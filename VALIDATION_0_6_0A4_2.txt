@@ -1,0 +1,12 @@
+Phase 0.6.0A4.2 validation
+
+.........x.............................................................. [ 64%]
+.....................................x.                                  [100%]
+109 passed, 2 xfailed in 0.28s
+
+python -m compileall -q .            PASS
+node --check static/app.js           PASS
+
+Intentional xfails remain:
+- VSX network canonicalization
+- PAN default-route classification

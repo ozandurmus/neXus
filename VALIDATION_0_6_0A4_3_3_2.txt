@@ -1,0 +1,33 @@
+SecurityExpert Phase 0.6.0A4.3.3.2 Validation
+================================================
+
+Scope:
+- PAN HA runtime role evidence
+- render-only development mode
+- PAN-config-only auto render
+- VSX-only collection/parser + mixed-cycle merge/render
+- CP-only physical non-VSX scope + mixed-cycle merge/render
+- full-run checkpoint behavior preserved
+
+Automated validation:
+- targeted A4.3.3/A4.3.3.2 tests: PASS
+- full pytest regression: PASS — 146 passed, 2 known xfailed, 0 failed
+- Python compileall: PASS
+- JavaScript syntax check: PASS
+- CP collection shell syntax check: PASS
+- render-only smoke: PASS
+
+Safety assertions:
+- static HA Group ID does not infer ACTIVE/PASSIVE
+- targeted HA lookup is type=op/read-only through Panorama target=<serial>
+- HA lookup timeout capped at 10 seconds
+- HA lookup failure is auxiliary and does not invalidate primary effective-running evidence
+- --render-only returns before credential prompts/vendor collector imports
+- --only cp is the only path that enables physical-non-VSX CP scope
+- normal full main.py retains baseline-all-managed-cp scope
+- partial views are labeled mixed-cycle/not-checkpoint
+- no CAS/history schema or migration behavior changed
+
+Known existing xfails remain unchanged:
+- VSX network canonicalization safety gap
+- PAN default-route classification safety gap

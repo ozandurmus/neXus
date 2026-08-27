@@ -1,0 +1,25 @@
+SecurityExpert Phase 0.6.0A4.3.1 — Vendor-Neutral Configuration Information Architecture
+
+Validation result
+-----------------
+pytest:              125 passed, 2 xfailed, 0 failed
+python compileall:   PASS
+node --check app.js: PASS
+HTML export smoke:  PASS
+structured DNS value embedded in local operator HTML: PASS
+proven local override value embedded in local operator HTML: PASS
+secret-bearing synthetic value excluded from local operator HTML: PASS
+serial / HA-role / VSYS / policy-scope header contract: PASS
+current Configuration / Alignment / Policy & Objects separation: PASS
+shareable support-bundle code path: unchanged
+
+Known xfail baseline
+--------------------
+- VSX network canonicalization
+- PAN default-route classification
+
+Security note
+-------------
+output/index.html is now a sensitive LOCAL OPERATOR artifact because it can contain selected
+real non-secret current configuration values. Raw configuration XML, value hashes, credentials
+and secret-bearing settings are not embedded. Shareable support bundles remain separate.

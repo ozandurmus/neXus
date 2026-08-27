@@ -1,0 +1,77 @@
+# SecurityExpert runtime / operational state (never repository content)
+/output/
+/logs/
+/data/
+/runtime/
+/state/
+/cas/
+/.cas/
+/support_bundles/
+
+# Keep repository-safe placeholders/examples only when intentionally added
+!/.gitkeep
+
+# Local configuration / credentials / trust material
+.env
+.env.*
+!.env.example
+config.local.*
+credentials.*
+secrets.*
+known_hosts
+known_hosts.*
+!known_hosts.example
+*.key
+*.pem
+*.p12
+*.pfx
+*.jks
+id_rsa*
+id_ed25519*
+
+# Generated reports / archives / local databases
+support_bundle_*.zip
+config_support_*.zip
+Network_Inventory_Phase*.zip
+storage_migration_*.json
+*.sqlite
+*.sqlite3
+*.db
+*.db-wal
+*.db-shm
+*.journal
+*.pcap
+*.pcapng
+
+# Python / test / coverage state
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# IDE / AI local state
+.vscode/
+.idea/
+.cache/
+.copilot/
+.serena/
+
+# OS / temporary / backup
+.DS_Store
+Thumbs.db
+*.bak
+*.tmp
+*.swp
+*~
+.next-id
+
+# Local-only real-env gate runner (may contain operational identities)
+_realenv_gate_runner.py
+
+# One-shot test output log
+pytest_result.log

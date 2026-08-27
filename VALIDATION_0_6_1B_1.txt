@@ -1,0 +1,47 @@
+SecurityExpert 0.6.1B.1 validation
+==================================
+
+Scope:
+- Check Point configuration coverage taxonomy
+- Quantum Spark / Gaia Embedded evidence classification
+- Expert-first Gaia read adapter with show-only direct-Clish fallback
+- Model / Serial scalar parsing
+- ClusterXL / VSX runtime HA role parsing
+- VSX logical presentation grouping
+- All / Check Point / Palo Alto Configuration fleet filters
+- collapsible/responsive Configuration device UX
+- secret-aware 0.6.1B persistence contract preserved
+
+Targeted 0.6.1B.1 tests:
+- 9 passed
+
+Full regression:
+- 171 passed
+- 2 known xfailed
+- 0 failed
+
+Known xfails unchanged:
+- VSX network canonicalization
+- PAN default-route classification
+
+Static validation:
+- Python compileall: PASS
+- JavaScript syntax (node --check static/app.js): PASS
+- Check Point shell syntax (bash -n checkpoint/scripts/cp_inventory.sh): PASS
+
+Security assertions:
+- Gaia adapter rejects non-show commands: PASS
+- Spark unsupported command => capability gap: PASS
+- Spark authorization error remains authorization failure: PASS
+- raw CP show configuration persistence remains disabled: regression PASS
+- secret-only CP configuration changes remain history-visible without storing secret values: regression PASS
+- exact Spark model token logic does not confuse 15000 with 1500: PASS
+- arbitrary four-digit year/build text is not treated as Spark model evidence: PASS
+
+Compatibility assertions:
+- PAN-only Configuration schema/build compatibility: PASS
+- proven CP inventory/VSX/PAN collector methods not modified by this increment
+
+Real-environment validation:
+- PENDING user CP-only configuration run
+- Command: py.exe -B .\main.py --cp-config-collect --cp-config-stage all

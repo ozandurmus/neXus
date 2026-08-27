@@ -1,0 +1,21 @@
+Phase 0.6.0A4.2.1 validation
+
+pytest -q
+113 passed, 2 xfailed, 0 failed
+
+python -m compileall -q .
+PASS
+
+node --check static/app.js
+PASS
+
+Release runtime/privacy scan
+PASS
+
+Semantic-validation privacy contract:
+- detailed semantic manifest is local-only
+- operator JSON/CSV is local-only
+- support bundle exposes counts/contracts only
+- sample setting paths, value hashes and raw values are excluded from support
+- secret-like sample paths are redacted even in local operator output
+- A4.2 classifications are never auto-promoted by schema-equivalence heuristics

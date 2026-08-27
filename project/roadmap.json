@@ -1,0 +1,265 @@
+{
+  "schema_version": "1.0",
+  "current_build": "0.6.4",
+  "current_track": "0.6.x",
+  "progress_contract": "Weighted acceptance-criterion completion. Percentages describe the declared roadmap, not calendar time or delivery ETA.",
+  "tracks": [
+    {
+      "id": "0.5.x",
+      "title": "Network Inventory Foundation",
+      "theme": "SEE",
+      "status": "done",
+      "weight": 10,
+      "feature_ids": [
+        "network_inventory",
+        "failure_aware_inventory",
+        "clusterxl_inventory",
+        "vsx_inventory",
+        "pan_runtime_inventory"
+      ]
+    },
+    {
+      "id": "0.6.x",
+      "title": "Current State & Evidence Foundation",
+      "theme": "SEE",
+      "status": "in_progress",
+      "weight": 35,
+      "feature_ids": [
+        "pan_config_evidence",
+        "pan_alignment_foundation",
+        "content_addressed_history",
+        "configuration_ui",
+        "workflow_modes",
+        "living_project_plan",
+        "cp_config_probe",
+        "cp_config_collector",
+        "cp_coverage_closure",
+        "discovery_capability_foundation",
+        "collection_execution_coordinator",
+        "cp_management_alignment",
+        "compliance_posture_foundation",
+        "configuration_history_ux",
+        "native_backup_foundation",
+        "production_read_trust"
+      ]
+    },
+    {
+      "id": "0.7.x",
+      "title": "Verification, Compliance & Expected State",
+      "theme": "VERIFY",
+      "status": "planned",
+      "weight": 20,
+      "feature_ids": [
+        "compliance_engine",
+        "framework_mappings",
+        "evidence_reporting",
+        "crypto_agility_pqc"
+      ]
+    },
+    {
+      "id": "0.8.x",
+      "title": "Trace, Diff & Root Cause",
+      "theme": "TRACE",
+      "status": "planned",
+      "weight": 15,
+      "feature_ids": [
+        "cross_vendor_change_timeline",
+        "root_cause_trace",
+        "event_signal_intake",
+        "passive_ti_enrichment"
+      ]
+    },
+    {
+      "id": "0.9.x",
+      "title": "Recovery & Restore Readiness",
+      "theme": "RECOVER",
+      "status": "planned",
+      "weight": 10,
+      "feature_ids": [
+        "native_backup_validation",
+        "restore_readiness"
+      ]
+    },
+    {
+      "id": "1.0",
+      "title": "Production Platform Foundation",
+      "theme": "GOVERN",
+      "status": "planned",
+      "weight": 10,
+      "feature_ids": [
+        "server_data_plane",
+        "deploy1_oidc_viewer",
+        "deploy1_evidence_egress_policy",
+        "oidc_rbac_audit",
+        "production_observability"
+      ]
+    }
+  ],
+  "now_next": {
+    "now": {
+      "build": "DEPLOY.1 architecture contract freeze",
+      "title": "Ubuntu + Docker server transition contract freeze",
+      "goal": "Freeze deployment architecture and acceptance gates without changing collector/runtime semantics while waiting for server availability.",
+      "status": "contract_frozen",
+      "started": "2026-08-27",
+      "completed": "2026-08-27"
+    },
+    "next": {
+      "build": "0.6.5",
+      "title": "PAN TLS/CA trust closure",
+      "goal": "Close PAN/Panorama transport trust gate with corporate CA verification while preserving read-only behavior and compatibility safety.",
+      "status": "planned"
+    },
+    "upcoming": [
+      {
+        "build": "0.6.3 target",
+        "title": "Unified Configuration History + Diff UX",
+        "status": "planned"
+      },
+      {
+        "build": "original 0.6.0B Â· rebase required",
+        "title": "Vendor-Native Backup Foundation",
+        "status": "deferred"
+      },
+      {
+        "build": "0.7.x",
+        "title": "Compliance / Expected-State Verification",
+        "status": "early_foundation_delivered",
+        "notes": [
+          "Early VERIFY foundation delivered ahead of formal 0.7.x track in 0.6.1B.1.5 (compliance posture model) and 0.6.1B.1.6 (compliance control pack v1): evidence-backed control states, CIS/PCI-DSS/BDDK framework area mappings, 10 deterministic vendor-neutral controls with CP/PAN adapters, traceability metadata and planned-gap semantics.",
+          "No-certification-claim semantics preserved. Formal 0.7.x work begins with compliance_posture_rulepack_transition: promote existing controls to versioned rule packs with stronger framework governance."
+        ]
+      },
+      {
+        "build": "DEPLOY.1 (pulled forward from 1.0 server_data_plane)",
+        "title": "Ubuntu + Docker Server Migration & Git Repository Foundation",
+        "status": "planned",
+        "notes": [
+          "Target stack: Ubuntu host, Docker Compose, Nginx (TLS + IP allowlist) in front of an app+scheduler service, containerized Postgres for metadata/evidence/job state, a separate secrets vault component for device credentials (encryption, not hashing), and a separate versioned backup/policy-package volume kept independent from the evidence Postgres instance per the existing native_backup_foundation distinction.",
+          "Repository migration: move off zip-based handover onto git (internal Bitbucket DC preferred over public GitHub for this codebase; if GitHub is used, private repo only) so future sessions use git pull/diff instead of re-uploading the full project.",
+          "Mandatory before first push: secret-scan the full history-to-be (credentials, real IPs/hostnames in test fixtures or docs) and confirm .gitignore excludes data/, output/, logs/, and any local .env.",
+          "Write/change automation to firewalls stays outside this item's scope and outside the roadmap gate (see roadmap_notes); this item is deployment/CI infrastructure only, read-only collection remains the only active capability.",
+          "Per-device job lock/coordinator (from the 0.6.1B.1.3 safety audit) must be part of the scheduler design before recurring/scheduled jobs replace the current on-demand run model.",
+          "DEPLOY.1A authenticated read-only OIDC viewer boundary (deploy1_oidc_viewer) must be accepted before the server is opened for internal use; IP allowlist is defense-in-depth only.",
+          "Evidence egress and sharing policy (deploy1_evidence_egress_policy) must be defined and enforced before any additional egress paths (event webhook, TI enrichment) are opened."
+        ]
+      }
+    ]
+  },
+  "roadmap_notes": [
+    "Original roadmap milestones are preserved in history even when implementation order changes.",
+    "VSX configuration evidence was originally targeted for 0.6.2 but was delivered early inside the 0.6.1B Check Point configuration track.",
+    "The original 0.6.0B native-backup milestone is intentionally deferred and must be rebased before implementation; configuration evidence is not a recovery backup.",
+    "Write/change automation remains outside the current roadmap gate until SEE, VERIFY, TRACE and RECOVER are sufficiently mature.",
+    "Future 0.7.xâ€“1.0 major-track numbering is a planning map, not a frozen release commitment; rebase it explicitly when a preceding phase changes implementation order.",
+    "DEPLOY.1 pulls the server_data_plane portion of the 1.0 GOVERN track forward to host the living SEE-track platform; it must not be used to bypass the write/change automation gate stated above.",
+    "DEV.1 establishes the controlled Corporate Git/Copilot operating baseline; after acceptance, engineering returns to product work at 0.6.1C. DEV.0.3C remains deferred to the pre-server storage-sensitive checkpoint.",
+    "0.7.x early VERIFY foundation was delivered ahead of schedule in 0.6.1B.1.5 and 0.6.1B.1.6; the 0.7.x formal track opens with compliance_posture_rulepack_transition promoting those controls to versioned rule packs.",
+    "0.6.1C must include the collection execution coordinator foundation (collection_execution_coordinator) before any recurring scheduling or event-driven trigger is activated.",
+    "Event-driven webhook intake (event_signal_intake) and passive TI enrichment (passive_ti_enrichment) are gated on 0.8.x TRACE foundations: safe normalized diff, cross-vendor timeline, and the collection coordinator must all be in place first.",
+    "Cryptographic posture and PQC readiness (crypto_agility_pqc) is a 0.7.x VERIFY item; it operates on existing CP/PAN configuration evidence without adding new vendors or collectors.",
+    "DEPLOY.1A read-only OIDC viewer boundary is a mandatory server acceptance criterion, not an optional hardening step."
+  ],
+  "architecture_review_notes": [
+    "2026-08-25 architecture review: event-driven webhook, crypto/PQC readiness, DEPLOY.1 OIDC boundary and contextual TI enrichment evaluated for CP/PAN scope.",
+    "Vendor scope intentionally limited to Check Point and Palo Alto; no additional vendors will be added at current maturity.",
+    "Webhook signal is a read-only collection trigger only; it must never carry collector commands, device credentials or authoritative topology.",
+    "TI enrichment operates on normalized findings only; raw configuration, full topology and real IP ranges must not leave the evidence boundary."
+  ],
+  "engineering_tracks": [
+    {
+      "id": "DEV.0",
+      "title": "Repository Readiness",
+      "status": "done",
+      "steps": [
+        {
+          "build": "DEV.0.1",
+          "title": "Runtime Management Endpoint Decoupling",
+          "status": "done"
+        },
+        {
+          "build": "DEV.0.2",
+          "title": "Repository Sanitization & Corporate Git Candidate",
+          "status": "done"
+        },
+        {
+          "build": "DEV.0.3A",
+          "title": "Runtime Path Foundation",
+          "status": "done"
+        },
+        {
+          "build": "DEV.0.3B",
+          "title": "Runtime Artifact Consumer Migration",
+          "status": "done"
+        },
+        {
+          "build": "DEV.0.3C",
+          "title": "History/CAS Runtime Boundary (Pre-Server)",
+          "status": "deferred"
+        },
+        {
+          "build": "DEV.0.4",
+          "title": "Local Repository Privacy Gate",
+          "status": "done"
+        },
+        {
+          "build": "DEV.0.3B.1",
+          "title": "Direct SSH Runtime Path Closure",
+          "status": "done"
+        },
+        {
+          "build": "DEV.0.4.1",
+          "title": "Runtime Inventory Exclusion Policy Foundation",
+          "status": "done"
+        },
+        {
+          "build": "DEV.0.5A",
+          "title": "Runtime Authentication Vocabulary & Boundary Foundation",
+          "status": "done"
+        },
+        {
+          "build": "DEV.0.5B",
+          "title": "Authentication Consumer Migration + Canonical Config",
+          "status": "done"
+        },
+        {
+          "build": "DEV.0.5B.1",
+          "title": "Legacy Authentication Redaction Marker DLP Closure",
+          "status": "done"
+        },
+        {
+          "build": "DEV.0.5B.2",
+          "title": "Repository-Wide DLP Collision Closure",
+          "status": "done"
+        }
+      ]
+    },
+    {
+      "id": "DEV.1",
+      "title": "Corporate Git + Copilot Development Foundation",
+      "status": "done",
+      "steps": [
+        {
+          "build": "DEV.1",
+          "title": "Repository-native AI operating model and controlled Git baseline",
+          "status": "done"
+        }
+      ]
+    },
+    {
+      "id": "DEV.2",
+      "title": "Server Runtime Foundation",
+      "status": "planned"
+    },
+    {
+      "id": "DEV.3",
+      "title": "Containerization",
+      "status": "planned"
+    },
+    {
+      "id": "DEV.4",
+      "title": "CI/CD & Production Hardening",
+      "status": "planned"
+    }
+  ]
+}

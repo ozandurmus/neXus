@@ -1,0 +1,11 @@
+SecurityExpert 0.6.1B.1.1 validation
+====================================
+Targeted adaptive shell + CP B.1/B tests: PASS (22 passed)
+Full pytest regression: PASS (177 passed, 2 known xfailed, 0 failed)
+Python compileall: PASS
+JavaScript node --check: PASS
+CP inventory shell bash -n: PASS
+
+Known xfails (pre-existing):
+- VSX network canonicalization characterization backlog
+- PAN default-route classification characterization backlog

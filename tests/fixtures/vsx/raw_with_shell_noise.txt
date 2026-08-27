@@ -1,0 +1,5 @@
+vsenv 12
+Context is set to Virtual Device Extranet
+[Expert@member-1:0]# ifconfig
+eth0      Link encap:Ethernet
+          inet addr:10.20.30.2  Mask:255.255.255.0

@@ -1,0 +1,6 @@
+default via 10.10.10.1 dev eth0 proto static metric 100
+10.10.10.0/24 dev eth0 proto kernel scope link src 10.10.10.2
+172.16.0.0/16 via 10.10.10.254 dev eth0 proto static
+blackhole 192.0.2.0/24 proto static
+local 10.10.10.2 dev eth0 table local proto kernel scope host src 10.10.10.2
+127.0.0.0/8 dev lo scope link

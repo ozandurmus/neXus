@@ -1,0 +1,18 @@
+Phase 0.6.0A2.1 validation
+
+pytest -q
+79 passed, 2 xfailed
+
+python -m compileall -q main.py checkpoint panorama configuration utils
+PASS
+
+node --check static/app.js
+PASS
+
+Scope:
+- PAN XML API retrieval method unchanged: type=config action=show xpath=/config target=<serial>
+- no remote backup/snapshot creation
+- privacy-safe schema path inspector added
+- schema_status separated from evidence_status
+- evidence_status deliberately UNKNOWN until effective/local scope is proven
+- raw configuration remains local only and excluded from support bundles

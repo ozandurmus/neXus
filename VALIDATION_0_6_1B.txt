@@ -1,0 +1,45 @@
+SecurityExpert Phase 0.6.1B validation
+======================================
+
+Build: Check Point Configuration Collector + Secret-Aware Projection + UI Integration
+
+Code/static validation
+----------------------
+- Python compileall: PASS
+- JavaScript syntax (node --check static/app.js): PASS
+- Check Point inventory shell syntax (bash -n): PASS
+- Synthetic CP HTML render smoke: PASS
+
+Test suite
+----------
+- Full pytest: 162 passed, 2 known xfailed, 0 failed
+- 0.6.1B targeted tests: 7 passed
+- Existing known xfails unchanged:
+  * VSX network canonicalization characterization
+  * PAN default-route classification characterization
+
+Security/evidence tests added
+-----------------------------
+- secret-bearing Gaia configuration line is not persisted in sanitized evidence
+- secret-only change produces a different safe history artifact without storing the secret value
+- safe structured Check Point projection excludes raw/internal hashes
+- Standalone / ClusterXL / mature VSX target resolution covered
+- ClusterXL differences become MEMBER-specific, not drift
+- browser configuration payload excludes raw Check Point config / fingerprints / raw hashes
+- synthetic physical + VSX collection writes only redacted CAS artifacts
+
+Preserved contracts
+-------------------
+- SSH login shell: Expert
+- Gaia commands invoked explicitly through clish -c
+- VSX primary context: validated numeric vsenv + clish
+- raw show configuration persisted: false
+- CP Management API role: identity/topology/intent, not actual Gaia evidence
+- strict host-key trust remains a production gate
+
+Real-environment validation pending
+-----------------------------------
+Run:
+  py.exe -B .\main.py --cp-config-collect --cp-config-stage all
+
+Review the SAFE COLLECTION SUMMARY and Configuration UI. Do not share output/cp_config_telemetry.json.

@@ -1,0 +1,41 @@
+SecurityExpert Phase 0.6.0A4.3.2.1 — Legacy Migration Safety Hardening
+
+Validation result
+-----------------
+pytest:                              135 passed, 2 xfailed, 0 failed
+python compileall:                   PASS
+node --check static/app.js:          PASS
+legacy traversal rejection:          PASS
+Windows absolute-path rejection:     PASS
+legacy symlink rejection:            PASS
+actual-payload analyzer hashing:      PASS
+metadata/payload SHA mismatch gate:   PASS
+exact rollback-state manifest:        PASS
+interrupted apply rerun:              PASS
+
+Known xfail baseline
+--------------------
+- VSX network canonicalization
+- PAN default-route classification
+
+Scope guard
+-----------
+No CP/VSX/PAN/Panorama collector method was changed.
+Check Point remains storage-ready only; no Check Point configuration collection was added.
+The content-addressed runtime storage model for new snapshots remains unchanged.
+
+Security decision
+-----------------
+Legacy artifact paths are now treated as untrusted metadata and must remain inside the snapshot
+directory after canonical resolution. Absolute paths, path separators, drive/anchor paths and
+symlink artifacts fail closed. Legacy payload bytes are SHA-256 verified during analysis and again
+before migration mutation. Migration manifests contain local filesystem/entity information and are
+marked LOCAL_OPERATOR_SENSITIVE_NOT_SHAREABLE.
+
+Operational decision
+--------------------
+First command after installing this build:
+    py.exe -B .\main.py --storage-analyze
+
+Do not proceed to --apply. If all safety/integrity counters are zero, review a separate default
+--storage-deduplicate dry-run before any destructive migration.

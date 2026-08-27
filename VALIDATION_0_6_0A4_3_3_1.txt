@@ -1,0 +1,18 @@
+SecurityExpert Phase 0.6.0A4.3.3.1 Validation
+
+Targeted Configuration UI tests:
+9 passed
+
+Full regression:
+139 passed, 2 known xfailed, 0 failed
+
+Syntax/compile:
+Python compileall PASS
+JavaScript node --check PASS
+
+Scope verification:
+- No collector modifications
+- No storage/CAS modifications
+- No Network Inventory modifications
+- Device Group mapping uses existing Panorama intent evidence
+- HA fallback does not infer Active/Passive from static config

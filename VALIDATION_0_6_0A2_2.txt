@@ -1,0 +1,8 @@
+Phase 0.6.0A2.2 validation
+- Panorama discovery/control path retained.
+- Direct firewall XML API keygen uses POST body; keys are memory-only and redacted.
+- Direct serial identity is verified before any configuration query.
+- Direct active, effective-running and merged queries are read-only.
+- Snapshot history is scoped by artifact_type.
+- Shareable support bundle contains no raw configuration or real device identifiers.
+- Fleet-wide scale-out remains blocked pending two-device real validation.

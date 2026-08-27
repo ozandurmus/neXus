@@ -1,0 +1,16 @@
+Phase 0.6.0A3 validation
+- Panorama remains discovery/management control plane.
+- Connected firewalls are selected in safe 5 -> 10 -> all stages.
+- Direct PAN-OS XML API parallelism defaults to 3 and is capped at 6.
+- Direct serial identity gate remains mandatory before configuration reads.
+- Direct active, effective-running and merged evidence remain the required fleet gate.
+- Direct pushed-template is added as optional read-only alignment evidence.
+- Panorama Shared Policy / Template sync states are captured when exposed by discovery.
+- XML canonical SHA-256 supports formatting-insensitive active-view equivalence checks.
+- A3 records alignment signals but deliberately does not label merged/effective differences as override or drift.
+- Actual override/drift classification is reserved for Configuration > Alignment with XPath/value provenance.
+- Shareable support contains no raw configuration, API credentials, real serials, device names, management IPs or config values.
+- Raw configuration remains local under data/configs and is excluded from Git/support bundles.
+- Tests: 89 passed, 2 expected xfailed.
+- python compileall: PASS.
+- node --check static/app.js: PASS.

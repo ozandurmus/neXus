@@ -1,0 +1,130 @@
+{
+  "schema_version": "1.0",
+  "build": "0.6.1C-real-environment-validation",
+  "status": "real_env_validated",
+  "validation_date": "2026-08-27",
+  "r06_coalesce_probe_automated": "PASS — 6/6 (2026-08-26): same-process bounded overlap probe, no network access, synthetic endpoint only, full regression 368 passed 3 skipped 2 xfailed 0 failed",
+  "value_free": true,
+  "summary": {
+    "required_checks": 24,
+    "passed_checks": 24,
+    "failed_checks": 0,
+    "pending_checks": 0,
+    "pass_rate": 100.0,
+    "r06_automated_preflight": "bounded_same_process_coalesce_probe_pass",
+    "promotion_allowed": true,
+    "main_merge": "approved"
+  },
+  "preflight": {
+    "required": 10,
+    "checks": {
+      "P01_shared_process_coordinator": true,
+      "P02_scheduler_one_shot_dispatcher": true,
+      "P03_admission_before_network": true,
+      "P04_physical_endpoint_lock_key": true,
+      "P05_coalesced_skips_transport": true,
+      "P06_terminal_paths_release_once": true,
+      "P07_missing_disabled_policy_no_network": true,
+      "P08_malformed_policy_no_network": true,
+      "P09_scheduled_manifest_metadata": true,
+      "P10_runtime_observability_wired": true
+    }
+  },
+  "automated": {
+    "required": 4,
+    "test_counts": {
+      "passed": 362,
+      "skipped": 3,
+      "xfailed": 2,
+      "failed": 0
+    },
+    "targeted_test_counts": {
+      "passed": 102,
+      "skipped": 1,
+      "failed": 0
+    },
+    "privacy_findings": 0,
+    "checks": {
+      "A01_existing_targeted_suite": true,
+      "A02_production_wiring_suite": true,
+      "A03_full_regression": true,
+      "A04_repository_privacy_gate": true
+    }
+  },
+  "real_environment": {
+    "required": 8,
+    "aggregate_evidence": {
+      "scheduled_jobs_started": 1,
+      "scheduled_jobs_terminal": 1,
+      "coalesced_requests": 1,
+      "additional_sessions_from_coalesced_requests": 0,
+      "collector_contract_preserved": true,
+      "frequency_increased": false,
+      "concurrency_increased": false,
+      "cooldown_reduced": false
+    },
+    "checks": {
+      "R01_policy_absent_no_job_no_network": true,
+      "R02_policy_disabled_no_job_no_network": true,
+      "R03_malformed_policy_fails_before_network": true,
+      "R04_one_bounded_scheduled_job": true,
+      "R05_scheduled_provenance_and_admission": true,
+      "R06_same_process_coalescing_no_second_session": true,
+      "R07_collector_result_contract_preserved": true,
+      "R08_no_frequency_concurrency_cooldown_regression": true
+    },
+    "r04_r05_evidence": {
+      "terminal_jobs": 1,
+      "manifest_provenance": "scheduled",
+      "manifest_coordinator_decision": "admitted",
+      "manifest_effective_scope": "cp",
+      "manifest_scheduler_result": "completed",
+      "manifest_status": "completed",
+      "scheduler_state_written": true,
+      "collection_result": "DEGRADED — success=57 partial=0 failed=13 management_down=5 / 75 discovered",
+      "note": "Same degraded semantics as equivalent manual run; status enum and summary structure preserved."
+    },
+    "r06_automated_preflight": {
+      "probe": "_realenv_r06_coalesce_probe.py",
+      "evidence_origin": "synthetic_preflight",
+      "r06_mechanism_pass": true,
+      "r06_real_env_pass": false
+    },
+    "r06_real_environment": {
+      "probe": "_realenv_r06_coalesce_probe.py --real-env",
+      "evidence_origin": "real_environment",
+      "network_access": true,
+      "credentials_used": true,
+      "first_request_admitted": true,
+      "first_operation_started": true,
+      "first_request_completed": true,
+      "second_request_decision": "coalesced",
+      "second_operation_called": false,
+      "coalesced_to_set": true,
+      "failure_family": null,
+      "active_jobs_after_probe": 0,
+      "r06_mechanism_pass": true,
+      "r06_real_env_pass": true,
+      "collection_result": "DEGRADED — success=57 partial=0 failed=13 management_down=5 / 75 discovered"
+    },
+      "network_access": false,
+      "credentials_used": false,
+      "second_request_decision": "coalesced",
+      "second_operation_called": false,
+      "active_jobs_after_probe": 0
+    },
+    "human_attestation": {
+      "approved": true,
+      "reviewer_role": "network-security-validator",
+      "safe_summary_reviewed": true
+    }
+  },
+  "privacy": {
+    "required": 2,
+    "checks": {
+      "D01_value_free_outputs": true,
+      "D02_runtime_artifacts_outside_git": true
+    }
+  },
+  "blockers": []
+}

@@ -1,0 +1,6 @@
+eth0      Link encap:Ethernet  HWaddr 00:11:22:33:44:55
+          inet addr:10.20.30.2  Bcast:10.20.30.255  Mask:255.255.255.0
+eth1      Link encap:Ethernet  HWaddr 00:11:22:33:44:66
+          inet addr:172.16.5.1  Bcast:172.16.5.255  Mask:255.255.255.0
+lo        Link encap:Local Loopback
+          inet addr:127.0.0.1  Mask:255.0.0.0

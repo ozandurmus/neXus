@@ -1,0 +1,12 @@
+SecurityExpert Phase 0.6.0A4 validation
+
+Automated regression: 93 passed, 2 xfailed, 0 failed
+Expected xfails retained:
+- VSX network canonicalization characterization
+- PAN default-route classification characterization
+
+Additional A4 tests cover:
+- Panorama Template Stack / Device Group assignment mapping
+- no overclaim of local override from observed differences
+- effective-running primary gate when direct-active is unavailable
+- method/stage failure diagnostics and support-bundle pseudonymization

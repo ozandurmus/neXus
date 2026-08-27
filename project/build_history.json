@@ -1,0 +1,226 @@
+{
+  "schema_version": "1.0",
+  "builds": [
+    {
+      "build": "DEPLOY.1 architecture contract freeze",
+      "status": "planned",
+      "started": "2026-08-27",
+      "completed": "2026-08-27",
+      "title": "Ubuntu + Docker Server Migration Contract Freeze",
+      "summary": "Contract frozen with no runtime/collector behavior changes. Handover file DEPLOY_1_CONTRACT_FREEZE_HANDOVER_2026_08_27.md records topology (Nginx + app + scheduler + Postgres + separate secrets component + separate backup/policy-package volume), mandatory OIDC and evidence-egress gates, and model/reasoning routing. Server expected in ~1 week; implementation focus returns to 0.6.5 PAN TLS/CA trust closure."
+    },
+    {
+      "build": "0.6.4",
+      "status": "real_env_validated",
+      "started": "2026-08-27",
+      "completed": "2026-08-27",
+      "title": "CP SSH Host-Key Trust Production Closure",
+      "summary": "REAL_ENV_VALIDATED (2026-08-27). R1 PASS: compat mode (strict=off) 57/75 collection, HTML generated, no regression. R3 PASS: strict=on with absent known_hosts raises CpSshStrictPreflightError before ssh.connect(), zero network connections. Automated: 30 targeted tests passed; 47 regression passed 1 skipped; privacy gate 5 passed 0 findings. No new CP commands, polling, concurrency or CAS changes. main merge approved."
+    },
+    {
+      "build": "0.6.3",
+      "status": "done",
+      "started": "2026-08-27",
+      "completed": "2026-08-27",
+      "title": "Unified Configuration History + Diff UX",
+      "summary": "DONE (2026-08-27). Delivered: ConfigHistoryService (utils/config_history.py) — read-only timeline query + safe normalized PAN diff; additive history_v1 field in config_ui.py; History tab rendering with timeline/diff in app.js + style.css; 14 targeted tests (AC-1…AC-9). PAN effective-running: chronological timeline + latest CHANGED pair diff. CP: secret-aware timeline only; raw text diff INSUFFICIENT_EVIDENCE. No new collectors, CAS writes, migrations, polling, concurrency or network access. Automated evidence: 14 targeted PASS; 30 regression PASS 1 skipped; render-only PASS; privacy gate 5 PASS 0 findings. Commit-scope release review confirmed no collector/CAS/network/concurrency/native-backup change; pushed to origin/main."
+    },
+    {
+      "build": "0.6.1D",
+      "status": "real_env_validated",
+      "started": "2026-08-26",
+      "completed": "2026-08-26",
+      "title": "Check Point Management Intent \u2194 Actual Alignment",
+      "summary": "REAL_ENV_VALIDATED (2026-08-26): all automated and real-environment gates passed. Alignment engine: explicit provenance-bearing CP Management intent only, existing direct actual projection unchanged, ClusterXL/VSX differences MEMBER_SPECIFIC, no EFFECTIVE_DRIFT, no new command/collector/CAS. Value-free 35/35 gate: representative set 1 standalone + 2 same-group ClusterXL members + 1 VSX virtual system; all 4 ALIGNED; privacy contract clean. Automated evidence: gate+alignment 19p; impacted UI/integrity 31p; full regression 351p 3s 2xf EXIT_CODE=0; repository privacy gate PASS 0 findings 234 files. Real-environment gate PASS 35/35 pass_rate=100.0% EXIT_CODE=0 (2026-08-26)."
+    },
+    {
+      "build": "0.6.1C real-environment validation",
+      "status": "real_env_validated",
+      "started": "2026-08-26",
+      "completed": "2026-08-27",
+      "title": "Discovery / Capability / Coordinator Real-Environment Closure",
+      "summary": "REAL_ENV_VALIDATED (2026-08-27): 24/24 gate passed. R01-PASS policy absent no-op; R02-PASS enabled=false no-op; R03-PASS malformed exit-2 before network; R04-PASS terminal_jobs=1 scheduled cp run; R05-PASS manifest provenance=scheduled coordinator_decision=admitted scheduler_result=completed; R06-PASS real-env bounded same-process overlap with actual CP collector: first_request_admitted=true second_request_decision=coalesced second_operation_called=false active_jobs_after_probe=0; R07-PASS DEGRADED semantics identical to manual baseline; R08-PASS no frequency/concurrency/cooldown increase; D01/D02-PASS privacy clean. Full regression 369p 3s 2xf 0f. main merge approved."
+    },
+    {
+      "build": "0.6.1C",
+      "status": "automated_validated",
+      "started": "2026-08-25",
+      "title": "Discovery Lifecycle + Capability Profile Foundation",
+      "summary": "AUTOMATED_VALIDATED (2026-08-26). Delivered: discovery lifecycle state machine (DISCOVERED/VALIDATED/STABLE/EXCLUDED/REMOVED with confidence, evidence-plane, transition-reason), capability registry + collection planner (Expert/direct-Clish/unknown shell; ClusterXL standby suppress; PAN VSYS context; identity-failure defers), collection execution coordinator (per-device physical lock, vendor/context concurrency budget, coalescing, bounded cancellation, timeout-only retry, cooldown compat), limited default-disabled scheduler (RuntimeRoot policy only; allowlisted read-only workflows; malformed policy fails before network access; provenance=scheduled). UI: additive Discovery module (lifecycle/capability/coordinator/scheduler observability). Automated evidence: 91 passed, 1 skipped. Real-environment gate pending."
+    },
+    {
+      "build": "0.6.1B.1.6",
+      "status": "complete",
+      "title": "Compliance Control Pack v1",
+      "summary": "Implemented 10 vendor-neutral CP/PAN benchmark-aligned subject controls with deterministic normalized-evidence adapters, traceability-rich compliance control cards (scope/lifecycle/benchmark/evidence metadata), and planned-gap semantics where coverage is bounded. Preserved existing subject/platform/global information architecture and privacy/no-certification boundaries. AUTOMATED_VALIDATED 2026-08-25 with targeted regression: 13 passed."
+    },
+    {
+      "build": "0.6.1B.1.5A",
+      "status": "complete",
+      "title": "Compliance UI Master-Detail Refinement",
+      "summary": "Refined Compliance module UX to match established Configuration design language: contextual detail header, mutually exclusive Fleet/Subject views, clear partitioning of global safeguards vs platform controls, and non-empty subject rendering for PASS-only evidence. Automated validation remained green (13 targeted tests) and render-only integration markers were verified in runtime output HTML."
+    },
+    {
+      "build": "0.6.1B.1.5",
+      "status": "complete",
+      "title": "Compliance Posture Foundation",
+      "summary": "Added compliance posture foundation module and UI from normalized CP/PAN configuration payload. Introduced evidence-backed control-area states (PASS/FINDING/UNKNOWN/NOT_APPLICABLE/PLANNED), framework-area mappings (CIS/PCI DSS/BDDK without certification claims), fleet plus anonymized per-subject drilldown, and roadmap-linked planned controls for compliance_engine/crypto_agility_pqc. Privacy boundary preserved: no raw configuration, secrets, or real device/network identity in compliance payload."
+    },
+    {
+      "build": "0.6.1B.1.4",
+      "status": "complete",
+      "title": "CP SSH Host-Key Trust Foundation",
+      "summary": "Added opt-in strict host-key verification (RejectPolicy + load_system_host_keys) across cp_runner (SECURITYEXPERT_CP_MDS_STRICT_HOST_KEY), vsx_runner (FBUDDY_VSX_SSH_STRICT_HOST_KEY), direct_ssh_probe (already had FBUDDY_CP_DIRECT_SSH_STRICT_HOST_KEY), and cleanup utility. Default remains AutoAddPolicy for compatibility. AUTOMATED_VALIDATED 2026-08-25: 8 new tests + full regression clean."
+    },
+    {
+      "build": "0.6.1B.1.3A",
+      "status": "complete",
+      "title": "Runtime-safe Support Bundle Publish Path + Interrupt UX Hardening",
+      "summary": "Added optional support bundle publish redirection (`--support-bundle-output-dir`) to keep shareable bundles outside RuntimeRoot output when required, and converted operator-triggered KeyboardInterrupt into a controlled exit (130) with manifest-safe interruption status. AUTOMATED_VALIDATED 2026-08-25: 228 passed, 2 skipped, 2 xfailed. Real-environment validation pending."
+    },
+    {
+      "build": "0.6.1B.1.3",
+      "status": "complete",
+      "title": "Check Point Device Interaction Safety Audit & Polling Guardrails",
+      "summary": "Implemented CP interaction safety guardrails: bounded connect retry/timeout hardening across CP direct-SSH and config paths, plus full-run CP stage cooldown (`SECURITYEXPERT_CP_STAGE_COOLDOWN_SECONDS`, bounded 0..30, default 0). Added one-shot pytest wrapper stabilization for deterministic logging and failed-node extraction. AUTOMATED_VALIDATED 2026-08-25: 228 passed, 2 skipped, 2 xfailed. Real-environment validation pending."
+    },
+    {
+      "build": "DEV.1",
+      "status": "complete",
+      "title": "Corporate Git + Copilot Development Foundation",
+      "summary": "Corporate Git baseline activated on origin/main (ead9f1d), runtime path consumer closure completed for six OUTPUT_DIR defaults, and automated validation closed with one-shot log-based full regression (226 passed, 2 skipped, 2 xfailed)."
+    },
+    {
+      "build": "DEV.0.5B.2",
+      "status": "complete",
+      "title": "Repository-Wide DLP Collision Closure",
+      "summary": "Extended known enterprise DLP collision guards across the complete repository text candidate. Corporate Copilot subsequently completed the previously blocked broad authentication consumer audit."
+    },
+    {
+      "build": "DEV.0.5B.1",
+      "status": "complete",
+      "title": "Legacy Authentication Redaction Marker DLP Closure",
+      "summary": "Aligned repository-owned authentication redaction markers with the canonical auth vocabulary while preserving redaction behavior."
+    },
+    {
+      "build": "DEV.0.5B",
+      "status": "complete",
+      "title": "Authentication Consumer Migration + Canonical Config",
+      "summary": "Migrated application authentication consumers to Config.auth/RuntimeAuth, removed duplicate Config and legacy compatibility, and preserved native transport/security-detection semantics."
+    },
+    {
+      "build": "DEV.0.5A",
+      "status": "complete",
+      "title": "Runtime Authentication Vocabulary & Boundary Foundation",
+      "summary": "Introduced immutable protected RuntimeAuth and canonical Config.auth boundary; core multi-file Corporate Copilot DLP smoke tests passed."
+    },
+    {
+      "build": "DEV.0.3B.1",
+      "status": "complete",
+      "title": "Direct SSH Runtime Path Closure",
+      "summary": "Closed a missed repository-relative direct-SSH temporary artifact path; real CP validation passed the former failure point and reached the known clean-baseline dependency boundary."
+    },
+    {
+      "build": "DEV.0.4.1",
+      "status": "complete",
+      "title": "Runtime Inventory Exclusion Policy Foundation",
+      "summary": "Removed repository hard-coded CP non-device identities. Vendor-neutral local RuntimeRoot policy now supplies exact pre-poll exclusions through the existing shell hook with safe quoting; malformed policy fails before network access. Privacy gate: 0 findings."
+    },
+    {
+      "build": "DEV.0.4",
+      "status": "complete",
+      "title": "Local Repository Privacy Gate",
+      "summary": "Local/offline fail-closed repository scanner implemented and validated; DEV.0.4.1 externalized the final environment-specific CP exclusion identities and the Corporate Git candidate now passes with zero findings."
+    },
+    {
+      "build": "DEV.0.3B",
+      "status": "complete",
+      "title": "Runtime Artifact Consumer Migration",
+      "summary": "Normal runtime artifacts migrated to external RuntimeRoot; filesystem-only real-environment render validation passed with no repository data/output/logs writes. History/CAS remains deferred."
+    },
+    {
+      "build": "DEV.0.3A",
+      "status": "complete",
+      "title": "Runtime Path Foundation",
+      "summary": "External RuntimePaths foundation real-environment bootstrap validated: ENV and CLI selection, CLI > ENV precedence, non-admin external root creation and write/delete probes passed."
+    },
+    {
+      "build": "DEV.0.2",
+      "status": "complete",
+      "title": "Repository Sanitization & Corporate Git Candidate",
+      "summary": "Sanitizes repository-tracked source/tests/docs/AI metadata and hardens Git exclusions without changing collector/network/runtime path behavior."
+    },
+    {
+      "build": "DEV.0.1",
+      "status": "complete",
+      "title": "Runtime Management Endpoint Decoupling",
+      "summary": "Removed static CP Management/Panorama endpoints from active source; CP and PAN runtime endpoint input real-environment validated without collector regression."
+    },
+    {
+      "build": "0.6.1B.1.2",
+      "status": "complete_with_followup",
+      "title": "Interactive CP SSH Session + Coverage Closure + Project Roadmap UI",
+      "summary": "Interactive direct-Clish collection real-environment validated; CP Configuration reached 101/122 current in the authoritative checkpoint. Fleet/safety follow-up remains."
+    },
+    {
+      "build": "0.6.1B.1.1",
+      "status": "complete_with_followup",
+      "title": "Adaptive CP Shell Detection + Metadata Coverage Recovery",
+      "summary": "Recovered Model/Serial coverage from 0 to 54, but exec-channel shell detection did not recover the direct-Clish WiFi/Spark estate; superseded by B.1.2 interactive session work."
+    },
+    {
+      "build": "0.6.1B.1",
+      "status": "complete_with_followup",
+      "title": "Check Point Configuration Coverage + Device UX Hardening",
+      "summary": "Added vendor fleets, VSX logical grouping, responsive/collapsible Configuration UX and detailed coverage taxonomy; real run exposed 37 unknown-platform entities."
+    },
+    {
+      "build": "0.6.1B",
+      "status": "complete",
+      "title": "Check Point Configuration Collector + Secret-Aware Projection + UI Integration",
+      "summary": "Promoted Standalone, ClusterXL and VSX current configuration to secret-aware CAS/history and Configuration UI."
+    },
+    {
+      "build": "0.6.1A.1",
+      "status": "complete",
+      "title": "Check Point Configuration Identity Gate + VSX Target Resolution",
+      "summary": "Validated 5/5 targets, identity acceptance and distinct VSX context evidence on the real estate."
+    },
+    {
+      "build": "0.6.1A",
+      "status": "complete",
+      "title": "Check Point Configuration Evidence Probe",
+      "summary": "Proved Expertâ†’Gaia Clish actual-configuration collection and raw-secret non-persistence before production promotion."
+    },
+    {
+      "build": "0.6.0A4.3.3.2",
+      "status": "complete",
+      "title": "PAN HA Runtime Role + Development Workflow Modes",
+      "summary": "Added real PAN ACTIVE/PASSIVE runtime role and partial development workflows including render-only, PAN-config, VSX-only and physical CP-only modes."
+    },
+    {
+      "build": "0.6.0A4.3.2.1",
+      "status": "complete",
+      "title": "Legacy Migration Safety Hardening",
+      "summary": "Hardened CAS migration against traversal, symlink, hash-trust and interruption risks; validated migration reclaimed approximately 2.98 GiB."
+    },
+    {
+      "build": "0.6.0A4.3.2",
+      "status": "complete",
+      "title": "Content-Addressed Configuration History Storage",
+      "summary": "Introduced immutable SHA-256 content objects and reference-based SAME history semantics."
+    },
+    {
+      "build": "0.6.0A4.2.2",
+      "status": "complete",
+      "title": "PAN Semantic Policy & Provenance Hardening",
+      "summary": "Reduced false positives using alignment, member-specific and provenance-aware semantic states."
+    },
+    {
+      "build": "0.5 Final",
+      "status": "complete",
+      "title": "Network Inventory Foundation",
+      "summary": "Frozen mature multi-vendor inventory, ClusterXL/VSX hierarchy, PAN runtime and failure-aware freshness foundation."
+    }
+  ]
+}

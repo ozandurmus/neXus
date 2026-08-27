@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "exclusions": [
+    {
+      "vendor": "checkpoint",
+      "identity": "CP-NONDEVICE-EXAMPLE",
+      "enabled": true,
+      "reason": "management_object_not_real_device"
+    }
+  ]
+}

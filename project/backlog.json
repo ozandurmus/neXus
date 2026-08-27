@@ -1,0 +1,318 @@
+{
+  "schema_version": "1.0",
+  "items": [
+    {
+      "id": "deploy1_contract_freeze",
+      "category": "Deployment / Architecture",
+      "title": "DEPLOY.1 contract freeze and server-arrival execution gate",
+      "status": "planned",
+      "priority": "P0",
+      "target": "DEPLOY.1",
+      "note": "Contract frozen 2026-08-27 in DEPLOY_1_CONTRACT_FREEZE_HANDOVER_2026_08_27.md. No runtime behavior changes before server arrival (~1 week). Mandatory gates on arrival: OIDC viewer boundary, evidence egress policy, CP strict host-key R2 validation, PAN TLS corporate CA validation."
+    },
+    {
+      "id": "cp_management_alignment",
+      "category": "Alignment / Architecture",
+      "title": "0.6.1D — Check Point Management Intent ↔ Actual Alignment",
+      "status": "real_env_validated",
+      "note": "REAL_ENV_VALIDATED 2026-08-26: all gates passed. Value-free 35/35 real-environment gate: 1 standalone + 2 same-group ClusterXL members + 1 VSX virtual system; all 4 ALIGNED; privacy contract clean; main_merge=approved. Full regression 351p 3s 2xf EXIT_CODE=0; repository privacy gate PASS 0 findings."
+    },
+    {
+      "id": "discovery_capability_real_env_validation",
+      "category": "Safety / Validation",
+      "title": "0.6.1C — Discovery / Coordinator Real-Environment Validation",
+      "status": "real_env_validated",
+      "priority": "P0",
+      "target": "0.6.1C real-environment validation",
+      "note": "REAL_ENV_VALIDATED 2026-08-27: 24/24 gate passed. R01-R08 all PASS including R06 real-env bounded same-process overlap with actual CP collector. Full regression 369p 3s 2xf 0f; privacy PASS. main merge approved."
+    },
+    {
+      "id": "compliance_control_pack_v1",
+      "category": "Compliance / Implementation",
+      "title": "0.6.1B.1.6 â€” Compliance Control Pack v1 (10 controls)",
+      "status": "done",
+      "priority": "P1",
+      "target": "0.6.1B.1.6",
+      "note": "Completed 2026-08-25 (AUTOMATED_VALIDATED): implemented 10 vendor-neutral CP/PAN benchmark-aligned subject controls with deterministic adapters where normalized evidence exists, control traceability metadata in compliance cards, and planned-gap lifecycle semantics for coverage boundaries. Privacy boundary and no-certification-claim posture preserved. Targeted regression: 13 passed. Human real-environment validation pending."
+    },
+    {
+      "id": "collection_execution_coordinator",
+      "category": "Safety / Architecture",
+      "title": "Collection Execution Coordinator & Safety Policy",
+      "status": "real_env_validated",
+      "priority": "P0",
+      "target": "0.6.1C / DEPLOY.1",
+      "note": "REAL_ENV_VALIDATED 2026-08-27. Same-process coordinator coalescing validated in production with actual CP collector: admission, coalescing, scheduler-one-shot all confirmed. Downstream per-device/distributed persistence remains deferred to DEPLOY.1."
+    },
+    {
+      "id": "cp_ssh_trust_r2_prod_server",
+      "category": "Security / Validation",
+      "title": "CP SSH strict host-key R2 validation on production server",
+      "status": "planned",
+      "priority": "P1",
+      "target": "DEPLOY.1",
+      "note": "R2 deferred from 0.6.4: verify strict=on + provisioned MDS known_hosts entry completes full read-only CP collection on the DEPLOY.1 Ubuntu/Docker server. Requires: (1) server known_hosts provisioned with MDS host key before first run, (2) SECURITYEXPERT_CP_MDS_STRICT_HOST_KEY=1 set in server env, (3) collection succeeds at established baseline coverage. Value-free evidence only."
+    },
+    {
+      "id": "deploy1_oidc_viewer",
+      "category": "Security",
+      "title": "DEPLOY.1A \u2014 Authenticated Read-Only Viewer Boundary",
+      "status": "planned",
+      "priority": "P0",
+      "target": "DEPLOY.1A",
+      "note": "Corporate OIDC login gate required before server is opened internally. IP allowlist is defense-in-depth only. No credential or raw operational artifact in browser/export. Login and view/export audit events required."
+    },
+    {
+      "id": "deploy1_evidence_egress_policy",
+      "category": "Security",
+      "title": "DEPLOY.1 â€” Evidence Egress & Sharing Policy",
+      "status": "planned",
+      "priority": "P0",
+      "target": "DEPLOY.1",
+      "note": "Explicit policy for every outbound path: UI export, support bundle, audit log, webhook ingress persistence, TI enrichment query, OIDC claim retention. Must be defined before event intake or TI egress paths are opened."
+    },
+    {
+      "id": "crypto_agility_pqc",
+      "category": "Compliance / Security",
+      "title": "Cryptographic Posture, Crypto-Agility & PQC Readiness",
+      "status": "planned",
+      "priority": "P1",
+      "target": "0.7.x",
+      "note": "Normalize IPsec/IKE/TLS/cert facts from CP and PAN configuration evidence. Evaluate with versioned rule packs (weak algorithms, crypto-agility, PQC capability). Distinct from and dependent on core Compliance Rule Engine. No new vendors or collectors."
+    },
+    {
+      "id": "compliance_posture_rulepack_transition",
+      "category": "Compliance / Architecture",
+      "title": "Compliance posture foundation to rule-pack transition",
+      "status": "planned",
+      "priority": "P1",
+      "target": "0.7.x",
+      "note": "Promote 0.6.1B.1.5 evidence-backed control-area posture to versioned compliance rule packs and stronger framework references. Explicitly linked to compliance_engine and crypto_agility_pqc; keep no-certification-claim boundary until full rule coverage and governance acceptance."
+    },
+    {
+      "id": "event_signal_intake",
+      "category": "Architecture / Integration",
+      "title": "External Change Signal Intake & Bounded Evidence Trigger",
+      "status": "planned",
+      "priority": "P1",
+      "target": "0.8.x",
+      "note": "Authenticated webhook (e.g. Splunk correlation action). Schema allowlist, replay protection, dedup/cooldown, canonical identity resolution, coordinator-queued read-only collection. Gated on: collection coordinator, safe diff (0.6.3), cross-vendor timeline (0.8.x). Signal is trigger only â€” not authoritative evidence."
+    },
+    {
+      "id": "passive_ti_enrichment",
+      "category": "Architecture / Intelligence",
+      "title": "Passive TI Enrichment for Confirmed Changes",
+      "status": "planned",
+      "priority": "P2",
+      "target": "0.8.x",
+      "note": "Safe observable extraction from normalized diff findings. Local/corporate-proxy TI feed only; internet query off by default. Result is contextual risk enrichment, not root-cause. Raw config and full topology must not leave evidence boundary. Gated on event_signal_intake and passive_ti TI confidence model."
+    },
+    {
+      "id": "cp_interactive_validation",
+      "category": "Collection",
+      "title": "Validate interactive SSH coverage on direct-Clish WiFi/Spark estate",
+      "status": "done",
+      "priority": "P0",
+      "target": "0.6.1B.1.2",
+      "note": "B.1.2 real-environment validation proved PTY-backed direct-Clish collection; sanitized golden validation identity is CP-DIRECT-CLISH-VALIDATION-A."
+    },
+    {
+      "id": "cp_ha_runtime",
+      "category": "Collection",
+      "title": "Recover ClusterXL/VSX runtime HA role coverage",
+      "status": "in_progress",
+      "priority": "P0",
+      "target": "0.6.1B.1.2",
+      "note": "Runtime cphaprob evidence is functioning (real-environment coverage recovered from 0 to 42 in the B.1.2 checkpoint); remaining coverage/VSX closure stays open."
+    },
+    {
+      "id": "cp_unknown_platform",
+      "category": "Discovery",
+      "title": "Classify collectable unknown CP platforms without blocking current-state evidence",
+      "status": "in_progress",
+      "priority": "P1",
+      "target": "0.6.1C",
+      "note": "Platform identity and collection capability are separate. A proven read-only Clish configuration path may collect even while platform family remains unknown."
+    },
+    {
+      "id": "cp_identity_edges",
+      "category": "Identity",
+      "title": "Review remaining CP identity-gate edge cases after interactive session validation",
+      "status": "planned",
+      "priority": "P1",
+      "target": "0.6.1B.1.2 / 0.6.1C"
+    },
+    {
+      "id": "cp_ssh_trust",
+      "category": "Security",
+      "title": "Replace CP AutoAddPolicy compatibility with trusted known_hosts/pinned host keys",
+      "status": "real_env_validated",
+      "priority": "P0",
+      "target": "0.6.4",
+      "note": "0.6.4 REAL_ENV_VALIDATED 2026-08-27. R1 PASS compat mode; R3 PASS strict+no-trust raises CpSshStrictPreflightError before connect(). R2 (strict=on with provisioned known_hosts) deferred to DEPLOY.1 production server: requires real MDS host-key entry in server known_hosts before end-to-end read-only collection can be verified in strict mode."
+    },
+    {
+      "id": "pan_tls_ca",
+      "category": "Security",
+      "title": "Enable PAN/Panorama TLS verification with corporate CA trust",
+      "status": "planned",
+      "priority": "P0",
+      "target": "production gate"
+    },
+    {
+      "id": "vsx_network_canonicalization",
+      "category": "Known defect",
+      "title": "VSX network canonicalization characterization xfail",
+      "status": "planned",
+      "priority": "P2",
+      "target": "0.6.x"
+    },
+    {
+      "id": "pan_default_route",
+      "category": "Known defect",
+      "title": "PAN default-route classification characterization xfail",
+      "status": "planned",
+      "priority": "P2",
+      "target": "0.6.x"
+    },
+    {
+      "id": "immutable_store_permission",
+      "category": "Reliability",
+      "title": "Investigate intermittent local immutable evidence-store PermissionError",
+      "status": "planned",
+      "priority": "P1",
+      "target": "0.6.x hardening"
+    },
+    {
+      "id": "discovery_lifecycle",
+      "category": "Architecture",
+      "title": "Management-led discovery lifecycle and capability profiles",
+      "status": "automated_validated",
+      "priority": "P1",
+      "target": "0.6.1C"
+    },
+    {
+      "id": "credential_profiles",
+      "category": "Architecture",
+      "title": "Credential profile / enterprise vault abstraction",
+      "status": "planned",
+      "priority": "P1",
+      "target": "1.0 foundation"
+    },
+    {
+      "id": "history_diff_ui",
+      "category": "UX",
+      "title": "Chronological configuration history and safe diff UX",
+      "status": "automated_validated",
+      "priority": "P1",
+      "target": "0.6.3",
+      "note": "AUTOMATED_VALIDATED 2026-08-27: ConfigHistoryService, PAN diff adapter, additive history_v1 UI payload, History tab timeline+diff rendering. 14 targeted tests AC-1\u2026AC-9 PASS; 30 regression PASS; render-only PASS; privacy gate 0 findings. main merge pending diff review."
+    },
+    {
+      "id": "bulk_fleet_ops",
+      "category": "UX",
+      "title": "Fleet selection foundation for future bulk read/recovery/approved operations",
+      "status": "deferred",
+      "priority": "P2",
+      "target": "post-VERIFY/RECOVER"
+    },
+    {
+      "id": "native_backup",
+      "category": "Recovery",
+      "title": "Vendor-native backup and restore-readiness foundation",
+      "status": "deferred",
+      "priority": "P1",
+      "target": "rebase original 0.6.0B"
+    },
+    {
+      "id": "html_render_performance",
+      "category": "Performance",
+      "title": "Reduce HTML generation/render-only wall-clock time",
+      "status": "planned",
+      "priority": "P2",
+      "target": "0.6.x polish",
+      "note": "Recent full HTML generation is roughly one minute. Preserve correctness first, then profile payload generation/serialization/rendering before optimization."
+    },
+    {
+      "id": "clean_baseline_bootstrap",
+      "category": "Development Workflow",
+      "title": "Clean Baseline Bootstrap & Dependency UX",
+      "status": "planned",
+      "priority": "P1",
+      "target": "0.6.1C / workflow hardening",
+      "note": "Clean output exposed implicit partial-mode dependencies (CP telemetry, VSX/PAN baseline, unified inventory). Model producer/dependency relationships and return actionable bootstrap guidance instead of raw tracebacks."
+    },
+    {
+      "id": "cp_device_interaction_safety",
+      "category": "Safety",
+      "title": "Check Point Device Interaction Safety Audit & Polling Guardrails",
+      "status": "done",
+      "priority": "P0",
+      "target": "0.6.1B.1.3",
+      "note": "Audit completed with bounded retry/timeout hardening across cp_runner, vsx_runner, direct_ssh_probe, checkpoint_config_probe, and a full-run CP stage cooldown guardrail (SECURITYEXPERT_CP_STAGE_COOLDOWN_SECONDS, default 0, max 30). One-shot pytest wrapper stabilized. AUTOMATED_VALIDATED 2026-08-25. 0.6.1C collection_execution_coordinator extends this into the scheduled-execution world."
+    },
+    {
+      "id": "repository_privacy_gate",
+      "category": "DevSecOps",
+      "title": "Local Repository Privacy Gate",
+      "status": "done",
+      "priority": "P0",
+      "target": "DEV.0.4/DEV.0.4.1",
+      "note": "Local/offline fail-closed gate implemented and validated. DEV.0.4.1 removed the final repository environment-identity literal by moving exact inventory exclusions to local RuntimeRoot policy; candidate gate now passes with zero findings."
+    },
+    {
+      "id": "copilot_dlp_config_boundary",
+      "category": "DevSecOps",
+      "title": "Copilot/DLP-Compatible Configuration Boundary Refactor",
+      "status": "done",
+      "priority": "P1",
+      "target": "DEV.0.5B.2",
+      "note": "RuntimeAuth/Config.auth became the canonical authentication boundary; duplicate Config and legacy consumer compatibility were removed. Repository-wide enterprise DLP collision guards now pass and a broad Corporate Copilot authentication consumer audit completed successfully."
+    },
+    {
+      "id": "cp_exclusion_policy_externalization",
+      "category": "DevSecOps",
+      "title": "Runtime Inventory Exclusion Policy Foundation",
+      "status": "done",
+      "priority": "P0",
+      "target": "DEV.0.4.1",
+      "note": "Environment-specific CP non-device identities are no longer repository defaults. A vendor-neutral local RuntimeRoot policy feeds the existing exact-name pre-poll filter; malformed policy fails before network access and only counts are logged."
+    },
+    {
+      "id": "inventory_exclusions_ui",
+      "category": "Inventory UX",
+      "title": "Inventory Exclusions UX & Management",
+      "status": "planned",
+      "priority": "P1",
+      "target": "0.6.1C / Inventory UX",
+      "note": "Expose runtime inventory exclusions in a vendor-neutral Exclusions view. Later add controlled add/restore/reason/audit workflows. Exclusions must be applied before direct polling; automatic discovery classification should reduce manual exclusions over time."
+    },
+    {
+      "id": "pan_auth_transport_convergence",
+      "category": "Security",
+      "title": "PAN Authentication Transport Convergence",
+      "status": "planned",
+      "priority": "P1",
+      "target": "production hardening / PAN transport cleanup",
+      "note": "Corporate Copilot source audit observed divergent PAN authentication transport behavior between older runtime and newer configuration paths. Converge only in an explicit security build together with TLS trust review; do not change current behavior implicitly."
+    },
+    {
+      "id": "dev_python_env_tooling_friction",
+      "category": "Development Workflow",
+      "title": "Reduce Python environment bootstrap friction in AI-assisted sessions",
+      "status": "planned",
+      "priority": "P2",
+      "target": "DEV.1 follow-up / workflow polish",
+      "note": "User reported repeated environment-bootstrap/tooling friction during validation loops. Keep current workflow running without forced env setup; revisit with a minimal, optional path later."
+    },
+    {
+      "id": "overview_device_lifecycle_enrichment",
+      "category": "Inventory UX",
+      "title": "Overview enrichment: OS version, model, EOS and recommended target release",
+      "status": "planned",
+      "priority": "P1",
+      "target": "0.6.1C / Inventory UX",
+      "note": "Add vendor-appropriate OS version and model fields to Overview; if globally available, map model families to EOS dates and suggested next release guidance without exposing sensitive identities."
+    }
+  ]
+}

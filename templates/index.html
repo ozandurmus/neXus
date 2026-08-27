@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>SecurityExpert</title>
+    <style>
+    /* __STYLE_PLACEHOLDER__ */
+    </style>
+</head>
+<body>
+
+<header class="topbar">
+    <div class="brand">
+        <div class="brand-mark">SX</div>
+        <div class="brand-copy">
+            <div class="brand-title">Security<span>Expert</span></div>
+            <div class="brand-subtitle">Verified state for network security</div>
+        </div>
+    </div>
+
+    <nav class="module-nav" aria-label="Primary modules">
+        <button id="overviewNav" class="module-nav-item active" type="button" data-module="overview">Overview</button>
+        <button id="inventoryNav" class="module-nav-item" type="button" data-module="inventory">Network Inventory</button>
+        <button id="configurationNav" class="module-nav-item" type="button" data-module="configuration">Configuration</button>
+        <button id="complianceNav" class="module-nav-item" type="button" data-module="compliance">Compliance</button>
+        <button id="discoveryNav" class="module-nav-item" type="button" data-module="discovery">Discovery</button>
+        <button id="projectPlanNav" class="module-nav-item" type="button" data-module="project-plan">Project Plan</button>
+    </nav>
+
+    <div class="controls">
+        <div id="inventoryTopControls" class="context-controls" hidden>
+            <input
+                id="globalSearch"
+                class="control"
+                type="search"
+                placeholder="Search firewall, VS, VSYS, VR, interface or IP..."
+            >
+            <select id="vendorFilter" class="control">
+                <option value="">All Vendors</option>
+                <option value="cp">Check Point</option>
+                <option value="vsx">Check Point VSX</option>
+                <option value="panorama">Palo Alto</option>
+            </select>
+            <div id="stats" class="stats"></div>
+        </div>
+
+        <div id="configurationTopControls" class="context-controls" hidden>
+            <div id="configTopStats" class="stats"></div>
+        </div>
+
+        <button
+            id="themeToggle"
+            class="icon-button"
+            type="button"
+            aria-label="Switch theme"
+            title="Theme"
+        ></button>
+    </div>
+</header>
+
+<section id="overviewModule" class="app-module active" data-module-panel="overview">
+    <main class="overview-shell">
+        <div class="overview-heading">
+            <div>
+                <div class="eyebrow">SecurityExpert</div>
+                <h1>Operational overview</h1>
+                <p>Inventory freshness and configuration evidence from the latest observation cycle.</p>
+            </div>
+            <div id="overviewRunBadge" class="run-badge"></div>
+        </div>
+
+        <div id="overviewHeroCards" class="overview-hero-grid"></div>
+
+        <div class="overview-grid">
+            <section class="dashboard-card span-2">
+                <div class="dashboard-card-header">
+                    <div>
+                        <div class="eyebrow">Configuration</div>
+                        <h2>Configuration posture</h2>
+                    </div>
+                    <button id="overviewOpenConfiguration" class="text-button" type="button">Open Configuration →</button>
+                </div>
+                <div id="overviewAlignmentSummary"></div>
+            </section>
+
+            <section class="dashboard-card">
+                <div class="dashboard-card-header">
+                    <div>
+                        <div class="eyebrow">Evidence</div>
+                        <h2>Trust & coverage</h2>
+                    </div>
+                </div>
+                <div id="overviewEvidenceSummary"></div>
+            </section>
+
+            <section class="dashboard-card">
+                <div class="dashboard-card-header">
+                    <div>
+                        <div class="eyebrow">Backup</div>
+                        <h2>Recovery artifacts</h2>
+                    </div>
+                </div>
+                <div id="overviewBackupSummary"></div>
+            </section>
+        </div>
+    </main>
+</section>
+
+<section id="inventoryModule" class="app-module" data-module-panel="inventory">
+    <div class="workspace">
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="sidebar-title">Subnet / Network Search</div>
+                <input
+                    id="subnetSearch"
+                    class="control"
+                    type="search"
+                    placeholder="Example: 192.0.2.0/24 or 192.0.2.5"
+                >
+            </div>
+            <div id="deviceList" class="device-list"></div>
+        </aside>
+
+        <main class="main">
+            <section class="detail-header">
+                <div class="detail-title-row">
+                    <div>
+                        <h1 id="detailTitle" class="detail-title">Select a device</h1>
+                        <div id="detailSubtitle" class="detail-subtitle"></div>
+                        <div id="detailManagement" class="detail-management" hidden></div>
+                    </div>
+                    <div id="detailCounts" class="detail-counts"></div>
+                </div>
+            </section>
+
+            <nav class="tabs">
+                <button id="interfacesTab" class="tab active" type="button" data-tab="interfaces">Interfaces</button>
+                <button id="routingTab" class="tab" type="button" data-tab="routing">Routing</button>
+            </nav>
+
+            <section class="content">
+                <div id="interfacesPanel" class="panel active">
+                    <div class="panel-toolbar">
+                        <h2 class="panel-title">Interfaces</h2>
+                        <input id="interfaceSearch" class="control table-search" type="search" placeholder="Filter interfaces...">
+                    </div>
+                    <div class="table-container">
+                        <table id="interfaceTable"><thead></thead><tbody></tbody></table>
+                    </div>
+                </div>
+
+                <div id="routingPanel" class="panel">
+                    <div class="panel-toolbar">
+                        <h2 class="panel-title">Routing</h2>
+                        <input id="routeSearch" class="control table-search" type="search" placeholder="Filter routes...">
+                    </div>
+                    <div id="routeMemberTabs" class="member-tabs" hidden></div>
+                    <div class="table-container">
+                        <table id="routeTable"><thead></thead><tbody></tbody></table>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+</section>
+
+<section id="configurationModule" class="app-module" data-module-panel="configuration">
+    <div class="config-workspace">
+        <aside class="config-sidebar">
+            <div class="sidebar-header">
+                <div class="sidebar-title">Configuration Devices</div>
+                <input id="configSearch" class="control" type="search" placeholder="Search device, serial, model or IP...">
+                <div id="configFleetFilters" class="config-fleet-filters" aria-label="Configuration fleet filter"></div>
+            </div>
+            <div id="configDeviceList" class="config-device-list"></div>
+        </aside>
+
+        <main class="config-main">
+            <section id="configDetailHeader" class="config-detail-header">
+                <div class="config-detail-identity">
+                    <div id="configDetailEyebrow" class="eyebrow">Configuration</div>
+                    <h1 id="configDetailTitle" class="detail-title">Configuration fleet</h1>
+                    <div id="configDetailSubtitle" class="detail-subtitle"></div>
+                    <div id="configHeaderCompact" class="config-header-compact" hidden></div>
+                    <div id="configHeaderFacts" class="config-header-facts"></div>
+                </div>
+                <div class="config-detail-actions">
+                    <button id="configSidebarToggle" class="config-sidebar-toggle" type="button" aria-expanded="false">Devices</button>
+                    <button id="configHeaderToggle" class="config-header-toggle" type="button" aria-expanded="true">Collapse details</button>
+                    <div id="configDetailStatus" class="config-detail-status"></div>
+                </div>
+            </section>
+
+            <nav class="config-tabs" aria-label="Configuration views">
+                <button id="configOverviewTab" class="config-tab active" type="button" data-config-tab="overview">Overview</button>
+                <button id="configCurrentTab" class="config-tab" type="button" data-config-tab="current">Configuration</button>
+                <button id="configAlignmentTab" class="config-tab" type="button" data-config-tab="alignment">Alignment</button>
+                <button id="configPolicyTab" class="config-tab" type="button" data-config-tab="policy">Policy &amp; Objects</button>
+                <button id="configHistoryTab" class="config-tab" type="button" data-config-tab="history">History</button>
+                <button id="configEvidenceTab" class="config-tab" type="button" data-config-tab="evidence">Evidence</button>
+                <button id="configBackupTab" class="config-tab" type="button" data-config-tab="backup">Backup</button>
+            </nav>
+
+            <section class="config-content">
+                <div id="configOverviewPanel" class="config-panel active"></div>
+
+                <div id="configCurrentPanel" class="config-panel">
+                    <div class="config-panel-toolbar">
+                        <div>
+                            <div class="eyebrow">Current actual state</div>
+                            <h2 class="panel-title">Device configuration</h2>
+                        </div>
+                        <input id="configCurrentSearch" class="control compact-search" type="search" placeholder="Filter setting or value...">
+                    </div>
+                    <div id="configCurrentBody"></div>
+                </div>
+
+                <div id="configAlignmentPanel" class="config-panel">
+                    <div class="config-panel-toolbar">
+                        <div>
+                            <div class="eyebrow">Expected ↔ Effective</div>
+                            <h2 class="panel-title">Configuration alignment</h2>
+                        </div>
+                        <div class="alignment-filters">
+                            <select id="configClassificationFilter" class="control compact-control">
+                                <option value="">All statuses</option>
+                                <option value="DIFFERENCE_OBSERVED">Difference observed</option>
+                                <option value="LOCAL_OVERRIDE">Local override</option>
+                                <option value="EFFECTIVE_DRIFT">Effective drift</option>
+                                <option value="PANORAMA_OUT_OF_SYNC">Panorama out of sync</option>
+                                <option value="MEMBER_SPECIFIC">Expected member difference</option>
+                                <option value="PROVENANCE_UNVERIFIED">Provenance unverified</option>
+                                <option value="IDENTITY_TRANSLATION_REQUIRED">Identity translation required</option>
+                                <option value="UNKNOWN">Unknown</option>
+                            </select>
+                            <input id="configAlignmentSearch" class="control compact-search" type="search" placeholder="Filter setting or source...">
+                        </div>
+                    </div>
+                    <div id="configAlignmentBody"></div>
+                </div>
+
+                <div id="configPolicyPanel" class="config-panel"></div>
+                <div id="configHistoryPanel" class="config-panel"></div>
+                <div id="configEvidencePanel" class="config-panel"></div>
+                <div id="configBackupPanel" class="config-panel"></div>
+            </section>
+        </main>
+    </div>
+</section>
+
+<section id="complianceModule" class="app-module" data-module-panel="compliance">
+    <div class="compliance-shell">
+        <aside class="compliance-sidebar">
+            <div class="sidebar-header">
+                <div class="sidebar-title">Assessed devices</div>
+                <select id="complianceVendorFilter" class="control">
+                    <option value="all">All Vendors</option>
+                    <option value="check_point">Check Point</option>
+                    <option value="palo_alto">Palo Alto</option>
+                </select>
+                <select id="complianceStatusFilter" class="control">
+                    <option value="all">All Statuses</option>
+                    <option value="PASS">PASS</option>
+                    <option value="FINDING">FINDING</option>
+                    <option value="UNKNOWN">UNKNOWN</option>
+                    <option value="PLANNED">PLANNED</option>
+                </select>
+                <div id="complianceFleetStats" class="stats"></div>
+            </div>
+            <div id="complianceSubjectList" class="compliance-subject-list"></div>
+        </aside>
+        <main class="compliance-main">
+            <section id="complianceDetailHeader" class="config-detail-header">
+                <div class="config-detail-identity">
+                    <div id="complianceEyebrow" class="eyebrow">Compliance Posture</div>
+                    <h1 id="complianceTitle" class="detail-title">Evidence-backed control areas</h1>
+                    <div id="complianceSubtitle" class="detail-subtitle">No compliance certification claim. Results are bounded to observed evidence areas.</div>
+                </div>
+                <div class="config-detail-actions">
+                    <div id="complianceDetailStatus" class="config-detail-status"></div>
+                </div>
+            </section>
+
+            <section id="complianceFleetView">
+                <section id="complianceDisclaimer" class="inline-message neutral"></section>
+                <section id="complianceLegend" class="compliance-legend"></section>
+                <section id="complianceFleetCards" class="compliance-kpi-grid"></section>
+                <section class="compliance-card">
+                    <div class="section-heading">
+                        <div>
+                            <div class="eyebrow">Fleet controls</div>
+                            <h2>Global evidence safeguards</h2>
+                        </div>
+                    </div>
+                    <div id="complianceFleetControls"></div>
+                </section>
+                <section class="compliance-card">
+                    <div class="section-heading">
+                        <div>
+                            <div class="eyebrow">Fleet controls</div>
+                            <h2>Platform controls</h2>
+                        </div>
+                    </div>
+                    <div id="compliancePlatformControls"></div>
+                </section>
+            </section>
+
+            <section id="complianceSubjectView" hidden>
+                <section id="complianceSubjectSummary" class="compliance-kpi-grid compact"></section>
+                <section class="compliance-card">
+                    <div class="section-heading">
+                        <div>
+                            <div class="eyebrow">Subject controls</div>
+                            <h2>Control results</h2>
+                        </div>
+                    </div>
+                    <div id="complianceSubjectControls"></div>
+                </section>
+            </section>
+        </main>
+    </div>
+</section>
+
+
+<section id="discoveryModule" class="app-module" data-module-panel="discovery">
+    <main class="project-plan-shell">
+        <div class="project-plan-heading">
+            <div>
+                <div class="eyebrow">SecurityExpert · 0.6.1C</div>
+                <h1>Discovery &amp; Capability</h1>
+                <p>Management-led entity lifecycle, observed collection capability and the collection execution coordinator's safety state. Platform identity and collection capability remain distinct; UNKNOWN is shown explicitly rather than guessed.</p>
+            </div>
+        </div>
+
+        <div id="discoveryFleetSummary" class="project-plan-hero"></div>
+
+        <div class="project-plan-grid">
+            <section class="project-plan-card">
+                <div class="dashboard-card-header">
+                    <div><div class="eyebrow">Safety</div><h2>Collection coordinator</h2></div>
+                </div>
+                <div id="discoveryCoordinator"></div>
+            </section>
+            <section class="project-plan-card">
+                <div class="dashboard-card-header">
+                    <div><div class="eyebrow">Automation</div><h2>Scheduler policy</h2></div>
+                </div>
+                <div id="discoveryScheduler"></div>
+            </section>
+        </div>
+
+        <section class="project-plan-card">
+            <div class="dashboard-card-header">
+                <div><div class="eyebrow">Entities</div><h2>Lifecycle &amp; capability</h2></div>
+            </div>
+            <div id="discoveryEntityTable"></div>
+        </section>
+
+        <section class="project-plan-card">
+            <div class="dashboard-card-header">
+                <div><div class="eyebrow">Coordinator audit</div><h2>Recent jobs</h2></div>
+            </div>
+            <div id="discoveryRecentJobs"></div>
+        </section>
+    </main>
+</section>
+
+<section id="projectPlanModule" class="app-module" data-module-panel="project-plan">
+    <main class="project-plan-shell">
+        <div class="project-plan-heading">
+            <div>
+                <div class="eyebrow">SecurityExpert · Living product roadmap</div>
+                <h1>Project Plan</h1>
+                <p>Build-by-build delivery status, backlog, completed capabilities and major-track direction.</p>
+            </div>
+            <div id="projectPlanBuildBadge" class="run-badge"></div>
+        </div>
+
+        <div id="projectPlanHero" class="project-plan-hero"></div>
+
+        <section class="project-plan-card">
+            <div class="dashboard-card-header">
+                <div><div class="eyebrow">Execution horizon</div><h2>Now · Next · Upcoming</h2></div>
+            </div>
+            <div id="projectNowNext" class="project-now-next"></div>
+        </section>
+
+        <div class="project-plan-grid">
+            <section class="project-plan-card">
+                <div class="dashboard-card-header">
+                    <div><div class="eyebrow">Major tracks</div><h2>Roadmap</h2></div>
+                </div>
+                <div id="projectRoadmapTracks"></div>
+            </section>
+            <section class="project-plan-card">
+                <div class="dashboard-card-header">
+                    <div><div class="eyebrow">Open work</div><h2>Backlog &amp; technical debt</h2></div>
+                </div>
+                <div id="projectBacklog"></div>
+            </section>
+        </div>
+
+        <section class="project-plan-card">
+            <div class="dashboard-card-header">
+                <div><div class="eyebrow">Delivered capabilities</div><h2>Completed features</h2></div>
+            </div>
+            <div id="projectCompletedFeatures" class="project-feature-grid"></div>
+        </section>
+
+        <section class="project-plan-card">
+            <div class="dashboard-card-header">
+                <div><div class="eyebrow">Delivery record</div><h2>Build history</h2></div>
+            </div>
+            <div id="projectBuildHistory"></div>
+        </section>
+
+        <section class="project-plan-card compact">
+            <div class="dashboard-card-header">
+                <div><div class="eyebrow">Roadmap contract</div><h2>How to read this page</h2></div>
+            </div>
+            <div id="projectRoadmapNotes"></div>
+        </section>
+    </main>
+</section>
+
+<script>
+const rawData = __DATA_JSON_PLACEHOLDER__;
+const configUiData = __CONFIG_JSON_PLACEHOLDER__;
+const complianceUiData = __COMPLIANCE_JSON_PLACEHOLDER__;
+const projectPlanData = __PROJECT_PLAN_JSON_PLACEHOLDER__;
+const discoveryUiData = __DISCOVERY_JSON_PLACEHOLDER__;
+
+/* __SCRIPT_PLACEHOLDER__ */
+</script>
+
+</body>
+</html>

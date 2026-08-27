@@ -1,0 +1,16 @@
+SecurityExpert 0.6.1A.1 validation
+
+Targeted CP configuration evidence probe tests: 9 passed
+Full regression: 155 passed, 2 known xfailed, 0 failed
+Python compileall: PASS
+JavaScript syntax: PASS
+CP shell syntax: PASS
+
+New coverage:
+- VSX target fallback from mature VSX device_ip + non-zero VSID
+- identity acceptance with Management-object/Gaia-hostname difference
+- high-confidence identity when hostname agrees
+- fail-closed identity when hostname/version evidence is incomplete
+
+No raw configuration persistence was introduced.
+No CAS/history/UI promotion was introduced.

@@ -1,0 +1,6 @@
+Phase 0.6.0A validation
+- pytest: 71 passed, 2 xfailed
+- Python compileall: passed for main.py, configuration/, panorama/, checkpoint/, utils/
+- Phase 0.5 baseline before change: 66 passed, 2 xfailed
+- New production collector path is opt-in only: --only pan-config
+- Normal --only all inventory flow does not execute configuration collection

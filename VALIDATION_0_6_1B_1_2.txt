@@ -1,0 +1,72 @@
+SecurityExpert 0.6.1B.1.2 validation
+=====================================
+Build: Interactive CP SSH Session + Coverage Closure + Project Roadmap UI
+
+Automated regression
+--------------------
+pytest -q -rx
+187 passed, 2 known xfailed, 0 failed
+
+Known xfails (pre-existing; not introduced by this build)
+- tests/test_panorama_parser_characterization.py::test_panorama_default_route_should_have_default_type
+  Known defect: default destination is checked after static flag classification.
+- tests/test_vsx_parser_characterization.py::test_vsx_ifconfig_network_should_be_canonical_network_address
+  Known defect: VSX parser stores host/prefix instead of canonical network/prefix.
+
+Targeted 0.6.1B/B.1/B.1.1/B.1.2 tests
+--------------------------------------
+pytest -q tests/test_phase0_6_1b_1_2_interactive_project_plan.py tests/test_phase0_6_1b_1_1_adaptive_shell_metadata.py tests/test_phase0_6_1b_1_cp_coverage_device_ux.py tests/test_phase0_6_1b_cp_configuration_collector_ui.py
+32 passed, 0 failed
+
+Static validation
+-----------------
+python -m compileall -q .       PASS
+node --check static/app.js      PASS
+bash -n checkpoint/scripts/cp_inventory.sh PASS
+synthetic HTML export + Project Plan embedding PASS
+
+Project Plan integrity
+----------------------
+current_build: 0.6.1B.1.2
+overall declared-roadmap progress: 31.1%
+current 0.6.x track progress: 60.4%
+metadata integrity warnings: 0
+backlog items represented: 15
+completed feature explanations represented: 13
+
+Security/evidence assertions
+----------------------------
+PASS PTY-backed interactive SSH adapter is primary for physical CP Gaia reads.
+PASS Direct interactive Clish is proven by read-only `show hostname`; prompt shape is not shell evidence.
+PASS Expert interactive shell is proven by explicit `clish -c 'show hostname'`.
+PASS Bounded exec-channel fallback remains if PTY framing/capability cannot be proven.
+PASS Interactive Gaia dispatcher rejects non-`show` commands.
+PASS Wide PTY reduces terminal wrapping risk for long `show configuration` set-lines.
+PASS Unknown platform does not block current configuration when authenticated endpoint + hostname + read-only configuration evidence satisfies the collector identity gate.
+PASS Unknown-platform explicit unsupported configuration capability is a capability gap, not a reachability outage.
+PASS Known Enterprise Gaia unsupported/shape anomalies preserve previous operational-failure semantics.
+PASS Raw Gaia configuration persistence remains false; secret-aware sanitized CAS/history contract unchanged.
+PASS VSX context path remains exact physical endpoint + numeric VSID using previously validated context methods.
+PASS Project Plan percentages are computed from weighted acceptance criteria, not hard-coded UI values.
+PASS Project Plan metadata validates cross-file references/statuses and exposes warnings if inconsistent.
+
+Real-estate validation status
+-----------------------------
+PENDING. This package has not contacted the user's estate.
+Required partial validation command:
+  py.exe -B .\main.py --cp-config-collect --cp-config-stage all
+
+Key real-environment acceptance evidence:
+- interactive_direct_clish should appear for manually verified direct-Clish WiFi/Spark-like endpoints where network/auth allows.
+- Existing Enterprise Gaia success must not regress.
+- Model/Serial coverage must not regress from B.1.1.
+- HA role coverage should increase where `cphaprob stat` exposes local state.
+- `Unknown but current` is acceptable and must remain distinct from failed/unreachable.
+- Project Plan UI must render build 0.6.1B.1.2, calculated progress, backlog, completed features and build history.
+
+Production blockers intentionally still open
+--------------------------------------------
+- CP SSH host-key trust remains observe-and-record compatibility until trusted known_hosts/pinning is enabled.
+- PAN/Panorama TLS corporate-CA verification remains open.
+- Check Point Management expected-vs-actual Alignment remains future work.
+- Native recovery backup is deferred/rebase-required; configuration evidence is not a recovery backup.

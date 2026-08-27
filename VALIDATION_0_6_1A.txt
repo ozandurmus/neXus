@@ -1,0 +1,36 @@
+SecurityExpert 0.6.1A — Check Point Configuration Evidence Probe
+
+Build-time validation
+=====================
+
+Targeted tests:
+  tests/test_phase0_6_1a_cp_configuration_evidence_probe.py
+  5 passed
+
+Full regression:
+  151 passed
+  2 known xfailed
+  0 failed
+
+Known xfail baseline unchanged:
+  - VSX interface network canonicalization
+  - PAN default-route classification
+
+Static validation:
+  python -m compileall -q .                         PASS
+
+Security assertions:
+  - Expert login shell is handled explicitly via clish -c commands.
+  - VSX context uses validated numeric VSID only.
+  - Raw show-configuration stdout is not persisted.
+  - Raw show-configuration stdout is not printed.
+  - No CAS/history write API is used by the probe.
+  - Local probe report is marked sensitive/non-shareable.
+  - Host-key compatibility mode is explicitly non-production.
+
+Scope assertions:
+  - Existing CP inventory collector unchanged.
+  - Existing VSX runtime collector unchanged.
+  - PAN collection/alignment unchanged.
+  - Configuration UI unchanged.
+  - This build is capability/evidence validation only.

@@ -1,0 +1,22 @@
+Phase 0.6.0A2 validation
+
+pytest:
+76 passed, 2 xfailed
+
+Expected xfails retained from the Phase 0.5 baseline:
+- VSX network canonicalization correctness
+- Panorama default-route classification
+
+Additional checks:
+- python -m compileall -q main.py checkpoint panorama configuration utils : PASS
+- node --check static/app.js : PASS
+
+A2 adds:
+- privacy-safe PAN configuration structural validation
+- device/core section presence telemetry
+- aggregate VSYS/VR/zone/interface/security-rule counts
+- structural PASS/WARN semantics without false hard-failure promotion
+- structural telemetry persisted in snapshot metadata
+- structural telemetry included in shareable config support bundle
+- raw run_id removed from shareable summary
+- XML parsers configured with entity resolution disabled and network access disabled

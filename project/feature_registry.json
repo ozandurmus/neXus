@@ -1,0 +1,1095 @@
+{
+  "schema_version": "1.0",
+  "features": [
+    {
+      "id": "network_inventory",
+      "title": "Unified Network Inventory",
+      "status": "done",
+      "introduced": "0.5 Final",
+      "weight": 8,
+      "summary": "Normalized multi-vendor inventory with search, filters, freshness and logical device views.",
+      "why": "Creates the trusted SEE layer used by every later configuration, alignment and recovery workflow.",
+      "criteria": [
+        {
+          "id": "normalized_inventory",
+          "label": "Normalized inventory model",
+          "state": "done",
+          "weight": 1
+        },
+        {
+          "id": "search_filter",
+          "label": "Search/filter UX",
+          "state": "done",
+          "weight": 1
+        },
+        {
+          "id": "freshness",
+          "label": "Failure-aware freshness",
+          "state": "done",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "failure_aware_inventory",
+      "title": "Failure-Aware Snapshot Semantics",
+      "status": "done",
+      "introduced": "0.5",
+      "weight": 4,
+      "summary": "Separates collection failure, management-reported state and last-known-good evidence.",
+      "why": "Prevents unavailable collection from being misrepresented as device failure or fresh state.",
+      "criteria": [
+        {
+          "id": "failure_states",
+          "label": "Failure states",
+          "state": "done",
+          "weight": 1
+        },
+        {
+          "id": "lkg",
+          "label": "Last-known-good handling",
+          "state": "done",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "clusterxl_inventory",
+      "title": "ClusterXL Inventory Hierarchy",
+      "status": "done",
+      "introduced": "0.5",
+      "weight": 5,
+      "summary": "Represents ClusterXL clusters, members, VIP/member addresses and member-specific route/interface evidence.",
+      "why": "Keeps physical member evidence without losing the logical cluster view.",
+      "criteria": [
+        {
+          "id": "members",
+          "label": "Member hierarchy",
+          "state": "done",
+          "weight": 1
+        },
+        {
+          "id": "vip",
+          "label": "VIP/member address semantics",
+          "state": "done",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "vsx_inventory",
+      "title": "VSX Inventory Hierarchy",
+      "status": "done",
+      "introduced": "0.5",
+      "weight": 5,
+      "summary": "Models VSX physical members and Virtual Systems as a hierarchy instead of independent firewalls.",
+      "why": "Preserves the execution endpoint/context relationship required for correct collection and later alignment.",
+      "criteria": [
+        {
+          "id": "contexts",
+          "label": "VS contexts",
+          "state": "done",
+          "weight": 1
+        },
+        {
+          "id": "logical_hierarchy",
+          "label": "Logical hierarchy",
+          "state": "done",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "pan_runtime_inventory",
+      "title": "PAN Runtime Inventory",
+      "status": "done",
+      "introduced": "0.5",
+      "weight": 5,
+      "summary": "Discovers managed Palo Alto firewalls and VSYS runtime context through Panorama.",
+      "why": "Provides management-led target discovery and topology for PAN current-state collection.",
+      "criteria": [
+        {
+          "id": "fleet",
+          "label": "Fleet discovery",
+          "state": "done",
+          "weight": 1
+        },
+        {
+          "id": "vsys",
+          "label": "VSYS identity",
+          "state": "done",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "pan_config_evidence",
+      "title": "PAN Effective Configuration Evidence",
+      "status": "done",
+      "introduced": "0.6.0A",
+      "weight": 12,
+      "summary": "Collects direct-firewall effective-running configuration while retaining Panorama/local/merged provenance evidence.",
+      "why": "Answers what the firewall is actually configured as now without confusing management intent with effective state.",
+      "criteria": [
+        {
+          "id": "identity",
+          "label": "Direct identity gate",
+          "state": "done",
+          "weight": 1
+        },
+        {
+          "id": "effective",
+          "label": "Effective-running primary evidence",
+          "state": "done",
+          "weight": 2
+        },
+        {
+          "id": "fleet",
+          "label": "Connected fleet validation",
+          "state": "done",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "pan_alignment_foundation",
+      "title": "PAN Expected ↔ Actual Alignment",
+      "status": "done",
+      "introduced": "0.6.0A4.2",
+      "weight": 10,
+      "summary": "Compiles Panorama expected configuration and classifies setting-level alignment, override, member/provenance and drift states.",
+      "why": "Separates benign local/member semantics from unexplained effective drift and reduces false positives.",
+      "criteria": [
+        {
+          "id": "compiler",
+          "label": "Expected compiler",
+          "state": "done",
+          "weight": 1
+        },
+        {
+          "id": "identity_translation",
+          "label": "VSYS identity translation",
+          "state": "done",
+          "weight": 1
+        },
+        {
+          "id": "semantic_states",
+          "label": "Semantic classifications",
+          "state": "done",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "id": "content_addressed_history",
+      "title": "Content-Addressed Configuration History",
+      "status": "done",
+      "introduced": "0.6.0A4.3.2",
+      "weight": 8,
+      "summary": "Stores one immutable object per unique configuration payload while history snapshots reference shared content.",
+      "why": "Preserves history without duplicating identical multi-gigabyte configuration payloads.",
+      "evidence": "1295 legacy snapshots migrated to 153 unique CAS objects; approximately 2.98 GiB duplicate payload storage reclaimed in the validated migration.",
+      "criteria": [
+        {
+          "id": "cas",
+          "label": "Vendor-neutral CAS",
+          "state": "done",
+          "weight": 2
+        },
+        {
+          "id": "migration",
+          "label": "Safe legacy migration",
+          "state": "done",
+          "weight": 2
+        },
+        {
+          "id": "rollback",
+          "label": "Rollback manifest/integrity gates",
+          "state": "done",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "configuration_ui",
+      "title": "Configuration UI",
+      "status": "done",
+      "introduced": "0.6.0A4.3",
+      "weight": 8,
+      "summary": "Vendor-neutral current configuration, evidence, alignment, history and backup placeholders with fleet/device drilldown.",
+      "why": "Gives operators one consistent view while retaining vendor-specific evidence semantics underneath.",
+      "criteria": [
+        {
+          "id": "fleet",
+          "label": "Fleet/device navigation",
+          "state": "done",
+          "weight": 1
+        },
+        {
+          "id": "current",
+          "label": "Current-state projection",
+          "state": "done",
+          "weight": 2
+        },
+        {
+          "id": "responsive",
+          "label": "Responsive/collapsible device UX",
+          "state": "done",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "workflow_modes",
+      "title": "Development Workflow Modes",
+      "status": "done",
+      "introduced": "0.6.0A4.3.3.2",
+      "weight": 5,
+      "summary": "Adds render-only, PAN-config, VSX-only, CP-only and full-checkpoint workflows with mixed-cycle provenance.",
+      "why": "Keeps development loops fast without presenting partial reused evidence as a fresh full checkpoint.",
+      "criteria": [
+        {
+          "id": "partial_modes",
+          "label": "Partial modes",
+          "state": "done",
+          "weight": 2
+        },
+        {
+          "id": "checkpoint_semantics",
+          "label": "Checkpoint/mixed-cycle semantics",
+          "state": "done",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "living_project_plan",
+      "title": "Living Project Plan UI",
+      "status": "done",
+      "introduced": "0.6.1B.1.2",
+      "weight": 4,
+      "summary": "In-product roadmap, progress, Now/Next/Upcoming, backlog, completed-feature explanations and build history backed by versioned metadata files.",
+      "why": "Keeps implementation position, deferred work and technical debt visible so build-by-build decisions do not get lost across long development cycles.",
+      "criteria": [
+        {
+          "id": "metadata",
+          "label": "Versioned roadmap/feature/backlog/build metadata",
+          "state": "done",
+          "weight": 2
+        },
+        {
+          "id": "progress",
+          "label": "Acceptance-criterion progress calculation",
+          "state": "done",
+          "weight": 1
+        },
+        {
+          "id": "ui",
+          "label": "Responsive Project Plan module",
+          "state": "done",
+          "weight": 2
+        },
+        {
+          "id": "maintenance",
+          "label": "Per-build metadata update contract",
+          "state": "done",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "cp_config_probe",
+      "title": "Check Point Configuration Evidence Probe",
+      "status": "done",
+      "introduced": "0.6.1A",
+      "weight": 6,
+      "summary": "Validated direct read-only Check Point actual-configuration evidence, identity gating and VSX context-specific collection.",
+      "why": "Proved the collection semantics on real Standalone, ClusterXL and VSX devices before production promotion.",
+      "criteria": [
+        {
+          "id": "expert_clish",
+          "label": "Expert→Clish evidence path",
+          "state": "done",
+          "weight": 1
+        },
+        {
+          "id": "identity",
+          "label": "Identity gate",
+          "state": "done",
+          "weight": 1
+        },
+        {
+          "id": "vsx",
+          "label": "VSX context distinctness",
+          "state": "done",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "cp_config_collector",
+      "title": "Check Point Current Configuration",
+      "status": "done",
+      "introduced": "0.6.1B",
+      "weight": 12,
+      "summary": "Collects secret-aware current Gaia configuration for Standalone, ClusterXL members, VSX hosts and Virtual Systems.",
+      "why": "Extends Configuration beyond PAN while keeping member/VS context and raw-secret boundaries explicit.",
+      "criteria": [
+        {
+          "id": "standalone",
+          "label": "Standalone current state",
+          "state": "done",
+          "weight": 1
+        },
+        {
+          "id": "clusterxl",
+          "label": "ClusterXL member state",
+          "state": "done",
+          "weight": 1
+        },
+        {
+          "id": "vsx",
+          "label": "VSX host/VS state",
+          "state": "done",
+          "weight": 1
+        },
+        {
+          "id": "redaction",
+          "label": "Secret-aware CAS/UI projection",
+          "state": "done",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "id": "cp_coverage_closure",
+      "title": "CP Coverage Closure",
+      "status": "in_progress",
+      "introduced": "0.6.1B.1",
+      "target": "0.6.1B.1.2",
+      "weight": 10,
+      "summary": "Closes shell/platform/metadata coverage gaps and distinguishes operational failure from unsupported capability.",
+      "why": "A management-discovered device should be collectable according to observed capabilities, not a hard-coded shell assumption.",
+      "criteria": [
+        {
+          "id": "failure_taxonomy",
+          "label": "Coverage/failure taxonomy",
+          "state": "done",
+          "weight": 1
+        },
+        {
+          "id": "model_serial",
+          "label": "Model/Serial recovery",
+          "state": "done",
+          "weight": 1
+        },
+        {
+          "id": "interactive_adapter",
+          "label": "Interactive SSH adapter implemented",
+          "state": "done",
+          "weight": 2
+        },
+        {
+          "id": "spark_runtime",
+          "label": "Direct-Clish/Spark real-environment validation",
+          "state": "done",
+          "weight": 2
+        },
+        {
+          "id": "ha_runtime",
+          "label": "ClusterXL runtime HA role validation",
+          "state": "pending",
+          "weight": 1
+        },
+        {
+          "id": "coverage_gate",
+          "label": "Fleet coverage closure validation",
+          "state": "pending",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "id": "discovery_capability_foundation",
+      "title": "Discovery Lifecycle + Capability Profiles",
+      "status": "automated_validated",
+      "introduced": "0.6.1C",
+      "target": "0.6.1C",
+      "weight": 10,
+      "summary": "Management-led discovery lifecycle, topology/identity confidence and capability-driven collection plans.",
+      "why": "Preserves zero-touch onboarding while making uncertainty explicit instead of automating by assumption.",
+      "criteria": [
+        {
+          "id": "lifecycle",
+          "label": "Entity lifecycle",
+          "state": "done",
+          "weight": 1
+        },
+        {
+          "id": "capability",
+          "label": "Capability registry",
+          "state": "done",
+          "weight": 1
+        },
+        {
+          "id": "planner",
+          "label": "Collection planner",
+          "state": "done",
+          "weight": 1
+        },
+        {
+          "id": "production_wiring_preflight",
+          "label": "Production runtime wiring preflight",
+          "state": "done",
+          "weight": 2
+        },
+        {
+          "id": "real_environment_validation",
+          "label": "Representative real-environment validation",
+          "state": "pending",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "id": "cp_management_alignment",
+      "title": "Check Point Management Intent Alignment",
+      "status": "real_env_validated",
+      "target": "0.6.1D",
+      "weight": 10,
+      "summary": "Compare Management intent/expected state with gateway/member/VS actual state using CP-specific semantics.",
+      "why": "Adds VERIFY semantics without treating benign ClusterXL/VSX member differences as drift.",
+      "criteria": [
+        {
+          "id": "intent",
+          "label": "Intent evidence model",
+          "state": "done",
+          "weight": 1
+        },
+        {
+          "id": "semantic_alignment",
+          "label": "Semantic alignment",
+          "state": "done",
+          "weight": 2
+        },
+        {
+          "id": "trusted_intent_source_approval",
+          "label": "Trusted Management intent source approval",
+          "state": "pending",
+          "weight": 2
+        },
+        {
+          "id": "real_environment_validation",
+          "label": "Representative real-environment validation",
+          "state": "pending",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "id": "configuration_history_ux",
+      "title": "Unified Configuration History + Diff UX",
+      "status": "done",
+      "introduced": "0.6.3",
+      "target": "0.6.3",
+      "weight": 8,
+      "summary": "Chronological snapshot selection, normalized change views and safe configuration diffs. Device-scoped artifact timeline from CAS metadata; latest CHANGED pair diff for PAN; CP timeline + INSUFFICIENT_EVIDENCE for diff.",
+      "why": "Turns existing FIRST/SAME/CHANGED history signals into operator-usable TRACE workflows.",
+      "criteria": [
+        {
+          "id": "timeline",
+          "label": "Timeline",
+          "state": "done",
+          "weight": 1
+        },
+        {
+          "id": "diff",
+          "label": "Safe normalized diff",
+          "state": "done",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "id": "native_backup_foundation",
+      "title": "Vendor-Native Backup Foundation",
+      "status": "deferred",
+      "target": "original 0.6.0B · rebase required",
+      "weight": 10,
+      "summary": "Vendor-native recovery artifacts, integrity validation, immutable history, retention and restore-readiness evidence.",
+      "why": "Configuration evidence is useful for analysis but is not equivalent to a supported recovery backup.",
+      "criteria": [
+        {
+          "id": "pan_export",
+          "label": "PAN device-state export",
+          "state": "pending",
+          "weight": 1
+        },
+        {
+          "id": "integrity",
+          "label": "Backup integrity/retention",
+          "state": "pending",
+          "weight": 1
+        },
+        {
+          "id": "cp_backup",
+          "label": "CP native recovery strategy",
+          "state": "pending",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "production_read_trust",
+      "title": "Read-Plane Production Trust Hardening",
+      "status": "in_progress",
+      "weight": 7,
+      "summary": "Close transport trust, credential, dependency and deployment hardening before production rollout.",
+      "why": "Read-only does not remove the need for authenticated endpoints, trusted TLS/SSH and controlled secret handling.",
+      "criteria": [
+        {
+          "id": "secret_redaction",
+          "label": "Secret redaction/storage boundaries",
+          "state": "done",
+          "weight": 2
+        },
+        {
+          "id": "support_privacy",
+          "label": "Privacy-safe support bundles",
+          "state": "done",
+          "weight": 1
+        },
+        {
+          "id": "ssh_host_key",
+          "label": "Strict CP SSH host-key trust",
+          "state": "pending",
+          "weight": 2
+        },
+        {
+          "id": "pan_tls",
+          "label": "PAN corporate CA verification",
+          "state": "pending",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "id": "compliance_posture_foundation",
+      "title": "Compliance Posture Foundation",
+      "status": "done",
+      "introduced": "0.6.1B.1.5",
+      "weight": 6,
+      "summary": "Builds an evidence-backed compliance control-area view from existing CP/PAN normalized configuration UI payload with fleet/subject drilldown and roadmap-linked planned controls.",
+      "why": "Creates the VERIFY on-ramp without over-claiming certification: PASS/FINDING/UNKNOWN/NOT_APPLICABLE/PLANNED states remain bounded to observed evidence and explicit coverage limits.",
+      "criteria": [
+        {
+          "id": "control_states",
+          "label": "Control state model with bounded evidence",
+          "state": "done",
+          "weight": 2
+        },
+        {
+          "id": "framework_area_mapping",
+          "label": "CIS/PCI DSS/BDDK evidence-area mappings",
+          "state": "done",
+          "weight": 1
+        },
+        {
+          "id": "privacy_boundary",
+          "label": "No secret/raw config/real identity in compliance payload",
+          "state": "done",
+          "weight": 2
+        },
+        {
+          "id": "fleet_subject_drilldown",
+          "label": "Fleet summary plus anonymized per-subject drilldown",
+          "state": "done",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "compliance_control_pack_v1",
+      "title": "Compliance Control Pack v1 (CP/PAN)",
+      "status": "done",
+      "target": "0.6.1B.1.6",
+      "weight": 7,
+      "summary": "Expanded compliance posture with 10 vendor-neutral benchmark-aligned subject controls using CP/PAN normalized evidence adapters, with explicit control taxonomy and traceability metadata.",
+      "why": "Strengthens VERIFY signal quality and transparency while preserving privacy boundaries and no-certification-claim semantics.",
+      "criteria": [
+        {
+          "id": "ten_controls",
+          "label": "10 deterministic controls implemented",
+          "state": "done",
+          "weight": 2
+        },
+        {
+          "id": "scope_partition",
+          "label": "Subject/platform/global scope partition maintained",
+          "state": "done",
+          "weight": 1
+        },
+        {
+          "id": "framework_traceability",
+          "label": "CIS/PCI DSS/BDDK traceability metadata",
+          "state": "done",
+          "weight": 1
+        },
+        {
+          "id": "ui_taxonomy",
+          "label": "Compliance UI taxonomy clarity (top/sub menu semantics)",
+          "state": "done",
+          "weight": 1
+        },
+        {
+          "id": "privacy_no_claim",
+          "label": "Privacy boundary and no-certification claim preserved",
+          "state": "done",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "id": "compliance_engine",
+      "title": "Compliance Rule Engine",
+      "status": "planned",
+      "target": "0.7.x",
+      "weight": 12,
+      "early_foundation": "Early evidence-backed control state model and framework area mappings delivered in 0.6.1B.1.5/1.6. Formal rule engine with versioned rule packs, stronger framework governance and compliance_posture_rulepack_transition bridge opens the 0.7.x track.",
+      "summary": "Vendor-neutral rule evaluation over verified normalized configuration facts.",
+      "why": "Transforms verified current/expected state into actionable compliance findings.",
+      "criteria": [
+        {
+          "id": "rules",
+          "label": "Rule engine",
+          "state": "pending",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "id": "framework_mappings",
+      "title": "Framework Mappings",
+      "status": "planned",
+      "target": "0.7.x",
+      "weight": 5,
+      "early_foundation": "CIS/PCI-DSS/BDDK control-area mappings and benchmark references delivered in 0.6.1B.1.5/1.6 as evidence-bounded area mappings. Formal framework mapping with full rule coverage and governance acceptance is the 0.7.x gate.",
+      "summary": "Map technical evidence/findings to internal and external control frameworks.",
+      "why": "Connects engineering evidence to audit and governance requirements.",
+      "criteria": [
+        {
+          "id": "mapping",
+          "label": "Control mappings",
+          "state": "pending",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "evidence_reporting",
+      "title": "Evidence Reports",
+      "status": "planned",
+      "target": "0.7.x",
+      "weight": 5,
+      "summary": "Generate bounded evidence reports without exposing raw configuration secrets.",
+      "why": "Supports review, audit and management communication from the same evidence model.",
+      "criteria": [
+        {
+          "id": "reports",
+          "label": "Report model",
+          "state": "pending",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "cross_vendor_change_timeline",
+      "title": "Cross-Vendor Change Timeline",
+      "status": "planned",
+      "target": "0.8.x",
+      "weight": 10,
+      "summary": "Trace normalized configuration changes across devices and vendors over time.",
+      "why": "Makes change investigation independent of vendor-specific raw syntax.",
+      "criteria": [
+        {
+          "id": "timeline",
+          "label": "Cross-vendor timeline",
+          "state": "pending",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "root_cause_trace",
+      "title": "Root Cause Trace",
+      "status": "planned",
+      "target": "0.8.x",
+      "weight": 8,
+      "summary": "Correlate evidence, alignment and history to explain what changed and why a finding appeared.",
+      "why": "Moves from detecting difference to explaining causality and provenance.",
+      "criteria": [
+        {
+          "id": "trace",
+          "label": "Trace graph",
+          "state": "pending",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "native_backup_validation",
+      "title": "Native Backup Validation",
+      "status": "planned",
+      "target": "0.9.x",
+      "weight": 10,
+      "summary": "Validate vendor-native recovery artifacts, hashes, archive integrity and retention.",
+      "why": "Provides recovery evidence rather than assuming a collected config can restore a device.",
+      "criteria": [
+        {
+          "id": "validation",
+          "label": "Artifact validation",
+          "state": "pending",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "restore_readiness",
+      "title": "Restore Readiness",
+      "status": "planned",
+      "target": "0.9.x",
+      "weight": 8,
+      "summary": "Track restore prerequisites, coverage and tested recovery readiness without automatically restoring devices.",
+      "why": "Makes recovery posture measurable before any controlled restore operation exists.",
+      "criteria": [
+        {
+          "id": "readiness",
+          "label": "Readiness model",
+          "state": "pending",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "server_data_plane",
+      "title": "Server Data Plane",
+      "status": "planned",
+      "target": "1.0",
+      "weight": 10,
+      "summary": "PostgreSQL metadata, Redis/workers and object/PVC storage for multi-user server deployment.",
+      "why": "Moves local POC persistence into scalable services while retaining evidence contracts.",
+      "criteria": [
+        {
+          "id": "db",
+          "label": "PostgreSQL metadata",
+          "state": "pending",
+          "weight": 1
+        },
+        {
+          "id": "workers",
+          "label": "Worker queue",
+          "state": "pending",
+          "weight": 1
+        },
+        {
+          "id": "object_store",
+          "label": "Object storage",
+          "state": "pending",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "oidc_rbac_audit",
+      "title": "OIDC / RBAC / Audit",
+      "status": "planned",
+      "target": "1.0",
+      "weight": 8,
+      "summary": "Enterprise authentication, authorization and audited access to sensitive evidence/actions.",
+      "why": "Required before broader multi-user production use and any future write plane.",
+      "criteria": [
+        {
+          "id": "oidc",
+          "label": "OIDC",
+          "state": "pending",
+          "weight": 1
+        },
+        {
+          "id": "rbac",
+          "label": "RBAC",
+          "state": "pending",
+          "weight": 1
+        },
+        {
+          "id": "audit",
+          "label": "Audit trail",
+          "state": "pending",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "production_observability",
+      "title": "Production Observability & Deployment",
+      "status": "planned",
+      "target": "1.0",
+      "weight": 7,
+      "summary": "Container/pod topology, health, metrics, logs, dependency and supply-chain controls.",
+      "why": "Makes collector/network access boundaries and operational health supportable in production.",
+      "criteria": [
+        {
+          "id": "containers",
+          "label": "Container deployment",
+          "state": "pending",
+          "weight": 1
+        },
+        {
+          "id": "health",
+          "label": "Health/metrics",
+          "state": "pending",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "collection_execution_coordinator",
+      "title": "Collection Execution Coordinator & Safety Policy",
+      "status": "automated_validated",
+      "introduced": "0.6.1C",
+      "target": "0.6.1C / DEPLOY.1",
+      "weight": 10,
+      "summary": "Per-device canonical identity lock, vendor/context concurrency budget, cooldown, coalescing, priority and job provenance across manual, scheduled and event-triggered collection.",
+      "why": "Required before recurring scheduling or event-driven triggers; prevents concurrent CP/VSX/config collection hitting the same physical device simultaneously. Extends the 0.6.1B.1.3 safety audit finding into the scheduled-execution world.",
+      "criteria": [
+        {
+          "id": "device_lock",
+          "label": "Per-canonical-device job lock",
+          "state": "done",
+          "weight": 2
+        },
+        {
+          "id": "concurrency_budget",
+          "label": "Vendor/context concurrency budget",
+          "state": "done",
+          "weight": 1
+        },
+        {
+          "id": "job_provenance",
+          "label": "Job provenance: manual / scheduled (event reserved only)",
+          "state": "done",
+          "weight": 1
+        },
+        {
+          "id": "cancellation",
+          "label": "Cancellation and bounded retry",
+          "state": "done",
+          "weight": 1
+        },
+        {
+          "id": "production_runtime_wiring",
+          "label": "Shared production runtime admission and scheduler dispatch",
+          "state": "done",
+          "weight": 2
+        },
+        {
+          "id": "real_environment_validation",
+          "label": "Coordinator/scheduler real-environment validation",
+          "state": "pending",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "id": "deploy1_oidc_viewer",
+      "title": "DEPLOY.1A â€” Authenticated Read-Only Viewer Boundary",
+      "status": "planned",
+      "target": "DEPLOY.1A",
+      "weight": 9,
+      "summary": "Corporate OIDC login gate in front of all UI and API surfaces before the server is opened for internal use. IP allowlist remains as a defense-in-depth layer, not the primary control.",
+      "why": "Network topology, rule sets and configuration evidence are sensitive even after redaction. Any internal server deployment must verify who is viewing before exposing the evidence plane.",
+      "criteria": [
+        {
+          "id": "oidc_login",
+          "label": "Corporate OIDC login required",
+          "state": "pending",
+          "weight": 2
+        },
+        {
+          "id": "viewer_role",
+          "label": "Viewer role / explicit deny-by-default",
+          "state": "pending",
+          "weight": 1
+        },
+        {
+          "id": "audit_access",
+          "label": "Login and view/export audit events",
+          "state": "pending",
+          "weight": 1
+        },
+        {
+          "id": "no_secret_in_browser",
+          "label": "No credential or raw operational artifact in browser/export",
+          "state": "pending",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "id": "deploy1_evidence_egress_policy",
+      "title": "DEPLOY.1 â€” Evidence Egress & Sharing Policy",
+      "status": "planned",
+      "target": "DEPLOY.1",
+      "weight": 6,
+      "summary": "Explicit policy and enforcement for every path evidence can leave the system: UI export, support bundle, audit log, webhook ingress persistence, TI enrichment query and OIDC claim retention.",
+      "why": "As server, event intake and TI integration add new egress paths, a single governed policy prevents accidental exposure of topology, identities or raw configuration.",
+      "criteria": [
+        {
+          "id": "egress_inventory",
+          "label": "Egress path inventory",
+          "state": "pending",
+          "weight": 1
+        },
+        {
+          "id": "retention_redaction",
+          "label": "Retention and redaction rules per path",
+          "state": "pending",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "id": "crypto_agility_pqc",
+      "title": "Cryptographic Posture, Crypto-Agility & PQC Readiness",
+      "status": "planned",
+      "target": "0.7.x",
+      "weight": 10,
+      "summary": "Normalize IPsec/IKE proposal, TLS policy, certificate and platform-capability facts for Check Point and Palo Alto; evaluate against versioned rule packs for crypto-agility, known-weak algorithms and PQC readiness. Distinct from and dependent on the core Compliance Rule Engine.",
+      "why": "Turns existing configuration evidence into actionable crypto risk findings without adding new vendors or collectors. Supports NIST/PCI-DSS framework mappings and strategic PQC transition planning.",
+      "criteria": [
+        {
+          "id": "crypto_facts",
+          "label": "IPsec/IKE/TLS/cert normalized facts (CP + PAN)",
+          "state": "pending",
+          "weight": 2
+        },
+        {
+          "id": "rule_packs",
+          "label": "Versioned crypto rule packs (weak/agility/PQC)",
+          "state": "pending",
+          "weight": 2
+        },
+        {
+          "id": "evidence_confidence",
+          "label": "Configured vs negotiated vs inferred confidence model",
+          "state": "pending",
+          "weight": 1
+        },
+        {
+          "id": "pqc_capability",
+          "label": "Platform/OS PQC capability evidence",
+          "state": "pending",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "event_signal_intake",
+      "title": "External Change Signal Intake & Bounded Evidence Trigger",
+      "status": "planned",
+      "target": "0.8.x",
+      "weight": 8,
+      "summary": "Authenticated webhook ingress (e.g. Splunk correlation action) that validates, deduplicates and rate-limits inbound signals, resolves canonical device identity, and queues a bounded read-only evidence capture through the collection coordinator. Requires safe-diff and collection coordinator foundations.",
+      "why": "Enables near-real-time configuration snapshots after policy-install events without polling, while preserving all existing safety and identity contracts.",
+      "criteria": [
+        {
+          "id": "authenticated_ingress",
+          "label": "Authenticated / signed webhook ingress (mTLS or OIDC-client)",
+          "state": "pending",
+          "weight": 2
+        },
+        {
+          "id": "signal_validation",
+          "label": "Schema allowlist, replay protection and dedup/cooldown",
+          "state": "pending",
+          "weight": 2
+        },
+        {
+          "id": "identity_resolution",
+          "label": "Canonical device identity resolution via discovery lifecycle",
+          "state": "pending",
+          "weight": 1
+        },
+        {
+          "id": "coordinator_queue",
+          "label": "Coordinator-queued bounded read-only evidence capture",
+          "state": "pending",
+          "weight": 1
+        },
+        {
+          "id": "signal_outcome",
+          "label": "Explicit signal outcome: triggered / coalesced / ignored / unknown_identity",
+          "state": "pending",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "passive_ti_enrichment",
+      "title": "Passive Threat-Intelligence Enrichment for Confirmed Changes",
+      "status": "planned",
+      "target": "0.8.x",
+      "weight": 6,
+      "summary": "After a normalized, confirmed diff finding is produced, extract safe observables and check against a local/corporate-proxy TI feed. Result is stored as contextual risk enrichment, not root-cause evidence. Internet API query is off by default.",
+      "why": "Surfaces potential risk context without manual investigation, while keeping raw config, full topology and customer IP ranges inside the evidence boundary.",
+      "criteria": [
+        {
+          "id": "observable_extraction",
+          "label": "Safe observable extraction from normalized findings",
+          "state": "pending",
+          "weight": 1
+        },
+        {
+          "id": "local_feed",
+          "label": "Local/corporate-proxy TI feed integration (internet off by default)",
+          "state": "pending",
+          "weight": 2
+        },
+        {
+          "id": "ti_confidence",
+          "label": "TI match confidence, source, age and false-positive model",
+          "state": "pending",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "repository_privacy_gate",
+      "title": "Corporate Git Repository Privacy Gate",
+      "status": "done",
+      "introduced": "DEV.0.4/DEV.0.4.1",
+      "weight": 3,
+      "summary": "Offline fail-closed repository scan plus runtime-only inventory exclusion policy removes environment identities from the Corporate Git candidate without changing exact pre-poll filtering semantics.",
+      "why": "Keeps operational identities and runtime artifacts outside Git/AI context while preserving deterministic device-selection behavior.",
+      "criteria": [
+        {
+          "id": "offline_gate",
+          "label": "Offline privacy gate",
+          "state": "done",
+          "weight": 1
+        },
+        {
+          "id": "runtime_exclusions",
+          "label": "Runtime-only exact inventory exclusions",
+          "state": "done",
+          "weight": 1
+        },
+        {
+          "id": "zero_findings",
+          "label": "Corporate Git candidate zero findings",
+          "state": "done",
+          "weight": 1
+        }
+      ]
+    }
+  ]
+}
