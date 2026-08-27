@@ -2,6 +2,15 @@
   "schema_version": "1.0",
   "items": [
     {
+      "id": "parser_correctness_hardening",
+      "category": "Correctness / Implementation",
+      "title": "0.6.6A — CP/PAN parser correctness hardening",
+      "status": "planned",
+      "priority": "P1",
+      "target": "0.6.6A",
+      "note": "Contract frozen 2026-08-27 in PHASE0_6_6A_PARSER_CORRECTNESS_HARDENING.md. Bounded local correction only: canonical VSX interface network CIDR and PAN default-route precedence; the two strict xfails must become passing regressions. No collector, network, scheduler, concurrency, CAS or UI change."
+    },
+    {
       "id": "deploy1_contract_freeze",
       "category": "Deployment / Architecture",
       "title": "DEPLOY.1 contract freeze and server-arrival execution gate",
@@ -83,11 +92,11 @@
     {
       "id": "compliance_posture_rulepack_transition",
       "category": "Compliance / Architecture",
-      "title": "Compliance posture foundation to rule-pack transition",
+      "title": "0.6.6B — Compliance Rule-Pack Transition Foundation",
       "status": "planned",
       "priority": "P1",
-      "target": "0.7.x",
-      "note": "Promote 0.6.1B.1.5 evidence-backed control-area posture to versioned compliance rule packs and stronger framework references. Explicitly linked to compliance_engine and crypto_agility_pqc; keep no-certification-claim boundary until full rule coverage and governance acceptance."
+      "target": "0.6.6B",
+      "note": "Contract frozen 2026-08-27 in PHASE0_6_6B_COMPLIANCE_RULE_PACK_TRANSITION.md. Promote the existing ten deterministic CP/PAN controls through a static versioned rule-pack boundary; no network, collector, CAS or certification-claim semantics. Dynamic/signed packs, scoring and formal governance remain 0.7.x work."
     },
     {
       "id": "event_signal_intake",
@@ -164,17 +173,19 @@
       "id": "vsx_network_canonicalization",
       "category": "Known defect",
       "title": "VSX network canonicalization characterization xfail",
-      "status": "planned",
+      "status": "automated_validated",
       "priority": "P2",
-      "target": "0.6.x"
+      "target": "0.6.6A",
+      "note": "0.6.6A AUTOMATED_VALIDATED 2026-08-27. parse_ifconfig now emits canonical network CIDR in interfaces[].ips[].network; former strict xfail converted to passing regression."
     },
     {
       "id": "pan_default_route",
       "category": "Known defect",
       "title": "PAN default-route classification characterization xfail",
-      "status": "planned",
+      "status": "automated_validated",
       "priority": "P2",
-      "target": "0.6.x"
+      "target": "0.6.6A",
+      "note": "0.6.6A AUTOMATED_VALIDATED 2026-08-27. parse_routes now classifies destination 0.0.0.0/0 as type=default before static/connected flag checks; former strict xfail converted to passing regression."
     },
     {
       "id": "immutable_store_permission",

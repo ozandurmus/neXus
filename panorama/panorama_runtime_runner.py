@@ -211,13 +211,13 @@ def parse_routes(xml):
             "raw_flags": flags
         }
 
-        # TYPE FROM FLAGS - existing behavior preserved in Phase 0.4.
-        if "S" in flags:
+        # Default destination takes precedence over static/connected flags.
+        if dest == "0.0.0.0/0":
+            route["type"] = "default"
+        elif "S" in flags:
             route["type"] = "static"
         elif "C" in flags:
             route["type"] = "connected"
-        elif dest == "0.0.0.0/0":
-            route["type"] = "default"
         else:
             route["type"] = "unknown"
 

@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "current_build": "0.6.5",
+  "current_build": "0.6.6A",
   "current_track": "0.6.x",
   "progress_contract": "Weighted acceptance-criterion completion. Percentages describe the declared roadmap, not calendar time or delivery ETA.",
   "tracks": [
@@ -97,20 +97,29 @@
   ],
   "now_next": {
     "now": {
-      "build": "DEPLOY.1 architecture contract freeze",
-      "title": "Ubuntu + Docker server transition contract freeze",
-      "goal": "Freeze deployment architecture and acceptance gates without changing collector/runtime semantics while waiting for server availability.",
-      "status": "contract_frozen",
+      "build": "0.6.6A",
+      "title": "CP/PAN parser correctness hardening",
+      "goal": "Close VSX network canonicalization and PAN default-route classification xfails with bounded parser-only corrections.",
+      "status": "automated_validated",
       "started": "2026-08-27",
       "completed": "2026-08-27"
     },
     "next": {
-      "build": "DEPLOY.1 server-arrival execution gate",
-      "title": "Server bring-up and production admission validation",
-      "goal": "Execute frozen DEPLOY.1 acceptance gates on server arrival: OIDC viewer boundary, evidence egress policy, CP strict host-key R2 validation and PAN TLS corporate CA validation.",
+      "build": "0.6.6B",
+      "title": "Compliance Rule-Pack Transition Foundation",
+      "goal": "Introduce a static versioned rule-pack boundary around existing deterministic CP/PAN controls without collector, network or CAS scope expansion.",
       "status": "planned"
     },
     "upcoming": [
+      {
+        "build": "0.6.6B",
+        "title": "Compliance Rule-Pack Transition Foundation",
+        "status": "planned",
+        "notes": [
+          "Separate from 0.6.6A. Introduces a static, versioned, vendor-neutral rule-pack boundary around the existing ten deterministic CP/PAN controls.",
+          "Offline, privacy-safe and no-certification-claim semantics are mandatory; dynamic/signed packs, scoring and governance remain 0.7.x work."
+        ]
+      },
       {
         "build": "0.6.3 target",
         "title": "Unified Configuration History + Diff UX",

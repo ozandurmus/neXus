@@ -1,6 +1,5 @@
 from pathlib import Path
 
-import pytest
 from lxml import etree
 
 from panorama.panorama_runtime_runner import parse_interfaces, parse_routes
@@ -49,15 +48,9 @@ def test_panorama_route_parser_preserves_current_filters_and_fields():
     assert routes[1]["type"] == "static"
     assert routes[1]["interface"] == "ethernet1/1"
     assert routes[2]["network"] == "0.0.0.0/0"
-    # Characterization: current code classifies a static-flagged default route
-    # as static because flag checks happen before destination checks.
-    assert routes[2]["type"] == "static"
+    assert routes[2]["type"] == "default"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="Known defect: default destination is checked after static flag classification.",
-)
 def test_panorama_default_route_should_have_default_type():
     routes = parse_routes(_xml("routes.xml"))
 

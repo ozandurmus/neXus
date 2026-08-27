@@ -1,7 +1,5 @@
 from pathlib import Path
 
-import pytest
-
 from checkpoint.vsx_parser import clean_raw, parse_ifconfig, parse_routes
 
 
@@ -28,15 +26,9 @@ def test_vsx_ifconfig_parser_preserves_current_interface_and_ip_shape():
     assert [item["name"] for item in interfaces] == ["eth0", "eth1"]
     assert interfaces[0]["ips"][0]["ip"] == "10.20.30.2"
     assert interfaces[0]["ips"][0]["prefix"] == 24
-    # Characterization only: this records today's output shape.  A separate
-    # xfail below documents that the value is not yet a canonical network.
-    assert interfaces[0]["ips"][0]["network"] == "10.20.30.2/24"
+    assert interfaces[0]["ips"][0]["network"] == "10.20.30.0/24"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="Known defect: VSX parser currently stores host/prefix instead of network/prefix.",
-)
 def test_vsx_ifconfig_network_should_be_canonical_network_address():
     raw = (FIXTURES / "ifconfig.txt").read_text(encoding="utf-8")
 
