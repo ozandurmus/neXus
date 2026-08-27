@@ -1,4 +1,5 @@
 import requests
+import urllib3
 from lxml import etree
 import json
 import os
@@ -7,10 +8,25 @@ import ipaddress
 from datetime import datetime, timezone
 from pathlib import Path
 
-from utils.logger import info, err, register_sensitive_value
+from utils.logger import info, err, warn, register_sensitive_value
+from utils.pan_tls_trust import PanTlsStrictPreflightError, preflight_pan_tls_ca_bundle
 
-requests.packages.urllib3.disable_warnings()
 TELEMETRY_OUT = "output/panorama_telemetry.json"
+
+
+def _tls_verify_setting() -> bool | str:
+    """Resolve TLS verification setting for Panorama runtime collection.
+
+    Priority: SECURITYEXPERT_PAN_CA_BUNDLE (CA bundle path) >
+    SECURITYEXPERT_PAN_TLS_VERIFY (bool) > False (compat default).
+    """
+    ca_bundle = os.getenv("SECURITYEXPERT_PAN_CA_BUNDLE")
+    if ca_bundle:
+        return ca_bundle
+    raw = os.getenv("SECURITYEXPERT_PAN_TLS_VERIFY")
+    if raw is not None:
+        return raw.strip().lower() in {"1", "true", "yes", "on"}
+    return False
 
 
 ###############################################
@@ -46,13 +62,12 @@ def _parse_xml_response(response, operation):
 ###############################################
 # API
 ###############################################
-def get_api_key(cfg, host):
-
+def get_api_key(cfg, host, *, verify: bool | str = False):
     r = requests.get(f"{host}/api/", params={
         "type": "keygen",
         "user": cfg.auth.principal,
         "password": cfg.auth.secret
-    }, verify=False, timeout=10)
+    }, verify=verify, timeout=10)
 
     root = _parse_xml_response(r, "Panorama key generation")
     key = root.findtext(".//key")
@@ -61,8 +76,7 @@ def get_api_key(cfg, host):
     return key
 
 
-def op_cmd(host, key, cmd, target):
-
+def op_cmd(host, key, cmd, target, *, verify: bool | str = False):
     params = {
         "type": "op",
         "cmd": cmd,
@@ -74,7 +88,7 @@ def op_cmd(host, key, cmd, target):
         r = requests.get(
             f"{host}/api/",
             params=params,
-            verify=False,
+            verify=verify,
             timeout=10
         )
         return _parse_xml_response(r, f"Operational command target={target}")
@@ -86,13 +100,12 @@ def op_cmd(host, key, cmd, target):
 ###############################################
 # DEVICE LIST
 ###############################################
-def get_devices(host, key):
-
+def get_devices(host, key, *, verify: bool | str = False):
     r = requests.get(f"{host}/api/", params={
         "type": "op",
         "cmd": "<show><devices><all></all></devices></show>",
         "key": key
-    }, verify=False, timeout=10)
+    }, verify=verify, timeout=10)
 
     tree = _parse_xml_response(r, "Panorama managed device discovery")
 
@@ -222,11 +235,18 @@ def run_panorama_runtime(cfg):
     output_root = Path(cfg.runtime_paths.output_root)
     raw_root = output_root / "panorama_raw"
 
+    verify = _tls_verify_setting()
+    if verify is False:
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+        warn(">>> PANORAMA RUNTIME TLS verification is disabled; set SECURITYEXPERT_PAN_CA_BUNDLE for production trust")
+    else:
+        preflight_pan_tls_ca_bundle(verify)
+
     host = fix_host(cfg.panorama_ip)
-    key = get_api_key(cfg, host)
+    key = get_api_key(cfg, host, verify=verify)
     register_sensitive_value(key, "[API_KEY:REDACTED]")
 
-    devices = get_devices(host, key)
+    devices = get_devices(host, key, verify=verify)
 
     info(f">>> FOUND {len(devices)} DEVICES")
 
@@ -260,7 +280,8 @@ def run_panorama_runtime(cfg):
                 host,
                 key,
                 "<show><interface>all</interface></show>",
-                serial
+                serial,
+                verify=verify,
             )
 
             with (raw_root / f"{serial}_interfaces.xml").open("wb") as f:
@@ -289,7 +310,8 @@ def run_panorama_runtime(cfg):
                 host,
                 key,
                 "<show><routing><route></route></routing></show>",
-                serial
+                serial,
+                verify=verify,
             )
 
             with (raw_root / f"{serial}_routes.xml").open("wb") as f:

@@ -28,6 +28,7 @@ from configuration.pan_config_alignment import (
 )
 from utils.config_evidence import ConfigEvidenceStore
 from utils.logger import err, info, register_sensitive_value, warn
+from utils.pan_tls_trust import PanTlsStrictPreflightError, preflight_pan_tls_ca_bundle
 from utils.runtime_paths import default_output_root
 from utils.support_bundle import Tokenizer, _get_support_key
 
@@ -1874,11 +1875,31 @@ def run_panorama_config_evidence(
     expected_compiler_result: dict[str, Any] = {"status": "pending", "summary": {}}
     intent_content: bytes | None = None
 
+    # Preflight: if a CA bundle path is configured, verify it exists and is
+    # readable before any network call.  This mirrors the 0.6.4 CP SSH
+    # host-key strict-preflight pattern and prevents a confusing TLS failure
+    # deep in the collection loop.
+    try:
+        preflight_pan_tls_ca_bundle(panorama_verify)
+    except PanTlsStrictPreflightError as preflight_exc:
+        raise PanTlsStrictPreflightError(
+            "pan_config_panorama_tls_preflight_failed"
+        ) from preflight_exc
+    if direct_compare:
+        try:
+            preflight_pan_tls_ca_bundle(direct_verify)
+        except PanTlsStrictPreflightError as preflight_exc:
+            raise PanTlsStrictPreflightError(
+                "pan_config_direct_tls_preflight_failed"
+            ) from preflight_exc
+
     if panorama_verify is False:
-        requests.packages.urllib3.disable_warnings()
+        import urllib3
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
         warn(">>> PANORAMA CONFIG A4.2.2 TLS verification is disabled; set SECURITYEXPERT_PAN_CA_BUNDLE for production trust")
     if direct_compare and direct_verify is False:
-        requests.packages.urllib3.disable_warnings()
+        import urllib3
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
         warn(">>> DIRECT PAN-OS API A4.2.2 TLS verification is disabled; set SECURITYEXPERT_PAN_DIRECT_CA_BUNDLE for production trust")
 
     info(">>> PHASE 0.6.0A4.2.2 PAN SEMANTIC POLICY & PROVENANCE HARDENING START")
