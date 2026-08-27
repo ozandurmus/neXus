@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "current_build": "0.6.4",
+  "current_build": "0.6.5",
   "current_track": "0.6.x",
   "progress_contract": "Weighted acceptance-criterion completion. Percentages describe the declared roadmap, not calendar time or delivery ETA.",
   "tracks": [
@@ -105,9 +105,9 @@
       "completed": "2026-08-27"
     },
     "next": {
-      "build": "0.6.5",
-      "title": "PAN TLS/CA trust closure",
-      "goal": "Close PAN/Panorama transport trust gate with corporate CA verification while preserving read-only behavior and compatibility safety.",
+      "build": "DEPLOY.1 server-arrival execution gate",
+      "title": "Server bring-up and production admission validation",
+      "goal": "Execute frozen DEPLOY.1 acceptance gates on server arrival: OIDC viewer boundary, evidence egress policy, CP strict host-key R2 validation and PAN TLS corporate CA validation.",
       "status": "planned"
     },
     "upcoming": [
