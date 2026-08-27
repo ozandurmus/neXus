@@ -3,11 +3,11 @@
   "builds": [
     {
       "build": "0.6.5",
-      "status": "automated_validated",
+      "status": "real_env_validated",
       "started": "2026-08-27",
       "completed": "2026-08-27",
       "title": "PAN TLS/CA Trust Production Closure",
-      "summary": "AUTOMATED_VALIDATED (2026-08-27). Delivered: centralized CA bundle preflight helper (utils/pan_tls_trust.py) mirroring 0.6.4 CP SSH trust pattern; panorama_runtime_runner.py _tls_verify_setting() with env var hierarchy (SECURITYEXPERT_PAN_CA_BUNDLE > SECURITYEXPERT_PAN_TLS_VERIFY > False); panorama_config_collector.py preflight validation (both Panorama and direct firewall paths) before HTTPS request; conditional urllib3 warning suppression compat-mode only; production trust warning when verify=False. Preflight raises PanTlsStrictPreflightError before any network call; error messages value-free (no paths/IPs/credentials). Default compat mode (verify=False) unchanged; production trust opt-in via env var. Automated evidence: 14 targeted (AC-1…AC-11) PASS; 28 PAN regression PASS; privacy gate 5 PASS 0 findings. No new PAN commands, collection target coverage, retries, timeouts, polling, concurrency, scheduler, CAS or UI behavior. GitHub remote synchronized (commit b22bd3e, tree ba532064…); main/origin/main equality verified."
+      "summary": "REAL_ENV_VALIDATED (2026-08-27). Delivered: centralized CA bundle preflight helper (utils/pan_tls_trust.py) mirroring 0.6.4 CP SSH trust pattern; panorama_runtime_runner.py _tls_verify_setting() with env var hierarchy (SECURITYEXPERT_PAN_CA_BUNDLE > SECURITYEXPERT_PAN_TLS_VERIFY > False); panorama_config_collector.py preflight validation (both Panorama and direct firewall paths) before HTTPS request; conditional urllib3 warning suppression compat-mode only; production trust warning when verify=False. Preflight raises PanTlsStrictPreflightError before any network call; error messages value-free (no paths/IPs/credentials). Default compat mode (verify=False) unchanged; production trust opt-in via env var. Automated evidence: 14 targeted (AC-1…AC-11) PASS; 28 PAN regression PASS; privacy gate 5 PASS 0 findings. Real-environment evidence (value-free): strict mode + CA bundle path PASS, no insecure TLS fallback PASS, PAN collection contract preserved PASS, shareable evidence value-free PASS, no scheduler/polling/concurrency scope drift PASS, SAFE SUMMARY success=5 partial=0 failed=0 management_down=0. No new PAN commands, collection target coverage, retries, timeouts, polling, concurrency, scheduler, CAS or UI behavior. main merge approved; 0.6.5 deployment gate real_env_validated."
     },
     {
       "build": "DEPLOY.1 architecture contract freeze",
