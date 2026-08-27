@@ -2,9 +2,56 @@
 
 **Authoritative operational checkpoint:** 2026-08-27  
 **Current engineering implementation:** `DEV.1 — Corporate Git + Copilot Development Foundation`  
-**Product baseline:** `0.6.3 — Unified Configuration History + Diff UX` (DONE)
+**Product baseline:** `0.6.5 — PAN TLS/CA Trust Closure` (DONE)
 
 ## Current Active Build
+
+`0.6.5 — PAN TLS/CA Trust Production Closure`
+Status: **AUTOMATED_VALIDATED** (2026-08-27)
+Build agreement: `PHASE0_6_5_PAN_TLS_CA_TRUST_PRODUCTION_CLOSURE.md`
+
+Frozen scope:
+- Close the production-admission contract for the existing opt-in PAN strict TLS
+  CA verification mode using externally provisioned CA bundle material.
+- No new PAN commands, collector target coverage, retries, timeouts, polling,
+  concurrency, scheduler, CAS or UI behavior.
+- Strict-mode TLS verification input failure must occur before HTTPS request;
+  strict mode must never fall back to `verify=False`.
+- Compatibility mode (`verify=False`) remains the default and is unchanged when
+  strict mode is disabled.
+
+Delivered and automated-validated:
+- `utils/pan_tls_trust.py` — `PanTlsStrictPreflightError`, `preflight_pan_tls_ca_bundle()`: centralized CA bundle validation helper (mirrors 0.6.4 CP SSH trust pattern).
+- `panorama/panorama_runtime_runner.py` — `_tls_verify_setting()` function; env var hierarchy `SECURITYEXPERT_PAN_CA_BUNDLE` > `SECURITYEXPERT_PAN_TLS_VERIFY` > False; conditional urllib3 warning suppression only in compat mode; production trust warning emitted when verify=False.
+- `configuration/panorama_config_collector.py` — preflight validation for both Panorama and direct firewall paths before any `requests.get/post()` call; replaced `requests.packages.urllib3.disable_warnings()` with direct `urllib3` import.
+- `tests/test_phase0_6_5_pan_tls_ca_trust_closure.py` — 14 targeted tests (AC-1…AC-11): compat mode, missing/unreadable bundle, env var routing, integration.
+
+Automated evidence (2026-08-27):
+
+```text
+0.6.5 targeted tests (AC-1…AC-11):   14 passed
+PAN config + regression suites:      28 passed
+Repository privacy gate:              5 passed, 0 findings
+```
+
+Integration verified:
+- Preflight raises `PanTlsStrictPreflightError` before any network call
+- Error messages are value-free (no file paths, IP addresses, credentials)
+- Default compat mode (verify=False) unchanged; production trust opt-in via env var
+
+`main` merge approved after automated validation (2026-08-27).
+
+## Next Build Contract (Frozen)
+
+`DEPLOY.1 — Ubuntu + Docker Server Migration & Git Repository Foundation`
+Status: **CONTRACT_FROZEN** (2026-08-27)
+Handover agreement: `DEPLOY_1_CONTRACT_FREEZE_HANDOVER_2026_08_27.md`
+
+Key planning note:
+- Server availability is expected in about one week.
+- 0.6.5 product track complete; awaiting DEPLOY.1 server setup to begin operational deployment.
+
+## Previous Completed Build
 
 `0.6.4 — CP SSH Host-Key Trust Production Closure`
 Status: **REAL_ENV_VALIDATED** (2026-08-27)
@@ -46,22 +93,6 @@ R3 PASS  strict=on, known_hosts absent → CpSshStrictPreflightError before ssh.
 ```
 
 `main` merge approved after R1+R3 evidence.
-
-## Next Build Contract (Frozen)
-
-`DEPLOY.1 — Ubuntu + Docker Server Migration & Git Repository Foundation`
-Status: **CONTRACT_FROZEN** (2026-08-27)
-Handover agreement: `DEPLOY_1_CONTRACT_FREEZE_HANDOVER_2026_08_27.md`
-
-Key planning note:
-- Server availability is expected in about one week.
-- Until server arrival, implementation focus returns to `0.6.5` product track.
-
-## Previous Completed Build
-
-`0.6.3 — Unified Configuration History + Diff UX`
-Status: **DONE** (2026-08-27)
-Build agreement: `PHASE0_6_3_UNIFIED_CONFIGURATION_HISTORY_DIFF_UX.md`
 
 Frozen scope:
 - Single source/entity/artifact timeline query from existing immutable CAS metadata.
