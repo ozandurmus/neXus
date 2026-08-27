@@ -7,7 +7,7 @@
 ## Current Active Build
 
 `0.6.5 — PAN TLS/CA Trust Production Closure`
-Status: **AUTOMATED_VALIDATED** (2026-08-27)
+Status: **REAL_ENV_VALIDATED** (2026-08-27)
 Build agreement: `PHASE0_6_5_PAN_TLS_CA_TRUST_PRODUCTION_CLOSURE.md`
 
 Frozen scope:
@@ -39,7 +39,18 @@ Integration verified:
 - Error messages are value-free (no file paths, IP addresses, credentials)
 - Default compat mode (verify=False) unchanged; production trust opt-in via env var
 
-`main` merge approved after automated validation (2026-08-27).
+Real-environment evidence (2026-08-27) — value-free:
+
+```text
+R1 PASS strict mode + CA bundle path enabled
+R2 PASS no insecure TLS fallback under strict mode
+R3 PASS PAN collection contract preserved
+R4 PASS shareable evidence remains value-free
+R5 PASS no scheduler/polling/concurrency scope drift
+SAFE SUMMARY PASS: success=5 partial=0 failed=0 management_down=0
+```
+
+`main` merge remains approved; deployment gate for 0.6.5 is **REAL_ENV_VALIDATED**.
 
 ## Next Build Contract (Frozen)
 

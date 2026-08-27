@@ -1,0 +1,72 @@
+{
+  "schema_version": "1.0",
+  "build": "0.6.5-real-environment-validation",
+  "status": "real_env_validated",
+  "validation_date": "2026-08-27",
+  "value_free": true,
+  "summary": {
+    "required_checks": 8,
+    "passed_checks": 8,
+    "failed_checks": 0,
+    "pending_checks": 0,
+    "pass_rate": 100.0,
+    "promotion_allowed": true,
+    "main_merge": "already_merged",
+    "deployment_gate": "real_env_validated"
+  },
+  "automated_baseline": {
+    "status": "pass",
+    "targeted_tests": {
+      "suite": "tests/test_phase0_6_5_pan_tls_ca_trust_closure.py",
+      "passed": 14,
+      "failed": 0
+    },
+    "pan_regression": {
+      "passed": 28,
+      "failed": 0
+    },
+    "privacy_gate": {
+      "passed": 5,
+      "failed": 0,
+      "findings": 0
+    }
+  },
+  "real_environment": {
+    "required": 5,
+    "checks": {
+      "R01_strict_mode_enabled_with_ca_bundle": true,
+      "R02_no_insecure_tls_fallback_under_strict_mode": true,
+      "R03_pan_collection_contract_preserved": true,
+      "R04_value_free_shareable_evidence": true,
+      "R05_no_scope_drift_scheduler_polling_concurrency": true
+    },
+    "safe_summary": {
+      "result": "PASS",
+      "success_count": 5,
+      "partial_count": 0,
+      "failed_count": 0,
+      "management_down_count": 0,
+      "notes": "Use sanitized/value-free summary only."
+    },
+    "strict_mode_evidence": {
+      "ca_bundle_provisioned": null,
+      "ca_bundle_readable": null,
+      "tls_preflight_error_class": null,
+      "https_attempted": null
+    }
+  },
+  "privacy": {
+    "required": 3,
+    "checks": {
+      "D01_no_credentials_in_shared_artifacts": true,
+      "D02_no_real_identity_literals_in_report": true,
+      "D03_no_raw_secret_bearing_config_shared": true
+    }
+  },
+  "human_attestation": {
+    "approved": true,
+    "reviewer_role": "network-security-validator",
+    "safe_summary_reviewed": true
+  },
+  "blockers": []
+}
