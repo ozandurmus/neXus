@@ -2,6 +2,14 @@
   "schema_version": "1.0",
   "builds": [
     {
+      "build": "0.6.6A",
+      "status": "automated_validated",
+      "started": "2026-08-27",
+      "completed": "2026-08-27",
+      "title": "CP/PAN Parser Correctness Hardening",
+      "summary": "AUTOMATED_VALIDATED (2026-08-27). Implemented bounded parser correctness hardening: VSX ifconfig normalization now stores canonical network CIDR in interfaces[].ips[].network (host IP preserved in interfaces[].ips[].ip), and PAN route classification now gives default-destination (0.0.0.0/0) precedence over static/connected flags. Converted the two known strict characterization xfails into passing regressions in test_vsx_parser_characterization.py and test_panorama_parser_characterization.py. Validation evidence: parser characterization suites 7 passed; impacted PAN regression suites 17 passed. No collector command, network access, retry/timeout, polling, concurrency, scheduler, CAS, storage or UI behavior change."
+    },
+    {
       "build": "0.6.5",
       "status": "real_env_validated",
       "started": "2026-08-27",

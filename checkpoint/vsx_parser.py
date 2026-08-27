@@ -1,6 +1,7 @@
 import json
 import re
 import os
+import ipaddress
 from pathlib import Path
 from utils.logger import info
 
@@ -81,11 +82,12 @@ def parse_ifconfig(raw):
                 mask_val = mask.group(1)
 
                 prefix = sum(bin(int(x)).count("1") for x in mask_val.split("."))
+                network = str(ipaddress.ip_network(f"{ip_val}/{prefix}", strict=False))
 
                 current["ips"].append({
                     "ip": ip_val,
                     "prefix": prefix,
-                    "network": f"{ip_val}/{prefix}"
+                    "network": network
                 })
 
     return interfaces

@@ -52,6 +52,37 @@ SAFE SUMMARY PASS: success=5 partial=0 failed=0 management_down=0
 
 `main` merge remains approved; deployment gate for 0.6.5 is **REAL_ENV_VALIDATED**.
 
+## Next Product Builds (Frozen)
+
+`0.6.6A — CP/PAN Parser Correctness Hardening`
+Status: **AUTOMATED_VALIDATED** (2026-08-27)
+Build agreement: `PHASE0_6_6A_PARSER_CORRECTNESS_HARDENING.md`
+
+- Correct only the VSX canonical network CIDR and PAN default-route precedence
+  defects represented by the two existing strict parser `xfail` tests.
+- No new collector command, network access, scheduler, polling, concurrency,
+  CAS, storage, UI or configuration-alignment behavior.
+- Automated evidence (2026-08-27):
+
+```text
+Parser characterization suites: 7 passed
+Impacted PAN regression suites: 17 passed
+```
+
+- The two strict characterization xfails were converted to passing regressions:
+  VSX canonical network CIDR and PAN default-route classification precedence.
+
+`0.6.6B — Compliance Rule-Pack Transition Foundation`
+Status: **PLANNED** (2026-08-27), next build after 0.6.6A
+Build agreement: `PHASE0_6_6B_COMPLIANCE_RULE_PACK_TRANSITION.md`
+
+- Add a static versioned rule-pack boundary around the existing ten
+  deterministic CP/PAN compliance controls.
+- Evaluation remains offline and evidence-bounded; no raw configuration,
+  secret, real identity or certification-claim semantics.
+- Dynamic/signed packs, framework governance, scoring and crypto/PQC controls
+  remain deferred to 0.7.x.
+
 ## Next Build Contract (Frozen)
 
 `DEPLOY.1 — Ubuntu + Docker Server Migration & Git Repository Foundation`
