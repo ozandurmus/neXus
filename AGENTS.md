@@ -8,15 +8,16 @@ Repository state is authoritative; chat history is transient working memory.
 Every new AI session must be able to reconstruct the current project from the
 repository without requiring a historical chat transcript.
 
-Read in this order:
+The cold-start entry point and the fixed reading order are in
+`AI_START_HERE.md`. Follow that order; this file is the canonical law it points
+to, and `docs/AI_DEVELOPMENT_PROTOCOL.md` is the detailed lifecycle. Historical
+detail is a data pattern: `project/build_history.json` is the structured
+timeline index, `docs/history/INDEX.md` the one-line view, and the archived
+agreements / validation reports live under `docs/history/`.
 
-1. `AGENTS.md`
-2. `CURRENT_STATE.md`
-3. `.github/copilot-instructions.md` when running in Copilot
-4. only the current `project/*` metadata required by the task
-5. current build/phase document if one exists
-6. relevant source and tests
-7. historical PHASE documents or `SECURITYEXPERT_AI_CONTINUATION_PACK.md` only when a concrete gap requires them
+Do not read `docs/history/**` (phase docs, validation reports, the Continuation
+Pack) by default — reach a specific record only through its
+`project/build_history.json` link when a concrete gap requires it.
 
 Do not scan `data/`, `output/`, `logs/`, CAS/runtime objects, support artifacts,
 or credential stores by default.

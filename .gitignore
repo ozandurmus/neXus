@@ -73,6 +73,8 @@ Thumbs.db
 # Local-only real-env gate runner (may contain operational identities)
 _realenv_gate_runner.py
 
-# One-shot test output log
+# Local one-shot test / render output logs (never repository content)
 pytest_result.log
-pytest_065_*.log
+pytest_*.log
+pytest_failed.txt
+render_only_*.log

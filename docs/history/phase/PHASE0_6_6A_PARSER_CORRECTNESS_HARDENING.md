@@ -49,8 +49,8 @@ computed from `ip` and `prefix`. The original host address remains in `ip`.
 Invalid/missing address input retains existing conservative omission/error
 behavior; this build must not invent a network value.
 
-Example synthetic expectation: `10.20.30.2` with prefix `24` becomes
-`network=10.20.30.0/24`, while `ip=10.20.30.2` remains unchanged.
+Example synthetic expectation: `192.0.2.10` with prefix `24` becomes
+`network=192.0.2.0/24`, while `ip=192.0.2.10` remains unchanged.
 
 ### PAN route type precedence
 
