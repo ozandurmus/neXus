@@ -101,9 +101,10 @@ def test_project_plan_payload_is_data_driven_and_percentages_are_bounded():
     features = {row["id"]: row for track in payload["tracks"] for row in track["features"]}
     assert features["content_addressed_history"]["progress_percent"] == 100
     assert 0 < features["cp_coverage_closure"]["progress_percent"] < 100
-    # 0.6.4 CP SSH strict host-key production closure is contract-frozen.
-    assert payload["now_next"]["now"]["build"] == "0.6.4"
-    assert "host-key" in payload["now_next"]["next"]["title"].lower()
+    # now_next mirrors roadmap.json: current build and the next planned build.
+    assert payload["now_next"]["now"]["build"] == payload["current_build"]
+    assert payload["now_next"]["next"]["build"]
+    assert payload["now_next"]["next"]["title"].strip()
     assert any(item["id"] == "cp_ssh_trust" for item in payload["backlog"])
     assert any(item["build"] == "0.6.1B.1.1" for item in payload["build_history"])
 
