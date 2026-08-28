@@ -93,6 +93,18 @@
         "oidc_rbac_audit",
         "production_observability"
       ]
+    },
+    {
+      "id": "OP.x",
+      "title": "Controlled Failover",
+      "theme": "OPERATE",
+      "status": "planned",
+      "weight": 18,
+      "feature_ids": [
+        "failover_readiness_assessment",
+        "failover_plan_compiler",
+        "failover_controlled_execution"
+      ]
     }
   ],
   "now_next": {
@@ -153,6 +165,15 @@
           "Evidence egress and sharing policy (deploy1_evidence_egress_policy) must be defined and enforced before any additional egress paths (event webhook, TI enrichment) are opened.",
           "Step breakdown for the readiness work is under engineering_tracks DEV.2 (server runtime foundation), DEV.3 (containerization) and DEV.4 (CI/CD & production hardening); backlog items noninteractive_runtime_config, deploy_persistent_secret_material, linux_container_image, distributed_endpoint_lock_and_job_store and per_vendor_worker_split carry the actionable scope."
         ]
+      },
+      {
+        "build": "OP.x (design frozen; write-free parts buildable post-DEPLOY.1)",
+        "title": "Controlled Failover - HA readiness assessment, plan compiler, gated execution",
+        "status": "planned",
+        "notes": [
+          "Architecture: docs/design/FAILOVER_ENGINE_ARCHITECTURE.md. Analyses the real per-vendor failover procedure (CP ClusterXL HA/LS + VSX, PAN A/P + A/A), the preflight stop-conditions, the graceful active-initiated single-step approach, and post-failover verification.",
+          "OP.0 (HA readiness / failover-safety assessment + SCC dashboard) is read-only and the first buildable step; OP.1 adds the dry-run plan compiler; OP.2 (controlled execution) is write-gated - see roadmap_notes."
+        ]
       }
     ]
   },
@@ -172,7 +193,8 @@
     "Containerization sequencing (2026-08-28 architecture review): the first migration is a single worker container running the existing sequential main.py pipeline with the runtime volume mounted and Nginx serving the static output; per-vendor worker containers (DEV.3.4) are a later optimisation, gated on collection duration becoming a real operational pain (CP was ~180s in the 0.6.1B.1.2 checkpoint) and on the distributed endpoint lock (DEV.3.3).",
     "Non-interactive runtime configuration (DEV.2.1) is a hard precondition for any unattended container: today the only credential/endpoint path is interactive input()/getpass in _build_runtime_config, and --scheduler-once re-enters it. It must land before DEV.3.",
     "output/index.html is a LOCAL OPERATOR SENSITIVE artifact (real device identities, non-secret configuration values); serving it without the DEPLOY.1A viewer boundary is only acceptable on a trusted internal network behind existing access control.",
-    "Postgres scope for DEV.3.2/DEV.3.3 is metadata only (scheduler state, run manifests, last-known-good, CAS metadata index, distributed lock); it touches config_evidence, config_storage, config_history, snapshot, run_context and collection_executor. CAS payload blobs remain on a volume. This is one infrastructure checkpoint with its own real-environment gate."
+    "Postgres scope for DEV.3.2/DEV.3.3 is metadata only (scheduler state, run manifests, last-known-good, CAS metadata index, distributed lock); it touches config_evidence, config_storage, config_history, snapshot, run_context and collection_executor. CAS payload blobs remain on a volume. This is one infrastructure checkpoint with its own real-environment gate.",
+    "OP.x Controlled Failover is the first OPERATE-theme work; architecture in docs/design/FAILOVER_ENGINE_ARCHITECTURE.md. Only the write-free parts may be built before the write-gate is cleared: OP.0 (HA readiness / failover-safety assessment + SCC dashboard, a read-only VERIFY-plane feature) and OP.1 (dry-run plan compiler). OP.2 controlled execution is hard-gated on mature VERIFY/TRACE/RECOVER, the DEPLOY.1 server, DEPLOY.1A OIDC + an RBAC OPERATE role, the CP device-interaction-safety audit, the network-device command gate for the new read and write primitives, and a signed change-management / safety review with the network-security leads."
   ],
   "architecture_review_notes": [
     "2026-08-25 architecture review: event-driven webhook, crypto/PQC readiness, DEPLOY.1 OIDC boundary and contextual TI enrichment evaluated for CP/PAN scope.",
