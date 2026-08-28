@@ -5,9 +5,9 @@ Hot-path state only. Historical build detail lives in
 agreements and validation reports). `docs/history/INDEX.md` is the one-line
 timeline.
 
-- **Authoritative checkpoint:** 2026-08-27
-- **Product baseline:** `0.6.6A — CP/PAN Parser Correctness Hardening` — AUTOMATED_VALIDATED
-- **Engineering baseline:** `DEV.1 — Corporate Git Foundation` — CORPORATE GIT BASELINE ACTIVE
+- **Authoritative checkpoint:** 2026-08-28
+- **Product baseline:** `0.6.6B — Compliance Rule-Pack Transition Foundation` — AUTOMATED_VALIDATED
+- **Engineering baseline:** `DEV.1` complete; `DEV.2.1` (non-interactive runtime config) — AUTOMATED_VALIDATED
 - **Product evidence baseline:** `0.6.1B.1.2` interactive Check Point configuration
   collection is REAL-ENVIRONMENT VALIDATED.
 
@@ -15,33 +15,33 @@ timeline.
 
 ## Active build
 
-`0.6.6A — CP/PAN Parser Correctness Hardening` — **AUTOMATED_VALIDATED** (2026-08-27)
-Agreement: `docs/history/phase/PHASE0_6_6A_PARSER_CORRECTNESS_HARDENING.md`
+`0.6.6B — Compliance Rule-Pack Transition Foundation` — **AUTOMATED_VALIDATED** (2026-08-28)
+Agreement: `docs/history/phase/PHASE0_6_6B_COMPLIANCE_RULE_PACK_TRANSITION.md`
+Implementation: `docs/builds/0_6_6B_COMPLIANCE_RULE_PACK.md`
 
-Frozen scope: correct only the VSX canonical network CIDR and the PAN
-default-route precedence defects represented by the two strict parser `xfail`
-tests. No new collector command, network access, retry/timeout, scheduler,
-polling, concurrency, CAS, storage, UI or alignment behavior.
+Frozen scope: route the ten deterministic CP/PAN compliance controls through a
+static, versioned, in-repository rule pack (`utils/compliance_rulepack.py`,
+`pack_id securityexpert.baseline.cp-pan @ 0.6.6B`). Additive `rule_pack`
+traceability; outcomes for existing synthetic evidence unchanged; platform/fleet
+controls unrouted. No collector, network, CAS, scheduler or UI-logic change.
 
-Evidence (2026-08-27):
+Evidence (2026-08-28):
 
 ```
-Parser characterization suites:  7 passed
-Impacted PAN regression suites: 17 passed
+py -m pytest -q:            440 passed, 3 skipped, 0 failed (Python 3.12)
+--render-only:              PASS (rule_pack embeds in HTML)
+repository privacy gate:    PASS / 0 findings
 ```
 
-The two strict characterization xfails were converted to passing regressions
-(VSX canonical network CIDR; PAN default-route classification precedence).
+Dynamic/signed packs, scoring and formal framework governance remain 0.7.x.
+
+Previous: `0.6.6A — CP/PAN Parser Correctness Hardening` — AUTOMATED_VALIDATED
+(2026-08-27); the two strict parser xfails became passing regressions.
 
 ---
 
 ## Next builds (frozen contracts)
 
-- `0.6.6B — Compliance Rule-Pack Transition Foundation` — **PLANNED**, next
-  product build. Static versioned rule-pack boundary around the existing ten
-  deterministic CP/PAN compliance controls. Offline, evidence-bounded; no raw
-  configuration, secret, real identity or certification-claim semantics.
-  Agreement: `docs/history/phase/PHASE0_6_6B_COMPLIANCE_RULE_PACK_TRANSITION.md`
 - `DEPLOY.1 — Ubuntu + Docker Server Migration & Git Repository Foundation` —
   **CONTRACT_FROZEN** (2026-08-27). No runtime behavior change before server
   arrival (~1 week). Mandatory gates on arrival: OIDC viewer boundary, evidence

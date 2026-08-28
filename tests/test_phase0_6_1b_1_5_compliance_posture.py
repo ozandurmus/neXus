@@ -137,8 +137,15 @@ def test_compliance_posture_foundation_emits_all_required_statuses_and_links():
     payload = build_compliance_posture(_sample_configuration_payload(), _sample_project_plan_payload())
 
     assert payload["available"] is True
-    assert payload["schema_version"] == "0.6.1B.1.6"
+    assert payload["schema_version"] == "0.6.6B"
     assert payload["classification"] == "evidence_backed_control_area"
+
+    # 0.6.6B: additive static rule-pack metadata; no certification claim.
+    rule_pack = payload["rule_pack"]
+    assert rule_pack["pack_id"] == "securityexpert.baseline.cp-pan"
+    assert rule_pack["pack_version"] == "0.6.6B"
+    assert rule_pack["certification_claim"] is False
+    assert rule_pack["rule_count"] == 10
 
     statuses = payload["fleet"]["status_counts"]
     assert statuses["PASS"] > 0
@@ -153,6 +160,12 @@ def test_compliance_posture_foundation_emits_all_required_statuses_and_links():
     all_controls = [control for subject in payload["subjects"] for control in subject["controls"]]
     unique_subject_control_ids = {control["control_id"] for control in all_controls}
     assert len(unique_subject_control_ids) == 10
+
+    # 0.6.6B: every subject control is stamped with its rule-pack rule.
+    for control in all_controls:
+        assert control["rule_pack"]["pack_id"] == "securityexpert.baseline.cp-pan"
+        assert control["rule_pack"]["pack_version"] == "0.6.6B"
+        assert control["rule_pack"]["rule_id"].endswith("::" + control["control_id"])
 
     planned_subject_ids = {
         control["control_id"]
