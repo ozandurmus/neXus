@@ -22,6 +22,13 @@ If a section does not apply, write `n/a` — do not delete the heading.
 
 ## 2. Recent builds (all on `main`)
 
+- **code-quality cleanup** — removed dead code (`enrich_cluster_topology`
+  post-loop, `_evaluate_timezone_control`), tightened 3 bare `except:`,
+  English-ised 3 vsx_runner comments. No behavior change.
+- **Failover Engine design** — `docs/design/FAILOVER_ENGINE_ARCHITECTURE.md`
+  (design only, no code). New `OP.x — Controlled Failover` roadmap track +
+  3 features + 3 backlog items (`failover_readiness_assessment` OP.0,
+  `failover_plan_compiler` OP.1, `failover_controlled_execution` OP.2 deferred).
 - **`clean_baseline_bootstrap`** — `main.py` `_require_bootstrap(mode,
   output_root)`: `--render-only` / `--cp-config-probe` / `--cp-config-collect` /
   `--only cp|vsx|pan-config` now exit 2 with an actionable "Missing X, produced

@@ -1090,6 +1090,105 @@
           "weight": 1
         }
       ]
+    },
+    {
+      "id": "failover_readiness_assessment",
+      "title": "HA Readiness / Failover-Safety Assessment",
+      "status": "planned",
+      "introduced": "OP.0",
+      "weight": 6,
+      "summary": "Read-only per-vendor preflight battery that scores whether an HA cluster is safe to fail over, and why not.",
+      "why": "The safety net and foundation for any controlled failover; valuable on its own as a VERIFY-plane capability.",
+      "criteria": [
+        {
+          "id": "preflight_battery",
+          "label": "Per-vendor preflight battery (CP HA/LS/VSX, PAN A/P + A/A)",
+          "state": "pending",
+          "weight": 1
+        },
+        {
+          "id": "readiness_verdict",
+          "label": "SAFE / DEGRADED / UNSAFE / INSUFFICIENT verdict with blocking line items",
+          "state": "pending",
+          "weight": 1
+        },
+        {
+          "id": "scc_readiness_dashboard",
+          "label": "SCC readiness dashboard + history (read-only)",
+          "state": "pending",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "failover_plan_compiler",
+      "title": "Failover Plan Compiler & Dry-Run",
+      "status": "planned",
+      "introduced": "OP.1",
+      "weight": 4,
+      "summary": "Compiles the exact graceful vendor action, rollback, impact window and preemption note into a FailoverPlan. Dry-run only.",
+      "why": "Makes the action explicit and reviewable before any write capability exists.",
+      "criteria": [
+        {
+          "id": "action_rollback_compile",
+          "label": "Compile active-initiated action + rollback per vendor/mode",
+          "state": "pending",
+          "weight": 1
+        },
+        {
+          "id": "impact_window_preemption",
+          "label": "Impact-window estimate + preemption/fall-back note",
+          "state": "pending",
+          "weight": 1
+        },
+        {
+          "id": "dry_run_only",
+          "label": "Dry-run only; executes nothing",
+          "state": "pending",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "failover_controlled_execution",
+      "title": "Controlled Failover Execution",
+      "status": "planned",
+      "introduced": "OP.2",
+      "weight": 8,
+      "summary": "The single write-capable component: one authorised action with snapshot / poll / verify / auto-rollback, full audit, and per-vendor adapters. Hard-gated.",
+      "why": "The payoff of a trustworthy SEE/VERIFY/TRACE/RECOVER stack; the tool's first OPERATE capability.",
+      "criteria": [
+        {
+          "id": "single_action_executor",
+          "label": "One authorised action per run; re-assess between actions",
+          "state": "pending",
+          "weight": 1
+        },
+        {
+          "id": "snapshot_verify_autorollback",
+          "label": "Snapshot -> act -> poll(timeout) -> verify -> auto-rollback",
+          "state": "pending",
+          "weight": 1
+        },
+        {
+          "id": "audit_record",
+          "label": "Immutable who/when/intent/verdict/plan/steps/outcome audit record",
+          "state": "pending",
+          "weight": 1
+        },
+        {
+          "id": "operate_rbac_gate",
+          "label": "Feature flag + per-run token + OIDC/RBAC OPERATE role + maintenance window",
+          "state": "pending",
+          "weight": 1
+        },
+        {
+          "id": "vendor_action_adapters",
+          "label": "CP ClusterXL, CP VSX per-VS, PAN A/P (+A/A) action adapters",
+          "state": "pending",
+          "weight": 1
+        }
+      ]
     }
   ]
 }
