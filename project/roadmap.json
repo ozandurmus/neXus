@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "current_build": "0.7.0",
+  "current_build": "0.7.1a",
   "current_track": "0.6.x",
   "progress_contract": "Weighted acceptance-criterion completion. Percentages describe the declared roadmap, not calendar time or delivery ETA.",
   "tracks": [
@@ -109,9 +109,9 @@
   ],
   "now_next": {
     "now": {
-      "build": "0.7.0",
-      "title": "Cryptographic Posture, Crypto-Agility & PQC Readiness",
-      "goal": "Normalize IKE/IPsec/TLS/certificate facts from stored CP/PAN config evidence and evaluate them through a static versioned crypto rule pack; additive payload, no new collectors.",
+      "build": "0.7.1a",
+      "title": "Compliance control catalog & framework grouping",
+      "goal": "Move the ten compliance controls into a versioned declarative catalog with severity and real CIS/PCI-DSS/BDDK membership; purely additive to the payload.",
       "status": "automated_validated",
       "started": "2026-08-29",
       "completed": "2026-08-29"
