@@ -81,6 +81,51 @@
       "note": "Explicit policy for every outbound path: UI export, support bundle, audit log, webhook ingress persistence, TI enrichment query, OIDC claim retention. Must be defined before event intake or TI egress paths are opened."
     },
     {
+      "id": "noninteractive_runtime_config",
+      "category": "Deployment / Architecture",
+      "title": "Non-interactive runtime configuration and credential sourcing",
+      "status": "planned",
+      "priority": "P0",
+      "target": "DEV.2.1",
+      "note": "Hard precondition for any unattended / container deployment. Today _build_runtime_config is the only path that builds Config and it always calls input() / getpass() / _prompt_management_endpoint(); there is no os.getenv fallback for credentials or endpoints, and --scheduler-once re-enters the same prompts. Add env-var + mounted-secret-file sourcing with precedence over prompts; keep the interactive path for local use. Read-only, value-free behaviour unchanged. Smaller, immediate form of credential_profiles (enterprise vault abstraction is the later work)."
+    },
+    {
+      "id": "deploy_persistent_secret_material",
+      "category": "Deployment / Security",
+      "title": "Persistent volume contract for HMAC key and production trust material",
+      "status": "planned",
+      "priority": "P1",
+      "target": "DEV.2.2",
+      "note": "data/.support_hmac.key must live on a persistent volume: if regenerated on container restart, support-bundle identity tokens drift between runs. CP known_hosts (SECURITYEXPERT_CP_MDS_STRICT_HOST_KEY) and PAN CA bundle (SECURITYEXPERT_PAN_CA_BUNDLE) move from opt-in to mounted-and-required on the server. Same workstream as noninteractive_runtime_config; feeds cp_ssh_trust_r2_prod_server and pan_tls_ca production validation."
+    },
+    {
+      "id": "linux_container_image",
+      "category": "Deployment / Architecture",
+      "title": "Linux worker image + Compose (single-container first migration)",
+      "status": "planned",
+      "priority": "P1",
+      "target": "DEV.3.1",
+      "note": "python:3.12-slim (matches the validated baseline; lxml ships manylinux wheels so no build toolchain). One image runs the existing sequential main.py pipeline with SECURITYEXPERT_RUNTIME_ROOT pointed at a mounted volume; bundled checkpoint/scripts/cp_inventory.sh included in the image. Compose: worker + nginx (serves the static output volume) + external timer calling --scheduler-once. No collector-semantic change. RunContext only exists for --only all, so the first container runs the full pipeline, not split planes. Depends on noninteractive_runtime_config."
+    },
+    {
+      "id": "distributed_endpoint_lock_and_job_store",
+      "category": "Safety / Architecture",
+      "title": "Distributed per-endpoint lock and job/metadata store (Postgres)",
+      "status": "planned",
+      "priority": "P0",
+      "target": "DEV.3.2 / DEV.3.3",
+      "note": "CollectionCoordinator is threading.Lock + in-memory dicts (its docstring defers distributed locking to DEPLOY.1). The per-endpoint lock and concurrency-budget-of-1 are the CP device-safety mechanism; splitting collectors across containers breaks it without a shared lock. Move scheduler state, run manifests, last-known-good and the CAS metadata index to Postgres (advisory locks or a DB-backed queue); CAS payload blobs stay on the volume. Touches config_evidence, config_storage, config_history, snapshot, run_context, collection_executor. Safety-critical; own real-environment gate. Blocks per_vendor_worker_split. Extends cp_device_interaction_safety / collection_execution_coordinator into the multi-process world."
+    },
+    {
+      "id": "per_vendor_worker_split",
+      "category": "Performance / Architecture",
+      "title": "Per-vendor worker containers",
+      "status": "deferred",
+      "priority": "P2",
+      "target": "DEV.3.4",
+      "note": "DEFERRED. With concurrency-budget-of-1 per vendor and a stability-over-speed mandate the parallelism gain is small (CP was ~180s in the 0.6.1B.1.2 checkpoint) and it forces the distributed-lock problem. Do only if collection duration becomes a real operational pain, and only after distributed_endpoint_lock_and_job_store."
+    },
+    {
       "id": "crypto_agility_pqc",
       "category": "Compliance / Security",
       "title": "Cryptographic Posture, Crypto-Agility & PQC Readiness",

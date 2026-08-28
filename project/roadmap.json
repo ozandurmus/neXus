@@ -150,7 +150,8 @@
           "Write/change automation to firewalls stays outside this item's scope and outside the roadmap gate (see roadmap_notes); this item is deployment/CI infrastructure only, read-only collection remains the only active capability.",
           "Per-device job lock/coordinator (from the 0.6.1B.1.3 safety audit) must be part of the scheduler design before recurring/scheduled jobs replace the current on-demand run model.",
           "DEPLOY.1A authenticated read-only OIDC viewer boundary (deploy1_oidc_viewer) must be accepted before the server is opened for internal use; IP allowlist is defense-in-depth only.",
-          "Evidence egress and sharing policy (deploy1_evidence_egress_policy) must be defined and enforced before any additional egress paths (event webhook, TI enrichment) are opened."
+          "Evidence egress and sharing policy (deploy1_evidence_egress_policy) must be defined and enforced before any additional egress paths (event webhook, TI enrichment) are opened.",
+          "Step breakdown for the readiness work is under engineering_tracks DEV.2 (server runtime foundation), DEV.3 (containerization) and DEV.4 (CI/CD & production hardening); backlog items noninteractive_runtime_config, deploy_persistent_secret_material, linux_container_image, distributed_endpoint_lock_and_job_store and per_vendor_worker_split carry the actionable scope."
         ]
       }
     ]
@@ -167,7 +168,11 @@
     "0.6.1C must include the collection execution coordinator foundation (collection_execution_coordinator) before any recurring scheduling or event-driven trigger is activated.",
     "Event-driven webhook intake (event_signal_intake) and passive TI enrichment (passive_ti_enrichment) are gated on 0.8.x TRACE foundations: safe normalized diff, cross-vendor timeline, and the collection coordinator must all be in place first.",
     "Cryptographic posture and PQC readiness (crypto_agility_pqc) is a 0.7.x VERIFY item; it operates on existing CP/PAN configuration evidence without adding new vendors or collectors.",
-    "DEPLOY.1A read-only OIDC viewer boundary is a mandatory server acceptance criterion, not an optional hardening step."
+    "DEPLOY.1A read-only OIDC viewer boundary is a mandatory server acceptance criterion, not an optional hardening step.",
+    "Containerization sequencing (2026-08-28 architecture review): the first migration is a single worker container running the existing sequential main.py pipeline with the runtime volume mounted and Nginx serving the static output; per-vendor worker containers (DEV.3.4) are a later optimisation, gated on collection duration becoming a real operational pain (CP was ~180s in the 0.6.1B.1.2 checkpoint) and on the distributed endpoint lock (DEV.3.3).",
+    "Non-interactive runtime configuration (DEV.2.1) is a hard precondition for any unattended container: today the only credential/endpoint path is interactive input()/getpass in _build_runtime_config, and --scheduler-once re-enters it. It must land before DEV.3.",
+    "output/index.html is a LOCAL OPERATOR SENSITIVE artifact (real device identities, non-secret configuration values); serving it without the DEPLOY.1A viewer boundary is only acceptable on a trusted internal network behind existing access control.",
+    "Postgres scope for DEV.3.2/DEV.3.3 is metadata only (scheduler state, run manifests, last-known-good, CAS metadata index, distributed lock); it touches config_evidence, config_storage, config_history, snapshot, run_context and collection_executor. CAS payload blobs remain on a volume. This is one infrastructure checkpoint with its own real-environment gate."
   ],
   "architecture_review_notes": [
     "2026-08-25 architecture review: event-driven webhook, crypto/PQC readiness, DEPLOY.1 OIDC boundary and contextual TI enrichment evaluated for CP/PAN scope.",
@@ -258,17 +263,73 @@
     {
       "id": "DEV.2",
       "title": "Server Runtime Foundation",
-      "status": "planned"
+      "status": "planned",
+      "steps": [
+        {
+          "build": "DEV.2.1",
+          "title": "Non-interactive runtime configuration: env vars + mounted secret files with precedence over interactive input()/getpass; keep the interactive path for local use",
+          "status": "planned"
+        },
+        {
+          "build": "DEV.2.2",
+          "title": "Persistent runtime volume contract: data_root, stable data/.support_hmac.key across restarts, mounted CP known_hosts and PAN CA bundle",
+          "status": "planned"
+        },
+        {
+          "build": "DEV.2.3",
+          "title": "Linux base validation: pin Python 3.12, portable scripts, remove %LOCALAPPDATA% / py.exe assumptions from docs and CI",
+          "status": "planned"
+        }
+      ]
     },
     {
       "id": "DEV.3",
       "title": "Containerization",
-      "status": "planned"
+      "status": "planned",
+      "steps": [
+        {
+          "build": "DEV.3.1",
+          "title": "Single worker image + Compose: one container runs the existing sequential main.py pipeline; Nginx serves the static output volume; an external timer invokes --scheduler-once",
+          "status": "planned"
+        },
+        {
+          "build": "DEV.3.2",
+          "title": "Job/metadata store: move scheduler state, run manifests, last-known-good and the CAS metadata index to Postgres; CAS payload blobs stay on the volume",
+          "status": "planned"
+        },
+        {
+          "build": "DEV.3.3",
+          "title": "Distributed per-endpoint lock replacing the in-process coordinator (Postgres advisory lock or DB-backed queue); preserves the concurrency-budget-of-1 CP safety constraint",
+          "status": "planned"
+        },
+        {
+          "build": "DEV.3.4",
+          "title": "Per-vendor worker containers — DEFERRED until collection duration is a real operational pain; requires DEV.3.3 first",
+          "status": "deferred"
+        }
+      ]
     },
     {
       "id": "DEV.4",
       "title": "CI/CD & Production Hardening",
-      "status": "planned"
+      "status": "planned",
+      "steps": [
+        {
+          "build": "DEV.4.1",
+          "title": "Image build/scan CI with pinned base digests",
+          "status": "planned"
+        },
+        {
+          "build": "DEV.4.2",
+          "title": "DEPLOY.1A OIDC read-only viewer boundary in front of the served output, or integrate an existing corporate SSO proxy",
+          "status": "planned"
+        },
+        {
+          "build": "DEV.4.3",
+          "title": "Promote CP strict host-key and PAN CA trust from opt-in to required in the server image; R2 real-environment validation",
+          "status": "planned"
+        }
+      ]
     }
   ]
 }
