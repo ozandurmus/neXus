@@ -3,13 +3,21 @@ param(
     [string[]]$Targets = @(),
     [string]$LogPath = "pytest_result.log",
     [string]$FailedPath = "pytest_failed.txt",
-    [switch]$VerboseOutput
+    [switch]$VerboseOutput,
+    [switch]$Serial
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
 $pytestArgs = @("-m", "pytest", "-q")
+
+# Parallel by default for the full-suite one-shot (requires requirements-dev.txt:
+# pytest-xdist). Pass -Serial when debugging a single failure so output stays in
+# order and tracebacks are easy to read.
+if (-not $Serial) {
+    $pytestArgs += @("-n", "auto", "--dist", "worksteal")
+}
 
 $allTargets = @()
 if ($Target -and $Target.Trim().Length -gt 0) {

@@ -1,0 +1,13 @@
+# Development / test dependencies. Not required to run SecurityExpert.
+# Runtime deps are in requirements.txt.
+#
+#   py -m pip install -r requirements.txt -r requirements-dev.txt
+#
+# Full suite (parallel): py -m pytest -q -n auto --dist worksteal
+#   ~44s on 16 cores vs ~110s serial. `worksteal` lets idle workers pick up
+#   from busy ones, which matters given uneven test durations.
+#   Use `-n0` (or scripts/pytest_one_shot.ps1 -Serial) for a serial run when
+#   debugging a single failure.
+
+pytest>=8
+pytest-xdist>=3.6
