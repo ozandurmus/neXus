@@ -171,9 +171,13 @@ def test_ac5_payload_shape_is_additive_only():
     available = build_compliance_posture(_configuration_payload([_FULL_CP]), None)
     unavailable = build_compliance_posture(None, None)
 
+    # 0.6.6B added `rule_pack`; 0.7.1b adds `compliance_overview` and
+    # `assignment_policy` (both additive, counts-only). The prior keys and their
+    # types are unchanged.
+    _ADDITIVE_KEYS = {"rule_pack", "compliance_overview", "assignment_policy"}
     for payload in (available, unavailable):
         assert _PRIOR_TOP_LEVEL_KEYS <= set(payload)
-        assert set(payload) - _PRIOR_TOP_LEVEL_KEYS == {"rule_pack"}  # the only new key
+        assert set(payload) - _PRIOR_TOP_LEVEL_KEYS == _ADDITIVE_KEYS
         assert payload["rule_pack"]["pack_id"] == DEFAULT_RULE_PACK_ID
 
     # platform / fleet posture controls are not pack rules.

@@ -14,9 +14,27 @@ from __future__ import annotations
 
 from typing import Any
 
-CATALOG_VERSION = "0.7.1a"
+CATALOG_VERSION = "0.7.1b"
 SEVERITY_VALUES = ("informational", "low", "medium", "high", "critical")
 _SEVERITY_WEIGHT = {"informational": 1, "low": 2, "medium": 3, "high": 4, "critical": 5}
+
+# The ten controls frozen by the 0.6.6B rule pack (and its tests). They keep
+# their own evaluators and pack routing; `catalog_baseline_controls()` returns
+# exactly these, in this order, in the 5-key shape the pack consumes. Everything
+# added in 0.7.1b is an *enrichment* control — a separate subject-control list,
+# never routed through `DEFAULT_RULE_PACK`.
+LEGACY_CONTROL_IDS: tuple[str, ...] = (
+    "hostname_configured_non_default",
+    "dns_primary_secondary_configured",
+    "ntp_primary_secondary_configured",
+    "aaa_provider_presence",
+    "management_session_timeout_policy",
+    "telnet_disabled",
+    "http_management_restricted",
+    "snmp_v3_only",
+    "update_server_identity_verified",
+    "management_audit_logging",
+)
 
 
 def _fw(framework: str, reference: str, applies: bool = True, **extra: Any) -> dict[str, Any]:
@@ -130,9 +148,96 @@ CONTROL_CATALOG: tuple[dict[str, Any], ...] = (
         "lifecycle": "active", "introduced": "0.6.1B.1.6", "evaluator": "management_audit_logging",
     },
 
-    # 0.7.1b adds ~12 further controls (existing sections + a password_policy
-    # projection). 0.7.1a is the catalog model + framework grouping + severity
-    # for the ten above, purely additive to the payload.
+    # --- 0.7.1b enrichment controls -------------------------------------------
+    # Evaluated from the *already projected* current-configuration sections
+    # (no new collector, no projection change). A control whose evidence
+    # section is genuinely absent resolves to UNKNOWN / PLANNED, never an
+    # inferred PASS. These are a separate subject-control list; they are not
+    # routed through the frozen 0.6.6B rule pack. The password_policy
+    # projection section and its controls are deferred to 0.7.2.
+    {
+        "id": "timezone_configured", "cis_reference": 'CIS 2.3.2', "title": "System timezone explicitly configured",
+        "rationale": "An unset or drifting timezone makes cross-device log correlation and audit timelines unreliable.",
+        "control_area": "Time synchronization and secure operations", "severity": "low",
+        "vendors": ["check_point", "palo_alto"],
+        "evidence": {"plane": "direct_actual", "fields": ["current_configuration.sections.system.settings.Timezone"], "basis": "configured"},
+        "frameworks": [_fw("CIS", "2.3.2"), _fw("PCI-DSS", "10.6.1", version="4.0"),
+                       _fw("BDDK", "Kayıt Yönetimi - Zaman Damgası")],
+        "lifecycle": "active", "introduced": "0.7.1b", "evaluator": "timezone_configured",
+    },
+    {
+        "id": "login_banner_present", "cis_reference": 'CIS 2.1.1 / PanOS Login Banner', "title": "Administrative login banner present",
+        "rationale": "A legal warning banner is a common regulatory prerequisite for prosecuting unauthorised access.",
+        "control_area": "Administrative access restrictions", "severity": "low",
+        "vendors": ["check_point", "palo_alto"],
+        "evidence": {"plane": "direct_actual", "fields": ["current_configuration.sections.system.settings.banner",
+                                                          "current_configuration.sections.management.settings.banner"], "basis": "configured"},
+        "frameworks": [_fw("CIS", "2.1.1"), _fw("PCI-DSS", "not applicable", version="4.0", applies=False),
+                       _fw("BDDK", "Erişim Yönetimi - Yasal Uyarı")],
+        "lifecycle": "active", "introduced": "0.7.1b", "evaluator": "login_banner_present",
+    },
+    {
+        "id": "remote_syslog_configured", "cis_reference": 'CIS 2.6.3 / PanOS Syslog Forwarding', "title": "Remote syslog / log forwarding configured",
+        "rationale": "Logs kept only on the device are lost on compromise or failure; off-box forwarding preserves the audit trail.",
+        "control_area": "Administrative activity traceability", "severity": "high",
+        "vendors": ["check_point", "palo_alto"],
+        "evidence": {"plane": "direct_actual", "fields": ["current_configuration.sections.logging.settings"], "basis": "configured"},
+        "frameworks": [_fw("CIS", "2.6.3"), _fw("PCI-DSS", "10.5.3", version="4.0"),
+                       _fw("BDDK", "Kayıt Yönetimi - Merkezi Loglama")],
+        "lifecycle": "active", "introduced": "0.7.1b", "evaluator": "remote_syslog_configured",
+    },
+    {
+        "id": "ntp_authentication_enabled", "cis_reference": 'CIS 2.3.1.1', "title": "NTP authentication enabled",
+        "rationale": "Unauthenticated NTP lets an on-path attacker move device time and undermine certificate and log validity.",
+        "control_area": "Time synchronization and secure operations", "severity": "medium",
+        "vendors": ["check_point", "palo_alto"],
+        "evidence": {"plane": "direct_actual", "fields": ["current_configuration.sections.ntp.settings"], "basis": "configured"},
+        "frameworks": [_fw("CIS", "2.3.1.1"), _fw("PCI-DSS", "10.6.2", version="4.0"),
+                       _fw("BDDK", "Kayıt Yönetimi - Zaman Damgası")],
+        "lifecycle": "active", "introduced": "0.7.1b", "evaluator": "ntp_authentication_enabled",
+    },
+    {
+        "id": "ssh_management_v2_only", "cis_reference": 'CIS 2.1.10 / PanOS SSH v2', "title": "SSH management restricted to protocol v2",
+        "rationale": "SSH protocol v1 has known cryptographic weaknesses and must not be accepted for administration.",
+        "control_area": "Management-plane protocol hardening", "severity": "high",
+        "vendors": ["check_point", "palo_alto"],
+        "evidence": {"plane": "direct_actual", "fields": ["current_configuration.sections.management.settings"], "basis": "configured"},
+        "frameworks": [_fw("CIS", "2.1.10"), _fw("PCI-DSS", "2.2.5", version="4.0"),
+                       _fw("BDDK", "Sistem Sıkılaştırma - Güvensiz Protokoller")],
+        "lifecycle": "active", "introduced": "0.7.1b", "evaluator": "ssh_management_v2_only",
+    },
+    {
+        "id": "snmp_no_default_community", "cis_reference": 'CIS 2.2.1', "title": "No default SNMP community string",
+        "rationale": "Default community strings such as 'public' / 'private' are universally known and allow trivial read access.",
+        "control_area": "Management-plane protocol hardening", "severity": "high",
+        "vendors": ["check_point", "palo_alto"],
+        "evidence": {"plane": "direct_actual", "fields": ["current_configuration.sections.snmp.settings"], "basis": "configured"},
+        "frameworks": [_fw("CIS", "2.2.1"), _fw("PCI-DSS", "2.2.2", version="4.0"),
+                       _fw("BDDK", "Sistem Sıkılaştırma - Varsayılan Kimlik Bilgileri")],
+        "lifecycle": "active", "introduced": "0.7.1b", "evaluator": "snmp_no_default_community",
+    },
+    {
+        "id": "admin_lockout_policy", "cis_reference": 'CIS 2.4.2 / PanOS Failed Attempts', "title": "Administrative account lockout policy configured",
+        "rationale": "Without a failed-attempt lockout, administrative logins are exposed to unbounded password guessing.",
+        "control_area": "Authentication policy strength", "severity": "medium",
+        "vendors": ["check_point", "palo_alto"],
+        "evidence": {"plane": "direct_actual", "fields": ["current_configuration.sections.authentication.settings",
+                                                          "current_configuration.sections.management.settings"], "basis": "configured"},
+        "frameworks": [_fw("CIS", "2.4.2"), _fw("PCI-DSS", "8.3.4", version="4.0"),
+                       _fw("BDDK", "Erişim Yönetimi - Hesap Kilitleme")],
+        "lifecycle": "active", "introduced": "0.7.1b", "evaluator": "admin_lockout_policy",
+    },
+    {
+        "id": "dns_domain_configured", "cis_reference": 'CIS 2.1.7', "title": "DNS search domain configured",
+        "rationale": "A configured search domain is a baseline hygiene signal that name resolution was deliberately set up.",
+        "control_area": "Name resolution resilience", "severity": "informational",
+        "vendors": ["check_point", "palo_alto"],
+        "evidence": {"plane": "direct_actual", "fields": ["current_configuration.sections.dns.settings",
+                                                          "current_configuration.sections.system.settings"], "basis": "configured"},
+        "frameworks": [_fw("CIS", "2.1.7"), _fw("PCI-DSS", "not applicable", version="4.0", applies=False),
+                       _fw("BDDK", "Süreklilik - Ad Çözümleme", applies=False)],
+        "lifecycle": "active", "introduced": "0.7.1b", "evaluator": "dns_domain_configured",
+    },
 )
 
 _BY_ID = {c["id"]: c for c in CONTROL_CATALOG}
@@ -151,11 +256,30 @@ def frameworks_for(control_id: str) -> list[dict[str, Any]]:
     return [dict(f) for f in entry.get("frameworks", [])]
 
 
+def _subject_view(c: dict[str, Any]) -> dict[str, Any]:
+    """The shape the compliance engine's evaluators and card render consume."""
+    return {
+        "control_id": c["id"],
+        "title": c["title"],
+        "control_area": c["control_area"],
+        "cis_reference": c["cis_reference"],
+        "evidence_fields": list(c["evidence"]["fields"]),
+        "severity": c["severity"],
+        "rationale": c["rationale"],
+        "frameworks": [dict(f) for f in c["frameworks"]],
+        "lifecycle": c["lifecycle"],
+        "evaluator": c["evaluator"],
+        "applicable_vendors": list(c["vendors"]),
+        "introduced": c.get("introduced"),
+    }
+
+
 def catalog_baseline_controls() -> tuple[dict[str, Any], ...]:
     """The 5-key view utils.compliance_rulepack.DEFAULT_RULE_PACK consumes.
 
-    Preserves the exact shape and order the 0.6.6B pack (and its tests) expect;
-    the added catalog fields are ignored by that view.
+    Exactly the ten `LEGACY_CONTROL_IDS`, in that order, in the shape and with
+    the keys the 0.6.6B pack (and its tests) expect; the added catalog fields
+    are ignored by that view. Enrichment controls are excluded here on purpose.
     """
     return tuple(
         {
@@ -166,4 +290,22 @@ def catalog_baseline_controls() -> tuple[dict[str, Any], ...]:
             "evidence_fields": list(c["evidence"]["fields"]),
         }
         for c in CONTROL_CATALOG
+        if c["id"] in LEGACY_CONTROL_IDS
     )
+
+
+def catalog_enrichment_controls() -> tuple[dict[str, Any], ...]:
+    """Subject-scoped controls added after the 0.6.6B freeze (0.7.1b+).
+
+    A separate list from the pack-routed baseline ten; ordered as declared.
+    """
+    return tuple(
+        _subject_view(c)
+        for c in CONTROL_CATALOG
+        if c["id"] not in LEGACY_CONTROL_IDS and c.get("lifecycle") != "deprecated"
+    )
+
+
+def all_subject_control_ids() -> frozenset[str]:
+    """Every catalog control that can be assigned to a subject (baseline + enrichment)."""
+    return frozenset(c["id"] for c in CONTROL_CATALOG if c.get("lifecycle") != "deprecated")
