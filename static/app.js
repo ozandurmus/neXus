@@ -4033,6 +4033,55 @@ function renderComplianceFleetView() {
             button.addEventListener("click", () => switchModule("project-plan"));
         });
     }
+
+    renderCryptoPostureCard();
+}
+
+
+function renderCryptoPostureCard() {
+    const host = document.getElementById("cryptoPostureCard");
+    if (!host) return;
+    const data = (typeof cryptoUiData === "object" && cryptoUiData) ? cryptoUiData : {};
+    if (!data.available) {
+        host.innerHTML = `<div class="empty-state compact"><span>No cryptographic evidence yet. Run a configuration collection (PAN effective-running) to populate IKE/IPsec/TLS/certificate posture.</span></div>`;
+        return;
+    }
+    const counts = (data.fleet && data.fleet.status_counts) || {};
+    const chip = (label, key, tone) =>
+        `<span class="statuspill ${tone}">${escapeHtml(label)} ${Number(counts[key] || 0)}</span>`;
+    const subjects = Array.isArray(data.subjects) ? data.subjects : [];
+    const notable = [];
+    subjects.forEach(subject => {
+        (subject.findings || []).forEach(f => {
+            if (f.status === "FINDING" || f.status === "INFORMATIONAL") {
+                notable.push({ subject: subject.subject_id, ...f });
+            }
+        });
+    });
+    notable.sort((a, b) => (a.status === "FINDING" ? 0 : 1) - (b.status === "FINDING" ? 0 : 1));
+    const pack = data.rule_pack || {};
+    const rows = notable.slice(0, 12).map(f => `
+        <article class="compliance-control-card ${f.status === "FINDING" ? "danger" : "neutral"} compact">
+            <div class="compliance-control-head">
+                <div>
+                    <div class="compliance-control-benchmark">${escapeHtml(f.category || "")}</div>
+                    <div class="compliance-control-id">${escapeHtml(f.subject)} · ${escapeHtml(f.control_id || "")}</div>
+                </div>
+                <span class="statuspill ${f.status === "FINDING" ? "danger" : "neutral"}">${escapeHtml(f.status)}</span>
+            </div>
+            <p>${escapeHtml(f.summary || "")}</p>
+            <p class="detail-subtitle">basis: ${escapeHtml(f.evidence_basis || "")}${(f.framework_refs && f.framework_refs.length) ? " · " + escapeHtml(f.framework_refs.join(", ")) : ""}</p>
+        </article>`).join("");
+    host.innerHTML = `
+        <div class="detail-subtitle">Pack ${escapeHtml(pack.pack_id || "")} @ ${escapeHtml(pack.pack_version || "")} · no certification claim · ${subjects.length} subject(s)</div>
+        <div class="compliance-kpi-grid compact" style="margin:8px 0">
+            ${chip("Findings", "FINDING", "danger")}
+            ${chip("Informational", "INFORMATIONAL", "neutral")}
+            ${chip("Pass", "PASS", "success")}
+            ${chip("Insufficient evidence", "INSUFFICIENT_EVIDENCE", "neutral")}
+        </div>
+        ${rows ? `<div class="compliance-control-grid">${rows}</div>` : `<div class="empty-state compact"><span>No crypto findings — all evaluated rules pass or lack evidence.</span></div>`}
+        <p class="detail-subtitle">PQC readiness: ${escapeHtml((data.pqc && data.pqc.status) || "INFORMATIONAL")} — platform capability only, not configured posture.</p>`;
 }
 
 

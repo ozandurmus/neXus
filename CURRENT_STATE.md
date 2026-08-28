@@ -5,8 +5,8 @@ Hot-path state only. Historical build detail lives in
 agreements and validation reports). `docs/history/INDEX.md` is the one-line
 timeline.
 
-- **Authoritative checkpoint:** 2026-08-28
-- **Product baseline:** `0.6.6B — Compliance Rule-Pack Transition Foundation` — AUTOMATED_VALIDATED
+- **Authoritative checkpoint:** 2026-08-29
+- **Product baseline:** `0.7.0 — Cryptographic Posture, Crypto-Agility & PQC Readiness` — AUTOMATED_VALIDATED (opens the 0.7.x VERIFY track)
 - **Engineering baseline:** `DEV.1` complete; `DEV.2.1` (non-interactive runtime config) — AUTOMATED_VALIDATED
 - **Product evidence baseline:** `0.6.1B.1.2` interactive Check Point configuration
   collection is REAL-ENVIRONMENT VALIDATED.
@@ -15,28 +15,32 @@ timeline.
 
 ## Active build
 
-`0.6.6B — Compliance Rule-Pack Transition Foundation` — **AUTOMATED_VALIDATED** (2026-08-28)
-Agreement: `docs/history/phase/PHASE0_6_6B_COMPLIANCE_RULE_PACK_TRANSITION.md`
-Implementation: `docs/builds/0_6_6B_COMPLIANCE_RULE_PACK.md`
+`0.7.0 — Cryptographic Posture, Crypto-Agility & PQC Readiness` — **AUTOMATED_VALIDATED** (2026-08-29)
+Agreement: `docs/history/phase/0_7_x_CRYPTO_AGILITY_PQC.md`
 
-Frozen scope: route the ten deterministic CP/PAN compliance controls through a
-static, versioned, in-repository rule pack (`utils/compliance_rulepack.py`,
-`pack_id securityexpert.baseline.cp-pan @ 0.6.6B`). Additive `rule_pack`
-traceability; outcomes for existing synthetic evidence unchanged; platform/fleet
-controls unrouted. No collector, network, CAS, scheduler or UI-logic change.
+Frozen scope: normalize IKE/IPsec/TLS/certificate facts from the **already-stored**
+PAN `effective-running` XML (CP best-effort from the sanitized projection) — no
+new collector — and evaluate them through a static versioned crypto rule pack
+(`utils/crypto_rulepack.py`, `securityexpert.crypto.cp-pan @ 0.7.0`; categories
+`weak_algorithm` / `crypto_agility` / `pqc_readiness`). Additive
+`build_crypto_posture` payload with a per-finding `evidence_basis` (`configured`
+/ `insufficient`; `negotiated` is a declared future runtime layer), rendered as
+one card in the existing Compliance module. Never key material, PSK or
+certificate body. No new collectors, vendors, network, CAS or UI module.
 
-Evidence (2026-08-28):
+Evidence (2026-08-29):
 
 ```
-py -m pytest -q:            440 passed, 3 skipped, 0 failed (Python 3.12)
---render-only:              PASS (rule_pack embeds in HTML)
+py -m pytest -q:            458 passed, 3 skipped, 0 failed (Python 3.12)
+--render-only:              PASS (cryptoUiData embeds in HTML)
 repository privacy gate:    PASS / 0 findings
 ```
 
-Dynamic/signed packs, scoring and formal framework governance remain 0.7.x.
+Dynamic/signed packs, scoring and live `negotiated` crypto evidence remain later
+0.7.x / 0.8.x work.
 
-Previous: `0.6.6A — CP/PAN Parser Correctness Hardening` — AUTOMATED_VALIDATED
-(2026-08-27); the two strict parser xfails became passing regressions.
+Previous: `0.6.6B — Compliance Rule-Pack Transition Foundation` — AUTOMATED_VALIDATED
+(2026-08-28), `utils/compliance_rulepack.py`.
 
 ---
 
