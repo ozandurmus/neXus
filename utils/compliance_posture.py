@@ -337,15 +337,6 @@ def _evaluate_ntp_control(device: dict[str, Any], control: dict[str, Any]) -> di
     return _implemented_control(control, "FINDING", "NTP section is present but one or more required NTP server settings were not observed.")
 
 
-def _evaluate_timezone_control(device: dict[str, Any], control: dict[str, Any]) -> dict[str, Any]:
-    settings = _section_settings(device, "system")
-    if not settings:
-        return _implemented_control(control, "UNKNOWN", "System section is unavailable for timezone evaluation.", coverage="partial")
-    if _setting_with_value(settings, "timezone"):
-        return _implemented_control(control, "PASS", "Timezone setting is present with a non-empty value in normalized current-state evidence.")
-    return _implemented_control(control, "FINDING", "System section is present but timezone setting was not observed.")
-
-
 def _evaluate_aaa_presence_control(device: dict[str, Any], control: dict[str, Any]) -> dict[str, Any]:
     settings = _section_settings(device, "authentication")
     if not settings:
