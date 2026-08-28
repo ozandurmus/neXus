@@ -6,7 +6,7 @@ agreements and validation reports). `docs/history/INDEX.md` is the one-line
 timeline.
 
 - **Authoritative checkpoint:** 2026-08-29
-- **Product baseline:** `0.7.0 — Cryptographic Posture, Crypto-Agility & PQC Readiness` — AUTOMATED_VALIDATED (opens the 0.7.x VERIFY track)
+- **Product baseline:** `0.7.1a — Compliance Control Catalog & Framework Grouping` — AUTOMATED_VALIDATED (0.7.x VERIFY track; follows `0.7.0` crypto posture)
 - **Engineering baseline:** `DEV.1` complete; `DEV.2.1` (non-interactive runtime config) — AUTOMATED_VALIDATED
 - **Product evidence baseline:** `0.6.1B.1.2` interactive Check Point configuration
   collection is REAL-ENVIRONMENT VALIDATED.
@@ -15,8 +15,37 @@ timeline.
 
 ## Active build
 
-`0.7.0 — Cryptographic Posture, Crypto-Agility & PQC Readiness` — **AUTOMATED_VALIDATED** (2026-08-29)
-Agreement: `docs/history/phase/0_7_x_CRYPTO_AGILITY_PQC.md`
+`0.7.1a — Compliance Control Catalog & Framework Grouping` — **AUTOMATED_VALIDATED** (2026-08-29)
+Contract: `docs/builds/0_7_1_COMPLIANCE_ASSIGNMENT.md` (§ Build split, § 8 impl record)
+
+Frozen scope: the ten deterministic compliance controls move into a versioned
+declarative catalog (`utils/compliance_catalog.py`, `CATALOG_VERSION = "0.7.1a"`)
+*verbatim* — same ids, areas, `evidence_fields`, evaluators, outcomes — with
+`severity` (5-level, weighted), `rationale` and real per-framework
+`frameworks` (CIS / PCI-DSS / BDDK membership + reference) added.
+`compliance_rulepack.BASELINE_CONTROLS` is now a derived 5-key view; the 0.6.6B
+rule pack and its frozen `rule_count == 10` tests are untouched.
+`compliance_posture._control` emits additive `severity` / `rationale` /
+`frameworks`; the `app.js` control card shows a severity badge + real per-framework
+references. **Purely additive to the compliance payload** — no engine, collector,
+network, CAS or UI-module change.
+
+Evidence (2026-08-29):
+
+```
+py -m pytest -q:            464 passed, 3 skipped, 0 failed (Python 3.12)
+--render-only:              PASS (0 placeholders left)
+repository privacy gate:    PASS / 0 findings
+```
+
+Next: `0.7.1b` — file-based assignment (`data/state/control_assignments.json`) +
+waivers + `compliance_overview` roll-up + Overview card + Compliance workbench
+spine + ~12 enrichment controls + `password_policy` projection. Contract already
+written (`docs/builds/0_7_1_COMPLIANCE_ASSIGNMENT.md` §2c–2e); for review before
+implementation.
+
+Previous: `0.7.0 — Cryptographic Posture, Crypto-Agility & PQC Readiness` —
+AUTOMATED_VALIDATED (2026-08-29), `docs/history/phase/0_7_x_CRYPTO_AGILITY_PQC.md`.
 
 Frozen scope: normalize IKE/IPsec/TLS/certificate facts from the **already-stored**
 PAN `effective-running` XML (CP best-effort from the sanitized projection) — no
@@ -38,9 +67,6 @@ repository privacy gate:    PASS / 0 findings
 
 Dynamic/signed packs, scoring and live `negotiated` crypto evidence remain later
 0.7.x / 0.8.x work.
-
-Previous: `0.6.6B — Compliance Rule-Pack Transition Foundation` — AUTOMATED_VALIDATED
-(2026-08-28), `utils/compliance_rulepack.py`.
 
 ---
 
@@ -83,7 +109,7 @@ full regression run.)
 ## Automated test baseline
 
 ```
-227 passed / 2 known xfail
+464 passed / 3 skipped / 0 failed (Python 3.12)
 Repository privacy gate: 0 findings / PASS
 ```
 

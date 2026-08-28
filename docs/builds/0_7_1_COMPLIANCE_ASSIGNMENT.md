@@ -1,6 +1,6 @@
 # 0.7.1 — Compliance Control Enrichment, Framework Grouping & File-Based Assignment (contract)
 
-**Status:** PLANNED (contract, for review) · **Movement:** IMPLEMENTATION
+**Status:** `0.7.1a` AUTOMATED_VALIDATED (2026-08-29) · `0.7.1b` PLANNED (contract, for review) · **Movement:** IMPLEMENTATION
 **Design:** `docs/design/COMPLIANCE_ASSIGNMENT_AND_FRAMEWORKS.md`
 **Advances:** `compliance_engine`, `framework_mappings`, `evidence_reporting`
 (0.7.x track). Active build contract; moves to `docs/history/phase/` on close.
@@ -9,14 +9,19 @@
 
 Ships as two independently-reviewable, independently-validated builds:
 
-- **`0.7.1a` — Control catalog, framework grouping & enrichment** (§2a, §2b,
-  and the severity-badge / framework-filter parts of §2e). A near-pure refactor:
-  the ten existing controls move into a versioned catalog *verbatim* (same ids,
-  same evaluators, same outcomes) with `severity` + real `frameworks` added;
-  ~12 new deterministic controls + the `password_policy` projection section.
-  Payload is additive only. No assignment, no roll-up.
-- **`0.7.1b` — File-based assignment, waivers & coverage roll-up** (§2c, §2d,
-  and the KPI-band / framework-readiness / Overview-card parts of §2e). Adds
+- **`0.7.1a` — Control catalog, framework grouping & severity** (§2a, §2b,
+  and the severity-badge / framework-grid parts of §2e) — **AUTOMATED_VALIDATED
+  2026-08-29**. A pure additive refactor: the ten existing controls move into a
+  versioned catalog *verbatim* (same ids, areas, evidence_fields, evaluators,
+  outcomes) with `severity`, `rationale` and real per-framework
+  `frameworks` (CIS / PCI-DSS / BDDK membership + reference) added. Payload is
+  additive only. No new controls, no assignment, no roll-up. The ~12 enrichment
+  controls + the `password_policy` projection section move to `0.7.1b` (they
+  change the subject-control count, which the 0.6.6B frozen `rule_count == 10`
+  tests pin, and the engine is reworked for assignment there anyway).
+- **`0.7.1b` — Enrichment, file-based assignment, waivers & coverage roll-up**
+  (§2c, §2d, the ~12 enrichment controls + `password_policy` projection, and the
+  KPI-band / framework-readiness / Overview-card parts of §2e). Adds
   `data/state/control_assignments.json`, the per-device engine filter, file
   waivers (`WAIVED`), the `compliance_overview` block and the Overview /
   Compliance workbench spine. Builds on `0.7.1a`.
@@ -224,3 +229,42 @@ network / CAS / scheduler change; `compliance_control_enrichment` →
 8. **Minimal file-based waivers in `0.7.1`** (`WAIVED` state); UI to raise them later.
 9. Trend / point-in-time → **deferred**; payload designed so `history[]` is additive.
 10. **Include `PARTIALLY_COVERED`** per-framework state.
+
+---
+
+## 8. Implementation record — `0.7.1a` (2026-08-29, AUTOMATED_VALIDATED)
+
+**Scope shipped (additive-only, zero outcome change):**
+
+- `utils/compliance_catalog.py` (new) — `CATALOG_VERSION = "0.7.1a"`. The ten
+  controls as a versioned declarative model: `id`, `cis_reference` (legacy
+  verbatim), `title`, `rationale`, `control_area`, `severity`
+  (`informational|low|medium|high|critical`, weighted 1–5), `vendors`,
+  `evidence` contract (`plane` / `fields` / `basis`), `frameworks` — explicit
+  per-framework CIS / PCI-DSS / BDDK membership with `applies` bool + `reference`
+  + extras (`version="4.0"`, `profile`), `lifecycle`, `introduced`, `evaluator`.
+  Helpers: `catalog_entry`, `severity_weight`, `frameworks_for`,
+  `catalog_baseline_controls()` (the 5-key view the 0.6.6B pack consumes,
+  verbatim shape + order).
+- `utils/compliance_rulepack.py` — `BASELINE_CONTROLS` is now
+  `catalog_baseline_controls()` (single source of truth); `DEFAULT_RULE_PACK`
+  still 10 rules; 0.6.6B pack + frozen tests untouched.
+- `utils/compliance_posture.py` — `_catalog_meta()`; `_control()` emits additive
+  `severity` / `rationale` / `frameworks`; `_implemented_control` /
+  `_planned_evidence_gap` stamp them from the catalog. Platform / fleet controls
+  carry `severity: null`, `frameworks: []` (no catalog entry).
+- `static/app.js` — `complianceControlCard` renders a severity badge, a rationale
+  line, and a real per-framework reference grid (falls back to the 0.6.6B
+  `framework_mappings` render when `control.frameworks` is absent).
+- `tests/test_phase0_7_1a_compliance_catalog.py` (new) — 6 tests: catalog schema
+  + membership, severity scale, baseline view is verbatim and drives the pack,
+  subject controls unchanged + additive metadata present, platform/fleet null
+  metadata, no certification claim / leak.
+
+**Evidence:** `py -m pytest -q` 464 passed / 3 skipped / 0 failed (Python 3.12);
+`--render-only` PASS (0 placeholders left); repository privacy gate PASS / 0.
+
+**Deferred to `0.7.1b`:** the ~12 enrichment controls, `password_policy`
+projection section, `control_assignments.json` + per-device filter + waivers,
+`compliance_overview` roll-up, Overview card, KPI band / framework readiness /
+framework filter workbench spine.
