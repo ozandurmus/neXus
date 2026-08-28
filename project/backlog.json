@@ -406,6 +406,24 @@
       "priority": "P2",
       "target": "OP.2",
       "note": "The single write-capable component: FailoverExecutor (one authorised action; feature flag + per-run token + OIDC/RBAC OPERATE role + maintenance window + optional four-eyes), snapshot -> act -> poll(timeout) -> verify -> auto-rollback, PostFailoverVerification, immutable audit record, per-vendor action adapters, and the Authorise/Execute UI. HARD-GATED - no implementation until every prerequisite in docs/design/FAILOVER_ENGINE_ARCHITECTURE.md section 10 is met (mature VERIFY/TRACE/RECOVER, DEPLOY.1 server, DEPLOY.1A OIDC + OPERATE role, CP device-interaction-safety audit, network-device command gate for the new read+write primitives, signed change-management/safety review)."
+    },
+    {
+      "id": "compliance_control_enrichment",
+      "category": "Compliance / Architecture",
+      "title": "0.7.1 - Control enrichment, framework grouping & file-based assignment",
+      "status": "planned",
+      "priority": "P1",
+      "target": "0.7.1",
+      "note": "The now-buildable spine from docs/design/COMPLIANCE_ASSIGNMENT_AND_FRAMEWORKS.md: grow the control catalog to a versioned declarative model (id, rationale, severity, vendors, evidence contract, per-framework CIS/PCI-DSS/BDDK membership + reference, lifecycle) with ~20-28 deterministic controls (small projection extension for password_policy / banner / services); real framework grouping + rollup (covered / monitored / aligned / PARTIALLY_COVERED per framework); data/state/control_assignments.json RuntimeRoot policy (schema-versioned, fail-closed, like inventory_exclusions) with groups + per-device/group include/exclude and file-based waivers {control,subject,reason,approver,expires} honoured as WAIVED; engine (_subject_controls) filters per device; additive compliance_overview roll-up (total / monitored / subjects / aligned_percent, by_framework, by_subject) read by the Overview module; read-only Compliance workbench spine (KPI band + framework cards + control list + explain-this-finding panel). No server. Advances compliance_engine / framework_mappings / evidence_reporting."
+    },
+    {
+      "id": "compliance_assignment_ui_and_registry",
+      "category": "Compliance / UX",
+      "title": "Compliance assignment editor + tagged device registry (DEPLOY.1-gated)",
+      "status": "deferred",
+      "priority": "P2",
+      "target": "DEPLOY.1",
+      "note": "From docs/design/COMPLIANCE_ASSIGNMENT_AND_FRAMEWORKS.md section 4b / 10: a Compliance-module editor to assign controls / whole frameworks to devices and groups by direct manipulation (device-group x control matrix, coverage-delta preview, every save audited), and a first-class device registry with operator tags/groups (pci-scope, dmz, crown-jewel) plus the waiver-raise and trend-scrubber UI. Requires the app server + DEPLOY.1A OIDC/RBAC (only an authorised role edits scope) + a persistent store. The 0.7.1 control_assignments.json is the interchange format the server writes."
     }
   ]
 }
