@@ -299,12 +299,13 @@ New track: **`OP.x — Controlled Failover`** (the first `OPERATE` work).
 
 - **`OP.0` — HA Readiness / Failover-Safety Assessment (read-only).** The §4
   preflight battery + the §9 readiness dashboard and history. *No write
-  capability.* This is genuinely a **VERIFY-plane** feature — "is this cluster
-  safe to fail over, and why not" — and is buildable in the 0.8.x–0.9.x era
-  (needs a server and real cluster access, no new write risk). It is the
-  foundation and the safety net for everything after.
+  capability.* A **VERIFY-plane** feature — "is this cluster safe to fail over,
+  and why not". Needs only a **reachable test CP + PAN cluster** (a laptop run
+  is sufficient) and the network-device command gate for the new *read*
+  commands — not the full server. Foundation and safety net for everything
+  after.
 - **`OP.1` — Failover Plan Compiler + Dry-Run.** §3 action/rollback compilation,
-  `FailoverPlan`, dry-run only. Still no write.
+  `FailoverPlan`, dry-run only. Still no write; same prerequisites as `OP.0`.
 - **`OP.2` — Controlled Failover Execution (gated).** `FailoverExecutor`,
   `PostFailoverVerification`, audit, per-vendor action adapters, the Authorise/
   Execute UI. **This is the gated part.**
@@ -314,15 +315,21 @@ New track: **`OP.x — Controlled Failover`** (the first `OPERATE` work).
 - `SEE` mature (done); `VERIFY` mature (CP + PAN alignment + compliance, 0.6.x /
   0.7.x); `TRACE` mature (cross-vendor change timeline + safe diff, 0.8.x);
   `RECOVER` mature (vendor-native backup + restore-readiness, 0.9.x).
-- `DEPLOY.1` server; `DEPLOY.1A` OIDC + an RBAC `OPERATE` role + full audit.
+- `DEPLOY.1A` OIDC boundary + an RBAC `OPERATE` role + full audit. (A
+  write-capable failover tool must not run without an auth boundary — this,
+  not the server hardware itself, is the gate.)
 - CP device-interaction-safety audit closed.
-- The `network-device command gate` completed for every new command (read *and*
-  the two write primitives) per `docs/AI_DEVELOPMENT_PROTOCOL.md`.
+- The `network-device command gate` completed for the two write primitives
+  (`clusterXL_admin down` / `request high-availability state suspend`) and
+  their rollbacks, per `docs/AI_DEVELOPMENT_PROTOCOL.md`.
 - A written change-management / safety review signed off with the network-
   security leads. This is not a code gate; it is an organisational one.
 
 Until every `OP.2` prerequisite is met, only `OP.0` and `OP.1` (both
 write-free) may be built.
+
+Open decisions for the OP.x approval review are tracked in
+`project/roadmap.json` → `open_decisions`; §11 restates them.
 
 ---
 
