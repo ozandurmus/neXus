@@ -30,7 +30,11 @@ Do not scan runtime/sensitive directories by default: `data/`, `output/`,
 
 ## First response contract — SESSION START
 
-Before editing code, return a short `SESSION START` with:
+Before editing code, return a short `SESSION START`. It opens with a
+`PROJE ÖZETİ` (Turkish, plain language, 4–6 lines, no jargon) for the
+non-developer product owner — what the project is, what this task is, the
+benefit, its type (feature / bug fix / major feature / hardening / docs /
+architecture), and what it enables in future — then, in English:
 
 - Current product baseline
 - Current engineering baseline
