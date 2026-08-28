@@ -22,6 +22,16 @@ If a section does not apply, write `n/a` — do not delete the heading.
 
 ## 2. Recent builds (all on `main`)
 
+- **`0.7.0` — Cryptographic Posture, Crypto-Agility & PQC Readiness** — opens
+  the 0.7.x VERIFY track. `utils/crypto_facts.py` + `utils/crypto_rulepack.py`
+  (`securityexpert.crypto.cp-pan @ 0.7.0`) + `utils/crypto_posture.py`: IKE/
+  IPsec/TLS/cert facts from the *already-stored* PAN XML → weak_algorithm /
+  crypto_agility / pqc_readiness findings, additive `__CRYPTO_JSON_PLACEHOLDER__`
+  payload, one card in the Compliance module. No new collector. Contract:
+  `docs/history/phase/0_7_x_CRYPTO_AGILITY_PQC.md`.
+- **SESSION START now opens with a Turkish `PROJE ÖZETİ`** for the non-developer
+  product owner (`AGENTS.md`, `docs/AI_DEVELOPMENT_PROTOCOL.md`,
+  `.github/copilot-instructions.md`).
 - **code-quality cleanup** — removed dead code (`enrich_cluster_topology`
   post-loop, `_evaluate_timezone_control`), tightened 3 bare `except:`,
   English-ised 3 vsx_runner comments. No behavior change.
@@ -50,14 +60,16 @@ If a section does not apply, write `n/a` — do not delete the heading.
 
 ## 3. Next work
 
-**Next build: `0.7.x` — `crypto_agility_pqc`** (backlog id, P1). First formal
-0.7.x VERIFY-track build. Normalize IPsec/IKE/TLS/certificate facts from
-existing CP/PAN configuration evidence and evaluate them through a versioned
-rule pack (extends the 0.6.6B `utils/compliance_rulepack.py` boundary). No new
-collectors, vendors or network. Needs a frozen architecture contract first
-(`docs/builds/0_7_x_CRYPTO_AGILITY_PQC.md`) — `ARCHITECTURE` movement, then
-`IMPLEMENTATION`. Synthetic config fixtures for tests (no server needed for the
-automated gate).
+`0.7.0` (crypto posture) is done. Remaining `0.7.x` VERIFY-track features
+(`roadmap.json` track `0.7.x`, all `planned`): `compliance_engine`,
+`framework_mappings`, `evidence_reporting`. Each needs its own architecture
+contract. `crypto_agility_pqc` follow-ups (later): dynamic/signed packs,
+scoring, and the live `negotiated` crypto-evidence layer (needs a server).
+
+Standing doable-now options if not starting the next 0.7.x contract:
+`immutable_store_permission` (P1 bug), `html_render_performance` (P2, profile
+via `scripts/render_sample.py`), `inventory_exclusions_ui` /
+`overview_device_lifecycle_enrichment` (P1 UI).
 
 **OP.x — Controlled Failover: design done, approval pending.**
 `docs/design/FAILOVER_ENGINE_ARCHITECTURE.md`. The user is getting sign-off next
