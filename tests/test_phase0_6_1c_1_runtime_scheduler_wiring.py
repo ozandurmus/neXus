@@ -248,6 +248,8 @@ def test_scheduler_once_dispatches_due_workflow_once_and_persists_state(tmp_path
 
 def test_main_cp_path_uses_shared_admission_and_runtime_observability(tmp_path, monkeypatch):
     import main as main_module
+    # DEV.2.1: _build_runtime_config prompts only when stdin is a TTY.
+    monkeypatch.setattr(main_module.sys.stdin, "isatty", lambda: True)
     import checkpoint.cp_runner as cp_runner
     import utils.html_export as html_module
     import utils.merge as merge_module
@@ -294,6 +296,8 @@ def test_main_cp_path_uses_shared_admission_and_runtime_observability(tmp_path, 
 
 def test_main_cp_config_probe_uses_shared_admission(tmp_path, monkeypatch):
     import main as main_module
+    # DEV.2.1: _build_runtime_config prompts only when stdin is a TTY.
+    monkeypatch.setattr(main_module.sys.stdin, "isatty", lambda: True)
     import configuration.checkpoint_config_probe as probe_module
 
     runtime_root = tmp_path / "runtime"
