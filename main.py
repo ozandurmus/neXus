@@ -2,6 +2,7 @@ import argparse
 import getpass
 import json
 import os
+import sys
 import time
 from pathlib import Path
 
@@ -15,6 +16,7 @@ from utils.logger import (
 # Storage maintenance stays dependency-light and credential-free. Collection
 # runners are imported lazily inside main() after storage-only commands return.
 from utils.config_storage import analyze_configuration_storage, deduplicate_legacy_storage, human_bytes
+from utils.runtime_config_source import RuntimeConfigError, resolve_value
 from utils.runtime_paths import RuntimePathError, resolve_runtime_paths
 from config import Config
 
@@ -106,6 +108,15 @@ def _cp_stage_cooldown(next_stage):
     time.sleep(seconds)
 
 
+# DEV.2.1: public non-interactive configuration contract (compose files, secret
+# mounts). Each also accepts a `<VAR>_FILE` variant pointing at a secret-mount
+# file; see utils/runtime_config_source.resolve_value and docs/builds/.
+_PRINCIPAL_VAR = "SECURITYEXPERT_PRINCIPAL"
+_SECRET_VAR = "SECURITYEXPERT_SECRET"
+_CP_MDS_ENDPOINT_VAR = "SECURITYEXPERT_CP_MDS_ENDPOINT"
+_PANORAMA_ENDPOINT_VAR = "SECURITYEXPERT_PANORAMA_ENDPOINT"
+
+
 def _prompt_management_endpoint(label):
     """Read an environment-specific management endpoint at runtime.
 
@@ -120,12 +131,58 @@ def _prompt_management_endpoint(label):
         print(f"{label} is required.")
 
 
-def _build_runtime_config(*, require_cp, require_panorama, runtime_paths=None):
-    cp_endpoint = _prompt_management_endpoint("Check Point Management") if require_cp else None
-    panorama_endpoint = _prompt_management_endpoint("Palo Alto Panorama") if require_panorama else None
+def _resolve_or_prompt(name, label, *, kind, interactive, missing):
+    """Resolve `name` non-interactively; otherwise prompt when stdin is a TTY;
+    otherwise record `name` in `missing` and return None.
 
-    principal = input("Login: " )
-    secret = getpass.getpass("Authentication secret: " )
+    `kind` selects the interactive fallback: "endpoint" (looped non-empty
+    prompt), "secret" (getpass), or "line" (bare input).
+    """
+    value = resolve_value(name)
+    if value is not None:
+        return value
+    if interactive:
+        if kind == "secret":
+            return getpass.getpass(f"{label}: ")
+        if kind == "endpoint":
+            return _prompt_management_endpoint(label)
+        return input(f"{label}: ")
+    missing.append(name)
+    return None
+
+
+def _build_runtime_config(*, require_cp, require_panorama, runtime_paths=None):
+    """Build the process Config from env / secret files, falling back to
+    interactive prompts only when stdin is a TTY.
+
+    Precedence per value: `<VAR>_FILE` > `<VAR>` > prompt (TTY only). When stdin
+    is not a TTY and a required value is unresolved, raise RuntimeConfigError
+    naming every missing variable, before any collector import or network call.
+    """
+    interactive = sys.stdin.isatty()
+    missing = []
+
+    cp_endpoint = (
+        _resolve_or_prompt(_CP_MDS_ENDPOINT_VAR, "Check Point Management",
+                           kind="endpoint", interactive=interactive, missing=missing)
+        if require_cp else None
+    )
+    panorama_endpoint = (
+        _resolve_or_prompt(_PANORAMA_ENDPOINT_VAR, "Palo Alto Panorama",
+                           kind="endpoint", interactive=interactive, missing=missing)
+        if require_panorama else None
+    )
+    principal = _resolve_or_prompt(_PRINCIPAL_VAR, "Login",
+                                   kind="line", interactive=interactive, missing=missing)
+    secret = _resolve_or_prompt(_SECRET_VAR, "Authentication secret",
+                                kind="secret", interactive=interactive, missing=missing)
+
+    if missing:
+        raise RuntimeConfigError(
+            "non-interactive runtime configuration incomplete (stdin is not a TTY): set "
+            + ", ".join(f"{name} (or {name}_FILE)" for name in missing)
+        )
+
     principal_id = principal_fingerprint(principal)
     register_sensitive_value(principal, f"[AUTH_PRINCIPAL:{principal_id}]")
     register_sensitive_value(secret, "[AUTH_SECRET:REDACTED]")
@@ -513,9 +570,21 @@ def main(argv=None, *, runtime_services=None, provenance="manual", admission_run
             run_context=run_context or admission_run_context,
         )
 
+    def _runtime_config(*, require_cp, require_panorama):
+        """_build_runtime_config with a clean CLI exit for a non-interactive
+        misconfiguration instead of an uncaught traceback."""
+        try:
+            return _build_runtime_config(
+                require_cp=require_cp,
+                require_panorama=require_panorama,
+                runtime_paths=runtime_paths,
+            )
+        except RuntimeConfigError as exc:
+            parser.error(str(exc))
+
     if args.cp_config_probe:
         print("=== SECURITYEXPERT CHECK POINT CONFIGURATION IDENTITY + VSX PROBE — PHASE 0.6.1A.1 ===\n")
-        cfg = _build_runtime_config(require_cp=True, require_panorama=False, runtime_paths=runtime_paths)
+        cfg = _runtime_config(require_cp=True, require_panorama=False)
         try:
             from configuration.checkpoint_config_probe import run_checkpoint_config_probe
             result = _admitted(
@@ -552,7 +621,7 @@ def main(argv=None, *, runtime_services=None, provenance="manual", admission_run
 
     if args.cp_config_collect:
         print("=== SECURITYEXPERT CHECK POINT CONFIGURATION COLLECTION — PHASE 0.6.1B.1.2 ===\n")
-        cfg = _build_runtime_config(require_cp=True, require_panorama=False, runtime_paths=runtime_paths)
+        cfg = _runtime_config(require_cp=True, require_panorama=False)
         try:
             from configuration.checkpoint_config_collector import run_checkpoint_config_collection
             from utils.html_export import run_html_export
@@ -710,10 +779,9 @@ def main(argv=None, *, runtime_services=None, provenance="manual", admission_run
     if collection_requested:
         require_cp_endpoint = args.only in ["cp", "vsx", "all"]
         require_panorama_endpoint = args.only in ["panorama", "pan-config", "all"]
-        cfg = _build_runtime_config(
+        cfg = _runtime_config(
             require_cp=require_cp_endpoint,
             require_panorama=require_panorama_endpoint,
-            runtime_paths=runtime_paths,
         )
 
     run_ctx = RunContext.create(data_root=runtime_paths.data_root, output_root=runtime_paths.output_root) if args.only == "all" else None
