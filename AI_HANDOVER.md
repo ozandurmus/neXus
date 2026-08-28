@@ -41,14 +41,17 @@ If a section does not apply, write `n/a` — do not delete the heading.
 laptop to confirm it works.** Automated tests are green but nothing since the
 0.6.1x builds has been exercised end-to-end.
 
-- **Local render check (no devices needed):** `py -B main.py --render-only
-  --runtime-root <path>` needs a prior `output/unified.json`. A synthetic
-  render harness / sample dataset would let the user open `output/index.html`
-  and eyeball every module (Overview / Network Inventory / Configuration /
-  Compliance / Discovery / Project Plan), including the new `rule_pack` fields.
-  Status: **set up next.**
+- **Local render check (no devices needed):** `py -V:3.12 scripts/render_sample.py`
+  builds a synthetic `unified.json` and renders `index.html` (path printed) so
+  the UI shell + Overview / Network Inventory / Project Plan can be eyeballed on
+  a laptop. Configuration / Compliance / Discovery show their correct
+  "no evidence collected" empty states — the script does not fabricate config or
+  compliance evidence. Verified 2026-08-28: 6 module panels, all placeholders
+  replaced, ~385 KB HTML.
 - **Real collection run:** needs reachability to an MDS / Panorama and
   credentials — not possible from a bare laptop. Deferred to the server.
+  `0.6.6B`'s `rule_pack` fields only populate when a configuration collection
+  has run (Compliance is empty in the sample render).
 - **DEPLOY.1** (`now_next.next`): server migration, gated on hardware arrival.
   Step breakdown in `roadmap.json` `engineering_tracks` DEV.2/3/4; backlog
   items `noninteractive_runtime_config` (done), `deploy_persistent_secret_material`,
