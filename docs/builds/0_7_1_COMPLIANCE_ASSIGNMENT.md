@@ -5,6 +5,24 @@
 **Advances:** `compliance_engine`, `framework_mappings`, `evidence_reporting`
 (0.7.x track). Active build contract; moves to `docs/history/phase/` on close.
 
+## Build split
+
+Ships as two independently-reviewable, independently-validated builds:
+
+- **`0.7.1a` — Control catalog, framework grouping & enrichment** (§2a, §2b,
+  and the severity-badge / framework-filter parts of §2e). A near-pure refactor:
+  the ten existing controls move into a versioned catalog *verbatim* (same ids,
+  same evaluators, same outcomes) with `severity` + real `frameworks` added;
+  ~12 new deterministic controls + the `password_policy` projection section.
+  Payload is additive only. No assignment, no roll-up.
+- **`0.7.1b` — File-based assignment, waivers & coverage roll-up** (§2c, §2d,
+  and the KPI-band / framework-readiness / Overview-card parts of §2e). Adds
+  `data/state/control_assignments.json`, the per-device engine filter, file
+  waivers (`WAIVED`), the `compliance_overview` block and the Overview /
+  Compliance workbench spine. Builds on `0.7.1a`.
+
+The sub-builds close and merge separately; this doc covers both.
+
 ---
 
 ## PROJE ÖZETİ (Türkçe)
