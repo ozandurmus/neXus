@@ -960,7 +960,7 @@
     {
       "id": "crypto_agility_pqc",
       "title": "Cryptographic Posture, Crypto-Agility & PQC Readiness",
-      "status": "planned",
+      "status": "automated_validated",
       "target": "0.7.x",
       "weight": 10,
       "summary": "Normalize IPsec/IKE proposal, TLS policy, certificate and platform-capability facts for Check Point and Palo Alto; evaluate against versioned rule packs for crypto-agility, known-weak algorithms and PQC readiness. Distinct from and dependent on the core Compliance Rule Engine.",
@@ -969,25 +969,25 @@
         {
           "id": "crypto_facts",
           "label": "IPsec/IKE/TLS/cert normalized facts (CP + PAN)",
-          "state": "pending",
+          "state": "done",
           "weight": 2
         },
         {
           "id": "rule_packs",
           "label": "Versioned crypto rule packs (weak/agility/PQC)",
-          "state": "pending",
+          "state": "done",
           "weight": 2
         },
         {
           "id": "evidence_confidence",
           "label": "Configured vs negotiated vs inferred confidence model",
-          "state": "pending",
+          "state": "done",
           "weight": 1
         },
         {
           "id": "pqc_capability",
           "label": "Platform/OS PQC capability evidence",
-          "state": "pending",
+          "state": "done",
           "weight": 1
         }
       ]

@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "current_build": "0.6.6B",
+  "current_build": "0.7.0",
   "current_track": "0.6.x",
   "progress_contract": "Weighted acceptance-criterion completion. Percentages describe the declared roadmap, not calendar time or delivery ETA.",
   "tracks": [
@@ -47,7 +47,7 @@
       "id": "0.7.x",
       "title": "Verification, Compliance & Expected State",
       "theme": "VERIFY",
-      "status": "planned",
+      "status": "in_progress",
       "weight": 20,
       "feature_ids": [
         "compliance_engine",
@@ -109,12 +109,12 @@
   ],
   "now_next": {
     "now": {
-      "build": "0.6.6B",
-      "title": "Compliance Rule-Pack Transition Foundation",
-      "goal": "Route the ten deterministic CP/PAN controls through a static versioned in-repository rule pack; additive traceability, unchanged outcomes, no collector/network/CAS/UI-logic change.",
+      "build": "0.7.0",
+      "title": "Cryptographic Posture, Crypto-Agility & PQC Readiness",
+      "goal": "Normalize IKE/IPsec/TLS/certificate facts from stored CP/PAN config evidence and evaluate them through a static versioned crypto rule pack; additive payload, no new collectors.",
       "status": "automated_validated",
-      "started": "2026-08-28",
-      "completed": "2026-08-28"
+      "started": "2026-08-29",
+      "completed": "2026-08-29"
     },
     "next": {
       "build": "DEPLOY.1",
