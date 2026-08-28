@@ -51,5 +51,6 @@ in any repository file — documentation and `project/*.json` metadata included.
 | `AGENTS.md` · `docs/AI_DEVELOPMENT_PROTOCOL.md` | Engineering law and lifecycle |
 | `project/roadmap.json` · `project/backlog.json` | Task source |
 | `project/build_history.json` · `docs/history/INDEX.md` | Structured build timeline |
+| `docs/design/` | Forward-looking architecture for major not-yet-built features (e.g. `FAILOVER_ENGINE_ARCHITECTURE.md`) |
 | `docs/history/` | Archived phase agreements, validation reports, old handovers |
 | `PROJECT_VISION.md` · `PRIVACY_AND_DATA_HANDLING.md` | North star and data-handling rules |

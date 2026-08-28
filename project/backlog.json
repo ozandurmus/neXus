@@ -74,7 +74,7 @@
     {
       "id": "deploy1_oidc_viewer",
       "category": "Security",
-      "title": "DEPLOY.1A \u2014 Authenticated Read-Only Viewer Boundary",
+      "title": "DEPLOY.1A — Authenticated Read-Only Viewer Boundary",
       "status": "planned",
       "priority": "P0",
       "target": "DEPLOY.1A",
@@ -272,7 +272,7 @@
       "status": "automated_validated",
       "priority": "P1",
       "target": "0.6.3",
-      "note": "AUTOMATED_VALIDATED 2026-08-27: ConfigHistoryService, PAN diff adapter, additive history_v1 UI payload, History tab timeline+diff rendering. 14 targeted tests AC-1\u2026AC-9 PASS; 30 regression PASS; render-only PASS; privacy gate 0 findings. main merge pending diff review."
+      "note": "AUTOMATED_VALIDATED 2026-08-27: ConfigHistoryService, PAN diff adapter, additive history_v1 UI payload, History tab timeline+diff rendering. 14 targeted tests AC-1…AC-9 PASS; 30 regression PASS; render-only PASS; privacy gate 0 findings. main merge pending diff review."
     },
     {
       "id": "bulk_fleet_ops",
@@ -379,6 +379,33 @@
       "priority": "P1",
       "target": "0.6.1C / Inventory UX",
       "note": "Add vendor-appropriate OS version and model fields to Overview; if globally available, map model families to EOS dates and suggested next release guidance without exposing sensitive identities."
+    },
+    {
+      "id": "failover_readiness_assessment",
+      "category": "Safety / Architecture",
+      "title": "OP.0 - HA Readiness / Failover-Safety Assessment (read-only)",
+      "status": "planned",
+      "priority": "P1",
+      "target": "OP.0",
+      "note": "Read-only per-vendor preflight battery (see docs/design/FAILOVER_ENGINE_ARCHITECTURE.md sections 3-4): viable target, state/session sync, version/policy/content parity, split-brain/flap, control+sync link health, preemption note. Emits SAFE_TO_FAILOVER / DEGRADED_PROCEED_WITH_RISK / UNSAFE_DO_NOT_FAILOVER / INSUFFICIENT_EVIDENCE with blocking line items, plus the SCC readiness dashboard + history. NO write capability. Needs the DEPLOY.1 server and real cluster access; buildable in the 0.8.x-0.9.x era as a VERIFY-plane feature. Foundation and safety net for OP.1 / OP.2."
+    },
+    {
+      "id": "failover_plan_compiler",
+      "category": "Architecture",
+      "title": "OP.1 - Failover Plan Compiler + Dry-Run",
+      "status": "planned",
+      "priority": "P2",
+      "target": "OP.1",
+      "note": "Compile the exact graceful active-initiated action (CP clusterXL_admin down [-p]; PAN request high-availability state suspend), the rollback, the traffic-impact window and the preemption/fall-back note into a FailoverPlan. Dry-run only; executes nothing. Gated on failover_readiness_assessment. See docs/design/FAILOVER_ENGINE_ARCHITECTURE.md sections 3 and 5."
+    },
+    {
+      "id": "failover_controlled_execution",
+      "category": "Safety / Architecture",
+      "title": "OP.2 - Controlled Failover Execution (write-gated)",
+      "status": "deferred",
+      "priority": "P2",
+      "target": "OP.2",
+      "note": "The single write-capable component: FailoverExecutor (one authorised action; feature flag + per-run token + OIDC/RBAC OPERATE role + maintenance window + optional four-eyes), snapshot -> act -> poll(timeout) -> verify -> auto-rollback, PostFailoverVerification, immutable audit record, per-vendor action adapters, and the Authorise/Execute UI. HARD-GATED - no implementation until every prerequisite in docs/design/FAILOVER_ENGINE_ARCHITECTURE.md section 10 is met (mature VERIFY/TRACE/RECOVER, DEPLOY.1 server, DEPLOY.1A OIDC + OPERATE role, CP device-interaction-safety audit, network-device command gate for the new read+write primitives, signed change-management/safety review)."
     }
   ]
 }
