@@ -174,6 +174,15 @@
           "Architecture: docs/design/FAILOVER_ENGINE_ARCHITECTURE.md. Analyses the real per-vendor failover procedure (CP ClusterXL HA/LS + VSX, PAN A/P + A/A), the preflight stop-conditions, the graceful active-initiated single-step approach, and post-failover verification.",
           "OP.0 (HA readiness / failover-safety assessment + SCC dashboard) is read-only and the first buildable step; OP.1 adds the dry-run plan compiler; OP.2 (controlled execution) is write-gated - see roadmap_notes."
         ]
+      },
+      {
+        "build": "0.7.1 (contract next)",
+        "title": "Compliance control enrichment, framework grouping & file-based assignment",
+        "status": "planned",
+        "notes": [
+          "Buildable now (no server). Versioned declarative control catalog with severity + per-framework CIS/PCI-DSS/BDDK membership; ~20-28 deterministic controls; data/state/control_assignments.json policy (groups, include/exclude, file-based waivers); engine filters per device; additive compliance_overview roll-up on the Overview pane; read-only Compliance workbench spine (progressive KPI -> framework -> control -> subject -> evidence).",
+          "Design + expert-lens analysis (compliance/risk, security manager, architect, UI): docs/design/COMPLIANCE_ASSIGNMENT_AND_FRAMEWORKS.md."
+        ]
       }
     ]
   },
@@ -194,7 +203,8 @@
     "Non-interactive runtime configuration (DEV.2.1) is a hard precondition for any unattended container: today the only credential/endpoint path is interactive input()/getpass in _build_runtime_config, and --scheduler-once re-enters it. It must land before DEV.3.",
     "output/index.html is a LOCAL OPERATOR SENSITIVE artifact (real device identities, non-secret configuration values); serving it without the DEPLOY.1A viewer boundary is only acceptable on a trusted internal network behind existing access control.",
     "Postgres scope for DEV.3.2/DEV.3.3 is metadata only (scheduler state, run manifests, last-known-good, CAS metadata index, distributed lock); it touches config_evidence, config_storage, config_history, snapshot, run_context and collection_executor. CAS payload blobs remain on a volume. This is one infrastructure checkpoint with its own real-environment gate.",
-    "OP.x Controlled Failover is the first OPERATE-theme work; architecture in docs/design/FAILOVER_ENGINE_ARCHITECTURE.md; open decisions tracked in this file's open_decisions. The write-free parts need only a reachable test CP + PAN cluster (a laptop run is sufficient): OP.0 (HA readiness / failover-safety assessment + SCC dashboard, a read-only VERIFY-plane feature) and OP.1 (dry-run plan compiler). OP.2 controlled execution is hard-gated on mature VERIFY/TRACE/RECOVER, the DEPLOY.1A OIDC boundary + an RBAC OPERATE role + full audit, the CP device-interaction-safety audit, the network-device command gate for the new read and write primitives, and a signed change-management / safety review with the network-security leads."
+    "OP.x Controlled Failover is the first OPERATE-theme work; architecture in docs/design/FAILOVER_ENGINE_ARCHITECTURE.md; open decisions tracked in this file's open_decisions. The write-free parts need only a reachable test CP + PAN cluster (a laptop run is sufficient): OP.0 (HA readiness / failover-safety assessment + SCC dashboard, a read-only VERIFY-plane feature) and OP.1 (dry-run plan compiler). OP.2 controlled execution is hard-gated on mature VERIFY/TRACE/RECOVER, the DEPLOY.1A OIDC boundary + an RBAC OPERATE role + full audit, the CP device-interaction-safety audit, the network-device command gate for the new read and write primitives, and a signed change-management / safety review with the network-security leads.",
+    "Compliance control assignment, CIS/PCI-DSS/BDDK framework grouping and the coverage/alignment roll-up are designed in docs/design/COMPLIANCE_ASSIGNMENT_AND_FRAMEWORKS.md with an explicit now vs DEPLOY.1 split. 0.7.1 (compliance_control_enrichment) delivers the file-based policy + versioned control catalog + read-only Compliance workbench spine + Overview roll-up - no server. The UI assignment editor and a tagged device registry (compliance_assignment_ui_and_registry) are DEPLOY.1-gated on the app server + DEPLOY.1A OIDC/RBAC + a store."
   ],
   "architecture_review_notes": [
     "2026-08-25 architecture review: event-driven webhook, crypto/PQC readiness, DEPLOY.1 OIDC boundary and contextual TI enrichment evaluated for CP/PAN scope.",
