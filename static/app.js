@@ -2459,6 +2459,33 @@ function renderOverviewModule() {
             </div>
         `;
     }
+
+    const complianceSummary = document.getElementById("overviewComplianceSummary");
+    if (complianceSummary) {
+        const ov = (complianceUiData && complianceUiData.available) ? complianceUiData.compliance_overview : null;
+        if (ov && ov.total_controls) {
+            const cells = ov.cells || {};
+            const fw = ov.by_framework || {};
+            complianceSummary.innerHTML = `
+                <div class="summary-list">
+                    <div><span>Controls monitored</span><strong>${formatNumber(ov.monitored_controls)} / ${formatNumber(ov.total_controls)}</strong></div>
+                    <div><span>Assessed devices</span><strong>${formatNumber(ov.subjects)}</strong></div>
+                    <div><span>Aligned</span><strong>${Number(ov.aligned_percent || 0).toFixed(1)}% · ${Number(ov.risk_weighted_alignment_percent || 0).toFixed(1)}% risk-weighted</strong></div>
+                    <div><span>Findings / gaps / waived</span><strong>${formatNumber(cells.finding)} · ${formatNumber(cells.unknown)} · ${formatNumber(cells.waived)}</strong></div>
+                </div>
+                <div class="alignment-summary-strip">
+                    ${["CIS", "PCI-DSS", "BDDK"].map(name => {
+                        const f = fw[name] || {};
+                        return metricCard(name, safe(f.coverage || "UNCOVERED").replace(/_/g, " "),
+                            `${formatNumber(f.monitored || 0)} / ${formatNumber(f.controls || 0)} monitored`,
+                            complianceCoveragePillTone(f.coverage));
+                    }).join("")}
+                </div>
+            `;
+        } else {
+            complianceSummary.innerHTML = `<div class="empty-state compact"><span>No compliance control-coverage roll-up in this export.</span></div>`;
+        }
+    }
 }
 
 
@@ -3708,6 +3735,7 @@ function complianceStatusTone(status) {
     if (value === "UNKNOWN") return "muted";
     if (value === "NOT_APPLICABLE") return "info";
     if (value === "PLANNED") return "warning";
+    if (value === "WAIVED") return "info";
     return "neutral";
 }
 
@@ -3719,6 +3747,7 @@ function complianceStatusMeaning(status) {
     if (value === "UNKNOWN") return "Evidence is missing or insufficient for a conclusion.";
     if (value === "NOT_APPLICABLE") return "This control does not apply for the selected vendor context.";
     if (value === "PLANNED") return "This control area is intentionally roadmap-planned.";
+    if (value === "WAIVED") return "A dated, approved waiver in the local assignment policy applies to this cell.";
     return "Status meaning unavailable.";
 }
 
@@ -3966,6 +3995,64 @@ function renderComplianceFleetCards() {
 }
 
 
+function complianceCoveragePillTone(coverage) {
+    const value = safe(coverage).toUpperCase();
+    if (value === "COVERED") return "success";
+    if (value === "PARTIALLY_COVERED") return "warning";
+    return "muted";
+}
+
+
+function renderComplianceCoverageOverview() {
+    const host = document.getElementById("complianceCoverageOverview");
+    if (!host) return;
+    const payload = compliancePayload();
+    const ov = payload.compliance_overview;
+    if (!complianceUiData?.available || !ov || !ov.total_controls) {
+        host.innerHTML = `<div class="section-heading"><div><div class="eyebrow">Coverage</div><h2>Control coverage</h2></div></div>
+            <div class="empty-state compact"><span>No control-coverage roll-up in this export.</span></div>`;
+        return;
+    }
+    const cells = ov.cells || {};
+    const policy = payload.assignment_policy || {};
+    const frameworks = ov.by_framework || {};
+    const policyNote = policy.active
+        ? `Assignment policy active (${escapeHtml(policy.source || "runtime-policy")}) · default ${escapeHtml(policy.default_mode || "all_applicable")} · ${formatNumber(policy.groups || 0)} group(s) · ${formatNumber(policy.waivers || 0)} waiver(s).`
+        : `No local assignment policy — every catalogued control applies to every assessed device.`;
+
+    host.innerHTML = `
+        <div class="section-heading">
+            <div>
+                <div class="eyebrow">Coverage · catalog ${escapeHtml(ov.catalog_version || "")}</div>
+                <h2>Control coverage &amp; framework readiness</h2>
+                <div class="detail-subtitle">${formatNumber(ov.monitored_controls)} of ${formatNumber(ov.total_controls)} catalogued controls are assigned and have evidence on ${formatNumber(ov.subjects)} assessed device(s).</div>
+            </div>
+        </div>
+        <div class="compliance-kpi-grid">
+            ${metricCard("CATALOGUED", formatNumber(ov.total_controls), `${formatNumber(ov.monitored_controls)} monitored · ${formatNumber(ov.unmonitored_controls)} not yet`, ov.unmonitored_controls ? "warning" : "success")}
+            ${metricCard("ALIGNED", `${Number(ov.aligned_percent || 0).toFixed(1)}%`, `${formatNumber(cells.aligned)} of ${formatNumber((cells.aligned || 0) + (cells.finding || 0) + (cells.unknown || 0) + (cells.planned || 0))} evaluated cells`, "success")}
+            ${metricCard("RISK-WEIGHTED", `${Number(ov.risk_weighted_alignment_percent || 0).toFixed(1)}%`, "Alignment weighted by control severity", "muted")}
+            ${metricCard("FINDINGS", formatNumber(cells.finding), `${formatNumber(cells.unknown)} evidence gaps · ${formatNumber(cells.waived)} waived`, Number(cells.finding) > 0 ? "danger" : "success")}
+        </div>
+        <div class="compliance-framework-readiness">
+            ${["CIS", "PCI-DSS", "BDDK"].map(name => {
+                const fw = frameworks[name] || {};
+                return `
+                    <article class="compliance-framework-card">
+                        <div class="compliance-framework-head">
+                            <strong>${escapeHtml(name)}</strong>
+                            ${statusPill(safe(fw.coverage || "UNCOVERED").replace(/_/g, " "), complianceCoveragePillTone(fw.coverage))}
+                        </div>
+                        <div class="compliance-framework-meta">${formatNumber(fw.monitored || 0)} / ${formatNumber(fw.controls || 0)} controls monitored · ${formatNumber(fw.aligned || 0)} aligned · ${formatNumber(fw.finding || 0)} finding(s)</div>
+                    </article>
+                `;
+            }).join("")}
+        </div>
+        <div class="posture-note"><strong>Assignment:</strong> ${policyNote}</div>
+    `;
+}
+
+
 function complianceSubjectStatusCounts(subject) {
     const rows = complianceRenderableControls(subject?.controls);
     return {
@@ -4024,6 +4111,7 @@ function renderComplianceFleetView() {
 
     renderComplianceLegend();
     renderComplianceFleetCards();
+    renderComplianceCoverageOverview();
 
     const payload = compliancePayload();
     const fleetControls = Array.isArray(payload.fleet_controls) ? payload.fleet_controls : [];
@@ -4117,10 +4205,29 @@ function renderComplianceSubjectView(subject) {
         metricCard("? UNKNOWN", formatNumber(counts.unknown), "Insufficient evidence", "muted"),
     ].join("");
 
+    const assignment = subject.assignment || {};
+    if (Array.isArray(assignment.assigned)) {
+        const note = document.createElement("div");
+        note.className = "posture-note";
+        const waived = Array.isArray(assignment.waived) ? assignment.waived.length : 0;
+        note.innerHTML = `<strong>Assignment:</strong> ${formatNumber(assignment.assigned.length)} control(s) in scope for this device` +
+            (Array.isArray(assignment.not_assigned) && assignment.not_assigned.length ? ` · ${formatNumber(assignment.not_assigned.length)} de-scoped` : "") +
+            (waived ? ` · ${formatNumber(waived)} waived` : "") + ".";
+        summaryHost.appendChild(note);
+    }
+
     const rows = complianceRenderableControls(subject.controls);
     subjectHost.innerHTML = rows.length
         ? `<div class="compliance-control-grid subject-grid">${rows.map(control => complianceControlCard(control, { showFramework: true, showRoadmap: false, showControlId: true, showTraceability: true, compact: true })).join("")}</div>`
         : `<div class="empty-state compact"><span>No control results available for this device.</span></div>`;
+
+    const extendedHost = document.getElementById("complianceSubjectExtendedControls");
+    if (extendedHost) {
+        const extRows = complianceRenderableControls(subject.extended_controls);
+        extendedHost.innerHTML = extRows.length
+            ? `<div class="compliance-control-grid subject-grid">${extRows.map(control => complianceControlCard(control, { showFramework: true, showRoadmap: false, showControlId: true, showTraceability: true, compact: true })).join("")}</div>`
+            : `<div class="empty-state compact"><span>No enrichment controls in scope for this device.</span></div>`;
+    }
 }
 
 
@@ -4468,6 +4575,7 @@ document.querySelectorAll(".module-nav-item").forEach(button => {
 });
 
 document.getElementById("overviewOpenConfiguration")?.addEventListener("click", () => switchModule("configuration"));
+document.getElementById("overviewOpenCompliance")?.addEventListener("click", () => switchModule("compliance"));
 document.getElementById("configSearch")?.addEventListener("input", renderConfigDeviceList);
 document.getElementById("configHeaderToggle")?.addEventListener("click", () => setConfigHeaderExpanded(!configHeaderExpanded));
 document.getElementById("configSidebarToggle")?.addEventListener("click", () => setConfigSidebarOpen(!configSidebarOpen));

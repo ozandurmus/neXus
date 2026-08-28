@@ -6,7 +6,7 @@ agreements and validation reports). `docs/history/INDEX.md` is the one-line
 timeline.
 
 - **Authoritative checkpoint:** 2026-08-29
-- **Product baseline:** `0.7.1a — Compliance Control Catalog & Framework Grouping` — AUTOMATED_VALIDATED (0.7.x VERIFY track; follows `0.7.0` crypto posture)
+- **Product baseline:** `0.7.1b — Compliance Assignment, Waivers & Coverage Roll-up` — AUTOMATED_VALIDATED (0.7.x VERIFY track; `0.7.1a` catalog + `0.7.1b` assignment together complete the 0.7.1 contract)
 - **Engineering baseline:** `DEV.1` complete; `DEV.2.1` (non-interactive runtime config) — AUTOMATED_VALIDATED
 - **Product evidence baseline:** `0.6.1B.1.2` interactive Check Point configuration
   collection is REAL-ENVIRONMENT VALIDATED.
@@ -15,34 +15,44 @@ timeline.
 
 ## Active build
 
-`0.7.1a — Compliance Control Catalog & Framework Grouping` — **AUTOMATED_VALIDATED** (2026-08-29)
-Contract: `docs/builds/0_7_1_COMPLIANCE_ASSIGNMENT.md` (§ Build split, § 8 impl record)
+`0.7.1b — Compliance Assignment, Waivers & Coverage Roll-up` — **AUTOMATED_VALIDATED** (2026-08-29)
+Contract: `docs/history/phase/0_7_1_COMPLIANCE_ASSIGNMENT.md` (§ Build split, §§ 8–9 impl records)
 
-Frozen scope: the ten deterministic compliance controls move into a versioned
-declarative catalog (`utils/compliance_catalog.py`, `CATALOG_VERSION = "0.7.1a"`)
-*verbatim* — same ids, areas, `evidence_fields`, evaluators, outcomes — with
-`severity` (5-level, weighted), `rationale` and real per-framework
-`frameworks` (CIS / PCI-DSS / BDDK membership + reference) added.
-`compliance_rulepack.BASELINE_CONTROLS` is now a derived 5-key view; the 0.6.6B
-rule pack and its frozen `rule_count == 10` tests are untouched.
-`compliance_posture._control` emits additive `severity` / `rationale` /
-`frameworks`; the `app.js` control card shows a severity badge + real per-framework
-references. **Purely additive to the compliance payload** — no engine, collector,
-network, CAS or UI-module change.
+`0.7.1a` moved the ten controls into a versioned declarative catalog
+(`utils/compliance_catalog.py`, `CATALOG_VERSION = "0.7.1b"`) *verbatim* with
+`severity` (5-level, weighted), `rationale` and real per-framework CIS / PCI-DSS /
+BDDK membership. `0.7.1b` adds:
+
+- **+8 enrichment controls** (`utils/compliance_evaluators_ext.py`) evaluated from
+  the already-projected current-configuration sections — no collector or
+  projection change. `subject["controls"]` stays the frozen 0.6.6B ten;
+  enrichment lives in `subject["extended_controls"]`.
+- **File-based per-device assignment + waivers** — `utils/control_assignment.py`
+  mirrors `utils/inventory_exclusions.py` (`data/state/control_assignments.json`,
+  schema v1, fail-closed, unknown control id → error, **missing file →
+  all-applicable / byte-identical to prior**). `groups`, `include`/`exclude`/`"*"`,
+  device > group > default precedence, dated approved waivers → `WAIVED` cells.
+- **Additive roll-up** — top-level `compliance_overview` (monitored vs total,
+  aligned % + severity-risk-weighted %, `cells`, per-framework `COVERED` /
+  `PARTIALLY_COVERED` / `UNCOVERED`, `by_subject`) and `assignment_policy`
+  (counts only). Overview `#overviewComplianceSummary` card + Compliance
+  coverage / framework-readiness band + enrichment list + assignment note.
+
+Device names / IPs never enter the payload — assignment matching is in-process
+only. No network, CAS, scheduler or new-collector change.
 
 Evidence (2026-08-29):
 
 ```
-py -m pytest -q:            464 passed, 3 skipped, 0 failed (Python 3.12)
---render-only:              PASS (0 placeholders left)
-repository privacy gate:    PASS / 0 findings
+py -m pytest -q:            477 passed, 3 skipped, 0 failed (Python 3.12)
+scripts/render_sample.py:   exit 0, 0 placeholders left
+repository privacy gate:    PASS / 0 findings (275 files)
 ```
 
-Next: `0.7.1b` — file-based assignment (`data/state/control_assignments.json`) +
-waivers + `compliance_overview` roll-up + Overview card + Compliance workbench
-spine + ~12 enrichment controls + `password_policy` projection. Contract already
-written (`docs/builds/0_7_1_COMPLIANCE_ASSIGNMENT.md` §2c–2e); for review before
-implementation.
+Deferred to `0.7.2`: `password_policy` projection section + its controls,
+framework filter chips + inline "explain" expansion, `banner` / `services`
+projections. UI assignment **editor** + tagged device registry stay gated on
+`DEPLOY.1A`.
 
 Previous: `0.7.0 — Cryptographic Posture, Crypto-Agility & PQC Readiness` —
 AUTOMATED_VALIDATED (2026-08-29), `docs/history/phase/0_7_x_CRYPTO_AGILITY_PQC.md`.
@@ -109,7 +119,7 @@ full regression run.)
 ## Automated test baseline
 
 ```
-464 passed / 3 skipped / 0 failed (Python 3.12)
+477 passed / 3 skipped / 0 failed (Python 3.12)
 Repository privacy gate: 0 findings / PASS
 ```
 

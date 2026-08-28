@@ -33,8 +33,9 @@ _LEGACY_IDS = {
 
 
 def test_catalog_schema_and_membership():
-    assert CATALOG_VERSION == "0.7.1a"
-    assert {c["id"] for c in CONTROL_CATALOG} == _LEGACY_IDS
+    assert CATALOG_VERSION == "0.7.1b"
+    # 0.7.1a shipped exactly the ten; 0.7.1b adds enrichment controls on top.
+    assert _LEGACY_IDS <= {c["id"] for c in CONTROL_CATALOG}
     for c in CONTROL_CATALOG:
         assert c["severity"] in SEVERITY_VALUES
         assert c["rationale"].strip()

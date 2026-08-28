@@ -3,6 +3,23 @@
   "record_contract": "One structured record per build, newest first. Required: build, status, title, summary (<= 2 sentences). Optional: started, completed, track, movement, supersedes, evidence, risks_forward, docs{agreement,validation,handover} (repo-relative paths under docs/history/). Full detail lives in the linked doc; do not restate it here. Status vocabulary must stay within utils/project_plan.py STATUS_VALUES.",
   "builds": [
     {
+      "build": "0.7.1b",
+      "status": "automated_validated",
+      "started": "2026-08-29",
+      "completed": "2026-08-29",
+      "title": "Compliance Assignment, Waivers & Coverage Roll-up",
+      "track": "0.7.x",
+      "movement": "IMPLEMENTATION",
+      "summary": "+8 enrichment compliance controls (utils/compliance_evaluators_ext.py) evaluated from the already-projected current-configuration sections - no collector or projection change. New utils/control_assignment.py (mirrors inventory_exclusions.py): file-based per-device control assignment (data/state/control_assignments.json, schema v1, fail-closed, unknown control id -> error, missing file -> all-applicable) with groups, include/exclude/'*', device>group>default precedence, and dated approved waivers -> WAIVED cell status. compliance_posture: subject['controls'] stays the frozen 0.6.6B ten; enrichment lives in subject['extended_controls']; per-subject assignment{assigned/not_assigned/evaluated/waived}. Two additive top-level keys: compliance_overview (monitored vs total controls, aligned % + severity-risk-weighted %, cells, per-framework COVERED/PARTIALLY_COVERED/UNCOVERED, by_subject) and assignment_policy (counts only). UI: Overview #overviewComplianceSummary card, Compliance coverage + framework-readiness band, enrichment control list, per-device assignment note. Device names / IPs never enter the payload - assignment matching is in-process only. No network, CAS, scheduler or new-collector change.",
+      "evidence": {
+        "automated": "py -m pytest -q: 477 passed, 3 skipped, 0 failed (Python 3.12); scripts/render_sample.py exit 0, 0 placeholders left; repository privacy gate PASS/0 (275 files)",
+        "real_env": "not required"
+      },
+      "docs": {
+        "agreement": "docs/history/phase/0_7_1_COMPLIANCE_ASSIGNMENT.md"
+      }
+    },
+    {
       "build": "0.7.1a",
       "status": "automated_validated",
       "started": "2026-08-29",
@@ -16,7 +33,7 @@
         "real_env": "not required"
       },
       "docs": {
-        "agreement": "docs/builds/0_7_1_COMPLIANCE_ASSIGNMENT.md"
+        "agreement": "docs/history/phase/0_7_1_COMPLIANCE_ASSIGNMENT.md"
       }
     },
     {

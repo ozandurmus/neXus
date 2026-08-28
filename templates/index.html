@@ -97,6 +97,17 @@
             <section class="dashboard-card">
                 <div class="dashboard-card-header">
                     <div>
+                        <div class="eyebrow">Compliance</div>
+                        <h2>Control coverage</h2>
+                        <button id="overviewOpenCompliance" class="text-button" type="button">Open Compliance →</button>
+                    </div>
+                </div>
+                <div id="overviewComplianceSummary"></div>
+            </section>
+
+            <section class="dashboard-card">
+                <div class="dashboard-card-header">
+                    <div>
                         <div class="eyebrow">Backup</div>
                         <h2>Recovery artifacts</h2>
                     </div>
@@ -286,6 +297,7 @@
                 <section id="complianceDisclaimer" class="inline-message neutral"></section>
                 <section id="complianceLegend" class="compliance-legend"></section>
                 <section id="complianceFleetCards" class="compliance-kpi-grid"></section>
+                <section id="complianceCoverageOverview" class="compliance-card"></section>
                 <section class="compliance-card">
                     <div class="section-heading">
                         <div>
@@ -326,6 +338,16 @@
                         </div>
                     </div>
                     <div id="complianceSubjectControls"></div>
+                </section>
+                <section class="compliance-card">
+                    <div class="section-heading">
+                        <div>
+                            <div class="eyebrow">Subject controls · enrichment (0.7.1b)</div>
+                            <h2>Additional benchmark checks</h2>
+                            <div class="detail-subtitle">Catalogued beyond the baseline ten; evaluated from the same stored configuration evidence.</div>
+                        </div>
+                    </div>
+                    <div id="complianceSubjectExtendedControls"></div>
                 </section>
             </section>
         </main>

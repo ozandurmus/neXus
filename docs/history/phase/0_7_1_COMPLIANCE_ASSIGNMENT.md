@@ -1,6 +1,6 @@
 # 0.7.1 — Compliance Control Enrichment, Framework Grouping & File-Based Assignment (contract)
 
-**Status:** `0.7.1a` AUTOMATED_VALIDATED (2026-08-29) · `0.7.1b` PLANNED (contract, for review) · **Movement:** IMPLEMENTATION
+**Status:** `0.7.1a` + `0.7.1b` AUTOMATED_VALIDATED (2026-08-29) · **Movement:** IMPLEMENTATION
 **Design:** `docs/design/COMPLIANCE_ASSIGNMENT_AND_FRAMEWORKS.md`
 **Advances:** `compliance_engine`, `framework_mappings`, `evidence_reporting`
 (0.7.x track). Active build contract; moves to `docs/history/phase/` on close.
@@ -268,3 +268,66 @@ network / CAS / scheduler change; `compliance_control_enrichment` →
 projection section, `control_assignments.json` + per-device filter + waivers,
 `compliance_overview` roll-up, Overview card, KPI band / framework readiness /
 framework filter workbench spine.
+
+---
+
+## 9. Implementation record — `0.7.1b` (2026-08-29, AUTOMATED_VALIDATED)
+
+**Scope shipped:**
+
+- `utils/compliance_catalog.py` — `CATALOG_VERSION` → `0.7.1b`; `LEGACY_CONTROL_IDS`
+  (the frozen ten); **+8 enrichment controls** (`introduced: "0.7.1b"`):
+  `timezone_configured`, `login_banner_present`, `remote_syslog_configured`,
+  `ntp_authentication_enabled`, `ssh_management_v2_only`,
+  `snmp_no_default_community`, `admin_lockout_policy`, `dns_domain_configured` —
+  each with severity, rationale, per-framework CIS/PCI-DSS/BDDK membership.
+  `catalog_baseline_controls()` still returns exactly the ten; new
+  `catalog_enrichment_controls()` / `all_subject_control_ids()`.
+- `utils/compliance_evaluators_ext.py` (new) — deterministic evaluators for the
+  eight, reading the **already-projected** sections only. Missing section →
+  `UNKNOWN`; present but signal absent → `FINDING`; never an inferred `PASS`.
+- `utils/control_assignment.py` (new) — mirrors `utils/inventory_exclusions.py`:
+  `data/state/control_assignments.json`, schema v1, `ControlAssignmentPolicyError`,
+  `load_control_assignments(data_root)`. `groups` (device_name / vendor /
+  name_prefix match), `assignments` (`target` all/vendor/group/device_name,
+  `include`/`exclude`, `"*"`), least-specific-first application
+  (all→vendor→group→device_name), `default_mode` `all_applicable` | `none`.
+  `waivers` (`control_id`, `device_name`, `reason`, `approver`, `expires`).
+  **Fail-closed:** malformed / unknown group / unknown `control_id` (in an
+  assignment or a waiver) → error before evaluation. Missing file →
+  `all_applicable` (byte-identical to prior behaviour). `enabled: false` → inert.
+- `utils/compliance_posture.py` — `STATUS_VALUES` gains `WAIVED`;
+  `build_compliance_posture(..., *, data_root=None)`. `subject["controls"]`
+  stays the frozen pack-routed ten (now filtered by the resolved assignment
+  set); enrichment lives in `subject["extended_controls"]`. An unexpired waiver
+  → `status: "WAIVED"` (`pre_waiver_status` kept, never counted as `PASS` or as
+  a finding). Per subject: `assignment: {assigned, not_assigned, evaluated,
+  waived}` (control-id lists). Two additive top-level keys —
+  `compliance_overview` (`total_controls`, `monitored_controls` /
+  `unmonitored_controls`, `subjects`, `cells`, `aligned_percent`,
+  `risk_weighted_alignment_percent` [severity-weighted], `by_framework` with
+  `COVERED` / `PARTIALLY_COVERED` / `UNCOVERED`, `by_subject`) and
+  `assignment_policy` (`active`, `source`, `default_mode`, `groups`, `waivers` —
+  **counts only**). The real device name drives assignment matching **in
+  process only** and never enters the payload.
+- `utils/html_export.py` / `main.py` — `run_html_export(..., data_root=None)`,
+  defaults to `repository_root/"data"`, threaded from `runtime_paths.data_root`
+  at all six real render call sites.
+- `templates/index.html` + `static/app.js` + `static/style.css` — Overview
+  `#overviewComplianceSummary` card; Compliance `#complianceCoverageOverview`
+  (KPI band + per-framework readiness cards + assignment-policy note); the
+  enrichment control list + a per-device assignment note in the subject view;
+  `WAIVED` status tone / legend.
+- `tests/test_phase0_7_1_compliance_assignment.py` (new, AC-1…AC-7). Frozen-test
+  touch-ups: `test_phase0_6_6b` (`compliance_overview` + `assignment_policy` are
+  now allowed additive top-level keys), `test_phase0_7_1a` (`CATALOG_VERSION`
+  `0.7.1b`; catalog is a superset of the ten).
+
+**Evidence:** `py -m pytest -q` 477 passed / 3 skipped / 0 failed (Python 3.12);
+`scripts/render_sample.py` exit 0, 0 placeholders left; repository privacy gate
+PASS / 0 (275 files).
+
+**Deferred to `0.7.2`:** the `password_policy` projection section and its
+controls; framework filter chips + inline "explain" expansion in the UI; the
+`banner` / `services` projection sections. The UI assignment **editor** and a
+tagged device registry stay gated on `DEPLOY.1A`.

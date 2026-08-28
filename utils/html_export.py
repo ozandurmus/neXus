@@ -48,11 +48,16 @@ def run_html_export(
     capability_store=None,
     coordinator=None,
     scheduler_policy=None,
+    data_root=None,
 ):
 
     info(">>> GENERATING HTML")
 
     repository_root = Path(repository_root) if repository_root is not None else BASE_DIR
+    # 0.7.1b: the compliance control-assignment policy lives in RuntimeRoot
+    # (data/state/control_assignments.json). Fall back to the repo-local data
+    # dir when a runtime root was not threaded through (diagnostic paths).
+    compliance_data_root = Path(data_root) if data_root is not None else (repository_root / "data")
     template_file = repository_root / "templates" / "index.html"
     style_file = repository_root / "static" / "style.css"
     script_file = repository_root / "static" / "app.js"
@@ -74,7 +79,7 @@ def run_html_export(
         workflow_context=workflow_context,
     )
     project_plan = build_project_plan_payload()
-    compliance_ui = build_compliance_posture(configuration_ui, project_plan)
+    compliance_ui = build_compliance_posture(configuration_ui, project_plan, data_root=compliance_data_root)
     crypto_ui = build_crypto_posture(
         config_result,
         checkpoint_config_result=checkpoint_config_result,
