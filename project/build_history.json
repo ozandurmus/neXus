@@ -1,5 +1,6 @@
 {
-  "schema_version": "1.0",
+  "schema_version": "2.0",
+  "record_contract": "One structured record per build, newest first. Required: build, status, title, summary (<= 2 sentences). Optional: started, completed, track, movement, supersedes, evidence, risks_forward, docs{agreement,validation,handover} (repo-relative paths under docs/history/). Full detail lives in the linked doc; do not restate it here. Status vocabulary must stay within utils/project_plan.py STATUS_VALUES.",
   "builds": [
     {
       "build": "0.6.6A",
@@ -7,7 +8,10 @@
       "started": "2026-08-27",
       "completed": "2026-08-27",
       "title": "CP/PAN Parser Correctness Hardening",
-      "summary": "AUTOMATED_VALIDATED (2026-08-27). Implemented bounded parser correctness hardening: VSX ifconfig normalization now stores canonical network CIDR in interfaces[].ips[].network (host IP preserved in interfaces[].ips[].ip), and PAN route classification now gives default-destination (0.0.0.0/0) precedence over static/connected flags. Converted the two known strict characterization xfails into passing regressions in test_vsx_parser_characterization.py and test_panorama_parser_characterization.py. Validation evidence: parser characterization suites 7 passed; impacted PAN regression suites 17 passed. No collector command, network access, retry/timeout, polling, concurrency, scheduler, CAS, storage or UI behavior change."
+      "summary": "Bounded parser correctness hardening: VSX ifconfig normalization stores canonical network CIDR in interfaces[].ips[].network (host IP kept in .ip), and PAN route classification gives 0.0.0.0/0 precedence over static/connected flags. The two strict characterization xfails became passing regressions; no collector, network, scheduler, concurrency, CAS, storage or UI change.",
+      "docs": {
+        "agreement": "docs/history/phase/PHASE0_6_6A_PARSER_CORRECTNESS_HARDENING.md"
+      }
     },
     {
       "build": "0.6.5",
@@ -15,7 +19,7 @@
       "started": "2026-08-27",
       "completed": "2026-08-27",
       "title": "PAN TLS/CA Trust Production Closure",
-      "summary": "REAL_ENV_VALIDATED (2026-08-27). Delivered: centralized CA bundle preflight helper (utils/pan_tls_trust.py) mirroring 0.6.4 CP SSH trust pattern; panorama_runtime_runner.py _tls_verify_setting() with env var hierarchy (SECURITYEXPERT_PAN_CA_BUNDLE > SECURITYEXPERT_PAN_TLS_VERIFY > False); panorama_config_collector.py preflight validation (both Panorama and direct firewall paths) before HTTPS request; conditional urllib3 warning suppression compat-mode only; production trust warning when verify=False. Preflight raises PanTlsStrictPreflightError before any network call; error messages value-free (no paths/IPs/credentials). Default compat mode (verify=False) unchanged; production trust opt-in via env var. Automated evidence: 14 targeted (AC-1…AC-11) PASS; 28 PAN regression PASS; privacy gate 5 PASS 0 findings. Real-environment evidence (value-free): strict mode + CA bundle path PASS, no insecure TLS fallback PASS, PAN collection contract preserved PASS, shareable evidence value-free PASS, no scheduler/polling/concurrency scope drift PASS, SAFE SUMMARY success=5 partial=0 failed=0 management_down=0. No new PAN commands, collection target coverage, retries, timeouts, polling, concurrency, scheduler, CAS or UI behavior. main merge approved; 0.6.5 deployment gate real_env_validated."
+      "summary": "Closed the production-admission contract for opt-in PAN strict TLS CA verification: centralized preflight helper (utils/pan_tls_trust.py), env hierarchy SECURITYEXPERT_PAN_CA_BUNDLE > SECURITYEXPERT_PAN_TLS_VERIFY > False, preflight before any HTTPS request, no insecure fallback in strict mode. Compat mode (verify=False) unchanged; no new commands, coverage, retries, timeouts, polling, concurrency, scheduler, CAS or UI behavior."
     },
     {
       "build": "DEPLOY.1 architecture contract freeze",
@@ -23,7 +27,10 @@
       "started": "2026-08-27",
       "completed": "2026-08-27",
       "title": "Ubuntu + Docker Server Migration Contract Freeze",
-      "summary": "Contract frozen with no runtime/collector behavior changes. Handover file DEPLOY_1_CONTRACT_FREEZE_HANDOVER_2026_08_27.md records topology (Nginx + app + scheduler + Postgres + separate secrets component + separate backup/policy-package volume), mandatory OIDC and evidence-egress gates, and model/reasoning routing. Server expected in ~1 week; implementation focus returns to 0.6.5 PAN TLS/CA trust closure."
+      "summary": "Contract frozen with no runtime/collector behavior changes. Handover file DEPLOY_1_CONTRACT_FREEZE_HANDOVER_2026_08_27.md records topology (Nginx + app + scheduler + Postgres + separate secrets component + separate backup/policy-package volume), mandatory OIDC and evidence-egress gates, and model/reasoning routing. Server expected in ~1 week; implementation focus returns to 0.6.5 PAN TLS/CA trust closure.",
+      "docs": {
+        "handover": "docs/history/handover/DEPLOY_1_CONTRACT_FREEZE_HANDOVER_2026_08_27.md"
+      }
     },
     {
       "build": "0.6.4",
@@ -31,7 +38,10 @@
       "started": "2026-08-27",
       "completed": "2026-08-27",
       "title": "CP SSH Host-Key Trust Production Closure",
-      "summary": "REAL_ENV_VALIDATED (2026-08-27). R1 PASS: compat mode (strict=off) 57/75 collection, HTML generated, no regression. R3 PASS: strict=on with absent known_hosts raises CpSshStrictPreflightError before ssh.connect(), zero network connections. Automated: 30 targeted tests passed; 47 regression passed 1 skipped; privacy gate 5 passed 0 findings. No new CP commands, polling, concurrency or CAS changes. main merge approved."
+      "summary": "Closed the production-admission contract for opt-in CP strict SSH host-key trust: shared preflight helper (utils/cp_ssh_trust.py) used by all CP SSH paths, strict-mode failure before ssh.connect(), no AutoAddPolicy/TOFU fallback. Compat mode remains default; no new CP commands, coverage, polling, concurrency or CAS change.",
+      "docs": {
+        "agreement": "docs/history/phase/PHASE0_6_4_CP_SSH_HOST_KEY_TRUST_PRODUCTION_CLOSURE.md"
+      }
     },
     {
       "build": "0.6.3",
@@ -39,15 +49,21 @@
       "started": "2026-08-27",
       "completed": "2026-08-27",
       "title": "Unified Configuration History + Diff UX",
-      "summary": "DONE (2026-08-27). Delivered: ConfigHistoryService (utils/config_history.py) — read-only timeline query + safe normalized PAN diff; additive history_v1 field in config_ui.py; History tab rendering with timeline/diff in app.js + style.css; 14 targeted tests (AC-1…AC-9). PAN effective-running: chronological timeline + latest CHANGED pair diff. CP: secret-aware timeline only; raw text diff INSUFFICIENT_EVIDENCE. No new collectors, CAS writes, migrations, polling, concurrency or network access. Automated evidence: 14 targeted PASS; 30 regression PASS 1 skipped; render-only PASS; privacy gate 5 PASS 0 findings. Commit-scope release review confirmed no collector/CAS/network/concurrency/native-backup change; pushed to origin/main."
+      "summary": "Read-only configuration history: ConfigHistoryService (utils/config_history.py) timeline query plus safe normalized PAN diff, additive history_v1 in config_ui.py, History tab in app.js/style.css. CP is secret-aware timeline only (raw text diff INSUFFICIENT_EVIDENCE); no new collectors, CAS writes, migrations, polling, concurrency or network access.",
+      "docs": {
+        "agreement": "docs/history/phase/PHASE0_6_3_UNIFIED_CONFIGURATION_HISTORY_DIFF_UX.md"
+      }
     },
     {
       "build": "0.6.1D",
       "status": "real_env_validated",
       "started": "2026-08-26",
       "completed": "2026-08-26",
-      "title": "Check Point Management Intent \u2194 Actual Alignment",
-      "summary": "REAL_ENV_VALIDATED (2026-08-26): all automated and real-environment gates passed. Alignment engine: explicit provenance-bearing CP Management intent only, existing direct actual projection unchanged, ClusterXL/VSX differences MEMBER_SPECIFIC, no EFFECTIVE_DRIFT, no new command/collector/CAS. Value-free 35/35 gate: representative set 1 standalone + 2 same-group ClusterXL members + 1 VSX virtual system; all 4 ALIGNED; privacy contract clean. Automated evidence: gate+alignment 19p; impacted UI/integrity 31p; full regression 351p 3s 2xf EXIT_CODE=0; repository privacy gate PASS 0 findings 234 files. Real-environment gate PASS 35/35 pass_rate=100.0% EXIT_CODE=0 (2026-08-26)."
+      "title": "Check Point Management Intent ↔ Actual Alignment",
+      "summary": "Check Point Management intent to actual alignment engine: explicit provenance-bearing CP Management intent only, direct actual projection unchanged, ClusterXL/VSX differences MEMBER_SPECIFIC, no EFFECTIVE_DRIFT, no new command/collector/CAS. Value-free 35/35 real-environment gate passed at 100%.",
+      "docs": {
+        "agreement": "docs/history/phase/PHASE0_6_1D_CHECK_POINT_MANAGEMENT_INTENT_ACTUAL_ALIGNMENT.md"
+      }
     },
     {
       "build": "0.6.1C real-environment validation",
@@ -55,14 +71,20 @@
       "started": "2026-08-26",
       "completed": "2026-08-27",
       "title": "Discovery / Capability / Coordinator Real-Environment Closure",
-      "summary": "REAL_ENV_VALIDATED (2026-08-27): 24/24 gate passed. R01-PASS policy absent no-op; R02-PASS enabled=false no-op; R03-PASS malformed exit-2 before network; R04-PASS terminal_jobs=1 scheduled cp run; R05-PASS manifest provenance=scheduled coordinator_decision=admitted scheduler_result=completed; R06-PASS real-env bounded same-process overlap with actual CP collector: first_request_admitted=true second_request_decision=coalesced second_operation_called=false active_jobs_after_probe=0; R07-PASS DEGRADED semantics identical to manual baseline; R08-PASS no frequency/concurrency/cooldown increase; D01/D02-PASS privacy clean. Full regression 369p 3s 2xf 0f. main merge approved."
+      "summary": "24/24 value-free real-environment gate for the discovery/capability/coordinator/scheduler foundation: policy-absent and enabled=false no-ops, malformed policy exits before network, scheduled run provenance=scheduled/admitted/completed, real-collector same-process overlap coalesced with no second session, DEGRADED semantics identical to the manual baseline, no frequency/concurrency/cooldown increase, privacy clean.",
+      "docs": {
+        "agreement": "docs/history/phase/PHASE0_6_1C_REAL_ENVIRONMENT_VALIDATION.md"
+      }
     },
     {
       "build": "0.6.1C",
       "status": "automated_validated",
       "started": "2026-08-25",
       "title": "Discovery Lifecycle + Capability Profile Foundation",
-      "summary": "AUTOMATED_VALIDATED (2026-08-26). Delivered: discovery lifecycle state machine (DISCOVERED/VALIDATED/STABLE/EXCLUDED/REMOVED with confidence, evidence-plane, transition-reason), capability registry + collection planner (Expert/direct-Clish/unknown shell; ClusterXL standby suppress; PAN VSYS context; identity-failure defers), collection execution coordinator (per-device physical lock, vendor/context concurrency budget, coalescing, bounded cancellation, timeout-only retry, cooldown compat), limited default-disabled scheduler (RuntimeRoot policy only; allowlisted read-only workflows; malformed policy fails before network access; provenance=scheduled). UI: additive Discovery module (lifecycle/capability/coordinator/scheduler observability). Automated evidence: 91 passed, 1 skipped. Real-environment gate pending."
+      "summary": "Discovery lifecycle state machine, capability registry + collection planner, collection execution coordinator (per-endpoint lock, concurrency budget, coalescing, bounded cancellation, timeout-only retry) and a default-disabled RuntimeRoot scheduler; additive Discovery UI module. Automated: 91 passed, 1 skipped; real-environment gate pending at the time.",
+      "docs": {
+        "agreement": "docs/history/phase/PHASE0_6_1C_DISCOVERY_LIFECYCLE_CAPABILITY_PROFILE_FOUNDATION.md"
+      }
     },
     {
       "build": "0.6.1B.1.6",
@@ -98,145 +120,228 @@
       "build": "0.6.1B.1.3",
       "status": "complete",
       "title": "Check Point Device Interaction Safety Audit & Polling Guardrails",
-      "summary": "Implemented CP interaction safety guardrails: bounded connect retry/timeout hardening across CP direct-SSH and config paths, plus full-run CP stage cooldown (`SECURITYEXPERT_CP_STAGE_COOLDOWN_SECONDS`, bounded 0..30, default 0). Added one-shot pytest wrapper stabilization for deterministic logging and failed-node extraction. AUTOMATED_VALIDATED 2026-08-25: 228 passed, 2 skipped, 2 xfailed. Real-environment validation pending."
+      "summary": "Implemented CP interaction safety guardrails: bounded connect retry/timeout hardening across CP direct-SSH and config paths, plus full-run CP stage cooldown (`SECURITYEXPERT_CP_STAGE_COOLDOWN_SECONDS`, bounded 0..30, default 0). Added one-shot pytest wrapper stabilization for deterministic logging and failed-node extraction. AUTOMATED_VALIDATED 2026-08-25: 228 passed, 2 skipped, 2 xfailed. Real-environment validation pending.",
+      "docs": {
+        "handover": "docs/history/handover/SESSION_HANDOVER_0_6_1B_1_3_SAFETY_AUDIT_AND_DEPLOY_1_ARCHITECTURE.md"
+      }
     },
     {
       "build": "DEV.1",
       "status": "complete",
       "title": "Corporate Git + Copilot Development Foundation",
-      "summary": "Corporate Git baseline activated on origin/main (ead9f1d), runtime path consumer closure completed for six OUTPUT_DIR defaults, and automated validation closed with one-shot log-based full regression (226 passed, 2 skipped, 2 xfailed)."
+      "summary": "Corporate Git baseline activated on origin/main (ead9f1d), runtime path consumer closure completed for six OUTPUT_DIR defaults, and automated validation closed with one-shot log-based full regression (226 passed, 2 skipped, 2 xfailed).",
+      "docs": {
+        "agreement": "docs/history/phase/DEV1_CORPORATE_GIT_COPILOT_DEVELOPMENT_FOUNDATION.md"
+      }
     },
     {
       "build": "DEV.0.5B.2",
       "status": "complete",
       "title": "Repository-Wide DLP Collision Closure",
-      "summary": "Extended known enterprise DLP collision guards across the complete repository text candidate. Corporate Copilot subsequently completed the previously blocked broad authentication consumer audit."
+      "summary": "Extended known enterprise DLP collision guards across the complete repository text candidate. Corporate Copilot subsequently completed the previously blocked broad authentication consumer audit.",
+      "docs": {
+        "agreement": "docs/history/phase/DEV0_5B_2_REPOSITORY_WIDE_DLP_COLLISION_CLOSURE.md"
+      }
     },
     {
       "build": "DEV.0.5B.1",
       "status": "complete",
       "title": "Legacy Authentication Redaction Marker DLP Closure",
-      "summary": "Aligned repository-owned authentication redaction markers with the canonical auth vocabulary while preserving redaction behavior."
+      "summary": "Aligned repository-owned authentication redaction markers with the canonical auth vocabulary while preserving redaction behavior.",
+      "docs": {
+        "agreement": "docs/history/phase/DEV0_5B_1_LEGACY_AUTHENTICATION_REDACTION_MARKER_DLP_CLOSURE.md"
+      }
     },
     {
       "build": "DEV.0.5B",
       "status": "complete",
       "title": "Authentication Consumer Migration + Canonical Config",
-      "summary": "Migrated application authentication consumers to Config.auth/RuntimeAuth, removed duplicate Config and legacy compatibility, and preserved native transport/security-detection semantics."
+      "summary": "Migrated application authentication consumers to Config.auth/RuntimeAuth, removed duplicate Config and legacy compatibility, and preserved native transport/security-detection semantics.",
+      "docs": {
+        "agreement": "docs/history/phase/DEV0_5B_AUTHENTICATION_CONSUMER_CANONICAL_CONFIG_DLP_CLOSURE.md"
+      }
     },
     {
       "build": "DEV.0.5A",
       "status": "complete",
       "title": "Runtime Authentication Vocabulary & Boundary Foundation",
-      "summary": "Introduced immutable protected RuntimeAuth and canonical Config.auth boundary; core multi-file Corporate Copilot DLP smoke tests passed."
+      "summary": "Introduced immutable protected RuntimeAuth and canonical Config.auth boundary; core multi-file Corporate Copilot DLP smoke tests passed.",
+      "docs": {
+        "agreement": "docs/history/phase/DEV0_5A_RUNTIME_AUTHENTICATION_VOCABULARY_BOUNDARY_FOUNDATION.md"
+      }
     },
     {
       "build": "DEV.0.3B.1",
       "status": "complete",
       "title": "Direct SSH Runtime Path Closure",
-      "summary": "Closed a missed repository-relative direct-SSH temporary artifact path; real CP validation passed the former failure point and reached the known clean-baseline dependency boundary."
+      "summary": "Closed a missed repository-relative direct-SSH temporary artifact path; real CP validation passed the former failure point and reached the known clean-baseline dependency boundary.",
+      "docs": {
+        "agreement": "docs/history/phase/DEV0_3B_1_DIRECT_SSH_RUNTIME_PATH_CLOSURE.md"
+      }
     },
     {
       "build": "DEV.0.4.1",
       "status": "complete",
       "title": "Runtime Inventory Exclusion Policy Foundation",
-      "summary": "Removed repository hard-coded CP non-device identities. Vendor-neutral local RuntimeRoot policy now supplies exact pre-poll exclusions through the existing shell hook with safe quoting; malformed policy fails before network access. Privacy gate: 0 findings."
+      "summary": "Removed repository hard-coded CP non-device identities. Vendor-neutral local RuntimeRoot policy now supplies exact pre-poll exclusions through the existing shell hook with safe quoting; malformed policy fails before network access. Privacy gate: 0 findings.",
+      "docs": {
+        "agreement": "docs/history/phase/DEV0_4_1_RUNTIME_INVENTORY_EXCLUSION_POLICY_FOUNDATION.md"
+      }
     },
     {
       "build": "DEV.0.4",
       "status": "complete",
       "title": "Local Repository Privacy Gate",
-      "summary": "Local/offline fail-closed repository scanner implemented and validated; DEV.0.4.1 externalized the final environment-specific CP exclusion identities and the Corporate Git candidate now passes with zero findings."
+      "summary": "Local/offline fail-closed repository scanner implemented and validated; DEV.0.4.1 externalized the final environment-specific CP exclusion identities and the Corporate Git candidate now passes with zero findings.",
+      "docs": {
+        "agreement": "docs/history/phase/DEV0_4_LOCAL_REPOSITORY_PRIVACY_GATE.md"
+      }
     },
     {
       "build": "DEV.0.3B",
       "status": "complete",
       "title": "Runtime Artifact Consumer Migration",
-      "summary": "Normal runtime artifacts migrated to external RuntimeRoot; filesystem-only real-environment render validation passed with no repository data/output/logs writes. History/CAS remains deferred."
+      "summary": "Normal runtime artifacts migrated to external RuntimeRoot; filesystem-only real-environment render validation passed with no repository data/output/logs writes. History/CAS remains deferred.",
+      "docs": {
+        "agreement": "docs/history/phase/DEV0_3B_RUNTIME_ARTIFACT_CONSUMER_MIGRATION.md"
+      }
     },
     {
       "build": "DEV.0.3A",
       "status": "complete",
       "title": "Runtime Path Foundation",
-      "summary": "External RuntimePaths foundation real-environment bootstrap validated: ENV and CLI selection, CLI > ENV precedence, non-admin external root creation and write/delete probes passed."
+      "summary": "External RuntimePaths foundation real-environment bootstrap validated: ENV and CLI selection, CLI > ENV precedence, non-admin external root creation and write/delete probes passed.",
+      "docs": {
+        "agreement": "docs/history/phase/DEV0_3A_RUNTIME_PATH_FOUNDATION.md"
+      }
     },
     {
       "build": "DEV.0.2",
       "status": "complete",
       "title": "Repository Sanitization & Corporate Git Candidate",
-      "summary": "Sanitizes repository-tracked source/tests/docs/AI metadata and hardens Git exclusions without changing collector/network/runtime path behavior."
+      "summary": "Sanitizes repository-tracked source/tests/docs/AI metadata and hardens Git exclusions without changing collector/network/runtime path behavior.",
+      "docs": {
+        "agreement": "docs/history/phase/DEV0_2_REPOSITORY_SANITIZATION_CORPORATE_GIT_CANDIDATE.md"
+      }
     },
     {
       "build": "DEV.0.1",
       "status": "complete",
       "title": "Runtime Management Endpoint Decoupling",
-      "summary": "Removed static CP Management/Panorama endpoints from active source; CP and PAN runtime endpoint input real-environment validated without collector regression."
+      "summary": "Removed static CP Management/Panorama endpoints from active source; CP and PAN runtime endpoint input real-environment validated without collector regression.",
+      "docs": {
+        "agreement": "docs/history/phase/DEV0_1_RUNTIME_MANAGEMENT_ENDPOINT_DECOUPLING.md"
+      }
     },
     {
       "build": "0.6.1B.1.2",
       "status": "complete_with_followup",
       "title": "Interactive CP SSH Session + Coverage Closure + Project Roadmap UI",
-      "summary": "Interactive direct-Clish collection real-environment validated; CP Configuration reached 101/122 current in the authoritative checkpoint. Fleet/safety follow-up remains."
+      "summary": "Interactive direct-Clish collection real-environment validated; CP Configuration reached 101/122 current in the authoritative checkpoint. Fleet/safety follow-up remains.",
+      "docs": {
+        "agreement": "docs/history/phase/PHASE0_6_1B_1_2_INTERACTIVE_CP_SSH_SESSION_COVERAGE_CLOSURE_PROJECT_ROADMAP_UI.md",
+        "validation": "docs/history/validation/VALIDATION_0_6_1B_1_2.txt"
+      }
     },
     {
       "build": "0.6.1B.1.1",
       "status": "complete_with_followup",
       "title": "Adaptive CP Shell Detection + Metadata Coverage Recovery",
-      "summary": "Recovered Model/Serial coverage from 0 to 54, but exec-channel shell detection did not recover the direct-Clish WiFi/Spark estate; superseded by B.1.2 interactive session work."
+      "summary": "Recovered Model/Serial coverage from 0 to 54, but exec-channel shell detection did not recover the direct-Clish WiFi/Spark estate; superseded by B.1.2 interactive session work.",
+      "docs": {
+        "agreement": "docs/history/phase/PHASE0_6_1B_1_1_ADAPTIVE_CP_SHELL_DETECTION_METADATA_COVERAGE_RECOVERY.md",
+        "validation": "docs/history/validation/VALIDATION_0_6_1B_1_1.txt"
+      }
     },
     {
       "build": "0.6.1B.1",
       "status": "complete_with_followup",
       "title": "Check Point Configuration Coverage + Device UX Hardening",
-      "summary": "Added vendor fleets, VSX logical grouping, responsive/collapsible Configuration UX and detailed coverage taxonomy; real run exposed 37 unknown-platform entities."
+      "summary": "Added vendor fleets, VSX logical grouping, responsive/collapsible Configuration UX and detailed coverage taxonomy; real run exposed 37 unknown-platform entities.",
+      "docs": {
+        "agreement": "docs/history/phase/PHASE0_6_1B_1_CHECK_POINT_CONFIGURATION_COVERAGE_DEVICE_UX_HARDENING.md",
+        "validation": "docs/history/validation/VALIDATION_0_6_1B_1.txt"
+      }
     },
     {
       "build": "0.6.1B",
       "status": "complete",
       "title": "Check Point Configuration Collector + Secret-Aware Projection + UI Integration",
-      "summary": "Promoted Standalone, ClusterXL and VSX current configuration to secret-aware CAS/history and Configuration UI."
+      "summary": "Promoted Standalone, ClusterXL and VSX current configuration to secret-aware CAS/history and Configuration UI.",
+      "docs": {
+        "agreement": "docs/history/phase/PHASE0_6_1B_CHECK_POINT_CONFIGURATION_COLLECTOR_SECRET_AWARE_PROJECTION_UI_INTEGRATION.md",
+        "validation": "docs/history/validation/VALIDATION_0_6_1B.txt"
+      }
     },
     {
       "build": "0.6.1A.1",
       "status": "complete",
       "title": "Check Point Configuration Identity Gate + VSX Target Resolution",
-      "summary": "Validated 5/5 targets, identity acceptance and distinct VSX context evidence on the real estate."
+      "summary": "Validated 5/5 targets, identity acceptance and distinct VSX context evidence on the real estate.",
+      "docs": {
+        "agreement": "docs/history/phase/PHASE0_6_1A_1_CHECK_POINT_CONFIGURATION_IDENTITY_GATE_VSX_TARGET_RESOLUTION.md",
+        "validation": "docs/history/validation/VALIDATION_0_6_1A_1.txt"
+      }
     },
     {
       "build": "0.6.1A",
       "status": "complete",
       "title": "Check Point Configuration Evidence Probe",
-      "summary": "Proved Expertâ†’Gaia Clish actual-configuration collection and raw-secret non-persistence before production promotion."
+      "summary": "Proved Expertâ†’Gaia Clish actual-configuration collection and raw-secret non-persistence before production promotion.",
+      "docs": {
+        "agreement": "docs/history/phase/PHASE0_6_1A_CHECK_POINT_CONFIGURATION_EVIDENCE_PROBE.md",
+        "validation": "docs/history/validation/VALIDATION_0_6_1A.txt"
+      }
     },
     {
       "build": "0.6.0A4.3.3.2",
       "status": "complete",
       "title": "PAN HA Runtime Role + Development Workflow Modes",
-      "summary": "Added real PAN ACTIVE/PASSIVE runtime role and partial development workflows including render-only, PAN-config, VSX-only and physical CP-only modes."
+      "summary": "Added real PAN ACTIVE/PASSIVE runtime role and partial development workflows including render-only, PAN-config, VSX-only and physical CP-only modes.",
+      "docs": {
+        "agreement": "docs/history/phase/PHASE0_6_0A4_3_3_2_PAN_HA_RUNTIME_ROLE_DEVELOPMENT_WORKFLOW_MODES.md",
+        "validation": "docs/history/validation/VALIDATION_0_6_0A4_3_3_2.txt"
+      }
     },
     {
       "build": "0.6.0A4.3.2.1",
       "status": "complete",
       "title": "Legacy Migration Safety Hardening",
-      "summary": "Hardened CAS migration against traversal, symlink, hash-trust and interruption risks; validated migration reclaimed approximately 2.98 GiB."
+      "summary": "Hardened CAS migration against traversal, symlink, hash-trust and interruption risks; validated migration reclaimed approximately 2.98 GiB.",
+      "docs": {
+        "agreement": "docs/history/phase/PHASE0_6_0A4_3_2_1_LEGACY_MIGRATION_SAFETY_HARDENING.md",
+        "validation": "docs/history/validation/VALIDATION_0_6_0A4_3_2_1.txt"
+      }
     },
     {
       "build": "0.6.0A4.3.2",
       "status": "complete",
       "title": "Content-Addressed Configuration History Storage",
-      "summary": "Introduced immutable SHA-256 content objects and reference-based SAME history semantics."
+      "summary": "Introduced immutable SHA-256 content objects and reference-based SAME history semantics.",
+      "docs": {
+        "agreement": "docs/history/phase/PHASE0_6_0A4_3_2_CONTENT_ADDRESSED_CONFIGURATION_HISTORY_STORAGE.md",
+        "validation": "docs/history/validation/VALIDATION_0_6_0A4_3_2.txt"
+      }
     },
     {
       "build": "0.6.0A4.2.2",
       "status": "complete",
       "title": "PAN Semantic Policy & Provenance Hardening",
-      "summary": "Reduced false positives using alignment, member-specific and provenance-aware semantic states."
+      "summary": "Reduced false positives using alignment, member-specific and provenance-aware semantic states.",
+      "docs": {
+        "agreement": "docs/history/phase/PHASE0_6_0A4_2_2_PAN_SEMANTIC_POLICY_PROVENANCE_HARDENING.md",
+        "validation": "docs/history/validation/VALIDATION_0_6_0A4_2_2.txt"
+      }
     },
     {
       "build": "0.5 Final",
       "status": "complete",
       "title": "Network Inventory Foundation",
-      "summary": "Frozen mature multi-vendor inventory, ClusterXL/VSX hierarchy, PAN runtime and failure-aware freshness foundation."
+      "summary": "Frozen mature multi-vendor inventory, ClusterXL/VSX hierarchy, PAN runtime and failure-aware freshness foundation.",
+      "track": "0.5.x",
+      "docs": {
+        "agreement": "docs/history/phase/PHASE0_5_FINAL_UI_CLOSURE.md"
+      }
     }
   ]
 }
