@@ -29,9 +29,11 @@ DEV.1 establishes the controlled Git baseline.
 
 ### Tier 3 — historical only when required
 
-- `SECURITYEXPERT_AI_CONTINUATION_PACK.md`
-- historical PHASE docs
-- old validation reports
+All under `docs/history/`, reached through `project/build_history.json` links:
+
+- `docs/history/SECURITYEXPERT_AI_CONTINUATION_PACK.md`
+- `docs/history/phase/PHASE*.md`
+- `docs/history/validation/VALIDATION*.txt`
 - old telemetry
 
 Do not read Tier 3 merely because it exists.
