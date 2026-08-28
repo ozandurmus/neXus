@@ -84,10 +84,10 @@
       "id": "noninteractive_runtime_config",
       "category": "Deployment / Architecture",
       "title": "Non-interactive runtime configuration and credential sourcing",
-      "status": "planned",
+      "status": "automated_validated",
       "priority": "P0",
       "target": "DEV.2.1",
-      "note": "Hard precondition for any unattended / container deployment. Today _build_runtime_config is the only path that builds Config and it always calls input() / getpass() / _prompt_management_endpoint(); there is no os.getenv fallback for credentials or endpoints, and --scheduler-once re-enters the same prompts. Add env-var + mounted-secret-file sourcing with precedence over prompts; keep the interactive path for local use. Read-only, value-free behaviour unchanged. Smaller, immediate form of credential_profiles (enterprise vault abstraction is the later work)."
+      "note": "AUTOMATED_VALIDATED 2026-08-28 on feature/dev-2-1-noninteractive-config (contract: docs/builds/DEV_2_1_NONINTERACTIVE_RUNTIME_CONFIG.md). New utils/runtime_config_source.resolve_value: <VAR>_FILE (secret-mount, fail-closed) > <VAR> > interactive prompt (TTY only); _build_runtime_config raises RuntimeConfigError naming every missing required var before collector import when stdin is not a TTY; the three call sites route through a _runtime_config wrapper that maps it to parser.error (clean SystemExit 2). Vars: SECURITYEXPERT_PRINCIPAL / SECURITYEXPERT_SECRET / SECURITYEXPERT_CP_MDS_ENDPOINT / SECURITYEXPERT_PANORAMA_ENDPOINT (+ _FILE each). .env.example added (documentation only; nothing auto-loads it). Evidence: py -m pytest -q = 433 passed, 3 skipped, 0 failed (Python 3.12); 12 new tests plus 5 fixed (4 main.main() integration tests forced interactive; 1 pre-existing stale project-plan assertion). Repository privacy gate: 2 pre-existing unrelated findings on this branch (synthetic 10.20.30.x example in a phase doc), fixed on chore/ai-onboarding-restructure which merges first; PASS/0 verified there. Read-only / value-free behaviour and downstream Config/RuntimeAuth/collectors unchanged. Human main merge blocked pending review."
     },
     {
       "id": "deploy_persistent_secret_material",
