@@ -38,7 +38,7 @@ def safe_read(path):
 def derive_network(ip, prefix):
     try:
         return str(ipaddress.ip_interface(f"{ip}/{prefix}").network)
-    except:
+    except ValueError:
         return None
 
 
@@ -593,13 +593,6 @@ def enrich_cluster_topology(results, collection_status):
         group["display_name"] = display_name
         group["name_source"] = name_source
 
-    for item in results:
-        virtuals = item.get("_cluster_virtual_interfaces", [])
-        # _cluster_virtual_interfaces was popped above; recover via fingerprint
-        # from original data cached below where available.
-        if item.get("cluster_topology"):
-            continue
-
     # Attach groups by matching the member name. One member belongs to at most
     # one classic ClusterXL group in this runtime inventory.
     by_member = {}
@@ -685,7 +678,7 @@ def run_cp(cfg, *, exclude_vsx=False):
 
     try:
         sftp.chdir(REMOTE_RAW_DIR)
-    except:
+    except OSError:
         err("RAW directory not found — run collection first")
         sftp.close()
         ssh.close()
