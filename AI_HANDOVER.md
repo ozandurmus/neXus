@@ -10,72 +10,62 @@ If a section does not apply, write `n/a` — do not delete the heading.
 
 ## 1. Snapshot
 
-- Product baseline: `0.6.6A` — AUTOMATED_VALIDATED
-- Engineering baseline: `DEV.1` complete; `DEV.2.1` merged (AUTOMATED_VALIDATED)
+- Product baseline: `0.6.6B — Compliance Rule-Pack Transition Foundation` — AUTOMATED_VALIDATED
+- Engineering baseline: `DEV.1` complete; `DEV.2.1` (non-interactive runtime config) — AUTOMATED_VALIDATED
 - Date: 2026-08-28
-- Local `main` is **4 branches ahead of `origin/main`** and **not pushed**.
+- `main` is pushed to `origin/main` (all merges below are on `origin`).
 - Test deps installed for Python 3.12 (`--user`): `pytest`, `pytest-xdist`,
   `lxml`, `paramiko`, `requests`. `py` on this machine defaults to 3.14 (no
   deps) — use `py -V:3.12` or set `PY_PYTHON=3.12`.
+- Full suite: `py -m pytest -q -n auto --dist worksteal` → **440 passed,
+  3 skipped, 0 failed** (~35s). `--repository-privacy-check` → PASS / 0.
 
-## 2. Last session
+## 2. Recent builds (all on `main`)
 
-Merged four local feature branches into `main` (no push — that is the human's):
+- **`0.6.6B`** — the ten deterministic CP/PAN compliance controls now execute
+  through a static versioned in-repository rule pack
+  (`utils/compliance_rulepack.py`, `pack_id securityexpert.baseline.cp-pan @
+  0.6.6B`). Additive `rule_pack` traceability; outcomes unchanged;
+  platform/fleet controls unrouted. `COMPLIANCE_SCHEMA_VERSION` → `0.6.6B`.
+  Contract: `docs/history/phase/0_6_6B_COMPLIANCE_RULE_PACK.md`.
+- **`DEV.2.1`** — `_build_runtime_config` sources principal / secret / CP-MDS /
+  Panorama endpoints from `<VAR>_FILE` > `<VAR>` > TTY prompt; non-TTY +
+  missing required value → clean `SystemExit 2`. `utils/runtime_config_source.py`,
+  `.env.example`.
+- Repo restructure + test parallelism + DEV.2/3/4 roadmap step breakdown
+  (earlier this session).
 
-1. **`chore/ai-onboarding-restructure`** — hot-path docs (`AI_START_HERE.md`,
-   `docs/ARCHITECTURE.md`, this file), ~89 historical docs archived under
-   `docs/history/**`, `CURRENT_STATE.md` trimmed, governance consolidated to
-   `AGENTS.md` + thin shims, English working language, `build_history.json` v2,
-   RFC 5737 fix to the 0.6.6A CIDR example. Root `.md` 72 → 8.
-2. **`chore/test-parallelism`** — `pytest -n auto --dist worksteal`
-   (~35s vs ~110s serial); `requirements-dev.txt`; `scripts/pytest_one_shot.ps1`
-   parallel-by-default with `-Serial`.
-3. **`chore/deploy-containerization-roadmap`** — `engineering_tracks` DEV.2/3/4
-   step breakdown + 5 backlog items for the container/server readiness work.
-4. **`feature/dev-2-1-noninteractive-config`** — DEV.2.1: `_build_runtime_config`
-   sources principal / secret / CP-MDS / Panorama endpoints from
-   `<VAR>_FILE` > `<VAR>` > TTY prompt; non-TTY + missing required value →
-   `RuntimeConfigError` (mapped to `parser.error`, clean exit 2) before any
-   collector import. New `utils/runtime_config_source.py`, `.env.example`,
-   12 tests. Interactive local runs unchanged.
+## 3. NOT YET DONE — real-environment / on-hardware validation
 
-- Post-merge fixups on `main`: regenerated `docs/history/INDEX.md` (38 rows),
-  moved the DEV.2.1 contract to `docs/history/phase/`, rewrote this file.
-- Evidence on merged `main`:
-  - `py -m pytest -q -n auto --dist worksteal` → **433 passed, 3 skipped,
-    0 failed** (34.9s).
-  - `py -B main.py --repository-privacy-check` → **PASS, 0 findings**.
-  - `utils.project_plan.build_project_plan_payload()` → `metadata_warnings: []`.
-- Merges were `--no-ff`, zero conflicts (incl. `build_history.json` v2 +
-  DEV.2.1 record).
+**The user does not have the server yet and wants to run the app on their
+laptop to confirm it works.** Automated tests are green but nothing since the
+0.6.1x builds has been exercised end-to-end.
 
-## 3. Next session — exact starting point
-
-1. **Human: push `main`** to `origin` (git push is human-controlled). Nothing is
-   pushed yet.
-2. Then the next product build: **`0.6.6B — Compliance Rule-Pack Transition
-   Foundation`**. Contract already frozen in
-   `docs/history/phase/PHASE0_6_6B_COMPLIANCE_RULE_PACK_TRANSITION.md`; backlog
-   `compliance_posture_rulepack_transition` (P1). Wrap the existing 10
-   deterministic CP/PAN controls in `utils/compliance_posture.py` with a static
-   versioned rule-pack boundary. Offline, no collector/network/CAS/UI-semantic
-   change. Automated-validated only.
-   - Movement: `READ_ONLY_AUDIT` → `ARCHITECTURE` → `IMPLEMENTATION`.
-   - Reasoning: normal.
-   - Read the frozen contract doc first.
-3. Container/server work (`DEV.2.2`+, `DEV.3.*`) is gated on server arrival;
-   see `roadmap.json` `engineering_tracks` and the 5 new backlog items.
+- **Local render check (no devices needed):** `py -B main.py --render-only
+  --runtime-root <path>` needs a prior `output/unified.json`. A synthetic
+  render harness / sample dataset would let the user open `output/index.html`
+  and eyeball every module (Overview / Network Inventory / Configuration /
+  Compliance / Discovery / Project Plan), including the new `rule_pack` fields.
+  Status: **set up next.**
+- **Real collection run:** needs reachability to an MDS / Panorama and
+  credentials — not possible from a bare laptop. Deferred to the server.
+- **DEPLOY.1** (`now_next.next`): server migration, gated on hardware arrival.
+  Step breakdown in `roadmap.json` `engineering_tracks` DEV.2/3/4; backlog
+  items `noninteractive_runtime_config` (done), `deploy_persistent_secret_material`,
+  `linux_container_image`, `distributed_endpoint_lock_and_job_store`,
+  `per_vendor_worker_split`.
 
 ## 4. Open risks / debt carried forward
 
 - CP device-interaction-safety audit remains P0 (blocks any scheduling /
   concurrency increase).
 - `_realenv_*.py` / `_write_r0x_policy.py` stay at repo root (imported by
-  `tests/` and validation runbooks). Moving them is a separate code change.
-- `.py` source comments still cite `PHASE0_*.md` by bare filename; the files keep
+  `tests/` and validation runbooks).
+- `.py` source comments still cite `PHASE0_*.md` by bare filename; files keep
   their names under `docs/history/phase/`.
 - `scripts/pytest_one_shot.ps1` calls `py`; on this machine that resolves to
-  3.14 without deps. Tracked by backlog `dev_python_env_tooling_friction`.
-- The CAS / support-key path writes `data/` and `logs/` into the repo dir during
-  a test run (`BASE_DIR/data`; `DEV.0.3C` History/CAS boundary deferred).
-  Gitignored, not tracked.
+  3.14 without deps (backlog `dev_python_env_tooling_friction`).
+- The CAS / support-key path writes `data/` and `logs/` into the repo dir
+  during a test run (`BASE_DIR/data`; `DEV.0.3C` deferred). Gitignored.
+- `utils/compliance_posture._evaluate_timezone_control` is defined but not
+  wired into any control or dispatch (pre-existing dead code, left as-is).

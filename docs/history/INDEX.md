@@ -5,6 +5,7 @@ One line per build, newest first. Generated from `project/build_history.json`
 
 | Build | Status | Dates | Title | Summary | Docs |
 | --- | --- | --- | --- | --- | --- |
+| `0.6.6B` | automated_validated | 2026-08-28 → 2026-08-28 | Compliance Rule-Pack Transition Foundation | AUTOMATED_VALIDATED 2026-08-28. New utils/compliance_rulepack.py holds a static versioned in-repository pack (securityexpert.baseline.cp-pan @ 0.6.6B, certific… | [agreement](docs/history/phase/PHASE0_6_6B_COMPLIANCE_RULE_PACK_TRANSITION.md) [implementation](docs/history/phase/0_6_6B_COMPLIANCE_RULE_PACK.md) |
 | `DEV.2.1` | automated_validated | 2026-08-28 → 2026-08-28 | Non-Interactive Runtime Configuration | AUTOMATED_VALIDATED 2026-08-28. _build_runtime_config now sources principal, secret and the CP-MDS / Panorama endpoints from <VAR>_FILE (secret-mount, fail-clo… | [agreement](docs/history/phase/DEV_2_1_NONINTERACTIVE_RUNTIME_CONFIG.md) |
 | `0.6.6A` | automated_validated | 2026-08-27 → 2026-08-27 | CP/PAN Parser Correctness Hardening | Bounded parser correctness hardening: VSX ifconfig normalization stores canonical network CIDR in interfaces[].ips[].network (host IP kept in .ip), and PAN rou… | [agreement](docs/history/phase/PHASE0_6_6A_PARSER_CORRECTNESS_HARDENING.md) |
 | `0.6.5` | real_env_validated | 2026-08-27 → 2026-08-27 | PAN TLS/CA Trust Production Closure | Closed the production-admission contract for opt-in PAN strict TLS CA verification: centralized preflight helper (utils/pan_tls_trust.py), env hierarchy SECURI… | — |
