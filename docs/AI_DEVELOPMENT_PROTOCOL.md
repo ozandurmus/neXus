@@ -42,7 +42,13 @@ Do not read Tier 3 merely because it exists.
 
 ### Start
 
-Every meaningful session begins with `SESSION START`:
+Every meaningful session begins with `SESSION START`.
+
+It opens with a **`PROJE ÖZETİ`** (Turkish, plain language, 4–6 lines, no
+jargon) for the non-developer product owner: what SecurityExpert is, what this
+task is, why we are doing it / the benefit, its type (feature / bug fix / major
+feature / hardening / docs / architecture), and what it enables or solves in
+future. This block is Turkish by design; the rest of `SESSION START` is English:
 
 1. authoritative product baseline,
 2. authoritative engineering baseline,

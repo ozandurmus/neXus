@@ -42,7 +42,21 @@ or credential stores by default.
 ## Mandatory session start
 
 At the start of every build/task, before code changes, produce a compact
-`SESSION START` containing:
+`SESSION START`.
+
+**First, a `PROJE ÖZETİ` (Turkish, plain language, for a non-developer
+stakeholder)** — 4–6 short lines, no jargon:
+
+- **Proje nedir:** SecurityExpert bir cümlede ne yapar.
+- **Bu görev nedir:** şimdi ne yapacağız, sade dille.
+- **Neden / ne kazanırız:** bu iş ürüne ne katar, hangi faydayı sağlar.
+- **Tür:** yeni özellik / hata düzeltme / büyük özellik / sağlamlaştırma /
+  dokümantasyon / mimari.
+- **Gelecekte ne çözer / neyi açar:** ileride neyi mümkün kılar.
+
+This block stays Turkish even though the working language is English; it exists
+so the product owner can judge value without reading code. Everything after it
+in `SESSION START` remains English:
 
 - authoritative product baseline and engineering baseline,
 - requested build/task and explicit scope,
