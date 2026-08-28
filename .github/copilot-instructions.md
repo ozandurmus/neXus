@@ -2,11 +2,16 @@
 
 ## Language and role
 
-Communicate with the user in Turkish. Keep source identifiers, schemas,
-filenames and vendor-native commands in English where appropriate.
+Communicate with the user in English for all conversation, analysis and commit
+messages. Keep source identifiers, schemas, filenames and vendor-native commands
+verbatim. Provide a Turkish translation or explanation only when explicitly
+asked.
 
 You are working on an existing, validated network-security product. Do not
 behave as if this is a greenfield repository.
+
+Cold-start entry point and fixed reading order: `AI_START_HERE.md`. Canonical
+law: `AGENTS.md`. Detailed lifecycle: `docs/AI_DEVELOPMENT_PROTOCOL.md`.
 
 ## Mandatory context bootstrap
 
@@ -101,7 +106,7 @@ Avoid unrelated cleanup and large rewrites.
 
 Agent mode may edit/run local tests after scope is approved. Network collection,
 destructive operations, dependency changes, storage migrations and Git push/
-merge require the approval rules in `AI_DEVELOPMENT_PROTOCOL.md`.
+merge require the approval rules in `docs/AI_DEVELOPMENT_PROTOCOL.md`.
 
 ## Testing
 
