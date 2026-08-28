@@ -25,6 +25,10 @@ py.exe .\main.py
 `--cp-config-collect --cp-config-stage all`. See `AI_START_HERE.md` for the full
 CLI table.
 
+No devices to hand? `py.exe .\scripts\render_sample.py` renders the UI from a
+synthetic inventory so the shell and the Network Inventory / Overview / Project
+Plan modules can be checked locally (it prints the `index.html` path).
+
 Full runs write a shareable support bundle under the runtime `output/`. All run
 artifacts live outside the repository (Windows:
 `%LOCALAPPDATA%\SecurityExpert\runtime\`).
