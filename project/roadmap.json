@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "current_build": "0.6.6A",
+  "current_build": "0.6.6B",
   "current_track": "0.6.x",
   "progress_contract": "Weighted acceptance-criterion completion. Percentages describe the declared roadmap, not calendar time or delivery ETA.",
   "tracks": [
@@ -97,17 +97,17 @@
   ],
   "now_next": {
     "now": {
-      "build": "0.6.6A",
-      "title": "CP/PAN parser correctness hardening",
-      "goal": "Close VSX network canonicalization and PAN default-route classification xfails with bounded parser-only corrections.",
-      "status": "automated_validated",
-      "started": "2026-08-27",
-      "completed": "2026-08-27"
-    },
-    "next": {
       "build": "0.6.6B",
       "title": "Compliance Rule-Pack Transition Foundation",
-      "goal": "Introduce a static versioned rule-pack boundary around existing deterministic CP/PAN controls without collector, network or CAS scope expansion.",
+      "goal": "Route the ten deterministic CP/PAN controls through a static versioned in-repository rule pack; additive traceability, unchanged outcomes, no collector/network/CAS/UI-logic change.",
+      "status": "automated_validated",
+      "started": "2026-08-28",
+      "completed": "2026-08-28"
+    },
+    "next": {
+      "build": "DEPLOY.1",
+      "title": "Ubuntu + Docker Server Migration & Git Repository Foundation",
+      "goal": "Begin the server migration on hardware arrival: non-interactive runtime config (DEV.2.1, done), persistent volume/secret material, Linux image, Nginx, then the Postgres job/lock checkpoint. Gated on server availability.",
       "status": "planned"
     },
     "upcoming": [

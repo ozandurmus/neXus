@@ -3,6 +3,18 @@
   "record_contract": "One structured record per build, newest first. Required: build, status, title, summary (<= 2 sentences). Optional: started, completed, track, movement, supersedes, evidence, risks_forward, docs{agreement,validation,handover} (repo-relative paths under docs/history/). Full detail lives in the linked doc; do not restate it here. Status vocabulary must stay within utils/project_plan.py STATUS_VALUES.",
   "builds": [
     {
+      "build": "0.6.6B",
+      "status": "automated_validated",
+      "started": "2026-08-28",
+      "completed": "2026-08-28",
+      "title": "Compliance Rule-Pack Transition Foundation",
+      "track": "0.6.x",
+      "movement": "IMPLEMENTATION",
+      "summary": "AUTOMATED_VALIDATED 2026-08-28. New utils/compliance_rulepack.py holds a static versioned in-repository pack (securityexpert.baseline.cp-pan @ 0.6.6B, certification_claim=false, 10 rules from single-source BASELINE_CONTROLS); compliance_posture routes the ten subject controls through DEFAULT_RULE_PACK and stamps rule-pack provenance, adds an additive top-level rule_pack block, and bumps COMPLIANCE_SCHEMA_VERSION to 0.6.6B. Outcomes for existing synthetic evidence are unchanged (proven per-control against the raw evaluator); platform/fleet controls keep rule_pack=null; no collector/network/CAS/scheduler/UI-logic change.",
+      "evidence": { "automated": "py -m pytest -q: 440 passed, 3 skipped, 0 failed (Python 3.12); --render-only PASS; repository privacy gate PASS/0", "real_env": "not required (no network-facing behavior)" },
+      "docs": { "agreement": "docs/history/phase/PHASE0_6_6B_COMPLIANCE_RULE_PACK_TRANSITION.md" }
+    },
+    {
       "build": "DEV.2.1",
       "status": "automated_validated",
       "started": "2026-08-28",
