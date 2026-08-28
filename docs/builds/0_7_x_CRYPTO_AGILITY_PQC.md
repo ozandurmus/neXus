@@ -1,7 +1,44 @@
 # 0.7.x — Cryptographic Posture, Crypto-Agility & PQC Readiness (contract)
 
-**Status:** PLANNED (architecture contract, for review) · **Movement:** ARCHITECTURE → IMPLEMENTATION
-**Opens the `0.7.x` VERIFY track.** · **Backlog / feature:** `crypto_agility_pqc` (P1)
+**Status:** AUTOMATED_VALIDATED (2026-08-29) — `py -m pytest -q` **458 passed,
+3 skipped, 0 failed**; `--render-only` PASS (`cryptoUiData` embeds); repository
+privacy gate PASS / 0. Real-environment validation not required (no
+network-facing behavior). Human `main` merge blocked pending review.
+**Movement:** ARCHITECTURE → IMPLEMENTATION · **Opens the `0.7.x` VERIFY track.**
+**Backlog / feature:** `crypto_agility_pqc` (P1)
+
+## Implementation record (2026-08-29)
+
+- `utils/crypto_rulepack.py` (new) — `DEFAULT_CRYPTO_RULE_PACK`
+  (`securityexpert.crypto.cp-pan @ 0.7.0`, schema `1.0`, `certification_claim:
+  False`, 14 rules in `weak_algorithm` / `crypto_agility` / `pqc_readiness`),
+  `crypto_rule_pack_summary()`.
+- `utils/crypto_facts.py` (new) — `extract_pan_crypto_facts(xml_bytes)` (IKE /
+  IPsec crypto profiles, IKE gateways, SSL/TLS service profiles, certificate
+  metadata: algorithm + validity only) and `extract_cp_crypto_facts(cp_device)`
+  (best-effort web-TLS / SSH from the sanitized projection; `management_plane_gap`
+  flag). Every fact carries `evidence_basis`.
+- `utils/crypto_posture.py` (new) — `build_crypto_posture(config_result,
+  checkpoint_config_result, *, repository_root, configuration_ui)`: reuses
+  `current_config_projection._artifact_bytes` to re-read the stored PAN XML,
+  runs the rule evaluators, rolls up subject status, emits the §4 payload with
+  `fleet.status_counts` / `category_counts` and the INFORMATIONAL `pqc` block.
+- `utils/html_export.py` — `build_crypto_posture` call + `__CRYPTO_JSON_PLACEHOLDER__`
+  replace. `templates/index.html` — `const cryptoUiData` + `#cryptoPostureCard`
+  in the Compliance module. `static/app.js` — `renderCryptoPostureCard()` called
+  from `renderComplianceFleetView`.
+- `tests/test_phase0_7_0_crypto_agility.py` (new) — 9 tests, AC-1…AC-6, incl.
+  weak-config → FINDING, strong-config → no FINDING, absent-section → never
+  inferred PASS, no key material in the payload.
+- State: `project/*`, `CURRENT_STATE.md` → `0.7.0` automated_validated;
+  `0.7.x` track → in_progress.
+
+Decisions 1–4 accepted as recommended (single-proposal = INFORMATIONAL; cert
+near-expiry 30d FINDING / 90d INFORMATIONAL; card-in-Compliance-module not a new
+module; CP best-effort SSH/web-TLS only).
+
+---
+
 Active build contract; moves to `docs/history/phase/` on close.
 
 ---
