@@ -3,6 +3,22 @@ import builtins
 import main
 from utils.runtime_auth import RuntimeAuth
 
+# DEV.2.1: force the interactive prompt path (stdin is not a TTY under pytest)
+# and a clean env for the prompt-based tests.
+_RUNTIME_VARS = (
+    "SECURITYEXPERT_PRINCIPAL",
+    "SECURITYEXPERT_SECRET",
+    "SECURITYEXPERT_CP_MDS_ENDPOINT",
+    "SECURITYEXPERT_PANORAMA_ENDPOINT",
+)
+
+
+def _force_interactive(monkeypatch):
+    monkeypatch.setattr(main.sys.stdin, "isatty", lambda: True)
+    for name in _RUNTIME_VARS:
+        monkeypatch.delenv(name, raising=False)
+        monkeypatch.delenv(f"{name}_FILE", raising=False)
+
 
 def test_runtime_auth_repr_never_exposes_material():
     auth = RuntimeAuth(principal="synthetic-principal", secret="synthetic-secret")
@@ -13,6 +29,7 @@ def test_runtime_auth_repr_never_exposes_material():
 
 
 def test_runtime_config_uses_auth_as_single_source_of_truth(monkeypatch):
+    _force_interactive(monkeypatch)
     answers = iter(["192.0.2.10", "synthetic-principal"])
     monkeypatch.setattr(builtins, "input", lambda _prompt: next(answers))
     monkeypatch.setattr(main.getpass, "getpass", lambda _prompt: "synthetic-secret")
@@ -35,6 +52,7 @@ def test_runtime_config_uses_auth_as_single_source_of_truth(monkeypatch):
 
 
 def test_runtime_config_prompts_use_general_auth_vocabulary(monkeypatch):
+    _force_interactive(monkeypatch)
     prompts = []
     answers = iter(["198.51.100.20", "synthetic-principal"])
 

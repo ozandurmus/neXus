@@ -1,6 +1,8 @@
 # DEV.2.1 — Non-Interactive Runtime Configuration
 
-**Status:** PLANNED (contract) · **Movement:** IMPLEMENTATION · **Track:** DEV.2 Server Runtime Foundation
+**Status:** IMPLEMENTED — automated validation pending (pytest deps not installed
+on the dev machine; local `resolve_value` + `_build_runtime_config` smoke green).
+**Movement:** IMPLEMENTATION · **Track:** DEV.2 Server Runtime Foundation
 **Backlog:** `noninteractive_runtime_config` (P0) · **Roadmap step:** DEV.2.1
 
 Active build contracts live in `docs/builds/`; on build close this document moves
@@ -195,3 +197,49 @@ with a clear message) instead of hanging / `EOFError`.
    the `DEV.2.1` roadmap step live on `chore/deploy-containerization-roadmap`,
    not `main`. Either merge the two `chore/*` branches to `main` first, or this
    build's close-out state updates rebase onto them.
+
+   Resolved: `feature/dev-2-1-noninteractive-config` was rebased onto
+   `chore/deploy-containerization-roadmap`. Merge order to `main`:
+   `chore/ai-onboarding-restructure` → `chore/deploy-containerization-roadmap`
+   → `feature/dev-2-1-noninteractive-config`.
+
+---
+
+## 10. Implementation record
+
+Landed on `feature/dev-2-1-noninteractive-config`:
+
+- `utils/runtime_config_source.py` (new) — `RuntimeConfigError`,
+  `resolve_value(name, *, environ=None)`: `<name>_FILE` (read+strip, fail closed
+  on unreadable/empty) → `<name>` (strip) → `None`.
+- `main.py` — `import sys`; import `RuntimeConfigError, resolve_value`;
+  `_PRINCIPAL_VAR` / `_SECRET_VAR` / `_CP_MDS_ENDPOINT_VAR` /
+  `_PANORAMA_ENDPOINT_VAR` constants; new `_resolve_or_prompt(...)` helper;
+  `_build_runtime_config` rewritten around it (prompt only when
+  `sys.stdin.isatty()`, else accumulate missing required vars and raise
+  `RuntimeConfigError` naming all of them, before the lazy collector imports);
+  new `_runtime_config(...)` closure in `main()` that maps `RuntimeConfigError`
+  to `parser.error(...)` (clean `SystemExit(2)`, no traceback); the three
+  `_build_runtime_config` call sites now go through it.
+- `.env.example` (new) — documents the four `SECURITYEXPERT_*` vars and their
+  `_FILE` variants; states nothing auto-loads it.
+- `tests/test_dev_2_1_noninteractive_runtime_config.py` (new) — 12 tests.
+- `tests/test_dev_0_1_runtime_endpoint_decoupling.py`,
+  `tests/test_dev_0_5a_runtime_auth_boundary.py` — the four prompt-path tests now
+  `_force_interactive(monkeypatch)` (set `sys.stdin.isatty()` true, clear the
+  four vars) since the default under pytest is now non-interactive.
+
+Local evidence (pytest unavailable — deps not installed):
+
+Expected `py -m pytest -q`: prior baseline + 12 new.
+
+- `resolve_value` smoke: `None`-when-unset, plain var, `*_FILE` read+strip,
+  `*_FILE` beats plain var, unreadable/empty `*_FILE` → `RuntimeConfigError`
+  (message names the var, never its content) — all pass.
+- `_build_runtime_config` smoke (lxml/paramiko stubbed): env-only no prompts,
+  secret-file precedence+trim, missing-required lists every var + value-free,
+  endpoints-not-required-for-mode, interactive path still prompts, wrapper →
+  `SystemExit(2)` with an argparse-style stderr line and no traceback — all pass.
+
+Pending: `py -m pytest -q` (expected baseline + 13 new) and
+`py -B main.py --repository-privacy-check` in a deps-installed environment.
