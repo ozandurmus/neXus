@@ -3,6 +3,7 @@ from pathlib import Path
 
 from utils.config_ui import build_configuration_ui_payload
 from utils.compliance_posture import build_compliance_posture
+from utils.crypto_posture import build_crypto_posture
 from utils.discovery_capability_ui import build_discovery_capability_payload
 from utils.logger import info
 from utils.project_plan import build_project_plan_payload
@@ -74,6 +75,12 @@ def run_html_export(
     )
     project_plan = build_project_plan_payload()
     compliance_ui = build_compliance_posture(configuration_ui, project_plan)
+    crypto_ui = build_crypto_posture(
+        config_result,
+        checkpoint_config_result=checkpoint_config_result,
+        repository_root=repository_root,
+        configuration_ui=configuration_ui,
+    )
     # 0.6.1C Phase 3: additive discovery/capability/coordinator observability.
     # Callers that have not yet wired Phase 4 collector integration may omit
     # all four arguments; the payload then renders an explicit empty state.
@@ -116,6 +123,11 @@ def run_html_export(
     html = html.replace(
         "__COMPLIANCE_JSON_PLACEHOLDER__",
         _script_json(compliance_ui),
+    )
+
+    html = html.replace(
+        "__CRYPTO_JSON_PLACEHOLDER__",
+        _script_json(crypto_ui),
     )
 
     html = html.replace(

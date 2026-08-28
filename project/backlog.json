@@ -138,10 +138,10 @@
       "id": "crypto_agility_pqc",
       "category": "Compliance / Security",
       "title": "Cryptographic Posture, Crypto-Agility & PQC Readiness",
-      "status": "planned",
+      "status": "automated_validated",
       "priority": "P1",
-      "target": "0.7.x",
-      "note": "Normalize IPsec/IKE/TLS/cert facts from CP and PAN configuration evidence. Evaluate with versioned rule packs (weak algorithms, crypto-agility, PQC capability). Distinct from and dependent on core Compliance Rule Engine. No new vendors or collectors."
+      "target": "0.7.0",
+      "note": "AUTOMATED_VALIDATED 2026-08-29. New utils/crypto_facts.py normalizes IKE/IPsec/TLS/certificate facts from the ALREADY-STORED PAN effective-running XML (no new collector; CP best-effort from the sanitized projection, VPN-community crypto an explicit Management-plane gap). utils/crypto_rulepack.py is a static versioned pack (securityexpert.crypto.cp-pan @ 0.7.0, certification_claim=false, categories weak_algorithm / crypto_agility / pqc_readiness). utils/crypto_posture.build_crypto_posture emits an additive __CRYPTO_JSON_PLACEHOLDER__ payload with an evidence_basis per finding (configured / insufficient; negotiated is a declared future runtime layer) rendered as one card in the existing Compliance module. No key material / PSK / certificate body ever in the payload. Evidence: py -m pytest -q: 458 passed, 3 skipped, 0 failed (Python 3.12); --render-only PASS (cryptoUiData embeds); repository privacy gate PASS/0. Contract: docs/history/phase/0_7_x_CRYPTO_AGILITY_PQC.md. Dynamic/signed packs, scoring and live 'negotiated' evidence remain later 0.7.x/0.8.x work."
     },
     {
       "id": "compliance_posture_rulepack_transition",
