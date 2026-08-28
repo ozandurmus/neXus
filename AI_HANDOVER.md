@@ -48,11 +48,30 @@ If a section does not apply, write `n/a` — do not delete the heading.
 - Repo restructure + test parallelism + DEV.2/3/4 roadmap step breakdown
   (earlier this session).
 
-## 3. NOT YET DONE — real-environment / on-hardware validation
+## 3. Next work
 
-**The user does not have the server yet and wants to run the app on their
-laptop to confirm it works.** Automated tests are green but nothing since the
-0.6.1x builds has been exercised end-to-end.
+**Next build: `0.7.x` — `crypto_agility_pqc`** (backlog id, P1). First formal
+0.7.x VERIFY-track build. Normalize IPsec/IKE/TLS/certificate facts from
+existing CP/PAN configuration evidence and evaluate them through a versioned
+rule pack (extends the 0.6.6B `utils/compliance_rulepack.py` boundary). No new
+collectors, vendors or network. Needs a frozen architecture contract first
+(`docs/builds/0_7_x_CRYPTO_AGILITY_PQC.md`) — `ARCHITECTURE` movement, then
+`IMPLEMENTATION`. Synthetic config fixtures for tests (no server needed for the
+automated gate).
+
+**OP.x — Controlled Failover: design done, approval pending.**
+`docs/design/FAILOVER_ENGINE_ARCHITECTURE.md`. The user is getting sign-off next
+week and will source a test CP + PAN cluster. `roadmap.json` → `open_decisions`
+holds the 6 items for that review. OP.0 (read-only HA readiness assessment +
+SCC dashboard) and OP.1 (dry-run plan compiler) need only a reachable test
+cluster — a laptop run suffices; OP.2 (write) is gated on the DEPLOY.1A auth
+boundary + the command gate + a signed safety review.
+
+## 3b. NOT YET DONE — real-environment / on-hardware validation
+
+Automated tests are green but nothing since the 0.6.1x builds has been
+exercised end-to-end. Backlog `on_hardware_real_env_validation` (P0), blocked
+on the corporate laptop.
 
 - **Local render check (no devices needed):** `py -V:3.12 scripts/render_sample.py`
   builds a synthetic `unified.json` and renders `index.html` (path printed) so
