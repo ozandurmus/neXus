@@ -1,7 +1,10 @@
 # DEV.2.1 — Non-Interactive Runtime Configuration
 
-**Status:** IMPLEMENTED — automated validation pending (pytest deps not installed
-on the dev machine; local `resolve_value` + `_build_runtime_config` smoke green).
+**Status:** AUTOMATED_VALIDATED (2026-08-28) — `py -m pytest -q`
+**433 passed, 3 skipped, 0 failed** (Python 3.12; `requirements.txt` + pytest
+installed `--user`). Real-environment validation not required (no new network
+behavior or device command). Human `main` merge blocked pending review + the
+branch-stack merge order below.
 **Movement:** IMPLEMENTATION · **Track:** DEV.2 Server Runtime Foundation
 **Backlog:** `noninteractive_runtime_config` (P0) · **Roadmap step:** DEV.2.1
 
@@ -228,10 +231,24 @@ Landed on `feature/dev-2-1-noninteractive-config`:
   `tests/test_dev_0_5a_runtime_auth_boundary.py` — the four prompt-path tests now
   `_force_interactive(monkeypatch)` (set `sys.stdin.isatty()` true, clear the
   four vars) since the default under pytest is now non-interactive.
+- `tests/test_phase0_6_0a4_3_3_2_workflow_and_ha.py`,
+  `tests/test_phase0_6_1c_1_runtime_scheduler_wiring.py` — four integration tests
+  that drive `main.main()` with a collection mode now set
+  `main_module.sys.stdin.isatty()` → `True` so their mocked prompt sequences are
+  still used.
+- `tests/test_phase0_6_1b_1_2_interactive_project_plan.py` — **pre-existing**
+  stale `now_next` assertions (`build == "0.6.4"`, `"host-key"` in the next
+  title) replaced with data-driven checks. Red on `main` independent of this
+  build; separate commit.
 
-Local evidence (pytest unavailable — deps not installed):
+### Evidence (2026-08-28, Python 3.12, deps installed `--user`)
 
-Expected `py -m pytest -q`: prior baseline + 12 new.
+```
+py -m pytest -q   →   433 passed, 3 skipped, 0 failed  (109.8s)
+```
+
+Includes the 12 new DEV.2.1 tests and the 5 fixed above. `project_plan`
+payload loads with `metadata_warnings: []`.
 
 - `resolve_value` smoke: `None`-when-unset, plain var, `*_FILE` read+strip,
   `*_FILE` beats plain var, unreadable/empty `*_FILE` → `RuntimeConfigError`
@@ -241,5 +258,13 @@ Expected `py -m pytest -q`: prior baseline + 12 new.
   endpoints-not-required-for-mode, interactive path still prompts, wrapper →
   `SystemExit(2)` with an argparse-style stderr line and no traceback — all pass.
 
-Pending: `py -m pytest -q` (expected baseline + 13 new) and
-`py -B main.py --repository-privacy-check` in a deps-installed environment.
+### Repository privacy gate
+
+On this branch in isolation the gate reports **2 pre-existing findings** —
+`PHASE0_6_6A_PARSER_CORRECTNESS_HARDENING.md:52-53` (synthetic `10.20.30.x`
+CIDR example, flagged `PRIVATE_ENDPOINT_LITERAL`), red on `main` and unrelated to
+DEV.2.1. Fixed in `chore/ai-onboarding-restructure` (`11c4ff4`, `192.0.2.x`),
+which merges before this branch; verified **0 findings / PASS** there. DEV.2.1's
+own new files scan clean. Local `data/` / `logs/` are created by the CAS /
+support-key path (`BASE_DIR/data`, DEV.0.3C deferred) during the pytest run;
+gitignored, not tracked.

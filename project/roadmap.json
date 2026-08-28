@@ -268,7 +268,7 @@
         {
           "build": "DEV.2.1",
           "title": "Non-interactive runtime configuration: env vars + mounted secret files with precedence over interactive input()/getpass; keep the interactive path for local use",
-          "status": "in_progress"
+          "status": "automated_validated"
         },
         {
           "build": "DEV.2.2",
