@@ -35,7 +35,7 @@ def _tls_verify_setting() -> bool | str:
 def derive_network(ip):
     try:
         return str(ipaddress.ip_interface(ip).network)
-    except:
+    except ValueError:
         return None
 
 
