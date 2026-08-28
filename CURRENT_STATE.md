@@ -50,6 +50,11 @@ Previous: `0.6.6A — CP/PAN Parser Correctness Hardening` — AUTOMATED_VALIDAT
   Handover: `docs/history/handover/DEPLOY_1_CONTRACT_FREEZE_HANDOVER_2026_08_27.md`
 - After the engineering-readiness checkpoint, product architecture proceeds
   toward `0.6.1C` follow-ups already validated in the 0.6.x track.
+- `OP.x — Controlled Failover` (new track, OPERATE theme): design frozen in
+  `docs/design/FAILOVER_ENGINE_ARCHITECTURE.md`. Write-free parts (OP.0 HA
+  readiness assessment + SCC dashboard, OP.1 dry-run plan compiler) are
+  buildable post-`DEPLOY.1`; OP.2 controlled execution is hard-gated (see the
+  doc's §10 and `roadmap_notes`).
 
 ---
 
