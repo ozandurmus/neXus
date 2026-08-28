@@ -3,6 +3,17 @@
   "record_contract": "One structured record per build, newest first. Required: build, status, title, summary (<= 2 sentences). Optional: started, completed, track, movement, supersedes, evidence, risks_forward, docs{agreement,validation,handover} (repo-relative paths under docs/history/). Full detail lives in the linked doc; do not restate it here. Status vocabulary must stay within utils/project_plan.py STATUS_VALUES.",
   "builds": [
     {
+      "build": "clean_baseline_bootstrap",
+      "status": "automated_validated",
+      "started": "2026-08-28",
+      "completed": "2026-08-28",
+      "title": "Clean Baseline Bootstrap & Dependency UX",
+      "track": "workflow",
+      "movement": "IMPLEMENTATION",
+      "summary": "main.py now models which prior artifacts each partial/dev mode reuses (_ARTIFACT_PRODUCERS / _MODE_PREREQUISITES) and _require_bootstrap() fails --render-only / --cp-config-probe / --cp-config-collect / --only cp|vsx|pan-config fast with exit 2 and an actionable 'Missing X, produced by <cmd>' block before any credential prompt or collector, instead of a deep traceback. --only all and legacy diagnostic modes unaffected; also fixed RFC1918 literals in scripts/render_sample.py that were failing the repository privacy gate on main. Evidence: pytest 449 passed / 3 skipped / 0 failed; privacy gate PASS/0. No collector/network/CAS/UI change.",
+      "evidence": { "automated": "py -m pytest -q: 449 passed, 3 skipped, 0 failed (Python 3.12); repository privacy gate PASS/0", "real_env": "not required (no network-facing behavior)" }
+    },
+    {
       "build": "0.6.6B",
       "status": "automated_validated",
       "started": "2026-08-28",
