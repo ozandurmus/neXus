@@ -194,7 +194,7 @@
     "Non-interactive runtime configuration (DEV.2.1) is a hard precondition for any unattended container: today the only credential/endpoint path is interactive input()/getpass in _build_runtime_config, and --scheduler-once re-enters it. It must land before DEV.3.",
     "output/index.html is a LOCAL OPERATOR SENSITIVE artifact (real device identities, non-secret configuration values); serving it without the DEPLOY.1A viewer boundary is only acceptable on a trusted internal network behind existing access control.",
     "Postgres scope for DEV.3.2/DEV.3.3 is metadata only (scheduler state, run manifests, last-known-good, CAS metadata index, distributed lock); it touches config_evidence, config_storage, config_history, snapshot, run_context and collection_executor. CAS payload blobs remain on a volume. This is one infrastructure checkpoint with its own real-environment gate.",
-    "OP.x Controlled Failover is the first OPERATE-theme work; architecture in docs/design/FAILOVER_ENGINE_ARCHITECTURE.md. Only the write-free parts may be built before the write-gate is cleared: OP.0 (HA readiness / failover-safety assessment + SCC dashboard, a read-only VERIFY-plane feature) and OP.1 (dry-run plan compiler). OP.2 controlled execution is hard-gated on mature VERIFY/TRACE/RECOVER, the DEPLOY.1 server, DEPLOY.1A OIDC + an RBAC OPERATE role, the CP device-interaction-safety audit, the network-device command gate for the new read and write primitives, and a signed change-management / safety review with the network-security leads."
+    "OP.x Controlled Failover is the first OPERATE-theme work; architecture in docs/design/FAILOVER_ENGINE_ARCHITECTURE.md; open decisions tracked in this file's open_decisions. The write-free parts need only a reachable test CP + PAN cluster (a laptop run is sufficient): OP.0 (HA readiness / failover-safety assessment + SCC dashboard, a read-only VERIFY-plane feature) and OP.1 (dry-run plan compiler). OP.2 controlled execution is hard-gated on mature VERIFY/TRACE/RECOVER, the DEPLOY.1A OIDC boundary + an RBAC OPERATE role + full audit, the CP device-interaction-safety audit, the network-device command gate for the new read and write primitives, and a signed change-management / safety review with the network-security leads."
   ],
   "architecture_review_notes": [
     "2026-08-25 architecture review: event-driven webhook, crypto/PQC readiness, DEPLOY.1 OIDC boundary and contextual TI enrichment evaluated for CP/PAN scope.",
@@ -352,6 +352,80 @@
           "status": "planned"
         }
       ]
+    }
+  ],
+  "open_decisions": [
+    {
+      "id": "op_track_id",
+      "area": "OP.x Controlled Failover",
+      "status": "open",
+      "question": "Track id: keep OP.x as a dedicated OPERATE track, or fold into 1.x after the 1.0 GOVERN track?",
+      "options": [
+        "OP.x dedicated OPERATE track",
+        "1.x after GOVERN"
+      ],
+      "recommendation": "OP.x - OPERATE is a distinct theme with its own write-gate and should not be conflated with GOVERN.",
+      "decide_by": "OP.x approval review"
+    },
+    {
+      "id": "op_four_eyes",
+      "area": "OP.2 Controlled Failover Execution",
+      "status": "open",
+      "question": "Second-approver (four-eyes) sign-off for an authorised failover: mandatory, or configurable per environment?",
+      "options": [
+        "mandatory in v1",
+        "configurable (default on)"
+      ],
+      "recommendation": "configurable, default on - mandatory can block a legitimate emergency; the audit record + OPERATE role are the hard controls.",
+      "decide_by": "OP.2 contract freeze"
+    },
+    {
+      "id": "op_degraded_verdict",
+      "area": "OP.0 Readiness Assessment",
+      "status": "open",
+      "question": "Support DEGRADED_PROCEED_WITH_RISK (per-risk operator acceptance) in v1, or restrict to SAFE_TO_FAILOVER / UNSAFE_DO_NOT_FAILOVER / INSUFFICIENT_EVIDENCE until there is field experience?",
+      "options": [
+        "include DEGRADED in v1",
+        "SAFE / UNSAFE / INSUFFICIENT only in v1"
+      ],
+      "recommendation": "SAFE / UNSAFE / INSUFFICIENT only in v1; add DEGRADED once the battery is validated against real clusters.",
+      "decide_by": "OP.0 contract freeze"
+    },
+    {
+      "id": "op_emergency_evac",
+      "area": "OP.x scope",
+      "status": "open",
+      "question": "Emergency 'evacuate a failing member fast' path: in scope for OP.2, or a later OP.3?",
+      "options": [
+        "OP.2 (separate, still-gated path)",
+        "defer to OP.3"
+      ],
+      "recommendation": "defer to OP.3 - OP.2 proves the planned-maintenance path first; emergency reuses it with a reduced-but-not-skipped preflight.",
+      "decide_by": "OP.2 contract freeze"
+    },
+    {
+      "id": "op_aa_vsls_scope",
+      "area": "OP.2 vendor coverage",
+      "status": "open",
+      "question": "PAN Active/Active and Check Point VSLS (per-VS load sharing) failover: first-class in OP.2, or deferred?",
+      "options": [
+        "first-class in OP.2",
+        "deferred (OP.0 still assesses them)"
+      ],
+      "recommendation": "deferred - OP.2 covers CP ClusterXL HA and PAN A/P (the common cases); A/A and VSLS are a later adapter. OP.0/OP.1 assess and plan for them regardless.",
+      "decide_by": "OP.2 contract freeze"
+    },
+    {
+      "id": "op_continuity_tolerance",
+      "area": "OP.2 auto-rollback",
+      "status": "open",
+      "question": "Session/connection continuity tolerance that triggers auto-rollback: fixed defaults, or operator-tunable per run?",
+      "options": [
+        "fixed default (e.g. sessions preserved >= ~90%, zero split-brain)",
+        "operator-tunable per run within bounds"
+      ],
+      "recommendation": "fixed conservative default in v1 (sessions >= ~90%, zero split-brain, sync resumed); make it tunable-within-bounds only after real-cluster calibration.",
+      "decide_by": "OP.2 contract freeze"
     }
   ]
 }
