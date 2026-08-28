@@ -43,6 +43,73 @@ def _remove_output_files(*names, output_dir=Path("output")):
             info(f">>> STALE OUTPUT REMOVED BEFORE PARTIAL COLLECTION: {name}")
 
 
+# ---------------------------------------------------------------------------
+# Clean-baseline bootstrap: partial/dev modes reuse artifacts produced by a
+# previous run. On a fresh runtime they must fail fast here with actionable
+# guidance, before credential prompts or a collector, instead of a deep
+# traceback.
+# ---------------------------------------------------------------------------
+_ARTIFACT_PRODUCERS = {
+    "cp.json": "py -B main.py   (or --only cp)",
+    "cp_telemetry.json": "py -B main.py   (or --only cp)",
+    "vsx.json": "py -B main.py   (or --only vsx)",
+    "panorama_runtime.json": "py -B main.py   (or --only panorama)",
+    "unified.json": "py -B main.py   (full checkpoint; also written by --only cp / --only vsx / --only pan-config)",
+    "pan_config_telemetry.json": "py -B main.py   (or --only pan-config)",
+    "cp_config_telemetry.json": "py -B main.py   (or --cp-config-collect --cp-config-stage all)",
+}
+
+# Artifacts each mode consumes from a *previous* run — not the ones it produces
+# itself. A full `--only all` checkpoint has no prerequisites.
+_MODE_PREREQUISITES = {
+    "render-only": ("unified.json",),
+    "cp-config-probe": ("cp_telemetry.json", "cp.json", "vsx.json"),
+    "cp-config-collect": ("cp.json", "vsx.json"),
+    "cp": ("vsx.json", "panorama_runtime.json"),
+    "vsx": ("cp.json", "panorama_runtime.json"),
+    "pan-config": ("unified.json",),
+}
+
+_BOOTSTRAP_SEQUENCE = (
+    "Establish a baseline, then re-run this mode:",
+    "  py -B main.py                     full checkpoint - produces every artifact",
+    "or build the inventory planes individually:",
+    "  py -B main.py --only cp",
+    "  py -B main.py --only vsx",
+    "  py -B main.py --only panorama",
+)
+
+
+def _bootstrap_gaps(mode, output_root):
+    """Return [(artifact, producer_hint)] for a mode's missing prior artifacts."""
+    output_root = Path(output_root)
+    return [
+        (name, _ARTIFACT_PRODUCERS.get(name, "a previous run"))
+        for name in _MODE_PREREQUISITES.get(mode, ())
+        if not (output_root / name).exists()
+    ]
+
+
+def _require_bootstrap(mode, output_root):
+    """Exit 2 with actionable guidance if `mode` is missing prior artifacts."""
+    gaps = _bootstrap_gaps(mode, output_root)
+    if not gaps:
+        return
+    lines = [
+        "",
+        f">>> BOOTSTRAP REQUIRED: '{mode}' reuses artifacts from a previous run; "
+        "this runtime has none yet.",
+        "",
+        "    Missing:",
+        *(f"      {name:<24} produced by:  {producer}" for name, producer in gaps),
+        "",
+        *(f"    {line}" for line in _BOOTSTRAP_SEQUENCE),
+        "",
+    ]
+    print("\n".join(lines), file=sys.stderr)
+    raise SystemExit(2)
+
+
 def _workflow_context(mode, *, run_id=None):
     labels = {
         "checkpoint": "Full checkpoint",
@@ -584,6 +651,7 @@ def main(argv=None, *, runtime_services=None, provenance="manual", admission_run
 
     if args.cp_config_probe:
         print("=== SECURITYEXPERT CHECK POINT CONFIGURATION IDENTITY + VSX PROBE — PHASE 0.6.1A.1 ===\n")
+        _require_bootstrap("cp-config-probe", runtime_paths.output_root)
         cfg = _runtime_config(require_cp=True, require_panorama=False)
         try:
             from configuration.checkpoint_config_probe import run_checkpoint_config_probe
@@ -621,6 +689,7 @@ def main(argv=None, *, runtime_services=None, provenance="manual", admission_run
 
     if args.cp_config_collect:
         print("=== SECURITYEXPERT CHECK POINT CONFIGURATION COLLECTION — PHASE 0.6.1B.1.2 ===\n")
+        _require_bootstrap("cp-config-collect", runtime_paths.output_root)
         cfg = _runtime_config(require_cp=True, require_panorama=False)
         try:
             from configuration.checkpoint_config_collector import run_checkpoint_config_collection
@@ -721,12 +790,8 @@ def main(argv=None, *, runtime_services=None, provenance="manual", admission_run
     if args.render_only:
         from utils.html_export import run_html_export
 
+        _require_bootstrap("render-only", runtime_paths.output_root)
         unified = runtime_paths.output_root / "unified.json"
-        if not unified.exists():
-            raise RuntimeError(
-                "--render-only requires output/unified.json from a previous full/partial inventory run. "
-                "Run py.exe -B .\\main.py once to establish a checkpoint."
-            )
         config_result = _load_output_json("pan_config_telemetry.json", runtime_paths.output_root)
         checkpoint_config_result = _load_output_json("cp_config_telemetry.json", runtime_paths.output_root)
         print("=== SECURITYEXPERT RENDER-ONLY DEVELOPMENT MODE — PHASE 0.6.1B.1 ===\n")
@@ -772,6 +837,10 @@ def main(argv=None, *, runtime_services=None, provenance="manual", admission_run
 
     collection_requested = args.only in ["cp", "vsx", "panorama", "pan-config", "all"]
     cfg = None
+
+    # Fail fast — before any credential prompt or collector — when a partial
+    # mode has no baseline artifacts to reuse.
+    _require_bootstrap(args.only, runtime_paths.output_root)
 
     ###############################################
     # USER INPUT - ONLY WHEN COLLECTION NEEDS IT

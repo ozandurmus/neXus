@@ -63,7 +63,7 @@ def _sample_unified() -> list[dict]:
             "source": "cp", "device": "cp-edge-a", "vsys": "default",
             "interfaces": [_iface("eth0", "192.0.2.1", 24), _iface("eth1", "198.51.100.1", 24)],
             "routes": [_route("0.0.0.0/0", "192.0.2.254", "eth0", "default"),
-                       _route("10.0.0.0/8", "198.51.100.254", "eth1")],
+                       _route("203.0.113.0/24", "198.51.100.254", "eth1")],
             "inventory_status": live,
         },
         {
@@ -86,7 +86,7 @@ def _sample_unified() -> list[dict]:
             "source": "vsx", "device": "vsx-host-1", "vsys": "VS-PAYMENTS", "vs_id": "2", "cluster": "vsx-host",
             "interfaces": [_iface("wrp64", "198.51.100.20", 24), _iface("eth2.100", "203.0.113.20", 28, itype="vlan")],
             "routes": [_route("0.0.0.0/0", "198.51.100.254", "wrp64", "default"),
-                       _route("172.16.0.0/12", "203.0.113.30", "eth2.100")],
+                       _route("198.51.100.128/25", "203.0.113.30", "eth2.100")],
             "inventory_status": live,
         },
         {
@@ -95,7 +95,7 @@ def _sample_unified() -> list[dict]:
             "interfaces": [_iface("ethernet1/1", "203.0.113.41", 24, vr="default", vsys="vsys1", zone="untrust"),
                            _iface("ethernet1/2", "198.51.100.41", 24, vr="default", vsys="vsys1", zone="trust")],
             "routes": [_route("0.0.0.0/0", "203.0.113.254", "ethernet1/1", "default", vr="default"),
-                       _route("10.10.0.0/16", "198.51.100.254", "ethernet1/2", vr="default")],
+                       _route("203.0.113.0/25", "198.51.100.254", "ethernet1/2", vr="default")],
             "inventory_status": live,
         },
         {
