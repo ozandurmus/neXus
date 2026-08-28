@@ -1,17 +1,37 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
-from utils.compliance_catalog import catalog_entry
+from utils.compliance_catalog import (
+    CATALOG_VERSION,
+    LEGACY_CONTROL_IDS,
+    catalog_enrichment_controls,
+    catalog_entry,
+    severity_weight,
+)
+from utils.compliance_evaluators_ext import ENRICHMENT_EVALUATORS, evaluate_enrichment_control
 from utils.compliance_rulepack import (
     BASELINE_CONTROLS,
     DEFAULT_RULE_PACK,
     rule_pack_summary,
 )
+from utils.control_assignment import ControlAssignmentPolicy, load_control_assignments
 
+
+BASE_DIR = Path(__file__).resolve().parent.parent
 
 COMPLIANCE_SCHEMA_VERSION = "0.6.6B"
-STATUS_VALUES = ("PASS", "FINDING", "UNKNOWN", "NOT_APPLICABLE", "PLANNED")
+STATUS_VALUES = ("PASS", "FINDING", "UNKNOWN", "NOT_APPLICABLE", "PLANNED", "WAIVED")
+
+_FRAMEWORKS = ("CIS", "PCI-DSS", "BDDK")
+_ENRICHMENT_CONTROLS = catalog_enrichment_controls()
+_ENRICHMENT_BY_ID = {c["control_id"]: c for c in _ENRICHMENT_CONTROLS}
+# Alignment (roll-up numerator) is PASS only; WAIVED is tracked but never
+# counted as aligned or as a finding.
+_ALIGNED_STATUSES = frozenset({"PASS"})
+_DENOMINATOR_STATUSES = frozenset({"PASS", "FINDING", "UNKNOWN", "PLANNED"})
 
 
 # 0.6.6B: the ten deterministic controls now live in utils.compliance_rulepack
@@ -555,22 +575,102 @@ def _pan_alignment_status(device: dict[str, Any]) -> str:
     return "PASS"
 
 
-def _subject_controls(device: dict[str, Any]) -> list[dict[str, Any]]:
+def _apply_waiver(
+    result: dict[str, Any],
+    policy: ControlAssignmentPolicy | None,
+    device_name: str,
+    now: datetime,
+) -> dict[str, Any]:
+    """0.7.1b: an unexpired waiver turns a (control, subject) cell into WAIVED.
+
+    The pre-waiver status is preserved; free-text reason / approver stay in the
+    local policy file and never enter this payload.
+    """
+    if policy is None:
+        return result
+    waiver = policy.waiver_for(str(result.get("control_id") or ""), device_name, now)
+    if waiver is None:
+        return result
+    result["pre_waiver_status"] = result.get("status")
+    result["status"] = "WAIVED"
+    result["waived"] = True
+    result["waiver"] = {
+        "control_id": waiver.control_id,
+        "expires": waiver.expires.isoformat() if waiver.expires else None,
+    }
+    return result
+
+
+def _subject_controls(
+    device: dict[str, Any],
+    policy: ControlAssignmentPolicy | None = None,
+    device_name: str = "",
+    resolved_ids: frozenset[str] | None = None,
+    now: datetime | None = None,
+) -> list[dict[str, Any]]:
     has_current = _bool(device.get("connected")) and str(_as_dict(device.get("current_configuration")).get("status") or "") == "available"
     if not has_current:
         return []
+    now = now or datetime.now(timezone.utc)
     # 0.6.6B: the ten deterministic controls execute through the default rule
     # pack. Each rule carries the exact keys the evaluators read, so outcomes
     # are unchanged; each result is stamped with rule-pack provenance.
+    # 0.7.1b: when a local assignment policy is active a control can be
+    # de-scoped for this device (omitted) or waived (status WAIVED).
     results: list[dict[str, Any]] = []
     for rule in DEFAULT_RULE_PACK["rules"]:
+        if resolved_ids is not None and rule["control_id"] not in resolved_ids:
+            continue
         result = _evaluate_vendor_neutral_control(device, rule)
         result["rule_pack"] = {
             "pack_id": DEFAULT_RULE_PACK["pack_id"],
             "pack_version": DEFAULT_RULE_PACK["pack_version"],
             "rule_id": rule["rule_id"],
         }
-        results.append(result)
+        results.append(_apply_waiver(result, policy, device_name, now))
+    return results
+
+
+def _subject_extended_controls(
+    device: dict[str, Any],
+    policy: ControlAssignmentPolicy | None,
+    device_name: str,
+    resolved_ids: frozenset[str],
+    now: datetime,
+) -> list[dict[str, Any]]:
+    """0.7.1b enrichment controls — a separate list, not routed through the
+    frozen 0.6.6B pack. Evaluated only where the vendor applies and the control
+    is in scope for this device."""
+    vendor_key = str(device.get("vendor_key") or "")
+    results: list[dict[str, Any]] = []
+    for control in _ENRICHMENT_CONTROLS:
+        control_id = str(control.get("control_id") or "")
+        if vendor_key not in list(control.get("applicable_vendors") or []):
+            continue
+        if control_id not in resolved_ids:
+            continue
+        status, summary, coverage = evaluate_enrichment_control(device, control_id)
+        lifecycle = "IMPLEMENTED" if control_id in ENRICHMENT_EVALUATORS else "PLANNED_EVIDENCE_GAP"
+        result = _control(
+            control_id,
+            str(control.get("title") or "Control"),
+            status,
+            summary,
+            str(control.get("control_area") or "evidence-backed control area"),
+            scope="SUBJECT",
+            benchmark="CIS",
+            benchmark_reference=str(control.get("cis_reference") or "") or None,
+            evidence_fields=list(control.get("evidence_fields") or []),
+            evidence_plane="direct_actual",
+            evidence_coverage=coverage,
+            control_lifecycle=lifecycle,
+            rule_pack=None,
+            severity=control.get("severity"),
+            rationale=control.get("rationale"),
+            frameworks=[dict(f) for f in control.get("frameworks", [])],
+        )
+        result["control_class"] = "enrichment"
+        results.append(_apply_waiver(result, policy, device_name, now))
     return results
 
 
@@ -769,12 +869,169 @@ def _fleet_controls(configuration_ui: dict[str, Any], link_map: dict[str, dict[s
     ]
 
 
+def _catalog_control_frameworks() -> dict[str, dict[str, Any]]:
+    """control_id -> {framework -> applies bool} across baseline + enrichment."""
+    out: dict[str, dict[str, Any]] = {}
+    for control_id in LEGACY_CONTROL_IDS:
+        entry = catalog_entry(control_id) or {}
+        out[control_id] = {
+            str(f.get("framework")): bool(f.get("applies"))
+            for f in entry.get("frameworks", [])
+        }
+    for control in _ENRICHMENT_CONTROLS:
+        out[str(control["control_id"])] = {
+            str(f.get("framework")): bool(f.get("applies"))
+            for f in control.get("frameworks", [])
+        }
+    return out
+
+
+def _control_severity(control_id: str) -> str:
+    entry = catalog_entry(control_id) or {}
+    return str(entry.get("severity") or "informational")
+
+
+def _empty_overview() -> dict[str, Any]:
+    total = len(LEGACY_CONTROL_IDS) + len(_ENRICHMENT_CONTROLS)
+    return {
+        "catalog_version": CATALOG_VERSION,
+        "total_controls": total,
+        "monitored_controls": 0,
+        "unmonitored_controls": total,
+        "subjects": 0,
+        "cells": {"aligned": 0, "finding": 0, "unknown": 0, "planned": 0, "waived": 0},
+        "aligned_percent": 0.0,
+        "risk_weighted_alignment_percent": 0.0,
+        "by_framework": {
+            name: {"controls": 0, "monitored": 0, "aligned": 0, "finding": 0, "coverage": "UNCOVERED"}
+            for name in _FRAMEWORKS
+        },
+        "by_subject": [],
+    }
+
+
+def _compliance_overview(subjects: list[dict[str, Any]]) -> dict[str, Any]:
+    evaluated = [s for s in subjects if s.get("availability") == "AVAILABLE"]
+    fw_applies = _catalog_control_frameworks()
+
+    cells = {"aligned": 0, "finding": 0, "unknown": 0, "planned": 0, "waived": 0}
+    weight_num = 0
+    weight_den = 0
+    # control_id -> did any subject produce hard evidence (PASS/FINDING/WAIVED)
+    has_evidence: dict[str, bool] = {}
+    assigned_anywhere: set[str] = set()
+    per_control_aligned: dict[str, int] = {}
+    per_control_finding: dict[str, int] = {}
+    by_subject: list[dict[str, Any]] = []
+
+    for subject in evaluated:
+        rows = _as_list(subject.get("controls")) + _as_list(subject.get("extended_controls"))
+        assignment = _as_dict(subject.get("assignment"))
+        assigned_anywhere.update(str(x) for x in _as_list(assignment.get("assigned")))
+        s_counts = {"aligned": 0, "finding": 0, "unknown": 0, "planned": 0, "waived": 0}
+        for control in rows:
+            control_id = str(_as_dict(control).get("control_id") or "")
+            status = str(_as_dict(control).get("status") or "UNKNOWN")
+            bucket = {
+                "PASS": "aligned", "FINDING": "finding", "UNKNOWN": "unknown",
+                "PLANNED": "planned", "WAIVED": "waived",
+            }.get(status)
+            if bucket is None:
+                continue
+            cells[bucket] += 1
+            s_counts[bucket] += 1
+            if bucket in ("aligned", "finding", "waived"):
+                has_evidence[control_id] = True
+            else:
+                has_evidence.setdefault(control_id, False)
+            if status in _DENOMINATOR_STATUSES:
+                w = severity_weight(_control_severity(control_id))
+                weight_den += w
+                if status in _ALIGNED_STATUSES:
+                    weight_num += w
+            if bucket == "aligned":
+                per_control_aligned[control_id] = per_control_aligned.get(control_id, 0) + 1
+            if bucket == "finding":
+                per_control_finding[control_id] = per_control_finding.get(control_id, 0) + 1
+        by_subject.append({
+            "subject_id": subject.get("subject_id"),
+            "assigned": len(_as_list(assignment.get("assigned"))),
+            "aligned": s_counts["aligned"],
+            "finding": s_counts["finding"],
+            "unknown": s_counts["unknown"],
+            "planned": s_counts["planned"],
+            "waived": s_counts["waived"],
+        })
+
+    all_ids = list(LEGACY_CONTROL_IDS) + [str(c["control_id"]) for c in _ENRICHMENT_CONTROLS]
+    monitored = {
+        cid for cid in all_ids
+        if cid in assigned_anywhere and has_evidence.get(cid)
+    }
+    denom = sum(cells[k] for k in ("aligned", "finding", "unknown", "planned"))
+    aligned_percent = round(cells["aligned"] / denom * 100, 1) if denom else 0.0
+    risk_weighted = round(weight_num / weight_den * 100, 1) if weight_den else 0.0
+
+    by_framework: dict[str, Any] = {}
+    for name in _FRAMEWORKS:
+        fw_control_ids = [cid for cid in all_ids if fw_applies.get(cid, {}).get(name)]
+        fw_monitored = [cid for cid in fw_control_ids if cid in monitored]
+        if not fw_control_ids:
+            coverage = "UNCOVERED"
+        elif len(fw_monitored) == len(fw_control_ids):
+            coverage = "COVERED"
+        elif fw_monitored:
+            coverage = "PARTIALLY_COVERED"
+        else:
+            coverage = "UNCOVERED"
+        by_framework[name] = {
+            "controls": len(fw_control_ids),
+            "monitored": len(fw_monitored),
+            "aligned": sum(per_control_aligned.get(cid, 0) for cid in fw_control_ids),
+            "finding": sum(per_control_finding.get(cid, 0) for cid in fw_control_ids),
+            "coverage": coverage,
+        }
+
+    total = len(all_ids)
+    return {
+        "catalog_version": CATALOG_VERSION,
+        "total_controls": total,
+        "monitored_controls": len(monitored),
+        "unmonitored_controls": total - len(monitored),
+        "subjects": len(evaluated),
+        "cells": cells,
+        "aligned_percent": aligned_percent,
+        "risk_weighted_alignment_percent": risk_weighted,
+        "by_framework": by_framework,
+        "by_subject": by_subject,
+    }
+
+
+def _assignment_policy_block(policy: ControlAssignmentPolicy) -> dict[str, Any]:
+    """Counts-only policy provenance — safe for the shareable artifact."""
+    return {
+        "active": policy.is_active,
+        "source": policy.source,
+        "default_mode": policy.default_mode,
+        "groups": policy.group_count,
+        "waivers": policy.waiver_count,
+    }
+
+
 def build_compliance_posture(
     configuration_ui: dict[str, Any] | None,
     project_plan: dict[str, Any] | None = None,
+    *,
+    data_root: Any = None,
 ) -> dict[str, Any]:
     payload = _as_dict(configuration_ui)
     plan = _as_dict(project_plan)
+
+    # 0.7.1b: local, file-based per-device control assignment + waivers.
+    # Missing file → all-applicable (byte-identical to the prior behaviour).
+    resolved_root = Path(data_root) if data_root is not None else (BASE_DIR / "data")
+    policy = load_control_assignments(resolved_root)
+    now = datetime.now(timezone.utc)
 
     if not payload.get("available"):
         return {
@@ -797,6 +1054,8 @@ def build_compliance_posture(
             "fleet_controls": [],
             "platform_controls": [],
             "subjects": [],
+            "compliance_overview": _empty_overview(),
+            "assignment_policy": _assignment_policy_block(policy),
             "privacy": {
                 "contains_secrets": False,
                 "contains_raw_configuration": False,
@@ -813,6 +1072,8 @@ def build_compliance_posture(
     subjects: list[dict[str, Any]] = []
     fleet_tls_verify = _as_dict(payload.get("fleet")).get("tls_verify")
 
+    baseline_ids = frozenset(LEGACY_CONTROL_IDS)
+
     for source_config_index, device in enumerate(devices):
         vendor_key = str(device.get("vendor_key") or "")
         if vendor_key == "check_point":
@@ -827,11 +1088,36 @@ def build_compliance_posture(
             continue
 
         has_current = _bool(device.get("connected")) and str(_as_dict(device.get("current_configuration")).get("status") or "") == "available"
-        controls = _subject_controls(device) if has_current else []
+
+        # In-process only: the real device name drives assignment matching and
+        # never enters the payload (subjects stay positional: cp-001, pan-001).
+        device_name = str(device.get("name") or "")
+        applicable_enrichment = {
+            str(c["control_id"]) for c in _ENRICHMENT_CONTROLS
+            if vendor_key in list(c.get("applicable_vendors") or [])
+        }
+        applicable_ids = baseline_ids | applicable_enrichment
+        resolved_ids = policy.resolve(device_name, vendor_key, applicable_ids)
+
+        controls = (
+            _subject_controls(device, policy, device_name, resolved_ids, now)
+            if has_current else []
+        )
+        extended_controls = (
+            _subject_extended_controls(device, policy, device_name, resolved_ids, now)
+            if has_current else []
+        )
+
+        all_rows = controls + extended_controls
+        evaluated_ids = {str(c.get("control_id") or "") for c in all_rows}
+        waived_ids = sorted(
+            str(c.get("control_id") or "") for c in all_rows if c.get("status") == "WAIVED"
+        )
+
         subject_status = "UNAVAILABLE" if not has_current else "PASS"
-        if has_current and any(control.get("status") == "FINDING" for control in controls):
+        if has_current and any(control.get("status") == "FINDING" for control in all_rows):
             subject_status = "FINDING"
-        elif has_current and any(control.get("status") == "UNKNOWN" for control in controls):
+        elif has_current and any(control.get("status") == "UNKNOWN" for control in all_rows):
             subject_status = "UNKNOWN"
 
         subjects.append({
@@ -843,6 +1129,13 @@ def build_compliance_posture(
             "availability_reason": None if has_current else "Current-state evidence was not collected for this subject.",
             "status": subject_status,
             "controls": controls,
+            "extended_controls": extended_controls,
+            "assignment": {
+                "assigned": sorted(resolved_ids),
+                "not_assigned": sorted(applicable_ids - resolved_ids),
+                "evaluated": sorted(evaluated_ids),
+                "waived": waived_ids,
+            },
         })
 
     fleet_controls = _fleet_controls(payload, link_map)
@@ -852,7 +1145,7 @@ def build_compliance_posture(
     for control in fleet_controls + platform_controls:
         status_counts[str(control.get("status") or "UNKNOWN")] += 1
     for subject in subjects:
-        for control in _as_list(subject.get("controls")):
+        for control in _as_list(subject.get("controls")) + _as_list(subject.get("extended_controls")):
             key = str(_as_dict(control).get("status") or "UNKNOWN")
             if key in status_counts:
                 status_counts[key] += 1
@@ -880,6 +1173,8 @@ def build_compliance_posture(
         "fleet_controls": fleet_controls,
         "platform_controls": platform_controls,
         "subjects": subjects,
+        "compliance_overview": _compliance_overview(subjects),
+        "assignment_policy": _assignment_policy_block(policy),
         "privacy": {
             "contains_secrets": False,
             "contains_raw_configuration": False,

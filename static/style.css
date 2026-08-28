@@ -3176,6 +3176,45 @@ html[data-theme="light"] {
     box-shadow: var(--shadow-sm);
 }
 
+.compliance-framework-readiness {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+    margin: 12px 0 4px;
+}
+
+.compliance-framework-card {
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+    padding: 12px;
+    background: var(--surface-muted, var(--surface));
+}
+
+.compliance-framework-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 6px;
+}
+
+.compliance-framework-head strong {
+    font-size: 13px;
+    letter-spacing: 0.02em;
+}
+
+.compliance-framework-meta {
+    font-size: 12px;
+    color: var(--text-muted, #6b7280);
+    line-height: 1.5;
+}
+
+@media (max-width: 900px) {
+    .compliance-framework-readiness {
+        grid-template-columns: 1fr;
+    }
+}
+
 .compliance-control-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));

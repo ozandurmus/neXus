@@ -10,29 +10,50 @@ If a section does not apply, write `n/a` — do not delete the heading.
 
 ## 1. Snapshot
 
-- Product baseline: `0.7.1a — Compliance Control Catalog & Framework Grouping` — AUTOMATED_VALIDATED
+- Product baseline: `0.7.1b — Compliance Assignment, Waivers & Coverage Roll-up` — AUTOMATED_VALIDATED
+  (`0.7.1a` catalog + `0.7.1b` assignment together close the 0.7.1 contract)
 - Engineering baseline: `DEV.1` complete; `DEV.2.1` (non-interactive runtime config) — AUTOMATED_VALIDATED
 - Date: 2026-08-29
 - `main` is pushed to `origin/main` (all merges below are on `origin`).
 - Test deps installed for Python 3.12 (`--user`): `pytest`, `pytest-xdist`,
   `lxml`, `paramiko`, `requests`. `py` on this machine defaults to 3.14 (no
-  deps) — use `py -V:3.12` or set `PY_PYTHON=3.12`.
-- Full suite: `py -m pytest -q -n auto --dist worksteal` → **464 passed,
+  deps) — use `py -V:3.12` or set `PY_PYTHON=3.12`. NOTE: `py -V:3.12 <script>`
+  currently mis-parses on this box (exit 103) — call the interpreter directly:
+  `C:\Users\Ozan\AppData\Local\Programs\Python\Python312\python.exe <script>`.
+  `py -V:3.12 -m pytest` is fine.
+- Full suite: `py -m pytest -q -n auto --dist worksteal` → **477 passed,
   3 skipped, 0 failed** (~35s). `--repository-privacy-check` → PASS / 0.
 
 ## 2. Recent builds (all on `main`)
 
+- **`0.7.1b` — Compliance Assignment, Waivers & Coverage Roll-up** — `+8`
+  enrichment compliance controls (`utils/compliance_evaluators_ext.py`),
+  evaluated from the *already-projected* current-configuration sections (no
+  collector / projection change). New `utils/control_assignment.py` (mirrors
+  `utils/inventory_exclusions.py`): file-based per-device control assignment
+  (`data/state/control_assignments.json`, schema v1, fail-closed, unknown
+  control id → error, **missing file → all-applicable / byte-identical to
+  prior**) with groups, `include`/`exclude`/`"*"`, device>group>default
+  precedence, and dated approved waivers → `WAIVED` cells. `compliance_posture`:
+  `subject["controls"]` stays the frozen 0.6.6B ten (now filtered by the
+  resolved set); enrichment in `subject["extended_controls"]`; per-subject
+  `assignment {assigned/not_assigned/evaluated/waived}`. Two additive top-level
+  keys — `compliance_overview` (monitored vs total, aligned % + severity-risk-
+  weighted %, `cells`, per-framework `COVERED`/`PARTIALLY_COVERED`/`UNCOVERED`,
+  `by_subject`) and `assignment_policy` (counts only). UI: Overview
+  `#overviewComplianceSummary` card, Compliance coverage + framework-readiness
+  band, enrichment control list, per-device assignment note. Device names / IPs
+  never enter the payload — matching is in-process only. `run_html_export(...,
+  data_root=None)` threaded from `runtime_paths.data_root`.
+  Contract: `docs/history/phase/0_7_1_COMPLIANCE_ASSIGNMENT.md` (§§ 8–9).
 - **`0.7.1a` — Compliance Control Catalog & Framework Grouping** — the ten
   deterministic compliance controls move into a versioned declarative catalog
-  (`utils/compliance_catalog.py`, `CATALOG_VERSION = "0.7.1a"`) *verbatim* (same
+  (`utils/compliance_catalog.py`, `CATALOG_VERSION = "0.7.1b"`) *verbatim* (same
   ids / areas / `evidence_fields` / evaluators / outcomes) with `severity`
   (5-level, weighted), `rationale` and real per-framework `frameworks` (CIS /
   PCI-DSS / BDDK membership + reference) added. `compliance_rulepack.BASELINE_CONTROLS`
   is now a derived 5-key view (`catalog_baseline_controls()`); the 0.6.6B rule
-  pack + frozen `rule_count == 10` tests are untouched. `compliance_posture._control`
-  emits additive `severity` / `rationale` / `frameworks`; `app.js` control card
-  gains a severity badge + real per-framework references. Purely additive payload.
-  Contract: `docs/builds/0_7_1_COMPLIANCE_ASSIGNMENT.md` (§ Build split, § 8).
+  pack + frozen `rule_count == 10` tests are untouched. Purely additive payload.
 - **`0.7.0` — Cryptographic Posture, Crypto-Agility & PQC Readiness** — opens
   the 0.7.x VERIFY track. `utils/crypto_facts.py` + `utils/crypto_rulepack.py`
   (`securityexpert.crypto.cp-pan @ 0.7.0`) + `utils/crypto_posture.py`: IKE/
@@ -71,20 +92,26 @@ If a section does not apply, write `n/a` — do not delete the heading.
 
 ## 3. Next work
 
-**`0.7.1b` — the next build. Contract already written and reviewed/approved
-(`docs/builds/0_7_1_COMPLIANCE_ASSIGNMENT.md` §2c–2e), not yet implemented.**
-File-based per-device assignment (`utils/control_assignment.py` +
-`data/state/control_assignments.json`, mirroring `inventory_exclusions.py`),
-minimal file waivers (`WAIVED` state), `compliance_overview` roll-up in the
-compliance payload, Overview `#overviewComplianceSummary` card, Compliance-module
-KPI band + framework-readiness cards + framework filter, ~12 enrichment controls
-+ a `password_policy` projection section, and `data_root` threaded to
-`build_compliance_posture` via `run_html_export` / `main.py`.
+**The 0.7.1 contract (a + b) is fully AUTOMATED_VALIDATED and merged.** No
+active build contract is open — the next build needs a fresh contract, written
+and put to the user for review first (their standing rule for meaningful builds).
 
-Then remaining `0.7.x` VERIFY-track features (`roadmap.json` track `0.7.x`):
-`compliance_engine`, `framework_mappings`, `evidence_reporting` further work.
-`crypto_agility_pqc` follow-ups (later): dynamic/signed packs, scoring, and the
-live `negotiated` crypto-evidence layer (needs a server).
+Candidate next steps, roughly in priority order:
+
+- **`0.7.2` — compliance follow-ups** (deferred out of 0.7.1b): the
+  `password_policy` projection section in `configuration/current_config_projection.py`
+  + its 3 controls; framework **filter chips** + inline "explain" expansion in
+  the Compliance UI; `banner` / `services` projection sections. These are
+  additive and low-risk; a short contract.
+- Remaining `0.7.x` VERIFY-track features (`roadmap.json` track `0.7.x`):
+  `compliance_engine`, `framework_mappings`, `evidence_reporting` — each its own
+  contract. `framework_mappings` and `compliance_engine` are now `in_progress`
+  in `feature_registry.json` (0.7.1a/b advanced them).
+- `crypto_agility_pqc` follow-ups: dynamic/signed packs, scoring, live
+  `negotiated` crypto-evidence layer (needs a server).
+- Standing doable-now: `immutable_store_permission` (P1 bug),
+  `html_render_performance` (P2), `inventory_exclusions_ui` /
+  `overview_device_lifecycle_enrichment` (P1 UI).
 
 Standing doable-now options if not starting the next 0.7.x contract:
 `immutable_store_permission` (P1 bug), `html_render_performance` (P2, profile
@@ -134,5 +161,12 @@ on the corporate laptop.
   3.14 without deps (backlog `dev_python_env_tooling_friction`).
 - The CAS / support-key path writes `data/` and `logs/` into the repo dir
   during a test run (`BASE_DIR/data`; `DEV.0.3C` deferred). Gitignored.
-- `0.7.1a` left `compliance_posture.build_compliance_posture` without a
-  `data_root` param — `0.7.1b` adds it (needed for the assignment policy).
+- `0.7.1b` compliance enrichment evaluators are conservative — several
+  (`ntp_authentication_enabled`, `ssh_management_v2_only`, `login_banner_present`)
+  will read `UNKNOWN` on real sparse projections until the relevant sections are
+  actually populated by a collection run. That is by design (never an inferred
+  PASS); `on_hardware_real_env_validation` will tell us which enrichment
+  controls have real evidence coverage.
+- `main.py` now passes `data_root=runtime_paths.data_root` to every
+  `run_html_export` call (6 sites); the diagnostic-only paths fall back to
+  `repository_root/"data"`.
