@@ -22,6 +22,12 @@ If a section does not apply, write `n/a` — do not delete the heading.
 
 ## 2. Recent builds (all on `main`)
 
+- **`clean_baseline_bootstrap`** — `main.py` `_require_bootstrap(mode,
+  output_root)`: `--render-only` / `--cp-config-probe` / `--cp-config-collect` /
+  `--only cp|vsx|pan-config` now exit 2 with an actionable "Missing X, produced
+  by <cmd>" block before any credential prompt or collector, instead of a deep
+  traceback. `--only all` unaffected. Also fixed RFC1918 literals in
+  `scripts/render_sample.py` that were failing the privacy gate on `main`.
 - **`0.6.6B`** — the ten deterministic CP/PAN compliance controls now execute
   through a static versioned in-repository rule pack
   (`utils/compliance_rulepack.py`, `pack_id securityexpert.baseline.cp-pan @

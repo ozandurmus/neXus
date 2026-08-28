@@ -301,6 +301,11 @@ def test_main_cp_config_probe_uses_shared_admission(tmp_path, monkeypatch):
     import configuration.checkpoint_config_probe as probe_module
 
     runtime_root = tmp_path / "runtime"
+    # clean_baseline_bootstrap: --cp-config-probe reuses prior inventory artifacts.
+    out = runtime_root / "output"
+    out.mkdir(parents=True)
+    for name in ("cp_telemetry.json", "cp.json", "vsx.json"):
+        (out / name).write_text("[]", encoding="utf-8")
     services = RuntimeCollectionServices()
     calls = []
 
