@@ -3,6 +3,23 @@
   "record_contract": "One structured record per build, newest first. Required: build, status, title, summary (<= 2 sentences). Optional: started, completed, track, movement, supersedes, evidence, risks_forward, docs{agreement,validation,handover} (repo-relative paths under docs/history/). Full detail lives in the linked doc; do not restate it here. Status vocabulary must stay within utils/project_plan.py STATUS_VALUES.",
   "builds": [
     {
+      "build": "0.7.1a",
+      "status": "automated_validated",
+      "started": "2026-08-29",
+      "completed": "2026-08-29",
+      "title": "Compliance Control Catalog & Framework Grouping",
+      "track": "0.7.x",
+      "movement": "IMPLEMENTATION",
+      "summary": "utils/compliance_catalog.py - the ten deterministic compliance controls become a versioned declarative catalog (id / rationale / severity / vendors / evidence contract / explicit per-framework CIS-PCI/DSS-BDDK membership + reference / lifecycle), verbatim ids / areas / evidence_fields / evaluators / outcomes. compliance_rulepack.BASELINE_CONTROLS is now a derived 5-key view (0.6.6B pack + tests unchanged). compliance_posture._control emits additive severity / rationale / frameworks; the app.js control card shows a severity badge and real per-framework references. Purely additive to the compliance payload; no engine, collector, network, CAS or UI-logic change. Split build - 0.7.1b adds assignment / waivers / roll-up / workbench spine / enrichment controls.",
+      "evidence": {
+        "automated": "py -m pytest -q: 464 passed, 3 skipped, 0 failed (Python 3.12); --render-only PASS; repository privacy gate PASS/0",
+        "real_env": "not required"
+      },
+      "docs": {
+        "agreement": "docs/history/phase/0_7_1_COMPLIANCE_ASSIGNMENT.md"
+      }
+    },
+    {
       "build": "0.7.0",
       "status": "automated_validated",
       "started": "2026-08-29",

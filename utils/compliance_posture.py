@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from utils.compliance_catalog import catalog_entry
 from utils.compliance_rulepack import (
     BASELINE_CONTROLS,
     DEFAULT_RULE_PACK,
@@ -134,6 +135,9 @@ def _control(
     future_evidence_requirement: str | None = None,
     roadmap_links: list[dict[str, Any]] | None = None,
     rule_pack: dict[str, Any] | None = None,
+    severity: str | None = None,
+    rationale: str | None = None,
+    frameworks: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     normalized_status = status if status in STATUS_VALUES else "UNKNOWN"
     return {
@@ -157,6 +161,10 @@ def _control(
         # 0.6.6B: rule-pack provenance for the ten baseline controls; None for
         # the separate platform/fleet posture controls.
         "rule_pack": rule_pack,
+        # 0.7.1a: catalog metadata (None for platform/fleet posture controls).
+        "severity": severity,
+        "rationale": rationale,
+        "frameworks": frameworks or [],
     }
 
 
@@ -244,6 +252,15 @@ def _is_enabled_text(text: str) -> bool:
     return any(token in normalized for token in ("enable", "enabled", "on", "true", "yes"))
 
 
+def _catalog_meta(control_id: str) -> dict[str, Any]:
+    entry = catalog_entry(control_id) or {}
+    return {
+        "severity": entry.get("severity"),
+        "rationale": entry.get("rationale"),
+        "frameworks": [dict(f) for f in entry.get("frameworks", [])],
+    }
+
+
 def _implemented_control(
     control: dict[str, Any],
     status: str,
@@ -264,6 +281,7 @@ def _implemented_control(
         evidence_plane="direct_actual",
         evidence_coverage=coverage,
         control_lifecycle="IMPLEMENTED",
+        **_catalog_meta(str(control.get("control_id") or "")),
     )
 
 
@@ -283,6 +301,7 @@ def _planned_evidence_gap(control: dict[str, Any]) -> dict[str, Any]:
         control_lifecycle="PLANNED_EVIDENCE_GAP",
         planned_reason=str(control.get("planned_reason") or "Normalized evidence adapter is not available."),
         future_evidence_requirement=str(control.get("future_evidence_requirement") or "normalized.adapter.contract"),
+        **_catalog_meta(str(control.get("control_id") or "")),
     )
 
 

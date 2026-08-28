@@ -10,18 +10,29 @@ If a section does not apply, write `n/a` — do not delete the heading.
 
 ## 1. Snapshot
 
-- Product baseline: `0.6.6B — Compliance Rule-Pack Transition Foundation` — AUTOMATED_VALIDATED
+- Product baseline: `0.7.1a — Compliance Control Catalog & Framework Grouping` — AUTOMATED_VALIDATED
 - Engineering baseline: `DEV.1` complete; `DEV.2.1` (non-interactive runtime config) — AUTOMATED_VALIDATED
-- Date: 2026-08-28
+- Date: 2026-08-29
 - `main` is pushed to `origin/main` (all merges below are on `origin`).
 - Test deps installed for Python 3.12 (`--user`): `pytest`, `pytest-xdist`,
   `lxml`, `paramiko`, `requests`. `py` on this machine defaults to 3.14 (no
   deps) — use `py -V:3.12` or set `PY_PYTHON=3.12`.
-- Full suite: `py -m pytest -q -n auto --dist worksteal` → **440 passed,
+- Full suite: `py -m pytest -q -n auto --dist worksteal` → **464 passed,
   3 skipped, 0 failed** (~35s). `--repository-privacy-check` → PASS / 0.
 
 ## 2. Recent builds (all on `main`)
 
+- **`0.7.1a` — Compliance Control Catalog & Framework Grouping** — the ten
+  deterministic compliance controls move into a versioned declarative catalog
+  (`utils/compliance_catalog.py`, `CATALOG_VERSION = "0.7.1a"`) *verbatim* (same
+  ids / areas / `evidence_fields` / evaluators / outcomes) with `severity`
+  (5-level, weighted), `rationale` and real per-framework `frameworks` (CIS /
+  PCI-DSS / BDDK membership + reference) added. `compliance_rulepack.BASELINE_CONTROLS`
+  is now a derived 5-key view (`catalog_baseline_controls()`); the 0.6.6B rule
+  pack + frozen `rule_count == 10` tests are untouched. `compliance_posture._control`
+  emits additive `severity` / `rationale` / `frameworks`; `app.js` control card
+  gains a severity badge + real per-framework references. Purely additive payload.
+  Contract: `docs/builds/0_7_1_COMPLIANCE_ASSIGNMENT.md` (§ Build split, § 8).
 - **`0.7.0` — Cryptographic Posture, Crypto-Agility & PQC Readiness** — opens
   the 0.7.x VERIFY track. `utils/crypto_facts.py` + `utils/crypto_rulepack.py`
   (`securityexpert.crypto.cp-pan @ 0.7.0`) + `utils/crypto_posture.py`: IKE/
@@ -60,11 +71,20 @@ If a section does not apply, write `n/a` — do not delete the heading.
 
 ## 3. Next work
 
-`0.7.0` (crypto posture) is done. Remaining `0.7.x` VERIFY-track features
-(`roadmap.json` track `0.7.x`, all `planned`): `compliance_engine`,
-`framework_mappings`, `evidence_reporting`. Each needs its own architecture
-contract. `crypto_agility_pqc` follow-ups (later): dynamic/signed packs,
-scoring, and the live `negotiated` crypto-evidence layer (needs a server).
+**`0.7.1b` — the next build. Contract already written and reviewed/approved
+(`docs/builds/0_7_1_COMPLIANCE_ASSIGNMENT.md` §2c–2e), not yet implemented.**
+File-based per-device assignment (`utils/control_assignment.py` +
+`data/state/control_assignments.json`, mirroring `inventory_exclusions.py`),
+minimal file waivers (`WAIVED` state), `compliance_overview` roll-up in the
+compliance payload, Overview `#overviewComplianceSummary` card, Compliance-module
+KPI band + framework-readiness cards + framework filter, ~12 enrichment controls
++ a `password_policy` projection section, and `data_root` threaded to
+`build_compliance_posture` via `run_html_export` / `main.py`.
+
+Then remaining `0.7.x` VERIFY-track features (`roadmap.json` track `0.7.x`):
+`compliance_engine`, `framework_mappings`, `evidence_reporting` further work.
+`crypto_agility_pqc` follow-ups (later): dynamic/signed packs, scoring, and the
+live `negotiated` crypto-evidence layer (needs a server).
 
 Standing doable-now options if not starting the next 0.7.x contract:
 `immutable_store_permission` (P1 bug), `html_render_performance` (P2, profile
@@ -114,5 +134,5 @@ on the corporate laptop.
   3.14 without deps (backlog `dev_python_env_tooling_friction`).
 - The CAS / support-key path writes `data/` and `logs/` into the repo dir
   during a test run (`BASE_DIR/data`; `DEV.0.3C` deferred). Gitignored.
-- `utils/compliance_posture._evaluate_timezone_control` is defined but not
-  wired into any control or dispatch (pre-existing dead code, left as-is).
+- `0.7.1a` left `compliance_posture.build_compliance_posture` without a
+  `data_root` param — `0.7.1b` adds it (needed for the assignment policy).
