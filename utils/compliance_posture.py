@@ -2,92 +2,22 @@ from __future__ import annotations
 
 from typing import Any
 
+from utils.compliance_rulepack import (
+    BASELINE_CONTROLS,
+    DEFAULT_RULE_PACK,
+    rule_pack_summary,
+)
 
-COMPLIANCE_SCHEMA_VERSION = "0.6.1B.1.6"
+
+COMPLIANCE_SCHEMA_VERSION = "0.6.6B"
 STATUS_VALUES = ("PASS", "FINDING", "UNKNOWN", "NOT_APPLICABLE", "PLANNED")
 
 
-VENDOR_NEUTRAL_CONTROLS: tuple[dict[str, Any], ...] = (
-    {
-        "control_id": "hostname_configured_non_default",
-        "title": "Hostname configured and non-default",
-        "control_area": "System identity baseline",
-        "cis_reference": "CIS 2.1.8",
-        "evidence_fields": ["current_configuration.sections.system.settings.Hostname"],
-    },
-    {
-        "control_id": "dns_primary_secondary_configured",
-        "title": "Primary and secondary DNS configured",
-        "control_area": "Name resolution resilience",
-        "cis_reference": "CIS 2.1.6",
-        "evidence_fields": [
-            "current_configuration.sections.dns.settings.Primary DNS",
-            "current_configuration.sections.dns.settings.Secondary DNS",
-        ],
-    },
-    {
-        "control_id": "ntp_primary_secondary_configured",
-        "title": "Primary and secondary NTP configured",
-        "control_area": "Time synchronization and secure operations",
-        "cis_reference": "CIS 2.3.1",
-        "evidence_fields": [
-            "current_configuration.sections.ntp.settings.Primary NTP Server",
-            "current_configuration.sections.ntp.settings.Secondary NTP Server",
-        ],
-    },
-    {
-        "control_id": "aaa_provider_presence",
-        "title": "AAA provider presence (RADIUS/TACACS/LDAP)",
-        "control_area": "Authentication policy strength",
-        "cis_reference": "CIS 2.5.4 / AAA server configured",
-        "evidence_fields": ["current_configuration.sections.authentication.settings"],
-    },
-    {
-        "control_id": "management_session_timeout_policy",
-        "title": "Management session timeout policy",
-        "control_area": "Administrative access restrictions",
-        "cis_reference": "CIS 2.5.2 / PanOS Idle Timeout",
-        "evidence_fields": [
-            "current_configuration.sections.management.settings.inactivity-timeout",
-            "current_configuration.sections.management.settings.idle-timeout",
-        ],
-    },
-    {
-        "control_id": "telnet_disabled",
-        "title": "Telnet disabled",
-        "control_area": "Administrative access restrictions",
-        "cis_reference": "CIS 2.1.9 / PanOS Telnet Disabled",
-        "evidence_fields": ["current_configuration.sections.management.settings.protocol_enablement"],
-    },
-    {
-        "control_id": "http_management_restricted",
-        "title": "HTTP management disabled or HTTPS 443-only",
-        "control_area": "Administrative access restrictions",
-        "cis_reference": "PanOS Permitted Protocols / CP management web hardening",
-        "evidence_fields": ["current_configuration.sections.management.settings.http_https_ports"],
-    },
-    {
-        "control_id": "snmp_v3_only",
-        "title": "SNMP v3 only",
-        "control_area": "Management-plane protocol hardening",
-        "cis_reference": "CIS 2.2.2 / PanOS SNMP Polling v3",
-        "evidence_fields": ["current_configuration.sections.snmp.settings.version"],
-    },
-    {
-        "control_id": "update_server_identity_verified",
-        "title": "Update server identity verification enabled",
-        "control_area": "Supply-chain and update-channel trust",
-        "cis_reference": "PanOS Verify Update Server Identity",
-        "evidence_fields": ["current_configuration.sections.system.settings.Update Server"],
-    },
-    {
-        "control_id": "management_audit_logging",
-        "title": "Management audit logging configured",
-        "control_area": "Administrative activity traceability",
-        "cis_reference": "CIS 2.6.1 / 2.6.2",
-        "evidence_fields": ["current_configuration.sections.logging.settings.audit"],
-    },
-)
+# 0.6.6B: the ten deterministic controls now live in utils.compliance_rulepack
+# as the single source of truth; subject-control evaluation is routed through
+# DEFAULT_RULE_PACK (see _subject_controls). This alias preserves the internal
+# symbol and its former shape.
+VENDOR_NEUTRAL_CONTROLS: tuple[dict[str, Any], ...] = BASELINE_CONTROLS
 
 
 def _as_dict(value: Any) -> dict[str, Any]:
@@ -203,6 +133,7 @@ def _control(
     planned_reason: str | None = None,
     future_evidence_requirement: str | None = None,
     roadmap_links: list[dict[str, Any]] | None = None,
+    rule_pack: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     normalized_status = status if status in STATUS_VALUES else "UNKNOWN"
     return {
@@ -223,6 +154,9 @@ def _control(
         "framework_mappings": _mapping(control_area, benchmark_reference if benchmark == "CIS" else None),
         "applicable_vendors": ["check_point", "palo_alto"],
         "roadmap_links": roadmap_links or [],
+        # 0.6.6B: rule-pack provenance for the ten baseline controls; None for
+        # the separate platform/fleet posture controls.
+        "rule_pack": rule_pack,
     }
 
 
@@ -615,7 +549,19 @@ def _subject_controls(device: dict[str, Any]) -> list[dict[str, Any]]:
     has_current = _bool(device.get("connected")) and str(_as_dict(device.get("current_configuration")).get("status") or "") == "available"
     if not has_current:
         return []
-    return [_evaluate_vendor_neutral_control(device, control) for control in VENDOR_NEUTRAL_CONTROLS]
+    # 0.6.6B: the ten deterministic controls execute through the default rule
+    # pack. Each rule carries the exact keys the evaluators read, so outcomes
+    # are unchanged; each result is stamped with rule-pack provenance.
+    results: list[dict[str, Any]] = []
+    for rule in DEFAULT_RULE_PACK["rules"]:
+        result = _evaluate_vendor_neutral_control(device, rule)
+        result["rule_pack"] = {
+            "pack_id": DEFAULT_RULE_PACK["pack_id"],
+            "pack_version": DEFAULT_RULE_PACK["pack_version"],
+            "rule_id": rule["rule_id"],
+        }
+        results.append(result)
+    return results
 
 
 def _platform_controls(
@@ -826,6 +772,7 @@ def build_compliance_posture(
             "available": False,
             "classification": "evidence_backed_control_area",
             "disclaimer": "Not a compliance certification or complete framework assessment.",
+            "rule_pack": rule_pack_summary(),
             "fleet": {
                 "subjects": 0,
                 "evaluated_subjects": 0,
@@ -912,6 +859,7 @@ def build_compliance_posture(
         "available": True,
         "classification": "evidence_backed_control_area",
         "disclaimer": "Not a compliance certification or complete framework assessment.",
+        "rule_pack": rule_pack_summary(),
         "fleet": {
             "subjects": len(subjects),
             "evaluated_subjects": len(evaluated_subjects),

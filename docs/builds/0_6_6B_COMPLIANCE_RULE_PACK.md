@@ -1,6 +1,10 @@
 # 0.6.6B — Compliance Rule-Pack Transition Foundation (implementation contract)
 
-**Status:** PLANNED (implementation contract) · **Movement:** IMPLEMENTATION
+**Status:** AUTOMATED_VALIDATED (2026-08-28) — `py -m pytest -q` **440 passed,
+3 skipped, 0 failed**; `--render-only` PASS; repository privacy gate PASS / 0.
+Real-environment validation not required (no network-facing behavior). Human
+`main` merge blocked pending review.
+**Movement:** IMPLEMENTATION
 **Architecture contract (frozen):** `docs/history/phase/PHASE0_6_6B_COMPLIANCE_RULE_PACK_TRANSITION.md`
 **Backlog:** `compliance_posture_rulepack_transition` (P1) · **Track:** 0.6.x
 
@@ -146,3 +150,38 @@ No real-environment validation required (no network-facing behavior).
 3. **Platform/fleet controls** get `rule_pack: None` (not routed through the
    pack — they are not "the ten"). Recommend **yes** — matches AC-2 scope and
    the frozen architecture ("the existing ten deterministic controls").
+
+All three accepted.
+
+---
+
+## 7. Implementation record (2026-08-28)
+
+- `utils/compliance_rulepack.py` (new) — `BASELINE_CONTROLS` (the 10, verbatim
+  from the former `compliance_posture.VENDOR_NEUTRAL_CONTROLS`),
+  `RULE_PACK_SCHEMA_VERSION="1.0"`, `DEFAULT_RULE_PACK_ID`,
+  `DEFAULT_RULE_PACK_VERSION="0.6.6B"`, `DEFAULT_RULE_PACK` (rules are a frozen
+  `tuple`), `rule_pack_summary()`.
+- `utils/compliance_posture.py` — `COMPLIANCE_SCHEMA_VERSION="0.6.6B"`; import
+  from `compliance_rulepack`; `VENDOR_NEUTRAL_CONTROLS = BASELINE_CONTROLS`
+  (alias); `_control(...)` gains `rule_pack` param + field; `_subject_controls`
+  iterates `DEFAULT_RULE_PACK["rules"]`, evaluates with the rule dict (which
+  carries the exact keys the evaluators read) and stamps
+  `result["rule_pack"] = {pack_id, pack_version, rule_id}`;
+  `build_compliance_posture` adds `"rule_pack": rule_pack_summary()` to both the
+  `available: false` and `available: true` returns.
+- `tests/test_phase0_6_6b_compliance_rulepack.py` (new) — 7 tests, AC-1…AC-6.
+- `tests/test_phase0_6_1b_1_5_compliance_posture.py` — `schema_version` →
+  `"0.6.6B"`; additive `rule_pack` assertions on payload and per subject control.
+
+Evidence: `pytest` 440/3/0 (was 433; +7). `_evaluate_vendor_neutral_control`
+called directly with the matching `BASELINE_CONTROLS` entry returns the same
+`status` as the routed subject control for every device in the synthetic
+fixtures (AC-2 proof by construction). `--render-only` renders
+`"rule_pack"` into `output/index.html` with no error. Privacy gate PASS / 0.
+`app.js` / `templates/index.html` unchanged (they read none of the new fields).
+
+State updated: `CURRENT_STATE.md`, `project/roadmap.json` (`current_build` →
+`0.6.6B`, `now_next`), `project/backlog.json`
+(`compliance_posture_rulepack_transition` → `automated_validated`),
+`project/build_history.json` (0.6.6B record).
