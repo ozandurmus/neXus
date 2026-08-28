@@ -35,13 +35,24 @@ If a section does not apply, write `n/a` — do not delete the heading.
   - Restructured `project/build_history.json` to v2 structured records with
     links to the archived agreement/validation docs; added
     `docs/history/INDEX.md`.
-- Deliberately preserved: all `.py` behavior, `project/*.json` schema keys read
-  by `utils/project_plan.py`, the reusable `.github/prompts/*`, and the test
-  baseline.
-- Evidence: `pytest` one-shot baseline unchanged; `--repository-privacy-check`
-  clean. (Fill exact numbers at close.)
-- `main` merge decision: **blocked** until the human reviews the restructure
-  branch `chore/ai-onboarding-restructure`.
+- Deliberately preserved: all `.py` behavior (zero `.py` files modified on the
+  branch), `project/*.json` schema keys read by `utils/project_plan.py`, the
+  reusable `.github/prompts/*`.
+- Evidence:
+  - `utils.project_plan.build_project_plan_payload()` loads the v2
+    `build_history.json` with `metadata_warnings: []`.
+  - Repo-wide grep for dangling references to relocated docs: clean.
+  - `git diff --name-only main...HEAD | grep '\.py$'` -> none.
+  - Full `pytest` suite: **not run on this machine** — `lxml` / `paramiko` /
+    `requests` / `pytest` from `requirements.txt` are not installed for either
+    interpreter (`py -V:3.14`, `py -V:3.12`). Per `docs/AI_DEVELOPMENT_PROTOCOL.md`
+    the environment was not modified. Run `py -m pytest -q > pytest_result.log 2>&1`
+    once deps are installed; expected baseline `227 passed / 2 xfail`.
+  - `--repository-privacy-check`: **not run** (blocked by the same missing deps
+    via `main.py` imports). Run before the Corporate-Git merge.
+- Branch: `chore/ai-onboarding-restructure` (5 commits). No push.
+- `main` merge decision: **blocked** until the human reviews the branch and the
+  pytest + privacy gate run green in a deps-installed environment.
 
 ## 3. Next session — exact starting point
 
