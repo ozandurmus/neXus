@@ -154,7 +154,10 @@ Do not run expensive real-device collection for UI-only or documentation work.
 
 Use one-shot, file-backed local test runs to prevent repeated token/credit burn:
 
-- Run once: `py -m pytest -q > pytest_result.log 2>&1`
+- Full suite (parallel): `py -m pytest -q -n auto --dist worksteal > pytest_result.log 2>&1`
+  (requires `pip install -r requirements-dev.txt`; ~44s on 16 cores vs ~110s
+  serial). `scripts/pytest_one_shot.ps1` does this by default; pass `-Serial`
+  (or `-n0`) to run serially when debugging a single failure.
 - Read evidence from file (prefer Unicode read on Windows):
   `Get-Content pytest_result.log -Encoding Unicode -Tail 40`
 - Re-run full suite only when source changes after that evidence.
