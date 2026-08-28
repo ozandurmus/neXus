@@ -143,6 +143,8 @@ def _write_json(path: Path, value):
 def test_only_cp_runs_non_vsx_scope_then_merge_and_render(monkeypatch, tmp_path):
     import sys
     import main as main_module
+    # DEV.2.1: _build_runtime_config prompts only when stdin is a TTY.
+    monkeypatch.setattr(main_module.sys.stdin, "isatty", lambda: True)
     import checkpoint.cp_runner as cp_runner
     import checkpoint.vsx_runner as vsx_runner
     import panorama.panorama_runtime_runner as pan_runner
@@ -193,6 +195,8 @@ def test_only_cp_runs_non_vsx_scope_then_merge_and_render(monkeypatch, tmp_path)
 def test_only_vsx_runs_vsx_parser_then_merge_and_render_without_cp(monkeypatch, tmp_path):
     import sys
     import main as main_module
+    # DEV.2.1: _build_runtime_config prompts only when stdin is a TTY.
+    monkeypatch.setattr(main_module.sys.stdin, "isatty", lambda: True)
     import checkpoint.cp_runner as cp_runner
     import checkpoint.vsx_runner as vsx_runner
     import checkpoint.vsx_parser as vsx_parser
