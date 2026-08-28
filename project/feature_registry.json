@@ -670,7 +670,7 @@
     {
       "id": "framework_mappings",
       "title": "Framework Mappings",
-      "status": "planned",
+      "status": "in_progress",
       "target": "0.7.x",
       "weight": 5,
       "early_foundation": "CIS/PCI-DSS/BDDK control-area mappings and benchmark references delivered in 0.6.1B.1.5/1.6 as evidence-bounded area mappings. Formal framework mapping with full rule coverage and governance acceptance is the 0.7.x gate.",
@@ -680,7 +680,7 @@
         {
           "id": "mapping",
           "label": "Control mappings",
-          "state": "pending",
+          "state": "done",
           "weight": 1
         }
       ]

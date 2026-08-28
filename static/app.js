@@ -3840,6 +3840,9 @@ function complianceControlCard(control, options = {}) {
     const compact = options.compact === true;
     const status = safe(control?.status || "UNKNOWN").toUpperCase();
     const mappings = control?.framework_mappings || {};
+    const severity = safe(control?.severity || "").toLowerCase();
+    const rationale = safe(control?.rationale || "");
+    const frameworks = Array.isArray(control?.frameworks) ? control.frameworks : [];
     const roadmap = Array.isArray(control?.roadmap_links) ? control.roadmap_links : [];
     const evidenceFields = Array.isArray(control?.evidence_fields) ? control.evidence_fields.filter(Boolean) : [];
     const benchmark = safe(control?.benchmark);
@@ -3859,9 +3862,13 @@ function complianceControlCard(control, options = {}) {
                     ${benchmarkLabel ? `<div class="compliance-control-benchmark">${escapeHtml(benchmarkLabel)}</div>` : ""}
                     ${showControlId ? `<div class="compliance-control-id">${escapeHtml(control?.control_id || "")}</div>` : ""}
                 </div>
-                ${statusPill(status, complianceStatusTone(status))}
+                <div class="compliance-control-pills">
+                    ${severity ? `<span class="statuspill ${severity === "critical" || severity === "high" ? "danger" : (severity === "medium" ? "warning" : "neutral")}">${escapeHtml(severity)}</span>` : ""}
+                    ${statusPill(status, complianceStatusTone(status))}
+                </div>
             </div>
             <p>${escapeHtml(control?.evidence_summary || "No summary available.")}</p>
+            ${rationale ? `<p class="detail-subtitle">${escapeHtml(rationale)}</p>` : ""}
             ${showTraceability ? `<div class="compliance-traceability-grid">
                 ${scope ? `<div><strong>Scope</strong><span>${escapeHtml(scope)}</span></div>` : ""}
                 ${lifecycle ? `<div><strong>Lifecycle</strong><span>${escapeHtml(lifecycle.replaceAll("_", " "))}</span></div>` : ""}
@@ -3870,7 +3877,14 @@ function complianceControlCard(control, options = {}) {
             </div>` : ""}
             ${showTraceability && evidenceFields.length ? `<div class="compliance-evidence-fields"><strong>Evidence checked</strong><span>${escapeHtml(evidenceFields.join(", "))}</span></div>` : ""}
             ${status === "PLANNED" && plannedReason ? `<div class="compliance-planned-note"><strong>Evidence gap</strong><span>${escapeHtml(plannedReason)}</span>${futureEvidence ? `<span class="future-evidence">Required: ${escapeHtml(futureEvidence)}</span>` : ""}</div>` : ""}
-            ${showFramework ? `<div class="compliance-mapping-grid">
+            ${showFramework ? (frameworks.length ? `<div class="compliance-mapping-grid">
+                ${frameworks.map(f => {
+                    const name = safe(f.framework || "").toUpperCase();
+                    const ref = safe(f.reference || "");
+                    const applies = f.applies !== false;
+                    return `<div><strong>${escapeHtml(name)}</strong><span>${applies ? escapeHtml(ref || "mapped") : "not applicable"}</span><small>${applies ? "evidence-area" : "no equivalent"}</small></div>`;
+                }).join("")}
+            </div>` : `<div class="compliance-mapping-grid">
                 ${["cis", "pci_dss", "bddk"].map(key => {
                     const row = mappings[key] || {};
                     const mappingType = safe(row.mapping_type || "").replaceAll("_", " ");
@@ -3879,7 +3893,7 @@ function complianceControlCard(control, options = {}) {
                     const line = ref ? `${area} (${ref})` : area;
                     return `<div><strong>${escapeHtml(key.toUpperCase())}</strong><span>${escapeHtml(line)}</span>${mappingType ? `<small>${escapeHtml(mappingType)}</small>` : ""}</div>`;
                 }).join("")}
-            </div>` : ""}
+            </div>`) : ""}
             ${showRoadmap && roadmap.length ? `<div class="compliance-roadmap-links">${roadmap.map(item => `<button type="button" class="compliance-roadmap-link" data-open-plan="${escapeHtml(item.feature_id || "")}">${escapeHtml(item.title || item.feature_id || "roadmap item")}</button>`).join("")}</div>` : ""}
         </article>
     `;

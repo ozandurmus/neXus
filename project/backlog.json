@@ -411,10 +411,10 @@
       "id": "compliance_control_enrichment",
       "category": "Compliance / Architecture",
       "title": "0.7.1 - Control enrichment, framework grouping & file-based assignment",
-      "status": "planned",
+      "status": "in_progress",
       "priority": "P1",
       "target": "0.7.1",
-      "note": "The now-buildable spine from docs/design/COMPLIANCE_ASSIGNMENT_AND_FRAMEWORKS.md: grow the control catalog to a versioned declarative model (id, rationale, severity, vendors, evidence contract, per-framework CIS/PCI-DSS/BDDK membership + reference, lifecycle) with ~20-28 deterministic controls (small projection extension for password_policy / banner / services); real framework grouping + rollup (covered / monitored / aligned / PARTIALLY_COVERED per framework); data/state/control_assignments.json RuntimeRoot policy (schema-versioned, fail-closed, like inventory_exclusions) with groups + per-device/group include/exclude and file-based waivers {control,subject,reason,approver,expires} honoured as WAIVED; engine (_subject_controls) filters per device; additive compliance_overview roll-up (total / monitored / subjects / aligned_percent, by_framework, by_subject) read by the Overview module; read-only Compliance workbench spine (KPI band + framework cards + control list + explain-this-finding panel). No server. Advances compliance_engine / framework_mappings / evidence_reporting."
+      "note": "Split into 0.7.1a (done) + 0.7.1b. 0.7.1a AUTOMATED_VALIDATED 2026-08-29: utils/compliance_catalog.py - the ten controls as a versioned declarative catalog (id / rationale / severity 5-level / vendors / evidence contract / per-framework CIS-PCI/DSS-BDDK membership + reference / lifecycle), verbatim ids/areas/evidence_fields/evaluators/outcomes; compliance_rulepack.BASELINE_CONTROLS derives from it (0.6.6B untouched); compliance_posture._control adds additive severity / rationale / frameworks; app.js control card gains a severity badge + real per-framework references. py -m pytest -q: 464 passed, 3 skipped, 0 failed (Python 3.12); --render-only PASS; repository privacy gate PASS/0. 0.7.1b (next): file-based assignment (data/state/control_assignments.json) + waivers + compliance_overview roll-up + Overview card + KPI/framework-filter workbench spine + the ~12 enrichment controls + password_policy projection. Contract: docs/history/phase/0_7_1_COMPLIANCE_ASSIGNMENT.md."
     },
     {
       "id": "compliance_assignment_ui_and_registry",
