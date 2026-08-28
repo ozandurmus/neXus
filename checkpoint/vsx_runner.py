@@ -163,7 +163,7 @@ def discover_vsx(ssh):
 
         name, ip = parts[0], parts[1]
 
-        # 🔥 sadece gerçek member
+        # real cluster members only (NAME-1 / NAME-2)
         if re.search(r"-[12]$", name):
             gws.append({"name": name, "ip": ip})
 
@@ -198,7 +198,7 @@ def worker(gw, cfg):
         sh = ssh.invoke_shell()
         time.sleep(1)
 
-        # 🔥 nested ssh
+        # nested ssh: MDS shell -> gateway
         out = run_cmd(sh, f"ssh {cfg.auth.principal}@{ip}", 2)
 
         if "yes/no" in out:
@@ -207,7 +207,7 @@ def worker(gw, cfg):
         if "assword" in out:
             run_cmd(sh, cfg.auth.secret)
 
-        # 🔥 ACTIVE kontrol
+        # active-member check: skip standby
         ha = run_cmd(sh, "cphaprob stat", 2)
         if "Standby" in ha:
             print(f"{name} SKIPPED (standby)")
