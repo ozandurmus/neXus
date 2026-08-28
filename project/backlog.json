@@ -20,6 +20,15 @@
       "note": "Contract frozen 2026-08-27 in DEPLOY_1_CONTRACT_FREEZE_HANDOVER_2026_08_27.md. No runtime behavior changes before server arrival (~1 week). Mandatory gates on arrival: OIDC viewer boundary, evidence egress policy, CP strict host-key R2 validation, PAN TLS corporate CA validation."
     },
     {
+      "id": "on_hardware_real_env_validation",
+      "category": "Safety / Validation",
+      "title": "On-hardware validation of the 0.6.3 -> 0.6.6B + DEV.2.1 line",
+      "status": "planned",
+      "priority": "P0",
+      "target": "next corporate-laptop session",
+      "note": "BLOCKED: user does not currently have the corporate laptop (no server either). Automated tests are green but nothing since the 0.6.1x real-env gates has been exercised end to end (0.6.3 history UX, 0.6.4 CP SSH trust, 0.6.5 PAN TLS trust, 0.6.6A parser, 0.6.6B rule pack, DEV.2.1 non-interactive config). On laptop availability: (1) py -V:3.12 scripts/render_sample.py, open index.html, confirm the UI shell + Network Inventory / Overview / Project Plan render; (2) with reachability to an MDS / Panorama plus credentials, one py .\\main.py full checkpoint (or --only cp / --only pan-config / --cp-config-collect) confirming collection -> merge -> snapshot -> HTML -> support bundle, that 0.6.6B rule_pack fields populate in the Compliance module, and that DEV.2.1 env-var / _FILE credential+endpoint sourcing runs non-interactively. Value-free SAFE SUMMARY evidence only; no new commands or scope. Feeds DEPLOY.1 readiness."
+    },
+    {
       "id": "cp_management_alignment",
       "category": "Alignment / Architecture",
       "title": "0.6.1D — Check Point Management Intent ↔ Actual Alignment",
