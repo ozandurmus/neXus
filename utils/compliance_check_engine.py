@@ -17,6 +17,7 @@ from utils.compliance_check_pack import (
     CheckStep,
     ComplianceCheck,
     ParsedSelector,
+    is_inventory_collection_selector,
     parse_selector,  # re-exported for callers that only import the engine
 )
 
@@ -215,6 +216,16 @@ def _redact_observed(value: Any) -> str:
     return f"{len(vals)} value(s): {head}{more}"
 
 
+def _redact_count_only(value: Any) -> str:
+    """Count-only view for the merged-inventory collections — the rows carry
+    network identity (interface addresses / names, route targets) so not a
+    single value is echoed, only how many matched (CE.1 fast-follow)."""
+    if value is None:
+        return "no matching evidence"
+    n = len(value) if isinstance(value, list) else (0 if value == "" else 1)
+    return f"{n} inventory row(s)"
+
+
 def evaluate_check(
     subject_evidence: dict[str, Any],
     check: ComplianceCheck,
@@ -242,10 +253,15 @@ def evaluate_check(
         if result is None:
             any_missing = True
         step_results.append(result)
+        observed = (
+            _redact_count_only(selected)
+            if is_inventory_collection_selector(step.selector)
+            else _redact_observed(selected)
+        )
         step_details.append({
             "step": str(index),
             "expected": _describe_expected(step),
-            "observed": _redact_observed(selected),
+            "observed": observed,
         })
 
     conclusive = [r for r in step_results if r is not None]

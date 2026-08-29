@@ -96,6 +96,10 @@ def run_html_export(
         configuration_ui, project_plan,
         data_root=compliance_data_root,
         crypto_facts_by_subject=crypto_facts_by_subject,
+        # CE.1 fast-follow — the merged inventory already loaded above, so a user
+        # check can assert over unified.interfaces / unified.routes. Also covers
+        # --render-only (it rebuilds from the same unified.json).
+        unified_inventory=data if isinstance(data, list) else None,
     )
     # 0.6.1C Phase 3: additive discovery/capability/coordinator observability.
     # Callers that have not yet wired Phase 4 collector integration may omit
