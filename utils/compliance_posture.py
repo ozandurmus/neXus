@@ -960,9 +960,77 @@ def _check_pack_block(pack: CompliancePack) -> dict[str, Any]:
     }
 
 
+def _norm_identity(value: Any) -> str:
+    return str(value or "").strip().lower()
+
+
+# CE.1 fast-follow: which unified.json `source` values a config subject of a
+# given vendor may join to — keeps a coincidental cross-vendor name collision
+# from pulling the wrong inventory.
+_VENDOR_UNIFIED_SOURCES = {
+    "check_point": frozenset({"cp", "vsx"}),
+    "palo_alto": frozenset({"panorama"}),
+}
+
+
+def _index_unified_inventory(
+    rows: list[dict[str, Any]] | None,
+) -> dict[str, list[dict[str, Any]]]:
+    """Index the merged inventory list by normalised device identity (and PAN
+    serial). One identity can map to several rows (VSX VSIDs, per-vsys records)."""
+    index: dict[str, list[dict[str, Any]]] = {}
+    for row in _as_list(rows):
+        row = _as_dict(row)
+        for key in (_norm_identity(row.get("device")), _norm_identity(row.get("serial"))):
+            if key:
+                index.setdefault(key, []).append(row)
+    return index
+
+
+def _match_unified_rows(
+    index: dict[str, list[dict[str, Any]]],
+    device: dict[str, Any],
+    vendor_key: str,
+) -> list[dict[str, Any]]:
+    """Exact (normalised) identity join, tolerant of which config-UI field
+    carries the name. Zero matches → ``[]`` → the namespace stays unresolved."""
+    if not index:
+        return []
+    allowed_sources = _VENDOR_UNIFIED_SOURCES.get(vendor_key, frozenset())
+    seen: set[int] = set()
+    matched: list[dict[str, Any]] = []
+    candidates = {
+        _norm_identity(device.get("device_name")),
+        _norm_identity(device.get("name")),
+        _norm_identity(device.get("id")),
+    }
+    candidates.discard("")
+    for key in candidates:
+        for row in index.get(key, []):
+            if allowed_sources and _norm_identity(row.get("source")) not in allowed_sources:
+                continue
+            if id(row) not in seen:
+                seen.add(id(row))
+                matched.append(row)
+    return matched
+
+
+def _inventory_collection(rows: list[dict[str, Any]], key: str) -> list[Any] | None:
+    """Union of one merged-inventory collection across the matched rows. ``None``
+    (no subject match at all) is distinct from ``[]`` (matched, none present) —
+    the engine treats ``None`` as no-evidence, ``[]`` as a judged count of 0."""
+    if not rows:
+        return None
+    out: list[Any] = []
+    for row in rows:
+        out.extend(_as_list(_as_dict(row).get(key)))
+    return out
+
+
 def _subject_evidence(
     device: dict[str, Any],
     crypto_facts: dict[str, Any] | None = None,
+    unified_rows: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """The read-only evidence namespaces a user check can assert over (D4).
 
@@ -971,7 +1039,9 @@ def _subject_evidence(
     already-normalised, privacy-reviewed 0.7.0 fact set for this subject
     (``ike_crypto_profiles`` / ``ipsec_crypto_profiles`` / ``ike_gateways`` /
     ``tls_service_profiles`` / ``certificates``) — never key material, PSK or
-    certificate body.
+    certificate body. ``unified_rows`` is the matched merged-inventory record(s)
+    for this subject (CE.1 fast-follow); when unmatched the ``interfaces`` /
+    ``routes`` namespaces stay ``None`` → any check using them is on_no_evidence.
     """
     return {
         "current_configuration": _as_dict(device.get("current_configuration")),
@@ -984,8 +1054,8 @@ def _subject_evidence(
                 "ha_role": device.get("ha_role"),
                 "entity_type": device.get("entity_type"),
             },
-            "interfaces": [],   # namespace reserved — merged-inventory wire is a later step
-            "routes": [],
+            "interfaces": _inventory_collection(unified_rows, "interfaces"),
+            "routes": _inventory_collection(unified_rows, "routes"),
         },
         "alignment": {
             "results": _as_list(_as_dict(device.get("alignment")).get("findings")),
@@ -1002,6 +1072,7 @@ def _subject_user_checks(
     resolved_ids: frozenset[str],
     now: datetime,
     crypto_facts: dict[str, Any] | None = None,
+    unified_rows: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     """0.7.3 (CE.1) — evaluate the user pack's checks for one subject.
 
@@ -1014,7 +1085,7 @@ def _subject_user_checks(
     vendor_key = str(device.get("vendor_key") or "")
     platform_family = str(device.get("platform_family") or "")
     entity_type = str(device.get("entity_type") or "")
-    evidence = _subject_evidence(device, crypto_facts)
+    evidence = _subject_evidence(device, crypto_facts, unified_rows)
     results: list[dict[str, Any]] = []
     for check in pack.checks:
         if not check.applies_to_subject(
@@ -1286,10 +1357,16 @@ def build_compliance_posture(
     *,
     data_root: Any = None,
     crypto_facts_by_subject: dict[str, dict[str, Any]] | None = None,
+    unified_inventory: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     payload = _as_dict(configuration_ui)
     plan = _as_dict(project_plan)
     crypto_by_subject = _as_dict(crypto_facts_by_subject)
+    # CE.1 fast-follow: the merged inventory (utils/merge.py → unified.json), keyed
+    # by device identity, so a user check can assert over unified.interfaces /
+    # unified.routes. Omitted (render paths that pre-date the wire) → the
+    # namespaces stay unresolved and any check using them is on_no_evidence.
+    inventory_index = _index_unified_inventory(unified_inventory)
 
     # 0.7.1b: local, file-based per-device control assignment + waivers.
     # Missing file → all-applicable (byte-identical to the prior behaviour).
@@ -1382,11 +1459,13 @@ def build_compliance_posture(
             _subject_controls(device, policy, device_name, resolved_ids, now)
             if has_current else []
         )
+        subject_unified_rows = _match_unified_rows(inventory_index, device, vendor_key)
         extended_controls = (
             _subject_extended_controls(device, policy, device_name, resolved_ids, now)
             + _subject_user_checks(
                 device, check_pack, policy, device_name, resolved_ids, now,
                 crypto_by_subject.get(subject_id),
+                subject_unified_rows,
             )
             if has_current else []
         )

@@ -14,10 +14,20 @@ If a section does not apply, write `n/a` — do not delete the heading.
   AUTOMATED_VALIDATED (2026-08-29).
 - Engineering baseline: `DEV.1` complete; `DEV.2.1` — AUTOMATED_VALIDATED.
 - Date: 2026-08-29
-- **Everything from this session is on `origin/main`** — HEAD `684adad`. Nothing
-  pending; working tree clean. (`gh` CLI is not installed and the GitHub MCP
-  token cannot open PRs — each build was committed on a feature branch, merged
-  `--no-ff` locally, and pushed.)
+- `origin/main` is at `088c369` (docs follow-up to the `684adad` 0.7.4 merge).
+- **This session's work is on branch `feature/ce1-unified-inventory-wire`, not yet
+  committed** — the CE.1 `unified.interfaces` / `unified.routes` fast-follow (§2).
+  Automated-validated; awaiting the user's go-ahead to commit + land on `main`.
+- **GitHub tooling (2026-08-29):** `gh` CLI is installed
+  (`C:\Program Files\GitHub CLI\gh.exe`, v2.98.0) and authenticated as
+  `ozandurmus` — token scopes `gist, read:org, repo, workflow` (`repo` covers
+  push / PR create / merge). `gh auth setup-git` has wired git's credential
+  helper for `github.com`, so `git push` / `fetch` against
+  `https://github.com/ozandurmus/neXus.git` need no prompt. `gh` was added to the
+  User PATH; a shell started before that still needs the full exe path. Corporate
+  Git push/merge stays human-initiated (`CURRENT_STATE.md` standing priority 4) —
+  a real `gh pr create` is now an option in place of a local `--no-ff` merge,
+  under the same human go-ahead.
   - `5ca70e4` — `0.7.2` + `0.7.3` + `docs/design/COMPLIANCE_CHECK_ENGINE.md`
     (CE.1→CE.4, decisions D1–D16 resolved)
   - `38b6a74` — CE.1 crypto-source wire
@@ -28,14 +38,38 @@ If a section does not apply, write `n/a` — do not delete the heading.
   `py -V:3.12 <script>` mis-parses on this box (exit 103); use
   `py -V:3.12 -m pytest` or the 3.12 interpreter directly at
   `%LOCALAPPDATA%\Programs\Python\Python312\python.exe`.
-- Full suite: `py -m pytest -q -n auto --dist worksteal` → **523 passed,
-  3 skipped, 0 failed** (~35s).
+- Full suite: `py -m pytest -q -n auto --dist worksteal` → **529 passed,
+  3 skipped, 0 failed** (~35s) — 523 baseline + 6 (fast-follow #2).
 - Repository privacy gate: **PASS / 0 on a clean checkout**. Locally it flags the
   gitignored `data/` + `logs/` + `data/.support_hmac.key` a test run creates —
   delete them before running the gate.
 
 ## 2. Recent builds (this session)
 
+- **CE.1 fast-follow #2 — `unified.interfaces` / `unified.routes` wire**
+  (branch `feature/ce1-unified-inventory-wire`, **uncommitted**). Record:
+  `docs/history/phase/0_7_3_COMPLIANCE_CHECK_ENGINE.md` §12. Additive; no server;
+  no collector; no device command; `COMPLIANCE_SCHEMA_VERSION` unchanged; no
+  product-version bump.
+  - `utils/compliance_posture.py` — `build_compliance_posture(..., *,
+    unified_inventory=None)`; `_index_unified_inventory` (identity + PAN serial
+    → rows), `_match_unified_rows` (subject `device_name`/`name`/`id`,
+    normalised, **vendor-scoped**: `check_point`→`cp`/`vsx`, `palo_alto`→
+    `panorama`; fan-in unioned), `_inventory_collection` (`None` when unmatched
+    vs `[]` when matched-empty). `_subject_evidence` / `_subject_user_checks`
+    take `unified_rows`.
+  - `utils/compliance_check_pack.py` — `is_inventory_collection_selector`;
+    `_step` rejects any op other than `present` / `absent` / `count_gte` /
+    `count_lte` on `unified.interfaces` / `unified.routes` (fail-closed).
+  - `utils/compliance_check_engine.py` — `_redact_count_only`; `evaluate_check`
+    renders a count-only `observed` (`"N inventory row(s)"`) for those two
+    namespaces so no interface address / route target enters the payload.
+  - `utils/html_export.py` — threads the already-loaded `unified.json` list
+    (`--render-only` covered).
+  - `tests/test_phase0_7_3_compliance_check_engine.py` — +6.
+  - Behaviour delta: an unmatched subject's `unified.interfaces` / `.routes`
+    now → `UNKNOWN` (was a definite False on the old `[]` placeholder). No
+    shipped pack used them.
 - **`0.7.4` — framework_mappings: requirement-level coverage** (on `main`,
   `684adad`). Contract `docs/history/phase/0_7_4_FRAMEWORK_REQUIREMENTS.md` §10;
   design `docs/design/COMPLIANCE_ASSIGNMENT_AND_FRAMEWORKS.md` §9. Additive; no
@@ -82,13 +116,10 @@ If a section does not apply, write `n/a` — do not delete the heading.
 
 ## 3. Next work
 
-**No active build contract is open.** A new build needs a fresh contract, put to
-the user for review first.
+**No active build contract is open** (the CE.1 fast-follow #2 in §2 is
+implemented + automated-validated, pending commit/merge). A new build needs a
+fresh contract, put to the user for review first.
 
-- **CE.1 fast-follow (small, `Sonnet 5 normal`):** wire
-  `unified.interfaces` / `unified.routes` — the namespaces parse and resolve
-  empty; `build_compliance_posture` needs the merged inventory row threaded
-  (non-breaking optional param, like `crypto_facts_by_subject`).
 - **Point-in-time / trend layer for `compliance_overview`** (`Sonnet 5 extended
   thinking` for the contract) — read the existing config history so a past run's
   posture is reproducible; the payload was designed so a `history[]` is additive
@@ -120,9 +151,12 @@ Backlog `on_hardware_real_env_validation` (P0), laptop-blocked.
 ## 4. Open risks / debt carried forward
 
 - CP device-interaction-safety audit remains P0 — hard prerequisite for CE.2.
-- `unified.interfaces` / `unified.routes` selector namespaces parse but resolve
-  empty in the check engine — wire when `build_compliance_posture` gets the
-  merged inventory row.
+- `unified.interfaces` / `unified.routes` now resolve, but the subject→inventory
+  join is an exact normalised-identity match on the config-UI device name — if a
+  real run's config-subject name and `unified.json` `device` string diverge, the
+  namespace stays `UNKNOWN` (fail-closed, not wrong). VSX cluster-name matching
+  and any per-VSID scoping are not attempted; confirm the join lands on the
+  first real-env run before authoring interface/route packs.
 - The regex safety linter (`_REDOS_RE` + quantifier count + `.*.*`) is
   best-effort; the eval-time timeout is the real backstop.
 - CP `show configuration` sanitized artifact redacts the banner body (0.7.2
@@ -138,26 +172,43 @@ Backlog `on_hardware_real_env_validation` (P0), laptop-blocked.
 
 ## 5. Exact next action
 
-**Fresh chat**: cold-start via `AI_START_HERE.md` → this file → `CURRENT_STATE.md`
-→ `project/roadmap.json` + `project/backlog.json`; pick one §3 objective; write a
-contract for user review **before** implementing.
+1. On the user's go-ahead, commit `feature/ce1-unified-inventory-wire`
+   (changed: `utils/compliance_posture.py`, `utils/compliance_check_pack.py`,
+   `utils/compliance_check_engine.py`, `utils/html_export.py`,
+   `tests/test_phase0_7_3_compliance_check_engine.py`,
+   `docs/history/phase/0_7_3_COMPLIANCE_CHECK_ENGINE.md`, `CURRENT_STATE.md`,
+   `project/backlog.json`, `AI_HANDOVER.md`), then `git merge --no-ff` into
+   `main` + `git push`, **or** `gh pr create` → `gh pr merge`.
+2. Then **fresh chat**: cold-start via `AI_START_HERE.md` → this file →
+   `CURRENT_STATE.md` → `project/roadmap.json` + `project/backlog.json`; pick one
+   §3 objective; write a contract for user review **before** implementing.
 
 ## 6. main merge decision + Git dispatch
 
-Nothing outstanding — `origin/main` at `684adad` holds this whole session.
-Future builds: branch off `main`, commit, `git merge --no-ff`, `git push origin
-main` (`gh` unavailable, GitHub MCP token lacks PR scope).
+- **`feature/ce1-unified-inventory-wire` → `main`: approved on evidence, pending
+  the user's explicit go-ahead to run it** (standing priority 4 keeps the push
+  human-initiated). Evidence: full suite 529p/3s/0f; privacy gate PASS/0 on a
+  clean tree; `render_sample.py` exit 0. Not yet committed.
+- Dispatch once cleared (branch already exists, changes staged by `git add -A`):
+  `git -C C:\Users\Ozan\Code\neXus commit` → `git checkout main` →
+  `git merge --no-ff feature/ce1-unified-inventory-wire` → `git push origin main`.
+  Or PR: `gh pr create --fill --base main` → `gh pr merge --merge` (`gh` is
+  installed + `repo`-scoped, see §1).
+- Delete the gitignored `data/` + `logs/` a test run leaves before re-checking
+  the privacy gate.
 
 ## 7. Next movement / model
 
-- `ARCHITECTURE` (**Sonnet 5 extended thinking**) for a new 0.7.x contract
-  (point-in-time / trend layer), or `IMPLEMENTATION` (**Sonnet 5 normal**) for
-  the small `unified.interfaces` / `unified.routes` check-engine wire.
+- `ARCHITECTURE` (**Sonnet 5, extended thinking**) for the point-in-time / trend
+  layer contract — the only reason to escalate is the config-history read + the
+  additive `history[]` shape.
+- Otherwise `IMPLEMENTATION` (**Sonnet 5, normal**) for any standing doable-now
+  item. Nothing pending needs Opus.
 
 ## 8. Continue or fresh chat
 
-**Start a fresh chat** after `0.7.4` is landed — the next build is a different
-objective and needs its own contract.
+**Start a fresh chat** once `feature/ce1-unified-inventory-wire` is landed — the
+next build is a different objective and needs its own contract.
 
 ## 9. main.py / UI effect
 
@@ -171,3 +222,8 @@ objective and needs its own contract.
   extra enrichment cards ("user-defined" / "advisory" badges); `enforced` checks
   move the roll-up, `advisory` do not. No pack file → no visible change from
   0.7.2. A malformed pack fails the run closed.
+- **CE.1 fast-follow #2:** no visible change unless a pack ships an
+  `unified.interfaces` / `unified.routes` check — then that check now evaluates
+  against real merged inventory (previously always `UNKNOWN`). Its Explain
+  `observed` line reads `"N inventory row(s)"` (count only). No change to any
+  module for a run with no such check.

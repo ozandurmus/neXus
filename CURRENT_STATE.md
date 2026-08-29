@@ -64,11 +64,17 @@ VERIFY-plane design must keep a future enforce/remediate capability additive.
 
 Recent predecessors (all AUTOMATED_VALIDATED 2026-08-29):
 
-- `0.7.3 — CE.1: User-Authored Compliance Check Engine` (+ crypto-source wire) —
-  `docs/history/phase/0_7_3_COMPLIANCE_CHECK_ENGINE.md`; design
+- `0.7.3 — CE.1: User-Authored Compliance Check Engine` (+ crypto-source wire
+  + `unified.interfaces` / `unified.routes` wire) —
+  `docs/history/phase/0_7_3_COMPLIANCE_CHECK_ENGINE.md` (§11, §12); design
   `docs/design/COMPLIANCE_CHECK_ENGINE.md` (D1–D16 resolved; CE.2/CE.3/CE.4
   gated). A check is *data* over already-collected evidence; fail-closed pack;
   safe selector grammar + 14 operators; `advisory` mode; `remediation` reserved.
+  Fast-follow #2 (2026-08-29): `build_compliance_posture(..., unified_inventory)`
+  joins each subject to its merged-inventory row(s) by normalised device
+  identity, vendor-scoped; the interface/route collections are load-restricted to
+  presence/count operators and render a count-only `observed` — no network
+  identity in the payload.
 - `0.7.2 — Compliance Follow-ups` — `docs/history/phase/0_7_2_COMPLIANCE_FOLLOWUPS.md`.
   `password_policy` / `banner` (presence only) / `services` projection-extension
   sections (no new collector) + 6 enrichment controls; framework filter chips +
@@ -129,7 +135,7 @@ full regression run.)
 ## Automated test baseline
 
 ```
-523 passed / 3 skipped / 0 failed (Python 3.12)
+529 passed / 3 skipped / 0 failed (Python 3.12)
 Repository privacy gate: PASS / 0 on a clean checkout. Locally it flags the
 gitignored `data/` + `logs/` + `data/.support_hmac.key` that a test run
 creates — delete them before running the gate.
