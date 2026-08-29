@@ -13,6 +13,12 @@ from utils.compliance_catalog import (
 )
 from utils.compliance_check_engine import evaluate_check, redacted_selector
 from utils.compliance_check_pack import CompliancePack, load_compliance_checks
+from utils.framework_catalog import (
+    FRAMEWORK_CATALOG_VERSION,
+    framework_entry,
+    normalize_ref,
+    requirements_for,
+)
 from utils.compliance_evaluators_ext import ENRICHMENT_EVALUATORS, evaluate_enrichment_control
 from utils.compliance_rulepack import (
     BASELINE_CONTROLS,
@@ -901,6 +907,23 @@ def _control_severity(control_id: str, extra_meta: dict[str, dict[str, Any]] | N
     return str(meta.get("severity") or "informational")
 
 
+def _control_framework_refs(
+    control_id: str,
+    extra_meta: dict[str, dict[str, Any]] | None = None,
+) -> dict[str, str]:
+    """0.7.4 — control_id -> {framework: reference string} across baseline +
+    enrichment + enforced user checks. The reference is the join key into the
+    framework catalog's requirements."""
+    entry = catalog_entry(control_id)
+    if entry:
+        return {
+            str(f.get("framework")): str(f.get("reference") or "")
+            for f in entry.get("frameworks", [])
+        }
+    meta = (extra_meta or {}).get(control_id) or {}
+    return {str(k): str(v or "") for k, v in (meta.get("framework_refs") or {}).items()}
+
+
 def _user_check_meta(pack: CompliancePack) -> dict[str, dict[str, Any]]:
     """Enforced user-check id -> {frameworks: {name: applies}, severity, advisory}.
 
@@ -913,6 +936,10 @@ def _user_check_meta(pack: CompliancePack) -> dict[str, dict[str, Any]]:
         out[check.id] = {
             "frameworks": {
                 str(f.get("framework")): bool(f.get("applies"))
+                for f in check.frameworks
+            },
+            "framework_refs": {
+                str(f.get("framework")): str(f.get("reference") or "")
                 for f in check.frameworks
             },
             "severity": check.severity,
@@ -1032,10 +1059,33 @@ def _scoring_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [row for row in rows if not _as_dict(row).get("advisory")]
 
 
+def _empty_framework_block(name: str) -> dict[str, Any]:
+    fw_cat = framework_entry(name) or {}
+    req_rows: list[dict[str, Any]] = []
+    req_counts = {"COVERED": 0, "PARTIALLY_COVERED": 0, "UNCOVERED": 0, "NOT_APPLICABLE": 0}
+    for requirement in requirements_for(name):
+        req_applies = bool(requirement.get("applies", True))
+        cov = "UNCOVERED" if req_applies else "NOT_APPLICABLE"
+        req_counts[cov] += 1
+        req_rows.append({
+            "id": requirement["id"], "section": requirement["section"],
+            "title": requirement["title"], "control_ids": [], "applicable": req_applies,
+            "monitored": 0, "aligned": 0, "finding": 0, "unknown": 0,
+            "coverage": cov, "posture": "UNKNOWN",
+        })
+    return {
+        "controls": 0, "monitored": 0, "aligned": 0, "finding": 0, "coverage": "UNCOVERED",
+        "version": fw_cat.get("version"), "profile": fw_cat.get("profile"),
+        "requirements": req_rows, "requirement_counts": req_counts,
+        "unmapped_control_refs": [],
+    }
+
+
 def _empty_overview() -> dict[str, Any]:
     total = len(LEGACY_CONTROL_IDS) + len(_ENRICHMENT_CONTROLS)
     return {
         "catalog_version": CATALOG_VERSION,
+        "framework_catalog_version": FRAMEWORK_CATALOG_VERSION,
         "total_controls": total,
         "monitored_controls": 0,
         "unmonitored_controls": total,
@@ -1043,10 +1093,7 @@ def _empty_overview() -> dict[str, Any]:
         "cells": {"aligned": 0, "finding": 0, "unknown": 0, "planned": 0, "waived": 0},
         "aligned_percent": 0.0,
         "risk_weighted_alignment_percent": 0.0,
-        "by_framework": {
-            name: {"controls": 0, "monitored": 0, "aligned": 0, "finding": 0, "coverage": "UNCOVERED"}
-            for name in _FRAMEWORKS
-        },
+        "by_framework": {name: _empty_framework_block(name) for name in _FRAMEWORKS},
         "by_subject": [],
     }
 
@@ -1067,6 +1114,7 @@ def _compliance_overview(
     assigned_anywhere: set[str] = set()
     per_control_aligned: dict[str, int] = {}
     per_control_finding: dict[str, int] = {}
+    per_control_unknown: dict[str, int] = {}
     by_subject: list[dict[str, Any]] = []
 
     for subject in evaluated:
@@ -1100,6 +1148,8 @@ def _compliance_overview(
                 per_control_aligned[control_id] = per_control_aligned.get(control_id, 0) + 1
             if bucket == "finding":
                 per_control_finding[control_id] = per_control_finding.get(control_id, 0) + 1
+            if bucket == "unknown":
+                per_control_unknown[control_id] = per_control_unknown.get(control_id, 0) + 1
         by_subject.append({
             "subject_id": subject.get("subject_id"),
             "assigned": len(_as_list(assignment.get("assigned"))),
@@ -1123,6 +1173,12 @@ def _compliance_overview(
     aligned_percent = round(cells["aligned"] / denom * 100, 1) if denom else 0.0
     risk_weighted = round(weight_num / weight_den * 100, 1) if weight_den else 0.0
 
+    # 0.7.4 — control_id -> {framework: normalized ref}, the requirement join key.
+    norm_refs = {
+        cid: {fw: normalize_ref(ref) for fw, ref in _control_framework_refs(cid, extra_meta).items()}
+        for cid in all_ids
+    }
+
     by_framework: dict[str, Any] = {}
     for name in _FRAMEWORKS:
         fw_control_ids = [cid for cid in all_ids if fw_applies.get(cid, {}).get(name)]
@@ -1135,17 +1191,72 @@ def _compliance_overview(
             coverage = "PARTIALLY_COVERED"
         else:
             coverage = "UNCOVERED"
+
+        # 0.7.4 — requirement-level roll-up
+        fw_cat = framework_entry(name) or {}
+        req_rows: list[dict[str, Any]] = []
+        req_counts = {"COVERED": 0, "PARTIALLY_COVERED": 0, "UNCOVERED": 0, "NOT_APPLICABLE": 0}
+        req_norm_ids: set[str] = set()
+        for requirement in requirements_for(name):
+            rid_norm = normalize_ref(requirement["id"])
+            req_norm_ids.add(rid_norm)
+            mapped = [cid for cid in all_ids if rid_norm and norm_refs.get(cid, {}).get(name) == rid_norm]
+            applicable_mapped = [cid for cid in mapped if fw_applies.get(cid, {}).get(name)]
+            mon = [cid for cid in applicable_mapped if cid in monitored]
+            aligned = sum(per_control_aligned.get(cid, 0) for cid in applicable_mapped)
+            finding = sum(per_control_finding.get(cid, 0) for cid in applicable_mapped)
+            unknown = sum(per_control_unknown.get(cid, 0) for cid in applicable_mapped)
+            req_applies = bool(requirement.get("applies", True))
+            if not req_applies or (mapped and not applicable_mapped):
+                req_coverage = "NOT_APPLICABLE"
+            elif not applicable_mapped:
+                req_coverage = "UNCOVERED"
+            elif len(mon) == len(applicable_mapped):
+                req_coverage = "COVERED"
+            elif mon:
+                req_coverage = "PARTIALLY_COVERED"
+            else:
+                req_coverage = "UNCOVERED"
+            req_posture = "FINDING" if finding > 0 else ("ALIGNED" if aligned > 0 else "UNKNOWN")
+            req_counts[req_coverage] += 1
+            req_rows.append({
+                "id": requirement["id"],
+                "section": requirement["section"],
+                "title": requirement["title"],
+                "control_ids": sorted(mapped),
+                "applicable": req_applies and (bool(applicable_mapped) or not mapped),
+                "monitored": len(mon),
+                "aligned": aligned,
+                "finding": finding,
+                "unknown": unknown,
+                "coverage": req_coverage,
+                "posture": req_posture,
+            })
+        unmapped_refs = sorted({
+            _control_framework_refs(cid, extra_meta).get(name, "")
+            for cid in all_ids
+            if name in _control_framework_refs(cid, extra_meta)
+            and norm_refs.get(cid, {}).get(name)
+            and norm_refs[cid][name] not in req_norm_ids
+        })
+
         by_framework[name] = {
             "controls": len(fw_control_ids),
             "monitored": len(fw_monitored),
             "aligned": sum(per_control_aligned.get(cid, 0) for cid in fw_control_ids),
             "finding": sum(per_control_finding.get(cid, 0) for cid in fw_control_ids),
             "coverage": coverage,
+            "version": fw_cat.get("version"),
+            "profile": fw_cat.get("profile"),
+            "requirements": req_rows,
+            "requirement_counts": req_counts,
+            "unmapped_control_refs": unmapped_refs,
         }
 
     total = len(all_ids)
     return {
         "catalog_version": CATALOG_VERSION,
+        "framework_catalog_version": FRAMEWORK_CATALOG_VERSION,
         "total_controls": total,
         "monitored_controls": len(monitored),
         "unmonitored_controls": total - len(monitored),

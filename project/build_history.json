@@ -3,6 +3,25 @@
   "record_contract": "One structured record per build, newest first. Required: build, status, title, summary (<= 2 sentences). Optional: started, completed, track, movement, supersedes, evidence, risks_forward, docs{agreement,validation,handover} (repo-relative paths under docs/history/). Full detail lives in the linked doc; do not restate it here. Status vocabulary must stay within utils/project_plan.py STATUS_VALUES.",
   "builds": [
     {
+      "build": "0.7.4",
+      "status": "automated_validated",
+      "started": "2026-08-29",
+      "completed": "2026-08-29",
+      "title": "framework_mappings: Requirement-Level Coverage",
+      "track": "0.7.x",
+      "movement": "IMPLEMENTATION",
+      "summary": "Models the framework SIDE: new utils/framework_catalog.py (declarative, FRAMEWORK_CATALOG_VERSION 0.7.4) - CIS / PCI-DSS / BDDK each an authored requirement list covering every structured control reference plus a curated gap set, our own one-line titles (no verbatim benchmark text), process-only requirements marked applies:false. normalize_ref is the join key. compliance_posture._compliance_overview.by_framework[name] gains version/profile + requirements[] (each: control_ids joined from catalog + x_ user checks, coverage COVERED/PARTIALLY_COVERED/UNCOVERED/NOT_APPLICABLE for monitoring completeness, posture ALIGNED/FINDING/UNKNOWN orthogonal), requirement_counts, unmapped_control_refs (drift guard). Top-level framework_catalog_version. UI: each framework readiness card gets a version line, a 4-segment requirement mini-bar and a Requirements(N) expand -> per-requirement rows with coverage + posture pills and mapped control ids (reuses the 0.7.2 explain-toggle listener + framework filter chips). Additive payload; COMPLIANCE_SCHEMA_VERSION unchanged; no new control/collector/network/assignment-engine change. No certification claim. Delivers the design's deferred 'a requirement with some controls unmonitored is PARTIALLY_COVERED' (COMPLIANCE_ASSIGNMENT_AND_FRAMEWORKS.md section 9).",
+      "evidence": {
+        "automated": "py -m pytest -q -n auto: 523 passed, 3 skipped, 0 failed (Python 3.12). Prior baseline 516 -> +7 (tests/test_phase0_7_4_framework_requirements.py). No frozen touch-up needed.",
+        "privacy_gate": "PASS / 0 on a clean tree. compliance_overview carries no device identity, no verbatim CIS/PCI benchmark text, no certification claim.",
+        "real_env": "not required (roll-up over already-evaluated compliance results)"
+      },
+      "docs": {
+        "agreement": "docs/history/phase/0_7_4_FRAMEWORK_REQUIREMENTS.md",
+        "design": "docs/design/COMPLIANCE_ASSIGNMENT_AND_FRAMEWORKS.md"
+      }
+    },
+    {
       "build": "0.7.3",
       "status": "automated_validated",
       "started": "2026-08-29",
