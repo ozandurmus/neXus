@@ -14,19 +14,16 @@ If a section does not apply, write `n/a` — do not delete the heading.
   AUTOMATED_VALIDATED (2026-08-29).
 - Engineering baseline: `DEV.1` complete; `DEV.2.1` — AUTOMATED_VALIDATED.
 - Date: 2026-08-29
-- **`0.7.2` + `0.7.3` (+ CE.1 crypto wire) + the governance rule are on
-  `origin/main`** (`gh` CLI is not installed and the GitHub MCP token cannot
-  open PRs — each build was committed on a feature branch, merged `--no-ff`
-  locally, and pushed):
-  - `fe461b0` / merge `5ca70e4` — `0.7.2` + `0.7.3` + `docs/design/COMPLIANCE_CHECK_ENGINE.md`
-  - `03c4417` / merge `38b6a74` — CE.1 crypto-source wire
-  - `a8be5c9` / merge `70f86b1` — governance: explicit model + reasoning
-    recommendation to the user at every checkpoint (`AGENTS.md`, `CLAUDE.md`)
-  - `288e0b6` — `docs(handover)` correction
-- **`0.7.4` is committed-ready on `feature/0-7-4-framework-requirements`,
-  NOT yet merged.** New `utils/framework_catalog.py` + `compliance_posture` +
-  UI + tests + state. Land it the same way (branch off `main` is done; commit +
-  `git merge --no-ff` + push).
+- **Everything from this session is on `origin/main`** — HEAD `684adad`. Nothing
+  pending; working tree clean. (`gh` CLI is not installed and the GitHub MCP
+  token cannot open PRs — each build was committed on a feature branch, merged
+  `--no-ff` locally, and pushed.)
+  - `5ca70e4` — `0.7.2` + `0.7.3` + `docs/design/COMPLIANCE_CHECK_ENGINE.md`
+    (CE.1→CE.4, decisions D1–D16 resolved)
+  - `38b6a74` — CE.1 crypto-source wire
+  - `70f86b1` — governance: explicit model + reasoning recommendation to the
+    user at every checkpoint (`AGENTS.md`, `CLAUDE.md`)
+  - `684adad` — `0.7.4` framework_mappings requirement-level coverage
 - Python: bare `py` → 3.14 (no deps). Test deps are `--user` on **3.12**.
   `py -V:3.12 <script>` mis-parses on this box (exit 103); use
   `py -V:3.12 -m pytest` or the 3.12 interpreter directly at
@@ -39,8 +36,8 @@ If a section does not apply, write `n/a` — do not delete the heading.
 
 ## 2. Recent builds (this session)
 
-- **`0.7.4` — framework_mappings: requirement-level coverage** (committed-ready,
-  not merged). Contract `docs/history/phase/0_7_4_FRAMEWORK_REQUIREMENTS.md` §10;
+- **`0.7.4` — framework_mappings: requirement-level coverage** (on `main`,
+  `684adad`). Contract `docs/history/phase/0_7_4_FRAMEWORK_REQUIREMENTS.md` §10;
   design `docs/design/COMPLIANCE_ASSIGNMENT_AND_FRAMEWORKS.md` §9. Additive; no
   server; no new control/collector.
   - `utils/framework_catalog.py` (new) — `FRAMEWORK_CATALOG_VERSION "0.7.4"`.
@@ -85,8 +82,8 @@ If a section does not apply, write `n/a` — do not delete the heading.
 
 ## 3. Next work
 
-**No active build contract is open.** Merge `0.7.4` (§6), then a new build needs
-a fresh contract, put to the user for review first.
+**No active build contract is open.** A new build needs a fresh contract, put to
+the user for review first.
 
 - **CE.1 fast-follow (small, `Sonnet 5 normal`):** wire
   `unified.interfaces` / `unified.routes` — the namespaces parse and resolve
@@ -141,34 +138,21 @@ Backlog `on_hardware_real_env_validation` (P0), laptop-blocked.
 
 ## 5. Exact next action
 
-1. Land `0.7.4` (§6).
-2. Then a **fresh chat**: cold-start via `AI_START_HERE.md` → this file →
-   `CURRENT_STATE.md` → `project/roadmap.json` + `project/backlog.json`; pick one
-   §3 objective; write a contract for user review **before** implementing.
+**Fresh chat**: cold-start via `AI_START_HERE.md` → this file → `CURRENT_STATE.md`
+→ `project/roadmap.json` + `project/backlog.json`; pick one §3 objective; write a
+contract for user review **before** implementing.
 
 ## 6. main merge decision + Git dispatch
 
-`0.7.4` — **approved for `main`**. Evidence: 523 passed / 3 skipped / 0 failed;
-render exit 0 / 0 placeholders; privacy gate PASS / 0 on a clean tree. Additive;
-no new control / collector / network / assignment-engine change;
-`COMPLIANCE_SCHEMA_VERSION` unchanged.
-
-```
-git add -A
-git commit -m "feat(compliance): 0.7.4 framework_mappings — requirement-level coverage"
-git checkout main && git merge --no-ff feature/0-7-4-framework-requirements
-git push origin main
-```
-
-Everything earlier this session is already on `origin/main` (`288e0b6`, plus the
-`0.7.4` commit once landed). Future builds: branch off `main`, commit, merge
-`--no-ff`, push (`gh` unavailable, GitHub MCP token lacks PR scope).
+Nothing outstanding — `origin/main` at `684adad` holds this whole session.
+Future builds: branch off `main`, commit, `git merge --no-ff`, `git push origin
+main` (`gh` unavailable, GitHub MCP token lacks PR scope).
 
 ## 7. Next movement / model
 
-- Land `0.7.4` (mechanical) → then `ARCHITECTURE` (**Sonnet 5 extended
-  thinking**) for a new 0.7.x contract, or `IMPLEMENTATION` (**Sonnet 5
-  normal**) for the small `unified.interfaces`/`routes` wire.
+- `ARCHITECTURE` (**Sonnet 5 extended thinking**) for a new 0.7.x contract
+  (point-in-time / trend layer), or `IMPLEMENTATION` (**Sonnet 5 normal**) for
+  the small `unified.interfaces` / `unified.routes` check-engine wire.
 
 ## 8. Continue or fresh chat
 
