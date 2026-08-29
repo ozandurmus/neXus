@@ -14,20 +14,19 @@ If a section does not apply, write `n/a` — do not delete the heading.
   (data-driven, evidence-only)` — AUTOMATED_VALIDATED (2026-08-29).
 - Engineering baseline: `DEV.1` complete; `DEV.2.1` — AUTOMATED_VALIDATED.
 - Date: 2026-08-29
-- **`0.7.2` + `0.7.3` are on `origin/main`.** Committed `fe461b0`, merged
-  `--no-ff` as `5ca70e4`, pushed (`gh` CLI is not installed and the GitHub MCP
-  token cannot open PRs, so the merge was done locally and pushed). Local
-  feature branch `feature/0-7-3-compliance-check-engine` is kept;
-  `feature/0-7-2-compliance-followups` was deleted (unused).
-  - `0.7.2` — Compliance Follow-ups (password/banner/services projection +
-    framework filter & explain UI).
-  - `docs/design/COMPLIANCE_CHECK_ENGINE.md` — CE.1→CE.4, all decisions
-    D1–D16 resolved.
-  - `0.7.3` — CE.1 user-authored check engine.
-- **CE.1 crypto-source follow-up — NOT yet committed.** Working tree on branch
-  `feature/0-7-3-1-check-engine-crypto-source` (off the updated `main`).
-  `build_compliance_posture` gained `crypto_facts_by_subject`; `html_export`
-  threads it. 3 files + doc/state updates. Ready to commit + merge the same way.
+- **Everything from this session is on `origin/main`** — HEAD `38b6a74`.
+  Nothing is pending; the working tree is clean. (`gh` CLI is not installed and
+  the GitHub MCP token cannot open PRs, so each build was committed on a feature
+  branch, merged `--no-ff` locally, and pushed. Merged local feature branches
+  were deleted; `origin/feature/0-7-3-compliance-check-engine` still exists on
+  GitHub and can be pruned.)
+  - `fe461b0` / merge `5ca70e4` — `0.7.2` Compliance Follow-ups
+    (password/banner/services projection + framework filter & explain UI) **and**
+    `0.7.3` CE.1 user-authored check engine + `docs/design/COMPLIANCE_CHECK_ENGINE.md`
+    (CE.1→CE.4, all decisions D1–D16 resolved).
+  - `03c4417` / merge `38b6a74` — CE.1 crypto-source wire
+    (`build_compliance_posture(..., crypto_facts_by_subject=…)`; `html_export`
+    threads the 0.7.0 crypto fact groups).
 - Python: bare `py` → 3.14 (no deps). Test deps are `--user` on **3.12**.
   `py -V:3.12 <script>` mis-parses on this box (exit 103); use
   `py -V:3.12 -m pytest` or the 3.12 interpreter directly at
@@ -154,43 +153,41 @@ Backlog `on_hardware_real_env_validation` (P0), laptop-blocked.
 
 ## 5. Exact next action
 
-1. Commit + merge the **CE.1 crypto-source follow-up** (branch
-   `feature/0-7-3-1-check-engine-crypto-source`) the same way 0.7.2+0.7.3 were
-   landed — see §6.
-2. Then: fresh chat, pick a new 0.7.x objective (framework_mappings; a
-   point-in-time / trend layer for `compliance_overview` off the config
-   history; or wire `unified.interfaces`/`routes` into the check engine),
-   write + review a contract, implement.
+Nothing is pending on Git. In a **fresh chat**:
+
+1. Cold-start via `AI_START_HERE.md` → this file → `CURRENT_STATE.md` →
+   `project/roadmap.json` + `project/backlog.json`.
+2. Pick one new 0.7.x objective and write a contract for user review **before**
+   implementing (standing rule for meaningful builds):
+   - `framework_mappings` — its own feature, still `in_progress`.
+   - A point-in-time / trend layer for `compliance_overview` reading the
+     existing config history (design `COMPLIANCE_ASSIGNMENT_AND_FRAMEWORKS.md`
+     §9 "point-in-time", §10 "Time"; payload was designed so a `history[]` is
+     additive).
+   - Wire `unified.interfaces` / `unified.routes` into the check engine (small;
+     `build_compliance_posture` needs the merged inventory row threaded).
+   - `html_render_performance` (P2) or `immutable_store_permission` (P1 bug) if
+     not starting a new 0.7.x contract.
 
 ## 6. main merge decision + Git dispatch
 
-`0.7.2` + `0.7.3` are **already merged and pushed** — `origin/main` at `5ca70e4`
-(merge commit), `fe461b0` the squashed build commit.
+**All merged and pushed.** `origin/main` at `38b6a74`:
 
-The **CE.1 crypto-source follow-up** is committed-ready on
-`feature/0-7-3-1-check-engine-crypto-source`. Recommendation: **approved for
-`main`**. Evidence: 516 passed / 3 skipped / 0 failed; render exit 0 / 0
-placeholders; privacy gate PASS / 0 on a clean tree. Additive; `html_export` is
-the sole non-test caller; non-breaking optional param.
+- `fe461b0` → merge `5ca70e4` — 0.7.2 + 0.7.3
+- `03c4417` → merge `38b6a74` — CE.1 crypto-source wire
 
-`gh` is not installed and the GitHub MCP token cannot open PRs — land it locally:
-
-```
-git add -A
-git commit -m "feat(compliance): CE.1 crypto-source wire — crypto_facts namespace for user checks"
-git checkout main && git merge --no-ff feature/0-7-3-1-check-engine-crypto-source
-git push origin main
-```
+No outstanding branch to land. Future builds: branch off `main`, commit, merge
+`--no-ff` locally, push (`gh` unavailable, GitHub MCP token lacks PR scope).
 
 ## 7. Next movement / model
 
-- Next movement: `ARCHITECTURE` (high reasoning) for a new 0.7.x contract
-  (framework_mappings, trend layer), then `IMPLEMENTATION` (normal).
+- Next movement: `ARCHITECTURE` (high reasoning) for a new 0.7.x contract, then
+  `IMPLEMENTATION` (normal reasoning) once it is approved.
 
 ## 8. Continue or fresh chat
 
-**Start a fresh chat** after the follow-up is merged — the next build is a
-different objective and needs its own contract.
+**Start a fresh chat.** This session's builds are complete and on `main`; the
+next build is a different objective and needs its own contract.
 
 ## 9. main.py / UI effect
 
