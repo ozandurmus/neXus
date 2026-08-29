@@ -326,7 +326,7 @@ def test_a4_3_3_basic_configuration_highlights_are_bounded_safe_and_operator_ori
 
     assert payload["schema_version"] == "0.6.1B"
     assert payload["build"] == "phase-0.6.1B-check-point-configuration-ui-integration"
-    assert current["schema_version"] == "0.6.0A4.3.3.2"
+    assert current["schema_version"] == "0.7.2"   # 0.7.2 projection extension
     assert by_label["Hostname"]["value"] == "FW-A"
     assert by_label["Primary DNS"]["value"] == "10.0.0.53"
     assert by_label["Primary NTP Server"]["value"] == "10.0.0.123"

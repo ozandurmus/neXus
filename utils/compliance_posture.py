@@ -11,6 +11,8 @@ from utils.compliance_catalog import (
     catalog_entry,
     severity_weight,
 )
+from utils.compliance_check_engine import evaluate_check, redacted_selector
+from utils.compliance_check_pack import CompliancePack, load_compliance_checks
 from utils.compliance_evaluators_ext import ENRICHMENT_EVALUATORS, evaluate_enrichment_control
 from utils.compliance_rulepack import (
     BASELINE_CONTROLS,
@@ -869,8 +871,11 @@ def _fleet_controls(configuration_ui: dict[str, Any], link_map: dict[str, dict[s
     ]
 
 
-def _catalog_control_frameworks() -> dict[str, dict[str, Any]]:
-    """control_id -> {framework -> applies bool} across baseline + enrichment."""
+def _catalog_control_frameworks(
+    extra_meta: dict[str, dict[str, Any]] | None = None,
+) -> dict[str, dict[str, Any]]:
+    """control_id -> {framework -> applies bool} across baseline + enrichment
+    (+ 0.7.3 enforced user checks)."""
     out: dict[str, dict[str, Any]] = {}
     for control_id in LEGACY_CONTROL_IDS:
         entry = catalog_entry(control_id) or {}
@@ -883,12 +888,140 @@ def _catalog_control_frameworks() -> dict[str, dict[str, Any]]:
             str(f.get("framework")): bool(f.get("applies"))
             for f in control.get("frameworks", [])
         }
+    for control_id, meta in (extra_meta or {}).items():
+        out[control_id] = dict(meta.get("frameworks") or {})
     return out
 
 
-def _control_severity(control_id: str) -> str:
+def _control_severity(control_id: str, extra_meta: dict[str, dict[str, Any]] | None = None) -> str:
     entry = catalog_entry(control_id) or {}
-    return str(entry.get("severity") or "informational")
+    if entry:
+        return str(entry.get("severity") or "informational")
+    meta = (extra_meta or {}).get(control_id) or {}
+    return str(meta.get("severity") or "informational")
+
+
+def _user_check_meta(pack: CompliancePack) -> dict[str, dict[str, Any]]:
+    """Enforced user-check id -> {frameworks: {name: applies}, severity, advisory}.
+
+    Advisory checks are omitted so they never enter the coverage roll-up (D6).
+    """
+    out: dict[str, dict[str, Any]] = {}
+    for check in pack.checks:
+        if check.advisory:
+            continue
+        out[check.id] = {
+            "frameworks": {
+                str(f.get("framework")): bool(f.get("applies"))
+                for f in check.frameworks
+            },
+            "severity": check.severity,
+            "advisory": False,
+        }
+    return out
+
+
+def _check_pack_block(pack: CompliancePack) -> dict[str, Any]:
+    """Counts + pack id only — safe for the shareable artifact (D12)."""
+    return {
+        "pack_id": pack.pack_id,
+        "pack_version": pack.pack_version,
+        "source": pack.source,
+        "enabled": pack.is_active,
+        "checks": len(pack.checks),
+        "advisory_checks": pack.advisory_count,
+    }
+
+
+def _subject_evidence(device: dict[str, Any]) -> dict[str, Any]:
+    """The read-only evidence namespaces a user check can assert over (D4).
+
+    In-process only; nothing here is echoed into the payload beyond the bounded
+    ``observed`` description the engine produces.
+    """
+    return {
+        "current_configuration": _as_dict(device.get("current_configuration")),
+        "unified": {
+            "device": {
+                "vendor_key": device.get("vendor_key"),
+                "platform_family": device.get("platform_family"),
+                "model": device.get("model"),
+                "sw_version": device.get("sw_version"),
+                "ha_role": device.get("ha_role"),
+                "entity_type": device.get("entity_type"),
+            },
+            "interfaces": [],
+            "routes": [],
+        },
+        "alignment": {
+            "results": _as_list(_as_dict(device.get("alignment")).get("findings")),
+        },
+        "crypto_facts": {},   # namespace reserved (D4) — wired in a fast-follow
+    }
+
+
+def _subject_user_checks(
+    device: dict[str, Any],
+    pack: CompliancePack,
+    policy: ControlAssignmentPolicy | None,
+    device_name: str,
+    resolved_ids: frozenset[str],
+    now: datetime,
+) -> list[dict[str, Any]]:
+    """0.7.3 (CE.1) — evaluate the user pack's checks for one subject.
+
+    Only checks whose ``applies_to`` matches this subject and that are in scope
+    for it (assignment resolution) are evaluated. Advisory checks are marked so
+    the roll-up can exclude them; they still render.
+    """
+    if not pack.is_active:
+        return []
+    vendor_key = str(device.get("vendor_key") or "")
+    platform_family = str(device.get("platform_family") or "")
+    entity_type = str(device.get("entity_type") or "")
+    evidence = _subject_evidence(device)
+    results: list[dict[str, Any]] = []
+    for check in pack.checks:
+        if not check.applies_to_subject(
+            vendor=vendor_key, platform_family=platform_family, entity_type=entity_type,
+        ):
+            continue
+        if check.id not in resolved_ids:
+            continue
+        status, summary, coverage, steps = evaluate_check(evidence, check)
+        result = _control(
+            check.id,
+            check.title,
+            status,
+            summary,
+            "user-authored compliance check",
+            scope="SUBJECT",
+            benchmark="USER",
+            benchmark_reference=None,
+            evidence_fields=[redacted_selector(step.source) for step in check.steps],
+            evidence_plane="direct_actual",
+            evidence_coverage=coverage,
+            control_lifecycle="IMPLEMENTED",
+            rule_pack=None,
+            severity=check.severity,
+            rationale=check.rationale,
+            frameworks=[dict(f) for f in check.frameworks],
+        )
+        result["control_class"] = "user_check"
+        result["advisory"] = check.advisory
+        result["pack"] = {
+            "pack_id": pack.pack_id,
+            "pack_version": pack.pack_version,
+            "source": pack.source,
+        }
+        result["check_steps"] = steps
+        results.append(_apply_waiver(result, policy, device_name, now))
+    return results
+
+
+def _scoring_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """0.7.3 (D6) — advisory user checks render but never affect the score."""
+    return [row for row in rows if not _as_dict(row).get("advisory")]
 
 
 def _empty_overview() -> dict[str, Any]:
@@ -910,9 +1043,13 @@ def _empty_overview() -> dict[str, Any]:
     }
 
 
-def _compliance_overview(subjects: list[dict[str, Any]]) -> dict[str, Any]:
+def _compliance_overview(
+    subjects: list[dict[str, Any]],
+    extra_meta: dict[str, dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    extra_meta = extra_meta or {}
     evaluated = [s for s in subjects if s.get("availability") == "AVAILABLE"]
-    fw_applies = _catalog_control_frameworks()
+    fw_applies = _catalog_control_frameworks(extra_meta)
 
     cells = {"aligned": 0, "finding": 0, "unknown": 0, "planned": 0, "waived": 0}
     weight_num = 0
@@ -925,7 +1062,9 @@ def _compliance_overview(subjects: list[dict[str, Any]]) -> dict[str, Any]:
     by_subject: list[dict[str, Any]] = []
 
     for subject in evaluated:
-        rows = _as_list(subject.get("controls")) + _as_list(subject.get("extended_controls"))
+        rows = _scoring_rows(
+            _as_list(subject.get("controls")) + _as_list(subject.get("extended_controls"))
+        )
         assignment = _as_dict(subject.get("assignment"))
         assigned_anywhere.update(str(x) for x in _as_list(assignment.get("assigned")))
         s_counts = {"aligned": 0, "finding": 0, "unknown": 0, "planned": 0, "waived": 0}
@@ -945,7 +1084,7 @@ def _compliance_overview(subjects: list[dict[str, Any]]) -> dict[str, Any]:
             else:
                 has_evidence.setdefault(control_id, False)
             if status in _DENOMINATOR_STATUSES:
-                w = severity_weight(_control_severity(control_id))
+                w = severity_weight(_control_severity(control_id, extra_meta))
                 weight_den += w
                 if status in _ALIGNED_STATUSES:
                     weight_num += w
@@ -963,7 +1102,11 @@ def _compliance_overview(subjects: list[dict[str, Any]]) -> dict[str, Any]:
             "waived": s_counts["waived"],
         })
 
-    all_ids = list(LEGACY_CONTROL_IDS) + [str(c["control_id"]) for c in _ENRICHMENT_CONTROLS]
+    all_ids = (
+        list(LEGACY_CONTROL_IDS)
+        + [str(c["control_id"]) for c in _ENRICHMENT_CONTROLS]
+        + list(extra_meta)          # 0.7.3 — enforced user checks (advisory omitted upstream)
+    )
     monitored = {
         cid for cid in all_ids
         if cid in assigned_anywhere and has_evidence.get(cid)
@@ -1029,8 +1172,14 @@ def build_compliance_posture(
 
     # 0.7.1b: local, file-based per-device control assignment + waivers.
     # Missing file → all-applicable (byte-identical to the prior behaviour).
+    # 0.7.3 (CE.1): a user-authored check pack (data/state/compliance_checks.json)
+    # adds x_-prefixed checks the assignment policy can also target. Both loaders
+    # are fail-closed — a malformed file stops the posture build.
     resolved_root = Path(data_root) if data_root is not None else (BASE_DIR / "data")
-    policy = load_control_assignments(resolved_root)
+    check_pack = load_compliance_checks(resolved_root)
+    policy = load_control_assignments(resolved_root, extra_known_ids=check_pack.check_ids())
+    user_check_meta = _user_check_meta(check_pack)
+    check_packs_block = [] if check_pack.source == "missing" else [_check_pack_block(check_pack)]
     now = datetime.now(timezone.utc)
 
     if not payload.get("available"):
@@ -1056,6 +1205,7 @@ def build_compliance_posture(
             "subjects": [],
             "compliance_overview": _empty_overview(),
             "assignment_policy": _assignment_policy_block(policy),
+            "check_packs": check_packs_block,
             "privacy": {
                 "contains_secrets": False,
                 "contains_raw_configuration": False,
@@ -1096,7 +1246,15 @@ def build_compliance_posture(
             str(c["control_id"]) for c in _ENRICHMENT_CONTROLS
             if vendor_key in list(c.get("applicable_vendors") or [])
         }
-        applicable_ids = baseline_ids | applicable_enrichment
+        applicable_user_checks = {
+            check.id for check in check_pack.checks
+            if check.applies_to_subject(
+                vendor=vendor_key,
+                platform_family=str(device.get("platform_family") or ""),
+                entity_type=str(device.get("entity_type") or ""),
+            )
+        }
+        applicable_ids = baseline_ids | applicable_enrichment | applicable_user_checks
         resolved_ids = policy.resolve(device_name, vendor_key, applicable_ids)
 
         controls = (
@@ -1105,19 +1263,21 @@ def build_compliance_posture(
         )
         extended_controls = (
             _subject_extended_controls(device, policy, device_name, resolved_ids, now)
+            + _subject_user_checks(device, check_pack, policy, device_name, resolved_ids, now)
             if has_current else []
         )
 
         all_rows = controls + extended_controls
+        scoring_rows = _scoring_rows(all_rows)
         evaluated_ids = {str(c.get("control_id") or "") for c in all_rows}
         waived_ids = sorted(
             str(c.get("control_id") or "") for c in all_rows if c.get("status") == "WAIVED"
         )
 
         subject_status = "UNAVAILABLE" if not has_current else "PASS"
-        if has_current and any(control.get("status") == "FINDING" for control in all_rows):
+        if has_current and any(control.get("status") == "FINDING" for control in scoring_rows):
             subject_status = "FINDING"
-        elif has_current and any(control.get("status") == "UNKNOWN" for control in all_rows):
+        elif has_current and any(control.get("status") == "UNKNOWN" for control in scoring_rows):
             subject_status = "UNKNOWN"
 
         subjects.append({
@@ -1145,7 +1305,9 @@ def build_compliance_posture(
     for control in fleet_controls + platform_controls:
         status_counts[str(control.get("status") or "UNKNOWN")] += 1
     for subject in subjects:
-        for control in _as_list(subject.get("controls")) + _as_list(subject.get("extended_controls")):
+        for control in _scoring_rows(
+            _as_list(subject.get("controls")) + _as_list(subject.get("extended_controls"))
+        ):
             key = str(_as_dict(control).get("status") or "UNKNOWN")
             if key in status_counts:
                 status_counts[key] += 1
@@ -1173,8 +1335,9 @@ def build_compliance_posture(
         "fleet_controls": fleet_controls,
         "platform_controls": platform_controls,
         "subjects": subjects,
-        "compliance_overview": _compliance_overview(subjects),
+        "compliance_overview": _compliance_overview(subjects, user_check_meta),
         "assignment_policy": _assignment_policy_block(policy),
+        "check_packs": check_packs_block,
         "privacy": {
             "contains_secrets": False,
             "contains_raw_configuration": False,

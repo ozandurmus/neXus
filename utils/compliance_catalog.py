@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from typing import Any
 
-CATALOG_VERSION = "0.7.1b"
+CATALOG_VERSION = "0.7.2"
 SEVERITY_VALUES = ("informational", "low", "medium", "high", "critical")
 _SEVERITY_WEIGHT = {"informational": 1, "low": 2, "medium": 3, "high": 4, "critical": 5}
 
@@ -153,8 +153,8 @@ CONTROL_CATALOG: tuple[dict[str, Any], ...] = (
     # (no new collector, no projection change). A control whose evidence
     # section is genuinely absent resolves to UNKNOWN / PLANNED, never an
     # inferred PASS. These are a separate subject-control list; they are not
-    # routed through the frozen 0.6.6B rule pack. The password_policy
-    # projection section and its controls are deferred to 0.7.2.
+    # routed through the frozen 0.6.6B rule pack. The password_policy / banner /
+    # services projection sections and their controls are added in 0.7.2 below.
     {
         "id": "timezone_configured", "cis_reference": 'CIS 2.3.2', "title": "System timezone explicitly configured",
         "rationale": "An unset or drifting timezone makes cross-device log correlation and audit timelines unreliable.",
@@ -237,6 +237,73 @@ CONTROL_CATALOG: tuple[dict[str, Any], ...] = (
         "frameworks": [_fw("CIS", "2.1.7"), _fw("PCI-DSS", "not applicable", version="4.0", applies=False),
                        _fw("BDDK", "Süreklilik - Ad Çözümleme", applies=False)],
         "lifecycle": "active", "introduced": "0.7.1b", "evaluator": "dns_domain_configured",
+    },
+
+    # --- 0.7.2 enrichment controls ------------------------------------------
+    # Evaluated from the 0.7.2 projection extension sections `password_policy`,
+    # `banner` and `services` (new projections over already-stored config — no
+    # new collector). Section genuinely absent → UNKNOWN; present-but-weak →
+    # FINDING; never an inferred PASS. Separate subject-control list; not routed
+    # through the frozen 0.6.6B rule pack.
+    {
+        "id": "password_min_length", "cis_reference": 'CIS 2.4.1 / PanOS Password Min Length', "title": "Administrative password minimum length enforced",
+        "rationale": "A short minimum length lets weak administrative passwords survive policy, undermining every other access control.",
+        "control_area": "Authentication policy strength", "severity": "high",
+        "vendors": ["check_point", "palo_alto"],
+        "evidence": {"plane": "direct_actual", "fields": ["current_configuration.sections.password_policy.settings"], "basis": "configured"},
+        "frameworks": [_fw("CIS", "2.4.1"), _fw("PCI-DSS", "8.3.6", version="4.0"),
+                       _fw("BDDK", "Erişim Yönetimi - Parola Uzunluğu")],
+        "lifecycle": "active", "introduced": "0.7.2", "evaluator": "password_min_length",
+    },
+    {
+        "id": "password_complexity_enabled", "cis_reference": 'CIS 2.4.3 / PanOS Password Complexity', "title": "Administrative password complexity requirement enabled",
+        "rationale": "Without a character-class requirement, minimum length alone still permits predictable, easily guessed passwords.",
+        "control_area": "Authentication policy strength", "severity": "medium",
+        "vendors": ["check_point", "palo_alto"],
+        "evidence": {"plane": "direct_actual", "fields": ["current_configuration.sections.password_policy.settings"], "basis": "configured"},
+        "frameworks": [_fw("CIS", "2.4.3"), _fw("PCI-DSS", "8.3.6", version="4.0"),
+                       _fw("BDDK", "Erişim Yönetimi - Parola Karmaşıklığı")],
+        "lifecycle": "active", "introduced": "0.7.2", "evaluator": "password_complexity_enabled",
+    },
+    {
+        "id": "password_history_depth", "cis_reference": 'CIS 2.4.4 / PanOS Password History', "title": "Administrative password history / reuse prevention configured",
+        "rationale": "Allowing immediate password reuse defeats forced rotation and lets a compromised credential be reinstated.",
+        "control_area": "Authentication policy strength", "severity": "low",
+        "vendors": ["check_point", "palo_alto"],
+        "evidence": {"plane": "direct_actual", "fields": ["current_configuration.sections.password_policy.settings"], "basis": "configured"},
+        "frameworks": [_fw("CIS", "2.4.4"), _fw("PCI-DSS", "8.3.7", version="4.0"),
+                       _fw("BDDK", "Erişim Yönetimi - Parola Geçmişi")],
+        "lifecycle": "active", "introduced": "0.7.2", "evaluator": "password_history_depth",
+    },
+    {
+        "id": "password_lockout_policy", "cis_reference": 'CIS 2.4.2 / PanOS Failed Attempts', "title": "Administrative password failed-attempt lockout configured",
+        "rationale": "A password policy without a failed-attempt lockout leaves administrative logins open to unbounded online guessing.",
+        "control_area": "Authentication policy strength", "severity": "high",
+        "vendors": ["check_point", "palo_alto"],
+        "evidence": {"plane": "direct_actual", "fields": ["current_configuration.sections.password_policy.settings"], "basis": "configured"},
+        "frameworks": [_fw("CIS", "2.4.2"), _fw("PCI-DSS", "8.3.4", version="4.0"),
+                       _fw("BDDK", "Erişim Yönetimi - Hesap Kilitleme")],
+        "lifecycle": "active", "introduced": "0.7.2", "evaluator": "password_lockout_policy",
+    },
+    {
+        "id": "login_banner_text_present", "cis_reference": 'CIS 2.1.1 / PanOS Login Banner', "title": "Administrative login banner text projected as present",
+        "rationale": "A legal warning banner is a common regulatory prerequisite for prosecuting unauthorised administrative access.",
+        "control_area": "Administrative access restrictions", "severity": "low",
+        "vendors": ["check_point", "palo_alto"],
+        "evidence": {"plane": "direct_actual", "fields": ["current_configuration.sections.banner.settings"], "basis": "configured"},
+        "frameworks": [_fw("CIS", "2.1.1"), _fw("PCI-DSS", "not applicable", version="4.0", applies=False),
+                       _fw("BDDK", "Erişim Yönetimi - Yasal Uyarı")],
+        "lifecycle": "active", "introduced": "0.7.2", "evaluator": "login_banner_text_present",
+    },
+    {
+        "id": "unused_services_disabled", "cis_reference": 'CIS 2.1.2 / PanOS Disable Unused Mgmt Services', "title": "Unused management-plane services disabled",
+        "rationale": "Legacy or unused inbound services (finger, ident, echo, telnet, HTTP) widen the management-plane attack surface for no operational gain.",
+        "control_area": "Management-plane protocol hardening", "severity": "medium",
+        "vendors": ["check_point", "palo_alto"],
+        "evidence": {"plane": "direct_actual", "fields": ["current_configuration.sections.services.settings"], "basis": "configured"},
+        "frameworks": [_fw("CIS", "2.1.2"), _fw("PCI-DSS", "2.2.4", version="4.0"),
+                       _fw("BDDK", "Sistem Sıkılaştırma - Gereksiz Servisler")],
+        "lifecycle": "active", "introduced": "0.7.2", "evaluator": "unused_services_disabled",
     },
 )
 
