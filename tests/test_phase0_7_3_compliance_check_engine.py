@@ -349,3 +349,56 @@ def test_ac7_missing_pack_is_additive_noop(tmp_path):
     assert payload["check_packs"] == []
     subj = next(s for s in payload["subjects"] if s["vendor_key"] == "check_point")
     assert all(not c["control_id"].startswith("x_") for c in subj["extended_controls"])
+
+
+# --- CE.1 fast-follow: crypto_facts source namespace wired -----------
+
+def test_crypto_facts_namespace_resolves():
+    ev = {"crypto_facts": {"ike_crypto_profiles": [{"name": "p1", "encryption": ["aes-128-cbc", "aes-256-gcm"]}]}}
+    got = resolve_source(ev, parse_selector("crypto_facts.ike_crypto_profiles"))
+    assert isinstance(got, list) and got[0]["name"] == "p1"
+
+
+def test_crypto_facts_check_evaluates_against_wired_facts(tmp_path):
+    _write_pack(tmp_path, _pack({
+        "id": "x_ike_no_cbc",
+        "title": "IKE crypto profiles offer no CBC encryption",
+        "rationale": "CBC-mode IKE encryption is a legacy weakness.",
+        "severity": "high",
+        "applies_to": {"vendor": ["check_point"]},
+        "frameworks": [
+            {"framework": "CIS", "reference": "x", "applies": True},
+            {"framework": "PCI-DSS", "reference": "x", "applies": True},
+            {"framework": "BDDK", "reference": "x", "applies": True},
+        ],
+        "evidence": {"steps": [
+            {"source": "crypto_facts.ike_crypto_profiles", "select": "encryption",
+             "assert": {"op": "none_match", "pattern": "(?i)-cbc"}},
+        ]},
+    }))
+
+    # no facts wired -> the namespace resolves empty -> on_no_evidence (UNKNOWN)
+    bare = build_compliance_posture(_configuration_payload(_CP_SECTIONS), None, data_root=tmp_path)
+    b = next(c for c in next(s for s in bare["subjects"] if s["vendor_key"] == "check_point")["extended_controls"]
+             if c["control_id"] == "x_ike_no_cbc")
+    assert b["status"] == "UNKNOWN"
+
+    # facts wired for cp-001 with a CBC profile -> FINDING
+    facts = {"cp-001": {"ike_crypto_profiles": [{"name": "legacy", "encryption": ["aes-256-cbc"]}]}}
+    wired = build_compliance_posture(
+        _configuration_payload(_CP_SECTIONS), None, data_root=tmp_path,
+        crypto_facts_by_subject=facts,
+    )
+    w = next(c for c in next(s for s in wired["subjects"] if s["vendor_key"] == "check_point")["extended_controls"]
+             if c["control_id"] == "x_ike_no_cbc")
+    assert w["status"] == "FINDING"
+
+    # facts wired with only GCM -> PASS
+    facts_ok = {"cp-001": {"ike_crypto_profiles": [{"name": "modern", "encryption": ["aes-256-gcm"]}]}}
+    ok = build_compliance_posture(
+        _configuration_payload(_CP_SECTIONS), None, data_root=tmp_path,
+        crypto_facts_by_subject=facts_ok,
+    )
+    o = next(c for c in next(s for s in ok["subjects"] if s["vendor_key"] == "check_point")["extended_controls"]
+             if c["control_id"] == "x_ike_no_cbc")
+    assert o["status"] == "PASS"
