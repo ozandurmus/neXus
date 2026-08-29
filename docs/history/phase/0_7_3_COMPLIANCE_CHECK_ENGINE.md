@@ -341,3 +341,39 @@ real facts; with none wired (tests, some callers) the namespace resolves empty �
 Evidence: `py -m pytest -q -n auto` → **516 passed, 3 skipped, 0 failed**
 (514 → +2). Repository privacy gate PASS / 0. `--render-only` exit 0 / 0
 placeholders.
+
+---
+
+## 12. Follow-up — CE.1 `unified.interfaces` / `unified.routes` wire (2026-08-29, AUTOMATED_VALIDATED)
+
+`build_compliance_posture(..., unified_inventory=None)` — an optional pass-through
+of the merged inventory list (`utils/merge.py` → `unified.json`).
+`utils/html_export.py` threads the list it already loads (`--render-only`
+included); every other caller omits it and the two namespaces stay unresolved.
+
+- **Join (Decision 1).** `_index_unified_inventory` keys the merged rows by
+  normalised device identity (and PAN `serial`); `_match_unified_rows` joins each
+  config subject on `device_name` / `name` / `id` (case-folded, trimmed),
+  **vendor-scoped** — a `check_point` subject only takes `source` `cp` / `vsx`, a
+  `palo_alto` subject only `panorama`. One identity may fan in to several rows
+  (VSX VSIDs, per-vsys records); their `interfaces` / `routes` are unioned. Zero
+  matches → the namespace is `None` → `on_no_evidence` (distinct from a matched
+  device that genuinely has `[]`, which is judged as a count of 0).
+- **Privacy (Decision 2).** `unified.interfaces` / `unified.routes` rows carry
+  network identity (interface addresses / names, route targets). Pack load
+  (`is_inventory_collection_selector` in `utils/compliance_check_pack.py`)
+  restricts these two namespaces to `present` / `absent` / `count_gte` /
+  `count_lte`; the engine renders a **count-only** `observed`
+  (`"N inventory row(s)"`, via `_redact_count_only`) for them, so not one value
+  is echoed into the payload. `contains_network_identity` stays `False` by
+  construction.
+- `COMPLIANCE_SCHEMA_VERSION` unchanged; payload additive. Behaviour change for
+  the previously-reserved namespaces only: an unmatched subject now yields
+  `UNKNOWN` (was a definite `FINDING`/False on the placeholder `[]`) — the
+  documented intent, and strictly more conservative. No shipped pack used them.
+
+Evidence: `py -m pytest -q -n auto --dist worksteal` → **529 passed, 3 skipped,
+0 failed** (523 → +6, `tests/test_phase0_7_3_compliance_check_engine.py`).
+Repository privacy gate **PASS / 0** on a clean tree; `json.dumps(payload)` for a
+routes check carries no next-hop, destination or interface address.
+`scripts/render_sample.py` exit 0.

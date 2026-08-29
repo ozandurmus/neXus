@@ -402,3 +402,104 @@ def test_crypto_facts_check_evaluates_against_wired_facts(tmp_path):
     o = next(c for c in next(s for s in ok["subjects"] if s["vendor_key"] == "check_point")["extended_controls"]
              if c["control_id"] == "x_ike_no_cbc")
     assert o["status"] == "PASS"
+
+
+# --- CE.1 fast-follow #2: unified.interfaces / unified.routes wired --------
+
+_CP_INVENTORY = [
+    {
+        "source": "cp", "device": _DEVICE_NAME_CP,
+        "interfaces": [
+            {"name": "eth0", "ipv4_address": "198.51.100.2"},
+            {"name": "eth1", "ipv4_address": "198.51.100.3"},
+        ],
+        "routes": [{"destination": "10.10.0.0/16", "next_hop": "198.51.100.1"}],
+    },
+]
+
+
+def _inv_check(check_id, value, *, key="interfaces", op="count_gte"):
+    return {
+        **_GOOD_CHECK, "id": check_id, "title": check_id.replace("_", " "),
+        "evidence": {"steps": [
+            {"source": f"unified.{key}", "assert": {"op": op, "value": value}}]},
+    }
+
+
+def _cp_user_row(payload, control_id):
+    subj = next(s for s in payload["subjects"] if s["vendor_key"] == "check_point")
+    return next(c for c in subj["extended_controls"] if c["control_id"] == control_id)
+
+
+def test_unified_interfaces_pack_rejects_value_echoing_op(tmp_path):
+    _write_pack(tmp_path, _pack({
+        **_GOOD_CHECK, "id": "x_iface_name",
+        "evidence": {"steps": [
+            {"source": "unified.interfaces", "select": "name",
+             "assert": {"op": "matches", "pattern": "eth0"}}]},
+    }))
+    with pytest.raises(CompliancePackError):
+        load_compliance_checks(tmp_path)
+
+
+def test_unified_routes_pack_allows_count_and_presence_ops(tmp_path):
+    _write_pack(tmp_path, _pack(
+        _inv_check("x_min_ifaces", 2),
+        _inv_check("x_has_routes", 0, key="routes", op="present"),
+    ))
+    pack = load_compliance_checks(tmp_path)
+    assert pack.check_ids() == {"x_min_ifaces", "x_has_routes"}
+
+
+def test_unified_interfaces_resolves_from_wired_inventory(tmp_path):
+    _write_pack(tmp_path, _pack(
+        _inv_check("x_min_two_ifaces", 2),
+        _inv_check("x_min_four_ifaces", 4),
+    ))
+    # nothing wired -> namespace stays unresolved -> on_no_evidence
+    bare = build_compliance_posture(_configuration_payload(_CP_SECTIONS), None, data_root=tmp_path)
+    assert _cp_user_row(bare, "x_min_two_ifaces")["status"] == "UNKNOWN"
+
+    wired = build_compliance_posture(
+        _configuration_payload(_CP_SECTIONS), None, data_root=tmp_path,
+        unified_inventory=_CP_INVENTORY,
+    )
+    assert _cp_user_row(wired, "x_min_two_ifaces")["status"] == "PASS"      # 2 >= 2
+    assert _cp_user_row(wired, "x_min_four_ifaces")["status"] == "FINDING"  # 2 >= 4 is false
+
+
+def test_unified_routes_observed_is_count_only_and_private(tmp_path):
+    _write_pack(tmp_path, _pack(_inv_check("x_has_routes", 1, key="routes")))
+    payload = build_compliance_posture(
+        _configuration_payload(_CP_SECTIONS), None, data_root=tmp_path,
+        unified_inventory=_CP_INVENTORY,
+    )
+    row = _cp_user_row(payload, "x_has_routes")
+    assert row["status"] == "PASS"
+    assert row["check_steps"][0]["observed"] == "1 inventory row(s)"
+    encoded = json.dumps(payload)
+    assert "198.51.100.1" not in encoded    # route next-hop
+    assert "10.10.0.0/16" not in encoded    # route destination
+    assert "198.51.100.2" not in encoded    # interface address (defence in depth)
+
+
+def test_unified_inventory_join_is_vendor_scoped(tmp_path):
+    _write_pack(tmp_path, _pack(_inv_check("x_min_one_iface", 1)))
+    # same identity string, but a Panorama-plane row must not feed a CP subject
+    pan_row = [{"source": "panorama", "device": _DEVICE_NAME_CP,
+                "interfaces": [{"name": "e1"}, {"name": "e2"}, {"name": "e3"}], "routes": []}]
+    payload = build_compliance_posture(
+        _configuration_payload(_CP_SECTIONS), None, data_root=tmp_path,
+        unified_inventory=pan_row,
+    )
+    assert _cp_user_row(payload, "x_min_one_iface")["status"] == "UNKNOWN"
+
+
+def test_unified_inventory_kwarg_omitted_is_noop(tmp_path):
+    _write_pack(tmp_path, _pack(_GOOD_CHECK))
+    a = build_compliance_posture(
+        _configuration_payload(_CP_SECTIONS), _sample_project_plan_payload(), data_root=tmp_path)
+    b = build_compliance_posture(
+        _configuration_payload(_CP_SECTIONS), _sample_project_plan_payload(), data_root=tmp_path,
+        unified_inventory=None)
+    assert json.dumps(a, sort_keys=True) == json.dumps(b, sort_keys=True)
