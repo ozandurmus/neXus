@@ -218,9 +218,18 @@ def _expires(raw: object) -> date | None:
         raise _fail("control-assignment waiver expires is not a valid YYYY-MM-DD date") from exc
 
 
-def load_control_assignments(data_root: Path) -> ControlAssignmentPolicy:
-    """Load the local-only policy without logging or returning matched values."""
-    known = all_subject_control_ids()
+def load_control_assignments(
+    data_root: Path,
+    *,
+    extra_known_ids: frozenset[str] = frozenset(),
+) -> ControlAssignmentPolicy:
+    """Load the local-only policy without logging or returning matched values.
+
+    ``extra_known_ids`` (0.7.3 / CE.1) lets an assignment ``include`` / ``exclude``
+    or a dated waiver target a user-authored check id
+    (``utils.compliance_check_pack``) as well as a catalogued control id.
+    """
+    known = all_subject_control_ids() | frozenset(extra_known_ids)
     empty = ControlAssignmentPolicy(
         source="missing", default_mode="all_applicable",
         groups=(), assignments=(), waivers=(),

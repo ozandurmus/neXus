@@ -172,9 +172,9 @@ def test_ac5_payload_shape_is_additive_only():
     unavailable = build_compliance_posture(None, None)
 
     # 0.6.6B added `rule_pack`; 0.7.1b adds `compliance_overview` and
-    # `assignment_policy` (both additive, counts-only). The prior keys and their
-    # types are unchanged.
-    _ADDITIVE_KEYS = {"rule_pack", "compliance_overview", "assignment_policy"}
+    # `assignment_policy`; 0.7.3 adds `check_packs` (all additive, counts-only).
+    # The prior keys and their types are unchanged.
+    _ADDITIVE_KEYS = {"rule_pack", "compliance_overview", "assignment_policy", "check_packs"}
     for payload in (available, unavailable):
         assert _PRIOR_TOP_LEVEL_KEYS <= set(payload)
         assert set(payload) - _PRIOR_TOP_LEVEL_KEYS == _ADDITIVE_KEYS
