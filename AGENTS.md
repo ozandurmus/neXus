@@ -142,6 +142,17 @@ for low-risk work, but explicit routing is preferred for major builds.
 At every meaningful checkpoint recommend the next movement type and reasoning
 level. Do not use high reasoning merely because it is available.
 
+**Explicit model + reasoning recommendation, every checkpoint.** At each of
+`SESSION START`, contract freeze, before implementation, before validation and
+`SESSION CLOSE`, the agent must state — to the user, in plain terms — an explicit
+`model + reasoning tier` recommendation for the next step, and must say plainly
+when the strongest available tier would be overkill and a lighter one is enough.
+Default down, not up: name the lightest tier that covers the task, and only
+escalate with a stated reason (new architecture, security/storage/CAS,
+vendor-semantic ambiguity, cross-subsystem root cause, phase closure). If the
+user has pre-selected a tier, still say whether it fits or is more than the task
+needs.
+
 ## Context/token discipline
 
 - Search/symbol-driven inspection before large-file reads.
