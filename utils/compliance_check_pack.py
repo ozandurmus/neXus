@@ -47,6 +47,14 @@ SOURCE_NAMESPACES = frozenset({
     "current_configuration", "unified", "crypto_facts", "alignment",
 })
 
+# CE.1 fast-follow: `unified.interfaces` / `unified.routes` are merged-inventory
+# collections whose rows carry network identity (interface addresses / names,
+# route targets). They are limited to operators that assert on shape only and
+# never echo an observed value into the payload; the engine renders a count-only
+# `observed` for them (see utils.compliance_check_engine).
+_INVENTORY_COLLECTION_KEYS = frozenset({"interfaces", "routes"})
+_INVENTORY_COLLECTION_OPS = frozenset({"present", "absent", "count_gte", "count_lte"})
+
 _SEGMENT_RE = re.compile(
     r"^([a-z_][a-z0-9_]*)(?:\[([a-z_][a-z0-9_]*)=([^\]]+)\])?$"
 )
@@ -156,6 +164,16 @@ def parse_selector(text: object) -> ParsedSelector:
     return ParsedSelector(namespace=namespace, segments=tuple(segments))
 
 
+def is_inventory_collection_selector(selector: ParsedSelector) -> bool:
+    """True for a ``unified.interfaces`` / ``unified.routes`` selector — the
+    merged-inventory collections that carry network identity (CE.1 fast-follow)."""
+    return (
+        selector.namespace == "unified"
+        and bool(selector.segments)
+        and selector.segments[0].key in _INVENTORY_COLLECTION_KEYS
+    )
+
+
 # --- validation helpers --------------------------------------------------
 
 def _fail(message: str) -> CompliancePackError:
@@ -226,6 +244,13 @@ def _step(raw: object) -> CheckStep:
     op = str(assertion.get("op") or "")
     if op not in VALID_OPS:
         raise _fail(f"check step assert op '{op}' is not one of {sorted(VALID_OPS)}")
+
+    if is_inventory_collection_selector(selector) and op not in _INVENTORY_COLLECTION_OPS:
+        raise _fail(
+            f"check step assert op '{op}' is not allowed on "
+            f"'unified.{selector.segments[0].key}' — merged-inventory collections carry "
+            f"network identity and are limited to {sorted(_INVENTORY_COLLECTION_OPS)}"
+        )
 
     pattern: re.Pattern[str] | None = None
     value: Any = None
