@@ -314,10 +314,30 @@ Configuration, Discovery, Project Plan. A malformed pack fails the run closed
 
 **Deferred (fast-follows / later phases):**
 
-- `crypto_facts` and full `unified.interfaces` / `unified.routes` resolvers —
-  the namespaces parse and are reserved; they resolve empty in CE.1 (a check
-  using them → `on_no_evidence`). Wire when `build_compliance_posture` is given
-  crypto facts / the merged inventory row (non-breaking optional param).
+- `unified.interfaces` / `unified.routes` resolvers — the namespaces parse and
+  are reserved; they resolve empty (a check using them → `on_no_evidence`).
+  Wire when `build_compliance_posture` is given the merged inventory row
+  (non-breaking optional param).
 - `CE.2` (`compliance_check_engine_primitives`), `CE.3`
   (`compliance_check_engine_ui`), `CE.4` (`compliance_remediation_checks`) — see
   the design doc and backlog.
+
+---
+
+## 11. Follow-up — CE.1 crypto-source wire (2026-08-29, AUTOMATED_VALIDATED)
+
+`build_compliance_posture(..., crypto_facts_by_subject=None)` — an optional
+`{subject_id: facts}` map. `utils/html_export.py` now builds `crypto_ui` first
+and threads `{s["subject_id"]: s["facts"]}` (the bounded, privacy-reviewed 0.7.0
+fact groups: `ike_crypto_profiles` / `ipsec_crypto_profiles` / `ike_gateways` /
+`tls_service_profiles` / `certificates` — never key material / PSK / cert body)
+into `build_compliance_posture`. `_subject_evidence(device, crypto_facts)`
+populates the `crypto_facts` namespace; `_subject_user_checks` threads it by
+`subject_id`. A check with `source: "crypto_facts.<group>"` now evaluates against
+real facts; with none wired (tests, some callers) the namespace resolves empty →
+`on_no_evidence`. Additive, non-breaking; the sole non-test caller is
+`html_export`.
+
+Evidence: `py -m pytest -q -n auto` → **516 passed, 3 skipped, 0 failed**
+(514 → +2). Repository privacy gate PASS / 0. `--render-only` exit 0 / 0
+placeholders.

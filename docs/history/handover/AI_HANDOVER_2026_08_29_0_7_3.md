@@ -14,25 +14,25 @@ If a section does not apply, write `n/a` — do not delete the heading.
   (data-driven, evidence-only)` — AUTOMATED_VALIDATED (2026-08-29).
 - Engineering baseline: `DEV.1` complete; `DEV.2.1` — AUTOMATED_VALIDATED.
 - Date: 2026-08-29
-- **This session produced two builds plus a design, none committed** (Git is
-  human-controlled). Working tree on branch
-  `feature/0-7-3-compliance-check-engine`; branches `feature/0-7-2-…`,
-  `feature/0-7-3-…` and `main` all still point at `2ff2973` — the whole diff is
-  uncommitted in the working tree.
+- **`0.7.2` + `0.7.3` are on `origin/main`.** Committed `fe461b0`, merged
+  `--no-ff` as `5ca70e4`, pushed (`gh` CLI is not installed and the GitHub MCP
+  token cannot open PRs, so the merge was done locally and pushed). Local
+  feature branch `feature/0-7-3-compliance-check-engine` is kept;
+  `feature/0-7-2-compliance-followups` was deleted (unused).
   - `0.7.2` — Compliance Follow-ups (password/banner/services projection +
     framework filter & explain UI).
-  - Design + resolved decisions: `docs/design/COMPLIANCE_CHECK_ENGINE.md`
-    (CE.1→CE.4, all D1–D16 resolved) + roadmap/backlog entries.
+  - `docs/design/COMPLIANCE_CHECK_ENGINE.md` — CE.1→CE.4, all decisions
+    D1–D16 resolved.
   - `0.7.3` — CE.1 user-authored check engine.
-  The two builds were validated together (514 tests). They can land as one
-  0.7.2+0.7.3 change or be split by the file lists in
-  `docs/history/phase/0_7_2_COMPLIANCE_FOLLOWUPS.md` §3 and
-  `docs/history/phase/0_7_3_COMPLIANCE_CHECK_ENGINE.md` §3.
+- **CE.1 crypto-source follow-up — NOT yet committed.** Working tree on branch
+  `feature/0-7-3-1-check-engine-crypto-source` (off the updated `main`).
+  `build_compliance_posture` gained `crypto_facts_by_subject`; `html_export`
+  threads it. 3 files + doc/state updates. Ready to commit + merge the same way.
 - Python: bare `py` → 3.14 (no deps). Test deps are `--user` on **3.12**.
   `py -V:3.12 <script>` mis-parses on this box (exit 103); use
   `py -V:3.12 -m pytest` or the 3.12 interpreter directly at
   `%LOCALAPPDATA%\Programs\Python\Python312\python.exe`.
-- Full suite: `py -m pytest -q -n auto --dist worksteal` → **514 passed,
+- Full suite: `py -m pytest -q -n auto --dist worksteal` → **516 passed,
   3 skipped, 0 failed** (~35s).
 - Repository privacy gate: **PASS / 0 on a clean checkout**. (Locally it reports
   `data/` + `logs/` + `data/.support_hmac.key` — gitignored runtime artifacts
@@ -94,11 +94,12 @@ If a section does not apply, write `n/a` — do not delete the heading.
 the stacked feature branch and need a human `main` merge (§6). A new build needs
 a fresh contract, reviewed first.
 
-- **CE.1 fast-follow (small, buildable now):** wire the `crypto_facts` and
-  `unified.interfaces` / `unified.routes` resolvers — the namespaces already
-  parse and are reserved; today they resolve empty. Give
-  `build_compliance_posture` an optional `crypto_facts_by_subject` / merged
-  inventory param (non-breaking) and populate `_subject_evidence`.
+- **CE.1 fast-follow — `crypto_facts` wired (done 2026-08-29).**
+  `build_compliance_posture(..., crypto_facts_by_subject=None)`; `html_export`
+  threads the privacy-reviewed 0.7.0 fact groups keyed by subject id.
+  Remaining: `unified.interfaces` / `unified.routes` still parse and resolve
+  empty — wire when `build_compliance_posture` is given the merged inventory
+  row (non-breaking optional param).
 - **CE.2** (`compliance_check_engine_primitives`) — curated read-only
   command-primitive registry (`configuration/command_primitives.py`), opt-in
   `--compliance-probe`. **Blocked on `cp_device_interaction_safety` (P0) + the
@@ -134,9 +135,10 @@ Backlog `on_hardware_real_env_validation` (P0), laptop-blocked.
 ## 4. Open risks / debt carried forward
 
 - CP device-interaction-safety audit remains P0 — hard prerequisite for CE.2.
-- `crypto_facts` / `unified.interfaces` / `unified.routes` selector namespaces
-  parse but resolve empty in CE.1 (a check using them → `on_no_evidence`). Not a
-  bug — the fast-follow above wires them.
+- `unified.interfaces` / `unified.routes` selector namespaces parse but resolve
+  empty in CE.1 (a check using them → `on_no_evidence`). Not a bug — wire when
+  `build_compliance_posture` is given the merged inventory row. (`crypto_facts`
+  is now wired — the CE.1 crypto-source follow-up.)
 - The regex safety linter (`_REDOS_RE` + quantifier count + `.*.*`) is
   best-effort; the eval-time timeout is the real backstop. `regex` module is
   used when importable, else stdlib `re` with a 20 000-char input cap.
@@ -152,43 +154,43 @@ Backlog `on_hardware_real_env_validation` (P0), laptop-blocked.
 
 ## 5. Exact next action
 
-1. Human review + `main` merge of the `0.7.2` + `0.7.3` diff (§6).
-2. Then: fresh chat, pick from §3 (the CE.1 crypto/inventory-resolver
-   fast-follow is the smallest next step), write + review a contract, implement.
+1. Commit + merge the **CE.1 crypto-source follow-up** (branch
+   `feature/0-7-3-1-check-engine-crypto-source`) the same way 0.7.2+0.7.3 were
+   landed — see §6.
+2. Then: fresh chat, pick a new 0.7.x objective (framework_mappings; a
+   point-in-time / trend layer for `compliance_overview` off the config
+   history; or wire `unified.interfaces`/`routes` into the check engine),
+   write + review a contract, implement.
 
 ## 6. main merge decision + Git dispatch
 
-Recommendation: **approved for `main`** once a human has reviewed the diff.
-Evidence: 514 passed / 3 skipped / 0 failed; render exit 0 / 0 placeholders;
-privacy gate PASS / 0 on a clean tree. Additive only; no new device command; no
-collector / network / CAS / scheduler change; frozen 0.6.6B pack and
-`subject["controls"]` unchanged; a `remediation` key is validator-rejected.
+`0.7.2` + `0.7.3` are **already merged and pushed** — `origin/main` at `5ca70e4`
+(merge commit), `fe461b0` the squashed build commit.
 
-The working tree holds both builds. Land as one change:
+The **CE.1 crypto-source follow-up** is committed-ready on
+`feature/0-7-3-1-check-engine-crypto-source`. Recommendation: **approved for
+`main`**. Evidence: 516 passed / 3 skipped / 0 failed; render exit 0 / 0
+placeholders; privacy gate PASS / 0 on a clean tree. Additive; `html_export` is
+the sole non-test caller; non-breaking optional param.
+
+`gh` is not installed and the GitHub MCP token cannot open PRs — land it locally:
 
 ```
 git add -A
-git commit -m "feat(compliance): 0.7.2 projection follow-ups + 0.7.3 CE.1 user-authored check engine"
-git push -u origin feature/0-7-3-compliance-check-engine
-gh pr create --base main --head feature/0-7-3-compliance-check-engine \
-  --title "0.7.2 + 0.7.3 — compliance follow-ups and the CE.1 user-authored check engine" \
-  --body "Contracts: docs/history/phase/0_7_2_COMPLIANCE_FOLLOWUPS.md + 0_7_3_COMPLIANCE_CHECK_ENGINE.md (each §10). Design: docs/design/COMPLIANCE_CHECK_ENGINE.md. Additive; no new collector/command. pytest 514p/3s/0f; render exit 0; privacy gate PASS/0."
+git commit -m "feat(compliance): CE.1 crypto-source wire — crypto_facts namespace for user checks"
+git checkout main && git merge --no-ff feature/0-7-3-1-check-engine-crypto-source
+git push origin main
 ```
-
-Or split: commit the `0.7.2` files (contract §3 list) on
-`feature/0-7-2-compliance-followups` first, then the `0.7.3` files on
-`feature/0-7-3-compliance-check-engine`.
 
 ## 7. Next movement / model
 
-- Next movement: `IMPLEMENTATION` for the CE.1 fast-follow (deterministic,
-  contract-shaped) → normal reasoning; or `ARCHITECTURE` (high reasoning) for a
-  new 0.7.x contract (trend layer, framework_mappings).
+- Next movement: `ARCHITECTURE` (high reasoning) for a new 0.7.x contract
+  (framework_mappings, trend layer), then `IMPLEMENTATION` (normal).
 
 ## 8. Continue or fresh chat
 
-**Start a fresh chat.** 0.7.2 + 0.7.3 are complete pending the human merge; the
-next build is a different objective and needs its own contract.
+**Start a fresh chat** after the follow-up is merged — the next build is a
+different objective and needs its own contract.
 
 ## 9. main.py / UI effect
 

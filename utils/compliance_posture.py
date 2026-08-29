@@ -933,11 +933,18 @@ def _check_pack_block(pack: CompliancePack) -> dict[str, Any]:
     }
 
 
-def _subject_evidence(device: dict[str, Any]) -> dict[str, Any]:
+def _subject_evidence(
+    device: dict[str, Any],
+    crypto_facts: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """The read-only evidence namespaces a user check can assert over (D4).
 
     In-process only; nothing here is echoed into the payload beyond the bounded
-    ``observed`` description the engine produces.
+    ``observed`` description the engine produces. ``crypto_facts`` is the
+    already-normalised, privacy-reviewed 0.7.0 fact set for this subject
+    (``ike_crypto_profiles`` / ``ipsec_crypto_profiles`` / ``ike_gateways`` /
+    ``tls_service_profiles`` / ``certificates``) — never key material, PSK or
+    certificate body.
     """
     return {
         "current_configuration": _as_dict(device.get("current_configuration")),
@@ -950,13 +957,13 @@ def _subject_evidence(device: dict[str, Any]) -> dict[str, Any]:
                 "ha_role": device.get("ha_role"),
                 "entity_type": device.get("entity_type"),
             },
-            "interfaces": [],
+            "interfaces": [],   # namespace reserved — merged-inventory wire is a later step
             "routes": [],
         },
         "alignment": {
             "results": _as_list(_as_dict(device.get("alignment")).get("findings")),
         },
-        "crypto_facts": {},   # namespace reserved (D4) — wired in a fast-follow
+        "crypto_facts": _as_dict(crypto_facts),
     }
 
 
@@ -967,6 +974,7 @@ def _subject_user_checks(
     device_name: str,
     resolved_ids: frozenset[str],
     now: datetime,
+    crypto_facts: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     """0.7.3 (CE.1) — evaluate the user pack's checks for one subject.
 
@@ -979,7 +987,7 @@ def _subject_user_checks(
     vendor_key = str(device.get("vendor_key") or "")
     platform_family = str(device.get("platform_family") or "")
     entity_type = str(device.get("entity_type") or "")
-    evidence = _subject_evidence(device)
+    evidence = _subject_evidence(device, crypto_facts)
     results: list[dict[str, Any]] = []
     for check in pack.checks:
         if not check.applies_to_subject(
@@ -1166,9 +1174,11 @@ def build_compliance_posture(
     project_plan: dict[str, Any] | None = None,
     *,
     data_root: Any = None,
+    crypto_facts_by_subject: dict[str, dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     payload = _as_dict(configuration_ui)
     plan = _as_dict(project_plan)
+    crypto_by_subject = _as_dict(crypto_facts_by_subject)
 
     # 0.7.1b: local, file-based per-device control assignment + waivers.
     # Missing file → all-applicable (byte-identical to the prior behaviour).
@@ -1263,7 +1273,10 @@ def build_compliance_posture(
         )
         extended_controls = (
             _subject_extended_controls(device, policy, device_name, resolved_ids, now)
-            + _subject_user_checks(device, check_pack, policy, device_name, resolved_ids, now)
+            + _subject_user_checks(
+                device, check_pack, policy, device_name, resolved_ids, now,
+                crypto_by_subject.get(subject_id),
+            )
             if has_current else []
         )
 
