@@ -14,10 +14,10 @@ If a section does not apply, write `n/a` — do not delete the heading.
   AUTOMATED_VALIDATED (2026-08-29).
 - Engineering baseline: `DEV.1` complete; `DEV.2.1` — AUTOMATED_VALIDATED.
 - Date: 2026-08-29
-- `origin/main` is at `088c369` (docs follow-up to the `684adad` 0.7.4 merge).
-- **This session's work is on branch `feature/ce1-unified-inventory-wire`, not yet
-  committed** — the CE.1 `unified.interfaces` / `unified.routes` fast-follow (§2).
-  Automated-validated; awaiting the user's go-ahead to commit + land on `main`.
+- **`origin/main` is at `5b5e893`** — the CE.1 `unified.interfaces` /
+  `unified.routes` fast-follow (§2) is merged (`--no-ff`, `e8ca974` + merge
+  `5b5e893`) and pushed; feature branch deleted. Working tree clean.
+- A trend-layer contract (§3) is being drafted next in the same session.
 - **GitHub tooling (2026-08-29):** `gh` CLI is installed
   (`C:\Program Files\GitHub CLI\gh.exe`, v2.98.0) and authenticated as
   `ozandurmus` — token scopes `gist, read:org, repo, workflow` (`repo` covers
@@ -47,7 +47,7 @@ If a section does not apply, write `n/a` — do not delete the heading.
 ## 2. Recent builds (this session)
 
 - **CE.1 fast-follow #2 — `unified.interfaces` / `unified.routes` wire**
-  (branch `feature/ce1-unified-inventory-wire`, **uncommitted**). Record:
+  (on `main`, `e8ca974`; merge `5b5e893`). Record:
   `docs/history/phase/0_7_3_COMPLIANCE_CHECK_ENGINE.md` §12. Additive; no server;
   no collector; no device command; `COMPLIANCE_SCHEMA_VERSION` unchanged; no
   product-version bump.
@@ -185,17 +185,14 @@ Backlog `on_hardware_real_env_validation` (P0), laptop-blocked.
 
 ## 6. main merge decision + Git dispatch
 
-- **`feature/ce1-unified-inventory-wire` → `main`: approved on evidence, pending
-  the user's explicit go-ahead to run it** (standing priority 4 keeps the push
-  human-initiated). Evidence: full suite 529p/3s/0f; privacy gate PASS/0 on a
-  clean tree; `render_sample.py` exit 0. Not yet committed.
-- Dispatch once cleared (branch already exists, changes staged by `git add -A`):
-  `git -C C:\Users\Ozan\Code\neXus commit` → `git checkout main` →
-  `git merge --no-ff feature/ce1-unified-inventory-wire` → `git push origin main`.
-  Or PR: `gh pr create --fill --base main` → `gh pr merge --merge` (`gh` is
-  installed + `repo`-scoped, see §1).
-- Delete the gitignored `data/` + `logs/` a test run leaves before re-checking
-  the privacy gate.
+- **CE.1 fast-follow #2: LANDED.** `feature/ce1-unified-inventory-wire` merged
+  `--no-ff` into `main` (`5b5e893`) and pushed to `origin/main`; branch deleted.
+  Evidence at merge: 529p/3s/0f, privacy gate PASS/0 clean tree, render exit 0.
+- Nothing else outstanding. Next build: branch off `main`, commit, then
+  `git merge --no-ff` + `git push origin main` **or** `gh pr create --fill
+  --base main` → `gh pr merge --merge` (`gh` installed + `repo`-scoped, see §1).
+- Delete the gitignored `data/` + `logs/` a test run leaves before the privacy
+  gate.
 
 ## 7. Next movement / model
 
