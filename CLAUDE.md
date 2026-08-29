@@ -13,8 +13,16 @@ lifecycle is `docs/AI_DEVELOPMENT_PROTOCOL.md`. This file does not restate them.
   security boundaries, vendor-semantic ambiguity, deployment/server/container
   work, cross-subsystem root cause, and phase closure. Use normal reasoning for
   deterministic implementation, tests, documentation and validation. Do not
-  spend high reasoning on mechanical work; recommend the next movement type and
-  reasoning level at each meaningful checkpoint.
+  spend high reasoning on mechanical work.
+- **Model + reasoning recommendation to the user, every checkpoint** (per
+  `AGENTS.md` "AI reasoning / movement routing"). Concrete tiers for this repo:
+  `Sonnet 5, normal` for source audit, deterministic implementation against a
+  frozen contract, tests, docs and validation; `Sonnet 5, extended thinking
+  (high)` for a design/contract on new scope, a security/privacy boundary, a
+  vendor-semantic call, or phase closure; `Opus / Fast` only when a genuinely
+  cross-subsystem architecture decision is on the table. State the recommendation
+  in plain terms, name the lightest tier that fits, and say when a pre-selected
+  tier (e.g. "Sonnet high") is more than the step needs.
 - **Test economy.** One-shot, file-backed runs:
   `py -m pytest -q > pytest_result.log 2>&1`. Do not re-run the full suite while
   the last evidence still holds.
