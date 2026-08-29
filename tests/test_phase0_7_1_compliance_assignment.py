@@ -26,7 +26,7 @@ _PRIOR_KEYS = {
     "schema_version", "available", "classification", "disclaimer", "rule_pack",
     "fleet", "fleet_controls", "platform_controls", "subjects", "privacy",
 }
-_ADDITIVE_KEYS = {"compliance_overview", "assignment_policy"}
+_ADDITIVE_KEYS = {"compliance_overview", "assignment_policy", "check_packs"}
 
 _DEVICE_NAME_CP = "corp-cp-gw-01"
 _DEVICE_NAME_PAN = "corp-pan-fw-01"
@@ -93,7 +93,7 @@ def _write_policy(tmp_path, body):
 # --- AC-1: catalog / enrichment shape -------------------------------------
 
 def test_ac1_catalog_shape_and_derived_views():
-    assert CATALOG_VERSION == "0.7.1b"
+    assert CATALOG_VERSION == "0.7.2"
     assert len(catalog_baseline_controls()) == 10          # frozen 0.6.6B view
     enrichment = catalog_enrichment_controls()
     assert len(enrichment) >= 6

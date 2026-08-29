@@ -51,6 +51,24 @@ SECRET_LINE_RE = re.compile(
     r"(?:^|[\s_-])key(?:$|[\s_-]))"
 )
 
+# 0.7.2: `set password-controls <knob> ...` lines match SECRET_LINE_RE ("password")
+# but carry only non-secret policy knobs. This allowlist re-admits exactly those
+# knob lines; anything else matching SECRET_LINE_RE stays withheld.
+PASSWORD_POLICY_SAFE_RE = re.compile(
+    r"(?i)^set\s+password-controls\s+(?:"
+    r"min-password-length|password-min-length|complexity|palindrome-check|history-check|"
+    r"password-history|password-expiration|expiration-warning-days|expiration-lockout-days|"
+    r"deny-on-fail|deny-on-nonuse|force-change-when|password-format"
+    r")\b"
+)
+
+# 0.7.2: the banner / MOTD body is a local-operator (potentially identifying)
+# string. Keep the presence/on-off token, drop everything from `msgvalue` on,
+# before the line reaches the redacted artifact or the shareable bundle.
+MESSAGE_BODY_RE = re.compile(
+    r"(?i)^(set\s+message\s+\S+(?:\s+(?:on|off))?)\s+msgvalue\s+.*$"
+)
+
 CLI_UNSUPPORTED_PATTERNS = (
     "command not found",
     "unknown command",
@@ -75,6 +93,9 @@ SECTION_ORDER = (
     "dns",
     "ntp",
     "management",
+    "password_policy",
+    "banner",
+    "services",
     "logging",
     "high_availability",
     "interfaces",
@@ -88,6 +109,9 @@ SECTION_LABELS = {
     "dns": "DNS",
     "ntp": "NTP",
     "management": "Management",
+    "password_policy": "Password Policy",
+    "banner": "Login Banner",
+    "services": "Management Services",
     "logging": "Logging",
     "high_availability": "High Availability",
     "interfaces": "Interfaces",
@@ -183,14 +207,29 @@ def _sanitize_configuration(stdout: str) -> dict[str, Any]:
     set_lines = _canonical_set_lines(stdout)
     raw_canonical = "\n".join(set_lines)
     raw_hash = _sha256_text(raw_canonical) if set_lines else None
+
+    def _withheld(line: str) -> bool:
+        # 0.7.2: password-controls policy knobs are re-admitted even though they
+        # contain the substring "password".
+        if PASSWORD_POLICY_SAFE_RE.match(line):
+            return False
+        return bool(SECRET_LINE_RE.search(line))
+
+    def _display(line: str) -> str:
+        # 0.7.2: collapse the banner / MOTD body; keep the presence token.
+        return MESSAGE_BODY_RE.sub(r"\1 msgvalue [SECURITYEXPERT BANNER BODY WITHHELD]", line)
+
     safe_lines: list[str] = []
+    safe_set_lines: list[str] = []
     withheld = 0
     for line in set_lines:
-        if SECRET_LINE_RE.search(line):
+        if _withheld(line):
             withheld += 1
             safe_lines.append("# [SECURITYEXPERT SECRET-BEARING CONFIGURATION LINE WITHHELD]")
-        else:
-            safe_lines.append(line)
+            continue
+        display = _display(line)
+        safe_lines.append(display)
+        safe_set_lines.append(display)
 
     header = [
         "# SecurityExpert Check Point Gaia configuration evidence (redacted)",
@@ -200,7 +239,7 @@ def _sanitize_configuration(stdout: str) -> dict[str, Any]:
     ]
     sanitized_text = "\n".join(header + safe_lines).rstrip() + "\n"
     return {
-        "safe_set_lines": [line for line in set_lines if not SECRET_LINE_RE.search(line)],
+        "safe_set_lines": safe_set_lines,
         "sanitized_text": sanitized_text,
         "raw_canonical_sha256": raw_hash,
         "set_line_count": len(set_lines),
@@ -217,8 +256,12 @@ def _section_for(tokens: list[str]) -> str:
     if not tokens:
         return "other"
     head = tokens[0].lower()
-    if head in {"hostname", "domainname", "timezone", "time", "clock", "banner"}:
+    if head in {"hostname", "domainname", "timezone", "time", "clock"}:
         return "system"
+    if head == "password-controls":
+        return "password_policy"
+    if head in {"message", "banner"}:
+        return "banner"
     if head == "dns":
         return "dns"
     if head == "ntp":
@@ -245,6 +288,14 @@ def _setting_value(tokens: list[str]) -> tuple[str, str]:
         return "Setting", "—"
     head = tokens[0].lower()
     rest = tokens[1:]
+    if head == "password-controls" and rest:
+        return "Password · " + _pretty(rest[0]), " ".join(rest[1:]) or "enabled"
+    if head == "message" and rest:
+        # The banner / MOTD body is redacted upstream; project presence only.
+        on_off = next((tok.lower() for tok in rest[1:] if tok.lower() in {"on", "off"}), None)
+        return _pretty(rest[0]), "absent" if on_off == "off" else "present"
+    if head == "banner" and rest:
+        return "Banner", "present"
     if head == "hostname":
         return "Hostname", " ".join(rest) or "—"
     if head == "domainname":

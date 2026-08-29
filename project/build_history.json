@@ -3,6 +3,43 @@
   "record_contract": "One structured record per build, newest first. Required: build, status, title, summary (<= 2 sentences). Optional: started, completed, track, movement, supersedes, evidence, risks_forward, docs{agreement,validation,handover} (repo-relative paths under docs/history/). Full detail lives in the linked doc; do not restate it here. Status vocabulary must stay within utils/project_plan.py STATUS_VALUES.",
   "builds": [
     {
+      "build": "0.7.3",
+      "status": "automated_validated",
+      "started": "2026-08-29",
+      "completed": "2026-08-29",
+      "title": "CE.1 - User-Authored Compliance Check Engine (data-driven, evidence-only)",
+      "track": "0.7.x",
+      "movement": "IMPLEMENTATION",
+      "summary": "The BackBox/Nipper model: a check is DATA (name + evidence source + expected pattern + verdict), matches -> compliant, else not - over ALREADY-collected evidence. No server, no new device command. New utils/compliance_check_pack.py (load_compliance_checks -> CompliancePack from data/state/compliance_checks.json, schema v1, fail-closed; mirrors control_assignment.py): x_-prefixed check ids, a hand-written selector grammar NS('.'SEGMENT)* over namespaces {current_configuration, unified, crypto_facts, alignment} (no eval / no dep), a fixed 14-operator assertion set, evidence.steps[] with combine all|any, anchored regex <=512 chars behind a complexity linter + eval-time timeout, mode enforced|advisory, verdict on_pass/on_fail/on_no_evidence; a 'remediation' key is rejected (reserved for the write-capable future, CE.4). New utils/compliance_check_engine.py (resolve_source / apply_select / apply_assertion / evaluate_check, all pure; a path that can't be walked -> None -> on_no_evidence for every operator, never an inferred PASS; regex timeout -> step inconclusive; redacted_selector blanks [attr=value] filter values). compliance_posture: _subject_user_checks appends to subject.extended_controls (control_class user_check, advisory, pack, check_steps, redacted evidence_fields); _scoring_rows drops advisory rows from subject status + fleet counts + compliance_overview (which now extends all_ids / by_framework / severity with enforced user checks); applies_to miss -> assignment.not_assigned; new top-level check_packs (counts + pack_id only). control_assignment.load_control_assignments gains extra_known_ids so an include/exclude/waiver can target x_ ids. UI: 'user-defined' + 'advisory' badges on the control card, source-pack + per-step expected/observed lines in the 0.7.2 Explain panel (pattern expected shown as 'redacted'). Arbitrary user command strings are never executed. No certification claim.",
+      "evidence": {
+        "automated": "py -m pytest -q -n auto: 514 passed, 3 skipped, 0 failed (Python 3.12). Prior baseline 483 -> +31 (tests/test_phase0_7_3_compliance_check_engine.py). Frozen touch-ups: test_phase0_7_1 + test_phase0_6_6b (check_packs added to the allowed additive top-level key set - same precedent as compliance_overview/assignment_policy in 0.7.1b).",
+        "privacy_gate": "PASS / 0 on a clean tree. No raw pattern, no raw selector filter value, no device name/IP in the payload; check_packs is counts + pack_id only. data/state/compliance_checks.json is under the existing data/ gitignore.",
+        "real_env": "not required (engine reads already-collected evidence; on-hardware check-authoring folds into on_hardware_real_env_validation)"
+      },
+      "docs": {
+        "agreement": "docs/history/phase/0_7_3_COMPLIANCE_CHECK_ENGINE.md",
+        "design": "docs/design/COMPLIANCE_CHECK_ENGINE.md"
+      }
+    },
+    {
+      "build": "0.7.2",
+      "status": "automated_validated",
+      "started": "2026-08-29",
+      "completed": "2026-08-29",
+      "title": "Compliance Follow-ups: Password / Banner / Services Projection + Framework Filter & Explain UI",
+      "track": "0.7.x",
+      "movement": "IMPLEMENTATION",
+      "summary": "Closes the list deferred from 0.7.1. New projection-extension sections over the already-stored config (no new collector): password_policy, banner (presence + length bucket only, never the body), services. PAN via bounded local-name allowlist extractors in current_config_projection.py (independent of the generic scalar walk; _section_for now yields None for service/login-banner leaves so they are not double-projected or body-exposed under Management/System); CP via checkpoint_config_collector.py - a PASSWORD_POLICY_SAFE_RE allowlist re-admits `set password-controls <knob>` lines that SECRET_LINE_RE would otherwise withhold, and MESSAGE_BODY_RE collapses `set message ... msgvalue <body>` before the redacted artifact / shareable bundle. +6 enrichment controls (compliance_catalog.py CATALOG_VERSION -> 0.7.2; compliance_evaluators_ext.py): password_min_length, password_complexity_enabled, password_history_depth, password_lockout_policy, login_banner_text_present, unused_services_disabled - all in extended_controls, the frozen 0.6.6B ten and rule_count==10 untouched; section absent -> UNKNOWN, present-but-weak -> FINDING, never an inferred PASS. UI (app.js / index.html / style.css): framework filter chips (CIS / PCI-DSS / BDDK, multi-select union, Clear) that filter the control grids + framework-readiness cards + subject grids, and an inline Explain toggle on every control card (rationale + evidence fields + framework references; one delegated listener). Purely additive payload; CURRENT_CONFIG_SCHEMA_VERSION -> 0.7.2 (PAN); CP artifact schema and COMPLIANCE_SCHEMA_VERSION unchanged.",
+      "evidence": {
+        "automated": "py -m pytest -q -n auto: 483 passed, 3 skipped, 0 failed (Python 3.12); scripts/render_sample.py exit 0, 0 placeholders; new tests/test_phase0_7_2_compliance_followups.py (6). Frozen-test touch-ups: test_phase0_7_1a / test_phase0_7_1 (CATALOG_VERSION 0.7.2), test_phase0_6_0a4_3 (CURRENT_CONFIG_SCHEMA_VERSION 0.7.2). test_phase0_6_6b untouched.",
+        "privacy_gate": "5 findings, all pre-existing and none from 0.7.2 source: 3 are gitignored local runtime artifacts (data/, logs/, data/.support_hmac.key) created by test runs; 2 are AI_HANDOVER files carrying a raw interpreter path committed in 6f5818e (0.7.1b). No 0.7.2 changed file produces a finding.",
+        "real_env": "not required (projection reads already-stored config; new-section on-hardware coverage folds into on_hardware_real_env_validation)"
+      },
+      "docs": {
+        "agreement": "docs/history/phase/0_7_2_COMPLIANCE_FOLLOWUPS.md"
+      }
+    },
+    {
       "build": "0.7.1b",
       "status": "automated_validated",
       "started": "2026-08-29",
