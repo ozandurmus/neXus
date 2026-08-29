@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "current_build": "0.7.3",
+  "current_build": "0.7.4",
   "current_track": "0.6.x",
   "progress_contract": "Weighted acceptance-criterion completion. Percentages describe the declared roadmap, not calendar time or delivery ETA.",
   "tracks": [
@@ -109,9 +109,9 @@
   ],
   "now_next": {
     "now": {
-      "build": "0.7.3",
-      "title": "CE.1 - user-authored compliance check engine (data-driven, evidence-only)",
-      "goal": "A check is DATA (name + evidence source + expected pattern + verdict), evaluated over already-collected evidence: fail-closed RuntimeRoot check pack (data/state/compliance_checks.json), a safe selector grammar + fixed assertion operator set, multi-step combine all|any, enforced|advisory mode, results into subject.extended_controls + compliance_overview, reusing the 0.7.2 Explain panel + framework chips. No server, no new device command.",
+      "build": "0.7.4",
+      "title": "framework_mappings: requirement-level coverage",
+      "goal": "Model the framework side: utils/framework_catalog.py (declarative CIS/PCI-DSS/BDDK requirement lists, our own titles, applies flag), and compliance_overview.by_framework[name].requirements[] with per-requirement coverage (COVERED/PARTIALLY_COVERED/UNCOVERED/NOT_APPLICABLE) + posture (ALIGNED/FINDING/UNKNOWN), version/profile, requirement_counts, unmapped_control_refs. UI: per-framework requirement mini-bar + drill-down. Additive; no new control/collector; no server.",
       "status": "automated_validated",
       "started": "2026-08-29",
       "completed": "2026-08-29"
