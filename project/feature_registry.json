@@ -674,15 +674,22 @@
       "status": "in_progress",
       "target": "0.7.x",
       "weight": 5,
-      "early_foundation": "CIS/PCI-DSS/BDDK control-area mappings and benchmark references delivered in 0.6.1B.1.5/1.6 as evidence-bounded area mappings. Formal framework mapping with full rule coverage and governance acceptance is the 0.7.x gate.",
-      "summary": "Map technical evidence/findings to internal and external control frameworks. Design + now/DEPLOY.1 split: docs/design/COMPLIANCE_ASSIGNMENT_AND_FRAMEWORKS.md (0.7.1 delivers the file-based, read-only foundation).",
-      "why": "Connects engineering evidence to audit and governance requirements.",
+      "early_foundation": "CIS/PCI-DSS/BDDK control-area mappings and benchmark references delivered in 0.6.1B.1.5/1.6 as evidence-bounded area mappings. 0.7.1a added real per-control per-framework membership; 0.7.4 added the framework SIDE - a declarative requirement catalog (utils/framework_catalog.py) with requirement-level COVERED/PARTIALLY_COVERED/UNCOVERED/NOT_APPLICABLE + posture, version/profile, unmapped-ref drift guard, and a UI requirement drill-down.",
+      "summary": "Map technical evidence/findings to internal and external control frameworks. Designs: docs/design/COMPLIANCE_ASSIGNMENT_AND_FRAMEWORKS.md. A signed / user-authored framework pack + a UI mapping editor (custom frameworks) is DEPLOY.1A-gated.",
+      "why": "Connects engineering evidence to audit and governance requirements - requirement by requirement, not just a framework-level percentage.",
       "criteria": [
         {
           "id": "mapping",
           "label": "Control mappings",
           "state": "done",
           "weight": 1
+        },
+        {
+          "id": "requirement_coverage",
+          "label": "Requirement-level coverage",
+          "state": "done",
+          "weight": 1,
+          "note": "0.7.4: framework_catalog.py + compliance_overview.by_framework[].requirements[] with coverage + posture. DEPLOY.1A: custom/signed framework packs + UI mapping editor."
         }
       ]
     },

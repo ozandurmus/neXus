@@ -4070,6 +4070,14 @@ function renderComplianceFleetCards() {
 }
 
 
+function compliancePostureTone(posture) {
+    const value = safe(posture).toUpperCase();
+    if (value === "ALIGNED") return "success";
+    if (value === "FINDING") return "danger";
+    return "muted";
+}
+
+
 function complianceCoveragePillTone(coverage) {
     const value = safe(coverage).toUpperCase();
     if (value === "COVERED") return "success";
@@ -4112,6 +4120,24 @@ function renderComplianceCoverageOverview() {
         <div class="compliance-framework-readiness">
             ${complianceFilteredFrameworkNames().map(name => {
                 const fw = frameworks[name] || {};
+                const reqs = Array.isArray(fw.requirements) ? fw.requirements : [];
+                const rc = fw.requirement_counts || {};
+                const versionLine = [safe(fw.version), safe(fw.profile)].filter(Boolean).join(" · ");
+                const bar = reqs.length ? `<div class="compliance-req-bar" role="img" aria-label="${formatNumber(rc.COVERED || 0)} covered, ${formatNumber(rc.PARTIALLY_COVERED || 0)} partial, ${formatNumber(rc.UNCOVERED || 0)} uncovered, ${formatNumber(rc.NOT_APPLICABLE || 0)} not applicable">
+                        ${["COVERED", "PARTIALLY_COVERED", "UNCOVERED", "NOT_APPLICABLE"].map(k => {
+                            const n = Number(rc[k] || 0);
+                            return n ? `<span class="seg ${k.toLowerCase()}" style="flex:${n}" title="${escapeHtml(k.replace(/_/g, " "))}: ${n}">${n}</span>` : "";
+                        }).join("")}
+                    </div>` : "";
+                const rows = reqs.map(r => `
+                    <div class="compliance-req-row">
+                        <div class="compliance-req-id">${escapeHtml(r.section || "")} · ${escapeHtml(r.id || "")}</div>
+                        <div class="compliance-req-title">${escapeHtml(r.title || "")}${(r.control_ids && r.control_ids.length) ? `<small>${r.control_ids.map(escapeHtml).join(", ")}</small>` : `<small>no mapped control</small>`}</div>
+                        <div class="compliance-req-pills">
+                            ${statusPill(safe(r.coverage || "UNCOVERED").replace(/_/g, " "), complianceCoveragePillTone(r.coverage))}
+                            ${statusPill(safe(r.posture || "UNKNOWN"), compliancePostureTone(r.posture))}
+                        </div>
+                    </div>`).join("");
                 return `
                     <article class="compliance-framework-card">
                         <div class="compliance-framework-head">
@@ -4119,6 +4145,10 @@ function renderComplianceCoverageOverview() {
                             ${statusPill(safe(fw.coverage || "UNCOVERED").replace(/_/g, " "), complianceCoveragePillTone(fw.coverage))}
                         </div>
                         <div class="compliance-framework-meta">${formatNumber(fw.monitored || 0)} / ${formatNumber(fw.controls || 0)} controls monitored · ${formatNumber(fw.aligned || 0)} aligned · ${formatNumber(fw.finding || 0)} finding(s)</div>
+                        ${versionLine ? `<div class="compliance-framework-meta subtle">${escapeHtml(versionLine)}</div>` : ""}
+                        ${bar}
+                        ${reqs.length ? `<button type="button" class="compliance-explain-toggle" data-explain-toggle aria-expanded="false">Requirements (${formatNumber(reqs.length)})</button>
+                        <div class="compliance-explain-panel" hidden><div class="compliance-req-list">${rows}</div>${(fw.unmapped_control_refs && fw.unmapped_control_refs.length) ? `<div class="compliance-req-row subtle"><small>Unmapped control references: ${fw.unmapped_control_refs.map(escapeHtml).join(", ")}</small></div>` : ""}</div>` : ""}
                     </article>
                 `;
             }).join("")}
