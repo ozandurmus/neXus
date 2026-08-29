@@ -8,7 +8,7 @@ from lxml import etree
 from configuration.pan_setting_alignment import alignment_key_for_node
 
 
-CURRENT_CONFIG_SCHEMA_VERSION = "0.6.0A4.3.3.2"
+CURRENT_CONFIG_SCHEMA_VERSION = "0.7.2"
 
 # The browser payload is a local operator view, not a support artifact. We still
 # refuse to surface secret-bearing values even locally. The initial projection
@@ -47,10 +47,63 @@ SECTION_ORDER = [
     "dns",
     "ntp",
     "management",
+    "password_policy",
+    "banner",
+    "services",
     "telemetry",
     "high_availability",
     "network_summary",
 ]
+
+# 0.7.2 projection extension. New sections over the *already-stored*
+# effective-running XML (no new collector). `password_policy` is projected from
+# an explicit field allowlist — never the generic `_sensitive_path()` filter —
+# so a `password*` section can carry only non-secret policy knobs. `banner`
+# carries presence + a coarse length bucket, never the banner body. `services`
+# carries the inbound management-plane service-disable toggles.
+_PASSWORD_POLICY_LEAVES: dict[str, str] = {
+    "minimum-length": "Minimum Length",
+    "minimum-uppercase-letters": "Minimum Uppercase Letters",
+    "minimum-lowercase-letters": "Minimum Lowercase Letters",
+    "minimum-numeric-letters": "Minimum Numeric Letters",
+    "minimum-special-characters": "Minimum Special Characters",
+    "minimum-password-complexity": "Complexity Required",
+    "block-repeated-passwords-count": "History Depth",
+    "password-history-count": "History Depth",
+    "new-password-differs-by-characters": "New Password Differs By",
+    "password-change-on-first-login": "Change On First Login",
+    "block-username-inclusion": "Block Username Inclusion",
+    "expiration-period": "Expiration Period (days)",
+    "expiration-warning-period": "Expiration Warning (days)",
+    "post-expiration-grace-period": "Post-Expiration Grace",
+    "post-expiration-admin-login-count": "Post-Expiration Admin Logins",
+    "failed-attempts": "Lockout: Failed Attempts",
+    "lockout-time": "Lockout: Lock Time",
+    "max-failed-attempts": "Lockout: Max Failed Attempts",
+}
+_PASSWORD_POLICY_ANCESTORS = {"password-complexity", "mgt-config", "admin-lockout", "management"}
+
+_BANNER_LEAVES: dict[str, str] = {
+    "login-banner": "Login Banner",
+    "motd": "Message Of The Day",
+    "ssh-banner": "SSH Banner",
+}
+_BANNER_ANCESTORS = {"mgt-config", "deviceconfig", "system", "setting"}
+
+_SERVICE_LEAVES: dict[str, str] = {
+    "disable-telnet": "Telnet Disabled",
+    "disable-http": "HTTP Disabled",
+    "disable-https": "HTTPS Disabled",
+    "disable-ssh": "SSH Disabled",
+    "disable-icmp": "ICMP Disabled",
+    "disable-snmp": "SNMP Disabled",
+    "disable-snmp-trap": "SNMP Trap Disabled",
+    "disable-userid-service": "User-ID Service Disabled",
+    "disable-userid-syslog-listener-ssl": "User-ID Syslog SSL Disabled",
+    "disable-userid-syslog-listener-udp": "User-ID Syslog UDP Disabled",
+    "disable-http-ocsp": "HTTP OCSP Disabled",
+}
+_SERVICE_ANCESTORS = {"service"}
 
 
 
@@ -73,6 +126,9 @@ SECTION_LABELS = {
     "dns": "DNS",
     "ntp": "NTP",
     "management": "Management",
+    "password_policy": "Password Policy",
+    "banner": "Login Banner",
+    "services": "Management Services",
     "telemetry": "Telemetry",
     "high_availability": "High Availability",
     "network_summary": "Network Configuration",
@@ -232,6 +288,13 @@ def _relative_components(node: etree._Element, stop: etree._Element) -> list[str
 
 def _section_for(key: str) -> str | None:
     text = key.lower()
+    # 0.7.2: the dedicated allowlist extractors own these. Returning None here
+    # keeps the generic scalar walk from (a) re-projecting the service toggles
+    # under Management and (b) surfacing the login-banner *body* under System.
+    if "/deviceconfig/system/service/" in text or text.endswith("/deviceconfig/system/service"):
+        return None
+    if text.endswith("/login-banner") or text.endswith("/motd") or text.endswith("/ssh-banner"):
+        return None
     if "/deviceconfig/high-availability" in text or "/high-availability/" in text:
         return "high_availability"
     if "/deviceconfig/system/dns" in text or "/dns-setting" in text:
@@ -368,6 +431,70 @@ def _scalar_rows(
     return sections, redacted
 
 
+def _has_ancestor(node: etree._Element, names: set[str]) -> bool:
+    cur = node.getparent()
+    while cur is not None:
+        if _local_name(cur.tag) in names:
+            return True
+        cur = cur.getparent()
+    return False
+
+
+def _len_bucket(length: int) -> str:
+    if length <= 0:
+        return "empty"
+    if length < 80:
+        return "<80 chars"
+    if length < 400:
+        return "80-399 chars"
+    return ">=400 chars"
+
+
+def _allowlist_section(
+    root: etree._Element,
+    leaf_labels: dict[str, str],
+    ancestors: set[str],
+    *,
+    presence_only: bool = False,
+) -> list[dict[str, Any]]:
+    """0.7.2 — project a bounded set of leaves by exact local-name.
+
+    Only leaves whose local-name is in ``leaf_labels`` AND that sit under an
+    ancestor in ``ancestors`` are taken. ``presence_only`` (the banner section)
+    replaces the value with a presence + coarse length token so the body is
+    never projected.
+    """
+    rows: list[dict[str, Any]] = []
+    seen: set[tuple[str, str]] = set()
+    for node in root.iter():
+        if not isinstance(node.tag, str) or len(node) != 0:
+            continue
+        label = leaf_labels.get(_local_name(node.tag))
+        if not label:
+            continue
+        text = str(node.text or "").strip()
+        if not text:
+            continue
+        if not _has_ancestor(node, ancestors):
+            continue
+        value = f"present ({_len_bucket(len(text))})" if presence_only else text
+        dedupe = (label, value)
+        if dedupe in seen:
+            continue
+        seen.add(dedupe)
+        rows.append({
+            "setting": label,
+            "value": value,
+            "origin": "effective",
+            "alignment_classification": None,
+            "confidence": None,
+            "context": None,
+            "member_specific": False,
+        })
+    rows.sort(key=lambda row: str(row.get("setting") or "").lower())
+    return rows
+
+
 def _current_highlights(section_rows: dict[str, list[dict[str, Any]]]) -> list[dict[str, Any]]:
     """Return a bounded operator-oriented basic configuration summary.
 
@@ -473,6 +600,18 @@ def build_pan_current_configuration(
     ]
     section_rows["network_summary"] = network_summary
 
+    # 0.7.2 projection-extension sections (allowlist-based; independent of the
+    # generic scalar walk above).
+    password_rows = _allowlist_section(root, _PASSWORD_POLICY_LEAVES, _PASSWORD_POLICY_ANCESTORS)
+    if password_rows:
+        section_rows["password_policy"] = password_rows
+    banner_rows = _allowlist_section(root, _BANNER_LEAVES, _BANNER_ANCESTORS, presence_only=True)
+    if banner_rows:
+        section_rows["banner"] = banner_rows
+    service_rows = _allowlist_section(root, _SERVICE_LEAVES, _SERVICE_ANCESTORS)
+    if service_rows:
+        section_rows["services"] = service_rows
+
     sections = []
     for section_id in SECTION_ORDER:
         rows = section_rows.get(section_id) or []
@@ -495,7 +634,7 @@ def build_pan_current_configuration(
         "highlights": _current_highlights(section_rows),
         "setting_count": sum(section["count"] for section in sections),
         "redacted_secret_setting_count": redacted,
-        "projection_scope": "device_system_management_dns_ntp_ha_telemetry_plus_network_counts",
+        "projection_scope": "device_system_management_dns_ntp_ha_telemetry_password_policy_banner_services_plus_network_counts",
         "native_view": {
             "status": "deferred",
             "reason": "native_config_render_requires_secret_aware_authorized_view",

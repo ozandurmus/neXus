@@ -2248,6 +2248,8 @@ let configSidebarOpen = false;
 let complianceSelectedSubjectId = "__fleet__";
 let complianceVendorFilter = "all";
 let complianceStatusFilter = "all";
+const COMPLIANCE_FRAMEWORKS = ["CIS", "PCI-DSS", "BDDK"];
+const complianceFrameworkFilter = new Set();   // 0.7.2 — empty = no filter
 
 const configDevices = Array.isArray(configUiData?.devices)
     ? configUiData.devices
@@ -3818,9 +3820,62 @@ function complianceSourceName(subject) {
 
 function complianceRenderableControls(controls, includeNotApplicable = false) {
     const rows = Array.isArray(controls) ? controls : [];
-    return includeNotApplicable
+    const visible = includeNotApplicable
         ? rows
         : rows.filter(control => safe(control?.status).toUpperCase() !== "NOT_APPLICABLE");
+    return complianceApplyFrameworkFilter(visible);
+}
+
+
+// 0.7.2 — framework filter chips. A control is shown when the filter is empty
+// or it has an applicable membership in one of the selected frameworks.
+function complianceControlMatchesFrameworkFilter(control) {
+    if (!complianceFrameworkFilter.size) return true;
+    const frameworks = Array.isArray(control?.frameworks) ? control.frameworks : [];
+    return frameworks.some(f => f && f.applies !== false
+        && complianceFrameworkFilter.has(safe(f.framework).toUpperCase()));
+}
+
+
+function complianceApplyFrameworkFilter(controls) {
+    const rows = Array.isArray(controls) ? controls : [];
+    if (!complianceFrameworkFilter.size) return rows;
+    return rows.filter(complianceControlMatchesFrameworkFilter);
+}
+
+
+function complianceFilteredFrameworkNames() {
+    return complianceFrameworkFilter.size
+        ? COMPLIANCE_FRAMEWORKS.filter(name => complianceFrameworkFilter.has(name))
+        : COMPLIANCE_FRAMEWORKS;
+}
+
+
+function renderComplianceFrameworkFilter() {
+    const host = document.getElementById("complianceFrameworkFilter");
+    if (!host) return;
+    if (!complianceUiData?.available) { host.innerHTML = ""; return; }
+    const chips = COMPLIANCE_FRAMEWORKS.map(name => {
+        const active = complianceFrameworkFilter.has(name);
+        return `<button type="button" class="compliance-framework-chip${active ? " active" : ""}" data-framework-chip="${escapeHtml(name)}" aria-pressed="${active ? "true" : "false"}">${escapeHtml(name)}</button>`;
+    }).join("");
+    const clear = complianceFrameworkFilter.size
+        ? `<button type="button" class="compliance-framework-chip clear" data-framework-chip="__clear__">Clear</button>`
+        : "";
+    host.innerHTML = `<span class="compliance-framework-filter-label">Framework filter</span>${chips}${clear}`;
+    host.querySelectorAll("[data-framework-chip]").forEach(btn => {
+        btn.addEventListener("click", () => {
+            const key = btn.dataset.frameworkChip;
+            if (key === "__clear__") {
+                complianceFrameworkFilter.clear();
+            } else if (complianceFrameworkFilter.has(key)) {
+                complianceFrameworkFilter.delete(key);
+            } else {
+                complianceFrameworkFilter.add(key);
+            }
+            renderComplianceModule();
+        });
+    });
 }
 
 
@@ -3880,6 +3935,11 @@ function complianceControlCard(control, options = {}) {
     const plannedReason = safe(control?.planned_reason);
     const futureEvidence = safe(control?.future_evidence_requirement);
     const scope = safe(control?.scope || "");
+    const isUserCheck = safe(control?.control_class || "") === "user_check";
+    const isAdvisory = control?.advisory === true;
+    const packId = safe(control?.pack?.pack_id || "");
+    const packVersion = safe(control?.pack?.pack_version || "");
+    const checkSteps = Array.isArray(control?.check_steps) ? control.check_steps : [];
     const evidencePlane = safe(control?.evidence_plane || "").replaceAll("_", " ");
     const evidenceCoverage = safe(control?.evidence_coverage || "").replaceAll("_", " ");
     const benchmarkLabel = benchmark && benchmarkReference ? `${benchmark} · ${benchmarkReference}` : (benchmark || benchmarkReference);
@@ -3892,6 +3952,8 @@ function complianceControlCard(control, options = {}) {
                     ${showControlId ? `<div class="compliance-control-id">${escapeHtml(control?.control_id || "")}</div>` : ""}
                 </div>
                 <div class="compliance-control-pills">
+                    ${isUserCheck ? `<span class="statuspill neutral" title="Defined in a local compliance check pack">user-defined</span>` : ""}
+                    ${isAdvisory ? `<span class="statuspill warning" title="Advisory — shown but excluded from the coverage score">advisory</span>` : ""}
                     ${severity ? `<span class="statuspill ${severity === "critical" || severity === "high" ? "danger" : (severity === "medium" ? "warning" : "neutral")}">${escapeHtml(severity)}</span>` : ""}
                     ${statusPill(status, complianceStatusTone(status))}
                 </div>
@@ -3924,6 +3986,19 @@ function complianceControlCard(control, options = {}) {
                 }).join("")}
             </div>`) : ""}
             ${showRoadmap && roadmap.length ? `<div class="compliance-roadmap-links">${roadmap.map(item => `<button type="button" class="compliance-roadmap-link" data-open-plan="${escapeHtml(item.feature_id || "")}">${escapeHtml(item.title || item.feature_id || "roadmap item")}</button>`).join("")}</div>` : ""}
+            ${(rationale || evidenceFields.length || frameworks.length) ? `
+            <button type="button" class="compliance-explain-toggle" data-explain-toggle aria-expanded="false">Explain</button>
+            <div class="compliance-explain-panel" hidden>
+                ${rationale ? `<p class="compliance-explain-rationale">${escapeHtml(rationale)}</p>` : ""}
+                ${isUserCheck && packId ? `<div class="compliance-explain-row"><strong>Source pack</strong><span>${escapeHtml(packId)}${packVersion ? ` @ ${escapeHtml(packVersion)}` : ""}</span></div>` : ""}
+                ${evidenceFields.length ? `<div class="compliance-explain-row"><strong>Evidence fields</strong><span>${escapeHtml(evidenceFields.join(", "))}</span></div>` : ""}
+                ${checkSteps.length ? `<div class="compliance-explain-row"><strong>Evidence steps</strong><span>${checkSteps.map(s => `#${escapeHtml(String(s.step || "?"))}: expected ${escapeHtml(safe(s.expected))} — observed ${escapeHtml(safe(s.observed))}`).join(" · ")}</span></div>` : ""}
+                ${frameworks.length ? `<div class="compliance-explain-row"><strong>Framework references</strong><span>${frameworks.map(f => {
+                    const name = safe(f.framework || "").toUpperCase();
+                    const ref = safe(f.reference || "");
+                    return `${escapeHtml(name)} ${escapeHtml(f.applies === false ? "not applicable" : (ref || "mapped"))}`;
+                }).join(" · ")}</span></div>` : ""}
+            </div>` : ""}
         </article>
     `;
 }
@@ -4035,7 +4110,7 @@ function renderComplianceCoverageOverview() {
             ${metricCard("FINDINGS", formatNumber(cells.finding), `${formatNumber(cells.unknown)} evidence gaps · ${formatNumber(cells.waived)} waived`, Number(cells.finding) > 0 ? "danger" : "success")}
         </div>
         <div class="compliance-framework-readiness">
-            ${["CIS", "PCI-DSS", "BDDK"].map(name => {
+            ${complianceFilteredFrameworkNames().map(name => {
                 const fw = frameworks[name] || {};
                 return `
                     <article class="compliance-framework-card">
@@ -4114,15 +4189,20 @@ function renderComplianceFleetView() {
     renderComplianceCoverageOverview();
 
     const payload = compliancePayload();
-    const fleetControls = Array.isArray(payload.fleet_controls) ? payload.fleet_controls : [];
-    const platformControls = Array.isArray(payload.platform_controls) ? payload.platform_controls : [];
+    const filterActive = complianceFrameworkFilter.size > 0;
+    const filterLabel = complianceFilteredFrameworkNames().join(" / ");
+    const emptyMsg = filterActive
+        ? `No controls map to the selected framework(s): ${escapeHtml(filterLabel)}.`
+        : null;
+    const fleetControls = complianceApplyFrameworkFilter(Array.isArray(payload.fleet_controls) ? payload.fleet_controls : []);
+    const platformControls = complianceApplyFrameworkFilter(Array.isArray(payload.platform_controls) ? payload.platform_controls : []);
     const fleetHost = document.getElementById("complianceFleetControls");
     const platformHost = document.getElementById("compliancePlatformControls");
 
     if (fleetHost) {
         fleetHost.innerHTML = fleetControls.length
             ? `<div class="compliance-control-grid">${fleetControls.map(control => complianceControlCard(control, { showFramework: true, showRoadmap: true, showControlId: true })).join("")}</div>`
-            : `<div class="empty-state compact"><span>No fleet control rows available.</span></div>`;
+            : `<div class="empty-state compact"><span>${emptyMsg || "No fleet control rows available."}</span></div>`;
         fleetHost.querySelectorAll("[data-open-plan]").forEach(button => {
             button.addEventListener("click", () => switchModule("project-plan"));
         });
@@ -4130,7 +4210,7 @@ function renderComplianceFleetView() {
     if (platformHost) {
         platformHost.innerHTML = platformControls.length
             ? `<div class="compliance-control-grid">${platformControls.map(control => complianceControlCard(control, { showFramework: true, showRoadmap: true, showControlId: true })).join("")}</div>`
-            : `<div class="empty-state compact"><span>No platform control rows available.</span></div>`;
+            : `<div class="empty-state compact"><span>${emptyMsg || "No platform control rows available."}</span></div>`;
         platformHost.querySelectorAll("[data-open-plan]").forEach(button => {
             button.addEventListener("click", () => switchModule("project-plan"));
         });
@@ -4237,6 +4317,7 @@ function renderComplianceContent() {
     const subject = complianceUiData?.available && complianceSelectedSubjectId !== "__fleet__" ? selectedComplianceSubject() : null;
 
     renderComplianceHeader(subject);
+    renderComplianceFrameworkFilter();
 
     if (fleetView) fleetView.hidden = Boolean(subject);
     if (subjectView) subjectView.hidden = !subject;
@@ -4596,6 +4677,18 @@ document.getElementById("complianceStatusFilter")?.addEventListener("change", ev
     complianceSelectedSubjectId = "__fleet__";
     renderComplianceSubjectList();
     renderComplianceContent();
+});
+
+// 0.7.2 — inline "explain" expansion on any compliance control card.
+document.addEventListener("click", event => {
+    const toggle = event.target?.closest?.("[data-explain-toggle]");
+    if (!toggle) return;
+    const panel = toggle.nextElementSibling;
+    if (!panel || !panel.classList.contains("compliance-explain-panel")) return;
+    const open = panel.hidden;
+    panel.hidden = !open;
+    toggle.setAttribute("aria-expanded", open ? "true" : "false");
+    toggle.textContent = open ? "Hide" : "Explain";
 });
 
 document.querySelectorAll(".config-tab").forEach(tab => {

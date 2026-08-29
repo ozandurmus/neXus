@@ -656,14 +656,15 @@
       "target": "0.7.x",
       "weight": 12,
       "early_foundation": "Early evidence-backed control state model and framework area mappings delivered in 0.6.1B.1.5/1.6. Formal rule engine with versioned rule packs, stronger framework governance and compliance_posture_rulepack_transition bridge opens the 0.7.x track.",
-      "summary": "Vendor-neutral rule evaluation over verified normalized configuration facts. Design + now/DEPLOY.1 split: docs/design/COMPLIANCE_ASSIGNMENT_AND_FRAMEWORKS.md (0.7.1 delivers the file-based, read-only foundation).",
-      "why": "Transforms verified current/expected state into actionable compliance findings.",
+      "summary": "Vendor-neutral rule evaluation over verified normalized configuration facts. Designs: docs/design/COMPLIANCE_ASSIGNMENT_AND_FRAMEWORKS.md (0.7.1 file-based catalog + assignment, delivered 0.7.1a/b) and docs/design/COMPLIANCE_CHECK_ENGINE.md (user-authored data-driven checks over already-collected evidence - CE.1 target 0.7.3, no server / no new command; CE.2 curated read-only command primitives, command-gated; CE.3 UI editor + signed org packs, DEPLOY.1A).",
+      "why": "Transforms verified current/expected state into actionable compliance findings, and lets operators/auditors add their own checks as data instead of code.",
       "criteria": [
         {
           "id": "rules",
           "label": "Rule engine",
           "state": "pending",
-          "weight": 2
+          "weight": 2,
+          "note": "In progress: 0.6.6B static rule pack + 0.7.1a/b catalog + 0.7.3 (CE.1) data-driven user check engine (compliance_check_pack.py / compliance_check_engine.py) all delivered. Marked done once CE.2 (curated read-only command primitives, gated on cp_device_interaction_safety) and CE.3 (UI editor + signed org packs, DEPLOY.1A) land."
         }
       ]
     },
@@ -688,10 +689,10 @@
     {
       "id": "evidence_reporting",
       "title": "Evidence Reports",
-      "status": "planned",
+      "status": "in_progress",
       "target": "0.7.x",
       "weight": 5,
-      "summary": "Generate bounded evidence reports without exposing raw configuration secrets. Design + now/DEPLOY.1 split: docs/design/COMPLIANCE_ASSIGNMENT_AND_FRAMEWORKS.md (0.7.1 delivers the file-based, read-only foundation).",
+      "summary": "Generate bounded evidence reports without exposing raw configuration secrets. Design + now/DEPLOY.1 split: docs/design/COMPLIANCE_ASSIGNMENT_AND_FRAMEWORKS.md (0.7.1 delivers the file-based, read-only foundation; 0.7.2 adds the read-side workbench spine - framework filter chips + inline explain-this-control panel).",
       "why": "Supports review, audit and management communication from the same evidence model.",
       "criteria": [
         {
