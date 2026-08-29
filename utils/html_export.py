@@ -79,12 +79,23 @@ def run_html_export(
         workflow_context=workflow_context,
     )
     project_plan = build_project_plan_payload()
-    compliance_ui = build_compliance_posture(configuration_ui, project_plan, data_root=compliance_data_root)
     crypto_ui = build_crypto_posture(
         config_result,
         checkpoint_config_result=checkpoint_config_result,
         repository_root=repository_root,
         configuration_ui=configuration_ui,
+    )
+    # CE.1 fast-follow — expose the already-normalised, privacy-reviewed 0.7.0
+    # crypto facts to the user-check engine, keyed by the shared subject id.
+    crypto_facts_by_subject = {
+        str(subject.get("subject_id")): dict(subject.get("facts") or {})
+        for subject in (crypto_ui.get("subjects") or [])
+        if subject.get("subject_id")
+    }
+    compliance_ui = build_compliance_posture(
+        configuration_ui, project_plan,
+        data_root=compliance_data_root,
+        crypto_facts_by_subject=crypto_facts_by_subject,
     )
     # 0.6.1C Phase 3: additive discovery/capability/coordinator observability.
     # Callers that have not yet wired Phase 4 collector integration may omit

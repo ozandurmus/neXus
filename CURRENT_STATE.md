@@ -54,8 +54,9 @@ expected pattern + verdict — evaluated over **already-collected** evidence.
 Evidence (2026-08-29):
 
 ```
-py -m pytest -q -n auto:    514 passed, 3 skipped, 0 failed (Python 3.12)
-                            (483 baseline → +31; tests/test_phase0_7_3_*)
+py -m pytest -q -n auto:    516 passed, 3 skipped, 0 failed (Python 3.12)
+                            (483 baseline → +33; new tests/test_phase0_7_3_*
+                            incl. the crypto-source follow-up)
 scripts/render_sample.py:   exit 0, 0 placeholders (no pack → renders as 0.7.2)
 repository privacy gate:    PASS / 0 on a clean tree — no raw pattern, no raw
                             selector filter value, no device name/IP in the
@@ -64,8 +65,9 @@ repository privacy gate:    PASS / 0 on a clean tree — no raw pattern, no raw
 
 **Decisions resolved (design doc §10):** D1 extend-only (`^x_` id namespace);
 D2 fixed operators + `all/any` (no expression tree); D3 anchored regex with
-cap + linter + timeout; D4 all read-only namespaces (crypto_facts /
-interfaces/routes reserved, resolve empty — fast-follow); D5 multi-step;
+cap + linter + timeout; D4 all read-only namespaces
+(`current_configuration` / `unified.device` / `alignment` / `crypto_facts` wired;
+`unified.interfaces`/`routes` parse but resolve empty — later step); D5 multi-step;
 D6 `advisory` mode excluded from the score; D7 reuse `control_assignments.json`
 waivers; D8 CE.2 opt-in `--compliance-probe` only; D9 CE.3 signing deferred to
 DEPLOY.1; D10 `0.7.3` = CE.1; D11–D16 engine placement / payload / grammar /
@@ -149,7 +151,7 @@ full regression run.)
 ## Automated test baseline
 
 ```
-514 passed / 3 skipped / 0 failed (Python 3.12)
+516 passed / 3 skipped / 0 failed (Python 3.12)
 Repository privacy gate: on a clean checkout, PASS / 0 (0.7.2 adds no finding;
 locally the gate reports 3 gitignored runtime artifacts + 2 pre-existing
 AI_HANDOVER path lines — see the Active build evidence block)
