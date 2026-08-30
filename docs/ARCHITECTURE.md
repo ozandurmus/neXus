@@ -25,8 +25,13 @@ _build_runtime_config  (interactive: endpoint + login + secret)
 Everything a run produces is written outside the repository. `main.py` first
 calls `utils.runtime_paths.resolve_runtime_paths(--runtime-root)`:
 
-- Precedence: `--runtime-root` CLI → `SECURITYEXPERT_RUNTIME_ROOT` env → Windows
-  `%LOCALAPPDATA%\SecurityExpert\runtime` default.
+- Precedence: `--runtime-root` CLI → `SECURITYEXPERT_RUNTIME_ROOT` env →
+  platform default: Windows `%LOCALAPPDATA%\SecurityExpert\runtime`, or on
+  macOS/Linux `$XDG_DATA_HOME/SecurityExpert/runtime` (else
+  `$HOME/.local/share/SecurityExpert/runtime`) -- a local dev/AI-session
+  convenience (`dev_python_env_tooling_friction`), not a production default; a
+  container/server deployment (DEV.3) must still set
+  `SECURITYEXPERT_RUNTIME_ROOT` explicitly to its mounted volume.
 - `data_root`, `output_root`, `logs_root` under it.
 - Rejects any runtime root that equals or is nested with the repository root
   (`_validate_separation`), and write-probes every directory.
