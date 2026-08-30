@@ -184,10 +184,24 @@ alongside the full suite:
 ```
 py -V:3.12 scripts/render_uitest.py --out <dir>
 bun tools/render-harness/check-render.mjs <dir>/output/index.html
+# or, when bun/happy-dom is unavailable or broken (a real Chromium instead):
+py -V:3.12 tools/render-harness/check_render_playwright.py <dir>/output/index.html
 ```
 
-`tests/test_html_render_harness.py` runs both (the JSON-validity half needs no
-JS engine; the headless-navigation half skips cleanly when `bun` is absent).
+`tests/test_html_render_harness.py` runs all three checks (the JSON-validity
+half needs no JS engine at all; the two headless-navigation halves each skip
+cleanly when their own toolchain is absent — `bun`/`happy-dom` for one,
+`playwright` + a resolvable Chromium for the other). Both navigation checks
+perform the same walk (parse, execute, click every nav module + inner tab,
+assert no console error); the Playwright one exists because `happy-dom`'s
+`window.eval()` execution shim is version-sensitive and broke outright in one
+cloud dev environment (`window.eval is not a function`) with no code change on
+the report side — a real browser engine isn't coupled to that specific
+version pairing. Treat check-render.mjs as the primary/faster check when its
+toolchain is healthy; check_render_playwright.py is the fallback, not a
+replacement — keep both green when both toolchains are available.
+`playwright install chromium` is a one-time setup step, same role as
+`bun install` in `tools/render-harness/`.
 The generated report is one inline `<script>` — if it fails to parse or throws
 before the nav listeners attach, every button is dead while the page still looks
 loaded (the `0.7.4a` failure). If the change touches a payload field or UI

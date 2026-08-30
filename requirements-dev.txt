@@ -11,3 +11,11 @@
 
 pytest>=8
 pytest-xdist>=3.6
+
+# Optional: powers the Playwright-based render-harness DOM check
+# (tools/render-harness/check_render_playwright.py), a real-Chromium
+# alternative to the bun+happy-dom path when that toolchain is unavailable
+# or its script-eval shim breaks against a newer happy-dom/bun pairing.
+# Skipped cleanly by tests/test_html_render_harness.py if not installed.
+# One-time setup: py -m pip install -r requirements-dev.txt && playwright install chromium
+playwright>=1.40

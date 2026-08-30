@@ -3,6 +3,22 @@
   "record_contract": "One structured record per build, newest first. Required: build, status, title, summary (<= 2 sentences). Optional: started, completed, track, movement, supersedes, evidence, risks_forward, docs{agreement,validation,handover} (repo-relative paths under docs/history/). Full detail lives in the linked doc; do not restate it here. Status vocabulary must stay within utils/project_plan.py STATUS_VALUES.",
   "builds": [
     {
+      "build": "playwright_render_harness_fallback",
+      "status": "automated_validated",
+      "started": "2026-08-30",
+      "completed": "2026-08-30",
+      "title": "Playwright/Chromium fallback for the HTML render harness's DOM-execution check",
+      "track": "0.6.x tooling",
+      "movement": "IMPLEMENTATION",
+      "summary": "User request (not a project/backlog.json item): this session's cloud container has a broken bun/happy-dom pairing (window.eval is not a function) that made check-render.mjs unrunnable, so every render-harness DOM-execution/navigation check this session relied only on JSON-validity assertions. New tools/render-harness/check_render_playwright.py performs the identical walk (parse/execute, click every .module-nav-item + inner tab, assert panels activate with zero console errors) against a real Chromium via Playwright instead of happy-dom's DOM re-implementation, so it is not coupled to that specific version pairing. Wired as a second, independently-skipping test (test_headless_navigation_smoke_playwright) in tests/test_html_render_harness.py alongside the existing bun-based one -- a fallback, not a replacement; check-render.mjs stays primary when its toolchain is healthy. requirements-dev.txt gained an optional playwright dependency (one-time `playwright install chromium` setup, same role as `bun install`). docs/AI_DEVELOPMENT_PROTOCOL.md's mandatory render-harness section documents both paths.",
+      "evidence": {
+        "automated": "Negative-tested by hand against two known failure classes before wiring into pytest: a renamed nav handler (switchModule -> switchModuleRENAMED) correctly produced 21 findings including every panel/button failing to activate; a corrupted embedded-JSON payload (the 0.7.4a class) correctly produced a script-parse pageerror plus every panel failing to activate. py -m pytest -q: 621 passed, 2 skipped, 2 failed (both pre-existing and unrelated, same two tests already documented against the unmodified baseline in every prior 0.6.x closure this session). Net +1 (the new Playwright test; the bun-based one still skips cleanly in this session's environment as before -- both toolchains are correctly independent).",
+        "privacy_gate": "No credential/device-identity/IP literal introduced; the checker only ever reads the already-privacy-reviewed uitest fixture bundle.",
+        "real_env": "not applicable -- dev/CI tooling only, no device or network path. Verified live in this session (see automated evidence) since it is the artifact this build actually produces."
+      },
+      "docs": {}
+    },
+    {
       "build": "dev_python_env_tooling_friction",
       "status": "automated_validated",
       "started": "2026-08-30",
