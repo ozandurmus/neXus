@@ -53,12 +53,27 @@ canonical_ids=[endpoint], operation=lambda: run_x(...))`.
   keys.
 - **Concurrency budget.** Fixed at **1** per vendor/context
   (`checkpoint`, `checkpoint_vsx`, `paloalto`). Raising it requires explicit
-  real-environment evidence; the CP device-interaction-safety audit is P0 and
-  blocks any increase.
+  real-environment evidence. The CP device-interaction-safety audit itself
+  closed 2026-08-25 (`backlog.json` `cp_device_interaction_safety`).
 - **Coalescing.** A second request for a busy endpoint attaches to the running
   job (`CoordinatorDecision.COALESCED`) — no second session is opened.
 - A non-admitted decision (`REJECTED_BUDGET` / `REJECTED_LOCKED`) raises
   `CollectionAdmissionError` **before** `operation()` runs.
+- **Backend (DEV.3.2).** `CollectionCoordinator` delegates every admission
+  decision to a `utils.coordinator_backend.CoordinatorBackend`. Default
+  (`SECURITYEXPERT_COORDINATOR_BACKEND=memory`, unset) is
+  `InMemoryCoordinatorBackend` — the unchanged, validated single-process
+  behavior. `SECURITYEXPERT_COORDINATOR_BACKEND=postgres` (+
+  `SECURITYEXPERT_COORDINATOR_POSTGRES_DSN`, `requirements-postgres.txt`)
+  opts into `PostgresCoordinatorBackend`: per-endpoint exclusion is a
+  session-level `pg_advisory_lock` held on a dedicated connection for the
+  job's lifetime (released by the server itself if the connection dies —
+  no TTL, no heartbeat), the per-vendor budget is a counted check under a
+  short-lived per-budget-key gate lock, and lock keys are HMAC-derived from
+  `canonical_id` so no device identity reaches Postgres. A fail-closed
+  startup preflight (`verify_postgres_backend_ready`) detects a
+  transaction-pooling proxy (which silently breaks session-level advisory
+  locks) before the backend is used. `docs/history/phase/DEV3_2_DISTRIBUTED_ENDPOINT_LOCK.md`.
 - In-process, in-memory. Distributed locking / durable queue are deferred to
   DEPLOY.1.
 

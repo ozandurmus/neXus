@@ -269,7 +269,32 @@ def _scheduler_workflow_argv(workflow, runtime_root):
 
 
 def _run_scheduler_once(runtime_paths, services):
-    """Evaluate the RuntimeRoot scheduler policy once; never create a loop."""
+    """Evaluate the RuntimeRoot scheduler policy once; never create a loop.
+
+    On the PostgreSQL coordinator backend, the whole read-evaluate-write
+    cycle is gated behind a non-blocking scheduler-wide advisory lock
+    (correctness contract item 6, DEV.3.2) so two scheduler processes never
+    both see the same workflow as due and both dispatch it. This is
+    independent of, and does not substitute for, the per-endpoint/per-vendor
+    admission a dispatched workflow still goes through — it only stops
+    redundant dispatch attempts. The in-memory backend has no such
+    cross-process race to gate.
+    """
+    from utils.coordinator_backend import PostgresCoordinatorBackend, SchedulerLockUnavailable
+
+    backend = services.coordinator.backend
+    if isinstance(backend, PostgresCoordinatorBackend):
+        try:
+            with backend.scheduler_lock():
+                return _evaluate_and_dispatch_due_workflows(runtime_paths, services)
+        except SchedulerLockUnavailable:
+            print("Scheduler: another process is already evaluating the schedule; skipping this cycle.")
+            return []
+    return _evaluate_and_dispatch_due_workflows(runtime_paths, services)
+
+
+def _evaluate_and_dispatch_due_workflows(runtime_paths, services):
+    """The actual read-evaluate-write cycle; see ``_run_scheduler_once``."""
     from datetime import datetime, timezone
 
     from utils.collection_executor import (
@@ -639,14 +664,26 @@ def main(argv=None, *, runtime_services=None, provenance="manual", admission_run
         return
 
     from utils.collection_executor import (
+        CollectionCoordinator,
         Provenance,
         RuntimeCollectionServices,
         SchedulerPolicyError,
         execute_admitted_collection,
         load_scheduler_policy,
+        select_coordinator_backend,
     )
+    from utils.coordinator_backend import CoordinatorBackendError
 
-    services = runtime_services or RuntimeCollectionServices()
+    if runtime_services is not None:
+        services = runtime_services
+    else:
+        # SECURITYEXPERT_COORDINATOR_BACKEND=postgres opts into the DEV.3.2
+        # cross-process backend; default 'memory' is the unchanged 0.6.1C path.
+        try:
+            backend = select_coordinator_backend(data_root=runtime_paths.data_root)
+        except CoordinatorBackendError as exc:
+            parser.error(str(exc))
+        services = RuntimeCollectionServices(coordinator=CollectionCoordinator(backend))
     try:
         services.scheduler_policy = load_scheduler_policy(runtime_paths.data_root)
     except SchedulerPolicyError as exc:
