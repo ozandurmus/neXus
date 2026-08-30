@@ -78,9 +78,48 @@ def test_empty_environment_root_fails_closed_without_default_fallback(tmp_path):
         )
 
 
-def test_non_windows_requires_explicit_or_environment_root(tmp_path):
+def test_posix_default_uses_xdg_data_home(tmp_path):
     repo = _repo(tmp_path)
-    with pytest.raises(RuntimePathError, match="required on this platform"):
+    xdg = tmp_path / "xdg-data"
+
+    paths = resolve_runtime_paths(
+        environ={"XDG_DATA_HOME": str(xdg), "HOME": str(tmp_path / "home")},
+        repository_root=repo,
+        platform_name="posix",
+    )
+
+    assert paths.runtime_root == (xdg / "SecurityExpert" / "runtime").resolve()
+
+
+def test_posix_default_falls_back_to_home_local_share(tmp_path):
+    repo = _repo(tmp_path)
+    home = tmp_path / "home"
+
+    paths = resolve_runtime_paths(
+        environ={"HOME": str(home)},
+        repository_root=repo,
+        platform_name="posix",
+    )
+
+    assert paths.runtime_root == (home / ".local" / "share" / "SecurityExpert" / "runtime").resolve()
+
+
+def test_environment_runtime_root_wins_over_posix_default(tmp_path):
+    repo = _repo(tmp_path)
+    env_root = tmp_path / "env-runtime"
+
+    paths = resolve_runtime_paths(
+        environ={"SECURITYEXPERT_RUNTIME_ROOT": str(env_root), "HOME": str(tmp_path / "home")},
+        repository_root=repo,
+        platform_name="posix",
+    )
+
+    assert paths.runtime_root == env_root.resolve()
+
+
+def test_posix_requires_explicit_or_environment_root_when_home_and_xdg_unavailable(tmp_path):
+    repo = _repo(tmp_path)
+    with pytest.raises(RuntimePathError, match="XDG_DATA_HOME nor HOME"):
         resolve_runtime_paths(environ={}, repository_root=repo, platform_name="posix")
 
 

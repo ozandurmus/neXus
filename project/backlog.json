@@ -404,10 +404,10 @@
       "id": "dev_python_env_tooling_friction",
       "category": "Development Workflow",
       "title": "Reduce Python environment bootstrap friction in AI-assisted sessions",
-      "status": "planned",
+      "status": "automated_validated",
       "priority": "P2",
       "target": "DEV.1 follow-up / workflow polish",
-      "note": "User reported repeated environment-bootstrap/tooling friction during validation loops. Keep current workflow running without forced env setup; revisit with a minimal, optional path later."
+      "note": "AUTOMATED_VALIDATED 2026-08-30. Two concrete frictions closed, both discovered first-hand in a Linux cloud AI session this session: (1) utils/runtime_paths.py previously hard-required --runtime-root/SECURITYEXPERT_RUNTIME_ROOT on every non-Windows platform with zero default (Windows already had a LOCALAPPDATA default). Added a mirrored POSIX default: $XDG_DATA_HOME/SecurityExpert/runtime, else $HOME/.local/share/SecurityExpert/runtime -- explicitly scoped as a local dev/AI-session convenience only (docs/ARCHITECTURE.md updated), never a production default: DEV.3 container/server deployments must still set SECURITYEXPERT_RUNTIME_ROOT explicitly to a mounted volume, same as today. Verified live: resolve_runtime_paths() now resolves cleanly with zero env vars set on this Linux box. (2) scripts/pytest_one_shot.ps1 called bare `py`, which AI_HANDOVER.md already documented as resolving to Python 3.14 without dev deps on at least one validated dev box. Script now probes `py -0p` and prefers `-V:3.12` (the already real-environment-validated combination with -m pytest) when that tag is registered, falling back to bare `py` otherwise rather than hard-failing. UNVERIFIED: no pwsh available in this cloud session to execute the .ps1 script directly -- owed on the next Windows session under on_hardware_real_env_validation. 4 new tests (net +3, one superseded) in tests/test_dev0_3a_runtime_paths.py for the POSIX-default precedence/fallback/fail-closed paths. py -m pytest -q: 620 passed, 2 skipped, 2 failed (both pre-existing/unrelated) -- zero regressions."
     },
     {
       "id": "overview_device_lifecycle_enrichment",
