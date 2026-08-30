@@ -439,6 +439,17 @@ def main(argv=None, *, runtime_services=None, provenance="manual", admission_run
         ),
     )
     parser.add_argument(
+        "--persistent-secret-material-check",
+        action="store_true",
+        help=(
+            "DEV.2.2 local/offline check of the persistent runtime volume contract: "
+            "resolves the runtime root, reports whether the support-bundle HMAC "
+            "identity key already exists on the persistent data root, and preflights "
+            "CP strict host-key trust / PAN CA bundle trust when enabled. No network "
+            "access; no key material, path or credential is printed."
+        ),
+    )
+    parser.add_argument(
         "--storage-analyze",
         action="store_true",
         help="Analyze configuration history/object storage without collecting devices or changing files.",
@@ -476,7 +487,10 @@ def main(argv=None, *, runtime_services=None, provenance="manual", admission_run
     args = parser.parse_args(argv)
 
     maintenance_modes = sum(bool(value) for value in (
-        args.repository_privacy_check, args.storage_analyze, args.storage_deduplicate
+        args.repository_privacy_check,
+        args.storage_analyze,
+        args.storage_deduplicate,
+        args.persistent_secret_material_check,
     ))
     if maintenance_modes > 1:
         parser.error("Choose only one repository/storage maintenance mode")
@@ -484,6 +498,12 @@ def main(argv=None, *, runtime_services=None, provenance="manual", admission_run
         parser.error("--apply is not valid with --repository-privacy-check")
     if args.repository_privacy_check and (args.cp_config_probe or args.cp_config_collect or args.render_only or args.only != "all"):
         parser.error("--repository-privacy-check cannot be combined with collection/render modes")
+    if args.persistent_secret_material_check and args.apply:
+        parser.error("--apply is not valid with --persistent-secret-material-check")
+    if args.persistent_secret_material_check and (
+        args.cp_config_probe or args.cp_config_collect or args.render_only or args.only != "all"
+    ):
+        parser.error("--persistent-secret-material-check cannot be combined with collection/render modes")
 
     if args.storage_analyze and args.storage_deduplicate:
         parser.error("Choose only one of --storage-analyze or --storage-deduplicate")
@@ -511,6 +531,7 @@ def main(argv=None, *, runtime_services=None, provenance="manual", admission_run
         args.repository_privacy_check
         or args.storage_analyze
         or args.storage_deduplicate
+        or args.persistent_secret_material_check
         or args.apply
         or args.cp_config_probe
         or args.cp_config_collect
@@ -604,6 +625,37 @@ def main(argv=None, *, runtime_services=None, provenance="manual", admission_run
         ">>> RUNTIME PATH FOUNDATION READY "
         f"(runtime_root={runtime_paths.runtime_root} normal_runtime=external history_cas=legacy_pending)"
     )
+
+    if args.persistent_secret_material_check:
+        from utils.persistent_secret_material import check_persistent_secret_material
+        print("=== SECURITYEXPERT PERSISTENT SECRET MATERIAL CHECK — DEV.2.2 ===\n")
+        report = check_persistent_secret_material(runtime_paths)
+        print(f"HMAC identity key present:    {report.hmac_key_present}")
+        print(f"HMAC identity key on volume:  {report.hmac_key_on_persistent_root}")
+        print(f"CP strict host-key enabled:   {report.cp_strict_host_key_enabled}")
+        print(f"CP trust preflight:           {report.cp_trust_status}")
+        print(f"PAN CA bundle configured:     {report.pan_ca_bundle_configured}")
+        print(f"PAN trust preflight:          {report.pan_trust_status}")
+        if not report.hmac_key_present:
+            print(
+                "\nNote: no HMAC identity key on the persistent data root yet -- one will "
+                "be generated on the first support-bundle write and then persists across "
+                "restarts as long as the runtime volume is retained."
+            )
+        if not report.cp_strict_host_key_enabled or not report.pan_ca_bundle_configured:
+            print(
+                "\nAdvisory: production hardening (SECURITYEXPERT_CP_MDS_STRICT_HOST_KEY=1 "
+                "with a mounted known_hosts, SECURITYEXPERT_PAN_CA_BUNDLE with a mounted CA "
+                "bundle) is not fully enabled. Not a gate failure by itself -- compatibility "
+                "mode is the accepted default off the production server."
+            )
+        if report.findings:
+            print("\nFindings:")
+            for finding in report.findings:
+                print(f"  {finding}")
+        print(f"\nGate:                         {report.gate}")
+        print("No network access performed. No key material, path or credential was printed.")
+        raise SystemExit(0 if report.gate == "PASS" else 1)
 
     from utils.collection_executor import (
         Provenance,

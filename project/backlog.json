@@ -102,10 +102,10 @@
       "id": "deploy_persistent_secret_material",
       "category": "Deployment / Security",
       "title": "Persistent volume contract for HMAC key and production trust material",
-      "status": "planned",
+      "status": "automated_validated",
       "priority": "P1",
       "target": "DEV.2.2",
-      "note": "data/.support_hmac.key must live on a persistent volume: if regenerated on container restart, support-bundle identity tokens drift between runs. CP known_hosts (SECURITYEXPERT_CP_MDS_STRICT_HOST_KEY) and PAN CA bundle (SECURITYEXPERT_PAN_CA_BUNDLE) move from opt-in to mounted-and-required on the server. Same workstream as noninteractive_runtime_config; feeds cp_ssh_trust_r2_prod_server and pan_tls_ca production validation."
+      "note": "AUTOMATED_VALIDATED 2026-08-30 (contract: docs/history/phase/DEV2_2_PERSISTENT_SECRET_MATERIAL.md). data/.support_hmac.key persistence was already structurally correct (run_support_bundle derives the key path from runtime_paths.data_root, which docker-compose.yml already mounts on a named volume); this build makes the contract explicit and machine-checkable via new utils/persistent_secret_material.py + main.py --persistent-secret-material-check (offline, value-free, reuses cp_ssh_trust/pan_tls_trust preflight code verbatim). New docker-compose.prod.yml overlay mounts deploy/secrets/known_hosts + pan-ca-bundle.pem read-only and sets SECURITYEXPERT_CP_MDS_STRICT_HOST_KEY=1 / SECURITYEXPERT_PAN_CA_BUNDLE, moving CP/PAN trust from opt-in to mounted-and-required on the server while the base compose file keeps compatibility mode as the default. Evidence: py -m pytest -q = 640 passed, 3 skipped, 2 failed (645 collected; +6 net new tests, 2 pre-existing unrelated failures reproduce identically on a clean git stash -u baseline -- 634 passed, same 2 failed, 3 skipped); repository privacy gate PASS/0; docker compose -f docker-compose.yml -f docker-compose.prod.yml config verified the overlay merges correctly (full docker build/up blocked by this sandbox's TLS-intercepting proxy, same constraint as linux_container_image). Real MDS/Panorama endpoint validation of the mounted material remains owed, same class as cp_ssh_trust_r2_prod_server."
     },
     {
       "id": "linux_container_image",
