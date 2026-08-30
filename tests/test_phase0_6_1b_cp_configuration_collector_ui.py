@@ -265,3 +265,247 @@ def test_collect_host_writes_only_redacted_cas_for_physical_and_vsx(tmp_path, mo
     assert content.count("SECRET-BEARING CONFIGURATION LINE WITHHELD") == 2
     assert "raw-canonical-sha256=" in content
     assert all(row["raw_configuration_persisted"] is False for row in rows)
+
+
+def test_vsx_virtual_system_gets_independent_ha_role_not_inherited(tmp_path, monkeypatch):
+    """A virtual system's HA role must come from its own vsenv-scoped probe,
+    not be presented as inherited runtime evidence from the physical member.
+
+    Regression for cp_ha_runtime (0.6.1B.1.2 VSX closure):
+    docs/history/phase/PHASE0_6_1B_1_2_CP_HA_RUNTIME_VSX_CLOSURE.md.
+    """
+    from utils.config_evidence import ConfigEvidenceStore
+
+    class FakeSSH:
+        def close(self):
+            pass
+
+    def fake_connect(target, username, secret, *, strict, connect_timeout):
+        return FakeSSH(), "SHA256:fake-host-key"
+
+    def result(stdout, success=True):
+        return {
+            "success": success,
+            "error_class": "none" if success else "command_error",
+            "error_detail": None,
+            "timeout": False,
+            "exit_status": 0 if success else 1,
+            "duration_ms": 1,
+            "stdout": stdout,
+            "stderr": "",
+        }
+
+    def fake_exec(_ssh, command, _timeout):
+        if "show hostname" in command:
+            return result("GW1\n")
+        if "show version all" in command:
+            return result("Product version Check Point Gaia R82\n")
+        if "cpstat os -f hw_info" in command:
+            return result("Appliance SN: SERIAL1\nAppliance Name: Check Point 6500\n")
+        if command == "cphaprob stat":
+            # Physical member is ACTIVE...
+            return result("GW1 (local) ACTIVE\nGW2 STANDBY\n")
+        if command.startswith("vsenv ") and command.endswith("cphaprob stat"):
+            # ...but this virtual system is independently STANDBY on GW1.
+            return result("VS-A (local) STANDBY\n")
+        if command.startswith("vsenv ") and "clish -c" in command:
+            return result("set hostname VS-A\nset dns primary 10.0.0.53\n")
+        if "show configuration" in command:
+            return result("set hostname GW1\nset dns primary 10.0.0.53\n")
+        raise AssertionError(command)
+
+    monkeypatch.setattr(collector, "_connect", fake_connect)
+    monkeypatch.setattr(collector, "_run_exec", fake_exec)
+    monkeypatch.setattr(
+        collector,
+        "_run_vsx_clish_context",
+        lambda _ssh, _vsid, _timeout: result("set hostname VS-A\nset dns primary 10.0.0.53\n"),
+    )
+
+    store = ConfigEvidenceStore(root=tmp_path / "configs")
+    target = collector.PhysicalTarget(
+        device="GW1",
+        management_ip="10.0.0.1",
+        object_type="cluster_member",
+        entity_type="vsx_host",
+        contexts=[collector.VsContext(vs_id="3", vs_name="VS-A")],
+    )
+    rows = collector._collect_host(
+        target,
+        username="admin",
+        secret="pw",
+        strict_host_key=False,
+        connect_timeout=2,
+        command_timeout=5,
+        store=store,
+    )
+    host_row = next(row for row in rows if row["entity_type"] == "vsx_host")
+    vs_row = next(row for row in rows if row["entity_type"] == "virtual_system")
+
+    assert host_row["ha_role"] == "ACTIVE"
+    assert vs_row["ha_role"] == "STANDBY"
+    assert vs_row["ha_role"] != host_row["ha_role"]
+    assert vs_row["ha_role_source"] == "interactive_cphaprob_stat_runtime_per_vs"
+    assert vs_row["ha_runtime_status"] == "success"
+
+
+def test_vsx_virtual_system_falls_back_to_labeled_inherited_role_when_per_vs_probe_fails(tmp_path, monkeypatch):
+    """When the per-VS probe cannot produce an independent role, the fallback
+    to the physical member's role must be explicitly labeled as inherited,
+    never presented as VS-specific runtime evidence.
+    """
+    from utils.config_evidence import ConfigEvidenceStore
+
+    class FakeSSH:
+        def close(self):
+            pass
+
+    def fake_connect(target, username, secret, *, strict, connect_timeout):
+        return FakeSSH(), "SHA256:fake-host-key"
+
+    def result(stdout, success=True):
+        return {
+            "success": success,
+            "error_class": "none" if success else "command_error",
+            "error_detail": None,
+            "timeout": False,
+            "exit_status": 0 if success else 1,
+            "duration_ms": 1,
+            "stdout": stdout,
+            "stderr": "",
+        }
+
+    def fake_exec(_ssh, command, _timeout):
+        if "show hostname" in command:
+            return result("GW1\n")
+        if "show version all" in command:
+            return result("Product version Check Point Gaia R82\n")
+        if "cpstat os -f hw_info" in command:
+            return result("Appliance SN: SERIAL1\nAppliance Name: Check Point 6500\n")
+        if command == "cphaprob stat":
+            return result("GW1 (local) ACTIVE\n")
+        if command.startswith("vsenv ") and command.endswith("cphaprob stat"):
+            # Per-VS probe returns no parseable role (no local-marker/state token).
+            return result("unrecognized output\n")
+        if command.startswith("vsenv ") and "clish -c" in command:
+            return result("set hostname VS-A\nset dns primary 10.0.0.53\n")
+        if "show configuration" in command:
+            return result("set hostname GW1\nset dns primary 10.0.0.53\n")
+        raise AssertionError(command)
+
+    monkeypatch.setattr(collector, "_connect", fake_connect)
+    monkeypatch.setattr(collector, "_run_exec", fake_exec)
+    monkeypatch.setattr(
+        collector,
+        "_run_vsx_clish_context",
+        lambda _ssh, _vsid, _timeout: result("set hostname VS-A\nset dns primary 10.0.0.53\n"),
+    )
+
+    store = ConfigEvidenceStore(root=tmp_path / "configs")
+    target = collector.PhysicalTarget(
+        device="GW1",
+        management_ip="10.0.0.1",
+        object_type="cluster_member",
+        entity_type="vsx_host",
+        contexts=[collector.VsContext(vs_id="3", vs_name="VS-A")],
+    )
+    rows = collector._collect_host(
+        target,
+        username="admin",
+        secret="pw",
+        strict_host_key=False,
+        connect_timeout=2,
+        command_timeout=5,
+        store=store,
+    )
+    vs_row = next(row for row in rows if row["entity_type"] == "virtual_system")
+
+    assert vs_row["ha_role"] == "ACTIVE"  # inherited value, not invented
+    assert vs_row["ha_role_source"] == "inherited_from_physical_member"
+    assert vs_row["ha_runtime_status"] == "unavailable_inherited"
+
+
+def test_direct_clish_ha_probe_reports_explicit_capability_gap(tmp_path, monkeypatch):
+    """cphaprob is Expert/bash-level; a direct-Clish-only session must resolve
+    to an explicit capability_gap, not an unexplained 'unavailable'.
+    """
+    from utils.config_evidence import ConfigEvidenceStore
+
+    class FakeSSH:
+        def close(self):
+            pass
+
+    class FakeInteractive:
+        def __init__(self, responses):
+            self.responses = responses
+
+        def run(self, command, _timeout):
+            return self.responses.get(
+                command,
+                {
+                    "success": False, "error_class": "cli_rejected", "error_detail": None,
+                    "timeout": False, "exit_status": None, "duration_ms": 1,
+                    "stdout": "", "stderr": "unknown command",
+                },
+            )
+
+        def close(self):
+            pass
+
+    def fake_connect(target, username, secret, *, strict, connect_timeout):
+        return FakeSSH(), "SHA256:fake-host-key"
+
+    def result(stdout, success=True, error_class="none"):
+        return {
+            "success": success,
+            "error_class": error_class,
+            "error_detail": None,
+            "timeout": False,
+            "exit_status": 0 if success else 1,
+            "duration_ms": 1,
+            "stdout": stdout,
+            "stderr": "",
+        }
+
+    # Every command in this test is issued through the interactive session
+    # (proven "interactive_direct_clish" below) EXCEPT cphaprob, which the
+    # collector deliberately routes through the exec channel for direct-Clish
+    # hosts since it is an Expert/bash-level command, not a Clish one.
+    interactive = FakeInteractive({
+        "show hostname": result("GW1\n"),
+        "show version all": result("Product version Check Point Gaia R82\n"),
+        "cpstat os -f hw_info": result("Appliance SN: SERIAL1\nAppliance Name: Check Point 6500\n"),
+        "show configuration": result("set hostname GW1\nset dns primary 10.0.0.53\n"),
+    })
+
+    def fake_exec(_ssh, command, _timeout):
+        if command == "cphaprob stat":
+            # Rejected: not a recognized command in a direct-Clish-only shell.
+            return result("Unknown command cphaprob\n", success=False, error_class="command_error")
+        raise AssertionError(command)
+
+    monkeypatch.setattr(collector, "_connect", fake_connect)
+    monkeypatch.setattr(collector, "_run_exec", fake_exec)
+    monkeypatch.setattr(collector, "InteractiveSshSession", lambda _ssh, _timeout: interactive)
+
+    store = ConfigEvidenceStore(root=tmp_path / "configs")
+    target = collector.PhysicalTarget(
+        device="GW1",
+        management_ip="10.0.0.1",
+        object_type="cluster_member",
+        entity_type="clusterxl_member",
+        contexts=[],
+    )
+    rows = collector._collect_host(
+        target,
+        username="admin",
+        secret="pw",
+        strict_host_key=False,
+        connect_timeout=2,
+        command_timeout=5,
+        store=store,
+    )
+    host_row = rows[0]
+    assert host_row["ssh_shell_mode"] == "interactive_direct_clish"
+    assert host_row["ha_runtime_status"] == "capability_gap"
+    assert host_row["ha_runtime_error_class"] == "cphaprob_unavailable_in_direct_clish"
