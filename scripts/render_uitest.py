@@ -29,7 +29,7 @@ def _load(name: str):
     return json.loads((FIXTURE / name).read_text(encoding="utf-8"))
 
 
-def render(out_root: Path) -> Path:
+def render(out_root: Path, *, profile: bool = False) -> Path:
     (out_root / "output").mkdir(parents=True, exist_ok=True)
     data_root = out_root / "data"
     (data_root / "state").mkdir(parents=True, exist_ok=True)
@@ -62,6 +62,7 @@ def render(out_root: Path) -> Path:
         workflow_context={"mode": "uitest", "label": "UI test bundle",
                           "checkpoint": False, "mixed_cycle": True},
         record_checkpoint=False,
+        profile=profile,
     )
     return index_html
 
@@ -69,10 +70,14 @@ def render(out_root: Path) -> Path:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", help="output directory (default: a temp dir outside the repo)")
+    parser.add_argument(
+        "--profile", action="store_true",
+        help="log an opt-in per-stage render-time breakdown (html_render_performance)",
+    )
     args = parser.parse_args()
     out_root = (Path(args.out).expanduser().resolve() if args.out
                 else Path(tempfile.mkdtemp(prefix="securityexpert_uitest_render_")))
-    index_html = render(out_root)
+    index_html = render(out_root, profile=args.profile)
     print()
     print("UI test bundle rendered (all six modules populated).")
     print(f"  fixture    : {FIXTURE}")

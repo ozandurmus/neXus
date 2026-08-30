@@ -207,6 +207,15 @@
       "note": "Split out 2026-08-30 from inventory_exclusions_ui on that contract's own closure (docs/history/phase/PHASE0_6_1C_INVENTORY_EXCLUSIONS_UI.md, Definition of done): the read-only Exclusions view (phase 1) is done; this is phase 2 -- a controlled add/restore workflow with a mandatory reason and an audit trail, writing into state/inventory_exclusions.json. Same write-boundary class as compliance_assignment_ui_and_registry: needs the app server + DEPLOY.1A OIDC/RBAC (only an authorised role edits exclusions) + a persistent store, and its own dedicated design pass (schema for the audit log, concurrent-write safety, InventoryExclusionPolicy's existing _validate_identity constraints become load-bearing once a write path exists). Not buildable standalone pre-DEPLOY.1A."
     },
     {
+      "id": "html_render_optimization",
+      "category": "Performance",
+      "title": "Optimize HTML render wall-clock time based on the html_render_performance profiling findings",
+      "status": "planned",
+      "priority": "P2",
+      "target": "0.6.x polish follow-up",
+      "note": "Split out 2026-08-30 from html_render_performance on that contract's own gate (docs/history/phase/PHASE0_6_X_HTML_RENDER_PERFORMANCE.md): profiling shipped, optimization is deliberately deferred to this item. Candidates from the uitest-fixture measurement, in priority order: (1) fill_template's single-pass regex substitution over the full embedded-JSON payload (~40-46% of measured total on the fixture; scales with fleet size via configuration_ui.json's size) -- investigate whether the regex-alternation approach itself is the cost or whether it is dominated by producing/copying the large JSON strings being substituted in. (2) build_compliance_posture's per-subject x per-check evaluation in _subject_user_checks / the CE.1 regex-assertion engine (~27-34%). Before touching either, this item MUST run the profiling instrumentation from html_render_performance against a real --render-only pass on production-scale fleet data (not available in the cloud session that authored the profiling build) -- the uitest-fixture numbers are not representative of build_configuration_ui_payload/build_crypto_posture/build_discovery_capability_payload's real cost, since render_uitest.py injects those three as instant stubs. Do not optimize the three injected builders based on fixture numbers alone."
+    },
+    {
       "id": "overview_eos_release_guidance",
       "category": "Inventory UX",
       "title": "Overview: static EOS/EOL date + suggested-next-release guidance by model family (Increment 2)",
@@ -323,10 +332,10 @@
       "id": "html_render_performance",
       "category": "Performance",
       "title": "Reduce HTML generation/render-only wall-clock time",
-      "status": "planned",
+      "status": "automated_validated",
       "priority": "P2",
       "target": "0.6.x polish",
-      "note": "Recent full HTML generation is roughly one minute. Preserve correctness first, then profile payload generation/serialization/rendering before optimization."
+      "note": "AUTOMATED_VALIDATED 2026-08-30 -- PROFILING ONLY, per this item's own scope (optimization deliberately deferred). Contract: docs/history/phase/PHASE0_6_X_HTML_RENDER_PERFORMANCE.md. New opt-in _stage_timer instrumentation in utils/html_export.py (SECURITYEXPERT_HTML_RENDER_PROFILE env var or profile= kwarg; a true no-op when disabled). Measured on the uitest 16-device fixture (3 runs): fill_template ~40-46% of total, build_compliance_posture ~27-34%, write_output_html noisy ~9-20%. Critical caveat: render_uitest.py monkeypatches build_configuration_ui_payload/build_crypto_posture/build_discovery_capability_payload to instant lambdas, so their real per-device cost was NOT measured -- a real --render-only profile against production fleet size was not reachable this session (no prior real checkpoint artifact exists in this cloud environment) and remains owed. 6 new tests. py -m pytest -q: 616 passed, 2 skipped, 2 failed (both pre-existing/unrelated) -- net +5, zero regressions. Follow-up optimization work split into html_render_optimization, scoped from these findings."
     },
     {
       "id": "clean_baseline_bootstrap",
