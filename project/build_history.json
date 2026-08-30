@@ -3,6 +3,114 @@
   "record_contract": "One structured record per build, newest first. Required: build, status, title, summary (<= 2 sentences). Optional: started, completed, track, movement, supersedes, evidence, risks_forward, docs{agreement,validation,handover} (repo-relative paths under docs/history/). Full detail lives in the linked doc; do not restate it here. Status vocabulary must stay within utils/project_plan.py STATUS_VALUES.",
   "builds": [
     {
+      "build": "stale_doc_correction_rb3_p0_audit",
+      "status": "done",
+      "started": "2026-08-30",
+      "completed": "2026-08-30",
+      "title": "Merge-discovered correction: RB.3's CP P0 audit blocker claim was stale",
+      "track": "RECOVER / RB.3",
+      "movement": "DOCS",
+      "summary": "While merging origin/main (which already carried a separate session's stale-doc correction for the same fact) into the recovery_collect_rb2_rb4 branch, discovered this session's own RECOVER-track work had repeatedly cited the CP device-interaction-safety audit (P0, cp_device_interaction_safety) as 'not started' when it actually closed 2026-08-25 -- before this session began. Corrected in docs/design/BACKUP_AND_RECOVERY_ARCHITECTURE.md, docs/design/BACKUP_RECOVERY_CONTRACTS.md, checkpoint/checkpoint_recovery_collector.py's BLOCK_REASON, this file's recovery_collect_rb2_rb4 entry (summary + risks_forward), project/roadmap.json's RB entry, CURRENT_STATE.md and AI_HANDOVER.md. RB.3's real remaining blocker is D3 alone (product-owner decision on the operational-write command class) plus add backup local's own command-gate sign-off -- not an unstarted audit. Does not itself unblock RB.3; only corrects the stated reason.",
+      "docs": {
+        "agreement": "docs/design/BACKUP_AND_RECOVERY_ARCHITECTURE.md"
+      }
+    },
+    {
+      "build": "recovery_collect_rb2_rb4",
+      "status": "automated_validated",
+      "started": "2026-08-30",
+      "completed": "2026-08-30",
+      "title": "D2 decision + RB.2 PAN device-state collection orchestration (IMPLEMENTED, real-env owed) + RB.4 validation (AUTOMATED_VALIDATED)",
+      "track": "RECOVER / RB.2 + RB.4",
+      "movement": "IMPLEMENTATION",
+      "summary": "User directed: resolve D2, build RB.4, and build recovery collection under explicit constraints -- not inlined in main.py, selective per gateway, scheduler-integrated, mergeable with a future UI. D2 resolved 2026-08-30 (product owner approval, recorded in docs/design/BACKUP_AND_RECOVERY_ARCHITECTURE.md §13): PAN service account may hold superuser for device-state export only. New utils/recovery_collect.py is the single orchestration layer -- target selection (select_recovery_targets: 'all' or an explicit entity_id list including the VSX __vsid_ convention; an unresolvable id raises before any device is touched), a RecoveryCollector protocol for vendor dispatch, and run_recovery_collection routing every target through a caller-supplied admission hook so one gateway's failure never aborts the batch. panorama/panorama_recovery_collector.py implements PAN device-state export (contract §7.1, read class, gate-documented before this build) reusing panorama_runtime_runner.get_api_key/_tls_verify_setting verbatim with per-host API-key session reuse and no 403 retry. checkpoint/checkpoint_recovery_collector.py is a typed blocked stub (RecoveryCollectionBlockedError naming D3, unresolved -- CORRECTED during the main-merge on 2026-08-30: the P0 cp_device_interaction_safety audit itself closed 2026-08-25, before this build; D3 is the only real remaining blocker) so orchestration/store/admission wiring is already correct for CP once D3 is decided and the command gate signs off. utils/collection_executor.py: ALLOWLISTED_WORKFLOWS gains 'recovery-pan' (not 'recovery-cp'); ScheduledWorkflow gains an additive optional 'targets' field (schema version unchanged, every prior policy file's meaning preserved). main.py stays thin: --recovery-collect/--recovery-vendor/--recovery-gateways parse arguments and dispatch only; _scheduler_workflow_argv extended for recovery-pan. Separately, utils/recovery_validation.py (RB.4) implements the V1-V3 battery frozen in contract §4 and utils/recovery_store.revalidate_artifact wires it into the store (decrypt in memory only); main.py --recovery-validate gates on any individual check FAIL, not the top-line verdict alone, after a real bug was caught where a V2-only failure reported verdict=INTACT (V1 passed) and would have silently passed a naive gate.",
+      "evidence": {
+        "automated": "85 new tests: tests/test_rb2_recovery_collect.py (25 -- target selection incl. VSX addressing and unresolvable-id request-time errors; run_recovery_collection integration writing a real encrypted artifact through the actual store, partial-batch-failure isolation, blocked-vs-failed outcome distinction, admission-hook call-per-target and rejection handling; CP stub always blocks with the exact reason string; PAN collector exercised only against a monkeypatched fixture HTTP transport -- 403-no-retry, session/key reuse across two collect() calls, missing-management_ip fails before any request; scheduler policy 'targets' field optional/additive and 'recovery-cp' rejected at load time; _scheduler_workflow_argv shape for both with and without targets; CLI integration through main.main() including the mandatory --recovery-vendor guard and a full blocked-CP run) and tests/test_rb4_recovery_validation.py (19 -- V1 hash/size PASS and FAIL-caps-at-V1; V2 gzip/XML well-formedness incl. the differentiator case of an artifact that is internally valid V1/V2 but claims the wrong device, correctly stuck at V2 not V3; V3 absent-inventory and version-mismatch NOT_APPLICABLE/FAIL semantics; restore_proven never settable without attach_restore_proof and its required-field/success-result checks; store-level revalidate_artifact round trip; CLI incl. the corrected any-check-FAIL gate). One pre-existing test updated in place, not routed around: tests/test_phase0_6_1c_collection_executor.py::test_allowlisted_workflows_are_read_only now asserts 'recovery-pan' present (read class) and 'recovery-cp' absent (write-adjacent, still gated) -- a genuine, intentional allowlist expansion, not a regression. py -m pytest -q: 741 passed, 3 skipped, 2 pre-existing unrelated failures unchanged from baseline. Repository privacy gate: PASS / 0.",
+        "manual_cli": "Exercised end-to-end via main.main() and a real docker-compose-free --scheduler-once run against a throwaway runtime/recovery root with synthetic credentials and the uitest unified.json fixture: CP path (--recovery-collect --recovery-vendor checkpoint, both explicit-gateway and 'all' selector) fails closed immediately with the exact P0/D3 blocker text, gate FAIL, exit 1, zero artifacts written. PAN path resolves the target, acquires admission, attempts the real (unreachable-in-this-sandbox) HTTPS call, fails gracefully per-target with the real connection error surfaced, gate FAIL, exit 1 -- confirming the failure path degrades correctly rather than crashing. An unresolvable --recovery-gateways entry fails at argument-parse time (exit 2) before any device is contacted. A scheduler_policy.json entry for 'recovery-pan' with an explicit targets list was picked up correctly by --scheduler-once and dispatched through the identical --recovery-collect CLI path (verified by output), proving the CLI/scheduler code-sharing the product direction required actually holds, not just in unit tests.",
+        "real_env": "PAN device-state export is IMPLEMENTED, not REAL_ENV_VALIDATED -- this cloud sandbox has no device reachability, the same on_hardware_real_env_validation gap every other collector in this repository carries. Automated tests exercise the PAN collector against a fixture HTTP transport only, per contract §10's own 'never a live device in CI' rule."
+      },
+      "risks_forward": "RB.3 (CP) remains blocked on D3 alone -- CORRECTED during the main-merge on 2026-08-30: the P0 cp_device_interaction_safety audit closed 2026-08-25, before this build; only D3's decision plus the command gate sign-off are missing. RB.2's PAN configuration-XML export (contract §7.2, the secondary/companion artifact) is not yet implemented, only device-state. software_version for PAN artifacts is recorded as the honest 'unknown' sentinel because unified.json carries no version field for PAN devices and this build deliberately did not invent a new, undocumented device command to fetch one -- a real gap that should be raised as its own gate-reviewed item before RB.4's V3 version-match check can do anything useful against PAN artifacts.",
+      "docs": {
+        "agreement": "docs/design/BACKUP_RECOVERY_CONTRACTS.md"
+      }
+    },
+    {
+      "build": "recovery_store_rb1",
+      "status": "automated_validated",
+      "started": "2026-08-30",
+      "completed": "2026-08-30",
+      "title": "RB.1 recovery-plane store: encryption, manifest, retention, validator (no collection)",
+      "track": "RECOVER / RB.1",
+      "movement": "IMPLEMENTATION",
+      "summary": "User request: implement RB.1 against the frozen docs/design/BACKUP_RECOVERY_CONTRACTS.md §2/§3/§8/§9. New utils/recovery_crypto.py (AES-256-GCM envelope encryption via the cryptography package, now pinned explicitly in requirements.txt instead of only a transitive paramiko dependency), utils/recovery_manifest.py (build_manifest/validate_manifest enforcing all five frozen §3 rules), utils/recovery_store.py (vault key resolution mirroring DEV.2.2's .support_hmac.key precedent -- the key lives on data_root, never on recovery_root -- plus write/read/decrypt-artifact and a consistency-group storage primitive), utils/recovery_retention.py (GFS plan_deletions as a pure function honoring the floor invariant, apply_deletions dry-run-by-default matching --storage-deduplicate's --apply convention). utils/runtime_paths.py gains resolve_recovery_root: SECURITYEXPERT_RECOVERY_ROOT, mandatory and absolute with deliberately NO OS-default (unlike runtime_root), validated separate from both the repository root and the runtime root via a generalized _validate_disjoint helper. main.py gains --recovery-store-check (offline diagnostic mirroring --persistent-secret-material-check) and --recovery-root. docker-compose.yml gains a securityexpert-recovery named volume mounted ONLY on worker, never nginx. utils/repository_privacy.py extended with the .enc suffix and a 'vault' forbidden root dir.",
+      "evidence": {
+        "automated": "41 new tests in tests/test_rb1_recovery_store.py (new pytest.ini 'recovery' marker, shared with RB.0) covering every §9 security invariant assigned to RB.1: 9.1 (a real write_artifact call, then every file under recovery_root is grepped for an unmistakable plaintext marker -- none found, confirming ciphertext-only on disk including the atomic-write temp path), 9.2 (the vault-key resolver rejects a data_root nested under recovery_root), 9.4 (a real support bundle built via support_bundle.run_support_bundle alongside a populated recovery store contains none of its bytes, checked by unzipping and scanning every member), 9.5 (scan_repository flags a probe .enc file and a vault/ root dir), 9.6 (validate_manifest rejects a non-null restore block), 9.9 (a 200-iteration seeded-random property test over arbitrary fleets/policies: retention never reduces an entity below its configured floor, and never deletes the sole remaining is_rma_grade artifact even when it is nominally over the tier limit), 9.11 (docker-compose.yml and docker-compose.prod.yml parsed by indentation to isolate the nginx service's own lines, comments stripped, and asserted to never mention 'recovery'). Plus manifest-builder derivation rules (pan_running_config always is_rma_grade=false, pan_device_state/cp_gaia_backup always true, known_gaps auto-filled and rejected-if-empty for classes with documented vendor exclusions), crypto round-trips (encrypt/decrypt, wrap/unwrap) and two tamper-detection cases (wrong key, flipped ciphertext byte) both raising RecoveryCryptoError, vault-key persistence across a simulated restart (two independent get_or_create_vault_key calls against the same paths), and CLI integration through main.main() including the mandatory-env-var failure path. py -m pytest -q: 697 passed, 3 skipped, 2 pre-existing unrelated failures unchanged from baseline. Repository privacy gate: PASS / 0.",
+        "manual_cli": "python main.py --recovery-store-check exercised directly against throwaway SECURITYEXPERT_RUNTIME_ROOT/SECURITYEXPERT_RECOVERY_ROOT: initializes vault/groups/retention under the recovery root, generates and persists the vault key at <data_root>/.recovery_vault.key (confirmed on disk, physically separate from the recovery root), prints only the key's opaque fingerprint (never the path or key bytes), reports zero artifacts held. The missing-SECURITYEXPERT_RECOVERY_ROOT and nested-inside-runtime-root cases both fail closed with actionable, value-free error messages (exit 2). docker compose config (base file and the docker-compose.prod.yml overlay) confirms the volume topology: worker mounts both securityexpert-runtime and securityexpert-recovery; nginx mounts only securityexpert-runtime.",
+        "real_env": "n/a -- local/offline store operations only; no device reachability required or used. RB.2/RB.3 (actual collection) remain gated behind the network-device command gate and are not touched by this build."
+      },
+      "docs": {
+        "agreement": "docs/design/BACKUP_RECOVERY_CONTRACTS.md"
+      }
+    },
+    {
+      "build": "restore_readiness_rb0",
+      "status": "automated_validated",
+      "started": "2026-08-30",
+      "completed": "2026-08-30",
+      "title": "RB.0 restore-readiness assessment (first implementation against the frozen Backup & Recovery contracts)",
+      "track": "RECOVER / RB.0",
+      "movement": "IMPLEMENTATION",
+      "summary": "User request: implement against the just-frozen docs/design/BACKUP_RECOVERY_CONTRACTS.md §5. New utils/restore_readiness.py: compute_restore_readiness, a pure function with no I/O, deriving per-device READY/STALE/PARTIAL/UNPROTECTED/UNKNOWN readiness from unified.json plus optional (currently empty, since RB.1-RB.3 do not exist yet) recovery_manifests and attestations maps. New main.py --restore-readiness-check CLI mode wired the same way as --render-only (registered in _MODE_PREREQUISITES/_require_bootstrap, requires a prior unified.json), writing data/state/restore_readiness.json. Zero network access, zero credentials, zero new device command -- matches the contract's own requirement that RB.0 be computable exactly like --repository-privacy-check.",
+      "evidence": {
+        "automated": "16 new tests in tests/test_rb0_restore_readiness.py (new pytest.ini 'recovery' marker): all five states; both evidence bases (held vs. device-attested, never merged, attestation alone never promotes to READY); VSX vs_id entity-id convention matching configuration/checkpoint_config_collector.py's _entity_id (<device>__vsid_<vs_id>, never the vsys label); cp+vsx -> checkpoint vendor, panorama -> panorama; a required-artifact-class gap caps state at PARTIAL even when a held artifact is otherwise validated/current; no_data inventory -> UNKNOWN (never UNPROTECTED, per the 'insufficient evidence vs. no recovery artifact' distinction in the contract); duplicate-row dedup; summary counts; a static no-I/O guard (no socket/requests/paramiko/getpass import). py -m pytest -q: 656 passed, 3 skipped, 2 pre-existing unrelated failures unchanged from baseline. Repository privacy gate: PASS / 0.",
+        "manual_cli": "Exercised main.py --restore-readiness-check against tests/fixtures/uitest/unified.json copied into a throwaway SECURITYEXPERT_RUNTIME_ROOT: 15 devices -> 14 UNPROTECTED + 1 UNKNOWN, the UNKNOWN being exactly the fixture's deliberate UNAVAILABLE gateway (data_state=no_data) -- confirming the state machine reads real inventory shape correctly, not just synthetic fixtures. Missing-unified.json bootstrap gate verified (exit 2, actionable guidance); --apply/--render-only combination guards verified (exit 2).",
+        "real_env": "n/a -- read-only over local artifacts only; no device reachability required or used."
+      },
+      "docs": {
+        "agreement": "docs/design/BACKUP_RECOVERY_CONTRACTS.md"
+      }
+    },
+    {
+      "build": "backup_recovery_architecture",
+      "status": "planned",
+      "started": "2026-08-30",
+      "completed": "2026-08-30",
+      "title": "Backup & Recovery architecture + frozen contracts (RB.0-RB.6; rebase of original 0.6.0B)",
+      "track": "RECOVER / RB.x",
+      "movement": "ARCHITECTURE",
+      "supersedes": "original 0.6.0B native-backup milestone (deferred, 'rebase required') -- this is that rebase",
+      "summary": "User request: design the backup architecture and freeze its contracts ahead of the BackBox non-renewal in 2027. Two design documents, no code: docs/design/BACKUP_AND_RECOVERY_ARCHITECTURE.md (three-plane model, per-vendor analysis grounded in CP/PAN admin+API guides, the new 'operational-write' command class, the four-level validation model, restore-readiness, phasing RB.0-RB.6, seven open decisions) and docs/design/BACKUP_RECOVERY_CONTRACTS.md (storage layout, manifest, validation result, readiness record, recovery_ui payload, ten/fourteen-point command gate entries, retention, twelve security invariants as test obligations). Status is 'planned' deliberately -- design frozen, nothing implemented.",
+      "evidence": {
+        "vendor_grounding": "Check Point: sk108902 (snapshot = root partition + OS + binaries + hotfixes, >=2.5GB, same-machine restore; system backup = config + networking/OS params, EXCLUDES OS/binaries/hotfixes, not cross-version), R81 Installation and Upgrade Guide (migrate_server export, mds_backup, Management HA must be captured simultaneously -> consistency groups). Palo Alto: device-state export is the RMA-grade artifact (carries certificates + LSVPN satellite auth) and requires SUPERUSER on PAN-OS 7.1+; configuration XML alone is NOT RMA-grade; Panorama-generated partial device state lacks the dynamic information. URLs cited in the architecture doc's Sources section.",
+        "automated": "py -m pytest -q: 640 passed, 3 skipped, 2 failed -- unchanged from the pre-existing baseline; the project/*.json edits do not disturb the project_plan payload assertions. Repository privacy gate: PASS / 0.",
+        "no_code": "Design + contracts + project metadata only. No source file, no test, no device command implemented. Every command in contracts section 7 is an explicit DRAFT FOR GATE REVIEW, not an approval.",
+        "real_env": "n/a for this movement -- nothing network-facing was built."
+      },
+      "risks_forward": "D1 (product owner) blocks the BackBox-replacement premise itself: vendor scope is frozen to CP+PAN, so any other vendor BackBox currently backs up is NOT covered by this product. D2 (security lead): PAN device-state export needs superuser -- a privilege increase of the platform's own service account. D3/D6: 'add backup local' writes to the device's /var/log and needs the new operational-write class plus the P0 cp_device_interaction_safety audit, making RB.3 the schedule risk against the 2027 deadline. D7: without a restore-proof lab nothing ever leaves RESTORE_UNPROVEN.",
+      "docs": {
+        "agreement": "docs/design/BACKUP_AND_RECOVERY_ARCHITECTURE.md"
+      }
+    },
+    {
+      "build": "deploy_persistent_secret_material",
+      "status": "automated_validated",
+      "started": "2026-08-30",
+      "completed": "2026-08-30",
+      "title": "Persistent runtime volume contract: HMAC key stability + mounted CP/PAN trust material (DEV.2.2)",
+      "track": "DEV.2 / DEV.2.2",
+      "movement": "IMPLEMENTATION",
+      "summary": "User request: close the DEV.2.2 persistent-volume contract left open by DEV.3.1. data/.support_hmac.key persistence was already structurally correct via runtime_paths.data_root; new utils/persistent_secret_material.py + main.py --persistent-secret-material-check make it explicit and offline-checkable, reusing utils.cp_ssh_trust / utils.pan_tls_trust preflight code verbatim (value-free, no network). New docker-compose.prod.yml overlay mounts deploy/secrets/known_hosts and pan-ca-bundle.pem read-only and sets SECURITYEXPERT_CP_MDS_STRICT_HOST_KEY=1 / SECURITYEXPERT_PAN_CA_BUNDLE, moving CP/PAN trust from opt-in to mounted-and-required on the server while docker-compose.yml keeps compatibility mode as the base default. No collector/transport/trust-logic semantic changed.",
+      "evidence": {
+        "automated": "py -m pytest -q: 640 passed, 3 skipped, 2 failed (645 collected; +6 net from tests/test_dev2_2_persistent_secret_material.py). Two pre-existing failures (test_run_html_export_embeds_discovery_payload_without_leftover_placeholder, test_checkpoint_render_appends_one_record) reproduce identically on the unmodified branch head with zero changes applied (634 passed, same 2 failed, 3 skipped), confirmed via git stash -u before/after -- unrelated test-order state bleed, not introduced or fixed by this build.",
+        "manual_cli": "python main.py --persistent-secret-material-check exercised directly: PASS/advisory output with nothing enabled, no key material/path/credential printed; --apply and --render-only combined with the new flag correctly rejected via parser.error (exit 2), matching the --repository-privacy-check guard pattern.",
+        "compose_config": "docker compose -f docker-compose.yml -f docker-compose.prod.yml config confirms the overlay merges correctly (hardening env vars + two read-only bind mounts added to worker only). Full docker build/up blocked by this sandbox's TLS-intercepting proxy, same constraint already documented for linux_container_image.",
+        "privacy_gate": "python main.py --repository-privacy-check: PASS, 0 findings, including the new synthetic (RFC 5737) deploy/secrets/known_hosts.example placeholder."
+      },
+      "docs": {
+        "agreement": "docs/history/phase/DEV2_2_PERSISTENT_SECRET_MATERIAL.md"
+      }
+    },
+    {
       "build": "compliance_trend_reconstruction",
       "status": "automated_validated",
       "started": "2026-08-30",

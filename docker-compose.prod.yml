@@ -1,0 +1,29 @@
+# DEV.2.2 — production overlay: mounts CP known_hosts + PAN CA bundle as
+# read-only trust material and switches strict/verified trust from opt-in to
+# required. See docs/history/phase/DEV2_2_PERSISTENT_SECRET_MATERIAL.md.
+#
+# Base docker-compose.yml (DEV.3.1) stays the generic/dev-friendly compose
+# file -- compatibility-mode trust (AutoAddPolicy / system CA / insecure
+# fallback) is still the accepted default there. This overlay is what turns
+# a `docker compose up` into the DEPLOY.1 server posture:
+#
+#   cp deploy/secrets/known_hosts.example deploy/secrets/known_hosts
+#   ssh-keyscan -H <mds-hostname-or-ip> >> deploy/secrets/known_hosts   # provision the real MDS host key first
+#   cp <your corporate CA bundle> deploy/secrets/pan-ca-bundle.pem
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#   docker compose exec worker python main.py --persistent-secret-material-check
+#
+# deploy/secrets/ is gitignored (see .gitignore's known_hosts*/*.pem rules);
+# only the .example placeholders are committed.
+
+services:
+  worker:
+    environment:
+      SECURITYEXPERT_CP_MDS_STRICT_HOST_KEY: "1"
+      SECURITYEXPERT_PAN_CA_BUNDLE: /run/secrets/pan-ca-bundle.pem
+    volumes:
+      # paramiko's load_system_host_keys() with no explicit filename reads
+      # ~/.ssh/known_hosts for the container's user -- this image runs as
+      # root by default, so that resolves to /root/.ssh/known_hosts.
+      - ./deploy/secrets/known_hosts:/root/.ssh/known_hosts:ro
+      - ./deploy/secrets/pan-ca-bundle.pem:/run/secrets/pan-ca-bundle.pem:ro

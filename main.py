@@ -63,6 +63,8 @@ _ARTIFACT_PRODUCERS = {
 # itself. A full `--only all` checkpoint has no prerequisites.
 _MODE_PREREQUISITES = {
     "render-only": ("unified.json",),
+    "restore-readiness-check": ("unified.json",),
+    "recovery-collect": ("unified.json",),
     "cp-config-probe": ("cp_telemetry.json", "cp.json", "vsx.json"),
     "cp-config-collect": ("cp.json", "vsx.json"),
     "cp": ("vsx.json", "panorama_runtime.json"),
@@ -260,11 +262,18 @@ def _build_runtime_config(*, require_cp, require_panorama, runtime_paths=None):
     return cfg
 
 
-def _scheduler_workflow_argv(workflow, runtime_root):
+def _scheduler_workflow_argv(row, runtime_root):
+    workflow = row.workflow
     normalized = "cp" if workflow == "checkpoint" else workflow
     base = ["--runtime-root", str(runtime_root)]
     if normalized == "cp-config":
         return [*base, "--cp-config-collect", "--cp-config-stage", "all"]
+    if normalized.startswith("recovery-"):
+        vendor = {"recovery-pan": "panorama", "recovery-cp": "checkpoint"}[normalized]
+        argv = [*base, "--recovery-collect", "--recovery-vendor", vendor]
+        if row.targets:
+            argv += ["--recovery-gateways", ",".join(row.targets)]
+        return argv
     return [*base, "--only", normalized]
 
 
@@ -325,7 +334,7 @@ def _evaluate_and_dispatch_due_workflows(runtime_paths, services):
         )
         try:
             main(
-                _scheduler_workflow_argv(row.workflow, runtime_paths.runtime_root),
+                _scheduler_workflow_argv(row, runtime_paths.runtime_root),
                 runtime_services=services,
                 provenance=Provenance.SCHEDULED.value,
                 admission_run_context=ctx,
@@ -372,6 +381,16 @@ def main(argv=None, *, runtime_services=None, provenance="manual", admission_run
             "External SecurityExpert runtime root. Precedence: this CLI option, "
             "SECURITYEXPERT_RUNTIME_ROOT, then the Windows LOCALAPPDATA default. "
             "DEV.0.3A validates the foundation; artifact consumers migrate in DEV.0.3B/C."
+        ),
+    )
+    parser.add_argument(
+        "--recovery-root",
+        default=None,
+        help=(
+            "RB.1 recovery-plane store root. Precedence: this CLI option, then "
+            "SECURITYEXPERT_RECOVERY_ROOT. No default -- unlike --runtime-root, this is "
+            "mandatory and must be a separate volume (docs/design/BACKUP_RECOVERY_CONTRACTS.md §2). "
+            "Only used by --recovery-store-check."
         ),
     )
     parser.add_argument(
@@ -464,6 +483,84 @@ def main(argv=None, *, runtime_services=None, provenance="manual", admission_run
         ),
     )
     parser.add_argument(
+        "--persistent-secret-material-check",
+        action="store_true",
+        help=(
+            "DEV.2.2 local/offline check of the persistent runtime volume contract: "
+            "resolves the runtime root, reports whether the support-bundle HMAC "
+            "identity key already exists on the persistent data root, and preflights "
+            "CP strict host-key trust / PAN CA bundle trust when enabled. No network "
+            "access; no key material, path or credential is printed."
+        ),
+    )
+    parser.add_argument(
+        "--restore-readiness-check",
+        action="store_true",
+        help=(
+            "RB.0 local/offline restore-readiness assessment: 'if this device died "
+            "right now, what do we actually have?' Reads the latest local unified.json "
+            "only -- no network access, no credentials, no new device command, no "
+            "recovery artifact is collected. Writes data/state/restore_readiness.json. "
+            "Every device is UNPROTECTED until RB.1+ ship a recovery store to report "
+            "against; that count is the point of running this before then."
+        ),
+    )
+    parser.add_argument(
+        "--recovery-store-check",
+        action="store_true",
+        help=(
+            "RB.1 local/offline recovery-plane store check: resolves --recovery-root / "
+            "SECURITYEXPERT_RECOVERY_ROOT (mandatory, must be a separate volume from "
+            "the runtime root), initializes the vault/groups/retention layout and the "
+            "vault master key if not already present, and reports what is already held. "
+            "No network access, no device collection. Never prints artifact bytes, key "
+            "material or the vault key file's path."
+        ),
+    )
+    parser.add_argument(
+        "--recovery-validate",
+        action="store_true",
+        help=(
+            "RB.4 local/offline validation (V1-V3) of every artifact already held in "
+            "the recovery store: transport (hash/size), structural (archive/XML "
+            "well-formed), and semantic (cross-checked against the local unified.json, "
+            "when present). Rewrites each artifact's manifest.validation in place. "
+            "Never computes V4 (RESTORE_PROVEN) -- that requires a real lab restore, "
+            "entered manually. Exit 1 if any artifact's validation verdict is FAILED."
+        ),
+    )
+    parser.add_argument(
+        "--recovery-collect",
+        action="store_true",
+        help=(
+            "RB.2/RB.3 recovery artifact collection, via utils.recovery_collect -- this "
+            "flag only parses arguments and dispatches; it contains no collection logic "
+            "itself. Requires --recovery-vendor. Admission-coordinated per target "
+            "(collection_executor), same per-endpoint lock/budget as other collectors."
+        ),
+    )
+    parser.add_argument(
+        "--recovery-vendor",
+        choices=["panorama", "checkpoint"],
+        default=None,
+        help=(
+            "Vendor for --recovery-collect. 'panorama' (PAN device-state export) is "
+            "implemented. 'checkpoint' (CP Gaia backup) is a blocked stub -- P0 "
+            "cp_device_interaction_safety audit + open decision D3, neither resolved."
+        ),
+    )
+    parser.add_argument(
+        "--recovery-gateways",
+        default=None,
+        help=(
+            "Comma-separated entity_id list to selectively target specific gateways/"
+            "firewalls for --recovery-collect (e.g. fw-01,fw-02, or fw-01__vsid_10 for "
+            "a CP virtual system). Omit for every admitted device of --recovery-vendor. "
+            "An entity_id absent from unified.json is a request-time error -- no device "
+            "is contacted."
+        ),
+    )
+    parser.add_argument(
         "--storage-analyze",
         action="store_true",
         help="Analyze configuration history/object storage without collecting devices or changing files.",
@@ -512,15 +609,47 @@ def main(argv=None, *, runtime_services=None, provenance="manual", admission_run
     args = parser.parse_args(argv)
 
     maintenance_modes = sum(bool(value) for value in (
-        args.repository_privacy_check, args.storage_analyze, args.storage_deduplicate,
+        args.repository_privacy_check,
+        args.storage_analyze,
+        args.storage_deduplicate,
+        args.persistent_secret_material_check,
+        args.restore_readiness_check,
+        args.recovery_store_check,
+        args.recovery_validate,
         args.compliance_trend_reconstruct,
     ))
     if maintenance_modes > 1:
         parser.error("Choose only one repository/storage maintenance mode")
     if args.repository_privacy_check and args.apply:
         parser.error("--apply is not valid with --repository-privacy-check")
-    if args.repository_privacy_check and (args.cp_config_probe or args.cp_config_collect or args.render_only or args.only != "all"):
+    if args.repository_privacy_check and (
+        args.cp_config_probe or args.cp_config_collect or args.render_only or args.only != "all" or args.recovery_collect
+    ):
         parser.error("--repository-privacy-check cannot be combined with collection/render modes")
+    if args.persistent_secret_material_check and args.apply:
+        parser.error("--apply is not valid with --persistent-secret-material-check")
+    if args.persistent_secret_material_check and (
+        args.cp_config_probe or args.cp_config_collect or args.render_only or args.only != "all" or args.recovery_collect
+    ):
+        parser.error("--persistent-secret-material-check cannot be combined with collection/render modes")
+    if args.restore_readiness_check and args.apply:
+        parser.error("--apply is not valid with --restore-readiness-check")
+    if args.restore_readiness_check and (
+        args.cp_config_probe or args.cp_config_collect or args.render_only or args.only != "all" or args.recovery_collect
+    ):
+        parser.error("--restore-readiness-check cannot be combined with collection/render modes")
+    if args.recovery_store_check and args.apply:
+        parser.error("--apply is not valid with --recovery-store-check")
+    if args.recovery_store_check and (
+        args.cp_config_probe or args.cp_config_collect or args.render_only or args.only != "all" or args.recovery_collect
+    ):
+        parser.error("--recovery-store-check cannot be combined with collection/render modes")
+    if args.recovery_validate and args.apply:
+        parser.error("--apply is not valid with --recovery-validate")
+    if args.recovery_validate and (
+        args.cp_config_probe or args.cp_config_collect or args.render_only or args.only != "all" or args.recovery_collect
+    ):
+        parser.error("--recovery-validate cannot be combined with collection/render modes")
 
     if args.storage_analyze and args.storage_deduplicate:
         parser.error("Choose only one of --storage-analyze or --storage-deduplicate")
@@ -544,10 +673,25 @@ def main(argv=None, *, runtime_services=None, provenance="manual", admission_run
         parser.error("--render-only cannot be combined with --only")
     if args.render_only and (args.storage_analyze or args.storage_deduplicate or args.apply):
         parser.error("--render-only cannot be combined with storage maintenance options")
+    if args.recovery_collect and not args.recovery_vendor:
+        parser.error("--recovery-collect requires --recovery-vendor")
+    if args.recovery_gateways and not args.recovery_collect:
+        parser.error("--recovery-gateways is only valid with --recovery-collect")
+    if args.recovery_collect and (
+        args.cp_config_probe or args.cp_config_collect or args.render_only
+        or args.only != "all" or args.storage_analyze or args.storage_deduplicate or args.apply
+        or args.compliance_trend_reconstruct
+    ):
+        parser.error("--recovery-collect cannot be combined with other collection/render/storage modes")
     if args.scheduler_once and (
         args.repository_privacy_check
         or args.storage_analyze
         or args.storage_deduplicate
+        or args.persistent_secret_material_check
+        or args.restore_readiness_check
+        or args.recovery_store_check
+        or args.recovery_validate
+        or args.recovery_collect
         or args.apply
         or args.cp_config_probe
         or args.cp_config_collect
@@ -558,6 +702,7 @@ def main(argv=None, *, runtime_services=None, provenance="manual", admission_run
         parser.error("--scheduler-once cannot be combined with collection, render, or maintenance modes")
     if args.compliance_trend_reconstruct and (
         args.cp_config_probe or args.cp_config_collect or args.render_only or args.apply or args.only != "all"
+        or args.recovery_collect
     ):
         parser.error("--compliance-trend-reconstruct cannot be combined with collection/render modes")
 
@@ -647,6 +792,174 @@ def main(argv=None, *, runtime_services=None, provenance="manual", admission_run
         f"(runtime_root={runtime_paths.runtime_root} normal_runtime=external history_cas=legacy_pending)"
     )
 
+    if args.persistent_secret_material_check:
+        from utils.persistent_secret_material import check_persistent_secret_material
+        print("=== SECURITYEXPERT PERSISTENT SECRET MATERIAL CHECK — DEV.2.2 ===\n")
+        report = check_persistent_secret_material(runtime_paths)
+        print(f"HMAC identity key present:    {report.hmac_key_present}")
+        print(f"HMAC identity key on volume:  {report.hmac_key_on_persistent_root}")
+        print(f"CP strict host-key enabled:   {report.cp_strict_host_key_enabled}")
+        print(f"CP trust preflight:           {report.cp_trust_status}")
+        print(f"PAN CA bundle configured:     {report.pan_ca_bundle_configured}")
+        print(f"PAN trust preflight:          {report.pan_trust_status}")
+        if not report.hmac_key_present:
+            print(
+                "\nNote: no HMAC identity key on the persistent data root yet -- one will "
+                "be generated on the first support-bundle write and then persists across "
+                "restarts as long as the runtime volume is retained."
+            )
+        if not report.cp_strict_host_key_enabled or not report.pan_ca_bundle_configured:
+            print(
+                "\nAdvisory: production hardening (SECURITYEXPERT_CP_MDS_STRICT_HOST_KEY=1 "
+                "with a mounted known_hosts, SECURITYEXPERT_PAN_CA_BUNDLE with a mounted CA "
+                "bundle) is not fully enabled. Not a gate failure by itself -- compatibility "
+                "mode is the accepted default off the production server."
+            )
+        if report.findings:
+            print("\nFindings:")
+            for finding in report.findings:
+                print(f"  {finding}")
+        print(f"\nGate:                         {report.gate}")
+        print("No network access performed. No key material, path or credential was printed.")
+        raise SystemExit(0 if report.gate == "PASS" else 1)
+
+    if args.restore_readiness_check:
+        _require_bootstrap("restore-readiness-check", runtime_paths.output_root)
+        from utils.restore_readiness import compute_restore_readiness
+
+        print("=== SECURITYEXPERT RESTORE READINESS — RB.0 ===\n")
+        unified_path = runtime_paths.output_root / "unified.json"
+        unified_devices = json.loads(unified_path.read_text(encoding="utf-8"))
+
+        # RB.1 (the encrypted recovery store) does not exist yet, so this is
+        # deliberately called with no recovery_manifests/attestations: every
+        # device is judged on inventory alone, which correctly reports
+        # UNPROTECTED across the fleet rather than inventing evidence that
+        # was never collected. docs/design/BACKUP_RECOVERY_CONTRACTS.md §5.
+        report = compute_restore_readiness(unified_devices)
+
+        state_dir = runtime_paths.data_root / "state"
+        state_dir.mkdir(parents=True, exist_ok=True)
+        state_path = state_dir / "restore_readiness.json"
+        state_path.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+
+        summary = report["summary"]
+        total = sum(summary.values())
+        print(f"Devices assessed:      {total}")
+        for state in ("READY", "STALE", "PARTIAL", "UNPROTECTED", "UNKNOWN"):
+            print(f"  {state:<12}       {summary.get(state, 0)}")
+        if summary.get("UNPROTECTED", 0) or not any(
+            d.get("held_artifacts") for d in report["devices"]
+        ):
+            print(
+                "\nNote: no recovery artifact has ever been collected for this fleet "
+                "(RB.1-RB.3 not yet built) -- UNPROTECTED here means 'no vendor-native "
+                "backup exists', not a fault in this check. See "
+                "docs/design/BACKUP_AND_RECOVERY_ARCHITECTURE.md."
+            )
+        print(f"\nWritten:                {state_path}")
+        print("No network access performed. No recovery artifact was collected.")
+        return
+
+    if args.recovery_store_check:
+        from utils.recovery_store import RecoveryStoreError, get_or_create_vault_key, list_artifact_dirs
+        from utils.recovery_retention import read_ledger
+        from utils.runtime_paths import resolve_recovery_root
+
+        print("=== SECURITYEXPERT RECOVERY-PLANE STORE CHECK — RB.1 ===\n")
+        try:
+            recovery_paths = resolve_recovery_root(
+                args.recovery_root, runtime_root=runtime_paths.runtime_root
+            )
+        except RuntimePathError as exc:
+            parser.error(str(exc))
+        try:
+            _, vault_key_id = get_or_create_vault_key(
+                runtime_paths.data_root, recovery_paths.recovery_root
+            )
+        except RecoveryStoreError as exc:
+            print("Gate:                    ERROR")
+            print(f"Reason:                  {exc}")
+            raise SystemExit(2)
+
+        artifact_dirs = list_artifact_dirs(recovery_paths)
+        ledger = read_ledger(recovery_paths)
+
+        print(f"Recovery root:           {recovery_paths.recovery_root}")
+        print(f"Vault key id:            {vault_key_id}")
+        print(f"Artifacts held:          {len(artifact_dirs)}")
+        print(f"Retention deletions:     {len(ledger)}")
+        if not artifact_dirs:
+            print(
+                "\nNote: the store is initialized but empty -- run --recovery-collect "
+                "--recovery-vendor panorama to collect a PAN device-state artifact "
+                "(CP Gaia backup remains blocked; see "
+                "docs/design/BACKUP_AND_RECOVERY_ARCHITECTURE.md)."
+            )
+        print("\nGate:                    PASS")
+        print("No network access performed. No artifact bytes, key material or vault key path was printed.")
+        return
+
+    if args.recovery_validate:
+        from utils.recovery_store import (
+            RecoveryStoreError, get_or_create_vault_key, list_artifact_dirs,
+            read_manifest, revalidate_artifact,
+        )
+        from utils.runtime_paths import resolve_recovery_root
+
+        print("=== SECURITYEXPERT RECOVERY ARTIFACT VALIDATION — RB.4 ===\n")
+        try:
+            recovery_paths = resolve_recovery_root(
+                args.recovery_root, runtime_root=runtime_paths.runtime_root
+            )
+        except RuntimePathError as exc:
+            parser.error(str(exc))
+        try:
+            vault_key, _ = get_or_create_vault_key(runtime_paths.data_root, recovery_paths.recovery_root)
+        except RecoveryStoreError as exc:
+            print("Gate:                    ERROR")
+            print(f"Reason:                  {exc}")
+            raise SystemExit(2)
+
+        unified_path = runtime_paths.output_root / "unified.json"
+        if unified_path.is_file():
+            unified_devices = json.loads(unified_path.read_text(encoding="utf-8"))
+        else:
+            unified_devices = []
+            print(
+                "Note: no local unified.json -- every V3 semantic check will report "
+                "NOT_APPLICABLE rather than PASS (frozen rule 3, contract §4).\n"
+            )
+
+        artifact_dirs = list_artifact_dirs(recovery_paths)
+        verdict_counts: dict[str, int] = {}
+        artifacts_with_a_failed_check = 0
+        for artifact_dir in artifact_dirs:
+            manifest = read_manifest(artifact_dir)
+            updated = revalidate_artifact(
+                artifact_dir, manifest, vault_key=vault_key, unified_devices=unified_devices
+            )
+            validation = updated["validation"]
+            verdict_counts[validation["verdict"]] = verdict_counts.get(validation["verdict"], 0) + 1
+            # The gate must not rely on `verdict` alone: verdict reflects the
+            # highest level fully passed (e.g. a V2-only failure still
+            # reports INTACT, since V1 passed) -- an operator needs to know
+            # about ANY failed check, not only a total V1 failure.
+            if any(c["result"] == "FAIL" for c in validation["checks"]):
+                artifacts_with_a_failed_check += 1
+
+        print(f"Artifacts validated:     {len(artifact_dirs)}")
+        for verdict in ("RESTORE_PROVEN", "CONSISTENT", "WELL_FORMED", "INTACT", "FAILED"):
+            if verdict_counts.get(verdict):
+                print(f"  {verdict:<16}     {verdict_counts[verdict]}")
+        print(f"Artifacts with a finding: {artifacts_with_a_failed_check}")
+        if not artifact_dirs:
+            print("\nNote: the store holds no artifacts yet -- nothing to validate.")
+
+        print(f"\nGate:                    {'FAIL' if artifacts_with_a_failed_check else 'PASS'}")
+        print("No network access performed. No artifact bytes or key material was printed.")
+        raise SystemExit(1 if artifacts_with_a_failed_check else 0)
+
     if args.compliance_trend_reconstruct:
         from utils.compliance_history import append_reconstructed
         from utils.compliance_trend_reconstruction import RECONSTRUCTION_SCOPE, reconstruct_pan_baseline_records
@@ -718,6 +1031,80 @@ def main(argv=None, *, runtime_services=None, provenance="manual", admission_run
             )
         except RuntimeConfigError as exc:
             parser.error(str(exc))
+
+    if args.recovery_collect:
+        _require_bootstrap("recovery-collect", runtime_paths.output_root)
+        from utils.recovery_collect import (
+            RecoveryCollectionError,
+            RecoveryCollectionRequest,
+            run_recovery_collection,
+        )
+        from utils.recovery_store import RecoveryStoreError, get_or_create_vault_key
+        from utils.runtime_paths import resolve_recovery_root
+
+        print(f"=== SECURITYEXPERT RECOVERY COLLECTION — {args.recovery_vendor} ===\n")
+        try:
+            recovery_paths = resolve_recovery_root(
+                args.recovery_root, runtime_root=runtime_paths.runtime_root
+            )
+        except RuntimePathError as exc:
+            parser.error(str(exc))
+        try:
+            vault_key, vault_key_id = get_or_create_vault_key(
+                runtime_paths.data_root, recovery_paths.recovery_root
+            )
+        except RecoveryStoreError as exc:
+            print("Gate:                    ERROR")
+            print(f"Reason:                  {exc}")
+            raise SystemExit(2)
+
+        unified_devices = json.loads(
+            (runtime_paths.output_root / "unified.json").read_text(encoding="utf-8")
+        )
+
+        if args.recovery_gateways:
+            entity_ids = [g.strip() for g in args.recovery_gateways.split(",") if g.strip()]
+            selector = {"mode": "targets", "entity_ids": entity_ids}
+        else:
+            selector = {"mode": "all"}
+        request = RecoveryCollectionRequest(
+            vendor=args.recovery_vendor, selector=selector, provenance=provenance,
+        )
+
+        if args.recovery_vendor == "panorama":
+            from panorama.panorama_recovery_collector import PanDeviceStateCollector
+            from panorama.panorama_runtime_runner import _tls_verify_setting
+
+            cfg = _runtime_config(require_cp=False, require_panorama=True)
+            collector = PanDeviceStateCollector(cfg, verify=_tls_verify_setting())
+            budget_vendor = "paloalto"
+        else:
+            from checkpoint.checkpoint_recovery_collector import CheckpointGaiaBackupCollector
+
+            collector = CheckpointGaiaBackupCollector()
+            budget_vendor = "checkpoint"
+
+        def _run_under_admission(entity_id, operation):
+            return _admitted(budget_vendor, f"recovery-{args.recovery_vendor}", entity_id, operation)
+
+        try:
+            result = run_recovery_collection(
+                request,
+                unified_devices=unified_devices, collector=collector,
+                recovery_paths=recovery_paths, vault_key=vault_key, vault_key_id=vault_key_id,
+                run_under_admission=_run_under_admission,
+            )
+        except RecoveryCollectionError as exc:
+            parser.error(str(exc))
+
+        print(f"Targets:                 {len(result.outcomes)}")
+        print(f"Collected:               {result.collected_count}")
+        print(f"Failed/blocked:          {result.failed_count}")
+        for outcome in result.outcomes:
+            if outcome.status != "collected":
+                print(f"  {outcome.entity_id}: {outcome.status} -- {outcome.error}")
+        print(f"\nGate:                    {'PASS' if result.failed_count == 0 else 'FAIL'}")
+        raise SystemExit(0 if result.failed_count == 0 else 1)
 
     if args.cp_config_probe:
         print("=== SECURITYEXPERT CHECK POINT CONFIGURATION IDENTITY + VSX PROBE — PHASE 0.6.1A.1 ===\n")

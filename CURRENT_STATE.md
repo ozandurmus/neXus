@@ -35,23 +35,138 @@ gap to close, not a reason to trust this file over it.
 
 ## Active build
 
-**None open.** Last landed: `compliance_trend_reconstruction — 0.7.7
-Compliance trend retro-fill` — **AUTOMATED_VALIDATED** (2026-08-30, this
-session, this merge). Follow-up to `0.7.5`'s deliberate no-backfill decision.
-Feasibility check found most of `build_compliance_posture`'s inputs
-(alignment, CP config, assignment/waiver policy, CE.1 checks) are not
-versioned per historical CAS snapshot — put the scope trade-off to the
-product owner directly, who chose narrow/labeled reconstruction over
-dropping the build or a broader unlabeled approximation. New
-`utils/compliance_trend_reconstruction.py` mines stored PAN
-effective-running snapshots, time-clusters them into synthetic checkpoints
-(CAS carries no `run_id`), and evaluates the ten deterministic
-`DEFAULT_RULE_PACK` baseline controls per entity through the exact same live
-evaluator dispatch a real checkpoint uses. Every record is stamped
-`reconstructed: true` / `reconstruction_scope: "pan_baseline_rule_pack_only"`
-and the trend delta never uses one as `prev`. New offline `main.py
---compliance-trend-reconstruct` maintenance mode (no network, no
-credentials). `project/build_history.json` entry `compliance_trend_reconstruction`;
+**None open.** This checkpoint reconciles two independent sessions that
+landed in parallel on separate branches: this session's RECOVER track
+(`recovery_collect_rb2_rb4` + predecessors, PR #15) and a separate session's
+`compliance_trend_reconstruction` (`0.7.7`) + `distributed_endpoint_lock`
+(`DEV.3.2`) + a stale-doc correction, already on `origin/main`. Both are
+below, most recent first per branch; neither superseded the other.
+
+**CORRECTION (fixed in this merge):** this session's own RECOVER-track work
+(architecture doc, contracts, `checkpoint/checkpoint_recovery_collector.py`,
+`project/backlog.json`'s `native_backup` note) repeatedly cited the CP
+device-interaction-safety audit (P0) as "not started" — that was stale. Per
+`project/backlog.json`'s `cp_device_interaction_safety` (see "Standing
+priorities and blockers" below), **it closed 2026-08-25**, before this
+session began. `RB.3`'s real remaining blocker is `D3` alone (the
+product-owner decision on the `operational-write` command class) plus
+`add backup local`'s own command-gate sign-off (drafted, not yet approved,
+in contract §7.3) — not an unstarted audit. Corrected everywhere this merge
+touches; **do not re-cite the audit as open.**
+
+Last landed on this session's branch: `recovery_collect_rb2_rb4`
+(2026-08-30, this session). **`D2` RESOLVED** (product owner approval,
+recorded in
+`docs/design/BACKUP_AND_RECOVERY_ARCHITECTURE.md` §13): the PAN service
+account may hold superuser for device-state export only. **`RB.2` —
+IMPLEMENTED, real-environment validation owed** (no device reachability in
+this sandbox). **`RB.4` — AUTOMATED_VALIDATED.**
+
+Explicit product direction this build follows: recovery collection must not
+be logic inlined in `main.py`; must be selective per gateway; must be
+scheduler-integrated from day one. New `utils/recovery_collect.py` is the one
+orchestration layer — target selection (`"all"` or an explicit `entity_id`
+list, VSX `__vsid_` addressing included; an unresolvable id fails before any
+device is touched), a `RecoveryCollector` protocol for vendor dispatch, and
+admission-coordinated execution where one gateway's failure never aborts the
+batch. `main.py --recovery-collect --recovery-vendor {panorama|checkpoint}
+[--recovery-gateways ...]` is a thin CLI that builds a request and dispatches
+— the same call a future UI action or the scheduler makes.
+`panorama/panorama_recovery_collector.py` implements PAN device-state export
+(contract §7.1, `read` class, gate-documented before this build) — session
+reuse, no 403 retry. `checkpoint/checkpoint_recovery_collector.py` is a typed
+blocked stub (`D3` unresolved — the P0 audit itself is closed, see the
+CORRECTION above) so the orchestration/store/admission wiring is already
+correct for CP once `D3` is decided and the command gate signs off.
+`utils/collection_executor.py` gains
+`"recovery-pan"` in `ALLOWLISTED_WORKFLOWS` (not `"recovery-cp"`) and an
+additive optional per-schedule `targets` field — every existing scheduler
+policy file's meaning is unchanged. **Correction recorded in the architecture
+doc:** scheduled recovery collection does *not* need to wait for
+`distributed_endpoint_lock_and_job_store` under the current single-container
+deployment — verified end-to-end with a real `--scheduler-once` run.
+
+Separately, `utils/recovery_validation.py` (RB.4) implements the V1–V3
+battery (contract §4); `main.py --recovery-validate` rewrites each held
+artifact's `manifest.validation`. A real bug was caught and fixed here: the
+initial gate only checked the top-line verdict, but a V2-only failure still
+reports `verdict=INTACT` (V1 passed) — the gate now scans every individual
+check for a `FAIL`, not just the summary verdict.
+
+85 new tests (`tests/test_rb2_recovery_collect.py`,
+`tests/test_rb4_recovery_validation.py`); one pre-existing test
+(`test_allowlisted_workflows_are_read_only`) updated in place for the
+intentional allowlist expansion. `py -m pytest -q`: 741 passed, 3 skipped, 2
+pre-existing unrelated failures unchanged. Privacy gate PASS/0.
+`project/build_history.json` entry `recovery_collect_rb2_rb4`.
+
+**Next:** `RB.3` (CP) remains blocked on `D3` alone (P0 audit closed — see
+CORRECTION above). PAN
+configuration-XML export (contract §7.2, secondary artifact) not yet built.
+**Known gap:** PAN artifact `software_version` is recorded as the honest
+`"unknown"` sentinel — `unified.json` carries no PAN version field, and
+inventing an undocumented device command to fetch one was deliberately
+avoided; this should become its own gate-reviewed item. **`D1` is still a
+product-owner action, not engineering** — vendor scope is frozen to CP+PAN.
+
+Prior: `recovery_store_rb1` — **AUTOMATED_VALIDATED** (2026-08-30).
+Recovery-plane store: encryption, manifest, retention, validator, no
+collection. `utils/recovery_crypto.py`, `recovery_manifest.py`,
+`recovery_store.py`, `recovery_retention.py`; `resolve_recovery_root`; `main.py
+--recovery-store-check`; `docker-compose.yml` `securityexpert-recovery` volume
+on `worker` only. 41 tests.
+
+Prior: `restore_readiness_rb0` — **AUTOMATED_VALIDATED** (2026-08-30). First
+implementation against the frozen contracts (§5): `utils/restore_readiness.py`
++ `main.py --restore-readiness-check`. 16 tests. Manually verified against the
+uitest fixture: 15 devices → 14 `UNPROTECTED` + 1 `UNKNOWN` — the first real
+number for the `D1` BackBox-replacement decision.
+
+Prior: `backup_recovery_architecture` — **DESIGN FROZEN** (2026-08-30).
+ARCHITECTURE movement, no code. Rebases the deferred `original 0.6.0B`
+native-backup milestone. Driver: BackBox is not being renewed in 2027.
+`docs/design/BACKUP_AND_RECOVERY_ARCHITECTURE.md` (three-plane model,
+per-vendor analysis, phasing `RB.0`–`RB.6`, seven open decisions `D1`–`D7`) +
+`docs/design/BACKUP_RECOVERY_CONTRACTS.md` (frozen shapes, the 10/14-point
+command gate entries — drafts for review, not approvals — retention, twelve
+security invariants). Central boundary: configuration evidence is deliberately
+redacted (`secrets_redacted: True`) and therefore **non-restorable by
+design** — today's Configuration module makes it easy to assume otherwise.
+
+Prior: `deploy_persistent_secret_material — persistent
+runtime volume contract` (DEV.2.2) — **AUTOMATED_VALIDATED** (2026-08-30, this
+session). `data/.support_hmac.key` persistence across a container restart was
+already structurally correct via `runtime_paths.data_root`; new
+`utils/persistent_secret_material.py` + `main.py --persistent-secret-material-check`
+make that contract explicit and offline-checkable (value-free, reuses
+`utils.cp_ssh_trust` / `utils.pan_tls_trust` preflight code verbatim). New
+`docker-compose.prod.yml` overlay mounts `deploy/secrets/known_hosts` +
+`pan-ca-bundle.pem` read-only and sets `SECURITYEXPERT_CP_MDS_STRICT_HOST_KEY=1`
+/ `SECURITYEXPERT_PAN_CA_BUNDLE`, moving CP/PAN trust from opt-in to
+mounted-and-required on the server while `docker-compose.yml` keeps
+compatibility mode as the base default. `docs/history/phase/DEV2_2_PERSISTENT_SECRET_MATERIAL.md`;
+`project/build_history.json` entry `deploy_persistent_secret_material`.
+
+Last landed on the parallel `main`-side session's branch:
+`compliance_trend_reconstruction — 0.7.7 Compliance trend retro-fill` —
+**AUTOMATED_VALIDATED** (2026-08-30). Follow-up to `0.7.5`'s deliberate
+no-backfill decision. Feasibility check found most of
+`build_compliance_posture`'s inputs (alignment, CP config,
+assignment/waiver policy, CE.1 checks) are not versioned per historical CAS
+snapshot — put the scope trade-off to the product owner directly, who chose
+narrow/labeled reconstruction over dropping the build or a broader
+unlabeled approximation. New `utils/compliance_trend_reconstruction.py`
+mines stored PAN effective-running snapshots, time-clusters them into
+synthetic checkpoints (CAS carries no `run_id`), and evaluates the ten
+deterministic `DEFAULT_RULE_PACK` baseline controls per entity through the
+exact same live evaluator dispatch a real checkpoint uses. Every record is
+stamped `reconstructed: true` /
+`reconstruction_scope: "pan_baseline_rule_pack_only"` and the trend delta
+never uses one as `prev`. New offline `main.py --compliance-trend-reconstruct`
+maintenance mode (no network, no credentials — merged into this branch's
+`main.py` alongside `--recovery-collect`/`--recovery-validate`, all three
+cross-guarded against each other during conflict resolution).
+`project/build_history.json` entry `compliance_trend_reconstruction`;
 contract + impl record `docs/history/phase/0_7_7_COMPLIANCE_TREND_RECONSTRUCTION.md`.
 
 Landed just before it, on a separate session/branch
