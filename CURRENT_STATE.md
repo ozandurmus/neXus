@@ -23,39 +23,64 @@ timeline.
 
 ## Active build
 
-**None open.** Last landed: `recovery_store_rb1` — **AUTOMATED_VALIDATED**
-(2026-08-30, this session). Recovery-plane store against the frozen Backup &
-Recovery contracts (`docs/design/BACKUP_RECOVERY_CONTRACTS.md` §2/§3/§8/§9):
-encryption, manifest, retention, validator — **no collection** (`RB.2`/`RB.3`
-remain gated). New `utils/recovery_crypto.py` (AES-256-GCM envelope
-encryption; `cryptography` is now pinned explicitly in `requirements.txt`
-instead of riding along as paramiko's transitive dependency),
-`utils/recovery_manifest.py` (`build_manifest`/`validate_manifest` enforcing
-all five frozen §3 rules — `restore` reserved `null`, `is_rma_grade` derived
-never asserted, mandatory `known_gaps`, mandatory `software_version`),
-`utils/recovery_store.py` (vault-key resolution mirrors `DEV.2.2`'s
-`.support_hmac.key` precedent exactly — the key lives on `data_root`, never
-on `recovery_root`), `utils/recovery_retention.py` (GFS `plan_deletions` as a
-pure function honoring the floor invariant; `apply_deletions` dry-run by
-default). `utils/runtime_paths.py` gains `resolve_recovery_root` —
-`SECURITYEXPERT_RECOVERY_ROOT`, mandatory and absolute with **no OS-default**
-(unlike `runtime_root`), validated separate from *both* the repository root
-and the runtime root. `main.py --recovery-store-check` (offline diagnostic).
-`docker-compose.yml` gains a `securityexpert-recovery` volume mounted **only
-on `worker`**, confirmed absent from `nginx` by `docker compose config` on
-both the base file and the `docker-compose.prod.yml` overlay. 41 new tests
-(`tests/test_rb1_recovery_store.py`) covering every §9 invariant assigned to
-RB.1, including a real write-then-grep for plaintext leakage (9.1), a real
-support-bundle build alongside a populated recovery store (9.4), and a
-200-iteration randomized property test on the retention floor (9.9).
-`project/build_history.json` entry `recovery_store_rb1`.
+**None open.** Last landed: `recovery_collect_rb2_rb4` (2026-08-30, this
+session). **`D2` RESOLVED** (product owner approval, recorded in
+`docs/design/BACKUP_AND_RECOVERY_ARCHITECTURE.md` §13): the PAN service
+account may hold superuser for device-state export only. **`RB.2` —
+IMPLEMENTED, real-environment validation owed** (no device reachability in
+this sandbox). **`RB.4` — AUTOMATED_VALIDATED.**
 
-**Next:** `RB.2` (PAN device-state export) — gated on the command gate and
-open decision `D2` (requires PAN-OS superuser). **`RB.3` (CP) remains the 2027
-schedule risk** — `add backup local` writes a multi-MB archive to the device's
-`/var/log` and is blocked behind the P0 `cp_device_interaction_safety` audit.
-**`D1` is still a product-owner action, not engineering** — vendor scope is
-frozen to CP+PAN.
+Explicit product direction this build follows: recovery collection must not
+be logic inlined in `main.py`; must be selective per gateway; must be
+scheduler-integrated from day one. New `utils/recovery_collect.py` is the one
+orchestration layer — target selection (`"all"` or an explicit `entity_id`
+list, VSX `__vsid_` addressing included; an unresolvable id fails before any
+device is touched), a `RecoveryCollector` protocol for vendor dispatch, and
+admission-coordinated execution where one gateway's failure never aborts the
+batch. `main.py --recovery-collect --recovery-vendor {panorama|checkpoint}
+[--recovery-gateways ...]` is a thin CLI that builds a request and dispatches
+— the same call a future UI action or the scheduler makes.
+`panorama/panorama_recovery_collector.py` implements PAN device-state export
+(contract §7.1, `read` class, gate-documented before this build) — session
+reuse, no 403 retry. `checkpoint/checkpoint_recovery_collector.py` is a typed
+blocked stub (P0 `cp_device_interaction_safety` audit + `D3`, **neither
+resolved**) so the orchestration/store/admission wiring is already correct
+for CP once the audit clears. `utils/collection_executor.py` gains
+`"recovery-pan"` in `ALLOWLISTED_WORKFLOWS` (not `"recovery-cp"`) and an
+additive optional per-schedule `targets` field — every existing scheduler
+policy file's meaning is unchanged. **Correction recorded in the architecture
+doc:** scheduled recovery collection does *not* need to wait for
+`distributed_endpoint_lock_and_job_store` under the current single-container
+deployment — verified end-to-end with a real `--scheduler-once` run.
+
+Separately, `utils/recovery_validation.py` (RB.4) implements the V1–V3
+battery (contract §4); `main.py --recovery-validate` rewrites each held
+artifact's `manifest.validation`. A real bug was caught and fixed here: the
+initial gate only checked the top-line verdict, but a V2-only failure still
+reports `verdict=INTACT` (V1 passed) — the gate now scans every individual
+check for a `FAIL`, not just the summary verdict.
+
+85 new tests (`tests/test_rb2_recovery_collect.py`,
+`tests/test_rb4_recovery_validation.py`); one pre-existing test
+(`test_allowlisted_workflows_are_read_only`) updated in place for the
+intentional allowlist expansion. `py -m pytest -q`: 741 passed, 3 skipped, 2
+pre-existing unrelated failures unchanged. Privacy gate PASS/0.
+`project/build_history.json` entry `recovery_collect_rb2_rb4`.
+
+**Next:** `RB.3` (CP) remains blocked — P0 audit + `D3` unresolved. PAN
+configuration-XML export (contract §7.2, secondary artifact) not yet built.
+**Known gap:** PAN artifact `software_version` is recorded as the honest
+`"unknown"` sentinel — `unified.json` carries no PAN version field, and
+inventing an undocumented device command to fetch one was deliberately
+avoided; this should become its own gate-reviewed item. **`D1` is still a
+product-owner action, not engineering** — vendor scope is frozen to CP+PAN.
+
+Prior: `recovery_store_rb1` — **AUTOMATED_VALIDATED** (2026-08-30).
+Recovery-plane store: encryption, manifest, retention, validator, no
+collection. `utils/recovery_crypto.py`, `recovery_manifest.py`,
+`recovery_store.py`, `recovery_retention.py`; `resolve_recovery_root`; `main.py
+--recovery-store-check`; `docker-compose.yml` `securityexpert-recovery` volume
+on `worker` only. 41 tests.
 
 Prior: `restore_readiness_rb0` — **AUTOMATED_VALIDATED** (2026-08-30). First
 implementation against the frozen contracts (§5): `utils/restore_readiness.py`

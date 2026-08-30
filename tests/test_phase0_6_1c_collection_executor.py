@@ -346,10 +346,20 @@ def test_policy_interval_too_short_raises(tmp_path):
 
 
 def test_allowlisted_workflows_are_read_only():
-    """Allowlisted workflows must not include any write/change operation."""
+    """Allowlisted workflows must not include any write/change operation.
+
+    "recovery-pan" (RB.2, docs/design/BACKUP_RECOVERY_CONTRACTS.md §7.1) is
+    PAN device-state export -- `read` class per the network-device command
+    gate, not a write/change operation. "recovery-cp" (CP Gaia backup,
+    `operational-write` class) deliberately does NOT appear here: it is
+    blocked on the P0 cp_device_interaction_safety audit and open decision
+    D3, and utils.collection_executor.ALLOWLISTED_WORKFLOWS is exactly the
+    gate that must keep it out until both clear.
+    """
     for w in ALLOWLISTED_WORKFLOWS:
-        assert w in {"checkpoint", "cp", "vsx", "pan-config", "cp-config"}, \
+        assert w in {"checkpoint", "cp", "vsx", "pan-config", "cp-config", "recovery-pan"}, \
             f"Unexpected workflow in allowlist: {w!r}"
+    assert "recovery-cp" not in ALLOWLISTED_WORKFLOWS
 
 
 # ---------------------------------------------------------------------------

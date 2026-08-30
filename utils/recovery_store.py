@@ -1,10 +1,10 @@
 """SecurityExpert — RB.1 recovery-plane store.
 
 Writes/reads the encrypted vault under `RecoveryPaths.recovery_root`
-(docs/design/BACKUP_RECOVERY_CONTRACTS.md §2). No collector calls this yet —
-RB.2 (PAN device-state export) and RB.3 (CP Gaia backup) are gated behind the
-network-device command gate; this module only provides the store, envelope
-encryption, manifest and retention primitives they will call into.
+(docs/design/BACKUP_RECOVERY_CONTRACTS.md §2). `utils.recovery_collect`
+(RB.2/RB.3) is the only caller of `write_artifact`; this module owns the
+store, envelope encryption, manifest, validation-rewrite and retention
+primitives, never a vendor protocol/shell call.
 """
 from __future__ import annotations
 
@@ -13,11 +13,12 @@ import os
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Sequence
 
 from utils import recovery_crypto
 from utils.config_evidence import safe_component, sha256_bytes, utc_stamp
 from utils.recovery_manifest import build_manifest, validate_manifest
+from utils.recovery_validation import validate_artifact
 from utils.runtime_paths import RecoveryPaths
 
 VAULT_KEY_FILE_NAME = ".recovery_vault.key"
@@ -245,3 +246,37 @@ def delete_artifact_dir(artifact_dir: Path) -> None:
     directory = Path(artifact_dir)
     if directory.is_dir():
         shutil.rmtree(directory)
+
+
+def revalidate_artifact(
+    artifact_dir: Path,
+    manifest: dict[str, Any],
+    *,
+    vault_key: bytes,
+    unified_devices: Sequence[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """RB.4: decrypt in memory (never to disk — §9.1 has no validation
+    carve-out), run the V1–V3 battery, write `manifest.validation` back and
+    return the updated manifest.
+
+    `unified_devices` is optional: an empty/omitted inventory makes every V3
+    check `NOT_APPLICABLE` (frozen rule 3 of §4), not an error — RB.4 must be
+    runnable offline against whatever local `unified.json` happens to exist.
+    """
+    sealed_bytes = (Path(artifact_dir) / "artifact.enc").read_bytes()
+    plaintext = decrypt_artifact(artifact_dir, manifest, vault_key=vault_key)
+
+    validation = validate_artifact(
+        sealed_bytes=sealed_bytes, plaintext=plaintext, manifest=manifest,
+        unified_devices=unified_devices,
+    )
+
+    updated = dict(manifest)
+    updated["validation"] = validation
+    validate_manifest(updated)  # still honors every §3 frozen rule after the rewrite
+
+    _atomic_write_bytes(
+        Path(artifact_dir) / "manifest.json",
+        (json.dumps(updated, indent=2, ensure_ascii=False) + "\n").encode("utf-8"),
+    )
+    return updated
