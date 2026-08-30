@@ -3,6 +3,24 @@
   "record_contract": "One structured record per build, newest first. Required: build, status, title, summary (<= 2 sentences). Optional: started, completed, track, movement, supersedes, evidence, risks_forward, docs{agreement,validation,handover} (repo-relative paths under docs/history/). Full detail lives in the linked doc; do not restate it here. Status vocabulary must stay within utils/project_plan.py STATUS_VALUES.",
   "builds": [
     {
+      "build": "cp_ha_runtime",
+      "status": "automated_validated",
+      "started": "2026-08-30",
+      "completed": "2026-08-30",
+      "title": "ClusterXL/VSX runtime HA role: per-virtual-system probe + explicit direct-Clish capability gap",
+      "track": "0.6.x",
+      "movement": "IMPLEMENTATION",
+      "summary": "Closes the VSX-closure half of the standing P0 cp_ha_runtime item. A virtual_system row previously always inherited its physical member's cphaprob-derived ha_role verbatim, mislabeled as VS-specific runtime evidence. Each virtual_system context now runs its own vsenv-scoped cphaprob probe; a genuine independent read is labeled interactive_cphaprob_stat_runtime_per_vs/success, an unresolved probe falls back to the physical role but is explicitly relabeled inherited_from_physical_member/unavailable_inherited. Separately, interactive_direct_clish hosts (where cphaprob is an Expert/bash-only command unreachable from that shell) now resolve to an explicit capability_gap/cphaprob_unavailable_in_direct_clish instead of an undifferentiated unavailable. No new device command; cphaprob stat was already whitelisted for the physical member.",
+      "evidence": {
+        "automated": "py -m pytest -q: 555 passed, 2 skipped, 2 failed (both pre-existing, unrelated test-order pollution reproduced identically on the unmodified baseline). Net +3 from 3 new regression tests in tests/test_phase0_6_1b_cp_configuration_collector_ui.py. Render harness (tests/test_html_render_harness.py): 3 passed, 1 skipped (no bun in this environment).",
+        "privacy_gate": "No new IP/credential/device-identity literal introduced; synthetic fixture data only (GW1/GW2/VS-A).",
+        "real_env": "not yet confirmed against a real VSX cluster -- owed under on_hardware_real_env_validation, not required to close this build per its own validation gate."
+      },
+      "docs": {
+        "agreement": "docs/history/phase/PHASE0_6_1B_1_2_CP_HA_RUNTIME_VSX_CLOSURE.md"
+      }
+    },
+    {
       "build": "immutable_store_permission",
       "status": "automated_validated",
       "started": "2026-08-30",

@@ -2,10 +2,48 @@
 
 ## Status
 
-**PLANNED — architecture contract frozen 2026-08-30**
+**DONE — AUTOMATED_VALIDATED 2026-08-30**
 
 Product baseline: `0.7.6a AUTOMATED_VALIDATED`. Backlog id: `cp_ha_runtime`
-(P0, `in_progress`).
+(P0, was `in_progress`, now `automated_validated`).
+
+### Closure evidence (2026-08-30)
+
+- `configuration/checkpoint_config_collector.py`: the physical-member HA
+  probe now classifies an `interactive_direct_clish` + CLI-error response as
+  an explicit `ha_runtime_status = "capability_gap"` /
+  `ha_runtime_error_class = "cphaprob_unavailable_in_direct_clish"`, instead
+  of the previous undifferentiated `"unavailable"` (AC-2).
+- Each `virtual_system` context row now runs its own `vsenv <VSID> ...;
+  cphaprob stat` probe and stores an independently-parsed role when one is
+  found (`ha_role_source = "interactive_cphaprob_stat_runtime_per_vs"`,
+  `ha_runtime_status = "success"`), distinct from the physical member's role
+  (AC-1).
+- When the per-VS probe yields no parseable role, the row falls back to the
+  physical member's role but the source is explicitly relabeled
+  `"inherited_from_physical_member"` / `ha_runtime_status =
+  "unavailable_inherited"` rather than silently reusing the physical row's
+  `"interactive_cphaprob_stat_runtime"` label as if it were VS-specific
+  evidence (AC-1, correctness contract).
+- `_write_snapshot`'s summary gains `ha_role_covered_virtual_systems` and
+  `ha_role_inherited_virtual_systems`, distinguishing confirmed per-VS
+  coverage from inherited fallback in aggregate telemetry.
+- No new device command was introduced; `cphaprob stat` was already
+  whitelisted and already run for the physical member (AC-4).
+- Real-environment confirmation against an actual VSX cluster remains owed
+  under `on_hardware_real_env_validation` (not required to close this build
+  per its own validation-gate section).
+- Evidence: three new regression tests in
+  `tests/test_phase0_6_1b_cp_configuration_collector_ui.py`
+  (`test_vsx_virtual_system_gets_independent_ha_role_not_inherited`,
+  `test_vsx_virtual_system_falls_back_to_labeled_inherited_role_when_per_vs_probe_fails`,
+  `test_direct_clish_ha_probe_reports_explicit_capability_gap`). Full suite:
+  555 passed, 2 skipped, 2 failed (both pre-existing, unrelated test-order
+  pollution reproduced identically on the unmodified baseline — see
+  `project/build_history.json`'s `immutable_store_permission` entry for the
+  same two tests). Net +3 passing, zero regressions. Render harness
+  (`tests/test_html_render_harness.py`): 3 passed, 1 skipped (no `bun` in
+  this environment).
 
 ## Objective
 

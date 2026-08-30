@@ -1300,7 +1300,17 @@ def _collect_host(target: PhysicalTarget, *, username: str, secret: str, strict_
                     if role:
                         host_row["ha_role"] = role
                         host_row["ha_role_source"] = "interactive_cphaprob_stat_runtime"
-                host_row["ha_runtime_status"] = "success" if host_row.get("ha_role") else "unavailable"
+                if host_row.get("ha_role"):
+                    host_row["ha_runtime_status"] = "success"
+                elif shell_mode == "interactive_direct_clish" and _looks_like_cli_error(ha_result):
+                    # cphaprob is an Expert/bash-level command; a direct-Clish
+                    # session with no proven Expert access cannot reach it.
+                    # This is a known capability boundary, not an operational
+                    # anomaly -- keep it distinct from an unexplained failure.
+                    host_row["ha_runtime_status"] = "capability_gap"
+                    host_row["ha_runtime_error_class"] = "cphaprob_unavailable_in_direct_clish"
+                else:
+                    host_row["ha_runtime_status"] = "unavailable"
                 ha_result["stdout"] = ha_result["stderr"] = ""
             except Exception as exc:
                 # Runtime role is useful header evidence, never a reason to lose
@@ -1431,8 +1441,14 @@ def _collect_host(target: PhysicalTarget, *, username: str, secret: str, strict_
                 "serial": host_row.get("serial"),
                 "sw_version": host_row.get("sw_version"),
                 "gaia_command_mode": host_row.get("gaia_command_mode"),
+                # A virtual system can hold independent ClusterXL state from its
+                # physical member (VSX per-VS High Availability). Default to the
+                # physical member's role only as a labeled fallback -- never
+                # present it as VS-specific runtime evidence until a per-VS
+                # probe (below) actually confirms it.
                 "ha_role": host_row.get("ha_role"),
-                "ha_role_source": host_row.get("ha_role_source"),
+                "ha_role_source": "inherited_from_physical_member" if host_row.get("ha_role") else None,
+                "ha_runtime_status": "unavailable",
                 "failure_family": None,
                 "vs_id": context.vs_id,
                 "vs_name": context.vs_name,
@@ -1537,6 +1553,32 @@ def _collect_host(target: PhysicalTarget, *, username: str, secret: str, strict_
 
             ctx_result["stdout"] = ctx_result["stderr"] = ""
             ctx_raw = ""
+
+            # Independent per-VS HA role. Never infer it from the physical
+            # member's role or from VS naming; probe cphaprob inside this VS's
+            # own vsenv context, the same estate-proven primitive already used
+            # for per-VS configuration collection above.
+            try:
+                vs_ha_result = _run_exec(
+                    ssh, f"vsenv {context.vs_id} >/dev/null 2>&1; cphaprob stat", command_timeout
+                )
+                if vs_ha_result.get("success") and not _looks_like_cli_error(vs_ha_result):
+                    vs_role = _parse_clusterxl_runtime_role(
+                        str(vs_ha_result.get("stdout") or ""), observed_hostname
+                    )
+                    if vs_role:
+                        ctx_row["ha_role"] = vs_role
+                        ctx_row["ha_role_source"] = "interactive_cphaprob_stat_runtime_per_vs"
+                        ctx_row["ha_runtime_status"] = "success"
+                if ctx_row.get("ha_runtime_status") != "success":
+                    ctx_row["ha_runtime_status"] = (
+                        "unavailable_inherited" if ctx_row.get("ha_role") else "unavailable"
+                    )
+                vs_ha_result["stdout"] = vs_ha_result["stderr"] = ""
+            except Exception as exc:
+                ctx_row["ha_runtime_status"] = "unavailable_inherited" if ctx_row.get("ha_role") else "unavailable"
+                ctx_row["ha_runtime_error_class"] = type(exc).__name__
+
             ctx_row["completed_at"] = _utc_now()
             rows.append(ctx_row)
 
@@ -1836,6 +1878,15 @@ def run_checkpoint_config_collection(
         "model_covered": sum(1 for row in rows if row.get("entity_type") != "virtual_system" and row.get("model")),
         "serial_covered": sum(1 for row in rows if row.get("entity_type") != "virtual_system" and row.get("serial")),
         "ha_role_covered": sum(1 for row in rows if row.get("entity_type") in {"clusterxl_member", "vsx_host"} and row.get("ha_role")),
+        # Per-virtual-system HA role confirmed by an independent per-VS probe
+        # (ha_runtime_status "success"), never counting a virtual_system row
+        # that only carries its physical member's role as a labeled fallback.
+        "ha_role_covered_virtual_systems": sum(
+            1 for row in rows if row.get("entity_type") == "virtual_system" and row.get("ha_runtime_status") == "success"
+        ),
+        "ha_role_inherited_virtual_systems": sum(
+            1 for row in rows if row.get("entity_type") == "virtual_system" and row.get("ha_runtime_status") == "unavailable_inherited"
+        ),
         "gaia_embedded_entities": int((platform_counts.get("gaia_embedded") or {}).get("selected", 0)),
         "gaia_embedded_success": int((platform_counts.get("gaia_embedded") or {}).get("success", 0)),
         "management_reported_down_entities": management_reported_down_entities,
