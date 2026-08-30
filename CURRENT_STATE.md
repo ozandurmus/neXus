@@ -23,7 +23,36 @@ timeline.
 
 ## Active build
 
-**None open.** Last landed: `deploy_persistent_secret_material — persistent
+**None open.** Last landed: `backup_recovery_architecture` — **DESIGN FROZEN**
+(2026-08-30, this session). ARCHITECTURE movement, no code. Rebases the deferred
+`original 0.6.0B` native-backup milestone that the roadmap said "must be rebased
+before implementation". Driver: **BackBox is not being renewed in 2027**.
+
+- `docs/design/BACKUP_AND_RECOVERY_ARCHITECTURE.md` — the three-plane model
+  (inventory / evidence / **recovery**), per-vendor analysis grounded in the CP
+  and PAN admin + API guides, the new `operational-write` command class, the
+  four-level validation model, restore-readiness, phasing `RB.0`–`RB.6`, and
+  seven open decisions `D1`–`D7`.
+- `docs/design/BACKUP_RECOVERY_CONTRACTS.md` — frozen shapes: storage layout,
+  `manifest.json`, validation result, readiness record, `recovery_ui` payload,
+  the 10/14-point **command gate entries** (drafts for review, not approvals),
+  retention, and twelve security invariants as automated test obligations.
+
+**The one-line reason this work exists:** configuration evidence is deliberately
+redacted (`secrets_redacted: True`) and is therefore **non-restorable by
+design** — today the platform has zero recovery capability, and the Configuration
+module makes it easy to assume otherwise.
+
+**Buildable now, unblocked, no server and no new device command:** `RB.0`
+(restore-readiness over existing evidence — pulled forward from 0.9.x because it
+depends on nothing later) then `RB.1` (encrypted recovery store). **`RB.3` (CP)
+is the schedule risk** against 2027: `add backup local` writes a multi-MB archive
+to the device's `/var/log` and is blocked behind the P0
+`cp_device_interaction_safety` audit. **`D1` is a product-owner action, not
+engineering** — vendor scope is frozen to CP+PAN, so any other vendor BackBox
+backs up today is not covered by this product.
+
+Prior: `deploy_persistent_secret_material — persistent
 runtime volume contract` (DEV.2.2) — **AUTOMATED_VALIDATED** (2026-08-30, this
 session). `data/.support_hmac.key` persistence across a container restart was
 already structurally correct via `runtime_paths.data_root`; new

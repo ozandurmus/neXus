@@ -138,9 +138,19 @@
         "status": "planned"
       },
       {
-        "build": "original 0.6.0B Â· rebase required",
-        "title": "Vendor-Native Backup Foundation",
-        "status": "deferred"
+        "build": "RB.0-RB.6 (rebase of original 0.6.0B; design frozen 2026-08-30)",
+        "title": "Backup & Recovery - vendor-native recovery plane",
+        "status": "design_frozen",
+        "notes": [
+          "Architecture: docs/design/BACKUP_AND_RECOVERY_ARCHITECTURE.md; frozen contracts: docs/design/BACKUP_RECOVERY_CONTRACTS.md. This IS the rebase the deferred original 0.6.0B milestone required.",
+          "Driver: BackBox is not being renewed in 2027. Decision-critical caveat (architecture section 2): SecurityExpert is Check Point + Palo Alto only, and vendor scope is frozen by architecture_review_notes -- if BackBox currently backs up any other vendor, this product does NOT replace it for those devices. Open decision D1 (inventory what BackBox actually backs up) blocks the whole replacement premise.",
+          "Central boundary: configuration evidence is deliberately REDACTED (secrets_redacted: True) and therefore non-restorable by design. The recovery plane is a third, separate, encrypted, egress-denied plane -- never merged with the evidence plane, never rendered into the report or the support bundle.",
+          "RB.0 (restore-readiness over existing evidence) and RB.1 (recovery store) are buildable now: read-only, no new device command, no server. RB.0 rebases restore_readiness FORWARD from 0.9.x because it depends on nothing later in the sequence and quantifies the BackBox exit risk with real numbers.",
+          "RB.2 (PAN device-state export) is gated on the command gate + open decision D2: device-state export requires SUPERUSER on PAN-OS 7.1+, which is a privilege increase of the platform's own service account.",
+          "RB.3 (CP Gaia backup) is gated on the P0 cp_device_interaction_safety audit because 'add backup local' writes a multi-MB archive to the device's /var/log -- a new 'operational-write' command class proposed in architecture section 5 (open decision D6), sitting between read and config-write.",
+          "RB.6 (controlled restore) is hard-gated at the OP.2 bar and is explicitly NOT buildable; the manifest reserves a restore block that the RB.1 validator rejects, keeping restore additive per the roadmap binding design consequence.",
+          "Scheduled fleet backup additionally requires distributed_endpoint_lock_and_job_store (DEV.3.2/3.3): backup must route through collection_executor's admission coordinator, never a side channel around the per-endpoint lock."
+        ]
       },
       {
         "build": "0.7.x",
@@ -189,7 +199,7 @@
   "roadmap_notes": [
     "Original roadmap milestones are preserved in history even when implementation order changes.",
     "VSX configuration evidence was originally targeted for 0.6.2 but was delivered early inside the 0.6.1B Check Point configuration track.",
-    "The original 0.6.0B native-backup milestone is intentionally deferred and must be rebased before implementation; configuration evidence is not a recovery backup.",
+    "The original 0.6.0B native-backup milestone was deferred pending a rebase; that rebase landed 2026-08-30 as docs/design/BACKUP_AND_RECOVERY_ARCHITECTURE.md + docs/design/BACKUP_RECOVERY_CONTRACTS.md (phases RB.0-RB.6). The original constraint stands and is now the design's first principle: configuration evidence is not a recovery backup -- the evidence plane is deliberately redacted and therefore non-restorable, so a separate encrypted recovery plane is required. Backup artifact bytes must never reach output/index.html, the support bundle, or repository metadata; only manifests may be read by other subsystems.",
     "Write/change automation remains outside the current roadmap gate until SEE, VERIFY, TRACE and RECOVER are sufficiently mature.",
     "Future 0.7.xâ€“1.0 major-track numbering is a planning map, not a frozen release commitment; rebase it explicitly when a preceding phase changes implementation order.",
     "DEPLOY.1 pulls the server_data_plane portion of the 1.0 GOVERN track forward to host the living SEE-track platform; it must not be used to bypass the write/change automation gate stated above.",
