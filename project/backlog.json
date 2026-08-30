@@ -186,7 +186,7 @@
       "status": "in_progress",
       "priority": "P0",
       "target": "0.6.1B.1.2",
-      "note": "Runtime cphaprob evidence is functioning (real-environment coverage recovered from 0 to 42 in the B.1.2 checkpoint); remaining coverage/VSX closure stays open."
+      "note": "Runtime cphaprob evidence is functioning (real-environment coverage recovered from 0 to 42 in the B.1.2 checkpoint); remaining coverage/VSX closure stays open. Contract frozen 2026-08-30: docs/history/phase/PHASE0_6_1B_1_2_CP_HA_RUNTIME_VSX_CLOSURE.md -- per-virtual-system HA role (independent of physical-member ClusterXL role) plus an explicit capability-gap state for interactive_direct_clish hosts where cphaprob is unreachable. Not yet implemented."
     },
     {
       "id": "cp_unknown_platform",
@@ -195,7 +195,7 @@
       "status": "in_progress",
       "priority": "P1",
       "target": "0.6.1C",
-      "note": "Platform identity and collection capability are separate. A proven read-only Clish configuration path may collect even while platform family remains unknown."
+      "note": "Platform identity and collection capability are separate. A proven read-only Clish configuration path may collect even while platform family remains unknown. Contract frozen 2026-08-30: docs/history/phase/PHASE0_6_1C_CP_UNKNOWN_PLATFORM_LIFECYCLE.md -- propagate the already-correct configuration-collector-level classification (checkpoint_config_collector.py _classify_platform) into the 0.6.1C discovery lifecycle/capability record, which today carries no platform-family field at all. Not yet implemented."
     },
     {
       "id": "cp_identity_edges",
@@ -203,7 +203,8 @@
       "title": "Review remaining CP identity-gate edge cases after interactive session validation",
       "status": "planned",
       "priority": "P1",
-      "target": "0.6.1B.1.2 / 0.6.1C"
+      "target": "0.6.1B.1.2 / 0.6.1C",
+      "note": "Contract frozen 2026-08-30: docs/history/phase/PHASE0_6_1C_CP_IDENTITY_EDGES_REVIEW.md -- an offline synthetic-hostname review of _identity_relation()'s exact/shortname_match/normalized_match/different_observed boundary and its interaction with the pre-poll exact-name exclusion filter; real-estate validation was still PENDING as of the 0.6.1B.1.2 checkpoint per docs/history/validation/VALIDATION_0_6_1B_1_2.txt. Review-first: only implement a fix if the review finds a genuine false-accept/false-reject. Not yet started."
     },
     {
       "id": "cp_ssh_trust",
@@ -352,7 +353,7 @@
       "status": "planned",
       "priority": "P1",
       "target": "0.6.1C / Inventory UX",
-      "note": "Expose runtime inventory exclusions in a vendor-neutral Exclusions view. Later add controlled add/restore/reason/audit workflows. Exclusions must be applied before direct polling; automatic discovery classification should reduce manual exclusions over time."
+      "note": "Expose runtime inventory exclusions in a vendor-neutral Exclusions view. Later add controlled add/restore/reason/audit workflows. Exclusions must be applied before direct polling; automatic discovery classification should reduce manual exclusions over time. Contract frozen 2026-08-30: docs/history/phase/PHASE0_6_1C_INVENTORY_EXCLUSIONS_UI.md -- phase 1 (this contract) is strictly read-only: new utils/inventory_exclusions_ui.py payload builder modeled on discovery_capability_ui.py, new Exclusions nav module. Add/restore/reason/audit write workflows stay a separate, later, DEPLOY.1A-adjacent contract. Not yet implemented."
     },
     {
       "id": "pan_auth_transport_convergence",
@@ -379,7 +380,7 @@
       "status": "planned",
       "priority": "P1",
       "target": "0.6.1C / Inventory UX",
-      "note": "Add vendor-appropriate OS version and model fields to Overview; if globally available, map model families to EOS dates and suggested next release guidance without exposing sensitive identities."
+      "note": "Add vendor-appropriate OS version and model fields to Overview; if globally available, map model families to EOS dates and suggested next release guidance without exposing sensitive identities. Contract frozen 2026-08-30: docs/history/phase/PHASE0_6_1C_OVERVIEW_DEVICE_LIFECYCLE_ENRICHMENT.md -- increment 1 (this contract, in scope) surfaces already-collected model/sw_version aggregated by (vendor, model, sw_version) family on Overview, no new collection; increment 2 (EOS/next-release mapping) is design-only here, gated on finding a vetted static dataset, else split into its own follow-up item. Not yet implemented."
     },
     {
       "id": "failover_readiness_assessment",
