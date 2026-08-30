@@ -3,6 +3,26 @@
   "record_contract": "One structured record per build, newest first. Required: build, status, title, summary (<= 2 sentences). Optional: started, completed, track, movement, supersedes, evidence, risks_forward, docs{agreement,validation,handover} (repo-relative paths under docs/history/). Full detail lives in the linked doc; do not restate it here. Status vocabulary must stay within utils/project_plan.py STATUS_VALUES.",
   "builds": [
     {
+      "build": "distributed_endpoint_lock",
+      "status": "automated_validated",
+      "started": "2026-08-30",
+      "completed": "2026-08-30",
+      "title": "DEV.3.2 - Distributed per-endpoint lock and cross-process admission (Postgres)",
+      "track": "0.6.x / DEV.3.2",
+      "movement": "IMPLEMENTATION",
+      "supersedes": "distributed_endpoint_lock_and_job_store (split into this item + distributed_evidence_store_migration per the accepted contract)",
+      "summary": "User-approved contract implemented: CollectionCoordinator now delegates every admission decision to a CoordinatorBackend (utils/coordinator_backend.py); the default InMemoryCoordinatorBackend is the prior single-process logic moved verbatim (plus two incidental bug fixes: dead _endpoint_locks removed, budget_snapshot() undercounting above capacity 1 fixed). New opt-in PostgresCoordinatorBackend (SECURITYEXPERT_COORDINATOR_BACKEND=postgres) gives the per-endpoint exclusion and per-vendor budget a cross-process equivalent via session-level pg_advisory_lock held on a dedicated per-job connection (released by the server itself if the connection dies -- no TTL, no heartbeat), HMAC-derived lock keys so no device identity reaches Postgres, and a fail-closed startup preflight (verify_postgres_backend_ready) that detects a transaction-pooling proxy before use. main.py wires backend selection with a clean parser.error on failure and gates the scheduler read-evaluate-write cycle behind a scheduler-wide advisory lock on the Postgres backend. Concurrency budget value unchanged at 1; no collector/transport/command change.",
+      "evidence": {
+        "automated": "py -m pytest -q: 654 passed, 3 skipped, 2 failed (both pre-existing/unrelated, same two tests already documented against the unmodified baseline). Net +20 (tests/test_dev3_2_distributed_endpoint_lock.py), zero regressions.",
+        "real_postgres": "Manually verified this session against a real local PostgreSQL 16 (not mocked): a real child OS process admitted first, an independent second backend instance coalesced onto it rather than opening a second session (AC-1); the child was SIGKILLed and reclamation happened with no TTL/heartbeat, the stale row marked orphaned (AC-3); a real pgbouncer 1.22 configured pool_mode=transaction was correctly rejected by the startup preflight (AC-5), while a direct connection passed it. main.py smoke-tested end-to-end (--scheduler-once) against the real Postgres backend and against an unreachable DSN (clean fail-closed error, not a traceback).",
+        "privacy_gate": "No canonical_id, device name, address, credential or transport transcript is persisted to Postgres -- only HMAC-derived lock keys, job ids, vendor/scope labels, status and timestamps.",
+        "real_env": "Real-environment validation against an actual multi-container deployment hitting a real Check Point MDS remains owed before DONE/REAL_ENV_VALIDATED -- server-blocked (DEPLOY.1, external)."
+      },
+      "docs": {
+        "agreement": "docs/history/phase/DEV3_2_DISTRIBUTED_ENDPOINT_LOCK.md"
+      }
+    },
+    {
       "build": "linux_container_image",
       "status": "automated_validated",
       "started": "2026-08-30",
