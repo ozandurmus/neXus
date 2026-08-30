@@ -156,11 +156,17 @@ Full timeline: `project/build_history.json` / `docs/history/INDEX.md`.
 
 ## Standing priorities and blockers
 
-1. **CP device-interaction-safety audit (P0)** — must complete before any
-   recurring scheduling or concurrency increase. The admission coordinator
-   concurrency budget stays at 1 per vendor until this closes.
-2. Do **not** increase recurring polling frequency or concurrency before that
-   audit closes.
+1. **CP device-interaction-safety audit (P0)** — CLOSED (`backlog.json`
+   `cp_device_interaction_safety`, AUTOMATED_VALIDATED 2026-08-25;
+   `collection_execution_coordinator` REAL_ENV_VALIDATED 2026-08-27). This
+   line stayed stale here after both closed — corrected 2026-08-30. Any
+   recurring-scheduling / concurrency-budget-increase build still needs its
+   own real-environment evidence (not a reopened audit), and the
+   single-process coordinator's admission model does not yet cover a
+   multi-process deployment — see `distributed_endpoint_lock_and_job_store`
+   (P0, `planned`, DEPLOY.1-era), which now carries that prerequisite.
+2. The admission coordinator concurrency budget stays at 1 per vendor pending
+   that real-environment evidence.
 3. DEPLOY.1 gates are blocked on server availability (external, ~1 week).
 4. Corporate Git push/merge remains **human-controlled**.
 

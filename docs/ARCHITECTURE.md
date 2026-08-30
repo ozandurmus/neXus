@@ -53,8 +53,11 @@ canonical_ids=[endpoint], operation=lambda: run_x(...))`.
   keys.
 - **Concurrency budget.** Fixed at **1** per vendor/context
   (`checkpoint`, `checkpoint_vsx`, `paloalto`). Raising it requires explicit
-  real-environment evidence; the CP device-interaction-safety audit is P0 and
-  blocks any increase.
+  real-environment evidence. The CP device-interaction-safety audit itself
+  closed 2026-08-25 (`backlog.json` `cp_device_interaction_safety`); a
+  multi-process concurrency increase still needs
+  `distributed_endpoint_lock_and_job_store` (planned) first, since the
+  coordinator's per-endpoint lock is in-process/in-memory today.
 - **Coalescing.** A second request for a busy endpoint attaches to the running
   job (`CoordinatorDecision.COALESCED`) — no second session is opened.
 - A non-admitted decision (`REJECTED_BUDGET` / `REJECTED_LOCKED`) raises
