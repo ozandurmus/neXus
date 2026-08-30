@@ -198,6 +198,15 @@
       "note": "AUTOMATED_VALIDATED 2026-08-30. Contract: docs/history/phase/PHASE0_6_1C_CP_UNKNOWN_PLATFORM_LIFECYCLE.md. CapabilityProfile.platform_family/.platform_confidence added, independent of every other field (proven: plan_collection() output is identical across every platform_family value); platform_fields_from_classification() is the one sanctioned conversion from a real _classify_platform() dict, integration-tested against the actual collector function. discovery_capability_ui.py + app.js's Discovery module surface it (new Platform column). Scope correction discovered during implementation: there is no live 0.6.1C Phase 4 collector-to-CapabilityStore wiring anywhere in the repo yet for ANY capability field (not platform-specific) -- building that is materially larger and stays a separate future item, not silently absorbed here. Also flagged (not fixed): tests/fixtures/uitest/discovery_ui.json's entity keys pre-existingly do not match _entity_row()'s real shape -- see new backlog item discovery_fixture_shape_drift. +11 regression tests; py -m pytest -q: 569 passed, 2 skipped, 2 failed (both pre-existing/unrelated) -- net +14, zero regressions."
     },
     {
+      "id": "inventory_exclusions_management_ui",
+      "category": "Inventory UX",
+      "title": "Inventory Exclusions add/restore/reason/audit workflows (write phase, DEPLOY.1A-adjacent)",
+      "status": "planned",
+      "priority": "P2",
+      "target": "DEPLOY.1A",
+      "note": "Split out 2026-08-30 from inventory_exclusions_ui on that contract's own closure (docs/history/phase/PHASE0_6_1C_INVENTORY_EXCLUSIONS_UI.md, Definition of done): the read-only Exclusions view (phase 1) is done; this is phase 2 -- a controlled add/restore workflow with a mandatory reason and an audit trail, writing into state/inventory_exclusions.json. Same write-boundary class as compliance_assignment_ui_and_registry: needs the app server + DEPLOY.1A OIDC/RBAC (only an authorised role edits exclusions) + a persistent store, and its own dedicated design pass (schema for the audit log, concurrent-write safety, InventoryExclusionPolicy's existing _validate_identity constraints become load-bearing once a write path exists). Not buildable standalone pre-DEPLOY.1A."
+    },
+    {
       "id": "discovery_fixture_shape_drift",
       "category": "Reliability / Test Infrastructure",
       "title": "tests/fixtures/uitest/discovery_ui.json entity keys drift from the real discovery_capability_ui builder shape",
@@ -359,10 +368,10 @@
       "id": "inventory_exclusions_ui",
       "category": "Inventory UX",
       "title": "Inventory Exclusions UX & Management",
-      "status": "planned",
+      "status": "automated_validated",
       "priority": "P1",
       "target": "0.6.1C / Inventory UX",
-      "note": "Expose runtime inventory exclusions in a vendor-neutral Exclusions view. Later add controlled add/restore/reason/audit workflows. Exclusions must be applied before direct polling; automatic discovery classification should reduce manual exclusions over time. Contract frozen 2026-08-30: docs/history/phase/PHASE0_6_1C_INVENTORY_EXCLUSIONS_UI.md -- phase 1 (this contract) is strictly read-only: new utils/inventory_exclusions_ui.py payload builder modeled on discovery_capability_ui.py, new Exclusions nav module. Add/restore/reason/audit write workflows stay a separate, later, DEPLOY.1A-adjacent contract. Not yet implemented."
+      "note": "AUTOMATED_VALIDATED 2026-08-30 (phase 1 -- read-only). Contract: docs/history/phase/PHASE0_6_1C_INVENTORY_EXCLUSIONS_UI.md. New utils/inventory_exclusions_ui.py pure payload builder + new Exclusions nav/module in templates/index.html + static/app.js, modeled on the Discovery module. html_export.py loads the policy via the existing load_inventory_exclusions(compliance_data_root) -- no main.py call-site changes needed. A malformed local policy degrades to an explicit empty state on render rather than crashing the report; cp_runner.py's own collection-time load stays fail-closed and untouched. tests/fixtures/uitest/state/inventory_exclusions.json is read by the REAL builder (not hand-authored/injected like discovery_ui.json), so the render harness exercises the actual production code path for this module. 13 new tests; py -m pytest -q: 603 passed, 2 skipped, 2 failed (both pre-existing/unrelated) -- net +13, zero regressions. Deferred to a new, separately-contracted item: add/restore/reason/audit write workflows (DEPLOY.1A-adjacent, needs its own design pass)."
     },
     {
       "id": "pan_auth_transport_convergence",

@@ -7,6 +7,8 @@ from utils.compliance_history import append_run, load_history, summarise_overvie
 from utils.compliance_posture import build_compliance_posture
 from utils.crypto_posture import build_crypto_posture
 from utils.discovery_capability_ui import build_discovery_capability_payload
+from utils.inventory_exclusions import InventoryExclusionPolicyError, load_inventory_exclusions
+from utils.inventory_exclusions_ui import build_inventory_exclusions_payload
 from utils.logger import info
 from utils.project_plan import build_project_plan_payload
 
@@ -134,6 +136,17 @@ def run_html_export(
         coordinator=coordinator,
         scheduler_policy=scheduler_policy,
     )
+    # inventory_exclusions_ui (0.6.1C Inventory UX, phase 1): read-only
+    # projection of the same local policy cp_runner.py already gates
+    # collection with. A malformed local policy file fails CLOSED for actual
+    # collection (see utils/inventory_exclusions.py) -- that guarantee is
+    # untouched -- but must never crash report *rendering*, so this path
+    # degrades to the payload's own explicit empty state instead.
+    try:
+        exclusion_policy = load_inventory_exclusions(compliance_data_root)
+    except InventoryExclusionPolicyError:
+        exclusion_policy = None
+    exclusions_ui = build_inventory_exclusions_payload(exclusion_policy)
 
     template = read_text_file(template_file)
     css = read_text_file(style_file)
@@ -151,6 +164,7 @@ def run_html_export(
         "__COMPLIANCE_JSON_PLACEHOLDER__": _script_json(compliance_ui),
         "__CRYPTO_JSON_PLACEHOLDER__": _script_json(crypto_ui),
         "__DISCOVERY_JSON_PLACEHOLDER__": _script_json(discovery_ui),
+        "__EXCLUSIONS_JSON_PLACEHOLDER__": _script_json(exclusions_ui),
     })
 
     output_html.parent.mkdir(
