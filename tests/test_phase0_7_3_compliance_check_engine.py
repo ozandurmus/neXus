@@ -23,6 +23,8 @@ from utils.control_assignment import ControlAssignmentPolicyError, load_control_
 
 from test_phase0_6_1b_1_5_compliance_posture import _sample_project_plan_payload
 
+pytestmark = pytest.mark.compliance
+
 
 def _write_pack(tmp_path, body):
     state = tmp_path / "state"

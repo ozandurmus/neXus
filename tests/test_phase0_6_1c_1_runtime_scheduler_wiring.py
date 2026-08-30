@@ -23,6 +23,8 @@ from utils.collection_executor import (
 )
 from utils.run_context import RunContext
 
+pytestmark = pytest.mark.discovery
+
 
 def _write_policy(root: Path, value: dict) -> None:
     path = root / "state" / "scheduler_policy.json"

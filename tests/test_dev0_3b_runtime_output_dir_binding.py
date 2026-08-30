@@ -2,6 +2,9 @@ import importlib
 from pathlib import Path
 
 from utils.runtime_paths import resolve_runtime_paths
+import pytest
+
+pytestmark = pytest.mark.runtime_platform
 
 
 MODULES = [

@@ -5,6 +5,8 @@ import pytest
 
 from utils.runtime_paths import RuntimePathError, RuntimePaths, resolve_runtime_paths
 
+pytestmark = pytest.mark.runtime_platform
+
 
 def _repo(tmp_path):
     repo = tmp_path / "repo"

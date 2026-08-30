@@ -1,6 +1,9 @@
 from pathlib import Path
 
 from checkpoint.vsx_parser import clean_raw, parse_ifconfig, parse_routes
+import pytest
+
+pytestmark = pytest.mark.inventory
 
 
 FIXTURES = Path(__file__).parent / "fixtures" / "vsx"

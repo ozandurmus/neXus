@@ -2,6 +2,9 @@ import json
 import zipfile
 
 from utils import support_bundle
+import pytest
+
+pytestmark = pytest.mark.inventory
 
 
 def test_support_bundle_hmac_anonymizes_and_is_deterministic(tmp_path, monkeypatch):

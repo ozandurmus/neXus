@@ -7,6 +7,9 @@ from pathlib import Path
 
 from utils.inventory_exclusions import InventoryExclusion, InventoryExclusionPolicy
 from utils.inventory_exclusions_ui import build_inventory_exclusions_payload
+import pytest
+
+pytestmark = pytest.mark.discovery
 
 
 ROOT = Path(__file__).resolve().parents[1]

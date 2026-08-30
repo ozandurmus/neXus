@@ -18,6 +18,8 @@ from utils.collection_executor import (
 )
 from utils import run_context
 
+pytestmark = pytest.mark.discovery
+
 
 # ---------------------------------------------------------------------------
 # Helpers

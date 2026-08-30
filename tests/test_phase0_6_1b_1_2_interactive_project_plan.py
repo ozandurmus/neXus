@@ -6,6 +6,8 @@ import pytest
 from configuration import checkpoint_config_collector as collector
 from utils.project_plan import build_project_plan_payload
 
+pytestmark = pytest.mark.configuration
+
 ROOT = Path(__file__).resolve().parents[1]
 APP = (ROOT / "static" / "app.js").read_text(encoding="utf-8")
 CSS = (ROOT / "static" / "style.css").read_text(encoding="utf-8")

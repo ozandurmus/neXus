@@ -1,6 +1,9 @@
 import json
 
 from utils.compliance_posture import build_compliance_posture
+import pytest
+
+pytestmark = pytest.mark.compliance
 
 
 def _sample_configuration_payload():

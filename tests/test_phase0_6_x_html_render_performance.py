@@ -6,6 +6,9 @@ the instrumentation is provably inert when disabled (AC-1) and does not
 change any payload/schema (AC-4).
 """
 from utils.html_export import PROFILE_ENV_VAR, run_html_export
+import pytest
+
+pytestmark = pytest.mark.render
 
 
 def _write_unified(tmp_path):

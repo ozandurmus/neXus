@@ -10,6 +10,9 @@ All identities below are fabricated.
 """
 from configuration import checkpoint_config_collector as collector
 from utils.inventory_exclusions import checkpoint_transport_value
+import pytest
+
+pytestmark = pytest.mark.configuration
 
 
 # ---------------------------------------------------------------------------

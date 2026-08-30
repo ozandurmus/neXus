@@ -1,6 +1,9 @@
 import json
 
 from utils.verification import run_verification
+import pytest
+
+pytestmark = pytest.mark.inventory
 
 
 def test_verification_is_observe_only_and_counts_sources(tmp_path):

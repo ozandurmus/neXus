@@ -8,6 +8,8 @@ import pytest
 
 import main
 
+pytestmark = pytest.mark.runtime_platform
+
 
 def _write(output_root, name, payload="[]"):
     p = output_root / "output"

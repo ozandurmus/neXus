@@ -23,6 +23,8 @@ from utils.capability_registry import (
     platform_fields_from_classification,
 )
 
+pytestmark = pytest.mark.discovery
+
 
 # ---------------------------------------------------------------------------
 # EntityRecord basics

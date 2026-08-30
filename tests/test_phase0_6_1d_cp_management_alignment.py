@@ -4,6 +4,9 @@ from pathlib import Path
 from configuration.checkpoint_config_alignment import align_checkpoint_management_intent
 from configuration.checkpoint_config_collector import build_checkpoint_current_configuration
 from utils.config_ui import build_configuration_ui_payload
+import pytest
+
+pytestmark = pytest.mark.configuration
 
 
 ROOT = Path(__file__).resolve().parents[1]

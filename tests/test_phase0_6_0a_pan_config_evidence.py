@@ -7,6 +7,9 @@ from types import SimpleNamespace
 
 from configuration import panorama_config_collector as collector
 from utils.config_evidence import ConfigEvidenceStore, sha256_bytes
+import pytest
+
+pytestmark = pytest.mark.configuration
 
 
 class FakeResponse:

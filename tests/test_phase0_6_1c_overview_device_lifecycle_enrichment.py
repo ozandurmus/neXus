@@ -16,6 +16,8 @@ from pathlib import Path
 
 import pytest
 
+pytestmark = pytest.mark.discovery
+
 
 ROOT = Path(__file__).resolve().parents[1]
 TEMPLATE = (ROOT / "templates" / "index.html").read_text(encoding="utf-8")

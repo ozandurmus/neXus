@@ -1,4 +1,7 @@
 from pathlib import Path
+import pytest
+
+pytestmark = pytest.mark.configuration
 
 
 def test_full_run_source_invokes_pan_config_and_preserves_separate_support_bundles():

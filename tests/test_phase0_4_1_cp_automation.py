@@ -5,6 +5,8 @@ import pytest
 
 from checkpoint import cp_runner
 
+pytestmark = pytest.mark.inventory
+
 
 class FakeSFTP:
     def __init__(self):

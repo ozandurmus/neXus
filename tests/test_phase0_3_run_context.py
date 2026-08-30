@@ -1,6 +1,9 @@
 from pathlib import Path
 
 from utils import run_context
+import pytest
+
+pytestmark = pytest.mark.inventory
 
 
 def test_run_context_removes_stale_target_and_captures_fresh_artifact(tmp_path, monkeypatch):

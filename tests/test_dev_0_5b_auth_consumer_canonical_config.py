@@ -3,6 +3,9 @@ from pathlib import Path
 
 import config
 import main
+import pytest
+
+pytestmark = pytest.mark.runtime_platform
 
 
 ROOT = Path(__file__).resolve().parents[1]

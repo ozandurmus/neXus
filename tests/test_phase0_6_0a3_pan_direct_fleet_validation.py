@@ -4,6 +4,9 @@ from types import SimpleNamespace
 
 from configuration import panorama_config_collector as collector
 from utils.config_evidence import ConfigEvidenceStore
+import pytest
+
+pytestmark = pytest.mark.configuration
 
 
 LOCAL_XML = b'''<config version="11.1"><devices><entry name="localhost.localdomain"><deviceconfig/><network><interface><ethernet/></interface><virtual-router/></network><vsys><entry name="vsys1"/></vsys></entry></devices></config>'''

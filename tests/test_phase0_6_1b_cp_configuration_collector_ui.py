@@ -3,6 +3,9 @@ from pathlib import Path
 
 from configuration import checkpoint_config_collector as collector
 from utils.config_ui import build_configuration_ui_payload
+import pytest
+
+pytestmark = pytest.mark.configuration
 
 
 ROOT = Path(__file__).resolve().parents[1]

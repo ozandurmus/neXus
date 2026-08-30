@@ -12,6 +12,8 @@ import pytest
 import main
 from utils.runtime_config_source import RuntimeConfigError, resolve_value
 
+pytestmark = pytest.mark.runtime_platform
+
 PRINCIPAL = "SECURITYEXPERT_PRINCIPAL"
 SECRET = "SECURITYEXPERT_SECRET"
 CP = "SECURITYEXPERT_CP_MDS_ENDPOINT"

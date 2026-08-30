@@ -4,8 +4,12 @@ import json
 import os
 from pathlib import Path
 
+import pytest
+
 from utils.config_evidence import ConfigEvidenceStore, sha256_bytes
 from utils.config_storage import analyze_configuration_storage, deduplicate_legacy_storage
+
+pytestmark = pytest.mark.configuration
 
 
 XML_A = b'<?xml version="1.0"?><config><devices><entry name="a"/></devices></config>'

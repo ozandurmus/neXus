@@ -20,6 +20,9 @@ from utils.compliance_rulepack import (
     DEFAULT_RULE_PACK_VERSION,
     rule_pack_summary,
 )
+import pytest
+
+pytestmark = pytest.mark.compliance
 
 _BASELINE_IDS = {c["control_id"] for c in BASELINE_CONTROLS}
 

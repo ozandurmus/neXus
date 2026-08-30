@@ -1,4 +1,7 @@
 from checkpoint import vsx_runner
+import pytest
+
+pytestmark = pytest.mark.inventory
 
 
 class FakeShell:

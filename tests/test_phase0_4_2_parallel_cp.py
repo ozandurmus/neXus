@@ -6,6 +6,9 @@ from pathlib import Path
 from checkpoint import cp_runner
 from utils import run_context, support_bundle
 from utils.verification import run_verification
+import pytest
+
+pytestmark = pytest.mark.inventory
 
 
 def test_extended_cp_status_parses_retry_and_error_fields():

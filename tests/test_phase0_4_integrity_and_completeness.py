@@ -5,6 +5,9 @@ from pathlib import Path
 from utils import run_context
 from utils.completeness import build_vsx_completeness
 from utils.verification import run_verification
+import pytest
+
+pytestmark = pytest.mark.inventory
 
 
 def test_run_context_records_stage_and_artifact_integrity(tmp_path, monkeypatch):

@@ -5,6 +5,9 @@ import zipfile
 from checkpoint import cp_runner
 from utils.verification import run_verification
 from utils import support_bundle
+import pytest
+
+pytestmark = pytest.mark.inventory
 
 
 def test_cp_status_parses_management_state_and_outcome():

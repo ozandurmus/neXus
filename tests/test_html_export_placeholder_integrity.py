@@ -16,6 +16,9 @@ import json
 import re
 
 from utils.html_export import _fill_template, run_html_export
+import pytest
+
+pytestmark = pytest.mark.configuration
 
 
 _SCRIPT_CONSTS = (

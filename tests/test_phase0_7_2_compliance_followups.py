@@ -21,6 +21,9 @@ from utils.compliance_evaluators_ext import evaluate_enrichment_control
 from utils.compliance_posture import build_compliance_posture
 
 from test_phase0_6_1b_1_5_compliance_posture import _sample_project_plan_payload
+import pytest
+
+pytestmark = pytest.mark.compliance
 
 _NEW_IDS = {
     "password_min_length", "password_complexity_enabled", "password_history_depth",

@@ -1,4 +1,7 @@
 from checkpoint.cp_runner import parse_cluster_virtual_interfaces, enrich_cluster_topology
+import pytest
+
+pytestmark = pytest.mark.inventory
 
 
 def test_parse_clusterxl_virtual_interfaces():

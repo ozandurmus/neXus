@@ -30,6 +30,8 @@ from utils.config_history import (
 )
 from utils.config_ui import build_configuration_ui_payload
 
+pytestmark = pytest.mark.configuration
+
 # ---------------------------------------------------------------------------
 # Synthetic fixtures
 # ---------------------------------------------------------------------------
