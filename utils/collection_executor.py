@@ -1,4 +1,4 @@
-"""Collection execution coordinator and limited scheduler — 0.6.1C.
+"""Collection execution coordinator and limited scheduler — 0.6.1C / DEV.3.2.
 
 The coordinator is the single admission boundary for all collection
 requests.  Every collection path (CP MDS, direct SSH, VSX, CP config,
@@ -23,125 +23,40 @@ Safety contracts
 
 Coordinator persistence
 -----------------------
-This implementation is single-process in-memory.  Distributed locking,
-durable queue and multi-node HA scheduling are explicitly deferred to
-DEPLOY.1.
+``CollectionCoordinator`` delegates every admission decision to a
+``utils.coordinator_backend.CoordinatorBackend``. The default
+``InMemoryCoordinatorBackend`` is single-process — the same validated 0.6.1C
+behavior, byte-for-byte. ``select_coordinator_backend()`` opts into
+``PostgresCoordinatorBackend`` (``SECURITYEXPERT_COORDINATOR_BACKEND=postgres``)
+for cross-process admission — see
+``docs/history/phase/DEV3_2_DISTRIBUTED_ENDPOINT_LOCK.md``. Multi-node HA
+scheduling beyond the scheduler-advisory-lock gate below remains deferred.
 """
 from __future__ import annotations
 
 import json
+import os
 import threading
-import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from enum import Enum
 from pathlib import Path
 from typing import Any, Callable, TypeVar
 
 from utils.capability_registry import CapabilityStore
 from utils.discovery_lifecycle import LifecycleStore
-
-
-# ---------------------------------------------------------------------------
-# Enumerations
-# ---------------------------------------------------------------------------
-
-class Provenance(str, Enum):
-    MANUAL    = "manual"
-    SCHEDULED = "scheduled"
-    # "event" is a reserved schema value; no trigger implemented in 0.6.1C.
-
-
-class CoordinatorDecision(str, Enum):
-    ADMITTED         = "admitted"
-    COALESCED        = "coalesced"
-    REJECTED_BUDGET  = "rejected_budget"
-    REJECTED_LOCKED  = "rejected_locked"
-
-
-class JobStatus(str, Enum):
-    PENDING   = "pending"
-    RUNNING   = "running"
-    COMPLETED = "completed"
-    FAILED    = "failed"
-    CANCELLED = "cancelled"
-    COALESCED = "coalesced"  # request merged into an existing job
-
-
-class CollectionAdmissionError(RuntimeError):
-    """Raised when a collection request must not open a transport session."""
-
-    def __init__(self, decision: CoordinatorDecision, job: "Job") -> None:
-        super().__init__(f"collection admission did not execute: {decision.value}")
-        self.decision = decision
-        self.job = job
-
-
-# ---------------------------------------------------------------------------
-# Job record
-# ---------------------------------------------------------------------------
-
-@dataclass
-class Job:
-    """Mutable lifecycle record for one collection request."""
-    job_id: str
-    vendor: str
-    workflow_scope: str      # e.g. "checkpoint", "pan-config"
-    provenance: str          # Provenance enum value
-    canonical_ids: list[str] = field(default_factory=list)
-    status: str = JobStatus.PENDING.value
-    created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
-    admitted_at: str | None = None
-    completed_at: str | None = None
-    coalesced_to: str | None = None   # job_id of the job this was merged into
-    reason: str | None = None          # safe reason code; no secrets
-    cancel_event: threading.Event = field(default_factory=threading.Event, repr=False, compare=False)
-    completion_event: threading.Event = field(default_factory=threading.Event, repr=False, compare=False)
-
-    def to_manifest_dict(self) -> dict[str, Any]:
-        """Return a secrets-free dict suitable for RunContext manifest."""
-        return {
-            "job_id": self.job_id,
-            "vendor": self.vendor,
-            "workflow_scope": self.workflow_scope,
-            "provenance": self.provenance,
-            "status": self.status,
-            "created_at": self.created_at,
-            "admitted_at": self.admitted_at,
-            "completed_at": self.completed_at,
-            "coalesced_to": self.coalesced_to,
-            "reason": self.reason,
-            # canonical_ids intentionally omitted — may contain device names.
-        }
-
-
-# ---------------------------------------------------------------------------
-# Concurrency budget
-# ---------------------------------------------------------------------------
-
-# Conservative fixed budgets per vendor/context.
-# Increasing these requires explicit real-environment evidence (see phase doc).
-_DEFAULT_BUDGETS: dict[str, int] = {
-    "checkpoint":     1,
-    "checkpoint_vsx": 1,
-    "paloalto":       1,
-    "_default":       1,
-}
-
-# Public read-only alias for UI/observability consumers (e.g. discovery_capability_ui).
-DEFAULT_CONCURRENCY_BUDGETS: dict[str, int] = dict(_DEFAULT_BUDGETS)
-
-
-def _vendor_budget_key(vendor: str, workflow_scope: str) -> str:
-    v = vendor.strip().lower()
-    w = workflow_scope.strip().lower()
-    if v == "checkpoint" and "vsx" in w:
-        return "checkpoint_vsx"
-    if v in {"checkpoint", "cp"}:
-        return "checkpoint"
-    if v in {"paloalto", "pan"}:
-        return "paloalto"
-    return "_default"
+from utils.coordinator_backend import (
+    CollectionAdmissionError,
+    CoordinatorBackend,
+    CoordinatorBackendError,
+    CoordinatorDecision,
+    DEFAULT_CONCURRENCY_BUDGETS,
+    InMemoryCoordinatorBackend,
+    Job,
+    JobStatus,
+    Provenance,
+    derive_lock_key,
+    vendor_budget_key,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -149,25 +64,17 @@ def _vendor_budget_key(vendor: str, workflow_scope: str) -> str:
 # ---------------------------------------------------------------------------
 
 class CollectionCoordinator:
-    """Thread-safe admission coordinator for collection jobs.
+    """Admission coordinator for collection jobs — a thin, backend-delegating shell.
 
-    One instance should be shared across the process lifetime.  It is not
-    safe to use across multiple OS processes (single-process scope only).
+    All admission logic lives in a ``CoordinatorBackend``
+    (``utils/coordinator_backend.py``). The default ``InMemoryCoordinatorBackend``
+    is single-process only (not safe across multiple OS processes); pass a
+    ``PostgresCoordinatorBackend`` (via ``select_coordinator_backend()``) for
+    cross-process admission.
     """
 
-    def __init__(self) -> None:
-        self._lock = threading.Lock()
-        # Per-physical-endpoint locks (canonical_id → Lock).
-        self._endpoint_locks: dict[str, threading.Lock] = {}
-        # Per-vendor semaphores for concurrency budget.
-        self._budgets: dict[str, threading.Semaphore] = {
-            key: threading.Semaphore(val)
-            for key, val in _DEFAULT_BUDGETS.items()
-        }
-        # Active and recently completed jobs.
-        self._jobs: dict[str, Job] = {}
-        # Map of canonical_id → active job_id (for coalescing).
-        self._active_for: dict[str, str] = {}
+    def __init__(self, backend: CoordinatorBackend | None = None) -> None:
+        self.backend: CoordinatorBackend = backend if backend is not None else InMemoryCoordinatorBackend()
 
     # ------------------------------------------------------------------
     # Public API
@@ -209,145 +116,36 @@ class CollectionCoordinator:
         uses this detailed form so a coalesced request can write its own safe
         job id and ``coalesced_to`` relationship to a manifest.
         """
-        job_id = f"job_{uuid.uuid4().hex[:12]}"
-        now = datetime.now(timezone.utc).isoformat()
-        job = Job(
-            job_id=job_id,
-            vendor=vendor,
-            workflow_scope=workflow_scope,
-            provenance=provenance,
-            canonical_ids=list(canonical_ids),
-            created_at=now,
-        )
-
-        budget_key = _vendor_budget_key(vendor, workflow_scope)
-
-        with self._lock:
-            # --- Coalesce check ----------------------------------------
-            for cid in canonical_ids:
-                existing_id = self._active_for.get(cid)
-                if existing_id and existing_id in self._jobs:
-                    existing = self._jobs[existing_id]
-                    if existing.status == JobStatus.RUNNING.value:
-                        job.status = JobStatus.COALESCED.value
-                        job.coalesced_to = existing_id
-                        job.reason = "coalesced_into_active_job"
-                        job.completed_at = now
-                        job.completion_event.set()
-                        self._jobs[job_id] = job
-                        return CoordinatorDecision.COALESCED, job, existing
-
-            # --- Concurrency budget check (non-blocking tryacquire) -----
-            sem = self._budgets.get(budget_key) or self._budgets["_default"]
-            if not sem.acquire(blocking=False):
-                job.status = JobStatus.FAILED.value
-                job.reason = "concurrency_budget_exhausted"
-                job.completed_at = now
-                job.completion_event.set()
-                self._jobs[job_id] = job
-                return CoordinatorDecision.REJECTED_BUDGET, job, None
-
-            # --- Endpoint lock check ------------------------------------
-            conflicting = [
-                cid for cid in canonical_ids
-                if cid in self._active_for
-            ]
-            if conflicting:
-                # Release the semaphore we just took since we cannot proceed.
-                sem.release()
-                job.status = JobStatus.FAILED.value
-                job.reason = "endpoint_lock_conflict"
-                job.completed_at = now
-                job.completion_event.set()
-                self._jobs[job_id] = job
-                return CoordinatorDecision.REJECTED_LOCKED, job, None
-
-            # --- Admit --------------------------------------------------
-            job.status = JobStatus.RUNNING.value
-            job.admitted_at = now
-            for cid in canonical_ids:
-                self._active_for[cid] = job_id
-            # Attach the budget semaphore so release() can return it.
-            job.reason = "admitted"
-            self._jobs[job_id] = job
-            # Store semaphore ref for release (using a hidden attribute).
-            object.__setattr__(job, "_budget_sem", sem)  # type: ignore[arg-type]
-            return CoordinatorDecision.ADMITTED, job, None
+        return self.backend.admit_request(vendor, workflow_scope, canonical_ids, provenance=provenance)
 
     def release(self, job_id: str) -> None:
         """Mark a job as completed and free its resources."""
-        with self._lock:
-            job = self._jobs.get(job_id)
-            if job is None:
-                return
-            if job.status not in (JobStatus.RUNNING.value, JobStatus.PENDING.value):
-                return
-            job.status = JobStatus.COMPLETED.value
-            job.completed_at = datetime.now(timezone.utc).isoformat()
-            job.completion_event.set()
-            for cid in job.canonical_ids:
-                self._active_for.pop(cid, None)
-            sem = getattr(job, "_budget_sem", None)
-            if sem is not None:
-                sem.release()
+        self.backend.release(job_id)
 
     def fail(self, job_id: str, reason: str) -> None:
         """Mark a job as failed and free its resources."""
-        with self._lock:
-            job = self._jobs.get(job_id)
-            if job is None:
-                return
-            job.status = JobStatus.FAILED.value
-            job.reason = reason
-            job.completed_at = datetime.now(timezone.utc).isoformat()
-            job.completion_event.set()
-            for cid in job.canonical_ids:
-                self._active_for.pop(cid, None)
-            sem = getattr(job, "_budget_sem", None)
-            if sem is not None:
-                sem.release()
+        self.backend.fail(job_id, reason)
 
     def cancel(self, job_id: str) -> bool:
         """Request cancellation of a running job.
 
-        Sets the job's cancel_event and marks it CANCELLED; returns True if
-        the job was found and running, False otherwise.
+        Marks it CANCELLED and frees its resources; returns True if the job
+        was found and still open, False otherwise.
         """
-        with self._lock:
-            job = self._jobs.get(job_id)
-            if job is None or job.status != JobStatus.RUNNING.value:
-                return False
-            job.cancel_event.set()
-            job.status = JobStatus.CANCELLED.value
-            job.completed_at = datetime.now(timezone.utc).isoformat()
-            job.reason = "cancelled_by_request"
-            job.completion_event.set()
-            for cid in job.canonical_ids:
-                self._active_for.pop(cid, None)
-            sem = getattr(job, "_budget_sem", None)
-            if sem is not None:
-                sem.release()
-            return True
+        return self.backend.cancel(job_id)
 
     def get_job(self, job_id: str) -> Job | None:
-        with self._lock:
-            return self._jobs.get(job_id)
+        return self.backend.get_job(job_id)
 
     def wait_for_terminal(self, job_id: str, timeout: float) -> Job | None:
-        """Wait boundedly for an active job without holding the coordinator lock."""
-        job = self.get_job(job_id)
-        if job is None:
-            return None
-        job.completion_event.wait(timeout=max(0.0, float(timeout)))
-        return self.get_job(job_id)
+        """Wait boundedly for an active job to reach a terminal state."""
+        return self.backend.wait_for_terminal(job_id, timeout)
 
     def active_jobs(self) -> list[Job]:
-        with self._lock:
-            return [j for j in self._jobs.values() if j.status == JobStatus.RUNNING.value]
+        return self.backend.active_jobs()
 
     def all_jobs(self) -> list[Job]:
-        with self._lock:
-            return list(self._jobs.values())
+        return self.backend.all_jobs()
 
     def budget_snapshot(self) -> dict[str, dict[str, int]]:
         """Return a safe, read-only snapshot of concurrency budgets.
@@ -355,18 +153,41 @@ class CollectionCoordinator:
         Reports configured capacity and currently available permits per
         vendor/context key. Contains no device identities or secrets.
         """
-        with self._lock:
-            snapshot: dict[str, dict[str, int]] = {}
-            for key, sem in self._budgets.items():
-                capacity = DEFAULT_CONCURRENCY_BUDGETS.get(key, 0)
-                # threading.Semaphore does not expose current value publicly;
-                # approximate availability via a non-blocking acquire/release probe.
-                available = 0
-                if sem.acquire(blocking=False):
-                    available = 1
-                    sem.release()
-                snapshot[key] = {"capacity": capacity, "available": available}
-            return snapshot
+        return self.backend.budget_snapshot()
+
+
+def select_coordinator_backend(data_root: Path | None = None) -> CoordinatorBackend:
+    """Choose a coordinator backend from the environment. Fails closed.
+
+    ``SECURITYEXPERT_COORDINATOR_BACKEND`` = ``memory`` (default) |
+    ``postgres``. The in-memory default is the unchanged, validated 0.6.1C
+    behavior and needs no configuration. ``postgres`` requires
+    ``SECURITYEXPERT_COORDINATOR_POSTGRES_DSN`` and runs the DEV.3.2 startup
+    preflight (``verify_postgres_backend_ready``) before returning — a
+    misconfigured or unreachable deployment raises rather than silently
+    falling back to unsynchronized local admission.
+    """
+    backend_name = os.getenv("SECURITYEXPERT_COORDINATOR_BACKEND", "memory").strip().lower()
+    if backend_name in ("", "memory"):
+        return InMemoryCoordinatorBackend()
+    if backend_name != "postgres":
+        raise CoordinatorBackendError(
+            f"Unsupported SECURITYEXPERT_COORDINATOR_BACKEND={backend_name!r}; expected 'memory' or 'postgres'."
+        )
+
+    dsn = os.getenv("SECURITYEXPERT_COORDINATOR_POSTGRES_DSN", "").strip()
+    if not dsn:
+        raise CoordinatorBackendError(
+            "SECURITYEXPERT_COORDINATOR_BACKEND=postgres requires SECURITYEXPERT_COORDINATOR_POSTGRES_DSN."
+        )
+
+    from utils.coordinator_backend import PostgresCoordinatorBackend, verify_postgres_backend_ready
+    from utils.support_bundle import _get_support_key
+
+    verify_postgres_backend_ready(dsn)
+    support_key_file = (Path(data_root) / ".support_hmac.key") if data_root is not None else None
+    secret = _get_support_key(support_key_file) if support_key_file is not None else _get_support_key()
+    return PostgresCoordinatorBackend(dsn, secret)
 
 
 # ---------------------------------------------------------------------------
