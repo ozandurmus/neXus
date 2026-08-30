@@ -1,4 +1,7 @@
 from configuration.pan_expected_compiler import compile_panorama_expected, expected_for_serial
+import pytest
+
+pytestmark = pytest.mark.configuration
 
 
 PANORAMA_COMPILER_XML = b"""<config>

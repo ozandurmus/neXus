@@ -7,6 +7,9 @@ from types import SimpleNamespace
 from configuration import panorama_config_collector as collector
 from configuration.pan_config_structure import analyze_pan_config_structure
 from utils.config_evidence import ConfigEvidenceStore
+import pytest
+
+pytestmark = pytest.mark.configuration
 
 
 XML = b'''<?xml version="1.0"?>

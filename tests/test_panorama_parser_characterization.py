@@ -3,6 +3,9 @@ from pathlib import Path
 from lxml import etree
 
 from panorama.panorama_runtime_runner import parse_interfaces, parse_routes
+import pytest
+
+pytestmark = pytest.mark.inventory
 
 
 FIXTURES = Path(__file__).parent / "fixtures" / "panorama"

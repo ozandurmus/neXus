@@ -3,6 +3,9 @@ from pathlib import Path
 
 from utils.run_context import RunContext
 from utils.runtime_paths import resolve_runtime_paths
+import pytest
+
+pytestmark = pytest.mark.runtime_platform
 
 
 def test_run_context_uses_external_runtime_and_ignores_stale_repository(tmp_path):

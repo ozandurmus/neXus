@@ -10,6 +10,9 @@ from configuration.pan_config_alignment import (
     assignment_for_serial,
 )
 from utils.config_evidence import ConfigEvidenceStore
+import pytest
+
+pytestmark = pytest.mark.configuration
 
 
 PANORAMA_XML = b"""<config>

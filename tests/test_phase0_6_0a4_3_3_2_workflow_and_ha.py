@@ -5,6 +5,9 @@ from lxml import etree
 
 from configuration import panorama_config_collector as pan_collector
 from utils.config_ui import build_configuration_ui_payload
+import pytest
+
+pytestmark = pytest.mark.configuration
 
 
 ROOT = Path(__file__).resolve().parents[1]

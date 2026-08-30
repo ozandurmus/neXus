@@ -10,6 +10,9 @@ from utils.collection_executor import (
     SchedulerPolicy,
     ScheduledWorkflow,
 )
+import pytest
+
+pytestmark = pytest.mark.discovery
 
 
 ROOT = Path(__file__).resolve().parents[1]

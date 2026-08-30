@@ -2,6 +2,8 @@ import pytest
 
 from panorama.panorama_runtime_runner import _parse_xml_response
 
+pytestmark = pytest.mark.inventory
+
 
 class FakeResponse:
     def __init__(self, content, status_code=200):

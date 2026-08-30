@@ -2,6 +2,9 @@ import json
 from pathlib import Path
 
 from utils import merge
+import pytest
+
+pytestmark = pytest.mark.inventory
 
 
 def _write(path: Path, value):

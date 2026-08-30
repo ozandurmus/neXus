@@ -1,6 +1,9 @@
 import builtins
 
 import main
+import pytest
+
+pytestmark = pytest.mark.runtime_platform
 
 # DEV.2.1: _build_runtime_config now prompts only when stdin is a TTY and reads
 # SECURITYEXPERT_* env vars first. Force the interactive path and a clean env for

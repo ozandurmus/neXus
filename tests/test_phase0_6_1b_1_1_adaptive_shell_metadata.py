@@ -1,4 +1,7 @@
 from configuration import checkpoint_config_collector as collector
+import pytest
+
+pytestmark = pytest.mark.configuration
 
 
 def _result(stdout="", *, success=True, stderr="", error_class=None, timeout=False):

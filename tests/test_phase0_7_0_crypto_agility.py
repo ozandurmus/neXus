@@ -12,6 +12,8 @@ import pytest
 from utils.crypto_posture import build_crypto_posture
 from utils.crypto_rulepack import DEFAULT_CRYPTO_RULE_PACK, crypto_rule_pack_summary
 
+pytestmark = pytest.mark.compliance
+
 _EXPIRED_EPOCH = int(time.time()) - 86400
 _FUTURE_EPOCH = int(time.time()) + 400 * 86400
 

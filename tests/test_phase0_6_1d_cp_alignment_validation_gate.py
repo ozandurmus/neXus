@@ -4,6 +4,9 @@ from configuration.checkpoint_alignment_validation import (
     evaluate_checkpoint_alignment_real_env_gate,
 )
 from configuration.checkpoint_config_collector import build_checkpoint_current_configuration
+import pytest
+
+pytestmark = pytest.mark.configuration
 
 
 def _actual(entity_id, entity_type, *, value="CP-GW-TEST-01", **extra):

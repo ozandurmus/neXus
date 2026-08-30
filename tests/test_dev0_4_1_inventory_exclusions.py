@@ -16,6 +16,8 @@ from utils.inventory_exclusions import (
 )
 from utils.repository_privacy import scan_repository
 
+pytestmark = pytest.mark.discovery
+
 
 def _write_policy(data_root: Path, exclusions):
     path = policy_path(data_root)

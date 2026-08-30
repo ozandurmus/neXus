@@ -1,4 +1,7 @@
 from pathlib import Path
+import pytest
+
+pytestmark = pytest.mark.inventory
 
 
 def test_ui_contains_live_and_old_data_contract():

@@ -1,4 +1,7 @@
 from utils import logger
+import pytest
+
+pytestmark = pytest.mark.runtime_platform
 
 
 def test_logger_redacts_registered_secret_and_hashes_principal(monkeypatch, tmp_path):
