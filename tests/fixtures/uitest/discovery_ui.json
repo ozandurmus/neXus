@@ -24,7 +24,10 @@
       "deferred": false,
       "confidence": 93,
       "last_transition_reason": "repeated_success",
-      "observed_runs": 8
+      "observed_runs": 8,
+      "platform_family": "gaia",
+      "platform_confidence": "MEDIUM",
+      "platform_label": "Gaia"
     },
     {
       "entity_id": "cp:core-01",
@@ -35,7 +38,10 @@
       "deferred": false,
       "confidence": 90,
       "last_transition_reason": "repeated_success",
-      "observed_runs": 6
+      "observed_runs": 6,
+      "platform_family": "gaia_embedded",
+      "platform_confidence": "HIGH",
+      "platform_label": "Quantum Spark / Gaia Embedded"
     },
     {
       "entity_id": "cp:core-02",
@@ -46,7 +52,10 @@
       "deferred": true,
       "confidence": 68,
       "last_transition_reason": "standby_member_deferred",
-      "observed_runs": 3
+      "observed_runs": 3,
+      "platform_family": "unknown",
+      "platform_confidence": "LOW",
+      "platform_label": "Check Point platform"
     },
     {
       "entity_id": "cp:vsx-gw-01/10",
@@ -57,7 +66,10 @@
       "deferred": false,
       "confidence": 74,
       "last_transition_reason": "repeated_success",
-      "observed_runs": 4
+      "observed_runs": 4,
+      "platform_family": "unknown",
+      "platform_confidence": "LOW",
+      "platform_label": "Check Point platform"
     },
     {
       "entity_id": "pan:edge-01",
@@ -68,7 +80,10 @@
       "deferred": false,
       "confidence": 88,
       "last_transition_reason": "repeated_success",
-      "observed_runs": 5
+      "observed_runs": 5,
+      "platform_family": null,
+      "platform_confidence": null,
+      "platform_label": null
     },
     {
       "entity_id": "pan:mvha-02",
@@ -79,7 +94,10 @@
       "deferred": true,
       "confidence": 40,
       "last_transition_reason": "standby_member_deferred",
-      "observed_runs": 1
+      "observed_runs": 1,
+      "platform_family": null,
+      "platform_confidence": null,
+      "platform_label": null
     }
   ],
   "coordinator": {
@@ -152,5 +170,10 @@
     "failed": "Failed",
     "cancelled": "Cancelled",
     "coalesced": "Coalesced"
+  },
+  "platform_family_labels": {
+    "gaia_embedded": "Quantum Spark / Gaia Embedded",
+    "gaia": "Gaia",
+    "unknown": "Check Point platform"
   }
 }

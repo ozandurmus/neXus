@@ -76,6 +76,36 @@ def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+# 0.6.1C cp_unknown_platform: the coarse platform-family classification
+# already produced by configuration.checkpoint_config_collector._classify_platform().
+# Mirrored here (not imported) to keep this module free of a hard dependency
+# on the CP config collector -- PAN/other vendors carry no platform_family.
+PLATFORM_FAMILY_LABELS = {
+    "gaia_embedded": "Quantum Spark / Gaia Embedded",
+    "gaia": "Gaia",
+    "unknown": "Check Point platform",
+}
+
+
+def platform_fields_from_classification(
+    classification: dict[str, Any] | None,
+) -> tuple[str | None, str | None]:
+    """Extract ``(platform_family, platform_confidence)`` from a
+    ``_classify_platform()``-shaped dict (``{"family", "confidence", ...}``).
+
+    Pure and read-only: this is the ONLY sanctioned path onto
+    ``CapabilityProfile.platform_family``. Never derive platform identity
+    from ``shell_type``/collection-capability fields -- shell behavior is a
+    capability observation, not proof of product family (see module
+    docstring).
+    """
+    if not classification:
+        return None, None
+    family = classification.get("family")
+    confidence = classification.get("confidence")
+    return (str(family) if family else None, str(confidence) if confidence else None)
+
+
 @dataclass(frozen=True)
 class CapabilityProfile:
     """Observed capability facts for one entity.
@@ -86,6 +116,14 @@ class CapabilityProfile:
     ``standby_member`` is set when cphaprob or equivalent confirms the
     entity is a non-active ClusterXL/VRRP member.  The planner uses this
     to avoid an unnecessary login before HA-role data is confirmed.
+
+    ``platform_family``/``platform_confidence`` are the config-collector's
+    platform classification (``configuration.checkpoint_config_collector.
+    _classify_platform()``), propagated verbatim via
+    ``platform_fields_from_classification()``. They are independent of
+    every other field on this record: an ``unknown`` platform must never
+    demote ``shell_type``, ``direct_collection_capable`` or any planner
+    decision, and no other field here may be used to infer them.
     """
     vendor: str
     canonical_id: str
@@ -96,6 +134,8 @@ class CapabilityProfile:
     standby_member: bool | None = None
     had_identity_failure: bool = False
     confidence: int = 0           # 0-100; accumulated from evidence
+    platform_family: str | None = None       # e.g. "gaia_embedded" | "gaia" | "unknown"
+    platform_confidence: str | None = None   # e.g. "HIGH" | "MEDIUM" | "LOW"
     last_evidenced: str = field(default_factory=_utc_now)
     notes: list[str] = field(default_factory=list)
 
@@ -116,6 +156,8 @@ class CapabilityProfile:
             "standby_member": self.standby_member,
             "had_identity_failure": self.had_identity_failure,
             "confidence": self.confidence,
+            "platform_family": self.platform_family,
+            "platform_confidence": self.platform_confidence,
             "last_evidenced": self.last_evidenced,
             "notes": list(self.notes),
         }
@@ -132,6 +174,8 @@ class CapabilityProfile:
             standby_member=raw.get("standby_member"),
             had_identity_failure=bool(raw.get("had_identity_failure", False)),
             confidence=int(raw.get("confidence", 0)),
+            platform_family=raw.get("platform_family"),
+            platform_confidence=raw.get("platform_confidence"),
             last_evidenced=raw.get("last_evidenced", _utc_now()),
             notes=list(raw.get("notes", [])),
         )

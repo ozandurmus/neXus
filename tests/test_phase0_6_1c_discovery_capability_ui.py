@@ -79,6 +79,57 @@ def test_missing_capability_profile_defaults_to_unknown_shell():
 
 
 # ---------------------------------------------------------------------------
+# cp_unknown_platform (0.6.1C): platform classification is independent of
+# collection capability -- an unknown platform must not gate an otherwise
+# collecting entity, and an unclassified entity is distinguishable from one
+# explicitly classified as unknown.
+
+def test_unknown_platform_does_not_block_an_otherwise_collecting_entity():
+    lifecycle = LifecycleStore()
+    lifecycle.observe("checkpoint", "DEV-UNKNOWN-PLATFORM")
+
+    capability = CapabilityStore()
+    capability.put(CapabilityProfile(
+        vendor="checkpoint", canonical_id="DEV-UNKNOWN-PLATFORM",
+        shell_type=ShellType.EXPERT, confidence=80,
+        platform_family="unknown", platform_confidence="LOW",
+    ))
+
+    payload = build_discovery_capability_payload(lifecycle, capability)
+    row = payload["entities"][0]
+    assert row["platform_family"] == "unknown"
+    # Same allowed/mode outcome as the identical-but-classified-platform case
+    # in test_payload_reflects_lifecycle_and_capability -- platform family
+    # never enters the planner.
+    assert row["plan_allowed"] is True
+    assert row["planned_mode"] == "expert_explicit_clish"
+
+
+def test_unclassified_platform_is_distinguishable_from_classified_unknown():
+    lifecycle = LifecycleStore()
+    lifecycle.observe("checkpoint", "DEV-NOT-YET-CLASSIFIED")
+    payload = build_discovery_capability_payload(lifecycle, CapabilityStore())
+    row = payload["entities"][0]
+    # No collector has run _classify_platform() for this entity yet.
+    assert row["platform_family"] is None
+    assert row["platform_label"] is None
+
+
+def test_platform_label_surfaces_the_classifier_display_string():
+    lifecycle = LifecycleStore()
+    lifecycle.observe("checkpoint", "DEV-SPARK")
+    capability = CapabilityStore()
+    capability.put(CapabilityProfile(
+        vendor="checkpoint", canonical_id="DEV-SPARK",
+        platform_family="gaia_embedded", platform_confidence="HIGH",
+    ))
+    payload = build_discovery_capability_payload(lifecycle, capability)
+    row = payload["entities"][0]
+    assert row["platform_label"] == "Quantum Spark / Gaia Embedded"
+    assert payload["platform_family_labels"]["gaia_embedded"] == "Quantum Spark / Gaia Embedded"
+
+
+# ---------------------------------------------------------------------------
 # Coordinator section — no identity leakage
 # ---------------------------------------------------------------------------
 
