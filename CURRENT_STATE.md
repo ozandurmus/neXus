@@ -6,7 +6,7 @@ agreements and validation reports). `docs/history/INDEX.md` is the one-line
 timeline.
 
 - **Authoritative checkpoint:** 2026-08-30
-- **Product baseline:** `0.7.6 — Automated HTML render harness` — AUTOMATED_VALIDATED (0.7.x VERIFY track)
+- **Product baseline:** `0.7.6a — Render harness + uitest topology matrix` — AUTOMATED_VALIDATED (0.7.x VERIFY track)
 - **Previous:** `0.7.5 — Compliance trend layer` — AUTOMATED_VALIDATED
 - **Previous:** `0.7.4 — framework_mappings: Requirement-Level Coverage` — AUTOMATED_VALIDATED
 - **Hotfix `0.7.4a`** (2026-08-30) — **REAL_ENV_VALIDATED**. The report's inline
@@ -30,11 +30,16 @@ Motivated by `0.7.4a`: the report is one inline `<script>`; a parse failure or
 an early throw leaves every button dead while the page looks loaded, and nothing
 in CI parsed or ran that script.
 
-- **`tests/fixtures/uitest/`** (committed) — hand-authored, privacy-clean bundle
-  (fake names, RFC 5737 ranges): `unified.json` + injected `configuration_ui` /
-  `crypto_ui` / `discovery_ui` payloads + `state/compliance_checks.json` +
-  `state/compliance_history.json` (3 records → the trend renders) +
-  `build_fixture.py` + `README.md` (growth rule).
+- **`tests/fixtures/uitest/`** (committed) — hand-authored, privacy-clean
+  **topology matrix** (fake names, RFC 5737 ranges), `0.7.6a`: CP standalone
+  gateway, ClusterXL (2 members active/standby), VSX host + virtual systems, VSX
+  cluster + shared virtual system, one UNAVAILABLE gateway; PAN single firewall,
+  HA pair, multi-vsys firewall, multi-vsys HA pair. Plus cluster-member
+  interface/route divergence, stale + disconnected inventory, the full alignment
+  class set, SAME/CHANGED/FIRST history, crypto PASS/FINDING/UNKNOWN, enforced +
+  advisory + WAIVED compliance. `unified.json` + injected `configuration_ui` /
+  `crypto_ui` / `discovery_ui` + `state/{compliance_checks,control_assignments,
+  compliance_history}.json` + `build_fixture.py` + `README.md` (growth rule).
 - **`scripts/render_uitest.py`** — renders the report from the bundle; injects
   only the three builders whose real inputs are collector telemetry / PAN XML /
   live stores. `build_compliance_posture`, `_fill_template`, `_script_json` run
@@ -51,7 +56,7 @@ in CI parsed or ran that script.
   `tests/fixtures/uitest/`.
 - `utils/repository_privacy.py` + one repo-text test skip `node_modules`.
 
-Evidence (2026-08-30): pytest `550 passed / 3 skipped / 0 failed` (547 → +3);
+Evidence (2026-08-30): pytest `551 passed / 3 skipped / 0 failed` (547 → +3);
 negative-tested (corrupt payload literal → FAIL parse; renamed nav handler →
 FAIL, panels don't activate); privacy gate PASS / 0; `render_sample.py` exit 0
 (unchanged — stays the empty-state check). No `main.py` change.
@@ -207,7 +212,7 @@ full regression run.)
 ## Automated test baseline
 
 ```
-550 passed / 3 skipped / 0 failed (Python 3.12)
+551 passed / 3 skipped / 0 failed (Python 3.12)
 Repository privacy gate: PASS / 0 on a clean checkout. Locally it flags the
 gitignored `data/` + `logs/` + `data/.support_hmac.key` that a test run
 creates — delete them before running the gate.
