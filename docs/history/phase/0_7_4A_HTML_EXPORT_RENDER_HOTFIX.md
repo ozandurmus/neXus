@@ -60,10 +60,11 @@ erroneous substitution none survive, and the JS is never parsed or executed.
 
 ## 5. Follow-up
 
-- Real-environment reconfirmation on the corporate laptop: regenerate the report
-  and click through all six modules. (Automated evidence is strong — the failure
-  reproduced deterministically from `project/*.json` content and is now guarded —
-  but the on-hardware click-through is still owed, tracked under
-  `on_hardware_real_env_validation`.)
+- **REAL_ENV_VALIDATED (2026-08-30)** — the product owner ran a full checkpoint
+  on the corporate laptop, regenerated `output/index.html`, and confirmed every
+  module and tab works with no dead buttons.
+- The render harness proposed as the next build (`bun` syntax + `happy-dom`
+  click smoke test) will make this check automatic so no on-hardware
+  click-through is needed for future UI/payload changes.
 - Optional hardening (not this hotfix): escape `U+2028` / `U+2029` in
   `_script_json` for pre-ES2019 engines.

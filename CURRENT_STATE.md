@@ -8,10 +8,11 @@ timeline.
 - **Authoritative checkpoint:** 2026-08-30
 - **Product baseline:** `0.7.5 — Compliance trend layer` — AUTOMATED_VALIDATED (0.7.x VERIFY track)
 - **Previous:** `0.7.4 — framework_mappings: Requirement-Level Coverage` — AUTOMATED_VALIDATED
-- **Hotfix `0.7.4a`** (2026-08-30) — the report's inline `<script>` was broken by
-  a placeholder-substitution collision (a `project/*.json` note contains
-  `__CRYPTO_JSON_PLACEHOLDER__`), which killed every module-nav button. Fixed by
-  a single-pass template fill; real-env click-through still owed.
+- **Hotfix `0.7.4a`** (2026-08-30) — **REAL_ENV_VALIDATED**. The report's inline
+  `<script>` was broken by a placeholder-substitution collision (a `project/*.json`
+  note contains `__CRYPTO_JSON_PLACEHOLDER__`), which killed every module-nav
+  button. Fixed by a single-pass template fill; product owner confirmed a full
+  checkpoint render on the corporate laptop — all tabs work.
   `docs/history/phase/0_7_4A_HTML_EXPORT_RENDER_HOTFIX.md`.
 - **Engineering baseline:** `DEV.1` complete; `DEV.2.1` (non-interactive runtime config) — AUTOMATED_VALIDATED
 - **Product evidence baseline:** `0.6.1B.1.2` interactive Check Point configuration

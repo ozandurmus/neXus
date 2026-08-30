@@ -23,7 +23,7 @@
     },
     {
       "build": "0.7.4a",
-      "status": "automated_validated",
+      "status": "real_env_validated",
       "started": "2026-08-30",
       "completed": "2026-08-30",
       "title": "HTML export render hotfix (dead module-nav buttons)",
@@ -33,7 +33,7 @@
       "evidence": {
         "automated": "py -m pytest -q -n auto --dist worksteal: 534 passed, 3 skipped, 0 failed (Python 3.12). 529 -> +5 (tests/test_html_export_placeholder_integrity.py). Every embedded payload in a real render round-trips through json.loads; the sentinel token survives as data inside projectPlanData without expansion.",
         "privacy_gate": "PASS / 0 on a clean tree.",
-        "real_env": "owed - regenerate on the corporate laptop and click through all six modules (on_hardware_real_env_validation). Failure reproduced deterministically from project/*.json content and is now guarded."
+        "real_env": "REAL_ENV_VALIDATED 2026-08-30 - the product owner regenerated the report on the corporate laptop from a full checkpoint run; all six modules and every tab work, no dead buttons."
       },
       "docs": {
         "agreement": "docs/history/phase/0_7_4A_HTML_EXPORT_RENDER_HOTFIX.md"
