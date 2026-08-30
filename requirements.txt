@@ -1,3 +1,4 @@
+cryptography>=41
 lxml
 paramiko
 requests

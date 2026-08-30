@@ -351,6 +351,16 @@ def main(argv=None, *, runtime_services=None, provenance="manual", admission_run
         ),
     )
     parser.add_argument(
+        "--recovery-root",
+        default=None,
+        help=(
+            "RB.1 recovery-plane store root. Precedence: this CLI option, then "
+            "SECURITYEXPERT_RECOVERY_ROOT. No default -- unlike --runtime-root, this is "
+            "mandatory and must be a separate volume (docs/design/BACKUP_RECOVERY_CONTRACTS.md §2). "
+            "Only used by --recovery-store-check."
+        ),
+    )
+    parser.add_argument(
         "--only",
         help=(
             "Development/diagnostic scope. Recommended modes: cp / vsx / pan-config / all. "
@@ -463,6 +473,18 @@ def main(argv=None, *, runtime_services=None, provenance="manual", admission_run
         ),
     )
     parser.add_argument(
+        "--recovery-store-check",
+        action="store_true",
+        help=(
+            "RB.1 local/offline recovery-plane store check: resolves --recovery-root / "
+            "SECURITYEXPERT_RECOVERY_ROOT (mandatory, must be a separate volume from "
+            "the runtime root), initializes the vault/groups/retention layout and the "
+            "vault master key if not already present, and reports what is already held. "
+            "No network access, no device collection. Never prints artifact bytes, key "
+            "material or the vault key file's path."
+        ),
+    )
+    parser.add_argument(
         "--storage-analyze",
         action="store_true",
         help="Analyze configuration history/object storage without collecting devices or changing files.",
@@ -505,6 +527,7 @@ def main(argv=None, *, runtime_services=None, provenance="manual", admission_run
         args.storage_deduplicate,
         args.persistent_secret_material_check,
         args.restore_readiness_check,
+        args.recovery_store_check,
     ))
     if maintenance_modes > 1:
         parser.error("Choose only one repository/storage maintenance mode")
@@ -524,6 +547,12 @@ def main(argv=None, *, runtime_services=None, provenance="manual", admission_run
         args.cp_config_probe or args.cp_config_collect or args.render_only or args.only != "all"
     ):
         parser.error("--restore-readiness-check cannot be combined with collection/render modes")
+    if args.recovery_store_check and args.apply:
+        parser.error("--apply is not valid with --recovery-store-check")
+    if args.recovery_store_check and (
+        args.cp_config_probe or args.cp_config_collect or args.render_only or args.only != "all"
+    ):
+        parser.error("--recovery-store-check cannot be combined with collection/render modes")
 
     if args.storage_analyze and args.storage_deduplicate:
         parser.error("Choose only one of --storage-analyze or --storage-deduplicate")
@@ -553,6 +582,7 @@ def main(argv=None, *, runtime_services=None, provenance="manual", admission_run
         or args.storage_deduplicate
         or args.persistent_secret_material_check
         or args.restore_readiness_check
+        or args.recovery_store_check
         or args.apply
         or args.cp_config_probe
         or args.cp_config_collect
@@ -714,6 +744,44 @@ def main(argv=None, *, runtime_services=None, provenance="manual", admission_run
             )
         print(f"\nWritten:                {state_path}")
         print("No network access performed. No recovery artifact was collected.")
+        return
+
+    if args.recovery_store_check:
+        from utils.recovery_store import RecoveryStoreError, get_or_create_vault_key, list_artifact_dirs
+        from utils.recovery_retention import read_ledger
+        from utils.runtime_paths import resolve_recovery_root
+
+        print("=== SECURITYEXPERT RECOVERY-PLANE STORE CHECK — RB.1 ===\n")
+        try:
+            recovery_paths = resolve_recovery_root(
+                args.recovery_root, runtime_root=runtime_paths.runtime_root
+            )
+        except RuntimePathError as exc:
+            parser.error(str(exc))
+        try:
+            _, vault_key_id = get_or_create_vault_key(
+                runtime_paths.data_root, recovery_paths.recovery_root
+            )
+        except RecoveryStoreError as exc:
+            print("Gate:                    ERROR")
+            print(f"Reason:                  {exc}")
+            raise SystemExit(2)
+
+        artifact_dirs = list_artifact_dirs(recovery_paths)
+        ledger = read_ledger(recovery_paths)
+
+        print(f"Recovery root:           {recovery_paths.recovery_root}")
+        print(f"Vault key id:            {vault_key_id}")
+        print(f"Artifacts held:          {len(artifact_dirs)}")
+        print(f"Retention deletions:     {len(ledger)}")
+        if not artifact_dirs:
+            print(
+                "\nNote: the store is initialized but empty -- RB.2/RB.3 collection is "
+                "gated behind the network-device command gate and has not landed yet. "
+                "See docs/design/BACKUP_AND_RECOVERY_ARCHITECTURE.md."
+            )
+        print("\nGate:                    PASS")
+        print("No network access performed. No artifact bytes, key material or vault key path was printed.")
         return
 
     from utils.collection_executor import (

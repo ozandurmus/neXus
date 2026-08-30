@@ -15,6 +15,7 @@ from typing import Mapping, Optional
 
 
 RUNTIME_ROOT_ENV = "SECURITYEXPERT_RUNTIME_ROOT"
+RECOVERY_ROOT_ENV = "SECURITYEXPERT_RECOVERY_ROOT"
 
 
 class RuntimePathError(RuntimeError):
@@ -28,6 +29,17 @@ class RuntimePaths:
     data_root: Path
     output_root: Path
     logs_root: Path
+
+
+@dataclass(frozen=True)
+class RecoveryPaths:
+    """RB.1 recovery-plane store root. Never derived from `RuntimePaths` --
+    docs/design/BACKUP_RECOVERY_CONTRACTS.md §2 requires a volume physically
+    separate from both the repository *and* the runtime/evidence root."""
+    recovery_root: Path
+    vault_root: Path
+    groups_root: Path
+    retention_root: Path
 
 
 def default_output_root(*, repository_root: Optional[Path] = None) -> Path:
@@ -55,11 +67,15 @@ def _contains(parent: Path, child: Path) -> bool:
         return False
 
 
+def _validate_disjoint(label_a: str, a: Path, label_b: str, b: Path) -> None:
+    left = _canonical(a)
+    right = _canonical(b)
+    if left == right or _contains(left, right) or _contains(right, left):
+        raise RuntimePathError(f"{label_a} must be physically separate from {label_b}")
+
+
 def _validate_separation(repository_root: Path, runtime_root: Path) -> None:
-    repo = _canonical(repository_root)
-    runtime = _canonical(runtime_root)
-    if repo == runtime or _contains(repo, runtime) or _contains(runtime, repo):
-        raise RuntimePathError("runtime root must be physically separate from repository root")
+    _validate_disjoint("runtime root", runtime_root, "repository root", repository_root)
 
 
 def _probe_writable(directory: Path) -> None:
@@ -159,5 +175,64 @@ def resolve_runtime_paths(
         logs_root=runtime / "logs",
     )
     for directory in (paths.runtime_root, paths.data_root, paths.output_root, paths.logs_root):
+        _probe_writable(directory)
+    return paths
+
+
+def resolve_recovery_root(
+    cli_recovery_root: Optional[str] = None,
+    *,
+    environ: Optional[Mapping[str, str]] = None,
+    repository_root: Optional[Path] = None,
+    runtime_root: Optional[Path] = None,
+) -> RecoveryPaths:
+    """Resolve, validate and prepare the RB.1 recovery-plane store root.
+
+    Unlike `resolve_runtime_paths`, there is deliberately **no OS-default
+    fallback**: `docs/design/BACKUP_RECOVERY_CONTRACTS.md` §2 requires this to
+    be an explicit, mandatory, absolute operator decision, not an inferred
+    convenience path -- a recovery volume silently defaulting into place would
+    reproduce exactly the "assumed we had backups" failure mode
+    `docs/design/BACKUP_AND_RECOVERY_ARCHITECTURE.md` §1 exists to prevent.
+
+    Validated separate from the repository root (as `resolve_runtime_paths`
+    already is) *and* from `runtime_root` when given -- evidence and recovery
+    are different volumes with different lifecycles (architecture §4).
+    """
+    env = os.environ if environ is None else environ
+    repo = _canonical(repository_root or discover_repository_root())
+
+    if cli_recovery_root is not None:
+        if not str(cli_recovery_root).strip():
+            raise RuntimePathError("--recovery-root cannot be empty")
+        selected = Path(cli_recovery_root)
+        source = "cli"
+    elif RECOVERY_ROOT_ENV in env:
+        value = env.get(RECOVERY_ROOT_ENV, "")
+        if not value.strip():
+            raise RuntimePathError(f"{RECOVERY_ROOT_ENV} is set but empty")
+        selected = Path(value)
+        source = "environment"
+    else:
+        raise RuntimePathError(
+            f"{RECOVERY_ROOT_ENV} (or an explicit recovery root) is required -- "
+            "the recovery-plane store has no default location by design"
+        )
+
+    if not selected.is_absolute():
+        raise RuntimePathError(f"{source} recovery root must be an absolute path")
+
+    recovery = _canonical(selected)
+    _validate_disjoint("recovery root", recovery, "repository root", repo)
+    if runtime_root is not None:
+        _validate_disjoint("recovery root", recovery, "runtime root", runtime_root)
+
+    paths = RecoveryPaths(
+        recovery_root=recovery,
+        vault_root=recovery / "vault",
+        groups_root=recovery / "groups",
+        retention_root=recovery / "retention",
+    )
+    for directory in (paths.recovery_root, paths.vault_root, paths.groups_root, paths.retention_root):
         _probe_writable(directory)
     return paths

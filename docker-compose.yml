@@ -27,13 +27,22 @@ services:
         required: false
     environment:
       SECURITYEXPERT_RUNTIME_ROOT: /runtime
+      # RB.1 recovery-plane store (docs/design/BACKUP_RECOVERY_CONTRACTS.md
+      # §2) -- physically separate from the evidence volume above, on its
+      # own named volume, mounted ONLY on worker. Never add this volume to
+      # the nginx service: recovery artifacts are encrypted vendor-native
+      # backups (secrets), not the sanitized report -- contract §9.11.
+      SECURITYEXPERT_RECOVERY_ROOT: /recovery
     volumes:
       - securityexpert-runtime:/runtime
+      - securityexpert-recovery:/recovery
     restart: unless-stopped
 
   nginx:
     image: nginx:1.27-alpine
     volumes:
+      # Deliberately NOT securityexpert-recovery -- see the worker comment
+      # above and contract §9.11 ("nginx never mounts the recovery volume").
       - securityexpert-runtime:/runtime:ro
       - ./deploy/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
     ports:
@@ -51,3 +60,10 @@ volumes:
   # CP known_hosts / PAN CA bundle contract, use docker-compose.prod.yml as
   # an overlay -- see docs/history/phase/DEV2_2_PERSISTENT_SECRET_MATERIAL.md.
   securityexpert-runtime:
+  # RB.1 encrypted recovery-plane vault (vendor-native backups). Separate
+  # volume, separate lifecycle from securityexpert-runtime above -- a
+  # compromise or wipe of one must not take the other with it (architecture
+  # docs/design/BACKUP_AND_RECOVERY_ARCHITECTURE.md §4). Not yet written to
+  # by anything (RB.2/RB.3 collection is gated); provisioned now so the
+  # storage exists ahead of collection capability.
+  securityexpert-recovery:

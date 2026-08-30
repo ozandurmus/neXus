@@ -23,28 +23,45 @@ timeline.
 
 ## Active build
 
-**None open.** Last landed: `restore_readiness_rb0` — **AUTOMATED_VALIDATED**
-(2026-08-30, this session). First implementation against the just-frozen Backup
-& Recovery contracts (`docs/design/BACKUP_RECOVERY_CONTRACTS.md` §5). New
-`utils/restore_readiness.py` (`compute_restore_readiness` — pure function, no
-I/O: `READY`/`STALE`/`PARTIAL`/`UNPROTECTED`/`UNKNOWN` per device from
-`unified.json` plus optional recovery-manifest/attestation maps, both empty
-until `RB.1`–`RB.3` exist) + `main.py --restore-readiness-check` (offline, no
-network, no credentials, no new device command; wired through the existing
-`_MODE_PREREQUISITES`/`_require_bootstrap` gate like `--render-only`; writes
-`data/state/restore_readiness.json`). 16 new tests
-(`tests/test_rb0_restore_readiness.py`, new `pytest.ini` `recovery` marker).
-Manually verified against the uitest fixture: **15 devices → 14 `UNPROTECTED`
-+ 1 `UNKNOWN`** — the first real number for the `D1` BackBox-replacement
-decision, and exactly the honest baseline the architecture doc predicted (no
-recovery plane has been built yet, so nothing can be `READY`).
-`project/build_history.json` entry `restore_readiness_rb0`.
+**None open.** Last landed: `recovery_store_rb1` — **AUTOMATED_VALIDATED**
+(2026-08-30, this session). Recovery-plane store against the frozen Backup &
+Recovery contracts (`docs/design/BACKUP_RECOVERY_CONTRACTS.md` §2/§3/§8/§9):
+encryption, manifest, retention, validator — **no collection** (`RB.2`/`RB.3`
+remain gated). New `utils/recovery_crypto.py` (AES-256-GCM envelope
+encryption; `cryptography` is now pinned explicitly in `requirements.txt`
+instead of riding along as paramiko's transitive dependency),
+`utils/recovery_manifest.py` (`build_manifest`/`validate_manifest` enforcing
+all five frozen §3 rules — `restore` reserved `null`, `is_rma_grade` derived
+never asserted, mandatory `known_gaps`, mandatory `software_version`),
+`utils/recovery_store.py` (vault-key resolution mirrors `DEV.2.2`'s
+`.support_hmac.key` precedent exactly — the key lives on `data_root`, never
+on `recovery_root`), `utils/recovery_retention.py` (GFS `plan_deletions` as a
+pure function honoring the floor invariant; `apply_deletions` dry-run by
+default). `utils/runtime_paths.py` gains `resolve_recovery_root` —
+`SECURITYEXPERT_RECOVERY_ROOT`, mandatory and absolute with **no OS-default**
+(unlike `runtime_root`), validated separate from *both* the repository root
+and the runtime root. `main.py --recovery-store-check` (offline diagnostic).
+`docker-compose.yml` gains a `securityexpert-recovery` volume mounted **only
+on `worker`**, confirmed absent from `nginx` by `docker compose config` on
+both the base file and the `docker-compose.prod.yml` overlay. 41 new tests
+(`tests/test_rb1_recovery_store.py`) covering every §9 invariant assigned to
+RB.1, including a real write-then-grep for plaintext leakage (9.1), a real
+support-bundle build alongside a populated recovery store (9.4), and a
+200-iteration randomized property test on the retention floor (9.9).
+`project/build_history.json` entry `recovery_store_rb1`.
 
-**Next:** `RB.1` (encrypted recovery store — buildable now, local/offline).
-**`RB.3` (CP) remains the 2027 schedule risk** — `add backup local` writes a
-multi-MB archive to the device's `/var/log` and is blocked behind the P0
-`cp_device_interaction_safety` audit. **`D1` is still a product-owner action,
-not engineering** — vendor scope is frozen to CP+PAN.
+**Next:** `RB.2` (PAN device-state export) — gated on the command gate and
+open decision `D2` (requires PAN-OS superuser). **`RB.3` (CP) remains the 2027
+schedule risk** — `add backup local` writes a multi-MB archive to the device's
+`/var/log` and is blocked behind the P0 `cp_device_interaction_safety` audit.
+**`D1` is still a product-owner action, not engineering** — vendor scope is
+frozen to CP+PAN.
+
+Prior: `restore_readiness_rb0` — **AUTOMATED_VALIDATED** (2026-08-30). First
+implementation against the frozen contracts (§5): `utils/restore_readiness.py`
++ `main.py --restore-readiness-check`. 16 tests. Manually verified against the
+uitest fixture: 15 devices → 14 `UNPROTECTED` + 1 `UNKNOWN` — the first real
+number for the `D1` BackBox-replacement decision.
 
 Prior: `backup_recovery_architecture` — **DESIGN FROZEN** (2026-08-30).
 ARCHITECTURE movement, no code. Rebases the deferred `original 0.6.0B`
