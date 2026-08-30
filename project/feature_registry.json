@@ -513,11 +513,11 @@
     {
       "id": "native_backup_foundation",
       "title": "Vendor-Native Backup Foundation",
-      "status": "deferred",
-      "target": "original 0.6.0B · rebase required",
+      "status": "planned",
+      "target": "RB.1-RB.3 (rebase of original 0.6.0B)",
       "weight": 10,
-      "summary": "Vendor-native recovery artifacts, integrity validation, immutable history, retention and restore-readiness evidence.",
-      "why": "Configuration evidence is useful for analysis but is not equivalent to a supported recovery backup.",
+      "summary": "Encrypted recovery plane separate from the evidence plane: vendor-native recovery artifacts, manifests, integrity validation, retention/immutability and restore-readiness evidence.",
+      "why": "Configuration evidence is deliberately redacted (secrets_redacted: True) and therefore NON-RESTORABLE by design. It is not a recovery backup, and the Configuration module's existence makes it easy to assume otherwise. docs/design/BACKUP_AND_RECOVERY_ARCHITECTURE.md + docs/design/BACKUP_RECOVERY_CONTRACTS.md (design frozen 2026-08-30).",
       "criteria": [
         {
           "id": "pan_export",
@@ -748,10 +748,10 @@
       "id": "native_backup_validation",
       "title": "Native Backup Validation",
       "status": "planned",
-      "target": "0.9.x",
+      "target": "RB.4",
       "weight": 10,
-      "summary": "Validate vendor-native recovery artifacts, hashes, archive integrity and retention.",
-      "why": "Provides recovery evidence rather than assuming a collected config can restore a device.",
+      "summary": "Validation battery V1 transport / V2 structural / V3 semantic. V3 cross-checks the artifact against unified.json (interface, vsys/VS, version, HA role).",
+      "why": "A hash proves a file arrived intact; it proves nothing about restorability. V3 catches truncated, partial and wrong-device artifacts that pass V1/V2 cleanly -- only possible because this platform already has a reconciled inventory to compare against. V4 RESTORE_PROVEN requires a real lab restore and is never inferred. docs/design/BACKUP_AND_RECOVERY_ARCHITECTURE.md + docs/design/BACKUP_RECOVERY_CONTRACTS.md (design frozen 2026-08-30).",
       "criteria": [
         {
           "id": "validation",
@@ -765,10 +765,10 @@
       "id": "restore_readiness",
       "title": "Restore Readiness",
       "status": "planned",
-      "target": "0.9.x",
+      "target": "RB.0 (pulled forward from 0.9.x) + RB.5",
       "weight": 8,
-      "summary": "Track restore prerequisites, coverage and tested recovery readiness without automatically restoring devices.",
-      "why": "Makes recovery posture measurable before any controlled restore operation exists.",
+      "summary": "Per-device READY / STALE / PARTIAL / UNPROTECTED / UNKNOWN readiness over already-collected evidence, plus the Recovery UI module and coverage-vs-inventory gap view.",
+      "why": "Answers 'if this device died right now, what do we actually have?' with zero new device commands, zero credentials and no network. Buildable immediately, depends on nothing later in the sequence, and quantifies the BackBox-exit risk with real numbers instead of assumption -- which is why it is pulled forward from 0.9.x. docs/design/BACKUP_AND_RECOVERY_ARCHITECTURE.md + docs/design/BACKUP_RECOVERY_CONTRACTS.md (design frozen 2026-08-30).",
       "criteria": [
         {
           "id": "readiness",
