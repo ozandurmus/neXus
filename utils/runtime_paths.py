@@ -92,6 +92,28 @@ def _windows_default(environ: Mapping[str, str]) -> Path:
     return Path(environ["LOCALAPPDATA"]) / "SecurityExpert" / "runtime"
 
 
+def _posix_default(environ: Mapping[str, str]) -> Path:
+    """XDG Base Directory default for macOS/Linux, mirroring the Windows
+    LOCALAPPDATA default's precedence and fail-closed behavior exactly:
+    ``$XDG_DATA_HOME`` first, else ``$HOME/.local/share``. A local
+    development/AI-session convenience only -- dev_python_env_tooling_friction.
+    A container/server deployment (DEV.3) must still set
+    SECURITYEXPERT_RUNTIME_ROOT explicitly to its mounted volume; this default
+    exists to remove forced env setup for a local checkout, the same role
+    LOCALAPPDATA already plays on a Windows laptop today.
+    """
+    xdg_data_home = environ.get("XDG_DATA_HOME", "").strip()
+    if xdg_data_home:
+        return Path(xdg_data_home) / "SecurityExpert" / "runtime"
+    home = environ.get("HOME", "").strip()
+    if not home:
+        raise RuntimePathError(
+            f"{RUNTIME_ROOT_ENV} or --runtime-root is required when neither "
+            "XDG_DATA_HOME nor HOME is available"
+        )
+    return Path(home) / ".local" / "share" / "SecurityExpert" / "runtime"
+
+
 def resolve_runtime_paths(
     cli_runtime_root: Optional[str] = None,
     *,
@@ -116,12 +138,12 @@ def resolve_runtime_paths(
         source = "environment"
     else:
         platform = os.name if platform_name is None else platform_name
-        if platform != "nt":
-            raise RuntimePathError(
-                f"--runtime-root or {RUNTIME_ROOT_ENV} is required on this platform during DEV.0.3A"
-            )
-        selected = _windows_default(env)
-        source = "windows-default"
+        if platform == "nt":
+            selected = _windows_default(env)
+            source = "windows-default"
+        else:
+            selected = _posix_default(env)
+            source = "posix-default"
 
     if source in {"cli", "environment"} and not selected.is_absolute():
         raise RuntimePathError(f"{source} runtime root must be an absolute path")

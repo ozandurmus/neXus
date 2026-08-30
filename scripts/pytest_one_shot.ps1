@@ -10,6 +10,26 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
+# dev_python_env_tooling_friction: bare `py` resolves to whatever the launcher's
+# default is, which has drifted to a newer interpreter without dev deps on at
+# least one validated dev box (`py` -> 3.14 without pytest/pytest-xdist). Prefer
+# the pinned 3.12 baseline via `py -V:3.12` (real-environment validated: works
+# with `-m pytest`, though `-V:3.12 <script>` alone is known to mis-parse on
+# that box) when a 3.12 interpreter is actually registered with the launcher;
+# otherwise fall back to bare `py` rather than hard-failing on a box where the
+# `-V:3.12` tag isn't installed.
+$pythonSelector = @()
+try {
+    $installed = & py -0p 2>$null
+    if ($installed -match "-V:3\.12") {
+        $pythonSelector = @("-V:3.12")
+    } else {
+        Write-Host "Warning: no py -V:3.12 interpreter registered; falling back to the default 'py' launcher target. Dev deps (pytest/pytest-xdist) must already be installed there."
+    }
+} catch {
+    Write-Host "Warning: could not query 'py -0p'; falling back to the default 'py' launcher target."
+}
+
 $pytestArgs = @("-m", "pytest", "-q")
 
 # Parallel by default for the full-suite one-shot (requires requirements-dev.txt:
@@ -40,10 +60,10 @@ if ($VerboseOutput) {
 }
 
 Write-Host "== pytest one-shot start =="
-Write-Host ("Command: py " + ($pytestArgs -join " "))
+Write-Host ("Command: py " + (($pythonSelector + $pytestArgs) -join " "))
 
 # Run once: stream output to console and save UTF-8 log.
-$rawOutput = & py @pytestArgs 2>&1
+$rawOutput = & py @pythonSelector @pytestArgs 2>&1
 $rawOutput | Tee-Object -FilePath $LogPath | Out-Host
 $exitCode = $LASTEXITCODE
 
@@ -94,7 +114,7 @@ Write-Host ("Failed list: " + $FailedPath)
 if ($failedNodeIds.Count -gt 0) {
     Write-Host ""
     Write-Host "Rerun failed only command:"
-    Write-Host ("py -m pytest -q " + ($failedNodeIds -join " ") + " -vv")
+    Write-Host ("py " + (($pythonSelector + @("-m", "pytest", "-q") + $failedNodeIds + @("-vv")) -join " "))
 }
 
 exit $exitCode
