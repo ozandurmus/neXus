@@ -23,34 +23,39 @@ timeline.
 
 ## Active build
 
-**None open.** Last landed: `backup_recovery_architecture` — **DESIGN FROZEN**
-(2026-08-30, this session). ARCHITECTURE movement, no code. Rebases the deferred
-`original 0.6.0B` native-backup milestone that the roadmap said "must be rebased
-before implementation". Driver: **BackBox is not being renewed in 2027**.
+**None open.** Last landed: `restore_readiness_rb0` — **AUTOMATED_VALIDATED**
+(2026-08-30, this session). First implementation against the just-frozen Backup
+& Recovery contracts (`docs/design/BACKUP_RECOVERY_CONTRACTS.md` §5). New
+`utils/restore_readiness.py` (`compute_restore_readiness` — pure function, no
+I/O: `READY`/`STALE`/`PARTIAL`/`UNPROTECTED`/`UNKNOWN` per device from
+`unified.json` plus optional recovery-manifest/attestation maps, both empty
+until `RB.1`–`RB.3` exist) + `main.py --restore-readiness-check` (offline, no
+network, no credentials, no new device command; wired through the existing
+`_MODE_PREREQUISITES`/`_require_bootstrap` gate like `--render-only`; writes
+`data/state/restore_readiness.json`). 16 new tests
+(`tests/test_rb0_restore_readiness.py`, new `pytest.ini` `recovery` marker).
+Manually verified against the uitest fixture: **15 devices → 14 `UNPROTECTED`
++ 1 `UNKNOWN`** — the first real number for the `D1` BackBox-replacement
+decision, and exactly the honest baseline the architecture doc predicted (no
+recovery plane has been built yet, so nothing can be `READY`).
+`project/build_history.json` entry `restore_readiness_rb0`.
 
-- `docs/design/BACKUP_AND_RECOVERY_ARCHITECTURE.md` — the three-plane model
-  (inventory / evidence / **recovery**), per-vendor analysis grounded in the CP
-  and PAN admin + API guides, the new `operational-write` command class, the
-  four-level validation model, restore-readiness, phasing `RB.0`–`RB.6`, and
-  seven open decisions `D1`–`D7`.
-- `docs/design/BACKUP_RECOVERY_CONTRACTS.md` — frozen shapes: storage layout,
-  `manifest.json`, validation result, readiness record, `recovery_ui` payload,
-  the 10/14-point **command gate entries** (drafts for review, not approvals),
-  retention, and twelve security invariants as automated test obligations.
+**Next:** `RB.1` (encrypted recovery store — buildable now, local/offline).
+**`RB.3` (CP) remains the 2027 schedule risk** — `add backup local` writes a
+multi-MB archive to the device's `/var/log` and is blocked behind the P0
+`cp_device_interaction_safety` audit. **`D1` is still a product-owner action,
+not engineering** — vendor scope is frozen to CP+PAN.
 
-**The one-line reason this work exists:** configuration evidence is deliberately
-redacted (`secrets_redacted: True`) and is therefore **non-restorable by
-design** — today the platform has zero recovery capability, and the Configuration
-module makes it easy to assume otherwise.
-
-**Buildable now, unblocked, no server and no new device command:** `RB.0`
-(restore-readiness over existing evidence — pulled forward from 0.9.x because it
-depends on nothing later) then `RB.1` (encrypted recovery store). **`RB.3` (CP)
-is the schedule risk** against 2027: `add backup local` writes a multi-MB archive
-to the device's `/var/log` and is blocked behind the P0
-`cp_device_interaction_safety` audit. **`D1` is a product-owner action, not
-engineering** — vendor scope is frozen to CP+PAN, so any other vendor BackBox
-backs up today is not covered by this product.
+Prior: `backup_recovery_architecture` — **DESIGN FROZEN** (2026-08-30).
+ARCHITECTURE movement, no code. Rebases the deferred `original 0.6.0B`
+native-backup milestone. Driver: BackBox is not being renewed in 2027.
+`docs/design/BACKUP_AND_RECOVERY_ARCHITECTURE.md` (three-plane model,
+per-vendor analysis, phasing `RB.0`–`RB.6`, seven open decisions `D1`–`D7`) +
+`docs/design/BACKUP_RECOVERY_CONTRACTS.md` (frozen shapes, the 10/14-point
+command gate entries — drafts for review, not approvals — retention, twelve
+security invariants). Central boundary: configuration evidence is deliberately
+redacted (`secrets_redacted: True`) and therefore **non-restorable by
+design** — today's Configuration module makes it easy to assume otherwise.
 
 Prior: `deploy_persistent_secret_material — persistent
 runtime volume contract` (DEV.2.2) — **AUTOMATED_VALIDATED** (2026-08-30, this

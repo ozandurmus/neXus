@@ -764,16 +764,16 @@
     {
       "id": "restore_readiness",
       "title": "Restore Readiness",
-      "status": "planned",
+      "status": "in_progress",
       "target": "RB.0 (pulled forward from 0.9.x) + RB.5",
       "weight": 8,
       "summary": "Per-device READY / STALE / PARTIAL / UNPROTECTED / UNKNOWN readiness over already-collected evidence, plus the Recovery UI module and coverage-vs-inventory gap view.",
-      "why": "Answers 'if this device died right now, what do we actually have?' with zero new device commands, zero credentials and no network. Buildable immediately, depends on nothing later in the sequence, and quantifies the BackBox-exit risk with real numbers instead of assumption -- which is why it is pulled forward from 0.9.x. docs/design/BACKUP_AND_RECOVERY_ARCHITECTURE.md + docs/design/BACKUP_RECOVERY_CONTRACTS.md (design frozen 2026-08-30).",
+      "why": "Answers 'if this device died right now, what do we actually have?' with zero new device commands, zero credentials and no network. Buildable immediately, depends on nothing later in the sequence, and quantifies the BackBox-exit risk with real numbers instead of assumption -- which is why it is pulled forward from 0.9.x. docs/design/BACKUP_AND_RECOVERY_ARCHITECTURE.md + docs/design/BACKUP_RECOVERY_CONTRACTS.md (design frozen 2026-08-30). RB.0 landed 2026-08-30: utils/restore_readiness.py + main.py --restore-readiness-check. RB.5 (Recovery UI module) is next.",
       "criteria": [
         {
           "id": "readiness",
           "label": "Readiness model",
-          "state": "pending",
+          "state": "done",
           "weight": 1
         }
       ]

@@ -140,9 +140,10 @@
       {
         "build": "RB.0-RB.6 (rebase of original 0.6.0B; design frozen 2026-08-30)",
         "title": "Backup & Recovery - vendor-native recovery plane",
-        "status": "design_frozen",
+        "status": "in_progress",
         "notes": [
           "Architecture: docs/design/BACKUP_AND_RECOVERY_ARCHITECTURE.md; frozen contracts: docs/design/BACKUP_RECOVERY_CONTRACTS.md. This IS the rebase the deferred original 0.6.0B milestone required.",
+          "RB.0 AUTOMATED_VALIDATED 2026-08-30: utils/restore_readiness.py + main.py --restore-readiness-check, offline/no-network/no-credentials/no-new-device-command per contract. 16 tests. See backlog.json native_backup for evidence detail.",
           "Driver: BackBox is not being renewed in 2027. Decision-critical caveat (architecture section 2): SecurityExpert is Check Point + Palo Alto only, and vendor scope is frozen by architecture_review_notes -- if BackBox currently backs up any other vendor, this product does NOT replace it for those devices. Open decision D1 (inventory what BackBox actually backs up) blocks the whole replacement premise.",
           "Central boundary: configuration evidence is deliberately REDACTED (secrets_redacted: True) and therefore non-restorable by design. The recovery plane is a third, separate, encrypted, egress-denied plane -- never merged with the evidence plane, never rendered into the report or the support bundle.",
           "RB.0 (restore-readiness over existing evidence) and RB.1 (recovery store) are buildable now: read-only, no new device command, no server. RB.0 rebases restore_readiness FORWARD from 0.9.x because it depends on nothing later in the sequence and quantifies the BackBox exit risk with real numbers.",
