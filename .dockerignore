@@ -1,0 +1,36 @@
+# DEV.3.1 — keep the image to application code + runtime deps only.
+# Never bake gitignored runtime state (data/, output/, logs/, secrets) or
+# local dev/CI-only tooling into the image.
+
+.git
+.github
+.pytest_cache
+__pycache__
+*.pyc
+tests/
+docs/
+tools/render-harness/node_modules/
+
+# Gitignored runtime/state (see .gitignore) -- must never ship in the image;
+# a real deployment mounts these as a volume instead.
+data/
+logs/
+output/
+runtime/
+state/
+cas/
+.cas/
+support_bundles/
+
+# Local-only, never baked into an image.
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+*.pfx
+*.jks
+known_hosts
+known_hosts.*
+!known_hosts.example
