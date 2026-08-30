@@ -96,8 +96,13 @@ the user for review first.
   deliberately did not (append-only ledger, no backfill). `Sonnet 5, extended
   thinking` for the contract.
 - **CE.2** (`compliance_check_engine_primitives`) — curated read-only
-  command-primitive registry, opt-in `--compliance-probe`. **Blocked on
-  `cp_device_interaction_safety` (P0) + the network-device command gate.**
+  command-primitive registry, opt-in `--compliance-probe`. `backlog.json`
+  shows `cp_device_interaction_safety` (P0) itself CLOSED
+  (AUTOMATED_VALIDATED 2026-08-25); `CURRENT_STATE.md` still carried it as an
+  open blocker through 2026-08-30 — corrected this session. CE.2 is
+  therefore unblocked on that front; it still needs each primitive through
+  the 10-point network-device command gate and its own real-environment
+  validation gate before any implementation (§5, `COMPLIANCE_CHECK_ENGINE.md`).
 - **CE.3** / **CE.4** — `DEPLOY.1A` / OP.2-gated.
 - **Standing doable-now:** `immutable_store_permission` (P1 bug) — CLOSED this
   session, see build_history. Remaining: `html_render_performance` (P2),
@@ -120,7 +125,9 @@ P0, laptop/server-blocked):
 
 ## 4. Open risks / debt carried forward
 
-- CP device-interaction-safety audit remains P0 — hard prerequisite for CE.2.
+- CP device-interaction-safety audit is closed (2026-08-25); the remaining
+  CE.2 prerequisite is the per-primitive command gate + a real-environment
+  validation gate, not a reopened audit.
 - `unified.interfaces` / `unified.routes` join is an exact normalised-identity
   match on the config-UI device name. If a real run's config-subject name and
   `unified.json` `device` string diverge, the namespace stays `UNKNOWN`
