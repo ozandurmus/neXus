@@ -5,8 +5,13 @@ Hot-path state only. Historical build detail lives in
 agreements and validation reports). `docs/history/INDEX.md` is the one-line
 timeline.
 
-- **Authoritative checkpoint:** 2026-08-29
+- **Authoritative checkpoint:** 2026-08-30
 - **Product baseline:** `0.7.4 — framework_mappings: Requirement-Level Coverage` — AUTOMATED_VALIDATED (0.7.x VERIFY track)
+- **Latest hotfix:** `0.7.4.1` (2026-08-30) — the report's inline `<script>` was
+  broken by a placeholder-substitution collision (a `project/*.json` note
+  contains `__CRYPTO_JSON_PLACEHOLDER__`), which killed every module-nav button.
+  Fixed by a single-pass template fill; real-env click-through still owed.
+  `docs/history/phase/0_7_4_1_HTML_EXPORT_RENDER_HOTFIX.md`.
 - **Engineering baseline:** `DEV.1` complete; `DEV.2.1` (non-interactive runtime config) — AUTOMATED_VALIDATED
 - **Product evidence baseline:** `0.6.1B.1.2` interactive Check Point configuration
   collection is REAL-ENVIRONMENT VALIDATED.
@@ -135,7 +140,7 @@ full regression run.)
 ## Automated test baseline
 
 ```
-529 passed / 3 skipped / 0 failed (Python 3.12)
+534 passed / 3 skipped / 0 failed (Python 3.12)
 Repository privacy gate: PASS / 0 on a clean checkout. Locally it flags the
 gitignored `data/` + `logs/` + `data/.support_hmac.key` that a test run
 creates — delete them before running the gate.
