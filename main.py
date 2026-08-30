@@ -1287,6 +1287,10 @@ def main(argv=None, *, runtime_services=None, provenance="manual", admission_run
                     capability_store=services.capability_store,
                     coordinator=services.coordinator,
                     scheduler_policy=services.scheduler_policy,
+                    # 0.7.5 — only the full checkpoint appends a compliance-trend
+                    # ledger record.
+                    record_checkpoint=True,
+                    run_id=run_ctx.run_id,
                 )
                 run_ctx.archive_from_stage("index.html", "root")
                 run_ctx.publish_from_stage("index.html")

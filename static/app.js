@@ -2349,6 +2349,53 @@ function metricCard(label, value, detail = "", tone = "neutral") {
 }
 
 
+// 0.7.5 — compliance trend layer. Both render "" when there is not enough
+// history, so every empty / first-run state is untouched.
+function complianceSparkline(records) {
+    const points = (Array.isArray(records) ? records : [])
+        .map(r => Number(r && r.aligned_percent))
+        .filter(n => Number.isFinite(n));
+    if (points.length < 2) return "";
+    const w = 132;
+    const h = 30;
+    const pad = 3;
+    const min = Math.min(...points);
+    const max = Math.max(...points);
+    const span = max - min || 1;
+    const step = (w - pad * 2) / (points.length - 1);
+    const coords = points.map((value, index) => {
+        const x = pad + index * step;
+        const y = pad + (h - pad * 2) * (1 - (value - min) / span);
+        return `${x.toFixed(1)},${y.toFixed(1)}`;
+    });
+    const last = coords[coords.length - 1].split(",");
+    return `
+        <svg class="compliance-sparkline" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none"
+             role="img" aria-label="Aligned percent over the last ${points.length} checkpoints:
+             ${points.map(p => p.toFixed(1)).join(", ")}">
+            <polyline points="${coords.join(" ")}" fill="none" stroke="currentColor"
+                      stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" />
+            <circle cx="${last[0]}" cy="${last[1]}" r="2" fill="currentColor" />
+        </svg>
+    `;
+}
+
+function complianceTrendChip(trend) {
+    if (!trend || typeof trend !== "object") return "";
+    const delta = Number(trend.delta_aligned_percent || 0);
+    const direction = safe(trend.direction || "flat");
+    const glyph = direction === "up" ? "▲" : direction === "down" ? "▼" : "·";
+    const sign = delta > 0 ? "+" : "";
+    const since = safe(trend.previous_date);
+    return `
+        <span class="compliance-trend-chip ${escapeHtml(direction)}">
+            <span aria-hidden="true">${glyph}</span>
+            ${escapeHtml(sign + delta.toFixed(1))} pts${since ? ` since ${escapeHtml(since)}` : ""}
+        </span>
+    `;
+}
+
+
 function inventoryOverviewStats() {
     const total = inventory.length;
     const live = inventory.filter(entry => entry.inventoryStatus?.fresh).length;
@@ -2468,6 +2515,8 @@ function renderOverviewModule() {
         if (ov && ov.total_controls) {
             const cells = ov.cells || {};
             const fw = ov.by_framework || {};
+            const spark = complianceSparkline(ov.history);
+            const chip = complianceTrendChip(ov.trend);
             complianceSummary.innerHTML = `
                 <div class="summary-list">
                     <div><span>Controls monitored</span><strong>${formatNumber(ov.monitored_controls)} / ${formatNumber(ov.total_controls)}</strong></div>
@@ -2475,6 +2524,7 @@ function renderOverviewModule() {
                     <div><span>Aligned</span><strong>${Number(ov.aligned_percent || 0).toFixed(1)}% · ${Number(ov.risk_weighted_alignment_percent || 0).toFixed(1)}% risk-weighted</strong></div>
                     <div><span>Findings / gaps / waived</span><strong>${formatNumber(cells.finding)} · ${formatNumber(cells.unknown)} · ${formatNumber(cells.waived)}</strong></div>
                 </div>
+                ${(spark || chip) ? `<div class="compliance-trend-row">${spark}${chip}</div>` : ""}
                 <div class="alignment-summary-strip">
                     ${["CIS", "PCI-DSS", "BDDK"].map(name => {
                         const f = fw[name] || {};
@@ -4117,6 +4167,13 @@ function renderComplianceCoverageOverview() {
             ${metricCard("RISK-WEIGHTED", `${Number(ov.risk_weighted_alignment_percent || 0).toFixed(1)}%`, "Alignment weighted by control severity", "muted")}
             ${metricCard("FINDINGS", formatNumber(cells.finding), `${formatNumber(cells.unknown)} evidence gaps · ${formatNumber(cells.waived)} waived`, Number(cells.finding) > 0 ? "danger" : "success")}
         </div>
+        ${(() => {
+            const spark = complianceSparkline(ov.history);
+            const chip = complianceTrendChip(ov.trend);
+            return (spark || chip)
+                ? `<div class="compliance-trend-row wide"><span class="compliance-trend-label">Aligned % trend</span>${spark}${chip}</div>`
+                : "";
+        })()}
         <div class="compliance-framework-readiness">
             ${complianceFilteredFrameworkNames().map(name => {
                 const fw = frameworks[name] || {};

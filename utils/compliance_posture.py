@@ -13,6 +13,7 @@ from utils.compliance_catalog import (
 )
 from utils.compliance_check_engine import evaluate_check, redacted_selector
 from utils.compliance_check_pack import CompliancePack, load_compliance_checks
+from utils.compliance_history import history_view
 from utils.framework_catalog import (
     FRAMEWORK_CATALOG_VERSION,
     framework_entry,
@@ -1152,8 +1153,9 @@ def _empty_framework_block(name: str) -> dict[str, Any]:
     }
 
 
-def _empty_overview() -> dict[str, Any]:
+def _empty_overview(history: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     total = len(LEGACY_CONTROL_IDS) + len(_ENRICHMENT_CONTROLS)
+    view = history_view(history)  # no current run -> records only, trend None
     return {
         "catalog_version": CATALOG_VERSION,
         "framework_catalog_version": FRAMEWORK_CATALOG_VERSION,
@@ -1166,12 +1168,15 @@ def _empty_overview() -> dict[str, Any]:
         "risk_weighted_alignment_percent": 0.0,
         "by_framework": {name: _empty_framework_block(name) for name in _FRAMEWORKS},
         "by_subject": [],
+        "history": view["records"],
+        "trend": view["trend"],
     }
 
 
 def _compliance_overview(
     subjects: list[dict[str, Any]],
     extra_meta: dict[str, dict[str, Any]] | None = None,
+    history: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     extra_meta = extra_meta or {}
     evaluated = [s for s in subjects if s.get("availability") == "AVAILABLE"]
@@ -1325,6 +1330,11 @@ def _compliance_overview(
         }
 
     total = len(all_ids)
+    view = history_view(
+        history,
+        current_aligned=aligned_percent,
+        current_risk_weighted=risk_weighted,
+    )
     return {
         "catalog_version": CATALOG_VERSION,
         "framework_catalog_version": FRAMEWORK_CATALOG_VERSION,
@@ -1337,6 +1347,8 @@ def _compliance_overview(
         "risk_weighted_alignment_percent": risk_weighted,
         "by_framework": by_framework,
         "by_subject": by_subject,
+        "history": view["records"],
+        "trend": view["trend"],
     }
 
 
@@ -1358,6 +1370,7 @@ def build_compliance_posture(
     data_root: Any = None,
     crypto_facts_by_subject: dict[str, dict[str, Any]] | None = None,
     unified_inventory: list[dict[str, Any]] | None = None,
+    history: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     payload = _as_dict(configuration_ui)
     plan = _as_dict(project_plan)
@@ -1401,7 +1414,7 @@ def build_compliance_posture(
             "fleet_controls": [],
             "platform_controls": [],
             "subjects": [],
-            "compliance_overview": _empty_overview(),
+            "compliance_overview": _empty_overview(history),
             "assignment_policy": _assignment_policy_block(policy),
             "check_packs": check_packs_block,
             "privacy": {
@@ -1538,7 +1551,7 @@ def build_compliance_posture(
         "fleet_controls": fleet_controls,
         "platform_controls": platform_controls,
         "subjects": subjects,
-        "compliance_overview": _compliance_overview(subjects, user_check_meta),
+        "compliance_overview": _compliance_overview(subjects, user_check_meta, history),
         "assignment_policy": _assignment_policy_block(policy),
         "check_packs": check_packs_block,
         "privacy": {
