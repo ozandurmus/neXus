@@ -69,9 +69,45 @@ scripts/render_uitest.py + check-render   : PASS
 
 No `main.py` behaviour change; the harness is dev/CI only.
 
-## 4. Follow-up
+## 4. `0.7.6a` — fixture expanded to a full topology matrix (2026-08-30)
 
-- CI without `bun`: the JSON-validity test still runs; add `bun` to CI to get
+`tests/fixtures/uitest/build_fixture.py` regenerated so the bundle exercises
+every device shape and UI branch, not just three devices:
+
+- **Check Point:** standalone `gateway`; ClusterXL (`clusterxl_member` ×2,
+  `active` / `standby`); VSX `vsx_host` (standalone) + two `virtual_system`
+  contexts (VSID 10 / 20); VSX cluster (`vsx_host` ×2) + a shared
+  `virtual_system` (VSID 30); one UNAVAILABLE gateway (`capability_gap`).
+- **Palo Alto:** single firewall (`vsys_count 1`, `HA Disabled`); HA pair
+  (`Local Active` / `Local Passive`, `panorama_sync.out_of_sync`); multi-vsys
+  firewall (`vsys_count 3`); multi-vsys HA pair (`vsys_count 2`, one
+  disconnected).
+- **`unified.json`:** matching rows with genuine cluster-member interface + route
+  divergence (member B missing `eth2`, different static-route next-hop, an extra
+  route), VSX physical-host + per-VSID `wrp*` rows, PAN vr-scoped multi-vsys
+  interfaces, and `live` / `last_known_good` / `no_data` inventory states.
+- Alignment: `ALIGNED` · `LOCAL_OVERRIDE` · `EFFECTIVE_DRIFT` · `MEMBER_SPECIFIC`
+  · `LOCAL_ONLY` · `EXPECTED_ONLY` · `UNKNOWN` all present. History: `same` /
+  `changed` / `first` + a CP `insufficient_evidence` diff + a PAN pair diff with
+  MODIFIED/ADDED rows. Crypto: CP + PAN subjects, `PASS` / `FINDING` / `UNKNOWN`
+  across `weak_algorithm` / `crypto_agility` / `pqc_readiness`,
+  `evidence_basis` configured/inferred/insufficient. Compliance: enforced +
+  advisory user checks + a `state/control_assignments.json` waiver (one WAIVED
+  control) + per-framework `COVERED` / `PARTIALLY_COVERED` / `UNCOVERED`.
+
+New `tests/test_html_render_harness.py::test_all_topologies_present` asserts each
+`entity_type`, HA role, vsys/VSID shape, change state, alignment class, inventory
+state and crypto status appears in the rendered payload — so a future builder
+change that drops a shape fails loudly instead of the harness passing on a
+thinner render.
+
+Evidence: `py -m pytest -q -n auto --dist worksteal` → **551 passed, 3 skipped,
+0 failed**. `check-render.mjs` PASS on the 16-device render (no console errors).
+Repository privacy gate PASS / 0 on a clean tree.
+
+## 5. Follow-up
+
+- CI without `bun`: the JSON-validity tests still run; add `bun` to CI to get
   the navigation smoke test there too.
 - The fixture is authored at the payload layer. If a future build changes how
   `build_configuration_ui_payload` shapes its output, the fixture must be
