@@ -2,10 +2,75 @@
 
 ## Status
 
-**PLANNED — architecture contract frozen 2026-08-30**
+**DONE — REVIEWED, NO DEFECT FOUND — AUTOMATED_VALIDATED 2026-08-30**
 
 Product baseline: `0.7.6a AUTOMATED_VALIDATED`. Backlog id: `cp_identity_edges`
-(P1, `planned`).
+(P1, was `planned`, now `automated_validated`).
+
+### Review findings (2026-08-30)
+
+**Finding 1 — normalized/shortname relations are correctly safe, not a
+false-accept risk.** `_normalize_host_token()` treats everything after the
+*first* dot as a domain suffix and strips it on both sides before comparing
+— so a dot inside a short-name segment (e.g. `fw.01`) is FQDN-parsed, not
+generically normalized away. Traced case: `_identity_relation("fw.01",
+"fw-01")` returns `different_observed`, not a false `normalized_match` —
+under-matching is the safe direction here, since a mismatch only affects the
+confidence *label* (HIGH vs MEDIUM), never whether the entity is accepted
+(`_identity_gate` docstring: "a name difference is evidence to retain, not
+sufficient reason to reject"). No code change needed; documented and
+regression-tested (`test_identity_relation_dot_as_literal_separator_stays_safe_not_a_false_exact`).
+Separately confirmed: `exact`/`shortname_match`/`normalized_match` are
+treated identically (HIGH) by `_identity_gate` — the finer distinction is
+audit/evidentiary granularity in `name_relation` only, never a behavioral
+fork. This satisfies AC-4 (existing vocabulary preserved) without needing a
+change.
+
+**Finding 2 — the MEDIUM-confidence fallback (AC-2's concern) is anchored on
+the selected management IP, not on hostname/naming pattern.**
+`_collector_identity_gate`'s extension only ever runs after
+`target.management_ip` (the specific, already-connected endpoint) is set;
+hostname comparison there only chooses the *status label*
+(`..._HOSTNAME_DIFF_OBSERVED` vs matched), never whether the entity is
+`accepted`. An "unrelated device that merely shares a naming pattern" cannot
+satisfy this path unless it is literally the device already reached at that
+exact management IP — traced and regression-tested
+(`test_medium_confidence_acceptance_survives_a_completely_unrelated_hostname`,
+`test_medium_confidence_acceptance_requires_a_selected_management_endpoint`).
+No code change needed.
+
+**Finding 3 — the pre-poll exclusion filter and the post-connect identity
+gate are structurally decoupled; no interaction is possible.**
+`checkpoint_transport_value()` / `SECURITYEXPERT_CP_EXCLUDED_DEVICE_NAMES`
+are consumed exclusively by `checkpoint/cp_runner.py`'s server-side
+`cp_inventory.sh` awk filter, an **exact-string** match against the
+Check Point management object `__name__` field — it never sees an observed
+Gaia hostname. `configuration/checkpoint_config_collector.py`'s target
+selection (`_pick_targets`) reads only the already-exclusion-filtered
+`output/cp.json` / `vsx.json` / `cp_telemetry.json` artifacts, so an excluded
+device structurally never becomes a `ProbeTarget`/`PhysicalTarget` and
+therefore never reaches `_identity_gate`/`_identity_relation` at all — the
+two mechanisms operate on disjoint data flows at different pipeline stages.
+Confirmed by direct source inspection (regression-tested via
+`test_excluded_device_never_reaches_the_identity_gate_because_it_is_never_a_target`,
+which asserts `excluded_device_names`/`load_inventory_exclusions` appear
+only in `cp_runner.py`, never in the config-collector/probe modules). No
+code change needed.
+
+**Conclusion: reviewed and clean.** No false-accept, no false-reject, no
+interaction risk found. AC-1 through AC-5 satisfied entirely through
+review + new regression coverage; per this contract's own Validation and
+merge gate section, that is sufficient to close as `DONE` without a code
+fix. Real-estate confirmation of the boundary against actual production
+hostnames remains owed under `on_hardware_real_env_validation`, unchanged
+from before this review.
+
+Evidence: 21 new tests -- `tests/test_phase0_6_1a_cp_configuration_evidence_probe.py`
+(+16, including a 13-case parametrized synthetic `_identity_relation` matrix)
+and the new `tests/test_phase0_6_1c_cp_identity_edges_review.py` (+5). Full suite: 590
+passed, 2 skipped, 2 failed (both pre-existing and unrelated — same two
+tests already documented against the unmodified baseline in prior 0.6.x
+closures). Net +21 from baseline 569, zero regressions.
 
 ## Objective
 

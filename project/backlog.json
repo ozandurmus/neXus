@@ -210,10 +210,10 @@
       "id": "cp_identity_edges",
       "category": "Identity",
       "title": "Review remaining CP identity-gate edge cases after interactive session validation",
-      "status": "planned",
+      "status": "automated_validated",
       "priority": "P1",
       "target": "0.6.1B.1.2 / 0.6.1C",
-      "note": "Contract frozen 2026-08-30: docs/history/phase/PHASE0_6_1C_CP_IDENTITY_EDGES_REVIEW.md -- an offline synthetic-hostname review of _identity_relation()'s exact/shortname_match/normalized_match/different_observed boundary and its interaction with the pre-poll exact-name exclusion filter; real-estate validation was still PENDING as of the 0.6.1B.1.2 checkpoint per docs/history/validation/VALIDATION_0_6_1B_1_2.txt. Review-first: only implement a fix if the review finds a genuine false-accept/false-reject. Not yet started."
+      "note": "AUTOMATED_VALIDATED 2026-08-30 -- REVIEWED, NO DEFECT FOUND. Contract: docs/history/phase/PHASE0_6_1C_CP_IDENTITY_EDGES_REVIEW.md. Three findings, all reviewed-and-clean: (1) a dot in a short-name segment is FQDN-parsed consistently on both sides, so it safely under-matches (different_observed) rather than false-matching; exact/shortname_match/normalized_match are treated identically (HIGH) by _identity_gate -- the finer distinction is audit granularity only. (2) the MEDIUM-confidence _collector_identity_gate fallback is anchored on target.management_ip (the already-connected endpoint), never on hostname pattern -- an unrelated hostname is still accepted at MEDIUM, but only because it is genuinely the device at that exact IP. (3) the pre-poll exact-name exclusion filter (checkpoint_transport_value / cp_inventory.sh awk) and the post-connect identity gate are structurally decoupled: excluded_device_names/load_inventory_exclusions appear only in cp_runner.py, never in checkpoint_config_collector.py/checkpoint_config_probe.py, so an excluded device never becomes a target and never reaches the identity gate. No code change made -- all three findings hold under the existing implementation. 21 new regression tests (13-case parametrized _identity_relation matrix + IP-anchor + decoupling proofs). py -m pytest -q: 590 passed, 2 skipped, 2 failed (both pre-existing/unrelated) -- net +21, zero regressions. Real-estate confirmation remains owed under on_hardware_real_env_validation, unchanged."
     },
     {
       "id": "cp_ssh_trust",
