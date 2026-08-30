@@ -2,11 +2,81 @@
 
 ## Status
 
-**CONTRACT — PROPOSED (not implemented).** Awaiting user review before any
-code is written.
+**AUTOMATED_VALIDATED 2026-08-30.** Contract accepted; implemented and tested
+this session against a real local PostgreSQL 16 instance (real OS
+subprocesses, real `SIGKILL`, a real transaction-pooling `pgbouncer` proxy
+for the preflight-rejection path). Real-environment validation against an
+actual multi-container deployment hitting a real Check Point MDS remains
+owed (see "Validation and merge gate") — server-blocked (DEPLOY.1, external).
 
-Product baseline: `0.7.6a AUTOMATED_VALIDATED`. Backlog id:
-`distributed_endpoint_lock_and_job_store` (P0, `planned`).
+Product baseline: `0.7.6a AUTOMATED_VALIDATED`. Backlog id: `distributed_endpoint_lock`
+(P0), split from `distributed_endpoint_lock_and_job_store` per the scope split
+below (that id now scopes DEV.3.3 only).
+
+### Closure evidence (2026-08-30)
+
+- `utils/coordinator_backend.py` (new): `CoordinatorBackend` protocol,
+  `InMemoryCoordinatorBackend` (the exact prior `CollectionCoordinator` logic,
+  moved verbatim — plus the two incidental fixes below), `PostgresCoordinatorBackend`,
+  `verify_postgres_backend_ready`, `try_acquire_scheduler_lock`.
+- `utils/collection_executor.py`: `CollectionCoordinator` is now a thin shell
+  delegating to a `backend`; `select_coordinator_backend()` reads
+  `SECURITYEXPERT_COORDINATOR_BACKEND` (`memory` default / `postgres`),
+  running the fail-closed preflight before returning a Postgres backend.
+- `main.py`: wires `select_coordinator_backend()` at startup (mapped to a
+  clean `parser.error` on `CoordinatorBackendError`, matching the
+  `clean_baseline_bootstrap` precedent); `_run_scheduler_once` gates its
+  whole read-evaluate-write cycle behind `backend.scheduler_lock()` when the
+  backend is Postgres-backed (correctness contract item 6), no-op on the
+  in-memory backend.
+- **Two incidental bugs fixed while extracting the backend** (found during
+  the audit that produced this contract, in scope per the contract):
+  `_endpoint_locks` was initialized and never read (dead code, removed);
+  `budget_snapshot()` always reported at most 1 available regardless of true
+  capacity (latent — every shipped budget is currently 1) — fixed by
+  draining/restoring the semaphore under lock.
+- **Order-of-checks correction found by testing against real Postgres**
+  (not caught by the design review): the coalesce check must run **before**
+  the budget check, exactly mirroring the in-memory backend — a request for
+  an endpoint already held by a running job must coalesce even when that
+  vendor's budget is exhausted, since coalescing opens no new session and
+  consumes no additional budget. An initial draft checked budget first and
+  wrongly rejected same-endpoint requests once the budget was full. Covered
+  by `test_postgres_second_request_same_endpoint_coalesces_even_at_budget`.
+- Evidence, all against a real local PostgreSQL 16 (not mocked):
+  - **AC-1 / AC-3** (`test_postgres_cross_process_exclusion_and_orphan_reclaim_on_crash`):
+    a real child *OS process* admitted first; this process's independent
+    backend instance, sharing only the database, got `COALESCED` — no
+    second session opened. The child was then `SIGKILL`ed; reclamation
+    happened with no TTL and no operator action (the next admission
+    attempt succeeded within the test's polling window, and the dead
+    holder's row was marked `orphaned`).
+  - **AC-5** (`verify_postgres_backend_ready`): manually verified this
+    session against a real `pgbouncer 1.22` configured with
+    `pool_mode = transaction` — the preflight correctly raised
+    `CoordinatorBackendError` and refused to start; against a direct
+    connection it passed. The committed test suite additionally covers the
+    preflight's two failure-detection branches deterministically via a
+    mocked driver (`test_preflight_detects_backend_pid_instability`,
+    `test_preflight_detects_lock_visible_across_connections`), since a real
+    pgbouncer install/config is too environment-fragile to depend on in a
+    committed CI test.
+  - AC-2, AC-4, AC-6, AC-7, AC-8 and the scheduler-lock correctness item are
+    each covered by a dedicated test in
+    `tests/test_dev3_2_distributed_endpoint_lock.py` (20 tests, all passing).
+  - Full suite: `py -m pytest -q` = **654 passed, 3 skipped, 2 failed** (both
+    pre-existing/unrelated — same two tests the codebase already documents
+    as failing identically on the unmodified baseline). Net +20 passing
+    (19 new DEV.3.2 tests + 1 scheduler-lock test), zero regressions.
+  - `main.py` smoke-tested end-to-end with the real Postgres backend:
+    `SECURITYEXPERT_COORDINATOR_BACKEND=postgres` + a real DSN runs
+    `--scheduler-once` cleanly through the preflight and the coordinator;
+    an unreachable DSN and an unsupported backend name both fail closed
+    with a clean `parser.error`, not a traceback.
+- `psycopg[binary]>=3.1` added to a new, optional `requirements-postgres.txt`
+  (not the base `requirements.txt` — the default in-memory path needs it for
+  nothing, and DEV.3.1's Dockerfile stays unchanged); `.env.example` documents
+  the two new variables.
 
 Prerequisite state: `cp_device_interaction_safety` (P0) closed 2026-08-25;
 `collection_execution_coordinator` REAL_ENV_VALIDATED 2026-08-27. This build

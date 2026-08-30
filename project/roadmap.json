@@ -163,7 +163,7 @@
           "Per-device job lock/coordinator (from the 0.6.1B.1.3 safety audit) must be part of the scheduler design before recurring/scheduled jobs replace the current on-demand run model.",
           "DEPLOY.1A authenticated read-only OIDC viewer boundary (deploy1_oidc_viewer) must be accepted before the server is opened for internal use; IP allowlist is defense-in-depth only.",
           "Evidence egress and sharing policy (deploy1_evidence_egress_policy) must be defined and enforced before any additional egress paths (event webhook, TI enrichment) are opened.",
-          "Step breakdown for the readiness work is under engineering_tracks DEV.2 (server runtime foundation), DEV.3 (containerization) and DEV.4 (CI/CD & production hardening); backlog items noninteractive_runtime_config, deploy_persistent_secret_material, linux_container_image, distributed_endpoint_lock_and_job_store and per_vendor_worker_split carry the actionable scope."
+          "Step breakdown for the readiness work is under engineering_tracks DEV.2 (server runtime foundation), DEV.3 (containerization) and DEV.4 (CI/CD & production hardening); backlog items noninteractive_runtime_config, deploy_persistent_secret_material, linux_container_image, distributed_endpoint_lock (AUTOMATED_VALIDATED 2026-08-30), distributed_evidence_store_migration and per_vendor_worker_split carry the actionable scope."
         ]
       },
       {
