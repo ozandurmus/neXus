@@ -17,6 +17,9 @@ from utils.compliance_history import (
 )
 from utils.compliance_posture import build_compliance_posture
 from utils.html_export import run_html_export
+import pytest
+
+pytestmark = pytest.mark.compliance
 
 
 def _cfg(available=True):

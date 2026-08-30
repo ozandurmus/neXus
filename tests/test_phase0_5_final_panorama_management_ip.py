@@ -2,6 +2,9 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from panorama import panorama_runtime_runner as runner
+import pytest
+
+pytestmark = pytest.mark.inventory
 
 
 ROOT = Path(__file__).resolve().parents[1]

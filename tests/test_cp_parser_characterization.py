@@ -1,6 +1,9 @@
 from pathlib import Path
 
 from checkpoint.cp_runner import parse_interfaces, parse_routes, validate
+import pytest
+
+pytestmark = pytest.mark.inventory
 
 
 FIXTURES = Path(__file__).parent / "fixtures" / "cp"

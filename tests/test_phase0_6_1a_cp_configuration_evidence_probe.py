@@ -1,7 +1,11 @@
 import json
 from pathlib import Path
 
+import pytest
+
 from configuration import checkpoint_config_probe as probe
+
+pytestmark = pytest.mark.configuration
 
 
 def test_expert_login_contract_invokes_gaia_clish_explicitly():

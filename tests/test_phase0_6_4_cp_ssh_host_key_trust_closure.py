@@ -32,6 +32,8 @@ import pytest
 
 from utils.cp_ssh_trust import CpSshStrictPreflightError, apply_strict_host_key_policy
 
+pytestmark = pytest.mark.security
+
 
 # ---------------------------------------------------------------------------
 # Helpers

@@ -6,6 +6,9 @@ from configuration import panorama_config_collector as collector
 from configuration.pan_expected_compiler import compile_panorama_expected, expected_for_serial
 from configuration.pan_setting_alignment import align_expected_to_effective
 from utils.config_evidence import ConfigEvidenceStore
+import pytest
+
+pytestmark = pytest.mark.configuration
 
 
 PANORAMA_XML = b"""<config>

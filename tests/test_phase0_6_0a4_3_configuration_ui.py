@@ -2,6 +2,9 @@ import json
 from pathlib import Path
 
 from utils.config_ui import build_configuration_ui_payload
+import pytest
+
+pytestmark = pytest.mark.configuration
 
 
 ROOT = Path(__file__).resolve().parents[1]

@@ -2,6 +2,9 @@ import builtins
 
 import main
 from utils.runtime_auth import RuntimeAuth
+import pytest
+
+pytestmark = pytest.mark.runtime_platform
 
 # DEV.2.1: force the interactive prompt path (stdin is not a TTY under pytest)
 # and a clean env for the prompt-based tests.

@@ -13,6 +13,8 @@ from utils.collection_executor import (
     execute_admitted_collection,
 )
 
+pytestmark = pytest.mark.discovery
+
 
 # ---------------------------------------------------------------------------
 # Unit-level coalescing contract (production path)

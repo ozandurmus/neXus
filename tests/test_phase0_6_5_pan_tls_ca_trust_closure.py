@@ -33,6 +33,8 @@ from pathlib import Path
 
 from utils.pan_tls_trust import PanTlsStrictPreflightError, preflight_pan_tls_ca_bundle
 
+pytestmark = pytest.mark.security
+
 
 ###############################################
 # AC-1 / AC-2: bool verify → no-op

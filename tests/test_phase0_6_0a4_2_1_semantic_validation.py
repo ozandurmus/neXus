@@ -8,6 +8,9 @@ from types import SimpleNamespace
 import configuration.panorama_config_collector as collector
 from configuration.pan_semantic_validation import build_semantic_validation
 from utils.config_evidence import ConfigEvidenceStore
+import pytest
+
+pytestmark = pytest.mark.configuration
 
 
 PANORAMA_XML = b"""<config>

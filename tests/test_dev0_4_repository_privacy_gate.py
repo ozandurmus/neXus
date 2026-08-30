@@ -1,6 +1,9 @@
 from pathlib import Path
 
 from utils.repository_privacy import scan_repository
+import pytest
+
+pytestmark = pytest.mark.runtime_platform
 
 
 def _write(root: Path, rel: str, text: str) -> None:

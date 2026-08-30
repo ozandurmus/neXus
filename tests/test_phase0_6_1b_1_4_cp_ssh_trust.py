@@ -10,6 +10,9 @@ Verifies that:
 All tests are unit-level: no real SSH connections are opened.
 """
 from unittest.mock import MagicMock, patch
+import pytest
+
+pytestmark = pytest.mark.security
 
 
 # ---------------------------------------------------------------------------

@@ -3,6 +3,8 @@ from pathlib import Path
 
 import pytest
 
+pytestmark = pytest.mark.inventory
+
 
 def test_logger_can_write_on_fresh_checkout_when_initialized(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)

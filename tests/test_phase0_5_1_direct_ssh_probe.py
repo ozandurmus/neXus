@@ -5,6 +5,9 @@ import zipfile
 from checkpoint import cp_runner, direct_ssh_probe
 from utils.verification import run_verification
 from utils import support_bundle
+import pytest
+
+pytestmark = pytest.mark.inventory
 
 
 def test_cp_status_extended_target_fields_are_parsed():

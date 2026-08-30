@@ -1,6 +1,9 @@
 from pathlib import Path
 
 from checkpoint.cp_runner import _cluster_display_name
+import pytest
+
+pytestmark = pytest.mark.inventory
 
 ROOT = Path(__file__).resolve().parents[1]
 APP = (ROOT / "static" / "app.js").read_text(encoding="utf-8")

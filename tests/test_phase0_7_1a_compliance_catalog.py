@@ -22,6 +22,9 @@ from test_phase0_6_1b_1_5_compliance_posture import (
     _sample_configuration_payload,
     _sample_project_plan_payload,
 )
+import pytest
+
+pytestmark = pytest.mark.compliance
 
 _LEGACY_IDS = {
     "hostname_configured_non_default", "dns_primary_secondary_configured",

@@ -3,6 +3,9 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import utils.snapshot as snapshot
+import pytest
+
+pytestmark = pytest.mark.inventory
 
 
 def write_json(path: Path, data):

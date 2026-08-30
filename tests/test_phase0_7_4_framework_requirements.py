@@ -19,6 +19,9 @@ from test_phase0_7_1_compliance_assignment import (
     _configuration_payload,
 )
 from test_phase0_6_1b_1_5_compliance_posture import _sample_project_plan_payload
+import pytest
+
+pytestmark = pytest.mark.compliance
 
 
 _COVERAGE = {"COVERED", "PARTIALLY_COVERED", "UNCOVERED", "NOT_APPLICABLE"}

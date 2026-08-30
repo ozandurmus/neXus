@@ -4,6 +4,9 @@ import hashlib
 
 from configuration.pan_semantic_policy import semantic_policy_for_setting
 from configuration.pan_setting_alignment import align_expected_to_effective
+import pytest
+
+pytestmark = pytest.mark.configuration
 
 
 def _h(value: str) -> str:
