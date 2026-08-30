@@ -1,0 +1,48 @@
+# DEV.3.1 — single worker container + nginx serving the static output volume.
+# No collector-semantic change; this only relocates where the existing
+# main.py pipeline runs. See docs/history/phase/DEV3_1_LINUX_CONTAINER_IMAGE.md.
+#
+# Quick start:
+#   cp .env.example .env   # fill in credentials, or use the _FILE / secrets: convention below
+#   docker compose up -d
+#   docker compose exec worker python main.py --repository-privacy-check   # no credentials needed
+#   docker compose exec worker python main.py --render-only                # needs a prior real checkpoint's artifacts
+#   curl http://127.0.0.1:8080/                                            # the rendered report
+#
+# nginx is bound to 127.0.0.1 only, deliberately: output/index.html is a
+# LOCAL OPERATOR SENSITIVE artifact (roadmap.json roadmap_notes) and serving
+# it beyond loopback without the DEPLOY.1A authenticated viewer boundary is
+# not an accepted default here -- widening this bind address is a DEPLOY.1A
+# decision, not a casual config change.
+
+services:
+  worker:
+    build: .
+    image: securityexpert-worker:dev
+    env_file:
+      # required: false -- a fresh checkout has no .env yet; --repository-privacy-check
+      # and other no-credential modes must still be runnable to validate the image.
+      - path: .env
+        required: false
+    environment:
+      SECURITYEXPERT_RUNTIME_ROOT: /runtime
+    volumes:
+      - securityexpert-runtime:/runtime
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:1.27-alpine
+    volumes:
+      - securityexpert-runtime:/runtime:ro
+      - ./deploy/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    ports:
+      - "127.0.0.1:8080:80"
+    depends_on:
+      - worker
+    restart: unless-stopped
+
+volumes:
+  # Persistent runtime state (data/output/logs, HMAC key, trust material) --
+  # deploy_persistent_secret_material (DEV.2.2) covers the production-grade
+  # secret/volume contract; this is the bounded DEV.3.1 volume only.
+  securityexpert-runtime:
