@@ -330,5 +330,11 @@ UI code.
    history) or deferred with the trend scrubber UI? *Recommend deferred* — keep
    `0.7.1` to the current-run roll-up; design the payload so a `history[]` array
    is additive.
+   **RESOLVED in `0.7.5`** (`docs/history/phase/0_7_5_COMPLIANCE_TREND.md`): an
+   append-only aggregate ledger (`data/state/compliance_history.json`), one
+   record per full checkpoint, surfaced as additive
+   `compliance_overview.history[]` + `.trend` with a minimal Overview sparkline.
+   Not reconstruction from config history (a possible later TRACE-plane build);
+   the full trend-scrubber UI stays DEPLOY.1-gated.
 10. `PARTIALLY_COVERED` framework state in `0.7.1` vs covered/uncovered only.
     *Recommend include it* — it is the honest answer and cheap to compute.
