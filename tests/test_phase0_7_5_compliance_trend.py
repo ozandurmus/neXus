@@ -114,6 +114,7 @@ def test_history_view_projects_and_limits(tmp_path):
         "date", "at", "aligned_percent", "risk_weighted_alignment_percent",
         "cells", "monitored_controls", "total_controls",
         "catalog_version", "framework_catalog_version",
+        "reconstructed", "reconstruction_scope",  # 0.7.7
     }
 
 

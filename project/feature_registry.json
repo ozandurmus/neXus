@@ -664,7 +664,7 @@
           "label": "Rule engine",
           "state": "pending",
           "weight": 2,
-          "note": "In progress: 0.6.6B static rule pack + 0.7.1a/b catalog + 0.7.3 (CE.1) data-driven user check engine (compliance_check_pack.py / compliance_check_engine.py) all delivered. Marked done once CE.2 (curated read-only command primitives, gated on cp_device_interaction_safety) and CE.3 (UI editor + signed org packs, DEPLOY.1A) land."
+          "note": "In progress: 0.6.6B static rule pack + 0.7.1a/b catalog + 0.7.3 (CE.1) data-driven user check engine (compliance_check_pack.py / compliance_check_engine.py) all delivered. Marked done once CE.2 (curated read-only command primitives; cp_device_interaction_safety itself closed 2026-08-25, remaining gate is the per-primitive network-device command gate + real-environment validation) and CE.3 (UI editor + signed org packs, DEPLOY.1A) land."
         }
       ]
     },
@@ -904,6 +904,13 @@
           "label": "Coordinator/scheduler real-environment validation",
           "state": "pending",
           "weight": 2
+        },
+        {
+          "id": "distributed_backend",
+          "label": "Cross-process backend (DEV.3.2, Postgres advisory locks)",
+          "state": "done",
+          "weight": 2,
+          "note": "backlog.json distributed_endpoint_lock, AUTOMATED_VALIDATED 2026-08-30. Verified this session against a real local PostgreSQL 16: real cross-process exclusion (a real child OS process, SIGKILLed, endpoint reclaimed with no TTL/heartbeat) and a real pgbouncer transaction-pooling proxy correctly rejected by the startup preflight. Multi-container-against-a-real-MDS real-environment evidence still owed (server-blocked, DEPLOY.1)."
         }
       ]
     },

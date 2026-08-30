@@ -321,8 +321,9 @@ running-config contains hashed credentials and PSKs.
     fetch (digest match). On fetch failure the archive is **still deleted** and
     the job reports failure — leaving orphaned multi-MB archives on firewalls is
     itself the resource risk this gate exists to prevent.
-14. **Device-impact assessment:** **owed — blocked on the P0
-    `cp_device_interaction_safety` audit and open decision D3.**
+14. **Device-impact assessment:** **owed — blocked on open decision D3**
+    (the P0 `cp_device_interaction_safety` audit that used to co-gate this
+    closed 2026-08-25, corrected 2026-08-30).
 
 ### 7.4 SCP fetch of the Gaia backup file — class: `read`
 
@@ -441,10 +442,10 @@ itself — it only does target selection, admission-coordinator routing
 | Vendor | Status | Blocker |
 |---|---|---|
 | `panorama` (PAN device-state, §7.1) | **implemented** | `D2` resolved 2026-08-30; `read` class, gate-documented in §7.1 before implementation |
-| `checkpoint` (CP Gaia backup, §7.3) | **blocked stub** | P0 `cp_device_interaction_safety` audit + open decision `D3` (architecture §13) — **neither resolved** |
+| `checkpoint` (CP Gaia backup, §7.3) | **blocked stub** | open decision `D3` (architecture §13) — **not resolved**. The P0 `cp_device_interaction_safety` audit that used to co-gate this closed 2026-08-25 (corrected 2026-08-30). |
 
 Calling the CP collector raises `RecoveryCollectionBlockedError` naming the
-exact blocker (audit + `D3`), not a generic `NotImplementedError` — an
+exact blocker (`D3`), not a generic `NotImplementedError` — an
 operator or a future UI must be able to show *why*, not just *that it
 failed*.
 

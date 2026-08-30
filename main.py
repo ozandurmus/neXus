@@ -278,7 +278,32 @@ def _scheduler_workflow_argv(row, runtime_root):
 
 
 def _run_scheduler_once(runtime_paths, services):
-    """Evaluate the RuntimeRoot scheduler policy once; never create a loop."""
+    """Evaluate the RuntimeRoot scheduler policy once; never create a loop.
+
+    On the PostgreSQL coordinator backend, the whole read-evaluate-write
+    cycle is gated behind a non-blocking scheduler-wide advisory lock
+    (correctness contract item 6, DEV.3.2) so two scheduler processes never
+    both see the same workflow as due and both dispatch it. This is
+    independent of, and does not substitute for, the per-endpoint/per-vendor
+    admission a dispatched workflow still goes through — it only stops
+    redundant dispatch attempts. The in-memory backend has no such
+    cross-process race to gate.
+    """
+    from utils.coordinator_backend import PostgresCoordinatorBackend, SchedulerLockUnavailable
+
+    backend = services.coordinator.backend
+    if isinstance(backend, PostgresCoordinatorBackend):
+        try:
+            with backend.scheduler_lock():
+                return _evaluate_and_dispatch_due_workflows(runtime_paths, services)
+        except SchedulerLockUnavailable:
+            print("Scheduler: another process is already evaluating the schedule; skipping this cycle.")
+            return []
+    return _evaluate_and_dispatch_due_workflows(runtime_paths, services)
+
+
+def _evaluate_and_dispatch_due_workflows(runtime_paths, services):
+    """The actual read-evaluate-write cycle; see ``_run_scheduler_once``."""
     from datetime import datetime, timezone
 
     from utils.collection_executor import (
@@ -563,6 +588,17 @@ def main(argv=None, *, runtime_services=None, provenance="manual", admission_run
         ),
     )
     parser.add_argument(
+        "--compliance-trend-reconstruct",
+        action="store_true",
+        help=(
+            "Offline retro-fill of compliance_overview.history from PAN configuration snapshots "
+            "already in the content-addressed store. PAN baseline rule-pack controls only "
+            "(no alignment, no CP, no assignment/waiver or CE.1 check replay); records are "
+            "stamped reconstructed=true and never affect the live trend delta. "
+            "No network, no credentials. Safe to re-run (idempotent)."
+        ),
+    )
+    parser.add_argument(
         "--scheduler-once",
         action="store_true",
         help=(
@@ -580,6 +616,7 @@ def main(argv=None, *, runtime_services=None, provenance="manual", admission_run
         args.restore_readiness_check,
         args.recovery_store_check,
         args.recovery_validate,
+        args.compliance_trend_reconstruct,
     ))
     if maintenance_modes > 1:
         parser.error("Choose only one repository/storage maintenance mode")
@@ -643,6 +680,7 @@ def main(argv=None, *, runtime_services=None, provenance="manual", admission_run
     if args.recovery_collect and (
         args.cp_config_probe or args.cp_config_collect or args.render_only
         or args.only != "all" or args.storage_analyze or args.storage_deduplicate or args.apply
+        or args.compliance_trend_reconstruct
     ):
         parser.error("--recovery-collect cannot be combined with other collection/render/storage modes")
     if args.scheduler_once and (
@@ -658,9 +696,15 @@ def main(argv=None, *, runtime_services=None, provenance="manual", admission_run
         or args.cp_config_probe
         or args.cp_config_collect
         or args.render_only
+        or args.compliance_trend_reconstruct
         or args.only != "all"
     ):
         parser.error("--scheduler-once cannot be combined with collection, render, or maintenance modes")
+    if args.compliance_trend_reconstruct and (
+        args.cp_config_probe or args.cp_config_collect or args.render_only or args.apply or args.only != "all"
+        or args.recovery_collect
+    ):
+        parser.error("--compliance-trend-reconstruct cannot be combined with collection/render modes")
 
     # Repository privacy validation is deliberately local/offline and returns
     # before RuntimeRoot creation, credential prompts, or any collector import.
@@ -916,15 +960,43 @@ def main(argv=None, *, runtime_services=None, provenance="manual", admission_run
         print("No network access performed. No artifact bytes or key material was printed.")
         raise SystemExit(1 if artifacts_with_a_failed_check else 0)
 
+    if args.compliance_trend_reconstruct:
+        from utils.compliance_history import append_reconstructed
+        from utils.compliance_trend_reconstruction import RECONSTRUCTION_SCOPE, reconstruct_pan_baseline_records
+        print(f"=== SECURITYEXPERT COMPLIANCE TREND RETRO-FILL ({RECONSTRUCTION_SCOPE}) — PHASE 0.7.7 ===\n")
+        records = reconstruct_pan_baseline_records()
+        appended = append_reconstructed(runtime_paths.data_root, records)
+        print(f"Reconstructed buckets found: {len(records)}")
+        print(f"New records appended:        {appended}")
+        print(f"Already present (skipped):   {len(records) - appended}")
+        print(
+            "\nScope: PAN devices only, the ten deterministic baseline rule-pack controls only. "
+            "No alignment, no CP, no assignment/waiver or CE.1 check replay. Records are stamped "
+            "reconstructed=true and never affect the live trend delta."
+        )
+        return
+
     from utils.collection_executor import (
+        CollectionCoordinator,
         Provenance,
         RuntimeCollectionServices,
         SchedulerPolicyError,
         execute_admitted_collection,
         load_scheduler_policy,
+        select_coordinator_backend,
     )
+    from utils.coordinator_backend import CoordinatorBackendError
 
-    services = runtime_services or RuntimeCollectionServices()
+    if runtime_services is not None:
+        services = runtime_services
+    else:
+        # SECURITYEXPERT_COORDINATOR_BACKEND=postgres opts into the DEV.3.2
+        # cross-process backend; default 'memory' is the unchanged 0.6.1C path.
+        try:
+            backend = select_coordinator_backend(data_root=runtime_paths.data_root)
+        except CoordinatorBackendError as exc:
+            parser.error(str(exc))
+        services = RuntimeCollectionServices(coordinator=CollectionCoordinator(backend))
     try:
         services.scheduler_policy = load_scheduler_policy(runtime_paths.data_root)
     except SchedulerPolicyError as exc:

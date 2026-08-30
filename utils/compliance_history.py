@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-HISTORY_SCHEMA_VERSION = "0.7.5"
+HISTORY_SCHEMA_VERSION = "0.7.7"
 LEDGER_RELATIVE_PATH = "state/compliance_history.json"
 MAX_RECORDS = 200          # ledger cap; oldest trimmed on append
 PAYLOAD_RECORD_LIMIT = 30  # most-recent N surfaced in the payload
@@ -121,6 +121,45 @@ def append_run(data_root: Any, record: dict[str, Any]) -> None:
         pass
 
 
+def append_reconstructed(data_root: Any, records: list[dict[str, Any]]) -> int:
+    """0.7.7 -- batch-append offline-reconstructed records, idempotently.
+
+    Each record is expected to carry ``reconstructed: True`` and a
+    ``run_id`` of the form ``"reconstructed:<bucket_start_iso>"`` (see
+    ``utils.compliance_trend_reconstruction``). A record whose ``run_id``
+    already exists in the ledger is skipped, so re-running the batch job is
+    always safe. Returns the number of records actually appended.
+
+    Same fail-safe contract as ``append_run``: an ``OSError`` while writing
+    is swallowed (reconstruction is a convenience, not essential).
+    """
+    existing = load_history(data_root)
+    existing_run_ids = {str(r.get("run_id")) for r in existing if r.get("run_id")}
+    new_records = [
+        dict(r) for r in records
+        if str(r.get("run_id") or "") not in existing_run_ids
+    ]
+    if not new_records:
+        return 0
+    combined = existing + new_records
+    combined.sort(key=lambda r: str(r.get("collected_at")))
+    combined = combined[-MAX_RECORDS:]
+    payload = {
+        "schema_version": HISTORY_SCHEMA_VERSION,
+        "updated_at": _utc_now_iso(),
+        "records": combined,
+    }
+    path = _ledger_path(data_root)
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+        tmp.replace(path)
+    except OSError:
+        return 0
+    return len(new_records)
+
+
 def _project_record(record: Any) -> dict[str, Any]:
     r = _as_dict(record)
     at = str(r.get("collected_at") or "")
@@ -135,6 +174,10 @@ def _project_record(record: Any) -> dict[str, Any]:
         "total_controls": _int(r.get("total_controls")),
         "catalog_version": r.get("catalog_version"),
         "framework_catalog_version": r.get("framework_catalog_version"),
+        # 0.7.7 -- reconstructed (offline, narrower-methodology) vs a live
+        # checkpoint record. Missing on every pre-0.7.7 record -> False.
+        "reconstructed": bool(r.get("reconstructed", False)),
+        "reconstruction_scope": r.get("reconstruction_scope"),
     }
 
 
@@ -154,8 +197,12 @@ def history_view(
     """
     records = [_project_record(r) for r in (history or [])][-limit:]
     trend: dict[str, Any] | None = None
-    if records and current_aligned is not None:
-        prev = records[-1]
+    # 0.7.7 -- a reconstructed record's methodology (PAN baseline-only, no
+    # alignment/assignment/CE.1) differs from a live checkpoint's; comparing
+    # against one would produce a misleading delta. Always trend against the
+    # newest *live* record, even if reconstructed records are newer in time.
+    prev = next((r for r in reversed(records) if not r["reconstructed"]), None)
+    if prev is not None and current_aligned is not None:
         delta_aligned = round(float(current_aligned) - prev["aligned_percent"], 1)
         delta_risk = round(float(current_risk_weighted or 0.0) - prev["risk_weighted_alignment_percent"], 1)
         trend = {
