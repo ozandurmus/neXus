@@ -111,10 +111,10 @@
       "id": "linux_container_image",
       "category": "Deployment / Architecture",
       "title": "Linux worker image + Compose (single-container first migration)",
-      "status": "planned",
+      "status": "automated_validated",
       "priority": "P1",
       "target": "DEV.3.1",
-      "note": "python:3.12-slim (matches the validated baseline; lxml ships manylinux wheels so no build toolchain). One image runs the existing sequential main.py pipeline with SECURITYEXPERT_RUNTIME_ROOT pointed at a mounted volume; bundled checkpoint/scripts/cp_inventory.sh included in the image. Compose: worker + nginx (serves the static output volume) + external timer calling --scheduler-once. No collector-semantic change. RunContext only exists for --only all, so the first container runs the full pipeline, not split planes. Depends on noninteractive_runtime_config."
+      "note": "AUTOMATED_VALIDATED 2026-08-30 (contract: docs/history/phase/DEV3_1_LINUX_CONTAINER_IMAGE.md). Shipped: Dockerfile (python:3.12-slim, no build toolchain needed -- lxml/cryptography/paramiko all install from manylinux wheels; idle CMD by default), .dockerignore, docker-compose.yml (worker + nginx:1.27-alpine sharing a named runtime volume, nginx read-only and bound to 127.0.0.1:8080 only pending DEPLOY.1A's authenticated-viewer boundary), deploy/nginx/default.conf, updated .env.example. No collector/transport/retry/timeout/concurrency change. Verified end-to-end this session: real dependency install succeeded in-container; python main.py --repository-privacy-check passed inside the container using only env-var config (DEV.2.1); the actual committed docker-compose.yml brought both services up, exec'd into worker, confirmed --render-only correctly refuses without a prior checkpoint, and confirmed nginx serves the shared volume read-only (403 on empty output/, 200 once an index.html is written from worker). This cloud sandbox's own TLS-intercepting proxy blocked a plain `docker build` here; verification used a throwaway, non-committed build workaround (--network=host + a temporary CA trust) that touched no committed file -- explicitly not baked into the shipped Dockerfile since it is sandbox-specific, not relevant to a real deployment target. Real-device checkpoint inside the container remains owed (on_hardware_real_env_validation, same class of gap as every other item needing MDS/Panorama reachability)."
     },
     {
       "id": "distributed_endpoint_lock_and_job_store",
