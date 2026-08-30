@@ -270,22 +270,18 @@ the RB.x builds were built against.
 
 ## 5. Exact next action
 
-**This merge still needs, before it is pushed:**
-1. Run the full suite fresh on the merged tree (`py -m pytest -q` or the
-   sandbox venv equivalent) — neither side's "green" evidence covers the
-   *merged* result yet.
-2. Re-run the repository privacy gate on the merged tree.
-3. Spot-check `utils/collection_executor.py`'s clean auto-merge is actually
-   correct (both `ALLOWLISTED_WORKFLOWS` additions and the backend-selection
-   changes present and non-conflicting) — auto-merge succeeding syntactically
-   doesn't guarantee semantic correctness.
-4. Push the merge commit to `claude/deploy-persistent-secret-material-3rtfrs`
-   (PR #15) and confirm GitHub reports it mergeable again.
+**Merge complete, pushed, verified.** `c84a903` on
+`claude/deploy-persistent-secret-material-3rtfrs`; full suite on the merged
+tree: 763 passed, 11 skipped, 2 pre-existing unrelated failures (unchanged);
+privacy gate PASS/0; `utils/collection_executor.py`'s clean auto-merge
+spot-checked correct (`ALLOWLISTED_WORKFLOWS` + backend selection coexist).
+`PR #15` reports `mergeable_state: "clean"` against `main`. **Not merged to
+`main` yet** — that step is the user's, not this session's.
 
-**After that: fresh chat recommended either way.** Two independent
-multi-build sessions closed here; whichever objective is picked next
-(`RB.3`/`D3`, `RB.5`, `DEV.3.3`, CE.2) is distinct and deserves its own
-contract and clean context.
+**Fresh chat recommended.** Two independent multi-build sessions closed
+here; whichever objective is picked next (`RB.3`/`D3`, `RB.5`, `DEV.3.3`,
+CE.2) is distinct and deserves its own contract and clean context. First
+check whether `PR #15` merged in the meantime.
 
 ## 6. main merge decision + Git dispatch
 
@@ -294,10 +290,12 @@ contract and clean context.
   merge, but don't override newly written code") after confirming `main`
   had moved and PR #15 was reported `mergeable_state: dirty`. Resolved by
   hand, keeping both sides' content, not picking one over the other.
-- PR #15 stays open at `https://github.com/ozandurmus/neXus/pull/15` — the
-  user explicitly chose "open a PR" over a direct push earlier this session,
-  matching this repo's own established convention. Do not merge #15 to
-  `main` without the user's explicit go-ahead in that session.
+  Pushed as `c84a903`; PR #15 now reports `mergeable_state: "clean"`.
+- PR #15 stays open at `https://github.com/ozandurmus/neXus/pull/15`, ready
+  to merge — the user explicitly chose "open a PR" over a direct push
+  earlier this session, matching this repo's own established convention.
+  **Do not merge #15 to `main` without the user's explicit go-ahead** in
+  whatever session picks this up next.
 - `bun.lock` + `package.json` under `tools/render-harness/` are committed;
   `node_modules/` is not. Delete gitignored `data/`+`logs/` before the
   privacy gate.
