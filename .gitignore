@@ -8,6 +8,14 @@
 /.cas/
 /support_bundles/
 
+# RB.1 recovery-plane store (docs/design/BACKUP_RECOVERY_CONTRACTS.md §2) --
+# lives on SECURITYEXPERT_RECOVERY_ROOT, physically separate from the repo,
+# but ignore it here too in case a local/dev recovery root is ever pointed
+# inside the checkout by mistake.
+/recovery/
+/vault/
+*.enc
+
 # Keep repository-safe placeholders/examples only when intentionally added
 !/.gitkeep
 

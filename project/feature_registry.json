@@ -513,11 +513,11 @@
     {
       "id": "native_backup_foundation",
       "title": "Vendor-Native Backup Foundation",
-      "status": "planned",
+      "status": "in_progress",
       "target": "RB.1-RB.3 (rebase of original 0.6.0B)",
       "weight": 10,
       "summary": "Encrypted recovery plane separate from the evidence plane: vendor-native recovery artifacts, manifests, integrity validation, retention/immutability and restore-readiness evidence.",
-      "why": "Configuration evidence is deliberately redacted (secrets_redacted: True) and therefore NON-RESTORABLE by design. It is not a recovery backup, and the Configuration module's existence makes it easy to assume otherwise. docs/design/BACKUP_AND_RECOVERY_ARCHITECTURE.md + docs/design/BACKUP_RECOVERY_CONTRACTS.md (design frozen 2026-08-30).",
+      "why": "Configuration evidence is deliberately redacted (secrets_redacted: True) and therefore NON-RESTORABLE by design. It is not a recovery backup, and the Configuration module's existence makes it easy to assume otherwise. docs/design/BACKUP_AND_RECOVERY_ARCHITECTURE.md + docs/design/BACKUP_RECOVERY_CONTRACTS.md (design frozen 2026-08-30). RB.1 landed 2026-08-30: utils/recovery_store.py + recovery_crypto.py (AES-256-GCM envelope encryption) + recovery_manifest.py + recovery_retention.py + main.py --recovery-store-check + resolve_recovery_root (utils/runtime_paths.py). Store/encryption/manifest/retention infrastructure only -- no collector calls it yet (RB.2/RB.3 gated).",
       "criteria": [
         {
           "id": "pan_export",
