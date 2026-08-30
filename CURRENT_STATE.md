@@ -23,8 +23,16 @@ timeline.
 
 ## Active build
 
-**None open.** Last landed: `0.7.6a — Render harness + uitest topology matrix`
-— **AUTOMATED_VALIDATED** (2026-08-30), `origin/main` `671fd6c`.
+**None open.** Last landed: `immutable_store_permission — evidence-store
+snapshot-publish retry` — **AUTOMATED_VALIDATED** (2026-08-30, this session,
+not yet pushed). `ConfigEvidenceStore._write_snapshot`'s directory-publish
+`os.replace(tmp_dir, final_dir)` now retries on transient lock the same way
+`_ensure_blob`'s blob write already did (`_replace_with_retry`, 3 attempts,
+0.1s exponential backoff) — closes the standing P1 intermittent
+`PermissionError`. `project/build_history.json` entry `immutable_store_permission`.
+
+Prior: `0.7.6a — Render harness + uitest topology matrix` —
+**AUTOMATED_VALIDATED** (2026-08-30), `origin/main` `671fd6c`.
 Contract + impl record: `docs/history/phase/0_7_6_RENDER_HARNESS.md` (§4).
 
 Motivated by `0.7.4a`: the report is one inline `<script>`; a parse failure or

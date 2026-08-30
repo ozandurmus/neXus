@@ -99,9 +99,9 @@ the user for review first.
   command-primitive registry, opt-in `--compliance-probe`. **Blocked on
   `cp_device_interaction_safety` (P0) + the network-device command gate.**
 - **CE.3** / **CE.4** — `DEPLOY.1A` / OP.2-gated.
-- **Standing doable-now:** `immutable_store_permission` (P1 bug),
-  `html_render_performance` (P2), `inventory_exclusions_ui` /
-  `overview_device_lifecycle_enrichment` (P1 UI).
+- **Standing doable-now:** `immutable_store_permission` (P1 bug) — CLOSED this
+  session, see build_history. Remaining: `html_render_performance` (P2),
+  `inventory_exclusions_ui` / `overview_device_lifecycle_enrichment` (P1 UI).
 - **OP.x — Controlled Failover:** design done, approval pending
   (`docs/design/FAILOVER_ENGINE_ARCHITECTURE.md`; `roadmap.json` `open_decisions`).
 

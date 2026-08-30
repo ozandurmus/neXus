@@ -245,9 +245,10 @@
       "id": "immutable_store_permission",
       "category": "Reliability",
       "title": "Investigate intermittent local immutable evidence-store PermissionError",
-      "status": "planned",
+      "status": "automated_validated",
       "priority": "P1",
-      "target": "0.6.x hardening"
+      "target": "0.6.x hardening",
+      "note": "AUTOMATED_VALIDATED 2026-08-30. Root cause: ConfigEvidenceStore._ensure_blob already retried os.replace on transient (OSError, PermissionError) for the content-addressed blob write, but the snapshot-directory publish right after it (os.replace(tmp_dir, final_dir) in _write_snapshot) had no retry at all -- a single AV/indexer lock there failed the whole snapshot write, surfacing as the LOCAL_IMMUTABLE_EVIDENCE_STORE / local_filesystem_permission_or_lock failure already classified in configuration/panorama_config_collector.py. Fix: extracted the existing bounded retry (3 attempts, 0.1s exponential backoff) into ConfigEvidenceStore._replace_with_retry and applied it to the directory-publish os.replace call; _ensure_blob's own loop is unchanged. Two new regression tests in tests/test_phase0_6_0a4_3_2_content_addressed_storage.py: a transient-then-success case (self-heals, snapshot still lands) and a persistent-lock case (still raises cleanly, no leftover .tmp- directory). No collector/network/CAS-schema/UI change. Evidence: py -m pytest -q: 552 passed, 2 skipped, 2 failed (both pre-existing and reproduced identically on the unmodified baseline -- test-order pollution in test_phase0_6_1c_discovery_capability_ui.py / test_phase0_7_5_compliance_trend.py, out of scope for this fix; baseline is 550 passed / same 2 failures, so this change is a net +2 passing from the new regression tests with zero regressions)."
     },
     {
       "id": "discovery_lifecycle",
