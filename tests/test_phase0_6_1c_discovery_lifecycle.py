@@ -12,6 +12,7 @@ from utils.discovery_lifecycle import (
     update_observed,
 )
 from utils.capability_registry import (
+    PLATFORM_FAMILY_LABELS,
     CapabilityProfile,
     CapabilityStore,
     CollectionMode,
@@ -19,6 +20,7 @@ from utils.capability_registry import (
     PlanReasonCode,
     ShellType,
     plan_collection,
+    platform_fields_from_classification,
 )
 
 
@@ -458,3 +460,99 @@ def test_capability_store_from_dict_skips_bad_profiles():
     assert store.get("checkpoint", "DEV-GOOD") is not None
     # Empty canonical_id skipped; no crash.
     assert len(store.all_profiles()) == 1
+
+
+# ---------------------------------------------------------------------------
+# cp_unknown_platform (0.6.1C): platform_family/platform_confidence
+# ---------------------------------------------------------------------------
+
+def test_platform_fields_from_classification_extracts_family_and_confidence():
+    classification = {
+        "family": "gaia_embedded", "label": "Quantum Spark / Gaia Embedded",
+        "confidence": "HIGH", "evidence": "explicit_product_or_os_marker",
+    }
+    family, confidence = platform_fields_from_classification(classification)
+    assert family == "gaia_embedded"
+    assert confidence == "HIGH"
+
+
+def test_platform_fields_from_classification_handles_unknown_family():
+    # _classify_platform()'s own fallback shape when nothing matched.
+    classification = {
+        "family": "unknown", "label": "Check Point platform",
+        "confidence": "LOW", "evidence": "insufficient_platform_evidence",
+    }
+    family, confidence = platform_fields_from_classification(classification)
+    assert family == "unknown"
+    assert confidence == "LOW"
+
+
+def test_platform_fields_from_classification_none_input_yields_none():
+    assert platform_fields_from_classification(None) == (None, None)
+    assert platform_fields_from_classification({}) == (None, None)
+
+
+def test_capability_profile_platform_fields_default_to_unclassified():
+    p = CapabilityProfile(vendor="checkpoint", canonical_id="DEV-R")
+    assert p.platform_family is None
+    assert p.platform_confidence is None
+
+
+def test_capability_profile_platform_fields_roundtrip():
+    p = CapabilityProfile(
+        vendor="checkpoint", canonical_id="DEV-S",
+        platform_family="gaia", platform_confidence="MEDIUM",
+    )
+    d = p.to_dict()
+    p2 = CapabilityProfile.from_dict(d)
+    assert p2.platform_family == "gaia"
+    assert p2.platform_confidence == "MEDIUM"
+
+
+@pytest.mark.parametrize("platform_family", [None, "unknown", "gaia", "gaia_embedded"])
+def test_platform_family_never_changes_the_collection_plan(platform_family):
+    """Correctness contract: platform_family must be fully independent of
+    the collection plan. Two profiles identical except for platform_family
+    must produce the identical CollectionPlan.
+    """
+    baseline = _profile(shell=ShellType.EXPERT, confidence=80)
+    with_platform = CapabilityProfile(
+        vendor=baseline.vendor, canonical_id=baseline.canonical_id,
+        shell_type=baseline.shell_type,
+        direct_collection_capable=baseline.direct_collection_capable,
+        vsx_vsenv_capable=baseline.vsx_vsenv_capable,
+        pan_vsys_capable=baseline.pan_vsys_capable,
+        standby_member=baseline.standby_member,
+        had_identity_failure=baseline.had_identity_failure,
+        confidence=baseline.confidence,
+        platform_family=platform_family,
+    )
+    plan_baseline = plan_collection(baseline, LifecycleState.DISCOVERED)
+    plan_with_platform = plan_collection(with_platform, LifecycleState.DISCOVERED)
+    assert plan_with_platform == plan_baseline
+
+
+def test_platform_family_labels_cover_every_classify_platform_family():
+    # Mirrors configuration.checkpoint_config_collector._classify_platform()'s
+    # three possible family values.
+    assert set(PLATFORM_FAMILY_LABELS) == {"gaia_embedded", "gaia", "unknown"}
+
+
+def test_platform_fields_from_classification_accepts_real_classify_platform_output():
+    """Integration guard: the real collector's _classify_platform() output
+    must remain a valid input to platform_fields_from_classification() --
+    catches drift if that function's return shape ever changes.
+    """
+    from configuration.checkpoint_config_collector import _classify_platform
+
+    unknown = _classify_platform(version_stdout="", asset_stdout="", model=None)
+    family, confidence = platform_fields_from_classification(unknown)
+    assert family == "unknown"
+    assert family in PLATFORM_FAMILY_LABELS
+
+    spark = _classify_platform(
+        version_stdout="", asset_stdout="Appliance Name: Quantum Spark 1600", model=None
+    )
+    family, confidence = platform_fields_from_classification(spark)
+    assert family == "gaia_embedded"
+    assert family in PLATFORM_FAMILY_LABELS
