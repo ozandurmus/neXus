@@ -1,0 +1,523 @@
+{
+  "schema_version": "0.6.1B",
+  "available": true,
+  "local_only": true,
+  "raw_configuration_blob_included": false,
+  "value_hashes_included": false,
+  "structured_current_values_included": true,
+  "workflow": {
+    "mode": "uitest",
+    "label": "UI test bundle",
+    "checkpoint": false,
+    "mixed_cycle": true
+  },
+  "privacy": {
+    "raw_configuration_blob_included": false,
+    "credentials_included": false,
+    "secret_values_redacted": true
+  },
+  "fleet": {
+    "tls_verify": true,
+    "selected": 3,
+    "success": 3,
+    "failed": 0,
+    "primary_evidence_success": 3,
+    "first": 0,
+    "same": 3,
+    "changed": 0,
+    "checkpoint_host_key_policy": "strict_known_hosts",
+    "checkpoint_production_trust_ready": true
+  },
+  "backup": {
+    "status": "not_configured",
+    "phase": "0.6.0B"
+  },
+  "devices": [
+    {
+      "vendor": "check_point",
+      "vendor_key": "check_point",
+      "name": "cp-edge-01",
+      "display_name": "cp-edge-01",
+      "device_name": "cp-edge-01",
+      "entity_type": "gateway",
+      "platform_family": "gaia",
+      "serial": "SN-CP-UITEST-1",
+      "model": "CP-6900",
+      "sw_version": "R81.20",
+      "ha_role": "active",
+      "management_ip": "192.0.2.11",
+      "connected": true,
+      "host_key_policy": "strict_known_hosts",
+      "current_configuration": {
+        "status": "available",
+        "sections": [
+          {
+            "id": "system",
+            "settings": [
+              {
+                "setting": "Hostname",
+                "value": "CP-EDGE-01"
+              },
+              {
+                "setting": "Timezone",
+                "value": "Europe/Istanbul"
+              }
+            ]
+          },
+          {
+            "id": "dns",
+            "settings": [
+              {
+                "setting": "Primary DNS",
+                "value": "203.0.113.53"
+              },
+              {
+                "setting": "Search Domain",
+                "value": "corp.example"
+              }
+            ]
+          },
+          {
+            "id": "ntp",
+            "settings": [
+              {
+                "setting": "Primary NTP Server",
+                "value": "203.0.113.10"
+              },
+              {
+                "setting": "Secondary NTP Server",
+                "value": "203.0.113.11"
+              }
+            ]
+          },
+          {
+            "id": "authentication",
+            "settings": [
+              {
+                "setting": "AAA Type",
+                "value": "radius"
+              },
+              {
+                "setting": "Failed Attempts Lockout",
+                "value": "5"
+              }
+            ]
+          },
+          {
+            "id": "management",
+            "settings": [
+              {
+                "setting": "Telnet Disabled",
+                "value": "yes"
+              },
+              {
+                "setting": "Inactivity Timeout",
+                "value": "10"
+              },
+              {
+                "setting": "SSH Version",
+                "value": "v2"
+              },
+              {
+                "setting": "SSH Ciphers",
+                "value": "aes256-ctr,aes128-ctr"
+              }
+            ]
+          },
+          {
+            "id": "password_policy",
+            "settings": [
+              {
+                "setting": "Minimum Password Length",
+                "value": "12"
+              },
+              {
+                "setting": "Password Complexity",
+                "value": "enabled"
+              },
+              {
+                "setting": "Password History Depth",
+                "value": "8"
+              }
+            ]
+          },
+          {
+            "id": "banner",
+            "settings": [
+              {
+                "setting": "Login Banner Present",
+                "value": "yes"
+              },
+              {
+                "setting": "Login Banner Length",
+                "value": "medium"
+              }
+            ]
+          },
+          {
+            "id": "services",
+            "settings": [
+              {
+                "setting": "Telnet",
+                "value": "disabled"
+              },
+              {
+                "setting": "HTTP",
+                "value": "disabled"
+              }
+            ]
+          },
+          {
+            "id": "logging",
+            "settings": [
+              {
+                "setting": "Logging Audit",
+                "value": "enabled"
+              },
+              {
+                "setting": "Syslog Server",
+                "value": "203.0.113.90"
+              }
+            ]
+          }
+        ]
+      },
+      "alignment": {
+        "counts": {
+          "ALIGNED": 2,
+          "LOCAL_OVERRIDE": 1,
+          "MEMBER_SPECIFIC": 1
+        },
+        "findings": [
+          {
+            "alignment_key": "deviceconfig/system/hostname",
+            "classification": "ALIGNED",
+            "category": "system"
+          },
+          {
+            "alignment_key": "deviceconfig/system/dns-setting/servers/primary",
+            "classification": "ALIGNED",
+            "category": "dns"
+          },
+          {
+            "alignment_key": "deviceconfig/system/permitted-ip/entry/description",
+            "classification": "LOCAL_OVERRIDE",
+            "category": "system",
+            "reason": "effective_differs_from_expected_and_matches_local_active_scalar"
+          },
+          {
+            "alignment_key": "deviceconfig/high-availability/peer-ip",
+            "classification": "MEMBER_SPECIFIC",
+            "category": "ha",
+            "reason": "member_relative_ha_setting"
+          }
+        ]
+      }
+    },
+    {
+      "vendor": "check_point",
+      "vendor_key": "check_point",
+      "name": "cp-core-01",
+      "display_name": "cp-core-CLS",
+      "device_name": "cp-core-01",
+      "parent_name": "cp-core",
+      "entity_type": "cluster_member",
+      "platform_family": "gaia",
+      "serial": "SN-CP-UITEST-2",
+      "model": "CP-6900",
+      "sw_version": "R81.20",
+      "ha_role": "active",
+      "management_ip": "192.0.2.21",
+      "connected": true,
+      "host_key_policy": "strict_known_hosts",
+      "current_configuration": {
+        "status": "available",
+        "sections": [
+          {
+            "id": "system",
+            "settings": [
+              {
+                "setting": "Hostname",
+                "value": "CP-EDGE-01"
+              },
+              {
+                "setting": "Timezone",
+                "value": "Europe/Istanbul"
+              }
+            ]
+          },
+          {
+            "id": "dns",
+            "settings": [
+              {
+                "setting": "Primary DNS",
+                "value": "203.0.113.53"
+              },
+              {
+                "setting": "Search Domain",
+                "value": "corp.example"
+              }
+            ]
+          },
+          {
+            "id": "ntp",
+            "settings": [
+              {
+                "setting": "Primary NTP Server",
+                "value": "203.0.113.10"
+              },
+              {
+                "setting": "Secondary NTP Server",
+                "value": "203.0.113.11"
+              }
+            ]
+          },
+          {
+            "id": "authentication",
+            "settings": [
+              {
+                "setting": "AAA Type",
+                "value": "radius"
+              },
+              {
+                "setting": "Failed Attempts Lockout",
+                "value": "5"
+              }
+            ]
+          },
+          {
+            "id": "management",
+            "settings": [
+              {
+                "setting": "Telnet Disabled",
+                "value": "yes"
+              },
+              {
+                "setting": "Inactivity Timeout",
+                "value": "10"
+              },
+              {
+                "setting": "SSH Version",
+                "value": "v2"
+              },
+              {
+                "setting": "SSH Ciphers",
+                "value": "aes256-ctr,aes128-ctr"
+              }
+            ]
+          },
+          {
+            "id": "password_policy",
+            "settings": [
+              {
+                "setting": "Minimum Password Length",
+                "value": "12"
+              },
+              {
+                "setting": "Password Complexity",
+                "value": "enabled"
+              },
+              {
+                "setting": "Password History Depth",
+                "value": "8"
+              }
+            ]
+          },
+          {
+            "id": "banner",
+            "settings": [
+              {
+                "setting": "Login Banner Present",
+                "value": "yes"
+              },
+              {
+                "setting": "Login Banner Length",
+                "value": "medium"
+              }
+            ]
+          },
+          {
+            "id": "services",
+            "settings": [
+              {
+                "setting": "Telnet",
+                "value": "disabled"
+              },
+              {
+                "setting": "HTTP",
+                "value": "disabled"
+              }
+            ]
+          },
+          {
+            "id": "logging",
+            "settings": [
+              {
+                "setting": "Logging Audit",
+                "value": "enabled"
+              },
+              {
+                "setting": "Syslog Server",
+                "value": "203.0.113.90"
+              }
+            ]
+          }
+        ]
+      },
+      "alignment": {
+        "counts": {
+          "ALIGNED": 3
+        },
+        "findings": [
+          {
+            "alignment_key": "deviceconfig/system/hostname",
+            "classification": "ALIGNED",
+            "category": "system"
+          },
+          {
+            "alignment_key": "deviceconfig/system/dns-setting/servers/primary",
+            "classification": "ALIGNED",
+            "category": "dns"
+          }
+        ]
+      }
+    },
+    {
+      "vendor": "palo_alto",
+      "vendor_key": "palo_alto",
+      "name": "pan-edge-01",
+      "display_name": "pan-edge-01",
+      "device_name": "pan-edge-01",
+      "entity_type": "firewall",
+      "platform_family": "pan_os",
+      "serial": "UITEST00000001",
+      "model": "PA-5220",
+      "sw_version": "11.1.3",
+      "ha_role": "active",
+      "management_ip": "192.0.2.40",
+      "connected": true,
+      "current_configuration": {
+        "status": "available",
+        "sections": [
+          {
+            "id": "system",
+            "settings": [
+              {
+                "setting": "Hostname",
+                "value": "PAN-EDGE-01"
+              },
+              {
+                "setting": "Domain",
+                "value": "corp.example"
+              },
+              {
+                "setting": "Timezone",
+                "value": "Europe/Istanbul"
+              }
+            ]
+          },
+          {
+            "id": "dns",
+            "settings": [
+              {
+                "setting": "Primary DNS",
+                "value": "203.0.113.53"
+              },
+              {
+                "setting": "Secondary DNS",
+                "value": "203.0.113.54"
+              }
+            ]
+          },
+          {
+            "id": "ntp",
+            "settings": [
+              {
+                "setting": "Primary NTP Server",
+                "value": "203.0.113.10"
+              }
+            ]
+          },
+          {
+            "id": "management",
+            "settings": [
+              {
+                "setting": "Permitted IP",
+                "value": "192.0.2.0/24"
+              },
+              {
+                "setting": "Idle Timeout",
+                "value": "10"
+              }
+            ]
+          },
+          {
+            "id": "password_policy",
+            "settings": [
+              {
+                "setting": "Minimum Password Length",
+                "value": "8"
+              },
+              {
+                "setting": "Password Complexity",
+                "value": "disabled"
+              }
+            ]
+          },
+          {
+            "id": "banner",
+            "settings": [
+              {
+                "setting": "Login Banner Present",
+                "value": "no"
+              }
+            ]
+          },
+          {
+            "id": "services",
+            "settings": [
+              {
+                "setting": "SNMP",
+                "value": "v3"
+              },
+              {
+                "setting": "HTTP",
+                "value": "disabled"
+              }
+            ]
+          }
+        ]
+      },
+      "alignment": {
+        "counts": {
+          "ALIGNED": 4,
+          "LOCAL_OVERRIDE": 1
+        },
+        "findings": [
+          {
+            "alignment_key": "deviceconfig/system/hostname",
+            "classification": "ALIGNED",
+            "category": "system"
+          },
+          {
+            "alignment_key": "deviceconfig/system/dns-setting/servers/primary",
+            "classification": "ALIGNED",
+            "category": "dns"
+          },
+          {
+            "alignment_key": "deviceconfig/system/permitted-ip/entry/description",
+            "classification": "LOCAL_OVERRIDE",
+            "category": "system",
+            "reason": "effective_differs_from_expected_and_matches_local_active_scalar"
+          },
+          {
+            "alignment_key": "deviceconfig/high-availability/peer-ip",
+            "classification": "MEMBER_SPECIFIC",
+            "category": "ha",
+            "reason": "member_relative_ha_setting"
+          }
+        ]
+      }
+    }
+  ]
+}

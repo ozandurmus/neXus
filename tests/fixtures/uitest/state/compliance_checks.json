@@ -1,0 +1,94 @@
+{
+  "version": 1,
+  "pack_id": "uitest.local",
+  "pack_version": "1",
+  "checks": [
+    {
+      "id": "x_ssh_no_cbc",
+      "title": "SSH management offers no CBC ciphers",
+      "rationale": "CBC-mode SSH ciphers are plaintext-recovery vulnerable.",
+      "severity": "high",
+      "applies_to": {
+        "vendor": [
+          "check_point"
+        ]
+      },
+      "frameworks": [
+        {
+          "framework": "CIS",
+          "reference": "5.1",
+          "applies": true
+        },
+        {
+          "framework": "PCI-DSS",
+          "reference": "1.2.1",
+          "applies": true
+        },
+        {
+          "framework": "BDDK",
+          "reference": "Ağ Güvenliği",
+          "applies": true
+        }
+      ],
+      "evidence": {
+        "combine": "all",
+        "steps": [
+          {
+            "source": "current_configuration.sections[id=management].settings",
+            "select": "value",
+            "assert": {
+              "op": "none_match",
+              "pattern": "(?i)-cbc"
+            }
+          }
+        ]
+      },
+      "verdict": {
+        "on_pass": "PASS",
+        "on_fail": "FINDING",
+        "on_no_evidence": "UNKNOWN"
+      }
+    },
+    {
+      "id": "x_min_two_interfaces",
+      "title": "Device exposes at least two interfaces",
+      "rationale": "A single-interface production firewall is usually a discovery gap.",
+      "severity": "low",
+      "mode": "advisory",
+      "applies_to": {},
+      "frameworks": [
+        {
+          "framework": "CIS",
+          "reference": "5.1",
+          "applies": true
+        },
+        {
+          "framework": "PCI-DSS",
+          "reference": "1.2.1",
+          "applies": true
+        },
+        {
+          "framework": "BDDK",
+          "reference": "Ağ Güvenliği",
+          "applies": true
+        }
+      ],
+      "evidence": {
+        "steps": [
+          {
+            "source": "unified.interfaces",
+            "assert": {
+              "op": "count_gte",
+              "value": 2
+            }
+          }
+        ]
+      },
+      "verdict": {
+        "on_pass": "PASS",
+        "on_fail": "FINDING",
+        "on_no_evidence": "UNKNOWN"
+      }
+    }
+  ]
+}

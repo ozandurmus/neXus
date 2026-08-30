@@ -1,0 +1,114 @@
+{
+  "schema_version": "0.7.5",
+  "updated_at": "2026-07-31T00:00:00Z",
+  "records": [
+    {
+      "run_id": "uitest-1",
+      "collected_at": "2026-06-01T00:00:00Z",
+      "compliance_schema_version": "0.6.6B",
+      "catalog_version": "0.7.2",
+      "framework_catalog_version": "0.7.4",
+      "cells": {
+        "aligned": 14,
+        "finding": 3,
+        "unknown": 2,
+        "planned": 1,
+        "waived": 0
+      },
+      "aligned_percent": 71.0,
+      "risk_weighted_alignment_percent": 68.0,
+      "monitored_controls": 12,
+      "total_controls": 18,
+      "subjects": 3,
+      "by_framework": {
+        "CIS": {
+          "aligned": 4,
+          "finding": 2,
+          "coverage": "PARTIALLY_COVERED"
+        },
+        "PCI-DSS": {
+          "aligned": 3,
+          "finding": 1,
+          "coverage": "PARTIALLY_COVERED"
+        },
+        "BDDK": {
+          "aligned": 2,
+          "finding": 1,
+          "coverage": "UNCOVERED"
+        }
+      }
+    },
+    {
+      "run_id": "uitest-2",
+      "collected_at": "2026-07-01T00:00:00Z",
+      "compliance_schema_version": "0.6.6B",
+      "catalog_version": "0.7.2",
+      "framework_catalog_version": "0.7.4",
+      "cells": {
+        "aligned": 15,
+        "finding": 2,
+        "unknown": 2,
+        "planned": 1,
+        "waived": 0
+      },
+      "aligned_percent": 76.5,
+      "risk_weighted_alignment_percent": 73.5,
+      "monitored_controls": 13,
+      "total_controls": 18,
+      "subjects": 3,
+      "by_framework": {
+        "CIS": {
+          "aligned": 5,
+          "finding": 1,
+          "coverage": "PARTIALLY_COVERED"
+        },
+        "PCI-DSS": {
+          "aligned": 4,
+          "finding": 1,
+          "coverage": "PARTIALLY_COVERED"
+        },
+        "BDDK": {
+          "aligned": 2,
+          "finding": 1,
+          "coverage": "UNCOVERED"
+        }
+      }
+    },
+    {
+      "run_id": "uitest-3",
+      "collected_at": "2026-07-31T00:00:00Z",
+      "compliance_schema_version": "0.6.6B",
+      "catalog_version": "0.7.2",
+      "framework_catalog_version": "0.7.4",
+      "cells": {
+        "aligned": 16,
+        "finding": 1,
+        "unknown": 2,
+        "planned": 1,
+        "waived": 0
+      },
+      "aligned_percent": 80.0,
+      "risk_weighted_alignment_percent": 77.0,
+      "monitored_controls": 14,
+      "total_controls": 18,
+      "subjects": 3,
+      "by_framework": {
+        "CIS": {
+          "aligned": 6,
+          "finding": 0,
+          "coverage": "PARTIALLY_COVERED"
+        },
+        "PCI-DSS": {
+          "aligned": 5,
+          "finding": 1,
+          "coverage": "PARTIALLY_COVERED"
+        },
+        "BDDK": {
+          "aligned": 2,
+          "finding": 1,
+          "coverage": "UNCOVERED"
+        }
+      }
+    }
+  ]
+}

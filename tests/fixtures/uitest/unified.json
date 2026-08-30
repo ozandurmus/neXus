@@ -1,0 +1,346 @@
+[
+  {
+    "source": "cp",
+    "device": "cp-edge-01",
+    "vsys": "default",
+    "interfaces": [
+      {
+        "name": "eth0",
+        "type": "physical",
+        "state": "up",
+        "ips": [
+          {
+            "ip": "192.0.2.11",
+            "prefix": 24,
+            "network": "192.0.2.0/24"
+          }
+        ]
+      },
+      {
+        "name": "eth1",
+        "type": "physical",
+        "state": "up",
+        "ips": [
+          {
+            "ip": "198.51.100.11",
+            "prefix": 24,
+            "network": "198.51.100.0/24"
+          }
+        ]
+      }
+    ],
+    "routes": [
+      {
+        "network": "0.0.0.0/0",
+        "next_hop": "192.0.2.254",
+        "interface": "eth0",
+        "type": "default"
+      },
+      {
+        "network": "203.0.113.0/24",
+        "next_hop": "198.51.100.254",
+        "interface": "eth1",
+        "type": "static"
+      }
+    ],
+    "inventory_status": {
+      "fresh": true,
+      "data_state": "live",
+      "availability_state": "available",
+      "current_run": "uitest",
+      "current_run_observed": true,
+      "collected_at": "2026-08-30T08:18:12.257238+00:00",
+      "last_successful_collection": "2026-08-30T08:18:12.257238+00:00",
+      "stale_reason": null
+    }
+  },
+  {
+    "source": "cp",
+    "device": "cp-core-01",
+    "vsys": "default",
+    "cluster": "cp-core",
+    "cluster_topology": {
+      "group_id": "uitest01",
+      "display_name": "cp-core-CLS",
+      "name_source": "inferred_member_pattern",
+      "members": [
+        "cp-core-01",
+        "cp-core-02"
+      ],
+      "cma": "CMA-EU",
+      "virtual_interfaces": [
+        {
+          "name": "eth0",
+          "ip": "192.0.2.20",
+          "role": "cluster_virtual"
+        }
+      ]
+    },
+    "interfaces": [
+      {
+        "name": "eth0",
+        "type": "physical",
+        "state": "up",
+        "ips": [
+          {
+            "ip": "192.0.2.21",
+            "prefix": 24,
+            "network": "192.0.2.0/24"
+          }
+        ]
+      },
+      {
+        "name": "eth1",
+        "type": "physical",
+        "state": "up",
+        "ips": [
+          {
+            "ip": "203.0.113.21",
+            "prefix": 24,
+            "network": "203.0.113.0/24"
+          }
+        ]
+      }
+    ],
+    "routes": [
+      {
+        "network": "0.0.0.0/0",
+        "next_hop": "192.0.2.254",
+        "interface": "eth0",
+        "type": "default"
+      }
+    ],
+    "inventory_status": {
+      "fresh": true,
+      "data_state": "live",
+      "availability_state": "available",
+      "current_run": "uitest",
+      "current_run_observed": true,
+      "collected_at": "2026-08-30T08:18:12.257238+00:00",
+      "last_successful_collection": "2026-08-30T08:18:12.257238+00:00",
+      "stale_reason": null
+    }
+  },
+  {
+    "source": "cp",
+    "device": "cp-core-02",
+    "vsys": "default",
+    "cluster": "cp-core",
+    "interfaces": [
+      {
+        "name": "eth0",
+        "type": "physical",
+        "state": "up",
+        "ips": [
+          {
+            "ip": "192.0.2.22",
+            "prefix": 24,
+            "network": "192.0.2.0/24"
+          }
+        ]
+      },
+      {
+        "name": "eth1",
+        "type": "physical",
+        "state": "up",
+        "ips": [
+          {
+            "ip": "203.0.113.22",
+            "prefix": 24,
+            "network": "203.0.113.0/24"
+          }
+        ]
+      }
+    ],
+    "routes": [
+      {
+        "network": "0.0.0.0/0",
+        "next_hop": "192.0.2.254",
+        "interface": "eth0",
+        "type": "default"
+      }
+    ],
+    "inventory_status": {
+      "fresh": false,
+      "data_state": "last_known_good",
+      "availability_state": "communicating",
+      "current_run": "uitest",
+      "current_run_observed": true,
+      "collected_at": null,
+      "last_successful_collection": "2026-08-30T08:18:12.257238+00:00",
+      "stale_reason": "collection_failed"
+    }
+  },
+  {
+    "source": "vsx",
+    "device": "vsx-host-01",
+    "vsys": "VS-PAYMENTS",
+    "vs_id": "2",
+    "cluster": "vsx-host",
+    "interfaces": [
+      {
+        "name": "wrp64",
+        "type": "physical",
+        "state": "up",
+        "ips": [
+          {
+            "ip": "198.51.100.30",
+            "prefix": 24,
+            "network": "198.51.100.0/24"
+          }
+        ]
+      },
+      {
+        "name": "eth2.100",
+        "type": "vlan",
+        "state": "up",
+        "ips": [
+          {
+            "ip": "203.0.113.30",
+            "prefix": 28,
+            "network": "203.0.113.0/28"
+          }
+        ]
+      }
+    ],
+    "routes": [
+      {
+        "network": "0.0.0.0/0",
+        "next_hop": "198.51.100.254",
+        "interface": "wrp64",
+        "type": "default"
+      },
+      {
+        "network": "198.51.100.128/25",
+        "next_hop": "203.0.113.40",
+        "interface": "eth2.100",
+        "type": "static"
+      }
+    ],
+    "inventory_status": {
+      "fresh": true,
+      "data_state": "live",
+      "availability_state": "available",
+      "current_run": "uitest",
+      "current_run_observed": true,
+      "collected_at": "2026-08-30T08:18:12.257238+00:00",
+      "last_successful_collection": "2026-08-30T08:18:12.257238+00:00",
+      "stale_reason": null
+    }
+  },
+  {
+    "source": "panorama",
+    "device": "pan-edge-01",
+    "serial": "UITEST00000001",
+    "management_ip": "192.0.2.40",
+    "interfaces": [
+      {
+        "name": "ethernet1/1",
+        "type": "physical",
+        "state": "up",
+        "ips": [
+          {
+            "ip": "203.0.113.51",
+            "prefix": 24,
+            "network": "203.0.113.0/24"
+          }
+        ],
+        "vr": "default",
+        "vsys": "vsys1",
+        "zone": "untrust",
+        "ip": "203.0.113.51",
+        "prefix": 24,
+        "network": "203.0.113.0/24"
+      },
+      {
+        "name": "ethernet1/2",
+        "type": "physical",
+        "state": "up",
+        "ips": [
+          {
+            "ip": "198.51.100.51",
+            "prefix": 24,
+            "network": "198.51.100.0/24"
+          }
+        ],
+        "vr": "default",
+        "vsys": "vsys1",
+        "zone": "trust",
+        "ip": "198.51.100.51",
+        "prefix": 24,
+        "network": "198.51.100.0/24"
+      }
+    ],
+    "routes": [
+      {
+        "network": "0.0.0.0/0",
+        "next_hop": "203.0.113.254",
+        "interface": "ethernet1/1",
+        "type": "default",
+        "vr": "default"
+      },
+      {
+        "network": "203.0.113.0/25",
+        "next_hop": "198.51.100.254",
+        "interface": "ethernet1/2",
+        "type": "static",
+        "vr": "default"
+      }
+    ],
+    "inventory_status": {
+      "fresh": true,
+      "data_state": "live",
+      "availability_state": "available",
+      "current_run": "uitest",
+      "current_run_observed": true,
+      "collected_at": "2026-08-30T08:18:12.257238+00:00",
+      "last_successful_collection": "2026-08-30T08:18:12.257238+00:00",
+      "stale_reason": null
+    }
+  },
+  {
+    "source": "panorama",
+    "device": "pan-edge-02",
+    "serial": "UITEST00000002",
+    "management_ip": "192.0.2.41",
+    "interfaces": [
+      {
+        "name": "ethernet1/1",
+        "type": "physical",
+        "state": "up",
+        "ips": [
+          {
+            "ip": "203.0.113.52",
+            "prefix": 24,
+            "network": "203.0.113.0/24"
+          }
+        ],
+        "vr": "default",
+        "vsys": "vsys1",
+        "zone": "untrust",
+        "ip": "203.0.113.52",
+        "prefix": 24,
+        "network": "203.0.113.0/24"
+      }
+    ],
+    "routes": [
+      {
+        "network": "0.0.0.0/0",
+        "next_hop": "203.0.113.254",
+        "interface": "ethernet1/1",
+        "type": "default",
+        "vr": "default"
+      }
+    ],
+    "inventory_status": {
+      "fresh": false,
+      "data_state": "no_data",
+      "availability_state": "disconnected",
+      "current_run": "uitest",
+      "current_run_observed": true,
+      "collected_at": null,
+      "last_successful_collection": "2026-08-30T08:18:12.257238+00:00",
+      "stale_reason": "management_disconnected"
+    }
+  }
+]

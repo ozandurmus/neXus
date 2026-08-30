@@ -174,6 +174,26 @@ When the same session already validated Python/runtime terminal setup, do not
 re-bootstrap PATH/interpreter repeatedly. Only apply minimal correction on an
 actual command failure and continue.
 
+## HTML render harness (mandatory for any UI / payload change)
+
+Any build that changes `templates/index.html`, `static/app.js`,
+`static/style.css`, or a payload builder (`configuration_ui` / `compliance` /
+`crypto` / `discovery` / `project_plan`) must show the render harness green
+alongside the full suite:
+
+```
+py -V:3.12 scripts/render_uitest.py --out <dir>
+bun tools/render-harness/check-render.mjs <dir>/output/index.html
+```
+
+`tests/test_html_render_harness.py` runs both (the JSON-validity half needs no
+JS engine; the headless-navigation half skips cleanly when `bun` is absent).
+The generated report is one inline `<script>` — if it fails to parse or throws
+before the nav listeners attach, every button is dead while the page still looks
+loaded (the `0.7.4a` failure). If the change touches a payload field or UI
+module, also extend `tests/fixtures/uitest/` (see its README growth rule) so the
+harness actually exercises the new path.
+
 ## Human / agent responsibility split
 
 AI may perform coherent source edits and local tests. Git must expose exact

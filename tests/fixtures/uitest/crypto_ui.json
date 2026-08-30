@@ -1,0 +1,140 @@
+{
+  "schema_version": "0.7.0",
+  "available": true,
+  "classification": "evidence_backed_crypto_posture",
+  "disclaimer": "Evidence-backed crypto-area evaluation only. Not a certification or complete cryptographic assessment.",
+  "rule_pack": {
+    "pack_id": "securityexpert.crypto.cp-pan",
+    "pack_version": "0.7.0",
+    "schema_version": "1.0",
+    "title": "SecurityExpert CP/PAN cryptographic posture pack",
+    "source": "in_repository_static",
+    "certification_claim": false,
+    "rule_count": 14
+  },
+  "evidence_confidence_model": {
+    "configured": "read from stored device configuration",
+    "negotiated": "from a live security association - future runtime-evidence layer, not in this build",
+    "inferred": "derived from platform/OS facts",
+    "insufficient": "the relevant configuration section was not observed"
+  },
+  "subjects": [
+    {
+      "subject_id": "pan-001",
+      "subject_label": "Configuration subject pan-001",
+      "vendor_key": "palo_alto",
+      "status": "FINDING",
+      "facts": {
+        "ike_crypto_profiles": [
+          {
+            "name": "default",
+            "encryption": [
+              "aes-256-cbc",
+              "aes-256-gcm"
+            ],
+            "hash": [
+              "sha256"
+            ],
+            "dh_group": [
+              "group14"
+            ]
+          }
+        ],
+        "ipsec_crypto_profiles": [
+          {
+            "name": "default",
+            "encryption": [
+              "aes-256-gcm"
+            ]
+          }
+        ],
+        "tls_service_profiles": [
+          {
+            "name": "mgmt",
+            "min_version": "tls1-2"
+          }
+        ],
+        "certificates": [
+          {
+            "name": "mgmt-cert",
+            "algorithm": "RSA",
+            "key_size": 2048
+          }
+        ]
+      },
+      "findings": [
+        {
+          "rule_id": "ike_no_cbc",
+          "category": "weak_algorithm",
+          "status": "FINDING",
+          "severity": "high",
+          "evidence_basis": "configured",
+          "summary": "An IKE crypto profile offers CBC-mode encryption."
+        },
+        {
+          "rule_id": "tls_min_version",
+          "category": "crypto_agility",
+          "status": "PASS",
+          "severity": "medium",
+          "evidence_basis": "configured",
+          "summary": "Management TLS minimum version is 1.2."
+        },
+        {
+          "rule_id": "pqc_readiness",
+          "category": "pqc_readiness",
+          "status": "UNKNOWN",
+          "severity": "informational",
+          "evidence_basis": "inferred",
+          "summary": "No post-quantum key exchange configured (expected at this platform level)."
+        }
+      ]
+    },
+    {
+      "subject_id": "cp-001",
+      "subject_label": "Configuration subject cp-001",
+      "vendor_key": "check_point",
+      "status": "PASS",
+      "facts": {
+        "tls_service_profiles": [
+          {
+            "name": "gaia-portal",
+            "min_version": "tls1-2"
+          }
+        ]
+      },
+      "findings": [
+        {
+          "rule_id": "ssh_no_cbc",
+          "category": "weak_algorithm",
+          "status": "PASS",
+          "severity": "high",
+          "evidence_basis": "configured",
+          "summary": "SSH management offers no CBC ciphers."
+        }
+      ]
+    }
+  ],
+  "fleet": {
+    "subjects": 2,
+    "evaluated_subjects": 2,
+    "status_counts": {
+      "PASS": 1,
+      "FINDING": 1
+    },
+    "category_counts": {
+      "weak_algorithm": 2,
+      "crypto_agility": 1,
+      "pqc_readiness": 1
+    }
+  },
+  "pqc": {
+    "status": "INFORMATIONAL",
+    "platform_capability": []
+  },
+  "privacy": {
+    "contains_secrets": false,
+    "contains_key_material": false,
+    "contains_certificate_content": false,
+    "contains_real_identity": false
+  }
+}

@@ -57,6 +57,7 @@ FORBIDDEN_DIRS_ANYWHERE = {
     ".serena",
     ".venv",
     "venv",
+    "node_modules",  # gitignored render-harness JS deps (tools/render-harness/)
 }
 FORBIDDEN_SUFFIXES = {
     ".zip": "ARCHIVE_OR_PACKAGE",
