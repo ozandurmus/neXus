@@ -2352,9 +2352,9 @@ function metricCard(label, value, detail = "", tone = "neutral") {
 // 0.7.5 — compliance trend layer. Both render "" when there is not enough
 // history, so every empty / first-run state is untouched.
 function complianceSparkline(records) {
-    const points = (Array.isArray(records) ? records : [])
-        .map(r => Number(r && r.aligned_percent))
-        .filter(n => Number.isFinite(n));
+    const rows = (Array.isArray(records) ? records : [])
+        .filter(r => r && Number.isFinite(Number(r.aligned_percent)));
+    const points = rows.map(r => Number(r.aligned_percent));
     if (points.length < 2) return "";
     const w = 132;
     const h = 30;
@@ -2366,16 +2366,40 @@ function complianceSparkline(records) {
     const coords = points.map((value, index) => {
         const x = pad + index * step;
         const y = pad + (h - pad * 2) * (1 - (value - min) / span);
-        return `${x.toFixed(1)},${y.toFixed(1)}`;
+        return { x: x.toFixed(1), y: y.toFixed(1), reconstructed: !!rows[index].reconstructed };
     });
-    const last = coords[coords.length - 1].split(",");
+
+    // 0.7.7 -- a reconstructed (offline, narrower-methodology) point never
+    // shares a solid line segment with a live checkpoint point: draw one
+    // polyline per contiguous live/reconstructed run. Each run also carries
+    // the last point of the previous run so the connecting segment still
+    // renders (styled as the newer point's kind).
+    const runs = [];
+    coords.forEach((pt, index) => {
+        if (index === 0 || pt.reconstructed !== coords[index - 1].reconstructed) {
+            const run = { reconstructed: pt.reconstructed, points: [] };
+            if (index > 0) run.points.push(coords[index - 1]);
+            runs.push(run);
+        }
+        runs[runs.length - 1].points.push(pt);
+    });
+
+    const polylines = runs.map(run => `
+        <polyline points="${run.points.map(p => `${p.x},${p.y}`).join(" ")}" fill="none" stroke="currentColor"
+                  stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"
+                  ${run.reconstructed ? 'stroke-dasharray="3,2" opacity="0.55"' : ""} />
+    `).join("");
+    const markers = coords.map(p => `
+        <circle cx="${p.x}" cy="${p.y}" r="${p.reconstructed ? 1.5 : 2}" fill="${p.reconstructed ? "none" : "currentColor"}"
+                stroke="currentColor" stroke-width="${p.reconstructed ? 1 : 0}" opacity="${p.reconstructed ? 0.55 : 1}" />
+    `).join("");
+    const hasReconstructed = coords.some(p => p.reconstructed);
     return `
-        <svg class="compliance-sparkline" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none"
-             role="img" aria-label="Aligned percent over the last ${points.length} checkpoints:
+        <svg class="compliance-sparkline${hasReconstructed ? " has-reconstructed" : ""}" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none"
+             role="img" aria-label="Aligned percent over the last ${points.length} checkpoints${hasReconstructed ? " (includes offline-reconstructed points, dashed)" : ""}:
              ${points.map(p => p.toFixed(1)).join(", ")}">
-            <polyline points="${coords.join(" ")}" fill="none" stroke="currentColor"
-                      stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" />
-            <circle cx="${last[0]}" cy="${last[1]}" r="2" fill="currentColor" />
+            ${polylines}
+            ${markers}
         </svg>
     `;
 }

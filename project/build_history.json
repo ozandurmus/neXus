@@ -3,6 +3,25 @@
   "record_contract": "One structured record per build, newest first. Required: build, status, title, summary (<= 2 sentences). Optional: started, completed, track, movement, supersedes, evidence, risks_forward, docs{agreement,validation,handover} (repo-relative paths under docs/history/). Full detail lives in the linked doc; do not restate it here. Status vocabulary must stay within utils/project_plan.py STATUS_VALUES.",
   "builds": [
     {
+      "build": "compliance_trend_reconstruction",
+      "status": "automated_validated",
+      "started": "2026-08-30",
+      "completed": "2026-08-30",
+      "title": "0.7.7 -- Compliance trend retro-fill (PAN baseline reconstruction)",
+      "track": "0.7.x VERIFY (TRACE-adjacent)",
+      "movement": "ARCHITECTURE -> IMPLEMENTATION",
+      "summary": "0.7.5 shipped the append-only compliance trend ledger with deliberate no-backfill; this is that deferred follow-up. Feasibility check found most of build_compliance_posture's inputs (alignment, CP config, assignment/waiver policy, CE.1 checks) are not versioned per historical CAS snapshot, so a full re-run is not possible -- put the scope trade-off to the product owner directly, who chose narrow/labeled reconstruction over dropping the build or a broader unlabeled approximation. New utils/compliance_trend_reconstruction.py mines stored PAN effective-running snapshots, single-linkage time-clusters them into synthetic checkpoints (CAS carries no run_id), and evaluates the ten deterministic DEFAULT_RULE_PACK baseline controls per entity through the exact same live evaluator dispatch a real checkpoint uses. Every record is stamped reconstructed=true / reconstruction_scope=pan_baseline_rule_pack_only. utils/compliance_history.py gains append_reconstructed (idempotent on run_id) and history_view's trend now always compares against the newest live record, never a reconstructed one, even when a reconstructed record is chronologically newest. New offline main.py --compliance-trend-reconstruct maintenance mode (no network, no credentials). static/app.js's sparkline renders reconstructed runs dashed/hollow, never sharing a solid segment with a live run.",
+      "evidence": {
+        "automated": "10 new tests in tests/test_phase0_7_7_compliance_trend_reconstruction.py (empty CAS, single/multi-entity bucketing, time-gap bucket separation, a characterization test asserting the reconstruction path matches the live evaluator dispatch exactly, append_reconstructed idempotency, trend-never-uses-reconstructed even when newest, trend absent with reconstructed-only history, pre-0.7.7 records default reconstructed=False, no device identity/IP in reconstructed JSON) + one pre-existing exact-key-set test updated for the two new additive _project_record fields. py -m pytest -q: 645 passed, 2 skipped, 2 failed (635 -> +10; same two pre-existing, unrelated failures documented in every prior 0.7.x closure this session). Zero regressions.",
+        "render_harness": "tools/render-harness/check_render_playwright.py (bun+happy-dom's window.eval path is broken in this sandbox's bun version, same known gap the playwright_render_harness_fallback build exists for) PASS on the full uitest bundle -- page loads, executes clean, every nav module + inner tab switches, zero console errors. Confirms the complianceSparkline reconstructed/live run-splitting change parses and executes correctly.",
+        "privacy_gate": "No credential/device-identity/IP literal introduced; a manual reconstruction sanity check (synthetic throwaway XML, not committed) confirmed the reconstructed record JSON carries no entity id, hostname or IP.",
+        "real_env": "Not applicable in the collector sense (this build only reads already-stored CAS blobs, no device contact) -- validating --compliance-trend-reconstruct against a real fleet's accumulated CAS history is deferred to DEPLOY.1, same class as every other real-device gap."
+      },
+      "docs": {
+        "agreement": "docs/history/phase/0_7_7_COMPLIANCE_TREND_RECONSTRUCTION.md"
+      }
+    },
+    {
       "build": "linux_container_image",
       "status": "automated_validated",
       "started": "2026-08-30",
