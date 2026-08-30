@@ -10,19 +10,20 @@ If a section does not apply, write `n/a` — do not delete the heading.
 
 ## 1. Snapshot
 
-- Product baseline: `0.7.5 — Compliance trend layer` — AUTOMATED_VALIDATED
-  (2026-08-30). Previous: `0.7.4`; hotfix `0.7.4a`.
+- Product baseline: `0.7.6 — Automated HTML render harness` — AUTOMATED_VALIDATED
+  (2026-08-30). Previous: `0.7.5` (trend layer), `0.7.4`; hotfix `0.7.4a`
+  REAL_ENV_VALIDATED.
 - Engineering baseline: `DEV.1` complete; `DEV.2.1` — AUTOMATED_VALIDATED.
 - Date: 2026-08-30
-- **`origin/main` is at `7d991a3`** — CE.1 fast-follow #2 (`5b5e893`) and the
-  `0.7.4a` HTML-export render hotfix (`7d991a3`) are merged + pushed.
-- **`0.7.5` compliance trend layer is on branch `feature/0-7-5-compliance-trend`,
+- **`origin/main` is at `0c89880`** — CE.1 fast-follow #2 (`5b5e893`), the
+  `0.7.4a` render hotfix (`7d991a3`), `0.7.5` trend layer (`8aa0805`) and the
+  `0.7.4a` real-env doc (`0c89880`) are all merged + pushed.
+- **`0.7.6` render harness is on branch `feature/0-7-6-render-harness`,
   automated-validated, not yet merged** (§2, §6).
-- **NOTE — a privacy-gate regression rode in on `7d991a3`**: an early `0.7.4a` label was written as four dot-separated
-  numbers, which matches the gate's IPv4 literal regex (`_IPV4_RE`). The
-  `feature/0-7-5-compliance-trend` branch renames it to `0.7.4a` everywhere and
-  the gate is PASS/0 again; the fix lands when that branch merges. Never label a
-  version as four dot-separated numbers.
+- **Never label a version as four dot-separated numbers** — `_IPV4_RE` in the
+  privacy gate flags an `A.B.C.D` numeric label as a `PRIVATE_ENDPOINT_LITERAL`.
+  Use a letter suffix (`0.7.4a`). The two `0.7.4a` hotfix *commit messages*
+  still say the old form (immutable; the gate scans files only).
 - **GitHub tooling (2026-08-29):** `gh` CLI is installed
   (`C:\Program Files\GitHub CLI\gh.exe`, v2.98.0) and authenticated as
   `ozandurmus` — token scopes `gist, read:org, repo, workflow` (`repo` covers
@@ -43,16 +44,43 @@ If a section does not apply, write `n/a` — do not delete the heading.
   `py -V:3.12 <script>` mis-parses on this box (exit 103); use
   `py -V:3.12 -m pytest` or the 3.12 interpreter directly at
   `%LOCALAPPDATA%\Programs\Python\Python312\python.exe`.
-- Full suite: `py -m pytest -q -n auto --dist worksteal` → **547 passed,
-  3 skipped, 0 failed** (~35s) — 523 + 6 (fast-follow #2) + 5 (0.7.4a) + 13 (0.7.5).
+- Full suite: `py -m pytest -q -n auto --dist worksteal` → **550 passed,
+  3 skipped, 0 failed** (~35s). +13 (0.7.5) + 3 (0.7.6) since the 534 baseline.
+- **HTML render harness** (0.7.6): `py -V:3.12 scripts/render_uitest.py --out D`
+  then `bun tools/render-harness/check-render.mjs D/output/index.html`.
+  `tests/test_html_render_harness.py` runs both; the bun half `skipif`s when
+  `bun` (`~/.bun/bin/bun`) or `tools/render-harness/node_modules` is absent —
+  run `bun install` in `tools/render-harness/` once.
 - Repository privacy gate: **PASS / 0 on a clean checkout**. Locally it flags the
   gitignored `data/` + `logs/` + `data/.support_hmac.key` a test run creates —
   delete them before running the gate.
 
 ## 2. Recent builds (this session)
 
-- **`0.7.5` — Compliance trend layer** — branch
-  `feature/0-7-5-compliance-trend`, automated-validated, **not yet merged**.
+- **`0.7.6` — Automated HTML render harness + `uitest` fixture** — branch
+  `feature/0-7-6-render-harness`, automated-validated, **not yet merged**.
+  Contract + impl record: `docs/history/phase/0_7_6_RENDER_HARNESS.md`.
+  - `tests/fixtures/uitest/` — committed, hand-authored, privacy-clean bundle
+    (fake names, RFC 5737 ranges): `unified.json` + injected `configuration_ui`
+    / `crypto_ui` / `discovery_ui` + `state/compliance_checks.json` +
+    `state/compliance_history.json` (3 records → the trend renders) +
+    `build_fixture.py` + `README.md` (growth rule).
+  - `scripts/render_uitest.py` — renders from the bundle; injects only the three
+    builders whose real inputs are telemetry / PAN XML / live stores.
+    `build_compliance_posture`, `_fill_template`, `_script_json` run for real.
+  - `tools/render-harness/check-render.mjs` — bun + `happy-dom`: parse the inline
+    `<script>`, `window.eval` it, assert `window.switchModule`, click every
+    `.module-nav-item` + inner tab (panels switch, zero `console.error`).
+    `package.json` + `bun.lock` committed; `node_modules/` gitignored.
+  - `tests/test_html_render_harness.py` (3): JSON validity of every embedded
+    payload (no JS engine — the `0.7.4a` class), all six modules populated,
+    headless nav smoke test (`skipif` no `bun`).
+  - Governance: `docs/AI_DEVELOPMENT_PROTOCOL.md` mandatory section; `AGENTS.md`
+    project-state-update rule gains `tests/fixtures/uitest/`.
+  - `utils/repository_privacy.py` + `test_dev_0_5b_*` skip `node_modules`.
+  - Negative-tested: corrupt payload literal → FAIL parse; renamed nav handler →
+    FAIL (16), panels don't activate. Suite 547 → 550. No `main.py` change.
+- **`0.7.5` — Compliance trend layer** — **LANDED** on `main` (`8aa0805`).
   Contract + impl record: `docs/history/phase/0_7_5_COMPLIANCE_TREND.md`.
   Resolves design doc §11 decision 9. Additive; no server/collector/command;
   `COMPLIANCE_SCHEMA_VERSION` unchanged.
@@ -73,11 +101,11 @@ If a section does not apply, write `n/a` — do not delete the heading.
   - `static/app.js` + `style.css` — `complianceSparkline` + `complianceTrendChip`
     on the Overview compliance card + the Compliance KPI band; render nothing
     below 2 points / null trend.
-  - `tests/test_phase0_7_5_compliance_trend.py` (13). Suite 534 → 547.
+  - `tests/test_phase0_7_5_compliance_trend.py` (13).
   - **Owed:** a live trend line only appears after a *second* real full
     checkpoint (`on_hardware_real_env_validation`).
 - **`0.7.4a` — HTML export render hotfix (P0)** — **LANDED** on `main`
-  (`7d991a3`). Record:
+  (`7d991a3`), **REAL_ENV_VALIDATED** (`0c89880`). Record:
   `docs/history/phase/0_7_4A_HTML_EXPORT_RENDER_HOTFIX.md`.
   - Symptom: real `py .\main.py` run rendered the report but every
     `.module-nav-item` button was dead, stuck on Overview.
@@ -191,9 +219,10 @@ a fresh contract, put to the user for review first.
 Automated tests green; nothing since the 0.6.1x builds exercised end-to-end.
 Backlog `on_hardware_real_env_validation` (P0), laptop-blocked.
 
-- Local render check (no devices): `scripts/render_sample.py` — `0.7.5` verified
-  2026-08-30 (exit 0; `complianceUiData` carries `history: []` / `trend: null`;
-  all six payload literals valid JSON).
+- **Automated render check (0.7.6):** `scripts/render_uitest.py` +
+  `tools/render-harness/check-render.mjs` — a full six-module render, script
+  parse + execute + nav-click smoke, no human needed. `scripts/render_sample.py`
+  stays the empty-state check.
 - **`0.7.4a`**: **REAL_ENV_VALIDATED (2026-08-30)** — product owner ran a full
   `py .\main.py` on the corporate laptop, regenerated `output/index.html`, and
   confirmed all six modules and every tab work. Dead-button fix done.
@@ -234,31 +263,33 @@ Backlog `on_hardware_real_env_validation` (P0), laptop-blocked.
 
 ## 5. Exact next action
 
-1. **Land `0.7.5`** (branch `feature/0-7-5-compliance-trend`). Changed:
-   `utils/compliance_history.py` (new), `utils/compliance_posture.py`,
-   `utils/html_export.py`, `main.py`, `static/app.js`, `static/style.css`,
-   `tests/test_phase0_7_5_compliance_trend.py` (new),
-   `docs/history/phase/0_7_5_COMPLIANCE_TREND.md` (new),
-   `docs/design/COMPLIANCE_ASSIGNMENT_AND_FRAMEWORKS.md`,
-   `project/build_history.json`, `CURRENT_STATE.md`, `AI_HANDOVER.md`, and the
-   four-digit-label rename to `0.7.4a` (incl. `git mv` of the phase doc). `git merge
-   --no-ff` into `main` + `git push`, or `gh pr create` → `gh pr merge`.
-2. Ask the user for the two real-env confirmations in §3b (`0.7.4a` click-through
-   now; `0.7.5` trend after a second checkpoint).
-3. New build → fresh contract for user review first. Candidates in §3.
+1. **Land `0.7.6`** (branch `feature/0-7-6-render-harness`). New:
+   `tests/fixtures/uitest/**`, `scripts/render_uitest.py`,
+   `tools/render-harness/{package.json,bun.lock,check-render.mjs}`,
+   `tests/test_html_render_harness.py`,
+   `docs/history/phase/0_7_6_RENDER_HARNESS.md`. Modified: `.gitignore`,
+   `AGENTS.md`, `docs/AI_DEVELOPMENT_PROTOCOL.md`, `utils/repository_privacy.py`,
+   `tests/test_dev_0_5b_auth_consumer_canonical_config.py`,
+   `project/build_history.json`, `CURRENT_STATE.md`, `AI_HANDOVER.md`.
+   `git merge --no-ff` into `main` + `git push`, or `gh pr create` → `gh pr merge`.
+2. From now on, run the render harness for any UI/payload change (it's in the
+   `AGENTS.md` close checklist + `AI_DEVELOPMENT_PROTOCOL.md`).
+3. `0.7.5` real-env confirmation still owed: the trend chip appears after the
+   user's *next two* real full checkpoints.
+4. New build → fresh contract for user review first. Candidates in §3.
 
 ## 6. main merge decision + Git dispatch
 
-- **CE.1 fast-follow #2 + `0.7.4a` hotfix: LANDED** on `origin/main` (`7d991a3`).
-- **`0.7.5`: approved on evidence, pending the user's go-ahead to run the
-  merge** (standing priority 4). Branch `feature/0-7-5-compliance-trend`.
-  Evidence: 547p/3s/0f, privacy gate PASS/0 on a clean tree (incl. the
-  `0.7.4a` rename fix), `render_sample.py` exit 0.
+- **CE.1 fast-follow #2, `0.7.4a` hotfix, `0.7.5` trend layer: LANDED** on
+  `origin/main` (`0c89880`).
+- **`0.7.6` render harness: approved on evidence, pending the user's go-ahead to
+  run the merge** (standing priority 4). Branch `feature/0-7-6-render-harness`.
+  Evidence: 550p/3s/0f, negative-tested, privacy gate PASS/0 on a clean tree,
+  `render_sample.py` exit 0, `render_uitest.py` + `check-render.mjs` PASS.
 - Dispatch: `git checkout main && git merge --no-ff
-  feature/0-7-5-compliance-trend && git push origin main` (or the `gh pr` path;
-  `gh` installed + `repo`-scoped, see §1).
+  feature/0-7-6-render-harness && git push origin main` (or the `gh pr` path).
 - Delete the gitignored `data/` + `logs/` a test run leaves before the privacy
-  gate.
+  gate. `bun.lock` + `package.json` are committed; `node_modules/` is not.
 
 ## 7. Next movement / model
 
@@ -269,11 +300,12 @@ Backlog `on_hardware_real_env_validation` (P0), laptop-blocked.
 
 ## 8. Continue or fresh chat
 
-**Continue this chat** to land `0.7.5` and collect the real-env confirmations.
-Start a fresh chat for the next distinct build.
+**Continue this chat** to land `0.7.6`. Start a fresh chat for the next distinct
+build.
 
 ## 9. main.py / UI effect
 
+- **0.7.6:** none — dev/CI tooling only. `main.py` unchanged.
 - **0.7.5:** no visible change until a *second* full `py .\main.py` checkpoint
   exists. From then, the Overview compliance card and the Compliance KPI band
   show an aligned-% sparkline and a "±N pts since <date>" chip. `--render-only`
