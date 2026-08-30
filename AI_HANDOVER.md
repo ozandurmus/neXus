@@ -10,16 +10,19 @@ If a section does not apply, write `n/a` — do not delete the heading.
 
 ## 1. Snapshot
 
-- Product baseline: `0.7.4 — framework_mappings: Requirement-Level Coverage` —
-  AUTOMATED_VALIDATED (2026-08-29). Latest: hotfix `0.7.4.1` (2026-08-30).
+- Product baseline: `0.7.5 — Compliance trend layer` — AUTOMATED_VALIDATED
+  (2026-08-30). Previous: `0.7.4`; hotfix `0.7.4a`.
 - Engineering baseline: `DEV.1` complete; `DEV.2.1` — AUTOMATED_VALIDATED.
 - Date: 2026-08-30
-- **`origin/main` was at `d3b1384`** (CE.1 fast-follow #2 + its handover sync).
-  Then **`0.7.4.1` HTML-export render hotfix** landed on branch
-  `fix/html-export-placeholder-collision` — automated-validated, awaiting the
-  user's go-ahead to merge to `main` (§2, §6).
-- The trend-layer contract (§3) is approved (recommendations A–E) but **not
-  started** — the hotfix pre-empted it. Pick it up next.
+- **`origin/main` is at `7d991a3`** — CE.1 fast-follow #2 (`5b5e893`) and the
+  `0.7.4a` HTML-export render hotfix (`7d991a3`) are merged + pushed.
+- **`0.7.5` compliance trend layer is on branch `feature/0-7-5-compliance-trend`,
+  automated-validated, not yet merged** (§2, §6).
+- **NOTE — a privacy-gate regression rode in on `7d991a3`**: an early `0.7.4a` label was written as four dot-separated
+  numbers, which matches the gate's IPv4 literal regex (`_IPV4_RE`). The
+  `feature/0-7-5-compliance-trend` branch renames it to `0.7.4a` everywhere and
+  the gate is PASS/0 again; the fix lands when that branch merges. Never label a
+  version as four dot-separated numbers.
 - **GitHub tooling (2026-08-29):** `gh` CLI is installed
   (`C:\Program Files\GitHub CLI\gh.exe`, v2.98.0) and authenticated as
   `ozandurmus` — token scopes `gist, read:org, repo, workflow` (`repo` covers
@@ -40,17 +43,42 @@ If a section does not apply, write `n/a` — do not delete the heading.
   `py -V:3.12 <script>` mis-parses on this box (exit 103); use
   `py -V:3.12 -m pytest` or the 3.12 interpreter directly at
   `%LOCALAPPDATA%\Programs\Python\Python312\python.exe`.
-- Full suite: `py -m pytest -q -n auto --dist worksteal` → **534 passed,
-  3 skipped, 0 failed** (~35s) — 523 baseline + 6 (fast-follow #2) + 5 (0.7.4.1).
+- Full suite: `py -m pytest -q -n auto --dist worksteal` → **547 passed,
+  3 skipped, 0 failed** (~35s) — 523 + 6 (fast-follow #2) + 5 (0.7.4a) + 13 (0.7.5).
 - Repository privacy gate: **PASS / 0 on a clean checkout**. Locally it flags the
   gitignored `data/` + `logs/` + `data/.support_hmac.key` a test run creates —
   delete them before running the gate.
 
 ## 2. Recent builds (this session)
 
-- **`0.7.4.1` — HTML export render hotfix (P0)** — branch
-  `fix/html-export-placeholder-collision`, **not yet merged**. Record:
-  `docs/history/phase/0_7_4_1_HTML_EXPORT_RENDER_HOTFIX.md`.
+- **`0.7.5` — Compliance trend layer** — branch
+  `feature/0-7-5-compliance-trend`, automated-validated, **not yet merged**.
+  Contract + impl record: `docs/history/phase/0_7_5_COMPLIANCE_TREND.md`.
+  Resolves design doc §11 decision 9. Additive; no server/collector/command;
+  `COMPLIANCE_SCHEMA_VERSION` unchanged.
+  - `utils/compliance_history.py` (new) — append-only ledger
+    `data/state/compliance_history.json` (RuntimeRoot state, gitignored).
+    `load_history` (**fail-safe** — missing/corrupt → `[]`, never raises),
+    `summarise_overview`, `append_run` (cap `MAX_RECORDS` 200, atomic), plus
+    `history_view` → `{records, trend}`. Aggregates + ISO dates only; **no
+    identity, no per-subject rows**.
+  - `utils/compliance_posture.py` — `build_compliance_posture(..., history=None)`;
+    `_compliance_overview` + `_empty_overview` append `history` (last 30) +
+    `trend` (delta vs newest prior record; `null` with < 1 prior).
+  - `utils/html_export.py` — reads the ledger on every render; writes one record
+    only when `run_html_export(record_checkpoint=True)`.
+  - `main.py` — the one full-checkpoint render passes `record_checkpoint=True,
+    run_id=run_ctx.run_id`. No other call site touched (`--render-only` /
+    `--only` / diagnostic keep the `False` default).
+  - `static/app.js` + `style.css` — `complianceSparkline` + `complianceTrendChip`
+    on the Overview compliance card + the Compliance KPI band; render nothing
+    below 2 points / null trend.
+  - `tests/test_phase0_7_5_compliance_trend.py` (13). Suite 534 → 547.
+  - **Owed:** a live trend line only appears after a *second* real full
+    checkpoint (`on_hardware_real_env_validation`).
+- **`0.7.4a` — HTML export render hotfix (P0)** — **LANDED** on `main`
+  (`7d991a3`). Record:
+  `docs/history/phase/0_7_4A_HTML_EXPORT_RENDER_HOTFIX.md`.
   - Symptom: real `py .\main.py` run rendered the report but every
     `.module-nav-item` button was dead, stuck on Overview.
   - Cause: `utils/html_export.py` chained `str.replace()` per placeholder.
@@ -139,15 +167,13 @@ If a section does not apply, write `n/a` — do not delete the heading.
 
 ## 3. Next work
 
-**No active build contract is open** (the CE.1 fast-follow #2 in §2 is
-implemented + automated-validated, pending commit/merge). A new build needs a
-fresh contract, put to the user for review first.
+**No active build contract is open** once `0.7.5` (§2) merges. A new build needs
+a fresh contract, put to the user for review first.
 
-- **Point-in-time / trend layer for `compliance_overview`** (`Sonnet 5 extended
-  thinking` for the contract) — read the existing config history so a past run's
-  posture is reproducible; the payload was designed so a `history[]` is additive
-  (design `COMPLIANCE_ASSIGNMENT_AND_FRAMEWORKS.md` §9 "point-in-time", §10
-  "Time").
+- **`compliance_overview.trend` retro-fill / reconstruction** (optional, later) —
+  a TRACE-plane build that recomputes past posture from the content-addressed
+  config history so the trend has depth before the first two live checkpoints.
+  `0.7.5` deliberately did not do this (append-only ledger, no backfill).
 - **CE.2** (`compliance_check_engine_primitives`) — curated read-only
   command-primitive registry, opt-in `--compliance-probe`. **Blocked on
   `cp_device_interaction_safety` (P0) + the command gate.**
@@ -165,8 +191,14 @@ fresh contract, put to the user for review first.
 Automated tests green; nothing since the 0.6.1x builds exercised end-to-end.
 Backlog `on_hardware_real_env_validation` (P0), laptop-blocked.
 
-- Local render check (no devices): `py -V:3.12 scripts/render_sample.py` —
-  0.7.4 verified 2026-08-29 (exit 0, 0 placeholders).
+- Local render check (no devices): `scripts/render_sample.py` — `0.7.5` verified
+  2026-08-30 (exit 0; `complianceUiData` carries `history: []` / `trend: null`;
+  all six payload literals valid JSON).
+- **`0.7.4a`**: regenerate the report on the corporate laptop (`git pull` then
+  `py .\main.py --render-only`) and click through all six modules — confirms the
+  dead-button fix on real data.
+- **`0.7.5`**: the trend sparkline/chip only appears after a *second* real full
+  `py .\main.py` checkpoint (the ledger starts empty; no backfill).
 - Real collection run: needs an MDS / Panorama + credentials — deferred to the
   server. Requirement coverage / user-check outcomes only become PASS/FINDING
   once a real configuration collection has run.
@@ -192,52 +224,62 @@ Backlog `on_hardware_real_env_validation` (P0), laptop-blocked.
   test run (`DEV.0.3C` deferred). Gitignored; delete before the privacy gate.
 - `scripts/pytest_one_shot.ps1` calls `py` → 3.14 without deps
   (`dev_python_env_tooling_friction`).
+- **Version labels must not be four dot-separated numbers** — `_IPV4_RE` in
+  the repository privacy gate flags an `A.B.C.D` numeric label as a
+  `PRIVATE_ENDPOINT_LITERAL`. Use a letter suffix (`0.7.4a`, matching
+  `0.7.1a` / `0.7.1b`).
+- `0.7.5` trend ledger: aggregates only, no backfill. A framework catalog /
+  control-set version change between runs is recorded per-record but the trend
+  line does not annotate it — a jump may be a rule change, not a posture change.
 
 ## 5. Exact next action
 
-1. **Land `0.7.4.1`** (branch `fix/html-export-placeholder-collision`). Changed:
-   `utils/html_export.py`, `tests/test_html_export_placeholder_integrity.py`
-   (new), `docs/history/phase/0_7_4_1_HTML_EXPORT_RENDER_HOTFIX.md` (new),
-   `project/build_history.json`, `CURRENT_STATE.md`, `AI_HANDOVER.md`.
-   `git merge --no-ff` into `main` + `git push`, **or** `gh pr create` →
-   `gh pr merge`.
-2. Ask the user to regenerate the report on the corporate laptop and click
-   through all six modules (real-env confirmation of the hotfix).
-3. Then the **trend layer** (§3, approved A–E): `ARCHITECTURE` handoff already
-   drafted in chat; write it up as `docs/history/phase/0_7_5_COMPLIANCE_TREND.md`
-   and implement on `feature/0-7-5-compliance-trend`.
+1. **Land `0.7.5`** (branch `feature/0-7-5-compliance-trend`). Changed:
+   `utils/compliance_history.py` (new), `utils/compliance_posture.py`,
+   `utils/html_export.py`, `main.py`, `static/app.js`, `static/style.css`,
+   `tests/test_phase0_7_5_compliance_trend.py` (new),
+   `docs/history/phase/0_7_5_COMPLIANCE_TREND.md` (new),
+   `docs/design/COMPLIANCE_ASSIGNMENT_AND_FRAMEWORKS.md`,
+   `project/build_history.json`, `CURRENT_STATE.md`, `AI_HANDOVER.md`, and the
+   four-digit-label rename to `0.7.4a` (incl. `git mv` of the phase doc). `git merge
+   --no-ff` into `main` + `git push`, or `gh pr create` → `gh pr merge`.
+2. Ask the user for the two real-env confirmations in §3b (`0.7.4a` click-through
+   now; `0.7.5` trend after a second checkpoint).
+3. New build → fresh contract for user review first. Candidates in §3.
 
 ## 6. main merge decision + Git dispatch
 
-- **CE.1 fast-follow #2: LANDED.** merged `--no-ff` into `main` (`5b5e893`),
-  handover sync `d3b1384`, pushed; branch deleted.
-- **`0.7.4.1` hotfix: approved on evidence, pending the user's go-ahead to run
-  the merge** (standing priority 4). Branch
-  `fix/html-export-placeholder-collision`. Evidence: 534p/3s/0f, privacy gate
-  PASS/0 clean tree, `render_sample.py` exit 0, fresh sample `index.html` — all
-  six payload literals parse as valid JSON.
+- **CE.1 fast-follow #2 + `0.7.4a` hotfix: LANDED** on `origin/main` (`7d991a3`).
+- **`0.7.5`: approved on evidence, pending the user's go-ahead to run the
+  merge** (standing priority 4). Branch `feature/0-7-5-compliance-trend`.
+  Evidence: 547p/3s/0f, privacy gate PASS/0 on a clean tree (incl. the
+  `0.7.4a` rename fix), `render_sample.py` exit 0.
 - Dispatch: `git checkout main && git merge --no-ff
-  fix/html-export-placeholder-collision && git push origin main` (or the `gh pr`
-  path; `gh` installed + `repo`-scoped, see §1).
+  feature/0-7-5-compliance-trend && git push origin main` (or the `gh pr` path;
+  `gh` installed + `repo`-scoped, see §1).
 - Delete the gitignored `data/` + `logs/` a test run leaves before the privacy
   gate.
 
 ## 7. Next movement / model
 
-- `ARCHITECTURE` (**Sonnet 5, extended thinking**) for the point-in-time / trend
-  layer contract — the only reason to escalate is the config-history read + the
-  additive `history[]` shape.
-- Otherwise `IMPLEMENTATION` (**Sonnet 5, normal**) for any standing doable-now
-  item. Nothing pending needs Opus.
+- `IMPLEMENTATION` (**Sonnet 5, normal**) for any standing doable-now item
+  (§3). Nothing pending needs Opus or extended thinking.
+- A new 0.7.x/0.8.x design (trend reconstruction, OP.0) would want
+  **Sonnet 5, extended thinking** for the contract only.
 
 ## 8. Continue or fresh chat
 
-**Continue this chat** through: land `0.7.4.1` → real-env confirmation → the
-trend-layer build. Start a fresh chat only if context gets polluted.
+**Continue this chat** to land `0.7.5` and collect the real-env confirmations.
+Start a fresh chat for the next distinct build.
 
 ## 9. main.py / UI effect
 
-- **0.7.4.1:** the generated `output/index.html` now runs its inline `<script>` —
+- **0.7.5:** no visible change until a *second* full `py .\main.py` checkpoint
+  exists. From then, the Overview compliance card and the Compliance KPI band
+  show an aligned-% sparkline and a "±N pts since <date>" chip. `--render-only`
+  never writes the ledger; a corrupt ledger degrades to "no trend", never an
+  error. Payload gains `compliance_overview.history[]` + `.trend` (additive).
+- **0.7.4a:** the generated `output/index.html` now runs its inline `<script>` —
   the module-nav buttons, tab switching and every interactive panel work again.
   Before the fix the page rendered the static Overview shell only and no button
   responded. No payload/schema change; a re-render of an existing run is enough.

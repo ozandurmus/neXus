@@ -3,7 +3,26 @@
   "record_contract": "One structured record per build, newest first. Required: build, status, title, summary (<= 2 sentences). Optional: started, completed, track, movement, supersedes, evidence, risks_forward, docs{agreement,validation,handover} (repo-relative paths under docs/history/). Full detail lives in the linked doc; do not restate it here. Status vocabulary must stay within utils/project_plan.py STATUS_VALUES.",
   "builds": [
     {
-      "build": "0.7.4.1",
+      "build": "0.7.5",
+      "status": "automated_validated",
+      "started": "2026-08-30",
+      "completed": "2026-08-30",
+      "title": "Compliance trend layer (append-only ledger)",
+      "track": "0.7.x",
+      "movement": "IMPLEMENTATION",
+      "summary": "Resolves COMPLIANCE_ASSIGNMENT_AND_FRAMEWORKS.md section 11 decision 9. New utils/compliance_history.py: each full py .\\main.py checkpoint appends one aggregate roll-up record to data/state/compliance_history.json (RuntimeRoot state, gitignored; fleet + per-framework counts + rounded percents + ISO dates only, no device identity, no per-subject rows). Every render exposes compliance_overview.history[] (last 30) + compliance_overview.trend (delta vs newest prior record, null with <1 prior). build_compliance_posture(..., history=None) threads it; html_export reads the ledger on every render and writes only when run_html_export(record_checkpoint=True) (the full-checkpoint call in main.py). static/app.js complianceSparkline + complianceTrendChip on the Overview compliance card and the Compliance KPI band. Read path is FAIL-SAFE - a missing/corrupt ledger degrades to no-trend, never an error (opposite of the fail-closed check pack). No backfill; no trend-scrubber UI (DEPLOY.1). COMPLIANCE_SCHEMA_VERSION unchanged (repo additive-no-bump convention; overrode the original Decision E recommendation to bump).",
+      "evidence": {
+        "automated": "py -m pytest -q -n auto --dist worksteal: 547 passed, 3 skipped, 0 failed (Python 3.12). 534 -> +13 (tests/test_phase0_7_5_compliance_trend.py). build_compliance_posture additive-only when history omitted; ledger round-trip + MAX_RECORDS cap; load_history fail-safe on missing/corrupt/wrong-shape; --render-only writes no ledger; corrupt ledger does not break a render.",
+        "privacy_gate": "PASS / 0 on a clean tree. Ledger + payload carry only integer counts, rounded percents, ISO-8601 timestamps and framework names.",
+        "real_env": "owed - a live trend line only appears after a second real full checkpoint (on_hardware_real_env_validation)."
+      },
+      "docs": {
+        "agreement": "docs/history/phase/0_7_5_COMPLIANCE_TREND.md",
+        "design": "docs/design/COMPLIANCE_ASSIGNMENT_AND_FRAMEWORKS.md"
+      }
+    },
+    {
+      "build": "0.7.4a",
       "status": "automated_validated",
       "started": "2026-08-30",
       "completed": "2026-08-30",
@@ -17,7 +36,7 @@
         "real_env": "owed - regenerate on the corporate laptop and click through all six modules (on_hardware_real_env_validation). Failure reproduced deterministically from project/*.json content and is now guarded."
       },
       "docs": {
-        "agreement": "docs/history/phase/0_7_4_1_HTML_EXPORT_RENDER_HOTFIX.md"
+        "agreement": "docs/history/phase/0_7_4A_HTML_EXPORT_RENDER_HOTFIX.md"
       }
     },
     {
