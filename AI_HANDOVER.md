@@ -194,9 +194,9 @@ Backlog `on_hardware_real_env_validation` (P0), laptop-blocked.
 - Local render check (no devices): `scripts/render_sample.py` — `0.7.5` verified
   2026-08-30 (exit 0; `complianceUiData` carries `history: []` / `trend: null`;
   all six payload literals valid JSON).
-- **`0.7.4a`**: regenerate the report on the corporate laptop (`git pull` then
-  `py .\main.py --render-only`) and click through all six modules — confirms the
-  dead-button fix on real data.
+- **`0.7.4a`**: **REAL_ENV_VALIDATED (2026-08-30)** — product owner ran a full
+  `py .\main.py` on the corporate laptop, regenerated `output/index.html`, and
+  confirmed all six modules and every tab work. Dead-button fix done.
 - **`0.7.5`**: the trend sparkline/chip only appears after a *second* real full
   `py .\main.py` checkpoint (the ledger starts empty; no backfill).
 - Real collection run: needs an MDS / Panorama + credentials — deferred to the
