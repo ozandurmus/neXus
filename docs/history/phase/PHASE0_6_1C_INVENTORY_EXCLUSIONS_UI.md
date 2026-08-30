@@ -2,10 +2,51 @@
 
 ## Status
 
-**PLANNED — architecture contract frozen 2026-08-30**
+**DONE — AUTOMATED_VALIDATED 2026-08-30**
 
 Product baseline: `0.7.6a AUTOMATED_VALIDATED`. Backlog id:
-`inventory_exclusions_ui` (P1, `planned`).
+`inventory_exclusions_ui` (P1, was `planned`, now `automated_validated`).
+
+### Closure evidence (2026-08-30)
+
+- `utils/inventory_exclusions_ui.py`: new pure payload builder
+  (`build_inventory_exclusions_payload`), modeled on
+  `discovery_capability_ui.py`. Additive-only fields: `vendor`, `identity`,
+  `reason` per entry, `fleet_summary.total_exclusions` +
+  `.vendor_counts`, and `source` (mirrors `InventoryExclusionPolicy.source`
+  so the UI/tests can distinguish "no local policy file" from "policy loaded
+  with zero active entries").
+- `utils/html_export.py`: loads the policy via the existing
+  `load_inventory_exclusions(compliance_data_root)` — the same `data_root`
+  already threaded through every `run_html_export` call site for the
+  compliance-history ledger, so **no `main.py` call-site changes were
+  needed** (unlike `discovery_ui`, which is threaded as an explicit
+  `lifecycle_store`/`capability_store` kwarg). A malformed local policy file
+  degrades to the payload's own explicit empty state instead of crashing
+  report rendering — `cp_runner.py`'s own collection-time load stays
+  fail-closed and untouched (AC-3).
+- `templates/index.html` / `static/app.js`: new `Exclusions` nav item +
+  panel + `renderExclusionsModule()`, following the Discovery module's
+  structure exactly (AC-1).
+- **Fixture note beyond the implementation plan's assumption:** unlike
+  `discovery_ui.json` (hand-authored, injected via a monkeypatch —
+  see the `discovery_fixture_shape_drift` finding from `cp_unknown_platform`),
+  `tests/fixtures/uitest/state/inventory_exclusions.json` is consumed by the
+  **real** `load_inventory_exclusions()` + `build_inventory_exclusions_payload()`
+  — the render harness exercises the actual production code path end-to-end
+  for this module, not a hand-authored approximation of its shape (AC-4).
+- Evidence: 13 new tests in `tests/test_phase0_6_1c_inventory_exclusions_ui.py`
+  (empty-state, populated payload, sort order, privacy-field-set contract, UI
+  wiring markers, an end-to-end render smoke test, and a malformed-policy
+  degrades-gracefully test). Full suite: 603 passed, 2 skipped, 2 failed
+  (both pre-existing and unrelated — same two tests already documented
+  against the unmodified baseline in prior 0.6.x closures). Net +13 from
+  baseline 590, zero regressions. `tests/test_html_render_harness.py`
+  (JSON-payload checks): 3 passed, 1 skipped. The `bun`/`happy-dom`
+  DOM-execution half of the harness could not run in this session's
+  container (`window.eval is not a function` — the same pre-existing
+  environment gap noted in the `cp_unknown_platform` closure, unrelated to
+  this change) and is owed on a working local toolchain.
 
 ## Objective
 

@@ -658,6 +658,23 @@ def control_assignments():
     }
 
 
+def inventory_exclusions():
+    # inventory_exclusions_ui (0.6.1C Inventory UX, phase 1): unlike
+    # discovery_ui / configuration_ui / crypto_ui, this one is NOT injected
+    # via a monkeypatched builder in render_uitest.py -- it is read for real
+    # by the real load_inventory_exclusions() + build_inventory_exclusions_
+    # payload(), the same as build_compliance_posture. Fake, vendor-neutral
+    # identities only.
+    return {
+        "version": 1,
+        "exclusions": [
+            {"vendor": "checkpoint", "identity": "cp-decoy-jumphost-01", "reason": "not a firewall"},
+            {"vendor": "checkpoint", "identity": "cp-lab-standby-09", "reason": "lab device, out of scope"},
+            {"vendor": "paloalto", "identity": "pan-retired-fw-02", "reason": "decommissioned"},
+        ],
+    }
+
+
 def compliance_history():
     base = datetime(2026, 6, 1, tzinfo=timezone.utc)
     rows = []
@@ -687,6 +704,7 @@ def main():
         "state/compliance_checks.json": compliance_checks(),
         "state/control_assignments.json": control_assignments(),
         "state/compliance_history.json": compliance_history(),
+        "state/inventory_exclusions.json": inventory_exclusions(),
     }
     for rel, payload in writes.items():
         path = HERE / rel

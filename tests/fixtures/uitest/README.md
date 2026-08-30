@@ -24,6 +24,7 @@ compliance, per-framework COVERED / PARTIALLY_COVERED / UNCOVERED.
 | `state/compliance_checks.json` | user-defined compliance cards | copied to `<data_root>/state/`, read by `build_compliance_posture` |
 | `state/control_assignments.json` | a WAIVED control | copied to `<data_root>/state/`, read by `load_control_assignments` |
 | `state/compliance_history.json` | 0.7.5 trend sparkline + delta chip | copied to `<data_root>/state/`, read by `load_history` |
+| `state/inventory_exclusions.json` | Exclusions module | copied to `<data_root>/state/`, read for real by `load_inventory_exclusions` (not injected -- runs the real payload builder, like `build_compliance_posture`) |
 
 `build_compliance_posture`, `build_project_plan_payload` (from the real
 `project/*.json`), the template fill and `_script_json` all run for real —

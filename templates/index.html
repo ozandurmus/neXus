@@ -25,6 +25,7 @@
         <button id="configurationNav" class="module-nav-item" type="button" data-module="configuration">Configuration</button>
         <button id="complianceNav" class="module-nav-item" type="button" data-module="compliance">Compliance</button>
         <button id="discoveryNav" class="module-nav-item" type="button" data-module="discovery">Discovery</button>
+        <button id="exclusionsNav" class="module-nav-item" type="button" data-module="exclusions">Exclusions</button>
         <button id="projectPlanNav" class="module-nav-item" type="button" data-module="project-plan">Project Plan</button>
     </nav>
 
@@ -400,6 +401,27 @@
     </main>
 </section>
 
+<section id="exclusionsModule" class="app-module" data-module-panel="exclusions">
+    <main class="project-plan-shell">
+        <div class="project-plan-heading">
+            <div>
+                <div class="eyebrow">SecurityExpert · 0.6.1C Inventory UX</div>
+                <h1>Inventory Exclusions</h1>
+                <p>Local RuntimeRoot policy applied before direct polling, read-only. Vendor-neutral: shows every excluded identity and its recorded reason, if any. Add/restore/audit workflows are a later, separately-gated phase.</p>
+            </div>
+        </div>
+
+        <div id="exclusionsFleetSummary" class="project-plan-hero"></div>
+
+        <section class="project-plan-card">
+            <div class="dashboard-card-header">
+                <div><div class="eyebrow">Policy</div><h2>Excluded identities</h2></div>
+            </div>
+            <div id="exclusionsEntityTable"></div>
+        </section>
+    </main>
+</section>
+
 <section id="projectPlanModule" class="app-module" data-module-panel="project-plan">
     <main class="project-plan-shell">
         <div class="project-plan-heading">
@@ -465,6 +487,7 @@ const complianceUiData = __COMPLIANCE_JSON_PLACEHOLDER__;
 const cryptoUiData = __CRYPTO_JSON_PLACEHOLDER__;
 const projectPlanData = __PROJECT_PLAN_JSON_PLACEHOLDER__;
 const discoveryUiData = __DISCOVERY_JSON_PLACEHOLDER__;
+const exclusionsUiData = __EXCLUSIONS_JSON_PLACEHOLDER__;
 
 /* __SCRIPT_PLACEHOLDER__ */
 </script>

@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "exclusions": [
+    {
+      "vendor": "checkpoint",
+      "identity": "cp-decoy-jumphost-01",
+      "reason": "not a firewall"
+    },
+    {
+      "vendor": "checkpoint",
+      "identity": "cp-lab-standby-09",
+      "reason": "lab device, out of scope"
+    },
+    {
+      "vendor": "paloalto",
+      "identity": "pan-retired-fw-02",
+      "reason": "decommissioned"
+    }
+  ]
+}

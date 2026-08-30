@@ -2548,7 +2548,7 @@ function savedModule() {
     }
     try {
         const value = localStorage.getItem("securityexpert-module");
-        return ["overview", "inventory", "configuration", "compliance", "discovery", "project-plan"].includes(value) ? value : "overview";
+        return ["overview", "inventory", "configuration", "compliance", "discovery", "exclusions", "project-plan"].includes(value) ? value : "overview";
     } catch (error) {
         return "overview";
     }
@@ -2556,7 +2556,7 @@ function savedModule() {
 
 
 function switchModule(nextModule) {
-    activeModule = ["overview", "inventory", "configuration", "compliance", "discovery", "project-plan"].includes(nextModule)
+    activeModule = ["overview", "inventory", "configuration", "compliance", "discovery", "exclusions", "project-plan"].includes(nextModule)
         ? nextModule
         : "overview";
 
@@ -2593,6 +2593,7 @@ function switchModule(nextModule) {
     }
     if (activeModule === "compliance") renderComplianceModule();
     if (activeModule === "discovery") renderDiscoveryModule();
+    if (activeModule === "exclusions") renderExclusionsModule();
     if (activeModule === "project-plan") renderProjectPlan();
 }
 
@@ -4577,6 +4578,48 @@ function renderDiscoveryModule() {
 }
 
 
+function renderExclusionsModule() {
+    const payload = exclusionsUiData || {};
+    const fleet = payload.fleet_summary || {};
+    const entities = Array.isArray(payload.entities) ? payload.entities : [];
+
+    const summaryHost = document.getElementById("exclusionsFleetSummary");
+    if (summaryHost) {
+        const vendorCounts = fleet.vendor_counts || {};
+        summaryHost.innerHTML = `
+            <article class="project-progress-card primary">
+                <div class="eyebrow">Excluded identities</div>
+                <div class="project-progress-value">${escapeHtml(formatNumber(fleet.total_exclusions))}</div>
+                <p>Applied before direct polling by the local RuntimeRoot policy. No repository defaults.</p>
+            </article>
+            <article class="project-progress-card">
+                <div class="eyebrow">By vendor</div>
+                <div class="project-status-summary">
+                    ${Object.entries(vendorCounts).length
+                        ? Object.entries(vendorCounts).map(([key, value]) => `<span>${escapeHtml(key)}<strong>${escapeHtml(formatNumber(value))}</strong></span>`).join("")
+                        : `<span>No exclusions active<strong>0</strong></span>`}
+                </div>
+            </article>
+        `;
+    }
+
+    const entityHost = document.getElementById("exclusionsEntityTable");
+    if (entityHost) {
+        entityHost.innerHTML = entities.length
+            ? `<div class="table-wrap"><table class="data-table"><thead><tr>
+                <th>Vendor</th><th>Identity</th><th>Reason</th>
+            </tr></thead><tbody>${entities.map(row => `
+                <tr>
+                    <td>${escapeHtml(row.vendor)}</td>
+                    <td>${escapeHtml(row.identity)}</td>
+                    <td>${escapeHtml(row.reason || "—")}</td>
+                </tr>
+            `).join("")}</tbody></table></div>`
+            : `<div class="empty-state compact"><span>No inventory exclusions active. Add entries to data/state/inventory_exclusions.json (local RuntimeRoot policy, not the repository) to exclude identities from direct polling.</span></div>`;
+    }
+}
+
+
 function renderProjectPlan() {
     const plan = projectPlanData || {};
     const badge = document.getElementById("projectPlanBuildBadge");
@@ -4787,6 +4830,7 @@ document.querySelectorAll(".config-tab").forEach(tab => {
 renderOverviewModule();
 renderComplianceModule();
 renderDiscoveryModule();
+renderExclusionsModule();
 renderProjectPlan();
 renderConfigDeviceList();
 renderConfigSelected();
