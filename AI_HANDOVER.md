@@ -10,16 +10,17 @@ If a section does not apply, write `n/a` — do not delete the heading.
 
 ## 1. Snapshot
 
-- Product baseline: `0.7.6 — Automated HTML render harness` — AUTOMATED_VALIDATED
-  (2026-08-30). Previous: `0.7.5` (trend layer), `0.7.4`; hotfix `0.7.4a`
-  REAL_ENV_VALIDATED.
+- Product baseline: `0.7.6a — Render harness + uitest topology matrix` —
+  AUTOMATED_VALIDATED (2026-08-30). Previous: `0.7.6` (harness), `0.7.5` (trend
+  layer), `0.7.4`; hotfix `0.7.4a` REAL_ENV_VALIDATED.
 - Engineering baseline: `DEV.1` complete; `DEV.2.1` — AUTOMATED_VALIDATED.
 - Date: 2026-08-30
-- **`origin/main` is at `0c89880`** — CE.1 fast-follow #2 (`5b5e893`), the
-  `0.7.4a` render hotfix (`7d991a3`), `0.7.5` trend layer (`8aa0805`) and the
-  `0.7.4a` real-env doc (`0c89880`) are all merged + pushed.
-- **`0.7.6` render harness is on branch `feature/0-7-6-render-harness`,
-  automated-validated, not yet merged** (§2, §6).
+- **`origin/main` is at `bf9c605`** — CE.1 fast-follow #2 (`5b5e893`), `0.7.4a`
+  render hotfix (`7d991a3`) + real-env doc (`0c89880`), `0.7.5` trend layer
+  (`8aa0805`), `0.7.6` render harness (`bf9c605`) are all merged + pushed.
+- **`0.7.6a` (uitest topology-matrix expansion) is on branch
+  `feature/0-7-6a-uitest-topologies`, automated-validated, not yet merged**
+  (§2, §6).
 - **Never label a version as four dot-separated numbers** — `_IPV4_RE` in the
   privacy gate flags an `A.B.C.D` numeric label as a `PRIVATE_ENDPOINT_LITERAL`.
   Use a letter suffix (`0.7.4a`). The two `0.7.4a` hotfix *commit messages*
@@ -44,7 +45,7 @@ If a section does not apply, write `n/a` — do not delete the heading.
   `py -V:3.12 <script>` mis-parses on this box (exit 103); use
   `py -V:3.12 -m pytest` or the 3.12 interpreter directly at
   `%LOCALAPPDATA%\Programs\Python\Python312\python.exe`.
-- Full suite: `py -m pytest -q -n auto --dist worksteal` → **550 passed,
+- Full suite: `py -m pytest -q -n auto --dist worksteal` → **551 passed,
   3 skipped, 0 failed** (~35s). +13 (0.7.5) + 3 (0.7.6) since the 534 baseline.
 - **HTML render harness** (0.7.6): `py -V:3.12 scripts/render_uitest.py --out D`
   then `bun tools/render-harness/check-render.mjs D/output/index.html`.
@@ -57,14 +58,23 @@ If a section does not apply, write `n/a` — do not delete the heading.
 
 ## 2. Recent builds (this session)
 
-- **`0.7.6` — Automated HTML render harness + `uitest` fixture** — branch
-  `feature/0-7-6-render-harness`, automated-validated, **not yet merged**.
-  Contract + impl record: `docs/history/phase/0_7_6_RENDER_HARNESS.md`.
+- **`0.7.6a` — `uitest` fixture expanded to a topology matrix** — branch
+  `feature/0-7-6a-uitest-topologies`, automated-validated, **not yet merged**.
+  Same phase doc, §4. `build_fixture.py` regenerated so the bundle covers CP
+  standalone gateway / ClusterXL (active+standby) / VSX host + virtual systems /
+  VSX cluster + shared virtual system / UNAVAILABLE gateway; PAN single / HA pair
+  / multi-vsys / multi-vsys HA. Plus cluster-member interface+route divergence,
+  `live`/`last_known_good`/`no_data` inventory, the full alignment class set,
+  `same`/`changed`/`first` history, crypto `PASS`/`FINDING`/`UNKNOWN`, enforced +
+  advisory + WAIVED (`state/control_assignments.json`) compliance. New
+  `test_all_topologies_present` (suite 550 → 551).
+- **`0.7.6` — Automated HTML render harness + `uitest` fixture** — **LANDED** on
+  `main` (`bf9c605`). Contract + impl record:
+  `docs/history/phase/0_7_6_RENDER_HARNESS.md`.
   - `tests/fixtures/uitest/` — committed, hand-authored, privacy-clean bundle
     (fake names, RFC 5737 ranges): `unified.json` + injected `configuration_ui`
-    / `crypto_ui` / `discovery_ui` + `state/compliance_checks.json` +
-    `state/compliance_history.json` (3 records → the trend renders) +
-    `build_fixture.py` + `README.md` (growth rule).
+    / `crypto_ui` / `discovery_ui` + `state/*` + `build_fixture.py` +
+    `README.md` (growth rule).
   - `scripts/render_uitest.py` — renders from the bundle; injects only the three
     builders whose real inputs are telemetry / PAN XML / live stores.
     `build_compliance_posture`, `_fill_template`, `_script_json` run for real.
@@ -79,7 +89,7 @@ If a section does not apply, write `n/a` — do not delete the heading.
     project-state-update rule gains `tests/fixtures/uitest/`.
   - `utils/repository_privacy.py` + `test_dev_0_5b_*` skip `node_modules`.
   - Negative-tested: corrupt payload literal → FAIL parse; renamed nav handler →
-    FAIL (16), panels don't activate. Suite 547 → 550. No `main.py` change.
+    FAIL (16), panels don't activate. No `main.py` change.
 - **`0.7.5` — Compliance trend layer** — **LANDED** on `main` (`8aa0805`).
   Contract + impl record: `docs/history/phase/0_7_5_COMPLIANCE_TREND.md`.
   Resolves design doc §11 decision 9. Additive; no server/collector/command;
@@ -263,15 +273,13 @@ Backlog `on_hardware_real_env_validation` (P0), laptop-blocked.
 
 ## 5. Exact next action
 
-1. **Land `0.7.6`** (branch `feature/0-7-6-render-harness`). New:
-   `tests/fixtures/uitest/**`, `scripts/render_uitest.py`,
-   `tools/render-harness/{package.json,bun.lock,check-render.mjs}`,
-   `tests/test_html_render_harness.py`,
-   `docs/history/phase/0_7_6_RENDER_HARNESS.md`. Modified: `.gitignore`,
-   `AGENTS.md`, `docs/AI_DEVELOPMENT_PROTOCOL.md`, `utils/repository_privacy.py`,
-   `tests/test_dev_0_5b_auth_consumer_canonical_config.py`,
-   `project/build_history.json`, `CURRENT_STATE.md`, `AI_HANDOVER.md`.
-   `git merge --no-ff` into `main` + `git push`, or `gh pr create` → `gh pr merge`.
+1. **Land `0.7.6a`** (branch `feature/0-7-6a-uitest-topologies`). Modified:
+   `tests/fixtures/uitest/build_fixture.py` + its regenerated
+   `unified.json` / `configuration_ui.json` / `crypto_ui.json` /
+   `discovery_ui.json` / `state/*.json` (+ new `state/control_assignments.json`),
+   `tests/fixtures/uitest/README.md`, `tests/test_html_render_harness.py`,
+   `docs/history/phase/0_7_6_RENDER_HARNESS.md`, `project/build_history.json`,
+   `CURRENT_STATE.md`, `AI_HANDOVER.md`. `git merge --no-ff` + `git push`.
 2. From now on, run the render harness for any UI/payload change (it's in the
    `AGENTS.md` close checklist + `AI_DEVELOPMENT_PROTOCOL.md`).
 3. `0.7.5` real-env confirmation still owed: the trend chip appears after the
@@ -280,14 +288,14 @@ Backlog `on_hardware_real_env_validation` (P0), laptop-blocked.
 
 ## 6. main merge decision + Git dispatch
 
-- **CE.1 fast-follow #2, `0.7.4a` hotfix, `0.7.5` trend layer: LANDED** on
-  `origin/main` (`0c89880`).
-- **`0.7.6` render harness: approved on evidence, pending the user's go-ahead to
-  run the merge** (standing priority 4). Branch `feature/0-7-6-render-harness`.
-  Evidence: 550p/3s/0f, negative-tested, privacy gate PASS/0 on a clean tree,
-  `render_sample.py` exit 0, `render_uitest.py` + `check-render.mjs` PASS.
+- **CE.1 fast-follow #2, `0.7.4a` hotfix, `0.7.5` trend layer, `0.7.6` render
+  harness: LANDED** on `origin/main` (`bf9c605`).
+- **`0.7.6a` uitest topology-matrix expansion: approved on evidence, pending the
+  user's go-ahead to run the merge** (standing priority 4). Branch
+  `feature/0-7-6a-uitest-topologies`. Evidence: 551p/3s/0f,
+  `check-render.mjs` PASS on the 16-device render, privacy gate PASS/0.
 - Dispatch: `git checkout main && git merge --no-ff
-  feature/0-7-6-render-harness && git push origin main` (or the `gh pr` path).
+  feature/0-7-6a-uitest-topologies && git push origin main`.
 - Delete the gitignored `data/` + `logs/` a test run leaves before the privacy
   gate. `bun.lock` + `package.json` are committed; `node_modules/` is not.
 
@@ -300,12 +308,13 @@ Backlog `on_hardware_real_env_validation` (P0), laptop-blocked.
 
 ## 8. Continue or fresh chat
 
-**Continue this chat** to land `0.7.6`. Start a fresh chat for the next distinct
+**Continue this chat** to land `0.7.6a`. Start a fresh chat for the next distinct
 build.
 
 ## 9. main.py / UI effect
 
-- **0.7.6:** none — dev/CI tooling only. `main.py` unchanged.
+- **0.7.6 / 0.7.6a:** none — dev/CI tooling + test fixture only. `main.py`
+  unchanged.
 - **0.7.5:** no visible change until a *second* full `py .\main.py` checkpoint
   exists. From then, the Overview compliance card and the Compliance KPI band
   show an aligned-% sparkline and a "±N pts since <date>" chip. `--render-only`

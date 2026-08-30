@@ -50,6 +50,46 @@
       }
     },
     {
+      "id": "x_ntp_configured",
+      "title": "At least one NTP server is configured",
+      "rationale": "Time sync underpins log correlation and cert validation.",
+      "severity": "medium",
+      "applies_to": {},
+      "frameworks": [
+        {
+          "framework": "CIS",
+          "reference": "5.1",
+          "applies": true
+        },
+        {
+          "framework": "PCI-DSS",
+          "reference": "1.2.1",
+          "applies": true
+        },
+        {
+          "framework": "BDDK",
+          "reference": "Ağ Güvenliği",
+          "applies": true
+        }
+      ],
+      "evidence": {
+        "steps": [
+          {
+            "source": "current_configuration.sections[id=ntp].settings",
+            "select": "value",
+            "assert": {
+              "op": "present"
+            }
+          }
+        ]
+      },
+      "verdict": {
+        "on_pass": "PASS",
+        "on_fail": "FINDING",
+        "on_no_evidence": "UNKNOWN"
+      }
+    },
+    {
       "id": "x_min_two_interfaces",
       "title": "Device exposes at least two interfaces",
       "rationale": "A single-interface production firewall is usually a discovery gap.",

@@ -80,6 +80,14 @@
           "summary": "Management TLS minimum version is 1.2."
         },
         {
+          "rule_id": "cert_key_size",
+          "category": "crypto_agility",
+          "status": "UNKNOWN",
+          "severity": "medium",
+          "evidence_basis": "insufficient",
+          "summary": "Certificate inventory is incomplete for this subject."
+        },
+        {
           "rule_id": "pqc_readiness",
           "category": "pqc_readiness",
           "status": "UNKNOWN",
@@ -110,21 +118,61 @@
           "severity": "high",
           "evidence_basis": "configured",
           "summary": "SSH management offers no CBC ciphers."
+        },
+        {
+          "rule_id": "pqc_readiness",
+          "category": "pqc_readiness",
+          "status": "UNKNOWN",
+          "severity": "informational",
+          "evidence_basis": "inferred",
+          "summary": "PQC key exchange not available on this Gaia release."
+        }
+      ]
+    },
+    {
+      "subject_id": "cp-002",
+      "subject_label": "Configuration subject cp-002",
+      "vendor_key": "check_point",
+      "status": "FINDING",
+      "facts": {
+        "tls_service_profiles": [
+          {
+            "name": "gaia-portal",
+            "min_version": "tls1-0"
+          }
+        ]
+      },
+      "findings": [
+        {
+          "rule_id": "tls_min_version",
+          "category": "crypto_agility",
+          "status": "FINDING",
+          "severity": "high",
+          "evidence_basis": "configured",
+          "summary": "Gaia portal TLS minimum version is 1.0."
+        },
+        {
+          "rule_id": "ssh_no_cbc",
+          "category": "weak_algorithm",
+          "status": "FINDING",
+          "severity": "high",
+          "evidence_basis": "configured",
+          "summary": "SSH management still offers a CBC cipher."
         }
       ]
     }
   ],
   "fleet": {
-    "subjects": 2,
-    "evaluated_subjects": 2,
+    "subjects": 3,
+    "evaluated_subjects": 3,
     "status_counts": {
       "PASS": 1,
-      "FINDING": 1
+      "FINDING": 2
     },
     "category_counts": {
-      "weak_algorithm": 2,
-      "crypto_agility": 1,
-      "pqc_readiness": 1
+      "weak_algorithm": 4,
+      "crypto_agility": 3,
+      "pqc_readiness": 2
     }
   },
   "pqc": {

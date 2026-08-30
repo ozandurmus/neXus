@@ -18,45 +18,114 @@
   },
   "fleet": {
     "tls_verify": true,
-    "selected": 3,
-    "success": 3,
-    "failed": 0,
-    "primary_evidence_success": 3,
-    "first": 0,
-    "same": 3,
-    "changed": 0,
+    "ca_bundle_configured": true,
+    "selected": 16,
+    "success": 14,
+    "failed": 2,
+    "primary_evidence_success": 14,
+    "first": 1,
+    "same": 10,
+    "changed": 3,
+    "method_failures": 1,
+    "devices_with_coverage_gaps": 2,
+    "pan_selected": 6,
+    "pan_success": 5,
+    "alignment_supported_selected": 6,
+    "alignment_supported_success": 5,
+    "alignment_evidence_complete": 5,
+    "checkpoint_selected": 10,
+    "checkpoint_success": 9,
+    "checkpoint_planned_entities": 10,
+    "checkpoint_unmaterialized_entities": 0,
     "checkpoint_host_key_policy": "strict_known_hosts",
-    "checkpoint_production_trust_ready": true
+    "checkpoint_production_trust_ready": true,
+    "checkpoint_entity_type_counts": {
+      "gateway": 2,
+      "clusterxl_member": 2,
+      "vsx_host": 3,
+      "virtual_system": 3
+    },
+    "checkpoint_platform_counts": {
+      "gaia": 10
+    }
+  },
+  "classification_labels": {
+    "ALIGNED": "Aligned",
+    "LOCAL_OVERRIDE": "Local override",
+    "EFFECTIVE_DRIFT": "Effective drift",
+    "MEMBER_SPECIFIC": "Member specific",
+    "LOCAL_ONLY": "Local only",
+    "EXPECTED_ONLY": "Expected only",
+    "UNKNOWN": "Unknown"
+  },
+  "category_labels": {
+    "system": "System",
+    "network": "Network",
+    "management": "Management",
+    "ha": "HA"
   },
   "backup": {
     "status": "not_configured",
-    "phase": "0.6.0B"
+    "phase": "0.6.0B",
+    "message": "Native recovery artifacts are not configured yet."
   },
   "devices": [
     {
-      "vendor": "check_point",
-      "vendor_key": "check_point",
+      "id": "cp:cp-edge-01",
       "name": "cp-edge-01",
-      "display_name": "cp-edge-01",
       "device_name": "cp-edge-01",
+      "vendor": "Check Point",
+      "vendor_key": "check_point",
       "entity_type": "gateway",
+      "parent_name": null,
+      "parent_entity_id": null,
+      "cluster_group_id": null,
+      "cluster_display_name": null,
+      "presentation_group_id": null,
+      "presentation_group_label": null,
+      "presentation_group_source": null,
+      "platform": {
+        "family": "gaia",
+        "label": "Check Point Gaia"
+      },
       "platform_family": "gaia",
-      "serial": "SN-CP-UITEST-1",
+      "platform_label": "Check Point Gaia",
+      "management_state": "communicating",
+      "failure_reason": null,
+      "failure_family": null,
+      "serial": "SN-CP-EDGE-01",
+      "management_ip": null,
       "model": "CP-6900",
       "sw_version": "R81.20",
-      "ha_role": "active",
-      "management_ip": "192.0.2.11",
+      "ha_role": null,
+      "ha_role_source": null,
+      "vsys_count": 0,
+      "policy_scope_label": "Entity",
+      "policy_scope": "Standalone gateway",
       "connected": true,
-      "host_key_policy": "strict_known_hosts",
+      "status": "success",
+      "primary_evidence_status": "success",
+      "alignment_evidence_status": "success",
+      "started_at": "2026-08-30T12:00:00Z",
+      "completed_at": "2026-08-30T12:00:00Z",
+      "tone": "success",
+      "status_label": "Current",
+      "assignment": {},
       "current_configuration": {
+        "schema_version": "0.6.1B",
         "status": "available",
+        "vendor": "check_point",
+        "source_plane": "gaia-clish-show-configuration",
+        "entity_type": "gateway",
         "sections": [
           {
             "id": "system",
+            "label": "System",
+            "count": 2,
             "settings": [
               {
                 "setting": "Hostname",
-                "value": "CP-EDGE-01"
+                "value": "CP-DEVICE"
               },
               {
                 "setting": "Timezone",
@@ -66,6 +135,8 @@
           },
           {
             "id": "dns",
+            "label": "Dns",
+            "count": 2,
             "settings": [
               {
                 "setting": "Primary DNS",
@@ -79,6 +150,8 @@
           },
           {
             "id": "ntp",
+            "label": "Ntp",
+            "count": 2,
             "settings": [
               {
                 "setting": "Primary NTP Server",
@@ -91,20 +164,9 @@
             ]
           },
           {
-            "id": "authentication",
-            "settings": [
-              {
-                "setting": "AAA Type",
-                "value": "radius"
-              },
-              {
-                "setting": "Failed Attempts Lockout",
-                "value": "5"
-              }
-            ]
-          },
-          {
             "id": "management",
+            "label": "Management",
+            "count": 4,
             "settings": [
               {
                 "setting": "Telnet Disabled",
@@ -120,12 +182,14 @@
               },
               {
                 "setting": "SSH Ciphers",
-                "value": "aes256-ctr,aes128-ctr"
+                "value": "aes256-ctr,aes256-gcm"
               }
             ]
           },
           {
             "id": "password_policy",
+            "label": "Password Policy",
+            "count": 3,
             "settings": [
               {
                 "setting": "Minimum Password Length",
@@ -143,6 +207,8 @@
           },
           {
             "id": "banner",
+            "label": "Banner",
+            "count": 2,
             "settings": [
               {
                 "setting": "Login Banner Present",
@@ -156,6 +222,8 @@
           },
           {
             "id": "services",
+            "label": "Services",
+            "count": 2,
             "settings": [
               {
                 "setting": "Telnet",
@@ -169,6 +237,8 @@
           },
           {
             "id": "logging",
+            "label": "Logging",
+            "count": 2,
             "settings": [
               {
                 "setting": "Logging Audit",
@@ -180,14 +250,107 @@
               }
             ]
           }
-        ]
+        ],
+        "section_index": [
+          {
+            "id": "system",
+            "label": "System",
+            "count": 2
+          },
+          {
+            "id": "dns",
+            "label": "Dns",
+            "count": 2
+          },
+          {
+            "id": "ntp",
+            "label": "Ntp",
+            "count": 2
+          },
+          {
+            "id": "management",
+            "label": "Management",
+            "count": 4
+          },
+          {
+            "id": "password_policy",
+            "label": "Password Policy",
+            "count": 3
+          },
+          {
+            "id": "banner",
+            "label": "Banner",
+            "count": 2
+          },
+          {
+            "id": "services",
+            "label": "Services",
+            "count": 2
+          },
+          {
+            "id": "logging",
+            "label": "Logging",
+            "count": 2
+          }
+        ],
+        "highlights": [
+          {
+            "label": "Hostname",
+            "value": "CP-DEVICE",
+            "section": "system",
+            "section_label": "System",
+            "origin": "local",
+            "context": null
+          }
+        ],
+        "setting_count": 19,
+        "redacted_secret_setting_count": 2,
+        "structured_values_included": true,
+        "raw_config_included": false,
+        "secrets_redacted": true
       },
       "alignment": {
+        "available": true,
+        "status": "success",
+        "device_status": "DIFFERENCE_OBSERVED",
+        "engine_status": "success",
+        "reason": "trusted_intent_compared_with_direct_actual",
+        "message": "Trusted intent was compared with direct actual evidence.",
         "counts": {
-          "ALIGNED": 2,
-          "LOCAL_OVERRIDE": 1,
-          "MEMBER_SPECIFIC": 1
+          "ALIGNED": 6,
+          "LOCAL_OVERRIDE": 2,
+          "EFFECTIVE_DRIFT": 1,
+          "MEMBER_SPECIFIC": 1,
+          "LOCAL_ONLY": 1,
+          "EXPECTED_ONLY": 1,
+          "UNKNOWN": 1
         },
+        "categories": [
+          {
+            "category": "system",
+            "count": 4
+          },
+          {
+            "category": "network",
+            "count": 2
+          },
+          {
+            "category": "management",
+            "count": 3
+          },
+          {
+            "category": "ha",
+            "count": 1
+          }
+        ],
+        "expected_settings": 40,
+        "alignment_ready_settings": 34,
+        "observed_settings": 36,
+        "observed_percent": 90.0,
+        "coverage_percent": 85.0,
+        "value_comparison_coverage_percent": 80.0,
+        "local_only_settings": 1,
+        "semantic_exclusion_settings": 2,
         "findings": [
           {
             "alignment_key": "deviceconfig/system/hostname",
@@ -206,39 +369,324 @@
             "reason": "effective_differs_from_expected_and_matches_local_active_scalar"
           },
           {
-            "alignment_key": "deviceconfig/high-availability/peer-ip",
+            "alignment_key": "deviceconfig/system/login-banner",
+            "classification": "EFFECTIVE_DRIFT",
+            "category": "system",
+            "reason": "effective_differs_from_expected_no_local_scalar_match"
+          },
+          {
+            "alignment_key": "network/virtual-router/entry/routing-table/ip/static-route",
+            "classification": "LOCAL_ONLY",
+            "category": "network",
+            "reason": "present_only_in_local_active"
+          },
+          {
+            "alignment_key": "deviceconfig/setting/management/idle-timeout",
+            "classification": "EXPECTED_ONLY",
+            "category": "management",
+            "reason": "present_only_in_expected"
+          },
+          {
+            "alignment_key": "deviceconfig/high-availability/group/peer-ip",
             "classification": "MEMBER_SPECIFIC",
             "category": "ha",
             "reason": "member_relative_ha_setting"
+          },
+          {
+            "alignment_key": "deviceconfig/system/service/disable-telnet",
+            "classification": "UNKNOWN",
+            "category": "management",
+            "reason": "expected_or_effective_value_not_resolvable"
           }
-        ]
-      }
+        ],
+        "peer_evidence_incomplete": false
+      },
+      "history": {
+        "actual_change_state": "same",
+        "effective_change_state": "same"
+      },
+      "history_v1": {
+        "schema_version": "0.6.3",
+        "status": "available",
+        "scope": "entity",
+        "artifacts": [
+          {
+            "artifact_type": "cp-show-configuration",
+            "artifact_label": "Gaia show configuration",
+            "event_count": 3,
+            "truncated": false,
+            "skipped_malformed": 0,
+            "events": [
+              {
+                "collected_at": "2026-07-31T12:00:00Z",
+                "change": "FIRST",
+                "artifact_type": "effective-running"
+              },
+              {
+                "collected_at": "2026-08-23T12:00:00Z",
+                "change": "SAME",
+                "artifact_type": "effective-running"
+              },
+              {
+                "collected_at": "2026-08-30T12:00:00Z",
+                "change": "SAME",
+                "artifact_type": "effective-running"
+              }
+            ]
+          }
+        ],
+        "pair_results": [
+          {
+            "status": "insufficient_evidence",
+            "reason": "cp_raw_text_diff_not_supported_in_0_6_3"
+          }
+        ],
+        "privacy": {
+          "contains_secrets": false,
+          "contains_raw_configuration": false
+        }
+      },
+      "host_key_policy": "strict_known_hosts"
     },
     {
-      "vendor": "check_point",
+      "id": "cp:cp-edge-02",
+      "name": "cp-edge-02",
+      "device_name": "cp-edge-02",
+      "vendor": "Check Point",
       "vendor_key": "check_point",
-      "name": "cp-core-01",
-      "display_name": "cp-core-CLS",
-      "device_name": "cp-core-01",
-      "parent_name": "cp-core",
-      "entity_type": "cluster_member",
+      "entity_type": "gateway",
+      "parent_name": null,
+      "parent_entity_id": null,
+      "cluster_group_id": null,
+      "cluster_display_name": null,
+      "presentation_group_id": null,
+      "presentation_group_label": null,
+      "presentation_group_source": null,
+      "platform": {
+        "family": "gaia",
+        "label": "Check Point Gaia"
+      },
       "platform_family": "gaia",
-      "serial": "SN-CP-UITEST-2",
+      "platform_label": "Check Point Gaia",
+      "management_state": "unreachable",
+      "failure_reason": "capability_gap",
+      "failure_family": "capability_gap",
+      "serial": "SN-CP-EDGE-02",
+      "management_ip": null,
+      "model": "CP-6900",
+      "sw_version": "R81.20",
+      "ha_role": null,
+      "ha_role_source": null,
+      "vsys_count": 0,
+      "policy_scope_label": "Entity",
+      "policy_scope": "Standalone gateway",
+      "connected": false,
+      "status": "failed",
+      "primary_evidence_status": "failed",
+      "alignment_evidence_status": "insufficient_evidence",
+      "started_at": "2026-08-30T12:00:00Z",
+      "completed_at": "2026-08-30T12:00:00Z",
+      "tone": "muted",
+      "status_label": "Capability gap",
+      "assignment": {},
+      "current_configuration": {
+        "status": "unavailable"
+      },
+      "alignment": {
+        "available": false,
+        "status": "insufficient_evidence",
+        "device_status": "INSUFFICIENT_EVIDENCE",
+        "engine_status": "insufficient_evidence",
+        "reason": "trusted_management_intent_projection_unavailable",
+        "message": "Trusted intent is unavailable; direct actual evidence is not treated as expected state.",
+        "counts": {
+          "ALIGNED": 6,
+          "LOCAL_OVERRIDE": 2,
+          "EFFECTIVE_DRIFT": 1,
+          "MEMBER_SPECIFIC": 1,
+          "LOCAL_ONLY": 1,
+          "EXPECTED_ONLY": 1,
+          "UNKNOWN": 1
+        },
+        "categories": [
+          {
+            "category": "system",
+            "count": 4
+          },
+          {
+            "category": "network",
+            "count": 2
+          },
+          {
+            "category": "management",
+            "count": 3
+          },
+          {
+            "category": "ha",
+            "count": 1
+          }
+        ],
+        "expected_settings": 40,
+        "alignment_ready_settings": 34,
+        "observed_settings": 36,
+        "observed_percent": 90.0,
+        "coverage_percent": 85.0,
+        "value_comparison_coverage_percent": 80.0,
+        "local_only_settings": 1,
+        "semantic_exclusion_settings": 2,
+        "findings": [
+          {
+            "alignment_key": "deviceconfig/system/hostname",
+            "classification": "ALIGNED",
+            "category": "system"
+          },
+          {
+            "alignment_key": "deviceconfig/system/dns-setting/servers/primary",
+            "classification": "ALIGNED",
+            "category": "dns"
+          },
+          {
+            "alignment_key": "deviceconfig/system/permitted-ip/entry/description",
+            "classification": "LOCAL_OVERRIDE",
+            "category": "system",
+            "reason": "effective_differs_from_expected_and_matches_local_active_scalar"
+          },
+          {
+            "alignment_key": "deviceconfig/system/login-banner",
+            "classification": "EFFECTIVE_DRIFT",
+            "category": "system",
+            "reason": "effective_differs_from_expected_no_local_scalar_match"
+          },
+          {
+            "alignment_key": "network/virtual-router/entry/routing-table/ip/static-route",
+            "classification": "LOCAL_ONLY",
+            "category": "network",
+            "reason": "present_only_in_local_active"
+          },
+          {
+            "alignment_key": "deviceconfig/setting/management/idle-timeout",
+            "classification": "EXPECTED_ONLY",
+            "category": "management",
+            "reason": "present_only_in_expected"
+          },
+          {
+            "alignment_key": "deviceconfig/high-availability/group/peer-ip",
+            "classification": "MEMBER_SPECIFIC",
+            "category": "ha",
+            "reason": "member_relative_ha_setting"
+          },
+          {
+            "alignment_key": "deviceconfig/system/service/disable-telnet",
+            "classification": "UNKNOWN",
+            "category": "management",
+            "reason": "expected_or_effective_value_not_resolvable"
+          }
+        ],
+        "peer_evidence_incomplete": false
+      },
+      "history": {
+        "actual_change_state": "same",
+        "effective_change_state": "same"
+      },
+      "history_v1": {
+        "schema_version": "0.6.3",
+        "status": "available",
+        "scope": "entity",
+        "artifacts": [
+          {
+            "artifact_type": "cp-show-configuration",
+            "artifact_label": "Gaia show configuration",
+            "event_count": 3,
+            "truncated": false,
+            "skipped_malformed": 0,
+            "events": [
+              {
+                "collected_at": "2026-07-31T12:00:00Z",
+                "change": "FIRST",
+                "artifact_type": "effective-running"
+              },
+              {
+                "collected_at": "2026-08-23T12:00:00Z",
+                "change": "SAME",
+                "artifact_type": "effective-running"
+              },
+              {
+                "collected_at": "2026-08-30T12:00:00Z",
+                "change": "SAME",
+                "artifact_type": "effective-running"
+              }
+            ]
+          }
+        ],
+        "pair_results": [
+          {
+            "status": "insufficient_evidence",
+            "reason": "cp_raw_text_diff_not_supported_in_0_6_3"
+          }
+        ],
+        "privacy": {
+          "contains_secrets": false,
+          "contains_raw_configuration": false
+        }
+      },
+      "host_key_policy": "strict_known_hosts"
+    },
+    {
+      "id": "cp:cp-core-01",
+      "name": "cp-core-01",
+      "device_name": "cp-core-01",
+      "vendor": "Check Point",
+      "vendor_key": "check_point",
+      "entity_type": "clusterxl_member",
+      "parent_name": "cp-core",
+      "parent_entity_id": "cp:cp-core",
+      "cluster_group_id": "uitest-cxl",
+      "cluster_display_name": "cp-core-CLS",
+      "presentation_group_id": "uitest-cxl",
+      "presentation_group_label": "cp-core-CLS",
+      "presentation_group_source": "inferred_member_pattern",
+      "platform": {
+        "family": "gaia",
+        "label": "Check Point Gaia"
+      },
+      "platform_family": "gaia",
+      "platform_label": "Check Point Gaia",
+      "management_state": "communicating",
+      "failure_reason": null,
+      "failure_family": null,
+      "serial": "SN-CP-CORE-01",
+      "management_ip": null,
       "model": "CP-6900",
       "sw_version": "R81.20",
       "ha_role": "active",
-      "management_ip": "192.0.2.21",
+      "ha_role_source": "cluster_topology",
+      "vsys_count": 0,
+      "policy_scope_label": "ClusterXL",
+      "policy_scope": "cp-core-CLS",
       "connected": true,
-      "host_key_policy": "strict_known_hosts",
+      "status": "success",
+      "primary_evidence_status": "success",
+      "alignment_evidence_status": "success",
+      "started_at": "2026-08-30T12:00:00Z",
+      "completed_at": "2026-08-30T12:00:00Z",
+      "tone": "success",
+      "status_label": "Current",
+      "assignment": {},
       "current_configuration": {
+        "schema_version": "0.6.1B",
         "status": "available",
+        "vendor": "check_point",
+        "source_plane": "gaia-clish-show-configuration",
+        "entity_type": "clusterxl_member",
         "sections": [
           {
             "id": "system",
+            "label": "System",
+            "count": 2,
             "settings": [
               {
                 "setting": "Hostname",
-                "value": "CP-EDGE-01"
+                "value": "CP-DEVICE"
               },
               {
                 "setting": "Timezone",
@@ -248,6 +696,8 @@
           },
           {
             "id": "dns",
+            "label": "Dns",
+            "count": 2,
             "settings": [
               {
                 "setting": "Primary DNS",
@@ -261,6 +711,8 @@
           },
           {
             "id": "ntp",
+            "label": "Ntp",
+            "count": 2,
             "settings": [
               {
                 "setting": "Primary NTP Server",
@@ -273,20 +725,9 @@
             ]
           },
           {
-            "id": "authentication",
-            "settings": [
-              {
-                "setting": "AAA Type",
-                "value": "radius"
-              },
-              {
-                "setting": "Failed Attempts Lockout",
-                "value": "5"
-              }
-            ]
-          },
-          {
             "id": "management",
+            "label": "Management",
+            "count": 4,
             "settings": [
               {
                 "setting": "Telnet Disabled",
@@ -302,12 +743,14 @@
               },
               {
                 "setting": "SSH Ciphers",
-                "value": "aes256-ctr,aes128-ctr"
+                "value": "aes128-cbc,aes256-ctr"
               }
             ]
           },
           {
             "id": "password_policy",
+            "label": "Password Policy",
+            "count": 3,
             "settings": [
               {
                 "setting": "Minimum Password Length",
@@ -325,6 +768,8 @@
           },
           {
             "id": "banner",
+            "label": "Banner",
+            "count": 2,
             "settings": [
               {
                 "setting": "Login Banner Present",
@@ -338,6 +783,8 @@
           },
           {
             "id": "services",
+            "label": "Services",
+            "count": 2,
             "settings": [
               {
                 "setting": "Telnet",
@@ -351,6 +798,8 @@
           },
           {
             "id": "logging",
+            "label": "Logging",
+            "count": 2,
             "settings": [
               {
                 "setting": "Logging Audit",
@@ -362,12 +811,107 @@
               }
             ]
           }
-        ]
+        ],
+        "section_index": [
+          {
+            "id": "system",
+            "label": "System",
+            "count": 2
+          },
+          {
+            "id": "dns",
+            "label": "Dns",
+            "count": 2
+          },
+          {
+            "id": "ntp",
+            "label": "Ntp",
+            "count": 2
+          },
+          {
+            "id": "management",
+            "label": "Management",
+            "count": 4
+          },
+          {
+            "id": "password_policy",
+            "label": "Password Policy",
+            "count": 3
+          },
+          {
+            "id": "banner",
+            "label": "Banner",
+            "count": 2
+          },
+          {
+            "id": "services",
+            "label": "Services",
+            "count": 2
+          },
+          {
+            "id": "logging",
+            "label": "Logging",
+            "count": 2
+          }
+        ],
+        "highlights": [
+          {
+            "label": "Hostname",
+            "value": "CP-DEVICE",
+            "section": "system",
+            "section_label": "System",
+            "origin": "local",
+            "context": null
+          }
+        ],
+        "setting_count": 19,
+        "redacted_secret_setting_count": 2,
+        "structured_values_included": true,
+        "raw_config_included": false,
+        "secrets_redacted": true
       },
       "alignment": {
+        "available": true,
+        "status": "success",
+        "device_status": "DIFFERENCE_OBSERVED",
+        "engine_status": "success",
+        "reason": "trusted_intent_compared_with_direct_actual",
+        "message": "Trusted intent was compared with direct actual evidence.",
         "counts": {
-          "ALIGNED": 3
+          "ALIGNED": 6,
+          "LOCAL_OVERRIDE": 2,
+          "EFFECTIVE_DRIFT": 1,
+          "MEMBER_SPECIFIC": 1,
+          "LOCAL_ONLY": 1,
+          "EXPECTED_ONLY": 1,
+          "UNKNOWN": 1
         },
+        "categories": [
+          {
+            "category": "system",
+            "count": 4
+          },
+          {
+            "category": "network",
+            "count": 2
+          },
+          {
+            "category": "management",
+            "count": 3
+          },
+          {
+            "category": "ha",
+            "count": 1
+          }
+        ],
+        "expected_settings": 40,
+        "alignment_ready_settings": 34,
+        "observed_settings": 36,
+        "observed_percent": 90.0,
+        "coverage_percent": 85.0,
+        "value_comparison_coverage_percent": 80.0,
+        "local_only_settings": 1,
+        "semantic_exclusion_settings": 2,
         "findings": [
           {
             "alignment_key": "deviceconfig/system/hostname",
@@ -378,33 +922,2727 @@
             "alignment_key": "deviceconfig/system/dns-setting/servers/primary",
             "classification": "ALIGNED",
             "category": "dns"
+          },
+          {
+            "alignment_key": "deviceconfig/system/permitted-ip/entry/description",
+            "classification": "LOCAL_OVERRIDE",
+            "category": "system",
+            "reason": "effective_differs_from_expected_and_matches_local_active_scalar"
+          },
+          {
+            "alignment_key": "deviceconfig/system/login-banner",
+            "classification": "EFFECTIVE_DRIFT",
+            "category": "system",
+            "reason": "effective_differs_from_expected_no_local_scalar_match"
+          },
+          {
+            "alignment_key": "network/virtual-router/entry/routing-table/ip/static-route",
+            "classification": "LOCAL_ONLY",
+            "category": "network",
+            "reason": "present_only_in_local_active"
+          },
+          {
+            "alignment_key": "deviceconfig/setting/management/idle-timeout",
+            "classification": "EXPECTED_ONLY",
+            "category": "management",
+            "reason": "present_only_in_expected"
+          },
+          {
+            "alignment_key": "deviceconfig/high-availability/group/peer-ip",
+            "classification": "MEMBER_SPECIFIC",
+            "category": "ha",
+            "reason": "member_relative_ha_setting"
+          },
+          {
+            "alignment_key": "deviceconfig/system/service/disable-telnet",
+            "classification": "UNKNOWN",
+            "category": "management",
+            "reason": "expected_or_effective_value_not_resolvable"
           }
-        ]
-      }
+        ],
+        "peer_evidence_incomplete": false
+      },
+      "history": {
+        "actual_change_state": "changed",
+        "effective_change_state": "changed"
+      },
+      "history_v1": {
+        "schema_version": "0.6.3",
+        "status": "available",
+        "scope": "entity",
+        "artifacts": [
+          {
+            "artifact_type": "cp-show-configuration",
+            "artifact_label": "Gaia show configuration",
+            "event_count": 3,
+            "truncated": false,
+            "skipped_malformed": 0,
+            "events": [
+              {
+                "collected_at": "2026-07-31T12:00:00Z",
+                "change": "FIRST",
+                "artifact_type": "effective-running"
+              },
+              {
+                "collected_at": "2026-08-23T12:00:00Z",
+                "change": "SAME",
+                "artifact_type": "effective-running"
+              },
+              {
+                "collected_at": "2026-08-30T12:00:00Z",
+                "change": "CHANGED",
+                "artifact_type": "effective-running"
+              }
+            ]
+          }
+        ],
+        "pair_results": [
+          {
+            "status": "insufficient_evidence",
+            "reason": "cp_raw_text_diff_not_supported_in_0_6_3"
+          }
+        ],
+        "privacy": {
+          "contains_secrets": false,
+          "contains_raw_configuration": false
+        }
+      },
+      "host_key_policy": "strict_known_hosts"
     },
     {
-      "vendor": "palo_alto",
-      "vendor_key": "palo_alto",
-      "name": "pan-edge-01",
-      "display_name": "pan-edge-01",
-      "device_name": "pan-edge-01",
-      "entity_type": "firewall",
-      "platform_family": "pan_os",
-      "serial": "UITEST00000001",
-      "model": "PA-5220",
-      "sw_version": "11.1.3",
-      "ha_role": "active",
-      "management_ip": "192.0.2.40",
+      "id": "cp:cp-core-02",
+      "name": "cp-core-02",
+      "device_name": "cp-core-02",
+      "vendor": "Check Point",
+      "vendor_key": "check_point",
+      "entity_type": "clusterxl_member",
+      "parent_name": "cp-core",
+      "parent_entity_id": "cp:cp-core",
+      "cluster_group_id": "uitest-cxl",
+      "cluster_display_name": "cp-core-CLS",
+      "presentation_group_id": "uitest-cxl",
+      "presentation_group_label": "cp-core-CLS",
+      "presentation_group_source": "inferred_member_pattern",
+      "platform": {
+        "family": "gaia",
+        "label": "Check Point Gaia"
+      },
+      "platform_family": "gaia",
+      "platform_label": "Check Point Gaia",
+      "management_state": "communicating",
+      "failure_reason": null,
+      "failure_family": null,
+      "serial": "SN-CP-CORE-02",
+      "management_ip": null,
+      "model": "CP-6900",
+      "sw_version": "R81.20",
+      "ha_role": "standby",
+      "ha_role_source": "cluster_topology",
+      "vsys_count": 0,
+      "policy_scope_label": "ClusterXL",
+      "policy_scope": "cp-core-CLS",
       "connected": true,
+      "status": "success",
+      "primary_evidence_status": "success",
+      "alignment_evidence_status": "success",
+      "started_at": "2026-08-30T12:00:00Z",
+      "completed_at": "2026-08-30T12:00:00Z",
+      "tone": "success",
+      "status_label": "Current",
+      "assignment": {},
       "current_configuration": {
+        "schema_version": "0.6.1B",
         "status": "available",
+        "vendor": "check_point",
+        "source_plane": "gaia-clish-show-configuration",
+        "entity_type": "clusterxl_member",
         "sections": [
           {
             "id": "system",
+            "label": "System",
+            "count": 2,
             "settings": [
               {
                 "setting": "Hostname",
-                "value": "PAN-EDGE-01"
+                "value": "CP-DEVICE"
+              },
+              {
+                "setting": "Timezone",
+                "value": "Europe/Istanbul"
+              }
+            ]
+          },
+          {
+            "id": "dns",
+            "label": "Dns",
+            "count": 2,
+            "settings": [
+              {
+                "setting": "Primary DNS",
+                "value": "203.0.113.53"
+              },
+              {
+                "setting": "Search Domain",
+                "value": "corp.example"
+              }
+            ]
+          },
+          {
+            "id": "ntp",
+            "label": "Ntp",
+            "count": 2,
+            "settings": [
+              {
+                "setting": "Primary NTP Server",
+                "value": "203.0.113.10"
+              },
+              {
+                "setting": "Secondary NTP Server",
+                "value": "203.0.113.11"
+              }
+            ]
+          },
+          {
+            "id": "management",
+            "label": "Management",
+            "count": 4,
+            "settings": [
+              {
+                "setting": "Telnet Disabled",
+                "value": "yes"
+              },
+              {
+                "setting": "Inactivity Timeout",
+                "value": "10"
+              },
+              {
+                "setting": "SSH Version",
+                "value": "v2"
+              },
+              {
+                "setting": "SSH Ciphers",
+                "value": "aes256-ctr,aes256-gcm"
+              }
+            ]
+          },
+          {
+            "id": "password_policy",
+            "label": "Password Policy",
+            "count": 3,
+            "settings": [
+              {
+                "setting": "Minimum Password Length",
+                "value": "12"
+              },
+              {
+                "setting": "Password Complexity",
+                "value": "enabled"
+              },
+              {
+                "setting": "Password History Depth",
+                "value": "8"
+              }
+            ]
+          },
+          {
+            "id": "banner",
+            "label": "Banner",
+            "count": 2,
+            "settings": [
+              {
+                "setting": "Login Banner Present",
+                "value": "yes"
+              },
+              {
+                "setting": "Login Banner Length",
+                "value": "medium"
+              }
+            ]
+          },
+          {
+            "id": "services",
+            "label": "Services",
+            "count": 2,
+            "settings": [
+              {
+                "setting": "Telnet",
+                "value": "disabled"
+              },
+              {
+                "setting": "HTTP",
+                "value": "disabled"
+              }
+            ]
+          },
+          {
+            "id": "logging",
+            "label": "Logging",
+            "count": 2,
+            "settings": [
+              {
+                "setting": "Logging Audit",
+                "value": "enabled"
+              },
+              {
+                "setting": "Syslog Server",
+                "value": "203.0.113.90"
+              }
+            ]
+          }
+        ],
+        "section_index": [
+          {
+            "id": "system",
+            "label": "System",
+            "count": 2
+          },
+          {
+            "id": "dns",
+            "label": "Dns",
+            "count": 2
+          },
+          {
+            "id": "ntp",
+            "label": "Ntp",
+            "count": 2
+          },
+          {
+            "id": "management",
+            "label": "Management",
+            "count": 4
+          },
+          {
+            "id": "password_policy",
+            "label": "Password Policy",
+            "count": 3
+          },
+          {
+            "id": "banner",
+            "label": "Banner",
+            "count": 2
+          },
+          {
+            "id": "services",
+            "label": "Services",
+            "count": 2
+          },
+          {
+            "id": "logging",
+            "label": "Logging",
+            "count": 2
+          }
+        ],
+        "highlights": [
+          {
+            "label": "Hostname",
+            "value": "CP-DEVICE",
+            "section": "system",
+            "section_label": "System",
+            "origin": "local",
+            "context": null
+          }
+        ],
+        "setting_count": 19,
+        "redacted_secret_setting_count": 2,
+        "structured_values_included": true,
+        "raw_config_included": false,
+        "secrets_redacted": true
+      },
+      "alignment": {
+        "available": true,
+        "status": "success",
+        "device_status": "DIFFERENCE_OBSERVED",
+        "engine_status": "success",
+        "reason": "trusted_intent_compared_with_direct_actual",
+        "message": "Trusted intent was compared with direct actual evidence.",
+        "counts": {
+          "ALIGNED": 3,
+          "MEMBER_SPECIFIC": 4,
+          "LOCAL_OVERRIDE": 1,
+          "UNKNOWN": 1
+        },
+        "categories": [
+          {
+            "category": "system",
+            "count": 4
+          },
+          {
+            "category": "network",
+            "count": 2
+          },
+          {
+            "category": "management",
+            "count": 3
+          },
+          {
+            "category": "ha",
+            "count": 1
+          }
+        ],
+        "expected_settings": 40,
+        "alignment_ready_settings": 34,
+        "observed_settings": 36,
+        "observed_percent": 90.0,
+        "coverage_percent": 85.0,
+        "value_comparison_coverage_percent": 80.0,
+        "local_only_settings": 1,
+        "semantic_exclusion_settings": 2,
+        "findings": [
+          {
+            "alignment_key": "deviceconfig/system/hostname",
+            "classification": "ALIGNED",
+            "category": "system"
+          },
+          {
+            "alignment_key": "deviceconfig/system/dns-setting/servers/primary",
+            "classification": "ALIGNED",
+            "category": "dns"
+          },
+          {
+            "alignment_key": "deviceconfig/system/permitted-ip/entry/description",
+            "classification": "LOCAL_OVERRIDE",
+            "category": "system",
+            "reason": "effective_differs_from_expected_and_matches_local_active_scalar"
+          },
+          {
+            "alignment_key": "deviceconfig/high-availability/group/peer-ip",
+            "classification": "MEMBER_SPECIFIC",
+            "category": "ha",
+            "reason": "member_relative_ha_setting"
+          },
+          {
+            "alignment_key": "deviceconfig/system/service/disable-telnet",
+            "classification": "UNKNOWN",
+            "category": "management",
+            "reason": "expected_or_effective_value_not_resolvable"
+          }
+        ],
+        "peer_evidence_incomplete": false
+      },
+      "history": {
+        "actual_change_state": "same",
+        "effective_change_state": "same"
+      },
+      "history_v1": {
+        "schema_version": "0.6.3",
+        "status": "available",
+        "scope": "entity",
+        "artifacts": [
+          {
+            "artifact_type": "cp-show-configuration",
+            "artifact_label": "Gaia show configuration",
+            "event_count": 3,
+            "truncated": false,
+            "skipped_malformed": 0,
+            "events": [
+              {
+                "collected_at": "2026-07-31T12:00:00Z",
+                "change": "FIRST",
+                "artifact_type": "effective-running"
+              },
+              {
+                "collected_at": "2026-08-23T12:00:00Z",
+                "change": "SAME",
+                "artifact_type": "effective-running"
+              },
+              {
+                "collected_at": "2026-08-30T12:00:00Z",
+                "change": "SAME",
+                "artifact_type": "effective-running"
+              }
+            ]
+          }
+        ],
+        "pair_results": [
+          {
+            "status": "insufficient_evidence",
+            "reason": "cp_raw_text_diff_not_supported_in_0_6_3"
+          }
+        ],
+        "privacy": {
+          "contains_secrets": false,
+          "contains_raw_configuration": false
+        }
+      },
+      "host_key_policy": "strict_known_hosts"
+    },
+    {
+      "id": "cp:vsx-gw-01",
+      "name": "vsx-gw-01",
+      "device_name": "vsx-gw-01",
+      "vendor": "Check Point",
+      "vendor_key": "check_point",
+      "entity_type": "vsx_host",
+      "parent_name": null,
+      "parent_entity_id": null,
+      "cluster_group_id": null,
+      "cluster_display_name": null,
+      "presentation_group_id": null,
+      "presentation_group_label": null,
+      "presentation_group_source": null,
+      "platform": {
+        "family": "gaia",
+        "label": "Check Point Gaia"
+      },
+      "platform_family": "gaia",
+      "platform_label": "Check Point Gaia",
+      "management_state": "communicating",
+      "failure_reason": null,
+      "failure_family": null,
+      "serial": "SN-VSX-GW-01",
+      "management_ip": null,
+      "model": "CP-6900",
+      "sw_version": "R81.20",
+      "ha_role": null,
+      "ha_role_source": null,
+      "vsys_count": 2,
+      "policy_scope_label": "VSX",
+      "policy_scope": "Host",
+      "connected": true,
+      "status": "success",
+      "primary_evidence_status": "success",
+      "alignment_evidence_status": "success",
+      "started_at": "2026-08-30T12:00:00Z",
+      "completed_at": "2026-08-30T12:00:00Z",
+      "tone": "success",
+      "status_label": "Current",
+      "assignment": {},
+      "current_configuration": {
+        "schema_version": "0.6.1B",
+        "status": "available",
+        "vendor": "check_point",
+        "source_plane": "gaia-clish-show-configuration",
+        "entity_type": "vsx_host",
+        "sections": [
+          {
+            "id": "system",
+            "label": "System",
+            "count": 2,
+            "settings": [
+              {
+                "setting": "Hostname",
+                "value": "CP-DEVICE"
+              },
+              {
+                "setting": "Timezone",
+                "value": "Europe/Istanbul"
+              }
+            ]
+          },
+          {
+            "id": "dns",
+            "label": "Dns",
+            "count": 2,
+            "settings": [
+              {
+                "setting": "Primary DNS",
+                "value": "203.0.113.53"
+              },
+              {
+                "setting": "Search Domain",
+                "value": "corp.example"
+              }
+            ]
+          },
+          {
+            "id": "ntp",
+            "label": "Ntp",
+            "count": 2,
+            "settings": [
+              {
+                "setting": "Primary NTP Server",
+                "value": "203.0.113.10"
+              },
+              {
+                "setting": "Secondary NTP Server",
+                "value": "203.0.113.11"
+              }
+            ]
+          },
+          {
+            "id": "management",
+            "label": "Management",
+            "count": 4,
+            "settings": [
+              {
+                "setting": "Telnet Disabled",
+                "value": "yes"
+              },
+              {
+                "setting": "Inactivity Timeout",
+                "value": "10"
+              },
+              {
+                "setting": "SSH Version",
+                "value": "v2"
+              },
+              {
+                "setting": "SSH Ciphers",
+                "value": "aes256-ctr,aes256-gcm"
+              }
+            ]
+          },
+          {
+            "id": "password_policy",
+            "label": "Password Policy",
+            "count": 3,
+            "settings": [
+              {
+                "setting": "Minimum Password Length",
+                "value": "12"
+              },
+              {
+                "setting": "Password Complexity",
+                "value": "enabled"
+              },
+              {
+                "setting": "Password History Depth",
+                "value": "8"
+              }
+            ]
+          },
+          {
+            "id": "banner",
+            "label": "Banner",
+            "count": 2,
+            "settings": [
+              {
+                "setting": "Login Banner Present",
+                "value": "yes"
+              },
+              {
+                "setting": "Login Banner Length",
+                "value": "medium"
+              }
+            ]
+          },
+          {
+            "id": "services",
+            "label": "Services",
+            "count": 2,
+            "settings": [
+              {
+                "setting": "Telnet",
+                "value": "disabled"
+              },
+              {
+                "setting": "HTTP",
+                "value": "disabled"
+              }
+            ]
+          },
+          {
+            "id": "logging",
+            "label": "Logging",
+            "count": 2,
+            "settings": [
+              {
+                "setting": "Logging Audit",
+                "value": "enabled"
+              },
+              {
+                "setting": "Syslog Server",
+                "value": "203.0.113.90"
+              }
+            ]
+          }
+        ],
+        "section_index": [
+          {
+            "id": "system",
+            "label": "System",
+            "count": 2
+          },
+          {
+            "id": "dns",
+            "label": "Dns",
+            "count": 2
+          },
+          {
+            "id": "ntp",
+            "label": "Ntp",
+            "count": 2
+          },
+          {
+            "id": "management",
+            "label": "Management",
+            "count": 4
+          },
+          {
+            "id": "password_policy",
+            "label": "Password Policy",
+            "count": 3
+          },
+          {
+            "id": "banner",
+            "label": "Banner",
+            "count": 2
+          },
+          {
+            "id": "services",
+            "label": "Services",
+            "count": 2
+          },
+          {
+            "id": "logging",
+            "label": "Logging",
+            "count": 2
+          }
+        ],
+        "highlights": [
+          {
+            "label": "Hostname",
+            "value": "CP-DEVICE",
+            "section": "system",
+            "section_label": "System",
+            "origin": "local",
+            "context": null
+          }
+        ],
+        "setting_count": 19,
+        "redacted_secret_setting_count": 2,
+        "structured_values_included": true,
+        "raw_config_included": false,
+        "secrets_redacted": true
+      },
+      "alignment": {
+        "available": true,
+        "status": "success",
+        "device_status": "DIFFERENCE_OBSERVED",
+        "engine_status": "success",
+        "reason": "trusted_intent_compared_with_direct_actual",
+        "message": "Trusted intent was compared with direct actual evidence.",
+        "counts": {
+          "ALIGNED": 6,
+          "LOCAL_OVERRIDE": 2,
+          "EFFECTIVE_DRIFT": 1,
+          "MEMBER_SPECIFIC": 1,
+          "LOCAL_ONLY": 1,
+          "EXPECTED_ONLY": 1,
+          "UNKNOWN": 1
+        },
+        "categories": [
+          {
+            "category": "system",
+            "count": 4
+          },
+          {
+            "category": "network",
+            "count": 2
+          },
+          {
+            "category": "management",
+            "count": 3
+          },
+          {
+            "category": "ha",
+            "count": 1
+          }
+        ],
+        "expected_settings": 40,
+        "alignment_ready_settings": 34,
+        "observed_settings": 36,
+        "observed_percent": 90.0,
+        "coverage_percent": 85.0,
+        "value_comparison_coverage_percent": 80.0,
+        "local_only_settings": 1,
+        "semantic_exclusion_settings": 2,
+        "findings": [
+          {
+            "alignment_key": "deviceconfig/system/hostname",
+            "classification": "ALIGNED",
+            "category": "system"
+          },
+          {
+            "alignment_key": "deviceconfig/system/dns-setting/servers/primary",
+            "classification": "ALIGNED",
+            "category": "dns"
+          },
+          {
+            "alignment_key": "deviceconfig/system/permitted-ip/entry/description",
+            "classification": "LOCAL_OVERRIDE",
+            "category": "system",
+            "reason": "effective_differs_from_expected_and_matches_local_active_scalar"
+          },
+          {
+            "alignment_key": "deviceconfig/system/login-banner",
+            "classification": "EFFECTIVE_DRIFT",
+            "category": "system",
+            "reason": "effective_differs_from_expected_no_local_scalar_match"
+          },
+          {
+            "alignment_key": "network/virtual-router/entry/routing-table/ip/static-route",
+            "classification": "LOCAL_ONLY",
+            "category": "network",
+            "reason": "present_only_in_local_active"
+          },
+          {
+            "alignment_key": "deviceconfig/setting/management/idle-timeout",
+            "classification": "EXPECTED_ONLY",
+            "category": "management",
+            "reason": "present_only_in_expected"
+          },
+          {
+            "alignment_key": "deviceconfig/high-availability/group/peer-ip",
+            "classification": "MEMBER_SPECIFIC",
+            "category": "ha",
+            "reason": "member_relative_ha_setting"
+          },
+          {
+            "alignment_key": "deviceconfig/system/service/disable-telnet",
+            "classification": "UNKNOWN",
+            "category": "management",
+            "reason": "expected_or_effective_value_not_resolvable"
+          }
+        ],
+        "peer_evidence_incomplete": false
+      },
+      "history": {
+        "actual_change_state": "same",
+        "effective_change_state": "same"
+      },
+      "history_v1": {
+        "schema_version": "0.6.3",
+        "status": "available",
+        "scope": "entity",
+        "artifacts": [
+          {
+            "artifact_type": "cp-show-configuration",
+            "artifact_label": "Gaia show configuration",
+            "event_count": 3,
+            "truncated": false,
+            "skipped_malformed": 0,
+            "events": [
+              {
+                "collected_at": "2026-07-31T12:00:00Z",
+                "change": "FIRST",
+                "artifact_type": "effective-running"
+              },
+              {
+                "collected_at": "2026-08-23T12:00:00Z",
+                "change": "SAME",
+                "artifact_type": "effective-running"
+              },
+              {
+                "collected_at": "2026-08-30T12:00:00Z",
+                "change": "SAME",
+                "artifact_type": "effective-running"
+              }
+            ]
+          }
+        ],
+        "pair_results": [
+          {
+            "status": "insufficient_evidence",
+            "reason": "cp_raw_text_diff_not_supported_in_0_6_3"
+          }
+        ],
+        "privacy": {
+          "contains_secrets": false,
+          "contains_raw_configuration": false
+        }
+      },
+      "host_key_policy": "strict_known_hosts"
+    },
+    {
+      "id": "cp:vsx-gw-01-vs10",
+      "name": "vsx-gw-01 / VS-WEB",
+      "device_name": "vsx-gw-01 / VS-WEB",
+      "vendor": "Check Point",
+      "vendor_key": "check_point",
+      "entity_type": "virtual_system",
+      "parent_name": "vsx-gw-01",
+      "parent_entity_id": "cp:vsx-gw-01",
+      "cluster_group_id": "host:cp:vsx-gw-01",
+      "cluster_display_name": null,
+      "presentation_group_id": "host:cp:vsx-gw-01",
+      "presentation_group_label": null,
+      "presentation_group_source": "inferred_member_pattern",
+      "platform": {
+        "family": "gaia",
+        "label": "Check Point Gaia"
+      },
+      "platform_family": "gaia",
+      "platform_label": "Check Point Gaia",
+      "management_state": "communicating",
+      "failure_reason": null,
+      "failure_family": null,
+      "serial": "SN-VSX-GW-01-VS10",
+      "management_ip": null,
+      "model": "CP-6900",
+      "sw_version": "R81.20",
+      "ha_role": null,
+      "ha_role_source": null,
+      "vsys_count": 0,
+      "policy_scope_label": "VSX Context",
+      "policy_scope": "VSID 10",
+      "connected": true,
+      "status": "success",
+      "primary_evidence_status": "success",
+      "alignment_evidence_status": "success",
+      "started_at": "2026-08-30T12:00:00Z",
+      "completed_at": "2026-08-30T12:00:00Z",
+      "tone": "success",
+      "status_label": "Current",
+      "assignment": {},
+      "current_configuration": {
+        "schema_version": "0.6.1B",
+        "status": "available",
+        "vendor": "check_point",
+        "source_plane": "gaia-clish-show-configuration",
+        "entity_type": "virtual_system",
+        "sections": [
+          {
+            "id": "system",
+            "label": "System",
+            "count": 2,
+            "settings": [
+              {
+                "setting": "Hostname",
+                "value": "CP-DEVICE"
+              },
+              {
+                "setting": "Timezone",
+                "value": "Europe/Istanbul"
+              }
+            ]
+          },
+          {
+            "id": "dns",
+            "label": "Dns",
+            "count": 2,
+            "settings": [
+              {
+                "setting": "Primary DNS",
+                "value": "203.0.113.53"
+              },
+              {
+                "setting": "Search Domain",
+                "value": "corp.example"
+              }
+            ]
+          },
+          {
+            "id": "management",
+            "label": "Management",
+            "count": 4,
+            "settings": [
+              {
+                "setting": "Telnet Disabled",
+                "value": "yes"
+              },
+              {
+                "setting": "Inactivity Timeout",
+                "value": "10"
+              },
+              {
+                "setting": "SSH Version",
+                "value": "v2"
+              },
+              {
+                "setting": "SSH Ciphers",
+                "value": "aes256-ctr,aes256-gcm"
+              }
+            ]
+          },
+          {
+            "id": "password_policy",
+            "label": "Password Policy",
+            "count": 3,
+            "settings": [
+              {
+                "setting": "Minimum Password Length",
+                "value": "12"
+              },
+              {
+                "setting": "Password Complexity",
+                "value": "enabled"
+              },
+              {
+                "setting": "Password History Depth",
+                "value": "8"
+              }
+            ]
+          },
+          {
+            "id": "banner",
+            "label": "Banner",
+            "count": 2,
+            "settings": [
+              {
+                "setting": "Login Banner Present",
+                "value": "yes"
+              },
+              {
+                "setting": "Login Banner Length",
+                "value": "medium"
+              }
+            ]
+          },
+          {
+            "id": "services",
+            "label": "Services",
+            "count": 2,
+            "settings": [
+              {
+                "setting": "Telnet",
+                "value": "disabled"
+              },
+              {
+                "setting": "HTTP",
+                "value": "disabled"
+              }
+            ]
+          },
+          {
+            "id": "logging",
+            "label": "Logging",
+            "count": 2,
+            "settings": [
+              {
+                "setting": "Logging Audit",
+                "value": "enabled"
+              },
+              {
+                "setting": "Syslog Server",
+                "value": "203.0.113.90"
+              }
+            ]
+          }
+        ],
+        "section_index": [
+          {
+            "id": "system",
+            "label": "System",
+            "count": 2
+          },
+          {
+            "id": "dns",
+            "label": "Dns",
+            "count": 2
+          },
+          {
+            "id": "management",
+            "label": "Management",
+            "count": 4
+          },
+          {
+            "id": "password_policy",
+            "label": "Password Policy",
+            "count": 3
+          },
+          {
+            "id": "banner",
+            "label": "Banner",
+            "count": 2
+          },
+          {
+            "id": "services",
+            "label": "Services",
+            "count": 2
+          },
+          {
+            "id": "logging",
+            "label": "Logging",
+            "count": 2
+          }
+        ],
+        "highlights": [
+          {
+            "label": "Hostname",
+            "value": "CP-DEVICE",
+            "section": "system",
+            "section_label": "System",
+            "origin": "local",
+            "context": null
+          }
+        ],
+        "setting_count": 17,
+        "redacted_secret_setting_count": 2,
+        "structured_values_included": true,
+        "raw_config_included": false,
+        "secrets_redacted": true
+      },
+      "alignment": {
+        "available": true,
+        "status": "success",
+        "device_status": "DIFFERENCE_OBSERVED",
+        "engine_status": "success",
+        "reason": "trusted_intent_compared_with_direct_actual",
+        "message": "Trusted intent was compared with direct actual evidence.",
+        "counts": {
+          "ALIGNED": 6,
+          "LOCAL_OVERRIDE": 2,
+          "EFFECTIVE_DRIFT": 1,
+          "MEMBER_SPECIFIC": 1,
+          "LOCAL_ONLY": 1,
+          "EXPECTED_ONLY": 1,
+          "UNKNOWN": 1
+        },
+        "categories": [
+          {
+            "category": "system",
+            "count": 4
+          },
+          {
+            "category": "network",
+            "count": 2
+          },
+          {
+            "category": "management",
+            "count": 3
+          },
+          {
+            "category": "ha",
+            "count": 1
+          }
+        ],
+        "expected_settings": 40,
+        "alignment_ready_settings": 34,
+        "observed_settings": 36,
+        "observed_percent": 90.0,
+        "coverage_percent": 85.0,
+        "value_comparison_coverage_percent": 80.0,
+        "local_only_settings": 1,
+        "semantic_exclusion_settings": 2,
+        "findings": [
+          {
+            "alignment_key": "deviceconfig/system/hostname",
+            "classification": "ALIGNED",
+            "category": "system"
+          },
+          {
+            "alignment_key": "deviceconfig/system/dns-setting/servers/primary",
+            "classification": "ALIGNED",
+            "category": "dns"
+          },
+          {
+            "alignment_key": "deviceconfig/system/permitted-ip/entry/description",
+            "classification": "LOCAL_OVERRIDE",
+            "category": "system",
+            "reason": "effective_differs_from_expected_and_matches_local_active_scalar"
+          },
+          {
+            "alignment_key": "deviceconfig/system/login-banner",
+            "classification": "EFFECTIVE_DRIFT",
+            "category": "system",
+            "reason": "effective_differs_from_expected_no_local_scalar_match"
+          },
+          {
+            "alignment_key": "network/virtual-router/entry/routing-table/ip/static-route",
+            "classification": "LOCAL_ONLY",
+            "category": "network",
+            "reason": "present_only_in_local_active"
+          },
+          {
+            "alignment_key": "deviceconfig/setting/management/idle-timeout",
+            "classification": "EXPECTED_ONLY",
+            "category": "management",
+            "reason": "present_only_in_expected"
+          },
+          {
+            "alignment_key": "deviceconfig/high-availability/group/peer-ip",
+            "classification": "MEMBER_SPECIFIC",
+            "category": "ha",
+            "reason": "member_relative_ha_setting"
+          },
+          {
+            "alignment_key": "deviceconfig/system/service/disable-telnet",
+            "classification": "UNKNOWN",
+            "category": "management",
+            "reason": "expected_or_effective_value_not_resolvable"
+          }
+        ],
+        "peer_evidence_incomplete": false
+      },
+      "history": {
+        "actual_change_state": "changed",
+        "effective_change_state": "changed"
+      },
+      "history_v1": {
+        "schema_version": "0.6.3",
+        "status": "available",
+        "scope": "entity",
+        "artifacts": [
+          {
+            "artifact_type": "cp-show-configuration",
+            "artifact_label": "Gaia show configuration",
+            "event_count": 3,
+            "truncated": false,
+            "skipped_malformed": 0,
+            "events": [
+              {
+                "collected_at": "2026-07-31T12:00:00Z",
+                "change": "FIRST",
+                "artifact_type": "effective-running"
+              },
+              {
+                "collected_at": "2026-08-23T12:00:00Z",
+                "change": "SAME",
+                "artifact_type": "effective-running"
+              },
+              {
+                "collected_at": "2026-08-30T12:00:00Z",
+                "change": "CHANGED",
+                "artifact_type": "effective-running"
+              }
+            ]
+          }
+        ],
+        "pair_results": [
+          {
+            "status": "insufficient_evidence",
+            "reason": "cp_raw_text_diff_not_supported_in_0_6_3"
+          }
+        ],
+        "privacy": {
+          "contains_secrets": false,
+          "contains_raw_configuration": false
+        }
+      },
+      "host_key_policy": "strict_known_hosts"
+    },
+    {
+      "id": "cp:vsx-gw-01-vs20",
+      "name": "vsx-gw-01 / VS-DB",
+      "device_name": "vsx-gw-01 / VS-DB",
+      "vendor": "Check Point",
+      "vendor_key": "check_point",
+      "entity_type": "virtual_system",
+      "parent_name": "vsx-gw-01",
+      "parent_entity_id": "cp:vsx-gw-01",
+      "cluster_group_id": "host:cp:vsx-gw-01",
+      "cluster_display_name": null,
+      "presentation_group_id": "host:cp:vsx-gw-01",
+      "presentation_group_label": null,
+      "presentation_group_source": "inferred_member_pattern",
+      "platform": {
+        "family": "gaia",
+        "label": "Check Point Gaia"
+      },
+      "platform_family": "gaia",
+      "platform_label": "Check Point Gaia",
+      "management_state": "communicating",
+      "failure_reason": null,
+      "failure_family": null,
+      "serial": "SN-VSX-GW-01-VS20",
+      "management_ip": null,
+      "model": "CP-6900",
+      "sw_version": "R81.20",
+      "ha_role": null,
+      "ha_role_source": null,
+      "vsys_count": 0,
+      "policy_scope_label": "VSX Context",
+      "policy_scope": "VSID 20",
+      "connected": true,
+      "status": "success",
+      "primary_evidence_status": "success",
+      "alignment_evidence_status": "success",
+      "started_at": "2026-08-30T12:00:00Z",
+      "completed_at": "2026-08-30T12:00:00Z",
+      "tone": "success",
+      "status_label": "Current",
+      "assignment": {},
+      "current_configuration": {
+        "schema_version": "0.6.1B",
+        "status": "available",
+        "vendor": "check_point",
+        "source_plane": "gaia-clish-show-configuration",
+        "entity_type": "virtual_system",
+        "sections": [
+          {
+            "id": "system",
+            "label": "System",
+            "count": 2,
+            "settings": [
+              {
+                "setting": "Hostname",
+                "value": "CP-DEVICE"
+              },
+              {
+                "setting": "Timezone",
+                "value": "Europe/Istanbul"
+              }
+            ]
+          },
+          {
+            "id": "dns",
+            "label": "Dns",
+            "count": 2,
+            "settings": [
+              {
+                "setting": "Primary DNS",
+                "value": "203.0.113.53"
+              },
+              {
+                "setting": "Search Domain",
+                "value": "corp.example"
+              }
+            ]
+          },
+          {
+            "id": "ntp",
+            "label": "Ntp",
+            "count": 2,
+            "settings": [
+              {
+                "setting": "Primary NTP Server",
+                "value": "203.0.113.10"
+              },
+              {
+                "setting": "Secondary NTP Server",
+                "value": "203.0.113.11"
+              }
+            ]
+          },
+          {
+            "id": "management",
+            "label": "Management",
+            "count": 4,
+            "settings": [
+              {
+                "setting": "Telnet Disabled",
+                "value": "yes"
+              },
+              {
+                "setting": "Inactivity Timeout",
+                "value": "10"
+              },
+              {
+                "setting": "SSH Version",
+                "value": "v2"
+              },
+              {
+                "setting": "SSH Ciphers",
+                "value": "aes256-ctr,aes256-gcm"
+              }
+            ]
+          },
+          {
+            "id": "password_policy",
+            "label": "Password Policy",
+            "count": 3,
+            "settings": [
+              {
+                "setting": "Minimum Password Length",
+                "value": "12"
+              },
+              {
+                "setting": "Password Complexity",
+                "value": "enabled"
+              },
+              {
+                "setting": "Password History Depth",
+                "value": "8"
+              }
+            ]
+          },
+          {
+            "id": "banner",
+            "label": "Banner",
+            "count": 2,
+            "settings": [
+              {
+                "setting": "Login Banner Present",
+                "value": "yes"
+              },
+              {
+                "setting": "Login Banner Length",
+                "value": "medium"
+              }
+            ]
+          },
+          {
+            "id": "services",
+            "label": "Services",
+            "count": 2,
+            "settings": [
+              {
+                "setting": "Telnet",
+                "value": "disabled"
+              },
+              {
+                "setting": "HTTP",
+                "value": "disabled"
+              }
+            ]
+          },
+          {
+            "id": "logging",
+            "label": "Logging",
+            "count": 2,
+            "settings": [
+              {
+                "setting": "Logging Audit",
+                "value": "enabled"
+              },
+              {
+                "setting": "Syslog Server",
+                "value": "203.0.113.90"
+              }
+            ]
+          }
+        ],
+        "section_index": [
+          {
+            "id": "system",
+            "label": "System",
+            "count": 2
+          },
+          {
+            "id": "dns",
+            "label": "Dns",
+            "count": 2
+          },
+          {
+            "id": "ntp",
+            "label": "Ntp",
+            "count": 2
+          },
+          {
+            "id": "management",
+            "label": "Management",
+            "count": 4
+          },
+          {
+            "id": "password_policy",
+            "label": "Password Policy",
+            "count": 3
+          },
+          {
+            "id": "banner",
+            "label": "Banner",
+            "count": 2
+          },
+          {
+            "id": "services",
+            "label": "Services",
+            "count": 2
+          },
+          {
+            "id": "logging",
+            "label": "Logging",
+            "count": 2
+          }
+        ],
+        "highlights": [
+          {
+            "label": "Hostname",
+            "value": "CP-DEVICE",
+            "section": "system",
+            "section_label": "System",
+            "origin": "local",
+            "context": null
+          }
+        ],
+        "setting_count": 19,
+        "redacted_secret_setting_count": 2,
+        "structured_values_included": true,
+        "raw_config_included": false,
+        "secrets_redacted": true
+      },
+      "alignment": {
+        "available": true,
+        "status": "success",
+        "device_status": "DIFFERENCE_OBSERVED",
+        "engine_status": "success",
+        "reason": "trusted_intent_compared_with_direct_actual",
+        "message": "Trusted intent was compared with direct actual evidence.",
+        "counts": {
+          "ALIGNED": 6,
+          "LOCAL_OVERRIDE": 2,
+          "EFFECTIVE_DRIFT": 1,
+          "MEMBER_SPECIFIC": 1,
+          "LOCAL_ONLY": 1,
+          "EXPECTED_ONLY": 1,
+          "UNKNOWN": 1
+        },
+        "categories": [
+          {
+            "category": "system",
+            "count": 4
+          },
+          {
+            "category": "network",
+            "count": 2
+          },
+          {
+            "category": "management",
+            "count": 3
+          },
+          {
+            "category": "ha",
+            "count": 1
+          }
+        ],
+        "expected_settings": 40,
+        "alignment_ready_settings": 34,
+        "observed_settings": 36,
+        "observed_percent": 90.0,
+        "coverage_percent": 85.0,
+        "value_comparison_coverage_percent": 80.0,
+        "local_only_settings": 1,
+        "semantic_exclusion_settings": 2,
+        "findings": [
+          {
+            "alignment_key": "deviceconfig/system/hostname",
+            "classification": "ALIGNED",
+            "category": "system"
+          },
+          {
+            "alignment_key": "deviceconfig/system/dns-setting/servers/primary",
+            "classification": "ALIGNED",
+            "category": "dns"
+          },
+          {
+            "alignment_key": "deviceconfig/system/permitted-ip/entry/description",
+            "classification": "LOCAL_OVERRIDE",
+            "category": "system",
+            "reason": "effective_differs_from_expected_and_matches_local_active_scalar"
+          },
+          {
+            "alignment_key": "deviceconfig/system/login-banner",
+            "classification": "EFFECTIVE_DRIFT",
+            "category": "system",
+            "reason": "effective_differs_from_expected_no_local_scalar_match"
+          },
+          {
+            "alignment_key": "network/virtual-router/entry/routing-table/ip/static-route",
+            "classification": "LOCAL_ONLY",
+            "category": "network",
+            "reason": "present_only_in_local_active"
+          },
+          {
+            "alignment_key": "deviceconfig/setting/management/idle-timeout",
+            "classification": "EXPECTED_ONLY",
+            "category": "management",
+            "reason": "present_only_in_expected"
+          },
+          {
+            "alignment_key": "deviceconfig/high-availability/group/peer-ip",
+            "classification": "MEMBER_SPECIFIC",
+            "category": "ha",
+            "reason": "member_relative_ha_setting"
+          },
+          {
+            "alignment_key": "deviceconfig/system/service/disable-telnet",
+            "classification": "UNKNOWN",
+            "category": "management",
+            "reason": "expected_or_effective_value_not_resolvable"
+          }
+        ],
+        "peer_evidence_incomplete": false
+      },
+      "history": {
+        "actual_change_state": "same",
+        "effective_change_state": "same"
+      },
+      "history_v1": {
+        "schema_version": "0.6.3",
+        "status": "available",
+        "scope": "entity",
+        "artifacts": [
+          {
+            "artifact_type": "cp-show-configuration",
+            "artifact_label": "Gaia show configuration",
+            "event_count": 3,
+            "truncated": false,
+            "skipped_malformed": 0,
+            "events": [
+              {
+                "collected_at": "2026-07-31T12:00:00Z",
+                "change": "FIRST",
+                "artifact_type": "effective-running"
+              },
+              {
+                "collected_at": "2026-08-23T12:00:00Z",
+                "change": "SAME",
+                "artifact_type": "effective-running"
+              },
+              {
+                "collected_at": "2026-08-30T12:00:00Z",
+                "change": "SAME",
+                "artifact_type": "effective-running"
+              }
+            ]
+          }
+        ],
+        "pair_results": [
+          {
+            "status": "insufficient_evidence",
+            "reason": "cp_raw_text_diff_not_supported_in_0_6_3"
+          }
+        ],
+        "privacy": {
+          "contains_secrets": false,
+          "contains_raw_configuration": false
+        }
+      },
+      "host_key_policy": "strict_known_hosts"
+    },
+    {
+      "id": "cp:vsx-cls-01",
+      "name": "vsx-cls-01",
+      "device_name": "vsx-cls-01",
+      "vendor": "Check Point",
+      "vendor_key": "check_point",
+      "entity_type": "vsx_host",
+      "parent_name": "vsx-cls",
+      "parent_entity_id": "cp:vsx-cls",
+      "cluster_group_id": "uitest-vsx-cls",
+      "cluster_display_name": "vsx-cls-CLS",
+      "presentation_group_id": "uitest-vsx-cls",
+      "presentation_group_label": "vsx-cls-CLS",
+      "presentation_group_source": "inferred_member_pattern",
+      "platform": {
+        "family": "gaia",
+        "label": "Check Point Gaia"
+      },
+      "platform_family": "gaia",
+      "platform_label": "Check Point Gaia",
+      "management_state": "communicating",
+      "failure_reason": null,
+      "failure_family": null,
+      "serial": "SN-VSX-CLS-01",
+      "management_ip": null,
+      "model": "CP-6900",
+      "sw_version": "R81.20",
+      "ha_role": "active",
+      "ha_role_source": "cluster_topology",
+      "vsys_count": 1,
+      "policy_scope_label": "VSX",
+      "policy_scope": "Host",
+      "connected": true,
+      "status": "success",
+      "primary_evidence_status": "success",
+      "alignment_evidence_status": "success",
+      "started_at": "2026-08-30T12:00:00Z",
+      "completed_at": "2026-08-30T12:00:00Z",
+      "tone": "success",
+      "status_label": "Current",
+      "assignment": {},
+      "current_configuration": {
+        "schema_version": "0.6.1B",
+        "status": "available",
+        "vendor": "check_point",
+        "source_plane": "gaia-clish-show-configuration",
+        "entity_type": "vsx_host",
+        "sections": [
+          {
+            "id": "system",
+            "label": "System",
+            "count": 2,
+            "settings": [
+              {
+                "setting": "Hostname",
+                "value": "CP-DEVICE"
+              },
+              {
+                "setting": "Timezone",
+                "value": "Europe/Istanbul"
+              }
+            ]
+          },
+          {
+            "id": "dns",
+            "label": "Dns",
+            "count": 2,
+            "settings": [
+              {
+                "setting": "Primary DNS",
+                "value": "203.0.113.53"
+              },
+              {
+                "setting": "Search Domain",
+                "value": "corp.example"
+              }
+            ]
+          },
+          {
+            "id": "ntp",
+            "label": "Ntp",
+            "count": 2,
+            "settings": [
+              {
+                "setting": "Primary NTP Server",
+                "value": "203.0.113.10"
+              },
+              {
+                "setting": "Secondary NTP Server",
+                "value": "203.0.113.11"
+              }
+            ]
+          },
+          {
+            "id": "management",
+            "label": "Management",
+            "count": 4,
+            "settings": [
+              {
+                "setting": "Telnet Disabled",
+                "value": "yes"
+              },
+              {
+                "setting": "Inactivity Timeout",
+                "value": "10"
+              },
+              {
+                "setting": "SSH Version",
+                "value": "v2"
+              },
+              {
+                "setting": "SSH Ciphers",
+                "value": "aes256-ctr,aes256-gcm"
+              }
+            ]
+          },
+          {
+            "id": "password_policy",
+            "label": "Password Policy",
+            "count": 3,
+            "settings": [
+              {
+                "setting": "Minimum Password Length",
+                "value": "12"
+              },
+              {
+                "setting": "Password Complexity",
+                "value": "enabled"
+              },
+              {
+                "setting": "Password History Depth",
+                "value": "8"
+              }
+            ]
+          },
+          {
+            "id": "banner",
+            "label": "Banner",
+            "count": 2,
+            "settings": [
+              {
+                "setting": "Login Banner Present",
+                "value": "yes"
+              },
+              {
+                "setting": "Login Banner Length",
+                "value": "medium"
+              }
+            ]
+          },
+          {
+            "id": "services",
+            "label": "Services",
+            "count": 2,
+            "settings": [
+              {
+                "setting": "Telnet",
+                "value": "disabled"
+              },
+              {
+                "setting": "HTTP",
+                "value": "disabled"
+              }
+            ]
+          },
+          {
+            "id": "logging",
+            "label": "Logging",
+            "count": 2,
+            "settings": [
+              {
+                "setting": "Logging Audit",
+                "value": "enabled"
+              },
+              {
+                "setting": "Syslog Server",
+                "value": "203.0.113.90"
+              }
+            ]
+          }
+        ],
+        "section_index": [
+          {
+            "id": "system",
+            "label": "System",
+            "count": 2
+          },
+          {
+            "id": "dns",
+            "label": "Dns",
+            "count": 2
+          },
+          {
+            "id": "ntp",
+            "label": "Ntp",
+            "count": 2
+          },
+          {
+            "id": "management",
+            "label": "Management",
+            "count": 4
+          },
+          {
+            "id": "password_policy",
+            "label": "Password Policy",
+            "count": 3
+          },
+          {
+            "id": "banner",
+            "label": "Banner",
+            "count": 2
+          },
+          {
+            "id": "services",
+            "label": "Services",
+            "count": 2
+          },
+          {
+            "id": "logging",
+            "label": "Logging",
+            "count": 2
+          }
+        ],
+        "highlights": [
+          {
+            "label": "Hostname",
+            "value": "CP-DEVICE",
+            "section": "system",
+            "section_label": "System",
+            "origin": "local",
+            "context": null
+          }
+        ],
+        "setting_count": 19,
+        "redacted_secret_setting_count": 2,
+        "structured_values_included": true,
+        "raw_config_included": false,
+        "secrets_redacted": true
+      },
+      "alignment": {
+        "available": true,
+        "status": "success",
+        "device_status": "DIFFERENCE_OBSERVED",
+        "engine_status": "success",
+        "reason": "trusted_intent_compared_with_direct_actual",
+        "message": "Trusted intent was compared with direct actual evidence.",
+        "counts": {
+          "ALIGNED": 6,
+          "LOCAL_OVERRIDE": 2,
+          "EFFECTIVE_DRIFT": 1,
+          "MEMBER_SPECIFIC": 1,
+          "LOCAL_ONLY": 1,
+          "EXPECTED_ONLY": 1,
+          "UNKNOWN": 1
+        },
+        "categories": [
+          {
+            "category": "system",
+            "count": 4
+          },
+          {
+            "category": "network",
+            "count": 2
+          },
+          {
+            "category": "management",
+            "count": 3
+          },
+          {
+            "category": "ha",
+            "count": 1
+          }
+        ],
+        "expected_settings": 40,
+        "alignment_ready_settings": 34,
+        "observed_settings": 36,
+        "observed_percent": 90.0,
+        "coverage_percent": 85.0,
+        "value_comparison_coverage_percent": 80.0,
+        "local_only_settings": 1,
+        "semantic_exclusion_settings": 2,
+        "findings": [
+          {
+            "alignment_key": "deviceconfig/system/hostname",
+            "classification": "ALIGNED",
+            "category": "system"
+          },
+          {
+            "alignment_key": "deviceconfig/system/dns-setting/servers/primary",
+            "classification": "ALIGNED",
+            "category": "dns"
+          },
+          {
+            "alignment_key": "deviceconfig/system/permitted-ip/entry/description",
+            "classification": "LOCAL_OVERRIDE",
+            "category": "system",
+            "reason": "effective_differs_from_expected_and_matches_local_active_scalar"
+          },
+          {
+            "alignment_key": "deviceconfig/system/login-banner",
+            "classification": "EFFECTIVE_DRIFT",
+            "category": "system",
+            "reason": "effective_differs_from_expected_no_local_scalar_match"
+          },
+          {
+            "alignment_key": "network/virtual-router/entry/routing-table/ip/static-route",
+            "classification": "LOCAL_ONLY",
+            "category": "network",
+            "reason": "present_only_in_local_active"
+          },
+          {
+            "alignment_key": "deviceconfig/setting/management/idle-timeout",
+            "classification": "EXPECTED_ONLY",
+            "category": "management",
+            "reason": "present_only_in_expected"
+          },
+          {
+            "alignment_key": "deviceconfig/high-availability/group/peer-ip",
+            "classification": "MEMBER_SPECIFIC",
+            "category": "ha",
+            "reason": "member_relative_ha_setting"
+          },
+          {
+            "alignment_key": "deviceconfig/system/service/disable-telnet",
+            "classification": "UNKNOWN",
+            "category": "management",
+            "reason": "expected_or_effective_value_not_resolvable"
+          }
+        ],
+        "peer_evidence_incomplete": false
+      },
+      "history": {
+        "actual_change_state": "same",
+        "effective_change_state": "same"
+      },
+      "history_v1": {
+        "schema_version": "0.6.3",
+        "status": "available",
+        "scope": "entity",
+        "artifacts": [
+          {
+            "artifact_type": "cp-show-configuration",
+            "artifact_label": "Gaia show configuration",
+            "event_count": 3,
+            "truncated": false,
+            "skipped_malformed": 0,
+            "events": [
+              {
+                "collected_at": "2026-07-31T12:00:00Z",
+                "change": "FIRST",
+                "artifact_type": "effective-running"
+              },
+              {
+                "collected_at": "2026-08-23T12:00:00Z",
+                "change": "SAME",
+                "artifact_type": "effective-running"
+              },
+              {
+                "collected_at": "2026-08-30T12:00:00Z",
+                "change": "SAME",
+                "artifact_type": "effective-running"
+              }
+            ]
+          }
+        ],
+        "pair_results": [
+          {
+            "status": "insufficient_evidence",
+            "reason": "cp_raw_text_diff_not_supported_in_0_6_3"
+          }
+        ],
+        "privacy": {
+          "contains_secrets": false,
+          "contains_raw_configuration": false
+        }
+      },
+      "host_key_policy": "strict_known_hosts"
+    },
+    {
+      "id": "cp:vsx-cls-02",
+      "name": "vsx-cls-02",
+      "device_name": "vsx-cls-02",
+      "vendor": "Check Point",
+      "vendor_key": "check_point",
+      "entity_type": "vsx_host",
+      "parent_name": "vsx-cls",
+      "parent_entity_id": "cp:vsx-cls",
+      "cluster_group_id": "uitest-vsx-cls",
+      "cluster_display_name": "vsx-cls-CLS",
+      "presentation_group_id": "uitest-vsx-cls",
+      "presentation_group_label": "vsx-cls-CLS",
+      "presentation_group_source": "inferred_member_pattern",
+      "platform": {
+        "family": "gaia",
+        "label": "Check Point Gaia"
+      },
+      "platform_family": "gaia",
+      "platform_label": "Check Point Gaia",
+      "management_state": "communicating",
+      "failure_reason": null,
+      "failure_family": null,
+      "serial": "SN-VSX-CLS-02",
+      "management_ip": null,
+      "model": "CP-6900",
+      "sw_version": "R81.20",
+      "ha_role": "standby",
+      "ha_role_source": "cluster_topology",
+      "vsys_count": 1,
+      "policy_scope_label": "VSX",
+      "policy_scope": "Host",
+      "connected": true,
+      "status": "success",
+      "primary_evidence_status": "success",
+      "alignment_evidence_status": "success",
+      "started_at": "2026-08-30T12:00:00Z",
+      "completed_at": "2026-08-30T12:00:00Z",
+      "tone": "success",
+      "status_label": "Current",
+      "assignment": {},
+      "current_configuration": {
+        "schema_version": "0.6.1B",
+        "status": "available",
+        "vendor": "check_point",
+        "source_plane": "gaia-clish-show-configuration",
+        "entity_type": "vsx_host",
+        "sections": [
+          {
+            "id": "system",
+            "label": "System",
+            "count": 2,
+            "settings": [
+              {
+                "setting": "Hostname",
+                "value": "CP-DEVICE"
+              },
+              {
+                "setting": "Timezone",
+                "value": "Europe/Istanbul"
+              }
+            ]
+          },
+          {
+            "id": "dns",
+            "label": "Dns",
+            "count": 2,
+            "settings": [
+              {
+                "setting": "Primary DNS",
+                "value": "203.0.113.53"
+              },
+              {
+                "setting": "Search Domain",
+                "value": "corp.example"
+              }
+            ]
+          },
+          {
+            "id": "ntp",
+            "label": "Ntp",
+            "count": 2,
+            "settings": [
+              {
+                "setting": "Primary NTP Server",
+                "value": "203.0.113.10"
+              },
+              {
+                "setting": "Secondary NTP Server",
+                "value": "203.0.113.11"
+              }
+            ]
+          },
+          {
+            "id": "management",
+            "label": "Management",
+            "count": 4,
+            "settings": [
+              {
+                "setting": "Telnet Disabled",
+                "value": "yes"
+              },
+              {
+                "setting": "Inactivity Timeout",
+                "value": "10"
+              },
+              {
+                "setting": "SSH Version",
+                "value": "v2"
+              },
+              {
+                "setting": "SSH Ciphers",
+                "value": "aes256-ctr,aes256-gcm"
+              }
+            ]
+          },
+          {
+            "id": "password_policy",
+            "label": "Password Policy",
+            "count": 3,
+            "settings": [
+              {
+                "setting": "Minimum Password Length",
+                "value": "12"
+              },
+              {
+                "setting": "Password Complexity",
+                "value": "enabled"
+              },
+              {
+                "setting": "Password History Depth",
+                "value": "8"
+              }
+            ]
+          },
+          {
+            "id": "banner",
+            "label": "Banner",
+            "count": 2,
+            "settings": [
+              {
+                "setting": "Login Banner Present",
+                "value": "yes"
+              },
+              {
+                "setting": "Login Banner Length",
+                "value": "medium"
+              }
+            ]
+          },
+          {
+            "id": "services",
+            "label": "Services",
+            "count": 2,
+            "settings": [
+              {
+                "setting": "Telnet",
+                "value": "disabled"
+              },
+              {
+                "setting": "HTTP",
+                "value": "disabled"
+              }
+            ]
+          },
+          {
+            "id": "logging",
+            "label": "Logging",
+            "count": 2,
+            "settings": [
+              {
+                "setting": "Logging Audit",
+                "value": "enabled"
+              },
+              {
+                "setting": "Syslog Server",
+                "value": "203.0.113.90"
+              }
+            ]
+          }
+        ],
+        "section_index": [
+          {
+            "id": "system",
+            "label": "System",
+            "count": 2
+          },
+          {
+            "id": "dns",
+            "label": "Dns",
+            "count": 2
+          },
+          {
+            "id": "ntp",
+            "label": "Ntp",
+            "count": 2
+          },
+          {
+            "id": "management",
+            "label": "Management",
+            "count": 4
+          },
+          {
+            "id": "password_policy",
+            "label": "Password Policy",
+            "count": 3
+          },
+          {
+            "id": "banner",
+            "label": "Banner",
+            "count": 2
+          },
+          {
+            "id": "services",
+            "label": "Services",
+            "count": 2
+          },
+          {
+            "id": "logging",
+            "label": "Logging",
+            "count": 2
+          }
+        ],
+        "highlights": [
+          {
+            "label": "Hostname",
+            "value": "CP-DEVICE",
+            "section": "system",
+            "section_label": "System",
+            "origin": "local",
+            "context": null
+          }
+        ],
+        "setting_count": 19,
+        "redacted_secret_setting_count": 2,
+        "structured_values_included": true,
+        "raw_config_included": false,
+        "secrets_redacted": true
+      },
+      "alignment": {
+        "available": true,
+        "status": "success",
+        "device_status": "DIFFERENCE_OBSERVED",
+        "engine_status": "success",
+        "reason": "trusted_intent_compared_with_direct_actual",
+        "message": "Trusted intent was compared with direct actual evidence.",
+        "counts": {
+          "ALIGNED": 3,
+          "MEMBER_SPECIFIC": 4,
+          "LOCAL_OVERRIDE": 1,
+          "UNKNOWN": 1
+        },
+        "categories": [
+          {
+            "category": "system",
+            "count": 4
+          },
+          {
+            "category": "network",
+            "count": 2
+          },
+          {
+            "category": "management",
+            "count": 3
+          },
+          {
+            "category": "ha",
+            "count": 1
+          }
+        ],
+        "expected_settings": 40,
+        "alignment_ready_settings": 34,
+        "observed_settings": 36,
+        "observed_percent": 90.0,
+        "coverage_percent": 85.0,
+        "value_comparison_coverage_percent": 80.0,
+        "local_only_settings": 1,
+        "semantic_exclusion_settings": 2,
+        "findings": [
+          {
+            "alignment_key": "deviceconfig/system/hostname",
+            "classification": "ALIGNED",
+            "category": "system"
+          },
+          {
+            "alignment_key": "deviceconfig/system/dns-setting/servers/primary",
+            "classification": "ALIGNED",
+            "category": "dns"
+          },
+          {
+            "alignment_key": "deviceconfig/system/permitted-ip/entry/description",
+            "classification": "LOCAL_OVERRIDE",
+            "category": "system",
+            "reason": "effective_differs_from_expected_and_matches_local_active_scalar"
+          },
+          {
+            "alignment_key": "deviceconfig/high-availability/group/peer-ip",
+            "classification": "MEMBER_SPECIFIC",
+            "category": "ha",
+            "reason": "member_relative_ha_setting"
+          },
+          {
+            "alignment_key": "deviceconfig/system/service/disable-telnet",
+            "classification": "UNKNOWN",
+            "category": "management",
+            "reason": "expected_or_effective_value_not_resolvable"
+          }
+        ],
+        "peer_evidence_incomplete": false
+      },
+      "history": {
+        "actual_change_state": "same",
+        "effective_change_state": "same"
+      },
+      "history_v1": {
+        "schema_version": "0.6.3",
+        "status": "available",
+        "scope": "entity",
+        "artifacts": [
+          {
+            "artifact_type": "cp-show-configuration",
+            "artifact_label": "Gaia show configuration",
+            "event_count": 3,
+            "truncated": false,
+            "skipped_malformed": 0,
+            "events": [
+              {
+                "collected_at": "2026-07-31T12:00:00Z",
+                "change": "FIRST",
+                "artifact_type": "effective-running"
+              },
+              {
+                "collected_at": "2026-08-23T12:00:00Z",
+                "change": "SAME",
+                "artifact_type": "effective-running"
+              },
+              {
+                "collected_at": "2026-08-30T12:00:00Z",
+                "change": "SAME",
+                "artifact_type": "effective-running"
+              }
+            ]
+          }
+        ],
+        "pair_results": [
+          {
+            "status": "insufficient_evidence",
+            "reason": "cp_raw_text_diff_not_supported_in_0_6_3"
+          }
+        ],
+        "privacy": {
+          "contains_secrets": false,
+          "contains_raw_configuration": false
+        }
+      },
+      "host_key_policy": "strict_known_hosts"
+    },
+    {
+      "id": "cp:vsx-cls-vs30",
+      "name": "vsx-cls / VS-PAYMENTS",
+      "device_name": "vsx-cls / VS-PAYMENTS",
+      "vendor": "Check Point",
+      "vendor_key": "check_point",
+      "entity_type": "virtual_system",
+      "parent_name": "vsx-cls",
+      "parent_entity_id": "cp:vsx-cls",
+      "cluster_group_id": "uitest-vsx-cls",
+      "cluster_display_name": null,
+      "presentation_group_id": "uitest-vsx-cls",
+      "presentation_group_label": null,
+      "presentation_group_source": "inferred_member_pattern",
+      "platform": {
+        "family": "gaia",
+        "label": "Check Point Gaia"
+      },
+      "platform_family": "gaia",
+      "platform_label": "Check Point Gaia",
+      "management_state": "communicating",
+      "failure_reason": null,
+      "failure_family": null,
+      "serial": "SN-VSX-CLS-VS30",
+      "management_ip": null,
+      "model": "CP-6900",
+      "sw_version": "R81.20",
+      "ha_role": null,
+      "ha_role_source": null,
+      "vsys_count": 0,
+      "policy_scope_label": "VSX Context",
+      "policy_scope": "VSID 30",
+      "connected": true,
+      "status": "success",
+      "primary_evidence_status": "success",
+      "alignment_evidence_status": "success",
+      "started_at": "2026-08-30T12:00:00Z",
+      "completed_at": "2026-08-30T12:00:00Z",
+      "tone": "success",
+      "status_label": "Current",
+      "assignment": {},
+      "current_configuration": {
+        "schema_version": "0.6.1B",
+        "status": "available",
+        "vendor": "check_point",
+        "source_plane": "gaia-clish-show-configuration",
+        "entity_type": "virtual_system",
+        "sections": [
+          {
+            "id": "system",
+            "label": "System",
+            "count": 2,
+            "settings": [
+              {
+                "setting": "Hostname",
+                "value": "CP-DEVICE"
+              },
+              {
+                "setting": "Timezone",
+                "value": "Europe/Istanbul"
+              }
+            ]
+          },
+          {
+            "id": "dns",
+            "label": "Dns",
+            "count": 2,
+            "settings": [
+              {
+                "setting": "Primary DNS",
+                "value": "203.0.113.53"
+              },
+              {
+                "setting": "Search Domain",
+                "value": "corp.example"
+              }
+            ]
+          },
+          {
+            "id": "ntp",
+            "label": "Ntp",
+            "count": 2,
+            "settings": [
+              {
+                "setting": "Primary NTP Server",
+                "value": "203.0.113.10"
+              },
+              {
+                "setting": "Secondary NTP Server",
+                "value": "203.0.113.11"
+              }
+            ]
+          },
+          {
+            "id": "management",
+            "label": "Management",
+            "count": 4,
+            "settings": [
+              {
+                "setting": "Telnet Disabled",
+                "value": "yes"
+              },
+              {
+                "setting": "Inactivity Timeout",
+                "value": "10"
+              },
+              {
+                "setting": "SSH Version",
+                "value": "v2"
+              },
+              {
+                "setting": "SSH Ciphers",
+                "value": "aes256-ctr,aes256-gcm"
+              }
+            ]
+          },
+          {
+            "id": "password_policy",
+            "label": "Password Policy",
+            "count": 3,
+            "settings": [
+              {
+                "setting": "Minimum Password Length",
+                "value": "12"
+              },
+              {
+                "setting": "Password Complexity",
+                "value": "enabled"
+              },
+              {
+                "setting": "Password History Depth",
+                "value": "8"
+              }
+            ]
+          },
+          {
+            "id": "banner",
+            "label": "Banner",
+            "count": 2,
+            "settings": [
+              {
+                "setting": "Login Banner Present",
+                "value": "yes"
+              },
+              {
+                "setting": "Login Banner Length",
+                "value": "medium"
+              }
+            ]
+          },
+          {
+            "id": "services",
+            "label": "Services",
+            "count": 2,
+            "settings": [
+              {
+                "setting": "Telnet",
+                "value": "disabled"
+              },
+              {
+                "setting": "HTTP",
+                "value": "disabled"
+              }
+            ]
+          },
+          {
+            "id": "logging",
+            "label": "Logging",
+            "count": 2,
+            "settings": [
+              {
+                "setting": "Logging Audit",
+                "value": "enabled"
+              },
+              {
+                "setting": "Syslog Server",
+                "value": "203.0.113.90"
+              }
+            ]
+          }
+        ],
+        "section_index": [
+          {
+            "id": "system",
+            "label": "System",
+            "count": 2
+          },
+          {
+            "id": "dns",
+            "label": "Dns",
+            "count": 2
+          },
+          {
+            "id": "ntp",
+            "label": "Ntp",
+            "count": 2
+          },
+          {
+            "id": "management",
+            "label": "Management",
+            "count": 4
+          },
+          {
+            "id": "password_policy",
+            "label": "Password Policy",
+            "count": 3
+          },
+          {
+            "id": "banner",
+            "label": "Banner",
+            "count": 2
+          },
+          {
+            "id": "services",
+            "label": "Services",
+            "count": 2
+          },
+          {
+            "id": "logging",
+            "label": "Logging",
+            "count": 2
+          }
+        ],
+        "highlights": [
+          {
+            "label": "Hostname",
+            "value": "CP-DEVICE",
+            "section": "system",
+            "section_label": "System",
+            "origin": "local",
+            "context": null
+          }
+        ],
+        "setting_count": 19,
+        "redacted_secret_setting_count": 2,
+        "structured_values_included": true,
+        "raw_config_included": false,
+        "secrets_redacted": true
+      },
+      "alignment": {
+        "available": true,
+        "status": "success",
+        "device_status": "DIFFERENCE_OBSERVED",
+        "engine_status": "success",
+        "reason": "trusted_intent_compared_with_direct_actual",
+        "message": "Trusted intent was compared with direct actual evidence.",
+        "counts": {
+          "ALIGNED": 6,
+          "LOCAL_OVERRIDE": 2,
+          "EFFECTIVE_DRIFT": 1,
+          "MEMBER_SPECIFIC": 1,
+          "LOCAL_ONLY": 1,
+          "EXPECTED_ONLY": 1,
+          "UNKNOWN": 1
+        },
+        "categories": [
+          {
+            "category": "system",
+            "count": 4
+          },
+          {
+            "category": "network",
+            "count": 2
+          },
+          {
+            "category": "management",
+            "count": 3
+          },
+          {
+            "category": "ha",
+            "count": 1
+          }
+        ],
+        "expected_settings": 40,
+        "alignment_ready_settings": 34,
+        "observed_settings": 36,
+        "observed_percent": 90.0,
+        "coverage_percent": 85.0,
+        "value_comparison_coverage_percent": 80.0,
+        "local_only_settings": 1,
+        "semantic_exclusion_settings": 2,
+        "findings": [
+          {
+            "alignment_key": "deviceconfig/system/hostname",
+            "classification": "ALIGNED",
+            "category": "system"
+          },
+          {
+            "alignment_key": "deviceconfig/system/dns-setting/servers/primary",
+            "classification": "ALIGNED",
+            "category": "dns"
+          },
+          {
+            "alignment_key": "deviceconfig/system/permitted-ip/entry/description",
+            "classification": "LOCAL_OVERRIDE",
+            "category": "system",
+            "reason": "effective_differs_from_expected_and_matches_local_active_scalar"
+          },
+          {
+            "alignment_key": "deviceconfig/system/login-banner",
+            "classification": "EFFECTIVE_DRIFT",
+            "category": "system",
+            "reason": "effective_differs_from_expected_no_local_scalar_match"
+          },
+          {
+            "alignment_key": "network/virtual-router/entry/routing-table/ip/static-route",
+            "classification": "LOCAL_ONLY",
+            "category": "network",
+            "reason": "present_only_in_local_active"
+          },
+          {
+            "alignment_key": "deviceconfig/setting/management/idle-timeout",
+            "classification": "EXPECTED_ONLY",
+            "category": "management",
+            "reason": "present_only_in_expected"
+          },
+          {
+            "alignment_key": "deviceconfig/high-availability/group/peer-ip",
+            "classification": "MEMBER_SPECIFIC",
+            "category": "ha",
+            "reason": "member_relative_ha_setting"
+          },
+          {
+            "alignment_key": "deviceconfig/system/service/disable-telnet",
+            "classification": "UNKNOWN",
+            "category": "management",
+            "reason": "expected_or_effective_value_not_resolvable"
+          }
+        ],
+        "peer_evidence_incomplete": false
+      },
+      "history": {
+        "actual_change_state": "same",
+        "effective_change_state": "same"
+      },
+      "history_v1": {
+        "schema_version": "0.6.3",
+        "status": "available",
+        "scope": "entity",
+        "artifacts": [
+          {
+            "artifact_type": "cp-show-configuration",
+            "artifact_label": "Gaia show configuration",
+            "event_count": 3,
+            "truncated": false,
+            "skipped_malformed": 0,
+            "events": [
+              {
+                "collected_at": "2026-07-31T12:00:00Z",
+                "change": "FIRST",
+                "artifact_type": "effective-running"
+              },
+              {
+                "collected_at": "2026-08-23T12:00:00Z",
+                "change": "SAME",
+                "artifact_type": "effective-running"
+              },
+              {
+                "collected_at": "2026-08-30T12:00:00Z",
+                "change": "SAME",
+                "artifact_type": "effective-running"
+              }
+            ]
+          }
+        ],
+        "pair_results": [
+          {
+            "status": "insufficient_evidence",
+            "reason": "cp_raw_text_diff_not_supported_in_0_6_3"
+          }
+        ],
+        "privacy": {
+          "contains_secrets": false,
+          "contains_raw_configuration": false
+        }
+      },
+      "host_key_policy": "strict_known_hosts"
+    },
+    {
+      "id": "UITEST0EDGE01",
+      "name": "pan-edge-01",
+      "vendor": "Palo Alto Networks",
+      "vendor_key": "palo_alto",
+      "serial": "UITEST0EDGE01",
+      "management_ip": null,
+      "model": "PA-5220",
+      "sw_version": "11.1.3",
+      "ha_role": "HA Disabled",
+      "ha_role_source": "panorama_target_ha_state",
+      "vsys_count": 1,
+      "policy_scope_label": "Device Group",
+      "policy_scope": "DG-Branch",
+      "connected": true,
+      "status": "success",
+      "primary_evidence_status": "success",
+      "alignment_evidence_status": "success",
+      "started_at": "2026-08-30T12:00:00Z",
+      "completed_at": "2026-08-30T12:00:00Z",
+      "tone": "success",
+      "status_label": "Current",
+      "panorama_sync": {
+        "template": "in-sync",
+        "shared_policy": "in-sync",
+        "out_of_sync": false
+      },
+      "assignment": {
+        "device_groups": [
+          {
+            "name": "DG-Branch",
+            "parent": "Shared"
+          }
+        ]
+      },
+      "current_configuration": {
+        "schema_version": "0.6.1B",
+        "status": "available",
+        "vendor": "palo_alto",
+        "source_plane": "pan-effective-running",
+        "entity_type": "firewall",
+        "sections": [
+          {
+            "id": "system",
+            "label": "System",
+            "count": 3,
+            "settings": [
+              {
+                "setting": "Hostname",
+                "value": "PAN-DEVICE"
               },
               {
                 "setting": "Domain",
@@ -418,6 +3656,8 @@
           },
           {
             "id": "dns",
+            "label": "Dns",
+            "count": 2,
             "settings": [
               {
                 "setting": "Primary DNS",
@@ -431,6 +3671,8 @@
           },
           {
             "id": "ntp",
+            "label": "Ntp",
+            "count": 1,
             "settings": [
               {
                 "setting": "Primary NTP Server",
@@ -440,6 +3682,8 @@
           },
           {
             "id": "management",
+            "label": "Management",
+            "count": 2,
             "settings": [
               {
                 "setting": "Permitted IP",
@@ -453,28 +3697,34 @@
           },
           {
             "id": "password_policy",
+            "label": "Password Policy",
+            "count": 2,
             "settings": [
               {
                 "setting": "Minimum Password Length",
-                "value": "8"
+                "value": "14"
               },
               {
                 "setting": "Password Complexity",
-                "value": "disabled"
+                "value": "enabled"
               }
             ]
           },
           {
             "id": "banner",
+            "label": "Banner",
+            "count": 1,
             "settings": [
               {
                 "setting": "Login Banner Present",
-                "value": "no"
+                "value": "yes"
               }
             ]
           },
           {
             "id": "services",
+            "label": "Services",
+            "count": 2,
             "settings": [
               {
                 "setting": "SNMP",
@@ -486,13 +3736,99 @@
               }
             ]
           }
-        ]
+        ],
+        "section_index": [
+          {
+            "id": "system",
+            "label": "System",
+            "count": 3
+          },
+          {
+            "id": "dns",
+            "label": "Dns",
+            "count": 2
+          },
+          {
+            "id": "ntp",
+            "label": "Ntp",
+            "count": 1
+          },
+          {
+            "id": "management",
+            "label": "Management",
+            "count": 2
+          },
+          {
+            "id": "password_policy",
+            "label": "Password Policy",
+            "count": 2
+          },
+          {
+            "id": "banner",
+            "label": "Banner",
+            "count": 1
+          },
+          {
+            "id": "services",
+            "label": "Services",
+            "count": 2
+          }
+        ],
+        "highlights": [
+          {
+            "label": "Hostname",
+            "value": "CP-DEVICE",
+            "section": "system",
+            "section_label": "System",
+            "origin": "local",
+            "context": null
+          }
+        ],
+        "setting_count": 13,
+        "redacted_secret_setting_count": 2,
+        "structured_values_included": true,
+        "raw_config_included": false,
+        "secrets_redacted": true
       },
       "alignment": {
+        "available": true,
+        "status": "success",
+        "device_status": "DIFFERENCE_OBSERVED",
+        "engine_status": "success",
+        "reason": "trusted_intent_compared_with_direct_actual",
+        "message": "Trusted intent was compared with direct actual evidence.",
         "counts": {
-          "ALIGNED": 4,
-          "LOCAL_OVERRIDE": 1
+          "ALIGNED": 7,
+          "LOCAL_OVERRIDE": 1,
+          "EFFECTIVE_DRIFT": 2,
+          "UNKNOWN": 1
         },
+        "categories": [
+          {
+            "category": "system",
+            "count": 4
+          },
+          {
+            "category": "network",
+            "count": 2
+          },
+          {
+            "category": "management",
+            "count": 3
+          },
+          {
+            "category": "ha",
+            "count": 1
+          }
+        ],
+        "expected_settings": 40,
+        "alignment_ready_settings": 34,
+        "observed_settings": 36,
+        "observed_percent": 90.0,
+        "coverage_percent": 85.0,
+        "value_comparison_coverage_percent": 80.0,
+        "local_only_settings": 1,
+        "semantic_exclusion_settings": 2,
         "findings": [
           {
             "alignment_key": "deviceconfig/system/hostname",
@@ -511,12 +3847,1792 @@
             "reason": "effective_differs_from_expected_and_matches_local_active_scalar"
           },
           {
-            "alignment_key": "deviceconfig/high-availability/peer-ip",
+            "alignment_key": "deviceconfig/system/login-banner",
+            "classification": "EFFECTIVE_DRIFT",
+            "category": "system",
+            "reason": "effective_differs_from_expected_no_local_scalar_match"
+          },
+          {
+            "alignment_key": "network/virtual-router/entry/routing-table/ip/static-route",
+            "classification": "LOCAL_ONLY",
+            "category": "network",
+            "reason": "present_only_in_local_active"
+          },
+          {
+            "alignment_key": "deviceconfig/setting/management/idle-timeout",
+            "classification": "EXPECTED_ONLY",
+            "category": "management",
+            "reason": "present_only_in_expected"
+          },
+          {
+            "alignment_key": "deviceconfig/high-availability/group/peer-ip",
             "classification": "MEMBER_SPECIFIC",
             "category": "ha",
             "reason": "member_relative_ha_setting"
+          },
+          {
+            "alignment_key": "deviceconfig/system/service/disable-telnet",
+            "classification": "UNKNOWN",
+            "category": "management",
+            "reason": "expected_or_effective_value_not_resolvable"
+          }
+        ],
+        "peer_evidence_incomplete": false
+      },
+      "evidence": {
+        "panorama_control": {
+          "status": "success",
+          "role": "Panorama control-plane active",
+          "change_state": "first"
+        },
+        "active": {
+          "status": "success",
+          "role": "Local active / override evidence",
+          "change_state": "first"
+        },
+        "merged": {
+          "status": "success",
+          "role": "Merged / provenance evidence",
+          "change_state": "first"
+        },
+        "effective": {
+          "status": "success",
+          "role": "Effective-running",
+          "change_state": "first",
+          "method": "DIRECT_EFFECTIVE"
+        }
+      },
+      "history": {
+        "active_change_state": "first",
+        "merged_change_state": "first",
+        "effective_change_state": "first"
+      },
+      "history_v1": {
+        "schema_version": "0.6.3",
+        "status": "available",
+        "scope": "device",
+        "artifacts": [
+          {
+            "artifact_type": "effective-running",
+            "artifact_label": "PAN effective-running",
+            "event_count": 1,
+            "truncated": false,
+            "skipped_malformed": 0,
+            "events": [
+              {
+                "collected_at": "2026-08-30T12:00:00Z",
+                "change": "FIRST",
+                "artifact_type": "effective-running"
+              }
+            ]
+          }
+        ],
+        "pair_results": [
+          {
+            "status": "same",
+            "change": "FIRST",
+            "rows": []
+          }
+        ],
+        "privacy": {
+          "contains_secrets": false,
+          "contains_raw_configuration": false
+        }
+      }
+    },
+    {
+      "id": "UITEST0HA0001",
+      "name": "pan-ha-01",
+      "vendor": "Palo Alto Networks",
+      "vendor_key": "palo_alto",
+      "serial": "UITEST0HA0001",
+      "management_ip": null,
+      "model": "PA-5220",
+      "sw_version": "11.1.3",
+      "ha_role": "Local Active",
+      "ha_role_source": "panorama_target_ha_state",
+      "vsys_count": 1,
+      "policy_scope_label": "Device Group",
+      "policy_scope": "DG-DMZ",
+      "connected": true,
+      "status": "success",
+      "primary_evidence_status": "success",
+      "alignment_evidence_status": "success",
+      "started_at": "2026-08-30T12:00:00Z",
+      "completed_at": "2026-08-30T12:00:00Z",
+      "tone": "success",
+      "status_label": "Current",
+      "panorama_sync": {
+        "template": "out-of-sync",
+        "shared_policy": "in-sync",
+        "out_of_sync": true
+      },
+      "assignment": {
+        "device_groups": [
+          {
+            "name": "DG-DMZ",
+            "parent": "Shared"
           }
         ]
+      },
+      "current_configuration": {
+        "schema_version": "0.6.1B",
+        "status": "available",
+        "vendor": "palo_alto",
+        "source_plane": "pan-effective-running",
+        "entity_type": "firewall",
+        "sections": [
+          {
+            "id": "system",
+            "label": "System",
+            "count": 3,
+            "settings": [
+              {
+                "setting": "Hostname",
+                "value": "PAN-DEVICE"
+              },
+              {
+                "setting": "Domain",
+                "value": "corp.example"
+              },
+              {
+                "setting": "Timezone",
+                "value": "Europe/Istanbul"
+              }
+            ]
+          },
+          {
+            "id": "dns",
+            "label": "Dns",
+            "count": 2,
+            "settings": [
+              {
+                "setting": "Primary DNS",
+                "value": "203.0.113.53"
+              },
+              {
+                "setting": "Secondary DNS",
+                "value": "203.0.113.54"
+              }
+            ]
+          },
+          {
+            "id": "ntp",
+            "label": "Ntp",
+            "count": 1,
+            "settings": [
+              {
+                "setting": "Primary NTP Server",
+                "value": "203.0.113.10"
+              }
+            ]
+          },
+          {
+            "id": "management",
+            "label": "Management",
+            "count": 2,
+            "settings": [
+              {
+                "setting": "Permitted IP",
+                "value": "192.0.2.0/24"
+              },
+              {
+                "setting": "Idle Timeout",
+                "value": "10"
+              }
+            ]
+          },
+          {
+            "id": "password_policy",
+            "label": "Password Policy",
+            "count": 2,
+            "settings": [
+              {
+                "setting": "Minimum Password Length",
+                "value": "14"
+              },
+              {
+                "setting": "Password Complexity",
+                "value": "enabled"
+              }
+            ]
+          },
+          {
+            "id": "banner",
+            "label": "Banner",
+            "count": 1,
+            "settings": [
+              {
+                "setting": "Login Banner Present",
+                "value": "yes"
+              }
+            ]
+          },
+          {
+            "id": "services",
+            "label": "Services",
+            "count": 2,
+            "settings": [
+              {
+                "setting": "SNMP",
+                "value": "v3"
+              },
+              {
+                "setting": "HTTP",
+                "value": "disabled"
+              }
+            ]
+          }
+        ],
+        "section_index": [
+          {
+            "id": "system",
+            "label": "System",
+            "count": 3
+          },
+          {
+            "id": "dns",
+            "label": "Dns",
+            "count": 2
+          },
+          {
+            "id": "ntp",
+            "label": "Ntp",
+            "count": 1
+          },
+          {
+            "id": "management",
+            "label": "Management",
+            "count": 2
+          },
+          {
+            "id": "password_policy",
+            "label": "Password Policy",
+            "count": 2
+          },
+          {
+            "id": "banner",
+            "label": "Banner",
+            "count": 1
+          },
+          {
+            "id": "services",
+            "label": "Services",
+            "count": 2
+          }
+        ],
+        "highlights": [
+          {
+            "label": "Hostname",
+            "value": "CP-DEVICE",
+            "section": "system",
+            "section_label": "System",
+            "origin": "local",
+            "context": null
+          }
+        ],
+        "setting_count": 13,
+        "redacted_secret_setting_count": 2,
+        "structured_values_included": true,
+        "raw_config_included": false,
+        "secrets_redacted": true
+      },
+      "alignment": {
+        "available": true,
+        "status": "success",
+        "device_status": "DIFFERENCE_OBSERVED",
+        "engine_status": "success",
+        "reason": "trusted_intent_compared_with_direct_actual",
+        "message": "Trusted intent was compared with direct actual evidence.",
+        "counts": {
+          "ALIGNED": 7,
+          "LOCAL_OVERRIDE": 1,
+          "EFFECTIVE_DRIFT": 2,
+          "UNKNOWN": 1
+        },
+        "categories": [
+          {
+            "category": "system",
+            "count": 4
+          },
+          {
+            "category": "network",
+            "count": 2
+          },
+          {
+            "category": "management",
+            "count": 3
+          },
+          {
+            "category": "ha",
+            "count": 1
+          }
+        ],
+        "expected_settings": 40,
+        "alignment_ready_settings": 34,
+        "observed_settings": 36,
+        "observed_percent": 90.0,
+        "coverage_percent": 85.0,
+        "value_comparison_coverage_percent": 80.0,
+        "local_only_settings": 1,
+        "semantic_exclusion_settings": 2,
+        "findings": [
+          {
+            "alignment_key": "deviceconfig/system/hostname",
+            "classification": "ALIGNED",
+            "category": "system"
+          },
+          {
+            "alignment_key": "deviceconfig/system/dns-setting/servers/primary",
+            "classification": "ALIGNED",
+            "category": "dns"
+          },
+          {
+            "alignment_key": "deviceconfig/system/permitted-ip/entry/description",
+            "classification": "LOCAL_OVERRIDE",
+            "category": "system",
+            "reason": "effective_differs_from_expected_and_matches_local_active_scalar"
+          },
+          {
+            "alignment_key": "deviceconfig/system/login-banner",
+            "classification": "EFFECTIVE_DRIFT",
+            "category": "system",
+            "reason": "effective_differs_from_expected_no_local_scalar_match"
+          },
+          {
+            "alignment_key": "network/virtual-router/entry/routing-table/ip/static-route",
+            "classification": "LOCAL_ONLY",
+            "category": "network",
+            "reason": "present_only_in_local_active"
+          },
+          {
+            "alignment_key": "deviceconfig/setting/management/idle-timeout",
+            "classification": "EXPECTED_ONLY",
+            "category": "management",
+            "reason": "present_only_in_expected"
+          },
+          {
+            "alignment_key": "deviceconfig/high-availability/group/peer-ip",
+            "classification": "MEMBER_SPECIFIC",
+            "category": "ha",
+            "reason": "member_relative_ha_setting"
+          },
+          {
+            "alignment_key": "deviceconfig/system/service/disable-telnet",
+            "classification": "UNKNOWN",
+            "category": "management",
+            "reason": "expected_or_effective_value_not_resolvable"
+          }
+        ],
+        "peer_evidence_incomplete": false
+      },
+      "evidence": {
+        "panorama_control": {
+          "status": "success",
+          "role": "Panorama control-plane active",
+          "change_state": "changed"
+        },
+        "active": {
+          "status": "success",
+          "role": "Local active / override evidence",
+          "change_state": "changed"
+        },
+        "merged": {
+          "status": "success",
+          "role": "Merged / provenance evidence",
+          "change_state": "changed"
+        },
+        "effective": {
+          "status": "success",
+          "role": "Effective-running",
+          "change_state": "changed",
+          "method": "DIRECT_EFFECTIVE"
+        }
+      },
+      "history": {
+        "active_change_state": "changed",
+        "merged_change_state": "changed",
+        "effective_change_state": "changed"
+      },
+      "history_v1": {
+        "schema_version": "0.6.3",
+        "status": "available",
+        "scope": "device",
+        "artifacts": [
+          {
+            "artifact_type": "effective-running",
+            "artifact_label": "PAN effective-running",
+            "event_count": 3,
+            "truncated": false,
+            "skipped_malformed": 0,
+            "events": [
+              {
+                "collected_at": "2026-07-31T12:00:00Z",
+                "change": "FIRST",
+                "artifact_type": "effective-running"
+              },
+              {
+                "collected_at": "2026-08-23T12:00:00Z",
+                "change": "SAME",
+                "artifact_type": "effective-running"
+              },
+              {
+                "collected_at": "2026-08-30T12:00:00Z",
+                "change": "CHANGED",
+                "artifact_type": "effective-running"
+              }
+            ]
+          }
+        ],
+        "pair_results": [
+          {
+            "status": "available",
+            "change": "CHANGED",
+            "rows": [
+              {
+                "path": "deviceconfig/system/login-banner",
+                "change": "MODIFIED",
+                "left": "old banner",
+                "right": "new banner"
+              },
+              {
+                "path": "network/virtual-router/entry/routing-table/ip/static-route/entry[10.9.0.0]",
+                "change": "ADDED",
+                "left": null,
+                "right": "present"
+              }
+            ]
+          }
+        ],
+        "privacy": {
+          "contains_secrets": false,
+          "contains_raw_configuration": false
+        }
+      }
+    },
+    {
+      "id": "UITEST0HA0002",
+      "name": "pan-ha-02",
+      "vendor": "Palo Alto Networks",
+      "vendor_key": "palo_alto",
+      "serial": "UITEST0HA0002",
+      "management_ip": null,
+      "model": "PA-5220",
+      "sw_version": "11.1.3",
+      "ha_role": "Local Passive",
+      "ha_role_source": "panorama_target_ha_state",
+      "vsys_count": 1,
+      "policy_scope_label": "Device Group",
+      "policy_scope": "DG-DMZ",
+      "connected": true,
+      "status": "success",
+      "primary_evidence_status": "success",
+      "alignment_evidence_status": "success",
+      "started_at": "2026-08-30T12:00:00Z",
+      "completed_at": "2026-08-30T12:00:00Z",
+      "tone": "success",
+      "status_label": "Current",
+      "panorama_sync": {
+        "template": "in-sync",
+        "shared_policy": "in-sync",
+        "out_of_sync": false
+      },
+      "assignment": {
+        "device_groups": [
+          {
+            "name": "DG-DMZ",
+            "parent": "Shared"
+          }
+        ]
+      },
+      "current_configuration": {
+        "schema_version": "0.6.1B",
+        "status": "available",
+        "vendor": "palo_alto",
+        "source_plane": "pan-effective-running",
+        "entity_type": "firewall",
+        "sections": [
+          {
+            "id": "system",
+            "label": "System",
+            "count": 3,
+            "settings": [
+              {
+                "setting": "Hostname",
+                "value": "PAN-DEVICE"
+              },
+              {
+                "setting": "Domain",
+                "value": "corp.example"
+              },
+              {
+                "setting": "Timezone",
+                "value": "Europe/Istanbul"
+              }
+            ]
+          },
+          {
+            "id": "dns",
+            "label": "Dns",
+            "count": 2,
+            "settings": [
+              {
+                "setting": "Primary DNS",
+                "value": "203.0.113.53"
+              },
+              {
+                "setting": "Secondary DNS",
+                "value": "203.0.113.54"
+              }
+            ]
+          },
+          {
+            "id": "ntp",
+            "label": "Ntp",
+            "count": 1,
+            "settings": [
+              {
+                "setting": "Primary NTP Server",
+                "value": "203.0.113.10"
+              }
+            ]
+          },
+          {
+            "id": "management",
+            "label": "Management",
+            "count": 2,
+            "settings": [
+              {
+                "setting": "Permitted IP",
+                "value": "192.0.2.0/24"
+              },
+              {
+                "setting": "Idle Timeout",
+                "value": "10"
+              }
+            ]
+          },
+          {
+            "id": "password_policy",
+            "label": "Password Policy",
+            "count": 2,
+            "settings": [
+              {
+                "setting": "Minimum Password Length",
+                "value": "14"
+              },
+              {
+                "setting": "Password Complexity",
+                "value": "enabled"
+              }
+            ]
+          },
+          {
+            "id": "banner",
+            "label": "Banner",
+            "count": 1,
+            "settings": [
+              {
+                "setting": "Login Banner Present",
+                "value": "yes"
+              }
+            ]
+          },
+          {
+            "id": "services",
+            "label": "Services",
+            "count": 2,
+            "settings": [
+              {
+                "setting": "SNMP",
+                "value": "v3"
+              },
+              {
+                "setting": "HTTP",
+                "value": "disabled"
+              }
+            ]
+          }
+        ],
+        "section_index": [
+          {
+            "id": "system",
+            "label": "System",
+            "count": 3
+          },
+          {
+            "id": "dns",
+            "label": "Dns",
+            "count": 2
+          },
+          {
+            "id": "ntp",
+            "label": "Ntp",
+            "count": 1
+          },
+          {
+            "id": "management",
+            "label": "Management",
+            "count": 2
+          },
+          {
+            "id": "password_policy",
+            "label": "Password Policy",
+            "count": 2
+          },
+          {
+            "id": "banner",
+            "label": "Banner",
+            "count": 1
+          },
+          {
+            "id": "services",
+            "label": "Services",
+            "count": 2
+          }
+        ],
+        "highlights": [
+          {
+            "label": "Hostname",
+            "value": "CP-DEVICE",
+            "section": "system",
+            "section_label": "System",
+            "origin": "local",
+            "context": null
+          }
+        ],
+        "setting_count": 13,
+        "redacted_secret_setting_count": 2,
+        "structured_values_included": true,
+        "raw_config_included": false,
+        "secrets_redacted": true
+      },
+      "alignment": {
+        "available": true,
+        "status": "success",
+        "device_status": "DIFFERENCE_OBSERVED",
+        "engine_status": "success",
+        "reason": "trusted_intent_compared_with_direct_actual",
+        "message": "Trusted intent was compared with direct actual evidence.",
+        "counts": {
+          "ALIGNED": 7,
+          "LOCAL_OVERRIDE": 1,
+          "EFFECTIVE_DRIFT": 2,
+          "UNKNOWN": 1
+        },
+        "categories": [
+          {
+            "category": "system",
+            "count": 4
+          },
+          {
+            "category": "network",
+            "count": 2
+          },
+          {
+            "category": "management",
+            "count": 3
+          },
+          {
+            "category": "ha",
+            "count": 1
+          }
+        ],
+        "expected_settings": 40,
+        "alignment_ready_settings": 34,
+        "observed_settings": 36,
+        "observed_percent": 90.0,
+        "coverage_percent": 85.0,
+        "value_comparison_coverage_percent": 80.0,
+        "local_only_settings": 1,
+        "semantic_exclusion_settings": 2,
+        "findings": [
+          {
+            "alignment_key": "deviceconfig/system/hostname",
+            "classification": "ALIGNED",
+            "category": "system"
+          },
+          {
+            "alignment_key": "deviceconfig/system/dns-setting/servers/primary",
+            "classification": "ALIGNED",
+            "category": "dns"
+          },
+          {
+            "alignment_key": "deviceconfig/system/permitted-ip/entry/description",
+            "classification": "LOCAL_OVERRIDE",
+            "category": "system",
+            "reason": "effective_differs_from_expected_and_matches_local_active_scalar"
+          },
+          {
+            "alignment_key": "deviceconfig/system/login-banner",
+            "classification": "EFFECTIVE_DRIFT",
+            "category": "system",
+            "reason": "effective_differs_from_expected_no_local_scalar_match"
+          },
+          {
+            "alignment_key": "network/virtual-router/entry/routing-table/ip/static-route",
+            "classification": "LOCAL_ONLY",
+            "category": "network",
+            "reason": "present_only_in_local_active"
+          },
+          {
+            "alignment_key": "deviceconfig/setting/management/idle-timeout",
+            "classification": "EXPECTED_ONLY",
+            "category": "management",
+            "reason": "present_only_in_expected"
+          },
+          {
+            "alignment_key": "deviceconfig/high-availability/group/peer-ip",
+            "classification": "MEMBER_SPECIFIC",
+            "category": "ha",
+            "reason": "member_relative_ha_setting"
+          },
+          {
+            "alignment_key": "deviceconfig/system/service/disable-telnet",
+            "classification": "UNKNOWN",
+            "category": "management",
+            "reason": "expected_or_effective_value_not_resolvable"
+          }
+        ],
+        "peer_evidence_incomplete": false
+      },
+      "evidence": {
+        "panorama_control": {
+          "status": "success",
+          "role": "Panorama control-plane active",
+          "change_state": "same"
+        },
+        "active": {
+          "status": "success",
+          "role": "Local active / override evidence",
+          "change_state": "same"
+        },
+        "merged": {
+          "status": "success",
+          "role": "Merged / provenance evidence",
+          "change_state": "same"
+        },
+        "effective": {
+          "status": "success",
+          "role": "Effective-running",
+          "change_state": "same",
+          "method": "DIRECT_EFFECTIVE"
+        }
+      },
+      "history": {
+        "active_change_state": "same",
+        "merged_change_state": "same",
+        "effective_change_state": "same"
+      },
+      "history_v1": {
+        "schema_version": "0.6.3",
+        "status": "available",
+        "scope": "device",
+        "artifacts": [
+          {
+            "artifact_type": "effective-running",
+            "artifact_label": "PAN effective-running",
+            "event_count": 3,
+            "truncated": false,
+            "skipped_malformed": 0,
+            "events": [
+              {
+                "collected_at": "2026-07-31T12:00:00Z",
+                "change": "FIRST",
+                "artifact_type": "effective-running"
+              },
+              {
+                "collected_at": "2026-08-23T12:00:00Z",
+                "change": "SAME",
+                "artifact_type": "effective-running"
+              },
+              {
+                "collected_at": "2026-08-30T12:00:00Z",
+                "change": "SAME",
+                "artifact_type": "effective-running"
+              }
+            ]
+          }
+        ],
+        "pair_results": [
+          {
+            "status": "same",
+            "change": "SAME",
+            "rows": []
+          }
+        ],
+        "privacy": {
+          "contains_secrets": false,
+          "contains_raw_configuration": false
+        }
+      }
+    },
+    {
+      "id": "UITEST0MV0001",
+      "name": "pan-mv-01",
+      "vendor": "Palo Alto Networks",
+      "vendor_key": "palo_alto",
+      "serial": "UITEST0MV0001",
+      "management_ip": null,
+      "model": "PA-5220",
+      "sw_version": "11.1.3",
+      "ha_role": "HA Disabled",
+      "ha_role_source": "panorama_target_ha_state",
+      "vsys_count": 3,
+      "policy_scope_label": "Device Group",
+      "policy_scope": "DG-Core",
+      "connected": true,
+      "status": "success",
+      "primary_evidence_status": "success",
+      "alignment_evidence_status": "success",
+      "started_at": "2026-08-30T12:00:00Z",
+      "completed_at": "2026-08-30T12:00:00Z",
+      "tone": "success",
+      "status_label": "Current",
+      "panorama_sync": {
+        "template": "in-sync",
+        "shared_policy": "in-sync",
+        "out_of_sync": false
+      },
+      "assignment": {
+        "device_groups": [
+          {
+            "name": "DG-Core",
+            "parent": "Shared"
+          }
+        ]
+      },
+      "current_configuration": {
+        "schema_version": "0.6.1B",
+        "status": "available",
+        "vendor": "palo_alto",
+        "source_plane": "pan-effective-running",
+        "entity_type": "firewall",
+        "sections": [
+          {
+            "id": "system",
+            "label": "System",
+            "count": 3,
+            "settings": [
+              {
+                "setting": "Hostname",
+                "value": "PAN-DEVICE"
+              },
+              {
+                "setting": "Domain",
+                "value": "corp.example"
+              },
+              {
+                "setting": "Timezone",
+                "value": "Europe/Istanbul"
+              }
+            ]
+          },
+          {
+            "id": "dns",
+            "label": "Dns",
+            "count": 2,
+            "settings": [
+              {
+                "setting": "Primary DNS",
+                "value": "203.0.113.53"
+              },
+              {
+                "setting": "Secondary DNS",
+                "value": "203.0.113.54"
+              }
+            ]
+          },
+          {
+            "id": "ntp",
+            "label": "Ntp",
+            "count": 1,
+            "settings": [
+              {
+                "setting": "Primary NTP Server",
+                "value": "203.0.113.10"
+              }
+            ]
+          },
+          {
+            "id": "management",
+            "label": "Management",
+            "count": 2,
+            "settings": [
+              {
+                "setting": "Permitted IP",
+                "value": "192.0.2.0/24"
+              },
+              {
+                "setting": "Idle Timeout",
+                "value": "10"
+              }
+            ]
+          },
+          {
+            "id": "password_policy",
+            "label": "Password Policy",
+            "count": 2,
+            "settings": [
+              {
+                "setting": "Minimum Password Length",
+                "value": "8"
+              },
+              {
+                "setting": "Password Complexity",
+                "value": "disabled"
+              }
+            ]
+          },
+          {
+            "id": "banner",
+            "label": "Banner",
+            "count": 1,
+            "settings": [
+              {
+                "setting": "Login Banner Present",
+                "value": "no"
+              }
+            ]
+          },
+          {
+            "id": "services",
+            "label": "Services",
+            "count": 2,
+            "settings": [
+              {
+                "setting": "SNMP",
+                "value": "v3"
+              },
+              {
+                "setting": "HTTP",
+                "value": "disabled"
+              }
+            ]
+          },
+          {
+            "id": "vsys",
+            "label": "Vsys",
+            "count": 2,
+            "settings": [
+              {
+                "setting": "Virtual System Count",
+                "value": "3"
+              },
+              {
+                "setting": "Shared Gateway Count",
+                "value": "1"
+              }
+            ]
+          }
+        ],
+        "section_index": [
+          {
+            "id": "system",
+            "label": "System",
+            "count": 3
+          },
+          {
+            "id": "dns",
+            "label": "Dns",
+            "count": 2
+          },
+          {
+            "id": "ntp",
+            "label": "Ntp",
+            "count": 1
+          },
+          {
+            "id": "management",
+            "label": "Management",
+            "count": 2
+          },
+          {
+            "id": "password_policy",
+            "label": "Password Policy",
+            "count": 2
+          },
+          {
+            "id": "banner",
+            "label": "Banner",
+            "count": 1
+          },
+          {
+            "id": "services",
+            "label": "Services",
+            "count": 2
+          },
+          {
+            "id": "vsys",
+            "label": "Vsys",
+            "count": 2
+          }
+        ],
+        "highlights": [
+          {
+            "label": "Hostname",
+            "value": "CP-DEVICE",
+            "section": "system",
+            "section_label": "System",
+            "origin": "local",
+            "context": null
+          }
+        ],
+        "setting_count": 15,
+        "redacted_secret_setting_count": 2,
+        "structured_values_included": true,
+        "raw_config_included": false,
+        "secrets_redacted": true
+      },
+      "alignment": {
+        "available": true,
+        "status": "success",
+        "device_status": "DIFFERENCE_OBSERVED",
+        "engine_status": "success",
+        "reason": "trusted_intent_compared_with_direct_actual",
+        "message": "Trusted intent was compared with direct actual evidence.",
+        "counts": {
+          "ALIGNED": 7,
+          "LOCAL_OVERRIDE": 1,
+          "EFFECTIVE_DRIFT": 2,
+          "UNKNOWN": 1
+        },
+        "categories": [
+          {
+            "category": "system",
+            "count": 4
+          },
+          {
+            "category": "network",
+            "count": 2
+          },
+          {
+            "category": "management",
+            "count": 3
+          },
+          {
+            "category": "ha",
+            "count": 1
+          }
+        ],
+        "expected_settings": 40,
+        "alignment_ready_settings": 34,
+        "observed_settings": 36,
+        "observed_percent": 90.0,
+        "coverage_percent": 85.0,
+        "value_comparison_coverage_percent": 80.0,
+        "local_only_settings": 1,
+        "semantic_exclusion_settings": 2,
+        "findings": [
+          {
+            "alignment_key": "deviceconfig/system/hostname",
+            "classification": "ALIGNED",
+            "category": "system"
+          },
+          {
+            "alignment_key": "deviceconfig/system/dns-setting/servers/primary",
+            "classification": "ALIGNED",
+            "category": "dns"
+          },
+          {
+            "alignment_key": "deviceconfig/system/permitted-ip/entry/description",
+            "classification": "LOCAL_OVERRIDE",
+            "category": "system",
+            "reason": "effective_differs_from_expected_and_matches_local_active_scalar"
+          },
+          {
+            "alignment_key": "deviceconfig/system/login-banner",
+            "classification": "EFFECTIVE_DRIFT",
+            "category": "system",
+            "reason": "effective_differs_from_expected_no_local_scalar_match"
+          },
+          {
+            "alignment_key": "network/virtual-router/entry/routing-table/ip/static-route",
+            "classification": "LOCAL_ONLY",
+            "category": "network",
+            "reason": "present_only_in_local_active"
+          },
+          {
+            "alignment_key": "deviceconfig/setting/management/idle-timeout",
+            "classification": "EXPECTED_ONLY",
+            "category": "management",
+            "reason": "present_only_in_expected"
+          },
+          {
+            "alignment_key": "deviceconfig/high-availability/group/peer-ip",
+            "classification": "MEMBER_SPECIFIC",
+            "category": "ha",
+            "reason": "member_relative_ha_setting"
+          },
+          {
+            "alignment_key": "deviceconfig/system/service/disable-telnet",
+            "classification": "UNKNOWN",
+            "category": "management",
+            "reason": "expected_or_effective_value_not_resolvable"
+          }
+        ],
+        "peer_evidence_incomplete": false
+      },
+      "evidence": {
+        "panorama_control": {
+          "status": "success",
+          "role": "Panorama control-plane active",
+          "change_state": "changed"
+        },
+        "active": {
+          "status": "success",
+          "role": "Local active / override evidence",
+          "change_state": "changed"
+        },
+        "merged": {
+          "status": "success",
+          "role": "Merged / provenance evidence",
+          "change_state": "changed"
+        },
+        "effective": {
+          "status": "success",
+          "role": "Effective-running",
+          "change_state": "changed",
+          "method": "DIRECT_EFFECTIVE"
+        }
+      },
+      "history": {
+        "active_change_state": "changed",
+        "merged_change_state": "changed",
+        "effective_change_state": "changed"
+      },
+      "history_v1": {
+        "schema_version": "0.6.3",
+        "status": "available",
+        "scope": "device",
+        "artifacts": [
+          {
+            "artifact_type": "effective-running",
+            "artifact_label": "PAN effective-running",
+            "event_count": 3,
+            "truncated": false,
+            "skipped_malformed": 0,
+            "events": [
+              {
+                "collected_at": "2026-07-31T12:00:00Z",
+                "change": "FIRST",
+                "artifact_type": "effective-running"
+              },
+              {
+                "collected_at": "2026-08-23T12:00:00Z",
+                "change": "SAME",
+                "artifact_type": "effective-running"
+              },
+              {
+                "collected_at": "2026-08-30T12:00:00Z",
+                "change": "CHANGED",
+                "artifact_type": "effective-running"
+              }
+            ]
+          }
+        ],
+        "pair_results": [
+          {
+            "status": "available",
+            "change": "CHANGED",
+            "rows": [
+              {
+                "path": "deviceconfig/system/login-banner",
+                "change": "MODIFIED",
+                "left": "old banner",
+                "right": "new banner"
+              },
+              {
+                "path": "network/virtual-router/entry/routing-table/ip/static-route/entry[10.9.0.0]",
+                "change": "ADDED",
+                "left": null,
+                "right": "present"
+              }
+            ]
+          }
+        ],
+        "privacy": {
+          "contains_secrets": false,
+          "contains_raw_configuration": false
+        }
+      }
+    },
+    {
+      "id": "UITEST0MVHA01",
+      "name": "pan-mvha-01",
+      "vendor": "Palo Alto Networks",
+      "vendor_key": "palo_alto",
+      "serial": "UITEST0MVHA01",
+      "management_ip": null,
+      "model": "PA-5220",
+      "sw_version": "11.1.3",
+      "ha_role": "Local Active",
+      "ha_role_source": "panorama_target_ha_state",
+      "vsys_count": 2,
+      "policy_scope_label": "Device Group",
+      "policy_scope": "DG-Core",
+      "connected": true,
+      "status": "success",
+      "primary_evidence_status": "success",
+      "alignment_evidence_status": "success",
+      "started_at": "2026-08-30T12:00:00Z",
+      "completed_at": "2026-08-30T12:00:00Z",
+      "tone": "success",
+      "status_label": "Current",
+      "panorama_sync": {
+        "template": "in-sync",
+        "shared_policy": "in-sync",
+        "out_of_sync": false
+      },
+      "assignment": {
+        "device_groups": [
+          {
+            "name": "DG-Core",
+            "parent": "Shared"
+          }
+        ]
+      },
+      "current_configuration": {
+        "schema_version": "0.6.1B",
+        "status": "available",
+        "vendor": "palo_alto",
+        "source_plane": "pan-effective-running",
+        "entity_type": "firewall",
+        "sections": [
+          {
+            "id": "system",
+            "label": "System",
+            "count": 3,
+            "settings": [
+              {
+                "setting": "Hostname",
+                "value": "PAN-DEVICE"
+              },
+              {
+                "setting": "Domain",
+                "value": "corp.example"
+              },
+              {
+                "setting": "Timezone",
+                "value": "Europe/Istanbul"
+              }
+            ]
+          },
+          {
+            "id": "dns",
+            "label": "Dns",
+            "count": 2,
+            "settings": [
+              {
+                "setting": "Primary DNS",
+                "value": "203.0.113.53"
+              },
+              {
+                "setting": "Secondary DNS",
+                "value": "203.0.113.54"
+              }
+            ]
+          },
+          {
+            "id": "ntp",
+            "label": "Ntp",
+            "count": 1,
+            "settings": [
+              {
+                "setting": "Primary NTP Server",
+                "value": "203.0.113.10"
+              }
+            ]
+          },
+          {
+            "id": "management",
+            "label": "Management",
+            "count": 2,
+            "settings": [
+              {
+                "setting": "Permitted IP",
+                "value": "192.0.2.0/24"
+              },
+              {
+                "setting": "Idle Timeout",
+                "value": "10"
+              }
+            ]
+          },
+          {
+            "id": "password_policy",
+            "label": "Password Policy",
+            "count": 2,
+            "settings": [
+              {
+                "setting": "Minimum Password Length",
+                "value": "14"
+              },
+              {
+                "setting": "Password Complexity",
+                "value": "enabled"
+              }
+            ]
+          },
+          {
+            "id": "banner",
+            "label": "Banner",
+            "count": 1,
+            "settings": [
+              {
+                "setting": "Login Banner Present",
+                "value": "yes"
+              }
+            ]
+          },
+          {
+            "id": "services",
+            "label": "Services",
+            "count": 2,
+            "settings": [
+              {
+                "setting": "SNMP",
+                "value": "v3"
+              },
+              {
+                "setting": "HTTP",
+                "value": "disabled"
+              }
+            ]
+          },
+          {
+            "id": "vsys",
+            "label": "Vsys",
+            "count": 2,
+            "settings": [
+              {
+                "setting": "Virtual System Count",
+                "value": "2"
+              },
+              {
+                "setting": "Shared Gateway Count",
+                "value": "1"
+              }
+            ]
+          }
+        ],
+        "section_index": [
+          {
+            "id": "system",
+            "label": "System",
+            "count": 3
+          },
+          {
+            "id": "dns",
+            "label": "Dns",
+            "count": 2
+          },
+          {
+            "id": "ntp",
+            "label": "Ntp",
+            "count": 1
+          },
+          {
+            "id": "management",
+            "label": "Management",
+            "count": 2
+          },
+          {
+            "id": "password_policy",
+            "label": "Password Policy",
+            "count": 2
+          },
+          {
+            "id": "banner",
+            "label": "Banner",
+            "count": 1
+          },
+          {
+            "id": "services",
+            "label": "Services",
+            "count": 2
+          },
+          {
+            "id": "vsys",
+            "label": "Vsys",
+            "count": 2
+          }
+        ],
+        "highlights": [
+          {
+            "label": "Hostname",
+            "value": "CP-DEVICE",
+            "section": "system",
+            "section_label": "System",
+            "origin": "local",
+            "context": null
+          }
+        ],
+        "setting_count": 15,
+        "redacted_secret_setting_count": 2,
+        "structured_values_included": true,
+        "raw_config_included": false,
+        "secrets_redacted": true
+      },
+      "alignment": {
+        "available": true,
+        "status": "success",
+        "device_status": "DIFFERENCE_OBSERVED",
+        "engine_status": "success",
+        "reason": "trusted_intent_compared_with_direct_actual",
+        "message": "Trusted intent was compared with direct actual evidence.",
+        "counts": {
+          "ALIGNED": 7,
+          "LOCAL_OVERRIDE": 1,
+          "EFFECTIVE_DRIFT": 2,
+          "UNKNOWN": 1
+        },
+        "categories": [
+          {
+            "category": "system",
+            "count": 4
+          },
+          {
+            "category": "network",
+            "count": 2
+          },
+          {
+            "category": "management",
+            "count": 3
+          },
+          {
+            "category": "ha",
+            "count": 1
+          }
+        ],
+        "expected_settings": 40,
+        "alignment_ready_settings": 34,
+        "observed_settings": 36,
+        "observed_percent": 90.0,
+        "coverage_percent": 85.0,
+        "value_comparison_coverage_percent": 80.0,
+        "local_only_settings": 1,
+        "semantic_exclusion_settings": 2,
+        "findings": [
+          {
+            "alignment_key": "deviceconfig/system/hostname",
+            "classification": "ALIGNED",
+            "category": "system"
+          },
+          {
+            "alignment_key": "deviceconfig/system/dns-setting/servers/primary",
+            "classification": "ALIGNED",
+            "category": "dns"
+          },
+          {
+            "alignment_key": "deviceconfig/system/permitted-ip/entry/description",
+            "classification": "LOCAL_OVERRIDE",
+            "category": "system",
+            "reason": "effective_differs_from_expected_and_matches_local_active_scalar"
+          },
+          {
+            "alignment_key": "deviceconfig/system/login-banner",
+            "classification": "EFFECTIVE_DRIFT",
+            "category": "system",
+            "reason": "effective_differs_from_expected_no_local_scalar_match"
+          },
+          {
+            "alignment_key": "network/virtual-router/entry/routing-table/ip/static-route",
+            "classification": "LOCAL_ONLY",
+            "category": "network",
+            "reason": "present_only_in_local_active"
+          },
+          {
+            "alignment_key": "deviceconfig/setting/management/idle-timeout",
+            "classification": "EXPECTED_ONLY",
+            "category": "management",
+            "reason": "present_only_in_expected"
+          },
+          {
+            "alignment_key": "deviceconfig/high-availability/group/peer-ip",
+            "classification": "MEMBER_SPECIFIC",
+            "category": "ha",
+            "reason": "member_relative_ha_setting"
+          },
+          {
+            "alignment_key": "deviceconfig/system/service/disable-telnet",
+            "classification": "UNKNOWN",
+            "category": "management",
+            "reason": "expected_or_effective_value_not_resolvable"
+          }
+        ],
+        "peer_evidence_incomplete": false
+      },
+      "evidence": {
+        "panorama_control": {
+          "status": "success",
+          "role": "Panorama control-plane active",
+          "change_state": "same"
+        },
+        "active": {
+          "status": "success",
+          "role": "Local active / override evidence",
+          "change_state": "same"
+        },
+        "merged": {
+          "status": "success",
+          "role": "Merged / provenance evidence",
+          "change_state": "same"
+        },
+        "effective": {
+          "status": "success",
+          "role": "Effective-running",
+          "change_state": "same",
+          "method": "DIRECT_EFFECTIVE"
+        }
+      },
+      "history": {
+        "active_change_state": "same",
+        "merged_change_state": "same",
+        "effective_change_state": "same"
+      },
+      "history_v1": {
+        "schema_version": "0.6.3",
+        "status": "available",
+        "scope": "device",
+        "artifacts": [
+          {
+            "artifact_type": "effective-running",
+            "artifact_label": "PAN effective-running",
+            "event_count": 3,
+            "truncated": false,
+            "skipped_malformed": 0,
+            "events": [
+              {
+                "collected_at": "2026-07-31T12:00:00Z",
+                "change": "FIRST",
+                "artifact_type": "effective-running"
+              },
+              {
+                "collected_at": "2026-08-23T12:00:00Z",
+                "change": "SAME",
+                "artifact_type": "effective-running"
+              },
+              {
+                "collected_at": "2026-08-30T12:00:00Z",
+                "change": "SAME",
+                "artifact_type": "effective-running"
+              }
+            ]
+          }
+        ],
+        "pair_results": [
+          {
+            "status": "same",
+            "change": "SAME",
+            "rows": []
+          }
+        ],
+        "privacy": {
+          "contains_secrets": false,
+          "contains_raw_configuration": false
+        }
+      }
+    },
+    {
+      "id": "UITEST0MVHA02",
+      "name": "pan-mvha-02",
+      "vendor": "Palo Alto Networks",
+      "vendor_key": "palo_alto",
+      "serial": "UITEST0MVHA02",
+      "management_ip": null,
+      "model": "PA-5220",
+      "sw_version": "11.1.3",
+      "ha_role": "Local Passive",
+      "ha_role_source": "panorama_target_ha_state",
+      "vsys_count": 2,
+      "policy_scope_label": "Device Group",
+      "policy_scope": "DG-Core",
+      "connected": false,
+      "status": "failed",
+      "primary_evidence_status": "failed",
+      "alignment_evidence_status": "insufficient_evidence",
+      "started_at": "2026-08-30T12:00:00Z",
+      "completed_at": "2026-08-30T12:00:00Z",
+      "tone": "danger",
+      "status_label": "Collection issue",
+      "panorama_sync": {
+        "template": "in-sync",
+        "shared_policy": "in-sync",
+        "out_of_sync": false
+      },
+      "assignment": {
+        "device_groups": [
+          {
+            "name": "DG-Core",
+            "parent": "Shared"
+          }
+        ]
+      },
+      "current_configuration": {
+        "status": "unavailable"
+      },
+      "alignment": {
+        "available": false,
+        "status": "insufficient_evidence",
+        "device_status": "INSUFFICIENT_EVIDENCE",
+        "engine_status": "insufficient_evidence",
+        "reason": "trusted_management_intent_projection_unavailable",
+        "message": "Trusted intent is unavailable; direct actual evidence is not treated as expected state.",
+        "counts": {
+          "ALIGNED": 6,
+          "LOCAL_OVERRIDE": 2,
+          "EFFECTIVE_DRIFT": 1,
+          "MEMBER_SPECIFIC": 1,
+          "LOCAL_ONLY": 1,
+          "EXPECTED_ONLY": 1,
+          "UNKNOWN": 1
+        },
+        "categories": [
+          {
+            "category": "system",
+            "count": 4
+          },
+          {
+            "category": "network",
+            "count": 2
+          },
+          {
+            "category": "management",
+            "count": 3
+          },
+          {
+            "category": "ha",
+            "count": 1
+          }
+        ],
+        "expected_settings": 40,
+        "alignment_ready_settings": 34,
+        "observed_settings": 36,
+        "observed_percent": 90.0,
+        "coverage_percent": 85.0,
+        "value_comparison_coverage_percent": 80.0,
+        "local_only_settings": 1,
+        "semantic_exclusion_settings": 2,
+        "findings": [
+          {
+            "alignment_key": "deviceconfig/system/hostname",
+            "classification": "ALIGNED",
+            "category": "system"
+          },
+          {
+            "alignment_key": "deviceconfig/system/dns-setting/servers/primary",
+            "classification": "ALIGNED",
+            "category": "dns"
+          },
+          {
+            "alignment_key": "deviceconfig/system/permitted-ip/entry/description",
+            "classification": "LOCAL_OVERRIDE",
+            "category": "system",
+            "reason": "effective_differs_from_expected_and_matches_local_active_scalar"
+          },
+          {
+            "alignment_key": "deviceconfig/system/login-banner",
+            "classification": "EFFECTIVE_DRIFT",
+            "category": "system",
+            "reason": "effective_differs_from_expected_no_local_scalar_match"
+          },
+          {
+            "alignment_key": "network/virtual-router/entry/routing-table/ip/static-route",
+            "classification": "LOCAL_ONLY",
+            "category": "network",
+            "reason": "present_only_in_local_active"
+          },
+          {
+            "alignment_key": "deviceconfig/setting/management/idle-timeout",
+            "classification": "EXPECTED_ONLY",
+            "category": "management",
+            "reason": "present_only_in_expected"
+          },
+          {
+            "alignment_key": "deviceconfig/high-availability/group/peer-ip",
+            "classification": "MEMBER_SPECIFIC",
+            "category": "ha",
+            "reason": "member_relative_ha_setting"
+          },
+          {
+            "alignment_key": "deviceconfig/system/service/disable-telnet",
+            "classification": "UNKNOWN",
+            "category": "management",
+            "reason": "expected_or_effective_value_not_resolvable"
+          }
+        ],
+        "peer_evidence_incomplete": false
+      },
+      "evidence": {
+        "panorama_control": {
+          "status": "success",
+          "role": "Panorama control-plane active",
+          "change_state": "same"
+        },
+        "active": {
+          "status": "success",
+          "role": "Local active / override evidence",
+          "change_state": "same"
+        },
+        "merged": {
+          "status": "success",
+          "role": "Merged / provenance evidence",
+          "change_state": "same"
+        },
+        "effective": {
+          "status": "success",
+          "role": "Effective-running",
+          "change_state": "same",
+          "method": "DIRECT_EFFECTIVE"
+        }
+      },
+      "history": {
+        "active_change_state": "same",
+        "merged_change_state": "same",
+        "effective_change_state": "same"
+      },
+      "history_v1": {
+        "schema_version": "0.6.3",
+        "status": "available",
+        "scope": "device",
+        "artifacts": [
+          {
+            "artifact_type": "effective-running",
+            "artifact_label": "PAN effective-running",
+            "event_count": 3,
+            "truncated": false,
+            "skipped_malformed": 0,
+            "events": [
+              {
+                "collected_at": "2026-07-31T12:00:00Z",
+                "change": "FIRST",
+                "artifact_type": "effective-running"
+              },
+              {
+                "collected_at": "2026-08-23T12:00:00Z",
+                "change": "SAME",
+                "artifact_type": "effective-running"
+              },
+              {
+                "collected_at": "2026-08-30T12:00:00Z",
+                "change": "SAME",
+                "artifact_type": "effective-running"
+              }
+            ]
+          }
+        ],
+        "pair_results": [
+          {
+            "status": "same",
+            "change": "SAME",
+            "rows": []
+          }
+        ],
+        "privacy": {
+          "contains_secrets": false,
+          "contains_raw_configuration": false
+        }
       }
     }
   ]

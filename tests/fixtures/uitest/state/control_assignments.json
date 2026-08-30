@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "waivers": [
+    {
+      "control_id": "login_banner_text_present",
+      "device_name": "cp-edge-01",
+      "reason": "legacy jump host - banner change scheduled Q4",
+      "approver": "netsec-lead",
+      "expires": "2099-01-01"
+    }
+  ]
+}

@@ -1,8 +1,17 @@
 # `uitest` render-harness fixture bundle
 
-Hand-authored, privacy-clean input that makes **every** UI module render
-*populated*, so the render harness can check the generated report loads and
-navigates without a human.
+Hand-authored, privacy-clean **topology matrix** that makes **every** UI module
+render *populated*, so the render harness can check the generated report loads
+and navigates without a human.
+
+Covered: CP standalone gateway, ClusterXL (2 members, active/standby), VSX host
+(standalone) + virtual systems, VSX cluster (2 hosts) + a shared virtual system,
+one UNAVAILABLE gateway; PAN single firewall, HA pair (active/passive),
+multi-vsys firewall, multi-vsys HA pair. Plus: interface/route divergence between
+cluster members, stale + disconnected inventory, the full alignment
+classification set, SAME / CHANGED / FIRST / insufficient history, crypto
+PASS / FINDING / UNKNOWN across every category, enforced + advisory + WAIVED
+compliance, per-framework COVERED / PARTIALLY_COVERED / UNCOVERED.
 
 ## Files
 
@@ -13,6 +22,7 @@ navigates without a human.
 | `crypto_ui.json` | Compliance crypto card + `crypto_facts_by_subject` | injected for `build_crypto_posture` |
 | `discovery_ui.json` | Discovery module | injected for `build_discovery_capability_payload` |
 | `state/compliance_checks.json` | user-defined compliance cards | copied to `<data_root>/state/`, read by `build_compliance_posture` |
+| `state/control_assignments.json` | a WAIVED control | copied to `<data_root>/state/`, read by `load_control_assignments` |
 | `state/compliance_history.json` | 0.7.5 trend sparkline + delta chip | copied to `<data_root>/state/`, read by `load_history` |
 
 `build_compliance_posture`, `build_project_plan_payload` (from the real
