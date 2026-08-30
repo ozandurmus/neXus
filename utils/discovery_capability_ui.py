@@ -14,6 +14,10 @@ Privacy contract
 * Coordinator job rows use ``Job.to_manifest_dict()`` which intentionally
   omits ``canonical_ids`` to avoid duplicating device identity data in
   job/audit views.
+* ``platform_family``/``platform_confidence`` (cp_unknown_platform, 0.6.1C)
+  are the coarse classification already produced by the config collector's
+  ``_classify_platform()`` -- never a raw asset/serial string, and never
+  used here to gate lifecycle state or the collection plan.
 
 Until 0.6.1C Phase 4 wires real collectors through the coordinator, callers
 may build this payload with empty stores; the UI renders an explicit
@@ -25,6 +29,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from utils.capability_registry import (
+    PLATFORM_FAMILY_LABELS,
     CapabilityProfile,
     CapabilityStore,
     plan_collection,
@@ -84,6 +89,15 @@ def _entity_row(record: Any, profile: CapabilityProfile) -> dict[str, Any]:
         "shell_type": profile.shell_type.value,
         "capability_confidence": profile.confidence,
         "standby_member": profile.standby_member,
+        # cp_unknown_platform (0.6.1C): platform identity is independent of
+        # collection capability/plan -- an "unknown" family here must never
+        # change planned_mode/plan_allowed below. platform_family is None
+        # (not "unknown") until the collector has actually classified the
+        # entity, so the UI can distinguish "not yet evaluated" from a real
+        # classification result of "unknown".
+        "platform_family": profile.platform_family,
+        "platform_confidence": profile.platform_confidence,
+        "platform_label": PLATFORM_FAMILY_LABELS.get(profile.platform_family or ""),
         "planned_mode": plan.mode.value,
         "plan_allowed": plan.allowed,
         "plan_reason_code": plan.reason_code,
@@ -185,4 +199,5 @@ def build_discovery_capability_payload(
         "lifecycle_state_labels": LIFECYCLE_STATE_LABELS,
         "collection_mode_labels": COLLECTION_MODE_LABELS,
         "job_status_labels": JOB_STATUS_LABELS,
+        "platform_family_labels": PLATFORM_FAMILY_LABELS,
     }

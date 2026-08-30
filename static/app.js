@@ -4478,6 +4478,7 @@ function renderDiscoveryModule() {
     const lifecycleLabels = payload.lifecycle_state_labels || {};
     const modeLabels = payload.collection_mode_labels || {};
     const jobLabels = payload.job_status_labels || {};
+    const platformLabels = payload.platform_family_labels || {};
 
     const summaryHost = document.getElementById("discoveryFleetSummary");
     if (summaryHost) {
@@ -4538,13 +4539,14 @@ function renderDiscoveryModule() {
         entityHost.innerHTML = entities.length
             ? `<div class="table-wrap"><table class="data-table"><thead><tr>
                 <th>Vendor</th><th>Entity</th><th>Lifecycle</th><th>Confidence</th>
-                <th>Shell</th><th>Planned mode</th><th>Allowed</th><th>Reason</th>
+                <th>Platform</th><th>Shell</th><th>Planned mode</th><th>Allowed</th><th>Reason</th>
             </tr></thead><tbody>${entities.map(row => `
                 <tr>
                     <td>${escapeHtml(row.vendor)}</td>
                     <td>${escapeHtml(row.canonical_id)}</td>
                     <td>${statusPill(lifecycleLabels[row.lifecycle_state] || row.lifecycle_state, lifecycleStateTone(row.lifecycle_state))}</td>
                     <td>${escapeHtml(formatNumber(row.confidence))}%</td>
+                    <td>${escapeHtml(row.platform_label || platformLabels[row.platform_family] || row.platform_family || "—")}</td>
                     <td>${escapeHtml(row.shell_type)}</td>
                     <td>${escapeHtml(modeLabels[row.planned_mode] || row.planned_mode)}</td>
                     <td>${statusPill(row.plan_allowed ? "Allowed" : "Deferred", row.plan_allowed ? "success" : "muted")}</td>

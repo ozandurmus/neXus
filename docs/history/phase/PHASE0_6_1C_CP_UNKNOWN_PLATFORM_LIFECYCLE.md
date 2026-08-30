@@ -2,10 +2,73 @@
 
 ## Status
 
-**PLANNED — architecture contract frozen 2026-08-30**
+**DONE — AUTOMATED_VALIDATED 2026-08-30**
 
 Product baseline: `0.7.6a AUTOMATED_VALIDATED`. Backlog id: `cp_unknown_platform`
-(P1, `in_progress`).
+(P1, was `in_progress`, now `automated_validated`).
+
+### Closure evidence and scope correction (2026-08-30)
+
+A fact discovered during implementation changes what "wired end-to-end from
+collector to Discovery UI" (this doc's original Definition of Done) can
+honestly mean, so this section states precisely what shipped:
+
+- **Discovered:** `utils/capability_registry.py`'s `CapabilityStore` /
+  `CapabilityProfile` are never populated from a real collection run anywhere
+  in this repository today (`grep -rn "CapabilityProfile(\|CapabilityStore("`
+  outside `tests/` returns only the three data-model files themselves). The
+  "0.6.1C Phase 4 collector wiring" this contract's implementation plan
+  assumed as an existing integration point **does not exist yet, for any
+  capability field** -- not something specific to platform classification.
+  Building that live wiring is a materially larger, separate piece of work
+  (main.py orchestration, a real per-run collector-to-store fold) outside
+  this contract's bounded scope, and is not re-scoped in here.
+- **What shipped instead, matching the contract's actual text ("sourced from
+  the existing `_classify_platform()` output", AC-1):**
+  - `CapabilityProfile.platform_family` / `.platform_confidence` (+
+    `to_dict`/`from_dict`), independent of every other field (AC-2's
+    correctness contract).
+  - `platform_fields_from_classification()`: the one pure, sanctioned
+    function that turns a `_classify_platform()`-shaped dict into those two
+    fields. An integration test
+    (`test_platform_fields_from_classification_accepts_real_classify_platform_output`)
+    calls the actual collector's `_classify_platform()` and feeds its output
+    through this function, proving the shapes stay compatible without
+    requiring the live Phase-4 wiring to exist.
+  - `discovery_capability_ui.py`'s `_entity_row()` + payload now carry
+    `platform_family`/`platform_confidence`/`platform_label` and a
+    `platform_family_labels` map (AC-1, AC-4 — no raw asset/serial data).
+  - `app.js`'s `renderDiscoveryModule()` gained a Platform column (AC-3).
+  - `test_platform_family_never_changes_the_collection_plan` proves
+    `plan_collection()` is byte-identical across every `platform_family`
+    value for an otherwise-identical profile (AC-2, the hard requirement).
+- **Also discovered (not fixed, out of scope, flagged for a future item):**
+  `tests/fixtures/uitest/discovery_ui.json`'s entity rows use key names
+  (`entity_id`, `collection_mode`, `deferred`, `last_transition_reason`) that
+  do **not** match `_entity_row()`'s real output shape (`canonical_id`,
+  `shell_type`, `planned_mode`, `plan_allowed`, `plan_reason_code`) that
+  `app.js` actually reads. This is a pre-existing mismatch (present before
+  this build), not introduced here -- `app.js` was already silently reading
+  `undefined` for Shell/Planned mode/Allowed/Reason on every Discovery row in
+  the render harness. This build's new `platform_family`/`platform_label`
+  keys were added to the fixture using the *correct* real names so the new
+  Platform column renders meaningfully; the broader mismatch is a separate,
+  larger fixture-regeneration task and is being raised as a new backlog
+  candidate (`discovery_fixture_shape_drift`) rather than silently absorbed
+  into this contract.
+- Real device-command surface: unchanged. No new command; `_classify_platform()`
+  itself was not touched.
+- Evidence: `tests/test_phase0_6_1c_discovery_lifecycle.py` (+8 tests) and
+  `tests/test_phase0_6_1c_discovery_capability_ui.py` (+3 tests). Full suite:
+  569 passed, 2 skipped, 2 failed (both pre-existing, unrelated — same two
+  tests documented in the `cp_ha_runtime`/`immutable_store_permission`
+  closures). Net +14 from baseline 555, zero regressions.
+  `tests/fixtures/uitest/` regenerated via `build_fixture.py`; JSON-payload
+  render-harness checks (`tests/test_html_render_harness.py`) pass. The
+  `bun`/`happy-dom` DOM-execution half of the harness could not run in this
+  session's container (`window.eval is not a function` — an environment gap
+  in this sandbox's bun/happy-dom versions, unrelated to this change) and is
+  owed on a working local toolchain.
 
 ## Objective
 

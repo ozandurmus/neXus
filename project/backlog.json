@@ -192,10 +192,19 @@
       "id": "cp_unknown_platform",
       "category": "Discovery",
       "title": "Classify collectable unknown CP platforms without blocking current-state evidence",
-      "status": "in_progress",
+      "status": "automated_validated",
       "priority": "P1",
       "target": "0.6.1C",
-      "note": "Platform identity and collection capability are separate. A proven read-only Clish configuration path may collect even while platform family remains unknown. Contract frozen 2026-08-30: docs/history/phase/PHASE0_6_1C_CP_UNKNOWN_PLATFORM_LIFECYCLE.md -- propagate the already-correct configuration-collector-level classification (checkpoint_config_collector.py _classify_platform) into the 0.6.1C discovery lifecycle/capability record, which today carries no platform-family field at all. Not yet implemented."
+      "note": "AUTOMATED_VALIDATED 2026-08-30. Contract: docs/history/phase/PHASE0_6_1C_CP_UNKNOWN_PLATFORM_LIFECYCLE.md. CapabilityProfile.platform_family/.platform_confidence added, independent of every other field (proven: plan_collection() output is identical across every platform_family value); platform_fields_from_classification() is the one sanctioned conversion from a real _classify_platform() dict, integration-tested against the actual collector function. discovery_capability_ui.py + app.js's Discovery module surface it (new Platform column). Scope correction discovered during implementation: there is no live 0.6.1C Phase 4 collector-to-CapabilityStore wiring anywhere in the repo yet for ANY capability field (not platform-specific) -- building that is materially larger and stays a separate future item, not silently absorbed here. Also flagged (not fixed): tests/fixtures/uitest/discovery_ui.json's entity keys pre-existingly do not match _entity_row()'s real shape -- see new backlog item discovery_fixture_shape_drift. +11 regression tests; py -m pytest -q: 569 passed, 2 skipped, 2 failed (both pre-existing/unrelated) -- net +14, zero regressions."
+    },
+    {
+      "id": "discovery_fixture_shape_drift",
+      "category": "Reliability / Test Infrastructure",
+      "title": "tests/fixtures/uitest/discovery_ui.json entity keys drift from the real discovery_capability_ui builder shape",
+      "status": "planned",
+      "priority": "P2",
+      "target": "render harness hardening",
+      "note": "Discovered 2026-08-30 while implementing cp_unknown_platform. The hand-authored discovery_ui() fixture in tests/fixtures/uitest/build_fixture.py uses entity_id/collection_mode/deferred/last_transition_reason, while utils/discovery_capability_ui.py's real _entity_row() (and static/app.js's renderDiscoveryModule(), which reads it) uses canonical_id/shell_type/planned_mode/plan_allowed/plan_reason_code. The render harness's build_discovery_capability_payload monkeypatch bypasses the real builder entirely, so this mismatch has never been caught: Shell/Planned mode/Allowed/Reason have been silently rendering `undefined`/false-by-default on every Discovery row in the render-harness output since 0.7.6. Fix: regenerate discovery_ui() to match the real builder's field names (same class of fix AI_HANDOVER.md already flags generally for this fixture layer), verified visually with a bun/happy-dom run once a compatible toolchain is available (this session's container has a window.eval gap in bun/happy-dom -- tracked separately, not this item's blocker)."
     },
     {
       "id": "cp_identity_edges",

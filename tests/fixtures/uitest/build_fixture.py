@@ -557,21 +557,33 @@ def crypto_ui():
 # --------------------------------------------------------------------------
 
 def discovery_ui():
-    ent = lambda eid, cid, vendor, state, mode, deferred, conf, runs: {
+    platform_labels = {"gaia_embedded": "Quantum Spark / Gaia Embedded", "gaia": "Gaia",
+                        "unknown": "Check Point platform"}
+    ent = lambda eid, cid, vendor, state, mode, deferred, conf, runs, platform_family=None: {
         "entity_id": eid, "canonical_id": cid, "vendor": vendor, "lifecycle_state": state,
         "collection_mode": mode, "deferred": deferred, "confidence": conf,
         "last_transition_reason": "repeated_success" if not deferred else "standby_member_deferred",
-        "observed_runs": runs}
+        "observed_runs": runs,
+        # cp_unknown_platform (0.6.1C): platform identity is independent of
+        # collection capability. cp:core-02 (unknown, deferred=True) and
+        # cp:vsx-gw-01/10 (unknown, deferred=False) are the deliberate
+        # contrast pair -- same "unknown" platform family, one collecting,
+        # one not, proving platform family never gates the plan.
+        "platform_family": platform_family,
+        "platform_confidence": ({"gaia_embedded": "HIGH", "gaia": "MEDIUM", "unknown": "LOW"}.get(platform_family)
+                                 if platform_family else None),
+        "platform_label": platform_labels.get(platform_family),
+    }
     return {
         "schema_version": "0.6.1C", "generated_at": _ISO,
         "fleet_summary": {"total_entities": 6, "deferred_count": 2,
                           "lifecycle_state_counts": {"STABLE": 3, "VALIDATED": 2, "DISCOVERED": 1},
                           "vendor_counts": {"checkpoint": 4, "paloalto": 2}},
         "entities": [
-            ent("cp:edge-01", "cp-edge-01", "checkpoint", "STABLE", "expert_explicit_clish", False, 93, 8),
-            ent("cp:core-01", "cp-core-01", "checkpoint", "STABLE", "expert_explicit_clish", False, 90, 6),
-            ent("cp:core-02", "cp-core-02", "checkpoint", "VALIDATED", "expert_explicit_clish", True, 68, 3),
-            ent("cp:vsx-gw-01/10", "vsx-gw-01 / VS-WEB", "checkpoint", "VALIDATED", "vsx_vsenv", False, 74, 4),
+            ent("cp:edge-01", "cp-edge-01", "checkpoint", "STABLE", "expert_explicit_clish", False, 93, 8, "gaia"),
+            ent("cp:core-01", "cp-core-01", "checkpoint", "STABLE", "expert_explicit_clish", False, 90, 6, "gaia_embedded"),
+            ent("cp:core-02", "cp-core-02", "checkpoint", "VALIDATED", "expert_explicit_clish", True, 68, 3, "unknown"),
+            ent("cp:vsx-gw-01/10", "vsx-gw-01 / VS-WEB", "checkpoint", "VALIDATED", "vsx_vsenv", False, 74, 4, "unknown"),
             ent("pan:edge-01", "pan-edge-01", "paloalto", "STABLE", "pan_api", False, 88, 5),
             ent("pan:mvha-02", "pan-mvha-02", "paloalto", "DISCOVERED", "deferred_lifecycle", True, 40, 1),
         ],
@@ -596,6 +608,7 @@ def discovery_ui():
                                    "deferred_lifecycle": "Deferred — lifecycle state", "unknown": "Unknown"},
         "job_status_labels": {"pending": "Pending", "running": "Running", "completed": "Completed",
                               "failed": "Failed", "cancelled": "Cancelled", "coalesced": "Coalesced"},
+        "platform_family_labels": platform_labels,
     }
 
 
