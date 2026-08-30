@@ -3,6 +3,24 @@
   "record_contract": "One structured record per build, newest first. Required: build, status, title, summary (<= 2 sentences). Optional: started, completed, track, movement, supersedes, evidence, risks_forward, docs{agreement,validation,handover} (repo-relative paths under docs/history/). Full detail lives in the linked doc; do not restate it here. Status vocabulary must stay within utils/project_plan.py STATUS_VALUES.",
   "builds": [
     {
+      "build": "0.7.4.1",
+      "status": "automated_validated",
+      "started": "2026-08-30",
+      "completed": "2026-08-30",
+      "title": "HTML export render hotfix (dead module-nav buttons)",
+      "track": "0.7.x",
+      "movement": "ROOT_CAUSE",
+      "summary": "P0: on a real run the report rendered but every module-nav button was dead, stuck on Overview. Cause: html_export filled the template with a SEQUENCE of str.replace() calls; project/backlog.json + project/build_history.json contain the literal token __CRYPTO_JSON_PLACEHOLDER__ in a note, so once projectPlanData was embedded the later replace() spliced the crypto JSON object into the middle of that JS string literal -> SyntaxError -> the whole inline <script> never ran -> no event listeners. Fix: utils/html_export._fill_template does one left-to-right pass (single re alternation, longest key first, function replacement) so inserted content is never re-scanned; run_html_export calls it once for all eight sentinels. _script_json unchanged.",
+      "evidence": {
+        "automated": "py -m pytest -q -n auto --dist worksteal: 534 passed, 3 skipped, 0 failed (Python 3.12). 529 -> +5 (tests/test_html_export_placeholder_integrity.py). Every embedded payload in a real render round-trips through json.loads; the sentinel token survives as data inside projectPlanData without expansion.",
+        "privacy_gate": "PASS / 0 on a clean tree.",
+        "real_env": "owed - regenerate on the corporate laptop and click through all six modules (on_hardware_real_env_validation). Failure reproduced deterministically from project/*.json content and is now guarded."
+      },
+      "docs": {
+        "agreement": "docs/history/phase/0_7_4_1_HTML_EXPORT_RENDER_HOTFIX.md"
+      }
+    },
+    {
       "build": "0.7.4",
       "status": "automated_validated",
       "started": "2026-08-29",

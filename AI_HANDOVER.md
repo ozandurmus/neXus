@@ -11,13 +11,15 @@ If a section does not apply, write `n/a` — do not delete the heading.
 ## 1. Snapshot
 
 - Product baseline: `0.7.4 — framework_mappings: Requirement-Level Coverage` —
-  AUTOMATED_VALIDATED (2026-08-29).
+  AUTOMATED_VALIDATED (2026-08-29). Latest: hotfix `0.7.4.1` (2026-08-30).
 - Engineering baseline: `DEV.1` complete; `DEV.2.1` — AUTOMATED_VALIDATED.
-- Date: 2026-08-29
-- **`origin/main` is at `5b5e893`** — the CE.1 `unified.interfaces` /
-  `unified.routes` fast-follow (§2) is merged (`--no-ff`, `e8ca974` + merge
-  `5b5e893`) and pushed; feature branch deleted. Working tree clean.
-- A trend-layer contract (§3) is being drafted next in the same session.
+- Date: 2026-08-30
+- **`origin/main` was at `d3b1384`** (CE.1 fast-follow #2 + its handover sync).
+  Then **`0.7.4.1` HTML-export render hotfix** landed on branch
+  `fix/html-export-placeholder-collision` — automated-validated, awaiting the
+  user's go-ahead to merge to `main` (§2, §6).
+- The trend-layer contract (§3) is approved (recommendations A–E) but **not
+  started** — the hotfix pre-empted it. Pick it up next.
 - **GitHub tooling (2026-08-29):** `gh` CLI is installed
   (`C:\Program Files\GitHub CLI\gh.exe`, v2.98.0) and authenticated as
   `ozandurmus` — token scopes `gist, read:org, repo, workflow` (`repo` covers
@@ -38,14 +40,35 @@ If a section does not apply, write `n/a` — do not delete the heading.
   `py -V:3.12 <script>` mis-parses on this box (exit 103); use
   `py -V:3.12 -m pytest` or the 3.12 interpreter directly at
   `%LOCALAPPDATA%\Programs\Python\Python312\python.exe`.
-- Full suite: `py -m pytest -q -n auto --dist worksteal` → **529 passed,
-  3 skipped, 0 failed** (~35s) — 523 baseline + 6 (fast-follow #2).
+- Full suite: `py -m pytest -q -n auto --dist worksteal` → **534 passed,
+  3 skipped, 0 failed** (~35s) — 523 baseline + 6 (fast-follow #2) + 5 (0.7.4.1).
 - Repository privacy gate: **PASS / 0 on a clean checkout**. Locally it flags the
   gitignored `data/` + `logs/` + `data/.support_hmac.key` a test run creates —
   delete them before running the gate.
 
 ## 2. Recent builds (this session)
 
+- **`0.7.4.1` — HTML export render hotfix (P0)** — branch
+  `fix/html-export-placeholder-collision`, **not yet merged**. Record:
+  `docs/history/phase/0_7_4_1_HTML_EXPORT_RENDER_HOTFIX.md`.
+  - Symptom: real `py .\main.py` run rendered the report but every
+    `.module-nav-item` button was dead, stuck on Overview.
+  - Cause: `utils/html_export.py` chained `str.replace()` per placeholder.
+    `project/backlog.json` + `project/build_history.json` carry the literal token
+    `__CRYPTO_JSON_PLACEHOLDER__` in a note; once `projectPlanData` was embedded,
+    the later `replace("__CRYPTO_JSON_PLACEHOLDER__", …)` spliced the crypto JSON
+    object into that string literal → `SyntaxError` → the whole inline `<script>`
+    never executed → no listeners. Static Overview panel still rendered.
+  - Fix: `_fill_template(template, replacements)` — one `re` alternation pass,
+    longest key first, function replacement; inserted content is never
+    re-scanned. `run_html_export` calls it once for all 8 sentinels.
+  - Tests: `tests/test_html_export_placeholder_integrity.py` (5) — every
+    embedded payload round-trips `json.loads`; the token survives as data inside
+    `projectPlanData` unexpanded. Suite 529 → 534. Privacy gate PASS/0;
+    `render_sample.py` exit 0.
+  - **Owed:** real-env click-through on the corporate laptop (regenerate, click
+    all six modules). Deterministically reproduced + guarded; on-hardware
+    confirmation still under `on_hardware_real_env_validation`.
 - **CE.1 fast-follow #2 — `unified.interfaces` / `unified.routes` wire**
   (on `main`, `e8ca974`; merge `5b5e893`). Record:
   `docs/history/phase/0_7_3_COMPLIANCE_CHECK_ENGINE.md` §12. Additive; no server;
@@ -172,25 +195,30 @@ Backlog `on_hardware_real_env_validation` (P0), laptop-blocked.
 
 ## 5. Exact next action
 
-1. On the user's go-ahead, commit `feature/ce1-unified-inventory-wire`
-   (changed: `utils/compliance_posture.py`, `utils/compliance_check_pack.py`,
-   `utils/compliance_check_engine.py`, `utils/html_export.py`,
-   `tests/test_phase0_7_3_compliance_check_engine.py`,
-   `docs/history/phase/0_7_3_COMPLIANCE_CHECK_ENGINE.md`, `CURRENT_STATE.md`,
-   `project/backlog.json`, `AI_HANDOVER.md`), then `git merge --no-ff` into
-   `main` + `git push`, **or** `gh pr create` → `gh pr merge`.
-2. Then **fresh chat**: cold-start via `AI_START_HERE.md` → this file →
-   `CURRENT_STATE.md` → `project/roadmap.json` + `project/backlog.json`; pick one
-   §3 objective; write a contract for user review **before** implementing.
+1. **Land `0.7.4.1`** (branch `fix/html-export-placeholder-collision`). Changed:
+   `utils/html_export.py`, `tests/test_html_export_placeholder_integrity.py`
+   (new), `docs/history/phase/0_7_4_1_HTML_EXPORT_RENDER_HOTFIX.md` (new),
+   `project/build_history.json`, `CURRENT_STATE.md`, `AI_HANDOVER.md`.
+   `git merge --no-ff` into `main` + `git push`, **or** `gh pr create` →
+   `gh pr merge`.
+2. Ask the user to regenerate the report on the corporate laptop and click
+   through all six modules (real-env confirmation of the hotfix).
+3. Then the **trend layer** (§3, approved A–E): `ARCHITECTURE` handoff already
+   drafted in chat; write it up as `docs/history/phase/0_7_5_COMPLIANCE_TREND.md`
+   and implement on `feature/0-7-5-compliance-trend`.
 
 ## 6. main merge decision + Git dispatch
 
-- **CE.1 fast-follow #2: LANDED.** `feature/ce1-unified-inventory-wire` merged
-  `--no-ff` into `main` (`5b5e893`) and pushed to `origin/main`; branch deleted.
-  Evidence at merge: 529p/3s/0f, privacy gate PASS/0 clean tree, render exit 0.
-- Nothing else outstanding. Next build: branch off `main`, commit, then
-  `git merge --no-ff` + `git push origin main` **or** `gh pr create --fill
-  --base main` → `gh pr merge --merge` (`gh` installed + `repo`-scoped, see §1).
+- **CE.1 fast-follow #2: LANDED.** merged `--no-ff` into `main` (`5b5e893`),
+  handover sync `d3b1384`, pushed; branch deleted.
+- **`0.7.4.1` hotfix: approved on evidence, pending the user's go-ahead to run
+  the merge** (standing priority 4). Branch
+  `fix/html-export-placeholder-collision`. Evidence: 534p/3s/0f, privacy gate
+  PASS/0 clean tree, `render_sample.py` exit 0, fresh sample `index.html` — all
+  six payload literals parse as valid JSON.
+- Dispatch: `git checkout main && git merge --no-ff
+  fix/html-export-placeholder-collision && git push origin main` (or the `gh pr`
+  path; `gh` installed + `repo`-scoped, see §1).
 - Delete the gitignored `data/` + `logs/` a test run leaves before the privacy
   gate.
 
@@ -204,11 +232,15 @@ Backlog `on_hardware_real_env_validation` (P0), laptop-blocked.
 
 ## 8. Continue or fresh chat
 
-**Start a fresh chat** once `feature/ce1-unified-inventory-wire` is landed — the
-next build is a different objective and needs its own contract.
+**Continue this chat** through: land `0.7.4.1` → real-env confirmation → the
+trend-layer build. Start a fresh chat only if context gets polluted.
 
 ## 9. main.py / UI effect
 
+- **0.7.4.1:** the generated `output/index.html` now runs its inline `<script>` —
+  the module-nav buttons, tab switching and every interactive panel work again.
+  Before the fix the page rendered the static Overview shell only and no button
+  responded. No payload/schema change; a re-render of an existing run is enough.
 - **0.7.4:** each framework readiness card in the Compliance module shows a
   `version · profile` line, a COVERED/PARTIALLY/UNCOVERED/N-A requirement
   mini-bar, and a `Requirements (N)` expand → a per-requirement list with

@@ -1,4 +1,5 @@
 import json
+import re
 from pathlib import Path
 
 from utils.config_ui import build_configuration_ui_payload
@@ -34,6 +35,23 @@ def _script_json(value) -> str:
         ensure_ascii=False,
         separators=(",", ":"),
     ).replace("</", "<\\/")
+
+
+def _fill_template(template: str, replacements: dict[str, str]) -> str:
+    """Substitute every sentinel in a single left-to-right pass so inserted
+    content is never re-scanned.
+
+    A chain of ``str.replace()`` calls is unsafe here: an earlier payload can
+    legitimately contain the literal text of a later sentinel -- the embedded
+    project plan carries a backlog note that mentions
+    ``__CRYPTO_JSON_PLACEHOLDER__`` -- and the later ``replace()`` would then
+    splice JSON into the middle of an already-emitted JS string literal, whose
+    stray quotes break the whole inline <script>. Longest keys first so a
+    sentinel can never be shadowed by a prefix of a longer one.
+    """
+    ordered = sorted(replacements, key=len, reverse=True)
+    pattern = re.compile("|".join(re.escape(key) for key in ordered))
+    return pattern.sub(lambda match: replacements[match.group(0)], template)
 
 
 def run_html_export(
@@ -115,45 +133,19 @@ def run_html_export(
     css = read_text_file(style_file)
     javascript = read_text_file(script_file)
 
-    html = template.replace(
-        "/* __STYLE_PLACEHOLDER__ */",
-        css,
-    )
-
-    html = html.replace(
-        "/* __SCRIPT_PLACEHOLDER__ */",
-        javascript,
-    )
-
-    html = html.replace(
-        "__DATA_JSON_PLACEHOLDER__",
-        _script_json(data),
-    )
-
-    html = html.replace(
-        "__CONFIG_JSON_PLACEHOLDER__",
-        _script_json(configuration_ui),
-    )
-
-    html = html.replace(
-        "__PROJECT_PLAN_JSON_PLACEHOLDER__",
-        _script_json(project_plan),
-    )
-
-    html = html.replace(
-        "__COMPLIANCE_JSON_PLACEHOLDER__",
-        _script_json(compliance_ui),
-    )
-
-    html = html.replace(
-        "__CRYPTO_JSON_PLACEHOLDER__",
-        _script_json(crypto_ui),
-    )
-
-    html = html.replace(
-        "__DISCOVERY_JSON_PLACEHOLDER__",
-        _script_json(discovery_ui),
-    )
+    # One pass. Do NOT chain str.replace() here (see _fill_template): a payload
+    # such as the project plan legitimately contains the literal text of another
+    # sentinel and a second replace() would corrupt the emitted <script>.
+    html = _fill_template(template, {
+        "/* __STYLE_PLACEHOLDER__ */": css,
+        "/* __SCRIPT_PLACEHOLDER__ */": javascript,
+        "__DATA_JSON_PLACEHOLDER__": _script_json(data),
+        "__CONFIG_JSON_PLACEHOLDER__": _script_json(configuration_ui),
+        "__PROJECT_PLAN_JSON_PLACEHOLDER__": _script_json(project_plan),
+        "__COMPLIANCE_JSON_PLACEHOLDER__": _script_json(compliance_ui),
+        "__CRYPTO_JSON_PLACEHOLDER__": _script_json(crypto_ui),
+        "__DISCOVERY_JSON_PLACEHOLDER__": _script_json(discovery_ui),
+    })
 
     output_html.parent.mkdir(
         parents=True,
