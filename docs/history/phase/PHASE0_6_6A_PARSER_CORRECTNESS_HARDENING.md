@@ -2,7 +2,11 @@
 
 ## Status
 
-**PLANNED — architecture contract frozen 2026-08-27**
+**DONE — AUTOMATED_VALIDATED 2026-08-27; parent backlog status corrected 2026-08-30**
+(the parent `parser_correctness_hardening` backlog entry was left `planned`
+after this contract closed; `project/backlog.json` and this status line were
+brought back in sync 2026-08-30 — no scope, code or acceptance-criteria
+change).
 
 Product baseline: `0.6.5 REAL_ENV_VALIDATED`.
 
