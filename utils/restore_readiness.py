@@ -42,13 +42,14 @@ def _utc_now() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def _entity_id(row: Mapping[str, Any]) -> str:
+def resolve_entity_id(row: Mapping[str, Any]) -> str:
     """Mirror configuration/checkpoint_config_collector.py's `_entity_id`
     convention so recovery, configuration and inventory reference the same
     identity for a CP virtual system: physical device alone, or
     `<device>__vsid_<vs_id>` — never the VS name/vsys label, which is not
     stable identity per AGENTS.md ("VSX actual identity = physical endpoint +
-    VSID")."""
+    VSID"). The one shared identity resolver -- utils.recovery_validation and
+    utils.recovery_collect both import this rather than re-deriving it."""
     device = str(row.get("device") or "").strip()
     vs_id = str(row.get("vs_id") or "").strip()
     if row.get("source") == "vsx" and vs_id:
@@ -56,7 +57,7 @@ def _entity_id(row: Mapping[str, Any]) -> str:
     return device
 
 
-def _vendor(row: Mapping[str, Any]) -> str | None:
+def resolve_vendor(row: Mapping[str, Any]) -> str | None:
     return _VENDOR_BY_SOURCE.get(str(row.get("source") or "").strip().lower())
 
 
@@ -185,8 +186,8 @@ def compute_restore_readiness(
     for index, row in enumerate(unified_devices):
         inventory_status = row.get("inventory_status") or {}
         data_state = str(inventory_status.get("data_state") or "").strip().lower()
-        entity_id = _entity_id(row)
-        vendor = _vendor(row)
+        entity_id = resolve_entity_id(row)
+        vendor = resolve_vendor(row)
 
         if not entity_id or vendor is None or data_state in _INSUFFICIENT_DATA_STATES:
             reason = (

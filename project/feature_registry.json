@@ -517,18 +517,18 @@
       "target": "RB.1-RB.3 (rebase of original 0.6.0B)",
       "weight": 10,
       "summary": "Encrypted recovery plane separate from the evidence plane: vendor-native recovery artifacts, manifests, integrity validation, retention/immutability and restore-readiness evidence.",
-      "why": "Configuration evidence is deliberately redacted (secrets_redacted: True) and therefore NON-RESTORABLE by design. It is not a recovery backup, and the Configuration module's existence makes it easy to assume otherwise. docs/design/BACKUP_AND_RECOVERY_ARCHITECTURE.md + docs/design/BACKUP_RECOVERY_CONTRACTS.md (design frozen 2026-08-30). RB.1 landed 2026-08-30: utils/recovery_store.py + recovery_crypto.py (AES-256-GCM envelope encryption) + recovery_manifest.py + recovery_retention.py + main.py --recovery-store-check + resolve_recovery_root (utils/runtime_paths.py). Store/encryption/manifest/retention infrastructure only -- no collector calls it yet (RB.2/RB.3 gated).",
+      "why": "Configuration evidence is deliberately redacted (secrets_redacted: True) and therefore NON-RESTORABLE by design. It is not a recovery backup, and the Configuration module's existence makes it easy to assume otherwise. docs/design/BACKUP_AND_RECOVERY_ARCHITECTURE.md + docs/design/BACKUP_RECOVERY_CONTRACTS.md (design frozen 2026-08-30). RB.1 landed 2026-08-30: utils/recovery_store.py + recovery_crypto.py (AES-256-GCM envelope encryption) + recovery_manifest.py + recovery_retention.py + main.py --recovery-store-check + resolve_recovery_root (utils/runtime_paths.py). Store/encryption/manifest/retention infrastructure only -- no collector calls it yet (RB.2/RB.3 gated). D2 RESOLVED 2026-08-30 (product owner): PAN service account may hold superuser for device-state export. RB.2 IMPLEMENTED 2026-08-30 (real-env validation owed): utils/recovery_collect.py orchestration (selective gateway targeting, scheduler-integrated, admission-coordinated) + panorama/panorama_recovery_collector.py. CP (RB.3) stays a typed blocked stub -- P0 cp_device_interaction_safety audit + D3 unresolved.",
       "criteria": [
         {
           "id": "pan_export",
           "label": "PAN device-state export",
-          "state": "pending",
+          "state": "done",
           "weight": 1
         },
         {
           "id": "integrity",
           "label": "Backup integrity/retention",
-          "state": "pending",
+          "state": "done",
           "weight": 1
         },
         {
@@ -747,16 +747,16 @@
     {
       "id": "native_backup_validation",
       "title": "Native Backup Validation",
-      "status": "planned",
+      "status": "automated_validated",
       "target": "RB.4",
       "weight": 10,
       "summary": "Validation battery V1 transport / V2 structural / V3 semantic. V3 cross-checks the artifact against unified.json (interface, vsys/VS, version, HA role).",
-      "why": "A hash proves a file arrived intact; it proves nothing about restorability. V3 catches truncated, partial and wrong-device artifacts that pass V1/V2 cleanly -- only possible because this platform already has a reconciled inventory to compare against. V4 RESTORE_PROVEN requires a real lab restore and is never inferred. docs/design/BACKUP_AND_RECOVERY_ARCHITECTURE.md + docs/design/BACKUP_RECOVERY_CONTRACTS.md (design frozen 2026-08-30).",
+      "why": "A hash proves a file arrived intact; it proves nothing about restorability. V3 catches truncated, partial and wrong-device artifacts that pass V1/V2 cleanly -- only possible because this platform already has a reconciled inventory to compare against. V4 RESTORE_PROVEN requires a real lab restore and is never inferred. docs/design/BACKUP_AND_RECOVERY_ARCHITECTURE.md + docs/design/BACKUP_RECOVERY_CONTRACTS.md (design frozen 2026-08-30). AUTOMATED_VALIDATED 2026-08-30: utils/recovery_validation.py (validate_artifact V1-V3) + attach_restore_proof (the only path that can set V4/RESTORE_PROVEN, never automatic) + main.py --recovery-validate.",
       "criteria": [
         {
           "id": "validation",
           "label": "Artifact validation",
-          "state": "pending",
+          "state": "done",
           "weight": 1
         }
       ]

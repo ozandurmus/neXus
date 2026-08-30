@@ -1,10 +1,11 @@
-# Backup & Recovery — Architecture (design, phased; `RB.0` buildable now)
+# Backup & Recovery — Architecture (design, phased; `RB.0`–`RB.2`/`RB.4` landed)
 
-**Status:** DESIGN. Phased `RB.0`–`RB.6`. `RB.0` (restore-readiness assessment)
-is buildable now — read-only, **no new device command**. `RB.2`/`RB.3`
-(actual backup collection) are gated on the network-device command gate **and**
-a new command class this document introduces (§5). `RB.6` (restore) is
-hard-gated at the `OP.2` bar and is explicitly not buildable.
+**Status:** `RB.0`, `RB.1` and `RB.4` AUTOMATED_VALIDATED; `RB.2` (PAN device-state
+export + collection orchestration) IMPLEMENTED, real-environment validation
+owed. `RB.3` (CP Gaia backup) is a blocked stub — P0 `cp_device_interaction_safety`
+audit and open decision `D3` are unresolved. `RB.6` (restore) is hard-gated at
+the `OP.2` bar and is explicitly not buildable. See §12 for the current
+per-phase status table.
 **Rebases:** the deferred `original 0.6.0B · rebase required` milestone
 (`project/roadmap.json`, feature `native_backup_foundation`). That rebase is
 this document.
@@ -417,10 +418,19 @@ workload; everything so far has been on-demand or opportunistically scheduled.
   job that bypasses the admission coordinator to "just fetch a file" reintroduces
   precisely the risk that gate exists to hold. Backup becomes a new entry in
   `ALLOWLISTED_WORKFLOWS`, not a side channel.
-- **It hard-depends on `distributed_endpoint_lock_and_job_store`
-  (DEV.3.2/3.3).** A scheduled fleet backup across containers without a shared
-  lock breaks the device-safety invariant. Backup scheduling therefore cannot
-  precede that item — recorded in the sequencing in §12.
+- **Correction 2026-08-30 (superseded text below):** an earlier draft of this
+  section said scheduled backup "hard-depends on
+  `distributed_endpoint_lock_and_job_store` (DEV.3.2/3.3)". That is only true
+  once the platform splits into *multiple* worker containers
+  (`per_vendor_worker_split`, DEV.3.4, explicitly deferred). Under the current
+  DEV.3.1 single-container deployment, `utils/collection_executor.py`'s
+  in-memory `CollectionCoordinator` already provides the per-endpoint lock
+  correctly for every existing scheduled workflow (`checkpoint`/`cp`/`vsx`/
+  `pan-config` already run under `--scheduler-once` today, single-process, no
+  distributed store) — recovery collection scheduling is safe under the exact
+  same model and does **not** need to wait for DEV.3.2/3.3. The distributed
+  lock only becomes load-bearing if/when a future build actually splits
+  collection across multiple processes/containers.
 - **Consistency groups** (§3.1) are scheduled as a unit, not as members.
 - **Retention** is Grandfather/Father/Son by default (dailies → weeklies →
   monthlies), per-device-class overridable, with a floor: **retention may never
@@ -430,6 +440,74 @@ workload; everything so far has been on-demand or opportunistically scheduled.
   `docs/AI_DEVELOPMENT_PROTOCOL.md` requires explicit human approval; the
   scheduler proposes, `--apply` disposes, mirroring the existing
   `--storage-deduplicate` dry-run-by-default convention.
+
+### 9.1 Recovery collection command infrastructure (added 2026-08-30, product owner request)
+
+Explicit product direction: recovery collection must **not** be a block of
+logic inlined in `main.py`. It must be (1) a standalone, importable
+orchestration layer that a CLI, a future UI action, or the scheduler can all
+call identically; (2) **selective** — an operator or a schedule can target
+specific gateways/firewalls, not only "everything"; (3) scheduler-integrated
+from day one, under the existing `collection_executor` admission model (§9
+correction above).
+
+**Module: `utils/recovery_collect.py`.** Owns the whole orchestration; `main.py`
+is reduced to argument parsing that builds a request and calls in — the exact
+shape `RB.5`'s Recovery UI (or any future internal API) will call too, so "UI
+if needed" is a consequence of this layering, not a rewrite of it.
+
+```
+RecoveryCollectionTarget    # one resolved (vendor, entity_id) pair
+RecoveryCollectionRequest   # vendor, target selector, provenance
+select_recovery_targets(unified_devices, vendor, selector) -> [RecoveryCollectionTarget]
+RecoveryCollector (protocol)  # .collect(target) -> plaintext bytes + artifact metadata
+run_recovery_collection(request, services, *, store_writer) -> RecoveryCollectionResult
+```
+
+**Target selection** (`selector`) is one of:
+
+- `"all"` — every admitted device of the given vendor in `unified.json`
+  (today's only mode for the existing checkpoint/pan-config workflows).
+- an explicit `entity_id` list — the "selective for gateways" requirement.
+  Resolved the same way `restore_readiness` resolves entity identity (§7),
+  including the VSX `<device>__vsid_<vs_id>` convention, so a specific virtual
+  system can be targeted without pulling its whole physical host.
+
+An unresolvable entity_id in an explicit list is a **request-time error**
+(fails before any device is touched), not a silent skip — the same
+fail-closed posture as `_require_bootstrap` for other modes.
+
+**Vendor dispatch.** `RecoveryCollector` is a small protocol
+(`collect(target) -> (plaintext_bytes, artifact_meta)`); vendor collectors
+register against it. This keeps `recovery_collect.py` vendor-neutral: it does
+target selection, admission-coordinator routing, and the encrypt-and-store
+call into `utils/recovery_store.write_artifact`, but never speaks PAN XML or
+CP Clish itself.
+
+- **PAN — `panorama/panorama_recovery_collector.py` — implemented.** `D2` is
+  resolved (§13) and `type=export&category=device-state` is `read` class, not
+  the "no new write command" prohibition (`docs/AI_DEVELOPMENT_PROTOCOL.md`),
+  and was already gate-documented in contract §7.1 before this build. Reuses
+  `panorama_runtime_runner.get_api_key` / TLS-verify resolution verbatim (gate
+  point 7: existing-session reuse). **Real-environment validation remains
+  owed** — this cloud sandbox has no device reachability, the same gap class
+  as every other `on_hardware_real_env_validation` item in this repository;
+  automated tests exercise it against a fixture HTTP transport only, never a
+  live firewall.
+- **CP — still a typed, explicit stub.** `add backup local` is
+  `operational-write` class and is blocked on the P0
+  `cp_device_interaction_safety` audit and open decision `D3` — **neither is
+  resolved by this build.** Calling the CP collector raises
+  `RecoveryCollectionBlockedError` naming the exact blocker; it is wired into
+  target selection and the store so only the device call itself is missing
+  once the audit clears.
+
+**Scheduler integration.** `ALLOWLISTED_WORKFLOWS` gains `"recovery-pan"`
+(not `"recovery-cp"` — still blocked). The scheduler policy schema (contract
+addendum below) gains an **optional, additive** `targets` field per scheduled
+entry — omitted means `"all"`, present means an explicit gateway list —
+preserving every existing policy file's meaning unchanged (no schema version
+bump; `targets` absent is indistinguishable from today's behavior).
 
 ---
 
@@ -485,13 +563,22 @@ consistent with the existing control model.
 
 | Phase | Scope | Gate | Buildable |
 |---|---|---|---|
-| **`RB.0`** | Restore-readiness assessment over existing evidence (§7) | none — read-only, no new command | **now** |
-| **`RB.1`** | Recovery-plane store: layout, encryption, manifest, retention, validator. No collection. | none — local/offline | **now** (after `RB.0`) |
-| **`RB.2`** | PAN device-state + configuration export | command gate; **D2** privilege decision | after `RB.1` |
-| **`RB.3`** | CP Gaia backup + management export; consistency groups | command gate **+ `operational-write` class (§5) + P0 CP safety audit** | after P0 audit |
-| **`RB.4`** | Validation battery V1–V3 (§6) | none beyond `RB.1`–`RB.3` | after `RB.2` |
+| **`RB.0`** | Restore-readiness assessment over existing evidence (§7) | none — read-only, no new command | **AUTOMATED_VALIDATED 2026-08-30** |
+| **`RB.1`** | Recovery-plane store: layout, encryption, manifest, retention, validator. No collection. | none — local/offline | **AUTOMATED_VALIDATED 2026-08-30** |
+| **`RB.2`** | PAN device-state export + collection orchestration (target selection, scheduler) | command gate (documented §7.1, `read` class); **D2 RESOLVED 2026-08-30** | **IMPLEMENTED 2026-08-30 — real-env validation owed** (PAN configuration-XML export, §7.2, not yet implemented) |
+| **`RB.3`** | CP Gaia backup + management export; consistency groups | command gate **+ `operational-write` class (§5) + P0 CP safety audit** | blocked stub only — after P0 audit |
+| **`RB.4`** | Validation battery V1–V3 (§6) | none beyond `RB.1`–`RB.3` | **AUTOMATED_VALIDATED 2026-08-30** — built and tested against synthetic manifests ahead of `RB.2`/`RB.3` landing, same "offline-first, real-env validation owed" pattern already used for `RB.0` |
 | **`RB.5`** | Readiness scoring + Recovery UI module (§11) | render harness + uitest fixtures | after `RB.4` |
 | **`RB.6`** | Controlled restore | **`OP.2` bar (§8)** | **no** |
+
+**RB.2/RB.3 real-environment note:** the PAN device-state collector
+(`panorama/panorama_recovery_collector.py`) is implemented but this cloud
+sandbox has no device reachability — the same
+`on_hardware_real_env_validation` gap every other collector in this
+repository carries. Automated tests exercise it against a fixture HTTP
+transport only. Per `AGENTS.md`, this is `IMPLEMENTED`, not
+`REAL_ENV_VALIDATED` — never mark a network-facing behavior `DONE` from
+automated tests alone.
 
 Scheduled fleet backup (as opposed to on-demand) additionally requires
 `distributed_endpoint_lock_and_job_store` (DEV.3.2/3.3) per §9.
@@ -512,8 +599,8 @@ that has not started.
 
 | id | Decision | Owner | Blocks |
 |---|---|---|---|
-| **D1** | Inventory of what BackBox actually backs up today, by vendor and device count. Does the estate contain non-CP/PAN devices that need backup after 2027? | product owner | the entire "BackBox replacement" premise (§2) |
-| **D2** | Is the platform's PAN service account permitted to hold **superuser** (required for device-state export, PAN-OS 7.1+)? If not, `RB.2` degrades to configuration-XML-only, which is not an RMA-grade backup. | security lead | `RB.2` |
+| **D1** | Inventory of what BackBox actually backs up today, by vendor and device count. Does the estate contain non-CP/PAN devices that need backup after 2027? | product owner | the entire "BackBox replacement" premise (§2) — **still open** |
+| **D2** | ~~Is the platform's PAN service account permitted to hold **superuser**~~ **RESOLVED 2026-08-30 — approved by the product owner.** The platform's PAN service account is permitted to hold superuser for the sole purpose of `type=export&category=device-state`. Consequence accepted: this is a real privilege increase to the collection identity (§10 rule 4 still separates the *backup* credential from the *collection* credential — D4 — so the superuser grant lands on a distinct service account, not the read-only inventory one). `RB.2` PAN device-state export is unblocked on this axis; `DEPLOY.1`'s secrets-vault requirement (§2) is now load-bearing, not aspirational. | security lead — **approved** | `RB.2` — unblocked |
 | **D3** | Is `add backup local` (writes to device disk) acceptable at current maturity as the new `operational-write` class (§5), or does the CP backup have to wait for full write-capability maturity? | network-security leads + P0 audit | `RB.3` |
 | **D4** | Backup credential identity: separate service account per vendor, or reuse the collection identity with elevated rights? (§10 rule 4 assumes separate.) | security lead | `RB.2`, `RB.3` |
 | **D5** | Recovery volume retention floor and total storage budget — drives GFS parameters and whether CP management exports (large) are held at the same depth as PAN device states. | product owner + infra | `RB.1` |

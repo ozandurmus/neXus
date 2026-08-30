@@ -25,6 +25,7 @@ outcomes. Append/rebase explicitly.").
 | §7 command gate entries | `RB.2`, `RB.3` | every new device command |
 | §8 retention policy | `RB.1` | GFS + deletion ledger |
 | §9 security invariants | all | automated test obligations |
+| §10 collection command contract | `RB.2`, `RB.3` | orchestration, selection, scheduler |
 
 ---
 
@@ -400,7 +401,88 @@ Each is a test that must exist before the corresponding phase closes.
 
 ---
 
-## 10. Test contract per phase
+## 10. Recovery collection command contract (added 2026-08-30)
+
+Architecture §9.1. Owns how `RB.2`/`RB.3` are actually invoked — CLI,
+scheduler, and a future UI all call the same orchestration, per explicit
+product direction (not a `main.py`-inlined operation).
+
+### 10.1 `RecoveryCollectionRequest`
+
+```json
+{
+  "vendor": "panorama | checkpoint",
+  "selector": {"mode": "all"} ,
+  "_or_": {"mode": "targets", "entity_ids": ["fw-01", "fw-02__vsid_10"]},
+  "provenance": "manual | scheduled"
+}
+```
+
+- `selector.mode: "all"` — every admitted device of `vendor` in `unified.json`.
+- `selector.mode: "targets"` — an explicit `entity_id` list (the "selective
+  for gateways" requirement). Entity identity follows the same
+  `<device>__vsid_<vs_id>` convention as `restore_readiness` (§5) and
+  `configuration/checkpoint_config_collector.py`.
+- An `entity_id` in `selector.entity_ids` that does not resolve against
+  `unified.json` is a **request-time error** — raised before any device is
+  contacted, never a silent skip.
+
+### 10.2 `RecoveryCollector` protocol
+
+A vendor collector implements one method: `collect(target) -> (plaintext:
+bytes, artifact_meta: dict)`, where `artifact_meta` supplies the
+`artifact.class` / `vendor_native_filename` / `collected_via` fields §3
+requires. `recovery_collect.py` never constructs vendor protocol/shell calls
+itself — it only does target selection, admission-coordinator routing
+(§9.12), and the encrypt-and-store call into `write_artifact`.
+
+### 10.3 Collector availability
+
+| Vendor | Status | Blocker |
+|---|---|---|
+| `panorama` (PAN device-state, §7.1) | **implemented** | `D2` resolved 2026-08-30; `read` class, gate-documented in §7.1 before implementation |
+| `checkpoint` (CP Gaia backup, §7.3) | **blocked stub** | P0 `cp_device_interaction_safety` audit + open decision `D3` (architecture §13) — **neither resolved** |
+
+Calling the CP collector raises `RecoveryCollectionBlockedError` naming the
+exact blocker (audit + `D3`), not a generic `NotImplementedError` — an
+operator or a future UI must be able to show *why*, not just *that it
+failed*.
+
+### 10.4 Scheduler policy schema (additive)
+
+Extends `utils.collection_executor`'s scheduler policy
+(`SCHEDULER_POLICY_SCHEMA_VERSION` unchanged — this is additive per the
+`AGENTS.md` "phase may add optional fields" rule, not a version bump):
+
+```json
+{
+  "version": 1,
+  "enabled": true,
+  "schedule": [
+    {"workflow": "recovery-pan", "interval_minutes": 1440, "targets": ["fw-01", "fw-02"]},
+    {"workflow": "recovery-pan", "interval_minutes": 1440}
+  ]
+}
+```
+
+- `"recovery-pan"` joins `ALLOWLISTED_WORKFLOWS`. `"recovery-cp"` does **not**
+  — scheduling a blocked collector is refused at policy-load time, the same
+  fail-closed posture `SchedulerPolicyError` already applies to an
+  unallowlisted workflow name.
+- `targets` (optional, per schedule entry): an explicit `entity_id` list.
+  Omitted (the field does not exist) means `selector.mode: "all"` —
+  indistinguishable from every scheduled entry that predates this contract,
+  so no existing policy file changes meaning.
+- Scheduling still routes through `collection_executor.execute_admitted_collection`
+  (§9.12) — the per-endpoint lock and concurrency budget apply to a
+  scheduled recovery job exactly as they do to `checkpoint`/`cp`/`vsx`/
+  `pan-config` today. Architecture §9's correction: this does **not** wait on
+  `distributed_endpoint_lock_and_job_store` under the current single-container
+  deployment — the in-memory coordinator already serializes per endpoint.
+
+---
+
+## 11. Test contract per phase
 
 - **`RB.0`** — readiness state machine over synthetic inventory fixtures
   (all five states, both evidence bases); zero network, zero credentials;
