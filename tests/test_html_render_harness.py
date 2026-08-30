@@ -7,7 +7,13 @@ module is populated, then:
   * (when `bun` + the harness deps are present) runs
     `tools/render-harness/check-render.mjs`, which executes the script in a DOM
     and clicks every nav module + inner tab, asserting panels switch with no
-    console errors.
+    console errors;
+  * (when Playwright + a Chromium are present) runs
+    `tools/render-harness/check_render_playwright.py`, a real-browser
+    alternative that performs the same checks -- not gated on the same
+    bun/happy-dom version pairing, so it still catches a render regression if
+    that toolchain breaks (as it did in one cloud dev environment this
+    session: `window.eval is not a function`).
 """
 import json
 import os
@@ -25,6 +31,7 @@ if str(ROOT) not in sys.path:
 
 HARNESS = ROOT / "tools" / "render-harness" / "check-render.mjs"
 HARNESS_DEPS = ROOT / "tools" / "render-harness" / "node_modules" / "happy-dom"
+PLAYWRIGHT_HARNESS = ROOT / "tools" / "render-harness" / "check_render_playwright.py"
 
 _PAYLOAD_CONSTS = (
     "rawData", "configUiData", "complianceUiData",
@@ -39,6 +46,26 @@ def _bun() -> str | None:
         return found
     fallback = Path(os.path.expanduser("~")) / ".bun" / "bin" / "bun"
     return str(fallback) if fallback.exists() else None
+
+
+def _playwright_chromium_available() -> bool:
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        return False
+    try:
+        # Pre-installed Chromium documented for this repo's dev/CI notes
+        # takes precedence (matches check_render_playwright.py's own
+        # resolution); otherwise fall back to whatever Playwright itself
+        # resolves (a `playwright install chromium`'d browser). Playwright's
+        # executable_path is a resolved path string regardless of whether a
+        # browser actually exists there, so check the file itself.
+        if Path("/opt/pw-browsers/chromium-1194/chrome-linux/chrome").exists():
+            return True
+        with sync_playwright() as p:
+            return Path(p.chromium.executable_path).exists()
+    except Exception:
+        return False
 
 
 @pytest.fixture(scope="module")
@@ -183,5 +210,23 @@ def test_headless_navigation_smoke(rendered_html):
     )
     assert proc.returncode == 0, (
         f"render harness failed (exit {proc.returncode})\n"
+        f"STDOUT:\n{proc.stdout}\nSTDERR:\n{proc.stderr}"
+    )
+
+
+@pytest.mark.skipif(
+    not _playwright_chromium_available(),
+    reason="playwright not installed or no Chromium resolvable — "
+           "pip install -r requirements-dev.txt && playwright install chromium",
+)
+def test_headless_navigation_smoke_playwright(rendered_html):
+    """Real-Chromium alternative to test_headless_navigation_smoke, not gated
+    on the bun/happy-dom toolchain -- see the module docstring."""
+    proc = subprocess.run(
+        [sys.executable, str(PLAYWRIGHT_HARNESS), str(rendered_html)],
+        capture_output=True, text=True, timeout=120,
+    )
+    assert proc.returncode == 0, (
+        f"playwright render harness failed (exit {proc.returncode})\n"
         f"STDOUT:\n{proc.stdout}\nSTDERR:\n{proc.stderr}"
     )
