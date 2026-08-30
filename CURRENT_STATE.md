@@ -23,8 +23,9 @@ timeline.
 
 ## Active build
 
-`0.7.6 — Automated HTML render harness + uitest fixture` — **AUTOMATED_VALIDATED** (2026-08-30)
-Contract + impl record: `docs/history/phase/0_7_6_RENDER_HARNESS.md`.
+**None open.** Last landed: `0.7.6a — Render harness + uitest topology matrix`
+— **AUTOMATED_VALIDATED** (2026-08-30), `origin/main` `671fd6c`.
+Contract + impl record: `docs/history/phase/0_7_6_RENDER_HARNESS.md` (§4).
 
 Motivated by `0.7.4a`: the report is one inline `<script>`; a parse failure or
 an early throw leaves every button dead while the page looks loaded, and nothing
@@ -61,75 +62,29 @@ negative-tested (corrupt payload literal → FAIL parse; renamed nav handler →
 FAIL, panels don't activate); privacy gate PASS / 0; `render_sample.py` exit 0
 (unchanged — stays the empty-state check). No `main.py` change.
 
-Predecessor `0.7.5 — Compliance trend layer` — **AUTOMATED_VALIDATED** (2026-08-30)
-Contract + impl record: `docs/history/phase/0_7_5_COMPLIANCE_TREND.md`.
-Design: `docs/design/COMPLIANCE_ASSIGNMENT_AND_FRAMEWORKS.md` §11 decision 9.
-Additive; no server; no collector; no device command; `COMPLIANCE_SCHEMA_VERSION`
-unchanged (repo additive-no-bump convention).
+Predecessors this cycle (all AUTOMATED_VALIDATED 2026-08-30; detail in
+`project/build_history.json`):
 
-Append-only ledger: each full `py .\main.py` checkpoint appends one aggregate
-roll-up record to `data/state/compliance_history.json` (RuntimeRoot state,
-gitignored). Every render then exposes `compliance_overview.history[]` (last 30,
-aggregates + ISO dates only — no identity) and `compliance_overview.trend` (delta
-vs the newest prior record, `null` with < 1 prior). Overview compliance card +
-Compliance KPI band show a sparkline + a "±N pts since <date>" chip once ≥ 2
-checkpoints exist. No backfill; no trend-scrubber UI (DEPLOY.1). Read path is
-**fail-safe** — a missing/corrupt ledger degrades to "no trend", never an error.
-
-- **`utils/compliance_history.py`** (new) — `load_history` / `summarise_overview`
-  / `append_run` / `history_view`; `HISTORY_SCHEMA_VERSION "0.7.5"`;
-  `MAX_RECORDS` 200, payload `PAYLOAD_RECORD_LIMIT` 30.
-- **`utils/compliance_posture.py`** — `build_compliance_posture(..., history=None)`;
-  `_compliance_overview` / `_empty_overview` append `history` + `trend`.
-- **`utils/html_export.py`** — reads the ledger every render; writes one record
-  only when `run_html_export(record_checkpoint=True)` (the full-checkpoint path
-  in `main.py`).
-- **`static/app.js` + `style.css`** — `complianceSparkline` + `complianceTrendChip`.
-
-Evidence (2026-08-30): pytest `547 passed / 3 skipped / 0 failed` (534 → +13);
-privacy gate PASS / 0; `render_sample.py` exit 0 (`history: []` / `trend: null`).
-Real-env: a live trend only appears after a second real full checkpoint — owed
-under `on_hardware_real_env_validation`.
-
-Predecessor `0.7.4 — framework_mappings: Requirement-Level Coverage` —
-**AUTOMATED_VALIDATED** (2026-08-29)
-Contract: `docs/history/phase/0_7_4_FRAMEWORK_REQUIREMENTS.md` (§10 impl record)
-Design: `docs/design/COMPLIANCE_ASSIGNMENT_AND_FRAMEWORKS.md` §9. Additive; no
-server; no new control/collector.
-
-Models the **framework side**: a framework is now a list of *requirements*, each
-with its own coverage.
-
-- **`utils/framework_catalog.py`** (new) — `FRAMEWORK_CATALOG_VERSION "0.7.4"`.
-  CIS / PCI-DSS / BDDK, each an authored requirement list covering every
-  structured control `frameworks[].reference` **plus** a curated gap set; our own
-  one-line titles (**no verbatim benchmark text**); process-only requirements
-  carry `applies:false`. `normalize_ref` is the join key.
-- **`utils/compliance_posture.py`** — `_compliance_overview.by_framework[name]`
-  gains `version` / `profile` + `requirements: [{id, section, title,
-  control_ids, applicable, monitored, aligned, finding, unknown, coverage,
-  posture}]`, `requirement_counts`, `unmapped_control_refs` (drift guard).
-  `coverage` (`COVERED`/`PARTIALLY_COVERED`/`UNCOVERED`/`NOT_APPLICABLE`) =
-  monitoring completeness over *applicable* mapped controls; `posture`
-  (`ALIGNED`/`FINDING`/`UNKNOWN`) is orthogonal. Catalog **and** `x_` user
-  checks join by `normalize_ref`. Top-level `framework_catalog_version`.
-- **UI** (`static/app.js` + `static/style.css`) — each framework readiness card
-  gets a version line, a 4-segment requirement mini-bar, and a `Requirements (N)`
-  expand → per-requirement rows with coverage + posture pills and mapped control
-  ids (reuses the 0.7.2 explain-toggle listener + framework filter chips).
-
-`COMPLIANCE_SCHEMA_VERSION` unchanged; payload additive; framework-level
-percentages unchanged.
-
-Evidence (2026-08-29):
-
-```
-py -m pytest -q -n auto:    523 passed, 3 skipped, 0 failed (Python 3.12)
-                            (516 baseline → +7; tests/test_phase0_7_4_*)
-scripts/render_sample.py:   exit 0, 0 placeholders
-repository privacy gate:    PASS / 0 on a clean tree — no device identity, no
-                            verbatim benchmark text, no certification claim
-```
+- `0.7.5 — Compliance trend layer` — `docs/history/phase/0_7_5_COMPLIANCE_TREND.md`.
+  New `utils/compliance_history.py` (append-only ledger
+  `data/state/compliance_history.json`, fail-safe read, cap 200, aggregates + ISO
+  dates only). `build_compliance_posture(..., history=)` →
+  `compliance_overview.history[]` + `.trend` (additive). `html_export` reads
+  every render, writes only on a full checkpoint
+  (`run_html_export(record_checkpoint=True)`). `app.js` sparkline + "±N pts since
+  <date>" chip. `COMPLIANCE_SCHEMA_VERSION` unchanged. Live trend only after a
+  *second* real checkpoint — owed under `on_hardware_real_env_validation`.
+- `0.7.4a — HTML export render hotfix (P0)` —
+  `docs/history/phase/0_7_4A_HTML_EXPORT_RENDER_HOTFIX.md`. **REAL_ENV_VALIDATED**
+  (product owner, corporate laptop). `html_export._fill_template` — one
+  single-pass template fill; a chained `str.replace()` had spliced the crypto
+  JSON into the `projectPlanData` string literal (a `project/*.json` note
+  contains `__CRYPTO_JSON_PLACEHOLDER__`) → `SyntaxError` → dead nav buttons.
+- `0.7.4 — framework_mappings: Requirement-Level Coverage` —
+  `docs/history/phase/0_7_4_FRAMEWORK_REQUIREMENTS.md`; design
+  `COMPLIANCE_ASSIGNMENT_AND_FRAMEWORKS.md` §9. `utils/framework_catalog.py` +
+  `compliance_overview.by_framework[].requirements[]` (coverage + posture) + UI
+  drill-down. Additive; `COMPLIANCE_SCHEMA_VERSION` unchanged.
 
 **Deferred:** a signed / user-authored framework pack (custom frameworks + a UI
 mapping editor) — `DEPLOY.1A`-gated, same class as the assignment editor and the
@@ -139,7 +94,7 @@ CE.3 check editor.
 device administration platform**; read-only now is a staging phase. Every
 VERIFY-plane design must keep a future enforce/remediate capability additive.
 
-Recent predecessors (all AUTOMATED_VALIDATED 2026-08-29):
+Earlier 0.7.x predecessors (all AUTOMATED_VALIDATED 2026-08-29):
 
 - `0.7.3 — CE.1: User-Authored Compliance Check Engine` (+ crypto-source wire
   + `unified.interfaces` / `unified.routes` wire) —
