@@ -3,6 +3,24 @@
   "record_contract": "One structured record per build, newest first. Required: build, status, title, summary (<= 2 sentences). Optional: started, completed, track, movement, supersedes, evidence, risks_forward, docs{agreement,validation,handover} (repo-relative paths under docs/history/). Full detail lives in the linked doc; do not restate it here. Status vocabulary must stay within utils/project_plan.py STATUS_VALUES.",
   "builds": [
     {
+      "build": "0.7.6a",
+      "status": "automated_validated",
+      "started": "2026-08-30",
+      "completed": "2026-08-30",
+      "title": "uitest fixture expanded to a full topology matrix",
+      "track": "0.7.x",
+      "movement": "IMPLEMENTATION",
+      "summary": "tests/fixtures/uitest/build_fixture.py regenerated so the render-harness bundle exercises every device shape: CP standalone gateway, ClusterXL (2 members active/standby), VSX host (standalone) + 2 virtual systems, VSX cluster (2 hosts) + a shared virtual system, one UNAVAILABLE gateway; PAN single firewall, HA pair (active/passive, panorama out-of-sync), multi-vsys firewall (vsys_count 3), multi-vsys HA pair (one disconnected). unified.json carries matching rows with genuine cluster-member interface + route divergence, VSX per-VSID wrp rows, PAN vr-scoped multi-vsys interfaces, and live / last_known_good / no_data inventory states. Alignment classes ALIGNED / LOCAL_OVERRIDE / EFFECTIVE_DRIFT / MEMBER_SPECIFIC / LOCAL_ONLY / EXPECTED_ONLY / UNKNOWN; history same / changed / first + a CP insufficient_evidence diff + a PAN pair diff; crypto PASS / FINDING / UNKNOWN across weak_algorithm / crypto_agility / pqc_readiness; compliance enforced + advisory + a control_assignments.json waiver (one WAIVED) + per-framework COVERED / PARTIALLY_COVERED / UNCOVERED. New test_all_topologies_present asserts each shape appears in the rendered payload so a builder change that drops one fails loudly.",
+      "evidence": {
+        "automated": "py -m pytest -q -n auto --dist worksteal: 551 passed, 3 skipped, 0 failed (550 -> +1). check-render.mjs PASS on the 16-device render, no console errors.",
+        "privacy_gate": "PASS / 0 on a clean tree.",
+        "real_env": "not applicable - dev/CI fixture."
+      },
+      "docs": {
+        "agreement": "docs/history/phase/0_7_6_RENDER_HARNESS.md"
+      }
+    },
+    {
       "build": "0.7.6",
       "status": "automated_validated",
       "started": "2026-08-30",

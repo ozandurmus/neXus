@@ -1,43 +1,66 @@
 {
   "schema_version": "0.6.1C",
-  "generated_at": "2026-08-30T08:18:12.257238+00:00",
+  "generated_at": "2026-08-30T12:00:00Z",
   "fleet_summary": {
-    "total_entities": 3,
-    "deferred_count": 1,
+    "total_entities": 6,
+    "deferred_count": 2,
     "lifecycle_state_counts": {
-      "STABLE": 2,
-      "VALIDATED": 1
+      "STABLE": 3,
+      "VALIDATED": 2,
+      "DISCOVERED": 1
     },
     "vendor_counts": {
-      "checkpoint": 2,
-      "paloalto": 1
+      "checkpoint": 4,
+      "paloalto": 2
     }
   },
   "entities": [
     {
-      "entity_id": "cp:uitest-1",
+      "entity_id": "cp:edge-01",
       "canonical_id": "cp-edge-01",
       "vendor": "checkpoint",
       "lifecycle_state": "STABLE",
       "collection_mode": "expert_explicit_clish",
       "deferred": false,
-      "confidence": 92,
+      "confidence": 93,
+      "last_transition_reason": "repeated_success",
+      "observed_runs": 8
+    },
+    {
+      "entity_id": "cp:core-01",
+      "canonical_id": "cp-core-01",
+      "vendor": "checkpoint",
+      "lifecycle_state": "STABLE",
+      "collection_mode": "expert_explicit_clish",
+      "deferred": false,
+      "confidence": 90,
       "last_transition_reason": "repeated_success",
       "observed_runs": 6
     },
     {
-      "entity_id": "cp:uitest-2",
-      "canonical_id": "cp-core-01",
+      "entity_id": "cp:core-02",
+      "canonical_id": "cp-core-02",
       "vendor": "checkpoint",
       "lifecycle_state": "VALIDATED",
       "collection_mode": "expert_explicit_clish",
       "deferred": true,
-      "confidence": 71,
+      "confidence": 68,
       "last_transition_reason": "standby_member_deferred",
       "observed_runs": 3
     },
     {
-      "entity_id": "pan:uitest-1",
+      "entity_id": "cp:vsx-gw-01/10",
+      "canonical_id": "vsx-gw-01 / VS-WEB",
+      "vendor": "checkpoint",
+      "lifecycle_state": "VALIDATED",
+      "collection_mode": "vsx_vsenv",
+      "deferred": false,
+      "confidence": 74,
+      "last_transition_reason": "repeated_success",
+      "observed_runs": 4
+    },
+    {
+      "entity_id": "pan:edge-01",
       "canonical_id": "pan-edge-01",
       "vendor": "paloalto",
       "lifecycle_state": "STABLE",
@@ -46,6 +69,17 @@
       "confidence": 88,
       "last_transition_reason": "repeated_success",
       "observed_runs": 5
+    },
+    {
+      "entity_id": "pan:mvha-02",
+      "canonical_id": "pan-mvha-02",
+      "vendor": "paloalto",
+      "lifecycle_state": "DISCOVERED",
+      "collection_mode": "deferred_lifecycle",
+      "deferred": true,
+      "confidence": 40,
+      "last_transition_reason": "standby_member_deferred",
+      "observed_runs": 1
     }
   ],
   "coordinator": {
@@ -62,16 +96,16 @@
         "vendor": "checkpoint",
         "status": "completed",
         "scope": "inventory",
-        "started_at": "2026-08-30T08:18:12.257238+00:00",
-        "finished_at": "2026-08-30T08:18:12.257238+00:00"
+        "started_at": "2026-08-30T12:00:00Z",
+        "finished_at": "2026-08-30T12:00:00Z"
       },
       {
         "job_id": "job-uitest-2",
         "vendor": "paloalto",
-        "status": "completed",
+        "status": "failed",
         "scope": "inventory",
-        "started_at": "2026-08-30T08:18:12.257238+00:00",
-        "finished_at": "2026-08-30T08:18:12.257238+00:00"
+        "started_at": "2026-08-30T12:00:00Z",
+        "finished_at": "2026-08-30T12:00:00Z"
       }
     ]
   },
