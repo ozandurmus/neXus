@@ -1,0 +1,10 @@
+{
+  "name": "securityexpert-render-harness",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Headless load + navigation smoke test for the generated SecurityExpert report. Dev/CI only; never shipped, never touched by main.py.",
+  "type": "module",
+  "dependencies": {
+    "happy-dom": "^20.0.0"
+  }
+}

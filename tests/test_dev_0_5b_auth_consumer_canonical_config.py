@@ -40,7 +40,7 @@ def _repository_text_candidates():
     for path in ROOT.rglob("*"):
         if not path.is_file():
             continue
-        if any(part in {".git", "__pycache__", ".pytest_cache"} for part in path.parts):
+        if any(part in {".git", "__pycache__", ".pytest_cache", "node_modules"} for part in path.parts):
             continue
         if path.name == ".gitignore" or path.suffix.lower() in suffixes:
             yield path

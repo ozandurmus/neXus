@@ -120,8 +120,17 @@ must update as applicable:
 - `project/feature_registry.json`
 - `project/build_history.json`
 - current build/design document
+- `tests/fixtures/uitest/` — whenever a `configuration_ui` / `compliance_overview`
+  / `crypto` / `discovery` / `project_plan` payload field or a UI module / tab
+  changes, so the render harness (`docs/AI_DEVELOPMENT_PROTOCOL.md`) keeps
+  exercising the real path.
 
 Do not silently rewrite historical outcomes. Append/rebase explicitly.
+
+A build that touches `templates/index.html`, `static/app.js`, `static/style.css`
+or a payload builder must show the HTML render harness green
+(`tests/test_html_render_harness.py` / `docs/AI_DEVELOPMENT_PROTOCOL.md`)
+alongside the full suite and the privacy gate.
 
 ## AI reasoning / movement routing
 
