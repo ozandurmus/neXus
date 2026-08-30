@@ -54,6 +54,9 @@ htmlcov/
 .venv/
 venv/
 
+# Render-harness JS deps (dev/CI only; package.json + bun.lock are committed)
+/tools/render-harness/node_modules/
+
 # IDE / AI local state
 .vscode/
 .idea/

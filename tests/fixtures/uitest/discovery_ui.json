@@ -1,0 +1,122 @@
+{
+  "schema_version": "0.6.1C",
+  "generated_at": "2026-08-30T08:18:12.257238+00:00",
+  "fleet_summary": {
+    "total_entities": 3,
+    "deferred_count": 1,
+    "lifecycle_state_counts": {
+      "STABLE": 2,
+      "VALIDATED": 1
+    },
+    "vendor_counts": {
+      "checkpoint": 2,
+      "paloalto": 1
+    }
+  },
+  "entities": [
+    {
+      "entity_id": "cp:uitest-1",
+      "canonical_id": "cp-edge-01",
+      "vendor": "checkpoint",
+      "lifecycle_state": "STABLE",
+      "collection_mode": "expert_explicit_clish",
+      "deferred": false,
+      "confidence": 92,
+      "last_transition_reason": "repeated_success",
+      "observed_runs": 6
+    },
+    {
+      "entity_id": "cp:uitest-2",
+      "canonical_id": "cp-core-01",
+      "vendor": "checkpoint",
+      "lifecycle_state": "VALIDATED",
+      "collection_mode": "expert_explicit_clish",
+      "deferred": true,
+      "confidence": 71,
+      "last_transition_reason": "standby_member_deferred",
+      "observed_runs": 3
+    },
+    {
+      "entity_id": "pan:uitest-1",
+      "canonical_id": "pan-edge-01",
+      "vendor": "paloalto",
+      "lifecycle_state": "STABLE",
+      "collection_mode": "pan_api",
+      "deferred": false,
+      "confidence": 88,
+      "last_transition_reason": "repeated_success",
+      "observed_runs": 5
+    }
+  ],
+  "coordinator": {
+    "available": true,
+    "active_job_count": 0,
+    "budgets": {
+      "checkpoint": 1,
+      "checkpoint_vsx": 1,
+      "paloalto": 1
+    },
+    "recent_jobs": [
+      {
+        "job_id": "job-uitest-1",
+        "vendor": "checkpoint",
+        "status": "completed",
+        "scope": "inventory",
+        "started_at": "2026-08-30T08:18:12.257238+00:00",
+        "finished_at": "2026-08-30T08:18:12.257238+00:00"
+      },
+      {
+        "job_id": "job-uitest-2",
+        "vendor": "paloalto",
+        "status": "completed",
+        "scope": "inventory",
+        "started_at": "2026-08-30T08:18:12.257238+00:00",
+        "finished_at": "2026-08-30T08:18:12.257238+00:00"
+      }
+    ]
+  },
+  "scheduler": {
+    "configured": true,
+    "enabled": false,
+    "workflow_count": 1,
+    "workflows": [
+      {
+        "name": "nightly-inventory",
+        "vendor": "checkpoint",
+        "enabled": false,
+        "interval_minutes": 1440,
+        "provenance": "runtime_root_policy"
+      }
+    ]
+  },
+  "default_concurrency_budgets": {
+    "checkpoint": 1,
+    "checkpoint_vsx": 1,
+    "paloalto": 1,
+    "_default": 1
+  },
+  "lifecycle_state_labels": {
+    "DISCOVERED": "Discovered",
+    "VALIDATED": "Validated",
+    "STABLE": "Stable",
+    "EXCLUDED": "Excluded",
+    "REMOVED": "Removed"
+  },
+  "collection_mode_labels": {
+    "expert_explicit_clish": "Expert + explicit Clish",
+    "direct_clish_capable": "Direct Clish (capability only)",
+    "vsx_vsenv": "VSX vsenv context",
+    "pan_api": "Palo Alto API",
+    "deferred_standby": "Deferred — standby member",
+    "deferred_lifecycle": "Deferred — lifecycle state",
+    "unknown": "Unknown"
+  },
+  "job_status_labels": {
+    "pending": "Pending",
+    "running": "Running",
+    "completed": "Completed",
+    "failed": "Failed",
+    "cancelled": "Cancelled",
+    "coalesced": "Coalesced"
+  }
+}

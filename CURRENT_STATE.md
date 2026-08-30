@@ -6,7 +6,8 @@ agreements and validation reports). `docs/history/INDEX.md` is the one-line
 timeline.
 
 - **Authoritative checkpoint:** 2026-08-30
-- **Product baseline:** `0.7.5 — Compliance trend layer` — AUTOMATED_VALIDATED (0.7.x VERIFY track)
+- **Product baseline:** `0.7.6 — Automated HTML render harness` — AUTOMATED_VALIDATED (0.7.x VERIFY track)
+- **Previous:** `0.7.5 — Compliance trend layer` — AUTOMATED_VALIDATED
 - **Previous:** `0.7.4 — framework_mappings: Requirement-Level Coverage` — AUTOMATED_VALIDATED
 - **Hotfix `0.7.4a`** (2026-08-30) — **REAL_ENV_VALIDATED**. The report's inline
   `<script>` was broken by a placeholder-substitution collision (a `project/*.json`
@@ -22,7 +23,40 @@ timeline.
 
 ## Active build
 
-`0.7.5 — Compliance trend layer` — **AUTOMATED_VALIDATED** (2026-08-30)
+`0.7.6 — Automated HTML render harness + uitest fixture` — **AUTOMATED_VALIDATED** (2026-08-30)
+Contract + impl record: `docs/history/phase/0_7_6_RENDER_HARNESS.md`.
+
+Motivated by `0.7.4a`: the report is one inline `<script>`; a parse failure or
+an early throw leaves every button dead while the page looks loaded, and nothing
+in CI parsed or ran that script.
+
+- **`tests/fixtures/uitest/`** (committed) — hand-authored, privacy-clean bundle
+  (fake names, RFC 5737 ranges): `unified.json` + injected `configuration_ui` /
+  `crypto_ui` / `discovery_ui` payloads + `state/compliance_checks.json` +
+  `state/compliance_history.json` (3 records → the trend renders) +
+  `build_fixture.py` + `README.md` (growth rule).
+- **`scripts/render_uitest.py`** — renders the report from the bundle; injects
+  only the three builders whose real inputs are collector telemetry / PAN XML /
+  live stores. `build_compliance_posture`, `_fill_template`, `_script_json` run
+  for real.
+- **`tools/render-harness/check-render.mjs`** (bun + `happy-dom`) — parse-check
+  the inline `<script>`, execute it, assert `window.switchModule` exists, click
+  every `.module-nav-item` + inner tab (panels must switch, zero `console.error`).
+  `node_modules/` gitignored; `package.json` + `bun.lock` committed.
+- **`tests/test_html_render_harness.py`** (3) — every embedded payload is valid
+  JSON (no JS engine needed — the `0.7.4a` class); all six modules populated;
+  headless-navigation smoke test (`skipif` no `bun`).
+- **Governance** — `docs/AI_DEVELOPMENT_PROTOCOL.md` mandatory "HTML render
+  harness" section; `AGENTS.md` project-state-update rule gains
+  `tests/fixtures/uitest/`.
+- `utils/repository_privacy.py` + one repo-text test skip `node_modules`.
+
+Evidence (2026-08-30): pytest `550 passed / 3 skipped / 0 failed` (547 → +3);
+negative-tested (corrupt payload literal → FAIL parse; renamed nav handler →
+FAIL, panels don't activate); privacy gate PASS / 0; `render_sample.py` exit 0
+(unchanged — stays the empty-state check). No `main.py` change.
+
+Predecessor `0.7.5 — Compliance trend layer` — **AUTOMATED_VALIDATED** (2026-08-30)
 Contract + impl record: `docs/history/phase/0_7_5_COMPLIANCE_TREND.md`.
 Design: `docs/design/COMPLIANCE_ASSIGNMENT_AND_FRAMEWORKS.md` §11 decision 9.
 Additive; no server; no collector; no device command; `COMPLIANCE_SCHEMA_VERSION`
@@ -173,7 +207,7 @@ full regression run.)
 ## Automated test baseline
 
 ```
-547 passed / 3 skipped / 0 failed (Python 3.12)
+550 passed / 3 skipped / 0 failed (Python 3.12)
 Repository privacy gate: PASS / 0 on a clean checkout. Locally it flags the
 gitignored `data/` + `logs/` + `data/.support_hmac.key` that a test run
 creates — delete them before running the gate.

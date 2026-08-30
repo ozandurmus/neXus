@@ -3,6 +3,24 @@
   "record_contract": "One structured record per build, newest first. Required: build, status, title, summary (<= 2 sentences). Optional: started, completed, track, movement, supersedes, evidence, risks_forward, docs{agreement,validation,handover} (repo-relative paths under docs/history/). Full detail lives in the linked doc; do not restate it here. Status vocabulary must stay within utils/project_plan.py STATUS_VALUES.",
   "builds": [
     {
+      "build": "0.7.6",
+      "status": "automated_validated",
+      "started": "2026-08-30",
+      "completed": "2026-08-30",
+      "title": "Automated HTML render harness + uitest fixture bundle",
+      "track": "0.7.x",
+      "movement": "IMPLEMENTATION",
+      "summary": "Motivated by 0.7.4a (the report is one inline <script>; a parse failure or an early throw leaves every button dead while the page looks loaded, and nothing in CI parsed or ran that script). New tests/fixtures/uitest/ (hand-authored, privacy-clean: fake names, RFC 5737 IP ranges) - unified.json + injected configuration_ui / crypto_ui / discovery_ui payloads + state/compliance_checks.json + state/compliance_history.json (3 records so the 0.7.5 trend renders) + build_fixture.py + README with a growth rule. scripts/render_uitest.py renders the report from the bundle (injects only the three builders whose real inputs are collector telemetry / PAN XML / live stores; build_compliance_posture, build_project_plan_payload, _fill_template and _script_json run for real). tools/render-harness/check-render.mjs (bun + happy-dom): new Function() parse check, then window.eval the script, assert window.switchModule exists, click every .module-nav-item (panel + button must go .active, no console.error) and every inner tab. tests/test_html_render_harness.py: JSON-validity of every embedded payload (no JS engine needed - the 0.7.4a class), all-six-modules-populated, and a headless-navigation smoke test that skips cleanly when bun is absent. Governance: docs/AI_DEVELOPMENT_PROTOCOL.md new mandatory section, AGENTS.md project-state-update rule gains tests/fixtures/uitest/. repository_privacy.py + one repo-text test skip node_modules (gitignored render-harness deps). No main.py change; harness is dev/CI only.",
+      "evidence": {
+        "automated": "py -m pytest -q -n auto --dist worksteal: 550 passed, 3 skipped, 0 failed (Python 3.12). 547 -> +3 (tests/test_html_render_harness.py). Negative-tested: a corrupted payload literal -> FAIL parse (exit 1); a renamed nav handler -> FAIL (16), panels do not activate (exit 1).",
+        "privacy_gate": "PASS / 0 on a clean tree. Fixture uses fake names + RFC 5737 ranges; node_modules is skipped like other tool caches.",
+        "real_env": "not applicable - dev/CI tooling, no device or network path."
+      },
+      "docs": {
+        "agreement": "docs/history/phase/0_7_6_RENDER_HARNESS.md"
+      }
+    },
+    {
       "build": "0.7.5",
       "status": "automated_validated",
       "started": "2026-08-30",
