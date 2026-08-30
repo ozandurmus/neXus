@@ -198,6 +198,12 @@ SCHEDULER_POLICY_PATH = Path("state") / "scheduler_policy.json"
 SCHEDULER_POLICY_SCHEMA_VERSION = 1
 ALLOWLISTED_WORKFLOWS: frozenset[str] = frozenset({
     "checkpoint", "cp", "vsx", "pan-config", "cp-config",
+    # RB.2 (docs/design/BACKUP_RECOVERY_CONTRACTS.md §10.4): PAN device-state
+    # recovery collection. "recovery-cp" deliberately does NOT join this set
+    # yet -- CP Gaia backup collection is blocked (P0 audit + open decision
+    # D3); scheduling a blocked collector must fail at policy-load time, the
+    # same fail-closed posture this allowlist already gives any unknown name.
+    "recovery-pan",
 })
 _MIN_INTERVAL_MINUTES = 10
 
@@ -210,6 +216,12 @@ class SchedulerPolicyError(ValueError):
 class ScheduledWorkflow:
     workflow: str
     interval_minutes: int
+    # Additive (contract §10.4): omitted/empty means "all admitted devices
+    # of this workflow's vendor" -- every policy file written before this
+    # field existed keeps its exact prior meaning. Only meaningful for
+    # recovery-* workflows today; ignored by the existing checkpoint/cp/vsx/
+    # pan-config workflows, which have never taken a target list.
+    targets: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -290,7 +302,18 @@ def load_scheduler_policy(data_root: Path) -> SchedulerPolicy | None:
                 f"scheduler policy interval_minutes must be >= {_MIN_INTERVAL_MINUTES}, "
                 f"got {interval}"
             )
-        workflows.append(ScheduledWorkflow(workflow=workflow, interval_minutes=interval))
+
+        targets_raw = entry.get("targets")
+        if targets_raw is None:
+            targets: tuple[str, ...] = ()
+        elif isinstance(targets_raw, list) and all(isinstance(t, str) and t.strip() for t in targets_raw):
+            targets = tuple(targets_raw)
+        else:
+            raise SchedulerPolicyError(
+                "scheduler policy schedule entry 'targets', if present, must be a list of non-empty strings"
+            )
+
+        workflows.append(ScheduledWorkflow(workflow=workflow, interval_minutes=interval, targets=targets))
         seen_workflows.add(workflow)
 
     return SchedulerPolicy(

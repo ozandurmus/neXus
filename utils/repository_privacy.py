@@ -46,6 +46,7 @@ FORBIDDEN_ROOT_DIRS = {
     "cas",
     ".cas",
     "support_bundles",
+    "vault",  # RB.1 recovery-plane vault layout (docs/design/BACKUP_RECOVERY_CONTRACTS.md §2)
 }
 FORBIDDEN_DIRS_ANYWHERE = {
     "__pycache__",
@@ -73,6 +74,7 @@ FORBIDDEN_SUFFIXES = {
     ".pfx": "PRIVATE_OR_TRUST_MATERIAL",
     ".jks": "PRIVATE_OR_TRUST_MATERIAL",
     ".key": "PRIVATE_OR_TRUST_MATERIAL",
+    ".enc": "PRIVATE_OR_TRUST_MATERIAL",  # RB.1 encrypted recovery artifact (contract §9.5)
     ".bak": "BACKUP_OR_TEMPORARY",
     ".tmp": "BACKUP_OR_TEMPORARY",
 }
