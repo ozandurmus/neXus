@@ -3,6 +3,22 @@
   "record_contract": "One structured record per build, newest first. Required: build, status, title, summary (<= 2 sentences). Optional: started, completed, track, movement, supersedes, evidence, risks_forward, docs{agreement,validation,handover} (repo-relative paths under docs/history/). Full detail lives in the linked doc; do not restate it here. Status vocabulary must stay within utils/project_plan.py STATUS_VALUES.",
   "builds": [
     {
+      "build": "discovery_fixture_shape_drift",
+      "status": "automated_validated",
+      "started": "2026-08-30",
+      "completed": "2026-08-30",
+      "title": "Fix hand-authored discovery_ui.json fixture to match the real builder shape",
+      "track": "0.6.x",
+      "movement": "IMPLEMENTATION",
+      "summary": "tests/fixtures/uitest/build_fixture.py's discovery_ui() previously used hand-guessed field names (entity_id/collection_mode/deferred/last_transition_reason for entities; scope/started_at/finished_at for coordinator jobs) instead of the real utils.discovery_capability_ui._entity_row()/_coordinator_section()/_scheduler_section() shape (canonical_id/shell_type/planned_mode/plan_allowed/plan_reason_code/evidence_plane/transition_reason; workflow_scope/provenance/reason; workflow/interval_minutes). Because render_uitest.py injects this file via a monkeypatch that bypasses the real builder, the mismatch was invisible to every prior render-harness check -- Shell/Planned mode/Allowed/Reason and every coordinator-job-table column silently rendered undefined on the real UI since 0.7.6. Regenerated with the correct field names, also fixing two scenarios that could not occur under the real plan_collection() logic (a DISCOVERED+deferred_lifecycle entity, which the real planner never produces for a merely-DISCOVERED entity -- replaced with the real identity_failure_history rule). New regression test constructs an actual build_discovery_capability_payload() call and asserts the fixture's key sets match exactly, so this class of drift cannot silently recur; sanity-checked to fail against the pre-fix fixture and pass against the fix.",
+      "evidence": {
+        "automated": "1 new regression test (tests/test_html_render_harness.py::test_discovery_fixture_entities_match_the_real_builder_shape), confirmed to fail against the old fixture and pass against the fix via a git-stash sanity check. py -m pytest -q: 617 passed, 2 skipped, 2 failed (both pre-existing and unrelated, same two tests already documented against the unmodified baseline in every prior 0.6.x closure this session). Net +1 from baseline 616, zero regressions.",
+        "privacy_gate": "Fixture data only; no real device identity.",
+        "real_env": "not applicable -- test-fixture/render-harness fix only. The corrected field names were confirmed present in the actual rendered HTML output; the bun/happy-dom DOM-execution half of the harness remains blocked by this session's pre-existing environment gap, unrelated to this change."
+      },
+      "docs": {}
+    },
+    {
       "build": "html_render_performance",
       "status": "automated_validated",
       "started": "2026-08-30",

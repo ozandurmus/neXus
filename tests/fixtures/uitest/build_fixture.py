@@ -557,47 +557,97 @@ def crypto_ui():
 # --------------------------------------------------------------------------
 
 def discovery_ui():
+    # discovery_fixture_shape_drift fix: field names below match the REAL
+    # utils.discovery_capability_ui._entity_row() / _coordinator_section() /
+    # _scheduler_section() output exactly (canonical_id/shell_type/
+    # planned_mode/plan_allowed/plan_reason_code for entities;
+    # workflow_scope/provenance/reason for jobs; workflow/interval_minutes
+    # for workflows) -- NOT hand-guessed key names. Previously this fixture
+    # used entity_id/collection_mode/deferred/last_transition_reason and
+    # scope/started_at/finished_at for jobs, silently rendering `undefined`
+    # for Shell/Planned mode/Allowed/Reason and every job-table column since
+    # 0.7.6, because render_uitest.py injects this file directly and bypasses
+    # the real builder entirely -- see project/backlog.json's
+    # discovery_fixture_shape_drift entry.
     platform_labels = {"gaia_embedded": "Quantum Spark / Gaia Embedded", "gaia": "Gaia",
                         "unknown": "Check Point platform"}
-    ent = lambda eid, cid, vendor, state, mode, deferred, conf, runs, platform_family=None: {
-        "entity_id": eid, "canonical_id": cid, "vendor": vendor, "lifecycle_state": state,
-        "collection_mode": mode, "deferred": deferred, "confidence": conf,
-        "last_transition_reason": "repeated_success" if not deferred else "standby_member_deferred",
-        "observed_runs": runs,
-        # cp_unknown_platform (0.6.1C): platform identity is independent of
-        # collection capability. cp:core-02 (unknown, deferred=True) and
-        # cp:vsx-gw-01/10 (unknown, deferred=False) are the deliberate
-        # contrast pair -- same "unknown" platform family, one collecting,
-        # one not, proving platform family never gates the plan.
-        "platform_family": platform_family,
-        "platform_confidence": ({"gaia_embedded": "HIGH", "gaia": "MEDIUM", "unknown": "LOW"}.get(platform_family)
-                                 if platform_family else None),
-        "platform_label": platform_labels.get(platform_family),
-    }
+
+    def ent(canonical_id, vendor, lifecycle_state, *, shell_type, confidence, capability_confidence,
+            planned_mode, plan_allowed, plan_reason_code, standby_member=None, platform_family=None,
+            evidence_plane="direct", transition_reason="direct_collection_ok"):
+        return {
+            "vendor": vendor,
+            "canonical_id": canonical_id,
+            "lifecycle_state": lifecycle_state,
+            "confidence": confidence,
+            "evidence_plane": evidence_plane,
+            "last_observed": _ISO,
+            "transition_reason": transition_reason,
+            "shell_type": shell_type,
+            "capability_confidence": capability_confidence,
+            "standby_member": standby_member,
+            # cp_unknown_platform (0.6.1C): platform identity is independent
+            # of collection capability. cp-core-02 (unknown, plan_allowed
+            # False via standby) and vsx-gw-01 / VS-WEB (unknown, plan_allowed
+            # True via vsx_vsenv_capable) are the deliberate contrast pair --
+            # same "unknown" platform family, one collecting, one not,
+            # proving platform family never gates the plan.
+            "platform_family": platform_family,
+            "platform_confidence": ({"gaia_embedded": "HIGH", "gaia": "MEDIUM", "unknown": "LOW"}.get(platform_family)
+                                     if platform_family else None),
+            "platform_label": platform_labels.get(platform_family),
+            "planned_mode": planned_mode,
+            "plan_allowed": plan_allowed,
+            "plan_reason_code": plan_reason_code,
+            "plan_notes": [],
+        }
+
     return {
         "schema_version": "0.6.1C", "generated_at": _ISO,
         "fleet_summary": {"total_entities": 6, "deferred_count": 2,
                           "lifecycle_state_counts": {"STABLE": 3, "VALIDATED": 2, "DISCOVERED": 1},
                           "vendor_counts": {"checkpoint": 4, "paloalto": 2}},
         "entities": [
-            ent("cp:edge-01", "cp-edge-01", "checkpoint", "STABLE", "expert_explicit_clish", False, 93, 8, "gaia"),
-            ent("cp:core-01", "cp-core-01", "checkpoint", "STABLE", "expert_explicit_clish", False, 90, 6, "gaia_embedded"),
-            ent("cp:core-02", "cp-core-02", "checkpoint", "VALIDATED", "expert_explicit_clish", True, 68, 3, "unknown"),
-            ent("cp:vsx-gw-01/10", "vsx-gw-01 / VS-WEB", "checkpoint", "VALIDATED", "vsx_vsenv", False, 74, 4, "unknown"),
-            ent("pan:edge-01", "pan-edge-01", "paloalto", "STABLE", "pan_api", False, 88, 5),
-            ent("pan:mvha-02", "pan-mvha-02", "paloalto", "DISCOVERED", "deferred_lifecycle", True, 40, 1),
+            ent("cp-edge-01", "checkpoint", "STABLE", shell_type="expert", confidence=93,
+                capability_confidence=90, planned_mode="expert_explicit_clish", plan_allowed=True,
+                plan_reason_code="shell_expert_confirmed", standby_member=False, platform_family="gaia",
+                transition_reason="multi_cycle_stable"),
+            ent("cp-core-01", "checkpoint", "STABLE", shell_type="expert", confidence=90,
+                capability_confidence=88, planned_mode="expert_explicit_clish", plan_allowed=True,
+                plan_reason_code="shell_expert_confirmed", standby_member=False, platform_family="gaia_embedded",
+                transition_reason="multi_cycle_stable"),
+            # Deferred #1: a confirmed ClusterXL/VRRP standby member (real
+            # plan_collection() rule 4) -- avoids an unnecessary login before
+            # HA role is confirmed.
+            ent("cp-core-02", "checkpoint", "VALIDATED", shell_type="expert", confidence=68,
+                capability_confidence=60, planned_mode="deferred_standby", plan_allowed=False,
+                plan_reason_code="standby_member", standby_member=True, platform_family="unknown"),
+            ent("vsx-gw-01 / VS-WEB", "checkpoint", "VALIDATED", shell_type="expert", confidence=74,
+                capability_confidence=70, planned_mode="vsx_vsenv", plan_allowed=True,
+                plan_reason_code="vsx_vsenv_capable", standby_member=False, platform_family="unknown"),
+            ent("pan-edge-01", "paloalto", "STABLE", shell_type="unknown", confidence=88,
+                capability_confidence=85, planned_mode="pan_api", plan_allowed=True,
+                plan_reason_code="pan_api_capable", transition_reason="multi_cycle_stable"),
+            # Deferred #2: a newly discovered device with prior identity-gate
+            # failure history (real plan_collection() rule 3) -- deferred
+            # until re-validated, not yet a capability/platform judgement.
+            ent("pan-mvha-02", "paloalto", "DISCOVERED", shell_type="unknown", confidence=40,
+                capability_confidence=20, planned_mode="unknown", plan_allowed=False,
+                plan_reason_code="identity_failure_history", evidence_plane="management",
+                transition_reason="identity_failure"),
         ],
         "coordinator": {"available": True, "active_job_count": 0,
                         "budgets": {"checkpoint": 1, "checkpoint_vsx": 1, "paloalto": 1},
                         "recent_jobs": [
-                            {"job_id": "job-uitest-1", "vendor": "checkpoint", "status": "completed",
-                             "scope": "inventory", "started_at": _ISO, "finished_at": _ISO},
-                            {"job_id": "job-uitest-2", "vendor": "paloalto", "status": "failed",
-                             "scope": "inventory", "started_at": _ISO, "finished_at": _ISO}]},
+                            {"job_id": "job-uitest-1", "vendor": "checkpoint", "workflow_scope": "inventory",
+                             "provenance": "manual", "status": "completed", "created_at": _ISO,
+                             "admitted_at": _ISO, "completed_at": _ISO, "coalesced_to": None, "reason": None},
+                            {"job_id": "job-uitest-2", "vendor": "paloalto", "workflow_scope": "inventory",
+                             "provenance": "scheduled", "status": "failed", "created_at": _ISO,
+                             "admitted_at": _ISO, "completed_at": _ISO, "coalesced_to": None,
+                             "reason": "connect_timeout"}]},
         "scheduler": {"configured": True, "enabled": False, "workflow_count": 1,
-                      "workflows": [{"name": "nightly-inventory", "vendor": "checkpoint",
-                                     "enabled": False, "interval_minutes": 1440,
-                                     "provenance": "runtime_root_policy"}]},
+                      "workflows": [{"workflow": "checkpoint", "interval_minutes": 1440}]},
         "default_concurrency_budgets": {"checkpoint": 1, "checkpoint_vsx": 1, "paloalto": 1, "_default": 1},
         "lifecycle_state_labels": {"DISCOVERED": "Discovered", "VALIDATED": "Validated",
                                    "STABLE": "Stable", "EXCLUDED": "Excluded", "REMOVED": "Removed"},

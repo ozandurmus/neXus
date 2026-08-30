@@ -127,6 +127,49 @@ def _dig(obj, *keys):
     return obj
 
 
+def test_discovery_fixture_entities_match_the_real_builder_shape(rendered_html):
+    """discovery_fixture_shape_drift regression: discovery_ui.json is
+    hand-authored and injected via a monkeypatch (unlike
+    inventory_exclusions.json, which flows through the real builder), so a
+    key-name mismatch here is invisible to every other check in this file --
+    the harness would keep passing on a payload static/app.js's
+    renderDiscoveryModule() cannot actually read. Directly compare the
+    fixture's key set against a real build_discovery_capability_payload()
+    call.
+    """
+    from utils.capability_registry import CapabilityProfile, CapabilityStore, ShellType
+    from utils.collection_executor import CollectionCoordinator, Provenance
+    from utils.discovery_capability_ui import build_discovery_capability_payload
+    from utils.discovery_lifecycle import LifecycleStore
+
+    lifecycle = LifecycleStore()
+    lifecycle.observe("checkpoint", "REAL-SHAPE-PROBE", confidence=50)
+    capability = CapabilityStore()
+    capability.put(CapabilityProfile(
+        vendor="checkpoint", canonical_id="REAL-SHAPE-PROBE",
+        shell_type=ShellType.EXPERT, platform_family="gaia",
+    ))
+    coordinator = CollectionCoordinator()
+    coordinator.admit("checkpoint", "checkpoint", ["REAL-SHAPE-PROBE"], provenance=Provenance.MANUAL.value)
+    coordinator.release(coordinator.active_jobs()[0].job_id)
+
+    real_payload = build_discovery_capability_payload(lifecycle, capability, coordinator)
+    real_entity_keys = set(real_payload["entities"][0])
+    real_job_keys = set(real_payload["coordinator"]["recent_jobs"][0])
+
+    html = rendered_html.read_text(encoding="utf-8")
+    fixture_payload = _const(html, "discoveryUiData")
+    assert fixture_payload["entities"], "fixture must carry at least one entity"
+    for entity in fixture_payload["entities"]:
+        assert set(entity) == real_entity_keys, (
+            f"fixture entity keys {sorted(entity)} != real builder keys {sorted(real_entity_keys)}"
+        )
+    for job in fixture_payload["coordinator"]["recent_jobs"]:
+        assert set(job) == real_job_keys, (
+            f"fixture job keys {sorted(job)} != real builder keys {sorted(real_job_keys)}"
+        )
+
+
 @pytest.mark.skipif(_bun() is None, reason="bun not installed")
 @pytest.mark.skipif(
     not HARNESS_DEPS.exists(),
