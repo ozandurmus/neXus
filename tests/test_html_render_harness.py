@@ -29,6 +29,7 @@ HARNESS_DEPS = ROOT / "tools" / "render-harness" / "node_modules" / "happy-dom"
 _PAYLOAD_CONSTS = (
     "rawData", "configUiData", "complianceUiData",
     "cryptoUiData", "projectPlanData", "discoveryUiData",
+    "exclusionsUiData",
 )
 
 

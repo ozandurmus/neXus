@@ -2412,6 +2412,32 @@ function currentConfigurationFleet() {
 }
 
 
+// overview_device_lifecycle_enrichment (0.6.1C Inventory UX, increment 1):
+// aggregate the already-collected, already-reviewed model/sw_version fields
+// by (vendor, model, sw_version) family -- never a raw per-device row, never
+// hostname/serial -- keeping Overview a fleet-summary surface. Per-device
+// drill-down already exists in Configuration and is not duplicated here.
+function deviceLifecycleFamilies() {
+    const devices = Array.isArray(configUiData?.devices) ? configUiData.devices : [];
+    const byFamily = new Map();
+    for (const device of devices) {
+        if (device.entity_type === "virtual_system") continue; // count physical/host rows only
+        const vendor = device.vendor || "Unknown vendor";
+        const model = device.model || "Unknown model";
+        const swVersion = device.sw_version || "Unknown version";
+        const key = `${vendor} ${model} ${swVersion}`;
+        const existing = byFamily.get(key);
+        if (existing) {
+            existing.count += 1;
+        } else {
+            byFamily.set(key, { vendor, model, sw_version: swVersion, count: 1 });
+        }
+    }
+    return Array.from(byFamily.values()).sort((a, b) =>
+        b.count - a.count || a.vendor.localeCompare(b.vendor) || a.model.localeCompare(b.model));
+}
+
+
 function renderOverviewModule() {
     const inventoryStats = inventoryOverviewStats();
     const fleet = currentConfigurationFleet();
@@ -2537,6 +2563,23 @@ function renderOverviewModule() {
         } else {
             complianceSummary.innerHTML = `<div class="empty-state compact"><span>No compliance control-coverage roll-up in this export.</span></div>`;
         }
+    }
+
+    const deviceFamilies = document.getElementById("overviewDeviceFamilies");
+    if (deviceFamilies) {
+        const families = available ? deviceLifecycleFamilies() : [];
+        deviceFamilies.innerHTML = families.length
+            ? `<div class="table-wrap"><table class="data-table"><thead><tr>
+                <th>Vendor</th><th>Model</th><th>Software version</th><th>Devices</th>
+            </tr></thead><tbody>${families.map(row => `
+                <tr>
+                    <td>${escapeHtml(row.vendor)}</td>
+                    <td>${escapeHtml(row.model)}</td>
+                    <td>${escapeHtml(row.sw_version)}</td>
+                    <td>${escapeHtml(formatNumber(row.count))}</td>
+                </tr>
+            `).join("")}</tbody></table></div>`
+            : `<div class="empty-state compact"><span>No model/version evidence in this export.</span></div>`;
     }
 }
 

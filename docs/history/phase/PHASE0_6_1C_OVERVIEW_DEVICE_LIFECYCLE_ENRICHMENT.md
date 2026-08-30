@@ -2,10 +2,106 @@
 
 ## Status
 
-**PLANNED — architecture contract frozen 2026-08-30**
+**DONE (Increment 1) — AUTOMATED_VALIDATED 2026-08-30; Increment 2 deferred**
 
 Product baseline: `0.7.6a AUTOMATED_VALIDATED`. Backlog id:
-`overview_device_lifecycle_enrichment` (P1, `planned`).
+`overview_device_lifecycle_enrichment` (P1, was `planned`, now
+`automated_validated`).
+
+### Closure evidence (2026-08-30)
+
+**Increment 1 — shipped, pure client-side, zero schema change.** The
+per-device `vendor`/`model`/`sw_version` fields were already present, in the
+exact shape needed, on `configUiData.devices` — the same flat array
+`static/app.js` already reads for the Configuration module's device tree
+(`configDeviceItemHtml`). This meant Increment 1 needed **no new Python
+payload builder, no new `__..._JSON_PLACEHOLDER__` sentinel, and no
+`main.py` wiring at all** — a smaller footprint than the implementation plan
+assumed. A new `deviceLifecycleFamilies()` helper in `static/app.js`
+aggregates `configUiData.devices` by `(vendor, model, sw_version)`,
+explicitly excluding `entity_type === "virtual_system"` rows (a VSX virtual
+system inherits its physical host's `model`/`sw_version` verbatim in
+`utils/config_ui.py`, so counting it too would double-count the same
+physical device). Rendered as a new "Fleet composition" card on Overview via
+`overviewDeviceFamilies`, sorted by count descending (AC-1).
+
+Privacy (AC-2): the aggregation only ever touches `vendor`/`model`/
+`sw_version`/`entity_type` — never `serial`/`management_ip`/`device_name`/
+`id`/`name`, which stay a Configuration-module concern. Verified by a test
+that inspects the extracted function body for those forbidden field-name
+substrings, not just a manual read.
+
+No new device command or collection path (AC-3) — Increment 1 touches no
+Python collector code at all.
+
+**Increment 2 — deferred, design documented below, not implemented.** No
+internet access was available in this implementation session to identify
+and vet a maintained public CP/PAN EOL dataset, and the contract's own gate
+is explicit: implement only against a *vetted* dataset, otherwise defer with
+the design written up (not silently dropped) — so per that gate, this
+defers. Design sketch for whoever picks this up:
+
+- **Data shape**: a small static, versioned, in-repo table (e.g.
+  `utils/eos_release_catalog.py`, mirroring the `compliance_rulepack.py` /
+  `framework_catalog.py` static-versioned-dataset pattern already
+  established in this codebase), keyed by a normalized `(vendor,
+  model_family)` tuple — not exact model string, since e.g. "PA-3220" and
+  "PA-3220-FIPS" share an EOL date. Each entry: `eos_date` (ISO date),
+  `eol_support_date` (if distinct from EOS), `suggested_next_release`
+  (a free-text hint, not a guarantee), and `source_reference` (where the
+  date came from — vendor's own published EOL/EOS bulletin URL or doc id,
+  for auditability).
+  - Do **not** key by exact `sw_version` — vendor EOL tables are keyed by
+    major train (e.g. "R81.10" as a train, not each build within it) and by
+    hardware model family, two largely independent axes; conflating them
+    into one lookup key would need two separate tables, not one.
+  - Because the OS-version axis needs its own maintenance cadence
+    independent of the hardware-model axis, the two should probably be two
+    tables from the start (`model_eos_catalog` / `os_train_support_catalog`)
+    even though this design sketch shows them conceptually as one — a
+    real vetted dataset will settle that shape once it exists, not before.
+- **Join logic**: `deviceLifecycleFamilies()`'s existing aggregation groups
+  by `(vendor, model, sw_version)` already; a second pass would map each
+  group's `(vendor, model)` through the catalog to attach EOS guidance,
+  independent of whether `sw_version` matched anything (a device on an
+  unlisted software train still gets hardware EOS guidance).
+- **Provenance/trust**: every row must be traceable to a vendor's own
+  published statement, not inferred/guessed — the same no-fabrication
+  standard as the rest of this evidence platform's compliance content.
+  Consider requiring `source_reference` non-empty as a load-time validation,
+  matching `compliance_check_pack.py`'s fail-closed pattern for a malformed
+  entry.
+- **UI**: an additional column or a secondary badge on the same
+  "Fleet composition" card (`overviewDeviceFamilies`) — no new card/module
+  needed.
+- **Egress**: confirmed explicitly out of scope for any implementation --
+  no live vendor API/internet call, ever; static dataset shipped in-repo
+  only (AC-4 satisfied by this write-up existing, per the contract's own
+  gate: "explicitly deferred with its design written up — not silently
+  dropped").
+
+Split into a new backlog item `overview_eos_release_guidance` (see
+`project/backlog.json`) rather than left ambiguously inside this "done"
+item.
+
+Evidence: 8 new tests in
+`tests/test_phase0_6_1c_overview_device_lifecycle_enrichment.py`, including
+two that execute the real `deviceLifecycleFamilies()` function through a
+real JS engine (`bun`, no DOM needed) against a synthetic device list,
+proving the aggregation/sort/exclusion logic actually behaves as claimed —
+not just source-string presence checks. Also fixed a gap from the prior
+`inventory_exclusions_ui` build: `exclusionsUiData` was missing from
+`tests/test_html_render_harness.py`'s `_PAYLOAD_CONSTS` JSON-validity check
+list. Full suite: 611 passed, 2 skipped, 2 failed (both pre-existing and
+unrelated — same two tests already documented against the unmodified
+baseline in prior 0.6.x closures). Net +8 from baseline 603, zero
+regressions. The existing `tests/fixtures/uitest/configuration_ui.json`
+already carries 2 distinct device families (Check Point `CP-6900`/`R81.20`,
+Palo Alto `PA-5220`/`11.1.3`), so **no fixture regeneration was needed** for
+AC-5. The `bun`/`happy-dom` DOM-execution half of the render harness could
+not run in this session's container (`window.eval is not a function` — the
+same pre-existing environment gap noted in prior 0.6.x closures, unrelated
+to this change) and is owed on a working local toolchain.
 
 ## Objective
 
