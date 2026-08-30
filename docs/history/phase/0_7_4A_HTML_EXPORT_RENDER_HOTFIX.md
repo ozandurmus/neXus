@@ -1,4 +1,4 @@
-# 0.7.4.1 — HTML export render hotfix (P0)
+# 0.7.4a — HTML export render hotfix (P0)
 
 **Status:** AUTOMATED_VALIDATED (2026-08-30) · **Track:** 0.7.x · **Movement:** ROOT_CAUSE + hotfix
 

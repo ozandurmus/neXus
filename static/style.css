@@ -3167,6 +3167,57 @@ html[data-theme="light"] {
     margin-top: 0;
 }
 
+/* 0.7.5 — compliance trend layer */
+.compliance-trend-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin: 8px 0 4px;
+}
+
+.compliance-trend-row.wide {
+    margin: 0 0 14px;
+}
+
+.compliance-trend-label {
+    font-size: 11px;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    color: var(--muted-2);
+}
+
+.compliance-sparkline {
+    width: 132px;
+    height: 30px;
+    flex: none;
+    color: var(--accent);
+    overflow: visible;
+}
+
+.compliance-trend-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+    background: color-mix(in srgb, var(--muted-2), transparent 82%);
+    color: var(--muted);
+}
+
+.compliance-trend-chip.up {
+    background: var(--success-soft);
+    color: var(--success);
+}
+
+.compliance-trend-chip.down {
+    background: var(--danger-soft);
+    color: var(--danger);
+}
+
 .compliance-card {
     margin-bottom: 14px;
     padding: 16px;

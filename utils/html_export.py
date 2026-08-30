@@ -3,6 +3,7 @@ import re
 from pathlib import Path
 
 from utils.config_ui import build_configuration_ui_payload
+from utils.compliance_history import append_run, load_history, summarise_overview
 from utils.compliance_posture import build_compliance_posture
 from utils.crypto_posture import build_crypto_posture
 from utils.discovery_capability_ui import build_discovery_capability_payload
@@ -67,6 +68,8 @@ def run_html_export(
     coordinator=None,
     scheduler_policy=None,
     data_root=None,
+    record_checkpoint=False,
+    run_id=None,
 ):
 
     info(">>> GENERATING HTML")
@@ -118,6 +121,9 @@ def run_html_export(
         # check can assert over unified.interfaces / unified.routes. Also covers
         # --render-only (it rebuilds from the same unified.json).
         unified_inventory=data if isinstance(data, list) else None,
+        # 0.7.5 — the trend ledger (read on every render; written only on a full
+        # checkpoint, below). Fail-safe: a missing/corrupt ledger -> [].
+        history=load_history(compliance_data_root),
     )
     # 0.6.1C Phase 3: additive discovery/capability/coordinator observability.
     # Callers that have not yet wired Phase 4 collector integration may omit
@@ -156,5 +162,18 @@ def run_html_export(
         html,
         encoding="utf-8",
     )
+
+    # 0.7.5 — append one aggregate roll-up record to the trend ledger. Only a
+    # full-integration checkpoint records; --render-only / --only / diagnostic
+    # renders pass record_checkpoint=False. Best-effort inside append_run.
+    if record_checkpoint and compliance_ui.get("available"):
+        append_run(
+            compliance_data_root,
+            summarise_overview(
+                compliance_ui.get("compliance_overview") or {},
+                run_id=run_id,
+                schema_version=compliance_ui.get("schema_version"),
+            ),
+        )
 
     info(f">>> HTML READY -> {output_html}")

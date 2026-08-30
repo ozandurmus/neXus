@@ -6,12 +6,13 @@ agreements and validation reports). `docs/history/INDEX.md` is the one-line
 timeline.
 
 - **Authoritative checkpoint:** 2026-08-30
-- **Product baseline:** `0.7.4 — framework_mappings: Requirement-Level Coverage` — AUTOMATED_VALIDATED (0.7.x VERIFY track)
-- **Latest hotfix:** `0.7.4.1` (2026-08-30) — the report's inline `<script>` was
-  broken by a placeholder-substitution collision (a `project/*.json` note
-  contains `__CRYPTO_JSON_PLACEHOLDER__`), which killed every module-nav button.
-  Fixed by a single-pass template fill; real-env click-through still owed.
-  `docs/history/phase/0_7_4_1_HTML_EXPORT_RENDER_HOTFIX.md`.
+- **Product baseline:** `0.7.5 — Compliance trend layer` — AUTOMATED_VALIDATED (0.7.x VERIFY track)
+- **Previous:** `0.7.4 — framework_mappings: Requirement-Level Coverage` — AUTOMATED_VALIDATED
+- **Hotfix `0.7.4a`** (2026-08-30) — the report's inline `<script>` was broken by
+  a placeholder-substitution collision (a `project/*.json` note contains
+  `__CRYPTO_JSON_PLACEHOLDER__`), which killed every module-nav button. Fixed by
+  a single-pass template fill; real-env click-through still owed.
+  `docs/history/phase/0_7_4A_HTML_EXPORT_RENDER_HOTFIX.md`.
 - **Engineering baseline:** `DEV.1` complete; `DEV.2.1` (non-interactive runtime config) — AUTOMATED_VALIDATED
 - **Product evidence baseline:** `0.6.1B.1.2` interactive Check Point configuration
   collection is REAL-ENVIRONMENT VALIDATED.
@@ -20,7 +21,38 @@ timeline.
 
 ## Active build
 
-`0.7.4 — framework_mappings: Requirement-Level Coverage` — **AUTOMATED_VALIDATED** (2026-08-29)
+`0.7.5 — Compliance trend layer` — **AUTOMATED_VALIDATED** (2026-08-30)
+Contract + impl record: `docs/history/phase/0_7_5_COMPLIANCE_TREND.md`.
+Design: `docs/design/COMPLIANCE_ASSIGNMENT_AND_FRAMEWORKS.md` §11 decision 9.
+Additive; no server; no collector; no device command; `COMPLIANCE_SCHEMA_VERSION`
+unchanged (repo additive-no-bump convention).
+
+Append-only ledger: each full `py .\main.py` checkpoint appends one aggregate
+roll-up record to `data/state/compliance_history.json` (RuntimeRoot state,
+gitignored). Every render then exposes `compliance_overview.history[]` (last 30,
+aggregates + ISO dates only — no identity) and `compliance_overview.trend` (delta
+vs the newest prior record, `null` with < 1 prior). Overview compliance card +
+Compliance KPI band show a sparkline + a "±N pts since <date>" chip once ≥ 2
+checkpoints exist. No backfill; no trend-scrubber UI (DEPLOY.1). Read path is
+**fail-safe** — a missing/corrupt ledger degrades to "no trend", never an error.
+
+- **`utils/compliance_history.py`** (new) — `load_history` / `summarise_overview`
+  / `append_run` / `history_view`; `HISTORY_SCHEMA_VERSION "0.7.5"`;
+  `MAX_RECORDS` 200, payload `PAYLOAD_RECORD_LIMIT` 30.
+- **`utils/compliance_posture.py`** — `build_compliance_posture(..., history=None)`;
+  `_compliance_overview` / `_empty_overview` append `history` + `trend`.
+- **`utils/html_export.py`** — reads the ledger every render; writes one record
+  only when `run_html_export(record_checkpoint=True)` (the full-checkpoint path
+  in `main.py`).
+- **`static/app.js` + `style.css`** — `complianceSparkline` + `complianceTrendChip`.
+
+Evidence (2026-08-30): pytest `547 passed / 3 skipped / 0 failed` (534 → +13);
+privacy gate PASS / 0; `render_sample.py` exit 0 (`history: []` / `trend: null`).
+Real-env: a live trend only appears after a second real full checkpoint — owed
+under `on_hardware_real_env_validation`.
+
+Predecessor `0.7.4 — framework_mappings: Requirement-Level Coverage` —
+**AUTOMATED_VALIDATED** (2026-08-29)
 Contract: `docs/history/phase/0_7_4_FRAMEWORK_REQUIREMENTS.md` (§10 impl record)
 Design: `docs/design/COMPLIANCE_ASSIGNMENT_AND_FRAMEWORKS.md` §9. Additive; no
 server; no new control/collector.
@@ -140,7 +172,7 @@ full regression run.)
 ## Automated test baseline
 
 ```
-534 passed / 3 skipped / 0 failed (Python 3.12)
+547 passed / 3 skipped / 0 failed (Python 3.12)
 Repository privacy gate: PASS / 0 on a clean checkout. Locally it flags the
 gitignored `data/` + `logs/` + `data/.support_hmac.key` that a test run
 creates — delete them before running the gate.
