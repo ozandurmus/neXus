@@ -466,6 +466,17 @@ def main(argv=None, *, runtime_services=None, provenance="manual", admission_run
         ),
     )
     parser.add_argument(
+        "--compliance-trend-reconstruct",
+        action="store_true",
+        help=(
+            "Offline retro-fill of compliance_overview.history from PAN configuration snapshots "
+            "already in the content-addressed store. PAN baseline rule-pack controls only "
+            "(no alignment, no CP, no assignment/waiver or CE.1 check replay); records are "
+            "stamped reconstructed=true and never affect the live trend delta. "
+            "No network, no credentials. Safe to re-run (idempotent)."
+        ),
+    )
+    parser.add_argument(
         "--scheduler-once",
         action="store_true",
         help=(
@@ -476,7 +487,8 @@ def main(argv=None, *, runtime_services=None, provenance="manual", admission_run
     args = parser.parse_args(argv)
 
     maintenance_modes = sum(bool(value) for value in (
-        args.repository_privacy_check, args.storage_analyze, args.storage_deduplicate
+        args.repository_privacy_check, args.storage_analyze, args.storage_deduplicate,
+        args.compliance_trend_reconstruct,
     ))
     if maintenance_modes > 1:
         parser.error("Choose only one repository/storage maintenance mode")
@@ -515,9 +527,14 @@ def main(argv=None, *, runtime_services=None, provenance="manual", admission_run
         or args.cp_config_probe
         or args.cp_config_collect
         or args.render_only
+        or args.compliance_trend_reconstruct
         or args.only != "all"
     ):
         parser.error("--scheduler-once cannot be combined with collection, render, or maintenance modes")
+    if args.compliance_trend_reconstruct and (
+        args.cp_config_probe or args.cp_config_collect or args.render_only or args.apply or args.only != "all"
+    ):
+        parser.error("--compliance-trend-reconstruct cannot be combined with collection/render modes")
 
     # Repository privacy validation is deliberately local/offline and returns
     # before RuntimeRoot creation, credential prompts, or any collector import.
@@ -604,6 +621,22 @@ def main(argv=None, *, runtime_services=None, provenance="manual", admission_run
         ">>> RUNTIME PATH FOUNDATION READY "
         f"(runtime_root={runtime_paths.runtime_root} normal_runtime=external history_cas=legacy_pending)"
     )
+
+    if args.compliance_trend_reconstruct:
+        from utils.compliance_history import append_reconstructed
+        from utils.compliance_trend_reconstruction import RECONSTRUCTION_SCOPE, reconstruct_pan_baseline_records
+        print(f"=== SECURITYEXPERT COMPLIANCE TREND RETRO-FILL ({RECONSTRUCTION_SCOPE}) — PHASE 0.7.7 ===\n")
+        records = reconstruct_pan_baseline_records()
+        appended = append_reconstructed(runtime_paths.data_root, records)
+        print(f"Reconstructed buckets found: {len(records)}")
+        print(f"New records appended:        {appended}")
+        print(f"Already present (skipped):   {len(records) - appended}")
+        print(
+            "\nScope: PAN devices only, the ten deterministic baseline rule-pack controls only. "
+            "No alignment, no CP, no assignment/waiver or CE.1 check replay. Records are stamped "
+            "reconstructed=true and never affect the live trend delta."
+        )
+        return
 
     from utils.collection_executor import (
         Provenance,

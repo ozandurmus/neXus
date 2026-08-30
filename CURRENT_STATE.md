@@ -6,133 +6,127 @@ agreements and validation reports). `docs/history/INDEX.md` is the one-line
 timeline.
 
 - **Authoritative checkpoint:** 2026-08-30
-- **Product baseline:** `0.7.6a — Render harness + uitest topology matrix` — AUTOMATED_VALIDATED (0.7.x VERIFY track)
-- **Previous:** `0.7.5 — Compliance trend layer` — AUTOMATED_VALIDATED
-- **Previous:** `0.7.4 — framework_mappings: Requirement-Level Coverage` — AUTOMATED_VALIDATED
+- **Product baseline:** `0.7.7 — Compliance trend retro-fill (PAN baseline
+  reconstruction)` — AUTOMATED_VALIDATED (0.7.x VERIFY track)
+- **Previous:** `DEV.3.1 — Linux worker image + Compose` — AUTOMATED_VALIDATED
+- **Previous:** `0.7.6a — Render harness + uitest topology matrix` — AUTOMATED_VALIDATED
 - **Hotfix `0.7.4a`** (2026-08-30) — **REAL_ENV_VALIDATED**. The report's inline
   `<script>` was broken by a placeholder-substitution collision (a `project/*.json`
   note contains `__CRYPTO_JSON_PLACEHOLDER__`), which killed every module-nav
   button. Fixed by a single-pass template fill; product owner confirmed a full
   checkpoint render on the corporate laptop — all tabs work.
   `docs/history/phase/0_7_4A_HTML_EXPORT_RENDER_HOTFIX.md`.
-- **Engineering baseline:** `DEV.1` complete; `DEV.2.1` (non-interactive runtime config) — AUTOMATED_VALIDATED
+- **Engineering baseline:** `DEV.1` complete; `DEV.2.1` (non-interactive runtime
+  config) — AUTOMATED_VALIDATED; `DEV.3.1` (Linux worker image + Compose) —
+  AUTOMATED_VALIDATED.
 - **Product evidence baseline:** `0.6.1B.1.2` interactive Check Point configuration
   collection is REAL-ENVIRONMENT VALIDATED.
+
+**Note on this file:** between the `671fd6c` merge (2026-08-30) and this
+checkpoint, twelve further builds landed on `origin/main` — several
+sessions ran without rewriting this file / `AI_HANDOVER.md` at close, so they
+were only ever recorded in `project/build_history.json`. This checkpoint
+re-syncs both files against `origin/main` HEAD. If this file's "Active build"
+section and `project/build_history.json`'s newest entry ever disagree again,
+`build_history.json` is authoritative — treat a disagreement as a docs-sync
+gap to close, not a reason to trust this file over it.
 
 ---
 
 ## Active build
 
-**None open.** Last landed: `immutable_store_permission — evidence-store
-snapshot-publish retry` — **AUTOMATED_VALIDATED** (2026-08-30, this session,
-not yet pushed). `ConfigEvidenceStore._write_snapshot`'s directory-publish
-`os.replace(tmp_dir, final_dir)` now retries on transient lock the same way
-`_ensure_blob`'s blob write already did (`_replace_with_retry`, 3 attempts,
-0.1s exponential backoff) — closes the standing P1 intermittent
-`PermissionError`. `project/build_history.json` entry `immutable_store_permission`.
+**None open.** Last landed: `compliance_trend_reconstruction — 0.7.7
+Compliance trend retro-fill` — **AUTOMATED_VALIDATED** (2026-08-30, this
+session). Follow-up to `0.7.5`'s deliberate no-backfill decision. Feasibility
+check found most of `build_compliance_posture`'s inputs (alignment, CP
+config, assignment/waiver policy, CE.1 checks) are not versioned per
+historical CAS snapshot — put the scope trade-off to the product owner
+directly, who chose narrow/labeled reconstruction over dropping the build or
+a broader unlabeled approximation. New
+`utils/compliance_trend_reconstruction.py` mines stored PAN
+effective-running snapshots, time-clusters them into synthetic checkpoints
+(CAS carries no `run_id`), and evaluates the ten deterministic
+`DEFAULT_RULE_PACK` baseline controls per entity through the exact same live
+evaluator dispatch a real checkpoint uses. Every record is stamped
+`reconstructed: true` / `reconstruction_scope: "pan_baseline_rule_pack_only"`
+and the trend delta never uses one as `prev`. New offline `main.py
+--compliance-trend-reconstruct` maintenance mode (no network, no
+credentials). `project/build_history.json` entry `compliance_trend_reconstruction`;
+contract + impl record `docs/history/phase/0_7_7_COMPLIANCE_TREND_RECONSTRUCTION.md`.
 
-Prior: `0.7.6a — Render harness + uitest topology matrix` —
-**AUTOMATED_VALIDATED** (2026-08-30), `origin/main` `671fd6c`.
-Contract + impl record: `docs/history/phase/0_7_6_RENDER_HARNESS.md` (§4).
+Twelve predecessor builds this cycle (all landed on `origin/main` between
+`671fd6c` and `101f75b`, detail in `project/build_history.json`, newest
+first):
 
-Motivated by `0.7.4a`: the report is one inline `<script>`; a parse failure or
-an early throw leaves every button dead while the page looks loaded, and nothing
-in CI parsed or ran that script.
+- `linux_container_image` (`101f75b`, `DEV.3.1`) — Linux worker image +
+  Compose: `python:3.12-slim` worker (idle by default), `docker-compose.yml`
+  pairing it with `nginx:1.27-alpine` over a shared loopback-only volume. No
+  collector/transport/retry/concurrency semantic change.
+- `pytest_feature_area_markers` (`5b49aa6`) — 7 pytest markers
+  (`inventory`/`configuration`/`compliance`/`discovery`/`render`/
+  `runtime_platform`/`security`) so `pytest -m <area>` runs a feature slice;
+  purely additive, zero test logic touched.
+- `inventory_exclusions_management_ui_backend` (`3463b71`) — write-path
+  backend only (`add_exclusion`/`restore_exclusion` + fail-closed audit
+  ledger), deliberately not wired into any HTTP-reachable surface pending
+  DEPLOY.1A auth. **Stays `in_progress`** in `project/backlog.json` by
+  design — the UI and OIDC/RBAC wiring are still owed.
+- `playwright_render_harness_fallback` (`996aeca`) — `tools/render-harness/
+  check_render_playwright.py`, a real-Chromium alternative to the bun+
+  happy-dom DOM-execution check for when that toolchain's script-eval shim
+  breaks against a newer bun/happy-dom pairing (as it does in this sandbox —
+  used directly by this session's own 0.7.7 validation).
+- `dev_python_env_tooling_friction` fix (`a593761`) — POSIX runtime-root
+  default + `pytest_one_shot.ps1` interpreter pin.
+- `uitest-fixture discovery_ui fix` (`2a18a3d`) — `discovery_ui.json` fixture
+  corrected to match the real builder shape.
+- `html_render_performance` (`e761c9d`) — opt-in stage timing + measured
+  profiling report.
+- `overview_device_lifecycle_enrichment` (`6dd82b7`) — fleet-composition
+  card, increment 1.
+- `inventory_exclusions_ui` (`ab5a9a5`) — read-only Exclusions module, phase 1.
+- `cp-identity-edges` review (`3e8af0e`) — CP identity-gate edge-case review,
+  no defect found.
+- `cp-unknown-platform` (`8b3fc28`) — CP platform classification propagated
+  into discovery lifecycle.
+- `cp-ha-runtime` (`7e25391`) — per-VS HA role probe + explicit direct-Clish
+  capability-gap signal.
+- `immutable_store_permission` (`cb2f6f5`) — evidence-store
+  snapshot-directory publish retry (this was "not yet pushed" in the prior
+  version of this file; it is pushed and landed as of this checkpoint).
 
-- **`tests/fixtures/uitest/`** (committed) — hand-authored, privacy-clean
-  **topology matrix** (fake names, RFC 5737 ranges), `0.7.6a`: CP standalone
-  gateway, ClusterXL (2 members active/standby), VSX host + virtual systems, VSX
-  cluster + shared virtual system, one UNAVAILABLE gateway; PAN single firewall,
-  HA pair, multi-vsys firewall, multi-vsys HA pair. Plus cluster-member
-  interface/route divergence, stale + disconnected inventory, the full alignment
-  class set, SAME/CHANGED/FIRST history, crypto PASS/FINDING/UNKNOWN, enforced +
-  advisory + WAIVED compliance. `unified.json` + injected `configuration_ui` /
-  `crypto_ui` / `discovery_ui` + `state/{compliance_checks,control_assignments,
-  compliance_history}.json` + `build_fixture.py` + `README.md` (growth rule).
-- **`scripts/render_uitest.py`** — renders the report from the bundle; injects
-  only the three builders whose real inputs are collector telemetry / PAN XML /
-  live stores. `build_compliance_posture`, `_fill_template`, `_script_json` run
-  for real.
-- **`tools/render-harness/check-render.mjs`** (bun + `happy-dom`) — parse-check
-  the inline `<script>`, execute it, assert `window.switchModule` exists, click
-  every `.module-nav-item` + inner tab (panels must switch, zero `console.error`).
-  `node_modules/` gitignored; `package.json` + `bun.lock` committed.
-- **`tests/test_html_render_harness.py`** (3) — every embedded payload is valid
-  JSON (no JS engine needed — the `0.7.4a` class); all six modules populated;
-  headless-navigation smoke test (`skipif` no `bun`).
-- **Governance** — `docs/AI_DEVELOPMENT_PROTOCOL.md` mandatory "HTML render
-  harness" section; `AGENTS.md` project-state-update rule gains
-  `tests/fixtures/uitest/`.
-- `utils/repository_privacy.py` + one repo-text test skip `node_modules`.
-
-Evidence (2026-08-30): pytest `551 passed / 3 skipped / 0 failed` (547 → +3);
-negative-tested (corrupt payload literal → FAIL parse; renamed nav handler →
-FAIL, panels don't activate); privacy gate PASS / 0; `render_sample.py` exit 0
-(unchanged — stays the empty-state check). No `main.py` change.
-
-Predecessors this cycle (all AUTOMATED_VALIDATED 2026-08-30; detail in
+Predecessors before that (all AUTOMATED_VALIDATED 2026-08-30; detail in
 `project/build_history.json`):
 
+- `0.7.6a — Render harness + uitest topology matrix` —
+  `docs/history/phase/0_7_6_RENDER_HARNESS.md` §4. `tests/fixtures/uitest/`
+  expanded to a full topology matrix (CP standalone/ClusterXL/VSX
+  host+cluster/UNAVAILABLE gateway; PAN single/HA/multi-vsys/multi-vsys HA);
+  new `test_all_topologies_present`.
+- `0.7.6 — HTML render harness` — `docs/history/phase/0_7_6_RENDER_HARNESS.md`.
+  `tools/render-harness/check-render.mjs` (bun + happy-dom) parse-checks the
+  inline `<script>`, clicks every nav module + tab, asserts no console errors.
 - `0.7.5 — Compliance trend layer` — `docs/history/phase/0_7_5_COMPLIANCE_TREND.md`.
-  New `utils/compliance_history.py` (append-only ledger
-  `data/state/compliance_history.json`, fail-safe read, cap 200, aggregates + ISO
-  dates only). `build_compliance_posture(..., history=)` →
-  `compliance_overview.history[]` + `.trend` (additive). `html_export` reads
-  every render, writes only on a full checkpoint
-  (`run_html_export(record_checkpoint=True)`). `app.js` sparkline + "±N pts since
-  <date>" chip. `COMPLIANCE_SCHEMA_VERSION` unchanged. Live trend only after a
-  *second* real checkpoint — owed under `on_hardware_real_env_validation`.
-- `0.7.4a — HTML export render hotfix (P0)` —
-  `docs/history/phase/0_7_4A_HTML_EXPORT_RENDER_HOTFIX.md`. **REAL_ENV_VALIDATED**
-  (product owner, corporate laptop). `html_export._fill_template` — one
-  single-pass template fill; a chained `str.replace()` had spliced the crypto
-  JSON into the `projectPlanData` string literal (a `project/*.json` note
-  contains `__CRYPTO_JSON_PLACEHOLDER__`) → `SyntaxError` → dead nav buttons.
+  Append-only ledger `data/state/compliance_history.json`;
+  `compliance_overview.history[]` + `.trend`; deliberately **no backfill**
+  (closed by `0.7.7` above).
+- `0.7.4a — HTML export render hotfix (P0)` — see header. **REAL_ENV_VALIDATED.**
 - `0.7.4 — framework_mappings: Requirement-Level Coverage` —
-  `docs/history/phase/0_7_4_FRAMEWORK_REQUIREMENTS.md`; design
-  `COMPLIANCE_ASSIGNMENT_AND_FRAMEWORKS.md` §9. `utils/framework_catalog.py` +
-  `compliance_overview.by_framework[].requirements[]` (coverage + posture) + UI
-  drill-down. Additive; `COMPLIANCE_SCHEMA_VERSION` unchanged.
+  `docs/history/phase/0_7_4_FRAMEWORK_REQUIREMENTS.md`.
 
-**Deferred:** a signed / user-authored framework pack (custom frameworks + a UI
-mapping editor) — `DEPLOY.1A`-gated, same class as the assignment editor and the
-CE.3 check editor.
+Earlier 0.7.x / 0.6.x predecessors: see `project/build_history.json` /
+`docs/history/INDEX.md` for the full timeline (0.7.3 CE.1 check engine, 0.7.2
+compliance follow-ups, 0.7.1b assignment/waivers, 0.7.1a control catalog,
+0.7.0 crypto-agility/PQC).
+
+**Deferred:** a signed / user-authored framework pack (custom frameworks + a
+UI mapping editor) — `DEPLOY.1A`-gated. CP-side trend reconstruction —
+blocked on a structured CP config projection existing at all (CP currently
+stores only redacted Gaia text; see `0_7_7` §2/§6).
 
 **Product trajectory (owner, 2026-08-29):** the end-state is a **write-capable
 device administration platform**; read-only now is a staging phase. Every
 VERIFY-plane design must keep a future enforce/remediate capability additive.
-
-Earlier 0.7.x predecessors (all AUTOMATED_VALIDATED 2026-08-29):
-
-- `0.7.3 — CE.1: User-Authored Compliance Check Engine` (+ crypto-source wire
-  + `unified.interfaces` / `unified.routes` wire) —
-  `docs/history/phase/0_7_3_COMPLIANCE_CHECK_ENGINE.md` (§11, §12); design
-  `docs/design/COMPLIANCE_CHECK_ENGINE.md` (D1–D16 resolved; CE.2/CE.3/CE.4
-  gated). A check is *data* over already-collected evidence; fail-closed pack;
-  safe selector grammar + 14 operators; `advisory` mode; `remediation` reserved.
-  Fast-follow #2 (2026-08-29): `build_compliance_posture(..., unified_inventory)`
-  joins each subject to its merged-inventory row(s) by normalised device
-  identity, vendor-scoped; the interface/route collections are load-restricted to
-  presence/count operators and render a count-only `observed` — no network
-  identity in the payload.
-- `0.7.2 — Compliance Follow-ups` — `docs/history/phase/0_7_2_COMPLIANCE_FOLLOWUPS.md`.
-  `password_policy` / `banner` (presence only) / `services` projection-extension
-  sections (no new collector) + 6 enrichment controls; framework filter chips +
-  inline Explain panel. `CURRENT_CONFIG_SCHEMA_VERSION → "0.7.2"` (PAN).
-- `0.7.1b — Compliance Assignment, Waivers & Coverage Roll-up` —
-  `docs/history/phase/0_7_1_COMPLIANCE_ASSIGNMENT.md`. File-based per-device
-  control assignment + waivers, +8 enrichment controls, additive
-  `compliance_overview` roll-up + `assignment_policy`, Overview card +
-  coverage / framework-readiness band.
-- `0.7.1a — Compliance Control Catalog & Framework Grouping` — the ten controls
-  moved into `utils/compliance_catalog.py` verbatim with `severity`, `rationale`
-  and real per-framework CIS / PCI-DSS / BDDK membership.
-- `0.7.0 — Cryptographic Posture, Crypto-Agility & PQC Readiness` —
-  `docs/history/phase/0_7_x_CRYPTO_AGILITY_PQC.md`. IKE/IPsec/TLS/cert facts from
-  the already-stored PAN XML → static crypto rule pack, additive
-  `build_crypto_posture` payload, one Compliance card. No new collector.
-
-Full timeline: `project/build_history.json` / `docs/history/INDEX.md`.
 
 ---
 
@@ -140,9 +134,10 @@ Full timeline: `project/build_history.json` / `docs/history/INDEX.md`.
 
 - `DEPLOY.1 — Ubuntu + Docker Server Migration & Git Repository Foundation` —
   **CONTRACT_FROZEN** (2026-08-27). No runtime behavior change before server
-  arrival (~1 week). Mandatory gates on arrival: OIDC viewer boundary, evidence
-  egress policy, CP strict host-key R2 validation, PAN TLS corporate-CA
-  validation.
+  arrival. `DEV.3.1` (this cycle) is the first container-migration slice
+  under this contract; the OIDC viewer boundary, evidence egress policy, CP
+  strict host-key R2 validation and PAN TLS corporate-CA validation gates are
+  still owed on server arrival.
   Handover: `docs/history/handover/DEPLOY_1_CONTRACT_FREEZE_HANDOVER_2026_08_27.md`
 - After the engineering-readiness checkpoint, product architecture proceeds
   toward `0.6.1C` follow-ups already validated in the 0.6.x track.
@@ -161,8 +156,11 @@ Full timeline: `project/build_history.json` / `docs/history/INDEX.md`.
    concurrency budget stays at 1 per vendor until this closes.
 2. Do **not** increase recurring polling frequency or concurrency before that
    audit closes.
-3. DEPLOY.1 gates are blocked on server availability (external, ~1 week).
+3. DEPLOY.1 gates are blocked on server availability (external).
 4. Corporate Git push/merge remains **human-controlled**.
+5. `inventory_exclusions_management_ui_backend` stays `in_progress` by design
+   — do not wire its write functions into any HTTP-reachable surface before
+   DEPLOY.1A's OIDC/RBAC boundary exists.
 
 ## Known xfails
 
@@ -175,7 +173,11 @@ full regression run.)
 ## Automated test baseline
 
 ```
-551 passed / 3 skipped / 0 failed (Python 3.12)
+645 passed / 2 skipped / 2 failed (Python 3.12)
+The 2 failures are pre-existing and unrelated to any build in this cycle:
+  tests/test_phase0_6_1c_discovery_capability_ui.py::
+    test_run_html_export_embeds_discovery_payload_without_leftover_placeholder
+  tests/test_phase0_7_5_compliance_trend.py::test_checkpoint_render_appends_one_record
 Repository privacy gate: PASS / 0 on a clean checkout. Locally it flags the
 gitignored `data/` + `logs/` + `data/.support_hmac.key` that a test run
 creates — delete them before running the gate.
@@ -183,6 +185,13 @@ creates — delete them before running the gate.
 
 Run one-shot and read from file (see `docs/AI_DEVELOPMENT_PROTOCOL.md`):
 `py -m pytest -q > pytest_result.log 2>&1`
+
+Render harness: `bun tools/render-harness/check-render.mjs <index.html>` is
+the primary check; when the bun+happy-dom `window.eval` shim breaks against
+the installed bun version (observed in the cloud sandbox this session), fall
+back to `python tools/render-harness/check_render_playwright.py <index.html>`
+(real Chromium via Playwright — `playwright_render_harness_fallback` build).
+Both are wired into `tests/test_html_render_harness.py`.
 
 ---
 
@@ -196,7 +205,10 @@ pre-server storage checkpoint:
 - `DEV.0.3A/B/B.1` runtime path foundation + artifact migration + direct-SSH
   closure — DONE / real-env validated.
 - `DEV.0.3C` History/CAS runtime boundary — DEFERRED / pre-server; not a
-  Corporate Git blocker.
+  Corporate Git blocker. (Config-evidence CAS still lives at repo-root
+  `data/configs` — `utils/config_evidence.py`'s `CONFIG_ROOT` default — not
+  under `RuntimeRoot`; the compliance-trend ledger already lives under
+  `RuntimeRoot`, so this deferral is CAS-specific, not repo-wide.)
 - `DEV.0.4 / 0.4.1` local repository privacy gate + runtime inventory exclusion
   policy — DONE; clean candidate, 0 findings.
 - `DEV.0.5A/B/B.1/B.2` authentication boundary + canonical config + repository-wide
