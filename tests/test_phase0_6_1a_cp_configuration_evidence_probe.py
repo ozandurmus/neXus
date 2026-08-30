@@ -146,6 +146,78 @@ def test_identity_gate_raises_confidence_when_hostname_agrees():
     assert result["name_relation"] == "shortname_match"
 
 
+import pytest
+
+
+# ---------------------------------------------------------------------------
+# cp_identity_edges (0.6.1B.1.2 / 0.6.1C) — _identity_relation() synthetic
+# edge-case matrix. Reviewed 2026-08-30: docs/history/phase/
+# PHASE0_6_1C_CP_IDENTITY_EDGES_REVIEW.md. Every pair below is fabricated,
+# not from any real estate.
+
+@pytest.mark.parametrize(
+    "expected,observed,relation",
+    [
+        # -- exact --------------------------------------------------------
+        ("fw-core-01", "fw-core-01", "exact"),
+        ("FW-CORE-01", "fw-core-01", "exact"),           # case folding
+        ("fw-core-01.", "fw-core-01", "exact"),           # trailing FQDN root dot
+        ("fw-core-01", "FW-CORE-01.", "exact"),
+        # -- shortname_match (FQDN vs short name) --------------------------
+        ("fw-core-01.corp.example.net", "fw-core-01", "shortname_match"),
+        ("fw-core-01", "fw-core-01.corp.example.net", "shortname_match"),
+        ("FW-CORE-01.corp.example.net", "fw-core-01.otherdomain.example", "shortname_match"),
+        # -- normalized_match (separator variance, no dot involved --
+        #    a dot is always FQDN-parsed as a domain boundary on both
+        #    sides, see test_identity_relation_dot_as_literal_separator_*
+        #    below, so it is deliberately excluded from this bucket) ------
+        ("fw-core-01", "fw_core_01", "normalized_match"),
+        ("fw_core_01", "fw core 01", "normalized_match"),
+        ("FW CORE 01", "fw-core-01", "normalized_match"),
+        # -- different_observed (genuinely different identity) -------------
+        ("fw-core-01", "fw-core-02", "different_observed"),
+        ("fw-core-01", "unrelated-device-name", "different_observed"),
+        # -- unavailable ----------------------------------------------------
+        ("fw-core-01", None, "unavailable"),
+        ("fw-core-01", "", "unavailable"),
+    ],
+)
+def test_identity_relation_synthetic_edge_case_matrix(expected, observed, relation):
+    assert probe._identity_relation(expected, observed) == relation
+
+
+def test_identity_relation_dot_as_literal_separator_stays_safe_not_a_false_exact():
+    """A dot inside the pre-first-dot segment is FQDN-parsed (domain-stripped)
+    consistently on both sides, per _normalize_host_token's contract. This
+    under-matches (falls to different_observed) rather than producing a
+    false HIGH-confidence match -- the safe direction, since a mismatch here
+    still yields MEDIUM/accepted, never a rejection (see
+    _identity_gate: relation only ever raises confidence, never blocks).
+    """
+    assert probe._identity_relation("fw.01", "fw-01") == "different_observed"
+
+
+def test_identity_gate_exact_shortname_and_normalized_relations_are_equally_high_confidence():
+    """The three matched relations are informational/audit granularity only
+    -- _identity_gate treats them identically. Documented finding, not a
+    defect: preserves the existing confidence vocabulary per the review's
+    correctness contract (AC-4).
+    """
+    base_kwargs = dict(hostname_success=True, version_success=True, authenticated=True)
+    for observed, expected_relation in [
+        ("fw-core-01", "exact"),
+        ("fw-core-01.corp.example.net", "shortname_match"),
+        ("fw_core_01", "normalized_match"),
+    ]:
+        target = probe.ProbeTarget(
+            role="standalone", device="fw-core-01", management_ip="10.0.0.1", object_type="gateway",
+        )
+        result = probe._identity_gate(target=target, observed_hostname=observed, **base_kwargs)
+        assert result["name_relation"] == expected_relation
+        assert result["confidence"] == "HIGH"
+        assert result["accepted"] is True
+
+
 def test_identity_gate_fails_closed_without_hostname_or_version_evidence():
     target = probe.ProbeTarget(
         role="standalone",
