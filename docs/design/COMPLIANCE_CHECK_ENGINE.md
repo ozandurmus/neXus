@@ -1,8 +1,10 @@
 # Compliance Check Engine — User-Authored Checks over Evidence (design)
 
 **Status:** DESIGN. Phased. `CE.1` buildable now (no server, no new device
-command); `CE.2` gated on the network-device command gate + the CP
-device-interaction-safety audit; `CE.3` gated on `DEPLOY.1A`.
+command); `CE.2` gated on the network-device command gate + a
+real-environment validation gate (the CP device-interaction-safety audit
+itself closed 2026-08-25, `backlog.json` `cp_device_interaction_safety`);
+`CE.3` gated on `DEPLOY.1A`.
 **Maps onto roadmap `0.7.x` feature:** `compliance_engine` (currently
 `in_progress` — 0.7.1a/b advanced it; this is the next major step).
 **Sibling designs:** `docs/design/COMPLIANCE_ASSIGNMENT_AND_FRAMEWORKS.md`
@@ -210,9 +212,10 @@ green / not-compliant, folded into the same coverage roll-up.
 
 ## 5. CE.2 — curated read-only command primitives (command-gate work)
 
-**Blocked on: the CP device-interaction-safety audit (P0) closing; each
-primitive through the 10-point command gate; a real-environment validation
-gate.**
+**Blocked on: each primitive through the 10-point command gate; a
+real-environment validation gate.** (The CP device-interaction-safety audit
+that formerly gated this closed 2026-08-25 — `backlog.json`
+`cp_device_interaction_safety`.)
 
 - **`configuration/command_primitives.py` (new)** — a static registry. Each
   entry: `primitive_id`, vendor, shell/context (e.g. Gaia Clish `clish -c`,
@@ -337,7 +340,7 @@ recorded against `project/backlog.json` (`compliance_check_engine` and siblings)
 | **D5** | Multi-step in CE.1 | **Yes** — `evidence.steps[]`, each = one `source` + optional `select` + one `assert`; `combine: all` (default) / `any`. | Pure data; it is the user's explicit "command series" ask over collected evidence. |
 | **D6** | Advisory / dry-run | **`mode: "advisory" \| "enforced"` (default `enforced`).** An `advisory` check's verdict is computed and shown with an "advisory" badge but excluded from the `compliance_overview` numerator **and** denominator and from framework coverage. | The only false-positive guard until the CE.3 live-test editor exists; lets an operator trial a check against real fleet data before it moves the score. |
 | **D7** | Waivers for user checks | **Reuse `control_assignments.json` `waivers[]`, keyed by check id.** `utils/control_assignment.py`'s known-id set is extended to include `load_compliance_checks(...)` ids so a dated approved waiver can target a user check. | One waiver mechanism, one audit surface. |
-| **D8** | CE.2 primitive execution | **Opt-in `--compliance-probe` mode only.** Promote to a normal-run stage only after a real-environment validation gate, and never before the CP device-interaction-safety audit (P0) closes. | Matches the `--cp-config-probe` precedent; device interaction stays explicit and bounded. |
+| **D8** | CE.2 primitive execution | **Opt-in `--compliance-probe` mode only.** Promote to a normal-run stage only after a real-environment validation gate. (The CP device-interaction-safety audit (P0) that used to gate this closed 2026-08-25.) | Matches the `--cp-config-probe` precedent; device interaction stays explicit and bounded. |
 | **D9** | CE.3 pack signing | **Requirement recorded; mechanism deferred to the `DEPLOY.1` security workstream** (detached signature, publisher trust store, fail-closed on invalid/untrusted). | Signing infra rides on the same trust/secrets work as `deploy1_oidc_viewer` and the CP/PAN trust gates. |
 | **D10** | Numbering | **`0.7.3` = the CE.1 build.** `CE.x` stays as design-doc phase labels; CE.2/CE.3/CE.4 get backlog entries, not point-release numbers yet. | — |
 | **D11** | Where the engine runs | In `compliance_posture.build_compliance_posture(...)`, a new `_subject_user_checks(...)` after `_subject_extended_controls`, appending to the same `subject["extended_controls"]` with `control_class: "user_check"`. The `compliance_overview` roll-up already iterates `controls + extended_controls`; it filters out `mode == "advisory"` rows from the score. | Minimal new surface; reuses assignment / waiver / roll-up plumbing. |

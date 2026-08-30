@@ -37,12 +37,12 @@ gap to close, not a reason to trust this file over it.
 
 **None open.** Last landed: `compliance_trend_reconstruction — 0.7.7
 Compliance trend retro-fill` — **AUTOMATED_VALIDATED** (2026-08-30, this
-session). Follow-up to `0.7.5`'s deliberate no-backfill decision. Feasibility
-check found most of `build_compliance_posture`'s inputs (alignment, CP
-config, assignment/waiver policy, CE.1 checks) are not versioned per
-historical CAS snapshot — put the scope trade-off to the product owner
-directly, who chose narrow/labeled reconstruction over dropping the build or
-a broader unlabeled approximation. New
+session, this merge). Follow-up to `0.7.5`'s deliberate no-backfill decision.
+Feasibility check found most of `build_compliance_posture`'s inputs
+(alignment, CP config, assignment/waiver policy, CE.1 checks) are not
+versioned per historical CAS snapshot — put the scope trade-off to the
+product owner directly, who chose narrow/labeled reconstruction over
+dropping the build or a broader unlabeled approximation. New
 `utils/compliance_trend_reconstruction.py` mines stored PAN
 effective-running snapshots, time-clusters them into synthetic checkpoints
 (CAS carries no `run_id`), and evaluates the ten deterministic
@@ -54,7 +54,35 @@ and the trend delta never uses one as `prev`. New offline `main.py
 credentials). `project/build_history.json` entry `compliance_trend_reconstruction`;
 contract + impl record `docs/history/phase/0_7_7_COMPLIANCE_TREND_RECONSTRUCTION.md`.
 
-Twelve predecessor builds this cycle (all landed on `origin/main` between
+Landed just before it, on a separate session/branch
+(`claude/cp-device-interaction-markdown-ret13v`, merged to `main` in
+`eb6cd81`, now folded into this branch by this merge): `DEV.3.2 —
+distributed per-endpoint lock` (`distributed_endpoint_lock`) —
+**AUTOMATED_VALIDATED** (2026-08-30). `CollectionCoordinator` now delegates
+to a `CoordinatorBackend`; the new `PostgresCoordinatorBackend`
+(`SECURITYEXPERT_COORDINATOR_BACKEND=postgres`) gives the single-process
+per-endpoint lock and per-vendor budget a cross-process equivalent via
+session-level `pg_advisory_lock`, opt-in and off by default. Real
+cross-process exclusion, crash reclamation, and preflight pooler-rejection
+were each verified against an actual local PostgreSQL 16 instance (real
+subprocess `SIGKILL`, a real `pgbouncer` in transaction mode).
+`docs/history/phase/DEV3_2_DISTRIBUTED_ENDPOINT_LOCK.md`. That same
+branch also corrected a standing documentation-staleness bug: the CP
+device-interaction-safety audit (P0) actually closed 2026-08-25 (with its
+`collection_execution_coordinator` follow-on REAL_ENV_VALIDATED 2026-08-27),
+but `CURRENT_STATE.md`, the old `AI_HANDOVER.md`, `docs/ARCHITECTURE.md` and
+`docs/design/COMPLIANCE_CHECK_ENGINE.md` all kept citing it as an open P0
+blocker — see "Standing priorities and blockers" below, now corrected.
+
+Prior: `immutable_store_permission — evidence-store snapshot-publish retry`
+— **AUTOMATED_VALIDATED** (2026-08-30). `ConfigEvidenceStore._write_snapshot`'s
+directory-publish `os.replace(tmp_dir, final_dir)` now retries on transient
+lock the same way `_ensure_blob`'s blob write already did
+(`_replace_with_retry`, 3 attempts, 0.1s exponential backoff) — closes the
+standing P1 intermittent `PermissionError`. `project/build_history.json`
+entry `immutable_store_permission`.
+
+Twelve further predecessor builds this cycle (all landed on `origin/main` between
 `671fd6c` and `101f75b`, detail in `project/build_history.json`, newest
 first):
 
@@ -151,12 +179,25 @@ VERIFY-plane design must keep a future enforce/remediate capability additive.
 
 ## Standing priorities and blockers
 
-1. **CP device-interaction-safety audit (P0)** — must complete before any
-   recurring scheduling or concurrency increase. The admission coordinator
-   concurrency budget stays at 1 per vendor until this closes.
-2. Do **not** increase recurring polling frequency or concurrency before that
-   audit closes.
-3. DEPLOY.1 gates are blocked on server availability (external).
+1. **CP device-interaction-safety audit (P0)** — CLOSED (`backlog.json`
+   `cp_device_interaction_safety`, AUTOMATED_VALIDATED 2026-08-25;
+   `collection_execution_coordinator` REAL_ENV_VALIDATED 2026-08-27). This
+   line stayed stale here after both closed — corrected 2026-08-30. Any
+   recurring-scheduling / concurrency-budget-increase build still needs its
+   own real-environment evidence (not a reopened audit).
+   The single-process coordinator's admission model now has a cross-process
+   equivalent: `distributed_endpoint_lock` (P0) reached AUTOMATED_VALIDATED
+   2026-08-30 (`docs/history/phase/DEV3_2_DISTRIBUTED_ENDPOINT_LOCK.md`) —
+   `SECURITYEXPERT_COORDINATOR_BACKEND=postgres` opts a `CollectionCoordinator`
+   into session-level Postgres advisory locks for cross-process endpoint
+   exclusion and budget admission; default (`memory`) is unchanged. Real
+   multi-container-against-a-real-MDS evidence remains owed before DONE —
+   server-blocked (DEPLOY.1, external). The CAS metadata index / run
+   manifests / last-known-good half is split out as
+   `distributed_evidence_store_migration` (P0, `planned`, its own contract).
+2. The admission coordinator concurrency budget stays at 1 per vendor pending
+   its own real-environment evidence — unaffected by the above.
+3. DEPLOY.1 gates are blocked on server availability (external, ~1 week).
 4. Corporate Git push/merge remains **human-controlled**.
 5. `inventory_exclusions_management_ui_backend` stays `in_progress` by design
    — do not wire its write functions into any HTTP-reachable surface before
