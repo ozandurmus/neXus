@@ -207,6 +207,15 @@
       "note": "Split out 2026-08-30 from inventory_exclusions_ui on that contract's own closure (docs/history/phase/PHASE0_6_1C_INVENTORY_EXCLUSIONS_UI.md, Definition of done): the read-only Exclusions view (phase 1) is done; this is phase 2 -- a controlled add/restore workflow with a mandatory reason and an audit trail, writing into state/inventory_exclusions.json. Same write-boundary class as compliance_assignment_ui_and_registry: needs the app server + DEPLOY.1A OIDC/RBAC (only an authorised role edits exclusions) + a persistent store, and its own dedicated design pass (schema for the audit log, concurrent-write safety, InventoryExclusionPolicy's existing _validate_identity constraints become load-bearing once a write path exists). Not buildable standalone pre-DEPLOY.1A."
     },
     {
+      "id": "overview_eos_release_guidance",
+      "category": "Inventory UX",
+      "title": "Overview: static EOS/EOL date + suggested-next-release guidance by model family (Increment 2)",
+      "status": "planned",
+      "priority": "P2",
+      "target": "0.6.1C / Inventory UX follow-up",
+      "note": "Split out 2026-08-30 from overview_device_lifecycle_enrichment on that contract's own gate (docs/history/phase/PHASE0_6_1C_OVERVIEW_DEVICE_LIFECYCLE_ENRICHMENT.md, Increment 2 design write-up): Increment 1 (model/sw_version family aggregation on Overview) shipped; this is the deferred EOS/EOL half. Blocked on identifying and vetting a maintained public CP/PAN EOL dataset -- no live vendor API/internet call is ever acceptable (read-only, no-egress product posture), only a static in-repo table sourced from each vendor's own published EOL bulletins with a source_reference per entry (fail-closed on a missing provenance field, matching compliance_check_pack.py's pattern). Likely needs two separate tables (hardware model-family EOS vs. OS-train support window), not one, since those are independent maintenance axes. UI: an additional column/badge on the existing 'Fleet composition' Overview card -- no new card or module needed."
+    },
+    {
       "id": "discovery_fixture_shape_drift",
       "category": "Reliability / Test Infrastructure",
       "title": "tests/fixtures/uitest/discovery_ui.json entity keys drift from the real discovery_capability_ui builder shape",
@@ -395,10 +404,10 @@
       "id": "overview_device_lifecycle_enrichment",
       "category": "Inventory UX",
       "title": "Overview enrichment: OS version, model, EOS and recommended target release",
-      "status": "planned",
+      "status": "automated_validated",
       "priority": "P1",
       "target": "0.6.1C / Inventory UX",
-      "note": "Add vendor-appropriate OS version and model fields to Overview; if globally available, map model families to EOS dates and suggested next release guidance without exposing sensitive identities. Contract frozen 2026-08-30: docs/history/phase/PHASE0_6_1C_OVERVIEW_DEVICE_LIFECYCLE_ENRICHMENT.md -- increment 1 (this contract, in scope) surfaces already-collected model/sw_version aggregated by (vendor, model, sw_version) family on Overview, no new collection; increment 2 (EOS/next-release mapping) is design-only here, gated on finding a vetted static dataset, else split into its own follow-up item. Not yet implemented."
+      "note": "AUTOMATED_VALIDATED 2026-08-30 (increment 1 only). Contract: docs/history/phase/PHASE0_6_1C_OVERVIEW_DEVICE_LIFECYCLE_ENRICHMENT.md. New deviceLifecycleFamilies() in static/app.js aggregates the already-embedded configUiData.devices by (vendor, model, sw_version), excluding virtual_system rows (they inherit the physical host's model/sw_version verbatim, so counting them would double-count one device). Rendered as a new 'Fleet composition' card on Overview. Pure client-side -- no new Python payload builder, no new sentinel, no main.py wiring, no schema bump; the fields were already present on configUiData.devices for the Configuration module. 8 new tests, 2 of which execute the real aggregation function through a real JS engine (bun) against a synthetic device list, not just source-string presence. Existing tests/fixtures/uitest/configuration_ui.json already had 2 distinct families -- no fixture regeneration needed. Also fixed a gap from the prior inventory_exclusions_ui build: exclusionsUiData was missing from the render harness's JSON-validity check list. py -m pytest -q: 611 passed, 2 skipped, 2 failed (both pre-existing/unrelated) -- net +8, zero regressions. Increment 2 (EOS/next-release mapping) deferred: no internet access in this session to identify/vet a public CP/PAN EOL dataset; full design (table shape, join logic, provenance requirement) written up in the contract's closure section and split into overview_eos_release_guidance."
     },
     {
       "id": "failover_readiness_assessment",
