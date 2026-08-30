@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 from utils.config_evidence import ConfigEvidenceStore, sha256_bytes
@@ -46,6 +47,62 @@ def test_same_snapshot_reuses_single_content_addressed_object(tmp_path):
 
     objects = [p for p in store.artifact_root.rglob("*") if p.is_file()]
     assert len(objects) == 1
+
+
+def test_snapshot_publish_self_heals_transient_permission_error(tmp_path, monkeypatch):
+    """A transient lock on the final directory rename must retry, not fail the run.
+
+    Regression for the intermittent local immutable evidence-store
+    PermissionError: os.replace(tmp_dir, final_dir) previously had no retry,
+    unlike the content-addressed blob write beside it.
+    """
+    store = ConfigEvidenceStore(tmp_path / "configs")
+    real_replace = os.replace
+    dir_rename_attempts = {"count": 0}
+
+    def flaky_replace(src, dst):
+        # Only the final metadata-directory publish (a directory rename) is
+        # the target of this regression; leave the blob write untouched.
+        if Path(src).is_dir():
+            dir_rename_attempts["count"] += 1
+            if dir_rename_attempts["count"] == 1:
+                raise PermissionError("simulated transient AV/indexer lock")
+        return real_replace(src, dst)
+
+    monkeypatch.setattr("utils.config_evidence.os.replace", flaky_replace)
+
+    result = store.write_xml_snapshot(
+        source="panos-direct", entity_id="SER1", artifact_type="effective",
+        artifact_name="effective.xml", content=XML_A, method="test",
+    )
+
+    assert dir_rename_attempts["count"] == 2
+    assert result.change_state == "first"
+    assert result.directory.exists()
+    assert (result.directory / "metadata.json").exists()
+
+
+def test_snapshot_publish_raises_after_exhausting_retries(tmp_path, monkeypatch):
+    store = ConfigEvidenceStore(tmp_path / "configs")
+
+    def always_locked(src, dst):
+        raise PermissionError("simulated persistent lock")
+
+    monkeypatch.setattr("utils.config_evidence.os.replace", always_locked)
+    monkeypatch.setattr("utils.config_evidence.time.sleep", lambda *_: None)
+
+    try:
+        store.write_xml_snapshot(
+            source="panos-direct", entity_id="SER1", artifact_type="effective",
+            artifact_name="effective.xml", content=XML_A, method="test",
+        )
+        assert False, "expected PermissionError to propagate after retries are exhausted"
+    except PermissionError:
+        pass
+
+    entity_dir = store._entity_dir("panos-direct", "SER1")
+    leftovers = [p for p in entity_dir.iterdir()] if entity_dir.exists() else []
+    assert not any(p.name.startswith(".tmp-") for p in leftovers)
 
 
 def test_changed_snapshot_preserves_both_unique_versions(tmp_path):

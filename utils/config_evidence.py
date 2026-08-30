@@ -161,9 +161,30 @@ class ConfigEvidenceStore:
                 return metadata_path, payload
         return None
 
+    @staticmethod
+    def _replace_with_retry(
+        tmp_path: Path, final_path: Path, *, max_retries: int = 3, retry_delay_seconds: float = 0.1
+    ) -> None:
+        """``os.replace`` with bounded retry on transient lock failures.
+
+        Windows antivirus/indexer processes can briefly hold a newly written
+        file or directory open, turning a normally-atomic rename into an
+        intermittent ``PermissionError``/``OSError``. Retrying with a short
+        backoff self-heals that case; a persistent failure still raises.
+        """
+        for attempt in range(max_retries):
+            try:
+                os.replace(tmp_path, final_path)
+                return
+            except (OSError, PermissionError):
+                if attempt < max_retries - 1:
+                    time.sleep(retry_delay_seconds * (2 ** attempt))
+                    continue
+                raise
+
     def _ensure_blob(self, *, content: bytes, digest: str) -> tuple[Path, bool]:
         """Write content-addressed blob with concurrent-safe fallback handling.
-        
+
         Multiple workers may attempt to write the same digest (identical content).
         This method is safe under concurrency:
         - If blob_path exists with matching digest, return it (another worker won).
@@ -172,7 +193,7 @@ class ConfigEvidenceStore:
         """
         blob_path = self._blob_path(digest)
         blob_path.parent.mkdir(parents=True, exist_ok=True)
-        
+
         # Check if blob already exists (common case for concurrent de-duplication).
         if blob_path.exists():
             if sha256_file(blob_path) != digest:
@@ -182,18 +203,18 @@ class ConfigEvidenceStore:
         # Attempt to write new blob with retry on concurrent lock failures.
         max_retries = 3
         retry_delay_seconds = 0.1
-        
+
         for attempt in range(max_retries):
             tmp_blob = blob_path.parent / f".tmp-{digest}-{uuid.uuid4().hex[:8]}"
             try:
                 tmp_blob.write_bytes(content)
                 if sha256_file(tmp_blob) != digest:
                     raise RuntimeError("Configuration object hash changed while writing")
-                
+
                 # Attempt atomic replace. On Windows, concurrent writers may race here.
                 os.replace(tmp_blob, blob_path)
                 return blob_path, True
-                
+
             except (OSError, PermissionError) as exc:
                 # Cleanup temporary blob if it exists.
                 try:
@@ -201,7 +222,7 @@ class ConfigEvidenceStore:
                         tmp_blob.unlink()
                 except OSError:
                     pass
-                
+
                 # Check if another concurrent writer already succeeded.
                 if blob_path.exists():
                     try:
@@ -210,15 +231,15 @@ class ConfigEvidenceStore:
                             return blob_path, False
                     except (OSError, RuntimeError):
                         pass
-                
+
                 # Retry on transient lock if not the final attempt.
                 if attempt < max_retries - 1:
                     time.sleep(retry_delay_seconds * (2 ** attempt))
                     continue
-                
+
                 # Final attempt failed; raise the original exception.
                 raise
-        
+
         # Should not reach here, but fallback.
         raise RuntimeError(f"Failed to write configuration blob after {max_retries} attempts")
 
@@ -324,7 +345,7 @@ class ConfigEvidenceStore:
                 encoding="utf-8",
             )
 
-            os.replace(tmp_dir, final_dir)
+            self._replace_with_retry(tmp_dir, final_dir)
         except Exception:
             shutil.rmtree(tmp_dir, ignore_errors=True)
             # Never delete blob_path here. Another already-published snapshot may
