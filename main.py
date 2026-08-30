@@ -63,6 +63,7 @@ _ARTIFACT_PRODUCERS = {
 # itself. A full `--only all` checkpoint has no prerequisites.
 _MODE_PREREQUISITES = {
     "render-only": ("unified.json",),
+    "restore-readiness-check": ("unified.json",),
     "cp-config-probe": ("cp_telemetry.json", "cp.json", "vsx.json"),
     "cp-config-collect": ("cp.json", "vsx.json"),
     "cp": ("vsx.json", "panorama_runtime.json"),
@@ -450,6 +451,18 @@ def main(argv=None, *, runtime_services=None, provenance="manual", admission_run
         ),
     )
     parser.add_argument(
+        "--restore-readiness-check",
+        action="store_true",
+        help=(
+            "RB.0 local/offline restore-readiness assessment: 'if this device died "
+            "right now, what do we actually have?' Reads the latest local unified.json "
+            "only -- no network access, no credentials, no new device command, no "
+            "recovery artifact is collected. Writes data/state/restore_readiness.json. "
+            "Every device is UNPROTECTED until RB.1+ ship a recovery store to report "
+            "against; that count is the point of running this before then."
+        ),
+    )
+    parser.add_argument(
         "--storage-analyze",
         action="store_true",
         help="Analyze configuration history/object storage without collecting devices or changing files.",
@@ -491,6 +504,7 @@ def main(argv=None, *, runtime_services=None, provenance="manual", admission_run
         args.storage_analyze,
         args.storage_deduplicate,
         args.persistent_secret_material_check,
+        args.restore_readiness_check,
     ))
     if maintenance_modes > 1:
         parser.error("Choose only one repository/storage maintenance mode")
@@ -504,6 +518,12 @@ def main(argv=None, *, runtime_services=None, provenance="manual", admission_run
         args.cp_config_probe or args.cp_config_collect or args.render_only or args.only != "all"
     ):
         parser.error("--persistent-secret-material-check cannot be combined with collection/render modes")
+    if args.restore_readiness_check and args.apply:
+        parser.error("--apply is not valid with --restore-readiness-check")
+    if args.restore_readiness_check and (
+        args.cp_config_probe or args.cp_config_collect or args.render_only or args.only != "all"
+    ):
+        parser.error("--restore-readiness-check cannot be combined with collection/render modes")
 
     if args.storage_analyze and args.storage_deduplicate:
         parser.error("Choose only one of --storage-analyze or --storage-deduplicate")
@@ -532,6 +552,7 @@ def main(argv=None, *, runtime_services=None, provenance="manual", admission_run
         or args.storage_analyze
         or args.storage_deduplicate
         or args.persistent_secret_material_check
+        or args.restore_readiness_check
         or args.apply
         or args.cp_config_probe
         or args.cp_config_collect
@@ -656,6 +677,44 @@ def main(argv=None, *, runtime_services=None, provenance="manual", admission_run
         print(f"\nGate:                         {report.gate}")
         print("No network access performed. No key material, path or credential was printed.")
         raise SystemExit(0 if report.gate == "PASS" else 1)
+
+    if args.restore_readiness_check:
+        _require_bootstrap("restore-readiness-check", runtime_paths.output_root)
+        from utils.restore_readiness import compute_restore_readiness
+
+        print("=== SECURITYEXPERT RESTORE READINESS — RB.0 ===\n")
+        unified_path = runtime_paths.output_root / "unified.json"
+        unified_devices = json.loads(unified_path.read_text(encoding="utf-8"))
+
+        # RB.1 (the encrypted recovery store) does not exist yet, so this is
+        # deliberately called with no recovery_manifests/attestations: every
+        # device is judged on inventory alone, which correctly reports
+        # UNPROTECTED across the fleet rather than inventing evidence that
+        # was never collected. docs/design/BACKUP_RECOVERY_CONTRACTS.md §5.
+        report = compute_restore_readiness(unified_devices)
+
+        state_dir = runtime_paths.data_root / "state"
+        state_dir.mkdir(parents=True, exist_ok=True)
+        state_path = state_dir / "restore_readiness.json"
+        state_path.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+
+        summary = report["summary"]
+        total = sum(summary.values())
+        print(f"Devices assessed:      {total}")
+        for state in ("READY", "STALE", "PARTIAL", "UNPROTECTED", "UNKNOWN"):
+            print(f"  {state:<12}       {summary.get(state, 0)}")
+        if summary.get("UNPROTECTED", 0) or not any(
+            d.get("held_artifacts") for d in report["devices"]
+        ):
+            print(
+                "\nNote: no recovery artifact has ever been collected for this fleet "
+                "(RB.1-RB.3 not yet built) -- UNPROTECTED here means 'no vendor-native "
+                "backup exists', not a fault in this check. See "
+                "docs/design/BACKUP_AND_RECOVERY_ARCHITECTURE.md."
+            )
+        print(f"\nWritten:                {state_path}")
+        print("No network access performed. No recovery artifact was collected.")
+        return
 
     from utils.collection_executor import (
         Provenance,

@@ -3,6 +3,24 @@
   "record_contract": "One structured record per build, newest first. Required: build, status, title, summary (<= 2 sentences). Optional: started, completed, track, movement, supersedes, evidence, risks_forward, docs{agreement,validation,handover} (repo-relative paths under docs/history/). Full detail lives in the linked doc; do not restate it here. Status vocabulary must stay within utils/project_plan.py STATUS_VALUES.",
   "builds": [
     {
+      "build": "restore_readiness_rb0",
+      "status": "automated_validated",
+      "started": "2026-08-30",
+      "completed": "2026-08-30",
+      "title": "RB.0 restore-readiness assessment (first implementation against the frozen Backup & Recovery contracts)",
+      "track": "RECOVER / RB.0",
+      "movement": "IMPLEMENTATION",
+      "summary": "User request: implement against the just-frozen docs/design/BACKUP_RECOVERY_CONTRACTS.md §5. New utils/restore_readiness.py: compute_restore_readiness, a pure function with no I/O, deriving per-device READY/STALE/PARTIAL/UNPROTECTED/UNKNOWN readiness from unified.json plus optional (currently empty, since RB.1-RB.3 do not exist yet) recovery_manifests and attestations maps. New main.py --restore-readiness-check CLI mode wired the same way as --render-only (registered in _MODE_PREREQUISITES/_require_bootstrap, requires a prior unified.json), writing data/state/restore_readiness.json. Zero network access, zero credentials, zero new device command -- matches the contract's own requirement that RB.0 be computable exactly like --repository-privacy-check.",
+      "evidence": {
+        "automated": "16 new tests in tests/test_rb0_restore_readiness.py (new pytest.ini 'recovery' marker): all five states; both evidence bases (held vs. device-attested, never merged, attestation alone never promotes to READY); VSX vs_id entity-id convention matching configuration/checkpoint_config_collector.py's _entity_id (<device>__vsid_<vs_id>, never the vsys label); cp+vsx -> checkpoint vendor, panorama -> panorama; a required-artifact-class gap caps state at PARTIAL even when a held artifact is otherwise validated/current; no_data inventory -> UNKNOWN (never UNPROTECTED, per the 'insufficient evidence vs. no recovery artifact' distinction in the contract); duplicate-row dedup; summary counts; a static no-I/O guard (no socket/requests/paramiko/getpass import). py -m pytest -q: 656 passed, 3 skipped, 2 pre-existing unrelated failures unchanged from baseline. Repository privacy gate: PASS / 0.",
+        "manual_cli": "Exercised main.py --restore-readiness-check against tests/fixtures/uitest/unified.json copied into a throwaway SECURITYEXPERT_RUNTIME_ROOT: 15 devices -> 14 UNPROTECTED + 1 UNKNOWN, the UNKNOWN being exactly the fixture's deliberate UNAVAILABLE gateway (data_state=no_data) -- confirming the state machine reads real inventory shape correctly, not just synthetic fixtures. Missing-unified.json bootstrap gate verified (exit 2, actionable guidance); --apply/--render-only combination guards verified (exit 2).",
+        "real_env": "n/a -- read-only over local artifacts only; no device reachability required or used."
+      },
+      "docs": {
+        "agreement": "docs/design/BACKUP_RECOVERY_CONTRACTS.md"
+      }
+    },
+    {
       "build": "backup_recovery_architecture",
       "status": "planned",
       "started": "2026-08-30",
