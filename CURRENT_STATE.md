@@ -23,13 +23,26 @@ timeline.
 
 ## Active build
 
-**None open.** Last landed: `immutable_store_permission — evidence-store
-snapshot-publish retry` — **AUTOMATED_VALIDATED** (2026-08-30, this session,
-not yet pushed). `ConfigEvidenceStore._write_snapshot`'s directory-publish
-`os.replace(tmp_dir, final_dir)` now retries on transient lock the same way
-`_ensure_blob`'s blob write already did (`_replace_with_retry`, 3 attempts,
-0.1s exponential backoff) — closes the standing P1 intermittent
-`PermissionError`. `project/build_history.json` entry `immutable_store_permission`.
+**None open.** Last landed: `deploy_persistent_secret_material — persistent
+runtime volume contract` (DEV.2.2) — **AUTOMATED_VALIDATED** (2026-08-30, this
+session). `data/.support_hmac.key` persistence across a container restart was
+already structurally correct via `runtime_paths.data_root`; new
+`utils/persistent_secret_material.py` + `main.py --persistent-secret-material-check`
+make that contract explicit and offline-checkable (value-free, reuses
+`utils.cp_ssh_trust` / `utils.pan_tls_trust` preflight code verbatim). New
+`docker-compose.prod.yml` overlay mounts `deploy/secrets/known_hosts` +
+`pan-ca-bundle.pem` read-only and sets `SECURITYEXPERT_CP_MDS_STRICT_HOST_KEY=1`
+/ `SECURITYEXPERT_PAN_CA_BUNDLE`, moving CP/PAN trust from opt-in to
+mounted-and-required on the server while `docker-compose.yml` keeps
+compatibility mode as the base default. `docs/history/phase/DEV2_2_PERSISTENT_SECRET_MATERIAL.md`;
+`project/build_history.json` entry `deploy_persistent_secret_material`.
+
+Prior: `immutable_store_permission — evidence-store snapshot-publish retry` —
+**AUTOMATED_VALIDATED** (2026-08-30). `ConfigEvidenceStore._write_snapshot`'s
+directory-publish `os.replace(tmp_dir, final_dir)` now retries on transient
+lock the same way `_ensure_blob`'s blob write already did
+(`_replace_with_retry`, 3 attempts, 0.1s exponential backoff) — closes the
+standing P1 intermittent `PermissionError`.
 
 Prior: `0.7.6a — Render harness + uitest topology matrix` —
 **AUTOMATED_VALIDATED** (2026-08-30), `origin/main` `671fd6c`.

@@ -6,6 +6,7 @@
 #   cp .env.example .env   # fill in credentials, or use the _FILE / secrets: convention below
 #   docker compose up -d
 #   docker compose exec worker python main.py --repository-privacy-check   # no credentials needed
+#   docker compose exec worker python main.py --persistent-secret-material-check  # DEV.2.2 volume/trust contract check
 #   docker compose exec worker python main.py --render-only                # needs a prior real checkpoint's artifacts
 #   curl http://127.0.0.1:8080/                                            # the rendered report
 #
@@ -42,7 +43,11 @@ services:
     restart: unless-stopped
 
 volumes:
-  # Persistent runtime state (data/output/logs, HMAC key, trust material) --
-  # deploy_persistent_secret_material (DEV.2.2) covers the production-grade
-  # secret/volume contract; this is the bounded DEV.3.1 volume only.
+  # Persistent runtime state (data/output/logs, HMAC key, trust material).
+  # data_root (and therefore data/.support_hmac.key) lives under this volume
+  # via SECURITYEXPERT_RUNTIME_ROOT, so the support-bundle identity key is
+  # already stable across `docker compose restart` / recreate as long as the
+  # volume itself is retained. For the production-grade mounted-and-required
+  # CP known_hosts / PAN CA bundle contract, use docker-compose.prod.yml as
+  # an overlay -- see docs/history/phase/DEV2_2_PERSISTENT_SECRET_MATERIAL.md.
   securityexpert-runtime:

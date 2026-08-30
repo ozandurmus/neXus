@@ -307,7 +307,7 @@
         {
           "build": "DEV.2.2",
           "title": "Persistent runtime volume contract: data_root, stable data/.support_hmac.key across restarts, mounted CP known_hosts and PAN CA bundle",
-          "status": "planned"
+          "status": "automated_validated"
         },
         {
           "build": "DEV.2.3",
