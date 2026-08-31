@@ -534,7 +534,7 @@
       "status": "planned",
       "priority": "P1",
       "target": "Local development; required before DEPLOY.1 viewer exposure",
-      "note": "Audit all HTML sinks, keep JSON script serialization safe, add a restrictive report CSP compatible with the single-file report, and add hostile inventory/configuration label tests. Preserve the existing report payload and UX."
+      "note": "Audit all HTML sinks, keep JSON script serialization safe, add a restrictive report CSP compatible with the single-file report, and add hostile inventory/configuration label tests. Preserve the existing report payload and UX. CONTRACT FROZEN 2026-08-31 (Sonnet 5, normal; docs-only, no code change): docs/history/phase/FRONTEND_RENDERING_BOUNDARY.md. Audit found escapeHtml() already used pervasively and utils/html_export.py's _script_json already neutralizes </script> breakout; no CSP exists today; the report has zero external resources or network calls (supports a strict default-src 'none' CSP with unsafe-inline only for the inlined script/style). A heuristic scan flagged 28 of 97 static/app.js innerHTML sinks as candidates needing verification -- not a finished audit. AC-1..AC-7 and a 6-step implementation plan are frozen for a fresh session at the same reasoning tier; status stays planned until that implementation lands."
     },
     {
       "id": "codebase_modularization",
