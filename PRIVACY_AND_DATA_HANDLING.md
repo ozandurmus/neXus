@@ -103,6 +103,33 @@ credential stores
 Only inspect a narrow runtime artifact when explicitly required by a
 concrete validation/debug task.
 
+## Distributed evidence store (DEV.3.3, opt-in)
+
+When `SECURITYEXPERT_EVIDENCE_BACKEND=postgres` is set, the CAS metadata
+index (`config_snapshot` table: device names, management IPs, entity ids),
+run manifests, last-known-good state and scheduler state move from
+per-container local files into a PostgreSQL instance — see
+`docs/history/phase/DEV3_3_DISTRIBUTED_EVIDENCE_STORE_MIGRATION.md` (decision
+E1). That Postgres instance is therefore a **CLASS 2** identity-bearing
+store, architecturally equivalent to local disk, not a CLASS 1/shareable
+artifact:
+
+-   must be a **dedicated instance for this product**, never a shared
+    multi-tenant database;
+-   the connection DSN must use TLS in production, the same as any other
+    credential-bearing configuration value (never in Git, never in AI
+    conversation);
+-   the database role used by the application should be restricted to the
+    four DEV.3.3 tables it needs;
+-   volume/disk encryption at rest is expected wherever the deployment
+    already encrypts other local-disk evidence.
+-   Content-addressed payload blobs never move to Postgres — they remain a
+    local-disk-only artifact under `data/artifacts/config/sha256/`,
+    unchanged by this backend.
+
+Default (`filesystem`, unset) behavior and its existing CLASS 2 rules above
+are unchanged.
+
 ## Raw configuration
 
 ### Check Point
