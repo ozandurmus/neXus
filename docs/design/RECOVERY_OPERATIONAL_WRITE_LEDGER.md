@@ -1,9 +1,20 @@
 # Recovery operational-write ledger — design
 
-**Status:** DESIGN — no code. Prepared as `RB.3b` unblocking prep (2026-08-31).
-Companion to `docs/design/BACKUP_RECOVERY_CONTRACTS.md` §7.3 point 6, §9.13, and
+**Status:** DESIGN — no code. **Design accepted 2026-08-31 (product owner):** the
+fail-closed-on-unreadable posture (§5) and the evidence-plane placement (§2) are
+approved as written; RB.3b implementation builds this module as specified.
+Prepared as `RB.3b` unblocking prep (2026-08-31). Companion to
+`docs/design/BACKUP_RECOVERY_CONTRACTS.md` §7.3 point 6, §9.13, and
 `docs/history/phase/RB_3B_CP_GAIA_BACKUP_COLLECTION.md` decision B4. Consumes the
 DEV.3.3 evidence backend (`utils/evidence_backend.py`).
+
+> **DESIGN ACCEPTED 2026-08-31 (product owner).** §5's fail-closed contract —
+> an **unreadable** ledger blocks the run with `OperationalLedgerUnreadableError`
+> and no device command, while a legitimately **absent** ledger proceeds — is
+> accepted as written, with the explicit understanding that a "couldn't read the
+> ledger" outcome is a **false refusal** (a missed backup, recoverable next run)
+> chosen deliberately over a false proceed (a second disk-consuming write inside
+> the 24 h window). Operators must be able to see and act on that outcome.
 
 **Module to be built (RB.3b step 2):** `utils/recovery_operational_ledger.py`.
 

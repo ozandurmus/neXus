@@ -132,7 +132,9 @@ Frozen rules:
    Silence here would read as "complete", which is the failure mode §1 of the
    architecture exists to prevent.
 5. `software_version` is mandatory. Tightened by amendment **C4** (RB.3b prep,
-   2026-08-31):
+   2026-08-31; **accepted as written 2026-08-31, product owner** — a
+   version-locked CP class with no resolvable version is not a degraded record,
+   it is an unrestorable file, so refusing to store it is the correct posture):
    - **Version-locked CP classes** (`cp_gaia_backup`, `cp_mgmt_export`,
      `cp_mds_backup`): if the exact software version cannot be resolved from
      **existing evidence** (`unified.json` / the configuration evidence store —
@@ -299,11 +301,23 @@ gate review, not approvals.** No command here is implemented.
 Sign-off state: **§7.1 / §7.2** (PAN) documented, `D2` resolved; **§7.5**
 (CP attestation, `read`) **SIGNED OFF 2026-08-31**; **§7.3 / §7.4** (CP backup,
 `operational-write` / `read`) — `D3` resolved pilot-scoped, points 1–13 drafted,
-**point 14 written 2026-08-31 (RB.3b prep), awaiting sign-off**; **§7.7 / §7.8**
-(CP free-space read / backup deletion) **PREPARED FOR GATE REVIEW 2026-08-31
-(RB.3b prep) — not signed off**, two literal Gaia command strings carried with
-an explicit "confirm exact token at sign-off" marker; **§7.6** (CP management
-export) blocked on `D5` + `E1`.
+**point 14 (device-impact assessment) SIGNED OFF 2026-08-31** (product owner /
+network-security leads); **§7.7 / §7.8** (CP free-space read / backup deletion)
+**SIGNED OFF 2026-08-31** (product owner / network-security leads) — the two
+literal Gaia command strings are kept as written, with the "confirm exact
+token" check moved to the first watched real-gateway run (estate is
+R81.10 + R81.20 only; see §7.7 / §7.8 notes); **§7.6** (CP management export)
+blocked on `D5` + `E1`.
+
+| Gate entry | Class | State |
+|---|---|---|
+| §7.1 / §7.2 (PAN export) | `read` | documented; `D2` resolved 2026-08-31 |
+| §7.3 point 14 (device-impact assessment) | — | **SIGNED OFF 2026-08-31** |
+| §7.3 / §7.4 (CP `add backup local` + SCP fetch) | `operational-write` / `read` | `D3` resolved pilot-scoped; points 1–14 complete; implementation-cleared |
+| §7.5 (CP attestation) | `read` | SIGNED OFF 2026-08-31 (RB.3a) |
+| §7.6 (CP management export) | `operational-write` | blocked on `D5` + `E1` |
+| §7.7 (`/var/log` free-space read) | `read` | **SIGNED OFF 2026-08-31** — command string confirm-on-hardware |
+| §7.8 (backup deletion) | `operational-write` | **SIGNED OFF 2026-08-31** — command string confirm-on-hardware |
 
 ### 7.1 `GET /api/?type=export&category=device-state` (PAN) — class: `read`
 
@@ -396,6 +410,18 @@ running-config contains hashed credentials and PSKs.
     closed 2026-08-25; this assessment stands in its place and is what the gate
     signs off.
 
+> **GATE SIGNED OFF 2026-08-31 (product owner / network-security leads).**
+> §7.3 points 1–14 approved as written. `add backup local` is accepted as an
+> `operational-write` command at current maturity, **scoped to the fail-closed
+> pilot allowlist `SECURITYEXPERT_CP_BACKUP_ALLOWED_ENTITIES`** (`D3`), with a
+> distinct backup service account (`D4`), the durable 24 h ledger (point 6 /
+> §9.13), the 3× free-space precondition (point 12 / §7.7) and the
+> delete-what-we-made cleanup contract (point 13 / §7.8) all binding. Point 14's
+> device-impact assessment is accepted; it supersedes the (closed 2026-08-25) P0
+> audit dependency. `RB.3b` implementation is cleared to proceed against fixture
+> transports; the first real run is a single, named, non-production-critical
+> gateway, watched, per the phase doc's validation gate.
+
 ### 7.4 SCP fetch of the Gaia backup file — class: `read`
 
 Read of a known path produced by 7.3; timeout 900 s; 1 retry; digest verified
@@ -440,9 +466,11 @@ marked `INCONSISTENT` and is **not** counted as readiness evidence.
 
 ### 7.7 `/var/log` free-space read (CP Gaia) — class: `read`
 
-**Status: PREPARED FOR GATE REVIEW (RB.3b prep, 2026-08-31). Not signed off.**
+**Status: SIGNED OFF 2026-08-31 (product owner / network-security leads).**
 Added by amendment **C1**; supersedes the draft in
-`docs/history/phase/RB_3B_CP_GAIA_BACKUP_COLLECTION.md` §B2.
+`docs/history/phase/RB_3B_CP_GAIA_BACKUP_COLLECTION.md` §B2. The literal command
+form is kept as written; the exact-token check moves to the first watched
+real-gateway run (see the sign-off note at the end of this section).
 
 1. **Why required:** §7.3 point 12's free-space precondition cannot be satisfied
    without it. Architecture §10 rule 8 — an `operational-write` runs only after
@@ -495,11 +523,31 @@ Added by amendment **C1**; supersedes the draft in
     if it can identify neither, `UNKNOWN` (→ abort). It never infers a figure
     from a partial or truncated line.
 
-### 7.8 backup-file deletion (CP Gaia) — class: `operational-write`
+> **GATE SIGNED OFF 2026-08-31 (product owner / network-security leads).**
+> Points 1–13 approved. Class `read`. `SECURITYEXPERT_CP_BACKUP_MIN_FREE_MB`
+> default **3072** (hard floor 1024) accepted as an interim value, to be
+> revisited against measured backup sizes at the first real-environment run.
+>
+> **Command-string note (estate = R81.10 + R81.20 only).** The R81 Gaia
+> Administration Guide documentation check for this sign-off did **not** find
+> `show diskspace` in any published Gaia Clish command list (R80.20.M2 / R80.30
+> full lists, R81 Clish summary); the only documented `show disk*` form is
+> `show disk-usage` on **SMB/Spark** appliances, which this section already
+> gates as `UNSUPPORTED`. The Expert `df -P /var/log` form is exact and portable
+> on both R81.10 and R81.20. Sign-off therefore stands with the literal forms
+> **as written**, and the implementation must **confirm on the first watched
+> real R81.10 / R81.20 gateway** whether `show diskspace` is present as a Clish
+> command on that build; if it is not, `df -P /var/log` (Expert) is the sole
+> form and becomes the primary (still one explicit literal non-`show` exception
+> in the collector's frozen set, never a prefix-rule relaxation). A parseable
+> free-space figure from either form satisfies the gate; neither → `UNKNOWN` →
+> §7.3 point 12 aborts.
 
-**Status: PREPARED FOR GATE REVIEW (RB.3b prep, 2026-08-31). Not signed off.**
+**Status: SIGNED OFF 2026-08-31 (product owner / network-security leads).**
 Added by amendment **C2**; supersedes the draft in
-`docs/history/phase/RB_3B_CP_GAIA_BACKUP_COLLECTION.md` §B3.
+`docs/history/phase/RB_3B_CP_GAIA_BACKUP_COLLECTION.md` §B3. The literal command
+form is kept as written; the exact-token check moves to the first watched
+real-gateway run (see the sign-off note at the end of this section).
 
 1. **Why required:** §7.3 point 13's cleanup contract. Without it every backup
    run leaves a multi-MB archive on the firewall and the platform becomes the
@@ -557,6 +605,31 @@ Added by amendment **C2**; supersedes the draft in
     `operational-write` class (§5) — a bounded, non-configuration change that
     only releases a resource. Reviewed together with §7.3 point 14, same
     sign-off.
+
+> **GATE SIGNED OFF 2026-08-31 (product owner / network-security leads).**
+> Points 1–14 approved. Class `operational-write`. Point 12 (delete **only** the
+> exact archive name this run created in the same session — never a pattern,
+> wildcard, listing-derived or config-supplied name; `CLEANUP_FAILED` +
+> endpoint-ineligible if the name is unavailable) is binding as written.
+>
+> **Command-string note (estate = R81.10 + R81.20 only).** The R81 Gaia
+> Administration Guide documentation check for this sign-off found: the R81
+> guide documents backup deletion as a **Gaia Portal-only** procedure (no Clish
+> delete for local backups in the "Backing Up and Restoring the System" topic);
+> the R80.30 "List of Gaia Clish 'delete' Commands" does list `delete backup`
+> but as *"Delete the local backup"* with **no name argument** (singleton
+> semantics), and no `delete backups` (plural) form is documented anywhere.
+> The Expert `rm -f -- /var/log/CPbackup/backups/<name>` form is exact — POSIX
+> `--` end-of-options guard, one literal path, no glob — and `/var/log/CPbackup/
+> backups/` is confirmed by sk108902 and the R81.10 / R82 System Backup pages.
+> Sign-off stands with the literal forms **as written**; the implementation must
+> **confirm on the first watched real R81.10 / R81.20 gateway** whether a
+> per-name `delete backup <name>` Clish form exists on that build. If it does
+> not (the documented state), `rm -f -- /var/log/CPbackup/backups/<name>`
+> (Expert) is the sole deletion form and becomes the primary — the only form
+> that honours point 12's "delete exactly the name this run created". Per point
+> 8, if no acceptable delete form exists for a Gaia release, §7.3 is not cleared
+> for that release either.
 
 ---
 
@@ -650,7 +723,7 @@ itself — it only does target selection, admission-coordinator routing
 | Vendor | Status | Blocker |
 |---|---|---|
 | `panorama` (PAN device-state, §7.1) | **implemented** | `D2` resolved 2026-08-30; `read` class, gate-documented in §7.1 before implementation |
-| `checkpoint` (CP Gaia backup *collection*, §7.3) | **blocked stub** | `D3` **resolved 2026-08-31** (pilot-scoped, fail-closed allowlist). Still blocked on: `D4` (backup credential identity — decision brief `docs/design/D4_BACKUP_CREDENTIAL_IDENTITY_DECISION.md`, recommended, awaiting security-lead sign-off), §7.3 point 14 (written, awaiting sign-off), §7.7 / §7.8 gate sign-off (two literal Gaia strings owed at review), and the durable operational-write ledger (`docs/design/RECOVERY_OPERATIONAL_WRITE_LEDGER.md`). The P0 `cp_device_interaction_safety` audit closed 2026-08-25 and is **not** a blocker. |
+| `checkpoint` (CP Gaia backup *collection*, §7.3) | **blocked stub — implementation-cleared 2026-08-31** | All five RB.3b prep blockers signed off 2026-08-31: `D3` resolved (pilot-scoped, fail-closed allowlist), `D4` **signed off** (`docs/design/D4_BACKUP_CREDENTIAL_IDENTITY_DECISION.md` — distinct backup service account, no fallback), §7.3 point 14 **signed off**, §7.7 / §7.8 **signed off** (command strings kept as written, confirm-on-hardware at the first watched R81.10 / R81.20 run), durable operational-write ledger design accepted (`docs/design/RECOVERY_OPERATIONAL_WRITE_LEDGER.md`, fail-closed-on-unreadable as written). The stub is replaced by RB.3b implementation per `docs/history/phase/RB_3B_CP_GAIA_BACKUP_COLLECTION.md`. The P0 `cp_device_interaction_safety` audit closed 2026-08-25 and is **not** a blocker. |
 | `checkpoint` attestation (CP Gaia `show backups` / `show snapshots`, §7.5) | **implemented** (RB.3a, 2026-08-31) | none — `read` class, command gate signed off 2026-08-31. **Not** a `RecoveryCollector`: it is a `RecoveryAttester` (amendment C2). An attestation has no plaintext, and `run_recovery_collection` calls `write_artifact` unconditionally on every success — forcing an attestation through `collect() -> (bytes, meta)` would mean fabricating bytes or special-casing the vendor-neutral orchestrator on vendor behaviour (RB.3a decision A2). It has its own `run_recovery_attestation` entry point and writes nothing to the recovery store. |
 
 Calling the CP *collector* raises `RecoveryCollectionBlockedError` naming the

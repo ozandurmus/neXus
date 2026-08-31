@@ -2,8 +2,7 @@
 
 ## Status
 
-**PROPOSED CONTRACT — STILL BLOCKED, but no longer on `D3`. Not frozen, not
-implemented.**
+**CONTRACT CLEARED FOR IMPLEMENTATION 2026-08-31. Not yet implemented.**
 
 **`D3` RESOLVED 2026-08-31 — approved by the product owner, scoped to a named
 pilot set.** The `operational-write` class is accepted as a real command class.
@@ -14,37 +13,50 @@ Scheduling is **not** approved: `"recovery-cp"` stays out of
 `ALLOWLISTED_WORKFLOWS` (B9). Recorded in architecture §13.
 
 **RB.3b unblocking prep completed 2026-08-31** on `feature/rb-3b-gate-prep`
-(`ARCHITECTURE` / `DOCS`, no code, no device call). The five open items below
-now each have a reviewable artifact; RB.3b stays `blocked` pending
-**product-owner / security-lead sign-off** of those artifacts, not pending
-design work.
+(`ARCHITECTURE` / `DOCS`, no code, no device call), then **reviewed and signed
+off 2026-08-31** (product owner / security lead / network-security leads). All
+five open items now have an approved artifact; RB.3b is **no longer blocked** —
+the next step is implementation.
 
-Remaining blockers, in the order they must clear — each now has its artifact:
+The five blockers, all cleared 2026-08-31:
 
-1. **`D4`** — backup credential identity. **Decision brief produced:**
+1. **`D4`** — backup credential identity. **SIGNED OFF (security lead).**
    `docs/design/D4_BACKUP_CREDENTIAL_IDENTITY_DECISION.md` — Option A (distinct
-   per-vendor backup service account, no fallback to the collection identity)
-   recommended, awaiting security-lead sign-off. Architecture §13 `D4` row and
-   §10 rule 4 updated.
-2. **Command gate §7.3 point 14** (device-impact assessment) — **written**
-   2026-08-31 into `docs/design/BACKUP_RECOVERY_CONTRACTS.md` §7.3 point 14
-   (and §7.8 point 14), awaiting sign-off. The P0 audit dependency is
-   superseded (audit closed 2026-08-25).
-3. **§7.7 and §7.8 gate entries** — **promoted from the C1/C2 drafts below into
-   `BACKUP_RECOVERY_CONTRACTS.md` §7.7 / §7.8**, marked *PREPARED FOR GATE
-   REVIEW*. Each carries a **literal Gaia command string** with an explicit
-   "confirm exact token at sign-off" marker: §7.7 `show diskspace` (Clish) /
-   `df -P /var/log` (Expert); §7.8 `delete backup <name>` (Clish) /
-   `rm -f -- /var/log/CPbackup/backups/<name>` (Expert).
-4. **Durable per-endpoint `operational-write` ledger** — **design produced:**
-   `docs/design/RECOVERY_OPERATIONAL_WRITE_LEDGER.md` (module
+   per-vendor backup service account, `SECURITYEXPERT_CP_BACKUP_SSH_USERNAME` +
+   `_PASSWORD_FILE` / `_PASSWORD`, **no fallback** to `SECURITYEXPERT_CP_CONFIG_
+   SSH_*`) adopted as the target; Option C (DEV.2.2 mounted-material custody) is
+   the pilot mechanism. Architecture §13 `D4` row resolved, §10 rule 4 / §5
+   updated. PAN (`RB.2`) owes a matching follow-up before it leaves
+   `IMPLEMENTED` — not a blocker here.
+2. **Command gate §7.3 point 14** (device-impact assessment) — **SIGNED OFF
+   (product owner / network-security leads).** `add backup local` touches no
+   config / process / policy / routing / clustering / HA state; sole data-plane
+   failure mode is `/var/log` exhaustion, covered by points 12/13. Supersedes
+   the (closed 2026-08-25) P0 audit dependency.
+3. **§7.7 and §7.8 gate entries** — **SIGNED OFF (product owner / network-
+   security leads).** The literal Gaia command strings are kept **as written**
+   (`show diskspace` / `df -P /var/log`; `delete backup <name>` /
+   `rm -f -- /var/log/CPbackup/backups/<name>`). Estate is **R81.10 + R81.20
+   only**. The R81 Gaia Administration Guide documentation check for the sign-off
+   found neither `show diskspace` nor a per-name `delete backup <name>` Clish
+   form in the published R81 command lists (R81 documents Portal-only deletion;
+   R80.30 lists `delete backup` with no name argument); the Expert forms
+   (`df -P /var/log`, `rm -f -- …`) are exact and portable. The exact-token
+   check is therefore **moved to the first watched real R81.10 / R81.20 gateway
+   run** — if a Clish form is absent on that build, the Expert form is the sole
+   and primary form (still an explicit literal in the collector's frozen set,
+   never a prefix-rule relaxation). Recorded in the §7.7 / §7.8 sign-off notes.
+4. **Durable per-endpoint `operational-write` ledger** — **DESIGN ACCEPTED
+   (product owner).** `docs/design/RECOVERY_OPERATIONAL_WRITE_LEDGER.md` — module
    `utils/recovery_operational_ledger.py`, a fifth DEV.3.3 evidence-backend
-   concern, fail-closed on an unreadable ledger). Contract §7.3 point 6
-   tightened (C3); new §9.13 test obligation.
-5. **Refuse to store a version-unknown CP artifact** — **contract §3 frozen
-   rule 5 tightened** (C4): a version-locked CP class with no resolvable
-   `software_version` is **not stored**; PAN keeps the honest `"unknown"`
-   sentinel.
+   concern, **fail-closed on an unreadable ledger** (absent ledger ≠ error),
+   read inside the admission-held section. Contract §7.3 point 6 tightened (C3);
+   new §9.13 test obligation. Accepted as written, false-refusal-over-false-
+   proceed understood.
+5. **Refuse to store a version-unknown CP artifact** — **ACCEPTED AS WRITTEN
+   (product owner).** Contract §3 frozen rule 5 tightened (C4): a version-locked
+   CP class with no resolvable `software_version` is **not stored**; PAN keeps
+   the honest `"unknown"` sentinel.
 
 The P0 `cp_device_interaction_safety` audit **closed 2026-08-25**
 (`project/backlog.json`, status `done`). It is **not** a blocker on this build.
@@ -438,10 +450,11 @@ exact failure mode `D2` was raised to prevent on the PAN side.
 
 ## Contract amendments required (design docs)
 
-Status after RB.3b prep (2026-08-31): **C1–C4 landed** in the design docs;
-**C5 landed** (as the `D3` resolution + the new `D4` recommended-resolution
-row); **C6 outstanding** (deferred to RB.3b implementation, where §9.12's test
-is written).
+Status after RB.3b prep + sign-off (2026-08-31): **C1–C4 landed** in the design
+docs; **C5 landed** (the `D3` resolution + the now-resolved `D4` row); the
+§7.3 point 14 / §7.7 / §7.8 gate entries and the ledger + §3 rule 5 tightenings
+are all **signed off / accepted 2026-08-31**; **C6 outstanding** (deferred to
+RB.3b implementation, where §9.12's CP-path test is written).
 
 - **C1 — new §7.7**, `/var/log` free-space read, class `read` — **LANDED**
   in `BACKUP_RECOVERY_CONTRACTS.md` §7.7, *PREPARED FOR GATE REVIEW*, with the
@@ -563,8 +576,11 @@ independently of how they were collected. No schema version changes.
 
 ## Definition of done
 
-1. `D3` answered and recorded in architecture §13 (amendment C5); `D4`
-   answered; §7.3 point 14 written; §7.7/§7.8 gated and signed off.
+1. ~~`D3` answered and recorded in architecture §13 (amendment C5); `D4`
+   answered; §7.3 point 14 written; §7.7/§7.8 gated and signed off.~~ **DONE
+   2026-08-31** — `D3` resolved (architecture §13), `D4` signed off, §7.3 point
+   14 signed off, §7.7 / §7.8 signed off (command strings confirm-on-hardware at
+   the first R81.10 / R81.20 run), ledger design + §3 rule 5 accepted.
 2. AC-1 … AC-14 green against fixture transports.
 3. Full suite at or above baseline; privacy gate PASS / 0.
 4. Amendments C1–C6 landed.
@@ -574,13 +590,14 @@ independently of how they were collected. No schema version changes.
 
 ## Next movement / model
 
-The next movement is **not implementation**. It is `ARCHITECTURE` /
-decision: put `D3` and `D4` to the product owner and the security lead, with
-this document as the brief.
+The decision walk-through is **done** — `D3` resolved, `D4` and the §7.3 point
+14 / §7.7 / §7.8 gates signed off, the ledger design and §3 rule 5 tightening
+accepted (all 2026-08-31). The next movement is **implementation**.
 
-Once answered: `IMPLEMENTATION` at **Sonnet 5, normal** for steps 2–4 of the
-plan (ledger, gating, precondition parser — all offline and well specified
-above), and **Sonnet 5, extended thinking** for step 5 only, the device-touching
-core, where the failure modes are on a production firewall rather than in a
-test. That is the one place in this build where the strongest tier earns its
-cost; the rest does not need it.
+`IMPLEMENTATION` at **Sonnet 5, normal** for steps 2–4 of the plan (ledger,
+gating, precondition parser — all offline and well specified above), and
+**Sonnet 5, extended thinking** for step 5 only, the device-touching core,
+where the failure modes are on a production firewall rather than in a test.
+That is the one place in this build where the strongest tier earns its cost;
+the rest does not need it. **C6** (contracts §9.12 CP-path test for a
+non-scheduled workflow) lands with steps 5–6.
