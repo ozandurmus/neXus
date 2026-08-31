@@ -29,7 +29,8 @@ from configuration.current_config_projection import (
     _safe_xml,
     _scalar_rows,
 )
-from utils.config_evidence import CONFIG_ROOT, ARTIFACT_ROOT, safe_component
+from utils.config_evidence import CONFIG_ROOT, ARTIFACT_ROOT
+from utils.evidence_backend import ConfigSnapshotBackend, select_config_snapshot_backend
 
 HISTORY_SCHEMA_VERSION = "0.6.3"
 MAX_TIMELINE_EVENTS = 50
@@ -152,37 +153,32 @@ def _blob_path_for_metadata(
     return obj_path
 
 
-def _read_metadata(metadata_path: Path) -> dict[str, Any] | None:
-    try:
-        raw = metadata_path.read_text(encoding="utf-8")
-        payload = json.loads(raw)
-        if not isinstance(payload, dict):
-            return None
-        if payload.get("status") != "success" or not payload.get("sha256"):
-            return None
-        if not payload.get("collected_at") or not payload.get("artifact_type"):
-            return None
-        return payload
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValueError):
+def _valid_metadata(payload: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Apply the stored-record validity rules, independent of storage backend.
+
+    Kept here rather than in the backend so both backends run identical logic
+    (DEV.3.3 contract, amendment A2).
+    """
+    if not isinstance(payload, dict):
         return None
+    if payload.get("status") != "success" or not payload.get("sha256"):
+        return None
+    if not payload.get("collected_at") or not payload.get("artifact_type"):
+        return None
+    return payload
 
 
-def _build_timeline(entity_dir: Path, artifact_type: str) -> ArtifactTimeline:
+def _build_timeline(
+    backend: ConfigSnapshotBackend, source: str, entity_id: str, artifact_type: str
+) -> ArtifactTimeline:
     timeline = ArtifactTimeline(
         artifact_type=artifact_type,
         artifact_label=_artifact_label(artifact_type),
     )
-    if not entity_dir.exists():
-        return timeline
 
-    candidates: list[tuple[datetime, str, dict[str, Any], Path]] = []
-    for child in entity_dir.iterdir():
-        if not child.is_dir() or child.name.startswith(".tmp-"):
-            continue
-        metadata_path = child / "metadata.json"
-        if not metadata_path.exists():
-            continue
-        meta = _read_metadata(metadata_path)
+    candidates: list[tuple[datetime, str, dict[str, Any]]] = []
+    for snapshot_id, raw in backend.list_snapshots(source=source, entity_id=entity_id):
+        meta = _valid_metadata(raw)
         if meta is None:
             timeline.skipped_malformed += 1
             continue
@@ -192,7 +188,7 @@ def _build_timeline(entity_dir: Path, artifact_type: str) -> ArtifactTimeline:
         if dt is None:
             timeline.skipped_malformed += 1
             continue
-        candidates.append((dt, child.name, meta, child))
+        candidates.append((dt, snapshot_id, meta))
 
     # Descending chronological; snapshot directory name as tie-breaker.
     candidates.sort(key=lambda c: (c[0], c[1]), reverse=True)
@@ -202,7 +198,7 @@ def _build_timeline(entity_dir: Path, artifact_type: str) -> ArtifactTimeline:
         candidates = candidates[:MAX_TIMELINE_EVENTS]
 
     is_pan = artifact_type in PAN_EFFECTIVE_ARTIFACT_TYPES
-    for dt, snap_name, meta, snap_dir in candidates:
+    for dt, snap_name, meta in candidates:
         change_state = str(meta.get("change_state") or "unknown").lower()
         eligible = is_pan and change_state in ("first", "changed")
         timeline.events.append(TimelineEvent(
@@ -370,18 +366,19 @@ class ConfigHistoryService:
         self,
         config_root: Path | None = None,
         artifact_root: Path | None = None,
+        backend: ConfigSnapshotBackend | None = None,
     ) -> None:
         self.config_root = Path(config_root) if config_root else CONFIG_ROOT
         self.artifact_root = Path(artifact_root) if artifact_root else ARTIFACT_ROOT
+        self.backend = (
+            backend if backend is not None else select_config_snapshot_backend(root=self.config_root)
+        )
 
-    def _entity_dir(self, source: str, entity_id: str) -> Path:
-        return self.config_root / safe_component(source) / safe_component(entity_id)
-
-    def _read_snap_metadata(self, entity_dir: Path, snap_name: str, artifact_type: str) -> dict[str, Any] | None:
-        metadata_path = entity_dir / snap_name / "metadata.json"
-        if not metadata_path.exists():
-            return None
-        meta = _read_metadata(metadata_path)
+    def _read_snap_metadata(
+        self, source: str, entity_id: str, snap_name: str, artifact_type: str
+    ) -> dict[str, Any] | None:
+        raw = self.backend.get_snapshot(source=source, entity_id=entity_id, snapshot_id=snap_name)
+        meta = _valid_metadata(raw)
         if meta is None or meta.get("artifact_type") != artifact_type:
             return None
         return meta
@@ -400,8 +397,7 @@ class ConfigHistoryService:
         """
         # CP: timeline only; diff not supported yet.
         if artifact_type in CP_ARTIFACT_TYPES:
-            entity_dir = self._entity_dir(source, entity_id)
-            timeline = _build_timeline(entity_dir, artifact_type)
+            timeline = _build_timeline(self.backend, source, entity_id, artifact_type)
             status = "available" if timeline.events else "insufficient_evidence"
             return DeviceHistory(
                 status=status,
@@ -426,8 +422,7 @@ class ConfigHistoryService:
                 scope="single_entity_single_artifact",
             )
 
-        entity_dir = self._entity_dir(source, entity_id)
-        timeline = _build_timeline(entity_dir, artifact_type)
+        timeline = _build_timeline(self.backend, source, entity_id, artifact_type)
 
         if not timeline.events:
             return DeviceHistory(
@@ -441,11 +436,11 @@ class ConfigHistoryService:
         eligible = [e for e in timeline.events if e.comparison_eligible]
         if eligible:
             newer_event = eligible[0]
-            newer_meta = self._read_snap_metadata(entity_dir, newer_event.id, artifact_type)
+            newer_meta = self._read_snap_metadata(source, entity_id, newer_event.id, artifact_type)
             if newer_meta is not None:
                 previous_snap = str(newer_meta.get("previous_snapshot") or "")
                 if previous_snap:
-                    older_meta = self._read_snap_metadata(entity_dir, previous_snap, artifact_type)
+                    older_meta = self._read_snap_metadata(source, entity_id, previous_snap, artifact_type)
                     if older_meta is not None:
                         pair_results.append(_compute_pan_pair(
                             older_snap_name=previous_snap,

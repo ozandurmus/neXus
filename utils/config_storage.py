@@ -11,6 +11,7 @@ from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any
 
 from utils.config_evidence import ARTIFACT_ROOT, CONFIG_ROOT, sha256_file
+from utils.evidence_backend import active_evidence_backend_kind
 from utils.runtime_paths import default_output_root
 
 
@@ -123,11 +124,36 @@ def _metadata_rows(config_root: Path) -> tuple[list[dict[str, Any]], list[dict[s
     return rows, errors
 
 
+def _not_applicable(mode: str) -> dict[str, Any]:
+    """These tools clean up a legacy *filesystem* layout that cannot exist elsewhere.
+
+    A legacy per-snapshot payload copy sitting beside its content-addressed
+    object is a property of the on-disk snapshot directory; a metadata row in
+    Postgres never embeds a payload copy. Reporting "0 files, 0 bytes" there
+    would read as "nothing to clean up" when the honest answer is "this
+    question does not apply to the active backend" (DEV.3.3 contract).
+    """
+    return {
+        "schema_version": "0.6.0A4.3.2.1",
+        "mode": mode,
+        "generated_at": _utc_now(),
+        "status": "not_applicable_on_postgres_backend",
+        "evidence_backend": active_evidence_backend_kind(),
+        "reason": (
+            "Legacy per-snapshot payload duplication is a filesystem-only condition; "
+            "the Postgres metadata backend never stores a payload copy beside its "
+            "content-addressed object. Nothing to analyze or migrate."
+        ),
+    }
+
+
 def analyze_configuration_storage(
     *,
     config_root: Path | None = None,
     artifact_root: Path | None = None,
 ) -> dict[str, Any]:
+    if active_evidence_backend_kind() != "filesystem":
+        return _not_applicable("analysis")
     config_root = Path(config_root) if config_root else CONFIG_ROOT
     artifact_root = Path(artifact_root) if artifact_root else ARTIFACT_ROOT
     rows, safety_errors = _metadata_rows(config_root)
@@ -273,6 +299,8 @@ def deduplicate_legacy_storage(
     legacy payload unlinked. The generated manifest is sufficient to recreate
     the removed legacy files from their content-addressed object if needed.
     """
+    if active_evidence_backend_kind() != "filesystem":
+        return _not_applicable("apply" if apply else "dry_run")
     config_root = Path(config_root) if config_root else CONFIG_ROOT
     artifact_root = Path(artifact_root) if artifact_root else ARTIFACT_ROOT
     output_dir = Path(output_dir) if output_dir else OUTPUT_DIR

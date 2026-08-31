@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
 
+from utils.evidence_backend import RunManifestBackend, select_run_manifest_backend
 from utils.logger import info
 from utils.runtime_paths import default_output_root
 
@@ -80,6 +81,7 @@ class RunContext:
     extra: dict[str, Any] = field(default_factory=dict)
     output_dir: Path = field(default=OUTPUT_DIR, repr=False)
     data_root: Path = field(default=BASE_DIR / "data", repr=False)
+    manifest_backend: RunManifestBackend | None = field(default=None, repr=False)
     _stage_started_monotonic: dict[str, float] = field(default_factory=dict, repr=False)
     # 0.6.1C: coordinator job metadata — all fields are safe for manifests (no secrets).
     job_id: str | None = None
@@ -145,9 +147,9 @@ class RunContext:
             payload["coordinator_decision"] = self.coordinator_decision
         if self.coalesced_to is not None:
             payload["coalesced_to"] = self.coalesced_to
-        tmp = self.manifest_path.with_suffix(".json.tmp")
-        tmp.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
-        tmp.replace(self.manifest_path)
+        if self.manifest_backend is None:
+            self.manifest_backend = select_run_manifest_backend()
+        self.manifest_backend.write_manifest(manifest_path=self.manifest_path, manifest=payload)
 
     def start_stage(self, name: str) -> None:
         stage = self.stages.setdefault(name, {})
