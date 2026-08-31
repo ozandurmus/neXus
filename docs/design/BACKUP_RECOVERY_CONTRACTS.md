@@ -223,6 +223,21 @@ Frozen rules:
    distinction drives the §6 gap view.
 4. `RB.0` computes this with zero network access and zero credentials, like
    `--repository-privacy-check`.
+5. **`attested_not_held[].age_days` is nullable.** (Amendment C1, RB.3a,
+   2026-08-31.) `null` means "the device reported an artifact whose date did
+   not parse into an unambiguous UTC calendar date" (RB.3a decision A6) and is
+   distinct from the key being **absent**. Readiness classification tests only
+   the *presence* of an attestation, never its age, so `null` changes no
+   `state`. `held_artifacts[].age_days` is unaffected and stays non-null.
+
+The RB.3a attestation producer (`show backups` / `show snapshots`, §7.5) is a
+`RecoveryAttester`, not a `RecoveryCollector` — see §10.3. It writes
+`attested_not_held` entries via `data/state/recovery_attestations.json`
+(`securityexpert-recovery-attestations-v1`: `{schema, generated_at,
+attestations: {entity_id: [{class, age_days, source}, ...]}}`), which
+`--restore-readiness-check` reads and passes straight into
+`compute_restore_readiness(attestations=)`. No backup/snapshot **name** ever
+appears in that file (decision A5).
 
 ---
 
@@ -458,12 +473,14 @@ itself — it only does target selection, admission-coordinator routing
 | Vendor | Status | Blocker |
 |---|---|---|
 | `panorama` (PAN device-state, §7.1) | **implemented** | `D2` resolved 2026-08-30; `read` class, gate-documented in §7.1 before implementation |
-| `checkpoint` (CP Gaia backup, §7.3) | **blocked stub** | open decision `D3` (architecture §13) — **not resolved**. The P0 `cp_device_interaction_safety` audit that used to co-gate this closed 2026-08-25 (corrected 2026-08-30). |
+| `checkpoint` (CP Gaia backup *collection*, §7.3) | **blocked stub** | open decision `D3` (architecture §13) — **not resolved**. The P0 `cp_device_interaction_safety` audit that used to co-gate this closed 2026-08-25 (corrected 2026-08-30). |
+| `checkpoint` attestation (CP Gaia `show backups` / `show snapshots`, §7.5) | **implemented** (RB.3a, 2026-08-31) | none — `read` class, command gate signed off 2026-08-31. **Not** a `RecoveryCollector`: it is a `RecoveryAttester` (amendment C2). An attestation has no plaintext, and `run_recovery_collection` calls `write_artifact` unconditionally on every success — forcing an attestation through `collect() -> (bytes, meta)` would mean fabricating bytes or special-casing the vendor-neutral orchestrator on vendor behaviour (RB.3a decision A2). It has its own `run_recovery_attestation` entry point and writes nothing to the recovery store. |
 
-Calling the CP collector raises `RecoveryCollectionBlockedError` naming the
+Calling the CP *collector* raises `RecoveryCollectionBlockedError` naming the
 exact blocker (`D3`), not a generic `NotImplementedError` — an
 operator or a future UI must be able to show *why*, not just *that it
-failed*.
+failed*. The CP *attester* is unrelated to that block: `show backups` /
+`show snapshots` change no device state and are gated as `read` under §7.5.
 
 ### 10.4 Scheduler policy schema (additive)
 

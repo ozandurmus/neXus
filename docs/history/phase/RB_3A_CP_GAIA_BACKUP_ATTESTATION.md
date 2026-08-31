@@ -2,7 +2,22 @@
 
 ## Status
 
-**CONTRACT FROZEN 2026-08-31 — cleared for implementation. Not yet implemented.**
+**CONTRACT FROZEN 2026-08-31 — cleared for implementation.**
+
+**IMPLEMENTED / AUTOMATED_VALIDATED 2026-08-31** on `feature/rb-3a-attestation`.
+`checkpoint/checkpoint_recovery_attestation.py`,
+`utils/recovery_collect.run_recovery_attestation` + `RecoveryAttester`,
+`data/state/recovery_attestations.json`
+(`securityexpert-recovery-attestations-v1`), `main.py --recovery-attest`, and
+the attestation read in `--restore-readiness-check`. Amendments C1 and C2
+landed in `docs/design/BACKUP_RECOVERY_CONTRACTS.md` (C3 was already §7.5
+points 5-7). `utils/restore_readiness.py` unchanged. AC-1…AC-10 covered by
+`tests/test_rb3a_recovery_attestation.py` (33 tests); full suite
+804 passed / 20 skipped / 2 pre-existing unrelated failures. Repository
+privacy gate clean on tracked source. **Real-environment validation is owed**
+and is not satisfied here — no live CP device is reachable from this
+workspace; added to `on_hardware_real_env_validation`. Per `AGENTS.md` this
+build reaches `AUTOMATED_VALIDATED`, never `DONE`.
 
 - Gate: network-device command gate, class `read`,
   `docs/design/BACKUP_RECOVERY_CONTRACTS.md` §7.5 — **SIGNED OFF 2026-08-31
