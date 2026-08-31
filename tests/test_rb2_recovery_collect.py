@@ -457,3 +457,100 @@ def test_cli_recovery_collect_checkpoint_requires_backup_credentials(tmp_path, c
         ])
     assert exc.value.code == 2
     assert "cp_backup_credentials_unavailable" in capsys.readouterr().err
+
+
+def test_cli_recovery_collect_checkpoint_rejects_vsx_target_before_admission(tmp_path, capsys, monkeypatch):
+    """RB.3b step 6: a `__vsid_` entity named in --recovery-gateways is refused
+    as a clean parser.error before admission -- the collector's own precheck()
+    would also refuse it (B7), but catching it here means no ledger read, no
+    admission, and no device contact are even attempted for a VSX target."""
+    monkeypatch.setenv("SECURITYEXPERT_CP_BACKUP_SSH_USERNAME", "svc-backup")
+    monkeypatch.setenv("SECURITYEXPERT_CP_BACKUP_SSH_PASSWORD", "s3cr3t")
+
+    runtime_root = tmp_path / "runtime"
+    recovery_root = tmp_path / "recovery"
+    output_dir = runtime_root / "output"
+    output_dir.mkdir(parents=True)
+    import json
+    (output_dir / "unified.json").write_text(json.dumps(_unified()), encoding="utf-8")
+
+    with pytest.raises(SystemExit) as exc:
+        main.main([
+            "--runtime-root", str(runtime_root),
+            "--recovery-root", str(recovery_root),
+            "--recovery-collect", "--recovery-vendor", "checkpoint",
+            "--recovery-gateways", "vsx-01__vsid_10",
+        ])
+    assert exc.value.code == 2
+    assert "VSX virtual system" in capsys.readouterr().err
+
+
+def test_cli_recovery_collect_checkpoint_wires_ledger_platform_and_prior_sizes(tmp_path, monkeypatch):
+    """RB.3b step 6: the checkpoint branch builds the ledger from data_root,
+    the platform map from cp_config_telemetry.json, and prior backup sizes
+    from the recovery store's own manifests, and passes all of them (plus the
+    resolved vault key / recovery paths) into the collector constructor."""
+    monkeypatch.setenv("SECURITYEXPERT_CP_BACKUP_SSH_USERNAME", "svc-backup")
+    monkeypatch.setenv("SECURITYEXPERT_CP_BACKUP_SSH_PASSWORD", "s3cr3t")
+    monkeypatch.setenv("SECURITYEXPERT_CP_BACKUP_ALLOWED_ENTITIES", "fw-01")
+
+    import json
+
+    runtime_root = tmp_path / "runtime"
+    recovery_root_arg = tmp_path / "recovery"
+    output_dir = runtime_root / "output"
+    output_dir.mkdir(parents=True)
+    (output_dir / "unified.json").write_text(json.dumps(_unified()), encoding="utf-8")
+    (output_dir / "cp_config_telemetry.json").write_text(
+        json.dumps({"devices": [{"entity_id": "fw-01", "platform": {"family": "gaia"}}]}),
+        encoding="utf-8",
+    )
+
+    runtime_paths = resolve_runtime_paths(str(runtime_root))
+    recovery_paths = resolve_recovery_root(str(recovery_root_arg), runtime_root=runtime_paths.runtime_root)
+    vault_key, vault_key_id = recovery_store.get_or_create_vault_key(
+        runtime_paths.data_root, recovery_paths.recovery_root
+    )
+    recovery_store.write_artifact(
+        recovery_paths,
+        vault_key=vault_key, vault_key_id=vault_key_id,
+        device={
+            "vendor": "checkpoint", "entity_id": "fw-01",
+            "physical_endpoint": "fw-01", "vsid": None, "hostname_fingerprint": "",
+            "platform": "gaia_r81_10", "software_version": "R81.10", "ha_role": "unknown",
+        },
+        artifact_class="cp_gaia_backup",
+        plaintext=b"x" * 4096,
+        vendor_native_filename="backup_fw-01_prior.tgz",
+        collected_via="cp_ssh_scp_fetch",
+    )
+
+    captured = {}
+
+    class _FakeCollector:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+
+        def collect(self, target):
+            raise RecoveryCollectionBlockedError("test stub -- not exercising the device core")
+
+    import checkpoint.checkpoint_recovery_collector as cc
+    monkeypatch.setattr(cc, "CheckpointGaiaBackupCollector", _FakeCollector)
+
+    with pytest.raises(SystemExit):
+        main.main([
+            "--runtime-root", str(runtime_root),
+            "--recovery-root", str(recovery_root_arg),
+            "--recovery-collect", "--recovery-vendor", "checkpoint",
+            "--recovery-gateways", "fw-01",
+        ])
+
+    assert captured["platform_by_entity"] == {"fw-01": "gaia"}
+    assert captured["prior_backup_sizes_by_entity"] == {"fw-01": [4096]}
+    assert captured["vault_key"] == vault_key
+    assert captured["vault_key_id"] == vault_key_id
+    assert captured["recovery_paths"].recovery_root == recovery_paths.recovery_root
+    assert captured["run_id"] is None
+
+    from utils.recovery_operational_ledger import RecoveryOperationalLedger
+    assert isinstance(captured["ledger"], RecoveryOperationalLedger)
