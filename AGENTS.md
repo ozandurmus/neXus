@@ -109,6 +109,28 @@ compact `SESSION CLOSE` containing:
 If implementation is complete but human validation is pending, say so and do
 not advance durable state beyond the evidence.
 
+## Handover economy
+
+`AI_HANDOVER.md` and the hot sections of `CURRENT_STATE.md` exist so a cold
+chat can resume in **one read each** — not to narrate a session. A new chat
+must be able to reconstruct the task from: `AI_START_HERE.md` →
+`CURRENT_STATE.md` (hot section) → `AI_HANDOVER.md` → the **one** phase/design
+doc the task names. If it needs more than that, the handover was too thin or
+the phase doc too vague — fix those, do not pad the rotating docs.
+
+- `AI_HANDOVER.md`: snapshot (≤6 lines), what changed this session (bullets,
+  not prose), exact next action, test delta, new risks. No decision
+  re-litigation, no doc-editing mechanics, no restating the phase/contract
+  doc.
+- `CURRENT_STATE.md` "Active build": status + one-line scope + link to the
+  phase doc. Predecessor builds are one line each — or left entirely to
+  `project/build_history.json`.
+- `project/build_history.json`: obey its own `record_contract` — summary ≤ 2
+  sentences, detail lives in the linked doc.
+- Never copy the same paragraph into three files. The phase/design doc is the
+  spec; the rotating docs point at it and carry only what is *not* in it
+  (current status, test numbers, next action, live risks).
+
 ## Project-state update rule
 
 A build that changes scope, delivery state, architecture, debt or sequencing

@@ -1148,23 +1148,28 @@ def main(argv=None, *, runtime_services=None, provenance="manual", admission_run
             vendor=args.recovery_vendor, selector=selector, provenance=provenance,
         )
 
-        if args.recovery_vendor == "panorama":
-            from panorama.panorama_recovery_collector import PanDeviceStateCollector
-            from panorama.panorama_runtime_runner import _tls_verify_setting
-
-            cfg = _runtime_config(require_cp=False, require_panorama=True)
-            collector = PanDeviceStateCollector(cfg, verify=_tls_verify_setting())
-            budget_vendor = "paloalto"
-        else:
-            from checkpoint.checkpoint_recovery_collector import CheckpointGaiaBackupCollector
-
-            collector = CheckpointGaiaBackupCollector()
-            budget_vendor = "checkpoint"
-
         def _run_under_admission(entity_id, operation):
             return _admitted(budget_vendor, f"recovery-{args.recovery_vendor}", entity_id, operation)
 
         try:
+            if args.recovery_vendor == "panorama":
+                from panorama.panorama_recovery_collector import PanDeviceStateCollector
+                from panorama.panorama_runtime_runner import _tls_verify_setting
+
+                cfg = _runtime_config(require_cp=False, require_panorama=True)
+                collector = PanDeviceStateCollector(cfg, verify=_tls_verify_setting())
+                budget_vendor = "paloalto"
+            else:
+                # RB.3b: the distinct backup credential (D4 / B11) is resolved in
+                # the constructor and fails closed if absent — refusing the whole
+                # CP request before target selection. Full step-6 wiring
+                # (platform gate, prior-size lookup, pre-admission VSX reject) is
+                # still owed.
+                from checkpoint.checkpoint_recovery_collector import CheckpointGaiaBackupCollector
+
+                collector = CheckpointGaiaBackupCollector()
+                budget_vendor = "checkpoint"
+
             result = run_recovery_collection(
                 request,
                 unified_devices=unified_devices, collector=collector,
