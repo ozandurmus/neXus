@@ -581,23 +581,28 @@ independently of how they were collected. No schema version changes.
    2026-08-31** — `D3` resolved (architecture §13), `D4` signed off, §7.3 point
    14 signed off, §7.7 / §7.8 signed off (command strings confirm-on-hardware at
    the first R81.10 / R81.20 run), ledger design + §3 rule 5 accepted.
-2. AC-1 … AC-14 green against fixture transports.
-3. Full suite at or above baseline; privacy gate PASS / 0.
-4. Amendments C1–C6 landed.
+2. AC-1 … AC-14 green against fixture transports. **Steps 2–5 + C6 done
+   2026-08-31** — AC-1…AC-6 / AC-12 / AC-14 / C6 / §9.13 (a)(b)(c)(f)(g) green
+   in `tests/test_rb3b_cp_backup_device_core.py`; AC-7…AC-11 / §9.13 in the
+   step 2–4 suites. AC-13 (`recovery-cp` not allowlisted ⇒ `SchedulerPolicyError`)
+   is covered by `tests/test_rb2_recovery_collect.py`.
+3. Full suite at or above baseline; privacy gate PASS / 0. **Step 5: 875 / 25 / 2
+   (the 2 = documented pre-existing pollution), privacy gate = only the
+   gitignored `data/`+`logs/` local noise.**
+4. Amendments C1–C6 landed. **C6 landed with step 5** (§9.12 CP-path test).
 5. Status `IMPLEMENTED` — **not** `AUTOMATED_VALIDATED` and not `DONE` — until
-   the single-gateway watched real-environment run above has happened. A
-   device-writing command does not get to skip that on the strength of fixtures.
+   step 6 (`main.py` wiring) lands **and** the single-gateway watched
+   real-environment run above has happened. A device-writing command does not
+   get to skip that on the strength of fixtures.
 
 ## Next movement / model
 
-The decision walk-through is **done** — `D3` resolved, `D4` and the §7.3 point
-14 / §7.7 / §7.8 gates signed off, the ledger design and §3 rule 5 tightening
-accepted (all 2026-08-31). The next movement is **implementation**.
-
-`IMPLEMENTATION` at **Sonnet 5, normal** for steps 2–4 of the plan (ledger,
-gating, precondition parser — all offline and well specified above), and
-**Sonnet 5, extended thinking** for step 5 only, the device-touching core,
-where the failure modes are on a production firewall rather than in a test.
-That is the one place in this build where the strongest tier earns its cost;
-the rest does not need it. **C6** (contracts §9.12 CP-path test for a
-non-scheduled workflow) lands with steps 5–6.
+Steps 2–5 + C6 are **implemented** (2026-08-31). **Steps 6–7 remain**, both at
+**`Sonnet 5, normal`** — step 6 is deterministic `main.py` wiring against the
+now-frozen collector (ledger + store binding, `cp_config_telemetry.json`
+platform map, prior-backup-size lookup from the recovery store, pre-admission
+VSX reject, `skipped` in the CLI summary); step 7 is project metadata +
+`CURRENT_STATE.md` trim + `docs/AI_DEVELOPMENT_PROTOCOL.md` iff `D6` adopts
+`operational-write` permanently. Neither needs extended thinking. The device
+core (step 5) was the one place the strongest tier earned its cost, and it is
+done.

@@ -39,6 +39,15 @@ class RecoveryCollectionBlockedError(Exception):
     just *that it failed* (contract §10.3)."""
 
 
+class RecoveryCollectionSkipped(Exception):
+    """A per-endpoint skip that is **not** a failure and **not** a block:
+    the collector deliberately did nothing this run and that is the correct
+    outcome. RB.3b B4 — the durable ``operational-write`` ledger already
+    records an ``add backup local`` for this endpoint inside the 24 h window,
+    so the run is skipped with zero device contact. Reported as status
+    ``"skipped"``; it does not count toward ``failed_count``."""
+
+
 @dataclass(frozen=True)
 class RecoveryCollectionTarget:
     entity_id: str
@@ -56,7 +65,7 @@ class RecoveryCollectionRequest:
 @dataclass
 class RecoveryCollectionOutcome:
     entity_id: str
-    status: str  # "collected" | "failed" | "blocked"
+    status: str  # "collected" | "failed" | "blocked" | "skipped"
     artifact_id: str | None = None
     error: str | None = None
 
@@ -71,8 +80,14 @@ class RecoveryCollectionResult:
         return sum(1 for o in self.outcomes if o.status == "collected")
 
     @property
+    def skipped_count(self) -> int:
+        return sum(1 for o in self.outcomes if o.status == "skipped")
+
+    @property
     def failed_count(self) -> int:
-        return sum(1 for o in self.outcomes if o.status != "collected")
+        # A deliberate skip (RB.3b B4 — already backed up inside the 24 h
+        # window) is a success-equivalent outcome, not a failure.
+        return sum(1 for o in self.outcomes if o.status not in ("collected", "skipped"))
 
 
 def select_recovery_targets(
@@ -139,6 +154,29 @@ class RecoveryCollector(Protocol):
         ...
 
 
+def build_recovery_device_block(
+    target: RecoveryCollectionTarget, meta: Mapping[str, Any]
+) -> dict[str, Any]:
+    """The ``manifest.device`` block for a collected artifact (contract §3),
+    from the target identity plus the collector's returned ``meta``.
+
+    One definition, shared by ``run_recovery_collection`` and by any collector
+    that persists its own artifact **inside** ``collect()`` — RB.3b: the CP
+    Gaia backup collector calls ``recovery_store.write_artifact`` within the
+    admitted SSH session so the store write lands *before* the on-device
+    archive is deleted (correctness contract rule 1)."""
+    return {
+        "vendor": target.vendor,
+        "entity_id": target.entity_id,
+        "physical_endpoint": meta.get("physical_endpoint", target.entity_id),
+        "vsid": meta.get("vsid"),
+        "hostname_fingerprint": meta.get("hostname_fingerprint", ""),
+        "platform": meta["platform"],
+        "software_version": meta.get("software_version") or "unknown",
+        "ha_role": meta.get("ha_role", "unknown"),
+    }
+
+
 def run_recovery_collection(
     request: RecoveryCollectionRequest,
     *,
@@ -181,6 +219,11 @@ def run_recovery_collection(
                 plaintext, meta = run_under_admission(target.entity_id, _do_collect)
             else:
                 plaintext, meta = _do_collect()
+        except RecoveryCollectionSkipped as exc:
+            result.outcomes.append(RecoveryCollectionOutcome(
+                entity_id=target.entity_id, status="skipped", error=str(exc),
+            ))
+            continue
         except RecoveryCollectionBlockedError as exc:
             result.outcomes.append(RecoveryCollectionOutcome(
                 entity_id=target.entity_id, status="blocked", error=str(exc),
@@ -192,16 +235,19 @@ def run_recovery_collection(
             ))
             continue
 
-        device = {
-            "vendor": target.vendor,
-            "entity_id": target.entity_id,
-            "physical_endpoint": meta.get("physical_endpoint", target.entity_id),
-            "vsid": meta.get("vsid"),
-            "hostname_fingerprint": meta.get("hostname_fingerprint", ""),
-            "platform": meta["platform"],
-            "software_version": meta.get("software_version") or "unknown",
-            "ha_role": meta.get("ha_role", "unknown"),
-        }
+        # A collector that persisted its own artifact inside collect() — the CP
+        # Gaia backup path, where the store write must land inside the admitted
+        # SSH session and before the on-device archive is deleted — reports its
+        # artifact_id here; the orchestrator does not write a second copy.
+        stored_artifact_id = meta.get("stored_artifact_id")
+        if stored_artifact_id:
+            result.outcomes.append(RecoveryCollectionOutcome(
+                entity_id=target.entity_id, status="collected",
+                artifact_id=str(stored_artifact_id),
+            ))
+            continue
+
+        device = build_recovery_device_block(target, meta)
         write_result = write_artifact(
             recovery_paths,
             vault_key=vault_key, vault_key_id=vault_key_id,
