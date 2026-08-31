@@ -3,6 +3,21 @@
   "record_contract": "One structured record per build, newest first. Required: build, status, title, summary (<= 2 sentences). Optional: started, completed, track, movement, supersedes, evidence, risks_forward, docs{agreement,validation,handover} (repo-relative paths under docs/history/). Full detail lives in the linked doc; do not restate it here. Status vocabulary must stay within utils/project_plan.py STATUS_VALUES.",
   "builds": [
     {
+      "build": "remove_dormant_remote_cleanup",
+      "status": "done",
+      "started": "2026-08-31",
+      "completed": "2026-08-31",
+      "title": "Remove dormant remote-cleanup helper (utils/cleanup.py)",
+      "track": "Security / Code Health",
+      "movement": "IMPLEMENTATION",
+      "summary": "Deleted utils/cleanup.py, an unreferenced module that connected over SSH with the CP collection credential and issued unaudited 'rm -f' commands -- outside the network-device command gate (docs/AI_DEVELOPMENT_PROTOCOL.md) and the current read-only product posture, even though nothing imported it. New tests/test_remove_dormant_remote_cleanup.py (pytest.mark.security) asserts the module stays gone and that no tracked .py file reintroduces a cleanup_all() equivalent.",
+      "evidence": "2 new tests, both green. Full suite 881 passed / 23 skipped / 2 failed (same two pre-existing, unrelated, order-dependent failures, re-confirmed passing in isolation) -- zero regressions. Repository privacy gate PASS/0. No device contacted at any point.",
+      "risks_forward": "None. Purely local hardening flagged in docs/design/SERVER_PRODUCTIZATION_AND_MODULARIZATION_ARCHITECTURE.md section 3 item 1 as safe before server arrival; no runtime behavior, CLI surface, or test contract changed for any live path.",
+      "docs": {
+        "agreement": "docs/design/SERVER_PRODUCTIZATION_AND_MODULARIZATION_ARCHITECTURE.md"
+      }
+    },
+    {
       "build": "RB.3b-impl-step7",
       "status": "in_progress",
       "started": "2026-08-31",
