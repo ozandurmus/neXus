@@ -3,6 +3,51 @@
   "record_contract": "One structured record per build, newest first. Required: build, status, title, summary (<= 2 sentences). Optional: started, completed, track, movement, supersedes, evidence, risks_forward, docs{agreement,validation,handover} (repo-relative paths under docs/history/). Full detail lives in the linked doc; do not restate it here. Status vocabulary must stay within utils/project_plan.py STATUS_VALUES.",
   "builds": [
     {
+      "build": "RB.3b-impl-step7",
+      "status": "in_progress",
+      "started": "2026-08-31",
+      "completed": "2026-08-31",
+      "title": "RB.3b implementation step 7 - project metadata / state sync",
+      "track": "Recovery",
+      "movement": "DOCS",
+      "summary": "Docs-only catch-up after steps 5-6 landed without their own build_history.json entries: added the missing step-5 (device core + C6) and step-6 (main.py wiring) records below, trimmed CURRENT_STATE.md's Active build section, updated the phase doc's Status/Definition-of-done, and refreshed project/roadmap.json + project/backlog.json + project/feature_registry.json's stale RB.3b prose. No code change; no test re-run (last evidence, 879/23/2, still holds).",
+      "evidence": "No code changed. Repository privacy gate PASS/0 (docs only, no runtime artifacts touched).",
+      "risks_forward": "RB.3b stays in_progress -- not IMPLEMENTED -- until the mandatory watched real R81.10/R81.20 single-gateway run happens (also resolves the confirm-on-hardware §7.7/§7.8 command-string and add backup local output-format questions). D5-D7 (RB.3c storage budget / operational-write classification; permanent protocol adoption) remain open and untouched by this step.",
+      "docs": {
+        "agreement": "docs/history/phase/RB_3B_CP_GAIA_BACKUP_COLLECTION.md"
+      }
+    },
+    {
+      "build": "RB.3b-impl-step6",
+      "status": "in_progress",
+      "started": "2026-08-31",
+      "completed": "2026-08-31",
+      "title": "RB.3b implementation step 6 - main.py wiring",
+      "track": "Recovery",
+      "movement": "IMPLEMENTATION",
+      "summary": "main.py's --recovery-collect --recovery-vendor checkpoint branch now builds and binds the operational-write ledger, recovery store paths/vault key, the cp_config_telemetry.json platform map and a prior-backup-size lookup from the recovery store into CheckpointGaiaBackupCollector, instead of constructing it bare (which failed closed at the D4 credential guard with nothing else wired). A __vsid_ target in --recovery-gateways is now rejected with a clean parser.error before admission (belt-and-suspenders alongside the collector's own precheck()); the CLI summary gained an explicit skipped-outcome count.",
+      "evidence": "2 new CLI-integration tests in tests/test_rb2_recovery_collect.py (VSX pre-admission reject; full constructor-kwargs wiring). Full suite 879 passed / 23 skipped / 2 failed (same two pre-existing, unrelated, order-dependent failures). Privacy gate PASS/0.",
+      "risks_forward": "Step 7 (project metadata + CURRENT_STATE.md trim) and the mandatory watched real R81.10/R81.20 gateway run both remain before RB.3b can leave in_progress; a normal run with no operator configuration still touches no device (SECURITYEXPERT_CP_BACKUP_SSH_* and a non-empty SECURITYEXPERT_CP_BACKUP_ALLOWED_ENTITIES are both required and unset by default).",
+      "docs": {
+        "agreement": "docs/history/phase/RB_3B_CP_GAIA_BACKUP_COLLECTION.md"
+      }
+    },
+    {
+      "build": "RB.3b-impl-step5",
+      "status": "in_progress",
+      "started": "2026-08-31",
+      "completed": "2026-08-31",
+      "title": "RB.3b implementation step 5 + C6 - CP Gaia backup device core",
+      "track": "Recovery",
+      "movement": "IMPLEMENTATION",
+      "summary": "checkpoint_recovery_collector.collect() now runs the one-SSH-session device-touching sequence inside run_under_admission: ledger read, §7.7 free-space read, add backup local (no retry), SFTP fetch into memory (no temp file, B6), size verify, write_artifact before the §7.8 delete of exactly the created name, then ledger.record_execution iff add backup local was sent. New BackupSshSession transport wrapper and frozen Clish/Expert command tuples (Expert primary per the §7.7/§7.8 sign-off notes); RecoveryCollectionSkipped / 'skipped' status added to utils/recovery_collect.py, excluded from failed_count.",
+      "evidence": "24 new tests (tests/test_rb3b_cp_backup_device_core.py: AC-1..AC-6, AC-12, AC-14, C6, §9.13 (a)(b)(c)(f)(g)). Full suite 875 passed / 25 skipped / 2 failed (documented pre-existing test-order pollution, unrelated). No main.py change (step 6).",
+      "risks_forward": "Device core is exercised only against fixture SSH/SCP transports; the mandatory watched real R81.10/R81.20 gateway run (which also confirms the §7.7/§7.8 command-string and add backup local output-format on hardware) remains owed. Steps 6-7 remain before RB.3b can leave in_progress.",
+      "docs": {
+        "agreement": "docs/history/phase/RB_3B_CP_GAIA_BACKUP_COLLECTION.md"
+      }
+    },
+    {
       "build": "RB.3b-impl-steps-2-4",
       "status": "in_progress",
       "started": "2026-08-31",
