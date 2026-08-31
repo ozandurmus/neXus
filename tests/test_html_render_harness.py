@@ -4,16 +4,31 @@ Renders the report from the committed `tests/fixtures/uitest` bundle so every
 module is populated, then:
   * (always) checks every embedded `const X = ...;` payload is valid JSON — the
     0.7.4a bug class, catchable with no JS engine;
-  * (when `bun` + the harness deps are present) runs
+  * (when a JS runtime + the harness deps are present) runs
     `tools/render-harness/check-render.mjs`, which executes the script in a DOM
     and clicks every nav module + inner tab, asserting panels switch with no
     console errors;
   * (when Playwright + a Chromium are present) runs
     `tools/render-harness/check_render_playwright.py`, a real-browser
     alternative that performs the same checks -- not gated on the same
-    bun/happy-dom version pairing, so it still catches a render regression if
-    that toolchain breaks (as it did in one cloud dev environment this
-    session: `window.eval is not a function`).
+    happy-dom toolchain, so it still catches a render regression if that
+    toolchain breaks.
+
+render_harness_happydom_pin (discovered 2026-08-30, root-caused 2026-08-31):
+happy-dom's per-Window script execution runs inside a `node:vm` context.
+Under Bun, that context's globals come back broken -- `window.eval` is an
+own property that is simply `undefined` (`TypeError: window.eval is not a
+function`), and even built-ins like `Map`/`Error` resolve to `undefined`
+inside a script run there. This reproduces on every happy-dom major back to
+16.x, i.e. it is not a happy-dom version regression -- Bun's `node:vm` shim
+does not correctly implement what happy-dom needs. Under real Node.js the
+exact same happy-dom version (including the currently pinned ^20.0.0) works
+correctly: `window.eval` is a real function and executes with normal global
+semantics. `check-render.mjs` itself needed no change; `_js_runtime()` below
+now prefers a real `node` binary over `bun` to execute it, falling back to
+`bun` (broken for this specific check, kept as a last resort) only when no
+Node is on PATH. `bun install`/`bun.lock` are unaffected -- Bun's package
+resolution is not implicated, only its `vm` module.
 """
 import json
 import os
@@ -48,6 +63,19 @@ def _bun() -> str | None:
         return found
     fallback = Path(os.path.expanduser("~")) / ".bun" / "bin" / "bun"
     return str(fallback) if fallback.exists() else None
+
+
+def _js_runtime() -> str | None:
+    """A JS runtime to execute check-render.mjs under.
+
+    Prefer real Node.js: its `node:vm` implementation is what happy-dom's
+    per-Window script execution actually needs (see module docstring,
+    render_harness_happydom_pin). `bun install` still resolves/installs the
+    harness's node_modules just fine -- only Bun's vm module breaks this
+    specific check, so it stays a last-resort fallback in case a session has
+    Bun but no Node at all.
+    """
+    return shutil.which("node") or _bun()
 
 
 def _playwright_chromium_available() -> bool:
@@ -199,15 +227,15 @@ def test_discovery_fixture_entities_match_the_real_builder_shape(rendered_html):
         )
 
 
-@pytest.mark.skipif(_bun() is None, reason="bun not installed")
+@pytest.mark.skipif(_js_runtime() is None, reason="neither node nor bun is installed")
 @pytest.mark.skipif(
     not HARNESS_DEPS.exists(),
-    reason="render-harness deps missing — run `bun install` in tools/render-harness",
+    reason="render-harness deps missing — run `bun install` (or `npm install`) in tools/render-harness",
 )
 def test_headless_navigation_smoke(rendered_html):
     """Execute the script in a DOM and click every nav module + inner tab."""
     proc = subprocess.run(
-        [_bun(), str(HARNESS), str(rendered_html)],
+        [_js_runtime(), str(HARNESS), str(rendered_html)],
         capture_output=True, text=True, timeout=120,
     )
     assert proc.returncode == 0, (

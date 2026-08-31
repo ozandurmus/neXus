@@ -44,6 +44,7 @@ from typing import Any, Callable, TypeVar
 
 from utils.capability_registry import CapabilityStore
 from utils.discovery_lifecycle import LifecycleStore
+from utils.evidence_backend import SchedulerStateBackend, select_scheduler_state_backend
 from utils.coordinator_backend import (
     CollectionAdmissionError,
     CoordinatorBackend,
@@ -348,15 +349,20 @@ SCHEDULER_STATE_PATH = Path("state") / "scheduler_state.json"
 _ResultT = TypeVar("_ResultT")
 
 
-def load_scheduler_state(data_root: Path) -> dict[str, datetime]:
-    """Load value-free last-success timestamps; malformed state fails closed."""
-    path = Path(data_root) / SCHEDULER_STATE_PATH
-    if not path.exists():
-        return {}
+def load_scheduler_state(data_root: Path, backend: SchedulerStateBackend | None = None) -> dict[str, datetime]:
+    """Load value-free last-success timestamps; malformed state fails closed.
+
+    Validation stays here rather than in the backend so both storage backends
+    enforce the identical allowlist rules (DEV.3.3 contract, amendment A5).
+    """
+    if backend is None:
+        backend = select_scheduler_state_backend(path=Path(data_root) / SCHEDULER_STATE_PATH)
     try:
-        raw = json.loads(path.read_text(encoding="utf-8"))
+        raw = backend.load_raw()
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise SchedulerPolicyError("scheduler state cannot be read safely") from exc
+    if raw is None:
+        return {}
     if not isinstance(raw, dict) or raw.get("version") != 1:
         raise SchedulerPolicyError("scheduler state has unsupported schema")
     rows = raw.get("last_completed_at", {})
@@ -374,10 +380,12 @@ def load_scheduler_state(data_root: Path) -> dict[str, datetime]:
     return result
 
 
-def write_scheduler_state(data_root: Path, state: dict[str, datetime]) -> None:
-    """Atomically persist value-free completion timestamps under RuntimeRoot."""
-    path = Path(data_root) / SCHEDULER_STATE_PATH
-    path.parent.mkdir(parents=True, exist_ok=True)
+def write_scheduler_state(
+    data_root: Path, state: dict[str, datetime], backend: SchedulerStateBackend | None = None
+) -> None:
+    """Persist value-free completion timestamps through the active backend."""
+    if backend is None:
+        backend = select_scheduler_state_backend(path=Path(data_root) / SCHEDULER_STATE_PATH)
     payload = {
         "version": 1,
         "last_completed_at": {
@@ -385,9 +393,7 @@ def write_scheduler_state(data_root: Path, state: dict[str, datetime]) -> None:
             for workflow, value in sorted(state.items())
         },
     }
-    tmp = path.with_suffix(".json.tmp")
-    tmp.write_text(json.dumps(payload, indent=2), encoding="utf-8")
-    tmp.replace(path)
+    backend.save_raw(payload)
 
 
 def execute_admitted_collection(
