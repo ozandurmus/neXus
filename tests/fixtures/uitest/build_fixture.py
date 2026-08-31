@@ -169,6 +169,22 @@ def unified():
                         _iface("ethernet1/3", "198.51.100.132", 25, vr="vr-dmz", vsys="vsys2", zone="dmz")],
          "routes": [_route("0.0.0.0/0", "203.0.113.254", "ethernet1/1", "default", vr="default")],
          "inventory_status": _NODATA},
+
+        # --- frontend_rendering_boundary (AC-3): standalone gateways whose
+        # `device` name is a hostile HTML/script payload. `device` flows
+        # straight into the client's `entry.displayName` (static/app.js:706)
+        # and is rendered by deviceCardHtml() -- the tree/list highest-value
+        # sink this contract's audit called out. Deliberately standalone
+        # (no cluster/VSX membership) so this addition cannot perturb any
+        # existing cluster-matching/topology assertion.
+        {"source": "cp", "device": "<img src=x onerror=alert(1)>", "vsys": "default",
+         "interfaces": [_iface("eth0", "192.0.2.201", 24)],
+         "routes": [_route("0.0.0.0/0", "192.0.2.254", "eth0", "default")],
+         "inventory_status": _LIVE},
+        {"source": "cp", "device": "\"><script>alert(1)</script>", "vsys": "default",
+         "interfaces": [_iface("eth0", "192.0.2.202", 24)],
+         "routes": [_route("0.0.0.0/0", "192.0.2.254", "eth0", "default")],
+         "inventory_status": _LIVE},
     ]
 
 

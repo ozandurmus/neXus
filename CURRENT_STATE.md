@@ -6,7 +6,8 @@ agreements and validation reports). `docs/history/INDEX.md` is the one-line
 timeline.
 
 - **Authoritative checkpoint:** 2026-08-31 (`main` — RB.3b prep sign-off
-  committed, then RB.3b implementation steps 2–7; real-environment run owed)
+  committed, then RB.3b implementation steps 2–7; real-environment run owed;
+  then `frontend_rendering_boundary` implemented — see "Active build" below)
 - **Product baseline:** `0.7.7 — Compliance trend retro-fill (PAN baseline
   reconstruction)` — AUTOMATED_VALIDATED (0.7.x VERIFY track)
 - **Previous:** `DEV.3.1 — Linux worker image + Compose` — AUTOMATED_VALIDATED
@@ -134,16 +135,41 @@ capable of issuing unaudited `rm -f` over SSH with the collection credential
 — deleted; `tests/test_remove_dormant_remote_cleanup.py` regression-guards
 its absence. `project/backlog.json` entry closed.
 
-**`frontend_rendering_boundary` — CONTRACT FROZEN 2026-08-31, not yet
-implemented.** `docs/history/phase/FRONTEND_RENDERING_BOUNDARY.md` — CSP
-design (portable single-file report, no server to set headers, so a
-`<meta>` CSP with `default-src 'none'` and `'unsafe-inline'` only for the
-inlined script/style), the escaping rule, AC-1…AC-7, and a 6-step
-implementation plan, ready for a fresh session at `Sonnet 5, normal`. No
-source touched this session — audit only (`escapeHtml()` and
-`_script_json`'s `</script>`-neutralization both already sound where
-sampled; 28 of 97 `static/app.js` sinks flagged as needing verification,
-not yet a finished audit).
+**`frontend_rendering_boundary` — AUTOMATED_VALIDATED 2026-08-31, implemented
+in the same session the contract was frozen in.**
+`docs/history/phase/FRONTEND_RENDERING_BOUNDARY.md` — CSP `<meta>` tag added
+to `templates/index.html` (`default-src 'none'`, `'unsafe-inline'` only for
+the inlined script/style; `frame-ancestors` dropped mid-implementation once
+found to be spec-unsupported via `<meta>` delivery — see the doc's
+"Implementation findings"). AC-2's exhaustive sink audit reviewed all 97
+`static/app.js` `.innerHTML` sinks individually (not the earlier 28-of-97
+heuristic sample) and found **zero gaps** — no fix required, a real negative
+result. New `tests/test_frontend_rendering_boundary.py` (5 tests: CSP
+exact-match, static + real-Chromium hostile-label checks, `_script_json`
+breakout neutralization) plus two hostile-label devices added to
+`tests/fixtures/uitest/unified.json`. Evidence: full suite 888 passed / 23
+skipped / 0 failed; privacy gate PASS/0; render harness green including the
+real-Chromium path. The "manual browser check" was performed via real
+Chromium driven by Playwright (zero console errors across all seven
+modules, screenshots captured) rather than literal human interaction — this
+sandbox has no display — which is why this stays AUTOMATED_VALIDATED rather
+than DONE; a human interactive open on a real workstation is a cheap,
+non-blocking follow-up, not a known defect.
+
+**`codebase_modularization` (frontend half) — CONTRACT FROZEN 2026-08-31,
+not yet implemented.** `docs/history/phase/CODEBASE_MODULARIZATION_FRONTEND.md`
+— splits `static/app.js` (169 top-level functions, one flat file) into eight
+responsibility-owned source files composed back into the same single inline
+portable `<script>` (no bundler, no ES modules, no build step). Grounded in
+the same session's `frontend_rendering_boundary` full read of the file. An
+8-file module ownership table (amends the architecture doc's 7-file
+proposal with a new `overview_ui.js`), two justified deviations from that
+doc's literal suggestion (no `window.SecurityExpert` namespace; no
+shared-state bucket in `app_core.js`), a new static dependency-order
+regression test design, and a 7-step implementation plan are frozen for a
+fresh session at `Sonnet 5, normal`. No source touched this session — scope/
+audit/design only. The backend half (`main.py` / vendor-collector
+splitting) stays unscoped, under the same backlog id.
 
 The P0 `cp_device_interaction_safety` audit **closed 2026-08-25**; do not
 re-cite it as open. The earlier seed prompt
