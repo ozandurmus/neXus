@@ -3,6 +3,37 @@
   "record_contract": "One structured record per build, newest first. Required: build, status, title, summary (<= 2 sentences). Optional: started, completed, track, movement, supersedes, evidence, risks_forward, docs{agreement,validation,handover} (repo-relative paths under docs/history/). Full detail lives in the linked doc; do not restate it here. Status vocabulary must stay within utils/project_plan.py STATUS_VALUES.",
   "builds": [
     {
+      "build": "codebase_modularization_frontend-contract",
+      "status": "complete",
+      "started": "2026-08-31",
+      "completed": "2026-08-31",
+      "title": "Codebase modularization (static/app.js split) -- frontend-half contract",
+      "track": "Architecture / Code Health",
+      "movement": "ARCHITECTURE",
+      "summary": "Scoping pass for project/backlog.json codebase_modularization (P1), the frontend half of docs/design/SERVER_PRODUCTIZATION_AND_MODULARIZATION_ARCHITECTURE.md section 5. Grounded in the same session's frontend_rendering_boundary full read of static/app.js (169 top-level functions, no strict mode/wrapper, three interleaved top-level executable-code regions, decentralized module-level state). Froze docs/history/phase/CODEBASE_MODULARIZATION_FRONTEND.md: an 8-file module ownership table amending the architecture doc's original 7-file proposal (adds overview_ui.js), two deliberate design deviations (no window.SecurityExpert namespace, no shared-state bucket in app_core.js) each with a stated reason, a file-concatenation composition mechanism (no bundler/ES-modules/build-step), a new static dependency-order regression test design (AC-3), and a step-by-step implementation plan for a fresh session.",
+      "evidence": "No code changed; no test re-run required (last evidence, 888/23/0, unaffected). Repository privacy gate not re-run (docs only, no tracked-source secrets pattern touched).",
+      "risks_forward": "A wrong composition order fails silently (ReferenceError partway through the inline script, same class of risk frontend_rendering_boundary's CSP violations posed) -- AC-3's static ordering check exists specifically to catch this before a browser does. D-MOD5's line ranges will drift slightly during real extraction; the ownership rule matters more than preserving exact line numbers. The backend half of codebase_modularization (main.py / vendor-collector splitting) remains unscoped and must not be folded into the same implementation session as this frontend-only contract.",
+      "docs": {
+        "agreement": "docs/history/phase/CODEBASE_MODULARIZATION_FRONTEND.md"
+      }
+    },
+    {
+      "build": "frontend_rendering_boundary",
+      "status": "automated_validated",
+      "started": "2026-08-31",
+      "completed": "2026-08-31",
+      "title": "Frontend rendering boundary (XSS/CSP) -- implementation",
+      "track": "Security / Code Health",
+      "movement": "IMPLEMENTATION",
+      "supersedes": "frontend_rendering_boundary-contract",
+      "summary": "Implemented the frozen contract (docs/history/phase/FRONTEND_RENDERING_BOUNDARY.md, AC-1..AC-7 all green) in the same session it was frozen in. The AC-2 exhaustive sink audit reviewed all 97 static/app.js innerHTML sinks individually (not sampled) and found zero missing escapeHtml() coverage -- a real negative result confirming the prior sampling's finding held at full scale. Added the D-CSP1 <meta> CSP tag to templates/index.html, then corrected it in the same pass: frame-ancestors is spec-defined as unsupported via <meta> delivery and Chromium flags it as a console error, caught by this session's real-Chromium manual-browser-check step, so it was removed (the other nine directives are unaffected and meta-compatible).",
+      "evidence": "New tests/test_frontend_rendering_boundary.py (5 tests: AC-1 CSP exact-match, AC-3 static hostile-label check, AC-4 real-Chromium hostile-label DOM check via Playwright, AC-5 x2 for _script_json breakout neutralization). Two hostile-label standalone devices added to tests/fixtures/uitest/unified.json via build_fixture.py. Full suite 888 passed / 23 skipped / 0 failed (-n auto --dist worksteal; at/above the 881/23/2 baseline, the 2 pre-existing test-order-pollution failures did not reproduce this run). Repository privacy gate PASS/0 on a clean checkout. Render harness green including the real-Chromium path, after the frame-ancestors fix. Manual browser check performed via real-Chromium Playwright automation (not literally human-interactive -- this sandbox has no display) across all seven modules, zero console errors, screenshots captured.",
+      "risks_forward": "'unsafe-inline' remains required for script-src/style-src (single-portable-file architecture, D-CSP2) -- the CSP is defense-in-depth (blocks exfiltration/framing/embedding), not a backstop for a missed escaping gap; AC-2's exhaustive review is the actual control and it passed clean. No generic tooling enforces the D-ESC1 escaping rule going forward (a written convention, not a linted one) -- worth a follow-up (e.g. a repo-hygiene regression test scanning for new unescaped .innerHTML sinks) but not required by this contract. A literal human-interactive browser open of the CSP'd report on a real workstation remains a cheap, worthwhile follow-up whenever next convenient.",
+      "docs": {
+        "agreement": "docs/history/phase/FRONTEND_RENDERING_BOUNDARY.md"
+      }
+    },
+    {
       "build": "frontend_rendering_boundary-contract",
       "status": "complete",
       "started": "2026-08-31",
