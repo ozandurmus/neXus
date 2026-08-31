@@ -3,6 +3,20 @@
   "record_contract": "One structured record per build, newest first. Required: build, status, title, summary (<= 2 sentences). Optional: started, completed, track, movement, supersedes, evidence, risks_forward, docs{agreement,validation,handover} (repo-relative paths under docs/history/). Full detail lives in the linked doc; do not restate it here. Status vocabulary must stay within utils/project_plan.py STATUS_VALUES.",
   "builds": [
     {
+      "build": "RB.3b-prep",
+      "status": "complete",
+      "started": "2026-08-31",
+      "completed": "2026-08-31",
+      "title": "RB.3b unblocking prep - D4 decision brief, §7.7/§7.8 gate entries, operational-write ledger design, contract §3 rule 5 tightening",
+      "track": "Recovery",
+      "movement": "ARCHITECTURE",
+      "summary": "CONTRACT/ARCHITECTURE prep on feature/rb-3b-gate-prep - no code, no device call. Produced the five artifacts RB.3b was blocked on: (1) docs/design/D4_BACKUP_CREDENTIAL_IDENTITY_DECISION.md - Option A (distinct per-vendor backup service account, SECURITYEXPERT_CP_BACKUP_SSH_USERNAME + _PASSWORD_FILE/_PASSWORD, no fallback to SECURITYEXPERT_CP_CONFIG_SSH_*, constructor-time resolution that fails the CP collection closed before any device contact; DEV.2.2 mounted-material custody for the pilot) recommended, awaiting security-lead sign-off; RB.2/PAN owes a matching split from the inventory API key. (2)+(3) BACKUP_RECOVERY_CONTRACTS.md §7.7 (/var/log free-space read, class read; literal 'show diskspace' Clish / 'df -P /var/log' Expert) and §7.8 (backup deletion, class operational-write; literal 'delete backup <name>' Clish / 'rm -f -- /var/log/CPbackup/backups/<name>' Expert; deletes only the exact name this run created) landed as PREPARED FOR GATE REVIEW with a 'confirm exact token at sign-off' marker; §7.3 point 14 device-impact assessment written; §7 preamble sign-off state table added. (4) docs/design/RECOVERY_OPERATIONAL_WRITE_LEDGER.md - utils/recovery_operational_ledger.py as a fifth DEV.3.3 evidence-backend concern (filesystem + Postgres, select_ factory), read inside the admission-held section, fail-closed on an unreadable/unreachable ledger (absent ledger != error); contract §7.3 point 6 tightened (C3) + new §9.13. (5) contract §3 frozen rule 5 tightened (C4): a version-locked CP class with no resolvable software_version is not stored; PAN keeps the honest 'unknown' sentinel. Amendments C1-C5 landed; C6 folded into RB.3b implementation. RB.3b stays blocked pending product-owner / security-lead sign-off.",
+      "risks_forward": "The two literal Gaia command strings (§7.7 'show diskspace'/'df', §7.8 'delete backup <name>'/'rm') are committed to the contract with an explicit confirm-at-sign-off marker - the exact Clish token and per-release compatibility must be checked against the R81 Gaia Administration Guide and the estate's Gaia mix at gate review, not assumed. The operational-write ledger is new correctness-critical state; its fail-closed-on-unreadable posture will produce false refusals before a double backup, which is the correct direction but must be understood by operators. RB.3b remains BLOCKED - this build only produced the review artifacts; nothing is signed off, nothing implemented. No test-suite or privacy-gate re-run (docs-only; last evidence 804/20/2 from RB.3a holds).",
+      "docs": {
+        "agreement": "docs/history/phase/RB_3B_CP_GAIA_BACKUP_COLLECTION.md"
+      }
+    },
+    {
       "build": "RB.3a",
       "status": "automated_validated",
       "started": "2026-08-31",

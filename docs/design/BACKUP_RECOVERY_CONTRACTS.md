@@ -131,8 +131,27 @@ Frozen rules:
    documents an exclusion (CP Gaia backup excludes OS/binaries/hotfixes).
    Silence here would read as "complete", which is the failure mode §1 of the
    architecture exists to prevent.
-5. `software_version` is mandatory. A CP artifact without it cannot be
-   version-matched and is `UNKNOWN` readiness by definition (§5).
+5. `software_version` is mandatory. Tightened by amendment **C4** (RB.3b prep,
+   2026-08-31):
+   - **Version-locked CP classes** (`cp_gaia_backup`, `cp_mgmt_export`,
+     `cp_mds_backup`): if the exact software version cannot be resolved from
+     **existing evidence** (`unified.json` / the configuration evidence store —
+     `configuration/checkpoint_config_collector._parse_gaia_version` already
+     produces it), the collector **refuses to store the artifact**. No new
+     device command is issued to obtain a version. A Gaia backup is
+     version-locked (architecture §3.1) — a backup with no recorded version is
+     not a degraded record, it is an unrestorable file that would sit at V2
+     forever (RB.4 V3 treats an `"unknown"` version as `NOT_APPLICABLE`, not
+     `FAIL`) while presenting in every view as a valid recovery artifact.
+     Rationale: RB.3b decision B8.
+   - **PAN classes** (`pan_device_state`, `pan_running_config`): `unified.json`
+     carries no PAN version field and no device command is invented to fetch
+     one, so the honest `"unknown"` sentinel is retained, the artifact **is**
+     stored, and readiness is `UNKNOWN` by §5 until a version is available.
+     Unchanged.
+   - Consequence: a stored artifact whose `software_version` is `"unknown"` is
+     therefore only ever a PAN artifact. A CP artifact either carries its real
+     version or was never stored.
 
 ---
 
@@ -277,6 +296,15 @@ Per `docs/AI_DEVELOPMENT_PROTOCOL.md` (10 points) plus points 11–14 for the
 `operational-write` class introduced in architecture §5. **These are drafts for
 gate review, not approvals.** No command here is implemented.
 
+Sign-off state: **§7.1 / §7.2** (PAN) documented, `D2` resolved; **§7.5**
+(CP attestation, `read`) **SIGNED OFF 2026-08-31**; **§7.3 / §7.4** (CP backup,
+`operational-write` / `read`) — `D3` resolved pilot-scoped, points 1–13 drafted,
+**point 14 written 2026-08-31 (RB.3b prep), awaiting sign-off**; **§7.7 / §7.8**
+(CP free-space read / backup deletion) **PREPARED FOR GATE REVIEW 2026-08-31
+(RB.3b prep) — not signed off**, two literal Gaia command strings carried with
+an explicit "confirm exact token at sign-off" marker; **§7.6** (CP management
+export) blocked on `D5` + `E1`.
+
 ### 7.1 `GET /api/?type=export&category=device-state` (PAN) — class: `read`
 
 1. **Why required:** the only PAN artifact that restores a firewall's full
@@ -318,8 +346,18 @@ running-config contains hashed credentials and PSKs.
 4. **Timeout:** 900 s (backup generation is slow on large gateways).
 5. **Retry:** **none.** A retry risks a second concurrent backup and doubled
    disk consumption.
-6. **Max frequency per endpoint:** 1 per 24 h, hard-enforced by the admission
-   coordinator, not by convention.
+6. **Max frequency per endpoint:** 1 per 24 h. Enforced from **durable
+   per-endpoint state**, not from the in-memory admission coordinator — amended
+   by **C3** (RB.3b prep, 2026-08-31). `CollectionCoordinator` is process-local
+   and does not survive a restart: it prevents a *concurrent* second backup, not
+   one ten minutes later. The durable record is `utils/recovery_operational_ledger.py`
+   on the DEV.3.3 evidence backend — see
+   `docs/design/RECOVERY_OPERATIONAL_WRITE_LEDGER.md`. The ledger is read
+   **inside** the admission-held section, before any device contact; an endpoint
+   inside its window is skipped with zero SSH, and the entry is written once,
+   after `add backup local` is sent. An **unreadable** ledger fails closed —
+   the backup does not run (§9.13, RB.3b B4). A legitimately **absent** ledger
+   (no prior execution) is not an error and the backup proceeds.
 7. **Existing session reuse:** reuses the established SSH session; no new login.
 8. **Unsupported behavior:** Spark / Gaia Embedded — do **not** infer platform
    from direct-Clish behaviour (`AGENTS.md`); treat as `UNSUPPORTED`.
@@ -336,9 +374,27 @@ running-config contains hashed credentials and PSKs.
     fetch (digest match). On fetch failure the archive is **still deleted** and
     the job reports failure — leaving orphaned multi-MB archives on firewalls is
     itself the resource risk this gate exists to prevent.
-14. **Device-impact assessment:** **owed — blocked on open decision D3**
-    (the P0 `cp_device_interaction_safety` audit that used to co-gate this
-    closed 2026-08-25, corrected 2026-08-30).
+14. **Device-impact assessment:** written 2026-08-31 (RB.3b prep); **awaiting
+    sign-off**. `add backup local` invokes the Gaia backup subsystem, which
+    reads configuration and OS-parameter files and writes one compressed archive
+    under `/var/log/CPbackup/backups/`. It does **not** restart a process, and
+    does not touch the security policy, routing table, interfaces, SIC,
+    clustering or credentials; it holds no global lock, so a concurrent policy
+    install or operator session is unaffected. Measurable load is disk I/O plus
+    transient CPU for compression, for the backup's duration (bounded at 900 s
+    by point 4). No HA/failover interaction: a backup on the active member does
+    not trigger failover and is not synced to the standby. The only failure mode
+    that reaches the data plane is `/var/log` exhaustion, fully covered by
+    point 12 (3× free-space precondition, abort-on-unknown) and point 13
+    (cleanup, including on fetch failure). Assessed as consistent with the
+    `operational-write` class (§5, architecture §5): bounded, reversible,
+    non-configuration resource consumption. Residual risk: a gateway whose
+    `/var/log` fills from its own logging between the precondition read and
+    backup completion — not eliminable off-device, bounded by the 24 h ceiling
+    (point 6) and single-archive cleanup. **Superseded gate note:** the P0
+    `cp_device_interaction_safety` audit this point originally deferred to
+    closed 2026-08-25; this assessment stands in its place and is what the gate
+    signs off.
 
 ### 7.4 SCP fetch of the Gaia backup file — class: `read`
 
@@ -381,6 +437,126 @@ one additional constraint: **Management HA consistency.** Check Point requires
 backups collected from all management servers at the same time; these run as a
 **consistency group** (§2 `groups/`), and a group with any failed member is
 marked `INCONSISTENT` and is **not** counted as readiness evidence.
+
+### 7.7 `/var/log` free-space read (CP Gaia) — class: `read`
+
+**Status: PREPARED FOR GATE REVIEW (RB.3b prep, 2026-08-31). Not signed off.**
+Added by amendment **C1**; supersedes the draft in
+`docs/history/phase/RB_3B_CP_GAIA_BACKUP_COLLECTION.md` §B2.
+
+1. **Why required:** §7.3 point 12's free-space precondition cannot be satisfied
+   without it. Architecture §10 rule 8 — an `operational-write` runs only after
+   its precondition passes, never optimistically.
+2. **Read/write:** `read` — reports filesystem utilisation; changes nothing on
+   the device.
+3. **Vendor/platform/shell/context:** Check Point Gaia.
+   - **Literal command, primary form (Clish):** `show diskspace`
+   - **Literal command, fallback form (Expert):** `df -P /var/log`
+   `show diskspace` is primary because it needs no Expert shell; `df -P
+   /var/log` is used only where `show diskspace` is absent or its output does
+   not parse on a given Gaia release. **The exact form per release is confirmed
+   at sign-off** against the R81 Gaia Administration Guide and the estate's
+   actual Gaia mix — not assumed here. Not valid inside a VSX virtual-system
+   context (as §7.3 point 3).
+   - If the Expert `df -P /var/log` form is adopted for any release it becomes
+     the **second** literal non-`show` exception in the CP read vocabulary,
+     alongside `cpstat os -f hw_info`. It is added as an explicit literal string
+     to the RB.3b collector's own frozen command set (or
+     `configuration/checkpoint_config_probe.EXPERT_READ_ONLY_COMMANDS`),
+     **never** as a relaxation of the `show `/`clish -c 'show …'` prefix rule
+     (RB.3b B1).
+4. **Timeout:** 30 s.
+5. **Retry:** 1 retry (transport error only).
+6. **Max frequency per endpoint:** once immediately before each §7.3 attempt,
+   plus ad-hoc operator use. Not ledger-tracked — it is a `read`.
+7. **Existing session reuse:** the same SSH session as §7.3 / §7.4 / §7.8 — one
+   session does precondition, backup, fetch and cleanup. No new login; the
+   §7.3 backup identity (`D4`) carries it, no separate credential.
+8. **Unsupported behavior:** if neither form returns a parseable free-space
+   figure for the filesystem backing `/var/log` (its own mount, or `/` when
+   `/var/log` is not separately mounted), the result is `UNKNOWN` and §7.3
+   point 12 **aborts the backup**. An unparseable or absent disk reading is
+   never treated as "probably fine". Spark / Gaia Embedded: `UNSUPPORTED`, no
+   command sent — platform from the discovery-lifecycle classification, never
+   from shell behaviour (`AGENTS.md`).
+9. **Secret-bearing output risk:** none. Filesystem names, block counts and
+   mount points only.
+10. **Safe telemetry:** free bytes, total bytes, used percent, partition/mount
+    name. No file listing, no path contents.
+11. **Resource consumed:** none (read).
+12. **Free-space threshold:** free space on the `/var/log` filesystem ≥ **3×**
+    the largest prior `cp_gaia_backup` for this `entity_id` (read from the
+    recovery store's manifests). With no prior backup the floor is
+    `SECURITYEXPERT_CP_BACKUP_MIN_FREE_MB` (**default 3072**, hard floor 1024) —
+    the default is a proposal for sign-off, to be reviewed against the estate's
+    real backup sizes at the first real-environment run.
+13. **Parser contract:** bounded and fail-closed. It selects the row for the
+    mount backing `/var/log`; if `/var/log` is not its own mount it uses `/`;
+    if it can identify neither, `UNKNOWN` (→ abort). It never infers a figure
+    from a partial or truncated line.
+
+### 7.8 backup-file deletion (CP Gaia) — class: `operational-write`
+
+**Status: PREPARED FOR GATE REVIEW (RB.3b prep, 2026-08-31). Not signed off.**
+Added by amendment **C2**; supersedes the draft in
+`docs/history/phase/RB_3B_CP_GAIA_BACKUP_COLLECTION.md` §B3.
+
+1. **Why required:** §7.3 point 13's cleanup contract. Without it every backup
+   run leaves a multi-MB archive on the firewall and the platform becomes the
+   disk-consumption problem the gate exists to prevent.
+2. **Read/write:** `operational-write` — removes an artifact this platform
+   created, in the same session that created it. Consumes no resource; releases
+   disk.
+3. **Vendor/platform/shell/context:** Check Point Gaia, Clish.
+   - **Literal command, primary form (Clish):** `delete backup <name>`, where
+     `<name>` is the exact archive name returned by the `add backup local` in
+     §7.3 of the **same session**.
+   - **Literal command, fallback form (Expert):**
+     `rm -f -- /var/log/CPbackup/backups/<name>` — POSIX `--` end-of-options
+     guard, one literal path, **no glob**.
+   The exact Clish token (`delete backup` vs `delete backups`, and whether a
+   `file` keyword is required) is **confirmed at sign-off** against the R81 Gaia
+   Administration Guide for each Gaia release in the estate; the collector
+   carries whichever single literal form the review fixes, per release. Not
+   valid inside a VSX virtual-system context.
+4. **Timeout:** 60 s.
+5. **Retry:** **1 retry** — unlike §7.3, retrying a *delete* is strictly safer
+   than not retrying.
+6. **Max frequency per endpoint:** bounded by §7.3's own 1-per-24 h ceiling — a
+   deletion only ever follows a backup in the same session. Not separately
+   ledger-tracked.
+7. **Existing session reuse:** the same SSH session as §7.3 — the session that
+   created the archive is the session that deletes it. If that session is lost
+   before cleanup, see point 12.
+8. **Unsupported behavior:** same platform gating as §7.3 (Spark / Gaia
+   Embedded → `UNSUPPORTED`). If neither literal form is available for a Gaia
+   release, §7.3 is not cleared for that release either — a backup with no gated
+   cleanup path is not run.
+9. **Secret-bearing output risk:** the archive **name** is an operational
+   identity (it embeds the hostname and a timestamp) — redacted in every log
+   line per architecture §10 rule 6. The command produces only a status line;
+   no payload.
+10. **Safe telemetry:** status; `/var/log` free space after deletion.
+11. **Resource consumed:** none — it **releases** disk.
+12. **Precondition — the load-bearing rule:** the target name is the archive
+    this run created, held in memory from §7.3's own output. **Never a pattern,
+    never a wildcard, never a name obtained by listing (`show backups`), never a
+    name supplied by config or CLI.** A deletion driven by a listing or a
+    pattern could remove an operator's own backup. If the run cannot produce the
+    exact name it created (e.g. the SSH session dropped after `add backup local`
+    and before cleanup), it does **not** fall back to a discovery-based delete:
+    it reports `CLEANUP_FAILED` loudly and marks the endpoint ineligible for
+    further backup until an operator clears it (RB.3b correctness contract
+    item 3; AC-3 / AC-4).
+13. **Cleanup contract:** n/a — this *is* the cleanup.
+14. **Device-impact assessment:** removes one file under
+    `/var/log/CPbackup/backups/`. Touches no configuration, process, policy,
+    routing or clustering state; the only device effect is freeing disk.
+    Reversibility: the file is this run's own transient artifact; "reversal"
+    would be re-running the backup. No HA interaction. Assessed as within the
+    `operational-write` class (§5) — a bounded, non-configuration change that
+    only releases a resource. Reviewed together with §7.3 point 14, same
+    sign-off.
 
 ---
 
@@ -430,6 +606,7 @@ Each is a test that must exist before the corresponding phase closes.
 | 9.10 | `operational-write` refuses when the precondition is unknown | `RB.3` | free-space probe returns `None` ⇒ abort, no command sent |
 | 9.11 | nginx never mounts the recovery volume | `RB.1` | assert against committed compose files |
 | 9.12 | Backup workflow is admission-coordinated, not a side channel | `RB.2` | assert the workflow is in `ALLOWLISTED_WORKFLOWS` and acquires the endpoint lock |
+| 9.13 | `operational-write` 24 h ceiling is enforced from durable state; an unreadable ledger blocks the run | `RB.3` | 2nd run inside the window ⇒ zero device contact; corrupt/unreachable ledger ⇒ abort, no command sent; **absent** ledger ⇒ proceed; filesystem and Postgres backends decide identically; ledger read+write occur inside the admission-held section; entry written iff `add backup local` was sent (amendment C3; `docs/design/RECOVERY_OPERATIONAL_WRITE_LEDGER.md` §10) |
 
 ---
 
@@ -473,7 +650,7 @@ itself — it only does target selection, admission-coordinator routing
 | Vendor | Status | Blocker |
 |---|---|---|
 | `panorama` (PAN device-state, §7.1) | **implemented** | `D2` resolved 2026-08-30; `read` class, gate-documented in §7.1 before implementation |
-| `checkpoint` (CP Gaia backup *collection*, §7.3) | **blocked stub** | open decision `D3` (architecture §13) — **not resolved**. The P0 `cp_device_interaction_safety` audit that used to co-gate this closed 2026-08-25 (corrected 2026-08-30). |
+| `checkpoint` (CP Gaia backup *collection*, §7.3) | **blocked stub** | `D3` **resolved 2026-08-31** (pilot-scoped, fail-closed allowlist). Still blocked on: `D4` (backup credential identity — decision brief `docs/design/D4_BACKUP_CREDENTIAL_IDENTITY_DECISION.md`, recommended, awaiting security-lead sign-off), §7.3 point 14 (written, awaiting sign-off), §7.7 / §7.8 gate sign-off (two literal Gaia strings owed at review), and the durable operational-write ledger (`docs/design/RECOVERY_OPERATIONAL_WRITE_LEDGER.md`). The P0 `cp_device_interaction_safety` audit closed 2026-08-25 and is **not** a blocker. |
 | `checkpoint` attestation (CP Gaia `show backups` / `show snapshots`, §7.5) | **implemented** (RB.3a, 2026-08-31) | none — `read` class, command gate signed off 2026-08-31. **Not** a `RecoveryCollector`: it is a `RecoveryAttester` (amendment C2). An attestation has no plaintext, and `run_recovery_collection` calls `write_artifact` unconditionally on every success — forcing an attestation through `collect() -> (bytes, meta)` would mean fabricating bytes or special-casing the vendor-neutral orchestrator on vendor behaviour (RB.3a decision A2). It has its own `run_recovery_attestation` entry point and writes nothing to the recovery store. |
 
 Calling the CP *collector* raises `RecoveryCollectionBlockedError` naming the
@@ -527,7 +704,12 @@ Extends `utils.collection_executor`'s scheduler policy
 - **`RB.2`** — PAN export against recorded fixtures (never a live device in CI);
   403-no-retry; `is_rma_grade` correctness per class; 9.12.
 - **`RB.3`** — precondition abort 9.10; cleanup-on-failure; consistency-group
-  `INCONSISTENT` propagation; Spark/Embedded `UNSUPPORTED`.
+  `INCONSISTENT` propagation; Spark/Embedded `UNSUPPORTED`. **RB.3b adds:** the
+  durable-ledger battery 9.13 (`docs/design/RECOVERY_OPERATIONAL_WRITE_LEDGER.md`
+  §10); §3 rule 5 refusal — a version-locked CP class with no resolvable
+  `software_version` is not stored (AC-10); the D4 credential guard — no backup
+  identity ⇒ fail closed, no fallback (AC-11); §7.8 deletes only the exact name
+  this run created (AC-4).
 - **`RB.4`** — V1–V3 batteries incl. deliberately truncated and wrong-device
   artifacts (which must fail V3 while passing V1/V2 — the differentiator case);
   9.7, 9.8.

@@ -297,11 +297,15 @@ standard ten:
     the target partition ≥ N× expected artifact size),
 13. **cleanup contract** — what is removed afterwards, and what happens to the
     on-device artifact if the transfer fails,
-14. **device-impact assessment** signed off by the `cp_device_interaction_safety`
-    (P0) audit.
+14. **device-impact assessment**. Originally deferred to the
+    `cp_device_interaction_safety` (P0) audit; that audit **closed 2026-08-25**,
+    so the assessment is now written directly into the gate entry —
+    `docs/design/BACKUP_RECOVERY_CONTRACTS.md` §7.3 point 14 and §7.8 point 14
+    (RB.3b prep, 2026-08-31, awaiting sign-off).
 
-Consequences: `RB.3` (Check Point) is blocked on the P0 CP device-interaction
-safety audit — not merely adjacent to it. `RB.2` (PAN) is lighter: the device
+Consequences: `RB.3` (Check Point) `operational-write` commands each carry the
+extra points 11–14; the device-impact assessment now lives in the contract, not
+in a separate audit. `RB.2` (PAN) is lighter: the device
 state export streams over the API without a durable on-device artifact, so it
 classifies as `read` with a resource caveat, which is a large part of why PAN
 is sequenced first. The full ten/fourteen-point gate entries for every command
@@ -437,6 +441,14 @@ workload; everything so far has been on-demand or opportunistically scheduled.
   lock only becomes load-bearing if/when a future build actually splits
   collection across multiple processes/containers.
 - **Consistency groups** (§3.1) are scheduled as a unit, not as members.
+- **Durable per-endpoint `operational-write` ledger** (RB.3b prep, 2026-08-31):
+  the "1 per 24 h" ceiling on `add backup local` is enforced from persisted
+  state on the DEV.3.3 evidence backend, not from the in-memory coordinator
+  (which prevents a *concurrent* second backup but not a sequential one, and
+  forgets on restart). Read inside the admission-held section; an unreadable
+  ledger fails closed. Design:
+  `docs/design/RECOVERY_OPERATIONAL_WRITE_LEDGER.md`; contract §7.3 point 6 and
+  §9.13.
 - **Retention** is Grandfather/Father/Son by default (dailies → weeklies →
   monthlies), per-device-class overridable, with a floor: **retention may never
   delete the only artifact for a device that is otherwise `UNPROTECTED`.** A
@@ -529,7 +541,13 @@ These are testable invariants, not aspirations. `BACKUP_RECOVERY_CONTRACTS.md`
 3. The recovery volume is **not** served by nginx, in any configuration. The
    DEV.3.1 nginx service mounts the runtime volume; it must never mount this one.
 4. Backup credentials are **separate identities** from collection credentials and
-   are held in the `DEPLOY.1` secrets vault, never in `.env` on the server.
+   are held in the `DEPLOY.1` secrets vault, never in `.env` on the server. See
+   `docs/design/D4_BACKUP_CREDENTIAL_IDENTITY_DECISION.md` (`D4`). The backup
+   identity has **no fallback** to the collection identity; its absence fails
+   the collection closed before any device contact (RB.3b B11). Transport
+   tunables (port, timeouts, strict-host-key) stay shared with
+   `SECURITYEXPERT_CP_CONFIG_SSH_*` — only the principal and secret are
+   distinct.
 5. The repository privacy gate must fail on any recovery artifact, key or
    manifest that appears inside the repository tree — the same way it already
    fails on `known_hosts` and `*.pem`.
@@ -607,7 +625,7 @@ done or implemented; `D2` is resolved. `RB.3` is the schedule risk, gated on
 | **D1** | Inventory of what BackBox actually backs up today, by vendor and device count. Does the estate contain non-CP/PAN devices that need backup after 2027? | product owner | the entire "BackBox replacement" premise (§2) — **still open** |
 | **D2** | ~~Is the platform's PAN service account permitted to hold **superuser**~~ **RESOLVED 2026-08-30 — approved by the product owner.** The platform's PAN service account is permitted to hold superuser for the sole purpose of `type=export&category=device-state`. Consequence accepted: this is a real privilege increase to the collection identity (§10 rule 4 still separates the *backup* credential from the *collection* credential — D4 — so the superuser grant lands on a distinct service account, not the read-only inventory one). `RB.2` PAN device-state export is unblocked on this axis; `DEPLOY.1`'s secrets-vault requirement (§2) is now load-bearing, not aspirational. | security lead — **approved** | `RB.2` — unblocked |
 | **D3** | ~~Is `add backup local` (writes to device disk) acceptable at current maturity as the new `operational-write` class (§5)?~~ **RESOLVED 2026-08-31 — approved by the product owner, scoped to a named pilot set.** The `operational-write` class (§5) is accepted as a real command class; `add backup local` may run, but **only against gateways explicitly named in an allowlist that is empty by default** (`SECURITYEXPERT_CP_BACKUP_ALLOWED_ENTITIES`, fail-closed — unset or empty means no endpoint may be backed up). Consequence accepted: the platform is no longer strictly read-only against Check Point devices, consistent with the stated product trajectory (a write-capable device administration platform; read-only is a staging phase). The blast radius is exactly the allowlist's contents, and the capability cannot become a fleet-wide operation through a CLI selector — the allowlist is a ceiling, `--recovery-gateways` chooses within it. **Scheduling is NOT approved by this decision**: `"recovery-cp"` stays out of `ALLOWLISTED_WORKFLOWS`; unattended timed fleet backup is a separate decision. `D3` does not resolve `D4` (backup credential identity), §7.3 point 14 (device-impact assessment), or the two gate entries §7.3 points 12/13 require but §7 never wrote (drafted as §7.7 / §7.8 in `docs/history/phase/RB_3B_CP_GAIA_BACKUP_COLLECTION.md`) — `RB.3b` remains blocked on those. | network-security leads — **approved (pilot-scoped)** | `RB.3b` — class approved, still blocked on `D4` + the §7.3/§7.7/§7.8 gate sign-off |
-| **D4** | Backup credential identity: separate service account per vendor, or reuse the collection identity with elevated rights? (§10 rule 4 assumes separate.) | security lead | `RB.2`, `RB.3` |
+| **D4** | Backup credential identity: separate service account per vendor, or reuse the collection identity with elevated rights? (§10 rule 4 assumes separate.) **RECOMMENDED RESOLUTION RECORDED 2026-08-31 (RB.3b prep) — awaiting security-lead sign-off:** `docs/design/D4_BACKUP_CREDENTIAL_IDENTITY_DECISION.md`. Option A — a **distinct per-vendor backup service account**, `SECURITYEXPERT_CP_BACKUP_SSH_USERNAME` + `_PASSWORD_FILE` / `_PASSWORD`, **no fallback** to `SECURITYEXPERT_CP_CONFIG_SSH_*`; absence fails the CP collection closed before any device contact (RB.3b B11). Reuse (Option B) rejected: it grants the always-on inventory credential a device-mutating capability — the failure `D2` was raised to prevent. Secret delivered by the DEV.2.2 mounted-material pattern for the pilot, moving into the `DEPLOY.1` vault as a distinct secret on server arrival. **PAN implication:** `RB.2` currently reuses the inventory API key and now owes a follow-up to authenticate device-state export with a distinct PAN service account before it advances past `IMPLEMENTED`. | security lead | `RB.3b` (hard); `RB.2` (owed follow-up) |
 | **D5** | Recovery volume retention floor and total storage budget — drives GFS parameters and whether CP management exports (large) are held at the same depth as PAN device states. | product owner + infra | `RB.1` |
 | **D6** | Does the `operational-write` class get adopted into `docs/AI_DEVELOPMENT_PROTOCOL.md` as a permanent taxonomy amendment, or stay local to this design? | product owner | §5, `RB.3` |
 | **D7** | Is a V4 restore-proof lab (a spare appliance / VM per platform class) available? Without one, nothing ever leaves `RESTORE_UNPROVEN` (§6). | product owner + infra | `RB.6`, and the credibility of `RB.4` |
