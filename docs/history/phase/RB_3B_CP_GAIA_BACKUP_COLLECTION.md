@@ -13,17 +13,38 @@ fail-closed** — design decision B10 is therefore mandatory, not optional.
 Scheduling is **not** approved: `"recovery-cp"` stays out of
 `ALLOWLISTED_WORKFLOWS` (B9). Recorded in architecture §13.
 
-Remaining blockers, in the order they must clear:
+**RB.3b unblocking prep completed 2026-08-31** on `feature/rb-3b-gate-prep`
+(`ARCHITECTURE` / `DOCS`, no code, no device call). The five open items below
+now each have a reviewable artifact; RB.3b stays `blocked` pending
+**product-owner / security-lead sign-off** of those artifacts, not pending
+design work.
 
-1. **`D4`** — backup credential identity (separate service account vs. reusing
-   the collection identity). Architecture §10 rule 4 assumes separate; RB.3b
-   depends on that assumption being real.
-2. **Command gate §7.3 point 14** (device-impact assessment) — drafted at
-   points 1–13, point 14 explicitly owed. `D3`'s resolution unblocks writing it;
-   it is not written yet.
-3. **Two missing gate entries**, §7.7 and §7.8, which §7.3's own points 12 and
-   13 require but §7 never wrote. Drafted below as amendments C1/C2, awaiting
-   sign-off — including the two literal command strings owed at review.
+Remaining blockers, in the order they must clear — each now has its artifact:
+
+1. **`D4`** — backup credential identity. **Decision brief produced:**
+   `docs/design/D4_BACKUP_CREDENTIAL_IDENTITY_DECISION.md` — Option A (distinct
+   per-vendor backup service account, no fallback to the collection identity)
+   recommended, awaiting security-lead sign-off. Architecture §13 `D4` row and
+   §10 rule 4 updated.
+2. **Command gate §7.3 point 14** (device-impact assessment) — **written**
+   2026-08-31 into `docs/design/BACKUP_RECOVERY_CONTRACTS.md` §7.3 point 14
+   (and §7.8 point 14), awaiting sign-off. The P0 audit dependency is
+   superseded (audit closed 2026-08-25).
+3. **§7.7 and §7.8 gate entries** — **promoted from the C1/C2 drafts below into
+   `BACKUP_RECOVERY_CONTRACTS.md` §7.7 / §7.8**, marked *PREPARED FOR GATE
+   REVIEW*. Each carries a **literal Gaia command string** with an explicit
+   "confirm exact token at sign-off" marker: §7.7 `show diskspace` (Clish) /
+   `df -P /var/log` (Expert); §7.8 `delete backup <name>` (Clish) /
+   `rm -f -- /var/log/CPbackup/backups/<name>` (Expert).
+4. **Durable per-endpoint `operational-write` ledger** — **design produced:**
+   `docs/design/RECOVERY_OPERATIONAL_WRITE_LEDGER.md` (module
+   `utils/recovery_operational_ledger.py`, a fifth DEV.3.3 evidence-backend
+   concern, fail-closed on an unreadable ledger). Contract §7.3 point 6
+   tightened (C3); new §9.13 test obligation.
+5. **Refuse to store a version-unknown CP artifact** — **contract §3 frozen
+   rule 5 tightened** (C4): a version-locked CP class with no resolvable
+   `software_version` is **not stored**; PAN keeps the honest `"unknown"`
+   sentinel.
 
 The P0 `cp_device_interaction_safety` audit **closed 2026-08-25**
 (`project/backlog.json`, status `done`). It is **not** a blocker on this build.
@@ -417,23 +438,33 @@ exact failure mode `D2` was raised to prevent on the PAN side.
 
 ## Contract amendments required (design docs)
 
-- **C1 — new §7.7**, `/var/log` free-space read, class `read` (B2 text above).
-- **C2 — new §7.8**, backup deletion, class `operational-write` (B3 text above).
-- **C3 — §7.3 point 6** gains the durable-ledger requirement (B4): the 24-hour
-  ceiling is enforced from persisted state, not from the in-memory coordinator.
-- **C4 — §3 frozen rule 5** is tightened, not added. It already says
-  `software_version` is mandatory and that a CP artifact without it is `UNKNOWN`
-  readiness. B8 makes the consequence structural: for a version-locked class
-  (`cp_gaia_backup`, `cp_mgmt_export`, `cp_mds_backup`) an unresolvable version
-  means the artifact is **not stored at all**, rather than stored and
-  permanently uncountable. The PAN classes keep the honest `"unknown"` sentinel
-  and are unaffected.
+Status after RB.3b prep (2026-08-31): **C1–C4 landed** in the design docs;
+**C5 landed** (as the `D3` resolution + the new `D4` recommended-resolution
+row); **C6 outstanding** (deferred to RB.3b implementation, where §9.12's test
+is written).
+
+- **C1 — new §7.7**, `/var/log` free-space read, class `read` — **LANDED**
+  in `BACKUP_RECOVERY_CONTRACTS.md` §7.7, *PREPARED FOR GATE REVIEW*, with the
+  literal `show diskspace` / `df -P /var/log` strings.
+- **C2 — new §7.8**, backup deletion, class `operational-write` — **LANDED**
+  in `BACKUP_RECOVERY_CONTRACTS.md` §7.8, *PREPARED FOR GATE REVIEW*, with the
+  literal `delete backup <name>` / `rm -f -- /var/log/CPbackup/backups/<name>`
+  strings and the "confirm exact token at sign-off" marker.
+- **C3 — §7.3 point 6** — **LANDED**: the 24-hour ceiling is enforced from the
+  durable ledger (`docs/design/RECOVERY_OPERATIONAL_WRITE_LEDGER.md`), read
+  inside admission, unreadable ⇒ fail closed. New §9.13 test obligation added.
+- **C4 — §3 frozen rule 5** — **LANDED**: a version-locked CP class
+  (`cp_gaia_backup`, `cp_mgmt_export`, `cp_mds_backup`) with no resolvable
+  version is **not stored**; the PAN classes keep the honest `"unknown"`
+  sentinel and are unaffected.
+- **C5 — architecture §13** — **LANDED** as the resolved `D3` entry (2026-08-31,
+  earlier) plus the new `D4` recommended-resolution row pointing at
+  `docs/design/D4_BACKUP_CREDENTIAL_IDENTITY_DECISION.md`; §5 and §10 rule 4
+  updated too.
 - **C6 — contracts §9.12** clarified for a workflow with no scheduler entry
   (B9): the invariant is satisfied by the endpoint lock, not by allowlist
-  membership.
-- **C5 — architecture §13 `D3`** is updated with whatever answer arrives, in the
-  same style as the resolved `D2` entry — question struck through, decision and
-  accepted consequence recorded inline, with the date and the approver's role.
+  membership. **Outstanding** — folded into RB.3b implementation, where the
+  §9.12 test for the CP path is written.
 
 ## Implementation plan
 
