@@ -5,7 +5,8 @@ Hot-path state only. Historical build detail lives in
 agreements and validation reports). `docs/history/INDEX.md` is the one-line
 timeline.
 
-- **Authoritative checkpoint:** 2026-08-31 (`main` at `ae10bf7`)
+- **Authoritative checkpoint:** 2026-08-31 (`main` at `d67ea52` — RB.3b
+  unblocking prep merged; RB.3a merge `e0799fc` before it)
 - **Product baseline:** `0.7.7 — Compliance trend retro-fill (PAN baseline
   reconstruction)` — AUTOMATED_VALIDATED (0.7.x VERIFY track)
 - **Previous:** `DEV.3.1 — Linux worker image + Compose` — AUTOMATED_VALIDATED
