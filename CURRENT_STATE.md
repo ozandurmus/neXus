@@ -84,18 +84,39 @@ single-container run (server-blocked, DEPLOY.1). Backfilling existing
 filesystem history into Postgres is deliberately out of scope (same
 no-backfill precedent DEV.3.2 set).
 
-**Next objective: `RB.3` (CP Gaia backup).** Blocked on **`D3` alone** — the
-product-owner decision on whether `add backup local` is acceptable now as the
-new `operational-write` command class — plus that command's own gate review
-(drafted at contracts §7.3; point 14, the device-impact assessment, is owed
-and itself gated on D3). The P0 `cp_device_interaction_safety` audit **closed
-2026-08-25**; do not re-cite it as open. There is an unblocked slice: contracts
-**§7.5** (`show backups` / `show snapshots`, class `read`) is the attestation
-path, does not depend on D3, and the contract itself calls it "worth gating
-first, independently of RB.3" — it would populate the `attestations` argument
-`utils/restore_readiness.py` already accepts but nothing currently fills.
-Ready-to-paste next-chat prompt:
-`docs/history/handover/RB3_NEXT_CHAT_PROMPT.md`.
+**Next objective: `RB.3` (CP Gaia backup) — contracts prepared 2026-08-31,
+split three ways by gate class.** `docs/history/phase/RB_3A_…`, `RB_3B_…`,
+`RB_3C_…`.
+
+- **`RB.3a` — CP Gaia backup/snapshot attestation** (`show backups` /
+  `show snapshots`, class `read`) — **CONTRACT FROZEN, gate §7.5 SIGNED OFF
+  2026-08-31, cleared for implementation.** Populates the `attestations`
+  argument `utils/restore_readiness.py` already accepts and nothing fills.
+  `docs/history/phase/RB_3A_CP_GAIA_BACKUP_ATTESTATION.md`. **This is the next
+  build.**
+- **`RB.3b` — CP Gaia system backup** (`add backup local` + SCP fetch, class
+  `operational-write`). **`D3` RESOLVED 2026-08-31 — approved, scoped to a named
+  pilot set**: an allowlist (`SECURITYEXPERT_CP_BACKUP_ALLOWED_ENTITIES`) that
+  is empty and fail-closed by default; scheduling explicitly NOT approved
+  (`"recovery-cp"` stays out of `ALLOWLISTED_WORKFLOWS`). **Still blocked** on
+  `D4` (backup credential identity), §7.3 point 14, and two gate entries §7.3's
+  own points 12/13 require but §7 never wrote — drafted as §7.7 (`/var/log`
+  free-space read, `read`) and §7.8 (backup deletion, `operational-write`) in
+  the RB.3b contract, with their literal Gaia command strings owed at review.
+  Also found: "1 per 24 h hard-enforced by the admission coordinator" is not
+  currently possible — `CollectionCoordinator` is process-local and in-memory —
+  so it needs a durable per-endpoint ledger on the DEV.3.3 evidence backend.
+- **`RB.3c` — CP management export + consistency groups**
+  (`migrate_server export` / `mds_backup`). Blocked on `D5` (storage budget) and
+  a **new open decision `E1`**: §7.6 files both commands as `operational-write`
+  by inheritance from §7.3, unverified. If either stops or degrades management
+  services it is not that class, and the contract must be re-cut. Sequence
+  after `RB.3b` has had a watched single-gateway real-environment run.
+
+The P0 `cp_device_interaction_safety` audit **closed 2026-08-25**; do not
+re-cite it as open. The earlier seed prompt
+`docs/history/handover/RB3_NEXT_CHAT_PROMPT.md` is superseded by the three
+contracts above.
 
 **Previously (before this session): no build open.** This checkpoint reconciles two independent sessions that
 landed in parallel on separate branches: this session's RECOVER track
