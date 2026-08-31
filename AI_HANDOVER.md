@@ -16,134 +16,131 @@ If a section does not apply, write `n/a` — do not delete the heading.
 - Engineering baseline: `DEV.1` complete; `DEV.2.1`, `DEV.2.2`, `DEV.3.1`,
   `DEV.3.2`, `DEV.3.3` all AUTOMATED_VALIDATED. Unchanged this session.
 - Recovery track: `RB.0` / `RB.1` / `RB.4` AUTOMATED_VALIDATED; `RB.2`
-  IMPLEMENTED (real-env owed, plus a new D4 credential follow-up owed — §2);
-  `RB.3a` AUTOMATED_VALIDATED. **`RB.3b` still BLOCKED — but its five blockers
-  now each have a reviewable artifact (§2). It stays blocked pending
-  product-owner / security-lead SIGN-OFF, not pending design.** `RB.3c` blocked
+  IMPLEMENTED (real-env owed + a D4 PAN credential follow-up owed — §3b);
+  `RB.3a` AUTOMATED_VALIDATED. **`RB.3b` — prep REVIEWED AND SIGNED OFF
+  2026-08-31. No longer blocked. Next step is implementation.** `RB.3c` blocked
   (`D5` + `E1`).
-- This session did **CONTRACT / ARCHITECTURE** work only: no code, no device
-  call, no test-logic change. Branch **`feature/rb-3b-gate-prep`** off `main`
-  (`e0799fc`). **Not merged** — this branch is the review artifact.
-- `main` / `origin/main` unchanged this session (`e0799fc` = the RB.3a merge).
-- Test baseline unchanged and **not re-run** (docs-only change): last evidence
-  `804 passed / 20 skipped / 2 failed` (the two documented pre-existing
-  unrelated test-order-pollution failures). Privacy gate not re-run — no
-  tracked-source secret pattern was touched. `tests -k "project_plan or
-  feature_registry or build_history or roadmap or metadata"` → 37 passed after
-  the metadata edits.
-- Toolchain: `py` works directly (Python 3.14 default); `json.load` needs
-  `encoding="utf-8"` for `project/*.json` (they contain `§` / `—`).
+- This session did **ARCHITECTURE / decision + DOCS** work only: a decision
+  walk-through of the five RB.3b prep artifacts with the product owner / security
+  lead / network-security leads, then recorded the sign-off outcomes in the
+  design docs and project metadata. No code, no device call, no test-logic
+  change.
+- The RB.3b unblocking prep was already merged to `main` (`7f5a023`, merge
+  `d67ea52`). This session's sign-off edits are **uncommitted working-tree
+  changes on `main`** (10 files, all docs / metadata). Corporate Git
+  commit/push remains **human-controlled** (standing priority 4) — not done.
+- `origin/main` HEAD unchanged this session (`e0799fc` = the RB.3a merge line;
+  `d67ea52` = the RB.3b unblocking-prep merge per `CURRENT_STATE.md`).
+- Test baseline unchanged and **not re-run** (docs-only change): last full-suite
+  evidence `804 passed / 20 skipped / 2 failed` (the two documented pre-existing
+  test-order-pollution failures). Privacy gate not re-run — no tracked-source
+  secret pattern was touched. `py -m pytest -q -k "project_plan or
+  feature_registry or build_history or roadmap or metadata"` → **26 passed / 1
+  skipped** after this session's metadata edits.
+- Toolchain: `py` works directly; `json.load` needs `encoding="utf-8"` for
+  `project/*.json` (they contain `§` / `—`).
 
 ## 2. What this session did
 
-**RB.3b unblocking prep — the five deliverables from the previous handover §3.**
-`ARCHITECTURE` movement. All five now exist as reviewable artifacts:
+**RB.3b prep review + sign-off.** Walked the product owner / security lead /
+network-security leads through the five prep artifacts and recorded the
+decisions. All five cleared 2026-08-31:
 
-1. **D4 — backup credential identity. Decision brief:**
-   `docs/design/D4_BACKUP_CREDENTIAL_IDENTITY_DECISION.md` (new). Recommends
-   **Option A** — a distinct per-vendor backup service account
-   (`SECURITYEXPERT_CP_BACKUP_SSH_USERNAME` + `_PASSWORD_FILE` / `_PASSWORD`),
-   **no fallback** to `SECURITYEXPERT_CP_CONFIG_SSH_*`; the CP collector
-   resolves it in its constructor and fails the whole CP collection closed —
-   zero device contact — when it is absent. Transport tunables (port, timeouts,
-   strict-host-key) stay shared with the collection config; only principal +
-   secret are distinct. Secret custody: DEV.2.2 read-only mounted-material for
-   the pilot, `DEPLOY.1` vault later. Option B (reuse the collection identity
-   elevated) rejected — it is the `D2` failure mode. **Awaiting security-lead
-   sign-off.** Architecture §13 `D4` row, §10 rule 4 and §5 updated.
-   **PAN follow-up recorded:** `RB.2` currently reuses the inventory API key;
-   `D4` implies a distinct PAN service-account credential for device-state
-   export before `RB.2` advances past `IMPLEMENTED`
-   (`project/backlog.json` `on_hardware_real_env_validation` + `native_backup`).
+1. **D4 — backup credential identity → SIGNED OFF (security lead).** Option A
+   adopted as the target (a **distinct per-vendor backup service account**,
+   `SECURITYEXPERT_CP_BACKUP_SSH_USERNAME` + `_PASSWORD_FILE` / `_PASSWORD`,
+   **no fallback** to `SECURITYEXPERT_CP_CONFIG_SSH_*`, resolved in the CP
+   collector constructor and failing the whole CP collection closed — zero
+   device contact — when absent). Option C (DEV.2.2 read-only mounted-material
+   custody) is the pilot mechanism; `DEPLOY.1` vault later (custody change only).
+   Recorded: `docs/design/BACKUP_AND_RECOVERY_ARCHITECTURE.md` §13 `D4` row
+   struck through to a resolved entry; `docs/design/D4_BACKUP_CREDENTIAL_IDENTITY_DECISION.md`
+   status header + a `> **D4 SIGNED OFF …**` blockquote.
 
-2. **§7.3 point 14 — device-impact assessment.** Written into
-   `docs/design/BACKUP_RECOVERY_CONTRACTS.md` §7.3 point 14 (and §7.8 point 14).
-   `add backup local` touches no config / process / policy / routing /
-   clustering / HA state — disk I/O + transient CPU only; the sole data-plane
-   failure mode is `/var/log` exhaustion, covered by points 12/13. The closed
-   P0-audit dependency is superseded. **Awaiting sign-off.**
+2. **§7.3 point 14 — device-impact assessment → SIGNED OFF (product owner /
+   network-security leads).** `> **GATE SIGNED OFF 2026-08-31 …**` blockquote
+   added after `BACKUP_RECOVERY_CONTRACTS.md` §7.3.
 
-3. **§7.7 and §7.8 gate entries.** Landed in `BACKUP_RECOVERY_CONTRACTS.md` as
-   *PREPARED FOR GATE REVIEW*, each with a **literal Gaia command string** and
-   an explicit "confirm exact token at sign-off" marker:
-   - **§7.7** `/var/log` free-space read, class `read`: `show diskspace` (Clish,
-     primary) / `df -P /var/log` (Expert, fallback — an explicit second literal
-     non-`show` exception, never a prefix relaxation). Unparseable → `UNKNOWN`
-     → §7.3 point 12 aborts.
-   - **§7.8** backup deletion, class `operational-write`: `delete backup <name>`
-     (Clish) / `rm -f -- /var/log/CPbackup/backups/<name>` (Expert). **Deletes
-     only the exact name this run created in the same session** — never a
-     pattern, wildcard, listing-derived or config-supplied name; if the name is
-     unavailable it reports `CLEANUP_FAILED` and marks the endpoint ineligible,
-     never a discovery-based delete.
-   §7 preamble gained a sign-off state table; §10.3 CP-collector blocker row
-   refreshed.
+3. **§7.7 (`/var/log` free-space read, `read`) + §7.8 (backup deletion,
+   `operational-write`) → SIGNED OFF (product owner / network-security leads).**
+   Status lines flipped from *PREPARED FOR GATE REVIEW* to *SIGNED OFF*;
+   `> **GATE SIGNED OFF …**` blockquotes added; the §7 preamble sign-off
+   paragraph rewritten and a new sign-off-state table added; §10.3 CP-collector
+   row → *"blocked stub — implementation-cleared 2026-08-31"*.
+   - **Estate confirmed R81.10 + R81.20 only.**
+   - **Gaia command-string documentation check** (WebFetch/WebSearch against the
+     R81 Gaia Administration Guide — a doc/estate check, not a device run):
+     `show diskspace` is **not** in any published Gaia Clish command list
+     (R80.20.M2 / R80.30 full lists, R81 Clish summary); the only documented
+     `show disk*` form is `show disk-usage` on **SMB/Spark** (which §7.7 already
+     gates `UNSUPPORTED`). R81 documents backup **deletion** as **Gaia
+     Portal-only**; R80.30 lists `delete backup` with **no name argument**; no
+     `delete backups` (plural) form is documented anywhere. The **Expert forms
+     `df -P /var/log` and `rm -f -- /var/log/CPbackup/backups/<name>` are exact**
+     and the `/var/log/CPbackup/backups/` path is confirmed (sk108902, R81.10 /
+     R82 System Backup pages).
+   - **Decision (product owner): keep the literal strings as written +
+     confirm-on-hardware.** The exact-token check moves to the **first watched
+     real R81.10 / R81.20 gateway run**; if a Clish form is absent there, the
+     Expert form is the sole and primary form (still an explicit literal in the
+     collector's frozen set, never a prefix-rule relaxation). This finding is
+     recorded in the §7.7 / §7.8 sign-off blockquotes and the phase doc.
+   - `SECURITYEXPERT_CP_BACKUP_MIN_FREE_MB` **default 3072** accepted as an
+     interim value, to be revisited at the first real-env measurement.
 
-4. **Durable per-endpoint operational-write ledger. Design:**
-   `docs/design/RECOVERY_OPERATIONAL_WRITE_LEDGER.md` (new). Module
-   `utils/recovery_operational_ledger.py` as a **fifth DEV.3.3 evidence-backend
-   concern** (`OperationalWriteLedgerBackend` abstract + filesystem + Postgres
-   impls + a `select_operational_write_ledger_backend` factory, reusing
-   `_ensure_schema` / `_write_json_atomic` / `EvidenceBackendError`;
-   `verify_evidence_backend_ready` gains a line). Filesystem:
-   `<data_root>/state/recovery_operational_ledger.json`
-   (`securityexpert-recovery-operational-ledger-v1`, append = read + append +
-   atomic replace). Postgres: `recovery_operational_write_ledger`, **INSERT-only**,
-   index `(entity_id, command_class, executed_at DESC)`. **Fail-closed:** absent
-   ledger → proceed (first backup); readable + entry inside 24 h → skip with
-   **zero device contact**; readable + stale → proceed; **unreadable / unreachable
-   → `OperationalLedgerUnreadableError`, run BLOCKED, no command sent**. Read and
-   write both occur **inside** the `run_under_admission` callable so two
-   containers racing one endpoint are serialised by the per-endpoint lock.
-   `record_execution` fires iff `add backup local` was actually sent. Contract
-   §7.3 point 6 tightened (**C3**); new **§9.13** test obligation; architecture
-   §9 coordination bullet added.
+4. **Operational-write ledger design → DESIGN ACCEPTED (product owner).**
+   `docs/design/RECOVERY_OPERATIONAL_WRITE_LEDGER.md`: the fail-closed-on-
+   unreadable posture (§5) and evidence-plane placement (§2) approved **as
+   written** — false-refusal-over-false-proceed understood. Status header +
+   `> **DESIGN ACCEPTED …**` blockquote added.
 
-5. **Refuse to store a version-unknown CP artifact.** Contract §3 frozen rule 5
-   tightened (**C4**): a version-locked CP class (`cp_gaia_backup`,
-   `cp_mgmt_export`, `cp_mds_backup`) with no `software_version` resolvable from
-   existing evidence (`unified.json` /
-   `checkpoint_config_collector._parse_gaia_version`) is **not stored** — no new
-   device command for version. PAN classes keep the honest `"unknown"` sentinel
-   and are stored (`UNKNOWN` readiness by §5). A stored `"unknown"`-version
-   artifact is therefore only ever PAN.
-
-**Amendment status:** C1–C5 landed in the design docs; **C6** (contracts §9.12
-for a workflow with no scheduler entry) deferred into RB.3b implementation,
-where the CP-path §9.12 test is written.
+5. **§3 rule 5 (C4) — version-locked CP class with no resolvable
+   `software_version` not stored → ACCEPTED AS WRITTEN (product owner).** Inline
+   note added to `BACKUP_RECOVERY_CONTRACTS.md` §3 rule 5.
 
 **Files changed this session (all docs / metadata):**
-`docs/design/D4_BACKUP_CREDENTIAL_IDENTITY_DECISION.md` (new),
-`docs/design/RECOVERY_OPERATIONAL_WRITE_LEDGER.md` (new),
-`docs/design/BACKUP_RECOVERY_CONTRACTS.md` (§3 r5, §7 preamble, §7.3 p6/p14,
-§7.7 + §7.8 new, §9.13 new, §10.3),
-`docs/design/BACKUP_AND_RECOVERY_ARCHITECTURE.md` (§5, §9, §10 r4, §13 D4),
-`docs/history/phase/RB_3B_CP_GAIA_BACKUP_COLLECTION.md` (status + amendments),
-`CURRENT_STATE.md`, `project/roadmap.json`, `project/backlog.json`,
-`project/build_history.json`, `project/feature_registry.json`, this file.
+`docs/design/D4_BACKUP_CREDENTIAL_IDENTITY_DECISION.md`,
+`docs/design/RECOVERY_OPERATIONAL_WRITE_LEDGER.md`,
+`docs/design/BACKUP_RECOVERY_CONTRACTS.md` (§7 preamble + table, §7.3 blockquote,
+§7.7 / §7.8 status + blockquotes, §3 rule 5, §10.3),
+`docs/design/BACKUP_AND_RECOVERY_ARCHITECTURE.md` (§13 D4 row),
+`docs/history/phase/RB_3B_CP_GAIA_BACKUP_COLLECTION.md` (status, amendment
+status, DoD item 1, next-movement),
+`CURRENT_STATE.md`, `project/roadmap.json` (`now_next.next` → `planned`, goal
+text; `upcoming` RB.3b notes), `project/backlog.json` (`native_backup`),
+`project/build_history.json` (new `RB.3b-prep-signoff` entry), this file.
+
+**C6** (contracts §9.12 CP-path test for a workflow with no scheduler entry)
+remains the one outstanding amendment — folded into RB.3b implementation
+(steps 5–6).
 
 ## 3. Next work
 
-**`RB.3b` remains BLOCKED — the next action is not implementation, it is
-review + sign-off.** Put the five prep artifacts to the product owner and the
-security lead:
+**RB.3b implementation** per the phase doc's implementation plan
+(`docs/history/phase/RB_3B_CP_GAIA_BACKUP_COLLECTION.md` §"Implementation plan"):
 
-1. `D4` — approve/adjust `docs/design/D4_BACKUP_CREDENTIAL_IDENTITY_DECISION.md`
-   (Option A recommended). Security lead.
-2. §7.3 point 14 + §7.7 + §7.8 — network-device command gate sign-off,
-   **including confirming the two literal Gaia command strings** (`show
-   diskspace` / `df -P /var/log`; `delete backup <name>` / `rm -f -- …`) against
-   the R81 Gaia Administration Guide and the estate's Gaia mix. Product owner /
-   network-security leads.
-3. Confirm `SECURITYEXPERT_CP_BACKUP_MIN_FREE_MB` default 3072 (§7.7 point 12)
-   is acceptable pending first real-env measurement.
-
-**Once signed off**, RB.3b implementation per the phase doc's implementation
-plan: step 2 (`utils/recovery_operational_ledger.py` + tests) and steps 3–4
-(pilot allowlist / platform gating / VSX rejection / `software_version`
-resolution / free-space parser) at `Sonnet 5, normal`; **step 5 only** (the
-device-touching core — `add backup local`, SCP fetch, digest verify, delete) at
-`Sonnet 5, extended thinking`. C6 (§9.12 CP-path test) lands with step 5–6.
+- **Step 2** — `utils/recovery_operational_ledger.py` + tests (a fifth DEV.3.3
+  evidence-backend concern; filesystem + Postgres; read inside the admission-held
+  section; fail-closed on an unreadable ledger). Pure local state, no device.
+- **Steps 3–4** — pilot allowlist (`SECURITYEXPERT_CP_BACKUP_ALLOWED_ENTITIES`,
+  empty + fail-closed), platform gating (Spark / Gaia Embedded → `UNSUPPORTED`),
+  VSX `__vsid_` rejection at request time, `software_version` resolution from
+  existing evidence (refuse to store when unresolvable — §3 rule 5), and the
+  §7.7 free-space read + parser against fixture output.
+  → **`Sonnet 5, normal`** for steps 2–4 (offline, well specified).
+- **Step 5** — the device-touching core: `add backup local`, SCP fetch into the
+  encrypting writer (no plaintext temp file), digest verify, deletion (§7.8).
+  → **`Sonnet 5, extended thinking`** (failure modes on a production firewall).
+- **Step 6** — wire into `main.py`'s existing `checkpoint` branch; remove the
+  blocked stub. **C6** (§9.12 CP-path test) lands here.
+- The D4 credential guard (AC-11) and the §7.8 delete-only-the-name-we-made
+  rule (AC-4) are correctness-contract items; AC-1…AC-14 are exercised against
+  a **fixture SSH/SCP transport — never a live device in CI**.
+- **Command-string confirm-on-hardware:** the §7.7 / §7.8 literal Clish forms
+  (`show diskspace`, `delete backup <name>`) are unverified against the public
+  R81 docs; the collector must carry the Expert forms (`df -P /var/log`,
+  `rm -f -- /var/log/CPbackup/backups/<name>`) as exact, and the first watched
+  real R81.10 / R81.20 run decides whether a Clish form is usable on that build.
 
 **Parallel local option (not blocked):** `codebase_modularization` +
 `browser_render_boundary` from
@@ -151,38 +148,41 @@ device-touching core — `add backup local`, SCP fetch, digest verify, delete) a
 
 ## 3a. Architecture planning carried forward
 
-Unchanged from the prior handover: the local-only productization /
-modularization review in
-`docs/design/SERVER_PRODUCTIZATION_AND_MODULARIZATION_ARCHITECTURE.md` is
-doable locally, independently of RB.3b, with render / privacy / regression
-gates green per extraction. It does **not** authorize a premature server/API
-rewrite.
+Unchanged: the local-only productization / modularization review in
+`docs/design/SERVER_PRODUCTIZATION_AND_MODULARIZATION_ARCHITECTURE.md` is doable
+locally, independently of RB.3b, with render / privacy / regression gates green
+per extraction. It does **not** authorize a premature server/API rewrite.
 
 ## 3b. NOT YET DONE — real-environment / on-hardware validation
 
-- **`RB.3b` prep — nothing to validate on hardware** (no code, no device call).
-  The two literal Gaia command strings are the thing that needs a
-  documentation/estate check at gate review, not a device run.
-- **`RB.2` PAN credential follow-up (new, D4 consequence):** device-state
-  export must authenticate with a distinct PAN service account, not the
-  inventory API key, before `RB.2` advances past `IMPLEMENTED`. Code change owed
-  on `panorama/panorama_recovery_collector.py`. In
-  `on_hardware_real_env_validation`.
-- Carried forward unchanged: `RB.3a` real Gaia `--recovery-attest` run;
-  `RB.2` real firewall run; `DEV.3.2` / `DEV.3.3` multi-container runs;
-  everything else under `on_hardware_real_env_validation`.
+- **RB.3b — first real run is mandatory before `IMPLEMENTED` → anything
+  further.** A single, named, non-production-critical R81.10 / R81.20 gateway,
+  watched, `/var/log` free space observed before and after, deletion confirmed.
+  This run also resolves the §7.7 / §7.8 command-string confirm-on-hardware
+  question.
+- **RB.2 PAN credential follow-up (D4 consequence):** device-state export must
+  authenticate with a **distinct PAN service account**, not the inventory API
+  key (`panorama_runtime_runner.get_api_key`), before `RB.2` advances past
+  `IMPLEMENTED`. Code change owed on `panorama/panorama_recovery_collector.py`.
+  Recorded in `project/backlog.json` `on_hardware_real_env_validation` +
+  `native_backup`; design in `D4` doc §8. Not a blocker on RB.3b.
+- Carried forward unchanged: `RB.3a` real Gaia `--recovery-attest` run; `RB.2`
+  real firewall run; `DEV.3.2` / `DEV.3.3` multi-container runs; everything else
+  under `on_hardware_real_env_validation`.
 
 ## 4. Open risks / debt carried forward
 
-- **The two §7.7 / §7.8 literal command strings are committed to the contract
-  with a confirm-at-sign-off marker.** House law is "no invented certainty" —
-  `show diskspace` and `df -P` are high-confidence; the exact §7.8 Clish token
-  (`delete backup` vs `delete backups`, `file` keyword) is the one to verify at
-  review. The `rm` Expert fallback is exact.
+- **The §7.7 / §7.8 literal Clish command strings are in the contract but
+  unverified against the public R81 Gaia Administration Guide.** The doc check
+  this session found `show diskspace` in no Gaia Clish command list and R81
+  documenting Portal-only backup deletion; the Expert forms are the solid ones.
+  Sign-off is explicitly conditional on the first watched real-gateway run
+  confirming (or replacing) the Clish forms.
 - **The operational-write ledger is new correctness-critical state.** Its
-  fail-closed-on-unreadable posture produces false refusals before it produces
-  a double backup — the correct direction, but operators must understand a
-  "couldn't read the ledger" outcome blocks the backup.
+  fail-closed-on-unreadable posture produces a false refusal (missed backup,
+  recoverable) before a false proceed (double disk write) — the correct
+  direction, but operators must understand "couldn't read the ledger" blocks
+  the backup.
 - **`D4` for PAN retro-fits `RB.2`.** Recorded, not silently absorbed.
 - Unchanged from prior handovers: mixed-backend fleet; `D1`, `D5`–`D7` open;
   `D6` (adopt `operational-write` into `AI_DEVELOPMENT_PROTOCOL.md`) still open;
@@ -194,40 +194,35 @@ rewrite.
 **Start a fresh chat.** Read `AI_START_HERE.md` → `CURRENT_STATE.md` → this
 file. Then:
 
-- **RB.3b review + sign-off** (the actual next step): walk the product owner /
-  security lead through `docs/design/D4_BACKUP_CREDENTIAL_IDENTITY_DECISION.md`,
-  `docs/design/BACKUP_RECOVERY_CONTRACTS.md` §7.3 point 14 / §7.7 / §7.8, and
-  `docs/design/RECOVERY_OPERATIONAL_WRITE_LEDGER.md`. Movement: `ARCHITECTURE` /
-  decision. No model call needed for the walk-through itself; recording the
-  outcome is `DOCS`.
-- **or** RB.3b implementation once signed off (see §3).
+- **RB.3b implementation** (the actual next step): phase doc implementation plan,
+  steps 2–4 at `Sonnet 5, normal`, step 5 at `Sonnet 5, extended thinking`,
+  step 6 + C6 with step 5. All device interaction against fixture transports;
+  first real R81.10 / R81.20 gateway run owed before `IMPLEMENTED` advances.
 - **or** the modularization work in §3a.
+- **or** the RB.2 PAN credential follow-up (`Sonnet 5, normal`, real-env owed).
 
 ## 6. main merge decision + Git dispatch
 
-- **`main` merge: BLOCKED.** This branch (`feature/rb-3b-gate-prep`) is a
-  review artifact for the RB.3b blockers, not a merge candidate on landing.
-  Merge it to `main` only after the product owner / security lead have reviewed
-  the five artifacts and the sign-off outcomes are recorded in the docs
-  (the `D3`-style inline resolution for `D4`; the `§7.5`-style
-  `> **GATE SIGNED OFF …**` blockquote for §7.3 point 14 / §7.7 / §7.8).
-- Corporate Git push/merge remains **human-controlled** (standing priority 4).
-- Exact non-interactive Git dispatch when review is done and outcomes recorded:
+- The RB.3b unblocking prep is already on `main` (`d67ea52`). This session's
+  sign-off outcomes are **uncommitted doc/metadata edits on `main`** (10 files;
+  see §2). They record: the `D2`/`D3`-style struck-through resolution for `D4`
+  in architecture §13; the §7.5-style `> **GATE SIGNED OFF 2026-08-31 …**`
+  blockquotes for §7.3 point 14 / §7.7 / §7.8; the `> **DESIGN ACCEPTED …**`
+  blockquote for the ledger; the `> **D4 SIGNED OFF …**` blockquote in the D4
+  brief.
+- Corporate Git commit/push remains **human-controlled** (standing priority 4)
+  — **not done this session.** Suggested commit when the human is ready:
 
   ```
   git add -A
-  git commit -m "docs(recovery): RB.3b unblocking prep — D4 brief, §7.7/§7.8 gate entries, operational-write ledger design, §3 rule 5 tightening"
-  git push -u origin feature/rb-3b-gate-prep
-  # after sign-off outcomes are committed on this branch:
-  git checkout main && git merge --no-ff feature/rb-3b-gate-prep && git push origin main
+  git commit -m "docs(recovery): RB.3b prep sign-off — D4, §7.3 p14, §7.7/§7.8 gates, operational-write ledger, §3 rule 5"
+  git push origin main
   ```
 
 ## 7. Next movement / model
 
-- **RB.3b review + sign-off:** `ARCHITECTURE` / decision — the walk-through
-  needs no strong model; `Sonnet 5, normal` to record outcomes.
-- **RB.3b implementation (post sign-off):** `Sonnet 5, normal` for the ledger,
-  gating, precondition parser (offline, well specified); `Sonnet 5, extended
+- **RB.3b implementation:** `Sonnet 5, normal` for the ledger, gating and
+  precondition parser (steps 2–4 — offline, well specified); `Sonnet 5, extended
   thinking` for step 5 only (the device-touching core, on a real `/var/log`).
 - **RB.2 PAN credential follow-up:** `Sonnet 5, normal` — a bounded collector
   change against a fixture transport, real-env owed.
@@ -236,16 +231,15 @@ file. Then:
 
 ## 8. Continue or fresh chat
 
-**Fresh chat.** This session's prep is self-contained in the five artifacts and
-the metadata. Nothing in this chat's context (which Gaia command forms were
-weighed, the ledger fail-closed reasoning) is needed to run the review — it is
-all in the docs.
+**Fresh chat.** This session's outcome is fully captured in the design docs and
+metadata. Nothing in this chat's context is needed to start RB.3b
+implementation — the phase doc carries the plan and the acceptance criteria.
 
 ## 9. main.py / UI effect
 
 **None.** No `main.py`, `templates/`, `static/` or payload-builder change. No
 CLI flag added, no runtime behavior changed. A normal `py .\main.py` checkpoint
 run looks and behaves exactly as before. `SECURITYEXPERT_CP_BACKUP_SSH_*`,
-`SECURITYEXPERT_CP_BACKUP_MIN_FREE_MB` and `utils/recovery_operational_ledger.py`
-are **designed, not implemented** — they do nothing until RB.3b is signed off
-and built.
+`SECURITYEXPERT_CP_BACKUP_MIN_FREE_MB`, `SECURITYEXPERT_CP_BACKUP_ALLOWED_ENTITIES`
+and `utils/recovery_operational_ledger.py` are **designed and signed off, not
+implemented** — they do nothing until RB.3b is built.

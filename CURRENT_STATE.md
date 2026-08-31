@@ -100,8 +100,13 @@ single-container run (server-blocked, DEPLOY.1). Backfilling existing
 filesystem history into Postgres is deliberately out of scope (same
 no-backfill precedent DEV.3.2 set).
 
-**Active build: `RB.3a` — AUTOMATED_VALIDATED 2026-08-31** on
-`feature/rb-3a-attestation`. Next objective after it: `RB.3b`.
+**Active build: `RB.3b` — CP Gaia system backup collection.** Unblocking prep
+merged to `main` (`d67ea52`); **reviewed and signed off 2026-08-31** (all five
+blockers cleared — see the `RB.3b` bullet below). Status now **cleared for
+implementation**, not blocked. The sign-off outcomes are recorded in the design
+docs + project metadata (uncommitted on `main` at this checkpoint; commit is
+human-controlled). Predecessor `RB.3a` — AUTOMATED_VALIDATED 2026-08-31 on
+`feature/rb-3a-attestation`.
 
 - **`RB.3a` — CP Gaia backup/snapshot attestation** (`show backups` /
   `show snapshots`, class `read`) — **AUTOMATED_VALIDATED 2026-08-31.**
@@ -128,41 +133,57 @@ no-backfill precedent DEV.3.2 set).
   cannot reach `DONE` per `AGENTS.md`.
   `docs/history/phase/RB_3A_CP_GAIA_BACKUP_ATTESTATION.md`.
 - **`RB.3b` — CP Gaia system backup** (`add backup local` + SCP fetch, class
-  `operational-write`). **`D3` RESOLVED 2026-08-31 — approved, scoped to a named
-  pilot set**: an allowlist (`SECURITYEXPERT_CP_BACKUP_ALLOWED_ENTITIES`) that
-  is empty and fail-closed by default; scheduling explicitly NOT approved
-  (`"recovery-cp"` stays out of `ALLOWLISTED_WORKFLOWS`).
-  **RB.3b unblocking prep DONE 2026-08-31** on `feature/rb-3b-gate-prep`
-  (`ARCHITECTURE`/`DOCS`, no code, no device call) — RB.3b stays `blocked`
-  pending **sign-off** of the prep artifacts, not pending design:
-  - **D4 decision brief** — `docs/design/D4_BACKUP_CREDENTIAL_IDENTITY_DECISION.md`:
-    Option A (distinct per-vendor backup service account,
+  `operational-write`). **UNBLOCKED 2026-08-31 — next step is implementation.**
+  `D3` RESOLVED 2026-08-31 (approved, scoped to the fail-closed
+  `SECURITYEXPERT_CP_BACKUP_ALLOWED_ENTITIES` pilot allowlist; scheduling NOT
+  approved — `"recovery-cp"` stays out of `ALLOWLISTED_WORKFLOWS`). RB.3b
+  unblocking prep DONE 2026-08-31 on `feature/rb-3b-gate-prep`, then **reviewed
+  and signed off 2026-08-31** (product owner / security lead / network-security
+  leads). All five prep blockers cleared:
+  - **D4 — SIGNED OFF (security lead).**
+    `docs/design/D4_BACKUP_CREDENTIAL_IDENTITY_DECISION.md`: Option A adopted
+    (distinct per-vendor backup service account
     `SECURITYEXPERT_CP_BACKUP_SSH_USERNAME` + `_PASSWORD_FILE`/`_PASSWORD`, **no
     fallback** to `SECURITYEXPERT_CP_CONFIG_SSH_*`, fails closed before any
-    device contact) recommended; DEV.2.2 mounted-material custody for the pilot,
-    `DEPLOY.1` vault later. PAN (`RB.2`) owes a matching follow-up. Awaiting
-    security-lead sign-off. Architecture §13 `D4` row + §10 rule 4 updated.
-  - **§7.7 / §7.8 gate entries** — landed in `BACKUP_RECOVERY_CONTRACTS.md` as
-    *PREPARED FOR GATE REVIEW* with literal Gaia strings: §7.7 `show diskspace`
-    (Clish) / `df -P /var/log` (Expert), class `read`; §7.8 `delete backup
-    <name>` (Clish) / `rm -f -- /var/log/CPbackup/backups/<name>` (Expert),
-    class `operational-write`, deletes **only the name this run created**. Exact
-    Clish tokens confirmed at sign-off vs. the R81 Gaia Administration Guide.
-  - **§7.3 point 14** (device-impact assessment) — written into the contract,
-    awaiting sign-off; the closed P0 audit dependency is superseded.
-  - **Durable operational-write ledger** — design in
+    device contact), Option C (DEV.2.2 mounted-material custody) the pilot
+    mechanism, `DEPLOY.1` vault later. Architecture §13 `D4` row resolved,
+    §10 rule 4 / §5 updated. PAN (`RB.2`) owes a matching credential follow-up
+    before it leaves `IMPLEMENTED` — not a blocker.
+  - **§7.3 point 14 (device-impact assessment) — SIGNED OFF** (product owner /
+    network-security leads). `add backup local` touches no config / process /
+    policy / routing / clustering / HA state; sole data-plane failure mode is
+    `/var/log` exhaustion, covered by points 12/13. Supersedes the closed
+    (2026-08-25) P0 audit dependency.
+  - **§7.7 / §7.8 gate entries — SIGNED OFF** (product owner / network-security
+    leads). Estate is **R81.10 + R81.20 only**. Literal Gaia strings kept as
+    written (§7.7 `show diskspace` / `df -P /var/log`; §7.8 `delete backup
+    <name>` / `rm -f -- /var/log/CPbackup/backups/<name>`). The R81 Gaia Admin
+    Guide doc-check found neither `show diskspace` nor a per-name `delete backup
+    <name>` Clish form documented for R81 (R81 = Portal-only delete; R80.30 =
+    `delete backup` no-arg); the **Expert forms are exact**. Exact-token check
+    **moved to the first watched real R81.10 / R81.20 gateway run** — if a Clish
+    form is absent there, the Expert form is sole and primary. Recorded in the
+    §7.7 / §7.8 sign-off notes. `SECURITYEXPERT_CP_BACKUP_MIN_FREE_MB` default
+    **3072** accepted as an interim value.
+  - **Durable operational-write ledger — DESIGN ACCEPTED** (product owner).
     `docs/design/RECOVERY_OPERATIONAL_WRITE_LEDGER.md`: module
     `utils/recovery_operational_ledger.py`, a fifth DEV.3.3 evidence-backend
     concern (`OperationalWriteLedgerBackend`, filesystem + Postgres), read
     **inside** the admission-held section, **fail-closed on an unreadable
-    ledger** (absent ledger ≠ error). Contract §7.3 point 6 tightened (C3);
-    new §9.13.
-  - **Version-unknown CP artifact refused** — contract §3 frozen rule 5
-    tightened (C4): a version-locked CP class (`cp_gaia_backup` /
-    `cp_mgmt_export` / `cp_mds_backup`) with no resolvable `software_version`
-    is **not stored**; PAN keeps the honest `"unknown"` sentinel.
-  Contract amendments C1–C5 landed; **C6** (§9.12 for a non-scheduled workflow)
-  folded into RB.3b implementation. No `main.py`/UI effect.
+    ledger** (absent ledger ≠ error), false-refusal-over-false-proceed
+    understood. Contract §7.3 point 6 tightened (C3); new §9.13.
+  - **Version-unknown CP artifact refused — ACCEPTED AS WRITTEN** (product
+    owner). Contract §3 frozen rule 5 tightened (C4): a version-locked CP class
+    (`cp_gaia_backup` / `cp_mgmt_export` / `cp_mds_backup`) with no resolvable
+    `software_version` is **not stored**; PAN keeps the honest `"unknown"`
+    sentinel.
+  Contract amendments C1–C5 landed; **C6** (§9.12 CP-path test for a
+  non-scheduled workflow) folded into RB.3b implementation (steps 5–6). No
+  `main.py`/UI effect from the prep or the sign-off. **Next: RB.3b
+  implementation** per the phase doc plan — steps 2–4 (ledger, gating,
+  precondition parser) at `Sonnet 5, normal`; step 5 (device-touching core —
+  `add backup local`, SCP fetch, digest verify, delete) at `Sonnet 5, extended
+  thinking`.
 - **`RB.3c` — CP management export + consistency groups**
   (`migrate_server export` / `mds_backup`). Blocked on `D5` (storage budget) and
   a **new open decision `E1`**: §7.6 files both commands as `operational-write`

@@ -1,11 +1,22 @@
 # D4 — Backup credential identity (decision brief)
 
-**Status:** DECISION BRIEF — recommended resolution recorded below, **pending
-security-lead sign-off**. No code. Companion to
-`docs/design/BACKUP_AND_RECOVERY_ARCHITECTURE.md` §13 (row `D4`), §10 rule 4,
-and `docs/history/phase/RB_3B_CP_GAIA_BACKUP_COLLECTION.md` (decision B11,
-AC-11). This brief exists so `D4` can be answered without re-deriving the
-reasoning at review time.
+**Status:** DECISION BRIEF — **SIGNED OFF 2026-08-31 (security lead).**
+Option A adopted as the target model, Option C as the pilot mechanism
+(§4 — the recommendation of this brief, accepted as written). No code.
+Companion to `docs/design/BACKUP_AND_RECOVERY_ARCHITECTURE.md` §13 (row `D4`,
+now resolved), §10 rule 4, and
+`docs/history/phase/RB_3B_CP_GAIA_BACKUP_COLLECTION.md` (decision B11, AC-11).
+This brief is retained as the record of what was put to the security lead and
+what they accepted.
+
+> **D4 SIGNED OFF 2026-08-31 (security lead).** Option A (distinct per-vendor
+> backup service account, no fallback to the collection identity, fails the CP
+> collection closed before any device contact when absent) + Option C (DEV.2.2
+> read-only mounted-material custody for the pilot; `DEPLOY.1` vault later)
+> approved as written. Option B (reuse the collection identity elevated)
+> rejected. The PAN (`RB.2`) follow-up in §8 is accepted as an owed item on
+> `RB.2`, not a blocker on `RB.3b`. `RB.3b` is unblocked on the credential-
+> identity axis.
 
 **Owner:** security lead. **Blocks:** `RB.3b` implementation (hard). Also names
 an owed follow-up on `RB.2` (PAN), below.
