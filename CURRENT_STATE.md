@@ -115,14 +115,27 @@ this file does not restate it.
   replaces the D3-blocked stub with the pilot allowlist, the D4 fail-closed
   backup-credential guard (no fallback to `SECURITYEXPERT_CP_CONFIG_SSH_*`),
   platform / VSX / `software_version` gates, and the §7.7 `/var/log`
-  free-space parser + 3× threshold. Full suite 851 / 25 / 2 (the 2 are the
-  known pre-existing pollution), zero regressions.
-- **Steps 5–7 OWED.** Step 5 (device core — `add backup local`, SCP fetch,
-  digest verify, delete) at `Sonnet 5, extended thinking`; step 6 (`main.py`
-  wiring + `C6` §9.12 CP-path test) and step 7 (state) at `Sonnet 5, normal`.
-  Status stays `in_progress` — not IMPLEMENTED — until AC-1…AC-14 are green and
+  free-space parser + 3× threshold.
+- **Step 5 + C6 IMPLEMENTED 2026-08-31** (device core, `Sonnet 5, extended
+  thinking`): `checkpoint_recovery_collector.collect()` runs the one-SSH-session
+  sequence — ledger read (inside admission) → free-space read → `add backup
+  local` (no retry) → SFTP fetch into memory (no temp file) → size verify →
+  `write_artifact` (before the delete) → §7.8 delete of exactly the created
+  name → `ledger.record_execution` iff `add backup local` was sent. New
+  `RecoveryCollectionSkipped` / `skipped` status + `build_recovery_device_block`
+  in `utils/recovery_collect.py`. `tests/test_rb3b_cp_backup_device_core.py`
+  (24 tests: AC-1…AC-6, AC-12, AC-14, C6, §9.13 (a)(b)(c)(f)(g)). Full suite
+  **875 / 25 / 2** (the 2 are the known pre-existing pollution), zero
+  regressions. **No `main.py` change.**
+- **Steps 6–7 OWED** at `Sonnet 5, normal`. Step 6: wire the collector into
+  `main.py`'s `--recovery-collect --recovery-vendor checkpoint` branch (ledger +
+  store binding, `cp_config_telemetry.json` platform map, prior-backup-size
+  lookup, pre-admission VSX reject, `skipped` in the CLI summary). Step 7:
+  `project/build_history.json`, this file's trim, phase-doc status.
+  Status stays `in_progress` — not IMPLEMENTED — until steps 6–7 land **and**
   the mandatory watched real R81.10/R81.20 gateway run has happened (that run
-  also resolves the §7.7/§7.8 command-string confirm-on-hardware question).
+  also resolves the §7.7/§7.8 command-string + `add backup local`
+  output-format confirm-on-hardware questions).
 - **`RB.3a`** — CP Gaia backup/snapshot attestation (`show backups` /
   `show snapshots`, `read`) — AUTOMATED_VALIDATED 2026-08-31, real-env owed.
   `docs/history/phase/RB_3A_CP_GAIA_BACKUP_ATTESTATION.md`.

@@ -188,15 +188,19 @@ def test_precheck_success_returns_prechecked_values():
     assert out.required_free_mb == DEFAULT_MIN_FREE_MB
 
 
-def test_collect_runs_gate_then_defers_device_step():
+def test_collect_runs_gate_then_fails_closed_without_ledger_or_store():
+    """The offline gate still fires from collect(); once it passes, an
+    unconfigured operational-write ledger / recovery store fails the run
+    closed (B4) rather than touching a device. The device-core happy paths
+    live in tests/test_rb3b_cp_backup_device_core.py."""
     c = CheckpointGaiaBackupCollector(env={**_CREDS, "SECURITYEXPERT_CP_BACKUP_ALLOWED_ENTITIES": "gw-1"})
     # gate refusal still fires from collect()
     with pytest.raises(CpBackupEndpointRefused):
         c.collect(_target("gw-1"))  # no version
-    # gate passes -> device step not implemented yet
+    # gate passes -> fail closed: no ledger bound, no device contact
     with pytest.raises(RecoveryCollectionError) as exc:
         c.collect(_target("gw-1", sw_version="R81.10"))
-    assert "step 5" in str(exc.value)
+    assert "operational-write ledger is not configured" in str(exc.value)
 
 
 # ---------------------------------------------------------------------------
