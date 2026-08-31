@@ -204,6 +204,15 @@ ALLOWLISTED_WORKFLOWS: frozenset[str] = frozenset({
     # yet -- CP Gaia backup collection is blocked (P0 audit + open decision
     # D3); scheduling a blocked collector must fail at policy-load time, the
     # same fail-closed posture this allowlist already gives any unknown name.
+    #
+    # RB.3a (contract RB_3A_CP_GAIA_BACKUP_ATTESTATION.md, design decision A9):
+    # "recovery-attest-cp" (CP Gaia backup/snapshot attestation) is likewise
+    # absent by design -- NOT because it is blocked, but because allowlisting
+    # it would let a policy file schedule fleet-wide SSH at any interval
+    # >= 10 min, which is a separate decision from "may this command run at
+    # all" and needs its own review (CURRENT_STATE.md standing priority 2: do
+    # not increase recurring polling frequency/concurrency). RB.3a ships the
+    # on-demand CLI path only (main.py --recovery-attest).
     "recovery-pan",
 })
 _MIN_INTERVAL_MINUTES = 10
