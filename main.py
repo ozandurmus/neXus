@@ -1116,7 +1116,12 @@ def main(argv=None, *, runtime_services=None, provenance="manual", admission_run
             RecoveryCollectionRequest,
             run_recovery_collection,
         )
-        from utils.recovery_store import RecoveryStoreError, get_or_create_vault_key
+        from utils.recovery_store import (
+            RecoveryStoreError,
+            get_or_create_vault_key,
+            list_artifact_dirs,
+            read_manifest,
+        )
         from utils.runtime_paths import resolve_recovery_root
 
         print(f"=== SECURITYEXPERT RECOVERY COLLECTION — {args.recovery_vendor} ===\n")
@@ -1160,14 +1165,74 @@ def main(argv=None, *, runtime_services=None, provenance="manual", admission_run
                 collector = PanDeviceStateCollector(cfg, verify=_tls_verify_setting())
                 budget_vendor = "paloalto"
             else:
-                # RB.3b: the distinct backup credential (D4 / B11) is resolved in
-                # the constructor and fails closed if absent — refusing the whole
-                # CP request before target selection. Full step-6 wiring
-                # (platform gate, prior-size lookup, pre-admission VSX reject) is
-                # still owed.
-                from checkpoint.checkpoint_recovery_collector import CheckpointGaiaBackupCollector
+                # RB.3b step 6: the distinct backup credential (D4 / B11) is
+                # resolved in the constructor and fails closed if absent --
+                # refusing the whole CP request before target selection. Ledger
+                # + store binding, the platform gate and the prior-backup-size
+                # lookup are wired here.
+                from checkpoint.checkpoint_recovery_collector import (
+                    ARTIFACT_CLASS as _CP_BACKUP_ARTIFACT_CLASS,
+                    CheckpointGaiaBackupCollector,
+                    is_vsx_virtual_system,
+                )
+                from utils.recovery_manifest import RecoveryManifestError
+                from utils.recovery_operational_ledger import RecoveryOperationalLedger
 
-                collector = CheckpointGaiaBackupCollector()
+                # B7 -- a VSX virtual system is never a backup target; refused
+                # here as a clean parser.error before admission, in addition to
+                # (not instead of) the collector's own precheck() refusal.
+                if args.recovery_gateways:
+                    vsx_targets = sorted(e for e in entity_ids if is_vsx_virtual_system(e))
+                    if vsx_targets:
+                        parser.error(
+                            "--recovery-gateways: a VSX virtual system is never a "
+                            "backup target (contract §7.3 point 3): "
+                            + ", ".join(vsx_targets)
+                        )
+
+                # AC-9 platform gate input -- the same discovery-lifecycle
+                # platform-family classification --recovery-attest uses above,
+                # propagated into cp_config_telemetry.json by a prior
+                # --cp-config-collect run. Absent -> no entity is excluded here
+                # (the collector treats an unknown platform as supported).
+                platform_by_entity: dict[str, str] = {}
+                ct_path = runtime_paths.output_root / "cp_config_telemetry.json"
+                if ct_path.exists():
+                    try:
+                        ct_doc = json.loads(ct_path.read_text(encoding="utf-8"))
+                        for dev in ct_doc.get("devices", []) or []:
+                            eid = dev.get("entity_id")
+                            fam = (dev.get("platform") or {}).get("family")
+                            if eid and fam:
+                                platform_by_entity[str(eid)] = str(fam)
+                    except (OSError, ValueError):
+                        platform_by_entity = {}
+
+                # B8 / §7.7 -- the largest prior cp_gaia_backup per entity, read
+                # from the recovery store's own manifests (the ledger records
+                # execution outcomes, not artifact size).
+                prior_backup_sizes_by_entity: dict[str, list[int]] = {}
+                for artifact_dir in list_artifact_dirs(recovery_paths, vendor="checkpoint"):
+                    try:
+                        manifest = read_manifest(artifact_dir)
+                    except (OSError, ValueError, RecoveryStoreError, RecoveryManifestError):
+                        continue
+                    if (manifest.get("artifact") or {}).get("class") != _CP_BACKUP_ARTIFACT_CLASS:
+                        continue
+                    eid = (manifest.get("device") or {}).get("entity_id")
+                    size = (manifest.get("artifact") or {}).get("plaintext_bytes")
+                    if eid and isinstance(size, int) and size > 0:
+                        prior_backup_sizes_by_entity.setdefault(str(eid), []).append(size)
+
+                collector = CheckpointGaiaBackupCollector(
+                    ledger=RecoveryOperationalLedger.from_data_root(runtime_paths.data_root),
+                    recovery_paths=recovery_paths,
+                    vault_key=vault_key,
+                    vault_key_id=vault_key_id,
+                    run_id=admission_run_context.run_id if admission_run_context else None,
+                    platform_by_entity=platform_by_entity,
+                    prior_backup_sizes_by_entity=prior_backup_sizes_by_entity,
+                )
                 budget_vendor = "checkpoint"
 
             result = run_recovery_collection(
@@ -1181,6 +1246,7 @@ def main(argv=None, *, runtime_services=None, provenance="manual", admission_run
 
         print(f"Targets:                 {len(result.outcomes)}")
         print(f"Collected:               {result.collected_count}")
+        print(f"Skipped (already fresh): {result.skipped_count}")
         print(f"Failed/blocked:          {result.failed_count}")
         for outcome in result.outcomes:
             if outcome.status != "collected":
