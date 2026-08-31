@@ -2,11 +2,17 @@
 
 ## Status
 
-**CONTRACT_PROPOSED 2026-08-31.** Architecture/audit pass complete against the
-current codebase; this document is the contract for user review before any
-implementation, exactly the gate `docs/history/phase/DEV3_2_DISTRIBUTED_ENDPOINT_LOCK.md`
-used ("Contract → user review. No implementation until accepted."). **No code
-in this build.**
+**CONTRACT_FROZEN 2026-08-31.** Architecture/audit pass complete; contract
+reviewed and accepted by the product owner the same day, including E1 (see
+below). Implementation proceeds against this frozen contract.
+
+**E1 resolved: Option 1 — full fidelity.** `device`/`management_ip`/
+`entity_id` are stored in the `config_snapshot` table exactly as they exist
+in `metadata.json` today; no tokenization layer. The Postgres instance is
+documented as a CLASS 2 identity-bearing asset in
+`PRIVACY_AND_DATA_HANDLING.md` ("Distributed evidence store (DEV.3.3,
+opt-in)"), on the stated assumption — already true for `DEV.3.2` — that the
+instance is dedicated to this product, not a shared multi-tenant database.
 
 Product baseline: `0.7.7` / `DEV.3.2 AUTOMATED_VALIDATED`. Backlog id:
 `distributed_evidence_store_migration` (P0, `planned`), split from
@@ -264,7 +270,7 @@ inert refactor" step `DEV.3.2` used. Every existing test for
 against the filesystem backend (default), proving the extraction is inert
 before any Postgres-specific test is added.
 
-## Open decision for product-owner review (blocks implementation)
+## Open decision — RESOLVED 2026-08-31 (Option 1, full fidelity)
 
 ### E1 — Does CAS metadata belong in Postgres with full identity fidelity, or does it need tokenization first?
 
@@ -425,9 +431,13 @@ real container scheduler timing).
 
 ## Risks
 
-- **E1 unresolved** — no Postgres write of `config_snapshot` should happen
-  until this is answered; implementation would otherwise bake in an
-  un-reviewed privacy posture.
+- **E1 (resolved: Option 1)** — full-fidelity identity in Postgres means a
+  compromised or over-broadly-shared Postgres instance now carries the same
+  identity exposure as a compromised container's local disk today, across
+  the whole fleet's metadata index at once instead of one container's slice
+  of it. Mitigated by the `PRIVACY_AND_DATA_HANDLING.md` requirements this
+  decision now carries (dedicated instance, TLS DSN, restricted role,
+  encryption at rest) rather than by the schema.
 - **Silent backend mismatch** — a deployment accidentally running some
   containers with `SECURITYEXPERT_EVIDENCE_BACKEND=filesystem` and others
   with `postgres` would silently fragment evidence across two stores with no
@@ -453,24 +463,20 @@ shape to `DEV.3.2`'s rollback story.
 
 ## Definition of done
 
-`DONE` when AC-1..AC-8 pass, E1 is resolved and implemented consistently, the
-filesystem default is unchanged, the multi-container real-environment
-evidence for AC-3 is recorded, and `backlog.json`/`CURRENT_STATE.md` reflect
-the new status.
+`DONE` when AC-1..AC-8 pass, E1 (Option 1, full fidelity) is implemented
+consistently, the filesystem default is unchanged, the multi-container
+real-environment evidence for AC-3 is recorded, and
+`backlog.json`/`CURRENT_STATE.md` reflect the new status.
 
 ## Next movement / model
 
-- **This contract → user review, specifically E1.** No implementation until
-  answered.
-- Step 1 (backend extraction, filesystem-only) and step 5 (config_storage.py
-  gating): **Sonnet 5, normal** — deterministic refactor against a frozen
-  contract, same as `DEV.3.2`'s equivalent steps.
-- Steps 3–4 (Postgres backends, preflight, factory wiring) and step 6 (E1
-  implementation): **Sonnet 5, extended thinking** if E1 resolves to Option 2
-  (new token/lookup layer, a genuine new failure mode to reason through);
-  **Sonnet 5, normal** if E1 resolves to Option 1 (mechanical column mapping
-  against an already-frozen schema).
-- Opus is not needed for implementation. This contract itself used extended
-  reasoning because the store-shape analysis (D1) and the identity-boundary
-  call (E1) are the expensive parts; both are now settled or narrowed to one
-  explicit open question.
+- **Contract frozen, E1 resolved (Option 1).** Implementation proceeds.
+- All implementation steps (1–8): **Sonnet 5, normal** — E1 resolved to the
+  mechanical option (column mapping against the already-frozen D3 schema,
+  no new token/lookup layer), so every remaining step is deterministic
+  implementation against a frozen contract, same as `DEV.3.2`'s equivalent
+  steps.
+- Opus/extended thinking is not needed for implementation. This contract
+  itself used extended reasoning because the store-shape analysis (D1) and
+  the identity-boundary call (E1) were the expensive parts; both are now
+  settled.
