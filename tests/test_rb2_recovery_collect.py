@@ -7,7 +7,10 @@ Contract: docs/design/BACKUP_RECOVERY_CONTRACTS.md §10.
 import pytest
 
 import main
-from checkpoint.checkpoint_recovery_collector import BLOCK_REASON, CheckpointGaiaBackupCollector
+from checkpoint.checkpoint_recovery_collector import (
+    CheckpointGaiaBackupCollector,
+    CpBackupCredentialsUnavailable,
+)
 from utils import recovery_store
 from utils.collection_executor import ALLOWLISTED_WORKFLOWS, load_scheduler_policy
 from utils.recovery_collect import (
@@ -212,17 +215,21 @@ def test_run_recovery_collection_admission_rejection_reports_failed(tmp_path):
     assert collector.calls == []  # never reached the collector
 
 
-# --- CP blocked stub ----------------------------------------------------------
+# --- CP collector: D4 credential guard fails closed at construction ----------
+# RB.3b replaced the D3-blocked stub. The dedicated RB.3b coverage (allowlist,
+# platform gate, VSX, software_version, §7.7 parser) lives in
+# tests/test_rb3b_cp_backup_collector.py; here we only assert that the CP path
+# still refuses cleanly with no backup credential configured.
 
-def test_checkpoint_collector_always_blocked():
-    collector = CheckpointGaiaBackupCollector()
-    from utils.recovery_collect import RecoveryCollectionTarget
-    target = RecoveryCollectionTarget(entity_id="fw-01", vendor="checkpoint", row={})
-    with pytest.raises(RecoveryCollectionBlockedError) as exc:
-        collector.collect(target)
-    assert str(exc.value) == BLOCK_REASON
-    assert "cp_device_interaction_safety" in BLOCK_REASON
-    assert "D3" in BLOCK_REASON
+def test_checkpoint_collector_requires_distinct_backup_credential(monkeypatch):
+    for var in (
+        "SECURITYEXPERT_CP_BACKUP_SSH_USERNAME",
+        "SECURITYEXPERT_CP_BACKUP_SSH_PASSWORD",
+        "SECURITYEXPERT_CP_BACKUP_SSH_PASSWORD_FILE",
+    ):
+        monkeypatch.delenv(var, raising=False)
+    with pytest.raises(CpBackupCredentialsUnavailable):
+        CheckpointGaiaBackupCollector()
 
 
 # --- PAN device-state collector (fixture transport only) ----------------------
@@ -425,7 +432,16 @@ def test_cli_recovery_gateways_requires_recovery_collect(tmp_path):
     assert exc.value.code == 2
 
 
-def test_cli_recovery_collect_checkpoint_end_to_end_blocked(tmp_path, capsys):
+def test_cli_recovery_collect_checkpoint_requires_backup_credentials(tmp_path, capsys, monkeypatch):
+    """RB.3b / AC-11: with no distinct SECURITYEXPERT_CP_BACKUP_SSH_* identity
+    the whole CP collection request is refused before target selection."""
+    for var in (
+        "SECURITYEXPERT_CP_BACKUP_SSH_USERNAME",
+        "SECURITYEXPERT_CP_BACKUP_SSH_PASSWORD",
+        "SECURITYEXPERT_CP_BACKUP_SSH_PASSWORD_FILE",
+    ):
+        monkeypatch.delenv(var, raising=False)
+
     runtime_root = tmp_path / "runtime"
     recovery_root = tmp_path / "recovery"
     output_dir = runtime_root / "output"
@@ -439,7 +455,5 @@ def test_cli_recovery_collect_checkpoint_end_to_end_blocked(tmp_path, capsys):
             "--recovery-root", str(recovery_root),
             "--recovery-collect", "--recovery-vendor", "checkpoint", "--recovery-gateways", "fw-01",
         ])
-    assert exc.value.code == 1
-    out = capsys.readouterr().out
-    assert "fw-01: blocked" in out
-    assert "Gate:                    FAIL" in out
+    assert exc.value.code == 2
+    assert "cp_backup_credentials_unavailable" in capsys.readouterr().err

@@ -1,6 +1,6 @@
 """Evidence store backend implementations — DEV.3.3 distributed evidence store migration.
 
-Four independent storage concerns move from per-container local files to an
+Five independent storage concerns move from per-container local files to an
 opt-in PostgreSQL backend, byte-compatible with today's filesystem behavior:
 
 * **Config snapshot** metadata index (``utils/config_evidence.py``,
@@ -10,6 +10,9 @@ opt-in PostgreSQL backend, byte-compatible with today's filesystem behavior:
 * **Run manifest** (``utils/run_context.py``).
 * **Last-known-good** entity state (``utils/snapshot.py``).
 * **Scheduler state** (``utils/collection_executor.py``).
+* **Operational-write ledger** — the durable 24 h per-endpoint ceiling on
+  ``operational-write`` device commands (``utils/recovery_operational_ledger.py``,
+  RB.3b decision B4).
 
 See ``docs/history/phase/DEV3_3_DISTRIBUTED_EVIDENCE_STORE_MIGRATION.md`` for
 the full contract, design decisions and the resolved identity-fidelity
@@ -638,6 +641,181 @@ class PostgresSchedulerStateBackend(SchedulerStateBackend):
 
 
 # ---------------------------------------------------------------------------
+# 5. Operational-write ledger backend (RB.3b, decision B4)
+# ---------------------------------------------------------------------------
+#
+# A durable per-endpoint record of every ``operational-write`` device command
+# (today only ``add backup local``). The 24 h ceiling in
+# ``BACKUP_RECOVERY_CONTRACTS.md`` §7.3 point 6 is a disk-safety control on a
+# production firewall, so it needs state that survives a process/container
+# restart and is shared across containers when Postgres is configured — exactly
+# what this abstraction already gives the other four concerns.
+#
+# INSERT-ONLY: no code path issues UPDATE or DELETE against the row store, and
+# the filesystem impl never rewrites an existing entry (§9.13 test (e)).
+#
+# Fail-closed read semantics (``RecoveryOperationalLedger`` in
+# ``utils/recovery_operational_ledger.py`` enforces this): an *absent* store
+# (missing file / empty table) is "no prior backup" and returns ``[]``; an
+# *unreadable* store (corrupt JSON, I/O error, Postgres unreachable, query
+# error) raises ``EvidenceBackendError`` and callers MUST NOT treat that as
+# "no entries" — see the ledger module's §5 table.
+
+_OPERATIONAL_LEDGER_SCHEMA_KEY = "securityexpert-recovery-operational-ledger-v1"
+
+
+class OperationalWriteLedgerBackend(abc.ABC):
+    @abc.abstractmethod
+    def append(self, entry: dict[str, Any]) -> None:
+        """Append one entry dict (``entity_id``, ``command_class``,
+        ``executed_at`` ISO-8601, ``outcome``, ``run_id``). Never rewrites or
+        removes an existing entry."""
+
+    @abc.abstractmethod
+    def entries_for(self, *, entity_id: str, command_class: str) -> list[dict[str, Any]]:
+        """Every entry for the pair, newest-first by ``executed_at``. Raises
+        ``EvidenceBackendError`` if the store exists but cannot be read/parsed
+        — callers MUST NOT treat that as an empty list."""
+
+
+class FilesystemOperationalWriteLedgerBackend(OperationalWriteLedgerBackend):
+    """``<data_root>/state/recovery_operational_ledger.json`` — the same
+    whole-file read → append → atomic-write pattern
+    ``data/state/compliance_history.json`` uses. Entries are tiny and accrue at
+    ≤ 1/endpoint/day, so whole-file writes are fine."""
+
+    def __init__(self, state_file: Path) -> None:
+        self.state_file = Path(state_file)
+
+    def _load_all(self) -> list[dict[str, Any]]:
+        if not self.state_file.exists():
+            return []
+        try:
+            raw = json.loads(self.state_file.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise EvidenceBackendError(
+                f"operational-write ledger at {self.state_file} is unreadable: {exc}"
+            ) from exc
+        if not isinstance(raw, dict) or not isinstance(raw.get("entries"), list):
+            raise EvidenceBackendError(
+                f"operational-write ledger at {self.state_file} is malformed: "
+                "expected an object with an 'entries' list"
+            )
+        entries: list[dict[str, Any]] = []
+        for item in raw["entries"]:
+            if not isinstance(item, dict):
+                raise EvidenceBackendError(
+                    f"operational-write ledger at {self.state_file} has a non-object entry"
+                )
+            entries.append(item)
+        return entries
+
+    def append(self, entry: dict[str, Any]) -> None:
+        entries = self._load_all()
+        entries.append(dict(entry))
+        _write_json_atomic(
+            self.state_file,
+            {
+                "schema": _OPERATIONAL_LEDGER_SCHEMA_KEY,
+                "updated_at": _utc_now(),
+                "entries": entries,
+            },
+        )
+
+    def entries_for(self, *, entity_id: str, command_class: str) -> list[dict[str, Any]]:
+        matched = [
+            e
+            for e in self._load_all()
+            if e.get("entity_id") == entity_id and e.get("command_class") == command_class
+        ]
+        matched.sort(key=lambda e: str(e.get("executed_at") or ""), reverse=True)
+        return matched
+
+
+_OPERATIONAL_LEDGER_SQL_SCHEMA = (
+    """
+    CREATE TABLE IF NOT EXISTS recovery_operational_write_ledger (
+        id            BIGSERIAL PRIMARY KEY,
+        entity_id     TEXT        NOT NULL,
+        command_class TEXT        NOT NULL,
+        executed_at   TIMESTAMPTZ NOT NULL,
+        outcome       TEXT        NOT NULL,
+        run_id        TEXT,
+        created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS recovery_opwrite_ledger_lookup_idx "
+    "ON recovery_operational_write_ledger (entity_id, command_class, executed_at DESC)",
+)
+
+
+class PostgresOperationalWriteLedgerBackend(OperationalWriteLedgerBackend):
+    """Insert-only ledger table. ``append`` is one INSERT; ``entries_for`` is
+    one indexed ``SELECT ... ORDER BY executed_at DESC``."""
+
+    def __init__(self, dsn: str) -> None:
+        self._psycopg = _psycopg()
+        self._dsn = dsn
+        self._ensure_schema()
+
+    def _connect(self):
+        return self._psycopg.connect(self._dsn, autocommit=True)
+
+    def _ensure_schema(self) -> None:
+        _ensure_schema(self._psycopg, self._dsn, _OPERATIONAL_LEDGER_SQL_SCHEMA)
+
+    def append(self, entry: dict[str, Any]) -> None:
+        try:
+            with self._connect() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        INSERT INTO recovery_operational_write_ledger
+                            (entity_id, command_class, executed_at, outcome, run_id)
+                        VALUES (%s,%s,%s,%s,%s)
+                        """,
+                        (
+                            entry.get("entity_id"),
+                            entry.get("command_class"),
+                            _parse_dt(entry.get("executed_at")),
+                            entry.get("outcome"),
+                            entry.get("run_id"),
+                        ),
+                    )
+        except Exception as exc:
+            raise EvidenceBackendError(
+                f"postgres operational-write ledger append failed: {exc}"
+            ) from exc
+
+    def entries_for(self, *, entity_id: str, command_class: str) -> list[dict[str, Any]]:
+        try:
+            with self._connect() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "SELECT entity_id, command_class, executed_at, outcome, run_id "
+                        "FROM recovery_operational_write_ledger "
+                        "WHERE entity_id = %s AND command_class = %s "
+                        "ORDER BY executed_at DESC",
+                        (entity_id, command_class),
+                    )
+                    rows = cur.fetchall()
+        except Exception as exc:
+            raise EvidenceBackendError(
+                f"postgres operational-write ledger read failed: {exc}"
+            ) from exc
+        return [
+            {
+                "entity_id": row[0],
+                "command_class": row[1],
+                "executed_at": row[2].isoformat() if row[2] else None,
+                "outcome": row[3],
+                "run_id": row[4],
+            }
+            for row in rows
+        ]
+
+
+# ---------------------------------------------------------------------------
 # Backend selection
 # ---------------------------------------------------------------------------
 
@@ -685,6 +863,7 @@ def verify_evidence_backend_ready() -> None:
         PostgresRunManifestBackend(dsn)
         PostgresLastKnownGoodBackend(dsn)
         PostgresSchedulerStateBackend(dsn)
+        PostgresOperationalWriteLedgerBackend(dsn)
     except EvidenceBackendError:
         raise
     except Exception as exc:
@@ -725,3 +904,12 @@ def select_scheduler_state_backend(*, path: Path) -> SchedulerStateBackend:
     if kind not in ("filesystem", ""):
         raise EvidenceBackendError(f"Unsupported {ENV_BACKEND}: {kind!r}")
     return FilesystemSchedulerStateBackend(path)
+
+
+def select_operational_write_ledger_backend(*, state_file: Path) -> OperationalWriteLedgerBackend:
+    kind = active_evidence_backend_kind()
+    if kind == "postgres":
+        return PostgresOperationalWriteLedgerBackend(_require_dsn())
+    if kind not in ("filesystem", ""):
+        raise EvidenceBackendError(f"Unsupported {ENV_BACKEND}: {kind!r}")
+    return FilesystemOperationalWriteLedgerBackend(state_file)
