@@ -945,5 +945,79 @@
       "last_successful_collection": "2026-08-30T12:00:00Z",
       "stale_reason": "management_disconnected"
     }
+  },
+  {
+    "source": "cp",
+    "device": "<img src=x onerror=alert(1)>",
+    "vsys": "default",
+    "interfaces": [
+      {
+        "name": "eth0",
+        "type": "physical",
+        "state": "up",
+        "ips": [
+          {
+            "ip": "192.0.2.201",
+            "prefix": 24,
+            "network": "192.0.2.0/24"
+          }
+        ]
+      }
+    ],
+    "routes": [
+      {
+        "network": "0.0.0.0/0",
+        "next_hop": "192.0.2.254",
+        "interface": "eth0",
+        "type": "default"
+      }
+    ],
+    "inventory_status": {
+      "fresh": true,
+      "data_state": "live",
+      "availability_state": "available",
+      "current_run": "uitest",
+      "current_run_observed": true,
+      "collected_at": "2026-08-30T12:00:00Z",
+      "last_successful_collection": "2026-08-30T12:00:00Z",
+      "stale_reason": null
+    }
+  },
+  {
+    "source": "cp",
+    "device": "\"><script>alert(1)</script>",
+    "vsys": "default",
+    "interfaces": [
+      {
+        "name": "eth0",
+        "type": "physical",
+        "state": "up",
+        "ips": [
+          {
+            "ip": "192.0.2.202",
+            "prefix": 24,
+            "network": "192.0.2.0/24"
+          }
+        ]
+      }
+    ],
+    "routes": [
+      {
+        "network": "0.0.0.0/0",
+        "next_hop": "192.0.2.254",
+        "interface": "eth0",
+        "type": "default"
+      }
+    ],
+    "inventory_status": {
+      "fresh": true,
+      "data_state": "live",
+      "availability_state": "available",
+      "current_run": "uitest",
+      "current_run_observed": true,
+      "collected_at": "2026-08-30T12:00:00Z",
+      "last_successful_collection": "2026-08-30T12:00:00Z",
+      "stale_reason": null
+    }
   }
 ]
