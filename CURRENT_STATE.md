@@ -5,7 +5,7 @@ Hot-path state only. Historical build detail lives in
 agreements and validation reports). `docs/history/INDEX.md` is the one-line
 timeline.
 
-- **Authoritative checkpoint:** 2026-08-30
+- **Authoritative checkpoint:** 2026-08-31 (`main` at `ae10bf7`)
 - **Product baseline:** `0.7.7 — Compliance trend retro-fill (PAN baseline
   reconstruction)` — AUTOMATED_VALIDATED (0.7.x VERIFY track)
 - **Previous:** `DEV.3.1 — Linux worker image + Compose` — AUTOMATED_VALIDATED
@@ -36,7 +36,7 @@ gap to close, not a reason to trust this file over it.
 ## Active build
 
 **`distributed_evidence_store_migration` (DEV.3.3) — AUTOMATED_VALIDATED
-2026-08-31 (this session).** The evidence-integrity half split from DEV.3.2.
+2026-08-31, merged to `main` (`ae10bf7`).** The evidence-integrity half split from DEV.3.2.
 Contract frozen after product-owner review, then implemented:
 `docs/history/phase/DEV3_3_DISTRIBUTED_EVIDENCE_STORE_MIGRATION.md`.
 
@@ -83,6 +83,19 @@ last-known-good state for a fleet split across containers matches a
 single-container run (server-blocked, DEPLOY.1). Backfilling existing
 filesystem history into Postgres is deliberately out of scope (same
 no-backfill precedent DEV.3.2 set).
+
+**Next objective: `RB.3` (CP Gaia backup).** Blocked on **`D3` alone** — the
+product-owner decision on whether `add backup local` is acceptable now as the
+new `operational-write` command class — plus that command's own gate review
+(drafted at contracts §7.3; point 14, the device-impact assessment, is owed
+and itself gated on D3). The P0 `cp_device_interaction_safety` audit **closed
+2026-08-25**; do not re-cite it as open. There is an unblocked slice: contracts
+**§7.5** (`show backups` / `show snapshots`, class `read`) is the attestation
+path, does not depend on D3, and the contract itself calls it "worth gating
+first, independently of RB.3" — it would populate the `attestations` argument
+`utils/restore_readiness.py` already accepts but nothing currently fills.
+Ready-to-paste next-chat prompt:
+`docs/history/handover/RB3_NEXT_CHAT_PROMPT.md`.
 
 **Previously (before this session): no build open.** This checkpoint reconciles two independent sessions that
 landed in parallel on separate branches: this session's RECOVER track
