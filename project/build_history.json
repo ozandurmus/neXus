@@ -3,6 +3,19 @@
   "record_contract": "One structured record per build, newest first. Required: build, status, title, summary (<= 2 sentences). Optional: started, completed, track, movement, supersedes, evidence, risks_forward, docs{agreement,validation,handover} (repo-relative paths under docs/history/). Full detail lives in the linked doc; do not restate it here. Status vocabulary must stay within utils/project_plan.py STATUS_VALUES.",
   "builds": [
     {
+      "build": "distributed_evidence_store_migration",
+      "status": "automated_validated",
+      "started": "2026-08-31",
+      "completed": "2026-08-31",
+      "title": "DEV.3.3 - CAS metadata index, run manifests, last-known-good and scheduler state to Postgres",
+      "track": "Storage / Architecture",
+      "movement": "ARCHITECTURE + IMPLEMENTATION",
+      "summary": "Evidence-integrity half split from DEV.3.2. New utils/evidence_backend.py holds four storage backends (config snapshot metadata, run manifest, last-known-good, scheduler state), each with a filesystem implementation carrying today's exact behavior and an opt-in PostgreSQL implementation selected by SECURITYEXPERT_EVIDENCE_BACKEND / SECURITYEXPERT_EVIDENCE_POSTGRES_DSN, independent of DEV.3.2's coordinator backend. Content-addressed payload blobs stay on the runtime volume. Product owner resolved the contract's one open decision (E1) to full identity fidelity, so the Postgres instance is documented as a CLASS 2 identity-bearing asset in PRIVACY_AND_DATA_HANDLING.md. Nine implementation-time contract amendments (A1-A9) are recorded in the phase doc rather than silently absorbed; two were substantive. A1: moving last-known-good to per-entity rows does not by itself fix the lost-update race between containers - the caller's load-mutate-save-whole-map pattern reproduces it against the table - so snapshot.py now reads and writes each entity individually while the filesystem backend buffers and still performs one whole-file write per run. A9, found by the two-real-subprocess AC-3 test: PostgreSQL's CREATE TABLE IF NOT EXISTS does not serialize against a concurrent identical CREATE, so two containers starting together against a fresh database could crash one; schema creation now runs under a transaction-level advisory lock. Backends are dumb storage primitives with all business validation left in the calling modules (A2/A5), so both paths run identical logic. 17 new tests against a real local PostgreSQL 16. Full suite 788 passed / 3 skipped / 2 pre-existing unrelated failures; privacy gate PASS/0. Real-environment multi-container evidence remains owed before DONE.",
+      "docs": {
+        "agreement": "docs/history/phase/DEV3_3_DISTRIBUTED_EVIDENCE_STORE_MIGRATION.md"
+      }
+    },
+    {
       "build": "render_harness_happydom_pin",
       "status": "automated_validated",
       "started": "2026-08-31",

@@ -35,7 +35,56 @@ gap to close, not a reason to trust this file over it.
 
 ## Active build
 
-**None open.** This checkpoint reconciles two independent sessions that
+**`distributed_evidence_store_migration` (DEV.3.3) — AUTOMATED_VALIDATED
+2026-08-31 (this session).** The evidence-integrity half split from DEV.3.2.
+Contract frozen after product-owner review, then implemented:
+`docs/history/phase/DEV3_3_DISTRIBUTED_EVIDENCE_STORE_MIGRATION.md`.
+
+New `utils/evidence_backend.py` puts four stores behind backends — CAS
+metadata index, run manifests, last-known-good, scheduler state — each with a
+filesystem implementation carrying today's exact behavior (the default,
+unchanged) and an opt-in PostgreSQL one selected by
+`SECURITYEXPERT_EVIDENCE_BACKEND` / `SECURITYEXPERT_EVIDENCE_POSTGRES_DSN`.
+Deliberately independent of DEV.3.2's `SECURITYEXPERT_COORDINATOR_BACKEND`:
+either may be enabled without the other. **Content-addressed payload blobs
+never move** — they stay on the runtime volume on both backends.
+
+The contract's one open decision (**E1**) was put to the product owner and
+resolved to **full identity fidelity**: the Postgres index carries
+`device`/`management_ip`/`entity_id` exactly as `metadata.json` does today,
+and that instance is now documented as a **CLASS 2 identity-bearing asset**
+in `PRIVACY_AND_DATA_HANDLING.md` (dedicated instance, TLS DSN, restricted
+role, encryption at rest).
+
+Nine implementation-time findings are recorded as explicit contract
+amendments (A1–A9) rather than silently absorbed. Two were substantive:
+
+- **A1** — moving last-known-good to per-entity rows does *not* by itself fix
+  the lost-update race the build exists to close; the caller's
+  load-mutate-save-whole-map pattern reproduces it against the table. So
+  `build_failure_aware_snapshot` now reads and writes each entity
+  individually, while the filesystem backend buffers those writes and still
+  performs exactly one whole-file write per run.
+- **A9** — found by the two-real-subprocess test: PostgreSQL's `CREATE TABLE
+  IF NOT EXISTS` does not serialize against a concurrent identical `CREATE`,
+  so two worker containers starting together against a fresh database could
+  crash one of them. Schema creation now runs under a transaction-level
+  advisory lock (pooler-safe, unlike DEV.3.2's session-level locks).
+
+17 new tests (`tests/test_dev3_3_evidence_store_migration.py`) against a real
+local PostgreSQL 16. Full suite **788 passed / 3 skipped / 2 failed** — the
+same two pre-existing unrelated failures, zero regressions (the skip count
+fell from 11 because DEV.3.2's Postgres tests also run when an instance is
+available). Privacy gate PASS / 0. `main.py` gains a fail-closed startup
+preflight; a misconfigured Postgres backend stops at a clean `parser.error`.
+
+**Owed before `DONE`:** a multi-container real-environment run proving
+last-known-good state for a fleet split across containers matches a
+single-container run (server-blocked, DEPLOY.1). Backfilling existing
+filesystem history into Postgres is deliberately out of scope (same
+no-backfill precedent DEV.3.2 set).
+
+**Previously (before this session): no build open.** This checkpoint reconciles two independent sessions that
 landed in parallel on separate branches: this session's RECOVER track
 (`recovery_collect_rb2_rb4` + predecessors, PR #15) and a separate session's
 `compliance_trend_reconstruction` (`0.7.7`) + `distributed_endpoint_lock`
@@ -329,7 +378,8 @@ full regression run.)
 ## Automated test baseline
 
 ```
-645 passed / 2 skipped / 2 failed (Python 3.12)
+788 passed / 3 skipped / 2 failed (2026-08-31, with a live PostgreSQL 16
+available; 763 passed / 11 skipped / 2 failed without one)
 The 2 failures are pre-existing and unrelated to any build in this cycle:
   tests/test_phase0_6_1c_discovery_capability_ui.py::
     test_run_html_export_embeds_discovery_payload_without_leftover_placeholder

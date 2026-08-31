@@ -129,10 +129,10 @@
       "id": "distributed_evidence_store_migration",
       "category": "Storage / Architecture",
       "title": "DEV.3.3 - CAS metadata index, run manifests and last-known-good to Postgres",
-      "status": "planned",
+      "status": "automated_validated",
       "priority": "P0",
       "target": "DEV.3.3",
-      "note": "Split from distributed_endpoint_lock_and_job_store per the DEV.3.2 contract (docs/history/phase/DEV3_2_DISTRIBUTED_ENDPOINT_LOCK.md) -- the evidence-integrity half, deliberately not bundled with distributed_endpoint_lock (device safety). Move scheduler state, run manifests, last-known-good and the CAS metadata index to Postgres; CAS payload blobs stay on the volume. Touches config_evidence, config_storage, config_history, snapshot, run_context. Its own contract and real-environment gate; does not gate per_vendor_worker_split (distributed_endpoint_lock already does)."
+      "note": "AUTOMATED_VALIDATED 2026-08-31. Contract frozen and implemented: docs/history/phase/DEV3_3_DISTRIBUTED_EVIDENCE_STORE_MIGRATION.md (includes implementation-time amendments A1-A9). utils/evidence_backend.py adds four backends -- config snapshot metadata index, run manifest, last-known-good, scheduler state -- filesystem by default (behavior unchanged) and PostgreSQL when SECURITYEXPERT_EVIDENCE_BACKEND=postgres, independent of DEV.3.2's SECURITYEXPERT_COORDINATOR_BACKEND. CAS payload blobs stay on the volume. E1 resolved by the product owner to full identity fidelity; the Postgres instance is now a documented CLASS 2 asset in PRIVACY_AND_DATA_HANDLING.md. Two substantive findings during implementation: per-entity last-known-good writes are required for the concurrency fix to be real (A1), and CREATE TABLE IF NOT EXISTS needed an advisory lock to survive two containers starting together (A9, caught by the real-subprocess test). Evidence: 17 new tests against a real local PostgreSQL 16; full suite 788 passed / 3 skipped / 2 pre-existing unrelated failures; privacy gate PASS/0. REAL_ENV_VALIDATED/DONE still owed: a multi-container run proving last-known-good state for a fleet split across containers matches a single-container run (server-blocked, DEPLOY.1)."
     },
     {
       "id": "per_vendor_worker_split",
