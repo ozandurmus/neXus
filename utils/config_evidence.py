@@ -4,7 +4,6 @@ import hashlib
 import json
 import os
 import re
-import shutil
 import time
 import uuid
 from dataclasses import dataclass
@@ -13,6 +12,8 @@ from pathlib import Path
 from typing import Any, Callable
 
 from lxml import etree
+
+from utils.evidence_backend import ConfigSnapshotBackend, select_config_snapshot_backend
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -115,7 +116,12 @@ class ConfigEvidenceStore:
 
     STORAGE_SCHEMA = "content_addressed_v1"
 
-    def __init__(self, root: Path | None = None, artifact_root: Path | None = None):
+    def __init__(
+        self,
+        root: Path | None = None,
+        artifact_root: Path | None = None,
+        backend: "ConfigSnapshotBackend | None" = None,
+    ):
         self.root = Path(root) if root else CONFIG_ROOT
         if artifact_root is not None:
             self.artifact_root = Path(artifact_root)
@@ -125,6 +131,7 @@ class ConfigEvidenceStore:
         else:
             self.artifact_root = ARTIFACT_ROOT
         self.data_root = self.root.parent
+        self.backend = backend if backend is not None else select_config_snapshot_backend(root=self.root)
 
     def _entity_dir(self, source: str, entity_id: str) -> Path:
         return self.root / safe_component(source) / safe_component(entity_id)
@@ -139,48 +146,24 @@ class ConfigEvidenceStore:
             return os.path.relpath(path, start=self.data_root)
 
     def _latest_metadata(
-        self, entity_dir: Path, *, artifact_type: str | None = None
-    ) -> tuple[Path, dict[str, Any]] | None:
-        if not entity_dir.exists():
-            return None
-        candidates = []
-        for child in entity_dir.iterdir():
-            if not child.is_dir() or child.name.startswith(".tmp-"):
-                continue
-            metadata_path = child / "metadata.json"
-            if metadata_path.exists():
-                candidates.append(metadata_path)
-        for metadata_path in sorted(candidates, key=lambda p: p.parent.name, reverse=True):
-            try:
-                payload = json.loads(metadata_path.read_text(encoding="utf-8"))
-            except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        self, source: str, entity_id: str, *, artifact_type: str | None = None
+    ) -> tuple[str, dict[str, Any]] | None:
+        """Most recent successful snapshot for this entity, as (snapshot_id, metadata).
+
+        Selection rules (newest first, matching artifact type, ``status ==
+        "success"`` with a ``sha256``) live here rather than in the backend so
+        both backends apply identical logic — see the DEV.3.3 contract,
+        amendment A2. ``list_snapshots`` returns newest-first by snapshot id
+        (amendment A3).
+        """
+        for snapshot_id, payload in self.backend.list_snapshots(source=source, entity_id=entity_id):
+            if payload is None:
                 continue
             if artifact_type is not None and payload.get("artifact_type") != artifact_type:
                 continue
             if payload.get("status") == "success" and payload.get("sha256"):
-                return metadata_path, payload
+                return snapshot_id, payload
         return None
-
-    @staticmethod
-    def _replace_with_retry(
-        tmp_path: Path, final_path: Path, *, max_retries: int = 3, retry_delay_seconds: float = 0.1
-    ) -> None:
-        """``os.replace`` with bounded retry on transient lock failures.
-
-        Windows antivirus/indexer processes can briefly hold a newly written
-        file or directory open, turning a normally-atomic rename into an
-        intermittent ``PermissionError``/``OSError``. Retrying with a short
-        backoff self-heals that case; a persistent failure still raises.
-        """
-        for attempt in range(max_retries):
-            try:
-                os.replace(tmp_path, final_path)
-                return
-            except (OSError, PermissionError):
-                if attempt < max_retries - 1:
-                    time.sleep(retry_delay_seconds * (2 ** attempt))
-                    continue
-                raise
 
     def _ensure_blob(self, *, content: bytes, digest: str) -> tuple[Path, bool]:
         """Write content-addressed blob with concurrent-safe fallback handling.
@@ -265,12 +248,10 @@ class ConfigEvidenceStore:
             validation.update(additional_validation)
         digest = sha256_bytes(content)
         size_bytes = len(content)
-        entity_dir = self._entity_dir(source, entity_id)
-        entity_dir.mkdir(parents=True, exist_ok=True)
 
-        previous = self._latest_metadata(entity_dir, artifact_type=artifact_type)
+        previous = self._latest_metadata(source, entity_id, artifact_type=artifact_type)
         previous_sha = previous[1].get("sha256") if previous else None
-        previous_snapshot = previous[0].parent.name if previous else None
+        previous_snapshot = previous[0] if previous else None
         if previous_sha is None:
             change_state = "first"
         elif previous_sha == digest:
@@ -282,80 +263,56 @@ class ConfigEvidenceStore:
         blob_path, blob_created = self._ensure_blob(content=content, digest=digest)
 
         snapshot_name = f"{utc_stamp()}_{uuid.uuid4().hex[:8]}"
-        final_dir = entity_dir / snapshot_name
-        tmp_dir = entity_dir / f".tmp-{snapshot_name}"
-        tmp_dir.mkdir(parents=False, exist_ok=False)
-
         artifact_name = safe_component(artifact_name)
-        metadata_path = tmp_dir / "metadata.json"
-        sha_path = tmp_dir / "sha256.txt"
-        ref_path = tmp_dir / f"{artifact_name}.ref.json"
         object_relpath = self._relative_to_data_root(blob_path)
 
-        try:
-            metadata = {
-                "schema_version": "0.6.0A4.3.2",
-                "source": source,
-                "entity_id": entity_id,
-                "device": device_name,
-                "management_ip": management_ip,
-                "artifact_type": artifact_type,
-                "artifact_file": artifact_name,
-                "media_type": media_type,
-                "collected_at": utc_now(),
-                "method": method,
-                "status": "success",
-                "sha256": digest,
-                "size_bytes": size_bytes,
-                "collector_version": collector_version,
-                "change_state": change_state,
-                "previous_sha256": previous_sha,
-                "previous_snapshot": previous_snapshot,
-                "storage": {
-                    "mode": self.STORAGE_SCHEMA,
-                    "object_sha256": digest,
-                    "object_path": object_relpath,
-                    "object_created_this_snapshot": blob_created,
-                    "stored_bytes_delta": size_bytes if blob_created else 0,
-                    "snapshot_contains_payload_copy": False,
-                },
-                "validation": validation,
-            }
-            if extra_metadata:
-                metadata.update(extra_metadata)
+        metadata = {
+            "schema_version": "0.6.0A4.3.2",
+            "source": source,
+            "entity_id": entity_id,
+            "device": device_name,
+            "management_ip": management_ip,
+            "artifact_type": artifact_type,
+            "artifact_file": artifact_name,
+            "media_type": media_type,
+            "collected_at": utc_now(),
+            "method": method,
+            "status": "success",
+            "sha256": digest,
+            "size_bytes": size_bytes,
+            "collector_version": collector_version,
+            "change_state": change_state,
+            "previous_sha256": previous_sha,
+            "previous_snapshot": previous_snapshot,
+            "storage": {
+                "mode": self.STORAGE_SCHEMA,
+                "object_sha256": digest,
+                "object_path": object_relpath,
+                "object_created_this_snapshot": blob_created,
+                "stored_bytes_delta": size_bytes if blob_created else 0,
+                "snapshot_contains_payload_copy": False,
+            },
+            "validation": validation,
+        }
+        if extra_metadata:
+            metadata.update(extra_metadata)
 
-            metadata_path.write_text(
-                json.dumps(metadata, indent=2, ensure_ascii=False), encoding="utf-8"
-            )
-            sha_path.write_text(
-                f"{digest}  @{object_relpath}  logical={artifact_name}\n", encoding="ascii"
-            )
-            ref_path.write_text(
-                json.dumps(
-                    {
-                        "schema_version": "content-addressed-reference-v1",
-                        "logical_artifact_name": artifact_name,
-                        "sha256": digest,
-                        "object_path": object_relpath,
-                        "size_bytes": size_bytes,
-                    },
-                    indent=2,
-                    ensure_ascii=False,
-                ),
-                encoding="utf-8",
-            )
-
-            self._replace_with_retry(tmp_dir, final_dir)
-        except Exception:
-            shutil.rmtree(tmp_dir, ignore_errors=True)
-            # Never delete blob_path here. Another already-published snapshot may
-            # reference it, or a concurrent writer may have created the same one.
-            raise
+        # A failed metadata write must never delete blob_path: an already-published
+        # snapshot may reference it, or a concurrent writer may have created it.
+        self.backend.write(
+            source=source,
+            entity_id=entity_id,
+            snapshot_id=snapshot_name,
+            metadata=metadata,
+        )
+        location = self.backend.snapshot_location(
+            source=source, entity_id=entity_id, snapshot_id=snapshot_name
+        )
 
         return SnapshotResult(
-            directory=final_dir,
+            directory=location,
             artifact_path=blob_path,
-            metadata_path=final_dir / "metadata.json",
+            metadata_path=location / "metadata.json",
             sha256=digest,
             size_bytes=size_bytes,
             change_state=change_state,

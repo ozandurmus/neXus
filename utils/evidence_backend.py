@@ -130,6 +130,15 @@ class ConfigSnapshotBackend(abc.ABC):
     def get_snapshot(self, *, source: str, entity_id: str, snapshot_id: str) -> dict[str, Any] | None:
         ...
 
+    @abc.abstractmethod
+    def snapshot_location(self, *, source: str, entity_id: str, snapshot_id: str) -> Path:
+        """Where this snapshot's metadata lives, for display in collector results.
+
+        A real directory on the filesystem backend; a synthetic, deliberately
+        non-existent ``postgres/config_snapshot/<id>`` pointer on the Postgres
+        backend, which has no per-snapshot directory (contract amendment A6).
+        """
+
 
 class FilesystemConfigSnapshotBackend(ConfigSnapshotBackend):
     """Today's exact ``data/configs/<source>/<entity>/<snapshot>/`` layout."""
@@ -209,6 +218,9 @@ class FilesystemConfigSnapshotBackend(ConfigSnapshotBackend):
         except (OSError, UnicodeDecodeError, json.JSONDecodeError):
             return None
         return meta if isinstance(meta, dict) else None
+
+    def snapshot_location(self, *, source: str, entity_id: str, snapshot_id: str) -> Path:
+        return self._entity_dir(source, entity_id) / snapshot_id
 
 
 _CONFIG_SNAPSHOT_SCHEMA = (
@@ -313,6 +325,9 @@ class PostgresConfigSnapshotBackend(ConfigSnapshotBackend):
         except Exception as exc:
             raise EvidenceBackendError(f"postgres config snapshot get failed: {exc}") from exc
         return row[0] if row else None
+
+    def snapshot_location(self, *, source: str, entity_id: str, snapshot_id: str) -> Path:
+        return Path("postgres") / "config_snapshot" / snapshot_id
 
 
 # ---------------------------------------------------------------------------
@@ -640,6 +655,33 @@ def _require_dsn() -> str:
             f"{ENV_BACKEND}=postgres requires {ENV_DSN} to be set."
         )
     return dsn
+
+
+def verify_evidence_backend_ready() -> None:
+    """Fail-closed startup preflight for the evidence backend.
+
+    No-op on the filesystem default (and never imports the Postgres driver
+    there). On ``postgres`` it proves the DSN is set, the instance is
+    reachable, and every table this build needs exists — so a misconfigured
+    deployment fails at startup instead of part-way through a collection run
+    with evidence already half-written.
+
+    Unlike the coordinator backend's preflight (DEV.3.2, D6) this does not
+    need to detect a transaction-pooling proxy: nothing here holds a lock
+    across a connection's idle time, so pooled connections are safe.
+    """
+    if active_evidence_backend_kind() != "postgres":
+        return
+    dsn = _require_dsn()
+    try:
+        PostgresConfigSnapshotBackend(dsn)
+        PostgresRunManifestBackend(dsn)
+        PostgresLastKnownGoodBackend(dsn)
+        PostgresSchedulerStateBackend(dsn)
+    except EvidenceBackendError:
+        raise
+    except Exception as exc:
+        raise EvidenceBackendError(f"evidence backend preflight could not run: {exc}") from exc
 
 
 def select_config_snapshot_backend(*, root: Path) -> ConfigSnapshotBackend:

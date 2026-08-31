@@ -17,6 +17,7 @@ Read-only: never writes to CAS, contacts a device, or requires credentials.
 """
 from __future__ import annotations
 
+import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -28,7 +29,8 @@ from utils.compliance_catalog import CATALOG_VERSION, severity_weight
 from utils.compliance_posture import _evaluate_vendor_neutral_control
 from utils.compliance_rulepack import BASELINE_CONTROLS, DEFAULT_RULE_PACK
 from utils.config_evidence import ARTIFACT_ROOT, CONFIG_ROOT
-from utils.config_history import PAN_EFFECTIVE_ARTIFACT_TYPES, _blob_path_for_metadata, _read_metadata
+from utils.config_history import PAN_EFFECTIVE_ARTIFACT_TYPES, _blob_path_for_metadata, _valid_metadata
+from utils.evidence_backend import EvidenceBackendError, active_evidence_backend_kind
 
 RECONSTRUCTION_SCOPE = "pan_baseline_rule_pack_only"
 RECONSTRUCTION_GAP_MINUTES = 15
@@ -76,7 +78,11 @@ def _iter_pan_snapshots(config_root: Path) -> list[_Snapshot]:
                 metadata_path = snap_dir / "metadata.json"
                 if not metadata_path.exists():
                     continue
-                meta = _read_metadata(metadata_path)
+                try:
+                    raw = json.loads(metadata_path.read_text(encoding="utf-8"))
+                except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+                    continue
+                meta = _valid_metadata(raw)
                 if meta is None or meta.get("artifact_type") not in PAN_EFFECTIVE_ARTIFACT_TYPES:
                     continue
                 dt = _parse_iso(meta.get("collected_at"))
@@ -204,6 +210,15 @@ def reconstruct_pan_baseline_records(
     Read-only over CAS; missing/empty CAS -> ``[]``. No network, no
     credentials, no device identity in the output.
     """
+    # Mines the on-disk CAS tree directly. On a non-filesystem evidence backend
+    # that tree is empty for new evidence, so a silent "0 buckets" would read as
+    # "no history to reconstruct" rather than "wrong backend" — fail loudly
+    # instead (DEV.3.3 contract, amendment A8).
+    if active_evidence_backend_kind() != "filesystem":
+        raise EvidenceBackendError(
+            "--compliance-trend-reconstruct mines the filesystem CAS tree and is not "
+            f"supported on the {active_evidence_backend_kind()!r} evidence backend."
+        )
     config_root = Path(config_root) if config_root else CONFIG_ROOT
     artifact_root = Path(artifact_root) if artifact_root else ARTIFACT_ROOT
     snapshots = _iter_pan_snapshots(config_root)

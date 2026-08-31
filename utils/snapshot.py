@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from utils.evidence_backend import LastKnownGoodBackend, select_last_known_good_backend
 from utils.logger import info, warn
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -124,13 +125,7 @@ def _stale_or_placeholder(
     return result
 
 
-def _save_lkg(state: dict[str, Any], state_file: Path = LKG_FILE) -> None:
-    state["schema_version"] = "0.5"
-    state["updated_at"] = _utc_now()
-    _write_json_atomic(state_file, state)
-
-
-def build_failure_aware_snapshot(run_ctx) -> dict[str, Any]:
+def build_failure_aware_snapshot(run_ctx, backend: LastKnownGoodBackend | None = None) -> dict[str, Any]:
     state_file = (Path(run_ctx.data_root) / "state" / "last_known_good.json") if hasattr(run_ctx, "data_root") else LKG_FILE
     """Build effective per-source inventory without changing collector methods.
 
@@ -146,11 +141,13 @@ def build_failure_aware_snapshot(run_ctx) -> dict[str, Any]:
     cp_tel = _load_json(run_ctx.raw_dir / "cp_telemetry.json", {}) or {}
     pan_tel = _load_json(run_ctx.raw_dir / "panorama_telemetry.json", {}) or {}
 
-    state = _load_json(state_file, {}) or {}
-    entities = state.setdefault("entities", {})
-    cp_lkg = entities.setdefault("cp", {})
-    vsx_lkg = entities.setdefault("vsx", {})
-    pan_lkg = entities.setdefault("panorama", {})
+    # Per-entity reads/writes (DEV.3.3 amendment A1): on the Postgres backend
+    # each observed entity is written independently, so one container never
+    # rewrites -- and never clobbers -- entities another container just wrote.
+    # The filesystem backend buffers these and commits one whole-file write at
+    # the end, exactly as before.
+    if backend is None:
+        backend = select_last_known_good_backend(state_file=state_file)
 
     cp_at = (run_ctx.stages.get("cp") or {}).get("completed_at") or run_ctx.created_at
     vsx_at = (run_ctx.stages.get("vsx_parse") or {}).get("completed_at") or run_ctx.created_at
@@ -169,7 +166,7 @@ def build_failure_aware_snapshot(run_ctx) -> dict[str, Any]:
         availability = str(row.get("management_state") or "communicating")
         outcome = str(row.get("collection_outcome") or "success")
         if outcome == "partial":
-            previous = cp_lkg.get(key)
+            previous = backend.get_entity(source="cp", entity_key=key)
             if previous and isinstance(previous.get("item"), dict):
                 effective_cp.append(_stale_or_placeholder(
                     source="cp", identity=key, display_device=key,
@@ -192,7 +189,7 @@ def build_failure_aware_snapshot(run_ctx) -> dict[str, Any]:
 
         fresh = _fresh_item(item, run_ctx.run_id, cp_at, availability)
         effective_cp.append(fresh)
-        cp_lkg[key] = {"item": copy.deepcopy(item), "last_successful_collection": cp_at}
+        backend.put_entity(source="cp", entity_key=key, item=copy.deepcopy(item), last_successful_collection=cp_at)
 
     for key, row in cp_status_rows.items():
         if key in current_cp:
@@ -212,7 +209,7 @@ def build_failure_aware_snapshot(run_ctx) -> dict[str, Any]:
             run_id=run_ctx.run_id,
             availability=availability,
             reason=reason,
-            previous=cp_lkg.get(key),
+            previous=backend.get_entity(source="cp", entity_key=key),
         ))
 
     effective_vsx: list[dict[str, Any]] = []
@@ -221,7 +218,7 @@ def build_failure_aware_snapshot(run_ctx) -> dict[str, Any]:
         fresh = _fresh_item(item, run_ctx.run_id, vsx_at, "communicating")
         effective_vsx.append(fresh)
         if key:
-            vsx_lkg[key] = {"item": copy.deepcopy(item), "last_successful_collection": vsx_at}
+            backend.put_entity(source="vsx", entity_key=key, item=copy.deepcopy(item), last_successful_collection=vsx_at)
 
     pan_tel_by_serial = {
         str(row.get("serial") or ""): row
@@ -237,7 +234,7 @@ def build_failure_aware_snapshot(run_ctx) -> dict[str, Any]:
         availability = "communicating" if connected == "yes" else connected or "unknown"
         fresh = _fresh_item(item, run_ctx.run_id, pan_at, availability)
         effective_pan.append(fresh)
-        pan_lkg[key] = {"item": copy.deepcopy(item), "last_successful_collection": pan_at}
+        backend.put_entity(source="panorama", entity_key=key, item=copy.deepcopy(item), last_successful_collection=pan_at)
 
     for serial, row in pan_tel_by_serial.items():
         key = serial or str(row.get("device") or "")
@@ -263,10 +260,10 @@ def build_failure_aware_snapshot(run_ctx) -> dict[str, Any]:
             run_id=run_ctx.run_id,
             availability=availability,
             reason=reason,
-            previous=pan_lkg.get(key),
+            previous=backend.get_entity(source="panorama", entity_key=key),
         ))
 
-    _save_lkg(state, state_file)
+    backend.commit()
 
     outputs = {
         "cp_effective.json": effective_cp,
