@@ -11,111 +11,111 @@ Prior versions are in git history.
 
 - Date: 2026-08-31.
 - Product baseline `0.7.7` — AUTOMATED_VALIDATED. Engineering `DEV.3.3` —
-  AUTOMATED_VALIDATED. Both unchanged this session.
-- **Active build: `RB.3b` — CP Gaia system backup collection.** All seven
-  implementation steps now landed (2026-08-31, across this and prior
-  sessions). **Status stays `in_progress` — not `IMPLEMENTED`** — the sole
-  remaining item is the mandatory watched real R81.10/R81.20 gateway run
-  (hardware-gated, not an engineering task).
-- Branch: `claude/docs-handover-sequence-f5sb1g`. Not yet merged to `main`
-  (push is human-controlled, standing priority 4).
+  AUTOMATED_VALIDATED. `RB.3b` — `in_progress` (all 7 implementation steps
+  landed; only the real-environment run remains). None of these changed
+  this session.
+- **This session's build: `remove_dormant_remote_cleanup` — DONE.** A small,
+  self-contained, server/device-independent security-hardening item, picked
+  specifically because it needed neither a live CP/PAN device nor the
+  DEPLOY.1 server.
+- Branch: `claude/remove-dormant-remote-cleanup`, merged to `main` via PR
+  (squash) this session — see step 3 below for the actual PR/commit.
 
-## 2. What changed this session (step 7 — project metadata / state sync)
+## 2. What changed this session
 
-Docs-only. No source file touched; no test re-run (no code changed, so the
-last evidence — 879 passed / 23 skipped / 2 failed — still holds per the
-test-economy rule).
-
-- `project/build_history.json` — added the missing `RB.3b-impl-step5`
-  (device core + C6) and `RB.3b-impl-step6` (`main.py` wiring) records, which
-  a prior session's step-6 landing never got around to recording, plus a new
-  `RB.3b-impl-step7` record for this session's own docs sync. All three carry
-  `status: in_progress` — RB.3b as a whole isn't done, so this doesn't fold
-  into one closing entry (matching the `RB.3b-prep` /
-  `RB.3b-prep-signoff` precedent of one entry per landed movement).
-- `docs/history/phase/RB_3B_CP_GAIA_BACKUP_COLLECTION.md` — Status header
-  updated (steps 2–7 landed, still `in_progress`); Definition of done items 5
-  (step 6 landed) and 6 (step 7 landed, new) added; "Next movement / model"
-  rewritten — nothing engineering remains until the real-environment run.
-- `CURRENT_STATE.md` — Active build section trimmed: the separate steps-2-4
-  / step-5 bullets collapsed into one steps-2–7-implemented line (detail now
-  lives in `project/build_history.json` + the phase doc, not repeated here);
-  "Authoritative checkpoint" line updated to say steps 2–7.
-- `project/roadmap.json` — `now_next.next.goal` was stale (still said "Steps
-  5-7 owed" from before this session); rewritten to reflect steps 2–7
-  implemented and only the real-env run outstanding.
-- `project/backlog.json` (`native_backup` item) and
-  `project/feature_registry.json` (`native_backup_foundation` item) — each
-  had a stale "RB.3b stays blocked pending sign-off" sentence left over from
-  before the 2026-08-31 sign-off; appended (not rewritten — `AGENTS.md`
-  "do not silently rewrite historical outcomes") an `UPDATE 2026-08-31`
-  sentence superseding it.
-- `docs/AI_DEVELOPMENT_PROTOCOL.md` — **deliberately untouched.** Step 7 only
-  updates it if `D6` (adopt `operational-write` as a permanent protocol
-  class) is resolved; it is still open.
+- Deleted `utils/cleanup.py`. It was unreferenced by any live code path but
+  connected over SSH with the CP **collection credential** and issued
+  unaudited `rm -f` commands — outside the network-device command gate
+  (`docs/AI_DEVELOPMENT_PROTOCOL.md`) and this product's read-only posture.
+  Flagged for removal in
+  `docs/design/SERVER_PRODUCTIZATION_AND_MODULARIZATION_ARCHITECTURE.md`
+  §3 item 1 and `project/backlog.json` `remove_dormant_remote_cleanup` (P0).
+- New `tests/test_remove_dormant_remote_cleanup.py`
+  (`pytestmark = pytest.mark.security`, 2 tests): asserts the module stays
+  absent, and greps every tracked `.py` file for `cleanup_all` so a
+  reintroduction (under this name) is caught automatically.
+- `project/backlog.json` — `remove_dormant_remote_cleanup` status
+  `planned` → `done`, note appended with the DONE record.
+- `project/build_history.json` — new `remove_dormant_remote_cleanup` entry
+  (`status: done`).
+- `CURRENT_STATE.md` — one-paragraph DONE note added near the RB.3b block
+  (this build ran in parallel with RB.3b's now-finished implementation
+  steps, not as part of it).
+- No change to `main.py`, `templates/`, `static/`, or any collector/
+  orchestration module — `utils/cleanup.py` had zero live callers, confirmed
+  by a repo-wide grep before deletion (only `project/backlog.json` and the
+  productization design doc mentioned it in prose).
 
 ## 3. Exact next action
 
-**Nothing is owed on RB.3b from this chat.** The single remaining item —
-the watched real R81.10/R81.20 single-gateway `add backup local` run, with
-free space observed before/after and the deletion confirmed — is
-hardware-gated and needs a human at a console, not another implementation
-step. Do not invent further RB.3b engineering work to fill that gap.
+RB.3b's engineering work is exhausted (see prior handover in git history) —
+still waiting on the human hardware run, nothing to pick up there.
 
-For the next AI session, in order of likely product priority:
+This session cleared the request to find device/server-independent
+background work. Two more items from that same shortlist remain, both
+explicitly local-only per `docs/design/
+SERVER_PRODUCTIZATION_AND_MODULARIZATION_ARCHITECTURE.md` §3
+"Local development work, safe before server arrival":
 
-1. If the real-environment run has happened since this handover was
-   written: record its result (phase doc "Risks"/"Definition of done",
-   `CURRENT_STATE.md`, `build_history.json`), confirm the §7.7/§7.8 exact
-   command-string question it was meant to resolve, and only then move
-   RB.3b to `IMPLEMENTED`.
-2. Otherwise: `RB.3c` (CP management export + consistency groups) is still
-   blocked on `D5` (storage budget) and `E1` (§7.6 `operational-write`
-   classification unverified) — both are product-owner decisions, not
-   engineering-ready. Do not start `RB.3c` implementation without them.
-3. Absent explicit product direction, the `project/roadmap.json`
-   `now_next.upcoming` list (e.g. `0.6.6B` compliance rule-pack transition)
-   is the next unblocked track.
+1. `frontend_rendering_boundary` (P1, `project/backlog.json`) — audit HTML
+   sinks, safe JSON script serialization, a restrictive report CSP, hostile
+   inventory/configuration label tests. Needs its own scoped contract before
+   implementation (touches `templates/index.html` / `static/`, so the render
+   harness must stay green).
+2. `codebase_modularization` (P1) — split `static/app.js` and `main.py` into
+   responsibility-owned modules per the architecture doc, behavior-
+   preserving. Larger, multi-session scope; do not start without confirming
+   with the product owner which module first.
+
+A third option is design-only, not implementation: draft `D5` (storage
+budget) and `E1` (§7.6 `operational-write` classification) decision briefs to
+unblock `RB.3c`, mirroring how the `RB.3b` prep unblocked `D4` — offline,
+no device, but needs product-owner sign-off before `RB.3c` can start, same
+as `D4` did.
+
+Do not start any of these without picking one explicitly with the user —
+this handover intentionally leaves the choice open rather than assuming.
 
 ## 4. Test delta
 
-None. This session made no source, test, or fixture change — pure
-`project/*.json` + `docs/history/phase/RB_3B_CP_GAIA_BACKUP_COLLECTION.md` +
-`CURRENT_STATE.md` text edits. Last recorded evidence (unchanged, still
-authoritative): **879 passed / 23 skipped / 2 failed**, the 2 being the
+New: 2 tests (`tests/test_remove_dormant_remote_cleanup.py`), both green.
+Full suite **881 passed / 23 skipped / 2 failed** (up from the prior
+879/23/2 baseline by exactly the 2 new tests) — the 2 failures are the same
 documented pre-existing test-order pollution
-(`test_phase0_6_1c_discovery_capability_ui`,
-`test_phase0_7_5_compliance_trend::test_checkpoint_render_appends_one_record`).
-Repository privacy gate: **PASS / 0** — this session touched no runtime
-artifact, only tracked docs/JSON.
+(`test_phase0_6_1c_discovery_capability_ui::test_run_html_export_embeds_discovery_payload_without_leftover_placeholder`,
+`test_phase0_7_5_compliance_trend::test_checkpoint_render_appends_one_record`),
+both re-confirmed passing in isolation this session. Zero regressions.
+Repository privacy gate: **PASS / 0** on a clean checkout (this session's
+own gitignored `data/`/`logs/` test-run noise was deleted before the final
+gate run).
+
+Note: this sandbox had no Python dependencies installed at session start
+(`pip3 install -r requirements.txt -r requirements-dev.txt` was run first,
+system-wide, no venv). If a future session hits `ModuleNotFoundError`
+(`lxml`, `pytest`, ...), that is a sandbox-provisioning gap, not a code
+regression — reinstall from `requirements*.txt` rather than debugging code.
 
 ## 5. New risks / debt
 
-None new. Carried unchanged from the step-6 handover (see prior version in
-git history for full text): `add backup local` output format and the
-§7.7/§7.8 command strings are confirm-on-hardware; "SCP fetch" is paramiko
-SFTP, not the `scp` binary; a `CLEANUP_FAILED` endpoint is ineligible until
-an operator clears the orphaned archive + ledger entry manually; the
-operational-write ledger is new correctness-critical state (unreadable ⇒
-false refusal, chosen deliberately); `D5`–`D7` remain open (`D6` = adopt
-`operational-write` into `AI_DEVELOPMENT_PROTOCOL.md` permanently — still
-not resolved, so no doc there was touched this session either).
+None new. `utils/cleanup.py`'s removal has no runtime, CLI, or UI surface —
+it was dead code. The regression test only catches a literally-named
+`cleanup_all` reappearing in a tracked `.py` file; it does not generally
+scan for "any write-capable SSH helper" (no such generic scanner exists in
+this repo — the network-device command gate is documentation-enforced, not
+tool-enforced). Worth naming so a differently-named equivalent isn't assumed
+to be caught.
 
 ## 6. Continue or fresh chat
 
-**Fresh chat.** RB.3b's engineering work is exhausted pending a human
-hardware run; there is nothing left in flight for a continuation to pick up
-mid-thought. Read `AI_START_HERE.md` → `CURRENT_STATE.md` (hot section) →
-this file → the real-environment run's result if one has landed, otherwise
-`project/roadmap.json`'s `now_next` for the next product priority.
+**Either works.** This build is fully closed (implemented, tested, merged);
+nothing is mid-thought. A fresh chat is fine for whichever of section 3's
+options the user picks next since none of them extend this session's work.
+Continuing here is also fine if the user wants to keep discussing which one
+to start.
 
 ## 7. main.py / UI effect
 
-**No change.** This session touched no source file — `templates/`,
-`static/`, `main.py`, and every collector/orchestration module are byte-
-identical to the step-6 handover's state. A normal run behaves exactly as
-described in that prior handover: `--recovery-collect --recovery-vendor
-checkpoint` requires both `SECURITYEXPERT_CP_BACKUP_SSH_USERNAME` +
-`_PASSWORD`/`_PASSWORD_FILE` and a non-empty
-`SECURITYEXPERT_CP_BACKUP_ALLOWED_ENTITIES`, both unset by default, so an
-unconfigured run still touches no device.
+**No change.** `utils/cleanup.py` was never imported by `main.py` or any
+collector; deleting it changes nothing about `main.py`'s CLI surface, any
+run's output, or the rendered report. A normal run before and after this
+session is byte-for-byte identical in behavior.

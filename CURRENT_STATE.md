@@ -128,6 +128,12 @@ this file does not restate it.
   (storage budget) and `E1` (§7.6 `operational-write` classification
   unverified). Sequenced after RB.3b's first watched real-environment run.
 
+**`remove_dormant_remote_cleanup` — DONE 2026-08-31** (local security
+hardening, no device contact). `utils/cleanup.py` — unreferenced, but
+capable of issuing unaudited `rm -f` over SSH with the collection credential
+— deleted; `tests/test_remove_dormant_remote_cleanup.py` regression-guards
+its absence. `project/backlog.json` entry closed.
+
 The P0 `cp_device_interaction_safety` audit **closed 2026-08-25**; do not
 re-cite it as open. The earlier seed prompt
 `docs/history/handover/RB3_NEXT_CHAT_PROMPT.md` is superseded by the three
