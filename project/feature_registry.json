@@ -577,6 +577,18 @@
           "label": "PAN corporate CA verification",
           "state": "pending",
           "weight": 2
+        },
+        {
+          "id": "viewer_data_boundary",
+          "label": "Report-only viewer data boundary",
+          "state": "pending",
+          "weight": 2
+        },
+        {
+          "id": "browser_render_boundary",
+          "label": "CSP and hostile-data rendering tests",
+          "state": "pending",
+          "weight": 1
         }
       ]
     },
@@ -791,8 +803,8 @@
       "status": "planned",
       "target": "1.0",
       "weight": 10,
-      "summary": "PostgreSQL metadata, Redis/workers and object/PVC storage for multi-user server deployment.",
-      "why": "Moves local POC persistence into scalable services while retaining evidence contracts.",
+      "summary": "Deliberate single-worker server data plane first: PostgreSQL when enabled, durable evidence payloads, and recovery storage; add queues or object storage only after measured scale requires them.",
+      "why": "Hardens local persistence for an internal server while avoiding premature distributed components that add operational and security surface.",
       "criteria": [
         {
           "id": "db",
@@ -808,9 +820,21 @@
         },
         {
           "id": "object_store",
-          "label": "Object storage",
+          "label": "Shared payload storage decision after measured multi-worker need",
           "state": "pending",
           "weight": 1
+        },
+        {
+          "id": "migrations_roles",
+          "label": "Reviewed migrations and DML-only database role",
+          "state": "pending",
+          "weight": 2
+        },
+        {
+          "id": "recovery_durability",
+          "label": "Off-host recovery storage and key custody",
+          "state": "pending",
+          "weight": 2
         }
       ]
     },
@@ -863,6 +887,18 @@
           "label": "Health/metrics",
           "state": "pending",
           "weight": 1
+        },
+        {
+          "id": "least_privilege_runtime",
+          "label": "Non-root, restricted container runtime",
+          "state": "pending",
+          "weight": 2
+        },
+        {
+          "id": "release_assurance",
+          "label": "Locked CI release, SBOM and provenance",
+          "state": "pending",
+          "weight": 2
         }
       ]
     },
@@ -1209,6 +1245,42 @@
           "label": "CP ClusterXL, CP VSX per-VS, PAN A/P (+A/A) action adapters",
           "state": "pending",
           "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "codebase_modularization",
+      "title": "Behavior-Preserving Codebase Modularization",
+      "status": "planned",
+      "introduced": "Local architecture health",
+      "target": "Local development, before and during DEPLOY.1",
+      "weight": 7,
+      "summary": "Separates large UI, orchestration and vendor-collector modules by stable responsibility while preserving the portable static report and existing evidence contracts.",
+      "why": "Reduces change risk, improves testability and creates clear server migration seams without introducing a premature platform rewrite.",
+      "criteria": [
+        {
+          "id": "frontend_composition",
+          "label": "Responsibility-owned frontend fragments compose to one report",
+          "state": "pending",
+          "weight": 2
+        },
+        {
+          "id": "main_workflow_seams",
+          "label": "CLI orchestration has explicit workflow/service seams",
+          "state": "pending",
+          "weight": 2
+        },
+        {
+          "id": "vendor_collector_seams",
+          "label": "PAN and Check Point collector responsibilities are isolated",
+          "state": "pending",
+          "weight": 1
+        },
+        {
+          "id": "behavior_preservation",
+          "label": "Render, privacy and regression gates stay green for each extraction",
+          "state": "pending",
+          "weight": 2
         }
       ]
     }

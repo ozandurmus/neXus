@@ -136,7 +136,24 @@ Everything else in RB.3 stays blocked:
   `immutable_store_permission` (P1), `html_render_performance` (P2),
   `inventory_exclusions_ui` / `overview_device_lifecycle_enrichment` (P1 UI).
 
-## 3b. NOT YET DONE — real-environment / on-hardware validation
+## 3a. Architecture planning carried forward
+
+A local-only productization and modularization review is now recorded in
+`docs/design/SERVER_PRODUCTIZATION_AND_MODULARIZATION_ARCHITECTURE.md`, with
+tracked backlog, feature-registry, roadmap and history entries. It preserves
+the current one-worker/static-report model; it does **not** authorize a
+premature server/API/platform rewrite.
+
+Doable locally, independently of RB.3a: remove the dormant remote-cleanup
+helper, harden the browser rendering boundary, and extract responsibility-owned
+frontend/workflow/collector modules while preserving behavior and passing
+render, privacy and regression gates. Server-only gates are OIDC/RBAC, strict
+CP/PAN trust, report-only publication storage, non-root restricted containers,
+reviewed migrations and roles, release assurance, and off-host recovery key
+custody plus a restore drill. These are preconditions for production reliance,
+not reasons to start RB.3b.
+
+## 3b. NOT YET DONE - real-environment / on-hardware validation
 
 No change this session — nothing was implemented, so nothing new is owed.
 Carried forward unchanged from the DEV.3.3 handover:
