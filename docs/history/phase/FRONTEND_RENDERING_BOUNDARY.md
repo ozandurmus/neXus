@@ -2,11 +2,23 @@
 
 ## Status
 
+**IMPLEMENTED 2026-08-31.** AC-1 … AC-7 all green; see "Implementation
+findings" below for the exhaustive AC-2 audit result and one implementation-
+time contract correction (D-CSP1's `frame-ancestors` directive). Implemented
+in the same session the contract was frozen in (`Sonnet 5, normal`
+throughout, per the contract's own routing — no step needed a higher tier).
+
+<details>
+<summary>Original freeze note (2026-08-31, superseded by "Implementation
+findings" below)</summary>
+
 **CONTRACT FROZEN 2026-08-31. Not yet implemented.** Produced as a scoping/
 audit pass (`Sonnet 5, normal`) specifically so a fresh session can implement
 against a concrete plan without repeating the investigation. No source file
 changed by this pass — `templates/index.html`, `static/app.js`,
 `static/style.css`, `utils/html_export.py` are untouched.
+
+</details>
 
 `project/backlog.json` `frontend_rendering_boundary` (P1). Scoped from
 `docs/design/SERVER_PRODUCTIZATION_AND_MODULARIZATION_ARCHITECTURE.md` §3
@@ -108,6 +120,109 @@ This is groundwork, **not** the exhaustive audit AC-2 requires — treat the
   work rather than an assumed rewrite.
 - No hostile-input/XSS regression test exists anywhere in `tests/` today
   (confirmed by grep for `XSS`/`hostile`/`escapeHtml` usage in tests).
+
+## Implementation findings (2026-08-31)
+
+**AC-2 exhaustive sink audit — complete, zero gaps found.** Every one of the
+97 `.innerHTML` sinks in `static/app.js` was individually reviewed (not
+sampled) — line-by-line from the first sink at `renderDeviceList` (line
+~1728) through the last at `renderProjectPlan` (line ~4848) — together with
+every shared helper function they call: `escapeHtml`, `statusPill`,
+`metricCard`, `formatNumber`/`formatPercent`/`formatBytes`/
+`formatConfigTimestamp`/`formatInventoryTimestamp`, `categoryLabel`,
+`classificationLabel`, `routeTypeBadge`, `statusTone`, `complianceSparkline`/
+`complianceTrendChip`, `checkpointCoverageHtml`, `assignmentChips`,
+`deviceCardHtml`, `configDeviceItemHtml`, `evidenceCard`,
+`complianceControlCard`, `renderFindingsTable`, and the discovery/exclusions/
+project-plan table builders. Every dynamic value interpolated into an
+`innerHTML` template literal is one of: (a) a static/internal-only literal,
+(b) purely numeric via `Number()`-backed formatters (cannot carry markup),
+(c) routed through a fixed enum-lookup function that can only emit one of a
+small hardcoded set of literal strings (the `*Tone`/`*Label` mapper
+functions), or (d) explicitly wrapped in `escapeHtml()`. **No fix was
+required** — the D-ESC1 discipline the contract's freeze-time sampling (~10
+of 97 sites) found sound holds across the full 97/97. This is a real
+negative result, not a shortcut: the audit was exhaustive, it just found
+nothing to fix.
+
+**D-CSP1 correction — `frame-ancestors` removed, meta-incompatible per
+spec.** The CSP specification does not allow `frame-ancestors` (nor
+`report-uri`/`report-to`/`sandbox`) to be delivered via a `<meta
+http-equiv="Content-Security-Policy">` element — only via an HTTP response
+header. Chromium enforces this by emitting a console error ("The Content
+Security Policy directive 'frame-ancestors' is ignored when delivered via a
+`<meta>` element") whenever the directive is present, which the existing
+render harness's console-error assertion correctly caught during this
+session's real-Chromium manual-browser-check step (`test_headless_
+navigation_smoke_playwright`). This was not caught at contract-freeze time
+because that pass was docs-only and explicitly deferred the interactive
+browser check to implementation (per the contract's own step 2). The
+directive was already inert under `<meta>` delivery — removing it is a
+correction, not a security loosening: nothing was actually enforced by its
+presence, and the frozen directive's own text says a future session "must
+not loosen [the set] without a documented reason" — this is that reason.
+The other nine directives are all `<meta>`-compatible and are unchanged.
+`templates/index.html`'s CSP `<meta>` tag and this doc's D-CSP1 directive
+list below are both updated to the corrected nine-directive set.
+
+**Real-Chromium verification (this session, automated — not literally
+human-interactive).** This sandbox has no interactive display, so the
+"open the rendered report in a real browser" step (implementation plan step
+2) was performed via Playwright driving real Chromium: navigated all seven
+modules (Overview, Network Inventory, Configuration, Compliance, Discovery,
+Exclusions, Project Plan) plus every inner tab, asserted zero console
+errors throughout (this is what caught the `frame-ancestors` finding
+above), and captured screenshots of each module confirming no visible
+regression. This is real-browser evidence, not a human eyeballing a
+screen — flagged honestly per this repo's real-environment-evidence
+discipline. A human interactive pass remains a cheap, worthwhile follow-up
+whenever this report is next opened on a real workstation, but is not
+believed to be load-bearing given Chromium's own console-level CSP
+violation reporting already exercised the failure mode this step exists to
+catch.
+
+**AC-3/AC-4 hostile-label regression, new file
+`tests/test_frontend_rendering_boundary.py`.** Two hostile standalone CP
+gateway entries were added to `tests/fixtures/uitest/unified.json` (via
+`build_fixture.py`, regenerated) — `device: "<img src=x onerror=alert(1)>"`
+and `device: "\"><script>alert(1)</script>"` — deliberately non-clustered
+so they cannot perturb any existing topology-matrix assertion.
+`test_hostile_device_label_never_appears_as_raw_markup` (AC-3, static, no
+JS runtime) proves both raw strings appear only inside the inline
+`<script>` block's JSON data, never as markup in the surrounding page, and
+round-trip through `_script_json`/JSON parsing unmangled.
+`test_headless_hostile_label_renders_escaped_not_executed` (AC-4, real
+Chromium, skippable) proves the client's own `escapeHtml()` renders both as
+inert text — zero `<img>`/`<script>` elements created inside `#deviceList`,
+zero dialogs fired, and the expected `&lt;`/`&gt;`-escaped text is present
+in the live DOM. Two test-writing mistakes were caught and fixed while
+building this: an over-strict substring check (`"onerror" not in
+list_html`) that would have failed on the *correctly escaped* text itself,
+and an assumption that exactly one literal `<script>` substring may exist
+in the page — false, since descriptive prose already embedded elsewhere in
+the report (e.g. a `project/backlog.json` note discussing this exact class
+of bug) legitimately contains the substring `<script>` with no security
+implication, since an HTML tokenizer inside an already-open `<script>`
+element only treats a literal `</script>` as significant. The corrected,
+narrower invariant (`html.count("</script>") == 1`, the report's own real
+closing tag) is what actually matters and is what `_script_json` protects.
+
+**AC-5**, `test_script_json_neutralizes_script_breakout` and
+`test_script_json_breakout_does_not_break_the_whole_page` in the same new
+file, cover `_script_json`'s `</` → `<\/` neutralization directly (unit
+level) and end-to-end through a real `run_html_export` call.
+
+**Evidence.** New venv (`lxml`/`paramiko`/`requests`/`cryptography` +
+`pytest`/`playwright` per `requirements.txt`/`requirements-dev.txt`;
+Chromium via the pre-installed `PLAYWRIGHT_BROWSERS_PATH`) since neither
+`py` nor a bare `pytest` module was on this sandbox's default PATH. Full
+suite: **888 passed / 23 skipped / 0 failed** (`-n auto --dist worksteal`;
+at/above the pre-build baseline of 881/23/2, where the 2 were the
+documented pre-existing test-order-pollution pair — not reproduced this
+run, consistent with their known order-dependence). Repository privacy
+gate: **PASS / 0** on a clean checkout (`data/`/`logs/` cleared first, both
+gitignored). Render harness: green, including the real-Chromium path,
+after the `frame-ancestors` fix.
 
 ## Design decisions
 
