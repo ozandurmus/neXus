@@ -2,7 +2,12 @@
 
 ## Status
 
-**CONTRACT CLEARED FOR IMPLEMENTATION 2026-08-31. Not yet implemented.**
+**IMPLEMENTATION STEPS 2-7 LANDED 2026-08-31. Status stays `in_progress` — not
+`IMPLEMENTED` — until the mandatory watched real R81.10/R81.20 single-gateway
+run has happened (see "Definition of done" item 5).** Steps 2-4 (offline
+layer), step 5 + C6 (device core, `Sonnet 5, extended thinking`), step 6
+(`main.py` wiring) and step 7 (this project-metadata sync) are all
+implemented against fixture transports; no live device has been touched.
 
 **`D3` RESOLVED 2026-08-31 — approved by the product owner, scoped to a named
 pilot set.** The `operational-write` class is accepted as a real command class.
@@ -592,17 +597,30 @@ independently of how they were collected. No schema version changes.
 4. Amendments C1–C6 landed. **C6 landed with step 5** (§9.12 CP-path test).
 5. Status `IMPLEMENTED` — **not** `AUTOMATED_VALIDATED` and not `DONE` — until
    step 6 (`main.py` wiring) lands **and** the single-gateway watched
-   real-environment run above has happened. A device-writing command does not
-   get to skip that on the strength of fixtures.
+   real-environment run above has happened. **Step 6 landed 2026-08-31**
+   (`main.py`'s `--recovery-collect --recovery-vendor checkpoint` branch now
+   builds and binds the ledger/store/platform-map/prior-size wiring instead of
+   constructing the collector bare); the watched real-environment run remains
+   outstanding, so status stays `in_progress`. A device-writing command does
+   not get to skip that on the strength of fixtures.
+6. **Step 7 landed 2026-08-31** (project metadata / state sync — this
+   section, `CURRENT_STATE.md`, `project/build_history.json`,
+   `project/roadmap.json`, `project/backlog.json`,
+   `project/feature_registry.json`). `docs/AI_DEVELOPMENT_PROTOCOL.md` is
+   deliberately untouched — `D6` (adopt `operational-write` permanently) is
+   still open.
 
 ## Next movement / model
 
-Steps 2–5 + C6 are **implemented** (2026-08-31). **Steps 6–7 remain**, both at
-**`Sonnet 5, normal`** — step 6 is deterministic `main.py` wiring against the
-now-frozen collector (ledger + store binding, `cp_config_telemetry.json`
-platform map, prior-backup-size lookup from the recovery store, pre-admission
-VSX reject, `skipped` in the CLI summary); step 7 is project metadata +
-`CURRENT_STATE.md` trim + `docs/AI_DEVELOPMENT_PROTOCOL.md` iff `D6` adopts
-`operational-write` permanently. Neither needs extended thinking. The device
-core (step 5) was the one place the strongest tier earned its cost, and it is
-done.
+Steps 2–7 are **implemented** (2026-08-31) against fixture transports — step 6
+(`main.py` wiring) and step 7 (project metadata) both landed at
+**`Sonnet 5, normal`**, as scoped. The device core (step 5) was the one place
+the strongest tier earned its cost, and it is done. **What remains is not
+another implementation step**: the single, named, non-production-critical
+R81.10/R81.20 gateway run, watched, with free space observed before and after
+and the deletion confirmed (see "Validation and merge gate") — that run is
+external/hardware-gated, not an engineering task, and is what finally moves
+this build past `in_progress` to `IMPLEMENTED`. Until then the next
+engineering movement on the Recovery track is `RB.3c` (blocked on `D5`/`E1`,
+sequenced after this run) or a fresh cold-start pickup of whatever the
+product owner prioritizes next.

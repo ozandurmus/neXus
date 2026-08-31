@@ -12,138 +12,110 @@ Prior versions are in git history.
 - Date: 2026-08-31.
 - Product baseline `0.7.7` — AUTOMATED_VALIDATED. Engineering `DEV.3.3` —
   AUTOMATED_VALIDATED. Both unchanged this session.
-- **Active build: `RB.3b` — CP Gaia system backup collection.** Contract frozen
-  and signed off. **Steps 2–6 implemented this session's line of work
-  (step 6 landed this session). Step 7 owed.** Status stays `in_progress` —
-  step 7 (project metadata / `CURRENT_STATE.md` trim) **and** the mandatory
-  watched real R81.10/R81.20 run are both still owed before `IMPLEMENTED`.
-- Branch: `claude/rb3b-step6-main-wiring-iao3m8`. Not yet merged to `main`
-  (push is human-controlled).
+- **Active build: `RB.3b` — CP Gaia system backup collection.** All seven
+  implementation steps now landed (2026-08-31, across this and prior
+  sessions). **Status stays `in_progress` — not `IMPLEMENTED`** — the sole
+  remaining item is the mandatory watched real R81.10/R81.20 gateway run
+  (hardware-gated, not an engineering task).
+- Branch: `claude/docs-handover-sequence-f5sb1g`. Not yet merged to `main`
+  (push is human-controlled, standing priority 4).
 
-## 2. What changed this session (step 6 — `main.py` wiring)
+## 2. What changed this session (step 7 — project metadata / state sync)
 
-- `main.py`'s `--recovery-collect --recovery-vendor checkpoint` branch no
-  longer constructs `CheckpointGaiaBackupCollector()` bare (which failed
-  closed at the D4 credential guard with the ledger/store unwired). It now:
-  - builds `ledger = RecoveryOperationalLedger.from_data_root(runtime_paths.data_root)`
-    and passes `recovery_paths` / `vault_key` / `vault_key_id` (already
-    resolved earlier in that branch) straight into the collector;
-  - passes `run_id=admission_run_context.run_id if admission_run_context else None`;
-  - builds `platform_by_entity` from `cp_config_telemetry.json` — the exact
-    block `--recovery-attest` already used, duplicated (not shared) since the
-    two branches build it from the same file but at different points in
-    `main()`;
-  - builds `prior_backup_sizes_by_entity` by walking
-    `recovery_store.list_artifact_dirs(recovery_paths, vendor="checkpoint")`,
-    reading each manifest, keeping only `artifact.class ==
-    "cp_gaia_backup"`, and collecting `artifact.plaintext_bytes` per
-    `device.entity_id`; an unreadable/corrupt manifest is skipped (best
-    effort — it only affects the §7.7 free-space floor, never a correctness
-    gate);
-  - rejects a `__vsid_` entity named in `--recovery-gateways` with a clean
-    `parser.error` **before** any of the above runs (B7) — the collector's
-    own `precheck()` still refuses it too; this is belt-and-suspenders, not a
-    replacement.
-  - CLI summary gained an explicit `Skipped (already fresh):` line
-    (`result.skipped_count`); `Gate:`/exit-code logic was already
-    skip-aware (`failed_count` already excluded `"skipped"`) and is
-    unchanged.
-- `tests/test_rb2_recovery_collect.py` — two new CLI-integration tests:
-  `test_cli_recovery_collect_checkpoint_rejects_vsx_target_before_admission`
-  (SystemExit 2, no ledger/admission/device path reached) and
-  `test_cli_recovery_collect_checkpoint_wires_ledger_platform_and_prior_sizes`
-  (monkeypatches `CheckpointGaiaBackupCollector` to capture constructor
-  kwargs; asserts `platform_by_entity`, `prior_backup_sizes_by_entity`,
-  `vault_key(_id)`, `recovery_paths`, `run_id=None` and a real
-  `RecoveryOperationalLedger` instance all land correctly).
-- No change to `checkpoint/checkpoint_recovery_collector.py`,
-  `utils/recovery_collect.py`, `utils/recovery_operational_ledger.py`, or
-  `utils/recovery_store.py` — step 6 is wiring only, against the already-frozen
-  step-5 collector contract.
-- No `templates/`, `static/`, or payload-builder change — no UI effect.
+Docs-only. No source file touched; no test re-run (no code changed, so the
+last evidence — 879 passed / 23 skipped / 2 failed — still holds per the
+test-economy rule).
+
+- `project/build_history.json` — added the missing `RB.3b-impl-step5`
+  (device core + C6) and `RB.3b-impl-step6` (`main.py` wiring) records, which
+  a prior session's step-6 landing never got around to recording, plus a new
+  `RB.3b-impl-step7` record for this session's own docs sync. All three carry
+  `status: in_progress` — RB.3b as a whole isn't done, so this doesn't fold
+  into one closing entry (matching the `RB.3b-prep` /
+  `RB.3b-prep-signoff` precedent of one entry per landed movement).
+- `docs/history/phase/RB_3B_CP_GAIA_BACKUP_COLLECTION.md` — Status header
+  updated (steps 2–7 landed, still `in_progress`); Definition of done items 5
+  (step 6 landed) and 6 (step 7 landed, new) added; "Next movement / model"
+  rewritten — nothing engineering remains until the real-environment run.
+- `CURRENT_STATE.md` — Active build section trimmed: the separate steps-2-4
+  / step-5 bullets collapsed into one steps-2–7-implemented line (detail now
+  lives in `project/build_history.json` + the phase doc, not repeated here);
+  "Authoritative checkpoint" line updated to say steps 2–7.
+- `project/roadmap.json` — `now_next.next.goal` was stale (still said "Steps
+  5-7 owed" from before this session); rewritten to reflect steps 2–7
+  implemented and only the real-env run outstanding.
+- `project/backlog.json` (`native_backup` item) and
+  `project/feature_registry.json` (`native_backup_foundation` item) — each
+  had a stale "RB.3b stays blocked pending sign-off" sentence left over from
+  before the 2026-08-31 sign-off; appended (not rewritten — `AGENTS.md`
+  "do not silently rewrite historical outcomes") an `UPDATE 2026-08-31`
+  sentence superseding it.
+- `docs/AI_DEVELOPMENT_PROTOCOL.md` — **deliberately untouched.** Step 7 only
+  updates it if `D6` (adopt `operational-write` as a permanent protocol
+  class) is resolved; it is still open.
 
 ## 3. Exact next action
 
-**RB.3b step 7** (`Sonnet 5, normal`, per the phase doc's own routing):
+**Nothing is owed on RB.3b from this chat.** The single remaining item —
+the watched real R81.10/R81.20 single-gateway `add backup local` run, with
+free space observed before/after and the deletion confirmed — is
+hardware-gated and needs a human at a console, not another implementation
+step. Do not invent further RB.3b engineering work to fill that gap.
 
-- `project/build_history.json` entry for this step-6 landing (or fold into
-  one entry when RB.3b as a whole closes — check the doc's own
-  `record_contract` for which);
-- `CURRENT_STATE.md` "Active build" trim: steps 2–6 implemented, step 7 +
-  the real-environment run remain;
-- `docs/AI_DEVELOPMENT_PROTOCOL.md` update **iff** `D6` (adopt
-  `operational-write` as a permanent protocol class) is resolved — it is
-  still open; do not touch that doc until it is;
-- `docs/history/phase/RB_3B_CP_GAIA_BACKUP_COLLECTION.md` status line.
+For the next AI session, in order of likely product priority:
 
-Status stays `in_progress` — not `IMPLEMENTED` — until step 7 lands **and**
-the mandatory watched real R81.10/R81.20 single-gateway run has happened
-(unchanged from before this session; that run is what resolves the
-§7.7/§7.8 command-string and `add backup local` output-format
-confirm-on-hardware questions — see `docs/history/phase/RB_3B_CP_GAIA_BACKUP_COLLECTION.md`
-"Risks").
+1. If the real-environment run has happened since this handover was
+   written: record its result (phase doc "Risks"/"Definition of done",
+   `CURRENT_STATE.md`, `build_history.json`), confirm the §7.7/§7.8 exact
+   command-string question it was meant to resolve, and only then move
+   RB.3b to `IMPLEMENTED`.
+2. Otherwise: `RB.3c` (CP management export + consistency groups) is still
+   blocked on `D5` (storage budget) and `E1` (§7.6 `operational-write`
+   classification unverified) — both are product-owner decisions, not
+   engineering-ready. Do not start `RB.3c` implementation without them.
+3. Absent explicit product direction, the `project/roadmap.json`
+   `now_next.upcoming` list (e.g. `0.6.6B` compliance rule-pack transition)
+   is the next unblocked track.
 
 ## 4. Test delta
 
-Full suite `py -m pytest -q` (this sandbox has no live PostgreSQL, unlike
-some prior sessions — that alone shifts the skip count, not a code change):
-**879 passed / 23 skipped / 2 failed** (prior recorded baseline before this
-session: 875/25/2). +2 = the new step-6 CLI-integration tests above; the
-remaining +2 passed / -2 skipped is this sandbox's dependency availability,
-confirmed unrelated by rerunning `tests/test_rb2_recovery_collect.py` alone
-(27/27 green) and the two RB.3b-specific suites alone (green). The 2
-failures are the same documented pre-existing test-order pollution
+None. This session made no source, test, or fixture change — pure
+`project/*.json` + `docs/history/phase/RB_3B_CP_GAIA_BACKUP_COLLECTION.md` +
+`CURRENT_STATE.md` text edits. Last recorded evidence (unchanged, still
+authoritative): **879 passed / 23 skipped / 2 failed**, the 2 being the
+documented pre-existing test-order pollution
 (`test_phase0_6_1c_discovery_capability_ui`,
-`test_phase0_7_5_compliance_trend::test_checkpoint_render_appends_one_record`)
-— both re-confirmed passing in isolation this session, unrelated to RB.3b.
-Repository privacy gate: **PASS / 0** on a clean checkout (this session's own
-gitignored `data/`+`logs/` test-run noise was created and deleted before the
-final gate run). No `templates/`/`static/`/payload-builder change, so the
-render harness was not re-run beyond what the full suite already covers.
+`test_phase0_7_5_compliance_trend::test_checkpoint_render_appends_one_record`).
+Repository privacy gate: **PASS / 0** — this session touched no runtime
+artifact, only tracked docs/JSON.
 
 ## 5. New risks / debt
 
-- Carried unchanged from step 5 (see prior handover / git history for full
-  text): `add backup local` output format and the §7.7/§7.8 command strings
-  are confirm-on-hardware; "SCP fetch" is paramiko SFTP, not the `scp`
-  binary; a `CLEANUP_FAILED` endpoint is ineligible until an operator clears
-  the orphaned archive + ledger entry manually; the operational-write ledger
-  is new correctness-critical state (unreadable ⇒ false refusal, chosen
-  deliberately); `D5`–`D7` open (`D6` = adopt `operational-write` into
-  `AI_DEVELOPMENT_PROTOCOL.md` permanently — still not resolved, so step 7
-  must not touch that doc yet).
-- New this session: `platform_by_entity` and `prior_backup_sizes_by_entity`
-  are both best-effort reads (missing `cp_config_telemetry.json` ⇒ empty map,
-  unreadable manifest ⇒ skipped) — by design, matching AC-9 ("an unknown
-  platform is not a reason to skip") and the fact that a missing prior-size
-  only affects the §7.7 floor (falls back to `min_free_floor_mb`), never a
-  correctness gate. Not a gap, but worth naming so it isn't mistaken for an
-  oversight later.
-- `main.py`'s `--recovery-attest` branch builds the identical
-  `cp_config_telemetry.json → platform_by_entity` block independently
-  (pre-existing, now duplicated a second time in `--recovery-collect`). Left
-  as duplication rather than extracted — two call sites, both small, and the
-  phase doc scoped step 6 to wiring only; flag for a future cleanup pass if a
-  third call site appears.
+None new. Carried unchanged from the step-6 handover (see prior version in
+git history for full text): `add backup local` output format and the
+§7.7/§7.8 command strings are confirm-on-hardware; "SCP fetch" is paramiko
+SFTP, not the `scp` binary; a `CLEANUP_FAILED` endpoint is ineligible until
+an operator clears the orphaned archive + ledger entry manually; the
+operational-write ledger is new correctness-critical state (unreadable ⇒
+false refusal, chosen deliberately); `D5`–`D7` remain open (`D6` = adopt
+`operational-write` into `AI_DEVELOPMENT_PROTOCOL.md` permanently — still
+not resolved, so no doc there was touched this session either).
 
 ## 6. Continue or fresh chat
 
-**Fresh chat.** Read `AI_START_HERE.md` → `CURRENT_STATE.md` (hot section) →
-this file → `docs/history/phase/RB_3B_CP_GAIA_BACKUP_COLLECTION.md`
-("Implementation plan" step 7, "Definition of done"). Step 7 is project
-metadata + doc trims against a build that is otherwise done — deterministic,
-`Sonnet 5, normal`, no extended thinking needed.
+**Fresh chat.** RB.3b's engineering work is exhausted pending a human
+hardware run; there is nothing left in flight for a continuation to pick up
+mid-thought. Read `AI_START_HERE.md` → `CURRENT_STATE.md` (hot section) →
+this file → the real-environment run's result if one has landed, otherwise
+`project/roadmap.json`'s `now_next` for the next product priority.
 
 ## 7. main.py / UI effect
 
-**No UI change** (no `templates/`/`static/` touch). Functional CLI change:
-`py -B main.py --recovery-collect --recovery-vendor checkpoint [--recovery-gateways ...]`
-now runs live end-to-end against the frozen collector instead of failing
-closed at construction — still requires
-`SECURITYEXPERT_CP_BACKUP_SSH_USERNAME` + `_PASSWORD`/`_PASSWORD_FILE` (the
-distinct backup identity, D4/B11, no fallback) **and** a non-empty
-`SECURITYEXPERT_CP_BACKUP_ALLOWED_ENTITIES` pilot allowlist (B10) — both
-unset by default, so a normal run with no operator configuration still does
-nothing device-side. No live device has been touched by this session (fixture
-transports only, per contract §11); the mandatory watched real R81.10/R81.20
-run is still owed before this path is used against production hardware.
+**No change.** This session touched no source file — `templates/`,
+`static/`, `main.py`, and every collector/orchestration module are byte-
+identical to the step-6 handover's state. A normal run behaves exactly as
+described in that prior handover: `--recovery-collect --recovery-vendor
+checkpoint` requires both `SECURITYEXPERT_CP_BACKUP_SSH_USERNAME` +
+`_PASSWORD`/`_PASSWORD_FILE` and a non-empty
+`SECURITYEXPERT_CP_BACKUP_ALLOWED_ENTITIES`, both unset by default, so an
+unconfigured run still touches no device.
