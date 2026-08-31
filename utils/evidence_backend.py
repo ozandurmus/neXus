@@ -87,6 +87,25 @@ def _replace_dir_with_retry(tmp_path: Path, final_path: Path, *, max_retries: in
             raise
 
 
+# PostgreSQL's CREATE TABLE IF NOT EXISTS is *not* safe against a concurrent
+# identical CREATE: two processes racing it can fail with a duplicate-key error
+# on pg_type. Two worker containers starting together against a fresh database
+# hit exactly that, so all schema creation is serialized behind one
+# transaction-level advisory lock (released at commit — it never outlives the
+# transaction, so it is safe behind a transaction-pooling proxy, unlike the
+# coordinator's session-level locks).
+_SCHEMA_LOCK_KEY = 0x5EC0DE33  # arbitrary fixed constant, DEV.3.3 schema only
+
+
+def _ensure_schema(psycopg_module, dsn: str, statements: tuple[str, ...]) -> None:
+    with psycopg_module.connect(dsn, autocommit=True) as conn:
+        with conn.transaction():
+            with conn.cursor() as cur:
+                cur.execute("SELECT pg_advisory_xact_lock(%s)", (_SCHEMA_LOCK_KEY,))
+                for statement in statements:
+                    cur.execute(statement)
+
+
 def _psycopg():
     try:
         import psycopg
@@ -263,10 +282,7 @@ class PostgresConfigSnapshotBackend(ConfigSnapshotBackend):
         return self._psycopg.connect(self._dsn, autocommit=True)
 
     def _ensure_schema(self) -> None:
-        with self._connect() as conn:
-            with conn.cursor() as cur:
-                for statement in _CONFIG_SNAPSHOT_SCHEMA:
-                    cur.execute(statement)
+        _ensure_schema(self._psycopg, self._dsn, _CONFIG_SNAPSHOT_SCHEMA)
 
     def write(self, *, source: str, entity_id: str, snapshot_id: str, metadata: dict[str, Any]) -> None:
         from psycopg.types.json import Jsonb
@@ -373,10 +389,7 @@ class PostgresRunManifestBackend(RunManifestBackend):
         return self._psycopg.connect(self._dsn, autocommit=True)
 
     def _ensure_schema(self) -> None:
-        with self._connect() as conn:
-            with conn.cursor() as cur:
-                for statement in _RUN_MANIFEST_SCHEMA:
-                    cur.execute(statement)
+        _ensure_schema(self._psycopg, self._dsn, _RUN_MANIFEST_SCHEMA)
 
     def write_manifest(self, *, manifest_path: Path, manifest: dict[str, Any]) -> None:
         from psycopg.types.json import Jsonb
@@ -490,10 +503,7 @@ class PostgresLastKnownGoodBackend(LastKnownGoodBackend):
         return self._psycopg.connect(self._dsn, autocommit=True)
 
     def _ensure_schema(self) -> None:
-        with self._connect() as conn:
-            with conn.cursor() as cur:
-                for statement in _LAST_KNOWN_GOOD_SCHEMA:
-                    cur.execute(statement)
+        _ensure_schema(self._psycopg, self._dsn, _LAST_KNOWN_GOOD_SCHEMA)
 
     def get_entity(self, *, source: str, entity_key: str) -> dict[str, Any] | None:
         try:
@@ -593,10 +603,7 @@ class PostgresSchedulerStateBackend(SchedulerStateBackend):
         return self._psycopg.connect(self._dsn, autocommit=True)
 
     def _ensure_schema(self) -> None:
-        with self._connect() as conn:
-            with conn.cursor() as cur:
-                for statement in _SCHEDULER_STATE_SCHEMA:
-                    cur.execute(statement)
+        _ensure_schema(self._psycopg, self._dsn, _SCHEDULER_STATE_SCHEMA)
 
     def load_raw(self) -> dict[str, Any] | None:
         try:
