@@ -134,6 +134,17 @@ capable of issuing unaudited `rm -f` over SSH with the collection credential
 — deleted; `tests/test_remove_dormant_remote_cleanup.py` regression-guards
 its absence. `project/backlog.json` entry closed.
 
+**`frontend_rendering_boundary` — CONTRACT FROZEN 2026-08-31, not yet
+implemented.** `docs/history/phase/FRONTEND_RENDERING_BOUNDARY.md` — CSP
+design (portable single-file report, no server to set headers, so a
+`<meta>` CSP with `default-src 'none'` and `'unsafe-inline'` only for the
+inlined script/style), the escaping rule, AC-1…AC-7, and a 6-step
+implementation plan, ready for a fresh session at `Sonnet 5, normal`. No
+source touched this session — audit only (`escapeHtml()` and
+`_script_json`'s `</script>`-neutralization both already sound where
+sampled; 28 of 97 `static/app.js` sinks flagged as needing verification,
+not yet a finished audit).
+
 The P0 `cp_device_interaction_safety` audit **closed 2026-08-25**; do not
 re-cite it as open. The earlier seed prompt
 `docs/history/handover/RB3_NEXT_CHAT_PROMPT.md` is superseded by the three
