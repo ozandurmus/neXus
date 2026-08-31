@@ -15,8 +15,8 @@ Prior versions are in git history.
 - **Active build: `RB.3b` — CP Gaia system backup collection.** Contract frozen
   and signed off. **Steps 2–4 implemented this session; steps 5–7 owed.**
   Status `in_progress` — not IMPLEMENTED.
-- `main` at `<this session's 2nd commit>` (two commits: prior-session prep
-  sign-off docs, then RB.3b steps 2–4). Pushed to `origin/main`.
+- `main` at `f9dbf91`, pushed to `origin/main`. Two commits this session:
+  `9ce5c29` (prior-session prep sign-off docs), `f9dbf91` (RB.3b steps 2–4).
 
 ## 2. What changed this session
 
