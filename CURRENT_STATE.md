@@ -33,6 +33,21 @@ gap to close, not a reason to trust this file over it.
 
 ---
 
+## Architecture direction - local now, server later
+
+**Productization review recorded 2026-08-31; no runtime behavior changed.** The
+local product remains a single worker producing a portable static report. The
+server target is deliberately a hardened Ubuntu + Compose deployment first,
+not a premature Kubernetes, generic API, browser-command, or multi-worker
+rewrite. The full decision record and module split sequence are in
+`docs/design/SERVER_PRODUCTIZATION_AND_MODULARIZATION_ARCHITECTURE.md`.
+
+Local work may now remove dormant write-capable cleanup code, harden the report
+rendering boundary, and split large source modules without changing behavior.
+Server-only gates remain OIDC/RBAC, strict CP/PAN trust, report-only viewer
+storage, least-privilege containers, migration/role separation, release
+assurance, and off-host recovery artifact/key custody with a restore drill.
+
 ## Active build
 
 **`distributed_evidence_store_migration` (DEV.3.3) — AUTOMATED_VALIDATED
@@ -84,16 +99,33 @@ single-container run (server-blocked, DEPLOY.1). Backfilling existing
 filesystem history into Postgres is deliberately out of scope (same
 no-backfill precedent DEV.3.2 set).
 
-**Next objective: `RB.3` (CP Gaia backup) — contracts prepared 2026-08-31,
-split three ways by gate class.** `docs/history/phase/RB_3A_…`, `RB_3B_…`,
-`RB_3C_…`.
+**Active build: `RB.3a` — AUTOMATED_VALIDATED 2026-08-31** on
+`feature/rb-3a-attestation`. Next objective after it: `RB.3b`.
 
 - **`RB.3a` — CP Gaia backup/snapshot attestation** (`show backups` /
-  `show snapshots`, class `read`) — **CONTRACT FROZEN, gate §7.5 SIGNED OFF
-  2026-08-31, cleared for implementation.** Populates the `attestations`
-  argument `utils/restore_readiness.py` already accepts and nothing fills.
-  `docs/history/phase/RB_3A_CP_GAIA_BACKUP_ATTESTATION.md`. **This is the next
-  build.**
+  `show snapshots`, class `read`) — **AUTOMATED_VALIDATED 2026-08-31.**
+  `checkpoint/checkpoint_recovery_attestation.py`: one SSH session per physical
+  endpoint (reusing `checkpoint_config_probe._connect/_run_exec/ProbeTarget`)
+  runs exactly the frozen tuple `("show backups", "show snapshots")` behind a
+  pre-wire guard, a bounded fail-closed listing parser emits `{class, age_days,
+  source}` and **discards the artifact name** (`age_days` null when no
+  unambiguous UTC date parses), and a local platform gate records Spark / Gaia
+  Embedded as `UNSUPPORTED` with zero commands sent.
+  `utils/recovery_collect.run_recovery_attestation` + `RecoveryAttester`
+  protocol is a sibling of `run_recovery_collection` — **not** a
+  `RecoveryCollector` (an attestation has no plaintext and never enters the
+  recovery store); it reuses `select_recovery_targets`, the admission hook and
+  the batch-failure semantics; VSX virtual-system entities are never contacted
+  and stay `UNPROTECTED`. New `data/state/recovery_attestations.json`
+  (`securityexpert-recovery-attestations-v1`); `main.py --recovery-attest`
+  (thin dispatch, reuses `--recovery-gateways`) and `--restore-readiness-check`
+  now reads that file (degrading to "no attestations" on a corrupt/absent
+  file). `"recovery-attest-cp"` is deliberately **not** in
+  `ALLOWLISTED_WORKFLOWS`. `utils/restore_readiness.py` unchanged. Contract
+  amendments `C1` (`§5` `age_days` nullable) + `C2` (`§10.3`) landed.
+  **Real-environment validation owed** (`on_hardware_real_env_validation`);
+  cannot reach `DONE` per `AGENTS.md`.
+  `docs/history/phase/RB_3A_CP_GAIA_BACKUP_ATTESTATION.md`.
 - **`RB.3b` — CP Gaia system backup** (`add backup local` + SCP fetch, class
   `operational-write`). **`D3` RESOLVED 2026-08-31 — approved, scoped to a named
   pilot set**: an allowlist (`SECURITYEXPERT_CP_BACKUP_ALLOWED_ENTITIES`) that
@@ -412,9 +444,12 @@ full regression run.)
 ## Automated test baseline
 
 ```
-788 passed / 3 skipped / 2 failed (2026-08-31, with a live PostgreSQL 16
-available; 763 passed / 11 skipped / 2 failed without one)
-The 2 failures are pre-existing and unrelated to any build in this cycle:
+804 passed / 20 skipped / 2 failed (2026-08-31, after RB.3a, no live
+PostgreSQL; +33 RB.3a tests, zero new failures)
+Prior: 788 passed / 3 skipped / 2 failed (with a live PostgreSQL 16;
+763 / 11 / 2 without one)
+The 2 failures are pre-existing and unrelated to any build in this cycle
+(both pass in isolation — test-order pollution):
   tests/test_phase0_6_1c_discovery_capability_ui.py::
     test_run_html_export_embeds_discovery_payload_without_leftover_placeholder
   tests/test_phase0_7_5_compliance_trend.py::test_checkpoint_render_appends_one_record
