@@ -3,6 +3,7 @@ import os
 import re
 import time
 from contextlib import contextmanager
+from functools import lru_cache
 from pathlib import Path
 
 from utils.config_ui import build_configuration_ui_payload
@@ -75,6 +76,18 @@ def _log_profile_report(timings: list[tuple[str, float]]) -> None:
     info(f"    {'TOTAL':<40} {total:8.4f}s")
 
 
+@lru_cache(maxsize=32)
+def _sentinel_pattern(keys: tuple[str, ...]) -> re.Pattern[str]:
+    # Longest keys first so a sentinel can never be shadowed by a prefix of a
+    # longer one (see _fill_template's docstring). Every real call site uses
+    # the same fixed sentinel set, so this compiled pattern is built once and
+    # reused across every render rather than re-sorted/re-escaped/re-compiled
+    # per call; the small lru_cache also keeps ad hoc key sets (e.g. tests)
+    # cheap without unbounded growth.
+    ordered = sorted(keys, key=len, reverse=True)
+    return re.compile("|".join(re.escape(key) for key in ordered))
+
+
 def _fill_template(template: str, replacements: dict[str, str]) -> str:
     """Substitute every sentinel in a single left-to-right pass so inserted
     content is never re-scanned.
@@ -84,11 +97,9 @@ def _fill_template(template: str, replacements: dict[str, str]) -> str:
     project plan carries a backlog note that mentions
     ``__CRYPTO_JSON_PLACEHOLDER__`` -- and the later ``replace()`` would then
     splice JSON into the middle of an already-emitted JS string literal, whose
-    stray quotes break the whole inline <script>. Longest keys first so a
-    sentinel can never be shadowed by a prefix of a longer one.
+    stray quotes break the whole inline <script>.
     """
-    ordered = sorted(replacements, key=len, reverse=True)
-    pattern = re.compile("|".join(re.escape(key) for key in ordered))
+    pattern = _sentinel_pattern(tuple(replacements))
     return pattern.sub(lambda match: replacements[match.group(0)], template)
 
 
@@ -209,11 +220,14 @@ def run_html_export(
         css = read_text_file(style_file)
         javascript = read_text_file(script_file)
 
-    # One pass. Do NOT chain str.replace() here (see _fill_template): a payload
-    # such as the project plan legitimately contains the literal text of another
-    # sentinel and a second replace() would corrupt the emitted <script>.
-    with _stage_timer(timings, "fill_template"):
-        html = _fill_template(template, {
+    # html_render_optimization: split out from the "fill_template" stage,
+    # which used to wrap both this JSON serialization and the regex
+    # substitution below undistinguished -- the html_render_performance
+    # profiling report could not say which one actually dominated the
+    # ~40-46% it measured. Building the replacements dict here as its own
+    # named stage answers that.
+    with _stage_timer(timings, "build_json_replacements"):
+        replacements = {
             "/* __STYLE_PLACEHOLDER__ */": css,
             "/* __SCRIPT_PLACEHOLDER__ */": javascript,
             "__DATA_JSON_PLACEHOLDER__": _script_json(data),
@@ -223,7 +237,13 @@ def run_html_export(
             "__CRYPTO_JSON_PLACEHOLDER__": _script_json(crypto_ui),
             "__DISCOVERY_JSON_PLACEHOLDER__": _script_json(discovery_ui),
             "__EXCLUSIONS_JSON_PLACEHOLDER__": _script_json(exclusions_ui),
-        })
+        }
+
+    # One pass. Do NOT chain str.replace() here (see _fill_template): a payload
+    # such as the project plan legitimately contains the literal text of another
+    # sentinel and a second replace() would corrupt the emitted <script>.
+    with _stage_timer(timings, "fill_template"):
+        html = _fill_template(template, replacements)
 
     with _stage_timer(timings, "write_output_html"):
         output_html.parent.mkdir(

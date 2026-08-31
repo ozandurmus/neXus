@@ -269,6 +269,23 @@ One large multi-stage function (~750 lines):
   normalized diff (PAN: allowlisted structured projection; CP:
   `INSUFFICIENT_EVIDENCE` — no raw/redacted Gaia text diff). Timeline rows carry
   no sha256, object path, `management_ip`, credential, or raw config line.
+- **Backend (DEV.3.3).** The *metadata index* reads and writes through a
+  `utils.evidence_backend.ConfigSnapshotBackend`, alongside three sibling
+  backends for run manifests, last-known-good and scheduler state. Default
+  `filesystem` is the layout above, unchanged;
+  `SECURITYEXPERT_EVIDENCE_BACKEND=postgres` (+
+  `SECURITYEXPERT_EVIDENCE_POSTGRES_DSN`) puts those four in a shared
+  PostgreSQL instance so several worker containers see one evidence plane.
+  **Payload blobs never move** — `data/artifacts/config/sha256/` stays on the
+  runtime volume either way. Independent of DEV.3.2's coordinator backend
+  (separate env var; either may be enabled without the other). Backends are
+  storage primitives only: artifact-type filtering, the "latest successful"
+  rule and all validation stay in the calling modules so both paths run
+  identical logic. `--storage-analyze`/`--storage-deduplicate` and
+  `--compliance-trend-reconstruct` mine the on-disk tree and report/fail as
+  not-applicable on a non-filesystem backend rather than returning a
+  misleading empty result.
+  `docs/history/phase/DEV3_3_DISTRIBUTED_EVIDENCE_STORE_MIGRATION.md`.
 
 ---
 
@@ -281,10 +298,14 @@ One large multi-stage function (~750 lines):
 - **`build_failure_aware_snapshot`** (`utils/snapshot.py`): adds
   `inventory_status` to every entity — `data_state ∈ {live, last_known_good,
   no_data, partial}`, plus `availability_state` and
-  `last_successful_collection`. Fresh entities update
-  `data/state/last_known_good.json`; entities explicitly observed unavailable
-  this run are represented with their LKG data or a zero-data placeholder — so
-  **collection failure is never confused with device removal**. This is the
+  `last_successful_collection`. Fresh entities update last-known-good state —
+  `data/state/last_known_good.json` on the default filesystem backend, or
+  per-entity rows on the DEV.3.3 Postgres backend (see §5c); entities
+  explicitly observed unavailable this run are represented with their LKG data
+  or a zero-data placeholder — so **collection failure is never confused with
+  device removal**. Entities are read and written one at a time rather than as
+  one whole-map rewrite, so under multiple containers one worker's write never
+  discards another's (DEV.3.3 amendment A1). This is the
   source of the UI's `LIVE / OLD DATA / NO LIVE DATA` semantics.
 - **`run_verification`** (`utils/verification.py`): observe-only,
   `publish_blocking: false`. Writes `verification.json` with integrity warnings:

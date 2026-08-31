@@ -1,7 +1,9 @@
-# Optional — only needed when SECURITYEXPERT_COORDINATOR_BACKEND=postgres
-# (DEV.3.2 distributed per-endpoint lock; see
-# docs/history/phase/DEV3_2_DISTRIBUTED_ENDPOINT_LOCK.md). The default
-# in-memory coordinator backend needs none of this. Ships as a manylinux
+# Optional — only needed when SECURITYEXPERT_COORDINATOR_BACKEND=postgres or
+# SECURITYEXPERT_EVIDENCE_BACKEND=postgres
+# (DEV.3.2 distributed per-endpoint lock and DEV.3.3 distributed evidence
+# store; see docs/history/phase/DEV3_2_DISTRIBUTED_ENDPOINT_LOCK.md and
+# DEV3_3_DISTRIBUTED_EVIDENCE_STORE_MIGRATION.md). The default in-memory
+# coordinator and filesystem evidence backends need none of this. Ships as a manylinux
 # wheel (binary extra), so no build toolchain is required — consistent with
 # the Dockerfile's no-build-toolchain constraint (DEV.3.1).
 psycopg[binary]>=3.1

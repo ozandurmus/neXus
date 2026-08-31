@@ -792,6 +792,21 @@ def main(argv=None, *, runtime_services=None, provenance="manual", admission_run
         f"(runtime_root={runtime_paths.runtime_root} normal_runtime=external history_cas=legacy_pending)"
     )
 
+    # SECURITYEXPERT_EVIDENCE_BACKEND=postgres opts into the DEV.3.3 shared
+    # evidence store; default 'filesystem' is the unchanged per-container path
+    # and never touches the Postgres driver.
+    from utils.evidence_backend import (
+        EvidenceBackendError,
+        active_evidence_backend_kind,
+        verify_evidence_backend_ready,
+    )
+    try:
+        verify_evidence_backend_ready()
+    except EvidenceBackendError as exc:
+        parser.error(str(exc))
+    if active_evidence_backend_kind() != "filesystem":
+        print(f">>> EVIDENCE BACKEND: {active_evidence_backend_kind()} (DEV.3.3)")
+
     if args.persistent_secret_material_check:
         from utils.persistent_secret_material import check_persistent_secret_material
         print("=== SECURITYEXPERT PERSISTENT SECRET MATERIAL CHECK — DEV.2.2 ===\n")
