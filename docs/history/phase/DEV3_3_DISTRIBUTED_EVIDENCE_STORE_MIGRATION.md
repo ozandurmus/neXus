@@ -152,6 +152,11 @@ thing back) — the losing devices regress from `live`/`last_known_good` to
 up. Per-row upsert removes this hazard structurally: container B's write
 touches only the rows for entities it actually observed.
 
+**See amendment A1** — per-row storage alone does not deliver this; the
+caller's access pattern in `build_failure_aware_snapshot` has to become
+per-entity as well, or the same lost-update race simply reappears against the
+table instead of the file.
+
 This is the one place in this contract where the Postgres path is not just
 "the same behavior on a different store" — it is strictly safer than today's
 filesystem behavior under concurrent multi-container runs. The filesystem
@@ -182,7 +187,8 @@ CREATE TABLE IF NOT EXISTS config_snapshot (
     metadata_json         JSONB NOT NULL           -- full document, byte-identical to today's metadata.json
 );
 CREATE INDEX IF NOT EXISTS config_snapshot_latest_idx
-    ON config_snapshot (source, entity_id, artifact_type, collected_at DESC);
+    ON config_snapshot (source, entity_id, artifact_type, snapshot_id DESC);
+    -- snapshot_id, NOT collected_at — see amendment A3.
 CREATE INDEX IF NOT EXISTS config_snapshot_sha256_idx ON config_snapshot (sha256);
 
 CREATE TABLE IF NOT EXISTS run_manifest (
@@ -326,6 +332,112 @@ Recommendation: **Option 1**, on the stated assumption (already true for
 `DEV.3.2`) that the Postgres instance this product uses is dedicated to it,
 not a shared multi-tenant database. If that assumption does not hold for the
 intended deployment, Option 2 is the fallback, at the cost noted above.
+
+## Contract amendments — implementation-time findings (2026-08-31)
+
+Recorded explicitly rather than silently absorbed into the D-sections above,
+per `AGENTS.md` ("Do not silently rewrite historical outcomes"). Each of
+these was found while building `utils/evidence_backend.py` against the frozen
+contract; A1 is the one that would have made the build *not do what it exists
+to do* had it gone unnoticed.
+
+### A1 — D2's fix is only real if the caller's access pattern changes too
+
+The frozen D2 says last-known-good moves to per-entity rows. That is
+necessary but **not sufficient**: if `build_failure_aware_snapshot` keeps its
+current shape (load the whole entity map → mutate some keys in memory → write
+the whole map back), then moving that map into Postgres reproduces the exact
+same lost-update race one layer down — container A's write landing between
+container B's read and B's whole-map write is still clobbered by B's stale
+copy of A's entities. Moving the storage does nothing on its own.
+
+The fix requires the **call pattern** itself to become per-entity on the
+Postgres path: `get_entity(source, key)` at each lookup site, and a
+`put_entity(...)` issued and committed at each mutation site, so a container
+only ever writes rows for entities it actually observed and never rewrites
+rows it merely read.
+
+To keep the filesystem path bit-for-bit unchanged under that same call
+pattern (D7 — it must keep doing exactly one whole-file write per run, not
+one per device), `LastKnownGoodBackend` carries an explicit `commit()`:
+the filesystem backend buffers every `put_entity` in memory and performs the
+single atomic whole-file write on `commit()`; the Postgres backend writes
+each entity immediately and independently and `commit()` is a no-op. This is
+what makes one call pattern serve both semantics honestly.
+
+### A2 — Backends are dumb storage primitives; all business logic stays with the callers
+
+The frozen D1/D4 implied backend methods carrying domain semantics (e.g. a
+`latest_success(...)` that knows about `status == "success"`, `sha256`
+presence and artifact-type filtering). Implementation showed that is the
+wrong seam: re-expressing those rules in SQL is exactly how the two backends
+would drift out of D4's byte-compatibility over time.
+
+Final shape: `ConfigSnapshotBackend` exposes only `write()`,
+`list_snapshots()` (all snapshot ids for an entity + their raw metadata dict,
+or `None` where the stored record was unreadable) and `get_snapshot()`.
+Artifact-type filtering, the `status == "success"`/`sha256` "latest" rule,
+required-field validation, malformed counting, `collected_at` parsing,
+timeline sorting and truncation **all stay in `utils/config_evidence.py` and
+`utils/config_history.py`**, so the identical business logic runs regardless
+of backend. Same principle for scheduler state — see A5.
+
+### A3 — "Latest" ordering is by `snapshot_id`, not `collected_at`
+
+Today's filesystem "latest" is `sorted(..., key=lambda p: p.parent.name,
+reverse=True)` — the snapshot **directory name**, i.e. the `snapshot_id`.
+`snapshot_id` (`<utc_stamp>_<uuid8>`) and the `collected_at` field inside the
+metadata are produced by two separate clock reads microseconds apart, so
+ordering by `collected_at` would agree almost always and disagree
+occasionally — precisely the kind of rare, invisible divergence D4 exists to
+prevent. Both backends therefore order by `snapshot_id DESC`, and the D3
+index above is corrected to match.
+
+### A4 — `metadata_json` is the only read path; promoted columns are for ops only
+
+The Postgres backend stores the **complete** metadata dict verbatim as JSONB
+and every reader reconstructs from that column alone. The promoted columns
+(`device`, `sha256`, `change_state`, …) exist purely for indexing and
+operator SQL, and **no application read path may ever be built on them** —
+doing so would reintroduce per-field mapping drift between backends. Freezing
+this as an invariant because the code cannot express it.
+
+### A5 — Scheduler-state validation stays with the caller (also a circular-import constraint)
+
+`load_scheduler_state`'s allowlist validation depends on
+`ALLOWLISTED_WORKFLOWS` and `SchedulerPolicyError`, both defined in
+`utils/collection_executor.py`, which itself imports the backend — so a
+backend that validated would close an import cycle. `SchedulerStateBackend`
+is therefore raw-document-only (`load_raw`/`save_raw`), with all validation
+unchanged in `collection_executor.py`. This lands in the same place A2 does
+for its own reasons, which is a good sign about the seam.
+
+The same constraint applies module-wide: `utils/evidence_backend.py` must not
+import from `utils/config_evidence.py` (which imports the backend). The two
+small pure helpers it needs (`_safe_component`, atomic write/replace-retry)
+are therefore duplicated locally rather than shared — deliberate, and not to
+be "cleaned up" into a shared import later without breaking the cycle
+differently (e.g. by extracting them into a third, dependency-free module).
+
+### A6 — `SnapshotResult.directory` has no Postgres equivalent
+
+Not anticipated by the contract: `SnapshotResult` exposes filesystem paths,
+and `configuration/panorama_config_collector.py:1096-1099` consumes
+`snap.directory` to build a display string. On the Postgres backend there is
+no snapshot directory. Resolution: return a synthetic, non-existent
+`Path("postgres") / "config_snapshot" / <snapshot_id>`, which that caller
+renders as `postgres/config_snapshot/<id>` — its `relative_to(BASE_DIR)` call
+is already wrapped in `try/except ValueError`, so this is safe today, and the
+value reads as an honest "this lives in Postgres" pointer rather than a path
+that looks real but is not. `artifact_path` stays a genuine filesystem path
+on both backends, because blobs never move.
+
+### A7 — Snapshot writes are idempotent-safe
+
+`config_snapshot` inserts use `ON CONFLICT (snapshot_id) DO NOTHING`.
+`snapshot_id` is already globally unique by construction (timestamp + uuid4
+fragment), so this never merges two distinct snapshots; it only makes a
+retried write after a partial failure a no-op instead of an error.
 
 ## Correctness contract
 
