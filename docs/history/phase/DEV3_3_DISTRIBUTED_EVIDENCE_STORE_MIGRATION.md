@@ -432,6 +432,33 @@ value reads as an honest "this lives in Postgres" pointer rather than a path
 that looks real but is not. `artifact_path` stays a genuine filesystem path
 on both backends, because blobs never move.
 
+### A9 — `CREATE TABLE IF NOT EXISTS` is not concurrency-safe; schema creation is locked
+
+Found by the AC-3 two-process test, which is the reason that criterion
+demanded real subprocesses rather than threads. PostgreSQL's `CREATE TABLE IF
+NOT EXISTS` does **not** serialize against a concurrent identical `CREATE`:
+the racing session fails with `duplicate key value violates unique constraint
+"pg_type_typname_nsp_index"`. Two worker containers starting together against
+a fresh database — the exact deployment shape this build exists for — would
+have had one crash at startup.
+
+All schema creation is therefore serialized behind a single
+**transaction-level** advisory lock (`pg_advisory_xact_lock`), released at
+commit. Being transaction-scoped, it does not reintroduce the coordinator's
+D6 pooling hazard: it never outlives its transaction, so it remains safe
+behind a transaction-pooling proxy.
+
+### A8 — `utils/compliance_trend_reconstruction.py` is a sixth affected module
+
+The contract's module list (`config_evidence`, `config_storage`,
+`config_history`, `snapshot`, `run_context`) missed it. It mines the on-disk
+CAS tree directly and consumed `config_history._read_metadata`. On a
+non-filesystem backend it would have silently reconstructed **zero** buckets
+and reported "no history to reconstruct" rather than "wrong backend" — the
+same misleading-zero failure the contract already identified for
+`config_storage.py`, which is why it gets the same treatment: it now refuses
+to run on a non-filesystem backend instead of returning an empty result.
+
 ### A7 — Snapshot writes are idempotent-safe
 
 `config_snapshot` inserts use `ON CONFLICT (snapshot_id) DO NOTHING`.
