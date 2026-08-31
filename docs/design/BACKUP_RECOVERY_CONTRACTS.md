@@ -342,6 +342,22 @@ writer, never to a plaintext temp file (§9.1).
    hostnames → redaction applies.
 4. **This is the cheapest and safest command in the set and unblocks real
    `RB.0`/`RB.5` value on its own.** Worth gating first, independently of `RB.3`.
+5. **Frozen command set:** exactly `("show backups", "show snapshots")`. The
+   implementing module carries this as a literal tuple, **not** a `show `
+   prefix test — a prefix test is how an ungated command arrives in a later
+   edit unnoticed. Widening the tuple is a visible diff that re-trips this gate.
+6. **Platform gating:** Spark / Gaia Embedded is `UNSUPPORTED` and receives no
+   command. The determination comes from the discovery-lifecycle platform
+   classification, **never** from whether the device landed directly in Clish
+   (`AGENTS.md`).
+7. **Per physical endpoint only.** A VSX virtual-system entity
+   (`<device>__vsid_<vs_id>`) is never contacted and is never credited with its
+   host's attestation — a Gaia snapshot of a VSX host is not a per-virtual-system
+   recovery artifact.
+
+> **GATE SIGNED OFF 2026-08-31 (product owner).** Points 1-7 approved as
+> written. `RB.3a` is cleared for implementation and is **not** gated on `D3`.
+> Contract: `docs/history/phase/RB_3A_CP_GAIA_BACKUP_ATTESTATION.md`.
 
 ### 7.6 `migrate_server export` / `mds_backup` (CP management) — class: `operational-write`
 
