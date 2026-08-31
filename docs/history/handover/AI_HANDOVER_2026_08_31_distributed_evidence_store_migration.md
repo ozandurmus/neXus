@@ -15,10 +15,12 @@ If a section does not apply, write `n/a` — do not delete the heading.
 - Engineering baseline: `DEV.1` complete; `DEV.2.1`, `DEV.2.2`, `DEV.3.1`,
   `DEV.3.2` all AUTOMATED_VALIDATED; **`DEV.3.3`
   (`distributed_evidence_store_migration`) AUTOMATED_VALIDATED this session.**
-- Branch: `claude/unmerged-github-branches-bundao`, based on `origin/main` at
-  `7124ee4`. Carries two predecessor builds from earlier in this branch's life
-  (`html_render_optimization`, `render_harness_happydom_pin`) plus this
-  session's four DEV.3.3 commits.
+- **Merged to `main` and pushed this session** — `main` is at `ae10bf7`
+  (merge commit). It carries this session's DEV.3.3 build plus the two
+  predecessor builds from the branch (`html_render_optimization`,
+  `render_harness_happydom_pin`). `claude/unmerged-github-branches-bundao`
+  still exists and is fully contained in `main`; it can be deleted whenever
+  the user wants.
 - Full suite: **788 passed / 3 skipped / 2 failed** with a live PostgreSQL
   available; **763 / 11 / 2** without one. The 2 failures are the documented
   pre-existing unrelated ones — zero regressions.
@@ -81,9 +83,26 @@ list missed).
 
 ## 3. Next work
 
-- **`RB.3` (CP Gaia backup)** — still blocked on `D3` alone (product-owner
-  decision on the `operational-write` command class) plus that command's own
-  gate review. The P0 CP audit is **closed** — do not re-cite it as open.
+**Chosen next objective: `RB.3` (CP Gaia backup).** A ready-to-paste prompt for
+the next chat is at
+`docs/history/handover/RB3_NEXT_CHAT_PROMPT.md` — use it rather than
+re-deriving the state.
+
+- **`RB.3` (CP Gaia backup)** — blocked on **`D3` alone** (product-owner
+  decision: is `add backup local` acceptable now as the new
+  `operational-write` command class?), plus that command's own gate review,
+  drafted at contract §7.3 but not approved (point 14, the device-impact
+  assessment, is owed and itself gated on D3). The P0
+  `cp_device_interaction_safety` audit **closed 2026-08-25** — do not re-cite
+  it as open; read `project/backlog.json` directly before restating its status.
+- **Unblocked slice inside RB.3:** contract **§7.5** (`show backups` /
+  `show snapshots`, class **`read`**) is the attestation path and does *not*
+  depend on D3. The contract itself calls it the cheapest and safest command
+  in the set and says it is "worth gating first, independently of RB.3". It
+  still needs its own command-gate sign-off. `utils/restore_readiness.py`
+  already accepts an `attestations` argument that nothing populates — this is
+  what would populate it, turning RB.0's "14 UNPROTECTED + 1 UNKNOWN" into
+  evidence-backed states.
 - **`RB.5` (Recovery UI module)** — next natural RECOVER step; contract frozen
   in `docs/design/BACKUP_RECOVERY_CONTRACTS.md` §6. Touches `templates/`/
   `app.js` → **mandatory render-harness run** + `tests/fixtures/uitest/`.
@@ -126,27 +145,39 @@ list missed).
 
 ## 5. Exact next action
 
-DEV.3.3 is complete and pushed on
-`claude/unmerged-github-branches-bundao`. **No PR has been opened** — that is
-the user's call, as is any merge to `main`.
+DEV.3.3 is complete and **merged to `main`** (`ae10bf7`, pushed). The merged
+tree was re-verified before the push: 788 passed / 3 skipped / 2 pre-existing
+failures, privacy gate PASS / 0.
 
-**Fresh chat recommended.** The next objective (`RB.3`/`D3`, `RB.5`, CE.2) is
-distinct and deserves its own contract and clean context.
+**Start a fresh chat on `RB.3`** using
+`docs/history/handover/RB3_NEXT_CHAT_PROMPT.md`. Its first move is *not*
+coding: put **`D3`** to the product owner (with the §7.3 `/var/log`
+free-space precondition and cleanup contract they need in order to answer),
+and in the same message offer the §7.5 `read`-class attestation slice as the
+work that can proceed regardless of how D3 lands.
 
 ## 6. main merge decision + Git dispatch
 
-- Branch `claude/unmerged-github-branches-bundao` is pushed and current.
-- **Merge to `main`: blocked pending the user's decision** — this repo's
-  convention is human-controlled push/merge, and DEV.3.3's multi-container
-  real-environment evidence is still owed (though `AUTOMATED_VALIDATED` does
-  not require it, `DONE` does).
-- Dispatch if a PR is wanted:
-  `gh pr create --base main --head claude/unmerged-github-branches-bundao`
-  (or the GitHub MCP equivalent in a Claude session).
+- **Merged at the user's explicit request this session.** `--no-ff` merge of
+  `claude/unmerged-github-branches-bundao` into `main` (`ae10bf7`), pushed to
+  `origin/main`. `main` had not moved since `7124ee4`, so there were no
+  conflicts to resolve. Full suite + privacy gate were re-run on the merged
+  tree before pushing.
+- No PR was opened — the user asked for a direct merge instead.
+- DEV.3.3 is `AUTOMATED_VALIDATED`, not `DONE`: multi-container
+  real-environment evidence is still owed. Merging does not advance that
+  status.
+- Stale remote branches the user has said to leave alone: `feature/0.6.5`,
+  `claude/deploy-persistent-secret-material-3rtfrs`. No action unless asked.
 
 ## 7. Next movement / model
 
-- `RB.3` (if `D3` is answered): `IMPLEMENTATION` at **Sonnet 5, normal**.
+- `RB.3`: opens as **ARCHITECTURE/decision** work, not coding — put `D3` to
+  the user first. **Sonnet 5, normal** covers that, the §7.5 gate write-up,
+  and the implementation once approved: the orchestration, store and
+  admission wiring already exist and are shared with `RB.2`, so only the
+  device call itself is new. Escalate only if D3's answer opens a genuinely
+  new safety design question.
 - `RB.5`: `IMPLEMENTATION` at **Sonnet 5, normal** — contract already frozen.
 - CE.2 contract: **Sonnet 5, extended thinking** only for the contract itself
   (new check primitives touch the device-command gate); normal for the build.
@@ -155,8 +186,10 @@ distinct and deserves its own contract and clean context.
 
 ## 8. Continue or fresh chat
 
-**Fresh chat.** This session opened, froze and implemented one complete build;
-the next objective is unrelated.
+**Fresh chat**, seeded with `docs/history/handover/RB3_NEXT_CHAT_PROMPT.md`.
+This session opened, froze, implemented and merged one complete build; RB.3 is
+a different track (RECOVER, device-touching, decision-gated) and needs clean
+context.
 
 ## 9. main.py / UI effect
 
