@@ -117,10 +117,17 @@
       "completed": "2026-08-29"
     },
     "next": {
-      "build": "DEPLOY.1",
-      "title": "Ubuntu + Docker Server Migration & Git Repository Foundation",
-      "goal": "Begin the server migration on hardware arrival: non-interactive runtime config (DEV.2.1, done), persistent volume/secret material, Linux image, Nginx, then the Postgres job/lock checkpoint. Gated on server availability.",
-      "status": "planned"
+      "build": "RB.3b",
+      "title": "Check Point Gaia system backup collection (add backup local + SCP fetch)",
+      "goal": "operational-write class. D3 RESOLVED 2026-08-31 (product owner, scoped to a named pilot set, fail-closed by default); still blocked on D4 (a distinct backup credential identity), contract §7.3 point 14, the drafted §7.7/§7.8 gate entries, a durable per-endpoint 1/24h operational-write ledger, and refusing to store a version-unknown CP artifact. Contract: docs/history/phase/RB_3B_CP_GAIA_BACKUP_COLLECTION.md.",
+      "status": "blocked"
+    },
+    "previous_recovery": {
+      "build": "RB.3a",
+      "title": "Check Point Gaia backup and snapshot attestation",
+      "status": "automated_validated",
+      "completed": "2026-08-31",
+      "note": "Read-only 'show backups'/'show snapshots' per physical endpoint; populates the attestations input of compute_restore_readiness. checkpoint/checkpoint_recovery_attestation.py + utils.recovery_collect.run_recovery_attestation (RecoveryAttester, not a RecoveryCollector) + data/state/recovery_attestations.json + main.py --recovery-attest. 33 tests (AC-1..AC-10); full suite 804 passed / 2 pre-existing unrelated failures. Real Gaia validation owed (on_hardware_real_env_validation). See project/backlog.json native_backup for full evidence."
     },
     "upcoming": [
       {
@@ -149,7 +156,8 @@
           "Central boundary: configuration evidence is deliberately REDACTED (secrets_redacted: True) and therefore non-restorable by design. The recovery plane is a third, separate, encrypted, egress-denied plane -- never merged with the evidence plane, never rendered into the report or the support bundle.",
           "RB.0 (restore-readiness over existing evidence) and RB.1 (recovery store) are buildable now: read-only, no new device command, no server. RB.0 rebases restore_readiness FORWARD from 0.9.x because it depends on nothing later in the sequence and quantifies the BackBox exit risk with real numbers.",
           "D2 RESOLVED 2026-08-30 (product owner): PAN service account may hold superuser for device-state export only. RB.2 IMPLEMENTED 2026-08-30 (real-env validation owed -- no device reachability in this sandbox): utils/recovery_collect.py (target selection incl. explicit gateway lists and VSX __vsid_ addressing, vendor dispatch, admission-coordinated per target), panorama/panorama_recovery_collector.py (PAN device-state export, read class, session-reuse, no 403 retry), checkpoint/checkpoint_recovery_collector.py (typed blocked stub -- P0 audit + D3 still unresolved), main.py --recovery-collect/--recovery-vendor/--recovery-gateways (thin dispatch, zero collection logic per explicit product direction), collection_executor ALLOWLISTED_WORKFLOWS +'recovery-pan' (not 'recovery-cp') with an additive optional per-schedule 'targets' field. RB.4 AUTOMATED_VALIDATED 2026-08-30: utils/recovery_validation.py (V1-V3 battery) + main.py --recovery-validate. 85 new tests. See backlog.json native_backup for full evidence detail.",
-          "RB.3 (CP Gaia backup) remains blocked on open decision D3 alone -- CORRECTED 2026-08-30 during a main-branch merge: the P0 cp_device_interaction_safety audit that used to co-gate this closed 2026-08-25, before this build; do not re-cite it as open. 'add backup local' writes a multi-MB archive to the device's /var/log, the new 'operational-write' command class (architecture section 5). Orchestration/store/admission wiring for CP already exists (shared with RB.2); only D3's decision, the command gate sign-off, and the device call itself are missing.",
+          "RB.3a AUTOMATED_VALIDATED 2026-08-31 (feature/rb-3a-attestation; contract docs/history/phase/RB_3A_CP_GAIA_BACKUP_ATTESTATION.md, gate contracts §7.5 signed off 2026-08-31): read-only CP Gaia attestation. checkpoint/checkpoint_recovery_attestation.py runs exactly ('show backups','show snapshots') per physical endpoint (literal-tuple pre-wire guard, not a prefix test) with a bounded fail-closed parser emitting {class, age_days (nullable), source} and discarding the artifact name; utils.recovery_collect.run_recovery_attestation + RecoveryAttester protocol (a sibling of run_recovery_collection, NOT a RecoveryCollector -- an attestation has no plaintext and never enters the recovery store); data/state/recovery_attestations.json (securityexpert-recovery-attestations-v1); main.py --recovery-attest and an attestation read in --restore-readiness-check. VSX virtual systems never contacted, stay UNPROTECTED; Spark/Gaia Embedded UNSUPPORTED with zero commands; 'recovery-attest-cp' deliberately not allowlisted for scheduling. utils/restore_readiness.py unchanged. Design-doc amendments C1 (§5 age_days nullable) + C2 (§10.3) landed. 33 new tests; full suite 804 passed / 20 skipped / 2 pre-existing unrelated failures. Real Gaia validation owed (on_hardware_real_env_validation). See backlog.json native_backup for full evidence detail.",
+          "RB.3b (CP Gaia system backup COLLECTION, 'add backup local' + SCP fetch, operational-write) is the next recovery build: D3 RESOLVED 2026-08-31 (product owner, scoped to a fail-closed named pilot set) but still blocked on D4 (a distinct backup credential identity), §7.3 point 14, the drafted §7.7/§7.8 gate entries, a durable per-endpoint 1/24h operational-write ledger, and refusing to store a version-unknown CP artifact. Orchestration/store/admission wiring for CP already exists (shared with RB.2/RB.3a). The P0 cp_device_interaction_safety audit closed 2026-08-25 and is not a blocker -- do not re-cite it as open.",
           "RB.6 (controlled restore) is hard-gated at the OP.2 bar and is explicitly NOT buildable; the manifest reserves a restore block that the RB.1 validator rejects, keeping restore additive per the roadmap binding design consequence.",
           "Correction 2026-08-30 (architecture doc section 9): scheduled recovery collection does NOT need to wait for distributed_endpoint_lock_and_job_store (DEV.3.2/3.3) -- that only matters once collection splits across multiple containers (per_vendor_worker_split, deferred). Under the current single-process DEV.3.1 deployment, collection_executor's in-memory coordinator already serializes per endpoint for every scheduled workflow, checkpoint/cp/vsx/pan-config included; recovery-pan scheduling uses the exact same mechanism, verified end-to-end via a real --scheduler-once run."
         ]
@@ -211,6 +219,8 @@
     "Event-driven webhook intake (event_signal_intake) and passive TI enrichment (passive_ti_enrichment) are gated on 0.8.x TRACE foundations: safe normalized diff, cross-vendor timeline, and the collection coordinator must all be in place first.",
     "Cryptographic posture and PQC readiness (crypto_agility_pqc) is a 0.7.x VERIFY item; it operates on existing CP/PAN configuration evidence without adding new vendors or collectors.",
     "DEPLOY.1A read-only OIDC viewer boundary is a mandatory server acceptance criterion, not an optional hardening step.",
+    "Server productization architecture review (2026-08-31): the current Compose topology is a local/single-operator foundation, not an internally exposed product. Before server exposure, require OIDC, strict transport trust, report-only viewer storage, least-privilege containers, migrations/restricted DB roles, secret/KMS custody, off-host recovery and real-environment acceptance. See docs/design/SERVER_PRODUCTIZATION_AND_MODULARIZATION_ARCHITECTURE.md.",
+    "Large-file modularization is a local, behavior-preserving architectural-health track. Split static/app.js by UI responsibility and call graph, then compose the same single inline report at export time; split main.py and vendor collectors only at tested orchestration/transport/persistence seams. Do not combine an extraction with payload, device-command or UI behavior changes.",
     "Containerization sequencing (2026-08-28 architecture review): the first migration is a single worker container running the existing sequential main.py pipeline with the runtime volume mounted and Nginx serving the static output; per-vendor worker containers (DEV.3.4) are a later optimisation, gated on collection duration becoming a real operational pain (CP was ~180s in the 0.6.1B.1.2 checkpoint) and on the distributed endpoint lock (DEV.3.3).",
     "Non-interactive runtime configuration (DEV.2.1) is a hard precondition for any unattended container: today the only credential/endpoint path is interactive input()/getpass in _build_runtime_config, and --scheduler-once re-enters it. It must land before DEV.3.",
     "output/index.html is a LOCAL OPERATOR SENSITIVE artifact (real device identities, non-secret configuration values); serving it without the DEPLOY.1A viewer boundary is only acceptable on a trusted internal network behind existing access control.",
@@ -224,7 +234,8 @@
     "2026-08-25 architecture review: event-driven webhook, crypto/PQC readiness, DEPLOY.1 OIDC boundary and contextual TI enrichment evaluated for CP/PAN scope.",
     "Vendor scope intentionally limited to Check Point and Palo Alto; no additional vendors will be added at current maturity.",
     "Webhook signal is a read-only collection trigger only; it must never carry collector commands, device credentials or authoritative topology.",
-    "TI enrichment operates on normalized findings only; raw configuration, full topology and real IP ranges must not leave the evidence boundary."
+    "TI enrichment operates on normalized findings only; raw configuration, full topology and real IP ranges must not leave the evidence boundary.",
+    "2026-08-31 productization review: retain one worker and the static report while moving to the first server. Do not introduce a generic API around main.py, browser-supplied device commands, per-vendor workers, object storage or Kubernetes until a tested operational need appears. Server-only controls are recorded in docs/design/SERVER_PRODUCTIZATION_AND_MODULARIZATION_ARCHITECTURE.md."
   ],
   "engineering_tracks": [
     {
@@ -373,6 +384,21 @@
         {
           "build": "DEV.4.3",
           "title": "Promote CP strict host-key and PAN CA trust from opt-in to required in the server image; R2 real-environment validation",
+          "status": "planned"
+        },
+        {
+          "build": "DEV.4.4",
+          "title": "Least-privilege server runtime: non-root containers, report-only viewer publication mount, immutable image identity, health/resource limits and protected Docker host",
+          "status": "planned"
+        },
+        {
+          "build": "DEV.4.5",
+          "title": "Release assurance: dependency lock, Python 3.12 CI, privacy/render regression, SBOM, vulnerability policy and signed release provenance",
+          "status": "planned"
+        },
+        {
+          "build": "DEV.4.6",
+          "title": "Production evidence/recovery data plane: deployment migrations, restricted PostgreSQL roles, secret/KMS custody, encrypted off-host recovery and restore-drill acceptance",
           "status": "planned"
         }
       ]

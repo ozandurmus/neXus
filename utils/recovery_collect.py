@@ -27,6 +27,12 @@ class RecoveryCollectionError(Exception):
     raised before any device is contacted."""
 
 
+class RecoveryAttestationError(Exception):
+    """A per-endpoint attestation failure (bad address, session failure,
+    credentials unavailable). Recorded against the endpoint; the batch
+    continues (RB.3a correctness contract item 3)."""
+
+
 class RecoveryCollectionBlockedError(Exception):
     """Raised by a vendor collector that is not yet gate-cleared. Carries
     the exact blocker so an operator or a future UI can show *why*, not
@@ -206,6 +212,137 @@ def run_recovery_collection(
         result.outcomes.append(RecoveryCollectionOutcome(
             entity_id=target.entity_id, status="collected",
             artifact_id=write_result.manifest["artifact_id"],
+        ))
+
+    return result
+
+
+# ---------------------------------------------------------------------------
+# RB.3a — recovery *attestation* (a sibling of collection, not a variant of it)
+#
+# Contract: docs/history/phase/RB_3A_CP_GAIA_BACKUP_ATTESTATION.md, decision A2.
+# `RecoveryCollector.collect()` returns `(bytes, meta)` and
+# `run_recovery_collection` unconditionally calls `write_artifact`. An
+# attestation has no plaintext: forcing it through that protocol would mean
+# fabricating bytes. So this is a separate entry point that shares target
+# selection, the admission hook and the batch-failure semantics, but has its
+# own `RecoveryAttester` protocol and writes nothing to the recovery store.
+# ---------------------------------------------------------------------------
+
+
+class RecoveryAttester(Protocol):
+    def classify_target(self, target: RecoveryCollectionTarget) -> str:
+        """`"supported"` or `"unsupported"` — the platform gate (RB.3a A8).
+        Local only: it must not contact the device (correctness item 1 —
+        an A8-excluded target is never admitted, never contacted)."""
+        ...
+
+    def attest(self, target: RecoveryCollectionTarget) -> list[dict[str, Any]]:
+        """Open one session, run the frozen read commands, and return
+        attestation records `[{class, age_days, source}, ...]` — no artifact
+        name, no payload. Raise on a session/address failure; the batch
+        continues."""
+        ...
+
+
+@dataclass
+class RecoveryAttestationOutcome:
+    entity_id: str
+    # "attested"      — >=1 device-reported artifact parsed
+    # "no_evidence"   — session succeeded, nothing parsed (errored/empty/unknown format)
+    # "unsupported"   — A8 platform gate: Spark / Gaia Embedded, no command sent
+    # "skipped_virtual_system" — A3: a VS entity is never contacted
+    # "failed"        — session/address failure (recorded; batch continues)
+    status: str
+    records: list = field(default_factory=list)
+    error: str | None = None
+
+
+@dataclass
+class RecoveryAttestationResult:
+    request: RecoveryCollectionRequest
+    outcomes: list[RecoveryAttestationOutcome] = field(default_factory=list)
+
+    @property
+    def attested_count(self) -> int:
+        return sum(1 for o in self.outcomes if o.status == "attested")
+
+    @property
+    def failed_count(self) -> int:
+        return sum(1 for o in self.outcomes if o.status == "failed")
+
+    def as_attestation_map(self) -> dict[str, list]:
+        """`entity_id -> records`, ready for
+        `restore_readiness.compute_restore_readiness(attestations=)` and for
+        `data/state/recovery_attestations.json`. Only endpoints that actually
+        attested something appear."""
+        return {
+            o.entity_id: o.records
+            for o in self.outcomes
+            if o.status == "attested" and o.records
+        }
+
+
+def run_recovery_attestation(
+    request: RecoveryCollectionRequest,
+    *,
+    unified_devices: Sequence[Mapping[str, Any]],
+    attester: RecoveryAttester,
+    run_under_admission: Callable[[str, Callable[[], list[dict[str, Any]]]], list[dict[str, Any]]] | None = None,
+) -> RecoveryAttestationResult:
+    """Select targets, drop VS entities (A3) and platform-unsupported ones
+    (A8), then run each remaining physical endpoint's `attester.attest`
+    under `run_under_admission`. Writes nothing — the caller persists
+    `result.as_attestation_map()`.
+
+    One endpoint's failure is recorded and the batch continues (correctness
+    item 3). An unresolvable explicit `--recovery-gateways` entry is a
+    request-time `RecoveryCollectionError` from `select_recovery_targets`,
+    before any device is contacted (correctness item 2)."""
+    targets = select_recovery_targets(unified_devices, vendor=request.vendor, selector=request.selector)
+    result = RecoveryAttestationResult(request=request)
+    explicit = request.selector.get("mode") == "targets"
+
+    for target in targets:
+        # A3 — attestation is per physical endpoint. A VSX virtual-system
+        # entity (`<device>__vsid_<vs_id>`) is never contacted and never
+        # credited with its host's attestation.
+        if "__vsid_" in target.entity_id:
+            if explicit:
+                result.outcomes.append(RecoveryAttestationOutcome(
+                    entity_id=target.entity_id, status="skipped_virtual_system",
+                    error="per physical endpoint only (contract §7.5 point 7)",
+                ))
+            continue
+
+        # A8 — platform gate. UNSUPPORTED endpoints are never admitted and
+        # never contacted (correctness item 1).
+        if attester.classify_target(target) == "unsupported":
+            result.outcomes.append(RecoveryAttestationOutcome(
+                entity_id=target.entity_id, status="unsupported",
+                error="platform UNSUPPORTED (Spark / Gaia Embedded); no command sent",
+            ))
+            continue
+
+        def _do_attest(target=target):
+            return attester.attest(target)
+
+        try:
+            if run_under_admission is not None:
+                records = run_under_admission(target.entity_id, _do_attest)
+            else:
+                records = _do_attest()
+        except Exception as exc:  # admission rejection, session failure, bad address
+            result.outcomes.append(RecoveryAttestationOutcome(
+                entity_id=target.entity_id, status="failed", error=str(exc),
+            ))
+            continue
+
+        records = list(records or [])
+        result.outcomes.append(RecoveryAttestationOutcome(
+            entity_id=target.entity_id,
+            status="attested" if records else "no_evidence",
+            records=records,
         ))
 
     return result

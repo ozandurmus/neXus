@@ -65,6 +65,7 @@ _MODE_PREREQUISITES = {
     "render-only": ("unified.json",),
     "restore-readiness-check": ("unified.json",),
     "recovery-collect": ("unified.json",),
+    "recovery-attest": ("unified.json",),
     "cp-config-probe": ("cp_telemetry.json", "cp.json", "vsx.json"),
     "cp-config-collect": ("cp.json", "vsx.json"),
     "cp": ("vsx.json", "panorama_runtime.json"),
@@ -110,6 +111,30 @@ def _require_bootstrap(mode, output_root):
     ]
     print("\n".join(lines), file=sys.stderr)
     raise SystemExit(2)
+
+
+def _load_recovery_attestations(data_root):
+    """Read `data/state/recovery_attestations.json` (RB.3a) into an
+    `entity_id -> [records]` map for `compute_restore_readiness(attestations=)`.
+
+    A missing, corrupt or malformed file degrades to `{}` ("no attestations"),
+    never to an error -- the same fail-safe posture as
+    `utils/compliance_history.py` (RB.3a correctness contract item 5)."""
+    path = Path(data_root) / "state" / "recovery_attestations.json"
+    try:
+        doc = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    if not isinstance(doc, dict):
+        return {}
+    raw = doc.get("attestations")
+    if not isinstance(raw, dict):
+        return {}
+    clean = {}
+    for entity_id, records in raw.items():
+        if isinstance(records, list):
+            clean[str(entity_id)] = [r for r in records if isinstance(r, dict)]
+    return clean
 
 
 def _workflow_context(mode, *, run_id=None):
@@ -540,13 +565,30 @@ def main(argv=None, *, runtime_services=None, provenance="manual", admission_run
         ),
     )
     parser.add_argument(
+        "--recovery-attest",
+        action="store_true",
+        help=(
+            "RB.3a CP Gaia backup/snapshot *attestation*, via "
+            "utils.recovery_collect.run_recovery_attestation -- asks each physical "
+            "Check Point endpoint what recovery artifacts it believes it holds "
+            "('show backups' / 'show snapshots', frozen tuple, contract §7.5) and "
+            "records that as attested-but-unheld evidence in "
+            "data/state/recovery_attestations.json, which --restore-readiness-check "
+            "then reads. Collects no artifact; writes nothing to the recovery store; "
+            "no backup/snapshot name is ever recorded. Check Point only. Reuses "
+            "--recovery-gateways for selective targeting. Admission-coordinated per "
+            "endpoint (same per-endpoint lock/budget as other collectors)."
+        ),
+    )
+    parser.add_argument(
         "--recovery-vendor",
         choices=["panorama", "checkpoint"],
         default=None,
         help=(
             "Vendor for --recovery-collect. 'panorama' (PAN device-state export) is "
-            "implemented. 'checkpoint' (CP Gaia backup) is a blocked stub -- P0 "
-            "cp_device_interaction_safety audit + open decision D3, neither resolved."
+            "implemented. 'checkpoint' (CP Gaia backup *collection*) is a blocked "
+            "stub pending open decision D3. CP Gaia backup/snapshot *attestation* "
+            "(read-only, no artifact) is available now via --recovery-attest."
         ),
     )
     parser.add_argument(
@@ -623,31 +665,36 @@ def main(argv=None, *, runtime_services=None, provenance="manual", admission_run
     if args.repository_privacy_check and args.apply:
         parser.error("--apply is not valid with --repository-privacy-check")
     if args.repository_privacy_check and (
-        args.cp_config_probe or args.cp_config_collect or args.render_only or args.only != "all" or args.recovery_collect
+        args.cp_config_probe or args.cp_config_collect or args.render_only or args.only != "all"
+        or args.recovery_collect or args.recovery_attest
     ):
         parser.error("--repository-privacy-check cannot be combined with collection/render modes")
     if args.persistent_secret_material_check and args.apply:
         parser.error("--apply is not valid with --persistent-secret-material-check")
     if args.persistent_secret_material_check and (
-        args.cp_config_probe or args.cp_config_collect or args.render_only or args.only != "all" or args.recovery_collect
+        args.cp_config_probe or args.cp_config_collect or args.render_only or args.only != "all"
+        or args.recovery_collect or args.recovery_attest
     ):
         parser.error("--persistent-secret-material-check cannot be combined with collection/render modes")
     if args.restore_readiness_check and args.apply:
         parser.error("--apply is not valid with --restore-readiness-check")
     if args.restore_readiness_check and (
-        args.cp_config_probe or args.cp_config_collect or args.render_only or args.only != "all" or args.recovery_collect
+        args.cp_config_probe or args.cp_config_collect or args.render_only or args.only != "all"
+        or args.recovery_collect or args.recovery_attest
     ):
         parser.error("--restore-readiness-check cannot be combined with collection/render modes")
     if args.recovery_store_check and args.apply:
         parser.error("--apply is not valid with --recovery-store-check")
     if args.recovery_store_check and (
-        args.cp_config_probe or args.cp_config_collect or args.render_only or args.only != "all" or args.recovery_collect
+        args.cp_config_probe or args.cp_config_collect or args.render_only or args.only != "all"
+        or args.recovery_collect or args.recovery_attest
     ):
         parser.error("--recovery-store-check cannot be combined with collection/render modes")
     if args.recovery_validate and args.apply:
         parser.error("--apply is not valid with --recovery-validate")
     if args.recovery_validate and (
-        args.cp_config_probe or args.cp_config_collect or args.render_only or args.only != "all" or args.recovery_collect
+        args.cp_config_probe or args.cp_config_collect or args.render_only or args.only != "all"
+        or args.recovery_collect or args.recovery_attest
     ):
         parser.error("--recovery-validate cannot be combined with collection/render modes")
 
@@ -675,14 +722,18 @@ def main(argv=None, *, runtime_services=None, provenance="manual", admission_run
         parser.error("--render-only cannot be combined with storage maintenance options")
     if args.recovery_collect and not args.recovery_vendor:
         parser.error("--recovery-collect requires --recovery-vendor")
-    if args.recovery_gateways and not args.recovery_collect:
-        parser.error("--recovery-gateways is only valid with --recovery-collect")
-    if args.recovery_collect and (
+    if args.recovery_collect and args.recovery_attest:
+        parser.error("--recovery-collect and --recovery-attest cannot be combined")
+    if args.recovery_gateways and not (args.recovery_collect or args.recovery_attest):
+        parser.error("--recovery-gateways is only valid with --recovery-collect or --recovery-attest")
+    if args.recovery_attest and args.recovery_vendor and args.recovery_vendor != "checkpoint":
+        parser.error("--recovery-attest is Check Point only (omit --recovery-vendor, or set it to 'checkpoint')")
+    if (args.recovery_collect or args.recovery_attest) and (
         args.cp_config_probe or args.cp_config_collect or args.render_only
         or args.only != "all" or args.storage_analyze or args.storage_deduplicate or args.apply
         or args.compliance_trend_reconstruct
     ):
-        parser.error("--recovery-collect cannot be combined with other collection/render/storage modes")
+        parser.error("--recovery-collect / --recovery-attest cannot be combined with other collection/render/storage modes")
     if args.scheduler_once and (
         args.repository_privacy_check
         or args.storage_analyze
@@ -692,6 +743,7 @@ def main(argv=None, *, runtime_services=None, provenance="manual", admission_run
         or args.recovery_store_check
         or args.recovery_validate
         or args.recovery_collect
+        or args.recovery_attest
         or args.apply
         or args.cp_config_probe
         or args.cp_config_collect
@@ -702,7 +754,7 @@ def main(argv=None, *, runtime_services=None, provenance="manual", admission_run
         parser.error("--scheduler-once cannot be combined with collection, render, or maintenance modes")
     if args.compliance_trend_reconstruct and (
         args.cp_config_probe or args.cp_config_collect or args.render_only or args.apply or args.only != "all"
-        or args.recovery_collect
+        or args.recovery_collect or args.recovery_attest
     ):
         parser.error("--compliance-trend-reconstruct cannot be combined with collection/render modes")
 
@@ -846,12 +898,14 @@ def main(argv=None, *, runtime_services=None, provenance="manual", admission_run
         unified_path = runtime_paths.output_root / "unified.json"
         unified_devices = json.loads(unified_path.read_text(encoding="utf-8"))
 
-        # RB.1 (the encrypted recovery store) does not exist yet, so this is
-        # deliberately called with no recovery_manifests/attestations: every
-        # device is judged on inventory alone, which correctly reports
-        # UNPROTECTED across the fleet rather than inventing evidence that
-        # was never collected. docs/design/BACKUP_RECOVERY_CONTRACTS.md §5.
-        report = compute_restore_readiness(unified_devices)
+        # RB.1 (the encrypted recovery store) still does not exist, so
+        # recovery_manifests stays empty -- no held artifact is ever reported.
+        # RB.3a adds the other §5 input: device-reported attestations from a
+        # prior `--recovery-attest` run (data/state/recovery_attestations.json).
+        # Absent or corrupt -> {} ("no attestations"), never an error.
+        # docs/design/BACKUP_RECOVERY_CONTRACTS.md §5.
+        attestations = _load_recovery_attestations(runtime_paths.data_root)
+        report = compute_restore_readiness(unified_devices, attestations=attestations)
 
         state_dir = runtime_paths.data_root / "state"
         state_dir.mkdir(parents=True, exist_ok=True)
@@ -860,17 +914,25 @@ def main(argv=None, *, runtime_services=None, provenance="manual", admission_run
 
         summary = report["summary"]
         total = sum(summary.values())
+        attested_devices = sum(1 for d in report["devices"] if d.get("attested_not_held"))
         print(f"Devices assessed:      {total}")
         for state in ("READY", "STALE", "PARTIAL", "UNPROTECTED", "UNKNOWN"):
             print(f"  {state:<12}       {summary.get(state, 0)}")
-        if summary.get("UNPROTECTED", 0) or not any(
-            d.get("held_artifacts") for d in report["devices"]
-        ):
+        if attestations:
+            print(f"  (device-attested)  {attested_devices}")
+        if not any(d.get("held_artifacts") for d in report["devices"]):
             print(
-                "\nNote: no recovery artifact has ever been collected for this fleet "
-                "(RB.1-RB.3 not yet built) -- UNPROTECTED here means 'no vendor-native "
-                "backup exists', not a fault in this check. See "
-                "docs/design/BACKUP_AND_RECOVERY_ARCHITECTURE.md."
+                "\nNote: no recovery artifact is held for this fleet (RB.1 recovery "
+                "store not yet built) -- UNPROTECTED means 'no held vendor-native "
+                "backup', not a fault in this check."
+                + (
+                    " PARTIAL rows here are backed only by a device attestation "
+                    "(RB.3a): the endpoint says it holds a snapshot/backup we have "
+                    "not counted; that is weaker than a held, validated artifact and "
+                    "never reaches READY."
+                    if attestations else ""
+                )
+                + " See docs/design/BACKUP_AND_RECOVERY_ARCHITECTURE.md."
             )
         print(f"\nWritten:                {state_path}")
         print("No network access performed. No recovery artifact was collected.")
@@ -1119,6 +1181,98 @@ def main(argv=None, *, runtime_services=None, provenance="manual", admission_run
             if outcome.status != "collected":
                 print(f"  {outcome.entity_id}: {outcome.status} -- {outcome.error}")
         print(f"\nGate:                    {'PASS' if result.failed_count == 0 else 'FAIL'}")
+        raise SystemExit(0 if result.failed_count == 0 else 1)
+
+    if args.recovery_attest:
+        _require_bootstrap("recovery-attest", runtime_paths.output_root)
+        from datetime import datetime, timezone
+
+        from checkpoint.checkpoint_recovery_attestation import CheckpointRecoveryAttester
+        from utils.recovery_collect import (
+            RecoveryCollectionError,
+            RecoveryCollectionRequest,
+            run_recovery_attestation,
+        )
+
+        print("=== SECURITYEXPERT RECOVERY ATTESTATION — checkpoint ===\n")
+        unified_devices = json.loads(
+            (runtime_paths.output_root / "unified.json").read_text(encoding="utf-8")
+        )
+
+        if args.recovery_gateways:
+            entity_ids = [g.strip() for g in args.recovery_gateways.split(",") if g.strip()]
+            selector = {"mode": "targets", "entity_ids": entity_ids}
+        else:
+            selector = {"mode": "all"}
+        request = RecoveryCollectionRequest(
+            vendor="checkpoint", selector=selector, provenance=provenance,
+        )
+
+        # A8 platform gate input: the discovery-lifecycle platform-family
+        # classification, as propagated into cp_config_telemetry.json by a
+        # prior --cp-config-collect run. Absent -> every endpoint is treated
+        # as a supported/unknown platform and attested normally (A8: an
+        # unknown platform is not a reason to skip a read-class command).
+        platform_by_entity: dict[str, str] = {}
+        ct_path = runtime_paths.output_root / "cp_config_telemetry.json"
+        if ct_path.exists():
+            try:
+                ct_doc = json.loads(ct_path.read_text(encoding="utf-8"))
+                for dev in ct_doc.get("devices", []) or []:
+                    eid = dev.get("entity_id")
+                    fam = (dev.get("platform") or {}).get("family")
+                    if eid and fam:
+                        platform_by_entity[str(eid)] = str(fam)
+            except (OSError, ValueError):
+                platform_by_entity = {}
+
+        cfg = _runtime_config(require_cp=True, require_panorama=False)
+        try:
+            attester = CheckpointRecoveryAttester(cfg, platform_by_entity=platform_by_entity)
+
+            def _attest_under_admission(entity_id, operation):
+                return _admitted("checkpoint", "recovery-attest-cp", entity_id, operation)
+
+            try:
+                result = run_recovery_attestation(
+                    request,
+                    unified_devices=unified_devices,
+                    attester=attester,
+                    run_under_admission=_attest_under_admission,
+                )
+            except RecoveryCollectionError as exc:
+                parser.error(str(exc))
+        finally:
+            cfg.clear_credentials()
+
+        state_dir = runtime_paths.data_root / "state"
+        state_dir.mkdir(parents=True, exist_ok=True)
+        state_path = state_dir / "recovery_attestations.json"
+        state_path.write_text(
+            json.dumps(
+                {
+                    "schema": "securityexpert-recovery-attestations-v1",
+                    "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                    "attestations": result.as_attestation_map(),
+                },
+                indent=2, ensure_ascii=False,
+            ) + "\n",
+            encoding="utf-8",
+        )
+
+        print(f"Physical endpoints:      {len(result.outcomes)}")
+        print(f"Attested:                {result.attested_count}")
+        print(f"Failed:                  {result.failed_count}")
+        for outcome in result.outcomes:
+            if outcome.status != "attested":
+                detail = f" -- {outcome.error}" if outcome.error else ""
+                print(f"  {outcome.entity_id}: {outcome.status}{detail}")
+        print(f"\nWritten:                 {state_path}")
+        print(f"Gate:                    {'PASS' if result.failed_count == 0 else 'FAIL'}")
+        print(
+            "No recovery artifact was collected. No backup or snapshot name was "
+            "recorded; records carry {class, age_days, source} only."
+        )
         raise SystemExit(0 if result.failed_count == 0 else 1)
 
     if args.cp_config_probe:
