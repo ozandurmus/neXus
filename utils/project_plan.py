@@ -100,6 +100,142 @@ def _metadata_warnings(roadmap: dict[str, Any], features: list[dict[str, Any]], 
     current_build = str(roadmap.get("current_build") or "")
     if current_build and not any(str(item.get("build") or "") == current_build for item in builds):
         warnings.append(f"Current build is absent from build history: {current_build}")
+    warnings.extend(_cross_authority_warnings(roadmap, features, builds, backlog_items))
+    return warnings
+
+
+# --- Cross-authority consistency (architecture_convergence) -----------------
+#
+# The rules above check each file against itself: vocabulary, duplicate ids,
+# dangling references. They were all green while roadmap.json claimed the
+# current build was `0.7.4` (completed 2026-08-29), build_history.json's newest
+# record was OP.0a (2026-09-01), and feature_registry.json still called that
+# same OP.0a work `planned`. Three files each claiming a different "now" is the
+# exact drift a governance gate exists to catch, so the rules below compare the
+# files *against each other*.
+#
+# Deliberately JSON-only: this function runs inside the report render path, so
+# it must not read Markdown. The CURRENT_STATE.md ↔ roadmap agreement check
+# lives in tests/test_architecture_convergence.py instead, where it costs
+# nothing at runtime.
+
+#: build_history statuses that mean "finished"; a `next` build may not hold one.
+_TERMINAL_BUILD_STATUSES = frozenset({
+    "done", "complete", "automated_validated", "real_env_validated",
+})
+
+#: feature_registry and build_history use slightly different words for the same
+#: delivery state. Compare canonical forms, not raw strings.
+_STATUS_EQUIVALENCE = {
+    "complete": "done",
+    "complete_with_followup": "done",
+}
+
+
+def _canonical_status(status: str) -> str:
+    return _STATUS_EQUIVALENCE.get(status, status)
+
+
+#: Delivery states that mean work has actually begun.
+_STARTED_STATUSES = frozenset({
+    "in_progress", "automated_validated", "real_env_validated", "done", "complete",
+    "complete_with_followup",
+})
+
+
+def _cross_authority_warnings(
+    roadmap: dict[str, Any],
+    features: list[dict[str, Any]],
+    builds: list[dict[str, Any]],
+    backlog_items: list[dict[str, Any]] | None = None,
+) -> list[str]:
+    warnings: list[str] = []
+    now_next = roadmap.get("now_next") or {}
+    now = now_next.get("now") or {}
+    nxt = now_next.get("next") or {}
+
+    build_status = {}
+    for item in builds:
+        key = str(item.get("build") or "")
+        if key and key not in build_status:      # newest-first: first wins
+            build_status[key] = str(item.get("status") or "")
+
+    newest = str(builds[0].get("build") or "") if builds else ""
+    now_build = str(now.get("build") or "")
+
+    # R1 -- build_history.json is newest-first by its own record_contract, so
+    # its head record IS the current build. roadmap must agree with it.
+    if newest and now_build and now_build != newest:
+        warnings.append(
+            f"roadmap now_next.now.build ({now_build}) is not the newest build "
+            f"history record ({newest}); one of the two is stale"
+        )
+
+    # R2 -- current_build and now_next.now.build are two fields claiming the
+    # same fact in the same file.
+    current_build = str(roadmap.get("current_build") or "")
+    if current_build and now_build and current_build != now_build:
+        warnings.append(
+            f"roadmap current_build ({current_build}) disagrees with "
+            f"now_next.now.build ({now_build})"
+        )
+
+    # R3 -- an id that is both a feature and a build must carry one status.
+    feature_status = {
+        str(f.get("id") or ""): str(f.get("status") or "") for f in features
+    }
+    for fid, fstatus in feature_status.items():
+        if not fid or fid not in build_status:
+            continue
+        bstatus = build_status[fid]
+        if not fstatus or not bstatus:
+            continue
+        if _canonical_status(fstatus) != _canonical_status(bstatus):
+            warnings.append(
+                f"status conflict for {fid!r}: feature_registry says {fstatus!r}, "
+                f"build_history says {bstatus!r}"
+            )
+
+    # R4 -- "next" cannot already be finished.
+    next_build = str(nxt.get("build") or "")
+    if next_build and _canonical_status(build_status.get(next_build, "")) in _TERMINAL_BUILD_STATUSES:
+        warnings.append(
+            f"roadmap now_next.next.build ({next_build}) is already "
+            f"{build_status[next_build]!r} in build history"
+        )
+
+    # R5 -- every open decision must name the gate that forces it (the existing
+    # `decide_by` field), so a decision cannot sit open indefinitely with nobody
+    # able to say which build it is holding up.
+    for decision in roadmap.get("open_decisions") or []:
+        if str(decision.get("status") or "") != "open":
+            continue
+        if not str(decision.get("decide_by") or "").strip():
+            warnings.append(
+                f"open decision {decision.get('id') or '<unnamed>'!r} has no "
+                f"decide_by gate"
+            )
+
+    # R6 -- backlog and feature_registry describe different things (a debt item
+    # can span several features), so their statuses are NOT required to match.
+    # But the two impossible directions are still worth catching: a backlog item
+    # cannot still be `planned` once its feature has started, and a feature
+    # cannot still be `planned` once its backlog item is done.
+    backlog_status = {
+        str(i.get("id") or ""): str(i.get("status") or "") for i in (backlog_items or [])
+    }
+    for fid, fstatus in feature_status.items():
+        bstatus = backlog_status.get(fid)
+        if bstatus is None or not fid:
+            continue
+        if bstatus == "planned" and fstatus in _STARTED_STATUSES:
+            warnings.append(
+                f"backlog {fid!r} is still 'planned' while feature_registry says {fstatus!r}"
+            )
+        if fstatus == "planned" and _canonical_status(bstatus) == "done":
+            warnings.append(
+                f"feature_registry {fid!r} is still 'planned' while backlog says {bstatus!r}"
+            )
     return warnings
 
 def build_project_plan_payload() -> dict[str, Any]:

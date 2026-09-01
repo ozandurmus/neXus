@@ -328,6 +328,62 @@ New track: **`OP.x — Controlled Failover`** (the first `OPERATE` work).
 Until every `OP.2` prerequisite is met, only `OP.0` and `OP.1` (both
 write-free) may be built.
 
+### 10.1 Stage map and the safety contract (architecture_convergence, 2026-09-01)
+
+`OP.x` already expresses the staged failover program; this section names the
+safety contract each stage carries, because those requirements were previously
+spread across §4, §7 and §8 with no single place to check them against.
+
+| Stage | Scope | Class | Gate |
+| --- | --- | --- | --- |
+| **`OP.0a`** | Readiness assessment over existing evidence | 0 | none — **AUTOMATED_VALIDATED 2026-09-01** |
+| **`OP.0b`** | The §3.1/§3.2 preflight command battery | 0 | network-device command gate, **drafted not approved** |
+| **`OP.0c`** | The §9 readiness UI module | 0 | none |
+| **`OP.1`** | Plan compiler + dry-run | 0 | `op_degraded_verdict` decides at contract freeze |
+| **`OP.2`** | Controlled execution, **one vendor** | **2** | every §10 prerequisite |
+| **`OP.3+`** | Broader vendor coverage | 2 | only after `OP.2` is proven in a real environment |
+
+**The safety contract `OP.2` must satisfy** — each item is a fail-closed
+condition, not a warning:
+
+1. **Action class.** Failover is `utils/action_taxonomy.CLASS_2_OPERATIONAL_STATE_CHANGE`.
+   That class has no member today and gaining one is what this gate authorises.
+   It is *not* class 1: the `RB.x` recovery contracts do not transfer to it.
+2. **Identity.** Fail closed when endpoint identity or HA membership is
+   ambiguous. CP identity is physical endpoint + VSID; PAN requires the serial
+   identity gate. An inferred peer relationship is not an identity — `OP.0a`'s
+   `pan_ha_peer_unresolved` is the known instance and needs a discovery-plane
+   peer field before it can gate a write.
+3. **Freshness.** Inventory may *inform* capability selection but is never the
+   sole authority. A state-changing action requires operational evidence
+   collected immediately before execution, inside a declared freshness window;
+   exceeding it fails closed. Stale topology, unknown active/standby state and
+   unknown preemption configuration are each independently disqualifying.
+4. **Locking.** A per-**HA-entity** lock, held across preflight → act → verify.
+   The coordinator's existing lock is per-*endpoint*, which is not the same
+   grain: two members of one cluster are two endpoints. Closing that gap is
+   `OP.2` work and must not be assumed done.
+5. **Confirmation.** Explicit human confirmation of the resolved target, after
+   the compiled plan is displayed. No implicit or batched confirmation, no
+   multi-cluster scripting.
+6. **Exactly once, no blind retry.** One action per authorised run. A timeout or
+   an ambiguous result is `UNKNOWN`, never a reason to re-issue — retry safety
+   would need its own per-vendor proof and none exists.
+7. **Post-verification.** Inability to verify the post-state is a failure, not a
+   silent success. `UNKNOWN` is a first-class outcome alongside
+   `SUCCESS`/`DEGRADED`.
+8. **Audit.** Immutable record: actor, target, pre-state, action class, exact
+   supported operation, result, post-state, timestamps, evidence references.
+9. **No generic cross-vendor primitive.** Explicit per-vendor capability
+   adapters. One vendor proven before any abstraction is generalised.
+
+**Where the boundary is enforced today.** The operator console submits typed
+intent against a closed registry and refuses anything above class 0 with the
+refusing class named (`console/registry.py`, `console/app.py`). There is no
+Browser → device path, and `utils/failover/` deliberately contains no plan,
+executor or adapter module — `tests/test_architecture_convergence.py` asserts
+that absence, so an executor cannot appear ahead of this gate.
+
 Open decisions for the OP.x approval review are tracked in
 `project/roadmap.json` → `open_decisions`; §11 restates them.
 

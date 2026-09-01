@@ -14,14 +14,29 @@ a Turkish translation or explanation only when you explicitly need one.
 ## What this is
 
 **neXus / SecurityExpert** — a multi-vendor network-security *evidence* platform.
-Read-only. It collects and reconciles runtime inventory and current configuration
-from Check Point (MDS/CMA), Check Point VSX, and Palo Alto Panorama / PAN-OS, then
+It collects and reconciles runtime inventory and current configuration from
+Check Point (MDS/CMA), Check Point VSX, and Palo Alto Panorama / PAN-OS, then
 publishes a single static HTML report plus a sanitized shareable support bundle.
 
 Product maturity axis: `SEE → VERIFY → TRACE → RECOVER → OPERATE`.
 `SEE` (inventory) is mature; `VERIFY` (configuration + alignment + compliance) is
-in progress. **No** write / commit / policy-install / failover / remediation
-exists or is permitted at current maturity.
+in progress; `RECOVER` has shipped its first controlled writes; `OPERATE` has
+shipped its read-only half.
+
+**What the product may do is an explicit taxonomy, not a slogan**
+(`utils/action_taxonomy.py` — the single source of truth):
+
+| Class | What | Status |
+| --- | --- | --- |
+| 0 — read | discovery, inventory, config collection, compliance, verification, preflight, readiness | permitted; the overwhelming majority of the product |
+| 1 — controlled recovery write | narrowly scoped recovery ops: backup creation, exact generated-artifact cleanup | permitted **only** through the `RB.x` contracts (per-entity ledger, minimum re-execution interval, distinct backup credential, fail-closed allowlist); **not** console-submittable |
+| 2 — operational state change | failover, cluster role transition | **no member exists**; hard-gated by `FAILOVER_ENGINE_ARCHITECTURE.md` §10 |
+| 3 — configuration write | config / object / policy-rule modification | prohibited |
+| 4 — policy / deployment / remediation | policy install, automated remediation | prohibited |
+
+The older "the product is read-only" shorthand stopped being true when `RB.x`
+shipped; do not restore it. `"operational-write"` in existing code and durable
+records is this repository's legacy name for **class 1** only.
 
 - Product baseline: see `CURRENT_STATE.md`
 - Engineering baseline: `DEV.1 — Corporate Git Foundation`
@@ -31,11 +46,11 @@ exists or is permitted at current maturity.
 ## How it works in 30 lines
 
 **One Python CLI.** Dependencies: `lxml`, `paramiko`, `requests`. `--console`
-(CON.1) is the one optional exception — a read-only loopback web server, off
-by default, requiring the separate `requirements-console.txt`.
+is the one optional exception — a loopback web server, off by default,
+requiring the separate `requirements-console.txt`.
 
 ```
-live devices ──(SSH / cprid_util / HTTPS XML API — all read-only)──► collectors
+live devices ──(SSH / cprid_util / HTTPS XML API — class 0 read)──► collectors
    → per-source JSON artifacts
    → merge         → unified.json          (unified inventory model)
    → snapshot      → *_effective.json      (LIVE / LAST_KNOWN_GOOD / NO_DATA / PARTIAL)
@@ -61,7 +76,11 @@ outside it — on Windows under `%LOCALAPPDATA%\SecurityExpert\runtime\`.
 | `py .\main.py --repository-privacy-check` | Local/offline Corporate-Git privacy gate. No network, no credentials, matched values never printed. |
 | `py .\main.py --storage-analyze` / `--storage-deduplicate [--apply]` | Content-addressed storage inspection / dedup migration (dry-run default). |
 | `py .\main.py --scheduler-once` | Evaluate the default-disabled RuntimeRoot scheduler policy once; no loop. |
-| `py .\main.py --console [--console-port N]` | CON.1 read-only operator console: authenticated loopback HTTP service serving the existing UI live from local artifacts. Zero action capability, no vendor import, no credential, no device contact. Requires `pip install -r requirements-console.txt`. |
+| `py .\main.py --console [--console-port N]` | Operator console (`CON.1`+`CON.2`): authenticated loopback HTTP service serving the existing UI live from local artifacts, plus a job engine. The browser submits **typed intent** (`job_type` + `entity_id` targets) against a closed server-side registry — never a command, an argv fragment or a path. Only class 0 job types are submittable; everything else returns 409 with the refusing class named. Requires `pip install -r requirements-console.txt`. |
+| `py .\main.py --ha-readiness-check` | `OP.0a` HA readiness assessment over already-collected evidence. Offline, no credential, no device contact; writes `data/state/ha_readiness.json`. Cannot emit `SAFE_TO_FAILOVER` by construction — see below. |
+| `py .\main.py --restore-readiness-check` / `--recovery-attest` / `--recovery-store-check` / `--recovery-validate` | `RB.x` recovery plane, class 0 halves: readiness derivation, backup/snapshot attestation, store inspection, artifact validation. |
+| `py .\main.py --recovery-collect --recovery-vendor <checkpoint\|panorama>` | `RB.x` recovery collection — **class 1**. Ledgered, allowlisted, separately credentialed; never reachable from the console. |
+| `py .\main.py --persistent-secret-material-check` / `--compliance-trend-reconstruct` | Trust-material preflight (`DEV.2.2`) / compliance-trend retro-fill (`0.7.7`). |
 
 Vendor/config imports are lazy — maintenance modes return before touching them.
 
@@ -87,9 +106,11 @@ Vendor/config imports are lazy — maintenance modes return before touching them
 | `utils/support_bundle.py`, `completeness.py` | sanitized shareable zip |
 | `utils/logger.py`, `cp_ssh_trust.py`, `pan_tls_trust.py`, `repository_privacy.py`, `inventory_exclusions.py` | log redaction, trust preflight, DLP gate, exclusion policy |
 | `templates/index.html` + `static/{app.js,style.css}` | single-page UI (Overview / Network Inventory / Configuration / Compliance / Discovery / Project Plan) |
-| `console/` + `templates/console.html` + `static/console_actions.js` | CON.1 read-only operator console (`--console`); imports no vendor/collector module |
+| `console/` + `templates/console.html` + `static/console_actions.js` | operator console (`--console`): `registry.py` is the closed job vocabulary, `runner.py` the single-worker executor, `jobs.py` the durable records; imports no vendor/collector module |
+| `utils/action_taxonomy.py` | the five action classes — what each surface may execute, and why not |
+| `utils/failover/` | `OP.0a` HA readiness assessment **only**; the absence of a plan/executor/adapter is test-enforced |
 | `project/*.json` | living plan metadata (roadmap / backlog / feature_registry / build_history) — embedded into the Project Plan UI on every render |
-| `tests/` | phase-scoped suites; baseline `227 passed / 2 xfail` |
+| `tests/` | phase-scoped suites; for the current baseline see `CURRENT_STATE.md` (never hard-code it here — it went stale by ~750 tests) |
 
 Full mechanism detail: **`docs/ARCHITECTURE.md`**.
 

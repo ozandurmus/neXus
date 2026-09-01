@@ -1158,7 +1158,7 @@
     {
       "id": "failover_readiness_assessment",
       "title": "HA Readiness / Failover-Safety Assessment",
-      "status": "planned",
+      "status": "automated_validated",
       "introduced": "OP.0",
       "weight": 6,
       "summary": "Read-only per-vendor preflight battery that scores whether an HA cluster is safe to fail over, and why not.",
@@ -1264,7 +1264,7 @@
     {
       "id": "codebase_modularization",
       "title": "Behavior-Preserving Codebase Modularization",
-      "status": "planned",
+      "status": "done",
       "introduced": "Local architecture health",
       "target": "Local development, before and during DEPLOY.1",
       "weight": 7,
@@ -1335,7 +1335,7 @@
     {
       "id": "operator_console_job_engine",
       "title": "Operator Console - job engine and read-class actions",
-      "status": "done",
+      "status": "automated_validated",
       "introduced": "CON.2",
       "weight": 8,
       "summary": "Durable job records plus a closed registry of read-class actions (re-collect an inventory plane, RB.3a attestation, report rebuild), executed through the same main() path the scheduler uses.",

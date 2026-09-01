@@ -1,6 +1,6 @@
 # SecurityExpert / neXus (working name)
 
-A multi-vendor network-security **evidence** platform. Read-only. It collects and
+A multi-vendor network-security **evidence** platform. It collects and
 reconciles runtime inventory and current configuration from Check Point
 (MDS/CMA), Check Point VSX, and Palo Alto Panorama / PAN-OS — with run isolation,
 completeness telemetry, last-known-good snapshots, UI freshness state, a
@@ -8,8 +8,17 @@ content-addressed configuration history, and privacy-preserving support bundles.
 
 Product maturity axis: `SEE → VERIFY → TRACE → RECOVER → OPERATE`. `SEE`
 (inventory) is mature; `VERIFY` (configuration, alignment, compliance) is in
-progress. No write / policy-install / failover / remediation exists or is
-permitted at current maturity.
+progress; `RECOVER` has shipped its first controlled writes; `OPERATE` has
+shipped its read-only half (the operator console).
+
+**What the product may do is an explicit five-class taxonomy**, not a slogan —
+`utils/action_taxonomy.py` is the single source of truth and `AI_START_HERE.md`
+carries the table. In short: class 0 (read) is permitted and is most of the
+product; class 1 (controlled recovery write — backup creation and exact
+generated-artifact cleanup) is permitted only through the `RB.x` safety
+contracts and is never console-submittable; class 2 (failover / operational
+state change) has no member yet and is hard-gated; classes 3-4 (configuration
+write, policy install / remediation) are prohibited.
 
 Authoritative state: **`CURRENT_STATE.md`**.
 

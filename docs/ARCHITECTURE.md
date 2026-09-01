@@ -353,8 +353,16 @@ One large multi-stage function (~750 lines):
 
 ## 8. Security & privacy model (code level)
 
-- **Read-only invariant.** No collector issues a write command. CP commands are
-  `ip` / `route` / `cphaprob` / `show`; PAN is `show` + `keygen`.
+- **Action-class invariant.** Every device operation belongs to a declared class
+  in `utils/action_taxonomy.py`. **No *collector* issues a write command** — CP
+  collector commands are `ip` / `route` / `cphaprob` / `show`, PAN is `show` +
+  `keygen`, all class 0. The one write-capable path in the product is the
+  `RB.x` recovery plane (`checkpoint/checkpoint_recovery_collector.py`:
+  `add backup local` and a bounded backup deletion), which is **class 1** and
+  is not a collector: it runs only under the recovery contracts (per-entity
+  ledger, minimum re-execution interval, distinct backup service account,
+  fail-closed entity allowlist) and is unreachable from any HTTP surface.
+  Class 2 (failover) has no implementation; classes 3-4 are prohibited.
 - **Secret redaction.** `utils/logger.register_sensitive_value()` — in-process
   exact-match; every log line passes through `_redact()`. The principal is
   recorded only as `sha256[:12]`.

@@ -246,7 +246,8 @@ Every meaningful implementation reports:
 Before adding/changing a device command, document:
 
 1. why it is required,
-2. read-only vs write,
+2. its `utils/action_taxonomy.py` class (0 read / 1 controlled recovery write /
+   2 operational state change / 3 configuration write / 4 policy-remediation),
 3. vendor/platform/shell/context,
 4. timeout,
 5. retry,
@@ -256,7 +257,14 @@ Before adding/changing a device command, document:
 9. secret-bearing output risk,
 10. safe telemetry.
 
-No new write command at the current product maturity.
+No new class 2, 3 or 4 command at the current product maturity. A new class 1
+command requires the recovery contracts in
+`docs/design/RECOVERY_OPERATIONAL_WRITE_LEDGER.md` **and** an approved gate
+entry — `RB.3b`'s `add backup local` is the only precedent. A parse-scope
+extension of a command the collector already runs (same command, session,
+timeout and frequency) is not a command addition and needs no gate entry;
+`OP.0a`'s cluster-mode parse of the already-executed `cphaprob stat` is the
+worked example.
 
 ## Approval boundaries
 
@@ -269,9 +277,11 @@ migration, destructive local-data operations, full-fleet collection when not
 already requested, new network-access patterns, Git push/merge until DEV.1 Git
 workflow is accepted.
 
-Prohibited at current maturity: firewall configuration writes, policy install,
-commit, reboot/shutdown, forced failover, interface/routing change, credential
-change and automatic remediation.
+Prohibited at current maturity (taxonomy classes 2-4): firewall configuration
+writes, policy install, commit, reboot/shutdown, forced failover,
+interface/routing change, credential change and automatic remediation. Class 1
+controlled recovery writes are permitted only through their existing contracts
+and are never exposed on an HTTP surface.
 
 ## Token/context discipline
 
