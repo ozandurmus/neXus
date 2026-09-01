@@ -4,13 +4,14 @@ from pathlib import Path
 from configuration import checkpoint_config_collector as collector
 from utils.config_ui import build_configuration_ui_payload
 import pytest
+from utils.html_export import compose_report_script as _composed_report_script
 
 pytestmark = pytest.mark.configuration
 
 
 ROOT = Path(__file__).resolve().parents[1]
 MAIN = (ROOT / "main.py").read_text(encoding="utf-8")
-APP = (ROOT / "static" / "app.js").read_text(encoding="utf-8")
+APP = _composed_report_script()
 
 
 def test_secret_aware_sanitization_never_persists_secret_line_and_tracks_raw_change():
