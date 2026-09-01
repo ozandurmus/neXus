@@ -50,7 +50,39 @@ Server-only gates remain OIDC/RBAC, strict CP/PAN trust, report-only viewer
 storage, least-privilege containers, migration/role separation, release
 assurance, and off-host recovery artifact/key custody with a restore drill.
 
+**Amended 2026-08-31 — the operator console (`CON.x`).** That review's "not a
+premature generic API or browser-command rewrite" still holds and is not
+relaxed. What changed is that the operational need it was conditioned on is now
+stated: the BackBox exit needs an operator *surface*, not only a capability.
+The sanctioned form is a **second delivery surface**, not a dynamic report —
+`output/index.html` keeps its portable, shareable, action-free form, and a
+separate authenticated loopback console serves the same UI modules and the same
+payloads with an action layer on top. The browser sends intent against a closed
+server-side job registry; it never sends a device command or an argv fragment,
+and the console never becomes part of the nginx report viewer. Architecture:
+`docs/design/OPERATOR_CONSOLE_ARCHITECTURE.md`; the server doc carries the
+reconciliation as its new §7.
+
 ## Active build
+
+**`operator_console` (`CON.x`) — ARCHITECTURE FROZEN 2026-08-31, nothing
+implemented.** `docs/design/OPERATOR_CONSOLE_ARCHITECTURE.md` (`CON.0`) plus all
+five phase contracts, written in one pass and ready for separate implementation
+sessions:
+
+| Phase | Contract (`docs/history/phase/`) | Blocked on |
+| --- | --- | --- |
+| `CON.1` read-only console | `CON_1_OPERATOR_CONSOLE_READ_ONLY.md` | `codebase_modularization` (frontend) DONE; `C-D1`, `C-D2` |
+| `CON.2` job engine + `read` actions | `CON_2_CONSOLE_JOB_ENGINE_READ_ACTIONS.md` | `CON.1`; `C-D3` |
+| `CON.3` `operational-write` actions | `CON_3_CONSOLE_OPERATIONAL_WRITE_ACTIONS.md` | `CON.2`; **`RB.3b` REAL_ENV_VALIDATED**; `C-D4`, `C-D6` |
+| `CON.4` Recovery module (`RB.5`) | `CON_4_CONSOLE_RECOVERY_MODULE.md` | `CON.2` |
+| `CON.5` scheduler surface | `CON_5_CONSOLE_SCHEDULER_SURFACE.md` | `CON.2`; `C-D7` |
+
+The architecture doc is the spec; this file does not restate it. Eight open
+decisions (`C-D1`…`C-D8`, in `project/roadmap.json` `open_decisions`) are
+product-owner / security calls, not engineering work — `CON.1` cannot start
+until `C-D1`/`C-D2` are answered. No source file was touched by the freeze.
+
 
 **`distributed_evidence_store_migration` (DEV.3.3) — AUTOMATED_VALIDATED
 2026-08-31, merged to `main` (`ae10bf7`).** The evidence-integrity half split from DEV.3.2.

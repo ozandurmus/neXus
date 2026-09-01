@@ -16,6 +16,17 @@ introduce Kubernetes, per-vendor workers, a generic REST wrapper around
 `main.py`, or browser-supplied device commands before real operational need and
 the relevant gates exist.
 
+**Amendment 2026-08-31 (`CON.0`).** The condition this paragraph attaches to —
+"before real operational need and the relevant gates exist" — has now been met
+on one axis and only one: the BackBox exit
+(`BACKUP_AND_RECOVERY_ARCHITECTURE.md` §2) makes a local operator surface a
+stated operational need. The sanctioned form of that surface is
+`docs/design/OPERATOR_CONSOLE_ARCHITECTURE.md`, and **none of the prohibitions
+above are relaxed by it**: it is not a generic REST wrapper (a closed
+server-side job registry, no browser-supplied commands or arguments), not part
+of the report viewer (§2 below), not exposed beyond loopback, and not a
+Kubernetes or multi-worker change. See §7 for the full reconciliation.
+
 ## 2. Deployment boundaries
 
 ```text
@@ -171,3 +182,34 @@ RB.3a is compatible with this design and may proceed as the current read-only
 product build. RB.3b must not be treated as a recovery outcome until the
 off-host/key-custody and restore gates are satisfied.
 
+---
+
+## 7. Amendment — the sanctioned control plane (2026-08-31, `CON.0`)
+
+§2 requires that "future policy, scheduling, exclusion, check-pack, or recovery
+administration must use a separately authenticated and audited control plane;
+it must not be added to the static viewer." `CON.x`
+(`docs/design/OPERATOR_CONSOLE_ARCHITECTURE.md`) is that control plane, in its
+first, deliberately smallest deployment shape. This section records how it
+satisfies each boundary this document set, so a future reader does not have to
+reconstruct the reasoning.
+
+| This document requires | How `CON.x` satisfies it |
+|---|---|
+| No generic REST wrapper around `main.py` | A closed, source-resident job registry (`CON.2` `C2-1`). The browser sends a `job_type` plus `entity_id` values validated against `unified.json`; no command string, flag or free-form argument reaches argv. |
+| No browser-supplied device commands | Same boundary, stated as `CON.0` §4. Argv is built by the server from a fixed template shared with the scheduler (`CON.2` `C2-2`). |
+| The control plane is not added to the static viewer | The console is a separate application in the worker trust zone. The nginx viewer is unchanged, keeps its read-only report mount, and never gains a console route (`CON.0` §7.5). |
+| The viewer may never hold credentials, evidence metadata, runtime keys or recovery material | Unchanged. The console holds no credential in the browser at all; recovery payload is unreachable over HTTP in every phase (`CON.0` §7.6, `CON.3` `C3-7`, `CON.4` `C4-1`). |
+| Separately authenticated and audited | Per-launch cookieless bearer token on a loopback bind now (`CON.0` §7.2); durable job records with `provenance="console"` from `CON.2`; corporate OIDC + role mapping only at `CON.6`, behind this document's §6 gates. |
+| Single worker, static report near-term | Preserved. The exported report keeps its inline single-script form and gains no action surface; the console is a second consumer of the same composed modules (`CON.1` `C1-2`). |
+
+**Not authorized by this amendment:** running the console anywhere but loopback
+on an operator workstation (`CON.0` `C-D5`), publishing a console port from
+`docker-compose.yml`, any new device command, or any device write beyond the
+`D3` pilot allowlist that `RB.3b` already governs. `CON.6` — the console behind
+corporate OIDC on a server — remains blocked on the complete §6 gate set and is
+deliberately left uncontracted.
+
+§5's modularization plan is unchanged and remains a precondition rather than a
+casualty: `CON.1` depends on the frontend split landing first, and reuses its
+module order rather than introducing a second composition path.

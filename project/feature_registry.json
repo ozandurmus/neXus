@@ -784,15 +784,21 @@
       "id": "restore_readiness",
       "title": "Restore Readiness",
       "status": "in_progress",
-      "target": "RB.0 (pulled forward from 0.9.x) + RB.5",
+      "target": "RB.0 (pulled forward from 0.9.x) + RB.5 (delivered by CON.4)",
       "weight": 8,
-      "summary": "Per-device READY / STALE / PARTIAL / UNPROTECTED / UNKNOWN readiness over already-collected evidence, plus the Recovery UI module and coverage-vs-inventory gap view.",
-      "why": "Answers 'if this device died right now, what do we actually have?' with zero new device commands, zero credentials and no network. Buildable immediately, depends on nothing later in the sequence, and quantifies the BackBox-exit risk with real numbers instead of assumption -- which is why it is pulled forward from 0.9.x. docs/design/BACKUP_AND_RECOVERY_ARCHITECTURE.md + docs/design/BACKUP_RECOVERY_CONTRACTS.md (design frozen 2026-08-30). RB.0 landed 2026-08-30: utils/restore_readiness.py + main.py --restore-readiness-check. RB.5 (Recovery UI module) is next.",
+      "summary": "Per-device READY / STALE / PARTIAL / UNPROTECTED / UNKNOWN readiness over already-collected evidence, plus the Recovery UI module and coverage-vs-inventory gap view. The Recovery UI module half (RB.5) is contracted as CON.4, rendering in both the exported report and the console from one shared payload.",
+      "why": "Answers 'if this device died right now, what do we actually have?' with zero new device commands, zero credentials and no network. Buildable immediately, depends on nothing later in the sequence, and quantifies the BackBox-exit risk with real numbers instead of assumption -- which is why it is pulled forward from 0.9.x. docs/design/BACKUP_AND_RECOVERY_ARCHITECTURE.md + docs/design/BACKUP_RECOVERY_CONTRACTS.md (design frozen 2026-08-30). RB.0 landed 2026-08-30: utils/restore_readiness.py + main.py --restore-readiness-check. RB.5 (Recovery UI module) is contracted 2026-08-31 as docs/history/phase/CON_4_CONSOLE_RECOVERY_MODULE.md.",
       "criteria": [
         {
           "id": "readiness",
           "label": "Readiness model",
           "state": "done",
+          "weight": 1
+        },
+        {
+          "id": "recovery_ui_module",
+          "label": "Recovery UI module (roll-up, coverage-vs-inventory, per-artifact verdicts) in both delivery modes",
+          "state": "pending",
           "weight": 1
         }
       ]
@@ -1281,6 +1287,140 @@
           "label": "Render, privacy and regression gates stay green for each extraction",
           "state": "pending",
           "weight": 2
+        }
+      ]
+    },
+    {
+      "id": "operator_console_surface",
+      "title": "Operator Console - read-only surface",
+      "status": "planned",
+      "introduced": "CON.1",
+      "weight": 5,
+      "summary": "Authenticated loopback HTTP surface serving the existing UI modules and report payloads live, with zero action capability and zero device contact.",
+      "why": "Establishes transport, authentication, CSP and the dual delivery mode (portable static report + live console) from one UI source tree, at no device risk. Contract: docs/history/phase/CON_1_OPERATOR_CONSOLE_READ_ONLY.md.",
+      "criteria": [
+        {
+          "id": "loopback_auth",
+          "label": "Loopback bind + cookieless per-launch bearer token",
+          "state": "pending",
+          "weight": 1
+        },
+        {
+          "id": "dual_mode_ui",
+          "label": "One UI source, two delivery modes; report keeps no action surface",
+          "state": "pending",
+          "weight": 1
+        },
+        {
+          "id": "payload_parity",
+          "label": "Console payloads byte-equal to the exported report's",
+          "state": "pending",
+          "weight": 1
+        },
+        {
+          "id": "no_mutating_route",
+          "label": "No mutating HTTP route exists (asserted on the route table)",
+          "state": "pending",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "operator_console_job_engine",
+      "title": "Operator Console - job engine and read-class actions",
+      "status": "planned",
+      "introduced": "CON.2",
+      "weight": 8,
+      "summary": "Durable job records plus a closed registry of read-class actions (re-collect an inventory plane, RB.3a attestation, report rebuild), executed through the same main() path the scheduler uses.",
+      "why": "The phase where the product becomes an operator tool rather than a report you regenerate from a terminal - with no new device command and no write. Contract: docs/history/phase/CON_2_CONSOLE_JOB_ENGINE_READ_ACTIONS.md.",
+      "criteria": [
+        {
+          "id": "closed_registry",
+          "label": "Closed job-type registry; browser sends intent, never a command",
+          "state": "pending",
+          "weight": 1
+        },
+        {
+          "id": "durable_jobs",
+          "label": "Durable job records on the evidence backend; terminal state on crash",
+          "state": "pending",
+          "weight": 1
+        },
+        {
+          "id": "single_orchestration_path",
+          "label": "Every execution goes through main(); no second orchestration path",
+          "state": "pending",
+          "weight": 1
+        },
+        {
+          "id": "console_provenance",
+          "label": "provenance='console' in every manifest and job record",
+          "state": "pending",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "operator_console_operational_actions",
+      "title": "Operator Console - operational-write actions",
+      "status": "planned",
+      "introduced": "CON.3",
+      "weight": 6,
+      "summary": "Per-device Check Point Gaia backup triggered from the console, inside the D3 pilot allowlist, behind a preflight + single-use confirmation token + mandatory reason.",
+      "why": "The BackBox-parity moment for the CP pilot set, in its smallest safe form: one device per request, three independent gates, no retry, no restore, no scheduling. Contract: docs/history/phase/CON_3_CONSOLE_OPERATIONAL_WRITE_ACTIONS.md.",
+      "criteria": [
+        {
+          "id": "three_gates",
+          "label": "UI / API / collector refuse independently",
+          "state": "pending",
+          "weight": 1
+        },
+        {
+          "id": "preflight_confirm",
+          "label": "Zero-device-contact preflight + single-use bound confirm token",
+          "state": "pending",
+          "weight": 1
+        },
+        {
+          "id": "ledger_authority",
+          "label": "24h operational-write ledger stays authoritative; no force control",
+          "state": "pending",
+          "weight": 1
+        },
+        {
+          "id": "no_payload_route",
+          "label": "No route exposes recovery bytes, paths or a decrypt path",
+          "state": "pending",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "operator_console_scheduler_view",
+      "title": "Operator Console - scheduler surface (read-only)",
+      "status": "planned",
+      "introduced": "CON.5",
+      "weight": 3,
+      "summary": "Read-only view of the RuntimeRoot scheduler policy, due-ness and last/next run, including which workflows cannot be scheduled at all and why.",
+      "why": "'recovery-cp' is absent from ALLOWLISTED_WORKFLOWS because D3 approved the CP backup command and explicitly not unattended fleet backup. An operator who cannot see that assumes the opposite. Contract: docs/history/phase/CON_5_CONSOLE_SCHEDULER_SURFACE.md.",
+      "criteria": [
+        {
+          "id": "derived_unschedulable",
+          "label": "Unschedulable list derived from ALLOWLISTED_WORKFLOWS, never authored in the UI",
+          "state": "pending",
+          "weight": 1
+        },
+        {
+          "id": "read_only",
+          "label": "No policy or state mutation route",
+          "state": "pending",
+          "weight": 1
+        },
+        {
+          "id": "honest_empty_state",
+          "label": "Default-disabled scheduler renders as disabled, not as broken",
+          "state": "pending",
+          "weight": 1
         }
       ]
     }
