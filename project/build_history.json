@@ -3,6 +3,36 @@
   "record_contract": "One structured record per build, newest first. Required: build, status, title, summary (<= 2 sentences). Optional: started, completed, track, movement, supersedes, evidence, risks_forward, docs{agreement,validation,handover} (repo-relative paths under docs/history/). Full detail lives in the linked doc; do not restate it here. Status vocabulary must stay within utils/project_plan.py STATUS_VALUES.",
   "builds": [
     {
+      "build": "codebase_modularization_backend-contract",
+      "status": "complete",
+      "started": "2026-09-01",
+      "completed": "2026-09-01",
+      "title": "Codebase modularization (main.py orchestration split) -- backend-half contract",
+      "track": "Architecture / Code Health",
+      "movement": "ARCHITECTURE",
+      "summary": "SCOPE -> AUDIT -> CONTRACT pass for the backend half of docs/design/SERVER_PRODUCTIZATION_AND_MODULARIZATION_ARCHITECTURE.md section 5, immediately after the frontend half landed. Line-verified read of main.py (2,089 lines; main() alone ~1,690 lines / 399-2089, five execution phases, 17 CLI modes, ~15 shared locals, one try/except/finally with cfg.clear_credentials()). Froze docs/history/phase/CODEBASE_MODULARIZATION_BACKEND.md: a new application/ package (cli.py, services.py, context.py, workflows/{maintenance,recovery,checkpoint}.py) binding to section 5's named layout, an explicit ApplicationContext dataclass replacing the shared locals, main.py kept as a thin entry that re-exports the seven module-level names 12 test files import (no test rewrite), the lazy vendor-import boundary turned into a tested invariant (AC-3 static + AC-5 runtime sys.modules check), and a before/after CLI transcript-diff parity gate (AC-4). Vendor-collector split (configuration/pan, configuration/checkpoint) explicitly OUT -- section 5 says those move only when a bounded feature touches them, and this build touches none.",
+      "evidence": "No code changed; no test re-run required. Repository privacy gate not re-run (docs only).",
+      "risks_forward": "A moved mode block that drops a parser.error or reorders mode precedence (AC-2/AC-4 guard); a vendor import creeping to module scope in cli.py/services.py so an offline maintenance run starts loading paramiko (AC-3/AC-5 guard, the backend twin of the frontend half's ReferenceError risk); the Phase-E try/except/finally and cfg lifetime must move as one unit into checkpoint.py or credential cleanup can be skipped on a mid-pipeline error. checkpoint.py stays the largest application/ module (~560 lines of Phase E) after the split -- acceptable and in-bounds; splitting the 2,595-line panorama_config_collector.py / 1,941-line checkpoint_config_collector.py is a separate feature-triggered item, not this build.",
+      "docs": {
+        "agreement": "docs/history/phase/CODEBASE_MODULARIZATION_BACKEND.md"
+      }
+    },
+    {
+      "build": "codebase_modularization_frontend",
+      "status": "in_progress",
+      "started": "2026-09-01",
+      "completed": "2026-09-01",
+      "title": "Frontend modularization - static/app.js split into eight responsibility-owned files",
+      "track": "Architecture / Code Health",
+      "movement": "IMPLEMENTATION",
+      "summary": "Behavior-preserving split of the flat 4,905-line static/app.js (173 top-level functions, one implicit-global scope) into the eight D-MOD5 files - app_core, inventory_ui, configuration_ui, compliance_ui, discovery_ui, project_plan_ui, overview_ui, app_bootstrap - concatenated by utils/html_export.py in fixed dependency order into the exact same single inline <script> (D-MOD1: no bundler, no ES modules, no build step). New compose_report_script() helper; sixteen source-string UI tests repointed to it; new tests/test_frontend_module_composition.py (AC-3 static dependency-order check + AC-1 completeness). Two contract-audit gaps found during extraction and resolved by the ownership rule: currentConfigurationFleet -> configuration_ui (shared with overview_ui, which loads later); switchModule/savedModule kept in app_bootstrap with a reasoned nav-dispatcher carve-out in the AC-3 check (every feature-module call site is a deferred event handler).",
+      "evidence": "Rendered-report line-multiset diff before (main) vs after, on both the uitest fixture bundle and the empty-state render: zero original code lines lost - the only additions are eight file-header comments and a five-line relocation note. Render harness (bun DOM-execution) green on both renders: 'script parses, executes clean, 7 nav modules + all inner tabs switch with no console errors'. Repository privacy gate PASS/0 on a clean checkout (files scanned 432 -> 460, no new findings). Full suite py -m pytest -q: 887 passed / 26 skipped / 2 failed on the branch vs 882 / 27 / 2 on main at the same commit - +4 from tests/test_frontend_module_composition.py, one bun-gated test that skipped on the baseline run passing here, and the identical two pre-existing order-pollution failures (both pass in isolation), so zero regressions.",
+      "risks_forward": "The Playwright real-Chromium harness path is uninstalled in this sandbox (chromium not downloaded); the bun happy-dom path stood in and a human interactive open on a real workstation is a cheap non-blocking follow-up. Status stays in_progress: the backend half of codebase_modularization (main.py / vendor-collector seam extraction) is a separate later item under the same backlog id and is untouched here. CON.1 (operator console read-only) lists this frontend split as a hard precondition - it is now implemented but the phase doc DoD keeps the id at in_progress until that real-browser confirmation is recorded.",
+      "docs": {
+        "agreement": "docs/history/phase/CODEBASE_MODULARIZATION_FRONTEND.md"
+      }
+    },
+    {
       "build": "operator_console_architecture",
       "status": "complete",
       "started": "2026-08-31",
