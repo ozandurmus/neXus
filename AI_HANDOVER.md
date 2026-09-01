@@ -18,8 +18,10 @@ Prior versions are in git history.
   were answered this session (both approved per their documented
   recommendation) and `CON.1` (read-only console) was implemented and reached
   **AUTOMATED_VALIDATED** the same session.
-- Branch: `main`, clean, up to date with `origin/main` at session start. This
-  session's changes are **uncommitted** — see §3.
+- Branch: `main`, commit `6e22e0a` ("feat(console): implement CON.1 read-only
+  operator console"), committed directly to `main` this session per explicit
+  user instruction (no feature branch / PR this time). **Not yet pushed to
+  `origin/main`** — see §3.
 
 ## 2. What changed this session
 
@@ -92,48 +94,43 @@ Prior versions are in git history.
 
 ## 3. Exact next action
 
-**This session's changes are uncommitted on `main`.** Before anything else,
-review and commit/PR them (repo convention elsewhere in this history is a
-feature branch + PR, not a direct commit to `main` — follow whatever the user
-directs). Touched/added files:
+**Push `6e22e0a` to `origin/main`** (not yet done this session — only
+committed locally) unless the user directs otherwise.
 
-```
- M AI_START_HERE.md
- M application/cli.py
- M project/{backlog,build_history,feature_registry,roadmap}.json
- M static/app_bootstrap.js
- M static/app_core.js
- M templates/index.html
- M tests/test_frontend_module_composition.py
- M tests/test_frontend_rendering_boundary.py
- M tests/test_html_export_placeholder_integrity.py
- M tests/test_html_render_harness.py
- M tests/test_phase0_6_1b_1_2_interactive_project_plan.py
- M tests/test_phase0_7_0_crypto_agility.py
- M utils/config_history.py
- M utils/config_ui.py
- M utils/crypto_posture.py
- M utils/html_export.py
-?? console/               (new package)
-?? requirements-console.txt
-?? static/console_actions.js
-?? templates/console.html
-?? tests/test_con1_operator_console_read_only.py
-```
+Then, for the `CON.x` track specifically, two independent next steps —
+neither blocks the other:
 
-After that, independent options for the next session:
+- **Close `CON.1`: the human real-browser open (cheap, non-blocking).**
+  Render the `tests/fixtures/uitest` topology-matrix bundle behind a live
+  `main.py --console` process (same throwaway-fixture pattern
+  `scripts/render_uitest.py` / the frontend split's own closure session
+  used) and drive it in an actual browser through all seven modules,
+  watching for console errors, to move `CON.1` from AUTOMATED_VALIDATED to
+  `DONE`. Concretely: point `SECURITYEXPERT_RUNTIME_ROOT` at a scratch dir
+  seeded with the uitest fixture's `output/unified.json` + `data/state/*`
+  (see `scripts/render_uitest.py`'s `render()` for the exact seeding), run
+  `py -B main.py --console`, open the printed `http://127.0.0.1:<port>/#t=...`
+  URL, click through every nav tab, confirm zero console errors, then record
+  the closure the same way `docs/history/phase/CODEBASE_MODULARIZATION_FRONTEND.md`'s
+  follow-up was recorded (`project/backlog.json` note, `CURRENT_STATE.md`,
+  this file). Alternatively, `py -m pip install -r requirements-dev.txt &&
+  playwright install chromium` would let `tests/test_con1_operator_console_read_only.py`'s
+  own AC-1 Playwright test do this automatically instead of manually.
+- **Start `CON.2`** (job engine + `read`-class actions,
+  `docs/history/phase/CON_2_CONSOLE_JOB_ENGINE_READ_ACTIONS.md`) — blocked
+  on `CON.1` (now clear, AUTOMATED_VALIDATED is sufficient per that
+  contract's own "Blocked on" column) and on `C-D3`, the one remaining open
+  product-owner decision in its path: add `Provenance.CONSOLE = "console"`
+  to the provenance vocabulary, or reuse `"manual"` for UI-triggered runs.
+  Recommendation already on file in `project/roadmap.json` (`open_decisions`,
+  id `C-D3`): **add `"console"`** — a UI-triggered device action must be
+  distinguishable from a CLI one in every manifest and audit record.
+  Whoever picks this up next should surface that question to the product
+  owner first (same `AskUserQuestion` pattern this session used for
+  `C-D1`/`C-D2`), then read the `CON.2` contract's own implementation plan.
 
-- **`CON.1` real-browser open** (cheap, non-blocking): render the uitest
-  fixture behind a live `--console` process and drive it in an actual
-  browser (same pattern the frontend split used) to move `CON.1` from
-  AUTOMATED_VALIDATED to `DONE`. AC-1's Playwright test in
-  `tests/test_con1_operator_console_read_only.py` skips cleanly in this
-  sandbox (Chromium binary not downloaded); `py -m pip install -r
-  requirements-dev.txt && playwright install chromium` would let it run for
-  real instead.
-- **`CON.2`** (job engine + `read`-class actions) — blocked on `CON.1`
-  (now clear) and `C-D3` (product-owner: `Provenance.CONSOLE` vocabulary,
-  recommendation already on file in `project/roadmap.json`).
+Other independent, unrelated options (unchanged from before this session):
+
 - `OP.0`/`OP.1` — design-frozen, write-free, buildable now.
 - `RB.3b` — blocked on the external watched real-device R81.10/R81.20 run
   (hardware-gated, not engineering).
@@ -173,8 +170,8 @@ final gate run — neither is new to this session).
 
 ## 6. Continue or fresh chat
 
-**Either works**, but commit/PR the uncommitted changes first (§3) before
-starting new work — nothing else is mid-flight.
+**Either works.** `6e22e0a` is committed; only the push to `origin/main` and
+§3's `CON.x` follow-ups remain, and nothing is mid-flight.
 
 ## 7. main.py / UI effect
 
