@@ -114,6 +114,8 @@ class HaUnit:
     vendor: str
     members: list[str] = field(default_factory=list)
     cluster_mode: str = "unknown"
+    display_name: str | None = None
+    parent_id: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -122,6 +124,8 @@ class HaUnit:
             "vendor": self.vendor,
             "members": list(self.members),
             "cluster_mode": self.cluster_mode,
+            "display_name": self.display_name,
+            "parent_id": self.parent_id,
         }
 
 
@@ -283,12 +287,49 @@ def _verdict_for(unit: HaUnit, checks: Sequence[Mapping[str, Any]]) -> tuple[str
     return VERDICT_INSUFFICIENT, "stop_conditions_not_fully_evaluable"
 
 
+def _row_is_vsx(row: Mapping[str, Any], source: str) -> bool:
+    """True when this physical-host row participates in VSX -- either it came
+    from `vsx.json` directly, or a `cp.json` row carries the CP inventory's own
+    VSX flag (`checkpoint/cp_runner.py`'s `vsx_cluster_member`/legacy
+    `vs_cluster_member`). Used only to pick the presentation `unit_type`
+    (`cp_vsx_host` vs `cp_clusterxl_cluster`) -- it never affects grouping
+    identity, which is `cluster_topology.group_id` either way."""
+    if source == "vsx":
+        return True
+    for key in ("vsx_cluster_member", "vs_cluster_member"):
+        if str(row.get(key) or "").strip().lower() in {"true", "yes", "1"}:
+            return True
+    return False
+
+
 def _derive_cp_units(
     rows: Sequence[Mapping[str, Any]],
     cp_ha_runtime: Mapping[str, Mapping[str, Any]],
 ) -> list[HaUnit]:
+    """Assemble CP failover units, cluster-centric (real-env finding, OP.0a
+    identity/topology defect).
+
+    Canonical grouping identity is `cluster_topology.group_id` -- the stable,
+    role-independent digest `checkpoint/cp_runner.py::enrich_cluster_topology`
+    already attaches to both plain ClusterXL members and VSX physical hosts
+    that run classic ClusterXL underneath (the standard VSX topology; no VSLS
+    assumption is made or needed). The legacy flat `cluster` field is a
+    fallback only, for fixtures/history predating that nested shape -- it is
+    never primary once nested topology exists. `cluster_topology.display_name`
+    is presentation only and never decides grouping.
+
+    A VSX Virtual System is always its own unit and never inherits its
+    physical host's verdict (correctness rule 7) -- but it carries `parent_id`
+    pointing at its resolved physical cluster/host unit, so the UI can present
+    it as subordinate to that physical context without changing how its own
+    verdict is computed.
+    """
     units: list[HaUnit] = []
     clusters: dict[str, list[str]] = {}
+    cluster_display_names: dict[str, str] = {}
+    cluster_is_vsx: dict[str, bool] = {}
+    physical_unit_by_device: dict[str, str] = {}
+    vs_rows: list[tuple[str, str]] = []  # (entity_id, physical device)
 
     for row in rows:
         source = str(row.get("source") or "").strip().lower()
@@ -298,46 +339,68 @@ def _derive_cp_units(
         if not entity_id:
             continue
         vs_id = str(row.get("vs_id") or "").strip()
+        device = str(row.get("device") or "").strip()
 
         # A VSX virtual system is always its own unit and never joins its
-        # host's cluster grouping (correctness rule 7).
+        # host's cluster grouping (correctness rule 7) -- deferred until the
+        # physical-grouping pass below resolves a parent_id for it.
         if source == "vsx" and vs_id:
-            units.append(HaUnit(
-                unit_id=entity_id, unit_type=_UNIT_CP_VSX_VS, vendor="checkpoint",
-                members=[entity_id],
-                cluster_mode=str((cp_ha_runtime.get(entity_id) or {}).get("ha_cluster_mode") or "unknown"),
-            ))
+            vs_rows.append((entity_id, device))
             continue
 
-        cluster = str(row.get("cluster") or "").strip()
-        if cluster:
-            clusters.setdefault(cluster, [])
-            if entity_id not in clusters[cluster]:
-                clusters[cluster].append(entity_id)
-        elif source == "vsx":
+        is_vsx = _row_is_vsx(row, source)
+        topology = row.get("cluster_topology")
+        topology = topology if isinstance(topology, Mapping) else {}
+        group_id = str(topology.get("group_id") or "").strip()
+        display_name = str(topology.get("display_name") or "").strip()
+        legacy_cluster = str(row.get("cluster") or "").strip()
+        cluster_key = group_id or legacy_cluster
+
+        if cluster_key:
+            clusters.setdefault(cluster_key, [])
+            if entity_id not in clusters[cluster_key]:
+                clusters[cluster_key].append(entity_id)
+            cluster_is_vsx[cluster_key] = cluster_is_vsx.get(cluster_key, False) or is_vsx
+            if display_name and cluster_key not in cluster_display_names:
+                cluster_display_names[cluster_key] = display_name
+        elif is_vsx:
             units.append(HaUnit(
                 unit_id=entity_id, unit_type=_UNIT_CP_VSX_HOST, vendor="checkpoint",
                 members=[entity_id],
                 cluster_mode=str((cp_ha_runtime.get(entity_id) or {}).get("ha_cluster_mode") or "unknown"),
             ))
-        # A standalone CP gateway with no cluster is not an HA unit at all and
-        # is omitted rather than reported as a broken one.
+            physical_unit_by_device[device] = entity_id
+        # A standalone CP gateway with no cluster identity is not an HA unit
+        # at all and is omitted rather than reported as a broken one.
 
-    for cluster_name, members in clusters.items():
+    for cluster_key, members in clusters.items():
         modes = {
             str((cp_ha_runtime.get(m) or {}).get("ha_cluster_mode") or "").strip()
             for m in members
         }
         modes.discard("")
         modes.discard("unknown")
+        unit_type = _UNIT_CP_VSX_HOST if cluster_is_vsx.get(cluster_key) else _UNIT_CP_CLUSTER
         units.append(HaUnit(
-            unit_id=cluster_name,
-            unit_type=_UNIT_CP_CLUSTER,
+            unit_id=cluster_key,
+            unit_type=unit_type,
             vendor="checkpoint",
             members=sorted(members),
+            display_name=cluster_display_names.get(cluster_key),
             # Members disagreeing on the mode is itself unresolved evidence.
             cluster_mode=modes.pop() if len(modes) == 1 else "unknown",
         ))
+        for member_device in members:
+            physical_unit_by_device.setdefault(member_device, cluster_key)
+
+    for entity_id, device in vs_rows:
+        units.append(HaUnit(
+            unit_id=entity_id, unit_type=_UNIT_CP_VSX_VS, vendor="checkpoint",
+            members=[entity_id],
+            parent_id=physical_unit_by_device.get(device),
+            cluster_mode=str((cp_ha_runtime.get(entity_id) or {}).get("ha_cluster_mode") or "unknown"),
+        ))
+
     return units
 
 

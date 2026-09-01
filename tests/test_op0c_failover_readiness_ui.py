@@ -230,3 +230,61 @@ def test_failover_readiness_data_key_present_in_report_payloads():
 def test_check_status_tones_never_map_insufficient_or_fail_to_success():
     assert CHECK_STATUS_TONES["FAIL"] != "success"
     assert CHECK_STATUS_TONES["INSUFFICIENT_EVIDENCE"] != "success"
+
+
+# --- cluster-centric identity passthrough (2026-09-02 real-env correction) --
+
+def test_payload_carries_cluster_topology_display_name_and_parent_id():
+    """The UI payload passes units through verbatim -- prove the new
+    cluster-centric fields (real pipeline shape) reach it unchanged."""
+    rows = [
+        {"source": "cp", "device": "FW-1", "cluster_topology": {"group_id": "grp-1", "display_name": "FW-CLS"},
+         "inventory_status": {"data_state": "live"}},
+        {"source": "cp", "device": "FW-2", "cluster_topology": {"group_id": "grp-1", "display_name": "FW-CLS"},
+         "inventory_status": {"data_state": "live"}},
+    ]
+    payload = build_failover_readiness_payload(rows)
+    unit = next(u for u in payload["units"] if u["unit_id"] == "grp-1")
+    assert unit["display_name"] == "FW-CLS"
+    assert unit["parent_id"] is None
+    assert sorted(unit["members"]) == ["FW-1", "FW-2"]
+
+
+def test_payload_links_vsx_virtual_system_to_its_physical_parent():
+    rows = [
+        {"source": "vsx", "device": "VSX-1", "cluster_topology": {"group_id": "grp-vsx", "display_name": "VSX-CLS"},
+         "inventory_status": {"data_state": "live"}},
+        {"source": "vsx", "device": "VSX-2", "cluster_topology": {"group_id": "grp-vsx", "display_name": "VSX-CLS"},
+         "inventory_status": {"data_state": "live"}},
+        {"source": "vsx", "device": "VSX-1", "vs_id": "10", "inventory_status": {"data_state": "live"}},
+    ]
+    payload = build_failover_readiness_payload(rows)
+    parent = next(u for u in payload["units"] if u["unit_id"] == "grp-vsx")
+    child = next(u for u in payload["units"] if u["unit_id"] == "VSX-1__vsid_10")
+    assert parent["parent_id"] is None
+    assert child["parent_id"] == parent["unit_id"]
+    assert child["unit_type"] == "cp_vsx_virtual_system"
+
+
+def test_no_top_level_unit_falsely_represents_a_vsx_virtual_system_as_independent_gateway():
+    """A VS's parent_id must always name a real unit_id in the same payload,
+    or be None -- never a dangling/invented reference."""
+    rows = [
+        {"source": "vsx", "device": "VSX-1", "cluster_topology": {"group_id": "grp-vsx"},
+         "inventory_status": {"data_state": "live"}},
+        {"source": "vsx", "device": "VSX-1", "vs_id": "10", "inventory_status": {"data_state": "live"}},
+    ]
+    payload = build_failover_readiness_payload(rows)
+    unit_ids = {u["unit_id"] for u in payload["units"]}
+    for unit in payload["units"]:
+        if unit["parent_id"] is not None:
+            assert unit["parent_id"] in unit_ids
+
+
+def test_failover_js_renders_children_nested_never_as_top_level_rows():
+    """Static-source guard: the JS must filter by parent_id before building
+    the top-level row set, and must not re-flatten children back in."""
+    source = (ROOT / "static" / "failover_readiness_ui.js").read_text(encoding="utf-8")
+    assert "parent_id" in source
+    assert "filter(unit => !unit.parent_id)" in source
+    assert "childrenByParent" in source
