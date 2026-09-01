@@ -3819,3 +3819,50 @@ html[data-theme="light"] {
         grid-template-columns: 1fr;
     }
 }
+
+/* CON.2 — console job engine action surface */
+.console-job-types {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 14px;
+}
+
+.job-type-button {
+    border: 1px solid var(--line);
+    border-radius: var(--radius-md);
+    background: var(--surface-2);
+    color: var(--text);
+    padding: 8px 14px;
+    font-size: 12px;
+    font-weight: 640;
+    cursor: pointer;
+}
+
+.job-type-button:hover:not(:disabled) {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+.job-type-button:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+.job-type-button.blocked {
+    border-style: dashed;
+    color: var(--muted);
+}
+
+.console-jobs-table table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.console-jobs-table th,
+.console-jobs-table td {
+    text-align: left;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--line);
+    font-size: 12px;
+}

@@ -1328,7 +1328,7 @@
     {
       "id": "operator_console_job_engine",
       "title": "Operator Console - job engine and read-class actions",
-      "status": "planned",
+      "status": "done",
       "introduced": "CON.2",
       "weight": 8,
       "summary": "Durable job records plus a closed registry of read-class actions (re-collect an inventory plane, RB.3a attestation, report rebuild), executed through the same main() path the scheduler uses.",
@@ -1337,25 +1337,25 @@
         {
           "id": "closed_registry",
           "label": "Closed job-type registry; browser sends intent, never a command",
-          "state": "pending",
+          "state": "done",
           "weight": 1
         },
         {
           "id": "durable_jobs",
           "label": "Durable job records on the evidence backend; terminal state on crash",
-          "state": "pending",
+          "state": "done",
           "weight": 1
         },
         {
           "id": "single_orchestration_path",
           "label": "Every execution goes through main(); no second orchestration path",
-          "state": "pending",
+          "state": "done",
           "weight": 1
         },
         {
           "id": "console_provenance",
           "label": "provenance='console' in every manifest and job record",
-          "state": "pending",
+          "state": "done",
           "weight": 1
         }
       ]

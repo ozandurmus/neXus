@@ -65,6 +65,14 @@ def _redact(msg):
     return text
 
 
+def redact_sensitive_text(text):
+    """Public wrapper over the redaction registry (CON.2 C2-4) for callers
+    outside the logger that need to bound a string against the same
+    registered-sensitive-value set before persisting it (e.g. a console job
+    record's ``error_summary``)."""
+    return _redact(text)
+
+
 ###############################################
 # CORE LOGGER
 ###############################################

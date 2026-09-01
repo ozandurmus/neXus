@@ -73,10 +73,17 @@ def console_client(uitest_runtime_paths):
 # --- AC-2: no route with a method other than GET/HEAD ----------------------
 
 def test_ac2_no_route_exposes_a_mutating_method(console_client):
+    """CON.2 (docs/history/phase/CON_2_CONSOLE_JOB_ENGINE_READ_ACTIONS.md,
+    AC-2) deliberately adds exactly one mutating route, ``POST /api/jobs``
+    — every other route stays GET/HEAD only, and CON.2 job creation is
+    itself gated to read-class job types only (C2-6)."""
     client, _ = console_client
     for route in client.app.routes:
         methods = getattr(route, "methods", None)
         if methods is None:
+            continue
+        if route.path == "/api/jobs" and "POST" in methods:
+            assert methods <= {"GET", "HEAD", "POST"}, f"{route.path} exposes {methods}"
             continue
         assert methods <= {"GET", "HEAD"}, f"{route.path} exposes {methods}"
 

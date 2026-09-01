@@ -2,15 +2,35 @@
 
 ## Status
 
-**CONTRACT FROZEN 2026-08-31**, alongside `docs/design/OPERATOR_CONSOLE_ARCHITECTURE.md`
-(`CON.0`) — the architecture this binds to and does not restate, in particular
-§4 (the intent boundary) and §5 (the reuse map). No source file changed by the
-session that froze it.
+**AUTOMATED_VALIDATED 2026-09-01** (implemented the same session `C-D3` was
+resolved). Contract frozen 2026-08-31 alongside
+`docs/design/OPERATOR_CONSOLE_ARCHITECTURE.md` (`CON.0`) — the architecture
+this binds to and does not restate, in particular §4 (the intent boundary)
+and §5 (the reuse map).
 
 `project/backlog.json` `operator_console` (P1), roadmap track `CON.x`.
+`project/build_history.json` entry `operator_console_job_engine`.
 
-**Preconditions:** `CON.1` AUTOMATED_VALIDATED; decision `C-D3` resolved
-(`Provenance.CONSOLE`).
+**Preconditions:** `CON.1` DONE; decision `C-D3` resolved 2026-09-01 —
+product owner chose **add `'console'`** per the on-file recommendation
+(`project/roadmap.json` `open_decisions`).
+
+**Implementation summary:** every design decision below (`C2-1`..`C2-10`)
+shipped as specified, with one scope note — `C2-2`'s two explicit read modes
+(`recovery-attest`, `render-only`) are not scheduler workflows and are built
+by `console/runner.py::_build_argv` directly from a fixed template rather
+than through `workflow_argv()`, exactly as `C2-1`'s registry table already
+documented. The `C2-3` provenance consumer audit found every consumer
+(`Job.to_manifest_dict`, `RunContext.set_job_metadata`, both coordinator
+backends' free-text provenance column, the discovery/coordinator UI payload)
+already stores/echoes `provenance` as an unvalidated free string — additive,
+no schema or consumer change required. AC-1 through AC-11 all pass; full
+suite 933 passed / 27 skipped / 2 failed (pre-existing, unrelated), +26 from
+`tests/test_con2_console_job_engine.py`. Real-environment validation (a
+watched console-triggered `read`-class job reaching a real device) remains
+owed before this phase advances past AUTOMATED_VALIDATED — hardware-gated,
+not engineering. Full detail: `project/build_history.json` entry
+`operator_console_job_engine`.
 
 ## Objective
 

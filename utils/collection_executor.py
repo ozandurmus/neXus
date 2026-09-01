@@ -14,8 +14,9 @@ Safety contracts
   cannot be increased without explicit real-environment evidence.
 * Lock conflicts are coalesced onto the active job; no second device
   connection is opened.
-* Job provenance is ``manual`` or ``scheduled``.  ``event`` is a reserved
-  schema value only; no webhook/event trigger is implemented here.
+* Job provenance is ``manual``, ``scheduled`` or ``console`` (CON.2).
+  ``event`` is a reserved schema value only; no webhook/event trigger is
+  implemented here.
 * Job metadata written to the RunContext manifest must not contain
   secrets, raw target addresses or transport transcripts.
 * The scheduler is disabled by default (no RuntimeRoot policy = no jobs).
@@ -189,6 +190,34 @@ def select_coordinator_backend(data_root: Path | None = None) -> CoordinatorBack
     support_key_file = (Path(data_root) / ".support_hmac.key") if data_root is not None else None
     secret = _get_support_key(support_key_file) if support_key_file is not None else _get_support_key()
     return PostgresCoordinatorBackend(dsn, secret)
+
+
+# ---------------------------------------------------------------------------
+# Shared argv construction (CON.2 C2-2)
+# ---------------------------------------------------------------------------
+
+def workflow_argv(workflow: str, runtime_root: Path, *, targets: "tuple[str, ...] | list[str]" = ()) -> list[str]:
+    """Build the ``main.py`` argv for one workflow name.
+
+    The single argv construction path shared by the scheduler
+    (``application.workflows.maintenance._scheduler_workflow_argv``) and the
+    console job runner (``console/runner.py``) — CON.2 contract C2-2. If the
+    scheduler and the console ever built argv differently, one of them would
+    eventually build it wrongly. No string originating from an HTTP request
+    is ever placed into argv here except an already-validated ``entity_id``
+    (C2-2's one exception).
+    """
+    normalized = "cp" if workflow == "checkpoint" else workflow
+    base = ["--runtime-root", str(runtime_root)]
+    if normalized == "cp-config":
+        return [*base, "--cp-config-collect", "--cp-config-stage", "all"]
+    if normalized.startswith("recovery-"):
+        vendor = {"recovery-pan": "panorama", "recovery-cp": "checkpoint"}[normalized]
+        argv = [*base, "--recovery-collect", "--recovery-vendor", vendor]
+        if targets:
+            argv += ["--recovery-gateways", ",".join(targets)]
+        return argv
+    return [*base, "--only", normalized]
 
 
 # ---------------------------------------------------------------------------

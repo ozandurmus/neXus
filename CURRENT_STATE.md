@@ -9,8 +9,9 @@ timeline.
   sign-off + steps 2–7 on `main`, real-environment run owed;
   `frontend_rendering_boundary` implemented; `codebase_modularization`
   (frontend + backend, including the real-browser follow-up) `DONE`; `CON.1`
-  (read-only console, including its own real-browser follow-up) `DONE` — see
-  "Active build" below)
+  (read-only console, including its own real-browser follow-up) `DONE`;
+  `CON.2` (job engine + `read`-class actions) `AUTOMATED_VALIDATED`,
+  real-environment run owed — see "Active build" below)
 - **Product baseline:** `0.7.7 — Compliance trend retro-fill (PAN baseline
   reconstruction)` — AUTOMATED_VALIDATED (0.7.x VERIFY track)
 - **Previous:** `DEV.3.1 — Linux worker image + Compose` — AUTOMATED_VALIDATED
@@ -76,7 +77,7 @@ sessions:
 | Phase | Contract (`docs/history/phase/`) | Blocked on |
 | --- | --- | --- |
 | `CON.1` read-only console | `CON_1_OPERATOR_CONSOLE_READ_ONLY.md` | `codebase_modularization` (frontend) — **DONE**; `C-D1`, `C-D2` — **approved 2026-09-01, both consumed as-is**. `CON.1` itself: **DONE 2026-09-01** (implemented, then closed the same session by a human real-browser open — see below). |
-| `CON.2` job engine + `read` actions | `CON_2_CONSOLE_JOB_ENGINE_READ_ACTIONS.md` | `CON.1`; `C-D3` |
+| `CON.2` job engine + `read` actions | `CON_2_CONSOLE_JOB_ENGINE_READ_ACTIONS.md` | `CON.1` — **DONE**; `C-D3` — **resolved 2026-09-01 (add `'console'`)**. `CON.2` itself: **AUTOMATED_VALIDATED 2026-09-01**, real-environment run owed — see below. |
 | `CON.3` `operational-write` actions | `CON_3_CONSOLE_OPERATIONAL_WRITE_ACTIONS.md` | `CON.2`; **`RB.3b` REAL_ENV_VALIDATED**; `C-D4`, `C-D6` |
 | `CON.4` Recovery module (`RB.5`) | `CON_4_CONSOLE_RECOVERY_MODULE.md` | `CON.2` |
 | `CON.5` scheduler surface | `CON_5_CONSOLE_SCHEDULER_SURFACE.md` | `CON.2`; `C-D7` |
@@ -87,7 +88,50 @@ product-owner / security calls, not engineering work. `C-D1`/`C-D2` were
 answered 2026-09-01 (both per their documented recommendation: optional
 `fastapi`+`uvicorn` dependency; cookieless per-launch bearer token in the URL
 fragment), which unblocked and completed `CON.1` the same session — see below.
-`C-D3`…`C-D8` remain open, blocking `CON.2` onward.
+`C-D3` was answered the same day (add `Provenance.CONSOLE = "console"`, per
+its documented recommendation), which unblocked and shipped `CON.2` the same
+session — see below. `C-D4`…`C-D8` remain open, blocking `CON.3` onward.
+
+**`CON.2` (job engine + `read`-class actions) — AUTOMATED_VALIDATED
+2026-09-01 (`Sonnet 5, normal`).** `docs/history/phase/CON_2_CONSOLE_JOB_ENGINE_READ_ACTIONS.md`.
+`utils/collection_executor.py` gained `workflow_argv()` (C2-2), promoted out
+of `application/workflows/maintenance.py`'s `_scheduler_workflow_argv` (now a
+one-line wrapper) so the scheduler and the console share one argv
+construction path. `utils/coordinator_backend.py` gained
+`Provenance.CONSOLE = "console"` (C2-3); the required consumer audit found
+every consumer already stores/echoes `provenance` as an unvalidated free
+string (`Job`, `RunContext`, both coordinator backends' Postgres `TEXT`
+column, the discovery/coordinator UI payload) — additive, no schema change.
+`utils/evidence_backend.py` gained a sixth storage concern,
+`ConsoleJobBackend` (filesystem default + opt-in PostgreSQL, same shape as
+`DEV.3.3`'s five), for durable job records under
+`data_root/state/console_jobs`. New `console/registry.py` (`JOB_REGISTRY` —
+seven closed job types, `cp_gaia_backup` declared but refused per C2-6),
+`console/jobs.py` (`ConsoleJobStore`: C2-9 idempotency, C2-5 crash recovery,
+forbidden fields excluded by construction), `console/runner.py`
+(single-worker FIFO executor, C2-7 — calls `main.main()` only, AC-2, never a
+collector or vendor module). `console/app.py` gained `POST /api/jobs`,
+`GET /api/jobs`, `GET /api/jobs/{job_id}`, `GET /api/jobs/{job_id}/events`
+(SSE, C2-10), `GET /api/job-types`; `create_app()`'s new `job_store`/`runner`
+params are optional (auto-constructed) so `CON.1`'s existing route-table test
+and any read-only-only caller keep working unmodified. `application/cli.py`'s
+`--console` branch now also builds `ctx.services` before `run_console`, held
+for the console process's lifetime so admission state stays consistent
+across every job — the same continuity the scheduler already has across its
+own dispatch loop. `static/console_actions.js` gained the action surface
+(job-type buttons — an `operational-write` type always renders `BLOCKED`,
+C2-6; a recent-jobs table; a manual SSE reader via `fetch()`+`ReadableStream`,
+since native `EventSource` cannot carry the `Authorization` bearer header
+CON.1's auth model requires) in `templates/console.html`'s Discovery module.
+New `tests/test_con2_console_job_engine.py` (AC-1…AC-11, 26 tests, every test
+patches `main.main` so no test contacts a device); `CON.1`'s own AC-2
+route-table test updated in place to allow the one deliberate mutating route
+this phase adds (`POST /api/jobs`). Full suite **933 / 27 / 2** vs pre-build
+baseline **907 / 27 / 2** — same two pre-existing pollution failures, zero
+regressions, `+26 passed`. Privacy gate PASS/0. **Owed before `DONE`:** a
+watched real-environment run where a console-triggered `read`-class job
+reaches a real device and produces the same artifact an equivalent CLI run
+would — hardware-gated, not engineering.
 
 **`CON.1` (operator console, read-only surface) — DONE
 2026-09-01 (`Sonnet 5, normal`).** `docs/history/phase/CON_1_OPERATOR_CONSOLE_READ_ONLY.md`.
@@ -604,7 +648,11 @@ full regression run.)
 ## Automated test baseline
 
 ```
-896 passed / 26 skipped / 2 failed (2026-09-01, after codebase_modularization
+933 passed / 27 skipped / 2 failed (2026-09-01, after CON.2; +26
+tests/test_con2_console_job_engine.py, zero new failures)
+Prior: 907 passed / 27 skipped / 2 failed (2026-09-01, after CON.1 including
+its real-browser close; +11 tests/test_con1_operator_console_read_only.py)
+Prior: 896 passed / 26 skipped / 2 failed (2026-09-01, after codebase_modularization
 backend; +9 tests/test_application_package.py, zero new failures)
 Prior: 804 passed / 20 skipped / 2 failed (2026-08-31, after RB.3a, no live
 PostgreSQL; +33 RB.3a tests, zero new failures)

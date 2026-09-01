@@ -454,7 +454,13 @@ def dispatch(args, parser, *, runtime_services=None, provenance="manual", admiss
 
     if args.console:
         from console.server import run_console
-        run_console(runtime_paths=ctx.runtime_paths, port=args.console_port)
+        # CON.2: the console needs the same RuntimeCollectionServices a
+        # collection-mode invocation builds, held for the process lifetime
+        # so job admission state is consistent across every console job.
+        ctx.services = services.build_collection_services(
+            args, ctx.runtime_paths, runtime_services, parser
+        )
+        run_console(runtime_paths=ctx.runtime_paths, port=args.console_port, services=ctx.services)
         return None
 
     # --- Phase D: single-purpose modes -----------------------------------

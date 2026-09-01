@@ -537,7 +537,9 @@
     {
       "id": "C-D3",
       "area": "CON.x Operator Console",
-      "status": "open",
+      "status": "decided",
+      "decision": "Add 'console'",
+      "decided_on": "2026-09-01",
       "question": "Provenance vocabulary: add Provenance.CONSOLE = 'console', or reuse 'manual' for UI-triggered runs?",
       "options": [
         "Add 'console'",
