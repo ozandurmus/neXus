@@ -99,10 +99,13 @@ diff before/after: only 8 header comments + a 5-line relocation note added).
 Render harness (bun) green on the uitest and empty-state renders; privacy gate
 PASS/0. Full suite **887 / 26 / 2** vs `main` **882 / 27 / 2** — same two
 pre-existing pollution failures, zero regressions. `docs/history/phase/CODEBASE_MODULARIZATION_FRONTEND.md`.
-A human interactive real-browser open of this split is still owed (this
-sandbox has no display) but is a cheap, non-blocking follow-up — it did not
-keep the backlog id open: both halves of `codebase_modularization` are `done`
-per the backend half's own entry below.
+The human interactive real-browser open of this split is now **CLOSED
+2026-09-01**: the `tests/fixtures/uitest` topology-matrix bundle was rendered
+(`scripts/render_uitest.py`) and driven live in a real browser through all
+seven modules (Overview, Network Inventory, Configuration, Compliance,
+Discovery, Exclusions, Project Plan) — zero console errors/warnings, every
+module populated correctly with real fixture data. Both halves of
+`codebase_modularization` are `done` per the backend half's own entry below.
 
 **`codebase_modularization` (backend half) — IMPLEMENTED 2026-09-01
 (`Sonnet 5, normal`), same day as the contract freeze.**
