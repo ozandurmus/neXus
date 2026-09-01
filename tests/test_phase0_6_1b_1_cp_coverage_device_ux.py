@@ -15,7 +15,9 @@ ROOT = Path(__file__).resolve().parents[1]
 APP = _composed_report_script()
 CSS = (ROOT / "static" / "style.css").read_text(encoding="utf-8")
 TEMPLATE = (ROOT / "templates" / "index.html").read_text(encoding="utf-8")
-MAIN = (ROOT / "main.py").read_text(encoding="utf-8")
+# codebase_modularization (backend): --cp-config-collect's body moved from
+# main.py into application/workflows/checkpoint.py.
+CHECKPOINT_WF = (ROOT / "application" / "workflows" / "checkpoint.py").read_text(encoding="utf-8")
 
 
 def _result(stdout="", *, success=True, stderr="", error_class=None, timeout=False):
@@ -244,7 +246,7 @@ def test_device_ux_source_contract_has_vendor_fleets_vsx_grouping_and_responsive
     assert ".config-workspace.sidebar-open .config-sidebar" in CSS
     assert "@media (max-width: 680px)" in CSS
     assert "grid-template-columns: 1fr" in CSS
-    assert "0.6.1B.1 SAFE COLLECTION SUMMARY" in MAIN
-    assert "Operational failures:" in MAIN
-    assert "Capability gaps:" in MAIN
-    assert "Quantum Spark/Embedded:" in MAIN
+    assert "0.6.1B.1 SAFE COLLECTION SUMMARY" in CHECKPOINT_WF
+    assert "Operational failures:" in CHECKPOINT_WF
+    assert "Capability gaps:" in CHECKPOINT_WF
+    assert "Quantum Spark/Embedded:" in CHECKPOINT_WF

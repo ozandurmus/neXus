@@ -13,6 +13,12 @@ pytestmark = pytest.mark.configuration
 
 ROOT = Path(__file__).resolve().parents[1]
 MAIN = (ROOT / "main.py").read_text(encoding="utf-8")
+# codebase_modularization (backend): the mode bodies moved out of main.py into
+# the application/ package. Source-level contract checks now read the module
+# that owns the block.
+CLI = (ROOT / "application" / "cli.py").read_text(encoding="utf-8")
+CHECKPOINT_WF = (ROOT / "application" / "workflows" / "checkpoint.py").read_text(encoding="utf-8")
+MAINTENANCE_WF = (ROOT / "application" / "workflows" / "maintenance.py").read_text(encoding="utf-8")
 CP_SCRIPT = (ROOT / "checkpoint" / "scripts" / "cp_inventory.sh").read_text(encoding="utf-8")
 APP = _composed_report_script()
 
@@ -63,31 +69,35 @@ def test_pan_target_ha_runtime_parser_handles_ha_disabled_without_inventing_role
 
 
 def test_workflow_modes_are_explicit_and_render_only_precedes_vendor_imports():
-    assert '"--render-only"' in MAIN
-    assert 'args.only == "pan-config"' in MAIN
-    assert 'args.only == "cp"' in MAIN
-    assert 'args.only == "vsx"' in MAIN
-    assert '_workflow_context("checkpoint", run_id=run_ctx.run_id)' in MAIN
-    assert "MIXED-CYCLE DEVELOPMENT VIEW / NOT A CHECKPOINT" in MAIN
-    assert MAIN.index("if args.render_only:") < MAIN.index("from checkpoint.cp_runner import run_cp")
-    assert "NO NETWORK / NO CREDENTIALS / NOT A CHECKPOINT" in MAIN
+    assert '"--render-only"' in CLI
+    assert 'args.only == "pan-config"' in CHECKPOINT_WF
+    assert 'args.only == "cp"' in CHECKPOINT_WF
+    assert 'args.only == "vsx"' in CHECKPOINT_WF
+    assert '_workflow_context("checkpoint", run_id=run_ctx.run_id)' in CHECKPOINT_WF
+    assert "MIXED-CYCLE DEVELOPMENT VIEW / NOT A CHECKPOINT" in CHECKPOINT_WF
+    # render-only is dispatched before the checkpoint workflow (which owns the
+    # vendor imports) is ever entered.
+    assert CLI.index("if args.render_only:") < CLI.index("integration_checkpoint(ctx)")
+    assert "from checkpoint.cp_runner import run_cp" not in CLI
+    assert "NO NETWORK / NO CREDENTIALS / NOT A CHECKPOINT" in MAINTENANCE_WF
 
 
 def test_full_run_keeps_cp_stage_cooldown_guardrail_contract():
-    assert "SECURITYEXPERT_CP_STAGE_COOLDOWN_SECONDS" in MAIN
-    assert '_cp_stage_cooldown("vsx_collect")' in MAIN
-    assert '_cp_stage_cooldown("cp_config")' in MAIN
+    assert "SECURITYEXPERT_CP_STAGE_COOLDOWN_SECONDS" in CHECKPOINT_WF
+    assert '_cp_stage_cooldown("vsx_collect")' in CHECKPOINT_WF
+    assert '_cp_stage_cooldown("cp_config")' in CHECKPOINT_WF
 
 
 def test_cp_stage_cooldown_default_does_not_sleep(monkeypatch):
     import main as main_module
+    from application.workflows import checkpoint as _cp_wf
 
     sleeps = []
     logs = []
 
     monkeypatch.delenv("SECURITYEXPERT_CP_STAGE_COOLDOWN_SECONDS", raising=False)
     monkeypatch.setattr(main_module.time, "sleep", lambda seconds: sleeps.append(seconds))
-    monkeypatch.setattr(main_module, "info", lambda message: logs.append(message))
+    monkeypatch.setattr(_cp_wf, "info", lambda message: logs.append(message))
 
     main_module._cp_stage_cooldown("vsx_collect")
 
@@ -97,13 +107,14 @@ def test_cp_stage_cooldown_default_does_not_sleep(monkeypatch):
 
 def test_cp_stage_cooldown_env_override_is_bounded_and_sleeps(monkeypatch):
     import main as main_module
+    from application.workflows import checkpoint as _cp_wf
 
     sleeps = []
     logs = []
 
     monkeypatch.setenv("SECURITYEXPERT_CP_STAGE_COOLDOWN_SECONDS", "999")
     monkeypatch.setattr(main_module.time, "sleep", lambda seconds: sleeps.append(seconds))
-    monkeypatch.setattr(main_module, "info", lambda message: logs.append(message))
+    monkeypatch.setattr(_cp_wf, "info", lambda message: logs.append(message))
 
     main_module._cp_stage_cooldown("cp_config")
 
@@ -119,7 +130,7 @@ def test_only_cp_has_explicit_non_vsx_remote_scope_and_full_scope_stays_availabl
     assert "(! vs_cluster_member='true')" in CP_SCRIPT
     assert "(! vsx_netobj='true')" in CP_SCRIPT
     assert "baseline-all-managed-cp" in CP_SCRIPT
-    assert 'run_cp(cfg, exclude_vsx=(args.only == "cp"))' in MAIN
+    assert 'run_cp(cfg, exclude_vsx=(args.only == "cp"))' in CHECKPOINT_WF
 
 
 def test_workflow_context_is_embedded_and_frontend_marks_partial_views():

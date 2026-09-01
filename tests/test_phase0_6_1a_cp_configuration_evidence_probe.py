@@ -67,9 +67,13 @@ def test_target_selection_builds_standalone_cluster_pair_and_vsx_context(tmp_pat
 
 
 def test_main_exposes_cp_config_probe_without_promoting_configuration():
-    main_text = (Path(__file__).resolve().parents[1] / "main.py").read_text(encoding="utf-8")
-    assert '"--cp-config-probe"' in main_text
-    assert "run_checkpoint_config_probe" in main_text
+    # codebase_modularization (backend): the flag definition and the mode body
+    # moved out of main.py into application/cli.py and application/workflows/checkpoint.py.
+    root = Path(__file__).resolve().parents[1]
+    cli_text = (root / "application" / "cli.py").read_text(encoding="utf-8")
+    checkpoint_wf_text = (root / "application" / "workflows" / "checkpoint.py").read_text(encoding="utf-8")
+    assert '"--cp-config-probe"' in cli_text
+    assert "run_checkpoint_config_probe" in checkpoint_wf_text
     module_text = Path(probe.__file__).read_text(encoding="utf-8")
     assert '"configuration_promoted_to_product": False' in module_text
     assert '"raw_configuration_persisted": False' in module_text

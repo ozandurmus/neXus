@@ -12,7 +12,9 @@ ROOT = Path(__file__).resolve().parents[1]
 TEMPLATE = (ROOT / "templates" / "index.html").read_text(encoding="utf-8")
 APP = _composed_report_script()
 CSS = (ROOT / "static" / "style.css").read_text(encoding="utf-8")
-MAIN = (ROOT / "main.py").read_text(encoding="utf-8")
+# codebase_modularization (backend): the integration-checkpoint pipeline moved
+# from main.py into application/workflows/checkpoint.py.
+CHECKPOINT_WF = (ROOT / "application" / "workflows" / "checkpoint.py").read_text(encoding="utf-8")
 HTML_EXPORT = (ROOT / "utils" / "html_export.py").read_text(encoding="utf-8")
 
 
@@ -316,7 +318,7 @@ def test_frontend_separates_current_configuration_from_alignment_and_policy():
 
 
 def test_full_run_passes_current_configuration_result_into_same_html_export():
-    assert "config_result=config_result" in MAIN
+    assert "config_result=config_result" in CHECKPOINT_WF
     assert "build_configuration_ui_payload" in HTML_EXPORT
     assert '"__CONFIG_JSON_PLACEHOLDER__"' in HTML_EXPORT
     assert '"__COMPLIANCE_JSON_PLACEHOLDER__"' in HTML_EXPORT

@@ -10,7 +10,10 @@ pytestmark = pytest.mark.configuration
 
 
 ROOT = Path(__file__).resolve().parents[1]
-MAIN = (ROOT / "main.py").read_text(encoding="utf-8")
+# codebase_modularization (backend): the flag definitions and --cp-config-collect's
+# body moved from main.py into application/cli.py and application/workflows/checkpoint.py.
+CLI = (ROOT / "application" / "cli.py").read_text(encoding="utf-8")
+CHECKPOINT_WF = (ROOT / "application" / "workflows" / "checkpoint.py").read_text(encoding="utf-8")
 APP = _composed_report_script()
 
 
@@ -185,11 +188,11 @@ def test_configuration_ui_merges_pan_and_checkpoint_without_raw_or_hashes(tmp_pa
 
 
 def test_main_and_frontend_expose_061b_without_changing_expert_shell_contract():
-    assert '"--cp-config-collect"' in MAIN
-    assert '"--cp-config-stage"' in MAIN
-    assert '"--cp-config-workers"' in MAIN
-    assert "run_checkpoint_config_collection" in MAIN
-    assert "checkpoint_config_result=checkpoint_config_result" in MAIN
+    assert '"--cp-config-collect"' in CLI
+    assert '"--cp-config-stage"' in CLI
+    assert '"--cp-config-workers"' in CLI
+    assert "run_checkpoint_config_collection" in CHECKPOINT_WF
+    assert "checkpoint_config_result=checkpoint_config_result" in CHECKPOINT_WF
     assert "Expert shell" in Path(collector.__file__).read_text(encoding="utf-8")
     assert "vsenv {context.vs_id}" in Path(collector.__file__).read_text(encoding="utf-8")
     assert "Check Point alignment" in APP

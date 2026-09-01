@@ -5,7 +5,9 @@ pytestmark = pytest.mark.configuration
 
 
 def test_full_run_source_invokes_pan_config_and_preserves_separate_support_bundles():
-    source = Path("main.py").read_text(encoding="utf-8")
+    # codebase_modularization (backend): the integration-checkpoint pipeline
+    # moved from main.py into application/workflows/checkpoint.py.
+    source = Path("application/workflows/checkpoint.py").read_text(encoding="utf-8")
     assert 'args.only == "all" and not args.skip_config' in source
     assert "orchestration_run_id=run_ctx.run_id" in source
     assert "limit=_pan_config_limit_for_mode()" in source
