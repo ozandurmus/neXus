@@ -13,16 +13,31 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from utils.action_taxonomy import LEGACY_COMMAND_CLASS_TO_ACTION_CLASS, ActionClass
+
 
 @dataclass(frozen=True)
 class JobType:
     id: str
     label: str
-    command_class: str            # "read" | "operational-write"
+    command_class: str            # legacy wire/persistence value: "read" | "operational-write"
     workflow: str                 # feeds workflow_argv(), or an explicit read mode name
     target_mode: str              # "none" | "entity_ids"
     vendor: str | None
     requires_confirmation: bool
+
+    @property
+    def action_class(self) -> ActionClass:
+        """The `utils.action_taxonomy` class this job type belongs to.
+
+        ``command_class`` stays the declared field because it is already on the
+        wire and inside every durable job record; this property is the derived,
+        authoritative view. The taxonomy — not a string comparison at a call
+        site — decides whether a class may be submitted, so a future CLASS 2
+        (failover) entry cannot be mistaken for the CLASS 1 recovery write that
+        ``"operational-write"`` has always meant here.
+        """
+        return LEGACY_COMMAND_CLASS_TO_ACTION_CLASS[self.command_class]
 
 
 JOB_REGISTRY: dict[str, JobType] = {

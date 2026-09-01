@@ -16,6 +16,7 @@ import json
 import shutil
 import sys
 import tempfile
+from contextlib import contextmanager
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
@@ -27,6 +28,24 @@ FIXTURE = REPO / "tests" / "fixtures" / "uitest"
 
 def _load(name: str):
     return json.loads((FIXTURE / name).read_text(encoding="utf-8"))
+
+
+@contextmanager
+def _injected_builders(module, **replacements):
+    """Temporarily rebind module-level payload builders, always restoring them.
+
+    Restoring is not cosmetic: this module is imported and called in-process by
+    the test suite, so an unrestored rebind silently changes the behaviour of
+    every subsequent caller in that process.
+    """
+    originals = {name: getattr(module, name) for name in replacements}
+    try:
+        for name, replacement in replacements.items():
+            setattr(module, name, replacement)
+        yield
+    finally:
+        for name, original in originals.items():
+            setattr(module, name, original)
 
 
 def render(out_root: Path, *, profile: bool = False) -> Path:
@@ -49,21 +68,30 @@ def render(out_root: Path, *, profile: bool = False) -> Path:
     # disk, live stores) are out of scope for a UI render check. build_compliance_
     # posture, build_project_plan_payload, the template fill and _script_json all
     # still run for real.
-    html_export.build_configuration_ui_payload = lambda *a, **k: configuration_ui
-    html_export.build_crypto_posture = lambda *a, **k: crypto_ui
-    html_export.build_discovery_capability_payload = lambda *a, **k: discovery_ui
-
+    #
+    # The injection MUST be undone before returning. `render()` is called
+    # in-process by tests/test_frontend_rendering_boundary.py and
+    # tests/test_html_render_harness.py; a bare rebind here leaked into every
+    # later run_html_export() in the same worker and made two unrelated tests
+    # fail against fixture data instead of their own inputs. That was the whole
+    # of the long-standing "order-dependent" pair -- keep the try/finally.
     index_html = out_root / "output" / "index.html"
-    html_export.run_html_export(
-        unified_json=unified_path,
-        output_html=index_html,
-        repository_root=REPO,
-        data_root=data_root,
-        workflow_context={"mode": "uitest", "label": "UI test bundle",
-                          "checkpoint": False, "mixed_cycle": True},
-        record_checkpoint=False,
-        profile=profile,
-    )
+    with _injected_builders(
+        html_export,
+        build_configuration_ui_payload=lambda *a, **k: configuration_ui,
+        build_crypto_posture=lambda *a, **k: crypto_ui,
+        build_discovery_capability_payload=lambda *a, **k: discovery_ui,
+    ):
+        html_export.run_html_export(
+            unified_json=unified_path,
+            output_html=index_html,
+            repository_root=REPO,
+            data_root=data_root,
+            workflow_context={"mode": "uitest", "label": "UI test bundle",
+                              "checkpoint": False, "mixed_cycle": True},
+            record_checkpoint=False,
+            profile=profile,
+        )
     return index_html
 
 

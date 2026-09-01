@@ -200,11 +200,19 @@ def test_ac3_missing_idempotency_key_is_400(console_env):
 
 
 def test_ac3_operational_write_is_409(console_env):
-    # A resolvable entity_id -- 409 must come from the command_class gate
+    # A resolvable entity_id -- 409 must come from the action-class gate
     # (C2-6), not be masked by an unrelated 400 from entity_id validation.
+    #
+    # The refusal code names the class. cp_gaia_backup is a CLASS 1 controlled
+    # recovery write: it is permitted product-wide (the CLI runs it under the
+    # RB.x ledger contracts) but is not console-submittable, which is a
+    # different statement from the old catch-all "operational_write_not_enabled".
+    # A future CLASS 2 failover job must not report the same reason as a backup.
     response = _post_job(console_env, "cp_gaia_backup", targets=["cp-core-01"])
     assert response.status_code == 409
-    assert response.json()["detail"]["error"] == "operational_write_not_enabled"
+    detail = response.json()["detail"]
+    assert detail["error"] == "recovery_write_not_console_submittable"
+    assert detail["action_class"] == "recovery-write"
 
 
 def test_ac3_missing_or_invalid_token_is_401(console_env):
@@ -330,15 +338,34 @@ def test_ac10_events_stream_404_for_unknown_job(console_env):
     assert response.status_code == 404
 
 
-# --- C2-1: registry is closed and declares operational-write as blocked ----
+# --- C2-1: registry is closed and declares non-read classes as blocked -----
 
 def test_c2_1_job_types_endpoint_declares_operational_write_as_blocked(console_env):
     response = console_env.client.get("/api/job-types", headers=_headers(console_env))
     assert response.status_code == 200
     by_id = {jt["id"]: jt for jt in response.json()}
     assert by_id["cp_gaia_backup"]["blocked"] is True
-    assert by_id["cp_gaia_backup"]["blocked_reason"] == "operational_write_not_enabled"
+    assert by_id["cp_gaia_backup"]["blocked_reason"] == "recovery_write_not_console_submittable"
+    assert by_id["cp_gaia_backup"]["action_class"] == "recovery-write"
+    assert by_id["cp_gaia_backup"]["action_class_level"] == 1
     assert by_id["report_rebuild"]["blocked"] is False
+    assert by_id["report_rebuild"]["action_class"] == "read"
+    assert by_id["report_rebuild"]["action_class_level"] == 0
+
+
+def test_console_submits_nothing_above_class_0(console_env):
+    """The console's standing guarantee, asserted over the whole registry
+    rather than one job type: every submittable entry is CLASS 0. This is the
+    invariant that must survive OP.x adding a CLASS 2 failover job type."""
+    from console.registry import JOB_REGISTRY
+
+    response = console_env.client.get("/api/job-types", headers=_headers(console_env))
+    by_id = {jt["id"]: jt for jt in response.json()}
+    for job_id, job_type in JOB_REGISTRY.items():
+        submittable = by_id[job_id]["blocked"] is False
+        assert submittable == (job_type.action_class.level == 0), (
+            f"{job_id}: only CLASS 0 may be submittable from the console"
+        )
 
 
 # --- AC-11: static report still contains no action surface ------------------

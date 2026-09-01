@@ -9,130 +9,121 @@ Prior versions are in git history.
 
 ## 1. Snapshot
 
-- Date: 2026-09-01.
-- Product baseline `0.7.7`; engineering `DEV.3.3` — both AUTOMATED_VALIDATED,
-  unchanged. `RB.3b` `in_progress` (hardware-gated), unchanged.
-- `CON.1` `DONE`; `CON.2` `AUTOMATED_VALIDATED` (real-environment run still
-  owed) — unchanged this session.
-- New this session: **`OP.0a` AUTOMATED_VALIDATED** — contract frozen *and*
-  implemented in one session. First delivered work on the `OP.x` Controlled
-  Failover track.
-- Branch: `main`.
+- Date: 2026-09-01. Branch `main`, **uncommitted** — 36 changed paths.
+- Product baseline `0.7.7`; engineering `DEV.3.3` — both unchanged.
+- `CON.1` DONE; `CON.2` AUTOMATED_VALIDATED (real-env owed); `OP.0a`
+  AUTOMATED_VALIDATED; `RB.3b` blocked on hardware — all unchanged.
+- New this session: **`architecture_convergence` AUTOMATED_VALIDATED** —
+  `ARCHITECTURE` movement. No device contact, no new device command, no
+  dependency change.
 
 ## 2. What changed this session
 
-`CON.3` was the requested next `CON.x` but is genuinely blocked — verified
-against live files: `C-D4`/`C-D6` are still `"status": "open"` in
-`project/roadmap.json`, and `RB.3b` is hardware-gated. `OP.0` was the one
-unblocked track but had no frozen contract, so this session ran
-`ARCHITECTURE` → `IMPLEMENTATION` end to end.
+**The finding that mattered most:** the two "long-standing order-dependent test
+failures" were neither order-dependent nor flaky. `scripts/render_uitest.py`
+rebound three `utils.html_export` payload builders with bare module assignment
+and never restored them. `tests/test_frontend_rendering_boundary.py` and
+`tests/test_html_render_harness.py` call `render()` in-process, so every later
+`run_html_export()` in that worker returned uitest **fixture** payloads — which
+is why `test_..._embeds_discovery_payload_...` read `cp-edge-01` instead of its
+own `DEV-Z`, and why `test_checkpoint_render_appends_one_record` saw a populated
+configuration payload and wrote the ledger. Fixed with a `try/finally` restore.
+Serial and `-n auto` now agree at **988 / 27 / 0**.
 
-**The audit finding that shaped everything:** CP `cphaprob stat` (per-endpoint
-and per-VS) and PAN `show high-availability state` are **already gated and
-already collected** — the latter already parsing `peer_state` and
-`state_sync`. The design doc had assumed all ~19 preflight commands were new.
-So `OP.0` splits (contract P1): **`OP.0a`** engine over existing evidence,
-zero new device commands, nothing blocking it; **`OP.0b`** the ~16-command
-preflight battery behind a gate **drafted but not approved**; **`OP.0c`** the
-§9 UI module.
+- `utils/action_taxonomy.py` (new) — the five classes. `console/registry.py`
+  derives `action_class` from it; `console/app.py` + `console/runner.py` gate on
+  it and name the refusing class. `command_class` stays on the wire and in
+  durable records, so no data migration.
+- `utils/project_plan.py` — six cross-authority rules added to
+  `_metadata_warnings`. The pre-existing `metadata_warnings == []` assertion was
+  green while three files each named a different current build; it is now a real
+  gate. Repaired: `roadmap.json` (NOW/NEXT/AFTER/BLOCKED/DEFERRED rebuilt,
+  `current_build`, `current_track`, four track statuses), `feature_registry.json`
+  (3), `build_history.json` (1 + the `architecture_convergence` record),
+  `backlog.json` (1).
+- `scripts/build_history_index.py` (new) — `docs/history/INDEX.md` claimed to be
+  generated and was hand-maintained, stale at `0.7.4`. Now really generated;
+  `--check` gates it.
+- Read-only claim removed from `README.md`, `AI_START_HERE.md`,
+  `docs/ARCHITECTURE.md` ("Read-only invariant"),
+  `docs/AI_DEVELOPMENT_PROTOCOL.md` ("No new write command"). `AI_START_HERE.md`
+  also had a test baseline stale by ~750 tests and a CLI table missing 15 flags.
+- `docs/design/FAILOVER_ENGINE_ARCHITECTURE.md` §10.1 (new) — stage map plus the
+  nine-point safety contract `OP.2` must satisfy.
+- `CURRENT_STATE.md` 764 → 179 lines; `.github/workflows/validation.yml` (new,
+  first CI); 12 superseded handover snapshots deleted.
+- `tests/test_architecture_convergence.py` (new, 13 tests).
 
-- New `docs/history/phase/OP_0A_HA_READINESS_ASSESSMENT.md` — frozen contract
-  (P1–P8, AC-1…AC-13) plus the `OP.0b` command-gate draft, plus deviations
-  D1/D2 added during implementation.
-- New `utils/failover/` — `__init__.py` + `assessment.py` **only**. `plan.py`
-  / `executor.py` / `adapters/` are deliberately absent (P5, the
-  `remove_dormant_remote_cleanup` precedent); AC-9 enforces the absence.
-- New `application/workflows/failover.py` — offline loaders for CP/PAN HA
-  evidence (fail-safe to `{}` on missing/corrupt) + the mode entrypoint.
-- `main.py --ha-readiness-check` via `application/cli.py` — offline
-  maintenance class, cross-guarded against every other mode; prerequisite
-  `unified.json` registered in `application/services.py`.
-- `configuration/checkpoint_config_collector.py` — P2's additive
-  `_parse_clusterxl_cluster_mode` at both `cphaprob stat` call sites, reading
-  the mode out of a buffer the collector already had before it discards it.
-  **Same command, session, timeout and frequency** — a parse-scope extension,
-  not a command addition, so no gate entry was required.
-- `utils/collection_executor.py` — P6 allowlist comment only; no set change.
-- New `tests/test_op0a_ha_readiness.py` (38 tests).
-- `CURRENT_STATE.md`, roadmap, feature registry, build history, this file.
-
-**The safety property to preserve:** `OP.0a` can never emit
-`SAFE_TO_FAILOVER` or `DEGRADED_PROCEED_WITH_RISK` (P4). `AC-6` proves it by
-exhaustive generated matrix, so a later edit cannot make a green light
-reachable without also changing `OP0A_EVALUABLE_CHECKS` and its gate. Do not
-"fix" that test by relaxing it.
+**Deliberately not done:** the 92 `docs/history/phase/` documents were **not**
+bulk-deleted. `build_history.json` carries 94 doc links, 72 into that directory,
+0 broken — deleting them would break the exact mechanism `AGENTS.md` designates
+for reaching archived detail. They already cost zero context because the reading
+order excludes them. Only the superseded *rotating* handovers went.
 
 ## 3. Exact next action
 
-Pick one; none depends on the others.
+**`OP.0c` — the §9 failover readiness UI module.** Read-only, no new device
+command, buildable now against the `ha_readiness.json` `OP.0a` produces. It is
+NEXT because it is simultaneously the next Operator Console surface and the next
+step on the failover path.
 
-- **`OP.0b` gate review** — a product-owner/security call, not engineering.
-  The drafted gate is a section of the `OP.0a` contract. Approving it unblocks
-  the preflight battery, which is what makes `SAFE_TO_FAILOVER` reachable at
-  all. Until then every unit reports `INSUFFICIENT_EVIDENCE`, by design.
-- **`OP.0c`** — the §9 Failover UI module (seventh app module: fleet view,
-  readiness light, history). Buildable now against `ha_readiness.json`;
-  triggers the render harness and a `tests/fixtures/uitest/` growth step.
-- **`CON.2` real-environment run** — corporate laptop, trigger a `read`-class
-  job from the console, confirm it reaches a real device. No new code.
-- **`RB.3b`** — the watched real-device R81.10/R81.20 run; unblocks `CON.3`
-  and `RB.3c` at once.
+Two things it must get right: carry `OP.0a`'s framing into the UI
+(`INSUFFICIENT_EVIDENCE` means "not asked yet", not "unhealthy" — without that
+line an empty-looking dashboard reads as a broken feature), and budget for the
+render harness plus a `tests/fixtures/uitest/` growth step, which it triggers.
 
-`CON.3` remains blocked on `C-D4`/`C-D6` **and** `RB.3b`. Check `RB.3b` first;
-if it is still hardware-gated, `CON.3` cannot start regardless of decisions.
+Independent alternatives, none blocking the others: `OP.0b` gate review (a
+product-owner/security call, not engineering), `CON.2`'s real-environment run
+(no new code), `RB.3b`'s watched hardware run.
 
 ## 4. Test delta
 
-Full suite **973 passed / 27 skipped / 0 failed** (`pytest_result.log`),
-from **933 / 27 / 2** after `CON.2`. `+38` from
-`tests/test_op0a_ha_readiness.py`, zero regressions.
+Full suite **988 passed / 27 skipped / 0 failed**, confirmed **both serially and
+under `-n auto --dist worksteal`** (`pytest_result.log` is the serial run).
+From 971/27/**2** serial. `+13` `tests/test_architecture_convergence.py`,
+`+1` isolation regression in `test_frontend_rendering_boundary.py`, `+1` class
+invariant in `test_con2_console_job_engine.py`; `-2` failures.
 
-**Read the failure count honestly:** the two long-standing order-pollution
-failures did not trigger under this run's `-n auto --dist worksteal`
-distribution. They are **not fixed** — they are order-dependent and simply
-were not provoked. Do not record "0 failed" as evidence they are resolved.
+Privacy gate **PASS / 0**, 415 files, clean checkout. `INDEX.md --check` green.
+`git diff --check` clean. Render harness not triggered (no `templates/`,
+`static/` or payload-builder change) and green in the suite.
 
-Privacy gate **PASS / 0** after deleting the gitignored `data/` + `logs/` a
-test run creates. Render harness not triggered by this build (no
-`templates/`, `static/` or payload-builder change) and green in the suite.
+**Two test assertions were changed, both deliberately, neither weakened:**
+`test_..._project_plan_payload_is_data_driven` pinned `current_track == "0.6.x"`
+— a *test* acting as a fourth current-state authority; it now asserts the
+invariant (the track is declared) instead. The CON.2 refusal-code assertions now
+expect `recovery_write_not_console_submittable` rather than the catch-all
+`operational_write_not_enabled`, because naming the class is the point.
 
 ## 5. New risks / debt
 
-- **`OP.0a` reads as a broken feature without its framing.** Every unit is
-  `INSUFFICIENT_EVIDENCE` or `NOT_A_FAILOVER_UNIT` today. The CLI prints the
-  framing itself ("`INSUFFICIENT_EVIDENCE` means 'not asked yet', not
-  'unhealthy'"); `OP.0c`'s UI must carry the same line, or an empty-looking
-  dashboard will be misread as a defect.
-- **D2 is the cautionary tale of this build.** A healthy PAN active/passive
-  pair was misreported as **split-brain** — a false alarm on a healthy pair,
-  the worst direction to be wrong in. The unit tests missed it because they
-  had paired only same-shaped records; the smoke run against the real fixture
-  caught it immediately. Both directions are now pinned. Lesson for `OP.0b`:
-  run the thing against the fixture bundle, not only against unit fixtures.
-- **P7 PAN pairing is inference, not a discovered relationship.** A real,
-  healthy pair whose configured `peer-ip` is not inventoried reports
-  `pan_ha_peer_unresolved`. The durable fix is a discovery-plane peer field —
-  a follow-up, deliberately not attempted here.
-- **Owed before `OP.0a` is `DONE`:** one real-device confirmation that
-  `ha_cluster_mode` resolves rather than falling back to `"unknown"`. The mode
-  fixtures are constructed, not captured. Fixture-drift check, not a safety
-  gate.
-- Carried over: `tests/test_con1_*` / `tests/test_con2_*` have no top-level
+- **CLASS 2 is empty and must stay empty.** `test_no_console_job_type_is_class_2_or_above`
+  and the `utils/failover/` absence test are the guards. If either fails, the
+  `OP.2` gate is what needs revisiting — not the assertion.
+- **Tests still write into the repository-root `data/`.** Gitignored, so not a
+  leak, but it is shared mutable state across the suite and it is why the
+  privacy gate needs a manual `rm -rf data logs` first. Known debt, not fixed
+  here — the fix is passing `data_root` at every `run_html_export` call site.
+- **The CI workflow has never run.** It is written against this repository's own
+  local commands and its Python 3.12 baseline, but GitHub Actions has not
+  executed it; treat the first run as validation, not as a regression.
+- Carried over: `tests/test_con1_*` / `test_con2_*` have no top-level
   FastAPI/uvicorn skip guard. `C-D4`…`C-D8` remain open.
 
 ## 6. Continue or fresh chat
 
-**Fresh chat.** `OP.0a` is closed to AUTOMATED_VALIDATED and every next option
-is independent of this session's context. A cold start reading
-`AI_START_HERE.md` → `CURRENT_STATE.md` → this file → the one contract doc is
-sufficient.
+**Fresh chat.** This build is closed and `OP.0c` is independent of its context.
+`AI_START_HERE.md` → `CURRENT_STATE.md` → this file → the `OP.0a` contract doc
+is sufficient for a cold start.
 
 ## 7. main.py / UI effect
 
-One new CLI flag, `main.py --ha-readiness-check` — offline, no credential, no
-device contact, writes `data/state/ha_readiness.json` and prints a verdict
-summary. No other flag, mode or exit-code path changed.
-
-**No UI change, and that is intended.** This build touches no `templates/`,
-`static/` or payload builder; the exported static report and the operator
-console are byte-identical. The §9 Failover module is deliberately `OP.0c`.
+**No CLI flag, mode or exit-code path changed. No UI change, and that is
+intended** — this build touches no `templates/`, `static/` or payload builder,
+so the exported static report and the operator console render byte-identically.
+The one observable behaviour change is the console's refusal payload for a
+non-class-0 job type: 409 with `{"error": "recovery_write_not_console_submittable",
+"action_class": "recovery-write"}` instead of `{"error":
+"operational_write_not_enabled"}`, and `/api/job-types` rows now carry
+`action_class` + `action_class_level`. The existing UI renders `blocked_reason`
+as an opaque tooltip, so nothing visible changes there either.
