@@ -1293,7 +1293,7 @@
     {
       "id": "operator_console_surface",
       "title": "Operator Console - read-only surface",
-      "status": "automated_validated",
+      "status": "done",
       "introduced": "CON.1",
       "weight": 5,
       "summary": "Authenticated loopback HTTP surface serving the existing UI modules and report payloads live, with zero action capability and zero device contact.",
