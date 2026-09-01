@@ -5,3 +5,19 @@
 # imports console/ (C1-8: fail-closed preflight, no eager import from main.py).
 fastapi>=0.115
 uvicorn>=0.32
+
+# starlette.testclient (imported by fastapi.testclient, which
+# tests/test_con1_*.py and tests/test_con2_*.py use to drive the console
+# ASGI app in-process) requires an HTTP client at import time and does not
+# vendor one. This was never declared: it worked on a developer machine only
+# because *something else* on that machine had already installed httpx as an
+# unrelated transitive dependency (`pip show httpx` there reports
+# `Required-by:` empty) — a genuinely clean install has neither httpx nor its
+# httpx2 successor, and starlette.testclient fails closed at import time
+# (architecture_convergence's CI run, the first this repository ever ran,
+# is what surfaced it). Verified against the repository's currently pinned
+# stack (fastapi>=0.115 resolves fastapi 0.141.1 / starlette 1.6.0 on both
+# CI and here): starlette 1.6.0's httpx2-first-then-httpx fallback is
+# satisfied by plain httpx; httpx2 is not installed anywhere and is not
+# required.
+httpx>=0.27
