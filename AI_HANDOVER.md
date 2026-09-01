@@ -16,118 +16,101 @@ Prior versions are in git history.
   follow-up) is `DONE`, unchanged this session.
 - `CON.x` operator console: `CON.0` architecture stayed FROZEN; `C-D1`/`C-D2`
   were answered this session (both approved per their documented
-  recommendation) and `CON.1` (read-only console) was implemented and reached
-  **AUTOMATED_VALIDATED** the same session.
-- Branch: `main`, commit `6e22e0a` ("feat(console): implement CON.1 read-only
-  operator console"), committed directly to `main` this session per explicit
-  user instruction (no feature branch / PR this time). **Not yet pushed to
-  `origin/main`** — see §3.
+  recommendation) and `CON.1` (read-only console) was implemented **and**
+  closed to **DONE** the same session, including its own human real-browser
+  open.
+- Branch: `main`, commit `135a201` ("fix(ui): two real bugs found by CON.1's
+  real-browser open"), on top of `6e22e0a` (CON.1 implementation) and
+  `686dfa5` (handover docs). All three pushed to `origin/main` — `main` is
+  clean and in sync.
 
 ## 2. What changed this session
 
-- Answered `C-D1` (approve `fastapi`+`uvicorn` as an optional dependency,
-  `requirements-console.txt`) and `C-D2` (cookieless per-launch bearer token
-  in the URL fragment) — both per the architecture doc's own recommendation.
-  `project/roadmap.json`'s two entries marked `decided`.
-- Implemented `CON.1` per `docs/history/phase/CON_1_OPERATOR_CONSOLE_READ_ONLY.md`,
-  following its 9-step plan:
-  1. `utils/html_export.py` gained `MODULE_ORDER` / `compose_modules()` (C1-2)
-     and `build_report_payloads()` — the payload-building half of
-     `run_html_export` extracted into its own function, called by both
-     `run_html_export` and the console (`console/payloads.py`), so the two
-     surfaces cannot drift apart (C1-4). `compose_report_script()` and
-     `SCRIPT_MODULE_FILENAMES` kept as-is for the ~16 existing tests bound to
-     them.
-  2. `app_bootstrap.js`'s tail became `initializeReport(payloads)` (C1-3);
-     `app_core.js` gained the mutable payload globals (`let rawData`, etc.)
-     and a `reportMode()` accessor reading `window.SECURITYEXPERT_MODE`.
-     `templates/index.html` sets the mode flag and calls `initializeReport`
-     with the inline JSON. This is the phase's flagged risky step — done
-     first, alone, render harness green before anything else landed
-     (contract's own risk note). One real bug caught immediately: adding a
-     *second* `<script>` tag broke `tools/render-harness/check-render.mjs`'s
-     single-inline-script assumption — fixed by keeping one script tag.
-  3. `console/auth.py` — token generation/comparison, origin/Sec-Fetch-Site
-     checks (C1-5, AC-6).
-  4. `console/payloads.py` — thin wrapper calling `build_report_payloads`
-     with no lifecycle/capability/coordinator state (a freshly launched
-     console has none; discovery/exclusions render their existing explicit
-     empty state, same as `--render-only` before a coordinator exists).
-  5. `console/app.py` — FastAPI app, CSP response header (C1-1), the four
-     asset/shell routes (unauthenticated) + `/api/payloads` (authenticated).
-     Routes use `@app.api_route(..., methods=["GET", "HEAD"])` explicitly —
-     this Starlette version does **not** auto-add HEAD to `@app.get`.
-  6. `templates/console.html` (full body markup, reused from `index.html`;
-     external `<link>`/`<script src>` only — CSP has no `unsafe-inline`) +
-     `static/console_actions.js` (mode flag, launch-token fragment handling,
-     fetch/refresh cycle, opt-in ≥30s auto-refresh — zero action affordance).
-  7. `console/server.py` (C1-8 fail-closed preflight) + `main.py --console
-     [--console-port N]` wiring in `application/cli.py` (new Phase A
-     preflight before anything else, new branch after Phase C's runtime
-     foundation, mutual-exclusivity validation).
-  8. `requirements-console.txt`; `AI_START_HERE.md` CLI table + "no web
-     server" line corrected.
-  9. `tests/test_con1_operator_console_read_only.py` (AC-1…AC-11); full
-     suite; privacy gate; project metadata (`backlog.json`,
-     `feature_registry.json`, `build_history.json`, `roadmap.json`, this
-     file, `CURRENT_STATE.md`).
-- **Real finding during AC-8 (console imports no vendor module,
-  transitively):** three pre-existing eager `configuration.*` imports were
-  reachable from `utils/html_export.py` — `utils/config_ui.py`
-  (`align_checkpoint_management_intent`, `build_pan_current_configuration`),
-  `utils/config_history.py` (four helpers from
-  `configuration.current_config_projection`), `utils/crypto_posture.py`
-  (`_artifact_bytes`). Not introduced by this build — every other mode
-  already pulled these in eagerly — but only closeable once `console/` made
-  the import graph a tested invariant. Fixed by moving each to a lazy
-  import at its point of use (same `DEV.3.3`-established pattern as the
-  optional-dependency preflights); behavior-preserving for every existing
-  caller.
-- Installed `fastapi`, `uvicorn`, `httpx` (dev/test only — `httpx` powers
-  `fastapi.testclient.TestClient`, not itself a runtime dependency) into the
-  active Python environment. Not yet reflected in any lockfile beyond
-  `requirements-console.txt` itself.
-- Live end-to-end smoke test: started `main.py --console` for real, hit it
-  over real HTTP with `curl` (200 on `/`, `/assets/app.js`,
-  `/assets/style.css`; 401 on `/api/payloads` without a token; correct CSP
-  response header), then stopped the process cleanly.
+Two parts, same session:
+
+**A. `CON.1` implementation** (commit `6e22e0a`) — see that commit message
+or the previous handover in git history for full detail. Summary: new
+`console/` package (FastAPI/uvicorn loopback service, cookieless bearer
+auth, strict CSP), `templates/console.html`, `static/console_actions.js`,
+`main.py --console [--console-port N]`, `requirements-console.txt`.
+`utils/html_export.py` gained `build_report_payloads()` so the console and
+the exported report call the identical payload builder. Fixed three
+pre-existing eager `configuration.*` imports (AC-8 surfaced them) to lazy
+imports.
+
+**B. `CON.1`'s human real-browser open** (commit `135a201`) — per the
+contract's own closure requirement (same pattern `codebase_modularization`
+(frontend) used). Seeded a scratch runtime root with the
+`tests/fixtures/uitest` bundle (same monkeypatch technique as
+`scripts/render_uitest.py`), launched `main.py --console` against it, and
+drove it live in a real Chromium tab (Browser pane) through all seven
+modules. **Found and fixed two real regressions that neither `pytest` nor
+the bun/happy-dom render harness had caught:**
+
+1. **CSP `style-src` violations.** Three JS-set inline `style=""`
+   attributes — `compliance_ui.js`'s segmented framework-coverage bar
+   (`style="flex:${n}"`) and `project_plan_ui.js`'s roadmap progress bar
+   (`style="width:${numeric}%"`) — were blocked outright by the console's
+   stricter CSP (`style-src 'self'`, no `unsafe-inline`, per C1-1). The
+   static report's CSP keeps `unsafe-inline` so this never surfaced there.
+   Fixed with a fixed `.w-pct-0`…`.w-pct-100` CSS class set
+   (`static/style.css`), applied via `classList` instead of a computed
+   style attribute; the segmented bar converts its flex ratios to rounded
+   percentages first. CSP-safe in both modes, so this is a genuine
+   improvement to the static report too (one less style-src risk if its CSP
+   is ever tightened).
+2. **Stale module-load-time derived state.** `inventory_ui.js` (`inventory`
+   / `inventoryRoots`), `configuration_ui.js` (`configDevices`) and
+   `compliance_ui.js` (`complianceSubjects`) each computed a derived
+   collection **exactly once, at module-load time**, from `rawData` /
+   `configUiData` / `complianceUiData` — which are still their empty
+   defaults at that point, since `initializeReport(payloads)` (CON.1's own
+   C1-3 refactor, the previous commit) only assigns the real payloads
+   *afterward*. Network Inventory, Configuration and Compliance rendered
+   empty. **This affected the exported static report too, not only the
+   console** — both modes run every module's top-level code before calling
+   `initializeReport`. Fixed by wrapping each into a `rebuildX()` function,
+   called once at load (harmless against the empty default — preserves the
+   exact prior behavior) and again from `initializeReport`, before any
+   `renderX()` call.
+
+Re-verified after both fixes: fresh Browser-pane tab, full walk through all
+seven modules (Overview → Network Inventory → Configuration → Compliance →
+Discovery → Exclusions → Project Plan), zero console errors, real
+device/compliance/roadmap data rendered and visually correct (18 inventory
+entities, 14 assessed compliance devices, segmented coverage bars, roadmap
+progress bars all correct).
+
+Project metadata updated to close `CON.1` to `DONE`: `project/backlog.json`,
+`project/feature_registry.json` (`operator_console_surface` → `done`),
+`project/build_history.json` (new `operator_console_read_only_real_browser_close`
+entry), `CURRENT_STATE.md`, this file.
 
 ## 3. Exact next action
 
-**Push `6e22e0a` to `origin/main`** (not yet done this session — only
-committed locally) unless the user directs otherwise.
+`CON.1` is fully closed — nothing left there. Next independent step for the
+`CON.x` track:
 
-Then, for the `CON.x` track specifically, two independent next steps —
-neither blocks the other:
+**Start `CON.2`** (job engine + `read`-class actions,
+`docs/history/phase/CON_2_CONSOLE_JOB_ENGINE_READ_ACTIONS.md`) — blocked
+only on `C-D3`, the next open product-owner decision in its path: add
+`Provenance.CONSOLE = "console"` to the provenance vocabulary, or reuse
+`"manual"` for UI-triggered runs. Recommendation already on file in
+`project/roadmap.json` (`open_decisions`, id `C-D3`): **add `"console"`** —
+a UI-triggered device action must be distinguishable from a CLI one in
+every manifest and audit record; conflating them destroys the audit trail
+on the first day it matters. Whoever picks this up next should surface that
+question to the product owner first (same `AskUserQuestion` pattern used
+for `C-D1`/`C-D2` this session and the session before), then read
+`CON_2_CONSOLE_JOB_ENGINE_READ_ACTIONS.md`'s own implementation plan.
 
-- **Close `CON.1`: the human real-browser open (cheap, non-blocking).**
-  Render the `tests/fixtures/uitest` topology-matrix bundle behind a live
-  `main.py --console` process (same throwaway-fixture pattern
-  `scripts/render_uitest.py` / the frontend split's own closure session
-  used) and drive it in an actual browser through all seven modules,
-  watching for console errors, to move `CON.1` from AUTOMATED_VALIDATED to
-  `DONE`. Concretely: point `SECURITYEXPERT_RUNTIME_ROOT` at a scratch dir
-  seeded with the uitest fixture's `output/unified.json` + `data/state/*`
-  (see `scripts/render_uitest.py`'s `render()` for the exact seeding), run
-  `py -B main.py --console`, open the printed `http://127.0.0.1:<port>/#t=...`
-  URL, click through every nav tab, confirm zero console errors, then record
-  the closure the same way `docs/history/phase/CODEBASE_MODULARIZATION_FRONTEND.md`'s
-  follow-up was recorded (`project/backlog.json` note, `CURRENT_STATE.md`,
-  this file). Alternatively, `py -m pip install -r requirements-dev.txt &&
-  playwright install chromium` would let `tests/test_con1_operator_console_read_only.py`'s
-  own AC-1 Playwright test do this automatically instead of manually.
-- **Start `CON.2`** (job engine + `read`-class actions,
-  `docs/history/phase/CON_2_CONSOLE_JOB_ENGINE_READ_ACTIONS.md`) — blocked
-  on `CON.1` (now clear, AUTOMATED_VALIDATED is sufficient per that
-  contract's own "Blocked on" column) and on `C-D3`, the one remaining open
-  product-owner decision in its path: add `Provenance.CONSOLE = "console"`
-  to the provenance vocabulary, or reuse `"manual"` for UI-triggered runs.
-  Recommendation already on file in `project/roadmap.json` (`open_decisions`,
-  id `C-D3`): **add `"console"`** — a UI-triggered device action must be
-  distinguishable from a CLI one in every manifest and audit record.
-  Whoever picks this up next should surface that question to the product
-  owner first (same `AskUserQuestion` pattern this session used for
-  `C-D1`/`C-D2`), then read the `CON.2` contract's own implementation plan.
+Worth flagging to whoever picks up `CON.2`: this session's finding #2 above
+(stale module-load-time derived state) is a *class* of bug — any new
+`CON.2` UI code that adds its own derived-state variable at module-load
+time will have the same problem unless it is likewise recomputed inside
+`initializeReport` (or, for `CON.2`'s job-status polling, inside whatever
+periodic refresh hook it adds). Worth a quick read of `static/app_bootstrap.js`'s
+`initializeReport` before adding new UI state.
 
 Other independent, unrelated options (unchanged from before this session):
 
@@ -137,47 +120,48 @@ Other independent, unrelated options (unchanged from before this session):
 
 ## 4. Test delta
 
-Full suite **907 passed / 27 skipped / 2 failed** (`pytest_result.log`), vs
-the session-start baseline **896 / 26 / 2** — `+11 passed` (the new
-`test_con1_operator_console_read_only.py`, minus its one Chromium-gated
-skip) `+1 skipped` (that same AC-1 test). The 2 failures are the same
-pre-existing order-pollution pair as every prior session, reproduced on an
-unmodified checkout of the same batch (not a regression). Repository privacy
-gate `PASS/0` on a clean checkout (two rounds of leftover `data/`/`logs/`
-runtime artifacts from manual `--console` smoke-testing and from the full
-suite's own known logger side effect were found and removed before the
-final gate run — neither is new to this session).
+Full suite **907 passed / 27 skipped / 2 failed** (`pytest_result.log`),
+unchanged from immediately after `CON.1`'s implementation commit (this
+session's real-browser bugfixes touched only client-side JS/CSS, which the
+pytest suite doesn't execute in a real browser — that's exactly the gap the
+real-browser open exists to cover, and it's now covered by the manual walk
+described in §2, not by an automated test). The 2 failures are the same
+pre-existing order-pollution pair as every prior session. Repository privacy
+gate `PASS/0` on a clean checkout (leftover `data/`/`logs/` runtime
+artifacts from the full suite's own known logger side effect were found and
+removed before each final gate run — not new to this session).
 
 ## 5. New risks / debt
 
-- `fastapi`/`uvicorn`/`httpx` are now installed in the active dev
-  environment but this was not captured anywhere beyond
-  `requirements-console.txt` (which only the optional console path needs).
-  If CI or another environment runs `tests/test_con1_operator_console_read_only.py`
-  without those installed, every test in that file will fail at collection
-  (`from fastapi...`) rather than skip — unlike the Playwright AC-1 case,
-  this file has no top-level skip guard for a missing FastAPI/uvicorn.
-  Consider whether that file should import lazily / skip cleanly if a CI
-  environment doesn't install `requirements-console.txt` as part of its test
-  setup, or whether CI is expected to always install it. Not resolved this
-  session — flagging for whoever wires CI for this track.
-- The three lazy-import fixes (`utils/config_ui.py`, `utils/config_history.py`,
-  `utils/crypto_posture.py`) touch code paths every mode already exercises;
-  full suite is green at baseline, but if a future change re-adds a
-  module-level `configuration.*`/`checkpoint.*`/`panorama.*` import anywhere
-  reachable from `console.app`, AC-8 in `tests/test_con1_operator_console_read_only.py`
-  will catch it — no action needed, just don't weaken that test.
+- **Test coverage gap, now known and partially addressed by fix, not by a
+  new test.** `tools/render-harness/check-render.mjs` asserts scripts
+  execute cleanly and nav/tabs are clickable, but never asserts an actual
+  rendered device/entity *count* — which is exactly the class of bug
+  finding #2 (§2) was. Not fixed this session (scope discipline — `CON.1`'s
+  contract only required the human open, not a harness enhancement); flagged
+  in `project/build_history.json`'s `risks_forward` for the
+  `operator_console_read_only_real_browser_close` entry. Worth considering
+  whether `check-render.mjs` should gain a minimal device-count assertion
+  for the uitest fixture, so this class of regression is caught
+  automatically next time instead of only by a human open.
+- Carried over from the previous handover, still true: `fastapi`/`uvicorn`/
+  `httpx` are installed in the active dev environment but only captured in
+  `requirements-console.txt` (the optional path). `tests/test_con1_operator_console_read_only.py`
+  has no top-level skip guard for a missing FastAPI/uvicorn — if a CI
+  environment doesn't install `requirements-console.txt`, that whole file
+  fails at collection rather than skipping cleanly. Not resolved.
 
 ## 6. Continue or fresh chat
 
-**Either works.** `6e22e0a` is committed; only the push to `origin/main` and
-§3's `CON.x` follow-ups remain, and nothing is mid-flight.
+**Either works.** Both commits (`6e22e0a`, `135a201`) plus the docs commit
+are pushed to `origin/main`; nothing is mid-flight, nothing uncommitted.
 
 ## 7. main.py / UI effect
 
-**`--console` is a new, additive, mutually-exclusive CLI mode** — every
-existing mode's behavior, output and CLI surface is unchanged (verified by
-the full suite holding at baseline). The one non-additive, behavior-preserving
-change is `app_bootstrap.js`'s `initializeReport(payloads)` refactor
-(render harness green, exported report byte-for-byte the same modulo the
-initialization call shape).
+**No CLI surface change this session's second half** (the bugfix commit
+touched only `static/*.js`, `static/style.css`, and one test file). The two
+fixes are both behavior-preserving-or-better for the exported static report
+(finding #2 was an active bug there too, now fixed; finding #1 is a
+CSP-hardening improvement with no visible behavior change under the report's
+own more permissive CSP) and are the actual fix that makes the console's
+Network Inventory / Configuration / Compliance modules render real data.

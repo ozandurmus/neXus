@@ -9,7 +9,8 @@ timeline.
   sign-off + steps 2–7 on `main`, real-environment run owed;
   `frontend_rendering_boundary` implemented; `codebase_modularization`
   (frontend + backend, including the real-browser follow-up) `DONE`; `CON.1`
-  AUTOMATED_VALIDATED — see "Active build" below)
+  (read-only console, including its own real-browser follow-up) `DONE` — see
+  "Active build" below)
 - **Product baseline:** `0.7.7 — Compliance trend retro-fill (PAN baseline
   reconstruction)` — AUTOMATED_VALIDATED (0.7.x VERIFY track)
 - **Previous:** `DEV.3.1 — Linux worker image + Compose` — AUTOMATED_VALIDATED
@@ -74,7 +75,7 @@ sessions:
 
 | Phase | Contract (`docs/history/phase/`) | Blocked on |
 | --- | --- | --- |
-| `CON.1` read-only console | `CON_1_OPERATOR_CONSOLE_READ_ONLY.md` | `codebase_modularization` (frontend) — **DONE**; `C-D1`, `C-D2` — **approved 2026-09-01, both consumed as-is**. `CON.1` itself: **AUTOMATED_VALIDATED 2026-09-01**, implemented below — pending only a human real-browser open to reach `DONE`. |
+| `CON.1` read-only console | `CON_1_OPERATOR_CONSOLE_READ_ONLY.md` | `codebase_modularization` (frontend) — **DONE**; `C-D1`, `C-D2` — **approved 2026-09-01, both consumed as-is**. `CON.1` itself: **DONE 2026-09-01** (implemented, then closed the same session by a human real-browser open — see below). |
 | `CON.2` job engine + `read` actions | `CON_2_CONSOLE_JOB_ENGINE_READ_ACTIONS.md` | `CON.1`; `C-D3` |
 | `CON.3` `operational-write` actions | `CON_3_CONSOLE_OPERATIONAL_WRITE_ACTIONS.md` | `CON.2`; **`RB.3b` REAL_ENV_VALIDATED**; `C-D4`, `C-D6` |
 | `CON.4` Recovery module (`RB.5`) | `CON_4_CONSOLE_RECOVERY_MODULE.md` | `CON.2` |
@@ -88,7 +89,7 @@ answered 2026-09-01 (both per their documented recommendation: optional
 fragment), which unblocked and completed `CON.1` the same session — see below.
 `C-D3`…`C-D8` remain open, blocking `CON.2` onward.
 
-**`CON.1` (operator console, read-only surface) — AUTOMATED_VALIDATED
+**`CON.1` (operator console, read-only surface) — DONE
 2026-09-01 (`Sonnet 5, normal`).** `docs/history/phase/CON_1_OPERATOR_CONSOLE_READ_ONLY.md`.
 New `console/` package (`auth.py` token/origin checks, `payloads.py`,
 `app.py` FastAPI routes + CSP header, `server.py` fail-closed preflight +
@@ -111,12 +112,25 @@ New `tests/test_con1_operator_console_read_only.py` (AC-1…AC-11). Full suite
 pre-existing pollution failures (reproduced on an unmodified checkout of the
 same batch), zero regressions, `+11 passed / +1 skipped`. Privacy gate
 PASS/0. Render harness green. Live end-to-end smoke: `main.py --console`
-served real HTTP on `127.0.0.1`, verified over curl. AC-1's real-Chromium
-walk skips cleanly in this sandbox (Chromium binary not downloaded) — the
-same pre-existing skip condition as `tests/test_frontend_rendering_boundary.py`'s
-Playwright tests; a human interactive real-browser open is the cheap
-follow-up that moves this build to `DONE`, same pattern
-`codebase_modularization` (frontend) used.
+served real HTTP on `127.0.0.1`, verified over curl. AC-1's own real-Chromium
+Playwright test skips cleanly in this sandbox (Chromium binary not
+downloaded) — same as `tests/test_frontend_rendering_boundary.py`'s
+Playwright tests — but the human real-browser open itself (a real Chromium
+tab via the Browser pane, same session) **was** performed: `main.py --console`
+launched against the `tests/fixtures/uitest` bundle, driven live through all
+seven modules. It found two real regressions neither pytest nor the
+bun/happy-dom render harness caught — (1) three JS-set inline `style=""`
+attributes were blocked outright by the console's stricter CSP (`style-src
+'self'`, no `unsafe-inline`) — fixed with a `w-pct-0`…`w-pct-100` CSS class
+set (`static/style.css`); (2) `inventory_ui.js`/`configuration_ui.js`/
+`compliance_ui.js` each computed a derived collection once at module-load
+time against the still-empty default payload, before `initializeReport`
+assigns the real one — **this broke Network Inventory / Configuration /
+Compliance in the exported static report too, not only the console** — fixed
+with `rebuildX()` functions called both at load and from `initializeReport`.
+Re-verified after both fixes: fresh-tab walk through all seven modules, zero
+console errors, real data rendered and visually correct. Full suite unchanged
+at **907 / 27 / 2**. `CON.1` is now **DONE**.
 
 
 **`codebase_modularization` (frontend half) — IMPLEMENTED 2026-09-01
