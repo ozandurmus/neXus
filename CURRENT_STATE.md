@@ -72,7 +72,7 @@ sessions:
 
 | Phase | Contract (`docs/history/phase/`) | Blocked on |
 | --- | --- | --- |
-| `CON.1` read-only console | `CON_1_OPERATOR_CONSOLE_READ_ONLY.md` | `codebase_modularization` (frontend) DONE; `C-D1`, `C-D2` |
+| `CON.1` read-only console | `CON_1_OPERATOR_CONSOLE_READ_ONLY.md` | `codebase_modularization` (frontend) — **IMPLEMENTED 2026-09-01**, `in_progress` pending a human real-browser open; `C-D1`, `C-D2` |
 | `CON.2` job engine + `read` actions | `CON_2_CONSOLE_JOB_ENGINE_READ_ACTIONS.md` | `CON.1`; `C-D3` |
 | `CON.3` `operational-write` actions | `CON_3_CONSOLE_OPERATIONAL_WRITE_ACTIONS.md` | `CON.2`; **`RB.3b` REAL_ENV_VALIDATED**; `C-D4`, `C-D6` |
 | `CON.4` Recovery module (`RB.5`) | `CON_4_CONSOLE_RECOVERY_MODULE.md` | `CON.2` |
@@ -82,6 +82,38 @@ The architecture doc is the spec; this file does not restate it. Eight open
 decisions (`C-D1`…`C-D8`, in `project/roadmap.json` `open_decisions`) are
 product-owner / security calls, not engineering work — `CON.1` cannot start
 until `C-D1`/`C-D2` are answered. No source file was touched by the freeze.
+
+
+**`codebase_modularization` (frontend half) — IMPLEMENTED 2026-09-01
+(`Sonnet 5, normal`).** `static/app.js` (flat 4,905 lines / 173 top-level
+functions) split into the eight D-MOD5 files — `app_core`, `inventory_ui`,
+`configuration_ui`, `compliance_ui`, `discovery_ui`, `project_plan_ui`,
+`overview_ui`, `app_bootstrap` — concatenated by `utils/html_export.py` in
+fixed dependency order into the same single inline `<script>` (no bundler, no
+ES modules). New `compose_report_script()` helper; 16 source-string UI tests
+repointed to it; new `tests/test_frontend_module_composition.py` (AC-3 static
+dependency-order check). Zero code lines lost (rendered-report line-multiset
+diff before/after: only 8 header comments + a 5-line relocation note added).
+Render harness (bun) green on the uitest and empty-state renders; privacy gate
+PASS/0. Full suite **887 / 26 / 2** vs `main` **882 / 27 / 2** — same two
+pre-existing pollution failures, zero regressions. Backlog id stays
+`in_progress`: a human interactive real-browser open is still owed (this
+sandbox has no display). `docs/history/phase/CODEBASE_MODULARIZATION_FRONTEND.md`.
+
+**`codebase_modularization` (backend half) — CONTRACT FROZEN 2026-09-01
+(`Sonnet 5, normal`, docs-only).** `docs/history/phase/CODEBASE_MODULARIZATION_BACKEND.md`.
+Reduces `main.py` (2,089 lines; `main()` alone ~1,690) to a thin ~120-line
+entry: a new `application/` package (`cli.py` / `services.py` / `context.py` /
+`workflows/{maintenance,recovery,checkpoint}.py`) per
+`SERVER_PRODUCTIZATION_AND_MODULARIZATION_ARCHITECTURE.md` §5, an
+`ApplicationContext` dataclass for the ~15 shared locals, `main.py`
+re-exporting the seven names the 12 `main.main()` test files import (no test
+rewrite), and the lazy vendor-import boundary turned into a tested invariant
+(AC-3 static + AC-5 runtime `sys.modules` check) + a before/after CLI
+transcript-diff parity gate. The **vendor-collector split**
+(`configuration/pan/`, `configuration/checkpoint/`) is explicitly **out** — §5
+moves those only when a bounded feature touches them. Ready for a fresh
+implementation session at `Sonnet 5, normal`. No code changed by the freeze.
 
 
 **`distributed_evidence_store_migration` (DEV.3.3) — AUTOMATED_VALIDATED

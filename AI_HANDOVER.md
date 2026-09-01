@@ -9,107 +9,112 @@ Prior versions are in git history.
 
 ## 1. Snapshot
 
-- Date: 2026-08-31.
+- Date: 2026-09-01.
 - Product baseline `0.7.7`; engineering `DEV.3.3` — both AUTOMATED_VALIDATED,
-  unchanged this session. `RB.3b` `in_progress` (hardware-gated), unchanged.
-- **This session was `ARCHITECTURE` only: it froze `CON.x` — the Operator
-  Console — as `docs/design/OPERATOR_CONSOLE_ARCHITECTURE.md` plus all five
-  phase contracts (`CON.1`…`CON.5`).** No source file touched.
-- `codebase_modularization` (frontend) is still contract-frozen and still the
-  next implementation task — and is now also `CON.1`'s hard precondition.
-- Branch: `claude/dynamic-ui-backup-management-y74cra`.
+  unchanged. `RB.3b` `in_progress` (hardware-gated), unchanged. `CON.x`
+  ARCHITECTURE FROZEN, unchanged.
+- **This session, two pieces of work:**
+  1. **Implemented `codebase_modularization` (frontend half)** —
+     `docs/history/phase/CODEBASE_MODULARIZATION_FRONTEND.md`. Code + tests.
+  2. **Froze the `codebase_modularization` backend-half contract** —
+     `docs/history/phase/CODEBASE_MODULARIZATION_BACKEND.md`. Docs only.
+- Session also fast-forwarded local `main` from a 7-commit-stale state to
+  `origin/main` `5520249`; RB.3b steps 6–7 were already merged there (PRs
+  #17/#18) — no work owed on RB.3b beyond its hardware-gated real-env run.
+- Branch: `feature/codebase-modularization-frontend`, **everything uncommitted**
+  (branch layout + commits human-controlled — the branch now also carries the
+  backend contract-freeze docs; split at commit time as preferred).
 
 ## 2. What changed this session
 
-**`operator_console_architecture` — ARCHITECTURE, docs + metadata only.**
+### 2a. `codebase_modularization` frontend (code)
 
-- New `docs/design/OPERATOR_CONSOLE_ARCHITECTURE.md` (`CON.0`): the decision
-  (a second delivery surface, **not** a dynamic report), the intent boundary
-  (browser sends a `job_type` from a closed registry plus validated
-  `entity_id`s — never a command or argv fragment), a reuse map showing the
-  console adds an HTTP boundary, an auth boundary, a job record and one
-  provenance value and **no new device path**, a ten-rule security model,
-  the phasing, and eight open decisions `C-D1`…`C-D8`.
-- Five phase contracts under `docs/history/phase/`: `CON_1_OPERATOR_CONSOLE_READ_ONLY.md`,
-  `CON_2_CONSOLE_JOB_ENGINE_READ_ACTIONS.md`,
-  `CON_3_CONSOLE_OPERATIONAL_WRITE_ACTIONS.md`,
-  `CON_4_CONSOLE_RECOVERY_MODULE.md`, `CON_5_CONSOLE_SCHEDULER_SURFACE.md` —
-  each with scope/out-of-scope, design decisions, acceptance criteria, an
-  implementation plan, risks, rollback and a definition of done.
-- `docs/design/SERVER_PRODUCTIZATION_AND_MODULARIZATION_ARCHITECTURE.md`:
-  amendment note in §1 and a new §7 reconciling the console against every
-  boundary that document set. **No prohibition is relaxed** — the console is
-  not a generic REST wrapper, not part of the viewer, not exposed beyond
-  loopback.
-- Metadata: new `project/backlog.json` `operator_console` (P1); new `CON.x`
-  roadmap track + `upcoming` entry + `C-D1`…`C-D8` in `open_decisions`; four
-  new features in `project/feature_registry.json`; `restore_readiness` gained
-  its missing `recovery_ui_module` criterion (RB.5 was never actually built,
-  so the 0.9.x track percentage corrected downward — a fix, not a regression);
-  one `project/build_history.json` record; `CURRENT_STATE.md` "Architecture
-  direction" + "Active build".
+- `static/app.js` (flat 4,905 lines / 173 top-level functions) **removed**;
+  content distributed across eight new `static/` files per the D-MOD5
+  ownership table: `app_core.js`, `inventory_ui.js`, `configuration_ui.js`,
+  `compliance_ui.js`, `discovery_ui.js`, `project_plan_ui.js`,
+  `overview_ui.js`, `app_bootstrap.js`.
+- `utils/html_export.py` — `SCRIPT_MODULE_FILENAMES` tuple; `run_html_export`
+  now `"\n".join(read_text_file(f) …)` into the same `__SCRIPT_PLACEHOLDER__`
+  fill. New public `compose_report_script()` helper.
+- `tests/test_frontend_module_composition.py` — new (AC-3 static
+  dependency-order check + AC-1 completeness). 16 source-string UI tests
+  repointed to `compose_report_script()`.
+- Two contract-audit gaps resolved by the ownership rule (phase-doc
+  "Implementation deviations"): `currentConfigurationFleet` →
+  `configuration_ui.js`; `switchModule`/`savedModule` stay in
+  `app_bootstrap.js` with a documented AC-3 nav-dispatcher carve-out.
+
+### 2b. `codebase_modularization` backend (contract only, no code)
+
+- New `docs/history/phase/CODEBASE_MODULARIZATION_BACKEND.md` — `SCOPE →
+  AUDIT → CONTRACT` for reducing `main.py` (2,089 lines; `main()` ~1,690) to a
+  thin entry via a new `application/` package (`cli.py` / `services.py` /
+  `context.py` / `workflows/{maintenance,recovery,checkpoint}.py`), an
+  `ApplicationContext` dataclass, `main.py` re-exporting the seven names the
+  12 `main.main()` test files import, and the lazy vendor-import boundary made
+  a tested invariant. Vendor-collector split explicitly OUT.
+- Metadata: `project/build_history.json` entry
+  `codebase_modularization_backend-contract`; `project/backlog.json`
+  `codebase_modularization` note; `CURRENT_STATE.md`; this file.
 
 ## 3. Exact next action
 
-**Unchanged: implement `docs/history/phase/CODEBASE_MODULARIZATION_FRONTEND.md`**
-(the `static/app.js` split). Read it first — it is the spec. Recommended tier
-**`Sonnet 5, normal`**; its own 7-step plan stands. Nothing about the console
-changes that build's scope — but it is now a precondition for `CON.1`, so do
-not defer it.
+**Implement `docs/history/phase/CODEBASE_MODULARIZATION_BACKEND.md`** — a fresh
+session at **`Sonnet 5, normal`**. Read that doc in full; its 8-step plan
+stands (skeleton → `services.py` → `maintenance.py` → `recovery.py` →
+`checkpoint.py` → reduce `main.py` → AC-3/AC-4/AC-5 tests → metadata). The one
+place to slow down is step 5 (Phase E: the `RunContext` lifecycle + degraded
+policy + the `cfg.clear_credentials()` `finally` move as one unit).
 
-**Then, before `CON.1` starts, `C-D1` and `C-D2` must be answered by the
-product owner / security** (optional `fastapi`+`uvicorn` dependency; cookieless
-per-launch bearer token). Both have a recommendation recorded in the
-architecture doc §11 and in `project/roadmap.json` `open_decisions`; neither is
-an engineering task.
-
-`CON.1` implementation is then a fresh session against its contract at
-`Sonnet 5, normal`.
+Independent alternatives if preferred: (a) the human real-browser open that
+closes out the frontend half; (b) `CON.1`, still blocked on product-owner
+answers to `C-D1` / `C-D2`.
 
 ## 4. Test delta
 
-None — docs and project metadata only, no source file touched. The last
-evidence (**888 passed / 23 skipped / 0 failed**) is unaffected and still holds.
-`project/*.json` edits were validated by building the Project Plan payload:
-zero warnings, `current_track`/`current_build` unchanged, `CON.x` present.
-Repository privacy gate re-run on the working tree: **PASS / 0**.
+**Frontend half**: full suite `py -m pytest -q` **887 / 26 / 2** on the branch
+vs **882 / 27 / 2** on `main` at the same commit — `+4` from
+`tests/test_frontend_module_composition.py`, one bun-gated test that skipped on
+the baseline run passing here, and the **identical two pre-existing
+order-pollution failures** (both pass in isolation). **Zero regressions.**
+Render harness (bun) PASS on the uitest and empty-state renders. Privacy gate
+PASS/0 on a clean checkout. AC-4 proof: rendered-report line-multiset diff
+(`main` vs branch) on both render paths — zero original code lines lost, only
+8 header comments + a 5-line relocation note added.
+
+**Backend half**: no code, no test run — docs only.
 
 ## 5. New risks / debt
 
-- **Scope drift is this track's main risk.** The console is a surface over an
-  existing engine. Any phase proposing a new collector, a console-only payload
-  shape, or a second orchestration path has left the architecture. `CON.2` AC-2
-  exists to make the single-orchestration-path rule structurally checkable —
-  if it is ever weakened, the 24 h `operational-write` ledger stops being
-  enforceable.
-- **Two hard orderings that must not be shortcut:** `CON.1` after
-  `codebase_modularization` (it changes `app_bootstrap.js` initialization);
-  `CON.3` after `RB.3b` reaches `REAL_ENV_VALIDATED` (a UI must never be the
-  first thing to run a device write nobody has run by hand).
-- **`C-D1` adds supply-chain surface** (`fastapi`/`uvicorn`). It is scoped as an
-  optional extra, absent from the base image and unreachable from every other
-  mode — keep it that way.
-- **`D1` (the BackBox estate inventory) is still open and is unaffected by any
-  of this.** The console improves operability, not vendor coverage; if the
-  estate holds non-CP/PAN devices, this product still does not replace BackBox
-  for them. `CON.4` `C4-2` deliberately counts uncovered devices rather than
-  omitting them so a polished screen cannot hide that gap.
+- **Frontend**: Playwright real-Chromium harness uninstalled here (bun
+  happy-dom path stood in); human real-browser open owed. Execution-order
+  shift documented + benign (one synchronous `<script>`, single paint). No
+  `window.SecurityExpert` namespace — AC-3's static check is the only
+  structural guard against a wrong composition order.
+- **Backend (forward, for the implementer)**: a moved mode block dropping a
+  `parser.error` or reordering mode precedence; a vendor import creeping to
+  module scope in `cli.py`/`services.py` so an offline run loads `paramiko`;
+  the Phase-E `try/except/finally` + `cfg` lifetime must move as one unit.
+  All three are guarded by the contract's AC-2/AC-3/AC-4/AC-5.
+- **Working tree**: everything from both pieces of work is uncommitted on one
+  `feature/codebase-modularization-frontend` branch; Windows tooling wrote the
+  new/edited files with CRLF but `git diff --numstat` confirms git's
+  `autocrlf=true` normalizes them — only real content deltas enter a commit.
 
 ## 6. Continue or fresh chat
 
-**Fresh chat**, for `codebase_modularization` implementation — same convention
-the previous contract-freeze session used. Read `AI_START_HERE.md` →
-`CURRENT_STATE.md` (hot section) → this file →
-`docs/history/phase/CODEBASE_MODULARIZATION_FRONTEND.md` in full before touching
-`static/app.js`. The console contracts do **not** need to be read for that
-build; read `docs/design/OPERATOR_CONSOLE_ARCHITECTURE.md` plus the one `CON_*`
-contract when the console session starts.
+**Fresh chat.** Read `AI_START_HERE.md` → `CURRENT_STATE.md` (hot section) →
+this file → `docs/history/phase/CODEBASE_MODULARIZATION_BACKEND.md` in full
+before touching `main.py`. Nothing from this chat's context is needed.
 
 ## 7. main.py / UI effect
 
-**None.** This session was documentation and project metadata only; no source
-file, template, payload builder or CLI mode changed, so a normal run produces
-exactly the report it produced before. The one visible difference is inside the
-report's own Project Plan module, which embeds `project/*.json` on every render:
-a new `CON.x` track (0%), a new backlog item, four new features, eight new open
-decisions, and one new build-history record — content, not shape.
+**Frontend half — none functional.** No CLI mode, payload builder, template
+markup or CSS changed. A normal `py .\main.py` run produces byte-identical
+report content except for 8 module-header comments + one relocation-note
+comment now in the inline `<script>`. `static/app.js` no longer exists —
+anything reading it directly must use
+`utils.html_export.compose_report_script()`.
+
+**Backend half — none.** Contract only; `main.py` is untouched this session.

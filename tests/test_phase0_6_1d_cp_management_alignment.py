@@ -5,12 +5,13 @@ from configuration.checkpoint_config_alignment import align_checkpoint_managemen
 from configuration.checkpoint_config_collector import build_checkpoint_current_configuration
 from utils.config_ui import build_configuration_ui_payload
 import pytest
+from utils.html_export import compose_report_script as _composed_report_script
 
 pytestmark = pytest.mark.configuration
 
 
 ROOT = Path(__file__).resolve().parents[1]
-APP = (ROOT / "static" / "app.js").read_text(encoding="utf-8")
+APP = _composed_report_script()
 TEMPLATE = (ROOT / "templates" / "index.html").read_text(encoding="utf-8")
 
 

@@ -1,12 +1,13 @@
 from pathlib import Path
 import pytest
+from utils.html_export import compose_report_script as _composed_report_script
 
 pytestmark = pytest.mark.inventory
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 TEMPLATE = (PROJECT_ROOT / "templates" / "index.html").read_text(encoding="utf-8")
-APP = (PROJECT_ROOT / "static" / "app.js").read_text(encoding="utf-8")
+APP = _composed_report_script()
 STYLE = (PROJECT_ROOT / "static" / "style.css").read_text(encoding="utf-8")
 
 

@@ -1,10 +1,11 @@
 from pathlib import Path
 import pytest
+from utils.html_export import compose_report_script as _composed_report_script
 
 pytestmark = pytest.mark.inventory
 
 ROOT = Path(__file__).resolve().parents[1]
-APP = (ROOT / "static" / "app.js").read_text(encoding="utf-8")
+APP = _composed_report_script()
 
 
 def test_checkpoint_cluster_routes_are_collapsed_to_logical_view():
