@@ -321,16 +321,50 @@ def test_no_duplicate_cluster_unit_is_produced_across_repeated_rows():
 def test_vsx_physical_pair_forms_one_parent_unit_via_shared_group_id():
     """VSX physical hosts running classic ClusterXL underneath get the same
     cluster_topology.group_id mechanism as a normal cluster -- no VSLS
-    assumption, reusing existing evidence."""
+    assumption, reusing existing evidence. A grouped (2-member) VSX pair is
+    typed cp_vsx_cluster, distinct from a single ungrouped cp_vsx_host."""
     rows = [
         _cp_topo("VSX-1", "grp-vsx1", display_name="VSX-CLS", source="vsx"),
         _cp_topo("VSX-2", "grp-vsx1", display_name="VSX-CLS", source="vsx"),
     ]
     report = compute_ha_readiness(rows)
-    vsx_units = [u for u in report["units"] if u["unit_type"] == "cp_vsx_host"]
+    vsx_units = [u for u in report["units"] if u["unit_type"] == "cp_vsx_cluster"]
     assert len(vsx_units) == 1
     assert vsx_units[0]["unit_id"] == "grp-vsx1"
     assert sorted(vsx_units[0]["members"]) == ["VSX-1", "VSX-2"]
+
+
+def test_real_pipeline_shape_physical_vsx_detected_by_evidence_not_missing_flag():
+    """Reproduces the exact real-env pipeline shape: physical VSX hosts arrive
+    as plain source:"cp" rows (checkpoint/cp_runner.py never writes
+    vsx_cluster_member into cp.json/unified.json -- see _row_is_vsx). The
+    domain layer must still classify them as VSX using the fact that separate
+    source:"vsx" rows name them, not a flag that structurally never reaches
+    this file."""
+    rows = [
+        {"device": "VSX-1", "source": "cp", "cluster_topology": {"group_id": "grp-vsx1", "display_name": "VSX-CLS"},
+         "inventory_status": {"data_state": "ok"}},
+        {"device": "VSX-2", "source": "cp", "cluster_topology": {"group_id": "grp-vsx1", "display_name": "VSX-CLS"},
+         "inventory_status": {"data_state": "ok"}},
+        {"device": "VSX-1", "source": "vsx", "vs_id": "1", "inventory_status": {"data_state": "ok"}},
+        {"device": "VSX-1", "source": "vsx", "vs_id": "2", "inventory_status": {"data_state": "ok"}},
+        {"device": "VSX-2", "source": "vsx", "vs_id": "1", "inventory_status": {"data_state": "ok"}},
+        {"device": "VSX-2", "source": "vsx", "vs_id": "2", "inventory_status": {"data_state": "ok"}},
+    ]
+    report = compute_ha_readiness(rows)
+    parent = _unit_by_id(report, "grp-vsx1")
+    assert parent is not None
+    assert parent["unit_type"] == "cp_vsx_cluster"  # not cp_clusterxl_cluster
+    vs_units = [u for u in report["units"] if u["unit_type"] == "cp_vsx_virtual_system"]
+    # CASE A x2: VSID 1 and VSID 2, each observed by both physical members,
+    # collapse into exactly 2 logical units -- not 4 (device, vsid) pairs.
+    assert len(vs_units) == 2
+    assert {u["unit_id"] for u in vs_units} == {"grp-vsx1__vsid_1", "grp-vsx1__vsid_2"}
+    vsid_1 = _unit_by_id(report, "grp-vsx1__vsid_1")
+    vsid_2 = _unit_by_id(report, "grp-vsx1__vsid_2")
+    assert vsid_1["parent_id"] == "grp-vsx1" and vsid_2["parent_id"] == "grp-vsx1"
+    assert sorted(vsid_1["members"]) == ["VSX-1__vsid_1", "VSX-2__vsid_1"]
+    assert sorted(vsid_2["members"]) == ["VSX-1__vsid_2", "VSX-2__vsid_2"]
 
 
 def test_each_virtual_system_is_a_distinct_unit_linked_to_its_physical_parent():
@@ -341,8 +375,8 @@ def test_each_virtual_system_is_a_distinct_unit_linked_to_its_physical_parent():
         {"device": "VSX-1", "source": "vsx", "vs_id": "20", "inventory_status": {"data_state": "ok"}},
     ]
     report = compute_ha_readiness(rows)
-    vs_a = _unit_by_id(report, "VSX-1__vsid_10")
-    vs_b = _unit_by_id(report, "VSX-1__vsid_20")
+    vs_a = _unit_by_id(report, "grp-vsx1__vsid_10")
+    vs_b = _unit_by_id(report, "grp-vsx1__vsid_20")
     assert vs_a is not None and vs_b is not None
     assert vs_a["unit_id"] != vs_b["unit_id"]
     assert vs_a["parent_id"] == "grp-vsx1"
@@ -358,7 +392,8 @@ def test_physical_member_role_transition_does_not_change_vs_identity():
     ]
     before = compute_ha_readiness(rows, cp_ha_runtime={"VSX-1": {"ha_role": "ACTIVE"}, "VSX-2": {"ha_role": "STANDBY"}})
     after = compute_ha_readiness(rows, cp_ha_runtime={"VSX-1": {"ha_role": "STANDBY"}, "VSX-2": {"ha_role": "ACTIVE"}})
-    assert _unit_by_id(before, "VSX-1__vsid_10")["parent_id"] == _unit_by_id(after, "VSX-1__vsid_10")["parent_id"]
+    assert _unit_by_id(before, "grp-vsx1__vsid_10")["parent_id"] == _unit_by_id(after, "grp-vsx1__vsid_10")["parent_id"]
+    assert _unit_by_id(before, "grp-vsx1__vsid_10")["unit_id"] == _unit_by_id(after, "grp-vsx1__vsid_10")["unit_id"]
 
 
 def test_virtual_systems_are_not_flattened_into_unrelated_physical_gateways():
@@ -370,11 +405,119 @@ def test_virtual_systems_are_not_flattened_into_unrelated_physical_gateways():
         _cp_topo("FW-EDGE-2", "grp-other"),
     ]
     report = compute_ha_readiness(rows)
-    vs = _unit_by_id(report, "VSX-1__vsid_10")
+    vs = _unit_by_id(report, "grp-vsx1__vsid_10")
     other_cluster = _unit_by_id(report, "grp-other")
     assert vs["parent_id"] == "grp-vsx1"
     assert vs["parent_id"] != other_cluster["unit_id"]
     assert "FW-EDGE-1" not in vs["members"]
+
+
+# --- VSX failure/mismatch semantics (cases A-G) ------------------------------
+
+def _vsx_pair_rows(vsid_map):
+    """vsid_map: {device: [vs_id, ...]} -- builds the two physical rows plus
+    whichever per-device VS rows are requested, real-pipeline shaped."""
+    rows = [
+        {"device": d, "source": "cp", "cluster_topology": {"group_id": "grp-vsx1"},
+         "inventory_status": {"data_state": "ok"}}
+        for d in ("VSX-1", "VSX-2")
+    ]
+    for device, vs_ids in vsid_map.items():
+        for vs_id in vs_ids:
+            rows.append({"device": device, "source": "vsx", "vs_id": vs_id, "inventory_status": {"data_state": "ok"}})
+    return rows
+
+
+def test_case_b_one_sided_vs_evidence_never_reads_as_healthy():
+    """Only VSX-1 reports VSID 5 -- the aggregated unit has one member
+    observation. The existing, unmodified 7-check logic must still never
+    produce SAFE_TO_FAILOVER for it."""
+    rows = _vsx_pair_rows({"VSX-1": ["5"]})
+    for role in ("ACTIVE", "STANDBY", "DOWN", ""):
+        report = compute_ha_readiness(rows, cp_ha_runtime={"VSX-1__vsid_5": {"ha_role": role}})
+        unit = _unit_by_id(report, "grp-vsx1__vsid_5")
+        assert unit is not None
+        assert unit["members"] == ["VSX-1__vsid_5"]
+        assert unit["verdict"] != VERDICT_SAFE
+
+
+def test_case_c_different_vsid_sets_between_members_stay_separate_and_fail_closed():
+    """VSX-1 exposes VSID 1 and 2; VSX-2 exposes only VSID 1. VSID 1 merges
+    (both observed it); VSID 2 stays one-sided -- never silently merged with
+    an unrelated observation."""
+    rows = _vsx_pair_rows({"VSX-1": ["1", "2"], "VSX-2": ["1"]})
+    report = compute_ha_readiness(rows)
+    vs1 = _unit_by_id(report, "grp-vsx1__vsid_1")
+    vs2 = _unit_by_id(report, "grp-vsx1__vsid_2")
+    assert sorted(vs1["members"]) == ["VSX-1__vsid_1", "VSX-2__vsid_1"]
+    assert vs2["members"] == ["VSX-1__vsid_2"]
+    assert vs2["verdict"] != VERDICT_SAFE
+
+
+def test_case_d_conflicting_member_roles_for_same_vsid_fail_closed():
+    rows = _vsx_pair_rows({"VSX-1": ["1"], "VSX-2": ["1"]})
+    runtime = {"VSX-1__vsid_1": {"ha_role": "ACTIVE"}, "VSX-2__vsid_1": {"ha_role": "ACTIVE"}}
+    report = compute_ha_readiness(rows, cp_ha_runtime=runtime)
+    unit = _unit_by_id(report, "grp-vsx1__vsid_1")
+    assert unit["verdict"] == VERDICT_UNSAFE
+    assert unit["reason"] == "split_brain_observed"
+
+
+def test_case_e_conflicting_member_ha_mode_for_same_vsid_becomes_unknown():
+    rows = _vsx_pair_rows({"VSX-1": ["1"], "VSX-2": ["1"]})
+    runtime = {
+        "VSX-1__vsid_1": {"ha_role": "ACTIVE", "ha_cluster_mode": "ha_new_mode"},
+        "VSX-2__vsid_1": {"ha_role": "STANDBY", "ha_cluster_mode": "vrrp"},
+    }
+    report = compute_ha_readiness(rows, cp_ha_runtime=runtime)
+    unit = _unit_by_id(report, "grp-vsx1__vsid_1")
+    assert unit["cluster_mode"] == "unknown"
+
+
+def test_case_f_missing_physical_parent_never_triggers_hostname_grouping():
+    """Two VS rows for the same VSID, but neither device ever resolves into a
+    physical unit -- both stay independent evidence-keyed singletons, never
+    merged just because the VSID number matches (no hostname heuristic)."""
+    rows = [
+        {"device": "ORPHAN-A", "source": "vsx", "vs_id": "9", "inventory_status": {"data_state": "ok"}},
+        {"device": "ORPHAN-B", "source": "vsx", "vs_id": "9", "inventory_status": {"data_state": "ok"}},
+    ]
+    report = compute_ha_readiness(rows)
+    unit_a = _unit_by_id(report, "ORPHAN-A__vsid_9")
+    unit_b = _unit_by_id(report, "ORPHAN-B__vsid_9")
+    assert unit_a is not None and unit_b is not None
+    assert unit_a["unit_id"] != unit_b["unit_id"]
+    assert unit_a["parent_id"] is None and unit_b["parent_id"] is None
+    assert unit_a["members"] == ["ORPHAN-A__vsid_9"]
+    assert unit_b["members"] == ["ORPHAN-B__vsid_9"]
+
+
+def test_case_g_ambiguous_parent_never_merges_across_different_clusters():
+    """Same VSID number under two DIFFERENT resolved physical clusters must
+    remain two distinct logical VS units -- grouping key is
+    (parent_unit_id, vsid), never vsid alone."""
+    rows = [
+        {"device": "A-1", "source": "cp", "cluster_topology": {"group_id": "grp-a"}, "inventory_status": {"data_state": "ok"}},
+        {"device": "A-2", "source": "cp", "cluster_topology": {"group_id": "grp-a"}, "inventory_status": {"data_state": "ok"}},
+        {"device": "B-1", "source": "cp", "cluster_topology": {"group_id": "grp-b"}, "inventory_status": {"data_state": "ok"}},
+        {"device": "B-2", "source": "cp", "cluster_topology": {"group_id": "grp-b"}, "inventory_status": {"data_state": "ok"}},
+        {"device": "A-1", "source": "vsx", "vs_id": "1", "inventory_status": {"data_state": "ok"}},
+        {"device": "B-1", "source": "vsx", "vs_id": "1", "inventory_status": {"data_state": "ok"}},
+    ]
+    report = compute_ha_readiness(rows)
+    vs_units = [u for u in report["units"] if u["unit_type"] == "cp_vsx_virtual_system"]
+    assert len(vs_units) == 2
+    assert {u["unit_id"] for u in vs_units} == {"grp-a__vsid_1", "grp-b__vsid_1"}
+
+
+def test_no_new_command_in_vsx_aggregation_code():
+    import inspect
+
+    from utils.failover import assessment as assessment_module
+
+    source = inspect.getsource(assessment_module._derive_cp_units)
+    for forbidden in ("paramiko", "_run_exec", "vsenv", "ssh."):
+        assert forbidden not in source
 
 
 def test_vs_missing_physical_parent_evidence_yields_no_parent_id_not_a_guess():

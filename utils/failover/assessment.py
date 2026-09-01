@@ -93,6 +93,7 @@ _PAN_STANDBY_CAPABLE_STATES = {"passive", "active-secondary"}
 
 _UNIT_CP_CLUSTER = "cp_clusterxl_cluster"
 _UNIT_CP_VSX_HOST = "cp_vsx_host"
+_UNIT_CP_VSX_CLUSTER = "cp_vsx_cluster"
 _UNIT_CP_VSX_VS = "cp_vsx_virtual_system"
 _UNIT_PAN_PAIR = "pan_ha_pair"
 
@@ -288,12 +289,20 @@ def _verdict_for(unit: HaUnit, checks: Sequence[Mapping[str, Any]]) -> tuple[str
 
 
 def _row_is_vsx(row: Mapping[str, Any], source: str) -> bool:
-    """True when this physical-host row participates in VSX -- either it came
-    from `vsx.json` directly, or a `cp.json` row carries the CP inventory's own
-    VSX flag (`checkpoint/cp_runner.py`'s `vsx_cluster_member`/legacy
-    `vs_cluster_member`). Used only to pick the presentation `unit_type`
-    (`cp_vsx_host` vs `cp_clusterxl_cluster`) -- it never affects grouping
-    identity, which is `cluster_topology.group_id` either way."""
+    """True when this physical-host row's OWN fields mark it as VSX -- either
+    it came from `vsx.json` directly, or a `cp.json` row carries the CP
+    inventory's own VSX flag (`checkpoint/cp_runner.py`'s
+    `vsx_cluster_member`/legacy `vs_cluster_member`).
+
+    This flag is never actually present on a real `source:"cp"` row in
+    practice: `checkpoint/cp_runner.py::run_cp()` writes `cp.json` from
+    `results` (interfaces/routes/cluster-interface parsing only), while
+    `vsx_cluster_member` is set on a completely different list
+    (`collection_status`) that becomes `cp_telemetry.json`'s
+    `remote_command_status` -- it never merges into `cp.json`/`unified.json`.
+    Kept as a forward-compatible check in case that ever changes; the
+    evidence-based `vsx_hosting_devices` check in `_derive_cp_units` is what
+    actually classifies real VSX physical hosts today."""
     if source == "vsx":
         return True
     for key in ("vsx_cluster_member", "vs_cluster_member"):
@@ -307,29 +316,53 @@ def _derive_cp_units(
     cp_ha_runtime: Mapping[str, Mapping[str, Any]],
 ) -> list[HaUnit]:
     """Assemble CP failover units, cluster-centric (real-env finding, OP.0a
-    identity/topology defect).
+    identity/topology defect) and VSX-operational-identity-aware (real-env
+    finding, OP.VSX).
 
     Canonical grouping identity is `cluster_topology.group_id` -- the stable,
     role-independent digest `checkpoint/cp_runner.py::enrich_cluster_topology`
     already attaches to both plain ClusterXL members and VSX physical hosts
     that run classic ClusterXL underneath (the standard VSX topology; no VSLS
     assumption is made or needed). The legacy flat `cluster` field is a
-    fallback only, for fixtures/history predating that nested shape -- it is
-    never primary once nested topology exists. `cluster_topology.display_name`
-    is presentation only and never decides grouping.
+    fallback only, for fixtures/history predating that nested shape.
+    `cluster_topology.display_name` is presentation only and never decides
+    grouping.
 
-    A VSX Virtual System is always its own unit and never inherits its
-    physical host's verdict (correctness rule 7) -- but it carries `parent_id`
-    pointing at its resolved physical cluster/host unit, so the UI can present
-    it as subordinate to that physical context without changing how its own
-    verdict is computed.
+    A physical device is classified VSX by evidence, not by a flag that never
+    actually reaches `unified.json` for real CP rows (see `_row_is_vsx`):
+    "this device has at least one associated Virtual System" (a
+    `source:"vsx"` row naming it) is itself sufficient, already-collected
+    proof.
+
+    A VSX Virtual System's OPERATIONAL identity is `<physical_unit_id>__vsid_
+    <N>` -- the same VSID observed through every physical member that reports
+    it collapses into ONE logical unit, never one per (device, vsid) pair.
+    The pre-existing `<device>__vsid_<N>` EVIDENCE-ENTITY identity is
+    preserved unchanged inside that unit's `members` list; only the
+    OPERATIONAL unit id and the checks computed over the merged member list
+    change. A VS still never inherits its physical parent's verdict
+    (correctness rule 7): its own seven checks are computed from its own
+    aggregated evidence only. Fail-closed by construction, not by special
+    case: grouping key is `(physical_unit_id, vsid)`, so a VSID can never
+    merge across an unresolved or different physical parent (cases F/G), and
+    the existing, unmodified check logic already returns a decisive or
+    INSUFFICIENT_EVIDENCE verdict -- never a fabricated SAFE one -- for
+    one-sided, conflicting-role, or conflicting-mode evidence (cases B/D/E),
+    because it operates generically over however many member observations a
+    unit actually has.
     """
     units: list[HaUnit] = []
     clusters: dict[str, list[str]] = {}
     cluster_display_names: dict[str, str] = {}
     cluster_is_vsx: dict[str, bool] = {}
     physical_unit_by_device: dict[str, str] = {}
-    vs_rows: list[tuple[str, str]] = []  # (entity_id, physical device)
+    vs_rows: list[tuple[str, str, str]] = []  # (entity_id, physical device, vs_id)
+
+    vsx_hosting_devices = {
+        str(row.get("device") or "").strip()
+        for row in rows
+        if str(row.get("source") or "").strip().lower() == "vsx" and str(row.get("vs_id") or "").strip()
+    }
 
     for row in rows:
         source = str(row.get("source") or "").strip().lower()
@@ -341,14 +374,14 @@ def _derive_cp_units(
         vs_id = str(row.get("vs_id") or "").strip()
         device = str(row.get("device") or "").strip()
 
-        # A VSX virtual system is always its own unit and never joins its
-        # host's cluster grouping (correctness rule 7) -- deferred until the
-        # physical-grouping pass below resolves a parent_id for it.
+        # A VSX virtual system is always its own operational unit and never
+        # joins its host's cluster grouping (correctness rule 7) -- deferred
+        # until the physical-grouping pass below resolves a parent for it.
         if source == "vsx" and vs_id:
-            vs_rows.append((entity_id, device))
+            vs_rows.append((entity_id, device, vs_id))
             continue
 
-        is_vsx = _row_is_vsx(row, source)
+        is_vsx = _row_is_vsx(row, source) or device in vsx_hosting_devices
         topology = row.get("cluster_topology")
         topology = topology if isinstance(topology, Mapping) else {}
         group_id = str(topology.get("group_id") or "").strip()
@@ -380,7 +413,15 @@ def _derive_cp_units(
         }
         modes.discard("")
         modes.discard("unknown")
-        unit_type = _UNIT_CP_VSX_HOST if cluster_is_vsx.get(cluster_key) else _UNIT_CP_CLUSTER
+        if cluster_is_vsx.get(cluster_key):
+            # A grouped VSX physical pair is a VSX CLUSTER, distinct from a
+            # single ungrouped VSX host (_UNIT_CP_VSX_HOST, unchanged above)
+            # and from an ordinary non-VSX ClusterXL cluster. Additive type,
+            # not a rename: existing single-host VSX fixtures/tests are
+            # unaffected.
+            unit_type = _UNIT_CP_VSX_CLUSTER if len(members) > 1 else _UNIT_CP_VSX_HOST
+        else:
+            unit_type = _UNIT_CP_CLUSTER
         units.append(HaUnit(
             unit_id=cluster_key,
             unit_type=unit_type,
@@ -393,11 +434,42 @@ def _derive_cp_units(
         for member_device in members:
             physical_unit_by_device.setdefault(member_device, cluster_key)
 
-    for entity_id, device in vs_rows:
+    # Aggregate VS evidence entities into one logical VS operational unit per
+    # (resolved physical parent, vsid). A VSID observed only by a device whose
+    # own physical parent never resolved stays a standalone singleton, keyed
+    # by its evidence-entity id exactly as before -- never guessed into a
+    # cluster, and never merged with a same-numbered VSID under a different
+    # or absent parent (cases F/G).
+    resolved_groups: dict[tuple[str, str], list[str]] = {}
+    orphans: list[tuple[str, str]] = []  # (entity_id, vs_id) with no resolved parent
+    for entity_id, device, vs_id in vs_rows:
+        parent_unit_id = physical_unit_by_device.get(device)
+        if parent_unit_id is None:
+            orphans.append((entity_id, vs_id))
+            continue
+        resolved_groups.setdefault((parent_unit_id, vs_id), []).append(entity_id)
+
+    for (parent_unit_id, vs_id), member_entity_ids in resolved_groups.items():
+        modes = {
+            str((cp_ha_runtime.get(m) or {}).get("ha_cluster_mode") or "").strip()
+            for m in member_entity_ids
+        }
+        modes.discard("")
+        modes.discard("unknown")
+        units.append(HaUnit(
+            unit_id=f"{parent_unit_id}__vsid_{vs_id}",
+            unit_type=_UNIT_CP_VSX_VS,
+            vendor="checkpoint",
+            members=sorted(member_entity_ids),
+            parent_id=parent_unit_id,
+            cluster_mode=modes.pop() if len(modes) == 1 else "unknown",
+        ))
+
+    for entity_id, _vs_id in orphans:
         units.append(HaUnit(
             unit_id=entity_id, unit_type=_UNIT_CP_VSX_VS, vendor="checkpoint",
             members=[entity_id],
-            parent_id=physical_unit_by_device.get(device),
+            parent_id=None,
             cluster_mode=str((cp_ha_runtime.get(entity_id) or {}).get("ha_cluster_mode") or "unknown"),
         ))
 
