@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0",
-  "current_build": "0.7.4",
-  "current_track": "0.6.x",
+  "current_build": "architecture_convergence",
+  "current_track": "CON.x",
   "progress_contract": "Weighted acceptance-criterion completion. Percentages describe the declared roadmap, not calendar time or delivery ETA.",
   "tracks": [
     {
@@ -98,7 +98,7 @@
       "id": "OP.x",
       "title": "Controlled Failover",
       "theme": "OPERATE",
-      "status": "planned",
+      "status": "in_progress",
       "weight": 18,
       "feature_ids": [
         "failover_readiness_assessment",
@@ -110,7 +110,7 @@
       "id": "CON.x",
       "title": "Operator Console (local control plane)",
       "theme": "OPERATE",
-      "status": "planned",
+      "status": "in_progress",
       "weight": 12,
       "feature_ids": [
         "operator_console_surface",
@@ -121,119 +121,108 @@
     }
   ],
   "now_next": {
+    "horizon_contract": "NOW is exactly one build. NEXT is exactly one. Everything else is an `upcoming` row carrying its own true status: planned = AFTER, blocked = waiting on a named external gate, deferred = consciously postponed. `now.build` must equal the newest project/build_history.json record -- utils.project_plan enforces it.",
     "now": {
-      "build": "0.7.4",
-      "title": "framework_mappings: requirement-level coverage",
-      "goal": "Model the framework side: utils/framework_catalog.py (declarative CIS/PCI-DSS/BDDK requirement lists, our own titles, applies flag), and compliance_overview.by_framework[name].requirements[] with per-requirement coverage (COVERED/PARTIALLY_COVERED/UNCOVERED/NOT_APPLICABLE) + posture (ALIGNED/FINDING/UNKNOWN), version/profile, requirement_counts, unmapped_control_refs. UI: per-framework requirement mini-bar + drill-down. Additive; no new control/collector; no server.",
+      "build": "architecture_convergence",
+      "title": "Architecture convergence and project-state closure",
+      "goal": "One action taxonomy replacing the read-only claim; one current-state authority; test-order pollution root-caused and fixed; roadmap re-sequenced onto the Operator Console -> Controlled Failover path.",
       "status": "automated_validated",
-      "started": "2026-08-29",
-      "completed": "2026-08-29"
+      "started": "2026-09-01",
+      "completed": "2026-09-01"
     },
     "next": {
-      "build": "RB.3b",
-      "title": "Check Point Gaia system backup collection (add backup local + SCP fetch)",
-      "goal": "operational-write class. Contract frozen and signed off 2026-08-31 (D3 scoped to the fail-closed SECURITYEXPERT_CP_BACKUP_ALLOWED_ENTITIES pilot allowlist; D4 / §7.3 p14 / §7.7 / §7.8 gates; ledger design + §3 rule 5). Spec, decisions B1-B11, AC-1..AC-14 and the step plan: docs/history/phase/RB_3B_CP_GAIA_BACKUP_COLLECTION.md. Steps 2-7 IMPLEMENTED 2026-08-31 against fixture transports: utils/recovery_operational_ledger.py + 5th evidence_backend concern and the offline gates (steps 2-4); checkpoint_recovery_collector.collect()'s one-SSH-session device core (step 5 + C6, Sonnet 5 extended thinking); main.py --recovery-collect --recovery-vendor checkpoint wiring (step 6); this project-metadata sync (step 7, Sonnet 5 normal). AC-1..AC-14 green; full suite 879/23/2, zero regressions. Status stays in_progress -- not IMPLEMENTED -- until the mandatory watched real R81.10/R81.20 single-gateway run happens; that is the only remaining item and it is hardware-gated, not engineering.",
-      "status": "in_progress"
+      "build": "OP.0c",
+      "title": "Failover readiness UI module (Operator Console + report)",
+      "goal": "The FAILOVER_ENGINE_ARCHITECTURE.md section 9 readiness surface over the ha_readiness.json OP.0a already produces: fleet view, readiness light, blocking reasons, history. Read-only, no new device command. It is simultaneously the next Operator Console surface and the next step on the failover path, which is why it is NEXT rather than either track's other candidates.",
+      "status": "planned",
+      "prerequisites": [
+        "OP.0a AUTOMATED_VALIDATED (met)"
+      ],
+      "note": "Triggers the HTML render harness and a tests/fixtures/uitest/ growth step (AGENTS.md project-state update rule)."
     },
+    "upcoming": [
+      {
+        "build": "CON.2 real-environment run",
+        "title": "Trigger a read-class console job against a real device",
+        "status": "planned",
+        "notes": [
+          "No new code. Corporate laptop. Closes CON.2 from AUTOMATED_VALIDATED to DONE."
+        ]
+      },
+      {
+        "build": "OP.0b",
+        "title": "HA preflight command battery (~16 new read commands)",
+        "status": "blocked",
+        "notes": [
+          "Blocked on the network-device command gate drafted in docs/history/phase/OP_0A_HA_READINESS_ASSESSMENT.md but not approved.",
+          "This is the gate that makes SAFE_TO_FAILOVER reachable at all; until it is approved every unit correctly reports INSUFFICIENT_EVIDENCE."
+        ]
+      },
+      {
+        "build": "OP.1",
+        "title": "Failover plan compiler and dry-run",
+        "status": "planned",
+        "notes": [
+          "Still write-free. Open decision op_degraded_verdict decides at this freeze."
+        ]
+      },
+      {
+        "build": "OP.2",
+        "title": "Controlled failover execution -- single vendor pilot",
+        "status": "blocked",
+        "notes": [
+          "The CLASS 2 build. Hard-gated by FAILOVER_ENGINE_ARCHITECTURE.md section 10: DEPLOY.1A OIDC + an RBAC OPERATE role, the command gate for the two write primitives and their rollbacks, and a signed-off change-management review.",
+          "One vendor proven before any cross-vendor abstraction is generalized."
+        ]
+      },
+      {
+        "build": "CON.3",
+        "title": "Operator Console operational-write actions",
+        "status": "blocked",
+        "notes": [
+          "Blocked on open decisions C-D4 and C-D6 and on RB.3b's hardware-gated run. Check RB.3b first: if it is still hardware-gated, CON.3 cannot start regardless of how the decisions land."
+        ]
+      },
+      {
+        "build": "RB.3b",
+        "title": "Check Point Gaia system backup collection",
+        "status": "blocked",
+        "notes": [
+          "Steps 2-7 implemented against fixture transports. Blocked only on the watched real R81.10/R81.20 single-gateway run -- hardware, not engineering."
+        ]
+      },
+      {
+        "build": "DEPLOY.1",
+        "title": "Ubuntu + Docker server migration",
+        "status": "blocked",
+        "notes": [
+          "Blocked on server availability (external). Carries the OIDC viewer boundary, evidence egress policy, CP strict host-key R2 and PAN TLS corporate-CA gates."
+        ]
+      },
+      {
+        "build": "DEV.0.3C",
+        "title": "History/CAS runtime boundary",
+        "status": "deferred",
+        "notes": [
+          "Pre-server, not a Corporate Git blocker. Config-evidence CAS still lives at repo-root data/configs (utils/config_evidence.py CONFIG_ROOT default)."
+        ]
+      },
+      {
+        "build": "OP.3+ / broader vendor coverage",
+        "title": "Additional vendor failover coverage",
+        "status": "deferred",
+        "notes": [
+          "Only after the first single-vendor pilot is proven in a real environment."
+        ]
+      }
+    ],
     "previous_recovery": {
       "build": "RB.3a",
       "title": "Check Point Gaia backup and snapshot attestation",
       "status": "automated_validated",
       "completed": "2026-08-31",
       "note": "Read-only 'show backups'/'show snapshots' per physical endpoint; populates the attestations input of compute_restore_readiness. checkpoint/checkpoint_recovery_attestation.py + utils.recovery_collect.run_recovery_attestation (RecoveryAttester, not a RecoveryCollector) + data/state/recovery_attestations.json + main.py --recovery-attest. 33 tests (AC-1..AC-10); full suite 804 passed / 2 pre-existing unrelated failures. Real Gaia validation owed (on_hardware_real_env_validation). See project/backlog.json native_backup for full evidence."
-    },
-    "upcoming": [
-      {
-        "build": "0.6.6B",
-        "title": "Compliance Rule-Pack Transition Foundation",
-        "status": "planned",
-        "notes": [
-          "Separate from 0.6.6A. Introduces a static, versioned, vendor-neutral rule-pack boundary around the existing ten deterministic CP/PAN controls.",
-          "Offline, privacy-safe and no-certification-claim semantics are mandatory; dynamic/signed packs, scoring and governance remain 0.7.x work."
-        ]
-      },
-      {
-        "build": "0.6.3 target",
-        "title": "Unified Configuration History + Diff UX",
-        "status": "planned"
-      },
-      {
-        "build": "RB.0-RB.6 (rebase of original 0.6.0B; design frozen 2026-08-30)",
-        "title": "Backup & Recovery - vendor-native recovery plane",
-        "status": "in_progress",
-        "notes": [
-          "Architecture: docs/design/BACKUP_AND_RECOVERY_ARCHITECTURE.md; frozen contracts: docs/design/BACKUP_RECOVERY_CONTRACTS.md. This IS the rebase the deferred original 0.6.0B milestone required.",
-          "RB.0 AUTOMATED_VALIDATED 2026-08-30: utils/restore_readiness.py + main.py --restore-readiness-check, offline/no-network/no-credentials/no-new-device-command per contract. 16 tests. See backlog.json native_backup for evidence detail.",
-          "RB.1 AUTOMATED_VALIDATED 2026-08-30: recovery-plane store (encryption, manifest, retention, validator; no collection). utils/recovery_crypto.py, recovery_manifest.py, recovery_store.py, recovery_retention.py; utils/runtime_paths.resolve_recovery_root; main.py --recovery-store-check; docker-compose.yml securityexpert-recovery volume on worker only. 41 tests covering every RB.1 security invariant from contract §9. See backlog.json native_backup for full evidence detail.",
-          "Driver: BackBox is not being renewed in 2027. Decision-critical caveat (architecture section 2): SecurityExpert is Check Point + Palo Alto only, and vendor scope is frozen by architecture_review_notes -- if BackBox currently backs up any other vendor, this product does NOT replace it for those devices. Open decision D1 (inventory what BackBox actually backs up) blocks the whole replacement premise.",
-          "Central boundary: configuration evidence is deliberately REDACTED (secrets_redacted: True) and therefore non-restorable by design. The recovery plane is a third, separate, encrypted, egress-denied plane -- never merged with the evidence plane, never rendered into the report or the support bundle.",
-          "RB.0 (restore-readiness over existing evidence) and RB.1 (recovery store) are buildable now: read-only, no new device command, no server. RB.0 rebases restore_readiness FORWARD from 0.9.x because it depends on nothing later in the sequence and quantifies the BackBox exit risk with real numbers.",
-          "D2 RESOLVED 2026-08-30 (product owner): PAN service account may hold superuser for device-state export only. RB.2 IMPLEMENTED 2026-08-30 (real-env validation owed -- no device reachability in this sandbox): utils/recovery_collect.py (target selection incl. explicit gateway lists and VSX __vsid_ addressing, vendor dispatch, admission-coordinated per target), panorama/panorama_recovery_collector.py (PAN device-state export, read class, session-reuse, no 403 retry), checkpoint/checkpoint_recovery_collector.py (typed blocked stub -- P0 audit + D3 still unresolved), main.py --recovery-collect/--recovery-vendor/--recovery-gateways (thin dispatch, zero collection logic per explicit product direction), collection_executor ALLOWLISTED_WORKFLOWS +'recovery-pan' (not 'recovery-cp') with an additive optional per-schedule 'targets' field. RB.4 AUTOMATED_VALIDATED 2026-08-30: utils/recovery_validation.py (V1-V3 battery) + main.py --recovery-validate. 85 new tests. See backlog.json native_backup for full evidence detail.",
-          "RB.3a AUTOMATED_VALIDATED 2026-08-31 (feature/rb-3a-attestation; contract docs/history/phase/RB_3A_CP_GAIA_BACKUP_ATTESTATION.md, gate contracts §7.5 signed off 2026-08-31): read-only CP Gaia attestation. checkpoint/checkpoint_recovery_attestation.py runs exactly ('show backups','show snapshots') per physical endpoint (literal-tuple pre-wire guard, not a prefix test) with a bounded fail-closed parser emitting {class, age_days (nullable), source} and discarding the artifact name; utils.recovery_collect.run_recovery_attestation + RecoveryAttester protocol (a sibling of run_recovery_collection, NOT a RecoveryCollector -- an attestation has no plaintext and never enters the recovery store); data/state/recovery_attestations.json (securityexpert-recovery-attestations-v1); main.py --recovery-attest and an attestation read in --restore-readiness-check. VSX virtual systems never contacted, stay UNPROTECTED; Spark/Gaia Embedded UNSUPPORTED with zero commands; 'recovery-attest-cp' deliberately not allowlisted for scheduling. utils/restore_readiness.py unchanged. Design-doc amendments C1 (§5 age_days nullable) + C2 (§10.3) landed. 33 new tests; full suite 804 passed / 20 skipped / 2 pre-existing unrelated failures. Real Gaia validation owed (on_hardware_real_env_validation). See backlog.json native_backup for full evidence detail.",
-          "RB.3b (CP Gaia system backup COLLECTION, 'add backup local' + SCP fetch, operational-write) is the next recovery build: D3 RESOLVED 2026-08-31 (product owner, scoped to a fail-closed named pilot set); all five further blockers -- D4, §7.3 point 14, the §7.7/§7.8 gate entries, the durable per-endpoint 1/24h operational-write ledger, and refusing to store a version-unknown CP artifact -- SIGNED OFF / ACCEPTED 2026-08-31. RB.3b is CLEARED FOR IMPLEMENTATION. Orchestration/store/admission wiring for CP already exists (shared with RB.2/RB.3a). The P0 cp_device_interaction_safety audit closed 2026-08-25 and is not a blocker -- do not re-cite it as open.",
-          "RB.3b unblocking prep DONE 2026-08-31 (feature/rb-3b-gate-prep, ARCHITECTURE/DOCS, no code, no device call), then REVIEWED AND SIGNED OFF 2026-08-31 (product owner / security lead / network-security leads). All five blockers cleared: D4 SIGNED OFF (docs/design/D4_BACKUP_CREDENTIAL_IDENTITY_DECISION.md -- Option A distinct backup service account SECURITYEXPERT_CP_BACKUP_SSH_USERNAME + _PASSWORD_FILE/_PASSWORD, NO fallback to SECURITYEXPERT_CP_CONFIG_SSH_*, fails closed pre-contact; Option C DEV.2.2 mounted-material custody for the pilot, DEPLOY.1 vault later; architecture §13 D4 row resolved; RB.2/PAN owes a matching split from the inventory API key before it leaves IMPLEMENTED -- not a blocker); §7.3 point 14 device-impact assessment SIGNED OFF (closed P0 audit dependency superseded); BACKUP_RECOVERY_CONTRACTS.md §7.7 (/var/log free-space read, read class) and §7.8 (backup deletion, operational-write, deletes ONLY the exact name this run created, CLEANUP_FAILED + endpoint-ineligible if it cannot) both SIGNED OFF -- estate is R81.10 + R81.20 only, literal Gaia strings kept as written ('show diskspace' Clish / 'df -P /var/log' Expert; 'delete backup <name>' Clish / 'rm -f -- /var/log/CPbackup/backups/<name>' Expert); the R81 Gaia Administration Guide documentation check for the sign-off found neither 'show diskspace' nor a per-name 'delete backup <name>' Clish form documented for R81 (R81 documents Portal-only backup deletion; R80.30 lists 'delete backup' with no name argument), while the Expert forms (df -P /var/log, rm -f -- /var/log/CPbackup/backups/<name>) are exact -- so the exact-token check is MOVED to the first watched real R81.10/R81.20 gateway run, and if a Clish form is absent on that build the Expert form is the sole and primary form (still an explicit literal in the collector's frozen set, never a prefix-rule relaxation); SECURITYEXPERT_CP_BACKUP_MIN_FREE_MB default 3072 accepted as an interim value; docs/design/RECOVERY_OPERATIONAL_WRITE_LEDGER.md DESIGN ACCEPTED (module utils/recovery_operational_ledger.py, a fifth DEV.3.3 evidence-backend concern OperationalWriteLedgerBackend with filesystem + Postgres impls and a select_ factory, read INSIDE the admission-held section, fail-closed on an unreadable/unreachable ledger, absent ledger != error, false-refusal-over-false-proceed understood; contract §7.3 point 6 tightened as C3 + new §9.13 test obligation); contract §3 frozen rule 5 tightened as C4 ACCEPTED AS WRITTEN -- a version-locked CP class (cp_gaia_backup/cp_mgmt_export/cp_mds_backup) with no resolvable software_version is NOT stored, PAN keeps the honest 'unknown' sentinel. Amendments C1-C5 landed in the design docs; C6 (§9.12 for a workflow with no scheduler entry) folded into RB.3b implementation steps 5-6. NEXT: RB.3b IMPLEMENTATION (Sonnet 5 normal for the ledger/gating/precondition-parser steps 2-4, Sonnet 5 extended thinking only for step 5, the device-touching core).",
-          "RB.6 (controlled restore) is hard-gated at the OP.2 bar and is explicitly NOT buildable; the manifest reserves a restore block that the RB.1 validator rejects, keeping restore additive per the roadmap binding design consequence.",
-          "Correction 2026-08-30 (architecture doc section 9): scheduled recovery collection does NOT need to wait for distributed_endpoint_lock_and_job_store (DEV.3.2/3.3) -- that only matters once collection splits across multiple containers (per_vendor_worker_split, deferred). Under the current single-process DEV.3.1 deployment, collection_executor's in-memory coordinator already serializes per endpoint for every scheduled workflow, checkpoint/cp/vsx/pan-config included; recovery-pan scheduling uses the exact same mechanism, verified end-to-end via a real --scheduler-once run."
-        ]
-      },
-      {
-        "build": "0.7.x",
-        "title": "Compliance / Expected-State Verification",
-        "status": "early_foundation_delivered",
-        "notes": [
-          "Early VERIFY foundation delivered ahead of formal 0.7.x track in 0.6.1B.1.5 (compliance posture model) and 0.6.1B.1.6 (compliance control pack v1): evidence-backed control states, CIS/PCI-DSS/BDDK framework area mappings, 10 deterministic vendor-neutral controls with CP/PAN adapters, traceability metadata and planned-gap semantics.",
-          "No-certification-claim semantics preserved. Formal 0.7.x work begins with compliance_posture_rulepack_transition: promote existing controls to versioned rule packs with stronger framework governance."
-        ]
-      },
-      {
-        "build": "DEPLOY.1 (pulled forward from 1.0 server_data_plane)",
-        "title": "Ubuntu + Docker Server Migration & Git Repository Foundation",
-        "status": "planned",
-        "notes": [
-          "Target stack: Ubuntu host, Docker Compose, Nginx (TLS + IP allowlist) in front of an app+scheduler service, containerized Postgres for metadata/evidence/job state, a separate secrets vault component for device credentials (encryption, not hashing), and a separate versioned backup/policy-package volume kept independent from the evidence Postgres instance per the existing native_backup_foundation distinction.",
-          "Repository migration: move off zip-based handover onto git (internal Bitbucket DC preferred over public GitHub for this codebase; if GitHub is used, private repo only) so future sessions use git pull/diff instead of re-uploading the full project.",
-          "Mandatory before first push: secret-scan the full history-to-be (credentials, real IPs/hostnames in test fixtures or docs) and confirm .gitignore excludes data/, output/, logs/, and any local .env.",
-          "Write/change automation to firewalls stays outside this item's scope and outside the roadmap gate (see roadmap_notes); this item is deployment/CI infrastructure only, read-only collection remains the only active capability.",
-          "Per-device job lock/coordinator (from the 0.6.1B.1.3 safety audit) must be part of the scheduler design before recurring/scheduled jobs replace the current on-demand run model.",
-          "DEPLOY.1A authenticated read-only OIDC viewer boundary (deploy1_oidc_viewer) must be accepted before the server is opened for internal use; IP allowlist is defense-in-depth only.",
-          "Evidence egress and sharing policy (deploy1_evidence_egress_policy) must be defined and enforced before any additional egress paths (event webhook, TI enrichment) are opened.",
-          "Step breakdown for the readiness work is under engineering_tracks DEV.2 (server runtime foundation), DEV.3 (containerization) and DEV.4 (CI/CD & production hardening); backlog items noninteractive_runtime_config, deploy_persistent_secret_material, linux_container_image, distributed_endpoint_lock (AUTOMATED_VALIDATED 2026-08-30), distributed_evidence_store_migration and per_vendor_worker_split carry the actionable scope."
-        ]
-      },
-      {
-        "build": "OP.x (design frozen; write-free parts buildable post-DEPLOY.1)",
-        "title": "Controlled Failover - HA readiness assessment, plan compiler, gated execution",
-        "status": "planned",
-        "notes": [
-          "Architecture: docs/design/FAILOVER_ENGINE_ARCHITECTURE.md. Analyses the real per-vendor failover procedure (CP ClusterXL HA/LS + VSX, PAN A/P + A/A), the preflight stop-conditions, the graceful active-initiated single-step approach, and post-failover verification.",
-          "OP.0 (HA readiness / failover-safety assessment + SCC dashboard) is read-only and the first buildable step; OP.1 adds the dry-run plan compiler; OP.2 (controlled execution) is write-gated - see roadmap_notes.",
-          "OP.0 SPLIT 2026-09-01 at contract freeze (docs/history/phase/OP_0A_HA_READINESS_ASSESSMENT.md, decision P1). A source audit found the CP 'cphaprob stat' and PAN 'show high-availability state' reads are already gated and already collected, so: OP.0a = assessment engine over existing evidence, ZERO new device commands, no approval blocking it, CONTRACT FROZEN and cleared for implementation; OP.0b = the section 3.1/3.2 preflight command battery, behind a command gate DRAFTED in that contract but NOT approved; OP.0c = the section 9 Failover UI module. Same read-before-write sequencing RB.3a/RB.3b and CON.1/CON.2 already used.",
-          "OP.0a can never emit SAFE_TO_FAILOVER or DEGRADED_PROCEED_WITH_RISK (contract decision P4, enforced by AC-6). It reports UNSAFE_DO_NOT_FAILOVER, NOT_A_FAILOVER_UNIT or INSUFFICIENT_EVIDENCE with a named missing command. This is deliberate: a green light computed from part of the stop-condition set is the exact failure mode the design doc exists to prevent."
-        ]
-      },
-      {
-        "build": "0.7.1 (contract next)",
-        "title": "Compliance control enrichment, framework grouping & file-based assignment",
-        "status": "planned",
-        "notes": [
-          "Buildable now (no server). Versioned declarative control catalog with severity + per-framework CIS/PCI-DSS/BDDK membership; ~20-28 deterministic controls; data/state/control_assignments.json policy (groups, include/exclude, file-based waivers); engine filters per device; additive compliance_overview roll-up on the Overview pane; read-only Compliance workbench spine (progressive KPI -> framework -> control -> subject -> evidence).",
-          "Design + expert-lens analysis (compliance/risk, security manager, architect, UI): docs/design/COMPLIANCE_ASSIGNMENT_AND_FRAMEWORKS.md."
-        ]
-      },
-      {
-        "build": "CON.0-CON.5 (architecture frozen 2026-08-31)",
-        "title": "Operator Console - authenticated local control plane over the existing engine",
-        "status": "planned",
-        "notes": [
-          "Architecture: docs/design/OPERATOR_CONSOLE_ARCHITECTURE.md; per-phase contracts: docs/history/phase/CON_1..CON_5.",
-          "A second delivery surface, not a dynamic report: the exported static HTML report keeps its portable, action-free form and one UI source tree feeds both.",
-          "The browser sends intent (a job_type from a closed server-side registry plus validated entity ids), never a device command or an argv fragment.",
-          "Adds no device path: execution reuses main(argv, runtime_services, provenance) exactly as the scheduler does, plus the existing coordinator admission and operational-write ledger.",
-          "CON.1 is blocked on codebase_modularization (frontend) landing first; CON.3 is blocked on RB.3b reaching REAL_ENV_VALIDATED.",
-          "Open decisions C-D1..C-D8 in the architecture doc section 11 are product-owner/security calls, not engineering work."
-        ]
-      }
-    ]
+    }
   },
   "roadmap_notes": [
     "Original roadmap milestones are preserved in history even when implementation order changes.",
@@ -349,7 +338,7 @@
     {
       "id": "DEV.2",
       "title": "Server Runtime Foundation",
-      "status": "planned",
+      "status": "in_progress",
       "steps": [
         {
           "build": "DEV.2.1",
@@ -371,7 +360,7 @@
     {
       "id": "DEV.3",
       "title": "Containerization",
-      "status": "planned",
+      "status": "in_progress",
       "steps": [
         {
           "build": "DEV.3.1",

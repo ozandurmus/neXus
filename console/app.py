@@ -36,6 +36,7 @@ from console.jobs import TERMINAL_STATES, ConsoleJobStore
 from console.payloads import build_console_payloads
 from console.registry import JOB_REGISTRY, get_job_type
 from console.runner import ConsoleJobRunner
+from utils.action_taxonomy import console_refusal
 from utils.html_export import compose_modules, read_text_file
 from utils.restore_readiness import resolve_entity_id
 
@@ -164,9 +165,13 @@ def create_app(
                 "vendor": jt.vendor,
                 "requires_confirmation": jt.requires_confirmation,
                 # C2-6: the UI renders an honest BLOCKED state instead of a
-                # button that would 409 on click.
-                "blocked": jt.command_class != "read",
-                "blocked_reason": "operational_write_not_enabled" if jt.command_class != "read" else None,
+                # button that would 409 on click. The block decision and its
+                # reason both come from utils.action_taxonomy, so this surface
+                # cannot drift from the taxonomy it claims to enforce.
+                "action_class": jt.action_class.id,
+                "action_class_level": jt.action_class.level,
+                "blocked": console_refusal(jt.action_class) is not None,
+                "blocked_reason": console_refusal(jt.action_class),
             }
             for jt in JOB_REGISTRY.values()
         ])
@@ -209,10 +214,16 @@ def create_app(
         elif targets:
             raise HTTPException(status_code=400, detail=f"job_type {job_type.id!r} does not accept targets")
 
-        # C2-6: operational-write is a deliberate staging gate, refused here
-        # before any job record is even created.
-        if job_type.command_class != "read":
-            raise HTTPException(status_code=409, detail={"error": "operational_write_not_enabled"})
+        # C2-6: anything above CLASS 0 is a deliberate staging gate, refused
+        # here before any job record is even created. The refusal code names
+        # the actual class, so a CLASS 1 recovery write and a future CLASS 2
+        # operational state change do not report the same reason.
+        refusal = console_refusal(job_type.action_class)
+        if refusal is not None:
+            raise HTTPException(
+                status_code=409,
+                detail={"error": refusal, "action_class": job_type.action_class.id},
+            )
 
         record, is_new = job_store.submit(
             job_type=job_type.id,

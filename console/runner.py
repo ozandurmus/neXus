@@ -16,6 +16,7 @@ import threading
 
 from console.jobs import ConsoleJobStore
 from console.registry import JobType, get_job_type
+from utils.action_taxonomy import console_refusal
 
 
 def _build_argv(job_type: JobType, runtime_root, targets: list[str]) -> list[str]:
@@ -73,9 +74,10 @@ class ConsoleJobRunner:
         if job_type is None:
             self._job_store.mark_terminal(job_id, state="failed", error_code="unknown_job_type")
             return
-        if job_type.command_class != "read":
+        refusal = console_refusal(job_type.action_class)
+        if refusal is not None:
             # Defense in depth: the route already refuses this at POST time (C2-6).
-            self._job_store.mark_terminal(job_id, state="blocked", error_code="operational_write_not_enabled")
+            self._job_store.mark_terminal(job_id, state="blocked", error_code=refusal)
             return
 
         self._job_store.mark_running(job_id)

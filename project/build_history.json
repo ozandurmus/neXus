@@ -3,6 +3,18 @@
   "record_contract": "One structured record per build, newest first. Required: build, status, title, summary (<= 2 sentences). Optional: started, completed, track, movement, supersedes, evidence, risks_forward, docs{agreement,validation,handover} (repo-relative paths under docs/history/). Full detail lives in the linked doc; do not restate it here. Status vocabulary must stay within utils/project_plan.py STATUS_VALUES.",
   "builds": [
     {
+      "build": "architecture_convergence",
+      "status": "automated_validated",
+      "title": "Architecture convergence and project-state closure",
+      "summary": "Source-audited the repository against its own documentation and repaired the drift: one action taxonomy (utils/action_taxonomy.py) replaces the no-longer-true \"read-only\" claim, six competing current-state authorities were reduced to one, and the two long-standing \"order-dependent\" test failures were root-caused to an unrestored module rebind in scripts/render_uitest.py and fixed.",
+      "started": "2026-09-01",
+      "completed": "2026-09-01",
+      "track": "governance",
+      "movement": "ARCHITECTURE",
+      "evidence": "Full suite green serially and under xdist; repository privacy gate PASS/0; project metadata_warnings == [] under the new cross-authority rules.",
+      "risks_forward": "CLASS 2 (operational state change) has no member yet and stays empty until every OP.2 prerequisite is met. Tests still write into the gitignored repo-root data/."
+    },
+    {
       "build": "failover_readiness_assessment",
       "status": "automated_validated",
       "started": "2026-09-01",
@@ -109,7 +121,7 @@
     },
     {
       "build": "codebase_modularization_frontend",
-      "status": "in_progress",
+      "status": "complete",
       "started": "2026-09-01",
       "completed": "2026-09-01",
       "title": "Frontend modularization - static/app.js split into eight responsibility-owned files",
