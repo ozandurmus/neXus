@@ -11,13 +11,14 @@ from utils.collection_executor import (
     ScheduledWorkflow,
 )
 import pytest
+from utils.html_export import compose_report_script as _composed_report_script
 
 pytestmark = pytest.mark.discovery
 
 
 ROOT = Path(__file__).resolve().parents[1]
 TEMPLATE = (ROOT / "templates" / "index.html").read_text(encoding="utf-8")
-APP = (ROOT / "static" / "app.js").read_text(encoding="utf-8")
+APP = _composed_report_script()
 CSS = (ROOT / "static" / "style.css").read_text(encoding="utf-8")
 HTML_EXPORT = (ROOT / "utils" / "html_export.py").read_text(encoding="utf-8")
 

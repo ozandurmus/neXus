@@ -24,7 +24,25 @@ OUTPUT_HTML = BASE_DIR / "output" / "index.html"
 
 TEMPLATE_FILE = BASE_DIR / "templates" / "index.html"
 STYLE_FILE = BASE_DIR / "static" / "style.css"
-SCRIPT_FILE = BASE_DIR / "static" / "app.js"
+
+# codebase_modularization (frontend): static/app.js was split into eight
+# responsibility-owned source files. They are concatenated here, in this fixed
+# dependency order (D-MOD5), into the exact same single inline <script> the
+# report has always shipped — no bundler, no ES modules, no build step (D-MOD1).
+# The browser executes byte-for-byte the same flat top-level script; only the
+# on-disk source layout changed. tests/test_frontend_module_composition.py
+# statically enforces that no file references an identifier a later file owns.
+SCRIPT_MODULE_FILENAMES = (
+    "app_core.js",
+    "inventory_ui.js",
+    "configuration_ui.js",
+    "compliance_ui.js",
+    "discovery_ui.js",
+    "project_plan_ui.js",
+    "overview_ui.js",
+    "app_bootstrap.js",
+)
+SCRIPT_FILES = tuple(BASE_DIR / "static" / name for name in SCRIPT_MODULE_FILENAMES)
 
 # html_render_performance (0.6.x polish): opt-in stage-timing switch. Reading
 # this env var (rather than threading a profile= kwarg through every
@@ -38,6 +56,21 @@ def read_text_file(path: Path) -> str:
         raise FileNotFoundError(f"Required file not found: {path}")
 
     return path.read_text(encoding="utf-8")
+
+
+def compose_report_script(repository_root=None) -> str:
+    """The single inline ``<script>`` body — the eight module source files
+    (``SCRIPT_MODULE_FILENAMES``) joined in composition order exactly as
+    ``run_html_export`` inlines them at ``__SCRIPT_PLACEHOLDER__``.
+
+    codebase_modularization (frontend): before the split this was one
+    ``static/app.js`` read; test harnesses that inspect the report script as a
+    single string call this instead.
+    """
+    base = Path(repository_root) if repository_root is not None else BASE_DIR
+    return "\n".join(
+        read_text_file(base / "static" / name) for name in SCRIPT_MODULE_FILENAMES
+    )
 
 
 def _script_json(value) -> str:
@@ -141,7 +174,7 @@ def run_html_export(
     compliance_data_root = Path(data_root) if data_root is not None else (repository_root / "data")
     template_file = repository_root / "templates" / "index.html"
     style_file = repository_root / "static" / "style.css"
-    script_file = repository_root / "static" / "app.js"
+    script_files = [repository_root / "static" / name for name in SCRIPT_MODULE_FILENAMES]
 
     unified_json = Path(unified_json)
     output_html = Path(output_html)
@@ -218,7 +251,9 @@ def run_html_export(
     with _stage_timer(timings, "read_template_files"):
         template = read_text_file(template_file)
         css = read_text_file(style_file)
-        javascript = read_text_file(script_file)
+        # D-MOD1: one read_text_file per module file, joined with a single
+        # newline, into the same single string inlined at __SCRIPT_PLACEHOLDER__.
+        javascript = "\n".join(read_text_file(path) for path in script_files)
 
     # html_render_optimization: split out from the "fill_template" stage,
     # which used to wrap both this JSON serialization and the regex

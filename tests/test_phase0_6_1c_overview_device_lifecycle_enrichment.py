@@ -15,13 +15,14 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from utils.html_export import compose_report_script as _composed_report_script
 
 pytestmark = pytest.mark.discovery
 
 
 ROOT = Path(__file__).resolve().parents[1]
 TEMPLATE = (ROOT / "templates" / "index.html").read_text(encoding="utf-8")
-APP = (ROOT / "static" / "app.js").read_text(encoding="utf-8")
+APP = _composed_report_script()
 
 
 def _bun() -> str | None:
