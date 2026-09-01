@@ -19,71 +19,43 @@ from application.services import _require_bootstrap
 
 
 def _load_cp_ha_runtime(output_root) -> dict[str, dict]:
-    """Read `ha_role` / `ha_cluster_mode` per entity from
-    `cp_config_telemetry.json`, as populated by a prior `--cp-config-collect`
-    run from the already-gated `cphaprob stat`.
+    """Read `cp_config_telemetry.json` and extract `ha_role` /
+    `ha_cluster_mode` per entity via the pure, shared extractor (OP.0c:
+    `utils.failover_readiness_ui` -- the console's live projection calls the
+    same function over the same file's already-parsed contents, so the CLI
+    snapshot and the console can never disagree about what the file means).
 
     Missing, corrupt or malformed -> `{}` ("no HA runtime evidence"), never an
     error. Every CP unit then reports INSUFFICIENT_EVIDENCE, which is the
     correct answer rather than a degraded mode (contract correctness rule 6).
     """
+    from utils.failover_readiness_ui import extract_cp_ha_runtime
+
     path = Path(output_root) / "cp_config_telemetry.json"
     try:
         doc = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
-        return {}
-    if not isinstance(doc, dict):
-        return {}
-    runtime: dict[str, dict] = {}
-    for device in doc.get("devices") or []:
-        if not isinstance(device, dict):
-            continue
-        entity_id = str(device.get("entity_id") or "").strip()
-        if not entity_id:
-            continue
-        runtime[entity_id] = {
-            "ha_role": device.get("ha_role"),
-            "ha_cluster_mode": device.get("ha_cluster_mode") or "unknown",
-        }
-    return runtime
+        doc = None
+    return extract_cp_ha_runtime(doc)
 
 
 def _load_pan_ha_runtime(output_root) -> tuple[dict[str, dict], dict[str, str]]:
-    """Read PAN HA runtime state and the configured peer address per entity
-    from `pan_config_telemetry.json`.
+    """Read `pan_config_telemetry.json` and extract PAN HA runtime state plus
+    the configured peer address per entity via the shared extractor (see
+    `_load_cp_ha_runtime`).
 
     Returns `(runtime, peers)`. Same fail-safe posture as the CP loader: a
     missing or corrupt file degrades to empty maps, never to an error. `peers`
     feeds the contract-P7 pair assembly, which is fail-closed on its own.
     """
+    from utils.failover_readiness_ui import extract_pan_ha_runtime
+
     path = Path(output_root) / "pan_config_telemetry.json"
     try:
         doc = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
-        return {}, {}
-    if not isinstance(doc, dict):
-        return {}, {}
-    runtime: dict[str, dict] = {}
-    peers: dict[str, str] = {}
-    for device in doc.get("devices") or []:
-        if not isinstance(device, dict):
-            continue
-        entity_id = str(device.get("entity_id") or device.get("device") or "").strip()
-        if not entity_id:
-            continue
-        ha = device.get("ha_runtime")
-        if isinstance(ha, dict):
-            runtime[entity_id] = {
-                "enabled": ha.get("enabled"),
-                "state": ha.get("state"),
-                "mode": ha.get("mode"),
-                "peer_state": ha.get("peer_state"),
-                "state_sync": ha.get("state_sync"),
-            }
-            peer_ip = str(ha.get("peer_ip") or "").strip()
-            if peer_ip:
-                peers[entity_id] = peer_ip
-    return runtime, peers
+        doc = None
+    return extract_pan_ha_runtime(doc)
 
 
 def ha_readiness_check(ctx):

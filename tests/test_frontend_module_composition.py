@@ -1,7 +1,7 @@
 """codebase_modularization (frontend) — AC-3 static dependency-order check.
 
 ``static/app.js`` (one flat 4,905-line script, 173 implicit top-level globals)
-was split into eight responsibility-owned files that ``utils.html_export``
+was split into responsibility-owned files (nine as of OP.0c) that ``utils.html_export``
 concatenates, in a fixed order, back into the same single inline ``<script>``
 (D-MOD1: no bundler, no ES modules, no build step). Nothing at runtime changed
 — the browser still executes one flat top-level script.
@@ -38,6 +38,7 @@ STATIC = ROOT / "static"
 PAGE_LEVEL_CONSTS = {
     "rawData", "configUiData", "complianceUiData", "cryptoUiData",
     "projectPlanData", "discoveryUiData", "exclusionsUiData",
+    "failoverReadinessData",
 }
 
 # The cross-module navigation dispatcher (D-MOD5 audit: "switchModule/savedModule
@@ -130,7 +131,9 @@ def test_every_top_level_function_survived_the_split():
     # (inventory_ui.js, configuration_ui.js, compliance_ui.js) that recompute
     # payload-derived state initializeReport() now calls explicitly instead
     # of each module computing it once at load time against the still-empty
-    # default payload — so the floor is now 178.
+    # default payload — so the floor was 178. OP.0c added
+    # failover_readiness_ui.js's three functions (failoverVerdictTone,
+    # failoverCheckStatusTone, renderFailoverModule) — 181.
     all_defs = []
     per_file = {}
     for name in SCRIPT_MODULE_FILENAMES:
@@ -139,6 +142,6 @@ def test_every_top_level_function_survived_the_split():
         per_file[name] = fns
         all_defs.extend(fns)
 
-    assert len(all_defs) == 178, f"expected 178 top-level functions, found {len(all_defs)}"
+    assert len(all_defs) == 181, f"expected 181 top-level functions, found {len(all_defs)}"
     dupes = sorted({f for f in all_defs if all_defs.count(f) > 1})
     assert not dupes, f"functions defined in more than one module file: {dupes}"

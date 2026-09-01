@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "current_build": "architecture_convergence",
+  "current_build": "failover_readiness_ui",
   "current_track": "CON.x",
   "progress_contract": "Weighted acceptance-criterion completion. Percentages describe the declared roadmap, not calendar time or delivery ETA.",
   "tracks": [
@@ -123,22 +123,22 @@
   "now_next": {
     "horizon_contract": "NOW is exactly one build. NEXT is exactly one. Everything else is an `upcoming` row carrying its own true status: planned = AFTER, blocked = waiting on a named external gate, deferred = consciously postponed. `now.build` must equal the newest project/build_history.json record -- utils.project_plan enforces it.",
     "now": {
-      "build": "architecture_convergence",
-      "title": "Architecture convergence and project-state closure",
-      "goal": "One action taxonomy replacing the read-only claim; one current-state authority; test-order pollution root-caused and fixed; roadmap re-sequenced onto the Operator Console -> Controlled Failover path.",
+      "build": "failover_readiness_ui",
+      "title": "Failover readiness UI module (Operator Console + report)",
+      "goal": "The FAILOVER_ENGINE_ARCHITECTURE.md section 9 readiness surface over utils.failover.compute_ha_readiness: fleet view of every HA cluster/pair, per-unit verdict, per-stop-condition blocking reasons, the OP.0a fail-closed framing note. Read-only, computed live off already-loaded evidence, no new device command, no execution control.",
       "status": "automated_validated",
       "started": "2026-09-01",
       "completed": "2026-09-01"
     },
     "next": {
-      "build": "OP.0c",
-      "title": "Failover readiness UI module (Operator Console + report)",
-      "goal": "The FAILOVER_ENGINE_ARCHITECTURE.md section 9 readiness surface over the ha_readiness.json OP.0a already produces: fleet view, readiness light, blocking reasons, history. Read-only, no new device command. It is simultaneously the next Operator Console surface and the next step on the failover path, which is why it is NEXT rather than either track's other candidates.",
+      "build": "op0_failover_readiness_real_env_closure",
+      "title": "Failover readiness real-environment evidence",
+      "goal": "Confirm OP.0a ha_cluster_mode resolution against a real CP/PAN HA pair (the fixture-constructed mode mapping is not yet hardware-confirmed) and eyeball the new Failover module in Operator Console against that real evidence. No new code expected; a decision on OP.0b gate approval is the other open item on this path.",
       "status": "planned",
       "prerequisites": [
-        "OP.0a AUTOMATED_VALIDATED (met)"
+        "OP.0c AUTOMATED_VALIDATED (met)"
       ],
-      "note": "Triggers the HTML render harness and a tests/fixtures/uitest/ growth step (AGENTS.md project-state update rule)."
+      "note": "This is a real-environment validation step, not a new build with its own contract -- see CURRENT_STATE.md Real-environment validation owed."
     },
     "upcoming": [
       {

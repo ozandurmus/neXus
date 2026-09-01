@@ -1163,7 +1163,7 @@
       "weight": 6,
       "summary": "Read-only per-vendor preflight battery that scores whether an HA cluster is safe to fail over, and why not.",
       "why": "The safety net and foundation for any controlled failover; valuable on its own as a VERIFY-plane capability.",
-      "note": "Split 2026-09-01 into OP.0a / OP.0b / OP.0c - docs/history/phase/OP_0A_HA_READINESS_ASSESSMENT.md decision P1. OP.0a (ha_unit_derivation + readiness_verdict) is IMPLEMENTED / AUTOMATED_VALIDATED 2026-09-01 with zero new device commands; preflight_battery is OP.0b and is blocked on an un-approved command gate drafted in that contract; scc_readiness_dashboard is OP.0c. SAFE_TO_FAILOVER stays unreachable until OP.0b lands (decision P4, enforced by AC-6).",
+      "note": "Split 2026-09-01 into OP.0a / OP.0b / OP.0c - docs/history/phase/OP_0A_HA_READINESS_ASSESSMENT.md decision P1. OP.0a (ha_unit_derivation + readiness_verdict) is IMPLEMENTED / AUTOMATED_VALIDATED 2026-09-01 with zero new device commands; preflight_battery is OP.0b and is blocked on an un-approved command gate drafted in that contract; scc_readiness_dashboard is OP.0c, IMPLEMENTED / AUTOMATED_VALIDATED 2026-09-01 (Operator Console + report Failover module over compute_ha_readiness, read-only, no execution control). SAFE_TO_FAILOVER stays unreachable until OP.0b lands (decision P4, enforced by AC-6), so the dashboard correctly shows INSUFFICIENT_EVIDENCE/NOT_A_FAILOVER_UNIT today.",
       "criteria": [
         {
           "id": "ha_unit_derivation",
@@ -1185,8 +1185,8 @@
         },
         {
           "id": "scc_readiness_dashboard",
-          "label": "OP.0c - SCC readiness dashboard + history (read-only)",
-          "state": "pending",
+          "label": "OP.0c - SCC readiness dashboard + history (read-only) -- done: fleet view + blocking reasons; history is future scope",
+          "state": "done",
           "weight": 1
         }
       ]

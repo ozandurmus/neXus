@@ -1,0 +1,94 @@
+// SecurityExpert report UI — failover_readiness_ui: Failover module (OP.0c)
+//
+// Read-only. Renders utils.failover_readiness_ui's payload verbatim -- no
+// verdict/check computation happens here, only formatting. There is
+// deliberately no execute/prepare/authorise control anywhere in this file.
+
+function failoverVerdictTone(verdict) {
+    const payload = failoverReadinessData || {};
+    return (payload.verdict_tones || {})[verdict] || "neutral";
+}
+
+
+function failoverCheckStatusTone(status) {
+    const payload = failoverReadinessData || {};
+    return (payload.check_status_tones || {})[status] || "neutral";
+}
+
+
+function renderFailoverModule() {
+    const payload = failoverReadinessData || {};
+    const summary = payload.summary || {};
+    const units = Array.isArray(payload.units) ? payload.units : [];
+    const verdictLabels = payload.verdict_labels || {};
+    const checkStatusLabels = payload.check_status_labels || {};
+    const unitTypeLabels = payload.unit_type_labels || {};
+
+    const framingHost = document.getElementById("failoverFramingNote");
+    if (framingHost) {
+        framingHost.textContent = payload.framing_note
+            || "Failover readiness evidence is not available for this run.";
+    }
+
+    const executionHost = document.getElementById("failoverExecutionNote");
+    if (executionHost) {
+        executionHost.textContent = payload.execution_unavailable_note || "";
+    }
+
+    const summaryHost = document.getElementById("failoverFleetSummary");
+    if (summaryHost) {
+        const total = Object.values(summary).reduce((sum, value) => sum + Number(value || 0), 0);
+        const verdictOrder = [
+            "SAFE_TO_FAILOVER", "DEGRADED_PROCEED_WITH_RISK", "UNSAFE_DO_NOT_FAILOVER",
+            "INSUFFICIENT_EVIDENCE", "NOT_A_FAILOVER_UNIT",
+        ];
+        summaryHost.innerHTML = `
+            <article class="project-progress-card primary">
+                <div class="eyebrow">HA units assessed</div>
+                <div class="project-progress-value">${escapeHtml(formatNumber(total))}</div>
+                <p>Every unit reports one of five verdicts below -- INSUFFICIENT_EVIDENCE is the honest default until the OP.0b preflight battery exists.</p>
+            </article>
+            <article class="project-progress-card">
+                <div class="eyebrow">Verdicts</div>
+                <div class="project-status-summary">
+                    ${verdictOrder.map(key => `<span>${escapeHtml(verdictLabels[key] || key)}<strong>${escapeHtml(formatNumber(summary[key]))}</strong></span>`).join("")}
+                </div>
+            </article>
+        `;
+    }
+
+    const tableHost = document.getElementById("failoverUnitTable");
+    if (tableHost) {
+        tableHost.innerHTML = units.length
+            ? `<div class="table-wrap"><table class="data-table"><thead><tr>
+                <th>Unit</th><th>Type</th><th>Vendor</th><th>Members</th><th>Mode</th><th>Verdict</th><th>Reason</th><th>Stop-conditions</th>
+            </tr></thead><tbody>${units.map(unit => `
+                <tr>
+                    <td>${escapeHtml(unit.unit_id)}</td>
+                    <td>${escapeHtml(unitTypeLabels[unit.unit_type] || unit.unit_type)}</td>
+                    <td>${escapeHtml(unit.vendor)}</td>
+                    <td>${escapeHtml((unit.members || []).join(", "))}</td>
+                    <td>${escapeHtml(unit.cluster_mode)}</td>
+                    <td>${statusPill(verdictLabels[unit.verdict] || unit.verdict, failoverVerdictTone(unit.verdict))}</td>
+                    <td>${escapeHtml(unit.reason)}</td>
+                    <td>
+                        <details class="failover-check-details">
+                            <summary>${escapeHtml((unit.checks || []).length)} checks</summary>
+                            <table class="data-table compact">
+                                <thead><tr><th>Stop-condition</th><th>Status</th><th>Reason</th><th>Missing evidence</th></tr></thead>
+                                <tbody>${(unit.checks || []).map(check => `
+                                    <tr>
+                                        <td>${escapeHtml(check.label)}</td>
+                                        <td>${statusPill(checkStatusLabels[check.status] || check.status, failoverCheckStatusTone(check.status))}</td>
+                                        <td>${escapeHtml(check.reason)}</td>
+                                        <td>${escapeHtml(check.missing_evidence || "—")}</td>
+                                    </tr>
+                                `).join("")}</tbody>
+                            </table>
+                        </details>
+                    </td>
+                </tr>
+            `).join("")}</tbody></table></div>`
+            : `<div class="empty-state compact"><span>No HA cluster/pair units found in the current inventory.</span></div>`;
+    }
+}
