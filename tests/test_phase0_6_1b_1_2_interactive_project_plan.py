@@ -5,11 +5,12 @@ import pytest
 
 from configuration import checkpoint_config_collector as collector
 from utils.project_plan import build_project_plan_payload
+from utils.html_export import compose_report_script as _composed_report_script
 
 pytestmark = pytest.mark.configuration
 
 ROOT = Path(__file__).resolve().parents[1]
-APP = (ROOT / "static" / "app.js").read_text(encoding="utf-8")
+APP = _composed_report_script()
 CSS = (ROOT / "static" / "style.css").read_text(encoding="utf-8")
 TEMPLATE = (ROOT / "templates" / "index.html").read_text(encoding="utf-8")
 HTML_EXPORT = (ROOT / "utils" / "html_export.py").read_text(encoding="utf-8")

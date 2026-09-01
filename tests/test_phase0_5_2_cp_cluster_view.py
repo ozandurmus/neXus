@@ -1,5 +1,6 @@
 from checkpoint.cp_runner import parse_cluster_virtual_interfaces, enrich_cluster_topology
 import pytest
+from utils.html_export import compose_report_script as _composed_report_script
 
 pytestmark = pytest.mark.inventory
 
@@ -43,7 +44,7 @@ def test_cluster_group_identity_comes_from_vips_not_member_name():
 
 def test_ui_contains_cp_cluster_aggregate_contract():
     from pathlib import Path
-    text = (Path(__file__).resolve().parents[1] / "static" / "app.js").read_text(encoding="utf-8")
+    text = _composed_report_script()
     assert "aggregateCpClusters" in text
     assert 'entityType = "cp_cluster"' in text
     assert 'addressRole: "cluster_virtual"' in text

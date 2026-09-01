@@ -2,15 +2,26 @@
 
 ## Status
 
+**IMPLEMENTED 2026-09-01** (`Sonnet 5, normal`). `static/app.js` is gone; its
+4,905 lines / 173 top-level functions are distributed across the eight D-MOD5
+files and concatenated back into the identical single inline `<script>` by
+`utils/html_export.py`. AC-1…AC-6 green against fixture transports and the bun
+render harness; AC-7's real-browser confirmation stood in as the bun
+DOM-execution harness (this sandbox has no display / no Playwright Chromium) —
+a human interactive open remains a cheap, non-blocking follow-up, so the
+backlog id stays `in_progress`. Two contract-audit gaps found during
+extraction and resolved by the ownership rule are recorded in
+"Implementation deviations" below. `project/build_history.json` entry
+`codebase_modularization_frontend`.
+
+**Contract-freeze record (unchanged) follows.**
+
 **CONTRACT FROZEN 2026-08-31.** Produced as a `SCOPE → AUDIT → CONTRACT` pass
 (`Sonnet 5, normal`) in the same session as, and immediately following,
 `frontend_rendering_boundary`'s implementation — that session's full,
 line-by-line read of `static/app.js` (all 97 `.innerHTML` sinks plus every
 helper) is the source of this contract's function inventory, so the audit
-below is a verified re-read for module boundaries, not a fresh guess. No
-source file changed by this pass — `static/app.js`, `templates/index.html`,
-`utils/html_export.py` are untouched. Ready for a fresh session to
-implement against.
+below is a verified re-read for module boundaries, not a fresh guess.
 
 `project/backlog.json` `codebase_modularization` (P1). Scoped from
 `docs/design/SERVER_PRODUCTIZATION_AND_MODULARIZATION_ARCHITECTURE.md` §5
@@ -371,6 +382,38 @@ concern — it is a pure source-layout revert.
    per `frontend_rendering_boundary`'s own precedent for saying so
    honestly rather than implying more than was actually verified).
 3. Status → `IMPLEMENTED`.
+
+## Implementation deviations (2026-09-01)
+
+Both are "a physically-misplaced function this contract's read missed", which
+the Risks section explicitly anticipated — resolved by the ownership rule, not
+by preserving an accidental position.
+
+1. **`currentConfigurationFleet` → `configuration_ui.js`**, not `overview_ui.js`
+   as D-MOD4 listed. It is a one-line pure accessor over the page-level
+   `configUiData` const, and `configuration_ui`'s own `checkpointCoverageHtml`
+   calls it as well as `overview_ui`'s `renderOverviewModule`. It moves to the
+   earlier-loading of its two callers; `overview_ui` (which loads after
+   `configuration_ui`) still reaches it. `complianceSparkline` /
+   `complianceTrendChip` are the mirror case the contract *did* anticipate —
+   shared by Overview and Compliance, placed in `compliance_ui` (earlier
+   loader).
+
+2. **`switchModule` / `savedModule` stay in `app_bootstrap.js`** (loads last)
+   per D-MOD5, even though `compliance_ui.renderComplianceCoverageOverview`
+   references `switchModule`. Every such call site is inside a deferred
+   `addEventListener` callback that fires long after all eight files have
+   loaded (and after region-3 already ran in the pre-split file too), so the
+   forward reference is runtime-safe. AC-3's static check carries an explicit,
+   reasoned `NAVIGATION_PUBLIC_SURFACE` carve-out for exactly these two names —
+   this is the "genuinely public surface" D-MOD2 said the ordering check would
+   stand in for instead of a `window.SecurityExpert` namespace.
+
+Order-of-execution note: the pre-split file ran `applyTheme(preferredTheme())`
+before the inventory-panel bootstrap; in the composed script it runs later
+(in `app_bootstrap`, last). The whole report is one synchronous `<script>`
+with a single paint at the end, so this is unobservable — confirmed by the
+render harness (no console errors, all modules/tabs switch).
 
 ## Next movement / model
 
