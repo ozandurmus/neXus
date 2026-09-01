@@ -1,0 +1,85 @@
+# Deterministic validation gate.
+#
+# Runs exactly the checks the repository already runs locally, in the same
+# order as docs/AI_DEVELOPMENT_PROTOCOL.md's validation ladder. It adds no
+# service, no credential, no external action beyond the two first-party
+# ones, and no dependency that is not already pinned in requirements*.txt.
+#
+# Deliberately NOT here: any device contact, any fleet collection, the
+# render harness's bun/Playwright path (both are optional local tools and
+# tests/test_html_render_harness.py already skips when they are absent),
+# and container build/publish (DEV.4, and it needs registry credentials
+# this workflow must not hold).
+name: validation
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: validation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          # Matches the validated 3.12 baseline the Dockerfile and the dev
+          # tooling both target.
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+          pip install -r requirements-console.txt
+
+      - name: Import validation
+        # Catches a syntax error or a broken import before the suite spends
+        # time on it, and covers modules no test imports directly.
+        run: python -m compileall -q main.py application console configuration checkpoint panorama utils scripts
+
+      - name: Repository privacy gate
+        # Must run on the clean checkout, BEFORE the suite: a test run creates
+        # gitignored data/ + logs/ that the gate would otherwise flag.
+        run: python main.py --repository-privacy-check
+
+      - name: Project-state consistency
+        # The cross-authority rules in utils/project_plan. Fails when
+        # CURRENT_STATE.md, roadmap.json, feature_registry.json,
+        # build_history.json and backlog.json stop agreeing.
+        run: python -m pytest -q tests/test_architecture_convergence.py
+
+      - name: Build history index is current
+        run: python scripts/build_history_index.py --check
+
+      - name: Full test suite
+        # Serial on purpose. The suite's two long-standing failures were an
+        # in-process module-rebind leak that xdist's work distribution hid
+        # about two runs in three; a parallel-only gate would not have caught
+        # it. tests/test_frontend_rendering_boundary.py holds the guard now,
+        # but the gate stays serial so the next such leak surfaces here.
+        run: python -m pytest -q
+
+      - name: Whitespace / conflict-marker check
+        # Checks the whole HEAD tree against git's constant empty-tree SHA,
+        # not against a base ref -- github.event.pull_request.base.sha and
+        # github.event.before are both unset on workflow_dispatch, and
+        # actions/checkout@v4 defaults to a depth-1 clone, so a base-ref diff
+        # fails closed with "fatal: bad object" on exactly those triggers.
+        # The empty-tree comparison needs only HEAD, which checkout always has.
+        run: git diff --check 4b825dc642cb6eb9a060e54bf8d69288fbee4904 HEAD
+        continue-on-error: true

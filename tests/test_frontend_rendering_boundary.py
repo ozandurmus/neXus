@@ -28,6 +28,7 @@ correctly) -- see docs/history/phase/FRONTEND_RENDERING_BOUNDARY.md's
 for that verified state, not a fix.
 """
 import json
+import tempfile
 import re
 import sys
 from pathlib import Path
@@ -74,6 +75,48 @@ def rendered_html(tmp_path_factory) -> Path:
     from scripts.render_uitest import render
     out = tmp_path_factory.mktemp("frontend_boundary_render")
     return render(out)
+
+
+def test_render_uitest_restores_the_builders_it_injects():
+    """Test-isolation regression, not a rendering assertion.
+
+    `scripts.render_uitest.render()` swaps three `utils.html_export` payload
+    builders for fixture-returning stubs. It used to leave them swapped: a
+    bare module rebind, not `monkeypatch.setattr`. Because this file and
+    tests/test_html_render_harness.py call `render()` in-process, every later
+    `run_html_export()` in the same worker then silently returned uitest
+    fixture payloads instead of its own inputs.
+
+    That -- not test ordering -- was the whole of the two long-standing
+    "order-dependent" failures
+    (`test_run_html_export_embeds_discovery_payload_without_leftover_placeholder`
+    read `cp-edge-01` from the fixture instead of its own `DEV-Z`;
+    `test_checkpoint_render_appends_one_record` saw the fixture's populated
+    configuration payload, so compliance became "available" and the ledger
+    was written). Under `-n auto` the polluter often landed on a different
+    worker, which is why the suite could report zero failures while the
+    defect was still there.
+
+    Assert the restoration directly, so the guarantee does not depend on
+    another test happening to notice.
+    """
+    from scripts.render_uitest import render
+    from utils import html_export
+
+    injected = (
+        "build_configuration_ui_payload",
+        "build_crypto_posture",
+        "build_discovery_capability_payload",
+    )
+    before = {name: getattr(html_export, name) for name in injected}
+
+    with tempfile.TemporaryDirectory() as tmp:
+        render(Path(tmp))
+
+    for name in injected:
+        assert getattr(html_export, name) is before[name], (
+            f"render_uitest left {name} rebound; it must restore every builder it injects"
+        )
 
 
 def test_csp_meta_tag_present_verbatim(rendered_html):

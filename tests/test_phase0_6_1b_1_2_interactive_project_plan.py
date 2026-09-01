@@ -100,7 +100,12 @@ def test_project_plan_payload_is_data_driven_and_percentages_are_bounded():
     payload = build_project_plan_payload()
     # current_build is driven by roadmap.json; assert it is set and non-empty.
     assert payload["current_build"]
-    assert payload["current_track"] == "0.6.x"
+    # Assert the invariant, not the literal value. Pinning current_track to a
+    # string made this test a fourth place the repository declared its own
+    # current state -- it had to be edited every time the track legitimately
+    # advanced, and it went stale exactly like the other authorities did.
+    # "current_track names a declared track" is the property worth holding.
+    assert payload["current_track"] in {track["id"] for track in payload["tracks"]}
     assert 0 <= payload["overall_progress_percent"] <= 100
     assert 0 < payload["current_track_progress_percent"] < 100
     features = {row["id"]: row for track in payload["tracks"] for row in track["features"]}
