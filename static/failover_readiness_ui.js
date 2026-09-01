@@ -59,12 +59,24 @@ function renderFailoverModule() {
 
     const tableHost = document.getElementById("failoverUnitTable");
     if (tableHost) {
-        tableHost.innerHTML = units.length
-            ? `<div class="table-wrap"><table class="data-table"><thead><tr>
-                <th>Unit</th><th>Type</th><th>Vendor</th><th>Members</th><th>Mode</th><th>Verdict</th><th>Reason</th><th>Stop-conditions</th>
-            </tr></thead><tbody>${units.map(unit => `
-                <tr>
-                    <td>${escapeHtml(unit.unit_id)}</td>
+        // Cluster-centric presentation: a unit with a parent_id (a VSX
+        // Virtual System) is subordinate evidence, never a separate
+        // top-level failover target -- it renders nested under its physical
+        // cluster/host row, immediately after it. Its own verdict/checks are
+        // unchanged; only where it appears in the table changes.
+        const topLevelUnits = units.filter(unit => !unit.parent_id);
+        const childrenByParent = {};
+        units.forEach(unit => {
+            if (unit.parent_id) {
+                (childrenByParent[unit.parent_id] = childrenByParent[unit.parent_id] || []).push(unit);
+            }
+        });
+
+        function renderUnitRow(unit, isChild) {
+            const label = escapeHtml(unit.display_name || unit.unit_id);
+            return `
+                <tr${isChild ? ' class="failover-child-row"' : ''}>
+                    <td${isChild ? ' style="padding-left:2rem"' : ''}>${isChild ? '<span class="eyebrow">Virtual System</span> ' : ''}${label}</td>
                     <td>${escapeHtml(unitTypeLabels[unit.unit_type] || unit.unit_type)}</td>
                     <td>${escapeHtml(unit.vendor)}</td>
                     <td>${escapeHtml((unit.members || []).join(", "))}</td>
@@ -88,7 +100,16 @@ function renderFailoverModule() {
                         </details>
                     </td>
                 </tr>
-            `).join("")}</tbody></table></div>`
+            `;
+        }
+
+        tableHost.innerHTML = units.length
+            ? `<div class="table-wrap"><table class="data-table"><thead><tr>
+                <th>Unit</th><th>Type</th><th>Vendor</th><th>Members</th><th>Mode</th><th>Verdict</th><th>Reason</th><th>Stop-conditions</th>
+            </tr></thead><tbody>${topLevelUnits.map(unit => {
+                const children = childrenByParent[unit.unit_id] || [];
+                return renderUnitRow(unit, false) + children.map(child => renderUnitRow(child, true)).join("");
+            }).join("")}</tbody></table></div>`
             : `<div class="empty-state compact"><span>No HA cluster/pair units found in the current inventory.</span></div>`;
     }
 }
