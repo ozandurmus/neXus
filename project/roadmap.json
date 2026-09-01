@@ -206,7 +206,9 @@
         "status": "planned",
         "notes": [
           "Architecture: docs/design/FAILOVER_ENGINE_ARCHITECTURE.md. Analyses the real per-vendor failover procedure (CP ClusterXL HA/LS + VSX, PAN A/P + A/A), the preflight stop-conditions, the graceful active-initiated single-step approach, and post-failover verification.",
-          "OP.0 (HA readiness / failover-safety assessment + SCC dashboard) is read-only and the first buildable step; OP.1 adds the dry-run plan compiler; OP.2 (controlled execution) is write-gated - see roadmap_notes."
+          "OP.0 (HA readiness / failover-safety assessment + SCC dashboard) is read-only and the first buildable step; OP.1 adds the dry-run plan compiler; OP.2 (controlled execution) is write-gated - see roadmap_notes.",
+          "OP.0 SPLIT 2026-09-01 at contract freeze (docs/history/phase/OP_0A_HA_READINESS_ASSESSMENT.md, decision P1). A source audit found the CP 'cphaprob stat' and PAN 'show high-availability state' reads are already gated and already collected, so: OP.0a = assessment engine over existing evidence, ZERO new device commands, no approval blocking it, CONTRACT FROZEN and cleared for implementation; OP.0b = the section 3.1/3.2 preflight command battery, behind a command gate DRAFTED in that contract but NOT approved; OP.0c = the section 9 Failover UI module. Same read-before-write sequencing RB.3a/RB.3b and CON.1/CON.2 already used.",
+          "OP.0a can never emit SAFE_TO_FAILOVER or DEGRADED_PROCEED_WITH_RISK (contract decision P4, enforced by AC-6). It reports UNSAFE_DO_NOT_FAILOVER, NOT_A_FAILOVER_UNIT or INSUFFICIENT_EVIDENCE with a named missing command. This is deliberate: a green light computed from part of the stop-condition set is the exact failure mode the design doc exists to prevent."
         ]
       },
       {
@@ -466,7 +468,8 @@
         "SAFE / UNSAFE / INSUFFICIENT only in v1"
       ],
       "recommendation": "SAFE / UNSAFE / INSUFFICIENT only in v1; add DEGRADED once the battery is validated against real clusters.",
-      "decide_by": "OP.0 contract freeze"
+      "decide_by": "OP.1 contract freeze",
+      "note": "Rebased from 'OP.0 contract freeze' on 2026-09-01, not resolved. The OP.0a contract (docs/history/phase/OP_0A_HA_READINESS_ASSESSMENT.md, decision P4) reserves DEGRADED_PROCEED_WITH_RISK in the frozen verdict enum but makes it structurally unreachable, along with SAFE_TO_FAILOVER, because OP.0a has evidence for only part of the design-doc section 4 stop-condition set. The decision therefore does not block OP.0a and is owed before OP.1 compiles a plan against the verdict."
     },
     {
       "id": "op_emergency_evac",

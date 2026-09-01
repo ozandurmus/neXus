@@ -242,6 +242,12 @@ ALLOWLISTED_WORKFLOWS: frozenset[str] = frozenset({
     # all" and needs its own review (CURRENT_STATE.md standing priority 2: do
     # not increase recurring polling frequency/concurrency). RB.3a ships the
     # on-demand CLI path only (main.py --recovery-attest).
+    #
+    # OP.0a (contract OP_0A_HA_READINESS_ASSESSMENT.md, decision P6):
+    # "ha-readiness" is absent for a different reason again -- it performs no
+    # device I/O at all, so there is nothing to rate-limit, and it recomputes
+    # from state that only changes when a collection runs. Scheduling an
+    # offline derivation would add runs without adding evidence.
     "recovery-pan",
 })
 _MIN_INTERVAL_MINUTES = 10
