@@ -3,6 +3,36 @@
   "record_contract": "One structured record per build, newest first. Required: build, status, title, summary (<= 2 sentences). Optional: started, completed, track, movement, supersedes, evidence, risks_forward, docs{agreement,validation,handover} (repo-relative paths under docs/history/). Full detail lives in the linked doc; do not restate it here. Status vocabulary must stay within utils/project_plan.py STATUS_VALUES.",
   "builds": [
     {
+      "build": "failover_readiness_assessment",
+      "status": "automated_validated",
+      "started": "2026-09-01",
+      "completed": "2026-09-01",
+      "title": "OP.0a - HA readiness assessment over existing evidence (zero new device commands)",
+      "track": "OP.x Controlled Failover",
+      "movement": "IMPLEMENTATION",
+      "supersedes": "failover_readiness_assessment-contract",
+      "summary": "Implemented docs/history/phase/OP_0A_HA_READINESS_ASSESSMENT.md against the frozen contract: new utils/failover/ (assessment.py only, P5), application/workflows/failover.py, main.py --ha-readiness-check, and an additive cluster-mode parse of the already-executed cphaprob stat at both CP call sites. No new device command was issued or added, which was the defining property of the slice. Full suite 973 passed / 27 skipped / 0 failed; privacy gate PASS/0.",
+      "evidence": "tests/test_op0a_ha_readiness.py (38 tests, AC-1...AC-13, incl. AC-6's generated matrix proving SAFE_TO_FAILOVER is unreachable). Smoke run of --ha-readiness-check against the tests/fixtures/uitest bundle.",
+      "docs": {
+        "agreement": "docs/history/phase/OP_0A_HA_READINESS_ASSESSMENT.md"
+      },
+      "risks_forward": "Deviation D2 was a real defect the smoke run caught and the unit tests missed: a healthy PAN active/passive pair was misreported as split-brain because each peer reports both its own state and its view of the peer's. Fixed and regression-pinned in both directions. The P2 mode parse still needs one real-device confirmation that ha_cluster_mode resolves rather than falling back to unknown (fixture-drift check, not a safety gate)."
+    },
+    {
+      "build": "failover_readiness_assessment-contract",
+      "status": "complete",
+      "started": "2026-09-01",
+      "completed": "2026-09-01",
+      "title": "OP.0a - HA readiness assessment contract freeze (zero new device commands) + OP.0b command-gate draft",
+      "track": "OP.x Controlled Failover",
+      "movement": "ARCHITECTURE",
+      "summary": "SCOPE -> AUDIT -> CONTRACT pass over docs/design/FAILOVER_ENGINE_ARCHITECTURE.md's OP.0; a source audit found CP 'cphaprob stat' and PAN 'show high-availability state' are already gated and collected, so OP.0 is split and OP.0a ships an assessment engine over existing evidence with no new device command and no approval blocking it. The OP.0b preflight battery (16 CP/PAN read commands) is drafted as a command-gate entry for product-owner/security review, and remains un-approved.",
+      "docs": {
+        "agreement": "docs/history/phase/OP_0A_HA_READINESS_ASSESSMENT.md"
+      },
+      "risks_forward": "OP.0a can never emit SAFE_TO_FAILOVER by construction (contract P4/AC-6) - an honest but easily-misread result that must be framed when first reported. PAN HA pairs are not groupable from unified.json today and are inferred fail-closed from configured peer-ip (P7)."
+    },
+    {
       "build": "operator_console_job_engine",
       "status": "automated_validated",
       "started": "2026-09-01",

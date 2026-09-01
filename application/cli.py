@@ -152,6 +152,20 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--ha-readiness-check",
+        action="store_true",
+        help=(
+            "OP.0a local/offline HA readiness assessment: 'what do we actually know "
+            "about this cluster's failover readiness, and what would we still have to "
+            "ask a device?' Reads the latest local unified.json plus already-collected "
+            "HA runtime evidence -- no network access, no credentials, no device "
+            "command. Writes data/state/ha_readiness.json. It CANNOT report a cluster "
+            "safe to fail over: SAFE_TO_FAILOVER is unreachable by design until the "
+            "OP.0b preflight battery is gated and built, so INSUFFICIENT_EVIDENCE "
+            "means 'not asked yet', not 'unhealthy'."
+        ),
+    )
+    parser.add_argument(
         "--recovery-store-check",
         action="store_true",
         help=(
@@ -295,6 +309,7 @@ def validate_modes(args, parser):
         args.storage_deduplicate,
         args.persistent_secret_material_check,
         args.restore_readiness_check,
+        args.ha_readiness_check,
         args.recovery_store_check,
         args.recovery_validate,
         args.compliance_trend_reconstruct,
@@ -322,6 +337,13 @@ def validate_modes(args, parser):
         or args.recovery_collect or args.recovery_attest
     ):
         parser.error("--restore-readiness-check cannot be combined with collection/render modes")
+    if args.ha_readiness_check and args.apply:
+        parser.error("--apply is not valid with --ha-readiness-check")
+    if args.ha_readiness_check and (
+        args.cp_config_probe or args.cp_config_collect or args.render_only or args.only != "all"
+        or args.recovery_collect or args.recovery_attest
+    ):
+        parser.error("--ha-readiness-check cannot be combined with collection/render modes")
     if args.recovery_store_check and args.apply:
         parser.error("--apply is not valid with --recovery-store-check")
     if args.recovery_store_check and (
@@ -379,6 +401,7 @@ def validate_modes(args, parser):
         or args.storage_deduplicate
         or args.persistent_secret_material_check
         or args.restore_readiness_check
+        or args.ha_readiness_check
         or args.recovery_store_check
         or args.recovery_validate
         or args.recovery_collect
@@ -405,6 +428,7 @@ def validate_modes(args, parser):
         or args.apply
         or args.persistent_secret_material_check
         or args.restore_readiness_check
+        or args.ha_readiness_check
         or args.recovery_store_check
         or args.recovery_validate
         or args.recovery_collect
@@ -468,6 +492,9 @@ def dispatch(args, parser, *, runtime_services=None, provenance="manual", admiss
         return maintenance_wf.persistent_secret_material_check(ctx)
     if args.restore_readiness_check:
         return recovery_wf.restore_readiness_check(ctx)
+    if args.ha_readiness_check:
+        from application.workflows import failover as failover_wf
+        return failover_wf.ha_readiness_check(ctx)
     if args.recovery_store_check:
         return recovery_wf.recovery_store_check(ctx)
     if args.recovery_validate:
