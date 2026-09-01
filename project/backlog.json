@@ -589,6 +589,15 @@
       "priority": "P0",
       "target": "DEPLOY.1; blocks reliance on RB.3b recovery",
       "note": "Move recovery-key custody to a server secret manager/KMS, keep encrypted recovery artifacts in durable off-host storage, and pass a restore drill before claiming the operational backup path is dependable."
+    },
+    {
+      "id": "operator_console",
+      "category": "Product Surface / Platform",
+      "title": "CON.x - Operator Console: authenticated local control plane over the existing engine",
+      "status": "planned",
+      "priority": "P1",
+      "target": "CON.0 (architecture, frozen 2026-08-31) -> CON.1..CON.5",
+      "note": "ARCHITECTURE FROZEN 2026-08-31 (docs/design/OPERATOR_CONSOLE_ARCHITECTURE.md) with all five phase contracts written in the same pass: CON_1_OPERATOR_CONSOLE_READ_ONLY.md, CON_2_CONSOLE_JOB_ENGINE_READ_ACTIONS.md, CON_3_CONSOLE_OPERATIONAL_WRITE_ACTIONS.md, CON_4_CONSOLE_RECOVERY_MODULE.md, CON_5_CONSOLE_SCHEDULER_SURFACE.md (all under docs/history/phase/). Driver: the BackBox exit (BACKUP_AND_RECOVERY_ARCHITECTURE.md section 2) needs an operator surface, not just a capability -- BackBox's daily value is seeing the fleet and acting on a row, which today requires the CLI. Central decision: do NOT make the exported report dynamic. The portable, shareable, action-free output/index.html is a product feature; the console is a SECOND delivery surface over the same engine, sharing one UI source tree (mode flag SECURITYEXPERT_MODE) and one orchestration core. Security boundary: the browser sends intent (a job_type resolved against a closed, source-resident registry plus entity ids validated against unified.json), never a device command, flag or argv fragment -- which is how this stays inside SERVER_PRODUCTIZATION_AND_MODULARIZATION_ARCHITECTURE.md's prohibitions on a generic REST wrapper and browser-supplied commands (that doc is amended with a section 7 reconciliation, prohibitions unrelaxed). The console adds exactly four things - an HTTP boundary, an auth boundary, a durable job record and one new provenance value - and no new device path: execution reuses main(argv, runtime_services, provenance) the way the scheduler already does (main.py:361), plus CollectionCoordinator admission and the 24h operational-write ledger unchanged. Hard ordering: CON.1 is blocked on codebase_modularization (frontend) being DONE (it changes app_bootstrap.js initialization to initializeReport(payloads)); CON.3 is blocked on RB.3b reaching REAL_ENV_VALIDATED -- a UI must never be the first thing to run a device write nobody has run by hand. Open decisions C-D1..C-D8 (project/roadmap.json open_decisions) are product-owner/security calls: optional fastapi+uvicorn dependency, cookieless bearer auth, Provenance.CONSOLE, one target per operational-write request, no server exposure before OIDC, mandatory operator reason, no scheduler policy editing, track id."
     }
   ]
 }

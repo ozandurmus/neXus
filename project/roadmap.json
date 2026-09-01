@@ -105,6 +105,19 @@
         "failover_plan_compiler",
         "failover_controlled_execution"
       ]
+    },
+    {
+      "id": "CON.x",
+      "title": "Operator Console (local control plane)",
+      "theme": "OPERATE",
+      "status": "planned",
+      "weight": 12,
+      "feature_ids": [
+        "operator_console_surface",
+        "operator_console_job_engine",
+        "operator_console_operational_actions",
+        "operator_console_scheduler_view"
+      ]
     }
   ],
   "now_next": {
@@ -203,6 +216,19 @@
         "notes": [
           "Buildable now (no server). Versioned declarative control catalog with severity + per-framework CIS/PCI-DSS/BDDK membership; ~20-28 deterministic controls; data/state/control_assignments.json policy (groups, include/exclude, file-based waivers); engine filters per device; additive compliance_overview roll-up on the Overview pane; read-only Compliance workbench spine (progressive KPI -> framework -> control -> subject -> evidence).",
           "Design + expert-lens analysis (compliance/risk, security manager, architect, UI): docs/design/COMPLIANCE_ASSIGNMENT_AND_FRAMEWORKS.md."
+        ]
+      },
+      {
+        "build": "CON.0-CON.5 (architecture frozen 2026-08-31)",
+        "title": "Operator Console - authenticated local control plane over the existing engine",
+        "status": "planned",
+        "notes": [
+          "Architecture: docs/design/OPERATOR_CONSOLE_ARCHITECTURE.md; per-phase contracts: docs/history/phase/CON_1..CON_5.",
+          "A second delivery surface, not a dynamic report: the exported static HTML report keeps its portable, action-free form and one UI source tree feeds both.",
+          "The browser sends intent (a job_type from a closed server-side registry plus validated entity ids), never a device command or an argv fragment.",
+          "Adds no device path: execution reuses main(argv, runtime_services, provenance) exactly as the scheduler does, plus the existing coordinator admission and operational-write ledger.",
+          "CON.1 is blocked on codebase_modularization (frontend) landing first; CON.3 is blocked on RB.3b reaching REAL_ENV_VALIDATED.",
+          "Open decisions C-D1..C-D8 in the architecture doc section 11 are product-owner/security calls, not engineering work."
         ]
       }
     ]
@@ -477,6 +503,107 @@
       ],
       "recommendation": "fixed conservative default in v1 (sessions >= ~90%, zero split-brain, sync resumed); make it tunable-within-bounds only after real-cluster calibration.",
       "decide_by": "OP.2 contract freeze"
+    },
+    {
+      "id": "C-D1",
+      "area": "CON.x Operator Console",
+      "status": "open",
+      "question": "Approve fastapi + uvicorn as an optional dependency set (requirements-console.txt), keeping the core CLI/report path at its current four dependencies?",
+      "options": [
+        "Approve as optional extra",
+        "Stdlib http.server only",
+        "Decline the console transport"
+      ],
+      "recommendation": "Approve. Boundary-level request validation is a security control and it is the same stack the later server control plane needs; the optional-extra pattern already exists for requirements-postgres.txt.",
+      "decide_by": "CON.1 contract review"
+    },
+    {
+      "id": "C-D2",
+      "area": "CON.x Operator Console",
+      "status": "open",
+      "question": "Local authentication model for the console listener.",
+      "options": [
+        "Cookieless per-launch bearer token in the URL fragment",
+        "Cookie session",
+        "No auth, loopback bind only"
+      ],
+      "recommendation": "Cookieless per-launch bearer token. No cookie means no ambient credential, which makes the local-CSRF class structurally impossible rather than mitigated. 'It is only localhost' is the failure mode, not the control.",
+      "decide_by": "CON.1 contract review"
+    },
+    {
+      "id": "C-D3",
+      "area": "CON.x Operator Console",
+      "status": "open",
+      "question": "Provenance vocabulary: add Provenance.CONSOLE = 'console', or reuse 'manual' for UI-triggered runs?",
+      "options": [
+        "Add 'console'",
+        "Reuse 'manual'"
+      ],
+      "recommendation": "Add 'console'. A UI-triggered device action must stay distinguishable from a CLI one in every manifest and audit record; conflating them destroys the audit trail on the first day it matters.",
+      "decide_by": "CON.2 contract review"
+    },
+    {
+      "id": "C-D4",
+      "area": "CON.x Operator Console",
+      "status": "open",
+      "question": "Maximum targets per operational-write request during the pilot.",
+      "options": [
+        "1 target per request",
+        "N targets per request",
+        "Fleet selection"
+      ],
+      "recommendation": "1. The pilot proves the path, not throughput; a per-request ceiling of one makes an accidental multi-device write structurally impossible. Revisit only with real pilot evidence.",
+      "decide_by": "CON.3 contract review"
+    },
+    {
+      "id": "C-D5",
+      "area": "CON.x Operator Console",
+      "status": "open",
+      "question": "May the console run on the server before OIDC/RBAC exists?",
+      "options": [
+        "No - loopback operator workstation only",
+        "Yes, behind the reverse proxy"
+      ],
+      "recommendation": "No. Loopback only until the full DEPLOY.1 gate set passes; docker-compose.yml gains no console port mapping in this track.",
+      "decide_by": "CON.1 contract review"
+    },
+    {
+      "id": "C-D6",
+      "area": "CON.x Operator Console",
+      "status": "open",
+      "question": "Mandatory operator reason text on every operational-write, and its retention?",
+      "options": [
+        "Mandatory, bounded, redaction-filtered, excluded from the support bundle",
+        "Optional",
+        "Not collected"
+      ],
+      "recommendation": "Mandatory (8-200 chars), filtered through the redaction registry before persistence, never in the support bundle. It is the difference between an audit log and a list of timestamps.",
+      "decide_by": "CON.3 contract review"
+    },
+    {
+      "id": "C-D7",
+      "area": "CON.x Operator Console",
+      "status": "open",
+      "question": "May the scheduler policy be edited from the console?",
+      "options": [
+        "No - read-only view in CON.5",
+        "Yes, with confirmation"
+      ],
+      "recommendation": "No, not in this track. Editing the policy from a browser is a privilege-escalation path into unattended device contact and needs its own gate.",
+      "decide_by": "CON.5 contract review"
+    },
+    {
+      "id": "C-D8",
+      "area": "CON.x Operator Console",
+      "status": "open",
+      "question": "Track identity: keep CON.x as its own roadmap track, or fold the work into DEV.x / 0.8.x?",
+      "options": [
+        "CON.x dedicated track",
+        "Fold into DEV.x",
+        "Fold into 0.8.x"
+      ],
+      "recommendation": "Keep CON.x. It is a delivery-surface track spanning several product themes; burying it in an engineering track hides an operator-visible capability from the roadmap.",
+      "decide_by": "roadmap review"
     }
   ]
 }
