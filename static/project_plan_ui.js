@@ -18,9 +18,14 @@ function roadmapStatusLabel(status) {
 
 function roadmapProgress(value, compact = false) {
     const numeric = Math.max(0, Math.min(100, Number(value || 0)));
+    // CON.1: the console's CSP (style-src 'self') blocks any JS-set inline
+    // style="", so the bar's fill width is a fixed w-pct-N class
+    // (static/style.css) rather than a computed style attribute -- rounded
+    // to the nearest whole percent.
+    const roundedPct = Math.round(numeric);
     return `
         <div class="roadmap-progress ${compact ? "compact" : ""}" aria-label="${escapeHtml(formatPercent(numeric))} complete">
-            <div class="roadmap-progress-track"><span style="width:${numeric}%"></span></div>
+            <div class="roadmap-progress-track"><span class="w-pct-${roundedPct}"></span></div>
             <strong>${escapeHtml(formatPercent(numeric))}</strong>
         </div>
     `;

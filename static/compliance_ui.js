@@ -6,9 +6,16 @@ let complianceStatusFilter = "all";
 const COMPLIANCE_FRAMEWORKS = ["CIS", "PCI-DSS", "BDDK"];
 const complianceFrameworkFilter = new Set();   // 0.7.2 — empty = no filter
 
-const complianceSubjects = Array.isArray(complianceUiData?.subjects)
-    ? complianceUiData.subjects
-    : [];
+// CON.1 C1-3: complianceUiData starts empty and is populated later by
+// initializeReport(payloads) -- see the matching comment in
+// configuration_ui.js's rebuildConfigDevices(). rebuildComplianceSubjects()
+// is called once below (harmless against the empty default) and again from
+// initializeReport, after the real payload lands.
+let complianceSubjects = [];
+function rebuildComplianceSubjects() {
+    complianceSubjects = Array.isArray(complianceUiData?.subjects) ? complianceUiData.subjects : [];
+}
+rebuildComplianceSubjects();
 
 
 // 0.7.5 — compliance trend layer. Both render "" when there is not enough
@@ -485,7 +492,12 @@ function renderComplianceCoverageOverview() {
                 const bar = reqs.length ? `<div class="compliance-req-bar" role="img" aria-label="${formatNumber(rc.COVERED || 0)} covered, ${formatNumber(rc.PARTIALLY_COVERED || 0)} partial, ${formatNumber(rc.UNCOVERED || 0)} uncovered, ${formatNumber(rc.NOT_APPLICABLE || 0)} not applicable">
                         ${["COVERED", "PARTIALLY_COVERED", "UNCOVERED", "NOT_APPLICABLE"].map(k => {
                             const n = Number(rc[k] || 0);
-                            return n ? `<span class="seg ${k.toLowerCase()}" style="flex:${n}" title="${escapeHtml(k.replace(/_/g, " "))}: ${n}">${n}</span>` : "";
+                            // CON.1: the console's CSP (style-src 'self') blocks a JS-set
+                            // inline style="", so each segment's share of the bar is a
+                            // fixed w-pct-N class (static/style.css), not a computed
+                            // flex value -- rounded to the nearest whole percent of reqs.length.
+                            const pct = Math.round((n / reqs.length) * 100);
+                            return n ? `<span class="seg ${k.toLowerCase()} w-pct-${pct}" title="${escapeHtml(k.replace(/_/g, " "))}: ${n}">${n}</span>` : "";
                         }).join("")}
                     </div>` : "";
                 const rows = reqs.map(r => `
@@ -645,7 +657,7 @@ function renderCryptoPostureCard() {
         </article>`).join("");
     host.innerHTML = `
         <div class="detail-subtitle">Pack ${escapeHtml(pack.pack_id || "")} @ ${escapeHtml(pack.pack_version || "")} · no certification claim · ${subjects.length} subject(s)</div>
-        <div class="compliance-kpi-grid compact" style="margin:8px 0">
+        <div class="compliance-kpi-grid compact subject-summary">
             ${chip("Findings", "FINDING", "danger")}
             ${chip("Informational", "INFORMATIONAL", "neutral")}
             ${chip("Pass", "PASS", "success")}

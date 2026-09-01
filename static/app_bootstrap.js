@@ -165,6 +165,15 @@ function initializeReport(payloads) {
     discoveryUiData = payloads.discoveryUiData || {};
     exclusionsUiData = payloads.exclusionsUiData || {};
 
+    // These derived collections are computed from the payloads above, not
+    // read from them directly on every render (unlike every renderX()
+    // function below) -- so they must be rebuilt explicitly here, before any
+    // render call, or a refresh would leave them stuck on the previous
+    // payload's data (or, on the very first render, the empty default).
+    rebuildInventoryModel();
+    rebuildConfigDevices();
+    rebuildComplianceSubjects();
+
     renderOverviewModule();
     renderComplianceModule();
     renderDiscoveryModule();
