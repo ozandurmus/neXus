@@ -11,7 +11,7 @@ from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Sequence
 
 import requests
 from lxml import etree
@@ -1844,6 +1844,56 @@ def _run_storage_stats(rows: list[dict[str, Any]], panorama_intent_result: dict[
     }
 
 
+def _apply_pan_target_selector(
+    devices: list[dict[str, Any]],
+    connected: list[dict[str, Any]],
+    requested_serials: Sequence[str] | None,
+) -> list[dict[str, Any]]:
+    """OP.0d exact, fail-closed narrowing of already-discovered PAN candidates.
+
+    Matches on `serial` -- the same identity-gated value the direct-firewall
+    identity check already cross-verifies against `show system info`, never a
+    hostname/label/substring/regex/wildcard. Every requested serial must
+    resolve to exactly one currently-connected discovered device before this
+    returns; an unknown, ambiguous, or not-currently-connected serial raises
+    here, before `run_panorama_config_evidence` issues a single direct
+    firewall API call. Narrows only -- never adds a target `limit` did not
+    already make eligible.
+    """
+    requested = list(dict.fromkeys(str(s).strip() for s in requested_serials if str(s).strip()))
+    if not requested:
+        raise ValueError("pan_config_targets: no valid serial supplied")
+
+    by_serial: dict[str, list[dict[str, Any]]] = {}
+    for device in devices:
+        by_serial.setdefault(str(device.get("serial") or ""), []).append(device)
+
+    unknown = sorted(s for s in requested if s not in by_serial)
+    if unknown:
+        raise ValueError(
+            "pan_config_targets: unknown serial(s), refusing to contact any device: "
+            + ", ".join(unknown)
+        )
+
+    ambiguous = sorted(s for s in requested if len(by_serial[s]) > 1)
+    if ambiguous:
+        raise ValueError(
+            "pan_config_targets: ambiguous serial(s) resolve to more than one discovered device, "
+            "refusing to contact any device: " + ", ".join(ambiguous)
+        )
+
+    connected_serials = {str(d.get("serial") or "") for d in connected}
+    not_connected = sorted(s for s in requested if s not in connected_serials)
+    if not_connected:
+        raise ValueError(
+            "pan_config_targets: requested serial(s) not currently connected, refusing to contact: "
+            + ", ".join(not_connected)
+        )
+
+    by_serial_connected = {str(d.get("serial") or ""): d for d in connected}
+    return [by_serial_connected[s] for s in requested]
+
+
 def run_panorama_config_evidence(
     cfg: Any,
     *,
@@ -1852,6 +1902,7 @@ def run_panorama_config_evidence(
     max_workers: int | None = None,
     orchestration_run_id: str | None = None,
     probe_pushed_template: bool = True,
+    target_serials: Sequence[str] | None = None,
 ) -> dict[str, Any]:
     """Phase 0.6.0A4.2.1: PAN Semantic Validation.
 
@@ -2059,7 +2110,13 @@ def run_panorama_config_evidence(
     devices = get_devices(panorama_host, panorama_key, verify=panorama_verify, timeout=timeout)
     connected = [d for d in devices if d.get("connected") == "yes"]
     disconnected = [d for d in devices if d.get("connected") != "yes"]
-    if limit is None:
+    if target_serials:
+        # OP.0d: an explicit selector is a narrower, operator-approved request
+        # than limit -- it takes precedence and limit's own count-based
+        # selection is not applied on top of it.
+        selected = _apply_pan_target_selector(devices, connected, target_serials)
+        stage = f"explicit-{len(selected)}-target(s)"
+    elif limit is None:
         selected = connected
         stage = "all-connected"
     else:

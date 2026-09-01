@@ -3,6 +3,18 @@
   "record_contract": "One structured record per build, newest first. Required: build, status, title, summary (<= 2 sentences). Optional: started, completed, track, movement, supersedes, evidence, risks_forward, docs{agreement,validation,handover} (repo-relative paths under docs/history/). Full detail lives in the linked doc; do not restate it here. Status vocabulary must stay within utils/project_plan.py STATUS_VALUES.",
   "builds": [
     {
+      "build": "failover_readiness_ui",
+      "status": "automated_validated",
+      "title": "OP.0c - Failover readiness UI module (Operator Console + report)",
+      "summary": "Added a read-only Failover module to both the Operator Console and the exported report: a live projection over utils.failover.compute_ha_readiness (fleet view, per-unit verdict, per-stop-condition blocking reasons, the OP.0a fail-closed framing note). No execution control, no new device command, no CLASS 2 job type.",
+      "started": "2026-09-01",
+      "completed": "2026-09-01",
+      "track": "OP.x Controlled Failover",
+      "movement": "UI",
+      "evidence": "tests/test_op0c_failover_readiness_ui.py (15 tests: fail-closed verdict/check preservation, framing note, no execution markup/network call, no CLASS 2 registration). Full suite 1003 passed / 27 skipped / 0 failed serially. Render harness (happy-dom nav click-through) green. Privacy gate PASS. metadata_warnings == [].",
+      "risks_forward": "Every unit correctly shows INSUFFICIENT_EVIDENCE or NOT_A_FAILOVER_UNIT until OP.0b lands -- an empty-looking dashboard is the honest state of the evidence, not a bug. No History sub-view yet (nothing to show history of before OP.1/OP.2 exist)."
+    },
+    {
       "build": "architecture_convergence",
       "status": "automated_validated",
       "title": "Architecture convergence and project-state closure",

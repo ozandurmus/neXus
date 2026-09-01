@@ -2,6 +2,15 @@
   "schema_version": "1.0",
   "items": [
     {
+      "id": "op0c_uitest_fixture_verdict_diversity",
+      "category": "Test coverage",
+      "title": "uitest render-harness fixture never exercises a non-INSUFFICIENT_EVIDENCE failover verdict",
+      "status": "planned",
+      "priority": "P3",
+      "target": "OP.0c follow-up",
+      "note": "tests/fixtures/uitest/unified.json has no matching cp_config_telemetry/pan_config_telemetry HA-runtime fixture, so scripts/render_uitest.py always renders the Failover module with every unit at INSUFFICIENT_EVIDENCE or NOT_A_FAILOVER_UNIT -- correct given the fixture inputs, but it means the render harness never eyeballs an UNSAFE (split-brain) row. tests/test_op0c_failover_readiness_ui.py covers that path at the unit level with synthetic evidence instead. Add an HA-runtime fixture file (and wire it through render_uitest.py) only if a future build needs the visual check; not required for OP.0c's own Definition of Done."
+    },
+    {
       "id": "parser_correctness_hardening",
       "category": "Correctness / Implementation",
       "title": "0.6.6A — CP/PAN parser correctness hardening",

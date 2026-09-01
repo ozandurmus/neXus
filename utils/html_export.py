@@ -11,6 +11,7 @@ from utils.compliance_history import append_run, load_history, summarise_overvie
 from utils.compliance_posture import build_compliance_posture
 from utils.crypto_posture import build_crypto_posture
 from utils.discovery_capability_ui import build_discovery_capability_payload
+from utils.failover_readiness_ui import build_failover_readiness_payload
 from utils.inventory_exclusions import InventoryExclusionPolicyError, load_inventory_exclusions
 from utils.inventory_exclusions_ui import build_inventory_exclusions_payload
 from utils.logger import info
@@ -38,6 +39,7 @@ SCRIPT_MODULE_FILENAMES = (
     "configuration_ui.js",
     "compliance_ui.js",
     "discovery_ui.js",
+    "failover_readiness_ui.js",
     "project_plan_ui.js",
     "overview_ui.js",
     "app_bootstrap.js",
@@ -165,10 +167,11 @@ def build_report_payloads(
     data_root=None,
     timings: list[tuple[str, float]] | None = None,
 ) -> dict:
-    """Build the seven payload dicts the report embeds and the console (CON.1)
+    """Build the eight payload dicts the report embeds and the console (CON.1)
     serves at ``/api/payloads`` — ``rawData``, ``configUiData``,
     ``complianceUiData``, ``cryptoUiData``, ``projectPlanData``,
-    ``discoveryUiData``, ``exclusionsUiData``. Pure computation, no write side
+    ``discoveryUiData``, ``exclusionsUiData``, ``failoverReadinessData``. Pure
+    computation, no write side
     effect: ``run_html_export`` is the only caller that appends a trend-ledger
     record, and only for a full checkpoint (``record_checkpoint=True``).
 
@@ -252,6 +255,16 @@ def build_report_payloads(
             exclusion_policy = None
         exclusions_ui = build_inventory_exclusions_payload(exclusion_policy)
 
+    # OP.0c: pure projection over utils.failover.compute_ha_readiness, fed the
+    # same already-loaded unified/config-telemetry data as every other
+    # builder above -- no extra file read, no duplicated verdict logic.
+    with _stage_timer(timings, "build_failover_readiness_payload"):
+        failover_readiness_ui = build_failover_readiness_payload(
+            data if isinstance(data, list) else None,
+            checkpoint_config_result=checkpoint_config_result,
+            config_result=config_result,
+        )
+
     return {
         "rawData": data,
         "configUiData": configuration_ui,
@@ -260,6 +273,7 @@ def build_report_payloads(
         "projectPlanData": project_plan,
         "discoveryUiData": discovery_ui,
         "exclusionsUiData": exclusions_ui,
+        "failoverReadinessData": failover_readiness_ui,
     }
 
 
@@ -321,6 +335,7 @@ def run_html_export(
     project_plan = payloads["projectPlanData"]
     discovery_ui = payloads["discoveryUiData"]
     exclusions_ui = payloads["exclusionsUiData"]
+    failover_readiness_ui = payloads["failoverReadinessData"]
 
     with _stage_timer(timings, "read_template_files"):
         template = read_text_file(template_file)
@@ -346,6 +361,7 @@ def run_html_export(
             "__CRYPTO_JSON_PLACEHOLDER__": _script_json(crypto_ui),
             "__DISCOVERY_JSON_PLACEHOLDER__": _script_json(discovery_ui),
             "__EXCLUSIONS_JSON_PLACEHOLDER__": _script_json(exclusions_ui),
+            "__FAILOVER_READINESS_JSON_PLACEHOLDER__": _script_json(failover_readiness_ui),
         }
 
     # One pass. Do NOT chain str.replace() here (see _fill_template): a payload

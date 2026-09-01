@@ -12,7 +12,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Sequence
 
 import paramiko
 
@@ -1746,6 +1746,45 @@ def _sample_targets(targets: list[PhysicalTarget]) -> list[PhysicalTarget]:
     return list(unique.values())
 
 
+def _apply_cp_target_selector(
+    targets: list[PhysicalTarget],
+    requested_entity_ids: Sequence[str] | None,
+) -> list[PhysicalTarget]:
+    """OP.0d exact, fail-closed narrowing of already-resolved CP candidates.
+
+    Matches on the same physical-host `entity_id` convention `_entity_id`
+    already uses (`target.device`) -- never a display label, never a
+    substring/regex/wildcard. Every requested id must resolve to exactly one
+    candidate before this returns; an unknown or ambiguous id raises here,
+    before `run_checkpoint_config_collection` opens a single SSH connection.
+    Narrows only -- never adds a target `stage`/`_sample_targets` did not
+    already resolve.
+    """
+    requested = list(dict.fromkeys(str(i).strip() for i in requested_entity_ids if str(i).strip()))
+    if not requested:
+        raise ValueError("cp_config_targets: no valid entity_id supplied")
+
+    by_entity_id: dict[str, list[PhysicalTarget]] = {}
+    for target in targets:
+        by_entity_id.setdefault(_entity_id(target), []).append(target)
+
+    unknown = sorted(rid for rid in requested if rid not in by_entity_id)
+    if unknown:
+        raise ValueError(
+            "cp_config_targets: unknown entity_id(s), refusing to contact any device: "
+            + ", ".join(unknown)
+        )
+
+    ambiguous = sorted(rid for rid in requested if len(by_entity_id[rid]) > 1)
+    if ambiguous:
+        raise ValueError(
+            "cp_config_targets: ambiguous entity_id(s) resolve to more than one candidate, "
+            "refusing to contact any device: " + ", ".join(ambiguous)
+        )
+
+    return [by_entity_id[rid][0] for rid in requested]
+
+
 def _management_state_is_down(value: Any) -> bool:
     normalized = str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
     return normalized in {"down", "management_down", "not_connected", "disconnected", "offline"}
@@ -1757,6 +1796,7 @@ def run_checkpoint_config_collection(
     stage: str = "all",
     max_workers: int = 6,
     orchestration_run_id: str | None = None,
+    target_entity_ids: Sequence[str] | None = None,
 ) -> dict[str, Any]:
     global OUTPUT_DIR
     OUTPUT_DIR = Path(cfg.runtime_paths.output_root) if getattr(cfg, "runtime_paths", None) is not None else OUTPUT_DIR
@@ -1773,18 +1813,26 @@ def run_checkpoint_config_collection(
     command_timeout = _env_int("SECURITYEXPERT_CP_CONFIG_SSH_COMMAND_TIMEOUT_SECONDS", 20, 5, 120)
     max_workers = max(1, min(int(max_workers or 1), 12))
 
-    targets, skipped = _resolve_targets()
-    if stage == "sample":
-        targets = _sample_targets(targets)
-    elif stage != "all":
+    if stage not in ("all", "sample"):
         raise ValueError(f"Unsupported CP config stage: {stage}")
+
+    targets, skipped = _resolve_targets()
+    requested_count = len(list(dict.fromkeys(str(i).strip() for i in (target_entity_ids or []) if str(i).strip())))
+    if target_entity_ids:
+        # OP.0d: an explicit selector is a narrower, operator-approved request
+        # than stage -- it takes precedence and stage's own sample/all
+        # selection is not applied on top of it.
+        targets = _apply_cp_target_selector(targets, target_entity_ids)
+    elif stage == "sample":
+        targets = _sample_targets(targets)
 
     store = ConfigEvidenceStore()
     entity_target_count = sum(1 + len(target.contexts) for target in targets)
+    target_selection = f"explicit({len(targets)}/{requested_count})" if target_entity_ids else stage
     info(
         ">>> CP CONFIG COLLECTION START "
         f"(phase={PHASE} physical_hosts={len(targets)} entities={entity_target_count} workers={max_workers} "
-        f"ssh_session=interactive_adaptive raw_config_persisted=false)"
+        f"target_selection={target_selection} ssh_session=interactive_adaptive raw_config_persisted=false)"
     )
     if not strict_host_key:
         warn(

@@ -73,6 +73,18 @@ def build_parser() -> argparse.ArgumentParser:
         help="Check Point configuration scope for --cp-config-collect. Full integration runs always use all.",
     )
     parser.add_argument(
+        "--cp-config-targets",
+        default=None,
+        help=(
+            "OP.0d: exact, comma-separated entity_id allowlist for --cp-config-collect "
+            "(the physical-host entity_id already used throughout the repository -- "
+            "the 'device' value in cp.json/cp_config_telemetry.json; never a display "
+            "label). Fail-closed: every id must resolve to exactly one already-discovered "
+            "candidate before any SSH connection opens -- an unknown or ambiguous id aborts "
+            "before contact. Takes precedence over --cp-config-stage when set."
+        ),
+    )
+    parser.add_argument(
         "--cp-config-workers",
         type=int,
         default=6,
@@ -99,6 +111,19 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "PAN config scope override. Default: 5 connected firewalls for --only pan-config; "
             "all connected firewalls for a normal full run."
+        ),
+    )
+    parser.add_argument(
+        "--pan-config-targets",
+        default=None,
+        help=(
+            "OP.0d: exact, comma-separated serial allowlist for the PAN configuration "
+            "collector (the identity-gated serial the collector already cross-checks "
+            "against each firewall's own 'show system info'; never a hostname/label). "
+            "Fail-closed: every serial must resolve to exactly one currently-connected "
+            "discovered firewall before any direct API call -- an unknown, ambiguous, or "
+            "not-currently-connected serial aborts before contact. Takes precedence over "
+            "--pan-config-limit/--pan-config-stage when set."
         ),
     )
     parser.add_argument(
