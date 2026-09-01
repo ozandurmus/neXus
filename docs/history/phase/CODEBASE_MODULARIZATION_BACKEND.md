@@ -2,11 +2,69 @@
 
 ## Status
 
+**IMPLEMENTED 2026-09-01** (`Sonnet 5, normal`), same day as the contract
+freeze, by a fresh implementation session. `main.py` (2,089 lines) is now a
+47-line thin entry; the `application/` package matches the ownership table
+below. Full suite **896 passed / 26 skipped / 2 failed** (the 2 are the same
+pre-existing order-pollution failures noted throughout this doc's build
+history; +9 from the new `tests/test_application_package.py`), zero
+regressions vs this branch's pre-build baseline (887/26/2). Privacy gate
+PASS/0. AC-1 … AC-8 all green — see "Implementation deviations" below for the
+handful of judgment calls a line-verified contract-vs-test read still left
+open.
+
+Original freeze note (superseded by the above but kept for history):
 **CONTRACT FROZEN 2026-09-01.** Produced as a `SCOPE → AUDIT → CONTRACT` pass
 (`Sonnet 5, normal`) immediately after `codebase_modularization` (frontend)
 landed. No source file changed by this pass — `main.py`, the vendor collectors,
 `utils/*`, and every test are untouched. Ready for a fresh session to
 implement against.
+
+### Implementation deviations
+
+1. **Two test files could not stay byte-identical under AC-1.**
+   `tests/test_phase0_6_0a4_3_3_2_workflow_and_ha.py` asserted on the literal
+   text of `main.py` (e.g. `MAIN.index("if args.render_only:") <
+   MAIN.index("from checkpoint.cp_runner import run_cp")`) and patched
+   `main_module.info` by name before calling `main_module._cp_stage_cooldown`;
+   `tests/test_phase0_6_1c_1_...` and five other UI/coverage test files carried
+   the same "read main.py as text" pattern for strings that moved into
+   `application/workflows/checkpoint.py` or `application/cli.py`.
+   `tests/test_dev_2_1_noninteractive_runtime_config.py` patched
+   `main.register_sensitive_value` by name before calling
+   `main._build_runtime_config`. Both patterns assume the target function
+   still lives in `main`'s namespace — incompatible with AC-1's ≤120-line
+   `main.py` by construction, not a behavior assertion. Put to the product
+   owner directly; resolved to: keep `main.py` minimal, repoint the ~8 affected
+   assertions/patches to the new `application/*.py` locations. Same class of
+   mechanical repoint the frontend half applied to 16 source-string UI tests.
+   No test's *behavioral* assertion changed — only *where* it reads the source
+   text from, or *which module's* name it patches.
+2. **F5's three de-closured helpers stayed nested, not module-level.**
+   `_pan_config_limit_for_mode` / `_require_partial_inputs` /
+   `_render_partial_inventory` are defined inside
+   `checkpoint.integration_checkpoint` rather than at `checkpoint.py` module
+   scope. They still no longer close over a 1,690-line `main()` scope (the
+   stated problem) — only over `integration_checkpoint`'s own parameters — and
+   staying nested keeps the Phase-E lazy vendor-import cluster in exactly one
+   place rather than spreading it across module-level helper functions that
+   would each need their own lazy imports of `run_merge`/`run_html_export`.
+3. **A real pre-existing lazy-import gap, found by the new AC-3 check, not
+   introduced by this build.** `main.py`'s top-level
+   `from utils.config_storage import analyze_configuration_storage, ...`
+   transitively imported `lxml` (via `utils/config_evidence.py`) on *every*
+   invocation, including `--repository-privacy-check` — contradicting
+   `AI_START_HERE.md`'s documented "vendor imports are lazy" contract. F2's
+   audit believed this boundary already held; it did not. Closed by moving
+   that import into `storage_analyze()` / `storage_deduplicate()` (first use)
+   in `application/workflows/maintenance.py` — zero output or exit-code
+   change, only import timing.
+4. **`register_sensitive_value` / `info` are not re-exported from `main`.**
+   Only the F4 names plus `_cp_stage_cooldown` and `_run_scheduler_once` (both
+   directly called/patched by existing tests, which the original F4 audit
+   undercounted) are re-exported. `main.py` still imports `info` and
+   `register_sensitive_value` from `utils.logger` for readability/history, but
+   nothing depends on that binding after deviation 1's repoints.
 
 `project/backlog.json` `codebase_modularization` (P1) — this is the **backend
 half** of that entry; the frontend half is IMPLEMENTED
