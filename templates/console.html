@@ -3,11 +3,8 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
-    <title>SecurityExpert</title>
-    <style>
-    /* __STYLE_PLACEHOLDER__ */
-    </style>
+    <title>SecurityExpert Console</title>
+    <link rel="stylesheet" href="/assets/style.css">
 </head>
 <body>
 
@@ -16,7 +13,7 @@
         <div class="brand-mark">SX</div>
         <div class="brand-copy">
             <div class="brand-title">Security<span>Expert</span></div>
-            <div class="brand-subtitle">Verified state for network security</div>
+            <div class="brand-subtitle">Operator console · live, read-only</div>
         </div>
     </div>
 
@@ -50,6 +47,14 @@
         <div id="configurationTopControls" class="context-controls" hidden>
             <div id="configTopStats" class="stats"></div>
         </div>
+
+        <button
+            id="consoleRefreshButton"
+            class="icon-button"
+            type="button"
+            aria-label="Refresh from disk"
+            title="Refresh payloads from disk"
+        >&#8635;</button>
 
         <button
             id="themeToggle"
@@ -491,21 +496,8 @@
     </main>
 </section>
 
-<script>
-window.SECURITYEXPERT_MODE = "static";
-
-/* __SCRIPT_PLACEHOLDER__ */
-
-initializeReport({
-    rawData: __DATA_JSON_PLACEHOLDER__,
-    configUiData: __CONFIG_JSON_PLACEHOLDER__,
-    complianceUiData: __COMPLIANCE_JSON_PLACEHOLDER__,
-    cryptoUiData: __CRYPTO_JSON_PLACEHOLDER__,
-    projectPlanData: __PROJECT_PLAN_JSON_PLACEHOLDER__,
-    discoveryUiData: __DISCOVERY_JSON_PLACEHOLDER__,
-    exclusionsUiData: __EXCLUSIONS_JSON_PLACEHOLDER__,
-});
-</script>
+<script src="/assets/app.js"></script>
+<script src="/assets/console_actions.js"></script>
 
 </body>
 </html>

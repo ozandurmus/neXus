@@ -262,6 +262,22 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--console",
+        action="store_true",
+        help=(
+            "CON.1 read-only operator console: an authenticated loopback HTTP service "
+            "that serves the existing UI modules and the latest local artifacts, live. "
+            "Zero action capability -- no vendor import, no credential, no device contact. "
+            "Requires the optional console dependencies: pip install -r requirements-console.txt"
+        ),
+    )
+    parser.add_argument(
+        "--console-port",
+        type=int,
+        default=8765,
+        help="Loopback port for --console (default: 8765). The listener always binds 127.0.0.1 only.",
+    )
+    parser.add_argument(
         "--scheduler-once",
         action="store_true",
         help=(
@@ -380,6 +396,27 @@ def validate_modes(args, parser):
         or args.recovery_collect or args.recovery_attest
     ):
         parser.error("--compliance-trend-reconstruct cannot be combined with collection/render modes")
+    if args.console_port != 8765 and not args.console:
+        parser.error("--console-port is only valid with --console")
+    if args.console and (
+        args.repository_privacy_check
+        or args.storage_analyze
+        or args.storage_deduplicate
+        or args.apply
+        or args.persistent_secret_material_check
+        or args.restore_readiness_check
+        or args.recovery_store_check
+        or args.recovery_validate
+        or args.recovery_collect
+        or args.recovery_attest
+        or args.cp_config_probe
+        or args.cp_config_collect
+        or args.render_only
+        or args.compliance_trend_reconstruct
+        or args.scheduler_once
+        or args.only != "all"
+    ):
+        parser.error("--console cannot be combined with collection, render, or maintenance modes")
 
 
 def dispatch(args, parser, *, runtime_services=None, provenance="manual", admission_run_context=None):
@@ -392,6 +429,14 @@ def dispatch(args, parser, *, runtime_services=None, provenance="manual", admiss
         provenance=provenance,
         admission_run_context=admission_run_context,
     )
+
+    # --- Phase A: CON.1 C1-8 fail-closed preflight, before anything else ----
+    if args.console:
+        from console.server import ConsoleDependencyError, console_dependency_preflight
+        try:
+            console_dependency_preflight()
+        except ConsoleDependencyError as exc:
+            parser.error(str(exc))
 
     # --- Phase B: pre-runtime maintenance (offline, no RuntimeRoot) ---------
     if args.repository_privacy_check:
@@ -406,6 +451,11 @@ def dispatch(args, parser, *, runtime_services=None, provenance="manual", admiss
         Path(args.support_bundle_output_dir).expanduser() if args.support_bundle_output_dir else None
     )
     ctx.runtime_paths = services.build_runtime_foundation(args, parser)
+
+    if args.console:
+        from console.server import run_console
+        run_console(runtime_paths=ctx.runtime_paths, port=args.console_port)
+        return None
 
     # --- Phase D: single-purpose modes -----------------------------------
     if args.persistent_secret_material_check:

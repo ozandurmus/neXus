@@ -42,7 +42,9 @@ def _render(tmp_path):
 
 
 def _script_literal(html: str, name: str) -> str:
-    m = re.search(rf"\bconst {re.escape(name)} = (.*?);\n", html)
+    # CON.1 C1-2/C1-3: initializeReport({...}) object literal, not a
+    # top-level `const name = ...;` declaration — see templates/index.html.
+    m = re.search(rf"\b{re.escape(name)}: (.*?),\n", html)
     assert m, f"{name} declaration not found in the generated <script>"
     return m.group(1).replace("<\\/", "</")
 

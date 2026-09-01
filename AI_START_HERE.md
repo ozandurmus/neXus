@@ -30,7 +30,9 @@ exists or is permitted at current maturity.
 
 ## How it works in 30 lines
 
-**One Python CLI, no web server.** Dependencies: `lxml`, `paramiko`, `requests`.
+**One Python CLI.** Dependencies: `lxml`, `paramiko`, `requests`. `--console`
+(CON.1) is the one optional exception — a read-only loopback web server, off
+by default, requiring the separate `requirements-console.txt`.
 
 ```
 live devices ──(SSH / cprid_util / HTTPS XML API — all read-only)──► collectors
@@ -59,6 +61,7 @@ outside it — on Windows under `%LOCALAPPDATA%\SecurityExpert\runtime\`.
 | `py .\main.py --repository-privacy-check` | Local/offline Corporate-Git privacy gate. No network, no credentials, matched values never printed. |
 | `py .\main.py --storage-analyze` / `--storage-deduplicate [--apply]` | Content-addressed storage inspection / dedup migration (dry-run default). |
 | `py .\main.py --scheduler-once` | Evaluate the default-disabled RuntimeRoot scheduler policy once; no loop. |
+| `py .\main.py --console [--console-port N]` | CON.1 read-only operator console: authenticated loopback HTTP service serving the existing UI live from local artifacts. Zero action capability, no vendor import, no credential, no device contact. Requires `pip install -r requirements-console.txt`. |
 
 Vendor/config imports are lazy — maintenance modes return before touching them.
 
@@ -84,6 +87,7 @@ Vendor/config imports are lazy — maintenance modes return before touching them
 | `utils/support_bundle.py`, `completeness.py` | sanitized shareable zip |
 | `utils/logger.py`, `cp_ssh_trust.py`, `pan_tls_trust.py`, `repository_privacy.py`, `inventory_exclusions.py` | log redaction, trust preflight, DLP gate, exclusion policy |
 | `templates/index.html` + `static/{app.js,style.css}` | single-page UI (Overview / Network Inventory / Configuration / Compliance / Discovery / Project Plan) |
+| `console/` + `templates/console.html` + `static/console_actions.js` | CON.1 read-only operator console (`--console`); imports no vendor/collector module |
 | `project/*.json` | living plan metadata (roadmap / backlog / feature_registry / build_history) — embedded into the Project Plan UI on every render |
 | `tests/` | phase-scoped suites; baseline `227 passed / 2 xfail` |
 

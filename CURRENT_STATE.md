@@ -5,11 +5,11 @@ Hot-path state only. Historical build detail lives in
 agreements and validation reports). `docs/history/INDEX.md` is the one-line
 timeline.
 
-- **Authoritative checkpoint:** 2026-09-01 (branch
-  `feature/codebase-modularization-backend`, not yet merged — RB.3b prep
+- **Authoritative checkpoint:** 2026-09-01 (branch `main`, clean — RB.3b prep
   sign-off + steps 2–7 on `main`, real-environment run owed;
   `frontend_rendering_boundary` implemented; `codebase_modularization`
-  frontend then backend both implemented — see "Active build" below)
+  (frontend + backend, including the real-browser follow-up) `DONE`; `CON.1`
+  AUTOMATED_VALIDATED — see "Active build" below)
 - **Product baseline:** `0.7.7 — Compliance trend retro-fill (PAN baseline
   reconstruction)` — AUTOMATED_VALIDATED (0.7.x VERIFY track)
 - **Previous:** `DEV.3.1 — Linux worker image + Compose` — AUTOMATED_VALIDATED
@@ -74,7 +74,7 @@ sessions:
 
 | Phase | Contract (`docs/history/phase/`) | Blocked on |
 | --- | --- | --- |
-| `CON.1` read-only console | `CON_1_OPERATOR_CONSOLE_READ_ONLY.md` | `codebase_modularization` (frontend) — **IMPLEMENTED 2026-09-01**, `in_progress` pending a human real-browser open; `C-D1`, `C-D2` |
+| `CON.1` read-only console | `CON_1_OPERATOR_CONSOLE_READ_ONLY.md` | `codebase_modularization` (frontend) — **DONE**; `C-D1`, `C-D2` — **approved 2026-09-01, both consumed as-is**. `CON.1` itself: **AUTOMATED_VALIDATED 2026-09-01**, implemented below — pending only a human real-browser open to reach `DONE`. |
 | `CON.2` job engine + `read` actions | `CON_2_CONSOLE_JOB_ENGINE_READ_ACTIONS.md` | `CON.1`; `C-D3` |
 | `CON.3` `operational-write` actions | `CON_3_CONSOLE_OPERATIONAL_WRITE_ACTIONS.md` | `CON.2`; **`RB.3b` REAL_ENV_VALIDATED**; `C-D4`, `C-D6` |
 | `CON.4` Recovery module (`RB.5`) | `CON_4_CONSOLE_RECOVERY_MODULE.md` | `CON.2` |
@@ -82,8 +82,41 @@ sessions:
 
 The architecture doc is the spec; this file does not restate it. Eight open
 decisions (`C-D1`…`C-D8`, in `project/roadmap.json` `open_decisions`) are
-product-owner / security calls, not engineering work — `CON.1` cannot start
-until `C-D1`/`C-D2` are answered. No source file was touched by the freeze.
+product-owner / security calls, not engineering work. `C-D1`/`C-D2` were
+answered 2026-09-01 (both per their documented recommendation: optional
+`fastapi`+`uvicorn` dependency; cookieless per-launch bearer token in the URL
+fragment), which unblocked and completed `CON.1` the same session — see below.
+`C-D3`…`C-D8` remain open, blocking `CON.2` onward.
+
+**`CON.1` (operator console, read-only surface) — AUTOMATED_VALIDATED
+2026-09-01 (`Sonnet 5, normal`).** `docs/history/phase/CON_1_OPERATOR_CONSOLE_READ_ONLY.md`.
+New `console/` package (`auth.py` token/origin checks, `payloads.py`,
+`app.py` FastAPI routes + CSP header, `server.py` fail-closed preflight +
+uvicorn bootstrap), `templates/console.html`, `static/console_actions.js`,
+`main.py --console [--console-port N]` (mutually exclusive maintenance-class
+mode, no credential), `requirements-console.txt`. `utils/html_export.py`
+gained `MODULE_ORDER`/`compose_modules()` and `build_report_payloads()` — the
+console and the exporter now call the identical payload builder (C1-2/C1-4:
+drift between them is impossible by construction, not by discipline).
+`app_bootstrap.js`'s initialization became `initializeReport(payloads)`
+(C1-3); static mode (`templates/index.html`) calls it with the inline JSON
+constants, console mode calls it after an authenticated `/api/payloads`
+fetch. AC-8 (console imports no vendor module, transitively) surfaced three
+pre-existing eager `configuration.*` imports reachable from
+`utils/html_export.py` (`utils/config_ui.py`, `utils/config_history.py`,
+`utils/crypto_posture.py`) — made lazy at point of use, same
+`DEV.3.3`-established pattern, behavior-preserving for every other caller.
+New `tests/test_con1_operator_console_read_only.py` (AC-1…AC-11). Full suite
+**907 / 27 / 2** vs the pre-build baseline **896 / 26 / 2** — same two
+pre-existing pollution failures (reproduced on an unmodified checkout of the
+same batch), zero regressions, `+11 passed / +1 skipped`. Privacy gate
+PASS/0. Render harness green. Live end-to-end smoke: `main.py --console`
+served real HTTP on `127.0.0.1`, verified over curl. AC-1's real-Chromium
+walk skips cleanly in this sandbox (Chromium binary not downloaded) — the
+same pre-existing skip condition as `tests/test_frontend_rendering_boundary.py`'s
+Playwright tests; a human interactive real-browser open is the cheap
+follow-up that moves this build to `DONE`, same pattern
+`codebase_modularization` (frontend) used.
 
 
 **`codebase_modularization` (frontend half) — IMPLEMENTED 2026-09-01

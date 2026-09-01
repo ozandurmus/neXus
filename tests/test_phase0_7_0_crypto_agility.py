@@ -168,7 +168,7 @@ def test_ac4_no_secret_or_key_material_in_payload(tmp_path):
 def test_ac5_template_wires_crypto_placeholder():
     from pathlib import Path
     tpl = (Path(__file__).resolve().parents[1] / "templates" / "index.html").read_text(encoding="utf-8")
-    assert "const cryptoUiData = __CRYPTO_JSON_PLACEHOLDER__;" in tpl
+    assert "cryptoUiData: __CRYPTO_JSON_PLACEHOLDER__," in tpl
     assert 'id="cryptoPostureCard"' in tpl
 
 

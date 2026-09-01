@@ -126,7 +126,7 @@ def test_project_plan_ui_contract_and_export_embedding_are_present():
         "__PROJECT_PLAN_JSON_PLACEHOLDER__",
     ]:
         assert marker in TEMPLATE
-    assert "const projectPlanData" in TEMPLATE
+    assert "projectPlanData: __PROJECT_PLAN_JSON_PLACEHOLDER__" in TEMPLATE
     assert "function renderProjectPlan(" in APP
     assert '"project-plan"' in APP
     assert ".project-plan-shell" in CSS

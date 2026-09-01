@@ -23,13 +23,19 @@ from typing import Any
 
 from lxml import etree
 
-from configuration.current_config_projection import (
-    SECTION_ORDER,
-    _as_dict,
-    _safe_xml,
-    _scalar_rows,
-)
 from utils.config_evidence import CONFIG_ROOT, ARTIFACT_ROOT
+
+# CON.1 AC-8: console/ must import no vendor/collector module, transitively —
+# checkpoint/*, panorama/*, configuration/* — so this stays a lazy, per-use
+# import (see the four call sites below) instead of a module-level one.
+def _config_projection():
+    from configuration.current_config_projection import (
+        SECTION_ORDER,
+        _as_dict,
+        _safe_xml,
+        _scalar_rows,
+    )
+    return SECTION_ORDER, _as_dict, _safe_xml, _scalar_rows
 from utils.evidence_backend import ConfigSnapshotBackend, select_config_snapshot_backend
 
 HISTORY_SCHEMA_VERSION = "0.6.3"
@@ -138,6 +144,7 @@ def _blob_path_for_metadata(
     meta: dict[str, Any],
     artifact_root: Path,
 ) -> Path | None:
+    _, _as_dict, _, _ = _config_projection()
     storage = _as_dict(meta.get("storage"))
     obj_path_str = storage.get("object_path")
     if not obj_path_str:
@@ -227,6 +234,7 @@ def _read_pan_object(meta: dict[str, Any], artifact_root: Path) -> etree._Elemen
     except OSError:
         return None
     try:
+        _, _, _safe_xml, _ = _config_projection()
         return _safe_xml(content)
     except (etree.XMLSyntaxError, ValueError):
         return None
@@ -234,6 +242,7 @@ def _read_pan_object(meta: dict[str, Any], artifact_root: Path) -> etree._Elemen
 
 def _project_rows(root: etree._Element) -> dict[str, list[dict[str, Any]]]:
     """Return safe scalar rows without alignment context (history diff only)."""
+    _, _, _, _scalar_rows = _config_projection()
     sections, _ = _scalar_rows(root, alignment_index={})
     return sections
 
@@ -267,6 +276,7 @@ def _compare_sections(
     newer_idx = _rows_to_index(newer_sections)
     all_keys = set(older_idx) | set(newer_idx)
 
+    SECTION_ORDER, _, _, _ = _config_projection()
     section_priority = {s: i for i, s in enumerate(SECTION_ORDER)}
 
     for key in sorted(all_keys, key=lambda k: (section_priority.get(k[0], 99), k[1], k[2] or "")):

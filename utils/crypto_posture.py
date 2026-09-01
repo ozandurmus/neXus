@@ -9,7 +9,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from configuration.current_config_projection import _artifact_bytes
+# CON.1 AC-8: console/ must import no vendor/collector module, transitively —
+# checkpoint/*, panorama/*, configuration/* — so this stays a lazy, per-use
+# import instead of a module-level one.
 from utils.crypto_facts import (
     LEGACY_DH_GROUPS,
     STRONG_DH_GROUPS,
@@ -262,6 +264,7 @@ def build_crypto_posture(
     for row_value in _as_list(pan.get("devices")):
         row = _as_dict(row_value)
         artifact = _as_dict(_as_dict(row.get("direct")).get("effective"))
+        from configuration.current_config_projection import _artifact_bytes
         content = _artifact_bytes(base_dir, artifact)
         if not content:
             continue

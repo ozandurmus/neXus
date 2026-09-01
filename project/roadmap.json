@@ -507,7 +507,9 @@
     {
       "id": "C-D1",
       "area": "CON.x Operator Console",
-      "status": "open",
+      "status": "decided",
+      "decision": "Approve as optional extra",
+      "decided_on": "2026-09-01",
       "question": "Approve fastapi + uvicorn as an optional dependency set (requirements-console.txt), keeping the core CLI/report path at its current four dependencies?",
       "options": [
         "Approve as optional extra",
@@ -520,7 +522,9 @@
     {
       "id": "C-D2",
       "area": "CON.x Operator Console",
-      "status": "open",
+      "status": "decided",
+      "decision": "Cookieless per-launch bearer token in the URL fragment",
+      "decided_on": "2026-09-01",
       "question": "Local authentication model for the console listener.",
       "options": [
         "Cookieless per-launch bearer token in the URL fragment",

@@ -1293,7 +1293,7 @@
     {
       "id": "operator_console_surface",
       "title": "Operator Console - read-only surface",
-      "status": "planned",
+      "status": "automated_validated",
       "introduced": "CON.1",
       "weight": 5,
       "summary": "Authenticated loopback HTTP surface serving the existing UI modules and report payloads live, with zero action capability and zero device contact.",
@@ -1302,25 +1302,25 @@
         {
           "id": "loopback_auth",
           "label": "Loopback bind + cookieless per-launch bearer token",
-          "state": "pending",
+          "state": "done",
           "weight": 1
         },
         {
           "id": "dual_mode_ui",
           "label": "One UI source, two delivery modes; report keeps no action surface",
-          "state": "pending",
+          "state": "done",
           "weight": 1
         },
         {
           "id": "payload_parity",
           "label": "Console payloads byte-equal to the exported report's",
-          "state": "pending",
+          "state": "done",
           "weight": 1
         },
         {
           "id": "no_mutating_route",
           "label": "No mutating HTTP route exists (asserted on the route table)",
-          "state": "pending",
+          "state": "done",
           "weight": 1
         }
       ]

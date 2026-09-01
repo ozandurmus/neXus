@@ -149,12 +149,29 @@ document.querySelectorAll(".config-tab").forEach(tab => {
     tab.addEventListener("click", () => switchConfigTab(tab.dataset.configTab));
 });
 
-renderOverviewModule();
-renderComplianceModule();
-renderDiscoveryModule();
-renderExclusionsModule();
-renderProjectPlan();
-renderConfigDeviceList();
-renderConfigSelected();
-switchConfigTab(activeConfigTab);
-switchModule(savedModule());
+// CON.1 C1-2/C1-3: report initialization entry point. Static mode
+// (templates/index.html) calls this once with the inline JSON constants;
+// console mode (static/console_actions.js) calls it after fetching
+// /api/payloads, and again on every manual/auto refresh. Assigning the
+// module-scope `let` payload globals (app_core.js) here, then re-running the
+// same render sequence the static report always ran, is what makes a refresh
+// behave identically to the first render.
+function initializeReport(payloads) {
+    rawData = payloads.rawData || [];
+    configUiData = payloads.configUiData || {};
+    complianceUiData = payloads.complianceUiData || {};
+    cryptoUiData = payloads.cryptoUiData || {};
+    projectPlanData = payloads.projectPlanData || {};
+    discoveryUiData = payloads.discoveryUiData || {};
+    exclusionsUiData = payloads.exclusionsUiData || {};
+
+    renderOverviewModule();
+    renderComplianceModule();
+    renderDiscoveryModule();
+    renderExclusionsModule();
+    renderProjectPlan();
+    renderConfigDeviceList();
+    renderConfigSelected();
+    switchConfigTab(activeConfigTab);
+    switchModule(savedModule());
+}
