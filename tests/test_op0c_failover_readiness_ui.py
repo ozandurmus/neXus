@@ -260,7 +260,7 @@ def test_payload_links_vsx_virtual_system_to_its_physical_parent():
     ]
     payload = build_failover_readiness_payload(rows)
     parent = next(u for u in payload["units"] if u["unit_id"] == "grp-vsx")
-    child = next(u for u in payload["units"] if u["unit_id"] == "VSX-1__vsid_10")
+    child = next(u for u in payload["units"] if u["unit_id"] == "grp-vsx__vsid_10")
     assert parent["parent_id"] is None
     assert child["parent_id"] == parent["unit_id"]
     assert child["unit_type"] == "cp_vsx_virtual_system"

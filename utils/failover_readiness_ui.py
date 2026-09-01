@@ -82,6 +82,7 @@ CHECK_STATUS_TONES: Mapping[str, str] = {
 UNIT_TYPE_LABELS: Mapping[str, str] = {
     "cp_clusterxl_cluster": "Check Point ClusterXL",
     "cp_vsx_host": "Check Point VSX host",
+    "cp_vsx_cluster": "Check Point VSX Cluster",
     "cp_vsx_virtual_system": "Check Point VSX virtual system",
     "pan_ha_pair": "Palo Alto HA pair",
 }
