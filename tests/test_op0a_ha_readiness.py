@@ -53,13 +53,34 @@ def _cp(device, cluster=None, vs_id=None, source="cp"):
     return row
 
 
-def _pan(device, management_ip=None):
-    return {
+def _pan(device, management_ip=None, vsys=None):
+    row = {
         "device": device,
         "source": "panorama",
         "management_ip": management_ip,
         "inventory_status": {"data_state": "ok"},
     }
+    if vsys is not None:
+        row["vsys"] = vsys
+    return row
+
+
+def _cp_topo(device, group_id, display_name=None, source="cp", vs_id=None, vsx_flag=None):
+    """A row shaped like the REAL pipeline: nested `cluster_topology`
+    (`checkpoint/cp_runner.py::enrich_cluster_topology`), no flat `cluster`
+    field -- this is the shape the 2026-09-01/02 real-env CP validation
+    actually produced and that the legacy `_cp()` fixture above does not
+    exercise."""
+    row = {
+        "device": device, "source": source,
+        "inventory_status": {"data_state": "ok"},
+        "cluster_topology": {"group_id": group_id, "display_name": display_name or group_id},
+    }
+    if vs_id is not None:
+        row["vs_id"] = vs_id
+    if vsx_flag is not None:
+        row["vsx_cluster_member"] = vsx_flag
+    return row
 
 
 def _unit_by_id(report, unit_id):
@@ -184,6 +205,217 @@ def test_ac4_virtual_system_never_inherits_host_verdict():
     assert host["verdict"] == VERDICT_UNSAFE  # ACTIVE alone -> no viable target
     assert vs["verdict"] != VERDICT_UNSAFE or vs["reason"] != host["reason"]
     assert vs["members"] == ["vsx-gw-01__vsid_10"]
+
+
+# --------------------------------------------------------------------------
+# CP cluster-centric identity — real pipeline shape (2026-09-02 real-env find)
+#
+# The real CP pipeline never emits a flat `cluster` field (checkpoint/
+# cp_runner.py writes only nested `cluster_topology`); a narrow real-env
+# ClusterXL validation run reproduced exactly this and the cluster was
+# silently omitted from the Failover module. These tests use the REAL nested
+# shape (`_cp_topo`), not the legacy flat-field fixture (`_cp`).
+# --------------------------------------------------------------------------
+
+def test_cluster_topology_group_id_forms_one_cluster_unit_with_both_members():
+    rows = [
+        _cp_topo("FW-1", "grp-abc123", display_name="FW-CLS"),
+        _cp_topo("FW-2", "grp-abc123", display_name="FW-CLS"),
+    ]
+    report = compute_ha_readiness(rows)
+    cp_units = [u for u in report["units"] if u["vendor"] == "checkpoint"]
+    assert len(cp_units) == 1
+    assert cp_units[0]["unit_id"] == "grp-abc123"
+    assert sorted(cp_units[0]["members"]) == ["FW-1", "FW-2"]
+    assert cp_units[0]["unit_type"] == "cp_clusterxl_cluster"
+
+
+def test_group_id_is_canonical_display_name_is_presentation_only():
+    """Two clusters sharing a display_name (a naming collision) must still
+    remain distinct units -- display_name never decides grouping."""
+    rows = [
+        _cp_topo("FW-1", "grp-aaa", display_name="SAME-LABEL"),
+        _cp_topo("FW-2", "grp-aaa", display_name="SAME-LABEL"),
+        _cp_topo("FW-3", "grp-bbb", display_name="SAME-LABEL"),
+        _cp_topo("FW-4", "grp-bbb", display_name="SAME-LABEL"),
+    ]
+    report = compute_ha_readiness(rows)
+    cp_units = [u for u in report["units"] if u["vendor"] == "checkpoint"]
+    assert {u["unit_id"] for u in cp_units} == {"grp-aaa", "grp-bbb"}
+    for unit in cp_units:
+        assert unit["display_name"] == "SAME-LABEL"
+
+
+def test_active_standby_role_swap_does_not_change_cluster_identity():
+    rows = [_cp_topo("FW-1", "grp-abc123"), _cp_topo("FW-2", "grp-abc123")]
+    before = compute_ha_readiness(rows, cp_ha_runtime={
+        "FW-1": {"ha_role": "ACTIVE", "ha_cluster_mode": "ha_new_mode"},
+        "FW-2": {"ha_role": "STANDBY", "ha_cluster_mode": "ha_new_mode"},
+    })
+    after = compute_ha_readiness(rows, cp_ha_runtime={
+        "FW-1": {"ha_role": "STANDBY", "ha_cluster_mode": "ha_new_mode"},
+        "FW-2": {"ha_role": "ACTIVE", "ha_cluster_mode": "ha_new_mode"},
+    })
+    assert _unit_by_id(before, "grp-abc123")["unit_id"] == _unit_by_id(after, "grp-abc123")["unit_id"]
+
+
+def test_seven_checks_roll_up_to_one_cluster_level_verdict():
+    rows = [_cp_topo("FW-1", "grp-abc123"), _cp_topo("FW-2", "grp-abc123")]
+    runtime = {
+        "FW-1": {"ha_role": "ACTIVE", "ha_cluster_mode": "ha_new_mode"},
+        "FW-2": {"ha_role": "ACTIVE", "ha_cluster_mode": "ha_new_mode"},
+    }
+    report = compute_ha_readiness(rows, cp_ha_runtime=runtime)
+    cp_units = [u for u in report["units"] if u["vendor"] == "checkpoint"]
+    assert len(cp_units) == 1
+    unit = cp_units[0]
+    assert len(unit["checks"]) == 7
+    assert unit["verdict"] == VERDICT_UNSAFE
+    assert unit["reason"] == "split_brain_observed"
+
+
+def test_standalone_cp_gateway_not_falsely_classified_as_ha_cluster():
+    rows = [_cp_topo("FW-1", "grp-abc123"), _cp_topo("FW-2", "grp-abc123"),
+            {"device": "FW-EDGE", "source": "cp", "inventory_status": {"data_state": "ok"}}]
+    report = compute_ha_readiness(rows)
+    assert _unit_by_id(report, "FW-EDGE") is None
+    assert len([u for u in report["units"] if u["vendor"] == "checkpoint"]) == 1
+
+
+def test_legacy_flat_cluster_fixture_remains_compatible():
+    """AC-3's exact fixture/assertions must survive unchanged."""
+    rows = [_cp("cp-core-01", cluster="cp-core"), _cp("cp-core-02", cluster="cp-core")]
+    report = compute_ha_readiness(rows)
+    unit = _unit_by_id(report, "cp-core")
+    assert unit is not None
+    assert unit["display_name"] is None
+    assert sorted(unit["members"]) == ["cp-core-01", "cp-core-02"]
+
+
+def test_missing_and_ambiguous_topology_remains_fail_closed():
+    """No group_id, no legacy cluster -> standalone, omitted (fail-closed,
+    not guessed into a cluster)."""
+    rows = [
+        {"device": "FW-1", "source": "cp", "inventory_status": {"data_state": "ok"}},
+        {"device": "FW-2", "source": "cp", "inventory_status": {"data_state": "ok"},
+         "cluster_topology": "not-a-mapping"},
+    ]
+    report = compute_ha_readiness(rows)
+    assert [u for u in report["units"] if u["vendor"] == "checkpoint"] == []
+
+
+def test_no_duplicate_cluster_unit_is_produced_across_repeated_rows():
+    rows = [_cp_topo("FW-1", "grp-abc123"), _cp_topo("FW-1", "grp-abc123"), _cp_topo("FW-2", "grp-abc123")]
+    report = compute_ha_readiness(rows)
+    cp_units = [u for u in report["units"] if u["vendor"] == "checkpoint"]
+    assert len(cp_units) == 1
+    assert cp_units[0]["members"] == ["FW-1", "FW-2"]
+
+
+# --------------------------------------------------------------------------
+# CP VSX — physical cluster/host is a parent; each Virtual System is its own
+# unit, linked via parent_id, never flattened, never a top-level sibling of
+# unrelated physical gateways.
+# --------------------------------------------------------------------------
+
+def test_vsx_physical_pair_forms_one_parent_unit_via_shared_group_id():
+    """VSX physical hosts running classic ClusterXL underneath get the same
+    cluster_topology.group_id mechanism as a normal cluster -- no VSLS
+    assumption, reusing existing evidence."""
+    rows = [
+        _cp_topo("VSX-1", "grp-vsx1", display_name="VSX-CLS", source="vsx"),
+        _cp_topo("VSX-2", "grp-vsx1", display_name="VSX-CLS", source="vsx"),
+    ]
+    report = compute_ha_readiness(rows)
+    vsx_units = [u for u in report["units"] if u["unit_type"] == "cp_vsx_host"]
+    assert len(vsx_units) == 1
+    assert vsx_units[0]["unit_id"] == "grp-vsx1"
+    assert sorted(vsx_units[0]["members"]) == ["VSX-1", "VSX-2"]
+
+
+def test_each_virtual_system_is_a_distinct_unit_linked_to_its_physical_parent():
+    rows = [
+        _cp_topo("VSX-1", "grp-vsx1", source="vsx"),
+        _cp_topo("VSX-2", "grp-vsx1", source="vsx"),
+        {"device": "VSX-1", "source": "vsx", "vs_id": "10", "inventory_status": {"data_state": "ok"}},
+        {"device": "VSX-1", "source": "vsx", "vs_id": "20", "inventory_status": {"data_state": "ok"}},
+    ]
+    report = compute_ha_readiness(rows)
+    vs_a = _unit_by_id(report, "VSX-1__vsid_10")
+    vs_b = _unit_by_id(report, "VSX-1__vsid_20")
+    assert vs_a is not None and vs_b is not None
+    assert vs_a["unit_id"] != vs_b["unit_id"]
+    assert vs_a["parent_id"] == "grp-vsx1"
+    assert vs_b["parent_id"] == "grp-vsx1"
+    assert vs_a["unit_type"] == "cp_vsx_virtual_system"
+
+
+def test_physical_member_role_transition_does_not_change_vs_identity():
+    rows = [
+        _cp_topo("VSX-1", "grp-vsx1", source="vsx"),
+        _cp_topo("VSX-2", "grp-vsx1", source="vsx"),
+        {"device": "VSX-1", "source": "vsx", "vs_id": "10", "inventory_status": {"data_state": "ok"}},
+    ]
+    before = compute_ha_readiness(rows, cp_ha_runtime={"VSX-1": {"ha_role": "ACTIVE"}, "VSX-2": {"ha_role": "STANDBY"}})
+    after = compute_ha_readiness(rows, cp_ha_runtime={"VSX-1": {"ha_role": "STANDBY"}, "VSX-2": {"ha_role": "ACTIVE"}})
+    assert _unit_by_id(before, "VSX-1__vsid_10")["parent_id"] == _unit_by_id(after, "VSX-1__vsid_10")["parent_id"]
+
+
+def test_virtual_systems_are_not_flattened_into_unrelated_physical_gateways():
+    rows = [
+        _cp_topo("VSX-1", "grp-vsx1", source="vsx"),
+        _cp_topo("VSX-2", "grp-vsx1", source="vsx"),
+        {"device": "VSX-1", "source": "vsx", "vs_id": "10", "inventory_status": {"data_state": "ok"}},
+        _cp_topo("FW-EDGE-1", "grp-other"),
+        _cp_topo("FW-EDGE-2", "grp-other"),
+    ]
+    report = compute_ha_readiness(rows)
+    vs = _unit_by_id(report, "VSX-1__vsid_10")
+    other_cluster = _unit_by_id(report, "grp-other")
+    assert vs["parent_id"] == "grp-vsx1"
+    assert vs["parent_id"] != other_cluster["unit_id"]
+    assert "FW-EDGE-1" not in vs["members"]
+
+
+def test_vs_missing_physical_parent_evidence_yields_no_parent_id_not_a_guess():
+    """A VS row whose physical host never resolved into any unit (e.g. the
+    host row is entirely absent from this run's evidence) gets parent_id=None
+    -- it still stands on its own with its own verdict, never silently
+    attached to the wrong parent."""
+    rows = [{"device": "VSX-ORPHAN", "source": "vsx", "vs_id": "10", "inventory_status": {"data_state": "ok"}}]
+    report = compute_ha_readiness(rows)
+    vs = _unit_by_id(report, "VSX-ORPHAN__vsid_10")
+    assert vs is not None
+    assert vs["parent_id"] is None
+
+
+def test_no_vsls_assumption_is_introduced_by_vsx_grouping():
+    """Source-level guard: no VSLS-specific identifier, mode value or
+    behavior may be introduced by this build -- this environment does not
+    use it. (Explaining its absence in a docstring/comment is fine and
+    expected; this checks for actual code, not prose.)"""
+    import utils.failover.assessment as assessment_module
+
+    names = " ".join(dir(assessment_module)).lower()
+    assert "vsls" not in names
+    assert not any("vsls" in mode for mode in assessment_module._CP_LOAD_SHARING_MODES)
+
+
+# --------------------------------------------------------------------------
+# PAN — VSYS is subordinate context only, never an independently
+# failoverable top-level unit (already true structurally; locked in here).
+# --------------------------------------------------------------------------
+
+def test_pan_vsys_metadata_never_produces_a_top_level_unit():
+    rows = [_pan("pan-ha-01", "10.0.0.1", vsys="vsys1"), _pan("pan-ha-02", "10.0.0.2", vsys="vsys2")]
+    runtime = {"pan-ha-01": _pan_runtime(), "pan-ha-02": _pan_runtime("passive", "active")}
+    peers = {"pan-ha-01": "10.0.0.2", "pan-ha-02": "10.0.0.1"}
+    report = compute_ha_readiness(rows, pan_ha_runtime=runtime, pan_ha_peers=peers)
+    pan_units = [u for u in report["units"] if u["vendor"] == "panorama"]
+    assert len(pan_units) == 1
+    assert pan_units[0]["members"] == ["pan-ha-01", "pan-ha-02"]
+    ids = {u["unit_id"] for u in report["units"]}
+    assert "vsys1" not in ids and "vsys2" not in ids
 
 
 # --------------------------------------------------------------------------
