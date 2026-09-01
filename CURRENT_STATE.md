@@ -54,67 +54,47 @@ Standing boundaries that hold today:
 
 ## Active build
 
-**`architecture_convergence` — AUTOMATED_VALIDATED 2026-09-01.** Source audit of
-the repository against its own documentation, plus the repairs the audit found
-necessary. No device contact, no new device command, no dependency change.
+**`OP.0c` (`failover_readiness_ui`) — Failover readiness UI module —
+AUTOMATED_VALIDATED 2026-09-01.**
+A read-only Failover module in both the Operator Console and the exported
+report: a live projection over `utils.failover.compute_ha_readiness` (fleet
+view, per-unit verdict, per-`STOP_CONDITIONS` blocking reasons, the OP.0a
+fail-closed framing note carried verbatim). No execution control anywhere in
+the shipped markup/JS, no new device command, no CLASS 2 job type.
 
-What it changed, and why each mattered:
+- New: `utils/failover_readiness_ui.py` (pure UI projection; owns no verdict
+  logic, only labels/tones), `static/failover_readiness_ui.js`. `application/
+  workflows/failover.py`'s two CLI evidence loaders now delegate to this
+  module's extractors instead of duplicating them.
+- `utils.html_export.build_report_payloads` gained an eighth key,
+  `failoverReadinessData`; `SCRIPT_MODULE_FILENAMES` gained a ninth module.
+  Both `templates/console.html` and `templates/index.html` gained a
+  `Failover` nav item + panel — the render harness clicks every nav button in
+  both, and CON.1's payload-parity test now covers this key too.
+- Computed live off the same `unified.json` +
+  `cp_config_telemetry.json`/`pan_config_telemetry.json` the console already
+  loads for Configuration — no read of the CLI's cached
+  `data/state/ha_readiness.json` snapshot, so there is exactly one evidence
+  path rather than two that could drift.
+- `tests/fixtures/uitest/unified.json` has no matching HA-runtime fixture, so
+  the render harness always shows every unit at `INSUFFICIENT_EVIDENCE` /
+  `NOT_A_FAILOVER_UNIT` — correct given its inputs; `UNSAFE_DO_NOT_FAILOVER`
+  is covered at the unit level instead (`project/backlog.json`
+  `op0c_uitest_fixture_verdict_diversity`, P3, not required for DoD).
 
-- **The read-only claim was false in four canonical documents** (`README.md`,
-  `AI_START_HERE.md`, `docs/ARCHITECTURE.md`'s "Read-only invariant",
-  `docs/AI_DEVELOPMENT_PROTOCOL.md`'s "No new write command"). Replaced by the
-  five-class taxonomy above, in code at `utils/action_taxonomy.py`.
-- **The console could not tell a backup from a failover.** Its vocabulary was
-  `read | operational-write`; a Gaia backup (class 1) and a cluster failover
-  (class 2) resolved identically. `console/registry.py` now derives its class
-  from the taxonomy and the refusal names the class.
-- **Six authorities each claimed the current build and disagreed.**
-  `roadmap.json` said `0.7.4` (completed 2026-08-29) while the newest build
-  record was `OP.0a` (2026-09-01) and `feature_registry.json` still called that
-  same work `planned`. `utils/project_plan._cross_authority_warnings` now
-  compares the files *against each other* (six rules); the pre-existing
-  `metadata_warnings == []` assertion became a real gate rather than a
-  vocabulary check.
-- **`docs/history/INDEX.md` claimed to be generated and was not** — it had
-  drifted to a newest row of `0.7.4`. `scripts/build_history_index.py` now
-  generates it; `--check` fails when the checked-in copy is stale.
-- **The two long-standing "order-dependent" test failures were neither
-  order-dependent nor flaky.** Root cause: `scripts/render_uitest.py` rebound
-  three `utils.html_export` payload builders and never restored them — a bare
-  module assignment, not `monkeypatch.setattr`. Two test files call `render()`
-  in-process, so every later `run_html_export()` in that worker silently
-  returned uitest *fixture* payloads. Under `-n auto` the polluter usually
-  landed on a different worker, which is why the suite could report zero
-  failures while the defect was still there. Fixed with a `try/finally`
-  restore; `tests/test_frontend_rendering_boundary.py` now asserts the
-  restoration directly.
-- **This file was 764 lines**, carrying a narrative for eleven predecessor
-  builds that each already had a `build_history.json` record and a phase doc —
-  the exact thing `AGENTS.md` "Handover economy" forbids. Now capped at 200
-  lines by test.
+**Predecessor:** `architecture_convergence` — AUTOMATED_VALIDATED 2026-09-01
+(five-class action taxonomy, one project-state authority, `render_uitest.py`
+module-rebind leak root-caused and fixed). Detail:
+`project/build_history.json`.
 
 ## Exact next build
 
-**`OP.0c` — failover readiness UI module.** The
-`FAILOVER_ENGINE_ARCHITECTURE.md` §9 surface over the `ha_readiness.json`
-`OP.0a` already produces: fleet view, readiness light, blocking reasons,
-history. Read-only, no new device command, buildable now.
-
-It is NEXT because it is simultaneously the next Operator Console surface and
-the next step on the failover path, which is the sequencing this convergence
-established: **Operator Console → Failover**, with no unrelated feature track
-allowed to preempt it.
-
-Two things it must get right:
-
-1. **Carry `OP.0a`'s framing.** Every unit reports `INSUFFICIENT_EVIDENCE` or
-   `NOT_A_FAILOVER_UNIT` today, by design. The CLI prints the framing itself
-   ("`INSUFFICIENT_EVIDENCE` means 'not asked yet', not 'unhealthy'"). Without
-   the same line in the UI, an empty-looking dashboard reads as a broken
-   feature.
-2. It touches `templates/` / `static/` / a payload builder, so it triggers the
-   HTML render harness **and** a `tests/fixtures/uitest/` growth step
-   (`AGENTS.md` project-state update rule).
+**Failover readiness real-environment closure** (no new build contract —
+see `project/roadmap.json` `now_next.next`). Confirm `OP.0a`'s
+`ha_cluster_mode` resolution against a real CP/PAN HA pair and eyeball the new
+Failover module against that real evidence; a product-owner/security decision
+on the `OP.0b` command gate is the other open item on this path. No new code
+expected. `OP.0b` (the preflight battery) remains blocked on that gate.
 
 ## Open blockers
 
@@ -135,9 +115,10 @@ first.
 
 - **`CON.2`** — trigger a `read`-class job from the console against a real
   device. No new code; closes it to DONE.
-- **`OP.0a`** — one real-device confirmation that `ha_cluster_mode` resolves
-  rather than falling back to `"unknown"`. The mode fixtures are constructed,
-  not captured. Fixture-drift check, not a safety gate.
+- **`OP.0a`/`OP.0c`** — one real-device confirmation that `ha_cluster_mode`
+  resolves rather than falling back to `"unknown"`, and a real-evidence
+  eyeball of the new Failover module. The mode fixtures are constructed, not
+  captured. Fixture-drift check, not a safety gate.
 - **`RB.3b`** — the watched single-gateway run (above).
 - **`DEV.3.2`** — real multi-container-against-a-real-MDS evidence for the
   Postgres advisory-lock path. Server-blocked.
@@ -145,8 +126,8 @@ first.
 ## Automated test baseline
 
 ```
-988 passed / 27 skipped / 0 failed  (2026-09-01, serial, after architecture_convergence)
-  Prior: 971 / 27 / 2 serial — the 2 were the render_uitest rebind leak, now fixed.
+1003 passed / 27 skipped / 0 failed  (2026-09-01, serial, after OP.0c)
+  Prior: 988 / 27 / 0 serial (architecture_convergence) — +15 tests, +0 failures.
 Repository privacy gate: PASS / 0 findings, 415 files scanned, clean checkout.
 Project-state consistency: metadata_warnings == [] under all six cross-authority rules.
 ```

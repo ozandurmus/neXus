@@ -26,6 +26,7 @@
         <button id="configurationNav" class="module-nav-item" type="button" data-module="configuration">Configuration</button>
         <button id="complianceNav" class="module-nav-item" type="button" data-module="compliance">Compliance</button>
         <button id="discoveryNav" class="module-nav-item" type="button" data-module="discovery">Discovery</button>
+        <button id="failoverNav" class="module-nav-item" type="button" data-module="failover">Failover</button>
         <button id="exclusionsNav" class="module-nav-item" type="button" data-module="exclusions">Exclusions</button>
         <button id="projectPlanNav" class="module-nav-item" type="button" data-module="project-plan">Project Plan</button>
     </nav>
@@ -412,6 +413,31 @@
     </main>
 </section>
 
+<section id="failoverModule" class="app-module" data-module-panel="failover">
+    <main class="project-plan-shell">
+        <div class="project-plan-heading">
+            <div>
+                <div class="eyebrow">SecurityExpert · OP.0c</div>
+                <h1>Failover Readiness</h1>
+                <p>What we already know about each HA cluster/pair's failover readiness, and what evidence is still missing — derived only from evidence already collected. This is a readiness view, not a failover control.</p>
+            </div>
+        </div>
+
+        <section id="failoverFramingNote" class="inline-message neutral"></section>
+
+        <div id="failoverFleetSummary" class="project-plan-hero"></div>
+
+        <section class="project-plan-card">
+            <div class="dashboard-card-header">
+                <div><div class="eyebrow">Fleet</div><h2>HA units</h2></div>
+            </div>
+            <div id="failoverUnitTable"></div>
+        </section>
+
+        <section id="failoverExecutionNote" class="inline-message neutral"></section>
+    </main>
+</section>
+
 <section id="exclusionsModule" class="app-module" data-module-panel="exclusions">
     <main class="project-plan-shell">
         <div class="project-plan-heading">
@@ -504,6 +530,7 @@ initializeReport({
     projectPlanData: __PROJECT_PLAN_JSON_PLACEHOLDER__,
     discoveryUiData: __DISCOVERY_JSON_PLACEHOLDER__,
     exclusionsUiData: __EXCLUSIONS_JSON_PLACEHOLDER__,
+    failoverReadinessData: __FAILOVER_READINESS_JSON_PLACEHOLDER__,
 });
 </script>
 

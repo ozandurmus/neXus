@@ -53,7 +53,7 @@ PLAYWRIGHT_HARNESS = ROOT / "tools" / "render-harness" / "check_render_playwrigh
 _PAYLOAD_CONSTS = (
     "rawData", "configUiData", "complianceUiData",
     "cryptoUiData", "projectPlanData", "discoveryUiData",
-    "exclusionsUiData",
+    "exclusionsUiData", "failoverReadinessData",
 )
 
 
