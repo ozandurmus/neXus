@@ -5,9 +5,17 @@ let configSelectedId = "__fleet__";
 let configFleetFilter = "all";
 let configHeaderExpanded = null;
 let configSidebarOpen = false;
-const configDevices = Array.isArray(configUiData?.devices)
-    ? configUiData.devices
-    : [];
+// CON.1 C1-3: rawData/configUiData/etc. start empty and are populated later
+// by initializeReport(payloads) (static mode: the inline JSON; console mode:
+// the /api/payloads fetch) -- so a derived collection computed once here at
+// module-load time would stay stuck on the empty default. rebuildConfigDevices()
+// is called once below (harmless against the empty default) and again from
+// initializeReport, after the real payload lands.
+let configDevices = [];
+function rebuildConfigDevices() {
+    configDevices = Array.isArray(configUiData?.devices) ? configUiData.devices : [];
+}
+rebuildConfigDevices();
 
 
 // Pure accessor over the page-level configUiData const. Read by this module's

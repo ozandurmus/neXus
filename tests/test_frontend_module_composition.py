@@ -124,9 +124,13 @@ def test_every_top_level_function_survived_the_split():
     # AC-1 completeness, from the other direction: the full pre-split function
     # inventory (recorded in the frozen contract's audit) is 173 top-level
     # `function` declarations; the eight files together must still hold that
-    # many, none dropped, none duplicated. CON.1 C1-2/C1-3 added two more —
-    # app_core.js's reportMode() accessor and app_bootstrap.js's
-    # initializeReport() entry point — so the floor is now 175.
+    # many, none dropped, none duplicated. CON.1 C1-2/C1-3 added five more —
+    # app_core.js's reportMode() accessor, app_bootstrap.js's
+    # initializeReport() entry point, and three rebuildX() functions
+    # (inventory_ui.js, configuration_ui.js, compliance_ui.js) that recompute
+    # payload-derived state initializeReport() now calls explicitly instead
+    # of each module computing it once at load time against the still-empty
+    # default payload — so the floor is now 178.
     all_defs = []
     per_file = {}
     for name in SCRIPT_MODULE_FILENAMES:
@@ -135,6 +139,6 @@ def test_every_top_level_function_survived_the_split():
         per_file[name] = fns
         all_defs.extend(fns)
 
-    assert len(all_defs) == 175, f"expected 175 top-level functions, found {len(all_defs)}"
+    assert len(all_defs) == 178, f"expected 178 top-level functions, found {len(all_defs)}"
     dupes = sorted({f for f in all_defs if all_defs.count(f) > 1})
     assert not dupes, f"functions defined in more than one module file: {dupes}"

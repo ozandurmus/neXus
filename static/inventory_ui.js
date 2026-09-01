@@ -1413,11 +1413,20 @@ function flattenHierarchy(roots) {
 }
 
 
-const logicalEntries = deduplicateInventory(
-    aggregateCpClusters(rawData.map(buildEntry))
-);
-const inventoryRoots = buildInventoryHierarchy(logicalEntries);
-inventory = flattenHierarchy(inventoryRoots);
+// CON.1 C1-3: rawData starts empty and is populated later by
+// initializeReport(payloads) -- see the matching comment in
+// configuration_ui.js's rebuildConfigDevices(). rebuildInventoryModel() is
+// called once below (harmless against the empty default) and again from
+// initializeReport, after the real payload lands.
+let inventoryRoots = [];
+function rebuildInventoryModel() {
+    const logicalEntries = deduplicateInventory(
+        aggregateCpClusters(rawData.map(buildEntry))
+    );
+    inventoryRoots = buildInventoryHierarchy(logicalEntries);
+    inventory = flattenHierarchy(inventoryRoots);
+}
+rebuildInventoryModel();
 
 const expandedGroups = new Set();
 const activeRouteMemberByEntry = new Map();
