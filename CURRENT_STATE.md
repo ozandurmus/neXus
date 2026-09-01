@@ -5,9 +5,11 @@ Hot-path state only. Historical build detail lives in
 agreements and validation reports). `docs/history/INDEX.md` is the one-line
 timeline.
 
-- **Authoritative checkpoint:** 2026-08-31 (`main` — RB.3b prep sign-off
-  committed, then RB.3b implementation steps 2–7; real-environment run owed;
-  then `frontend_rendering_boundary` implemented — see "Active build" below)
+- **Authoritative checkpoint:** 2026-09-01 (branch
+  `feature/codebase-modularization-backend`, not yet merged — RB.3b prep
+  sign-off + steps 2–7 on `main`, real-environment run owed;
+  `frontend_rendering_boundary` implemented; `codebase_modularization`
+  frontend then backend both implemented — see "Active build" below)
 - **Product baseline:** `0.7.7 — Compliance trend retro-fill (PAN baseline
   reconstruction)` — AUTOMATED_VALIDATED (0.7.x VERIFY track)
 - **Previous:** `DEV.3.1 — Linux worker image + Compose` — AUTOMATED_VALIDATED
@@ -96,24 +98,42 @@ dependency-order check). Zero code lines lost (rendered-report line-multiset
 diff before/after: only 8 header comments + a 5-line relocation note added).
 Render harness (bun) green on the uitest and empty-state renders; privacy gate
 PASS/0. Full suite **887 / 26 / 2** vs `main` **882 / 27 / 2** — same two
-pre-existing pollution failures, zero regressions. Backlog id stays
-`in_progress`: a human interactive real-browser open is still owed (this
-sandbox has no display). `docs/history/phase/CODEBASE_MODULARIZATION_FRONTEND.md`.
+pre-existing pollution failures, zero regressions. `docs/history/phase/CODEBASE_MODULARIZATION_FRONTEND.md`.
+A human interactive real-browser open of this split is still owed (this
+sandbox has no display) but is a cheap, non-blocking follow-up — it did not
+keep the backlog id open: both halves of `codebase_modularization` are `done`
+per the backend half's own entry below.
 
-**`codebase_modularization` (backend half) — CONTRACT FROZEN 2026-09-01
-(`Sonnet 5, normal`, docs-only).** `docs/history/phase/CODEBASE_MODULARIZATION_BACKEND.md`.
-Reduces `main.py` (2,089 lines; `main()` alone ~1,690) to a thin ~120-line
-entry: a new `application/` package (`cli.py` / `services.py` / `context.py` /
+**`codebase_modularization` (backend half) — IMPLEMENTED 2026-09-01
+(`Sonnet 5, normal`), same day as the contract freeze.**
+`docs/history/phase/CODEBASE_MODULARIZATION_BACKEND.md`. `main.py` (2,089
+lines; `main()` alone ~1,690) is now a 47-line thin entry that delegates to
+`application.cli.run` and re-exports the F4 test-coupled surface. New
+`application/` package (`cli.py` / `services.py` / `context.py` /
 `workflows/{maintenance,recovery,checkpoint}.py`) per
-`SERVER_PRODUCTIZATION_AND_MODULARIZATION_ARCHITECTURE.md` §5, an
-`ApplicationContext` dataclass for the ~15 shared locals, `main.py`
-re-exporting the seven names the 12 `main.main()` test files import (no test
-rewrite), and the lazy vendor-import boundary turned into a tested invariant
-(AC-3 static + AC-5 runtime `sys.modules` check) + a before/after CLI
-transcript-diff parity gate. The **vendor-collector split**
-(`configuration/pan/`, `configuration/checkpoint/`) is explicitly **out** — §5
-moves those only when a bounded feature touches them. Ready for a fresh
-implementation session at `Sonnet 5, normal`. No code changed by the freeze.
+`SERVER_PRODUCTIZATION_AND_MODULARIZATION_ARCHITECTURE.md` §5, moved verbatim
+apart from de-closuring locals into an `ApplicationContext` dataclass. New
+`tests/test_application_package.py` makes the lazy vendor-import boundary a
+tested invariant (AC-3 static + AC-5 runtime `sys.modules` check via clean
+subprocess) and pins `main.main`'s frozen signature (AC-6); an AC-4 before/after
+CLI transcript diff over the offline mode matrix (git worktree vs
+`main@c4a7b6f`) was empty except run-scoped noise. Full suite **896 / 26 / 2**
+(same two pre-existing pollution failures; +9 new tests), zero regressions.
+Privacy gate PASS/0. One real pre-existing gap the new AC-3 check surfaced
+(not introduced by this build): `main.py`'s top-level `utils.config_storage`
+import was already pulling in `lxml` transitively on every invocation,
+contradicting the documented lazy-import contract — closed by moving it into
+`storage_analyze()`/`storage_deduplicate()` (first use), zero behavior change.
+Two test files' source-string/name-patch assumptions about code living in
+`main.py`'s namespace could not survive AC-1's ≤120-line `main.py`; repointed
+to the new `application/*.py` locations (same class of mechanical repoint the
+frontend half applied to 16 tests) — see the phase doc's "Implementation
+deviations". The **vendor-collector split** (`configuration/pan/`,
+`configuration/checkpoint/`) stays explicitly **out of scope** — §5 moves
+those only when a bounded feature touches them; it opens as its own
+feature-scoped backlog entry if/when that happens. `project/backlog.json`
+`codebase_modularization` is now `done` for both halves (the frontend half's
+human interactive real-browser open remains a cheap, non-blocking follow-up).
 
 
 **`distributed_evidence_store_migration` (DEV.3.3) — AUTOMATED_VALIDATED
@@ -534,7 +554,9 @@ full regression run.)
 ## Automated test baseline
 
 ```
-804 passed / 20 skipped / 2 failed (2026-08-31, after RB.3a, no live
+896 passed / 26 skipped / 2 failed (2026-09-01, after codebase_modularization
+backend; +9 tests/test_application_package.py, zero new failures)
+Prior: 804 passed / 20 skipped / 2 failed (2026-08-31, after RB.3a, no live
 PostgreSQL; +33 RB.3a tests, zero new failures)
 Prior: 788 passed / 3 skipped / 2 failed (with a live PostgreSQL 16;
 763 / 11 / 2 without one)
