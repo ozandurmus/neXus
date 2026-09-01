@@ -122,7 +122,8 @@ def test_ac4_api_payloads_are_byte_equal_to_the_exported_report(uitest_runtime_p
 
     exported = {}
     for key in ("rawData", "configUiData", "complianceUiData", "cryptoUiData",
-                "projectPlanData", "discoveryUiData", "exclusionsUiData"):
+                "projectPlanData", "discoveryUiData", "exclusionsUiData",
+                "failoverReadinessData"):
         import re
         m = re.search(rf"\b{re.escape(key)}: (.*?),\n", html)
         assert m, f"{key} not found in exported report"
@@ -130,13 +131,16 @@ def test_ac4_api_payloads_are_byte_equal_to_the_exported_report(uitest_runtime_p
 
     console_payloads = build_console_payloads(uitest_runtime_paths)
 
-    # projectPlanData.generated_at / exclusionsUiData.generated_at are real
-    # wall-clock timestamps (utils/project_plan.py, utils/inventory_exclusions_ui.py)
-    # -- by design they differ between any two calls, console or export. That is
-    # not a payload-parity violation; strip them before the equality check.
+    # projectPlanData.generated_at / exclusionsUiData.generated_at /
+    # failoverReadinessData.generated_at are real wall-clock timestamps
+    # (utils/project_plan.py, utils/inventory_exclusions_ui.py,
+    # utils/failover_readiness_ui.py) -- by design they differ between any two
+    # calls, console or export. That is not a payload-parity violation; strip
+    # them before the equality check.
     for payloads in (exported, console_payloads):
         payloads["projectPlanData"].pop("generated_at", None)
         payloads["exclusionsUiData"].pop("generated_at", None)
+        payloads["failoverReadinessData"].pop("generated_at", None)
 
     assert json.dumps(exported, sort_keys=True) == json.dumps(console_payloads, sort_keys=True)
 

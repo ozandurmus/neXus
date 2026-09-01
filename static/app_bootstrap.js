@@ -55,7 +55,7 @@ function savedModule() {
     }
     try {
         const value = localStorage.getItem("securityexpert-module");
-        return ["overview", "inventory", "configuration", "compliance", "discovery", "exclusions", "project-plan"].includes(value) ? value : "overview";
+        return ["overview", "inventory", "configuration", "compliance", "discovery", "failover", "exclusions", "project-plan"].includes(value) ? value : "overview";
     } catch (error) {
         return "overview";
     }
@@ -63,7 +63,7 @@ function savedModule() {
 
 
 function switchModule(nextModule) {
-    activeModule = ["overview", "inventory", "configuration", "compliance", "discovery", "exclusions", "project-plan"].includes(nextModule)
+    activeModule = ["overview", "inventory", "configuration", "compliance", "discovery", "failover", "exclusions", "project-plan"].includes(nextModule)
         ? nextModule
         : "overview";
 
@@ -100,6 +100,7 @@ function switchModule(nextModule) {
     }
     if (activeModule === "compliance") renderComplianceModule();
     if (activeModule === "discovery") renderDiscoveryModule();
+    if (activeModule === "failover") renderFailoverModule();
     if (activeModule === "exclusions") renderExclusionsModule();
     if (activeModule === "project-plan") renderProjectPlan();
 }
@@ -164,6 +165,7 @@ function initializeReport(payloads) {
     projectPlanData = payloads.projectPlanData || {};
     discoveryUiData = payloads.discoveryUiData || {};
     exclusionsUiData = payloads.exclusionsUiData || {};
+    failoverReadinessData = payloads.failoverReadinessData || {};
 
     // These derived collections are computed from the payloads above, not
     // read from them directly on every render (unlike every renderX()
@@ -177,6 +179,7 @@ function initializeReport(payloads) {
     renderOverviewModule();
     renderComplianceModule();
     renderDiscoveryModule();
+    renderFailoverModule();
     renderExclusionsModule();
     renderProjectPlan();
     renderConfigDeviceList();
