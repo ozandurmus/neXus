@@ -11,7 +11,8 @@ timeline.
   (frontend + backend, including the real-browser follow-up) `DONE`; `CON.1`
   (read-only console, including its own real-browser follow-up) `DONE`;
   `CON.2` (job engine + `read`-class actions) `AUTOMATED_VALIDATED`,
-  real-environment run owed — see "Active build" below)
+  real-environment run owed; `OP.0a` (HA readiness assessment) **CONTRACT
+  FROZEN**, nothing implemented — see "Active build" below)
 - **Product baseline:** `0.7.7 — Compliance trend retro-fill (PAN baseline
   reconstruction)` — AUTOMATED_VALIDATED (0.7.x VERIFY track)
 - **Previous:** `DEV.3.1 — Linux worker image + Compose` — AUTOMATED_VALIDATED
@@ -68,6 +69,54 @@ and the console never becomes part of the nginx report viewer. Architecture:
 reconciliation as its new §7.
 
 ## Active build
+
+**`OP.0a` (HA readiness assessment) — AUTOMATED_VALIDATED 2026-09-01
+(`Sonnet 5, normal`), contract frozen and implemented the same session.**
+`docs/history/phase/OP_0A_HA_READINESS_ASSESSMENT.md` — that is the spec; this
+file does not restate it. New `utils/failover/` (`assessment.py` only, P5),
+`application/workflows/failover.py`, `main.py --ha-readiness-check` (offline
+maintenance class, no credential, no device contact), and an additive
+cluster-mode parse of the already-executed `cphaprob stat` at both CP call
+sites. `tests/test_op0a_ha_readiness.py` (38 tests, AC-1…AC-13). Full suite
+**973 / 27 / 0**; privacy gate PASS/0. **No new device command was issued or
+added** — the defining property of the slice held through implementation.
+
+`OP.0` as the design doc framed it bundled ~19 new device commands, an engine
+and a new UI module behind one un-requested human approval. A source audit
+found CP `cphaprob stat` (already run per-endpoint and per-VS by
+`configuration/checkpoint_config_collector.py`) and PAN
+`show high-availability state` (already run by
+`panorama_config_collector.get_target_ha_runtime_state`, already parsing
+`peer_state`/`state_sync`) are **already gated and already collected**, so the
+phase splits: **`OP.0a`** = assessment engine over existing evidence, zero new
+device commands; **`OP.0b`** = the §3.1/§3.2 preflight battery, behind a
+command gate **drafted in the contract but not approved**; **`OP.0c`** = the
+§9 Failover UI module. Same read-before-write sequencing `RB.3a`/`RB.3b` and
+`CON.1`/`CON.2` already used.
+
+The load-bearing safety decision is **P4**: `OP.0a` can never emit
+`SAFE_TO_FAILOVER` or `DEGRADED_PROCEED_WITH_RISK`, enforced by `AC-6` over a
+generated matrix, because it has evidence for only part of the §4
+stop-condition set. It emits `UNSAFE_DO_NOT_FAILOVER`,
+`NOT_A_FAILOVER_UNIT` (load-sharing clusters — not a failover unit at all) or
+`INSUFFICIENT_EVIDENCE` against a named missing command. A build that can only
+say "no" or "not enough" is the honest shape for this slice, and the
+`INSUFFICIENT_EVIDENCE` output is exactly what makes the `OP.0b` gate ask
+evidence-driven. **State this framing when the first numbers are reported** —
+otherwise an empty-looking dashboard reads as a broken feature. Open decision
+`op_degraded_verdict` was rebased from "OP.0 contract freeze" to "OP.1
+contract freeze": `OP.0a` reserves the value but cannot reach it, so it is not
+blocked.
+
+Two implementation deviations are recorded in the contract. **`D2` was a real
+defect**, found by the smoke run and missed by the unit tests: each PAN peer
+reports both its own `state` and its view of the peer's, so counting both from
+every member turned a **healthy** active/passive pair into two observed
+`active` states — a false split-brain alarm on a healthy pair. Fixed and
+regression-pinned in both directions (healthy pair passes; a genuine
+split-brain is still caught). **Owed before `DONE`:** one real-device
+confirmation that `ha_cluster_mode` resolves rather than falling back to
+`"unknown"` — a fixture-drift check, not a safety gate.
 
 **`operator_console` (`CON.x`) — ARCHITECTURE FROZEN 2026-08-31, nothing
 implemented.** `docs/design/OPERATOR_CONSOLE_ARCHITECTURE.md` (`CON.0`) plus all
@@ -604,9 +653,10 @@ VERIFY-plane design must keep a future enforce/remediate capability additive.
 - After the engineering-readiness checkpoint, product architecture proceeds
   toward `0.6.1C` follow-ups already validated in the 0.6.x track.
 - `OP.x — Controlled Failover` (new track, OPERATE theme): design frozen in
-  `docs/design/FAILOVER_ENGINE_ARCHITECTURE.md`. Write-free parts (OP.0 HA
-  readiness assessment + SCC dashboard, OP.1 dry-run plan compiler) are
-  buildable post-`DEPLOY.1`; OP.2 controlled execution is hard-gated (see the
+  `docs/design/FAILOVER_ENGINE_ARCHITECTURE.md`. `OP.0` is now split — `OP.0a`
+  is **CONTRACT FROZEN and buildable now** (see "Active build"), `OP.0b` needs
+  its drafted command gate approved, `OP.0c` is the UI module; `OP.1` dry-run
+  plan compiler follows; `OP.2` controlled execution is hard-gated (see the
   doc's §10 and `roadmap_notes`).
 
 ---
@@ -648,7 +698,12 @@ full regression run.)
 ## Automated test baseline
 
 ```
-933 passed / 27 skipped / 2 failed (2026-09-01, after CON.2; +26
+973 passed / 27 skipped / 0 failed (2026-09-01, after OP.0a; +38
+tests/test_op0a_ha_readiness.py, zero new failures). Run under
+`-n auto --dist worksteal`; the two pre-existing order-pollution failures
+below did not trigger under that distribution, which is consistent with their
+known order-dependence -- they are not fixed, just not provoked.
+Prior: 933 passed / 27 skipped / 2 failed (2026-09-01, after CON.2; +26
 tests/test_con2_console_job_engine.py, zero new failures)
 Prior: 907 passed / 27 skipped / 2 failed (2026-09-01, after CON.1 including
 its real-browser close; +11 tests/test_con1_operator_console_read_only.py)

@@ -893,6 +893,45 @@ CLUSTERXL_RUNTIME_STATES = (
 )
 
 
+#: Cluster mode vocabulary (OP.0a contract decision P2). ``cphaprob stat``
+#: reports the mode in its header; the distinction is safety-critical, not
+#: cosmetic -- a Load Sharing cluster has no standby, so "fail it over" is not
+#: a coherent request (FAILOVER_ENGINE_ARCHITECTURE.md 3.1). Fail closed:
+#: anything unrecognised is "unknown", never a guess.
+CLUSTERXL_CLUSTER_MODES = (
+    "ha_new_mode", "load_sharing_unicast", "load_sharing_multicast", "vrrp", "unknown",
+)
+
+
+def _parse_clusterxl_cluster_mode(stdout: str) -> str:
+    """Extract the cluster mode from ``cphaprob stat`` output already in hand.
+
+    OP.0a decision P2: this is a parse-scope extension, NOT a new device
+    command. The caller has already run ``cphaprob stat`` for the role parse;
+    this reads the mode out of the same buffer before it is discarded. No
+    hostname, interface name or address is ever returned -- only one of
+    ``CLUSTERXL_CLUSTER_MODES``.
+    """
+    for raw in str(stdout or "").splitlines():
+        line = " ".join(raw.strip().split()).lower()
+        if not line or "mode" not in line:
+            continue
+        # Order matters: the load-sharing variants must be tested before the
+        # bare "load sharing" fallback, and "high availability" last so a
+        # line naming both cannot be misread as HA.
+        if "load sharing" in line or "load-sharing" in line:
+            if "multicast" in line:
+                return "load_sharing_multicast"
+            if "unicast" in line or "pivot" in line:
+                return "load_sharing_unicast"
+            return "unknown"
+        if "vrrp" in line:
+            return "vrrp"
+        if "high availability" in line or "new mode" in line:
+            return "ha_new_mode"
+    return "unknown"
+
+
 def _parse_clusterxl_runtime_role(stdout: str, observed_hostname: str | None) -> str | None:
     hostname = str(observed_hostname or "").strip().lower().rstrip(".")
     for raw in str(stdout or "").splitlines():
@@ -1296,10 +1335,17 @@ def _collect_host(target: PhysicalTarget, *, username: str, secret: str, strict_
                     else _run_exec(ssh, "cphaprob stat", command_timeout)
                 )
                 if ha_result.get("success") and not _looks_like_cli_error(ha_result):
-                    role = _parse_clusterxl_runtime_role(str(ha_result.get("stdout") or ""), observed_hostname)
+                    ha_stdout = str(ha_result.get("stdout") or "")
+                    role = _parse_clusterxl_runtime_role(ha_stdout, observed_hostname)
                     if role:
                         host_row["ha_role"] = role
                         host_row["ha_role_source"] = "interactive_cphaprob_stat_runtime"
+                    # OP.0a P2: same command, same buffer -- read the cluster
+                    # mode out before the stdout discard below.
+                    mode = _parse_clusterxl_cluster_mode(ha_stdout)
+                    if mode != "unknown":
+                        host_row["ha_cluster_mode"] = mode
+                        host_row["ha_cluster_mode_source"] = "interactive_cphaprob_stat_runtime"
                 if host_row.get("ha_role"):
                     host_row["ha_runtime_status"] = "success"
                 elif shell_mode == "interactive_direct_clish" and _looks_like_cli_error(ha_result):
@@ -1563,13 +1609,17 @@ def _collect_host(target: PhysicalTarget, *, username: str, secret: str, strict_
                     ssh, f"vsenv {context.vs_id} >/dev/null 2>&1; cphaprob stat", command_timeout
                 )
                 if vs_ha_result.get("success") and not _looks_like_cli_error(vs_ha_result):
-                    vs_role = _parse_clusterxl_runtime_role(
-                        str(vs_ha_result.get("stdout") or ""), observed_hostname
-                    )
+                    vs_ha_stdout = str(vs_ha_result.get("stdout") or "")
+                    vs_role = _parse_clusterxl_runtime_role(vs_ha_stdout, observed_hostname)
                     if vs_role:
                         ctx_row["ha_role"] = vs_role
                         ctx_row["ha_role_source"] = "interactive_cphaprob_stat_runtime_per_vs"
                         ctx_row["ha_runtime_status"] = "success"
+                    # OP.0a P2: per-VS cluster mode from the same buffer.
+                    vs_mode = _parse_clusterxl_cluster_mode(vs_ha_stdout)
+                    if vs_mode != "unknown":
+                        ctx_row["ha_cluster_mode"] = vs_mode
+                        ctx_row["ha_cluster_mode_source"] = "interactive_cphaprob_stat_runtime_per_vs"
                 if ctx_row.get("ha_runtime_status") != "success":
                     ctx_row["ha_runtime_status"] = (
                         "unavailable_inherited" if ctx_row.get("ha_role") else "unavailable"
