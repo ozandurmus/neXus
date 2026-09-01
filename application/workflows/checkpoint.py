@@ -123,6 +123,10 @@ def cp_config_collect(ctx):
                 cfg,
                 stage=args.cp_config_stage,
                 max_workers=args.cp_config_workers,
+                target_entity_ids=(
+                    [t.strip() for t in args.cp_config_targets.split(",") if t.strip()]
+                    if args.cp_config_targets else None
+                ),
             ),
         )
         summary = result.get("summary") or {}
@@ -279,6 +283,11 @@ def integration_checkpoint(ctx):
         # full run intentionally covers the whole connected PAN fleet.
         return 5 if args.only == "pan-config" else None
 
+    def _pan_config_targets():
+        if not args.pan_config_targets:
+            return None
+        return [t.strip() for t in args.pan_config_targets.split(",") if t.strip()]
+
     def _require_partial_inputs(mode, names):
         missing = [name for name in names if not (runtime_paths.output_root / name).exists()]
         if missing:
@@ -430,6 +439,10 @@ def integration_checkpoint(ctx):
                         stage="all",
                         max_workers=args.cp_config_workers,
                         orchestration_run_id=run_ctx.run_id,
+                        target_entity_ids=(
+                            [t.strip() for t in args.cp_config_targets.split(",") if t.strip()]
+                            if args.cp_config_targets else None
+                        ),
                     ),
                     run_context=run_ctx,
                 )
@@ -479,6 +492,7 @@ def integration_checkpoint(ctx):
                     limit=_pan_config_limit_for_mode(),
                     max_workers=args.pan_config_workers,
                     probe_pushed_template=args.pan_probe_pushed_template,
+                    target_serials=_pan_config_targets(),
                 ),
             )
             summary = config_result.get("summary") or {}
@@ -582,6 +596,7 @@ def integration_checkpoint(ctx):
                         max_workers=args.pan_config_workers,
                         orchestration_run_id=run_ctx.run_id,
                         probe_pushed_template=args.pan_probe_pushed_template,
+                        target_serials=_pan_config_targets(),
                     ),
                     run_context=run_ctx,
                 )
