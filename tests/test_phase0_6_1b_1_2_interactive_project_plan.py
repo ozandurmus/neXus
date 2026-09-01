@@ -14,7 +14,9 @@ APP = _composed_report_script()
 CSS = (ROOT / "static" / "style.css").read_text(encoding="utf-8")
 TEMPLATE = (ROOT / "templates" / "index.html").read_text(encoding="utf-8")
 HTML_EXPORT = (ROOT / "utils" / "html_export.py").read_text(encoding="utf-8")
-MAIN = (ROOT / "main.py").read_text(encoding="utf-8")
+# codebase_modularization (backend): --cp-config-collect's body moved from
+# main.py into application/workflows/checkpoint.py.
+CHECKPOINT_WF = (ROOT / "application" / "workflows" / "checkpoint.py").read_text(encoding="utf-8")
 
 
 def _result(stdout="", *, success=True, error_class=None):
@@ -139,8 +141,8 @@ def test_b112_source_contract_uses_interactive_session_for_host_gaia_reads_and_r
     assert "_run_gaia_interactive_read" in source
     assert 'interactive.run("cphaprob stat"' in source
     assert collector.PHASE == "0.6.1B.1.2"
-    assert "0.6.1B.1.2 SAFE COLLECTION SUMMARY" in MAIN
-    assert "Collection duration:" in MAIN
+    assert "0.6.1B.1.2 SAFE COLLECTION SUMMARY" in CHECKPOINT_WF
+    assert "Collection duration:" in CHECKPOINT_WF
 
 
 def test_project_plan_metadata_has_no_integrity_warnings_and_future_numbering_is_explicitly_provisional():

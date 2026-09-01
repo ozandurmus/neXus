@@ -10,6 +10,7 @@ import builtins
 import pytest
 
 import main
+from application import services as _app_services
 from utils.runtime_config_source import RuntimeConfigError, resolve_value
 
 pytestmark = pytest.mark.runtime_platform
@@ -159,7 +160,9 @@ def test_secret_and_principal_registered_for_redaction(monkeypatch):
     _non_interactive(monkeypatch)
     _forbid_prompts(monkeypatch)
     registered = []
-    monkeypatch.setattr(main, "register_sensitive_value", lambda value, replacement="[REDACTED]": registered.append(value))
+    # codebase_modularization (backend): _build_runtime_config moved to
+    # application.services; patch the name where the call site resolves it.
+    monkeypatch.setattr(_app_services, "register_sensitive_value", lambda value, replacement="[REDACTED]": registered.append(value))
     monkeypatch.setenv(PRINCIPAL, "svc-account")
     monkeypatch.setenv(SECRET, "svc-secret")
     monkeypatch.setenv(CP, "mds.example.invalid")
