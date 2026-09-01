@@ -1,5 +1,26 @@
 // SecurityExpert report UI — app_core: escaping, formatters, shared pure helpers (loads first)
 
+// CON.1 C1-3: the shell (templates/index.html or templates/console.html) sets
+// window.SECURITYEXPERT_MODE before any module executes. Every module reads
+// it through this one accessor rather than inferring mode from a URL or a
+// fetch capability, so the read stays greppable.
+function reportMode() {
+    return window.SECURITYEXPERT_MODE === "console" ? "console" : "static";
+}
+
+// CON.1 C1-2/C1-3: payload globals populated by initializeReport() in
+// app_bootstrap.js — static mode passes the inline JSON constants, console
+// mode passes the fetched /api/payloads response. Declared here (the
+// first-loaded module) as `let` so every later module can reference them by
+// name exactly as before the refactor.
+let rawData = [];
+let configUiData = {};
+let complianceUiData = {};
+let cryptoUiData = {};
+let projectPlanData = {};
+let discoveryUiData = {};
+let exclusionsUiData = {};
+
 // F-Buddy Phase 0.5 Final UI Closure
 function safe(value) {
     if (value === null || value === undefined) {

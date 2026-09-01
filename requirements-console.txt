@@ -1,0 +1,7 @@
+# Optional — only needed for `main.py --console` (CON.1 read-only operator
+# console; see docs/history/phase/CON_1_OPERATOR_CONSOLE_READ_ONLY.md and
+# decision C-D1 in docs/design/OPERATOR_CONSOLE_ARCHITECTURE.md §11). Every
+# other mode (collection, render, maintenance) needs none of this and never
+# imports console/ (C1-8: fail-closed preflight, no eager import from main.py).
+fastapi>=0.115
+uvicorn>=0.32

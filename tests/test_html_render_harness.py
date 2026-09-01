@@ -110,13 +110,16 @@ def test_every_embedded_payload_is_valid_json(rendered_html):
     kills the whole <script>) shows up as invalid JSON here."""
     html = rendered_html.read_text(encoding="utf-8")
     for name in _PAYLOAD_CONSTS:
-        m = re.search(rf"\bconst {re.escape(name)} = (.*?);\n", html)
+        m = re.search(rf"\b{re.escape(name)}: (.*?),\n", html)
         assert m, f"{name} not found in the generated <script>"
         json.loads(m.group(1).replace("<\\/", "</"))
 
 
 def _const(html: str, name: str):
-    m = re.search(rf"\bconst {re.escape(name)} = (.*?);\n", html)
+    # CON.1 C1-2/C1-3: report initialization is the initializeReport({...})
+    # object literal (app_bootstrap.js), not top-level `const name = ...;`
+    # declarations — see templates/index.html.
+    m = re.search(rf"\b{re.escape(name)}: (.*?),\n", html)
     assert m, f"{name} not found"
     return json.loads(m.group(1).replace("<\\/", "</"))
 

@@ -116,7 +116,7 @@ def test_hostile_device_label_never_appears_as_raw_markup(rendered_html):
     # and passes device data through faithfully; escaping is entirely the
     # client's job (D-ESC1). Verified for real by the Playwright test below
     # when a browser is available.
-    m = re.search(r"\bconst rawData = (.*?);\n", script_block)
+    m = re.search(r"\brawData: (.*?),\n", script_block)
     assert m, "rawData declaration not found in the generated <script>"
     raw = json.loads(m.group(1).replace("<\\/", "</"))
     devices = {entry.get("device") for entry in raw}
@@ -215,7 +215,7 @@ def test_script_json_breakout_does_not_break_the_whole_page(tmp_path):
     assert html.count("</script>") == 1
     assert "<\\/script>" in html
 
-    m = re.search(r"\bconst rawData = (.*?);\n", html)
+    m = re.search(r"\brawData: (.*?),\n", html)
     assert m
     raw = json.loads(m.group(1).replace("<\\/", "</"))
     assert raw[0]["device"] == "</script><script>alert(1)</script>"

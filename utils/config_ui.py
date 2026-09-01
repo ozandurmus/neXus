@@ -5,9 +5,13 @@ from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
 
-from configuration.checkpoint_config_alignment import align_checkpoint_management_intent
-from configuration.current_config_projection import build_pan_current_configuration
 from utils.config_history import ConfigHistoryService, build_history_payload
+
+# CON.1 AC-8: console/ must import no vendor/collector module, transitively —
+# checkpoint/*, panorama/*, configuration/* — so these two stay lazy (at the
+# point of use, below) instead of a module-level import. Every other caller
+# of build_configuration_ui_payload is unaffected: Python caches the import
+# on first call either way.
 
 
 CONFIG_UI_SCHEMA_VERSION = "0.6.1B"
@@ -382,6 +386,7 @@ def _build_pan_configuration_ui_payload(
         alignment = _as_dict(row.get("configuration_alignment"))
         serial = str(row.get("serial") or "")
         detail = details.get(serial, {})
+        from configuration.current_config_projection import build_pan_current_configuration
         current_configuration = build_pan_current_configuration(
             base_dir=BASE_DIR,
             row=row,
@@ -673,6 +678,7 @@ def _checkpoint_current_copy(value: Any) -> dict[str, Any]:
 def _checkpoint_ui_devices(checkpoint_result: dict[str, Any] | None) -> list[dict[str, Any]]:
     result = _as_dict(checkpoint_result)
     raw_devices = [_as_dict(row) for row in _as_list(result.get("devices"))]
+    from configuration.checkpoint_config_alignment import align_checkpoint_management_intent
     alignment_payload = align_checkpoint_management_intent(result)
     alignment_by_entity = {
         str(row.get("entity_id") or ""): row

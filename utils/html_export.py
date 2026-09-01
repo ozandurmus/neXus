@@ -44,6 +44,14 @@ SCRIPT_MODULE_FILENAMES = (
 )
 SCRIPT_FILES = tuple(BASE_DIR / "static" / name for name in SCRIPT_MODULE_FILENAMES)
 
+# CON.1 C1-2: the console (console/app.py) and the exporter must compose the
+# identical ordered module list from one implementation, so a drift between
+# what the report runs and what the console runs is impossible by
+# construction. MODULE_ORDER / compose_modules are the names that contract
+# specifies; SCRIPT_MODULE_FILENAMES / compose_report_script (below) are the
+# pre-existing names kept for the tests already bound to them.
+MODULE_ORDER = SCRIPT_MODULE_FILENAMES
+
 # html_render_performance (0.6.x polish): opt-in stage-timing switch. Reading
 # this env var (rather than threading a profile= kwarg through every
 # main.py call site) means a normal checkpoint is unaffected with zero code
@@ -58,6 +66,16 @@ def read_text_file(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
+def compose_modules(order: tuple[str, ...] = MODULE_ORDER, repository_root=None) -> str:
+    """The concatenated module source for ``order`` (default ``MODULE_ORDER``),
+    joined with a single newline — the exact same join ``run_html_export``
+    performs at ``__SCRIPT_PLACEHOLDER__``. ``console/app.py`` (CON.1) calls
+    this to serve ``/assets/app.js`` so the two surfaces cannot drift apart.
+    """
+    base = Path(repository_root) if repository_root is not None else BASE_DIR
+    return "\n".join(read_text_file(base / "static" / name) for name in order)
+
+
 def compose_report_script(repository_root=None) -> str:
     """The single inline ``<script>`` body — the eight module source files
     (``SCRIPT_MODULE_FILENAMES``) joined in composition order exactly as
@@ -67,10 +85,7 @@ def compose_report_script(repository_root=None) -> str:
     ``static/app.js`` read; test harnesses that inspect the report script as a
     single string call this instead.
     """
-    base = Path(repository_root) if repository_root is not None else BASE_DIR
-    return "\n".join(
-        read_text_file(base / "static" / name) for name in SCRIPT_MODULE_FILENAMES
-    )
+    return compose_modules(repository_root=repository_root)
 
 
 def _script_json(value) -> str:
@@ -136,9 +151,8 @@ def _fill_template(template: str, replacements: dict[str, str]) -> str:
     return pattern.sub(lambda match: replacements[match.group(0)], template)
 
 
-def run_html_export(
+def build_report_payloads(
     unified_json=UNIFIED_JSON,
-    output_html=OUTPUT_HTML,
     *,
     config_result=None,
     checkpoint_config_result=None,
@@ -149,35 +163,25 @@ def run_html_export(
     coordinator=None,
     scheduler_policy=None,
     data_root=None,
-    record_checkpoint=False,
-    run_id=None,
-    profile=None,
-):
+    timings: list[tuple[str, float]] | None = None,
+) -> dict:
+    """Build the seven payload dicts the report embeds and the console (CON.1)
+    serves at ``/api/payloads`` — ``rawData``, ``configUiData``,
+    ``complianceUiData``, ``cryptoUiData``, ``projectPlanData``,
+    ``discoveryUiData``, ``exclusionsUiData``. Pure computation, no write side
+    effect: ``run_html_export`` is the only caller that appends a trend-ledger
+    record, and only for a full checkpoint (``record_checkpoint=True``).
 
-    info(">>> GENERATING HTML")
-
-    # html_render_performance (0.6.x polish): opt-in stage timing only, off by
-    # default. profile=None (the default) falls back to PROFILE_ENV_VAR so a
-    # normal main.py checkpoint is unaffected with zero call-site change;
-    # profile=True/False always overrides the env var explicitly (used by
-    # scripts/render_uitest.py --profile and tests). Disabled -> timings stays
-    # None -> _stage_timer is a true no-op. Produces evidence only, never an
-    # optimization.
-    if profile is None:
-        profile = os.environ.get(PROFILE_ENV_VAR, "") not in ("", "0", "false", "False")
-    timings: list[tuple[str, float]] | None = [] if profile else None
-
+    C1-4: this is the *single* implementation both surfaces call, with the
+    same inputs, so a drift between what the report renders and what the
+    console serves is impossible by construction rather than by discipline.
+    """
     repository_root = Path(repository_root) if repository_root is not None else BASE_DIR
     # 0.7.1b: the compliance control-assignment policy lives in RuntimeRoot
     # (data/state/control_assignments.json). Fall back to the repo-local data
     # dir when a runtime root was not threaded through (diagnostic paths).
     compliance_data_root = Path(data_root) if data_root is not None else (repository_root / "data")
-    template_file = repository_root / "templates" / "index.html"
-    style_file = repository_root / "static" / "style.css"
-    script_files = [repository_root / "static" / name for name in SCRIPT_MODULE_FILENAMES]
-
     unified_json = Path(unified_json)
-    output_html = Path(output_html)
 
     if not unified_json.exists():
         raise FileNotFoundError(
@@ -248,12 +252,82 @@ def run_html_export(
             exclusion_policy = None
         exclusions_ui = build_inventory_exclusions_payload(exclusion_policy)
 
+    return {
+        "rawData": data,
+        "configUiData": configuration_ui,
+        "complianceUiData": compliance_ui,
+        "cryptoUiData": crypto_ui,
+        "projectPlanData": project_plan,
+        "discoveryUiData": discovery_ui,
+        "exclusionsUiData": exclusions_ui,
+    }
+
+
+def run_html_export(
+    unified_json=UNIFIED_JSON,
+    output_html=OUTPUT_HTML,
+    *,
+    config_result=None,
+    checkpoint_config_result=None,
+    workflow_context=None,
+    repository_root=None,
+    lifecycle_store=None,
+    capability_store=None,
+    coordinator=None,
+    scheduler_policy=None,
+    data_root=None,
+    record_checkpoint=False,
+    run_id=None,
+    profile=None,
+):
+
+    info(">>> GENERATING HTML")
+
+    # html_render_performance (0.6.x polish): opt-in stage timing only, off by
+    # default. profile=None (the default) falls back to PROFILE_ENV_VAR so a
+    # normal main.py checkpoint is unaffected with zero call-site change;
+    # profile=True/False always overrides the env var explicitly (used by
+    # scripts/render_uitest.py --profile and tests). Disabled -> timings stays
+    # None -> _stage_timer is a true no-op. Produces evidence only, never an
+    # optimization.
+    if profile is None:
+        profile = os.environ.get(PROFILE_ENV_VAR, "") not in ("", "0", "false", "False")
+    timings: list[tuple[str, float]] | None = [] if profile else None
+
+    repository_root = Path(repository_root) if repository_root is not None else BASE_DIR
+    compliance_data_root = Path(data_root) if data_root is not None else (repository_root / "data")
+    template_file = repository_root / "templates" / "index.html"
+    style_file = repository_root / "static" / "style.css"
+
+    output_html = Path(output_html)
+
+    payloads = build_report_payloads(
+        unified_json,
+        config_result=config_result,
+        checkpoint_config_result=checkpoint_config_result,
+        workflow_context=workflow_context,
+        repository_root=repository_root,
+        lifecycle_store=lifecycle_store,
+        capability_store=capability_store,
+        coordinator=coordinator,
+        scheduler_policy=scheduler_policy,
+        data_root=data_root,
+        timings=timings,
+    )
+    data = payloads["rawData"]
+    configuration_ui = payloads["configUiData"]
+    compliance_ui = payloads["complianceUiData"]
+    crypto_ui = payloads["cryptoUiData"]
+    project_plan = payloads["projectPlanData"]
+    discovery_ui = payloads["discoveryUiData"]
+    exclusions_ui = payloads["exclusionsUiData"]
+
     with _stage_timer(timings, "read_template_files"):
         template = read_text_file(template_file)
         css = read_text_file(style_file)
-        # D-MOD1: one read_text_file per module file, joined with a single
-        # newline, into the same single string inlined at __SCRIPT_PLACEHOLDER__.
-        javascript = "\n".join(read_text_file(path) for path in script_files)
+        # D-MOD1 / C1-2: one composer, two consumers — this is the exact join
+        # console/app.py performs for /assets/app.js.
+        javascript = compose_modules(repository_root=repository_root)
 
     # html_render_optimization: split out from the "fill_template" stage,
     # which used to wrap both this JSON serialization and the regex
