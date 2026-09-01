@@ -49,6 +49,14 @@ from typing import Any
 class Provenance(str, Enum):
     MANUAL = "manual"
     SCHEDULED = "scheduled"
+    CONSOLE = "console"  # CON.2 C2-3 / C-D3: UI-triggered console job, kept
+    # distinguishable from a CLI-triggered "manual" run in every manifest and
+    # audit record. Every consumer of this enum already stores/echoes
+    # ``provenance`` as a free string with no fixed-value validation (Job,
+    # RunContext, both coordinator backends' Postgres TEXT column, the
+    # discovery/coordinator UI payload) -- this member is additive and
+    # required no schema or consumer change (CON.2 build history entry
+    # carries the full enumeration).
     # "event" is a reserved schema value; no trigger implemented.
 
 

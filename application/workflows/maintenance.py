@@ -11,6 +11,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from application.services import _load_output_json, _require_bootstrap, _workflow_context
+from utils.collection_executor import workflow_argv
 
 # main.py sits at the repository root; this module is application/workflows/.
 _REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -20,18 +21,10 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 # Scheduler (--scheduler-once)
 # ---------------------------------------------------------------------------
 def _scheduler_workflow_argv(row, runtime_root):
-    workflow = row.workflow
-    normalized = "cp" if workflow == "checkpoint" else workflow
-    base = ["--runtime-root", str(runtime_root)]
-    if normalized == "cp-config":
-        return [*base, "--cp-config-collect", "--cp-config-stage", "all"]
-    if normalized.startswith("recovery-"):
-        vendor = {"recovery-pan": "panorama", "recovery-cp": "checkpoint"}[normalized]
-        argv = [*base, "--recovery-collect", "--recovery-vendor", vendor]
-        if row.targets:
-            argv += ["--recovery-gateways", ",".join(row.targets)]
-        return argv
-    return [*base, "--only", normalized]
+    """Thin wrapper: CON.2 C2-2 promoted the argv construction itself to
+    ``utils.collection_executor.workflow_argv`` so the scheduler and the
+    console job runner share one path."""
+    return workflow_argv(row.workflow, runtime_root, targets=row.targets)
 
 
 def _run_scheduler_once(runtime_paths, services):

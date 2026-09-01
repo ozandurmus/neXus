@@ -1,7 +1,9 @@
 """Evidence store backend implementations — DEV.3.3 distributed evidence store migration.
 
 Five independent storage concerns move from per-container local files to an
-opt-in PostgreSQL backend, byte-compatible with today's filesystem behavior:
+opt-in PostgreSQL backend, byte-compatible with today's filesystem behavior
+(a sixth, the CON.2 console job store, was added later — see its own section
+below):
 
 * **Config snapshot** metadata index (``utils/config_evidence.py``,
   ``utils/config_history.py``) — content-addressed payload blobs
@@ -555,6 +557,313 @@ class PostgresLastKnownGoodBackend(LastKnownGoodBackend):
 
 
 # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# 6. Console job backend (CON.2 C2-4)
+# ---------------------------------------------------------------------------
+#
+# One durable record per operator-triggered console job. Lives under
+# ``data_root/state/console_jobs``, never under ``output_root`` and never in
+# the support bundle (C2-4 / privacy invariant 4). Forbidden in a job record
+# (asserted by test): credentials, tokens, management addresses, hostnames
+# beyond an ``entity_id``, raw device output, backup bytes, file paths
+# outside the runtime root, stack traces -- ``console/jobs.py`` enforces the
+# shape; this backend is deliberately dumb storage, same split as the other
+# five concerns.
+
+_CONSOLE_JOB_SCHEMA = (
+    """
+    CREATE TABLE IF NOT EXISTS console_job (
+        job_id             TEXT PRIMARY KEY,
+        idempotency_key    TEXT NOT NULL,
+        job_type           TEXT NOT NULL,
+        command_class      TEXT NOT NULL,
+        targets_json       JSONB NOT NULL,
+        state              TEXT NOT NULL,
+        requested_at       TIMESTAMPTZ NOT NULL,
+        started_at         TIMESTAMPTZ,
+        finished_at        TIMESTAMPTZ,
+        run_id             TEXT,
+        coordinator_decision TEXT,
+        outcome_counts_json JSONB,
+        error_code         TEXT,
+        error_summary      TEXT
+    )
+    """,
+    "CREATE UNIQUE INDEX IF NOT EXISTS console_job_idempotency_idx "
+    "ON console_job (idempotency_key)",
+    "CREATE INDEX IF NOT EXISTS console_job_requested_at_idx "
+    "ON console_job (requested_at DESC)",
+)
+
+class ConsoleJobBackend(abc.ABC):
+    """Storage primitive for CON.2 durable job records.
+
+    Deliberately dumb: no registry validation, no admission logic, no
+    idempotency *policy* -- ``console/jobs.py`` owns all of that so both
+    backends behave identically.
+    """
+
+    @abc.abstractmethod
+    def create(self, job: dict[str, Any]) -> None:
+        """Insert a new job record. ``job['job_id']`` and
+        ``job['idempotency_key']`` must be unique; a duplicate `job_id`` is
+        a programming error (caller generates a fresh uuid per job), but a
+        duplicate ``idempotency_key`` is an expected race the caller must
+        handle by re-reading via ``get_by_idempotency_key`` -- this raises
+        ``EvidenceBackendError`` rather than silently overwriting."""
+
+    @abc.abstractmethod
+    def update(self, job_id: str, **fields: Any) -> None:
+        """Merge the given fields into the existing record."""
+
+    @abc.abstractmethod
+    def get(self, job_id: str) -> dict[str, Any] | None:
+        ...
+
+    @abc.abstractmethod
+    def get_by_idempotency_key(self, idempotency_key: str) -> dict[str, Any] | None:
+        ...
+
+    @abc.abstractmethod
+    def list_all(self) -> list[dict[str, Any]]:
+        """Every job record, newest-``requested_at``-first."""
+
+    @abc.abstractmethod
+    def mark_orphaned_running_as_failed(self, *, error_code: str) -> list[str]:
+        """C2-5: on console startup, any record still ``running`` from a
+        prior process is a crash, not a zombie -- mark it ``failed`` with
+        ``error_code`` and return the affected job ids."""
+
+
+class FilesystemConsoleJobBackend(ConsoleJobBackend):
+    """One JSON file per job under ``<data_root>/state/console_jobs/``."""
+
+    def __init__(self, root: Path) -> None:
+        self.root = Path(root)
+
+    def _job_path(self, job_id: str) -> Path:
+        return self.root / f"{_safe_component(job_id)}.json"
+
+    def create(self, job: dict[str, Any]) -> None:
+        self.root.mkdir(parents=True, exist_ok=True)
+        if self.get_by_idempotency_key(job["idempotency_key"]) is not None:
+            raise EvidenceBackendError(
+                f"console job idempotency_key already recorded: {job['idempotency_key']!r}"
+            )
+        path = self._job_path(job["job_id"])
+        if path.exists():
+            raise EvidenceBackendError(f"console job_id already recorded: {job['job_id']!r}")
+        _write_json_atomic(path, job)
+
+    def update(self, job_id: str, **fields: Any) -> None:
+        path = self._job_path(job_id)
+        try:
+            record = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise EvidenceBackendError(f"console job {job_id!r} is unreadable: {exc}") from exc
+        record.update(fields)
+        _write_json_atomic(path, record)
+
+    def get(self, job_id: str) -> dict[str, Any] | None:
+        path = self._job_path(job_id)
+        if not path.exists():
+            return None
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+            return None
+
+    def get_by_idempotency_key(self, idempotency_key: str) -> dict[str, Any] | None:
+        for record in self.list_all():
+            if record.get("idempotency_key") == idempotency_key:
+                return record
+        return None
+
+    def list_all(self) -> list[dict[str, Any]]:
+        if not self.root.exists():
+            return []
+        records: list[dict[str, Any]] = []
+        for child in self.root.iterdir():
+            if not child.is_file() or child.suffix != ".json":
+                continue
+            try:
+                record = json.loads(child.read_text(encoding="utf-8"))
+            except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+                continue
+            if isinstance(record, dict):
+                records.append(record)
+        records.sort(key=lambda r: str(r.get("requested_at") or ""), reverse=True)
+        return records
+
+    def mark_orphaned_running_as_failed(self, *, error_code: str) -> list[str]:
+        affected: list[str] = []
+        for record in self.list_all():
+            if record.get("state") == "running":
+                self.update(
+                    record["job_id"],
+                    state="failed",
+                    error_code=error_code,
+                    finished_at=_utc_now(),
+                )
+                affected.append(record["job_id"])
+        return affected
+
+
+class PostgresConsoleJobBackend(ConsoleJobBackend):
+    def __init__(self, dsn: str) -> None:
+        self._psycopg = _psycopg()
+        self._dsn = dsn
+        self._ensure_schema()
+
+    def _connect(self):
+        return self._psycopg.connect(self._dsn, autocommit=True)
+
+    def _ensure_schema(self) -> None:
+        _ensure_schema(self._psycopg, self._dsn, _CONSOLE_JOB_SCHEMA)
+
+    def _row_to_record(self, row) -> dict[str, Any]:
+        (job_id, idempotency_key, job_type, command_class, targets, state,
+         requested_at, started_at, finished_at, run_id, coordinator_decision,
+         outcome_counts, error_code, error_summary) = row
+        return {
+            "job_id": job_id,
+            "idempotency_key": idempotency_key,
+            "job_type": job_type,
+            "command_class": command_class,
+            "targets": targets,
+            "state": state,
+            "requested_at": requested_at.isoformat() if requested_at else None,
+            "started_at": started_at.isoformat() if started_at else None,
+            "finished_at": finished_at.isoformat() if finished_at else None,
+            "run_id": run_id,
+            "coordinator_decision": coordinator_decision,
+            "outcome_counts": outcome_counts,
+            "error_code": error_code,
+            "error_summary": error_summary,
+        }
+
+    def create(self, job: dict[str, Any]) -> None:
+        from psycopg.errors import UniqueViolation
+        from psycopg.types.json import Jsonb
+
+        try:
+            with self._connect() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        INSERT INTO console_job (
+                            job_id, idempotency_key, job_type, command_class, targets_json,
+                            state, requested_at, started_at, finished_at, run_id,
+                            coordinator_decision, outcome_counts_json, error_code, error_summary
+                        ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                        """,
+                        (
+                            job["job_id"], job["idempotency_key"], job["job_type"], job["command_class"],
+                            Jsonb(job.get("targets") or []), job["state"], _parse_dt(job.get("requested_at")),
+                            _parse_dt(job.get("started_at")), _parse_dt(job.get("finished_at")), job.get("run_id"),
+                            job.get("coordinator_decision"),
+                            Jsonb(job["outcome_counts"]) if job.get("outcome_counts") is not None else None,
+                            job.get("error_code"), job.get("error_summary"),
+                        ),
+                    )
+        except UniqueViolation as exc:
+            raise EvidenceBackendError(
+                f"console job already recorded (job_id or idempotency_key collision): {exc}"
+            ) from exc
+        except Exception as exc:
+            raise EvidenceBackendError(f"postgres console job create failed: {exc}") from exc
+
+    def update(self, job_id: str, **fields: Any) -> None:
+        from psycopg.types.json import Jsonb
+
+        column_map = {
+            "job_type": "job_type", "command_class": "command_class", "targets": "targets_json",
+            "state": "state", "requested_at": "requested_at", "started_at": "started_at",
+            "finished_at": "finished_at", "run_id": "run_id",
+            "coordinator_decision": "coordinator_decision", "outcome_counts": "outcome_counts_json",
+            "error_code": "error_code", "error_summary": "error_summary",
+        }
+        sets, values = [], []
+        for key, value in fields.items():
+            column = column_map.get(key)
+            if column is None:
+                continue
+            sets.append(f"{column} = %s")
+            if key in ("requested_at", "started_at", "finished_at"):
+                values.append(_parse_dt(value))
+            elif key in ("targets", "outcome_counts"):
+                values.append(Jsonb(value) if value is not None else None)
+            else:
+                values.append(value)
+        if not sets:
+            return
+        values.append(job_id)
+        try:
+            with self._connect() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        f"UPDATE console_job SET {', '.join(sets)} WHERE job_id = %s",
+                        values,
+                    )
+        except Exception as exc:
+            raise EvidenceBackendError(f"postgres console job update failed: {exc}") from exc
+
+    def get(self, job_id: str) -> dict[str, Any] | None:
+        try:
+            with self._connect() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(f"SELECT {', '.join(_CONSOLE_JOB_FIELDS_SQL)} FROM console_job WHERE job_id = %s", (job_id,))
+                    row = cur.fetchone()
+        except Exception as exc:
+            raise EvidenceBackendError(f"postgres console job get failed: {exc}") from exc
+        return self._row_to_record(row) if row else None
+
+    def get_by_idempotency_key(self, idempotency_key: str) -> dict[str, Any] | None:
+        try:
+            with self._connect() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        f"SELECT {', '.join(_CONSOLE_JOB_FIELDS_SQL)} FROM console_job WHERE idempotency_key = %s",
+                        (idempotency_key,),
+                    )
+                    row = cur.fetchone()
+        except Exception as exc:
+            raise EvidenceBackendError(f"postgres console job get-by-idempotency-key failed: {exc}") from exc
+        return self._row_to_record(row) if row else None
+
+    def list_all(self) -> list[dict[str, Any]]:
+        try:
+            with self._connect() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        f"SELECT {', '.join(_CONSOLE_JOB_FIELDS_SQL)} FROM console_job ORDER BY requested_at DESC"
+                    )
+                    rows = cur.fetchall()
+        except Exception as exc:
+            raise EvidenceBackendError(f"postgres console job list failed: {exc}") from exc
+        return [self._row_to_record(row) for row in rows]
+
+    def mark_orphaned_running_as_failed(self, *, error_code: str) -> list[str]:
+        try:
+            with self._connect() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "UPDATE console_job SET state = 'failed', error_code = %s, finished_at = %s "
+                        "WHERE state = 'running' RETURNING job_id",
+                        (error_code, datetime.now(timezone.utc)),
+                    )
+                    rows = cur.fetchall()
+        except Exception as exc:
+            raise EvidenceBackendError(f"postgres console job orphan-sweep failed: {exc}") from exc
+        return [row[0] for row in rows]
+
+
+_CONSOLE_JOB_FIELDS_SQL = (
+    "job_id", "idempotency_key", "job_type", "command_class", "targets_json", "state",
+    "requested_at", "started_at", "finished_at", "run_id", "coordinator_decision",
+    "outcome_counts_json", "error_code", "error_summary",
+)
+
 # 4. Scheduler state backend
 # ---------------------------------------------------------------------------
 
@@ -815,6 +1124,8 @@ class PostgresOperationalWriteLedgerBackend(OperationalWriteLedgerBackend):
         ]
 
 
+
+
 # ---------------------------------------------------------------------------
 # Backend selection
 # ---------------------------------------------------------------------------
@@ -864,6 +1175,7 @@ def verify_evidence_backend_ready() -> None:
         PostgresLastKnownGoodBackend(dsn)
         PostgresSchedulerStateBackend(dsn)
         PostgresOperationalWriteLedgerBackend(dsn)
+        PostgresConsoleJobBackend(dsn)
     except EvidenceBackendError:
         raise
     except Exception as exc:
@@ -913,3 +1225,12 @@ def select_operational_write_ledger_backend(*, state_file: Path) -> OperationalW
     if kind not in ("filesystem", ""):
         raise EvidenceBackendError(f"Unsupported {ENV_BACKEND}: {kind!r}")
     return FilesystemOperationalWriteLedgerBackend(state_file)
+
+
+def select_console_job_backend(*, root: Path) -> ConsoleJobBackend:
+    kind = active_evidence_backend_kind()
+    if kind == "postgres":
+        return PostgresConsoleJobBackend(_require_dsn())
+    if kind not in ("filesystem", ""):
+        raise EvidenceBackendError(f"Unsupported {ENV_BACKEND}: {kind!r}")
+    return FilesystemConsoleJobBackend(root)
