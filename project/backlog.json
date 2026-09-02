@@ -2,6 +2,15 @@
   "schema_version": "1.0",
   "items": [
     {
+      "id": "cp_cphaprob_peer_observation_corroboration",
+      "category": "Identity / additional validation",
+      "title": "Extract peer-member rows from cphaprob stat for additional cluster-identity corroboration",
+      "status": "planned",
+      "priority": "P3",
+      "target": "Follow-up to OP.0a.P7 (PAN HA peer-pairing identity closure)",
+      "note": "Raised while reviewing PAN's peer_ip risk (a declared/static value trusted for identity): the same already-issued cphaprob stat command (configuration/checkpoint_config_collector.py, ~line 1333/1609) is parsed today only for the LOCAL member's own role/mode (_parse_clusterxl_runtime_role/_parse_clusterxl_cluster_mode) -- the PEER row(s) in the same output table (Number/Unique Address/State/Name columns, confirmed real by this codebase's own tests/test_op0a_ha_readiness.py fixtures e.g. '2  192.0.2.12  0%  STANDBY  member-b') are discarded. That peer row is a second, independently-observed signal (each member's own local view of its peer's address/name/state) that could corroborate the existing VIP-fingerprint-based group_id clustering (checkpoint/cp_runner.py::enrich_cluster_topology) without replacing it -- purely additive validation, zero new device command (same command/session/timeout/frequency, OP.0a P2 precedent). Before implementing: consult the official Check Point ClusterXL Administration Guide / cphaprob CLI reference for the authoritative real-world semantics of the 'Unique Address' column (is it always the CCP/sync-interface address, or can it vary by deployment?) rather than assuming from this repo's test fixtures alone -- the same non-negotiable ground-truth-before-implementation discipline the PAN peer_ip work required. Explicitly requested by the product owner as 'additional validation' only, never as a replacement for the existing fail-closed grouping mechanism."
+    },
+    {
       "id": "pan_ha_serial_identity_hardening",
       "category": "Identity / architecture",
       "title": "PAN HA pair operational identity should consider serial, not just hostname",
