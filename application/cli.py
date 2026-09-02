@@ -146,6 +146,17 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--pan-ha-peer-diagnostic",
+        action="store_true",
+        help=(
+            "OP.0a real-env peer-identity audit: CLASS 0 read-only, opt-in, disabled by "
+            "default. Adds no new PAN command/API call -- it only enumerates the field "
+            "NAMES already present in the same 'show high-availability state' response "
+            "and reports whether the configured peer_ip's one-way token matches the "
+            "management_ip's or any runtime field's token. Never reports a raw address."
+        ),
+    )
+    parser.add_argument(
         "--repository-privacy-check",
         action="store_true",
         help=(

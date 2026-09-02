@@ -493,6 +493,7 @@ def integration_checkpoint(ctx):
                     max_workers=args.pan_config_workers,
                     probe_pushed_template=args.pan_probe_pushed_template,
                     target_serials=_pan_config_targets(),
+                    pan_ha_peer_diagnostic=args.pan_ha_peer_diagnostic,
                 ),
             )
             summary = config_result.get("summary") or {}
@@ -597,6 +598,7 @@ def integration_checkpoint(ctx):
                         orchestration_run_id=run_ctx.run_id,
                         probe_pushed_template=args.pan_probe_pushed_template,
                         target_serials=_pan_config_targets(),
+                        pan_ha_peer_diagnostic=args.pan_ha_peer_diagnostic,
                     ),
                     run_context=run_ctx,
                 )

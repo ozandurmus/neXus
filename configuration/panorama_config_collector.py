@@ -251,6 +251,48 @@ def get_devices(host: str, key: str, *, verify: bool | str, timeout: float) -> l
     return devices
 
 
+def _tokenize_ha_field_diagnostics(root: Any) -> dict[str, Any]:
+    """OP.0a real-env peer-identity audit (CLASS 0, read-only, opt-in).
+
+    Enumerates the child field NAMES PAN-OS actually returns under
+    ``result/group/local-info``/``result/group/peer-info`` in this
+    environment's already-received ``show high-availability state`` response,
+    and HMAC-tokenizes (never reversible without the local support key) any
+    non-empty leaf value so a caller can compare it against an already-known
+    value without either raw value ever appearing in output or storage. No
+    new command, no new API call -- this reads the same in-memory response
+    ``get_target_ha_runtime_state`` already received.
+    """
+    tok = Tokenizer(_get_support_key())
+    local_info = root.find(".//result/group/local-info")
+    peer_info = root.find(".//result/group/peer-info")
+    local_info_fields: list[str] = []
+    peer_info_fields: list[str] = []
+    field_tokens: dict[str, str] = {}
+    for node, prefix, names in (
+        (local_info, "local-info", local_info_fields),
+        (peer_info, "peer-info", peer_info_fields),
+    ):
+        if node is None:
+            continue
+        for child in node:
+            names.append(child.tag)
+            text = (child.text or "").strip()
+            if text:
+                # Same "kind" label the caller uses for peer_ip/management_ip
+                # (see _apply_pan_ha_peer_identity_diagnostic) -- the HMAC
+                # input includes this label, so both sides must agree on it
+                # for an equal raw value to ever produce an equal token.
+                token = tok.token("pan_ha_identity_value", text)
+                if token:
+                    field_tokens[f"{prefix}/{child.tag}"] = token
+    return {
+        "local_info_fields": sorted(local_info_fields),
+        "peer_info_fields": sorted(peer_info_fields),
+        "field_tokens": field_tokens,
+    }
+
+
 def get_target_ha_runtime_state(
     host: str,
     key: str,
@@ -258,12 +300,16 @@ def get_target_ha_runtime_state(
     *,
     verify: bool | str,
     timeout: float,
+    capture_field_diagnostics: bool = False,
 ) -> dict[str, Any]:
     """Read the managed firewall's actual HA runtime state through Panorama.
 
     This is a read-only operational query. PAN-OS exposes the local runtime
     role under ``result/group/local-info/state`` for ``show high-availability
     state``. Static HA configuration is deliberately not used to infer a role.
+
+    ``capture_field_diagnostics`` is off by default; it never changes the
+    request issued, only what is additionally read from the same response.
     """
     root = api_post(
         host,
@@ -282,13 +328,16 @@ def get_target_ha_runtime_state(
     mode = (root.findtext(".//result/group/local-info/mode") or "").strip() or None
     peer_state = (root.findtext(".//result/group/peer-info/state") or "").strip() or None
     state_sync = (root.findtext(".//result/group/local-info/state-sync") or "").strip() or None
-    return {
+    result: dict[str, Any] = {
         "enabled": enabled,
         "state": state,
         "mode": mode,
         "peer_state": peer_state,
         "state_sync": state_sync,
     }
+    if capture_field_diagnostics:
+        result.update(_tokenize_ha_field_diagnostics(root))
+    return result
 
 
 def parse_ha_peer_ip_from_config(content: bytes) -> dict[str, str | None]:
@@ -1438,6 +1487,44 @@ def _collect_direct_compare(
     result["duration_ms"] = int((time.monotonic() - started_all) * 1000)
     return result
 
+def _apply_pan_ha_peer_identity_diagnostic(row: dict[str, Any]) -> None:
+    """OP.0a real-env peer-identity audit (CLASS 0, read-only, opt-in, additive).
+
+    Compares the configured ``peer_ip`` against this device's own
+    ``management_ip`` and against every field PAN-OS actually returned under
+    the HA runtime response's local-info/peer-info, using one-way tokens so
+    no raw address ever enters the diagnostic result. Absent entirely unless
+    explicitly requested; never changes any other field, never issues a
+    network call, and only reads what ``get_target_ha_runtime_state`` already
+    put on this row this run.
+    """
+    ha_runtime = row.get("ha_runtime")
+    if not isinstance(ha_runtime, dict):
+        return
+    field_tokens = ha_runtime.pop("field_tokens", None)
+    local_info_fields = ha_runtime.pop("local_info_fields", [])
+    peer_info_fields = ha_runtime.pop("peer_info_fields", [])
+    if field_tokens is None:
+        # The target was never queried this run (Panorama already supplied
+        # ha_state) -- nothing to compare against.
+        return
+    tok = Tokenizer(_get_support_key())
+    peer_token = tok.token("pan_ha_identity_value", ha_runtime.get("peer_ip"))
+    management_token = tok.token("pan_ha_identity_value", row.get("management_ip"))
+    ha_runtime["peer_identity_diagnostic"] = {
+        "enabled": True,
+        "local_info_fields": local_info_fields,
+        "peer_info_fields": peer_info_fields,
+        "configured_peer_matches_peer_management_ip": (
+            None if peer_token is None or management_token is None else peer_token == management_token
+        ),
+        "configured_peer_matches_runtime_field": {
+            path: (peer_token is not None and value_token == peer_token)
+            for path, value_token in field_tokens.items()
+        },
+    }
+
+
 def _collect_device_row(
     cfg: Any,
     device: dict[str, Any],
@@ -1456,6 +1543,7 @@ def _collect_device_row(
     panorama_intent: dict[str, Any] | None,
     expected_compiler: dict[str, Any] | None,
     probe_pushed_template: bool = False,
+    pan_ha_peer_diagnostic: bool = False,
 ) -> dict[str, Any]:
     serial = device["serial"]
     device_name = str(device.get("hostname") or serial)
@@ -1505,6 +1593,7 @@ def _collect_device_row(
                 # Auxiliary runtime-role lookup must not stretch the primary
                 # configuration collection's much larger timeout budget.
                 timeout=min(timeout, 10.0),
+                capture_field_diagnostics=pan_ha_peer_diagnostic,
             )
             row["ha_runtime"] = {
                 "status": "success",
@@ -1567,6 +1656,8 @@ def _collect_device_row(
         if isinstance(row.get("ha_runtime"), dict):
             row["ha_runtime"]["peer_ip"] = peer_addresses["peer_ip"]
             row["ha_runtime"]["peer_ipv6"] = peer_addresses["peer_ipv6"]
+            if pan_ha_peer_diagnostic:
+                _apply_pan_ha_peer_identity_diagnostic(row)
 
         store_started = time.monotonic()
         try:
@@ -1946,6 +2037,7 @@ def run_panorama_config_evidence(
     orchestration_run_id: str | None = None,
     probe_pushed_template: bool = True,
     target_serials: Sequence[str] | None = None,
+    pan_ha_peer_diagnostic: bool = False,
 ) -> dict[str, Any]:
     """Phase 0.6.0A4.2.1: PAN Semantic Validation.
 
@@ -2191,6 +2283,7 @@ def run_panorama_config_evidence(
                 panorama_intent=intent_analysis,
                 expected_compiler=expected_compiler_result,
                 probe_pushed_template=probe_pushed_template,
+                pan_ha_peer_diagnostic=pan_ha_peer_diagnostic,
             )
 
         with ThreadPoolExecutor(max_workers=actual_workers) as executor:
@@ -2620,6 +2713,7 @@ def run_panorama_config_evidence(
                 "identity_gate": "direct show system info serial must equal Panorama-discovered serial",
                 "queries": ["active_config", "effective-running", "merged"] + (["pushed-template"] if probe_pushed_template else []),
                 "pushed_template_probe": "enabled" if probe_pushed_template else "disabled_by_default",
+                "peer_identity_diagnostic": "enabled" if pan_ha_peer_diagnostic else "disabled_by_default",
                 "transport": "HTTPS",
                 "api_key_transport": "X-PAN-KEY header",
                 "tls_verify": direct_verify is not False,

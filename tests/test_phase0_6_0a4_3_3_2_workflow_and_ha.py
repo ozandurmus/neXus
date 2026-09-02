@@ -1,5 +1,6 @@
 from pathlib import Path
 import inspect
+import json
 
 from lxml import etree
 
@@ -66,6 +67,126 @@ def test_pan_target_ha_runtime_parser_handles_ha_disabled_without_inventing_role
     assert result["enabled"] == "no"
     assert result["state"] is None
     assert result["peer_state"] is None
+
+
+def test_pan_ha_runtime_diagnostic_is_absent_by_default(monkeypatch):
+    response = etree.fromstring(
+        b"""<response status='success'><result><enabled>yes</enabled><group>
+        <local-info><state>active</state><mode>Active-Passive</mode><state-sync>Complete</state-sync></local-info>
+        <peer-info><state>passive</state></peer-info>
+        </group></result></response>"""
+    )
+    monkeypatch.setattr(pan_collector, "api_post", lambda *args, **kwargs: response)
+    result = pan_collector.get_target_ha_runtime_state(
+        "https://panorama.example", "key", "SER123", verify=False, timeout=10
+    )
+    assert "local_info_fields" not in result
+    assert "peer_info_fields" not in result
+    assert "field_tokens" not in result
+
+
+def test_pan_ha_runtime_diagnostic_enumerates_real_field_names_without_new_request(monkeypatch):
+    response = etree.fromstring(
+        b"""<response status='success'><result><enabled>yes</enabled><group>
+        <local-info><state>active</state><mode>Active-Passive</mode><state-sync>Complete</state-sync></local-info>
+        <peer-info><state>passive</state><mgmt-ip>10.9.9.9</mgmt-ip></peer-info>
+        </group></result></response>"""
+    )
+    calls = []
+
+    def fake_api_post(host, key, data, *, verify, timeout, operation):
+        calls.append(data)
+        return response
+
+    monkeypatch.setattr(pan_collector, "api_post", fake_api_post)
+    result = pan_collector.get_target_ha_runtime_state(
+        "https://panorama.example",
+        "secret-key",
+        "SER123",
+        verify=False,
+        timeout=10,
+        capture_field_diagnostics=True,
+    )
+
+    # Same single already-approved command -- no new/extra network call.
+    assert len(calls) == 1
+    assert calls[0]["cmd"] == "<show><high-availability><state></state></high-availability></show>"
+
+    assert result["local_info_fields"] == ["mode", "state", "state-sync"]
+    assert result["peer_info_fields"] == ["mgmt-ip", "state"]
+    # Every populated leaf -- local-info and peer-info alike -- is tokenized;
+    # we don't know in advance which field carries an address-shaped value.
+    assert set(result["field_tokens"]) == {
+        "local-info/state",
+        "local-info/mode",
+        "local-info/state-sync",
+        "peer-info/mgmt-ip",
+        "peer-info/state",
+    }
+    # Only a one-way token, never the raw value.
+    assert "10.9.9.9" not in result["field_tokens"]["peer-info/mgmt-ip"]
+
+
+def test_pan_ha_peer_identity_diagnostic_reports_booleans_never_raw_addresses(monkeypatch):
+    monkeypatch.setenv("FBUDDY_SUPPORT_HASH_KEY", "test-only-key-not-persisted")
+    tok = pan_collector.Tokenizer(pan_collector._get_support_key())
+    peer_ip = "192.0.2.9"
+    management_ip = "192.0.2.1"
+    row = {
+        "management_ip": management_ip,
+        "ha_runtime": {
+            "peer_ip": peer_ip,
+            "local_info_fields": ["mode", "state"],
+            "peer_info_fields": ["mgmt-ip", "state"],
+            "field_tokens": {
+                # Same peer_ip value as configured -- must resolve to a match.
+                "peer-info/mgmt-ip": tok.token("pan_ha_identity_value", peer_ip),
+                "peer-info/state": tok.token("pan_ha_identity_value", "passive"),
+            },
+        },
+    }
+
+    pan_collector._apply_pan_ha_peer_identity_diagnostic(row)
+
+    ha_runtime = row["ha_runtime"]
+    assert "field_tokens" not in ha_runtime
+    assert "local_info_fields" not in ha_runtime
+    assert "peer_info_fields" not in ha_runtime
+
+    diagnostic = ha_runtime["peer_identity_diagnostic"]
+    assert diagnostic["enabled"] is True
+    assert diagnostic["local_info_fields"] == ["mode", "state"]
+    assert diagnostic["peer_info_fields"] == ["mgmt-ip", "state"]
+    assert diagnostic["configured_peer_matches_peer_management_ip"] is False
+    assert diagnostic["configured_peer_matches_runtime_field"] == {
+        "peer-info/mgmt-ip": True,
+        "peer-info/state": False,
+    }
+
+    # The diagnostic sub-object itself must never carry a raw address -- only
+    # field names and booleans. (row["ha_runtime"]["peer_ip"] legitimately
+    # holds the raw configured value elsewhere, as existing OP.0a.P7 CLASS 2
+    # local evidence; this diagnostic must not duplicate it.)
+    dumped_diagnostic = json.dumps(diagnostic)
+    assert peer_ip not in dumped_diagnostic
+    assert management_ip not in dumped_diagnostic
+
+
+def test_pan_ha_peer_identity_diagnostic_absent_when_target_not_queried_this_run():
+    # Panorama already supplied ha_state (queried_target=False) -- no HA-state
+    # response was fetched this run, so there is nothing to compare against.
+    row = {
+        "management_ip": "192.0.2.1",
+        "ha_runtime": {"status": "success", "queried_target": False, "peer_ip": "192.0.2.9"},
+    }
+    pan_collector._apply_pan_ha_peer_identity_diagnostic(row)
+    assert "peer_identity_diagnostic" not in row["ha_runtime"]
+
+
+def test_pan_ha_peer_diagnostic_cli_flag_is_opt_in_and_threaded_through_both_call_sites():
+    assert '"--pan-ha-peer-diagnostic"' in CLI
+    assert CLI.count('action="store_true"') >= 1
+    assert CHECKPOINT_WF.count("pan_ha_peer_diagnostic=args.pan_ha_peer_diagnostic") == 2
 
 
 def test_workflow_modes_are_explicit_and_render_only_precedes_vendor_imports():
