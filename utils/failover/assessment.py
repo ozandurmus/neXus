@@ -296,17 +296,18 @@ def _join_device_key(name: str) -> str:
     """Normalize a physical device name for cross-collector identity joins
     only (never for display or for the entity/evidence identity itself).
 
-    `checkpoint/scripts/cp_inventory.sh` derives its `cp.json` filename/device
-    key via `tr -c '[:alnum:]_-' '_'` on the raw target name, which appends a
-    cosmetic trailing separator for some real-estate management objects (see
-    `_cluster_display_name`'s "NAME-1_ / NAME-2_" note); `checkpoint/vsx_runner.py`
-    reads the same physical object's name straight from `cpmiquerybin` and
-    does not carry that separator. Left unreconciled, the two collectors'
-    `device` values fail an exact-string join -- a VSX physical member is
-    then classified as plain ClusterXL (VSX-hosting-device match fails) and
-    each of its Virtual Systems falls back to a standalone, member-scoped
-    unit instead of merging under the shared physical parent (real-env
-    finding, OP.VSX retry)."""
+    Historically, `checkpoint/scripts/cp_inventory.sh`'s `SAFE_GW=$(echo "$GW"
+    | tr -c '[:alnum:]_-' '_')` line converted `echo`'s own trailing newline
+    into a literal "_" (an echo/tr pipeline bug, not a real naming
+    convention -- fixed at the source), so `cp.json`'s device key carried a
+    spurious trailing separator that `checkpoint/vsx_runner.py`'s device
+    names, read straight from `cpmiquerybin`, never had. Left unreconciled,
+    the two collectors' `device` values fail an exact-string join -- a VSX
+    physical member is then classified as plain ClusterXL (VSX-hosting-device
+    match fails) and each of its Virtual Systems falls back to a standalone,
+    member-scoped unit instead of merging under the shared physical parent
+    (real-env finding, OP.VSX retry). Kept defensively for evidence collected
+    before the source fix, or any other stray separator."""
     text = str(name or "").strip()
     match = _TRAILING_SEP_RE.match(text)
     return match.group(1) if match else text
