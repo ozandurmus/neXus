@@ -44,6 +44,39 @@ def test_cp_shell_uses_bounded_parallel_workers_and_single_capture_per_type():
     assert "ROUTE_OUTPUT=$(timeout" not in text
 
 
+def test_safe_gw_strips_spurious_trailing_underscore_from_echo_tr_pipeline():
+    """Real-env retry finding: `SAFE_GW=$(echo "$GW" | tr -c '[:alnum:]_-' '_')`
+    converts `echo`'s own trailing newline into a literal "_" (newline isn't
+    in the allowed class) -- and because it is no longer a newline byte,
+    `$(...)` command substitution has nothing left to strip. This fires
+    UNCONDITIONALLY for every device, even a perfectly clean name with no
+    stray characters at all, which is why every collected CP object name
+    carried a trailing "_" that was never part of the real object name.
+    Reproduce the actual shell transform (not a re-derivation) and assert
+    the added strip removes exactly that artifact, leaving a legitimate
+    mid-name underscore untouched."""
+    import subprocess
+
+    text = cp_runner.LOCAL_COLLECTION_SCRIPT.read_text(encoding="utf-8")
+    assert 'SAFE_GW="${SAFE_GW%_}"' in text
+
+    def _safe_gw(raw_gw: str, *, apply_fix: bool) -> str:
+        script = (
+            "GW='" + raw_gw + "'\n"
+            'SAFE_GW=$(echo "$GW" | tr -c \'[:alnum:]_-\' \'_\')\n'
+            + ('SAFE_GW="${SAFE_GW%_}"\n' if apply_fix else '')
+            + 'printf %s "$SAFE_GW"\n'
+        )
+        return subprocess.run(["bash", "-c", script], capture_output=True, text=True, check=True).stdout
+
+    # Without the fix, even a clean name picks up echo's newline as "_".
+    assert _safe_gw("FW-CKP-ARKTEST-01", apply_fix=False) == "FW-CKP-ARKTEST-01_"
+
+    # With the fix, the artifact is gone and a real mid-name underscore survives.
+    assert _safe_gw("FW-CKP-ARKTEST-01", apply_fix=True) == "FW-CKP-ARKTEST-01"
+    assert _safe_gw("FW_SITE_1", apply_fix=True) == "FW_SITE_1"
+
+
 def test_run_context_can_mark_stage_and_run_degraded(tmp_path, monkeypatch):
     output_dir = tmp_path / "output"
     runs_dir = tmp_path / "runs"
