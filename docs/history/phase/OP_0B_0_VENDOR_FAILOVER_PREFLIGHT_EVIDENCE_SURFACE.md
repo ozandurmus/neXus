@@ -1,0 +1,1030 @@
+# OP.0b.0 — Vendor failover preflight evidence surface contract
+
+## Status
+
+**DRAFT — DO NOT FREEZE (2026-09-02).**
+
+This document is structurally complete: every required section, the full
+command surface table (§24), the configuration/runtime field trace table (§25)
+and the bug/gap register (§26) are filled in. It is **not** cleared for
+implementation, for exactly the reason the freeze rule names: several
+**safety-critical vendor command semantics remain UNKNOWN**, and this contract
+refuses to fill them from generic product knowledge.
+
+Why they are unknown, stated plainly: the drafting environment could reach
+official vendor documentation **only through search-result snippets**. Every
+official documentation host (`sc1.checkpoint.com`, `support.checkpoint.com`,
+`docs.paloaltonetworks.com`, `knowledgebase.paloaltonetworks.com`, `pan.dev`)
+returned `CONNECT 403` from the egress proxy. Snippets were sufficient to
+establish command purpose, read-only class and several caveats; they were not
+sufficient to establish field-level output vocabularies. Each such row carries
+`UNKNOWN` in §24/§25 and is listed in §"Open decisions" with the exact
+document that resolves it. **Fetching those documents from an unblocked
+network and confirming the rows is the only work between this draft and
+FREEZE.**
+
+Movement history: `ARCHITECTURE` → `VENDOR SEMANTICS AUDIT` (three parallel
+evidence streams: repository source, recorded real-environment findings,
+official vendor documentation) → `EVIDENCE CONTRACT` (this document).
+
+- Design parent: `docs/design/FAILOVER_ENGINE_ARCHITECTURE.md` §3.1, §3.2
+  (per-vendor preflight reads), §4 (seven stop conditions), §7–§8 (engine and
+  safety model), §10–§10.1 (`OP.2` prerequisites and safety contract).
+- Contract parents: `docs/history/phase/OP_0A_HA_READINESS_ASSESSMENT.md`
+  (OP.0a, incl. the un-approved OP.0b command-gate draft at its §"OP.0b command
+  gate"), `docs/history/phase/OP_0A_PAN_HA_PEER_PAIRING_IDENTITY_CLOSURE.md`
+  (OP.0a.P7 revision — whose pairing join this contract's evidence supersedes;
+  see §"Frozen-contract impact"), `docs/history/phase/PHASE0_6_1B_1_2_CP_HA_RUNTIME_VSX_CLOSURE.md`.
+- Gate: this contract adds **no** command. It defines the evidence surface a
+  future `OP.0b.1` command-gate package must cover; that package is where new
+  commands are proposed, point by point, per `docs/AI_DEVELOPMENT_PROTOCOL.md`
+  "Network-device command gate".
+- Project-state: **deliberately not updated.** This is not a frozen build; it
+  must not become `roadmap.json` `now.build`. A `STATE_UPDATE` movement after
+  FREEZE records it. `docs/history/INDEX.md` is generated from
+  `project/build_history.json` and is therefore also untouched.
+
+## Objective
+
+Freeze — once the `UNKNOWN` rows are resolved — the vendor-specific
+**READ-ONLY preflight evidence contract** that must be satisfied immediately
+before any future firewall failover: what must be known, where it is read
+from, how authoritative it is, how fresh it must be, which member/context must
+provide it, how disagreement is detected, what stays `UNKNOWN`, what blocks
+execution, and what must never be inferred.
+
+## Why this contract exists
+
+The repository is moving from read-only HA readiness toward controlled
+failover. The architectural risk, demonstrated on real hardware twice this
+week, is **inventory/configuration evidence being stretched into failover
+authorization evidence**:
+
+- The frozen OP.0a.P7 PAN pairing join (configured `peer-ip` → Panorama
+  `management_ip`) was **disproven on the approved real PAN pair**: member A's
+  configured `peer-ip` equals its runtime `peer-info/ha1-ipaddr` (HA1
+  control-link plane), not any management address; member B's configured
+  `peer-ip` matches **no** runtime address field at all. Vendor documentation
+  corroborates: the HA1 peer setting is documented as "the ha1 interface IP
+  address on the other node", and HA1 may be bound to eth2, eth3 **or the
+  management port** — so the two planes coincide only in MGT-bound-HA1 estates.
+- The real VSX retry found three defects invisible to synthetic tests
+  (`op_vsx_real_env_retry_fixes`): a shell artifact split one device into two
+  identity strings, which misclassified VSX as ClusterXL and made HA runtime
+  checks report `INSUFFICIENT_EVIDENCE` for the wrong reason.
+- Today's readiness engine evaluates **2 of 7** stop conditions, from a single
+  already-collected command per vendor, with **no provenance, no freshness
+  model, no peer observation on Check Point, and a synthetic "phantom member"
+  on Palo Alto** (`_pan_states` counts the lone member's `peer_state` as a
+  second observation).
+
+Without a frozen, vendor-native evidence contract, the next build would
+inevitably promote one of these artifacts to an authorization input.
+
+## Scope in
+
+- Both vendors: Check Point ClusterXL (HA mode), Check Point VSX (physical
+  cluster + Virtual Systems, **non-VSLS**), Palo Alto PAN-OS HA
+  (Active/Passive).
+- Evidence categories A–M (§"Evidence taxonomy") for every fact a future
+  preflight consumes.
+- The complete candidate command/API surface (§24) and field trace (§25).
+- Identity, peer-relationship, provenance, freshness, command-safety,
+  fail-closed and privacy contracts.
+- Review of the seven-check model; single-authority rules; collector-reuse
+  decision; implementation slices; the pre-CLASS-2 bug/gap register.
+
+## Scope out
+
+- Any implementation, collector change, readiness-verdict change, schema
+  change, UI change, or device contact.
+- Approving any command: §24 rows marked `REQUIRED`/`OPTIONAL` are candidates
+  for the `OP.0b.1` gate package, not approvals.
+- CLASS 2 execution semantics (RBAC, confirmation, locking grain, exactly-once,
+  rollback, audit) — enumerated as handoff requirements only.
+- Load Sharing (Unicast/Multicast), VRRP, PAN Active/Active, PAN HA clustering
+  (HA4), VSLS — recorded as `UNSUPPORTED`/deferred, never silently generalized.
+- IPv6 peer addressing (deferred, `pan_ha_peer_ipv6_pairing`).
+- Reconciling the duplicate topology authorities in the UI (recorded as
+  follow-up, §"Architecture authority").
+
+## Authoritative sources
+
+Three sources, kept distinct throughout:
+
+**SOURCE A — repository source (audited line-by-line, not assumed correct).**
+`utils/failover/assessment.py`, `utils/failover_readiness_ui.py`,
+`configuration/checkpoint_config_collector.py`,
+`configuration/checkpoint_config_probe.py`, `checkpoint/cp_runner.py`,
+`checkpoint/vsx_runner.py`, `checkpoint/vsx_parser.py`,
+`checkpoint/direct_ssh_probe.py`, `checkpoint/scripts/cp_inventory.sh`,
+`configuration/panorama_config_collector.py`,
+`panorama/panorama_runtime_runner.py`, `panorama/pan_identity.py`,
+`utils/merge.py`, `utils/config_ui.py`, `utils/action_taxonomy.py`,
+`utils/capability_registry.py`, `utils/restore_readiness.py`,
+`static/inventory_ui.js`, `static/configuration_ui.js`,
+`static/failover_readiness_ui.js`, and their tests.
+
+**SOURCE B — recorded real-environment findings.** `project/build_history.json`
+(`op_vsx_real_env_retry_fixes`, `op0a_pan_ha_peer_pairing_identity_closure`),
+`docs/history/phase/PHASE0_6_1B_1_2_*`, `docs/history/validation/VALIDATION_0_6_1B*.txt`,
+`docs/history/phase/PHASE0_6_1D_*`, `project/backlog.json`,
+`project/roadmap.json`, `project/feature_registry.json`, `CURRENT_STATE.md`,
+and — recorded nowhere but git history, see §26 PAN-15 — commits `1d97cd6`,
+`d0f8e31`, `a1a3882` (the bounded PAN peer-identity diagnostic and the real
+PAN pair's diagnostic output, summarized above without identities).
+
+**SOURCE C — official vendor documentation (snippet-level only, see Status).**
+Cited per row in §24 as the page that establishes the semantic. Where a snippet
+established purpose/read-only class but not output vocabulary, the row says so.
+Community/forum content was **not** used as authority anywhere in this
+document.
+
+## Domain invariants
+
+1. **Evidence identity ≠ operational identity.** A physical member (CP) or
+   firewall (PAN) is an evidence entity; the ClusterXL cluster, the VSX
+   physical cluster, each Virtual System, and the PAN HA pair are operational
+   entities. Facts are collected from evidence entities and asserted about
+   operational entities, never the reverse.
+2. **Pair/cluster existence ≠ pair/cluster health.** Whether two devices form
+   the operational unit and whether that unit is currently safe to act on are
+   independent questions with independent evidence and independent states.
+3. **Configuration intent ≠ runtime state.** A configured value answers "what
+   was declared", never "what is true now". It may corroborate; it never
+   authorizes.
+4. **A member's report about its peer is that member's claim.** It is not the
+   peer's own report and not an independent observation. Bidirectional
+   corroboration requires both members' own reports from the same preflight.
+5. **A presentation field never becomes identity.** Hostnames, display names,
+   `-1`/`-2` ordinals, VSYS labels and inferred group labels are presentation
+   only (already pinned: `cp_runner._cluster_display_name`, OP.0a.P7 Q5).
+6. **Absence of observation ≠ observation of absence.** "Could not read the
+   link" is `UNKNOWN`/`COLLECTION_FAILED`, never `KNOWN_BAD`.
+7. **Mode gates everything.** No check is evaluated, and no unit is eligible,
+   until the HA mode is determined and is one this contract supports
+   (CP HA/"New mode"; PAN Active/Passive). Load Sharing, VRRP, A/A, HA4
+   clustering, VSLS → `UNSUPPORTED`.
+8. **VSYS is subordinate.** A PAN VSYS is never an operational unit.
+9. **No VSLS.** A Check Point Virtual System is a **readiness/impact entity**
+   (its state is read and assessed per VS, per the real finding that VS state
+   can differ from the physical member's) but **not an execution target** in
+   this estate: without VSLS the whole VSX gateway fails over. A VS role that
+   differs from its physical member's role is therefore an anomaly to surface
+   (`RELATIONSHIP_INCONSISTENT`), never a reason to plan a per-VS action.
+10. **Nothing in this contract authorizes CLASS 2.** See §"CLASS 2 handoff".
+
+## Operational entity model
+
+| Vendor | Evidence entities | Operational unit (readiness) | Execution target (future) | Subordinate context |
+| --- | --- | --- | --- | --- |
+| Check Point ClusterXL (HA) | physical members A, B (SSH endpoints; mgmt object names) | `cp_clusterxl_cluster` keyed by `cluster_topology.group_id` | the cluster (act on its **active** member) | — |
+| Check Point VSX (non-VSLS) | physical members A, B | `cp_vsx_cluster` (physical) **and** one `cp_vsx_virtual_system` per VSID keyed `(physical_unit_id, vsid)` | the **physical** VSX cluster only | each VS is a readiness/impact context |
+| Palo Alto A/P | firewalls A, B (identity-gated serials) | `pan_ha_pair` (candidate key: unordered pair of member serials — **not frozen**, see §"Identity contract") | the pair (act on its **active** member) | VSYS |
+
+Current code already keys CP units this way (`assessment.py::_derive_cp_units`,
+`group_id` = `sha256(CMA + sorted VIP set)[:16]`, role-independent, pinned by
+`tests/test_phase0_5_2_cp_cluster_view.py` and `tests/test_op0a_ha_readiness.py`).
+PAN units are keyed by member hostnames joined with `+`, which this contract's
+evidence shows must change (§"Identity contract", §"Frozen-contract impact").
+
+## Evidence taxonomy
+
+Every fact in §25 is classified into exactly one primary category; a secondary
+category is allowed only where vendor semantics prove it (noted per row).
+
+| Cat | Name | Definition |
+| --- | --- | --- |
+| A | PHYSICAL IDENTITY | Stable identity of one physical device, verified by an identity gate |
+| B | OPERATIONAL HA ENTITY IDENTITY | Stable identity of the cluster/pair/VS unit |
+| C | CONFIGURATION INTENT | Declared configuration (management or device config plane) |
+| D | RUNTIME HA STATE | A member's own current HA role/mode/state |
+| E | PEER IDENTITY / RELATIONSHIP | Who the peer is, as claimed or corroborated |
+| F | LINK HEALTH | Control/sync/data link status |
+| G | STATE / SESSION SYNCHRONIZATION | Runtime state-table sync status |
+| H | SOFTWARE / POLICY / CONTENT PARITY | Version/policy/content equality between members |
+| I | ELECTION / PREEMPTION BEHAVIOR | Priority and recovery behaviour |
+| J | FAILURE / HEALTH STATE | Member in a failure/attention/non-functional state |
+| K | TRANSITION / FLAP HISTORY | Failover counts, reasons, recency |
+| L | PROVENANCE / FRESHNESS | When/how/from where a fact was collected |
+| M | PRESENTATION ONLY | Labels; never identity, never a check input |
+
+## Check Point evidence surface
+
+### Current state (SOURCE A, verified)
+
+- **Exactly one HA command exists in executable code: `cphaprob stat`** — per
+  physical member (`checkpoint_config_collector.py:1333/1335`) and per VS via
+  `vsenv <N> >/dev/null 2>&1; cphaprob stat` on a fresh exec channel
+  (`:1608-1610`, VSID numeric-validated at `:1515`). `cphaprob -a -m if` runs
+  once per cluster member in stage `cp` over CPRID from the MDS
+  (`cp_inventory.sh:269`) and feeds cluster identity only. `cphaprob state`,
+  `cphaprob syncstat`, `cphaprob -a if`, `cphaprob -ia list`,
+  `cphaprob show_failover`, `fw ctl pstat`, `fw stat`, `show cluster *` exist
+  **only as fixed `missing_evidence` label strings** in
+  `utils/failover/assessment.py:65-84`.
+- **The `cphaprob stat` parser reads the local row only and discards the
+  buffer.** `_parse_clusterxl_runtime_role` returns the first state token on
+  the first line containing `(local)` or the short hostname; every other line
+  is skipped; then `stdout`/`stderr` are zeroed (`:1360`, `:1627`). Dropped:
+  "Unique Address", "Assigned Load", every peer row, any "Active Attention"
+  reason text. `_parse_clusterxl_cluster_mode` keyword-matches the first line
+  containing `mode`.
+- **Split-brain is detected only by aggregating one scalar per member across
+  independently timed SSH sessions** (`ThreadPoolExecutor`, up to 12 workers);
+  skew is not recorded.
+- **Provenance is thin:** rows carry `started_at`/`completed_at`,
+  `ssh_shell_mode`, `version_command` and `ha_role_source` (a label, not the
+  wire form); **no `run_id`, no `collected_at`, no source command string** on
+  the row. `cp.json`/`vsx.json` carry no timestamps. `cluster_topology.group_id`
+  (stage `cp`, CPRID) and `ha_role` (stage `cp_config`, direct SSH) are joined
+  off disk with no freshness check (`:1070-1072` explicitly accepts "a current
+  or previous inventory checkpoint").
+- **`extract_cp_ha_runtime`** (`utils/failover_readiness_ui.py:95-113`) forwards
+  only `ha_role` and `ha_cluster_mode`; the readiness engine cannot distinguish
+  a fresh probe from an `inherited_from_physical_member` fallback or a stale
+  file.
+- **VSX collector defects (`checkpoint/vsx_runner.py`):** issues
+  `fw ctl set int vsid <N>` — a kernel-parameter **set**, the only non-read
+  verb on any CP read path; discards standby members entirely
+  (`if "Standby" in ha: return []`, `:212-214`) so `vsx.json` never carries the
+  standby member's VS view; discovers only `-[12]$`-named members (`:167`);
+  interpolates `vs_id` without numeric validation. `checkpoint/scripts/vsx_collect.sh`
+  is dead code.
+- **VS rows inherit** `platform`, `model`, `serial`, `sw_version`,
+  `identity_gate`, `host_key_fingerprint`, `management_state`, cluster ids from
+  the physical host **without a source label**; only `ha_role` carries one.
+- **Platform classification is evidence-based, not command-availability
+  based** (`_classify_platform`; `capability_registry.py` invariant) — correct,
+  preserved. Direct-Clish-only appliances get `ha_runtime_status =
+  "capability_gap"` for `cphaprob` — a real coverage boundary.
+- **Cluster identity is sound and mutual:** both members independently report
+  the same VIP set under the same CMA → same `group_id`. That is a
+  topology-level bidirectional corroboration of membership, already in place.
+
+### Vendor semantics established (SOURCE C, snippet-level)
+
+| Fact | Established by | Status |
+| --- | --- | --- |
+| `cphaprob stat` columns Number / Unique Address / Assigned Load / State; HA shows one Active, others Standby | R80.40/R81 ClusterXL Admin Guide "Viewing Cluster State" | ESTABLISHED |
+| "Unique Address" semantics: R80.40 text says Sync-interface IPs; sk61546 says the displayed IPs "might differ from the IP addresses of Sync interfaces" during problems; another official page says "any unique IP address that belongs to the Cluster Member" | R80.40 guide; sk61546; SMB R81.10.X CLI "Viewing Cluster IP Addresses" | **AMBIGUOUS BY VENDOR'S OWN DOCS → not identity-grade** |
+| `cphaprob state` shows Cluster Mode incl. "High Availability (Primary Up / Active Up)", member states incl. `Active Attention`, `Down` | R81 CLI Ref "Viewing Cluster State"; R80.30 CLI Ref "Monitoring Cluster State" | ESTABLISHED (field detail UNKNOWN) |
+| "Maintain current active" vs "Switch to higher priority" recovery semantics | R80.40 "Cluster Failover"; R81.20 "High Availability Mode" | ESTABLISHED |
+| **Cluster Mode string does not reliably reflect the recovery setting** | **sk180184**: mode "does not change to 'Primary Up' when setting the cluster object to 'Switch to higher priority Cluster Member'" | ESTABLISHED — device-local preemption read is **NOT AUTHORITATIVE** |
+| `cphaprob syncstat` / `show cluster statistics sync`: Delta Sync status, drops, queue, timers | R81.20 "Viewing Delta Synchronization"; sk34475 | ESTABLISHED (field vocabulary UNKNOWN) |
+| `fw ctl pstat` Sync section applies "until R80.10; for R80.20 and higher refer to sk34475" | sk34476 | ESTABLISHED — version-conditional |
+| `cphaprob -a if` = cluster interfaces/CCP; critical devices via `cphaprob -ia list` / `show cluster members pnotes all`; pnote problem ⇒ member `Down` | R81.10 "Viewing Critical Devices"; R80.40 "ClusterXL Monitoring Commands" | ESTABLISHED |
+| `cphaprob -l list` vs `-ia list` | official pages use `-ia list`; syntax `cphaprob [-i[a]] … list`; `-l list` appears in sk117236 (Gaia Embedded) | VARIANCE — use `-ia list`; exact difference UNKNOWN |
+| Cluster failover statistics: "number of failovers…, reason, and the time of the last failover event" | R81 CLI Ref "Viewing Cluster Failover Statistics"; sk137472 | semantics ESTABLISHED; **exact Gaia syntax/version availability UNKNOWN** (documented for Spark R81.10.15+ as `cphaprob show_failover`) |
+| `cpinfo` is resource-intensive and "may decrease the performance of the target system" | sk92739 | ESTABLISHED — HIGH COST |
+| `fw stat` "shows information about the policy on the Security Gateway" | R81 CLI Ref `fw stat` | ESTABLISHED (columns UNKNOWN) |
+| `vsx stat -v` lists all Virtual Systems and status; status may read `Unknown` | R81 CLI Ref `vsx stat`; sk178589 | ESTABLISHED |
+| Per-VS diagnosis: `vsenv <VSID>` then `cphaprob stat` | R81.20 VSX Admin Guide "General Troubleshooting Steps" | ESTABLISHED |
+| **`cphaprob stat` shows the member `Down` when run in a VS context other than VS0 in a VSX HA cluster** | **sk165432** (VSX Traditional) | ESTABLISHED caveat — **applicability to this estate's version UNKNOWN** |
+| `cphaprob -a if` shows Bond as `Down` in any VS context | sk93341 | ESTABLISHED caveat |
+| VSX members may show "Cluster Mode: Single VS Failover" | sk112712 | ESTABLISHED — mode parser must recognise it |
+| Hotfix/JHF parity command (`installed_jumbo_take`, `cpinfo -y all`) | not established by any official snippet | UNKNOWN |
+
+### Evidence per check — ClusterXL (HA)
+
+| # | Check | Vendor-native evidence | Context | Status today |
+| --- | --- | --- | --- | --- |
+| 1 | viable standby | `cphaprob stat` local row on **both** members, same preflight; peer rows as corroboration (state only) | Expert, per member | local role only; peer rows dropped |
+| 2 | state sync | `cphaprob syncstat` (R80.20+); `fw ctl pstat` Sync section only for <R80.20, selected per host from already-collected `show version all` | Expert, per member | NOT_COLLECTED |
+| 3 | parity | policy: `fw stat` per member; software: existing `show version all`; hotfix: UNKNOWN command | Clish (existing) + Expert | software only (collected, not compared) |
+| 4 | no split-brain | both members' own `cphaprob stat` rows in one preflight, skew recorded; `Active Attention`/`Down` reasons retained | Expert, per member | aggregated across unsynchronised runs |
+| 5a | control link (CCP) | `cphaprob -a if` | Expert, per member | NOT_COLLECTED |
+| 5b | sync link | `cphaprob -a if` (sync interface), `cphaprob syncstat` | Expert, per member | NOT_COLLECTED |
+| 6 | preemption known | **management-plane cluster object recovery setting** (authoritative); `cphaprob state` Cluster Mode only as corroboration (sk180184) | MDS (`cpmiquerybin` attribute — **name UNKNOWN**) | NOT_COLLECTED |
+| 7 | flap history | cluster failover statistics (`cphaprob show_failover` / `show cluster failover`) | Expert/Clish, per member | NOT_COLLECTED |
+| 8 (new) | no member failure state | `cphaprob -ia list` (any pnote `problem`); `cphaprob stat`/`state` member `Down`/`Active Attention` | Expert, per member | partially (state token only, reason dropped) |
+
+### Evidence per check — VSX physical cluster
+
+Same battery as ClusterXL run in the **physical (VS0) context**, plus
+`vsx stat -v` to enumerate VSIDs (currently only in `vsx_runner.py` over a
+nested interactive shell; the preflight must issue it over the direct,
+identity-gated SSH session). Mode parser must accept "Single VS Failover"
+(sk112712) as a VSX-HA mode string.
+
+### Evidence per check — VSX Virtual System (readiness/impact only)
+
+- `vsenv <VSID> >/dev/null 2>&1; cphaprob stat` per VS (existing primitive,
+  fresh exec channel, numeric-validated) — **with the sk165432 caveat**: a
+  `Down` read in a non-VS0 context is `UNKNOWN` until real-env validation on
+  this estate's version proves the read reliable. Until then a per-VS role
+  that contradicts the physical member's role is `RELATIONSHIP_INCONSISTENT`,
+  never `KNOWN_BAD`, and never a per-VS action input.
+- `cphaprob -a if` per VS: OPTIONAL, with the sk93341 Bond caveat.
+- Per-VS role parse must stop passing the **physical** hostname as
+  `observed_hostname` (`:1613`); rely on the `(local)` marker inside the VS
+  context and record which matched.
+- `fw ctl set int vsid <N>` is **REJECTED** for preflight (non-read verb; the
+  exec-channel `vsenv` primitive already works without it).
+
+### Check Point configuration extraction correctness
+
+| Required fact | Source | Context | Parser | Normalized field | Evidence entity → operational entity | Finding |
+| --- | --- | --- | --- | --- | --- | --- |
+| member runtime role | `cphaprob stat` | Expert exec / interactive | `_parse_clusterxl_runtime_role` | `ha_role` | member → cluster | VALIDATED (real estate 0→42 coverage); peer rows dropped; skew unrecorded |
+| cluster mode | `cphaprob stat` | same | `_parse_clusterxl_cluster_mode` | `ha_cluster_mode` | member → cluster | fixtures constructed, not captured (two inconsistent shapes); real confirmation owed; "Single VS Failover" unrecognised |
+| cluster identity | `cphaprob -a -m if` (+ CMA) | CPRID from MDS, stage `cp` | `parse_cluster_virtual_interfaces` → `enrich_cluster_topology` | `cluster_topology.group_id` | member → cluster | VALIDATED, mutual; but a **different run/transport** than `ha_role`; no freshness join |
+| VSX membership | `cpmiquerybin … vsx_cluster_member,vs_cluster_member` | MDS, stage `cp` | `_is_vsx_status` | `entity_type` | mgmt object → member | management intent; never reaches `unified.json` rows (`_row_is_vsx` dead; evidence-based `vsx_hosting_devices` compensates) |
+| VS runtime role | `vsenv N; cphaprob stat` | Expert exec, per VS | same parsers | `ha_role` (+`_source`) | VS → VS unit | correctly labelled when inherited; **sk165432 unvalidated**; physical hostname passed as match token |
+| VS platform/serial/version/identity/host-key | inherited from host | — | — | same names, **no source label** | host → VS | SUSPECT: physical facts masquerade as VS facts |
+| Gaia configuration | `show configuration` (+ per-VS via vsenv) | Clish | `_snapshot_view` (sanitised) | CAS snapshot | member/VS | ClusterXL HA settings live in the **management DB**, not Gaia config → CP "configuration intent" for HA is effectively **not collected** beyond membership booleans; sanitation impact on HA-relevant lines UNKNOWN |
+| legacy `cluster` on VSX rows | hostname `-1`/`-2` suffix (`merge.normalize_vsx`) | merge | — | `cluster` | — | **heuristic leaking into the failover fallback key** (`assessment.py:456-457`) |
+
+Provenance ambiguities to close: (i) no wire-form command on rows (only the
+probe artifact persists `command`/`attempted_commands`); (ii) no `run_id` on
+rows; (iii) cross-stage join with no freshness; (iv) VS inheritance unlabelled;
+(v) the standby member is structurally absent from `vsx.json`.
+
+## Palo Alto evidence surface
+
+### Current state (SOURCE A + B, verified)
+
+- Runtime: `get_target_ha_runtime_state` issues
+  `<show><high-availability><state/></high-availability></show>` via the
+  Panorama XML API with `target=<serial>` and parses five leaves (`enabled`,
+  `local-info/state`, `local-info/mode`, `peer-info/state`,
+  `local-info/state-sync`). The response's `local-info` and `peer-info` each
+  carry ~50 children on PAN-OS 11.1 (real enumeration via the bounded
+  diagnostic, commit `1d97cd6`), including `serial-num`, `mgmt-ip`,
+  `ha1-ipaddr`, `ha1-backup-ipaddr`, `ha2-ipaddr`, `ha1-port`, `ha2-port`,
+  `preemptive`, `preempt-hold`, `priority`, `promotion-hold`, `max-flaps`,
+  `nonfunc-flap-cnt`, `preempt-flap-cnt`, `last-error-reason`,
+  `last-error-state`, `state-duration`, `version`, `build-rel`, `app-version`,
+  `av-version`, `threat-version`, `url-version`, `*-compat`, and on
+  `peer-info` additionally `conn-status`, `conn-ha1`, `conn-ha1-backup`,
+  `conn-ha2`. **Siblings of `local-info`/`peer-info` under `result/group`
+  (e.g. a `running-sync` element) were not enumerated** — an evidence gap.
+- Identity: Panorama `show devices all` → `entry/serial` (discovery plane);
+  direct `show system info` serial must equal it (identity gate,
+  `_collect_direct_compare`); runtime `local-info/serial-num` and
+  `peer-info/serial-num` are parsed to one-way tokens (commit `a1a3882`) with
+  a same-run correspondence state — **real-env result pending**.
+- Configuration intent: `deviceconfig/high-availability/group/peer-ip[-ipv6]`
+  from the Panorama-proxied `xpath=/config` of the target (`:401-403`); also
+  fetched directly per firewall (`:425`, `:468`) and as Panorama template intent
+  without target. `peer-ip` is **HA1-plane** (proven on member A; vendor doc
+  `interface ha1 peer-ip-address`).
+- Defect: `_collect_device_row` **skips the runtime query entirely** when
+  Panorama's discovery already supplied `ha-state` (`:1641-1647`), and that
+  branch's `ha_runtime` carries no `enabled` — so `_derive_pan_units:627` can
+  never form a unit for such a device. For preflight this short-circuit is
+  unacceptable: a discovery-plane cached role is never runtime evidence.
+- Defect: `_pan_states` synthesises a second member from `peer_state` when only
+  one member has evidence (phantom-member uplift; recorded successor-contract
+  invariant in the docstring, commit `a1a3882`).
+- Real pair: A `CONSISTENT` (configured HA1 peer == runtime peer HA1);
+  B `INCONSISTENT` (configured peer matches no runtime peer address). Both
+  members `queried_target: true`, `state_sync: Complete`, one active / one
+  passive. Serial correspondence: **not yet measured.**
+- TLS: verification defaults **off** unless `SECURITYEXPERT_PAN_CA_BUNDLE` /
+  `SECURITYEXPERT_PAN_DIRECT_CA_BUNDLE` is set; strict mode
+  `REAL_ENV_VALIDATED` (`pan_tls_ca`), production requires it.
+
+### Vendor semantics established (SOURCE C, snippet-level)
+
+| Fact | Established by | Status |
+| --- | --- | --- |
+| HA states: functional = active, passive, active-primary, active-secondary; non-functional = initial, non-functional, tentative, suspended; suspended needs user intervention | PAN-OS 10.1 "HA Firewall States"; 11.1 "Failover" | ESTABLISHED |
+| `show high-availability state`: local/peer information; peer "Connection status: up/down" with down-reasons such as "HA1 link went down" | KB "High Availability – HA Peer Connection Status"; KB "HA links status" | ESTABLISHED (field **names** `conn-status`, `conn-ha1`… seen real; **value vocabulary UNKNOWN**) |
+| `show high-availability all`: HA1 control-link info (IP, MAC, interface, link state); "Running Configuration: synchronized / not synchronized" | Wildfire/NGFW CLI ref pages; KB "Out of Sync Peers – Configuration"; 11.1 "Reference: HA Synchronization" | ESTABLISHED; **whether `running-sync` also appears in the `state` XML is UNKNOWN** |
+| State synchronization copies session, forwarding, ARP tables and VPN SAs over HA2 | "Reference: HA Synchronization" | ESTABLISHED (`state-sync` value vocabulary UNKNOWN) |
+| Device priority (lower value = active), preemptive off by default and required on both, preemption hold timer, HA1 MAC tie-break | 11.1 "Device Priority and Preemption"; KB | ESTABLISHED (runtime field binding `preemptive`/`preempt-hold`/`priority` inferred from names — CONFIRM) |
+| Flap-max default 3; a flap counted when the firewall leaves active within 15 min of last leaving active; suspended after max flaps; distinct non-functional loop and preemption loop; monitor-fail hold timer | KB "When does an HA node go into Suspended state…"; KB "HA Failover Hold Timers"; 11.1 "Failover" | ESTABLISHED (binding to `max-flaps`/`nonfunc-flap-cnt`/`preempt-flap-cnt` inferred from names — CONFIRM) |
+| HA checks compare app/threat/AV/PAN-OS versions between peers and log mismatches | KB "App and Threat Compatibility Mismatch in HA Pair"; KB "Dynamic Updates Version Mismatch Alerts" | ESTABLISHED concept (`*-compat` **value vocabulary UNKNOWN**) |
+| `show high-availability path-monitoring` exists; link and path monitoring are failover conditions | 10.1 "HA Link and Path Monitoring"; 11.1 "Configure HA Clustering" | ESTABLISHED (link-monitoring show-command existence PARTIAL) |
+| HA1 may use eth2/eth3 **or the management port**; HA1 peer setting = peer's ha1 address | "Configure Active/Passive HA (PAN-OS)"; `set deviceconfig high-availability` | ESTABLISHED |
+| Panorama proxies `type=op` to a firewall via `&target=<serial>` | "Query a Firewall from Panorama (API)" | ESTABLISHED |
+| `show system info` per peer for software/content versions | design §3.2; command already issued for the identity gate | ESTABLISHED (existing) |
+| Peer serial present in `show high-availability state` | **not shown in any official snippet**; present in real 11.1 output | **UNKNOWN semantics — real-env correspondence pending** |
+| `show high-availability state-synchronization`, `flap-statistics` as NGFW show-commands | not established (flap-statistics documented for HA clustering) | UNKNOWN |
+
+### Evidence per check — PAN Active/Passive pair
+
+| # | Check | Vendor-native evidence | Source | Status today |
+| --- | --- | --- | --- | --- |
+| 1 | viable passive | `local-info/state` on **both** members, same preflight; `peer-info/state` + `peer-info/conn-status` as corroboration; non-functional/suspended ⇒ not viable | `show high-availability state` (existing) | state parsed; conn-status unparsed; phantom-member uplift |
+| 2 | state sync | `local-info/state-sync` (+ `state-sync-type`) both members; HA2 link (`peer-info/conn-ha2`) | existing | `state-sync` parsed, vocabulary unconfirmed |
+| 3 | parity | config: `running-sync` (location UNKNOWN: `state` XML sibling or `show high-availability all`); software/content: `local-info`/`peer-info` `version`, `build-rel`, `app-version`, `av-version`, `threat-version`, `url-version`, `*-compat`; cross-check with direct `show system info` per member | existing (+ possibly `all`) | NOT_PARSED |
+| 4 | no split-brain | both members' own `local-info/state`; never `peer_state` as a member | existing | phantom-member uplift must go |
+| 5a | control link | `peer-info/conn-ha1`, `conn-ha1-backup`; `local-info/ha1-port`, `ha1-backup-port` | existing | NOT_PARSED |
+| 5b | sync link | `peer-info/conn-ha2`; `local-info/ha2-port` | existing | NOT_PARSED |
+| 6 | preemption known | `local-info`/`peer-info` `preemptive`, `priority`, `preempt-hold`, `promotion-hold`; corroborate with config `election-option` | existing (+ config) | NOT_PARSED |
+| 7 | flap history | `local-info` `max-flaps`, `nonfunc-flap-cnt`, `preempt-flap-cnt`, `state-duration`; `last-error-reason`/`last-error-state` | existing | NOT_PARSED |
+| 8 (new) | no member failure state | `local-info/state` ∈ non-functional set; `last-error-*`; `peer-info/conn-status` down | existing | partially |
+| — | path/link monitoring (design §3.2 row) | `show high-availability path-monitoring`, `link-monitoring` | **new commands** | NOT_COLLECTED — gate |
+
+### Palo Alto configuration extraction correctness
+
+| Required fact | Authoritative plane | Current source | Finding |
+| --- | --- | --- | --- |
+| serial (identity) | direct device (`show system info`) gated against Panorama inventory | as designed | VALIDATED (existing gate); VS/VSYS irrelevant |
+| hostname | Panorama discovery (presentation) | `normalize_pan_hostname` shared seam | M only; two independent XML walks remain (`pan_hostname_parser_unification`) |
+| `management_ip` | Panorama discovery | `entry/ip-address` | A-adjacent (re-assignable); **not identity, not a join key** |
+| configured peer HA1 address | device config (`effective-running`, direct) with provenance | Panorama-proxied `xpath=/config` of target | plane correct (HA1), **transport is Panorama proxy** — record `source_plane=device_config`, `transport=panorama_api_proxy`; prefer direct `effective-running` for preflight |
+| runtime local/peer serial | device runtime | `show high-availability state` via Panorama proxy | tokenised; correspondence pending; **transport decision open** |
+| HA link state, state sync, config sync, roles, failure, preemption, flaps | device runtime | same response, mostly **unparsed** | parse-scope extension, no new command, except `running-sync` location UNKNOWN |
+| discovery `ha-state` | Panorama discovery cache | `entry/ha-state` | **must never short-circuit a preflight runtime read** |
+| transition history beyond counters | device logs | not collected | out of scope (unbounded, secret-bearing) |
+
+Do not silently use Panorama intent when runtime truth is required (the
+`ha-state` short-circuit does exactly this today). Do not silently use runtime
+state when the question is configuration intent (the config/runtime
+consistency axis needs both, labelled).
+
+## Runtime extraction correctness
+
+- **CP:** one command, local row only, buffer discarded, no peer state, no
+  reason text, unsynchronised members, no wire-form provenance. Per-VS reads
+  carry an unvalidated vendor caveat (sk165432). Mode fixtures are constructed.
+- **PAN:** one command, five leaves parsed out of ~100 present, `result/group`
+  siblings unenumerated, discovery cache can suppress the runtime read
+  entirely, phantom member in the state aggregator, passive-member
+  `peer-info` completeness unexplained (member B matched nothing).
+- **Both:** `extract_*_ha_runtime` in `utils/failover_readiness_ui.py` is the
+  single narrowing point; anything not copied there is invisible to readiness.
+
+## Identity contract
+
+### Check Point
+
+- **Physical identity (A):** management object name (from `cpmiquerybin`)
+  confirmed by the in-session `show hostname` handshake, over a **strict
+  host-key-trusted** SSH session (`cp_ssh_trust` validated; R2 production
+  server provisioning pending). `serial`/`model` from `cpstat os -f hw_info`
+  are identity **attributes**, not the gate. For CLASS 2 the gate is
+  host-key trust + hostname match; a mismatch is `IDENTITY_MISMATCH`.
+- **Operational identity (B):** `cluster_topology.group_id` — mutual by
+  construction (both members report the identical VIP set). Preserve verbatim.
+  Legacy `cluster` (hostname suffix) fallback → to be **removed** from the
+  failover key path (§26 CP-11).
+- **VS identity (B):** `(physical_unit_id, vsid)`; VS evidence entity
+  `<device>__vsid_<N>` preserved.
+- **Peer identity (E):** `cphaprob stat` peer rows are **state corroboration
+  only**. "Unique Address" is not identity-grade by the vendor's own
+  documentation; peer **name** in the row is presentation. Membership identity
+  comes from `group_id`, not from peer rows.
+
+### Palo Alto
+
+Four independent serial observations must be kept distinct:
+
+| Symbol | Observation | Plane |
+| --- | --- | --- |
+| I1 | Panorama inventory `entry/serial` | management discovery |
+| I2 | direct `show system info` serial over the firewall's own API | device self-report, identity-gated session |
+| I3 | runtime `local-info/serial-num` | device self-report in HA context |
+| I4 | runtime `peer-info/serial-num` | **this member's claim about its peer** |
+
+Definitions (READ-ONLY presentation grades in brackets):
+
+- **self identity verified:** I1 == I2 (existing gate); I3 == I2 is a
+  consistency check, `self_identity_consistent`.
+- **one-sided peer claim [B₁]:** A.I4 present; nothing else.
+- **peer not inventoried:** A.I4 ∉ {I1 of any inventoried device}. Record
+  "claim present, peer not independently observed". **Never** `ESTABLISHED`.
+- **bidirectional corroboration [B₂]:** A.I4 == B.I2 **and** B.I4 == A.I2, both
+  members identity-verified, **same preflight run**, both `conn-status` live.
+- **pair established (presentation):** B₂.
+- **identity mismatch:** A.I4 matches an inventoried device other than the one
+  B's own report identifies, or A.I4 == B.I1 while B.I4 ≠ A.I2.
+- **unknown:** any of I2/I4 missing for either member.
+
+**Candidate pair operational identity:** unordered pair `sorted(I2_A, I2_B)` —
+stable across role swap, hostname rename, management-IP change, HA1
+re-addressing and label change; changes on RMA (correct: new hardware is a new
+authorization subject; continuity is a presentation label). **NOT FROZEN**
+until the real-env serial correspondence result is `MATCH`/`MATCH` and the
+official semantics of `peer-info/serial-num` are confirmed. Until then the
+current hostname-keyed unit id stands and its known defects stand with it.
+
+**A one-sided self-report is never sufficient for CLASS 2.** B₂ is the
+**minimum** identity input to CLASS 2, and B₂ alone is still not authorization.
+
+## Peer relationship contract
+
+Two orthogonal axes, never collapsed:
+
+```
+pair_identity_state ∈ { ESTABLISHED, PEER_NOT_INVENTORIED, MEMBER_ONLY, IDENTITY_MISMATCH, UNKNOWN }
+relationship_consistency ∈ { CONSISTENT, INCONSISTENT, NOT_EVALUABLE, NOT_APPLICABLE }
+```
+
+- CP: `pair_identity_state` derives from `group_id` (mutual VIP set) plus
+  both members reachable/identity-gated in-run; `relationship_consistency`
+  compares each member's peer-row state against the peer's own row.
+- PAN: `pair_identity_state` from I1–I4 as above; `relationship_consistency`
+  compares configured HA1 peer address against the peer's own
+  `local-info/ha1-ipaddr` and against the member's `peer-info/ha1-ipaddr`.
+- The approved real PAN pair is, conceptually: identity `pending B₂`,
+  consistency A `CONSISTENT` / B `INCONSISTENT`, readiness fail-closed.
+  **Serial corroboration, when it lands, does not erase B's inconsistency.**
+  Report it; never repair configuration.
+
+## Provenance contract
+
+Every preflight fact carries:
+
+```
+collected_at              UTC timestamp of the read
+preflight_run_id          one id per preflight invocation (not the inventory run_id)
+source_vendor             checkpoint | panorama
+source_plane              management_discovery | management_intent | device_config | device_runtime
+transport                 ssh_direct | cprid_mds | panorama_api_proxy | direct_api
+source_command            wire form actually sent (identity-free for these reads; `vsenv N` retained)
+shell_profile             CP only: interactive_direct_clish | interactive_expert_explicit_clish | exec_expert
+physical_device_identity  CP: mgmt object name + host-key fp; PAN: I2 serial (tokenised where persisted)
+operational_entity_id     unit id
+context                   physical | vsid:<N> | vsys:<name>
+outcome                   success | failed | unsupported | capability_gap | identity_mismatch
+member_skew_ms            max spread between the two members' reads for the same fact
+```
+
+Rules: a preflight fact set is **coherent** only if every category D–K fact
+for both members shares one `preflight_run_id`; `member_skew_ms` is recorded
+always and bounded by an OPEN DECISION; category C facts may come from an
+earlier collection but must carry their own `collection_run_id`,
+`collected_at` and `source_plane`, and are marked `STALE_INTENT` beyond an
+OPEN-DECISION max age; category A identity may be cached but is **re-gated
+in-run** (the identity gate is itself an in-run read). Old config + fresh
+runtime must never render as one snapshot: the UI shows the two provenance
+stamps.
+
+## Freshness contract
+
+| Category | Requirement |
+| --- | --- |
+| A physical identity | cached allowed; **revalidated in the preflight run** (gate) |
+| B operational identity | derived from in-run A + topology; recomputed per preflight |
+| C configuration intent | may predate the preflight; must carry provenance; max age → **OPEN DECISION** |
+| D, E, F, G, J, K runtime | **collected in the immediately preceding preflight** (same `preflight_run_id`), both members, skew recorded |
+| H parity | in-run (content versions change independently of failover intent) |
+| I preemption | CP: management-plane read may be bounded-window (config); PAN: in-run runtime read |
+| L provenance | always present |
+
+No numeric TTL is invented here (§"Open decisions" D-F1, D-F2).
+
+## Command / API safety contract
+
+- Class: every §24 `REQUIRED`/`OPTIONAL` row is `CLASS_0_READ`. Mutating
+  primitives (`clusterXL_admin`, `request high-availability state …`,
+  `sync-to-remote`, `fw ctl set …`) are listed only to be **REJECTED** from
+  preflight.
+- Session: CP — one strict-trusted SSH session per physical member runs the
+  whole battery; per-VS reads on fresh exec channels inside that session.
+  PAN — one API session per firewall (transport decision D-T1).
+- Frequency: preflight is **interactive, on-demand** — never recurring fleet
+  polling. `cpinfo`, log scraping and `show routing route` are excluded on
+  cost/output grounds regardless.
+- Retry: at most one bounded retry per read, never on a read whose partial
+  output could be misread as state; a second failure is `COLLECTION_FAILED`.
+- Timeouts: per-command, inherited from the OP.0b draft (CP 60 s, PAN 30 s)
+  pending the gate package.
+- Output lifetime: raw buffers parsed to enums/counters/tokens and discarded
+  in-module; nothing raw persisted; `cplic print`/`cpstat os` scalars only.
+
+## Minimum Check Point preflight battery
+
+**A. ClusterXL (HA)** — per physical member, one session:
+
+| Step | Command | Context | Evidence | Authoritative for | Req | Cost | Failure meaning |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| A1 | `show hostname` | Clish/handshake | identity match | A | REQ | LOW | `IDENTITY_MISMATCH` → stop |
+| A2 | `show version all` | Clish | Gaia/product version | H (software) | REQ | LOW | parity `UNKNOWN` |
+| A3 | `cphaprob stat` | Expert | local role, mode, peer rows (state), Active Attention | D, corroborating E/J | REQ | LOW | unit `UNKNOWN` → stop |
+| A4 | `cphaprob -a if` | Expert | interface/CCP/sync link status | F | REQ* | LOW | 5a/5b `INSUFFICIENT` |
+| A5 | `cphaprob -ia list` | Expert | pnotes | J | REQ* | LOW | 8 `INSUFFICIENT` |
+| A6 | `cphaprob syncstat` (R80.20+) / `fw ctl pstat` (<R80.20) | Expert | delta sync | G | REQ* | LOW | 2 `INSUFFICIENT` |
+| A7 | `fw stat` | Expert | installed policy | H (policy) | REQ* | LOW | 3 `INSUFFICIENT` |
+| A8 | cluster failover statistics | Expert/Clish | count/reason/last time | K | REQ* | LOW | 7 `INSUFFICIENT` |
+| A9 | management-plane recovery setting | MDS | preemption | I | REQ* | LOW | 6 `UNKNOWN` (not blocking, recorded) |
+| A10 | `cphaprob state` | Expert | mode string corroboration | I (corroboration), J | OPT | LOW | — |
+| A11 | `cplic print`, `cpstat os` | Expert | licence/resources on standby | 1 sub-fact | OPT | LOW | — |
+
+`*` = new command; enters only through the `OP.0b.1` gate package after the
+row's `UNKNOWN`s are resolved.
+
+**B. VSX physical cluster** — battery A in VS0 context, plus `vsx stat -v`
+(REQ) to enumerate VSIDs; mode parser accepts "Single VS Failover".
+
+**C. VSX Virtual System** (readiness/impact only) — `vsenv N >/dev/null 2>&1;
+cphaprob stat` (REQ, sk165432 caveat), optionally `vsenv N …; cphaprob -a if`
+(sk93341 caveat). No per-VS action is planned in this estate.
+
+## Minimum PAN preflight battery
+
+**A. Active/Passive pair** — per firewall:
+
+| Step | Command/API | Transport | Evidence | Authoritative for | Req | Cost | Failure meaning |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| P1 | `show system info` | direct API (identity gate) | I2 serial, sw/content versions | A, H | REQ | LOW | `IDENTITY_MISMATCH` → stop |
+| P2 | `show high-availability state` (full parse) | direct API (D-T1) or Panorama proxy | D, E (I3/I4), F, G, H, I, J, K | see §25 | REQ | LOW | unit `UNKNOWN` → stop |
+| P3 | `show high-availability all` | same | `running-sync`, link detail | H (config), F | OPT→REQ if `running-sync` absent from P2 | LOW | 3 `INSUFFICIENT` |
+| P4 | `show high-availability path-monitoring` | same | monitored paths | F/J | REQ* | LOW | `INSUFFICIENT` |
+| P5 | `show high-availability link-monitoring` | same | monitored links | F/J | REQ* (existence PARTIAL) | LOW | `INSUFFICIENT` |
+| P6 | `xpath=/config` effective-running (existing) | direct | configured HA1 peer, `preemptive`, `state-synchronization enabled` | C | REQ (bounded age) | MOD | consistency `NOT_EVALUABLE` |
+| P7 | `show devices all` (existing) | Panorama | I1 inventory serial, `ha-state` (cache) | A (inventory), M | REQ (inventory only) | LOW | inventory `UNKNOWN`; never a runtime source |
+
+**B. Exceptions:** Active/Active, HA clustering (HA4), VM-series licence
+states (`vm-license` field observed) → `UNSUPPORTED`/`NOT_APPLICABLE` until
+separately contracted.
+
+## Normalized preflight fact model
+
+Only what both vendors can support enters the common model; vendor-specific
+facts stay underneath with their category.
+
+```
+PreflightUnit
+  operational_unit_id, vendor, unit_type, mode {ha_new_mode|active_passive|UNSUPPORTED:<x>}
+  members[]: { device_identity, identity_verified, role, failure_state, provenance }
+  pair_identity_state, relationship_consistency, evidence_grade {A|B1|B2}
+  checks[]: { id, status {PASS|FAIL|INSUFFICIENT_EVIDENCE|UNSUPPORTED|NOT_APPLICABLE}, reason, missing_evidence, facts[] }
+  prerequisites: { identity_gate, pair_identity, mode_supported, evidence_coherence }
+  coherence: { preflight_run_id, member_skew_ms, stale_intent: bool }
+  vendor_facts: { …category-tagged raw-derived scalars/tokens… }
+```
+
+Not forced into the common model: CP "Assigned Load" (LS only), PAN
+`vm-license`, PAN `*-compat` details, CP pnote names (kept as counts + safe
+class), PAN flap counters (kept vendor-specific under K).
+
+## Seven-check model review
+
+| Today | Verdict | Change |
+| --- | --- | --- |
+| 1 viable_target | KEEP | evidence must be both members' **own** state; passive/standby set per vendor vocabulary; PAN non-functional set excluded |
+| 2 state_sync_current | KEEP | CP `syncstat` (version-conditional); PAN `state-sync` + HA2 link |
+| 3 parity | KEEP, widen name to "config/policy/software/content parity" | PAN `running-sync` belongs here; CP policy via `fw stat`, software via existing `show version all` |
+| 4 no_split_brain | KEEP | remove PAN phantom member; require both members in-run; record skew |
+| 5 control_sync_link_health | **SPLIT** → 5a control link, 5b sync link | blocking semantics differ (HA1/CCP down ⇒ split-brain risk; HA2/sync down ⇒ session drop) |
+| 6 preemption_known | KEEP (recorded, non-blocking) | CP source is **management plane** (sk180184); PAN is runtime `preemptive`/`priority`/`preempt-hold` |
+| 7 flap_history | KEEP | CP failover statistics; PAN flap counters + last-error |
+| — | **ADD 8 no_member_failure_state** | pnote problem / `Down` / `Active Attention` / `non-functional` / `suspended` — decisive `UNSAFE`, distinct from "no standby" |
+| peer identity | **MOVE to prerequisite** | `pair_identity_state` must be `ESTABLISHED` before checks run |
+| evidence freshness/coherence | **MOVE to prerequisite** | incoherent snapshot ⇒ no verdict, `INSUFFICIENT_EVIDENCE:incoherent_snapshot` |
+| mode determination | already pre-check | keep; add "Single VS Failover" |
+
+Resulting shape: 4 prerequisites + 8 checks. `SAFE_TO_FAILOVER` remains
+structurally unreachable until the gate package lands (P4 invariant). No code
+change in this build.
+
+## Fail-closed / UNKNOWN semantics
+
+| State | Meaning | Verdict effect |
+| --- | --- | --- |
+| `UNKNOWN` | fact not determinable from collected evidence | `INSUFFICIENT_EVIDENCE` |
+| `INSUFFICIENT_EVIDENCE` | read succeeded but does not answer the check | `INSUFFICIENT_EVIDENCE` |
+| `KNOWN_BAD` | read succeeded and proves an unsafe condition | `UNSAFE_DO_NOT_FAILOVER` |
+| `COLLECTION_FAILED` | read failed/timed out | `INSUFFICIENT_EVIDENCE` (never `KNOWN_BAD`) |
+| `IDENTITY_MISMATCH` | gate failed | stop before any check; no verdict |
+| `RELATIONSHIP_INCONSISTENT` | config vs runtime disagree (or VS vs host) | `INSUFFICIENT_EVIDENCE` with precise reason; unit still exists |
+| `UNSUPPORTED` | mode/platform outside contract | `NOT_A_FAILOVER_UNIT` / `UNSUPPORTED` |
+| `NOT_APPLICABLE` | check meaningless for this mode/vendor | excluded from PASS-all requirement, listed |
+
+Never collapse: unobserved link ≠ link down; config/runtime disagreement ≠
+pair absent; peer self-report ≠ peer verified; discovery-cache role ≠ runtime
+role; inherited VS fact ≠ VS observation.
+
+## Privacy invariants
+
+- Readiness/preflight artifacts carry no management address, raw device
+  output, licence string, hostname, or command text beyond fixed labels and
+  identity-free wire forms (`vsenv N` is not an identity). Serials persist
+  only as one-way tokens (established `Tokenizer` pattern) or not at all.
+- `cplic print`, `cpstat os`, `show system info`, `show configuration`,
+  effective-running XML are parsed to scalars in-module; raw never persisted
+  beyond the existing sanitised CAS path.
+- CLASS 2 local telemetry stays local; shareable summaries follow
+  `PRIVACY_AND_DATA_HANDLING.md` ("filter one entity → report safe derived
+  status"). Repository privacy gate stays PASS / 0.
+
+## Architecture authority / single-source rules
+
+**Rule:** the vendor/domain backend (`utils/failover/`) is the sole authority
+for HA identity, topology, pairing and readiness; every UI consumes its
+projection. Today five independent inference paths violate this and can
+contradict the backend while a preflight runs:
+
+1. `static/inventory_ui.js:1013-1042, 1332-1378` — PAN pairing by hostname
+   ordinal + VSYS/VR Jaccard similarity (0.75/0.60), `inferred_ha_runtime_pair`.
+2. `static/inventory_ui.js:1273-1317` — synthesises `cp_vsx_cluster` parents
+   from ≥2 name-token matches; `:1249-1266` attaches VSX groups on ≥1 token
+   overlap.
+3. `utils/merge.py:95-101` — `cluster` from `-1`/`-2` suffix, consumed as the
+   backend's legacy fallback key.
+4. `static/configuration_ui.js:147` + `presentation_group_id`
+   (`checkpoint_config_collector.py:1048-1057`) — hashed hostname-pattern
+   grouping the failover model never reads.
+5. `utils/config_ui.py:280-306` — a second PAN HA vocabulary ("HA Enabled" from
+   configuration alone).
+
+Follow-up (not this contract): retire 1–2 in favour of the backend projection;
+remove 3 from the failover key path; label 4 presentation-only in the UI;
+align 5's vocabulary. `console/payloads.py` and `static/failover_readiness_ui.js`
+are clean.
+
+## Current collector reuse decision
+
+**Decision: D — hybrid, as hypothesised, with one sharpening.** Reuse the
+transport/session/identity-gate/redaction/`RunContext`/admission primitives
+(CP: strict-trusted SSH + handshake + exec-channel `vsenv`; PAN: `api_post` +
+per-firewall keygen + identity gate). **Do not** make the inventory/config
+collector the preflight engine: it fetches heavy, sensitive `show
+configuration`/effective-running documents on every pass (latency, privacy,
+failure coupling); its PAN branch short-circuits the runtime read on a
+discovery cache; it has no preflight provenance; and coupling it to CLASS 2
+would make the whole inventory pipeline part of the authorization surface.
+Instead: a dedicated, read-only, vendor-specific **preflight evidence layer**
+that issues the §"Minimum battery" reads with the §"Provenance contract"
+envelope, and **consumes** category-C facts from the latest configuration run
+by reference (with provenance and max-age). Sharpening: runtime facts are
+never read from a stored telemetry file in a preflight — the preflight collector
+always performs its own in-run reads.
+
+## Frozen-contract impact (OP.0a / OP.0a.P7)
+
+Preserved verbatim: the Grade A/B/C model (extended by B₁/B₂ subdivision);
+every prohibition clause; fail-closed shape; Q5 identity-never-`management_ip`;
+privacy invariants; AC-1, AC-2, AC-4, AC-7–AC-9. Requiring amendment: Q1's
+factual claim that `peer-info` is a "management-address field"; the Risks
+section (add plane ambiguity and legitimate real-world asymmetry). Requiring
+supersession by the successor domain contract: the `peer-ip` →
+`management_ip` join, the single-member-unit outcome table, correctness item
+4, AC-3, AC-6's serial prohibition, original P7 AC-5. This contract does not
+perform that supersession; it records that the evidence now exists.
+
+## Implementation slices (after FREEZE)
+
+| Slice | Objective | Files | Network | Tests | Real-env | Tier |
+| --- | --- | --- | --- | --- | --- | --- |
+| S0 (in flight) | PAN runtime peer-serial correspondence result | — | existing run | — | **required** | Sonnet 5 normal |
+| S1 | Preflight fact + provenance model (pure, no I/O); UNKNOWN semantics; coherence check | `utils/failover/preflight_model.py` (new), tests | none | synthetic | no | Sonnet 5 normal |
+| S2 | PAN parse-scope extension of existing `show high-availability state` + `show system info`: identity, conn-*, election, flap, error, versions, `result/group/*` sibling enumeration | `configuration/panorama_config_collector.py`, `utils/failover_readiness_ui.py`, tests | **none** (same commands) | synthetic real-shaped XML | yes — resolves PAN `UNKNOWN` vocabularies | Sonnet 5 normal |
+| S3 | CP parse-scope extension of existing `cphaprob stat`: peer rows (state), Active Attention reason, "Single VS Failover" mode, wire form + `collected_at` on rows | `configuration/checkpoint_config_collector.py`, `utils/failover_readiness_ui.py`, tests | **none** | fixtures + one captured sanitised real header | yes — captures real header shape | Sonnet 5 normal |
+| S4 | `OP.0b.1` command-gate package: ten points per new row of §24 (CP A4–A9; PAN P3–P5), after official-doc confirmation of the `UNKNOWN` rows | docs only | none | — | — | Sonnet 5 extended (security boundary) |
+| S5 | CP preflight collector (dedicated) | `checkpoint/preflight_collector.py` (new) | new reads per approved gate | mocked SSH | yes | Sonnet 5 extended |
+| S6 | PAN preflight collector (dedicated); transport decision D-T1 | `panorama/preflight_collector.py` (new) | new reads per approved gate | mocked API | yes | Sonnet 5 extended |
+| S7 | Readiness v2: prerequisites + 8 checks; remove phantom member; pair existence vs health; serial-keyed PAN unit; `securityexpert-ha-readiness-v2` | `utils/failover/assessment.py`, UI labels, tests, successor contract to OP.0a.P7 | none | full | yes | Opus (cross-subsystem) |
+| S8 | Real-env validation on the approved CP ClusterXL pair, VSX pair and PAN pair | — | reads only | — | **required** | Sonnet 5 normal |
+| S9 | Authority reconciliation (UI heuristics retirement) | `static/*.js`, `utils/merge.py`, `utils/config_ui.py` | none | render harness | eyeball | Sonnet 5 normal |
+
+Dependency order: S0 → S1 → (S2, S3 in parallel) → S4 → (S5, S6) → S7 → S8;
+S9 independent after S7.
+
+## Acceptance criteria (for the FROZEN version)
+
+- **AC-1** Every §24 row has no `UNKNOWN` in the Read-only, Authoritative-for
+  or Official-source columns, or is `REJECTED`.
+- **AC-2** Every §25 row is `COLLECTED_AND_PARSED` or has a named slice.
+- **AC-3** Provenance envelope present on every preflight fact; coherence
+  rule enforced; no verdict emitted on an incoherent snapshot.
+- **AC-4** No fact in category C, M or discovery-cache D is a check input.
+- **AC-5** `_pan_states` phantom-member uplift removed; a single-member PAN
+  unit cannot PASS `viable_target` or `no_split_brain`.
+- **AC-6** Pair existence and health are separate fields; the real
+  asymmetric PAN pair renders as identity-per-B₂ + `INCONSISTENT` on B +
+  fail-closed.
+- **AC-7** No new command outside an approved `OP.0b.1` gate entry; no
+  mutating verb on any read path (incl. removal of `fw ctl set int vsid` from
+  preflight scope).
+- **AC-8** Privacy gate PASS / 0; no raw serial/address in readiness artifacts.
+- **AC-9** `SAFE_TO_FAILOVER` unreachable until S5/S6 land (P4 invariant test
+  retained).
+
+## Automated validation gate
+
+Targeted parser tests on synthetic real-shaped output (both vendors); OP.0a /
+OP.0c / OP.0d regression; full suite; privacy gate; `git diff --check`;
+architecture-convergence test (no plan/executor/adapter module appears).
+
+## Real-env validation gate
+
+Same approved targets (one CP ClusterXL pair, one VSX pair, one PAN pair;
+requested = resolved = contacts, extra = 0), reads only. Must record: captured
+sanitised `cphaprob stat` header shape; sk165432 behaviour on this estate's
+version; PAN `result/group/*` sibling enumeration; PAN field vocabularies for
+`conn-*`, `state-sync`, `*-compat`, `preemptive`; PAN serial correspondence
+`MATCH`/`MATCH`; member skew observed. Report as safe summaries, no
+identities.
+
+## CLASS 2 handoff requirements
+
+Even a fully green preflight is one prerequisite. CLASS 2 must separately
+freeze: RBAC/OIDC `OPERATE` role; explicit confirmation; change reason/ticket;
+**per-HA-entity lock** (§10.1 item 4 — currently untracked, §26 X-1);
+exactly-once; timeout-ambiguity → `UNKNOWN`; no blind retry; vendor-specific
+mutation adapter; post-action verification; immutable audit; `UNKNOWN`
+outcome handling; recovery/escalation; maintenance window; `op_degraded_verdict`
+resolution before OP.1. This contract guarantees CLASS 2 will have: identity
+B₂, coherent fresh runtime facts with skew, explicit failure/flap/preemption
+facts, and a config/runtime consistency axis — nothing more.
+
+## Risks
+
+- Official-doc access from the drafting environment was snippet-only; a row
+  confirmed later may differ (mitigation: DO NOT FREEZE until confirmed).
+- sk165432/sk93341 may make per-VS CP reads unreliable on this estate's
+  version; the contract already treats them as `UNKNOWN` until validated.
+- sk180184 means CP preemption needs a management-plane read that does not
+  exist in any collector today (new surface; gate).
+- PAN passive-member `peer-info` completeness is unexplained (member B matched
+  nothing); if passive members systematically under-report, B₂ may be
+  reachable only from the active side — must be measured, not assumed.
+- Real PAN pair has a genuine configuration/runtime inconsistency; pressure to
+  "make it green" must be resisted (OP.0a already warns).
+- `on_hardware_real_env_validation` is BLOCKED on laptop availability.
+
+## Open decisions
+
+| Id | Decision | Blocks freeze? | Resolves via |
+| --- | --- | --- | --- |
+| D-V1 | PAN `conn-status`/`conn-ha1`/`conn-ha1-backup`/`conn-ha2` value vocabulary | **YES** | PAN-OS 11.1 CLI reference / API output, S2 real-env |
+| D-V2 | PAN `state-sync`, `*-compat`, `preemptive`, flap-counter field semantics | **YES** | same |
+| D-V3 | PAN `peer-info/serial-num` semantics + real correspondence | **YES** | S0 + official doc |
+| D-V4 | PAN `running-sync` location (`state` XML sibling vs `all`) | **YES** | S2 enumeration |
+| D-V5 | CP failover-statistics exact Gaia syntax and version availability | **YES** | R81.x CLI Reference "Viewing Cluster Failover Statistics" |
+| D-V6 | CP `-ia list` vs `-l list` difference; `cphaprob state` field set | YES (gate package) | R81.x CLI Reference |
+| D-V7 | CP management-plane recovery-setting attribute/API for preemption | **YES** | Management API reference |
+| D-V8 | CP hotfix parity command | no (optional check) | Gaia CLI reference |
+| D-V9 | sk165432 applicability to this estate's version | **YES** for VS readiness | S8 |
+| D-T1 | PAN preflight transport: direct identity-gated API vs Panorama proxy | no | product owner + security |
+| D-F1 | numeric max age for category C intent | no | product owner |
+| D-F2 | numeric member-skew tolerance | no | product owner + vendor guidance |
+| D-P1 | `op_degraded_verdict` | no (OP.1) | existing open decision |
+
+## Rollback
+
+Documentation only; nothing to roll back. If superseded, mark this file's
+status and add the superseding path; never delete.
+
+## Definition of done (for this DRAFT)
+
+1. All required §23 sections present — **done**.
+2. §24, §25, §26 complete with every candidate/field/gap — **done**.
+3. Every semantic either cited to an official source or marked `UNKNOWN` —
+   **done**; no generic product knowledge used as authority.
+4. Freeze decision stated with the exact blocking list — **done**
+   (§"Open decisions", rows marked YES).
+5. Project metadata update — **deliberately not done** (not a frozen build).
+
+## Next movement
+
+`OFFICIAL_DOC_CONFIRMATION` (from an unblocked network: resolve D-V1…D-V7,
+D-V9 as far as documentation allows) → `HUMAN_REAL_ENV` (S0 result; S2/S3
+enumerations) → re-run this contract's freeze check → `FREEZE` →
+`STATE_UPDATE`. Recommended: `Sonnet 5, extended thinking (high)` for the
+confirmation/freeze pass (vendor-semantic calls); `Sonnet 5, normal` for S1–S3.
+
+---
+
+## §24 Command surface table
+
+Columns: Vendor · Platform/context · Command/API · Existing/new · Read-only · Runs where · Evidence returned · Authoritative for · Not authoritative for · Freshness · Cost · Retry-safe · Privacy · Official source · Decision.
+
+| Vendor | Platform/context | Command/API | Exist | RO | Runs where | Evidence | Auth for | Not auth for | Fresh | Cost | Retry | Privacy | Official source | Decision |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| CP | Gaia, Clish | `show hostname` | existing | yes | per member, handshake | hostname | A (gate input) | — | in-run | LOW | yes | hostname (CLASS 2 local) | Gaia CLI ref; VALIDATION_0_6_1B_1_2 | REQUIRED |
+| CP | Gaia, Clish | `show version all` | existing | yes | per member | Gaia/product version | H software | hotfix level | in-run | LOW | yes | none | Gaia CLI ref | REQUIRED |
+| CP | Gaia, Clish | `cpstat os -f hw_info` | existing | yes | per member | model/serial | A attribute | gate | in-run | LOW | yes | serial | draft point 9 | OPTIONAL |
+| CP | ClusterXL, Expert | `cphaprob stat` | existing | yes | per member; per VS via vsenv | roles, mode, peer rows | D; corroborating E/J | preemption (sk180184); peer identity (Unique Address ambiguous) | in-run | LOW | yes | member names, unique IPs (discard) | R80.40/R81 "Viewing Cluster State" | REQUIRED |
+| CP | ClusterXL, Expert | `cphaprob state` | new | yes (monitoring) | per member | mode string, Active Attention, states | J; I corroboration only | I authority (sk180184) | in-run | LOW | yes | same | R81 CLI "Viewing Cluster State" | OPTIONAL (field set UNKNOWN) |
+| CP | ClusterXL, Expert (CPRID today) | `cphaprob -a -m if` | existing (stage `cp`) | yes | per member | VIP set → `group_id` | B | D | bounded (topology) | LOW | yes | VIPs, if names | R80.40 "ClusterXL Monitoring Commands" | REQUIRED (transport change to direct session noted for gate) |
+| CP | ClusterXL, Expert | `cphaprob -a if` | new | yes | per member (+VS optional, sk93341) | interface/CCP/sync status | F | identity | in-run | LOW | yes | if names | R81.10 "Viewing Critical Devices"; monitoring cmds | REQUIRED (gate) |
+| CP | ClusterXL, Expert | `cphaprob -ia list` | new | yes | per member | pnotes | J | — | in-run | LOW | yes | device names (safe class) | R81.10 "Viewing Critical Devices" | REQUIRED (gate) |
+| CP | ClusterXL, Expert | `cphaprob -l list` | new | yes | — | pnotes (variant) | — | — | — | LOW | — | — | sk117236 only | REJECTED in favour of `-ia list` (variance UNKNOWN) |
+| CP | ClusterXL R80.20+, Expert | `cphaprob syncstat` | new | yes | per member | delta sync stats | G | F | in-run | LOW | yes | none | R81.20 "Viewing Delta Synchronization"; sk34475 | REQUIRED (gate; vocabulary UNKNOWN) |
+| CP | ClusterXL <R80.20, Expert | `fw ctl pstat` | new | yes | per member | sync section (legacy), conn table | G (<R80.20 only) | G on R80.20+ (sk34476) | in-run | LOW–MOD | yes | none | sk34476; R80.10 "Monitoring Synchronization" | OPTIONAL (version-conditional) |
+| CP | Gaia, Expert | `fw stat` | new | yes | per member | installed policy | H policy | software | in-run | LOW | yes | policy name | R81 CLI ref `fw stat` | REQUIRED (gate; columns UNKNOWN) |
+| CP | Gaia, Expert | `fw ver` | new | yes | — | version | — | — | — | LOW | — | — | — | REJECTED (redundant with `show version all`) |
+| CP | Gaia, Expert | `cpinfo -y all` | new | yes | — | hotfixes | — | — | — | **HIGH** | no | host identity | sk92739 | REJECTED (cost) |
+| CP | Gaia, Expert | `installed_jumbo_take` | new | ? | per member | JHF take | H hotfix | — | in-run | ? | ? | none | not established | UNKNOWN |
+| CP | Gaia, Expert | `cplic print` | new | yes | per member | licence | 1 sub-fact | — | in-run | LOW | yes | **licence strings → scalars only** | draft point 9 | OPTIONAL |
+| CP | Gaia, Expert | `cpstat os` | new | yes | per member | resources | 1 sub-fact | — | in-run | LOW | yes | host identity → scalars | draft point 9 | OPTIONAL |
+| CP | ClusterXL, Expert/Clish | failover statistics (`cphaprob show_failover` / `show cluster failover`) | new | yes | per member | count/reason/last time | K | — | in-run | LOW | yes | none | R81 CLI ref "Viewing Cluster Failover Statistics"; sk137472 | REQUIRED (gate; **syntax/version UNKNOWN**) |
+| CP | ClusterXL, Expert | `cphaprob show_bond_groups` | new | yes | per member | bond status | F (bonds) | — | in-run | LOW | yes | if names | not established | UNKNOWN |
+| CP | Gaia, Expert | `free -m`, `df -h`, `top -bn1` | new | yes | — | resources | — | — | — | LOW | — | — | — | REJECTED (draft exclusion; `cpstat os` covers) |
+| CP | Gaia, Expert | `/var/log/messages`, `fw log` | new | yes | — | events | — | — | — | HIGH/unbounded | no | high | — | REJECTED |
+| CP | MDS | `cpmiquerybin` recovery-setting attribute / Mgmt API | new | yes | per cluster object | "Maintain current active" vs "Switch to higher priority" | **I (authoritative)** | runtime | bounded (config) | LOW | yes | object names | R80.40 "Cluster Failover"; **attribute UNKNOWN** | REQUIRED (gate; UNKNOWN) |
+| CP | Gaia Clish R80.20+ | `show cluster state` / `members pnotes all` / `statistics sync` / `failover` | new | yes | per member (direct-Clish-only hosts) | same as `cphaprob` family | D/J/G/K | — | in-run | LOW | yes | same | R81.x CLI ref | OPTIONAL (alternative for `capability_gap` hosts; availability by version UNKNOWN) |
+| CP | VSX, Expert | `vsx stat -v` | existing (`vsx_runner`) / new in preflight session | yes | per member | VSIDs + status | B (VS enumeration) | VS HA state | in-run | LOW | yes | VS names | R81 CLI ref `vsx stat` | REQUIRED |
+| CP | VSX, Expert exec | `vsenv <N> >/dev/null 2>&1; <cmd>` | existing | yes (context) | per VS | context switch | — | — | — | LOW | yes | none | R81.20 VSX "General Troubleshooting Steps" | REQUIRED (primitive) |
+| CP | VSX, Expert | `fw ctl set int vsid <N>` | existing (`vsx_runner`) | **no** (kernel set) | — | — | — | — | — | — | — | — | — | **REJECTED** for preflight |
+| CP | ClusterXL | `clusterXL_admin down/up` | — | **no** | — | — | — | — | — | — | — | — | design §3.1 | REJECTED (CLASS 2, out of scope) |
+| PAN | Panorama API | `<show><devices><all/></devices></show>` | existing | yes | once | inventory: serial, mgmt IP, `ha-state` | A inventory (I1), M | **runtime role** | bounded | LOW | yes | IPs, serials (local) | "Query a Firewall from Panorama (API)" | REQUIRED (inventory only) |
+| PAN | Panorama API `target=` / direct | `<show><high-availability><state/></high-availability></show>` | existing | yes | per firewall | D, E(I3/I4), F, G, H, I, J, K fields | see §25 | config intent | in-run | LOW | yes | IPs, serials → tokens | KB HA Peer Connection Status; CLI ref pages | REQUIRED (full parse; D-V1–V4) |
+| PAN | direct API | `<show><system><info/></system></show>` | existing | yes | per firewall | serial (I2), sw/content versions | A gate, H | HA state | in-run | LOW | yes | serial, hostname | design §3.2; existing gate | REQUIRED |
+| PAN | direct API | `keygen` | existing | yes (auth) | per firewall | API key (memory only) | — | — | — | LOW | yes | **credential** | XML API docs | REQUIRED (transport) |
+| PAN | Panorama `target=` / direct | `type=config action=show xpath=/config` | existing | yes | per firewall | configured HA1 peer, election, sync enable | C | runtime | bounded (D-F1) | MOD | yes | full config (sanitise) | XML API "Configuration (API)" | REQUIRED (intent, bounded age) |
+| PAN | direct | `show config effective-running` (dynamic slot) | existing | yes | per firewall | effective config | C (primary per AGENTS.md) | runtime | bounded | MOD | yes | same | AGENTS.md PAN rules | REQUIRED for C (prefer over proxied) |
+| PAN | API | `show high-availability all` | new | yes | per firewall | link detail, running-sync | F, H config | — | in-run | LOW | yes | IPs/MACs | CLI ref `show high-availability all`; KB out-of-sync | OPTIONAL→REQUIRED if D-V4 says absent from `state` |
+| PAN | API | `show high-availability state-synchronization` | new | yes | per firewall | session sync detail | G | — | in-run | LOW | yes | none | not established for NGFW | UNKNOWN |
+| PAN | API | `show high-availability path-monitoring` | new | yes | per firewall | monitored paths | F/J | — | in-run | LOW | yes | destination IPs (local) | 11.1 "HA Link and Path Monitoring" | REQUIRED (gate) |
+| PAN | API | `show high-availability link-monitoring` | new | yes | per firewall | monitored links | F/J | — | in-run | LOW | yes | if names | concept documented; show-cmd PARTIAL | REQUIRED (gate; confirm) |
+| PAN | API | `show high-availability flap-statistics` | new | yes | — | cluster flaps | K (HA4) | A/P pair | — | LOW | — | — | HA clustering docs | UNKNOWN / NOT_APPLICABLE (no HA4) |
+| PAN | API | `show session info`, `show interface all`, `show routing route` | new | yes | per firewall | dataplane readiness | — (not among checks) | — | in-run | MOD–HIGH (routes) | yes | routes/IPs | design §3.2 | OPTIONAL / deferred |
+| PAN | API | `request high-availability state suspend/functional`, `sync-to-remote` | — | **no** | — | — | — | — | — | — | — | — | CLI ref `request high-availability …` | REJECTED (CLASS 2 / mutating) |
+| PAN | Panorama | `entry/ha-state` from `show devices all` | existing | yes | — | cached role | M | **D** | stale | — | — | — | — | REJECTED as runtime source |
+
+## §25 Configuration / runtime field trace table
+
+Status vocabulary: COLLECTED_AND_PARSED · COLLECTED_NOT_PARSED · NOT_COLLECTED · UNKNOWN. Correctness: VALIDATED · SUSPECT · BROKEN · UNKNOWN.
+
+| Normalized fact | Vendor | Unit | Raw source | Command/API | Field/path | Parser | Collection | Correctness | Required correction | Real-env |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| member_identity | CP | cluster | handshake | `show hostname` | stdout | `_usable_clish_result` | COLLECTED_AND_PARSED | VALIDATED | record as identity gate on row | done (0.6.1B.1.2) |
+| host_key_trust | CP | cluster | SSH | — | fingerprint | strict preflight | COLLECTED_AND_PARSED | VALIDATED (R1/R3); R2 prod pending | none | R2 owed |
+| cluster_identity | CP | cluster | VIP set | `cphaprob -a -m if` | "virtual cluster interfaces" | `parse_cluster_virtual_interfaces` | COLLECTED_AND_PARSED | VALIDATED | join freshness; move read into preflight session | done (real pairs) |
+| local_role | CP | cluster/VS | `cphaprob stat` | same | `(local)` row State | `_parse_clusterxl_runtime_role` | COLLECTED_AND_PARSED | VALIDATED (physical); **SUSPECT (VS, sk165432)** | keep; VS caveat; stop passing physical hostname | VS owed |
+| cluster_mode | CP | cluster | `cphaprob stat` | same | "Cluster Mode" line | `_parse_clusterxl_cluster_mode` | COLLECTED_AND_PARSED | SUSPECT (constructed fixtures; "Single VS Failover" unrecognised) | add VSX mode string; capture real header | owed |
+| peer_state (observed) | CP | cluster | `cphaprob stat` | same | non-local rows State | — | COLLECTED_NOT_PARSED | — | S3 parse (state only) | owed |
+| failure_reason | CP | cluster | `cphaprob stat`/`state` | same | "Active Attention" suffix | — | COLLECTED_NOT_PARSED | — | S3 | owed |
+| member_skew | CP | cluster | timestamps | — | `started_at` | — | COLLECTED_NOT_PARSED | — | S1/S3 provenance | — |
+| control_link_health | CP | cluster | — | `cphaprob -a if` | interface states | — | NOT_COLLECTED | — | S5 (gate) | owed |
+| sync_link_health | CP | cluster | — | `cphaprob -a if`, `syncstat` | sync if / drops | — | NOT_COLLECTED | — | S5 | owed |
+| state_sync | CP | cluster | — | `cphaprob syncstat` (R80.20+) | delta-sync status | — | NOT_COLLECTED | — | S5; version-conditional | owed |
+| pnotes | CP | cluster | — | `cphaprob -ia list` | device/state | — | NOT_COLLECTED | — | S5 | owed |
+| policy_parity | CP | cluster | — | `fw stat` | policy/install | — | NOT_COLLECTED | — | S5 | owed |
+| software_parity | CP | cluster | `show version all` | same | version | `_parse_gaia_version` | COLLECTED_NOT_PARSED (not compared) | VALIDATED (collection) | compare across members in S7 | — |
+| hotfix_parity | CP | cluster | — | UNKNOWN | — | — | NOT_COLLECTED | UNKNOWN | D-V8 | — |
+| preemption | CP | cluster | mgmt object | UNKNOWN attribute | — | — | NOT_COLLECTED | UNKNOWN | D-V7; never from Cluster Mode alone | — |
+| flap_history | CP | cluster | — | failover statistics | count/reason/time | — | NOT_COLLECTED | UNKNOWN syntax | D-V5 | owed |
+| vs_enumeration | CP | VSX | `vsx stat -v` | same | VSID/status | `vsx_runner.get_vs` | COLLECTED (nested shell) | SUSPECT (standby skipped; `-[12]$`) | preflight issues it directly | owed |
+| vs_inherited_attrs | CP | VS | host row | — | platform/serial/… | — | COLLECTED | SUSPECT (unlabelled) | add `_source` labels | — |
+| legacy_cluster | CP | VSX | hostname | — | `-1`/`-2` | `normalize_vsx` | COLLECTED | **BROKEN as identity** | remove from failover key path | — |
+| row_provenance | CP | all | — | — | run_id/collected_at/wire cmd | — | NOT_COLLECTED (on rows) | — | S1/S3 | — |
+| inventory_serial (I1) | PAN | pair | Panorama | `show devices all` | `entry/serial` | `get_devices` | COLLECTED_AND_PARSED | VALIDATED | none | — |
+| identity_serial (I2) | PAN | pair | direct | `show system info` | `serial` | `_collect_direct_compare` | COLLECTED_AND_PARSED | VALIDATED (gate) | none | done |
+| local_runtime_serial (I3) | PAN | pair | HA state | `show high-availability state` | `local-info/serial-num` | token (`a1a3882`) | COLLECTED_AND_PARSED (token) | UNKNOWN semantics | D-V3 | **pending (S0)** |
+| peer_runtime_serial (I4) | PAN | pair | HA state | same | `peer-info/serial-num` | token | COLLECTED_AND_PARSED (token) | UNKNOWN | D-V3 | **pending (S0)** |
+| management_ip | PAN | — | Panorama | `show devices all` | `entry/ip-address` | `get_devices` | COLLECTED_AND_PARSED | VALIDATED as address; **BROKEN as join key** | remove from pairing | done |
+| configured_peer_ha1 | PAN | pair | config | `xpath=/config` (proxied) | `deviceconfig/high-availability/group/peer-ip` | `parse_ha_peer_ip_from_config` | COLLECTED_AND_PARSED | VALIDATED as HA1-plane value; transport labelled wrong | record plane/transport; prefer effective-running | done (A consistent, B inconsistent) |
+| discovery_ha_state | PAN | — | Panorama | `show devices all` | `entry/ha-state` | `get_devices` | COLLECTED_AND_PARSED | **BROKEN as runtime source** (short-circuits query; lacks `enabled`) | never suppress runtime read | — |
+| ha_enabled | PAN | pair | HA state | `state` | `result/enabled` | parsed | COLLECTED_AND_PARSED | VALIDATED | none | done |
+| local_state / peer_state | PAN | pair | HA state | `state` | `local-info/state`, `peer-info/state` | parsed | COLLECTED_AND_PARSED | VALIDATED; **phantom-member use SUSPECT** | S7 removes uplift | done |
+| mode | PAN | pair | HA state | `state` | `local-info/mode` | parsed | COLLECTED_AND_PARSED | VALIDATED | none | done |
+| state_sync | PAN | pair | HA state | `state` | `local-info/state-sync[,-type]` | parsed (value only) | COLLECTED_AND_PARSED | UNKNOWN vocabulary | D-V2 | done (value seen) |
+| conn_status / conn_ha1 / conn_ha1_backup / conn_ha2 | PAN | pair | HA state | `state` | `peer-info/conn-*` | — | COLLECTED_NOT_PARSED | UNKNOWN vocabulary | S2 + D-V1 | owed |
+| ha1/ha2 addresses & ports | PAN | pair | HA state | `state` | `*-info/ha1-ipaddr`, `ha1-backup-ipaddr`, `ha2-ipaddr`, `ha1-port`, `ha2-port` | tokens (diagnostic) | COLLECTED_NOT_PARSED (persisted) | field names real | S2 (consistency axis only; never identity) | done (names) |
+| running_sync | PAN | pair | HA state or `all` | UNKNOWN | `result/group/running-sync`? | — | UNKNOWN | UNKNOWN | D-V4 enumeration | owed |
+| software/content parity | PAN | pair | HA state + `show system info` | both | `*-info/version`, `build-rel`, `app-version`, `av-version`, `threat-version`, `url-version`, `*-compat` | — | COLLECTED_NOT_PARSED | UNKNOWN (`*-compat` values) | S2 + D-V2 | owed |
+| preemption / priority / hold | PAN | pair | HA state | `state` | `*-info/preemptive`, `priority`, `preempt-hold`, `promotion-hold` | — | COLLECTED_NOT_PARSED | PARTIAL (semantics documented; binding inferred) | S2 + D-V2 | owed |
+| flap counters | PAN | pair | HA state | `state` | `local-info/max-flaps`, `nonfunc-flap-cnt`, `preempt-flap-cnt`, `state-duration` | — | COLLECTED_NOT_PARSED | PARTIAL | S2 + D-V2 | owed |
+| failure state | PAN | pair | HA state | `state` | `local-info/last-error-reason`, `last-error-state`; non-functional states | — | COLLECTED_NOT_PARSED | vocabulary ESTABLISHED (states) | S2 | owed |
+| passive_link_state | PAN | pair | HA state | `state` | `local-info/active-passive/*` | — | COLLECTED_NOT_PARSED (children unenumerated) | UNKNOWN | S2 enumeration | owed |
+| path/link monitoring | PAN | pair | — | `path-monitoring`, `link-monitoring` | — | — | NOT_COLLECTED | — | S6 (gate) | owed |
+| row_provenance | PAN | all | — | — | run_id/collected_at/transport | partial (`duration_ms`, `queried_target`) | COLLECTED_NOT_PARSED | — | S1/S2 | — |
+
+## §26 Current bug / gap register
+
+Priority: **P0 BEFORE CLASS 2** · **P1 BEFORE PRODUCTION** · **P2 HARDENING** · **DEFERRED**.
+
+| Id | Vendor | Gap | Evidence | Priority |
+| --- | --- | --- | --- | --- |
+| CP-1 | CP | 2/7 checks evaluable; no sync/parity/link/preemption/flap evidence exists in code | `assessment.py:61`, §24 ABSENT list | P0 |
+| CP-2 | CP | peer rows dropped; no peer observation; split-brain from unsynchronised member reads; skew unrecorded | `_parse_clusterxl_runtime_role`; `ThreadPoolExecutor` | P0 |
+| CP-3 | CP | preemption not reliably device-readable (sk180184); no management-plane read exists | vendor doc; no collector | P0 |
+| CP-4 | CP | per-VS `cphaprob stat` reliability unvalidated (sk165432); physical hostname used as VS match token | `:1613`; vendor doc | P0 (before VS readiness is trusted) |
+| CP-5 | CP | `vsx_runner.py`: `fw ctl set int vsid` (non-read verb); standby members discarded; `-[12]$` discovery; unvalidated `vs_id` | `vsx_runner.py:167, 212-214, 223-236` | P1 (P0 if `vsx.json` ever feeds preflight — it must not) |
+| CP-6 | CP | dead `checkpoint/scripts/vsx_collect.sh` | grep | P2 |
+| CP-7 | CP | no `run_id`/`collected_at`/wire command on rows; `group_id` (stage `cp`) and `ha_role` (stage `cp_config`) joined off disk without freshness | `:1070-1072`; row shape | P0 |
+| CP-8 | CP | `extract_cp_ha_runtime` drops status/source/timestamps — inherited and stale readings indistinguishable | `failover_readiness_ui.py:95-113` | P0 |
+| CP-9 | CP | strict host-key trust R2 on production server pending | `cp_ssh_trust_r2_prod_server` | P1 (P0 before CLASS 2) |
+| CP-10 | CP | direct-Clish-only appliances → `capability_gap` for `cphaprob`; needs `UNSUPPORTED` handling or Clish equivalents | `:1351-1357` | P1 |
+| CP-11 | CP | `merge.normalize_vsx` hostname-suffix `cluster` consumed as failover legacy fallback key | `merge.py:95-101`; `assessment.py:456-457` | P1 |
+| CP-12 | CP | VS rows inherit platform/serial/identity/host-key facts without source label | `:1485-1508` | P2 |
+| CP-13 | CP | `cphaprob -l list` (design/draft) vs `-ia list` (official) | §24 | P1 (gate package) |
+| CP-14 | CP | `cp_device_interaction_safety` `done` in backlog but listed open in design §10 and B.1.2 doc | records | P2 (docs) |
+| CP-15 | CP | `cphaprob stat` fixtures constructed, two inconsistent shapes; no captured real header | tests; OP.0a Risks | P1 |
+| PAN-1 | PAN | pairing join on management plane disproven; HA1 plane proven | real pair; vendor doc | P0 (successor contract) |
+| PAN-2 | PAN | runtime serial correspondence unmeasured | S0 pending | P0 |
+| PAN-3 | PAN | member B configured/runtime HA1 inconsistency (real); model cannot represent it | diagnostic | P0 (model); operator finding P1 |
+| PAN-4 | PAN | `_pan_states` phantom member uplift | `assessment.py:189-201` | P0 |
+| PAN-5 | PAN | discovery `ha-state` short-circuits runtime read; that branch lacks `enabled` → unit never forms | `:1641-1647`; `:627` | P0 |
+| PAN-6 | PAN | duplicate pairing authority in `inventory_ui.js` (0.75/0.60 heuristic) | `:1013-1042, 1332-1378` | P1 |
+| PAN-7 | PAN | hostname-keyed entity/unit identity vs serial | `pan_ha_serial_identity_hardening` | P1 (decision before CLASS 2) |
+| PAN-8 | PAN | TLS verification default off without CA bundle; strict validated, production must enforce | `_tls_verify_setting`; `pan_tls_ca` | P1 (P0 before CLASS 2) |
+| PAN-9 | PAN | IPv6 peer semantics unproven | `pan_ha_peer_ipv6_pairing` | DEFERRED |
+| PAN-10 | PAN | `result/group/*` siblings (`running-sync`?) and `active-passive/*` children unenumerated | diagnostic scope | P0 (evidence gap) |
+| PAN-11 | PAN | `conn-*`, `*-compat`, flap, `state-sync`, `serial-num` vocabularies not officially confirmed | §24 UNKNOWN rows | P0 (freeze blocker) |
+| PAN-12 | PAN | passive member's `peer-info` matched nothing — completeness unexplained | real pair | P0 (investigate in S2/S8) |
+| PAN-13 | PAN | two independent XML walks of `show devices all` | `pan_hostname_parser_unification` | P2 |
+| PAN-14 | PAN | `config_ui.py` second HA vocabulary | `:280-306` | P2 |
+| PAN-15 | PAN | commits `1d97cd6`, `d0f8e31`, `a1a3882` and the plane finding recorded only in git | project records | P1 (STATE_UPDATE) |
+| X-1 | both | per-HA-entity lock (§10.1 item 4) tracked nowhere | design only | P0 before CLASS 2 (record now) |
+| X-2 | both | `op_degraded_verdict` open | roadmap | before OP.1 |
+| X-3 | both | no same-run/freshness/coherence model anywhere | §"Provenance contract" | P0 |
+| X-4 | both | `HaUnit.unresolved_reason` not serialised; `reason` carries two semantic axes | `assessment.py:128-137, 721-726` | P1 (S7) |
+| X-5 | both | `FAILOVER_ENGINE_ARCHITECTURE.md` §10.1 stale (OP.0a stamp; identity note) | closure DoD item 6 | P2 |
+| X-6 | both | `on_hardware_real_env_validation` BLOCKED on laptop availability | backlog | external |
+
+## Freeze decision
+
+**DO NOT FREEZE.** Blocking rows: D-V1, D-V2, D-V3, D-V4, D-V5, D-V6, D-V7,
+D-V9. All are vendor-semantic confirmations or a single already-scheduled
+real-env measurement (S0) — none is a design decision. Non-blocking open
+decisions: D-V8, D-T1, D-F1, D-F2, D-P1.
