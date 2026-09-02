@@ -411,6 +411,49 @@ def test_real_pipeline_shape_survives_cp_vs_vsx_device_name_separator_mismatch()
     assert vsid_2["display_name"] == "Leasedline | FW-CKP-EXTRA-LL-CLS"
 
 
+def test_real_pipeline_shape_survives_cp_ha_runtime_entity_id_separator_mismatch():
+    """Real-env retry finding: `configuration/checkpoint_config_collector.py`
+    resolves its own `PhysicalTarget.device` independently and can inherit
+    the same trailing-separator-suffixed physical name (see the join-mismatch
+    test above), so `cp_config_telemetry.json` records HA runtime under
+    entity ids like "FW-CKP-EXTRA-LL-1___vsid_2" (triple underscore) while
+    this module's own VS entity ids (from `vsx.json` via `resolve_entity_id`)
+    are "FW-CKP-EXTRA-LL-1__vsid_2" (double underscore). An exact-string
+    lookup into `cp_ha_runtime` must not silently return INSUFFICIENT_EVIDENCE
+    for every check on a VS unit whose runtime evidence was actually
+    collected, just because the two collectors' entity ids differ by that
+    cosmetic separator."""
+    rows = [
+        {"device": "FW-CKP-EXTRA-LL-1_", "source": "cp",
+         "cluster_topology": {"group_id": "grp-extra-ll", "display_name": "FW-CKP-EXTRA-LL-CLS"},
+         "inventory_status": {"data_state": "ok"}},
+        {"device": "FW-CKP-EXTRA-LL-2_", "source": "cp",
+         "cluster_topology": {"group_id": "grp-extra-ll", "display_name": "FW-CKP-EXTRA-LL-CLS"},
+         "inventory_status": {"data_state": "ok"}},
+        {"device": "FW-CKP-EXTRA-LL-1", "source": "vsx", "vs_id": "2", "vsys": "Extranet-vsx",
+         "inventory_status": {"data_state": "ok"}},
+        {"device": "FW-CKP-EXTRA-LL-2", "source": "vsx", "vs_id": "2", "vsys": "Extranet-vsx",
+         "inventory_status": {"data_state": "ok"}},
+    ]
+    cp_ha_runtime = {
+        "FW-CKP-EXTRA-LL-1_": {"ha_role": "ACTIVE", "ha_cluster_mode": "high_availability"},
+        "FW-CKP-EXTRA-LL-2_": {"ha_role": "STANDBY", "ha_cluster_mode": "high_availability"},
+        "FW-CKP-EXTRA-LL-1___vsid_2": {"ha_role": "ACTIVE", "ha_cluster_mode": "high_availability"},
+        "FW-CKP-EXTRA-LL-2___vsid_2": {"ha_role": "STANDBY", "ha_cluster_mode": "high_availability"},
+    }
+    report = compute_ha_readiness(rows, cp_ha_runtime=cp_ha_runtime)
+
+    parent = _unit_by_id(report, "grp-extra-ll")
+    assert parent["cluster_mode"] == "high_availability"
+
+    vs = _unit_by_id(report, "grp-extra-ll__vsid_2")
+    assert vs["cluster_mode"] == "high_availability"
+    viable_target = next(c for c in vs["checks"] if c["id"] == "viable_target")
+    no_split_brain = next(c for c in vs["checks"] if c["id"] == "no_split_brain")
+    assert viable_target["status"] == CHECK_PASS
+    assert no_split_brain["status"] == CHECK_PASS
+
+
 def test_each_virtual_system_is_a_distinct_unit_linked_to_its_physical_parent():
     rows = [
         _cp_topo("VSX-1", "grp-vsx1", source="vsx"),
