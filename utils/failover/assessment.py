@@ -118,6 +118,12 @@ class HaUnit:
     cluster_mode: str = "unknown"
     display_name: str | None = None
     parent_id: str | None = None
+    #: Set only by `_derive_pan_units` for a single-member PAN fallback unit,
+    #: to distinguish *why* it stayed unresolved (contract OP.0a.P7) --
+    #: never read by anything CP-side. `None` keeps the existing generic
+    #: `pan_ha_peer_unresolved` reason at the `compute_ha_readiness` call
+    #: site.
+    unresolved_reason: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -541,14 +547,29 @@ def _derive_pan_units(
     pan_ha_runtime: Mapping[str, Mapping[str, Any]],
     pan_ha_peers: Mapping[str, str],
 ) -> list[HaUnit]:
-    """Assemble PAN HA pairs (contract P7).
+    """Assemble PAN HA pairs (contract OP.0a.P7, revised at the PAN HA
+    peer-pairing identity closure).
 
     `unified.json` carries no PAN peer relationship today — PAN rows have no
-    `cluster` and no peer reference — so the pair is inferred by matching a
-    device's configured `peer-ip` against another PAN entity's management
-    address. Fail-closed: a `peer-ip` resolving to zero or to more than one
-    entity yields a single-member unit with `pan_ha_peer_unresolved`. It is
-    never guessed and never silently merged.
+    `cluster` and no peer reference — so the pair is inferred from each
+    device's configured `peer-ip` (`pan_ha_peers`, sourced from the running
+    configuration this collector already fetches). This is CONFIGURATION
+    INTENT, never a runtime-observed or runtime-proven relationship (Grade A
+    only, per the frozen contract) — it must never be read elsewhere as
+    sufficient corroboration for any future CLASS 2 operational decision.
+
+    Fail-closed, in order:
+    - `peer-ip` missing, resolving to zero, or resolving to more than one
+      entity → single-member unit, generic `pan_ha_peer_unresolved` (via
+      `compute_ha_readiness`'s reason override).
+    - A resolves to exactly one candidate B, but B's own configured
+      `peer-ip` does not resolve back to A's `management_ip` (asymmetric or
+      contradictory configuration, e.g. A→B but B→C, or A→B but B has no
+      peer configured at all) → single-member unit for A,
+      `unresolved_reason="pan_ha_peer_asymmetric"`. Never guessed, never a
+      one-sided pair. Self-reference is already excluded from `candidates`.
+    - Only a MUTUAL configuration agreement (A→B and B→A) forms a pair. It
+      is never guessed and never silently merged.
     """
     pan_rows: dict[str, Mapping[str, Any]] = {}
     by_management_ip: dict[str, list[str]] = {}
@@ -573,7 +594,9 @@ def _derive_pan_units(
         runtime = pan_ha_runtime.get(entity_id) or {}
         enabled = runtime.get("enabled")
         # HA not enabled (or no HA evidence at all) is not a broken unit — the
-        # device simply is not part of an HA pair. Omit it.
+        # device simply is not part of an HA pair. Omit it. Configuration
+        # intent alone, with runtime HA disabled, never forms an eligible
+        # pair (contract fail-closed case 7).
         if str(enabled or "").strip().lower() not in {"yes", "true", "1"}:
             continue
 
@@ -583,11 +606,24 @@ def _derive_pan_units(
 
         if len(candidates) == 1:
             peer = candidates[0]
+            entity_management_ip = str(pan_rows[entity_id].get("management_ip") or "").strip()
+            peer_declared_peer_ip = str(pan_ha_peers.get(peer) or "").strip()
+            mutual = bool(entity_management_ip) and peer_declared_peer_ip == entity_management_ip
+
+            if mutual:
+                paired.add(entity_id)
+                paired.add(peer)
+                units.append(HaUnit(
+                    unit_id=f"{entity_id}+{peer}", unit_type=_UNIT_PAN_PAIR, vendor="panorama",
+                    members=sorted([entity_id, peer]), cluster_mode=mode,
+                ))
+                continue
+
             paired.add(entity_id)
-            paired.add(peer)
             units.append(HaUnit(
-                unit_id=f"{entity_id}+{peer}", unit_type=_UNIT_PAN_PAIR, vendor="panorama",
-                members=sorted([entity_id, peer]), cluster_mode=mode,
+                unit_id=entity_id, unit_type=_UNIT_PAN_PAIR, vendor="panorama",
+                members=[entity_id], cluster_mode=mode,
+                unresolved_reason="pan_ha_peer_asymmetric",
             ))
         else:
             paired.add(entity_id)
@@ -653,7 +689,7 @@ def compute_ha_readiness(
             and len(unit.members) == 1
             and verdict == VERDICT_INSUFFICIENT
         ):
-            reason = "pan_ha_peer_unresolved"
+            reason = unit.unresolved_reason or "pan_ha_peer_unresolved"
         assessments.append(UnitAssessment(unit, verdict, reason, checks))
 
     summary = {

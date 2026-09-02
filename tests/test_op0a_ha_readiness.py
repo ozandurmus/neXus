@@ -736,6 +736,97 @@ def test_ac5_ha_disabled_device_is_not_a_unit():
 
 
 # --------------------------------------------------------------------------
+# PAN HA peer-pairing identity closure (OP.0a.P7 revision) — mutual
+# CONFIGURATION agreement required before pairing. `peer_ip` is
+# configuration intent, never runtime proof (contract Q1/Q3); this is
+# Grade A (READ-ONLY OP.0a pairing) only, never sufficient corroboration
+# for any future CLASS 2 decision.
+# --------------------------------------------------------------------------
+
+def test_mutual_configuration_agreement_required_asymmetric_fails_closed():
+    """A declares B as peer; B declares no peer at all. A one-sided
+    relationship must not form a pair -- distinguishable from the generic
+    unresolved reason."""
+    rows = [_pan("pan-ha-01", "10.0.0.1"), _pan("pan-ha-02", "10.0.0.2")]
+    runtime = {"pan-ha-01": _pan_runtime(), "pan-ha-02": _pan_runtime("passive", "active")}
+    peers = {"pan-ha-01": "10.0.0.2"}  # pan-ha-02 declares nothing back
+    report = compute_ha_readiness(rows, pan_ha_runtime=runtime, pan_ha_peers=peers)
+    pan_units = [u for u in report["units"] if u["vendor"] == "panorama"]
+    assert len(pan_units) == 2  # never a guessed pair -- each stays its own unresolved unit
+    assert all(u["members"] != ["pan-ha-01", "pan-ha-02"] for u in pan_units)
+    unit_a = _unit_by_id(report, "pan-ha-01")
+    assert unit_a["members"] == ["pan-ha-01"]
+    assert unit_a["reason"] == "pan_ha_peer_asymmetric"
+
+
+def test_mutual_configuration_agreement_required_contradictory_fails_closed():
+    """A declares B as peer; B declares C as peer (not A). Contradictory
+    configuration must not form A+B, and must not guess."""
+    rows = [_pan("pan-a", "10.0.0.1"), _pan("pan-b", "10.0.0.2"), _pan("pan-c", "10.0.0.3")]
+    runtime = {
+        "pan-a": _pan_runtime(), "pan-b": _pan_runtime("passive", "active"),
+        "pan-c": _pan_runtime(),
+    }
+    peers = {"pan-a": "10.0.0.2", "pan-b": "10.0.0.3", "pan-c": "10.0.0.2"}
+    report = compute_ha_readiness(rows, pan_ha_runtime=runtime, pan_ha_peers=peers)
+    unit_a = _unit_by_id(report, "pan-a")
+    assert unit_a["members"] == ["pan-a"]
+    assert unit_a["reason"] == "pan_ha_peer_asymmetric"
+    # pan-a+pan-b must never appear as a guessed pair.
+    assert all(u["unit_id"] != "pan-a+pan-b" for u in report["units"])
+
+
+def test_peer_pointing_to_self_fails_closed():
+    """A device whose configured peer_ip equals its own management_ip must
+    never pair with itself."""
+    rows = [_pan("pan-solo", "10.0.0.1"), _pan("pan-other", "10.0.0.2")]
+    runtime = {"pan-solo": _pan_runtime()}
+    peers = {"pan-solo": "10.0.0.1"}  # points at itself
+    report = compute_ha_readiness(rows, pan_ha_runtime=runtime, pan_ha_peers=peers)
+    unit = _unit_by_id(report, "pan-solo")
+    assert unit["members"] == ["pan-solo"]
+    assert unit["reason"] == "pan_ha_peer_unresolved"
+
+
+def test_mutual_agreement_pair_identity_stable_across_active_passive_swap():
+    """The pair's unit_id must not depend on which member is currently
+    ACTIVE vs STANDBY -- only on the (stable, alphabetically-ordered)
+    identity strings of its two members."""
+    rows = [_pan("pan-ha-01", "10.0.0.1"), _pan("pan-ha-02", "10.0.0.2")]
+    peers = {"pan-ha-01": "10.0.0.2", "pan-ha-02": "10.0.0.1"}
+
+    before = compute_ha_readiness(
+        rows,
+        pan_ha_runtime={"pan-ha-01": _pan_runtime("active", "passive"), "pan-ha-02": _pan_runtime("passive", "active")},
+        pan_ha_peers=peers,
+    )
+    after = compute_ha_readiness(
+        rows,
+        pan_ha_runtime={"pan-ha-01": _pan_runtime("passive", "active"), "pan-ha-02": _pan_runtime("active", "passive")},
+        pan_ha_peers=peers,
+    )
+    unit_before = _unit_by_id(before, "pan-ha-01+pan-ha-02")
+    unit_after = _unit_by_id(after, "pan-ha-01+pan-ha-02")
+    assert unit_before is not None and unit_after is not None
+    assert unit_before["unit_id"] == unit_after["unit_id"]
+    assert sorted(unit_before["members"]) == sorted(unit_after["members"])
+
+
+def test_pan_ha_pair_unit_identity_never_uses_management_ip_serial_or_vsys():
+    """Canonical PAN HA pair identity is the two members' entity ids only --
+    never a management address, a single member's serial, a display label,
+    or a vsys value."""
+    rows = [_pan("pan-ha-01", "10.0.0.1", vsys="vsys1"), _pan("pan-ha-02", "10.0.0.2", vsys="vsys2")]
+    runtime = {"pan-ha-01": _pan_runtime(), "pan-ha-02": _pan_runtime("passive", "active")}
+    peers = {"pan-ha-01": "10.0.0.2", "pan-ha-02": "10.0.0.1"}
+    report = compute_ha_readiness(rows, pan_ha_runtime=runtime, pan_ha_peers=peers)
+    unit = _unit_by_id(report, "pan-ha-01+pan-ha-02")
+    assert unit is not None
+    assert "10.0.0.1" not in unit["unit_id"] and "10.0.0.2" not in unit["unit_id"]
+    assert "vsys1" not in unit["unit_id"] and "vsys2" not in unit["unit_id"]
+
+
+# --------------------------------------------------------------------------
 # AC-6 — SAFE_TO_FAILOVER is unreachable (the load-bearing invariant, P4)
 # --------------------------------------------------------------------------
 
