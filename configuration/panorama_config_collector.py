@@ -31,6 +31,7 @@ from utils.logger import err, info, register_sensitive_value, warn
 from utils.pan_tls_trust import PanTlsStrictPreflightError, preflight_pan_tls_ca_bundle
 from utils.runtime_paths import default_output_root
 from utils.support_bundle import Tokenizer, _get_support_key
+from panorama.pan_identity import normalize_pan_hostname
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -230,7 +231,7 @@ def get_devices(host: str, key: str, *, verify: bool | str, timeout: float) -> l
             continue
         devices.append({
             "serial": serial,
-            "hostname": (entry.findtext("hostname") or serial).strip(),
+            "hostname": normalize_pan_hostname(entry.findtext("hostname"), serial=serial),
             "connected": (entry.findtext("connected") or "").strip().lower(),
             "management_ip": (entry.findtext("ip-address") or "").strip() or None,
             "model": (entry.findtext("model") or "").strip() or None,
@@ -288,6 +289,39 @@ def get_target_ha_runtime_state(
         "peer_state": peer_state,
         "state_sync": state_sync,
     }
+
+
+def parse_ha_peer_ip_from_config(content: bytes) -> dict[str, str | None]:
+    """Extract the configured HA peer address from a running-config XML
+    document this collector already fetches (OP.0a.P7 contract). Read-only
+    parse of already-retrieved evidence -- no new device command, no new
+    API call: `content` is the same bytes `_store_artifact` writes as the
+    `running-config.xml` / active-config artifact.
+
+    `/deviceconfig/high-availability/group/peer-ip` (and `-ipv6`) is the
+    exact XPath `configuration/pan_semantic_policy.py`'s
+    `_MEMBER_SPECIFIC_EXACT_SUFFIXES` already treats as real and
+    member-specific, manually validated against this environment. Searched
+    as a descendant match (`.//deviceconfig/...`), not an absolute path,
+    because the exact nesting depth under the API's `target=<serial>`-scoped
+    `<config>` root is not asserted here -- the tag-path suffix is what was
+    validated, not its absolute depth.
+
+    Configuration intent, not a runtime observation and not proof of a live
+    peer relationship: this is what the HA group is configured to point at,
+    never confirmation that it currently does. Callers must not treat a
+    resolved value as sufficient corroboration on its own (OP.0a.P7
+    contract, Grade A vs Grade B/C) -- it is one half of the mutual
+    configuration-agreement check `utils/failover/assessment.py::_derive_pan_units`
+    requires before forming a pair, never used alone."""
+    try:
+        parser = etree.XMLParser(resolve_entities=False, no_network=True, recover=False)
+        root = etree.fromstring(content, parser=parser)
+    except etree.XMLSyntaxError:
+        return {"peer_ip": None, "peer_ipv6": None}
+    peer_ip = (root.findtext(".//deviceconfig/high-availability/group/peer-ip") or "").strip() or None
+    peer_ipv6 = (root.findtext(".//deviceconfig/high-availability/group/peer-ipv6") or "").strip() or None
+    return {"peer_ip": peer_ip, "peer_ipv6": peer_ipv6}
 
 
 def _config_payload(root: etree._Element, operation: str) -> bytes:
@@ -1525,6 +1559,15 @@ def _collect_device_row(
             f"hint={row['panorama_control'].get('error_hint')}"
         )
     else:
+        # Additive parse of the same already-fetched bytes stored below --
+        # no new command, no new API call (OP.0a.P7 contract). Fail-closed:
+        # an unparseable document yields peer_ip=None, never a guess, and
+        # never blocks storing the artifact itself.
+        peer_addresses = parse_ha_peer_ip_from_config(control_content)
+        if isinstance(row.get("ha_runtime"), dict):
+            row["ha_runtime"]["peer_ip"] = peer_addresses["peer_ip"]
+            row["ha_runtime"]["peer_ipv6"] = peer_addresses["peer_ipv6"]
+
         store_started = time.monotonic()
         try:
             artifact = _store_artifact(

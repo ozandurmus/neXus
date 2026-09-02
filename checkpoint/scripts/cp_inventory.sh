@@ -318,6 +318,12 @@ while read -r line; do
 
     SEQ=$((SEQ+1))
     SAFE_GW=$(echo "$GW" | tr -c '[:alnum:]_-' '_')
+    # `echo`'s own trailing newline isn't in the allowed class, so `tr -c`
+    # rewrites it to a literal "_" -- and since it is no longer a newline
+    # byte, command substitution above has nothing left to strip. This fires
+    # for every device unconditionally, appending a trailing "_" that was
+    # never part of the real object name (real-env retry finding). Drop it.
+    SAFE_GW="${SAFE_GW%_}"
 
     # Python consumes this line without echoing the sensitive identity.
     echo ">>> GW: $GW ($IP)"
