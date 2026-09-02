@@ -367,6 +367,50 @@ def test_real_pipeline_shape_physical_vsx_detected_by_evidence_not_missing_flag(
     assert sorted(vsid_2["members"]) == ["VSX-1__vsid_2", "VSX-2__vsid_2"]
 
 
+def test_real_pipeline_shape_survives_cp_vs_vsx_device_name_separator_mismatch():
+    """Real-env retry finding (post-PR#30): `checkpoint/scripts/cp_inventory.sh`
+    derives its `cp.json` device key with `tr -c '[:alnum:]_-' '_'` on the raw
+    target name, which appends a cosmetic trailing separator for some
+    real-estate management objects (e.g. "FW-CKP-EXTRA-LL-1_"); `vsx_runner.py`
+    reads the same physical object's name straight from `cpmiquerybin` without
+    that separator (e.g. "FW-CKP-EXTRA-LL-1"). An exact-string join between the
+    two collectors' `device` fields must not silently degrade a real VSX pair
+    to plain ClusterXL classification with 4 member-scoped orphan VS units --
+    it must still resolve to one cp_vsx_cluster parent and 2 merged VS units."""
+    rows = [
+        {"device": "FW-CKP-EXTRA-LL-1_", "source": "cp",
+         "cluster_topology": {"group_id": "grp-extra-ll", "display_name": "FW-CKP-EXTRA-LL-CLS"},
+         "inventory_status": {"data_state": "ok"}},
+        {"device": "FW-CKP-EXTRA-LL-2_", "source": "cp",
+         "cluster_topology": {"group_id": "grp-extra-ll", "display_name": "FW-CKP-EXTRA-LL-CLS"},
+         "inventory_status": {"data_state": "ok"}},
+        {"device": "FW-CKP-EXTRA-LL-1", "source": "vsx", "vs_id": "1", "vsys": "Extranet-vsx",
+         "inventory_status": {"data_state": "ok"}},
+        {"device": "FW-CKP-EXTRA-LL-1", "source": "vsx", "vs_id": "2", "vsys": "Leasedline",
+         "inventory_status": {"data_state": "ok"}},
+        {"device": "FW-CKP-EXTRA-LL-2", "source": "vsx", "vs_id": "1", "vsys": "Extranet-vsx",
+         "inventory_status": {"data_state": "ok"}},
+        {"device": "FW-CKP-EXTRA-LL-2", "source": "vsx", "vs_id": "2", "vsys": "Leasedline",
+         "inventory_status": {"data_state": "ok"}},
+    ]
+    report = compute_ha_readiness(rows)
+    parent = _unit_by_id(report, "grp-extra-ll")
+    assert parent is not None
+    assert parent["unit_type"] == "cp_vsx_cluster"  # not cp_clusterxl_cluster
+
+    vs_units = [u for u in report["units"] if u["unit_type"] == "cp_vsx_virtual_system"]
+    assert len(vs_units) == 2  # not 4 orphaned (device, vsid) singletons
+    assert {u["unit_id"] for u in vs_units} == {"grp-extra-ll__vsid_1", "grp-extra-ll__vsid_2"}
+
+    vsid_1 = _unit_by_id(report, "grp-extra-ll__vsid_1")
+    vsid_2 = _unit_by_id(report, "grp-extra-ll__vsid_2")
+    assert vsid_1["parent_id"] == "grp-extra-ll" and vsid_2["parent_id"] == "grp-extra-ll"
+    assert sorted(vsid_1["members"]) == ["FW-CKP-EXTRA-LL-1__vsid_1", "FW-CKP-EXTRA-LL-2__vsid_1"]
+    assert sorted(vsid_2["members"]) == ["FW-CKP-EXTRA-LL-1__vsid_2", "FW-CKP-EXTRA-LL-2__vsid_2"]
+    assert vsid_1["display_name"] == "Extranet-vsx | FW-CKP-EXTRA-LL-CLS"
+    assert vsid_2["display_name"] == "Leasedline | FW-CKP-EXTRA-LL-CLS"
+
+
 def test_each_virtual_system_is_a_distinct_unit_linked_to_its_physical_parent():
     rows = [
         _cp_topo("VSX-1", "grp-vsx1", source="vsx"),
