@@ -22,6 +22,7 @@ before and both of which had already drifted:
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -263,3 +264,69 @@ def test_agents_md_encodes_evidence_identity_and_readiness_distinctions():
     text = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
     assert "Evidence identity != operational identity" in text
     assert "Readiness != authorization" in text
+
+
+# --- Draft-authority machine gate (OP.0b.0 STATE_UPDATE, DEV.4 follow-up) ---
+#
+# AGENTS.md "Authority hierarchy" item 2 and "Contract-status law" both say, in
+# prose, that a DRAFT / DO NOT FREEZE contract must never be treated as the
+# current FROZEN implementation authority. Auditing DEV.4's five governance
+# tests found none of them machine-check that specific invariant -- they pin
+# AI_HANDOVER.md's banner, the stale device-write claim, the opaque-identifier
+# vocabulary, the command-gate/validation-tier wording, and the evidence-
+# identity/readiness wording, but nothing walks an actual contract doc's own
+# declared status against what project state claims about it. This closes
+# that gap generically: it reads each contract doc's own "## Status" line
+# (the existing, already-followed convention -- see e.g. OP_0B_0_..., which is
+# "DRAFT -- DO NOT FREEZE", vs. DEV3_3_..., which is "CONTRACT_FROZEN") and
+# compares the *token*, never fixed prose, against the status of any
+# build_history.json record that cites the doc via its `docs` mapping.
+
+_STATUS_HEADING_RE = re.compile(r"^## Status\s*$", re.MULTILINE)
+_DRAFT_STATUS_MARKERS = ("DRAFT", "DO NOT FREEZE")
+_FROZEN_STATUS_MARKERS = ("FROZEN",)
+
+
+def _contract_doc_status_line(path: Path) -> str:
+    """The first non-blank line following a doc's '## Status' heading -- the
+    convention every phase/design doc in this repository already follows for
+    declaring DRAFT / DO NOT FREEZE / CONTRACT_FROZEN / SUPERSEDED /
+    DEPRECATED (AGENTS.md Contract-status law)."""
+    match = _STATUS_HEADING_RE.search(path.read_text(encoding="utf-8"))
+    if not match:
+        return ""
+    for line in path.read_text(encoding="utf-8")[match.end():].splitlines():
+        if line.strip():
+            return line.strip()
+    return ""
+
+
+def test_a_draft_contract_never_backs_a_terminal_build_history_record():
+    """The machine check for: 'A DRAFT / DO NOT FREEZE contract cannot be
+    treated as the current FROZEN implementation authority.' Walks every doc
+    a build_history.json record cites, and where that doc's own status line
+    says DRAFT/DO NOT FREEZE (and not FROZEN), asserts the citing record's
+    own status is not one that claims a finished, authoritative outcome. This
+    is authority-semantics, not prose-matching: it keys off the doc's self-
+    declared status token, so it holds for any future DRAFT contract, not
+    only OP.0b.0."""
+    from utils.project_plan import _TERMINAL_BUILD_STATUSES
+
+    for build in _load("build_history.json")["builds"]:
+        for doc_path in (build.get("docs") or {}).values():
+            full = ROOT / doc_path
+            if full.suffix != ".md" or not full.exists():
+                continue
+            status_line = _contract_doc_status_line(full)
+            if not status_line:
+                continue
+            is_draft = any(marker in status_line for marker in _DRAFT_STATUS_MARKERS)
+            is_frozen = any(marker in status_line for marker in _FROZEN_STATUS_MARKERS)
+            if not is_draft or is_frozen:
+                continue
+            build_status = str(build.get("status") or "")
+            assert build_status not in _TERMINAL_BUILD_STATUSES, (
+                f"{doc_path} status line ({status_line!r}) is DRAFT/DO NOT FREEZE, "
+                f"but build_history record {build.get('build')!r} claims terminal "
+                f"status {build_status!r} -- a draft cannot back frozen authority"
+            )

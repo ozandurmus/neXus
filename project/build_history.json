@@ -3,6 +3,45 @@
   "record_contract": "One structured record per build, newest first. Required: build, status, title, summary (<= 2 sentences). Optional: started, completed, track, movement, supersedes, evidence, risks_forward, docs{agreement,validation,handover} (repo-relative paths under docs/history/). Full detail lives in the linked doc; do not restate it here. Status vocabulary must stay within utils/project_plan.py STATUS_VALUES.",
   "builds": [
     {
+      "build": "dev4_ai_engineering_constitution_authority_reconciliation",
+      "status": "automated_validated",
+      "title": "DEV.4 - AI engineering constitution & authority reconciliation",
+      "summary": "Collapsed the AI bootstrap/governance surface to a three-file authority model (AGENTS.md constitution, AI_START_HERE.md operating protocol, CURRENT_STATE.md hot checkpoint) after an audit found real duplication and two live authority contradictions (a stale DEV.1 pointer, and CURRENT_STATE.md naming a different active build than roadmap.json); both fixed by deferring to the higher authority rather than silently reconciling. Documentation/governance only -- no product code, collector, vendor command, schema, transport or UI behavior changed.",
+      "started": "2026-09-02",
+      "completed": "2026-09-02",
+      "track": "DEV.x Engineering Foundation",
+      "movement": "ARCHITECTURE",
+      "evidence": "tests/test_architecture_convergence.py grew five governance tests (AI_HANDOVER.md non-authoritative banner; stale no-device-write-automation claim never reappearing; opaque-identifier law present in AGENTS.md; command gate + validation-tier vocabulary documented; evidence-identity/readiness-authorization phrasing present). This STATE_UPDATE added a sixth, generic one: a DRAFT/DO NOT FREEZE contract doc can never back a terminal-status build_history record. Full regression: 1099 passed / 24 skipped / 0 failed, serial. Repository privacy gate PASS / 0 findings.",
+      "risks_forward": "None to product/runtime/network behavior -- this build touched only governance docs and tests. OP.0b.0 remains DRAFT -- DO NOT FREEZE and untouched by this build; the PAN HA runtime-serial B2 investigation remains unresolved, also untouched. Rollback: revert 64c8d79."
+    },
+    {
+      "build": "op0b_0_vendor_failover_preflight_evidence_surface_contract_draft",
+      "status": "in_progress",
+      "title": "OP.0b.0 - Vendor failover preflight evidence surface contract (DRAFT -- DO NOT FREEZE)",
+      "summary": "Structurally complete evidence-surface contract for the ~16-command HA preflight battery (command table, configuration/runtime field trace, bug/gap register) built from repository source, recorded real-environment findings and vendor-doc search snippets. DRAFT -- DO NOT FREEZE: several safety-critical vendor command semantics (D-V1-D-V7, D-V9) remain UNKNOWN because official vendor documentation hosts returned CONNECT 403 from the drafting environment's egress proxy; fetching those documents from an unblocked network is the only work between this draft and FREEZE.",
+      "started": "2026-09-02",
+      "completed": "2026-09-02",
+      "track": "OP.x Controlled Failover",
+      "movement": "ARCHITECTURE",
+      "evidence": "Document only; no code changed. \u00a724 command surface table, \u00a725 configuration/runtime field trace table and \u00a726 bug/gap register fully populated; every semantic either cited to an official source or marked UNKNOWN.",
+      "risks_forward": "Must not be cited as approving any command, schema or identity model -- see AGENTS.md Authority hierarchy #2 and Contract-status law. D-V8, D-T1, D-F1, D-F2, D-P1 are open but non-blocking.",
+      "docs": {
+        "agreement": "docs/history/phase/OP_0B_0_VENDOR_FAILOVER_PREFLIGHT_EVIDENCE_SURFACE.md"
+      }
+    },
+    {
+      "build": "pan_ha_runtime_peer_identity_diagnostic",
+      "status": "automated_validated",
+      "title": "PAN HA runtime peer-identity diagnostic (CLASS 0, opt-in, read-only)",
+      "summary": "Parses PAN HA runtime peer-serial identity (peer-info/serial-num) as opt-in diagnostic evidence, not as pairing input, and hints leading-zero-shaped serial mismatches in PAN target-selector errors without normalizing them. No new device command; no change to PAN HA pairing or readiness verdicts.",
+      "started": "2026-09-02",
+      "completed": "2026-09-02",
+      "track": "OP.x Controlled Failover",
+      "movement": "IMPLEMENTATION",
+      "evidence": "Commits 1d97cd6, d0f8e31, a1a3882. Full suite green at the point of this record (see dev4_ai_engineering_constitution_authority_reconciliation evidence: 1099 passed / 24 skipped / 0 failed).",
+      "risks_forward": "Real-environment S0 result on the approved real PAN pair: one member self-consistent (self_identity_consistent = MATCH, runtime_peer_serial_state = MATCH), the other member's independently sourced serial representations do not compare equal (self_identity_consistent = MISMATCH, runtime_peer_serial_state = MISMATCH). B2 bidirectional corroboration NOT ESTABLISHED. Root cause UNKNOWN -- whitespace and parser numeric-conversion causes ruled out by source inspection; leading-zero normalization is NOT AUTHORIZED, the identifier stays opaque. See project/backlog.json pan_serial_representation_identity_evidence_closure."
+    },
+    {
       "build": "op0a_pan_ha_peer_pairing_identity_closure",
       "status": "automated_validated",
       "title": "OP.0a.P7 revision - PAN HA peer-pairing identity closure",
