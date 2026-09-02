@@ -2004,10 +2004,24 @@ def _apply_pan_target_selector(
 
     unknown = sorted(s for s in requested if s not in by_serial)
     if unknown:
-        raise ValueError(
+        # Recurring operator pain point: a serial retyped/copied through a
+        # spreadsheet or numeric field loses its leading zero(s). This never
+        # changes matching -- it is still exact and fail-closed -- it only
+        # tells the operator, in the same message, which discovered serial
+        # they most likely meant.
+        by_digits = {s.lstrip("0") or "0": s for s in by_serial if s}
+        hints = [
+            f"{s} -> did you mean {by_digits[s.lstrip('0') or '0']}? (matches ignoring leading zeros)"
+            for s in unknown
+            if (s.lstrip("0") or "0") in by_digits and by_digits[s.lstrip("0") or "0"] != s
+        ]
+        message = (
             "pan_config_targets: unknown serial(s), refusing to contact any device: "
             + ", ".join(unknown)
         )
+        if hints:
+            message += " | " + "; ".join(hints)
+        raise ValueError(message)
 
     ambiguous = sorted(s for s in requested if len(by_serial[s]) > 1)
     if ambiguous:
