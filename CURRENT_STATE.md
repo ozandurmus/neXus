@@ -5,11 +5,18 @@ Hot-path checkpoint only. **Predecessor build detail is not here** — it is in
 shipped when) and its linked documents under `docs/history/`.
 `docs/history/INDEX.md` is the generated one-line timeline.
 
-- **Checkpoint:** 2026-09-01, branch `main`.
+- **Checkpoint:** 2026-09-02, branch `claude/vsx-real-env-retry-validation-jxh2qh`.
+- **Current build:** `op0a_pan_ha_peer_pairing_identity_closure` (OP.0a.P7
+  revision) — AUTOMATED_VALIDATED. Real-environment confirmation owed (see
+  `project/roadmap.json` `now_next.next`).
 - **Product baseline:** `0.7.7 — Compliance trend retro-fill` — AUTOMATED_VALIDATED.
 - **Engineering baseline:** `DEV.3.3` — AUTOMATED_VALIDATED. `DEV.1` complete.
 - **Product evidence baseline:** `0.6.1B.1.2` interactive Check Point
   configuration collection is REAL_ENV_VALIDATED.
+- **VSX real-env retry** (`op_vsx_real_env_retry_fixes`): three post-merge
+  defects found and fixed against a live physical VSX pair — see
+  `project/build_history.json`. Confirmed by the product owner on the real
+  `FW-CKP-EXTRA-LL` and `FW-CKP-ARKTEST` pairs.
 
 ## Reading this file
 

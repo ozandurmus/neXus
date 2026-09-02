@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "current_build": "failover_readiness_ui",
+  "current_build": "op0a_pan_ha_peer_pairing_identity_closure",
   "current_track": "CON.x",
   "progress_contract": "Weighted acceptance-criterion completion. Percentages describe the declared roadmap, not calendar time or delivery ETA.",
   "tracks": [
@@ -123,17 +123,17 @@
   "now_next": {
     "horizon_contract": "NOW is exactly one build. NEXT is exactly one. Everything else is an `upcoming` row carrying its own true status: planned = AFTER, blocked = waiting on a named external gate, deferred = consciously postponed. `now.build` must equal the newest project/build_history.json record -- utils.project_plan enforces it.",
     "now": {
-      "build": "failover_readiness_ui",
-      "title": "Failover readiness UI module (Operator Console + report)",
-      "goal": "The FAILOVER_ENGINE_ARCHITECTURE.md section 9 readiness surface over utils.failover.compute_ha_readiness: fleet view of every HA cluster/pair, per-unit verdict, per-stop-condition blocking reasons, the OP.0a fail-closed framing note. Read-only, computed live off already-loaded evidence, no new device command, no execution control.",
+      "build": "op0a_pan_ha_peer_pairing_identity_closure",
+      "title": "OP.0a.P7 revision - PAN HA peer-pairing identity closure",
+      "goal": "Wire peer_ip/peer_ipv6 from the already-fetched PAN running-config XML into PAN HA peer-pairing (previously dead code against real telemetry), close the CP-tr-class hostname-normalization divergence between panorama_runtime_runner.py and panorama_config_collector.py, and require mutual (both-directions) configuration agreement before _derive_pan_units forms a pair. Read-only, no new device command. peer_ip is explicitly configuration intent (Grade A) for OP.0a pairing only -- never sufficient for a future CLASS 2 authorization decision.",
       "status": "automated_validated",
-      "started": "2026-09-01",
-      "completed": "2026-09-01"
+      "started": "2026-09-02",
+      "completed": "2026-09-02"
     },
     "next": {
       "build": "op0_failover_readiness_real_env_closure",
       "title": "Failover readiness real-environment evidence",
-      "goal": "Confirm OP.0a ha_cluster_mode resolution against a real CP/PAN HA pair (the fixture-constructed mode mapping is not yet hardware-confirmed) and eyeball the new Failover module in Operator Console against that real evidence. No new code expected; a decision on OP.0b gate approval is the other open item on this path.",
+      "goal": "Confirm OP.0a ha_cluster_mode resolution AND the new PAN peer_ip extraction/mutual-agreement pairing against a real CP/PAN HA pair (both fixture-constructed today, not yet hardware-confirmed), and eyeball the Failover module in Operator Console against that real evidence. Also confirms the VSX real-env retry fixes (op_vsx_real_env_retry_fixes) hold on a freshly re-collected pair. No new code expected; a decision on OP.0b gate approval is the other open item on this path.",
       "status": "planned",
       "prerequisites": [
         "OP.0c AUTOMATED_VALIDATED (met)"
@@ -229,7 +229,7 @@
     "VSX configuration evidence was originally targeted for 0.6.2 but was delivered early inside the 0.6.1B Check Point configuration track.",
     "The original 0.6.0B native-backup milestone was deferred pending a rebase; that rebase landed 2026-08-30 as docs/design/BACKUP_AND_RECOVERY_ARCHITECTURE.md + docs/design/BACKUP_RECOVERY_CONTRACTS.md (phases RB.0-RB.6). The original constraint stands and is now the design's first principle: configuration evidence is not a recovery backup -- the evidence plane is deliberately redacted and therefore non-restorable, so a separate encrypted recovery plane is required. Backup artifact bytes must never reach output/index.html, the support bundle, or repository metadata; only manifests may be read by other subsystems.",
     "Write/change automation remains outside the current roadmap gate until SEE, VERIFY, TRACE and RECOVER are sufficiently mature.",
-    "Future 0.7.xâ€“1.0 major-track numbering is a planning map, not a frozen release commitment; rebase it explicitly when a preceding phase changes implementation order.",
+    "Future 0.7.x\u00e2\u20ac\u201c1.0 major-track numbering is a planning map, not a frozen release commitment; rebase it explicitly when a preceding phase changes implementation order.",
     "DEPLOY.1 pulls the server_data_plane portion of the 1.0 GOVERN track forward to host the living SEE-track platform; it must not be used to bypass the write/change automation gate stated above.",
     "DEV.1 establishes the controlled Corporate Git/Copilot operating baseline; after acceptance, engineering returns to product work at 0.6.1C. DEV.0.3C remains deferred to the pre-server storage-sensitive checkpoint.",
     "0.7.x early VERIFY foundation was delivered ahead of schedule in 0.6.1B.1.5 and 0.6.1B.1.6; the 0.7.x formal track opens with compliance_posture_rulepack_transition promoting those controls to versioned rule packs.",
@@ -379,7 +379,7 @@
         },
         {
           "build": "DEV.3.4",
-          "title": "Per-vendor worker containers — DEFERRED until collection duration is a real operational pain; requires DEV.3.3 first",
+          "title": "Per-vendor worker containers \u2014 DEFERRED until collection duration is a real operational pain; requires DEV.3.3 first",
           "status": "deferred"
         }
       ]
