@@ -159,7 +159,7 @@ def _check(check_id: str, label: str, status: str, reason: str, missing: str = "
 def _cp_roles(members: Sequence[str], cp_ha_runtime: Mapping[str, Mapping[str, Any]]) -> list[str]:
     roles = []
     for entity_id in members:
-        role = str((cp_ha_runtime.get(entity_id) or {}).get("ha_role") or "").strip().upper()
+        role = str((cp_ha_runtime.get(_normalize_cp_entity_key(entity_id)) or {}).get("ha_role") or "").strip().upper()
         if role:
             roles.append(role)
     return roles
@@ -312,6 +312,32 @@ def _join_device_key(name: str) -> str:
     return match.group(1) if match else text
 
 
+def _normalize_cp_entity_key(entity_id: str) -> str:
+    """Apply `_join_device_key` to just the device portion of a CP entity id,
+    so a VSID suffix (`__vsid_<N>`) never hides the same cosmetic separator
+    mismatch from a lookup.
+
+    `configuration/checkpoint_config_collector.py` derives its own
+    `cp_config_telemetry.json` entity id from its independently-resolved
+    `PhysicalTarget.device` (real-env finding: this can inherit the
+    trailing-separator-suffixed name, e.g. `FW-CKP-EXTRA-LL-1___vsid_2`),
+    while this module's own entity ids come from `resolve_entity_id` on raw
+    `vsx.json`/`cp.json` rows (e.g. `FW-CKP-EXTRA-LL-1__vsid_2`). Normalizing
+    both `cp_ha_runtime`'s stored keys and every lookup key here the same way
+    reconciles that without touching evidence identity."""
+    text = str(entity_id or "").strip()
+    if "__vsid_" in text:
+        device, _, suffix = text.partition("__vsid_")
+        return f"{_join_device_key(device)}__vsid_{suffix}"
+    return _join_device_key(text)
+
+
+def _normalize_cp_runtime(
+    cp_ha_runtime: Mapping[str, Mapping[str, Any]],
+) -> dict[str, Mapping[str, Any]]:
+    return {_normalize_cp_entity_key(k): v for k, v in cp_ha_runtime.items()}
+
+
 def _row_is_vsx(row: Mapping[str, Any], source: str) -> bool:
     """True when this physical-host row's OWN fields mark it as VSX -- either
     it came from `vsx.json` directly, or a `cp.json` row carries the CP
@@ -425,7 +451,7 @@ def _derive_cp_units(
             units.append(HaUnit(
                 unit_id=entity_id, unit_type=_UNIT_CP_VSX_HOST, vendor="checkpoint",
                 members=[entity_id],
-                cluster_mode=str((cp_ha_runtime.get(entity_id) or {}).get("ha_cluster_mode") or "unknown"),
+                cluster_mode=str((cp_ha_runtime.get(_normalize_cp_entity_key(entity_id)) or {}).get("ha_cluster_mode") or "unknown"),
             ))
             physical_unit_by_device[_join_device_key(device)] = entity_id
         # A standalone CP gateway with no cluster identity is not an HA unit
@@ -433,7 +459,7 @@ def _derive_cp_units(
 
     for cluster_key, members in clusters.items():
         modes = {
-            str((cp_ha_runtime.get(m) or {}).get("ha_cluster_mode") or "").strip()
+            str((cp_ha_runtime.get(_normalize_cp_entity_key(m)) or {}).get("ha_cluster_mode") or "").strip()
             for m in members
         }
         modes.discard("")
@@ -480,7 +506,7 @@ def _derive_cp_units(
 
     for (parent_unit_id, vs_id), member_entity_ids in resolved_groups.items():
         modes = {
-            str((cp_ha_runtime.get(m) or {}).get("ha_cluster_mode") or "").strip()
+            str((cp_ha_runtime.get(_normalize_cp_entity_key(m)) or {}).get("ha_cluster_mode") or "").strip()
             for m in member_entity_ids
         }
         modes.discard("")
@@ -503,7 +529,7 @@ def _derive_cp_units(
             members=[entity_id],
             parent_id=None,
             display_name=vsys or None,
-            cluster_mode=str((cp_ha_runtime.get(entity_id) or {}).get("ha_cluster_mode") or "unknown"),
+            cluster_mode=str((cp_ha_runtime.get(_normalize_cp_entity_key(entity_id)) or {}).get("ha_cluster_mode") or "unknown"),
         ))
 
     return units
@@ -603,7 +629,7 @@ def compute_ha_readiness(
     The result contains no management address, no raw device output and no
     command string other than the fixed `missing_evidence` labels.
     """
-    cp_runtime = cp_ha_runtime or {}
+    cp_runtime = _normalize_cp_runtime(cp_ha_runtime or {})
     pan_runtime = pan_ha_runtime or {}
     peers = pan_ha_peers or {}
 
