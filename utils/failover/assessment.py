@@ -19,6 +19,7 @@ re-derivation.
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Mapping, Sequence
@@ -288,6 +289,29 @@ def _verdict_for(unit: HaUnit, checks: Sequence[Mapping[str, Any]]) -> tuple[str
     return VERDICT_INSUFFICIENT, "stop_conditions_not_fully_evaluable"
 
 
+_TRAILING_SEP_RE = re.compile(r"^(.*[1-5])[-_.]$")
+
+
+def _join_device_key(name: str) -> str:
+    """Normalize a physical device name for cross-collector identity joins
+    only (never for display or for the entity/evidence identity itself).
+
+    `checkpoint/scripts/cp_inventory.sh` derives its `cp.json` filename/device
+    key via `tr -c '[:alnum:]_-' '_'` on the raw target name, which appends a
+    cosmetic trailing separator for some real-estate management objects (see
+    `_cluster_display_name`'s "NAME-1_ / NAME-2_" note); `checkpoint/vsx_runner.py`
+    reads the same physical object's name straight from `cpmiquerybin` and
+    does not carry that separator. Left unreconciled, the two collectors'
+    `device` values fail an exact-string join -- a VSX physical member is
+    then classified as plain ClusterXL (VSX-hosting-device match fails) and
+    each of its Virtual Systems falls back to a standalone, member-scoped
+    unit instead of merging under the shared physical parent (real-env
+    finding, OP.VSX retry)."""
+    text = str(name or "").strip()
+    match = _TRAILING_SEP_RE.match(text)
+    return match.group(1) if match else text
+
+
 def _row_is_vsx(row: Mapping[str, Any], source: str) -> bool:
     """True when this physical-host row's OWN fields mark it as VSX -- either
     it came from `vsx.json` directly, or a `cp.json` row carries the CP
@@ -356,10 +380,10 @@ def _derive_cp_units(
     cluster_display_names: dict[str, str] = {}
     cluster_is_vsx: dict[str, bool] = {}
     physical_unit_by_device: dict[str, str] = {}
-    vs_rows: list[tuple[str, str, str]] = []  # (entity_id, physical device, vs_id)
+    vs_rows: list[tuple[str, str, str, str]] = []  # (entity_id, physical device, vs_id, vsys name)
 
     vsx_hosting_devices = {
-        str(row.get("device") or "").strip()
+        _join_device_key(row.get("device"))
         for row in rows
         if str(row.get("source") or "").strip().lower() == "vsx" and str(row.get("vs_id") or "").strip()
     }
@@ -378,10 +402,11 @@ def _derive_cp_units(
         # joins its host's cluster grouping (correctness rule 7) -- deferred
         # until the physical-grouping pass below resolves a parent for it.
         if source == "vsx" and vs_id:
-            vs_rows.append((entity_id, device, vs_id))
+            vsys = str(row.get("vsys") or "").strip()
+            vs_rows.append((entity_id, device, vs_id, vsys))
             continue
 
-        is_vsx = _row_is_vsx(row, source) or device in vsx_hosting_devices
+        is_vsx = _row_is_vsx(row, source) or _join_device_key(device) in vsx_hosting_devices
         topology = row.get("cluster_topology")
         topology = topology if isinstance(topology, Mapping) else {}
         group_id = str(topology.get("group_id") or "").strip()
@@ -402,7 +427,7 @@ def _derive_cp_units(
                 members=[entity_id],
                 cluster_mode=str((cp_ha_runtime.get(entity_id) or {}).get("ha_cluster_mode") or "unknown"),
             ))
-            physical_unit_by_device[device] = entity_id
+            physical_unit_by_device[_join_device_key(device)] = entity_id
         # A standalone CP gateway with no cluster identity is not an HA unit
         # at all and is omitted rather than reported as a broken one.
 
@@ -432,7 +457,7 @@ def _derive_cp_units(
             cluster_mode=modes.pop() if len(modes) == 1 else "unknown",
         ))
         for member_device in members:
-            physical_unit_by_device.setdefault(member_device, cluster_key)
+            physical_unit_by_device.setdefault(_join_device_key(member_device), cluster_key)
 
     # Aggregate VS evidence entities into one logical VS operational unit per
     # (resolved physical parent, vsid). A VSID observed only by a device whose
@@ -441,13 +466,17 @@ def _derive_cp_units(
     # cluster, and never merged with a same-numbered VSID under a different
     # or absent parent (cases F/G).
     resolved_groups: dict[tuple[str, str], list[str]] = {}
-    orphans: list[tuple[str, str]] = []  # (entity_id, vs_id) with no resolved parent
-    for entity_id, device, vs_id in vs_rows:
-        parent_unit_id = physical_unit_by_device.get(device)
+    resolved_vsys: dict[tuple[str, str], str] = {}
+    orphans: list[tuple[str, str, str]] = []  # (entity_id, vs_id, vsys) with no resolved parent
+    for entity_id, device, vs_id, vsys in vs_rows:
+        parent_unit_id = physical_unit_by_device.get(_join_device_key(device))
         if parent_unit_id is None:
-            orphans.append((entity_id, vs_id))
+            orphans.append((entity_id, vs_id, vsys))
             continue
-        resolved_groups.setdefault((parent_unit_id, vs_id), []).append(entity_id)
+        key = (parent_unit_id, vs_id)
+        resolved_groups.setdefault(key, []).append(entity_id)
+        if vsys and key not in resolved_vsys:
+            resolved_vsys[key] = vsys
 
     for (parent_unit_id, vs_id), member_entity_ids in resolved_groups.items():
         modes = {
@@ -456,20 +485,24 @@ def _derive_cp_units(
         }
         modes.discard("")
         modes.discard("unknown")
+        vsys = resolved_vsys.get((parent_unit_id, vs_id), "")
+        parent_display_name = cluster_display_names.get(parent_unit_id, parent_unit_id)
         units.append(HaUnit(
             unit_id=f"{parent_unit_id}__vsid_{vs_id}",
             unit_type=_UNIT_CP_VSX_VS,
             vendor="checkpoint",
             members=sorted(member_entity_ids),
             parent_id=parent_unit_id,
+            display_name=f"{vsys} | {parent_display_name}" if vsys else None,
             cluster_mode=modes.pop() if len(modes) == 1 else "unknown",
         ))
 
-    for entity_id, _vs_id in orphans:
+    for entity_id, _vs_id, vsys in orphans:
         units.append(HaUnit(
             unit_id=entity_id, unit_type=_UNIT_CP_VSX_VS, vendor="checkpoint",
             members=[entity_id],
             parent_id=None,
+            display_name=vsys or None,
             cluster_mode=str((cp_ha_runtime.get(entity_id) or {}).get("ha_cluster_mode") or "unknown"),
         ))
 
