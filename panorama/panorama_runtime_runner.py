@@ -10,6 +10,7 @@ from pathlib import Path
 
 from utils.logger import info, err, warn, register_sensitive_value
 from utils.pan_tls_trust import PanTlsStrictPreflightError, preflight_pan_tls_ca_bundle
+from panorama.pan_identity import normalize_pan_hostname
 
 TELEMETRY_OUT = "output/panorama_telemetry.json"
 
@@ -120,7 +121,7 @@ def get_devices(host, key, *, verify: bool | str = False):
         if serial:
             devices.append({
                 "serial": serial,
-                "hostname": hostname or serial,
+                "hostname": normalize_pan_hostname(hostname, serial=serial),
                 "connected": connected,
                 "management_ip": management_ip or None,
             })

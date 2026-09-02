@@ -19,6 +19,7 @@ re-derivation.
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Mapping, Sequence
@@ -117,6 +118,12 @@ class HaUnit:
     cluster_mode: str = "unknown"
     display_name: str | None = None
     parent_id: str | None = None
+    #: Set only by `_derive_pan_units` for a single-member PAN fallback unit,
+    #: to distinguish *why* it stayed unresolved (contract OP.0a.P7) --
+    #: never read by anything CP-side. `None` keeps the existing generic
+    #: `pan_ha_peer_unresolved` reason at the `compute_ha_readiness` call
+    #: site.
+    unresolved_reason: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -158,7 +165,7 @@ def _check(check_id: str, label: str, status: str, reason: str, missing: str = "
 def _cp_roles(members: Sequence[str], cp_ha_runtime: Mapping[str, Mapping[str, Any]]) -> list[str]:
     roles = []
     for entity_id in members:
-        role = str((cp_ha_runtime.get(entity_id) or {}).get("ha_role") or "").strip().upper()
+        role = str((cp_ha_runtime.get(_normalize_cp_entity_key(entity_id)) or {}).get("ha_role") or "").strip().upper()
         if role:
             roles.append(role)
     return roles
@@ -288,6 +295,56 @@ def _verdict_for(unit: HaUnit, checks: Sequence[Mapping[str, Any]]) -> tuple[str
     return VERDICT_INSUFFICIENT, "stop_conditions_not_fully_evaluable"
 
 
+_TRAILING_SEP_RE = re.compile(r"^(.*[1-5])[-_.]$")
+
+
+def _join_device_key(name: str) -> str:
+    """Normalize a physical device name for cross-collector identity joins
+    only (never for display or for the entity/evidence identity itself).
+
+    Historically, `checkpoint/scripts/cp_inventory.sh`'s `SAFE_GW=$(echo "$GW"
+    | tr -c '[:alnum:]_-' '_')` line converted `echo`'s own trailing newline
+    into a literal "_" (an echo/tr pipeline bug, not a real naming
+    convention -- fixed at the source), so `cp.json`'s device key carried a
+    spurious trailing separator that `checkpoint/vsx_runner.py`'s device
+    names, read straight from `cpmiquerybin`, never had. Left unreconciled,
+    the two collectors' `device` values fail an exact-string join -- a VSX
+    physical member is then classified as plain ClusterXL (VSX-hosting-device
+    match fails) and each of its Virtual Systems falls back to a standalone,
+    member-scoped unit instead of merging under the shared physical parent
+    (real-env finding, OP.VSX retry). Kept defensively for evidence collected
+    before the source fix, or any other stray separator."""
+    text = str(name or "").strip()
+    match = _TRAILING_SEP_RE.match(text)
+    return match.group(1) if match else text
+
+
+def _normalize_cp_entity_key(entity_id: str) -> str:
+    """Apply `_join_device_key` to just the device portion of a CP entity id,
+    so a VSID suffix (`__vsid_<N>`) never hides the same cosmetic separator
+    mismatch from a lookup.
+
+    `configuration/checkpoint_config_collector.py` derives its own
+    `cp_config_telemetry.json` entity id from its independently-resolved
+    `PhysicalTarget.device` (real-env finding: this can inherit the
+    trailing-separator-suffixed name, e.g. `FW-CKP-EXTRA-LL-1___vsid_2`),
+    while this module's own entity ids come from `resolve_entity_id` on raw
+    `vsx.json`/`cp.json` rows (e.g. `FW-CKP-EXTRA-LL-1__vsid_2`). Normalizing
+    both `cp_ha_runtime`'s stored keys and every lookup key here the same way
+    reconciles that without touching evidence identity."""
+    text = str(entity_id or "").strip()
+    if "__vsid_" in text:
+        device, _, suffix = text.partition("__vsid_")
+        return f"{_join_device_key(device)}__vsid_{suffix}"
+    return _join_device_key(text)
+
+
+def _normalize_cp_runtime(
+    cp_ha_runtime: Mapping[str, Mapping[str, Any]],
+) -> dict[str, Mapping[str, Any]]:
+    return {_normalize_cp_entity_key(k): v for k, v in cp_ha_runtime.items()}
+
+
 def _row_is_vsx(row: Mapping[str, Any], source: str) -> bool:
     """True when this physical-host row's OWN fields mark it as VSX -- either
     it came from `vsx.json` directly, or a `cp.json` row carries the CP
@@ -356,10 +413,10 @@ def _derive_cp_units(
     cluster_display_names: dict[str, str] = {}
     cluster_is_vsx: dict[str, bool] = {}
     physical_unit_by_device: dict[str, str] = {}
-    vs_rows: list[tuple[str, str, str]] = []  # (entity_id, physical device, vs_id)
+    vs_rows: list[tuple[str, str, str, str]] = []  # (entity_id, physical device, vs_id, vsys name)
 
     vsx_hosting_devices = {
-        str(row.get("device") or "").strip()
+        _join_device_key(row.get("device"))
         for row in rows
         if str(row.get("source") or "").strip().lower() == "vsx" and str(row.get("vs_id") or "").strip()
     }
@@ -378,10 +435,11 @@ def _derive_cp_units(
         # joins its host's cluster grouping (correctness rule 7) -- deferred
         # until the physical-grouping pass below resolves a parent for it.
         if source == "vsx" and vs_id:
-            vs_rows.append((entity_id, device, vs_id))
+            vsys = str(row.get("vsys") or "").strip()
+            vs_rows.append((entity_id, device, vs_id, vsys))
             continue
 
-        is_vsx = _row_is_vsx(row, source) or device in vsx_hosting_devices
+        is_vsx = _row_is_vsx(row, source) or _join_device_key(device) in vsx_hosting_devices
         topology = row.get("cluster_topology")
         topology = topology if isinstance(topology, Mapping) else {}
         group_id = str(topology.get("group_id") or "").strip()
@@ -400,15 +458,15 @@ def _derive_cp_units(
             units.append(HaUnit(
                 unit_id=entity_id, unit_type=_UNIT_CP_VSX_HOST, vendor="checkpoint",
                 members=[entity_id],
-                cluster_mode=str((cp_ha_runtime.get(entity_id) or {}).get("ha_cluster_mode") or "unknown"),
+                cluster_mode=str((cp_ha_runtime.get(_normalize_cp_entity_key(entity_id)) or {}).get("ha_cluster_mode") or "unknown"),
             ))
-            physical_unit_by_device[device] = entity_id
+            physical_unit_by_device[_join_device_key(device)] = entity_id
         # A standalone CP gateway with no cluster identity is not an HA unit
         # at all and is omitted rather than reported as a broken one.
 
     for cluster_key, members in clusters.items():
         modes = {
-            str((cp_ha_runtime.get(m) or {}).get("ha_cluster_mode") or "").strip()
+            str((cp_ha_runtime.get(_normalize_cp_entity_key(m)) or {}).get("ha_cluster_mode") or "").strip()
             for m in members
         }
         modes.discard("")
@@ -432,7 +490,7 @@ def _derive_cp_units(
             cluster_mode=modes.pop() if len(modes) == 1 else "unknown",
         ))
         for member_device in members:
-            physical_unit_by_device.setdefault(member_device, cluster_key)
+            physical_unit_by_device.setdefault(_join_device_key(member_device), cluster_key)
 
     # Aggregate VS evidence entities into one logical VS operational unit per
     # (resolved physical parent, vsid). A VSID observed only by a device whose
@@ -441,39 +499,74 @@ def _derive_cp_units(
     # cluster, and never merged with a same-numbered VSID under a different
     # or absent parent (cases F/G).
     resolved_groups: dict[tuple[str, str], list[str]] = {}
-    orphans: list[tuple[str, str]] = []  # (entity_id, vs_id) with no resolved parent
-    for entity_id, device, vs_id in vs_rows:
-        parent_unit_id = physical_unit_by_device.get(device)
+    resolved_vsys: dict[tuple[str, str], str] = {}
+    orphans: list[tuple[str, str, str]] = []  # (entity_id, vs_id, vsys) with no resolved parent
+    for entity_id, device, vs_id, vsys in vs_rows:
+        parent_unit_id = physical_unit_by_device.get(_join_device_key(device))
         if parent_unit_id is None:
-            orphans.append((entity_id, vs_id))
+            orphans.append((entity_id, vs_id, vsys))
             continue
-        resolved_groups.setdefault((parent_unit_id, vs_id), []).append(entity_id)
+        key = (parent_unit_id, vs_id)
+        resolved_groups.setdefault(key, []).append(entity_id)
+        if vsys and key not in resolved_vsys:
+            resolved_vsys[key] = vsys
 
     for (parent_unit_id, vs_id), member_entity_ids in resolved_groups.items():
         modes = {
-            str((cp_ha_runtime.get(m) or {}).get("ha_cluster_mode") or "").strip()
+            str((cp_ha_runtime.get(_normalize_cp_entity_key(m)) or {}).get("ha_cluster_mode") or "").strip()
             for m in member_entity_ids
         }
         modes.discard("")
         modes.discard("unknown")
+        vsys = resolved_vsys.get((parent_unit_id, vs_id), "")
+        parent_display_name = cluster_display_names.get(parent_unit_id, parent_unit_id)
         units.append(HaUnit(
             unit_id=f"{parent_unit_id}__vsid_{vs_id}",
             unit_type=_UNIT_CP_VSX_VS,
             vendor="checkpoint",
             members=sorted(member_entity_ids),
             parent_id=parent_unit_id,
+            display_name=f"{vsys} | {parent_display_name}" if vsys else None,
             cluster_mode=modes.pop() if len(modes) == 1 else "unknown",
         ))
 
-    for entity_id, _vs_id in orphans:
+    for entity_id, _vs_id, vsys in orphans:
         units.append(HaUnit(
             unit_id=entity_id, unit_type=_UNIT_CP_VSX_VS, vendor="checkpoint",
             members=[entity_id],
             parent_id=None,
-            cluster_mode=str((cp_ha_runtime.get(entity_id) or {}).get("ha_cluster_mode") or "unknown"),
+            display_name=vsys or None,
+            cluster_mode=str((cp_ha_runtime.get(_normalize_cp_entity_key(entity_id)) or {}).get("ha_cluster_mode") or "unknown"),
         ))
 
     return units
+
+
+def _pan_vsys_names(*rows: Mapping[str, Any]) -> list[str]:
+    """VSYS names observed on a PAN device's own interfaces (`row["interfaces"][].vsys`,
+    `panorama/panorama_runtime_runner.py::parse_interfaces`) -- informational
+    context only, never identity. "0"/empty is the system/default context and
+    is not a real VSYS name. Accepts multiple rows (a resolved pair's two
+    members) and returns the union, sorted, so a pair's label reflects both
+    sides."""
+    names: set[str] = set()
+    for row in rows:
+        for iface in row.get("interfaces") or []:
+            if not isinstance(iface, Mapping):
+                continue
+            vsys = str(iface.get("vsys") or "").strip()
+            if vsys and vsys != "0":
+                names.add(vsys)
+    return sorted(names, key=lambda v: (len(v), v))
+
+
+def _pan_display_name(vsys_names: list[str], fallback: str) -> str | None:
+    if not vsys_names:
+        return None
+    label = "VSYS " + ", ".join(vsys_names) if len(vsys_names) <= 3 else (
+        "VSYS " + ", ".join(vsys_names[:3]) + f" +{len(vsys_names) - 3}"
+    )
+    return f"{label} | {fallback}"
 
 
 def _derive_pan_units(
@@ -481,14 +574,29 @@ def _derive_pan_units(
     pan_ha_runtime: Mapping[str, Mapping[str, Any]],
     pan_ha_peers: Mapping[str, str],
 ) -> list[HaUnit]:
-    """Assemble PAN HA pairs (contract P7).
+    """Assemble PAN HA pairs (contract OP.0a.P7, revised at the PAN HA
+    peer-pairing identity closure).
 
     `unified.json` carries no PAN peer relationship today — PAN rows have no
-    `cluster` and no peer reference — so the pair is inferred by matching a
-    device's configured `peer-ip` against another PAN entity's management
-    address. Fail-closed: a `peer-ip` resolving to zero or to more than one
-    entity yields a single-member unit with `pan_ha_peer_unresolved`. It is
-    never guessed and never silently merged.
+    `cluster` and no peer reference — so the pair is inferred from each
+    device's configured `peer-ip` (`pan_ha_peers`, sourced from the running
+    configuration this collector already fetches). This is CONFIGURATION
+    INTENT, never a runtime-observed or runtime-proven relationship (Grade A
+    only, per the frozen contract) — it must never be read elsewhere as
+    sufficient corroboration for any future CLASS 2 operational decision.
+
+    Fail-closed, in order:
+    - `peer-ip` missing, resolving to zero, or resolving to more than one
+      entity → single-member unit, generic `pan_ha_peer_unresolved` (via
+      `compute_ha_readiness`'s reason override).
+    - A resolves to exactly one candidate B, but B's own configured
+      `peer-ip` does not resolve back to A's `management_ip` (asymmetric or
+      contradictory configuration, e.g. A→B but B→C, or A→B but B has no
+      peer configured at all) → single-member unit for A,
+      `unresolved_reason="pan_ha_peer_asymmetric"`. Never guessed, never a
+      one-sided pair. Self-reference is already excluded from `candidates`.
+    - Only a MUTUAL configuration agreement (A→B and B→A) forms a pair. It
+      is never guessed and never silently merged.
     """
     pan_rows: dict[str, Mapping[str, Any]] = {}
     by_management_ip: dict[str, list[str]] = {}
@@ -513,7 +621,9 @@ def _derive_pan_units(
         runtime = pan_ha_runtime.get(entity_id) or {}
         enabled = runtime.get("enabled")
         # HA not enabled (or no HA evidence at all) is not a broken unit — the
-        # device simply is not part of an HA pair. Omit it.
+        # device simply is not part of an HA pair. Omit it. Configuration
+        # intent alone, with runtime HA disabled, never forms an eligible
+        # pair (contract fail-closed case 7).
         if str(enabled or "").strip().lower() not in {"yes", "true", "1"}:
             continue
 
@@ -523,17 +633,37 @@ def _derive_pan_units(
 
         if len(candidates) == 1:
             peer = candidates[0]
+            entity_management_ip = str(pan_rows[entity_id].get("management_ip") or "").strip()
+            peer_declared_peer_ip = str(pan_ha_peers.get(peer) or "").strip()
+            mutual = bool(entity_management_ip) and peer_declared_peer_ip == entity_management_ip
+
+            if mutual:
+                paired.add(entity_id)
+                paired.add(peer)
+                pair_id = f"{entity_id}+{peer}"
+                vsys_names = _pan_vsys_names(pan_rows[entity_id], pan_rows[peer])
+                units.append(HaUnit(
+                    unit_id=pair_id, unit_type=_UNIT_PAN_PAIR, vendor="panorama",
+                    members=sorted([entity_id, peer]), cluster_mode=mode,
+                    display_name=_pan_display_name(vsys_names, pair_id),
+                ))
+                continue
+
             paired.add(entity_id)
-            paired.add(peer)
-            units.append(HaUnit(
-                unit_id=f"{entity_id}+{peer}", unit_type=_UNIT_PAN_PAIR, vendor="panorama",
-                members=sorted([entity_id, peer]), cluster_mode=mode,
-            ))
-        else:
-            paired.add(entity_id)
+            vsys_names = _pan_vsys_names(pan_rows[entity_id])
             units.append(HaUnit(
                 unit_id=entity_id, unit_type=_UNIT_PAN_PAIR, vendor="panorama",
                 members=[entity_id], cluster_mode=mode,
+                display_name=_pan_display_name(vsys_names, entity_id),
+                unresolved_reason="pan_ha_peer_asymmetric",
+            ))
+        else:
+            paired.add(entity_id)
+            vsys_names = _pan_vsys_names(pan_rows[entity_id])
+            units.append(HaUnit(
+                unit_id=entity_id, unit_type=_UNIT_PAN_PAIR, vendor="panorama",
+                members=[entity_id], cluster_mode=mode,
+                display_name=_pan_display_name(vsys_names, entity_id),
             ))
     return units
 
@@ -570,7 +700,7 @@ def compute_ha_readiness(
     The result contains no management address, no raw device output and no
     command string other than the fixed `missing_evidence` labels.
     """
-    cp_runtime = cp_ha_runtime or {}
+    cp_runtime = _normalize_cp_runtime(cp_ha_runtime or {})
     pan_runtime = pan_ha_runtime or {}
     peers = pan_ha_peers or {}
 
@@ -593,7 +723,7 @@ def compute_ha_readiness(
             and len(unit.members) == 1
             and verdict == VERDICT_INSUFFICIENT
         ):
-            reason = "pan_ha_peer_unresolved"
+            reason = unit.unresolved_reason or "pan_ha_peer_unresolved"
         assessments.append(UnitAssessment(unit, verdict, reason, checks))
 
     summary = {

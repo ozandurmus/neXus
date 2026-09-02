@@ -22,6 +22,19 @@ def test_cluster_display_name_handles_real_trailing_separator_member_names():
     assert source == "inferred_member_pattern"
 
 
+def test_cluster_display_name_handles_zero_padded_trailing_separator_member_names():
+    """Real-env finding: some estate objects use zero-padded ordinals
+    (NAME-01_ / NAME-02_), which the single-digit pattern above didn't cover
+    -- it fell back to the raw, underscore-suffixed member names instead of a
+    clean "-CLS" label."""
+    display, source = _cluster_display_name([
+        "FW-CKP-ARKTEST-01_",
+        "FW-CKP-ARKTEST-02_",
+    ])
+    assert display == "FW-CKP-ARKTEST-CLS"
+    assert source == "inferred_member_pattern"
+
+
 def test_vsx_cluster_probe_is_read_only_and_attempted_for_all_cluster_members():
     assert 'if [ "$OBJ_NORM" = "cluster_member" ]; then' in SCRIPT
     assert '"cphaprob -a -m if"' in SCRIPT

@@ -534,12 +534,15 @@ def parse_cluster_virtual_interfaces(raw):
 
 
 def _member_base_name(name):
-    # Some management objects in the real estate end with an extra separator
-    # (for example NAME-1_ / NAME-2_).  Treat that cosmetic suffix exactly
-    # like NAME-1 / NAME-2 for display-name inference only.  Runtime VIP
-    # fingerprinting remains the authoritative cluster grouping key.
+    # Historically, SAFE_GW (checkpoint/scripts/cp_inventory.sh) appended a
+    # spurious trailing "_" to every device name -- an echo/tr pipeline bug,
+    # not a real naming convention (fixed at the source; see SAFE_GW there).
+    # Kept here defensively for names collected before that fix, or zero-
+    # padded ordinals (NAME-01_ / NAME-02_), so display-name inference still
+    # degrades gracefully.  Runtime VIP fingerprinting remains the
+    # authoritative cluster grouping key.
     text = str(name or "").strip()
-    match = re.match(r"^(.*?)([-_.])([1-5])(?:[-_.])?$", text)
+    match = re.match(r"^(.*?)([-_.])(0?[1-5])(?:[-_.])?$", text)
     return match.group(1) if match else ""
 
 
