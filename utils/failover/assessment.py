@@ -542,6 +542,33 @@ def _derive_cp_units(
     return units
 
 
+def _pan_vsys_names(*rows: Mapping[str, Any]) -> list[str]:
+    """VSYS names observed on a PAN device's own interfaces (`row["interfaces"][].vsys`,
+    `panorama/panorama_runtime_runner.py::parse_interfaces`) -- informational
+    context only, never identity. "0"/empty is the system/default context and
+    is not a real VSYS name. Accepts multiple rows (a resolved pair's two
+    members) and returns the union, sorted, so a pair's label reflects both
+    sides."""
+    names: set[str] = set()
+    for row in rows:
+        for iface in row.get("interfaces") or []:
+            if not isinstance(iface, Mapping):
+                continue
+            vsys = str(iface.get("vsys") or "").strip()
+            if vsys and vsys != "0":
+                names.add(vsys)
+    return sorted(names, key=lambda v: (len(v), v))
+
+
+def _pan_display_name(vsys_names: list[str], fallback: str) -> str | None:
+    if not vsys_names:
+        return None
+    label = "VSYS " + ", ".join(vsys_names) if len(vsys_names) <= 3 else (
+        "VSYS " + ", ".join(vsys_names[:3]) + f" +{len(vsys_names) - 3}"
+    )
+    return f"{label} | {fallback}"
+
+
 def _derive_pan_units(
     rows: Sequence[Mapping[str, Any]],
     pan_ha_runtime: Mapping[str, Mapping[str, Any]],
@@ -613,23 +640,30 @@ def _derive_pan_units(
             if mutual:
                 paired.add(entity_id)
                 paired.add(peer)
+                pair_id = f"{entity_id}+{peer}"
+                vsys_names = _pan_vsys_names(pan_rows[entity_id], pan_rows[peer])
                 units.append(HaUnit(
-                    unit_id=f"{entity_id}+{peer}", unit_type=_UNIT_PAN_PAIR, vendor="panorama",
+                    unit_id=pair_id, unit_type=_UNIT_PAN_PAIR, vendor="panorama",
                     members=sorted([entity_id, peer]), cluster_mode=mode,
+                    display_name=_pan_display_name(vsys_names, pair_id),
                 ))
                 continue
 
             paired.add(entity_id)
+            vsys_names = _pan_vsys_names(pan_rows[entity_id])
             units.append(HaUnit(
                 unit_id=entity_id, unit_type=_UNIT_PAN_PAIR, vendor="panorama",
                 members=[entity_id], cluster_mode=mode,
+                display_name=_pan_display_name(vsys_names, entity_id),
                 unresolved_reason="pan_ha_peer_asymmetric",
             ))
         else:
             paired.add(entity_id)
+            vsys_names = _pan_vsys_names(pan_rows[entity_id])
             units.append(HaUnit(
                 unit_id=entity_id, unit_type=_UNIT_PAN_PAIR, vendor="panorama",
                 members=[entity_id], cluster_mode=mode,
+                display_name=_pan_display_name(vsys_names, entity_id),
             ))
     return units
 

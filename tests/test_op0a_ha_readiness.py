@@ -648,6 +648,41 @@ def test_pan_vsys_metadata_never_produces_a_top_level_unit():
     assert "vsys1" not in ids and "vsys2" not in ids
 
 
+def _pan_with_interfaces(device, management_ip, vsys_values):
+    """Real-pipeline shape: VSYS names live on `row["interfaces"][].vsys`
+    (panorama/panorama_runtime_runner.py::parse_interfaces), never as a flat
+    top-level field -- unlike the legacy `_pan()` fixture's `vsys` kwarg,
+    which no real collector ever populates."""
+    row = _pan(device, management_ip)
+    row["interfaces"] = [{"name": f"eth1/{i}", "vsys": v} for i, v in enumerate(vsys_values)]
+    return row
+
+
+def test_pan_display_name_surfaces_real_interface_vsys_context():
+    """VSYS context (informational only, never identity) is composed into
+    display_name from the real interface-level field, mirroring the CP VSX
+    "vsys | cluster" precedent -- unit_id/matching are untouched."""
+    rows = [
+        _pan_with_interfaces("pan-ha-01", "10.0.0.1", ["vsys1", "0"]),
+        _pan_with_interfaces("pan-ha-02", "10.0.0.2", ["vsys2", "0"]),
+    ]
+    runtime = {"pan-ha-01": _pan_runtime(), "pan-ha-02": _pan_runtime("passive", "active")}
+    peers = {"pan-ha-01": "10.0.0.2", "pan-ha-02": "10.0.0.1"}
+    report = compute_ha_readiness(rows, pan_ha_runtime=runtime, pan_ha_peers=peers)
+    unit = _unit_by_id(report, "pan-ha-01+pan-ha-02")
+    assert unit["display_name"] is not None
+    assert "vsys1" in unit["display_name"] and "vsys2" in unit["display_name"]
+    assert unit["unit_id"] == "pan-ha-01+pan-ha-02"  # identity untouched
+
+
+def test_pan_display_name_is_none_when_no_vsys_evidence():
+    rows = [_pan("pan-solo", "10.0.0.1")]
+    runtime = {"pan-solo": _pan_runtime()}
+    report = compute_ha_readiness(rows, pan_ha_runtime=runtime)
+    unit = _unit_by_id(report, "pan-solo")
+    assert unit["display_name"] is None
+
+
 # --------------------------------------------------------------------------
 # AC-5 — PAN pairing (contract P7)
 # --------------------------------------------------------------------------
