@@ -185,6 +185,15 @@ def _pan_states(members: Sequence[str], pan_ha_runtime: Mapping[str, Mapping[str
     member's own `state` and ignore `peer_state`. `peer_state` is used only as
     a fallback when the unit has direct evidence for a single member (the P7
     unresolved-peer case), where it is the only peer evidence available.
+
+    Successor-contract invariant (OP.0a PAN runtime peer identity evidence,
+    recorded not yet enforced here): `peer_state` is relationship evidence
+    about a claimed peer, never an independently observed physical member.
+    Using it as a second observation for a single-member unit is a known,
+    deliberate stopgap this function documents rather than hides -- a future
+    PAN HA relationship-domain build must remove this readiness uplift once
+    genuine peer identity evidence (`runtime_peer_serial_state`) replaces it,
+    not extend it further.
     """
     with_evidence = [m for m in members if pan_ha_runtime.get(m)]
     use_peer_view = len(with_evidence) < 2

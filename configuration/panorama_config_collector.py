@@ -1524,6 +1524,70 @@ def _apply_pan_ha_peer_identity_diagnostic(row: dict[str, Any]) -> None:
         },
     }
 
+    # OP.0a PAN runtime peer identity evidence (evidence acquisition only --
+    # never forms or modifies a pan_ha_pair, never changes a readiness
+    # verdict). `local-info/serial-num` is this device's own runtime
+    # self-report; `peer-info/serial-num` is a one-sided runtime CLAIM about
+    # its peer's identity, not yet corroborated by anything independent.
+    # `_finalize_pan_runtime_peer_serial_correspondence` resolves the
+    # cross-device MATCH/MISMATCH/MISSING/NOT_EVALUABLE state once every
+    # selected device's row exists, then deletes the two `_`-prefixed
+    # temporary tokens below -- only the resolved state string persists.
+    local_serial_token = field_tokens.get("local-info/serial-num")
+    peer_serial_token = field_tokens.get("peer-info/serial-num")
+    identity_gated_serial_token = tok.token("pan_ha_identity_value", row.get("serial"))
+    ha_runtime["runtime_peer_identity_evidence"] = {
+        "local_serial_reported": local_serial_token is not None,
+        "peer_serial_claimed": peer_serial_token is not None,
+        "self_identity_consistent": (
+            None
+            if local_serial_token is None or identity_gated_serial_token is None
+            else local_serial_token == identity_gated_serial_token
+        ),
+    }
+    ha_runtime["_peer_serial_token"] = peer_serial_token
+    ha_runtime["_identity_gated_serial_token"] = identity_gated_serial_token
+
+
+def _finalize_pan_runtime_peer_serial_correspondence(rows: Sequence[dict[str, Any]]) -> None:
+    """OP.0a PAN runtime peer identity evidence -- cross-device resolution.
+
+    For every device in THIS run whose runtime HA-state response was
+    actually queried and diagnosed, checks whether its one-sided
+    `peer-info/serial-num` CLAIM corresponds to another device's own
+    identity-gated `serial`, observed in this same run. Evidence only: never
+    forms or modifies a `pan_ha_pair`, never changes a readiness verdict,
+    issues no network call. A MATCH here is NOT bidirectional corroboration
+    on its own and must never be read as an ESTABLISHED pair identity --
+    that determination belongs to a future relationship-domain build.
+    Removes the temporary comparison tokens; only the resolved state string
+    (`MATCH` / `MISMATCH` / `MISSING` / `NOT_EVALUABLE`) is left behind.
+    """
+    diagnosable = [
+        row
+        for row in rows
+        if isinstance(row.get("ha_runtime"), dict) and "_identity_gated_serial_token" in row["ha_runtime"]
+    ]
+    identity_tokens = [row["ha_runtime"].get("_identity_gated_serial_token") for row in diagnosable]
+
+    for index, row in enumerate(diagnosable):
+        ha_runtime = row["ha_runtime"]
+        peer_serial_token = ha_runtime.pop("_peer_serial_token", None)
+        ha_runtime.pop("_identity_gated_serial_token", None)
+        evidence = ha_runtime.get("runtime_peer_identity_evidence")
+        if not isinstance(evidence, dict):
+            continue
+        others = [token for i, token in enumerate(identity_tokens) if i != index and token is not None]
+        if peer_serial_token is None:
+            state = "MISSING"
+        elif not others:
+            state = "NOT_EVALUABLE"
+        elif peer_serial_token in others:
+            state = "MATCH"
+        else:
+            state = "MISMATCH"
+        evidence["runtime_peer_serial_state"] = state
+
 
 def _collect_device_row(
     cfg: Any,
@@ -2304,6 +2368,9 @@ def run_panorama_config_evidence(
             rows = list(executor.map(worker, enumerate(selected, 1)))
     else:
         rows = []
+
+    if pan_ha_peer_diagnostic:
+        _finalize_pan_runtime_peer_serial_correspondence(rows)
 
     rows.sort(key=lambda row: int(row.get("selection_index") or 0))
 
