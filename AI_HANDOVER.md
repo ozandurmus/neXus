@@ -1,112 +1,75 @@
 # AI_HANDOVER
 
+> **NON-AUTHORITATIVE DERIVED SUMMARY**
+> **DO NOT USE AS PROJECT-STATE AUTHORITY**
+> If anything below disagrees with `CURRENT_STATE.md` or `project/roadmap.json`,
+> those win — see `AGENTS.md` "Authority hierarchy". This file exists only so
+> a cold chat can learn the previous session's exact next action in one read;
+> it is never the record of what shipped (that's `project/build_history.json`).
+
 Overwrite at every session close. Keep it minimal (see `AGENTS.md` "Handover
 economy"): snapshot, what changed, exact next action, test delta, new risks.
-No decision re-litigation, no doc-editing mechanics, no restating the phase doc.
-Prior versions are in git history.
+No decision re-litigation, no doc-editing mechanics, no restating the phase
+doc. Prior versions are in git history.
 
 ---
 
 ## 1. Snapshot
 
-- Date: 2026-09-01. Branch `main`, **uncommitted** — this session's changes only
-  (architecture_convergence is already merged, PR #27).
+- Date: 2026-09-02. Branch `claude/pan-ha-peer-identity-mvlndf`.
 - Product baseline `0.7.7`; engineering `DEV.3.3` — both unchanged.
-- New this session: **`OP.0c` — Failover readiness UI — AUTOMATED_VALIDATED**
-  — `UI` movement.
+- This session: **`DEV.4` — AI engineering constitution & authority
+  reconciliation** — `DOCS`/governance movement. Documentation/governance
+  only; no product code, collector, schema, or readiness-verdict change.
 
 ## 2. What changed this session
 
-Built the Operator Console + report **Failover module**: a read-only fleet
-view over `utils.failover.compute_ha_readiness` (OP.0a's domain logic,
-untouched). No execution control, no new device command, no CLASS 2 job type.
-
-- `utils/failover_readiness_ui.py` (new) — pure UI projection: extracts
-  `cp_ha_runtime`/`pan_ha_runtime`/peers from already-loaded config-telemetry
-  dicts, calls `compute_ha_readiness`, adds fixed verdict/check labels+tones
-  and the OP.0a framing note (`SAFE_TO_FAILOVER` unreachable, `INSUFFICIENT_
-  EVIDENCE` means "not asked yet"). No I/O, no verdict computation of its own.
-- `application/workflows/failover.py`'s two CLI evidence loaders
-  (`_load_cp_ha_runtime`/`_load_pan_ha_runtime`) now delegate to that module's
-  `extract_cp_ha_runtime`/`extract_pan_ha_runtime` instead of duplicating the
-  parsing — the CLI snapshot and the console's live projection can no longer
-  disagree about what a telemetry file means.
-- `utils/html_export.py` — `build_report_payloads` gained an eighth key,
-  `failoverReadinessData`, computed live off the same `unified.json` +
-  telemetry dicts already loaded for Configuration (no read of the CLI's
-  cached `data/state/ha_readiness.json`, so there's one evidence path, not
-  two). `SCRIPT_MODULE_FILENAMES` gained `failover_readiness_ui.js` (ninth
-  module); `run_html_export` fills the matching placeholder.
-- `static/failover_readiness_ui.js` (new) — renders the payload verbatim, no
-  computation. `static/app_core.js` (global `failoverReadinessData`),
-  `static/app_bootstrap.js` (module switch/init wiring) updated.
-- `templates/console.html` + `templates/index.html` — both gained a
-  `Failover` nav item + panel (kept in parity because both share the same JS
-  bundle and the render harness clicks every nav button in both).
-- Tests updated for the new payload key/module count:
-  `tests/test_html_render_harness.py` (`_PAYLOAD_CONSTS`),
-  `tests/test_frontend_module_composition.py` (`PAGE_LEVEL_CONSTS`, function
-  floor 178→181), `tests/test_con1_operator_console_read_only.py` (AC-4
-  payload-parity key list + `generated_at` strip).
-- `tests/test_op0c_failover_readiness_ui.py` (new, 15 tests) — fail-closed
-  verdict/check preservation (never `SAFE_TO_FAILOVER`, split-brain →
-  `UNSAFE_DO_NOT_FAILOVER` with the specific reason, load-sharing →
-  `NOT_A_FAILOVER_UNIT`), framing note present, extractor purity/parity with
-  the CLI loader, no execution-control markup or network call in the shipped
-  JS/HTML, no CLASS 2 job type registered.
-
-**Design call made without asking, reversible:** the console computes
-readiness live from evidence files rather than reading the CLI's cached
-`ha_readiness.json` snapshot — matches CON.1's "always fresh, no in-memory
-state" posture already established for every other console payload.
+Consolidated the AI bootstrap/governance surface to the three-file model
+(`AGENTS.md` = constitution, `AI_START_HERE.md` = operating protocol,
+`CURRENT_STATE.md` = hot state only) after a full audit found real
+duplication and two live authority contradictions. Also trimmed
+`.github/copilot-instructions.md` and all six `.github/instructions/*` files
+to path-scoped deltas pointing at `AGENTS.md`; enriched
+`PRIVACY_AND_DATA_HANDLING.md` with the full RFC 5737 range set so
+`tests.instructions.md` has one detail-owner; fixed a stale
+`PROJECT_VISION.md` "read-only" claim to taxonomy-aware language; and added
+five governance-invariant tests to `tests/test_architecture_convergence.py`.
+See the DEV.4 audit and session-close report in this session's transcript
+for the complete before/after; durable content lives in the files
+themselves now, not here.
 
 ## 3. Exact next action
 
-**Failover readiness real-environment closure** (`project/roadmap.json`
-`now_next.next`) — confirm `OP.0a`'s `ha_cluster_mode` resolves against a
-real CP/PAN HA pair and eyeball the new Failover module against that
-evidence. No new code expected. The other open item on this path is a
-product-owner/security decision on the `OP.0b` command-gate draft (blocks
-`OP.0b`, not `OP.0c`).
+Two independent threads, neither touched by DEV.4:
+
+1. **PAN HA peer identity** — the `OP.0b.0` contract
+   (`docs/history/phase/OP_0B_0_VENDOR_FAILOVER_PREFLIGHT_EVIDENCE_SURFACE.md`,
+   `DRAFT — DO NOT FREEZE`) needs its blocking rows (D-V1…D-V7, D-V9)
+   confirmed against official vendor documentation from an unblocked
+   network, then the PAN runtime-serial `B2` real-env result. Do not freeze
+   or implement it from this session.
+2. **Project metadata catch-up** (flagged, not fixed, by DEV.4) — the PAN
+   runtime peer-identity diagnostic slice and the `OP.0b.0` contract itself
+   are not yet recorded in `project/roadmap.json`/`build_history.json`; see
+   `CURRENT_STATE.md`'s checkpoint note.
 
 ## 4. Test delta
 
-Full suite **1003 passed / 27 skipped / 0 failed**, serial (`pytest_result.log`).
-From 988/27/0. `+15` `tests/test_op0c_failover_readiness_ui.py`.
-
-Render harness green (happy-dom nav-click-through ran and passed; Playwright
-variant skipped — no Chromium in this environment, same as baseline).
-Privacy gate PASS (part of the full suite). `metadata_warnings == []`
-(`tests/test_architecture_convergence.py`, run targeted + in full suite).
-`git diff --check` clean (only CRLF-normalization warnings, no actual
-whitespace errors).
+See `CURRENT_STATE.md` "Automated test baseline" for the authoritative
+numbers — this file does not duplicate them.
 
 ## 5. New risks / debt
 
-- **`tests/fixtures/uitest/` has no HA-runtime fixture**, so the render
-  harness always shows every unit at `INSUFFICIENT_EVIDENCE`/
-  `NOT_A_FAILOVER_UNIT` — correct given its inputs, but it means no human
-  eyeballing an `UNSAFE_DO_NOT_FAILOVER` row without running the unit tests.
-  Tracked: `project/backlog.json` `op0c_uitest_fixture_verdict_diversity`
-  (P3, not required for OP.0c's own DoD).
-- Carried over, unchanged: CLASS 2 stays empty
-  (`test_no_console_job_type_is_class_2_or_above`, `utils/failover/` absence
-  test — both still green). Tests still write into the gitignored repo-root
-  `data/`. `C-D4`…`C-D8` remain open.
+None introduced by DEV.4. Pre-existing, unresolved: the `OP.0b.0` bug/gap
+register (`P0`/`P1` rows), and the project-metadata catch-up item above.
 
 ## 6. Continue or fresh chat
 
-**Fresh chat.** OP.0c is closed and its own next step (real-environment
-closure) needs no code context from this session — `AI_START_HERE.md` →
-`CURRENT_STATE.md` → this file is sufficient.
+Either is fine. `AI_START_HERE.md` → `CURRENT_STATE.md` → this file is
+sufficient either way; no code context from this session is required for
+either next-action thread.
 
 ## 7. main.py / UI effect
 
-**New nav item "Failover" in both the Operator Console and the exported
-report**, between Discovery and Exclusions. Opens to a fleet table of every
-HA cluster/pair with a verdict pill (`INSUFFICIENT_EVIDENCE` / `NOT_A_
-FAILOVER_UNIT` today, by design — no fixture or real environment yet reaches
-`UNSAFE_DO_NOT_FAILOVER` or better), a framing banner explaining why
-`SAFE_TO_FAILOVER` is unreachable, and an expandable per-unit stop-condition
-breakdown. No button, no execute affordance — this is a read view. No CLI
-flag or exit-code path changed.
+None. This was a documentation/governance-only build; no CLI flag, payload,
+schema, or UI surface changed.

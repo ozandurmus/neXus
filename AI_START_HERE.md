@@ -39,7 +39,9 @@ shipped; do not restore it. `"operational-write"` in existing code and durable
 records is this repository's legacy name for **class 1** only.
 
 - Product baseline: see `CURRENT_STATE.md`
-- Engineering baseline: `DEV.1 — Corporate Git Foundation`
+- Engineering baseline: see `CURRENT_STATE.md` (never hard-code a specific
+  value here — this file is operating protocol, not state; a hard-coded
+  baseline here has gone stale before and contradicted `CURRENT_STATE.md`)
 
 ---
 
@@ -121,7 +123,10 @@ Full mechanism detail: **`docs/ARCHITECTURE.md`**.
 ```
 0. AI_START_HERE.md        — this file: the idea, how it works, this order
 1. CURRENT_STATE.md        — active build, next task, blockers, xfails, test baseline
-2. AI_HANDOVER.md          — what the previous session did, your exact next action
+2. AI_HANDOVER.md          — NON-AUTHORITATIVE pointer: what the previous
+                             session did, your exact next action. If it
+                             disagrees with CURRENT_STATE.md/roadmap.json,
+                             they win.
 3. project/roadmap.json + project/backlog.json — pull the task by id / target
 4. docs/ARCHITECTURE.md    — only the sections your task touches
 5. the current build/design doc, if the task names one
@@ -132,14 +137,143 @@ Never by default: docs/history/SECURITYEXPERT_AI_CONTINUATION_PACK.md,
                   docs/history/phase/PHASE*.md, docs/history/validation/VALIDATION*.txt
 ```
 
-Governance and engineering law: `AGENTS.md` (canonical) and
-`docs/AI_DEVELOPMENT_PROTOCOL.md` (detailed lifecycle). Tool-specific deltas:
+Governance and engineering law: `AGENTS.md` (canonical constitution) and
+`docs/AI_DEVELOPMENT_PROTOCOL.md` (network-command gate, approval boundaries,
+render-harness mechanics — detail, not restated here). Tool-specific deltas:
 `CLAUDE.md`, `.github/copilot-instructions.md`. These reference this reading
-order rather than restating it.
+order and the schemas below rather than restating them.
 
-At the start of a meaningful build, produce a `SESSION START`; at the end,
-update durable state and rewrite `AI_HANDOVER.md`, then produce a
-`SESSION CLOSE` (see `AGENTS.md`).
+### Locating the active frozen contract
+
+A task may name its own contract (reading-order step 5). If it doesn't:
+
+1. Check `project/roadmap.json` `now_next.now`/`now_next.next` for the build
+   id, then its linked doc in `project/build_history.json`.
+2. Open that doc's own status line. Only `FROZEN` (or an equivalent canonical
+   status) authorizes implementation — see `AGENTS.md` "Authority hierarchy."
+   `DRAFT` / `DO NOT FREEZE` is evidence/design work, not authority.
+3. If no build names a contract for your task, there isn't an active one —
+   that itself may mean a `CONTRACT` movement is the actual next step.
+
+---
+
+## SESSION START (produce at the start of every meaningful build/task)
+
+Open with a **`PROJE ÖZETİ`** — Turkish, plain language, 4–6 short lines, no
+jargon, for a non-developer stakeholder to judge value without reading code:
+
+- **Proje nedir:** SecurityExpert bir cümlede ne yapar.
+- **Bu görev nedir:** şimdi ne yapacağız, sade dille.
+- **Neden / ne kazanırız:** bu iş ürüne ne katar, hangi faydayı sağlar.
+- **Tür:** yeni özellik / hata düzeltme / büyük özellik / sağlamlaştırma /
+  dokümantasyon / mimari.
+- **Gelecekte ne çözer / neyi açar:** ileride neyi mümkün kılar.
+
+This block stays Turkish even though the working language is English.
+Everything after it stays English:
+
+- authoritative product baseline and engineering baseline (from
+  `CURRENT_STATE.md`, never hard-coded),
+- requested build/task and explicit scope (in/out),
+- movement type (`AGENTS.md` "Mandatory session start" list),
+- source/tests expected to be inspected,
+- important invariants and risks,
+- context intentionally not loaded,
+- recommended model/reasoning tier for the next action (table below),
+- recommended Git lane for this build (`feature/*`, `build/*`, or direct
+  `main` hotfix),
+- merge-to-`main` gate recommendation and required evidence,
+- deployment direction for this task (`local validation only`,
+  `staging-like`, or `production-gated`).
+
+Do not ask the user to repeat settled project context the repository can
+answer.
+
+## SESSION CLOSE (produce before declaring a build complete)
+
+Update durable project state first (`AGENTS.md` "Project-state update
+rule"), then report:
+
+- what was completed; what changed vs. what was deliberately preserved,
+- targeted tests and full-regression evidence,
+- privacy gate and state-consistency results,
+- unresolved risks/gaps,
+- roadmap/backlog/build-history changes made,
+- exact next build/task and recommended next movement type,
+- recommended model/reasoning tier for that next step,
+- whether the next chat should continue this session or start fresh,
+- recommended branch/PR target and explicit `main` merge decision
+  (`approved` or `blocked`, with reason),
+- exact non-interactive Git dispatch commands for the recommended path
+  (stage/commit/push/PR base),
+- explicit `main.py`/UI effect note: what should be visible after a normal
+  run, or confirmation that backend-only work produces no visible UI change.
+
+If implementation is complete but human validation is pending, say so and do
+not advance durable state beyond the evidence.
+
+## Reasoning / model routing tiers
+
+Routing is task-driven (`AGENTS.md` "AI reasoning / movement routing"); this
+is the concrete tier table. Tool-specific tier *names* (a specific Claude or
+Copilot model) belong only in that tool's own delta file — this table uses
+neutral tier labels.
+
+| Tier | Use for |
+| --- | --- |
+| Fast/normal | `READ_ONLY_AUDIT`, log/result interpretation, narrow validation, tiny fix, mechanical documentation/test cleanup |
+| Normal (strong) | deterministic implementation against an already-frozen contract, routine multi-file audit, UI, tests, bounded implementation |
+| High | new architecture, security/storage/CAS, vendor-semantic ambiguity, deployment/server/container, major cross-subsystem root cause, phase closure |
+
+Use high reasoning to decide, normal reasoning to implement once the
+contract is deterministic. Auto-routing is acceptable for low-risk work;
+explicit routing is preferred for major builds so cost and reasoning quality
+stay observable. Never use the strongest tier for mechanical work.
+
+## Validation ladder
+
+- **Targeted**: tests for the files/behavior actually changed.
+- **Subsystem regression**: the affected vendor/module's test files.
+- **Full regression**: shared-core changes, phase closure, release
+  candidates. One-shot, file-backed: `py -m pytest -q > pytest_result.log
+  2>&1`. Run at least once **serially** before closing a build — a parallel
+  run has previously hidden a real shared-state leak.
+- **Repository privacy gate**: `py .\main.py --repository-privacy-check`.
+  Delete gitignored `data/`/`logs/` first; a test run recreates them and the
+  gate flags them as runtime directories present.
+- **State consistency**: `project_metadata_has_no_cross_authority_contradictions`
+  (part of `tests/test_architecture_convergence.py`) must show zero warnings.
+- **HTML render harness**: required alongside the full suite whenever
+  `templates/index.html`, `static/app.js`, `static/style.css`, or a payload
+  builder changes (`docs/AI_DEVELOPMENT_PROTOCOL.md` has the exact trigger
+  list and commands).
+- **`git diff --check`**: whitespace/conflict-marker guard before any commit.
+
+## Real-environment procedure
+
+Full policy: `docs/reference/REAL_ENV_VALIDATION_PROTOCOL.md`. Summary: the
+agent proposes exactly one bounded, read-only validation command with an
+explicit target scope (requested/resolved/contact/extra counts reportable);
+the controlled environment/human performs the actual network contact;
+credentials stay on that side; the human returns a SAFE SUMMARY (never full
+raw configuration/identities) that the agent continues from. Automated tests
+never substitute for this — see `AGENTS.md` evidence laws. Never fabricate
+device reachability in a sandbox that doesn't have it; say so and stop.
+
+## Git workflow
+
+Approval boundaries (full detail: `docs/AI_DEVELOPMENT_PROTOCOL.md`):
+generally allowed once scope is accepted — source edits, local tests,
+render-only validation, static analysis, docs, explicitly requested
+read-only local checks. Explicit human approval required — dependency
+additions/upgrades, schema/storage migration, destructive local-data
+operations, full-fleet collection not already requested, new network-access
+patterns or credential paths, new write primitives, Git push/merge.
+Prohibited at current maturity (taxonomy classes 2–4): firewall
+configuration writes, policy install, commit, reboot/shutdown, forced
+failover, interface/routing change, credential change, automatic
+remediation. Class 1 controlled recovery writes are permitted only through
+their existing `RB.x` contracts and are never exposed on an HTTP surface.
 
 ---
 

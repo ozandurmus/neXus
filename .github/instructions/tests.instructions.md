@@ -4,33 +4,14 @@ applyTo: "tests/**"
 
 # SecurityExpert Test Contract
 
-Tests committed to source control must use synthetic/repository-safe data.
+Tests committed to source control must use synthetic/repository-safe data —
+never real production hostnames, management IPs, serial numbers, internal
+domains, usernames, credentials or topology identities. Use the
+documentation ranges and synthetic names in `PRIVACY_AND_DATA_HANDLING.md`
+"Source-code hygiene" (the three RFC 5737 blocks and names such as
+`CP-SPARK-TEST-01`, `PAN-FW-TEST-01`, `example.invalid`) rather than
+inventing new ones.
 
-Do not introduce real:
-
-- production hostname,
-- management IP,
-- serial number,
-- internal domain,
-- username,
-- credential,
-- topology identity.
-
-Prefer documentation ranges:
-
-192.0.2.0/24
-198.51.100.0/24
-203.0.113.0/24
-
-and synthetic names such as:
-
-CP-GW-TEST-01
-PAN-FW-TEST-01
-example.invalid
-
-Preserve known expected xfails unless the build explicitly fixes them:
-
-- VSX network canonicalization
-- PAN default-route classification
-
-Do not turn regressions into new xfails merely to make tests pass.
+Preserve known expected xfails unless the build explicitly fixes them — see
+`CURRENT_STATE.md` "Known xfails" for the current list. Do not turn
+regressions into new xfails merely to make tests pass.
