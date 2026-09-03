@@ -3,6 +3,21 @@
   "record_contract": "One structured record per build, newest first. Required: build, status, title, summary (<= 2 sentences). Optional: started, completed, track, movement, supersedes, evidence, risks_forward, docs{agreement,validation,handover} (repo-relative paths under docs/history/). Full detail lives in the linked doc; do not restate it here. Status vocabulary must stay within utils/project_plan.py STATUS_VALUES.",
   "builds": [
     {
+      "build": "op0b_0_official_vendor_semantics_confirmation_pass2",
+      "status": "in_progress",
+      "title": "OP.0b.0 - official vendor semantics confirmation, pass 2 (Source Pack 2, documentation-only)",
+      "summary": "Third session against OP.0b.0's blocking rows, working from an independent source-pack hypothesis this task's prompt supplied and required independently re-verifying. Found pan.dev/sc1.checkpoint.com/support.checkpoint.com still EGRESS_BLOCKED (third consecutive confirmation) but discovered github.com/raw.githubusercontent.com are reachable; reading the official PaloAltoNetworks pan-os-upgrade-assurance repository's source verbatim closed D-V4 and, combined with Check Point ClusterXL Admin Guide search snippets, D-V7a -- the first two rows either session has fully closed. D-V1, D-V2, D-V6 upgraded within/to PARTIALLY_CLOSED; D-V5 and D-V7 split into a/b per the audit task's instruction; the source pack's own D-V6 hypothesis (a filtered -ia list) was found and reported as contradicted by better evidence. D-V3a stays STILL_UNKNOWN for HA-state serial field binding (a narrower, separate sub-fact -- general PAN serial leading-zero opacity -- is newly confirmed via an on-point official KB article). D-V7b stays STILL_UNKNOWN with new documented context (Simple Cluster API does not expose every cluster-object feature). Contract stays DRAFT -- DO NOT FREEZE: D-V3a and D-V7b remain safety-critical authoritative sources genuinely unknown, not merely measurements pending.",
+      "started": "2026-09-03",
+      "completed": "2026-09-03",
+      "track": "OP.x Controlled Failover",
+      "movement": "DOCS",
+      "evidence": "docs/history/phase/OP_0B_0_VENDOR_FAILOVER_PREFLIGHT_EVIDENCE_SURFACE.md: new dated Source Pack 2 section (decision matrix + official source table per the audit task's required format), D-V5/D-V7 split into a/b sub-rows, Open decisions/Freeze decision/Next movement updated, several SS24/S25 rows annotated (PAN running-sync path, version-vs-build-rel correction, conn-ha1/conn-ha2 structure, CP pnote enumeration semantics, CP reset-form exclusion). Document only; no code, collector, parser, schema, UI or transport changed; no device contacted. git diff --check clean; markdown table integrity verified programmatically.",
+      "risks_forward": "D-V3a and D-V7b are the two remaining safety-critical STILL_UNKNOWN rows and are the actual freeze blockers, not the several PARTIALLY_CLOSED rows (which could in principle support a real-env-gated freeze once their own residual gaps close). D-V5b (VSX failover-stat applicability) and D-V9a/D-V9b are real-env-only, unaffected by this session. The github.com-mirror technique that closed D-V4/D-V7a worked for a PAN-maintained OSS project with no Check Point equivalent found this session -- do not assume it generalizes to the Check Point rows without checking.",
+      "docs": {
+        "agreement": "docs/history/phase/OP_0B_0_VENDOR_FAILOVER_PREFLIGHT_EVIDENCE_SURFACE.md"
+      }
+    },
+    {
       "build": "op0b_0_official_vendor_semantics_confirmation_pass1",
       "status": "in_progress",
       "title": "OP.0b.0 - official vendor semantics confirmation, pass 1 (documentation-only)",
