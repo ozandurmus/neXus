@@ -40,6 +40,43 @@ candidates.
 
 Do not run expensive real-device collection for UI-only or documentation work.
 
+## CI validation policy (canonical — risk-based PR CI)
+
+`.github/workflows/validation.yml` implements the tiers above as two jobs.
+This is the one canonical statement of the policy; other files reference it
+rather than restating it.
+
+- **`validate`** (pull_request): the fast PR gate. Import/compileall
+  sanity, the repository privacy gate, project-state consistency
+  (`tests/test_architecture_convergence.py`), the build-history index
+  check, a small fixed PR smoke/safety-regression set (credential
+  redaction, the privacy gate's own tests, known safety gaps, the
+  frontend-rendering shared-state-leak guard), and the whitespace/
+  conflict-marker check. Deliberately **not** a path→test classifier —
+  bounded feature PRs are expected to pay for this job, not the full suite.
+- **`full-regression`** (push to `main`, `workflow_dispatch`): the same
+  gates plus the full `pytest -q` suite, serial (Test execution economy
+  above explains why serial). This is the post-merge integration safety
+  net and the on-demand full-regression path.
+
+A PR that trips one of the **full-regression triggers** below still needs a
+full regression before merge — run it locally
+(`py -m pytest -q > pytest_result.log 2>&1`, or the parallel one-shot
+`scripts/pytest_one_shot.ps1`) or via `workflow_dispatch`, and say so in the
+PR. Triggers: dependency/requirements changes; shared test infrastructure;
+schema/storage/migrations; concurrency/global shared state; a security or
+authentication boundary; broad common domain behavior; CI/test
+infrastructure itself; a release/integration milestone; an explicit
+PO/contract requirement. This list is deliberately not an automatic
+classifier — the agent applies it by judgment per change, the same way the
+rest of the validation ladder is applied.
+
+If the post-merge `full-regression` run on `main` fails, treat `main`'s
+integration baseline as unhealthy per `AGENTS.md` "Mandatory build
+lifecycle": report it immediately, and do not merge further feature PRs
+until the regression is understood or a PO explicitly waives it for a
+proven infrastructure-only cause.
+
 ## Build size
 
 Default build: one coherent objective, roughly 3–10 relevant source files,

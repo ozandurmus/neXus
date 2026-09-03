@@ -11,8 +11,20 @@
       "completed": "2026-09-03",
       "track": "SEE / CP Inventory",
       "movement": "IMPLEMENTATION",
-      "evidence": "checkpoint/cp_runner.py (_process_collection_output_line tracks state['last_marker']; _run_remote_collection's channel drain now tight-loops via a shared _drain_ready() helper, plus one defensive final drain before concluding DONE is absent; RuntimeError message enriched with safe diagnostic fields). tests/test_phase0_4_1_cp_automation.py: +2 tests (FakeChannel-based) proving a multi-chunk stdout burst is fully drained and DONE recognized in one pass, and that the missing-DONE RuntimeError carries the new diagnostic fields without leaking device name/IP. Full local suite: 1210 passed / 24 skipped / 0 failed (this repo's dependency baseline minus the not-yet-merged kaizen CI test file, which lives on a separate branch).",
+      "evidence": "checkpoint/cp_runner.py (_process_collection_output_line tracks state['last_marker']; _run_remote_collection's channel drain now tight-loops via a shared _drain_ready() helper, plus one defensive final drain before concluding DONE is absent; RuntimeError message enriched with safe diagnostic fields). tests/test_phase0_4_1_cp_automation.py: +2 tests (FakeChannel-based) proving a multi-chunk stdout burst is fully drained and DONE recognized in one pass, and that the missing-DONE RuntimeError carries the new diagnostic fields without leaking device name/IP. Full local suite: 1210 passed / 24 skipped / 0 failed (this branch's dependency baseline, one file fewer than dev_kaizen_fast_pr_ci's since the two branches had not merged yet).",
       "risks_forward": "Root cause of the original failure is still UNKNOWN -- this build is diagnostic hardening plus alignment with an already-proven sibling pattern, not a proven fix; it cannot be marked automated_validated/real_env_validated as a fix until the failure is reproduced (or recurs) against a real device with the new diagnostic fields captured. If it recurs, the RuntimeError's exit_status/processed_gw/total_gw/last_marker fields are the next real evidence to read before any further source change."
+    },
+    {
+      "build": "dev_kaizen_fast_pr_ci",
+      "status": "automated_validated",
+      "title": "DEV Kaizen - fast PR CI / risk-based full regression",
+      "summary": "Splits .github/workflows/validation.yml into a fast pull_request gate (`validate`: import sanity, repository privacy gate, project-state consistency, build-history-index check, a small fixed PR smoke/safety-regression set, whitespace check -- no full pytest suite) and a `full-regression` job (push-to-main + workflow_dispatch, same gates plus the full serial pytest suite). Canonical policy documented once in docs/AI_DEVELOPMENT_PROTOCOL.md \"CI validation policy\"; AI_START_HERE.md points at it instead of restating it. New tests/test_ci_workflow_fast_pr_regression.py statically asserts the split (text-based, no new YAML dependency). PR #38's CI confirmed the `validate` job green against this exact head (mergeable_state=clean, zero review threads); merged to main via merge commit 6778ee9. Local full regression 1215 passed/24 skipped/0 failed stands as the full-suite evidence (this build's own full-regression trigger).",
+      "started": "2026-09-03",
+      "completed": "2026-09-03",
+      "track": "DEV.x Engineering Kaizen",
+      "movement": "IMPLEMENTATION",
+      "evidence": ".github/workflows/validation.yml (split into `validate` + `full-regression` jobs); docs/AI_DEVELOPMENT_PROTOCOL.md (new \"CI validation policy\" section, canonical); AI_START_HERE.md (pointer only, no restatement); tests/test_ci_workflow_fast_pr_regression.py (new, 7 tests, text/regex-based -- no pyyaml dependency added). Locally executed this session: full pytest suite 1215 passed/24 skipped/0 failed (serial, full dependency set); repository privacy gate PASS; tests/test_architecture_convergence.py 19/19; build_history_index.py --check PASS.",
+      "risks_forward": "None remaining for this build's own scope. PR #38 merged 2026-09-03 (merge commit 6778ee9); job id `validate` did keep matching branch protection (the PR's own CI ran and reported normally, mergeable_state stayed clean throughout)."
     },
     {
       "build": "op0b_s3_cp_parse_scope_extension",
