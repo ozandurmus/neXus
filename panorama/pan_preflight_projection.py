@@ -41,7 +41,11 @@ from utils.failover.preflight_model import (
     Transport,
 )
 
-__all__ = ["project_pan_preflight_facts"]
+__all__ = [
+    "project_pan_preflight_facts",
+    "project_pan_identity_fact",
+    "project_pan_path_monitoring_facts",
+]
 
 #: (field key in the merged parsed dict, PreflightFact name, category,
 #: is_peer_claim). `is_peer_claim=True` -> lands in `peer_claim_facts`, never
@@ -199,3 +203,105 @@ def project_pan_preflight_facts(
         own_facts=tuple(own_facts),
         peer_claim_facts=tuple(peer_claim_facts),
     )
+
+
+# --- S6 additions: one projection function per newly-wired command --------
+#
+# Same discipline as `project_pan_preflight_facts` above: no I/O, no
+# readiness verdict, one caller-supplied `preflight_run_id`/`collected_at`/
+# `outcome`/`transport`/`context` shared by every fact a call produces.
+
+
+def project_pan_identity_fact(
+    accepted: bool,
+    *,
+    preflight_run_id: str,
+    collected_at: str,
+    physical_device_identity: str,
+    operational_entity_id: str,
+    transport: Transport = Transport.DIRECT_API,
+    context: FactContext | None = None,
+) -> PreflightFact:
+    """`P1` (`show system info`, direct API identity gate) -- category A
+    (`PHYSICAL_IDENTITY`). `accepted` is the caller's already-computed exact
+    (never normalized) serial-match result; this function carries no
+    identity logic of its own, only the resulting fact (task S6 §9)."""
+    provenance = Provenance(
+        collected_at=collected_at,
+        preflight_run_id=preflight_run_id,
+        source_vendor="panorama",
+        source_plane=SourceOrigin.DEVICE_RUNTIME,
+        transport=transport,
+        physical_device_identity=OpaqueToken(physical_device_identity),
+        operational_entity_id=operational_entity_id,
+        context=context or FactContext.physical(),
+        outcome=Outcome.SUCCESS if accepted else Outcome.IDENTITY_MISMATCH,
+        source_command="P1",
+    )
+    return PreflightFact(
+        name="pan_identity_gate_accepted", category=FactCategory.PHYSICAL_IDENTITY,
+        state=FactState.KNOWN, value=bool(accepted), provenance=provenance,
+    )
+
+
+def project_pan_path_monitoring_facts(
+    parsed: Mapping[str, Any] | None,
+    *,
+    preflight_run_id: str,
+    collected_at: str,
+    physical_device_identity: str,
+    operational_entity_id: str,
+    transport: Transport = Transport.DIRECT_API,
+    context: FactContext | None = None,
+    outcome: Outcome = Outcome.SUCCESS,
+) -> tuple[PreflightFact, ...]:
+    """`P4` (`show high-availability path-monitoring`) -- link/failure
+    health, categories F/J. `parsed` is the dict
+    `panorama.pan_preflight_extraction.parse_pan_path_monitoring` returns;
+    pass `parsed=None` for an explicit `COLLECTION_FAILED` (the read never
+    ran or failed). A missing/unrecognized field stays `UNKNOWN` -- never
+    healthy by absence (gate PAN-P4 "Failure semantics"/"Unsupported
+    semantics")."""
+    provenance = Provenance(
+        collected_at=collected_at,
+        preflight_run_id=preflight_run_id,
+        source_vendor="panorama",
+        source_plane=SourceOrigin.DEVICE_RUNTIME,
+        transport=transport,
+        physical_device_identity=OpaqueToken(physical_device_identity),
+        operational_entity_id=operational_entity_id,
+        context=context or FactContext.physical(),
+        outcome=outcome,
+        source_command="P4",
+    )
+    if parsed is None or not parsed.get("observed"):
+        state = FactState.COLLECTION_FAILED if outcome is not Outcome.SUCCESS else FactState.UNKNOWN
+        return (
+            PreflightFact(name="pan_path_monitoring_any_down", category=FactCategory.LINK_HEALTH, state=state, value=None, provenance=provenance),
+        )
+    facts: list[PreflightFact] = []
+    enabled = parsed.get("enabled")
+    facts.append(
+        PreflightFact(
+            name="pan_path_monitoring_enabled", category=FactCategory.LINK_HEALTH,
+            state=FactState.KNOWN if enabled is not None else FactState.UNKNOWN,
+            value=bool(enabled) if enabled is not None else None, provenance=provenance,
+        )
+    )
+    any_down = parsed.get("any_down")
+    facts.append(
+        PreflightFact(
+            name="pan_path_monitoring_any_down", category=FactCategory.LINK_HEALTH,
+            state=FactState.KNOWN if any_down is not None else FactState.UNKNOWN,
+            value=bool(any_down) if any_down is not None else None, provenance=provenance,
+        )
+    )
+    path_count = parsed.get("path_count")
+    if path_count is not None:
+        facts.append(
+            PreflightFact(
+                name="pan_path_monitoring_path_count", category=FactCategory.LINK_HEALTH,
+                state=FactState.KNOWN, value=int(path_count), provenance=provenance,
+            )
+        )
+    return tuple(facts)

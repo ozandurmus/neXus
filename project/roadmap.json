@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "current_build": "op0b_s5_cp_preflight_collector",
+  "current_build": "op0b_s6_pan_preflight_collector",
   "current_track": "OP.x",
   "progress_contract": "Weighted acceptance-criterion completion. Percentages describe the declared roadmap, not calendar time or delivery ETA.",
   "tracks": [
@@ -123,23 +123,20 @@
   "now_next": {
     "horizon_contract": "NOW is exactly one build. NEXT is exactly one. Everything else is an `upcoming` row carrying its own true status: planned = AFTER, blocked = waiting on a named external gate, deferred = consciously postponed. `now.build` must equal the newest project/build_history.json record -- utils.project_plan enforces it.",
     "now": {
-      "build": "op0b_s5_cp_preflight_collector",
-      "title": "OP.0b S5 - Check Point dedicated preflight collector",
-      "goal": "First dedicated Check Point failover-preflight collection implementation (checkpoint/preflight_collector.py), strictly within the PO-frozen S4 command gate (docs/history/phase/OP_0B_1_COMMAND_GATE_PACKAGE.md, Approval record, PR #41): for one caller-selected HA operational entity (<=2 bounded physical members, no fleet expansion), establishes one controlled SSH session per member (reused, never re-opened, for every read including B1), creates exactly one preflight_run_id, and issues the PO-authorized battery -- existing A1-A3 plus new A4 (cphaprob -a if), A5 (cphaprob -ia list), A6 (cphaprob syncstat / fw ctl pstat, evidence-based version dispatch from A2, never failure-driven), A7 (fw stat), A8 (cluster failover statistics, evidence-based platform dispatch from A2/A1, default invocation only, no reset/history-depth option), and B1 (vsx stat -v, VSX battery only, same per-member session, no new SSH transport session). New checkpoint/cp_preflight_battery.py (fixed typed command plan + evidence-based A6/A8 dispatch resolvers + a deterministic guard proving A9/A10/A11 and every rejected mutating command are absent by construction), checkpoint/cp_preflight_extraction.py (one pure, fail-closed extraction helper per new command -- no raw output retained), and additions to the existing S3 seam module checkpoint/cp_preflight_projection.py (one projection function per new command, reusing S1's PreflightFact/Provenance model unchanged; A1-A3's existing project_cp_preflight_facts left untouched). No application-level command retry anywhere in the new battery; no new SSH session/transport/credential path; no readiness verdict (S7 remains the sole readiness engine); no raw command output persisted. Network bound: <=16 required device commands per selected non-VSX ClusterXL pair, <=18 per selected VSX pair -- both proven by test, not just documented. tests/test_op0b_s5_cp_preflight_collector.py (48 tests: command-plan invariants, synthetic-session collection, VSX battery) green locally, plus S1/S3/S4/architecture-convergence regression and the full local suite (1277 passed / 26 skipped / 0 failed) and the repository privacy gate (0 findings).",
+      "build": "op0b_s6_pan_preflight_collector",
+      "title": "OP.0b S6 - Palo Alto dedicated preflight collector",
+      "goal": "Second (parallel to S5) dedicated failover-preflight collection implementation (panorama/preflight_collector.py), strictly within the PO-frozen S4 command gate (docs/history/phase/OP_0B_1_COMMAND_GATE_PACKAGE.md, Approval record, PR #41): for one caller-selected PAN HA pair (<=2 bounded physical members, no fleet expansion), resolves one direct API key per member (P1, P2, P4 all reuse it -- D-T1 resolved as direct for every row in this collector, since P1's own frozen plane is unconditionally direct and the gate's PAN preamble forbids splitting P2/P4 across a different plane), creates one preflight_run_id, and issues the PO-authorized battery -- P1 (show system info, direct identity gate, exact serial comparison, never normalized), P2 (show high-availability state, reusing the existing S2 _parse_pan_ha_preflight_fields/project_pan_preflight_facts unchanged), P4 (show high-availability path-monitoring, new). New panorama/pan_preflight_battery.py (fixed typed command plan + a deterministic guard proving P3/P5 and every rejected mutating PAN operation are absent by construction) and panorama/pan_preflight_extraction.py (one pure, fail-closed parser for P4). panorama/pan_preflight_projection.py (existing S2 seam) gains project_pan_identity_fact (P1) and project_pan_path_monitoring_facts (P4); P2's existing project_pan_preflight_facts is unchanged. No application-level command retry; no new SSH/API session shape, credential path, or TLS policy; no readiness verdict; B2 stays NOT ESTABLISHED (this collector produces per-member evidence only, no pair-identity redesign, no serial normalization). Network bound: <=6 required device commands per selected PAN pair -- proven by test. tests/test_op0b_s6_pan_preflight_collector.py (41 tests: battery invariants, synthetic-session collection, B2 non-establishment) green locally, plus S1/S2/S4/architecture-convergence regression, the affected PAN/configuration subsystem regression (399 passed), the full local suite (1318 passed / 26 skipped / 0 failed), and the repository privacy gate (0 findings).",
       "status": "automated_validated",
       "started": "2026-09-03"
     },
     "next": {
-      "build": "op0b_s6_pan_preflight_collector",
-      "title": "OP.0b S6 - Palo Alto dedicated preflight collector",
+      "build": "op0b_s7_readiness_v2_integration",
+      "title": "OP.0b S7 - Readiness v2 integration",
       "status": "planned",
       "notes": [
-        "Unblocked 2026-09-03: PO approved the OP.0b.1 command-gate package (docs/history/phase/OP_0B_1_COMMAND_GATE_PACKAGE.md, Approval record) -- PR #41; S5 (its CP sibling slice) landed the same day as the reference implementation shape.",
-        "Implementation battery (PO-frozen, not the wider technical candidate list): PAN P1, P2 (existing) + P4 (show high-availability path-monitoring, NO_RETRY) = 3 required reads/member. P3 (show high-availability all) is technically OPTIONAL_APPROVED but PO-withheld for this slice; P5 (show high-availability link-monitoring) stays DEFERRED_UNKNOWN -- exact command syntax unconfirmed.",
-        "Binding retry constraint: NO_RETRY on every command -- no new application-level command retry.",
-        "Network bound: <=6 required API operations per selected PAN HA pair (2 members x 3), within the existing per-firewall API session -- no fleet-wide or first-N behavior.",
-        "New panorama/preflight_collector.py should follow the S5 reference shape: a fixed typed command battery module (panorama/pan_preflight_battery.py or equivalent) proving P3/P5/every rejected mutating PAN operation absent by construction, one pure extraction helper per new command, and additions to the existing S2 PAN projection seam -- no ad hoc parsing inline in the collector.",
-        "Recommended branch: feature/op0b-s6-pan-preflight-collector. New session. Recommended reasoning: Sonnet 5, normal -- bounded collector implementation against a frozen, PO-approved command gate, same shape as S5."
+        "Unblocked once S5 (CP) and S6 (PAN) dedicated preflight collectors are both merged -- both landed 2026-09-03.",
+        "S7 is the first slice to consume PreflightSnapshot/evaluate_coherence (S1) and the real per-member evidence S5/S6 now produce, and to define/wire the readiness-v2 verdict path -- still CLASS 0 read-only; still no SAFE_TO_FAILOVER by construction per utils.failover.assessment's existing invariant.",
+        "Recommended branch: feature/op0b-s7-readiness-v2. New session. Recommended reasoning: Sonnet 5, extended thinking (high) -- new architecture/readiness-verdict design, per this repo's routing table (phase closure / new architecture tier)."
       ]
     },
     "upcoming": [
