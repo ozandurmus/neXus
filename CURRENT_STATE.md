@@ -7,16 +7,24 @@ detail is not here either** — it is in `project/build_history.json`
 linked documents under `docs/history/`. `docs/history/INDEX.md` is the
 generated one-line timeline.
 
-- **Checkpoint:** 2026-09-03, branch `claude/readiness-v2-s7-aorkfs` (base `main`).
+- **Checkpoint:** 2026-09-03, branch `feature/op0b-s75-preflight-entrypoint` (base `main`).
 - **Current build** (per `project/roadmap.json` `now_next.now`):
-  `op0b_s7_readiness_v2_integration` — **AUTOMATED_VALIDATED**. `OP.0b` S7:
-  fresh S1/S5/S6 preflight evidence integrated into the one canonical
-  readiness evaluator (`utils/failover/preflight_readiness.py` typed
-  fact→check mapping; `assessment._verdict_for` stays the single roll-up) —
-  see "Active build" below. `now_next.next` =
-  `op0b_s8_real_env_validation` (hardware-blocked).
-  `cp_remote_collection_done_marker_diagnostics` stays `now_next.upcoming`
-  (`IN_PROGRESS`).
+  `op0b_s75_preflight_entrypoint` — **AUTOMATED_VALIDATED**. `OP.0b` S7.5:
+  the bounded application/CLI seam S8 proved was missing.
+  `--cp-ha-preflight-check`/`--cp-preflight-targets` and
+  `--pan-ha-preflight-check`/`--pan-preflight-targets` resolve one explicit
+  HA operational entity and its exact bounded physical members (≤2) from
+  already-collected local inventory only, fail-closed before any device
+  contact, then invoke `run_cp_preflight`/`run_pan_preflight` exactly once
+  and hand the in-memory `PreflightSnapshot` straight to
+  `compute_ha_readiness` — no persistence, no new command/API operation/
+  retry, CLASS 2 unreachable. New `utils.failover.derive_ha_units` export
+  (pure refactor of `compute_ha_readiness`'s internal unit derivation, no
+  behavior change) keeps the application layer's `operational_unit_id`
+  resolution identical to the readiness evaluator's own. `now_next.next` =
+  `op0b_s8_real_env_validation` (entrypoint gap closed; still
+  hardware-blocked). `cp_remote_collection_done_marker_diagnostics` stays
+  `now_next.upcoming` (`IN_PROGRESS`).
 - **Product baseline:** `0.7.7 — Compliance trend retro-fill` — AUTOMATED_VALIDATED.
 - **Engineering baseline:** `DEV.3.3` — AUTOMATED_VALIDATED. `DEV.1`,
   `DEV.4` complete.
@@ -49,25 +57,21 @@ test-enforced boundaries. Current numbers:
 
 ## Active build
 
-**`op0b_s7_readiness_v2_integration`** — **AUTOMATED_VALIDATED**, 2026-09-03.
-`OP.0b` S7: `compute_ha_readiness(preflight_snapshots=...)` accepts the S5/S6
-`PreflightSnapshot`s; a unit with a snapshot is interpreted by the new
-`utils/failover/preflight_readiness.py` (`FACT_CHECK_MAP`, 14 vendor×check
-specs over the **unchanged seven checks**), every other unit keeps the OP.0a
-stored-telemetry basis; `assessment._verdict_for` remains the **one** roll-up
-(five verdicts unchanged; SAFE also refused while an open `D-F` policy
-applies). Schema string unchanged (`-v1`); additive per-unit `evidence`
-(basis, run id, coherence, skew, prerequisites, open policy gates) + top-level
-`preflight`. OP.0c stays projection-only. Evidence laws test-enforced
-(UNKNOWN/COLLECTION_FAILED/UNSUPPORTED never PASS, never KNOWN_BAD; positives
-need in-run evidence from every member; prerequisites block positives without
-fabricating failure). PAN phantom-member uplift removed (AC-5); a one-sided
-OP.0a read is now `INSUFFICIENT_EVIDENCE`. `D-F1`/`D-F2`/`D-F3`/`D-V7b`/`B2`
-stay unresolved, fail-closed — **SAFE and DEGRADED stay unreachable**. PO
-architecture approval 2026-09-03: seven checks kept (no 8th check, no
-top-level 5a/5b), schema stays `-v1`, one-sided-ACTIVE → INSUFFICIENT
-accepted, plus a fresh-preflight-XOR-legacy-telemetry guard test. Detail:
-contract §25c; `project/build_history.json`. No device contact; S8 owed.
+**`op0b_s75_preflight_entrypoint`** — **AUTOMATED_VALIDATED**, 2026-09-03,
+pending PO acceptance before merge. `OP.0b` S7.5: the bounded application/CLI
+seam S8 proved was missing. `--cp-ha-preflight-check --cp-preflight-targets`
+and `--pan-ha-preflight-check --pan-preflight-targets`
+(`application/workflows/preflight.py`) resolve one explicit HA operational
+entity and its exact bounded physical members (≤2) from already-collected
+local inventory only, fail-closed before any device contact, reusing the
+existing CP entity_id / PAN serial selectors; invoke
+`run_cp_preflight`/`run_pan_preflight` exactly once; hand the in-memory,
+never-persisted `PreflightSnapshot` straight to `compute_ha_readiness`. New
+`utils.failover.derive_ha_units` export (pure refactor, no behavior change)
+keeps `operational_unit_id` resolution identical between the application
+layer and the readiness evaluator; `B2` is not re-designed. No new command,
+API operation, retry, or CLASS 2. No device contact this session — S8-A owed.
+Detail: `project/build_history.json`.
 
 **Stalled, moved to `now_next.upcoming`:**
 `cp_remote_collection_done_marker_diagnostics` — still `IN_PROGRESS`,
@@ -78,11 +82,7 @@ safe category token instead of a bare byte count. Resume when a real
 recurrence report with the new diagnostic fields is available. Detail:
 `project/build_history.json`.
 
-**Predecessors:** `op0b_s6_pan_preflight_collector` (PR #43),
-`op0b_s5_cp_preflight_collector` (PR #42),
-`op0b_s4_command_gate_package` (PR #41), `dev_kaizen_fast_pr_ci` (PR #38),
-`op0b_s3_cp_parse_scope_extension` (PR #37),
-`op0b_s2_pan_parse_scope_extension` (PR #36),
+**Predecessors:** `op0b_s7_readiness_v2_integration` through
 `op0b_s1_preflight_fact_provenance_model` — all AUTOMATED_VALIDATED.
 Detail: `project/build_history.json`.
 
@@ -166,11 +166,11 @@ Concurrency budget stays at 1 per vendor pending its own real-environment eviden
 ## Automated test baseline
 
 ```
-1371 passed / 26 skipped / 0 failed (2026-09-03, op0b_s7_readiness_v2_integration, pre-guard;
-  +1 test-only guard added after PO approval, affected suites re-run green,
+1418 passed / 26 skipped / 0 failed (2026-09-03, op0b_s75_preflight_entrypoint,
   this session's local sandbox, serial, console extras installed session-locally)
-  -- +53 new (test_op0b_s7_readiness_v2.py) + 1 new OP.0a regression over the
-  S6 session's 1318/26/0 (same sandbox).
+  -- +46 new (test_op0b_s75_preflight_entrypoint.py); +1 new file
+  (application/workflows/preflight.py) over op0b_s7_readiness_v2_integration's
+  1371/26/0 (same sandbox class).
 Repository privacy gate: PASS / 0 findings, clean checkout.
 Project-state consistency: metadata_warnings == [] under all cross-authority rules.
 ```

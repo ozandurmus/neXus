@@ -202,6 +202,53 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--cp-ha-preflight-check",
+        action="store_true",
+        help=(
+            "OP.0b S7.5 READ-ONLY Check Point HA preflight: contacts only the explicit "
+            "physical member(s) named by --cp-preflight-targets (exact physical-host "
+            "entity_id, same convention as --cp-config-targets; at most 2, fail-closed "
+            "before any SSH connection opens), runs the approved S5 read battery exactly "
+            "once, then hands the resulting evidence straight to the canonical S7 readiness "
+            "evaluator -- no snapshot is persisted. Performs fresh device reads; executes no "
+            "failover action. Readiness may still come back INSUFFICIENT_EVIDENCE."
+        ),
+    )
+    parser.add_argument(
+        "--cp-preflight-targets",
+        default=None,
+        help=(
+            "OP.0b S7.5: exact, comma-separated physical-host entity_id allowlist for "
+            "--cp-ha-preflight-check (1-2 members of one ClusterXL/VSX HA entity). Required "
+            "with --cp-ha-preflight-check. Fail-closed: every id must resolve to exactly one "
+            "already-discovered candidate belonging to the same operational HA entity before "
+            "any device is contacted."
+        ),
+    )
+    parser.add_argument(
+        "--pan-ha-preflight-check",
+        action="store_true",
+        help=(
+            "OP.0b S7.5 READ-ONLY Palo Alto HA preflight: contacts only the explicit physical "
+            "member(s) named by --pan-preflight-targets (exact identity-gated serial, same "
+            "convention as --pan-config-targets; at most 2, fail-closed before any API call), "
+            "runs the approved S6 read battery exactly once, then hands the resulting evidence "
+            "straight to the canonical S7 readiness evaluator -- no snapshot is persisted. "
+            "Performs fresh device reads; executes no failover action. Readiness may still come "
+            "back INSUFFICIENT_EVIDENCE."
+        ),
+    )
+    parser.add_argument(
+        "--pan-preflight-targets",
+        default=None,
+        help=(
+            "OP.0b S7.5: exact, comma-separated serial allowlist for --pan-ha-preflight-check "
+            "(1-2 members of one Palo Alto HA pair). Required with --pan-ha-preflight-check. "
+            "Fail-closed: every serial must resolve to exactly one already-discovered candidate "
+            "belonging to the same operational HA entity before any device is contacted."
+        ),
+    )
+    parser.add_argument(
         "--recovery-store-check",
         action="store_true",
         help=(
@@ -395,6 +442,29 @@ def validate_modes(args, parser):
     ):
         parser.error("--recovery-validate cannot be combined with collection/render modes")
 
+    if args.cp_ha_preflight_check and not args.cp_preflight_targets:
+        parser.error("--cp-ha-preflight-check requires --cp-preflight-targets")
+    if args.cp_preflight_targets and not args.cp_ha_preflight_check:
+        parser.error("--cp-preflight-targets is only valid with --cp-ha-preflight-check")
+    if args.pan_ha_preflight_check and not args.pan_preflight_targets:
+        parser.error("--pan-ha-preflight-check requires --pan-preflight-targets")
+    if args.pan_preflight_targets and not args.pan_ha_preflight_check:
+        parser.error("--pan-preflight-targets is only valid with --pan-ha-preflight-check")
+    if args.cp_ha_preflight_check and args.pan_ha_preflight_check:
+        parser.error("--cp-ha-preflight-check and --pan-ha-preflight-check cannot be combined")
+    if (args.cp_ha_preflight_check or args.pan_ha_preflight_check) and (
+        args.cp_config_probe or args.cp_config_collect or args.render_only or args.only != "all"
+        or args.recovery_collect or args.recovery_attest or args.storage_analyze
+        or args.storage_deduplicate or args.apply or args.repository_privacy_check
+        or args.persistent_secret_material_check or args.restore_readiness_check
+        or args.ha_readiness_check or args.recovery_store_check or args.recovery_validate
+        or args.compliance_trend_reconstruct or args.scheduler_once or args.console
+    ):
+        parser.error(
+            "--cp-ha-preflight-check / --pan-ha-preflight-check cannot be combined with "
+            "collection/render/maintenance modes"
+        )
+
     if args.storage_analyze and args.storage_deduplicate:
         parser.error("Choose only one of --storage-analyze or --storage-deduplicate")
     if args.apply and not args.storage_deduplicate:
@@ -552,6 +622,12 @@ def dispatch(args, parser, *, runtime_services=None, provenance="manual", admiss
         return checkpoint_wf.cp_config_probe(ctx)
     if args.cp_config_collect:
         return checkpoint_wf.cp_config_collect(ctx)
+    if args.cp_ha_preflight_check:
+        from application.workflows import preflight as preflight_wf
+        return preflight_wf.cp_ha_preflight_check(ctx)
+    if args.pan_ha_preflight_check:
+        from application.workflows import preflight as preflight_wf
+        return preflight_wf.pan_ha_preflight_check(ctx)
     if args.render_only:
         return maintenance_wf.render_only(ctx)
 

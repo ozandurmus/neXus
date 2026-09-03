@@ -775,6 +775,39 @@ def _derive_pan_units(
     return units
 
 
+def derive_ha_units(
+    unified_devices: Sequence[Mapping[str, Any]],
+    *,
+    cp_ha_runtime: Mapping[str, Mapping[str, Any]] | None = None,
+    pan_ha_runtime: Mapping[str, Mapping[str, Any]] | None = None,
+    pan_ha_peers: Mapping[str, str] | None = None,
+) -> list[HaUnit]:
+    """The canonical operational-HA-unit derivation, exported unchanged.
+
+    `compute_ha_readiness` uses this internally to decide which units exist
+    and what their `unit_id`/`members` are; OP.0b S7.5's application
+    entrypoint calls it too, to resolve one operational entity from caller-
+    supplied physical targets *before* any device contact, so a fresh
+    `PreflightSnapshot.operational_unit_id` is guaranteed to match what this
+    function -- and therefore `compute_ha_readiness` -- will independently
+    derive for the same inventory. No readiness/verdict logic lives here;
+    this performs no collection and computes no check or verdict.
+    """
+    cp_runtime = _normalize_cp_runtime(cp_ha_runtime or {})
+    pan_runtime = pan_ha_runtime or {}
+    peers = pan_ha_peers or {}
+
+    usable_rows = [
+        row for row in unified_devices
+        if str((row.get("inventory_status") or {}).get("data_state") or "").strip().lower()
+        not in _INSUFFICIENT_DATA_STATES
+        and resolve_vendor(row) is not None
+        and resolve_entity_id(row)
+    ]
+
+    return _derive_cp_units(usable_rows, cp_runtime) + _derive_pan_units(usable_rows, pan_runtime, peers)
+
+
 def compute_ha_readiness(
     unified_devices: Sequence[Mapping[str, Any]],
     *,
@@ -821,17 +854,10 @@ def compute_ha_readiness(
     """
     cp_runtime = _normalize_cp_runtime(cp_ha_runtime or {})
     pan_runtime = pan_ha_runtime or {}
-    peers = pan_ha_peers or {}
 
-    usable_rows = [
-        row for row in unified_devices
-        if str((row.get("inventory_status") or {}).get("data_state") or "").strip().lower()
-        not in _INSUFFICIENT_DATA_STATES
-        and resolve_vendor(row) is not None
-        and resolve_entity_id(row)
-    ]
-
-    units = _derive_cp_units(usable_rows, cp_runtime) + _derive_pan_units(usable_rows, pan_runtime, peers)
+    units = derive_ha_units(
+        unified_devices, cp_ha_runtime=cp_ha_runtime, pan_ha_runtime=pan_runtime, pan_ha_peers=pan_ha_peers,
+    )
 
     snapshots_by_unit: dict[str, Any] = {}
     duplicate_snapshot_units: list[str] = []
