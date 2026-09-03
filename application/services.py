@@ -70,6 +70,8 @@ _MODE_PREREQUISITES = {
     "cp": ("vsx.json", "panorama_runtime.json"),
     "vsx": ("cp.json", "panorama_runtime.json"),
     "pan-config": ("unified.json",),
+    "cp-ha-preflight-check": ("cp_telemetry.json", "cp.json", "vsx.json", "unified.json"),
+    "pan-ha-preflight-check": ("unified.json",),
 }
 
 _BOOTSTRAP_SEQUENCE = (
