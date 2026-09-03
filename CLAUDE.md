@@ -1,8 +1,10 @@
 # CLAUDE.md — SecurityExpert
 
-Claude-specific delta only. The canonical law is `AGENTS.md`; the cold-start
-entry point and reading order is `AI_START_HERE.md`; the detailed engineering
-lifecycle is `docs/AI_DEVELOPMENT_PROTOCOL.md`. This file does not restate them.
+Claude-specific delta only. The canonical constitution is `AGENTS.md`; the
+cold-start entry point, reading order, and SESSION START/CLOSE/reasoning-tier
+schemas are in `AI_START_HERE.md`; the network-device command gate, approval
+boundaries and render-harness mechanics are detailed in
+`docs/AI_DEVELOPMENT_PROTOCOL.md`. This file does not restate them.
 
 ## Claude delta
 
@@ -31,7 +33,8 @@ lifecycle is `docs/AI_DEVELOPMENT_PROTOCOL.md`. This file does not restate them.
   bootstrap or interpreter selection. On a real command failure, report it and
   stop.
 
-Everything else — context order, movement types, build lifecycle, privacy / DLP,
-the network-device command gate, approval boundaries, and the
-`SESSION START` / `SESSION CLOSE` contracts — is in `AGENTS.md` and
+Everything else — context order, movement types, build lifecycle, privacy /
+DLP, evidence/identity laws, the `SESSION START` / `SESSION CLOSE` schemas
+and reasoning-tier table, the network-device command gate, and approval
+boundaries — is in `AGENTS.md`, `AI_START_HERE.md`, and
 `docs/AI_DEVELOPMENT_PROTOCOL.md`.

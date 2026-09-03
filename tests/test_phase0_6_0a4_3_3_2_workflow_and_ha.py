@@ -1,5 +1,6 @@
 from pathlib import Path
 import inspect
+import json
 
 from lxml import etree
 
@@ -66,6 +67,280 @@ def test_pan_target_ha_runtime_parser_handles_ha_disabled_without_inventing_role
     assert result["enabled"] == "no"
     assert result["state"] is None
     assert result["peer_state"] is None
+
+
+def test_pan_ha_runtime_diagnostic_is_absent_by_default(monkeypatch):
+    response = etree.fromstring(
+        b"""<response status='success'><result><enabled>yes</enabled><group>
+        <local-info><state>active</state><mode>Active-Passive</mode><state-sync>Complete</state-sync></local-info>
+        <peer-info><state>passive</state></peer-info>
+        </group></result></response>"""
+    )
+    monkeypatch.setattr(pan_collector, "api_post", lambda *args, **kwargs: response)
+    result = pan_collector.get_target_ha_runtime_state(
+        "https://panorama.example", "key", "SER123", verify=False, timeout=10
+    )
+    assert "local_info_fields" not in result
+    assert "peer_info_fields" not in result
+    assert "field_tokens" not in result
+
+
+def test_pan_ha_runtime_diagnostic_enumerates_real_field_names_without_new_request(monkeypatch):
+    response = etree.fromstring(
+        b"""<response status='success'><result><enabled>yes</enabled><group>
+        <local-info><state>active</state><mode>Active-Passive</mode><state-sync>Complete</state-sync></local-info>
+        <peer-info><state>passive</state><mgmt-ip>10.9.9.9</mgmt-ip></peer-info>
+        </group></result></response>"""
+    )
+    calls = []
+
+    def fake_api_post(host, key, data, *, verify, timeout, operation):
+        calls.append(data)
+        return response
+
+    monkeypatch.setattr(pan_collector, "api_post", fake_api_post)
+    result = pan_collector.get_target_ha_runtime_state(
+        "https://panorama.example",
+        "secret-key",
+        "SER123",
+        verify=False,
+        timeout=10,
+        capture_field_diagnostics=True,
+    )
+
+    # Same single already-approved command -- no new/extra network call.
+    assert len(calls) == 1
+    assert calls[0]["cmd"] == "<show><high-availability><state></state></high-availability></show>"
+
+    assert result["local_info_fields"] == ["mode", "state", "state-sync"]
+    assert result["peer_info_fields"] == ["mgmt-ip", "state"]
+    # Every populated leaf -- local-info and peer-info alike -- is tokenized;
+    # we don't know in advance which field carries an address-shaped value.
+    assert set(result["field_tokens"]) == {
+        "local-info/state",
+        "local-info/mode",
+        "local-info/state-sync",
+        "peer-info/mgmt-ip",
+        "peer-info/state",
+    }
+    # Only a one-way token, never the raw value.
+    assert "10.9.9.9" not in result["field_tokens"]["peer-info/mgmt-ip"]
+
+
+def test_pan_ha_peer_identity_diagnostic_reports_booleans_never_raw_addresses(monkeypatch):
+    monkeypatch.setenv("FBUDDY_SUPPORT_HASH_KEY", "test-only-key-not-persisted")
+    tok = pan_collector.Tokenizer(pan_collector._get_support_key())
+    peer_ip = "192.0.2.9"
+    management_ip = "192.0.2.1"
+    row = {
+        "management_ip": management_ip,
+        "ha_runtime": {
+            "peer_ip": peer_ip,
+            "local_info_fields": ["mode", "state"],
+            "peer_info_fields": ["mgmt-ip", "state"],
+            "field_tokens": {
+                # Same peer_ip value as configured -- must resolve to a match.
+                "peer-info/mgmt-ip": tok.token("pan_ha_identity_value", peer_ip),
+                "peer-info/state": tok.token("pan_ha_identity_value", "passive"),
+            },
+        },
+    }
+
+    pan_collector._apply_pan_ha_peer_identity_diagnostic(row)
+
+    ha_runtime = row["ha_runtime"]
+    assert "field_tokens" not in ha_runtime
+    assert "local_info_fields" not in ha_runtime
+    assert "peer_info_fields" not in ha_runtime
+
+    diagnostic = ha_runtime["peer_identity_diagnostic"]
+    assert diagnostic["enabled"] is True
+    assert diagnostic["local_info_fields"] == ["mode", "state"]
+    assert diagnostic["peer_info_fields"] == ["mgmt-ip", "state"]
+    assert diagnostic["configured_peer_matches_peer_management_ip"] is False
+    assert diagnostic["configured_peer_matches_runtime_field"] == {
+        "peer-info/mgmt-ip": True,
+        "peer-info/state": False,
+    }
+
+    # The diagnostic sub-object itself must never carry a raw address -- only
+    # field names and booleans. (row["ha_runtime"]["peer_ip"] legitimately
+    # holds the raw configured value elsewhere, as existing OP.0a.P7 CLASS 2
+    # local evidence; this diagnostic must not duplicate it.)
+    dumped_diagnostic = json.dumps(diagnostic)
+    assert peer_ip not in dumped_diagnostic
+    assert management_ip not in dumped_diagnostic
+
+
+def test_pan_ha_peer_identity_diagnostic_absent_when_target_not_queried_this_run():
+    # Panorama already supplied ha_state (queried_target=False) -- no HA-state
+    # response was fetched this run, so there is nothing to compare against.
+    row = {
+        "management_ip": "192.0.2.1",
+        "ha_runtime": {"status": "success", "queried_target": False, "peer_ip": "192.0.2.9"},
+    }
+    pan_collector._apply_pan_ha_peer_identity_diagnostic(row)
+    assert "peer_identity_diagnostic" not in row["ha_runtime"]
+
+
+def test_pan_ha_peer_diagnostic_cli_flag_is_opt_in_and_threaded_through_both_call_sites():
+    assert '"--pan-ha-peer-diagnostic"' in CLI
+    assert CLI.count('action="store_true"') >= 1
+    assert CHECKPOINT_WF.count("pan_ha_peer_diagnostic=args.pan_ha_peer_diagnostic") == 2
+
+
+# --- OP.0a PAN runtime peer identity evidence (evidence-only slice) ---------
+
+
+def _row_with_serial_fields(monkeypatch, *, own_serial, local_serial_text, peer_serial_text, management_ip="192.0.2.1", peer_ip="192.168.255.1"):
+    monkeypatch.setenv("FBUDDY_SUPPORT_HASH_KEY", "test-only-key-not-persisted")
+    tok = pan_collector.Tokenizer(pan_collector._get_support_key())
+    field_tokens = {}
+    if local_serial_text is not None:
+        field_tokens["local-info/serial-num"] = tok.token("pan_ha_identity_value", local_serial_text.strip())
+    if peer_serial_text is not None:
+        field_tokens["peer-info/serial-num"] = tok.token("pan_ha_identity_value", peer_serial_text.strip())
+    return {
+        "serial": own_serial,
+        "management_ip": management_ip,
+        "ha_runtime": {
+            "peer_ip": peer_ip,
+            "local_info_fields": ["serial-num"],
+            "peer_info_fields": ["serial-num"],
+            "field_tokens": field_tokens,
+        },
+    }
+
+
+def test_pan_ha_runtime_peer_identity_evidence_parses_both_serial_fields(monkeypatch):
+    row = _row_with_serial_fields(
+        monkeypatch, own_serial="SERIAL-A", local_serial_text="SERIAL-A", peer_serial_text="SERIAL-B"
+    )
+    pan_collector._apply_pan_ha_peer_identity_diagnostic(row)
+
+    evidence = row["ha_runtime"]["runtime_peer_identity_evidence"]
+    assert evidence["local_serial_reported"] is True
+    assert evidence["peer_serial_claimed"] is True
+    # Own reported local-info/serial-num matches this device's own
+    # identity-gated serial -- a self-consistency sanity check, not peer
+    # correspondence.
+    assert evidence["self_identity_consistent"] is True
+
+    # Raw serials never appear in the persisted evidence -- only tokens.
+    dumped = json.dumps(evidence)
+    assert "SERIAL-A" not in dumped
+    assert "SERIAL-B" not in dumped
+
+    # Temporary comparison tokens exist for the cross-device finalize pass,
+    # but are never raw values themselves.
+    assert row["ha_runtime"]["_peer_serial_token"] is not None
+    assert row["ha_runtime"]["_identity_gated_serial_token"] is not None
+    assert "SERIAL-A" not in row["ha_runtime"]["_identity_gated_serial_token"]
+    assert "SERIAL-B" not in row["ha_runtime"]["_peer_serial_token"]
+
+
+def test_pan_ha_runtime_peer_identity_evidence_missing_fields_degrade_safely(monkeypatch):
+    row = _row_with_serial_fields(monkeypatch, own_serial="SERIAL-A", local_serial_text=None, peer_serial_text=None)
+    pan_collector._apply_pan_ha_peer_identity_diagnostic(row)
+
+    evidence = row["ha_runtime"]["runtime_peer_identity_evidence"]
+    assert evidence["local_serial_reported"] is False
+    assert evidence["peer_serial_claimed"] is False
+    assert evidence["self_identity_consistent"] is None
+    assert row["ha_runtime"]["_peer_serial_token"] is None
+
+
+def test_pan_ha_runtime_peer_identity_evidence_whitespace_normalizes_like_raw_value(monkeypatch):
+    padded = _row_with_serial_fields(
+        monkeypatch, own_serial="SERIAL-A", local_serial_text="SERIAL-A", peer_serial_text="  SERIAL-B  "
+    )
+    clean = _row_with_serial_fields(
+        monkeypatch, own_serial="SERIAL-A", local_serial_text="SERIAL-A", peer_serial_text="SERIAL-B"
+    )
+    pan_collector._apply_pan_ha_peer_identity_diagnostic(padded)
+    pan_collector._apply_pan_ha_peer_identity_diagnostic(clean)
+    assert padded["ha_runtime"]["_peer_serial_token"] == clean["ha_runtime"]["_peer_serial_token"]
+
+
+def test_pan_ha_runtime_peer_serial_correspondence_match_is_bidirectional(monkeypatch):
+    row_a = _row_with_serial_fields(monkeypatch, own_serial="SERIAL-A", local_serial_text="SERIAL-A", peer_serial_text="SERIAL-B")
+    row_b = _row_with_serial_fields(monkeypatch, own_serial="SERIAL-B", local_serial_text="SERIAL-B", peer_serial_text="SERIAL-A")
+    pan_collector._apply_pan_ha_peer_identity_diagnostic(row_a)
+    pan_collector._apply_pan_ha_peer_identity_diagnostic(row_b)
+
+    pan_collector._finalize_pan_runtime_peer_serial_correspondence([row_a, row_b])
+
+    assert row_a["ha_runtime"]["runtime_peer_identity_evidence"]["runtime_peer_serial_state"] == "MATCH"
+    assert row_b["ha_runtime"]["runtime_peer_identity_evidence"]["runtime_peer_serial_state"] == "MATCH"
+    # Temporary tokens are removed once resolved -- nothing left to compare
+    # against raw values.
+    assert "_peer_serial_token" not in row_a["ha_runtime"]
+    assert "_identity_gated_serial_token" not in row_a["ha_runtime"]
+
+
+def test_pan_ha_runtime_peer_serial_correspondence_mismatch_is_not_established_as_a_pair(monkeypatch):
+    row_a = _row_with_serial_fields(monkeypatch, own_serial="SERIAL-A", local_serial_text="SERIAL-A", peer_serial_text="SERIAL-ZZZ")
+    row_b = _row_with_serial_fields(monkeypatch, own_serial="SERIAL-B", local_serial_text="SERIAL-B", peer_serial_text="SERIAL-A")
+
+    pan_collector._apply_pan_ha_peer_identity_diagnostic(row_a)
+    pan_collector._apply_pan_ha_peer_identity_diagnostic(row_b)
+    pan_collector._finalize_pan_runtime_peer_serial_correspondence([row_a, row_b])
+
+    # A claims a peer serial that corresponds to no independently observed
+    # device in this run -- MISMATCH, never promoted to a pair.
+    assert row_a["ha_runtime"]["runtime_peer_identity_evidence"]["runtime_peer_serial_state"] == "MISMATCH"
+    # B's claim about A is correct.
+    assert row_b["ha_runtime"]["runtime_peer_identity_evidence"]["runtime_peer_serial_state"] == "MATCH"
+
+
+def test_pan_ha_runtime_peer_serial_correspondence_missing_claim(monkeypatch):
+    row = _row_with_serial_fields(monkeypatch, own_serial="SERIAL-A", local_serial_text="SERIAL-A", peer_serial_text=None)
+    pan_collector._apply_pan_ha_peer_identity_diagnostic(row)
+    pan_collector._finalize_pan_runtime_peer_serial_correspondence([row])
+    assert row["ha_runtime"]["runtime_peer_identity_evidence"]["runtime_peer_serial_state"] == "MISSING"
+
+
+def test_pan_ha_runtime_peer_serial_correspondence_not_evaluable_with_single_device(monkeypatch):
+    row = _row_with_serial_fields(monkeypatch, own_serial="SERIAL-A", local_serial_text="SERIAL-A", peer_serial_text="SERIAL-B")
+    pan_collector._apply_pan_ha_peer_identity_diagnostic(row)
+    # Only one device diagnosed this run -- nothing to compare the claim
+    # against, so it must not be silently treated as a match or mismatch.
+    pan_collector._finalize_pan_runtime_peer_serial_correspondence([row])
+    assert row["ha_runtime"]["runtime_peer_identity_evidence"]["runtime_peer_serial_state"] == "NOT_EVALUABLE"
+
+
+def test_pan_ha_runtime_peer_serial_correspondence_ignores_legacy_rows_without_crashing():
+    legacy_row = {"ha_runtime": {"status": "success", "queried_target": False, "peer_ip": "192.168.255.1"}}
+    # Must not raise, and must not fabricate an evidence block that was
+    # never populated.
+    pan_collector._finalize_pan_runtime_peer_serial_correspondence([legacy_row])
+    assert "runtime_peer_identity_evidence" not in legacy_row["ha_runtime"]
+
+
+def test_pan_ha_runtime_peer_identity_evidence_makes_no_new_network_request(monkeypatch):
+    response = etree.fromstring(
+        b"""<response status='success'><result><enabled>yes</enabled><group>
+        <local-info><state>active</state><serial-num>001122334455</serial-num></local-info>
+        <peer-info><state>passive</state><serial-num>556677889900</serial-num></peer-info>
+        </group></result></response>"""
+    )
+    calls = []
+
+    def fake_api_post(host, key, data, *, verify, timeout, operation):
+        calls.append(data)
+        return response
+
+    monkeypatch.setattr(pan_collector, "api_post", fake_api_post)
+    result = pan_collector.get_target_ha_runtime_state(
+        "https://panorama.example", "secret-key", "SER123", verify=False, timeout=10, capture_field_diagnostics=True,
+    )
+
+    assert len(calls) == 1
+    assert calls[0]["cmd"] == "<show><high-availability><state></state></high-availability></show>"
+    assert "local-info/serial-num" in result["field_tokens"]
+    assert "peer-info/serial-num" in result["field_tokens"]
+    assert "001122334455" not in json.dumps(result)
+    assert "556677889900" not in json.dumps(result)
 
 
 def test_workflow_modes_are_explicit_and_render_only_precedes_vendor_imports():

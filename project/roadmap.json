@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "current_build": "op0a_pan_ha_peer_pairing_identity_closure",
+  "current_build": "dev4_ai_engineering_constitution_authority_reconciliation",
   "current_track": "CON.x",
   "progress_contract": "Weighted acceptance-criterion completion. Percentages describe the declared roadmap, not calendar time or delivery ETA.",
   "tracks": [
@@ -123,24 +123,35 @@
   "now_next": {
     "horizon_contract": "NOW is exactly one build. NEXT is exactly one. Everything else is an `upcoming` row carrying its own true status: planned = AFTER, blocked = waiting on a named external gate, deferred = consciously postponed. `now.build` must equal the newest project/build_history.json record -- utils.project_plan enforces it.",
     "now": {
-      "build": "op0a_pan_ha_peer_pairing_identity_closure",
-      "title": "OP.0a.P7 revision - PAN HA peer-pairing identity closure",
-      "goal": "Wire peer_ip/peer_ipv6 from the already-fetched PAN running-config XML into PAN HA peer-pairing (previously dead code against real telemetry), close the CP-tr-class hostname-normalization divergence between panorama_runtime_runner.py and panorama_config_collector.py, and require mutual (both-directions) configuration agreement before _derive_pan_units forms a pair. Read-only, no new device command. peer_ip is explicitly configuration intent (Grade A) for OP.0a pairing only -- never sufficient for a future CLASS 2 authorization decision.",
+      "build": "dev4_ai_engineering_constitution_authority_reconciliation",
+      "title": "DEV.4 - AI engineering constitution & authority reconciliation",
+      "goal": "Collapse the AI bootstrap/governance surface to a three-file authority model (AGENTS.md constitution, AI_START_HERE.md operating protocol, CURRENT_STATE.md hot checkpoint) and fix the two live authority contradictions the audit found. Documentation/governance only -- no product code, collector, vendor command, schema, transport or UI behavior changed.",
       "status": "automated_validated",
       "started": "2026-09-02",
       "completed": "2026-09-02"
     },
     "next": {
-      "build": "op0_failover_readiness_real_env_closure",
-      "title": "Failover readiness real-environment evidence",
-      "goal": "Confirm OP.0a ha_cluster_mode resolution AND the new PAN peer_ip extraction/mutual-agreement pairing against a real CP/PAN HA pair (both fixture-constructed today, not yet hardware-confirmed), and eyeball the Failover module in Operator Console against that real evidence. Also confirms the VSX real-env retry fixes (op_vsx_real_env_retry_fixes) hold on a freshly re-collected pair. No new code expected; a decision on OP.0b gate approval is the other open item on this path.",
+      "build": "op0b_official_vendor_semantics_confirmation",
+      "title": "OP.0b.0 official vendor semantics confirmation",
+      "goal": "From an unblocked network, fetch the official Check Point / Palo Alto documentation pages the OP.0b.0 contract's Open decisions table names for D-V1, D-V2, D-V3, D-V4, D-V5, D-V6, D-V7 and D-V9, resolve each row's UNKNOWN as far as documentation allows, then re-run the contract's own freeze check. This is what moves OP.0b.0 from DRAFT -- DO NOT FREEZE toward FROZEN; it is not itself a freeze decision.",
       "status": "planned",
       "prerequisites": [
-        "OP.0c AUTOMATED_VALIDATED (met)"
+        "Egress proxy access to sc1.checkpoint.com, support.checkpoint.com, docs.paloaltonetworks.com, knowledgebase.paloaltonetworks.com, pan.dev (all returned CONNECT 403 during drafting)"
       ],
-      "note": "This is a real-environment validation step, not a new build with its own contract -- see CURRENT_STATE.md Real-environment validation owed."
+      "note": "Independent of PAN SERIAL REPRESENTATION / IDENTITY EVIDENCE CLOSURE (below, upcoming) -- the two may proceed in either order or in parallel. Recommended: Sonnet 5, extended thinking (high) for the confirmation/freeze pass (vendor-semantic calls)."
     },
     "upcoming": [
+      {
+        "build": "pan_serial_representation_identity_evidence_closure",
+        "title": "PAN SERIAL REPRESENTATION / IDENTITY EVIDENCE CLOSURE",
+        "status": "blocked",
+        "notes": [
+          "Blocked on access to the same approved real PAN pair used for the S0 result (hardware/real-environment, not a decision gate).",
+          "Purpose: determine why one member's independently sourced serial representations (runtime local-info vs runtime peer-info claim) do not compare equal, without weakening opaque-identifier semantics -- not merely 'obtain B2'.",
+          "Independent of OP.0b.0 OFFICIAL VENDOR SEMANTICS CONFIRMATION (now_next.next) -- the two may proceed independently.",
+          "Recommended: Sonnet 5, normal reasoning initially; escalate to extended thinking (high) only if vendor identity semantics become architectural."
+        ]
+      },
       {
         "build": "CON.2 real-environment run",
         "title": "Trigger a read-class console job against a real device",
@@ -155,7 +166,8 @@
         "status": "blocked",
         "notes": [
           "Blocked on the network-device command gate drafted in docs/history/phase/OP_0A_HA_READINESS_ASSESSMENT.md but not approved.",
-          "This is the gate that makes SAFE_TO_FAILOVER reachable at all; until it is approved every unit correctly reports INSUFFICIENT_EVIDENCE."
+          "This is the gate that makes SAFE_TO_FAILOVER reachable at all; until it is approved every unit correctly reports INSUFFICIENT_EVIDENCE.",
+          "Its evidence surface is now audited in docs/history/phase/OP_0B_0_VENDOR_FAILOVER_PREFLIGHT_EVIDENCE_SURFACE.md (DRAFT -- DO NOT FREEZE; see now_next.next)."
         ]
       },
       {
@@ -602,6 +614,114 @@
       ],
       "recommendation": "Keep CON.x. It is a delivery-surface track spanning several product themes; burying it in an engineering track hides an operator-visible capability from the roadmap.",
       "decide_by": "roadmap review"
+    },
+    {
+      "id": "D-V1",
+      "area": "OP.0b.0 Vendor Failover Preflight Evidence",
+      "status": "open",
+      "question": "PAN conn-status/conn-ha1/conn-ha1-backup/conn-ha2 value vocabulary. Blocks OP.0b.0 freeze.",
+      "options": [
+        "Confirm from official vendor documentation",
+        "Confirm from a bounded real-environment measurement (S0/S2/S8 as applicable)"
+      ],
+      "recommendation": "Do not fill from generic product knowledge; resolve via the named source only.",
+      "decide_by": "PAN-OS 11.1 CLI reference / API output, S2 real-env"
+    },
+    {
+      "id": "D-V2",
+      "area": "OP.0b.0 Vendor Failover Preflight Evidence",
+      "status": "open",
+      "question": "PAN state-sync, *-compat, preemptive, flap-counter field semantics. Blocks OP.0b.0 freeze.",
+      "options": [
+        "Confirm from official vendor documentation",
+        "Confirm from a bounded real-environment measurement (S0/S2/S8 as applicable)"
+      ],
+      "recommendation": "Do not fill from generic product knowledge; resolve via the named source only.",
+      "decide_by": "PAN-OS 11.1 CLI reference / API output, S2 real-env"
+    },
+    {
+      "id": "D-V3",
+      "area": "OP.0b.0 Vendor Failover Preflight Evidence",
+      "status": "open",
+      "question": "PAN peer-info/serial-num semantics and real correspondence. Blocks OP.0b.0 freeze.",
+      "options": [
+        "Confirm from official vendor documentation",
+        "Confirm from a bounded real-environment measurement (S0/S2/S8 as applicable)"
+      ],
+      "recommendation": "Do not fill from generic product knowledge; resolve via the named source only.",
+      "decide_by": "S0 + official doc"
+    },
+    {
+      "id": "D-V4",
+      "area": "OP.0b.0 Vendor Failover Preflight Evidence",
+      "status": "open",
+      "question": "PAN running-sync location (state XML sibling vs all). Blocks OP.0b.0 freeze.",
+      "options": [
+        "Confirm from official vendor documentation",
+        "Confirm from a bounded real-environment measurement (S0/S2/S8 as applicable)"
+      ],
+      "recommendation": "Do not fill from generic product knowledge; resolve via the named source only.",
+      "decide_by": "S2 enumeration"
+    },
+    {
+      "id": "D-V5",
+      "area": "OP.0b.0 Vendor Failover Preflight Evidence",
+      "status": "open",
+      "question": "CP failover-statistics exact Gaia syntax and version availability. Blocks OP.0b.0 freeze.",
+      "options": [
+        "Confirm from official vendor documentation",
+        "Confirm from a bounded real-environment measurement (S0/S2/S8 as applicable)"
+      ],
+      "recommendation": "Do not fill from generic product knowledge; resolve via the named source only.",
+      "decide_by": "R81.x CLI Reference \"Viewing Cluster Failover Statistics\""
+    },
+    {
+      "id": "D-V6",
+      "area": "OP.0b.0 Vendor Failover Preflight Evidence",
+      "status": "open",
+      "question": "CP -ia list vs -l list difference; cphaprob state field set. Blocks OP.0b.0 freeze (gate package).",
+      "options": [
+        "Confirm from official vendor documentation",
+        "Confirm from a bounded real-environment measurement (S0/S2/S8 as applicable)"
+      ],
+      "recommendation": "Do not fill from generic product knowledge; resolve via the named source only.",
+      "decide_by": "R81.x CLI Reference"
+    },
+    {
+      "id": "D-V7",
+      "area": "OP.0b.0 Vendor Failover Preflight Evidence",
+      "status": "open",
+      "question": "CP management-plane recovery-setting attribute/API for preemption. Blocks OP.0b.0 freeze.",
+      "options": [
+        "Confirm from official vendor documentation",
+        "Confirm from a bounded real-environment measurement (S0/S2/S8 as applicable)"
+      ],
+      "recommendation": "Do not fill from generic product knowledge; resolve via the named source only.",
+      "decide_by": "Management API reference"
+    },
+    {
+      "id": "D-V8",
+      "area": "OP.0b.0 Vendor Failover Preflight Evidence",
+      "status": "open",
+      "question": "CP hotfix parity command (optional check). Does not block OP.0b.0 freeze.",
+      "options": [
+        "Confirm from official vendor documentation",
+        "Confirm from a bounded real-environment measurement (S0/S2/S8 as applicable)"
+      ],
+      "recommendation": "Do not fill from generic product knowledge; resolve via the named source only.",
+      "decide_by": "Gaia CLI reference"
+    },
+    {
+      "id": "D-V9",
+      "area": "OP.0b.0 Vendor Failover Preflight Evidence",
+      "status": "open",
+      "question": "sk165432 applicability to this estate's version. Blocks OP.0b.0 freeze for VS readiness.",
+      "options": [
+        "Confirm from official vendor documentation",
+        "Confirm from a bounded real-environment measurement (S0/S2/S8 as applicable)"
+      ],
+      "recommendation": "Do not fill from generic product knowledge; resolve via the named source only.",
+      "decide_by": "S8"
     }
   ]
 }
