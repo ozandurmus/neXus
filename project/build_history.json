@@ -3,6 +3,21 @@
   "record_contract": "One structured record per build, newest first. Required: build, status, title, summary (<= 2 sentences). Optional: started, completed, track, movement, supersedes, evidence, risks_forward, docs{agreement,validation,handover} (repo-relative paths under docs/history/). Full detail lives in the linked doc; do not restate it here. Status vocabulary must stay within utils/project_plan.py STATUS_VALUES.",
   "builds": [
     {
+      "build": "op0b_s3_cp_parse_scope_extension",
+      "status": "in_progress",
+      "title": "OP.0b S3 - CP preflight parse-scope extension (existing cphaprob stat response)",
+      "summary": "Third bounded implementation slice against the FROZEN OP.0b.0 contract, Check Point side: new _parse_clusterxl_stat_preflight_fields() reads non-local member-row state (peer/member observation) and a local failure/attention boolean out of the SAME already-fetched cphaprob stat buffer, plus one new recognized cluster-mode value (vsx_single_vs_failover, sk112712) in the existing always-invoked mode parser. New checkpoint/cp_preflight_projection.py (pure) projects that into S1 PreflightFact/PreflightMemberEvidence; the peer/attention field family is opt-in and dormant by design (include_preflight_fields=False on _collect_host, unchanged production call site) -- same S2-established posture, production invocation remains S5/S6's job. Status recorded as in_progress rather than automated_validated: targeted + affected-subsystem tests are green in this session's local run, but no PR/CI evidence exists yet -- deliberately not repeating S2's same-day overclaim correction (contract section 25a).",
+      "started": "2026-09-03",
+      "completed": null,
+      "track": "OP.x Controlled Failover",
+      "movement": "IMPLEMENTATION",
+      "evidence": "configuration/checkpoint_config_collector.py (additive: CLUSTERXL_CLUSTER_MODES gains vsx_single_vs_failover; new _parse_clusterxl_stat_preflight_fields(); _collect_host gains opt-in include_preflight_fields=False, wired at both the physical and per-VS cphaprob stat call sites, before the existing stdout-discard). checkpoint/cp_preflight_projection.py (new, pure, no I/O). tests/test_op0b_s3_cp_extraction.py and tests/test_op0b_s3_cp_projection.py (new). Locally executed (paramiko/lxml/pytest installed session-local for validation only, not a repository dependency change): targeted S3 suites + tests/test_op0b_s1_preflight_model.py + tests/test_op0b_s2_pan_extraction.py + tests/test_op0b_s2_pan_projection.py + tests/test_op0a_ha_readiness.py = 178/178 passed; broader CP/VSX/failover/OP.0a/OP.0b/architecture-convergence subsystem sweep = 307/307 passed. Full local regression: 1181 passed / 26 skipped / 1 failed / 24 errors -- all in tests/test_con1_*/test_con2_* (missing fastapi, a pre-existing container gap unrelated to this change, same class of gap S1/S2 recorded). git diff --check clean. Repository privacy gate: PASS / 0 findings.",
+      "risks_forward": "Same dormant-by-design posture S2 established: the new peer-row/attention field family is real and tested but not wired into any production call site -- production invocation belongs to S5's dedicated checkpoint/preflight_collector.py (not yet created), never the inventory/config collector. Contract deliberately narrowed 'Active Attention reason' to a boolean (no free-text reason suffix parsed -- no safe vendor-confirmed vocabulary exists for one); see field-trace row failure_reason and section 25b. D-F1/D-F2/D-F3, D-V3a, D-V7b, PAN B2 remain exactly as unresolved as before this build. CLASS 2 remains structurally unreachable. Status must advance to automated_validated only once PR CI evidence lands (per the corrected S2 practice), never from local evidence alone.",
+      "docs": {
+        "agreement": "docs/history/phase/OP_0B_0_VENDOR_FAILOVER_PREFLIGHT_EVIDENCE_SURFACE.md"
+      }
+    },
+    {
       "build": "op0b_s2_pan_parse_scope_extension",
       "status": "automated_validated",
       "title": "OP.0b S2 - PAN preflight parse-scope extension (existing show high-availability state response)",
