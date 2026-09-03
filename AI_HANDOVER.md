@@ -16,64 +16,68 @@ doc. Prior versions are in git history.
 
 ## 1. Snapshot
 
-- Date: 2026-09-03. Branch `claude/cp-ssh-trust-preflight-fix-pf0611`, fresh
-  off `main` at `9747ad5` (PR #45 merged — `OP.0b` S7.5). This build,
-  `op0b_s8_p01_cp_ssh_trust_preflight_correction`, is `OP.0b` S8-P0.1 — a
-  security-boundary correction discovered while preparing S8-A.
-- Status: `AUTOMATED_VALIDATED`, **pending PO security review**; do not merge
-  without explicit PO approval.
+- Date: 2026-09-04. `main` at `57d78f1`. Build
+  `op0b_s8_realenv_campaign_corrections` — `AUTOMATED_VALIDATED`.
+- The `OP.0b` S8 real-environment campaign ran S8-A once against the approved
+  CP ClusterXL pair, surfaced four defects, corrected and merged all four
+  (PRs #47–#50), and is now **blocked on device SSH access**.
 
 ## 2. What changed this session
 
-- `utils/cp_ssh_trust.py`: strict preflight now counts what was actually
-  loaded into Paramiko's read-only system store (`load_system_host_keys`)
-  instead of gating on the writable local store (`get_host_keys()`), which
-  made `strict=True` unsatisfiable with a correct `known_hosts`. Public
-  Paramiko APIs only (explicit system `known_hosts` path +
-  `paramiko.HostKeys` parse of the same file); new value-free reason tokens
-  `trust_source_unreadable` / `trust_source_malformed` /
-  `no_usable_host_keys_loaded`; new `load_trusted_host_keys()` export;
-  `CpSshStrictPreflightError.reason`. Order, `RejectPolicy`,
-  fail-before-connect and `strict=False` unchanged. No callers touched.
-- New `tests/test_op0b_s8_p01_cp_ssh_trust_preflight_correction.py` (47):
-  real `paramiko.SSHClient` + synthetic generated keys, `connect()`
-  sentinel; the populated-store reproducer fails against the old helper.
-- `tests/test_phase0_6_4_cp_ssh_host_key_trust_closure.py`,
-  `tests/test_phase0_6_1b_1_4_cp_ssh_trust.py`: strict paths reworked from
-  `get_host_keys()` mocks to real isolated synthetic files.
-- Docs: correction note appended to
-  `docs/history/phase/PHASE0_6_4_CP_SSH_HOST_KEY_TRUST_PRODUCTION_CLOSURE.md`;
-  one paragraph in `deploy/secrets/README.md`. Project state updated; new
-  backlog debt `op0b_s7_s6_test_order_isolation` (pre-existing, not fixed).
+- **#46** `utils/cp_ssh_trust.py`: strict preflight counted the wrong Paramiko
+  store, so `strict=True` was unusable with a correct `known_hosts`.
+- **#47** typed `HostKeyNotTrustedError`: host-key rejections (and, in
+  `direct_ssh_probe`, auth failures and key mismatches) no longer enter the
+  connect retry loop.
+- **#48** `run_cp_preflight` defaults `strict_host_key=False` — the same
+  compatibility trust every sibling CP SSH caller already had. Strict stays
+  implemented and selectable; production enforcement deferred by PO decision
+  to backlog `cp_production_ssh_host_key_trust_hardening` (P0).
+- **#49** A3 differential: `collect_member` now merges
+  `local_role`/`cluster_mode` into the `fields` contract
+  `project_cp_preflight_facts` always documented, via the established
+  canonical parsers.
+- **#50** device session architecture: `_run_exec` gains explicit `use_pty`
+  (default unchanged for all existing callers); the preflight session binds
+  `use_pty=False`; `MemberSession` is now the per-member execution context
+  resolving its command plan once. Per member: connects 1, closes 1, exec
+  channels == scheduled reads, PTY requests 8/9 → 0. PAN audited, already
+  compliant, untouched.
 
 ## 3. Exact next action
 
-1. PO security review of this PR. On approval: merge, sync `main`.
-2. Provision the trusted host key (out-of-band verified fingerprint in the
-   runtime's system/user `known_hosts`; production: the DEV.2.2
-   `/root/.ssh/known_hosts` mount).
-3. **NEW session**: `op0b_s8_real_env_validation` — S8-A retry of the
-   IDENTICAL controlled command. `Sonnet 5, normal`. S8-A is currently NOT
-   EXECUTED / ZERO CONTACTS / BLOCKED; not failed. Do not reopen other
-   `OP.0b` research.
+1. **Operator confirms SSH access to the approved CP pair is restored.**
+   During the campaign the device stopped offering password authentication;
+   operator recovery (clish `set ssh server password-authentication yes` +
+   `save config`, then direct `/etc/ssh/sshd_config` + Gaia template edits,
+   then `service sshd restart`) is unconfirmed. Nothing in this repository
+   can write device configuration — the collectors are read-only by
+   construction and test-enforced.
+2. Then retry S8-A unchanged:
+   `py .\main.py --cp-ha-preflight-check --cp-preflight-targets <A>,<B>`.
+   Report SAFE counts only. Expect the per-command device-side CLI init to
+   be gone. Then S8-B (VSX), then S8-C (PAN). `Sonnet 5, normal`.
 
 ## 4. Test delta
 
-- Targeted: new file 47 passed; reworked 0.6.4 + 0.6.1B.1.4 + DEV.2.2 trust
-  suites 36 passed.
-- Regression: CP connection-path / S5 / S7.5 / S7 / S1 / RB.3a / VSX /
-  safety-gap / redaction / privacy-gate / frontend-boundary passed.
-- Full serial suite, privacy gate, `git diff --check`, `metadata_warnings ==
-  []`: see `CURRENT_STATE.md` "Automated test baseline".
+- Full serial suite 1535 passed / 24 skipped / 0 failed (+67 over the S7.5
+  baseline of 1468/24/0), from four new S8 regression files.
+- Privacy gate PASS/0; architecture convergence 19 passed; `git diff --check`
+  clean.
 
 ## 5. New risks
 
-- No explicit RuntimeRoot trusted-`known_hosts` source exists
-  (`NOT_PRESENT`); the system/user `known_hosts` is the only trusted source.
-  Adding one is a separate PO decision.
-- `cp_ssh_trust_r2_prod_server` (strict + real provisioned MDS entry) is now
-  reachable but still owed on the production server.
-- Pre-existing, unrelated: `test_op0b_s7_readiness_v2.py` run before
-  `test_op0b_s6_pan_preflight_collector.py` in one process fails 25 S6 tests
-  (state leak); default order and the serial full suite are unaffected.
-  Backlog `op0b_s7_s6_test_order_isolation`.
+- **A3 on the real device is unresolved.** The wiring defect is fixed and
+  proven, but the one live retry after it was never confirmed to have run on
+  the fixed commit before access was lost. Source tracing shows the
+  established parser and the S5 projection now agree exactly, and the parser
+  survives terminal-escape contamination — so if `ha_mode_not_established`
+  persists on a confirmed HA pair over the now-clean channel, the remaining
+  divergence is device-side execution context (Expert-shell vs direct-Clish
+  landing), not the parser.
+- Production strict host-key enforcement is deliberately incomplete by PO
+  decision, not a regression — `cp_production_ssh_host_key_trust_hardening`.
+- Pre-existing, unrelated: test-order state leaks between
+  `test_op0b_s7_readiness_v2.py` and its neighbours
+  (`op0b_s7_s6_test_order_isolation`). Default order and the serial suite are
+  unaffected.
