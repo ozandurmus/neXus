@@ -68,6 +68,45 @@ REASON_TRUST_SOURCE_MALFORMED = "trust_source_malformed"
 REASON_NO_USABLE_HOST_KEYS = "no_usable_host_keys_loaded"
 
 
+class HostKeyNotTrustedError(paramiko.SSHException):
+    """Raised in place of Paramiko's generic ``SSHException`` when
+    ``RejectPolicy`` refuses a host key with no entry in the trusted store
+    at all (OP.0b S8 real-env finding, follow-up to S8-P0.1).
+
+    Paramiko's own ``RejectPolicy.missing_host_key`` raises a bare
+    ``paramiko.SSHException`` -- indistinguishable, to a caller's ``except``
+    clause, from a transient transport failure.  A host-key trust refusal
+    is a security decision and must never enter a connection retry loop,
+    but "untrusted key" and "transient failure" were not structurally
+    distinguishable without parsing exception text.  This type makes that
+    distinction structural, at the one shared seam
+    (``apply_strict_host_key_policy``) every CP SSH caller already goes
+    through -- no caller re-implements its own classification.  A key
+    *mismatch* (an entry exists but disagrees) is already the separate,
+    distinct ``paramiko.BadHostKeyException`` and is unaffected.
+    """
+
+
+class _NonRetryableRejectPolicy(paramiko.RejectPolicy):
+    """``RejectPolicy`` whose missing-host-key rejection is deterministically
+    classifiable as non-retryable, without parsing exception text.
+
+    ``isinstance(policy, paramiko.RejectPolicy)`` still holds (it *is* one);
+    only the exception type raised on rejection changes.
+    """
+
+    def missing_host_key(self, client, hostname, key):
+        try:
+            super().missing_host_key(client, hostname, key)
+        except paramiko.SSHException:
+            # Paramiko's own message embeds the hostname ("Server %r not
+            # found in known_hosts") -- value-free law forbids that leaking
+            # into a caller's exception chain/traceback, so this is
+            # deliberately not chained (``from None``), same precedent as
+            # CpSshStrictPreflightError above.
+            raise HostKeyNotTrustedError("host_key_not_trusted") from None
+
+
 class CpSshStrictPreflightError(Exception):
     """Raised before a connection attempt when strict host-key mode is
     enabled but no trusted host-key material could be loaded.
@@ -138,7 +177,7 @@ def apply_strict_host_key_policy(ssh: paramiko.SSHClient, strict: bool) -> None:
     """
     if strict:
         loaded = load_trusted_host_keys(ssh)
-        ssh.set_missing_host_key_policy(paramiko.RejectPolicy())
+        ssh.set_missing_host_key_policy(_NonRetryableRejectPolicy())
         if loaded < 1:
             raise CpSshStrictPreflightError(REASON_NO_USABLE_HOST_KEYS)
     else:
