@@ -72,11 +72,12 @@ def _provision_known_hosts(tmp_path: Path, monkeypatch, *, populated: bool) -> P
 
 
 def _fake_ssh_and_exec(monkeypatch):
-    """Patch paramiko.SSHClient with a connect-only fake and
-    checkpoint.preflight_collector._run_exec with a fixture that always
-    "succeeds" with empty output -- the same first-class-supported
-    "everything missing" shape the S5 suite already exercises. Returns the
-    list of created FakeSSH instances (to inspect the installed policy)."""
+    """Patch paramiko.SSHClient with a connect-only fake and the preflight's
+    persistent-shell session with a fixture that always "succeeds" with empty
+    output -- the same first-class-supported "everything missing" shape the S5
+    suite already exercises. This file is about host-key trust, not execution,
+    so the shell is stubbed at the session seam. Returns the list of created
+    FakeSSH instances (to inspect the installed policy)."""
     instances: list = []
 
     class FakeTransport:
@@ -103,14 +104,19 @@ def _fake_ssh_and_exec(monkeypatch):
         def close(self_inner):
             pass
 
-    def fake_run_exec(ssh, command, timeout_seconds, *, use_pty=True):
-        # Mirrors the real primitive's signature, including the non-interactive
-        # `use_pty` the preflight session layer passes (OP.0b S8 session
-        # architecture) -- a double that drifts from it hides real call sites.
-        return {"success": True, "stdout": "", "stderr": "", "error_class": "none", "timeout": False}
+    def fake_session(ssh, *, physical_device_identity, command_timeout):
+        # Mirrors make_real_member_session's signature -- a double that drifts
+        # from it hides real call sites.
+        return pc.MemberSession(
+            physical_device_identity=physical_device_identity,
+            _run_command=lambda _command_text: {
+                "success": True, "stdout": "", "stderr": "",
+                "error_class": "none", "timeout": False, "exit_status": 0,
+            },
+        )
 
     monkeypatch.setattr(paramiko, "SSHClient", FakeSSH)
-    monkeypatch.setattr(pc, "_run_exec", fake_run_exec)
+    monkeypatch.setattr(pc, "make_real_member_session", fake_session)
     return instances
 
 
@@ -278,8 +284,14 @@ class TestStrictModeStillFullyFunctional:
         _provision_known_hosts(tmp_path, monkeypatch, populated=False)
         _fake_ssh_and_exec(monkeypatch)
 
+        # Nothing may execute -- and no shell may even be opened -- once the
+        # strict trust preflight has failed.
         exec_calls: list = []
-        monkeypatch.setattr(pc, "_run_exec", lambda *a, **kw: exec_calls.append(1) or {"success": True})
+        monkeypatch.setattr(
+            pc, "make_real_member_session",
+            lambda *a, **kw: exec_calls.append(1) or (_ for _ in ()).throw(
+                AssertionError("a session was opened after a preflight failure")),
+        )
 
         with pytest.raises(CpSshStrictPreflightError):
             run_cp_preflight(

@@ -103,20 +103,20 @@ def _print_read_outcomes(snapshot) -> None:
     failed = [s for s, o, _ in outcomes if o != "success"]
     if failed:
         print(f"  -> {len(failed)} of {len(outcomes)} approved reads produced no usable evidence.")
-    # A capability gap is not a device fault and not a collector defect -- it
-    # is the SSH account's execution context, and it is the one cause here an
-    # operator can actually clear. Say so instead of leaving it as "failed".
+    # A capability gap means the device's CLI rejected the read before any
+    # binary ran -- distinct from a device that answered badly. The battery
+    # runs inside one persistent Expert shell, so reaching this state means
+    # that shell did not land in Expert on this session.
     gaps = [s for s, o, _ in outcomes if o == "capability_gap"]
     if gaps:
         print(
-            f"  -> {len(gaps)} read(s) were rejected by the device CLI before executing: the "
-            "collector account's login shell is Gaia Clish, so Expert-shell reads "
-            "(cphaprob/fw/vsx) never run."
+            f"  -> {len(gaps)} read(s) were rejected by the device CLI before executing, "
+            "so the session's Expert-shell execution context could not be confirmed."
         )
         print(
-            "     Remedy is an operator/account action, not a product change -- "
-            "use an account whose login shell is Expert. This tool will not change "
-            "device configuration."
+            "     Expert reads (cphaprob/fw/vsx) require an Expert execution context. "
+            "This tool never changes device configuration, escalates privilege, "
+            "or opens a second credential path."
         )
 
 

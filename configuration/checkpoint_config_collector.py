@@ -3,9 +3,11 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import random
 import re
 import shlex
 import socket
+import string
 import time
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -542,9 +544,24 @@ class InteractiveSshSession:
     session while keeping command dispatch explicitly allow-listed by callers.
     """
 
+    #: Per-session random framing nonce. Random so device output can never
+    #: collide with it, and regenerated per session so one session's marker is
+    #: meaningless in another. Letters only -- no shell-significant character
+    #: reaches the device.
+    @staticmethod
+    def _END_RE(marker: str):
+        return re.compile(rf"{re.escape(marker)}(\d{{1,3}}){re.escape(marker)}")
+
+    @staticmethod
+    def _MARKER_LINE_RE(marker: str):
+        return re.compile(rf"(?m)^.*{re.escape(marker)}.*$\n?")
+
     def __init__(self, ssh: paramiko.SSHClient, timeout_seconds: int):
         self.ssh = ssh
         self.timeout_seconds = max(3, int(timeout_seconds))
+        self._marker = "SEMARK" + "".join(
+            random.choice(string.ascii_uppercase) for _ in range(12)
+        ) + "END"
         self.channel = ssh.invoke_shell(term="vt100", width=4096, height=10000)
         try:
             self.channel.settimeout(0.0)
@@ -603,7 +620,16 @@ class InteractiveSshSession:
             time.sleep(0.04)
         return b"".join(chunks).decode("utf-8", errors="ignore")
 
-    def run(self, command: str, timeout_seconds: int) -> dict[str, Any]:
+    def run(self, command: str, timeout_seconds: int, *, frame: bool = False) -> dict[str, Any]:
+        """Run one allow-listed command on this persistent shell.
+
+        `frame=True` appends a per-session end marker carrying `$?`, so command
+        completion and exit status are read explicitly instead of inferred from
+        a prompt match or a quiet period. The marker is a shell `echo` of a
+        random nonce: read-only, device-state-free, stripped from `stdout`
+        before it can reach a parser, and never surfaced as evidence. It is
+        opt-in so the established collection path keeps its exact behaviour.
+        """
         started = time.monotonic()
         normalized = str(command or "").strip()
         if not normalized or "\n" in normalized or "\r" in normalized:
@@ -611,9 +637,12 @@ class InteractiveSshSession:
                 "success": False, "error_class": "invalid_interactive_command", "error_detail": None,
                 "timeout": False, "exit_status": None, "duration_ms": 0, "stdout": "", "stderr": "",
             }
+        sent = normalized
+        if frame:
+            sent = f"{normalized}; echo {self._marker}$?{self._marker}"
         self._drain_ready()
         try:
-            self.channel.send(normalized + "\n")
+            self.channel.send(sent + "\n")
         except Exception as exc:
             return {
                 "success": False, "error_class": "execution_error", "error_detail": type(exc).__name__,
@@ -638,10 +667,16 @@ class InteractiveSshSession:
             if got:
                 last_data = time.monotonic()
                 current = _strip_terminal_control(b"".join(chunks).decode("utf-8", errors="ignore"))
-                if self.prompt and current.rstrip().endswith(self.prompt):
+                if frame:
+                    # Deterministic completion: the marker only appears once the
+                    # command itself has finished and the shell evaluated `$?`.
+                    if self._END_RE(self._marker).search(current):
+                        completed = True
+                        break
+                elif self.prompt and current.rstrip().endswith(self.prompt):
                     completed = True
                     break
-            elif saw_data and not self.prompt and time.monotonic() - last_data >= 1.25:
+            elif saw_data and not frame and not self.prompt and time.monotonic() - last_data >= 1.25:
                 # Fallback only when a stable prompt could not be learned.
                 completed = True
                 break
@@ -655,9 +690,22 @@ class InteractiveSshSession:
         if observed_prompt:
             self.prompt = observed_prompt
 
+        exit_status = None
+        if frame:
+            # Take the exit status, then remove every trace of the framing --
+            # both the echoed request and the marker line -- so no parser and
+            # no fact can ever see it.
+            match = self._END_RE(self._marker).search(text)
+            if match:
+                try:
+                    exit_status = int(match.group(1))
+                except (TypeError, ValueError):
+                    exit_status = None
+            text = self._MARKER_LINE_RE(self._marker).sub("", text)
+
         lines = text.splitlines()
         # Remove a terminal-echoed command only when it is an exact line match.
-        if lines and lines[0].strip() == normalized:
+        if lines and lines[0].strip() in (normalized, sent):
             lines = lines[1:]
         if self.prompt and lines and lines[-1].strip() == self.prompt:
             lines = lines[:-1]
@@ -665,6 +713,11 @@ class InteractiveSshSession:
         cli_error = any(pattern in stdout.lower() for pattern in CLI_ERROR_PATTERNS)
         if timed_out:
             error_class = "timeout"
+            success = False
+        elif exit_status not in (0, None):
+            # An explicit non-zero status is authoritative: the command ran and
+            # reported failure. Never soften that into usable evidence.
+            error_class = "command_error"
             success = False
         elif cli_error:
             error_class = "cli_rejected"
@@ -680,7 +733,7 @@ class InteractiveSshSession:
             "error_class": error_class,
             "error_detail": None,
             "timeout": timed_out,
-            "exit_status": None,
+            "exit_status": exit_status,
             "duration_ms": int((time.monotonic() - started) * 1000),
             "stdout": stdout,
             "stderr": "",
