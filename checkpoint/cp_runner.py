@@ -223,6 +223,7 @@ def _process_collection_output_line(line, state):
             state["total_gw"] = int(line.split("=", 1)[1])
         except ValueError:
             pass
+        state["last_marker"] = "TOTAL_GW"
         return
 
     if line.startswith(">>> GW:"):
@@ -232,10 +233,12 @@ def _process_collection_output_line(line, state):
             print(f"\r[CP {state['processed_gw']} / {total}] collecting live data...", end="", flush=True)
         else:
             print(f"\r[CP {state['processed_gw']}] collecting live data...", end="", flush=True)
+        state["last_marker"] = "GW"
         return
 
     if line == "DONE":
         state["done_marker_seen"] = True
+        state["last_marker"] = "DONE"
 
 
 def _remote_collection_command(*, exclude_vsx=False, excluded_device_names=()):
@@ -264,25 +267,37 @@ def _run_remote_collection(ssh, *, exclude_vsx=False, excluded_device_names=()):
         "processed_gw": 0,
         "done_marker_seen": False,
         "stderr_bytes": 0,
+        "last_marker": None,
     }
     pending = ""
 
-    while True:
-        if channel.recv_ready():
-            chunk = channel.recv(4096).decode("utf-8", errors="ignore")
-            pending += chunk
+    def _drain_ready():
+        # Tight drain of everything currently buffered on both streams, same
+        # idiom as checkpoint/direct_ssh_probe.py's proven _run_session_command:
+        # a single `if recv_ready(): recv(...)` per outer-loop pass can leave
+        # the break condition below racing a still-buffered final chunk when
+        # more than one read is needed to empty the channel.
+        nonlocal pending
+        while channel.recv_ready():
+            pending += channel.recv(4096).decode("utf-8", errors="ignore")
             while "\n" in pending:
                 line, pending = pending.split("\n", 1)
                 _process_collection_output_line(line, state)
+        while channel.recv_stderr_ready():
+            state["stderr_bytes"] += len(channel.recv_stderr(4096))
 
-        if channel.recv_stderr_ready():
-            chunk = channel.recv_stderr(4096)
-            state["stderr_bytes"] += len(chunk)
+    while True:
+        _drain_ready()
 
         if channel.exit_status_ready() and not channel.recv_ready() and not channel.recv_stderr_ready():
             break
 
         time.sleep(0.05)
+
+    # Defensive final drain: the exit-status and last-data packets are
+    # expected to arrive in order, but re-check once more before concluding
+    # the DONE marker is genuinely absent rather than merely still in flight.
+    _drain_ready()
 
     if pending:
         _process_collection_output_line(pending, state)
@@ -298,7 +313,12 @@ def _run_remote_collection(ssh, *, exclude_vsx=False, excluded_device_names=()):
     if exit_status != 0:
         raise RuntimeError(f"CP remote collection failed with exit status {exit_status}")
     if not state["done_marker_seen"]:
-        raise RuntimeError("CP remote collection ended without DONE marker")
+        raise RuntimeError(
+            "CP remote collection ended without DONE marker "
+            f"(exit_status=0, processed_gw={state['processed_gw']}, "
+            f"total_gw={state['total_gw']}, stderr_bytes={state['stderr_bytes']}, "
+            f"last_marker={state['last_marker']})"
+        )
 
     if state["stderr_bytes"]:
         warn(f">>> CP collector emitted {state['stderr_bytes']} stderr bytes; telemetry/verification will determine data completeness")

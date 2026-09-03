@@ -61,6 +61,7 @@ def test_cp_output_progress_parser_does_not_need_device_identity(capsys):
         "total_gw": None,
         "processed_gw": 0,
         "done_marker_seen": False,
+        "last_marker": None,
     }
 
     cp_runner._process_collection_output_line("TOTAL_GW=83", state)
@@ -71,6 +72,85 @@ def test_cp_output_progress_parser_does_not_need_device_identity(capsys):
     assert state["total_gw"] == 83
     assert state["processed_gw"] == 1
     assert state["done_marker_seen"] is True
+    assert state["last_marker"] == "DONE"
     assert "sensitive-device-name" not in output
     assert "10.1.2.3" not in output
     assert "[CP 1 / 83]" in output
+
+
+class FakeChannel:
+    """Minimal paramiko.Channel double for _run_remote_collection.
+
+    `stdout_chunks` are handed back one per recv() call while recv_ready()
+    still has chunks left -- this exercises the tight-drain loop (multiple
+    recv() calls must happen before recv_ready() goes False), the same
+    idiom checkpoint/direct_ssh_probe.py already uses.
+    """
+
+    def __init__(self, stdout_chunks, exit_status=0):
+        self._stdout_chunks = list(stdout_chunks)
+        self._exit_status = exit_status
+
+    def recv_ready(self):
+        return bool(self._stdout_chunks)
+
+    def recv(self, _n):
+        return self._stdout_chunks.pop(0)
+
+    def recv_stderr_ready(self):
+        return False
+
+    def recv_stderr(self, _n):
+        return b""
+
+    def exit_status_ready(self):
+        return True
+
+    def recv_exit_status(self):
+        return self._exit_status
+
+
+class FakeStdout:
+    def __init__(self, channel):
+        self.channel = channel
+
+
+def _fake_ssh(channel):
+    class _FakeSSH:
+        def exec_command(self, _command):
+            return None, FakeStdout(channel), None
+
+    return _FakeSSH()
+
+
+def test_run_remote_collection_drains_multi_chunk_burst_and_sees_done(monkeypatch):
+    monkeypatch.setattr(cp_runner, "info", lambda *a, **k: None)
+    monkeypatch.setattr(cp_runner, "warn", lambda *a, **k: None)
+    channel = FakeChannel([
+        b"TOTAL_GW=2\n>>> GW: gw1 (10.0.0.1)\n",
+        b">>> GW: gw2 (10.0.0.2)\nDONE\n",
+    ])
+
+    state = cp_runner._run_remote_collection(_fake_ssh(channel))
+
+    assert state["done_marker_seen"] is True
+    assert state["processed_gw"] == 2
+    assert state["total_gw"] == 2
+    assert state["exit_status"] == 0
+
+
+def test_run_remote_collection_missing_done_marker_raises_safe_diagnostics(monkeypatch):
+    monkeypatch.setattr(cp_runner, "info", lambda *a, **k: None)
+    monkeypatch.setattr(cp_runner, "warn", lambda *a, **k: None)
+    channel = FakeChannel([b"TOTAL_GW=1\n>>> GW: gw1 (10.0.0.1)\n"])
+
+    with pytest.raises(RuntimeError) as excinfo:
+        cp_runner._run_remote_collection(_fake_ssh(channel))
+
+    message = str(excinfo.value)
+    assert "DONE marker" in message
+    assert "processed_gw=1" in message
+    assert "total_gw=1" in message
+    assert "last_marker=GW" in message
+    assert "gw1" not in message
+    assert "10.0.0.1" not in message

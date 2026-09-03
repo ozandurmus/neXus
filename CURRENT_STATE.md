@@ -7,17 +7,13 @@ detail is not here either** — it is in `project/build_history.json`
 linked documents under `docs/history/`. `docs/history/INDEX.md` is the
 generated one-line timeline.
 
-- **Checkpoint:** 2026-09-03, branch `main` (merged via PRs #34/#35/#36/#37).
+- **Checkpoint:** 2026-09-03, branch `claude/cp-remote-collection-done-marker`
+  (base `main`, merged via PRs #34/#35/#36/#37).
 - **Current build** (per `project/roadmap.json` `now_next.now`):
-  `op0b_s3_cp_parse_scope_extension` — **AUTOMATED_VALIDATED** (PR #37's CI
-  confirmed the full suite green against the exact merged head — see
-  "Active build" below). Third bounded slice against the FROZEN `OP.0b.0`
-  contract: extends
-  `configuration/checkpoint_config_collector.py` to parse more of the
-  already-fetched `cphaprob stat` buffer (opt-in, dormant by design —
-  production invocation is S5/S6's job), plus a pure projection module.
-  Zero device I/O, zero new command, no readiness-verdict/UI change;
-  `D-F1`/`D-F2`/`D-F3`/`D-V3a`/`D-V7b` stay unresolved; CLASS 2 unreachable.
+  `cp_remote_collection_done_marker_diagnostics` — **IN_PROGRESS**. A real
+  run hit `RuntimeError('CP remote collection ended without DONE marker')`;
+  root cause is `UNKNOWN` pending real-device evidence (no device access in
+  this session). Diagnostic hardening only — see "Active build" below.
 - **Product baseline:** `0.7.7 — Compliance trend retro-fill` — AUTOMATED_VALIDATED.
 - **Engineering baseline:** `DEV.3.3` — AUTOMATED_VALIDATED. `DEV.1`,
   `DEV.4` complete.
@@ -50,25 +46,32 @@ test-enforced boundaries. Current numbers:
 
 ## Active build
 
-**`op0b_s3_cp_parse_scope_extension`** — **AUTOMATED_VALIDATED** 2026-09-03.
-New `_parse_clusterxl_stat_preflight_fields()` reads non-local member-row
-State (peer observation, address/name excluded) and a local failure/attention
-boolean (reclassified role token — no free-text "Active Attention" reason
-parsed, no safe vocabulary confirmed) from the **same** already-fetched
-`cphaprob stat` buffer, behind `include_preflight_fields=False` on
-`_collect_host` (dormant by design, S5/S6's job to invoke). Cluster-mode
-parser gained `vsx_single_vs_failover` (sk112712), active immediately (not
-opt-in). New pure `checkpoint/cp_preflight_projection.py`. Contract §25
-updated; new §25b mirrors S2's §25a reconciliation. **PR #37's CI**
-(https://github.com/ozandurmus/neXus/actions/runs/33753129757) ran the
-`validation` workflow with the real dependency set against this exact head:
-**conclusion=success**, mergeable_state=clean, zero open review threads.
-Zero device I/O, zero new command; `D-F1`/`D-F2`/`D-F3`/`D-V3a`/`D-V7b`
-unresolved; CLASS 2 unreachable.
+**`cp_remote_collection_done_marker_diagnostics`** — **IN_PROGRESS**
+2026-09-03. `checkpoint/scripts/cp_inventory.sh`'s last statement is a bare
+`echo "DONE"` with no early-exit path before it, so `exit_status=0` with no
+`DONE` seen has **`UNKNOWN`** root cause — not reproduced here, no device
+access. Source inspection found `checkpoint/cp_runner.py`'s
+`_run_remote_collection` channel-drain loop reading at most one
+recv()/recv_stderr() chunk per outer pass before its exit-status break
+check, unlike `checkpoint/direct_ssh_probe.py`'s already-proven
+`_run_session_command` tight-drain idiom (`while recv_ready(): ...`).
+Aligned `_run_remote_collection` with that idiom (behavior-preserving) plus
+one defensive final drain; enriched the `RuntimeError` with safe diagnostic
+fields (`exit_status`/`processed_gw`/`total_gw`/`stderr_bytes`/
+`last_marker`) so a recurrence carries real evidence instead of a bare
+message. New `tests/test_phase0_4_1_cp_automation.py` `FakeChannel` tests
+prove the multi-chunk drain and the diagnostics leak no device identity.
+Full local suite: 1210 passed / 24 skipped / 0 failed. **Explicitly not a
+confirmed fix** — stays `IN_PROGRESS` until real-device evidence exists.
 
-**Predecessors:** `op0b_s2_pan_parse_scope_extension` (AUTOMATED_VALIDATED,
-PR #36) and `op0b_s1_preflight_fact_provenance_model` (AUTOMATED_VALIDATED).
-Detail: `project/build_history.json`.
+**Unrelated in-flight build:** `dev_kaizen_fast_pr_ci` (PR #38, CI green,
+awaiting merge) — separate branch, PR CI/regression split; detail:
+`project/build_history.json`.
+
+**Predecessors:** `op0b_s3_cp_parse_scope_extension` (AUTOMATED_VALIDATED,
+PR #37), `op0b_s2_pan_parse_scope_extension` (AUTOMATED_VALIDATED, PR #36),
+`op0b_s1_preflight_fact_provenance_model` (AUTOMATED_VALIDATED). Detail:
+`project/build_history.json`.
 
 ## `OP.0b.0` — FROZEN WITH REAL-ENV VALIDATION GATES
 
@@ -108,10 +111,11 @@ identifier stays opaque (`AGENTS.md` opaque-identifier law). Tracked as
 
 ## Exact next build
 
-`OP.0b` S3 (above) needs PR CI evidence before it can advance to
-`AUTOMATED_VALIDATED`; once that lands, three further independent
-movements remain, any order/parallel (full detail in `project/roadmap.json`
-`now_next.next`/`upcoming`):
+`cp_remote_collection_done_marker_diagnostics` (above) needs a real recurrence
+(or a watched real run) with the new diagnostic fields before it can advance
+past `IN_PROGRESS` — this is hardening, not a closed fix. Once merged, three
+further independent `OP.0b`-track movements remain, any order/parallel (full
+detail in `project/roadmap.json` `now_next.next`/`upcoming`):
 
 **A. Close `D-V3a`/`D-V7b` before CLASS 2** (`now_next.next`) — does not
 block `S1`–`S9` or the freeze. GitHub-mirror search first, then

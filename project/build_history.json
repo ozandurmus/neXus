@@ -3,6 +3,18 @@
   "record_contract": "One structured record per build, newest first. Required: build, status, title, summary (<= 2 sentences). Optional: started, completed, track, movement, supersedes, evidence, risks_forward, docs{agreement,validation,handover} (repo-relative paths under docs/history/). Full detail lives in the linked doc; do not restate it here. Status vocabulary must stay within utils/project_plan.py STATUS_VALUES.",
   "builds": [
     {
+      "build": "cp_remote_collection_done_marker_diagnostics",
+      "status": "in_progress",
+      "title": "CP remote collection - DONE-marker-loss diagnostic hardening",
+      "summary": "A real run hit RuntimeError('CP remote collection ended without DONE marker') with exit_status=0 -- checkpoint/scripts/cp_inventory.sh's last statement is a bare `echo \"DONE\"` with no early-exit path before it, so root cause is UNKNOWN pending real-environment reproduction (no device access in this session -- AGENTS.md evidence laws). checkpoint/cp_runner.py's _run_remote_collection channel-drain loop read at most one recv()/recv_stderr() chunk per outer-loop pass before its exit-status break check; checkpoint/direct_ssh_probe.py's already-proven _run_session_command instead tight-drains with `while recv_ready(): ...` before checking exit status. Aligned _run_remote_collection with that established idiom (a safe, behavior-preserving hardening, not a confirmed fix) and added a redundant post-break drain pass. The RuntimeError now also reports exit_status/processed_gw/total_gw/stderr_bytes/last_marker (all safe non-identity fields) instead of a bare message, so a recurrence carries real diagnostic evidence.",
+      "started": "2026-09-03",
+      "completed": "2026-09-03",
+      "track": "SEE / CP Inventory",
+      "movement": "IMPLEMENTATION",
+      "evidence": "checkpoint/cp_runner.py (_process_collection_output_line tracks state['last_marker']; _run_remote_collection's channel drain now tight-loops via a shared _drain_ready() helper, plus one defensive final drain before concluding DONE is absent; RuntimeError message enriched with safe diagnostic fields). tests/test_phase0_4_1_cp_automation.py: +2 tests (FakeChannel-based) proving a multi-chunk stdout burst is fully drained and DONE recognized in one pass, and that the missing-DONE RuntimeError carries the new diagnostic fields without leaking device name/IP. Full local suite: 1210 passed / 24 skipped / 0 failed (this repo's dependency baseline minus the not-yet-merged kaizen CI test file, which lives on a separate branch).",
+      "risks_forward": "Root cause of the original failure is still UNKNOWN -- this build is diagnostic hardening plus alignment with an already-proven sibling pattern, not a proven fix; it cannot be marked automated_validated/real_env_validated as a fix until the failure is reproduced (or recurs) against a real device with the new diagnostic fields captured. If it recurs, the RuntimeError's exit_status/processed_gw/total_gw/last_marker fields are the next real evidence to read before any further source change."
+    },
+    {
       "build": "op0b_s3_cp_parse_scope_extension",
       "status": "automated_validated",
       "title": "OP.0b S3 - CP preflight parse-scope extension (existing cphaprob stat response)",

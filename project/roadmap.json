@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "current_build": "op0b_s3_cp_parse_scope_extension",
+  "current_build": "cp_remote_collection_done_marker_diagnostics",
   "current_track": "CON.x",
   "progress_contract": "Weighted acceptance-criterion completion. Percentages describe the declared roadmap, not calendar time or delivery ETA.",
   "tracks": [
@@ -123,12 +123,11 @@
   "now_next": {
     "horizon_contract": "NOW is exactly one build. NEXT is exactly one. Everything else is an `upcoming` row carrying its own true status: planned = AFTER, blocked = waiting on a named external gate, deferred = consciously postponed. `now.build` must equal the newest project/build_history.json record -- utils.project_plan enforces it.",
     "now": {
-      "build": "op0b_s3_cp_parse_scope_extension",
-      "title": "OP.0b S3 - CP preflight parse-scope extension (existing cphaprob stat response)",
-      "goal": "Third bounded implementation slice against the FROZEN OP.0b.0 contract, Check Point side. New _parse_clusterxl_stat_preflight_fields() in configuration/checkpoint_config_collector.py reads non-local member-row State tokens (peer/member observation, address/name excluded -- not identity-grade) and a local failure/attention boolean (reclassification of the already-parsed role token, no free-text reason suffix parsed -- no safe vendor-confirmed vocabulary exists for one) out of the SAME already-fetched cphaprob stat buffer -- zero new command, zero new SSH invocation. _parse_clusterxl_cluster_mode gained one new recognized value, vsx_single_vs_failover (sk112712), in production use immediately since it lives inside the existing always-invoked mode parser. New include_preflight_fields=False opt-in parameter on _collect_host (physical and per-VS paths); default behavior and the one existing production call site (run_checkpoint_config_collection) unchanged BY DESIGN -- production invocation is S5/S6's dedicated preflight collector's job, per the frozen contract's own 'Current collector reuse decision' (same posture S2 established for PAN). New checkpoint/cp_preflight_projection.py (pure, no I/O) turns the field dict into S1 PreflightFact/PreflightMemberEvidence instances; peer/member row state lands in peer_claim_facts (this member's claim about its peer, never own_facts, never a synthesized second member) per contract domain invariant 4. Contract field-trace table (section 25) updated for cluster_mode/peer_state/failure_reason/member_skew/row_provenance rows; new section 25b gives the same six-dimension PARSER_IMPLEMENTED -- PRODUCTION_WIRING_PENDING reconciliation section 25a established for S2, learning directly from that same-day correction rather than repeating the overclaim. D-F1/D-F2/D-F3, D-V3a, D-V7b, PAN B2 all remain exactly as unresolved as before; CLASS 2 stays structurally unreachable (P4 invariant, unchanged). PR #37's CI (https://github.com/ozandurmus/neXus/actions/runs/33753129757) confirmed green against this exact head with the real dependency set; status now correctly advances to automated_validated.",
-      "status": "automated_validated",
-      "started": "2026-09-03",
-      "completed": "2026-09-03"
+      "build": "cp_remote_collection_done_marker_diagnostics",
+      "title": "CP remote collection - DONE-marker-loss diagnostic hardening",
+      "goal": "User-reported real-run failure: RuntimeError('CP remote collection ended without DONE marker'), exit_status=0. checkpoint/scripts/cp_inventory.sh's last statement is a bare `echo \"DONE\"` with no early-exit path reaching it, so root cause is UNKNOWN pending real-device reproduction -- no device access in this session. Source inspection found checkpoint/cp_runner.py's _run_remote_collection channel-drain loop reading only one recv()/recv_stderr() chunk per outer pass before its exit-status break check, unlike checkpoint/direct_ssh_probe.py's already-proven tight-drain idiom (`while recv_ready(): ...`). Aligned _run_remote_collection with that idiom (behavior-preserving hardening) plus a defensive final drain, and enriched the RuntimeError with safe diagnostic fields (exit_status/processed_gw/total_gw/stderr_bytes/last_marker) so a recurrence carries real evidence instead of a bare message. New tests/test_phase0_4_1_cp_automation.py FakeChannel tests prove the multi-chunk drain and the diagnostic fields. Full local suite 1210 passed/24 skipped/0 failed. Explicitly NOT a confirmed fix -- status stays in_progress until real-device evidence exists.",
+      "status": "in_progress",
+      "started": "2026-09-03"
     },
     "next": {
       "build": "op0b_0_close_d_v3a_d_v7b_pre_class2",
