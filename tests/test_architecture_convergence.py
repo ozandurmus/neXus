@@ -184,11 +184,15 @@ def test_every_build_history_doc_link_resolves():
 def test_the_failover_package_still_contains_no_executor():
     """OP.0a decision P5, restated here because it is a safety property and not
     only that build's business: dormant write-capable code is a standing
-    liability (the `remove_dormant_remote_cleanup` precedent)."""
+    liability (the `remove_dormant_remote_cleanup` precedent). `preflight_model`
+    (OP.0b S1, frozen contract) is the one deliberate addition -- a pure,
+    zero-I/O evidence/provenance model, not a plan/executor/adapter; allowed
+    here explicitly rather than by widening the check's intent."""
     failover_dir = ROOT / "utils" / "failover"
     modules = {p.stem for p in failover_dir.glob("*.py")}
-    assert modules == {"__init__", "assessment"}, (
-        f"utils/failover/ gained {modules - {'__init__', 'assessment'}}; a plan, "
+    allowed = {"__init__", "assessment", "preflight_model"}
+    assert modules == allowed, (
+        f"utils/failover/ gained {modules - allowed}; a plan, "
         f"executor or vendor adapter may not exist before its own gate is cleared"
     )
 
