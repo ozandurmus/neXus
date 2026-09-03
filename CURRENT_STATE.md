@@ -9,10 +9,11 @@ generated one-line timeline.
 
 - **Checkpoint:** 2026-09-03, branch `claude/vendor-semantics-confirmation-pt2iiq`.
 - **Current build** (per `project/roadmap.json` `now_next.now`):
-  `op0b_0_official_vendor_semantics_confirmation_pass1` — IN_PROGRESS.
-  Documentation-only vendor-semantics confirmation pass against the `OP.0b.0`
-  draft; no product, collector, vendor-command, schema, transport or UI
-  behavior changed; no device contacted.
+  `op0b_0_official_vendor_semantics_confirmation_pass2` — IN_PROGRESS.
+  Third documentation-only vendor-semantics confirmation pass against the
+  `OP.0b.0` draft, this one closing two rows outright; no product,
+  collector, vendor-command, schema, transport or UI behavior changed; no
+  device contacted.
 - **Product baseline:** `0.7.7 — Compliance trend retro-fill` — AUTOMATED_VALIDATED.
 - **Engineering baseline:** `DEV.3.3` — AUTOMATED_VALIDATED. `DEV.1`,
   `DEV.4` complete.
@@ -45,25 +46,24 @@ test-enforced boundaries. Current numbers:
 
 ## Active build
 
-**`op0b_0_official_vendor_semantics_confirmation_pass1`** — OP.0b.0 official
-vendor semantics confirmation, pass 1 — IN_PROGRESS 2026-09-03. Second
-session against the `OP.0b.0` draft's blocking rows; a page-fetch tool hit
-`EGRESS_BLOCKED` on every official vendor host, identical to session 1's
-`CONNECT 403`, but a search tool remained reachable and narrowed `D-V1`,
-`D-V2`, `D-V4`, `D-V5` to `PARTIALLY_CLOSED` via genuine official excerpts
-(`D-V3a`, `D-V6`, `D-V7` stayed `STILL_UNKNOWN`; `D-V9a` `PARTIAL,
-unchanged`). No row reached `CLOSED_BY_DOCS`; contract stays
-`DRAFT — DO NOT FREEZE`. Document-only, no device contacted. Full result:
+**`op0b_0_official_vendor_semantics_confirmation_pass2`** — Source Pack 2 —
+IN_PROGRESS 2026-09-03. Third session against `OP.0b.0`'s blocking rows.
+`pan.dev`/`sc1.checkpoint.com`/`support.checkpoint.com` stayed
+`EGRESS_BLOCKED` again, but `github.com` is reachable — reading the official
+PaloAltoNetworks `pan-os-upgrade-assurance` source **verbatim** closed
+`D-V4`; Check Point search snippets closed `D-V7a` — first two full closures
+across three sessions. `D-V1`/`D-V2`/`D-V6` strengthened; `D-V5`/`D-V7` split
+into `a`/`b`; a source-pack hypothesis on `D-V6` was found **contradicted**
+and reported as such, not forced. Contract stays `DRAFT — DO NOT FREEZE`:
+`D-V3a`/`D-V7b` remain safety-critical `STILL_UNKNOWN`. Document-only, no
+device contacted. Full result:
 `docs/history/phase/OP_0B_0_VENDOR_FAILOVER_PREFLIGHT_EVIDENCE_SURFACE.md`
-§"Official vendor semantics confirmation pass — 2026-09-03".
+§"Official vendor semantics confirmation pass — Source Pack 2".
 
-**Predecessor:** `dev4_ai_engineering_constitution_authority_reconciliation`
-(`DEV.4`) — AUTOMATED_VALIDATED 2026-09-02, three-file AI-authority
-consolidation (`AGENTS.md`/`AI_START_HERE.md`/this file), six governance
-regression tests added. Also recorded, as separate `build_history` entries,
-two pieces of prior-session work: the **PAN HA runtime peer-identity
-diagnostic** (AUTOMATED_VALIDATED) and the **`OP.0b.0` contract draft
-itself** (`in_progress`). Detail: `project/build_history.json`.
+**Predecessor:** `op0b_0_official_vendor_semantics_confirmation_pass1` —
+session 2's pass (`D-V1`/`D-V2`/`D-V4`/`D-V5` narrowed to `PARTIALLY_CLOSED`;
+none fully closed). Before that, `DEV.4` — AUTOMATED_VALIDATED 2026-09-02,
+three-file AI-authority consolidation. Detail: `project/build_history.json`.
 
 ## `OP.0b.0` — DRAFT, DO NOT FREEZE
 
@@ -71,16 +71,22 @@ itself** (`in_progress`). Detail: `project/build_history.json`.
 structurally complete (command surface table, configuration/runtime field
 trace table, bug/gap register) but is **not** implementation authority — it
 must not be cited as approving any command, schema or identity model, and its
-`UNKNOWN`s must not be reinterpreted as decided. Blocking its freeze, in the
-split form this checkpoint's pass introduced: `D-V1`, `D-V2`, `D-V3a`,
-`D-V3b`, `D-V4`, `D-V5`, `D-V6`, `D-V7`, `D-V9a`, `D-V9b`
-(`project/roadmap.json` `open_decisions`). `D-V1`, `D-V2`, `D-V4`, `D-V5` are
-now `PARTIALLY_CLOSED` (official concept-level semantics cited, a precisely
-named residual gap each); `D-V3a`, `D-V6`, `D-V7` are `STILL_UNKNOWN`
-(no official page body was retrievable by either of two sessions — the next
-step is a human fetching the named pages and pasting their text in, not
-another automated retry); `D-V9a` is `PARTIAL, unchanged`; `D-V3b`/`D-V9b`
-`REQUIRE_REAL_ENV` regardless. `D-V8` is open but non-blocking.
+`UNKNOWN`s must not be reinterpreted as decided. **`D-V4` and `D-V7a` are now
+`CLOSED_BY_DOCS`** (first full closures, session 3). Still blocking: `D-V1`,
+`D-V2`, `D-V3a`, `D-V3b`, `D-V5a`, `D-V5b`, `D-V6`, `D-V7b`, `D-V9a`, `D-V9b`
+(`project/roadmap.json` `open_decisions`). `D-V1`/`D-V2` are `PARTIALLY_CLOSED`
+with field-binding now `CONFIRMED` for most fields (an official PANW source
+read verbatim, not name-matching); `D-V5` split into `D-V5a`
+(`PARTIALLY_CLOSED`, strong) / `D-V5b` (`OPEN`, VSX applicability); `D-V6`
+upgraded to `PARTIALLY_CLOSED` (register/unregister + pnote-enumeration
+semantics confirmed — **contradicting**, and correcting, this session's own
+source-pack hypothesis about a problem-filtered `-ia list`); `D-V7` split
+into `D-V7a` (closed) / `D-V7b` (`STILL_UNKNOWN`, now with documented
+context: the Simple Cluster API doesn't expose every cluster-object
+feature). **`D-V3a` and `D-V7b` are the actual remaining freeze blockers** —
+safety-critical authoritative sources still unknown, not merely real-env
+measurements pending. `D-V3b`/`D-V5b`/`D-V9b` `REQUIRE_REAL_ENV` regardless.
+`D-V8` is open but non-blocking.
 
 ## PAN HA serial evidence
 
@@ -104,10 +110,12 @@ Three independent movements — any order, any in parallel (full detail in
 `project/roadmap.json` `now_next.next`/`upcoming` and the contract's own
 "Next movement" section):
 
-**A. `OP.0b.0` human-assisted vendor-doc confirmation** (`now_next.next`) —
-a human fetches the pages named in the contract's source table for `D-V3a`,
-`D-V6`, `D-V7` and pastes their body text in; two automated sessions hit an
-identical egress block, so a third automated retry is not expected to help.
+**A. `OP.0b.0` close the two remaining safety-critical blockers**
+(`now_next.next`) — `D-V3a` (official PAN-OS/Panorama serial-field semantics
+inside `show high-availability state`) and `D-V7b` (an official, safe,
+machine-readable read surface for the CP cluster recovery-method setting).
+Try an official GitHub mirror first (the technique that closed `D-V4`/
+`D-V7a` this session); fall back to a human fetching the named pages.
 Recommended: `Sonnet 5, extended thinking (high)`.
 
 **B. PAN serial representation/identity evidence closure**
@@ -115,10 +123,10 @@ Recommended: `Sonnet 5, extended thinking (high)`.
 Recommended: `Sonnet 5, normal reasoning` initially; escalate only if vendor
 identity semantics become architectural.
 
-**C. Real-env residuals** (`D-V5` schema/VSX parity, `D-V9a`/`D-V9b` estate
-applicability, `D-V1`/`D-V2`/`D-V4` field-binding gaps) — folded into the
-contract's existing S0→S8 slice sequence; not separately schedulable before
-`FREEZE`.
+**C. Real-env residuals** (`D-V5a`/`D-V5b` schema/VSX parity, `D-V9a`/`D-V9b`
+estate applicability, `D-V1`/`D-V2` exhaustive-vocabulary gaps) — folded into
+the contract's existing S0→S8 slice sequence; not separately schedulable
+before `FREEZE`.
 
 ## Open blockers
 

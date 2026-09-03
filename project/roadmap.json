@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "current_build": "op0b_0_official_vendor_semantics_confirmation_pass1",
+  "current_build": "op0b_0_official_vendor_semantics_confirmation_pass2",
   "current_track": "CON.x",
   "progress_contract": "Weighted acceptance-criterion completion. Percentages describe the declared roadmap, not calendar time or delivery ETA.",
   "tracks": [
@@ -123,21 +123,21 @@
   "now_next": {
     "horizon_contract": "NOW is exactly one build. NEXT is exactly one. Everything else is an `upcoming` row carrying its own true status: planned = AFTER, blocked = waiting on a named external gate, deferred = consciously postponed. `now.build` must equal the newest project/build_history.json record -- utils.project_plan enforces it.",
     "now": {
-      "build": "op0b_0_official_vendor_semantics_confirmation_pass1",
-      "title": "OP.0b.0 - official vendor semantics confirmation, pass 1 (documentation-only)",
-      "goal": "Resolve OP.0b.0's D-V1-D-V7/D-V9 blocking rows as far as official vendor documentation allows from this execution environment, then re-run the contract's own freeze check. Documentation-only -- no product code, collector, vendor command, schema, transport or UI behavior changed; no device contacted.",
+      "build": "op0b_0_official_vendor_semantics_confirmation_pass2",
+      "title": "OP.0b.0 - official vendor semantics confirmation, pass 2 (Source Pack 2, documentation-only)",
+      "goal": "Independently verify a supplied source-pack hypothesis against named official vendor sources and reconcile the contract accordingly. Documentation-only -- no product code, collector, vendor command, schema, transport or UI behavior changed; no device contacted.",
       "status": "in_progress",
       "started": "2026-09-03"
     },
     "next": {
-      "build": "op0b_0_human_assisted_vendor_doc_confirmation",
-      "title": "OP.0b.0 - human-assisted official vendor doc confirmation (D-V3a, D-V6, D-V7)",
-      "goal": "A human fetches the specific official pages/sk-articles the pass-1 source table names -- a PAN-OS/Panorama reference establishing local-info/peer-info serial-num semantics (D-V3a); the official cphaprob -l list vs -ia list comparison and the cphaprob state field reference (D-V6); the Check Point Cluster Management API attribute reference for the cluster recovery-method setting (D-V7) -- and pastes their body text in, since two consecutive automated sessions hit an identical WebFetch-class egress block (CONNECT 403 / EGRESS_BLOCKED) against every official Check Point / Palo Alto host.",
+      "build": "op0b_0_close_remaining_semantic_blockers",
+      "title": "OP.0b.0 - close the two remaining safety-critical semantic blockers (D-V3a, D-V7b)",
+      "goal": "D-V4 and D-V7a closed by docs in pass 2 (an official PaloAltoNetworks GitHub repository mirrored pan.dev content that WebFetch could not reach directly). Two rows remain the actual freeze blockers, both safety-critical and both STILL_UNKNOWN, not merely real-env-pending: D-V3a (does an official PAN-OS/Panorama source establish local-info/peer-info serial-num semantics inside show high-availability state?) and D-V7b (is there any official, safe, machine-readable read surface -- Simple Cluster API, full Management API, or another -- for the Check Point cluster object's configured recovery-method setting, given official docs already say the Simple Cluster API does not expose every cluster-object feature?). Try an official GitHub mirror first (the technique that worked for D-V4/D-V7a) before falling back to a human fetching the specific pages named in the pass-2 source table.",
       "status": "blocked",
       "prerequisites": [
-        "A human with browser/vendor-portal access to fetch and paste in the pages named above; a third automated retry against the same egress proxy is not expected to behave differently"
+        "Either an official GitHub-hosted mirror of the relevant PAN-OS/Panorama or Check Point documentation (unconfirmed to exist for the Check Point side), or a human with browser/vendor-portal access to fetch and paste in the named pages"
       ],
-      "note": "Independent of PAN SERIAL REPRESENTATION / IDENTITY EVIDENCE CLOSURE (below, upcoming, hardware-blocked) and of the D-V3b/D-V5/D-V9a/D-V9b real-env residuals recorded in the contract -- any of these threads may proceed in either order or in parallel. Recommended: Sonnet 5, extended thinking (high) for the confirmation/freeze pass once new material lands."
+      "note": "Independent of PAN SERIAL REPRESENTATION / IDENTITY EVIDENCE CLOSURE (below, upcoming, hardware-blocked) and of the D-V3b/D-V5a/D-V5b/D-V6/D-V9a/D-V9b residuals recorded in the contract (real-env or a smaller remaining doc gap) -- any of these threads may proceed in either order or in parallel. Recommended: Sonnet 5, extended thinking (high) for the confirmation/freeze pass once new material lands."
     },
     "upcoming": [
       {
