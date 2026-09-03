@@ -360,6 +360,7 @@ class TestNoExplicitTrustSourceSurface:
         public = {name for name in dir(cp_ssh_trust) if not name.startswith("_")}
         expected = {
             "CpSshStrictPreflightError",
+            "HostKeyNotTrustedError",
             "apply_strict_host_key_policy",
             "load_trusted_host_keys",
             "REASON_NO_USABLE_HOST_KEYS",
@@ -421,8 +422,12 @@ class TestStructuralSecurityGuards:
         strict_names = _names_in(strict_body)
         assert "AutoAddPolicy" not in strict_names
         assert "WarningPolicy" not in strict_names
-        assert "RejectPolicy" in strict_names
+        assert "RejectPolicy" not in strict_names, "strict branch instantiates the local subclass, not paramiko.RejectPolicy directly"
+        assert "_NonRetryableRejectPolicy" in strict_names
         assert "AutoAddPolicy" in _names_in(compat_body), "compat branch is where AutoAddPolicy lives"
+
+    def test_non_retryable_reject_policy_is_a_reject_policy_subclass(self):
+        assert issubclass(cp_ssh_trust._NonRetryableRejectPolicy, paramiko.RejectPolicy)
 
     def test_no_strict_false_fallback_inside_strict_branch(self, helper_ast):
         strict_body, _ = _strict_branch(self._apply_fn(helper_ast))
@@ -452,15 +457,17 @@ class TestStructuralSecurityGuards:
         assert imported == {"__future__", "os", "paramiko", "paramiko.hostkeys"}
 
     def test_every_exception_handler_re_raises(self, helper_ast):
-        """No fail-open handler: every except body must end in a raise."""
+        """No fail-open handler: every except body must end in a raise of one
+        of this module's own value-free, fail-closed exception types."""
         handlers = [n for n in ast.walk(helper_ast) if isinstance(n, ast.ExceptHandler)]
         assert handlers, "expected the fail-closed handlers around the trust-source load"
+        allowed = {"CpSshStrictPreflightError", "HostKeyNotTrustedError"}
         for handler in handlers:
             assert handler.body and isinstance(handler.body[-1], ast.Raise), (
                 "exception handler in cp_ssh_trust must fail closed (re-raise)"
             )
             raised = handler.body[-1].exc
-            assert isinstance(raised, ast.Call) and getattr(raised.func, "id", None) == "CpSshStrictPreflightError"
+            assert isinstance(raised, ast.Call) and getattr(raised.func, "id", None) in allowed
 
     def test_no_paramiko_private_internals_in_product_code(self, helper_ast):
         attrs = {n.attr for n in ast.walk(helper_ast) if isinstance(n, ast.Attribute)}

@@ -14,7 +14,7 @@ from typing import Any
 
 import paramiko
 
-from utils.cp_ssh_trust import CpSshStrictPreflightError, apply_strict_host_key_policy
+from utils.cp_ssh_trust import CpSshStrictPreflightError, HostKeyNotTrustedError, apply_strict_host_key_policy
 from utils.logger import info, warn, register_sensitive_value, user_fingerprint
 
 OUTPUT_DIR = Path("output")
@@ -593,9 +593,12 @@ def _connect(target: ProbeTarget, username: str, secret: str, *, strict: bool, c
             transport = ssh.get_transport()
             key = transport.get_remote_server_key() if transport else None
             return ssh, _host_key_fingerprint(key)
-        except (paramiko.AuthenticationException, paramiko.BadHostKeyException):
-            # Not retried: a wrong credential or host-key mismatch will not
-            # change on a second attempt.
+        except (paramiko.AuthenticationException, paramiko.BadHostKeyException, HostKeyNotTrustedError):
+            # Not retried: a wrong credential, a host-key mismatch, or an
+            # untrusted/unknown host key (RejectPolicy) will not change on a
+            # second attempt. HostKeyNotTrustedError must be listed ahead of
+            # the generic SSHException branch below -- it is a subclass, and
+            # Python matches except clauses in order.
             try:
                 ssh.close()
             except Exception:
