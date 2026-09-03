@@ -59,6 +59,8 @@ from checkpoint.cp_preflight_projection import (
 )
 from configuration.checkpoint_config_collector import (
     _classify_platform,
+    _parse_clusterxl_cluster_mode,
+    _parse_clusterxl_runtime_role,
     _parse_clusterxl_stat_preflight_fields,
     _parse_gaia_version,
 )
@@ -240,7 +242,24 @@ def collect_member(
     # A3: cphaprob stat -- local role / cluster mode / attention / peer claims
     a3_at = _utc_now()
     a3_result = session.run(CPPreflightRead.A3_CPHAPROB_STAT)
-    a3_fields = _parse_clusterxl_stat_preflight_fields(str(a3_result.get("stdout") or ""), observed_hostname) if a3_result.get("success") else None
+    a3_stdout = str(a3_result.get("stdout") or "")
+    if a3_result.get("success"):
+        # project_cp_preflight_facts's own contract is
+        # _parse_clusterxl_stat_preflight_fields's shape "merged with the two
+        # always-parsed leaves" (local_role, cluster_mode) -- that merge is
+        # this call site's responsibility, not the S3 extraction function's
+        # (whose own test_no_future_command_fields_fabricated deliberately
+        # keeps its return set to exactly {peer_row_states, local_attention}).
+        # Same canonical parsers the pre-existing VS-context path already
+        # uses on this same buffer -- one parser, two consumers, no second
+        # implementation.
+        a3_fields = {
+            **_parse_clusterxl_stat_preflight_fields(a3_stdout, observed_hostname),
+            "local_role": _parse_clusterxl_runtime_role(a3_stdout, observed_hostname),
+            "cluster_mode": _parse_clusterxl_cluster_mode(a3_stdout),
+        }
+    else:
+        a3_fields = None
     a3_member = project_cp_preflight_facts(
         a3_fields, preflight_run_id=preflight_run_id, collected_at=a3_at,
         physical_device_identity=physical_device_identity, operational_entity_id=operational_entity_id,
