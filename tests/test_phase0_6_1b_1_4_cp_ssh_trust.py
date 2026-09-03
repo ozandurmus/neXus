@@ -8,7 +8,13 @@ Verifies that:
 - direct_ssh_probe._env_bool contract for FBUDDY_CP_DIRECT_SSH_STRICT_HOST_KEY.
 
 All tests are unit-level: no real SSH connections are opened.
+
+S8-P0.1 correction (OP.0b): the fake client no longer simulates the trust
+store through ``get_host_keys()`` (Paramiko's writable local store); strict
+tests provision a real synthetic ``known_hosts`` in an isolated user profile
+and the shared helper makes the trust decision over it.
 """
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 import pytest
 
@@ -19,19 +25,30 @@ pytestmark = pytest.mark.security
 # Helpers — tracked SSHClient factory
 # ---------------------------------------------------------------------------
 
-def _make_tracked_ssh(*, host_keys_empty: bool = False):
+def _provision_synthetic_known_hosts(tmp_path: Path, monkeypatch) -> Path:
+    """Isolated user profile (HOME + USERPROFILE) whose ``.ssh/known_hosts``
+    holds one synthetic, in-process generated entry (RFC 5737 host)."""
+    import paramiko
+
+    home = tmp_path / "home"
+    (home / ".ssh").mkdir(parents=True, exist_ok=True)
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
+    monkeypatch.delenv("HOMEDRIVE", raising=False)
+    monkeypatch.delenv("HOMEPATH", raising=False)
+    key = paramiko.ECDSAKey.generate()
+    known_hosts = home / ".ssh" / "known_hosts"
+    known_hosts.write_text(f"192.0.2.10 {key.get_name()} {key.get_base64()}\n", encoding="utf-8")
+    return known_hosts
+
+
+def _make_tracked_ssh():
     """Return (FakeSSHClient class, instances list).
 
     FakeSSHClient records every instance created and the policy that was set
     on it.  connect() raises immediately so the real run is aborted after
-    policy selection without hitting the network.
-
-    Parameters
-    ----------
-    host_keys_empty:
-        When ``True``, ``get_host_keys()`` returns an empty dict, simulating
-        absent known_hosts.  The default returns a synthetic non-empty dict
-        so strict-mode preflight passes.
+    policy selection without hitting the network.  It does not simulate the
+    trust store: the shared helper reads the real (isolated) known_hosts.
     """
     instances = []
 
@@ -41,17 +58,11 @@ def _make_tracked_ssh(*, host_keys_empty: bool = False):
             self_inner._system_host_keys_loaded = False
             instances.append(self_inner)
 
-        def load_system_host_keys(self_inner):
+        def load_system_host_keys(self_inner, filename=None):
             self_inner._system_host_keys_loaded = True
 
         def set_missing_host_key_policy(self_inner, policy):
             self_inner._policy = policy
-
-        def get_host_keys(self_inner):
-            if host_keys_empty:
-                return {}
-            # Return a non-empty dict to simulate a loaded known_hosts store.
-            return {"synth.test": {"ssh-rsa": MagicMock()}}
 
         def connect(self_inner, host, **kwargs):
             raise RuntimeError("abort-after-policy-selection")
@@ -106,8 +117,9 @@ class TestCpRunnerHostKeyPolicy:
             "Default must use AutoAddPolicy"
         assert not instances[0]._system_host_keys_loaded
 
-    def test_strict_env_uses_reject_policy(self, monkeypatch):
+    def test_strict_env_uses_reject_policy(self, monkeypatch, tmp_path):
         monkeypatch.setenv("SECURITYEXPERT_CP_MDS_STRICT_HOST_KEY", "1")
+        _provision_synthetic_known_hosts(tmp_path, monkeypatch)
 
         import checkpoint.cp_runner as cp_runner
         import paramiko
@@ -152,9 +164,11 @@ class TestVsxRunnerConnectPolicy:
         assert isinstance(instances[0]._policy, paramiko.AutoAddPolicy)
         assert not instances[0]._system_host_keys_loaded
 
-    def test_connect_strict_uses_reject_policy(self, monkeypatch):
+    def test_connect_strict_uses_reject_policy(self, monkeypatch, tmp_path):
         import checkpoint.vsx_runner as vsx_runner
         import paramiko
+
+        _provision_synthetic_known_hosts(tmp_path, monkeypatch)
 
         FakeSSHClient, instances = _make_tracked_ssh()
         monkeypatch.setattr(paramiko, "SSHClient", FakeSSHClient)

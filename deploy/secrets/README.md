@@ -22,6 +22,13 @@ ssh-keyscan -H <mds-hostname-or-ip> >> known_hosts
 Verify the fingerprint against the MDS out-of-band before trusting it —
 `ssh-keyscan` itself does not authenticate the host.
 
+The strict preflight verifies this mounted system `known_hosts` itself (the
+read-only store `load_system_host_keys()` fills) — the same file is
+sufficient on its own and does not need to be duplicated into any other
+Paramiko store. Before the OP.0b S8-P0.1 correction the preflight checked the
+wrong store and failed even with a correct mount; see the correction note in
+`docs/history/phase/PHASE0_6_4_CP_SSH_HOST_KEY_TRUST_PRODUCTION_CLOSURE.md`.
+
 ## `pan-ca-bundle.pem`
 
 Copy the corporate CA bundle that signs the Panorama / PAN-OS HTTPS

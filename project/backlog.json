@@ -114,7 +114,16 @@
       "status": "planned",
       "priority": "P1",
       "target": "DEPLOY.1",
-      "note": "R2 deferred from 0.6.4: verify strict=on + provisioned MDS known_hosts entry completes full read-only CP collection on the DEPLOY.1 Ubuntu/Docker server. Requires: (1) server known_hosts provisioned with MDS host key before first run, (2) SECURITYEXPERT_CP_MDS_STRICT_HOST_KEY=1 set in server env, (3) collection succeeds at established baseline coverage. Value-free evidence only."
+      "note": "R2 deferred from 0.6.4: verify strict=on + provisioned MDS known_hosts entry completes full read-only CP collection on the DEPLOY.1 Ubuntu/Docker server. Requires: (1) server known_hosts provisioned with MDS host key before first run, (2) SECURITYEXPERT_CP_MDS_STRICT_HOST_KEY=1 set in server env, (3) collection succeeds at established baseline coverage. Value-free evidence only. 2026-09-03: previously unreachable because of the strict trust-store preflight defect corrected in op0b_s8_p01_cp_ssh_trust_preflight_correction; now reachable once the server known_hosts is provisioned. Also the gating prerequisite for the OP.0b S8-A retry."
+    },
+    {
+      "id": "op0b_s7_s6_test_order_isolation",
+      "category": "Test infrastructure",
+      "title": "OP.0b S7 readiness tests leak state into the S6 PAN preflight collector tests when run out of default order",
+      "status": "planned",
+      "priority": "P2",
+      "target": "OP.0b",
+      "note": "Observed 2026-09-03 during op0b_s8_p01_cp_ssh_trust_preflight_correction validation, reproduced at HEAD without that change: `pytest tests/test_op0b_s7_readiness_v2.py tests/test_op0b_s6_pan_preflight_collector.py` (S7 first) fails 25 S6 tests with a real requests HTTPError because the S6 patch targets no longer bind to the module collect_member uses (module-rebind/state-leak class, same family as the frontend-rendering guard). Default alphabetical order (s6 before s7) and the serial full suite are unaffected. Not fixed in S8-P0.1 (S7 file boundary). Fix in an S7/S6 test-isolation slice; no product change expected."
     },
     {
       "id": "deploy1_oidc_viewer",
@@ -303,7 +312,7 @@
       "status": "real_env_validated",
       "priority": "P0",
       "target": "0.6.4",
-      "note": "0.6.4 REAL_ENV_VALIDATED 2026-08-27. R1 PASS compat mode; R3 PASS strict+no-trust raises CpSshStrictPreflightError before connect(). R2 (strict=on with provisioned known_hosts) deferred to DEPLOY.1 production server: requires real MDS host-key entry in server known_hosts before end-to-end read-only collection can be verified in strict mode."
+      "note": "0.6.4 REAL_ENV_VALIDATED 2026-08-27. R1 PASS compat mode; R3 PASS strict+no-trust raises CpSshStrictPreflightError before connect(). R2 (strict=on with provisioned known_hosts) deferred to DEPLOY.1 production server: requires real MDS host-key entry in server known_hosts before end-to-end read-only collection can be verified in strict mode. CORRECTION 2026-09-03 (OP.0b S8-P0.1, build op0b_s8_p01_cp_ssh_trust_preflight_correction): the shipped strict preflight gated on Paramiko's writable local store (get_host_keys) instead of the system store load_system_host_keys fills, so strict=on could never pass with a provisioned known_hosts -- R3 was genuinely correct, R2 was structurally impossible. Corrected through public Paramiko APIs with real-Paramiko regression tests; R2 remains owed (cp_ssh_trust_r2_prod_server)."
     },
     {
       "id": "pan_tls_ca",

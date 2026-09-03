@@ -7,24 +7,17 @@ detail is not here either** — it is in `project/build_history.json`
 linked documents under `docs/history/`. `docs/history/INDEX.md` is the
 generated one-line timeline.
 
-- **Checkpoint:** 2026-09-03, branch `feature/op0b-s75-preflight-entrypoint` (base `main`).
+- **Checkpoint:** 2026-09-03, branch `claude/cp-ssh-trust-preflight-fix-pf0611` (base `main`).
 - **Current build** (per `project/roadmap.json` `now_next.now`):
-  `op0b_s75_preflight_entrypoint` — **AUTOMATED_VALIDATED**. `OP.0b` S7.5:
-  the bounded application/CLI seam S8 proved was missing.
-  `--cp-ha-preflight-check`/`--cp-preflight-targets` and
-  `--pan-ha-preflight-check`/`--pan-preflight-targets` resolve one explicit
-  HA operational entity and its exact bounded physical members (≤2) from
-  already-collected local inventory only, fail-closed before any device
-  contact, then invoke `run_cp_preflight`/`run_pan_preflight` exactly once
-  and hand the in-memory `PreflightSnapshot` straight to
-  `compute_ha_readiness` — no persistence, no new command/API operation/
-  retry, CLASS 2 unreachable. New `utils.failover.derive_ha_units` export
-  (pure refactor of `compute_ha_readiness`'s internal unit derivation, no
-  behavior change) keeps the application layer's `operational_unit_id`
-  resolution identical to the readiness evaluator's own. `now_next.next` =
-  `op0b_s8_real_env_validation` (entrypoint gap closed; still
-  hardware-blocked). `cp_remote_collection_done_marker_diagnostics` stays
-  `now_next.upcoming` (`IN_PROGRESS`).
+  `op0b_s8_p01_cp_ssh_trust_preflight_correction` — **AUTOMATED_VALIDATED**,
+  pending PO security review before merge. `OP.0b` S8-P0.1: the shared
+  strict CP SSH host-key preflight gated on the wrong Paramiko store, so
+  `strict=True` was unusable with a correctly provisioned `known_hosts`;
+  corrected in `utils/cp_ssh_trust.py` only (see "Active build").
+  `now_next.next` = `op0b_s8_real_env_validation` (S8-A: NOT EXECUTED, ZERO
+  CONTACTS, BLOCKED pending this correction + trusted host-key provisioning).
+  `cp_remote_collection_done_marker_diagnostics` stays `now_next.upcoming`
+  (`IN_PROGRESS`).
 - **Product baseline:** `0.7.7 — Compliance trend retro-fill` — AUTOMATED_VALIDATED.
 - **Engineering baseline:** `DEV.3.3` — AUTOMATED_VALIDATED. `DEV.1`,
   `DEV.4` complete.
@@ -57,21 +50,24 @@ test-enforced boundaries. Current numbers:
 
 ## Active build
 
-**`op0b_s75_preflight_entrypoint`** — **AUTOMATED_VALIDATED**, 2026-09-03,
-pending PO acceptance before merge. `OP.0b` S7.5: the bounded application/CLI
-seam S8 proved was missing. `--cp-ha-preflight-check --cp-preflight-targets`
-and `--pan-ha-preflight-check --pan-preflight-targets`
-(`application/workflows/preflight.py`) resolve one explicit HA operational
-entity and its exact bounded physical members (≤2) from already-collected
-local inventory only, fail-closed before any device contact, reusing the
-existing CP entity_id / PAN serial selectors; invoke
-`run_cp_preflight`/`run_pan_preflight` exactly once; hand the in-memory,
-never-persisted `PreflightSnapshot` straight to `compute_ha_readiness`. New
-`utils.failover.derive_ha_units` export (pure refactor, no behavior change)
-keeps `operational_unit_id` resolution identical between the application
-layer and the readiness evaluator; `B2` is not re-designed. No new command,
-API operation, retry, or CLASS 2. No device contact this session — S8-A owed.
-Detail: `project/build_history.json`.
+**`op0b_s8_p01_cp_ssh_trust_preflight_correction`** — **AUTOMATED_VALIDATED**,
+2026-09-03, pending PO security review before merge. `OP.0b` S8-P0.1:
+`utils/cp_ssh_trust.py` loaded trusted keys into Paramiko's read-only system
+store (`load_system_host_keys`) but gated on the writable local store
+(`get_host_keys()`), so a correctly provisioned system/user `known_hosts`
+could never satisfy `strict=True`. The precondition is now "at least one
+configured trusted source was successfully loaded", derived via public
+Paramiko APIs (explicit system `known_hosts` path + `paramiko.HostKeys`
+parse of the same file); missing/unreadable → `trust_source_unreadable`,
+unparsable → `trust_source_malformed`, empty → `no_usable_host_keys_loaded`,
+all before `connect()`. Pinned with real Paramiko + synthetic keys
+(`tests/test_op0b_s8_p01_cp_ssh_trust_preflight_correction.py`); the older
+`get_host_keys()` mocks were reworked to real isolated files. Preserved:
+`RejectPolicy`, fail-before-connect, `strict=False` behavior, all five
+callers on the one helper, no AutoAdd/TOFU/enrollment, no new env/CLI/config
+surface, no device command, zero device contact. No explicit RuntimeRoot
+trusted-source path exists (`NOT_PRESENT`); none added. Correction note:
+`docs/history/phase/PHASE0_6_4_CP_SSH_HOST_KEY_TRUST_PRODUCTION_CLOSURE.md`.
 
 **Stalled, moved to `now_next.upcoming`:**
 `cp_remote_collection_done_marker_diagnostics` — still `IN_PROGRESS`,
@@ -82,7 +78,7 @@ safe category token instead of a bare byte count. Resume when a real
 recurrence report with the new diagnostic fields is available. Detail:
 `project/build_history.json`.
 
-**Predecessors:** `op0b_s7_readiness_v2_integration` through
+**Predecessors:** `op0b_s75_preflight_entrypoint` through
 `op0b_s1_preflight_fact_provenance_model` — all AUTOMATED_VALIDATED.
 Detail: `project/build_history.json`.
 
@@ -122,11 +118,16 @@ causes are ruled out by source inspection. Leading-zero normalization is
 `cp_remote_collection_done_marker_diagnostics` (`now_next.upcoming`) needs a
 real recurrence with the new diagnostic fields — independent of `OP.0b`.
 
-`now_next.next` is **`op0b_s8_real_env_validation`** (`OP.0b` S8) — bounded,
+`now_next.next` is **`op0b_s8_real_env_validation`** (`OP.0b` S8-A) — bounded,
 reads-only real-environment validation on the approved CP ClusterXL pair,
 VSX pair and PAN pair: confirms the S5/S6 real response shapes and the
 minimal vendor value vocabularies S7's `FACT_CHECK_MAP` freezes (fail-closed
-on anything unrecognised). Hardware-blocked. `S9` (UI-authority
+on anything unrecognised). Status: NOT EXECUTED, ZERO CONTACTS, BLOCKED —
+the first attempt surfaced the strict trust-store preflight defect corrected
+by `op0b_s8_p01_cp_ssh_trust_preflight_correction`; after that merges and
+`main` is synced, provision the trusted host key (out-of-band verified
+fingerprint in the runtime's system/user `known_hosts`), then retry the
+IDENTICAL controlled command in a NEW session. Hardware-blocked. `S9` (UI-authority
 reconciliation) is independent after S7. `OP.0b` is **not DONE**; S7 is
 `AUTOMATED_VALIDATED`, never `REAL_ENV_VALIDATED`, until S8.
 
@@ -166,11 +167,10 @@ Concurrency budget stays at 1 per vendor pending its own real-environment eviden
 ## Automated test baseline
 
 ```
-1418 passed / 26 skipped / 0 failed (2026-09-03, op0b_s75_preflight_entrypoint,
-  this session's local sandbox, serial, console extras installed session-locally)
-  -- +46 new (test_op0b_s75_preflight_entrypoint.py); +1 new file
-  (application/workflows/preflight.py) over op0b_s7_readiness_v2_integration's
-  1371/26/0 (same sandbox class).
+1468 passed / 24 skipped / 0 failed (2026-09-03, op0b_s8_p01_cp_ssh_trust_preflight_correction,
+  this session's local sandbox, serial, dev + console extras installed session-locally)
+  -- exactly +47 new (test_op0b_s8_p01_cp_ssh_trust_preflight_correction.py) over
+  the same sandbox's HEAD baseline of 1421 / 24 / 0; no repository dependency change.
 Repository privacy gate: PASS / 0 findings, clean checkout.
 Project-state consistency: metadata_warnings == [] under all cross-authority rules.
 ```
