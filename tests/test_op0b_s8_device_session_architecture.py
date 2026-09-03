@@ -174,6 +174,9 @@ def _run(monkeypatch, *, unit_type: str = "clusterxl", members: int = 2) -> _Rec
     rec = _Recorder()
     _FakeSSHClient.rec = rec
     monkeypatch.setattr(paramiko, "SSHClient", _FakeSSHClient)
+    # The real battery paces itself to spare the device's management plane;
+    # that delay is device courtesy, not behaviour under test.
+    monkeypatch.setattr(pc, "INTER_READ_DELAY_SECONDS", 0)
     targets = [
         CPPhysicalMemberTarget("member-a", "gw-member-a", "192.0.2.10"),
         CPPhysicalMemberTarget("member-b", "gw-member-b", "192.0.2.11"),
@@ -214,11 +217,18 @@ class TestCheckPointSessionInvariants:
         assert rec.channels == 8
         assert len(rec.commands) == 8
 
-    def test_no_pty_requested_on_the_preflight_path(self, monkeypatch):
-        """A PTY-backed channel is what made the device run its login/CLI
-        initialization once per command (S8-A `ver` amplification)."""
+    def test_no_pty_requested_for_a_one_shot_read(self, monkeypatch):
+        """A one-shot read needs no terminal.
+
+        A PTY was briefly suspected of being what put `$CPDIR/bin` on
+        `$PATH` for the Expert reads. The device's own `clish`/`xpand` audit
+        trail disproves it: the bare Expert reads never reach a shell at all
+        -- the account's login shell hands every exec command to Clish,
+        which rejects them before any binary runs (see
+        `classify_execution_context_gap`). A PTY cannot change that, so this
+        stays at the cheaper PTY-less channel."""
         rec = _run(monkeypatch, members=2)
-        assert rec.pty_requests == 0
+        assert rec.pty_requests == 0, "a one-shot exec read needs no terminal"
 
     def test_only_approved_battery_text_reaches_the_device(self, monkeypatch):
         rec = _run(monkeypatch, members=1)
@@ -305,7 +315,7 @@ class TestNoRuntimeDiscoveryOfStaticSemantics:
     def test_only_the_session_factory_binds_a_transport(self):
         src = inspect.getsource(pc)
         assert src.count("_run_exec(") == 1, "exactly one place binds the exec primitive"
-        assert "use_pty=False" in src
+        assert "use_pty=False" in src, "one-shot reads must not allocate a terminal"
 
 
 # ---------------------------------------------------------------------------
@@ -325,10 +335,11 @@ class TestVsxSessionInvariants:
         assert len(rec.connects) == 1
         assert rec.channels == 9, "8 physical reads + B1, all on one session"
 
-    def test_vsx_adds_no_pty_and_no_reconnect(self, monkeypatch):
+    def test_vsx_reuses_one_session_and_allocates_no_terminal(self, monkeypatch):
         rec = _run(monkeypatch, unit_type="vsx", members=2)
         assert rec.pty_requests == 0
         assert rec.closes == 2
+        assert len(rec.connects) == 2, "no reconnect for the VSX read"
 
 
 # ---------------------------------------------------------------------------
