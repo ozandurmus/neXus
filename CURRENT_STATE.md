@@ -7,15 +7,18 @@ detail is not here either** — it is in `project/build_history.json`
 linked documents under `docs/history/`. `docs/history/INDEX.md` is the
 generated one-line timeline.
 
-- **Checkpoint:** 2026-09-03, branch `claude/kaizen-fast-pr-ci-yx6oe3` (base
-  `main`, merged via PRs #34/#35/#36/#37).
+- **Checkpoint:** 2026-09-03, branch `main` (merged via PRs
+  #34/#35/#36/#37/#38; `claude/cp-remote-collection-done-marker` still open
+  as PR #39).
 - **Current build** (per `project/roadmap.json` `now_next.now`):
-  `dev_kaizen_fast_pr_ci` — **IN_PROGRESS** (implemented + full local
-  regression green; PR CI evidence pending — see "Active build" below).
-  Engineering-flow-only Kaizen: splits `.github/workflows/validation.yml`
-  into a fast PR gate (`validate`) and a full-suite integration safety net
-  (`full-regression`, main push + `workflow_dispatch`). No product/network
-  behavior change.
+  `dev_kaizen_fast_pr_ci` — **AUTOMATED_VALIDATED** (PR #38's CI confirmed
+  `validate` green, merged via 6778ee9 — see "Active build"). Splits
+  `.github/workflows/validation.yml` into a fast PR gate (`validate`) and a
+  full-suite integration safety net (`full-regression`, main push +
+  `workflow_dispatch`); no product/network behavior change. The automatic
+  post-merge `full-regression` run is the integration safety net — not
+  blocked on; a later failure makes `main` integration-unhealthy until
+  classified (`AGENTS.md` "Mandatory build lifecycle").
 - **Product baseline:** `0.7.7 — Compliance trend retro-fill` — AUTOMATED_VALIDATED.
 - **Engineering baseline:** `DEV.3.3` — AUTOMATED_VALIDATED. `DEV.1`,
   `DEV.4` complete.
@@ -48,25 +51,20 @@ test-enforced boundaries. Current numbers:
 
 ## Active build
 
-**`dev_kaizen_fast_pr_ci`** — **IN_PROGRESS** 2026-09-03. PO policy: a
-bounded feature PR no longer pays for the ~11-minute full `pytest` suite by
-default. `.github/workflows/validation.yml` now has two jobs: `validate`
-(pull_request only — compileall import sanity, repository privacy gate,
-project-state consistency, build-history-index check, a small fixed PR
-smoke/safety-regression set, whitespace/conflict-marker check; no full
-suite) and `full-regression` (push-to-`main` + `workflow_dispatch` — the
-same gates plus the full suite, serial). Canonical policy statement:
-`docs/AI_DEVELOPMENT_PROTOCOL.md` "CI validation policy" (full-regression
-triggers, e.g. dependency/schema/concurrency/security-boundary/CI-infra
-changes, live there — not duplicated here or in `AGENTS.md`/
-`AI_START_HERE.md`). New `tests/test_ci_workflow_fast_pr_regression.py`
-statically asserts the split (text-based, no new YAML dependency). This
-build is itself a full-regression trigger (CI infrastructure); full suite
-run locally this session: **1215 passed / 24 skipped / 0 failed**
-(dependencies incl. `fastapi`/`lxml`/`paramiko` installed session-local).
-No product/network/dependency/branch-protection change; job id `validate`
-kept for the PR job so an existing required-status-check name still
-matches.
+**`dev_kaizen_fast_pr_ci`** — **AUTOMATED_VALIDATED** 2026-09-03. A bounded
+feature PR no longer pays for the ~11-minute full `pytest` suite by
+default: `.github/workflows/validation.yml` now has `validate`
+(pull_request only — cheap gates, no full suite) and `full-regression`
+(push-to-`main` + `workflow_dispatch` — same gates plus the full serial
+suite). Canonical policy: `docs/AI_DEVELOPMENT_PROTOCOL.md` "CI validation
+policy". New `tests/test_ci_workflow_fast_pr_regression.py` statically
+asserts the split. Full suite locally: **1215 passed / 24 skipped / 0
+failed**. **PR #38's CI** confirmed `validate` green; merged via
+**6778ee9**. No product/network/dependency/branch-protection change.
+
+**Unrelated in-flight build:** `cp_remote_collection_done_marker_diagnostics`
+(PR #39) — diagnostic hardening for a real-run CP RuntimeError, root cause
+`UNKNOWN`. Detail: `project/build_history.json`.
 
 **Predecessors:** `op0b_s3_cp_parse_scope_extension` (AUTOMATED_VALIDATED,
 PR #37), `op0b_s2_pan_parse_scope_extension` (AUTOMATED_VALIDATED, PR #36),
@@ -111,21 +109,31 @@ identifier stays opaque (`AGENTS.md` opaque-identifier law). Tracked as
 
 ## Exact next build
 
-`dev_kaizen_fast_pr_ci` (above) needs PR CI evidence before it can advance
-to `AUTOMATED_VALIDATED`; once merged, return to `OP.0b` implementation.
-Three independent `OP.0b`-track movements remain, any order/parallel (full
-detail in `project/roadmap.json` `now_next.next`/`upcoming`):
+`dev_kaizen_fast_pr_ci` is done (above). `now_next.next` is now
+**`op0b_s4_command_gate_package`** (`OP.0b` S4) — 2026-09-03 roadmap
+correction: contract dependency order `S0 → S1 → (S2, S3) → S4 → (S5, S6) →
+S7 → S8; S9 independent after S7`. S1/S2/S3 are `AUTOMATED_VALIDATED`, so S4
+— not D-V3a/D-V7b closure — is next: docs-only `OP.0b.1` command-gate
+package (ten points/row, CP `A4`–`A9` / PAN `P3`–`P5`), gated on
+official-vendor-doc confirmation first. Even drafted, it's a candidate
+list, not an approval — the `OP.0b` open blocker below still applies before
+S5/S6 implement any command. Recommended: `Sonnet 5, extended thinking
+(high)` — security boundary.
 
-**A. Close `D-V3a`/`D-V7b` before CLASS 2** (`now_next.next`) — does not
-block `S1`–`S9` or the freeze. GitHub-mirror search first, then
-human-assisted fetch. Recommended: `Sonnet 5, extended thinking (high)`.
+`D-V3a`/`D-V7b` stay **preserved unresolved CLASS-2 blockers** —
+reclassified `now_next.next` → `upcoming`, not reopened/closed: they gate
+only the PAN successor identity model and CLASS 2, not S1–S9 or S4. Two
+further independent `upcoming` movements, any order:
 
-**B. `D-F3` numeric threshold** (`now_next.upcoming`) — product-owner call,
-needed before check 7 computes a real verdict; doesn't block `S1`/`S2`/`S3`.
+**A. Close `D-V3a`/`D-V7b`** — does not block `S1`–`S9`/`S4`/the freeze.
+GitHub-mirror first, then human-assisted fetch. `Sonnet 5, extended
+thinking (high)`.
 
-**C. PAN serial representation/identity evidence closure**
-(`now_next.upcoming`) — hardware-blocked, unchanged. `Sonnet 5, normal`
-initially; escalate only if vendor identity semantics become architectural.
+**B. `D-F3` numeric threshold** — product-owner call; doesn't block
+`S1`–`S4`.
+
+**C. PAN serial identity closure** — hardware-blocked. `Sonnet 5, normal`
+initially.
 
 ## Open blockers
 
@@ -159,18 +167,11 @@ evidence.
 ## Automated test baseline
 
 ```
-1153 passed / 28 skipped / 0 failed (2026-09-03, GitHub CI, PR #36
-  `validate` job, full dependency set incl. lxml/paramiko/cryptography/
-  fastapi) -- current full-dependency-environment baseline, superseding the
-  prior 1099/24/0 (2026-09-02). Includes S1 (23) and both S2 suites (20
-  extraction + 14 projection) executed for the first time anywhere.
-  Locally executable-here subset (no lxml/paramiko/fastapi in this
-  container): S1+convergence 42/42, S2 projection 14/14.
+1215 passed / 24 skipped / 0 failed (2026-09-03, local full-dependency
+  container, serial -- dev_kaizen_fast_pr_ci session evidence) --
+  supersedes the prior CI baseline of 1153/28/0 (PR #36).
 Repository privacy gate: PASS / 0 findings, clean checkout.
 Project-state consistency: metadata_warnings == [] under all cross-authority rules.
-
-This session (`dev_kaizen_fast_pr_ci`, full-dependency container, serial):
-1215 passed / 24 skipped / 0 failed. Local-only evidence pending PR CI.
 ```
 
 Run one-shot and read from file: `py -m pytest -q > pytest_result.log 2>&1`.
