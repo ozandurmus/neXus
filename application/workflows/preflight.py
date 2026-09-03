@@ -96,12 +96,28 @@ def _print_read_outcomes(snapshot) -> None:
     if not outcomes:
         return
     print("Reads (approved battery, safe outcome only):")
+    markers = {"success": "ok  ", "capability_gap": "GAP "}
     for source, outcome, fact_count in outcomes:
-        marker = "ok  " if outcome == "success" else "FAIL"
+        marker = markers.get(outcome, "FAIL")
         print(f"  {marker} {source:<34} {outcome:<18} facts={fact_count}")
     failed = [s for s, o, _ in outcomes if o != "success"]
     if failed:
         print(f"  -> {len(failed)} of {len(outcomes)} approved reads produced no usable evidence.")
+    # A capability gap is not a device fault and not a collector defect -- it
+    # is the SSH account's execution context, and it is the one cause here an
+    # operator can actually clear. Say so instead of leaving it as "failed".
+    gaps = [s for s, o, _ in outcomes if o == "capability_gap"]
+    if gaps:
+        print(
+            f"  -> {len(gaps)} read(s) were rejected by the device CLI before executing: the "
+            "collector account's login shell is Gaia Clish, so Expert-shell reads "
+            "(cphaprob/fw/vsx) never run."
+        )
+        print(
+            "     Remedy is an operator/account action, not a product change -- "
+            "use an account whose login shell is Expert. This tool will not change "
+            "device configuration."
+        )
 
 
 def _print_safe_result(report: dict, *, operational_unit_id: str, vendor: str, member_count: int) -> None:
