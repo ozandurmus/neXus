@@ -1632,10 +1632,10 @@ Status vocabulary: COLLECTED_AND_PARSED · COLLECTED_NOT_PARSED · NOT_COLLECTED
 | host_key_trust | CP | cluster | SSH | — | fingerprint | strict preflight | COLLECTED_AND_PARSED | VALIDATED (R1/R3); R2 prod pending | none | R2 owed |
 | cluster_identity | CP | cluster | VIP set | `cphaprob -a -m if` | "virtual cluster interfaces" | `parse_cluster_virtual_interfaces` | COLLECTED_AND_PARSED | VALIDATED | join freshness; move read into preflight session | done (real pairs) |
 | local_role | CP | cluster/VS | `cphaprob stat` | same | `(local)` row State | `_parse_clusterxl_runtime_role` | COLLECTED_AND_PARSED | VALIDATED (physical); **SUSPECT (VS, sk165432)** | keep; VS caveat; stop passing physical hostname | VS owed |
-| cluster_mode | CP | cluster | `cphaprob stat` | same | "Cluster Mode" line | `_parse_clusterxl_cluster_mode` | COLLECTED_AND_PARSED | SUSPECT (constructed fixtures; "Single VS Failover" unrecognised) | add VSX mode string; capture real header | owed |
-| peer_state (observed) | CP | cluster | `cphaprob stat` | same | non-local rows State | — | COLLECTED_NOT_PARSED | — | S3 parse (state only) | owed |
-| failure_reason | CP | cluster | `cphaprob stat`/`state` | same | "Active Attention" suffix | — | COLLECTED_NOT_PARSED | — | S3 | owed |
-| member_skew | CP | cluster | timestamps | — | `started_at` | — | COLLECTED_NOT_PARSED | — | S1/S3 provenance | — |
+| cluster_mode | CP | cluster | `cphaprob stat` | same | "Cluster Mode" line | `_parse_clusterxl_cluster_mode` | COLLECTED_AND_PARSED | VALIDATED for existing modes (constructed fixtures); "Single VS Failover" **now recognised** (S3, 2026-09-03) as a distinct `vsx_single_vs_failover` enum value — never folded into `ha_new_mode` | real header capture | owed |
+| peer_state (observed) | CP | cluster | `cphaprob stat` | same | non-local rows State (address/name excluded, not identity-grade) | `_parse_clusterxl_stat_preflight_fields` + `project_cp_preflight_facts` (S3, 2026-09-03) | PARSER_IMPLEMENTED — PRODUCTION_WIRING_PENDING (`_collect_host(..., include_preflight_fields=True)` opt-in, dormant by design; see §25b) | VALIDATED against synthetic fixtures (state token only; one-member buffer never synthesizes a peer row) | production wiring is S5/S6's job | owed |
+| failure_reason | CP | cluster | `cphaprob stat` | same | local role token reclassified as boolean (`ACTIVE ATTENTION`/`DOWN` ⇒ `True`) — **no free-text reason suffix is parsed**: no vendor-confirmed safe reason-text vocabulary exists for `cphaprob stat` (only the state token itself is ESTABLISHED, §"Vendor semantics established"), and parsing an arbitrary suffix risks raw-buffer leakage | `_parse_clusterxl_stat_preflight_fields` (`local_attention`) + `project_cp_preflight_facts` (S3, 2026-09-03) | PARSER_IMPLEMENTED — PRODUCTION_WIRING_PENDING (see §25b) | VALIDATED (boolean derivation, not free text) | free-text reason stays NOT_COLLECTED pending a confirmed safe vocabulary | owed |
+| member_skew | CP | cluster | timestamps | — | `started_at` (rows); `collected_at` (S3 projection, caller-supplied) | S1 `evaluate_coherence` (existing) | COLLECTED_NOT_PARSED on rows; computable via S1 once S5/S6 supply real per-member `collected_at` to the S3 projection | — | S5/S6 provenance | — |
 | control_link_health | CP | cluster | — | `cphaprob -a if` | interface states | — | NOT_COLLECTED | — | S5 (gate) | owed |
 | sync_link_health | CP | cluster | — | `cphaprob -a if`, `syncstat` | sync if / drops | — | NOT_COLLECTED | — | S5 | owed |
 | state_sync | CP | cluster | — | `cphaprob syncstat` (R80.20+) | delta-sync status | — | NOT_COLLECTED | — | S5; version-conditional | owed |
@@ -1648,7 +1648,7 @@ Status vocabulary: COLLECTED_AND_PARSED · COLLECTED_NOT_PARSED · NOT_COLLECTED
 | vs_enumeration | CP | VSX | `vsx stat -v` | same | VSID/status | `vsx_runner.get_vs` | COLLECTED (nested shell) | SUSPECT (standby skipped; `-[12]$`) | preflight issues it directly | owed |
 | vs_inherited_attrs | CP | VS | host row | — | platform/serial/… | — | COLLECTED | SUSPECT (unlabelled) | add `_source` labels | — |
 | legacy_cluster | CP | VSX | hostname | — | `-1`/`-2` | `normalize_vsx` | COLLECTED | **BROKEN as identity** | remove from failover key path | — |
-| row_provenance | CP | all | — | — | run_id/collected_at/wire cmd | — | NOT_COLLECTED (on rows) | — | S1/S3 | — |
+| row_provenance | CP | all | — | — | run_id/collected_at/wire cmd | S1 `Provenance` + S3 `project_cp_preflight_facts` (caller-supplied, not self-generated) | NOT_COLLECTED (on raw collector rows — unchanged); carried by the S3 projection layer once a caller supplies it | — | S5/S6 own creating/orchestrating real values | — |
 | inventory_serial (I1) | PAN | pair | Panorama | `show devices all` | `entry/serial` | `get_devices` | COLLECTED_AND_PARSED | VALIDATED | none | — |
 | identity_serial (I2) | PAN | pair | direct | `show system info` | `serial` | `_collect_direct_compare` | COLLECTED_AND_PARSED | VALIDATED (gate) | none | done |
 | local_runtime_serial (I3) | PAN | pair | HA state | `show high-availability state` | `local-info/serial-num` | token (`a1a3882`) | COLLECTED_AND_PARSED (token) | UNKNOWN semantics | D-V3 | **pending (S0)** |
@@ -1743,6 +1743,53 @@ AUTHORITY = YES for the group-level field family S2 owns; the pre-existing
 diagnostic sweep remains a deliberately separate, differently-shaped tool
 outside S2's scope.**
 
+## §25b S3 implementation-state reconciliation (2026-09-03)
+
+Applying the same six-dimension discipline §25a established, to the three
+Check Point field-groups S3 adds (`peer_state (observed)`, `failure_reason`,
+`cluster_mode`'s new VSX value):
+
+| Dimension | Answer | Detail |
+| --- | --- | --- |
+| Response fetched by existing production path | **YES** | `_collect_host` already runs `cphaprob stat` once per physical member (and once per VS context) for the pre-existing baseline (`ha_role`/`ha_cluster_mode`). S3 reads more of that *same* in-hand buffer, before it is zeroed — it adds no command, no SSH invocation. |
+| Extraction code implemented | **YES** | `_parse_clusterxl_stat_preflight_fields` (delegates local-role/cluster-mode extraction to the existing `_parse_clusterxl_runtime_role`/`_parse_clusterxl_cluster_mode` — single extraction authority preserved by reuse, not duplication; peer-row/attention extraction is new territory nothing else in the repository parses), proven correct against synthetic fixtures. `_parse_clusterxl_cluster_mode` itself gained one new recognized value (`vsx_single_vs_failover`), in production use immediately (unlike the dormant fields below) since it is the same function the existing physical/VS paths already call unconditionally. |
+| Production extraction currently invoked | **cluster_mode's new value: YES (immediately); peer/attention fields: NO** | `_collect_host`'s new `include_preflight_fields` parameter defaults `False`; `run_checkpoint_config_collection`'s one call site does not pass `True`. By design, not an oversight — see "S3 vs. S5/S6 boundary" below. The "Single VS Failover" mode recognition is different in kind: it lives inside the *existing, always-invoked* `_parse_clusterxl_cluster_mode`, so it takes effect on the next real VSX-HA read with no additional wiring — it corrects a previously-unrecognized string, it does not add a new opt-in read. |
+| Projected into `PreflightFact` | **capability YES, invocation NO** | `checkpoint.cp_preflight_projection.project_cp_preflight_facts()` exists and is tested, but nothing in the product calls it yet — same dormancy as S2's PAN projection. |
+| Automated extraction/projection tests executed | **YES, in this session** | `tests/test_op0b_s3_cp_extraction.py` and `tests/test_op0b_s3_cp_projection.py` both ran green in this container (`paramiko`/`lxml`/`pytest` were installed locally, session-local, for validation purposes only — not a repository dependency change; nothing under `requirements*.txt` changed). Full-dependency CI (PR) is still the authoritative gate per repository policy, but unlike S2's session this session's local run is real evidence, not merely a syntax check. |
+| Real-env validated | **NO** | Unaffected — `S8` remains the real-env gate for every CP field in this table, S3 included; no device was contacted. |
+
+**S3 vs. S5/S6 boundary:** identical shape to §25a's PAN boundary. S3 is
+responsible for a reusable, synthetic-fixture-proven extraction
+(`_parse_clusterxl_stat_preflight_fields`) and projection
+(`project_cp_preflight_facts`) capability over the *shape* of an
+already-fetched `cphaprob stat` buffer — not for invoking either against a
+real device or wiring either into any production collection pass. S5 (the
+dedicated `checkpoint/preflight_collector.py`, not yet created) owns
+building the actual preflight invocation, per this contract's own
+"S2 architectural lesson — apply to S3" guidance carried into the task
+instructions. `PARSER_IMPLEMENTED — PRODUCTION_WIRING_PENDING` names the
+peer/attention state precisely for the same reason §25a gives for PAN.
+
+**Scope narrowing, stated plainly:** the task's own slice description names
+"Active Attention reason" as an S3 target. What is actually projected is a
+**boolean** (`local_attention`) derived from the already-parsed local-role
+state token (`"ACTIVE ATTENTION"`/`"DOWN"` ⇒ `True`) — not a free-text
+reason string. No official vendor snippet reached by this contract
+establishes a safe, bounded reason-text vocabulary for `cphaprob stat`
+specifically (only the state-token vocabulary itself, §"Vendor semantics
+established", is ESTABLISHED); parsing an arbitrary suffix would risk
+returning raw buffer/interface/device text, which task §16/§19 forbid. This
+is the same "fail closed rather than guess" posture the contract's own
+domain invariants require, applied to a genuinely open evidence gap rather
+than deferred silently — see the `failure_reason` row (§25) for the exact
+wording now on record.
+
+**Single extraction authority:** `_parse_clusterxl_stat_preflight_fields`
+calls the existing `_parse_clusterxl_runtime_role`/`_parse_clusterxl_cluster_mode`
+functions for local role/mode rather than re-tokenizing the buffer a second
+way; its own new logic (peer-row state extraction) is not duplicated
+anywhere else in the repository. SINGLE EXTRACTION AUTHORITY = YES.
+
 ## §26 Current bug / gap register
 
 Priority: **P0 BEFORE CLASS 2** · **P1 BEFORE PRODUCTION** · **P2 HARDENING** · **DEFERRED**.
@@ -1750,12 +1797,12 @@ Priority: **P0 BEFORE CLASS 2** · **P1 BEFORE PRODUCTION** · **P2 HARDENING** 
 | Id | Vendor | Gap | Evidence | Priority |
 | --- | --- | --- | --- | --- |
 | CP-1 | CP | 2/7 checks evaluable; no sync/parity/link/preemption/flap evidence exists in code | `assessment.py:61`, §24 ABSENT list | P0 |
-| CP-2 | CP | peer rows dropped; no peer observation; split-brain from unsynchronised member reads; skew unrecorded | `_parse_clusterxl_runtime_role`; `ThreadPoolExecutor` | P0 |
+| CP-2 | CP | peer rows dropped; no peer observation; split-brain from unsynchronised member reads; skew unrecorded — **S3 (2026-09-03) adds a dormant, opt-in extraction/projection capability (`_parse_clusterxl_stat_preflight_fields`, `project_cp_preflight_facts`) that can read peer-row state; production `_collect_host` still discards it by default (`include_preflight_fields=False`) — gap NOT closed, only a path to closing it now exists** | `_parse_clusterxl_runtime_role`; `ThreadPoolExecutor` | P0 |
 | CP-3 | CP | preemption not reliably device-readable (sk180184); no management-plane read exists | vendor doc; no collector | P0 |
 | CP-4 | CP | per-VS `cphaprob stat` reliability unvalidated (sk165432); physical hostname used as VS match token | `:1613`; vendor doc | P0 (before VS readiness is trusted) |
 | CP-5 | CP | `vsx_runner.py`: `fw ctl set int vsid` (non-read verb); standby members discarded; `-[12]$` discovery; unvalidated `vs_id` | `vsx_runner.py:167, 212-214, 223-236` | P1 (P0 if `vsx.json` ever feeds preflight — it must not) |
 | CP-6 | CP | dead `checkpoint/scripts/vsx_collect.sh` | grep | P2 |
-| CP-7 | CP | no `run_id`/`collected_at`/wire command on rows; `group_id` (stage `cp`) and `ha_role` (stage `cp_config`) joined off disk without freshness | `:1070-1072`; row shape | P0 |
+| CP-7 | CP | no `run_id`/`collected_at`/wire command on rows; `group_id` (stage `cp`) and `ha_role` (stage `cp_config`) joined off disk without freshness — **unchanged by S3**: `project_cp_preflight_facts` carries provenance only when a caller supplies it (S5/S6's job), never by writing it onto `host_row`/`ctx_row` itself | `:1070-1072`; row shape | P0 |
 | CP-8 | CP | `extract_cp_ha_runtime` drops status/source/timestamps — inherited and stale readings indistinguishable | `failover_readiness_ui.py:95-113` | P0 |
 | CP-9 | CP | strict host-key trust R2 on production server pending | `cp_ssh_trust_r2_prod_server` | P1 (P0 before CLASS 2) |
 | CP-10 | CP | direct-Clish-only appliances → `capability_gap` for `cphaprob`; needs `UNSUPPORTED` handling or Clish equivalents | `:1351-1357` | P1 |

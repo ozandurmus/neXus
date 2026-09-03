@@ -7,18 +7,19 @@ detail is not here either** — it is in `project/build_history.json`
 linked documents under `docs/history/`. `docs/history/INDEX.md` is the
 generated one-line timeline.
 
-- **Checkpoint:** 2026-09-03, branch `main` (merged via PRs #34/#35/#36).
+- **Checkpoint:** 2026-09-03, branch `claude/op0b-s3-cp-preflight-parser-0y9z6u`
+  (base `main`, merged via PRs #34/#35/#36).
 - **Current build** (per `project/roadmap.json` `now_next.now`):
-  `op0b_s2_pan_parse_scope_extension` — **AUTOMATED_VALIDATED** (a same-day
-  overclaim was caught, corrected, then genuinely advanced once PR #36's CI
-  proved the load-bearing extraction suite green — see "Active build"
-  below). Second bounded slice against the FROZEN `OP.0b.0` contract:
-  extends `configuration/panorama_config_collector.py` to parse more of the
-  already-fetched `show high-availability state` response (opt-in, dormant
-  by design — production invocation is S5/S6's job), plus a pure
-  projection module. Zero device I/O, zero new command, no
-  readiness-verdict/UI change; `D-F1`/`D-F2`/`D-F3`/`D-V3a`/`D-V7b` stay
-  unresolved; CLASS 2 unreachable.
+  `op0b_s3_cp_parse_scope_extension` — **IN_PROGRESS** (implemented and
+  locally validated this session; deliberately not marked
+  `AUTOMATED_VALIDATED` until PR CI evidence lands, per the lesson recorded
+  from S2's same-day overclaim correction — see "Active build" below).
+  Third bounded slice against the FROZEN `OP.0b.0` contract: extends
+  `configuration/checkpoint_config_collector.py` to parse more of the
+  already-fetched `cphaprob stat` buffer (opt-in, dormant by design —
+  production invocation is S5/S6's job), plus a pure projection module.
+  Zero device I/O, zero new command, no readiness-verdict/UI change;
+  `D-F1`/`D-F2`/`D-F3`/`D-V3a`/`D-V7b` stay unresolved; CLASS 2 unreachable.
 - **Product baseline:** `0.7.7 — Compliance trend retro-fill` — AUTOMATED_VALIDATED.
 - **Engineering baseline:** `DEV.3.3` — AUTOMATED_VALIDATED. `DEV.1`,
   `DEV.4` complete.
@@ -51,27 +52,24 @@ test-enforced boundaries. Current numbers:
 
 ## Active build
 
-**`op0b_s2_pan_parse_scope_extension`** — **AUTOMATED_VALIDATED** 2026-09-03.
-New `_parse_pan_ha_preflight_fields()` reads `conn-*`, `running-sync[-enabled]`,
-election/preemption, flap counters, error state, `*-version`/`*-compat`
-parity from the **same** already-fetched `show high-availability state`
-response, behind `include_preflight_fields=False` (dormant by design —
-production invocation is S5/S6's job, never the inventory collector, per
-the contract's own "Current collector reuse decision"). New pure
-`panorama/pan_preflight_projection.py`. **Correction applied same day:**
-field-trace table no longer claims `COLLECTED_AND_PARSED` (§25a gives the
-six-dimension reconciliation); single-extraction-authority gap fixed via
-one shared `_pan_ha_group_text()` accessor. **Git topology reconciled:**
-merged as three sequential PRs — `#34` (freeze, `85ca1b5`), `#35` (S1,
-`f993008`), `#36` (this build, `6873ad9`). `#36`'s CI ran the full suite
-with the real dependency set: **1153 passed / 28 skipped / 0 failed**,
-including all 34 new tests for the first time anywhere. Zero device I/O,
-zero new command, no pair-identity/verdict/UI/CP/auth change; `D-F1`/
+**`op0b_s3_cp_parse_scope_extension`** — **IN_PROGRESS** 2026-09-03. New
+`_parse_clusterxl_stat_preflight_fields()` reads non-local member-row State
+(peer observation, address/name excluded) and a local failure/attention
+boolean (reclassified role token — no free-text "Active Attention" reason
+parsed, no safe vocabulary confirmed) from the **same** already-fetched
+`cphaprob stat` buffer, behind `include_preflight_fields=False` on
+`_collect_host` (dormant by design, S5/S6's job to invoke). Cluster-mode
+parser gained `vsx_single_vs_failover` (sk112712), active immediately (not
+opt-in). New pure `checkpoint/cp_preflight_projection.py`. Contract §25
+updated; new §25b mirrors S2's §25a reconciliation. Locally validated only
+(178/307/1181-test sweeps green, 24 `fastapi`-gap errors pre-existing) —
+stays `IN_PROGRESS` until PR CI lands, not `AUTOMATED_VALIDATED`, learning
+from S2's same-day overclaim. Zero device I/O, zero new command; `D-F1`/
 `D-F2`/`D-F3`/`D-V3a`/`D-V7b` unresolved; CLASS 2 unreachable.
 
-**Predecessor:** `op0b_s1_preflight_fact_provenance_model` —
-AUTOMATED_VALIDATED 2026-09-03, session 4 (pure fact/provenance model, no
-collector wired). Detail: `project/build_history.json`.
+**Predecessors:** `op0b_s2_pan_parse_scope_extension` (AUTOMATED_VALIDATED,
+PR #36) and `op0b_s1_preflight_fact_provenance_model` (AUTOMATED_VALIDATED).
+Detail: `project/build_history.json`.
 
 ## `OP.0b.0` — FROZEN WITH REAL-ENV VALIDATION GATES
 
@@ -111,24 +109,19 @@ identifier stays opaque (`AGENTS.md` opaque-identifier law). Tracked as
 
 ## Exact next build
 
-Four independent movements, any order/parallel (full detail in
-`project/roadmap.json` `now_next.next`/`upcoming`):
+`OP.0b` S3 (above) needs PR CI evidence before it can advance to
+`AUTOMATED_VALIDATED`; once that lands, three further independent
+movements remain, any order/parallel (full detail in `project/roadmap.json`
+`now_next.next`/`upcoming`):
 
-**A. `OP.0b` S3 — CP parse-scope extension** (`now_next.next`) — same
-pattern as S2, Check Point side: parse more of the already-collected
-`cphaprob stat` output (peer rows, Active Attention reason, "Single VS
-Failover" mode) into `PreflightFact`/`Provenance`. No new command.
-Independent of S2 — could equally have run first. Recommended:
-`Sonnet 5, normal`.
-
-**B. Close `D-V3a`/`D-V7b` before CLASS 2** (`now_next.upcoming`) — does not
+**A. Close `D-V3a`/`D-V7b` before CLASS 2** (`now_next.next`) — does not
 block `S1`–`S9` or the freeze. GitHub-mirror search first, then
 human-assisted fetch. Recommended: `Sonnet 5, extended thinking (high)`.
 
-**C. `D-F3` numeric threshold** (`now_next.upcoming`) — product-owner call,
+**B. `D-F3` numeric threshold** (`now_next.upcoming`) — product-owner call,
 needed before check 7 computes a real verdict; doesn't block `S1`/`S2`/`S3`.
 
-**D. PAN serial representation/identity evidence closure**
+**C. PAN serial representation/identity evidence closure**
 (`now_next.upcoming`) — hardware-blocked, unchanged. `Sonnet 5, normal`
 initially; escalate only if vendor identity semantics become architectural.
 
