@@ -1624,7 +1624,7 @@ Columns: Vendor · Platform/context · Command/API · Existing/new · Read-only 
 
 ## §25 Configuration / runtime field trace table
 
-Status vocabulary: COLLECTED_AND_PARSED · COLLECTED_NOT_PARSED · NOT_COLLECTED · UNKNOWN. Correctness: VALIDATED · SUSPECT · BROKEN · UNKNOWN.
+Status vocabulary: COLLECTED_AND_PARSED · COLLECTED_NOT_PARSED · NOT_COLLECTED · UNKNOWN · **PARSER_IMPLEMENTED — PRODUCTION_WIRING_PENDING** (session-correction addition, 2026-09-03: a parser/projection exists and is proven correct against synthetic fixtures on the SAME already-fetched response, but no current production collection path actually invokes it — `COLLECTED_AND_PARSED` is reserved for a field the live product path parses today; see §25a for the full six-dimension reconciliation this addition exists to make precise). Correctness: VALIDATED · SUSPECT · BROKEN · UNKNOWN.
 
 | Normalized fact | Vendor | Unit | Raw source | Command/API | Field/path | Parser | Collection | Correctness | Required correction | Real-env |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -1660,16 +1660,88 @@ Status vocabulary: COLLECTED_AND_PARSED · COLLECTED_NOT_PARSED · NOT_COLLECTED
 | local_state / peer_state | PAN | pair | HA state | `state` | `local-info/state`, `peer-info/state` | parsed | COLLECTED_AND_PARSED | VALIDATED; **phantom-member use SUSPECT** | S7 removes uplift | done |
 | mode | PAN | pair | HA state | `state` | `local-info/mode` | parsed | COLLECTED_AND_PARSED | VALIDATED | none | done |
 | state_sync | PAN | pair | HA state | `state` | `local-info/state-sync[,-type]` | parsed (value only) | COLLECTED_AND_PARSED | UNKNOWN vocabulary | D-V2 | done (value seen) |
-| conn_status / conn_ha1 / conn_ha1_backup / conn_ha2 | PAN | pair | HA state | `state` | `peer-info/conn-status` (scalar); `peer-info/conn-ha1`, `peer-info/conn-ha2` (**nested objects: `conn-desc`, `conn-primary`, `conn-status` — structure CONFIRMED 2026-09-03**); `conn-ha1-backup` presence conditional, shape not independently confirmed | `_parse_pan_ha_preflight_fields` (S2, 2026-09-03) | COLLECTED_AND_PARSED for the four `conn-status` leaves; `conn-desc`/`conn-primary` remain COLLECTED_NOT_PARSED (out of S2's bounded scope) | field-binding CONFIRMED for `conn-ha1`/`conn-ha2` (2026-09-03); exhaustive vocabulary + missing-field meaning UNKNOWN | D-V1 (vocabulary only — S2 parse-scope done) | owed |
+| conn_status / conn_ha1 / conn_ha1_backup / conn_ha2 | PAN | pair | HA state | `state` | `peer-info/conn-status` (scalar); `peer-info/conn-ha1`, `peer-info/conn-ha2` (**nested objects: `conn-desc`, `conn-primary`, `conn-status` — structure CONFIRMED 2026-09-03**); `conn-ha1-backup` presence conditional, shape not independently confirmed | `_parse_pan_ha_preflight_fields` (S2, 2026-09-03) | PARSER_IMPLEMENTED — PRODUCTION_WIRING_PENDING for the four `conn-status` leaves (see §25a); `conn-desc`/`conn-primary` remain COLLECTED_NOT_PARSED (out of S2's bounded scope) | field-binding CONFIRMED for `conn-ha1`/`conn-ha2` (2026-09-03); exhaustive vocabulary + missing-field meaning UNKNOWN | D-V1 (vocabulary); production wiring (§25a) | owed |
 | ha1/ha2 addresses & ports | PAN | pair | HA state | `state` | `*-info/ha1-ipaddr`, `ha1-backup-ipaddr`, `ha2-ipaddr`, `ha1-port`, `ha2-port` | tokens (diagnostic) | COLLECTED_NOT_PARSED (persisted) | field names real | S2 (consistency axis only; never identity) — **out of S2 scope by task instruction: no HA1/HA2 addresses**; deferred | done (names) |
-| running_sync | PAN | pair | HA state | `show high-availability state` (existing) | `group/running-sync`, `group/running-sync-enabled` — **CLOSED_BY_DOCS 2026-09-03** (official PANW source, verbatim) | `_parse_pan_ha_preflight_fields` (S2, 2026-09-03) | COLLECTED_AND_PARSED | CONFIRMED (path + concept); values `synchronized`/`not synchronized` per session-2 KB | — (S2 parse-scope done) | owed |
-| software/content parity | PAN | pair | HA state + `show system info` | both | `*-info/build-rel` (**software version — 2026-09-03 correction: `version` is a separate HA-protocol/schema counter, NOT the software version**), `app-version`, `av-version`, `threat-version`, `url-version`, `*-compat` | `_parse_pan_ha_preflight_fields` (S2, 2026-09-03; local + peer sides) | COLLECTED_AND_PARSED | FIELD_BINDING CONFIRMED for most fields 2026-09-03 (official PANW source); `*-compat` vocabulary evidenced ≥2-valued (`Match`/`Mismatch`); exhaustive enum still UNKNOWN | D-V2 (vocabulary only — S2 parse-scope done) | owed |
-| preemption / priority / hold | PAN | pair | HA state | `state` | `*-info/preemptive`, `priority`, `preempt-hold`, `promotion-hold` | `_parse_pan_ha_preflight_fields` (S2, 2026-09-03) | COLLECTED_AND_PARSED | field-binding CONFIRMED 2026-09-03 (present at these exact paths in an official PANW-captured real response); semantics documented (session-2 KB) | — (S2 parse-scope done) | owed |
-| flap counters | PAN | pair | HA state | `state` | `local-info/max-flaps`, `nonfunc-flap-cnt`, `preempt-flap-cnt`, `state-duration` | `_parse_pan_ha_preflight_fields` (S2, 2026-09-03; raw counters only — no D-F3 threshold applied) | COLLECTED_AND_PARSED | field-binding CONFIRMED 2026-09-03 (same source) | — (S2 parse-scope done; D-F3 threshold decision remains separate) | owed |
-| failure state | PAN | pair | HA state | `state` | `local-info/last-error-reason`, `last-error-state`; non-functional states | `_parse_pan_ha_preflight_fields` (S2, 2026-09-03; parsed defensively — returns `None` when absent, never a guess) | COLLECTED_AND_PARSED | vocabulary ESTABLISHED (states); path presence still UNCONFIRMED by an official captured example (absent from that source) | — (S2 parse-scope done; path-presence confirmation is S8 real-env) | owed |
+| running_sync | PAN | pair | HA state | `show high-availability state` (existing) | `group/running-sync`, `group/running-sync-enabled` — **CLOSED_BY_DOCS 2026-09-03** (official PANW source, verbatim) | `_parse_pan_ha_preflight_fields` (S2, 2026-09-03) | PARSER_IMPLEMENTED — PRODUCTION_WIRING_PENDING (see §25a) | CONFIRMED (path + concept); values `synchronized`/`not synchronized` per session-2 KB | production wiring (§25a) | owed |
+| software/content parity | PAN | pair | HA state + `show system info` | both | `*-info/build-rel` (**software version — 2026-09-03 correction: `version` is a separate HA-protocol/schema counter, NOT the software version**), `app-version`, `av-version`, `threat-version`, `url-version`, `*-compat` | `_parse_pan_ha_preflight_fields` (S2, 2026-09-03; local + peer sides) | PARSER_IMPLEMENTED — PRODUCTION_WIRING_PENDING (see §25a) | FIELD_BINDING CONFIRMED for most fields 2026-09-03 (official PANW source); `*-compat` vocabulary evidenced ≥2-valued (`Match`/`Mismatch`); exhaustive enum still UNKNOWN | D-V2 (vocabulary); production wiring (§25a) | owed |
+| preemption / priority / hold | PAN | pair | HA state | `state` | `*-info/preemptive`, `priority`, `preempt-hold`, `promotion-hold` | `_parse_pan_ha_preflight_fields` (S2, 2026-09-03) | PARSER_IMPLEMENTED — PRODUCTION_WIRING_PENDING (see §25a) | field-binding CONFIRMED 2026-09-03 (present at these exact paths in an official PANW-captured real response); semantics documented (session-2 KB) | production wiring (§25a) | owed |
+| flap counters | PAN | pair | HA state | `state` | `local-info/max-flaps`, `nonfunc-flap-cnt`, `preempt-flap-cnt`, `state-duration` | `_parse_pan_ha_preflight_fields` (S2, 2026-09-03; raw counters only — no D-F3 threshold applied) | PARSER_IMPLEMENTED — PRODUCTION_WIRING_PENDING (see §25a) | field-binding CONFIRMED 2026-09-03 (same source) | production wiring (§25a); D-F3 threshold decision remains separate | owed |
+| failure state | PAN | pair | HA state | `state` | `local-info/last-error-reason`, `last-error-state`; non-functional states | `_parse_pan_ha_preflight_fields` (S2, 2026-09-03; parsed defensively — returns `None` when absent, never a guess) | PARSER_IMPLEMENTED — PRODUCTION_WIRING_PENDING (see §25a) | vocabulary ESTABLISHED (states); path presence still UNCONFIRMED by an official captured example (absent from that source) | production wiring (§25a); path-presence confirmation is S8 real-env | owed |
 | passive_link_state | PAN | pair | HA state | `state` | `local-info/active-passive/*` | — | COLLECTED_NOT_PARSED (children unenumerated) | UNKNOWN | S2 enumeration | owed |
 | path/link monitoring | PAN | pair | — | `path-monitoring`, `link-monitoring` | — | — | NOT_COLLECTED | — | S6 (gate) | owed |
 | row_provenance | PAN | all | — | — | run_id/collected_at/transport | partial (`duration_ms`, `queried_target`) | COLLECTED_NOT_PARSED | — | S1/S2 | — |
+
+## §25a S2 implementation-state reconciliation (session correction, 2026-09-03)
+
+The initial S2 SESSION CLOSE labeled the six field-groups above (`conn_status`/
+`conn_ha1`/`conn_ha2`, `running_sync`, software/content parity, preemption/
+priority/hold, flap counters, failure state) `COLLECTED_AND_PARSED`. A
+follow-up PO/architecture review correctly identified this as an
+overclaim: `COLLECTED_AND_PARSED` elsewhere in this table means the field
+is parsed by the *current production collection path* — none of these six
+are. This section makes the actual state precise, per field-group, on the
+six dimensions the review specified. The answer is identical across all
+six groups (they are all read by the same `_parse_pan_ha_preflight_fields`
+function under the same `include_preflight_fields` flag):
+
+| Dimension | Answer | Detail |
+| --- | --- | --- |
+| Response fetched by existing production path | **YES** | `_collect_device_row` already calls `get_target_ha_runtime_state`, which already issues `show high-availability state` once per selected member, for the pre-existing baseline five fields (`enabled`/`state`/`mode`/`peer_state`/`state_sync`). S2 reads more of that *same* in-memory response — it adds no request. |
+| Extraction code implemented | **YES** | `_parse_pan_ha_preflight_fields` (now routed through the shared `_pan_ha_group_text` canonical accessor — §"Single extraction authority" below), proven correct against synthetic fixtures. |
+| Production extraction currently invoked | **NO** | `include_preflight_fields` defaults `False`; the one production call site does not pass `True`. This is by design, not an oversight — see "S2 vs. S5/S6 boundary" below. |
+| Projected into `PreflightFact` | **capability YES, invocation NO** | `panorama.pan_preflight_projection.project_pan_preflight_facts()` exists and is tested, but nothing in the product calls it yet — same dormancy as the extraction step above. |
+| Automated extraction tests executed | **NO** | `tests/test_op0b_s2_pan_extraction.py` (20 tests) requires `lxml`, absent from this container; collection fails with `ModuleNotFoundError`. `python3 -m py_compile` confirms syntactic validity only — **not** evidence the tests pass. This container's tooling is deliberately not modified to install the missing dependency merely to turn this local run green (see this session's SESSION CLOSE); the repository CI / full-dependency environment is the actual gate. |
+| Real-env validated | **NO** | Unaffected — `S8` remains the real-env gate for every PAN field in this table, S2 included. |
+
+**S2 vs. S5/S6 boundary (§"Implementation slices" table, above):**
+
+- **S2 parser responsibility:** implement and prove correct, against
+  synthetic fixtures, a reusable field-extraction (`_parse_pan_ha_preflight_
+  fields`) and projection (`project_pan_preflight_facts`) capability over
+  the *shape* of an already-fetched `show high-availability state`
+  response. Not responsible for invoking either against a real device or
+  wiring either into any production collection pass.
+- **S5/S6 orchestration responsibility:** build the dedicated preflight
+  collector (`panorama/preflight_collector.py`, not yet created) that
+  performs its own in-run `show high-availability state` read — per this
+  contract's own "Current collector reuse decision" (above): *"the
+  preflight collector always performs its own in-run reads"*, and
+  explicitly **not** the inventory/config collector, because coupling the
+  inventory pipeline to preflight evidence "would make the whole inventory
+  pipeline part of the authorization surface." S5/S6, not S2, is where
+  `get_target_ha_runtime_state(..., include_preflight_fields=True)` and
+  `project_pan_preflight_facts()` are actually meant to be called from, with
+  a real `preflight_run_id`/`collected_at`.
+
+Given that clause, S2 leaving its new capability unwired from
+`_collect_device_row` is not merely cautious default — production-wiring
+it into the inventory collector's regular pass would have started
+implementing S5 early, inside S2, using the wrong collector. `PARSER_
+IMPLEMENTED — PRODUCTION_WIRING_PENDING` names that state precisely: the
+capability is real and correctly placed; only its production invocation is
+pending, and it is pending in the *dedicated preflight collector* S5/S6
+have yet to build, not in this collector.
+
+**Single extraction authority (§4 of the review):** before this
+correction, three functions in this file independently traversed the same
+in-memory `root` for HA-state fields: `get_target_ha_runtime_state`'s
+inline five-field baseline, `_tokenize_ha_field_diagnostics` (pre-existing
+OP.0a generic diagnostic sweep), and S2's `_parse_pan_ha_preflight_fields`
+— matching the "one production parser + one diagnostic parser + one
+preflight parser" anti-pattern this review named. Corrected with a small,
+behavior-preserving refactor: a new `_pan_ha_group_text(root, path)`
+helper is now the one canonical accessor for any leaf under
+`result/group/`, and both the baseline five-field extraction and S2's
+field map read through it (same paths, same `None`-on-absent/whitespace
+semantics — verified by direct re-derivation, not merely inspection).
+`_tokenize_ha_field_diagnostics` deliberately still does not route through
+it: it enumerates arbitrary child tag names rather than reading named
+paths, and it feeds the B1/B2-adjacent peer-identity diagnostic — refactoring
+it is out of S2's authorized scope (no pair-identity redesign). Left
+untouched, flagged here rather than silently. **SINGLE EXTRACTION
+AUTHORITY = YES for the group-level field family S2 owns; the pre-existing
+diagnostic sweep remains a deliberately separate, differently-shaped tool
+outside S2's scope.**
 
 ## §26 Current bug / gap register
 

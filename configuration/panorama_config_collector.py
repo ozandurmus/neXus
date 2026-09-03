@@ -353,6 +353,37 @@ _PAN_HA_PREFLIGHT_FIELD_MAP: tuple[tuple[str, str, bool], ...] = (
 )
 
 
+def _pan_ha_group_text(root: Any, relative_path: str) -> str | None:
+    """Read one leaf under ``result/group/`` from an already-fetched ``show
+    high-availability state`` response, normalized the one way this file
+    reads any such leaf: absent or whitespace-only -> `None`, else the
+    stripped text.
+
+    OP.0b S2 audit finding (session correction, 2026-09-03): before this
+    helper existed, `get_target_ha_runtime_state`'s baseline five-field
+    extraction and `_parse_pan_ha_preflight_fields` each independently
+    called `root.findtext(".//result/group/...")` with their own inline
+    strip-or-None logic -- two separate places that happened to normalize
+    the same way, not one place guaranteeing it. Both now read through this
+    one canonical group-level accessor, so a leaf under `result/group/` can
+    never be normalized two different ways in two different places. This
+    is a mechanical, behavior-preserving consolidation -- same paths, same
+    `None`-on-absent/whitespace semantics, same values -- not a new field
+    or a new interpretation of any field.
+
+    `_tokenize_ha_field_diagnostics` deliberately does not route through
+    this helper: it is a pre-existing, differently-shaped tool (an
+    unscoped enumeration of whatever child tag names PAN-OS actually
+    returns, HMAC-tokenizing every leaf generically for the OP.0a
+    peer-identity diagnostic) rather than a named-field reader, and it
+    feeds `_apply_pan_ha_peer_identity_diagnostic` / the B1/B2 identity
+    model -- out of S2's authorized scope to refactor (no pair-identity
+    redesign). Left untouched, deliberately, not silently.
+    """
+    text = root.findtext(f".//result/group/{relative_path}")
+    return text.strip() if text and text.strip() else None
+
+
 def _parse_pan_ha_preflight_fields(root: Any) -> dict[str, Any]:
     """OP.0b S2: parse the additional contract-authorized fields out of the
     same ``show high-availability state`` response
@@ -374,8 +405,7 @@ def _parse_pan_ha_preflight_fields(root: Any) -> dict[str, Any]:
     values: dict[str, Any] = {}
     tok: Tokenizer | None = None
     for key, path, is_identity in _PAN_HA_PREFLIGHT_FIELD_MAP:
-        text = root.findtext(f".//result/group/{path}")
-        text = text.strip() if text and text.strip() else None
+        text = _pan_ha_group_text(root, path)
         if text is None:
             values[key] = None
         elif is_identity:
@@ -425,10 +455,10 @@ def get_target_ha_runtime_state(
         operation=f"Panorama target HA runtime state serial={_fingerprint(serial)}",
     )
     enabled = (root.findtext(".//result/enabled") or root.findtext(".//enabled") or "").strip() or None
-    state = (root.findtext(".//result/group/local-info/state") or "").strip() or None
-    mode = (root.findtext(".//result/group/local-info/mode") or "").strip() or None
-    peer_state = (root.findtext(".//result/group/peer-info/state") or "").strip() or None
-    state_sync = (root.findtext(".//result/group/local-info/state-sync") or "").strip() or None
+    state = _pan_ha_group_text(root, "local-info/state")
+    mode = _pan_ha_group_text(root, "local-info/mode")
+    peer_state = _pan_ha_group_text(root, "peer-info/state")
+    state_sync = _pan_ha_group_text(root, "local-info/state-sync")
     result: dict[str, Any] = {
         "enabled": enabled,
         "state": state,
