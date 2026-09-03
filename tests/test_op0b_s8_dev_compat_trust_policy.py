@@ -103,7 +103,10 @@ def _fake_ssh_and_exec(monkeypatch):
         def close(self_inner):
             pass
 
-    def fake_run_exec(ssh, command, timeout_seconds):
+    def fake_run_exec(ssh, command, timeout_seconds, *, use_pty=True):
+        # Mirrors the real primitive's signature, including the non-interactive
+        # `use_pty` the preflight session layer passes (OP.0b S8 session
+        # architecture) -- a double that drifts from it hides real call sites.
         return {"success": True, "stdout": "", "stderr": "", "error_class": "none", "timeout": False}
 
     monkeypatch.setattr(paramiko, "SSHClient", FakeSSH)
