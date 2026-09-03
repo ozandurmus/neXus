@@ -120,6 +120,22 @@ def parse_cp_sync_status(stdout: str | None) -> dict[str, Any]:
 
 _POLICY_NAME_RE = re.compile(r"(?im)^\s*policy\s*name\s*:\s*(\S[^\r\n]*)$")
 
+#: `fw stat`'s actual output is a column table, not a `Policy name:` line --
+#: OP.0b S8-A real-environment evidence (the pre-existing regex above was
+#: written against an assumed shape and matched nothing on a real gateway):
+#:
+#:     HOST      POLICY           DATE
+#:     localhost <policy>         3Sep2026 22:30:59 :  [>iface] [<iface]
+#:
+#: The header is matched structurally (HOST/POLICY/DATE in order) and the
+#: policy is the second whitespace-delimited column of the following row.
+#: Both shapes stay supported: no approved command changed, only the set of
+#: real outputs this parser recognizes.
+_FW_STAT_HEADER_RE = re.compile(r"(?i)^\s*host\s+policy\s+date\s*$")
+#: A policy column that is absent/placeholder is *not* an observed policy --
+#: fail closed (UNKNOWN law) rather than tokenizing a placeholder.
+_FW_STAT_EMPTY_POLICY = {"-", "--", "none", "n/a"}
+
 
 def parse_fw_stat_policy(stdout: str | None) -> dict[str, Any]:
     """Minimum safe policy-parity evidence: the installed policy name as an
@@ -130,10 +146,27 @@ def parse_fw_stat_policy(stdout: str | None) -> dict[str, Any]:
     retains nothing beyond its own return value."""
     text = str(stdout or "")
     match = _POLICY_NAME_RE.search(text)
-    if not match:
-        return {"observed": False, "policy_name": None}
-    name = match.group(1).strip()
-    return {"observed": True, "policy_name": name or None}
+    if match:
+        name = match.group(1).strip()
+        return {"observed": True, "policy_name": name or None}
+
+    # Real `fw stat` column table (see _FW_STAT_HEADER_RE): take the second
+    # column of the first data row after the header. Never the DATE column,
+    # never a placeholder.
+    lines = [ln for ln in text.splitlines() if ln.strip()]
+    for index, line in enumerate(lines):
+        if not _FW_STAT_HEADER_RE.match(line):
+            continue
+        for row in lines[index + 1:]:
+            columns = row.split()
+            if len(columns) < 2:
+                continue
+            candidate = columns[1].strip()
+            if candidate.lower() in _FW_STAT_EMPTY_POLICY:
+                return {"observed": False, "policy_name": None}
+            return {"observed": True, "policy_name": candidate or None}
+        break
+    return {"observed": False, "policy_name": None}
 
 
 # --- CP-A8: `show cluster failover` / `cphaprob show_failover` -------------
