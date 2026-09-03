@@ -65,6 +65,45 @@ def _load_unified_devices(output_root) -> list[dict]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def _read_outcomes(snapshot) -> list[tuple[str, str, int]]:
+    """Per-approved-read collection outcome, derived from provenance already
+    carried by the facts in `snapshot` -- nothing new is collected.
+
+    Value-free by construction: only the approved source-command id the gate
+    already fixes and the `Outcome` enum. Never command output, never a
+    device value. This exists because a readiness reason like
+    `ha_mode_not_established` cannot distinguish "the device reported a mode
+    we could not interpret" from "that read never produced output at all" --
+    an operator needs to see which of the two happened, per member.
+    """
+    ranked = {"success": 0, "capability_gap": 1, "unsupported": 2,
+              "identity_mismatch": 3, "failed": 4}
+    worst: dict[str, tuple[str, int]] = {}
+    for member in snapshot.members:
+        for fact in member.own_facts + member.peer_claim_facts:
+            source = str(fact.provenance.source_command or "unattributed")
+            outcome = str(fact.provenance.outcome.value)
+            seen, count = worst.get(source, (None, 0))
+            count += 1
+            if seen is None or ranked.get(outcome, 9) > ranked.get(seen, 9):
+                seen = outcome
+            worst[source] = (seen, count)
+    return sorted((src, res, n) for src, (res, n) in worst.items())
+
+
+def _print_read_outcomes(snapshot) -> None:
+    outcomes = _read_outcomes(snapshot)
+    if not outcomes:
+        return
+    print("Reads (approved battery, safe outcome only):")
+    for source, outcome, fact_count in outcomes:
+        marker = "ok  " if outcome == "success" else "FAIL"
+        print(f"  {marker} {source:<34} {outcome:<18} facts={fact_count}")
+    failed = [s for s, o, _ in outcomes if o != "success"]
+    if failed:
+        print(f"  -> {len(failed)} of {len(outcomes)} approved reads produced no usable evidence.")
+
+
 def _print_safe_result(report: dict, *, operational_unit_id: str, vendor: str, member_count: int) -> None:
     """Operator-visible, privacy-safe summary (contract S7.5 §13): never a
     raw serial, management/HA IP, raw command output, raw XML or credential
@@ -214,6 +253,7 @@ def cp_ha_preflight_check(ctx):
         preflight_snapshots=[snapshot],
     )
     print("\n=== SAFE READINESS SUMMARY ===")
+    _print_read_outcomes(snapshot)
     _print_safe_result(
         report, operational_unit_id=operational_entity_id, vendor="checkpoint", member_count=len(members),
     )
@@ -338,6 +378,7 @@ def pan_ha_preflight_check(ctx):
         preflight_snapshots=[snapshot],
     )
     print("\n=== SAFE READINESS SUMMARY ===")
+    _print_read_outcomes(snapshot)
     _print_safe_result(
         report, operational_unit_id=operational_entity_id, vendor="panorama", member_count=len(members),
     )

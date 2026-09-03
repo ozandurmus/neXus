@@ -357,3 +357,60 @@ class TestRealCliPathA3Semantics:
         assert parse_fw_stat_policy(
             "HOST      POLICY           DATE\nlocalhost -    1Jan2026 00:00:00") == {
             "observed": False, "policy_name": None}
+
+
+# ---------------------------------------------------------------------------
+# Per-read outcome disclosure: a readiness reason must never be the only
+# thing an operator gets when the reads themselves never produced evidence.
+# ---------------------------------------------------------------------------
+
+class TestReadOutcomeDisclosure:
+
+    def _clish_only_device(self, monkeypatch):
+        """A session that behaves like the real one S8-A hit: `clish -c '...'`
+        reads answer, bare Expert reads produce nothing."""
+        clish_reads = {CPPreflightRead.A1_HOSTNAME, CPPreflightRead.A2_VERSION,
+                       CPPreflightRead.A8_CLISH_FAILOVER}
+        original = _Channel.exec_command
+
+        def only_clish(self, command: str) -> None:
+            original(self, command)
+            if _TEXT_TO_READ.get(command) not in clish_reads:
+                self._out = b""
+
+        monkeypatch.setattr(_Channel, "exec_command", only_clish)
+
+    def test_healthy_run_reports_every_read_successful(self, tmp_path, monkeypatch, capsys):
+        _device, out = _drive_cli(tmp_path, monkeypatch, capsys)
+        assert "Reads (approved battery, safe outcome only):" in out
+        assert "FAIL" not in out, out
+        assert "produced no usable evidence" not in out
+
+    def test_expert_reads_failing_are_named_not_hidden_behind_readiness(
+        self, tmp_path, monkeypatch, capsys
+    ):
+        """The S8-A symptom: readiness says `ha_mode_not_established` for six
+        checks, which alone cannot tell an operator whether the device
+        reported an uninterpretable mode or whether those reads never ran.
+        The per-read disclosure must name them."""
+        self._clish_only_device(monkeypatch)
+        _device, out = _drive_cli(tmp_path, monkeypatch, capsys)
+
+        assert "ha_mode_not_established" in out, "precondition: the symptom reproduces"
+        assert "produced no usable evidence" in out, out
+        # The Expert-shell reads are the ones named as failed.
+        failed_block = [ln for ln in out.splitlines() if ln.strip().startswith("FAIL")]
+        assert failed_block, out
+        assert any("cphaprob stat" in ln for ln in failed_block), failed_block
+        # ...and the clish-wrapped reads are not.
+        assert not any("A8:" in ln for ln in failed_block), failed_block
+
+    def test_disclosure_is_value_free(self, tmp_path, monkeypatch, capsys):
+        """Only approved source-command ids and the Outcome enum -- never
+        device output, hostname, address or policy value."""
+        self._clish_only_device(monkeypatch)
+        _device, out = _drive_cli(tmp_path, monkeypatch, capsys)
+        block = out.split("Reads (approved battery")[1].split("Vendor:")[0]
+        for forbidden in ("gw-member-a", "gw-member-b", "192.0.2.", "SynthPolicy",
+                          "STANDBY", "ACTIVE", "IGMP"):
+            assert forbidden not in block, f"{forbidden!r} leaked into the disclosure"
