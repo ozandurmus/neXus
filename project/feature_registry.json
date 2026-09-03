@@ -1163,7 +1163,7 @@
       "weight": 6,
       "summary": "Read-only per-vendor preflight battery that scores whether an HA cluster is safe to fail over, and why not.",
       "why": "The safety net and foundation for any controlled failover; valuable on its own as a VERIFY-plane capability.",
-      "note": "Split 2026-09-01 into OP.0a / OP.0b / OP.0c - docs/history/phase/OP_0A_HA_READINESS_ASSESSMENT.md decision P1. OP.0a (ha_unit_derivation + readiness_verdict) is IMPLEMENTED / AUTOMATED_VALIDATED 2026-09-01 with zero new device commands; preflight_battery is OP.0b and is blocked on an un-approved command gate drafted in that contract; scc_readiness_dashboard is OP.0c, IMPLEMENTED / AUTOMATED_VALIDATED 2026-09-01 (Operator Console + report Failover module over compute_ha_readiness, read-only, no execution control). SAFE_TO_FAILOVER stays unreachable until OP.0b lands (decision P4, enforced by AC-6), so the dashboard correctly shows INSUFFICIENT_EVIDENCE/NOT_A_FAILOVER_UNIT today. 2026-09-02: VSX real-env retry (op_vsx_real_env_retry_fixes) found and fixed three CP-side identity/join defects invisible to synthetic tests, confirmed against a real physical VSX pair by the product owner. Same-day: OP.0a.P7's PAN HA peer-pairing was audited and found dead against real telemetry (peer_ip never populated) plus a hostname-normalization divergence risk; op0a_pan_ha_peer_pairing_identity_closure closes both, sources peer_ip from already-fetched evidence (no new device command), and requires mutual configuration agreement before pairing -- see docs/history/phase/OP_0A_PAN_HA_PEER_PAIRING_IDENTITY_CLOSURE.md. peer_ip remains configuration intent only (Grade A); never sufficient for a future CLASS 2 decision.",
+      "note": "Split 2026-09-01 into OP.0a / OP.0b / OP.0c - docs/history/phase/OP_0A_HA_READINESS_ASSESSMENT.md decision P1. OP.0a (ha_unit_derivation + readiness_verdict) is IMPLEMENTED / AUTOMATED_VALIDATED 2026-09-01 with zero new device commands; preflight_battery is OP.0b and is blocked on an un-approved command gate drafted in that contract; scc_readiness_dashboard is OP.0c, IMPLEMENTED / AUTOMATED_VALIDATED 2026-09-01 (Operator Console + report Failover module over compute_ha_readiness, read-only, no execution control). SAFE_TO_FAILOVER stays unreachable until OP.0b lands (decision P4, enforced by AC-6), so the dashboard correctly shows INSUFFICIENT_EVIDENCE/NOT_A_FAILOVER_UNIT today. 2026-09-02: VSX real-env retry (op_vsx_real_env_retry_fixes) found and fixed three CP-side identity/join defects invisible to synthetic tests, confirmed against a real physical VSX pair by the product owner. Same-day: OP.0a.P7's PAN HA peer-pairing was audited and found dead against real telemetry (peer_ip never populated) plus a hostname-normalization divergence risk; op0a_pan_ha_peer_pairing_identity_closure closes both, sources peer_ip from already-fetched evidence (no new device command), and requires mutual configuration agreement before pairing -- see docs/history/phase/OP_0A_PAN_HA_PEER_PAIRING_IDENTITY_CLOSURE.md. peer_ip remains configuration intent only (Grade A); never sufficient for a future CLASS 2 decision. 2026-09-03 OP.0b S1-S7: frozen evidence contract (OP_0B_0), PO-approved command gate (OP_0B_1, PR #41), dedicated CP/PAN preflight collectors (S5/S6) and the S7 readiness integration -- fresh PreflightSnapshot evidence is interpreted by one typed fact->check mapping (utils/failover/preflight_readiness.py) inside the same canonical evaluator; seven checks and five verdicts unchanged; SAFE/DEGRADED still unreachable (D-F3 open for both vendors, D-V7b for CP); S8 real-env validation owed.",
       "criteria": [
         {
           "id": "ha_unit_derivation",
@@ -1173,13 +1173,13 @@
         },
         {
           "id": "preflight_battery",
-          "label": "OP.0b - Per-vendor preflight battery (CP HA/LS/VSX, PAN A/P + A/A); blocked on the drafted command gate",
-          "state": "blocked",
+          "label": "OP.0b - Per-vendor preflight battery: S1-S7 AUTOMATED_VALIDATED (frozen contract, PO-approved gate, CP/PAN dedicated collectors, readiness integration); S8 real-env validation owed before this criterion is done",
+          "state": "pending",
           "weight": 1
         },
         {
           "id": "readiness_verdict",
-          "label": "SAFE / DEGRADED / UNSAFE / INSUFFICIENT verdict with blocking line items (SAFE and DEGRADED unreachable until OP.0b)",
+          "label": "SAFE / DEGRADED / UNSAFE / INSUFFICIENT verdict with blocking line items (SAFE and DEGRADED unreachable until D-F3 flap threshold + D-V7b CP recovery read are resolved; UNSAFE/INSUFFICIENT/NOT_A_FAILOVER_UNIT live on fresh preflight evidence since S7)",
           "state": "pending",
           "weight": 1
         },

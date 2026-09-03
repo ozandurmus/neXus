@@ -7,14 +7,16 @@ detail is not here either** — it is in `project/build_history.json`
 linked documents under `docs/history/`. `docs/history/INDEX.md` is the
 generated one-line timeline.
 
-- **Checkpoint:** 2026-09-03, branch `claude/checkpoint-preflight-collector-i1yyz7` (base `main`).
+- **Checkpoint:** 2026-09-03, branch `claude/readiness-v2-s7-aorkfs` (base `main`).
 - **Current build** (per `project/roadmap.json` `now_next.now`):
-  `op0b_s6_pan_preflight_collector` — **AUTOMATED_VALIDATED**. `OP.0b` S6:
-  dedicated Palo Alto failover-preflight collector
-  (`panorama/preflight_collector.py`) — see "Active build" below.
-  `now_next.next` = `op0b_s7_readiness_v2_integration` (both S5/S6
-  collectors now exist). `cp_remote_collection_done_marker_diagnostics`
-  stays `now_next.upcoming` (`IN_PROGRESS`).
+  `op0b_s7_readiness_v2_integration` — **AUTOMATED_VALIDATED**. `OP.0b` S7:
+  fresh S1/S5/S6 preflight evidence integrated into the one canonical
+  readiness evaluator (`utils/failover/preflight_readiness.py` typed
+  fact→check mapping; `assessment._verdict_for` stays the single roll-up) —
+  see "Active build" below. `now_next.next` =
+  `op0b_s8_real_env_validation` (hardware-blocked).
+  `cp_remote_collection_done_marker_diagnostics` stays `now_next.upcoming`
+  (`IN_PROGRESS`).
 - **Product baseline:** `0.7.7 — Compliance trend retro-fill` — AUTOMATED_VALIDATED.
 - **Engineering baseline:** `DEV.3.3` — AUTOMATED_VALIDATED. `DEV.1`,
   `DEV.4` complete.
@@ -47,26 +49,25 @@ test-enforced boundaries. Current numbers:
 
 ## Active build
 
-**`op0b_s6_pan_preflight_collector`** — **AUTOMATED_VALIDATED**, 2026-09-03.
-`OP.0b` S6: new `panorama/preflight_collector.py` — dedicated Palo Alto
-failover-preflight collector (`S5`'s CP sibling), within the PO-frozen
-`OP.0b.1` command gate (`docs/history/phase/OP_0B_1_COMMAND_GATE_PACKAGE.md`,
-"Approval record", PR #41). One direct API key/member reused for `P1`
-(`show system info`, identity gate, exact serial comparison, never
-normalized) + `P2` (`show high-availability state`, existing `S2`
-extraction/projection unchanged) + `P4` (`show high-availability
-path-monitoring`, new), one `preflight_run_id`, no application-level
-retry. New `panorama/pan_preflight_battery.py` + `pan_preflight_extraction.py`;
-`pan_preflight_projection.py` gains `project_pan_identity_fact`/
-`project_pan_path_monitoring_facts`. No readiness verdict, no raw output
-persisted, no new API session/credential/TLS path, `B2` stays `NOT
-ESTABLISHED`. Network bound proven by test: ≤6/pair.
-`tests/test_op0b_s6_pan_preflight_collector.py` (41 tests) + `S1`/`S2`/`S4`/
-architecture-convergence + configuration subsystem regression (399 passed)
-+ full local suite (1318/26/0) + privacy gate (0 findings) — all green
-locally. No PR/CI evidence recorded yet. Real-env validation (`S8`) owed
-for `P4`'s exact vendor response vocabulary. Full detail:
-`project/build_history.json`.
+**`op0b_s7_readiness_v2_integration`** — **AUTOMATED_VALIDATED**, 2026-09-03.
+`OP.0b` S7: `compute_ha_readiness(preflight_snapshots=...)` accepts the S5/S6
+`PreflightSnapshot`s; a unit with a snapshot is interpreted by the new
+`utils/failover/preflight_readiness.py` (`FACT_CHECK_MAP`, 14 vendor×check
+specs over the **unchanged seven checks**), every other unit keeps the OP.0a
+stored-telemetry basis; `assessment._verdict_for` remains the **one** roll-up
+(five verdicts unchanged; SAFE also refused while an open `D-F` policy
+applies). Schema string unchanged (`-v1`); additive per-unit `evidence`
+(basis, run id, coherence, skew, prerequisites, open policy gates) + top-level
+`preflight`. OP.0c stays projection-only. Evidence laws test-enforced
+(UNKNOWN/COLLECTION_FAILED/UNSUPPORTED never PASS, never KNOWN_BAD; positives
+need in-run evidence from every member; prerequisites block positives without
+fabricating failure). PAN phantom-member uplift removed (AC-5); a one-sided
+OP.0a read is now `INSUFFICIENT_EVIDENCE`. `D-F1`/`D-F2`/`D-F3`/`D-V7b`/`B2`
+stay unresolved, fail-closed — **SAFE and DEGRADED stay unreachable**. PO
+architecture approval 2026-09-03: seven checks kept (no 8th check, no
+top-level 5a/5b), schema stays `-v1`, one-sided-ACTIVE → INSUFFICIENT
+accepted, plus a fresh-preflight-XOR-legacy-telemetry guard test. Detail:
+contract §25c; `project/build_history.json`. No device contact; S8 owed.
 
 **Stalled, moved to `now_next.upcoming`:**
 `cp_remote_collection_done_marker_diagnostics` — still `IN_PROGRESS`,
@@ -77,7 +78,8 @@ safe category token instead of a bare byte count. Resume when a real
 recurrence report with the new diagnostic fields is available. Detail:
 `project/build_history.json`.
 
-**Predecessors:** `op0b_s5_cp_preflight_collector` (PR #42),
+**Predecessors:** `op0b_s6_pan_preflight_collector` (PR #43),
+`op0b_s5_cp_preflight_collector` (PR #42),
 `op0b_s4_command_gate_package` (PR #41), `dev_kaizen_fast_pr_ci` (PR #38),
 `op0b_s3_cp_parse_scope_extension` (PR #37),
 `op0b_s2_pan_parse_scope_extension` (PR #36),
@@ -120,22 +122,19 @@ causes are ruled out by source inspection. Leading-zero normalization is
 `cp_remote_collection_done_marker_diagnostics` (`now_next.upcoming`) needs a
 real recurrence with the new diagnostic fields — independent of `OP.0b`.
 
-`now_next.next` is **`op0b_s7_readiness_v2_integration`** (`OP.0b` S7) —
-unblocked now that both `S5` (CP) and `S6` (PAN) dedicated preflight
-collectors exist. Per dependency order `S0 → S1 → (S2, S3) → S4 →
-(S5, S6) → S7 → S8; S9 independent after S7`, `S7` is the first slice to
-consume `PreflightSnapshot`/`evaluate_coherence` and define/wire the
-readiness-v2 verdict path — still `CLASS 0` read-only, still no
-`SAFE_TO_FAILOVER` by construction. Recommended branch
-`feature/op0b-s7-readiness-v2`, new session, `Sonnet 5, extended thinking
-(high)` — new architecture/readiness-verdict design.
+`now_next.next` is **`op0b_s8_real_env_validation`** (`OP.0b` S8) — bounded,
+reads-only real-environment validation on the approved CP ClusterXL pair,
+VSX pair and PAN pair: confirms the S5/S6 real response shapes and the
+minimal vendor value vocabularies S7's `FACT_CHECK_MAP` freezes (fail-closed
+on anything unrecognised). Hardware-blocked. `S9` (UI-authority
+reconciliation) is independent after S7. `OP.0b` is **not DONE**; S7 is
+`AUTOMATED_VALIDATED`, never `REAL_ENV_VALIDATED`, until S8.
 
-`D-V3a`/`D-V7b` stay **preserved unresolved CLASS-2 blockers** (`upcoming`,
-not reopened/closed — gate only the PAN successor identity model and
-CLASS 2, not S1–S9/S4/S5/S6/S7). Three further independent `upcoming`
-movements, any order: **A.** close `D-V3a`/`D-V7b` — GitHub-mirror first,
-then human-assisted fetch (`Sonnet 5, extended thinking high`). **B.**
-`D-F3` numeric flap threshold — product-owner call. **C.** PAN serial identity closure — hardware-blocked (`Sonnet 5, normal` initially).
+`D-V3a`/`D-V7b` stay **preserved unresolved CLASS-2 blockers** (`upcoming`).
+Independent `upcoming` movements, any order: **A.** close `D-V3a`/`D-V7b` —
+GitHub-mirror first, then human-assisted fetch (`Sonnet 5, extended thinking
+high`). **B.** `D-F3` flap threshold — product-owner call (blocks check 7 for
+both vendors). **C.** PAN serial identity closure — hardware-blocked.
 
 ## Open blockers
 
@@ -167,10 +166,11 @@ Concurrency budget stays at 1 per vendor pending its own real-environment eviden
 ## Automated test baseline
 
 ```
-1318 passed / 26 skipped / 0 failed (2026-09-03, op0b_s6_pan_preflight_collector,
-  this session's local sandbox, serial) -- +41 new (test_op0b_s6_pan_preflight_
-  collector.py) over the S5 session's 1277/26/0 (same sandbox), itself +48 new
-  over the prior CI baseline (dev_kaizen_fast_pr_ci, PR #38: 1215/24/0).
+1371 passed / 26 skipped / 0 failed (2026-09-03, op0b_s7_readiness_v2_integration, pre-guard;
+  +1 test-only guard added after PO approval, affected suites re-run green,
+  this session's local sandbox, serial, console extras installed session-locally)
+  -- +53 new (test_op0b_s7_readiness_v2.py) + 1 new OP.0a regression over the
+  S6 session's 1318/26/0 (same sandbox).
 Repository privacy gate: PASS / 0 findings, clean checkout.
 Project-state consistency: metadata_warnings == [] under all cross-authority rules.
 ```
