@@ -9,12 +9,15 @@ generated one-line timeline.
 
 - **Checkpoint:** 2026-09-03, branch `claude/vendor-semantics-confirmation-pt2iiq`.
 - **Current build** (per `project/roadmap.json` `now_next.now`):
-  `op0b_s1_preflight_fact_provenance_model` — AUTOMATED_VALIDATED. First
-  bounded implementation slice against the FROZEN `OP.0b.0` contract:
-  `utils/failover/preflight_model.py` (new) — pure fact/provenance
-  dataclasses, evidence taxonomy, deterministic same-run coherence. Zero
-  device I/O, zero network, no collector/parser/readiness-verdict/schema/UI
-  change; CLASS 2 stays structurally unreachable (P4 invariant, unchanged).
+  `op0b_s2_pan_parse_scope_extension` — AUTOMATED_VALIDATED. Second bounded
+  slice against the FROZEN `OP.0b.0` contract: extended
+  `configuration/panorama_config_collector.py` to parse more of the
+  already-fetched `show high-availability state` response (opt-in, zero
+  behavior change by default), plus a new pure projection module turning
+  those fields into S1's `PreflightFact`/`PreflightMemberEvidence`. Zero new
+  device I/O, zero new command, no readiness-verdict/UI change; `D-F1`/
+  `D-F2`/`D-F3`/`D-V3a`/`D-V7b` stay unresolved; CLASS 2 stays structurally
+  unreachable (P4 invariant, unchanged).
 - **Product baseline:** `0.7.7 — Compliance trend retro-fill` — AUTOMATED_VALIDATED.
 - **Engineering baseline:** `DEV.3.3` — AUTOMATED_VALIDATED. `DEV.1`,
   `DEV.4` complete.
@@ -47,27 +50,28 @@ test-enforced boundaries. Current numbers:
 
 ## Active build
 
-**`op0b_s1_preflight_fact_provenance_model`** — AUTOMATED_VALIDATED
-2026-09-03. First implementation slice against the FROZEN `OP.0b.0`
-contract. New `utils/failover/preflight_model.py`: frozen `PreflightFact`/
-`Provenance`/`PreflightMemberEvidence`/`PreflightSnapshot` dataclasses; the
-13-category evidence taxonomy (A–M); `evaluate_coherence()` — deterministic
-same-preflight-run coherence over categories D/E/F/G/J/K, member-skew
-computed only when timestamps parse (never a fake zero). Encodes the frozen
-contract's domain invariants without reinterpreting them; picks no
-`D-F1`/`D-F2`/`D-F3` numeric threshold. 23 targeted tests, all passing.
-Resolved the flagged S0-vs-S1 ordering question by proceeding — S1 needed
-no device I/O and no S0 result. Two pre-existing structural tests (OP.0a
-decision P5's `utils/failover/` file-count check) updated, narrowly, to
-allow exactly this one contract-named addition; P5's actual boundary (no
-write-capable surface) is unaffected and re-verified. Zero device I/O, zero
-network, no collector/parser/readiness-verdict/schema/UI change; CLASS 2
-stays structurally unreachable (P4 invariant, unchanged).
+**`op0b_s2_pan_parse_scope_extension`** — AUTOMATED_VALIDATED 2026-09-03.
+Second implementation slice against the FROZEN `OP.0b.0` contract.
+`configuration/panorama_config_collector.py`: new `_parse_pan_ha_preflight_
+fields()` reads `conn-*`, `running-sync[-enabled]`, election/preemption,
+flap counters, error state and `*-version`/`*-compat` parity out of the
+**same** already-fetched `show high-availability state` response, behind a
+new `include_preflight_fields=False` opt-in param on
+`get_target_ha_runtime_state` — zero behavior change by default, unwired
+from the production call site this session (dormant). New pure
+`panorama/pan_preflight_projection.py::project_pan_preflight_facts()` turns
+that field dict into S1 `PreflightFact`/`PreflightMemberEvidence` — no I/O,
+no verdict, peer-claim fields routed to `peer_claim_facts` never
+`own_facts`. One extraction authority preserved (reuses the existing
+`Tokenizer`/`"pan_ha_identity_value"` pattern). 34 new tests (20 extraction
+— lxml, `NOT EXECUTED` here, pre-existing gap; 14 projection — executed, all
+passing). Zero device I/O, zero new command, no pair-identity/verdict/UI/
+CP/auth change; `D-F1`/`D-F2`/`D-F3`, `D-V3a`, `D-V7b` stay unresolved by
+design; CLASS 2 stays structurally unreachable (P4 invariant, unchanged).
 
-**Predecessor:** `op0b_0_final_semantic_blocker_closure_freeze` —
-AUTOMATED_VALIDATED 2026-09-03, session 4 (`OP.0b.0` moved `DRAFT — DO NOT
-FREEZE` → `FREEZE WITH REAL-ENV VALIDATION GATES`). Detail:
-`project/build_history.json`.
+**Predecessor:** `op0b_s1_preflight_fact_provenance_model` —
+AUTOMATED_VALIDATED 2026-09-03, session 4 (pure fact/provenance model, no
+collector wired). Detail: `project/build_history.json`.
 
 ## `OP.0b.0` — FROZEN WITH REAL-ENV VALIDATION GATES
 
@@ -110,18 +114,19 @@ identifier stays opaque (`AGENTS.md` opaque-identifier law). Tracked as
 Four independent movements, any order/parallel (full detail in
 `project/roadmap.json` `now_next.next`/`upcoming`):
 
-**A. `OP.0b` S1 — preflight fact + provenance model** (`now_next.next`) —
-pure, no I/O; first implementation slice against the frozen contract.
-Flagged not resolved: the contract lists `S0 → S1` but `S1` needs no device
-I/O while `S0` is hardware-blocked — confirm with product owner whether `S1`
-may go first. Recommended: `Sonnet 5, normal`.
+**A. `OP.0b` S3 — CP parse-scope extension** (`now_next.next`) — same
+pattern as S2, Check Point side: parse more of the already-collected
+`cphaprob stat` output (peer rows, Active Attention reason, "Single VS
+Failover" mode) into `PreflightFact`/`Provenance`. No new command.
+Independent of S2 — could equally have run first. Recommended:
+`Sonnet 5, normal`.
 
 **B. Close `D-V3a`/`D-V7b` before CLASS 2** (`now_next.upcoming`) — does not
 block `S1`–`S9` or the freeze. GitHub-mirror search first, then
 human-assisted fetch. Recommended: `Sonnet 5, extended thinking (high)`.
 
 **C. `D-F3` numeric threshold** (`now_next.upcoming`) — product-owner call,
-needed before check 7 computes a real verdict; doesn't block `S1`.
+needed before check 7 computes a real verdict; doesn't block `S1`/`S2`/`S3`.
 
 **D. PAN serial representation/identity evidence closure**
 (`now_next.upcoming`) — hardware-blocked, unchanged. `Sonnet 5, normal`
@@ -160,13 +165,13 @@ evidence.
 
 ```
 1099 passed / 24 skipped / 0 failed (2026-09-02, serial, after DEV.4) — last
-  full-dependency-environment baseline. +23 targeted tests since
-  (op0b_s1_preflight_fact_provenance_model, 2026-09-03) not yet folded into
-  a full re-run: this container lacks lxml/cryptography/paramiko/fastapi, so
-  only the targeted+convergence suite (42/42) and a tolerant full pass
-  (510 passed / 17 skipped / 33 failed / 81 errors — failed/error counts
-  unchanged from the prior session, all pre-existing missing-dependency
-  gaps) could be run here.
+  full-dependency-environment baseline. +23 (S1) +14 (S2 projection) run
+  here since; S2's 20 lxml-based extraction tests are `NOT EXECUTED` here
+  (pre-existing container gap: no lxml/cryptography/paramiko/fastapi).
+  Targeted+convergence (S1+convergence): 42/42. S2 projection: 14/14.
+  Tolerant full pass: 524 passed / 17 skipped / 33 failed / 82 errors —
+  failed unchanged; errors +1 (S2's own lxml-blocked file, same gap
+  shape); passed +14 over the S1-session number (510).
 Repository privacy gate: PASS / 0 findings, clean checkout.
 Project-state consistency: metadata_warnings == [] under all cross-authority rules.
 ```
