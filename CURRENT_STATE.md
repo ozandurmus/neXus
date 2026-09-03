@@ -7,14 +7,14 @@ detail is not here either** — it is in `project/build_history.json`
 linked documents under `docs/history/`. `docs/history/INDEX.md` is the
 generated one-line timeline.
 
-- **Checkpoint:** 2026-09-03, branch `claude/cp-remote-collection-done-marker`
-  (base `main`, PRs #34-#38; merges `main` to resolve PR #39's bookkeeping
-  conflict after #38 landed).
+- **Checkpoint:** 2026-09-03, branch `claude/op0b-s4-command-gate-6pyv2y`
+  (base `main`).
 - **Current build** (per `project/roadmap.json` `now_next.now`):
-  `cp_remote_collection_done_marker_diagnostics` — **IN_PROGRESS**. A real
-  run hit `RuntimeError('CP remote collection ended without DONE marker')`;
-  root cause is `UNKNOWN` pending real-device evidence (no device access in
-  this session). Diagnostic hardening only — see "Active build" below.
+  `op0b_s4_command_gate_package` — **IN_PROGRESS**. `OP.0b` S4: the
+  `OP.0b.1` network-device command-gate package, docs only — see "Active
+  build" below. `cp_remote_collection_done_marker_diagnostics` moved to
+  `now_next.upcoming` (still `IN_PROGRESS`, stalled pending a real-device
+  recurrence; independent subsystem, does not block S4/S5/S6).
 - **Product baseline:** `0.7.7 — Compliance trend retro-fill` — AUTOMATED_VALIDATED.
 - **Engineering baseline:** `DEV.3.3` — AUTOMATED_VALIDATED. `DEV.1`,
   `DEV.4` complete.
@@ -47,23 +47,31 @@ test-enforced boundaries. Current numbers:
 
 ## Active build
 
-**`cp_remote_collection_done_marker_diagnostics`** — **IN_PROGRESS**
-2026-09-03, two passes. **Pass 1**: aligned `checkpoint/cp_runner.py`'s
-`_run_remote_collection` drain loop with `direct_ssh_probe.py`'s tight-drain
-idiom, added diagnostic fields (`exit_status`/`processed_gw`/`total_gw`/
-`stderr_bytes`/`last_marker`). **Did not fix the real recurrence** — but
-proved the drain race was NOT the cause: the fields (`processed_gw=0`,
-`total_gw=None`, `last_marker=None`, `stderr_bytes=658`) showed the failure
-happens before `cp_inventory.sh` line ~94 (`TOTAL_GW` never echoed), with
-real stderr the code was discarding. **Pass 2**: captures a bounded
-(8192-char) in-memory stderr sample, classifies into safe non-identity
-tokens (`no_such_file_or_directory` / `command_not_found` /
-`permission_denied` / `not_a_tty` / `unbound_variable` / `syntax_error` /
-`connection_reset_or_broken_pipe` / `unclassified`) via
-`_classify_stderr_sample()`, discards the raw sample immediately (raw-
-evidence law). Both `RuntimeError`s now report `stderr_classification`. +3
-tests; full suite 1220/24/0. Root cause remains **`UNKNOWN`** — stays
-`IN_PROGRESS` until the next run's classification narrows it further.
+**`op0b_s4_command_gate_package`** — **IN_PROGRESS**, 2026-09-03. `OP.0b`
+S4: docs-only network-device command gate for the FROZEN `OP.0b.0`
+candidate battery (CP `A4`–`A9`, PAN `P3`–`P5`) —
+`docs/history/phase/OP_0B_1_COMMAND_GATE_PACKAGE.md` (new, status `DRAFT`
+— **pending explicit product-owner approval**; this build does not
+self-approve). CP `A4`/`A5`/`A6`/`A7`/`A8`/`B1` → `APPROVED_FOR_S5`;
+`A10`/`A11` → `OPTIONAL_APPROVED`; `A9` (management-plane preemption
+attribute) → `DEFERRED_UNKNOWN` (`D-V7b`, `CP-3`, P0 before `CLASS 2`).
+PAN `P4` → `APPROVED_FOR_S6`; `P3` → `OPTIONAL_APPROVED`; `P5` →
+`DEFERRED_UNKNOWN` (command syntax only `PARTIAL`ly confirmed). All 7
+known mutating operations stay `REJECTED`. No command implementation, no
+device I/O. New `tests/test_op0b_s4_command_gate.py` (6 tests) +
+`tests/test_architecture_convergence.py` — 26 passed locally. Full detail
++ PO approval package: the gate doc above and `project/build_history.json`.
+Stays `IN_PROGRESS` until PR/CI evidence lands **and** independently
+cannot merge/finalize before the doc's own "Approval record" is signed.
+
+**Stalled, moved to `now_next.upcoming`:**
+`cp_remote_collection_done_marker_diagnostics` — still `IN_PROGRESS`,
+independent subsystem, does not block `OP.0b`. Root cause of a real
+`RuntimeError('CP remote collection ended without DONE marker')` remains
+`UNKNOWN`; a stderr classifier (`_classify_stderr_sample`) now reports a
+safe category token instead of a bare byte count. Resume when a real
+recurrence report with the new diagnostic fields is available. Detail:
+`project/build_history.json`.
 
 **Predecessors:** `dev_kaizen_fast_pr_ci` (AUTOMATED_VALIDATED, PR #38, CI
 split into `validate`/`full-regression`), `op0b_s3_cp_parse_scope_extension`
@@ -105,41 +113,31 @@ causes are ruled out by source inspection. Leading-zero normalization is
 
 ## Exact next build
 
-`cp_remote_collection_done_marker_diagnostics` (above) needs a real
-recurrence with the new diagnostic fields before it can advance past
-`IN_PROGRESS` — hardening, not a closed fix; does not change `now_next.next`.
+`cp_remote_collection_done_marker_diagnostics` (`now_next.upcoming`) needs a
+real recurrence with the new diagnostic fields — independent of `OP.0b`.
 
-`dev_kaizen_fast_pr_ci` is done. `now_next.next` is
-**`op0b_s4_command_gate_package`** (`OP.0b` S4) — 2026-09-03 roadmap
-correction: contract dependency order `S0 → S1 → (S2, S3) → S4 → (S5, S6) →
-S7 → S8; S9 independent after S7`. S1/S2/S3 are `AUTOMATED_VALIDATED`, so S4
-— not D-V3a/D-V7b closure — is next: docs-only `OP.0b.1` command-gate
-package (ten points/row, CP `A4`–`A9` / PAN `P3`–`P5`), gated on
-official-vendor-doc confirmation first. Even drafted, it's a candidate
-list, not an approval — the `OP.0b` open blocker below still applies before
-S5/S6 implement any command. Recommended: `Sonnet 5, extended thinking
-(high)` — security boundary.
+`now_next.next` is **`op0b_s5_cp_preflight_collector`** (`OP.0b` S5) —
+**blocked** on explicit product-owner approval of
+`docs/history/phase/OP_0B_1_COMMAND_GATE_PACKAGE.md` ("Approval record",
+currently empty). Once approved: S5 (CP) and S6 (PAN) dedicated preflight
+collectors run parallel, per dependency order `S0 → S1 → (S2, S3) → S4 →
+(S5, S6) → S7 → S8; S9 independent after S7`. Recommended: `Sonnet 5,
+extended thinking (high)` for collector session design; `Sonnet 5, normal`
+for wiring the already-proven `S1`/`S2`/`S3` extraction/projection seams.
 
-`D-V3a`/`D-V7b` stay **preserved unresolved CLASS-2 blockers** —
-reclassified `now_next.next` → `upcoming`, not reopened/closed: they gate
-only the PAN successor identity model and CLASS 2, not S1–S9 or S4. Two
-further independent `upcoming` movements, any order:
-
-**A. Close `D-V3a`/`D-V7b`** — does not block `S1`–`S9`/`S4`/the freeze.
-GitHub-mirror first, then human-assisted fetch. `Sonnet 5, extended
-thinking (high)`.
-
-**B. `D-F3` numeric threshold** — product-owner call; doesn't block
-`S1`–`S4`.
-
-**C. PAN serial identity closure** — hardware-blocked. `Sonnet 5, normal`
-initially.
+`D-V3a`/`D-V7b` stay **preserved unresolved CLASS-2 blockers** (`upcoming`,
+not reopened/closed — gate only the PAN successor identity model and
+CLASS 2, not S1–S9/S4/S5/S6). Three further independent `upcoming`
+movements, any order: **A.** close `D-V3a`/`D-V7b` — GitHub-mirror first,
+then human-assisted fetch (`Sonnet 5, extended thinking high`). **B.**
+`D-F3` numeric flap threshold — product-owner call. **C.** PAN serial
+identity closure — hardware-blocked (`Sonnet 5, normal` initially).
 
 ## Open blockers
 
 | What | Blocked on | Kind |
 | --- | --- | --- |
-| `OP.0b` preflight battery | its command gate is drafted but **not approved** — a product-owner/security call; the `OP.0b.0` evidence contract is now `FROZEN WITH REAL-ENV VALIDATION GATES` (see above), but the `OP.0b.1` gate package that actually approves any command is a separate, still-open step | decision |
+| `OP.0b` preflight battery | its command gate (`docs/history/phase/OP_0B_1_COMMAND_GATE_PACKAGE.md`) is now drafted with a full per-command PO approval package but **not approved** — a product-owner/security sign-off, recorded in that doc's own "Approval record" section; `S5`/`S6` are blocked on it | decision |
 | PAN HA serial `B2` establishment | the mismatching member's root cause is `UNKNOWN` (see above) — do not resolve as a side effect of an unrelated build | investigation + hardware |
 | `CON.3` console operational-write actions | open decisions `C-D4`, `C-D6` **and** `RB.3b` | decision + hardware |
 | `RB.3b` CP Gaia backup collection | the watched real R81.10/R81.20 run — hardware, not engineering | hardware |
