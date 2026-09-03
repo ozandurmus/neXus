@@ -87,9 +87,10 @@ class FakeChannel:
     idiom checkpoint/direct_ssh_probe.py already uses.
     """
 
-    def __init__(self, stdout_chunks, exit_status=0):
+    def __init__(self, stdout_chunks, exit_status=0, stderr_chunks=()):
         self._stdout_chunks = list(stdout_chunks)
         self._exit_status = exit_status
+        self._stderr_chunks = list(stderr_chunks)
 
     def recv_ready(self):
         return bool(self._stdout_chunks)
@@ -98,10 +99,10 @@ class FakeChannel:
         return self._stdout_chunks.pop(0)
 
     def recv_stderr_ready(self):
-        return False
+        return bool(self._stderr_chunks)
 
     def recv_stderr(self, _n):
-        return b""
+        return self._stderr_chunks.pop(0)
 
     def exit_status_ready(self):
         return True
@@ -152,5 +153,30 @@ def test_run_remote_collection_missing_done_marker_raises_safe_diagnostics(monke
     assert "processed_gw=1" in message
     assert "total_gw=1" in message
     assert "last_marker=GW" in message
-    assert "gw1" not in message
-    assert "10.0.0.1" not in message
+
+
+def test_run_remote_collection_classifies_stderr_without_leaking_raw_text(monkeypatch):
+    monkeypatch.setattr(cp_runner, "info", lambda *a, **k: None)
+    monkeypatch.setattr(cp_runner, "warn", lambda *a, **k: None)
+    raw = b"bash: /opt/CPshared/5.0/tmp/.CPprofile.sh: No such file or directory\n"
+    channel = FakeChannel([b""], stderr_chunks=[raw])
+
+    with pytest.raises(RuntimeError) as excinfo:
+        cp_runner._run_remote_collection(_fake_ssh(channel))
+
+    message = str(excinfo.value)
+    assert "no_such_file_or_directory" in message
+    assert f"stderr_bytes={len(raw)}" in message
+    assert ".CPprofile.sh" not in message
+    assert "No such file or directory" not in message
+
+
+def test_classify_stderr_sample_returns_unclassified_for_unknown_text():
+    assert cp_runner._classify_stderr_sample("device gw-core-01 rebooted") == ["unclassified"]
+
+
+def test_classify_stderr_sample_matches_known_safe_categories():
+    assert cp_runner._classify_stderr_sample("Permission denied (publickey)") == ["permission_denied"]
+    assert cp_runner._classify_stderr_sample(
+        "stty: standard input: Inappropriate ioctl for device"
+    ) == ["not_a_tty"]

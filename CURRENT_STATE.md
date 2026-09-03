@@ -48,22 +48,22 @@ test-enforced boundaries. Current numbers:
 ## Active build
 
 **`cp_remote_collection_done_marker_diagnostics`** — **IN_PROGRESS**
-2026-09-03. `checkpoint/scripts/cp_inventory.sh`'s last statement is a bare
-`echo "DONE"` with no early-exit path before it, so `exit_status=0` with no
-`DONE` seen has **`UNKNOWN`** root cause — not reproduced here, no device
-access. Source inspection found `checkpoint/cp_runner.py`'s
-`_run_remote_collection` channel-drain loop reading at most one
-recv()/recv_stderr() chunk per outer pass before its exit-status break
-check, unlike `checkpoint/direct_ssh_probe.py`'s already-proven
-`_run_session_command` tight-drain idiom (`while recv_ready(): ...`).
-Aligned `_run_remote_collection` with that idiom (behavior-preserving) plus
-one defensive final drain; enriched the `RuntimeError` with safe diagnostic
-fields (`exit_status`/`processed_gw`/`total_gw`/`stderr_bytes`/
-`last_marker`) so a recurrence carries real evidence instead of a bare
-message. New `tests/test_phase0_4_1_cp_automation.py` `FakeChannel` tests
-prove the multi-chunk drain and the diagnostics leak no device identity.
-Full local suite: 1210 passed / 24 skipped / 0 failed. **Explicitly not a
-confirmed fix** — stays `IN_PROGRESS` until real-device evidence exists.
+2026-09-03, two passes. **Pass 1**: aligned `checkpoint/cp_runner.py`'s
+`_run_remote_collection` drain loop with `direct_ssh_probe.py`'s tight-drain
+idiom, added diagnostic fields (`exit_status`/`processed_gw`/`total_gw`/
+`stderr_bytes`/`last_marker`). **Did not fix the real recurrence** — but
+proved the drain race was NOT the cause: the fields (`processed_gw=0`,
+`total_gw=None`, `last_marker=None`, `stderr_bytes=658`) showed the failure
+happens before `cp_inventory.sh` line ~94 (`TOTAL_GW` never echoed), with
+real stderr the code was discarding. **Pass 2**: captures a bounded
+(8192-char) in-memory stderr sample, classifies into safe non-identity
+tokens (`no_such_file_or_directory` / `command_not_found` /
+`permission_denied` / `not_a_tty` / `unbound_variable` / `syntax_error` /
+`connection_reset_or_broken_pipe` / `unclassified`) via
+`_classify_stderr_sample()`, discards the raw sample immediately (raw-
+evidence law). Both `RuntimeError`s now report `stderr_classification`. +3
+tests; full suite 1220/24/0. Root cause remains **`UNKNOWN`** — stays
+`IN_PROGRESS` until the next run's classification narrows it further.
 
 **Predecessors:** `dev_kaizen_fast_pr_ci` (AUTOMATED_VALIDATED, PR #38, CI
 split into `validate`/`full-regression`), `op0b_s3_cp_parse_scope_extension`
