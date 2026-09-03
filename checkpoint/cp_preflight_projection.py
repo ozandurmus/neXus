@@ -34,6 +34,7 @@ This module:
 """
 from __future__ import annotations
 
+import hashlib
 from typing import Any, Mapping, Sequence
 
 from utils.failover.preflight_model import (
@@ -50,7 +51,16 @@ from utils.failover.preflight_model import (
     Transport,
 )
 
-__all__ = ["project_cp_preflight_facts"]
+__all__ = [
+    "project_cp_preflight_facts",
+    "project_cp_software_version_fact",
+    "project_cp_link_health_facts",
+    "project_cp_pnote_facts",
+    "project_cp_sync_facts",
+    "project_cp_policy_facts",
+    "project_cp_failover_history_facts",
+    "project_cp_vsx_enumeration_facts",
+]
 
 #: The parser's own fail-closed sentinel (`CLUSTERXL_CLUSTER_MODES`), never a
 #: positive KNOWN value -- an unrecognized/absent mode stays UNKNOWN, never a
@@ -225,3 +235,365 @@ def project_cp_preflight_facts(
         own_facts=tuple(own_facts),
         peer_claim_facts=tuple(peer_claim_facts),
     )
+
+
+# --- S5 additions: one projection function per newly-approved command ------
+#
+# Same discipline as `project_cp_preflight_facts` above: no I/O, no readiness
+# verdict, one caller-supplied `preflight_run_id`/`collected_at`/`outcome`/
+# `transport`/`shell_profile`/`context` shared by every fact a call produces.
+# Each function owns exactly one command's evidence and carries that
+# command's own symbolic `source_command` id -- never a generic "cphaprob"
+# label (contract "Provenance", §20).
+
+
+def _provenance(
+    *,
+    preflight_run_id: str,
+    collected_at: str,
+    physical_device_identity: str,
+    operational_entity_id: str,
+    transport: Transport,
+    source_command: str,
+    shell_profile: ShellProfile | None,
+    context: FactContext | None,
+    outcome: Outcome,
+) -> Provenance:
+    return Provenance(
+        collected_at=collected_at,
+        preflight_run_id=preflight_run_id,
+        source_vendor="checkpoint",
+        source_plane=SourceOrigin.DEVICE_RUNTIME,
+        transport=transport,
+        physical_device_identity=OpaqueToken(physical_device_identity),
+        operational_entity_id=operational_entity_id,
+        context=context or FactContext.physical(),
+        outcome=outcome,
+        source_command=source_command,
+        shell_profile=shell_profile,
+    )
+
+
+def project_cp_software_version_fact(
+    sw_version: str | None,
+    *,
+    preflight_run_id: str,
+    collected_at: str,
+    physical_device_identity: str,
+    operational_entity_id: str,
+    transport: Transport = Transport.SSH_DIRECT,
+    shell_profile: ShellProfile | None = None,
+    context: FactContext | None = None,
+    outcome: Outcome = Outcome.SUCCESS,
+) -> PreflightFact:
+    """CP-A2 (`show version all`) -- software version, category H. Feeds the
+    software half of check 3 (policy/software parity); the policy half comes
+    from `project_cp_policy_facts` (CP-A7) separately -- a CP-A7 failure
+    never erases this fact (contract CP-A7 "Failure semantics")."""
+    prov = _provenance(
+        preflight_run_id=preflight_run_id, collected_at=collected_at,
+        physical_device_identity=physical_device_identity, operational_entity_id=operational_entity_id,
+        transport=transport, source_command="A2", shell_profile=shell_profile, context=context, outcome=outcome,
+    )
+    if outcome is not Outcome.SUCCESS:
+        return PreflightFact(
+            name="cp_software_version", category=FactCategory.SOFTWARE_POLICY_CONTENT_PARITY,
+            state=FactState.COLLECTION_FAILED, value=None, provenance=prov,
+        )
+    if not sw_version:
+        return PreflightFact(
+            name="cp_software_version", category=FactCategory.SOFTWARE_POLICY_CONTENT_PARITY,
+            state=FactState.UNKNOWN, value=None, provenance=prov,
+        )
+    return PreflightFact(
+        name="cp_software_version", category=FactCategory.SOFTWARE_POLICY_CONTENT_PARITY,
+        state=FactState.KNOWN, value=str(sw_version), provenance=prov,
+    )
+
+
+def project_cp_link_health_facts(
+    parsed: Mapping[str, Any] | None,
+    *,
+    preflight_run_id: str,
+    collected_at: str,
+    physical_device_identity: str,
+    operational_entity_id: str,
+    transport: Transport = Transport.SSH_DIRECT,
+    shell_profile: ShellProfile | None = None,
+    context: FactContext | None = None,
+    outcome: Outcome = Outcome.SUCCESS,
+) -> tuple[PreflightFact, ...]:
+    """CP-A4 (`cphaprob -a if`) -- link health, category F. `parsed` is the
+    dict `cp_preflight_extraction.parse_cphaprob_a_if` returns; pass
+    `parsed=None` for an explicit `COLLECTION_FAILED` (command never ran or
+    the read itself failed)."""
+    prov = _provenance(
+        preflight_run_id=preflight_run_id, collected_at=collected_at,
+        physical_device_identity=physical_device_identity, operational_entity_id=operational_entity_id,
+        transport=transport, source_command="A4", shell_profile=shell_profile, context=context, outcome=outcome,
+    )
+    if parsed is None or not parsed.get("observed"):
+        state = FactState.COLLECTION_FAILED if outcome is not Outcome.SUCCESS else FactState.UNKNOWN
+        return (
+            PreflightFact(name="cp_link_any_down", category=FactCategory.LINK_HEALTH, state=state, value=None, provenance=prov),
+        )
+    any_down = parsed.get("any_down")
+    facts = [
+        PreflightFact(
+            name="cp_link_any_down", category=FactCategory.LINK_HEALTH,
+            state=FactState.KNOWN if any_down is not None else FactState.UNKNOWN,
+            value=bool(any_down) if any_down is not None else None, provenance=prov,
+        ),
+    ]
+    count = parsed.get("interface_count")
+    if count is not None:
+        facts.append(
+            PreflightFact(
+                name="cp_link_interface_count", category=FactCategory.LINK_HEALTH,
+                state=FactState.KNOWN, value=int(count), provenance=prov,
+            )
+        )
+    return tuple(facts)
+
+
+def project_cp_pnote_facts(
+    parsed: Mapping[str, Any] | None,
+    *,
+    preflight_run_id: str,
+    collected_at: str,
+    physical_device_identity: str,
+    operational_entity_id: str,
+    transport: Transport = Transport.SSH_DIRECT,
+    shell_profile: ShellProfile | None = None,
+    context: FactContext | None = None,
+    outcome: Outcome = Outcome.SUCCESS,
+) -> tuple[PreflightFact, ...]:
+    """CP-A5 (`cphaprob -ia list`) -- critical-device (pnote) problem state,
+    category J. Read failure -> `UNKNOWN` for check 8, never `KNOWN_BAD`
+    from absence (gate CP-A5 "Failure semantics"; frozen contract D-V6)."""
+    prov = _provenance(
+        preflight_run_id=preflight_run_id, collected_at=collected_at,
+        physical_device_identity=physical_device_identity, operational_entity_id=operational_entity_id,
+        transport=transport, source_command="A5", shell_profile=shell_profile, context=context, outcome=outcome,
+    )
+    if parsed is None or not parsed.get("observed") or parsed.get("any_problem") is None:
+        state = FactState.COLLECTION_FAILED if outcome is not Outcome.SUCCESS else FactState.UNKNOWN
+        return (
+            PreflightFact(name="cp_pnote_any_problem", category=FactCategory.FAILURE_HEALTH_STATE, state=state, value=None, provenance=prov),
+        )
+    facts = [
+        PreflightFact(
+            name="cp_pnote_any_problem", category=FactCategory.FAILURE_HEALTH_STATE,
+            state=FactState.KNOWN, value=bool(parsed["any_problem"]), provenance=prov,
+        ),
+    ]
+    if parsed.get("device_count") is not None:
+        facts.append(
+            PreflightFact(
+                name="cp_pnote_device_count", category=FactCategory.FAILURE_HEALTH_STATE,
+                state=FactState.KNOWN, value=int(parsed["device_count"]), provenance=prov,
+            )
+        )
+    return tuple(facts)
+
+
+def project_cp_sync_facts(
+    parsed: Mapping[str, Any] | None,
+    *,
+    preflight_run_id: str,
+    collected_at: str,
+    physical_device_identity: str,
+    operational_entity_id: str,
+    dispatch_form: str | None,
+    transport: Transport = Transport.SSH_DIRECT,
+    shell_profile: ShellProfile | None = None,
+    context: FactContext | None = None,
+    outcome: Outcome = Outcome.SUCCESS,
+) -> tuple[PreflightFact, ...]:
+    """CP-A6 (`cphaprob syncstat` / `fw ctl pstat`, version-dispatched) --
+    state/session sync, category G. `dispatch_form=None` means the caller
+    could not prove capability/version evidence before execution and never
+    ran either form -- the fact becomes `CAPABILITY_GAP`, per the gate's
+    binding "no failure-driven fallback" rule (never attempted-then-switched)."""
+    source_command = "A6" if dispatch_form is None else f"A6:{dispatch_form}"
+    prov = _provenance(
+        preflight_run_id=preflight_run_id, collected_at=collected_at,
+        physical_device_identity=physical_device_identity, operational_entity_id=operational_entity_id,
+        transport=transport, source_command=source_command, shell_profile=shell_profile, context=context,
+        outcome=Outcome.CAPABILITY_GAP if dispatch_form is None else outcome,
+    )
+    if dispatch_form is None:
+        return (
+            PreflightFact(name="cp_sync_status", category=FactCategory.STATE_SESSION_SYNCHRONIZATION, state=FactState.UNSUPPORTED, value=None, provenance=prov),
+        )
+    if parsed is None or not parsed.get("observed") or parsed.get("status") is None:
+        state = FactState.COLLECTION_FAILED if outcome is not Outcome.SUCCESS else FactState.UNKNOWN
+        return (
+            PreflightFact(name="cp_sync_status", category=FactCategory.STATE_SESSION_SYNCHRONIZATION, state=state, value=None, provenance=prov),
+        )
+    return (
+        PreflightFact(
+            name="cp_sync_status", category=FactCategory.STATE_SESSION_SYNCHRONIZATION,
+            state=FactState.KNOWN, value=str(parsed["status"]), provenance=prov,
+        ),
+    )
+
+
+def project_cp_policy_facts(
+    parsed: Mapping[str, Any] | None,
+    *,
+    preflight_run_id: str,
+    collected_at: str,
+    physical_device_identity: str,
+    operational_entity_id: str,
+    transport: Transport = Transport.SSH_DIRECT,
+    shell_profile: ShellProfile | None = None,
+    context: FactContext | None = None,
+    outcome: Outcome = Outcome.SUCCESS,
+) -> tuple[PreflightFact, ...]:
+    """CP-A7 (`fw stat`, physical only) -- installed policy identity,
+    category H. The policy name is tokenized (sha256, truncated) here and
+    never retained raw (gate CP-A7 "Safe retained fields": "opaque token
+    used only for equality comparison")."""
+    prov = _provenance(
+        preflight_run_id=preflight_run_id, collected_at=collected_at,
+        physical_device_identity=physical_device_identity, operational_entity_id=operational_entity_id,
+        transport=transport, source_command="A7", shell_profile=shell_profile, context=context, outcome=outcome,
+    )
+    if parsed is None or not parsed.get("observed") or not parsed.get("policy_name"):
+        state = FactState.COLLECTION_FAILED if outcome is not Outcome.SUCCESS else FactState.UNKNOWN
+        return (
+            PreflightFact(name="cp_installed_policy_token", category=FactCategory.SOFTWARE_POLICY_CONTENT_PARITY, state=state, value=None, provenance=prov),
+        )
+    digest = hashlib.sha256(str(parsed["policy_name"]).encode("utf-8")).hexdigest()[:16]
+    return (
+        PreflightFact(
+            name="cp_installed_policy_token", category=FactCategory.SOFTWARE_POLICY_CONTENT_PARITY,
+            state=FactState.KNOWN, value=OpaqueToken(digest), provenance=prov,
+        ),
+    )
+
+
+#: Bounded, known-safe failover-count clamp -- mirrors
+#: `cp_preflight_extraction._MAX_SAFE_COUNT`; defends this module too if a
+#: caller ever passes an unclamped value from a different source.
+_MAX_SAFE_FAILOVER_COUNT = 10_000
+
+
+def project_cp_failover_history_facts(
+    parsed: Mapping[str, Any] | None,
+    *,
+    preflight_run_id: str,
+    collected_at: str,
+    physical_device_identity: str,
+    operational_entity_id: str,
+    dispatch_form: str | None,
+    transport: Transport = Transport.SSH_DIRECT,
+    shell_profile: ShellProfile | None = None,
+    context: FactContext | None = None,
+    outcome: Outcome = Outcome.SUCCESS,
+) -> tuple[PreflightFact, ...]:
+    """CP-A8 (`show cluster failover` / `cphaprob show_failover`,
+    platform-dispatched) -- flap/failover history, category K. Never
+    produces a PASS/healthy verdict from the count (`D-F3` open);
+    `dispatch_form=None` means platform evidence was insufficient to choose
+    a form and neither was executed -- `CAPABILITY_GAP`, not a fallback
+    attempt (gate CP-A8 "Also binding")."""
+    source_command = "A8" if dispatch_form is None else f"A8:{dispatch_form}"
+    prov = _provenance(
+        preflight_run_id=preflight_run_id, collected_at=collected_at,
+        physical_device_identity=physical_device_identity, operational_entity_id=operational_entity_id,
+        transport=transport, source_command=source_command, shell_profile=shell_profile, context=context,
+        outcome=Outcome.CAPABILITY_GAP if dispatch_form is None else outcome,
+    )
+    if dispatch_form is None:
+        return (
+            PreflightFact(name="cp_failover_count", category=FactCategory.TRANSITION_FLAP_HISTORY, state=FactState.UNSUPPORTED, value=None, provenance=prov),
+        )
+    if parsed is None or not parsed.get("observed"):
+        state = FactState.COLLECTION_FAILED if outcome is not Outcome.SUCCESS else FactState.UNKNOWN
+        return (
+            PreflightFact(name="cp_failover_count", category=FactCategory.TRANSITION_FLAP_HISTORY, state=state, value=None, provenance=prov),
+        )
+    facts: list[PreflightFact] = []
+    count = parsed.get("count")
+    if count is not None and 0 <= int(count) <= _MAX_SAFE_FAILOVER_COUNT:
+        facts.append(
+            PreflightFact(name="cp_failover_count", category=FactCategory.TRANSITION_FLAP_HISTORY, state=FactState.KNOWN, value=int(count), provenance=prov)
+        )
+    else:
+        facts.append(
+            PreflightFact(name="cp_failover_count", category=FactCategory.TRANSITION_FLAP_HISTORY, state=FactState.UNKNOWN, value=None, provenance=prov)
+        )
+    reason_class = parsed.get("last_reason_class")
+    facts.append(
+        PreflightFact(
+            name="cp_failover_last_reason", category=FactCategory.TRANSITION_FLAP_HISTORY,
+            state=FactState.KNOWN if reason_class else FactState.UNKNOWN,
+            value=str(reason_class) if reason_class else None, provenance=prov,
+        )
+    )
+    last_event_time = parsed.get("last_event_time")
+    facts.append(
+        PreflightFact(
+            name="cp_failover_last_event_time", category=FactCategory.TRANSITION_FLAP_HISTORY,
+            state=FactState.KNOWN if last_event_time else FactState.UNKNOWN,
+            value=str(last_event_time) if last_event_time else None, provenance=prov,
+        )
+    )
+    return tuple(facts)
+
+
+#: Bounded VS enumeration retained per member -- a defensive cap against a
+#: malformed/looping response shape, not a real-world VS count expectation.
+_MAX_RETAINED_VS_ROWS = 64
+
+
+def project_cp_vsx_enumeration_facts(
+    parsed: Mapping[str, Any] | None,
+    *,
+    preflight_run_id: str,
+    collected_at: str,
+    physical_device_identity: str,
+    operational_entity_id: str,
+    transport: Transport = Transport.SSH_DIRECT,
+    shell_profile: ShellProfile | None = None,
+    context: FactContext | None = None,
+    outcome: Outcome = Outcome.SUCCESS,
+) -> tuple[PreflightFact, ...]:
+    """CP-B1 (`vsx stat -v`, VSX battery only) -- VS enumeration, category B
+    (`OPERATIONAL_HA_ENTITY_IDENTITY` in the S1 taxonomy). One fact per
+    observed VSID + a count fact; VS *names* are never retained (gate CP-B1
+    "Safe retained fields"). A subordinate VS is never turned into a CLASS 2
+    execution target by this or any later step (contract domain invariant 9
+    / task §10/§16) -- this function only records enumeration/status."""
+    prov = _provenance(
+        preflight_run_id=preflight_run_id, collected_at=collected_at,
+        physical_device_identity=physical_device_identity, operational_entity_id=operational_entity_id,
+        transport=transport, source_command="B1", shell_profile=shell_profile, context=context, outcome=outcome,
+    )
+    if parsed is None or not parsed.get("observed"):
+        state = FactState.COLLECTION_FAILED if outcome is not Outcome.SUCCESS else FactState.UNKNOWN
+        return (
+            PreflightFact(name="cp_vsx_vs_count", category=FactCategory.OPERATIONAL_HA_ENTITY_IDENTITY, state=state, value=None, provenance=prov),
+        )
+    rows = list(parsed.get("vs_rows") or [])[:_MAX_RETAINED_VS_ROWS]
+    facts = [
+        PreflightFact(
+            name="cp_vsx_vs_count", category=FactCategory.OPERATIONAL_HA_ENTITY_IDENTITY,
+            state=FactState.KNOWN, value=len(rows), provenance=prov,
+        ),
+    ]
+    for row in rows:
+        vsid = str(row.get("vsid") or "")
+        if not vsid:
+            continue
+        status = row.get("status")
+        facts.append(
+            PreflightFact(
+                name=f"cp_vsx_vs_{vsid}_status", category=FactCategory.OPERATIONAL_HA_ENTITY_IDENTITY,
+                state=FactState.KNOWN if status else FactState.UNKNOWN,
+                value=str(status) if status else None, provenance=prov,
+            )
+        )
+    return tuple(facts)

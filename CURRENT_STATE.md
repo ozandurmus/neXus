@@ -7,14 +7,15 @@ detail is not here either** — it is in `project/build_history.json`
 linked documents under `docs/history/`. `docs/history/INDEX.md` is the
 generated one-line timeline.
 
-- **Checkpoint:** 2026-09-03, branch `claude/op0b-s4-command-gate-6pyv2y`
+- **Checkpoint:** 2026-09-03, branch `claude/checkpoint-preflight-collector-i1yyz7`
   (base `main`).
 - **Current build** (per `project/roadmap.json` `now_next.now`):
-  `op0b_s4_command_gate_package` — **AUTOMATED_VALIDATED**. `OP.0b` S4:
-  the `OP.0b.1` network-device command-gate package, PO-approved — see
-  "Active build" below. `now_next.next` is `op0b_s5_cp_preflight_collector`
-  (unblocked). `cp_remote_collection_done_marker_diagnostics` moved to
-  `now_next.upcoming` (still `IN_PROGRESS`, independent subsystem).
+  `op0b_s5_cp_preflight_collector` — **AUTOMATED_VALIDATED**. `OP.0b` S5:
+  first dedicated Check Point failover-preflight collector
+  (`checkpoint/preflight_collector.py`) — see "Active build" below.
+  `now_next.next` = `op0b_s6_pan_preflight_collector` (PAN sibling slice,
+  same PO approval). `cp_remote_collection_done_marker_diagnostics` stays
+  `now_next.upcoming` (`IN_PROGRESS`, independent subsystem).
 - **Product baseline:** `0.7.7 — Compliance trend retro-fill` — AUTOMATED_VALIDATED.
 - **Engineering baseline:** `DEV.3.3` — AUTOMATED_VALIDATED. `DEV.1`,
   `DEV.4` complete.
@@ -47,23 +48,24 @@ test-enforced boundaries. Current numbers:
 
 ## Active build
 
-**`op0b_s4_command_gate_package`** — **AUTOMATED_VALIDATED**, 2026-09-03.
-`OP.0b` S4: `docs/history/phase/OP_0B_1_COMMAND_GATE_PACKAGE.md` — status
-`APPROVED`, PO sign-off recorded same session (PR #41). **PO-authorized
-for `S5`/`S6` implementation** (narrower than the technical candidate
-list): CP `A4`–`A8` + `B1` (VSX only); PAN `P4` — every one `NO_RETRY`
-(no new application-level command retry; `A6`/`A8` dispatch must be
-evidence-based, never failure-driven), and `B1` explicitly reuses the
-existing per-member SSH session (no new session; stop and return to PO if
-that proves impossible in `S5`). `A10`/`A11`/`P3` stay technically
-`OPTIONAL_APPROVED` but are **withheld** from this implementation battery.
-`A9`/`P5` unchanged `DEFERRED_UNKNOWN`. Network bound: ≤18 required CP VSX
-/ ≤16 required CP non-VSX ClusterXL / ≤6 required PAN invocations per
-selected HA-entity pair. All 7 known mutating operations stay `REJECTED`.
-No command implementation, no device I/O. `tests/test_op0b_s4_command_gate.py`
-(11 tests) + `tests/test_architecture_convergence.py` + privacy gate — 35
-passed locally; PR #41 fast CI green, mergeable. Full detail + PO approval
-record: the gate doc above and `project/build_history.json`.
+**`op0b_s5_cp_preflight_collector`** — **AUTOMATED_VALIDATED**, 2026-09-03.
+`OP.0b` S5: new `checkpoint/preflight_collector.py` — the first dedicated
+Check Point failover-preflight collector, strictly within the PO-frozen
+`OP.0b.1` command gate (`docs/history/phase/OP_0B_1_COMMAND_GATE_PACKAGE.md`,
+"Approval record", PR #41). One SSH session per physical member (`B1`
+included, never re-opened), one `preflight_run_id`, exactly the authorized
+battery (`A1`–`A3` existing + new `A4`–`A8` + `B1` VSX-only), evidence-based
+`A6`/`A8` dispatch (never failure-driven), no application-level retry. New
+`checkpoint/cp_preflight_battery.py` + `cp_preflight_extraction.py`;
+`cp_preflight_projection.py` gains one projection function per new command
+on the existing `S1`/`S3` seam. No readiness verdict, no raw output
+persisted, no new SSH transport/credential path. Network bound proven by
+test: ≤16 non-VSX pair / ≤18 VSX pair. `tests/test_op0b_s5_cp_preflight_collector.py`
+(48 tests) + `S1`/`S3`/`S4`/architecture-convergence regression + full
+local suite (1277/26/0) + privacy gate (0 findings) — all green locally.
+No PR/CI evidence recorded yet. Real-env validation (`S8`) owed for
+`A4`–`A8`/`B1`'s exact vendor field vocabulary. Full detail:
+`project/build_history.json`.
 
 **Stalled, moved to `now_next.upcoming`:**
 `cp_remote_collection_done_marker_diagnostics` — still `IN_PROGRESS`,
@@ -74,11 +76,12 @@ safe category token instead of a bare byte count. Resume when a real
 recurrence report with the new diagnostic fields is available. Detail:
 `project/build_history.json`.
 
-**Predecessors:** `dev_kaizen_fast_pr_ci` (AUTOMATED_VALIDATED, PR #38, CI
-split into `validate`/`full-regression`), `op0b_s3_cp_parse_scope_extension`
-(AUTOMATED_VALIDATED, PR #37), `op0b_s2_pan_parse_scope_extension`
-(AUTOMATED_VALIDATED, PR #36), `op0b_s1_preflight_fact_provenance_model`
-(AUTOMATED_VALIDATED). Detail: `project/build_history.json`.
+**Predecessors:** `op0b_s4_command_gate_package` (AUTOMATED_VALIDATED, PR
+#41), `dev_kaizen_fast_pr_ci` (AUTOMATED_VALIDATED, PR #38, CI split into
+`validate`/`full-regression`), `op0b_s3_cp_parse_scope_extension` (PR #37),
+`op0b_s2_pan_parse_scope_extension` (PR #36),
+`op0b_s1_preflight_fact_provenance_model` — all AUTOMATED_VALIDATED.
+Detail: `project/build_history.json`.
 
 ## `OP.0b.0` — FROZEN WITH REAL-ENV VALIDATION GATES
 
@@ -97,8 +100,7 @@ genuinely `STILL_UNKNOWN`** but were already scoped by the contract's own
 pre-existing text as **CLASS-2-time blockers, not architecture blockers**.
 New non-blocking decision: `D-F3` (flap/failover threshold, parallel to
 `D-F1`/`D-F2`). `D-V8` remains open, non-blocking. Full reasoning:
-`project/roadmap.json` `open_decisions`; contract §"Final semantic blocker
-closure — session 4".
+`project/roadmap.json` `open_decisions`; contract §"Final semantic blocker closure — session 4".
 
 ## PAN HA serial evidence
 
@@ -109,24 +111,22 @@ identity-gated successfully; one member's `self_identity_consistent` and
 — representation divergence, a genuine runtime discrepancy, and another
 semantic mismatch are all still possible; whitespace/numeric-conversion
 causes are ruled out by source inspection. Leading-zero normalization is
-**not authorized** (`AGENTS.md` opaque-identifier law). Tracked as
-`project/backlog.json` `pan_serial_representation_identity_evidence_closure`.
+**not authorized** (opaque-identifier law). Tracked as `project/backlog.json`
+`pan_serial_representation_identity_evidence_closure`.
 
 ## Exact next build
 
 `cp_remote_collection_done_marker_diagnostics` (`now_next.upcoming`) needs a
 real recurrence with the new diagnostic fields — independent of `OP.0b`.
 
-`now_next.next` is **`op0b_s5_cp_preflight_collector`** (`OP.0b` S5) —
-**unblocked** (PO approved the gate 2026-09-03; see "Active build").
-Implementation battery is the PO-frozen one, not the wider technical
-candidate list — exact rows, `NO_RETRY`/session constraints and network
-bound: `docs/history/phase/OP_0B_1_COMMAND_GATE_PACKAGE.md` "Approval
-record" + `project/roadmap.json` `now_next.next.notes`. S6 (PAN) is the
-parallel sibling slice, same approval, per dependency order `S0 → S1 →
-(S2, S3) → S4 → (S5, S6) → S7 → S8; S9 independent after S7`. Recommended
-branch: `feature/op0b-s5-cp-preflight-collector`, new session, `Sonnet 5,
-normal` — bounded implementation against a frozen, PO-approved gate.
+`now_next.next` is **`op0b_s6_pan_preflight_collector`** (`OP.0b` S6) —
+the parallel Palo Alto sibling slice to `S5` above, same PO approval
+(`P1`/`P2` existing + `P4`, `NO_RETRY`, ≤6 invocations/pair — exact rows in
+`docs/history/phase/OP_0B_1_COMMAND_GATE_PACKAGE.md` "Approval record" +
+`project/roadmap.json` `now_next.next.notes`). Per dependency order `S0 →
+S1 → (S2, S3) → S4 → (S5, S6) → S7 → S8`, only `S6` remains before `S7`.
+Recommended branch `feature/op0b-s6-pan-preflight-collector`, new session,
+`Sonnet 5, normal`, same shape as `S5` above.
 
 `D-V3a`/`D-V7b` stay **preserved unresolved CLASS-2 blockers** (`upcoming`,
 not reopened/closed — gate only the PAN successor identity model and
@@ -147,8 +147,7 @@ identity closure — hardware-blocked (`Sonnet 5, normal` initially).
 | `DEPLOY.1` gates | server availability (external) | external |
 | `inventory_exclusions_management_ui_backend` | stays `in_progress` **by design** — do not wire its write functions into any HTTP-reachable surface before `DEPLOY.1A`'s OIDC/RBAC boundary exists | design |
 
-Concurrency budget stays at 1 per vendor pending its own real-environment
-evidence.
+Concurrency budget stays at 1 per vendor pending its own real-environment evidence.
 
 ## Real-environment validation owed
 
@@ -167,10 +166,11 @@ evidence.
 ## Automated test baseline
 
 ```
-1215 passed / 24 skipped / 0 failed (2026-09-03, dev_kaizen_fast_pr_ci,
-  local full-dependency container, serial); 1210/24/0 on this branch
-  before the merge above (one file fewer, pre-#38). Both supersede the
-  prior CI baseline of 1153/28/0 (PR #36).
+1277 passed / 26 skipped / 0 failed (2026-09-03, op0b_s5_cp_preflight_collector,
+  this session's local sandbox, serial) -- +48 new (test_op0b_s5_cp_preflight_
+  collector.py) over the prior CI baseline (dev_kaizen_fast_pr_ci, PR #38:
+  1215/24/0; supersedes 1153/28/0, PR #36). Count also reflects a fresh
+  sandbox needing requirements-console.txt installed -- unrelated to this build.
 Repository privacy gate: PASS / 0 findings, clean checkout.
 Project-state consistency: metadata_warnings == [] under all cross-authority rules.
 ```
