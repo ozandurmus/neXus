@@ -19,77 +19,99 @@ doc. Prior versions are in git history.
 - Date: 2026-09-03. Branch `claude/vendor-semantics-confirmation-pt2iiq`.
 - Product baseline `0.7.7`; engineering baseline unchanged (`DEV.4`
   AUTOMATED_VALIDATED).
-- This session: **`op0b_0_official_vendor_semantics_confirmation_pass1`** —
-  a `DOCS`/vendor-semantics-audit movement against the `OP.0b.0` draft
-  contract. Documentation-only; no product code, collector, schema,
-  transport or UI behavior changed; no device contacted.
+- This session: **`op0b_0_official_vendor_semantics_confirmation_pass2`**
+  ("Source Pack 2") — third `DOCS`/vendor-semantics-audit pass against the
+  `OP.0b.0` draft contract, working from a supplied source-pack hypothesis
+  the task required independently re-verifying. Documentation-only; no
+  product code, collector, schema, transport or UI behavior changed; no
+  device contacted.
 
 ## 2. What changed this session
 
-Second attempt (session 1 was the original 2026-09-02 draft) at resolving
-`OP.0b.0`'s `D-V1…D-V7`/`D-V9` blocking rows against official vendor
-documentation. A page-fetch tool (`WebFetch`) returned `EGRESS_BLOCKED`
-against every official Check Point/Palo Alto host tried
-(`support.checkpoint.com`, `sc1.checkpoint.com`, `docs.paloaltonetworks.com`,
-`pan.dev`) — the identical failure class session 1 recorded as
-`CONNECT 403`. A separate search tool (`WebSearch`) remained reachable and
-returned indexed snippets, some of them genuine excerpts of official
-pages/KB articles with a citeable URL. Applying the audit task's official-
-source discipline strictly (never a search engine's own paraphrase, never
-community-forum content, never field-name correspondence alone) narrowed
-four rows and left three at their prior state:
+`pan.dev`/`sc1.checkpoint.com`/`support.checkpoint.com` returned
+`EGRESS_BLOCKED` again (third consecutive confirmation, same signature as
+sessions 1–2). New this session: `github.com`/`raw.githubusercontent.com`
+**are** reachable. Palo Alto's `pan.dev` "PAN-OS Upgrade Assurance" docs are
+generated from the official `PaloAltoNetworks/pan-os-upgrade-assurance`
+GitHub repository — fetched that instead (via `curl`, read verbatim, not
+summarized) and it settled `D-V4` outright: `group.running-sync`/
+`group.running-sync-enabled` are literal keys in the `show high-availability
+state` response, at `group` scope, exactly as asked. The same source showed
+`conn-ha1`/`conn-ha2` are nested objects (`conn-desc`/`conn-primary`/
+`conn-status`) with `conn-desc` literally reading `"heartbeat status"` /
+`"link status"` — strong new field-binding evidence for `D-V1`, and most of
+`D-V2`'s field family confirmed present at their named paths in one real
+captured response (two fields, `last-error-reason`/`last-error-state`, were
+conspicuously absent and stayed unconfirmed). A genuine correction found in
+the same source: `local-info/version` is an HA-protocol counter, not the
+PAN-OS software version — `build-rel` is.
 
-- `D-V1`, `D-V2`, `D-V4`, `D-V5`: `UNKNOWN` → `PARTIALLY_CLOSED` (official
-  concept-level semantics now cited, each with a precisely named residual
-  gap — see the contract's new dated section).
-- `D-V3a`, `D-V6`, `D-V7`: stayed `STILL_UNKNOWN` — no official page body
-  was retrievable for any of the three, by either session.
-- `D-V9a`: stayed `PARTIAL, unchanged`.
-- `D-V3` and `D-V9` were split into `a`/`b` sub-decisions per the audit
-  task's explicit instruction (docs-closable half vs real-env-only half).
+On the Check Point side (`WebSearch` only, no GitHub mirror found), search
+snippets repeated, verbatim and consistently, that `cphaprob -ia list` is
+"the complete list of the configured critical devices (pnotes)" —
+**contradicting** this session's own source-pack hypothesis that `-ia`
+returns only problem-state pnotes. Per the audit task's explicit instruction,
+the contradiction was reported and the better-evidenced reading kept; `D-V6`
+moved `STILL_UNKNOWN → PARTIALLY_CLOSED`, not `CLOSED_BY_DOCS`. Recovery-mode
+behavioral semantics ("Maintain current active" / "Switch to higher
+priority") were confirmed precisely, closing `D-V7a`; the Cluster Management
+API's documented feature gap ("use SmartConsole" for unsupported settings)
+explains but does not resolve `D-V7b` — no attribute name was invented.
+`D-V5` split into `D-V5a` (`PARTIALLY_CLOSED`, strong — version map across
+R80.20 GA–R82 confirmed, reset form confirmed as a separate mutating variant
+and explicitly excluded) and `D-V5b` (`OPEN`, no VSX-applicability statement
+found). A distinct PAN KB on serial leading-zero CSV handling strengthened
+(with a precise citation) the opaque-identifier prohibition, but — per the
+task's explicit instruction — does **not** advance `D-V3a`'s HA-state-field
+half, which stayed `STILL_UNKNOWN` (no serial field appeared in the one
+official HA-state example this session could read).
 
-No row reached `CLOSED_BY_DOCS`. `OP.0b.0` stays `DRAFT — DO NOT FREEZE`.
+**Net: `D-V4` and `D-V7a` are the first rows either session has fully
+closed.** `D-V3a` and `D-V7b` are now the actual remaining freeze blockers —
+safety-critical authoritative sources still unknown, not real-env-pending.
+`OP.0b.0` stays `DRAFT — DO NOT FREEZE`.
 
 Files touched: `docs/history/phase/OP_0B_0_VENDOR_FAILOVER_PREFLIGHT_EVIDENCE_SURFACE.md`
-(new dated section with the decision matrix + source table, Open decisions
-and Freeze decision updated, D-V3/D-V9 split), `project/build_history.json`
-(new head record, `in_progress`), `project/roadmap.json` (`now`/`next`
-advanced), `CURRENT_STATE.md`, this file. No test, source, schema, UI, or
-transport file touched.
+(new dated Source Pack 2 section with decision matrix + source table, D-V5/
+D-V7 split, several §24/§25 rows annotated, Open decisions/Freeze decision/
+Next movement updated), `project/build_history.json` (new head record,
+`in_progress`), `project/roadmap.json` (`now`/`next` advanced),
+`CURRENT_STATE.md`, `docs/history/INDEX.md` (regenerated), this file. No
+test, source, schema, UI, or transport file touched.
 
 ## 3. Exact next action
 
 Three independent threads, any order, any in parallel — see
 `CURRENT_STATE.md` "Exact next build" for the full detail:
 
-1. **Human-assisted vendor-doc confirmation** (`now_next.next`) — a human
-   fetches the specific pages the contract's new source table names for
-   `D-V3a`, `D-V6`, `D-V7` and pastes their body text in. Two consecutive
-   automated sessions hit an identical `WebFetch`-class egress block; do not
-   spend a third session retrying the same hosts the same way.
+1. **Close `D-V3a`/`D-V7b`** (`now_next.next`) — try an official GitHub
+   mirror first (the technique that worked this session), then fall back to
+   a human fetching the specific pages the contract's source table names.
 2. **PAN serial representation/identity evidence closure** (hardware-
    blocked, unchanged by this session).
-3. **Real-environment residuals** this session's pass recorded (`D-V5`
-   schema parity + VSX applicability, `D-V9a`/`D-V9b` estate applicability,
-   `D-V1`/`D-V2`/`D-V4` field-binding/vocabulary gaps) — already folded into
-   the contract's existing S0–S8 slice sequence; not separately schedulable
-   before `FREEZE`.
+3. **Real-environment residuals** (`D-V5a`/`D-V5b` schema/VSX parity,
+   `D-V9a`/`D-V9b` estate applicability, `D-V1`/`D-V2` exhaustive-vocabulary
+   gaps) — already folded into the contract's existing S0–S8 slice sequence.
 
 ## 4. Test delta
 
 None. No test file changed; no code changed. `CURRENT_STATE.md` "Automated
 test baseline" (1099 passed / 24 skipped / 0 failed) is unaffected and
-authoritative — this session did not re-run it (nothing it covers changed).
+authoritative — this session did not re-run the full suite (this container
+lacks `lxml`/`cryptography`/`paramiko`/`fastapi`; `test_architecture_
+convergence.py`, the suite that actually exercises this session's changes,
+ran clean at 19/19 via the local `pytest` binary).
 
 ## 5. New risks / debt
 
 None introduced. The pre-existing `OP.0b.0` bug/gap register (`P0`/`P1`
-rows) is untouched. New, explicit: two consecutive sessions confirm the
-`WebFetch`-class block against official vendor hosts is a structural
-property of this execution environment, not incidental — future sessions
-should not be instructed to "just try an unblocked network" without a
-concrete different resourcing (human fetch, or a genuinely different egress
-path).
+rows) is untouched. New, explicit: the `WebFetch`-class block against
+`pan.dev`/`sc1.checkpoint.com`/`support.checkpoint.com` is now confirmed a
+third time and should be treated as structural, but it is **not** a blanket
+block — `github.com` worked and settled two rows. Future sessions on the
+remaining rows should try an official GitHub mirror before assuming only a
+human fetch can help; no equivalent Check Point mirror was found this
+session, so that side likely still needs a human.
 
 ## 6. Continue or fresh chat
 
