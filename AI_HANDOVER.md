@@ -17,106 +17,94 @@ doc. Prior versions are in git history.
 ## 1. Snapshot
 
 - Date: 2026-09-03. Branch `claude/checkpoint-preflight-collector-i1yyz7`,
-  base `main` (at `abf0bb4`, PR #41 merged — `OP.0b` S4 command gate,
-  PO-approved). This build, `op0b_s5_cp_preflight_collector`, is `OP.0b`
-  S5 — the first dedicated Check Point failover-preflight collector.
+  reset fresh off `main` at `7143e21` (PR #42 merged — `OP.0b` S5). This
+  build, `op0b_s6_pan_preflight_collector`, is `OP.0b` S6 — the dedicated
+  Palo Alto failover-preflight collector, `S5`'s parallel sibling slice.
 
 ## 2. What changed this session
 
-Implemented `checkpoint/preflight_collector.py` — the dedicated Check
-Point `CLASS-0` preflight collector — strictly within the PO-frozen
-`OP.0b.1` command gate (`docs/history/phase/OP_0B_1_COMMAND_GATE_PACKAGE.md`,
+Implemented `panorama/preflight_collector.py` — strictly within the
+PO-frozen `OP.0b.1` command gate (`docs/history/phase/OP_0B_1_COMMAND_GATE_PACKAGE.md`,
 "Approval record", PR #41). For one caller-selected, bounded (≤2 member)
-HA operational entity: one SSH session per physical member (reused for
-every read including `B1`, never re-opened), one `preflight_run_id`, and
-exactly the authorized battery — `A1`–`A3` (existing, reused via
-`configuration.checkpoint_config_probe`/`configuration.checkpoint_config_collector`
-primitives, not duplicated) + new `A4` (`cphaprob -a if`), `A5`
-(`cphaprob -ia list`), `A6` (`cphaprob syncstat` / `fw ctl pstat`,
-version-dispatched from `A2`), `A7` (`fw stat`), `A8` (cluster failover
-statistics, platform-dispatched, default invocation only) + `B1`
-(`vsx stat -v`, VSX battery only, same session). `A6`/`A8` dispatch is
-evidence-based, decided before execution, never a failure-driven fallback;
-no command carries an application-level retry.
+PAN HA pair: one direct API key per member, reused for `P1` (`show system
+info`, identity gate — exact serial string comparison only, no
+normalization), `P2` (`show high-availability state`, reusing the
+existing `S2` `_parse_pan_ha_preflight_fields`/`project_pan_preflight_facts`
+unchanged), `P4` (`show high-availability path-monitoring`, new); one
+`preflight_run_id`; no application-level retry. `D-T1` (direct vs.
+Panorama-proxy transport) resolved as **direct for every row** inside this
+collector only — `P1`'s frozen plane is unconditionally direct and the
+gate's PAN preamble forbids splitting `P2`/`P4` onto a different plane, so
+all three reuse one direct API key/host rather than mixing direct (`P1`)
+with Panorama-proxied (`P2`/`P4`).
 
-New files: `checkpoint/cp_preflight_battery.py` (fixed typed
-`CPPreflightRead` command plan, `COMMAND_TEXT` literal map, `resolve_a6_form`/
-`resolve_a8_form` dispatch resolvers, `build_member_schedule`, and a
-deterministic `assert_battery_excludes_forbidden_commands` guard — run at
-import time — proving `A9`/`A10`/`A11` and every rejected mutating command
-are absent by construction); `checkpoint/cp_preflight_extraction.py` (one
-pure, fail-closed parser per new command — no raw output retained beyond
-the parse call). `checkpoint/cp_preflight_projection.py` (existing S3 seam
-module) gains one projection function per new command
-(`project_cp_software_version_fact`, `project_cp_link_health_facts`,
-`project_cp_pnote_facts`, `project_cp_sync_facts`, `project_cp_policy_facts`,
-`project_cp_failover_history_facts`, `project_cp_vsx_enumeration_facts`);
-`A1`–`A3`'s existing `project_cp_preflight_facts` is unchanged.
+New files: `panorama/pan_preflight_battery.py` (fixed typed
+`PANPreflightRead` enum, `COMMAND_TEXT` literal map, a deterministic
+`assert_battery_excludes_forbidden_commands` guard — run at import time —
+proving `P3`/`P5` and every rejected mutating PAN operation are absent by
+construction); `panorama/pan_preflight_extraction.py` (one pure,
+fail-closed parser for `P4`, `parse_pan_path_monitoring`).
+`panorama/pan_preflight_projection.py` (existing S2 seam) gains
+`project_pan_identity_fact` (`P1`) and `project_pan_path_monitoring_facts`
+(`P4`); `P2`'s existing `project_pan_preflight_facts` is unchanged.
 
-New `tests/test_op0b_s5_cp_preflight_collector.py` (48 tests) covers all
-40 numbered requirements from the build task (§27–§29): command-plan
-invariants, synthetic-session collection (identity-gate-stop, per-command
-failure isolation, invocation-count bounds ≤16 non-VSX / ≤18 VSX, no raw
-output in serialization), and the VSX battery. No readiness verdict
-anywhere; no new SSH transport/credential path; no raw command output
-persisted. Real device contact: **none** this session.
+New `tests/test_op0b_s6_pan_preflight_collector.py` (41 tests) covers all
+36 numbered requirements from the build task (§21–§23) plus extraction
+fixtures: battery invariants (P3/P5/mutation absence, no retry, ≤6
+calls/pair), synthetic-session collection (identity-gate-stop, per-command
+failure isolation, symbolic `source_command`, raw-value absence from
+serialization), and `B2` non-establishment (peer claim never promoted to
+own fact or a synthesized member, no serial normalization, leading-zero
+identifiers stay distinct). No readiness verdict; no new API session
+shape/credential path/TLS policy; no raw response persisted. Real device
+contact: **none** this session.
 
-Updated `project/roadmap.json` (`now_next.now` → `op0b_s5...`
-`automated_validated`; `now_next.next` → `op0b_s6_pan_preflight_collector`
-`planned`), `project/build_history.json` (new S5 record, newest-first),
+Updated `project/roadmap.json` (`now_next.now` → `op0b_s6...`
+`automated_validated`; `now_next.next` → `op0b_s7_readiness_v2_integration`
+`planned`), `project/build_history.json` (new S6 record, newest-first),
 `CURRENT_STATE.md` (checkpoint, Active build, Predecessors, Exact next
-build, test baseline), and regenerated `docs/history/INDEX.md` via
-`scripts/build_history_index.py`.
+build, test baseline), and regenerated `docs/history/INDEX.md`.
 
 ## 3. Exact next action
 
-`OP.0b` S6 — Palo Alto dedicated preflight collector
-(`panorama/preflight_collector.py`), same shape as this session's `S5`:
-`panorama/pan_preflight_battery.py` (fixed command plan, guard proving
-`P3`/`P5` absent from the implementation battery), one pure extraction
-helper per new command, additions to the existing PAN S2 projection seam.
-Battery: `P1`/`P2` (existing) + `P4` (`show high-availability
-path-monitoring`, `NO_RETRY`) = 3 required reads/member, ≤6 required
-invocations/pair. New session, fresh `origin/main`, branch
-`feature/op0b-s6-pan-preflight-collector`, `Sonnet 5, normal`. Full
-detail: `project/roadmap.json` `now_next.next.notes` +
-`docs/history/phase/OP_0B_1_COMMAND_GATE_PACKAGE.md` "Approval record".
+`OP.0b` S7 — readiness v2 integration. First slice to consume
+`PreflightSnapshot`/`evaluate_coherence` (S1) and the real per-member
+evidence `S5`/`S6` now produce, and to define/wire the readiness-v2
+verdict path — still `CLASS 0` read-only, still no `SAFE_TO_FAILOVER` by
+construction (existing `utils.failover.assessment` invariant, test-enforced).
+New session, fresh `origin/main`, branch `feature/op0b-s7-readiness-v2`,
+`Sonnet 5, extended thinking (high)` — new architecture/readiness-verdict
+design, per this repo's routing table.
 
 ## 4. Test delta
 
-+48 (`tests/test_op0b_s5_cp_preflight_collector.py`, new file). No
-existing test changed or removed. This session's local full suite: 1277
-passed / 26 skipped / 0 failed (serial) — see `CURRENT_STATE.md`
-"Automated test baseline" for why this count differs from the last
-CI-recorded baseline (a fresh sandbox needed `requirements.txt`/
-`requirements-console.txt` installed; unrelated to this build's code).
++41 (`tests/test_op0b_s6_pan_preflight_collector.py`, new file). No
+existing test changed or removed. This session's local full suite: 1318
+passed / 26 skipped / 0 failed (serial) — up from S5's 1277/26/0 in the
+same sandbox.
 
 ## 5. New risks / debt
 
-- Real-env validation (`S8`) still owed for `A4`–`A8`/`B1` — exact vendor
-  field vocabulary for `A6`'s `syncstat`/`pstat` status token and `A8`'s
-  two failover-history forms is `UNKNOWN` pending a real device read; the
-  extraction parsers are fail-closed on anything unrecognized by design.
-- `D-F3` (flap/failover threshold) stays unresolved — `A8`'s count is
-  collected but no PASS/healthy verdict is ever derived from it.
-- `A9` (configured recovery/preemption) remains `DEFERRED_UNKNOWN` — bug
-  register `CP-3`, `P0` before `CLASS 2`.
-- No PR opened yet this session (task instructions specify a
-  `feature/op0b-s5-cp-preflight-collector` branch/PR; this session's
-  designated push target per the harness is
-  `claude/checkpoint-preflight-collector-i1yyz7` — see commit for the
-  reconciliation note).
+- Real-env validation (`S8`) still owed for `P1`/`P2`/`P4` — exact real
+  PAN-OS `show high-availability path-monitoring` response shape/
+  vocabulary is `UNKNOWN` pending a real device read; the extraction
+  parser is fail-closed on anything unrecognized by design.
+- `D-T1` (direct vs. Panorama-proxy transport) is resolved as "direct for
+  every row" **inside this collector only** — a non-blocking, revisitable
+  implementation choice, not a new frozen contract decision.
+- `D-V3a` (PAN HA serial identity) and `B2` (bidirectional pair-identity
+  corroboration) both remain unresolved/`NOT ESTABLISHED` — this build
+  touches neither the pair-identity model nor serial normalization.
+- No PR opened yet this session.
 
 ## 6. Continue or fresh chat
 
-Fresh session for `S6` — the build task itself specifies "NEW SESSION
+Fresh session for `S7` — the build task itself specifies "NEW SESSION
 REQUIRED" for each `OP.0b` slice, and state is fully recorded here,
 `CURRENT_STATE.md`, and `build_history.json`.
 
 ## 7. main.py / UI effect
 
-None. `checkpoint/preflight_collector.py` is new, dormant code — nothing
-in `main.py`'s existing CLI modes calls it yet (wiring a real invocation
-path is a future build's job, consistent with how S1/S3's extraction/
-projection seams stayed dormant until this session used them). No UI
-payload, template, or `static/` file changed.
+None. `panorama/preflight_collector.py` is new, dormant code — nothing in
+`main.py`'s existing CLI modes calls it yet. No UI payload, template, or
+`static/` file changed.

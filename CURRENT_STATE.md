@@ -7,15 +7,14 @@ detail is not here either** — it is in `project/build_history.json`
 linked documents under `docs/history/`. `docs/history/INDEX.md` is the
 generated one-line timeline.
 
-- **Checkpoint:** 2026-09-03, branch `claude/checkpoint-preflight-collector-i1yyz7`
-  (base `main`).
+- **Checkpoint:** 2026-09-03, branch `claude/checkpoint-preflight-collector-i1yyz7` (base `main`).
 - **Current build** (per `project/roadmap.json` `now_next.now`):
-  `op0b_s5_cp_preflight_collector` — **AUTOMATED_VALIDATED**. `OP.0b` S5:
-  first dedicated Check Point failover-preflight collector
-  (`checkpoint/preflight_collector.py`) — see "Active build" below.
-  `now_next.next` = `op0b_s6_pan_preflight_collector` (PAN sibling slice,
-  same PO approval). `cp_remote_collection_done_marker_diagnostics` stays
-  `now_next.upcoming` (`IN_PROGRESS`, independent subsystem).
+  `op0b_s6_pan_preflight_collector` — **AUTOMATED_VALIDATED**. `OP.0b` S6:
+  dedicated Palo Alto failover-preflight collector
+  (`panorama/preflight_collector.py`) — see "Active build" below.
+  `now_next.next` = `op0b_s7_readiness_v2_integration` (both S5/S6
+  collectors now exist). `cp_remote_collection_done_marker_diagnostics`
+  stays `now_next.upcoming` (`IN_PROGRESS`).
 - **Product baseline:** `0.7.7 — Compliance trend retro-fill` — AUTOMATED_VALIDATED.
 - **Engineering baseline:** `DEV.3.3` — AUTOMATED_VALIDATED. `DEV.1`,
   `DEV.4` complete.
@@ -48,23 +47,25 @@ test-enforced boundaries. Current numbers:
 
 ## Active build
 
-**`op0b_s5_cp_preflight_collector`** — **AUTOMATED_VALIDATED**, 2026-09-03.
-`OP.0b` S5: new `checkpoint/preflight_collector.py` — the first dedicated
-Check Point failover-preflight collector, strictly within the PO-frozen
+**`op0b_s6_pan_preflight_collector`** — **AUTOMATED_VALIDATED**, 2026-09-03.
+`OP.0b` S6: new `panorama/preflight_collector.py` — dedicated Palo Alto
+failover-preflight collector (`S5`'s CP sibling), within the PO-frozen
 `OP.0b.1` command gate (`docs/history/phase/OP_0B_1_COMMAND_GATE_PACKAGE.md`,
-"Approval record", PR #41). One SSH session per physical member (`B1`
-included, never re-opened), one `preflight_run_id`, exactly the authorized
-battery (`A1`–`A3` existing + new `A4`–`A8` + `B1` VSX-only), evidence-based
-`A6`/`A8` dispatch (never failure-driven), no application-level retry. New
-`checkpoint/cp_preflight_battery.py` + `cp_preflight_extraction.py`;
-`cp_preflight_projection.py` gains one projection function per new command
-on the existing `S1`/`S3` seam. No readiness verdict, no raw output
-persisted, no new SSH transport/credential path. Network bound proven by
-test: ≤16 non-VSX pair / ≤18 VSX pair. `tests/test_op0b_s5_cp_preflight_collector.py`
-(48 tests) + `S1`/`S3`/`S4`/architecture-convergence regression + full
-local suite (1277/26/0) + privacy gate (0 findings) — all green locally.
-No PR/CI evidence recorded yet. Real-env validation (`S8`) owed for
-`A4`–`A8`/`B1`'s exact vendor field vocabulary. Full detail:
+"Approval record", PR #41). One direct API key/member reused for `P1`
+(`show system info`, identity gate, exact serial comparison, never
+normalized) + `P2` (`show high-availability state`, existing `S2`
+extraction/projection unchanged) + `P4` (`show high-availability
+path-monitoring`, new), one `preflight_run_id`, no application-level
+retry. New `panorama/pan_preflight_battery.py` + `pan_preflight_extraction.py`;
+`pan_preflight_projection.py` gains `project_pan_identity_fact`/
+`project_pan_path_monitoring_facts`. No readiness verdict, no raw output
+persisted, no new API session/credential/TLS path, `B2` stays `NOT
+ESTABLISHED`. Network bound proven by test: ≤6/pair.
+`tests/test_op0b_s6_pan_preflight_collector.py` (41 tests) + `S1`/`S2`/`S4`/
+architecture-convergence + configuration subsystem regression (399 passed)
++ full local suite (1318/26/0) + privacy gate (0 findings) — all green
+locally. No PR/CI evidence recorded yet. Real-env validation (`S8`) owed
+for `P4`'s exact vendor response vocabulary. Full detail:
 `project/build_history.json`.
 
 **Stalled, moved to `now_next.upcoming`:**
@@ -76,9 +77,9 @@ safe category token instead of a bare byte count. Resume when a real
 recurrence report with the new diagnostic fields is available. Detail:
 `project/build_history.json`.
 
-**Predecessors:** `op0b_s4_command_gate_package` (AUTOMATED_VALIDATED, PR
-#41), `dev_kaizen_fast_pr_ci` (AUTOMATED_VALIDATED, PR #38, CI split into
-`validate`/`full-regression`), `op0b_s3_cp_parse_scope_extension` (PR #37),
+**Predecessors:** `op0b_s5_cp_preflight_collector` (PR #42),
+`op0b_s4_command_gate_package` (PR #41), `dev_kaizen_fast_pr_ci` (PR #38),
+`op0b_s3_cp_parse_scope_extension` (PR #37),
 `op0b_s2_pan_parse_scope_extension` (PR #36),
 `op0b_s1_preflight_fact_provenance_model` — all AUTOMATED_VALIDATED.
 Detail: `project/build_history.json`.
@@ -119,22 +120,22 @@ causes are ruled out by source inspection. Leading-zero normalization is
 `cp_remote_collection_done_marker_diagnostics` (`now_next.upcoming`) needs a
 real recurrence with the new diagnostic fields — independent of `OP.0b`.
 
-`now_next.next` is **`op0b_s6_pan_preflight_collector`** (`OP.0b` S6) —
-the parallel Palo Alto sibling slice to `S5` above, same PO approval
-(`P1`/`P2` existing + `P4`, `NO_RETRY`, ≤6 invocations/pair — exact rows in
-`docs/history/phase/OP_0B_1_COMMAND_GATE_PACKAGE.md` "Approval record" +
-`project/roadmap.json` `now_next.next.notes`). Per dependency order `S0 →
-S1 → (S2, S3) → S4 → (S5, S6) → S7 → S8`, only `S6` remains before `S7`.
-Recommended branch `feature/op0b-s6-pan-preflight-collector`, new session,
-`Sonnet 5, normal`, same shape as `S5` above.
+`now_next.next` is **`op0b_s7_readiness_v2_integration`** (`OP.0b` S7) —
+unblocked now that both `S5` (CP) and `S6` (PAN) dedicated preflight
+collectors exist. Per dependency order `S0 → S1 → (S2, S3) → S4 →
+(S5, S6) → S7 → S8; S9 independent after S7`, `S7` is the first slice to
+consume `PreflightSnapshot`/`evaluate_coherence` and define/wire the
+readiness-v2 verdict path — still `CLASS 0` read-only, still no
+`SAFE_TO_FAILOVER` by construction. Recommended branch
+`feature/op0b-s7-readiness-v2`, new session, `Sonnet 5, extended thinking
+(high)` — new architecture/readiness-verdict design.
 
 `D-V3a`/`D-V7b` stay **preserved unresolved CLASS-2 blockers** (`upcoming`,
 not reopened/closed — gate only the PAN successor identity model and
-CLASS 2, not S1–S9/S4/S5/S6). Three further independent `upcoming`
+CLASS 2, not S1–S9/S4/S5/S6/S7). Three further independent `upcoming`
 movements, any order: **A.** close `D-V3a`/`D-V7b` — GitHub-mirror first,
 then human-assisted fetch (`Sonnet 5, extended thinking high`). **B.**
-`D-F3` numeric flap threshold — product-owner call. **C.** PAN serial
-identity closure — hardware-blocked (`Sonnet 5, normal` initially).
+`D-F3` numeric flap threshold — product-owner call. **C.** PAN serial identity closure — hardware-blocked (`Sonnet 5, normal` initially).
 
 ## Open blockers
 
@@ -166,11 +167,10 @@ Concurrency budget stays at 1 per vendor pending its own real-environment eviden
 ## Automated test baseline
 
 ```
-1277 passed / 26 skipped / 0 failed (2026-09-03, op0b_s5_cp_preflight_collector,
-  this session's local sandbox, serial) -- +48 new (test_op0b_s5_cp_preflight_
-  collector.py) over the prior CI baseline (dev_kaizen_fast_pr_ci, PR #38:
-  1215/24/0; supersedes 1153/28/0, PR #36). Count also reflects a fresh
-  sandbox needing requirements-console.txt installed -- unrelated to this build.
+1318 passed / 26 skipped / 0 failed (2026-09-03, op0b_s6_pan_preflight_collector,
+  this session's local sandbox, serial) -- +41 new (test_op0b_s6_pan_preflight_
+  collector.py) over the S5 session's 1277/26/0 (same sandbox), itself +48 new
+  over the prior CI baseline (dev_kaizen_fast_pr_ci, PR #38: 1215/24/0).
 Repository privacy gate: PASS / 0 findings, clean checkout.
 Project-state consistency: metadata_warnings == [] under all cross-authority rules.
 ```
