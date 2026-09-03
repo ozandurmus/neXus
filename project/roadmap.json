@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "current_build": "op0b_s1_preflight_fact_provenance_model",
+  "current_build": "op0b_s2_pan_parse_scope_extension",
   "current_track": "CON.x",
   "progress_contract": "Weighted acceptance-criterion completion. Percentages describe the declared roadmap, not calendar time or delivery ETA.",
   "tracks": [
@@ -123,33 +123,24 @@
   "now_next": {
     "horizon_contract": "NOW is exactly one build. NEXT is exactly one. Everything else is an `upcoming` row carrying its own true status: planned = AFTER, blocked = waiting on a named external gate, deferred = consciously postponed. `now.build` must equal the newest project/build_history.json record -- utils.project_plan enforces it.",
     "now": {
-      "build": "op0b_s1_preflight_fact_provenance_model",
-      "title": "OP.0b S1 - preflight fact + provenance model (pure, no I/O)",
-      "goal": "First bounded implementation slice against the FROZEN OP.0b.0 contract: utils/failover/preflight_model.py (new) -- PreflightFact/Provenance/PreflightMemberEvidence/PreflightSnapshot dataclasses, the 13-category evidence taxonomy, deterministic same-preflight-run coherence checking, explicit UNKNOWN/NOT_APPLICABLE/UNSUPPORTED/COLLECTION_FAILED fact states. Resolved the flagged S0-vs-S1 ordering question by proceeding: S1 needed no device I/O and no S0 result. Pure model code, zero I/O, no collector/parser/readiness-logic/schema/UI change; no device contacted; D-F1/D-F2/D-F3 deliberately left unresolved (raw data modeled, no threshold picked); CLASS 2 stays structurally unreachable (P4 invariant, unchanged). 23 targeted tests, all passing; two pre-existing test assertions (OP.0a decision P5's file-count check) updated in the same build to allow this one contract-named addition, narrowly, since P5's actual intent (no write-capable surface) is unaffected.",
+      "build": "op0b_s2_pan_parse_scope_extension",
+      "title": "OP.0b S2 - PAN preflight parse-scope extension (existing show high-availability state response)",
+      "goal": "Second bounded implementation slice against the FROZEN OP.0b.0 contract. configuration/panorama_config_collector.py: new _parse_pan_ha_preflight_fields() reads conn-status leaves, running-sync/-enabled, election/preemption, flap/duration counters, error state, and *-version/*-compat parity out of the SAME already-fetched show high-availability state response -- zero new command, zero new device contact. New include_preflight_fields=False opt-in parameter on get_target_ha_runtime_state; default behavior and the one existing production call site unchanged, new field family left dormant/unwired by design. New panorama/pan_preflight_projection.py (pure, no I/O): project_pan_preflight_facts() turns that field dict into S1 PreflightFact/PreflightMemberEvidence instances, routing peer claims to peer_claim_facts never own_facts, applying no D-F3 threshold, no readiness judgment. 34 new tests (20 lxml extraction -- NOT EXECUTED in this container, pre-existing gap; 14 pure projection -- 14/14 passed here). D-F1/D-F2/D-F3, D-V3a, D-V7b, PAN B2 all remain exactly as unresolved as before; CLASS 2 stays structurally unreachable (P4 invariant, unchanged).",
       "status": "automated_validated",
       "started": "2026-09-03",
       "completed": "2026-09-03"
     },
     "next": {
-      "build": "op0b_s2_pan_parse_scope_extension",
-      "title": "OP.0b S2 - PAN parse-scope extension of already-collected show high-availability state",
-      "goal": "Extend configuration/panorama_config_collector.py's/utils/failover_readiness_ui.py's parsing of the existing show high-availability state response (no new command, no new device contact) to populate PreflightFact/Provenance instances for conn-*, running-sync, sync/compat/election/flap fields per the frozen contract's field-binding findings. Synthetic real-shaped XML tests; no real-env required for this slice (S8 remains the real-env gate for schema/version confirmation). Can run in parallel with S3 (CP side, same pattern) per the contract's own S0 -> S1 -> (S2, S3) ordering.",
+      "build": "op0b_s3_cp_parse_scope_extension",
+      "title": "OP.0b S3 - CP parse-scope extension of already-collected cphaprob stat",
+      "goal": "Same pattern as S2, CP side: extend configuration/checkpoint_config_collector.py's parsing of the existing cphaprob stat output (no new command, no new device contact) to populate PreflightFact/Provenance instances for peer rows (state), Active Attention reason, Single VS Failover mode, wire form + collected_at on rows, per the frozen contract's field-binding findings. Synthetic fixtures + one captured sanitised real header; no real-env required for this slice (S8 remains the real-env gate). Independent of S2 (already landed) -- could equally have run first.",
       "status": "planned",
       "prerequisites": [
         "None technical. Independent of D-F3, D-V3a/D-V7b, and PAN serial closure below."
       ],
-      "note": "S3 (CP parse-scope extension, same pattern) is an equally valid parallel/alternative next build -- both are named in the contract's slice table with no ordering preference between them. Recommended: Sonnet 5, normal (deterministic implementation against a frozen contract, synthetic fixtures)."
+      "note": "Recommended: Sonnet 5, normal (deterministic implementation against a frozen contract, synthetic fixtures + one sanitised real header)."
     },
     "upcoming": [
-      {
-        "build": "op0b_s3_cp_parse_scope_extension",
-        "title": "OP.0b S3 - CP parse-scope extension of already-collected cphaprob stat",
-        "status": "planned",
-        "notes": [
-          "Same pattern as S2 (now_next.next), CP side: peer rows, Active Attention reason, Single VS Failover mode, wire form + collected_at on rows, populated as PreflightFact/Provenance per the frozen contract's field-binding findings. No new command, no new device contact.",
-          "Can run in parallel with S2 -- independent."
-        ]
-      },
       {
         "build": "op0b_0_close_d_v3a_d_v7b_pre_class2",
         "title": "OP.0b.0 - close D-V3a/D-V7b before CLASS 2 (not a freeze gate)",
@@ -178,7 +169,7 @@
         "notes": [
           "Blocked on access to the same approved real PAN pair used for the S0 result (hardware/real-environment, not a decision gate).",
           "Purpose: determine why one member's independently sourced serial representations (runtime local-info vs runtime peer-info claim) do not compare equal, without weakening opaque-identifier semantics -- not merely 'obtain B2'.",
-          "Independent of OP.0b S1 (now_next.next) -- may proceed independently.",
+          "Independent of OP.0b S2/S3 -- may proceed independently.",
           "Recommended: Sonnet 5, normal reasoning initially; escalate to extended thinking (high) only if vendor identity semantics become architectural."
         ]
       },
