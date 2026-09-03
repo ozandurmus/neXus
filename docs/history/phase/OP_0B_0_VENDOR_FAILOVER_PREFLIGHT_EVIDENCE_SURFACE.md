@@ -2,20 +2,34 @@
 
 ## Status
 
-**DRAFT — DO NOT FREEZE (2026-09-03, session 3 of the vendor-semantics audit,
-"Source Pack 2").**
+**CONTRACT FROZEN — WITH REAL-ENV VALIDATION GATES (2026-09-03, session 4,
+"Final Semantic Blocker Closure") — cleared for bounded implementation
+(slices S0–S9 as already sequenced below); CLASS 2 remains separately and
+structurally unreachable (P4 invariant, unchanged).**
 
 This document is structurally complete: every required section, the full
 command surface table (§24), the configuration/runtime field trace table (§25)
-and the bug/gap register (§26) are filled in. It is **not** cleared for
-implementation: two rows (`D-V4`, `D-V7a`) are now `CLOSED_BY_DOCS`, but
-several other **safety-critical vendor command semantics remain UNKNOWN or
-only PARTIALLY established** (`D-V3a` and `D-V7b` most notably — see
-"Freeze decision"), and this contract refuses to fill them from generic
-product knowledge.
+and the bug/gap register (§26) are filled in. Session 4 closes the freeze
+question, not every open fact: two rows (`D-V4`, `D-V7a`) are `CLOSED_BY_DOCS`;
+two remaining safety-critical rows (`D-V3a`, `D-V7b`) are genuinely
+`STILL_UNKNOWN` by any source reached across four sessions — but re-reading
+this document's own already-written fail-closed design (the hostname-keyed
+PAN identity fallback that stands until the successor serial model proves
+itself; check 6 `preemption_known` already specified "recorded, non-blocking")
+shows **both were already scoped, by the original session-1 drafters, as
+CLASS-2-time blockers, not architecture-interpretation blockers.** Every other
+residual row's minimal safe interpretation is now explicitly frozen (see
+§"Final semantic blocker closure — session 4" below). No safety-critical
+semantic requires guessing for the contract, as an evidence/interpretation
+model, to be usable; what remains is real-env measurement, `OP.0b.1`
+command-gate syntax work, one new bounded numeric-threshold decision, and —
+before CLASS 2 specifically, never before this freeze — closing `D-V3a`/
+`D-V7b` for real.
 
-Why some rows are still not fully established, stated plainly: three
-sessions, on different execution environments, have consistently found
+**Historical record, preserved verbatim (sessions 1–3, do not delete):** why
+some rows were not fully established at each prior pass, stated plainly at
+the time: three sessions, on different execution environments, have
+consistently found
 `pan.dev`, `sc1.checkpoint.com`, `support.checkpoint.com`,
 `docs.paloaltonetworks.com` and `knowledgebase.paloaltonetworks.com`
 unreachable for full-page fetch (`CONNECT 403` in session 1, `EGRESS_BLOCKED`
@@ -40,8 +54,11 @@ official vendor documentation) → `EVIDENCE CONTRACT` (this document, session
 1) → `VENDOR SEMANTICS AUDIT` (session 2, search-snippet-level confirmation
 pass) → `CONTRACT RECONCILIATION` (session 2) → `VENDOR SEMANTICS AUDIT`
 (session 3, Source Pack 2 — verbatim official-source read via an unblocked
-GitHub mirror, below) → `CONTRACT RECONCILIATION` (this document, updated in
-place).
+GitHub mirror) → `CONTRACT RECONCILIATION` (session 3) → `FINAL VENDOR
+SEMANTICS AUDIT` (session 4 — one last targeted D-V3a/D-V7b search, converging
+official-negative evidence for D-V7b) → `FINAL_CONTRACT_RECONCILIATION` →
+`FREEZE_DECISION` (this document, updated in place; see §"Final semantic
+blocker closure — session 4" below).
 
 - Design parent: `docs/design/FAILOVER_ENGINE_ARCHITECTURE.md` §3.1, §3.2
   (per-vendor preflight reads), §4 (seven stop conditions), §7–§8 (engine and
@@ -799,6 +816,14 @@ S9 independent after S7.
 
 ## Acceptance criteria (for the FROZEN version)
 
+**Note (session 4):** these are bars for the *implementation* slices (S1–S9)
+and the `OP.0b.1` gate package to clear, evaluated against this now-frozen
+contract — not conditions on freezing the contract itself (that determination
+is §"Freeze decision"/§"Final semantic blocker closure"). AC-1 in particular
+still has `UNKNOWN` entries today (D-V5a/D-V6's exact syntax, D-V3a/D-V7b);
+closing them is `OP.0b.1`/pre-CLASS-2 work, tracked there, not a reason this
+document stays `DRAFT`.
+
 - **AC-1** Every §24 row has no `UNKNOWN` in the Read-only, Authoritative-for
   or Official-source columns, or is `REJECTED`.
 - **AC-2** Every §25 row is `COLLECTED_AND_PARSED` or has a named slice.
@@ -1240,26 +1265,242 @@ Exact semantic established: precise behavioral semantics of "Maintain current ac
 Still not established: any machine-readable attribute/property name for the recovery-method setting, on the Simple Cluster API or the broader Management API
 Contract consequence: D-V7a → `CLOSED_BY_DOCS`; D-V7b stays `STILL_UNKNOWN` with documented context; no attribute name invented
 
+## Final semantic blocker closure — session 4 (2026-09-03)
+
+Fourth and final broad vendor-semantics session (`OP.0b.0 — FINAL SEMANTIC
+BLOCKER CLOSURE`). Scope, per the task's own instruction: one last targeted
+search each for `D-V3a`/`D-V7b`, then a classification-only triage of every
+residual `PARTIAL` row, then the freeze decision. Not another general
+architecture review; nothing below reopens settled repository source audit,
+recorded real-environment findings, or the domain invariants — it only
+determines whether their existing consequences were already sufficient to
+freeze.
+
+### D-V3a — one final search, and the freeze-boundary question
+
+Re-read the official PaloAltoNetworks `pan-os-upgrade-assurance` source
+(`firewall_proxy.py`) with a search targeted specifically at `serial`: it
+appears once, in `get_licenses()` (device license serials, unrelated), and
+**not at all** in `get_ha_configuration()`'s documented `show
+high-availability state` response shape. This is the same official source
+that closed `D-V4`; its `get_ha_configuration()` docstring is presented as a
+comprehensive real (masked) capture, and it does not carry a serial field.
+Absence of evidence is not evidence of absence, but across four sessions no
+accessible source — official or otherwise — has named `local-info/serial-num`
+or `peer-info/serial-num`'s semantics inside this specific command. `D-V3a`
+stays `STILL_UNKNOWN` for HA-field serial binding.
+
+The freeze-boundary question (§5 of the audit task): does `OP.0b.0` need
+`D-V3a` closed to freeze? Re-reading this document's own **already-written**
+"Identity contract → Palo Alto" section (§"Identity contract", unchanged by
+this session) answers it: the serial-keyed **candidate** pair identity is
+explicitly `**NOT FROZEN** until the real-env serial correspondence result is
+`MATCH`/`MATCH` and the official semantics of `peer-info/serial-num` are
+confirmed. Until then the current hostname-keyed unit id stands and its known
+defects stand with it.` This is precisely the deterministic, fail-closed
+fallback §5/§16 of the audit task asked whether a safe contract could state —
+**it already does**, from session 1. The base architecture (evidence
+taxonomy, B₁/B₂ grading, hostname-keyed unit identity, provenance model) does
+not depend on the serial-keyed successor model existing yet; it depends only
+on that successor model never being silently adopted without both `D-V3a`
+closing *and* `D-V3b` matching — which the existing "NOT FROZEN" language
+already guarantees. `D-V3a` is therefore **not** an architecture-freeze
+blocker. It remains exactly what "Identity contract" and bug-register row
+`PAN-7` already scope it as: a prerequisite for the *successor* identity
+model and, transitively, for any PAN CLASS 2 path — i.e. a CLASS-2-time
+blocker. This is not a weakening: the identity requirement itself (B₂,
+opaque comparison, no normalization) is unchanged; only its classification
+against the freeze/CLASS-2 boundary is being stated explicitly for the first
+time.
+
+### D-V7b — one final search, and the freeze-boundary question
+
+Two further official-adjacent negatives, beyond session 3's "Simple Cluster
+API does not support all cluster object features" finding: (1) the official
+`CheckPointSW/CheckPointAnsibleMgmtCollection` GitHub repository's
+`cp_mgmt_simple_cluster` module — a comprehensive, actively maintained
+parameter-by-parameter specification of the `simple-cluster` object
+(interfaces, security blades, VPN, topology, members, etc.) — documents **no**
+recovery, failback, preemption, or "maintain current active"/"switch to
+higher priority" parameter anywhere in its `DOCUMENTATION` block; (2) no
+official schema/OpenAPI source for the broader (non-"simple") generic
+Management API's cluster-object attributes was found either. Together these
+converge, more strongly than session 3's finding alone, on: the setting is
+**not** exposed through the documented, supported, safe-to-automate Check
+Point management surface. It remains possible in principle that Check
+Point's lower-level generic-object API (`show-generic-object`, whose internal
+attribute names are not individually documented as stable) could reach it,
+but this contract does not invent that attribute name, per the audit task's
+explicit prohibition. `D-V7b` stays `STILL_UNKNOWN`.
+
+The freeze-boundary question (§9 of the audit task): audit the **current**
+contract only. §"Seven-check model review" already reads: `6 preemption_known
+| KEEP (recorded, non-blocking) | CP source is management plane (sk180184);
+PAN is runtime preemptive/priority/preempt-hold`. The minimum CP battery's own
+row A9 already reads: `management-plane recovery setting | ... | 6 UNKNOWN
+(not blocking, recorded)`. Both are **pre-existing, unchanged, mutually
+consistent** — check 6 is explicitly, doubly specified as excluded from the
+`PASS`-all requirement (the same `NOT_APPLICABLE`-adjacent treatment already
+formalized for other excluded cases in §"Fail-closed / UNKNOWN semantics").
+No `CONTRACT CONTRADICTION` exists. Answer: **NO**, `preemption_known` is not
+currently required for `SAFE_TO_FAILOVER`. `D-V7b` is therefore **not** an
+architecture-freeze blocker. Exact readiness consequence: `configured_
+preemption = UNKNOWN` is recorded on every unit until a later approved
+management-source slice establishes retrieval; this never by itself prevents
+a unit's other seven checks from reaching `SAFE_TO_FAILOVER` once `OP.0b.1`'s
+gate package lands (§P4 invariant keeps that structurally unreachable
+regardless, today). Per bug-register row `CP-3` (`preemption not reliably
+device-readable; no management-plane read exists | P0`), this remains a hard
+prerequisite **before CLASS 2** — unchanged, and now stated explicitly as a
+CLASS-2 boundary item rather than an ungrouped "P0."
+
+### Residual PARTIAL row triage (§10–§13 of the audit task)
+
+Applying the safety-minimalism principle (§11/§12: a minimal proven
+authoritative predicate, fail-closed on anything unrecognized, beats
+exhaustive vocabulary reverse-engineering) to each row still `PARTIALLY_
+CLOSED`, without reopening their research:
+
+- **`D-V1`** (PAN `conn-*`) — `SEMANTIC interpretation now FROZEN`: `conn-
+  status`-class value `"up"` → healthy signal; any other value (recognized
+  `"down"` or unrecognized) → not sufficient for `PASS`; an absent field is
+  already covered by the pre-existing domain invariant 6 ("absence of
+  observation ≠ observation of absence" → `UNKNOWN`/`COLLECTION_FAILED`,
+  never `KNOWN_BAD`) — vendor confirmation of *every* possible string was
+  never required. Applies uniformly to `conn-status` wherever it appears
+  (top-level scalar or nested inside `conn-ha1`/`conn-ha2`) — the fail-closed
+  default means an unproven assumption about a specific nested occurrence's
+  vocabulary fails safe (an incorrect `UNKNOWN`), never unsafe (an incorrect
+  `PASS`). Classification: `REAL_ENV_VALIDATION_GATE` (S2 — confirm the
+  parser reads the now-known nested paths against real captured output).
+- **`D-V2`** (PAN sync/compat/election/flap) — split: `state-sync`
+  (`"Complete"` → healthy, else → not-sufficient, same pattern as `D-V1`) and
+  `*-compat` (`"Match"` → healthy, `"Mismatch"` → an explicit, vendor-
+  documented parity failure, else → `UNKNOWN`) are `SEMANTIC interpretation
+  FROZEN`, `REAL_ENV_VALIDATION_GATE` only (S2). The `preemptive`/`priority`/
+  `preempt-hold`/`promotion-hold` sub-family feeds check 6, already
+  non-blocking (see `D-V7b` above) — its residual ambiguity is therefore
+  provably non-blocking too. The `max-flaps`/`nonfunc-flap-cnt`/`preempt-
+  flap-cnt`/`state-duration` sub-family feeds check 7 (flap_history), which
+  — unlike check 6 — is **not** marked non-blocking in the existing text, and
+  no exact pass/fail threshold for these counters is frozen anywhere in this
+  document for either vendor. This is a genuine, narrow, still-open question,
+  but it is **the same shape** of gap the contract already treats as
+  non-blocking-for-freeze: `D-F1`/`D-F2` are already open, non-blocking,
+  product-owner numeric-threshold decisions (max age, skew tolerance) sitting
+  underneath an otherwise-frozen structure. This session adds a third,
+  `D-F3`, on the same terms: the qualitative meaning of check 7 is fixed now
+  (exceeding an as-yet-undecided flap/failover-frequency threshold is unsafe;
+  an undecided threshold means check 7 cannot yet compute a real `PASS` —
+  fail-closed, not silently permissive), the number is a bounded
+  implementation-time decision. `last-error-reason`/`last-error-state`
+  binding stays unconfirmed (absent from the one official captured example)
+  but both are corroborative reason-text, never the primary gating fact
+  (`state`'s non-functional-set membership is) — their absence is an
+  acceptable, already-fail-closed outcome, not a blocker.
+- **`D-V5a`** (CP failover statistics) — `SEMANTIC interpretation FROZEN`
+  under the §12 minimal-parser-contract principle: count, last event/reason/
+  time is enough; extra columns are safely ignorable; the reset form is
+  already identified and `REJECTED`. The exact CLI flag/history-depth syntax
+  and full Clish/Expert schema parity are `COMMAND_GATE_ONLY` — precisely
+  `OP.0b.1`'s job, not an open safety interpretation. Same `D-F3` threshold
+  caveat as `D-V2`'s flap family applies symmetrically here (CP check 7).
+- **`D-V5b`** (VSX applicability of failover statistics) — re-examined
+  against the **already-frozen** battery definition (§"Evidence per check —
+  VSX physical cluster": "Same battery as ClusterXL run in the **physical
+  (VS0) context**"): failover statistics was never specified as a per-VS
+  read. The question the source pack raised turns out not to be load-bearing
+  — nothing in the frozen minimum battery needs a per-VS answer. Reclassified
+  `NON_BLOCKING_INFORMATIONAL`; dropped from the active blocking list.
+- **`D-V6`** (CP pnote/state) — `SEMANTIC interpretation FROZEN` under the
+  §12 minimal-parser-contract principle: any pnote in `problem` state (from
+  the confirmed-complete `-ia list` enumeration) → check 8 `KNOWN_BAD`
+  signal; none → healthy; read failure → `UNKNOWN`. `cphaprob state` was
+  already `OPTIONAL`/corroboration-only in §24 before this session — its
+  unresolved field set was never load-bearing. The `-l`/`-i` exact
+  differentiation is `COMMAND_GATE_ONLY`.
+- **`D-V9a`** (VSX sk165432 caveat) — already `SEMANTIC interpretation
+  FROZEN`, verbatim, in the pre-existing §"Evidence per check — VSX Virtual
+  System" text: *"a `Down` read in a non-VS0 context is `UNKNOWN` until
+  real-env validation on this estate's version proves the read reliable...
+  never `KNOWN_BAD`, and never a per-VS action input."* This is exactly the
+  deterministic rule §13 of the audit task asked whether documentation
+  supports — it was already written. `D-V9a` was never an architecture
+  blocker once this is recognized; `D-V9b` (does the caveat manifest on this
+  estate) remains a pure `REAL_ENV_VALIDATION_GATE` (S8) precisely because
+  the frozen interpretation is safe regardless of the real answer, and — per
+  domain invariant 9 — a VS is never a CLASS-2 execution target either way.
+
+### Final blocker table (§18 of the audit task)
+
+| Decision | Semantic status | Architecture freeze blocker? | Real-env blocker? | CLASS 2 blocker? | Exact next closure |
+| --- | --- | --- | --- | --- | --- |
+| D-V1 | Interpretation FROZEN (minimal predicate + invariant 6) | NO | YES (S2) | NO | S2 parse-scope extension |
+| D-V2 | Interpretation FROZEN for sync/compat/preemption family; flap family needs `D-F3` | NO | YES (S2) | NO (check-6 pieces) | S2 + `D-F3` product-owner decision |
+| D-V3a | STILL_UNKNOWN (HA-field binding); successor model already `NOT FROZEN`, fallback stands | NO | N/A (docs-only) | YES | GitHub-mirror/human fetch — pre-CLASS-2 |
+| D-V3b | `B2 NOT ESTABLISHED`, unchanged | NO | YES | YES (min. identity input) | S0, unchanged |
+| D-V4 | CLOSED | NO | NO | depends on implementation | — |
+| D-V5a | Interpretation FROZEN (count/reason/time minimal contract; reset excluded) | NO | YES (S8) | NO | `OP.0b.1` gate package + S8 |
+| D-V5b | Not load-bearing — battery only requires physical/VS0-level reads | NO | NO | NO | none — dropped from blocking list |
+| D-V6 | Interpretation FROZEN (pnote problem/no-problem via `-ia list`; `state` stays optional) | NO | YES (S5) | NO | `OP.0b.1` gate package + S5 |
+| D-V7a | CLOSED | NO | NO | NO | — |
+| D-V7b | STILL_UNKNOWN; check 6 already non-blocking (pre-existing) | NO | NO | YES (`CP-3`, P0 before CLASS 2) | GitHub-mirror/human fetch — pre-CLASS-2 |
+| D-V9a | Interpretation already frozen (pre-existing text) | NO | NO | NO (VS never a CLASS-2 target, invariant 9) | none required |
+| D-V9b | Estate applicability, confirmatory only | NO | YES (S8) | NO (same as D-V9a) | S8, unchanged |
+
+### Architecture verdict (§19 of the audit task)
+
+**ARCHITECTURE CORE STATUS: STABLE.** Operational entity model: STABLE.
+Dedicated preflight layer: STABLE. Identity model: STABLE — the B₁/B₂ grading
++ hostname-keyed fallback + "successor NOT FROZEN until match" design already
+absorbs the `D-V3a`/`D-V3b` uncertainty. Evidence/provenance model: STABLE.
+Readiness prerequisites/check model: STABLE — check 6's non-blocking status
+and the VSX fail-closed rule already absorb `D-V7b`/`D-V9a`; the one addition
+is `D-F3` (a new open decision, not a redesign). Vendor command/evidence
+battery: STABLE CANDIDATE — minimal parser contracts now defined for every
+row; exact syntax is `OP.0b.1` territory. CLASS 2 boundary: STABLE — P4
+invariant unchanged, structurally unreachable regardless; `D-V3a`/`D-V7b` now
+explicitly filed against this boundary. **No item requires change.**
+
+### Diminishing returns (§20 of the audit task)
+
+**YES — reached.** Architecture is sufficiently stable; future work moves to
+bounded slices: `OP.0b.1` command-gate syntax (CP flag/history-depth
+confirmation, exact Clish/Expert parity), `D-F3`'s numeric threshold
+(product-owner decision, bounded), S0/S2/S3/S5/S8 real-env measurements, and
+— whenever convenient, not gating anything else — `D-V3a`/`D-V7b`'s eventual
+resolution before CLASS 2 specifically. None of these needs another general
+vendor-semantics review to resolve.
+
 ## Open decisions
+
+**Column note (2026-09-03, session 4):** "Blocks freeze?" below records the
+**final, post-freeze** determination — see §"Final semantic blocker closure
+— session 4" for the reasoning behind every `NO` that used to be `YES`. None
+of these rows is fully resolved; the column answers only whether the
+*contract's own interpretation* still depends on resolving them, which — per
+that section — it no longer does for any row except the two genuinely
+`STILL_UNKNOWN` ones, and even those only gate CLASS 2, not this freeze.
 
 | Id | Decision | Blocks freeze? | Resolves via |
 | --- | --- | --- | --- |
-| D-V1 | PAN `conn-status`/`conn-ha1`/`conn-ha1-backup`/`conn-ha2` value vocabulary | **YES** | PARTIALLY_CLOSED 2026-09-03 (Source Pack 2): field-binding + nested structure CONFIRMED for `conn-ha1`/`conn-ha2` via official PANW source; residual: exhaustive vocabulary, missing-field meaning, `conn-ha1-backup` shape — S2 real-env |
-| D-V2 | PAN `state-sync`, `*-compat`, `preemptive`, flap-counter field semantics | **YES** | PARTIALLY_CLOSED 2026-09-03 (Source Pack 2): field-binding CONFIRMED for most of the family via official PANW source (`*-compat` vocabulary now evidenced as ≥2-valued); `last-error-reason`/`last-error-state` binding still unconfirmed (absent from the one healthy-state example read) — S2 real-env |
-| D-V3a | PAN HA-state serial field semantics (docs-only) | **YES** | STILL_UNKNOWN 2026-09-03 for HA-field binding (no serial field in the one official example read); general serial leading-zero opacity separately CONFIRMED via official PAN KB — needs human-fetched official HA-state field reference or a genuinely unblocked network |
-| D-V3b | PAN peer-serial real correspondence / B2 | **YES** | REQUIRES_REAL_ENV — S0 result already pending; `B2 NOT ESTABLISHED`, do not reinterpret |
-| D-V4 | PAN `running-sync` location (`state` XML sibling vs `all`) | NO — closed | **CLOSED_BY_DOCS 2026-09-03** (Source Pack 2): `group.running-sync`/`group.running-sync-enabled` confirmed verbatim, official PANW source, `show high-availability state` |
-| D-V5a | CP ClusterXL failover-statistics command contract | **YES** | PARTIALLY_CLOSED 2026-09-03 (Source Pack 2): purpose/version-map/read-only/reset-exclusion confirmed; exact history-depth flag + Clish/Expert schema parity open |
-| D-V5b | CP VSX failover-statistics applicability | **YES** for VS readiness | OPEN / REAL_ENV_OR_DOC_REQUIRED — no official statement found either way |
-| D-V6 | CP `-ia list`/`-l list`/`-i list` differentiation; `cphaprob state` field set | YES (gate package) | PARTIALLY_CLOSED 2026-09-03 (Source Pack 2): register/unregister syntax + `-ia list` = complete pnote enumeration CONFIRMED (**contradicts** the source pack's `-i`/`-ia` problem-filtered hypothesis — the better-evidenced reading is kept); exact `-l`/`-i` differentiation and `cphaprob state` field set still open |
-| D-V7a | CP recovery/preemption behavior semantics | NO — closed | **CLOSED_BY_DOCS 2026-09-03** (Source Pack 2): both settings' behavior confirmed precisely; Cluster-Mode-string non-correlation already documented (sk180184, session 1) |
-| D-V7b | CP configured-recovery machine-readable read surface | **YES** | STILL_UNKNOWN 2026-09-03; Simple Cluster API's documented feature gap ("use SmartConsole" for unsupported settings) is a plausible explanation, not a resolution — no attribute name invented |
+| D-V1 | PAN `conn-status`/`conn-ha1`/`conn-ha1-backup`/`conn-ha2` value vocabulary | NO — interpretation frozen (minimal predicate) | S2 real-env parser validation |
+| D-V2 | PAN `state-sync`, `*-compat`, `preemptive`, flap-counter field semantics | NO — interpretation frozen (sync/compat/preemption); flap sub-family gated by new `D-F3` | S2 real-env + `D-F3` |
+| D-V3a | PAN HA-state serial field semantics (docs-only) | NO — successor identity model already `NOT FROZEN`, hostname-keyed fallback stands | **CLASS-2 blocker**: GitHub-mirror/human fetch |
+| D-V3b | PAN peer-serial real correspondence / B2 | NO (architecture); real-env + CLASS-2 blocker | S0 result already pending; `B2 NOT ESTABLISHED`, do not reinterpret |
+| D-V4 | PAN `running-sync` location (`state` XML sibling vs `all`) | NO — closed | **CLOSED_BY_DOCS 2026-09-03** |
+| D-V5a | CP ClusterXL failover-statistics command contract | NO — interpretation frozen (count/reason/time minimal contract) | `OP.0b.1` gate package + S8 |
+| D-V5b | CP VSX failover-statistics applicability | NO — not load-bearing (battery is physical/VS0-only) | none — dropped from active blocking list |
+| D-V6 | CP `-ia list`/`-l list`/`-i list` differentiation; `cphaprob state` field set | NO — interpretation frozen (pnote problem/no-problem via `-ia list`) | `OP.0b.1` gate package + S5 |
+| D-V7a | CP recovery/preemption behavior semantics | NO — closed | **CLOSED_BY_DOCS 2026-09-03** |
+| D-V7b | CP configured-recovery machine-readable read surface | NO — check 6 already non-blocking (pre-existing, session-1 text) | **CLASS-2 blocker** (`CP-3`, P0 before CLASS 2): GitHub-mirror/human fetch |
 | D-V8 | CP hotfix parity command | no (optional check) | Gaia CLI reference |
-| D-V9a | CP VSX sk165432 documented caveat semantics | **YES** for VS readiness | PARTIAL, unchanged in status 2026-09-03; new diagnostic texture (pnotes read OK while `stat` misreports `Down`) confirms presentation-layer nature; affected releases/fix version/alternative still open |
-| D-V9b | sk165432 applicability to this estate's version | **YES** for VS readiness | REQUIRES_REAL_ENV — S8 |
+| D-V9a | CP VSX sk165432 documented caveat semantics | NO — interpretation already frozen (pre-existing text) | none required for freeze; S8 informational |
+| D-V9b | sk165432 applicability to this estate's version | NO (architecture); real-env only | S8 — VS never a CLASS-2 target regardless (invariant 9) |
 | D-T1 | PAN preflight transport: direct identity-gated API vs Panorama proxy | no | product owner + security |
 | D-F1 | numeric max age for category C intent | no | product owner |
 | D-F2 | numeric member-skew tolerance | no | product owner + vendor guidance |
+| D-F3 | numeric flap/failover-frequency threshold for check 7 (both vendors) — **new, session 4** | no | product owner + vendor guidance; qualitative meaning frozen (§"Final semantic blocker closure"), undecided number ⇒ check 7 fail-closed (not silently PASS) until set |
 | D-P1 | `op_degraded_verdict` | no (OP.1) | existing open decision |
 
 ## Rollback
@@ -1267,48 +1508,67 @@ Contract consequence: D-V7a → `CLOSED_BY_DOCS`; D-V7b stays `STILL_UNKNOWN` wi
 Documentation only; nothing to roll back. If superseded, mark this file's
 status and add the superseding path; never delete.
 
-## Definition of done (for this DRAFT)
+## Definition of done (for this FROZEN version)
 
 1. All required §23 sections present — **done**.
 2. §24, §25, §26 complete with every candidate/field/gap — **done**.
-3. Every semantic either cited to an official source or marked `UNKNOWN` —
-   **done**; no generic product knowledge used as authority.
-4. Freeze decision stated with the exact blocking list — **done**
-   (§"Open decisions", rows marked YES).
-5. Project metadata update — **deliberately not done** (not a frozen build).
+3. Every semantic either cited to an official source, `CLOSED_BY_DOCS`, or
+   explicitly frozen as a minimal fail-closed interpretation with a named
+   residual (real-env or bounded numeric decision) — **done** (session 4,
+   §"Final semantic blocker closure"); no generic product knowledge used as
+   authority anywhere, including in the minimalism predicates (each cites the
+   official source it derives from).
+4. Freeze decision stated with the exact remaining blocker list, separated
+   from CLASS 2/real-env items — **done** (§"Open decisions" column note;
+   §"Final semantic blocker closure" final blocker table).
+5. Project metadata update — **done this session** (`STATE_UPDATE` follows;
+   see `project/build_history.json`/`project/roadmap.json`).
+6. CLASS 2 remains structurally unauthorized (P4 invariant) — **unchanged,
+   verified still in force**.
 
 ## Next movement
 
-Superseded again by the Source Pack 2 pass above (2026-09-03, session 3),
-which found that `github.com`/`raw.githubusercontent.com` are reachable even
-though `pan.dev`/`sc1.checkpoint.com`/`support.checkpoint.com` remain
-`EGRESS_BLOCKED` — so **"a third automated retry is not expected to behave
-differently" was wrong for the PAN side**, and this pattern is worth
-repeating rather than abandoning. Three paths remain, independent, any order
-or in parallel:
+`FREEZE_DECISION` reached (session 4) supersedes prior "Next movement" text
+below only where it discussed *whether* to freeze; the discovery it
+recorded — `github.com`/`raw.githubusercontent.com` reachable even though
+`pan.dev`/`sc1.checkpoint.com`/`support.checkpoint.com` remain
+`EGRESS_BLOCKED` — still stands and still applies to whoever eventually closes
+`D-V3a`/`D-V7b` for CLASS 2. With the contract now frozen, the actual next
+movements are implementation/real-env slices, not another vendor-semantics
+session:
 
-1. `OFFICIAL_GITHUB_MIRROR_SEARCH` — for the still-open rows, check first
-   whether an official PANW-org (or, less likely, Check Point) GitHub
-   repository's source/docstrings mirror the blocked page, the way
-   `pan-os-upgrade-assurance` did for `pan.dev`'s `FirewallProxy` docs. Check
-   Point does not obviously publish CLI reference content on GitHub, so this
-   is a PAN-side technique primarily; still worth one targeted attempt for
-   any Check Point Python/Ansible/Terraform SDK that might embed cluster
-   object schemas (D-V7b's target).
-2. `HUMAN_ASSISTED_DOC_CONFIRMATION` — for whatever `OFFICIAL_GITHUB_MIRROR_
-   SEARCH` cannot reach, a human fetches the specific pages the source table
-   names for the still-open rows (D-V3a's HA-state serial field reference,
-   D-V6's exact `-l`/`-i` differentiation and `cphaprob state` field set,
-   D-V5a's history-depth flag and Clish/Expert schema parity, D-V7b's exact
-   attribute name or its official absence) and pastes their body text in.
-3. `HUMAN_REAL_ENV` — S0 result (already pending, independent of this
-   thread); S2/S3/S8 enumerations once a real preflight-capable session is
-   available.
+**A. Bounded implementation, per the existing S0–S9 slice sequence** (§
+"Implementation slices (after FREEZE)", unchanged, now unblocked): S1
+(preflight fact/provenance model, pure), S2 (PAN parse-scope extension —
+`conn-*`, `running-sync`, sync/compat/election fields, all now interpretation-
+frozen), S3 (CP parse-scope extension — pnote/mode/wire-form), in parallel;
+then S4 (`OP.0b.1` command-gate package, using the now-narrower `UNKNOWN`
+list this session leaves: D-V5a's exact flag syntax, D-V6's `-l`/`-i`
+nuance).
 
-Any path, followed by a re-run of this contract's freeze check, is what
-moves this document toward `FREEZE`. Recommended: `Sonnet 5, extended
-thinking (high)` for the next confirmation/freeze pass (vendor-semantic
-calls); `Sonnet 5, normal` for S1–S3 once frozen.
+**B. `D-F3` — the flap/failover-frequency numeric threshold** — a bounded
+product-owner decision, parallel to `D-F1`/`D-F2`, needed before check 7 can
+compute a real verdict for either vendor; does not block S1–S3.
+
+**C. Pre-CLASS-2 closure of `D-V3a`/`D-V7b`** — `OFFICIAL_GITHUB_MIRROR_
+SEARCH` first (the technique that closed `D-V4`/`D-V7a`, and that this
+session's D-V7b search extended one level further without success — a
+Check Point generic-object API schema is the next candidate, unconfirmed to
+exist), then `HUMAN_ASSISTED_DOC_CONFIRMATION`. Independent of A/B; gates
+only CLASS 2 and the PAN successor identity model, never S1–S9.
+
+**D. Real-environment validations already scheduled** (S0, S2/S3's real-
+capture components, S8) — unchanged, independent of A–C.
+
+Superseded text, preserved (session 3's framing of a third path, now
+historical — folded into **D** above): `HUMAN_REAL_ENV` — S0 result
+(already pending, independent of this thread); S2/S3/S8 enumerations once a
+real preflight-capable session is available.
+
+Recommended: `Sonnet 5, normal` for S1–S3 (deterministic implementation
+against this now-frozen contract); `Sonnet 5, extended thinking (high)` only
+for **B** (`D-F3`, if it turns out to need cross-vendor judgment) and **C**
+(vendor-semantic calls, same as this session).
 
 ---
 
@@ -1455,6 +1715,41 @@ Priority: **P0 BEFORE CLASS 2** · **P1 BEFORE PRODUCTION** · **P2 HARDENING** 
 | X-6 | both | `on_hardware_real_env_validation` BLOCKED on laptop availability | backlog | external |
 
 ## Freeze decision
+
+**FREEZE WITH REAL-ENV VALIDATION GATES (2026-09-03, session 4, current and
+authoritative).** Every remaining row's minimal safe interpretation is now
+explicitly frozen — see §"Final semantic blocker closure — session 4" and
+the final blocker table there. Two genuinely `STILL_UNKNOWN` rows remain
+(`D-V3a`, `D-V7b`), but both were already scoped, by this document's own
+session-1 text (the PAN identity contract's "successor model NOT FROZEN,
+hostname-keyed fallback stands" clause; check 6 `preemption_known`'s
+"recorded, non-blocking" specification), as CLASS-2-time prerequisites, not
+architecture-interpretation blockers — a reading verified this session, not
+invented. No safety-critical semantic requires guessing for the contract, as
+an evidence/interpretation model, to be used as implementation authority.
+`D-V5b` is additionally found not load-bearing at all (the frozen battery
+never required a per-VS answer) and is dropped from the blocking list
+entirely. One new bounded, non-blocking open decision is added (`D-F3`, the
+check-7 flap/failover-frequency threshold), parallel to the pre-existing
+`D-F1`/`D-F2`.
+
+This reverses the `DO NOT FREEZE` conclusion sessions 1–3 reached — correctly,
+at the time, on the evidence and framing then available. Nothing about the
+underlying vendor semantics changed between session 3 and session 4; what
+changed is that session 4 was explicitly tasked with asking the
+freeze-boundary question sessions 1–3 were not: not "is every `D-V` row
+`CLOSED_BY_DOCS`" but "does any row's remaining uncertainty force a guess
+anywhere in the contract's interpretation." For every row but `D-V3a`/`D-V7b`
+the answer, on inspection, was already no — the minimal safety predicate was
+either already written into this document from session 1, or followed
+directly from applying it now (§11/§12 of the audit task). For `D-V3a`/`D-V7b`
+specifically, the answer is also no, once it is recognized that the
+architecture never depended on them for anything this side of CLASS 2 in the
+first place. This is a reclassification, not a new leniency: no identity
+requirement, no fail-closed default, and no check's `PASS` condition changed
+from what sessions 1–3 already specified.
+
+### Session 3 freeze decision (historical, superseded — preserved verbatim)
 
 **DO NOT FREEZE.** Split-row state after the 2026-09-03 Source Pack 2 pass
 (session 3): `D-V4` and `D-V7a` are **`CLOSED_BY_DOCS`** — the first rows
