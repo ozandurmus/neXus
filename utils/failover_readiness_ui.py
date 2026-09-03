@@ -34,9 +34,10 @@ UI_SCHEMA_VERSION = "op0c-failover-readiness-v1"
 FRAMING_NOTE = (
     "This assessment covers only the stop-conditions answerable from evidence "
     "already collected. It CANNOT report a cluster safe to fail over -- "
-    "SAFE_TO_FAILOVER is unreachable by design until the OP.0b preflight "
-    "battery is gated and built. INSUFFICIENT_EVIDENCE means 'not asked yet', "
-    "not 'unhealthy'."
+    "SAFE_TO_FAILOVER is unreachable by design: the OP.0b preflight battery "
+    "now exists, but its evidence cannot yet establish every stop-condition "
+    "(open decisions D-F3 flap threshold, D-V7b Check Point recovery "
+    "setting). INSUFFICIENT_EVIDENCE means 'not established', not 'unhealthy'."
 )
 
 # CLASS 2 (failover execution) does not exist yet -- OP.2 hard prerequisites
@@ -148,6 +149,7 @@ def build_failover_readiness_payload(
     *,
     checkpoint_config_result: Mapping[str, Any] | None = None,
     config_result: Mapping[str, Any] | None = None,
+    preflight_snapshots: Sequence[Any] | None = None,
 ) -> dict[str, Any]:
     """The `failoverReadinessData` payload the console/report embed.
 
@@ -157,6 +159,12 @@ def build_failover_readiness_payload(
     dicts passed to the configuration/crypto builders -- no extra file read.
     Missing/empty inputs degrade to an explicit empty fleet, never an error
     (the same posture `build_discovery_capability_payload` established).
+
+    `preflight_snapshots` (OP.0b S7, optional, default none) are fresh S5/S6
+    `PreflightSnapshot`s an explicit, separate collection stage already
+    produced; they are passed straight through to the one canonical
+    evaluator. This builder never collects anything and never interprets a
+    fact itself -- the UI stays a projection of `compute_ha_readiness`.
     """
     rows = unified_devices if isinstance(unified_devices, Sequence) else []
     cp_ha_runtime = extract_cp_ha_runtime(checkpoint_config_result)
@@ -168,6 +176,7 @@ def build_failover_readiness_payload(
         pan_ha_runtime=pan_ha_runtime,
         pan_ha_peers=pan_ha_peers,
         generated_at=_utc_now(),
+        preflight_snapshots=preflight_snapshots,
     )
 
     return {
@@ -178,6 +187,7 @@ def build_failover_readiness_payload(
         "execution_unavailable_note": EXECUTION_UNAVAILABLE_NOTE,
         "summary": report["summary"],
         "units": report["units"],
+        "preflight": report.get("preflight") or {},
         "verdict_labels": dict(VERDICT_LABELS),
         "verdict_tones": dict(VERDICT_TONES),
         "check_status_labels": dict(CHECK_STATUS_LABELS),

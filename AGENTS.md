@@ -349,7 +349,9 @@ frequency) is not a command addition and needs no new gate entry.
 - No Browser → device path. The operator console submits typed intent
   (`job_type` + `entity_id`) against a closed module-level registry; no
   command, argv fragment, path, or API route ever originates in the browser.
-- `utils/failover/` contains `assessment.py` only. The absence of a plan,
+- `utils/failover/` contains only read-only assessment/evidence modules
+  (`assessment.py`, `preflight_model.py`, `preflight_readiness.py`) with
+  exactly one verdict roll-up (`assessment._verdict_for`). The absence of a plan,
   executor, or vendor adapter is enforced by
   `tests/test_architecture_convergence.py`, not a current-phase courtesy.
 - `OP.0a`'s HA readiness assessment cannot emit `SAFE_TO_FAILOVER` or

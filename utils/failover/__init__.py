@@ -18,16 +18,25 @@ no verdict, no CLASS 2 authorization — and does not touch that boundary; its
 presence here is exactly what the frozen OP.0b.0 contract's own slice table
 names (`utils/failover/preflight_model.py (new)`).
 
+`preflight_readiness` (OP.0b S7) is the one typed fact→check mapping that
+interprets a `PreflightSnapshot` into the seven canonical checks; it is pure
+and zero-I/O like `preflight_model`, computes check statuses only, and feeds
+the single verdict roll-up in `assessment._verdict_for` — one readiness
+authority, not two.
+
 `tests/test_op0a_ha_readiness.py` asserts this package exposes no
 executor/plan/action/rollback symbol, so the absence is enforced rather than
 merely current; its companion structural test now allows exactly
-`{__init__.py, assessment.py, preflight_model.py}`, updated in the same
-build that added the third file.
+`{__init__.py, assessment.py, preflight_model.py, preflight_readiness.py}`,
+updated in the same build that added the fourth file.
 """
 from __future__ import annotations
 
 from .assessment import (  # noqa: F401
     SCHEMA,
+    EVIDENCE_BASIS_STORED_TELEMETRY,
+    EVIDENCE_BASIS_PREFLIGHT_SNAPSHOT,
+    UNRESOLVED_POLICY_DECISIONS,
     VERDICT_SAFE,
     VERDICT_DEGRADED,
     VERDICT_UNSAFE,
@@ -60,9 +69,19 @@ from .preflight_model import (  # noqa: F401
     CoherenceResult,
     evaluate_coherence,
 )
+from .preflight_readiness import (  # noqa: F401
+    FACT_CHECK_MAP,
+    CheckEvidenceSpec,
+    FactRule,
+    SnapshotEvaluation,
+    evaluate_snapshot_checks,
+)
 
 __all__ = [
     "SCHEMA",
+    "EVIDENCE_BASIS_STORED_TELEMETRY",
+    "EVIDENCE_BASIS_PREFLIGHT_SNAPSHOT",
+    "UNRESOLVED_POLICY_DECISIONS",
     "VERDICT_SAFE",
     "VERDICT_DEGRADED",
     "VERDICT_UNSAFE",
@@ -92,4 +111,9 @@ __all__ = [
     "PreflightSnapshot",
     "CoherenceResult",
     "evaluate_coherence",
+    "FACT_CHECK_MAP",
+    "CheckEvidenceSpec",
+    "FactRule",
+    "SnapshotEvaluation",
+    "evaluate_snapshot_checks",
 ]

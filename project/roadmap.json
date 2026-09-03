@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "current_build": "op0b_s6_pan_preflight_collector",
+  "current_build": "op0b_s7_readiness_v2_integration",
   "current_track": "OP.x",
   "progress_contract": "Weighted acceptance-criterion completion. Percentages describe the declared roadmap, not calendar time or delivery ETA.",
   "tracks": [
@@ -123,20 +123,20 @@
   "now_next": {
     "horizon_contract": "NOW is exactly one build. NEXT is exactly one. Everything else is an `upcoming` row carrying its own true status: planned = AFTER, blocked = waiting on a named external gate, deferred = consciously postponed. `now.build` must equal the newest project/build_history.json record -- utils.project_plan enforces it.",
     "now": {
-      "build": "op0b_s6_pan_preflight_collector",
-      "title": "OP.0b S6 - Palo Alto dedicated preflight collector",
-      "goal": "Second (parallel to S5) dedicated failover-preflight collection implementation (panorama/preflight_collector.py), strictly within the PO-frozen S4 command gate (docs/history/phase/OP_0B_1_COMMAND_GATE_PACKAGE.md, Approval record, PR #41): for one caller-selected PAN HA pair (<=2 bounded physical members, no fleet expansion), resolves one direct API key per member (P1, P2, P4 all reuse it -- D-T1 resolved as direct for every row in this collector, since P1's own frozen plane is unconditionally direct and the gate's PAN preamble forbids splitting P2/P4 across a different plane), creates one preflight_run_id, and issues the PO-authorized battery -- P1 (show system info, direct identity gate, exact serial comparison, never normalized), P2 (show high-availability state, reusing the existing S2 _parse_pan_ha_preflight_fields/project_pan_preflight_facts unchanged), P4 (show high-availability path-monitoring, new). New panorama/pan_preflight_battery.py (fixed typed command plan + a deterministic guard proving P3/P5 and every rejected mutating PAN operation are absent by construction) and panorama/pan_preflight_extraction.py (one pure, fail-closed parser for P4). panorama/pan_preflight_projection.py (existing S2 seam) gains project_pan_identity_fact (P1) and project_pan_path_monitoring_facts (P4); P2's existing project_pan_preflight_facts is unchanged. No application-level command retry; no new SSH/API session shape, credential path, or TLS policy; no readiness verdict; B2 stays NOT ESTABLISHED (this collector produces per-member evidence only, no pair-identity redesign, no serial normalization). Network bound: <=6 required device commands per selected PAN pair -- proven by test. tests/test_op0b_s6_pan_preflight_collector.py (41 tests: battery invariants, synthetic-session collection, B2 non-establishment) green locally, plus S1/S2/S4/architecture-convergence regression, the affected PAN/configuration subsystem regression (399 passed), the full local suite (1318 passed / 26 skipped / 0 failed), and the repository privacy gate (0 findings).",
+      "build": "op0b_s7_readiness_v2_integration",
+      "title": "OP.0b S7 - Readiness v2 integration",
+      "goal": "Integrate fresh S1/S5/S6 preflight evidence into the canonical readiness path without creating a second verdict authority: utils/failover/preflight_readiness.py is the one typed fact->check mapping (FACT_CHECK_MAP, 14 vendor x check specs) that interprets a PreflightSnapshot into the unchanged seven stop-conditions; utils.failover.assessment._evaluate_checks dispatches to it when compute_ha_readiness(preflight_snapshots=...) receives a snapshot for a derived unit, and _verdict_for stays the single roll-up (now also refusing SAFE while an open D-F policy applies). Five verdicts unchanged, schema string unchanged (additive per-unit evidence/provenance/coherence disclosure + top-level preflight applied/unmatched/ambiguous), OP.0c stays projection-only (optional snapshot passthrough, refreshed framing note). Evidence laws test-enforced; PAN phantom-member uplift removed (AC-5); one-sided OP.0a read is now INSUFFICIENT_EVIDENCE. SAFE/DEGRADED remain unreachable (D-F3 both vendors; D-V7b CP). No device contact, no new command, no CLASS 2.",
       "status": "automated_validated",
       "started": "2026-09-03"
     },
     "next": {
-      "build": "op0b_s7_readiness_v2_integration",
-      "title": "OP.0b S7 - Readiness v2 integration",
+      "build": "op0b_s8_real_env_validation",
+      "title": "OP.0b S8 - bounded real-environment validation (CP ClusterXL pair, VSX pair, PAN pair)",
       "status": "planned",
       "notes": [
-        "Unblocked once S5 (CP) and S6 (PAN) dedicated preflight collectors are both merged -- both landed 2026-09-03.",
-        "S7 is the first slice to consume PreflightSnapshot/evaluate_coherence (S1) and the real per-member evidence S5/S6 now produce, and to define/wire the readiness-v2 verdict path -- still CLASS 0 read-only; still no SAFE_TO_FAILOVER by construction per utils.failover.assessment's existing invariant.",
-        "Recommended branch: feature/op0b-s7-readiness-v2. New session. Recommended reasoning: Sonnet 5, extended thinking (high) -- new architecture/readiness-verdict design, per this repo's routing table (phase closure / new architecture tier)."
+        "Reads only, same approved targets as the frozen contract's real-env gate (requested = resolved = contacts, extra = 0). Confirms the S5/S6 collectors' real response shapes and the vendor value vocabularies S7's FACT_CHECK_MAP freezes minimally (PAN state-sync/running-sync/conn-*/*-compat; CP sync status, failover statistics, pnote enumeration, sk165432 behaviour, member skew observed).",
+        "Hardware-blocked until the corporate laptop / approved pairs are available. S7 stays AUTOMATED_VALIDATED (never REAL_ENV_VALIDATED) until then; OP.0b is not DONE.",
+        "Recommended: Sonnet 5, normal -- bounded real-env procedure per docs/reference/REAL_ENV_VALIDATION_PROTOCOL.md; SAFE SUMMARY only, no identities."
       ]
     },
     "upcoming": [
@@ -198,7 +198,8 @@
         "notes": [
           "Blocked on the network-device command gate drafted in docs/history/phase/OP_0A_HA_READINESS_ASSESSMENT.md but not approved.",
           "This is the gate that makes SAFE_TO_FAILOVER reachable at all; until it is approved every unit correctly reports INSUFFICIENT_EVIDENCE.",
-          "Its evidence surface is now FROZEN WITH REAL-ENV VALIDATION GATES in docs/history/phase/OP_0B_0_VENDOR_FAILOVER_PREFLIGHT_EVIDENCE_SURFACE.md (2026-09-03) -- cleared for the S0-S9 implementation slices, still not itself a command approval; the OP.0b.1 gate package is the actual approval step."
+          "Its evidence surface is now FROZEN WITH REAL-ENV VALIDATION GATES in docs/history/phase/OP_0B_0_VENDOR_FAILOVER_PREFLIGHT_EVIDENCE_SURFACE.md (2026-09-03) -- cleared for the S0-S9 implementation slices, still not itself a command approval; the OP.0b.1 gate package is the actual approval step.",
+          "S1-S7 landed 2026-09-03 (S4 = PO-approved OP.0b.1 gate, PR #41; S5/S6 dedicated collectors; S7 readiness integration). SAFE_TO_FAILOVER is still unreachable -- now by the open D-F3 flap-threshold decision (both vendors) and the unauthorized CP-A9 recovery read (D-V7b), not by the absence of a battery. S8 real-env validation and S9 UI-authority reconciliation remain."
         ]
       },
       {

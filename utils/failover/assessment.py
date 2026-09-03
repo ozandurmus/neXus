@@ -22,9 +22,12 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Mapping, Sequence
+from typing import TYPE_CHECKING, Any, Mapping, Sequence
 
 from utils.restore_readiness import resolve_entity_id, resolve_vendor
+
+if TYPE_CHECKING:  # pragma: no cover - typing only; no runtime import cycle
+    from utils.failover.preflight_model import PreflightSnapshot
 
 SCHEMA = "securityexpert-ha-readiness-v1"
 
@@ -59,6 +62,25 @@ STOP_CONDITIONS: tuple[tuple[str, str], ...] = (
 #: a convention, and `AC-6` proves SAFE_TO_FAILOVER stays unreachable because of
 #: it. Widening this set is an OP.0b change and must come with its command gate.
 OP0A_EVALUABLE_CHECKS = frozenset({"viable_target", "no_split_brain"})
+
+# --- Evidence basis + open-policy vocabulary (OP.0b S7) ---------------------
+#: Which evidence a unit's checks were interpreted from. `op0a_stored_telemetry`
+#: is the OP.0a path (already-collected `cphaprob stat` / `show
+#: high-availability state` rows read off disk, no run coherence); `op0b_
+#: preflight_snapshot` is a fresh S5/S6 `PreflightSnapshot` interpreted by
+#: `utils.failover.preflight_readiness`. One unit is evaluated from exactly
+#: one basis -- stored telemetry and a fresh snapshot are never blended.
+EVIDENCE_BASIS_STORED_TELEMETRY = "op0a_stored_telemetry"
+EVIDENCE_BASIS_PREFLIGHT_SNAPSHOT = "op0b_preflight_snapshot"
+
+#: Open product-owner numeric decisions (frozen OP.0b.0 contract, §"Open
+#: decisions"). No TTL, skew tolerance or flap threshold is chosen anywhere
+#: in this package; while any of these applies to a unit's evidence, a
+#: positive verdict for that unit stays unreachable (`_verdict_for`).
+POLICY_D_F1 = "D-F1"  # configuration-intent max age
+POLICY_D_F2 = "D-F2"  # member-skew tolerance
+POLICY_D_F3 = "D-F3"  # flap / failover-frequency threshold
+UNRESOLVED_POLICY_DECISIONS = frozenset({POLICY_D_F1, POLICY_D_F2, POLICY_D_F3})
 
 #: What OP.0b would have to ask to close each gap. These strings are the only
 #: command text this module emits; they are fixed labels, never device output.
@@ -134,6 +156,9 @@ class HaUnit:
             "cluster_mode": self.cluster_mode,
             "display_name": self.display_name,
             "parent_id": self.parent_id,
+            # OP.0b.0 §26 X-4: serialised additively (S7) so the pair-identity
+            # axis is visible separately from the verdict `reason`.
+            "unresolved_reason": self.unresolved_reason,
         }
 
 
@@ -143,12 +168,17 @@ class UnitAssessment:
     verdict: str
     reason: str
     checks: list[dict[str, Any]] = field(default_factory=list)
+    #: Safe provenance/coherence disclosure (S7): which evidence basis the
+    #: checks were read from, which preflight run, coherence state, open
+    #: policy gates -- never raw evidence, never an identity.
+    evidence: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         record = self.unit.to_dict()
         record["verdict"] = self.verdict
         record["reason"] = self.reason
         record["checks"] = list(self.checks)
+        record["evidence"] = dict(self.evidence)
         return record
 
 
@@ -159,6 +189,7 @@ def _check(check_id: str, label: str, status: str, reason: str, missing: str = "
         "status": status,
         "reason": reason,
         "missing_evidence": missing,
+        "facts": [],
     }
 
 
@@ -181,34 +212,35 @@ def _pan_states(members: Sequence[str], pan_ha_runtime: Mapping[str, Mapping[str
     and is misreported as split-brain. Found by the OP.0a smoke run, not by
     the unit tests, which had paired only same-shaped records.
 
-    So: when direct evidence exists for more than one member, trust each
-    member's own `state` and ignore `peer_state`. `peer_state` is used only as
-    a fallback when the unit has direct evidence for a single member (the P7
-    unresolved-peer case), where it is the only peer evidence available.
-
-    Successor-contract invariant (OP.0a PAN runtime peer identity evidence,
-    recorded not yet enforced here): `peer_state` is relationship evidence
-    about a claimed peer, never an independently observed physical member.
-    Using it as a second observation for a single-member unit is a known,
-    deliberate stopgap this function documents rather than hides -- a future
-    PAN HA relationship-domain build must remove this readiness uplift once
-    genuine peer identity evidence (`runtime_peer_serial_state`) replaces it,
-    not extend it further.
+    So: trust each member's own `state` only. `peer_state` is never counted
+    -- not even as a fallback for a single-member unit. That fallback (the
+    "phantom member" uplift, OP.0b.0 §26 PAN-4 / AC-5) was removed by OP.0b
+    S7: `peer_state` is relationship evidence about a claimed peer, never an
+    independently observed physical member, and a single-member unit now
+    reports `peer_not_independently_observed` for the two cross-member
+    checks instead of a PASS synthesised from one side's claim.
     """
-    with_evidence = [m for m in members if pan_ha_runtime.get(m)]
-    use_peer_view = len(with_evidence) < 2
-
     states: list[str] = []
     for entity_id in members:
         record = pan_ha_runtime.get(entity_id) or {}
         state = str(record.get("state") or "").strip().lower()
         if state:
             states.append(state)
-        if use_peer_view:
-            peer = str(record.get("peer_state") or "").strip().lower()
-            if peer:
-                states.append(peer)
     return states
+
+
+def _pair_identity_state(unit: HaUnit) -> str:
+    """How the unit-derivation layer established this unit's membership --
+    the `pair_identity` prerequisite the snapshot evaluator refuses to
+    PASS cross-member checks without. CP: `cluster_topology.group_id`
+    (mutual VIP set). PAN: mutual configured `peer-ip` agreement -- Grade A
+    configuration intent under the frozen hostname-keyed fallback, never
+    runtime-proven; `B2` stays NOT ESTABLISHED and is not asserted here."""
+    if len(unit.members) < 2:
+        return "not_established"
+    if unit.vendor == "panorama":
+        return "established_configuration_intent"
+    return "established_topology_group"
 
 
 def _evaluate_checks(
@@ -216,14 +248,38 @@ def _evaluate_checks(
     *,
     cp_ha_runtime: Mapping[str, Mapping[str, Any]],
     pan_ha_runtime: Mapping[str, Mapping[str, Any]],
-) -> list[dict[str, Any]]:
-    """Evaluate all seven §4 stop-conditions.
+    snapshot: "PreflightSnapshot | None" = None,
+) -> tuple[list[dict[str, Any]], dict[str, Any], str | None]:
+    """Evaluate all seven §4 stop-conditions from exactly one evidence basis.
 
-    Only the members of `OP0A_EVALUABLE_CHECKS` can return PASS/FAIL; every
-    other condition is forced to INSUFFICIENT_EVIDENCE here, at one place, so
-    that no future edit elsewhere can make a green light reachable without
-    changing that frozenset and its gate (contract P4).
+    With a fresh S5/S6 `snapshot` for this unit, every check is interpreted
+    by the one typed fact→check mapping in
+    `utils.failover.preflight_readiness` (OP.0b S7) -- the stored-telemetry
+    rows are not consulted for that unit at all, so old and fresh evidence
+    never blend into one result (frozen contract, "Provenance contract").
+
+    Without one, the OP.0a stored-telemetry path applies: only the members
+    of `OP0A_EVALUABLE_CHECKS` can return PASS/FAIL; every other condition is
+    forced to INSUFFICIENT_EVIDENCE here, at one place, so that no future
+    edit elsewhere can make a green light reachable without changing that
+    frozenset and its gate (contract P4).
+
+    Returns `(checks, evidence, effective_mode)`; `effective_mode` is the
+    fresh HA mode a snapshot established (or `None`).
     """
+    if snapshot is not None:
+        from utils.failover.preflight_readiness import evaluate_snapshot_checks
+
+        evaluation = evaluate_snapshot_checks(
+            snapshot,
+            unit_id=unit.unit_id,
+            vendor=unit.vendor,
+            unit_member_count=len(unit.members),
+            is_vs_unit=unit.unit_type == _UNIT_CP_VSX_VS,
+            pair_identity=_pair_identity_state(unit),
+        )
+        return evaluation.checks, evaluation.evidence, evaluation.effective_mode
+
     missing_for_vendor = _MISSING_EVIDENCE.get(unit.vendor, {})
 
     if unit.vendor == "checkpoint":
@@ -234,6 +290,13 @@ def _evaluate_checks(
         observed = _pan_states(unit.members, pan_ha_runtime)
         active = [s for s in observed if s in _PAN_ACTIVE_STATES]
         standby = [s for s in observed if s in _PAN_STANDBY_CAPABLE_STATES]
+
+    # Absence of evidence != evidence of absence (S7): "no standby observed"
+    # is a cross-member conclusion and needs every member's own state. A
+    # one-sided read (fewer own observations than members, or a single-
+    # member unit) can still expose an explicit split-brain (two actives
+    # are decisive on their own) but never a `no_viable_target`.
+    all_members_observed = len(observed) >= len(unit.members) and len(unit.members) >= 2
 
     checks: list[dict[str, Any]] = []
     for check_id, label in STOP_CONDITIONS:
@@ -253,13 +316,23 @@ def _evaluate_checks(
             continue
 
         if check_id == "viable_target":
-            if standby:
+            if not all_members_observed:
+                checks.append(_check(
+                    check_id, label, CHECK_INSUFFICIENT, "peer_not_independently_observed",
+                    missing_for_vendor.get(check_id, "OP.0b preflight battery"),
+                ))
+            elif standby:
                 checks.append(_check(check_id, label, CHECK_PASS, "standby_capable_member_observed"))
             else:
                 checks.append(_check(check_id, label, CHECK_FAIL, "no_viable_target"))
         elif check_id == "no_split_brain":
             if len(active) > 1:
                 checks.append(_check(check_id, label, CHECK_FAIL, "split_brain_observed"))
+            elif not all_members_observed:
+                checks.append(_check(
+                    check_id, label, CHECK_INSUFFICIENT, "peer_not_independently_observed",
+                    missing_for_vendor.get(check_id, "OP.0b preflight battery"),
+                ))
             elif active:
                 checks.append(_check(check_id, label, CHECK_PASS, "exactly_one_active_member"))
             else:
@@ -267,17 +340,36 @@ def _evaluate_checks(
                     check_id, label, CHECK_INSUFFICIENT, "no_active_member_observed",
                     missing_for_vendor.get(check_id, "OP.0b preflight battery"),
                 ))
-    return checks
+    evidence = {
+        "basis": EVIDENCE_BASIS_STORED_TELEMETRY,
+        "preflight_run_id": None,
+        "coherent": None,
+        "member_skew_ms": None,
+        "members_observed": len(observed),
+        "members_expected": len(unit.members),
+        "unresolved_policy_gates": [],
+    }
+    return checks, evidence, None
 
 
-def _verdict_for(unit: HaUnit, checks: Sequence[Mapping[str, Any]]) -> tuple[str, str]:
-    """Fail-closed verdict (contract P3/P4).
+def _verdict_for(
+    unit: HaUnit,
+    checks: Sequence[Mapping[str, Any]],
+    evidence: Mapping[str, Any] | None = None,
+) -> tuple[str, str]:
+    """Fail-closed verdict (contract P3/P4). **The one readiness roll-up.**
 
     `SAFE_TO_FAILOVER` requires **every** §4 stop-condition to have positively
-    passed. Because `OP0A_EVALUABLE_CHECKS` covers only two of the seven, that
-    is structurally unreachable in OP.0a — asserted by AC-6 rather than left to
-    reading. `DEGRADED_PROCEED_WITH_RISK` is reserved in the vocabulary and
-    never emitted here (open decision `op_degraded_verdict`, owed before OP.1).
+    passed *and* no open numeric policy decision (`UNRESOLVED_POLICY_DECISIONS`)
+    to apply to the evidence the checks were read from. On the OP.0a
+    stored-telemetry basis `OP0A_EVALUABLE_CHECKS` covers only two of the
+    seven, so SAFE is structurally unreachable — asserted by AC-6. On the
+    OP.0b S7 preflight basis `flap_history` can never PASS while `D-F3` is
+    open, and this gate additionally refuses SAFE while `D-F2`/`D-F1` apply,
+    so it stays unreachable there too — asserted by the S7 suite over a
+    generated snapshot matrix. `DEGRADED_PROCEED_WITH_RISK` is reserved in the
+    vocabulary and never emitted here (open decision `op_degraded_verdict`,
+    owed before OP.1).
     """
     # P3: a load-sharing cluster has no standby; "fail it over" is not a
     # coherent request, so it gets neither a safe nor an unsafe verdict.
@@ -299,6 +391,12 @@ def _verdict_for(unit: HaUnit, checks: Sequence[Mapping[str, Any]]) -> tuple[str
         return VERDICT_UNSAFE, str(failures[0].get("reason") or "stop_condition_failed")
 
     if all(c.get("status") == CHECK_PASS for c in checks) and len(checks) == len(STOP_CONDITIONS):
+        open_gates = sorted(
+            str(g) for g in ((evidence or {}).get("unresolved_policy_gates") or [])
+            if str(g) in UNRESOLVED_POLICY_DECISIONS
+        )
+        if open_gates:
+            return VERDICT_INSUFFICIENT, "positive_verdict_blocked_by_unresolved_policy:" + ",".join(open_gates)
         return VERDICT_SAFE, "all_stop_conditions_passed"
 
     return VERDICT_INSUFFICIENT, "stop_conditions_not_fully_evaluable"
@@ -684,8 +782,20 @@ def compute_ha_readiness(
     pan_ha_runtime: Mapping[str, Mapping[str, Any]] | None = None,
     pan_ha_peers: Mapping[str, str] | None = None,
     generated_at: str | None = None,
+    preflight_snapshots: "Sequence[PreflightSnapshot] | None" = None,
 ) -> dict[str, Any]:
     """Compute a `securityexpert-ha-readiness-v1` record.
+
+    OP.0b S7: `preflight_snapshots` are fresh S5/S6 `PreflightSnapshot`s,
+    keyed by their `operational_unit_id`. A unit whose id matches one is
+    evaluated from that snapshot alone (evidence basis
+    `op0b_preflight_snapshot`); every other unit keeps the OP.0a stored-
+    telemetry basis. Snapshots never create units — unit derivation stays
+    inventory-driven — and a snapshot naming no derived unit is reported
+    under the top-level `preflight.unmatched` list, never silently dropped
+    and never evaluated against a guessed unit. This function performs no
+    collection: callers run `checkpoint.preflight_collector` /
+    `panorama.preflight_collector` as a separate, explicit stage.
 
     Parameters
     ----------
@@ -723,17 +833,40 @@ def compute_ha_readiness(
 
     units = _derive_cp_units(usable_rows, cp_runtime) + _derive_pan_units(usable_rows, pan_runtime, peers)
 
+    snapshots_by_unit: dict[str, Any] = {}
+    duplicate_snapshot_units: list[str] = []
+    for snapshot in preflight_snapshots or ():
+        key = str(snapshot.operational_unit_id)
+        if key in snapshots_by_unit:
+            # Two snapshots for one unit is ambiguous evidence -- neither is
+            # trusted (fail closed), and the unit falls back to stored telemetry.
+            duplicate_snapshot_units.append(key)
+            continue
+        snapshots_by_unit[key] = snapshot
+    for key in duplicate_snapshot_units:
+        snapshots_by_unit.pop(key, None)
+    applied: list[str] = []
+
     assessments: list[UnitAssessment] = []
     for unit in sorted(units, key=lambda u: (u.vendor, u.unit_type, u.unit_id)):
-        checks = _evaluate_checks(unit, cp_ha_runtime=cp_runtime, pan_ha_runtime=pan_runtime)
-        verdict, reason = _verdict_for(unit, checks)
+        snapshot = snapshots_by_unit.get(unit.unit_id)
+        checks, evidence, effective_mode = _evaluate_checks(
+            unit, cp_ha_runtime=cp_runtime, pan_ha_runtime=pan_runtime, snapshot=snapshot,
+        )
+        if snapshot is not None:
+            applied.append(unit.unit_id)
+            if effective_mode:
+                # Fresh in-run mode beats the stored-telemetry mode for both
+                # the roll-up (P3 load-sharing gate) and the disclosed unit.
+                unit.cluster_mode = effective_mode
+        verdict, reason = _verdict_for(unit, checks, evidence)
         if (
             unit.vendor == "panorama"
             and len(unit.members) == 1
             and verdict == VERDICT_INSUFFICIENT
         ):
             reason = unit.unresolved_reason or "pan_ha_peer_unresolved"
-        assessments.append(UnitAssessment(unit, verdict, reason, checks))
+        assessments.append(UnitAssessment(unit, verdict, reason, checks, evidence))
 
     summary = {
         VERDICT_SAFE: 0,
@@ -745,9 +878,17 @@ def compute_ha_readiness(
     for assessment in assessments:
         summary[assessment.verdict] += 1
 
+    derived_unit_ids = {u.unit_id for u in units}
     return {
         "schema": SCHEMA,
         "generated_at": generated_at or _utc_now(),
         "units": [a.to_dict() for a in assessments],
         "summary": summary,
+        # Additive (S7): which fresh preflight evidence reached this record.
+        "preflight": {
+            "snapshots_supplied": len(preflight_snapshots or ()),
+            "applied": sorted(applied),
+            "unmatched": sorted(k for k in snapshots_by_unit if k not in derived_unit_ids),
+            "ambiguous": sorted(set(duplicate_snapshot_units)),
+        },
     }
