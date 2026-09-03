@@ -978,14 +978,20 @@ def test_ac9_failover_package_exposes_no_write_capable_symbol():
         )
 
 
-def test_ac9_failover_package_contains_only_assessment():
+def test_ac9_failover_package_contains_only_assessment_and_preflight_model():
+    """P5's actual boundary is "no write-capable surface" (see
+    utils/failover/__init__.py docstring), not "exactly one module forever".
+    `preflight_model` (OP.0b S1, frozen contract, pure/zero-I/O evidence
+    model) is the one deliberate, contract-named addition; the structural
+    assertion is updated in the same build that added it so the boundary
+    stays enforced rather than merely current."""
     from pathlib import Path
 
     import utils.failover as failover
 
     package_dir = Path(failover.__file__).parent
     modules = sorted(p.name for p in package_dir.glob("*.py"))
-    assert modules == ["__init__.py", "assessment.py"]
+    assert modules == ["__init__.py", "assessment.py", "preflight_model.py"]
     assert not (package_dir / "adapters").exists()
 
 

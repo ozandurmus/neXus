@@ -9,12 +9,12 @@ generated one-line timeline.
 
 - **Checkpoint:** 2026-09-03, branch `claude/vendor-semantics-confirmation-pt2iiq`.
 - **Current build** (per `project/roadmap.json` `now_next.now`):
-  `op0b_0_final_semantic_blocker_closure_freeze` — AUTOMATED_VALIDATED.
-  Fourth and final vendor-semantics session: `OP.0b.0` moves from
-  `DRAFT — DO NOT FREEZE` to **`FREEZE WITH REAL-ENV VALIDATION GATES`**.
-  Documentation/state only; no product, collector, vendor-command, schema,
-  transport or UI behavior changed; no device contacted; CLASS 2 stays
-  structurally unreachable (P4 invariant, unchanged).
+  `op0b_s1_preflight_fact_provenance_model` — AUTOMATED_VALIDATED. First
+  bounded implementation slice against the FROZEN `OP.0b.0` contract:
+  `utils/failover/preflight_model.py` (new) — pure fact/provenance
+  dataclasses, evidence taxonomy, deterministic same-run coherence. Zero
+  device I/O, zero network, no collector/parser/readiness-verdict/schema/UI
+  change; CLASS 2 stays structurally unreachable (P4 invariant, unchanged).
 - **Product baseline:** `0.7.7 — Compliance trend retro-fill` — AUTOMATED_VALIDATED.
 - **Engineering baseline:** `DEV.3.3` — AUTOMATED_VALIDATED. `DEV.1`,
   `DEV.4` complete.
@@ -47,29 +47,27 @@ test-enforced boundaries. Current numbers:
 
 ## Active build
 
-**`op0b_0_final_semantic_blocker_closure_freeze`** — AUTOMATED_VALIDATED
-2026-09-03. Fourth vendor-semantics session, scoped to `D-V3a`/`D-V7b` plus a
-classification-only triage of every residual `PARTIAL` row. Both stayed
-`STILL_UNKNOWN` (one final search each; `D-V7b` gained a second
-official-adjacent negative — the official CheckPointSW Ansible `simple-
-cluster` module's full parameter list has no recovery/failback field). The
-freeze-boundary question — does the contract's *interpretation* actually
-depend on these closing — was answered by re-reading this document's own
-already-written text: the PAN successor identity model was already `NOT
-FROZEN` with the hostname-keyed fallback standing until match, and CP check 6
-was already "recorded, non-blocking," both from session 1. **Neither gap
-blocks the contract; both gate only the successor identity model and
-CLASS 2.** Every other residual row got a deterministic fail-closed minimal
-interpretation under the same reasoning (`D-V5b` turned out not load-bearing
-at all). Result: `OP.0b.0` is now `FREEZE WITH REAL-ENV VALIDATION GATES` —
-a reclassification of what sessions 1–3 already wrote, not a new leniency.
-Full result: `docs/history/phase/OP_0B_0_VENDOR_FAILOVER_PREFLIGHT_EVIDENCE_SURFACE.md`
-§"Final semantic blocker closure — session 4".
+**`op0b_s1_preflight_fact_provenance_model`** — AUTOMATED_VALIDATED
+2026-09-03. First implementation slice against the FROZEN `OP.0b.0`
+contract. New `utils/failover/preflight_model.py`: frozen `PreflightFact`/
+`Provenance`/`PreflightMemberEvidence`/`PreflightSnapshot` dataclasses; the
+13-category evidence taxonomy (A–M); `evaluate_coherence()` — deterministic
+same-preflight-run coherence over categories D/E/F/G/J/K, member-skew
+computed only when timestamps parse (never a fake zero). Encodes the frozen
+contract's domain invariants without reinterpreting them; picks no
+`D-F1`/`D-F2`/`D-F3` numeric threshold. 23 targeted tests, all passing.
+Resolved the flagged S0-vs-S1 ordering question by proceeding — S1 needed
+no device I/O and no S0 result. Two pre-existing structural tests (OP.0a
+decision P5's `utils/failover/` file-count check) updated, narrowly, to
+allow exactly this one contract-named addition; P5's actual boundary (no
+write-capable surface) is unaffected and re-verified. Zero device I/O, zero
+network, no collector/parser/readiness-verdict/schema/UI change; CLASS 2
+stays structurally unreachable (P4 invariant, unchanged).
 
-**Predecessor:** `op0b_0_official_vendor_semantics_confirmation_pass2`
-("Source Pack 2") — session 3 (`D-V4`/`D-V7a` closed; `D-V1`/`D-V2`/`D-V6`
-strengthened; `D-V5`/`D-V7` split). Before that, session 2 and `DEV.4`
-(AUTOMATED_VALIDATED 2026-09-02). Detail: `project/build_history.json`.
+**Predecessor:** `op0b_0_final_semantic_blocker_closure_freeze` —
+AUTOMATED_VALIDATED 2026-09-03, session 4 (`OP.0b.0` moved `DRAFT — DO NOT
+FREEZE` → `FREEZE WITH REAL-ENV VALIDATION GATES`). Detail:
+`project/build_history.json`.
 
 ## `OP.0b.0` — FROZEN WITH REAL-ENV VALIDATION GATES
 
@@ -161,11 +159,14 @@ evidence.
 ## Automated test baseline
 
 ```
-1099 passed / 24 skipped / 0 failed (2026-09-02, serial, after DEV.4).
-  Prior: 1074 / 26 / 0 (op0a_pan_ha_peer_pairing_identity_closure) — the +25
-  spans the PAN HA peer-identity diagnostic, the OP.0b.0 draft (doc only, no
-  new tests) and DEV.4's six governance tests (five original + this
-  checkpoint's draft-authority gate).
+1099 passed / 24 skipped / 0 failed (2026-09-02, serial, after DEV.4) — last
+  full-dependency-environment baseline. +23 targeted tests since
+  (op0b_s1_preflight_fact_provenance_model, 2026-09-03) not yet folded into
+  a full re-run: this container lacks lxml/cryptography/paramiko/fastapi, so
+  only the targeted+convergence suite (42/42) and a tolerant full pass
+  (510 passed / 17 skipped / 33 failed / 81 errors — failed/error counts
+  unchanged from the prior session, all pre-existing missing-dependency
+  gaps) could be run here.
 Repository privacy gate: PASS / 0 findings, clean checkout.
 Project-state consistency: metadata_warnings == [] under all cross-authority rules.
 ```
