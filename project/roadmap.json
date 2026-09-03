@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "current_build": "dev4_ai_engineering_constitution_authority_reconciliation",
+  "current_build": "op0b_0_official_vendor_semantics_confirmation_pass1",
   "current_track": "CON.x",
   "progress_contract": "Weighted acceptance-criterion completion. Percentages describe the declared roadmap, not calendar time or delivery ETA.",
   "tracks": [
@@ -123,22 +123,21 @@
   "now_next": {
     "horizon_contract": "NOW is exactly one build. NEXT is exactly one. Everything else is an `upcoming` row carrying its own true status: planned = AFTER, blocked = waiting on a named external gate, deferred = consciously postponed. `now.build` must equal the newest project/build_history.json record -- utils.project_plan enforces it.",
     "now": {
-      "build": "dev4_ai_engineering_constitution_authority_reconciliation",
-      "title": "DEV.4 - AI engineering constitution & authority reconciliation",
-      "goal": "Collapse the AI bootstrap/governance surface to a three-file authority model (AGENTS.md constitution, AI_START_HERE.md operating protocol, CURRENT_STATE.md hot checkpoint) and fix the two live authority contradictions the audit found. Documentation/governance only -- no product code, collector, vendor command, schema, transport or UI behavior changed.",
-      "status": "automated_validated",
-      "started": "2026-09-02",
-      "completed": "2026-09-02"
+      "build": "op0b_0_official_vendor_semantics_confirmation_pass1",
+      "title": "OP.0b.0 - official vendor semantics confirmation, pass 1 (documentation-only)",
+      "goal": "Resolve OP.0b.0's D-V1-D-V7/D-V9 blocking rows as far as official vendor documentation allows from this execution environment, then re-run the contract's own freeze check. Documentation-only -- no product code, collector, vendor command, schema, transport or UI behavior changed; no device contacted.",
+      "status": "in_progress",
+      "started": "2026-09-03"
     },
     "next": {
-      "build": "op0b_official_vendor_semantics_confirmation",
-      "title": "OP.0b.0 official vendor semantics confirmation",
-      "goal": "From an unblocked network, fetch the official Check Point / Palo Alto documentation pages the OP.0b.0 contract's Open decisions table names for D-V1, D-V2, D-V3, D-V4, D-V5, D-V6, D-V7 and D-V9, resolve each row's UNKNOWN as far as documentation allows, then re-run the contract's own freeze check. This is what moves OP.0b.0 from DRAFT -- DO NOT FREEZE toward FROZEN; it is not itself a freeze decision.",
-      "status": "planned",
+      "build": "op0b_0_human_assisted_vendor_doc_confirmation",
+      "title": "OP.0b.0 - human-assisted official vendor doc confirmation (D-V3a, D-V6, D-V7)",
+      "goal": "A human fetches the specific official pages/sk-articles the pass-1 source table names -- a PAN-OS/Panorama reference establishing local-info/peer-info serial-num semantics (D-V3a); the official cphaprob -l list vs -ia list comparison and the cphaprob state field reference (D-V6); the Check Point Cluster Management API attribute reference for the cluster recovery-method setting (D-V7) -- and pastes their body text in, since two consecutive automated sessions hit an identical WebFetch-class egress block (CONNECT 403 / EGRESS_BLOCKED) against every official Check Point / Palo Alto host.",
+      "status": "blocked",
       "prerequisites": [
-        "Egress proxy access to sc1.checkpoint.com, support.checkpoint.com, docs.paloaltonetworks.com, knowledgebase.paloaltonetworks.com, pan.dev (all returned CONNECT 403 during drafting)"
+        "A human with browser/vendor-portal access to fetch and paste in the pages named above; a third automated retry against the same egress proxy is not expected to behave differently"
       ],
-      "note": "Independent of PAN SERIAL REPRESENTATION / IDENTITY EVIDENCE CLOSURE (below, upcoming) -- the two may proceed in either order or in parallel. Recommended: Sonnet 5, extended thinking (high) for the confirmation/freeze pass (vendor-semantic calls)."
+      "note": "Independent of PAN SERIAL REPRESENTATION / IDENTITY EVIDENCE CLOSURE (below, upcoming, hardware-blocked) and of the D-V3b/D-V5/D-V9a/D-V9b real-env residuals recorded in the contract -- any of these threads may proceed in either order or in parallel. Recommended: Sonnet 5, extended thinking (high) for the confirmation/freeze pass once new material lands."
     },
     "upcoming": [
       {

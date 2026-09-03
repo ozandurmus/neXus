@@ -2,7 +2,7 @@
 
 ## Status
 
-**DRAFT — DO NOT FREEZE (2026-09-02).**
+**DRAFT — DO NOT FREEZE (2026-09-03, session 2 of the vendor-semantics audit).**
 
 This document is structurally complete: every required section, the full
 command surface table (§24), the configuration/runtime field trace table (§25)
@@ -11,21 +11,32 @@ implementation, for exactly the reason the freeze rule names: several
 **safety-critical vendor command semantics remain UNKNOWN**, and this contract
 refuses to fill them from generic product knowledge.
 
-Why they are unknown, stated plainly: the drafting environment could reach
-official vendor documentation **only through search-result snippets**. Every
-official documentation host (`sc1.checkpoint.com`, `support.checkpoint.com`,
+Why they are still not fully established, stated plainly: **two independent
+sessions**, on two different execution environments, have now hit the same
+wall. Session 1 (2026-09-02, this doc's original draft) found every official
+documentation host (`sc1.checkpoint.com`, `support.checkpoint.com`,
 `docs.paloaltonetworks.com`, `knowledgebase.paloaltonetworks.com`, `pan.dev`)
-returned `CONNECT 403` from the egress proxy. Snippets were sufficient to
-establish command purpose, read-only class and several caveats; they were not
-sufficient to establish field-level output vocabularies. Each such row carries
-`UNKNOWN` in §24/§25 and is listed in §"Open decisions" with the exact
-document that resolves it. **Fetching those documents from an unblocked
-network and confirming the rows is the only work between this draft and
-FREEZE.**
+returning `CONNECT 403` from its egress proxy. Session 2 (2026-09-03, this
+pass — see §"Official vendor semantics confirmation pass — 2026-09-03" below)
+found the identical failure signature (`EGRESS_BLOCKED`) on a page-fetch tool
+against every one of those same hosts. **This is no longer plausibly an
+incidental proxy misconfiguration; it is a structural property of the
+execution environments these AI sessions run in.** A separate search tool
+*was* reachable in session 2 and returned indexed snippets — sometimes genuine
+excerpts of official pages, at other times only titles/URLs — which let
+several rows narrow from `UNKNOWN` to `PARTIAL`, but none reached full
+`CLOSED_BY_DOCS`. Each row's residual gap is recorded precisely in
+§"Open decisions" and the decision matrix below. **Closing the remaining rows
+needs either a genuinely unblocked network or a human fetching the named
+pages/sk-articles and pasting their body text in — "try again from an
+unblocked network" has now failed twice identically and should not be the
+unqualified next instruction.**
 
 Movement history: `ARCHITECTURE` → `VENDOR SEMANTICS AUDIT` (three parallel
 evidence streams: repository source, recorded real-environment findings,
-official vendor documentation) → `EVIDENCE CONTRACT` (this document).
+official vendor documentation) → `EVIDENCE CONTRACT` (this document, session
+1) → `VENDOR SEMANTICS AUDIT` (session 2, search-snippet-level confirmation
+pass, below) → `CONTRACT RECONCILIATION` (this document, updated in place).
 
 - Design parent: `docs/design/FAILOVER_ENGINE_ARCHITECTURE.md` §3.1, §3.2
   (per-vendor preflight reads), §4 (seven stop conditions), §7–§8 (engine and
@@ -839,19 +850,130 @@ facts, and a config/runtime consistency axis — nothing more.
   "make it green" must be resisted (OP.0a already warns).
 - `on_hardware_real_env_validation` is BLOCKED on laptop availability.
 
+## Official vendor semantics confirmation pass — 2026-09-03
+
+Session 2 of the vendor-semantics audit (`op0b_official_vendor_semantics_confirmation`,
+`project/roadmap.json` `now_next.next` at session start). Reasoning tier:
+`Sonnet 5, extended thinking (high)` per the task's own header and
+`CLAUDE.md`/`AGENTS.md` routing (vendor-semantic ambiguity, phase-adjacent
+contract reconciliation).
+
+**Network authority.** A page-fetch tool was tried first against
+`support.checkpoint.com`, `sc1.checkpoint.com`, `docs.paloaltonetworks.com`
+and `pan.dev` and returned `EGRESS_BLOCKED` on every one — the same failure
+class session 1 recorded as `CONNECT 403`. A separate search tool remained
+reachable and returned indexed results: sometimes a verbatim excerpt of an
+official page with a citeable URL (treated below as SOURCE C, per §3's
+official-source policy), at other times only a title/URL with no body text
+(treated as a discovery hint only, per AGENTS.md "field presence != field
+semantic proof" and this contract's own "Community/forum/blog content may be
+used only as a discovery hint, never as final authority" — the same
+restriction applied here to any snippet that was itself only a paraphrase
+rather than quoted official text). No device was contacted; no code, test,
+collector, parser, schema, UI or transport file changed.
+
+**Method discipline.** Per §2 of the audit task and the AGENTS.md vendor-
+semantics law, a snippet was accepted as closing a row only where it was a
+genuine excerpt of an official page/KB/sk article establishing the semantic
+itself — never a search engine's own paraphrase, never a field-name-only
+correspondence, and never community content (CheckMates, Indeni, blogs,
+Reddit-style forums) even when a snippet summarized one. Two cases below were
+caught by this discipline and are recorded precisely so the same false-close
+is not repeated: (1) the fullest structural CLI-output example found for
+`show high-availability state` — "Election Option Information",
+"Configuration Synchronization" / "Running Configuration: synchronized",
+"Version Compatibility: ... Match" — is from the **WildFire Appliance**
+operational-mode CLI reference, a different PANW product line with its own HA
+state vocabulary (`active-controller`/`passive-controller`, not the NGFW
+firewall's `active`/`passive`/`active-primary`/`active-secondary`); it is
+recorded below as structural corroboration only, never as NGFW-firewall-
+specific confirmation. (2) The only characterization found of the exact
+behavioral difference between `cphaprob -l list` and `cphaprob -ia list` came
+from CheckMates/Indeni community threads; per policy it is recorded as an
+unconfirmed engineering hint for future gate-package research, not as a
+contract fact, and does not close D-V6.
+
+### Decision matrix (§18 of the audit task)
+
+| Decision | Vendor | Semantic question | Docs result | Real-env needed | Final status |
+| --- | --- | --- | --- | --- | --- |
+| D-V1 | PAN | `conn-*` vocabulary | `conn-status`/`conn-ha1`/`conn-ha1-backup`/`conn-ha2` re-confirmed as real, officially-discussed fields; `conn-status`-class vocabulary is `up`/`down` with a free-text down-reason (e.g. "HA1 link went down"), per official KB. Per-field vocabulary for `conn-ha1` vs `conn-ha1-backup` vs `conn-ha2` individually, aggregate-vs-specific-link scope of `conn-status`, and missing-field meaning are **not** established | YES | PARTIALLY_CLOSED — still blocks freeze |
+| D-V2 | PAN | sync/compat/election/flap | Concepts confirmed with concrete defaults via official KB: preemption-hold-time (minutes, default 1), promotion-hold-time (ms, range 0–60000, default 2000), max-flaps (range 0–16, default 3; a flap = leaving active within 15 min of previously leaving active), `nonfunc-flap-cnt` = Non-Functional-state flap count distinct from the preemption-loop counter. XML field-to-concept **binding remains `FIELD_BINDING_UNCONFIRMED`** (name correspondence only, no official statement that `local-info/max-flaps` etc. are literally these concepts) | YES | PARTIALLY_CLOSED — still blocks freeze |
+| D-V3a | PAN | serial field semantics | No official PAN-OS/Panorama page body confirming `local-info/serial-num` / `peer-info/serial-num` semantics inside `show high-availability state` was retrievable (only an indirect, unread SDK-naming hint). Formatting/canonicalization semantics **not established by any source** | NO (this row is docs-only) | STILL_UNKNOWN |
+| D-V3b | PAN | pair correspondence / B2 | N/A — real-environment only | YES | OPEN — `B2 NOT ESTABLISHED`, unchanged |
+| D-V4 | PAN | `running-sync` location | Concept + CLI field label ("Configuration Synchronization" → "Running Configuration: synchronized / not synchronized", with an "Out-of-sync Reason" on failure) confirmed via NGFW-context official KB (not the WildFire-only citation — see method discipline above). Exact XML element path/command (`state` vs `all`) for the `type=op` API response **not** confirmed by an official source (only a non-official code sample suggests `result/group/running-sync`) | YES | PARTIALLY_CLOSED — still blocks freeze |
+| D-V5 | CP | failover-statistics syntax/version | Command purpose and version availability substantially narrowed: full-Gaia Clish `show cluster failover` is documented in official CLI Reference Guides across R80.20 GA, R80.30 and R81 (not merely a Spark novelty); Spark/Gaia-Embedded Expert `cphaprob show_failover` is documented since R81.10.15 with a confirmed output shape (last event: member/reason/time; cluster failover counter + reset time; 20-entry history with No./Time/Transition/CPU/Reason). Field-for-field parity between the two variants, and VSX applicability, **not** established | YES (parity + VSX) | PARTIALLY_CLOSED — still blocks freeze |
+| D-V6 | CP | pnote/state syntax | No official-source advance beyond the existing draft. sk117236's Gaia-Embedded scoping re-confirmed (title only). The only behavioral-difference characterization found for `-l list` vs `-ia list` is community-sourced and, per policy, is not authority | YES | STILL_UNKNOWN |
+| D-V7 | CP | recovery/preemption source | Confirmed an official "Cluster Management APIs" surface exists (R80.40+ ClusterXL Admin Guide) — the correct family to search. Exact attribute/field name for the recovery-method setting **not found** by any accessible source | YES | STILL_UNKNOWN |
+| D-V9a | CP VSX | documented caveat | sk165432 title/scope re-confirmed unchanged: VSX (Traditional), non-VS0 `cphaprob stat` context ⇒ member reads `Down`. Exact affected releases, fix version, and official recommended alternative **not retrievable** (article body blocked) | NO (concept only) | PARTIAL — unchanged in substance from the session-1 draft |
+| D-V9b | CP VSX | estate applicability | N/A — real-environment only | YES | OPEN |
+
+No row reached `CLOSED_BY_DOCS`. The freeze-blocking set is unchanged in
+substance (narrower evidence, same blocking outcome) and is now the split
+form: `D-V1, D-V2, D-V3a, D-V3b, D-V4, D-V5, D-V6, D-V7, D-V9a, D-V9b`.
+
+### Source table (§19 of the audit task)
+
+| Vendor | Decision | Official source | Version scope | Exact semantic established | Semantic still NOT established | Contract impact |
+| --- | --- | --- | --- | --- | --- | --- |
+| PAN | D-V1 | PANW Knowledge Base — "High Availability – HA Peer Connection Status"; "High-Availability – HA links status" (`knowledgebase.paloaltonetworks.com`) | not stated in the retrieved snippet | `conn-status`-class field: `up`/`down`; down carries a free-text reason (e.g. "HA1 link went down") | per-field vocabulary for `conn-ha1`/`conn-ha1-backup`/`conn-ha2` individually; missing-field meaning | none to §24 `REQUIRED` status; D-V1 stays blocking |
+| PAN | D-V2 | PANW Knowledge Base — "HA Failover Hold Timers"; "When does an HA node go into Suspended state due to Non-Functional/Preemption loop" | not stated | preemption-hold-time (min, default 1); promotion-hold-time (ms, 0–60000, default 2000); max-flaps (0–16, default 3; flap = leaving active within 15 min); `nonfunc-flap-cnt` distinct from preemption-loop flaps | XML field-to-concept binding (`FIELD_BINDING_UNCONFIRMED`) | none to §24 status; sharpens the S2 interpretation guide once binding is proven; D-V2 stays blocking |
+| PAN | D-V4 | PANW Knowledge Base — "High-Availability – Out of Sync Peers – Configuration"; "High Availability configuration status is 'not synchronized'" (NGFW-context, not WildFire) | general NGFW | a "Running Configuration: synchronized/not synchronized" state with an "Out-of-sync Reason" field exists under "Configuration Synchronization" | literal XML element name/path for the `type=op` API response; whether `show high-availability all` is additionally required | §24 `show high-availability all` row's conditional REQUIRED status unchanged; D-V4 stays blocking, S2 search space narrows to "look in `state` first" |
+| CP | D-V5 | Check Point CLI Reference Guides — "Viewing/Monitoring Cluster Failover Statistics" (R80.20 GA, R80.30, R81 full-Gaia; SMB R81.10.X for Spark/Gaia Embedded) — page/title level, bodies not fetchable | full-Gaia Clish since ≥R80.20 GA; Spark/Gaia-Embedded Expert `cphaprob show_failover` since R81.10.15 | command purpose (count/reason/last-event-time); Spark-variant output shape (last event, counter+reset time, 20-entry history w/ Transition+CPU+Reason) | field-for-field parity between full-Gaia Clish and Spark Expert variants; VSX applicability | §24 "cluster failover statistics" row's version caveat narrows from `UNKNOWN` to a two-variant version map; still `REQUIRED (gate)`; D-V5 stays blocking |
+| CP | D-V7 | Check Point ClusterXL Admin Guide — "Cluster Management APIs" (R80.40+) — title/existence only, body not fetchable | R80.40+ | an official cluster-object Management API surface exists | exact attribute/field name for the recovery-method setting | none to §24 status; narrows the S4 gate-package research target; D-V7 stays blocking |
+| CP VSX | D-V9a | Check Point sk165432 — title/scope only, body not fetchable | not retrievable | symptom + product scope (VSX Traditional, non-VS0 `cphaprob stat` ⇒ `Down`) — unchanged from session 1 | affected releases; fix version; official recommended alternative | none; D-V9a caveat status unchanged; D-V9b unaffected |
+
+D-V3a and D-V6 have no source-table row: no official-source text was
+retrievable beyond what session 1 already recorded, so nothing changed to
+report as established.
+
+### Command battery review (§12 of the audit task)
+
+No new command is proposed. Every candidate in §24 was re-evaluated against
+this session's findings:
+
+- **KEEP, unchanged:** all `REQUIRED`/`OPTIONAL` rows not named below.
+- **KEEP, annotation narrowed only (no status change):** CP cluster
+  failover-statistics row (D-V5 — version-availability caveat sharpened, see
+  source table); PAN `show high-availability state` / `all` rows (D-V4 — no
+  status change, search-space note added).
+- **REMAIN_UNKNOWN, unchanged:** CP `cphaprob state` (D-V6 field set); CP
+  `cphaprob -l list` (stays `REJECTED` in favour of `-ia list`, variance still
+  unconfirmed by an official source); CP MDS recovery-setting attribute
+  (D-V7); PAN `path-monitoring`/`link-monitoring` show-commands.
+- **REMOVE:** none — no row's official semantics disproved its candidacy.
+
+### Configuration/runtime field-trace recheck (§13 of the audit task)
+
+No row's collection/correctness classification in §25 changes. The narrowing
+above affects only the "Required correction" interpretation text for two
+rows, already reflected in the source table: CP `flap_history` (D-V5 version
+map) and PAN `running_sync` (D-V4 search-space note). Both remain
+`NOT_COLLECTED`/`UNKNOWN` in §25 pending their respective gate/enumeration
+slices — nothing here authorizes collecting them.
+
+### Command safety recheck (§16 of the audit task)
+
+No command's read-only class, privilege/context, or cost changed. The two
+rows whose version/availability narrowed (D-V5, D-V4) remain `CLASS_0_READ`
+candidates exactly as classified in §24; narrowing a version map is not a
+safety-relevant change and does not admit either row to an approved gate.
+
 ## Open decisions
 
 | Id | Decision | Blocks freeze? | Resolves via |
 | --- | --- | --- | --- |
-| D-V1 | PAN `conn-status`/`conn-ha1`/`conn-ha1-backup`/`conn-ha2` value vocabulary | **YES** | PAN-OS 11.1 CLI reference / API output, S2 real-env |
-| D-V2 | PAN `state-sync`, `*-compat`, `preemptive`, flap-counter field semantics | **YES** | same |
-| D-V3 | PAN `peer-info/serial-num` semantics + real correspondence | **YES** | S0 + official doc |
-| D-V4 | PAN `running-sync` location (`state` XML sibling vs `all`) | **YES** | S2 enumeration |
-| D-V5 | CP failover-statistics exact Gaia syntax and version availability | **YES** | R81.x CLI Reference "Viewing Cluster Failover Statistics" |
-| D-V6 | CP `-ia list` vs `-l list` difference; `cphaprob state` field set | YES (gate package) | R81.x CLI Reference |
-| D-V7 | CP management-plane recovery-setting attribute/API for preemption | **YES** | Management API reference |
+| D-V1 | PAN `conn-status`/`conn-ha1`/`conn-ha1-backup`/`conn-ha2` value vocabulary | **YES** | PARTIALLY_CLOSED 2026-09-03 (see confirmation pass above); residual: per-field vocabulary, missing-field meaning — S2 real-env |
+| D-V2 | PAN `state-sync`, `*-compat`, `preemptive`, flap-counter field semantics | **YES** | PARTIALLY_CLOSED 2026-09-03; concept+defaults confirmed, XML field binding still `FIELD_BINDING_UNCONFIRMED` — S2 real-env |
+| D-V3a | PAN `peer-info/serial-num` field semantics (docs-only) | **YES** | STILL_UNKNOWN 2026-09-03 — needs human-fetched official page body or a genuinely unblocked network |
+| D-V3b | PAN peer-serial real correspondence / B2 | **YES** | REQUIRES_REAL_ENV — S0 result already pending; `B2 NOT ESTABLISHED`, do not reinterpret |
+| D-V4 | PAN `running-sync` location (`state` XML sibling vs `all`) | **YES** | PARTIALLY_CLOSED 2026-09-03; concept+CLI label confirmed, exact XML path still open — S2 enumeration |
+| D-V5 | CP failover-statistics exact Gaia syntax and version availability | **YES** | PARTIALLY_CLOSED 2026-09-03; two-variant version map now documented, schema parity + VSX applicability open — S8 real-env |
+| D-V6 | CP `-ia list` vs `-l list` difference; `cphaprob state` field set | YES (gate package) | STILL_UNKNOWN 2026-09-03 — needs human-fetched official page body or a genuinely unblocked network |
+| D-V7 | CP management-plane recovery-setting attribute/API for preemption | **YES** | STILL_UNKNOWN 2026-09-03; official API surface family confirmed (Cluster Management APIs, R80.40+), exact attribute name still open |
 | D-V8 | CP hotfix parity command | no (optional check) | Gaia CLI reference |
-| D-V9 | sk165432 applicability to this estate's version | **YES** for VS readiness | S8 |
+| D-V9a | CP VSX sk165432 documented caveat semantics | **YES** for VS readiness | PARTIAL, unchanged 2026-09-03; affected releases/fix version/alternative still open |
+| D-V9b | sk165432 applicability to this estate's version | **YES** for VS readiness | REQUIRES_REAL_ENV — S8 |
 | D-T1 | PAN preflight transport: direct identity-gated API vs Panorama proxy | no | product owner + security |
 | D-F1 | numeric max age for category C intent | no | product owner |
 | D-F2 | numeric member-skew tolerance | no | product owner + vendor guidance |
@@ -874,11 +996,24 @@ status and add the superseding path; never delete.
 
 ## Next movement
 
-`OFFICIAL_DOC_CONFIRMATION` (from an unblocked network: resolve D-V1…D-V7,
-D-V9 as far as documentation allows) → `HUMAN_REAL_ENV` (S0 result; S2/S3
-enumerations) → re-run this contract's freeze check → `FREEZE` →
-`STATE_UPDATE`. Recommended: `Sonnet 5, extended thinking (high)` for the
-confirmation/freeze pass (vendor-semantic calls); `Sonnet 5, normal` for S1–S3.
+Superseded by the 2026-09-03 pass above. Two paths remain, independent, either
+order or in parallel:
+
+1. `HUMAN_ASSISTED_DOC_CONFIRMATION` — a human fetches the specific pages
+   already named in the source table and the D-V3a/D-V6/D-V7 rows (sk165432
+   body, the `-l list`/`-ia list` official comparison if one exists, the
+   Cluster Management API attribute reference, an NGFW-context `show
+   high-availability state` full field reference) and pastes their body text
+   in; a third automated `WebFetch` retry against the same hosts is not
+   expected to behave differently.
+2. `HUMAN_REAL_ENV` — S0 result (already pending, independent of this
+   thread); S2/S3/S8 enumerations once a real preflight-capable session is
+   available.
+
+Either path, followed by a re-run of this contract's freeze check, is what
+moves this document toward `FREEZE`. Recommended: `Sonnet 5, extended
+thinking (high)` for the next confirmation/freeze pass (vendor-semantic
+calls); `Sonnet 5, normal` for S1–S3 once frozen.
 
 ---
 
@@ -1024,7 +1159,23 @@ Priority: **P0 BEFORE CLASS 2** · **P1 BEFORE PRODUCTION** · **P2 HARDENING** 
 
 ## Freeze decision
 
-**DO NOT FREEZE.** Blocking rows: D-V1, D-V2, D-V3, D-V4, D-V5, D-V6, D-V7,
-D-V9. All are vendor-semantic confirmations or a single already-scheduled
-real-env measurement (S0) — none is a design decision. Non-blocking open
-decisions: D-V8, D-T1, D-F1, D-F2, D-P1.
+**DO NOT FREEZE.** Blocking rows, split form per the 2026-09-03 confirmation
+pass: `D-V1, D-V2, D-V3a, D-V3b, D-V4, D-V5, D-V6, D-V7, D-V9a, D-V9b`. All
+are vendor-semantic confirmations or already-scheduled real-env measurements
+(S0, S2, S8) — none is a design decision. The 2026-09-03 pass narrowed
+D-V1, D-V2, D-V4, D-V5 from `UNKNOWN` to `PARTIALLY_CLOSED` (official
+concept-level semantics now cited, with a precisely named residual gap each)
+and left D-V3a, D-V6, D-V7 at `STILL_UNKNOWN` (no official page body was
+retrievable for any of the three) and D-V9a `PARTIAL, unchanged`. None
+reached `CLOSED_BY_DOCS`, so none drops off the blocking list — per §14 of
+the audit task, `PARTIAL` still blocks unless the contract redefines the row
+as a fully-interpreted runtime validation gate, and none of these residual
+gaps is yet narrow enough to state precisely "what to measure, how to
+interpret it, what blocks execution" without the still-missing official
+confirmation. Non-blocking open decisions: D-V8, D-T1, D-F1, D-F2, D-P1.
+
+Two consecutive sessions have now hit an identical `WebFetch`-class block
+against every official vendor host; the honest next step for the
+docs-only-closable rows (D-V3a, D-V6, D-V7) is a human fetching the named
+pages/sk-articles and pasting their body text in, not a third automated
+retry against the same proxy.
