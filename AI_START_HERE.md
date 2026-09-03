@@ -237,7 +237,10 @@ stay observable. Never use the strongest tier for mechanical work.
 - **Full regression**: shared-core changes, phase closure, release
   candidates. One-shot, file-backed: `py -m pytest -q > pytest_result.log
   2>&1`. Run at least once **serially** before closing a build — a parallel
-  run has previously hidden a real shared-state leak.
+  run has previously hidden a real shared-state leak. Risk-based, not
+  mandatory for every bounded PR — `docs/AI_DEVELOPMENT_PROTOCOL.md`
+  "CI validation policy" is the canonical trigger list and CI shape; this
+  entry doesn't repeat it.
 - **Repository privacy gate**: `py .\main.py --repository-privacy-check`.
   Delete gitignored `data/`/`logs/` first; a test run recreates them and the
   gate flags them as runtime directories present.

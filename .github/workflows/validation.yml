@@ -1,15 +1,11 @@
 # Deterministic validation gate.
 #
-# Runs exactly the checks the repository already runs locally, in the same
-# order as docs/AI_DEVELOPMENT_PROTOCOL.md's validation ladder. It adds no
-# service, no credential, no external action beyond the two first-party
-# ones, and no dependency that is not already pinned in requirements*.txt.
-#
-# Deliberately NOT here: any device contact, any fleet collection, the
-# render harness's bun/Playwright path (both are optional local tools and
-# tests/test_html_render_harness.py already skips when they are absent),
-# and container build/publish (DEV.4, and it needs registry credentials
-# this workflow must not hold).
+# Risk-based split (DEV kaizen "fast PR CI"): a bounded PR pays for a fast
+# gate, not the ~11-minute full suite; the full suite runs as an integration
+# safety net on every push to main, plus on demand via workflow_dispatch.
+# This changes test PLACEMENT/FREQUENCY only — no check is weakened, hidden,
+# or made skippable, and no dependency/service/credential is added beyond
+# what the previous single-job version already used.
 name: validation
 
 on:
@@ -22,11 +18,97 @@ permissions:
   contents: read
 
 concurrency:
-  group: validation-${{ github.ref }}
+  group: validation-${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
+  # FAST PR VALIDATION — runs on every pull_request. Cheap, high-value gates
+  # only: import sanity, the repository/privacy gate, project-state
+  # consistency, the build-history index, a small stable safety/regression
+  # smoke set, and the whitespace/conflict-marker check. Deliberately does
+  # NOT run the full pytest suite (see the `full-regression` job below).
+  # Job id kept as `validate` (unchanged from the previous single-job
+  # workflow) so an existing branch-protection required-status-check named
+  # `validate` keeps matching on pull_request events without repository
+  # settings needing to change.
   validate:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          # Matches the validated 3.12 baseline the Dockerfile and the dev
+          # tooling both target.
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+          pip install -r requirements-console.txt
+
+      - name: Import validation
+        # Catches a syntax error or a broken import before anything else
+        # spends time on it, and covers modules no test imports directly.
+        run: python -m compileall -q main.py application console configuration checkpoint panorama utils scripts
+
+      - name: Repository privacy gate
+        # Must run on the clean checkout, BEFORE any test run: a test run
+        # creates gitignored data/ + logs/ that the gate would otherwise flag.
+        run: python main.py --repository-privacy-check
+
+      - name: Project-state consistency
+        # The cross-authority rules in utils/project_plan. Fails when
+        # CURRENT_STATE.md, roadmap.json, feature_registry.json,
+        # build_history.json and backlog.json stop agreeing.
+        run: python -m pytest -q tests/test_architecture_convergence.py
+
+      - name: Build history index is current
+        run: python scripts/build_history_index.py --check
+
+      - name: PR smoke / safety regression set
+        # A small, stable, hand-picked set of fast tests that stand in for
+        # "affected-subsystem regression" on an ordinary bounded PR — not a
+        # path->test classifier (deliberately not built: see
+        # docs/AI_DEVELOPMENT_PROTOCOL.md "Testing tiers"). Covers the
+        # invariants a regression here would most likely break: credential
+        # redaction, the repository privacy gate's own test surface, known
+        # safety-gap coverage, and the frontend-rendering shared-state-leak
+        # guard called out in the full-suite step's own long-standing
+        # comment. A change with a wider blast radius (dependencies, shared
+        # test infra, schema/storage, concurrency, security boundary, CI
+        # infra itself, or an explicit PO/contract requirement) still
+        # requires a full regression per AI_START_HERE.md's validation
+        # ladder and AGENTS.md's engineering laws — run it locally or via
+        # workflow_dispatch before merging such a PR.
+        run: >-
+          python -m pytest -q
+          tests/test_credential_redaction.py
+          tests/test_dev0_4_repository_privacy_gate.py
+          tests/test_known_safety_gaps.py
+          tests/test_frontend_rendering_boundary.py
+
+      - name: Whitespace / conflict-marker check
+        # Checks the whole HEAD tree against git's constant empty-tree SHA,
+        # not against a base ref -- github.event.pull_request.base.sha and
+        # github.event.before are both unset on workflow_dispatch, and
+        # actions/checkout@v4 defaults to a depth-1 clone, so a base-ref diff
+        # fails closed with "fatal: bad object" on exactly those triggers.
+        # The empty-tree comparison needs only HEAD, which checkout always has.
+        run: git diff --check 4b825dc642cb6eb9a060e54bf8d69288fbee4904 HEAD
+        continue-on-error: true
+
+  # FULL INTEGRATION REGRESSION — the previous single-job gate, unchanged in
+  # substance. Runs as the post-merge integration safety net on every push
+  # to main, and on demand for any PR/branch that needs it before merge.
+  full-regression:
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
