@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "current_build": "op0b_s7_readiness_v2_integration",
+  "current_build": "op0b_s75_preflight_entrypoint",
   "current_track": "OP.x",
   "progress_contract": "Weighted acceptance-criterion completion. Percentages describe the declared roadmap, not calendar time or delivery ETA.",
   "tracks": [
@@ -123,18 +123,19 @@
   "now_next": {
     "horizon_contract": "NOW is exactly one build. NEXT is exactly one. Everything else is an `upcoming` row carrying its own true status: planned = AFTER, blocked = waiting on a named external gate, deferred = consciously postponed. `now.build` must equal the newest project/build_history.json record -- utils.project_plan enforces it.",
     "now": {
-      "build": "op0b_s7_readiness_v2_integration",
-      "title": "OP.0b S7 - Readiness v2 integration",
-      "goal": "Integrate fresh S1/S5/S6 preflight evidence into the canonical readiness path without creating a second verdict authority: utils/failover/preflight_readiness.py is the one typed fact->check mapping (FACT_CHECK_MAP, 14 vendor x check specs) that interprets a PreflightSnapshot into the unchanged seven stop-conditions; utils.failover.assessment._evaluate_checks dispatches to it when compute_ha_readiness(preflight_snapshots=...) receives a snapshot for a derived unit, and _verdict_for stays the single roll-up (now also refusing SAFE while an open D-F policy applies). Five verdicts unchanged, schema string unchanged (additive per-unit evidence/provenance/coherence disclosure + top-level preflight applied/unmatched/ambiguous), OP.0c stays projection-only (optional snapshot passthrough, refreshed framing note). Evidence laws test-enforced; PAN phantom-member uplift removed (AC-5); one-sided OP.0a read is now INSUFFICIENT_EVIDENCE. SAFE/DEGRADED remain unreachable (D-F3 both vendors; D-V7b CP). No device contact, no new command, no CLASS 2.",
+      "build": "op0b_s75_preflight_entrypoint",
+      "title": "OP.0b S7.5 - Controlled preflight application entrypoint",
+      "goal": "Make the already-approved fresh preflight pipeline executable through a bounded application/CLI workflow: --cp-ha-preflight-check/--cp-preflight-targets and --pan-ha-preflight-check/--pan-preflight-targets resolve one explicit HA operational entity and its exact bounded physical members (<=2) from already-collected local inventory, fail-closed before any device contact, reusing the existing CP entity_id / PAN serial selectors; invoke run_cp_preflight/run_pan_preflight exactly once; hand the in-memory PreflightSnapshot straight to compute_ha_readiness (no persistence). New utils.failover.derive_ha_units export (pure refactor, no behavior change) keeps operational_unit_id resolution identical between the application layer and the readiness evaluator. No new command, API operation, retry, or CLASS 2.",
       "status": "automated_validated",
       "started": "2026-09-03"
     },
     "next": {
       "build": "op0b_s8_real_env_validation",
-      "title": "OP.0b S8 - bounded real-environment validation (CP ClusterXL pair, VSX pair, PAN pair)",
+      "title": "OP.0b S8-A - bounded real-environment validation (CP ClusterXL pair, VSX pair, PAN pair)",
       "status": "planned",
       "notes": [
-        "Reads only, same approved targets as the frozen contract's real-env gate (requested = resolved = contacts, extra = 0). Confirms the S5/S6 collectors' real response shapes and the vendor value vocabularies S7's FACT_CHECK_MAP freezes minimally (PAN state-sync/running-sync/conn-*/*-compat; CP sync status, failover statistics, pnote enumeration, sk165432 behaviour, member skew observed).",
+        "The application-entrypoint gap S8 surfaced is closed by op0b_s75_preflight_entrypoint (--cp-ha-preflight-check / --pan-ha-preflight-check). S8-A now runs those two CLI modes against the approved real-env pairs.",
+        "Reads only, same approved targets as the frozen contract real-env gate (requested = resolved = contacts, extra = 0). Confirms the S5/S6 collectors real response shapes and the vendor value vocabularies S7 FACT_CHECK_MAP freezes minimally (PAN state-sync/running-sync/conn-*/*-compat; CP sync status, failover statistics, pnote enumeration, sk165432 behaviour, member skew observed).",
         "Hardware-blocked until the corporate laptop / approved pairs are available. S7 stays AUTOMATED_VALIDATED (never REAL_ENV_VALIDATED) until then; OP.0b is not DONE.",
         "Recommended: Sonnet 5, normal -- bounded real-env procedure per docs/reference/REAL_ENV_VALIDATION_PROTOCOL.md; SAFE SUMMARY only, no identities."
       ]

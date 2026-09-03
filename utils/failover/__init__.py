@@ -50,6 +50,7 @@ from .assessment import (  # noqa: F401
     HaUnit,
     UnitAssessment,
     compute_ha_readiness,
+    derive_ha_units,
 )
 from .preflight_model import (  # noqa: F401
     FactCategory,
@@ -95,6 +96,7 @@ __all__ = [
     "HaUnit",
     "UnitAssessment",
     "compute_ha_readiness",
+    "derive_ha_units",
     "FactCategory",
     "RUNTIME_COHERENCE_CATEGORIES",
     "SourceOrigin",
