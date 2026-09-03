@@ -7,17 +7,18 @@ detail is not here either** — it is in `project/build_history.json`
 linked documents under `docs/history/`. `docs/history/INDEX.md` is the
 generated one-line timeline.
 
-- **Checkpoint:** 2026-09-03, branch `claude/vendor-semantics-confirmation-pt2iiq`.
+- **Checkpoint:** 2026-09-03, branch `main` (merged via PRs #34/#35/#36).
 - **Current build** (per `project/roadmap.json` `now_next.now`):
-  `op0b_s2_pan_parse_scope_extension` — **IN_PROGRESS** (corrected down from
-  an overclaimed AUTOMATED_VALIDATED same-day — see "Active build" below).
-  Second bounded slice against the FROZEN `OP.0b.0` contract: extends
-  `configuration/panorama_config_collector.py` to parse more of the
-  already-fetched `show high-availability state` response (opt-in, zero
-  behavior change by default, dormant by design — production invocation is
-  S5/S6's job), plus a pure projection module. Zero new device I/O, zero
-  new command, no readiness-verdict/UI change; `D-F1`/`D-F2`/`D-F3`/
-  `D-V3a`/`D-V7b` stay unresolved; CLASS 2 stays structurally unreachable.
+  `op0b_s2_pan_parse_scope_extension` — **AUTOMATED_VALIDATED** (a same-day
+  overclaim was caught, corrected, then genuinely advanced once PR #36's CI
+  proved the load-bearing extraction suite green — see "Active build"
+  below). Second bounded slice against the FROZEN `OP.0b.0` contract:
+  extends `configuration/panorama_config_collector.py` to parse more of the
+  already-fetched `show high-availability state` response (opt-in, dormant
+  by design — production invocation is S5/S6's job), plus a pure
+  projection module. Zero device I/O, zero new command, no
+  readiness-verdict/UI change; `D-F1`/`D-F2`/`D-F3`/`D-V3a`/`D-V7b` stay
+  unresolved; CLASS 2 unreachable.
 - **Product baseline:** `0.7.7 — Compliance trend retro-fill` — AUTOMATED_VALIDATED.
 - **Engineering baseline:** `DEV.3.3` — AUTOMATED_VALIDATED. `DEV.1`,
   `DEV.4` complete.
@@ -50,24 +51,23 @@ test-enforced boundaries. Current numbers:
 
 ## Active build
 
-**`op0b_s2_pan_parse_scope_extension`** — **IN_PROGRESS** 2026-09-03
-(corrected same day from an overclaimed AUTOMATED_VALIDATED). New
-`_parse_pan_ha_preflight_fields()` reads `conn-*`, `running-sync[-enabled]`,
+**`op0b_s2_pan_parse_scope_extension`** — **AUTOMATED_VALIDATED** 2026-09-03.
+New `_parse_pan_ha_preflight_fields()` reads `conn-*`, `running-sync[-enabled]`,
 election/preemption, flap counters, error state, `*-version`/`*-compat`
 parity from the **same** already-fetched `show high-availability state`
-response, behind `include_preflight_fields=False` (default unchanged,
-dormant by design — production invocation is S5/S6's dedicated preflight
-collector's job, never the inventory collector, per the contract's own
-"Current collector reuse decision"). New pure
-`panorama/pan_preflight_projection.py`. 34 new tests (20 extraction — lxml,
-`NOT EXECUTED` here, deliberately not forced green; CI is the acceptance
-gate; 14 projection — executed, passing). **Correction applied:**
-field-trace table no longer claims `COLLECTED_AND_PARSED` (contract §25a
-gives the six-dimension reconciliation); single-extraction-authority gap
-fixed via one shared `_pan_ha_group_text()` accessor. Zero device I/O, zero
-new command, no pair-identity/verdict/UI/CP/auth change; `D-F1`/`D-F2`/
-`D-F3`/`D-V3a`/`D-V7b` unresolved; CLASS 2 unreachable. **Not merged** —
-5 unmerged commits, PR/topology decision pending.
+response, behind `include_preflight_fields=False` (dormant by design —
+production invocation is S5/S6's job, never the inventory collector, per
+the contract's own "Current collector reuse decision"). New pure
+`panorama/pan_preflight_projection.py`. **Correction applied same day:**
+field-trace table no longer claims `COLLECTED_AND_PARSED` (§25a gives the
+six-dimension reconciliation); single-extraction-authority gap fixed via
+one shared `_pan_ha_group_text()` accessor. **Git topology reconciled:**
+merged as three sequential PRs — `#34` (freeze, `85ca1b5`), `#35` (S1,
+`f993008`), `#36` (this build, `6873ad9`). `#36`'s CI ran the full suite
+with the real dependency set: **1153 passed / 28 skipped / 0 failed**,
+including all 34 new tests for the first time anywhere. Zero device I/O,
+zero new command, no pair-identity/verdict/UI/CP/auth change; `D-F1`/
+`D-F2`/`D-F3`/`D-V3a`/`D-V7b` unresolved; CLASS 2 unreachable.
 
 **Predecessor:** `op0b_s1_preflight_fact_provenance_model` —
 AUTOMATED_VALIDATED 2026-09-03, session 4 (pure fact/provenance model, no
@@ -164,14 +164,13 @@ evidence.
 ## Automated test baseline
 
 ```
-1099 passed / 24 skipped / 0 failed (2026-09-02, serial, after DEV.4) — last
-  full-dependency-environment baseline. +23 (S1) +14 (S2 projection) run
-  here since; S2's 20 lxml extraction tests are `NOT EXECUTED` here
-  (container gap: no lxml/paramiko/fastapi) and deliberately not forced
-  green by installing deps -- CI is the acceptance gate. S1+convergence:
-  42/42. S2 projection: 14/14. Tolerant full pass: 524/17/33/82
-  (passed/skipped/failed/errors) -- failed unchanged, +1 error/+14 passed
-  are exactly S2's own new files.
+1153 passed / 28 skipped / 0 failed (2026-09-03, GitHub CI, PR #36
+  `validate` job, full dependency set incl. lxml/paramiko/cryptography/
+  fastapi) -- current full-dependency-environment baseline, superseding the
+  prior 1099/24/0 (2026-09-02). Includes S1 (23) and both S2 suites (20
+  extraction + 14 projection) executed for the first time anywhere.
+  Locally executable-here subset (no lxml/paramiko/fastapi in this
+  container): S1+convergence 42/42, S2 projection 14/14.
 Repository privacy gate: PASS / 0 findings, clean checkout.
 Project-state consistency: metadata_warnings == [] under all cross-authority rules.
 ```
