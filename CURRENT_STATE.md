@@ -7,23 +7,19 @@ detail is not here either** — it is in `project/build_history.json`
 linked documents under `docs/history/`. `docs/history/INDEX.md` is the
 generated one-line timeline.
 
-- **Checkpoint:** 2026-09-03, branch `main` (merged via PRs
-  #34/#35/#36/#37/#38; `claude/cp-remote-collection-done-marker` still open
-  as PR #39).
+- **Checkpoint:** 2026-09-03, branch `claude/cp-remote-collection-done-marker`
+  (base `main`, PRs #34-#38; merges `main` to resolve PR #39's bookkeeping
+  conflict after #38 landed).
 - **Current build** (per `project/roadmap.json` `now_next.now`):
-  `dev_kaizen_fast_pr_ci` — **AUTOMATED_VALIDATED** (PR #38's CI confirmed
-  `validate` green, merged via 6778ee9 — see "Active build"). Splits
-  `.github/workflows/validation.yml` into a fast PR gate (`validate`) and a
-  full-suite integration safety net (`full-regression`, main push +
-  `workflow_dispatch`); no product/network behavior change. The automatic
-  post-merge `full-regression` run is the integration safety net — not
-  blocked on; a later failure makes `main` integration-unhealthy until
-  classified (`AGENTS.md` "Mandatory build lifecycle").
+  `cp_remote_collection_done_marker_diagnostics` — **IN_PROGRESS**. A real
+  run hit `RuntimeError('CP remote collection ended without DONE marker')`;
+  root cause is `UNKNOWN` pending real-device evidence (no device access in
+  this session). Diagnostic hardening only — see "Active build" below.
 - **Product baseline:** `0.7.7 — Compliance trend retro-fill` — AUTOMATED_VALIDATED.
 - **Engineering baseline:** `DEV.3.3` — AUTOMATED_VALIDATED. `DEV.1`,
   `DEV.4` complete.
-- **Product evidence baseline:** `0.6.1B.1.2` interactive Check Point
-  configuration collection is REAL_ENV_VALIDATED.
+- **Product evidence baseline:** `0.6.1B.1.2` interactive CP config
+  collection is REAL_ENV_VALIDATED.
 
 ## Reading this file
 
@@ -51,25 +47,29 @@ test-enforced boundaries. Current numbers:
 
 ## Active build
 
-**`dev_kaizen_fast_pr_ci`** — **AUTOMATED_VALIDATED** 2026-09-03. A bounded
-feature PR no longer pays for the ~11-minute full `pytest` suite by
-default: `.github/workflows/validation.yml` now has `validate`
-(pull_request only — cheap gates, no full suite) and `full-regression`
-(push-to-`main` + `workflow_dispatch` — same gates plus the full serial
-suite). Canonical policy: `docs/AI_DEVELOPMENT_PROTOCOL.md` "CI validation
-policy". New `tests/test_ci_workflow_fast_pr_regression.py` statically
-asserts the split. Full suite locally: **1215 passed / 24 skipped / 0
-failed**. **PR #38's CI** confirmed `validate` green; merged via
-**6778ee9**. No product/network/dependency/branch-protection change.
+**`cp_remote_collection_done_marker_diagnostics`** — **IN_PROGRESS**
+2026-09-03. `checkpoint/scripts/cp_inventory.sh`'s last statement is a bare
+`echo "DONE"` with no early-exit path before it, so `exit_status=0` with no
+`DONE` seen has **`UNKNOWN`** root cause — not reproduced here, no device
+access. Source inspection found `checkpoint/cp_runner.py`'s
+`_run_remote_collection` channel-drain loop reading at most one
+recv()/recv_stderr() chunk per outer pass before its exit-status break
+check, unlike `checkpoint/direct_ssh_probe.py`'s already-proven
+`_run_session_command` tight-drain idiom (`while recv_ready(): ...`).
+Aligned `_run_remote_collection` with that idiom (behavior-preserving) plus
+one defensive final drain; enriched the `RuntimeError` with safe diagnostic
+fields (`exit_status`/`processed_gw`/`total_gw`/`stderr_bytes`/
+`last_marker`) so a recurrence carries real evidence instead of a bare
+message. New `tests/test_phase0_4_1_cp_automation.py` `FakeChannel` tests
+prove the multi-chunk drain and the diagnostics leak no device identity.
+Full local suite: 1210 passed / 24 skipped / 0 failed. **Explicitly not a
+confirmed fix** — stays `IN_PROGRESS` until real-device evidence exists.
 
-**Unrelated in-flight build:** `cp_remote_collection_done_marker_diagnostics`
-(PR #39) — diagnostic hardening for a real-run CP RuntimeError, root cause
-`UNKNOWN`. Detail: `project/build_history.json`.
-
-**Predecessors:** `op0b_s3_cp_parse_scope_extension` (AUTOMATED_VALIDATED,
-PR #37), `op0b_s2_pan_parse_scope_extension` (AUTOMATED_VALIDATED, PR #36),
-`op0b_s1_preflight_fact_provenance_model` (AUTOMATED_VALIDATED). Detail:
-`project/build_history.json`.
+**Predecessors:** `dev_kaizen_fast_pr_ci` (AUTOMATED_VALIDATED, PR #38, CI
+split into `validate`/`full-regression`), `op0b_s3_cp_parse_scope_extension`
+(AUTOMATED_VALIDATED, PR #37), `op0b_s2_pan_parse_scope_extension`
+(AUTOMATED_VALIDATED, PR #36), `op0b_s1_preflight_fact_provenance_model`
+(AUTOMATED_VALIDATED). Detail: `project/build_history.json`.
 
 ## `OP.0b.0` — FROZEN WITH REAL-ENV VALIDATION GATES
 
@@ -93,23 +93,23 @@ closure — session 4".
 
 ## PAN HA serial evidence
 
-The approved real PAN pair's S0 result: both exact selected PAN devices were
-directly identity-gated successfully; runtime local serial evidence and
-runtime peer serial claim were present on both. One member —
-`self_identity_consistent = MATCH`, `runtime_peer_serial_state = MATCH`. The
-other member — `self_identity_consistent = MISMATCH`,
-`runtime_peer_serial_state = MISMATCH`. **B2 bidirectional corroboration:
-NOT ESTABLISHED.** Root cause of the mismatching member: **UNKNOWN** — the
-current persisted diagnostic cannot distinguish representation divergence, a
-genuine runtime identity discrepancy, or another semantic mismatch.
-Whitespace difference and parser numeric conversion are both ruled out by
-source inspection. Leading-zero normalization is **not authorized**; the
-identifier stays opaque (`AGENTS.md` opaque-identifier law). Tracked as
+The approved real PAN pair's S0 result: both devices were directly
+identity-gated successfully; one member's `self_identity_consistent` and
+`runtime_peer_serial_state` are `MATCH`, the other's are both `MISMATCH`.
+**B2 bidirectional corroboration: NOT ESTABLISHED.** Root cause: **UNKNOWN**
+— representation divergence, a genuine runtime discrepancy, and another
+semantic mismatch are all still possible; whitespace/numeric-conversion
+causes are ruled out by source inspection. Leading-zero normalization is
+**not authorized** (`AGENTS.md` opaque-identifier law). Tracked as
 `project/backlog.json` `pan_serial_representation_identity_evidence_closure`.
 
 ## Exact next build
 
-`dev_kaizen_fast_pr_ci` is done (above). `now_next.next` is now
+`cp_remote_collection_done_marker_diagnostics` (above) needs a real
+recurrence with the new diagnostic fields before it can advance past
+`IN_PROGRESS` — hardening, not a closed fix; does not change `now_next.next`.
+
+`dev_kaizen_fast_pr_ci` is done. `now_next.next` is
 **`op0b_s4_command_gate_package`** (`OP.0b` S4) — 2026-09-03 roadmap
 correction: contract dependency order `S0 → S1 → (S2, S3) → S4 → (S5, S6) →
 S7 → S8; S9 independent after S7`. S1/S2/S3 are `AUTOMATED_VALIDATED`, so S4
@@ -167,9 +167,10 @@ evidence.
 ## Automated test baseline
 
 ```
-1215 passed / 24 skipped / 0 failed (2026-09-03, local full-dependency
-  container, serial -- dev_kaizen_fast_pr_ci session evidence) --
-  supersedes the prior CI baseline of 1153/28/0 (PR #36).
+1215 passed / 24 skipped / 0 failed (2026-09-03, dev_kaizen_fast_pr_ci,
+  local full-dependency container, serial); 1210/24/0 on this branch
+  before the merge above (one file fewer, pre-#38). Both supersede the
+  prior CI baseline of 1153/28/0 (PR #36).
 Repository privacy gate: PASS / 0 findings, clean checkout.
 Project-state consistency: metadata_warnings == [] under all cross-authority rules.
 ```
@@ -184,9 +185,8 @@ gate flags them.
 ## Known xfails
 
 None currently known. (Two previously tracked — VSX network
-canonicalization, PAN default-route classification — were converted to
-passing regressions in `0.6.6A`; if either resurfaces, record it here with
-the build that reintroduced it.)
+canonicalization, PAN default-route classification — converted to passing
+regressions in `0.6.6A`; record here if either resurfaces.)
 
 ## Production posture
 

@@ -16,101 +16,116 @@ doc. Prior versions are in git history.
 
 ## 1. Snapshot
 
-- Date: 2026-09-03. Branch `claude/kaizen-fast-pr-ci-yx6oe3` (base `main`,
-  which already carries PRs #34/#35/#36/#37).
-- This session ran the `dev_kaizen_fast_pr_ci` PO-requested engineering
-  Kaizen: no product/network behavior change, CI/test-infrastructure only.
+- Date: 2026-09-03. Two independent PRs this session, both off `main` (which
+  already carried #34/#35/#36/#37):
+  - **PR #38** `dev_kaizen_fast_pr_ci` — **MERGED** (6778ee9), status
+    `automated_validated`.
+  - **PR #39** `cp_remote_collection_done_marker_diagnostics` — open,
+    branch `claude/cp-remote-collection-done-marker`, merged `main` into it
+    this session to resolve the bookkeeping conflict #38's merge created
+    (both PRs touched `CURRENT_STATE.md`/`project/roadmap.json`/
+    `project/build_history.json`/`docs/history/INDEX.md`); source files
+    (`checkpoint/cp_runner.py`, its tests) merged clean, no conflict there.
 
 ## 2. What changed this session
 
-`.github/workflows/validation.yml` split into two jobs:
+**PR #38 (merged):** split `.github/workflows/validation.yml` into a fast
+`validate` job (`pull_request` only, no full suite) and a `full-regression`
+job (`push` to `main` + `workflow_dispatch`, full serial suite). Canonical
+policy in `docs/AI_DEVELOPMENT_PROTOCOL.md` "CI validation policy". New
+`tests/test_ci_workflow_fast_pr_regression.py` (+7). No product/network/
+dependency change. Local full regression: 1215 passed/24 skipped/0 failed.
+CI on the PR was green (`validate` succeeded, `full-regression` correctly
+skipped on the PR event); merged via merge commit **6778ee9**.
 
-- **`validate`** (`pull_request` only) — import/compileall sanity,
-  repository privacy gate, project-state consistency
-  (`tests/test_architecture_convergence.py`), build-history-index check, a
-  small fixed PR smoke/safety-regression set
-  (`tests/test_credential_redaction.py`,
-  `tests/test_dev0_4_repository_privacy_gate.py`,
-  `tests/test_known_safety_gaps.py`,
-  `tests/test_frontend_rendering_boundary.py`), whitespace/conflict-marker
-  check. **Does not run the full pytest suite.**
-- **`full-regression`** (`push` to `main`, `workflow_dispatch`) — the same
-  gates plus the full serial `pytest -q` suite. Substance unchanged from
-  the previous single-job workflow.
+Post-merge on `main` (908a8f1): advanced `dev_kaizen_fast_pr_ci`
+`in_progress` → `automated_validated` in `build_history.json`/
+`roadmap.json`/`CURRENT_STATE.md`, citing PR #38's CI + the local
+regression. Also corrected `now_next.next`: it was
+`op0b_0_close_d_v3a_d_v7b_pre_class2`, but the frozen `OP.0b.0` contract's
+own dependency order is `S0 → S1 → (S2, S3) → S4 → (S5, S6) → S7 → S8` (S9
+independent after S7). With S1/S2/S3 already `AUTOMATED_VALIDATED`, the
+actual next implementable slice is **S4** — the docs-only `OP.0b.1`
+command-gate package (CP `A4`–`A9` / PAN `P3`–`P5`) — not D-V3a/D-V7b
+closure, which the contract's own text already scopes as CLASS-2-time
+blockers independent of S1–S9/S4. `now_next.next` is now
+`op0b_s4_command_gate_package`; D-V3a/D-V7b closure moved to
+`now_next.upcoming`, **unchanged and still genuinely unresolved** — not
+reopened, not closed. No S4 implementation work was started this session
+(explicitly out of scope — "forget about next slice").
 
-Job id kept as `validate` for the PR-triggered job specifically so an
-existing branch-protection required-status-check named `validate` keeps
-matching — this repository session had no branch-protection API tool
-available to confirm the exact required-check name independently; verify
-after the PR opens that the required check still reports.
+**PR #39 (open):** the user hit a real-run `RuntimeError('CP remote
+collection ended without DONE marker')`, `exit_status=0`.
+`checkpoint/scripts/cp_inventory.sh`'s last statement is a bare
+`echo "DONE"` with no early-exit path before it, so **root cause stays
+`UNKNOWN`** — not reproduced, no device access this session. Source
+inspection found `checkpoint/cp_runner.py`'s `_run_remote_collection`
+channel-drain loop reading only one recv()/recv_stderr() chunk per outer
+pass before its exit-status break check, unlike
+`checkpoint/direct_ssh_probe.py`'s already-proven `_run_session_command`
+tight-drain idiom. Aligned `_run_remote_collection` with that idiom
+(behavior-preserving hardening, not a confirmed fix) plus one defensive
+final drain, and enriched the `RuntimeError` with safe diagnostic fields
+(`exit_status`/`processed_gw`/`total_gw`/`stderr_bytes`/`last_marker`).
+New `tests/test_phase0_4_1_cp_automation.py` `FakeChannel` tests (+2).
+Full local regression on this branch (pre-merge): 1210 passed/24 skipped/0
+failed.
 
-Canonical policy statement added once: `docs/AI_DEVELOPMENT_PROTOCOL.md`
-new "CI validation policy" section (the two jobs, and the full-regression
-trigger list a PR must self-apply: dependencies, shared test infra,
-schema/storage/migrations, concurrency/shared state, security/auth
-boundary, broad common domain behavior, CI infra itself, release
-milestone, explicit PO/contract requirement). `AI_START_HERE.md`'s
-existing "Validation ladder" full-regression bullet now points at that
-section instead of restating it. `AGENTS.md`/`CLAUDE.md` untouched — no
-duplication needed there.
-
-New `tests/test_ci_workflow_fast_pr_regression.py` (7 tests): text/regex
-assertions over the workflow file's shape — the PR job never contains the
-unrestricted full-suite line, the full-regression job does, triggers cover
-`pull_request`/`push:branches:[main]`/`workflow_dispatch`, both jobs keep
-the cheap gates, and the two jobs' `if:` conditions don't both fire on the
-same `pull_request` event. Deliberately text-based, not YAML-parsing — no
-`pyyaml` dependency added (none existed as a repository pattern before
-this).
-
-Project-state bookkeeping: `project/roadmap.json` (`current_build` +
-`now_next.now`) and `project/build_history.json` (new newest record,
-`status: in_progress`) both point at `dev_kaizen_fast_pr_ci`;
-`docs/history/INDEX.md` regenerated; `CURRENT_STATE.md` "Active build" /
-"Exact next build" / test-baseline sections updated (still ≤200 lines).
+**This session's merge-conflict resolution on PR #39's branch:** merged
+`main` in (no rebase, no force-push — a merge commit keeps the branch's own
+history valid). All 5 conflicts were in shared bookkeeping files
+(`AI_HANDOVER.md`, `CURRENT_STATE.md`, `docs/history/INDEX.md`,
+`project/build_history.json`, `project/roadmap.json`); resolved by keeping
+both builds' `build_history.json` records (CP diagnostics as newest,
+kaizen as `automated_validated` predecessor), pointing `roadmap.json`
+`now_next.now`/`current_build` at the CP build while carrying over main's
+S4 correction verbatim in `now_next.next`/`upcoming`, regenerating
+`docs/history/INDEX.md` from the resolved `build_history.json` (never
+hand-edited), and rewriting `CURRENT_STATE.md` to describe both builds
+(still ≤200 lines) plus this `AI_HANDOVER.md`.
 
 ## 3. Exact next action
 
-Push this branch, open the PR, and let the new `validate` job run for real
-CI evidence. Once `validate` is green (and, since this build itself trips
-the CI-infrastructure full-regression trigger, also run `full-regression`
-via `workflow_dispatch` on this branch or confirm it green on the first
-`main` push after merge), advance `dev_kaizen_fast_pr_ci`'s status
-`in_progress` → `automated_validated` in `project/build_history.json` /
-`project/roadmap.json` / `CURRENT_STATE.md`, citing the run URL — same
-pattern S2/S3 used. After that: return to `OP.0b` — `now_next.next`
-(`op0b_0_close_d_v3a_d_v7b_pre_class2`) is the next real implementation
-movement, unchanged by this Kaizen. Recommended reasoning: `Sonnet 5,
-normal` for the status-advance commit; `Sonnet 5, extended thinking (high)`
-when `OP.0b` D-V3a/D-V7b closure actually starts.
+- **PR #39**: push this merge commit, then re-check CI (`validate`) and
+  mergeable state on the branch. Once green, merge (repository convention:
+  merge commit) — this build stays `in_progress` even after merge; it is
+  diagnostic hardening, not a closed fix, so do not advance it to
+  `automated_validated` as "the fix." Only a real recurrence (or a watched
+  real run) with the new diagnostic fields justifies that.
+- After PR #39 is settled: the next real implementation movement is
+  `op0b_s4_command_gate_package` (`OP.0b` S4) per the roadmap correction
+  above — but per this session's explicit instruction, do not start it yet;
+  that is future-session work. Recommended reasoning when it does start:
+  `Sonnet 5, extended thinking (high)` — security boundary (new
+  network-device command candidates).
 
 ## 4. Test delta
 
-New: `tests/test_ci_workflow_fast_pr_regression.py` (+7). No existing test
-changed or removed. Full suite this session (serial, full dependency set
-installed session-local: `fastapi`/`lxml`/`paramiko`/`cryptography`, not a
-repository dependency change): **1215 passed / 24 skipped / 0 failed** —
-superseding the prior CI baseline of 1153/28/0 only because this
-container's local dependency set differs slightly from PR #36's exact CI
-run; no regression, no new skip.
+PR #38: +7 (`tests/test_ci_workflow_fast_pr_regression.py`). PR #39: +2
+(`tests/test_phase0_4_1_cp_automation.py` `FakeChannel` cases). No existing
+test changed or removed by either. Both branches' full-suite runs were
+green this session; no regression, no new skip.
 
 ## 5. New risks / debt
 
-Branch-protection required-status-check name could not be independently
-verified in this session (no such tool available) — mitigated by keeping
-the PR job's id as `validate`, but confirm on the actual PR that the
-required check still reports and gates merge as before. No other new
-risk: no dependency, schema, product, or network-device behavior changed;
-`collectors/`, `utils/failover/`, PAN/CP projection, UI, transport and
-schemas were not touched, per this build's own file boundary.
+- PR #39: root cause of the original DONE-marker-loss remains `UNKNOWN`.
+  If it recurs, read the new diagnostic fields off the `RuntimeError`
+  before making any further change — do not guess again from source alone.
+- PR #38 (closed risk): branch-protection required-status-check name for
+  `validate` could not be independently confirmed via API in this session;
+  the PR's own CI ran and reported normally through merge, so this did not
+  block, but it was never positively confirmed either.
+- No other new risk: no dependency, schema, product, or network-device
+  behavior changed in either build.
 
 ## 6. Continue or fresh chat
 
-New session recommended once the PR is open and CI evidence exists, per
-this Kaizen's own governing instructions (`SESSION: NEW SESSION after
-merge`) — matches the repository's established S1→S2→S3 pattern.
+New session recommended once PR #39 is merged and its state-advance (if
+any) is settled — matches this repository's established pattern.
 
 ## 7. main.py / UI effect
 
-None. This is a CI/test-infrastructure-only change; no runtime code,
-template, static asset, or payload builder was touched.
+Neither build changes visible `main.py`/UI behavior. PR #38 is CI/test
+infrastructure only. PR #39 changes only `_run_remote_collection`'s
+internal drain loop and its failure-path error text — the success path and
+return value are unchanged.
