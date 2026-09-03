@@ -9,11 +9,12 @@ generated one-line timeline.
 
 - **Checkpoint:** 2026-09-03, branch `claude/vendor-semantics-confirmation-pt2iiq`.
 - **Current build** (per `project/roadmap.json` `now_next.now`):
-  `op0b_0_official_vendor_semantics_confirmation_pass2` — IN_PROGRESS.
-  Third documentation-only vendor-semantics confirmation pass against the
-  `OP.0b.0` draft, this one closing two rows outright; no product,
-  collector, vendor-command, schema, transport or UI behavior changed; no
-  device contacted.
+  `op0b_0_final_semantic_blocker_closure_freeze` — AUTOMATED_VALIDATED.
+  Fourth and final vendor-semantics session: `OP.0b.0` moves from
+  `DRAFT — DO NOT FREEZE` to **`FREEZE WITH REAL-ENV VALIDATION GATES`**.
+  Documentation/state only; no product, collector, vendor-command, schema,
+  transport or UI behavior changed; no device contacted; CLASS 2 stays
+  structurally unreachable (P4 invariant, unchanged).
 - **Product baseline:** `0.7.7 — Compliance trend retro-fill` — AUTOMATED_VALIDATED.
 - **Engineering baseline:** `DEV.3.3` — AUTOMATED_VALIDATED. `DEV.1`,
   `DEV.4` complete.
@@ -46,47 +47,49 @@ test-enforced boundaries. Current numbers:
 
 ## Active build
 
-**`op0b_0_official_vendor_semantics_confirmation_pass2`** — Source Pack 2 —
-IN_PROGRESS 2026-09-03. Third session against `OP.0b.0`'s blocking rows.
-`pan.dev`/`sc1.checkpoint.com`/`support.checkpoint.com` stayed
-`EGRESS_BLOCKED` again, but `github.com` is reachable — reading the official
-PaloAltoNetworks `pan-os-upgrade-assurance` source **verbatim** closed
-`D-V4`; Check Point search snippets closed `D-V7a` — first two full closures
-across three sessions. `D-V1`/`D-V2`/`D-V6` strengthened; `D-V5`/`D-V7` split
-into `a`/`b`; a source-pack hypothesis on `D-V6` was found **contradicted**
-and reported as such, not forced. Contract stays `DRAFT — DO NOT FREEZE`:
-`D-V3a`/`D-V7b` remain safety-critical `STILL_UNKNOWN`. Document-only, no
-device contacted. Full result:
-`docs/history/phase/OP_0B_0_VENDOR_FAILOVER_PREFLIGHT_EVIDENCE_SURFACE.md`
-§"Official vendor semantics confirmation pass — Source Pack 2".
+**`op0b_0_final_semantic_blocker_closure_freeze`** — AUTOMATED_VALIDATED
+2026-09-03. Fourth vendor-semantics session, scoped to `D-V3a`/`D-V7b` plus a
+classification-only triage of every residual `PARTIAL` row. Both stayed
+`STILL_UNKNOWN` (one final search each; `D-V7b` gained a second
+official-adjacent negative — the official CheckPointSW Ansible `simple-
+cluster` module's full parameter list has no recovery/failback field). The
+freeze-boundary question — does the contract's *interpretation* actually
+depend on these closing — was answered by re-reading this document's own
+already-written text: the PAN successor identity model was already `NOT
+FROZEN` with the hostname-keyed fallback standing until match, and CP check 6
+was already "recorded, non-blocking," both from session 1. **Neither gap
+blocks the contract; both gate only the successor identity model and
+CLASS 2.** Every other residual row got a deterministic fail-closed minimal
+interpretation under the same reasoning (`D-V5b` turned out not load-bearing
+at all). Result: `OP.0b.0` is now `FREEZE WITH REAL-ENV VALIDATION GATES` —
+a reclassification of what sessions 1–3 already wrote, not a new leniency.
+Full result: `docs/history/phase/OP_0B_0_VENDOR_FAILOVER_PREFLIGHT_EVIDENCE_SURFACE.md`
+§"Final semantic blocker closure — session 4".
 
-**Predecessor:** `op0b_0_official_vendor_semantics_confirmation_pass1` —
-session 2's pass (`D-V1`/`D-V2`/`D-V4`/`D-V5` narrowed to `PARTIALLY_CLOSED`;
-none fully closed). Before that, `DEV.4` — AUTOMATED_VALIDATED 2026-09-02,
-three-file AI-authority consolidation. Detail: `project/build_history.json`.
+**Predecessor:** `op0b_0_official_vendor_semantics_confirmation_pass2`
+("Source Pack 2") — session 3 (`D-V4`/`D-V7a` closed; `D-V1`/`D-V2`/`D-V6`
+strengthened; `D-V5`/`D-V7` split). Before that, session 2 and `DEV.4`
+(AUTOMATED_VALIDATED 2026-09-02). Detail: `project/build_history.json`.
 
-## `OP.0b.0` — DRAFT, DO NOT FREEZE
+## `OP.0b.0` — FROZEN WITH REAL-ENV VALIDATION GATES
 
 `docs/history/phase/OP_0B_0_VENDOR_FAILOVER_PREFLIGHT_EVIDENCE_SURFACE.md` is
-structurally complete (command surface table, configuration/runtime field
-trace table, bug/gap register) but is **not** implementation authority — it
-must not be cited as approving any command, schema or identity model, and its
-`UNKNOWN`s must not be reinterpreted as decided. **`D-V4` and `D-V7a` are now
-`CLOSED_BY_DOCS`** (first full closures, session 3). Still blocking: `D-V1`,
-`D-V2`, `D-V3a`, `D-V3b`, `D-V5a`, `D-V5b`, `D-V6`, `D-V7b`, `D-V9a`, `D-V9b`
-(`project/roadmap.json` `open_decisions`). `D-V1`/`D-V2` are `PARTIALLY_CLOSED`
-with field-binding now `CONFIRMED` for most fields (an official PANW source
-read verbatim, not name-matching); `D-V5` split into `D-V5a`
-(`PARTIALLY_CLOSED`, strong) / `D-V5b` (`OPEN`, VSX applicability); `D-V6`
-upgraded to `PARTIALLY_CLOSED` (register/unregister + pnote-enumeration
-semantics confirmed — **contradicting**, and correcting, this session's own
-source-pack hypothesis about a problem-filtered `-ia list`); `D-V7` split
-into `D-V7a` (closed) / `D-V7b` (`STILL_UNKNOWN`, now with documented
-context: the Simple Cluster API doesn't expose every cluster-object
-feature). **`D-V3a` and `D-V7b` are the actual remaining freeze blockers** —
-safety-critical authoritative sources still unknown, not merely real-env
-measurements pending. `D-V3b`/`D-V5b`/`D-V9b` `REQUIRE_REAL_ENV` regardless.
-`D-V8` is open but non-blocking.
+now cleared as implementation authority for the bounded S0–S9 slice sequence
+it already defines — citable for command/schema/identity-model
+*interpretation*, but **still authorizes no CLASS 2 action** (P4 invariant
+unchanged; `OP.0b.1` command-gate package still separately required before
+any command is approved). `D-V4`/`D-V7a` are `CLOSED_BY_DOCS`. Every other
+row's minimal safe interpretation is explicitly frozen — `D-V1`/`D-V2`
+(field-binding confirmed, fail-closed predicates); `D-V5a` (minimal
+count/reason/time contract) / `D-V5b` (not load-bearing, dropped); `D-V6`
+(pnote problem/no-problem via `-ia list`); `D-V9a` (already-frozen non-VS0
+rule) / `D-V9b` (real-env, non-blocking either way). **`D-V3a`/`D-V7b` stay
+genuinely `STILL_UNKNOWN`** but were already scoped by the contract's own
+pre-existing text as **CLASS-2-time blockers, not architecture blockers**.
+New non-blocking decision: `D-F3` (flap/failover threshold, parallel to
+`D-F1`/`D-F2`). `D-V8` remains open, non-blocking. Full reasoning:
+`project/roadmap.json` `open_decisions`; contract §"Final semantic blocker
+closure — session 4".
 
 ## PAN HA serial evidence
 
@@ -106,33 +109,31 @@ identifier stays opaque (`AGENTS.md` opaque-identifier law). Tracked as
 
 ## Exact next build
 
-Three independent movements — any order, any in parallel (full detail in
-`project/roadmap.json` `now_next.next`/`upcoming` and the contract's own
-"Next movement" section):
+Four independent movements, any order/parallel (full detail in
+`project/roadmap.json` `now_next.next`/`upcoming`):
 
-**A. `OP.0b.0` close the two remaining safety-critical blockers**
-(`now_next.next`) — `D-V3a` (official PAN-OS/Panorama serial-field semantics
-inside `show high-availability state`) and `D-V7b` (an official, safe,
-machine-readable read surface for the CP cluster recovery-method setting).
-Try an official GitHub mirror first (the technique that closed `D-V4`/
-`D-V7a` this session); fall back to a human fetching the named pages.
-Recommended: `Sonnet 5, extended thinking (high)`.
+**A. `OP.0b` S1 — preflight fact + provenance model** (`now_next.next`) —
+pure, no I/O; first implementation slice against the frozen contract.
+Flagged not resolved: the contract lists `S0 → S1` but `S1` needs no device
+I/O while `S0` is hardware-blocked — confirm with product owner whether `S1`
+may go first. Recommended: `Sonnet 5, normal`.
 
-**B. PAN serial representation/identity evidence closure**
-(`now_next.upcoming`) — hardware-blocked, unchanged by this session.
-Recommended: `Sonnet 5, normal reasoning` initially; escalate only if vendor
-identity semantics become architectural.
+**B. Close `D-V3a`/`D-V7b` before CLASS 2** (`now_next.upcoming`) — does not
+block `S1`–`S9` or the freeze. GitHub-mirror search first, then
+human-assisted fetch. Recommended: `Sonnet 5, extended thinking (high)`.
 
-**C. Real-env residuals** (`D-V5a`/`D-V5b` schema/VSX parity, `D-V9a`/`D-V9b`
-estate applicability, `D-V1`/`D-V2` exhaustive-vocabulary gaps) — folded into
-the contract's existing S0→S8 slice sequence; not separately schedulable
-before `FREEZE`.
+**C. `D-F3` numeric threshold** (`now_next.upcoming`) — product-owner call,
+needed before check 7 computes a real verdict; doesn't block `S1`.
+
+**D. PAN serial representation/identity evidence closure**
+(`now_next.upcoming`) — hardware-blocked, unchanged. `Sonnet 5, normal`
+initially; escalate only if vendor identity semantics become architectural.
 
 ## Open blockers
 
 | What | Blocked on | Kind |
 | --- | --- | --- |
-| `OP.0b` preflight battery | its command gate is drafted but **not approved** — a product-owner/security call; the `OP.0b.0` evidence contract is `DRAFT — DO NOT FREEZE` pending vendor-doc confirmation (see above) | decision |
+| `OP.0b` preflight battery | its command gate is drafted but **not approved** — a product-owner/security call; the `OP.0b.0` evidence contract is now `FROZEN WITH REAL-ENV VALIDATION GATES` (see above), but the `OP.0b.1` gate package that actually approves any command is a separate, still-open step | decision |
 | PAN HA serial `B2` establishment | the mismatching member's root cause is `UNKNOWN` (see above) — do not resolve as a side effect of an unrelated build | investigation + hardware |
 | `CON.3` console operational-write actions | open decisions `C-D4`, `C-D6` **and** `RB.3b` | decision + hardware |
 | `RB.3b` CP Gaia backup collection | the watched real R81.10/R81.20 run — hardware, not engineering | hardware |

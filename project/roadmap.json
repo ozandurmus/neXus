@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "current_build": "op0b_0_official_vendor_semantics_confirmation_pass2",
+  "current_build": "op0b_0_final_semantic_blocker_closure_freeze",
   "current_track": "CON.x",
   "progress_contract": "Weighted acceptance-criterion completion. Percentages describe the declared roadmap, not calendar time or delivery ETA.",
   "tracks": [
@@ -123,23 +123,45 @@
   "now_next": {
     "horizon_contract": "NOW is exactly one build. NEXT is exactly one. Everything else is an `upcoming` row carrying its own true status: planned = AFTER, blocked = waiting on a named external gate, deferred = consciously postponed. `now.build` must equal the newest project/build_history.json record -- utils.project_plan enforces it.",
     "now": {
-      "build": "op0b_0_official_vendor_semantics_confirmation_pass2",
-      "title": "OP.0b.0 - official vendor semantics confirmation, pass 2 (Source Pack 2, documentation-only)",
-      "goal": "Independently verify a supplied source-pack hypothesis against named official vendor sources and reconcile the contract accordingly. Documentation-only -- no product code, collector, vendor command, schema, transport or UI behavior changed; no device contacted.",
-      "status": "in_progress",
-      "started": "2026-09-03"
+      "build": "op0b_0_final_semantic_blocker_closure_freeze",
+      "title": "OP.0b.0 - final semantic blocker closure and FREEZE WITH REAL-ENV VALIDATION GATES",
+      "goal": "Fourth vendor-semantics session: one final targeted search each for D-V3a/D-V7b (converging official-negative evidence for D-V7b), then a classification-only triage of every residual PARTIAL row against the contract's own already-written fail-closed fallbacks (PAN hostname-keyed identity stands until the successor serial model proves itself; CP check 6 preemption_known already non-blocking). Result: the contract freezes -- every remaining row's minimal safe interpretation is explicitly frozen; D-V3a/D-V7b remain STILL_UNKNOWN but only gate CLASS 2, not architecture; D-V5b found not load-bearing; one new bounded non-blocking decision (D-F3) added. Documentation-only -- no product code, collector, vendor command, schema, transport or UI behavior changed; no device contacted; CLASS 2 remains structurally unreachable (P4 invariant, unchanged).",
+      "status": "automated_validated",
+      "started": "2026-09-03",
+      "completed": "2026-09-03"
     },
     "next": {
-      "build": "op0b_0_close_remaining_semantic_blockers",
-      "title": "OP.0b.0 - close the two remaining safety-critical semantic blockers (D-V3a, D-V7b)",
-      "goal": "D-V4 and D-V7a closed by docs in pass 2 (an official PaloAltoNetworks GitHub repository mirrored pan.dev content that WebFetch could not reach directly). Two rows remain the actual freeze blockers, both safety-critical and both STILL_UNKNOWN, not merely real-env-pending: D-V3a (does an official PAN-OS/Panorama source establish local-info/peer-info serial-num semantics inside show high-availability state?) and D-V7b (is there any official, safe, machine-readable read surface -- Simple Cluster API, full Management API, or another -- for the Check Point cluster object's configured recovery-method setting, given official docs already say the Simple Cluster API does not expose every cluster-object feature?). Try an official GitHub mirror first (the technique that worked for D-V4/D-V7a) before falling back to a human fetching the specific pages named in the pass-2 source table.",
-      "status": "blocked",
+      "build": "op0b_s1_preflight_fact_provenance_model",
+      "title": "OP.0b S1 - preflight fact + provenance model (pure, no I/O)",
+      "goal": "First bounded implementation slice against the now-frozen OP.0b.0 contract: utils/failover/preflight_model.py (new) -- the fact/provenance data model, UNKNOWN semantics, coherence check, per the contract's already-specified §'Provenance contract'/§'Freshness contract'/§'Fail-closed semantics'. Pure model code, no device I/O, no collector/parser/readiness-logic change. Synthetic tests only.",
+      "status": "planned",
       "prerequisites": [
-        "Either an official GitHub-hosted mirror of the relevant PAN-OS/Panorama or Check Point documentation (unconfirmed to exist for the Check Point side), or a human with browser/vendor-portal access to fetch and paste in the named pages"
+        "None technical -- the contract's own slice-dependency note (S0 -> S1 -> ...) lists S0 (PAN runtime peer-serial correspondence, hardware-blocked) ahead of S1, but S1 is described as pure/no-I/O and does not obviously consume S0's result; flagged here rather than silently resolved -- confirm with product owner/next session whether S1 may start before S0 completes."
       ],
-      "note": "Independent of PAN SERIAL REPRESENTATION / IDENTITY EVIDENCE CLOSURE (below, upcoming, hardware-blocked) and of the D-V3b/D-V5a/D-V5b/D-V6/D-V9a/D-V9b residuals recorded in the contract (real-env or a smaller remaining doc gap) -- any of these threads may proceed in either order or in parallel. Recommended: Sonnet 5, extended thinking (high) for the confirmation/freeze pass once new material lands."
+      "note": "Independent of D-F3 (product-owner numeric threshold, below upcoming), of D-V3a/D-V7b pre-CLASS-2 closure (below upcoming), and of PAN SERIAL REPRESENTATION / IDENTITY EVIDENCE CLOSURE (below upcoming, hardware-blocked) -- any of these threads may proceed in either order or in parallel. Recommended: Sonnet 5, normal (deterministic implementation against a frozen contract)."
     },
     "upcoming": [
+      {
+        "build": "op0b_0_close_d_v3a_d_v7b_pre_class2",
+        "title": "OP.0b.0 - close D-V3a/D-V7b before CLASS 2 (not a freeze gate)",
+        "status": "blocked",
+        "notes": [
+          "Try an official GitHub mirror first (the technique that closed D-V4/D-V7a): D-V3a needs an official PAN-OS/Panorama source for local-info/peer-info serial-num inside show high-availability state; D-V7b needs an official Check Point generic-object API schema (unconfirmed to exist) beyond the Simple Cluster API already ruled insufficient.",
+          "Fall back to a human fetching the specific pages the contract's source tables name.",
+          "Explicitly does NOT block S1-S9 implementation or the contract's FROZEN status -- gates only the PAN successor identity model and CLASS 2 (bug register PAN-7, CP-3).",
+          "Recommended: Sonnet 5, extended thinking (high), same as the prior vendor-semantics sessions."
+        ]
+      },
+      {
+        "build": "d_f3_flap_failover_threshold_decision",
+        "title": "D-F3 - flap/failover-frequency numeric threshold (product owner)",
+        "status": "planned",
+        "notes": [
+          "Parallel to D-F1/D-F2. Qualitative meaning already frozen in the OP.0b.0 contract; only the number is open.",
+          "Needed before OP.0b.1/S2/S3 can compute a real check-7 (flap_history) verdict for either vendor.",
+          "Does not block S1 or the contract's FROZEN status."
+        ]
+      },
       {
         "build": "pan_serial_representation_identity_evidence_closure",
         "title": "PAN SERIAL REPRESENTATION / IDENTITY EVIDENCE CLOSURE",
@@ -147,7 +169,7 @@
         "notes": [
           "Blocked on access to the same approved real PAN pair used for the S0 result (hardware/real-environment, not a decision gate).",
           "Purpose: determine why one member's independently sourced serial representations (runtime local-info vs runtime peer-info claim) do not compare equal, without weakening opaque-identifier semantics -- not merely 'obtain B2'.",
-          "Independent of OP.0b.0 OFFICIAL VENDOR SEMANTICS CONFIRMATION (now_next.next) -- the two may proceed independently.",
+          "Independent of OP.0b S1 (now_next.next) -- may proceed independently.",
           "Recommended: Sonnet 5, normal reasoning initially; escalate to extended thinking (high) only if vendor identity semantics become architectural."
         ]
       },
@@ -166,7 +188,7 @@
         "notes": [
           "Blocked on the network-device command gate drafted in docs/history/phase/OP_0A_HA_READINESS_ASSESSMENT.md but not approved.",
           "This is the gate that makes SAFE_TO_FAILOVER reachable at all; until it is approved every unit correctly reports INSUFFICIENT_EVIDENCE.",
-          "Its evidence surface is now audited in docs/history/phase/OP_0B_0_VENDOR_FAILOVER_PREFLIGHT_EVIDENCE_SURFACE.md (DRAFT -- DO NOT FREEZE; see now_next.next)."
+          "Its evidence surface is now FROZEN WITH REAL-ENV VALIDATION GATES in docs/history/phase/OP_0B_0_VENDOR_FAILOVER_PREFLIGHT_EVIDENCE_SURFACE.md (2026-09-03) -- cleared for the S0-S9 implementation slices, still not itself a command approval; the OP.0b.1 gate package is the actual approval step."
         ]
       },
       {
@@ -618,85 +640,125 @@
       "id": "D-V1",
       "area": "OP.0b.0 Vendor Failover Preflight Evidence",
       "status": "open",
-      "question": "PAN conn-status/conn-ha1/conn-ha1-backup/conn-ha2 value vocabulary. Blocks OP.0b.0 freeze.",
+      "question": "PAN conn-status/conn-ha1/conn-ha1-backup/conn-ha2 exhaustive value vocabulary and missing-field meaning. Does NOT block OP.0b.0 freeze as of 2026-09-03 (session 4) -- field-binding + nested structure are official-source CONFIRMED and a minimal fail-closed predicate (up = healthy, else/absent = not-safe) is frozen; this residual is real-env parser validation only.",
       "options": [
-        "Confirm from official vendor documentation",
-        "Confirm from a bounded real-environment measurement (S0/S2/S8 as applicable)"
+        "Confirm exhaustive vocabulary from official vendor documentation",
+        "Confirm from a bounded real-environment measurement (S2)"
       ],
-      "recommendation": "Do not fill from generic product knowledge; resolve via the named source only.",
-      "decide_by": "PAN-OS 11.1 CLI reference / API output, S2 real-env"
+      "recommendation": "Do not fill from generic product knowledge; resolve via the named source only. Not required before implementing S2.",
+      "decide_by": "S2 real-env"
     },
     {
       "id": "D-V2",
       "area": "OP.0b.0 Vendor Failover Preflight Evidence",
       "status": "open",
-      "question": "PAN state-sync, *-compat, preemptive, flap-counter field semantics. Blocks OP.0b.0 freeze.",
+      "question": "PAN state-sync/*-compat/preemptive exhaustive vocabulary and last-error-* binding. Does NOT block OP.0b.0 freeze as of 2026-09-03 (session 4) -- field-binding CONFIRMED for most of the family via an official PANW source; preemption sub-fields feed check 6, already non-blocking.",
       "options": [
-        "Confirm from official vendor documentation",
-        "Confirm from a bounded real-environment measurement (S0/S2/S8 as applicable)"
+        "Confirm exhaustive vocabulary from official vendor documentation",
+        "Confirm from a bounded real-environment measurement (S2)"
       ],
-      "recommendation": "Do not fill from generic product knowledge; resolve via the named source only.",
-      "decide_by": "PAN-OS 11.1 CLI reference / API output, S2 real-env"
+      "recommendation": "Do not fill from generic product knowledge; resolve via the named source only. Not required before implementing S2.",
+      "decide_by": "S2 real-env"
     },
     {
-      "id": "D-V3",
+      "id": "D-V3a",
       "area": "OP.0b.0 Vendor Failover Preflight Evidence",
       "status": "open",
-      "question": "PAN peer-info/serial-num semantics and real correspondence. Blocks OP.0b.0 freeze.",
+      "question": "PAN local-info/peer-info serial-num semantics inside show high-availability state (docs-only half). STILL_UNKNOWN after four sessions (no official source, incl. an official PANW GitHub repo's captured example, names this field). Does NOT block OP.0b.0 freeze -- the successor serial-keyed pair-identity model is already specified NOT FROZEN until this closes AND D-V3b matches; the hostname-keyed fallback stands. Blocks the successor identity model and PAN CLASS 2 specifically.",
       "options": [
-        "Confirm from official vendor documentation",
-        "Confirm from a bounded real-environment measurement (S0/S2/S8 as applicable)"
+        "Official GitHub mirror search (the technique that closed D-V4/D-V7a)",
+        "Human-fetched official page body"
       ],
-      "recommendation": "Do not fill from generic product knowledge; resolve via the named source only.",
-      "decide_by": "S0 + official doc"
+      "recommendation": "Do not fill from generic product knowledge or SDK property-name correspondence alone; resolve via a named source only. Not a freeze blocker.",
+      "decide_by": "human-assisted or GitHub-mirror official doc confirmation, pre-CLASS-2"
+    },
+    {
+      "id": "D-V3b",
+      "area": "OP.0b.0 Vendor Failover Preflight Evidence",
+      "status": "open",
+      "question": "PAN peer-serial real correspondence (B2) on the approved real pair. B2 NOT ESTABLISHED; mismatch root cause UNKNOWN. Does NOT block OP.0b.0 freeze (same reasoning as D-V3a). Blocks the successor identity model and PAN CLASS 2 specifically -- B2 is the minimum CLASS-2 identity input.",
+      "options": [
+        "Real-environment investigation on the approved PAN pair"
+      ],
+      "recommendation": "Do not resolve as a side effect of an unrelated build; do not normalize/coerce serials to force a match.",
+      "decide_by": "S0 real-env, hardware-blocked"
     },
     {
       "id": "D-V4",
       "area": "OP.0b.0 Vendor Failover Preflight Evidence",
-      "status": "open",
-      "question": "PAN running-sync location (state XML sibling vs all). Blocks OP.0b.0 freeze.",
+      "status": "decided",
+      "decision": "CLOSED_BY_DOCS -- running-sync/running-sync-enabled confirmed at group scope, sourced from show high-availability state (already-REQUIRED P2), via a verbatim read of the official PaloAltoNetworks pan-os-upgrade-assurance GitHub repository.",
+      "decided_on": "2026-09-03",
+      "question": "PAN running-sync location (state XML sibling vs all).",
       "options": [
-        "Confirm from official vendor documentation",
-        "Confirm from a bounded real-environment measurement (S0/S2/S8 as applicable)"
+        "Confirm from official vendor documentation"
       ],
-      "recommendation": "Do not fill from generic product knowledge; resolve via the named source only.",
-      "decide_by": "S2 enumeration"
+      "recommendation": "Closed; no further action needed for freeze. Parser implementation (S2) remains owed.",
+      "decide_by": "resolved -- official PaloAltoNetworks GitHub source"
     },
     {
-      "id": "D-V5",
+      "id": "D-V5a",
       "area": "OP.0b.0 Vendor Failover Preflight Evidence",
       "status": "open",
-      "question": "CP failover-statistics exact Gaia syntax and version availability. Blocks OP.0b.0 freeze.",
+      "question": "CP ClusterXL failover-statistics exact command flag syntax (history-depth option) and full Clish/Expert schema parity. Does NOT block OP.0b.0 freeze as of 2026-09-03 (session 4) -- command/purpose/version-map/reset-exclusion are official-source confirmed; a minimal count/reason/last-time parser contract is frozen (extra columns safely ignorable). Command-gate-package work only.",
       "options": [
-        "Confirm from official vendor documentation",
-        "Confirm from a bounded real-environment measurement (S0/S2/S8 as applicable)"
+        "Official GitHub mirror search",
+        "Human-fetched official page body",
+        "OP.0b.1 gate-package research"
       ],
-      "recommendation": "Do not fill from generic product knowledge; resolve via the named source only.",
-      "decide_by": "R81.x CLI Reference \"Viewing Cluster Failover Statistics\""
+      "recommendation": "Not required before freeze; required before OP.0b.1 approves the exact command string.",
+      "decide_by": "OP.0b.1 gate package + S8"
+    },
+    {
+      "id": "D-V5b",
+      "area": "OP.0b.0 Vendor Failover Preflight Evidence",
+      "status": "decided",
+      "decision": "Not load-bearing -- the frozen minimum battery runs failover-statistics only at the physical/VS0 level (same as the rest of the ClusterXL battery), never per-VS. The source pack's VSX-applicability question has no frozen check that depends on its answer.",
+      "decided_on": "2026-09-03",
+      "question": "CP VSX failover-statistics applicability (VS0-only / per-VS / unsupported).",
+      "options": [
+        "N/A -- not required by the frozen battery"
+      ],
+      "recommendation": "Dropped from the active blocking list.",
+      "decide_by": "resolved -- not load-bearing"
     },
     {
       "id": "D-V6",
       "area": "OP.0b.0 Vendor Failover Preflight Evidence",
       "status": "open",
-      "question": "CP -ia list vs -l list difference; cphaprob state field set. Blocks OP.0b.0 freeze (gate package).",
+      "question": "CP exact cphaprob -l/-i/-ia differentiation and cphaprob state exact field set. Does NOT block OP.0b.0 freeze as of 2026-09-03 (session 4) -- cphaprob -ia list confirmed a complete pnote enumeration (contradicting an earlier problem-filtered hypothesis); minimal problem/no-problem predicate frozen; cphaprob state was already OPTIONAL/corroboration-only.",
       "options": [
-        "Confirm from official vendor documentation",
-        "Confirm from a bounded real-environment measurement (S0/S2/S8 as applicable)"
+        "Official GitHub mirror search",
+        "Human-fetched official page body",
+        "OP.0b.1 gate-package research"
       ],
-      "recommendation": "Do not fill from generic product knowledge; resolve via the named source only.",
-      "decide_by": "R81.x CLI Reference"
+      "recommendation": "Not required before freeze; nice-to-have precision for OP.0b.1.",
+      "decide_by": "OP.0b.1 gate package + S5"
     },
     {
-      "id": "D-V7",
+      "id": "D-V7a",
+      "area": "OP.0b.0 Vendor Failover Preflight Evidence",
+      "status": "decided",
+      "decision": "CLOSED_BY_DOCS -- \"Maintain current active\" vs \"Switch to higher priority Cluster Member\" behavioral semantics confirmed precisely; Cluster-Mode-string non-correlation already documented (sk180184).",
+      "decided_on": "2026-09-03",
+      "question": "CP recovery/preemption behavior semantics.",
+      "options": [
+        "Confirm from official vendor documentation"
+      ],
+      "recommendation": "Closed; no further action needed for freeze.",
+      "decide_by": "resolved -- official Check Point ClusterXL Admin Guide"
+    },
+    {
+      "id": "D-V7b",
       "area": "OP.0b.0 Vendor Failover Preflight Evidence",
       "status": "open",
-      "question": "CP management-plane recovery-setting attribute/API for preemption. Blocks OP.0b.0 freeze.",
+      "question": "CP configured-recovery machine-readable read surface. STILL_UNKNOWN after four sessions -- the Simple Cluster API is officially documented as not exposing every cluster-object feature (\"use SmartConsole\"), and the official CheckPointSW Ansible simple-cluster module's full parameter list has no recovery/failback field. Does NOT block OP.0b.0 freeze -- check 6 (preemption_known) is already specified \"recorded, non-blocking\" (session 1). Blocks CLASS 2 specifically (bug register CP-3, P0 before CLASS 2).",
       "options": [
-        "Confirm from official vendor documentation",
-        "Confirm from a bounded real-environment measurement (S0/S2/S8 as applicable)"
+        "Official GitHub mirror search (Check Point generic-object API schema, unconfirmed to exist)",
+        "Human-fetched official page body"
       ],
-      "recommendation": "Do not fill from generic product knowledge; resolve via the named source only.",
-      "decide_by": "Management API reference"
+      "recommendation": "Do not invent an attribute name. Not a freeze blocker; required before CLASS 2.",
+      "decide_by": "human-assisted or GitHub-mirror official doc confirmation, pre-CLASS-2"
     },
     {
       "id": "D-V8",
@@ -711,16 +773,40 @@
       "decide_by": "Gaia CLI reference"
     },
     {
-      "id": "D-V9",
+      "id": "D-V9a",
+      "area": "OP.0b.0 Vendor Failover Preflight Evidence",
+      "status": "decided",
+      "decision": "PARTIAL, but does not block freeze -- the safe fail-closed interpretation (a contradictory non-VS0 cphaprob stat read is UNKNOWN/RELATIONSHIP_INCONSISTENT, never KNOWN_BAD, never a per-VS action input) was already written into this contract at session 1. Affected releases/fix version/official alternative remain unconfirmed but are not load-bearing for that interpretation.",
+      "decided_on": "2026-09-03",
+      "question": "CP VSX sk165432 documented caveat semantics.",
+      "options": [
+        "Confirm from official vendor documentation"
+      ],
+      "recommendation": "No further action needed for freeze.",
+      "decide_by": "resolved -- interpretation already frozen"
+    },
+    {
+      "id": "D-V9b",
       "area": "OP.0b.0 Vendor Failover Preflight Evidence",
       "status": "open",
-      "question": "sk165432 applicability to this estate's version. Blocks OP.0b.0 freeze for VS readiness.",
+      "question": "sk165432 applicability to this estate's version. Does NOT block OP.0b.0 freeze -- the frozen interpretation (see D-V9a) is safe regardless of the answer, and a VS is never a CLASS-2 execution target either way (domain invariant 9).",
       "options": [
-        "Confirm from official vendor documentation",
-        "Confirm from a bounded real-environment measurement (S0/S2/S8 as applicable)"
+        "Confirm from a bounded real-environment measurement (S8)"
       ],
-      "recommendation": "Do not fill from generic product knowledge; resolve via the named source only.",
+      "recommendation": "Informational/confirmatory only.",
       "decide_by": "S8"
+    },
+    {
+      "id": "D-F3",
+      "area": "OP.0b.0 Vendor Failover Preflight Evidence",
+      "status": "open",
+      "question": "Numeric flap/failover-frequency threshold for check 7 (flap_history), both vendors -- new 2026-09-03 (session 4), parallel to D-F1/D-F2. Does not block freeze: the qualitative meaning is fixed (exceeding an as-yet-undecided threshold is unsafe; an undecided threshold means check 7 cannot yet compute a real PASS -- fail-closed, never silently permissive).",
+      "options": [
+        "Fixed conservative default (mirroring op_continuity_tolerance's pattern)",
+        "Operator-tunable within bounds"
+      ],
+      "recommendation": "Fixed conservative default in v1; needs product-owner + vendor-guidance input before OP.0b.1/S2/S3 can compute a real check-7 verdict.",
+      "decide_by": "product owner + vendor guidance, before OP.0b.1"
     }
   ]
 }
