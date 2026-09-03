@@ -28,6 +28,7 @@ just another entry in the same member's fixed schedule, run over the same
 """
 from __future__ import annotations
 
+import time
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -110,6 +111,16 @@ def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+#: Deterministic pacing between two approved reads of the same member's
+#: battery. Real-environment evidence: the battery executes correctly in one
+#: persistent Expert shell, but issued back to back it destabilizes the SSH
+#: session. Applied strictly BETWEEN reads (N reads -> N-1 waits), after
+#: deterministic completion of the previous one. It is not retry, backoff,
+#: reconnect, or an adaptive/configurable framework -- one constant, nothing
+#: to tune, and never authority to re-issue a failed read.
+INTER_COMMAND_DELAY_SECONDS = 0.3
+
+
 # --- Execution-context capability gap (OP.0b S8-A real-environment) --------
 
 #: Gaia Clish's own rejection vocabulary for a command it does not know.
@@ -184,6 +195,9 @@ class MemberSession:
 
     physical_device_identity: str
     _run_command: Callable[[str], dict]
+    #: Injected pacing sleeper. `None` in unit doubles that drive the
+    #: session directly, so no test ever waits for real time.
+    _sleep: Callable[[float], None] | None = None
     #: The persistent shell backing this member, when there is a real one.
     #: Owned here so the shell's lifecycle is exactly the session's: opened
     #: once, closed once, never replaced mid-battery.
@@ -209,6 +223,13 @@ class MemberSession:
 
     def run(self, read: CPPreflightRead) -> dict:
         command_text = COMMAND_TEXT[read]
+        # Pace BETWEEN reads: wait before every read except the first. Since
+        # `_run_command` returns only on deterministic completion, waiting
+        # here is exactly "previous read finished -> wait -> send next", and
+        # it structurally cannot leave a delay after the final read.
+        # Never retry authority: a failed read is recorded, never re-issued.
+        if self.command_invocations and self._sleep is not None:
+            self._sleep(INTER_COMMAND_DELAY_SECONDS)
         self.command_invocations += 1
         result = self._run_command(command_text)
         # Carry the command text alongside its own result so outcome
@@ -232,7 +253,10 @@ class MemberSession:
         self.execution_context_resolutions += 1
 
 
-def make_real_member_session(ssh, *, physical_device_identity: str, command_timeout: int) -> MemberSession:
+def make_real_member_session(
+    ssh, *, physical_device_identity: str, command_timeout: int,
+    sleeper: Callable[[float], None] | None = None,
+) -> MemberSession:
     """Build a `MemberSession` on **one persistent Expert shell**.
 
     The whole battery for one physical member runs inside a single
@@ -260,15 +284,27 @@ def make_real_member_session(ssh, *, physical_device_identity: str, command_time
 
     Commands are **framed**, not timed: each read carries a per-session end
     marker echoing `$?`, so completion and exit status are read explicitly
-    rather than inferred from a quiet period. Sequential
-    send/complete/parse is its own backpressure -- there is deliberately no
-    artificial inter-read delay.
+    rather than inferred from a quiet period. Framing stays authoritative for
+    completion -- the pacing below is *in addition to* it, never instead of
+    it.
+
+    Reads are **paced** at `INTER_COMMAND_DELAY_SECONDS`. Real-environment
+    evidence: the battery executes correctly in one Expert shell, but issued
+    back to back it destabilizes the session. The order is strictly
+    send -> deterministic completion -> record -> wait -> next send, so the
+    delay is spent between reads only: `N` reads cost `N-1` waits, with no
+    delay before the first and none after the last. It is pacing, never
+    retry, backoff, or reconnect authority -- a failed read is recorded and
+    the battery moves on.
     """
     shell = InteractiveSshSession(ssh, command_timeout)
     return MemberSession(
         physical_device_identity=physical_device_identity,
         _run_command=lambda command_text: shell.run(command_text, command_timeout, frame=True),
         _shell=shell,
+        # Resolved at call time, not bound as a default, so the pacing
+        # sleeper stays injectable/observable.
+        _sleep=sleeper if sleeper is not None else time.sleep,
     )
 
 

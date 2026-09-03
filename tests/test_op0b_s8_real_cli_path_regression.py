@@ -126,6 +126,8 @@ class _Device:
         #: What the device actually ran, including any CLI initialization a
         #: non-interactive exec channel would have cost it.
         self.device_executed: list[str] = []
+        #: One entry per inter-command pacing wait.
+        self.waits: list[float] = []
 
     #: Per-member hostname served by A1, keyed by management IP.
     HOSTS = {"10.0.0.1": ("gw-member-a", _A3_LOCAL_STANDBY),
@@ -313,6 +315,22 @@ def _drive_cli(tmp_path: Path, monkeypatch, capsys) -> tuple[_Device, str]:
     _SSHClient.device = device
     monkeypatch.setattr(paramiko, "SSHClient", _SSHClient)
 
+    import checkpoint.preflight_collector as pc
+    # §5: mock the sleeper so the suite never waits real seconds; every
+    # pacing call is still recorded on the device for assertion.
+    monkeypatch.setattr(pc, "INTER_COMMAND_DELAY_SECONDS", 0)
+    _real_sleep = pc.time.sleep
+
+    def _recording_sleep(seconds):
+        # Only the pacing value is recorded; the shell's own read-loop poll
+        # sleeps must keep working or nothing completes.
+        if seconds == pc.INTER_COMMAND_DELAY_SECONDS:
+            device.waits.append(seconds)
+            return
+        _real_sleep(seconds)
+
+    monkeypatch.setattr(pc.time, "sleep", _recording_sleep)
+
     import application.workflows.preflight as preflight_wf
     from utils.collection_executor import RuntimeCollectionServices
 
@@ -361,6 +379,23 @@ class TestRealCliPathSessionInvariants:
         assert device.channels == 0, "no per-command exec channel"
         assert device.shells == 2 and device.shell_closes == 2
         assert "ver" not in device.device_executed, device.device_executed
+
+    def test_pacing_on_the_real_path(self, tmp_path, monkeypatch, capsys):
+        """8 reads x 2 members = 16 reads, but pacing is per member and only
+        BETWEEN reads: 7 waits per member, none before a member's first read
+        and none after its last."""
+        device, _out = _drive_cli(tmp_path, monkeypatch, capsys)
+        assert len(device.commands) == 16
+        assert len(device.waits) == 14, "7 waits per member, none trailing"
+
+    def test_pacing_never_reconnects_or_retries(self, tmp_path, monkeypatch, capsys):
+        """Pacing must never become retry or reconnect authority: the same
+        session is retained across every wait."""
+        device, _out = _drive_cli(tmp_path, monkeypatch, capsys)
+        assert len(device.connects) == 2, "no reconnect across pacing"
+        assert device.shells == 2, "the same Expert shell spans every wait"
+        assert len(set(device.commands)) == 8, "the same 8 approved reads, per member"
+        assert len(device.commands) == 16, "no read re-issued"
 
     def test_version_collected_once_per_member(self, tmp_path, monkeypatch, capsys):
         device, _out = _drive_cli(tmp_path, monkeypatch, capsys)

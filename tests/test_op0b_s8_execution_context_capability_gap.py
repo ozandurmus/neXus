@@ -30,6 +30,7 @@ and never tries to route around it.
 from __future__ import annotations
 
 import inspect
+import time
 
 import checkpoint.preflight_collector as pc
 from checkpoint.cp_preflight_battery import COMMAND_TEXT, CPPreflightRead
@@ -110,16 +111,95 @@ class TestNoRoutingAroundTheGap:
             assert forbidden not in src, f"hard-stop boundary crossed: {forbidden!r}"
 
 
-class TestNoArtificialPacing:
-    """An inter-read delay was briefly added after the device's management
-    plane took 8 CLI initializations inside ~2 seconds. That burst was a
-    symptom of one exec channel per read, not something to slow down: inside
-    one persistent Expert shell the battery costs the device no CLI
-    initialization at all, and sequential send/complete/parse is its own
-    backpressure. Latency must never paper over an execution-model defect."""
+class TestInterCommandPacing:
+    """Deterministic pacing between approved reads.
 
-    def test_no_pacing_constant_exists(self):
-        assert not hasattr(pc, "INTER_READ_DELAY_SECONDS")
+    Real-environment evidence: the battery executes correctly inside one
+    persistent Expert shell, but issued back to back it destabilizes the SSH
+    session. Pacing is therefore intentional production courtesy -- and it is
+    strictly *between* reads, after deterministic completion of the previous
+    one. It is never retry, backoff, reconnect, or adaptive."""
 
-    def test_no_sleep_anywhere_in_the_preflight_path(self):
-        assert "sleep" not in inspect.getsource(pc)
+    def _paced(self, calls, invocations):
+        session = pc.MemberSession(
+            physical_device_identity="member-a",
+            _run_command=lambda _text: {"success": True, "stdout": "", "stderr": "",
+                                        "error_class": "none", "timeout": False,
+                                        "exit_status": 0},
+            _sleep=calls.append,
+        )
+        for read in invocations:
+            session.run(read)
+        return session
+
+    def test_n_commands_produce_n_minus_one_waits(self):
+        reads = [CPPreflightRead.A1_HOSTNAME, CPPreflightRead.A2_VERSION,
+                 CPPreflightRead.A3_CPHAPROB_STAT, CPPreflightRead.A7_FW_STAT]
+        calls: list[float] = []
+        self._paced(calls, reads)
+        assert len(calls) == len(reads) - 1
+
+    def test_first_read_has_no_pre_delay(self):
+        calls: list[float] = []
+        self._paced(calls, [CPPreflightRead.A1_HOSTNAME])
+        assert calls == [], "no delay before the first read"
+
+    def test_no_delay_after_the_final_read(self):
+        """Structural, not incidental: the wait happens before a *next* send,
+        so a battery can never end on a sleep."""
+        src = inspect.getsource(pc.MemberSession.run)
+        assert src.index("_sleep(") < src.index("_run_command("), src
+
+    def test_pacing_uses_the_single_named_constant(self):
+        assert pc.INTER_COMMAND_DELAY_SECONDS == 0.3
+        assert "INTER_COMMAND_DELAY_SECONDS" in inspect.getsource(pc.MemberSession.run)
+
+    def test_delay_value_is_exactly_the_constant(self):
+        calls: list[float] = []
+        self._paced(calls, [CPPreflightRead.A1_HOSTNAME, CPPreflightRead.A2_VERSION])
+        assert calls == [pc.INTER_COMMAND_DELAY_SECONDS]
+
+    def test_pacing_follows_completion_never_precedes_it(self):
+        """`_run_command` returns only on deterministic nonce/exit-status
+        completion, so a wait can only ever follow a completed read."""
+        order: list[str] = []
+        session = pc.MemberSession(
+            physical_device_identity="member-a",
+            _run_command=lambda _t: order.append("complete") or {
+                "success": True, "stdout": "", "stderr": "",
+                "error_class": "none", "timeout": False, "exit_status": 0},
+            _sleep=lambda _s: order.append("wait"),
+        )
+        for read in (CPPreflightRead.A1_HOSTNAME, CPPreflightRead.A2_VERSION,
+                     CPPreflightRead.A3_CPHAPROB_STAT):
+            session.run(read)
+        assert order == ["complete", "wait", "complete", "wait", "complete"]
+
+    def test_a_failed_read_is_never_retried(self):
+        """Pacing must never become retry authority."""
+        issued: list[str] = []
+        session = pc.MemberSession(
+            physical_device_identity="member-a",
+            _run_command=lambda text: issued.append(text) or {
+                "success": False, "stdout": "", "stderr": "",
+                "error_class": "command_error", "timeout": False, "exit_status": 1},
+            _sleep=lambda _s: None,
+        )
+        session.run(CPPreflightRead.A3_CPHAPROB_STAT)
+        assert len(issued) == 1, "a failed read is recorded, never re-issued"
+
+    def test_no_adaptive_or_configurable_pacing(self):
+        """Executable body only -- the constant's own comment legitimately
+        names the mechanisms it is not."""
+        called = set(pc.MemberSession.run.__code__.co_names)
+        for forbidden in ("getenv", "environ", "uniform", "monotonic"):
+            assert forbidden not in called, f"pacing must stay one plain constant: {forbidden!r}"
+        src = inspect.getsource(pc)
+        for forbidden in ("retry_delay", "max_delay", "backoff_factor"):
+            assert forbidden not in src, f"pacing must stay one plain constant: {forbidden!r}"
+
+    def test_real_session_binds_a_sleeper_resolved_at_call_time(self):
+        """Not a frozen default: production gets `time.sleep`, tests inject."""
+        sig = inspect.signature(pc.make_real_member_session)
+        assert sig.parameters["sleeper"].default is None
+        assert "time.sleep" in inspect.getsource(pc.make_real_member_session)

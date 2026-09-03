@@ -268,6 +268,9 @@ def _run(monkeypatch, *, unit_type: str = "clusterxl", members: int = 2) -> _Rec
     rec = _Recorder()
     _FakeSSHClient.rec = rec
     monkeypatch.setattr(paramiko, "SSHClient", _FakeSSHClient)
+    # §5: mock the sleeper -- pacing is device courtesy, not behaviour the
+    # suite should spend real seconds on. Counted in its own test instead.
+    monkeypatch.setattr(pc, "INTER_COMMAND_DELAY_SECONDS", 0)
     targets = [
         CPPhysicalMemberTarget("member-a", "gw-member-a", "192.0.2.10"),
         CPPhysicalMemberTarget("member-b", "gw-member-b", "192.0.2.11"),
@@ -431,12 +434,17 @@ class TestNoRuntimeDiscoveryOfStaticSemantics:
         # it reuses.
         assert "invoke_shell(" not in src, "the shell adapter is reused, not reimplemented"
 
-    def test_no_artificial_inter_read_delay(self):
-        """Sequential send/complete/parse is its own backpressure. Latency
-        must never be added to paper over an execution-model defect."""
-        src = inspect.getsource(pc)
-        assert "sleep" not in src, "no arbitrary pacing in the preflight path"
+    def test_reads_are_paced_between_commands_only(self):
+        """Deterministic pacing is production courtesy, not retry authority:
+        the SSH session destabilizes when the battery is issued back to back.
+        `N` reads cost `N-1` waits -- none before the first, none after the
+        last -- and each wait follows a completed read."""
+        assert pc.INTER_COMMAND_DELAY_SECONDS == 0.3
         assert not hasattr(pc, "INTER_READ_DELAY_SECONDS")
+        # The wait is issued before a *next* send, so it can never trail the
+        # battery. Counted on the real call graph in the CLI-path regression.
+        src = inspect.getsource(pc.MemberSession.run)
+        assert src.index("_sleep(") < src.index("_run_command(")
 
 
 # ---------------------------------------------------------------------------
