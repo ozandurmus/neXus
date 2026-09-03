@@ -7,14 +7,12 @@ detail is not here either** — it is in `project/build_history.json`
 linked documents under `docs/history/`. `docs/history/INDEX.md` is the
 generated one-line timeline.
 
-- **Checkpoint:** 2026-09-03, branch `claude/op0b-s3-cp-preflight-parser-0y9z6u`
-  (base `main`, merged via PRs #34/#35/#36).
+- **Checkpoint:** 2026-09-03, branch `main` (merged via PRs #34/#35/#36/#37).
 - **Current build** (per `project/roadmap.json` `now_next.now`):
-  `op0b_s3_cp_parse_scope_extension` — **IN_PROGRESS** (implemented and
-  locally validated this session; deliberately not marked
-  `AUTOMATED_VALIDATED` until PR CI evidence lands, per the lesson recorded
-  from S2's same-day overclaim correction — see "Active build" below).
-  Third bounded slice against the FROZEN `OP.0b.0` contract: extends
+  `op0b_s3_cp_parse_scope_extension` — **AUTOMATED_VALIDATED** (PR #37's CI
+  confirmed the full suite green against the exact merged head — see
+  "Active build" below). Third bounded slice against the FROZEN `OP.0b.0`
+  contract: extends
   `configuration/checkpoint_config_collector.py` to parse more of the
   already-fetched `cphaprob stat` buffer (opt-in, dormant by design —
   production invocation is S5/S6's job), plus a pure projection module.
@@ -52,20 +50,21 @@ test-enforced boundaries. Current numbers:
 
 ## Active build
 
-**`op0b_s3_cp_parse_scope_extension`** — **IN_PROGRESS** 2026-09-03. New
-`_parse_clusterxl_stat_preflight_fields()` reads non-local member-row State
-(peer observation, address/name excluded) and a local failure/attention
+**`op0b_s3_cp_parse_scope_extension`** — **AUTOMATED_VALIDATED** 2026-09-03.
+New `_parse_clusterxl_stat_preflight_fields()` reads non-local member-row
+State (peer observation, address/name excluded) and a local failure/attention
 boolean (reclassified role token — no free-text "Active Attention" reason
 parsed, no safe vocabulary confirmed) from the **same** already-fetched
 `cphaprob stat` buffer, behind `include_preflight_fields=False` on
 `_collect_host` (dormant by design, S5/S6's job to invoke). Cluster-mode
 parser gained `vsx_single_vs_failover` (sk112712), active immediately (not
 opt-in). New pure `checkpoint/cp_preflight_projection.py`. Contract §25
-updated; new §25b mirrors S2's §25a reconciliation. Locally validated only
-(178/307/1181-test sweeps green, 24 `fastapi`-gap errors pre-existing) —
-stays `IN_PROGRESS` until PR CI lands, not `AUTOMATED_VALIDATED`, learning
-from S2's same-day overclaim. Zero device I/O, zero new command; `D-F1`/
-`D-F2`/`D-F3`/`D-V3a`/`D-V7b` unresolved; CLASS 2 unreachable.
+updated; new §25b mirrors S2's §25a reconciliation. **PR #37's CI**
+(https://github.com/ozandurmus/neXus/actions/runs/33753129757) ran the
+`validation` workflow with the real dependency set against this exact head:
+**conclusion=success**, mergeable_state=clean, zero open review threads.
+Zero device I/O, zero new command; `D-F1`/`D-F2`/`D-F3`/`D-V3a`/`D-V7b`
+unresolved; CLASS 2 unreachable.
 
 **Predecessors:** `op0b_s2_pan_parse_scope_extension` (AUTOMATED_VALIDATED,
 PR #36) and `op0b_s1_preflight_fact_provenance_model` (AUTOMATED_VALIDATED).
