@@ -16,57 +16,64 @@ doc. Prior versions are in git history.
 
 ## 1. Snapshot
 
-- Date: 2026-09-03. Branch `claude/readiness-v2-s7-aorkfs`, fresh off
-  `main` at `bdd3563` (PR #43 merged — `OP.0b` S6). This build,
-  `op0b_s7_readiness_v2_integration`, is `OP.0b` S7 — fresh S1/S5/S6
-  preflight evidence integrated into the one canonical readiness evaluator.
-- Status: `AUTOMATED_VALIDATED`. PO architecture approval received
-  2026-09-03 (seven checks kept, schema `-v1` kept, one-sided-ACTIVE →
-  INSUFFICIENT accepted) with one added guard test; PR #44 merged per that
-  approval.
+- Date: 2026-09-03. Branch `claude/cp-ssh-trust-preflight-fix-pf0611`, fresh
+  off `main` at `9747ad5` (PR #45 merged — `OP.0b` S7.5). This build,
+  `op0b_s8_p01_cp_ssh_trust_preflight_correction`, is `OP.0b` S8-P0.1 — a
+  security-boundary correction discovered while preparing S8-A.
+- Status: `AUTOMATED_VALIDATED`, **pending PO security review**; do not merge
+  without explicit PO approval.
 
 ## 2. What changed this session
 
-- New `utils/failover/preflight_readiness.py`: the one typed fact→check
-  mapping (`FACT_CHECK_MAP`, 14 vendor×check specs over the unchanged seven
-  `STOP_CONDITIONS`) interpreting a `PreflightSnapshot` into check statuses;
-  computes no verdict (test-enforced by AST scan).
-- `utils/failover/assessment.py`: `compute_ha_readiness(preflight_snapshots=…)`;
-  `_evaluate_checks` dispatches to the mapping when a derived unit has a
-  snapshot (stored telemetry and fresh evidence never blend);
-  `_verdict_for` stays the single roll-up and now also refuses SAFE while an
-  open `D-F1/D-F2/D-F3` gate applies; PAN phantom-member uplift removed
-  (AC-5); one-sided stored-telemetry read → `INSUFFICIENT_EVIDENCE`
-  (`peer_not_independently_observed`), never `no_viable_target`; additive
-  `units[].evidence`, `units[].unresolved_reason`, `checks[].facts`,
-  top-level `preflight`. Schema string stays `-v1`.
-- `utils/failover_readiness_ui.py`: optional `preflight_snapshots`
-  passthrough, `preflight` block, refreshed framing note. No JS change.
-- Tests: new `tests/test_op0b_s7_readiness_v2.py` (53); OP.0a AC-4 fixture
-  rewritten around explicit two-member evidence + one new OP.0a regression;
-  structural module lists updated in `test_op0a_ha_readiness.py` /
-  `test_architecture_convergence.py`; `AGENTS.md` invariant line updated.
-- Contract `OP_0B_0…` gains §25c (S7 reconciliation: what was implemented,
-  what was folded, what is deferred to the PO). Project state updated.
+- `utils/cp_ssh_trust.py`: strict preflight now counts what was actually
+  loaded into Paramiko's read-only system store (`load_system_host_keys`)
+  instead of gating on the writable local store (`get_host_keys()`), which
+  made `strict=True` unsatisfiable with a correct `known_hosts`. Public
+  Paramiko APIs only (explicit system `known_hosts` path +
+  `paramiko.HostKeys` parse of the same file); new value-free reason tokens
+  `trust_source_unreadable` / `trust_source_malformed` /
+  `no_usable_host_keys_loaded`; new `load_trusted_host_keys()` export;
+  `CpSshStrictPreflightError.reason`. Order, `RejectPolicy`,
+  fail-before-connect and `strict=False` unchanged. No callers touched.
+- New `tests/test_op0b_s8_p01_cp_ssh_trust_preflight_correction.py` (47):
+  real `paramiko.SSHClient` + synthetic generated keys, `connect()`
+  sentinel; the populated-store reproducer fails against the old helper.
+- `tests/test_phase0_6_4_cp_ssh_host_key_trust_closure.py`,
+  `tests/test_phase0_6_1b_1_4_cp_ssh_trust.py`: strict paths reworked from
+  `get_host_keys()` mocks to real isolated synthetic files.
+- Docs: correction note appended to
+  `docs/history/phase/PHASE0_6_4_CP_SSH_HOST_KEY_TRUST_PRODUCTION_CLOSURE.md`;
+  one paragraph in `deploy/secrets/README.md`. Project state updated; new
+  backlog debt `op0b_s7_s6_test_order_isolation` (pre-existing, not fixed).
 
 ## 3. Exact next action
 
-1. `now_next.next` = `op0b_s8_real_env_validation` — bounded, reads only,
-   hardware-blocked; new session; `Sonnet 5, normal`. Do not start S8
-   without the approved real pairs available.
+1. PO security review of this PR. On approval: merge, sync `main`.
+2. Provision the trusted host key (out-of-band verified fingerprint in the
+   runtime's system/user `known_hosts`; production: the DEV.2.2
+   `/root/.ssh/known_hosts` mount).
+3. **NEW session**: `op0b_s8_real_env_validation` — S8-A retry of the
+   IDENTICAL controlled command. `Sonnet 5, normal`. S8-A is currently NOT
+   EXECUTED / ZERO CONTACTS / BLOCKED; not failed. Do not reopen other
+   `OP.0b` research.
 
 ## 4. Test delta
 
-- Targeted: `tests/test_op0b_s7_readiness_v2.py` 53 passed.
-- Regression: OP.0a/OP.0c/S1/S2/S3/S5/S6/architecture/known-safety-gaps
-  265 passed. Full serial suite 1371/26/0.
-  Privacy gate PASS/0. `git diff --check` clean. `metadata_warnings == []`.
+- Targeted: new file 47 passed; reworked 0.6.4 + 0.6.1B.1.4 + DEV.2.2 trust
+  suites 36 passed.
+- Regression: CP connection-path / S5 / S7.5 / S7 / S1 / RB.3a / VSX /
+  safety-gap / redaction / privacy-gate / frontend-boundary passed.
+- Full serial suite, privacy gate, `git diff --check`, `metadata_warnings ==
+  []`: see `CURRENT_STATE.md` "Automated test baseline".
 
 ## 5. New risks
 
-- Vendor value vocabularies frozen minimally in the mapping (PAN
-  `state-sync` "Complete", `running-sync` "synchronized", `conn-*`
-  "up"/"down", `*-compat` "Match"/"Mismatch"; CP sync "ok"/"not_ok") are
-  fail-closed and unvalidated against real output until S8.
-- Nothing persists/orchestrates snapshots yet — evaluation is a typed
-  stage callers feed explicitly; no CLI/console wiring in S7.
+- No explicit RuntimeRoot trusted-`known_hosts` source exists
+  (`NOT_PRESENT`); the system/user `known_hosts` is the only trusted source.
+  Adding one is a separate PO decision.
+- `cp_ssh_trust_r2_prod_server` (strict + real provisioned MDS entry) is now
+  reachable but still owed on the production server.
+- Pre-existing, unrelated: `test_op0b_s7_readiness_v2.py` run before
+  `test_op0b_s6_pan_preflight_collector.py` in one process fails 25 S6 tests
+  (state leak); default order and the serial full suite are unaffected.
+  Backlog `op0b_s7_s6_test_order_isolation`.

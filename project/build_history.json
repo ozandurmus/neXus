@@ -3,6 +3,33 @@
   "record_contract": "One structured record per build, newest first. Required: build, status, title, summary (<= 2 sentences). Optional: started, completed, track, movement, supersedes, evidence, risks_forward, docs{agreement,validation,handover} (repo-relative paths under docs/history/). Full detail lives in the linked doc; do not restate it here. Status vocabulary must stay within utils/project_plan.py STATUS_VALUES.",
   "builds": [
     {
+      "build": "op0b_s8_p01_cp_ssh_trust_preflight_correction",
+      "status": "automated_validated",
+      "title": "OP.0b S8-P0.1 - CP SSH strict trust-store preflight correction",
+      "summary": "Correction prerequisite discovered while preparing S8-A: the shared 0.6.4 strict host-key helper (utils/cp_ssh_trust.py) loaded trusted keys into Paramiko's read-only system store (load_system_host_keys) but gated on the separate writable local store (get_host_keys), so strict=True was unusable even with a correctly provisioned system/user known_hosts; the strict precondition now means 'at least one configured trusted host-key source was successfully loaded', derived through public Paramiko APIs only (explicit system known_hosts path + paramiko.HostKeys parse of the same file), with unreadable/malformed sources failing closed under distinct value-free reason tokens. All five CP SSH callers inherit the fix through the one helper; RejectPolicy, fail-before-connect and compatibility mode are unchanged; no AutoAdd/TOFU/enrollment, no new trust source or config surface, no device command or network behavior, zero device contact.",
+      "started": "2026-09-03",
+      "track": "OP.0b",
+      "movement": "IMPLEMENTATION",
+      "supersedes": null,
+      "evidence": [
+        "Root cause reproduced against real Paramiko 5.0.0 with a temporary synthetic known_hosts: system store holds 1 entry, get_host_keys() holds 0, pre-correction helper raises CpSshStrictPreflightError; the same reproducer passes after the correction.",
+        "tests/test_op0b_s8_p01_cp_ssh_trust_preflight_correction.py -- 47 passed (real paramiko.SSHClient + synthetic generated keys, connect() sentinel, no network: populated-store PASS, missing/empty/comment-only/unknown-type/malformed/unreadable/binary FAIL before connect, RejectPolicy on both paths, compat mode unchanged, no explicit trust-source surface, system-store-only without load_host_keys duplication, structural guards (no AutoAdd/Warning/TOFU/save/keyscan/private-internals/platform-branch, every handler re-raises), observed fingerprint never promoted, all five callers on the one helper, caller-level pass/fail-before-connect for vsx/config-probe/direct-probe, persistent-secret-material PASS with populated store, user-profile semantics).",
+        "tests/test_phase0_6_4_cp_ssh_host_key_trust_closure.py + tests/test_phase0_6_1b_1_4_cp_ssh_trust.py -- strict paths reworked from get_host_keys() mocks to real isolated synthetic known_hosts; 36 passed. tests/test_dev2_2_persistent_secret_material.py unchanged, passing.",
+        "CP connection-path / S5 / S7.5 / S7 / S1 / RB.3a / direct-probe / VSX / safety-gap / credential-redaction / privacy-gate / frontend-boundary regression -- passed (see risks_forward for the pre-existing S7->S6 test-order leak observed when files are run out of default order).",
+        "Full local suite, serial, one-shot (py -m pytest -q > pytest_result.log): 1468 passed / 24 skipped / 0 failed -- exactly +47 over this sandbox's own HEAD baseline of 1421 / 24 / 0 (pytest/lxml/paramiko/requests + dev/console extras installed session-locally, no repository dependency change).",
+        "python main.py --repository-privacy-check on the clean checkout (data/ and logs/ deleted first): PASS, 0 findings. git diff --check clean; compileall clean; build-history index current; tests/test_architecture_convergence.py 19 passed (metadata_warnings == [])."
+      ],
+      "risks_forward": [
+        "S8-A remains NOT EXECUTED, ZERO CONTACTS, BLOCKED pending this correction merging plus trusted host-key provisioning (independently verified fingerprint placed in the system/user known_hosts of the runtime). Next = S8-A retry of the identical controlled command in a NEW session; do not mark S8 failed.",
+        "cp_ssh_trust_r2_prod_server (strict + provisioned real MDS entry completes a read-only run) is now reachable but still owed on the production server; the 0.6.4 ssh_host_key feature criterion stays pending until it passes.",
+        "No explicit RuntimeRoot trusted-known_hosts source exists in the repository (NOT_PRESENT); the system/user known_hosts is the only trusted source. Adding one is a separate PO decision, not part of this correction.",
+        "Pre-existing, unrelated, not touched (S7 file boundary): running tests/test_op0b_s7_readiness_v2.py before tests/test_op0b_s6_pan_preflight_collector.py in one pytest process makes 25 S6 tests fail with a real requests call (module-rebind/state leak class); default alphabetical order and the serial full suite are unaffected. Recorded as backlog op0b_s7_s6_test_order_isolation."
+      ],
+      "docs": {
+        "agreement": "docs/history/phase/PHASE0_6_4_CP_SSH_HOST_KEY_TRUST_PRODUCTION_CLOSURE.md"
+      }
+    },
+    {
       "build": "op0b_s75_preflight_entrypoint",
       "status": "automated_validated",
       "title": "OP.0b S7.5 - Controlled preflight application entrypoint",
