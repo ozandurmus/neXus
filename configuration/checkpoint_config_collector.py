@@ -899,7 +899,8 @@ CLUSTERXL_RUNTIME_STATES = (
 #: a coherent request (FAILOVER_ENGINE_ARCHITECTURE.md 3.1). Fail closed:
 #: anything unrecognised is "unknown", never a guess.
 CLUSTERXL_CLUSTER_MODES = (
-    "ha_new_mode", "load_sharing_unicast", "load_sharing_multicast", "vrrp", "unknown",
+    "ha_new_mode", "load_sharing_unicast", "load_sharing_multicast", "vrrp",
+    "vsx_single_vs_failover", "unknown",
 )
 
 
@@ -911,14 +912,24 @@ def _parse_clusterxl_cluster_mode(stdout: str) -> str:
     this reads the mode out of the same buffer before it is discarded. No
     hostname, interface name or address is ever returned -- only one of
     ``CLUSTERXL_CLUSTER_MODES``.
+
+    OP.0b S3: ``"Single VS Failover"`` (sk112712, VSX HA, non-VSLS) is a
+    distinct enum value, ``vsx_single_vs_failover`` -- never folded into
+    ``ha_new_mode``. It is a different mode string with different semantics
+    (per-VS failover scope vs. whole-cluster), and the contract's own
+    normalization rule (§12: never rename raw stored enums, never conflate
+    a new mode string with an existing one) forbids collapsing it.
     """
     for raw in str(stdout or "").splitlines():
         line = " ".join(raw.strip().split()).lower()
         if not line or "mode" not in line:
             continue
         # Order matters: the load-sharing variants must be tested before the
-        # bare "load sharing" fallback, and "high availability" last so a
-        # line naming both cannot be misread as HA.
+        # bare "load sharing" fallback, VSX single-VS-failover before the
+        # generic "high availability"/"new mode" match (it never contains
+        # either phrase, but keeping the ordering explicit documents intent),
+        # and "high availability" last so a line naming both cannot be
+        # misread as HA.
         if "load sharing" in line or "load-sharing" in line:
             if "multicast" in line:
                 return "load_sharing_multicast"
@@ -927,6 +938,8 @@ def _parse_clusterxl_cluster_mode(stdout: str) -> str:
             return "unknown"
         if "vrrp" in line:
             return "vrrp"
+        if "single vs failover" in line:
+            return "vsx_single_vs_failover"
         if "high availability" in line or "new mode" in line:
             return "ha_new_mode"
     return "unknown"
@@ -950,6 +963,74 @@ def _parse_clusterxl_runtime_role(stdout: str, observed_hostname: str | None) ->
             if re.search(rf"(?<![A-Z]){re.escape(state)}(?![A-Z])", upper):
                 return state
     return None
+
+
+def _parse_clusterxl_stat_preflight_fields(stdout: str, observed_hostname: str | None) -> dict[str, Any]:
+    """OP.0b S3: parse additional contract-authorized fields out of the same
+    ``cphaprob stat`` buffer the caller already holds -- no new command, no
+    new SSH invocation, same buffer `_parse_clusterxl_runtime_role`/
+    `_parse_clusterxl_cluster_mode` already read.
+
+    Single extraction authority: local role and cluster mode are read via
+    those two existing functions (never reinterpreted a second way here).
+    This function's only new territory -- nothing else in the repository
+    parses it today -- is:
+
+    - ``peer_row_states``: the **State** column of each non-local member row
+      (contract "Identity contract / Check Point" -- "'Unique Address' is
+      not identity-grade"; peer name is presentation only). Only the state
+      token is extracted, never an address or name. Returns ``()`` when only
+      the local row is present, the buffer has no recognizable member rows,
+      or `stdout` is empty/unparseable -- one member's own read must never
+      synthesize a peer observation (contract domain invariant 4; task S3
+      §17 test 10).
+    - ``local_attention``: a boolean derived from the *already-parsed* local
+      role token (``True`` iff it is ``"ACTIVE ATTENTION"`` or ``"DOWN"``,
+      ``None`` iff the local role itself could not be determined) -- category
+      J (failure/health) corroboration for the same evidence category D
+      already captures, per the frozen contract's own command-surface row
+      (§24 A3: ``cphaprob stat`` -> "D, corroborating E/J"). No new text is
+      read to produce it; it is a reclassification of the existing role
+      token, never a guess.
+    """
+    local_role = _parse_clusterxl_runtime_role(stdout, observed_hostname)
+
+    hostname = str(observed_hostname or "").strip().lower().rstrip(".")
+    host_token = hostname.split(".", 1)[0] if hostname else None
+
+    peer_states: list[str] = []
+    for raw in str(stdout or "").splitlines():
+        line = " ".join(raw.strip().split())
+        if not line:
+            continue
+        low = line.lower()
+        if "number" in low and "state" in low and "name" in low:
+            continue  # header row, not a member row
+        # A member row is only ever recognized by its leading row-number
+        # token (the observed real header shape, e.g. "1 (local)  ..." /
+        # "2          ..."); anything else (banners, blank separators) is
+        # never mistaken for a peer row.
+        if not re.match(r"^\d+\s", line):
+            continue
+        local_line = "(local)" in low
+        if host_token:
+            local_line = local_line or bool(
+                re.search(rf"(?<![a-z0-9_.-]){re.escape(host_token)}(?![a-z0-9_.-])", low)
+            )
+        if local_line:
+            continue
+        upper = line.upper()
+        for state in CLUSTERXL_RUNTIME_STATES:
+            if re.search(rf"(?<![A-Z]){re.escape(state)}(?![A-Z])", upper):
+                peer_states.append(state)
+                break
+
+    local_attention = None if local_role is None else local_role in {"ACTIVE ATTENTION", "DOWN"}
+
+    return {
+        "peer_row_states": tuple(peer_states),
+        "local_attention": local_attention,
+    }
 
 
 def _collector_identity_gate(
@@ -1190,7 +1271,8 @@ def _entity_id(target: PhysicalTarget, context: VsContext | None = None) -> str:
 
 
 def _collect_host(target: PhysicalTarget, *, username: str, secret: str, strict_host_key: bool,
-                  connect_timeout: int, command_timeout: int, store: ConfigEvidenceStore) -> list[dict[str, Any]]:
+                  connect_timeout: int, command_timeout: int, store: ConfigEvidenceStore,
+                  include_preflight_fields: bool = False) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     ssh = None
     interactive = None
@@ -1346,6 +1428,14 @@ def _collect_host(target: PhysicalTarget, *, username: str, secret: str, strict_
                     if mode != "unknown":
                         host_row["ha_cluster_mode"] = mode
                         host_row["ha_cluster_mode_source"] = "interactive_cphaprob_stat_runtime"
+                    # OP.0b S3: opt-in, dormant by design (default False, never
+                    # passed True by run_checkpoint_config_collection today --
+                    # production invocation is S5/S6's job, per the contract's
+                    # own collector-reuse decision). Same buffer, no new read.
+                    if include_preflight_fields:
+                        host_row["preflight_fields"] = _parse_clusterxl_stat_preflight_fields(
+                            ha_stdout, observed_hostname
+                        )
                 if host_row.get("ha_role"):
                     host_row["ha_runtime_status"] = "success"
                 elif shell_mode == "interactive_direct_clish" and _looks_like_cli_error(ha_result):
@@ -1620,6 +1710,14 @@ def _collect_host(target: PhysicalTarget, *, username: str, secret: str, strict_
                     if vs_mode != "unknown":
                         ctx_row["ha_cluster_mode"] = vs_mode
                         ctx_row["ha_cluster_mode_source"] = "interactive_cphaprob_stat_runtime_per_vs"
+                    # OP.0b S3: same opt-in, dormant field family as the
+                    # physical path above -- this VS's own buffer only, never
+                    # the physical member's (contract §11: a VS fact must be
+                    # based only on that VS context's own observation).
+                    if include_preflight_fields:
+                        ctx_row["preflight_fields"] = _parse_clusterxl_stat_preflight_fields(
+                            vs_ha_stdout, observed_hostname
+                        )
                 if ctx_row.get("ha_runtime_status") != "success":
                     ctx_row["ha_runtime_status"] = (
                         "unavailable_inherited" if ctx_row.get("ha_role") else "unavailable"

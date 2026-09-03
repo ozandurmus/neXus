@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "current_build": "op0b_s2_pan_parse_scope_extension",
+  "current_build": "op0b_s3_cp_parse_scope_extension",
   "current_track": "CON.x",
   "progress_contract": "Weighted acceptance-criterion completion. Percentages describe the declared roadmap, not calendar time or delivery ETA.",
   "tracks": [
@@ -123,35 +123,25 @@
   "now_next": {
     "horizon_contract": "NOW is exactly one build. NEXT is exactly one. Everything else is an `upcoming` row carrying its own true status: planned = AFTER, blocked = waiting on a named external gate, deferred = consciously postponed. `now.build` must equal the newest project/build_history.json record -- utils.project_plan enforces it.",
     "now": {
-      "build": "op0b_s2_pan_parse_scope_extension",
-      "title": "OP.0b S2 - PAN preflight parse-scope extension (existing show high-availability state response)",
-      "goal": "Second bounded implementation slice against the FROZEN OP.0b.0 contract. configuration/panorama_config_collector.py: new _parse_pan_ha_preflight_fields() reads conn-status leaves, running-sync/-enabled, election/preemption, flap/duration counters, error state, and *-version/*-compat parity out of the SAME already-fetched show high-availability state response -- zero new command, zero new device contact. New include_preflight_fields=False opt-in parameter on get_target_ha_runtime_state; default behavior and the one existing production call site unchanged BY DESIGN -- production invocation is S5/S6's dedicated preflight collector's job, not S2's, per the frozen contract's own 'Current collector reuse decision'. New panorama/pan_preflight_projection.py (pure, no I/O), same dormant-by-design posture. SESSION CORRECTION (same day): a PO/architecture review found the initial close overclaimed COLLECTED_AND_PARSED/automated_validated; corrected to PARSER_IMPLEMENTED -- PRODUCTION_WIRING_PENDING in the contract's field-trace table (section 25a gives the full reconciliation). GIT TOPOLOGY RECONCILIATION: merged via three sequential PRs (#34 contract freeze, #35 S1, #36 S2) instead of one bundled stack. PR #36's CI installed the real dependency set and ran the full suite -- 1153 passed / 28 skipped / 0 failed, including the 20-test lxml extraction suite for the first time anywhere -- so status now correctly advances to automated_validated. Also fixed: a genuine single-extraction-authority gap (baseline + S2 field reads consolidated behind one new _pan_ha_group_text canonical accessor). D-F1/D-F2/D-F3, D-V3a, D-V7b, PAN B2 all remain exactly as unresolved as before; CLASS 2 stays structurally unreachable (P4 invariant, unchanged).",
-      "status": "automated_validated",
+      "build": "op0b_s3_cp_parse_scope_extension",
+      "title": "OP.0b S3 - CP preflight parse-scope extension (existing cphaprob stat response)",
+      "goal": "Third bounded implementation slice against the FROZEN OP.0b.0 contract, Check Point side. New _parse_clusterxl_stat_preflight_fields() in configuration/checkpoint_config_collector.py reads non-local member-row State tokens (peer/member observation, address/name excluded -- not identity-grade) and a local failure/attention boolean (reclassification of the already-parsed role token, no free-text reason suffix parsed -- no safe vendor-confirmed vocabulary exists for one) out of the SAME already-fetched cphaprob stat buffer -- zero new command, zero new SSH invocation. _parse_clusterxl_cluster_mode gained one new recognized value, vsx_single_vs_failover (sk112712), in production use immediately since it lives inside the existing always-invoked mode parser. New include_preflight_fields=False opt-in parameter on _collect_host (physical and per-VS paths); default behavior and the one existing production call site (run_checkpoint_config_collection) unchanged BY DESIGN -- production invocation is S5/S6's dedicated preflight collector's job, per the frozen contract's own 'Current collector reuse decision' (same posture S2 established for PAN). New checkpoint/cp_preflight_projection.py (pure, no I/O) turns the field dict into S1 PreflightFact/PreflightMemberEvidence instances; peer/member row state lands in peer_claim_facts (this member's claim about its peer, never own_facts, never a synthesized second member) per contract domain invariant 4. Contract field-trace table (section 25) updated for cluster_mode/peer_state/failure_reason/member_skew/row_provenance rows; new section 25b gives the same six-dimension PARSER_IMPLEMENTED -- PRODUCTION_WIRING_PENDING reconciliation section 25a established for S2, learning directly from that same-day correction rather than repeating the overclaim. D-F1/D-F2/D-F3, D-V3a, D-V7b, PAN B2 all remain exactly as unresolved as before; CLASS 2 stays structurally unreachable (P4 invariant, unchanged).",
+      "status": "in_progress",
       "started": "2026-09-03",
-      "completed": "2026-09-03"
+      "completed": null
     },
     "next": {
-      "build": "op0b_s3_cp_parse_scope_extension",
-      "title": "OP.0b S3 - CP parse-scope extension of already-collected cphaprob stat",
-      "goal": "Same pattern as S2, CP side: extend configuration/checkpoint_config_collector.py's parsing of the existing cphaprob stat output (no new command, no new device contact) to populate PreflightFact/Provenance instances for peer rows (state), Active Attention reason, Single VS Failover mode, wire form + collected_at on rows, per the frozen contract's field-binding findings. Synthetic fixtures + one captured sanitised real header; no real-env required for this slice (S8 remains the real-env gate). Independent of S2 (already landed) -- could equally have run first.",
-      "status": "planned",
-      "prerequisites": [
-        "None technical. Independent of D-F3, D-V3a/D-V7b, and PAN serial closure below."
-      ],
-      "note": "Recommended: Sonnet 5, normal (deterministic implementation against a frozen contract, synthetic fixtures + one sanitised real header)."
+      "build": "op0b_0_close_d_v3a_d_v7b_pre_class2",
+      "title": "OP.0b.0 - close D-V3a/D-V7b before CLASS 2 (not a freeze gate)",
+      "status": "blocked",
+      "notes": [
+        "Try an official GitHub mirror first (the technique that closed D-V4/D-V7a): D-V3a needs an official PAN-OS/Panorama source for local-info/peer-info serial-num inside show high-availability state; D-V7b needs an official Check Point generic-object API schema (unconfirmed to exist) beyond the Simple Cluster API already ruled insufficient.",
+        "Fall back to a human fetching the specific pages the contract's source tables name.",
+        "Explicitly does NOT block S1-S9 implementation or the contract's FROZEN status -- gates only the PAN successor identity model and CLASS 2 (bug register PAN-7, CP-3).",
+        "Recommended: Sonnet 5, extended thinking (high), same as the prior vendor-semantics sessions."
+      ]
     },
     "upcoming": [
-      {
-        "build": "op0b_0_close_d_v3a_d_v7b_pre_class2",
-        "title": "OP.0b.0 - close D-V3a/D-V7b before CLASS 2 (not a freeze gate)",
-        "status": "blocked",
-        "notes": [
-          "Try an official GitHub mirror first (the technique that closed D-V4/D-V7a): D-V3a needs an official PAN-OS/Panorama source for local-info/peer-info serial-num inside show high-availability state; D-V7b needs an official Check Point generic-object API schema (unconfirmed to exist) beyond the Simple Cluster API already ruled insufficient.",
-          "Fall back to a human fetching the specific pages the contract's source tables name.",
-          "Explicitly does NOT block S1-S9 implementation or the contract's FROZEN status -- gates only the PAN successor identity model and CLASS 2 (bug register PAN-7, CP-3).",
-          "Recommended: Sonnet 5, extended thinking (high), same as the prior vendor-semantics sessions."
-        ]
-      },
       {
         "build": "d_f3_flap_failover_threshold_decision",
         "title": "D-F3 - flap/failover-frequency numeric threshold (product owner)",
