@@ -10,11 +10,11 @@ generated one-line timeline.
 - **Checkpoint:** 2026-09-03, branch `claude/op0b-s4-command-gate-6pyv2y`
   (base `main`).
 - **Current build** (per `project/roadmap.json` `now_next.now`):
-  `op0b_s4_command_gate_package` — **IN_PROGRESS**. `OP.0b` S4: the
-  `OP.0b.1` network-device command-gate package, docs only — see "Active
-  build" below. `cp_remote_collection_done_marker_diagnostics` moved to
-  `now_next.upcoming` (still `IN_PROGRESS`, stalled pending a real-device
-  recurrence; independent subsystem, does not block S4/S5/S6).
+  `op0b_s4_command_gate_package` — **AUTOMATED_VALIDATED**. `OP.0b` S4:
+  the `OP.0b.1` network-device command-gate package, PO-approved — see
+  "Active build" below. `now_next.next` is `op0b_s5_cp_preflight_collector`
+  (unblocked). `cp_remote_collection_done_marker_diagnostics` moved to
+  `now_next.upcoming` (still `IN_PROGRESS`, independent subsystem).
 - **Product baseline:** `0.7.7 — Compliance trend retro-fill` — AUTOMATED_VALIDATED.
 - **Engineering baseline:** `DEV.3.3` — AUTOMATED_VALIDATED. `DEV.1`,
   `DEV.4` complete.
@@ -47,22 +47,23 @@ test-enforced boundaries. Current numbers:
 
 ## Active build
 
-**`op0b_s4_command_gate_package`** — **IN_PROGRESS**, 2026-09-03. `OP.0b`
-S4: docs-only network-device command gate for the FROZEN `OP.0b.0`
-candidate battery (CP `A4`–`A9`, PAN `P3`–`P5`) —
-`docs/history/phase/OP_0B_1_COMMAND_GATE_PACKAGE.md` (new, status `DRAFT`
-— **pending explicit product-owner approval**; this build does not
-self-approve). CP `A4`/`A5`/`A6`/`A7`/`A8`/`B1` → `APPROVED_FOR_S5`;
-`A10`/`A11` → `OPTIONAL_APPROVED`; `A9` (management-plane preemption
-attribute) → `DEFERRED_UNKNOWN` (`D-V7b`, `CP-3`, P0 before `CLASS 2`).
-PAN `P4` → `APPROVED_FOR_S6`; `P3` → `OPTIONAL_APPROVED`; `P5` →
-`DEFERRED_UNKNOWN` (command syntax only `PARTIAL`ly confirmed). All 7
-known mutating operations stay `REJECTED`. No command implementation, no
-device I/O. New `tests/test_op0b_s4_command_gate.py` (6 tests) +
-`tests/test_architecture_convergence.py` — 26 passed locally. Full detail
-+ PO approval package: the gate doc above and `project/build_history.json`.
-Stays `IN_PROGRESS` until PR/CI evidence lands **and** independently
-cannot merge/finalize before the doc's own "Approval record" is signed.
+**`op0b_s4_command_gate_package`** — **AUTOMATED_VALIDATED**, 2026-09-03.
+`OP.0b` S4: `docs/history/phase/OP_0B_1_COMMAND_GATE_PACKAGE.md` — status
+`APPROVED`, PO sign-off recorded same session (PR #41). **PO-authorized
+for `S5`/`S6` implementation** (narrower than the technical candidate
+list): CP `A4`–`A8` + `B1` (VSX only); PAN `P4` — every one `NO_RETRY`
+(no new application-level command retry; `A6`/`A8` dispatch must be
+evidence-based, never failure-driven), and `B1` explicitly reuses the
+existing per-member SSH session (no new session; stop and return to PO if
+that proves impossible in `S5`). `A10`/`A11`/`P3` stay technically
+`OPTIONAL_APPROVED` but are **withheld** from this implementation battery.
+`A9`/`P5` unchanged `DEFERRED_UNKNOWN`. Network bound: ≤18 required CP VSX
+/ ≤16 required CP non-VSX ClusterXL / ≤6 required PAN invocations per
+selected HA-entity pair. All 7 known mutating operations stay `REJECTED`.
+No command implementation, no device I/O. `tests/test_op0b_s4_command_gate.py`
+(11 tests) + `tests/test_architecture_convergence.py` + privacy gate — 35
+passed locally; PR #41 fast CI green, mergeable. Full detail + PO approval
+record: the gate doc above and `project/build_history.json`.
 
 **Stalled, moved to `now_next.upcoming`:**
 `cp_remote_collection_done_marker_diagnostics` — still `IN_PROGRESS`,
@@ -117,13 +118,15 @@ causes are ruled out by source inspection. Leading-zero normalization is
 real recurrence with the new diagnostic fields — independent of `OP.0b`.
 
 `now_next.next` is **`op0b_s5_cp_preflight_collector`** (`OP.0b` S5) —
-**blocked** on explicit product-owner approval of
-`docs/history/phase/OP_0B_1_COMMAND_GATE_PACKAGE.md` ("Approval record",
-currently empty). Once approved: S5 (CP) and S6 (PAN) dedicated preflight
-collectors run parallel, per dependency order `S0 → S1 → (S2, S3) → S4 →
-(S5, S6) → S7 → S8; S9 independent after S7`. Recommended: `Sonnet 5,
-extended thinking (high)` for collector session design; `Sonnet 5, normal`
-for wiring the already-proven `S1`/`S2`/`S3` extraction/projection seams.
+**unblocked** (PO approved the gate 2026-09-03; see "Active build").
+Implementation battery is the PO-frozen one, not the wider technical
+candidate list — exact rows, `NO_RETRY`/session constraints and network
+bound: `docs/history/phase/OP_0B_1_COMMAND_GATE_PACKAGE.md` "Approval
+record" + `project/roadmap.json` `now_next.next.notes`. S6 (PAN) is the
+parallel sibling slice, same approval, per dependency order `S0 → S1 →
+(S2, S3) → S4 → (S5, S6) → S7 → S8; S9 independent after S7`. Recommended
+branch: `feature/op0b-s5-cp-preflight-collector`, new session, `Sonnet 5,
+normal` — bounded implementation against a frozen, PO-approved gate.
 
 `D-V3a`/`D-V7b` stay **preserved unresolved CLASS-2 blockers** (`upcoming`,
 not reopened/closed — gate only the PAN successor identity model and
@@ -137,7 +140,6 @@ identity closure — hardware-blocked (`Sonnet 5, normal` initially).
 
 | What | Blocked on | Kind |
 | --- | --- | --- |
-| `OP.0b` preflight battery | its command gate (`docs/history/phase/OP_0B_1_COMMAND_GATE_PACKAGE.md`) is now drafted with a full per-command PO approval package but **not approved** — a product-owner/security sign-off, recorded in that doc's own "Approval record" section; `S5`/`S6` are blocked on it | decision |
 | PAN HA serial `B2` establishment | the mismatching member's root cause is `UNKNOWN` (see above) — do not resolve as a side effect of an unrelated build | investigation + hardware |
 | `CON.3` console operational-write actions | open decisions `C-D4`, `C-D6` **and** `RB.3b` | decision + hardware |
 | `RB.3b` CP Gaia backup collection | the watched real R81.10/R81.20 run — hardware, not engineering | hardware |
