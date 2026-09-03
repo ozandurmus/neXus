@@ -613,3 +613,69 @@ class TestDeriveHaUnitsExport:
         report = compute_ha_readiness(unified_devices, pan_ha_runtime=_PAN_HA_RUNTIME, pan_ha_peers=_PAN_HA_PEERS)
         assert report["schema"] == "securityexpert-ha-readiness-v1"
         assert len(report["units"]) == 2  # the resolved pair + the unresolved single
+
+
+# ===========================================================================
+# PO acceptance follow-up: PAN local selection != trusted runtime identity
+# ===========================================================================
+
+class TestPanLocalSelectionIsNotTrustedIdentity:
+    """The local `unified.json` selector this workflow reuses
+    (`_apply_pan_target_selector`) only decides which explicitly requested
+    physical members MAY be contacted -- it establishes no trusted runtime
+    identity. That trust boundary is, and remains, S6's own P1 direct-device
+    identity gate (`panorama.preflight_collector.collect_member`), which this
+    application layer never touches, bypasses, or duplicates (see
+    `TestSafety.test_workflow_module_imports_no_raw_transport_primitive`
+    above -- `preflight.py` never imports `api_post`/`COMMAND_TEXT`).
+
+    Equivalent, executable coverage of the actual gate behavior already
+    exists in S6's own suite and is NOT duplicated here:
+      - `tests/test_op0b_s6_pan_preflight_collector.py::test_13_identity_gate_occurs_before_attribution`
+      - `tests/test_op0b_s6_pan_preflight_collector.py::test_14_identity_mismatch_stops_trusted_collection`
+        -- constructs a member whose `expected_serial` (the same
+        locally-resolved value this workflow's `_resolve_pan_operational_entity`
+        supplies) is `"0001A"`, mocks the direct P1 response to observe
+        `"WRONG_SERIAL"` instead, and proves the identity fact comes back
+        `False`/`Outcome.IDENTITY_MISMATCH` with P2/P4 never issued -- i.e.
+        local selection alone never grants trust; only S6's own direct read
+        does.
+
+    This test adds the one thing not yet proven anywhere: that the value
+    S7.5's resolver actually feeds into `expected_serial` is exactly the
+    passive, already-collected local value (never a live/observed one), so
+    the S6 test above's guarantee actually applies to what this workflow
+    constructs. No selection logic is redesigned, no discovery call is
+    added, and PAN B2 is untouched.
+    """
+
+    def test_resolved_member_target_carries_local_expected_identity_only(self, tmp_path):
+        from panorama.preflight_collector import PANPhysicalMemberTarget
+
+        _write_pan_fixture(tmp_path)
+        runtime_paths = _RuntimePaths(tmp_path)
+        _entity_id, rows = preflight_wf._resolve_pan_operational_entity(
+            runtime_paths, ["SA1", "SB1"], _PAN_HA_RUNTIME, _PAN_HA_PEERS,
+        )
+
+        from utils.restore_readiness import resolve_entity_id as _resolve_entity_id
+
+        members = [
+            PANPhysicalMemberTarget(
+                physical_device_identity=_resolve_entity_id(row),
+                expected_serial=str(row.get("serial") or ""),
+                management_ip=str(row.get("management_ip") or ""),
+            )
+            for row in rows
+        ]
+
+        # The resolver's output is the caller-supplied EXPECTED value S6's P1
+        # gate will independently check -- never a value this application
+        # layer itself observed or attributed trust to. `unified.json` (the
+        # local candidate set) carries no runtime observation field at all
+        # for a Panorama-sourced row (confirmed by the fixture below), so
+        # there is structurally no "already trusted" identity to smuggle in.
+        assert {m.expected_serial for m in members} == {"SA1", "SB1"}
+        unified_row = next(r for r in json.loads((tmp_path / "unified.json").read_text()) if r["serial"] == "SA1")
+        assert "identity_gate_accepted" not in unified_row
+        assert "self_identity_consistent" not in unified_row
