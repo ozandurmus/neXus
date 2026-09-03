@@ -251,6 +251,38 @@ def _remote_collection_command(*, exclude_vsx=False, excluded_device_names=()):
     return f"{' '.join(assignments)} bash -l {REMOTE_COLLECTION_SCRIPT}"
 
 
+# Bounded, non-identity-bearing classification for the collector's stderr
+# stream. These are generic shell/environment error vocabulary -- never a
+# hostname, IP, or other device identity -- so reporting the matched tokens
+# is safe under AGENTS.md's raw-evidence law ("parse the minimum required
+# semantics ... discard the raw response") while still telling a human where
+# to look, unlike a bare byte count.
+_STDERR_CLASSIFIERS = (
+    ("no_such_file_or_directory", re.compile(r"no such file or directory", re.I)),
+    ("command_not_found", re.compile(r"command not found|: not found\b", re.I)),
+    ("permission_denied", re.compile(r"permission denied", re.I)),
+    ("not_a_tty", re.compile(r"not a tty|inappropriate ioctl for device", re.I)),
+    ("unbound_variable", re.compile(r"unbound variable", re.I)),
+    ("syntax_error", re.compile(r"syntax error", re.I)),
+    ("connection_reset_or_broken_pipe", re.compile(r"broken pipe|connection reset", re.I)),
+)
+
+# Cap the in-memory stderr sample used only for classification -- never
+# persisted, never included raw in any exception/log message.
+_STDERR_CLASSIFY_SAMPLE_LIMIT = 8192
+
+
+def _classify_stderr_sample(text):
+    """Return a sorted list of safe category tokens matched in `text`.
+
+    `text` itself must never be returned, logged, or raised -- only the
+    matched token names, which are static shell-error vocabulary and carry
+    no device identity.
+    """
+    matched = {token for token, pattern in _STDERR_CLASSIFIERS if pattern.search(text)}
+    return sorted(matched) if matched else ["unclassified"]
+
+
 def _run_remote_collection(ssh, *, exclude_vsx=False, excluded_device_names=()):
     """Execute the uploaded collector and wait for it to really finish."""
     scope = "physical-non-vsx" if exclude_vsx else "baseline-all-managed-cp"
@@ -270,6 +302,11 @@ def _run_remote_collection(ssh, *, exclude_vsx=False, excluded_device_names=()):
         "last_marker": None,
     }
     pending = ""
+    # Bounded, transient stderr sample -- classified below into safe category
+    # tokens and then discarded; never itself logged, raised, or persisted
+    # (AGENTS.md raw-evidence law).
+    stderr_sample = []
+    stderr_sample_len = 0
 
     def _drain_ready():
         # Tight drain of everything currently buffered on both streams, same
@@ -277,14 +314,18 @@ def _run_remote_collection(ssh, *, exclude_vsx=False, excluded_device_names=()):
         # a single `if recv_ready(): recv(...)` per outer-loop pass can leave
         # the break condition below racing a still-buffered final chunk when
         # more than one read is needed to empty the channel.
-        nonlocal pending
+        nonlocal pending, stderr_sample_len
         while channel.recv_ready():
             pending += channel.recv(4096).decode("utf-8", errors="ignore")
             while "\n" in pending:
                 line, pending = pending.split("\n", 1)
                 _process_collection_output_line(line, state)
         while channel.recv_stderr_ready():
-            state["stderr_bytes"] += len(channel.recv_stderr(4096))
+            chunk = channel.recv_stderr(4096)
+            state["stderr_bytes"] += len(chunk)
+            if stderr_sample_len < _STDERR_CLASSIFY_SAMPLE_LIMIT:
+                stderr_sample.append(chunk.decode("utf-8", errors="ignore"))
+                stderr_sample_len += len(chunk)
 
     while True:
         _drain_ready()
@@ -309,19 +350,33 @@ def _run_remote_collection(ssh, *, exclude_vsx=False, excluded_device_names=()):
     state["exit_status"] = exit_status
     state["scope"] = scope
     state["inventory_exclusions"] = len(tuple(excluded_device_names))
+    stderr_classification = (
+        _classify_stderr_sample("".join(stderr_sample)) if state["stderr_bytes"] else []
+    )
+    state["stderr_classification"] = stderr_classification
+    del stderr_sample  # the raw sample must not outlive classification
 
     if exit_status != 0:
-        raise RuntimeError(f"CP remote collection failed with exit status {exit_status}")
+        raise RuntimeError(
+            f"CP remote collection failed with exit status {exit_status} "
+            f"(stderr_bytes={state['stderr_bytes']}, stderr_classification="
+            f"{stderr_classification})"
+        )
     if not state["done_marker_seen"]:
         raise RuntimeError(
             "CP remote collection ended without DONE marker "
             f"(exit_status=0, processed_gw={state['processed_gw']}, "
             f"total_gw={state['total_gw']}, stderr_bytes={state['stderr_bytes']}, "
+            f"stderr_classification={stderr_classification}, "
             f"last_marker={state['last_marker']})"
         )
 
     if state["stderr_bytes"]:
-        warn(f">>> CP collector emitted {state['stderr_bytes']} stderr bytes; telemetry/verification will determine data completeness")
+        warn(
+            f">>> CP collector emitted {state['stderr_bytes']} stderr bytes "
+            f"(classification={stderr_classification}); telemetry/verification "
+            "will determine data completeness"
+        )
 
     total = state.get("total_gw")
     info(f">>> CP REMOTE LIVE COLLECTION DONE ({state['processed_gw']}/{total if total is not None else '?'})")
