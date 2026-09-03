@@ -190,21 +190,47 @@ def test_ac4_vsx_host_and_each_vs_are_distinct_units():
 
 
 def test_ac4_virtual_system_never_inherits_host_verdict():
-    """Correctness rule 7: the host is split-brained; the VS must not be."""
+    """Correctness rule 7: the physical VSX cluster is decisively UNSAFE (one
+    member ACTIVE, the other explicitly DOWN -- both observed, so "no viable
+    target" is positively established); its VS, observed from one member
+    only, must not inherit that verdict.
+
+    Rewritten at OP.0b S7: the original fixture inferred UNSAFE from a single
+    ACTIVE member with no peer observation at all, which the evidence law
+    "absence of evidence != evidence of absence" forbids -- a one-sided read
+    is now INSUFFICIENT_EVIDENCE (`peer_not_independently_observed`), never a
+    fabricated `no_viable_target`."""
     rows = [
-        _cp("vsx-gw-01", source="vsx"),
+        _cp("vsx-gw-01", cluster="vsx-c", source="vsx"),
+        _cp("vsx-gw-02", cluster="vsx-c", source="vsx"),
         _cp("vsx-gw-01", source="vsx", vs_id=10),
     ]
     runtime = {
         "vsx-gw-01": {"ha_role": "ACTIVE", "ha_cluster_mode": "ha_new_mode"},
+        "vsx-gw-02": {"ha_role": "DOWN", "ha_cluster_mode": "ha_new_mode"},
         "vsx-gw-01__vsid_10": {"ha_role": "STANDBY", "ha_cluster_mode": "ha_new_mode"},
     }
     report = compute_ha_readiness(rows, cp_ha_runtime=runtime)
-    host = _unit_by_id(report, "vsx-gw-01")
-    vs = _unit_by_id(report, "vsx-gw-01__vsid_10")
-    assert host["verdict"] == VERDICT_UNSAFE  # ACTIVE alone -> no viable target
-    assert vs["verdict"] != VERDICT_UNSAFE or vs["reason"] != host["reason"]
+    host = _unit_by_id(report, "vsx-c")
+    vs = _unit_by_id(report, "vsx-c__vsid_10")
+    assert host["verdict"] == VERDICT_UNSAFE and host["reason"] == "no_viable_target"
+    assert vs["verdict"] != VERDICT_UNSAFE
     assert vs["members"] == ["vsx-gw-01__vsid_10"]
+    assert vs["parent_id"] == "vsx-c"
+
+
+def test_one_sided_evidence_is_insufficient_not_no_viable_target():
+    """S7 evidence law: a single ACTIVE observation with no observation of the
+    peer at all cannot prove there is no standby. Explicit DOWN on the peer
+    (observed) still can."""
+    rows = [_cp("m1", cluster="c"), _cp("m2", cluster="c")]
+    report = compute_ha_readiness(rows, cp_ha_runtime={"m1": {"ha_role": "ACTIVE", "ha_cluster_mode": "ha_new_mode"}})
+    unit = _unit_by_id(report, "c")
+    assert unit["verdict"] == VERDICT_INSUFFICIENT
+    checks = {c["id"]: c for c in unit["checks"]}
+    assert checks["viable_target"]["status"] == CHECK_INSUFFICIENT
+    assert checks["viable_target"]["reason"] == "peer_not_independently_observed"
+    assert checks["no_split_brain"]["reason"] == "peer_not_independently_observed"
 
 
 # --------------------------------------------------------------------------
@@ -991,7 +1017,10 @@ def test_ac9_failover_package_contains_only_assessment_and_preflight_model():
 
     package_dir = Path(failover.__file__).parent
     modules = sorted(p.name for p in package_dir.glob("*.py"))
-    assert modules == ["__init__.py", "assessment.py", "preflight_model.py"]
+    # OP.0b S7 added `preflight_readiness.py` -- the one typed fact->check
+    # mapping over PreflightSnapshot; pure, zero-I/O, verdict-free (proven by
+    # tests/test_op0b_s7_readiness_v2.py). Updated in the same build.
+    assert modules == ["__init__.py", "assessment.py", "preflight_model.py", "preflight_readiness.py"]
     assert not (package_dir / "adapters").exists()
 
 
