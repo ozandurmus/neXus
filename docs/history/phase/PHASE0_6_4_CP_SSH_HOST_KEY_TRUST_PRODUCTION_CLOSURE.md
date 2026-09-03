@@ -161,3 +161,62 @@ trust validation gate passes; then it may become `DONE`.
 - PAN corporate-CA/TLS verification is a separate P0 trust build.
 - Host-key rotation and managed enterprise credential/trust vault integration
   remain deployment-era work and require a dedicated security contract.
+## Correction note — OP.0b S8-P0.1 strict trust-store preflight (2026-09-03)
+
+Status of this section: **implementation-status correction only**. No
+acceptance criterion, failure semantic, security boundary or deployment model
+above changes; this records that the shipped 0.6.4 preflight did not implement
+AC-2/AC-3 as written, and how that was corrected.
+
+**Defect (found by the S8 preparation, reproduced against real Paramiko):**
+`paramiko.SSHClient.load_system_host_keys()` populates the client's read-only
+*system* host-key store; `SSHClient.get_host_keys()` returns the separate
+writable *local* store (the one `load_host_keys()` / `AutoAddPolicy` fill).
+The 0.6.4 helper loaded the former and gated on the latter, so
+`strict=True` raised `CpSshStrictPreflightError` even with a correctly
+provisioned system/user `known_hosts` (the DEV.2.2 `/root/.ssh/known_hosts`
+mount, or the operator profile on Windows). Strict mode was therefore not
+usable; the 0.6.4 R3 result ("strict + no trust fails before connect") was
+correct, while R2 ("strict + provisioned entry completes the read-only
+operation") could never have passed. The synthetic tests of the era encoded
+the same wrong store assumption through `get_host_keys()` mocks.
+
+**Correction (`utils/cp_ssh_trust.py`, all five CP SSH callers inherit it):**
+the strict precondition now means *at least one configured trusted host-key
+source was successfully loaded*. The helper names the system `known_hosts`
+explicitly (the same OpenSSH user path Paramiko resolves with no filename),
+loads it into the client's system store through the public
+`load_system_host_keys(filename)` API, and derives the cardinality by parsing
+the same file with the public `paramiko.HostKeys` parser — no Paramiko private
+attribute is read by product code. Missing/unreadable and malformed sources
+now fail closed with distinct value-free reason tokens
+(`trust_source_unreadable`, `trust_source_malformed`,
+`no_usable_host_keys_loaded`); Paramiko's parse exception, which carries the
+offending line, is deliberately not chained. Order is unchanged: trusted keys
+loaded → `RejectPolicy` installed → cardinality confirmed → only then may
+`connect()` be called. Compatibility mode (`strict=False`) is byte-for-byte
+the pre-existing behavior.
+
+**Explicitly unchanged:** no `AutoAddPolicy`/`WarningPolicy`/TOFU/automatic
+enrollment/`save_host_keys`/`ssh-keyscan` in the strict path; no new
+environment variable, CLI flag or configuration surface; observed
+compatibility-mode fingerprints stay `observe_and_record_not_production` and
+are never promoted to trust; no new device command or network behavior.
+
+**On the "RuntimeRoot policy selects the trusted `known_hosts` source"
+wording above:** as implemented since 0.6.4, strict mode is selected by the
+existing per-path environment toggles and the trusted source is the system/
+user `known_hosts` only. No explicit RuntimeRoot trusted-source path exists in
+the repository; this correction does not add one (separate PO approval
+required). System `known_hosts` alone is sufficient and needs no duplication
+into a second Paramiko store.
+
+**Evidence:** `tests/test_op0b_s8_p01_cp_ssh_trust_preflight_correction.py`
+(real `paramiko.SSHClient`, temporary synthetic `known_hosts`, in-process
+generated keys, `connect()` replaced by a sentinel — no network); the
+populated-store reproducer fails against the pre-correction helper and passes
+after it. `tests/test_phase0_6_4_cp_ssh_host_key_trust_closure.py` and
+`tests/test_phase0_6_1b_1_4_cp_ssh_trust.py` strict paths now decide trust
+over a real isolated synthetic file rather than a `get_host_keys()` mock.
+R2 (strict + provisioned entry, real MDS) remains owed on the production
+server (`cp_ssh_trust_r2_prod_server`); it is now reachable.

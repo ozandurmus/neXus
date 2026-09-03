@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "current_build": "op0b_s75_preflight_entrypoint",
+  "current_build": "op0b_s8_p01_cp_ssh_trust_preflight_correction",
   "current_track": "OP.x",
   "progress_contract": "Weighted acceptance-criterion completion. Percentages describe the declared roadmap, not calendar time or delivery ETA.",
   "tracks": [
@@ -123,9 +123,9 @@
   "now_next": {
     "horizon_contract": "NOW is exactly one build. NEXT is exactly one. Everything else is an `upcoming` row carrying its own true status: planned = AFTER, blocked = waiting on a named external gate, deferred = consciously postponed. `now.build` must equal the newest project/build_history.json record -- utils.project_plan enforces it.",
     "now": {
-      "build": "op0b_s75_preflight_entrypoint",
-      "title": "OP.0b S7.5 - Controlled preflight application entrypoint",
-      "goal": "Make the already-approved fresh preflight pipeline executable through a bounded application/CLI workflow: --cp-ha-preflight-check/--cp-preflight-targets and --pan-ha-preflight-check/--pan-preflight-targets resolve one explicit HA operational entity and its exact bounded physical members (<=2) from already-collected local inventory, fail-closed before any device contact, reusing the existing CP entity_id / PAN serial selectors; invoke run_cp_preflight/run_pan_preflight exactly once; hand the in-memory PreflightSnapshot straight to compute_ha_readiness (no persistence). New utils.failover.derive_ha_units export (pure refactor, no behavior change) keeps operational_unit_id resolution identical between the application layer and the readiness evaluator. No new command, API operation, retry, or CLASS 2.",
+      "build": "op0b_s8_p01_cp_ssh_trust_preflight_correction",
+      "title": "OP.0b S8-P0.1 - CP SSH strict trust-store preflight correction",
+      "goal": "Correct the shared strict host-key preflight (utils/cp_ssh_trust.py) so that strict=True is satisfiable by a correctly provisioned system/user known_hosts: the precondition is 'at least one configured trusted host-key source was successfully loaded' (Paramiko system store via load_system_host_keys), not 'get_host_keys() is non-empty' (the writable local store). Public Paramiko APIs only; unreadable/malformed sources fail closed with value-free reasons; RejectPolicy, fail-before-connect and compatibility mode unchanged; all five CP SSH callers inherit the fix. No AutoAdd/TOFU/enrollment, no new trust source or config surface, no device command, zero device contact. Prerequisite for the S8-A retry.",
       "status": "automated_validated",
       "started": "2026-09-03"
     },
@@ -134,6 +134,7 @@
       "title": "OP.0b S8-A - bounded real-environment validation (CP ClusterXL pair, VSX pair, PAN pair)",
       "status": "planned",
       "notes": [
+        "S8-A status: NOT EXECUTED, ZERO CONTACTS, BLOCKED -- the first attempt surfaced the strict trust-store preflight defect corrected by op0b_s8_p01_cp_ssh_trust_preflight_correction. After that correction merges and main is synced: provision the trusted host key (out-of-band verified fingerprint in the runtime's system/user known_hosts), then start a NEW S8-A session and retry the IDENTICAL controlled command. Do not mark S8 failed; do not reopen other OP.0b research.",
         "The application-entrypoint gap S8 surfaced is closed by op0b_s75_preflight_entrypoint (--cp-ha-preflight-check / --pan-ha-preflight-check). S8-A now runs those two CLI modes against the approved real-env pairs.",
         "Reads only, same approved targets as the frozen contract real-env gate (requested = resolved = contacts, extra = 0). Confirms the S5/S6 collectors real response shapes and the vendor value vocabularies S7 FACT_CHECK_MAP freezes minimally (PAN state-sync/running-sync/conn-*/*-compat; CP sync status, failover statistics, pnote enumeration, sk165432 behaviour, member skew observed).",
         "Hardware-blocked until the corporate laptop / approved pairs are available. S7 stays AUTOMATED_VALIDATED (never REAL_ENV_VALIDATED) until then; OP.0b is not DONE.",

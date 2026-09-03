@@ -18,6 +18,13 @@ Acceptance criteria covered:
 
 All tests are unit-level: no real SSH connections are opened.
 Synthetic values use 192.0.2.0/24 and 198.51.100.0/24 (RFC 5737).
+
+S8-P0.1 correction (OP.0b): the strict-path tests originally simulated the
+trust store through ``get_host_keys()`` mocks, which encoded Paramiko's
+writable *local* store rather than the read-only *system* store that
+``load_system_host_keys()`` populates.  The strict decision now comes from a
+real synthetic ``known_hosts`` in an isolated user profile, and the fake
+clients only intercept ``connect()``.
 """
 from __future__ import annotations
 
@@ -39,11 +46,33 @@ pytestmark = pytest.mark.security
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _make_ssh_client(*, host_keys: dict | None = None):
-    """Return a MagicMock SSHClient whose get_host_keys() returns host_keys."""
-    client = MagicMock(spec=paramiko.SSHClient)
-    client.get_host_keys.return_value = host_keys if host_keys is not None else {}
-    return client
+def _make_ssh_client():
+    """Return a MagicMock SSHClient (compatibility-mode assertions only)."""
+    return MagicMock(spec=paramiko.SSHClient)
+
+
+def _isolated_home(tmp_path: Path, monkeypatch) -> Path:
+    """Isolated user profile (HOME + USERPROFILE) so the trust decision never
+    depends on the machine running the test."""
+    home = tmp_path / "home"
+    home.mkdir(exist_ok=True)
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
+    monkeypatch.delenv("HOMEDRIVE", raising=False)
+    monkeypatch.delenv("HOMEPATH", raising=False)
+    return home
+
+
+def _provision_known_hosts(tmp_path: Path, monkeypatch, *, populated: bool) -> Path:
+    """Isolated profile with ``.ssh/known_hosts`` holding one synthetic
+    generated entry (``populated=True``) or absent (``populated=False``)."""
+    home = _isolated_home(tmp_path, monkeypatch)
+    (home / ".ssh").mkdir(exist_ok=True)
+    known_hosts = home / ".ssh" / "known_hosts"
+    if populated:
+        key = paramiko.ECDSAKey.generate()
+        known_hosts.write_text(f"192.0.2.10 {key.get_name()} {key.get_base64()}\n", encoding="utf-8")
+    return known_hosts
 
 
 # ---------------------------------------------------------------------------
@@ -76,25 +105,26 @@ class TestApplyStrictHostKeyPolicyCompat:
 # ---------------------------------------------------------------------------
 
 class TestApplyStrictHostKeyPolicyStrict:
-    """Strict mode with a non-empty known_hosts: loads keys, sets RejectPolicy."""
+    """Strict mode with a populated known_hosts: loads keys, sets RejectPolicy."""
 
-    def test_strict_with_keys_sets_reject_policy(self):
-        ssh = _make_ssh_client(host_keys={"synth.test": {"ssh-rsa": MagicMock()}})
+    def test_strict_with_keys_sets_reject_policy(self, tmp_path, monkeypatch):
+        _provision_known_hosts(tmp_path, monkeypatch, populated=True)
+        ssh = paramiko.SSHClient()
         apply_strict_host_key_policy(ssh, strict=True)
-        ssh.set_missing_host_key_policy.assert_called_once()
-        policy = ssh.set_missing_host_key_policy.call_args[0][0]
-        assert isinstance(policy, paramiko.RejectPolicy)
+        assert isinstance(ssh._policy, paramiko.RejectPolicy)
 
-    def test_strict_loads_system_host_keys_before_policy(self):
-        ssh = _make_ssh_client(host_keys={"synth.test": {"ssh-rsa": MagicMock()}})
+    def test_strict_loads_system_host_keys_before_policy(self, tmp_path, monkeypatch):
+        _provision_known_hosts(tmp_path, monkeypatch, populated=True)
+        ssh = _make_ssh_client()
         call_order = []
-        ssh.load_system_host_keys.side_effect = lambda: call_order.append("load")
+        ssh.load_system_host_keys.side_effect = lambda *a, **kw: call_order.append("load")
         ssh.set_missing_host_key_policy.side_effect = lambda _: call_order.append("policy")
         apply_strict_host_key_policy(ssh, strict=True)
         assert call_order == ["load", "policy"], "load must precede policy"
 
-    def test_strict_with_keys_does_not_raise(self):
-        ssh = _make_ssh_client(host_keys={"synth.test": {"ssh-rsa": MagicMock()}})
+    def test_strict_with_keys_does_not_raise(self, tmp_path, monkeypatch):
+        _provision_known_hosts(tmp_path, monkeypatch, populated=True)
+        ssh = paramiko.SSHClient()
         apply_strict_host_key_policy(ssh, strict=True)  # must not raise
 
 
@@ -103,47 +133,50 @@ class TestApplyStrictHostKeyPolicyStrict:
 # ---------------------------------------------------------------------------
 
 class TestApplyStrictHostKeyPolicyPreflight:
-    """Strict mode with empty known_hosts raises CpSshStrictPreflightError."""
+    """Strict mode with absent known_hosts raises CpSshStrictPreflightError."""
 
-    def test_strict_empty_host_keys_raises_preflight_error(self):
-        ssh = _make_ssh_client(host_keys={})
+    def test_strict_empty_host_keys_raises_preflight_error(self, tmp_path, monkeypatch):
+        _provision_known_hosts(tmp_path, monkeypatch, populated=False)
+        ssh = paramiko.SSHClient()
         with pytest.raises(CpSshStrictPreflightError):
             apply_strict_host_key_policy(ssh, strict=True)
 
-    def test_preflight_error_message_is_value_free(self):
-        ssh = _make_ssh_client(host_keys={})
+    def test_preflight_error_message_is_value_free(self, tmp_path, monkeypatch):
+        _provision_known_hosts(tmp_path, monkeypatch, populated=False)
+        ssh = paramiko.SSHClient()
         try:
             apply_strict_host_key_policy(ssh, strict=True)
             assert False, "Should have raised"
         except CpSshStrictPreflightError as exc:
             msg = str(exc)
             # Must not contain IP, hostname, path, key material, credentials.
-            for forbidden in ("192.", "198.", "/home", "C:\\", "password", "secret", "key-"):
+            for forbidden in ("192.", "198.", "/home", "C:\\", "password", "secret", "key-", str(tmp_path)):
                 assert forbidden not in msg, f"Preflight error must not contain '{forbidden}'"
-            assert "preflight_failed" in msg or "no_usable" in msg
+            assert "preflight_failed" in msg
 
-    def test_strict_empty_host_keys_does_not_call_connect(self):
+    def test_strict_empty_host_keys_does_not_call_connect(self, tmp_path, monkeypatch):
         """After preflight failure, the caller must not invoke ssh.connect()."""
-        ssh = _make_ssh_client(host_keys={})
+        _provision_known_hosts(tmp_path, monkeypatch, populated=False)
+        ssh = paramiko.SSHClient()
+        calls = []
+        ssh.connect = lambda *a, **kw: calls.append(1)
         try:
             apply_strict_host_key_policy(ssh, strict=True)
         except CpSshStrictPreflightError:
             pass
-        ssh.connect.assert_not_called()
+        assert calls == []
 
-    def test_preflight_checks_after_load_system_host_keys(self):
-        """get_host_keys() is called only after load_system_host_keys()."""
-        ssh = _make_ssh_client(host_keys={})
+    def test_preflight_checks_after_load_system_host_keys(self, tmp_path, monkeypatch):
+        """The trusted store is loaded before the cardinality check raises."""
+        known_hosts = _provision_known_hosts(tmp_path, monkeypatch, populated=False)
+        known_hosts.write_text("# provisioned but empty\n", encoding="utf-8")
+        ssh = _make_ssh_client()
         call_order = []
-        ssh.load_system_host_keys.side_effect = lambda: call_order.append("load")
-        ssh.get_host_keys.side_effect = lambda: (call_order.append("get"), {})[1]
-        try:
+        ssh.load_system_host_keys.side_effect = lambda *a, **kw: call_order.append("load")
+        ssh.set_missing_host_key_policy.side_effect = lambda _: call_order.append("policy")
+        with pytest.raises(CpSshStrictPreflightError):
             apply_strict_host_key_policy(ssh, strict=True)
-        except CpSshStrictPreflightError:
-            pass
-        assert "load" in call_order
-        assert "get" in call_order
-        assert call_order.index("load") < call_order.index("get")
+        assert call_order == ["load", "policy"]
 
 
 # ---------------------------------------------------------------------------
@@ -169,7 +202,9 @@ class TestCpRunnerPreflight:
 
         return Cfg()
 
-    def _fake_ssh_factory(self, *, host_keys_empty: bool = False):
+    def _fake_ssh_factory(self):
+        """Fake client that only intercepts connect(); the trust decision is
+        made by the shared helper over the real isolated known_hosts."""
         instances = []
 
         class FakeSSH:
@@ -178,14 +213,11 @@ class TestCpRunnerPreflight:
                 self_inner._policy = None
                 self_inner._loaded = False
 
-            def load_system_host_keys(self_inner):
+            def load_system_host_keys(self_inner, filename=None):
                 self_inner._loaded = True
 
             def set_missing_host_key_policy(self_inner, p):
                 self_inner._policy = p
-
-            def get_host_keys(self_inner):
-                return {} if host_keys_empty else {"synth.test": {"ssh-rsa": MagicMock()}}
 
             def connect(self_inner, *a, **kw):
                 raise RuntimeError("abort-in-test")
@@ -195,10 +227,11 @@ class TestCpRunnerPreflight:
 
         return FakeSSH, instances
 
-    def test_strict_env_with_keys_uses_reject_policy(self, monkeypatch):
+    def test_strict_env_with_keys_uses_reject_policy(self, monkeypatch, tmp_path):
         monkeypatch.setenv("SECURITYEXPERT_CP_MDS_STRICT_HOST_KEY", "1")
+        _provision_known_hosts(tmp_path, monkeypatch, populated=True)
         import checkpoint.cp_runner as cp_runner
-        FakeSSH, instances = self._fake_ssh_factory(host_keys_empty=False)
+        FakeSSH, instances = self._fake_ssh_factory()
         with patch("paramiko.SSHClient", FakeSSH), \
              patch.object(cp_runner, "load_inventory_exclusions",
                           return_value=MagicMock(identities_for=MagicMock(return_value=[]))):
@@ -209,10 +242,11 @@ class TestCpRunnerPreflight:
         assert instances
         assert isinstance(instances[0]._policy, paramiko.RejectPolicy)
 
-    def test_strict_env_empty_keys_raises_before_connect(self, monkeypatch):
+    def test_strict_env_empty_keys_raises_before_connect(self, monkeypatch, tmp_path):
         monkeypatch.setenv("SECURITYEXPERT_CP_MDS_STRICT_HOST_KEY", "1")
+        _provision_known_hosts(tmp_path, monkeypatch, populated=False)
         import checkpoint.cp_runner as cp_runner
-        FakeSSH, instances = self._fake_ssh_factory(host_keys_empty=True)
+        FakeSSH, instances = self._fake_ssh_factory()
         connect_called = []
         original_connect = FakeSSH.connect
 
@@ -238,7 +272,7 @@ class TestCpRunnerPreflight:
 class TestVsxRunnerPreflight:
     """vsx_runner.connect() raises CpSshStrictPreflightError when keys absent."""
 
-    def _fake_ssh(self, *, host_keys_empty: bool):
+    def _fake_ssh(self):
         instances = []
 
         class FakeSSH:
@@ -246,14 +280,11 @@ class TestVsxRunnerPreflight:
                 instances.append(self_inner)
                 self_inner._policy = None
 
-            def load_system_host_keys(self_inner):
+            def load_system_host_keys(self_inner, filename=None):
                 pass
 
             def set_missing_host_key_policy(self_inner, p):
                 self_inner._policy = p
-
-            def get_host_keys(self_inner):
-                return {} if host_keys_empty else {"synth.test": {"ssh-rsa": MagicMock()}}
 
             def connect(self_inner, *a, **kw):
                 raise RuntimeError("abort-in-test")
@@ -263,16 +294,18 @@ class TestVsxRunnerPreflight:
 
         return FakeSSH, instances
 
-    def test_strict_with_keys_reaches_connect(self, monkeypatch):
+    def test_strict_with_keys_reaches_connect(self, monkeypatch, tmp_path):
         import checkpoint.vsx_runner as vsx_runner
-        FakeSSH, _ = self._fake_ssh(host_keys_empty=False)
+        _provision_known_hosts(tmp_path, monkeypatch, populated=True)
+        FakeSSH, _ = self._fake_ssh()
         monkeypatch.setattr(paramiko, "SSHClient", FakeSSH)
         with pytest.raises(RuntimeError, match="abort-in-test"):
             vsx_runner.connect("192.0.2.2", "user", "pass", strict_host_key=True)
 
-    def test_strict_empty_keys_raises_preflight_before_connect(self, monkeypatch):
+    def test_strict_empty_keys_raises_preflight_before_connect(self, monkeypatch, tmp_path):
         import checkpoint.vsx_runner as vsx_runner
-        FakeSSH, instances = self._fake_ssh(host_keys_empty=True)
+        _provision_known_hosts(tmp_path, monkeypatch, populated=False)
+        FakeSSH, instances = self._fake_ssh()
         connect_called = []
         orig = FakeSSH.connect
 
@@ -482,8 +515,9 @@ class TestCommandVocabularyUnchanged:
 class TestPolicyPrivacyBoundary:
     """Preflight errors and safe result dicts must not contain sensitive values."""
 
-    def test_preflight_error_string_contains_no_ip_or_path(self):
-        ssh = _make_ssh_client(host_keys={})
+    def test_preflight_error_string_contains_no_ip_or_path(self, tmp_path, monkeypatch):
+        _provision_known_hosts(tmp_path, monkeypatch, populated=False)
+        ssh = paramiko.SSHClient()
         try:
             apply_strict_host_key_policy(ssh, strict=True)
             assert False, "Expected CpSshStrictPreflightError"
