@@ -28,7 +28,6 @@ just another entry in the same member's fixed schedule, run over the same
 """
 from __future__ import annotations
 
-import time
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -59,6 +58,7 @@ from checkpoint.cp_preflight_projection import (
     project_cp_vsx_enumeration_facts,
 )
 from configuration.checkpoint_config_collector import (
+    InteractiveSshSession,
     _classify_platform,
     _parse_clusterxl_cluster_mode,
     _parse_clusterxl_runtime_role,
@@ -70,7 +70,6 @@ from configuration.checkpoint_config_probe import (
     _connect,
     _identity_gate,
     _parse_hostname,
-    _run_exec,
 )
 from utils.failover.preflight_model import (
     FactCategory,
@@ -111,12 +110,6 @@ def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-#: Delay between two reads of the same member's battery. Small enough to be
-#: invisible in total run time, large enough that the battery is not a burst
-#: of management-plane CLI sessions inside a single device-log second.
-INTER_READ_DELAY_SECONDS = 0.5
-
-
 # --- Execution-context capability gap (OP.0b S8-A real-environment) --------
 
 #: Gaia Clish's own rejection vocabulary for a command it does not know.
@@ -137,22 +130,21 @@ def _is_expert_shell_form(command_text: str) -> bool:
 
 
 def classify_execution_context_gap(command_text: str, result: dict) -> bool:
-    """True when a failed read failed because the SSH account's login shell
-    never let the command reach a shell, not because the device answered
-    badly.
+    """True when a read was rejected by the device's CLI before any binary
+    ran, rather than answered badly by the device.
 
-    OP.0b S8-A device-log evidence: when the collector account's login shell
-    is the Gaia CLI wrapper rather than `/bin/bash`, every exec channel is
-    dispatched to `clish`. `clish -c '...'` reads execute normally; a bare
-    Expert read (`cphaprob ...`, `fw ...`, `vsx ...`) is rejected by `clish`
-    before any Check Point binary runs -- it never appears in the device's
-    own command audit trail at all.
+    A bare Expert read (`cphaprob ...`, `fw ...`, `vsx ...`) coming back with
+    Clish's own rejection vocabulary means the command did not execute in an
+    Expert execution context. Since the battery now runs inside one
+    persistent Expert shell per member, this should not occur on a session
+    that landed in Expert -- so it is a *diagnostic* for an unconfirmed
+    Expert context, deliberately narrow and fail-closed.
 
-    That is a capability gap of the *account*, and it is deliberately not
-    repairable from here: reaching Expert from Clish requires the expert
-    password (a new credential path) and changing the account's shell is a
-    device mutation. Both are PO hard-stop conditions, so this function only
-    *reports* the gap -- it performs no fallback, retry or escalation.
+    It is not a licence to route around the condition: no fallback, no
+    retry, no privilege escalation, no second credential path, and no device
+    change. Nor may it excuse an application execution-path defect -- if
+    Expert reads are being rejected, the execution model is the first thing
+    to suspect, not the environment.
     """
     if result.get("success"):
         return False
@@ -192,6 +184,20 @@ class MemberSession:
 
     physical_device_identity: str
     _run_command: Callable[[str], dict]
+    #: The persistent shell backing this member, when there is a real one.
+    #: Owned here so the shell's lifecycle is exactly the session's: opened
+    #: once, closed once, never replaced mid-battery.
+    _shell: object | None = None
+
+    def close(self) -> None:
+        """Close the member's persistent shell exactly once. Idempotent, and
+        never closes the SSH transport -- that stays the caller's."""
+        shell, self._shell = self._shell, None
+        if shell is not None:
+            try:
+                shell.close()
+            except Exception:
+                pass
     #: Device-specific dispatch evidence + resulting plan -- resolved once.
     sw_version: str | None = field(default=None, init=False)
     platform_family: str | None = field(default=None, init=False)
@@ -227,52 +233,42 @@ class MemberSession:
 
 
 def make_real_member_session(ssh, *, physical_device_identity: str, command_timeout: int) -> MemberSession:
-    """Build a `MemberSession` backed by the existing, already-connected,
-    already-identity-relevant SSH client -- `configuration.checkpoint_config_probe._run_exec`
-    is the same primitive the repository's existing CP config probe/collector
-    already use for exactly this shape of read; this module introduces no
-    second transport path (task S5 §25).
+    """Build a `MemberSession` on **one persistent Expert shell**.
 
-    `use_pty=False`: the PTY is not what decides whether the Expert reads
-    execute. OP.0b S8-A real-environment device-log evidence (`clish`/`xpand`
-    audit trail, 8 reads on one member) shows *every* exec channel is
-    prefixed by a device-side `clish -c ver` -- exactly 8 of them, one per
-    channel -- because the collector account's login shell is the Gaia CLI
-    wrapper, not `/bin/bash`. That wrapper hands each exec command to
-    `clish`: the three `clish -c '...'` forms (`A1`, `A2`, `A8`) reach
-    "Start executing" in the device log, and the five bare Expert reads
-    (`cphaprob stat`, `cphaprob -a if`, `cphaprob -ia list`,
-    `cphaprob syncstat`, `fw stat`) never appear at all -- they are rejected
-    by `clish` before any binary runs. Requesting a PTY cannot change that;
-    the command never reaches a shell that could resolve `$CPDIR/bin`.
+    The whole battery for one physical member runs inside a single
+    `InteractiveSshSession` -- the repository's existing, real-environment
+    validated persistent-shell adapter (one `invoke_shell`, prompt framing,
+    caller-owned allow-listed dispatch). No second Expert-shell
+    implementation is introduced here (task S5 §25).
 
-    This is an execution-context capability gap of the *account*, not a
-    transport, PATH or parser defect, and it is not repairable from here:
-    reaching Expert from `clish` needs the expert password (a new credential
-    path) and changing the account's shell is a device mutation. Both are
-    PO hard-stop conditions. `classify_execution_context_gap` therefore
-    reports these reads honestly instead of as generic failures.
+    **Why a persistent shell and not one exec channel per read.** OP.0b S8-A
+    real-environment device-log evidence (`clish`/`xpand` audit trail, 8
+    reads on one member): every *non-interactive exec channel* was dispatched
+    through the Gaia CLI wrapper, so each read cost a full device-side CLI
+    initialization (`clish -c ver`, exactly 8, one per channel) and the five
+    bare Expert reads (`cphaprob stat`, `cphaprob -a if`,
+    `cphaprob -ia list`, `cphaprob syncstat`, `fw stat`) never reached an
+    Expert shell at all -- only the explicit `clish -c '...'` forms
+    executed. One SSH transport was never the same thing as one Expert
+    shell: eight independent exec channels meant eight execution contexts.
 
-    Reads are **paced**. Every read costs the device a management-plane CLI
-    session; the same S8-A device log shows an unpaced 8-read battery landing
-    as 8 CLI initializations inside ~2 seconds. That is avoidable burst load
-    on shared production infrastructure and nothing in a preflight is
-    latency-sensitive, so consecutive reads are separated by
-    `INTER_READ_DELAY_SECONDS` -- under a second added to the whole battery.
-    The delay is bound here, to the real transport, so it costs the device
-    time and never costs the test suite any.
+    An interactive shell is the operator's own login path, which the
+    validated Check Point execution contract fixes as Expert. Opening it
+    once per member gives one execution context for the entire battery,
+    Gaia reads still explicit (`clish -c '...'`) and Expert reads direct, as
+    the contract requires.
+
+    Commands are **framed**, not timed: each read carries a per-session end
+    marker echoing `$?`, so completion and exit status are read explicitly
+    rather than inferred from a quiet period. Sequential
+    send/complete/parse is its own backpressure -- there is deliberately no
+    artificial inter-read delay.
     """
-    state = {"issued": 0}
-
-    def _paced_run(command_text: str) -> dict:
-        if state["issued"] and INTER_READ_DELAY_SECONDS > 0:
-            time.sleep(INTER_READ_DELAY_SECONDS)
-        state["issued"] += 1
-        return _run_exec(ssh, command_text, command_timeout, use_pty=False)
-
+    shell = InteractiveSshSession(ssh, command_timeout)
     return MemberSession(
         physical_device_identity=physical_device_identity,
-        _run_command=_paced_run,
+        _run_command=lambda command_text: shell.run(command_text, command_timeout, frame=True),
+        _shell=shell,
     )
 
 
@@ -578,6 +574,7 @@ def run_cp_preflight(
         ssh, _fingerprint = _connect(
             probe_target, username, secret, strict=strict_host_key, connect_timeout=connect_timeout,
         )
+        session = None
         try:
             session = make_real_member_session(
                 ssh, physical_device_identity=member.physical_device_identity, command_timeout=command_timeout,
@@ -593,6 +590,9 @@ def run_cp_preflight(
                 )
             )
         finally:
+            # One shell close, then one transport close, in that order.
+            if session is not None:
+                session.close()
             try:
                 ssh.close()
             except Exception:

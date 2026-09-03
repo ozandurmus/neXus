@@ -110,13 +110,16 @@ class TestNoRoutingAroundTheGap:
             assert forbidden not in src, f"hard-stop boundary crossed: {forbidden!r}"
 
 
-class TestDeviceCourtesy:
+class TestNoArtificialPacing:
+    """An inter-read delay was briefly added after the device's management
+    plane took 8 CLI initializations inside ~2 seconds. That burst was a
+    symptom of one exec channel per read, not something to slow down: inside
+    one persistent Expert shell the battery costs the device no CLI
+    initialization at all, and sequential send/complete/parse is its own
+    backpressure. Latency must never paper over an execution-model defect."""
 
-    def test_reads_are_paced(self):
-        assert pc.INTER_READ_DELAY_SECONDS > 0, "the battery must not burst at the device"
+    def test_no_pacing_constant_exists(self):
+        assert not hasattr(pc, "INTER_READ_DELAY_SECONDS")
 
-    def test_pacing_is_bound_to_the_real_transport_only(self):
-        """The delay must cost the device time, never the test suite -- so it
-        lives in the real session factory, not in `MemberSession.run`."""
-        assert "sleep" not in inspect.getsource(pc.MemberSession.run)
-        assert "sleep" in inspect.getsource(pc.make_real_member_session)
+    def test_no_sleep_anywhere_in_the_preflight_path(self):
+        assert "sleep" not in inspect.getsource(pc)

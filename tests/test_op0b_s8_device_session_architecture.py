@@ -43,6 +43,7 @@ fake whose transport/channel serve fixture output, so the **real**
 from __future__ import annotations
 
 import inspect
+import re
 from unittest.mock import patch
 
 import paramiko
@@ -82,6 +83,11 @@ _FIXTURES = {
 _TEXT_TO_READ = {text: read for read, text in COMMAND_TEXT.items()}
 
 
+#: Framing suffix the shell adapter appends. Stripped by the fake device the
+#: same way a real shell would consume it, so no test asserts on the marker.
+_FRAMING_RE = re.compile(r";\s*echo\s+(\S*?)\$\?(\S*)\s*$")
+
+
 class _Recorder:
     """Device-side bookkeeping shared by every fake client in one run."""
 
@@ -89,24 +95,108 @@ class _Recorder:
         self.clients: list[_FakeSSHClient] = []
         self.connects: list[str] = []
         self.closes = 0
+        #: Persistent interactive shells opened / closed.
+        self.shells = 0
+        self.shell_closes = 0
+        #: Non-interactive exec channels -- the pre-correction execution model.
         self.channels = 0
         self.pty_requests = 0
+        #: Logical reads issued by the collector.
         self.commands: list[str] = []
+        #: What the *device* actually executed, in order. On a real Gaia box a
+        #: non-interactive exec channel costs a `ver` CLI initialization; the
+        #: persistent Expert shell costs none.
+        self.device_executed: list[str] = []
+
+
+class _FakeShell:
+    """One persistent Expert shell, modelled on the real device.
+
+    Expert binaries run directly; Gaia reads run only through an explicit
+    `clish -c '...'`; no CLI initialization is charged per command. This is
+    the execution context an interactive login lands in.
+    """
+
+    def __init__(self, rec: _Recorder) -> None:
+        self._rec = rec
+        # A real login prints its banner and prompt immediately.
+        self._buf = b"Last login: Thu Sep  4 01:51:49 2026\n[Expert@gw-member-a:0]# "
+        self._pending = ""
+
+    # -- paramiko Channel surface used by InteractiveSshSession --
+    def settimeout(self, _t):
+        pass
+
+    def send(self, data: str) -> int:
+        self._pending += data
+        while "\n" in self._pending:
+            line, self._pending = self._pending.split("\n", 1)
+            self._handle(line.strip())
+        return len(data)
+
+    def _handle(self, line: str) -> None:
+        if not line:
+            self._buf += b"[Expert@gw-member-a:0]# "
+            return
+        marker_open = marker_close = ""
+        match = _FRAMING_RE.search(line)
+        if match:
+            marker_open, marker_close = match.group(1), match.group(2)
+            line = line[: match.start()].strip()
+
+        self._rec.commands.append(line)
+        self._rec.device_executed.append(line)
+        read = _TEXT_TO_READ.get(line)
+        status = 0 if read is not None else 127
+        out = _FIXTURES.get(read, "") if read is not None else ""
+        payload = (out + "\n") if out else ""
+        if marker_open or marker_close:
+            payload += f"{marker_open}{status}{marker_close}\n"
+        payload += "[Expert@gw-member-a:0]# "
+        self._buf += payload.encode()
+
+    def recv_ready(self) -> bool:
+        return bool(self._buf)
+
+    def recv(self, _n: int) -> bytes:
+        out, self._buf = self._buf, b""
+        return out
+
+    def recv_stderr_ready(self) -> bool:
+        return False
+
+    def close(self) -> None:
+        self._rec.shell_closes += 1
 
 
 class _FakeChannel:
+    """A non-interactive exec channel, modelled on the real device.
+
+    The device dispatched these through the Gaia CLI wrapper: each one costs
+    a `ver` initialization, `clish -c '...'` executes, and a bare Expert read
+    is rejected before any binary runs. Kept faithful so a regression back to
+    one-exec-channel-per-command fails loudly instead of silently.
+    """
+
     def __init__(self, rec: _Recorder) -> None:
         self._rec = rec
         self._out = b""
         self._sent = False
+        self._status = 0
 
     def get_pty(self, **_kw):
         self._rec.pty_requests += 1
 
     def exec_command(self, command: str) -> None:
         self._rec.commands.append(command)
-        read = _TEXT_TO_READ.get(command)
-        self._out = (_FIXTURES.get(read, "") if read else "").encode()
+        self._rec.device_executed.append("ver")  # the wrapper's CLI init
+        if command.startswith("clish -c"):
+            self._rec.device_executed.append(command)
+            read = _TEXT_TO_READ.get(command)
+            self._out = (_FIXTURES.get(read, "") if read else "").encode()
+        else:
+            self._out = b"CLINFR0329  Invalid command.\n"
+            self._status = 1
 
     def recv_ready(self) -> bool:
         return bool(self._out) and not self._sent
@@ -122,7 +212,7 @@ class _FakeChannel:
         return True
 
     def recv_exit_status(self) -> int:
-        return 0
+        return self._status
 
     def close(self) -> None:
         pass
@@ -163,6 +253,10 @@ class _FakeSSHClient:
     def connect(self, host, **_kw):
         self._rec.connects.append(str(host))
 
+    def invoke_shell(self, **_kw) -> _FakeShell:
+        self._rec.shells += 1
+        return _FakeShell(self._rec)
+
     def get_transport(self) -> _FakeTransport:
         return _FakeTransport(self._rec)
 
@@ -174,9 +268,6 @@ def _run(monkeypatch, *, unit_type: str = "clusterxl", members: int = 2) -> _Rec
     rec = _Recorder()
     _FakeSSHClient.rec = rec
     monkeypatch.setattr(paramiko, "SSHClient", _FakeSSHClient)
-    # The real battery paces itself to spare the device's management plane;
-    # that delay is device courtesy, not behaviour under test.
-    monkeypatch.setattr(pc, "INTER_READ_DELAY_SECONDS", 0)
     targets = [
         CPPhysicalMemberTarget("member-a", "gw-member-a", "192.0.2.10"),
         CPPhysicalMemberTarget("member-b", "gw-member-b", "192.0.2.11"),
@@ -210,25 +301,45 @@ class TestCheckPointSessionInvariants:
         rec = _run(monkeypatch, members=2)
         assert len(rec.clients) == 2
 
-    def test_exec_channels_equal_scheduled_reads_no_amplification(self, monkeypatch):
-        """The whole point: 8 approved reads must cost 8 device operations —
-        not 8 plus a per-command CLI initialization each."""
+    def test_one_persistent_expert_shell_per_member(self, monkeypatch):
+        """One SSH transport was never the same thing as one Expert shell.
+
+        The pre-correction model opened one non-interactive exec channel per
+        read: one transport, but eight independent execution contexts, each
+        dispatched through the Gaia CLI wrapper. The battery must instead run
+        inside a single persistent Expert shell per member."""
+        rec = _run(monkeypatch, members=2)
+        assert rec.shells == 2, "exactly one persistent Expert shell per member"
+        assert rec.shell_closes == 2, "and exactly one shell close"
+        assert rec.channels == 0, "no per-command exec channel may survive"
+
+    def test_no_gaia_cli_initialization_per_command(self, monkeypatch):
+        """The real device's own audit trail showed one `ver` CLI
+        initialization per read — 8 reads, 8 `ver`. Inside one persistent
+        Expert shell there is no per-command initialization at all."""
         rec = _run(monkeypatch, members=1)
-        assert rec.channels == 8
+        assert "ver" not in rec.device_executed, rec.device_executed
+        assert rec.device_executed.count("ver") == 0
+
+    def test_every_scheduled_read_reaches_the_device_exactly_once(self, monkeypatch):
+        rec = _run(monkeypatch, members=1)
         assert len(rec.commands) == 8
+        assert len(set(rec.commands)) == 8, "no read issued twice"
+
+    def test_gaia_reads_are_explicit_clish_expert_reads_are_direct(self, monkeypatch):
+        """The shell adapter decides only HOW a read executes. Gaia reads stay
+        explicitly wrapped; Expert reads are sent bare into the Expert shell."""
+        rec = _run(monkeypatch, members=1)
+        gaia = [c for c in rec.commands if c.startswith("clish -c")]
+        expert = [c for c in rec.commands if not c.startswith("clish -c")]
+        assert len(gaia) == 3, gaia          # A1, A2, A8
+        assert len(expert) == 5, expert      # A3, A4, A5, A6, A7
+        assert all(c.split()[0] in {"cphaprob", "fw"} for c in expert), expert
 
     def test_no_pty_requested_for_a_one_shot_read(self, monkeypatch):
-        """A one-shot read needs no terminal.
-
-        A PTY was briefly suspected of being what put `$CPDIR/bin` on
-        `$PATH` for the Expert reads. The device's own `clish`/`xpand` audit
-        trail disproves it: the bare Expert reads never reach a shell at all
-        -- the account's login shell hands every exec command to Clish,
-        which rejects them before any binary runs (see
-        `classify_execution_context_gap`). A PTY cannot change that, so this
-        stays at the cheaper PTY-less channel."""
+        """No stray exec channel — and therefore no `get_pty` — remains."""
         rec = _run(monkeypatch, members=2)
-        assert rec.pty_requests == 0, "a one-shot exec read needs no terminal"
+        assert rec.pty_requests == 0
 
     def test_only_approved_battery_text_reaches_the_device(self, monkeypatch):
         rec = _run(monkeypatch, members=1)
@@ -314,8 +425,18 @@ class TestNoRuntimeDiscoveryOfStaticSemantics:
 
     def test_only_the_session_factory_binds_a_transport(self):
         src = inspect.getsource(pc)
-        assert src.count("_run_exec(") == 1, "exactly one place binds the exec primitive"
-        assert "use_pty=False" in src, "one-shot reads must not allocate a terminal"
+        assert src.count("InteractiveSshSession(") == 1, "exactly one place opens a shell"
+        assert "_run_exec(" not in src, "no per-command exec channel may return"
+        # Call form, not prose: the docstring legitimately names the primitive
+        # it reuses.
+        assert "invoke_shell(" not in src, "the shell adapter is reused, not reimplemented"
+
+    def test_no_artificial_inter_read_delay(self):
+        """Sequential send/complete/parse is its own backpressure. Latency
+        must never be added to paper over an execution-model defect."""
+        src = inspect.getsource(pc)
+        assert "sleep" not in src, "no arbitrary pacing in the preflight path"
+        assert not hasattr(pc, "INTER_READ_DELAY_SECONDS")
 
 
 # ---------------------------------------------------------------------------
@@ -333,7 +454,25 @@ class TestVsxSessionInvariants:
     def test_no_ssh_connection_per_vsid(self, monkeypatch):
         rec = _run(monkeypatch, unit_type="vsx", members=1)
         assert len(rec.connects) == 1
-        assert rec.channels == 9, "8 physical reads + B1, all on one session"
+        assert rec.shells == 1, "one Expert shell covers the physical reads and B1"
+        assert len(rec.commands) == 9, "8 physical reads + B1, all in that shell"
+
+    def test_vsx_read_runs_in_the_same_expert_shell(self, monkeypatch):
+        """`vsx stat -v` is a bare Expert read like any other — it must not
+        get its own shell, its own connection, or its own authentication."""
+        rec = _run(monkeypatch, unit_type="vsx", members=2)
+        assert rec.shells == 2 and rec.shell_closes == 2
+        assert len(rec.connects) == 2 and rec.closes == 2
+        assert rec.commands.count(COMMAND_TEXT[CPPreflightRead.B1_VSX_STAT]) == 2
+        assert "ver" not in rec.device_executed
+
+    def test_no_vsx_context_or_state_mutation(self, monkeypatch):
+        """VSX context is `vsenv` inside the same shell if it happens at all.
+        Nothing may set an interface VSID or assume VSLS."""
+        rec = _run(monkeypatch, unit_type="vsx", members=1)
+        joined = " ".join(rec.device_executed)
+        for forbidden in ("fw ctl set", "set int vsid", "vsls", "cpstop", "cpstart"):
+            assert forbidden not in joined.lower(), forbidden
 
     def test_vsx_reuses_one_session_and_allocates_no_terminal(self, monkeypatch):
         rec = _run(monkeypatch, unit_type="vsx", members=2)
