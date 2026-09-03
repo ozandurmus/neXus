@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "current_build": "op0b_0_final_semantic_blocker_closure_freeze",
+  "current_build": "op0b_s1_preflight_fact_provenance_model",
   "current_track": "CON.x",
   "progress_contract": "Weighted acceptance-criterion completion. Percentages describe the declared roadmap, not calendar time or delivery ETA.",
   "tracks": [
@@ -123,24 +123,33 @@
   "now_next": {
     "horizon_contract": "NOW is exactly one build. NEXT is exactly one. Everything else is an `upcoming` row carrying its own true status: planned = AFTER, blocked = waiting on a named external gate, deferred = consciously postponed. `now.build` must equal the newest project/build_history.json record -- utils.project_plan enforces it.",
     "now": {
-      "build": "op0b_0_final_semantic_blocker_closure_freeze",
-      "title": "OP.0b.0 - final semantic blocker closure and FREEZE WITH REAL-ENV VALIDATION GATES",
-      "goal": "Fourth vendor-semantics session: one final targeted search each for D-V3a/D-V7b (converging official-negative evidence for D-V7b), then a classification-only triage of every residual PARTIAL row against the contract's own already-written fail-closed fallbacks (PAN hostname-keyed identity stands until the successor serial model proves itself; CP check 6 preemption_known already non-blocking). Result: the contract freezes -- every remaining row's minimal safe interpretation is explicitly frozen; D-V3a/D-V7b remain STILL_UNKNOWN but only gate CLASS 2, not architecture; D-V5b found not load-bearing; one new bounded non-blocking decision (D-F3) added. Documentation-only -- no product code, collector, vendor command, schema, transport or UI behavior changed; no device contacted; CLASS 2 remains structurally unreachable (P4 invariant, unchanged).",
+      "build": "op0b_s1_preflight_fact_provenance_model",
+      "title": "OP.0b S1 - preflight fact + provenance model (pure, no I/O)",
+      "goal": "First bounded implementation slice against the FROZEN OP.0b.0 contract: utils/failover/preflight_model.py (new) -- PreflightFact/Provenance/PreflightMemberEvidence/PreflightSnapshot dataclasses, the 13-category evidence taxonomy, deterministic same-preflight-run coherence checking, explicit UNKNOWN/NOT_APPLICABLE/UNSUPPORTED/COLLECTION_FAILED fact states. Resolved the flagged S0-vs-S1 ordering question by proceeding: S1 needed no device I/O and no S0 result. Pure model code, zero I/O, no collector/parser/readiness-logic/schema/UI change; no device contacted; D-F1/D-F2/D-F3 deliberately left unresolved (raw data modeled, no threshold picked); CLASS 2 stays structurally unreachable (P4 invariant, unchanged). 23 targeted tests, all passing; two pre-existing test assertions (OP.0a decision P5's file-count check) updated in the same build to allow this one contract-named addition, narrowly, since P5's actual intent (no write-capable surface) is unaffected.",
       "status": "automated_validated",
       "started": "2026-09-03",
       "completed": "2026-09-03"
     },
     "next": {
-      "build": "op0b_s1_preflight_fact_provenance_model",
-      "title": "OP.0b S1 - preflight fact + provenance model (pure, no I/O)",
-      "goal": "First bounded implementation slice against the now-frozen OP.0b.0 contract: utils/failover/preflight_model.py (new) -- the fact/provenance data model, UNKNOWN semantics, coherence check, per the contract's already-specified §'Provenance contract'/§'Freshness contract'/§'Fail-closed semantics'. Pure model code, no device I/O, no collector/parser/readiness-logic change. Synthetic tests only.",
+      "build": "op0b_s2_pan_parse_scope_extension",
+      "title": "OP.0b S2 - PAN parse-scope extension of already-collected show high-availability state",
+      "goal": "Extend configuration/panorama_config_collector.py's/utils/failover_readiness_ui.py's parsing of the existing show high-availability state response (no new command, no new device contact) to populate PreflightFact/Provenance instances for conn-*, running-sync, sync/compat/election/flap fields per the frozen contract's field-binding findings. Synthetic real-shaped XML tests; no real-env required for this slice (S8 remains the real-env gate for schema/version confirmation). Can run in parallel with S3 (CP side, same pattern) per the contract's own S0 -> S1 -> (S2, S3) ordering.",
       "status": "planned",
       "prerequisites": [
-        "None technical -- the contract's own slice-dependency note (S0 -> S1 -> ...) lists S0 (PAN runtime peer-serial correspondence, hardware-blocked) ahead of S1, but S1 is described as pure/no-I/O and does not obviously consume S0's result; flagged here rather than silently resolved -- confirm with product owner/next session whether S1 may start before S0 completes."
+        "None technical. Independent of D-F3, D-V3a/D-V7b, and PAN serial closure below."
       ],
-      "note": "Independent of D-F3 (product-owner numeric threshold, below upcoming), of D-V3a/D-V7b pre-CLASS-2 closure (below upcoming), and of PAN SERIAL REPRESENTATION / IDENTITY EVIDENCE CLOSURE (below upcoming, hardware-blocked) -- any of these threads may proceed in either order or in parallel. Recommended: Sonnet 5, normal (deterministic implementation against a frozen contract)."
+      "note": "S3 (CP parse-scope extension, same pattern) is an equally valid parallel/alternative next build -- both are named in the contract's slice table with no ordering preference between them. Recommended: Sonnet 5, normal (deterministic implementation against a frozen contract, synthetic fixtures)."
     },
     "upcoming": [
+      {
+        "build": "op0b_s3_cp_parse_scope_extension",
+        "title": "OP.0b S3 - CP parse-scope extension of already-collected cphaprob stat",
+        "status": "planned",
+        "notes": [
+          "Same pattern as S2 (now_next.next), CP side: peer rows, Active Attention reason, Single VS Failover mode, wire form + collected_at on rows, populated as PreflightFact/Provenance per the frozen contract's field-binding findings. No new command, no new device contact.",
+          "Can run in parallel with S2 -- independent."
+        ]
+      },
       {
         "build": "op0b_0_close_d_v3a_d_v7b_pre_class2",
         "title": "OP.0b.0 - close D-V3a/D-V7b before CLASS 2 (not a freeze gate)",
