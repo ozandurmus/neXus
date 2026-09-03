@@ -1808,8 +1808,19 @@ a scope decision the product owner reviews before merge.
 | "serial-keyed PAN unit" | **NOT adopted** — this contract's own §"Identity contract" leaves the successor model NOT FROZEN until `D-V3a` closes and `B2` matches; the hostname-keyed fallback stands. `local_serial_claim`/`peer_serial_claim` are never consulted by the mapping (test-enforced) | **preserved unresolved** (`B2 NOT ESTABLISHED`) |
 | `securityexpert-ha-readiness-v2` | **NOT adopted** — the string is named here but no v2 record shape is frozen anywhere; every S7 change to the record is additive (`units[].evidence`, `units[].unresolved_reason`, `checks[].facts`, top-level `preflight`), so consumers and tests keep `-v1`. A one-line bump is available on PO instruction | **DEFERRED — PO decision** |
 | Freshness/coherence | `evaluate_coherence` gates positives; `member_skew_ms` recorded, never bounded (`D-F2`); category-C facts never a check input (AC-4) and disclosed as `configuration_intent_freshness: not_evaluable:D-F1`; check 7 never PASSes (`threshold_policy_unresolved:D-F3`); the single roll-up additionally refuses SAFE while any `D-F` gate applies | **IMPLEMENTED, fail-closed** |
-| Automated tests executed | `tests/test_op0b_s7_readiness_v2.py` (52) + OP.0a/OP.0c/S1–S6/architecture regression, in-session with `pytest`/`lxml`/`paramiko`/`requests`/console extras installed session-locally (no repository dependency change) | **YES** |
+| Automated tests executed | `tests/test_op0b_s7_readiness_v2.py` (53) + OP.0a/OP.0c/S1–S6/architecture regression, in-session with `pytest`/`lxml`/`paramiko`/`requests`/console extras installed session-locally (no repository dependency change) | **YES** |
 | Real-env validated | **NO** — S8 owed; the minimal value vocabularies the mapping freezes (PAN `state-sync` "Complete", `running-sync` "synchronized", `conn-*` "up"/"down", `*-compat` "Match"/"Mismatch"; CP sync "ok"/"not_ok") fail closed on anything unrecognised and must be confirmed against real output | owed |
+
+**PO architecture decision (2026-09-03, S7 approval):** the seven-check
+readiness contract is KEPT (no eighth top-level check, no top-level 5a/5b
+split — richer OP.0b evidence is carried by existing checks + distinct fact
+provenance + distinct reason/missing-evidence codes); the readiness schema
+identifier stays `securityexpert-ha-readiness-v1` ("readiness v2" is the
+build movement name, not a wire version); the one-sided-ACTIVE →
+`INSUFFICIENT_EVIDENCE` correction and the rewritten AC-4 fixture are
+accepted; SAFE/DEGRADED unreachability is accepted as not a defect. One
+added machine guard: fresh preflight XOR legacy stored telemetry per unit
+(`tests/test_op0b_s7_readiness_v2.py::test_evidence_source_exclusivity_fresh_preflight_xor_legacy_telemetry`).
 
 **Single authority:** one roll-up (`assessment._verdict_for`), one check
 evaluator entry (`assessment._evaluate_checks`, which dispatches to the S7

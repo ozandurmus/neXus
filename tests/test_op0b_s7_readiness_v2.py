@@ -947,6 +947,49 @@ def test_readiness_artifact_is_not_a_raw_evidence_dump():
     assert u["unresolved_reason"] is None  # X-4: serialised now
 
 
+def test_evidence_source_exclusivity_fresh_preflight_xor_legacy_telemetry():
+    """PO regression guard (S7 approval): for one unit, a supplied and
+    selected PreflightSnapshot is the ONLY evidence source -- stored
+    cp_config_telemetry / pan_config_telemetry facts must not also
+    contribute. Legacy telemetry here would produce a materially different
+    result on its own (split-brain UNSAFE for CP; unresolved single member
+    plus split-brain for PAN); the snapshot says healthy. Both vendor
+    dispatch paths are exercised. Complements test_18 (CP only)."""
+    # -- Check Point: legacy says both ACTIVE (UNSAFE split-brain), snapshot says ACTIVE/STANDBY.
+    stale_cp = {"m1": {"ha_role": "ACTIVE", "ha_cluster_mode": "ha_new_mode"},
+                "m2": {"ha_role": "ACTIVE", "ha_cluster_mode": "ha_new_mode"}}
+    legacy_only = unit(cp_report(cp_ha_runtime=stale_cp), _CP_UNIT)
+    assert legacy_only["verdict"] == VERDICT_UNSAFE and legacy_only["reason"] == "split_brain_observed"
+    with_snapshot = unit(cp_report(happy_cp(), cp_ha_runtime=stale_cp), _CP_UNIT)
+    snapshot_only = unit(cp_report(happy_cp()), _CP_UNIT)
+    assert with_snapshot["evidence"]["basis"] == EVIDENCE_BASIS_PREFLIGHT_SNAPSHOT
+    assert with_snapshot["verdict"] == VERDICT_INSUFFICIENT
+    assert with_snapshot["checks"] == snapshot_only["checks"]  # byte-identical: legacy contributed nothing
+    assert checks(with_snapshot)["no_split_brain"]["status"] == CHECK_PASS
+    # A conflicting legacy mode does not leak into the roll-up either.
+    stale_ls = {k: {**v, "ha_cluster_mode": "load_sharing_unicast"} for k, v in stale_cp.items()}
+    assert unit(cp_report(happy_cp(), cp_ha_runtime=stale_ls), _CP_UNIT)["verdict"] == VERDICT_INSUFFICIENT
+    assert unit(cp_report(happy_cp(), cp_ha_runtime=stale_ls), _CP_UNIT)["cluster_mode"] == "ha_new_mode"
+
+    # -- Palo Alto: legacy says both active (UNSAFE split-brain), snapshot says active/passive.
+    stale_pan = {
+        "pan-a": {**_PAN_RUNTIME["pan-a"], "state": "active", "peer_state": "active"},
+        "pan-b": {**_PAN_RUNTIME["pan-b"], "state": "active", "peer_state": "active"},
+    }
+    legacy_pan = unit(compute_ha_readiness(pan_rows(), pan_ha_runtime=stale_pan, pan_ha_peers=_PAN_PEERS), _PAN_UNIT)
+    assert legacy_pan["verdict"] == VERDICT_UNSAFE and legacy_pan["reason"] == "split_brain_observed"
+    with_pan = unit(compute_ha_readiness(pan_rows(), pan_ha_runtime=stale_pan, pan_ha_peers=_PAN_PEERS,
+                                         preflight_snapshots=[happy_pan()]), _PAN_UNIT)
+    pan_only = unit(pan_report(happy_pan()), _PAN_UNIT)
+    assert with_pan["evidence"]["basis"] == EVIDENCE_BASIS_PREFLIGHT_SNAPSHOT
+    assert with_pan["verdict"] == VERDICT_INSUFFICIENT and with_pan["reason"] != "split_brain_observed"
+    assert with_pan["checks"] == pan_only["checks"]
+    assert checks(with_pan)["no_split_brain"]["status"] == CHECK_PASS
+    # And the converse: a unit WITHOUT a snapshot never picks up snapshot facts from another unit.
+    stray = cp_snapshot(cp_member("tok-x", unit="grp-other", pnote=True), unit="grp-other")
+    assert unit(cp_report(stray, cp_ha_runtime=stale_cp), _CP_UNIT)["evidence"]["basis"] == EVIDENCE_BASIS_STORED_TELEMETRY
+
+
 def test_snapshot_never_creates_or_reshapes_a_unit():
     report = compute_ha_readiness([], preflight_snapshots=[happy_cp()])
     assert report["units"] == [] and report["preflight"]["unmatched"] == [_CP_UNIT]
