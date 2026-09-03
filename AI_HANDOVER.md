@@ -16,13 +16,39 @@ doc. Prior versions are in git history.
 
 ## 1. Snapshot
 
-- Date: 2026-09-04. `main` at `57d78f1`. Build
+- Date: 2026-09-04. `main` at `cd45f66`. Build
   `op0b_s8_realenv_campaign_corrections` — `AUTOMATED_VALIDATED`.
-- The `OP.0b` S8 real-environment campaign ran S8-A once against the approved
-  CP ClusterXL pair, surfaced four defects, corrected and merged all four
-  (PRs #47–#50), and is now **blocked on device SSH access**.
+- The `OP.0b` S8 real-environment campaign ran S8-A three times against the
+  approved CP ClusterXL pair, surfaced and merged six corrections
+  (PRs #47–#50, #52–#54), then corrected the CP **remote execution
+  primitive** itself. Ready for the S8-A retry; no operator prerequisite.
 
-## 2. What changed this session
+## 2. Root cause of the S8-A read failures (settled)
+
+**An application execution-path defect, not an environment fact.** Three
+wrong diagnoses preceded it — a `$PATH`/PTY theory, and then the conclusion
+that the collector account lands in Clish. The PO rejected the second as
+contradicting the validated CP execution contract, and was right.
+
+The device's own `clish`/`xpand` audit trail shows each *non-interactive
+exec channel* being dispatched through the Gaia CLI wrapper: 8 reads → 8
+device-side `clish -c ver` initializations (the "repeated `ver`" long
+mistaken for our own command), only the three `clish -c '...'` forms
+(A1/A2/A8) executing, and the five bare Expert reads never reaching an
+Expert shell at all.
+
+That does **not** prove the account's login shell is Clish. It proves the
+collector never established an Expert *execution context*: one SSH
+transport is not one Expert shell, and the old model opened one independent
+exec channel per read — eight execution contexts, each re-entering the
+wrapper. An interactive login (the operator's own path, which the contract
+fixes as Expert) was never used.
+
+Corrected by running the whole battery inside **one persistent Expert shell
+per member**, reusing the existing real-environment-validated
+`InteractiveSshSession`. No new command, credential, or device change.
+
+## 3. What changed this session
 
 - **#46** `utils/cp_ssh_trust.py`: strict preflight counted the wrong Paramiko
   store, so `strict=True` was unusable with a correct `known_hosts`.
@@ -41,40 +67,61 @@ doc. Prior versions are in git history.
   (default unchanged for all existing callers); the preflight session binds
   `use_pty=False`; `MemberSession` is now the per-member execution context
   resolving its command plan once. Per member: connects 1, closes 1, exec
-  channels == scheduled reads, PTY requests 8/9 → 0. PAN audited, already
-  compliant, untouched.
+  channels == scheduled reads.
+- **#52** A7 `fw stat` parsed from its real column table (`HOST POLICY DATE`),
+  legacy `Policy name:` shape kept; first regression test driving the real
+  CLI call graph with only `paramiko.SSHClient` faked.
+- **#53** per-read outcome disclosure in the safe summary (both vendors) —
+  the change that made the root cause above visible at all.
+- **#54** (merged, then superseded) added a `capability_gap` classification
+  and an inter-read delay on the disproven account-shell conclusion. Both
+  were corrected in the persistent-shell change below: the delay is gone
+  entirely, and the classification survives only as a narrow diagnostic.
+- **Persistent Expert shell** (this movement): the whole battery for one
+  member runs inside one `InteractiveSshSession` — one `invoke_shell`, one
+  close, zero exec channels, zero per-command CLI initialization. Commands
+  are *framed* (a per-session `echo`-of-`$?` end marker) so completion and
+  exit status are read explicitly rather than inferred from a quiet period;
+  the marker is read-only, stripped before any parser sees it, and
+  test-enforced never to reach evidence. Framing is opt-in, so the
+  established config-collection path is unchanged. No artificial pacing:
+  sequential send/complete/parse is its own backpressure.
 
-## 3. Exact next action
+## 4. Exact next action
 
-1. **Operator confirms SSH access to the approved CP pair is restored.**
-   During the campaign the device stopped offering password authentication;
-   operator recovery (clish `set ssh server password-authentication yes` +
-   `save config`, then direct `/etc/ssh/sshd_config` + Gaia template edits,
-   then `service sshd restart`) is unconfirmed. Nothing in this repository
-   can write device configuration — the collectors are read-only by
-   construction and test-enforced.
-2. Then retry S8-A unchanged:
+1. Retry S8-A unchanged:
    `py .\main.py --cp-ha-preflight-check --cp-preflight-targets <A>,<B>`.
-   Report SAFE counts only. Expect the per-command device-side CLI init to
-   be gone. Then S8-B (VSX), then S8-C (PAN). `Sonnet 5, normal`.
+   Report SAFE counts only. Expect: one SSH login and one Expert shell per
+   member, the repeated device-side `ver` initialization gone entirely, and
+   the five bare Expert reads (A3-A7) actually executing — A3 yielding
+   `High Availability` plus local/peer roles through the canonical parser.
+2. Then S8-B (VSX): `vsx stat -v` and any `vsenv` transition run in that
+   same Expert shell, no reconnect per VSID.
+3. Then S8-C (PAN), untouched by this change (HTTPS API, no shell).
+   `Sonnet 5, normal`.
 
-## 4. Test delta
+## 5. Test delta
 
-- Full serial suite 1535 passed / 24 skipped / 0 failed (+67 over the S7.5
-  baseline of 1468/24/0), from four new S8 regression files.
+- Full serial suite 1574 passed / 24 skipped / 0 failed (+106 over the S7.5
+  baseline of 1468/24/0), from seven new S8 regression files.
 - Privacy gate PASS/0; architecture convergence 19 passed; `git diff --check`
   clean.
 
-## 5. New risks
+## 6. New risks
 
-- **A3 on the real device is unresolved.** The wiring defect is fixed and
-  proven, but the one live retry after it was never confirmed to have run on
-  the fixed commit before access was lost. Source tracing shows the
-  established parser and the S5 projection now agree exactly, and the parser
-  survives terminal-escape contamination — so if `ha_mode_not_established`
-  persists on a confirmed HA pair over the now-clean channel, the remaining
-  divergence is device-side execution context (Expert-shell vs direct-Clish
-  landing), not the parser.
+- **The A3 outcome on the real device is now explained, not unresolved.**
+  `ha_mode_not_established` persisted because A3 never executed. The wiring
+  defect (#49) and the parser were both already correct; neither was the
+  cause. A3 stays unvalidated against real output until the S8-A retry runs.
+- **The persistent Expert shell is not yet real-environment validated.**
+  Its adapter is the one the CP config collector has used against real
+  devices, and the framing is covered by unit tests, but this specific
+  execution model has only been exercised against a device double. The S8-A
+  retry is its first real proof.
+- `capability_gap` now means only "the device CLI rejected the read before
+  any binary ran". If it still appears after the retry, suspect the
+  execution model first — it must never be allowed to stand in for an
+  application defect.
 - Production strict host-key enforcement is deliberately incomplete by PO
   decision, not a regression — `cp_production_ssh_host_key_trust_hardening`.
 - Pre-existing, unrelated: test-order state leaks between

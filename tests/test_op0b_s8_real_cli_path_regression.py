@@ -36,6 +36,7 @@ the local role preserved, a coherent snapshot, and
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import paramiko
@@ -117,13 +118,77 @@ class _Device:
     def __init__(self) -> None:
         self.connects: list[str] = []
         self.closes = 0
+        self.shells = 0
+        self.shell_closes = 0
         self.channels = 0
         self.pty_requests = 0
         self.commands: list[str] = []
+        #: What the device actually ran, including any CLI initialization a
+        #: non-interactive exec channel would have cost it.
+        self.device_executed: list[str] = []
 
     #: Per-member hostname served by A1, keyed by management IP.
     HOSTS = {"10.0.0.1": ("gw-member-a", _A3_LOCAL_STANDBY),
              "10.0.0.2": ("gw-member-b", _A3_LOCAL_ACTIVE)}
+
+
+_FRAMING_RE = re.compile(r";\s*echo\s+(\S*?)\$\?(\S*)\s*$")
+
+
+class _Shell:
+    """One persistent Expert shell on the real CLI path."""
+
+    def __init__(self, device: _Device, host: str) -> None:
+        self._device = device
+        self._host = host
+        hostname, _a3 = _Device.HOSTS.get(host, ("gw-member-a", _A3_LOCAL_STANDBY))
+        self._buf = f"[Expert@{hostname}:0]# ".encode()
+        self._pending = ""
+
+    def settimeout(self, _t):
+        pass
+
+    def send(self, data: str) -> int:
+        self._pending += data
+        while "\n" in self._pending:
+            line, self._pending = self._pending.split("\n", 1)
+            self._handle(line.strip())
+        return len(data)
+
+    def _handle(self, line: str) -> None:
+        hostname, a3 = _Device.HOSTS.get(self._host, ("gw-member-a", _A3_LOCAL_STANDBY))
+        prompt = f"[Expert@{hostname}:0]# "
+        if not line:
+            self._buf += prompt.encode()
+            return
+        marker_open = marker_close = ""
+        match = _FRAMING_RE.search(line)
+        if match:
+            marker_open, marker_close = match.group(1), match.group(2)
+            line = line[: match.start()].strip()
+        self._device.commands.append(line)
+        self._device.device_executed.append(line)
+        read = _TEXT_TO_READ.get(line)
+        out = _fixture_for(read, hostname, a3) if read else ""
+        status = 0 if read is not None and out else (0 if read is not None else 127)
+        payload = (out + "\n") if out else ""
+        if marker_open or marker_close:
+            payload += f"{marker_open}{status}{marker_close}\n"
+        payload += prompt
+        self._buf += payload.encode()
+
+    def recv_ready(self) -> bool:
+        return bool(self._buf)
+
+    def recv(self, _n: int) -> bytes:
+        out, self._buf = self._buf, b""
+        return out
+
+    def recv_stderr_ready(self) -> bool:
+        return False
+
+    def close(self) -> None:
+        self._device.shell_closes += 1
 
 
 class _Channel:
@@ -196,6 +261,10 @@ class _SSHClient:
         self._host = str(host)
         self._device.connects.append(self._host)
 
+    def invoke_shell(self, **_kw) -> _Shell:
+        self._device.shells += 1
+        return _Shell(self._device, self._host)
+
     def get_transport(self) -> _Transport:
         return _Transport(self._device, self._host)
 
@@ -244,10 +313,6 @@ def _drive_cli(tmp_path: Path, monkeypatch, capsys) -> tuple[_Device, str]:
     _SSHClient.device = device
     monkeypatch.setattr(paramiko, "SSHClient", _SSHClient)
 
-    import checkpoint.preflight_collector as pc
-    # Device courtesy, not behaviour under test -- see INTER_READ_DELAY_SECONDS.
-    monkeypatch.setattr(pc, "INTER_READ_DELAY_SECONDS", 0)
-
     import application.workflows.preflight as preflight_wf
     from utils.collection_executor import RuntimeCollectionServices
 
@@ -293,7 +358,9 @@ class TestRealCliPathSessionInvariants:
         approved = set(COMMAND_TEXT.values())
         assert all(c in approved for c in device.commands), device.commands
         assert len(device.commands) == 16, "8 approved reads x 2 members"
-        assert device.channels == 16
+        assert device.channels == 0, "no per-command exec channel"
+        assert device.shells == 2 and device.shell_closes == 2
+        assert "ver" not in device.device_executed, device.device_executed
 
     def test_version_collected_once_per_member(self, tmp_path, monkeypatch, capsys):
         device, _out = _drive_cli(tmp_path, monkeypatch, capsys)
@@ -383,14 +450,24 @@ class TestReadOutcomeDisclosure:
         reads answer, bare Expert reads produce nothing."""
         clish_reads = {CPPreflightRead.A1_HOSTNAME, CPPreflightRead.A2_VERSION,
                        CPPreflightRead.A8_CLISH_FAILOVER}
-        original = _Channel.exec_command
+        original = _Shell._handle
 
-        def only_clish(self, command: str) -> None:
-            original(self, command)
-            if _TEXT_TO_READ.get(command) not in clish_reads:
-                self._out = b""
+        def only_clish(self, line: str) -> None:
+            match = _FRAMING_RE.search(line)
+            bare = line[: match.start()].strip() if match else line
+            if bare and _TEXT_TO_READ.get(bare) not in clish_reads:
+                # Clish rejects the bare Expert read: no output, non-zero status.
+                marker_open, marker_close = (match.group(1), match.group(2)) if match else ("", "")
+                self._device.commands.append(bare)
+                self._device.device_executed.append("ver")
+                payload = "CLINFR0329  Invalid command.\n"
+                if marker_open or marker_close:
+                    payload += f"{marker_open}1{marker_close}\n"
+                self._buf += payload.encode()
+                return
+            original(self, line)
 
-        monkeypatch.setattr(_Channel, "exec_command", only_clish)
+        monkeypatch.setattr(_Shell, "_handle", only_clish)
 
     def test_healthy_run_reports_every_read_successful(self, tmp_path, monkeypatch, capsys):
         _device, out = _drive_cli(tmp_path, monkeypatch, capsys)
@@ -410,12 +487,16 @@ class TestReadOutcomeDisclosure:
 
         assert "ha_mode_not_established" in out, "precondition: the symptom reproduces"
         assert "produced no usable evidence" in out, out
-        # The Expert-shell reads are the ones named as failed.
-        failed_block = [ln for ln in out.splitlines() if ln.strip().startswith("FAIL")]
-        assert failed_block, out
-        assert any("cphaprob stat" in ln for ln in failed_block), failed_block
+        # The Expert-shell reads are the ones named -- as an execution-context
+        # gap now that the battery runs in one persistent Expert shell, since
+        # the device rejected them before any binary ran.
+        named = [ln for ln in out.splitlines()
+                 if ln.strip().startswith(("FAIL", "GAP"))]
+        assert named, out
+        assert "Expert-shell execution context could not be confirmed" in out
+        assert any("cphaprob stat" in ln for ln in named), named
         # ...and the clish-wrapped reads are not.
-        assert not any("A8:" in ln for ln in failed_block), failed_block
+        assert not any("A8:" in ln for ln in named), named
 
     def test_disclosure_is_value_free(self, tmp_path, monkeypatch, capsys):
         """Only approved source-command ids and the Outcome enum -- never
