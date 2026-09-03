@@ -370,7 +370,7 @@ def run_cp_preflight(
     members: Sequence[CPPhysicalMemberTarget],
     username: str,
     secret: str,
-    strict_host_key: bool = True,
+    strict_host_key: bool = False,
     connect_timeout: int = 8,
     command_timeout: int = 20,
 ) -> PreflightSnapshot:
@@ -383,6 +383,21 @@ def run_cp_preflight(
     the returned `PreflightSnapshot`, once collection is complete -- the S1
     dataclass this module returns carries no coherence field of its own and
     this module adds none, per the file-boundary constraint of this build.
+
+    Trust policy (PO override, 2026-09-03 -- see `OP_0B_1_COMMAND_GATE_PACKAGE.md`
+    "PO override — development trust mode"): ``strict_host_key`` defaults to
+    ``False``, matching the same compatibility-mode default every other CP
+    SSH caller in this repository already has. This is not a new trust
+    mechanism -- it is the identical `utils.cp_ssh_trust.apply_strict_host_key_policy`
+    helper every other caller uses, with the same argument every other
+    caller already defaults to. Strict mode remains fully implemented and
+    selectable by passing ``strict_host_key=True`` explicitly; mandatory
+    strict enforcement for a production/container runtime is tracked as
+    backlog `cp_production_ssh_host_key_trust_hardening`, not implemented
+    here. A host key observed in compatibility mode is never persisted,
+    never promoted to trust, and never enters the returned evidence (the
+    fingerprint `_connect` returns is discarded below) -- it carries no
+    identity or readiness authority.
     """
     if not members:
         raise CPPreflightCollectionError("run_cp_preflight requires at least one selected physical member")

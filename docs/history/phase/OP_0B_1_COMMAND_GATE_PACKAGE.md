@@ -5,10 +5,13 @@
 **APPROVED (2026-09-03) — SCOPED PER THE PO OVERRIDES BELOW.** The
 product owner recorded explicit approval in §"Approval record" for a
 **narrower** set of rows than this gate's own technical assessment
-offered, with two binding overrides applied to every newly-approved read:
+offered, with three binding overrides applied to every newly-approved read:
 **(1) no new application-level command retry** (§"Retry — PO override"),
-and **(2) `B1` reuses the existing per-member session; no new SSH
-transport session is authorized** (§"B1 session — PO clarification").
+**(2) `B1` reuses the existing per-member session; no new SSH
+transport session is authorized** (§"B1 session — PO clarification"), and
+**(3) SSH host-key trust for `S5`/CP defaults to compatibility mode, not
+strict, for the current development/pre-production phase** (§"CP SSH
+trust — PO override, development compatibility mode").
 `CP-A10`, `CP-A11` and `PAN-P3` are technically `OPTIONAL_APPROVED` (that
 assessment is preserved, unchanged, below) but the PO explicitly withheld
 implementation authorization for the current `S5`/`S6` slice — they are
@@ -1024,6 +1027,60 @@ in this network-behavior bound.
     `CLASS 2`, `A9`, `P5`, PAN serial normalization, PAN pair-identity
     redesign, new credentials, new transport, new retries beyond this
     override, new concurrency policy, or fleet-wide execution.
+
+## CP SSH trust — PO override, development compatibility mode (2026-09-03)
+
+**Context.** `S8` real-environment validation surfaced two implementation
+defects in the shared strict SSH host-key preflight (`utils/cp_ssh_trust.py`)
+that made strict mode unusable at all until corrected same-day
+(`op0b_s8_p01_cp_ssh_trust_preflight_correction`, merged) and then made a
+host-key rejection needlessly retry (`op0b_s8` retry-classification fix,
+merged). With both corrected, strict mode works exactly as designed — but
+running it against the first real target required the operator to
+provision a trusted `known_hosts` entry for a workstation-specific,
+Paramiko-specific transport that the roadmap already expects to retire
+once CP collection migrates to a container/pod execution model.
+
+**Decision.** For the current development/pre-production phase, `S5`'s
+`checkpoint.preflight_collector.run_cp_preflight` defaults
+`strict_host_key=False` — the same compatibility-mode default every other
+CP SSH caller in this repository already has
+(`checkpoint/cp_runner.py`, `checkpoint/vsx_runner.py`,
+`checkpoint/direct_ssh_probe.py`, `configuration/checkpoint_config_probe.py`,
+`configuration/checkpoint_config_collector.py`). This supersedes this
+gate's original framing of `S5`'s CP rows as reusing "the one
+strict-trusted SSH session per physical member" — that language described
+the pre-existing production intent, not a binding same-day implementation
+requirement; the PO explicitly authorizes deferring mandatory strict
+enforcement to the future production/container-pod hardening milestone.
+
+**What did not change:**
+- `utils.cp_ssh_trust.apply_strict_host_key_policy` — the one shared
+  helper — is unchanged and untouched by this decision. No second trust
+  implementation was created; `run_cp_preflight` calls the exact same
+  function every other caller calls, with the exact same `strict`
+  argument, just defaulting it the same way its siblings already do.
+- Strict mode remains fully implemented, fail-closed, and selectable by
+  passing `strict_host_key=True` explicitly (production, container
+  validation, or an operator who wants it today). `RejectPolicy`, the
+  corrected trust-store preflight, and the corrected non-retryable
+  host-key classification all remain exactly as merged — nothing here
+  reverts `d31d402` or its follow-up.
+- A host key observed in compatibility mode carries no trust claim, is
+  never persisted, and never enters `PreflightMemberEvidence`/
+  `PreflightSnapshot` (the fingerprint `_connect` returns is discarded) —
+  it therefore cannot become physical-identity authority or influence a
+  readiness verdict. This was already structurally true before this
+  decision; this note makes it explicit.
+- No new CLI flag, environment variable, or configuration schema. This is
+  a default-value change to an existing keyword argument, not a new trust
+  surface.
+
+**Debt.** Mandatory production strict-trust enforcement, container/pod
+`known_hosts` provisioning, and the retry-classification finding are
+tracked together as `project/backlog.json` `cp_production_ssh_host_key_trust_hardening`
+— production-blocking before this feature (or any `CLASS 2` behavior) may
+ship. This override does not close that debt; it explicitly defers it.
 
 ## Rollback
 
