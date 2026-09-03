@@ -17,156 +17,129 @@ doc. Prior versions are in git history.
 ## 1. Snapshot
 
 - Date: 2026-09-03. Branch `claude/vendor-semantics-confirmation-pt2iiq`.
-- Product baseline `0.7.7`; engineering baseline unchanged.
-- This session: **`op0b_s2_pan_parse_scope_extension`** — second
-  `IMPLEMENTATION` slice against the FROZEN `OP.0b.0` contract. Extends PAN
-  parse scope of an already-fetched response and projects the result into
-  S1's fact model. Zero new command, zero new device contact.
+- This session: **CLOSURE CORRECTION** on `op0b_s2_pan_parse_scope_extension`
+  — a PO/architecture acceptance review found the S2 SESSION CLOSE
+  overclaimed its own status, and this session corrected it. **S2 is NOT
+  accepted as closed.** No S3 work started. No PR opened. No device
+  contacted.
 
-## 2. What changed this session
+## 2. What changed this session (correction, not new feature work)
 
-`configuration/panorama_config_collector.py`: new `_PAN_HA_PREFLIGHT_FIELD_MAP`
-(35-entry field map) + `_parse_pan_ha_preflight_fields()` — reads
-`conn-status` leaves (`conn-status`, `conn-ha1/conn-status`,
-`conn-ha1-backup/conn-status`, `conn-ha2/conn-status`),
-`running-sync`/`running-sync-enabled`, election/preemption
-(`preemptive`/`priority`/`preempt-hold`/`promotion-hold`), flap/duration
-counters, `last-error-reason`/`last-error-state`, and `*-version`/`*-compat`
-parity fields (local + peer) out of the **same** already-fetched
-`show high-availability state` response `get_target_ha_runtime_state`
-already holds — zero new command, zero new API operation. New
-`include_preflight_fields=False` opt-in parameter on
-`get_target_ha_runtime_state` (mirrors the existing
-`capture_field_diagnostics` precedent); default behavior and the one
-existing production call site (`_collect_device_row`) are both unchanged —
-the new capability is deliberately dormant/unwired this session, and not
-added to `pan_config_telemetry.json`'s schema. Identity leaves
-(`local-info/serial-num`, `peer-info/serial-num`) are tokenized with the
-same `Tokenizer`/`"pan_ha_identity_value"` pattern the existing diagnostic
-sweep already uses — one extraction authority preserved, no third
-independent parser of the same XML fields, no leading-zero normalization.
+Two real defects found and fixed, plus one honest downgrade:
 
-New `panorama/pan_preflight_projection.py` (pure, no I/O, no lxml, no
-network — imports only `utils.failover.preflight_model` types):
-`project_pan_preflight_facts()` turns that field dict into S1
-`PreflightFact`/`PreflightMemberEvidence` instances. Every present field
-becomes `KNOWN` carrying the raw value read; every absent field `UNKNOWN`;
-a malformed numeric counter degrades to `UNKNOWN`, never a crash;
-`fields=None` represents a collection failure as all-`COLLECTION_FAILED`.
-Peer-claim fields (`peer_state_claim`, `peer_conn_*`, `peer_serial_claim`,
-`peer_*_version`) route to `peer_claim_facts`, never `own_facts` — a
-member's report about its peer is that member's claim, never an
-independent observation (contract domain invariant). No readiness/health
-interpretation of any value; no `D-F3` threshold applied to any flap
-counter.
+**1. Field-trace overclaim.** The prior close marked six PAN field-groups
+(`conn_status`/`conn_ha1`/`conn_ha2`, `running_sync`, software/content
+parity, preemption/priority/hold, flap counters, failure state)
+`COLLECTED_AND_PARSED` in the frozen contract's §25 table. That label means
+the *current production collection path* parses the field — untrue here:
+`include_preflight_fields` defaults `False` and the one production call
+site (`_collect_device_row`) never passes `True`. Corrected: those rows now
+read `PARSER_IMPLEMENTED — PRODUCTION_WIRING_PENDING`; a new contract
+§25a gives the full six-dimension reconciliation the review demanded
+(response fetched / extraction implemented / production-invoked /
+projected / tests executed / real-env validated — identical answers across
+all six groups) plus the explicit **S2 vs. S5/S6 boundary**: S2 owns
+implementing and proving the extraction/projection capability; S5/S6 (the
+not-yet-built dedicated preflight collector) owns actually invoking it in
+production, per the contract's own pre-existing "Current collector reuse
+decision" (the inventory/config collector must never become the preflight
+engine — production wiring inside S2 would have started implementing S5
+early, inside the wrong collector). This means S2's dormancy was
+*architecturally correct*, not merely cautious — only the field-trace
+label was wrong.
 
-Two new test files: `tests/test_op0b_s2_pan_extraction.py` (20 tests, lxml —
-existing leaves unchanged, every new field parses correctly against a
-full synthetic fixture, unknown `conn-status` values stored verbatim not
-upgraded to "healthy", malformed-numeric passthrough at extraction, no
-leading-zero normalization, missing `peer-info` degrades safely, plus 3
-network-regression-guard tests proving exactly one `api_post` call either
-way and no new command/thread-pool/retry token introduced — **`NOT
-EXECUTED`** in this container, `ModuleNotFoundError: No module named
-'lxml'`, the same pre-existing gap every other collector-touching test
-file in this arc has hit; `py_compile` confirms both changed/new files are
-syntactically valid) and `tests/test_op0b_s2_pan_projection.py` (14 tests,
-pure — run and passing here: run-id propagation, identity/entity
-separation, `source_plane=device_runtime`, no target identity in
-`source_command`, peer-claim vs own-fact routing, single-member-in
-single-member-out, `UNKNOWN` for absent fields, `COLLECTION_FAILED`
-representation with no `KNOWN_BAD` state, S1 `PreflightSnapshot`/
-`evaluate_coherence` acceptance including a mixed-run case that S1's
-coherence check catches rather than the projection layer silently fixing
-up, malformed/well-formed numeric conversion, no `D-F3` threshold
-applied).
+**2. Single-extraction-authority gap.** Audit found three functions in
+`configuration/panorama_config_collector.py` independently traversing the
+same in-memory HA-state XML `root`: the baseline five-field parse (inline
+in `get_target_ha_runtime_state`), `_tokenize_ha_field_diagnostics`
+(pre-existing OP.0a diagnostic sweep), and S2's `_parse_pan_ha_preflight_
+fields` — the exact "one production parser + one diagnostic parser + one
+preflight parser" anti-pattern the review named. Fixed with a small,
+behavior-preserving refactor: new `_pan_ha_group_text(root, path)` is now
+the one canonical accessor for any `result/group/` leaf; both the baseline
+extraction and S2's field map read through it (same paths, same
+`None`-on-absent/whitespace semantics — re-verified by direct re-derivation
+against the fixture shape using stdlib `ElementTree`, since `lxml` is
+unavailable in this container). `_tokenize_ha_field_diagnostics` is
+deliberately left untouched and unmerged: it enumerates arbitrary child
+tag names rather than reading named paths, and it feeds the B1/B2-adjacent
+peer-identity diagnostic — refactoring it would be a pair-identity change,
+out of S2's authorized scope. Flagged, not hidden.
 
-The frozen contract's own §25 field-trace table was updated (not its
-`## Status` line — still `FROZEN WITH REAL-ENV VALIDATION GATES`) to mark
-the now-parsed rows (`conn_status`/`conn_ha1`/`conn_ha2`, `running_sync`,
-software/content parity, preemption/priority/hold, flap counters, failure
-state) `COLLECTED_AND_PARSED`, narrowing each row's "required correction"
-to only what S2 didn't close (vocabulary exhaustiveness — `D-V1`/`D-V2` —
-and real-env path-presence confirmation — `S8`).
+**3. Status downgrade: `automated_validated` → `in_progress`.** S2's
+load-bearing extraction suite (20 `lxml`-based tests) has never executed
+in *any* environment — only `py_compile`-checked and now also logic-
+re-derived by hand (not equivalent to running the real suite). Per the
+review's explicit instruction, this container's tooling was **not**
+modified/installed to force a local green (even though `lxml` is already a
+declared project dependency in `requirements.txt` — installing it here
+would still be "making this environment pass," which the review forbade).
+`project/build_history.json`, `project/roadmap.json` and
+`CURRENT_STATE.md` all corrected to `in_progress`; do not re-advance to
+`automated_validated` except on actual CI/full-dependency-environment
+evidence that both `tests/test_op0b_s2_pan_extraction.py` (20) and
+`tests/test_op0b_s2_pan_projection.py` (14) pass.
 
-**Deliberate deviation from the contract's own S2 file list, flagged
-rather than silent:** the slice table names
-`utils/failover_readiness_ui.py` as a possible S2 file; this session did
-not touch it. The task's own explicit constraints for this session ("no
-UI change", "Do NOT touch... console/UI") take precedence over the
-contract's general file list, so the new projection logic was placed in
-its own pure module (`panorama/pan_preflight_projection.py`) instead —
-additive, unwired, no UI/readiness-verdict path touched.
+**Git topology, reported not hidden:** this branch carries 5 commits ahead
+of `origin/main` — three doc-only `OP.0b.0` vendor-semantics-confirmation
+sessions, S1, and S2 — none yet in a pull request. Per the review's own
+instructions this is exactly the "opaque multi-build stack" case that
+requires reporting and a decision before any PR is opened; **no PR has
+been opened this session.** See the PRE-MERGE ACCEPTANCE REPORT delivered
+in-conversation this session for the full topology and the explicit
+`Merge ready: NO` blocker.
 
-Files touched: `configuration/panorama_config_collector.py` (additive
-extension), `panorama/pan_preflight_projection.py` (new),
-`tests/test_op0b_s2_pan_extraction.py` (new),
-`tests/test_op0b_s2_pan_projection.py` (new),
+Files touched: `configuration/panorama_config_collector.py` (the
+`_pan_ha_group_text` refactor only — no field/path/semantics change),
 `docs/history/phase/OP_0B_0_VENDOR_FAILOVER_PREFLIGHT_EVIDENCE_SURFACE.md`
-(§25 field-trace table only), `project/build_history.json`,
-`project/roadmap.json`, `CURRENT_STATE.md`, `docs/history/INDEX.md`
-(regenerated), this file. No CP collector/parser, action taxonomy,
-console/UI, readiness-verdict engine, execution adapter, or
-auth/credential file touched. No CLASS 2 behavior;
-`utils.action_taxonomy.CLASS_2_*` unchanged. No pair-identity file
-(`_derive_pan_units`, hostname fallback, `HaUnit`) touched.
+(§25 status-vocabulary + six rows corrected; new §25a), `project/
+build_history.json`, `project/roadmap.json`, `CURRENT_STATE.md`,
+`docs/history/INDEX.md` (regenerated), this file. No test file, no CP
+file, no UI, no readiness-verdict, no pair-identity file touched.
 
 ## 3. Exact next action
 
-Per the contract's own `S0 → S1 → (S2, S3 in parallel)` sequence — S2 is
-done and needed no `S3` result:
+**Do not start S3.** S2 is still open. In order:
 
-1. **`OP.0b` S3** (`now_next.next`) — CP parse-scope extension: same
-   pattern as S2, Check Point side. Extend
-   `configuration/checkpoint_config_collector.py`'s parsing of the
-   existing `cphaprob stat` output (peer rows/state, Active Attention
-   reason, "Single VS Failover" mode, wire form + `collected_at`) into
-   `PreflightFact`/`Provenance`. No new command. Independent of S2 —
-   could equally have run first.
-2. Independent, unaffected by this session: `D-F3` numeric threshold,
-   `D-V3a`/`D-V7b` pre-CLASS-2 closure, PAN serial identity closure
-   (hardware-blocked).
+1. A human/product-owner decision on the git topology: does the S2 PR
+   bundle all 5 unmerged commits (3 doc-only sessions + S1 + S2), or does
+   something split first? This session intentionally did not decide this
+   unilaterally — see the PRE-MERGE ACCEPTANCE REPORT's "Merge ready: NO"
+   blocker.
+2. Once that's decided: open the PR, let CI run with the real dependency
+   set, and require green on `tests/test_op0b_s2_pan_extraction.py` (20),
+   `tests/test_op0b_s2_pan_projection.py` (14), S1 (23), architecture
+   convergence (19), and the relevant PAN regression before advancing S2's
+   `project/build_history.json` status to `automated_validated`.
+3. Only after S2 is merged: new session, new branch, for `OP.0b` S3 (CP
+   parse-scope extension).
 
-## 4. Test delta
+## 4. Test delta this session
 
-+34 (`tests/test_op0b_s2_pan_extraction.py` ×20 lxml — `NOT EXECUTED` here;
-`tests/test_op0b_s2_pan_projection.py` ×14 pure — executed, 14/14 passed).
-Targeted suite runnable here (S1 + convergence): 42/42. S2 projection
-suite: 14/14. Full regression in this container, tolerant of the
-pre-existing dependency gap: 524 passed / 17 skipped / 33 failed / 82
-errors — failed count unchanged from the prior session's baseline
-(510/17/33/81); errors +1 is exactly this build's own lxml-blocked
-extraction file (same gap shape, not a new kind of failure); passed +14 is
-exactly this build's own projection tests. The full-dependency baseline
-(1099/24/0, 2026-09-02) is preserved in `CURRENT_STATE.md`, not
-overwritten with this partial number. `git diff --check` clean.
+No new test files. Existing suite re-run after the refactor:
+`tests/test_op0b_s1_preflight_model.py` + `tests/test_op0b_s2_pan_
+projection.py` + `tests/test_architecture_convergence.py` = **56/56
+passed** (refactor is behavior-preserving for everything executable here).
+`tests/test_op0b_s2_pan_extraction.py` (20 tests) remains **NOT EXECUTED**
+in this container — this is the primary open item, not a formality.
 
 ## 5. New risks / debt
 
-None introduced beyond what's already tracked. Explicit: S2's parse
-capability is additive/opt-in only — not wired into the production
-collection call site or into `pan_config_telemetry.json`, so it stays
-dormant/not load-bearing until a future slice (S5/S6, the dedicated
-preflight collector) actually invokes it with
-`include_preflight_fields=True` against a real device response.
-`peer-info/conn-ha1-backup/conn-status`'s nested shape is a structural
-inference by analogy with the confirmed `conn-ha1`/`conn-ha2` nesting — no
-official source captured an example with a backup HA1 interface
-configured; degrades safely to `None` either way, real-env confirmation
-still owed (S8). `local-info/last-error-reason`/`last-error-state` path
-presence is likewise unconfirmed by an official captured example.
-`D-F1`/`D-F2`/`D-F3`, `D-V3a`, `D-V7b`, PAN `B2` all remain exactly as
-unresolved as the predecessor build left them — do not let a future
-session read "S2 shipped" as progress on any of them.
+The correction itself introduces no new risk. What it removes: a false
+`automated_validated` claim that would have let a later session believe
+S2's extraction logic was proven, when it has only ever been
+`py_compile`-checked and manually re-derived. Do not trust `COLLECTED_AND_
+PARSED`-shaped claims elsewhere in the phase doc without checking whether
+the same "capability implemented vs. production invoked" distinction
+applies — this session only corrected the six rows S2 itself touched.
 
 ## 6. Continue or fresh chat
 
-Either is fine.
+**Same session/branch until S2 reaches a real merge-ready state** (per the
+task that drove this correction — do not start S3 in a fresh chat before
+S2 merges).
 
 ## 7. main.py / UI effect
 
-None. `include_preflight_fields` defaults `False` and the one production
-call site does not pass it; `panorama/pan_preflight_projection.py` is not
-imported by `main.py`, any collector call site, or any UI path yet — this
-build is invisible in a normal run until S3 lands (CP side) and a later
-slice (S5/S6) wires both into an actual collection run.
+None, unchanged from before the correction — `include_preflight_fields`
+still defaults `False`, still unwired from any production call site.
