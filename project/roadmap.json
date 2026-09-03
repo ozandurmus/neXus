@@ -125,22 +125,37 @@
     "now": {
       "build": "dev_kaizen_fast_pr_ci",
       "title": "DEV Kaizen - fast PR CI / risk-based full regression",
-      "goal": "Engineering-flow improvement only (PO request): stop paying the ~11-minute full pytest suite on every bounded feature PR while preserving safety. .github/workflows/validation.yml now has two jobs: `validate` (pull_request only) runs import/compileall sanity, the repository privacy gate, project-state consistency (tests/test_architecture_convergence.py), the build-history-index check, a small fixed PR smoke/safety-regression set (credential redaction, the privacy gate's own tests, known safety gaps, the frontend-rendering shared-state-leak guard), and the whitespace/conflict-marker check -- no full suite. `full-regression` (push to main, workflow_dispatch) runs the same gates plus the full serial pytest suite, unchanged in substance from the previous single-job workflow. Canonical policy statement lives in docs/AI_DEVELOPMENT_PROTOCOL.md 'CI validation policy' (full-regression triggers: dependencies, shared test infra, schema/storage/migrations, concurrency/global shared state, security/auth boundary, broad common domain behavior, CI/test infra itself, release/integration milestone, explicit PO/contract requirement) -- AGENTS.md/AI_START_HERE.md point at it rather than duplicating it. New tests/test_ci_workflow_fast_pr_regression.py statically asserts the split via text/regex checks (no new YAML dependency). Job id kept as `validate` for the PR job so an existing branch-protection required-status-check name keeps matching. This build is itself a full-regression trigger (CI/test infrastructure) -- full suite run locally this session: 1215 passed / 24 skipped / 0 failed. No product/network/dependency behavior change; does not touch collectors, failover domain, PAN/CP projection, UI, transport, or schemas.",
-      "status": "in_progress",
-      "started": "2026-09-03"
+      "goal": "Engineering-flow improvement only (PO request): stop paying the ~11-minute full pytest suite on every bounded feature PR while preserving safety. .github/workflows/validation.yml now has two jobs: `validate` (pull_request only) runs import/compileall sanity, the repository privacy gate, project-state consistency (tests/test_architecture_convergence.py), the build-history-index check, a small fixed PR smoke/safety-regression set (credential redaction, the privacy gate's own tests, known safety gaps, the frontend-rendering shared-state-leak guard), and the whitespace/conflict-marker check -- no full suite. `full-regression` (push to main, workflow_dispatch) runs the same gates plus the full serial pytest suite, unchanged in substance from the previous single-job workflow. Canonical policy statement lives in docs/AI_DEVELOPMENT_PROTOCOL.md 'CI validation policy' (full-regression triggers: dependencies, shared test infra, schema/storage/migrations, concurrency/global shared state, security/auth boundary, broad common domain behavior, CI/test infra itself, release/integration milestone, explicit PO/contract requirement) -- AGENTS.md/AI_START_HERE.md point at it rather than duplicating it. New tests/test_ci_workflow_fast_pr_regression.py statically asserts the split via text/regex checks (no new YAML dependency). Job id kept as `validate` for the PR job so an existing branch-protection required-status-check name keeps matching. This build is itself a full-regression trigger (CI/test infrastructure) -- full suite run locally this session: 1215 passed / 24 skipped / 0 failed. No product/network/dependency behavior change; does not touch collectors, failover domain, PAN/CP projection, UI, transport, or schemas. PR #38's CI confirmed the `validate` job green (mergeable_state=clean, zero review threads); merged to main via merge commit 6778ee9. Local full regression 1215 passed/24 skipped/0 failed stands as this build's own full-regression-trigger evidence.",
+      "status": "automated_validated",
+      "started": "2026-09-03",
+      "completed": "2026-09-03"
     },
     "next": {
-      "build": "op0b_0_close_d_v3a_d_v7b_pre_class2",
-      "title": "OP.0b.0 - close D-V3a/D-V7b before CLASS 2 (not a freeze gate)",
-      "status": "blocked",
+      "build": "op0b_s4_command_gate_package",
+      "title": "OP.0b S4 - OP.0b.1 command-gate package (CP A4-A9 / PAN P3-P5, official-doc confirmation)",
+      "status": "planned",
       "notes": [
-        "Try an official GitHub mirror first (the technique that closed D-V4/D-V7a): D-V3a needs an official PAN-OS/Panorama source for local-info/peer-info serial-num inside show high-availability state; D-V7b needs an official Check Point generic-object API schema (unconfirmed to exist) beyond the Simple Cluster API already ruled insufficient.",
-        "Fall back to a human fetching the specific pages the contract's source tables name.",
-        "Explicitly does NOT block S1-S9 implementation or the contract's FROZEN status -- gates only the PAN successor identity model and CLASS 2 (bug register PAN-7, CP-3).",
-        "Recommended: Sonnet 5, extended thinking (high), same as the prior vendor-semantics sessions."
+        "Frozen OP.0b.0 contract dependency order: S0 -> S1 -> (S2, S3 in parallel) -> S4 -> (S5, S6) -> S7 -> S8; S9 independent after S7. S1/S2/S3 are AUTOMATED_VALIDATED -- S4 is the next implementable slice, not S5/S6 (which depend on S4's approved gate).",
+        "Docs only, no code, no device I/O: the ten-point command-gate entry per new SS24 row for CP A4 (cphaprob -a if), A5 (cphaprob -ia list), A6 (cphaprob syncstat / fw ctl pstat), A7 (fw stat), A8 (cluster failover statistics), A9 (management-plane recovery setting) and PAN P3 (show high-availability all), P4 (show high-availability path-monitoring), P5 (show high-availability link-monitoring) -- vendor, read/write class, shell/context, timeout, retry, frequency, session reuse, unsupported behavior, secret-output risk, safe telemetry (docs/AI_DEVELOPMENT_PROTOCOL.md network-device command gate).",
+        "Requires official-vendor-documentation confirmation of each row's currently UNKNOWN/INSUFFICIENT status first (AGENTS.md vendor semantics law) before the gate entries can be written -- same GitHub-mirror-first technique that already closed D-V4/D-V7a.",
+        "Distinct from D-V3a/D-V7b (moved to upcoming, unchanged, non-blocking) -- those gate only the PAN successor identity model and CLASS 2, not S4/S5/S6.",
+        "Even once drafted, this package is a candidate list, not an approval -- CURRENT_STATE.md 'OP.0b' open blocker (product-owner/security sign-off) still applies before any command is actually approved for S5/S6 implementation.",
+        "Recommended: Sonnet 5, extended thinking (high) -- security boundary (new network-device command candidates)."
       ]
     },
     "upcoming": [
+      {
+        "build": "op0b_0_close_d_v3a_d_v7b_pre_class2",
+        "title": "OP.0b.0 - close D-V3a/D-V7b before CLASS 2 (not a freeze gate)",
+        "status": "blocked",
+        "notes": [
+          "Try an official GitHub mirror first (the technique that closed D-V4/D-V7a): D-V3a needs an official PAN-OS/Panorama source for local-info/peer-info serial-num inside show high-availability state; D-V7b needs an official Check Point generic-object API schema (unconfirmed to exist) beyond the Simple Cluster API already ruled insufficient.",
+          "Fall back to a human fetching the specific pages the contract's source tables name.",
+          "Explicitly does NOT block S1-S9 implementation or the contract's FROZEN status -- gates only the PAN successor identity model and CLASS 2 (bug register PAN-7, CP-3).",
+          "Recommended: Sonnet 5, extended thinking (high), same as the prior vendor-semantics sessions.",
+          "Reclassified from now_next.next to upcoming (session 2026-09-03 roadmap correction): does not block S1-S9, S4, or the contract's FROZEN status -- gates only the PAN successor identity model and CLASS 2 (bug register PAN-7, CP-3). D-V3a/D-V7b remain genuinely unresolved CLASS-2 blockers under the frozen contract -- not reopened, not closed, just correctly ordered as independent of the S4 implementation-slice dependency chain."
+        ]
+      },
       {
         "build": "d_f3_flap_failover_threshold_decision",
         "title": "D-F3 - flap/failover-frequency numeric threshold (product owner)",
