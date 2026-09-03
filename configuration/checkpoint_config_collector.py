@@ -25,7 +25,7 @@ from configuration.checkpoint_config_probe import (
     _run_exec,
     _run_vsx_clish_context,
 )
-from utils.cp_ssh_trust import CpSshStrictPreflightError
+from utils.cp_ssh_trust import CpSshStrictPreflightError, HostKeyNotTrustedError
 from utils.config_evidence import ConfigEvidenceStore
 from utils.logger import info, warn, register_sensitive_value, user_fingerprint
 from utils.runtime_paths import default_output_root
@@ -1740,6 +1740,13 @@ def _collect_host(target: PhysicalTarget, *, username: str, secret: str, strict_
             host_row["failure_family"] = "authentication_failure"
         elif exc_name == "BadHostKeyException":
             host_row["error_class"] = "host_key_mismatch"
+            host_row["failure_family"] = "trust_failure"
+        elif isinstance(exc, HostKeyNotTrustedError):
+            # The TCP/SSH handshake reached the point of receiving the
+            # server's key -- this is a trust refusal, not a reachability
+            # failure. Checked before the generic SSHException branch below
+            # since HostKeyNotTrustedError is one of its subclasses.
+            host_row["error_class"] = "host_key_not_trusted"
             host_row["failure_family"] = "trust_failure"
         elif isinstance(exc, (socket.timeout, TimeoutError)):
             host_row["error_class"] = "ssh_connect_timeout"

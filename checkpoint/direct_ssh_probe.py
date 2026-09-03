@@ -13,7 +13,7 @@ from typing import Any
 
 import paramiko
 
-from utils.cp_ssh_trust import CpSshStrictPreflightError, apply_strict_host_key_policy
+from utils.cp_ssh_trust import CpSshStrictPreflightError, HostKeyNotTrustedError, apply_strict_host_key_policy
 from utils.logger import info, warn, register_sensitive_value, user_fingerprint
 
 OUTPUT_FILE = Path("output/cp_direct_ssh_probe.json")
@@ -290,6 +290,17 @@ def _probe_one(
                     allow_agent=False,
                 )
                 break
+            except (paramiko.AuthenticationException, paramiko.BadHostKeyException, HostKeyNotTrustedError):
+                # Not retried: a wrong credential, a host-key mismatch, or an
+                # untrusted/unknown host key (RejectPolicy) will not change
+                # on a second attempt. Re-raised here (rather than closed
+                # and continued) so the outer classification block below
+                # gets the original exception, matching BadHostKeyException.
+                try:
+                    ssh.close()
+                except Exception:
+                    pass
+                raise
             except (socket.timeout, TimeoutError, paramiko.SSHException, OSError):
                 try:
                     ssh.close()
@@ -323,6 +334,11 @@ def _probe_one(
     except paramiko.BadHostKeyException:
         result["ssh_reachable"] = True
         result["error_class"] = "host_key_mismatch"
+    except HostKeyNotTrustedError:
+        # The TCP/SSH handshake reached the point of receiving the server's
+        # key -- this is a trust refusal, not a reachability failure.
+        result["ssh_reachable"] = True
+        result["error_class"] = "host_key_not_trusted"
     except (socket.timeout, TimeoutError):
         result["error_class"] = "connect_timeout"
     except (paramiko.SSHException, OSError) as exc:
