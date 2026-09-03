@@ -29,7 +29,7 @@ just another entry in the same member's fixed schedule, run over the same
 from __future__ import annotations
 
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Callable, Sequence
 
@@ -112,27 +112,60 @@ def _utc_now() -> str:
 
 # --- Session abstraction: one per physical member, reused for every read ---
 
-@dataclass(frozen=True)
+@dataclass
 class MemberSession:
-    """One controlled per-member command-execution abstraction. `run` issues
-    exactly one command invocation for the given fixed, PO-approved read and
-    returns the raw exec result dict (`success`/`stdout`/`stderr`/
-    `error_class`/`timeout`) for the caller to parse and immediately
-    discard. Command text is resolved internally from
-    `cp_preflight_battery.COMMAND_TEXT` only -- callers cannot pass
-    arbitrary command text through this abstraction (task S5 §8/§9).
+    """One controlled per-member execution context. `run` issues exactly one
+    command invocation for the given fixed, PO-approved read and returns the
+    raw exec result dict (`success`/`stdout`/`stderr`/`error_class`/
+    `timeout`) for the caller to parse and immediately discard. Command text
+    is resolved internally from `cp_preflight_battery.COMMAND_TEXT` only --
+    callers cannot pass arbitrary command text through this abstraction
+    (task S5 §8/§9).
 
     A single instance is reused for every read scheduled for that member,
     `B1` included -- this is the entire mechanism by which "no new SSH
     session for B1" (task S5 §4/§16) is enforced: there is structurally no
     second session to open, only further calls to the same `run`.
+
+    It is also the member's **execution context**: the device-specific facts
+    the battery dispatches on (`sw_version`, `platform_family`) and the
+    resulting command plan (`a6_form`, `a8_form`) are resolved exactly once
+    per member by `resolve_execution_context` and read from here afterwards
+    -- never recomputed per command. The static parts of the Check Point
+    execution model (Expert login shell; Gaia commands invoked explicitly as
+    `clish -c '...'`; VSX context switched with `vsenv` inside this same
+    session) are platform contract, not runtime discovery, and are therefore
+    deliberately *not* probed here.
     """
 
     physical_device_identity: str
     _run_command: Callable[[str], dict]
+    #: Device-specific dispatch evidence + resulting plan -- resolved once.
+    sw_version: str | None = field(default=None, init=False)
+    platform_family: str | None = field(default=None, init=False)
+    a6_form: CPPreflightRead | None = field(default=None, init=False)
+    a8_form: CPPreflightRead | None = field(default=None, init=False)
+    #: Bookkeeping that makes the once-only invariants observable/testable.
+    execution_context_resolutions: int = field(default=0, init=False)
+    command_invocations: int = field(default=0, init=False)
 
     def run(self, read: CPPreflightRead) -> dict:
+        self.command_invocations += 1
         return self._run_command(COMMAND_TEXT[read])
+
+    def resolve_execution_context(
+        self, *, sw_version: str | None, platform_family: str | None
+    ) -> None:
+        """Fix this member's command plan once, from already-collected `A2`
+        evidence. Idempotent by construction: a second call is a no-op, so a
+        future helper cannot silently reintroduce per-command dispatch."""
+        if self.execution_context_resolutions:
+            return
+        self.sw_version = sw_version
+        self.platform_family = platform_family
+        self.a6_form = resolve_a6_form(sw_version)
+        self.a8_form = resolve_a8_form(platform_family)
+        self.execution_context_resolutions += 1
 
 
 def make_real_member_session(ssh, *, physical_device_identity: str, command_timeout: int) -> MemberSession:
@@ -140,10 +173,18 @@ def make_real_member_session(ssh, *, physical_device_identity: str, command_time
     already-identity-relevant SSH client -- `configuration.checkpoint_config_probe._run_exec`
     is the same primitive the repository's existing CP config probe/collector
     already use for exactly this shape of read; this module introduces no
-    second transport path (task S5 §25)."""
+    second transport path (task S5 §25).
+
+    `use_pty=False`: the battery is a set of plain non-interactive reads, and
+    OP.0b S8-A real-environment evidence showed a PTY-backed channel makes
+    the device run its login/CLI initialization once per command -- turning
+    one bounded battery into one extra device-side CLI session per read. The
+    PTY-backed path stays available for the callers that genuinely need it
+    (`_run_exec`'s own default is unchanged).
+    """
     return MemberSession(
         physical_device_identity=physical_device_identity,
-        _run_command=lambda command_text: _run_exec(ssh, command_text, command_timeout),
+        _run_command=lambda command_text: _run_exec(ssh, command_text, command_timeout, use_pty=False),
     )
 
 
@@ -208,6 +249,11 @@ def collect_member(
     version_success = bool(version_result.get("success"))
     sw_version = _parse_gaia_version(version_stdout) if version_success else None
     platform_family = _classify_platform(version_stdout=version_stdout, asset_stdout="", model=None)["family"]
+
+    # One execution context per member: the battery's device-specific
+    # dispatch evidence and the resulting command plan are fixed here, once,
+    # from A2's already-collected output -- never recomputed per command.
+    session.resolve_execution_context(sw_version=sw_version, platform_family=platform_family)
 
     own_facts.append(
         project_cp_software_version_fact(
@@ -294,7 +340,7 @@ def collect_member(
 
     # A6: state/sync -- evidence-based dispatch from A2's already-collected
     # version, decided before execution; never a failure-driven fallback.
-    a6_form = resolve_a6_form(sw_version)
+    a6_form = session.a6_form
     if a6_form is None:
         own_facts.extend(
             project_cp_sync_facts(
@@ -329,7 +375,7 @@ def collect_member(
 
     # A8: failover/flap history -- evidence-based dispatch from the already-
     # collected platform classification; never a failure-driven fallback.
-    a8_form = resolve_a8_form(platform_family)
+    a8_form = session.a8_form
     if a8_form is None:
         own_facts.extend(
             project_cp_failover_history_facts(
