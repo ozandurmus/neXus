@@ -63,11 +63,11 @@ applies). Schema string unchanged (`-v1`); additive per-unit `evidence`
 need in-run evidence from every member; prerequisites block positives without
 fabricating failure). PAN phantom-member uplift removed (AC-5); a one-sided
 OP.0a read is now `INSUFFICIENT_EVIDENCE`. `D-F1`/`D-F2`/`D-F3`/`D-V7b`/`B2`
-stay unresolved, fail-closed — **SAFE and DEGRADED stay unreachable**. Two PO
-decisions disclosed, not taken: the contract's proposed 8th check / 5a-5b
-split (folded into checks 1/5 with distinct reason codes) and the `-v2`
-schema string. Detail: contract §25c; `project/build_history.json`. No
-device contact; S8 real-env owed.
+stay unresolved, fail-closed — **SAFE and DEGRADED stay unreachable**. PO
+architecture approval 2026-09-03: seven checks kept (no 8th check, no
+top-level 5a/5b), schema stays `-v1`, one-sided-ACTIVE → INSUFFICIENT
+accepted, plus a fresh-preflight-XOR-legacy-telemetry guard test. Detail:
+contract §25c; `project/build_history.json`. No device contact; S8 owed.
 
 **Stalled, moved to `now_next.upcoming`:**
 `cp_remote_collection_done_marker_diagnostics` — still `IN_PROGRESS`,
@@ -166,9 +166,10 @@ Concurrency budget stays at 1 per vendor pending its own real-environment eviden
 ## Automated test baseline
 
 ```
-1371 passed / 26 skipped / 0 failed (2026-09-03, op0b_s7_readiness_v2_integration,
+1371 passed / 26 skipped / 0 failed (2026-09-03, op0b_s7_readiness_v2_integration, pre-guard;
+  +1 test-only guard added after PO approval, affected suites re-run green,
   this session's local sandbox, serial, console extras installed session-locally)
-  -- +52 new (test_op0b_s7_readiness_v2.py) + 1 new OP.0a regression over the
+  -- +53 new (test_op0b_s7_readiness_v2.py) + 1 new OP.0a regression over the
   S6 session's 1318/26/0 (same sandbox).
 Repository privacy gate: PASS / 0 findings, clean checkout.
 Project-state consistency: metadata_warnings == [] under all cross-authority rules.

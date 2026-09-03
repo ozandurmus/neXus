@@ -20,9 +20,10 @@ doc. Prior versions are in git history.
   `main` at `bdd3563` (PR #43 merged — `OP.0b` S6). This build,
   `op0b_s7_readiness_v2_integration`, is `OP.0b` S7 — fresh S1/S5/S6
   preflight evidence integrated into the one canonical readiness evaluator.
-- Status: `AUTOMATED_VALIDATED`. **Merge is gated on PO architecture
-  review** of the SESSION CLOSE (S7 changes readiness semantics) — do not
-  merge on green CI alone.
+- Status: `AUTOMATED_VALIDATED`. PO architecture approval received
+  2026-09-03 (seven checks kept, schema `-v1` kept, one-sided-ACTIVE →
+  INSUFFICIENT accepted) with one added guard test; PR #44 merged per that
+  approval.
 
 ## 2. What changed this session
 
@@ -41,7 +42,7 @@ doc. Prior versions are in git history.
   top-level `preflight`. Schema string stays `-v1`.
 - `utils/failover_readiness_ui.py`: optional `preflight_snapshots`
   passthrough, `preflight` block, refreshed framing note. No JS change.
-- Tests: new `tests/test_op0b_s7_readiness_v2.py` (52); OP.0a AC-4 fixture
+- Tests: new `tests/test_op0b_s7_readiness_v2.py` (53); OP.0a AC-4 fixture
   rewritten around explicit two-member evidence + one new OP.0a regression;
   structural module lists updated in `test_op0a_ha_readiness.py` /
   `test_architecture_convergence.py`; `AGENTS.md` invariant line updated.
@@ -50,15 +51,13 @@ doc. Prior versions are in git history.
 
 ## 3. Exact next action
 
-1. PO architecture review of the S7 SESSION CLOSE (two disclosed decisions:
-   8th-check/5a-5b fold vs. adopt; `-v2` schema string). Merge only after
-   explicit approval.
-2. Then `now_next.next` = `op0b_s8_real_env_validation` — bounded, reads
-   only, hardware-blocked; `Sonnet 5, normal`.
+1. `now_next.next` = `op0b_s8_real_env_validation` — bounded, reads only,
+   hardware-blocked; new session; `Sonnet 5, normal`. Do not start S8
+   without the approved real pairs available.
 
 ## 4. Test delta
 
-- Targeted: `tests/test_op0b_s7_readiness_v2.py` 52 passed.
+- Targeted: `tests/test_op0b_s7_readiness_v2.py` 53 passed.
 - Regression: OP.0a/OP.0c/S1/S2/S3/S5/S6/architecture/known-safety-gaps
   265 passed. Full serial suite 1371/26/0.
   Privacy gate PASS/0. `git diff --check` clean. `metadata_warnings == []`.
