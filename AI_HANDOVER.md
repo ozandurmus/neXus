@@ -16,116 +16,78 @@ doc. Prior versions are in git history.
 
 ## 1. Snapshot
 
-- Date: 2026-09-03. Two independent PRs this session, both off `main` (which
-  already carried #34/#35/#36/#37):
-  - **PR #38** `dev_kaizen_fast_pr_ci` — **MERGED** (6778ee9), status
-    `automated_validated`.
-  - **PR #39** `cp_remote_collection_done_marker_diagnostics` — open,
-    branch `claude/cp-remote-collection-done-marker`, merged `main` into it
-    this session to resolve the bookkeeping conflict #38's merge created
-    (both PRs touched `CURRENT_STATE.md`/`project/roadmap.json`/
-    `project/build_history.json`/`docs/history/INDEX.md`); source files
-    (`checkpoint/cp_runner.py`, its tests) merged clean, no conflict there.
+- Date: 2026-09-03. Branch `claude/cp-stderr-classification`, base `main`
+  (at `79449bb`, which already carries PRs #34-#39). `dev_kaizen_fast_pr_ci`
+  and the first pass of `cp_remote_collection_done_marker_diagnostics` are
+  merged; this branch is a second pass on the same still-open build.
 
 ## 2. What changed this session
 
-**PR #38 (merged):** split `.github/workflows/validation.yml` into a fast
-`validate` job (`pull_request` only, no full suite) and a `full-regression`
-job (`push` to `main` + `workflow_dispatch`, full serial suite). Canonical
-policy in `docs/AI_DEVELOPMENT_PROTOCOL.md` "CI validation policy". New
-`tests/test_ci_workflow_fast_pr_regression.py` (+7). No product/network/
-dependency change. Local full regression: 1215 passed/24 skipped/0 failed.
-CI on the PR was green (`validate` succeeded, `full-regression` correctly
-skipped on the PR event); merged via merge commit **6778ee9**.
+The user reported the **same** `RuntimeError('CP remote collection ended
+without DONE marker')` recurring on a real run, but now carrying PR #39's
+new diagnostic fields: `exit_status=0, processed_gw=0, total_gw=None,
+stderr_bytes=658, last_marker=None`. This is genuinely informative: it
+disproves the channel-drain-race theory (PR #39's fix didn't stop the
+recurrence) and shows the failure happens **before**
+`checkpoint/scripts/cp_inventory.sh` line ~94 (`TOTAL_GW` is never echoed),
+alongside 658 bytes of real stderr the code was discarding.
 
-Post-merge on `main` (908a8f1): advanced `dev_kaizen_fast_pr_ci`
-`in_progress` → `automated_validated` in `build_history.json`/
-`roadmap.json`/`CURRENT_STATE.md`, citing PR #38's CI + the local
-regression. Also corrected `now_next.next`: it was
-`op0b_0_close_d_v3a_d_v7b_pre_class2`, but the frozen `OP.0b.0` contract's
-own dependency order is `S0 → S1 → (S2, S3) → S4 → (S5, S6) → S7 → S8` (S9
-independent after S7). With S1/S2/S3 already `AUTOMATED_VALIDATED`, the
-actual next implementable slice is **S4** — the docs-only `OP.0b.1`
-command-gate package (CP `A4`–`A9` / PAN `P3`–`P5`) — not D-V3a/D-V7b
-closure, which the contract's own text already scopes as CLASS-2-time
-blockers independent of S1–S9/S4. `now_next.next` is now
-`op0b_s4_command_gate_package`; D-V3a/D-V7b closure moved to
-`now_next.upcoming`, **unchanged and still genuinely unresolved** — not
-reopened, not closed. No S4 implementation work was started this session
-(explicitly out of scope — "forget about next slice").
-
-**PR #39 (open):** the user hit a real-run `RuntimeError('CP remote
-collection ended without DONE marker')`, `exit_status=0`.
-`checkpoint/scripts/cp_inventory.sh`'s last statement is a bare
-`echo "DONE"` with no early-exit path before it, so **root cause stays
-`UNKNOWN`** — not reproduced, no device access this session. Source
-inspection found `checkpoint/cp_runner.py`'s `_run_remote_collection`
-channel-drain loop reading only one recv()/recv_stderr() chunk per outer
-pass before its exit-status break check, unlike
-`checkpoint/direct_ssh_probe.py`'s already-proven `_run_session_command`
-tight-drain idiom. Aligned `_run_remote_collection` with that idiom
-(behavior-preserving hardening, not a confirmed fix) plus one defensive
-final drain, and enriched the `RuntimeError` with safe diagnostic fields
-(`exit_status`/`processed_gw`/`total_gw`/`stderr_bytes`/`last_marker`).
-New `tests/test_phase0_4_1_cp_automation.py` `FakeChannel` tests (+2).
-Full local regression on this branch (pre-merge): 1210 passed/24 skipped/0
-failed.
-
-**This session's merge-conflict resolution on PR #39's branch:** merged
-`main` in (no rebase, no force-push — a merge commit keeps the branch's own
-history valid). All 5 conflicts were in shared bookkeeping files
-(`AI_HANDOVER.md`, `CURRENT_STATE.md`, `docs/history/INDEX.md`,
-`project/build_history.json`, `project/roadmap.json`); resolved by keeping
-both builds' `build_history.json` records (CP diagnostics as newest,
-kaizen as `automated_validated` predecessor), pointing `roadmap.json`
-`now_next.now`/`current_build` at the CP build while carrying over main's
-S4 correction verbatim in `now_next.next`/`upcoming`, regenerating
-`docs/history/INDEX.md` from the resolved `build_history.json` (never
-hand-edited), and rewriting `CURRENT_STATE.md` to describe both builds
-(still ≤200 lines) plus this `AI_HANDOVER.md`.
+Rather than guess again from source alone (risky on a live security
+appliance with no way to test the guess), added a bounded, privacy-safe
+stderr classifier: `checkpoint/cp_runner.py` gains `_STDERR_CLASSIFIERS` (a
+closed list of generic shell/environment error regexes —
+`no_such_file_or_directory`, `command_not_found`, `permission_denied`,
+`not_a_tty`, `unbound_variable`, `syntax_error`,
+`connection_reset_or_broken_pipe`) and `_classify_stderr_sample()`.
+`_run_remote_collection` now captures up to 8192 chars of stderr in memory,
+classifies it, and discards the raw text immediately — the classification
+tokens (never the raw text) are included in both `RuntimeError` messages
+(missing-DONE and nonzero-exit-status) and the success-path stderr warning.
++3 tests in `tests/test_phase0_4_1_cp_automation.py`, including one that
+asserts device names/IPs never appear in the exception message. Updated the
+existing `cp_remote_collection_done_marker_diagnostics` build_history
+record (same build, second pass) and `CURRENT_STATE.md`/`roadmap.json` to
+match; regenerated `docs/history/INDEX.md`.
 
 ## 3. Exact next action
 
-- **PR #39**: push this merge commit, then re-check CI (`validate`) and
-  mergeable state on the branch. Once green, merge (repository convention:
-  merge commit) — this build stays `in_progress` even after merge; it is
-  diagnostic hardening, not a closed fix, so do not advance it to
-  `automated_validated` as "the fix." Only a real recurrence (or a watched
-  real run) with the new diagnostic fields justifies that.
-- After PR #39 is settled: the next real implementation movement is
-  `op0b_s4_command_gate_package` (`OP.0b` S4) per the roadmap correction
-  above — but per this session's explicit instruction, do not start it yet;
-  that is future-session work. Recommended reasoning when it does start:
-  `Sonnet 5, extended thinking (high)` — security boundary (new
-  network-device command candidates).
+Push this branch, open a PR, wait for `validate` CI, merge if green
+(same posture as PR #38/#39). Then **the user needs to re-run `main.py`
+once more** — the next failure's `RuntimeError` will report
+`stderr_classification=[...]` instead of just a byte count. That
+classification is the next real evidence:
+- `no_such_file_or_directory` → prime suspect is `cp_inventory.sh` line 3's
+  `. /opt/CPshared/5.0/tmp/.CPprofile.sh` sourcing (unconfirmed without MDS
+  filesystem access).
+- `unclassified` → the closed category list missed it; do not add
+  categories speculatively, extend only from the next real observed text.
+- Anything else → follow the specific category.
+
+Do not attempt a third guess-based source change before that evidence
+comes back — this build's own risk note says so explicitly.
 
 ## 4. Test delta
 
-PR #38: +7 (`tests/test_ci_workflow_fast_pr_regression.py`). PR #39: +2
-(`tests/test_phase0_4_1_cp_automation.py` `FakeChannel` cases). No existing
-test changed or removed by either. Both branches' full-suite runs were
-green this session; no regression, no new skip.
++3 (`tests/test_phase0_4_1_cp_automation.py`: two classifier unit tests,
+one leak-check on `_run_remote_collection`'s exception message). No
+existing test changed or removed. Full suite this session: 1220 passed /
+24 skipped / 0 failed (up from 1217 pre-session, +3 new).
 
 ## 5. New risks / debt
 
-- PR #39: root cause of the original DONE-marker-loss remains `UNKNOWN`.
-  If it recurs, read the new diagnostic fields off the `RuntimeError`
-  before making any further change — do not guess again from source alone.
-- PR #38 (closed risk): branch-protection required-status-check name for
-  `validate` could not be independently confirmed via API in this session;
-  the PR's own CI ran and reported normally through merge, so this did not
-  block, but it was never positively confirmed either.
-- No other new risk: no dependency, schema, product, or network-device
-  behavior changed in either build.
+None new beyond what pass 1 already carried (root cause still `UNKNOWN`).
+The classifier is a closed, hand-picked list — a real cause outside it
+reports `unclassified` rather than vanishing, which is the fail-safe
+behavior, but doesn't itself name the cause.
 
 ## 6. Continue or fresh chat
 
-New session recommended once PR #39 is merged and its state-advance (if
-any) is settled — matches this repository's established pattern.
+Continue this chat once the user has the next real run's
+`stderr_classification` value — that's a quick, evidence-driven follow-up,
+not a new investigation. A fresh session is fine too since state is fully
+recorded here and in `CURRENT_STATE.md`/`build_history.json`.
 
 ## 7. main.py / UI effect
 
-Neither build changes visible `main.py`/UI behavior. PR #38 is CI/test
-infrastructure only. PR #39 changes only `_run_remote_collection`'s
-internal drain loop and its failure-path error text — the success path and
-return value are unchanged.
+None on the success path. On the specific failure path this build targets,
+the error message a real run prints now includes `stderr_classification`.
