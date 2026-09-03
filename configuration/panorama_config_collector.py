@@ -293,6 +293,130 @@ def _tokenize_ha_field_diagnostics(root: Any) -> dict[str, Any]:
     }
 
 
+#: OP.0b S2 bounded parse-scope extension. Each entry is
+#: ``(normalized_key, path relative to result/group, is_identity)``. Every
+#: field here is named and category-mapped in the frozen OP.0b.0 contract
+#: (D-V1/D-V2/D-V4 confirmation passes, 2026-09-03) -- this is *parsing more
+#: of the same already-fetched response* `get_target_ha_runtime_state`
+#: already receives, never a new command. Identity fields (``serial-num``)
+#: are tokenized by `_parse_pan_ha_preflight_fields`, never returned raw.
+#:
+#: ``peer-info/conn-ha1-backup/conn-status``'s nested shape is a structural
+#: inference by analogy with the confirmed ``conn-ha1``/``conn-ha2`` nesting
+#: (no official source captured an example with a backup HA1 interface
+#: configured) -- real-env validation owed (contract S8). A wrong guess here
+#: degrades safely to `None`/absent either way, never to a wrong value.
+_PAN_HA_PREFLIGHT_FIELD_MAP: tuple[tuple[str, str, bool], ...] = (
+    # group-level: config/running synchronization (D-V4 CLOSED_BY_DOCS)
+    ("running_sync", "running-sync", False),
+    ("running_sync_enabled", "running-sync-enabled", False),
+    # local-info: state-sync detail (state-sync itself already parsed below)
+    ("local_state_sync_type", "local-info/state-sync-type", False),
+    # local-info: election/preemption behavior
+    ("local_preemptive", "local-info/preemptive", False),
+    ("local_priority", "local-info/priority", False),
+    ("local_preempt_hold", "local-info/preempt-hold", False),
+    ("local_promotion_hold", "local-info/promotion-hold", False),
+    # local-info: transition/flap history (raw counters -- D-F3 threshold NOT applied here)
+    ("local_max_flaps", "local-info/max-flaps", False),
+    ("local_nonfunc_flap_cnt", "local-info/nonfunc-flap-cnt", False),
+    ("local_preempt_flap_cnt", "local-info/preempt-flap-cnt", False),
+    ("local_state_duration", "local-info/state-duration", False),
+    # local-info: failure/error state
+    ("local_last_error_reason", "local-info/last-error-reason", False),
+    ("local_last_error_state", "local-info/last-error-state", False),
+    # local-info: software/content parity
+    ("local_build_rel", "local-info/build-rel", False),
+    ("local_app_version", "local-info/app-version", False),
+    ("local_app_compat", "local-info/app-compat", False),
+    ("local_av_version", "local-info/av-version", False),
+    ("local_av_compat", "local-info/av-compat", False),
+    ("local_threat_version", "local-info/threat-version", False),
+    ("local_threat_compat", "local-info/threat-compat", False),
+    ("local_url_version", "local-info/url-version", False),
+    ("local_url_compat", "local-info/url-compat", False),
+    # local-info: identity corroboration only (D-V3a unresolved; never pair authority)
+    ("local_serial_num", "local-info/serial-num", True),
+    # peer-info: link health -- conn-ha1/conn-ha2 structure confirmed 2026-09-03
+    ("peer_conn_status", "peer-info/conn-status", False),
+    ("peer_conn_ha1_status", "peer-info/conn-ha1/conn-status", False),
+    ("peer_conn_ha1_backup_status", "peer-info/conn-ha1-backup/conn-status", False),
+    ("peer_conn_ha2_status", "peer-info/conn-ha2/conn-status", False),
+    # peer-info: software/content parity, corroborating local's own *-compat view
+    ("peer_build_rel", "peer-info/build-rel", False),
+    ("peer_app_version", "peer-info/app-version", False),
+    ("peer_av_version", "peer-info/av-version", False),
+    ("peer_threat_version", "peer-info/threat-version", False),
+    ("peer_url_version", "peer-info/url-version", False),
+    # peer-info: this member's CLAIM about its peer's identity (category E, not A)
+    ("peer_serial_num", "peer-info/serial-num", True),
+)
+
+
+def _pan_ha_group_text(root: Any, relative_path: str) -> str | None:
+    """Read one leaf under ``result/group/`` from an already-fetched ``show
+    high-availability state`` response, normalized the one way this file
+    reads any such leaf: absent or whitespace-only -> `None`, else the
+    stripped text.
+
+    OP.0b S2 audit finding (session correction, 2026-09-03): before this
+    helper existed, `get_target_ha_runtime_state`'s baseline five-field
+    extraction and `_parse_pan_ha_preflight_fields` each independently
+    called `root.findtext(".//result/group/...")` with their own inline
+    strip-or-None logic -- two separate places that happened to normalize
+    the same way, not one place guaranteeing it. Both now read through this
+    one canonical group-level accessor, so a leaf under `result/group/` can
+    never be normalized two different ways in two different places. This
+    is a mechanical, behavior-preserving consolidation -- same paths, same
+    `None`-on-absent/whitespace semantics, same values -- not a new field
+    or a new interpretation of any field.
+
+    `_tokenize_ha_field_diagnostics` deliberately does not route through
+    this helper: it is a pre-existing, differently-shaped tool (an
+    unscoped enumeration of whatever child tag names PAN-OS actually
+    returns, HMAC-tokenizing every leaf generically for the OP.0a
+    peer-identity diagnostic) rather than a named-field reader, and it
+    feeds `_apply_pan_ha_peer_identity_diagnostic` / the B1/B2 identity
+    model -- out of S2's authorized scope to refactor (no pair-identity
+    redesign). Left untouched, deliberately, not silently.
+    """
+    text = root.findtext(f".//result/group/{relative_path}")
+    return text.strip() if text and text.strip() else None
+
+
+def _parse_pan_ha_preflight_fields(root: Any) -> dict[str, Any]:
+    """OP.0b S2: parse the additional contract-authorized fields out of the
+    same ``show high-availability state`` response
+    `get_target_ha_runtime_state` already holds as `root` -- no new command,
+    no new API call. A field absent from the response (or not present in
+    this PAN-OS/estate's shape) returns `None` explicitly; never a guess,
+    never an empty string standing in for absence.
+
+    Identity fields (``local-info/serial-num``, ``peer-info/serial-num``)
+    are tokenized here with the same `Tokenizer` / `"pan_ha_identity_value"`
+    kind label `_tokenize_ha_field_diagnostics` and
+    `_apply_pan_ha_peer_identity_diagnostic` already use elsewhere in this
+    file, so a raw serial is never returned by this function under any
+    field name. This does not reuse those functions directly -- they serve a
+    different purpose (a blanket diagnostic sweep over every field) and
+    coupling to them would tie this bounded, contract-scoped extraction to
+    diagnostic-only behavior it does not need.
+    """
+    values: dict[str, Any] = {}
+    tok: Tokenizer | None = None
+    for key, path, is_identity in _PAN_HA_PREFLIGHT_FIELD_MAP:
+        text = _pan_ha_group_text(root, path)
+        if text is None:
+            values[key] = None
+        elif is_identity:
+            if tok is None:
+                tok = Tokenizer(_get_support_key())
+            values[key] = tok.token("pan_ha_identity_value", text)
+        else:
+            values[key] = text
+    return values
+
+
 def get_target_ha_runtime_state(
     host: str,
     key: str,
@@ -301,6 +425,7 @@ def get_target_ha_runtime_state(
     verify: bool | str,
     timeout: float,
     capture_field_diagnostics: bool = False,
+    include_preflight_fields: bool = False,
 ) -> dict[str, Any]:
     """Read the managed firewall's actual HA runtime state through Panorama.
 
@@ -308,8 +433,14 @@ def get_target_ha_runtime_state(
     role under ``result/group/local-info/state`` for ``show high-availability
     state``. Static HA configuration is deliberately not used to infer a role.
 
-    ``capture_field_diagnostics`` is off by default; it never changes the
-    request issued, only what is additionally read from the same response.
+    ``capture_field_diagnostics`` and ``include_preflight_fields`` are both
+    off by default; neither ever changes the request issued, only what is
+    additionally read from the same response. ``include_preflight_fields``
+    (OP.0b S2) adds a ``preflight_fields`` key -- the contract-authorized
+    field family `_parse_pan_ha_preflight_fields` extracts -- for a caller to
+    project into `utils.failover.preflight_model.PreflightFact` instances via
+    `panorama.pan_preflight_projection.project_pan_preflight_facts`; nothing
+    in this module consumes it yet.
     """
     root = api_post(
         host,
@@ -324,10 +455,10 @@ def get_target_ha_runtime_state(
         operation=f"Panorama target HA runtime state serial={_fingerprint(serial)}",
     )
     enabled = (root.findtext(".//result/enabled") or root.findtext(".//enabled") or "").strip() or None
-    state = (root.findtext(".//result/group/local-info/state") or "").strip() or None
-    mode = (root.findtext(".//result/group/local-info/mode") or "").strip() or None
-    peer_state = (root.findtext(".//result/group/peer-info/state") or "").strip() or None
-    state_sync = (root.findtext(".//result/group/local-info/state-sync") or "").strip() or None
+    state = _pan_ha_group_text(root, "local-info/state")
+    mode = _pan_ha_group_text(root, "local-info/mode")
+    peer_state = _pan_ha_group_text(root, "peer-info/state")
+    state_sync = _pan_ha_group_text(root, "local-info/state-sync")
     result: dict[str, Any] = {
         "enabled": enabled,
         "state": state,
@@ -337,6 +468,8 @@ def get_target_ha_runtime_state(
     }
     if capture_field_diagnostics:
         result.update(_tokenize_ha_field_diagnostics(root))
+    if include_preflight_fields:
+        result["preflight_fields"] = _parse_pan_ha_preflight_fields(root)
     return result
 
 
