@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0",
-  "current_build": "cp_remote_collection_done_marker_diagnostics",
-  "current_track": "CON.x",
+  "current_build": "op0b_s4_command_gate_package",
+  "current_track": "OP.x",
   "progress_contract": "Weighted acceptance-criterion completion. Percentages describe the declared roadmap, not calendar time or delivery ETA.",
   "tracks": [
     {
@@ -123,26 +123,37 @@
   "now_next": {
     "horizon_contract": "NOW is exactly one build. NEXT is exactly one. Everything else is an `upcoming` row carrying its own true status: planned = AFTER, blocked = waiting on a named external gate, deferred = consciously postponed. `now.build` must equal the newest project/build_history.json record -- utils.project_plan enforces it.",
     "now": {
-      "build": "cp_remote_collection_done_marker_diagnostics",
-      "title": "CP remote collection - DONE-marker-loss diagnostic hardening",
-      "goal": "User-reported real-run failure: RuntimeError('CP remote collection ended without DONE marker'), exit_status=0. checkpoint/scripts/cp_inventory.sh's last statement is a bare `echo \"DONE\"` with no early-exit path reaching it, so root cause is UNKNOWN pending real-device reproduction -- no device access in this session. Source inspection found checkpoint/cp_runner.py's _run_remote_collection channel-drain loop reading only one recv()/recv_stderr() chunk per outer pass before its exit-status break check, unlike checkpoint/direct_ssh_probe.py's already-proven tight-drain idiom (`while recv_ready(): ...`). Aligned _run_remote_collection with that idiom (behavior-preserving hardening) plus a defensive final drain, and enriched the RuntimeError with safe diagnostic fields (exit_status/processed_gw/total_gw/stderr_bytes/last_marker) so a recurrence carries real evidence instead of a bare message. New tests/test_phase0_4_1_cp_automation.py FakeChannel tests prove the multi-chunk drain and the diagnostic fields. Full local suite 1210 passed/24 skipped/0 failed. Explicitly NOT a confirmed fix -- status stays in_progress until real-device evidence exists. Second pass (real recurrence reported by the user on the first pass's code): the new diagnostic fields (processed_gw=0, total_gw=None, last_marker=None, stderr_bytes=658) proved the channel-drain race was NOT the cause and located the failure to before cp_inventory.sh line ~94, with real stderr the code was discarding. Added a bounded, privacy-safe stderr classifier (_classify_stderr_sample) that reports a category token (no_such_file_or_directory / command_not_found / permission_denied / not_a_tty / unbound_variable / syntax_error / connection_reset_or_broken_pipe / unclassified) instead of a bare byte count, discarding the raw sample immediately after classification -- never logged or raised. +3 tests, full suite 1220/24/0. Root cause remains UNKNOWN; status stays in_progress until the next real run's classification narrows it further or a fix is confirmed.",
-      "status": "in_progress",
+      "build": "op0b_s4_command_gate_package",
+      "title": "OP.0b S4 - OP.0b.1 command-gate package (CP A4-A9 / PAN P3-P5)",
+      "goal": "Docs-only network-device command security gate converting the FROZEN OP.0b.0 candidate battery (CP A4-A9, PAN P3-P5) into individually adjudicated gate entries per docs/AI_DEVELOPMENT_PROTOCOL.md 'Network-device command gate': docs/history/phase/OP_0B_1_COMMAND_GATE_PACKAGE.md (new, status DRAFT -- pending explicit product-owner approval, per the build's own approval-boundary instruction: never self-approve new device commands). Outcome: CP A4 (cphaprob -a if), A5 (cphaprob -ia list), A6 (cphaprob syncstat / fw ctl pstat), A7 (fw stat), A8 (cluster failover statistics, observation form only), and the already-approved-elsewhere vsx stat -v (new session) are APPROVED_FOR_S5; A9 (management-plane recovery/preemption attribute) stays DEFERRED_UNKNOWN -- no safe machine-readable source exists (D-V7b, bug register CP-3, P0 before CLASS 2). PAN P4 (show high-availability path-monitoring) is APPROVED_FOR_S6; P3 (show high-availability all) is OPTIONAL_APPROVED only (running-sync already sourced from P2, per the build's own re-justification instruction); P5 (show high-availability link-monitoring) stays DEFERRED_UNKNOWN -- its exact command syntax is only PARTIALly vendor-confirmed in the frozen contract. No mutating command is reclassified; all seven previously-identified mutating operations stay REJECTED. New tests/test_op0b_s4_command_gate.py (deterministic, text-level: decision vocabulary, CLASS_0_READ-only, mutating commands stay REJECTED, deferred rows approve nothing) plus targeted architecture-convergence re-run, both green locally. This build authorizes NO implementation: S5/S6 start only after the PO approval package (returned this session) is explicitly signed off -- see docs/AI_DEVELOPMENT_PROTOCOL.md merge policy. PO approval recorded 2026-09-03 (same session, PR #41): CP A4-A8 + B1 (VSX only) and PAN P4 authorized for S5/S6 implementation, each with NO_RETRY (no new application-level command retry) and, for A6/A8, evidence-based (never failure-driven) form dispatch; B1 explicitly reuses the existing per-member SSH session (no new session authorized). A10/A11/P3 stay OPTIONAL_APPROVED technically but are withheld from the current implementation battery; A9/P5 unchanged DEFERRED_UNKNOWN. Network bound frozen at <=18 required CP VSX / <=16 required CP non-VSX ClusterXL / <=6 required PAN invocations per selected HA entity pair. PR #41 fast CI green, mergeable.",
+      "status": "automated_validated",
       "started": "2026-09-03"
     },
     "next": {
-      "build": "op0b_s4_command_gate_package",
-      "title": "OP.0b S4 - OP.0b.1 command-gate package (CP A4-A9 / PAN P3-P5, official-doc confirmation)",
+      "build": "op0b_s5_cp_preflight_collector",
+      "title": "OP.0b S5 - Check Point dedicated preflight collector",
       "status": "planned",
       "notes": [
-        "Frozen OP.0b.0 contract dependency order: S0 -> S1 -> (S2, S3 in parallel) -> S4 -> (S5, S6) -> S7 -> S8; S9 independent after S7. S1/S2/S3 are AUTOMATED_VALIDATED -- S4 is the next implementable slice, not S5/S6 (which depend on S4's approved gate).",
-        "Docs only, no code, no device I/O: the ten-point command-gate entry per new SS24 row for CP A4 (cphaprob -a if), A5 (cphaprob -ia list), A6 (cphaprob syncstat / fw ctl pstat), A7 (fw stat), A8 (cluster failover statistics), A9 (management-plane recovery setting) and PAN P3 (show high-availability all), P4 (show high-availability path-monitoring), P5 (show high-availability link-monitoring) -- vendor, read/write class, shell/context, timeout, retry, frequency, session reuse, unsupported behavior, secret-output risk, safe telemetry (docs/AI_DEVELOPMENT_PROTOCOL.md network-device command gate).",
-        "Requires official-vendor-documentation confirmation of each row's currently UNKNOWN/INSUFFICIENT status first (AGENTS.md vendor semantics law) before the gate entries can be written -- same GitHub-mirror-first technique that already closed D-V4/D-V7a.",
-        "Distinct from D-V3a/D-V7b (moved to upcoming, unchanged, non-blocking) -- those gate only the PAN successor identity model and CLASS 2, not S4/S5/S6.",
-        "Even once drafted, this package is a candidate list, not an approval -- CURRENT_STATE.md 'OP.0b' open blocker (product-owner/security sign-off) still applies before any command is actually approved for S5/S6 implementation.",
-        "Recommended: Sonnet 5, extended thinking (high) -- security boundary (new network-device command candidates)."
+        "Unblocked 2026-09-03: PO approved the OP.0b.1 command-gate package (docs/history/phase/OP_0B_1_COMMAND_GATE_PACKAGE.md, Approval record) -- PR #41.",
+        "Implementation battery (PO-frozen, not the wider technical candidate list): CP A1-A3 (existing) + A4 (cphaprob -a if), A5 (cphaprob -ia list), A6 (cphaprob syncstat / fw ctl pstat, evidence-based version dispatch only), A7 (fw stat), A8 (cluster failover statistics, default invocation only, evidence-based platform dispatch only) -- 8 required reads/member; B1 (vsx stat -v) additionally required for the VSX battery only, reusing the existing per-member SSH session (a NEW SSH TRANSPORT SESSION IS NOT AUTHORIZED -- if reuse proves impossible, stop and return to the PO for review rather than opening one). A9, A10, A11 are NOT part of this implementation battery (A9 DEFERRED_UNKNOWN; A10/A11 technically OPTIONAL_APPROVED but PO-withheld for this slice).",
+        "Binding retry constraint: NO_RETRY on every command -- no new application-level command retry, and no failure-driven fallback between A6's/A8's two dispatched forms (the form is chosen from already-collected version/capability evidence before execution).",
+        "Network bound: <=18 required device commands per selected VSX pair (2 members x 9), <=16 per selected non-VSX ClusterXL pair (2 members x 8) -- all within the 2 already-open per-member sessions, no fleet-wide or first-N behavior.",
+        "New checkpoint/preflight_collector.py wires the already-implemented, currently-dormant S1/S3 extraction/projection seams (_parse_clusterxl_stat_preflight_fields, project_cp_preflight_facts) with a real preflight_run_id -- reuses existing transport/session/identity-gate primitives, no new credential path.",
+        "S6 (Palo Alto dedicated preflight collector; PAN P1-P2 existing + P4 show high-availability path-monitoring, NO_RETRY, same PO-withheld treatment for P3, unchanged DEFERRED_UNKNOWN for P5) is the parallel sibling slice, same approval, per the frozen OP.0b.0 dependency order S4 -> (S5, S6) -> S7 -> S8.",
+        "Recommended branch: feature/op0b-s5-cp-preflight-collector. New session. Recommended reasoning: Sonnet 5, normal -- bounded collector implementation against a frozen, PO-approved command gate."
       ]
     },
     "upcoming": [
+      {
+        "build": "cp_remote_collection_done_marker_diagnostics",
+        "title": "CP remote collection - DONE-marker-loss diagnostic hardening",
+        "status": "in_progress",
+        "notes": [
+          "Moved from now_next.now (2026-09-03 roadmap correction, OP.0b S4 session): stalled pending a real-device recurrence with the new diagnostic fields (exit_status/processed_gw/total_gw/stderr_bytes/last_marker/stderr_classification) -- no device access in this session, so it cannot progress here. Full detail: project/build_history.json 'cp_remote_collection_done_marker_diagnostics'.",
+          "Does not block OP.0b S4/S5/S6 -- independent subsystem (CP inventory collection channel-drain diagnostics vs. the OP.0b preflight command gate).",
+          "Resume when a real recurrence report with the new fields is available."
+        ]
+      },
       {
         "build": "op0b_0_close_d_v3a_d_v7b_pre_class2",
         "title": "OP.0b.0 - close D-V3a/D-V7b before CLASS 2 (not a freeze gate)",
@@ -265,7 +276,7 @@
     "VSX configuration evidence was originally targeted for 0.6.2 but was delivered early inside the 0.6.1B Check Point configuration track.",
     "The original 0.6.0B native-backup milestone was deferred pending a rebase; that rebase landed 2026-08-30 as docs/design/BACKUP_AND_RECOVERY_ARCHITECTURE.md + docs/design/BACKUP_RECOVERY_CONTRACTS.md (phases RB.0-RB.6). The original constraint stands and is now the design's first principle: configuration evidence is not a recovery backup -- the evidence plane is deliberately redacted and therefore non-restorable, so a separate encrypted recovery plane is required. Backup artifact bytes must never reach output/index.html, the support bundle, or repository metadata; only manifests may be read by other subsystems.",
     "Write/change automation remains outside the current roadmap gate until SEE, VERIFY, TRACE and RECOVER are sufficiently mature.",
-    "Future 0.7.x\u00e2\u20ac\u201c1.0 major-track numbering is a planning map, not a frozen release commitment; rebase it explicitly when a preceding phase changes implementation order.",
+    "Future 0.7.xâ€“1.0 major-track numbering is a planning map, not a frozen release commitment; rebase it explicitly when a preceding phase changes implementation order.",
     "DEPLOY.1 pulls the server_data_plane portion of the 1.0 GOVERN track forward to host the living SEE-track platform; it must not be used to bypass the write/change automation gate stated above.",
     "DEV.1 establishes the controlled Corporate Git/Copilot operating baseline; after acceptance, engineering returns to product work at 0.6.1C. DEV.0.3C remains deferred to the pre-server storage-sensitive checkpoint.",
     "0.7.x early VERIFY foundation was delivered ahead of schedule in 0.6.1B.1.5 and 0.6.1B.1.6; the 0.7.x formal track opens with compliance_posture_rulepack_transition promoting those controls to versioned rule packs.",
@@ -415,7 +426,7 @@
         },
         {
           "build": "DEV.3.4",
-          "title": "Per-vendor worker containers \u2014 DEFERRED until collection duration is a real operational pain; requires DEV.3.3 first",
+          "title": "Per-vendor worker containers — DEFERRED until collection duration is a real operational pain; requires DEV.3.3 first",
           "status": "deferred"
         }
       ]
