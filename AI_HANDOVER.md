@@ -16,87 +16,88 @@ doc. Prior versions are in git history.
 
 ## 1. Snapshot
 
-- Date: 2026-09-03. Branch `main` (this session ended with everything
-  merged — no feature branch remains checked out).
-- This session closed out `op0b_s2_pan_parse_scope_extension`
-  (**AUTOMATED_VALIDATED**) via a Git topology reconciliation: the
-  session's six-commit stack (three `OP.0b.0` contract-freeze commits, S1,
-  S2, and an S2 correction) was split into three sequential,
-  independently-CI-validated PRs and merged to `main` in order.
+- Date: 2026-09-03. Two independent branches this session, both off `main`
+  (which already carries PRs #34/#35/#36/#37):
+  - `claude/kaizen-fast-pr-ci-yx6oe3` → PR #38 (CI/test-infrastructure only)
+  - `claude/cp-remote-collection-done-marker` (CP live-collection diagnostic
+    hardening) — PR opened this session, see below for its number/status
 
 ## 2. What changed this session
 
-**Part 1 — acceptance correction** (before any PR existed): a PO/
-architecture review found the original S2 close overclaimed
-`COLLECTED_AND_PARSED`/`automated_validated`. Fixed: contract §25 field-
-trace rows corrected to `PARSER_IMPLEMENTED — PRODUCTION_WIRING_PENDING`,
-new §25a gives the six-dimension reconciliation and the explicit S2-vs-
-S5/S6 responsibility boundary; a genuine single-extraction-authority gap
-(three independent XML-root traversals) fixed via one shared
-`_pan_ha_group_text()` accessor; status corrected to `in_progress` pending
-real CI evidence (this container lacks `lxml`, and was deliberately not
-modified to force a local pass).
+**Build 1 — `dev_kaizen_fast_pr_ci` (PR #38):** split
+`.github/workflows/validation.yml` into a fast `validate` job
+(`pull_request` only, no full suite) and a `full-regression` job (`push` to
+`main` + `workflow_dispatch`, full serial suite). Canonical policy in
+`docs/AI_DEVELOPMENT_PROTOCOL.md` "CI validation policy". New
+`tests/test_ci_workflow_fast_pr_regression.py` (+7). No product/network/
+dependency change. Full local regression: 1215 passed/24 skipped/0 failed.
 
-**Part 2 — Git topology reconciliation and sequential PRs:**
+**Build 2 — `cp_remote_collection_done_marker_diagnostics`:** the user hit
+`RuntimeError('CP remote collection ended without DONE marker')`
+(`exit_status=0`) on a real run. `checkpoint/scripts/cp_inventory.sh`'s last
+statement is a bare `echo "DONE"` with no early-exit path before it, so
+**root cause stays `UNKNOWN`** — not reproduced, no device access in this
+session. Source inspection found `checkpoint/cp_runner.py`'s
+`_run_remote_collection` channel-drain loop reading only one
+recv()/recv_stderr() chunk per outer pass before its exit-status break
+check, unlike `checkpoint/direct_ssh_probe.py`'s already-proven
+`_run_session_command` tight-drain idiom. Aligned `_run_remote_collection`
+with that idiom (behavior-preserving hardening, not a confirmed fix) plus
+one defensive final drain, and enriched the `RuntimeError` with safe
+diagnostic fields (`exit_status`/`processed_gw`/`total_gw`/`stderr_bytes`/
+`last_marker`). New `tests/test_phase0_4_1_cp_automation.py` `FakeChannel`
+tests (+2) prove the multi-chunk drain and that no device identity leaks
+into the error message. Full local regression: 1210 passed/24 skipped/0
+failed (this branch's baseline, one file fewer than build 1's since the two
+branches haven't merged into each other).
 
-- **PR [#34](https://github.com/ozandurmus/neXus/pull/34)** — `OP.0b.0`
-  contract freeze (three doc-only commits: official vendor semantics pass
-  1, Source Pack 2 reconciliation, final blocker closure). CI green.
-  Merged → `85ca1b5`.
-- **PR [#35](https://github.com/ozandurmus/neXus/pull/35)** — `OP.0b` S1,
-  preflight fact + provenance model, from the new `main`. CI green (23 S1
-  tests + 19 convergence). Merged → `f993008`.
-- **PR [#36](https://github.com/ozandurmus/neXus/pull/36)** — `OP.0b` S2 +
-  its correction, from the new `main`. **This PR's CI is the first place
-  anywhere that `tests/test_op0b_s2_pan_extraction.py`'s 20 `lxml`-based
-  tests actually executed** — full suite result **1153 passed / 28
-  skipped / 0 failed** (~11 min, real dependency set: `lxml`/`paramiko`/
-  `cryptography`/`fastapi`, all already declared in `requirements*.txt`).
-  Merged → `6873ad9`.
-- **Post-merge:** advanced `op0b_s2_pan_parse_scope_extension`'s status
-  `in_progress` → `automated_validated` in `project/build_history.json`/
-  `roadmap.json`/`CURRENT_STATE.md`, citing PR #36's CI run as the
-  evidence, then regenerated `docs/history/INDEX.md`. This one metadata
-  commit was pushed directly to `main` post-merge rather than through a
-  fourth PR — pure state reconciliation following a proven-green PR, not
-  new implementation; flagged here rather than left implicit.
-
-The original working branch, `claude/vendor-semantics-confirmation-pt2iiq`,
-was left untouched on `origin` as the session's safety/reference copy —
-not force-pushed, not deleted, not rewritten.
+Both builds updated `project/roadmap.json`/`project/build_history.json`/
+`CURRENT_STATE.md`/`docs/history/INDEX.md` for their own build id.
 
 ## 3. Exact next action
 
-**`OP.0b` S3** (`now_next.next`) — CP parse-scope extension, same pattern
-as S2 but for Check Point's `cphaprob stat` output. Per this session's own
-governing instructions: **new session, new branch**
-(`feature/op0b-s3-cp-preflight-parser`), not a continuation of this one.
-Recommended reasoning tier: `Sonnet 5, normal`.
+- **PR #38** (`dev_kaizen_fast_pr_ci`): CI came back green
+  (`validate` succeeded, `full-regression` correctly skipped on the PR
+  event), no review comments, `mergeable_state=clean`. User authorized
+  merging both branches to `main` if green — merge this one, then advance
+  its build_history/roadmap status to `automated_validated` citing the PR's
+  CI run, push that state-advance directly to `main` (established S2/S3/
+  post-merge pattern), and sync local `main`.
+- **CP branch PR**: push + open PR, wait for its `validate` CI, then apply
+  the same merge-if-green + state-advance treatment. This build stays
+  `in_progress` even after merge — it is diagnostic hardening, not a closed
+  fix; do not mark it `automated_validated` as "the fix" until a real
+  recurrence (or a watched real run) is observed with the new fields.
+- After both: return to `OP.0b` — `now_next.next`
+  (`op0b_0_close_d_v3a_d_v7b_pre_class2`).
 
 ## 4. Test delta
 
-No new tests this session (pure reconciliation + one refactor already
-covered by S1/S2's own suites). Net across the three merged PRs: +23 (S1)
-+34 (S2: 20 extraction + 14 projection) = +57 tests, all now proven in CI.
-Full-dependency CI baseline: **1153 passed / 28 skipped / 0 failed**
-(2026-09-03, PR #36), superseding the prior 1099/24/0 (2026-09-02).
+Build 1: +7 (`tests/test_ci_workflow_fast_pr_regression.py`). Build 2: +2
+(`tests/test_phase0_4_1_cp_automation.py` `FakeChannel` cases). No existing
+test changed or removed in either. Both full-suite runs green this session
+(counts above); no regression, no new skip.
 
 ## 5. New risks / debt
 
-None introduced. What changed is bookkeeping accuracy: S2's status now
-genuinely reflects CI-proven test execution rather than an unverified
-claim. S2's parse capability remains dormant/opt-in by design — still not
-wired into the production collection call site; that wiring is S5/S6's
-job. `D-F1`/`D-F2`/`D-F3`, `D-V3a`, `D-V7b`, PAN `B2` remain exactly as
-unresolved as before. CLASS 2 stays structurally unreachable.
+- PR #38: branch-protection required-status-check name for `validate`
+  could not be independently confirmed in this session (no such API tool
+  available) — kept the job id unchanged as the safest bet; watch the PR
+  page to confirm the required check still gates merge.
+- CP branch: root cause of the original DONE-marker-loss remains
+  `UNKNOWN`. If it recurs, read the new diagnostic fields off the
+  `RuntimeError` before making any further change — do not guess again
+  from source alone.
 
 ## 6. Continue or fresh chat
 
-**New session required for S3** — stated explicitly by this session's
-governing instructions, not just a preference.
+New session recommended once both PRs are merged and their post-merge
+state-advance commits are pushed, per the kaizen build's own governing
+instructions and this repo's established pattern.
 
 ## 7. main.py / UI effect
 
-None. `include_preflight_fields` still defaults `False`; nothing merged
-this session is wired into any production call site, UI, or persisted
-telemetry schema.
+Build 1: none (CI/test-infrastructure only). Build 2: none visible in
+normal operation — `_run_remote_collection`'s drain behavior and error
+message changed, but the success path and its return value are unchanged;
+only a currently-failing run's error text differs.
