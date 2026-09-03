@@ -3,6 +3,32 @@
   "record_contract": "One structured record per build, newest first. Required: build, status, title, summary (<= 2 sentences). Optional: started, completed, track, movement, supersedes, evidence, risks_forward, docs{agreement,validation,handover} (repo-relative paths under docs/history/). Full detail lives in the linked doc; do not restate it here. Status vocabulary must stay within utils/project_plan.py STATUS_VALUES.",
   "builds": [
     {
+      "build": "op0b_s8_realenv_campaign_corrections",
+      "status": "automated_validated",
+      "title": "OP.0b S8 - real-environment campaign corrections (trust, retry, A3 wiring, device session architecture)",
+      "summary": "Four bounded corrections surfaced by the first live S8-A ClusterXL attempt: a host-key rejection no longer enters the connect retry loop (typed HostKeyNotTrustedError at the one shared trust seam); the CP HA preflight now defaults to the same compatibility trust mode every other CP SSH caller already had, with mandatory strict enforcement deferred to production container hardening by PO decision; A3's local_role/cluster_mode are finally merged into the fields contract project_cp_preflight_facts always documented needing; and the member session became a real per-member execution context that resolves its command plan once and stops paying a device-side login/CLI initialization per read. No new device command, no mutation, no retry/fallback authority change, no readiness-semantics change.",
+      "started": "2026-09-03",
+      "track": "OP.0b",
+      "movement": "IMPLEMENTATION",
+      "supersedes": null,
+      "evidence": [
+        "PR #47 host-key retry classification: missing/mismatched host key and authentication failure are non-retryable in both CP connect retry loops (direct_ssh_probe's inner loop previously had no non-retryable clause at all, so auth failures and host-key mismatches were being retried against the file's own stated invariant). tests/test_op0b_s8_host_key_retry_classification.py -- 26 passed.",
+        "PR #48 development trust policy: run_cp_preflight strict_host_key defaults False, matching every sibling CP SSH caller; strict remains fully implemented and selectable; no new CLI flag, env var or config schema. tests/test_op0b_s8_dev_compat_trust_policy.py -- 20 passed.",
+        "PR #49 A3 mode-evidence differential: collect_member merges local_role/cluster_mode via the same canonical parsers the established VS-context path uses; _parse_clusterxl_stat_preflight_fields's own S3 scope untouched. tests/test_op0b_s8_a3_mode_evidence_differential.py -- 10 passed; 6 of them fail against the pre-fix code.",
+        "PR #50 device session/execution context: _run_exec gains explicit use_pty (default True, every existing caller unchanged); the preflight session binds use_pty=False; MemberSession resolves sw_version/platform_family/a6_form/a8_form exactly once. Safe counts per member: authenticated connects 1, closes 1, exec channels == scheduled reads, PTY requests 8/9 -> 0. tests/test_op0b_s8_device_session_architecture.py -- 21 passed; 5 fail against the pre-fix code.",
+        "Palo Alto S6 audited against the same one-authenticated-context-per-member invariant: already compliant (one get_firewall_api_key per member, reused verbatim by P1/P2/P4); proven by tests, implementation untouched.",
+        "Full serial suite 1535 passed / 24 skipped / 0 failed; repository privacy gate PASS/0; architecture convergence 19 passed; git diff --check clean."
+      ],
+      "risks_forward": [
+        "S8-A/S8-B/S8-C real-environment validation remain NOT EXECUTED. Blocked on operator SSH access to the approved pairs: during the campaign the device stopped offering password authentication, and the operator's own recovery work (clish 'set ssh server password-authentication yes' + save config, then direct edits to /etc/ssh/sshd_config and its Gaia template, then a service sshd restart) has not yet been confirmed to have restored access. Environment/access matter, not an engineering blocker.",
+        "The A3 real-device outcome is unresolved: the wiring defect is fixed and proven, but the one live retry after it was never confirmed to have run on the fixed commit before device access was lost. Source tracing shows the established parser and the S5 projection now agree exactly, and the parser survives terminal-escape contamination, so if ha_mode_not_established persists on a confirmed HA pair over the now-clean channel, the remaining divergence is device-side execution context (an Expert-shell/direct-Clish landing question), not the parser.",
+        "Production strict host-key enforcement stays deliberately deferred -- tracked as backlog cp_production_ssh_host_key_trust_hardening (P0, production-blocking before production deployment / CLASS 2). Current development posture is explicitly INCOMPLETE by PO decision, not a regression."
+      ],
+      "docs": {
+        "agreement": "docs/history/phase/OP_0B_1_COMMAND_GATE_PACKAGE.md"
+      }
+    },
+    {
       "build": "op0b_s8_p01_cp_ssh_trust_preflight_correction",
       "status": "automated_validated",
       "title": "OP.0b S8-P0.1 - CP SSH strict trust-store preflight correction",

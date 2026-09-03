@@ -7,15 +7,12 @@ detail is not here either** — it is in `project/build_history.json`
 linked documents under `docs/history/`. `docs/history/INDEX.md` is the
 generated one-line timeline.
 
-- **Checkpoint:** 2026-09-03, branch `claude/cp-ssh-trust-preflight-fix-pf0611` (base `main`).
+- **Checkpoint:** 2026-09-04, branch `main` (S8 campaign corrections merged).
 - **Current build** (per `project/roadmap.json` `now_next.now`):
-  `op0b_s8_p01_cp_ssh_trust_preflight_correction` — **AUTOMATED_VALIDATED**,
-  pending PO security review before merge. `OP.0b` S8-P0.1: the shared
-  strict CP SSH host-key preflight gated on the wrong Paramiko store, so
-  `strict=True` was unusable with a correctly provisioned `known_hosts`;
-  corrected in `utils/cp_ssh_trust.py` only (see "Active build").
-  `now_next.next` = `op0b_s8_real_env_validation` (S8-A: NOT EXECUTED, ZERO
-  CONTACTS, BLOCKED pending this correction + trusted host-key provisioning).
+  `op0b_s8_realenv_campaign_corrections` — **AUTOMATED_VALIDATED**. The four
+  bounded corrections the first live `S8-A` attempt surfaced (see "Active
+  build"). `now_next.next` = `op0b_s8_real_env_validation` — **BLOCKED ON
+  DEVICE ACCESS**, S8-A/B/C NOT EXECUTED / ZERO CONTACTS.
   `cp_remote_collection_done_marker_diagnostics` stays `now_next.upcoming`
   (`IN_PROGRESS`).
 - **Product baseline:** `0.7.7 — Compliance trend retro-fill` — AUTOMATED_VALIDATED.
@@ -50,24 +47,26 @@ test-enforced boundaries. Current numbers:
 
 ## Active build
 
-**`op0b_s8_p01_cp_ssh_trust_preflight_correction`** — **AUTOMATED_VALIDATED**,
-2026-09-03, pending PO security review before merge. `OP.0b` S8-P0.1:
-`utils/cp_ssh_trust.py` loaded trusted keys into Paramiko's read-only system
-store (`load_system_host_keys`) but gated on the writable local store
-(`get_host_keys()`), so a correctly provisioned system/user `known_hosts`
-could never satisfy `strict=True`. The precondition is now "at least one
-configured trusted source was successfully loaded", derived via public
-Paramiko APIs (explicit system `known_hosts` path + `paramiko.HostKeys`
-parse of the same file); missing/unreadable → `trust_source_unreadable`,
-unparsable → `trust_source_malformed`, empty → `no_usable_host_keys_loaded`,
-all before `connect()`. Pinned with real Paramiko + synthetic keys
-(`tests/test_op0b_s8_p01_cp_ssh_trust_preflight_correction.py`); the older
-`get_host_keys()` mocks were reworked to real isolated files. Preserved:
-`RejectPolicy`, fail-before-connect, `strict=False` behavior, all five
-callers on the one helper, no AutoAdd/TOFU/enrollment, no new env/CLI/config
-surface, no device command, zero device contact. No explicit RuntimeRoot
-trusted-source path exists (`NOT_PRESENT`); none added. Correction note:
-`docs/history/phase/PHASE0_6_4_CP_SSH_HOST_KEY_TRUST_PRODUCTION_CLOSURE.md`.
+**`op0b_s8_realenv_campaign_corrections`** — **AUTOMATED_VALIDATED**,
+2026-09-04. Everything the first live `S8-A` ClusterXL attempt surfaced,
+corrected inside existing frozen semantics: host-key rejections are
+non-retryable at the one shared trust seam (#47); `run_cp_preflight`
+defaults to compatibility trust like every sibling caller, strict retained
+and selectable, production enforcement deferred by PO decision to backlog
+`cp_production_ssh_host_key_trust_hardening` (#48); A3's
+`local_role`/`cluster_mode` reach the fields contract the S5 projection
+documents, via the established canonical parsers (#49); and `MemberSession`
+became a per-member execution context — one authenticated session, one
+command plan resolved once, per-member PTY requests 8/9 → 0, exec channels
+== scheduled reads (#50). PAN already satisfied the equivalent
+one-authenticated-context invariant and was left untouched. No new device
+command, mutation, retry/fallback authority, identity or readiness-contract
+change. Detail: `project/build_history.json`.
+
+**S8-A/B/C** (`now_next.next`): **NOT EXECUTED, ZERO CONTACTS, BLOCKED ON
+DEVICE ACCESS** — the approved CP pair stopped offering SSH password
+authentication during the campaign and operator recovery is unconfirmed.
+Engineering side is ready and merged.
 
 **Stalled, moved to `now_next.upcoming`:**
 `cp_remote_collection_done_marker_diagnostics` — still `IN_PROGRESS`,
@@ -167,10 +166,11 @@ Concurrency budget stays at 1 per vendor pending its own real-environment eviden
 ## Automated test baseline
 
 ```
-1468 passed / 24 skipped / 0 failed (2026-09-03, op0b_s8_p01_cp_ssh_trust_preflight_correction,
-  this session's local sandbox, serial, dev + console extras installed session-locally)
-  -- exactly +47 new (test_op0b_s8_p01_cp_ssh_trust_preflight_correction.py) over
-  the same sandbox's HEAD baseline of 1421 / 24 / 0; no repository dependency change.
+1535 passed / 24 skipped / 0 failed (2026-09-04,
+  op0b_s8_realenv_campaign_corrections, this session's local sandbox, serial)
+  -- +67 over the op0b_s75_preflight_entrypoint baseline of 1468/24/0, from
+  four new S8 regression files (host-key retry classification, development
+  trust policy, A3 mode differential, device session architecture).
 Repository privacy gate: PASS / 0 findings, clean checkout.
 Project-state consistency: metadata_warnings == [] under all cross-authority rules.
 ```
