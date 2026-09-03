@@ -280,7 +280,20 @@ def _looks_like_cli_error(stdout: str, stderr: str) -> bool:
     return any(pattern in haystack for pattern in CLI_ERROR_PATTERNS)
 
 
-def _run_exec(ssh: paramiko.SSHClient, command: str, timeout_seconds: int) -> dict[str, Any]:
+def _run_exec(
+    ssh: paramiko.SSHClient, command: str, timeout_seconds: int, *, use_pty: bool = True
+) -> dict[str, Any]:
+    """Execute one command over a new channel of the *existing* transport.
+
+    `use_pty` defaults to `True` -- the long-standing behavior every existing
+    caller relies on (some Gaia Embedded/Spark appliances only cooperate with
+    a PTY-backed channel). Pass `use_pty=False` for a plain non-interactive
+    exec: OP.0b S8-A real-environment evidence showed that a PTY-backed
+    channel makes the device run its per-session login/CLI initialization on
+    *every* command, which amplified one bounded battery into one extra
+    device-side CLI session per read, and can also inject terminal escape
+    sequences into output the parsers then have to survive.
+    """
     started = time.monotonic()
     stdout_chunks: list[bytes] = []
     stderr_chunks: list[bytes] = []
@@ -292,10 +305,11 @@ def _run_exec(ssh: paramiko.SSHClient, command: str, timeout_seconds: int) -> di
         if not transport or not transport.is_active():
             raise RuntimeError("ssh_transport_inactive")
         channel = transport.open_session(timeout=min(timeout_seconds, 10))
-        try:
-            channel.get_pty(term="vt100", width=200, height=60)
-        except Exception:
-            pass
+        if use_pty:
+            try:
+                channel.get_pty(term="vt100", width=200, height=60)
+            except Exception:
+                pass
         channel.exec_command(command)
         deadline = time.monotonic() + timeout_seconds
         while True:
