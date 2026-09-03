@@ -28,6 +28,7 @@ just another entry in the same member's fixed schedule, run over the same
 """
 from __future__ import annotations
 
+import time
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -110,6 +111,57 @@ def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+#: Delay between two reads of the same member's battery. Small enough to be
+#: invisible in total run time, large enough that the battery is not a burst
+#: of management-plane CLI sessions inside a single device-log second.
+INTER_READ_DELAY_SECONDS = 0.5
+
+
+# --- Execution-context capability gap (OP.0b S8-A real-environment) --------
+
+#: Gaia Clish's own rejection vocabulary for a command it does not know.
+#: Matched only to *classify* an already-failed read -- never to retry it,
+#: never to select a different command, never to infer a healthy state.
+_CLISH_REJECTION_MARKERS = (
+    "invalid command",
+    "unknown command",
+    "not a valid command",
+    "clinfr",
+)
+
+#: An approved read whose command text is a bare Expert-shell invocation --
+#: i.e. anything the battery does not wrap in `clish -c '...'`. Derived from
+#: the frozen `COMMAND_TEXT`, never from a second hand-maintained list.
+def _is_expert_shell_form(command_text: str) -> bool:
+    return not str(command_text or "").strip().startswith("clish -c")
+
+
+def classify_execution_context_gap(command_text: str, result: dict) -> bool:
+    """True when a failed read failed because the SSH account's login shell
+    never let the command reach a shell, not because the device answered
+    badly.
+
+    OP.0b S8-A device-log evidence: when the collector account's login shell
+    is the Gaia CLI wrapper rather than `/bin/bash`, every exec channel is
+    dispatched to `clish`. `clish -c '...'` reads execute normally; a bare
+    Expert read (`cphaprob ...`, `fw ...`, `vsx ...`) is rejected by `clish`
+    before any Check Point binary runs -- it never appears in the device's
+    own command audit trail at all.
+
+    That is a capability gap of the *account*, and it is deliberately not
+    repairable from here: reaching Expert from Clish requires the expert
+    password (a new credential path) and changing the account's shell is a
+    device mutation. Both are PO hard-stop conditions, so this function only
+    *reports* the gap -- it performs no fallback, retry or escalation.
+    """
+    if result.get("success"):
+        return False
+    if not _is_expert_shell_form(command_text):
+        return False
+    text = f"{result.get('stdout') or ''}\n{result.get('stderr') or ''}".lower()
+    return any(marker in text for marker in _CLISH_REJECTION_MARKERS)
+
+
 # --- Session abstraction: one per physical member, reused for every read ---
 
 @dataclass
@@ -150,8 +202,14 @@ class MemberSession:
     command_invocations: int = field(default=0, init=False)
 
     def run(self, read: CPPreflightRead) -> dict:
+        command_text = COMMAND_TEXT[read]
         self.command_invocations += 1
-        return self._run_command(COMMAND_TEXT[read])
+        result = self._run_command(command_text)
+        # Carry the command text alongside its own result so outcome
+        # classification never has to re-resolve or guess it.
+        if isinstance(result, dict):
+            result = {**result, "command_text": command_text}
+        return result
 
     def resolve_execution_context(
         self, *, sw_version: str | None, platform_family: str | None
@@ -175,16 +233,46 @@ def make_real_member_session(ssh, *, physical_device_identity: str, command_time
     already use for exactly this shape of read; this module introduces no
     second transport path (task S5 §25).
 
-    `use_pty=False`: the battery is a set of plain non-interactive reads, and
-    OP.0b S8-A real-environment evidence showed a PTY-backed channel makes
-    the device run its login/CLI initialization once per command -- turning
-    one bounded battery into one extra device-side CLI session per read. The
-    PTY-backed path stays available for the callers that genuinely need it
-    (`_run_exec`'s own default is unchanged).
+    `use_pty=False`: the PTY is not what decides whether the Expert reads
+    execute. OP.0b S8-A real-environment device-log evidence (`clish`/`xpand`
+    audit trail, 8 reads on one member) shows *every* exec channel is
+    prefixed by a device-side `clish -c ver` -- exactly 8 of them, one per
+    channel -- because the collector account's login shell is the Gaia CLI
+    wrapper, not `/bin/bash`. That wrapper hands each exec command to
+    `clish`: the three `clish -c '...'` forms (`A1`, `A2`, `A8`) reach
+    "Start executing" in the device log, and the five bare Expert reads
+    (`cphaprob stat`, `cphaprob -a if`, `cphaprob -ia list`,
+    `cphaprob syncstat`, `fw stat`) never appear at all -- they are rejected
+    by `clish` before any binary runs. Requesting a PTY cannot change that;
+    the command never reaches a shell that could resolve `$CPDIR/bin`.
+
+    This is an execution-context capability gap of the *account*, not a
+    transport, PATH or parser defect, and it is not repairable from here:
+    reaching Expert from `clish` needs the expert password (a new credential
+    path) and changing the account's shell is a device mutation. Both are
+    PO hard-stop conditions. `classify_execution_context_gap` therefore
+    reports these reads honestly instead of as generic failures.
+
+    Reads are **paced**. Every read costs the device a management-plane CLI
+    session; the same S8-A device log shows an unpaced 8-read battery landing
+    as 8 CLI initializations inside ~2 seconds. That is avoidable burst load
+    on shared production infrastructure and nothing in a preflight is
+    latency-sensitive, so consecutive reads are separated by
+    `INTER_READ_DELAY_SECONDS` -- under a second added to the whole battery.
+    The delay is bound here, to the real transport, so it costs the device
+    time and never costs the test suite any.
     """
+    state = {"issued": 0}
+
+    def _paced_run(command_text: str) -> dict:
+        if state["issued"] and INTER_READ_DELAY_SECONDS > 0:
+            time.sleep(INTER_READ_DELAY_SECONDS)
+        state["issued"] += 1
+        return _run_exec(ssh, command_text, command_timeout, use_pty=False)
+
     return MemberSession(
         physical_device_identity=physical_device_identity,
-        _run_command=lambda command_text: _run_exec(ssh, command_text, command_timeout, use_pty=False),
+        _run_command=_paced_run,
     )
 
 
@@ -234,7 +322,12 @@ def collect_member(
     peer_claim_facts: tuple[PreflightFact, ...] = ()
 
     def _outcome(result: dict) -> Outcome:
-        return Outcome.SUCCESS if result.get("success") else Outcome.FAILED
+        if result.get("success"):
+            return Outcome.SUCCESS
+        command_text = str(result.get("command_text") or "")
+        if classify_execution_context_gap(command_text, result):
+            return Outcome.CAPABILITY_GAP
+        return Outcome.FAILED
 
     # A1: identity/hostname
     hostname_at = _utc_now()

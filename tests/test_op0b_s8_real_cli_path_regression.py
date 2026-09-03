@@ -20,6 +20,10 @@ the real vendor output shapes S8-A observed on the approved ClusterXL pair:
   - `fw stat` as its real column table (`HOST POLICY DATE`), which the A7
     parser previously did not recognize at all
 
+Every read runs on a PTY-backed channel: the Check Point profile it loads
+is what puts `$CPDIR/bin`/`$FWDIR/bin` on `$PATH`, without which every bare
+Expert read silently fails while `clish -c` reads keep working.
+
 Identities are synthetic throughout: RFC 5737 addresses, invented member
 names, no real hostname, serial, policy name or timestamp.
 
@@ -240,6 +244,10 @@ def _drive_cli(tmp_path: Path, monkeypatch, capsys) -> tuple[_Device, str]:
     _SSHClient.device = device
     monkeypatch.setattr(paramiko, "SSHClient", _SSHClient)
 
+    import checkpoint.preflight_collector as pc
+    # Device courtesy, not behaviour under test -- see INTER_READ_DELAY_SECONDS.
+    monkeypatch.setattr(pc, "INTER_READ_DELAY_SECONDS", 0)
+
     import application.workflows.preflight as preflight_wf
     from utils.collection_executor import RuntimeCollectionServices
 
@@ -268,9 +276,13 @@ class TestRealCliPathSessionInvariants:
         device, _out = _drive_cli(tmp_path, monkeypatch, capsys)
         assert device.closes == 2
 
-    def test_zero_pty_requests_on_the_real_path(self, tmp_path, monkeypatch, capsys):
-        """The S7.5 application wiring must not bypass the non-interactive
-        exec decision made in the session layer."""
+    def test_no_terminal_allocated_on_the_real_path(self, tmp_path, monkeypatch, capsys):
+        """One-shot reads allocate no terminal on the real CLI path.
+
+        A PTY was briefly suspected of being what made the bare Expert reads
+        resolvable. The device's own audit trail disproves it -- those reads
+        never reach a shell (see `classify_execution_context_gap`) -- so the
+        real path stays on the cheaper PTY-less channel."""
         device, _out = _drive_cli(tmp_path, monkeypatch, capsys)
         assert device.pty_requests == 0
 
