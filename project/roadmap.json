@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "current_build": "op0b_s3_cp_parse_scope_extension",
+  "current_build": "dev_kaizen_fast_pr_ci",
   "current_track": "CON.x",
   "progress_contract": "Weighted acceptance-criterion completion. Percentages describe the declared roadmap, not calendar time or delivery ETA.",
   "tracks": [
@@ -123,12 +123,11 @@
   "now_next": {
     "horizon_contract": "NOW is exactly one build. NEXT is exactly one. Everything else is an `upcoming` row carrying its own true status: planned = AFTER, blocked = waiting on a named external gate, deferred = consciously postponed. `now.build` must equal the newest project/build_history.json record -- utils.project_plan enforces it.",
     "now": {
-      "build": "op0b_s3_cp_parse_scope_extension",
-      "title": "OP.0b S3 - CP preflight parse-scope extension (existing cphaprob stat response)",
-      "goal": "Third bounded implementation slice against the FROZEN OP.0b.0 contract, Check Point side. New _parse_clusterxl_stat_preflight_fields() in configuration/checkpoint_config_collector.py reads non-local member-row State tokens (peer/member observation, address/name excluded -- not identity-grade) and a local failure/attention boolean (reclassification of the already-parsed role token, no free-text reason suffix parsed -- no safe vendor-confirmed vocabulary exists for one) out of the SAME already-fetched cphaprob stat buffer -- zero new command, zero new SSH invocation. _parse_clusterxl_cluster_mode gained one new recognized value, vsx_single_vs_failover (sk112712), in production use immediately since it lives inside the existing always-invoked mode parser. New include_preflight_fields=False opt-in parameter on _collect_host (physical and per-VS paths); default behavior and the one existing production call site (run_checkpoint_config_collection) unchanged BY DESIGN -- production invocation is S5/S6's dedicated preflight collector's job, per the frozen contract's own 'Current collector reuse decision' (same posture S2 established for PAN). New checkpoint/cp_preflight_projection.py (pure, no I/O) turns the field dict into S1 PreflightFact/PreflightMemberEvidence instances; peer/member row state lands in peer_claim_facts (this member's claim about its peer, never own_facts, never a synthesized second member) per contract domain invariant 4. Contract field-trace table (section 25) updated for cluster_mode/peer_state/failure_reason/member_skew/row_provenance rows; new section 25b gives the same six-dimension PARSER_IMPLEMENTED -- PRODUCTION_WIRING_PENDING reconciliation section 25a established for S2, learning directly from that same-day correction rather than repeating the overclaim. D-F1/D-F2/D-F3, D-V3a, D-V7b, PAN B2 all remain exactly as unresolved as before; CLASS 2 stays structurally unreachable (P4 invariant, unchanged). PR #37's CI (https://github.com/ozandurmus/neXus/actions/runs/33753129757) confirmed green against this exact head with the real dependency set; status now correctly advances to automated_validated.",
-      "status": "automated_validated",
-      "started": "2026-09-03",
-      "completed": "2026-09-03"
+      "build": "dev_kaizen_fast_pr_ci",
+      "title": "DEV Kaizen - fast PR CI / risk-based full regression",
+      "goal": "Engineering-flow improvement only (PO request): stop paying the ~11-minute full pytest suite on every bounded feature PR while preserving safety. .github/workflows/validation.yml now has two jobs: `validate` (pull_request only) runs import/compileall sanity, the repository privacy gate, project-state consistency (tests/test_architecture_convergence.py), the build-history-index check, a small fixed PR smoke/safety-regression set (credential redaction, the privacy gate's own tests, known safety gaps, the frontend-rendering shared-state-leak guard), and the whitespace/conflict-marker check -- no full suite. `full-regression` (push to main, workflow_dispatch) runs the same gates plus the full serial pytest suite, unchanged in substance from the previous single-job workflow. Canonical policy statement lives in docs/AI_DEVELOPMENT_PROTOCOL.md 'CI validation policy' (full-regression triggers: dependencies, shared test infra, schema/storage/migrations, concurrency/global shared state, security/auth boundary, broad common domain behavior, CI/test infra itself, release/integration milestone, explicit PO/contract requirement) -- AGENTS.md/AI_START_HERE.md point at it rather than duplicating it. New tests/test_ci_workflow_fast_pr_regression.py statically asserts the split via text/regex checks (no new YAML dependency). Job id kept as `validate` for the PR job so an existing branch-protection required-status-check name keeps matching. This build is itself a full-regression trigger (CI/test infrastructure) -- full suite run locally this session: 1215 passed / 24 skipped / 0 failed. No product/network/dependency behavior change; does not touch collectors, failover domain, PAN/CP projection, UI, transport, or schemas.",
+      "status": "in_progress",
+      "started": "2026-09-03"
     },
     "next": {
       "build": "op0b_0_close_d_v3a_d_v7b_pre_class2",
