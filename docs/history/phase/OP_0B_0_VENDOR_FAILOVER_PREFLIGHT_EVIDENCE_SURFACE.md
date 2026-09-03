@@ -1790,6 +1790,39 @@ functions for local role/mode rather than re-tokenizing the buffer a second
 way; its own new logic (peer-row state extraction) is not duplicated
 anywhere else in the repository. SINGLE EXTRACTION AUTHORITY = YES.
 
+## §25c S7 implementation-state reconciliation (2026-09-03)
+
+S7 (`op0b_s7_readiness_v2_integration`) integrated the S1/S5/S6 evidence
+into the canonical readiness path. Recorded here, in the same six-dimension
+discipline as §25a/§25b, is exactly where the implementation follows this
+contract's S7 slice row verbatim and where the PO-directed build task
+narrowed it — nothing below reinterprets a frozen semantic; each narrowing is
+a scope decision the product owner reviews before merge.
+
+| S7 slice-row item | Implemented as | Status |
+| --- | --- | --- |
+| "prerequisites" (identity gate, pair identity, mode, evidence coherence) | `utils/failover/preflight_readiness.py` evaluates all four per snapshot and discloses them under the unit's `evidence.prerequisites`; a failed prerequisite blocks every positive check result (never fabricates a failure); a single-fact explicit KNOWN_BAD still fails (a device's own report stands on its own), a cross-member conclusion (split-brain, no standby, mismatch) does not | **IMPLEMENTED** |
+| "8 checks" (adds `no_member_failure_state`, splits check 5 into 5a/5b) | **NOT adopted.** The build task preserved the canonical seven checks (`assessment.STOP_CONDITIONS`, design §4). The check-8 evidence family (CP pnote problem / `Down` / `Active Attention`; PAN non-functional set) is interpreted inside check 1 `viable_target` — whose design-§4 definition already reads "with no critical device/pnote down" — and the 5a/5b evidence inside one check 5, each with distinct reason codes (`critical_device_problem_observed`, `member_failure_state_observed`, `member_non_functional_state_observed`; `ha1_link_down_observed`, `ha2_link_down_observed`, `cluster_interface_down_observed`, `monitored_path_down_observed`) so no blocking reason is lost | **DEFERRED — PO decision** (adopting the 8-check shape is a contract-level change, not an S7 invention) |
+| "remove phantom member" (AC-5) | `assessment._pan_states` no longer counts `peer_state`; a single-member PAN unit reports `peer_not_independently_observed` on checks 1/4. Same law applied to the CP stored-telemetry path: a one-sided read is `INSUFFICIENT_EVIDENCE`, never a fabricated `no_viable_target` | **IMPLEMENTED** |
+| "pair existence vs health" | `HaUnit.unresolved_reason` is now serialised (§26 X-4) and `evidence.prerequisites.pair_identity` carries the identity axis (`established_topology_group` / `established_configuration_intent` / `not_established`) separately from the verdict | **IMPLEMENTED (disclosure)** |
+| "serial-keyed PAN unit" | **NOT adopted** — this contract's own §"Identity contract" leaves the successor model NOT FROZEN until `D-V3a` closes and `B2` matches; the hostname-keyed fallback stands. `local_serial_claim`/`peer_serial_claim` are never consulted by the mapping (test-enforced) | **preserved unresolved** (`B2 NOT ESTABLISHED`) |
+| `securityexpert-ha-readiness-v2` | **NOT adopted** — the string is named here but no v2 record shape is frozen anywhere; every S7 change to the record is additive (`units[].evidence`, `units[].unresolved_reason`, `checks[].facts`, top-level `preflight`), so consumers and tests keep `-v1`. A one-line bump is available on PO instruction | **DEFERRED — PO decision** |
+| Freshness/coherence | `evaluate_coherence` gates positives; `member_skew_ms` recorded, never bounded (`D-F2`); category-C facts never a check input (AC-4) and disclosed as `configuration_intent_freshness: not_evaluable:D-F1`; check 7 never PASSes (`threshold_policy_unresolved:D-F3`); the single roll-up additionally refuses SAFE while any `D-F` gate applies | **IMPLEMENTED, fail-closed** |
+| Automated tests executed | `tests/test_op0b_s7_readiness_v2.py` (52) + OP.0a/OP.0c/S1–S6/architecture regression, in-session with `pytest`/`lxml`/`paramiko`/`requests`/console extras installed session-locally (no repository dependency change) | **YES** |
+| Real-env validated | **NO** — S8 owed; the minimal value vocabularies the mapping freezes (PAN `state-sync` "Complete", `running-sync` "synchronized", `conn-*` "up"/"down", `*-compat` "Match"/"Mismatch"; CP sync "ok"/"not_ok") fail closed on anything unrecognised and must be confirmed against real output | owed |
+
+**Single authority:** one roll-up (`assessment._verdict_for`), one check
+evaluator entry (`assessment._evaluate_checks`, which dispatches to the S7
+mapping only when a snapshot exists for the derived unit), one typed mapping
+(`FACT_CHECK_MAP`). No `old_rollup`/`new_v2_rollup`; the S7 test suite
+proves by AST inspection that exactly one function in the package returns a
+verdict. Stored telemetry and a fresh snapshot are never blended for one
+unit (`evidence.basis` names which was used).
+
+**SAFE / DEGRADED reachability after S7:** both remain unreachable. CP —
+check 6 (`CP-A9` not authorized, `D-V7b`) and check 7 (`D-F3`); PAN — check
+7 (`D-F3`). Proven over a generated snapshot matrix, not by reading.
+
 ## §26 Current bug / gap register
 
 Priority: **P0 BEFORE CLASS 2** · **P1 BEFORE PRODUCTION** · **P2 HARDENING** · **DEFERRED**.

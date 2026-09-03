@@ -190,7 +190,7 @@ def test_the_failover_package_still_contains_no_executor():
     here explicitly rather than by widening the check's intent."""
     failover_dir = ROOT / "utils" / "failover"
     modules = {p.stem for p in failover_dir.glob("*.py")}
-    allowed = {"__init__", "assessment", "preflight_model"}
+    allowed = {"__init__", "assessment", "preflight_model", "preflight_readiness"}
     assert modules == allowed, (
         f"utils/failover/ gained {modules - allowed}; a plan, "
         f"executor or vendor adapter may not exist before its own gate is cleared"
