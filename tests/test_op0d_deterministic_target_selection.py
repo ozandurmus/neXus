@@ -186,6 +186,25 @@ def test_pan_selector_partial_resolution_fails_closed():
         pan_collector._apply_pan_target_selector(devices, connected, ["SER1", "GHOST"])
 
 
+def test_pan_selector_unknown_serial_hints_leading_zero_mismatch():
+    # Recurring operator pain point: a serial retyped/copied through a
+    # spreadsheet or numeric field loses its leading zero(s). The selector
+    # must still fail closed (no silent acceptance) but should name the
+    # discovered serial the operator most likely meant.
+    devices = _pan_devices() + [{"serial": "0026109000729", "hostname": "FW4", "connected": "yes"}]
+    connected = [d for d in devices if d["connected"] == "yes"]
+    with pytest.raises(ValueError, match=r"did you mean 0026109000729\?"):
+        pan_collector._apply_pan_target_selector(devices, connected, ["26109000729"])
+
+
+def test_pan_selector_unknown_serial_without_zero_match_has_no_hint():
+    devices = _pan_devices()
+    connected = [d for d in devices if d["connected"] == "yes"]
+    with pytest.raises(ValueError) as excinfo:
+        pan_collector._apply_pan_target_selector(devices, connected, ["GHOST"])
+    assert "did you mean" not in str(excinfo.value)
+
+
 def test_pan_selector_ambiguous_serial_fails_closed():
     devices = _pan_devices()
     devices.append({"serial": "SER1", "hostname": "FW1-DUP", "connected": "yes"})

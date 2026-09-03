@@ -185,6 +185,12 @@ CP-SPARK-TEST-01
 example.invalid
 ```
 
+The full documentation-range set approved for tests/fixtures is the three
+RFC 5737 blocks — `192.0.2.0/24`, `198.51.100.0/24`, `203.0.113.0/24` — paired
+with synthetic device names such as `CP-SPARK-TEST-01`, `PAN-FW-TEST-01` and
+`example.invalid`. `CP-SPARK-TEST-01` is the canonical Check Point synthetic
+name; do not introduce a second synthetic name for the same role.
+
 unless runtime configuration is explicitly intended to supply real
 values.
 
