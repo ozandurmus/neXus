@@ -16,78 +16,107 @@ doc. Prior versions are in git history.
 
 ## 1. Snapshot
 
-- Date: 2026-09-03. Branch `claude/cp-stderr-classification`, base `main`
-  (at `79449bb`, which already carries PRs #34-#39). `dev_kaizen_fast_pr_ci`
-  and the first pass of `cp_remote_collection_done_marker_diagnostics` are
-  merged; this branch is a second pass on the same still-open build.
+- Date: 2026-09-03. Branch `claude/checkpoint-preflight-collector-i1yyz7`,
+  base `main` (at `abf0bb4`, PR #41 merged — `OP.0b` S4 command gate,
+  PO-approved). This build, `op0b_s5_cp_preflight_collector`, is `OP.0b`
+  S5 — the first dedicated Check Point failover-preflight collector.
 
 ## 2. What changed this session
 
-The user reported the **same** `RuntimeError('CP remote collection ended
-without DONE marker')` recurring on a real run, but now carrying PR #39's
-new diagnostic fields: `exit_status=0, processed_gw=0, total_gw=None,
-stderr_bytes=658, last_marker=None`. This is genuinely informative: it
-disproves the channel-drain-race theory (PR #39's fix didn't stop the
-recurrence) and shows the failure happens **before**
-`checkpoint/scripts/cp_inventory.sh` line ~94 (`TOTAL_GW` is never echoed),
-alongside 658 bytes of real stderr the code was discarding.
+Implemented `checkpoint/preflight_collector.py` — the dedicated Check
+Point `CLASS-0` preflight collector — strictly within the PO-frozen
+`OP.0b.1` command gate (`docs/history/phase/OP_0B_1_COMMAND_GATE_PACKAGE.md`,
+"Approval record", PR #41). For one caller-selected, bounded (≤2 member)
+HA operational entity: one SSH session per physical member (reused for
+every read including `B1`, never re-opened), one `preflight_run_id`, and
+exactly the authorized battery — `A1`–`A3` (existing, reused via
+`configuration.checkpoint_config_probe`/`configuration.checkpoint_config_collector`
+primitives, not duplicated) + new `A4` (`cphaprob -a if`), `A5`
+(`cphaprob -ia list`), `A6` (`cphaprob syncstat` / `fw ctl pstat`,
+version-dispatched from `A2`), `A7` (`fw stat`), `A8` (cluster failover
+statistics, platform-dispatched, default invocation only) + `B1`
+(`vsx stat -v`, VSX battery only, same session). `A6`/`A8` dispatch is
+evidence-based, decided before execution, never a failure-driven fallback;
+no command carries an application-level retry.
 
-Rather than guess again from source alone (risky on a live security
-appliance with no way to test the guess), added a bounded, privacy-safe
-stderr classifier: `checkpoint/cp_runner.py` gains `_STDERR_CLASSIFIERS` (a
-closed list of generic shell/environment error regexes —
-`no_such_file_or_directory`, `command_not_found`, `permission_denied`,
-`not_a_tty`, `unbound_variable`, `syntax_error`,
-`connection_reset_or_broken_pipe`) and `_classify_stderr_sample()`.
-`_run_remote_collection` now captures up to 8192 chars of stderr in memory,
-classifies it, and discards the raw text immediately — the classification
-tokens (never the raw text) are included in both `RuntimeError` messages
-(missing-DONE and nonzero-exit-status) and the success-path stderr warning.
-+3 tests in `tests/test_phase0_4_1_cp_automation.py`, including one that
-asserts device names/IPs never appear in the exception message. Updated the
-existing `cp_remote_collection_done_marker_diagnostics` build_history
-record (same build, second pass) and `CURRENT_STATE.md`/`roadmap.json` to
-match; regenerated `docs/history/INDEX.md`.
+New files: `checkpoint/cp_preflight_battery.py` (fixed typed
+`CPPreflightRead` command plan, `COMMAND_TEXT` literal map, `resolve_a6_form`/
+`resolve_a8_form` dispatch resolvers, `build_member_schedule`, and a
+deterministic `assert_battery_excludes_forbidden_commands` guard — run at
+import time — proving `A9`/`A10`/`A11` and every rejected mutating command
+are absent by construction); `checkpoint/cp_preflight_extraction.py` (one
+pure, fail-closed parser per new command — no raw output retained beyond
+the parse call). `checkpoint/cp_preflight_projection.py` (existing S3 seam
+module) gains one projection function per new command
+(`project_cp_software_version_fact`, `project_cp_link_health_facts`,
+`project_cp_pnote_facts`, `project_cp_sync_facts`, `project_cp_policy_facts`,
+`project_cp_failover_history_facts`, `project_cp_vsx_enumeration_facts`);
+`A1`–`A3`'s existing `project_cp_preflight_facts` is unchanged.
+
+New `tests/test_op0b_s5_cp_preflight_collector.py` (48 tests) covers all
+40 numbered requirements from the build task (§27–§29): command-plan
+invariants, synthetic-session collection (identity-gate-stop, per-command
+failure isolation, invocation-count bounds ≤16 non-VSX / ≤18 VSX, no raw
+output in serialization), and the VSX battery. No readiness verdict
+anywhere; no new SSH transport/credential path; no raw command output
+persisted. Real device contact: **none** this session.
+
+Updated `project/roadmap.json` (`now_next.now` → `op0b_s5...`
+`automated_validated`; `now_next.next` → `op0b_s6_pan_preflight_collector`
+`planned`), `project/build_history.json` (new S5 record, newest-first),
+`CURRENT_STATE.md` (checkpoint, Active build, Predecessors, Exact next
+build, test baseline), and regenerated `docs/history/INDEX.md` via
+`scripts/build_history_index.py`.
 
 ## 3. Exact next action
 
-Push this branch, open a PR, wait for `validate` CI, merge if green
-(same posture as PR #38/#39). Then **the user needs to re-run `main.py`
-once more** — the next failure's `RuntimeError` will report
-`stderr_classification=[...]` instead of just a byte count. That
-classification is the next real evidence:
-- `no_such_file_or_directory` → prime suspect is `cp_inventory.sh` line 3's
-  `. /opt/CPshared/5.0/tmp/.CPprofile.sh` sourcing (unconfirmed without MDS
-  filesystem access).
-- `unclassified` → the closed category list missed it; do not add
-  categories speculatively, extend only from the next real observed text.
-- Anything else → follow the specific category.
-
-Do not attempt a third guess-based source change before that evidence
-comes back — this build's own risk note says so explicitly.
+`OP.0b` S6 — Palo Alto dedicated preflight collector
+(`panorama/preflight_collector.py`), same shape as this session's `S5`:
+`panorama/pan_preflight_battery.py` (fixed command plan, guard proving
+`P3`/`P5` absent from the implementation battery), one pure extraction
+helper per new command, additions to the existing PAN S2 projection seam.
+Battery: `P1`/`P2` (existing) + `P4` (`show high-availability
+path-monitoring`, `NO_RETRY`) = 3 required reads/member, ≤6 required
+invocations/pair. New session, fresh `origin/main`, branch
+`feature/op0b-s6-pan-preflight-collector`, `Sonnet 5, normal`. Full
+detail: `project/roadmap.json` `now_next.next.notes` +
+`docs/history/phase/OP_0B_1_COMMAND_GATE_PACKAGE.md` "Approval record".
 
 ## 4. Test delta
 
-+3 (`tests/test_phase0_4_1_cp_automation.py`: two classifier unit tests,
-one leak-check on `_run_remote_collection`'s exception message). No
-existing test changed or removed. Full suite this session: 1220 passed /
-24 skipped / 0 failed (up from 1217 pre-session, +3 new).
++48 (`tests/test_op0b_s5_cp_preflight_collector.py`, new file). No
+existing test changed or removed. This session's local full suite: 1277
+passed / 26 skipped / 0 failed (serial) — see `CURRENT_STATE.md`
+"Automated test baseline" for why this count differs from the last
+CI-recorded baseline (a fresh sandbox needed `requirements.txt`/
+`requirements-console.txt` installed; unrelated to this build's code).
 
 ## 5. New risks / debt
 
-None new beyond what pass 1 already carried (root cause still `UNKNOWN`).
-The classifier is a closed, hand-picked list — a real cause outside it
-reports `unclassified` rather than vanishing, which is the fail-safe
-behavior, but doesn't itself name the cause.
+- Real-env validation (`S8`) still owed for `A4`–`A8`/`B1` — exact vendor
+  field vocabulary for `A6`'s `syncstat`/`pstat` status token and `A8`'s
+  two failover-history forms is `UNKNOWN` pending a real device read; the
+  extraction parsers are fail-closed on anything unrecognized by design.
+- `D-F3` (flap/failover threshold) stays unresolved — `A8`'s count is
+  collected but no PASS/healthy verdict is ever derived from it.
+- `A9` (configured recovery/preemption) remains `DEFERRED_UNKNOWN` — bug
+  register `CP-3`, `P0` before `CLASS 2`.
+- No PR opened yet this session (task instructions specify a
+  `feature/op0b-s5-cp-preflight-collector` branch/PR; this session's
+  designated push target per the harness is
+  `claude/checkpoint-preflight-collector-i1yyz7` — see commit for the
+  reconciliation note).
 
 ## 6. Continue or fresh chat
 
-Continue this chat once the user has the next real run's
-`stderr_classification` value — that's a quick, evidence-driven follow-up,
-not a new investigation. A fresh session is fine too since state is fully
-recorded here and in `CURRENT_STATE.md`/`build_history.json`.
+Fresh session for `S6` — the build task itself specifies "NEW SESSION
+REQUIRED" for each `OP.0b` slice, and state is fully recorded here,
+`CURRENT_STATE.md`, and `build_history.json`.
 
 ## 7. main.py / UI effect
 
-None on the success path. On the specific failure path this build targets,
-the error message a real run prints now includes `stderr_classification`.
+None. `checkpoint/preflight_collector.py` is new, dormant code — nothing
+in `main.py`'s existing CLI modes calls it yet (wiring a real invocation
+path is a future build's job, consistent with how S1/S3's extraction/
+projection seams stayed dormant until this session used them). No UI
+payload, template, or `static/` file changed.
