@@ -88,6 +88,86 @@ UNIT_TYPE_LABELS: Mapping[str, str] = {
     "pan_ha_pair": "Palo Alto HA pair",
 }
 
+# OP.0b S9 (UI authority reconciliation, PAN UI debt item 4). `reason`/
+# `check.reason` values are honest, generic evidence-law codes
+# (`utils.failover.preflight_readiness._state_reason`: `"<fact_state>:<fact
+# name>"`, plus a handful of frozen `failure_reason`/`not_evaluable_reason`
+# snake_case strings) -- correct, never fabricated, but not written for an
+# operator glancing at a report. This is a fixed vocabulary lookup only, same
+# category as `VERDICT_LABELS`/`CHECK_STATUS_LABELS` above: it never computes
+# or reinterprets a status, only annotates the SAME reason code with a plain-
+# English gloss. An unrecognised code is never invented -- it degrades to a
+# spaced-out version of the raw code (`_humanize_reason` below), never to a
+# guessed sentence.
+_STATE_PREFIX_LABELS: Mapping[str, str] = {
+    "unknown": "not established",
+    "not_collected": "not collected this run",
+    "collection_failed": "the read for this failed",
+    "unsupported": "not supported for this mode",
+}
+
+# A handful of fact names worth a clearer gloss than the generic
+# underscore-to-space fallback. Deliberately small and additive -- absence
+# here is not an error, `_humanize_reason` still produces a readable string.
+_FACT_LABELS: Mapping[str, str] = {
+    "pan_path_monitoring_any_down": (
+        "path monitoring (path monitoring is often not configured on a pair; "
+        "this is fail-closed, not evidence of a device defect)"
+    ),
+    "peer_conn_ha1_status": "the HA1 control link status",
+    "peer_conn_ha2_status": "the HA2 data/sync link status",
+    "cp_link_any_down": "cluster interface link status",
+}
+
+# Frozen `failure_reason`/`not_evaluable_reason`/unresolved-unit reason
+# strings that already read as sentences once spaced out, but are worth a
+# small clarifying gloss.
+_REASON_LABELS: Mapping[str, str] = {
+    "pan_ha_peer_unresolved": (
+        "configured HA1 peer address does not resolve to exactly one known "
+        "management address"
+    ),
+    "pan_ha_peer_asymmetric": (
+        "the two members' configured HA1 peer addresses do not agree with "
+        "each other"
+    ),
+    "configured_recovery_not_readable_d_v7b": (
+        "configured recovery setting is not readable (open decision D-V7b)"
+    ),
+}
+
+
+def _humanize_reason(reason: str | None) -> str | None:
+    """Plain-English gloss of a `reason`/`check.reason` code -- never a new
+    fact, never a status change, purely a presentation annotation over the
+    exact same string the readiness evaluator already produced."""
+    if not reason:
+        return reason
+    if reason in _REASON_LABELS:
+        return _REASON_LABELS[reason]
+    if ":" in reason:
+        prefix, _, fact = reason.partition(":")
+        state_label = _STATE_PREFIX_LABELS.get(prefix)
+        if state_label is not None:
+            fact_label = _FACT_LABELS.get(fact, fact.replace("_", " "))
+            return f"{fact_label} — {state_label}"
+    return reason.replace("_", " ")
+
+
+def _annotate_reason_display(units: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    """Adds a `reason_display` field alongside each unit's/check's own
+    `reason` -- additive only, the raw `reason` is always still present."""
+    annotated: list[dict[str, Any]] = []
+    for unit in units:
+        u = dict(unit)
+        u["reason_display"] = _humanize_reason(u.get("reason"))
+        u["checks"] = [
+            {**check, "reason_display": _humanize_reason(check.get("reason"))}
+            for check in (unit.get("checks") or [])
+        ]
+        annotated.append(u)
+    return annotated
+
 
 def _utc_now() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -204,7 +284,7 @@ def build_failover_readiness_payload(
         "framing_note": FRAMING_NOTE,
         "execution_unavailable_note": EXECUTION_UNAVAILABLE_NOTE,
         "summary": report["summary"],
-        "units": report["units"],
+        "units": _annotate_reason_display(report["units"]),
         "preflight": report.get("preflight") or {},
         "verdict_labels": dict(VERDICT_LABELS),
         "verdict_tones": dict(VERDICT_TONES),

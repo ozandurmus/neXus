@@ -73,16 +73,24 @@ function renderFailoverModule() {
         });
 
         function renderUnitRow(unit, isChild) {
+            // Canonical backend identity (display_name, falling back to the
+            // canonical unit_id) is always the primary label. `context_vsys`
+            // (OP.0b S9) is subordinate, informational-only context -- it is
+            // never allowed to define or compose the unit's own name.
             const label = escapeHtml(unit.display_name || unit.unit_id);
+            const contextVsys = Array.isArray(unit.context_vsys) ? unit.context_vsys : [];
+            const contextLine = contextVsys.length
+                ? `<br><span class="eyebrow">VSYS: ${escapeHtml(contextVsys.join(", "))}</span>`
+                : '';
             return `
                 <tr${isChild ? ' class="failover-child-row"' : ''}>
-                    <td${isChild ? ' style="padding-left:2rem"' : ''}>${isChild ? '<span class="eyebrow">Virtual System</span> ' : ''}${label}</td>
+                    <td${isChild ? ' style="padding-left:2rem"' : ''}>${isChild ? '<span class="eyebrow">Virtual System</span> ' : ''}${label}${contextLine}</td>
                     <td>${escapeHtml(unitTypeLabels[unit.unit_type] || unit.unit_type)}</td>
                     <td>${escapeHtml(unit.vendor)}</td>
                     <td>${escapeHtml((unit.members || []).join(", "))}</td>
                     <td>${escapeHtml(unit.cluster_mode)}</td>
                     <td>${statusPill(verdictLabels[unit.verdict] || unit.verdict, failoverVerdictTone(unit.verdict))}</td>
-                    <td>${escapeHtml(unit.reason)}</td>
+                    <td>${escapeHtml(unit.reason_display || unit.reason)}</td>
                     <td>
                         <details class="failover-check-details">
                             <summary>${escapeHtml((unit.checks || []).length)} checks</summary>
@@ -92,7 +100,7 @@ function renderFailoverModule() {
                                     <tr>
                                         <td>${escapeHtml(check.label)}</td>
                                         <td>${statusPill(checkStatusLabels[check.status] || check.status, failoverCheckStatusTone(check.status))}</td>
-                                        <td>${escapeHtml(check.reason)}</td>
+                                        <td>${escapeHtml(check.reason_display || check.reason)}</td>
                                         <td>${escapeHtml(check.missing_evidence || "—")}</td>
                                     </tr>
                                 `).join("")}</tbody>

@@ -739,9 +739,13 @@ def test_31_explicit_known_path_failure_contributes_known_bad_evidence():
 
 
 def test_32_vsys_not_emitted_as_independent_failover_unit():
+    """OP.0b S9 (PAN UI debt item 1): VSYS is subordinate context
+    (`context_vsys`), never the unit's identity/label -- `display_name`
+    stays unset (falls back to the canonical `unit_id`) for a PAN pair."""
     report = pan_report(happy_pan())
     assert [u["unit_id"] for u in report["units"]] == [_PAN_UNIT]
-    assert report["units"][0]["display_name"].startswith("VSYS ")
+    assert report["units"][0]["display_name"] is None
+    assert "vsys1" in report["units"][0]["context_vsys"]
     assert "vsys" not in json.dumps([c for u in report["units"] for c in u["checks"]])
 
 
