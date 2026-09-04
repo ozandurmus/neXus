@@ -8,9 +8,8 @@ boundaries and render-harness mechanics are detailed in
 
 ## Claude delta
 
-- **Working language: English** for all conversation, analysis, commit messages
-  and docs. Vendor CLI commands, API fields and code identifiers stay verbatim.
-  Provide a Turkish translation or explanation only when explicitly asked.
+- **Working language: English** — `AGENTS.md` "Engineering-output language
+  law" is the single owner of the rule; it is not restated here.
 - **Reasoning routing.** Use extended thinking for new architecture, storage/CAS,
   security boundaries, vendor-semantic ambiguity, deployment/server/container
   work, cross-subsystem root cause, and phase closure. Use normal reasoning for

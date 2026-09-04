@@ -39,6 +39,21 @@ the human or the higher authority resolve it.**
    session must be able to reconstruct the current project from the
    repository alone, without a historical chat transcript.
 
+## Engineering-output language law
+
+Repository artifacts, engineering reports, `SESSION START` / `SESSION CLOSE`
+reports, PR descriptions, commit messages, structured checkpoints, code
+comments and agent-to-agent engineering handovers are **English by
+default**. The language a human converses in does **not** change the
+language of engineering output. Another language is used only when a
+repository-owned artifact explicitly requires it for that artifact. Vendor
+CLI commands, API fields and code identifiers stay verbatim. No engineering
+report carries a non-English preamble; a stakeholder-facing summary in
+another language, if ever wanted, is a separately requested artifact, not
+part of the session contract. This section is the single owner of the rule:
+`AI_START_HERE.md`, `CLAUDE.md` and `.github/copilot-instructions.md`
+point here and must not restate a different version.
+
 The cold-start entry point and fixed reading order are in `AI_START_HERE.md`.
 Follow that order. `docs/AI_DEVELOPMENT_PROTOCOL.md` is a detailed reference
 for the network-device command gate, approval boundaries, and render-harness
@@ -208,9 +223,10 @@ implementation authority — see Authority hierarchy, item 2.
 
 At the start of every build/task produce a `SESSION START`; before declaring
 a build complete, update durable project state and produce a `SESSION
-CLOSE`. Both open the same way — the schemas, the Turkish `PROJE ÖZETİ`
-template, and the reasoning-tier table live in `AI_START_HERE.md`; this rule
-only states that both are mandatory, not skippable, and that
+CLOSE`. The schemas and the reasoning-tier table live in `AI_START_HERE.md`;
+both reports are English with no preamble ("Engineering-output language
+law" above); this rule only states that both are mandatory, not skippable,
+and that
 `AI_HANDOVER.md` (non-authoritative — see below) must be rewritten as part of
 every `SESSION CLOSE`.
 

@@ -16,80 +16,75 @@ doc. Prior versions are in git history.
 
 ## 1. Snapshot
 
-- Date: 2026-09-04. Build `op0b_s8a_clusterxl_execution_model_console_parity`
-  — **REAL_ENV_VALIDATED** on the approved CP ClusterXL pair, PO-accepted.
-- **S8-A: PASS.** 8/8 approved reads `success` per member; `state_sync_current`,
-  `parity`, `no_split_brain`, `control_sync_link_health` PASS;
-  `preemption_known` D-V7b and `flap_history` D-F3 INSUFFICIENT_EVIDENCE by
-  decision; `viable_target` closed by the real A5 shape (#60). The Operator
-  Console shows the identical seven checks and MODE `ha_new_mode`.
-- **S8-B (VSX) and S8-C (PAN): NOT EXECUTED** — this session has no route to
-  the devices; the operator runs them.
+- Date: 2026-09-04. Product build unchanged: `op0b_s8a_clusterxl_execution_model_console_parity`
+  REAL_ENV_VALIDATED; S8-A PASS, PO-accepted; **S8-B (VSX) / S8-C (PAN) NOT
+  EXECUTED** — operator-run.
+- **OP.2.0** (`docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md`):
+  independent challenge review applied, then **CONTRACT FROZEN 2026-09-04**
+  by PO decision. Architecture authority only — not a build; CLASS 2 not
+  implemented, not reachable, no member; no product source changed.
+- **Language governance:** the Turkish session preamble requirement was
+  removed at its source (`AI_START_HERE.md` SESSION START); `AGENTS.md`
+  "Engineering-output language law" is now the single owner; one
+  regression guards the instruction surface.
 
-## 2. What changed this session (PRs #52–#60, all merged to `main`)
+## 2. What changed this session (docs, project metadata, one governance test)
 
-- **Execution primitive corrected (#55).** The S5 collector issued one
-  non-interactive exec channel per read; the device dispatched each through
-  the Gaia CLI wrapper (one `clish -c ver` per channel) and the five bare
-  Expert reads never reached an Expert shell. That does *not* prove the
-  account's shell (an earlier claim, withdrawn); it proves one SSH transport
-  is not one Expert context. Now: one persistent Expert shell per member
-  (`InteractiveSshSession`, existing adapter), reads framed by a per-session
-  `echo` of `$?` (read-only, stripped, never a fact).
-- **Pacing (#56, PO decision):** `INTER_COMMAND_DELAY_SECONDS = 0.3` strictly
-  between completed reads — N reads, N-1 waits, none first/last; never
-  retry/backoff/reconnect/adaptive; sleeper injected in tests.
-- **Real output shapes (#52/#56/#60):** `fw stat` table; `cphaprob -a if`
-  annotated rows + `Non-Monitored` + trailing VIP block; `cphaprob -ia list`
-  healthy sentence `There are no pnotes in problem state` (positive
-  `any_problem=False`, count not reported); A8 count wording. All
-  fail-closed; an unrecognised shape logs a value-free layout skeleton (#58).
-- **Console parity (#59):** the preflight evaluates once and hands the same
-  `compute_ha_readiness` record to the CLI summary and to
-  `run_html_export(failover_readiness_report=...)`; the report projects it,
-  evaluates nothing, refuses a snapshot alongside a record. No snapshot
-  persistence, no TTL; normal reports byte-identical; UI projection-only.
-  The live console (separate process) keeps its stored-telemetry answer.
-- **Disclosure (#53):** per-read outcome in the safe summary (both vendors).
-- **Backlog:** `cp_preflight_ccp_tablestat_evidence` (PO request; NEW command,
-  gate row + readiness mapping first).
+- **OP.2.0 draft corrected in place** (§"Independent challenge review —
+  2026-09-04" carries the matrix): state machine 8+7 → 4+6 (`LOCKING`,
+  `LOCKED`, `EVALUATING`, `VERIFYING`, `SUCCEEDED_WITH_WARNINGS` removed; the
+  re-preflight loop removed); HA-entity lock = the action record's per-entity
+  uniqueness rule; member admission per device-contact stage, never across
+  the human wait; quarantine = derived predicate over the unacknowledged
+  `OUTCOME_UNKNOWN` record (one owner); boundary commit = guarded
+  compare-and-set with one winner; adapter `check_precondition` before the
+  boundary; `FAILED_NO_CHANGE` unreachable while `settle_observation` is
+  `UNKNOWN`; no argv/CLI entry point; no `PERMIT` outside `tests/`;
+  approval-policy boundary carries four-eyes / maintenance window; AC-15–19.
+- **Parent reconciled:** `docs/design/FAILOVER_ENGINE_ARCHITECTURE.md` §10.2
+  + inline supersession markers (auto-rollback, `FAILED_ROLLED_BACK`,
+  freshness window, §7 layout, per-VS units, feature flag/token, class 0
+  sweep not universal). History kept, not rewritten.
+- **Freeze recorded:** OP.2.0 status block → `CONTRACT FROZEN 2026-09-04`;
+  roadmap `OP.2` row, backlog and feature registry say frozen architecture,
+  CLASS 2 not implemented/reachable; OP.2.A–D remain future movements.
+- **Project state:** `op_reversal_model`, `op_outcome_unknown_recovery` →
+  `decided`; `op_four_eyes`, `op_continuity_tolerance`, `op_emergency_evac`,
+  `op_aa_vsls_scope`, `op_degraded_verdict` re-pointed to their real
+  milestone, none an OP.2.0 freeze blocker; `ha_entity_operational_lock` and
+  `failover_controlled_execution` (backlog + feature registry) no longer say
+  "auto-rollback".
 
 ## 3. Exact next action
 
-1. **S8-B (VSX)** — operator runs
-   `py .\main.py --cp-ha-preflight-check --cp-preflight-targets <VSX-A>,<VSX-B>`
-   and opens the regenerated `index.html`. Expect per member 1 transport,
-   1 Expert shell, ~0.3 s spacing, B1 `vsx stat -v` in the same shell, no
-   reconnect per VSID; report identical to the CLI for the VSX unit; one
-   physical parent, two members, VSIDs not duplicated, VS child does not
-   inherit the parent verdict. Paste SAFE counts plus any
-   `observed layout:` log line.
-2. **S8-C (PAN)** — `py .\main.py --pan-ha-preflight-check ...` against the
-   approved pair; one API context per member, P1/P2/P4 only, no PAN pacing
-   unless evidence shows a need; B2 stays NOT ESTABLISHED unless
-   already-authorized evidence closes it; report parity via the same seam.
-3. Mechanical parser fixes inside frozen semantics: fix and continue. Stop
-   for PO on any new command/API, credential, mutation, retry authority,
-   identity or readiness-contract change, unresolved vendor semantic,
-   schema change, CLASS 1/2 behaviour. `Sonnet 5, normal`.
+1. **S8-B (VSX) then S8-C (PAN)** exactly as `project/roadmap.json`
+   `now_next.next` describes — operator-executed, SAFE counts only,
+   mechanical parser fixes inside frozen semantics only. `Sonnet 5,
+   normal`. Start a NEW session for it.
+2. **Only after OP.0b closure:** `OP.2.A` (typed action model, 4+6 lifecycle, audit
+   record, unconditional-`DENY` authorizer, convergence assertions; zero
+   device I/O) at `Sonnet 5, normal`; `OP.2.1` CP mutation command gate
+   (docs only, official sources) in parallel at `Sonnet 5, extended`;
+   `OP.2.B` after `A` at extended.
 
 ## 4. Test delta
 
-- Closing full serial run: see `CURRENT_STATE.md` "Automated test baseline"
-  (recorded from `pytest_result.log` at close). Render harness (Playwright)
-  PASS; architecture convergence 19 passed; `git diff --check` clean.
-- Ten S8 regression files now exist; `tests/test_op0b_s75_preflight_entrypoint.py`
-  harness points `repository_root` at the real repo because an explicit
-  preflight now regenerates the report.
+- No product code changed. Architecture convergence: 20 passed (one new
+  language-governance regression); `metadata_warnings == []`; build-history
+  index current; repository privacy gate PASS; `git diff --check` clean.
+  Full regression not run (docs/metadata/governance-test change only).
+- Note for Linux/container sessions: `py` does not exist there; `python3 -m
+  pytest` with `requirements.txt` + `requirements-dev.txt` installed.
 
 ## 5. New risks
 
-- VSX/PAN parity is proven synthetically only; real proof is S8-B/S8-C.
-- A4/A5/A8 shapes validated on one real release; the layout diagnostic
-  covers a fourth shape without guessing.
-- `capability_gap` means only "device CLI rejected the read before any binary
-  ran"; if it reappears, suspect the execution model first.
-- D-V7b/D-F3 keep overall readiness INSUFFICIENT_EVIDENCE by decision.
-- Strict host-key production enforcement deferred
-  (`cp_production_ssh_host_key_trust_hardening`, P0). Pre-existing:
-  `op0b_s7_s6_test_order_isolation` (P2).
+- OP.2.0 is frozen architecture, not a capability: it approves no command
+  and CLASS 2 stays memberless until `OP.2.C`'s full prerequisite set.
+- `FAILED_NO_CHANGE` is unreachable until the CP `settle_observation` is
+  measured in the `OP.2.D` pilot — expected, and the pilot must record it.
+- Single-coordinator-process topology is now an explicit OP.2 invariant; a
+  multi-worker console (`per_vendor_worker_split`, P2) would need its own
+  contract before touching class 2.
+- Unchanged from the previous session: VSX/PAN parity proven synthetically
+  only (S8-B/S8-C owed); D-V7b/D-F3 keep readiness INSUFFICIENT_EVIDENCE;
+  `cp_production_ssh_host_key_trust_hardening` (P0) deferred.
