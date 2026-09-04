@@ -150,6 +150,7 @@ def build_failover_readiness_payload(
     checkpoint_config_result: Mapping[str, Any] | None = None,
     config_result: Mapping[str, Any] | None = None,
     preflight_snapshots: Sequence[Any] | None = None,
+    readiness_report: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """The `failoverReadinessData` payload the console/report embed.
 
@@ -165,19 +166,36 @@ def build_failover_readiness_payload(
     produced; they are passed straight through to the one canonical
     evaluator. This builder never collects anything and never interprets a
     fact itself -- the UI stays a projection of `compute_ha_readiness`.
-    """
-    rows = unified_devices if isinstance(unified_devices, Sequence) else []
-    cp_ha_runtime = extract_cp_ha_runtime(checkpoint_config_result)
-    pan_ha_runtime, pan_ha_peers = extract_pan_ha_runtime(config_result)
 
-    report = compute_ha_readiness(
-        rows,
-        cp_ha_runtime=cp_ha_runtime,
-        pan_ha_runtime=pan_ha_runtime,
-        pan_ha_peers=pan_ha_peers,
-        generated_at=_utc_now(),
-        preflight_snapshots=preflight_snapshots,
-    )
+    `readiness_report` (OP.0b S7.5 console closure) is a `compute_ha_readiness`
+    record the caller has **already computed** -- the explicit HA preflight
+    invocation evaluates once and hands that same record to its CLI summary
+    and to this projection, so the two can never come from different
+    evidence generations. Given one, this builder evaluates nothing: it is
+    the same object, projected. Mutually exclusive with `preflight_snapshots`
+    (a snapshot alongside a finished report would be a second evaluation of
+    the same evidence, which is exactly the fork this parameter exists to
+    prevent).
+    """
+    if readiness_report is not None and preflight_snapshots:
+        raise ValueError(
+            "readiness_report and preflight_snapshots are mutually exclusive: "
+            "evaluate once, project once"
+        )
+    if readiness_report is not None:
+        report = readiness_report
+    else:
+        rows = unified_devices if isinstance(unified_devices, Sequence) else []
+        cp_ha_runtime = extract_cp_ha_runtime(checkpoint_config_result)
+        pan_ha_runtime, pan_ha_peers = extract_pan_ha_runtime(config_result)
+        report = compute_ha_readiness(
+            rows,
+            cp_ha_runtime=cp_ha_runtime,
+            pan_ha_runtime=pan_ha_runtime,
+            pan_ha_peers=pan_ha_peers,
+            generated_at=_utc_now(),
+            preflight_snapshots=preflight_snapshots,
+        )
 
     return {
         "schema_version": UI_SCHEMA_VERSION,
