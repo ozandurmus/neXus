@@ -245,49 +245,61 @@ class TestCpTargetResolution:
 # ===========================================================================
 
 class TestPanTargetResolution:
+    """OP.0b S8-C real-env correction: `_resolve_pan_operational_entity`
+    resolves a BOUNDED CANDIDATE SET only -- it no longer requires the
+    selection to already match a Grade-A configuration-intent pair
+    `utils.failover.derive_ha_units` independently derives (that requirement
+    was circular: it made the P1/P2 evidence that could corroborate a
+    dedicated-HA1 pair uncollectable, since contact was refused before it
+    could run). Pair correspondence is now established AFTER contact, from
+    fresh evidence -- see `tests/test_op0b_s7_readiness_v2.py`
+    `_pan_reciprocal_correspondence` coverage.
+    """
+
     def test_exact_pair_resolves_to_pair(self, tmp_path):
         _write_pan_fixture(tmp_path)
         runtime_paths = _RuntimePaths(tmp_path)
-        entity_id, rows = preflight_wf._resolve_pan_operational_entity(
-            runtime_paths, ["SA1", "SB1"], _PAN_HA_RUNTIME, _PAN_HA_PEERS,
-        )
+        entity_id, rows = preflight_wf._resolve_pan_operational_entity(runtime_paths, ["SA1", "SB1"])
         assert entity_id == "pan-a+pan-b"
         assert len(rows) == 2
 
     def test_single_unresolved_member_resolves(self, tmp_path):
         _write_pan_fixture(tmp_path)
         runtime_paths = _RuntimePaths(tmp_path)
-        entity_id, rows = preflight_wf._resolve_pan_operational_entity(
-            runtime_paths, ["SC1"], _PAN_HA_RUNTIME, _PAN_HA_PEERS,
-        )
+        entity_id, rows = preflight_wf._resolve_pan_operational_entity(runtime_paths, ["SC1"])
         assert entity_id == "pan-solo"
         assert len(rows) == 1
 
-    def test_partial_selection_of_known_pair_fails_closed(self, tmp_path):
-        # Selecting only one member of a MUTUALLY-paired unit is exactly the
-        # B2 boundary this slice must not paper over -- fail closed.
+    def test_single_member_of_known_pair_now_resolves(self, tmp_path):
+        # Selecting only one member of a config-intent-paired unit is no
+        # longer refused before contact -- P1 independently gates whichever
+        # single candidate was selected, exactly like any other bounded
+        # 1-member request. Only the identity gate at contact time, and the
+        # post-contact correspondence evaluation, carry trust -- never this
+        # local selection step.
         _write_pan_fixture(tmp_path)
         runtime_paths = _RuntimePaths(tmp_path)
-        with pytest.raises(preflight_wf.PreflightTargetResolutionError):
-            preflight_wf._resolve_pan_operational_entity(
-                runtime_paths, ["SA1"], _PAN_HA_RUNTIME, _PAN_HA_PEERS,
-            )
+        entity_id, rows = preflight_wf._resolve_pan_operational_entity(runtime_paths, ["SA1"])
+        assert entity_id == "pan-a"
+        assert len(rows) == 1
 
-    def test_unrelated_pair_fails_closed(self, tmp_path):
+    def test_two_unrelated_candidates_resolve_as_bounded_pair(self, tmp_path):
+        # No local pairing relationship is required to bound-select two
+        # candidates -- the explicit selector alone establishes the bounded
+        # candidate set; the S6 collector's own P1 gate and the post-contact
+        # correspondence evaluation are what actually corroborate (or, here,
+        # would honestly fail to corroborate) a real relationship.
         _write_pan_fixture(tmp_path)
         runtime_paths = _RuntimePaths(tmp_path)
-        with pytest.raises(preflight_wf.PreflightTargetResolutionError):
-            preflight_wf._resolve_pan_operational_entity(
-                runtime_paths, ["SA1", "SC1"], _PAN_HA_RUNTIME, _PAN_HA_PEERS,
-            )
+        entity_id, rows = preflight_wf._resolve_pan_operational_entity(runtime_paths, ["SA1", "SC1"])
+        assert entity_id == "pan-a+pan-solo"
+        assert len(rows) == 2
 
     def test_unknown_serial_fails_closed(self, tmp_path):
         _write_pan_fixture(tmp_path)
         runtime_paths = _RuntimePaths(tmp_path)
         with pytest.raises(preflight_wf.PreflightTargetResolutionError):
-            preflight_wf._resolve_pan_operational_entity(
-                runtime_paths, ["UNKNOWN99"], _PAN_HA_RUNTIME, _PAN_HA_PEERS,
-            )
+            preflight_wf._resolve_pan_operational_entity(runtime_paths, ["UNKNOWN99"])
 
     def test_more_than_two_targets_rejected_before_resolution(self):
         with pytest.raises(preflight_wf.PreflightTargetResolutionError):
@@ -313,14 +325,19 @@ class TestZeroCollectorInvocationOnFailure:
             preflight_wf.cp_ha_preflight_check(ctx)
         assert calls == []
 
-    def test_pan_partial_target_never_calls_s6(self, tmp_path, monkeypatch):
+    def test_pan_unknown_target_never_calls_s6(self, tmp_path, monkeypatch):
+        # OP.0b S8-C real-env correction: a single, resolvable candidate
+        # (e.g. "SA1" alone) no longer fails closed before contact -- see
+        # TestPanTargetResolution.test_single_member_of_known_pair_now_resolves.
+        # The genuine zero-collector-invocation-on-failure case is an
+        # UNKNOWN serial, which still fails before any device is contacted.
         _write_pan_fixture(tmp_path)
         calls = []
         monkeypatch.setattr(
             "panorama.preflight_collector.run_pan_preflight",
             lambda **kw: calls.append(kw) or pytest.fail("S6 must not be called"),
         )
-        args = _parse(["--pan-ha-preflight-check", "--pan-preflight-targets", "SA1"])
+        args = _parse(["--pan-ha-preflight-check", "--pan-preflight-targets", "UNKNOWN99"])
         runtime_paths = _RuntimePaths(tmp_path)
         ctx = _make_ctx(args, runtime_paths)
         monkeypatch.setenv("SECURITYEXPERT_PRINCIPAL", "tester")
@@ -414,6 +431,52 @@ class TestComposition:
 
         assert result == 0
         assert len(calls) == 1  # S6 invoked exactly once
+        assert calls[0]["operational_entity_id"] == "pan-a+pan-b"
+        assert len(calls[0]["members"]) == 2
+
+    def test_pan_dedicated_ha1_pair_now_reaches_contact(self, tmp_path, monkeypatch):
+        # OP.0b S8-C real-env correction, end to end: a topology where the
+        # OLD pre-contact gate (peer-ip == management_ip) genuinely fails --
+        # the approved real pair's own shape -- used to raise
+        # PreflightTargetResolutionError here, before S6 was ever called.
+        # It must now reach contact exactly like any other bounded 2-member
+        # selection.
+        _write_pan_fixture(tmp_path)
+        monkeypatch.setenv("SECURITYEXPERT_PRINCIPAL", "tester")
+        monkeypatch.setenv("SECURITYEXPERT_SECRET", "s3cret")
+        monkeypatch.setenv("SECURITYEXPERT_PANORAMA_ENDPOINT", "panorama.example.invalid")
+
+        from utils.failover.preflight_model import PreflightSnapshot
+
+        calls = []
+
+        def fake_run_pan_preflight(*, operational_entity_id, members, username, secret, **_kw):
+            calls.append({"operational_entity_id": operational_entity_id, "members": list(members)})
+            return PreflightSnapshot(
+                operational_unit_id=operational_entity_id, vendor="panorama", unit_type="ha_pair",
+                preflight_run_id="fixed-run-id-dedicated", members=(), configuration_facts=(),
+            )
+
+        monkeypatch.setattr("panorama.preflight_collector.run_pan_preflight", fake_run_pan_preflight)
+        # Configured HA1 peer-ip on a DIFFERENT address family from either
+        # member's management_ip -- the dedicated-HA1 shape the old
+        # pre-contact gate refused to contact.
+        monkeypatch.setattr(
+            "application.workflows.preflight._load_pan_ha_runtime",
+            lambda output_root: (
+                {"pan-a": {"enabled": "yes", "mode": "active-passive"}, "pan-b": {"enabled": "yes", "mode": "active-passive"}},
+                {"pan-a": "10.9.9.22", "pan-b": "10.9.9.21"},
+            ),
+        )
+
+        args = _parse(["--pan-ha-preflight-check", "--pan-preflight-targets", "SA1,SB1"])
+        runtime_paths = _RuntimePaths(tmp_path)
+        ctx = _make_ctx(args, runtime_paths)
+
+        result = preflight_wf.pan_ha_preflight_check(ctx)
+
+        assert result == 0
+        assert len(calls) == 1  # S6 invoked exactly once -- contact was never refused
         assert calls[0]["operational_entity_id"] == "pan-a+pan-b"
         assert len(calls[0]["members"]) == 2
 
@@ -661,9 +724,7 @@ class TestPanLocalSelectionIsNotTrustedIdentity:
 
         _write_pan_fixture(tmp_path)
         runtime_paths = _RuntimePaths(tmp_path)
-        _entity_id, rows = preflight_wf._resolve_pan_operational_entity(
-            runtime_paths, ["SA1", "SB1"], _PAN_HA_RUNTIME, _PAN_HA_PEERS,
-        )
+        _entity_id, rows = preflight_wf._resolve_pan_operational_entity(runtime_paths, ["SA1", "SB1"])
 
         from utils.restore_readiness import resolve_entity_id as _resolve_entity_id
 

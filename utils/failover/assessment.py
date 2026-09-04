@@ -159,6 +159,16 @@ class HaUnit:
     #: `pan_ha_peer_unresolved` reason at the `compute_ha_readiness` call
     #: site.
     unresolved_reason: str | None = None
+    #: OP.0b S8-C real-env correction. `True` only for a unit
+    #: `_apply_pan_explicit_candidate` built from an operator's explicit,
+    #: bounded `--pan-preflight-targets` selection -- never set by
+    #: `_derive_pan_units`'s normal stored-telemetry derivation. Distinguishes
+    #: an operator-bounded CANDIDATE pair (identity independently P1-gated
+    #: per member, pair correspondence not yet Grade-A proven) from a
+    #: `_derive_pan_units`-established Grade-A configuration-intent pair, so
+    #: `_pair_identity_state` never reports the stronger grade for evidence
+    #: that does not support it (task §10/§20: "no false Grade-A promotion").
+    explicit_candidate: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -172,6 +182,7 @@ class HaUnit:
             # OP.0b.0 §26 X-4: serialised additively (S7) so the pair-identity
             # axis is visible separately from the verdict `reason`.
             "unresolved_reason": self.unresolved_reason,
+            "explicit_candidate": self.explicit_candidate,
         }
 
 
@@ -248,9 +259,24 @@ def _pair_identity_state(unit: HaUnit) -> str:
     PASS cross-member checks without. CP: `cluster_topology.group_id`
     (mutual VIP set). PAN: mutual configured `peer-ip` agreement -- Grade A
     configuration intent under the frozen hostname-keyed fallback, never
-    runtime-proven; `B2` stays NOT ESTABLISHED and is not asserted here."""
+    runtime-proven; `B2` stays NOT ESTABLISHED and is not asserted here.
+
+    OP.0b S8-C real-env correction: an explicit, operator-bounded preflight
+    candidate pair (`HaUnit.explicit_candidate`) is a THIRD, distinct state
+    -- not "not_established" (both members were independently selected and,
+    by the time this unit is evaluated, both have independently passed P1;
+    cross-member checks over their fresh evidence are meaningful and must
+    run) and not "established_configuration_intent" (no Grade-A config-intent
+    match was ever proven for this pair; claiming that grade would be a
+    false promotion, task §10/§20). Its own literal string never appears in
+    `evaluate_snapshot_checks`'s gate (only the literal `"not_established"`
+    is special-cased there), so the distinction is legible in `evidence`
+    disclosure without changing which checks are reachable.
+    """
     if len(unit.members) < 2:
         return "not_established"
+    if unit.explicit_candidate:
+        return "explicit_bounded_candidate_pending_correspondence"
     if unit.vendor == "panorama":
         return "established_configuration_intent"
     return "established_topology_group"
@@ -723,10 +749,43 @@ def _derive_pan_units(
     `unified.json` carries no PAN peer relationship today — PAN rows have no
     `cluster` and no peer reference — so the pair is inferred from each
     device's configured `peer-ip` (`pan_ha_peers`, sourced from the running
-    configuration this collector already fetches). This is CONFIGURATION
-    INTENT, never a runtime-observed or runtime-proven relationship (Grade A
-    only, per the frozen contract) — it must never be read elsewhere as
-    sufficient corroboration for any future CLASS 2 operational decision.
+    configuration this collector already fetches) matching another device's
+    `management_ip`. This is CONFIGURATION INTENT, never a runtime-observed
+    or runtime-proven relationship (Grade A only, per the frozen contract) —
+    it must never be read elsewhere as sufficient corroboration for any
+    future CLASS 2 operational decision.
+
+    REAL_ENV_DISPROVEN (OP.0b S8-C, real-env correction): "configured HA1
+    peer-ip == peer's management_ip" is NOT a universal PAN HA invariant. It
+    is the correct test only for the specific (valid, supported) topology
+    where the management interface is itself configured as HA1. The
+    approved real S8-C pair uses dedicated HA1 control-link addressing (a
+    distinct, equally valid, and arguably more common topology): both
+    members report HA enabled and a configured HA1 peer address, self
+    identity is internally consistent, yet the configured peer address
+    matches neither member's management address — symmetrically, on both
+    sides. That is expected dedicated-HA1 behavior, never a device defect
+    and never evidence of misconfiguration. Management-plane addressing and
+    HA1 control-link addressing are independent planes unless the operator
+    has explicitly made them the same interface.
+
+    This function is UNCHANGED by that correction — deliberately (task
+    §12/§13: conservative stored/legacy topology derivation stays as-is;
+    weakening it globally would let an unrelated device's management_ip
+    coincidentally satisfy this predicate for the wrong reason). It still
+    only recognizes the management-as-HA1 topology as Grade A. A device
+    whose peer-ip does not resolve to any known management_ip (the
+    dedicated-HA1 case) stays a conservative single-member unit here, same
+    as before — correctly INSUFFICIENT_EVIDENCE, never fabricated into a
+    pair from this evidence alone. The corrected model is applied instead in
+    the explicit, narrow, invocation-scoped preflight candidate-resolution
+    path (`application.workflows.preflight._resolve_pan_operational_entity`
+    -> `derive_ha_units(..., pan_explicit_candidate_members=...)` ->
+    `_apply_pan_explicit_candidate` below), which never touches this
+    function's own fleet-wide, stored-telemetry behavior, and post-contact
+    fresh runtime correspondence (`preflight_readiness._pan_reciprocal_correspondence`),
+    which reasons over independently-observed P1/P2 evidence instead of this
+    config-intent heuristic.
 
     Fail-closed, in order:
     - `peer-ip` missing, resolving to zero, or resolving to more than one
@@ -811,12 +870,78 @@ def _derive_pan_units(
     return units
 
 
+def pan_explicit_candidate_unit_id(entity_ids: Sequence[str]) -> str:
+    """The deterministic `unit_id` an explicit, operator-bounded PAN preflight
+    candidate pair gets -- same `"A+B"` (sorted) convention
+    `_derive_pan_units` already uses for a Grade-A configuration-intent pair,
+    so the two are visually/textually consistent, and so
+    `_apply_pan_explicit_candidate` can recognize when `_derive_pan_units`
+    already independently formed the exact same pair (management-as-HA1
+    topology) and defer to that stronger-graded unit instead of duplicating
+    it. Exported so the S7.5 application entrypoint
+    (`application.workflows.preflight._resolve_pan_operational_entity`) can
+    compute the identical id for its fresh `PreflightSnapshot.operational_unit_id`
+    *before* calling `compute_ha_readiness`, matching the same convention
+    `derive_ha_units` docstring already establishes for CP/legacy PAN units."""
+    return "+".join(sorted(str(e) for e in entity_ids))
+
+
+def _apply_pan_explicit_candidate(
+    units: list[HaUnit],
+    usable_rows: Sequence[Mapping[str, Any]],
+    member_ids: Sequence[str],
+) -> list[HaUnit]:
+    """OP.0b S8-C real-env correction: append ONE additional `HaUnit` for an
+    operator's explicit, bounded `--pan-preflight-targets A,B` selection --
+    additive only, never a modification of `units` derived normally above.
+
+    This is deliberately separate from `_derive_pan_units`'s own fleet-wide,
+    stored-telemetry pairing (task §13's "A. conservative stored/legacy
+    topology derivation" vs. "B. explicit bounded candidate resolution"):
+    normal, non-preflight callers (the console, `--ha-readiness-check`, any
+    report render) never pass `member_ids`, so this function is never called
+    for them and their units are completely unaffected.
+
+    A no-op when:
+    - `member_ids` is not exactly two distinct entity ids (defensive; the
+      S7.5 application layer already enforces this before calling in), or
+    - both entity ids do not resolve to known PAN rows in `usable_rows`, or
+    - `_derive_pan_units` already independently formed a unit with EXACTLY
+      these two members (the management-as-HA1 topology, Grade A already
+      proven) -- that stronger-graded unit is used as-is, never shadowed by
+      a second, weaker-graded unit for the same two members.
+    """
+    ids = sorted(dict.fromkeys(str(e) for e in member_ids if str(e).strip()))
+    if len(ids) != 2:
+        return units
+    if any(u.vendor == "panorama" and set(u.members) == set(ids) for u in units):
+        return units
+
+    pan_rows = {
+        resolve_entity_id(row): row
+        for row in usable_rows
+        if resolve_vendor(row) == "panorama"
+    }
+    if not all(entity_id in pan_rows for entity_id in ids):
+        return units
+
+    unit_id = pan_explicit_candidate_unit_id(ids)
+    vsys_names = _pan_vsys_names(*(pan_rows[e] for e in ids))
+    return [*units, HaUnit(
+        unit_id=unit_id, unit_type=_UNIT_PAN_PAIR, vendor="panorama",
+        members=ids, cluster_mode="unknown",
+        display_name=_pan_display_name(vsys_names, unit_id),
+        explicit_candidate=True,
+    )]
+
+
 def derive_ha_units(
     unified_devices: Sequence[Mapping[str, Any]],
     *,
     cp_ha_runtime: Mapping[str, Mapping[str, Any]] | None = None,
     pan_ha_runtime: Mapping[str, Mapping[str, Any]] | None = None,
     pan_ha_peers: Mapping[str, str] | None = None,
+    pan_explicit_candidate_members: Sequence[str] | None = None,
 ) -> list[HaUnit]:
     """The canonical operational-HA-unit derivation, exported unchanged.
 
@@ -828,6 +953,13 @@ def derive_ha_units(
     function -- and therefore `compute_ha_readiness` -- will independently
     derive for the same inventory. No readiness/verdict logic lives here;
     this performs no collection and computes no check or verdict.
+
+    `pan_explicit_candidate_members` (OP.0b S8-C real-env correction):
+    optional, exactly-two entity ids an operator explicitly bounded via
+    `--pan-preflight-targets`. When given, ONE additional `HaUnit` is
+    appended for that pair via `_apply_pan_explicit_candidate` -- see its
+    docstring. `None`/omitted (every caller except the PAN preflight
+    entrypoint) reproduces the exact prior behavior of this function.
     """
     cp_runtime = _normalize_cp_runtime(cp_ha_runtime or {})
     pan_runtime = pan_ha_runtime or {}
@@ -841,7 +973,10 @@ def derive_ha_units(
         and resolve_entity_id(row)
     ]
 
-    return _derive_cp_units(usable_rows, cp_runtime) + _derive_pan_units(usable_rows, pan_runtime, peers)
+    units = _derive_cp_units(usable_rows, cp_runtime) + _derive_pan_units(usable_rows, pan_runtime, peers)
+    if pan_explicit_candidate_members:
+        units = _apply_pan_explicit_candidate(units, usable_rows, pan_explicit_candidate_members)
+    return units
 
 
 def compute_ha_readiness(
@@ -852,6 +987,7 @@ def compute_ha_readiness(
     pan_ha_peers: Mapping[str, str] | None = None,
     generated_at: str | None = None,
     preflight_snapshots: "Sequence[PreflightSnapshot] | None" = None,
+    pan_explicit_candidate_members: Sequence[str] | None = None,
 ) -> dict[str, Any]:
     """Compute a `securityexpert-ha-readiness-v1` record.
 
@@ -884,6 +1020,11 @@ def compute_ha_readiness(
     pan_ha_peers:
         Optional `entity_id -> configured peer-ip` map used only for P7 pair
         assembly.
+    pan_explicit_candidate_members:
+        OP.0b S8-C real-env correction. Optional, exactly-two entity ids an
+        operator explicitly bounded via `--pan-preflight-targets`, threaded
+        straight through to `derive_ha_units`. `None` for every caller
+        except the PAN preflight entrypoint -- see `derive_ha_units`.
 
     The result contains no management address, no raw device output and no
     command string other than the fixed `missing_evidence` labels.
@@ -893,6 +1034,7 @@ def compute_ha_readiness(
 
     units = derive_ha_units(
         unified_devices, cp_ha_runtime=cp_ha_runtime, pan_ha_runtime=pan_runtime, pan_ha_peers=pan_ha_peers,
+        pan_explicit_candidate_members=pan_explicit_candidate_members,
     )
 
     snapshots_by_unit: dict[str, Any] = {}

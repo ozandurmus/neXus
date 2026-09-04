@@ -385,6 +385,13 @@ class _MemberView:
     identity: str
     own: dict[str, PreflightFact]
     link: dict[str, PreflightFact]  # PAN conn-* leaves from peer_claim_facts
+    #: OP.0b S8-C real-env correction: EVERY peer_claim_facts entry, keyed by
+    #: name -- `link` above is filtered to `FactCategory.LINK_HEALTH` only,
+    #: which excludes `peer_serial_claim`/`peer_mgmt_ip_claim`
+    #: (`PEER_IDENTITY_RELATIONSHIP`). `_pan_reciprocal_correspondence` needs
+    #: those, so this carries the unfiltered set instead of widening `link`'s
+    #: existing, narrower meaning.
+    peer_claims: dict[str, PreflightFact]
     identity_gate: str  # "ok" | "failed" | "not_recorded"
     context_kind: ContextKind | None
 
@@ -425,8 +432,9 @@ def _member_views(snapshot: PreflightSnapshot) -> list[_MemberView]:
     views: list[_MemberView] = []
     for member in snapshot.members:
         own = {f.name: f for f in member.own_facts}
+        peer_claims = {f.name: f for f in member.peer_claim_facts}
         link = {
-            f.name: f for f in member.peer_claim_facts
+            name: f for name, f in peer_claims.items()
             if f.category is FactCategory.LINK_HEALTH
         }
         gate_fact = next((own[n] for n in _IDENTITY_GATE_FACTS if n in own), None)
@@ -438,7 +446,7 @@ def _member_views(snapshot: PreflightSnapshot) -> list[_MemberView]:
             gate = "ok"
         contexts = {f.provenance.context.kind for f in member.own_facts}
         views.append(_MemberView(
-            identity=str(member.physical_device_identity), own=own, link=link,
+            identity=str(member.physical_device_identity), own=own, link=link, peer_claims=peer_claims,
             identity_gate=gate, context_kind=next(iter(contexts)) if len(contexts) == 1 else None,
         ))
     return views
@@ -588,6 +596,85 @@ def _evaluate_check(
     return _result(CHECK_PASS, "positively_established_in_run")
 
 
+# --- OP.0b S8-C real-env correction: fresh PAN pair correspondence --------
+
+_CORRESPONDENCE_MATCH = "MATCH"
+_CORRESPONDENCE_MISMATCH = "MISMATCH"
+_CORRESPONDENCE_MISSING = "MISSING"
+_CORRESPONDENCE_NOT_EVALUABLE = "NOT_EVALUABLE"
+_CORRESPONDENCE_AMBIGUOUS = "AMBIGUOUS"
+
+
+def _pan_relationship(a: PreflightFact | None, b: PreflightFact | None) -> str:
+    """AGENTS.md "Sensitive identity reporting law" vocabulary: compare two
+    already-opaque fact values locally, report only the relationship, never
+    the values (both are already `OpaqueToken`s by construction for every
+    S8-C address/identity field this is called on)."""
+    if a is None or b is None or a.state is not FactState.KNOWN or b.state is not FactState.KNOWN:
+        return _CORRESPONDENCE_MISSING
+    return _CORRESPONDENCE_MATCH if _norm(a.value) == _norm(b.value) else _CORRESPONDENCE_MISMATCH
+
+
+def _pan_reciprocal_correspondence(members: Sequence[_MemberView]) -> dict[str, Any]:
+    """OP.0b S8-C real-env correction: fresh, post-contact PAN pair
+    correspondence from this run's own already-collected `P1` (dialed
+    endpoint) / `P2` (`mgmt-ip` self-report and peer-claim, `mode`,
+    best-effort `group-id`) evidence only -- no new field, no new read, and
+    deliberately NOT the config-intent (`peer-ip` == `management_ip`)
+    heuristic `_derive_pan_units` uses (that heuristic is REAL_ENV_DISPROVEN
+    as a universal invariant; see that function's docstring).
+
+    Purely descriptive. Never gates any of the seven canonical checks (that
+    stays `_pair_identity_state`'s job in `utils.failover.assessment`) and
+    never establishes PAN `B2` -- `B2` is the frozen, stronger, bidirectional
+    identity-corroboration requirement (AGENTS.md "one-sided peer claim is
+    not bidirectional corroboration"). This answers a narrower, read-only
+    question instead: do these two independently P1-gated, explicitly
+    bounded devices mutually report one another as their HA management
+    peers, in the same mode? Reported honestly for a human/PO to weigh
+    toward `B2`, never auto-promoted (task §12/§20: "no false B2 promotion";
+    `group_id_correspondence` never participates in `state` at all -- its
+    XML path is unconfirmed, corroborating only, per
+    `configuration.panorama_config_collector._PAN_HA_GROUP_ID_PATH`).
+    """
+    if len(members) != 2:
+        return {"state": _CORRESPONDENCE_NOT_EVALUABLE, "reason": "peer_not_independently_observed"}
+
+    by_identity = {v.identity: v for v in members}
+    if len(by_identity) != len(members):
+        return {"state": _CORRESPONDENCE_AMBIGUOUS, "reason": "duplicate_member_identity"}
+    ids = sorted(by_identity)
+    a, b = by_identity[ids[0]], by_identity[ids[1]]
+
+    self_a = _pan_relationship(a.own.get("local_mgmt_ip_claim"), a.own.get("local_management_endpoint"))
+    self_b = _pan_relationship(b.own.get("local_mgmt_ip_claim"), b.own.get("local_management_endpoint"))
+    a_claims_b = _pan_relationship(a.peer_claims.get("peer_mgmt_ip_claim"), b.own.get("local_management_endpoint"))
+    b_claims_a = _pan_relationship(b.peer_claims.get("peer_mgmt_ip_claim"), a.own.get("local_management_endpoint"))
+    mode_state = _pan_relationship(a.own.get("local_mode"), b.own.get("local_mode"))
+    group_state = _pan_relationship(a.own.get("ha_group_id"), b.own.get("ha_group_id"))
+    if group_state == _CORRESPONDENCE_MISSING:
+        group_state = _CORRESPONDENCE_NOT_EVALUABLE  # best-effort field, unconfirmed path -- never "missing"
+
+    signals = (self_a, self_b, a_claims_b, b_claims_a, mode_state)
+    if any(s == _CORRESPONDENCE_MISMATCH for s in signals):
+        overall = _CORRESPONDENCE_MISMATCH
+    elif any(s == _CORRESPONDENCE_MISSING for s in signals):
+        overall = _CORRESPONDENCE_MISSING
+    else:
+        overall = _CORRESPONDENCE_MATCH
+
+    return {
+        "state": overall,
+        "self_management_correspondence": {ids[0]: self_a, ids[1]: self_b},
+        "reciprocal_peer_management_correspondence": {
+            f"{ids[0]}_claims_{ids[1]}": a_claims_b,
+            f"{ids[1]}_claims_{ids[0]}": b_claims_a,
+        },
+        "mode_correspondence": mode_state,
+        "group_id_correspondence": group_state,
+    }
+
+
 def evaluate_snapshot_checks(
     snapshot: PreflightSnapshot,
     *,
@@ -668,6 +755,12 @@ def evaluate_snapshot_checks(
     if snapshot.configuration_facts:
         policy_gates.append(POLICY_D_F1)
 
+    # OP.0b S8-C real-env correction: fresh, post-contact PAN pair
+    # correspondence -- descriptive disclosure only, computed over exactly
+    # the same `usable` (attribution-valid, identity-gate-passed) members the
+    # seven checks above already use; never gates a check, never PAN B2.
+    pan_pair_correspondence = _pan_reciprocal_correspondence(usable) if vendor == "panorama" else None
+
     evidence = {
         "basis": EVIDENCE_BASIS_PREFLIGHT_SNAPSHOT,
         "preflight_run_id": snapshot.preflight_run_id,
@@ -683,4 +776,6 @@ def evaluate_snapshot_checks(
         "unresolved_policy_gates": sorted(set(policy_gates)),
         "observed": observed,
     }
+    if pan_pair_correspondence is not None:
+        evidence["pan_pair_correspondence"] = pan_pair_correspondence
     return SnapshotEvaluation(checks=checks, evidence=evidence, effective_mode=mode)
