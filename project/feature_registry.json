@@ -1226,7 +1226,7 @@
       "status": "planned",
       "introduced": "OP.2",
       "weight": 8,
-      "summary": "The single write-capable component: one authorised, confirmed action with fresh same-workflow preflight, independent post-action verification, no automatic rollback (reversal is a new confirmed action), OUTCOME_UNKNOWN quarantine, full audit, and per-vendor adapters. Hard-gated.",
+      "summary": "The single write-capable component: one authorised, confirmed action with fresh same-workflow preflight, independent post-action verification, no automatic rollback (reversal is a new confirmed action), OUTCOME_UNKNOWN quarantine, full audit, and per-vendor adapters. Vendor-independent architecture FROZEN 2026-09-04 (docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md); implementation hard-gated, not started.",
       "why": "The payoff of a trustworthy SEE/VERIFY/TRACE/RECOVER stack; the tool's first OPERATE capability.",
       "criteria": [
         {

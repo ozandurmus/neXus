@@ -5,9 +5,8 @@ Read this file first, then follow the reading order below. Do not scan the
 repository root or `docs/history/**` looking for context — everything you need
 on the first pass is listed here.
 
-Working language: **English** for all conversation, analysis, commit messages and
-docs. Vendor CLI commands, API fields and code identifiers stay verbatim. Ask for
-a Turkish translation or explanation only when you explicitly need one.
+Working language: **English** — `AGENTS.md` "Engineering-output language law"
+is the single owner of the rule and is not restated here.
 
 ---
 
@@ -159,18 +158,7 @@ A task may name its own contract (reading-order step 5). If it doesn't:
 
 ## SESSION START (produce at the start of every meaningful build/task)
 
-Open with a **`PROJE ÖZETİ`** — Turkish, plain language, 4–6 short lines, no
-jargon, for a non-developer stakeholder to judge value without reading code:
-
-- **Proje nedir:** SecurityExpert bir cümlede ne yapar.
-- **Bu görev nedir:** şimdi ne yapacağız, sade dille.
-- **Neden / ne kazanırız:** bu iş ürüne ne katar, hangi faydayı sağlar.
-- **Tür:** yeni özellik / hata düzeltme / büyük özellik / sağlamlaştırma /
-  dokümantasyon / mimari.
-- **Gelecekte ne çözer / neyi açar:** ileride neyi mümkün kılar.
-
-This block stays Turkish even though the working language is English.
-Everything after it stays English:
+English, no preamble (`AGENTS.md` "Engineering-output language law"):
 
 - authoritative product baseline and engineering baseline (from
   `CURRENT_STATE.md`, never hard-coded),
