@@ -38,6 +38,7 @@ from checkpoint.cp_preflight_projection import (
 )
 from panorama.pan_preflight_projection import (
     project_pan_identity_fact,
+    project_pan_management_endpoint_fact,
     project_pan_path_monitoring_facts,
     project_pan_preflight_facts,
 )
@@ -206,14 +207,26 @@ def pan_member(
     running_sync="synchronized", build_rel="11.1.2", compat="Match", preemptive="yes", flaps=(0, 0),
     peer_state="passive", serial="0001A", peer_serial="0002B", gate=True,
     failed=(), unknown=(), unsupported=(), omit=(), p2_failed=False,
+    # OP.0b S8-C real-env correction: local/peer runtime management-plane
+    # addressing (P2 `mgmt-ip`) and this member's own P1-dialed endpoint --
+    # all `None` by default (existing callers/tests unaffected). Values here
+    # are synthetic pre-tokenized strings, exactly like `serial`/`peer_serial`
+    # above -- the projection layer wraps whatever string it receives in
+    # `OpaqueToken`, it never re-tokenizes.
+    local_mgmt_ip=None, peer_mgmt_ip=None, ha_group_id=None, local_management_endpoint=None,
 ):
     kw = dict(preflight_run_id=run_id, collected_at=at, physical_device_identity=member, operational_entity_id=unit, transport=Transport.DIRECT_API)
-    fields = None if p2_failed else _pan_fields(
-        state=state, mode=mode, state_sync=state_sync, conn_ha1=conn_ha1, conn_ha2=conn_ha2, running_sync=running_sync,
-        build_rel=build_rel, compat=compat, preemptive=preemptive, flaps=flaps, peer_state=peer_state, serial=serial, peer_serial=peer_serial,
-    )
+    fields = None if p2_failed else {
+        **_pan_fields(
+            state=state, mode=mode, state_sync=state_sync, conn_ha1=conn_ha1, conn_ha2=conn_ha2, running_sync=running_sync,
+            build_rel=build_rel, compat=compat, preemptive=preemptive, flaps=flaps, peer_state=peer_state, serial=serial, peer_serial=peer_serial,
+        ),
+        "local_mgmt_ip": local_mgmt_ip, "peer_mgmt_ip": peer_mgmt_ip, "ha_group_id": ha_group_id,
+    }
     ev = project_pan_preflight_facts(fields, source_command="P2", outcome=Outcome.FAILED if p2_failed else Outcome.SUCCESS, **kw)
     own = [project_pan_identity_fact(gate, **kw)]
+    if local_management_endpoint is not None:
+        own.append(project_pan_management_endpoint_fact(local_management_endpoint, **kw))
     own.extend(ev.own_facts)
     own.extend(project_pan_path_monitoring_facts(
         {"observed": True, "enabled": path_enabled, "path_count": 2, "any_down": path_any_down}, **kw,
@@ -748,6 +761,276 @@ def test_34_no_leading_zero_normalization():
     u = unit(pan_report(snap), _PAN_UNIT)
     assert u["evidence"]["prerequisites"]["attribution"] == "ok"
     assert u["evidence"]["prerequisites"]["members_observed"] == 2
+
+
+# =====================================================================
+# OP.0b S8-C real-env correction: dedicated-HA1 pairing, explicit bounded
+# candidate resolution, fresh reciprocal correspondence, management-as-HA1
+# regression, and fail-closed negatives
+# =====================================================================
+
+#: A realistic dedicated-HA1 topology (the approved real S8-C pair's shape):
+#: HA1 peer addressing is NOT the management address on either side, so
+#: `_derive_pan_units`'s config-intent (`peer-ip` == `management_ip`)
+#: heuristic forms two separate single-member units, exactly as designed
+#: (task §22 "management-as-HA1 regression" -- this fixture is deliberately
+#: the OTHER, non-regression case).
+_DEDICATED_HA1_ROWS = [
+    {"device": "pan-d1", "source": "panorama", "management_ip": "10.9.9.1", "inventory_status": {"data_state": "ok"}},
+    {"device": "pan-d2", "source": "panorama", "management_ip": "10.9.9.2", "inventory_status": {"data_state": "ok"}},
+]
+_DEDICATED_HA1_RUNTIME = {
+    "pan-d1": {"enabled": "yes", "state": "active", "mode": "active-passive", "peer_state": "passive", "state_sync": "x"},
+    "pan-d2": {"enabled": "yes", "state": "passive", "mode": "active-passive", "peer_state": "active", "state_sync": "x"},
+}
+#: Configured HA1 peer-ip -- a DIFFERENT address family from management_ip
+#: above, so `_derive_pan_units` cannot and must not resolve a pair from it.
+_DEDICATED_HA1_PEERS = {"pan-d1": "10.250.0.22", "pan-d2": "10.250.0.21"}
+
+
+def _dedicated_ha1_member(member, *, state, peer_state, mgmt_token, peer_mgmt_token, endpoint_token, **kw):
+    return pan_member(
+        member, unit="pan-d1+pan-d2", state=state, peer_state=peer_state,
+        local_mgmt_ip=mgmt_token, peer_mgmt_ip=peer_mgmt_token, ha_group_id="20",
+        local_management_endpoint=endpoint_token, **kw,
+    )
+
+
+def test_41_dedicated_ha1_explicit_candidate_resolves_and_evaluates():
+    # The old universal invariant (peer-ip == management_ip) genuinely fails
+    # for this topology -- proven first, so the rest of the test cannot be
+    # accidentally validating a scenario the legacy path already handled.
+    legacy_units = assessment_module.derive_ha_units(
+        _DEDICATED_HA1_ROWS, pan_ha_runtime=_DEDICATED_HA1_RUNTIME, pan_ha_peers=_DEDICATED_HA1_PEERS,
+    )
+    assert {u.unit_id for u in legacy_units} == {"pan-d1", "pan-d2"}
+    assert all(len(u.members) == 1 for u in legacy_units)
+
+    snap = pan_snapshot(
+        _dedicated_ha1_member("tok-d1", state="active", peer_state="passive",
+                               mgmt_token="MGMTA", peer_mgmt_token="MGMTB", endpoint_token="MGMTA"),
+        _dedicated_ha1_member("tok-d2", state="passive", peer_state="active", at=_T1,
+                               mgmt_token="MGMTB", peer_mgmt_token="MGMTA", endpoint_token="MGMTB"),
+        unit="pan-d1+pan-d2",
+    )
+    report = compute_ha_readiness(
+        _DEDICATED_HA1_ROWS, pan_ha_runtime=_DEDICATED_HA1_RUNTIME, pan_ha_peers=_DEDICATED_HA1_PEERS,
+        preflight_snapshots=[snap], pan_explicit_candidate_members=["pan-d1", "pan-d2"],
+    )
+    # The two now-redundant legacy single-member units for THIS invocation's
+    # own report are replaced by the one bounded candidate pair (real-env
+    # UI finding, same session: showing all three was unreadable next to
+    # Check Point's one row per cluster) -- _derive_pan_units's own output
+    # (asserted above) is untouched; only this report's rendered units differ.
+    unit_ids = {u["unit_id"] for u in report["units"] if u["vendor"] == "panorama"}
+    assert unit_ids == {"pan-d1+pan-d2"}
+
+    u = unit(report, "pan-d1+pan-d2")
+    assert u["explicit_candidate"] is True
+    assert u["evidence"]["prerequisites"]["pair_identity"] == "explicit_bounded_candidate_pending_correspondence"
+    c = checks(u)
+    for cid in ("viable_target", "state_sync_current", "no_split_brain"):
+        assert c[cid]["status"] == CHECK_PASS, (cid, c[cid])
+
+    correspondence = u["evidence"]["pan_pair_correspondence"]
+    assert correspondence["state"] == "MATCH"
+    assert correspondence["self_management_correspondence"] == {"tok-d1": "MATCH", "tok-d2": "MATCH"}
+    assert correspondence["reciprocal_peer_management_correspondence"] == {
+        "tok-d1_claims_tok-d2": "MATCH", "tok-d2_claims_tok-d1": "MATCH",
+    }
+    assert correspondence["mode_correspondence"] == "MATCH"
+
+
+def test_42_dedicated_ha1_correspondence_is_not_pan_b2():
+    # The MATCH result above is genuine, fresh, reciprocal management-plane
+    # correspondence -- deliberately NOT PAN B2 (that stays the frozen
+    # serial-based bidirectional requirement). No mechanism here writes,
+    # sets, or infers a B2 flag anywhere.
+    src = _code_only(ROOT / "utils" / "failover" / "preflight_readiness.py")
+    assert "serial" not in src.lower()
+    assert "b2" not in src.lower()
+
+
+def test_43_management_as_ha1_regression_still_works_unaided():
+    # The pre-existing, already-covered (test_26) topology: peer-ip ==
+    # management_ip, so the LEGACY derivation alone already forms the pair.
+    # Passing pan_explicit_candidate_members for the SAME pair must not
+    # create a second, weaker-graded duplicate unit.
+    report = compute_ha_readiness(
+        pan_rows(), pan_ha_runtime=_PAN_RUNTIME, pan_ha_peers=_PAN_PEERS,
+        preflight_snapshots=[happy_pan()], pan_explicit_candidate_members=["pan-a", "pan-b"],
+    )
+    pan_units = [u for u in report["units"] if u["vendor"] == "panorama"]
+    assert len(pan_units) == 1 and pan_units[0]["unit_id"] == _PAN_UNIT
+    assert pan_units[0]["explicit_candidate"] is False
+    assert pan_units[0]["evidence"]["prerequisites"]["pair_identity"] == "established_configuration_intent"
+
+
+def test_44_explicit_candidate_requires_exactly_two_members():
+    units_one = assessment_module.derive_ha_units(
+        _DEDICATED_HA1_ROWS, pan_ha_runtime=_DEDICATED_HA1_RUNTIME, pan_ha_peers=_DEDICATED_HA1_PEERS,
+        pan_explicit_candidate_members=["pan-d1"],
+    )
+    assert not any(u.explicit_candidate for u in units_one)
+
+    units_unknown = assessment_module.derive_ha_units(
+        _DEDICATED_HA1_ROWS, pan_ha_runtime=_DEDICATED_HA1_RUNTIME, pan_ha_peers=_DEDICATED_HA1_PEERS,
+        pan_explicit_candidate_members=["pan-d1", "pan-nonexistent"],
+    )
+    assert not any(u.explicit_candidate for u in units_unknown)
+
+
+def test_45_self_management_mismatch_never_blocks_collection_but_is_reported():
+    # A candidate's P2 self-reported mgmt-ip disagrees with the endpoint P1
+    # actually dialed for it -- collection/checks still run (§9/§10: "collection
+    # itself must not be prevented"), the disagreement is disclosed honestly.
+    snap = pan_snapshot(
+        _dedicated_ha1_member("tok-d1", state="active", peer_state="passive",
+                               mgmt_token="WRONG_SELF_REPORT", peer_mgmt_token="MGMTB", endpoint_token="MGMTA"),
+        _dedicated_ha1_member("tok-d2", state="passive", peer_state="active", at=_T1,
+                               mgmt_token="MGMTB", peer_mgmt_token="MGMTA", endpoint_token="MGMTB"),
+        unit="pan-d1+pan-d2",
+    )
+    report = compute_ha_readiness(
+        _DEDICATED_HA1_ROWS, pan_ha_runtime=_DEDICATED_HA1_RUNTIME, pan_ha_peers=_DEDICATED_HA1_PEERS,
+        preflight_snapshots=[snap], pan_explicit_candidate_members=["pan-d1", "pan-d2"],
+    )
+    u = unit(report, "pan-d1+pan-d2")
+    assert checks(u)["no_split_brain"]["status"] == CHECK_PASS  # collection not blocked
+    correspondence = u["evidence"]["pan_pair_correspondence"]
+    assert correspondence["state"] == "MISMATCH"
+    assert correspondence["self_management_correspondence"]["tok-d1"] == "MISMATCH"
+
+
+def test_46_reciprocal_peer_mismatch_is_reported_asymmetrically():
+    # A claims B correctly; B's claim about A does not match A's own dialed
+    # endpoint -- an asymmetric relationship, reported per-direction, never
+    # collapsed into a false MATCH from one side alone.
+    snap = pan_snapshot(
+        _dedicated_ha1_member("tok-d1", state="active", peer_state="passive",
+                               mgmt_token="MGMTA", peer_mgmt_token="MGMTB", endpoint_token="MGMTA"),
+        _dedicated_ha1_member("tok-d2", state="passive", peer_state="active", at=_T1,
+                               mgmt_token="MGMTB", peer_mgmt_token="SOME_OTHER_ADDRESS", endpoint_token="MGMTB"),
+        unit="pan-d1+pan-d2",
+    )
+    report = compute_ha_readiness(
+        _DEDICATED_HA1_ROWS, pan_ha_runtime=_DEDICATED_HA1_RUNTIME, pan_ha_peers=_DEDICATED_HA1_PEERS,
+        preflight_snapshots=[snap], pan_explicit_candidate_members=["pan-d1", "pan-d2"],
+    )
+    correspondence = unit(report, "pan-d1+pan-d2")["evidence"]["pan_pair_correspondence"]
+    assert correspondence["state"] == "MISMATCH"
+    assert correspondence["reciprocal_peer_management_correspondence"]["tok-d1_claims_tok-d2"] == "MATCH"
+    assert correspondence["reciprocal_peer_management_correspondence"]["tok-d2_claims_tok-d1"] == "MISMATCH"
+
+
+def test_47_ha_group_mismatch_never_gates_correspondence_state():
+    # group-id is corroborating-only (unconfirmed XML path) -- a mismatch
+    # there must never flip the overall correspondence state on its own.
+    snap = pan_snapshot(
+        pan_member("tok-d1", unit="pan-d1+pan-d2", state="active", peer_state="passive",
+                    local_mgmt_ip="MGMTA", peer_mgmt_ip="MGMTB", ha_group_id="20", local_management_endpoint="MGMTA"),
+        pan_member("tok-d2", unit="pan-d1+pan-d2", state="passive", peer_state="active", at=_T1,
+                    local_mgmt_ip="MGMTB", peer_mgmt_ip="MGMTA", ha_group_id="21", local_management_endpoint="MGMTB"),
+        unit="pan-d1+pan-d2",
+    )
+    report = compute_ha_readiness(
+        _DEDICATED_HA1_ROWS, pan_ha_runtime=_DEDICATED_HA1_RUNTIME, pan_ha_peers=_DEDICATED_HA1_PEERS,
+        preflight_snapshots=[snap], pan_explicit_candidate_members=["pan-d1", "pan-d2"],
+    )
+    correspondence = unit(report, "pan-d1+pan-d2")["evidence"]["pan_pair_correspondence"]
+    assert correspondence["group_id_correspondence"] == "MISMATCH"
+    assert correspondence["state"] == "MATCH"  # group-id never gates the roll-up
+
+
+def test_48_group_id_absent_is_not_evaluable_never_missing():
+    # Full management-plane correspondence, group-id specifically absent --
+    # isolates that "absent" reads as NOT_EVALUABLE (best-effort field,
+    # unconfirmed XML path), never MISSING (which would read as "should be
+    # there and isn't"), and never gates the roll-up either way.
+    snap = pan_snapshot(
+        pan_member("tok-d1", unit="pan-d1+pan-d2", state="active", peer_state="passive",
+                   local_mgmt_ip="MGMTA", peer_mgmt_ip="MGMTB", local_management_endpoint="MGMTA"),
+        pan_member("tok-d2", unit="pan-d1+pan-d2", state="passive", peer_state="active", at=_T1,
+                   local_mgmt_ip="MGMTB", peer_mgmt_ip="MGMTA", local_management_endpoint="MGMTB"),
+        unit="pan-d1+pan-d2",
+    )
+    report = compute_ha_readiness(
+        _DEDICATED_HA1_ROWS, pan_ha_runtime=_DEDICATED_HA1_RUNTIME, pan_ha_peers=_DEDICATED_HA1_PEERS,
+        preflight_snapshots=[snap], pan_explicit_candidate_members=["pan-d1", "pan-d2"],
+    )
+    correspondence = unit(report, "pan-d1+pan-d2")["evidence"]["pan_pair_correspondence"]
+    assert correspondence["group_id_correspondence"] == "NOT_EVALUABLE"
+    assert correspondence["state"] == "MATCH"
+
+
+def test_49_only_one_member_passing_p1_yields_not_evaluable_correspondence():
+    snap = pan_snapshot(
+        _dedicated_ha1_member("tok-d1", state="active", peer_state="passive",
+                               mgmt_token="MGMTA", peer_mgmt_token="MGMTB", endpoint_token="MGMTA"),
+        _dedicated_ha1_member("tok-d2", state="passive", peer_state="active", at=_T1, gate=False,
+                               mgmt_token="MGMTB", peer_mgmt_token="MGMTA", endpoint_token="MGMTB"),
+        unit="pan-d1+pan-d2",
+    )
+    report = compute_ha_readiness(
+        _DEDICATED_HA1_ROWS, pan_ha_runtime=_DEDICATED_HA1_RUNTIME, pan_ha_peers=_DEDICATED_HA1_PEERS,
+        preflight_snapshots=[snap], pan_explicit_candidate_members=["pan-d1", "pan-d2"],
+    )
+    u = unit(report, "pan-d1+pan-d2")
+    assert all(c["status"] == CHECK_INSUFFICIENT for c in u["checks"])
+    assert u["evidence"]["pan_pair_correspondence"]["state"] == "NOT_EVALUABLE"
+
+
+def test_50_explicit_candidate_never_widens_target_boundary():
+    # Structural proof: nothing in the S8-C correction path contacts, derives,
+    # or evaluates a THIRD PAN member beyond an explicit two-id request.
+    units = assessment_module.derive_ha_units(
+        _DEDICATED_HA1_ROWS, pan_ha_runtime=_DEDICATED_HA1_RUNTIME, pan_ha_peers=_DEDICATED_HA1_PEERS,
+        pan_explicit_candidate_members=["pan-d1", "pan-d2"],
+    )
+    candidate = next(u for u in units if u.explicit_candidate)
+    assert set(candidate.members) == {"pan-d1", "pan-d2"}
+    assert len(candidate.members) == 2
+
+
+def test_50b_suppression_never_touches_an_unrelated_device():
+    # A third PAN device NOT part of the explicit selection keeps its own
+    # single-member unit untouched -- only the two selected devices' orphan
+    # halves are replaced.
+    rows = [*_DEDICATED_HA1_ROWS, {
+        "device": "pan-solo3", "source": "panorama", "management_ip": "10.9.9.3",
+        "inventory_status": {"data_state": "ok"},
+    }]
+    runtime = {**_DEDICATED_HA1_RUNTIME, "pan-solo3": {"enabled": "yes", "mode": "active-passive"}}
+    units = assessment_module.derive_ha_units(
+        rows, pan_ha_runtime=runtime, pan_ha_peers=_DEDICATED_HA1_PEERS,
+        pan_explicit_candidate_members=["pan-d1", "pan-d2"],
+    )
+    unit_ids = {u.unit_id for u in units if u.vendor == "panorama"}
+    assert unit_ids == {"pan-d1+pan-d2", "pan-solo3"}
+
+
+def test_51_running_sync_enabled_never_gates_parity():
+    # OP.0b S8-C real-env correction §15: real evidence showed one member
+    # with Configuration Synchronization Enabled=no and the other Enabled=
+    # yes, while BOTH report Running Configuration: synchronized. Verified,
+    # not assumed: no defect exists here -- `group_running_sync_enabled` was
+    # never consulted by the parity predicate at all (only `group_running_sync`
+    # per-member, and `local_build_rel` for cross-member equality).
+    spec = FACT_CHECK_MAP[("panorama", "parity")]
+    fact_names = {rule.fact for rule in spec.positive_facts} | set(spec.predicate_facts)
+    assert "group_running_sync_enabled" not in fact_names
+    assert "group_running_sync" in fact_names
+
+    snap = pan_snapshot(
+        pan_member("tok-d1", unit="pan-d1+pan-d2", state="active", peer_state="passive"),
+        pan_member("tok-d2", unit="pan-d1+pan-d2", state="passive", peer_state="active", at=_T1),
+        unit="pan-d1+pan-d2",
+    )
+    report = compute_ha_readiness(
+        _DEDICATED_HA1_ROWS, pan_ha_runtime=_DEDICATED_HA1_RUNTIME, pan_ha_peers=_DEDICATED_HA1_PEERS,
+        preflight_snapshots=[snap], pan_explicit_candidate_members=["pan-d1", "pan-d2"],
+    )
+    assert checks(unit(report, "pan-d1+pan-d2"))["parity"]["status"] == CHECK_PASS
 
 
 # =====================================================================

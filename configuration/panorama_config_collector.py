@@ -384,6 +384,53 @@ def _pan_ha_group_text(root: Any, relative_path: str) -> str | None:
     return text.strip() if text and text.strip() else None
 
 
+def _strip_cidr_suffix(text: str) -> str:
+    """``"198.51.100.9/24"`` -> ``"198.51.100.9"`` (example address per
+    RFC 5737, never a real one); text without a ``/`` is returned unchanged.
+    A pure string split -- never a network/address parse -- so it cannot
+    fail and normalizes nothing else about the value (OP.0b S8-C real-env
+    correction §10: "safely remove CIDR suffix", no other normalization)."""
+    return text.split("/", 1)[0].strip()
+
+
+#: OP.0b S8-C real-env correction: local/peer management-plane addressing,
+#: read from the SAME already-fetched ``show high-availability state``
+#: response -- real field names ``local-info/mgmt-ip`` / ``peer-info/mgmt-ip``,
+#: confirmed by real-environment enumeration (this file's own bounded
+#: diagnostic, commit ``1d97cd6`` -- see contract "Palo Alto evidence
+#: surface / Current state"). No new command, no new API call.
+#:
+#: This is a DIFFERENT address plane from the HA1/HA1-backup/HA2 control-
+#: link addresses (`ha1-ipaddr` et al., also real field names, deliberately
+#: still not parsed here -- out of this correction's bounded scope). PAN-OS
+#: HA1 peer addressing and management transport addressing are independent
+#: planes unless the management interface is explicitly configured as HA1
+#: (real-env S8-C finding: the approved pair uses dedicated HA1 addressing,
+#: so its configured HA1 peer-ip does not equal either member's management
+#: address -- expected, not a defect; see `_derive_pan_units`).
+#:
+#: Values are CIDR-suffixed on the wire (e.g. ``"198.51.100.9/24"``, an
+#: RFC 5737 example address, never a real one); the suffix is
+#: stripped before tokenizing so two representations of the same address
+#: compare equal. Tokenized with the same `Tokenizer` machinery as every
+#: other PAN identity value in this file -- a raw management address is
+#: never returned by this function (AGENTS.md "Sensitive identity reporting
+#: law": compare locally, report the relationship, never the value).
+_PAN_HA_ADDRESS_FIELD_MAP: tuple[tuple[str, str], ...] = (
+    ("local_mgmt_ip", "local-info/mgmt-ip"),
+    ("peer_mgmt_ip", "peer-info/mgmt-ip"),
+)
+
+#: Best-effort only. Unlike `mgmt-ip`, `group-id`'s exact presence/path in
+#: the ``state`` XML (as opposed to only ``show high-availability all`` /
+#: the CLI "Group N:" heading) is not confirmed by an official source or by
+#: this file's own real enumeration (contract "Palo Alto evidence surface").
+#: Absent -> `None`, exactly like any other unconfirmed field; never
+#: invented, and (S8-C correspondence, `preflight_readiness.py`) never a
+#: gate on the pair-correspondence result, only a disclosed corroboration.
+_PAN_HA_GROUP_ID_PATH = "group-id"
+
+
 def _parse_pan_ha_preflight_fields(root: Any) -> dict[str, Any]:
     """OP.0b S2: parse the additional contract-authorized fields out of the
     same ``show high-availability state`` response
@@ -401,20 +448,51 @@ def _parse_pan_ha_preflight_fields(root: Any) -> dict[str, Any]:
     different purpose (a blanket diagnostic sweep over every field) and
     coupling to them would tie this bounded, contract-scoped extraction to
     diagnostic-only behavior it does not need.
+
+    OP.0b S8-C real-env correction additionally returns
+    ``local_mgmt_ip``/``peer_mgmt_ip`` (tokenized, `"pan_ha_address_value"`
+    kind -- a distinct kind label from identity tokens, so an address token
+    and a serial token can never collide even in principle) and best-effort
+    ``ha_group_id`` (plain text, `None` if the field is absent).
     """
     values: dict[str, Any] = {}
     tok: Tokenizer | None = None
+
+    def _tok() -> Tokenizer:
+        nonlocal tok
+        if tok is None:
+            tok = Tokenizer(_get_support_key())
+        return tok
+
     for key, path, is_identity in _PAN_HA_PREFLIGHT_FIELD_MAP:
         text = _pan_ha_group_text(root, path)
         if text is None:
             values[key] = None
         elif is_identity:
-            if tok is None:
-                tok = Tokenizer(_get_support_key())
-            values[key] = tok.token("pan_ha_identity_value", text)
+            values[key] = _tok().token("pan_ha_identity_value", text)
         else:
             values[key] = text
+
+    for key, path in _PAN_HA_ADDRESS_FIELD_MAP:
+        text = _pan_ha_group_text(root, path)
+        values[key] = None if text is None else _tok().token("pan_ha_address_value", _strip_cidr_suffix(text))
+
+    values["ha_group_id"] = _pan_ha_group_text(root, _PAN_HA_GROUP_ID_PATH)
     return values
+
+
+def tokenize_pan_management_address(text: str | None) -> str | None:
+    """One-way HMAC token for a PAN management-plane address, same
+    `Tokenizer`/`"pan_ha_address_value"` kind `_parse_pan_ha_preflight_fields`
+    uses for the runtime `mgmt-ip` leaves -- so a P1-dialed management
+    endpoint and a P2 `local-info/mgmt-ip` self-report of the same address
+    always tokenize equal, without either ever being held or printed raw
+    (AGENTS.md "Sensitive identity reporting law"). CIDR-suffix-tolerant
+    (`_strip_cidr_suffix`), like the runtime leaves. `None` in, `None` out."""
+    text = str(text or "").strip()
+    if not text:
+        return None
+    return Tokenizer(_get_support_key()).token("pan_ha_address_value", _strip_cidr_suffix(text))
 
 
 def get_target_ha_runtime_state(

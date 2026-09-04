@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "current_build": "op0b_s8a_clusterxl_execution_model_console_parity",
+  "current_build": "op0b_s8c_pan_dedicated_ha1_real_env_correction",
   "current_track": "OP.x",
   "progress_contract": "Weighted acceptance-criterion completion. Percentages describe the declared roadmap, not calendar time or delivery ETA.",
   "tracks": [
@@ -123,25 +123,24 @@
   "now_next": {
     "horizon_contract": "NOW is exactly one build. NEXT is exactly one. Everything else is an `upcoming` row carrying its own true status: planned = AFTER, blocked = waiting on a named external gate, deferred = consciously postponed. `now.build` must equal the newest project/build_history.json record -- utils.project_plan enforces it.",
     "now": {
-      "build": "op0b_s8a_clusterxl_execution_model_console_parity",
-      "title": "OP.0b S8-A - CP persistent Expert-shell execution model, real output shapes, CLI/Console readiness parity",
-      "goal": "Make the CP HA preflight actually execute its approved Expert battery on a real ClusterXL pair (one persistent Expert shell per member, framed reads, 0.3 s pacing), recognise the real vendor output shapes fail-closed, and regenerate the operator report from the same canonical readiness record the CLI prints -- one evaluation, two renderers, no snapshot persistence. No new device command, mutation, retry authority, identity or readiness-contract change.",
+      "build": "op0b_s8c_pan_dedicated_ha1_real_env_correction",
+      "title": "OP.0b S8-C - PAN dedicated-HA1 pairing correction, real-env validation, OP.0b read-only closure",
+      "goal": "Fix the circular pre-contact PAN pairing gate a real dedicated-HA1 pair exposed (contact was refused before the evidence that could prove correspondence could be collected); resolve a bounded candidate set from the explicit selector alone, contact both candidates, and establish fresh reciprocal management-plane correspondence afterward, never gating checks or promoting PAN B2. No new API operation, mutation, retry authority, or readiness-contract change.",
       "status": "real_env_validated",
-      "started": "2026-09-03",
+      "started": "2026-09-04",
       "completed": "2026-09-04"
     },
     "next": {
-      "build": "op0b_s8_real_env_validation",
-      "title": "OP.0b S8-B/S8-C - bounded real-environment validation (approved VSX pair, approved PAN pair) with Operator-Console parity",
+      "build": "op0b_s9_ui_authority_reconciliation",
+      "title": "OP.0b S9 - UI authority reconciliation (retire client-side pairing/HA heuristics)",
       "status": "planned",
       "notes": [
-        "S8-A (CP ClusterXL pair): PASS, PO-accepted 2026-09-04 -- 8/8 reads success, four checks PASS, D-V7b/D-F3 INSUFFICIENT_EVIDENCE by decision, Operator Console identical to the CLI for all seven checks and fresh mode. Detail: project/build_history.json op0b_s8a_clusterxl_execution_model_console_parity.",
-        "S8-B (VSX): run `--cp-ha-preflight-check` against the approved VSX pair. Same transport law (1 SSH transport, 1 persistent Expert shell per member, 0.3 s pacing, B1 `vsx stat -v` in the same shell, vsenv only if context is required, no reconnect per VSID, no VSLS assumption, no fw ctl set). Validate fresh backend readiness AND the regenerated report through the same seam; one physical VSX parent, two physical members, VSIDs not duplicated per host, VS child does not inherit the parent verdict.",
-        "S8-B'' (VSX complete per-VSID readiness): REAL_ENV_VALIDATED 2026-09-04 -- operator rerun on the approved pair confirmed physical mode vsx_vsls, both B1-enumerated VSIDs each got their own per-VS collection and evaluation, viable_target/state_sync_current/parity/no_split_brain/control_sync_link_health all real PASS per VSID matching the physical parent, preemption_known/flap_history correctly stayed INSUFFICIENT_EVIDENCE (D-V7b/D-F3, not fabricated), the generic vs_state_out_of_physical_scope_preflight_battery reason was structurally absent, no unauthorized command appeared in the read list, no device mutation. Detail: docs/history/phase/OP_0B_S4A_VSX_PER_VS_FAILOVER_DOMAIN_REVIEW.md.",
-        "S8-C (PAN): run `--pan-ha-preflight-check` against the approved PAN pair. One authenticated API context per member, P1/P2/P4 only, no retry/fallback, no PAN pacing unless PAN evidence shows a need; validate P1 identity gate, P2 HA state, P4 path monitoring, one coherent preflight_run_id, no phantom peer, B2 stays NOT ESTABLISHED unless already-authorized evidence closes it; report parity through the same seam.",
-        "Operator-executed: this engineering session has no route to the approved pairs; report SAFE counts only. Mechanical parser corrections inside frozen semantics are allowed in-campaign; stop for PO only on a new command/API operation, new credential, device mutation, retry/fallback authority, identity or readiness-contract change, unresolved vendor semantic, schema change, or CLASS 1/2 behaviour.",
-        "OP.0b closure law: cannot close while fresh CLI readiness != Operator Console readiness for the same invocation; S7 stays AUTOMATED_VALIDATED for VSX/PAN until S8-B/S8-C.",
-        "Recommended: Sonnet 5, normal -- bounded real-env procedure per docs/reference/REAL_ENV_VALIDATION_PROTOCOL.md."
+        "S8-A/S8-B''/S8-C all REAL_ENV_VALIDATED 2026-09-04 -- OP.0b's read-only S1-S8 implementation sequence is closed. S9 is the one remaining slice the frozen OP.0b.0 contract itself names (docs/history/phase/OP_0B_0_VENDOR_FAILOVER_PREFLIGHT_EVIDENCE_SURFACE.md, 'Implementation slices' table: 'S9 | Authority reconciliation (UI heuristics retirement) | static/*.js, utils/merge.py, utils/config_ui.py | ... | S9 independent after S7').",
+        "Confirmed NOT STARTED 2026-09-04 (S8-C session, operator UI review of the generated report): static/inventory_ui.js still independently infers PAN pairing/cluster identity client-side (clusterNameSource: 'inferred_ha_runtime_pair', hostname-ordinal + VSYS/VR Jaccard similarity) and synthesizes cp_vsx_cluster from hostname-token overlap; static/configuration_ui.js groups by a hashed presentation_group_id the failover backend never reads; utils/config_ui.py _ha_header_evidence computes a second, independent 'HA Enabled/Disabled' vocabulary from static configuration alone, separate from utils.failover.assessment. None of these consult the canonical compute_ha_readiness evaluator.",
+        "Direct evidence this is overdue, not theoretical: the S8-C correction's own explicit-candidate PAN report row needed a same-day fix (project/build_history.json op0b_s8c_pan_dedicated_ha1_real_env_correction) because the legacy single-member/VSYS-labelled rows read as confusing near-duplicates next to Check Point's one-row-per-cluster shape -- the operator flagged this directly.",
+        "Scope: make utils.failover.assessment.compute_ha_readiness (already the one canonical evaluator, S7) the single authority every UI surface renders from -- static/inventory_ui.js's PAN/VSX pairing and cluster-name inference, utils/merge.py's hostname-suffix cluster heuristic, and utils/config_ui.py's independent HA vocabulary are candidates for retirement or explicit demotion to presentation-only labels that never drive grouping/identity. Cross JS + Python UI-rendering surface -- larger than a mechanical fix, needs its own scoping pass before implementation.",
+        "Not started in the S8-C session by PO decision 2026-09-04: independent, larger scope; logged honestly rather than silently dropped or rushed into the PAN-pairing correction.",
+        "Recommended: Sonnet 5, normal for the scoping/audit pass; escalate to extended thinking if retiring a heuristic turns out to be load-bearing for something the audit didn't expect."
       ]
     },
     "upcoming": [
@@ -194,17 +193,6 @@
         "status": "planned",
         "notes": [
           "No new code. Corporate laptop. Closes CON.2 from AUTOMATED_VALIDATED to DONE."
-        ]
-      },
-      {
-        "build": "OP.0b",
-        "title": "HA preflight command battery (~16 new read commands)",
-        "status": "blocked",
-        "notes": [
-          "Blocked on the network-device command gate drafted in docs/history/phase/OP_0A_HA_READINESS_ASSESSMENT.md but not approved.",
-          "This is the gate that makes SAFE_TO_FAILOVER reachable at all; until it is approved every unit correctly reports INSUFFICIENT_EVIDENCE.",
-          "Its evidence surface is now FROZEN WITH REAL-ENV VALIDATION GATES in docs/history/phase/OP_0B_0_VENDOR_FAILOVER_PREFLIGHT_EVIDENCE_SURFACE.md (2026-09-03) -- cleared for the S0-S9 implementation slices, still not itself a command approval; the OP.0b.1 gate package is the actual approval step.",
-          "S1-S7 landed 2026-09-03 (S4 = PO-approved OP.0b.1 gate, PR #41; S5/S6 dedicated collectors; S7 readiness integration). SAFE_TO_FAILOVER is still unreachable -- now by the open D-F3 flap-threshold decision (both vendors) and the unauthorized CP-A9 recovery read (D-V7b), not by the absence of a battery. S8 real-env validation and S9 UI-authority reconciliation remain."
         ]
       },
       {
@@ -702,7 +690,8 @@
         "Real-environment investigation on the approved PAN pair"
       ],
       "recommendation": "Do not resolve as a side effect of an unrelated build; do not normalize/coerce serials to force a match.",
-      "decide_by": "S0 real-env, hardware-blocked"
+      "decide_by": "S0 real-env, hardware-blocked",
+      "note": "2026-09-04 (OP.0b S8-C session): the operator additionally captured `show high-availability all` manually (outside the approved S8-C battery, not runtime-authorized) and reported reciprocal serial correspondence on both members. NOT treated as closing this decision -- not independently re-verified by this session's own code path, and appears to conflict with the earlier S0 finding (one member MISMATCH, project/backlog.json pan_serial_representation_identity_evidence_closure). Recorded as potentially useful future evidence only; root cause of the earlier discrepancy remains UNKNOWN and is not reconciled here."
     },
     {
       "id": "D-V4",
