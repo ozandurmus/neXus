@@ -277,6 +277,18 @@ def _finding_rows(detail: dict[str, Any]) -> list[dict[str, Any]]:
     return findings
 
 
+# OP.0b S9: the PAN-OS XML API's own boolean leaf convention (e.g.
+# `panorama/preflight_collector.py`'s `enabled` field, read the same way by
+# `utils.failover.assessment._derive_pan_units`'s canonical HA-enabled check)
+# is exactly `"yes"` / `"no"` -- never `"on"`/`"off"`/`"true"`/`"false"`/
+# `"1"`/`"0"`. Those extra tokens were an independently-invented vocabulary
+# that no PAN-OS response for this field actually emits; recognizing only
+# the canonical tokens here removes that invented tolerance without changing
+# any real device's classification.
+_PAN_HA_ENABLED_TOKENS = {"yes"}
+_PAN_HA_DISABLED_TOKENS = {"no"}
+
+
 def _ha_header_evidence(row: dict[str, Any], current_configuration: dict[str, Any]) -> tuple[str | None, str | None]:
     """Return the runtime HA role when proven, otherwise only config state.
 
@@ -290,7 +302,7 @@ def _ha_header_evidence(row: dict[str, Any], current_configuration: dict[str, An
         return runtime_role.upper(), str(ha_runtime.get("source") or "panorama_runtime")
 
     runtime_enabled = str(ha_runtime.get("enabled") or "").strip().lower()
-    if ha_runtime.get("status") == "success" and runtime_enabled in {"no", "false", "off", "disabled", "0"}:
+    if ha_runtime.get("status") == "success" and runtime_enabled in _PAN_HA_DISABLED_TOKENS:
         return "HA Disabled", str(ha_runtime.get("source") or "panorama_target_ha_state")
 
     highlights = {
@@ -300,9 +312,9 @@ def _ha_header_evidence(row: dict[str, Any], current_configuration: dict[str, An
     }
     enabled = str(_as_dict(highlights.get("HA Enabled")).get("value") or "").strip()
     normalized = enabled.lower()
-    if normalized in {"yes", "true", "on", "enabled", "1"}:
+    if normalized in _PAN_HA_ENABLED_TOKENS:
         return "HA Enabled", "effective_configuration"
-    if normalized in {"no", "false", "off", "disabled", "0"}:
+    if normalized in _PAN_HA_DISABLED_TOKENS:
         return "HA Disabled", "effective_configuration"
     return None, None
 

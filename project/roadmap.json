@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "current_build": "op0b_s9_pan_ha_label_authority_correction",
+  "current_build": "op0b_s9_ui_authority_reconciliation",
   "current_track": "OP.x",
   "progress_contract": "Weighted acceptance-criterion completion. Percentages describe the declared roadmap, not calendar time or delivery ETA.",
   "tracks": [
@@ -123,22 +123,24 @@
   "now_next": {
     "horizon_contract": "NOW is exactly one build. NEXT is exactly one. Everything else is an `upcoming` row carrying its own true status: planned = AFTER, blocked = waiting on a named external gate, deferred = consciously postponed. `now.build` must equal the newest project/build_history.json record -- utils.project_plan enforces it.",
     "now": {
-      "build": "op0b_s9_pan_ha_label_authority_correction",
-      "title": "OP.0b S9 (bounded slice) - PAN HA unit label authority correction",
-      "goal": "Retire the PAN UI debt S8-C recorded: display_name no longer composes VSYS names as the pair's identity/label (HaUnit.context_vsys carries them as subordinate context instead); the S8-C real pair's own control_sync_link_health unknown:pan_path_monitoring_any_down result reviewed end-to-end and confirmed presentation-only debt (generic, shared, cross-vendor evidence-law formatter, not a parser defect) -- given a plain-English gloss (reason_display) alongside the unchanged raw reason. No collector/identity/readiness-check logic touched.",
+      "build": "op0b_s9_ui_authority_reconciliation",
+      "title": "OP.0b S9 (remaining, broader scope) - UI authority reconciliation",
+      "goal": "Retire the three remaining client-side/utility-side HA pairing and classification heuristics the bounded PAN-label slice left open, replacing each with the canonical backend field/derivation already computed and, for two of the three, already embedded unused in the same rendered page: static/inventory_ui.js's PAN pairing (panGroups/inferPairDescriptor/panoramaPairCompatible) and cp_vsx_cluster hostname-token-overlap synthesis now read failoverReadinessData.units (utils.failover.assessment.compute_ha_readiness's own HaUnit derivation, identity fields only -- never verdict/checks/evidence); utils/merge.py's VSX cluster field now copies the matching cp.json row's canonical cluster_topology instead of guessing from a NAME-1/NAME-2 hostname suffix; utils/config_ui.py's _ha_header_evidence config-state fallback now recognizes only the literal yes/no PAN-OS API tokens instead of an independently invented on/off/true/false/1/0 tolerance. ClusterXL, VSX/VSLS, and PAN HA pairing/identity semantics from S8-C, the seven-check readiness semantics, and no-UI-side-readiness-authority are all unchanged and verified by targeted tests. Closes OP.0b's full S1-S9 read-only scope.",
       "status": "done",
       "started": "2026-09-04",
       "completed": "2026-09-04"
     },
     "next": {
-      "build": "op0b_s9_ui_authority_reconciliation",
-      "title": "OP.0b S9 (remaining, broader scope) - retire client-side Inventory-page pairing/HA-vocabulary heuristics",
-      "status": "planned",
+      "build": "op0b_0_close_d_v3a_d_v7b_pre_class2",
+      "title": "OP.0b.0 - close D-V3a/D-V7b before CLASS 2 (not a freeze gate)",
+      "status": "blocked",
       "notes": [
-        "The bounded PAN-label slice (op0b_s9_pan_ha_label_authority_correction, this build) is done; this row is what remains of S9 as project/feature_registry.json's ui_authority_reconciliation criterion still defines it (unchanged, still pending).",
-        "static/inventory_ui.js still independently infers PAN pairing/cluster identity client-side (clusterNameSource: 'inferred_ha_runtime_pair', hostname-ordinal + VSYS/VR Jaccard similarity) and synthesizes cp_vsx_cluster from hostname-token overlap -- the Inventory page's own tree builder, a different UI surface from the failover-readiness report/console module the bounded slice corrected. It never consults utils.failover.assessment.compute_ha_readiness.",
-        "utils/merge.py's hostname-suffix cluster heuristic and utils/config_ui.py's independent _ha_header_evidence HA vocabulary are unreviewed.",
-        "Cross JS + Python UI-rendering surface -- larger than a mechanical fix, needs its own scoping pass before implementation. Recommended: Sonnet 5, normal for the scoping/audit pass; escalate to extended thinking if retiring a heuristic turns out to be load-bearing for something the audit didn't expect."
+        "Promoted from upcoming (2026-09-04, OP.0b S9 UI-authority-reconciliation closure session): with OP.0b's full S1-S9 read-only scope now DONE, this is the most directly OP.0b-adjacent still-open item -- not itself blocking, but the natural next movement.",
+        "Try an official GitHub mirror first (the technique that closed D-V4/D-V7a): D-V3a needs an official PAN-OS/Panorama source for local-info/peer-info serial-num inside show high-availability state; D-V7b needs an official Check Point generic-object API schema (unconfirmed to exist) beyond the Simple Cluster API already ruled insufficient.",
+        "Fall back to a human fetching the specific pages the contract's source tables name.",
+        "Gates only the PAN successor identity model and CLASS 2 (bug register PAN-7, CP-3) -- does not block any other upcoming row.",
+        "Recommended: Sonnet 5, extended thinking (high), same as the prior vendor-semantics sessions.",
+        "D-V3a/D-V7b remain genuinely unresolved CLASS-2 blockers under the frozen contract -- not reopened, not closed, just correctly ordered."
       ]
     },
     "upcoming": [
@@ -150,18 +152,6 @@
           "Moved from now_next.now (2026-09-03 roadmap correction, OP.0b S4 session): stalled pending a real-device recurrence with the new diagnostic fields (exit_status/processed_gw/total_gw/stderr_bytes/last_marker/stderr_classification) -- no device access in this session, so it cannot progress here. Full detail: project/build_history.json 'cp_remote_collection_done_marker_diagnostics'.",
           "Does not block OP.0b S4/S5/S6 -- independent subsystem (CP inventory collection channel-drain diagnostics vs. the OP.0b preflight command gate).",
           "Resume when a real recurrence report with the new fields is available."
-        ]
-      },
-      {
-        "build": "op0b_0_close_d_v3a_d_v7b_pre_class2",
-        "title": "OP.0b.0 - close D-V3a/D-V7b before CLASS 2 (not a freeze gate)",
-        "status": "blocked",
-        "notes": [
-          "Try an official GitHub mirror first (the technique that closed D-V4/D-V7a): D-V3a needs an official PAN-OS/Panorama source for local-info/peer-info serial-num inside show high-availability state; D-V7b needs an official Check Point generic-object API schema (unconfirmed to exist) beyond the Simple Cluster API already ruled insufficient.",
-          "Fall back to a human fetching the specific pages the contract's source tables name.",
-          "Explicitly does NOT block S1-S9 implementation or the contract's FROZEN status -- gates only the PAN successor identity model and CLASS 2 (bug register PAN-7, CP-3).",
-          "Recommended: Sonnet 5, extended thinking (high), same as the prior vendor-semantics sessions.",
-          "Reclassified from now_next.next to upcoming (session 2026-09-03 roadmap correction): does not block S1-S9, S4, or the contract's FROZEN status -- gates only the PAN successor identity model and CLASS 2 (bug register PAN-7, CP-3). D-V3a/D-V7b remain genuinely unresolved CLASS-2 blockers under the frozen contract -- not reopened, not closed, just correctly ordered as independent of the S4 implementation-slice dependency chain."
         ]
       },
       {
