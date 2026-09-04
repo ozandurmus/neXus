@@ -75,7 +75,10 @@ def normalize_cp(item: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
-def normalize_vsx(item: dict[str, Any]) -> dict[str, Any]:
+def normalize_vsx(
+    item: dict[str, Any],
+    cp_cluster_topology_by_device: dict[str, dict[str, Any]] | None = None,
+) -> dict[str, Any]:
     result = dict(item)
 
     result["source"] = "vsx"
@@ -93,10 +96,21 @@ def normalize_vsx(item: dict[str, Any]) -> dict[str, Any]:
     )
 
     if "cluster" not in result:
-        device = str(result["device"])
-
-        if device.endswith("-1") or device.endswith("-2"):
-            result["cluster"] = device[:-2]
+        # OP.0b S9: a VSX physical host's cluster identity is decided by
+        # checkpoint/cp_runner.py::enrich_cluster_topology's runtime VIP
+        # fingerprint, already attached to that same device's `cp.json` row
+        # as `cluster_topology` -- the canonical grouping key
+        # `utils.failover.assessment._derive_cp_units` itself trusts. A
+        # hostname-suffix guess (`NAME-1`/`NAME-2` -> `NAME`) is never run
+        # here any more: it is not backend evidence, only a naming
+        # convention that does not hold across the estate. Absent a matched
+        # `cp.json` row, `item.get("parent")` (an explicit, collector-
+        # supplied field, never inferred) is the only other source; no
+        # cluster identity is guessed.
+        topology = (cp_cluster_topology_by_device or {}).get(str(result["device"]))
+        if topology:
+            result["cluster_topology"] = topology
+            result["cluster"] = str(topology.get("display_name") or "")
         else:
             result["cluster"] = item.get("parent") or ""
 
@@ -174,8 +188,14 @@ def run_merge(cp_file=None, vsx_file=None, pan_file=None, unified_file=None) -> 
 
     merged: list[dict[str, Any]] = []
 
+    cp_cluster_topology_by_device = {
+        str(item.get("device")): item["cluster_topology"]
+        for item in cp_data
+        if item.get("device") and isinstance(item.get("cluster_topology"), dict)
+    }
+
     merged.extend(normalize_cp(item) for item in cp_data)
-    merged.extend(normalize_vsx(item) for item in vsx_data)
+    merged.extend(normalize_vsx(item, cp_cluster_topology_by_device) for item in vsx_data)
     merged.extend(normalize_panorama(item) for item in pan_data)
 
     unified_file.parent.mkdir(parents=True, exist_ok=True)

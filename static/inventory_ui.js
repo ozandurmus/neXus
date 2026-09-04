@@ -993,55 +993,6 @@ function deduplicateInventory(entries) {
 }
 
 
-function setSimilarity(left, right) {
-    const a = new Set(left);
-    const b = new Set(right);
-    if (!a.size && !b.size) {
-        return 1;
-    }
-    const union = new Set([...a, ...b]);
-    let intersection = 0;
-    a.forEach(value => {
-        if (b.has(value)) {
-            intersection += 1;
-        }
-    });
-    return union.size ? intersection / union.size : 0;
-}
-
-
-function panoramaRuntimeSignature(entry) {
-    const vsys = uniqueStrings(
-        entry.interfaces
-            .map(row => row.vsys)
-            .filter(value => value !== "0")
-    );
-    const routers = uniqueStrings([
-        ...entry.interfaces.map(row => row.vr),
-        ...entry.routes.map(row => row.vr)
-    ]);
-
-    return {vsys, routers};
-}
-
-
-function panoramaPairCompatible(left, right) {
-    if (!left.interfaces.length || !right.interfaces.length) {
-        return false;
-    }
-
-    const a = panoramaRuntimeSignature(left);
-    const b = panoramaRuntimeSignature(right);
-    const vsysSimilarity = setSimilarity(a.vsys, b.vsys);
-    const routerSimilarity = setSimilarity(a.routers, b.routers);
-
-    return (
-        vsysSimilarity >= 0.75 &&
-        routerSimilarity >= 0.60
-    );
-}
-
-
 function tagMemberRows(entry) {
     return {
         interfaces: entry.interfaces.map(row => ({
@@ -1225,6 +1176,34 @@ function panoramaVsysChildren(memberEntries, parent) {
 }
 
 
+/*
+ * OP.0b S9 (UI authority reconciliation): canonical HA pairing/grouping
+ * identity is `utils.failover.assessment.compute_ha_readiness`'s own
+ * `HaUnit` derivation -- already computed server-side on every render and
+ * embedded as `failoverReadinessData.units` (see failover_readiness_ui.js).
+ * This lookup is how the Inventory page's tree builder consults that
+ * canonical authority instead of re-inferring pairing/grouping from
+ * hostname ordinals, token overlap or runtime-signature similarity: a
+ * `unit.members` entry is a device (or `device__vsid_N`) entity id exactly
+ * as `utils.failover.assessment.resolve_entity_id` produces it, which for a
+ * plain physical device is just `entry.device`. No verdict/check/evidence
+ * field on the unit is read here -- only `unit_id`/`unit_type`/`vendor`/
+ * `members`/`display_name`, i.e. identity, never readiness.
+ */
+function haReadinessUnitsByType(unitType, vendor) {
+    const units = (typeof failoverReadinessData !== "undefined" && Array.isArray(failoverReadinessData.units))
+        ? failoverReadinessData.units
+        : [];
+    return units.filter(unit =>
+        unit &&
+        unit.unit_type === unitType &&
+        unit.vendor === vendor &&
+        Array.isArray(unit.members) &&
+        unit.members.length > 1
+    );
+}
+
+
 function buildInventoryHierarchy(entries) {
     const roots = [];
     const used = new Set();
@@ -1266,10 +1245,16 @@ function buildInventoryHierarchy(entries) {
         });
 
     /*
-     * VSX physical clusters that did not expose a usable cphaprob VIP set are
-     * still presented as one parent only when the VSX collector itself proves
-     * that two physical members back the same logical VS contexts.
+     * VSX physical clusters that did not expose a usable cphaprob VIP set
+     * (so `aggregateCpClusters` never formed a `cp_cluster` parent for them)
+     * are still presented as one parent, but only when the canonical
+     * `utils.failover.assessment` HA-readiness derivation itself already
+     * grouped those same physical devices into one `cp_vsx_cluster` unit
+     * (`_derive_cp_units`'s own `cluster_topology.group_id`-or-legacy-
+     * `cluster` grouping) -- never a client-side guess from hostname-token
+     * overlap.
      */
+    const cpVsxClusterUnits = haReadinessUnitsByType("cp_vsx_cluster", "checkpoint");
     vsxByCluster.forEach(group => {
         const remainingChildren = group.filter(child => !used.has(child.id));
         if (!remainingChildren.length) {
@@ -1280,25 +1265,27 @@ function buildInventoryHierarchy(entries) {
             remainingChildren.flatMap(child => child.members || [])
         );
         const memberTokens = normalizedMemberSet(memberNames);
-        const physicalEntries = cpEntries.filter(entry =>
-            entry.entityType !== "cp_cluster" &&
-            !used.has(entry.id) &&
-            memberTokens.has(normalizedMemberToken(entry.device))
+        const unit = cpVsxClusterUnits.find(candidate =>
+            candidate.members.some(memberId => memberTokens.has(normalizedMemberToken(memberId)))
         );
+        const physicalEntries = unit
+            ? cpEntries.filter(entry =>
+                entry.entityType !== "cp_cluster" &&
+                !used.has(entry.id) &&
+                unit.members.some(memberId => normalizedMemberToken(memberId) === normalizedMemberToken(entry.device))
+            )
+            : [];
 
-        if (memberNames.length >= 2 && physicalEntries.length >= 2) {
-            const baseName =
-                remainingChildren.find(child => child.cluster)?.cluster ||
-                inferPairDescriptor(memberNames[0])?.base ||
-                memberNames[0];
+        if (unit && physicalEntries.length >= 2) {
+            const displayName = safe(unit.display_name) || safe(unit.unit_id);
             const parent = makeClusterParent(physicalEntries, {
                 source: "cp",
                 entityType: "cp_vsx_cluster",
-                displayName: clusterDisplayName(baseName),
-                members: memberNames,
+                displayName,
+                members: unit.members,
                 children: remainingChildren,
-                clusterNameSource: "vsx_runtime_members",
-                subtitle: "VSX Cluster | Members: " + memberNames.join(", ")
+                clusterNameSource: "ha_readiness_group",
+                subtitle: "VSX Cluster | Members: " + unit.members.join(", ")
             });
 
             parent.routes = collapseLogicalRoutes(parent.routes, parent.members);
@@ -1324,47 +1311,31 @@ function buildInventoryHierarchy(entries) {
     });
 
     /*
-     * Panorama runtime does not currently return an authoritative HA object.
-     * Pairing is therefore deliberately conservative: member names must form
-     * a 1/2 pair AND the live VSYS/VR signatures must substantially match.
-     * 0.6 Management/API work can replace this inferred relation later.
+     * PAN HA pairing identity is the canonical `utils.failover.assessment.
+     * _derive_pan_units` result (mutual configured `peer-ip` agreement, or
+     * an operator-bounded explicit preflight candidate) -- never a client-
+     * side hostname-ordinal + VSYS/VR-similarity guess. A pair's
+     * presentation identity is the unit's own `display_name || unit_id`,
+     * same law S9's bounded PAN-label slice already established for the
+     * failover-readiness report (`static/failover_readiness_ui.js`).
      */
-    const panGroups = new Map();
-    panEntries.forEach(entry => {
-        const descriptor = inferPairDescriptor(entry.device);
-        if (!descriptor) {
-            return;
-        }
-        const key = clusterKey(descriptor.base);
-        if (!panGroups.has(key)) {
-            panGroups.set(key, new Map());
-        }
-        panGroups.get(key).set(descriptor.index, {
-            entry,
-            base: descriptor.base
-        });
-    });
-
-    panGroups.forEach(pair => {
-        const left = pair.get(1);
-        const right = pair.get(2);
-        if (!left || !right) {
-            return;
-        }
-        if (used.has(left.entry.id) || used.has(right.entry.id)) {
-            return;
-        }
-        if (!panoramaPairCompatible(left.entry, right.entry)) {
+    const panPairUnits = haReadinessUnitsByType("pan_ha_pair", "panorama");
+    panPairUnits.forEach(unit => {
+        const memberEntries = unit.members
+            .map(memberId => panEntries.find(entry =>
+                !used.has(entry.id) && normalizedMemberToken(entry.device) === normalizedMemberToken(memberId)
+            ))
+            .filter(Boolean);
+        if (memberEntries.length !== unit.members.length) {
             return;
         }
 
-        const memberEntries = [left.entry, right.entry];
-        const displayName = clusterDisplayName(left.base);
+        const displayName = safe(unit.display_name) || safe(unit.unit_id);
         const parent = makeClusterParent(memberEntries, {
             source: "panorama",
             entityType: "pan_cluster",
             displayName,
-            clusterNameSource: "inferred_ha_runtime_pair",
+            clusterNameSource: "ha_readiness_pair",
             subtitle: "Palo Alto HA | Members: " + memberEntries.map(entry => entry.device).join(", ")
         });
         parent.interfaces = collapseLogicalInterfaces(parent.interfaces, parent.members);
