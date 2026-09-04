@@ -891,16 +891,31 @@ def _apply_pan_explicit_candidate(
     usable_rows: Sequence[Mapping[str, Any]],
     member_ids: Sequence[str],
 ) -> list[HaUnit]:
-    """OP.0b S8-C real-env correction: append ONE additional `HaUnit` for an
-    operator's explicit, bounded `--pan-preflight-targets A,B` selection --
-    additive only, never a modification of `units` derived normally above.
+    """OP.0b S8-C real-env correction: replace the two orphan single-member
+    `HaUnit`s `_derive_pan_units` produced for these SAME two entity ids with
+    ONE explicit, bounded `--pan-preflight-targets A,B` candidate `HaUnit`.
+    Every other unit `_derive_pan_units`/`_derive_cp_units` produced --
+    including any single-member PAN unit for a DIFFERENT, not-selected
+    entity -- passes through untouched.
+
+    Real-env finding (operator report review, same session): appending the
+    2-member candidate PURELY additively left the operator's generated
+    report showing THREE rows for one explicit, bounded, two-device preflight
+    invocation -- the pair plus its two now-redundant single-member halves,
+    all labelled "Palo Alto HA pair" with the same VSYS prefix, unreadable
+    next to Check Point's one row per cluster. The two single-member units
+    carry no evidence the 2-member candidate doesn't already subsume (same
+    physical rows, same-or-fresher facts once a snapshot applies); keeping
+    them was redundant, not additional evidence, so removing them for THIS
+    invocation's own report is not a weakening.
 
     This is deliberately separate from `_derive_pan_units`'s own fleet-wide,
     stored-telemetry pairing (task §13's "A. conservative stored/legacy
     topology derivation" vs. "B. explicit bounded candidate resolution"):
     normal, non-preflight callers (the console, `--ha-readiness-check`, any
     report render) never pass `member_ids`, so this function is never called
-    for them and their units are completely unaffected.
+    for them, `_derive_pan_units`'s own output is never touched by it, and
+    every other unit (any other PAN device, every CP unit) is unaffected.
 
     A no-op when:
     - `member_ids` is not exactly two distinct entity ids (defensive; the
@@ -925,9 +940,15 @@ def _apply_pan_explicit_candidate(
     if not all(entity_id in pan_rows for entity_id in ids):
         return units
 
+    remaining = [
+        u for u in units
+        if not (u.vendor == "panorama" and u.unit_type == _UNIT_PAN_PAIR
+                and len(u.members) == 1 and u.members[0] in ids)
+    ]
+
     unit_id = pan_explicit_candidate_unit_id(ids)
     vsys_names = _pan_vsys_names(*(pan_rows[e] for e in ids))
-    return [*units, HaUnit(
+    return [*remaining, HaUnit(
         unit_id=unit_id, unit_type=_UNIT_PAN_PAIR, vendor="panorama",
         members=ids, cluster_mode="unknown",
         display_name=_pan_display_name(vsys_names, unit_id),
@@ -956,9 +977,10 @@ def derive_ha_units(
 
     `pan_explicit_candidate_members` (OP.0b S8-C real-env correction):
     optional, exactly-two entity ids an operator explicitly bounded via
-    `--pan-preflight-targets`. When given, ONE additional `HaUnit` is
-    appended for that pair via `_apply_pan_explicit_candidate` -- see its
-    docstring. `None`/omitted (every caller except the PAN preflight
+    `--pan-preflight-targets`. When given, the two now-redundant orphan
+    single-member `HaUnit`s for those same two ids (if any) are replaced by
+    ONE bounded-candidate `HaUnit` via `_apply_pan_explicit_candidate` -- see
+    its docstring. `None`/omitted (every caller except the PAN preflight
     entrypoint) reproduces the exact prior behavior of this function.
     """
     cp_runtime = _normalize_cp_runtime(cp_ha_runtime or {})

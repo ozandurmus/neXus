@@ -817,11 +817,13 @@ def test_41_dedicated_ha1_explicit_candidate_resolves_and_evaluates():
         _DEDICATED_HA1_ROWS, pan_ha_runtime=_DEDICATED_HA1_RUNTIME, pan_ha_peers=_DEDICATED_HA1_PEERS,
         preflight_snapshots=[snap], pan_explicit_candidate_members=["pan-d1", "pan-d2"],
     )
-    # The two legacy single-member units are untouched (task §12/§13: normal
-    # stored-telemetry derivation stays conservative) -- the explicit
-    # candidate pair is ADDITIVE, a third unit.
+    # The two now-redundant legacy single-member units for THIS invocation's
+    # own report are replaced by the one bounded candidate pair (real-env
+    # UI finding, same session: showing all three was unreadable next to
+    # Check Point's one row per cluster) -- _derive_pan_units's own output
+    # (asserted above) is untouched; only this report's rendered units differ.
     unit_ids = {u["unit_id"] for u in report["units"] if u["vendor"] == "panorama"}
-    assert unit_ids == {"pan-d1", "pan-d2", "pan-d1+pan-d2"}
+    assert unit_ids == {"pan-d1+pan-d2"}
 
     u = unit(report, "pan-d1+pan-d2")
     assert u["explicit_candidate"] is True
@@ -988,6 +990,23 @@ def test_50_explicit_candidate_never_widens_target_boundary():
     candidate = next(u for u in units if u.explicit_candidate)
     assert set(candidate.members) == {"pan-d1", "pan-d2"}
     assert len(candidate.members) == 2
+
+
+def test_50b_suppression_never_touches_an_unrelated_device():
+    # A third PAN device NOT part of the explicit selection keeps its own
+    # single-member unit untouched -- only the two selected devices' orphan
+    # halves are replaced.
+    rows = [*_DEDICATED_HA1_ROWS, {
+        "device": "pan-solo3", "source": "panorama", "management_ip": "10.9.9.3",
+        "inventory_status": {"data_state": "ok"},
+    }]
+    runtime = {**_DEDICATED_HA1_RUNTIME, "pan-solo3": {"enabled": "yes", "mode": "active-passive"}}
+    units = assessment_module.derive_ha_units(
+        rows, pan_ha_runtime=runtime, pan_ha_peers=_DEDICATED_HA1_PEERS,
+        pan_explicit_candidate_members=["pan-d1", "pan-d2"],
+    )
+    unit_ids = {u.unit_id for u in units if u.vendor == "panorama"}
+    assert unit_ids == {"pan-d1+pan-d2", "pan-solo3"}
 
 
 def test_51_running_sync_enabled_never_gates_parity():
