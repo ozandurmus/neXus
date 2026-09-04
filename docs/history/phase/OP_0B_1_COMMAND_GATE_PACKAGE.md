@@ -1082,6 +1082,64 @@ tracked together as `project/backlog.json` `cp_production_ssh_host_key_trust_har
 — production-blocking before this feature (or any `CLASS 2` behavior) may
 ship. This override does not close that debt; it explicitly defers it.
 
+## S8-A real-environment closure — CP ClusterXL (2026-09-04)
+
+**Status:** REAL_ENV_VALIDATED on the approved CP ClusterXL pair,
+operator-executed, SAFE counts only; PO accepted S8-A as PASS.
+Build: `project/build_history.json`
+`op0b_s8a_clusterxl_execution_model_console_parity`.
+
+**What the live campaign proved wrong, and the correction.** The S5
+collector issued each approved read on its own non-interactive SSH exec
+channel. The device's own `clish`/`xpand` audit trail showed every such
+channel dispatched through the Gaia CLI wrapper (one `clish -c ver`
+initialization per channel, 8 per member), the three `clish -c '...'`
+forms executing and the five bare Expert reads (A3–A7) never reaching an
+Expert shell. That evidence does **not** establish the account's login
+shell (an earlier reading to that effect is withdrawn); it establishes that
+one SSH transport was never one Expert execution context. Corrected to
+**one persistent Expert shell per member** (`InteractiveSshSession`, the
+existing real-env-validated adapter), each read framed by a per-session
+`echo` of `$?` (read-only, stripped before any parser, never a fact), and
+`INTER_COMMAND_DELAY_SECONDS = 0.3` strictly between completed reads (PO
+decision after the unpaced battery destabilised the SSH session; not
+retry/backoff/reconnect). The battery, its order and S4 command authority
+are unchanged: Gaia reads explicit `clish -c`, Expert reads direct.
+
+**Real output shapes recognised (fail-closed on anything else):** CP-A7
+`fw stat` column table; CP-A4 `cphaprob -a if` annotated rows with a
+`Non-Monitored` row and a trailing virtual-cluster-interfaces block; CP-A5
+`cphaprob -ia list` healthy-member sentence `There are no pnotes in problem
+state` (a positive statement — `any_problem=False` established, count not
+reported); CP-A8 count wording variants. An unrecognised shape now reports a
+value-free layout skeleton (letters→`A`, digits→`9`) instead of silently
+yielding UNKNOWN.
+
+**Accepted real result (safe counts).** Per member: 1 SSH transport, 1
+Expert shell, 0 exec channels, 0 repeated `ver`, 8/8 reads `success`.
+Checks: `state_sync_current`, `parity`, `no_split_brain`,
+`control_sync_link_health` PASS; `viable_target` PASS-capable after the A5
+shape (was `unknown:cp_pnote_any_problem`); `preemption_known`
+`configured_recovery_not_readable_d_v7b`; `flap_history`
+`threshold_policy_unresolved:D-F3`. Overall readiness INSUFFICIENT_EVIDENCE
+by decision (D-V7b, D-F3), never SAFE.
+
+**CLI / Operator-Console parity (OP.0b closure law).** The explicit preflight
+evaluates once and hands the same `compute_ha_readiness` record to its CLI
+summary and to `run_html_export(failover_readiness_report=...)`; the report
+projects it and evaluates nothing. Confirmed on the real Operator Console:
+identical seven check statuses/reasons and MODE `ha_new_mode` (previously
+legacy reasons and `unknown`). `PreflightSnapshot` is never persisted — no
+file, cache, TTL; the regenerated `index.html` is an evaluation artifact of
+that invocation. The live console (separate process) keeps its honest
+stored-telemetry answer.
+
+**Not changed:** no new device command, no mutation, no credential path, no
+retry/fallback authority, no identity or readiness-contract change. PO
+request for `cphaprob tablestat` (CCP exchange per cluster interface) is a
+NEW command — backlog `cp_preflight_ccp_tablestat_evidence`, gate row and
+check mapping required first. S8-B (VSX) and S8-C (PAN) remain owed.
+
 ## Rollback
 
 Documentation only; nothing to roll back. No device was contacted, no code

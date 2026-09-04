@@ -7,12 +7,12 @@ detail is not here either** — it is in `project/build_history.json`
 linked documents under `docs/history/`. `docs/history/INDEX.md` is the
 generated one-line timeline.
 
-- **Checkpoint:** 2026-09-04, branch `main` (S8 campaign corrections merged).
+- **Checkpoint:** 2026-09-04, branch `main` (S8-A ClusterXL closure merged).
 - **Current build** (per `project/roadmap.json` `now_next.now`):
-  `op0b_s8_realenv_campaign_corrections` — **AUTOMATED_VALIDATED**. The four
-  bounded corrections the first live `S8-A` attempt surfaced (see "Active
-  build"). `now_next.next` = `op0b_s8_real_env_validation` — **BLOCKED ON
-  DEVICE ACCESS**, S8-A/B/C NOT EXECUTED / ZERO CONTACTS.
+  `op0b_s8a_clusterxl_execution_model_console_parity` —
+  **REAL_ENV_VALIDATED** on the approved CP ClusterXL pair (see "Active
+  build"). `now_next.next` = `op0b_s8_real_env_validation` — S8-A **PASS**
+  (PO-accepted); S8-B VSX / S8-C PAN NOT EXECUTED, operator-run.
   `cp_remote_collection_done_marker_diagnostics` stays `now_next.upcoming`
   (`IN_PROGRESS`).
 - **Product baseline:** `0.7.7 — Compliance trend retro-fill` — AUTOMATED_VALIDATED.
@@ -47,26 +47,28 @@ test-enforced boundaries. Current numbers:
 
 ## Active build
 
-**`op0b_s8_realenv_campaign_corrections`** — **AUTOMATED_VALIDATED**,
-2026-09-04. Everything the first live `S8-A` ClusterXL attempt surfaced,
-corrected inside existing frozen semantics: host-key rejections are
-non-retryable at the one shared trust seam (#47); `run_cp_preflight`
-defaults to compatibility trust like every sibling caller, strict retained
-and selectable, production enforcement deferred by PO decision to backlog
-`cp_production_ssh_host_key_trust_hardening` (#48); A3's
-`local_role`/`cluster_mode` reach the fields contract the S5 projection
-documents, via the established canonical parsers (#49); and `MemberSession`
-became a per-member execution context — one authenticated session, one
-command plan resolved once, per-member PTY requests 8/9 → 0, exec channels
-== scheduled reads (#50). PAN already satisfied the equivalent
-one-authenticated-context invariant and was left untouched. No new device
-command, mutation, retry/fallback authority, identity or readiness-contract
-change. Detail: `project/build_history.json`.
+**`op0b_s8a_clusterxl_execution_model_console_parity`** —
+**REAL_ENV_VALIDATED**, 2026-09-04. The live S8-A campaign proved the CP
+preflight's remote execution primitive wrong — one non-interactive exec
+channel per read, each dispatched through the Gaia CLI wrapper, so the five
+bare Expert reads never executed — and corrected it: one persistent Expert
+shell per member (existing `InteractiveSshSession`), reads framed by a
+per-session `echo` of `$?`, `INTER_COMMAND_DELAY_SECONDS = 0.3` strictly
+between completed reads (#55/#56). Real output shapes recognised
+fail-closed: `fw stat` table, `cphaprob -a if` annotated rows, `cphaprob -ia
+list` healthy sentence, A8 count wording (#52/#56/#60); an unrecognised
+shape now reports a value-free layout skeleton (#58). The operator report is
+regenerated from the SAME canonical readiness record the CLI prints — one
+evaluation, two renderers, no snapshot persistence, no TTL, UI
+projection-only (#59). Withdrawn: the predecessor's `$PATH`/PTY and
+account-shell diagnoses and its exec-channel model. Detail: `project/build_history.json`.
 
-**S8-A/B/C** (`now_next.next`): **NOT EXECUTED, ZERO CONTACTS, BLOCKED ON
-DEVICE ACCESS** — the approved CP pair stopped offering SSH password
-authentication during the campaign and operator recovery is unconfirmed.
-Engineering side is ready and merged.
+**S8-A (CP ClusterXL pair): PASS, PO-accepted.** 8/8 reads success; four
+checks PASS; `preemption_known` D-V7b and `flap_history` D-F3
+INSUFFICIENT_EVIDENCE by decision; Operator Console identical to the CLI
+for all seven checks, MODE the fresh ClusterXL mode. **S8-B VSX / S8-C
+PAN** (`now_next.next`): NOT EXECUTED — operator-run, same seam, same
+parity law.
 
 **Stalled, moved to `now_next.upcoming`:**
 `cp_remote_collection_done_marker_diagnostics` — still `IN_PROGRESS`,
@@ -116,19 +118,16 @@ causes are ruled out by source inspection. Leading-zero normalization is
 
 `cp_remote_collection_done_marker_diagnostics` (`now_next.upcoming`) needs a
 real recurrence with the new diagnostic fields — independent of `OP.0b`.
-
-`now_next.next` is **`op0b_s8_real_env_validation`** (`OP.0b` S8-A) — bounded,
-reads-only real-environment validation on the approved CP ClusterXL pair,
-VSX pair and PAN pair: confirms the S5/S6 real response shapes and the
-minimal vendor value vocabularies S7's `FACT_CHECK_MAP` freezes (fail-closed
-on anything unrecognised). Status: NOT EXECUTED, ZERO CONTACTS, BLOCKED —
-the first attempt surfaced the strict trust-store preflight defect corrected
-by `op0b_s8_p01_cp_ssh_trust_preflight_correction`; after that merges and
-`main` is synced, provision the trusted host key (out-of-band verified
-fingerprint in the runtime's system/user `known_hosts`), then retry the
-IDENTICAL controlled command in a NEW session. Hardware-blocked. `S9` (UI-authority
-reconciliation) is independent after S7. `OP.0b` is **not DONE**; S7 is
-`AUTOMATED_VALIDATED`, never `REAL_ENV_VALIDATED`, until S8.
+`now_next.next` is **`op0b_s8_real_env_validation`** — S8-A done; remaining
+**S8-B** (approved VSX pair: `--cp-ha-preflight-check`, B1 in the same
+Expert shell, no reconnect per VSID) and **S8-C** (approved PAN pair:
+`--pan-ha-preflight-check`, one API context per member, P1/P2/P4 only).
+Each validates fresh backend readiness AND Operator-Console parity through
+the same seam. Operator-executed, SAFE counts only. `OP.0b` closure law:
+fresh CLI readiness must equal Operator-Console readiness for the same
+invocation. `OP.0b` is **not DONE**; S7 is `REAL_ENV_VALIDATED` for
+ClusterXL only. Backlog (PO request): `cp_preflight_ccp_tablestat_evidence`
+— a NEW command, gate row + readiness mapping required first.
 
 `D-V3a`/`D-V7b` stay **preserved unresolved CLASS-2 blockers** (`upcoming`).
 Independent `upcoming` movements, any order: **A.** close `D-V3a`/`D-V7b` —
@@ -166,11 +165,12 @@ Concurrency budget stays at 1 per vendor pending its own real-environment eviden
 ## Automated test baseline
 
 ```
-1535 passed / 24 skipped / 0 failed (2026-09-04,
-  op0b_s8_realenv_campaign_corrections, this session's local sandbox, serial)
-  -- +67 over the op0b_s75_preflight_entrypoint baseline of 1468/24/0, from
-  four new S8 regression files (host-key retry classification, development
-  trust policy, A3 mode differential, device session architecture).
+1630 passed / 24 skipped / 0 failed (2026-09-04,
+  op0b_s8a_clusterxl_execution_model_console_parity, local sandbox, serial)
+  -- over the op0b_s75_preflight_entrypoint baseline of 1468/24/0, from ten
+  S8 regression files (trust, retry, A3 differential, session architecture,
+  persistent-shell framing, real CLI path, real output shapes, layout
+  diagnostic, capability-gap/pacing, console parity).
 Repository privacy gate: PASS / 0 findings, clean checkout.
 Project-state consistency: metadata_warnings == [] under all cross-authority rules.
 ```

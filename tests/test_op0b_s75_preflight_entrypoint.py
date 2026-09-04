@@ -79,9 +79,16 @@ _PAN_HA_RUNTIME = {
 _PAN_HA_PEERS = {"pan-a": "10.1.1.2", "pan-b": "10.1.1.1"}
 
 
+_REPO_ROOT = Path(__file__).resolve().parents[1]
+
+
 class _RuntimePaths:
     def __init__(self, root: Path):
-        self.repository_root = root
+        # The regenerated report needs the real templates/static; every artifact
+
+        # the run writes still lands in the temporary root.
+
+        self.repository_root = _REPO_ROOT
         self.runtime_root = root
         self.data_root = root / "data"
         self.output_root = root
