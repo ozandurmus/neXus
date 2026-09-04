@@ -246,11 +246,28 @@ class TestNoFreshRecordLeavesTheReportUnchanged:
 class TestProjectionIsIdentityNotEvaluation:
 
     def test_report_units_are_projected_verbatim(self):
+        """Every field from the canonical report reaches the payload
+        unchanged. The one addition, `reason_display` (OP.0b S9, PAN UI debt
+        item 4), is a pure presentation gloss of the SAME `reason` string
+        already on the record -- never a divergent value, never a second
+        evaluation."""
+        from utils.failover_readiness_ui import _humanize_reason
+
         report = _canonical_report(_contradictory_legacy_telemetry())
         payload = build_failover_readiness_payload(_unified_rows(), readiness_report=report)
-        assert payload["units"] == report["units"]
         assert payload["preflight"] == report["preflight"]
         assert payload["generated_at"] == report["generated_at"]
+        assert len(payload["units"]) == len(report["units"])
+        for got_unit, want_unit in zip(payload["units"], report["units"]):
+            assert got_unit["reason_display"] == _humanize_reason(want_unit["reason"])
+            got_checks = got_unit["checks"]
+            want_checks = want_unit["checks"]
+            assert len(got_checks) == len(want_checks)
+            for got_check, want_check in zip(got_checks, want_checks):
+                assert got_check["reason_display"] == _humanize_reason(want_check["reason"])
+                assert {k: v for k, v in got_check.items() if k != "reason_display"} == want_check
+            assert {k: v for k, v in got_unit.items() if k not in ("reason_display", "checks")} == \
+                {k: v for k, v in want_unit.items() if k != "checks"}
 
     def test_projection_is_deterministic(self):
         report = _canonical_report(_contradictory_legacy_telemetry())

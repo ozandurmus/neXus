@@ -169,6 +169,15 @@ class HaUnit:
     #: `_pair_identity_state` never reports the stronger grade for evidence
     #: that does not support it (task §10/§20: "no false Grade-A promotion").
     explicit_candidate: bool = False
+    #: OP.0b S9 (UI authority reconciliation). Subordinate, informational
+    #: context only -- e.g. the VSYS names observed on a PAN HA pair's own
+    #: interfaces -- never identity. `display_name`/`unit_id` are the
+    #: canonical presentation/identity for the unit; this field exists so a
+    #: renderer can show such context alongside the unit without it ever
+    #: defining or heuristically naming the operational unit itself (contract
+    #: rule: canonical backend topology/identity -> presentation projection,
+    #: never the reverse).
+    context_vsys: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -178,6 +187,7 @@ class HaUnit:
             "members": list(self.members),
             "cluster_mode": self.cluster_mode,
             "display_name": self.display_name,
+            "context_vsys": list(self.context_vsys),
             "parent_id": self.parent_id,
             # OP.0b.0 §26 X-4: serialised additively (S7) so the pair-identity
             # axis is visible separately from the verdict `reason`.
@@ -729,13 +739,12 @@ def _pan_vsys_names(*rows: Mapping[str, Any]) -> list[str]:
     return sorted(names, key=lambda v: (len(v), v))
 
 
-def _pan_display_name(vsys_names: list[str], fallback: str) -> str | None:
-    if not vsys_names:
-        return None
-    label = "VSYS " + ", ".join(vsys_names) if len(vsys_names) <= 3 else (
-        "VSYS " + ", ".join(vsys_names[:3]) + f" +{len(vsys_names) - 3}"
-    )
-    return f"{label} | {fallback}"
+#: OP.0b S9 correction: a PAN HA pair's presentation identity is its canonical
+#: `unit_id`/`display_name` (member entity ids, already the pairing identity
+#: `_derive_pan_units`/`_apply_pan_explicit_candidate` established) -- never a
+#: string composed from VSYS names. `_pan_vsys_names` output is carried
+#: separately on `HaUnit.context_vsys` as subordinate, informational context
+#: only; no function here builds a VSYS-prefixed label any more.
 
 
 def _derive_pan_units(
@@ -847,7 +856,7 @@ def _derive_pan_units(
                 units.append(HaUnit(
                     unit_id=pair_id, unit_type=_UNIT_PAN_PAIR, vendor="panorama",
                     members=sorted([entity_id, peer]), cluster_mode=mode,
-                    display_name=_pan_display_name(vsys_names, pair_id),
+                    context_vsys=vsys_names,
                 ))
                 continue
 
@@ -856,7 +865,7 @@ def _derive_pan_units(
             units.append(HaUnit(
                 unit_id=entity_id, unit_type=_UNIT_PAN_PAIR, vendor="panorama",
                 members=[entity_id], cluster_mode=mode,
-                display_name=_pan_display_name(vsys_names, entity_id),
+                context_vsys=vsys_names,
                 unresolved_reason="pan_ha_peer_asymmetric",
             ))
         else:
@@ -865,7 +874,7 @@ def _derive_pan_units(
             units.append(HaUnit(
                 unit_id=entity_id, unit_type=_UNIT_PAN_PAIR, vendor="panorama",
                 members=[entity_id], cluster_mode=mode,
-                display_name=_pan_display_name(vsys_names, entity_id),
+                context_vsys=vsys_names,
             ))
     return units
 
@@ -951,7 +960,7 @@ def _apply_pan_explicit_candidate(
     return [*remaining, HaUnit(
         unit_id=unit_id, unit_type=_UNIT_PAN_PAIR, vendor="panorama",
         members=ids, cluster_mode="unknown",
-        display_name=_pan_display_name(vsys_names, unit_id),
+        context_vsys=vsys_names,
         explicit_candidate=True,
     )]
 
