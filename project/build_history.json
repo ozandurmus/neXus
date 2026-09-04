@@ -3,6 +3,33 @@
   "record_contract": "One structured record per build, newest first. Required: build, status, title, summary (<= 2 sentences). Optional: started, completed, track, movement, supersedes, evidence, risks_forward, docs{agreement,validation,handover} (repo-relative paths under docs/history/). Full detail lives in the linked doc; do not restate it here. Status vocabulary must stay within utils/project_plan.py STATUS_VALUES.",
   "builds": [
     {
+      "build": "op0b_s9_pan_ha_label_authority_correction",
+      "status": "done",
+      "title": "OP.0b S9 (bounded slice) - PAN HA unit label authority correction",
+      "summary": "Corrected the PAN UI debt the S8-C closure recorded: the PAN HA pair's display_name composed VSYS names as the leading, defining part of the string (\"VSYS 2, 3, 4 +1 | <A>+<B>\") instead of the canonical pair identity (unit_id, already established by _derive_pan_units's mutual-configuration match / the operator's explicit candidate selection) staying primary and VSYS staying subordinate context. HaUnit gains context_vsys (list[str], additive, serialized); PAN pair display_name is no longer VSYS-composed (falls back to the canonical unit_id); the JS renderer shows context_vsys as a subordinate line, never part of the label. Also reviewed the S8-C real pair's own 'control_sync_link_health INSUFFICIENT_EVIDENCE (unknown:pan_path_monitoring_any_down)' result end-to-end and confirmed it is presentation-only debt (a generic, shared, cross-vendor evidence-law formatter, not a special case or parser defect) -- added a small, fixed reason-code-to-plain-English gloss (reason_display) alongside every unit's/check's own reason, never replacing or reinterpreting it. No collector, command battery, identity-resolution, or readiness-check logic touched; _derive_pan_units's own pairing predicate is exactly as OP.0b S8-C left it.",
+      "started": "2026-09-04",
+      "completed": "2026-09-04",
+      "track": "OP.0b",
+      "movement": "IMPLEMENTATION",
+      "supersedes": "op0b_s8c_pan_dedicated_ha1_real_env_correction (now_next.now placeholder)",
+      "evidence": [
+        "utils/failover/assessment.py: HaUnit.context_vsys (list[str], default [], serialized in to_dict); the four PAN-pair HaUnit construction sites in _derive_pan_units/_apply_pan_explicit_candidate pass VSYS names via context_vsys= instead of folding them into display_name; _pan_display_name removed.",
+        "utils/failover_readiness_ui.py: _humanize_reason (fixed vocabulary lookup, same category as VERDICT_LABELS/CHECK_STATUS_LABELS) glosses a reason/check.reason code into plain English, with an explicit gloss for pan_path_monitoring_any_down naming the fail-closed-not-a-defect behavior; unrecognised codes degrade to a spaced-out version of the same code, never a guessed sentence; _annotate_reason_display adds reason_display alongside (never replacing) reason.",
+        "static/failover_readiness_ui.js: unit label stays display_name || unit_id (now the canonical pair identity for PAN); context_vsys renders as a subordinate eyebrow line, never composed into the label; reason cells render reason_display || reason.",
+        "Targeted: 203 passed (test_op0a_ha_readiness, test_op0b_s7_readiness_v2, test_op0c_failover_readiness_ui, test_op0b_s7_5_fresh_readiness_console_parity, test_op0d_deterministic_target_selection, test_frontend_module_composition, test_phase0_5_final_ui_closure). Broader sweep -k 'failover or pan_ha or op0b_s8 or vsx or vsls or op0a': 410 passed. Architecture convergence: 20/20. Two PAN display_name tests and one identity-projection test updated to the new, honest contract (additive reason_display allowed, every other field including every reason still projected byte-for-byte unchanged).",
+        "Detail: docs/history/phase/OP_0B_S9_PAN_HA_LABEL_AUTHORITY_CORRECTION.md."
+      ],
+      "risks_forward": [
+        "The BROADER S9 scope (project/feature_registry.json ui_authority_reconciliation criterion; roadmap now_next.next note) is UNTOUCHED and stays pending: static/inventory_ui.js's client-side PAN pairing inference (inferPairDescriptor, panoramaPairCompatible, VSYS/VR Jaccard similarity) and CP VSX-cluster synthesis from hostname-token overlap, utils/merge.py's hostname-suffix cluster heuristic, and utils/config_ui.py's independent _ha_header_evidence HA vocabulary. Different UI surface (Inventory page) from the failover-readiness report/console module this slice corrected; larger, cross-JS/Python, independent movement per the S8-C session's own PO decision not to fold it into a bounded slice.",
+        "No full serial regression run for this bounded, presentation-only slice; targeted + convergence + privacy was judged sufficient. FAST PR CI covers the rest.",
+        "PAN B2, D-V3a/D-V7b/D-F3, CLASS 2 prerequisites, production-hardening debt: all unaffected, unchanged from S8-C closure."
+      ],
+      "docs": {
+        "agreement": "docs/history/phase/OP_0B_S9_PAN_HA_LABEL_AUTHORITY_CORRECTION.md",
+        "validation": "docs/history/phase/OP_0B_S9_PAN_HA_LABEL_AUTHORITY_CORRECTION.md"
+      }
+    },
+    {
       "build": "op0b_s8c_pan_dedicated_ha1_real_env_correction",
       "status": "real_env_validated",
       "title": "OP.0b S8-C - PAN dedicated-HA1 pairing correction, real-env validation, OP.0b read-only closure",

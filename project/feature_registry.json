@@ -1191,7 +1191,7 @@
         },
         {
           "id": "ui_authority_reconciliation",
-          "label": "OP.0b S9 - retire client-side PAN/CP pairing and HA-vocabulary heuristics (static/inventory_ui.js, utils/merge.py, utils/config_ui.py) in favor of the canonical compute_ha_readiness evaluator; confirmed NOT STARTED 2026-09-04",
+          "label": "OP.0b S9 - retire client-side PAN/CP pairing and HA-vocabulary heuristics (static/inventory_ui.js, utils/merge.py, utils/config_ui.py) in favor of the canonical compute_ha_readiness evaluator; the failover-readiness report/console module's own PAN-label debt (VSYS-composed display_name) is corrected (op0b_s9_pan_ha_label_authority_correction, 2026-09-04) -- this criterion's own named files (static/inventory_ui.js, utils/merge.py, utils/config_ui.py) remain untouched, still NOT STARTED",
           "state": "pending",
           "weight": 1
         }
