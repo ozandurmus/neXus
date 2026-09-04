@@ -2,21 +2,32 @@
 
 ## Status
 
-**DRAFT — INDEPENDENT CHALLENGE REVIEW COMPLETE 2026-09-04; READY FOR
-PRODUCT-OWNER FREEZE. Not frozen.**
+**CONTRACT FROZEN 2026-09-04 — vendor-independent CLASS 2 architecture.**
+Product-owner freeze decision 2026-09-04, accepting the independent
+challenge review of the same date with its corrections incorporated
+(§"Independent challenge review — 2026-09-04"). Cleared as design
+authority for `OP.2.A` → `OP.2.B` → `OP.2.C` → `OP.2.D` as sequenced in
+§"Implementation plan", each slice still behind its own prerequisites
+(§"Explicit blockers").
 
-Per `AGENTS.md` "Contract-status law" this document may guide investigation
-and sequencing; it **authorizes no implementation**, approves no command,
-and does not make `CLASS_2_OPERATIONAL_STATE_CHANGE` reachable. It becomes
-implementation authority only if a product owner freezes it, and even then
-only for the slices whose own prerequisites (§"Explicit blockers") are met.
-The product-owner decisions of 2026-09-04 and the independent challenge
-review that incorporated them are in §"Independent challenge review —
-2026-09-04". The review does not freeze this contract; only the product
-owner does.
+**Frozen:** the state-machine shape, the mutation boundary, the
+no-blind-retry law, outcome-unknown semantics, entity-quarantine ownership,
+confirmation binding, same-workflow preflight, the operational-entity
+lock/admission model, reversal-as-new-action, the authorization-`DENY`
+boundary, the audit/evidence shape, the crash-reconciliation law, the
+vendor-adapter boundary, CP-first / PAN-later sequencing and the
+implementation order. **Not decided by this freeze:** `OP.2.1` (no
+mutation command is approved), `D-V7b`, `D-F3`, `DEPLOY.1A` / `OPERATE`,
+production SSH trust hardening, the remaining CP release blockers, the
+`OP.2.D` real-environment pilot, PAN `B₂` / `D-V3a` / `OP.3`, and the
+policy decisions the review reclassified (§"Explicit blockers" B).
 
-`utils/action_taxonomy.CLASS_2_OPERATIONAL_STATE_CHANGE` keeps **no member**
-while this document is `DRAFT`. Nothing here is a reason to add one.
+Freezing this contract freezes an *architecture*, not a capability: it
+approves no command, adds no taxonomy member, creates no adapter, and
+leaves CLASS 2 **not implemented and not reachable**.
+`utils/action_taxonomy.CLASS_2_OPERATIONAL_STATE_CHANGE` keeps **no
+member**; one appears only at `OP.2.C`, behind the full
+`FAILOVER_ENGINE_ARCHITECTURE.md` §10 prerequisite set.
 
 - **Movement:** `ARCHITECTURE` (extended reasoning — new cross-subsystem
   architecture and a security boundary).
@@ -38,11 +49,12 @@ while this document is `DRAFT`. Nothing here is a reason to add one.
   `OP.2.1` command-gate package (§"Implementation plan") is the only place
   one may be proposed, ten points per row, per
   `docs/AI_DEVELOPMENT_PROTOCOL.md` "Network-device command gate".
-- **Project-state:** deliberately **not** recorded as a build. This is not a
-  frozen build and must not become `project/roadmap.json`
-  `now_next.now.build` — the same posture `OP.0b.0` took while drafting. Two
-  product-owner decisions and one previously-untracked P0 gap raised by this
-  session are recorded in `project/roadmap.json` `open_decisions` and
+- **Project-state:** deliberately **not** recorded as a build (no
+  `build_history` record, never `now_next.now.build`; `OP.0b` S8-B/S8-C
+  closure stays the current product movement). The freeze is recorded on
+  the `project/roadmap.json` `OP.2` row, in `project/backlog.json` and in
+  `CURRENT_STATE.md`. Two product-owner decisions and one
+  previously-untracked P0 gap raised by the drafting session are recorded in `project/roadmap.json` `open_decisions` and
   `project/backlog.json` respectively, because those files are their
   canonical homes regardless of this document's status. Both decisions
   were resolved by the product owner on 2026-09-04 (`status: decided`).
@@ -51,7 +63,7 @@ while this document is `DRAFT`. Nothing here is a reason to add one.
 
 ## Objective
 
-Freeze — once a product owner accepts it — the **vendor-independent**
+Freeze — done 2026-09-04 — the **vendor-independent**
 architecture of a controlled HA operation: how an operator's typed intent
 becomes exactly one authorized, confirmed, locked, verified and durably
 audited state change to one operational HA entity, and what the product does
@@ -61,7 +73,7 @@ The deliberate split this document makes:
 
 | Half | Content | Can it be frozen now? |
 | --- | --- | --- |
-| **Vendor-independent** | authorization, eligibility, freshness, confirmation binding, lock grain, lifecycle, mutation boundary, exactly-once, verification shape, unknown-outcome semantics, reversal, audit, crash recovery, UI boundary, adapter surface | **yes** — every input it needs already exists in the repository |
+| **Vendor-independent** | authorization, eligibility, freshness, confirmation binding, lock grain, lifecycle, mutation boundary, exactly-once, verification shape, unknown-outcome semantics, reversal, audit, crash recovery, UI boundary, adapter surface | **frozen 2026-09-04** — every input it needs already exists in the repository |
 | **Vendor-specific** | which command/API operation, its syntax, its options, its settle behaviour, its observable postcondition, its unsupported cases | **no** — blocked on `OP.2.1`, `D-V7b`, `D-V3a`/`B2`, `D-F3`, S8-B/S8-C |
 
 Nothing in the second column is guessed here. Where a vendor fact is
@@ -1257,7 +1269,7 @@ Few, coherent movements. Every one of them is gated by
 | Movement | Scope | Class introduced | Prerequisites | Tier |
 | --- | --- | --- | --- | --- |
 | **`OP.2.1`** | Mutation command-gate package: ten points per candidate vendor primitive and its reversal, mirroring `OP.0b.1`'s structure. **Docs only.** Requires official vendor documentation for each primitive's semantics, options and observable postcondition. | none | `D-V7b` (CP) and `D-V3a` (PAN) research paths; official-source access | extended (security boundary) |
-| **`OP.2.A`** | Typed action model, the four-plus-six-state lifecycle, durable action/audit record, `authorize()` boundary returning unconditional `DENY`, the `approval_policy` boundary in its initial one-confirmation form. Pure + storage; **zero device I/O**; no adapter, no transport, no command. New package `utils/operate/` carrying its convergence assertions from the first commit: no vendor adapter, no transport/collector import, no command text, no `PERMIT`-returning authorizer outside `tests/`, no argv/CLI entry point. | none — CLASS 2 stays memberless | this contract frozen | normal |
+| **`OP.2.A`** | Typed action model, the four-plus-six-state lifecycle, durable action/audit record, `authorize()` boundary returning unconditional `DENY`, the `approval_policy` boundary in its initial one-confirmation form. Pure + storage; **zero device I/O**; no adapter, no transport, no command. New package `utils/operate/` carrying its convergence assertions from the first commit: no vendor adapter, no transport/collector import, no command text, no `PERMIT`-returning authorizer outside `tests/`, no argv/CLI entry point. | none — CLASS 2 stays memberless | this contract frozen (met 2026-09-04); a future movement — `OP.0b` S8-B/S8-C closure stays the current product work | normal |
 | **`OP.2.B`** | Action coordinator: the record-as-HA-entity-lock uniqueness rule, per-stage member admission through the existing coordinator, idempotency on `action_id`, the guarded boundary transition, crash reconciliation, the derived quarantine predicate and the acknowledgement path. Still structurally `DENY`; no adapter, no mutation capability, no device contact. | none | `OP.2.A`; closes `ha_entity_operational_lock` | extended (concurrency + safety boundary) |
 | **`OP.2.C`** | First vendor capability adapter (**CP ClusterXL**): `capability`/`build_plan`/`execute_once`/`observe_postcondition`; post-action verification wiring. **This is where CLASS 2 gains its first member.** | **CLASS 2** | every `FAILOVER_ENGINE_ARCHITECTURE.md` §10 prerequisite; `OP.2.1` approved; `DEPLOY.1A` OIDC + `OPERATE`; `D-V7b`, `D-F3`; `cp_production_ssh_host_key_trust_hardening`; signed change-management review | extended |
 | **`OP.2.D`** | Operator Console class 2 workflow (proposal → confirmation → lifecycle → outcome → acknowledgement) **and** the bounded real-environment single-vendor pilot on the approved CP ClusterXL pair. | — | `OP.2.C`; `C-D4`, `C-D6`; real-env procedure | normal (UI) / normal (real-env) |
@@ -1407,7 +1419,7 @@ contradictions that exist in the repository either way.
 
 ---
 
-## Definition of done (for a future FROZEN version)
+## Definition of done (met at the 2026-09-04 freeze)
 
 1. Every §"Required structure" section present and filled — **done**.
 2. `op_reversal_model` and `op_outcome_unknown_recovery` resolved by the
@@ -1429,7 +1441,7 @@ contradictions that exist in the repository either way.
 8. Parent-authority reconciliation recorded (`FAILOVER_ENGINE_ARCHITECTURE.md`
    §10.2; `project/*.json`) so no two authoritative documents disagree —
    **done 2026-09-04**.
-9. Product-owner freeze — **open**. This document does not self-freeze.
+9. Product-owner freeze — **done 2026-09-04**.
 
 ---
 
@@ -1458,9 +1470,8 @@ placement; implementation sequencing.
 | PAN A/A and VSX VSLS | `op_aa_vsls_scope` | open at `OP.3`; outside initial scope; not a freeze blocker |
 | `DEGRADED_PROCEED_WITH_RISK` reachable in v1 | `op_degraded_verdict` | open at `OP.1` (readiness layer); not coupled to this freeze |
 
-Nothing in this section blocks the product owner from freezing the
-vendor-independent architecture. The **only** remaining freeze input is
-the product owner's own acceptance (section D).
+Nothing in this section blocked the freeze; each open item keeps its own
+later milestone and is not closed by it.
 
 ### C. Blocked on vendor evidence
 
@@ -1477,11 +1488,10 @@ the product owner's own acceptance (section D).
 
 ### D. Blocked on product-owner decision
 
-Acceptance (freeze) of `OP.2.0` itself — the one open input to freezing
-the architecture — and, later and separately, the signed change-management
-/ safety review with the network-security leads before `OP.2.C`
-(`FAILOVER_ENGINE_ARCHITECTURE.md` §10 — an organizational gate, not a code
-gate).
+The signed change-management / safety review with the network-security
+leads before `OP.2.C` (`FAILOVER_ENGINE_ARCHITECTURE.md` §10 — an
+organizational gate, not a code gate). Acceptance of `OP.2.0` itself was
+given 2026-09-04.
 
 ### E. Blocked only on real-environment validation
 
@@ -1509,7 +1519,7 @@ gate).
 
 | Dimension | CP ClusterXL (HA) | CP VSX (physical, non-VSLS) | PAN A/P |
 | --- | --- | --- | --- |
-| Generic architecture ready | YES (this contract, once frozen) | YES | YES |
+| Generic architecture ready | YES (this contract, FROZEN 2026-09-04) | YES | YES |
 | Operational identity ready | **YES** — `group_id`, mutual VIP set, role-independent; real-env validated (S8-A) | PARTIAL — parent identity modelled; VSID subordination frozen; **not real-env validated** (S8-B not executed) | **NO** — `B₂` NOT ESTABLISHED; `D-V3a` STILL_UNKNOWN; serial-keyed key NOT FROZEN; hostname fallback is mutable |
 | Fresh same-workflow preflight ready | **YES** — S5 persistent Expert shell, 8/8 reads, REAL_ENV_VALIDATED 2026-09-04 | PARTIAL — same seam, synthetic only; S8-B owed | PARTIAL — S6 implemented; S8-C owed |
 | Readiness eligibility can be positive | **NO** — check 6 blocked by `D-V7b`, check 7 by `D-F3`; `SAFE` structurally unreachable | NO — same, plus S8-B | NO — check 7 (`D-F3`), plus identity |
@@ -1634,6 +1644,8 @@ and deterministic, and all were applied in the same session. After them the
 vendor-independent architecture is, in the reviewer's judgment, safe,
 complete enough, implementable and free of contradictory authority:
 **READY FOR PRODUCT-OWNER FREEZE**. The review does not freeze it.
+**Product-owner decision, same date: FREEZE** — recorded in the status
+block above.
 
 ### Lock-timing conclusion
 
@@ -1672,10 +1684,9 @@ confirmation binding and no stale plan, without any numeric expiry.
 
 ## Next movement / reasoning tier
 
-1. **Product-owner freeze decision on this document.** Section B is
-   resolved or reclassified; the independent review found no remaining
-   architecture blocker. *(Decision, not a build.)*
-2. **Resume operational work meanwhile:** `OP.0b` S8-B (approved VSX pair)
+1. **Product-owner freeze — done 2026-09-04.** No architecture movement
+   is owed for `OP.2` until `OP.2.A` starts.
+2. **Resume operational work first:** `OP.0b` S8-B (approved VSX pair)
    → S8-C (approved PAN pair), operator-executed, SAFE counts only.
    Recommended: **normal reasoning** — bounded real-environment procedure
    against a frozen contract; a higher tier is more than the step needs.
@@ -1686,5 +1697,6 @@ confirmation binding and no stale plan, without any numeric expiry.
    `OP.2.1` (security boundary / vendor-semantic calls), the latter in
    parallel with `A`/`B`.
 
-This document authorizes none of the above. It is `DRAFT` — reviewed and
-ready for the product owner's freeze, and not frozen until they say so.
+This document is FROZEN as architecture authority. It authorizes the
+implementation slices above only as gated, in order, and it authorizes no
+command, no taxonomy member and no device contact by itself.

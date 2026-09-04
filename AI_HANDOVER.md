@@ -20,11 +20,15 @@ doc. Prior versions are in git history.
   REAL_ENV_VALIDATED; S8-A PASS, PO-accepted; **S8-B (VSX) / S8-C (PAN) NOT
   EXECUTED** — operator-run.
 - **OP.2.0** (`docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md`):
-  the Opus draft received its independent challenge review this session with
-  the PO's eleven decisions applied. Status: `DRAFT` — **READY FOR PO
-  FREEZE**, not frozen. Not a build; CLASS 2 has no member; no source changed.
+  independent challenge review applied, then **CONTRACT FROZEN 2026-09-04**
+  by PO decision. Architecture authority only — not a build; CLASS 2 not
+  implemented, not reachable, no member; no product source changed.
+- **Language governance:** the Turkish session preamble requirement was
+  removed at its source (`AI_START_HERE.md` SESSION START); `AGENTS.md`
+  "Engineering-output language law" is now the single owner; one
+  regression guards the instruction surface.
 
-## 2. What changed this session (docs + project metadata only)
+## 2. What changed this session (docs, project metadata, one governance test)
 
 - **OP.2.0 draft corrected in place** (§"Independent challenge review —
   2026-09-04" carries the matrix): state machine 8+7 → 4+6 (`LOCKING`,
@@ -41,6 +45,9 @@ doc. Prior versions are in git history.
   + inline supersession markers (auto-rollback, `FAILED_ROLLED_BACK`,
   freshness window, §7 layout, per-VS units, feature flag/token, class 0
   sweep not universal). History kept, not rewritten.
+- **Freeze recorded:** OP.2.0 status block → `CONTRACT FROZEN 2026-09-04`;
+  roadmap `OP.2` row, backlog and feature registry say frozen architecture,
+  CLASS 2 not implemented/reachable; OP.2.A–D remain future movements.
 - **Project state:** `op_reversal_model`, `op_outcome_unknown_recovery` →
   `decided`; `op_four_eyes`, `op_continuity_tolerance`, `op_emergency_evac`,
   `op_aa_vsls_scope`, `op_degraded_verdict` re-pointed to their real
@@ -50,13 +57,11 @@ doc. Prior versions are in git history.
 
 ## 3. Exact next action
 
-1. **PO: freeze decision on OP.2.0.** Flip the status line to `FROZEN` (or
-   send it back with the objection). Nothing else is owed before that.
-2. **Product work continues regardless:** S8-B (VSX) then S8-C (PAN) exactly
-   as `project/roadmap.json` `now_next.next` describes — operator-executed,
-   SAFE counts only, mechanical parser fixes inside frozen semantics only.
-   `Sonnet 5, normal`.
-3. **After freeze:** `OP.2.A` (typed action model, 4+6 lifecycle, audit
+1. **S8-B (VSX) then S8-C (PAN)** exactly as `project/roadmap.json`
+   `now_next.next` describes — operator-executed, SAFE counts only,
+   mechanical parser fixes inside frozen semantics only. `Sonnet 5,
+   normal`. Start a NEW session for it.
+2. **Only after OP.0b closure:** `OP.2.A` (typed action model, 4+6 lifecycle, audit
    record, unconditional-`DENY` authorizer, convergence assertions; zero
    device I/O) at `Sonnet 5, normal`; `OP.2.1` CP mutation command gate
    (docs only, official sources) in parallel at `Sonnet 5, extended`;
@@ -64,16 +69,17 @@ doc. Prior versions are in git history.
 
 ## 4. Test delta
 
-- No product code changed. Architecture convergence: 19 passed;
-  `metadata_warnings == []`; repository privacy gate PASS; `git diff --check`
-  clean. Full regression not run (not required for a docs/metadata change).
+- No product code changed. Architecture convergence: 20 passed (one new
+  language-governance regression); `metadata_warnings == []`; build-history
+  index current; repository privacy gate PASS; `git diff --check` clean.
+  Full regression not run (docs/metadata/governance-test change only).
 - Note for Linux/container sessions: `py` does not exist there; `python3 -m
   pytest` with `requirements.txt` + `requirements-dev.txt` installed.
 
 ## 5. New risks
 
-- OP.2.0 is reviewed, not frozen: nothing in it authorizes implementation
-  until the PO changes the status line.
+- OP.2.0 is frozen architecture, not a capability: it approves no command
+  and CLASS 2 stays memberless until `OP.2.C`'s full prerequisite set.
 - `FAILED_NO_CHANGE` is unreachable until the CP `settle_observation` is
   measured in the `OP.2.D` pilot — expected, and the pilot must record it.
 - Single-coordinator-process topology is now an explicit OP.2 invariant; a
