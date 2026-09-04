@@ -387,3 +387,31 @@ def test_a4331_runtime_ha_role_wins_over_static_config(tmp_path):
     device = payload["devices"][0]
     assert device["ha_role"] == "ACTIVE"
     assert device["ha_role_source"] == "panorama_runtime"
+
+
+def test_a4331_config_ha_fallback_recognizes_only_the_canonical_panos_boolean_text(tmp_path):
+    """OP.0b S9: the config-state fallback recognizes only the literal
+    ``yes``/``no`` PAN-OS XML API returns for this field (the same
+    vocabulary `utils.failover.assessment._derive_pan_units` already treats
+    as canonical for the same kind of field) -- not the wider, independently
+    -invented `on`/`off`/`true`/`false`/`1`/`0` tolerance the header used to
+    accept. No real PAN-OS response ever emits those, so tightening this
+    never reclassifies a real device."""
+    result = _config_result(tmp_path)
+    result["devices"][0]["ha_state"] = None
+    xml_path = tmp_path / "effective-snapshot" / "direct-effective-running.xml"
+    xml_path.write_text(
+        xml_path.read_text(encoding="utf-8").replace(
+            '<enabled src="tpl">yes</enabled>', '<enabled src="tpl">true</enabled>'
+        ),
+        encoding="utf-8",
+    )
+
+    payload = build_configuration_ui_payload(result)
+    device = payload["devices"][0]
+
+    assert device["current_configuration"]["highlights"]
+    by_label = {item["label"]: item for item in device["current_configuration"]["highlights"]}
+    assert by_label["HA Enabled"]["value"] == "true"
+    assert device["ha_role"] is None
+    assert device["ha_role_source"] is None

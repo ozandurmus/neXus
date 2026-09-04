@@ -133,7 +133,11 @@ def test_every_top_level_function_survived_the_split():
     # of each module computing it once at load time against the still-empty
     # default payload — so the floor was 178. OP.0c added
     # failover_readiness_ui.js's three functions (failoverVerdictTone,
-    # failoverCheckStatusTone, renderFailoverModule) — 181.
+    # failoverCheckStatusTone, renderFailoverModule) — 181. OP.0b S9 (UI
+    # authority reconciliation) retired inventory_ui.js's client-side PAN
+    # pairing similarity heuristic (setSimilarity, panoramaRuntimeSignature,
+    # panoramaPairCompatible — 3 removed) and added one canonical-authority
+    # lookup helper (haReadinessUnitsByType) in its place — 179.
     all_defs = []
     per_file = {}
     for name in SCRIPT_MODULE_FILENAMES:
@@ -142,6 +146,6 @@ def test_every_top_level_function_survived_the_split():
         per_file[name] = fns
         all_defs.extend(fns)
 
-    assert len(all_defs) == 181, f"expected 181 top-level functions, found {len(all_defs)}"
+    assert len(all_defs) == 179, f"expected 179 top-level functions, found {len(all_defs)}"
     dupes = sorted({f for f in all_defs if all_defs.count(f) > 1})
     assert not dupes, f"functions defined in more than one module file: {dupes}"
