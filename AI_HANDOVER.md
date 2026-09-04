@@ -16,12 +16,14 @@ doc. Prior versions are in git history.
 
 ## 1. Snapshot
 
-- Date: 2026-09-04. `main` at `cd45f66`. Build
+- Date: 2026-09-04. `main` at `73a988d`. Build
   `op0b_s8_realenv_campaign_corrections` — `AUTOMATED_VALIDATED`.
 - The `OP.0b` S8 real-environment campaign ran S8-A three times against the
   approved CP ClusterXL pair, surfaced and merged six corrections
-  (PRs #47–#50, #52–#54), then corrected the CP **remote execution
-  primitive** itself. Ready for the S8-A retry; no operator prerequisite.
+  (PRs #47–#50, #52–#54), corrected the CP **remote execution primitive**
+  (#55), and validated it on the real pair: S8-A retry returned 8/8 reads
+  `success`. #56 then paced the battery and fixed the A4/A5/A8 output
+  shapes. Awaiting the second S8-A retry.
 
 ## 2. Root cause of the S8-A read failures (settled)
 
@@ -74,9 +76,10 @@ per member**, reusing the existing real-environment-validated
 - **#53** per-read outcome disclosure in the safe summary (both vendors) —
   the change that made the root cause above visible at all.
 - **#54** (merged, then superseded) added a `capability_gap` classification
-  and an inter-read delay on the disproven account-shell conclusion. Both
-  were corrected in the persistent-shell change below: the delay is gone
-  entirely, and the classification survives only as a narrow diagnostic.
+  and an inter-read delay on the disproven account-shell conclusion. The
+  classification survives only as a narrow diagnostic; the account-shell
+  conclusion is withdrawn. (Pacing later returned on real evidence — see
+  #56 — but as a session-stability measure, not as that conclusion's remedy.)
 - **Persistent Expert shell** (this movement): the whole battery for one
   member runs inside one `InteractiveSshSession` — one `invoke_shell`, one
   close, zero exec channels, zero per-command CLI initialization. Commands
@@ -84,44 +87,58 @@ per member**, reusing the existing real-environment-validated
   exit status are read explicitly rather than inferred from a quiet period;
   the marker is read-only, stripped before any parser sees it, and
   test-enforced never to reach evidence. Framing is opt-in, so the
-  established config-collection path is unchanged. No artificial pacing:
-  sequential send/complete/parse is its own backpressure.
+  established config-collection path is unchanged.
+- **#56** real-environment follow-ups. (a) **Pacing**: the battery runs
+  correctly in one Expert shell but destabilizes the SSH session issued back
+  to back, so reads are paced by one constant,
+  `INTER_COMMAND_DELAY_SECONDS = 0.3`, strictly BETWEEN reads — N reads, N-1
+  waits, none before the first, none after the last, each after deterministic
+  completion. Never retry/backoff/reconnect/adaptive; the sleeper resolves at
+  call time so tests inject it. (b) **A4/A5/A8 output shapes**: those reads
+  succeeded but their parsers matched zero rows (A4/A5) or no count (A8) —
+  same class as the `fw stat` table. All three now accept the real layouts
+  and still fail closed on an unknown one.
 
 ## 4. Exact next action
 
-1. Retry S8-A unchanged:
+1. Retry S8-A unchanged (second retry, on `73a988d`):
    `py .\main.py --cp-ha-preflight-check --cp-preflight-targets <A>,<B>`.
-   Report SAFE counts only. Expect: one SSH login and one Expert shell per
-   member, the repeated device-side `ver` initialization gone entirely, and
-   the five bare Expert reads (A3-A7) actually executing — A3 yielding
-   `High Availability` plus local/peer roles through the canonical parser.
+   Report SAFE counts only. Expect reads still 8/8, ~0.3s spacing, a stable
+   SSH session, and `viable_target` / `control_sync_link_health` /
+   `flap_history` moving off `unknown:`.
 2. Then S8-B (VSX): `vsx stat -v` and any `vsenv` transition run in that
-   same Expert shell, no reconnect per VSID.
-3. Then S8-C (PAN), untouched by this change (HTTPS API, no shell).
-   `Sonnet 5, normal`.
+   same Expert shell, same 0.3s pacing, no reconnect per VSID.
+3. Then S8-C (PAN), untouched by this change (HTTPS API, no shell); no PAN
+   pacing unless PAN evidence shows a need. `Sonnet 5, normal`.
+
+If the SSH session still drops at 0.3s spacing: **stop.** Do not tune the
+delay upward by trial and error — that is a transport/session stability
+problem needing its own root cause.
 
 ## 5. Test delta
 
-- Full serial suite 1574 passed / 24 skipped / 0 failed (+106 over the S7.5
-  baseline of 1468/24/0), from seven new S8 regression files.
+- Full serial suite 1603 passed / 24 skipped / 0 failed (+135 over the S7.5
+  baseline of 1468/24/0), from eight new S8 regression files.
 - Privacy gate PASS/0; architecture convergence 19 passed; `git diff --check`
   clean.
 
 ## 6. New risks
 
-- **The A3 outcome on the real device is now explained, not unresolved.**
-  `ha_mode_not_established` persisted because A3 never executed. The wiring
-  defect (#49) and the parser were both already correct; neither was the
-  cause. A3 stays unvalidated against real output until the S8-A retry runs.
-- **The persistent Expert shell is not yet real-environment validated.**
-  Its adapter is the one the CP config collector has used against real
-  devices, and the framing is covered by unit tests, but this specific
-  execution model has only been exercised against a device double. The S8-A
-  retry is its first real proof.
+- **The persistent Expert shell IS real-environment validated** (S8-A retry:
+  8/8 reads `success`, `ha_mode_not_established` gone, three checks PASS).
+  A3 executes and yields cluster mode plus local/peer roles.
+- **The A4/A5/A8 shape fixes are not yet real-environment validated.** They
+  were written against documented vendor layouts, not against this device's
+  observed output, because the run reports safe counts only. If a check is
+  still `unknown:` after the next retry, that parser has a third shape and
+  needs the real one — not another guess.
+- **`preemption_known` and `flap_history` cannot reach PASS in this
+  campaign.** D-V7b (A9 not authorized) and D-F3 (flap threshold) are
+  unresolved by decision; a parsed `cp_failover_count` has no threshold to
+  be judged against. Overall S8-A readiness stays INSUFFICIENT_EVIDENCE.
 - `capability_gap` now means only "the device CLI rejected the read before
-  any binary ran". If it still appears after the retry, suspect the
-  execution model first — it must never be allowed to stand in for an
-  application defect.
+  any binary ran". If it appears again, suspect the execution model first —
+  it must never stand in for an application defect.
 - Production strict host-key enforcement is deliberately incomplete by PO
   decision, not a regression — `cp_production_ssh_host_key_trust_hardening`.
 - Pre-existing, unrelated: test-order state leaks between
