@@ -822,6 +822,30 @@
       ],
       "recommendation": "Fixed conservative default in v1; needs product-owner + vendor-guidance input before OP.0b.1/S2/S3 can compute a real check-7 verdict.",
       "decide_by": "product owner + vendor guidance, before OP.0b.1"
+    },
+    {
+      "id": "op_reversal_model",
+      "area": "OP.2 Controlled Failover Execution",
+      "status": "open",
+      "question": "Reported contradiction inside the design parent, raised per AGENTS.md 'Authority hierarchy' rather than silently reconciled. FAILOVER_ENGINE_ARCHITECTURE.md sections 5/7/8 require automatic rollback on a failed or partial transition (and section 6 defines a FAILED_ROLLED_BACK outcome); section 10.1 items 5-7 require explicit human confirmation per action, exactly one action per authorised run, and UNKNOWN as a first-class outcome that is never a reason to re-issue. An automatic rollback fires precisely when the entity's state is unverified, so it is a second CLASS 2 mutation, unconfirmed, against an unknown state. Which text governs?",
+      "options": [
+        "Reversal is a NEW typed CLASS 2 action (own authorization, fresh preflight, confirmation, lock, single submission, verification, audit); automatic rollback and FAILED_ROLLED_BACK are removed from the model",
+        "Keep automatic rollback as designed in sections 5/7/8 and narrow section 10.1 items 5-7 accordingly"
+      ],
+      "recommendation": "Reversal as a new typed action. The situation an auto-rollback exists to handle is the situation in which the postcondition is unknown, and issuing an unconfirmed second mutation against an unknown state is the worst available action; section 10.1 is also the later, explicitly dated safety contract and is the one the frozen OP.0b.0 CLASS 2 handoff cites. Drafted as principle P12 of docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md (DRAFT -- DO NOT FREEZE).",
+      "decide_by": "OP.2.0 contract freeze"
+    },
+    {
+      "id": "op_outcome_unknown_recovery",
+      "area": "OP.2 Controlled Failover Execution",
+      "status": "open",
+      "question": "What happens to an operational HA entity after a CLASS 2 action terminates OUTCOME_UNKNOWN (mutation boundary crossed, postcondition not independently determinable -- including the process-crash-after-submission case, which the product cannot distinguish from a transport timeout after submission)? FAILOVER_ENGINE_ARCHITECTURE.md section 10.1 item 7 makes UNKNOWN first-class but does not say what the entity's subsequent state is, and console/jobs.py's existing crash sweep resolves an orphaned running record to 'failed' -- correct for a class 0 collection, and the single most dangerous possible answer for a class 2 action, since it asserts the mutation did not happen from evidence that only proves the process died.",
+      "options": [
+        "Quarantine the HA entity against further CLASS 2 actions until an explicit audited operator acknowledgement; class 0 reads stay permitted; terminal state is never rewritten by a later observation",
+        "Allow a new CLASS 2 action once a fresh preflight returns a positive verdict, with no acknowledgement step"
+      ],
+      "recommendation": "Quarantine until acknowledged. A green readiness verdict answers 'is the entity safe to act on', not 'did my previous action execute', and letting the first silently clear the second is how a double failover happens. A later class 0 observation appends to the action record and never rewrites its terminal state. Drafted as principle P10 of docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md (DRAFT -- DO NOT FREEZE).",
+      "decide_by": "OP.2.0 contract freeze"
     }
   ]
 }
