@@ -63,10 +63,27 @@ def test_cluster_interface_matrix_and_conditional_route_comparison_contract():
     assert "routeDivergence" in APP
 
 
-def test_panorama_ha_and_vsys_hierarchy_is_conservative_runtime_inference():
-    assert "function panoramaPairCompatible(" in APP
-    assert "vsysSimilarity >= 0.75" in APP
-    assert "routerSimilarity >= 0.60" in APP
+def test_panorama_ha_hierarchy_consults_canonical_ha_readiness_units():
+    """OP.0b S9: PAN HA pairing for the Inventory tree is read from the
+    canonical `failoverReadinessData.units` (`utils.failover.assessment.
+    _derive_pan_units`), not re-inferred client-side from hostname-ordinal
+    matching and VSYS/VR Jaccard similarity -- that heuristic is retired."""
+    assert "function panoramaPairCompatible(" not in APP
+    assert "vsysSimilarity" not in APP
+    assert "routerSimilarity" not in APP
+    assert "function haReadinessUnitsByType(" in APP
+    assert 'haReadinessUnitsByType("pan_ha_pair", "panorama")' in APP
     assert "function panoramaVsysChildren(" in APP
     assert 'entityType: "pan_vsys"' in APP
     assert 'entityType: "pan_cluster"' in APP
+
+
+def test_cp_vsx_cluster_synthesis_consults_canonical_ha_readiness_units():
+    """OP.0b S9: when `aggregateCpClusters` finds no runtime-proven ClusterXL
+    VIP fingerprint for a VSX physical pair, the Inventory tree falls back to
+    the canonical `cp_vsx_cluster` unit `utils.failover.assessment.
+    _derive_cp_units` already grouped (`cluster_topology.group_id`, or its
+    legacy `cluster`-field fallback) -- not a client-side hostname-token
+    overlap guess."""
+    assert 'haReadinessUnitsByType("cp_vsx_cluster", "checkpoint")' in APP
+    assert "clusterNameSource: \"ha_readiness_group\"" in APP
