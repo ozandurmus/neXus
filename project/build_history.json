@@ -3,6 +3,21 @@
   "record_contract": "One structured record per build, newest first. Required: build, status, title, summary (<= 2 sentences). Optional: started, completed, track, movement, supersedes, evidence, risks_forward, docs{agreement,validation,handover} (repo-relative paths under docs/history/). Full detail lives in the linked doc; do not restate it here. Status vocabulary must stay within utils/project_plan.py STATUS_VALUES.",
   "builds": [
     {
+      "build": "op2_a_b_execution_foundation",
+      "status": "done",
+      "title": "OP.2.A/B - CLASS 2 execution foundation (typed action lifecycle, HA-entity lock, mutation boundary)",
+      "summary": "Implemented the vendor-independent typed action lifecycle, durable action_id, operational-HA-entity lock/quarantine, confirmation binding, mutation boundary and OUTCOME_UNKNOWN recovery from the frozen OP.2.0 contract, in new package utils/operate/ with zero device I/O and no vendor adapter. CLASS 2 stays structurally unreachable: authorization is unconditional DENY, no console job type or CLI entry point exists, and eligibility independently fails no_adapter_capability since no adapter exists anywhere.",
+      "started": "2026-09-04",
+      "completed": "2026-09-04",
+      "track": "OP.2",
+      "movement": "IMPLEMENTATION",
+      "evidence": "tests/test_op2_a_b_execution_foundation.py (67 passed); tests/test_architecture_convergence.py unaffected",
+      "docs": {
+        "agreement": "docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md",
+        "validation": "docs/history/phase/OP_2_A_B_EXECUTION_FOUNDATION.md"
+      }
+    },
+    {
       "build": "op0b_s9_ui_authority_reconciliation",
       "status": "done",
       "title": "OP.0b S9 (remaining, broader scope) - UI authority reconciliation",

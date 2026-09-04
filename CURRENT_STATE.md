@@ -7,15 +7,15 @@ detail is not here either** — it is in `project/build_history.json`
 linked documents under `docs/history/`. `docs/history/INDEX.md` is the
 generated one-line timeline.
 
-- **Checkpoint:** 2026-09-04, branch `claude/op-0b-s9-ui-authority-r14jfv`.
+- **Checkpoint:** 2026-09-04, branch `claude/op2-execution-foundation-5wu5a2`.
 - **Current build** (per `project/roadmap.json` `now_next.now`):
-  `op0b_s9_ui_authority_reconciliation` — **DONE** (see "Active build").
-  `OP.0b`'s full S1–S9 read-only scope is **CLOSED**. `now_next.next` =
-  `op0b_0_close_d_v3a_d_v7b_pre_class2` (promoted from `upcoming`).
+  `op2_a_b_execution_foundation` — **DONE** (see "Active build"). `OP.0b`'s
+  full S1–S9 read-only scope stays **CLOSED** (predecessor build). `now_next.next`
+  = `op0b_0_close_d_v3a_d_v7b_pre_class2` (real-env, independent of `OP.2`).
 - **OP.2.0 CLASS 2 architecture** (`docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md`):
-  **CONTRACT FROZEN 2026-09-04** (PO, after the independent challenge
-  review) — architecture authority only, not a build; CLASS 2 **not
-  implemented, not reachable**, no command approved, no adapter, no member.
+  **CONTRACT FROZEN 2026-09-04**; `OP.2.A`/`OP.2.B` **IMPLEMENTED 2026-09-04**
+  (see "Active build") — CLASS 2 still has **no member**, still not
+  reachable: no command approved, no vendor adapter, unconditional `DENY`.
 - **Product baseline:** `0.7.7 — Compliance trend retro-fill` — AUTOMATED_VALIDATED.
 - **Engineering baseline:** `DEV.3.3` — AUTOMATED_VALIDATED. `DEV.1`,
   `DEV.4` complete.
@@ -48,39 +48,38 @@ test-enforced boundaries. Current numbers:
 
 ## Active build
 
-**`op0b_s9_ui_authority_reconciliation`** — **DONE**, 2026-09-04. Retired
-the S9 remainder's three heuristics in favor of canonical backend data:
-`static/inventory_ui.js`'s PAN pairing + `cp_vsx_cluster` synthesis now
-read `failoverReadinessData.units` (the `compute_ha_readiness` `HaUnit`
-derivation, already embedded unused in the same page; identity fields
-only, never verdict/checks/evidence); `utils/merge.py`'s VSX cluster field
-copies the matching `cp.json` row's canonical `cluster_topology` instead of
-guessing from a hostname suffix; `utils/config_ui.py`'s `_ha_header_evidence`
-now recognizes only the literal `yes`/`no` PAN-OS API tokens. ClusterXL,
-VSX/VSLS, PAN HA pairing/identity from S8-C, seven-check readiness
-semantics, and no-UI-side-readiness-authority all unchanged, verified by
-targeted + broad-sweep tests. Detail:
+**`op2_a_b_execution_foundation`** — **DONE**, 2026-09-04. Implemented the
+vendor-independent typed action lifecycle, durable `action_id`,
+operational-HA-entity lock/quarantine, confirmation binding, mutation
+boundary and `OUTCOME_UNKNOWN` recovery from the frozen `OP.2.0` contract, in
+new package `utils/operate/` — zero device I/O, no vendor adapter, no
+transport import, no command text, no CLI/argv entry point, no console job
+type. CLASS 2 stays structurally unreachable: `authorize()` is unconditional
+`DENY` at `create_action` (no record is ever created on `DENY`), and
+independently eligibility fails `no_adapter_capability` since no adapter
+exists anywhere in the product. Closes backlog `ha_entity_operational_lock`
+(`OP.0b.0` §26 row X-1). 67 targeted tests
+(`tests/test_op2_a_b_execution_foundation.py`), real-thread-concurrency
+proofs for the guarded boundary transition and the entity-lock create race,
+crash-reconciliation coverage for every state in the contract's table.
+Detail: `docs/history/phase/OP_2_A_B_EXECUTION_FOUNDATION.md`.
+
+**Predecessor `op0b_s9_ui_authority_reconciliation`** — DONE, 2026-09-04:
+retired the S9 remainder's three UI-side HA heuristics in favor of canonical
+backend data; closed `OP.0b`'s full S1–S9 read-only scope. Detail:
 `docs/history/phase/OP_0B_S9_UI_AUTHORITY_RECONCILIATION.md`.
 
-**S8-A CP ClusterXL: PASS, PO-accepted. S8-B'' VSX (VSLS per-VSID) and S8-C
-PAN: both REAL_ENV_VALIDATED** (predecessor build,
-`op0b_s8c_pan_dedicated_ha1_real_env_correction`) — S8-C: 2/2 candidates,
-P1/P2/P4 success both members, 5/7 checks real PASS (the other two
-correctly INSUFFICIENT_EVIDENCE by unconfigured feature / open D-F3, not
-defects), pair correspondence `MATCH`, PAN B2 stays **NOT ESTABLISHED**.
-
-**OP.0b closure: full read-only S1–S9 scope CLOSED 2026-09-04.** No
-read-only blocker remains inside `OP.0b`'s own scope. `D-V3a`/`D-V7b`/
-`D-F3`/PAN B2/CLASS-2 gates remain correctly, intentionally open — see the
-S8-C phase doc's "OP.0b closure assessment"; none of them are read-only
-gaps inside `OP.0b`'s own S1–S9 scope.
-
+**S8-A CP ClusterXL: PASS. S8-B'' VSX and S8-C PAN: both REAL_ENV_VALIDATED**
+(`op0b_s8c_pan_dedicated_ha1_real_env_correction`) — PAN B2 stays **NOT
+ESTABLISHED** (pair correspondence `MATCH`, but serial-based `B2` itself
+unresolved). **OP.0b closure: full read-only S1–S9 scope CLOSED 2026-09-04**
+— `D-V3a`/`D-V7b`/`D-F3`/PAN B2/CLASS-2 gates remain correctly,
+intentionally open (none are read-only gaps inside `OP.0b`'s own scope; see
+the S8-C phase doc's "OP.0b closure assessment").
 **Stalled, `now_next.upcoming`:** `cp_remote_collection_done_marker_diagnostics`
 — independent, does not block `OP.0b`; resume on a real recurrence.
-
-**Predecessors:** `op0b_s8a_clusterxl_execution_model_console_parity`
-through `op0b_s1_preflight_fact_provenance_model` — REAL_ENV_VALIDATED /
-AUTOMATED_VALIDATED; `project/build_history.json`.
+**Predecessors:** `op0b_s8a_clusterxl_execution_model_console_parity` through
+`op0b_s1_preflight_fact_provenance_model` — `project/build_history.json`.
 
 ## `OP.0b.0` — FROZEN WITH REAL-ENV VALIDATION GATES
 
