@@ -238,6 +238,40 @@ def test_no_device_write_automation_claim_does_not_reappear():
         assert stale not in text, f"{doc} reintroduced the stale absolute claim"
 
 
+def test_no_authoritative_instruction_requires_the_turkish_session_preamble():
+    """AI_START_HERE.md's SESSION START schema required a Turkish-language
+    stakeholder preamble on every engineering report, and AGENTS.md pointed
+    at that template -- contradicting the English working-language contract
+    and reproduced verbatim by agents that followed the schema. The rule now
+    has one owner (AGENTS.md "Engineering-output language law") and no
+    agent instruction surface may require the preamble again. Guards the
+    instruction surface only: historical phase/design docs that carry their
+    own summary sections are records, not instructions."""
+    agents = " ".join((ROOT / "AGENTS.md").read_text(encoding="utf-8").split())
+    assert "Engineering-output language law" in agents
+    assert "English by default" in agents
+    instruction_docs = [
+        ROOT / p
+        for p in (
+            "AGENTS.md",
+            "AI_START_HERE.md",
+            "CLAUDE.md",
+            "docs/AI_DEVELOPMENT_PROTOCOL.md",
+            ".github/copilot-instructions.md",
+        )
+    ]
+    instruction_docs += sorted((ROOT / ".github" / "instructions").glob("*.md"))
+    instruction_docs += sorted((ROOT / ".github" / "prompts").glob("*.md"))
+    turkish_preamble_markers = ("PROJE \u00d6ZET\u0130", "Proje nedir", "Bu g\u00f6rev nedir")
+    for doc in instruction_docs:
+        text = doc.read_text(encoding="utf-8")
+        for marker in turkish_preamble_markers:
+            assert marker not in text, (
+                f"{doc.relative_to(ROOT)} requires the Turkish session preamble again; "
+                "AGENTS.md 'Engineering-output language law' is the single owner"
+            )
+
+
 def test_agents_md_encodes_the_opaque_identifier_law():
     """The identity law that came directly out of the PAN HA serial-matching
     incident (no int() cast, no leading-zero strip, no digit-only
