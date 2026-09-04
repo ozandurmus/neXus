@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "current_build": "op0b_s8_realenv_campaign_corrections",
+  "current_build": "op0b_s8a_clusterxl_execution_model_console_parity",
   "current_track": "OP.x",
   "progress_contract": "Weighted acceptance-criterion completion. Percentages describe the declared roadmap, not calendar time or delivery ETA.",
   "tracks": [
@@ -123,23 +123,24 @@
   "now_next": {
     "horizon_contract": "NOW is exactly one build. NEXT is exactly one. Everything else is an `upcoming` row carrying its own true status: planned = AFTER, blocked = waiting on a named external gate, deferred = consciously postponed. `now.build` must equal the newest project/build_history.json record -- utils.project_plan enforces it.",
     "now": {
-      "build": "op0b_s8_realenv_campaign_corrections",
-      "title": "OP.0b S8 - real-environment campaign corrections",
-      "goal": "Correct what the first live S8-A ClusterXL attempt surfaced, inside the existing frozen semantics: host-key rejections never enter the connect retry loop; the CP HA preflight defaults to the same compatibility trust mode every other CP SSH caller already had (mandatory strict deferred to production container hardening by PO decision, tracked as debt); A3's local_role/cluster_mode reach the fields contract the S5 projection documents; and the member session becomes a real per-member execution context -- one authenticated session, one command plan resolved once, no device-side login/CLI initialization per read (PTY requests per member 8/9 -> 0). Palo Alto audited and already compliant. No new device command, mutation, retry authority or readiness-semantics change.",
-      "status": "automated_validated",
-      "started": "2026-09-03"
+      "build": "op0b_s8a_clusterxl_execution_model_console_parity",
+      "title": "OP.0b S8-A - CP persistent Expert-shell execution model, real output shapes, CLI/Console readiness parity",
+      "goal": "Make the CP HA preflight actually execute its approved Expert battery on a real ClusterXL pair (one persistent Expert shell per member, framed reads, 0.3 s pacing), recognise the real vendor output shapes fail-closed, and regenerate the operator report from the same canonical readiness record the CLI prints -- one evaluation, two renderers, no snapshot persistence. No new device command, mutation, retry authority, identity or readiness-contract change.",
+      "status": "real_env_validated",
+      "started": "2026-09-03",
+      "completed": "2026-09-04"
     },
     "next": {
       "build": "op0b_s8_real_env_validation",
-      "title": "OP.0b S8-A - bounded real-environment validation (CP ClusterXL pair, VSX pair, PAN pair)",
+      "title": "OP.0b S8-B/S8-C - bounded real-environment validation (approved VSX pair, approved PAN pair) with Operator-Console parity",
       "status": "planned",
       "notes": [
-        "BLOCKED ON DEVICE ACCESS (2026-09-04): S8-A/B/C remain NOT EXECUTED, ZERO CONTACTS. The approved CP pair stopped offering SSH password authentication during the campaign; the operator's own recovery work (clish set ssh server password-authentication yes + save config, then direct /etc/ssh/sshd_config and Gaia template edits, then service sshd restart) has not been confirmed to have restored access. Resume S8-A with the identical controlled command once the operator confirms SSH access; the engineering side is ready and merged.",
-        "S8-A status: NOT EXECUTED, ZERO CONTACTS, BLOCKED -- the first attempt surfaced the strict trust-store preflight defect corrected by op0b_s8_p01_cp_ssh_trust_preflight_correction. After that correction merges and main is synced: provision the trusted host key (out-of-band verified fingerprint in the runtime's system/user known_hosts), then start a NEW S8-A session and retry the IDENTICAL controlled command. Do not mark S8 failed; do not reopen other OP.0b research.",
-        "The application-entrypoint gap S8 surfaced is closed by op0b_s75_preflight_entrypoint (--cp-ha-preflight-check / --pan-ha-preflight-check). S8-A now runs those two CLI modes against the approved real-env pairs.",
-        "Reads only, same approved targets as the frozen contract real-env gate (requested = resolved = contacts, extra = 0). Confirms the S5/S6 collectors real response shapes and the vendor value vocabularies S7 FACT_CHECK_MAP freezes minimally (PAN state-sync/running-sync/conn-*/*-compat; CP sync status, failover statistics, pnote enumeration, sk165432 behaviour, member skew observed).",
-        "Hardware-blocked until the corporate laptop / approved pairs are available. S7 stays AUTOMATED_VALIDATED (never REAL_ENV_VALIDATED) until then; OP.0b is not DONE.",
-        "Recommended: Sonnet 5, normal -- bounded real-env procedure per docs/reference/REAL_ENV_VALIDATION_PROTOCOL.md; SAFE SUMMARY only, no identities."
+        "S8-A (CP ClusterXL pair): PASS, PO-accepted 2026-09-04 -- 8/8 reads success, four checks PASS, D-V7b/D-F3 INSUFFICIENT_EVIDENCE by decision, Operator Console identical to the CLI for all seven checks and fresh mode. Detail: project/build_history.json op0b_s8a_clusterxl_execution_model_console_parity.",
+        "S8-B (VSX): run `--cp-ha-preflight-check` against the approved VSX pair. Same transport law (1 SSH transport, 1 persistent Expert shell per member, 0.3 s pacing, B1 `vsx stat -v` in the same shell, vsenv only if context is required, no reconnect per VSID, no VSLS assumption, no fw ctl set). Validate fresh backend readiness AND the regenerated report through the same seam; one physical VSX parent, two physical members, VSIDs not duplicated per host, VS child does not inherit the parent verdict.",
+        "S8-C (PAN): run `--pan-ha-preflight-check` against the approved PAN pair. One authenticated API context per member, P1/P2/P4 only, no retry/fallback, no PAN pacing unless PAN evidence shows a need; validate P1 identity gate, P2 HA state, P4 path monitoring, one coherent preflight_run_id, no phantom peer, B2 stays NOT ESTABLISHED unless already-authorized evidence closes it; report parity through the same seam.",
+        "Operator-executed: this engineering session has no route to the approved pairs; report SAFE counts only. Mechanical parser corrections inside frozen semantics are allowed in-campaign; stop for PO only on a new command/API operation, new credential, device mutation, retry/fallback authority, identity or readiness-contract change, unresolved vendor semantic, schema change, or CLASS 1/2 behaviour.",
+        "OP.0b closure law: cannot close while fresh CLI readiness != Operator Console readiness for the same invocation; S7 stays AUTOMATED_VALIDATED for VSX/PAN until S8-B/S8-C.",
+        "Recommended: Sonnet 5, normal -- bounded real-env procedure per docs/reference/REAL_ENV_VALIDATION_PROTOCOL.md."
       ]
     },
     "upcoming": [
@@ -276,7 +277,7 @@
     "VSX configuration evidence was originally targeted for 0.6.2 but was delivered early inside the 0.6.1B Check Point configuration track.",
     "The original 0.6.0B native-backup milestone was deferred pending a rebase; that rebase landed 2026-08-30 as docs/design/BACKUP_AND_RECOVERY_ARCHITECTURE.md + docs/design/BACKUP_RECOVERY_CONTRACTS.md (phases RB.0-RB.6). The original constraint stands and is now the design's first principle: configuration evidence is not a recovery backup -- the evidence plane is deliberately redacted and therefore non-restorable, so a separate encrypted recovery plane is required. Backup artifact bytes must never reach output/index.html, the support bundle, or repository metadata; only manifests may be read by other subsystems.",
     "Write/change automation remains outside the current roadmap gate until SEE, VERIFY, TRACE and RECOVER are sufficiently mature.",
-    "Future 0.7.xâ€“1.0 major-track numbering is a planning map, not a frozen release commitment; rebase it explicitly when a preceding phase changes implementation order.",
+    "Future 0.7.x\u00e2\u20ac\u201c1.0 major-track numbering is a planning map, not a frozen release commitment; rebase it explicitly when a preceding phase changes implementation order.",
     "DEPLOY.1 pulls the server_data_plane portion of the 1.0 GOVERN track forward to host the living SEE-track platform; it must not be used to bypass the write/change automation gate stated above.",
     "DEV.1 establishes the controlled Corporate Git/Copilot operating baseline; after acceptance, engineering returns to product work at 0.6.1C. DEV.0.3C remains deferred to the pre-server storage-sensitive checkpoint.",
     "0.7.x early VERIFY foundation was delivered ahead of schedule in 0.6.1B.1.5 and 0.6.1B.1.6; the 0.7.x formal track opens with compliance_posture_rulepack_transition promoting those controls to versioned rule packs.",
@@ -426,7 +427,7 @@
         },
         {
           "build": "DEV.3.4",
-          "title": "Per-vendor worker containers — DEFERRED until collection duration is a real operational pain; requires DEV.3.3 first",
+          "title": "Per-vendor worker containers \u2014 DEFERRED until collection duration is a real operational pain; requires DEV.3.3 first",
           "status": "deferred"
         }
       ]
