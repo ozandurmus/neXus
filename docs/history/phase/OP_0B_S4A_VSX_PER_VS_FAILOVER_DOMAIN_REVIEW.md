@@ -2,7 +2,19 @@
 
 ## Status
 
-**DRAFT — DO NOT FREEZE. STOP FOR PO REVIEW (2026-09-04).**
+**DRAFT — DO NOT FREEZE.** Architecture text below is unchanged from the
+2026-09-04 review. The PO did not issue an explicit freeze statement; the
+next message directed implementation of the first per-VS readiness slice
+(§4, §5, §12 CP-C0/CP-C1 only) directly. That slice is now **IMPLEMENTED**
+(same date, movement `IMPLEMENTATION`) — see "S4-A' implementation record"
+appended at the end of this document. This document's status stays `DRAFT`
+until the PO explicitly freezes the full model (§13 contract amendments);
+the implemented slice is scoped narrowly enough (readiness only, no CLASS 2,
+no new command beyond `vsenv` + already-approved `cphaprob stat`) that it
+did not require a prior freeze under `AGENTS.md` "Mandatory build lifecycle"
+("a deterministic fix inside an already-frozen contract does not need a new
+one" — here, a PO-directed bounded implementation inside this DRAFT's own
+already-vendor-evidenced scope).
 
 Movement: `ARCHITECTURE` (extended reasoning). Trigger: PO correction during
 the S8-B VSX real-environment campaign — the frozen model "physical VSX
@@ -482,3 +494,94 @@ contract "`vsenv N` retained").
 Recommended model/reasoning: this review — done at extended reasoning;
 Stage 1 diagnostic and the eventual implementation — `Sonnet 5, normal`;
 the contract freeze — `Sonnet 5, extended thinking (high)`.
+
+---
+
+## S4-A' implementation record (2026-09-04, movement `IMPLEMENTATION`)
+
+PO-directed first slice, implemented same session: mode parser (§2/Stage 1),
+CP-C0/CP-C1 command gate (§12, minus the B1-status reclassification, which
+stays `PROPOSED, conditional on D-V11`), same-session per-VS collection
+(§7/§8), and the readiness mapping of §5 **as the frozen `FACT_CHECK_MAP`
+actually allows it** — one correction to this review's own §5 table follows.
+
+**Shipped:**
+
+- `configuration/checkpoint_config_collector.py`: `_parse_clusterxl_cluster_mode`
+  recognises `"virtual system load sharing"` (checked before the generic
+  `"load sharing"` branch, since the phrase contains it as a substring) and
+  returns the new canonical token `vsx_vsls`, added to `CLUSTERXL_CLUSTER_MODES`.
+  `utils/failover/preflight_readiness.py::CP_SUPPORTED_FAILOVER_MODES` gained
+  `vsx_vsls`; `utils/failover/assessment.py::_CP_LOAD_SHARING_MODES`
+  deliberately does NOT gain it (that set means "no standby exists", false
+  for VSLS).
+- `checkpoint/preflight_collector.py`: `MemberSession.run_vsenv(vsid)` — the
+  CP-C0 primitive, numeric-validated (`^[0-9]{1,6}$`), verified by **exit
+  status** (not prompt shape — the same authority model the rest of the
+  codebase already uses for command completion), tracked via
+  `current_vsid`/`context_verified`. `enumerated_vsids(member_evidence)`
+  reads B1's own already-produced facts back (no second parse), excluding
+  VSID `"0"` (VS0 is the physical context already collected, not a
+  subordinate unit). `collect_member_vsx_per_vs` runs the CP-C1 slice
+  (`vsenv N` → `cphaprob stat`, reusing `A3_CPHAPROB_STAT`'s wire command
+  with an explicit `source_command="C1"` override for SAFE SUMMARY
+  provenance, never a duplicate `COMMAND_TEXT` entry — one collided with A3
+  in a test harness's `text -> command` reverse lookup during development
+  and was removed) → `vsenv 0`, per VSID, in order; an unverified enter
+  produces no fact and moves to the next VSID; an unverified restore stops
+  the remaining VSIDs on that member. `run_cp_preflight` runs this on each
+  member's SAME still-open session, right after that member's B1, before
+  closing it; assembles one `PreflightSnapshot` per VSID (union of
+  enumerated VSIDs across members, capped at `MAX_VS_SCOPES_PER_PREFLIGHT =
+  8`) into the physical snapshot's new `subordinate_snapshots` field
+  (`utils/failover/preflight_model.py`, additive, empty by default — every
+  existing non-VSX caller unaffected).
+- `application/workflows/preflight.py::cp_ha_preflight_check`: threads
+  `[snapshot, *snapshot.subordinate_snapshots]` into `compute_ha_readiness`
+  (same one canonical evaluator, no second evaluation) and prints a labelled
+  SAFE SUMMARY block per VSID.
+- No `assessment.py`/`preflight_readiness.py` check-evaluation logic
+  changed: the existing per-VS machinery (`is_vs_unit`, `ContextKind.VSID`,
+  the D-V9a fail-closed rule) already handled a VS-unit snapshot correctly
+  once given one (proven by the pre-existing `test_25` fixture); only the
+  collector needed to actually produce one.
+
+**Correction to §5's own table:** `viable_target`'s frozen `FACT_CHECK_MAP`
+entry (`utils.failover.preflight_readiness`, `("checkpoint",
+"viable_target")`) requires THREE facts — `ha_local_role`,
+`local_member_attention`, **and `cp_pnote_any_problem`** — not role/attention
+alone as this review's matrix implied. `cp_pnote_any_problem` is A5
+(`cphaprob -ia list`), which per §6/§12 is deliberately **not** part of the
+CP-C1 minimum slice (physical/VS0-only, unchanged this build). Real
+consequence: of the two checks §5 marked reachable from C1-only evidence,
+only **`no_split_brain`** (needs `ha_local_role` alone) actually reaches
+PASS; **`viable_target` stays `INSUFFICIENT_EVIDENCE`** (honest reason:
+`not_collected:cp_pnote_any_problem`) until a future slice adds a per-VS
+pnote read (its own gate row, its own vendor-semantics question — not
+proposed here). This is the fail-closed law working as designed, not a
+defect: no per-VS meaning was invented for a fact never collected. The
+other five checks behave exactly as §5 predicted (SHARED/UNKNOWN,
+never fabricated).
+
+**Tests:** `tests/test_op0b_s4a_vsls_per_vs.py` (34 tests: mode parser,
+`run_vsenv` numeric validation/exit-status verification/pacing,
+`enumerated_vsids` VS0-exclusion/ordering, `collect_member_vsx_per_vs`
+context-safety — unverified enter, unverified restore, no cross-VS leakage,
+no VSID-0 entry, deterministic order — `run_cp_preflight` same-session
+wiring/cap/non-VSX-unaffected, and readiness integration proving
+`no_split_brain` PASS / `viable_target` honest INSUFFICIENT / one unit per
+VSID / no parent-verdict inheritance / mode established as `vsx_vsls` / the
+sk165432 rule still fail-closed). Four pre-existing source-level "no vsls"
+guard tests updated (`test_op0b_s5_cp_preflight_collector.py::test_38`,
+`test_op0b_s7_readiness_v2.py::test_24`, `test_op0a_ha_readiness.py`'s VSLS
+guard docstring) to ban VSLS *mutation* primitives specifically
+(`vsx_util`, `clusterxl_admin`, `cphastop`) rather than the word itself,
+since the mode name is now legitimate vocabulary; `test_op0b_s8_device_
+session_architecture.py`'s guards were unaffected (device-executed-command
+checks, not source-text checks). Full suite: 1667 passed, 24 skipped, 0
+failed. Privacy gate: PASS, 0 findings. `git diff --check`: clean.
+
+**Not implemented (deliberately, per the PO's own hard-stop list):** any
+per-VS A4/A5/A6/A7/A8 read; the B1-status-column reclassification (D-V11
+unconfirmed); any CLASS 2 amendment, adapter, or management-plane primitive;
+PAN S8-C (still paused).

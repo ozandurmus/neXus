@@ -646,10 +646,14 @@ def test_vs_missing_physical_parent_evidence_yields_no_parent_id_not_a_guess():
 
 
 def test_no_vsls_assumption_is_introduced_by_vsx_grouping():
-    """Source-level guard: no VSLS-specific identifier, mode value or
-    behavior may be introduced by this build -- this environment does not
-    use it. (Explaining its absence in a docstring/comment is fine and
-    expected; this checks for actual code, not prose.)"""
+    """Source-level guard, scoped to this module: `utils.failover.assessment`
+    stays generic verdict/unit-derivation logic and never gains a VSLS-named
+    attribute or load-sharing-set entry of its own -- the vendor-specific
+    `vsx_vsls` mode token lives in `preflight_readiness.CP_SUPPORTED_FAILOVER_MODES`
+    (OP.0b S4-A', real-env finding 2026-09-04: this estate DOES run VSLS;
+    see that module's own tests). `_CP_LOAD_SHARING_MODES` here specifically
+    must never include it -- that set means "no standby exists", which is
+    false for VSLS."""
     import utils.failover.assessment as assessment_module
 
     names = " ".join(dir(assessment_module)).lower()

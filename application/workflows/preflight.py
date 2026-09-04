@@ -312,16 +312,29 @@ def cp_ha_preflight_check(ctx):
 
     unified_devices = _load_unified_devices(runtime_paths.output_root)
     cp_ha_runtime = _load_cp_ha_runtime(runtime_paths.output_root)
+    # OP.0b S4-A' (VSLS): the VSX per-VS slice `run_cp_preflight` collected
+    # (if any) is a SEPARATE snapshot per VSID, same preflight_run_id -- each
+    # is passed through the same one canonical evaluator alongside the
+    # physical unit, never a second evaluation pass.
+    vs_snapshots = tuple(snapshot.subordinate_snapshots)
     report = compute_ha_readiness(
         unified_devices,
         cp_ha_runtime=cp_ha_runtime,
-        preflight_snapshots=[snapshot],
+        preflight_snapshots=[snapshot, *vs_snapshots],
     )
     print("\n=== SAFE READINESS SUMMARY ===")
     _print_read_outcomes(snapshot)
     _print_safe_result(
         report, operational_unit_id=operational_entity_id, vendor="checkpoint", member_count=len(members),
     )
+    for vs_snapshot in vs_snapshots:
+        vsid = vs_snapshot.operational_unit_id.rsplit("__vsid_", 1)[-1]
+        print(f"\n--- VSID {vsid} ---")
+        _print_read_outcomes(vs_snapshot)
+        _print_safe_result(
+            report, operational_unit_id=vs_snapshot.operational_unit_id,
+            vendor="checkpoint", member_count=len(vs_snapshot.members),
+        )
     _publish_fresh_readiness(ctx, report, mode="cp-ha-preflight-check")
     return 0
 

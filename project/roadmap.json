@@ -534,7 +534,7 @@
       ],
       "recommendation": "deferred - OP.2 covers CP ClusterXL HA and PAN A/P (the common cases); A/A and VSLS are a later adapter. OP.0/OP.1 assess and plan for them regardless.",
       "decide_by": "OP.3 scoping (not OP.2.0 architecture freeze)",
-      "note": "Rebased from 'OP.2 contract freeze' on 2026-09-04, not resolved. PO classification 2026-09-04: NOT an OP.2.0 architecture freeze blocker -- Active/Active and VSLS semantics are outside the initial CLASS 2 scope; no VSLS assumption may enter the initial CP ClusterXL adapter (OP.2.C). OP.0 still assesses them. See docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md 'Identity invariants'."
+      "note": "Rebased from 'OP.2 contract freeze' on 2026-09-04, not resolved. PO classification 2026-09-04: NOT an OP.2.0 architecture freeze blocker -- Active/Active and VSLS semantics are outside the initial CLASS 2 scope; no VSLS assumption may enter the initial CP ClusterXL adapter (OP.2.C). OP.0 still assesses them. See docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md 'Identity invariants'. UPDATE 2026-09-04 (OP.0b S4-A'): real-env S8-B evidence establishes the approved VSX pair actually runs VSLS (Cluster Mode: Virtual System Load Sharing); OP.0b now collects per-VS readiness evidence and evaluates each VSID as an independent readiness unit (docs/history/phase/OP_0B_S4A_VSX_PER_VS_FAILOVER_DOMAIN_REVIEW.md). This decision's CLASS 2 scope is unchanged -- still deferred, still no VSID adapter, still OP.3 territory -- readiness and CLASS 2 execution are separate questions and only the former has moved."
     },
     {
       "id": "op_continuity_tolerance",

@@ -424,6 +424,19 @@ class PreflightSnapshot:
     #: (e.g. a management-plane cluster-object setting). Per-member
     #: configuration facts belong in that member's `own_facts` instead.
     configuration_facts: tuple[PreflightFact, ...] = ()
+    #: OP.0b S4-A' (VSLS real-env finding): snapshots this SAME preflight
+    #: invocation additionally collected for subordinate operational units of
+    #: this one (e.g. one per VSID under `vsx stat -v` enumeration) -- never
+    #: a second collection pass, never a second `preflight_run_id`. Purely
+    #: additive: every existing caller that never sets this keeps the exact
+    #: same single-snapshot shape, and `PreflightSnapshot.__eq__`/equality-
+    #: based tests over a snapshot built without it are unaffected by its
+    #: default. The caller (`checkpoint.preflight_collector.run_cp_preflight`)
+    #: is solely responsible for producing these; this type does not derive,
+    #: validate or flatten them -- `utils.failover.assessment.compute_ha_readiness`
+    #: expects the caller to pass each one (physical and subordinate alike)
+    #: through `preflight_snapshots` explicitly.
+    subordinate_snapshots: tuple["PreflightSnapshot", ...] = ()
 
     def __post_init__(self) -> None:
         if not self.operational_unit_id:
@@ -439,6 +452,7 @@ class PreflightSnapshot:
             "preflight_run_id": self.preflight_run_id,
             "members": [m.to_dict() for m in self.members],
             "configuration_facts": [f.to_dict() for f in self.configuration_facts],
+            "subordinate_snapshots": [s.to_dict() for s in self.subordinate_snapshots],
         }
 
 
