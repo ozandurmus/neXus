@@ -73,6 +73,19 @@ OP0A_EVALUABLE_CHECKS = frozenset({"viable_target", "no_split_brain"})
 EVIDENCE_BASIS_STORED_TELEMETRY = "op0a_stored_telemetry"
 EVIDENCE_BASIS_PREFLIGHT_SNAPSHOT = "op0b_preflight_snapshot"
 
+#: A VSX Virtual System's own HA state is out of scope for the approved S8-B
+#: physical-parent battery -- B1 (`vsx stat -v`) is VS enumeration/count only
+#: (`project_cp_vsx_enumeration_facts`), never a per-VS HA-state read. When
+#: this run's fresh preflight snapshot covers the VS's physical parent, the
+#: generic OP.0a "no preflight battery exists" reasons below are actively
+#: misleading -- a battery just ran, for the parent. This reason states the
+#: true, narrower fact instead (real-env finding, S8-B VSX operator review).
+#: Never a verdict change: the check still reports INSUFFICIENT_EVIDENCE.
+REASON_VS_STATE_OUT_OF_PHYSICAL_SCOPE_BATTERY = "vs_state_out_of_physical_scope_preflight_battery"
+_VS_OUT_OF_SCOPE_MISSING_EVIDENCE = (
+    "OP.0b VSX battery (B1 vsx stat -v) is VS enumeration/count only, not a per-VS HA-state read"
+)
+
 #: Open product-owner numeric decisions (frozen OP.0b.0 contract, §"Open
 #: decisions"). No TTL, skew tolerance or flap threshold is chosen anywhere
 #: in this package; while any of these applies to a unit's evidence, a
@@ -249,6 +262,7 @@ def _evaluate_checks(
     cp_ha_runtime: Mapping[str, Mapping[str, Any]],
     pan_ha_runtime: Mapping[str, Mapping[str, Any]],
     snapshot: "PreflightSnapshot | None" = None,
+    parent_preflight_applied: bool = False,
 ) -> tuple[list[dict[str, Any]], dict[str, Any], str | None]:
     """Evaluate all seven §4 stop-conditions from exactly one evidence basis.
 
@@ -263,6 +277,15 @@ def _evaluate_checks(
     forced to INSUFFICIENT_EVIDENCE here, at one place, so that no future
     edit elsewhere can make a green light reachable without changing that
     frozenset and its gate (contract P4).
+
+    `parent_preflight_applied` (VSX VS units only): true when THIS run's
+    fresh preflight snapshot was applied to the VS's physical parent (the
+    only unit the approved S8-B battery evaluates). The VS itself still gets
+    no snapshot of its own -- unchanged -- but its INSUFFICIENT_EVIDENCE
+    reason names the real, narrower cause (`REASON_VS_STATE_OUT_OF_
+    PHYSICAL_SCOPE_BATTERY`) instead of the generic OP.0a "no preflight
+    battery exists" wording, which is false in this case. Never a verdict or
+    evidence-basis change.
 
     Returns `(checks, evidence, effective_mode)`; `effective_mode` is the
     fresh HA mode a snapshot established (or `None`).
@@ -281,6 +304,7 @@ def _evaluate_checks(
         return evaluation.checks, evaluation.evidence, evaluation.effective_mode
 
     missing_for_vendor = _MISSING_EVIDENCE.get(unit.vendor, {})
+    vs_out_of_scope = unit.unit_type == _UNIT_CP_VSX_VS and parent_preflight_applied
 
     if unit.vendor == "checkpoint":
         observed = _cp_roles(unit.members, cp_ha_runtime)
@@ -301,18 +325,30 @@ def _evaluate_checks(
     checks: list[dict[str, Any]] = []
     for check_id, label in STOP_CONDITIONS:
         if check_id not in OP0A_EVALUABLE_CHECKS:
-            checks.append(_check(
-                check_id, label, CHECK_INSUFFICIENT,
-                "not_evaluable_without_preflight_battery",
-                missing_for_vendor.get(check_id, "OP.0b preflight battery"),
-            ))
+            if vs_out_of_scope:
+                checks.append(_check(
+                    check_id, label, CHECK_INSUFFICIENT,
+                    REASON_VS_STATE_OUT_OF_PHYSICAL_SCOPE_BATTERY, _VS_OUT_OF_SCOPE_MISSING_EVIDENCE,
+                ))
+            else:
+                checks.append(_check(
+                    check_id, label, CHECK_INSUFFICIENT,
+                    "not_evaluable_without_preflight_battery",
+                    missing_for_vendor.get(check_id, "OP.0b preflight battery"),
+                ))
             continue
 
         if not observed:
-            checks.append(_check(
-                check_id, label, CHECK_INSUFFICIENT, "no_ha_runtime_evidence_for_unit",
-                missing_for_vendor.get(check_id, "OP.0b preflight battery"),
-            ))
+            if vs_out_of_scope:
+                checks.append(_check(
+                    check_id, label, CHECK_INSUFFICIENT,
+                    REASON_VS_STATE_OUT_OF_PHYSICAL_SCOPE_BATTERY, _VS_OUT_OF_SCOPE_MISSING_EVIDENCE,
+                ))
+            else:
+                checks.append(_check(
+                    check_id, label, CHECK_INSUFFICIENT, "no_ha_runtime_evidence_for_unit",
+                    missing_for_vendor.get(check_id, "OP.0b preflight battery"),
+                ))
             continue
 
         if check_id == "viable_target":
@@ -872,12 +908,19 @@ def compute_ha_readiness(
     for key in duplicate_snapshot_units:
         snapshots_by_unit.pop(key, None)
     applied: list[str] = []
+    # A VSX VS's own physical parent, if this run applied a fresh snapshot to
+    # it -- the only fact `_evaluate_checks` needs to give the VS an honest,
+    # narrower INSUFFICIENT_EVIDENCE reason instead of the stale "no preflight
+    # battery exists" one (S8-B VSX operator-review finding).
+    snapshot_unit_ids = set(snapshots_by_unit.keys())
 
     assessments: list[UnitAssessment] = []
     for unit in sorted(units, key=lambda u: (u.vendor, u.unit_type, u.unit_id)):
         snapshot = snapshots_by_unit.get(unit.unit_id)
+        parent_preflight_applied = bool(unit.parent_id and unit.parent_id in snapshot_unit_ids)
         checks, evidence, effective_mode = _evaluate_checks(
             unit, cp_ha_runtime=cp_runtime, pan_ha_runtime=pan_runtime, snapshot=snapshot,
+            parent_preflight_applied=parent_preflight_applied,
         )
         if snapshot is not None:
             applied.append(unit.unit_id)

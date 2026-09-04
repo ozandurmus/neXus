@@ -559,6 +559,33 @@ def test_23_vs_verdict_does_not_inherit_physical_parent_verdict():
     assert vs["evidence"]["basis"] == EVIDENCE_BASIS_STORED_TELEMETRY  # the physical snapshot never reached it
 
 
+def test_23b_vs_gets_honest_reason_when_its_physical_parent_has_fresh_evidence():
+    """S8-B VSX operator-review finding: after a real `--cp-ha-preflight-check`
+    on the VSX physical parent, its VS children (out of that battery's scope
+    -- B1 is enumeration only) must not read as though no preflight ever ran.
+    Same verdict/basis as test_23 -- only the reason text changes."""
+    report = cp_report(_vsx_snapshot(), rows=vsx_rows())
+    assert report["preflight"]["applied"] == [_CP_UNIT]
+    vs = unit(report, f"{_CP_UNIT}__vsid_2")
+    assert vs["verdict"] == VERDICT_INSUFFICIENT
+    assert vs["evidence"]["basis"] == EVIDENCE_BASIS_STORED_TELEMETRY
+    for check in vs["checks"]:
+        assert check["status"] == CHECK_INSUFFICIENT
+        assert check["reason"] == "vs_state_out_of_physical_scope_preflight_battery"
+        assert check["missing_evidence"]
+
+
+def test_23c_vs_keeps_legacy_reason_when_no_fresh_preflight_ran_at_all():
+    """Stored-telemetry-only path (no `preflight_snapshots` given): OP.0a
+    behavior is unchanged -- the new reason only replaces the legacy one when
+    THIS run's fresh evidence actually reached the VS's physical parent."""
+    report = compute_ha_readiness(vsx_rows())
+    vs = unit(report, f"{_CP_UNIT}__vsid_2")
+    reasons = {check["reason"] for check in vs["checks"]}
+    assert reasons <= {"not_evaluable_without_preflight_battery", "no_ha_runtime_evidence_for_unit"}
+    assert "vs_state_out_of_physical_scope_preflight_battery" not in reasons
+
+
 def test_24_no_vsls_behavior():
     for path in ("utils/failover/preflight_readiness.py", "utils/failover/assessment.py"):
         assert "vsls" not in _code_only(ROOT / path).lower()
