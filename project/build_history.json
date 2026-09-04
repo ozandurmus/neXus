@@ -3,6 +3,36 @@
   "record_contract": "One structured record per build, newest first. Required: build, status, title, summary (<= 2 sentences). Optional: started, completed, track, movement, supersedes, evidence, risks_forward, docs{agreement,validation,handover} (repo-relative paths under docs/history/). Full detail lives in the linked doc; do not restate it here. Status vocabulary must stay within utils/project_plan.py STATUS_VALUES.",
   "builds": [
     {
+      "build": "op0b_s8c_pan_dedicated_ha1_real_env_correction",
+      "status": "real_env_validated",
+      "title": "OP.0b S8-C - PAN dedicated-HA1 pairing correction, real-env validation, OP.0b read-only closure",
+      "summary": "The live S8-C PAN campaign found the pre-contact pairing gate ('configured HA1 peer-ip == peer management_ip') was circular for the approved real pair's dedicated-HA1 topology -- it refused contact before the P1/P2 evidence that could prove correspondence could ever be collected -- and corrected it: the preflight entrypoint now resolves a bounded candidate set from the explicit selector alone, contacts both candidates, and establishes fresh reciprocal management-plane correspondence from already-collected P1/P2 evidence afterward, never gating or promoting PAN B2. Real-env validated on the approved pair: 2/2 candidates, P1/P2/P4 all success, 5/7 checks PASS (2/7 correctly INSUFFICIENT_EVIDENCE by open policy/unconfigured feature), pair correspondence MATCH, B2 stays NOT ESTABLISHED; S8-A/S8-B''/S8-C now all REAL_ENV_VALIDATED, closing OP.0b's read-only S1-S8 scope (S9 UI-authority reconciliation explicitly still open).",
+      "started": "2026-09-04",
+      "completed": "2026-09-04",
+      "track": "OP.0b",
+      "movement": "IMPLEMENTATION",
+      "supersedes": "op0b_s8_real_env_validation (now_next.next placeholder; S8-A already PASS, S8-B'' already REAL_ENV_VALIDATED, S8-C closes here)",
+      "evidence": [
+        "Real-env diagnosis: --pan-ha-preflight-check refused contact pre-P1 with 'pair identity B2 remains unresolved'. The existing, previously-unexercised --pan-ha-peer-diagnostic opt-in flag (value-free, token-compared) confirmed symmetric HA1-vs-management-address non-match on both approved members -- dedicated HA1 topology, not misconfiguration.",
+        "Correction: application/workflows/preflight.py _resolve_pan_operational_entity resolves a bounded 2-candidate set only, no pre-contact pairing proof; utils/failover/assessment.py derive_ha_units/compute_ha_readiness gain pan_explicit_candidate_members, replacing (for this invocation's own report only) the two orphan single-member units with one explicit-candidate unit, pair_identity grade explicit_bounded_candidate_pending_correspondence -- never the stronger established_configuration_intent grade; _derive_pan_units's own fleet-wide stored-telemetry derivation is unchanged.",
+        "New evidence, no new command: configuration/panorama_config_collector.py parses the already-fetched P2 local-info/mgmt-ip + peer-info/mgmt-ip (real, confirmed field names) and best-effort group-id; panorama/preflight_collector.py carries the P1-dialed endpoint as a fact; utils/failover/preflight_readiness.py _pan_reciprocal_correspondence reports MATCH/MISMATCH/MISSING/NOT_EVALUABLE/AMBIGUOUS self- and reciprocal peer-management correspondence plus mode -- descriptive only, never gates a check, never PAN B2.",
+        "Same-session UI finding and fix: the additive candidate unit initially left the generated report showing three near-duplicate PAN rows for one bounded invocation; _apply_pan_explicit_candidate now replaces the two redundant single-member rows with the one candidate row.",
+        "REAL ENVIRONMENT (approved PAN pair, operator-executed, SAFE counts only): P1/P2/P4 success both members (facts=4/82/2); requested 2 / resolved 2 / extra 0; snapshot coherent; viable_target/state_sync_current/parity/no_split_brain/preemption_known PASS; control_sync_link_health INSUFFICIENT_EVIDENCE (path monitoring not configured, fail-closed correctly); flap_history INSUFFICIENT_EVIDENCE (D-F3 open); pair correspondence MATCH (self/reciprocal/mode all MATCH, group-id NOT_EVALUABLE); PAN B2 stays NOT ESTABLISHED.",
+        "Verified, no fix needed: group_running_sync_enabled was never consulted by the parity check predicate (real evidence showed one member Enabled:no / other Enabled:yes, both Running Configuration: synchronized).",
+        "Full serial suite 1681 passed / 26 skipped / 0 failed. Privacy gate PASS / 0 (one accidental real-address docstring literal from an earlier draft caught and fixed before merge -- never reached a device or persisted evidence). metadata_warnings == []. Detail: docs/history/phase/OP_0B_S8C_PAN_DEDICATED_HA1_REAL_ENV_CORRECTION.md."
+      ],
+      "risks_forward": [
+        "S9 (UI authority reconciliation -- static/inventory_ui.js, utils/merge.py, utils/config_ui.py client-side pairing/cluster-name/HA-vocabulary heuristics) remains NOT STARTED; confirmed by this session's own UI review, which found direct evidence of the confusion it causes. Recommended next dedicated movement -- see roadmap now_next.next.",
+        "PAN B2 (bidirectional serial corroboration) stays NOT ESTABLISHED; the manually-captured (non-runtime-authorized) show high-availability all evidence this session recorded appears to conflict with the earlier S0 MISMATCH finding (project/backlog.json pan_serial_representation_identity_evidence_closure) -- not reconciled, root cause still UNKNOWN.",
+        "D-V3a/D-V7b/D-F3 remain genuinely open CLASS-2-time blockers per the frozen contract; unaffected by this correction.",
+        "group-id correspondence stays best-effort (XML path unconfirmed by any official source); never gates the pair-correspondence result."
+      ],
+      "docs": {
+        "agreement": "docs/history/phase/OP_0B_S8C_PAN_DEDICATED_HA1_REAL_ENV_CORRECTION.md",
+        "validation": "docs/history/phase/OP_0B_S8C_PAN_DEDICATED_HA1_REAL_ENV_CORRECTION.md"
+      }
+    },
+    {
       "build": "op0b_s8a_clusterxl_execution_model_console_parity",
       "status": "real_env_validated",
       "title": "OP.0b S8-A - CP persistent Expert-shell execution model, real output shapes, and CLI/Operator-Console readiness parity (ClusterXL, real environment)",
