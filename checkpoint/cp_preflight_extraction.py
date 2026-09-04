@@ -345,22 +345,36 @@ def parse_cp_failover_history(stdout: str | None) -> dict[str, Any]:
 
 # --- CP-B1: `vsx stat -v` -- VSID enumeration (VSX battery only) ----------
 
-_VSID_ROW_RE = re.compile(r"(?im)^\s*VSID\s+(\d+)\s+\S+\s+(\S+)\s*$")
-_VS_STATUS_TOKENS = {"active", "standby", "down"}
+#: OP.0b S4-A' real-env correction: the previously assumed shape
+#: ("VSID <N> <name> <status>") was never vendor-confirmed (contract's own
+#: V9 row: "vsx stat -v status vocabulary UNKNOWN") and did not match the
+#: real device. The confirmed real `vsx stat -v` "Virtual Devices Status"
+#: table is a pipe-delimited table:
+#:
+#:      ID  | Type & Name             | Access Control Policy | ...
+#:     -----+-------------------------+-----------------------+----
+#:        1 | S LeasedLine            | ...
+#:        2 | S Extranet-VSX          | ...
+#:
+#: with NO per-device HA-status column at all -- "Type & Name" carries a
+#: leading type letter (S/B/R/W) then the name; the other columns are
+#: policy/SIC state, not HA state. So this read stays exactly what the
+#: frozen gate CP-B1 always said it was -- VSID enumeration only, no status
+#: -- and the fictional status token this parser previously extracted is
+#: removed rather than reinterpreted as something it never was.
+_VSID_ROW_RE = re.compile(r"(?m)^\s*(\d+)\s*\|\s*[SBRW]\s+\S")
 
 
 def parse_vsx_stat_v(stdout: str | None) -> dict[str, Any]:
-    """Minimum safe VS enumeration evidence: VSID + a bounded status enum
-    per row. VS *names* are never retained (gate CP-B1 "Safe retained
-    fields"). A device-reported `Unknown` status stays unclassified here --
-    the projection layer turns that into `FactState.UNKNOWN`, never an
-    inferred healthy/unhealthy state (sk178589, gate CP-B1)."""
+    """Minimum safe VS enumeration evidence: VSID only, per row of the
+    "Virtual Devices Status" table. VS *names* are never retained (gate
+    CP-B1 "Safe retained fields") -- the name column is matched (so the ID
+    column is unambiguously anchored to a real device row, not a header or
+    separator line) but never captured into a group."""
     text = str(stdout or "")
     rows: list[dict[str, str | None]] = []
     for match in _VSID_ROW_RE.finditer(text):
-        vsid, status_token = match.group(1), match.group(2).strip().lower()
-        status = status_token if status_token in _VS_STATUS_TOKENS else None
-        rows.append({"vsid": vsid, "status": status})
+        rows.append({"vsid": match.group(1), "status": None})
     return {"observed": bool(rows), "vs_rows": rows}
 
 

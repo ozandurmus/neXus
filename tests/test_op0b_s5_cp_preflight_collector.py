@@ -74,13 +74,21 @@ _HAPPY = {
     CPPreflightRead.A8_EXPERT_FAILOVER: (
         "Failover count: 2\nReason: cpstop\nLast failover time: 3 hours ago"
     ),
-    CPPreflightRead.B1_VSX_STAT: "VSID 0    VS0        Active\nVSID 1    Finance    Standby",
+    # Real device shape (S8-B' real-env evidence, 2026-09-04): a
+    # pipe-delimited "Virtual Devices Status" table, no per-device status
+    # column -- see `checkpoint/cp_preflight_extraction.py::parse_vsx_stat_v`.
+    CPPreflightRead.B1_VSX_STAT: (
+        " ID  | Type & Name             | Access Control Policy | Installed at    | Threat Prevention Policy | SIC Stat\n"
+        "-----+-------------------------+-----------------------+-----------------+--------------------------+---------\n"
+        "   1 | S LeasedLine            | FW-CKP-LeasedLine_P...|  3Sep2026 22:40 | <No Policy>              | Trust\n"
+        "   2 | S Extranet-VSX          | ExtranetPol_2010062...|  3Sep2026 22:39 | <No Policy>              | Trust\n"
+    ),
 }
 
 _MISSING_FIELDS = {read: "" for read in CPPreflightRead}
 _UNKNOWN_VALUES = {
     CPPreflightRead.A6_SYNCSTAT: "Sync Status: Purple Elephant",
-    CPPreflightRead.B1_VSX_STAT: "VSID 3    Weird      Purple",
+    CPPreflightRead.B1_VSX_STAT: " ID  | Type & Name\n-----+-------------\nNo virtual devices configured\n",
 }
 _MALFORMED = {
     CPPreflightRead.A4_LINK_IF: "this is not a table\nrandom noise",
@@ -468,15 +476,20 @@ def test_39_no_fw_ctl_set_int_vsid_path_exists():
     assert "fw ctl set int vsid" not in source.lower()
 
 
-def test_40_conflicting_subordinate_evidence_remains_unknown_compatible():
+def test_40_empty_vsx_table_yields_unknown_compatible_count():
+    """OP.0b S4-A' real-env correction: `vsx stat -v` carries no per-device
+    status column (see `parse_vsx_stat_v`), so there is no per-VSID status
+    fact to leave UNKNOWN any more -- an empty/unparseable table now leaves
+    only `cp_vsx_vs_count` UNKNOWN, never fabricated or KNOWN_BAD."""
     parsed = parse_vsx_stat_v(_UNKNOWN_VALUES[CPPreflightRead.B1_VSX_STAT])
+    assert parsed["observed"] is False
     facts = project_cp_vsx_enumeration_facts(
         parsed, preflight_run_id="run-1", collected_at="2026-09-03T00:00:00Z",
         physical_device_identity="member-a", operational_entity_id="entity-1",
     )
-    status_fact = next(f for f in facts if f.name == "cp_vsx_vs_3_status")
-    assert status_fact.state == FactState.UNKNOWN
-    assert status_fact.value is None
+    count_fact = next(f for f in facts if f.name == "cp_vsx_vs_count")
+    assert count_fact.state == FactState.UNKNOWN
+    assert count_fact.value is None
 
 
 # =====================================================================

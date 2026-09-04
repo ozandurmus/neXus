@@ -28,6 +28,7 @@ just another entry in the same member's fixed schedule, run over the same
 """
 from __future__ import annotations
 
+import dataclasses
 import re
 import time
 import uuid
@@ -97,6 +98,7 @@ __all__ = [
     "make_real_member_session",
     "collect_member",
     "enumerated_vsids",
+    "shared_facts_for_vs_units",
     "collect_member_vsx_per_vs",
     "run_cp_preflight",
 ]
@@ -607,6 +609,7 @@ def collect_member(
         b1_at = _utc_now()
         b1_result = session.run(CPPreflightRead.B1_VSX_STAT)
         b1_parsed = parse_vsx_stat_v(str(b1_result.get("stdout") or "")) if b1_result.get("success") else None
+        _report_unparsed_layout("B1 vsx stat -v", b1_result, b1_parsed)
         own_facts.extend(
             project_cp_vsx_enumeration_facts(
                 b1_parsed, preflight_run_id=preflight_run_id, collected_at=b1_at,
@@ -641,43 +644,106 @@ def enumerated_vsids(member_evidence: PreflightMemberEvidence) -> list[str]:
     return sorted(found, key=int)
 
 
+#: Physical/shared facts (collected once, VS0, by `collect_member`'s
+#: A1+A2/A2/A4/A5) that a VS unit is explicitly authorized to consume
+#: unchanged (task S8-B'' §8/§13). Never re-collected per VSID, never
+#: relabelled into `context=vsid(N)` -- only `operational_entity_id` is
+#: remapped so the canonical evaluator can attribute them to the VS unit's
+#: snapshot; `context`, `physical_device_identity` and the fact's own
+#: value/state are untouched, so this is provenance-honest reuse of a real,
+#: already-collected reading, never a fabricated per-VS fact.
+#: `cp_identity_gate_accepted` is included because it gates every other
+#: fact's admissibility (`_member_views`'s `identity_gate`); a VS "member"
+#: is the same physical device the gate already verified, not a separate
+#: identity to re-prove.
+#:
+#: Deliberately excluded: `cp_failover_count`/`cp_failover_last_*` (A8 is
+#: Clish-based and its per-VS applicability is unestablished, D-V5b; `D-F3`
+#: blocks `flap_history` regardless) and `ha_cluster_mode` (a VS unit's own
+#: mode comes from its own per-VS `cphaprob stat` read, C1 -- never copied
+#: from the physical unit).
+_SHARED_FACT_NAMES_FOR_VS = frozenset({
+    "cp_identity_gate_accepted",
+    "cp_software_version",
+    "cp_link_any_down", "cp_link_interface_count",
+    "cp_pnote_any_problem", "cp_pnote_device_count",
+})
+
+
+def shared_facts_for_vs_units(member_evidence: PreflightMemberEvidence) -> tuple[PreflightFact, ...]:
+    """The subset of `member_evidence.own_facts` a VS unit may consume as
+    explicitly-authorized shared physical evidence (task S8-B'' §8/§13).
+    Read back from facts `collect_member` already produced -- no new read,
+    no re-derivation."""
+    return tuple(f for f in member_evidence.own_facts if f.name in _SHARED_FACT_NAMES_FOR_VS)
+
+
+def _remap_shared_fact(fact: PreflightFact, vs_unit_id: str) -> PreflightFact:
+    """Reattribute one already-collected shared fact to a VS unit's
+    operational identity. `context` stays exactly what it was (physical) --
+    task §8: "Do NOT relabel it: context = vsid(N) if it was collected in
+    VS0/physical context" -- only `operational_entity_id` changes, which is
+    what lets `_attribution_problems` accept it as belonging to this
+    snapshot without pretending the read happened inside the VS."""
+    return dataclasses.replace(fact, provenance=dataclasses.replace(fact.provenance, operational_entity_id=vs_unit_id))
+
+
 def collect_member_vsx_per_vs(
     session: MemberSession,
     *,
     vsids: Sequence[str],
     physical_operational_entity_id: str,
     preflight_run_id: str,
+    shared_facts: Sequence[PreflightFact] = (),
     transport: Transport = Transport.SSH_DIRECT,
 ) -> dict[str, PreflightMemberEvidence]:
     """For one already-battery-collected physical member, on the SAME
-    already-open `MemberSession` (still in VS0), collect the minimum per-VS
-    readiness slice (gate CP-C0/CP-C1, task S4-A'): verified `vsenv <N>` ->
-    `cphaprob stat` -> verified `vsenv 0`, for each VSID in `vsids`, in
-    order.
+    already-open `MemberSession` (still in VS0), collect the per-VS
+    readiness slice (gate CP-C0/CP-C1/C2/C3, task S8-B''): verified
+    `vsenv <N>` -> `cphaprob stat` (C1, reuses A3) -> `cphaprob syncstat` /
+    `fw ctl pstat` (C2, reuses this member's already-resolved A6 form) ->
+    `fw stat` (C3, reuses A7) -> verified `vsenv 0`, for each VSID in
+    `vsids`, in order. No new command family -- every read here is one of
+    the already-approved A3/A6/A7 families, issued a second time inside a
+    verified VS context (task §9/§31).
+
+    Deliberately NOT re-issued per VS (task §9/§10/§15): `A1`/`A2`
+    (identity/version -- physical), `A4` `cphaprob -a if` (sk93341: Bond
+    reads `Down` in any VS context -- unreliable per-VS, so
+    `control_sync_link_health` consumes the SHARED physical A4 facts
+    instead, via `shared_facts`), `A5` `cphaprob -ia list` (VSX global
+    pnotes are VS0-registered per the frozen gate -- `viable_target`
+    consumes the SHARED physical A5 fact instead), `A8` (Clish-based,
+    unestablished per-VS scope, `D-F3` blocks `flap_history` regardless).
 
     A VSID whose `vsenv <N>` switch is not verified contributes **no**
     evidence for this member -- never misattributed to VS0 or to a
     different VSID (task §6/§8). If the `vsenv 0` restore after a VSID's
-    read fails to verify, every remaining VSID in `vsids` is skipped for
+    reads fails to verify, every remaining VSID in `vsids` is skipped for
     this member (task §6): the session is left in an unproven context and
     this function refuses to guess it back to VS0 before the next read.
 
-    Per task §5/§9: only the per-VS role/mode/attention facts
-    (`project_cp_preflight_facts`, the same parser `A3` already uses) are
-    collected here -- no per-VS link/sync/policy/failover-history read is
-    added. `local_role`/`local_member_attention` are matched by the `(local)`
+    `local_role`/`local_member_attention` are matched by the `(local)`
     marker only (`observed_hostname=None`): passing the *physical* hostname
     into a VS-context buffer was the real-env defect §26 CP-4 named, and
     this function does not repeat it.
 
     Returns `{vsid: PreflightMemberEvidence}` for exactly the VSIDs this
-    member actually produced verified evidence for; a skipped/unverified
+    member actually entered a verified context for; a skipped/unverified
     VSID is simply absent -- the caller assembles each VS unit's snapshot
     from however many members actually contributed, same as any other
     partial-attribution case the canonical evaluator already handles.
     """
     physical_device_identity = session.physical_device_identity
     results: dict[str, PreflightMemberEvidence] = {}
+
+    def _outcome(result: dict) -> Outcome:
+        if result.get("success"):
+            return Outcome.SUCCESS
+        if classify_execution_context_gap(str(result.get("command_text") or ""), result):
+            return Outcome.CAPABILITY_GAP
+        return Outcome.FAILED
+
     for vsid in vsids:
         if session.current_vsid != "0":
             # A prior vsenv-0 restore never verified -- `current_vsid` still
@@ -691,6 +757,9 @@ def collect_member_vsx_per_vs(
             continue  # switch unverified: no read issued, no fact produced
         ctx = FactContext.vsid(vsid)
         vs_unit_id = f"{physical_operational_entity_id}__vsid_{vsid}"
+        own_facts: list[PreflightFact] = []
+
+        # C1 (reuses A3): role / cluster mode / attention.
         stat_at = _utc_now()
         stat_result = session.run(CPPreflightRead.A3_CPHAPROB_STAT)
         stat_stdout = str(stat_result.get("stdout") or "")
@@ -700,19 +769,60 @@ def collect_member_vsx_per_vs(
                 "local_role": _parse_clusterxl_runtime_role(stat_stdout, None),
                 "cluster_mode": _parse_clusterxl_cluster_mode(stat_stdout),
             }
-            outcome = Outcome.SUCCESS
         else:
             fields = None
-            outcome = (
-                Outcome.CAPABILITY_GAP
-                if classify_execution_context_gap(str(stat_result.get("command_text") or ""), stat_result)
-                else Outcome.FAILED
-            )
-        results[vsid] = project_cp_preflight_facts(
-            fields, preflight_run_id=preflight_run_id, collected_at=stat_at,
-            physical_device_identity=physical_device_identity, operational_entity_id=vs_unit_id,
-            transport=transport, context=ctx, outcome=outcome, source_command="C1",
+        own_facts.extend(
+            project_cp_preflight_facts(
+                fields, preflight_run_id=preflight_run_id, collected_at=stat_at,
+                physical_device_identity=physical_device_identity, operational_entity_id=vs_unit_id,
+                transport=transport, context=ctx, outcome=_outcome(stat_result), source_command="C1",
+            ).own_facts
         )
+
+        # C2 (reuses A6, this member's already-resolved form -- never
+        # re-resolved per VS): state/session sync.
+        if session.a6_form is not None:
+            a6_at = _utc_now()
+            a6_result = session.run(session.a6_form)
+            a6_parsed = parse_cp_sync_status(str(a6_result.get("stdout") or "")) if a6_result.get("success") else None
+            own_facts.extend(
+                project_cp_sync_facts(
+                    a6_parsed, preflight_run_id=preflight_run_id, collected_at=a6_at,
+                    physical_device_identity=physical_device_identity, operational_entity_id=vs_unit_id,
+                    transport=transport, context=ctx, dispatch_form=session.a6_form.value,
+                    outcome=_outcome(a6_result),
+                )
+            )
+        else:
+            own_facts.extend(
+                project_cp_sync_facts(
+                    None, preflight_run_id=preflight_run_id, collected_at=_utc_now(),
+                    physical_device_identity=physical_device_identity, operational_entity_id=vs_unit_id,
+                    transport=transport, context=ctx, dispatch_form=None,
+                )
+            )
+
+        # C3 (reuses A7): installed policy identity, per VS.
+        a7_at = _utc_now()
+        a7_result = session.run(CPPreflightRead.A7_FW_STAT)
+        a7_parsed = parse_fw_stat_policy(str(a7_result.get("stdout") or "")) if a7_result.get("success") else None
+        own_facts.extend(
+            project_cp_policy_facts(
+                a7_parsed, preflight_run_id=preflight_run_id, collected_at=a7_at,
+                physical_device_identity=physical_device_identity, operational_entity_id=vs_unit_id,
+                transport=transport, context=ctx, outcome=_outcome(a7_result),
+            )
+        )
+
+        # Explicitly authorized shared physical facts (task §8/§13) --
+        # reattributed to this VS unit, never relabelled as VS-context.
+        own_facts.extend(_remap_shared_fact(f, vs_unit_id) for f in shared_facts)
+
+        results[vsid] = PreflightMemberEvidence(
+            physical_device_identity=OpaqueToken(physical_device_identity),
+            own_facts=tuple(own_facts), peer_claim_facts=(),
+        )
+
         session.run_vsenv("0")
         if not session.context_verified:
             break  # restore unverified: no further VSIDs on this member
@@ -752,17 +862,24 @@ def run_cp_preflight(
     dataclass this module returns carries no coherence field of its own and
     this module adds none, per the file-boundary constraint of this build.
 
-    OP.0b S4-A' (VSLS real-env finding): when `unit_type == "vsx"`, this
-    function ALSO collects the per-VS slice (gate CP-C0/CP-C1) for every
-    VSID `B1` enumerated on ANY member, capped at
+    OP.0b S8-B'' (VSLS real-env finding, completing S4-A'): when
+    `unit_type == "vsx"`, this function ALSO collects the per-VS slice
+    (gate CP-C0/C1/C2/C3 -- `cphaprob stat` + this member's already-resolved
+    `A6` sync form + `fw stat`, no new command family) for every VSID `B1`
+    enumerated on ANY member, capped at
     `cp_preflight_battery.MAX_VS_SCOPES_PER_PREFLIGHT` -- on the SAME
     already-open session as that member's physical battery, never a second
-    connection. The result is attached to the returned physical snapshot's
-    `subordinate_snapshots`, one `PreflightSnapshot` per VSID, sharing this
-    same `preflight_run_id`. A VSID a member never verified a context switch
-    for simply has fewer members in its snapshot -- never a guessed member,
-    never a fabricated fact. Every existing non-VSX caller is unaffected:
-    `subordinate_snapshots` stays empty.
+    connection. Each VS unit's evidence additionally carries the explicitly
+    authorized shared physical facts (`shared_facts_for_vs_units`) that
+    `parity`/`control_sync_link_health`/`viable_target` need and that a
+    per-VS read cannot reliably reproduce (software version; `cphaprob -a if`
+    link health, sk93341 caveat; `cphaprob -ia list` pnotes, VS0-registered
+    per the frozen gate). The result is attached to the returned physical
+    snapshot's `subordinate_snapshots`, one `PreflightSnapshot` per VSID,
+    sharing this same `preflight_run_id`. A VSID a member never verified a
+    context switch for simply has fewer members in its snapshot -- never a
+    guessed member, never a fabricated fact. Every existing non-VSX caller
+    is unaffected: `subordinate_snapshots` stays empty.
 
     Trust policy (PO override, 2026-09-03 -- see `OP_0B_1_COMMAND_GATE_PACKAGE.md`
     "PO override — development trust mode"): ``strict_host_key`` defaults to
@@ -829,6 +946,7 @@ def run_cp_preflight(
                     vsids=vs_scope,
                     physical_operational_entity_id=operational_entity_id,
                     preflight_run_id=preflight_run_id,
+                    shared_facts=shared_facts_for_vs_units(member_ev),
                 )
                 for vsid, evidence in per_vs.items():
                     vs_evidence_by_vsid.setdefault(vsid, []).append(evidence)

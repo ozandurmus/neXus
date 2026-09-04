@@ -581,7 +581,119 @@ session_architecture.py`'s guards were unaffected (device-executed-command
 checks, not source-text checks). Full suite: 1667 passed, 24 skipped, 0
 failed. Privacy gate: PASS, 0 findings. `git diff --check`: clean.
 
-**Not implemented (deliberately, per the PO's own hard-stop list):** any
-per-VS A4/A5/A6/A7/A8 read; the B1-status-column reclassification (D-V11
-unconfirmed); any CLASS 2 amendment, adapter, or management-plane primitive;
-PAN S8-C (still paused).
+**Not implemented in this slice (deliberately, per the PO's own hard-stop
+list at the time):** any per-VS A4/A5/A6/A7/A8 read; the B1-status-column
+reclassification (D-V11 unconfirmed); any CLASS 2 amendment, adapter, or
+management-plane primitive; PAN S8-C (still paused).
+
+---
+
+## S8-B'' implementation record (2026-09-04, movement `IMPLEMENTATION`,
+## completing S4-A' per direct PO instruction)
+
+The S4-A' rerun found two real defects and one real gap, in order:
+
+1. **B1 parser wrong shape, not a mode wrong-token.** Real `vsx stat -v` on
+   this estate is a pipe-delimited "Virtual Devices Status" table (`ID |
+   Type & Name | Access Control Policy | Installed at | Threat Prevention
+   Policy | SIC Stat`) with **no per-device HA-status column at all** --
+   the previously assumed `"VSID <N> <name> <status>"` shape was never
+   vendor-confirmed (V9: "UNKNOWN") and matched nothing real, so B1 silently
+   enumerated zero VSIDs both times S8-B' ran, and no per-VS collection ever
+   triggered despite the mode fix working correctly. `parse_vsx_stat_v`
+   (`checkpoint/cp_preflight_extraction.py`) now anchors on the real
+   `ID | S <name>` row shape, extracting the VSID only (still no VS name
+   retained, gate CP-B1 unchanged). `collect_member`'s B1 call site also
+   gained the `_report_unparsed_layout` value-free diagnostic every other
+   read already had -- it was the one approved read missing it, which is
+   why this shape mismatch produced silence instead of a diagnostic line.
+2. **The operator manually confirmed the missing piece live**, pasting real
+   `vsenv 1`/`vsenv 2`/`vsenv 0` transcripts: the prompt does change to
+   `[Expert@host:N]#`, and `cphaprob stat` inside each VS context returns
+   the exact same parseable shape (`Cluster Mode: Virtual System Load
+   Sharing (Active Up)`, `<N> (local) ... ACTIVE/STANDBY ...`) as the
+   physical read -- proving the CP-C0/C1 mechanism end-to-end on real
+   hardware, independent of the B1 fix.
+3. **The per-VS battery was too narrow for a correct table, not just a
+   PASS-only table.** S4-A' deliberately collected only C1 (`cphaprob
+   stat`); `viable_target`'s own frozen `FACT_CHECK_MAP` entry also needs
+   `cp_pnote_any_problem`, and `parity`/`control_sync_link_health` need
+   facts C1 never produces at all. The PO's S8-B'' instruction authorized
+   completing this with already-approved command families reused in a
+   verified VS context (no new command family) plus an explicit
+   composition rule for facts that are genuinely physical/shared.
+
+**Shipped, on top of S4-A':**
+
+- `checkpoint/cp_preflight_extraction.py::parse_vsx_stat_v` -- rewritten for
+  the real pipe-table shape (`_VSID_ROW_RE = r"(?m)^\s*(\d+)\s*\|\s*[SBRW]\s+\S"`).
+  `checkpoint/preflight_collector.py::collect_member` -- B1 now calls
+  `_report_unparsed_layout`.
+- `collect_member_vsx_per_vs` extended: per VSID, after a verified `vsenv
+  <N>`, now runs **C1** (`cphaprob stat`, reuses `A3`) → **C2** (`cphaprob
+  syncstat`/`fw ctl pstat`, reuses this member's already-resolved `A6`
+  form -- never re-resolved per VS) → **C3** (`fw stat`, reuses `A7`) →
+  verified `vsenv 0`. No new `CPPreflightRead` member, no new
+  `COMMAND_TEXT` entry -- three already-approved wire commands, issued a
+  second time inside a verified context.
+- New `shared_facts_for_vs_units(member_evidence)` / `_remap_shared_fact`:
+  the physical member's `cp_identity_gate_accepted`, `cp_software_version`,
+  `cp_link_any_down`, `cp_link_interface_count`, `cp_pnote_any_problem`,
+  `cp_pnote_device_count` facts -- collected once, VS0, by the existing
+  A1+A2/A2/A4/A5 reads -- are reattributed (operational_entity_id only,
+  `context` stays `physical`) into each VS unit's snapshot. Judgment calls,
+  with vendor reasons: `cphaprob -a if` per-VS is sk93341-unreliable (Bond
+  reads `Down` in any VS context) so `control_sync_link_health` consumes
+  the SHARED physical A4 facts, never a per-VS A4 read; `cphaprob -ia list`
+  pnotes are VS0-registered per the frozen gate text, so `viable_target`
+  consumes the SHARED physical A5 fact rather than a redundant per-VS A5
+  attempt; `cp_identity_gate_accepted` is included because it gates every
+  other fact's admissibility and a VS "member" is the same physical device
+  already gated, not a separate identity. Excluded: `cp_failover_count`
+  family (A8 is Clish, per-VS scope unestablished, D-F3 blocks the check
+  regardless) and `ha_cluster_mode` (a VS unit gets its own, genuine,
+  per-VS mode from its own C1 read -- confirmed real: the operator's manual
+  `vsenv`+`cphaprob stat` transcripts show the same `Virtual System Load
+  Sharing` line inside each VS context, so no fabrication was needed to
+  satisfy task §21's "do not imply VSLS mode is unknown / do not fabricate
+  a per-VS mode fact").
+- No `assessment.py`/`preflight_readiness.py` evaluator change (again) --
+  the composed snapshot is a plain `PreflightSnapshot`; the existing
+  fact→check mapping (`FACT_CHECK_MAP`) evaluates it exactly as it would
+  any other unit's evidence.
+
+**Result, proven by `test_end_to_end_vs_unit_readiness_uses_per_vs_plus_shared_evidence`
+(builds real snapshots via `run_cp_preflight` over a fully mocked SSH/shell,
+then runs them through the real `compute_ha_readiness`):** a VS unit now
+reaches **five real PASSes** -- `viable_target`, `state_sync_current`,
+`parity`, `no_split_brain`, `control_sync_link_health` -- matching the
+physical parent's own real S8-B result check-for-check. `preemption_known`
+(D-V7b) and `flap_history` (D-F3) stay `INSUFFICIENT_EVIDENCE` regardless of
+evidence quality, so the unit verdict stays `INSUFFICIENT_EVIDENCE` --
+never `SAFE_TO_FAILOVER` (contract P4 untouched). The generic
+`vs_state_out_of_physical_scope_preflight_battery` reason is structurally
+absent once a VS unit's own snapshot exists (that branch only fires when
+`snapshot is None` for the unit) -- proven by explicit assertion, not
+inspection.
+
+**Real operation budget** (2-member, 2-VSID pair, matching the approved
+pair): physical battery unchanged at 9 reads/member (A1,A2,A3,A4,A5,A6-form,
+A7,A8-form,B1). Per VSID: `vsenv <N>` + C1 + C2 + C3 + `vsenv 0` = 5
+commands (2 context transitions, 3 reads). Two VSIDs: 10 commands/member (4
+transitions, 6 reads). **Total 19 commands/member, 38 for the pair** -- one
+SSH transport/member, one Expert shell/member, unchanged; 0.3s pacing
+unchanged; `NO_RETRY` unchanged.
+
+**Tests:** `tests/test_op0b_s4a_vsls_per_vs.py` grew from 34 to 37 (fixed
+three low-level fixtures to script the new C3 `fw stat` call; added the
+full end-to-end readiness proof above and the B1 unparsed-layout diagnostic
+coverage). `tests/test_op0b_s5_cp_preflight_collector.py`'s B1 fixtures
+rewritten to the real pipe-table shape (`test_40` renamed/reworked -- there
+is no per-device status token to leave `UNKNOWN` any more, only the
+`cp_vsx_vs_count` fact when the table is empty/unparseable). One full
+regression at this completion point: 1670 passed, 24 skipped, 0 failed.
+Privacy gate: PASS, 0 findings. `git diff --check`: clean.
+
+**Still not implemented (unchanged hard-stop boundary):** any CLASS 2
+amendment, adapter, or management-plane primitive; any command beyond
+`vsenv` + the already-approved A3/A6/A7 families; PAN S8-C (still paused).
