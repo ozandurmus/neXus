@@ -493,7 +493,8 @@
         "configurable (default on)"
       ],
       "recommendation": "configurable, default on - mandatory can block a legitimate emergency; the audit record + OPERATE role are the hard controls.",
-      "decide_by": "OP.2 contract freeze"
+      "decide_by": "deployment/release policy before the OP.2.D pilot (not OP.2.0 architecture freeze)",
+      "note": "Rebased from 'OP.2 contract freeze' on 2026-09-04, not resolved. PO classification 2026-09-04: NOT an OP.2.0 architecture freeze blocker -- the architecture provides one approval_policy boundary in the confirmation gate (second approver, role combinations, maintenance window, change reference are its inputs); whether production requires one approver, two, or a role combination is a deployment/release policy decision. No generic quorum framework is built. Initial implementation: one confirmation by the requesting operator, no configuration surface. See docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md P5."
     },
     {
       "id": "op_degraded_verdict",
@@ -506,7 +507,7 @@
       ],
       "recommendation": "SAFE / UNSAFE / INSUFFICIENT only in v1; add DEGRADED once the battery is validated against real clusters.",
       "decide_by": "OP.1 contract freeze",
-      "note": "Rebased from 'OP.0 contract freeze' on 2026-09-01, not resolved. The OP.0a contract (docs/history/phase/OP_0A_HA_READINESS_ASSESSMENT.md, decision P4) reserves DEGRADED_PROCEED_WITH_RISK in the frozen verdict enum but makes it structurally unreachable, along with SAFE_TO_FAILOVER, because OP.0a has evidence for only part of the design-doc section 4 stop-condition set. The decision therefore does not block OP.0a and is owed before OP.1 compiles a plan against the verdict."
+      "note": "Rebased from 'OP.0 contract freeze' on 2026-09-01, not resolved. The OP.0a contract (docs/history/phase/OP_0A_HA_READINESS_ASSESSMENT.md, decision P4) reserves DEGRADED_PROCEED_WITH_RISK in the frozen verdict enum but makes it structurally unreachable, along with SAFE_TO_FAILOVER, because OP.0a has evidence for only part of the design-doc section 4 stop-condition set. The decision therefore does not block OP.0a and is owed before OP.1 compiles a plan against the verdict. PO classification 2026-09-04: a readiness-layer decision, not coupled to the OP.2.0 CLASS 2 architecture freeze -- OP.2.0 consumes only the currently authoritative eligibility outcomes of the readiness authority and needs no change when this is decided."
     },
     {
       "id": "op_emergency_evac",
@@ -518,7 +519,8 @@
         "defer to OP.3"
       ],
       "recommendation": "defer to OP.3 - OP.2 proves the planned-maintenance path first; emergency reuses it with a reduced-but-not-skipped preflight.",
-      "decide_by": "OP.2 contract freeze"
+      "decide_by": "OP.3 scoping (not OP.2.0 architecture freeze)",
+      "note": "Rebased from 'OP.2 contract freeze' on 2026-09-04, not resolved. PO classification 2026-09-04: NOT an OP.2.0 architecture freeze blocker -- the initial CLASS 2 architecture has NO emergency bypass: no path bypasses authorization, fresh preflight, confirmation or the operational lock. A future emergency capability requires its own explicit contract and approval. See docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md 'Scope -- out'."
     },
     {
       "id": "op_aa_vsls_scope",
@@ -530,19 +532,21 @@
         "deferred (OP.0 still assesses them)"
       ],
       "recommendation": "deferred - OP.2 covers CP ClusterXL HA and PAN A/P (the common cases); A/A and VSLS are a later adapter. OP.0/OP.1 assess and plan for them regardless.",
-      "decide_by": "OP.2 contract freeze"
+      "decide_by": "OP.3 scoping (not OP.2.0 architecture freeze)",
+      "note": "Rebased from 'OP.2 contract freeze' on 2026-09-04, not resolved. PO classification 2026-09-04: NOT an OP.2.0 architecture freeze blocker -- Active/Active and VSLS semantics are outside the initial CLASS 2 scope; no VSLS assumption may enter the initial CP ClusterXL adapter (OP.2.C). OP.0 still assesses them. See docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md 'Identity invariants'."
     },
     {
       "id": "op_continuity_tolerance",
-      "area": "OP.2 auto-rollback",
+      "area": "OP.2 post-action verification",
       "status": "open",
-      "question": "Session/connection continuity tolerance that triggers auto-rollback: fixed defaults, or operator-tunable per run?",
+      "question": "Session/connection continuity tolerance for post-action verification: fixed defaults, or operator-tunable per run? (Originally framed as the auto-rollback trigger; auto-rollback was removed by op_reversal_model on 2026-09-04, so the tolerance now bears only on whether a continuity observation can carry a verdict or a warning.)",
       "options": [
         "fixed default (e.g. sessions preserved >= ~90%, zero split-brain)",
         "operator-tunable per run within bounds"
       ],
-      "recommendation": "fixed conservative default in v1 (sessions >= ~90%, zero split-brain, sync resumed); make it tunable-within-bounds only after real-cluster calibration.",
-      "decide_by": "OP.2 contract freeze"
+      "recommendation": "Fixed conservative default once real-cluster calibration exists (sessions preserved >= ~90%, zero split-brain, sync resumed); tunable-within-bounds only after that. Until decided, continuity observations are recorded on the action record and are not verdict-bearing; no numeric tolerance is invented; nothing they show triggers any action.",
+      "decide_by": "OP.2.D pilot calibration, before any continuity observation becomes verdict-bearing (not OP.2.0 architecture freeze)",
+      "note": "Rebased from 'OP.2 contract freeze' on 2026-09-04, not resolved. PO classification 2026-09-04: NOT an OP.2.0 architecture freeze blocker -- continuity observations are recorded but not independently verdict-bearing; SUCCEEDED_WITH_WARNINGS was removed from the OP.2.0 state set until this is decided. See docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md 'Post-action verification'."
     },
     {
       "id": "C-D1",
@@ -826,26 +830,30 @@
     {
       "id": "op_reversal_model",
       "area": "OP.2 Controlled Failover Execution",
-      "status": "open",
+      "status": "decided",
       "question": "Reported contradiction inside the design parent, raised per AGENTS.md 'Authority hierarchy' rather than silently reconciled. FAILOVER_ENGINE_ARCHITECTURE.md sections 5/7/8 require automatic rollback on a failed or partial transition (and section 6 defines a FAILED_ROLLED_BACK outcome); section 10.1 items 5-7 require explicit human confirmation per action, exactly one action per authorised run, and UNKNOWN as a first-class outcome that is never a reason to re-issue. An automatic rollback fires precisely when the entity's state is unverified, so it is a second CLASS 2 mutation, unconfirmed, against an unknown state. Which text governs?",
       "options": [
         "Reversal is a NEW typed CLASS 2 action (own authorization, fresh preflight, confirmation, lock, single submission, verification, audit); automatic rollback and FAILED_ROLLED_BACK are removed from the model",
         "Keep automatic rollback as designed in sections 5/7/8 and narrow section 10.1 items 5-7 accordingly"
       ],
-      "recommendation": "Reversal as a new typed action. The situation an auto-rollback exists to handle is the situation in which the postcondition is unknown, and issuing an unconfirmed second mutation against an unknown state is the worst available action; section 10.1 is also the later, explicitly dated safety contract and is the one the frozen OP.0b.0 CLASS 2 handoff cites. Drafted as principle P12 of docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md (DRAFT -- DO NOT FREEZE).",
-      "decide_by": "OP.2.0 contract freeze"
+      "recommendation": "Reversal as a new typed action. The situation an auto-rollback exists to handle is the situation in which the postcondition is unknown, and issuing an unconfirmed second mutation against an unknown state is the worst available action; section 10.1 is also the later, explicitly dated safety contract and is the one the frozen OP.0b.0 CLASS 2 handoff cites. Drafted as principle P12 of docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md (reviewed 2026-09-04).",
+      "decide_by": "OP.2.0 contract freeze",
+      "decision": "Reversal/failback is a NEW typed CLASS 2 action: new authorization, fresh same-workflow preflight, new confirmation, HA-entity lock, one new mutation attempt, independent post-action verification, independent audit record. No automatic rollback for HA failover; FAILED_ROLLED_BACK is not a state. FAILOVER_ENGINE_ARCHITECTURE.md section 10.2 records the supersession of its sections 1-8 auto-rollback wording.",
+      "decided_on": "2026-09-04"
     },
     {
       "id": "op_outcome_unknown_recovery",
       "area": "OP.2 Controlled Failover Execution",
-      "status": "open",
+      "status": "decided",
       "question": "What happens to an operational HA entity after a CLASS 2 action terminates OUTCOME_UNKNOWN (mutation boundary crossed, postcondition not independently determinable -- including the process-crash-after-submission case, which the product cannot distinguish from a transport timeout after submission)? FAILOVER_ENGINE_ARCHITECTURE.md section 10.1 item 7 makes UNKNOWN first-class but does not say what the entity's subsequent state is, and console/jobs.py's existing crash sweep resolves an orphaned running record to 'failed' -- correct for a class 0 collection, and the single most dangerous possible answer for a class 2 action, since it asserts the mutation did not happen from evidence that only proves the process died.",
       "options": [
         "Quarantine the HA entity against further CLASS 2 actions until an explicit audited operator acknowledgement; class 0 reads stay permitted; terminal state is never rewritten by a later observation",
         "Allow a new CLASS 2 action once a fresh preflight returns a positive verdict, with no acknowledgement step"
       ],
-      "recommendation": "Quarantine until acknowledged. A green readiness verdict answers 'is the entity safe to act on', not 'did my previous action execute', and letting the first silently clear the second is how a double failover happens. A later class 0 observation appends to the action record and never rewrites its terminal state. Drafted as principle P10 of docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md (DRAFT -- DO NOT FREEZE).",
-      "decide_by": "OP.2.0 contract freeze"
+      "recommendation": "Quarantine until acknowledged. A green readiness verdict answers 'is the entity safe to act on', not 'did my previous action execute', and letting the first silently clear the second is how a double failover happens. A later class 0 observation appends to the action record and never rewrites its terminal state. Drafted as principle P10 of docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md (reviewed 2026-09-04).",
+      "decide_by": "OP.2.0 contract freeze",
+      "decision": "Quarantine until acknowledged. After the mutation boundary is crossed, process death, worker death, transport timeout or a lost response is OUTCOME_UNKNOWN -- never merely FAILED -- unless independent evidence proves a more specific terminal outcome. The entity stays quarantined (a derived predicate over the unacknowledged OUTCOME_UNKNOWN action record, not a lock or entity state) until an explicit, authorized, audited operator acknowledgement; class 0 reads stay permitted; a later observation appends and never rewrites the terminal state. Class 0's sweep_orphaned_running -> failed stays valid for class 0 only; CLASS 2 does not inherit it.",
+      "decided_on": "2026-09-04"
     }
   ]
 }
