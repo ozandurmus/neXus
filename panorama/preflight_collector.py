@@ -43,11 +43,13 @@ from configuration.panorama_config_collector import (
     get_direct_system_info,
     get_firewall_api_key,
     fix_host,
+    tokenize_pan_management_address,
 )
 from panorama.pan_preflight_battery import COMMAND_TEXT, PANPreflightRead, build_member_schedule
 from panorama.pan_preflight_extraction import parse_pan_path_monitoring
 from panorama.pan_preflight_projection import (
     project_pan_identity_fact,
+    project_pan_management_endpoint_fact,
     project_pan_path_monitoring_facts,
     project_pan_preflight_facts,
 )
@@ -192,6 +194,20 @@ def collect_member(
             physical_device_identity=OpaqueToken(target.physical_device_identity),
             own_facts=tuple(own_facts), peer_claim_facts=(),
         )
+
+    # OP.0b S8-C real-env correction: the endpoint P1 just independently
+    # dialed and identity-gated for THIS member -- an in-memory value already
+    # held, tokenized (never a new read, never a raw address) so
+    # `_pan_reciprocal_correspondence` can compare it against P2's own
+    # `mgmt-ip` self-report and the OTHER member's peer-claim below.
+    own_facts.append(
+        project_pan_management_endpoint_fact(
+            tokenize_pan_management_address(target.management_ip),
+            preflight_run_id=preflight_run_id, collected_at=p1_at,
+            physical_device_identity=target.physical_device_identity,
+            operational_entity_id=operational_entity_id, transport=transport,
+        )
+    )
 
     # P2: HA state -- existing S2 extraction/projection seam, unchanged.
     p2_at = _utc_now()
