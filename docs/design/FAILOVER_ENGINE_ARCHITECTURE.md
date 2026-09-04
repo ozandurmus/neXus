@@ -1,6 +1,11 @@
 # Failover Engine — Architecture (design, not yet buildable)
 
 **Status:** DESIGN / roadmap. Not implemented. No code. Gated — see §10.
+**Reconciliation (2026-09-04):** §10.2 records the product-owner decisions
+that supersede the automatic-rollback, `FAILED_ROLLED_BACK`, freshness-window,
+execution-module-layout and per-VS-unit statements in §1–§8 and §10.1 for
+`OP.2`. Where §1–§8 and §10.2 disagree, §10.2 governs; the earlier text is
+kept as design history, not rewritten.
 **Movement when picked up:** `ARCHITECTURE` (high reasoning) → contract freeze → phased implementation.
 **Owner concept:** a controlled-failover capability for admins and Service
 Control Center (SCC) personnel — the tool's first `OPERATE` capability.
@@ -52,6 +57,9 @@ A safe operator failover is five phases:
                resumed; dataplane forwarding; management reachable; alarms
                clear. Emit an immutable audit record.
 ```
+
+*Phase 4's "auto-rollback on a failed transition" is superseded — §10.2
+(2026-09-04): reversal is a new confirmed action, never automatic.*
 
 The dangerous failure modes this structure exists to prevent: failing over to a
 member that cannot carry traffic (link down, critical device/pnote down,
@@ -156,6 +164,7 @@ require explicit acceptance.
 - `UNSAFE` preflight = hard stop (not operator-overridable in v1).
 - Every action: snapshot-before → act → poll-for-expected-transition(timeout) →
   snapshot-after → compare → auto-rollback on a failed/partial transition.
+  *("auto-rollback" superseded — §10.2.)*
 - Emergency "evacuate a failing member" is a **separate, still-gated** path with
   a reduced-but-not-skipped preflight (it still must confirm a target exists
   that can carry traffic).
@@ -189,6 +198,8 @@ acceptance required) · `UNSAFE_DO_NOT_FAILOVER` · `INSUFFICIENT_EVIDENCE`.
 ## 5. Best failover approach
 
 **Graceful, active-initiated, single-step, re-assessed, auto-rollback.**
+*("auto-rollback", and the numeric continuity default below, are superseded
+— §10.2, 2026-09-04.)*
 
 - CP: `clusterXL_admin down [-p]` on the active. PAN: `request high-availability
   state suspend` on the active.
@@ -218,6 +229,9 @@ Read-only, the VERIFY plane on the new topology:
 
 `FailoverOutcome`: `SUCCESS` · `SUCCESS_WITH_WARNINGS` · `FAILED_ROLLED_BACK` ·
 `FAILED_MANUAL_INTERVENTION_REQUIRED` (paged).
+*(Superseded — §10.2: the `OP.2.0` terminal set is `SUCCEEDED` ·
+`FAILED_NO_CHANGE` · `OUTCOME_UNKNOWN` plus the pre-mutation terminals;
+`FAILED_ROLLED_BACK` and `SUCCESS_WITH_WARNINGS` are not states.)*
 
 ---
 
@@ -259,7 +273,7 @@ utils/failover/
    next action; **no** multi-cluster scripting.
 4. Only the currently-active device is acted on. Only the graceful primitive.
 5. Snapshot → act → poll(timeout) → verify → auto-rollback on failure; a failed
-   rollback pages and stops.
+   rollback pages and stops. *("auto-rollback" superseded — §10.2.)*
 6. Per-cluster lock via the coordinator; a failover and a collection never run
    on the same cluster at once.
 7. Maintenance-window gate for "planned"; emergency path is separate and still
@@ -359,6 +373,8 @@ condition, not a warning:
    collected immediately before execution, inside a declared freshness window;
    exceeding it fails closed. Stale topology, unknown active/standby state and
    unknown preemption configuration are each independently disqualifying.
+   *("declared freshness window" superseded — §10.2: freshness is
+   structural, same-workflow, with no numeric TTL.)*
 4. **Locking.** A per-**HA-entity** lock, held across preflight → act → verify.
    The coordinator's existing lock is per-*endpoint*, which is not the same
    grain: two members of one cluster are two endpoints. Closing that gap is
@@ -386,6 +402,33 @@ that absence, so an executor cannot appear ahead of this gate.
 
 Open decisions for the OP.x approval review are tracked in
 `project/roadmap.json` → `open_decisions`; §11 restates them.
+
+### 10.2 Reconciliation with `OP.2.0` — product-owner decisions, 2026-09-04
+
+`docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md` is the
+vendor-independent CLASS 2 architecture contract for `OP.2`. Its drafting
+pass reported (per `AGENTS.md` "Authority hierarchy") that this document
+contradicted itself and its own §10.1, and its independent challenge review
+found further conflicts. The product owner resolved them on 2026-09-04. For
+`OP.2` the following now governs; the earlier paragraphs stay as history:
+
+| Earlier statement (kept as history) | Governs now |
+| --- | --- |
+| §1, §2 phase 4, §3.3, §5, §8 item 5: "auto-rollback on a failed/partial transition"; §7 `plan.py` compiles "the rollback command" | **No automatic rollback for HA failover.** Reversal/failback is a **new typed CLASS 2 action** with its own authorization, fresh same-workflow preflight, confirmation, HA-entity lock, single mutation attempt, independent verification and independent audit record (`op_reversal_model`, decided). An `OP.2.1` gate row for the reversal primitive is still required; it is simply used by a second confirmed action, never issued automatically. |
+| §6 `FailoverOutcome.FAILED_ROLLED_BACK`, `SUCCESS_WITH_WARNINGS` | Not states. `OP.2.0` terminals: `NOT_ELIGIBLE`, `ABORTED_PRE_MUTATION`, `CANCELLED`, `SUCCEEDED`, `FAILED_NO_CHANGE`, `OUTCOME_UNKNOWN`. `FAILED_MANUAL_INTERVENTION_REQUIRED` maps to `OUTCOME_UNKNOWN` + entity quarantine until acknowledged (`op_outcome_unknown_recovery`, decided). |
+| §5 "post-action session/connection delta beyond a configurable tolerance (default ≥ ~90%) triggers auto-rollback"; §6 continuity row | Continuity observations are **recorded, not verdict-bearing**, until `op_continuity_tolerance` is decided; no numeric tolerance is invented; nothing they show triggers any action. |
+| §10.1 item 3 "inside a declared freshness window; exceeding it fails closed" | Freshness is **structural**: eligibility consumes only a preflight generated inside the same action workflow; no persisted snapshot, no historical readiness, no numeric TTL (`D-F1` avoided, not solved). |
+| §10.1 item 7 `UNKNOWN` first-class; C2-5's class 0 sweep `running → failed` on console restart | For CLASS 2, process/worker death, transport timeout or lost response **after the mutation boundary** is `OUTCOME_UNKNOWN`, never merely `FAILED`, and the entity stays quarantined until an authorized, audited acknowledgement. The class 0 sweep stays correct for class 0 and is **not** universal. |
+| §7 module layout: `utils/failover/plan.py`, `executor.py`, `verification.py`, `audit.py`, `adapters/` | `utils/failover/` keeps its test-enforced read-only allowlist. The execution plane is a **new package `utils/operate/`** with its own convergence assertions; adapters appear only at `OP.2.C`. |
+| §7 "extended to a per-cluster lock"; §8 item 6 | The HA-entity lock is the durable action record's per-entity uniqueness rule, held from creation to terminal (and, for `OUTCOME_UNKNOWN`, to acknowledgement); the existing per-endpoint coordinator admission is taken per device-contact stage, never across the human confirmation wait. |
+| §7/§8 item 1 "feature flag *and* `OPERATE` role *and* per-action token"; §7 "second approver … configurable"; §8 item 7 maintenance-window gate | One fail-closed `authorize()` boundary (unconditional `DENY` until `DEPLOY.1A`) replaces the feature flag; the digest-bound confirmation replaces the per-action token; second approver, maintenance window and change reference are inputs of one `approval_policy` boundary whose production content is **deployment/release policy** (`op_four_eyes`), not a generic quorum framework and not an architecture freeze blocker. |
+| §3.1 VSX "*N* logical failover units (one per VS) plus the physical unit"; per-VS adapter | Outside the initial CLASS 2 scope with Active/Active (`op_aa_vsls_scope`, `OP.3`). The VSX operational failover unit is the **physical cluster parent**; VSIDs are subordinate contexts, never an execution target or lock subject; no VSLS assumption enters the initial CP adapter. |
+| §3.3 / §8 item 7 emergency path "separate, still-gated" | The initial CLASS 2 architecture has **no emergency bypass**; a future emergency capability requires its own contract and approval (`op_emergency_evac`, `OP.3`). |
+| §10 `OP.2` = both vendors' adapters | **Check Point classic ClusterXL is the first and only initial pilot** (`OP.2.C`/`OP.2.D`); VSX follows after S8-B and its own prerequisites; PAN is `OP.3` and remains blocked by `B2` NOT ESTABLISHED, `D-V3a` and a non-frozen pair identity. |
+
+Everything else in §10/§10.1 stands unchanged, including every hard
+prerequisite and the organizational change-management review before any
+mutation capability exists.
 
 ---
 

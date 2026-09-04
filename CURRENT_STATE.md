@@ -15,6 +15,10 @@ generated one-line timeline.
   (PO-accepted); S8-B VSX / S8-C PAN NOT EXECUTED, operator-run.
   `cp_remote_collection_done_marker_diagnostics` stays `now_next.upcoming`
   (`IN_PROGRESS`).
+- **OP.2.0 CLASS 2 architecture** (`docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md`):
+  `DRAFT`, independent review complete 2026-09-04, **READY FOR PO FREEZE**
+  — not frozen, not a build, CLASS 2 still has **no member**. Two `op_*`
+  decisions decided, five reclassified; `FAILOVER_ENGINE_ARCHITECTURE.md` §10.2.
 - **Product baseline:** `0.7.7 — Compliance trend retro-fill` — AUTOMATED_VALIDATED.
 - **Engineering baseline:** `DEV.3.3` — AUTOMATED_VALIDATED. `DEV.1`,
   `DEV.4` complete.
@@ -80,8 +84,7 @@ recurrence report with the new diagnostic fields is available. Detail:
 `project/build_history.json`.
 
 **Predecessors:** `op0b_s75_preflight_entrypoint` through
-`op0b_s1_preflight_fact_provenance_model` — all AUTOMATED_VALIDATED.
-Detail: `project/build_history.json`.
+`op0b_s1_preflight_fact_provenance_model` — AUTOMATED_VALIDATED; `project/build_history.json`.
 
 ## `OP.0b.0` — FROZEN WITH REAL-ENV VALIDATION GATES
 
@@ -142,7 +145,7 @@ both vendors). **C.** PAN serial identity closure — hardware-blocked.
 | PAN HA serial `B2` establishment | the mismatching member's root cause is `UNKNOWN` (see above) — do not resolve as a side effect of an unrelated build | investigation + hardware |
 | `CON.3` console operational-write actions | open decisions `C-D4`, `C-D6` **and** `RB.3b` | decision + hardware |
 | `RB.3b` CP Gaia backup collection | the watched real R81.10/R81.20 run — hardware, not engineering | hardware |
-| `OP.2` controlled failover execution | every `FAILOVER_ENGINE_ARCHITECTURE.md` §10 prerequisite, incl. `DEPLOY.1A` OIDC + an RBAC `OPERATE` role | multiple |
+| `OP.2` controlled failover execution | PO freeze of `OP.2.0` (reviewed, ready), then every `FAILOVER_ENGINE_ARCHITECTURE.md` §10 prerequisite incl. `DEPLOY.1A` OIDC + `OPERATE` role | decision + multiple |
 | `DEPLOY.1` gates | server availability (external) | external |
 | `inventory_exclusions_management_ui_backend` | stays `in_progress` **by design** — do not wire its write functions into any HTTP-reachable surface before `DEPLOY.1A`'s OIDC/RBAC boundary exists | design |
 
@@ -175,18 +178,14 @@ Repository privacy gate: PASS / 0 findings, clean checkout.
 Project-state consistency: metadata_warnings == [] under all cross-authority rules.
 ```
 
-Run one-shot and read from file: `py -m pytest -q > pytest_result.log 2>&1`.
-
-**Run the suite serially at least once before closing a build.** A green
-parallel run is not evidence of an isolated suite. Delete gitignored
-`data/`/`logs/` before the privacy gate — a test run recreates them and the
-gate flags them.
+Run one-shot and read from file: `py -m pytest -q > pytest_result.log 2>&1`;
+serially at least once before closing a build; delete gitignored
+`data/`/`logs/` before the privacy gate (`AI_START_HERE.md` "Validation ladder").
 
 ## Known xfails
 
-None currently known. (Two previously tracked — VSX network
-canonicalization, PAN default-route classification — converted to passing
-regressions in `0.6.6A`; record here if either resurfaces.)
+None currently known (the two tracked earlier became passing regressions in
+`0.6.6A`; record here if either resurfaces).
 
 ## Production posture
 

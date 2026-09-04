@@ -1226,7 +1226,7 @@
       "status": "planned",
       "introduced": "OP.2",
       "weight": 8,
-      "summary": "The single write-capable component: one authorised action with snapshot / poll / verify / auto-rollback, full audit, and per-vendor adapters. Hard-gated.",
+      "summary": "The single write-capable component: one authorised, confirmed action with fresh same-workflow preflight, independent post-action verification, no automatic rollback (reversal is a new confirmed action), OUTCOME_UNKNOWN quarantine, full audit, and per-vendor adapters. Hard-gated.",
       "why": "The payoff of a trustworthy SEE/VERIFY/TRACE/RECOVER stack; the tool's first OPERATE capability.",
       "criteria": [
         {
@@ -1236,8 +1236,8 @@
           "weight": 1
         },
         {
-          "id": "snapshot_verify_autorollback",
-          "label": "Snapshot -> act -> poll(timeout) -> verify -> auto-rollback",
+          "id": "preflight_act_verify_no_autorollback",
+          "label": "Fresh preflight -> guarded single submission -> independent verify; no automatic rollback; OUTCOME_UNKNOWN quarantines",
           "state": "pending",
           "weight": 1
         },
