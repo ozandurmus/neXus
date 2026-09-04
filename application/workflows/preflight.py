@@ -145,6 +145,55 @@ def _print_safe_result(report: dict, *, operational_unit_id: str, vendor: str, m
         print(f"  {check.get('id', ''):<24} {check.get('status', ''):<22} {check.get('reason', '')}{missing}")
 
 
+def _publish_fresh_readiness(ctx, report: dict, *, mode: str) -> Path:
+    """Regenerate the operator report from the SAME canonical readiness record
+    the CLI summary just printed (OP.0b S7.5 console closure).
+
+    Product invariant: one fresh collection, one canonical S7 evaluation, one
+    readiness result, two renderers. `report` is passed through untouched --
+    `run_html_export` projects it and evaluates nothing, so for the selected
+    unit CLI status/reason and report status/reason are the same object.
+
+    The `PreflightSnapshot` itself stays invocation-scoped and in memory:
+    nothing here persists it, caches it, or gives it a lifetime beyond this
+    call. The generated report is an evaluation artifact of this invocation.
+    Every other report path is untouched and keeps its stored-telemetry
+    basis -- report generation never contacts a device; only this explicit
+    preflight did, and only once, above.
+    """
+    from application.services import _workflow_context
+    from utils.html_export import run_html_export
+
+    runtime_paths = ctx.runtime_paths
+    services = ctx.services
+    output_root = Path(runtime_paths.output_root)
+    output_html = output_root / "index.html"
+    run_html_export(
+        config_result=_load_output_json("pan_config_telemetry.json", output_root),
+        checkpoint_config_result=_load_output_json("cp_config_telemetry.json", output_root),
+        workflow_context=_workflow_context(mode),
+        unified_json=output_root / "unified.json",
+        output_html=output_html,
+        repository_root=runtime_paths.repository_root,
+        data_root=runtime_paths.data_root,
+        lifecycle_store=getattr(services, "lifecycle_store", None),
+        capability_store=getattr(services, "capability_store", None),
+        coordinator=getattr(services, "coordinator", None),
+        scheduler_policy=getattr(services, "scheduler_policy", None),
+        failover_readiness_report=report,
+    )
+    print(f"\nOperator report regenerated from this invocation's readiness: {output_html}")
+    return output_html
+
+
+def _load_output_json(name: str, output_root):
+    path = Path(output_root) / name
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+
+
 # --- Check Point (S5) -------------------------------------------------------
 
 def _resolve_cp_operational_entity(output_root, requested: list[str]):
@@ -273,6 +322,7 @@ def cp_ha_preflight_check(ctx):
     _print_safe_result(
         report, operational_unit_id=operational_entity_id, vendor="checkpoint", member_count=len(members),
     )
+    _publish_fresh_readiness(ctx, report, mode="cp-ha-preflight-check")
     return 0
 
 
@@ -398,4 +448,5 @@ def pan_ha_preflight_check(ctx):
     _print_safe_result(
         report, operational_unit_id=operational_entity_id, vendor="panorama", member_count=len(members),
     )
+    _publish_fresh_readiness(ctx, report, mode="pan-ha-preflight-check")
     return 0

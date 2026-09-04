@@ -122,6 +122,8 @@ def _workflow_context(mode, *, run_id=None):
         "vsx": "VSX only",
         "cp": "Check Point physical only",
         "cp-config": "Check Point configuration only",
+        "cp-ha-preflight-check": "Check Point HA preflight (fresh readiness)",
+        "pan-ha-preflight-check": "Palo Alto HA preflight (fresh readiness)",
     }
     reused = {
         "checkpoint": [],
@@ -130,6 +132,8 @@ def _workflow_context(mode, *, run_id=None):
         "vsx": ["Check Point inventory", "PAN runtime", "PAN configuration/alignment"],
         "cp": ["VSX inventory", "PAN runtime", "PAN configuration/alignment", "Check Point configuration"],
         "cp-config": ["unified inventory", "PAN configuration/alignment"],
+        "cp-ha-preflight-check": ["unified inventory", "PAN configuration/alignment", "Check Point configuration"],
+        "pan-ha-preflight-check": ["unified inventory", "PAN configuration/alignment", "Check Point configuration"],
     }
     fresh = {
         "checkpoint": ["CP", "VSX", "Check Point configuration", "PAN runtime", "PAN configuration", "HTML"],
@@ -138,6 +142,8 @@ def _workflow_context(mode, *, run_id=None):
         "vsx": ["VSX", "merge", "HTML"],
         "cp": ["CP non-VSX", "merge", "HTML"],
         "cp-config": ["Check Point configuration", "HTML"],
+        "cp-ha-preflight-check": ["Check Point HA preflight reads", "HA readiness", "HTML"],
+        "pan-ha-preflight-check": ["Palo Alto HA preflight reads", "HA readiness", "HTML"],
     }
     return {
         "mode": mode,

@@ -166,6 +166,7 @@ def build_report_payloads(
     scheduler_policy=None,
     data_root=None,
     timings: list[tuple[str, float]] | None = None,
+    failover_readiness_report=None,
 ) -> dict:
     """Build the eight payload dicts the report embeds and the console (CON.1)
     serves at ``/api/payloads`` — ``rawData``, ``configUiData``,
@@ -258,11 +259,17 @@ def build_report_payloads(
     # OP.0c: pure projection over utils.failover.compute_ha_readiness, fed the
     # same already-loaded unified/config-telemetry data as every other
     # builder above -- no extra file read, no duplicated verdict logic.
+    # OP.0b S7.5 console closure: an explicit HA preflight invocation has
+    # already evaluated readiness once (fresh snapshot included) and passes
+    # that canonical record here; the projection then re-evaluates nothing.
+    # Every other caller leaves it None and gets the stored-telemetry basis
+    # exactly as before -- report generation never contacts a device.
     with _stage_timer(timings, "build_failover_readiness_payload"):
         failover_readiness_ui = build_failover_readiness_payload(
             data if isinstance(data, list) else None,
             checkpoint_config_result=checkpoint_config_result,
             config_result=config_result,
+            readiness_report=failover_readiness_report,
         )
 
     return {
@@ -293,6 +300,7 @@ def run_html_export(
     record_checkpoint=False,
     run_id=None,
     profile=None,
+    failover_readiness_report=None,
 ):
 
     info(">>> GENERATING HTML")
@@ -327,6 +335,7 @@ def run_html_export(
         scheduler_policy=scheduler_policy,
         data_root=data_root,
         timings=timings,
+        failover_readiness_report=failover_readiness_report,
     )
     data = payloads["rawData"]
     configuration_ui = payloads["configUiData"]

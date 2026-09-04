@@ -88,6 +88,18 @@ per member**, reusing the existing real-environment-validated
   the marker is read-only, stripped before any parser sees it, and
   test-enforced never to reach evidence. Framing is opt-in, so the
   established config-collection path is unchanged.
+- **Console parity (this movement)**: after an explicit HA preflight the
+  generated report showed the stored-telemetry reasons and `MODE = unknown`
+  for the very unit the CLI had just evaluated fresh. Closed by ONE seam:
+  the workflow evaluates once and hands that same `compute_ha_readiness`
+  record to both the CLI summary and `run_html_export(...,
+  failover_readiness_report=...)`; `build_failover_readiness_payload`
+  projects it and evaluates nothing (a snapshot alongside a finished record
+  is refused). `PreflightSnapshot` stays in memory -- no file, cache, TTL.
+  Normal reports are byte-for-byte unchanged. Boundary: the *live* console
+  (`console/payloads.py`, a separate process) cannot see an ephemeral
+  snapshot; the regenerated `index.html` from the same invocation is the
+  parity surface.
 - **#56** real-environment follow-ups. (a) **Pacing**: the battery runs
   correctly in one Expert shell but destabilizes the SSH session issued back
   to back, so reads are paced by one constant,
@@ -117,8 +129,8 @@ problem needing its own root cause.
 
 ## 5. Test delta
 
-- Full serial suite 1603 passed / 24 skipped / 0 failed (+135 over the S7.5
-  baseline of 1468/24/0), from eight new S8 regression files.
+- Full serial suite 1615 passed / 24 skipped / 0 failed at `d387bbf`; this
+  movement adds 12 parity tests (affected-suite run 399 passed / 2 skipped).
 - Privacy gate PASS/0; architecture convergence 19 passed; `git diff --check`
   clean.
 

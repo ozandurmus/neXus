@@ -278,9 +278,14 @@ class _SSHClient:
 # Real CLI-path driver
 # ---------------------------------------------------------------------------
 
+_REPO_ROOT = Path(__file__).resolve().parents[1]
+
+
 class _RuntimePaths:
     def __init__(self, root: Path):
-        self.repository_root = root
+        # Templates/static come from the real repository; every artifact
+        # written by the run lands in the temporary root.
+        self.repository_root = _REPO_ROOT
         self.runtime_root = root
         self.data_root = root / "data"
         self.output_root = root
@@ -348,6 +353,52 @@ def _drive_cli(tmp_path: Path, monkeypatch, capsys) -> tuple[_Device, str]:
 # ---------------------------------------------------------------------------
 # Session/transport invariants on the real path
 # ---------------------------------------------------------------------------
+
+def _embedded_readiness(html_path: Path) -> dict:
+    html = html_path.read_text(encoding="utf-8")
+    marker = "failoverReadinessData: "
+    payload, _ = json.JSONDecoder().raw_decode(html, html.index(marker) + len(marker))
+    return payload
+
+
+_CLI_CHECK_RE = re.compile(r"^\s{2}(\S+)\s+(\S+)\s+(\S+)")
+
+
+class TestOperatorReportParity:
+    """OP.0b S7.5 console closure on the REAL invocation path: the report the
+    preflight regenerates is a projection of the very record the CLI printed."""
+
+    def test_report_is_regenerated_from_the_same_invocation(self, tmp_path, monkeypatch, capsys):
+        _device, out = _drive_cli(tmp_path, monkeypatch, capsys)
+        assert "Operator report regenerated from this invocation's readiness" in out
+        assert (tmp_path / "index.html").exists()
+
+    def test_cli_and_report_agree_on_all_seven_checks_and_mode(self, tmp_path, monkeypatch, capsys):
+        _device, out = _drive_cli(tmp_path, monkeypatch, capsys)
+        # What the operator saw on the CLI, parsed from the safe summary.
+        cli: dict[str, tuple[str, str]] = {}
+        in_checks = False
+        for line in out.splitlines():
+            if line.strip() == "Checks:":
+                in_checks = True
+                continue
+            if in_checks:
+                m = _CLI_CHECK_RE.match(line)
+                if not m:
+                    if line.strip():
+                        in_checks = False
+                    continue
+                cli[m.group(1)] = (m.group(2), m.group(3))
+        assert len(cli) == 7, out
+        unit_id = re.search(r"Operational unit:\s+(\S+)", out).group(1)
+
+        payload = _embedded_readiness(tmp_path / "index.html")
+        unit = next(u for u in payload["units"] if u["unit_id"] == unit_id)
+        web = {c["id"]: (c["status"], c["reason"]) for c in unit["checks"]}
+        assert web == cli, "CLI and report must be the same record"
+        assert unit_id in payload["preflight"]["applied"]
+        assert unit["cluster_mode"] == "ha_new_mode", "fresh A3 mode, never legacy unknown"
+
 
 class TestRealCliPathSessionInvariants:
 
