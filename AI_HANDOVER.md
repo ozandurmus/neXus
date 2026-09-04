@@ -16,14 +16,17 @@ doc. Prior versions are in git history.
 
 ## 1. Snapshot
 
-- Date: 2026-09-04. `main` at `73a988d`. Build
+- Date: 2026-09-04. `main` at `d387bbf` + this branch. Build
   `op0b_s8_realenv_campaign_corrections` — `AUTOMATED_VALIDATED`.
-- The `OP.0b` S8 real-environment campaign ran S8-A three times against the
-  approved CP ClusterXL pair, surfaced and merged six corrections
-  (PRs #47–#50, #52–#54), corrected the CP **remote execution primitive**
-  (#55), and validated it on the real pair: S8-A retry returned 8/8 reads
-  `success`. #56 then paced the battery and fixed the A4/A5/A8 output
-  shapes. Awaiting the second S8-A retry.
+- **S8-A is PO-accepted as PASS** on the approved CP ClusterXL pair: 8/8
+  reads `success`, four checks PASS (`state_sync_current`, `parity`,
+  `no_split_brain`, `control_sync_link_health`), `flap_history` at its
+  authorized ceiling (`threshold_policy_unresolved:D-F3`), `preemption_known`
+  at D-V7b. One unexpected evidence gap remains: `viable_target` =
+  `unknown:cp_pnote_any_problem` (A5 has a third output shape; the #58
+  layout diagnostic will name it on the next run, value-free).
+- This branch closes the **CLI ≠ Operator Console** integration defect for
+  the same unit/invocation (see "Console parity" below).
 
 ## 2. Root cause of the S8-A read failures (settled)
 
@@ -88,6 +91,18 @@ per member**, reusing the existing real-environment-validated
   the marker is read-only, stripped before any parser sees it, and
   test-enforced never to reach evidence. Framing is opt-in, so the
   established config-collection path is unchanged.
+- **Console parity (this movement)**: after an explicit HA preflight the
+  generated report showed the stored-telemetry reasons and `MODE = unknown`
+  for the very unit the CLI had just evaluated fresh. Closed by ONE seam:
+  the workflow evaluates once and hands that same `compute_ha_readiness`
+  record to both the CLI summary and `run_html_export(...,
+  failover_readiness_report=...)`; `build_failover_readiness_payload`
+  projects it and evaluates nothing (a snapshot alongside a finished record
+  is refused). `PreflightSnapshot` stays in memory -- no file, cache, TTL.
+  Normal reports are byte-for-byte unchanged. Boundary: the *live* console
+  (`console/payloads.py`, a separate process) cannot see an ephemeral
+  snapshot; the regenerated `index.html` from the same invocation is the
+  parity surface.
 - **#56** real-environment follow-ups. (a) **Pacing**: the battery runs
   correctly in one Expert shell but destabilizes the SSH session issued back
   to back, so reads are paced by one constant,
@@ -101,15 +116,19 @@ per member**, reusing the existing real-environment-validated
 
 ## 4. Exact next action
 
-1. Retry S8-A unchanged (second retry, on `73a988d`):
-   `py .\main.py --cp-ha-preflight-check --cp-preflight-targets <A>,<B>`.
-   Report SAFE counts only. Expect reads still 8/8, ~0.3s spacing, a stable
-   SSH session, and `viable_target` / `control_sync_link_health` /
-   `flap_history` moving off `unknown:`.
-2. Then S8-B (VSX): `vsx stat -v` and any `vsenv` transition run in that
-   same Expert shell, same 0.3s pacing, no reconnect per VSID.
-3. Then S8-C (PAN), untouched by this change (HTTPS API, no shell); no PAN
-   pacing unless PAN evidence shows a need. `Sonnet 5, normal`.
+1. Real ClusterXL **parity check**: rerun
+   `py .\main.py --cp-ha-preflight-check --cp-preflight-targets <A>,<B>`
+   and open the `index.html` it regenerates. Expect the unit's seven checks
+   and mode in the report to equal the CLI summary exactly (four PASS,
+   D-V7b, D-F3, and `viable_target` identical), MODE the fresh ClusterXL
+   mode, never legacy `unknown`. The log line `A5 cphaprob -ia list:
+   executed but produced no usable evidence; observed layout: ...` gives the
+   value-free shape needed to close the pnote gap — fix that parser then.
+2. Then S8-B (VSX): `vsx stat -v` and any `vsenv` transition in the same
+   Expert shell, same 0.3s pacing, no reconnect per VSID — validate BOTH
+   fresh backend readiness and report parity through the same seam.
+3. Then S8-C (PAN): same seam, no PAN pacing unless PAN evidence shows a
+   need. `Sonnet 5, normal`.
 
 If the SSH session still drops at 0.3s spacing: **stop.** Do not tune the
 delay upward by trial and error — that is a transport/session stability
@@ -117,8 +136,8 @@ problem needing its own root cause.
 
 ## 5. Test delta
 
-- Full serial suite 1603 passed / 24 skipped / 0 failed (+135 over the S7.5
-  baseline of 1468/24/0), from eight new S8 regression files.
+- Full serial suite 1615 passed / 24 skipped / 0 failed at `d387bbf`; this
+  movement adds 12 parity tests (affected-suite run 399 passed / 2 skipped).
 - Privacy gate PASS/0; architecture convergence 19 passed; `git diff --check`
   clean.
 
