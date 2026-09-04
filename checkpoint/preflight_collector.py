@@ -28,6 +28,7 @@ just another entry in the same member's fixed schedule, run over the same
 """
 from __future__ import annotations
 
+import re
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -36,6 +37,7 @@ from typing import Callable, Mapping, Sequence
 
 from checkpoint.cp_preflight_battery import (
     COMMAND_TEXT,
+    MAX_VS_SCOPES_PER_PREFLIGHT,
     CPPreflightRead,
     resolve_a6_form,
     resolve_a8_form,
@@ -94,12 +96,19 @@ __all__ = [
     "CPPreflightCollectionError",
     "make_real_member_session",
     "collect_member",
+    "enumerated_vsids",
+    "collect_member_vsx_per_vs",
     "run_cp_preflight",
 ]
 
 #: Bounded, caller-selected physical members only -- one ClusterXL/VSX pair.
 #: No fleet-wide, first-N, or implicit expansion (task S5 §5/§18/§27 test 33).
 MAX_PHYSICAL_MEMBERS = 2
+
+#: `vsenv`'s one variable argument, numeric-validated before it ever reaches
+#: the device (gate CP-C0, task S4-A). "0" restores VS0; bounded length
+#: guards against a pathological argument, not a real VSID-magnitude limit.
+_VSID_RE = re.compile(r"^[0-9]{1,6}$")
 
 
 class CPPreflightCollectionError(RuntimeError):
@@ -242,6 +251,16 @@ class MemberSession:
     #: Bookkeeping that makes the once-only invariants observable/testable.
     execution_context_resolutions: int = field(default=0, init=False)
     command_invocations: int = field(default=0, init=False)
+    #: OP.0b S4-A' (VSLS): this session's current VS context -- "0" is VS0,
+    #: the context the physical battery always runs in and the value every
+    #: session starts at. Only `run_vsenv` ever changes it, and only on a
+    #: verified switch (`context_verified`).
+    current_vsid: str = field(default="0", init=False)
+    #: True once the last `run_vsenv` call was itself verified (exit status
+    #: 0 -- see `run_vsenv`'s docstring for why exit status, not prompt
+    #: shape, is the authoritative signal here). Starts True: a fresh
+    #: session is trivially "in VS0" without having issued a switch.
+    context_verified: bool = field(default=True, init=False)
 
     def run(self, read: CPPreflightRead) -> dict:
         command_text = COMMAND_TEXT[read]
@@ -258,6 +277,41 @@ class MemberSession:
         # classification never has to re-resolve or guess it.
         if isinstance(result, dict):
             result = {**result, "command_text": command_text}
+        return result
+
+    def run_vsenv(self, vsid: str) -> dict:
+        """Context-switch primitive: `vsenv <vsid>` on this member's already-
+        open Expert shell (gate CP-C0, task S4-A). `vsid` must be a bounded
+        numeric string (`"0"` restores VS0); anything else raises before any
+        device contact -- there is no caller-supplied free text path here,
+        matching `run`'s own invariant that command text is never built from
+        caller input.
+
+        **Verification is by exit status, not prompt shape** -- the same
+        authority model `InteractiveSshSession.run`'s own docstring already
+        states for every other command ("Prompt shape is never used to
+        decide... command success remains the capability evidence"): a
+        framed `vsenv` either completes with exit status 0 (the switch
+        happened) or it does not. `current_vsid` is updated, and
+        `context_verified` set `True`, only on that positive signal;
+        otherwise `context_verified` is `False` and `current_vsid` is left
+        exactly where it was. The caller (`collect_member_vsx_per_vs`) MUST
+        check `context_verified` after every call and must never issue or
+        attribute a read when it is `False` (task S4-A §6: no cross-VS fact
+        leakage, no attribution on an unverified switch)."""
+        vs_id = str(vsid).strip()
+        if not _VSID_RE.match(vs_id):
+            raise ValueError(f"run_vsenv: invalid VSID {vsid!r}")
+        command_text = f"vsenv {vs_id}"
+        if self.command_invocations and self._sleep is not None:
+            self._sleep(INTER_COMMAND_DELAY_SECONDS)
+        self.command_invocations += 1
+        result = self._run_command(command_text)
+        if isinstance(result, dict):
+            result = {**result, "command_text": command_text}
+        self.context_verified = bool(isinstance(result, dict) and result.get("success"))
+        if self.context_verified:
+            self.current_vsid = vs_id
         return result
 
     def resolve_execution_context(
@@ -567,6 +621,104 @@ def collect_member(
     )
 
 
+_VS_STATUS_FACT_RE = re.compile(r"^cp_vsx_vs_(\d+)_status$")
+
+
+def enumerated_vsids(member_evidence: PreflightMemberEvidence) -> list[str]:
+    """The subordinate VSIDs `collect_member`'s `B1` phase enumerated for
+    this member, read back from the facts it already produced
+    (`cp_vsx_vs_<N>_status`) -- never a second parse of raw output, never a
+    second command. VSID `"0"` is excluded: `vsx stat -v` lists VS0 itself
+    as one row, but VS0 IS the physical context the member's own A1-A8
+    battery already ran in -- `vsenv 0` into it would be a context switch
+    to where the session already is, not a subordinate unit. Numeric order,
+    deterministic (task S4-A §7)."""
+    found: set[str] = set()
+    for fact in member_evidence.own_facts:
+        match = _VS_STATUS_FACT_RE.match(fact.name)
+        if match and match.group(1) != "0":
+            found.add(match.group(1))
+    return sorted(found, key=int)
+
+
+def collect_member_vsx_per_vs(
+    session: MemberSession,
+    *,
+    vsids: Sequence[str],
+    physical_operational_entity_id: str,
+    preflight_run_id: str,
+    transport: Transport = Transport.SSH_DIRECT,
+) -> dict[str, PreflightMemberEvidence]:
+    """For one already-battery-collected physical member, on the SAME
+    already-open `MemberSession` (still in VS0), collect the minimum per-VS
+    readiness slice (gate CP-C0/CP-C1, task S4-A'): verified `vsenv <N>` ->
+    `cphaprob stat` -> verified `vsenv 0`, for each VSID in `vsids`, in
+    order.
+
+    A VSID whose `vsenv <N>` switch is not verified contributes **no**
+    evidence for this member -- never misattributed to VS0 or to a
+    different VSID (task §6/§8). If the `vsenv 0` restore after a VSID's
+    read fails to verify, every remaining VSID in `vsids` is skipped for
+    this member (task §6): the session is left in an unproven context and
+    this function refuses to guess it back to VS0 before the next read.
+
+    Per task §5/§9: only the per-VS role/mode/attention facts
+    (`project_cp_preflight_facts`, the same parser `A3` already uses) are
+    collected here -- no per-VS link/sync/policy/failover-history read is
+    added. `local_role`/`local_member_attention` are matched by the `(local)`
+    marker only (`observed_hostname=None`): passing the *physical* hostname
+    into a VS-context buffer was the real-env defect §26 CP-4 named, and
+    this function does not repeat it.
+
+    Returns `{vsid: PreflightMemberEvidence}` for exactly the VSIDs this
+    member actually produced verified evidence for; a skipped/unverified
+    VSID is simply absent -- the caller assembles each VS unit's snapshot
+    from however many members actually contributed, same as any other
+    partial-attribution case the canonical evaluator already handles.
+    """
+    physical_device_identity = session.physical_device_identity
+    results: dict[str, PreflightMemberEvidence] = {}
+    for vsid in vsids:
+        if session.current_vsid != "0":
+            # A prior vsenv-0 restore never verified -- `current_vsid` still
+            # names wherever the last verified switch left the session, not
+            # "0". Stop attempting further VSIDs rather than guess the
+            # context; an unverified ENTER (below) leaves `current_vsid` at
+            # "0" untouched and is not this case.
+            break
+        session.run_vsenv(vsid)
+        if not session.context_verified:
+            continue  # switch unverified: no read issued, no fact produced
+        ctx = FactContext.vsid(vsid)
+        vs_unit_id = f"{physical_operational_entity_id}__vsid_{vsid}"
+        stat_at = _utc_now()
+        stat_result = session.run(CPPreflightRead.A3_CPHAPROB_STAT)
+        stat_stdout = str(stat_result.get("stdout") or "")
+        if stat_result.get("success"):
+            fields = {
+                **_parse_clusterxl_stat_preflight_fields(stat_stdout, None),
+                "local_role": _parse_clusterxl_runtime_role(stat_stdout, None),
+                "cluster_mode": _parse_clusterxl_cluster_mode(stat_stdout),
+            }
+            outcome = Outcome.SUCCESS
+        else:
+            fields = None
+            outcome = (
+                Outcome.CAPABILITY_GAP
+                if classify_execution_context_gap(str(stat_result.get("command_text") or ""), stat_result)
+                else Outcome.FAILED
+            )
+        results[vsid] = project_cp_preflight_facts(
+            fields, preflight_run_id=preflight_run_id, collected_at=stat_at,
+            physical_device_identity=physical_device_identity, operational_entity_id=vs_unit_id,
+            transport=transport, context=ctx, outcome=outcome, source_command="C1",
+        )
+        session.run_vsenv("0")
+        if not session.context_verified:
+            break  # restore unverified: no further VSIDs on this member
+    return results
+
+
 @dataclass(frozen=True)
 class CPPhysicalMemberTarget:
     """One caller-selected physical member of the operational HA entity.
@@ -600,6 +752,18 @@ def run_cp_preflight(
     dataclass this module returns carries no coherence field of its own and
     this module adds none, per the file-boundary constraint of this build.
 
+    OP.0b S4-A' (VSLS real-env finding): when `unit_type == "vsx"`, this
+    function ALSO collects the per-VS slice (gate CP-C0/CP-C1) for every
+    VSID `B1` enumerated on ANY member, capped at
+    `cp_preflight_battery.MAX_VS_SCOPES_PER_PREFLIGHT` -- on the SAME
+    already-open session as that member's physical battery, never a second
+    connection. The result is attached to the returned physical snapshot's
+    `subordinate_snapshots`, one `PreflightSnapshot` per VSID, sharing this
+    same `preflight_run_id`. A VSID a member never verified a context switch
+    for simply has fewer members in its snapshot -- never a guessed member,
+    never a fabricated fact. Every existing non-VSX caller is unaffected:
+    `subordinate_snapshots` stays empty.
+
     Trust policy (PO override, 2026-09-03 -- see `OP_0B_1_COMMAND_GATE_PACKAGE.md`
     "PO override — development trust mode"): ``strict_host_key`` defaults to
     ``False``, matching the same compatibility-mode default every other CP
@@ -626,6 +790,11 @@ def run_cp_preflight(
     preflight_run_id = str(uuid.uuid4())
 
     member_evidence: list[PreflightMemberEvidence] = []
+    # {vsid: [PreflightMemberEvidence, ...]} in member order -- accumulated
+    # across the per-member loop below, since each member's per-VS reads
+    # must happen on that member's own still-open session (task §7).
+    vs_evidence_by_vsid: dict[str, list[PreflightMemberEvidence]] = {}
+    vs_scope: list[str] = []  # deterministic union, capped, first-seen order
     for member in members:
         probe_target = ProbeTarget(
             role="clusterxl_member" if not is_vsx else "vsx_host",
@@ -641,16 +810,28 @@ def run_cp_preflight(
             session = make_real_member_session(
                 ssh, physical_device_identity=member.physical_device_identity, command_timeout=command_timeout,
             )
-            member_evidence.append(
-                collect_member(
-                    session,
-                    expected_device_name=member.expected_device_name,
-                    management_ip=member.management_ip,
-                    is_vsx=is_vsx,
-                    preflight_run_id=preflight_run_id,
-                    operational_entity_id=operational_entity_id,
-                )
+            member_ev = collect_member(
+                session,
+                expected_device_name=member.expected_device_name,
+                management_ip=member.management_ip,
+                is_vsx=is_vsx,
+                preflight_run_id=preflight_run_id,
+                operational_entity_id=operational_entity_id,
             )
+            member_evidence.append(member_ev)
+
+            if is_vsx:
+                for vsid in enumerated_vsids(member_ev):
+                    if vsid not in vs_scope and len(vs_scope) < MAX_VS_SCOPES_PER_PREFLIGHT:
+                        vs_scope.append(vsid)
+                per_vs = collect_member_vsx_per_vs(
+                    session,
+                    vsids=vs_scope,
+                    physical_operational_entity_id=operational_entity_id,
+                    preflight_run_id=preflight_run_id,
+                )
+                for vsid, evidence in per_vs.items():
+                    vs_evidence_by_vsid.setdefault(vsid, []).append(evidence)
         finally:
             # One shell close, then one transport close, in that order.
             if session is not None:
@@ -660,6 +841,19 @@ def run_cp_preflight(
             except Exception:
                 pass
 
+    subordinate_snapshots = tuple(
+        PreflightSnapshot(
+            operational_unit_id=f"{operational_entity_id}__vsid_{vsid}",
+            vendor="checkpoint",
+            unit_type="vsx",
+            preflight_run_id=preflight_run_id,
+            members=tuple(vs_evidence_by_vsid[vsid]),
+            configuration_facts=(),
+        )
+        for vsid in vs_scope
+        if vsid in vs_evidence_by_vsid
+    )
+
     return PreflightSnapshot(
         operational_unit_id=operational_entity_id,
         vendor="checkpoint",
@@ -667,4 +861,5 @@ def run_cp_preflight(
         preflight_run_id=preflight_run_id,
         members=tuple(member_evidence),
         configuration_facts=(),
+        subordinate_snapshots=subordinate_snapshots,
     )

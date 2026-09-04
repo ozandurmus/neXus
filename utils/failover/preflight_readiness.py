@@ -98,7 +98,13 @@ __all__ = [
 #: Check Point HA modes this contract supports as a failover unit (contract
 #: domain invariant 7; sk112712 for the VSX string). Load-sharing modes are
 #: not here: they are handled by the canonical roll-up as NOT_A_FAILOVER_UNIT.
-CP_SUPPORTED_FAILOVER_MODES = frozenset({"ha_new_mode", "vsx_single_vs_failover"})
+#: `vsx_vsls` (real-env finding, S8-B'): Virtual System Load Sharing is a
+#: supported CP failover mode -- each VSID fails over independently, in
+#: contrast to `vsx_single_vs_failover` (whole VSX gateway together). Both
+#: are VSX HA modes in the vendor sense of "supported and evaluable", never
+#: `_CP_LOAD_SHARING_MODES` (that set means "no standby exists", which is
+#: false for VSLS).
+CP_SUPPORTED_FAILOVER_MODES = frozenset({"ha_new_mode", "vsx_single_vs_failover", "vsx_vsls"})
 
 #: Palo Alto: Active/Passive only (contract "Scope in"; A/A, HA4 → UNSUPPORTED).
 PAN_SUPPORTED_FAILOVER_MODES = frozenset({"active-passive"})

@@ -953,7 +953,7 @@ CLUSTERXL_RUNTIME_STATES = (
 #: anything unrecognised is "unknown", never a guess.
 CLUSTERXL_CLUSTER_MODES = (
     "ha_new_mode", "load_sharing_unicast", "load_sharing_multicast", "vrrp",
-    "vsx_single_vs_failover", "unknown",
+    "vsx_single_vs_failover", "vsx_vsls", "unknown",
 )
 
 
@@ -972,17 +972,31 @@ def _parse_clusterxl_cluster_mode(stdout: str) -> str:
     (per-VS failover scope vs. whole-cluster), and the contract's own
     normalization rule (§12: never rename raw stored enums, never conflate
     a new mode string with an existing one) forbids collapsing it.
+
+    OP.0b S4-A (real-env finding, S8-B): the approved VSX pair's real
+    ``Cluster Mode:`` line reads ``Virtual System Load Sharing (Active Up)``
+    -- this previously fell through the bare ``"load sharing"`` branch
+    (no multicast/unicast/pivot token) to ``"unknown"``, which is why the
+    fresh S8-B preflight could never establish mode on this estate. VSLS is
+    architecturally distinct from the CP-side load-sharing modes above (those
+    are non-VSX Load Sharing ClusterXL; VSLS is per-Virtual-System failover
+    placement, contract domain invariant 9's excluded case) and gets its own
+    enum value, ``vsx_vsls``, checked before the generic load-sharing
+    fallback so the more specific phrase wins.
     """
     for raw in str(stdout or "").splitlines():
         line = " ".join(raw.strip().split()).lower()
         if not line or "mode" not in line:
             continue
-        # Order matters: the load-sharing variants must be tested before the
-        # bare "load sharing" fallback, VSX single-VS-failover before the
-        # generic "high availability"/"new mode" match (it never contains
-        # either phrase, but keeping the ordering explicit documents intent),
-        # and "high availability" last so a line naming both cannot be
-        # misread as HA.
+        # Order matters: "virtual system load sharing" (VSLS) must be tested
+        # before the bare "load sharing" fallback -- the VSLS phrase itself
+        # contains "load sharing" as a substring. Then the load-sharing
+        # variants, VSX single-VS-failover before the generic "high
+        # availability"/"new mode" match (it never contains either phrase,
+        # but keeping the ordering explicit documents intent), and "high
+        # availability" last so a line naming both cannot be misread as HA.
+        if "virtual system load sharing" in line:
+            return "vsx_vsls"
         if "load sharing" in line or "load-sharing" in line:
             if "multicast" in line:
                 return "load_sharing_multicast"

@@ -18,6 +18,23 @@ caller: `A9` (configured recovery/preemption source -- `DEFERRED_UNKNOWN`),
 `A10` (`cphaprob state`), `A11` (`cplic print` / `cpstat os`) -- both
 `OPTIONAL_APPROVED` but PO-withheld from this slice -- and every rejected
 mutating command from the gate's "Rejected mutating operations" table.
+
+OP.0b S4-A' (real-env VSLS finding): the per-VS readiness slice (gate CP-C1)
+reuses `A3_CPHAPROB_STAT` verbatim -- the wire command is identical
+(`cphaprob stat`), issued once per enumerated VSID inside a verified
+`vsenv <VSID>` context on the same open session, so it is NOT given its own
+`CPPreflightRead` enum value (a distinct enum member here previously
+collided with `A3` in every fixture keyed by command text, e.g. the
+device-session-architecture harness's `text -> read` reverse lookup, since
+two enum members mapped to the same literal string). Its provenance is
+distinguished from the physical-context `A3` read by an explicit
+`source_command="C1"` override at the call site
+(`checkpoint.preflight_collector.collect_member_vsx_per_vs`), not by a
+second COMMAND_TEXT entry. The `vsenv <VSID>` / `vsenv 0` context-switch
+primitive itself is not a `CPPreflightRead` either -- `COMMAND_TEXT` stays
+literal-only -- it is `MemberSession.run_vsenv`, which numeric-validates its
+one variable (the VSID) and accepts no other caller-supplied text (task S5
+§8/§9, unchanged; gate CP-C0).
 """
 from __future__ import annotations
 
@@ -30,6 +47,7 @@ __all__ = [
     "CPPreflightRead",
     "COMMAND_TEXT",
     "FORBIDDEN_COMMAND_MARKERS",
+    "MAX_VS_SCOPES_PER_PREFLIGHT",
     "resolve_a6_form",
     "resolve_a8_form",
     "build_member_schedule",
@@ -73,6 +91,13 @@ COMMAND_TEXT: dict[CPPreflightRead, str] = {
     CPPreflightRead.A8_EXPERT_FAILOVER: "cphaprob show_failover",
     CPPreflightRead.B1_VSX_STAT: "vsx stat -v",
 }
+
+#: Bounded ceiling on how many VSIDs one preflight invocation evaluates
+#: per-VS. A defensive cap against a malformed/looping B1 enumeration, not a
+#: real-world VSID-count expectation (mirrors `_MAX_RETAINED_VS_ROWS` in
+#: `cp_preflight_projection.py`). VSIDs beyond the cap are not contacted;
+#: their evidence stays absent, never guessed.
+MAX_VS_SCOPES_PER_PREFLIGHT = 8
 
 #: Text markers that must never appear anywhere in `COMMAND_TEXT` -- `A9`/
 #: `A10`/`A11`, every rejected mutating operation, the reset form of `A8`,

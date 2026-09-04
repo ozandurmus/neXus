@@ -12,9 +12,9 @@ generated one-line timeline.
   `op0b_s8a_clusterxl_execution_model_console_parity` —
   **REAL_ENV_VALIDATED** on the approved CP ClusterXL pair (see "Active
   build"). `now_next.next` = `op0b_s8_real_env_validation` — S8-A **PASS**
-  (PO-accepted); S8-B VSX / S8-C PAN NOT EXECUTED, operator-run.
-  `cp_remote_collection_done_marker_diagnostics` stays `now_next.upcoming`
-  (`IN_PROGRESS`).
+  (PO-accepted); S8-B VSX found the pair runs VSLS, per-VSID readiness
+  implemented, S8-B' re-validation + S8-C PAN operator-run.
+  `cp_remote_collection_done_marker_diagnostics` stays `now_next.upcoming`.
 - **OP.2.0 CLASS 2 architecture** (`docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md`):
   **CONTRACT FROZEN 2026-09-04** (PO, after the independent challenge
   review) — architecture authority only, not a build; CLASS 2 **not
@@ -70,9 +70,12 @@ account-shell diagnoses and its exec-channel model. Detail: `project/build_histo
 **S8-A (CP ClusterXL pair): PASS, PO-accepted.** 8/8 reads success; four
 checks PASS; `preemption_known` D-V7b and `flap_history` D-F3
 INSUFFICIENT_EVIDENCE by decision; Operator Console identical to the CLI
-for all seven checks, MODE the fresh ClusterXL mode. **S8-B VSX / S8-C
-PAN** (`now_next.next`): NOT EXECUTED — operator-run, same seam, same
-parity law.
+for all seven checks, MODE the fresh ClusterXL mode. **S8-B VSX**: real-env
+found the pair runs **VSLS**, overturning "physical parent is the sole
+readiness unit" — per-VSID readiness implemented (S4-A': `no_split_brain`
+PASSes per-VS, `viable_target` stays honest INSUFFICIENT, no CLASS 2
+change; `docs/history/phase/OP_0B_S4A_VSX_PER_VS_FAILOVER_DOMAIN_REVIEW.md`).
+S8-B' re-validation is `now_next.next`. **S8-C PAN**: paused behind it.
 
 **Stalled, moved to `now_next.upcoming`:**
 `cp_remote_collection_done_marker_diagnostics` — still `IN_PROGRESS`,
@@ -121,16 +124,13 @@ causes are ruled out by source inspection. Leading-zero normalization is
 
 `cp_remote_collection_done_marker_diagnostics` (`now_next.upcoming`) needs a
 real recurrence with the new diagnostic fields — independent of `OP.0b`.
-`now_next.next` is **`op0b_s8_real_env_validation`** — S8-A done; remaining
-**S8-B** (approved VSX pair: `--cp-ha-preflight-check`, B1 in the same
-Expert shell, no reconnect per VSID) and **S8-C** (approved PAN pair:
-`--pan-ha-preflight-check`, one API context per member, P1/P2/P4 only).
-Each validates fresh backend readiness AND Operator-Console parity through
-the same seam. Operator-executed, SAFE counts only. `OP.0b` closure law:
+`now_next.next` is **`op0b_s8_real_env_validation`** — S8-A done; **S8-B'**
+(VSLS per-VSID re-validation, S4-A) and **S8-C** (approved PAN pair, paused
+behind S8-B') remain, operator-run, SAFE counts only. `OP.0b` closure law:
 fresh CLI readiness must equal Operator-Console readiness for the same
-invocation. `OP.0b` is **not DONE**; S7 is `REAL_ENV_VALIDATED` for
-ClusterXL only. Backlog (PO request): `cp_preflight_ccp_tablestat_evidence`
-— a NEW command, gate row + readiness mapping required first.
+invocation. `OP.0b` is **not DONE**. Backlog (PO request):
+`cp_preflight_ccp_tablestat_evidence` — a NEW command, gate row + readiness
+mapping required first.
 
 `D-V3a`/`D-V7b` stay **preserved unresolved CLASS-2 blockers** (`upcoming`).
 Independent `upcoming` movements, any order: **A.** close `D-V3a`/`D-V7b` —

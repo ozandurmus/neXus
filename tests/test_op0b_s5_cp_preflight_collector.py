@@ -447,10 +447,18 @@ def test_37_b1_vs_enumeration_does_not_create_failover_target():
         assert fact.category.value == "operational_ha_entity_identity"
 
 
-def test_38_no_vsls_model_introduced():
+def test_38_no_vsls_mutation_primitive_introduced():
+    """OP.0b S4-A' (real-env VSLS finding, PO correction 2026-09-04): a
+    Virtual System under VSLS IS an independent readiness domain, and the
+    collector now legitimately names "vsls" (the mode token, `vsenv`
+    context-switch primitive) -- this replaces the earlier blanket ban.
+    What stays banned unconditionally is any VSLS *mutation* surface
+    (management-plane priority change, per-VS failover execution) -- this
+    movement implements per-VS READINESS only, never CLASS 2."""
     import checkpoint.preflight_collector as collector_module
-    source = open(collector_module.__file__, encoding="utf-8").read()
-    assert "vsls" not in source.lower()
+    source = open(collector_module.__file__, encoding="utf-8").read().lower()
+    for forbidden in ("vsx_util", "clusterxl_admin", "cphastop"):
+        assert forbidden not in source
 
 
 def test_39_no_fw_ctl_set_int_vsid_path_exists():
