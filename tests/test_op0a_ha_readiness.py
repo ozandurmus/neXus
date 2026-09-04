@@ -688,10 +688,13 @@ def _pan_with_interfaces(device, management_ip, vsys_values):
     return row
 
 
-def test_pan_display_name_surfaces_real_interface_vsys_context():
-    """VSYS context (informational only, never identity) is composed into
-    display_name from the real interface-level field, mirroring the CP VSX
-    "vsys | cluster" precedent -- unit_id/matching are untouched."""
+def test_pan_context_vsys_surfaces_real_interface_vsys_context():
+    """VSYS context (informational only, never identity) is carried on
+    `context_vsys` from the real interface-level field, mirroring the CP VSX
+    "vsys | cluster" precedent for context data -- but (OP.0b S9, PAN UI
+    debt item 1) it must never compose the unit's own `display_name`/label:
+    the canonical `unit_id` (member entity ids) stays the presentation
+    identity, VSYS is strictly subordinate."""
     rows = [
         _pan_with_interfaces("pan-ha-01", "10.0.0.1", ["vsys1", "0"]),
         _pan_with_interfaces("pan-ha-02", "10.0.0.2", ["vsys2", "0"]),
@@ -700,17 +703,18 @@ def test_pan_display_name_surfaces_real_interface_vsys_context():
     peers = {"pan-ha-01": "10.0.0.2", "pan-ha-02": "10.0.0.1"}
     report = compute_ha_readiness(rows, pan_ha_runtime=runtime, pan_ha_peers=peers)
     unit = _unit_by_id(report, "pan-ha-01+pan-ha-02")
-    assert unit["display_name"] is not None
-    assert "vsys1" in unit["display_name"] and "vsys2" in unit["display_name"]
+    assert unit["display_name"] is None  # identity is unit_id alone, never VSYS-composed
+    assert "vsys1" in unit["context_vsys"] and "vsys2" in unit["context_vsys"]
     assert unit["unit_id"] == "pan-ha-01+pan-ha-02"  # identity untouched
 
 
-def test_pan_display_name_is_none_when_no_vsys_evidence():
+def test_pan_context_vsys_empty_when_no_vsys_evidence():
     rows = [_pan("pan-solo", "10.0.0.1")]
     runtime = {"pan-solo": _pan_runtime()}
     report = compute_ha_readiness(rows, pan_ha_runtime=runtime)
     unit = _unit_by_id(report, "pan-solo")
     assert unit["display_name"] is None
+    assert unit["context_vsys"] == []
 
 
 # --------------------------------------------------------------------------

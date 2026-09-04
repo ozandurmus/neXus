@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "current_build": "op0b_s8c_pan_dedicated_ha1_real_env_correction",
+  "current_build": "op0b_s9_pan_ha_label_authority_correction",
   "current_track": "OP.x",
   "progress_contract": "Weighted acceptance-criterion completion. Percentages describe the declared roadmap, not calendar time or delivery ETA.",
   "tracks": [
@@ -123,24 +123,22 @@
   "now_next": {
     "horizon_contract": "NOW is exactly one build. NEXT is exactly one. Everything else is an `upcoming` row carrying its own true status: planned = AFTER, blocked = waiting on a named external gate, deferred = consciously postponed. `now.build` must equal the newest project/build_history.json record -- utils.project_plan enforces it.",
     "now": {
-      "build": "op0b_s8c_pan_dedicated_ha1_real_env_correction",
-      "title": "OP.0b S8-C - PAN dedicated-HA1 pairing correction, real-env validation, OP.0b read-only closure",
-      "goal": "Fix the circular pre-contact PAN pairing gate a real dedicated-HA1 pair exposed (contact was refused before the evidence that could prove correspondence could be collected); resolve a bounded candidate set from the explicit selector alone, contact both candidates, and establish fresh reciprocal management-plane correspondence afterward, never gating checks or promoting PAN B2. No new API operation, mutation, retry authority, or readiness-contract change.",
-      "status": "real_env_validated",
+      "build": "op0b_s9_pan_ha_label_authority_correction",
+      "title": "OP.0b S9 (bounded slice) - PAN HA unit label authority correction",
+      "goal": "Retire the PAN UI debt S8-C recorded: display_name no longer composes VSYS names as the pair's identity/label (HaUnit.context_vsys carries them as subordinate context instead); the S8-C real pair's own control_sync_link_health unknown:pan_path_monitoring_any_down result reviewed end-to-end and confirmed presentation-only debt (generic, shared, cross-vendor evidence-law formatter, not a parser defect) -- given a plain-English gloss (reason_display) alongside the unchanged raw reason. No collector/identity/readiness-check logic touched.",
+      "status": "done",
       "started": "2026-09-04",
       "completed": "2026-09-04"
     },
     "next": {
       "build": "op0b_s9_ui_authority_reconciliation",
-      "title": "OP.0b S9 - UI authority reconciliation (retire client-side pairing/HA heuristics)",
+      "title": "OP.0b S9 (remaining, broader scope) - retire client-side Inventory-page pairing/HA-vocabulary heuristics",
       "status": "planned",
       "notes": [
-        "S8-A/S8-B''/S8-C all REAL_ENV_VALIDATED 2026-09-04 -- OP.0b's read-only S1-S8 implementation sequence is closed. S9 is the one remaining slice the frozen OP.0b.0 contract itself names (docs/history/phase/OP_0B_0_VENDOR_FAILOVER_PREFLIGHT_EVIDENCE_SURFACE.md, 'Implementation slices' table: 'S9 | Authority reconciliation (UI heuristics retirement) | static/*.js, utils/merge.py, utils/config_ui.py | ... | S9 independent after S7').",
-        "Confirmed NOT STARTED 2026-09-04 (S8-C session, operator UI review of the generated report): static/inventory_ui.js still independently infers PAN pairing/cluster identity client-side (clusterNameSource: 'inferred_ha_runtime_pair', hostname-ordinal + VSYS/VR Jaccard similarity) and synthesizes cp_vsx_cluster from hostname-token overlap; static/configuration_ui.js groups by a hashed presentation_group_id the failover backend never reads; utils/config_ui.py _ha_header_evidence computes a second, independent 'HA Enabled/Disabled' vocabulary from static configuration alone, separate from utils.failover.assessment. None of these consult the canonical compute_ha_readiness evaluator.",
-        "Direct evidence this is overdue, not theoretical: the S8-C correction's own explicit-candidate PAN report row needed a same-day fix (project/build_history.json op0b_s8c_pan_dedicated_ha1_real_env_correction) because the legacy single-member/VSYS-labelled rows read as confusing near-duplicates next to Check Point's one-row-per-cluster shape -- the operator flagged this directly.",
-        "Scope: make utils.failover.assessment.compute_ha_readiness (already the one canonical evaluator, S7) the single authority every UI surface renders from -- static/inventory_ui.js's PAN/VSX pairing and cluster-name inference, utils/merge.py's hostname-suffix cluster heuristic, and utils/config_ui.py's independent HA vocabulary are candidates for retirement or explicit demotion to presentation-only labels that never drive grouping/identity. Cross JS + Python UI-rendering surface -- larger than a mechanical fix, needs its own scoping pass before implementation.",
-        "Not started in the S8-C session by PO decision 2026-09-04: independent, larger scope; logged honestly rather than silently dropped or rushed into the PAN-pairing correction.",
-        "Recommended: Sonnet 5, normal for the scoping/audit pass; escalate to extended thinking if retiring a heuristic turns out to be load-bearing for something the audit didn't expect."
+        "The bounded PAN-label slice (op0b_s9_pan_ha_label_authority_correction, this build) is done; this row is what remains of S9 as project/feature_registry.json's ui_authority_reconciliation criterion still defines it (unchanged, still pending).",
+        "static/inventory_ui.js still independently infers PAN pairing/cluster identity client-side (clusterNameSource: 'inferred_ha_runtime_pair', hostname-ordinal + VSYS/VR Jaccard similarity) and synthesizes cp_vsx_cluster from hostname-token overlap -- the Inventory page's own tree builder, a different UI surface from the failover-readiness report/console module the bounded slice corrected. It never consults utils.failover.assessment.compute_ha_readiness.",
+        "utils/merge.py's hostname-suffix cluster heuristic and utils/config_ui.py's independent _ha_header_evidence HA vocabulary are unreviewed.",
+        "Cross JS + Python UI-rendering surface -- larger than a mechanical fix, needs its own scoping pass before implementation. Recommended: Sonnet 5, normal for the scoping/audit pass; escalate to extended thinking if retiring a heuristic turns out to be load-bearing for something the audit didn't expect."
       ]
     },
     "upcoming": [
