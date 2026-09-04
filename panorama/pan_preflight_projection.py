@@ -44,6 +44,7 @@ from utils.failover.preflight_model import (
 __all__ = [
     "project_pan_preflight_facts",
     "project_pan_identity_fact",
+    "project_pan_management_endpoint_fact",
     "project_pan_path_monitoring_facts",
 ]
 
@@ -96,6 +97,10 @@ _PREFLIGHT_FIELDS: tuple[tuple[str, str, FactCategory, bool], ...] = (
     ("peer_av_version", "peer_av_version", FactCategory.SOFTWARE_POLICY_CONTENT_PARITY, True),
     ("peer_threat_version", "peer_threat_version", FactCategory.SOFTWARE_POLICY_CONTENT_PARITY, True),
     ("peer_url_version", "peer_url_version", FactCategory.SOFTWARE_POLICY_CONTENT_PARITY, True),
+    # OP.0b S8-C real-env correction: best-effort HA group id, own fact,
+    # corroborating only (never gates pair correspondence -- path unconfirmed
+    # by an official source, see configuration/panorama_config_collector.py).
+    ("ha_group_id", "ha_group_id", FactCategory.RUNTIME_HA_STATE, False),
 )
 
 #: Fact names whose raw text is a safe-to-convert bounded counter. Conversion
@@ -110,6 +115,17 @@ _NUMERIC_FACT_NAMES = frozenset({
 
 _LOCAL_SERIAL_FIELD = "local_serial_num"
 _PEER_SERIAL_FIELD = "peer_serial_num"
+
+#: OP.0b S8-C real-env correction. `local_mgmt_ip`/`peer_mgmt_ip` are already
+#: tokenized (`"pan_ha_address_value"` kind) by
+#: `configuration.panorama_config_collector._parse_pan_ha_preflight_fields`,
+#: same treatment as `local_serial_num`/`peer_serial_num` above -- projected
+#: here with `is_identity=True` so the already-opaque token gets the same
+#: `OpaqueToken` wrapping, never re-tokenized. `ha_group_id` is a plain,
+#: best-effort, non-identity field (see that module for why its path is
+#: unconfirmed) and flows through `_PREFLIGHT_FIELDS` like `local_mode`.
+_LOCAL_MGMT_IP_FIELD = "local_mgmt_ip"
+_PEER_MGMT_IP_FIELD = "peer_mgmt_ip"
 
 
 def project_pan_preflight_facts(
@@ -198,6 +214,27 @@ def project_pan_preflight_facts(
         _fact("peer_serial_claim", FactCategory.PEER_IDENTITY_RELATIONSHIP, peer_raw, is_identity=True)
     )
 
+    # OP.0b S8-C real-env correction. local-info/mgmt-ip: this member's own
+    # runtime self-report of its management address (category A, own_facts) --
+    # compared, post-contact, against the SAME member's independently P1-
+    # dialed endpoint (`local_management_endpoint`, `project_pan_management_endpoint_fact`
+    # below) as a self-consistency check, never against any other member.
+    local_mgmt_raw = None if fields is None else fields.get(_LOCAL_MGMT_IP_FIELD)
+    own_facts.append(
+        _fact("local_mgmt_ip_claim", FactCategory.PHYSICAL_IDENTITY, local_mgmt_raw, is_identity=True)
+    )
+
+    # peer-info/mgmt-ip: this member's CLAIM about its peer's management
+    # address (category E, peer_claim_facts) -- never own_facts, never used
+    # to form/confirm a pair on its own. Compared, post-contact, against the
+    # OTHER independently-selected member's own P1-dialed endpoint --
+    # genuine reciprocal correspondence only when BOTH directions agree
+    # (`preflight_readiness._pan_reciprocal_correspondence`).
+    peer_mgmt_raw = None if fields is None else fields.get(_PEER_MGMT_IP_FIELD)
+    peer_claim_facts.append(
+        _fact("peer_mgmt_ip_claim", FactCategory.PEER_IDENTITY_RELATIONSHIP, peer_mgmt_raw, is_identity=True)
+    )
+
     return PreflightMemberEvidence(
         physical_device_identity=OpaqueToken(physical_device_identity),
         own_facts=tuple(own_facts),
@@ -241,6 +278,50 @@ def project_pan_identity_fact(
     return PreflightFact(
         name="pan_identity_gate_accepted", category=FactCategory.PHYSICAL_IDENTITY,
         state=FactState.KNOWN, value=bool(accepted), provenance=provenance,
+    )
+
+
+def project_pan_management_endpoint_fact(
+    endpoint_token: str | None,
+    *,
+    preflight_run_id: str,
+    collected_at: str,
+    physical_device_identity: str,
+    operational_entity_id: str,
+    transport: Transport = Transport.DIRECT_API,
+    context: FactContext | None = None,
+) -> PreflightFact:
+    """OP.0b S8-C real-env correction. `P1` (`show system info`, direct API
+    identity gate) already dials one specific, caller-selected management
+    endpoint per member -- this fact carries THAT endpoint (already tokenized
+    by the caller via
+    `configuration.panorama_config_collector.tokenize_pan_management_address`,
+    never a raw address) as this member's own, independently-established
+    contact point. It is the anchor `_pan_reciprocal_correspondence`
+    (`utils.failover.preflight_readiness`) compares P2's `local_mgmt_ip_claim`/
+    `peer_mgmt_ip_claim` against -- never a new device read, never a new API
+    call: purely an in-memory value the S6 collector already held for `P1`.
+
+    Category A (`PHYSICAL_IDENTITY`), same as `pan_identity_gate_accepted` --
+    both are facts about this member's own, independently-contacted identity,
+    never a claim about anything else."""
+    provenance = Provenance(
+        collected_at=collected_at,
+        preflight_run_id=preflight_run_id,
+        source_vendor="panorama",
+        source_plane=SourceOrigin.DEVICE_RUNTIME,
+        transport=transport,
+        physical_device_identity=OpaqueToken(physical_device_identity),
+        operational_entity_id=operational_entity_id,
+        context=context or FactContext.physical(),
+        outcome=Outcome.SUCCESS if endpoint_token else Outcome.FAILED,
+        source_command="P1",
+    )
+    return PreflightFact(
+        name="local_management_endpoint", category=FactCategory.PHYSICAL_IDENTITY,
+        state=FactState.KNOWN if endpoint_token else FactState.UNKNOWN,
+        value=OpaqueToken(endpoint_token) if endpoint_token else None,
+        provenance=provenance,
     )
 
 

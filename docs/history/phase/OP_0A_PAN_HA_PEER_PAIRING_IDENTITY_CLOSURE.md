@@ -16,6 +16,32 @@ Real-environment confirmation of `peer_ip` resolution against a real PAN HA
 pair is **owed** (`on_hardware_real_env_validation`) — status stays
 `AUTOMATED_VALIDATED`, not `REAL_ENV_VALIDATED`, until that runs.
 
+**UPDATE 2026-09-04 (OP.0b S8-C real-env correction) — REAL_ENV_DISPROVEN,
+partially.** That owed confirmation ran, against the approved real pair, and
+disproved this contract's Grade-A pairing test
+(`configured peer-ip == peer's management_ip`) as a UNIVERSAL PAN HA
+invariant: it is correct only for the topology where the management
+interface is itself configured as HA1. The approved pair uses dedicated
+HA1 control-link addressing instead — both members HA-enabled with a
+configured peer address, symmetrically non-matching either member's
+management address — expected behavior for that (equally valid, arguably
+more common) topology, never a device defect. This contract's own Q1
+("`peer-info` is a management-address field") and the single-member-unit
+outcome table for that case require the same qualification the successor
+document below already states in full.
+
+`_derive_pan_units` (this contract's implementation, `utils/failover/assessment.py`)
+is UNCHANGED by the disproof — it deliberately still only recognizes the
+management-as-HA1 topology as Grade A for the general, stored-telemetry
+case (weakening it globally would let an unrelated device's management_ip
+coincidentally satisfy the predicate for the wrong reason). The corrected
+model applies instead in the narrow, explicit, invocation-scoped preflight
+path, and post-contact fresh runtime correspondence from independently-
+observed `P1`/`P2` evidence replaces this contract's config-intent-only
+correspondence question for that path. Full detail, corrected law, and
+real-env validation: `docs/history/phase/OP_0B_S8C_PAN_DEDICATED_HA1_REAL_ENV_CORRECTION.md`.
+`B2` remains NOT ESTABLISHED — this update does not touch that boundary.
+
 Movement history: `ARCHITECTURE` (contract drafting, grounded by a
 `READ_ONLY_AUDIT`) → independent security/operational-identity architecture
 review (this document's design decisions were revised in response — see

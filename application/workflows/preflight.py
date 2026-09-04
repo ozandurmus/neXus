@@ -143,6 +143,18 @@ def _print_safe_result(report: dict, *, operational_unit_id: str, vendor: str, m
     for check in unit.get("checks") or []:
         missing = f" ({check['missing_evidence']})" if check.get("missing_evidence") else ""
         print(f"  {check.get('id', ''):<24} {check.get('status', ''):<22} {check.get('reason', '')}{missing}")
+    correspondence = evidence.get("pan_pair_correspondence")
+    if correspondence:
+        # OP.0b S8-C: fresh, post-contact pair correspondence -- safe by
+        # construction (MATCH/MISMATCH/MISSING/NOT_EVALUABLE/AMBIGUOUS
+        # relationship labels only, never a raw address). Descriptive only:
+        # this is NOT PAN B2 and never implies it (see
+        # `preflight_readiness._pan_reciprocal_correspondence`).
+        print(f"Pair correspondence:     {correspondence.get('state')} (read-only, NOT PAN B2)")
+        print(f"  self-management:       {correspondence.get('self_management_correspondence')}")
+        print(f"  reciprocal peer mgmt:  {correspondence.get('reciprocal_peer_management_correspondence')}")
+        print(f"  mode correspondence:   {correspondence.get('mode_correspondence')}")
+        print(f"  group-id (best-effort):{correspondence.get('group_id_correspondence')}")
 
 
 def _publish_fresh_readiness(ctx, report: dict, *, mode: str) -> Path:
@@ -341,9 +353,9 @@ def cp_ha_preflight_check(ctx):
 
 # --- Palo Alto (S6) ----------------------------------------------------------
 
-def _resolve_pan_operational_entity(runtime_paths, requested: list[str], pan_ha_runtime, pan_ha_peers):
-    """Fail-closed PAN target resolution, reusing the exact same serial
-    selector `--pan-config-targets` already uses
+def _resolve_pan_operational_entity(runtime_paths, requested: list[str]):
+    """Fail-closed PAN BOUNDED CANDIDATE resolution, reusing the exact same
+    serial selector `--pan-config-targets` already uses
     (`configuration.panorama_config_collector._apply_pan_target_selector`)
     against already-collected local candidates (`unified.json`'s Panorama-
     sourced rows -- no live Panorama "show devices" call is made to build
@@ -355,17 +367,30 @@ def _resolve_pan_operational_entity(runtime_paths, requested: list[str], pan_ha_
     actually proves reachability, at contact time, exactly as it already
     does for every other caller of this collector.
 
-    The resolved operational_unit_id must equal what
-    `utils.failover.derive_ha_units` -- the same derivation
-    `compute_ha_readiness` uses internally -- independently derives for the
-    same selected members. Anything else (an unresolved/asymmetric peer
-    relationship for a two-member request, or no matching unit at all) is
-    the open `B2` bidirectional pair-identity-corroboration boundary this
-    slice does not attempt to redesign, and fails closed before any device
-    is contacted.
+    OP.0b S8-C real-env correction: this function establishes a BOUNDED
+    CANDIDATE SET, never a TRUSTED OPERATIONAL PAIR. It used to additionally
+    require the selected pair to already match a Grade-A configuration-intent
+    unit `utils.failover.derive_ha_units` independently derives -- real-env
+    evidence disproved that requirement as a universal PAN invariant (the
+    approved pair uses dedicated HA1 addressing, so its configured HA1
+    peer-ip never resolves to either member's management_ip) and, more
+    fundamentally, made it circular: the P1/P2 evidence that could actually
+    corroborate the pair could never be collected because contact itself was
+    refused first. Proving pair correspondence is now `run_pan_preflight`'s
+    and `preflight_readiness._pan_reciprocal_correspondence`'s job, from
+    fresh, independently-observed evidence, AFTER each candidate
+    independently passes its own `P1` identity gate -- never before contact.
+
+    The returned `operational_entity_id` uses the same deterministic
+    `"A+B"` (sorted) convention `utils.failover.assessment
+    .pan_explicit_candidate_unit_id` computes, so this invocation's fresh
+    `PreflightSnapshot.operational_unit_id` is guaranteed to match the
+    additional explicit-candidate `HaUnit`
+    `compute_ha_readiness(..., pan_explicit_candidate_members=...)` builds
+    for the same two members (see that module).
     """
     import configuration.panorama_config_collector as pan_collector
-    from utils.failover import derive_ha_units
+    from utils.failover.assessment import pan_explicit_candidate_unit_id
     from utils.restore_readiness import resolve_entity_id
 
     unified_devices = _load_unified_devices(runtime_paths.output_root)
@@ -380,19 +405,16 @@ def _resolve_pan_operational_entity(runtime_paths, requested: list[str], pan_ha_
     except ValueError as exc:
         raise PreflightTargetResolutionError(str(exc)) from exc
 
-    selected_entity_ids = {resolve_entity_id(row) for row in selected_rows}
-
-    units = derive_ha_units(unified_devices, pan_ha_runtime=pan_ha_runtime, pan_ha_peers=pan_ha_peers)
-    matching = [u for u in units if u.vendor == "panorama" and set(u.members) == selected_entity_ids]
-    if len(matching) != 1:
+    selected_entity_ids = [resolve_entity_id(row) for row in selected_rows]
+    if len(set(selected_entity_ids)) != len(selected_entity_ids):
         raise PreflightTargetResolutionError(
-            "pan_preflight_targets: selected targets do not resolve to exactly one known operational "
-            "HA entity (pair identity B2 remains unresolved for this selection), refusing to contact any device"
+            "pan_preflight_targets: selected targets resolve to a duplicate candidate, "
+            "refusing to contact any device"
         )
-    unit = matching[0]
 
+    operational_entity_id = pan_explicit_candidate_unit_id(selected_entity_ids)
     by_entity_id = {resolve_entity_id(row): row for row in selected_rows}
-    return unit.unit_id, [by_entity_id[entity_id] for entity_id in sorted(selected_entity_ids)]
+    return operational_entity_id, [by_entity_id[entity_id] for entity_id in sorted(selected_entity_ids)]
 
 
 def pan_ha_preflight_check(ctx):
@@ -411,10 +433,8 @@ def pan_ha_preflight_check(ctx):
     _require_bootstrap("pan-ha-preflight-check", runtime_paths.output_root)
 
     requested = _parse_requested_targets(args.pan_preflight_targets, label="pan_preflight_targets")
+    operational_entity_id, selected_rows = _resolve_pan_operational_entity(runtime_paths, requested)
     pan_ha_runtime, pan_ha_peers = _load_pan_ha_runtime(runtime_paths.output_root)
-    operational_entity_id, selected_rows = _resolve_pan_operational_entity(
-        runtime_paths, requested, pan_ha_runtime, pan_ha_peers,
-    )
 
     from panorama.preflight_collector import PANPhysicalMemberTarget, run_pan_preflight
     from utils.restore_readiness import resolve_entity_id
@@ -455,6 +475,7 @@ def pan_ha_preflight_check(ctx):
         pan_ha_runtime=pan_ha_runtime,
         pan_ha_peers=pan_ha_peers,
         preflight_snapshots=[snapshot],
+        pan_explicit_candidate_members=[m.physical_device_identity for m in members],
     )
     print("\n=== SAFE READINESS SUMMARY ===")
     _print_read_outcomes(snapshot)
