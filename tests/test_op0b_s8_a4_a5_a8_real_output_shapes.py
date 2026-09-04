@@ -35,6 +35,32 @@ pytestmark = pytest.mark.configuration
 
 class TestLinkHealthShapes:
 
+    def test_real_approved_pair_shape(self):
+        """Exact layout observed on the approved pair (values synthetic):
+        annotated names, a Non-Monitored row, a legend line, and a trailing
+        virtual-cluster-interfaces block that must not be counted."""
+        out = (
+            "CCP mode: Manual (Unicast)\n"
+            "Required interfaces: 2\n"
+            "Required secured interfaces: 1\n"
+            "\n\n"
+            "Interface Name:      Status:\n"
+            "\n"
+            "Sync (S)             UP\n"
+            "Mgmt                 Non-Monitored\n"
+            "bond1.100 (LS)       UP\n"
+            "\n"
+            "S - sync, HA/LS - bond type, LM - link monitor, P - probing\n"
+            "\n"
+            "Virtual cluster interfaces: 1\n"
+            "\n"
+            "bond1.100      192.0.2.10        VMAC address: 00:00:5E:00:53:01\n"
+        )
+        parsed = parse_cphaprob_a_if(out)
+        assert parsed["observed"] is True
+        assert parsed["any_down"] is False
+        assert parsed["interface_count"] == 3
+
     def test_status_column_table(self):
         out = (
             "Interface Name:      Status:\n"
@@ -94,6 +120,19 @@ class TestLinkHealthShapes:
 # --- A5: cphaprob -ia list -------------------------------------------------
 
 class TestPnoteShapes:
+
+    def test_healthy_member_sentence_form_is_positive_evidence(self):
+        """Third real shape (S8-A, approved pair): no device list, just the
+        device's own statement that nothing is in problem state."""
+        parsed = parse_cphaprob_ia_list("There are no pnotes in problem state\n")
+        assert parsed == {"observed": True, "device_count": None, "any_problem": False}
+
+    def test_sentence_form_is_matched_narrowly(self):
+        """Only the explicit negative wording counts; anything else that
+        merely mentions pnotes stays unobserved -- never inferred healthy."""
+        for out in ("There are pnotes in problem state", "pnotes: see below",
+                    "There are no interfaces", "no problem"):
+            assert parse_cphaprob_ia_list(out)["observed"] is False, out
 
     def test_column_table_form(self):
         out = (

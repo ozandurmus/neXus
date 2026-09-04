@@ -85,7 +85,7 @@ _A7_FW_STAT = (
 
 _A2_VERSION = "This is Check Point's software version R81.10\nOS build 123"
 _A4_LINK = "eth1  UP  (secured, sync, HA)\neth2  UP  (non sync)"
-_A5_PNOTE = "Current State: OK (Actual)"
+_A5_PNOTE = "There are no pnotes in problem state"
 _A6_SYNC = "Sync Status: OK"
 _A8_FAILOVER = "Cluster failover count: 2\nReason: cpstop\nLast failover event: 3 hours ago"
 

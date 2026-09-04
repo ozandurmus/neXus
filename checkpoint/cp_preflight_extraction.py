@@ -125,6 +125,20 @@ _PNOTE_DEVICE_HEADER_RE = re.compile(r"(?i)device\s+name\s*:?")
 #: understand -- counted as a device, never asserted healthy (UNKNOWN law).
 _PNOTE_PROBLEM_PREFIXES = ("problem", "error", "failed")
 
+#: Third real shape (OP.0b S8-A, observed on the approved pair, disclosed
+#: value-free by the layout diagnostic and then confirmed by the operator):
+#: on a healthy member `cphaprob -ia list` prints no device list at all --
+#: just the sentence
+#:
+#:     There are no pnotes in problem state
+#:
+#: That is a *positive* statement by the device that no critical device is
+#: in problem state, so `any_problem=False` is established evidence, not an
+#: inference from absence. The registered-device count is genuinely not
+#: reported in this form and stays `None`. Matched narrowly: only this exact
+#: negative wording; any other sentence stays unobserved (fail-closed).
+_PNOTE_NONE_IN_PROBLEM_RE = re.compile(r"(?im)^\s*there\s+are\s+no\s+pnotes?\s+in\s+(?:a\s+)?problem\s+state\b")
+
 
 def _parse_pnote_table(text: str) -> list[str]:
     """Column-table form: return the `Current state` cell of each data row."""
@@ -153,14 +167,17 @@ def parse_cphaprob_ia_list(stdout: str | None) -> dict[str, Any]:
     critical device, aggregated to a count and a boolean -- never raw device
     names (gate CP-A5 "Safe retained fields"; frozen contract D-V6).
 
-    Both real output shapes are supported: the per-device `Current state:`
-    block form and the fixed-width column table. Neither shape is guessed at
-    -- an output matching no known shape stays `observed=False`, never an
-    inferred healthy state."""
+    Three real output shapes are supported: the per-device `Current state:`
+    block form, the fixed-width column table, and the healthy-member sentence
+    `There are no pnotes in problem state`. None is guessed at -- an output
+    matching no known shape stays `observed=False`, never an inferred
+    healthy state."""
     text = str(stdout or "")
     states = _PNOTE_STATE_RE.findall(text)
     if not states:
         states = _parse_pnote_table(text)
+    if not states and _PNOTE_NONE_IN_PROBLEM_RE.search(text):
+        return {"observed": True, "device_count": None, "any_problem": False}
     if not states:
         return {"observed": False, "device_count": None, "any_problem": None}
     problem_count = sum(
