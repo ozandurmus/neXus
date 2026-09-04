@@ -1127,6 +1127,210 @@ class PostgresOperationalWriteLedgerBackend(OperationalWriteLedgerBackend):
 
 
 # ---------------------------------------------------------------------------
+# 7. Class 2 action record backend (OP.2.A/B)
+# ---------------------------------------------------------------------------
+#
+# One durable record per ``action_id`` under ``<data_root>/state/
+# ha_action_records/`` -- the same shape ``ConsoleJobBackend`` uses, minus
+# its orphan sweep (an ``EXECUTING`` record left by a dead process resolves
+# to ``OUTCOME_UNKNOWN``, never ``failed`` -- see the OP.2.0 contract,
+# "Why this contract exists now" #3). This backend is deliberately dumb
+# storage: it has no opinion about legal states, transitions, the
+# operational-entity-lock uniqueness rule, or the quarantine predicate --
+# those all live in ``utils/operate/store.py`` so both backends behave
+# identically.
+
+_ACTION_RECORD_SCHEMA = (
+    """
+    CREATE TABLE IF NOT EXISTS ha_action_record (
+        action_id             TEXT PRIMARY KEY,
+        operational_entity_id TEXT NOT NULL,
+        state                 TEXT NOT NULL,
+        created_at            TIMESTAMPTZ,
+        finished_at           TIMESTAMPTZ,
+        acknowledged_at       TIMESTAMPTZ,
+        record_json           JSONB NOT NULL
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS ha_action_record_entity_idx "
+    "ON ha_action_record (operational_entity_id)",
+)
+
+
+class ActionRecordBackend(abc.ABC):
+    @abc.abstractmethod
+    def create(self, record: dict[str, Any]) -> None:
+        """Insert a new record. A duplicate ``action_id`` raises
+        ``EvidenceBackendError`` -- the caller (``ActionRecordStore``) treats
+        that as a create-race against a concurrent identical request and
+        re-reads rather than overwriting."""
+
+    @abc.abstractmethod
+    def update(self, action_id: str, **fields: Any) -> None:
+        ...
+
+    @abc.abstractmethod
+    def get(self, action_id: str) -> dict[str, Any] | None:
+        ...
+
+    @abc.abstractmethod
+    def list_by_entity(self, operational_entity_id: str) -> list[dict[str, Any]]:
+        ...
+
+    @abc.abstractmethod
+    def list_all(self) -> list[dict[str, Any]]:
+        ...
+
+
+class FilesystemActionRecordBackend(ActionRecordBackend):
+    """One JSON file per ``action_id`` under ``<root>/``."""
+
+    def __init__(self, root: Path) -> None:
+        self.root = Path(root)
+
+    def _record_path(self, action_id: str) -> Path:
+        return self.root / f"{_safe_component(action_id)}.json"
+
+    def create(self, record: dict[str, Any]) -> None:
+        self.root.mkdir(parents=True, exist_ok=True)
+        path = self._record_path(record["action_id"])
+        if path.exists():
+            raise EvidenceBackendError(f"action record already recorded: {record['action_id']!r}")
+        _write_json_atomic(path, record)
+
+    def update(self, action_id: str, **fields: Any) -> None:
+        path = self._record_path(action_id)
+        try:
+            record = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise EvidenceBackendError(f"action record {action_id!r} is unreadable: {exc}") from exc
+        record.update(fields)
+        _write_json_atomic(path, record)
+
+    def get(self, action_id: str) -> dict[str, Any] | None:
+        path = self._record_path(action_id)
+        if not path.exists():
+            return None
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+            return None
+
+    def list_all(self) -> list[dict[str, Any]]:
+        if not self.root.exists():
+            return []
+        records: list[dict[str, Any]] = []
+        for child in self.root.iterdir():
+            if not child.is_file() or child.suffix != ".json":
+                continue
+            try:
+                record = json.loads(child.read_text(encoding="utf-8"))
+            except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+                continue
+            if isinstance(record, dict):
+                records.append(record)
+        return records
+
+    def list_by_entity(self, operational_entity_id: str) -> list[dict[str, Any]]:
+        return [r for r in self.list_all() if r.get("operational_entity_id") == operational_entity_id]
+
+
+class PostgresActionRecordBackend(ActionRecordBackend):
+    def __init__(self, dsn: str) -> None:
+        self._psycopg = _psycopg()
+        self._dsn = dsn
+        self._ensure_schema()
+
+    def _connect(self):
+        return self._psycopg.connect(self._dsn, autocommit=True)
+
+    def _ensure_schema(self) -> None:
+        _ensure_schema(self._psycopg, self._dsn, _ACTION_RECORD_SCHEMA)
+
+    def create(self, record: dict[str, Any]) -> None:
+        from psycopg.errors import UniqueViolation
+        from psycopg.types.json import Jsonb
+
+        try:
+            with self._connect() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        INSERT INTO ha_action_record (
+                            action_id, operational_entity_id, state, created_at,
+                            finished_at, acknowledged_at, record_json
+                        ) VALUES (%s,%s,%s,%s,%s,%s,%s)
+                        """,
+                        (
+                            record["action_id"], record["operational_entity_id"], record["state"],
+                            _parse_dt(record.get("created_at")), _parse_dt(record.get("finished_at")),
+                            _parse_dt(record.get("acknowledged_at")), Jsonb(record),
+                        ),
+                    )
+        except UniqueViolation as exc:
+            raise EvidenceBackendError(f"action record already recorded: {exc}") from exc
+        except Exception as exc:
+            raise EvidenceBackendError(f"postgres action record create failed: {exc}") from exc
+
+    def update(self, action_id: str, **fields: Any) -> None:
+        current = self.get(action_id)
+        if current is None:
+            raise EvidenceBackendError(f"action record {action_id!r} does not exist")
+        current.update(fields)
+        from psycopg.types.json import Jsonb
+
+        try:
+            with self._connect() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        UPDATE ha_action_record SET
+                            state = %s, finished_at = %s, acknowledged_at = %s, record_json = %s
+                        WHERE action_id = %s
+                        """,
+                        (
+                            current["state"], _parse_dt(current.get("finished_at")),
+                            _parse_dt(current.get("acknowledged_at")), Jsonb(current), action_id,
+                        ),
+                    )
+        except Exception as exc:
+            raise EvidenceBackendError(f"postgres action record update failed: {exc}") from exc
+
+    def get(self, action_id: str) -> dict[str, Any] | None:
+        try:
+            with self._connect() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT record_json FROM ha_action_record WHERE action_id = %s", (action_id,))
+                    row = cur.fetchone()
+        except Exception as exc:
+            raise EvidenceBackendError(f"postgres action record get failed: {exc}") from exc
+        return row[0] if row else None
+
+    def list_by_entity(self, operational_entity_id: str) -> list[dict[str, Any]]:
+        try:
+            with self._connect() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "SELECT record_json FROM ha_action_record WHERE operational_entity_id = %s",
+                        (operational_entity_id,),
+                    )
+                    rows = cur.fetchall()
+        except Exception as exc:
+            raise EvidenceBackendError(f"postgres action record list-by-entity failed: {exc}") from exc
+        return [row[0] for row in rows]
+
+    def list_all(self) -> list[dict[str, Any]]:
+        try:
+            with self._connect() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT record_json FROM ha_action_record")
+                    rows = cur.fetchall()
+        except Exception as exc:
+            raise EvidenceBackendError(f"postgres action record list failed: {exc}") from exc
+        return [row[0] for row in rows]
+
+
+# ---------------------------------------------------------------------------
 # Backend selection
 # ---------------------------------------------------------------------------
 
@@ -1176,6 +1380,7 @@ def verify_evidence_backend_ready() -> None:
         PostgresSchedulerStateBackend(dsn)
         PostgresOperationalWriteLedgerBackend(dsn)
         PostgresConsoleJobBackend(dsn)
+        PostgresActionRecordBackend(dsn)
     except EvidenceBackendError:
         raise
     except Exception as exc:
@@ -1234,3 +1439,12 @@ def select_console_job_backend(*, root: Path) -> ConsoleJobBackend:
     if kind not in ("filesystem", ""):
         raise EvidenceBackendError(f"Unsupported {ENV_BACKEND}: {kind!r}")
     return FilesystemConsoleJobBackend(root)
+
+
+def select_action_record_backend(*, root: Path) -> ActionRecordBackend:
+    kind = active_evidence_backend_kind()
+    if kind == "postgres":
+        return PostgresActionRecordBackend(_require_dsn())
+    if kind not in ("filesystem", ""):
+        raise EvidenceBackendError(f"Unsupported {ENV_BACKEND}: {kind!r}")
+    return FilesystemActionRecordBackend(root)
