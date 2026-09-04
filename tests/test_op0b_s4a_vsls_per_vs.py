@@ -72,6 +72,18 @@ _REAL_VSLS_C1_STANDBY = (
 )
 
 
+def _vsx_stat_table(vsids: "list[str]") -> str:
+    """The real `vsx stat -v` "Virtual Devices Status" pipe-table shape
+    (S8-B' real-env evidence, 2026-09-04) -- no per-device status column;
+    `parse_vsx_stat_v` anchors on the `ID | S <name>` row shape."""
+    header = (
+        " ID  | Type & Name             | Access Control Policy | Installed at    | Threat Prevention Policy | SIC Stat\n"
+        "-----+-------------------------+-----------------------+-----------------+--------------------------+---------\n"
+    )
+    rows = "".join(f"   {vsid} | S vs{vsid}                   | Policy...              |  3Sep2026 22:40 | <No Policy>              | Trust\n" for vsid in vsids)
+    return header + rows
+
+
 # =====================================================================
 # 1. Mode parser -- the real-env finding this whole build traces to
 # =====================================================================
@@ -176,27 +188,65 @@ class TestRunVsenv:
 
 
 # =====================================================================
+# 2b. B1 unparsed-layout diagnostic -- real-env finding, S8-B'
+#
+# Real device evidence: B1 (`vsx stat -v`) executed successfully on the
+# approved VSLS pair but `parse_vsx_stat_v` found zero VSID rows (both
+# members' `cp_vsx_vs_count` came back with no per-VSID status facts), so no
+# per-VS collection ever ran -- the console showed both VSIDs still on the
+# stale "out of physical scope" fallback reason despite a fresh preflight.
+# B1 was the only approved read whose `collect_member` call site never wired
+# the value-free `_report_unparsed_layout` diagnostic every other read
+# (A4/A5/A6/A7) already has -- fixed here so the NEXT real run reports an
+# observed layout instead of silence.
+# =====================================================================
+
+class TestB1UnparsedLayoutDiagnostic:
+    def test_b1_reports_unparsed_layout_when_no_vsids_found(self, monkeypatch):
+        import checkpoint.preflight_collector as pc
+
+        seen: list[str] = []
+        monkeypatch.setattr(pc, "warn", seen.append)
+        pc._report_unparsed_layout(
+            "B1 vsx stat -v", {"success": True, "stdout": "Context ID  Name  Type  Status"},
+            {"observed": False},
+        )
+        assert len(seen) == 1
+        assert "B1 vsx stat -v" in seen[0] and "observed layout" in seen[0]
+
+    def test_b1_silent_when_it_actually_parses(self, monkeypatch):
+        import checkpoint.preflight_collector as pc
+
+        seen: list[str] = []
+        monkeypatch.setattr(pc, "warn", seen.append)
+        pc._report_unparsed_layout("B1 vsx stat -v", {"success": True, "stdout": "x"}, {"observed": True})
+        assert seen == []
+
+
+# =====================================================================
 # 3. enumerated_vsids -- VS0 excluded, deterministic order
 # =====================================================================
 
 class TestEnumeratedVsids:
-    def _member_evidence(self, statuses: dict[str, str]) -> PreflightMemberEvidence:
+    def _member_evidence(self, vsids: "list[str]") -> PreflightMemberEvidence:
         from checkpoint.cp_preflight_projection import project_cp_vsx_enumeration_facts
         from checkpoint.cp_preflight_extraction import parse_vsx_stat_v
 
-        rows = "\n".join(f"VSID {vsid}    name{vsid}        {status}" for vsid, status in statuses.items())
         facts = project_cp_vsx_enumeration_facts(
-            parse_vsx_stat_v(rows), preflight_run_id="r1", collected_at="2026-09-04T00:00:00Z",
+            parse_vsx_stat_v(_vsx_stat_table(vsids)), preflight_run_id="r1", collected_at="2026-09-04T00:00:00Z",
             physical_device_identity="m1", operational_entity_id="grp1",
         )
         return PreflightMemberEvidence(physical_device_identity="m1", own_facts=facts, peer_claim_facts=())
 
     def test_vs0_excluded(self):
-        ev = self._member_evidence({"0": "active", "1": "active", "2": "standby"})
+        # VSID "0" never appears as its own row in the real "Virtual Devices
+        # Status" table (it's the physical/VS0 context itself) -- confirmed
+        # here anyway since `enumerated_vsids` defends against it explicitly.
+        ev = self._member_evidence(["0", "1", "2"])
         assert enumerated_vsids(ev) == ["1", "2"]
 
     def test_numeric_sort_not_lexical(self):
-        ev = self._member_evidence({str(n): "active" for n in (10, 2, 1)})
+        ev = self._member_evidence(["10", "2", "1"])
         assert enumerated_vsids(ev) == ["1", "2", "10"]
 
     def test_no_vsids_is_empty(self):
@@ -214,10 +264,14 @@ class TestCollectMemberVsxPerVs:
         return MemberSession(physical_device_identity="member-token-a", _run_command=run), calls
 
     def _happy_script(self, *vsids: str) -> dict[str, dict]:
+        # A bare `MemberSession()` here never had `resolve_execution_context`
+        # called, so `session.a6_form is None` and C2 (A6) is never sent --
+        # only C1 (`cphaprob stat`) and C3 (`fw stat`) need scripting.
         script: dict[str, dict] = {}
         for vsid in vsids:
             script[f"vsenv {vsid}"] = {"success": True, "stdout": "", "stderr": ""}
         script["cphaprob stat"] = {"success": True, "stdout": _REAL_VSLS_C1_ACTIVE, "stderr": ""}
+        script["fw stat"] = {"success": True, "stdout": "Policy name: Standard_Policy", "stderr": ""}
         script["vsenv 0"] = {"success": True, "stdout": "", "stderr": ""}
         return script
 
@@ -227,7 +281,10 @@ class TestCollectMemberVsxPerVs:
             session, vsids=["1", "2"], physical_operational_entity_id="grp1", preflight_run_id="run-1",
         )
         assert set(result.keys()) == {"1", "2"}
-        assert calls == ["vsenv 1", "cphaprob stat", "vsenv 0", "vsenv 2", "cphaprob stat", "vsenv 0"]
+        assert calls == [
+            "vsenv 1", "cphaprob stat", "fw stat", "vsenv 0",
+            "vsenv 2", "cphaprob stat", "fw stat", "vsenv 0",
+        ]
 
     def test_facts_carry_vsid_context_and_vs_unit_operational_id(self):
         session, _ = self._session(self._happy_script("1"))
@@ -262,7 +319,7 @@ class TestCollectMemberVsxPerVs:
         assert "1" not in result  # unverified switch: no read, no attribution
         assert "2" in result
         # No read/restore issued for VSID 1's failed switch -- straight to VSID 2.
-        assert calls == ["vsenv 1", "vsenv 2", "cphaprob stat", "vsenv 0"]
+        assert calls == ["vsenv 1", "vsenv 2", "cphaprob stat", "fw stat", "vsenv 0"]
 
     def test_failed_restore_stops_remaining_vsids(self):
         script = self._happy_script("1", "2")
@@ -273,7 +330,7 @@ class TestCollectMemberVsxPerVs:
         )
         assert "1" in result
         assert "2" not in result  # never attempted -- restore after VSID 1 failed
-        assert calls == ["vsenv 1", "cphaprob stat", "vsenv 0"]
+        assert calls == ["vsenv 1", "cphaprob stat", "fw stat", "vsenv 0"]
 
     def test_no_cross_vs_fact_leakage_between_two_vsids(self):
         script = self._happy_script("1", "2")
@@ -291,7 +348,7 @@ class TestCollectMemberVsxPerVs:
             session, vsids=["2", "1"], physical_operational_entity_id="grp1", preflight_run_id="run-1",
         )
         assert calls[0] == "vsenv 2"
-        assert calls[3] == "vsenv 1"
+        assert calls[4] == "vsenv 1"
 
 
 # =====================================================================
@@ -369,7 +426,7 @@ class TestRunCpPreflightVsls:
             COMMAND_TEXT[CPPreflightRead.A6_SYNCSTAT]: "Sync Status: OK",
             COMMAND_TEXT[CPPreflightRead.A7_FW_STAT]: "Policy name: Standard_Policy",
             COMMAND_TEXT[CPPreflightRead.A8_CLISH_FAILOVER]: "Cluster failover count: 2",
-            COMMAND_TEXT[CPPreflightRead.B1_VSX_STAT]: "VSID 0    VS0        Active\nVSID 1    LeasedLine Active\nVSID 2    Extranet   Standby",
+            COMMAND_TEXT[CPPreflightRead.B1_VSX_STAT]: _vsx_stat_table(["1", "2"]),
             "vsenv 1": "",
             "vsenv 2": "",
             "vsenv 0": "",
@@ -426,10 +483,10 @@ class TestRunCpPreflightVsls:
         assert set(restore_targets) == {"0"}
 
     def test_cap_enforced(self, monkeypatch):
-        many_vsids = "\n".join(f"VSID {n}    name{n}        Active" for n in range(1, MAX_VS_SCOPES_PER_PREFLIGHT + 5))
+        many_vsids = [str(n) for n in range(1, MAX_VS_SCOPES_PER_PREFLIGHT + 5)]
         script = self._physical_script("active", "gw-a")
-        script[COMMAND_TEXT[CPPreflightRead.B1_VSX_STAT]] = f"VSID 0    VS0        Active\n{many_vsids}"
-        for n in range(1, MAX_VS_SCOPES_PER_PREFLIGHT + 5):
+        script[COMMAND_TEXT[CPPreflightRead.B1_VSX_STAT]] = _vsx_stat_table(many_vsids)
+        for n in many_vsids:
             script[f"vsenv {n}"] = ""
         opened = self._connect_stub(monkeypatch, {"mem-a": script})
         members = [CPPhysicalMemberTarget(physical_device_identity="mem-a", expected_device_name="mem-a", management_ip="10.0.0.1")]
@@ -443,6 +500,71 @@ class TestRunCpPreflightVsls:
         snapshot = run_cp_preflight(operational_entity_id="grp1", unit_type="clusterxl", members=members, username="u", secret="s")
         assert snapshot.subordinate_snapshots == ()
         assert not any(c.startswith("vsenv") for c in opened["mem-a"].sent)
+
+    def _inventory_rows(self, group="grp1", vsids=("1", "2")):
+        rows = [
+            {"device": d, "source": "cp", "cluster_topology": {"group_id": group, "display_name": "Core"},
+             "inventory_status": {"data_state": "ok"}}
+            for d in ("mem-a", "mem-b")
+        ]
+        for d in ("mem-a", "mem-b"):
+            for vsid in vsids:
+                rows.append({"device": d, "source": "vsx", "vs_id": vsid, "vsys": f"vs{vsid}", "inventory_status": {"data_state": "ok"}})
+        return rows
+
+    def test_end_to_end_vs_unit_readiness_uses_per_vs_plus_shared_evidence(self, monkeypatch):
+        """The real fix this campaign was about: after a real S8-B'' run, a
+        VS unit must reach an honest, evidence-correct seven-check table --
+        not the blanket out-of-scope reason, and not a fabricated PASS.
+        `viable_target`/`control_sync_link_health`/`parity` need the shared
+        physical facts (pnote, link health, software version) this test
+        proves actually reach the VS unit's snapshot; `no_split_brain` needs
+        only the per-VS role read; `preemption_known`/`flap_history` stay
+        INSUFFICIENT regardless (D-V7b/D-F3, unresolved product decisions)."""
+        from utils.failover import compute_ha_readiness
+
+        scripts = {
+            "mem-a": self._physical_script("active", "gw-a"),
+            "mem-b": self._physical_script("standby", "gw-b"),
+        }
+        self._connect_stub(monkeypatch, scripts)
+        members = [
+            CPPhysicalMemberTarget(physical_device_identity="mem-a", expected_device_name="mem-a", management_ip="10.0.0.1"),
+            CPPhysicalMemberTarget(physical_device_identity="mem-b", expected_device_name="mem-b", management_ip="10.0.0.2"),
+        ]
+        snapshot = run_cp_preflight(
+            operational_entity_id="grp1", unit_type="vsx", members=members, username="u", secret="s",
+        )
+        report = compute_ha_readiness(
+            self._inventory_rows(), preflight_snapshots=[snapshot, *snapshot.subordinate_snapshots],
+        )
+        for vsid in ("1", "2"):
+            unit = next(u for u in report["units"] if u["unit_id"] == f"grp1__vsid_{vsid}")
+            checks = {c["id"]: c for c in unit["checks"]}
+            assert unit["evidence"]["basis"] == "op0b_preflight_snapshot"
+            assert checks["no_split_brain"]["status"] == "PASS", checks["no_split_brain"]
+            assert checks["viable_target"]["status"] == "PASS", checks["viable_target"]
+            assert checks["state_sync_current"]["status"] == "PASS", checks["state_sync_current"]
+            assert checks["control_sync_link_health"]["status"] == "PASS", checks["control_sync_link_health"]
+            assert checks["parity"]["status"] == "PASS", checks["parity"]
+            for reason in (checks["viable_target"]["reason"], checks["control_sync_link_health"]["reason"]):
+                assert reason != "vs_state_out_of_physical_scope_preflight_battery"
+            # preemption/flap stay insufficient regardless of evidence (open decisions).
+            assert checks["preemption_known"]["status"] == "INSUFFICIENT_EVIDENCE"
+            assert checks["flap_history"]["status"] == "INSUFFICIENT_EVIDENCE"
+            # Task §29: five real PASSes is not a green light -- D-V7b/D-F3
+            # keep SAFE_TO_FAILOVER structurally unreachable (contract P4),
+            # and this asserts that stays true even with rich real evidence.
+            assert unit["verdict"] == "INSUFFICIENT_EVIDENCE"
+            # No verdict inherited from the physical parent or the sibling VSID.
+            assert unit["parent_id"] == "grp1"
+            # Task §21: the VS unit's own C1 read genuinely establishes its
+            # own cluster_mode -- never "unknown" merely because mode is
+            # ALSO stored on the physical parent, and never a fabricated
+            # copy of the parent's mode fact.
+            assert unit["cluster_mode"] == "vsx_vsls"
+        parent = next(u for u in report["units"] if u["unit_id"] == "grp1")
+        assert parent["cluster_mode"] == "vsx_vsls"
 
 
 # =====================================================================

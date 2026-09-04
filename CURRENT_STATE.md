@@ -13,7 +13,7 @@ generated one-line timeline.
   **REAL_ENV_VALIDATED** on the approved CP ClusterXL pair (see "Active
   build"). `now_next.next` = `op0b_s8_real_env_validation` — S8-A **PASS**
   (PO-accepted); S8-B VSX found the pair runs VSLS, per-VSID readiness
-  implemented, S8-B' re-validation + S8-C PAN operator-run.
+  implemented, S8-B'' complete-readiness re-validation + S8-C PAN operator-run.
   `cp_remote_collection_done_marker_diagnostics` stays `now_next.upcoming`.
 - **OP.2.0 CLASS 2 architecture** (`docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md`):
   **CONTRACT FROZEN 2026-09-04** (PO, after the independent challenge
@@ -75,7 +75,7 @@ found the pair runs **VSLS**, overturning "physical parent is the sole
 readiness unit" — per-VSID readiness implemented (S4-A': `no_split_brain`
 PASSes per-VS, `viable_target` stays honest INSUFFICIENT, no CLASS 2
 change; `docs/history/phase/OP_0B_S4A_VSX_PER_VS_FAILOVER_DOMAIN_REVIEW.md`).
-S8-B' re-validation is `now_next.next`. **S8-C PAN**: paused behind it.
+S8-B'' complete-readiness re-validation is `now_next.next`. **S8-C PAN**: paused behind it.
 
 **Stalled, moved to `now_next.upcoming`:**
 `cp_remote_collection_done_marker_diagnostics` — still `IN_PROGRESS`,
@@ -124,9 +124,9 @@ causes are ruled out by source inspection. Leading-zero normalization is
 
 `cp_remote_collection_done_marker_diagnostics` (`now_next.upcoming`) needs a
 real recurrence with the new diagnostic fields — independent of `OP.0b`.
-`now_next.next` is **`op0b_s8_real_env_validation`** — S8-A done; **S8-B'**
-(VSLS per-VSID re-validation, S4-A) and **S8-C** (approved PAN pair, paused
-behind S8-B') remain, operator-run, SAFE counts only. `OP.0b` closure law:
+`now_next.next` is **`op0b_s8_real_env_validation`** — S8-A done; **S8-B''**
+(VSLS complete per-VSID readiness re-validation) and **S8-C** (approved PAN
+pair, paused behind S8-B'') remain, operator-run, SAFE counts only. `OP.0b` closure law:
 fresh CLI readiness must equal Operator-Console readiness for the same
 invocation. `OP.0b` is **not DONE**. Backlog (PO request):
 `cp_preflight_ccp_tablestat_evidence` — a NEW command, gate row + readiness
