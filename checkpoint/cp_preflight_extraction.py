@@ -345,3 +345,58 @@ def parse_vsx_stat_v(stdout: str | None) -> dict[str, Any]:
         status = status_token if status_token in _VS_STATUS_TOKENS else None
         rows.append({"vsid": vsid, "status": status})
     return {"observed": bool(rows), "vs_rows": rows}
+
+
+# --- Value-free layout diagnostic for an unparsed read ---------------------
+
+#: Bounded so a diagnostic can never become a raw-output channel.
+_SKELETON_MAX_LINES = 8
+_SKELETON_MAX_WIDTH = 96
+
+
+def structural_skeleton(stdout: str | None, *, max_lines: int = _SKELETON_MAX_LINES) -> str:
+    """Reduce output to its **layout**, discarding every value.
+
+    Three times in OP.0b S8 a read executed correctly and its parser matched
+    nothing, because the assumed output shape was not the device's shape
+    (`fw stat`, `cphaprob -a if`, `cphaprob -ia list`). Each cost a
+    real-environment round trip, and the only alternative on offer was
+    guessing another shape. This closes that loop without ever moving a
+    device value off the device.
+
+    Every letter becomes `A`, every digit `9`; whitespace runs collapse to a
+    single space; structural punctuation (`:`, `-`, `.`, `,`, `(`, `)`, `/`,
+    `%`, `=`) survives because that is what distinguishes a column table from
+    a `key: value` block. So
+
+        Interface Active Check  0   none   OK   56.9 sec
+
+    becomes
+
+        AAA AAA AAA 9 AAA AAA 99.9 AAA
+
+    which identifies the layout and reconstructs no hostname, address,
+    policy name, interface name, role or count. Bounded in both directions
+    (`max_lines`, `_SKELETON_MAX_WIDTH`) so it can never become a raw-output
+    side channel, and never persisted -- the caller logs it and drops it.
+    """
+    lines: list[str] = []
+    for raw in str(stdout or "").splitlines():
+        if not raw.strip():
+            continue
+        shaped: list[str] = []
+        for char in raw.strip()[:_SKELETON_MAX_WIDTH]:
+            if char.isalpha():
+                shaped.append("A")
+            elif char.isdigit():
+                shaped.append("9")
+            elif char in ":-.,()/%=":
+                shaped.append(char)
+            else:
+                shaped.append(" ")
+        collapsed = re.sub(r"A+", "A", "".join(shaped))
+        collapsed = re.sub(r"9+", "9", collapsed)
+        lines.append(re.sub(r"\s+", " ", collapsed).strip())
+        if len(lines) >= max_lines:
+            break
+    return " | ".join(lines)

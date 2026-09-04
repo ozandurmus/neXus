@@ -32,7 +32,7 @@ import time
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Callable, Sequence
+from typing import Callable, Mapping, Sequence
 
 from checkpoint.cp_preflight_battery import (
     COMMAND_TEXT,
@@ -47,6 +47,7 @@ from checkpoint.cp_preflight_extraction import (
     parse_cphaprob_ia_list,
     parse_fw_stat_policy,
     parse_vsx_stat_v,
+    structural_skeleton,
 )
 from checkpoint.cp_preflight_projection import (
     project_cp_failover_history_facts,
@@ -72,6 +73,7 @@ from configuration.checkpoint_config_probe import (
     _identity_gate,
     _parse_hostname,
 )
+from utils.logger import warn
 from utils.failover.preflight_model import (
     FactCategory,
     FactContext,
@@ -163,6 +165,26 @@ def classify_execution_context_gap(command_text: str, result: dict) -> bool:
         return False
     text = f"{result.get('stdout') or ''}\n{result.get('stderr') or ''}".lower()
     return any(marker in text for marker in _CLISH_REJECTION_MARKERS)
+
+
+def _report_unparsed_layout(read_label: str, result: dict, parsed: Mapping | None) -> None:
+    """Say what an executed-but-unparsed read actually looked like.
+
+    Three times in this campaign a read returned `success` and its parser
+    matched nothing, and each time the only way forward on offer was to guess
+    another output shape. This reports the observed **layout** instead --
+    letters to `A`, digits to `9`, structural punctuation kept -- which
+    distinguishes a column table from a `key: value` block while
+    reconstructing no device value whatsoever. Logged and dropped: it is
+    never persisted, never a `PreflightFact`, and never readiness input.
+    """
+    if not result.get("success"):
+        return
+    if parsed is not None and parsed.get("observed"):
+        return
+    skeleton = structural_skeleton(str(result.get("stdout") or ""))
+    if skeleton:
+        warn(f"{read_label}: executed but produced no usable evidence; observed layout: {skeleton}")
 
 
 # --- Session abstraction: one per physical member, reused for every read ---
@@ -443,6 +465,7 @@ def collect_member(
     a4_at = _utc_now()
     a4_result = session.run(CPPreflightRead.A4_LINK_IF)
     a4_parsed = parse_cphaprob_a_if(str(a4_result.get("stdout") or "")) if a4_result.get("success") else None
+    _report_unparsed_layout("A4 cphaprob -a if", a4_result, a4_parsed)
     own_facts.extend(
         project_cp_link_health_facts(
             a4_parsed, preflight_run_id=preflight_run_id, collected_at=a4_at,
@@ -455,6 +478,7 @@ def collect_member(
     a5_at = _utc_now()
     a5_result = session.run(CPPreflightRead.A5_PNOTE_LIST)
     a5_parsed = parse_cphaprob_ia_list(str(a5_result.get("stdout") or "")) if a5_result.get("success") else None
+    _report_unparsed_layout("A5 cphaprob -ia list", a5_result, a5_parsed)
     own_facts.extend(
         project_cp_pnote_facts(
             a5_parsed, preflight_run_id=preflight_run_id, collected_at=a5_at,
@@ -478,6 +502,7 @@ def collect_member(
         a6_at = _utc_now()
         a6_result = session.run(a6_form)
         a6_parsed = parse_cp_sync_status(str(a6_result.get("stdout") or "")) if a6_result.get("success") else None
+        _report_unparsed_layout(f"A6 {a6_form.value}", a6_result, a6_parsed)
         own_facts.extend(
             project_cp_sync_facts(
                 a6_parsed, preflight_run_id=preflight_run_id, collected_at=a6_at,
@@ -490,6 +515,7 @@ def collect_member(
     a7_at = _utc_now()
     a7_result = session.run(CPPreflightRead.A7_FW_STAT)
     a7_parsed = parse_fw_stat_policy(str(a7_result.get("stdout") or "")) if a7_result.get("success") else None
+    _report_unparsed_layout("A7 fw stat", a7_result, a7_parsed)
     own_facts.extend(
         project_cp_policy_facts(
             a7_parsed, preflight_run_id=preflight_run_id, collected_at=a7_at,
