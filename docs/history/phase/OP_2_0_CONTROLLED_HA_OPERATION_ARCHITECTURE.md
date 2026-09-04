@@ -777,6 +777,15 @@ contract makes it operative, and adding what it lacked:
   `OP.0b.0` domain invariant 9, unchanged). A VS role differing from its
   physical member's is `RELATIONSHIP_INCONSISTENT` to surface, never a
   reason to plan a per-VS action.
+
+  **SUPERSEDED for readiness (not CLASS 2), 2026-09-04:** the "non-VSLS
+  estate" premise does not hold for the approved VSX pair — real-env S8-B
+  evidence established `Cluster Mode: Virtual System Load Sharing (Active
+  Up)` on both members. `docs/history/phase/OP_0B_S4A_VSX_PER_VS_FAILOVER_DOMAIN_REVIEW.md`
+  amends `OP.0b.0` domain invariant 9 the same way. **This paragraph's CLASS
+  2 half is UNCHANGED**: a VSID is still never a lock subject and never an
+  action target under this contract — that would require a separate `OP.2`
+  amendment (management-plane adapter, its own gate rows), not made here.
 - **PAN VSYS** is never an operational unit.
 - **PAN pair identity is not established.** The serial-keyed candidate key
   `sorted(I2_A, I2_B)` is explicitly **NOT FROZEN** (`OP.0b.0`

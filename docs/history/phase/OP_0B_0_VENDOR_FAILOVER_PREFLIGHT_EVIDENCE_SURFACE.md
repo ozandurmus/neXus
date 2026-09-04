@@ -205,6 +205,20 @@ document.
    this estate: without VSLS the whole VSX gateway fails over. A VS role that
    differs from its physical member's role is therefore an anomaly to surface
    (`RELATIONSHIP_INCONSISTENT`), never a reason to plan a per-VS action.
+
+   **SUPERSEDED for readiness (not execution), 2026-09-04 — `OP.0b S4-A`/S4-A'
+   (real-env finding, S8-B):** the approved VSX pair's own `Cluster Mode:`
+   line reads *"Virtual System Load Sharing (Active Up)"* on both members —
+   this estate runs VSLS, not plain VSX HA. Under VSLS a Virtual System DOES
+   have independent per-VS HA state and IS an independent readiness unit;
+   `docs/history/phase/OP_0B_S4A_VSX_PER_VS_FAILOVER_DOMAIN_REVIEW.md`
+   records the PO-corrected model and vendor evidence. The "not an execution
+   target" half of this paragraph is UNCHANGED — no CLASS 2 amendment has
+   been made and none is implemented here — but "without VSLS the whole VSX
+   gateway fails over" is no longer this estate's premise. This paragraph's
+   original text is left verbatim above as the historical record of what
+   was frozen 2026-09-03; it is not authoritative for readiness scope going
+   forward where it conflicts with this note.
 10. **Nothing in this contract authorizes CLASS 2.** See §"CLASS 2 handoff".
 
 ## Operational entity model

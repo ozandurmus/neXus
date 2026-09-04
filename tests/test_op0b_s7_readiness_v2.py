@@ -586,10 +586,18 @@ def test_23c_vs_keeps_legacy_reason_when_no_fresh_preflight_ran_at_all():
     assert "vs_state_out_of_physical_scope_preflight_battery" not in reasons
 
 
-def test_24_no_vsls_behavior():
+def test_24_no_vsls_mutation_behavior():
+    """OP.0b S4-A' (real-env VSLS finding, PO correction 2026-09-04): VSLS is
+    a legitimate, supported CP failover mode now (`vsx_vsls`) -- this
+    replaces the earlier blanket "no vsls" source ban. What stays banned is
+    any VSLS *mutation*/execution primitive; this evaluator computes
+    readiness only, never a CLASS 2 action."""
     for path in ("utils/failover/preflight_readiness.py", "utils/failover/assessment.py"):
-        assert "vsls" not in _code_only(ROOT / path).lower()
+        code = _code_only(ROOT / path).lower()
+        for forbidden in ("vsx_util", "clusterxl_admin", "cphastop"):
+            assert forbidden not in code
     assert "vsx_single_vs_failover" in readiness_module.CP_SUPPORTED_FAILOVER_MODES
+    assert "vsx_vsls" in readiness_module.CP_SUPPORTED_FAILOVER_MODES
     # A VS is never keyed as its own physical failover target: its unit id is subordinate to the parent.
     report = cp_report(_vsx_snapshot(), rows=vsx_rows())
     assert all(u["unit_id"].startswith(_CP_UNIT) for u in report["units"])
