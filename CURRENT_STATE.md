@@ -7,14 +7,12 @@ detail is not here either** — it is in `project/build_history.json`
 linked documents under `docs/history/`. `docs/history/INDEX.md` is the
 generated one-line timeline.
 
-- **Checkpoint:** 2026-09-04, branch `main` (S8-A ClusterXL closure merged).
+- **Checkpoint:** 2026-09-04, branch `claude/pan-real-env-validation-tum9pg`.
 - **Current build** (per `project/roadmap.json` `now_next.now`):
-  `op0b_s8a_clusterxl_execution_model_console_parity` —
-  **REAL_ENV_VALIDATED** on the approved CP ClusterXL pair (see "Active
-  build"). `now_next.next` = `op0b_s8_real_env_validation` — S8-A **PASS**
-  (PO-accepted); S8-B'' VSX per-VSID readiness **REAL_ENV_VALIDATED**; S8-C
-  PAN (approved pair, operator-run) is next.
-  `cp_remote_collection_done_marker_diagnostics` stays `now_next.upcoming`.
+  `op0b_s8c_pan_dedicated_ha1_real_env_correction` — **REAL_ENV_VALIDATED**
+  (see "Active build"). `now_next.next` = `op0b_s9_ui_authority_reconciliation`,
+  confirmed **NOT STARTED**. `cp_remote_collection_done_marker_diagnostics`
+  stays `now_next.upcoming`.
 - **OP.2.0 CLASS 2 architecture** (`docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md`):
   **CONTRACT FROZEN 2026-09-04** (PO, after the independent challenge
   review) — architecture authority only, not a build; CLASS 2 **not
@@ -51,45 +49,40 @@ test-enforced boundaries. Current numbers:
 
 ## Active build
 
-**`op0b_s8a_clusterxl_execution_model_console_parity`** —
-**REAL_ENV_VALIDATED**, 2026-09-04. The live S8-A campaign proved the CP
-preflight's remote execution primitive wrong — one non-interactive exec
-channel per read, each dispatched through the Gaia CLI wrapper, so the five
-bare Expert reads never executed — and corrected it: one persistent Expert
-shell per member (existing `InteractiveSshSession`), reads framed by a
-per-session `echo` of `$?`, `INTER_COMMAND_DELAY_SECONDS = 0.3` strictly
-between completed reads (#55/#56). Real output shapes recognised
-fail-closed: `fw stat` table, `cphaprob -a if` annotated rows, `cphaprob -ia
-list` healthy sentence, A8 count wording (#52/#56/#60); an unrecognised
-shape now reports a value-free layout skeleton (#58). The operator report is
-regenerated from the SAME canonical readiness record the CLI prints — one
-evaluation, two renderers, no snapshot persistence, no TTL, UI
-projection-only (#59). Withdrawn: the predecessor's `$PATH`/PTY and
-account-shell diagnoses and its exec-channel model. Detail: `project/build_history.json`.
+**`op0b_s8c_pan_dedicated_ha1_real_env_correction`** —
+**REAL_ENV_VALIDATED**, 2026-09-04. The approved PAN pair uses **dedicated
+HA1 addressing**; the preflight's old pre-contact pairing gate
+(`peer-ip == peer's management_ip`) never holds for that valid topology and
+was circular (refused contact before the evidence that could prove
+correspondence could be collected) — **REAL_ENV_DISPROVEN** as a universal
+invariant. Corrected: bounded candidate resolution from the explicit
+selector alone, then fresh post-contact management-plane correspondence
+(`MATCH`/`MISMATCH`/`MISSING`/`NOT_EVALUABLE`/`AMBIGUOUS`) from already-
+collected P1/P2 evidence — descriptive only, never gates a check, never
+establishes PAN B2; `_derive_pan_units`'s stored-telemetry pairing
+unchanged. Same-day UI fix: no more tripled PAN report row per invocation.
+No new API operation, mutation, or readiness-contract change. Detail:
+`docs/history/phase/OP_0B_S8C_PAN_DEDICATED_HA1_REAL_ENV_CORRECTION.md`.
 
-**S8-A (CP ClusterXL pair): PASS, PO-accepted.** 8/8 reads success; four
-checks PASS; `preemption_known` D-V7b and `flap_history` D-F3
-INSUFFICIENT_EVIDENCE by decision; Operator Console identical to the CLI
-for all seven checks, MODE the fresh ClusterXL mode. **S8-B VSX**: real-env
-found the pair runs **VSLS**, overturning "physical parent is the sole
-readiness unit" — per-VSID readiness completed (S8-B'': five checks real
-PASS on both VSIDs, matching the physical parent check-for-check;
-`preemption_known`/`flap_history` stay INSUFFICIENT_EVIDENCE by D-V7b/D-F3;
-generic out-of-scope reason confirmed absent; no CLASS 2 change;
-`docs/history/phase/OP_0B_S4A_VSX_PER_VS_FAILOVER_DOMAIN_REVIEW.md`).
-**S8-B'' REAL_ENV_VALIDATED**, 2026-09-04. **S8-C PAN** is `now_next.next`.
+**S8-A CP ClusterXL: PASS, PO-accepted. S8-B'' VSX (VSLS per-VSID) and S8-C
+PAN: both REAL_ENV_VALIDATED** — S8-C: 2/2 candidates, P1/P2/P4 success
+both members, 5/7 checks real PASS (the other two correctly
+INSUFFICIENT_EVIDENCE by unconfigured feature / open D-F3, not defects),
+pair correspondence `MATCH`, PAN B2 stays **NOT ESTABLISHED**.
 
-**Stalled, moved to `now_next.upcoming`:**
-`cp_remote_collection_done_marker_diagnostics` — still `IN_PROGRESS`,
-independent subsystem, does not block `OP.0b`. Root cause of a real
-`RuntimeError('CP remote collection ended without DONE marker')` remains
-`UNKNOWN`; a stderr classifier (`_classify_stderr_sample`) now reports a
-safe category token instead of a bare byte count. Resume when a real
-recurrence report with the new diagnostic fields is available. Detail:
-`project/build_history.json`.
+**OP.0b closure: read-only S1–S8 scope CLOSED, 2026-09-04.** S9 (UI
+authority reconciliation — `static/inventory_ui.js`, `utils/merge.py`,
+`utils/config_ui.py`) is the one remaining slice, confirmed **NOT
+STARTED** — now `now_next.next`. `D-V3a`/`D-V7b`/`D-F3`/PAN B2/CLASS-2
+gates remain correctly, intentionally open — full classification in the
+S8-C phase doc's "OP.0b closure assessment".
 
-**Predecessors:** `op0b_s75_preflight_entrypoint` through
-`op0b_s1_preflight_fact_provenance_model` — AUTOMATED_VALIDATED; `project/build_history.json`.
+**Stalled, `now_next.upcoming`:** `cp_remote_collection_done_marker_diagnostics`
+— independent, does not block `OP.0b`; resume on a real recurrence.
+
+**Predecessors:** `op0b_s8a_clusterxl_execution_model_console_parity`
+through `op0b_s1_preflight_fact_provenance_model` — REAL_ENV_VALIDATED /
+AUTOMATED_VALIDATED; `project/build_history.json`.
 
 ## `OP.0b.0` — FROZEN WITH REAL-ENV VALIDATION GATES
 
@@ -122,22 +115,31 @@ causes are ruled out by source inspection. Leading-zero normalization is
 **not authorized** (opaque-identifier law). Tracked as `project/backlog.json`
 `pan_serial_representation_identity_evidence_closure`.
 
+**2026-09-04 addendum:** a manual (non-authoritative) `show
+high-availability all` observation appears to conflict with the `MISMATCH`
+above — not reconciled, B2 stays NOT ESTABLISHED. S8-C separately
+established genuine fresh **management-plane** (not serial) correspondence
+= `MATCH`, a narrower question never promoted toward B2 — see the S8-C
+phase doc.
+
 ## Exact next build
 
 `cp_remote_collection_done_marker_diagnostics` (`now_next.upcoming`) needs a
 real recurrence with the new diagnostic fields — independent of `OP.0b`.
-`now_next.next` is **`op0b_s8_real_env_validation`** — S8-A/S8-B'' done;
-**S8-C** (approved PAN pair) remains, operator-run, SAFE counts only. `OP.0b` closure law:
-fresh CLI readiness must equal Operator-Console readiness for the same
-invocation. `OP.0b` is **not DONE**. Backlog (PO request):
-`cp_preflight_ccp_tablestat_evidence` — a NEW command, gate row + readiness
-mapping required first.
+`now_next.next` is **`op0b_s9_ui_authority_reconciliation`** — client-side
+PAN/CP pairing + HA vocabulary heuristics (`static/inventory_ui.js`,
+`utils/merge.py`, `utils/config_ui.py`) still bypass the canonical
+`compute_ha_readiness` evaluator; confirmed NOT STARTED. `OP.0b`'s
+read-only S1–S8 scope is **CLOSED**; the whole build is not DONE until S9
+lands. Backlog (PO request): `cp_preflight_ccp_tablestat_evidence` — a NEW
+command, gate row + readiness mapping required first.
 
-`D-V3a`/`D-V7b` stay **preserved unresolved CLASS-2 blockers** (`upcoming`).
-Independent `upcoming` movements, any order: **A.** close `D-V3a`/`D-V7b` —
-GitHub-mirror first, then human-assisted fetch (`Sonnet 5, extended thinking
-high`). **B.** `D-F3` flap threshold — product-owner call (blocks check 7 for
-both vendors). **C.** PAN serial identity closure — hardware-blocked.
+`D-V3a`/`D-V7b` stay preserved unresolved CLASS-2 blockers, permitted open
+by the frozen contract. Independent `upcoming` movements, any order:
+**A.** `D-V3a`/`D-V7b` closure (GitHub-mirror then human-fetch). **B.** `D-F3`
+flap threshold — product-owner call. **C.** PAN serial identity closure —
+hardware-blocked, in tension with a manual 2026-09-04 observation (see
+above), not reconciled. **D.** S9 (`now_next.next`).
 
 ## Open blockers
 
@@ -169,12 +171,10 @@ Concurrency budget stays at 1 per vendor pending its own real-environment eviden
 ## Automated test baseline
 
 ```
-1630 passed / 24 skipped / 0 failed (2026-09-04,
-  op0b_s8a_clusterxl_execution_model_console_parity, local sandbox, serial)
-  -- over the op0b_s75_preflight_entrypoint baseline of 1468/24/0, from ten
-  S8 regression files (trust, retry, A3 differential, session architecture,
-  persistent-shell framing, real CLI path, real output shapes, layout
-  diagnostic, capability-gap/pacing, console parity).
+1681 passed / 26 skipped / 0 failed (2026-09-04,
+  op0b_s8c_pan_dedicated_ha1_real_env_correction, serial) -- over the
+  1630/24/0 baseline, from the PAN dedicated-HA1 correction (20 new/changed
+  tests, tests/test_op0b_s7_readiness_v2.py + tests/test_op0b_s75_preflight_entrypoint.py).
 Repository privacy gate: PASS / 0 findings, clean checkout.
 Project-state consistency: metadata_warnings == [] under all cross-authority rules.
 ```

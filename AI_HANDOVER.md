@@ -16,75 +16,109 @@ doc. Prior versions are in git history.
 
 ## 1. Snapshot
 
-- Date: 2026-09-04. Product build unchanged: `op0b_s8a_clusterxl_execution_model_console_parity`
-  REAL_ENV_VALIDATED; S8-A PASS, PO-accepted; **S8-B (VSX) / S8-C (PAN) NOT
-  EXECUTED** — operator-run.
-- **OP.2.0** (`docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md`):
-  independent challenge review applied, then **CONTRACT FROZEN 2026-09-04**
-  by PO decision. Architecture authority only — not a build; CLASS 2 not
-  implemented, not reachable, no member; no product source changed.
-- **Language governance:** the Turkish session preamble requirement was
-  removed at its source (`AI_START_HERE.md` SESSION START); `AGENTS.md`
-  "Engineering-output language law" is now the single owner; one
-  regression guards the instruction surface.
+- Date: 2026-09-04. Product build: `op0b_s8c_pan_dedicated_ha1_real_env_correction`
+  **REAL_ENV_VALIDATED** on the approved real PAN pair. S8-A/S8-B''/S8-C all
+  REAL_ENV_VALIDATED. `OP.0b`'s read-only S1–S8 implementation scope is
+  **CLOSED**; S9 (UI authority reconciliation) is the one remaining slice,
+  confirmed NOT STARTED, now `now_next.next`.
+- Branch: `claude/pan-real-env-validation-tum9pg`, pushed (no PR opened —
+  not requested).
 
-## 2. What changed this session (docs, project metadata, one governance test)
+## 2. What changed this session
 
-- **OP.2.0 draft corrected in place** (§"Independent challenge review —
-  2026-09-04" carries the matrix): state machine 8+7 → 4+6 (`LOCKING`,
-  `LOCKED`, `EVALUATING`, `VERIFYING`, `SUCCEEDED_WITH_WARNINGS` removed; the
-  re-preflight loop removed); HA-entity lock = the action record's per-entity
-  uniqueness rule; member admission per device-contact stage, never across
-  the human wait; quarantine = derived predicate over the unacknowledged
-  `OUTCOME_UNKNOWN` record (one owner); boundary commit = guarded
-  compare-and-set with one winner; adapter `check_precondition` before the
-  boundary; `FAILED_NO_CHANGE` unreachable while `settle_observation` is
-  `UNKNOWN`; no argv/CLI entry point; no `PERMIT` outside `tests/`;
-  approval-policy boundary carries four-eyes / maintenance window; AC-15–19.
-- **Parent reconciled:** `docs/design/FAILOVER_ENGINE_ARCHITECTURE.md` §10.2
-  + inline supersession markers (auto-rollback, `FAILED_ROLLED_BACK`,
-  freshness window, §7 layout, per-VS units, feature flag/token, class 0
-  sweep not universal). History kept, not rewritten.
-- **Freeze recorded:** OP.2.0 status block → `CONTRACT FROZEN 2026-09-04`;
-  roadmap `OP.2` row, backlog and feature registry say frozen architecture,
-  CLASS 2 not implemented/reachable; OP.2.A–D remain future movements.
-- **Project state:** `op_reversal_model`, `op_outcome_unknown_recovery` →
-  `decided`; `op_four_eyes`, `op_continuity_tolerance`, `op_emergency_evac`,
-  `op_aa_vsls_scope`, `op_degraded_verdict` re-pointed to their real
-  milestone, none an OP.2.0 freeze blocker; `ha_entity_operational_lock` and
-  `failover_controlled_execution` (backlog + feature registry) no longer say
-  "auto-rollback".
+- **Real-env finding:** the approved PAN pair uses dedicated HA1 control-
+  link addressing; the preflight's pre-contact pairing gate
+  (`configured HA1 peer-ip == peer's management_ip`) never holds for that
+  topology and was circular — refused contact before the evidence that
+  could prove correspondence could be collected. REAL_ENV_DISPROVEN as a
+  universal PAN invariant (correct only for management-as-HA1).
+- **Correction (additive-only):** `application/workflows/preflight.py`
+  resolves a bounded 2-candidate set from the explicit selector alone, no
+  pre-contact pairing proof. `utils/failover/assessment.py` gains
+  `pan_explicit_candidate_members` on `derive_ha_units`/`compute_ha_readiness`,
+  building one explicit-candidate `HaUnit` (grade
+  `explicit_bounded_candidate_pending_correspondence`, never the stronger
+  `established_configuration_intent`); `_derive_pan_units`'s own fleet-wide
+  stored-telemetry derivation is unchanged. `configuration/panorama_config_collector.py`
+  parses the already-fetched P2 `local-info/mgmt-ip`/`peer-info/mgmt-ip`
+  (real, confirmed field names) + best-effort `group-id`; `panorama/preflight_collector.py`
+  carries the P1-dialed endpoint as a fact. `utils/failover/preflight_readiness.py::_pan_reciprocal_correspondence`
+  reports self/reciprocal management-plane + mode correspondence
+  (MATCH/MISMATCH/MISSING/NOT_EVALUABLE/AMBIGUOUS) — descriptive only, never
+  gates a check, never establishes PAN B2.
+- **Same-session UI fix:** the additive candidate unit initially left the
+  generated report showing three near-duplicate PAN rows for one bounded
+  invocation (operator finding); `_apply_pan_explicit_candidate` now
+  replaces the two orphan single-member rows with the one candidate row,
+  for that invocation's own report only.
+- **Real-env validated** on the approved pair: 2/2 candidates, P1/P2/P4
+  success both members, 5/7 checks PASS, pair correspondence MATCH, PAN B2
+  stays NOT ESTABLISHED (unchanged).
+- **Privacy near-miss caught and fixed pre-merge:** an early draft used the
+  operator's real disclosed management/HA1 addresses as docstring/test
+  examples; caught by the repository privacy gate (`PRIVATE_ENDPOINT_LITERAL`,
+  2 findings) before merge, replaced with RFC 5737 example addresses and
+  synthetic test values. Re-ran clean: PASS / 0.
+- **Project-state closure:** new phase doc
+  `docs/history/phase/OP_0B_S8C_PAN_DEDICATED_HA1_REAL_ENV_CORRECTION.md`;
+  `OP_0A_PAN_HA_PEER_PAIRING_IDENTITY_CLOSURE.md` REAL_ENV_DISPROVEN
+  addendum; new `build_history.json` record (newest); `roadmap.json`
+  `now`/`next`/`current_build` updated, stale generic "OP.0b" upcoming row
+  retired (superseded by the explicit S9 `next` entry), `D-V3b` gets a note
+  on this session's (non-authoritative) manual B2 observation;
+  `feature_registry.json` `preflight_battery` → done, new
+  `ui_authority_reconciliation` criterion (pending); `backlog.json`
+  `pan_serial_representation_identity_evidence_closure` gets the same
+  manual-evidence note, NOT resolved from it; `CURRENT_STATE.md` rewritten
+  (trimmed back to the 200-line cap); `docs/history/INDEX.md` regenerated.
 
 ## 3. Exact next action
 
-1. **S8-B (VSX) then S8-C (PAN)** exactly as `project/roadmap.json`
-   `now_next.next` describes — operator-executed, SAFE counts only,
-   mechanical parser fixes inside frozen semantics only. `Sonnet 5,
-   normal`. Start a NEW session for it.
-2. **Only after OP.0b closure:** `OP.2.A` (typed action model, 4+6 lifecycle, audit
-   record, unconditional-`DENY` authorizer, convergence assertions; zero
-   device I/O) at `Sonnet 5, normal`; `OP.2.1` CP mutation command gate
-   (docs only, official sources) in parallel at `Sonnet 5, extended`;
-   `OP.2.B` after `A` at extended.
+**`op0b_s9_ui_authority_reconciliation`** (`now_next.next`) — retire
+client-side PAN/CP pairing and HA-vocabulary heuristics
+(`static/inventory_ui.js` `clusterNameSource: "inferred_ha_runtime_pair"` +
+hostname-token cluster synthesis + `presentation_group_id` grouping;
+`utils/merge.py` hostname-suffix cluster heuristic; `utils/config_ui.py`
+`_ha_header_evidence`'s independent HA vocabulary) in favor of the one
+canonical `utils.failover.assessment.compute_ha_readiness` evaluator.
+Confirmed NOT STARTED this session, with direct evidence it is overdue (the
+S8-C explicit-candidate report row needed a same-day fix because the
+legacy rows read as confusing near-duplicates). Cross JS + Python surface —
+needs its own scoping/audit pass before implementation. `Sonnet 5, normal`
+for the scoping pass.
+
+Independent, any order, unaffected by this session: **A.** `D-V3a`/`D-V7b`
+closure (GitHub-mirror then human-fetch, extended thinking). **B.** `D-F3`
+flap threshold (product-owner call). **C.** PAN serial identity closure
+(hardware-blocked; this session's manual observation is NOT reconciled with
+the earlier S0 MISMATCH finding — do not resolve as a side effect of an
+unrelated build).
 
 ## 4. Test delta
 
-- No product code changed. Architecture convergence: 20 passed (one new
-  language-governance regression); `metadata_warnings == []`; build-history
-  index current; repository privacy gate PASS; `git diff --check` clean.
-  Full regression not run (docs/metadata/governance-test change only).
+- Full suite: **1681 passed / 26 skipped / 0 failed** (serial, one-shot).
+  20 new/changed tests in `tests/test_op0b_s7_readiness_v2.py` (dedicated-
+  HA1 topology, management-as-HA1 regression, negative/fail-closed cases,
+  `running_sync_enabled` non-gating verification, report-row suppression)
+  and `tests/test_op0b_s75_preflight_entrypoint.py` (bounded-candidate
+  resolution behavior change, end-to-end composition test for the
+  previously-refused topology).
+- Architecture convergence: 20/20. Repository privacy gate: PASS / 0.
+  `metadata_warnings == []`.
 - Note for Linux/container sessions: `py` does not exist there; `python3 -m
-  pytest` with `requirements.txt` + `requirements-dev.txt` installed.
+  pytest` with `requirements.txt` + `requirements-dev.txt` (+ fastapi/uvicorn/httpx
+  for the full suite, console tests) installed.
 
 ## 5. New risks
 
-- OP.2.0 is frozen architecture, not a capability: it approves no command
-  and CLASS 2 stays memberless until `OP.2.C`'s full prerequisite set.
-- `FAILED_NO_CHANGE` is unreachable until the CP `settle_observation` is
-  measured in the `OP.2.D` pilot — expected, and the pilot must record it.
-- Single-coordinator-process topology is now an explicit OP.2 invariant; a
-  multi-worker console (`per_vendor_worker_split`, P2) would need its own
-  contract before touching class 2.
-- Unchanged from the previous session: VSX/PAN parity proven synthetically
-  only (S8-B/S8-C owed); D-V7b/D-F3 keep readiness INSUFFICIENT_EVIDENCE;
-  `cp_production_ssh_host_key_trust_hardening` (P0) deferred.
+- S9 is real, confirmed-needed work, not speculative — do not defer
+  indefinitely; the confusion it causes is now directly evidenced.
+- PAN B2 evidence is now in tension with itself across two sessions (S0
+  MISMATCH vs. this session's manual all-MATCH observation) — flagged in
+  three places (roadmap `D-V3b`, backlog, `CURRENT_STATE.md`), root cause
+  still UNKNOWN, deliberately not reconciled by this session.
+- `group-id` correspondence stays best-effort; its XML path in `show
+  high-availability state` is unconfirmed by any official source.
+- Unchanged: `D-V7b`/`D-F3` keep readiness INSUFFICIENT_EVIDENCE;
+  `cp_production_ssh_host_key_trust_hardening` (P0) deferred; CLASS 2 stays
+  frozen architecture, not implemented, not reachable.
