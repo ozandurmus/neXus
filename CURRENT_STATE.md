@@ -7,12 +7,14 @@ detail is not here either** — it is in `project/build_history.json`
 linked documents under `docs/history/`. `docs/history/INDEX.md` is the
 generated one-line timeline.
 
-- **Checkpoint:** 2026-09-05, branch `claude/left-nav-vertical-redesign-e673q6`.
+- **Checkpoint:** 2026-09-05, branch `claude/left-nav-vertical-redesign-e673q6`
+  (unmerged; `origin/main` + 2 commits, no PR).
 - **Current build** (per `project/roadmap.json` `now_next.now`):
-  `nav_1_left_vertical_product_navigation` — **AUTOMATED_VALIDATED** (see
-  "Active build"). `now_next.next` is
-  `pcp_2_local_control_plane_sequencing_po_review` (blocked on Product Owner
-  review). `op2_c_cp_clusterxl_adapter_scoping` stays `upcoming`, blocked on
+  `pcp_2_local_control_plane_sequencing_po_review` — **IN_PROGRESS**, a
+  Product Owner architecture review producing **DRAFTS ONLY** (see "Active
+  build"). `now_next.next` is
+  `pcp1_registry_uuid_call_count_test_defect_repair`.
+  `op2_c_cp_clusterxl_adapter_scoping` stays `upcoming`, blocked on
   `DEPLOY.1`. `PCP.1` is complete — detail in `project/build_history.json`.
 - **OP.2.0 CLASS 2 architecture** (`docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md`):
   **CONTRACT FROZEN 2026-09-04**; `OP.2.A`/`OP.2.B` IMPLEMENTED; `OP.2.1` CP
@@ -52,35 +54,30 @@ test-enforced boundaries. Current numbers:
 
 ## Active build
 
-**`nav_1_left_vertical_product_navigation`** (`NAV.1`) —
-**AUTOMATED_VALIDATED**. Implements the new FROZEN
-`docs/design/NAVIGATION_INFORMATION_ARCHITECTURE.md`: both shells drop the
-horizontal one-root-per-module topbar strip for a collapsible left vertical
-rail over six evaluated product domains (Overview; Devices → Inventory,
-Discovery; Configuration; Operations → HA & readiness, Jobs; Compliance;
-Administration → Inventory exclusions, Project plan), driven by one model
-(`static/navigation_ui.js`) shared with the device-detail tab strip.
-**D-NAV6** is the load-bearing rule: an entry renders *iff* the shell ships
-the `[data-module-panel]` it points at, so an unbacked capability is omitted
-— never disabled, greyed or "coming soon". That is how the console shows its
-`CON.2` Jobs panel (moved out of Discovery into its own `jobs` module under
-Operations; no boundary, route or job-type change) while the action-free
-report shows no Jobs entry at all. **"Add Device" is a root nowhere and
-renders nowhere**: a declared contextual action of the `devices` domain,
-`available: false`, reason named (`pcp_console_registry_write_gate` open;
-enrollment CLI-only per `PCP.1`). Routes are derived from the model, fixing
-a drift where `#discovery`/`#failover`/`#exclusions` fell back to Overview
-from the URL hash. Authorization-aware seam only — `model: "none"`,
-`DEPLOY.1A` named, no role/permission/scope/claim in the navigation path.
-No payload builder, collector, vendor semantic, network command, credential
-path, storage/schema or action-class change.
+**`pcp_2_local_control_plane_sequencing_po_review`** — **IN_PROGRESS**,
+producing **no product code**. A Product Owner review of the architecture a
+left-navigation prototype surfaced. Three DRAFTs:
+`docs/design/NAVIGATION_INFORMATION_ARCHITECTURE.md` (**DRAFT — PRODUCT OWNER
+REVIEW REQUIRED**; its earlier self-declared FROZEN status is withdrawn), the
+companion `docs/design/LOCAL_CONTROL_PLANE_RUNTIME_AND_ENROLLMENT.md`, and the
+research appendix `docs/design/research/NSPM_NAVIGATION_BENCHMARK.md`.
 
-One deliberate out-of-navigation fix, recorded not folded in silently:
-`static/failover_readiness_ui.js` emitted an inline `style="padding-left:2rem"`
-the console's stricter CSP (`style-src 'self'`) refuses; it is now the
-`.failover-child-cell` class. Invisible until a resolvable Chromium made
-`CON.1`'s live console walk run instead of skip.
+**The left-navigation implementation is a WORKING PROTOTYPE** (commit
+`5a5a1f7`, runnable and behaviourally unchanged): a collapsible rail over six
+*candidate* domains, one model shared by the rail and the device tab strip,
+routes derived from it, no placeholders, no enrollment affordance. **Design
+evidence, not an approved architecture** — not frozen, not merge-approved, and
+it does not replace the roadmap movement.
 
+Headline corrections (detail in the DRAFT): the DOM-only availability rule
+becomes **one conjunct of four** — surface eligibility / entity applicability /
+evidence state / future authorization — so **a global module can no longer
+vanish because one device lacks a capability**; ten UX semantics map onto
+**existing** canonical states, proposing only `POLICY_DISABLED` and
+`NOT_ENROLLED`; the workspace is logical-entity-first **with no second identity
+authority**; amber stops meaning "member-specific". `Add Device` renders
+nowhere and `pcp_console_registry_write_gate` stays **OPEN** — the prototype's
+"waits for `DEPLOY.1A`" comment pre-decided a PO question and is withdrawn.
 Predecessors are `project/build_history.json`'s job. PAN B2 stays
 **NOT ESTABLISHED**.
 
@@ -117,25 +114,27 @@ a narrower question never promoted toward B2.
 
 ## Exact next build
 
-`now_next.next` is **`pcp_2_local_control_plane_sequencing_po_review`**:
-not `PCP.2` implementation — a Product Owner review of whether/when a local
-interactive console ships and whether/when the filesystem-only registry
-evolves toward SQLite (`pcp_storage_engine` open), and how both relate to
-the still-open `pcp_console_registry_write_gate`. `PCP.1`'s CLI verbs stay a
-bounded maintenance/bootstrap adapter until this is decided. Not started,
-not pre-designed, not pre-authorized. `Sonnet 5, extended thinking (high)`
-once the Product Owner is ready.
+`now_next.next` is **`pcp1_registry_uuid_call_count_test_defect_repair`**
+(movement `M1`): the one bounded build actionable today with **no** Product
+Owner decision required — see "Automated test baseline" for the defect.
+Deliberately not fixed inside this architecture movement: it is a
+test-mechanism decision inside `PCP.1`'s frozen §21 contract.
+`Sonnet 5, normal`.
 
-`NAV.1` leaves two seams in the model, not in prose: a device-scoped
-capability arrives as a **device tab**, never a new root (`PCP.4`); `Jobs`
-promotes to a root only once `PCP.5` gives it definitions/runs/schedules.
-The authorization conjunct is a `NAV.2` amendment when `DEPLOY.1A` lands.
+Everything else waits on the Product Owner: `PO-NAV-1…8`, the storage
+sequencing option (A/B/C) and the movement order.
+`pcp_console_registry_write_gate`, `pcp_storage_engine`,
+`pcp_first_contact_trust_policy` and `pcp_auto_enrollment_policy` all stay
+**open**. Proposed sequence: companion DRAFT §12 (`M1`…`M14`). `M5` — one
+collector's target-selection seam — is the critical path, because **every
+collection job type today is `target_mode="none"`**, so per-device collection
+cannot be offered honestly until that changes.
 
-`op2_c_cp_clusterxl_adapter_scoping` stays `upcoming`/blocked with its notes
-preserved in `project/roadmap.json` (adapter, real `ClusterXLMemberSession`
-and real `PreflightProvider`/`EligibilityEvaluator` all IMPLEMENTED +
-unit-tested, none wired; CLASS 2 unreachable). `OP.2.D`'s console flow is
-expected on the `PCP.4` device/HA tab — one console, never two.
+`op2_c_cp_clusterxl_adapter_scoping` stays `upcoming`/blocked, notes preserved
+in `project/roadmap.json` (adapter, real `ClusterXLMemberSession`, real
+`PreflightProvider`/`EligibilityEvaluator` all IMPLEMENTED + unit-tested, none
+wired; CLASS 2 unreachable). `OP.2.D`'s console flow is expected on the
+`PCP.4` device/HA tab — one console, never two.
 `op0b_0_close_d_v3a_d_v7b_pre_class2` is a vendor-fact question only;
 `cp_remote_collection_done_marker_diagnostics` needs a real recurrence; PAN
 serial identity closure is hardware-blocked (see above).
@@ -166,24 +165,25 @@ Concurrency budget stays at 1 per vendor pending its own real-env evidence.
 ## Automated test baseline
 
 ```
-Full serial suite, this machine, 2026-09-05 (this sandbox does have
-  pytest/lxml/paramiko/playwright/fastapi installed, unlike the PCP.1
-  session's):
-    after  NAV.1: 1950 passed / 22 skipped / 2 failed
-    before NAV.1: 1929 passed / 24 skipped / 2 failed
-  The same 2 failures before and after, pre-existing and unrelated to NAV.1
-  (both PCP.1 registry uuid4 call-count tests: the count also catches the
-  registry lock's own owner token, so both assert [1] == [] on HEAD; the AC
-  still holds, the proof technique over-reaches). Backlog
-  `pcp1_registry_uuid_call_count_test_defect`; NOT fixed here. The fast PR
-  `validate` job never ran that file -- that is how it reached main;
-  `full-regression` does. The 2 fewer skips are harness checks that now run
-  here (happy-dom + CON.1's live console walk).
-Render harnesses: node+happy-dom PASS; Playwright/Chromium PASS.
-Repository privacy gate: PASS / 0 findings, 490 files (2026-09-05).
+THE FULL SUITE IS NOT GREEN. Two PCP.1 registry tests fail deterministically,
+  on main and on this branch, unchanged and unfixed by the current movement:
+  test_duplicate_enroll_refused_before_device_id_generated and
+  test_lock_contention_on_enroll_never_generates_a_device_id (their uuid4
+  call-count proof also counts the registry lock's own owner token, so both
+  assert [1] == []). Backlog pcp1_registry_uuid_call_count_test_defect;
+  proposed movement M1. The fast PR `validate` job never ran that file --
+  that is how it reached main; `full-regression` does.
+Current movement is documentation/state only, changing no runtime behaviour,
+  so targeted evidence rather than a full regression:
+    tests/test_navigation_information_architecture.py  20 passed (18 prototype
+      AC checks + 2 DRAFT/authority guards; 4 drive a real Chromium)
+    tests/test_architecture_convergence.py  green
+    render harnesses: node+happy-dom PASS; Playwright/Chromium PASS
+  Last full serial run here (before the state correction):
+    1950 passed / 22 skipped / 2 failed -- the same 2 failures above.
+Repository privacy gate: PASS / 0 findings (2026-09-05).
 Project-state consistency: metadata_warnings == []; index --check clean.
 ```
-
 ## Known xfails
 
 None currently known (the two tracked earlier became passing regressions in
