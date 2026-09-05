@@ -68,6 +68,14 @@ LEGAL_TRANSITIONS: dict[ActionState, frozenset[ActionState]] = {
         ActionState.SUCCEEDED,
         ActionState.FAILED_NO_CHANGE,
         ActionState.OUTCOME_UNKNOWN,
+        #: P6/"Reconciliation, cancellation, and outcome": SUBMISSION_NOT_SENT
+        #: is the one case that maps back to the pre-mutation family -- the
+        #: adapter positively proved the command never left. The contract's
+        #: own ASCII diagram omits this edge for brevity; its prose table
+        #: ("Transport error before submission, adapter proves nothing was
+        #: sent" -> ABORTED_PRE_MUTATION:submission_not_sent) and
+        #: coordinator.py's _submit_and_verify both require it.
+        ActionState.ABORTED_PRE_MUTATION,
     }),
     **{state: frozenset() for state in TERMINAL_STATES},
 }
