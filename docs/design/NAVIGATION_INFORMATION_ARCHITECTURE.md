@@ -10,14 +10,27 @@ An earlier revision of this file declared itself `FROZEN` on the strength of a
 working prototype and its tests. **That was a self-declared freeze without
 Product Owner authority and it is withdrawn.** Tests prove the prototype
 matches the contract it was written against; they do not prove the contract is
-the right product architecture. The Product Owner has accepted the prototype as
-**design evidence** and accepted its broad **visual direction** — and has *not*
-approved the root set, the availability rule, the merge, or the replacement of
-the active roadmap movement.
+the right product architecture.
+
+**Review round 1 result (2026-09-05).** The Product Owner reviewed revision 1
+and **substantially accepted its direction**, closing eight navigation
+decisions (`PO-NAV-1`…`PO-NAV-8`, §16) plus the runtime, storage, trust and
+enrollment directions in the companion DRAFT. It is **still not frozen**, for
+two reasons: one **evidence-integrity correction** was required — revision 1
+misattributed a set of supplied screenshots to third-party products, and every
+conclusion resting on them is withdrawn (research appendix §0.2) — and several
+decisions were returned with their **ownership corrected** rather than simply
+approved (`PO-NAV-6`, `PO-NAV-7`, `PO-NAV-8`, D-NAV13, the freeze-vs-merge
+gate). The remaining `D-NAV` rows still marked PROVISIONAL are exactly the ones
+the review did not individually rule on.
+
+The prototype remains **design evidence**. The Product Owner has *not* approved
+the merge, or the replacement of the active roadmap movement.
 
 | | |
 | --- | --- |
 | **Movement** | `ARCHITECTURE` (navigation + product IA), continuing the `NAV.1` prototype |
+| **Revision** | **2 — 2026-09-05.** Records the Product Owner's review decisions (§16) and withdraws every conclusion that rested on misclassified benchmark screenshots (research appendix §0.2). Still DRAFT: the review closed direction, not the contract |
 | **Prototype** | commit `5a5a1f7` on `claude/left-nav-vertical-redesign-e673q6` — runnable, behaviourally unchanged by this review |
 | **Authorizes** | nothing. No UI behaviour, no storage, no enrollment, no job, no collector, no production wiring |
 | **Companion DRAFT** | `docs/design/LOCAL_CONTROL_PLANE_RUNTIME_AND_ENROLLMENT.md` — runtime, storage, jobs, enrollment, sequencing |
@@ -31,7 +44,8 @@ the active roadmap movement.
 | --- | --- |
 | **ACCEPTED DIRECTION** | the Product Owner has accepted this direction; detail may still change |
 | **PROVISIONAL** | this document's recommendation, implemented in the prototype, awaiting review |
-| **OPEN PO DECISION** | a real fork the Product Owner must resolve; recorded in §16 |
+| **OPEN PO DECISION** | a real fork the Product Owner must still resolve; the remaining ones are in §16.1 |
+| **DECIDED** | closed in direction by the Product Owner's review; recorded in §16 |
 | **RESERVED** | named in the target architecture, deliberately **not rendered** today |
 | **REJECTED** | evaluated and declined, with the reason recorded |
 
@@ -124,9 +138,9 @@ These are correct today and must not be mistaken for product law:
 | --- | --- |
 | The document declared itself **FROZEN** | Withdrawn. DRAFT, PO review required |
 | **D-NAV6** presented DOM presence as *the* anti-placeholder law | Downgraded to a **last-mile surface-integrity check**, one conjunct of four (§7). A `<section>` in a template is not evidence that a backend contract exists |
-| **D-NAV5** stated as fact that browser enrollment "waits for `DEPLOY.1A`" | Not decided. `pcp_console_registry_write_gate` is **open** and `PCP.0` §19 explicitly records three options. The prototype's own comment pre-decided a Product Owner question — corrected in source comments by this review |
+| **D-NAV5** stated as fact that browser enrollment "waits for `DEPLOY.1A`" | The prototype's own comment pre-decided a Product Owner question, and was corrected in source. The Product Owner has since decided (`PO-NAV-1`, companion §9.1): a **conditioned local-loopback** direction, not an unconditional wait — so revision 1's assertion was wrong in substance as well as in authority |
 | **Six roots** presented as "the information architecture" | PROVISIONAL. Recovery and Jobs/Automation were not evaluated at all in the first pass (§4) |
-| **Jobs rejected as a root** on the strength of one shell | The reasoning (a root absent from one shell is a bad fact) is sound; the conclusion is provisional and now has an explicit promotion trigger and external counter-evidence (BackBox ships Jobs as a top-level menu) |
+| **Jobs rejected as a root** on the strength of one shell | The reasoning (a root absent from one shell is a bad fact) is sound. Revision 1 cited "BackBox ships Jobs as a top-level menu" as external counter-evidence; **that observation is withdrawn** (appendix §0.2) and no retrievable source establishes any competitor's Jobs placement. Settled instead by decision: `PO-NAV-8` keeps Jobs under Operations, with **no** automatic promotion promise |
 | **`NAV.1` recorded as `automated_validated`** in project state | Corrected on this branch: a PO-review movement, non-terminal, prototype status (§ project-state correction in the companion DRAFT §12) |
 
 ### 2.5 What breaks once SQLite, enrollment, schedules, recovery, device jobs and RBAC arrive
@@ -174,7 +188,8 @@ Illegitimate differences to avoid:
   not in how the product is organised.
 - Assuming "the report has no Jobs panel" means "job *evidence* may never be
   exported". Read-only, sanitized execution history in an exported report is a
-  separate question, not settled by this document (§12, `OPEN PO DECISION`).
+  separate question, now **decided in principle with a ship trigger**
+(§12, `PO-NAV-4`).
 
 ### 2.7 Navigation instability / capability disappearance risk
 
@@ -217,9 +232,9 @@ Re-graded. `FROZEN` appears nowhere.
 | --- | --- | --- |
 | **D-NAV1** | Primary product navigation is a **left vertical rail**; the topbar keeps brand + module-context controls only | **ACCEPTED DIRECTION** (visual direction accepted by the PO) |
 | **D-NAV2** | The rail is collapsible; **collapse changes presentation density only** — never the entry set, never availability, never authority | **ACCEPTED DIRECTION** |
-| **D-NAV3** | Group by **stable product domain**, not by action. A domain with one shipped view renders as a direct root link and becomes a group by gaining children, with no route change | **PROVISIONAL** |
+| **D-NAV3** | Group by **stable product domain**, not by action. A domain with one shipped view renders as a direct root link and becomes a group by gaining children, with no route change | **ACCEPTED DIRECTION** (`PO-NAV-8`). Note: revision 1 claimed external corroboration for domain group headings; that is withdrawn (appendix §0.2) — this rests on neXus' own domains and the PO's decision |
 | **D-NAV4** | **Devices is a first-class root**; the device experience is never a sub-view of Configuration | **ACCEPTED DIRECTION** |
-| **D-NAV5** | **"Add Device" is never a navigation root.** It is a contextual action of a device-management surface | **ACCEPTED DIRECTION** for the *location*; **OPEN PO DECISION** (`pcp_console_registry_write_gate`) for *whether and when it renders at all* |
+| **D-NAV5** | **"Add Device" is never a navigation root.** Primary affordance in the Devices/entity-list pane header; **Administration → Device Management** is the lifecycle home; **one enrollment contract**, no duplicate implementation; Configuration never owns device lifecycle | **ACCEPTED DIRECTION** (`PO-NAV-1`). Rendering it locally is approved *in direction* under the conditions in the companion DRAFT §9; production exposure stays blocked on `DEPLOY.1A` |
 | **D-NAV6** | ~~DOM presence is the availability law~~ → **superseded by D-NAV6a/D-NAV6b** | **CORRECTED** |
 | **D-NAV6a** | A rendered navigation entry requires **product-surface eligibility**: a declared shipped contract, a shell permitted to expose it, and the surface actually present. DOM presence is the *last* of the three, an integrity check, not the rule | **PROVISIONAL** |
 | **D-NAV6b** | **No visual placeholder.** A capability with no product surface is omitted. A capability *with* a surface that is currently inapplicable, unsupported, unconfigured, blocked or evidence-poor is **shown, selectable where useful, and explained in words** — never a bare greyed control (`CON.0` §9 honest affordances) | **PROVISIONAL** |
@@ -229,8 +244,8 @@ Re-graded. `FROZEN` appears nowhere.
 | **D-NAV10** | **Three layers** (product navigation / entity context / contextual actions) are separate concerns with separate rules | **PROVISIONAL** |
 | **D-NAV11** | **Root stability**: the rendered root set depends on product-surface eligibility only — never on the selected entity, evidence state or payload contents | **PROVISIONAL** |
 | **D-NAV12** | **One selected-entity context** is shared across modules; each module keeps its own **independent data authority** over that subject | **PROVISIONAL** |
-| **D-NAV13** | **Tab order is canonical and stable** across entity types; an inapplicable tab is omitted or explained, never reordered | **PROVISIONAL** |
-| **D-NAV14** | **Colour is never the only carrier of state.** Every state has a text label; amber means "operator attention", never automatically "fault" | **PROVISIONAL** |
+| **D-NAV13** | **Device-tab stability (corrected).** Where a workspace surface exists, its canonical tab position is stable across entity types and must not flicker with selection or evidence. A structurally inapplicable tab stays **visible and selectable** with a `NOT_APPLICABLE` explanation and no enabled action. A tab is omitted **only** on a P1 failure — the surface does not exist in that build/shell | **ACCEPTED DIRECTION** (§6.5) |
+| **D-NAV14** | **Colour semantics (corrected by `PO-NAV-6`).** The pale yellow/gold comparison emphasis that makes member differences noticeable is **preserved**; what changes is that colour alone never carries meaning. Every state has an explicit textual label, expected member differences carry **no** warning icon or wording, and red stays reserved for actual fault, unsafe drift or failure | **ACCEPTED DIRECTION** (§5.4) |
 
 ---
 
@@ -246,12 +261,12 @@ or contract, not a plan.
 | --- | --- | --- |
 | **Overview** | **root link** — ACCEPTED DIRECTION | The landing surface, not a domain with views. Every benchmarked product lands on a dashboard |
 | **Devices** | **grouped root** — ACCEPTED DIRECTION | First-class (D-NAV4). Today: `Inventory`, `Discovery`. Target: the **entity workspace** becomes its primary child, with the fleet list as its index |
-| **Configuration** | **root link today; root + entity tab in target** — PROVISIONAL | `AGENTS.md` forbids collapsing Configuration into Inventory: they are separate product planes. Fleet-wide alignment review is a real cross-device workflow (Tufin's stacked change/risk panels, AlgoSec's `CHANGES` tab at the fleet node). **Open**: exactly which parts stay fleet-global once the entity workspace exists (§16 `PO-NAV-3`) |
-| **Operations** | **grouped root** — PROVISIONAL | "What is running, and what may be run, against the fleet." Today: `HA & readiness`, `Jobs`. BackBox's `OPERATIONS` group (Automations/Jobs/Queue/History) is the observed mature shape |
-| **Jobs** | **child of Operations now; root only on the §4.3 trigger** — PROVISIONAL | Today its only surface is the console job list, which the action-free report must not carry. BackBox ships Jobs under an Operations group *and* `Schedules` as a separate root — so the mature end-state is several execution surfaces, not one promoted page |
-| **Automation** | **RESERVED — not a separate domain** | BackBox separates `Automations` (definitions) from `Jobs` (executions). neXus' equivalent of "automation" is the **typed job definition + schedule** half of the same plane. It is named in the target architecture and **not rendered** until `PCP.5` gives it definitions to show |
+| **Configuration** | **root link today; root + entity tab in target** — ACCEPTED DIRECTION (`PO-NAV-3`) | `AGENTS.md` forbids collapsing Configuration into Inventory: they are separate product planes. Fleet-wide alignment review is a real cross-device workflow — externally, Tufin's Compare Revisions is a first-class view with its own device-tree pane (appendix §2, DOC-EXCERPT). **Decided** by `PO-NAV-3`: the global root keeps fleet-level work; device-level views use the shared entity workspace |
+| **Operations** | **grouped root** — ACCEPTED DIRECTION (`PO-NAV-8`) | "What is running, and what may be run, against the fleet." Today: `HA & readiness`, `Jobs`. The mature default set is `Jobs`, `Schedules`, `Queue`, `History` and future typed automation definitions — a **Product Owner decision**, not an observed competitor pattern (revision 1's BackBox citation is withdrawn, appendix §0.2) |
+| **Jobs** | **child of Operations — the default, with no promotion promise** — ACCEPTED DIRECTION (`PO-NAV-8`) | Today its only surface is the console job list, which the action-free report must not carry. As Operations gains `Schedules`, `Queue` and `History`, the mature end-state is **several execution surfaces under Operations**, not one promoted page. A root promotion is **not pre-approved**: it would need a new PO-reviewed IA amendment justified by real information density and operator workflow |
+| **Automation** | **RESERVED — not a separate domain** | neXus' "automation" is the **typed job definition + schedule** half of the job plane, and belongs under Operations beside `Jobs` (`PO-NAV-8`), not as a rival domain. Named in the target architecture and **not rendered** until `PCP.5` gives it definitions to show |
 | **Compliance** | **root link** — ACCEPTED DIRECTION | A shipped product plane with fleet and subject views already built |
-| **Recovery** | **RESERVED — future root, not rendered today** | Today the only recovery surface is one device tab (`configBackupPanel`) plus an Overview card. `RB.4`/`RB.5`/`CON.4` bring restore-readiness and recovery-store surfaces that are **fleet** workflows; at that point a device tab is the wrong home. **Open**: promote at `CON.4`/`RB.5` or earlier (§16 `PO-NAV-2`). Critically, once it is a root it stays a root even when the selected device is `UNPROTECTED` or `NOT_CONFIGURED` (D-NAV11) |
+| **Recovery** | **RESERVED — future root, not rendered today** | Today the only recovery surface is one device tab (`configBackupPanel`) plus an Overview card. `RB.4`/`RB.5`/`CON.4` bring restore-readiness and recovery-store surfaces that are **fleet** workflows; at that point a device tab is the wrong home. **Decided** by `PO-NAV-2`: promote only when a real fleet-level restore-readiness and/or recovery-store surface ships under its `RB`/`CON` contract. Once it is a root it stays a root even when the selected device is `UNPROTECTED` or `NOT_CONFIGURED` (D-NAV11) |
 | **Administration** | **grouped root** — PROVISIONAL | Today: `Inventory exclusions`, `Project plan`. Target children in §4.4 |
 | **Diagnostics** | **RESERVED** | `PCP.8`, closed runbook catalog. No surface, no entry |
 | **Topology / Risk / Policy authoring** | **REJECTED** | Policy authoring is `CLASS 3` (prohibited). Topology/risk analysis is not in `PROJECT_VISION.md`'s scope and inventing a root for it would advertise a capability the product does not have |
@@ -279,16 +294,28 @@ Rendered only as each row's surface actually ships.
 | **Overview** | — | — | ACCEPTED DIRECTION |
 | **Devices** | `Fleet` (entity list + workspace), `Discovery` | entity workspace ships (`PCP.4`) | PROVISIONAL |
 | **Configuration** | fleet alignment/posture views; device-scoped views move into the workspace | `PCP.4` | PROVISIONAL, split OPEN (`PO-NAV-3`) |
-| **Operations** | `HA & readiness`, `Jobs`, later `Schedules`, `Queue`, `History` | each on its own surface shipping | PROVISIONAL |
+| **Operations** | `HA & readiness`, `Jobs`, later `Schedules`, `Queue`, `History`, future typed automation definitions | each on its own surface shipping | **ACCEPTED DIRECTION** (`PO-NAV-8`) |
 | **Compliance** | — (fleet + subject views already inside) | — | ACCEPTED DIRECTION |
-| **Recovery** | `Restore readiness`, `Recovery store` | `RB.5` / `CON.4` surfaces ship | RESERVED, timing OPEN (`PO-NAV-2`) |
+| **Recovery** | `Restore readiness`, `Recovery store` | a real **fleet-level** restore-readiness and/or recovery-store surface ships under its `RB`/`CON` contract | **RESERVED — promotion rule accepted** (`PO-NAV-2`) |
 | **Administration** | `Device management` (registry lifecycle + enrollment), `Credential profiles` *(references only)*, `Trust profiles`, `Inventory exclusions`, `System & runtime health`, `Users & roles` | each on its own backend; `Users & roles` on `DEPLOY.1A` only | PROVISIONAL |
 | *(Automation, Diagnostics)* | — | `PCP.5` / `PCP.8` | RESERVED, not rendered |
 
-**Jobs promotion trigger, stated exactly:** Jobs becomes a root when it owns
-**definitions, executions, schedules and history** as distinct surfaces
-(`PCP.5`). Until then a Jobs root would be one console-only page pretending to
-be a domain.
+**Jobs stays a child of Operations — corrected.** Revision 1 promised that Jobs
+would become a root once it owned definitions, executions, schedules and
+history. **That automatic promise is withdrawn** (`PO-NAV-8`). The mature
+default is Operations growing several execution children — `Jobs`, `Schedules`,
+`Queue`, `History`, future typed automation definitions — not one of them being
+promoted. A root promotion is **not pre-approved**; it would require a new
+PO-reviewed IA amendment justified by real information density and operator
+workflow.
+
+**Recovery's promotion rule, stated exactly** (`PO-NAV-2`): it is a reserved
+future global root, **not rendered today**; device/entity Recovery remains a
+contextual workspace tab; it promotes only when a real fleet-level
+restore-readiness and/or recovery-store surface ships under the relevant
+`RB`/`CON` contract; and once the global root exists it **stays visible
+regardless** of whether the selected entity is protected, unsupported or not
+configured (D-NAV11).
 
 **Reserved domains are written here and rendered nowhere.** A `RESERVED` row is
 a commitment about *where* a capability will live, so later work does not
@@ -319,9 +346,12 @@ for it, what may be viewed or operated on it, and what state applies.
 
 **The Product Owner's model is logical-entity-first**: a cluster or HA pair is
 normally **one managed operational object**, with physical members represented
-beneath it. Externally corroborated — SmartConsole nests cluster members inside
-the opened cluster object; AlgoSec nests virtual contexts under the physical
-firewall; Tufin nests managed devices under their manager.
+beneath it. Externally corroborated by the two sources that survive evidence
+review — SmartConsole nests cluster members inside the opened cluster object,
+and Tufin's device hierarchy shows management devices with the devices they
+manage (appendix §7.1, §2). It is also already true of neXus itself: virtual
+systems render beneath their VSX parent and HA children beneath their unit
+(appendix §1, REPO-VERIFIED).
 
 **No second identity authority is created.** The workspace *selects* an existing
 canonical id and *renders* backend-derived relationships. It never computes
@@ -355,36 +385,45 @@ entity; show it **side by side** when it legitimately differs per member.
 | shared policy / configuration fact | sync addresses |
 | cluster-level identity (model, version family) | member-local routes and configuration settings |
 
-### 5.4 Difference semantics — never one "diff" colour
+### 5.4 Difference semantics — one meaning per treatment (`PO-NAV-6`)
 
-The prototype inherited a real defect here: **Inventory paints every
-member-scoped row amber** (`.difference-row`, `.scope-chip.diff`,
-`.divergence-badge` all use `--warning`), while **Configuration already gets
-this right** (`statusTone()` maps `MEMBER_SPECIFIC` → `info`, `LOCAL_OVERRIDE` →
-`warning`, `EFFECTIVE_DRIFT` → `danger`). Two planes therefore say different
-things about the same fact.
+Revision 1 recommended that Inventory simply adopt Configuration's blue `info`
+tone for `MEMBER_SPECIFIC`. **The Product Owner has rejected that specific
+remedy and kept the underlying problem.** The pale yellow/gold emphasis that
+makes cluster-member differences easy to *notice* is a real product benefit and
+is preserved; what must change is that the colour stops being the only carrier
+and stops implying fault.
 
-Proposed unification — Configuration's semantics win, Inventory adopts them:
+The defect being fixed is genuine: Inventory paints every member-scoped row with
+the warning token (`.difference-row`, `.scope-chip.diff`, `.divergence-badge`
+all use `--warning`), while Configuration already separates the cases
+(`statusTone()`: `MEMBER_SPECIFIC` → `info`, `LOCAL_OVERRIDE` → `warning`,
+`EFFECTIVE_DRIFT` → `danger`). Two planes therefore say different things about
+the same fact.
 
-| Semantic | Canonical state (existing) | Tone | Label | Non-colour carrier |
+**Adopted contract:**
+
+| Semantic | Canonical state | Treatment | Required label | Icon / wording rule |
 | --- | --- | --- | --- | --- |
-| Expected member difference | `MEMBER_SPECIFIC` | **info** (not amber) | "Expected member difference" | chip text + member name |
-| Intentional local override | `LOCAL_OVERRIDE` | warning (amber) | "Local override" | chip text + override icon |
-| Effective unexplained drift | `EFFECTIVE_DRIFT` | danger | "Effective drift" | chip text + drift icon |
-| Manager/device out of sync | `PANORAMA_OUT_OF_SYNC` | danger | "Out of sync" | chip text |
-| Difference observed, cause not classified | `DIFFERENCE_OBSERVED` | warning | "Difference observed" | chip text |
-| Stale / incomparable evidence | `PROVENANCE_UNVERIFIED`, `last_known_good` | muted | "Stale evidence" | timestamp + chip text |
-| Contradictory evidence | `IDENTITY_TRANSLATION_REQUIRED`, `RELATIONSHIP_INCONSISTENT` | muted + explicit warning | "Contradictory evidence" | chip text + explanation |
-| Unknown / insufficient | `UNKNOWN`, `INSUFFICIENT_EVIDENCE` | muted | "Insufficient evidence" | chip text |
+| **Expected member difference** | `MEMBER_SPECIFIC` | **may keep the pale yellow / gold row emphasis** in member-comparison views | "Expected member difference" or "Member-specific" | **No** warning or failure icon; no failure wording |
+| Intentional local override | `LOCAL_OVERRIDE` | stronger attention treatment | "Local override" | attention iconography permitted |
+| Unclassified difference | `DIFFERENCE_OBSERVED` | attention / warning semantics | "Difference observed" | attention iconography permitted |
+| Effective unexplained drift | `EFFECTIVE_DRIFT` | **danger / error** | "Effective drift" | error iconography |
+| Manager/device out of sync | `PANORAMA_OUT_OF_SYNC` | **danger / error** | "Out of sync" | error iconography |
+| Contradictory / unsafe state | `IDENTITY_TRANSLATION_REQUIRED`, `RELATIONSHIP_INCONSISTENT` | **danger / error**, with an explicit explanation | "Contradictory evidence" | error iconography |
+| Stale or incomparable evidence | `PROVENANCE_UNVERIFIED`, `last_known_good` | muted / provenance | "Stale evidence" + timestamp | none |
+| Unknown / insufficient | `UNKNOWN`, `INSUFFICIENT_EVIDENCE` | muted | "Insufficient evidence" | none |
 
-**D-NAV14 restated:** amber means *operator attention*, never automatically
-*fault* or *policy violation*. A standby member having a different serial is
-correct, not a finding. Every state carries a text label; colour is never the
-only carrier (accessibility, §13).
+**Rules that bind every row:** red is reserved for **actual fault, unsafe drift
+or failed state** — never for a difference that is expected. Colour is never the
+only carrier: each state carries its text label, and non-colour differentiation
+(chip text, member name, iconography where permitted) must make the state
+readable in high contrast and to a colour-blind operator. Unification is of
+**semantic meaning across modules**, not of palette: Inventory does not simply
+copy Configuration's blue.
 
-**Preserve** the amber member-only row treatment where the semantic really is
-"look at this" (`LOCAL_OVERRIDE`, `DIFFERENCE_OBSERVED`) — the Product Owner
-values it and it is genuinely useful. Only the `MEMBER_SPECIFIC` case moves.
+**Implementation is not in this movement.** No CSS or runtime change is made
+here; the later vocabulary/presentation movement (`M3`) owns it.
 
 ---
 
@@ -441,16 +480,29 @@ than an error. Backwards compatible: a bare `#configuration` keeps working.
 | Evidence | no | yes | all | Provenance/coverage |
 | Compliance | yes (fleet posture) | yes (subject) | all | Already fleet + subject shaped |
 | Recovery / Backups | RESERVED root | yes | all | Root on `PO-NAV-2` |
-| HA / Readiness | yes (`Operations`) | yes | **only** cluster, VSX cluster, PAN HA pair, VSLS VSID | For a standalone device the tab is `NOT_APPLICABLE` (§8), not missing-because-broken |
+| HA / Readiness | yes (`Operations`) | yes — **visible for every entity type** | applies to cluster, VSX cluster, PAN HA pair, VSLS VSID | On a standalone device the tab stays visible and selectable and renders `NOT_APPLICABLE` naming the entity types that support it (§6.5) |
 | Jobs | yes (console) | later (`PCP.5`) | all | Entity tab = this subject's runs |
 | Diagnostics | no | RESERVED | — | `PCP.8` |
 | Sanitized configuration | no | candidate | all | §10, contract required first |
 
-**D-NAV13 — tab order is canonical and stable.** The order above is the order
-everywhere. A tab that does not apply to an entity type is either omitted
-(no product surface) or shown with an honest `NOT_APPLICABLE` state (§8) —
-never reordered, never moved, so an operator's muscle memory survives switching
-between a standalone firewall and a cluster.
+### 6.5 D-NAV13 — device-tab stability (corrected)
+
+Revision 1 left this ambiguous by allowing an inapplicable tab to be "either
+omitted or shown". **That ambiguity is closed.**
+
+Where a product/entity workspace surface exists, its **canonical tab position is
+stable across managed entity types**. Selected-entity applicability and evidence
+state **must not** make a tab flicker in and out.
+
+| Case | Behaviour |
+| --- | --- |
+| **Structurally non-applicable** (e.g. HA on a standalone firewall) | keep the tab **visible and selectable**; render an explanatory `NOT_APPLICABLE` state; render **no enabled action**; **name which logical entity types support it** |
+| **Unsupported / not configured / stale / failed / insufficient evidence** | keep the tab **visible and selectable**; show the **exact state and its reason**; expose only actions backed and permitted by a real contract |
+| **No product surface in this build/shell** (P1 failure) | **omit the tab** — this is the only omission case |
+
+This is what makes the Product Owner's requirement operable: **not every
+capability need be active on every device**, and an operator's map of the
+product must not rearrange itself when they select a different one.
 
 ---
 
@@ -486,14 +538,21 @@ Derived from `PCP.0` §8's capability projection plus existing evidence states:
 is the capability supported for this vendor/platform, is it configured, is
 evidence current, stale, missing, failed or insufficient?
 
-New states this layer needs that **do not exist today** (proposals only):
+Two concepts this layer needs that no existing state covers. **`PO-NAV-7`
+approved the concepts and corrected their ownership**: revision 1 proposed them
+as undifferentiated global canonical states, which would have put a
+schedule-policy fact into the job lifecycle and a registry-reconciliation fact
+into device capability. Both names stay **provisional** until the
+capability-state vocabulary movement (`M3`) examines the existing schemas and
+their owners.
 
-| Proposed state | Why nothing existing covers it | Amendment target / trigger |
-| --- | --- | --- |
-| `POLICY_DISABLED` | An operator turning off a capability's schedule without disabling the device. `DISABLED` is a *device* lifecycle state; `EXCLUDED` is a *polling policy* over discovery identities. Neither says "this capability, on this device, is intentionally off" | `PCP.0` §9 job plane; decided at **`PCP.5`** |
-| `NOT_ENROLLED` | An entity present in `unified.json`/evidence but absent from the Device Registry, or vice versa. Real the moment navigation is registry-keyed | `PCP.0` §6/§8; decided at **`PCP.3`** |
+| Concept (name provisional) | What it expresses | Owning domain — corrected | Explicitly **not** |
+| --- | --- | --- | --- |
+| *"capability policy disabled"* (working name `POLICY_DISABLED`) | this capability, on this device, is intentionally off — e.g. its schedule was disabled without disabling the device | the **schedule / capability-policy contract** | **not** a job lifecycle state; must **not** join `queued`/`running`/`succeeded`/`failed`/`blocked`/`skipped` |
+| *"not enrolled"* (working name `NOT_ENROLLED`) | an entity present in evidence but absent from the Device Registry, or the reverse | the **registry / evidence reconciliation projection** | **not** a generic device capability state |
 
-Both are **DRAFT proposals**. No payload contract changes in this movement.
+Neither is a global canonical state, and **no payload contract changes in this
+movement.** `M3` owns the final names, owners and schemas.
 
 ### 7.4 P4 — Authorization *(future; absent, not permissive)*
 
@@ -524,9 +583,12 @@ be *done*. Concretely:
 
 ## 8. Capability-state presentation matrix
 
-Built from **existing canonical states**; only the two §7.3 rows are proposals.
-Externally corroborated by shipped products that also refuse pass/fail
-collapse (`Not enough historical data`, `N/A`, `Suspect` — research appendix §9).
+Built entirely from **existing canonical states** in this repository, plus
+`CON.0` §9's honest-affordance law; only the two §7.3 rows are proposals.
+Revision 1 claimed external corroboration from competitor state vocabularies;
+**that claim is withdrawn** (appendix §0.2) and was never needed — no
+competitor's capability-state vocabulary is established by any retrievable
+source, and this matrix does not rest on one.
 
 | UX semantic | Existing canonical states to reuse | Nav entry | View / tab | Action | Presentation |
 | --- | --- | --- | --- | --- | --- |
@@ -565,7 +627,7 @@ current operational state; and — once it exists — authorization.
 
 | Action | Home | Today |
 | --- | --- | --- |
-| **Add device (enroll)** | Devices pane header **and** Administration → Device management | **not rendered** — `pcp_console_registry_write_gate` open (§16 `PO-NAV-1`) |
+| **Add device (enroll)** | Devices / entity-list pane header (primary) **and** Administration → Device Management (lifecycle) — one contract, `PO-NAV-1` | **not rendered.** The local-loopback direction is approved, but nothing is implemented: movement `M9` must implement all seventeen conditions in companion §9.1 first |
 | Refresh / collect now | selected entity, in the capability's own view | console `CON.2` read-class job types exist; per-device targeting needs `PCP.6` seams |
 | Configure / change schedule | the device capability | `PCP.5`; policy editing from a browser is gated by `C-D7` |
 | Run backup | Recovery view of the entity | `CON.3` + `RB.3b`; `recovery-cp` unscheduled by `D3` |
@@ -612,8 +674,8 @@ means **behaviourally unchanged by `NAV.1` as prototyped**.
 | --- | --- | --- | --- | --- | --- |
 | Cluster interface matrix (`interface \| VIP \| member… \| network`) | `inventory_ui.js` | Devices | Inventory tab | **Preserved** | Matrix renders for a ClusterXL/VSX entity with VIP column when VIPs exist |
 | Route comparison modes (`Logical \| member \| Diff only`) | `inventory_ui.js` | Devices | Inventory tab | **Preserved** | All three modes selectable on a divergent multi-member entity |
-| Explicit member-scope column + `Shared`/member chips | `inventory_ui.js` | Devices | Inventory tab | **Preserved; tone changes** | `MEMBER_SPECIFIC` renders `info`, not `warning` (§5.4) |
-| Amber member-only row highlight | `inventory_ui.js` | Devices | Inventory tab | **Preserved for override/difference; re-toned for expected member difference** | Amber never used for `MEMBER_SPECIFIC` |
+| Explicit member-scope column + `Shared`/member chips | `inventory_ui.js` (`memberScope`, `.scope-chip`) | Devices | Inventory tab | **Preserved** | Chips keep an explicit text label for every state (§5.4) |
+| **Pale yellow/gold member-difference emphasis** | `inventory_ui.js`, `.difference-row` / `.scope-chip.diff` | Devices | Inventory tab | **Preserved — the Product Owner values it** | `MEMBER_SPECIFIC` may keep the pale emphasis, must carry "Expected member difference"/"Member-specific", and must carry **no** warning icon or failure wording; red stays reserved for fault (§5.4, `PO-NAV-6`) |
 | Interface/route divergence badges | `inventory_ui.js` | Devices | entity header | **Preserved** | Badge present when divergence exists |
 | Expandable VSX hierarchy under its parent | `inventory_ui.js` | Devices | entity tree | **Preserved; strengthened** | VS nested under the VSX parent (externally corroborated) |
 | Compact ClusterXL/VSX/failover hierarchy | `inventory_ui.js`, `failover_readiness_ui.js` | Devices / Operations | entity tree | **Preserved** | Hierarchy renders without a second identity model |
@@ -622,7 +684,7 @@ means **behaviourally unchanged by `NAV.1` as prototyped**.
 | Global search + vendor/device filtering | topbar + module sidebars | Devices | entity list | **Preserved; unify later** | Search still filters; a single entity search is a later movement |
 | Left context pane + main workspace | Inventory, Configuration, Compliance | all device-centric domains | workspace shell | **Preserved** | Pane + workspace retained under the rail (three-column shape) |
 | Current/stale/failure provenance | `snapshot.py` → every module | all | everywhere | **Preserved** | `data_state` still surfaced verbatim |
-| Configuration alignment classifications and tones | `configuration_ui.js`, `app_core.js` `statusTone()` | Configuration | Alignment tab | **Preserved; becomes the shared vocabulary** | Inventory adopts these tones (§5.4) |
+| Configuration alignment classifications | `configuration_ui.js`, `app_core.js` `statusTone()` | Configuration | Alignment tab | **Preserved; semantics become shared** | Both planes give one meaning per treatment — **semantic** unification, not palette copying (§5.4) |
 | Compliance fleet + subject views, framework filter, explain panels | `compliance_ui.js` | Compliance | Compliance tab | **Preserved** | Unchanged |
 | HA readiness verdicts and check tables | `failover_readiness_ui.js` | Operations | HA tab | **Preserved** | `SAFE_TO_FAILOVER` remains unreachable |
 | Console job types with `BLOCKED` + reason | `console_actions.js` | Operations → Jobs | Jobs tab later | **Preserved** | Blocked types still render their refusing class |
@@ -651,16 +713,28 @@ and data liveness**, not in how the product is organised (`CON.0` §6).
 | Enrollment | **absent** | gated (`pcp_console_registry_write_gate`) | never in the report |
 | Live refresh | none (snapshot) | `/api/payloads`, ≥30 s opt-in | report must work from `file://` |
 | Jobs module | no panel → no entry | panel → entry under Operations | P1 in action |
-| **Read-only job/execution history** | **OPEN** (§16 `PO-NAV-4`) | yes | "no Jobs *panel* in the report" ≠ "no job *evidence* may ever be exported" |
+| **Read-only job/execution history** | **approved in principle, ship-triggered** (`PO-NAV-4`) | yes | "no Jobs *panel* in the report" ≠ "no job *evidence* may ever be exported" |
 | Deep links | within-document hash only | same, plus live state | report has no server to resolve links against |
 
-**`PO-NAV-4` framed precisely:** a sanitized, read-only execution record
-(what ran, when, outcome, provenance — **never** targets' credentials, never
-device output) is *evidence*, and evidence is what the report exists to carry.
-It is also new data in a travelling artifact. The DRAFT neither adds it nor
-forbids it; it names the decision and the constraint (`CON.0` §7.8 job records
-are identity-lean and never enter the support bundle — an exported report is a
-different artifact from the support bundle and needs its own ruling).
+**`PO-NAV-4` — APPROVED IN PRINCIPLE, WITH A SHIP TRIGGER.** A future exported
+report **may** carry a sanitized, identity-lean, read-only job/execution
+evidence projection **once `PCP.5`'s job-record/export schema defines its exact
+fields**. This permits a future evidence projection; it does **not** create a
+Jobs module in the report today and does **not** authorize a schema now.
+
+The projection must contain **none** of:
+
+- an action affordance of any kind;
+- live submission;
+- a credential or trust reference;
+- a management endpoint, unless separately authorized for export;
+- raw device output;
+- backup or recovery bytes;
+- secret-bearing failure text.
+
+`CON.0` §7.8 (job records are identity-lean and never enter the support bundle)
+is unchanged; an exported report is a different artifact from the support bundle
+and its field list is `PCP.5`'s to define.
 
 ---
 
@@ -693,16 +767,25 @@ one, it is marked ✅ (verified in a real browser this session).
 | `prefers-reduced-motion` | rail/accordion transitions suppressed when requested | ⚠️ **gap** — CSS transitions are unconditional today |
 | Animation discipline | restrained, interruptible, non-authoritative: may support rail collapse, accordions, state changes and progress; must never obscure state or delay operational work | contract |
 
-### 13.1 Named accessibility gaps (must close before any freeze)
+### 13.1 Named accessibility gaps — and which gate they block
 
 1. **Icon-only accessible names** — replace reliance on `title` with an
    explicit accessible name.
 2. **`prefers-reduced-motion`** — guard the rail/accordion transitions.
-3. **Focus management** — move focus to the activated panel heading.
-4. **Group semantics** — associate each group's children with its label for
-   assistive technology.
+3. **Focus management** — move focus to the activated workspace heading.
+4. **Labelled group semantics** — associate each group's children with its
+   label for assistive technology.
 
-These are small, bounded and deliberately **not** implemented in this movement.
+**Gate correction.** Revision 1 said these "must close before any freeze". That
+conflated two different gates:
+
+| Gate | Requirement |
+| --- | --- |
+| **Architecture freeze** | the required behaviours and their acceptance criteria are **specified** — which §13 and this list do. Closing the gaps is not a precondition for freezing a sufficiently precise contract |
+| **Implementation merge / release** | all four gaps **pass**. The `NAV.1` prototype may not merge or be considered implementation-complete until then |
+
+Movement **`M2`** owns the implementation. It is deliberately **not** done in
+this movement.
 
 ---
 
@@ -711,12 +794,15 @@ These are small, bounded and deliberately **not** implemented in this movement.
 The Project Plan page is valuable **development** visibility and is not
 obviously part of a long-term operator product.
 
+**Decided by `PO-NAV-5`:**
+
 | Question | Position |
 | --- | --- |
-| Today | Stays under **Administration**, visible. It is genuinely useful and honest — it reports the repository's own state |
-| Direction | Becomes **administration/developer-only** |
-| Gate | Hidden from normal operators **only after a real authorization model exists** (`DEPLOY.1A`). **Never** hidden by a simulated role check — that would be exactly the fake RBAC D-NAV9 forbids |
-| Home | Administration (PROVISIONAL). A "Developer" group is a candidate once there is more than one such surface |
+| Today | **Remains visible under Administration** in the current local development product. It is genuinely useful and honest — it reports the repository's own state |
+| Direction | Becomes **administration/developer-only** once real OIDC/RBAC exists |
+| Gate | **Do not simulate that restriction before a real authorization model exists** — a simulated role check is exactly the fake RBAC D-NAV9 forbids |
+| Home | Administration. A "Developer" group is a candidate once there is more than one such surface |
+| Redesign | A **separate movement**; not this one |
 
 **Future design candidates, recorded and not implemented:** clearer
 milestone/phase hierarchy; board and timeline views; blocker/dependency
@@ -749,44 +835,58 @@ Checked against Part M's list. Findings, not assurances.
 
 | Blocked action | Gate |
 | --- | --- |
-| Any browser enrollment write | `pcp_console_registry_write_gate` (open, PO) |
+| Any browser enrollment write | Direction approved (`PO-NAV-1`, companion §9) but **nothing is implemented**: blocked until movement `M9` implements every condition in companion §9. Production/server exposure stays blocked on `DEPLOY.1A` |
 | Inventory-exclusion writes from a UI | `inventory_exclusions_management_ui_backend` → `DEPLOY.1A` |
 | Scheduler policy editing from a browser | `C-D7` |
 | `operational-write` (class 1) from the console | `CON.3` + `RB.3b` real-env + `C-D4`/`C-D6` |
 | Any `CLASS 2` action | no taxonomy member; `DenyAllAuthorizer`; `FAILOVER_ENGINE_ARCHITECTURE.md` §10 |
 | Console on a non-loopback interface | `C-D5` → `DEPLOY.1` |
-| Role/permission-based hiding | `DEPLOY.1A` OIDC/RBAC; `NAV.2` amendment |
+| Role/permission-based hiding | `DEPLOY.1A` OIDC/RBAC; `NAV.2` amendment. Simulating it earlier is forbidden (`PO-NAV-5`, D-NAV9) |
 | Privileged raw configuration view | separate security decision (§10c) |
 
 ---
 
-## 16. Open Product Owner decisions
+## 16. Product Owner decisions recorded (review round 1)
 
-The smallest set that must be answered before this document can be frozen.
+The Product Owner reviewed revision 1 and **closed the following in
+direction**. They are no longer open questions and are not restated as such
+anywhere in this document.
 
-| id | Decision | Options | This document's recommendation |
-| --- | --- | --- | --- |
-| **`PO-NAV-1`** | Where does enrollment live, and may it render at all before `DEPLOY.1A`? | (a) Devices pane header only; (b) Administration → Device management only; (c) **both, one contract**; and separately whether it renders pre-`DEPLOY.1A` — this is `pcp_console_registry_write_gate`, decided with the companion DRAFT | **(c)** for location; the *render* question is the companion DRAFT §9 recommendation and is the PO's to settle |
-| **`PO-NAV-2`** | Is **Recovery** a global root, and when? | (a) stay a device tab; (b) promote when `RB.5`/`CON.4` surfaces ship; (c) promote now with one tab behind it | **(b)** — a root with one device tab behind it would be the placeholder D-NAV6b forbids |
-| **`PO-NAV-3`** | Once the entity workspace exists, what stays in the **global Configuration** root? | (a) fleet alignment/posture only, device views move to the workspace; (b) both keep full views; (c) Configuration becomes workspace-only | **(a)** — preserves the fleet workflow the benchmark shows is real, without duplicating device views |
-| **`PO-NAV-4`** | May sanitized, read-only **job/execution history** appear in the exported report? | (a) never; (b) yes, sanitized and identity-lean; (c) defer to `PCP.5` | **(c)** then **(b)** — decide with the job-record schema, not ahead of it |
-| **`PO-NAV-5`** | Does **Project Plan** stay in normal product navigation? | (a) stays; (b) administration/developer-only after `DEPLOY.1A`; (c) removed from the product build | **(b)** |
-| **`PO-NAV-6`** | Adopt Configuration's tone vocabulary in Inventory, so `MEMBER_SPECIFIC` stops rendering amber? | (a) yes, unify; (b) keep Inventory's amber | **(a)** — one product, one meaning for one colour |
-| **`PO-NAV-7`** | Are the two proposed states (`POLICY_DISABLED`, `NOT_ENROLLED`) accepted as future canonical states? | (a) accept as `PCP.3`/`PCP.5` amendments; (b) reject and re-use existing; (c) defer | **(a)**, applied by the movement that needs each |
-| **`PO-NAV-8`** | Approve the six-root **current** IA as the shipped baseline while the target IA matures? | (a) yes; (b) change membership now; (c) revert to the horizontal strip | **(a)** |
+| id | Decision | Where it now lives |
+| --- | --- | --- |
+| **`PO-NAV-1`** | **Enrollment location — APPROVED.** "Add Device" is never a navigation root. Primary operator affordance in the **Devices / entity-list pane header**; **Administration → Device Management** is the lifecycle home (list, disable, re-verify, later profile references). Both entry points invoke **one enrollment contract**, no duplicate implementation. **Configuration does not own device lifecycle.** A local loopback console may eventually render enrollment before `DEPLOY.1A` under the companion DRAFT §9 conditions; **production/server exposure stays blocked on `DEPLOY.1A` OIDC/RBAC** | D-NAV5; §9; companion §8.3, §9 |
+| **`PO-NAV-2`** | **Recovery — APPROVED.** A **reserved future global root**, not rendered today. Promote only when a real **fleet-level** restore-readiness and/or recovery-store surface ships under its `RB`/`CON` contract. Device/entity Recovery stays a contextual workspace tab. Once the global root ships it **remains visible** whether the selected entity is protected, unsupported or not configured | §4.1, §4.3, §6.4 |
+| **`PO-NAV-3`** | **Configuration — APPROVED.** The global domain keeps fleet-level work: configuration posture, alignment/drift overview, cross-device search and filtering, configuration-change and evidence-coverage summaries, and fleet comparison workflows where a real contract exists. Device-level configuration, alignment, policy/object, history, evidence and sanitized-configuration views use the **shared selected-entity workspace**. **No duplicated data authority**; a global view may **deep-link** into the selected entity's Configuration context | §4.1, §6.2, §6.4 |
+| **`PO-NAV-4`** | **Exported execution history — APPROVED IN PRINCIPLE, ship-triggered** at `PCP.5`'s job-record/export schema, with a hard exclusion list. Creates no Jobs module in the report today and authorizes no schema now | §12 |
+| **`PO-NAV-5`** | **Project Plan — APPROVED.** Remains visible under Administration in the current local development product. Becomes administration/developer-only **once real OIDC/RBAC exists**. **Do not simulate that restriction** beforehand. Its dashboard redesign stays a separate movement | §14 |
+| **`PO-NAV-6`** | **Difference presentation — DECIDED (not the binary option offered).** The pale yellow/gold comparison emphasis is **preserved** because it makes member differences easy to notice; colour stops being the only carrier and stops implying fault. Full contract, including the label and no-warning-iconography rules for `MEMBER_SPECIFIC` and the reservation of red for actual fault | §5.4, D-NAV14, §11 |
+| **`PO-NAV-7`** | **Proposed states — concepts approved, ownership corrected.** They are **not** added as undifferentiated global canonical states. "Capability policy disabled" belongs to the **schedule/capability-policy contract** and must never join the job lifecycle vocabulary; "not enrolled" belongs to the **registry/evidence reconciliation projection** and is not a generic capability state. Names stay provisional until `M3` | §7.3 |
+| **`PO-NAV-8`** | **Root baseline — APPROVED.** The six current roots (Overview, Devices, Configuration, Operations, Compliance, Administration) are the accepted baseline. **Recovery is a reserved seventh** future root. **Jobs remains a child of Operations**, and the automatic promotion promise is **removed**: the mature default is Operations with `Jobs`, `Schedules`, `Queue`, `History` and future typed automation definitions. A root promotion is **not pre-approved** and would need a new PO-reviewed IA amendment | §4.1, §4.3 |
 
-`pcp_console_registry_write_gate`, `pcp_storage_engine`,
-`pcp_first_contact_trust_policy` and `pcp_auto_enrollment_policy` remain **open
-in `project/roadmap.json`** and are **not** closed by this document.
+### 16.1 Still open — navigation scope
+
+Only genuinely undecided questions remain here. Runtime, storage, enrollment and
+trust decisions live in the companion DRAFT §13.
+
+| Question | Owner / gate |
+| --- | --- |
+| **Sanitized exported job-history field schema** — the exact identity-lean field list `PO-NAV-4` is ship-triggered on | `PCP.5` job-record/export schema |
+| **Final names, owners and schemas for the two `PO-NAV-7` concepts**, after inventorying existing vocabularies | movement `M3` |
+| **Privileged raw configuration access** (§10 option c) | a separate future security decision — not this document |
+| **Future Jobs root promotion** | reopen **only** if later evidence on information density and operator workflow justifies it; not pre-approved |
+| **Future authorization-driven visibility** (P4 becoming a conjunct on entries, not only actions) | `DEPLOY.1A`; a `NAV.2` amendment |
 
 ---
 
 ## 17. Non-goals of this movement
 
-No UI behaviour change; no entity workspace; no per-device schedules; no
-enrollment path; no SQLite or storage change; no RBAC/OIDC; no payload builder
-change; no collector or device contact; no new action class; no change to what
-any module renders inside its own panel; no freeze; no merge; no PR.
+No UI behaviour change; no accessibility implementation (`M2`); no entity
+workspace; no per-device schedules; no enrollment path or route; no SQLite or
+storage change; no capability payload state; no RBAC/OIDC; no payload builder
+change; no collector targeting or device contact; no new action class; no change
+to what any module renders inside its own panel; no repair of the `PCP.1` uuid
+tests; **no freeze, no merge, no pull request**. This document stays **DRAFT**:
+the Product Owner closed direction, not the contract.
 
 ---
 
