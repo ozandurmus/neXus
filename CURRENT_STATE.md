@@ -56,30 +56,36 @@ test-enforced boundaries. Current numbers:
 
 **`pcp_2_local_control_plane_sequencing_po_review`** — **IN_PROGRESS**,
 producing **no product code**. A Product Owner review of the architecture a
-left-navigation prototype surfaced. Three DRAFTs:
-`docs/design/NAVIGATION_INFORMATION_ARCHITECTURE.md` (**DRAFT — PRODUCT OWNER
-REVIEW REQUIRED**; its earlier self-declared FROZEN status is withdrawn), the
-companion `docs/design/LOCAL_CONTROL_PLANE_RUNTIME_AND_ENROLLMENT.md`, and the
-research appendix `docs/design/research/NSPM_NAVIGATION_BENCHMARK.md`.
+left-navigation prototype surfaced. Three DRAFTs under `docs/design/`:
+`NAVIGATION_INFORMATION_ARCHITECTURE.md` (**DRAFT — PRODUCT OWNER REVIEW
+REQUIRED**; its earlier self-declared FROZEN status is withdrawn), the companion
+`LOCAL_CONTROL_PLANE_RUNTIME_AND_ENROLLMENT.md`, and the research appendix
+`research/NSPM_NAVIGATION_BENCHMARK.md`.
 
 **The left-navigation implementation is a WORKING PROTOTYPE** (commit
-`5a5a1f7`, runnable and behaviourally unchanged): a collapsible rail over six
-*candidate* domains, one model shared by the rail and the device tab strip,
-routes derived from it, no placeholders, no enrollment affordance. **Design
-evidence, not an approved architecture** — not frozen, not merge-approved, and
-it does not replace the roadmap movement.
+`5a5a1f7`, runnable and behaviourally unchanged): a collapsible rail over the
+six roots, one model shared by the rail and the device tab strip, routes derived
+from it, no placeholders, no enrollment affordance. **Design evidence, not an
+approved implementation** — not frozen, not merge-approved.
 
-Headline corrections (detail in the DRAFT): the DOM-only availability rule
-becomes **one conjunct of four** — surface eligibility / entity applicability /
-evidence state / future authorization — so **a global module can no longer
-vanish because one device lacks a capability**; ten UX semantics map onto
-**existing** canonical states, proposing only `POLICY_DISABLED` and
-`NOT_ENROLLED`; the workspace is logical-entity-first **with no second identity
-authority**; amber stops meaning "member-specific". `Add Device` renders
-nowhere and `pcp_console_registry_write_gate` stays **OPEN** — the prototype's
-"waits for `DEPLOY.1A`" comment pre-decided a PO question and is withdrawn.
-Predecessors are `project/build_history.json`'s job. PAN B2 stays
-**NOT ESTABLISHED**.
+**Review round 1 applied** (decisions: `project/roadmap.json` `now.notes`). The
+Product Owner substantially accepted both DRAFTs' direction and closed fourteen
+decisions — six-root baseline, enrollment location, conditioned local-loopback
+enrollment, storage **Option A**, the `M1`…`M14` order and more. **Both
+documents stay DRAFT.**
+
+**A material evidence correction was required.** The appendix's revision-1
+attribution of supplied screenshots to third-party products is **withdrawn in
+full** — they were neXus UI screenshots supplied to identify behaviours to
+preserve. The grade, every observation from them and three conclusions built on
+them are deleted, not softened; the appendix is rebuilt on supportable grades
+and the preservation evidence re-recorded as **REPO-VERIFIED** rows citing exact
+source symbols. Corrections returned rather than approved: the pale yellow/gold
+member emphasis is **preserved** (explicit label, no warning iconography); the
+two proposed states stay **out** of the global canonical vocabulary; Jobs gets
+**no** automatic root promotion; an inapplicable device tab stays **visible and
+selectable**; the accessibility gaps block **merge**, not **freeze**. PAN B2
+stays **NOT ESTABLISHED**.
 
 ## `OP.0b.0` — FROZEN WITH REAL-ENV VALIDATION GATES
 
@@ -115,29 +121,25 @@ a narrower question never promoted toward B2.
 ## Exact next build
 
 `now_next.next` is **`pcp1_registry_uuid_call_count_test_defect_repair`**
-(movement `M1`): the one bounded build actionable today with **no** Product
-Owner decision required — see "Automated test baseline" for the defect.
-Deliberately not fixed inside this architecture movement: it is a
-test-mechanism decision inside `PCP.1`'s frozen §21 contract.
+(movement `M1`): the one bounded build actionable today with **no** PO decision
+required — see "Automated test baseline". Not fixed inside this architecture
+movement: it is a test-mechanism decision inside `PCP.1`'s frozen §21 contract.
 `Sonnet 5, normal`.
 
-Everything else waits on the Product Owner: `PO-NAV-1…8`, the storage
-sequencing option (A/B/C) and the movement order.
-`pcp_console_registry_write_gate`, `pcp_storage_engine`,
-`pcp_first_contact_trust_policy` and `pcp_auto_enrollment_policy` all stay
-**open**. Proposed sequence: companion DRAFT §12 (`M1`…`M14`). `M5` — one
-collector's target-selection seam — is the critical path, because **every
-collection job type today is `target_mode="none"`**, so per-device collection
-cannot be offered honestly until that changes.
+`M1` runs **from current `main`**, in its own session and its own narrow PR —
+not from this branch, which then incorporates the new `main`. Still open: the
+SQLite schema/migration contract (`M4`), CP/PAN trust mechanics (`M8`),
+enrollment schemas (`M9`), production `pcp_storage_engine`, production
+OIDC/RBAC, future auto-enrollment, raw privileged configuration access, the
+exported job-history field schema (`PCP.5`), and any future Jobs root
+promotion. Sequence: companion DRAFT §12/§12.1. `M5` stays the critical path —
+**every collection job type today is `target_mode="none"`**, so per-device
+collection cannot be offered honestly until one collector gains a target seam.
 
-`op2_c_cp_clusterxl_adapter_scoping` stays `upcoming`/blocked, notes preserved
-in `project/roadmap.json` (adapter, real `ClusterXLMemberSession`, real
-`PreflightProvider`/`EligibilityEvaluator` all IMPLEMENTED + unit-tested, none
-wired; CLASS 2 unreachable). `OP.2.D`'s console flow is expected on the
-`PCP.4` device/HA tab — one console, never two.
-`op0b_0_close_d_v3a_d_v7b_pre_class2` is a vendor-fact question only;
-`cp_remote_collection_done_marker_diagnostics` needs a real recurrence; PAN
-serial identity closure is hardware-blocked (see above).
+`op2_c_cp_clusterxl_adapter_scoping` stays `upcoming`/blocked with its notes in
+`project/roadmap.json` (adapter, member session and preflight/eligibility all
+IMPLEMENTED + unit-tested, none wired; CLASS 2 unreachable). `OP.2.D`'s console
+flow is expected on the `PCP.4` device/HA tab — one console, never two.
 
 ## Open blockers
 
@@ -165,24 +167,21 @@ Concurrency budget stays at 1 per vendor pending its own real-env evidence.
 ## Automated test baseline
 
 ```
-THE FULL SUITE IS NOT GREEN. Two PCP.1 registry tests fail deterministically,
-  on main and on this branch, unchanged and unfixed by the current movement:
-  test_duplicate_enroll_refused_before_device_id_generated and
-  test_lock_contention_on_enroll_never_generates_a_device_id (their uuid4
-  call-count proof also counts the registry lock's own owner token, so both
-  assert [1] == []). Backlog pcp1_registry_uuid_call_count_test_defect;
-  proposed movement M1. The fast PR `validate` job never ran that file --
-  that is how it reached main; `full-regression` does.
-Current movement is documentation/state only, changing no runtime behaviour,
-  so targeted evidence rather than a full regression:
-    tests/test_navigation_information_architecture.py  20 passed (18 prototype
-      AC checks + 2 DRAFT/authority guards; 4 drive a real Chromium)
-    tests/test_architecture_convergence.py  green
+THE FULL SUITE IS NOT GREEN. The two PCP.1 registry uuid4 call-count tests
+  fail deterministically on main and on this branch, unchanged and unfixed:
+  the count also catches the registry lock's own owner token, so both assert
+  [1] == []. Backlog pcp1_registry_uuid_call_count_test_defect -> movement M1.
+  The fast PR `validate` job never ran that file; `full-regression` does.
+This movement is documentation/state only and changes no runtime behaviour
+  (diff from ace9813 touches no executable JS/CSS/template/Python), so
+  targeted evidence rather than a full regression:
+    tests/test_navigation_information_architecture.py  20 passed
+      (18 prototype AC checks + 2 DRAFT/authority guards; 4 real Chromium)
+    tests/test_architecture_convergence.py  20 passed
     render harnesses: node+happy-dom PASS; Playwright/Chromium PASS
-  Last full serial run here (before the state correction):
-    1950 passed / 22 skipped / 2 failed -- the same 2 failures above.
-Repository privacy gate: PASS / 0 findings (2026-09-05).
-Project-state consistency: metadata_warnings == []; index --check clean.
+  Last full serial run here: 1950 passed / 22 skipped / 2 failed (same two).
+Repository privacy gate: PASS / 0 findings. metadata_warnings == [];
+  build-history index --check clean; git diff --check clean.
 ```
 ## Known xfails
 
