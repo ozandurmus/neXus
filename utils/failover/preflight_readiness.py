@@ -34,15 +34,22 @@ Evidence laws this module encodes and the tests enforce:
   Palo Alto `conn-*` link-status leaves, which are this member's *own*
   observation of its *link* to the peer (category F), never of the peer's
   state.
-- No numeric threshold is chosen here: `D-F1` (configuration-intent max
-  age), `D-F2` (member-skew tolerance) and `D-F3` (flap/failover frequency)
-  are open product-owner decisions. Their counters are exposed as observed
-  values; the checks that would need them stay fail-closed
-  (`INSUFFICIENT_EVIDENCE`), never silently permissive.
+- No numeric threshold is chosen here, ever: `D-F1` (configuration-intent max
+  age) is a still-open product-owner decision; `D-F2` (member-skew
+  tolerance) and `D-F3` (flap/failover frequency) were DECIDED (CP pilot
+  readiness-policy amendment) to permanently carry no threshold at all. Every
+  counter is exposed as an observed value only; a check that would need a
+  threshold to PASS stays fail-closed (`INSUFFICIENT_EVIDENCE`), never
+  silently permissive, and never fabricated to a numeric predicate this
+  module was never given.
 - `D-V7b` (Check Point configured recovery) stays unreadable — `CP-A9` was
   not authorized by the command gate — so `preemption_known` stays
-  `INSUFFICIENT_EVIDENCE` for Check Point; the canonical roll-up's existing
-  treatment of that check is preserved, not reinterpreted.
+  `INSUFFICIENT_EVIDENCE` for Check Point, exactly as before; this module
+  does not reinterpret that check. What changed (CP pilot readiness-policy
+  amendment, `utils.failover.assessment.ADVISORY_EXEMPT_CHECKS`) is only
+  whether the canonical roll-up lets this one check's documented,
+  permanently-`INSUFFICIENT_EVIDENCE` status block an otherwise-positive
+  verdict — a roll-up-only decision, entirely outside this module.
 - PAN `B2` (bidirectional pair-identity corroboration) is NOT ESTABLISHED and
   is not established here: `peer_serial_claim` / `local_serial_claim` are
   never read; pair identity remains whatever `assessment._derive_pan_units`
@@ -749,6 +756,12 @@ def evaluate_snapshot_checks(
             elif fact is not None and fact.state is FactState.KNOWN and isinstance(fact.value, str) and len(fact.value) <= 24:
                 observed.setdefault(name, []).append(fact.value)
 
+    # Disclosure only, unchanged shape: which open-policy questions this
+    # snapshot's evidence touches. CP pilot readiness-policy amendment: the
+    # roll-up (`assessment.UNRESOLVED_POLICY_DECISIONS`) no longer treats
+    # `D-F2`/`D-F3` membership here as blocking -- both were DECIDED to carry
+    # no threshold, permanently -- so listing them below stays honest ("no
+    # bound was ever set") without gating anything. Only `D-F1` still blocks.
     policy_gates = [POLICY_D_F3]
     if coherence.member_skew_ms is not None:
         policy_gates.append(POLICY_D_F2)

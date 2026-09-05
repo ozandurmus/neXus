@@ -93,7 +93,55 @@ _VS_OUT_OF_SCOPE_MISSING_EVIDENCE = (
 POLICY_D_F1 = "D-F1"  # configuration-intent max age
 POLICY_D_F2 = "D-F2"  # member-skew tolerance
 POLICY_D_F3 = "D-F3"  # flap / failover-frequency threshold
-UNRESOLVED_POLICY_DECISIONS = frozenset({POLICY_D_F1, POLICY_D_F2, POLICY_D_F3})
+#: CP pilot readiness-policy amendment (PO decision, this build): `D-F2` and
+#: `D-F3` are DECIDED, not resolved -- the product owner chose not to invent
+#: a numeric threshold for either (no skew tolerance; the collected flap/
+#: failover counters are cumulative with no recency/window semantics), and
+#: instead made each a permanent, non-blocking advisory (see
+#: `ADVISORY_EXEMPT_CHECKS` for `D-F3`'s check-level mechanism; `D-F2` never
+#: gated a check at all -- see `preflight_readiness.evaluate_snapshot_checks`,
+#: which still records `member_skew_ms` for disclosure only). Only `D-F1`
+#: (configuration-intent max age) remains a genuinely open, still-blocking
+#: product-owner decision -- dormant in practice for Check Point today
+#: because `checkpoint/preflight_collector.py` always passes
+#: `configuration_facts=()`.
+UNRESOLVED_POLICY_DECISIONS = frozenset({POLICY_D_F1})
+
+#: CP pilot readiness-policy amendment (PO decision, this build; closes
+#: `D-V7b` and `D-F3` as CLASS-2-time blockers to the readiness roll-up,
+#: without resolving either's underlying vendor/numeric question). A
+#: **closed list** of exact `(vendor, check_id, reason)` triples: a check
+#: whose status is `INSUFFICIENT_EVIDENCE` for exactly one of these reasons
+#: is a documented, permanent, vendor- or policy-level absence -- never a
+#: `FAIL`, never an identity/coherence/collection failure, never open-ended
+#: missing evidence -- and therefore does not, by itself, block a positive
+#: verdict for the entity's other stop-conditions. `_verdict_for` is the
+#: only consumer.
+#:
+#: - `("checkpoint", "preemption_known", "configured_recovery_not_readable_d_v7b")`
+#:   -- `D-V7b`: no supported Check Point machine-readable read exists for
+#:   the configured cluster recovery/preemption setting, established after
+#:   exhaustive official-source research. Does NOT apply to
+#:   `("panorama", "preemption_known", ...)` -- PAN has a supported read
+#:   (`local-info/preemptive`); a missing PAN read stays fully blocking.
+#: - `("checkpoint", "flap_history", "threshold_policy_unresolved:D-F3")` and
+#:   `("panorama", "flap_history", "threshold_policy_unresolved:D-F3")` --
+#:   `D-F3`: the approved A8/P2 flap/failover counters are cumulative since
+#:   an operator-triggered reset, with no recency/window semantics; the PO
+#:   decided not to invent a threshold, and the check stays honestly
+#:   `INSUFFICIENT_EVIDENCE` forever, for both vendors, rather than being
+#:   given a fabricated pass/fail line.
+#:
+#: This set is never consulted for a `CHECK_FAIL` status (failures always
+#: block, unconditionally -- see `_verdict_for`), never widened by a
+#: generic reason match (the reason string must match exactly), and carries
+#: no per-run or operator-controlled member -- it is evaluated identically
+#: on every run, before any human is in the loop (no override).
+ADVISORY_EXEMPT_CHECKS: frozenset[tuple[str, str, str]] = frozenset({
+    ("checkpoint", "preemption_known", "configured_recovery_not_readable_d_v7b"),
+    ("checkpoint", "flap_history", "threshold_policy_unresolved:D-F3"),
+    ("panorama", "flap_history", "threshold_policy_unresolved:D-F3"),
+})
 
 #: What OP.0b would have to ask to close each gap. These strings are the only
 #: command text this module emits; they are fixed labels, never device output.
@@ -432,16 +480,28 @@ def _verdict_for(
     """Fail-closed verdict (contract P3/P4). **The one readiness roll-up.**
 
     `SAFE_TO_FAILOVER` requires **every** §4 stop-condition to have positively
-    passed *and* no open numeric policy decision (`UNRESOLVED_POLICY_DECISIONS`)
-    to apply to the evidence the checks were read from. On the OP.0a
-    stored-telemetry basis `OP0A_EVALUABLE_CHECKS` covers only two of the
-    seven, so SAFE is structurally unreachable — asserted by AC-6. On the
-    OP.0b S7 preflight basis `flap_history` can never PASS while `D-F3` is
-    open, and this gate additionally refuses SAFE while `D-F2`/`D-F1` apply,
-    so it stays unreachable there too — asserted by the S7 suite over a
-    generated snapshot matrix. `DEGRADED_PROCEED_WITH_RISK` is reserved in the
-    vocabulary and never emitted here (open decision `op_degraded_verdict`,
-    owed before OP.1).
+    passed, OR — CP pilot readiness-policy amendment, this build — to be one
+    of the closed-list, exact-reason `ADVISORY_EXEMPT_CHECKS` entries (`D-V7b`
+    check 6 for Check Point; `D-F3` check 7 for both vendors), *and* no open
+    numeric policy decision (`UNRESOLVED_POLICY_DECISIONS`) to apply to the
+    evidence the checks were read from. On the OP.0a stored-telemetry basis
+    `OP0A_EVALUABLE_CHECKS` covers only two of the seven and neither
+    preemption_known nor flap_history ever reaches the exempt reason there
+    (both report the generic `not_evaluable_without_preflight_battery`
+    instead), so SAFE stays structurally unreachable on that basis — asserted
+    by AC-6. On the OP.0b S7 preflight basis, once every OTHER check
+    positively passes, `preemption_known` (Check Point only) and
+    `flap_history` (both vendors) no longer block SAFE by themselves — proven
+    reachable by the S7 suite over a generated snapshot matrix.
+    `DEGRADED_PROCEED_WITH_RISK` is reserved in the vocabulary and never
+    emitted here (open decision `op_degraded_verdict`, owed before OP.1).
+
+    The exemption never applies to a `CHECK_FAIL` (handled first, below,
+    unconditionally), and never applies to an `INSUFFICIENT_EVIDENCE` whose
+    reason is not an exact `ADVISORY_EXEMPT_CHECKS` member — an identity-gate
+    failure, an incoherent snapshot, a collection failure, an unrecognized
+    vendor value, or any other missing-evidence reason still blocks exactly
+    as before.
     """
     # P3: a load-sharing cluster has no standby; "fail it over" is not a
     # coherent request, so it gets neither a safe nor an unsafe verdict.
@@ -462,16 +522,30 @@ def _verdict_for(
                 return VERDICT_UNSAFE, "split_brain_observed"
         return VERDICT_UNSAFE, str(failures[0].get("reason") or "stop_condition_failed")
 
-    if all(c.get("status") == CHECK_PASS for c in checks) and len(checks) == len(STOP_CONDITIONS):
-        open_gates = sorted(
-            str(g) for g in ((evidence or {}).get("unresolved_policy_gates") or [])
-            if str(g) in UNRESOLVED_POLICY_DECISIONS
-        )
-        if open_gates:
-            return VERDICT_INSUFFICIENT, "positive_verdict_blocked_by_unresolved_policy:" + ",".join(open_gates)
-        return VERDICT_SAFE, "all_stop_conditions_passed"
+    if len(checks) != len(STOP_CONDITIONS):
+        return VERDICT_INSUFFICIENT, "stop_conditions_not_fully_evaluable"
 
-    return VERDICT_INSUFFICIENT, "stop_conditions_not_fully_evaluable"
+    exempt_ids: list[str] = []
+    for check in checks:
+        if check.get("status") == CHECK_PASS:
+            continue
+        key = (unit.vendor, check.get("id"), check.get("reason"))
+        if key in ADVISORY_EXEMPT_CHECKS:
+            exempt_ids.append(str(check.get("id")))
+            continue
+        # A non-PASS, non-exempt check (INSUFFICIENT_EVIDENCE for any other
+        # reason) still blocks a positive verdict entirely.
+        return VERDICT_INSUFFICIENT, "stop_conditions_not_fully_evaluable"
+
+    open_gates = sorted(
+        str(g) for g in ((evidence or {}).get("unresolved_policy_gates") or [])
+        if str(g) in UNRESOLVED_POLICY_DECISIONS
+    )
+    if open_gates:
+        return VERDICT_INSUFFICIENT, "positive_verdict_blocked_by_unresolved_policy:" + ",".join(open_gates)
+    if exempt_ids:
+        return VERDICT_SAFE, "all_stop_conditions_passed_or_advisory_exempt:" + ",".join(sorted(exempt_ids))
+    return VERDICT_SAFE, "all_stop_conditions_passed"
 
 
 _TRAILING_SEP_RE = re.compile(r"^(.*[1-5])[-_.]$")
