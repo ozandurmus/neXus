@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "current_build": "op2_1b_cp_pilot_readiness_policy_amendment",
+  "current_build": "op2_c1_cp_clusterxl_member_session",
   "current_track": "OP.x",
   "progress_contract": "Weighted acceptance-criterion completion. Percentages describe the declared roadmap, not calendar time or delivery ETA.",
   "tracks": [
@@ -123,9 +123,9 @@
   "now_next": {
     "horizon_contract": "NOW is exactly one build. NEXT is exactly one. Everything else is an `upcoming` row carrying its own true status: planned = AFTER, blocked = waiting on a named external gate, deferred = consciously postponed. `now.build` must equal the newest project/build_history.json record -- utils.project_plan enforces it.",
     "now": {
-      "build": "op2_1b_cp_pilot_readiness_policy_amendment",
-      "title": "OP.2.1b - CP pilot readiness-policy amendment (D-V7b/D-F3/D-F2)",
-      "goal": "PO-decided readiness-layer policy amendment, no device contact, no adapter: utils/failover/assessment.py::_verdict_for now treats D-V7b (Check Point preemption_known, no supported vendor read exists) and D-F3 (flap_history, both vendors, no invented threshold) as closed-list, exact-reason, advisory-exempt checks -- INSUFFICIENT_EVIDENCE, visible, never silently PASS, but no longer independently blocking an otherwise-fully-passing unit. D-F2 (member-skew) never gated a check; its roll-up-level policy gate is simply retired (no threshold, ever) -- UNRESOLVED_POLICY_DECISIONS shrinks to {D-F1} only. PAN preemption_known is deliberately NOT exempted (a supported read exists there). No override, no operator control, no new verdict. Proves, over a generated matrix (tests/test_op0b_s7_readiness_v2.py), that SAFE_TO_FAILOVER is now reachable for a CP ClusterXL entity given a fresh OP.0b preflight run where the other five stop-conditions genuinely pass -- and never reachable for any other combination. OP.0a's stored-telemetry SAFE-unreachable invariant (AC-6) is untouched.",
+      "build": "op2_c1_cp_clusterxl_member_session",
+      "title": "OP.2.C follow-up - real ClusterXLMemberSession over the validated per-member Expert session",
+      "goal": "Implements checkpoint/clusterxl_member_session.py::RealClusterXLMemberSession -- the real ClusterXLMemberSession Protocol implementation the adapter movement deliberately left unbuilt -- backed onto the existing, real-environment-validated per-member checkpoint/preflight_collector.py::MemberSession Expert-shell transport (no new SSH client, no reconnect per command, no blind retry). read_role() reuses the already-approved A3/A5 reads; submit_admin_down()/submit_admin_up() issue exactly one of the two OP.2.1-approved literals (clusterXL_admin down/up, no -p) on the same shell, mapping to CONFIRMED_NOT_SENT only on a positively-proven pre-device transport failure and SUBMITTED_OR_AMBIGUOUS otherwise (OP.2.0 P6/P7). No change to the adapter contract, OP.2 lifecycle/authorization/readiness policy, or preflight_collector.py; CLASS 2 stays structurally unreachable (nothing outside tests/ references the new class).",
       "status": "automated_validated",
       "started": "2026-09-05",
       "completed": "2026-09-05"
@@ -137,9 +137,10 @@
       "notes": [
         "Promoted 2026-09-05 (OP.2.1b readiness-policy-amendment session): with D-V7b/D-F3/D-F2 no longer blocking the readiness roll-up, the readiness gate is no longer the reason OP.2.C cannot start -- authorization/trust/adapter/change-management are.",
         "Adapter itself now IMPLEMENTED + unit-tested (checkpoint/clusterxl_capability_adapter.py, tests/test_op2_c_cp_clusterxl_adapter.py): typed capability()/build_plan()/check_precondition()/execute_once()/observe_postcondition() for the two APPROVED_FOR_OP2C primitives (CP-M1 clusterXL_admin down, CP-M1-R clusterXL_admin up), exercised end-to-end through the real ActionCoordinator with fakes only. Wired into no production adapter_resolver -- CLASS 2 stays structurally unreachable (DenyAllAuthorizer unchanged, no taxonomy member).",
-        "Still blocked on: a real ClusterXLMemberSession backed by the existing per-member SSH session (deliberately not built by the adapter movement); DEPLOY.1A OIDC boundary + RBAC OPERATE role (authorize() is still unconditional DENY; no PermitAllAuthorizer exists outside tests); cp_production_ssh_host_key_trust_hardening (P0 before CLASS 2); the signed change-management/network-security review (FAILOVER_ENGINE_ARCHITECTURE.md section 10); a real PreflightProvider/EligibilityEvaluator supplying the check_statuses facts (cluster_mode, subject/peer member tokens, recovery_mode) the adapter's contract expects; a protected CLI/console entry point that actually constructs an ActionCoordinator with a real adapter_resolver.",
+        "CLOSED 2026-09-05 (op2_c1_cp_clusterxl_member_session): the real ClusterXLMemberSession is now implemented (checkpoint/clusterxl_member_session.py::RealClusterXLMemberSession) over the existing per-member MemberSession transport, unit-tested (tests/test_op2_c1_cp_clusterxl_member_session.py), and unwired -- CLASS 2 still structurally unreachable.",
+        "Still blocked on: DEPLOY.1A OIDC boundary + RBAC OPERATE role (authorize() is still unconditional DENY; no PermitAllAuthorizer exists outside tests); cp_production_ssh_host_key_trust_hardening (P0 before CLASS 2); the signed change-management/network-security review (FAILOVER_ENGINE_ARCHITECTURE.md section 10); a real PreflightProvider/EligibilityEvaluator supplying the check_statuses facts (cluster_mode, subject/peer member tokens, recovery_mode) the adapter's contract expects; a protected CLI/console entry point that actually constructs an ActionCoordinator with a real adapter_resolver, using RealClusterXLMemberSession as its session_resolver target.",
         "Recommended: Sonnet 5, normal for the remaining wiring items (deterministic against a now-frozen adapter contract); Sonnet 5, extended thinking (high) only for a genuine new decision inside the authorization/trust-model gates.",
-        "Detail: docs/history/phase/OP_2_1B_CP_PILOT_READINESS_POLICY_AMENDMENT.md \"Exact next step toward OP.2.C\"; checkpoint/clusterxl_capability_adapter.py module docstring."
+        "Detail: docs/history/phase/OP_2_1B_CP_PILOT_READINESS_POLICY_AMENDMENT.md \"Exact next step toward OP.2.C\"; checkpoint/clusterxl_capability_adapter.py and checkpoint/clusterxl_member_session.py module docstrings."
       ]
     },
     "upcoming": [

@@ -3,6 +3,20 @@
   "record_contract": "One structured record per build, newest first. Required: build, status, title, summary (<= 2 sentences). Optional: started, completed, track, movement, supersedes, evidence, risks_forward, docs{agreement,validation,handover} (repo-relative paths under docs/history/). Full detail lives in the linked doc; do not restate it here. Status vocabulary must stay within utils/project_plan.py STATUS_VALUES.",
   "builds": [
     {
+      "build": "op2_c1_cp_clusterxl_member_session",
+      "status": "automated_validated",
+      "title": "OP.2.C follow-up - real ClusterXLMemberSession over the validated per-member Expert session",
+      "summary": "Implements checkpoint/clusterxl_member_session.py::RealClusterXLMemberSession, the first real implementation of the ClusterXLMemberSession Protocol the CP ClusterXL capability adapter (checkpoint/clusterxl_capability_adapter.py, OP.2.C) defines but deliberately ships no implementation of. Backed onto the existing, real-environment-validated per-member checkpoint/preflight_collector.py::MemberSession Expert-shell transport -- no new SSH client, no reconnect per command, no blind retry. read_role() reuses the already-approved A3 (cphaprob stat) / A5 (cphaprob -ia list) reads through MemberSession.run, preserving framing/exit-status handling/pacing; submit_admin_down()/submit_admin_up() issue exactly one of the two OP.2.1-approved literals (clusterXL_admin down / up, no -p) directly on the same shell, mapping to SubmissionConfirmation.CONFIRMED_NOT_SENT only when the command is positively proven never to have reached the device, and SUBMITTED_OR_AMBIGUOUS otherwise (OP.2.0 P6/P7). Neither the adapter contract, OP.2 lifecycle/authorization/readiness policy, nor preflight_collector.py were changed. Nothing outside tests/ references the new class -- CLASS 2 stays structurally unreachable (DenyAllAuthorizer unchanged, no taxonomy member, no production adapter_resolver).",
+      "started": "2026-09-05",
+      "completed": "2026-09-05",
+      "track": "OP.2",
+      "movement": "ADAPTER_TRANSPORT_IMPLEMENTATION",
+      "evidence": "tests/test_op2_c1_cp_clusterxl_member_session.py (new, 21 passed: command resolution, exact one-shot submission behavior, read framing/exit-status handling, transport-failure propagation to CONFIRMED_NOT_SENT, session reuse across reads/submissions and across distinct physical members); tests/test_op2_c_cp_clusterxl_adapter.py, tests/test_op2_1_cp_clusterxl_command_gate.py, tests/test_op2_a_b_execution_foundation.py, tests/test_op0b_s5_cp_preflight_collector.py all green, unaffected.",
+      "docs": {
+        "agreement": "docs/history/phase/OP_2_1_CP_CLUSTERXL_MUTATION_COMMAND_GATE.md"
+      }
+    },
+    {
       "build": "op2_1b_cp_pilot_readiness_policy_amendment",
       "status": "automated_validated",
       "title": "OP.2.1b - CP pilot readiness-policy amendment (D-V7b/D-F3/D-F2)",
