@@ -726,6 +726,15 @@
       "priority": "P2",
       "target": "PCP.8",
       "note": "docs/design/PRODUCT_CONTROL_PLANE_ARCHITECTURE.md section 15: closed source catalog of bounded ordered read-only sequences over registered targets; every step gate-reviewed for this purpose; timeout/runtime, output limits, deterministic framing, redaction, audit; validator rejects class 1+ steps. Never browser -> arbitrary shell; no user-authored scripts in the first implementation. The CE.2 curated primitive registry and the runbook step catalog are one registry."
+    },
+    {
+      "id": "pcp1_registry_uuid_call_count_test_defect",
+      "category": "Test correctness / CI coverage gap",
+      "title": "Two PCP.1 registry tests fail deterministically on main: uuid4 call-count proof also counts the lock's owner token",
+      "status": "planned",
+      "priority": "P2",
+      "target": "PCP.1 (utils/device_registry.py + tests/test_pcp1_device_registry.py); no product behaviour change expected",
+      "note": "Discovered 2026-09-05 while establishing a pre-change test baseline for NAV.1, in a sandbox that (unlike the PCP.1 session's) has pytest/lxml/paramiko installed. tests/test_pcp1_device_registry.py::test_duplicate_enroll_refused_before_device_id_generated and ::test_lock_contention_on_enroll_never_generates_a_device_id both monkeypatch dr.uuid.uuid4 and assert the call list is empty. utils/device_registry.py::_acquire_lock generates the lock's owner_token with uuid.uuid4() before the O_CREAT|O_EXCL attempt, so exactly one call is always recorded and both tests fail with [1] == []. Deterministic, reproducible on HEAD (310593e) with the navigation change stashed, and unrelated to NAV.1. Why it reached main: .github/workflows/validation.yml's fast PR `validate` job runs only a fixed smoke set (credential redaction, privacy gate, known safety gaps, frontend rendering boundary) and never ran this file; the `full-regression` job runs on push to main, i.e. after the merge. CURRENT_STATE.md's 'confirmed green by PR #83's fast PR CI' claim is therefore accurate about what that job ran and over-broad about what it proves for this file. The AC being proven ('no device_id is generated before the duplicate/lock refusal') is still correct and still holds -- the *proof technique* over-reaches by counting every uuid4 call in the process rather than the device_id one. Fix is a test-mechanism decision inside PCP.1's frozen section 21 contract (e.g. count only calls made after lock acquisition, or assert on the persisted record instead of the call count) and is deliberately NOT folded into the NAV.1 UI movement."
     }
   ]
 }

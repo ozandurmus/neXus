@@ -287,8 +287,9 @@ must update as applicable: `CURRENT_STATE.md`, `project/roadmap.json`,
 changes (`docs/AI_DEVELOPMENT_PROTOCOL.md` render-harness section).
 
 Do not silently rewrite historical outcomes. Append/rebase explicitly. A
-build touching `templates/index.html`, `static/app.js`, `static/style.css`,
-or a payload builder must show the HTML render harness green
+build touching `templates/index.html`, `templates/console.html`, any
+`static/*.js` UI module, `static/style.css`, or a payload builder must show
+the HTML render harness green
 (`tests/test_html_render_harness.py`) alongside the full suite **and** the
 repository privacy gate.
 

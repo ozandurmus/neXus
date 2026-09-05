@@ -121,7 +121,6 @@ def test_project_plan_payload_is_data_driven_and_percentages_are_bounded():
 
 def test_project_plan_ui_contract_and_export_embedding_are_present():
     for marker in [
-        'id="projectPlanNav"',
         'id="projectPlanModule"',
         'id="projectPlanHero"',
         'id="projectRoadmapTracks"',
@@ -131,6 +130,15 @@ def test_project_plan_ui_contract_and_export_embedding_are_present():
         "__PROJECT_PLAN_JSON_PLACEHOLDER__",
     ]:
         assert marker in TEMPLATE
+    # NAV.1 (docs/design/NAVIGATION_INFORMATION_ARCHITECTURE.md): navigation
+    # reachability moved off the template's static topbar buttons onto the one
+    # navigation model in static/navigation_ui.js (composed into APP). The
+    # contract this test protects is unchanged — the module is reachable from
+    # primary navigation and the shell ships its panel — only where the two
+    # facts are declared changed.
+    for module_id in ("project-plan",):
+        assert f'module: "{module_id}"' in APP
+        assert f'data-module-panel="{module_id}"' in TEMPLATE
     assert "projectPlanData: __PROJECT_PLAN_JSON_PLACEHOLDER__" in TEMPLATE
     assert "function renderProjectPlan(" in APP
     assert '"project-plan"' in APP

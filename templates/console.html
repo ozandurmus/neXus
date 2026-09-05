@@ -17,16 +17,6 @@
         </div>
     </div>
 
-    <nav class="module-nav" aria-label="Primary modules">
-        <button id="overviewNav" class="module-nav-item active" type="button" data-module="overview">Overview</button>
-        <button id="inventoryNav" class="module-nav-item" type="button" data-module="inventory">Network Inventory</button>
-        <button id="configurationNav" class="module-nav-item" type="button" data-module="configuration">Configuration</button>
-        <button id="complianceNav" class="module-nav-item" type="button" data-module="compliance">Compliance</button>
-        <button id="discoveryNav" class="module-nav-item" type="button" data-module="discovery">Discovery</button>
-        <button id="failoverNav" class="module-nav-item" type="button" data-module="failover">Failover</button>
-        <button id="exclusionsNav" class="module-nav-item" type="button" data-module="exclusions">Exclusions</button>
-        <button id="projectPlanNav" class="module-nav-item" type="button" data-module="project-plan">Project Plan</button>
-    </nav>
 
     <div class="controls">
         <div id="inventoryTopControls" class="context-controls" hidden>
@@ -66,6 +56,12 @@
         ></button>
     </div>
 </header>
+
+<div class="app-body">
+
+<nav class="primary-nav" data-primary-nav aria-label="Primary navigation"></nav>
+
+<div class="app-canvas">
 
 <section id="overviewModule" class="app-module active" data-module-panel="overview">
     <main class="overview-shell">
@@ -221,15 +217,7 @@
                 </div>
             </section>
 
-            <nav class="config-tabs" aria-label="Configuration views">
-                <button id="configOverviewTab" class="config-tab active" type="button" data-config-tab="overview">Overview</button>
-                <button id="configCurrentTab" class="config-tab" type="button" data-config-tab="current">Configuration</button>
-                <button id="configAlignmentTab" class="config-tab" type="button" data-config-tab="alignment">Alignment</button>
-                <button id="configPolicyTab" class="config-tab" type="button" data-config-tab="policy">Policy &amp; Objects</button>
-                <button id="configHistoryTab" class="config-tab" type="button" data-config-tab="history">History</button>
-                <button id="configEvidenceTab" class="config-tab" type="button" data-config-tab="evidence">Evidence</button>
-                <button id="configBackupTab" class="config-tab" type="button" data-config-tab="backup">Backup</button>
-            </nav>
+            <nav class="config-tabs" data-device-tabs aria-label="Device views"></nav>
 
             <section class="config-content">
                 <div id="configOverviewPanel" class="config-panel active"></div>
@@ -415,12 +403,30 @@
             </div>
             <div id="discoveryRecentJobs"></div>
         </section>
+    </main>
+</section>
+
+<section id="jobsModule" class="app-module" data-module-panel="jobs">
+    <main class="project-plan-shell">
+        <div class="project-plan-heading">
+            <div>
+                <div class="eyebrow">SecurityExpert · CON.2</div>
+                <h1>Jobs</h1>
+                <p>Typed read-class jobs submitted from this console and their recorded outcomes. The browser submits a job type and its targets against a closed server-side registry — never a command, an argv fragment or a path. An operational-write job type always renders BLOCKED with the refusing class named; it is not offered.</p>
+            </div>
+        </div>
 
         <section class="project-plan-card">
             <div class="dashboard-card-header">
-                <div><div class="eyebrow">Operator actions</div><h2>Console jobs (CON.2 — read-class only)</h2></div>
+                <div><div class="eyebrow">Operator actions</div><h2>Submit a job</h2></div>
             </div>
             <div id="consoleJobTypes" class="console-job-types"></div>
+        </section>
+
+        <section class="project-plan-card">
+            <div class="dashboard-card-header">
+                <div><div class="eyebrow">Job records</div><h2>This session's jobs</h2></div>
+            </div>
             <div id="consoleJobsTable" class="console-jobs-table"></div>
         </section>
     </main>
@@ -529,6 +535,9 @@
         </section>
     </main>
 </section>
+
+</div>
+</div>
 
 <script src="/assets/app.js"></script>
 <script src="/assets/console_actions.js"></script>

@@ -325,10 +325,18 @@ One large multi-stage function (~750 lines):
   `utils/project_plan.py`),
   `__DISCOVERY_JSON_PLACEHOLDER__` (lifecycle / capability / coordinator /
   scheduler observability). Result: a single dependency-free `output/index.html`.
-  UI modules: Overview, Network Inventory, Configuration, Compliance, Discovery,
-  Project Plan. `static/app.js` (~5000 lines) does the inventory-side IP math,
-  ClusterXL/VSX/PAN-HA collapsing into one logical cluster, member-divergence
-  tabs, and hierarchy building.
+  The script is `utils.html_export.SCRIPT_MODULE_FILENAMES` concatenated in a
+  fixed order (no bundler, no build step) — the browser still runs one flat
+  top-level script. Navigation is a left vertical rail over six product
+  domains (Overview, Devices, Configuration, Operations, Compliance,
+  Administration); `static/navigation_ui.js` holds the one model for both the
+  rail and the device-detail tab strip, and renders an entry only when the
+  shell actually ships the `[data-module-panel]` it points at, so the console
+  and the action-free report expose different entry sets from identical code
+  (`docs/design/NAVIGATION_INFORMATION_ARCHITECTURE.md`). The inventory-side
+  IP math, ClusterXL/VSX/PAN-HA collapsing into one logical cluster,
+  member-divergence tabs and hierarchy building live in
+  `static/inventory_ui.js`.
 - **`run_support_bundle`** (`utils/support_bundle.py`): sanitized shareable zip
   with HMAC-tokenized (`data/.support_hmac.key` or `FBUDDY_SUPPORT_HASH_KEY`)
   device/assignment identities; raw config and value hashes excluded.

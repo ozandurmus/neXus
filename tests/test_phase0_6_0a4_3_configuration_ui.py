@@ -267,16 +267,31 @@ def test_template_has_vendor_neutral_configuration_information_architecture_and_
     assert "SecurityExpert" in TEMPLATE
     assert "F-Buddy" not in TEMPLATE
     for element_id in [
-        "overviewNav", "inventoryNav", "configurationNav",
-        "complianceNav",
         "overviewModule", "inventoryModule", "configurationModule",
         "complianceModule",
-        "configDeviceList", "configOverviewTab", "configCurrentTab", "configAlignmentTab",
-        "configPolicyTab", "configEvidenceTab", "configHistoryTab", "configBackupTab",
-        "configCurrentPanel", "configPolicyPanel", "configHeaderFacts",
+        "configDeviceList",
+        "configOverviewPanel", "configCurrentPanel", "configAlignmentPanel",
+        "configPolicyPanel", "configEvidencePanel", "configHistoryPanel",
+        "configBackupPanel", "configHeaderFacts",
         "globalSearch", "deviceList", "interfaceTable", "routeTable",
     ]:
         assert f'id="{element_id}"' in TEMPLATE
+
+    # NAV.1 (docs/design/NAVIGATION_INFORMATION_ARCHITECTURE.md): navigation
+    # reachability moved off the template's static topbar buttons onto the one
+    # navigation model in static/navigation_ui.js (composed into APP). The
+    # contract this test protects is unchanged — the module is reachable from
+    # primary navigation and the shell ships its panel — only where the two
+    # facts are declared changed.
+    for module_id in ("overview", "inventory", "configuration", "compliance",):
+        assert f'module: "{module_id}"' in APP
+        assert f'data-module-panel="{module_id}"' in TEMPLATE
+
+    # The device tab strip moved with it (NAV.1 §3 "Device-scoped functions"):
+    # the tabs are declared once, in the same model, and rendered only for the
+    # panels the shell actually ships.
+    for tab_id in ("overview", "current", "alignment", "policy", "history", "evidence", "backup"):
+        assert f'{{ tab: "{tab_id}", label:' in APP
     assert "__CONFIG_JSON_PLACEHOLDER__" in TEMPLATE
     assert "__COMPLIANCE_JSON_PLACEHOLDER__" in TEMPLATE
     assert "Search Palo Alto device" not in TEMPLATE

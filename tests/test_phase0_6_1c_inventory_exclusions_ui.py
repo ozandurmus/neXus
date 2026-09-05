@@ -106,7 +106,6 @@ def test_payload_has_no_credential_or_ip_shaped_fields():
 
 def test_template_has_exclusions_module_markers():
     for marker in [
-        'id="exclusionsNav"',
         'id="exclusionsModule"',
         'id="exclusionsFleetSummary"',
         'id="exclusionsEntityTable"',
@@ -114,18 +113,36 @@ def test_template_has_exclusions_module_markers():
     ]:
         assert marker in TEMPLATE
 
+    # NAV.1 (docs/design/NAVIGATION_INFORMATION_ARCHITECTURE.md): navigation
+    # reachability moved off the template's static topbar buttons onto the one
+    # navigation model in static/navigation_ui.js (composed into APP). The
+    # contract this test protects is unchanged — the module is reachable from
+    # primary navigation and the shell ships its panel — only where the two
+    # facts are declared changed.
+    for module_id in ("exclusions",):
+        assert f'module: "{module_id}"' in APP
+        assert f'data-module-panel="{module_id}"' in TEMPLATE
+
 
 def test_template_preserves_existing_module_markers():
     """The new module must not remove any pre-existing module marker."""
     for marker in [
-        'id="discoveryNav"',
         'id="discoveryModule"',
-        'id="projectPlanNav"',
         'id="projectPlanModule"',
         "__DISCOVERY_JSON_PLACEHOLDER__",
         "__PROJECT_PLAN_JSON_PLACEHOLDER__",
     ]:
         assert marker in TEMPLATE
+
+    # NAV.1 (docs/design/NAVIGATION_INFORMATION_ARCHITECTURE.md): navigation
+    # reachability moved off the template's static topbar buttons onto the one
+    # navigation model in static/navigation_ui.js (composed into APP). The
+    # contract this test protects is unchanged — the module is reachable from
+    # primary navigation and the shell ships its panel — only where the two
+    # facts are declared changed.
+    for module_id in ("discovery", "project-plan",):
+        assert f'module: "{module_id}"' in APP
+        assert f'data-module-panel="{module_id}"' in TEMPLATE
 
 
 def test_app_js_has_exclusions_render_function_and_wiring():

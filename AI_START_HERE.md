@@ -114,7 +114,8 @@ Vendor/config imports are lazy — maintenance modes return before touching them
 | `utils/support_bundle.py`, `completeness.py` | sanitized shareable zip |
 | `utils/logger.py`, `cp_ssh_trust.py`, `pan_tls_trust.py`, `repository_privacy.py`, `inventory_exclusions.py` | log redaction, trust preflight, DLP gate, exclusion policy |
 | `utils/device_registry.py` | `PCP.1` Device Registry: opaque `device_id`, endpoint normalization, vendor-hint-independent duplicate detection, lifecycle, the registry mutation lock; filesystem-only via `utils/evidence_backend.py::DeviceRegistryBackend` |
-| `templates/index.html` + `static/{app.js,style.css}` | single-page UI (Overview / Network Inventory / Configuration / Compliance / Discovery / Project Plan) |
+| `templates/index.html` + `static/{*_ui.js,app_*.js,style.css}` | single-page UI shell: left vertical product navigation (Overview / Devices / Configuration / Operations / Compliance / Administration) over the module panels |
+| `static/navigation_ui.js` | `NAV.1` the one navigation model — the left rail *and* the device-detail tab strip; an entry renders only when the shell ships the surface it points at (`docs/design/NAVIGATION_INFORMATION_ARCHITECTURE.md`) |
 | `console/` + `templates/console.html` + `static/console_actions.js` | operator console (`--console`): `registry.py` is the closed job vocabulary, `runner.py` the single-worker executor, `jobs.py` the durable records; imports no vendor/collector module |
 | `utils/action_taxonomy.py` | the five action classes — what each surface may execute, and why not |
 | `utils/failover/` | `OP.0a` HA readiness assessment **only**; the absence of a plan/executor/adapter is test-enforced |
@@ -243,7 +244,7 @@ stay observable. Never use the strongest tier for mechanical work.
 - **State consistency**: `project_metadata_has_no_cross_authority_contradictions`
   (part of `tests/test_architecture_convergence.py`) must show zero warnings.
 - **HTML render harness**: required alongside the full suite whenever
-  `templates/index.html`, `static/app.js`, `static/style.css`, or a payload
+  `templates/index.html`, any `static/*.js` UI module, `static/style.css`, or a payload
   builder changes (`docs/AI_DEVELOPMENT_PROTOCOL.md` has the exact trigger
   list and commands).
 - **`git diff --check`**: whitespace/conflict-marker guard before any commit.

@@ -59,14 +59,28 @@ _DEF_RE = re.compile(
 _TOKEN_RE = re.compile(r"[A-Za-z_$][\w$]*")
 _LINE_COMMENT_RE = re.compile(r"//[^\n]*")
 _BLOCK_COMMENT_RE = re.compile(r"/\*.*?\*/", re.DOTALL)
+# Single- and double-quoted literals only, and never across a newline, so a
+# mis-paired apostrophe inside a comment can never swallow real code below it.
+# Template literals are deliberately NOT stripped: `${escapeHtml(x)}` holds
+# genuine load-time references the scan must still see.
+_QUOTED_STRING_RE = re.compile(r"'(?:\\.|[^'\\\n])*'|\"(?:\\.|[^\"\\\n])*\"")
 
 
 def _strip_comments(source):
-    """Drop // and /* */ comments before the reference scan — a comment that
-    names another module's function is documentation, not a load-time
-    dependency. (AST-lite: does not touch strings; no current module has an
-    identifier-shaped string literal that trips the ordering check.)"""
-    return _LINE_COMMENT_RE.sub("", _BLOCK_COMMENT_RE.sub("", source))
+    """Drop quoted string literals and // + /* */ comments before the reference
+    scan — neither is a load-time dependency. Strings go first so a URL inside
+    one ("http://…") cannot be turned into a stray unbalanced quote by the
+    comment pass.
+
+    NAV.1 made the string pass necessary rather than merely correct:
+    navigation_ui.js's model names its target modules as *data* ("inventory",
+    "configuration", …), and several of those words are also top-level
+    identifiers a later module owns. A module id inside a string literal is not
+    a reference to that identifier, and treating it as one flagged a dependency
+    that does not exist."""
+    return _LINE_COMMENT_RE.sub(
+        "", _BLOCK_COMMENT_RE.sub("", _QUOTED_STRING_RE.sub("", source))
+    )
 
 
 def _module_source(name):
@@ -137,7 +151,15 @@ def test_every_top_level_function_survived_the_split():
     # authority reconciliation) retired inventory_ui.js's client-side PAN
     # pairing similarity heuristic (setSimilarity, panoramaRuntimeSignature,
     # panoramaPairCompatible — 3 removed) and added one canonical-authority
-    # lookup helper (haReadinessUnitsByType) in its place — 179.
+    # lookup helper (haReadinessUnitsByType) in its place — 179. NAV.1 (left
+    # vertical product navigation) added static/navigation_ui.js's seventeen:
+    # the model readers (navigationAuthorizationContext, navigationShellHasPanel,
+    # navigationEntryAvailable, navigationAvailableRoots, navigationModuleIds,
+    # navigationDefaultModule, navigationContextualActions), the rail state
+    # (navigationCollapsed, setNavigationCollapsed, navigationGroupCollapsedSet,
+    # setNavigationGroupCollapsed) and the renderers/dispatch (navigationIcon,
+    # navigationRootMarkup, renderPrimaryNavigation, syncNavigationActiveState,
+    # renderDeviceTabs, bindNavigationEvents) — 196.
     all_defs = []
     per_file = {}
     for name in SCRIPT_MODULE_FILENAMES:
@@ -146,6 +168,6 @@ def test_every_top_level_function_survived_the_split():
         per_file[name] = fns
         all_defs.extend(fns)
 
-    assert len(all_defs) == 179, f"expected 179 top-level functions, found {len(all_defs)}"
+    assert len(all_defs) == 196, f"expected 196 top-level functions, found {len(all_defs)}"
     dupes = sorted({f for f in all_defs if all_defs.count(f) > 1})
     assert not dupes, f"functions defined in more than one module file: {dupes}"
