@@ -271,10 +271,16 @@ behind an authenticated, authorized, audited actor before any HTTP surface.
 
 Default behaviour for every path: **candidate → explicit operator
 enrollment**. "Everything the management plane sees becomes authoritative
-inventory automatically" is *not* the architecture. A future, opt-in,
-trusted-source auto-enrollment policy is possible (open decision
-`pcp_auto_enrollment_policy`) but is not the default and is not designed
-here.
+inventory automatically" is *not* the architecture.
+
+**`pcp_auto_enrollment_policy` — DECIDED FOR THE CURRENT HORIZON (2026-09-05,
+§19).** No automatic persistent enrollment is approved: manual and candidate
+enrollment both still require positive identity evidence, operator preview
+and explicit confirmation, and no discovery or "trusted source" path may
+create a persistent enrolled device on its own. A future opt-in,
+trusted-source auto-enrollment policy is a **separately gated capability**
+that would require a **new** Product Owner decision — "not now" is not a
+permanent prohibition, but it is not designed here either.
 
 | Path | Input | Produces | Identity / capability evidence comes from |
 | --- | --- | --- | --- |
@@ -1246,16 +1252,33 @@ canonical authority competes with them.
 
 ---
 
-## 24. Next movement / reasoning tier
+## 24. Next movement / reasoning tier — HISTORICAL (at the original `PCP.0` freeze)
 
-- **This freeze session** (`Sonnet 5, extended thinking (high)`) applied
+This section records what was true **at the original `PCP.0` freeze session**
+and is preserved as history, not as current sequencing authority.
+
+- **That freeze session** (`Sonnet 5, extended thinking (high)`) applied
   §22 amendments 1-3 (item 4 deferred to the `PCP.1` close, see §22), the
   registry-mutation-lock ownership/privacy correction (AC-5, AC-15),
   flipped this status to `FROZEN`, and rotated `project/roadmap.json`
   (`PCP.0` → done; `PCP.1` stays `next`).
-- **Exact next movement:** `PCP.1`
+- **At that time, the next movement was `PCP.1`**
   (`pcp_1_device_registry_manual_enrollment_foundation`), `Sonnet 5,
   normal`, one short prompt pointing at §21 and
-  `tests/test_pcp1_device_registry.py`. Not started by this session.
-- Escalate to extended thinking only for the four open decisions in §19 when
-  their `decide_by` movement is reached.
+  `tests/test_pcp1_device_registry.py`. **`PCP.1` has since shipped** (see
+  `project/build_history.json`) — it is neither "next" nor "unstarted" today.
+
+**Current sequencing authority.** This historical note does not track what is
+next now. For the live `now`/`next` movement, see `CURRENT_STATE.md` and
+`project/roadmap.json`'s `now_next` — this document does not duplicate or
+invent a current NEXT.
+
+**Reasoning-tier rule (current, not historical).** Escalate to extended
+thinking only when (a) a genuinely open decision in canonical project state
+(`project/roadmap.json` `open_decisions`) reaches its recorded `decide_by`
+movement, or (b) a new durable architecture or security boundary is being
+proposed. Decided questions are not open decisions regardless of where they
+originated: as of the 2026-09-05 `M0` freeze, first-contact trust, local
+loopback enrollment (scoped as frozen) and current-horizon auto-enrollment are
+**decided**, not open, and do not by themselves justify escalating reasoning
+tier.

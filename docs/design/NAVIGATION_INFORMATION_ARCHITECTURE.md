@@ -143,10 +143,13 @@ These are correct today and must not be mistaken for product law:
 - **The `jobs` panel living only in `console.html`.** Correct today because the
   `CON.2` job engine is console-only. It is a *shell-shipping* fact, not a
   statement that job evidence may never be exported (§12).
-- **Six roots.** The right *shape*; the membership is provisional (§4).
+- **Six roots.** The baseline and its order are **frozen** (`PO-NAV-8`, §4);
+  a future change to root membership requires a new PO-reviewed IA amendment,
+  not a revision of this document in place.
 - **Per-group collapse persisted in `localStorage`.** Fine; per-viewer
   convenience, no product meaning.
-- **Icon choice, rail width, chevron behaviour.** Visual detail.
+- **Icon choice, rail width, chevron behaviour.** Implementation detail —
+  visual, not architectural.
 
 ### 2.3 Durable product-IA decisions the prototype got right
 
