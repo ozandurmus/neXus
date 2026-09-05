@@ -3,6 +3,21 @@
   "record_contract": "One structured record per build, newest first. Required: build, status, title, summary (<= 2 sentences). Optional: started, completed, track, movement, supersedes, evidence, risks_forward, docs{agreement,validation,handover} (repo-relative paths under docs/history/). Full detail lives in the linked doc; do not restate it here. Status vocabulary must stay within utils/project_plan.py STATUS_VALUES.",
   "builds": [
     {
+      "build": "op2_c_release_gate_dependency_scoping",
+      "status": "done",
+      "title": "OP.2.C release-gate scoping - dependency order and smallest actionable next build",
+      "summary": "Read-only ARCHITECTURE/RELEASE-GATE-SCOPING pass classifying the four remaining OP.2.C production-reachability gates (DEPLOY.1A OIDC+RBAC OPERATE, production CP SSH host-key trust hardening, the signed change-management/network-security review, the protected production entry point + live adapter_resolver construction) against repository evidence. Found: DEPLOY.1A is externally blocked on DEPLOY.1 server availability; the SSH trust hardening item's own backlog.json target field ('post-DEPLOY.1') shows it shares that same external blocker rather than being independently closable; the protected entry point/adapter_resolver is dependent on both landing first and stays out of scope for any build before then; the change-management/network-security review has no drafted artifact anywhere in the repository (unlike its sibling OP.2.1 network-device command gate, already DRAFTED), and drafting that package -- not signing it -- is the one item in the set that is engineering-actionable now with zero code, server, or device contact. No code, taxonomy, Authorizer, adapter, UI, or device command touched or added.",
+      "started": "2026-09-05",
+      "completed": "2026-09-05",
+      "track": "OP.2",
+      "movement": "ARCHITECTURE",
+      "evidence": "Read-only session: AGENTS.md, AI_START_HERE.md, CURRENT_STATE.md, project/roadmap.json, project/backlog.json, project/feature_registry.json, docs/design/FAILOVER_ENGINE_ARCHITECTURE.md section 10, utils/operate/authorization.py, checkpoint/clusterxl_capability_adapter.py, checkpoint/clusterxl_member_session.py, checkpoint/clusterxl_preflight_provider.py docstrings, and a repository-wide search confirming no utils/operate/adapter_resolver.py or production ActionCoordinator construction exists outside tests/. No test suite run (no code changed).",
+      "risks_forward": "The change-management review package's own future draft must not claim DEPLOY.1A, SSH trust hardening, or the protected entry point are any closer to done than DenyAllAuthorizer/no-taxonomy-member already make them -- its acceptance criteria say so explicitly (project/roadmap.json now_next.upcoming op2_c_change_management_review_package_draft).",
+      "docs": {
+        "agreement": "docs/design/FAILOVER_ENGINE_ARCHITECTURE.md"
+      }
+    },
+    {
       "build": "op2_c_cp_clusterxl_preflight_eligibility_wiring",
       "status": "automated_validated",
       "title": "OP.2.C follow-up - real CP ClusterXL PreflightProvider/EligibilityEvaluator wiring",

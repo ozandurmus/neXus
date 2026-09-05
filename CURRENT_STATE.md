@@ -7,11 +7,12 @@ detail is not here either** — it is in `project/build_history.json`
 linked documents under `docs/history/`. `docs/history/INDEX.md` is the
 generated one-line timeline.
 
-- **Checkpoint:** 2026-09-05, branch `claude/cp-clusterxl-preflight-wiring-ft80pc`.
+- **Checkpoint:** 2026-09-05, branch `claude/op2c-release-gate-scoping-bwym22`.
 - **Current build** (per `project/roadmap.json` `now_next.now`):
-  `op2_c_cp_clusterxl_preflight_eligibility_wiring` — **AUTOMATED_VALIDATED**
-  (see "Active build"). `now_next.next` = `op2_c_cp_clusterxl_adapter_scoping`
-  (blocked on authorization/trust/change-management/wiring, not readiness).
+  `op2_c_release_gate_dependency_scoping` — **DONE** (read-only ARCHITECTURE
+  scoping; see "Active build"). `now_next.next` stays `op2_c_cp_clusterxl_
+  adapter_scoping` (blocked); smallest actionable sub-step: `op2_c_change_
+  management_review_package_draft` (`upcoming`).
 - **OP.2.0 CLASS 2 architecture** (`docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md`):
   **CONTRACT FROZEN 2026-09-04**; `OP.2.A`/`OP.2.B` IMPLEMENTED; `OP.2.1` CP
   command gate DRAFTED — CLASS 2 still has **no member**, no adapter,
@@ -50,34 +51,28 @@ test-enforced boundaries. Current numbers:
 
 ## Active build
 
-**`op2_c_cp_clusterxl_preflight_eligibility_wiring`** —
-**AUTOMATED_VALIDATED**, 2026-09-05. New
-`checkpoint/clusterxl_preflight_provider.py`: `ClusterXLPreflightProvider`
-(the real `PreflightProvider`) calls `checkpoint.preflight_collector.
-run_cp_preflight` then the one canonical `utils.failover.assessment.
-compute_ha_readiness` — no second readiness engine — and copies its verdict
-verbatim; `ClusterXLReadinessEligibilityEvaluator` maps that verdict onto
-`EligibilityResult` by equality against `VERDICT_SAFE` only. The provider
-resolves opaque `subject_member_token`/`peer_member_token` from this run's
-own fresh `ha_local_role` fact (never member order), translates the CP
-vendor cluster-mode token to the adapter's canonical `"ha"`, and always
-reports `recovery_mode="unknown"` (`D-V7b`) — every ambiguous/missing/
-split-brain case fails closed to no tokens/no cluster_mode. Same-action/
-same-entity binding (P4): every returned snapshot is stamped with the
-caller's own `action_id`/`operational_entity_id`. No production
-`ActionCoordinator`, adapter resolver, entry point, UI, trust change, or
-device command added — CLASS 2 stays structurally unreachable
-(`DenyAllAuthorizer` unchanged, re-asserted by test). Detail:
-`checkpoint/clusterxl_preflight_provider.py` docstring,
-`tests/test_op2_c_cp_clusterxl_real_preflight_wiring.py` (24 tests: binding,
-canonical verdict mapping, fail-closed evidence, adapter eligibility
-handoff).
+**`op2_c_release_gate_dependency_scoping`** — **DONE**, 2026-09-05. Read-only
+ARCHITECTURE/RELEASE-GATE-SCOPING pass over the four gates already named
+below as blocking `op2_c_cp_clusterxl_adapter_scoping`. Findings: `DEPLOY.1A`
+OIDC+RBAC is externally blocked on `DEPLOY.1` server availability; CP SSH
+host-key trust hardening shares that same external blocker
+(`backlog.json` target: "post-DEPLOY.1", not independently closable); the
+protected entry point + live `adapter_resolver` construction is dependent on
+both landing first; the signed change-management/network-security review
+has no drafted artifact yet (unlike its sibling `OP.2.1` command gate) and
+drafting — not signing — it is the one item engineering-actionable now, with
+zero code/server/device contact. No code, taxonomy, `Authorizer`, adapter,
+UI, or device command touched. Selected next build:
+`op2_c_change_management_review_package_draft`. Detail:
+`project/roadmap.json` `now_next.next.notes` (dated 2026-09-05 entry) and
+`now_next.upcoming`.
 
 Predecessors (full detail: `project/build_history.json` + linked phase
-docs): `op2_c1_admin_down_pnote_safety_corrections`, `op2_c1_cp_clusterxl_
-member_session`, `op2_1b_cp_pilot_readiness_policy_amendment` (`D-V7b`/
-`D-F3`/`D-F2` advisory-exempt), `op2_1_cp_clusterxl_command_gate`,
-`op2_a_b_execution_foundation` — all DONE. S8-A/S8-B''/S8-C real-env
+docs): `op2_c_cp_clusterxl_preflight_eligibility_wiring`, `op2_c1_admin_
+down_pnote_safety_corrections`, `op2_c1_cp_clusterxl_member_session`,
+`op2_1b_cp_pilot_readiness_policy_amendment` (`D-V7b`/`D-F3`/`D-F2`
+advisory-exempt), `op2_1_cp_clusterxl_command_gate`, `op2_a_b_execution_
+foundation` — all DONE/AUTOMATED_VALIDATED. S8-A/S8-B''/S8-C real-env
 validated; PAN B2 stays **NOT ESTABLISHED**.
 
 ## `OP.0b.0` — FROZEN WITH REAL-ENV VALIDATION GATES
@@ -127,6 +122,11 @@ extended thinking only for a genuine new authorization/trust decision.
 Detail: `checkpoint/clusterxl_capability_adapter.py`,
 `checkpoint/clusterxl_member_session.py`, and
 `checkpoint/clusterxl_preflight_provider.py` docstrings.
+
+Dependency order (2026-09-05 scoping): `DEPLOY.1A` + SSH trust hardening
+both wait on `DEPLOY.1` (external, same blocker); the entry point waits on
+both; the review's sign-off is external, drafting is not —
+`op2_c_change_management_review_package_draft` (`upcoming`) starts now.
 
 `op0b_0_close_d_v3a_d_v7b_pre_class2` (`upcoming`, demoted from `next`
 2026-09-05): now purely a vendor-fact question — D-V7b's readiness-roll-up
