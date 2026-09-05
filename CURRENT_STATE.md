@@ -9,8 +9,8 @@ generated one-line timeline.
 
 - **Checkpoint:** 2026-09-05, branch `claude/pcp1-device-registry-gqp7s2`.
 - **Current build** (per `project/roadmap.json` `now_next.now`):
-  `pcp_1_device_registry_manual_enrollment_foundation` — **IMPLEMENTED**,
-  ceiling `AUTOMATED_VALIDATED` pending fast PR CI (see "Active build").
+  `pcp_1_device_registry_manual_enrollment_foundation` —
+  **AUTOMATED_VALIDATED** (PR #83 fast PR CI green; see "Active build").
   `now_next.next` is `pcp_2_local_control_plane_sequencing_po_review`
   (blocked on Product Owner review, not started, not pre-designed);
   `op2_c_cp_clusterxl_adapter_scoping` stays `upcoming`, blocked on
@@ -54,7 +54,7 @@ test-enforced boundaries. Current numbers:
 ## Active build
 
 **`pcp_1_device_registry_manual_enrollment_foundation`** (`PCP.1`) —
-**IMPLEMENTED**, ceiling `AUTOMATED_VALIDATED` pending fast PR CI.
+**AUTOMATED_VALIDATED**: PR #83's fast PR CI `validate` check ran green.
 Implements `docs/design/PRODUCT_CONTROL_PLANE_ARCHITECTURE.md` §21 exactly:
 `utils/device_registry.py` (opaque `device_id`; endpoint normalization with
 no DNS resolution; vendor-hint- and lifecycle-state-independent duplicate
@@ -67,13 +67,13 @@ concern `DeviceRegistryBackend` (filesystem-only); `--registry-enroll` /
 `--registry-list` / `--registry-disable` CLI modes
 (`application/cli.py` + `application/workflows/registry.py`), mode-
 exclusive, no vendor import, no credential resolution, no network;
-`tests/test_pcp1_device_registry.py` (AC-1a..AC-15). Sandbox has no
+`tests/test_pcp1_device_registry.py` (AC-1a..AC-15). This sandbox has no
 `pytest`/`lxml`/`paramiko` (reported per `CLAUDE.md`); every behavior was
-hand-verified directly instead — see `project/build_history.json` head
-record for the exact evidence and the open risk that CI must still confirm
-the suite green before the ceiling is claimed. No device contact, no
-console/UI/payload change, no SQLite/PostgreSQL. `AI_START_HERE.md` §22
-item 4 (deferred from the `PCP.0` freeze) landed this session.
+hand-verified directly, then confirmed by PR #83's fast PR CI running the
+real suite green (`project/build_history.json` head record has the exact
+CI evidence). No device contact, no console/UI/payload change, no SQLite/
+PostgreSQL. `AI_START_HERE.md` §22 item 4 (deferred from the `PCP.0`
+freeze) landed this session.
 
 Predecessors (full detail: `project/build_history.json` + linked phase
 docs): `product_control_plane_architecture_draft` (`PCP.0`, FROZEN),
@@ -170,12 +170,12 @@ Concurrency budget stays at 1 per vendor pending its own real-env evidence.
 ## Automated test baseline
 
 ```
-Prior baseline 1825 passed / 24 skipped / 0 failed -- NOT re-run this
-  session (no pytest/lxml/paramiko in this sandbox, per CLAUDE.md). New
-  tests/test_pcp1_device_registry.py added, hand-verified directly; fast PR
-  CI must confirm the full suite green before AUTOMATED_VALIDATED is
-  claimed (build_history record). Project-state consistency verified
-  directly: metadata_warnings == []; build_history_index.py --check clean.
+Prior baseline 1825 passed / 24 skipped / 0 failed -- NOT re-run directly
+  this session (no pytest/lxml/paramiko in this sandbox, per CLAUDE.md).
+  New tests/test_pcp1_device_registry.py confirmed green by PR #83's fast
+  PR CI 'validate' check on commit a149f5a (build_history record has the
+  run URL). Project-state consistency verified directly: metadata_warnings
+  == []; build_history_index.py --check clean.
 Repository privacy gate: PASS / 0 findings, 487 files scanned (re-run
   directly, 2026-09-05).
 ```
