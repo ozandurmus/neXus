@@ -7,11 +7,11 @@ detail is not here either** — it is in `project/build_history.json`
 linked documents under `docs/history/`. `docs/history/INDEX.md` is the
 generated one-line timeline.
 
-- **Checkpoint:** 2026-09-05, branch `claude/cp-pilot-readiness-policy-amendment`.
+- **Checkpoint:** 2026-09-05, branch `claude/clusterxl-member-session-u9qmtq`.
 - **Current build** (per `project/roadmap.json` `now_next.now`):
-  `op2_1b_cp_pilot_readiness_policy_amendment` — **AUTOMATED_VALIDATED** (see
+  `op2_c1_cp_clusterxl_member_session` — **AUTOMATED_VALIDATED** (see
   "Active build"). `now_next.next` = `op2_c_cp_clusterxl_adapter_scoping`
-  (blocked on authorization/trust/adapter/change-management, not readiness).
+  (blocked on authorization/trust/change-management/wiring, not readiness).
 - **OP.2.0 CLASS 2 architecture** (`docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md`):
   **CONTRACT FROZEN 2026-09-04**; `OP.2.A`/`OP.2.B` IMPLEMENTED; `OP.2.1` CP
   command gate DRAFTED — CLASS 2 still has **no member**, no adapter,
@@ -50,35 +50,33 @@ test-enforced boundaries. Current numbers:
 
 ## Active build
 
-**`op2_1b_cp_pilot_readiness_policy_amendment`** — **AUTOMATED_VALIDATED**,
-2026-09-05. Readiness-layer policy amendment (no device contact, no
-adapter): `utils/failover/assessment.py::_verdict_for` now treats
-`preemption_known` (Check Point only, `D-V7b`) and `flap_history` (both
-vendors, `D-F3`) as a closed-list, exact-reason, deterministic
-**advisory-exempt** set (`ADVISORY_EXEMPT_CHECKS`) — each stays
-`INSUFFICIENT_EVIDENCE`, visible, with its exact existing reason, but that
-status no longer by itself blocks an otherwise-positive verdict. PAN's
-`preemption_known` is deliberately **not** exempted (a supported read
-exists there). `D-F2` (member skew) never gated a check; its roll-up-level
-policy gate is retired — `UNRESOLVED_POLICY_DECISIONS` shrinks to `{D-F1}`
-only. No numeric threshold invented anywhere; no operator override; no new
-verdict. Proven over a generated matrix
-(`tests/test_op0b_s7_readiness_v2.py`): `SAFE_TO_FAILOVER` is now reachable
-for a CP ClusterXL entity given a fresh `OP.0b` preflight run where the
-other five stop-conditions genuinely pass, and reachable for no other
-combination in the same matrix. `OP.0a`'s stored-telemetry
-`SAFE`-unreachable invariant (`AC-6`) is untouched. Full suite: `1764
-passed, 24 skipped, 0 failed` (serial). Detail:
-`docs/history/phase/OP_2_1B_CP_PILOT_READINESS_POLICY_AMENDMENT.md`.
+**`op2_c1_cp_clusterxl_member_session`** — **AUTOMATED_VALIDATED**,
+2026-09-05. Implements `checkpoint/clusterxl_member_session.py::
+RealClusterXLMemberSession`, the real `ClusterXLMemberSession` Protocol
+implementation `OP.2.C`'s adapter movement deliberately left unbuilt —
+backed onto the existing, real-environment-validated per-member
+`checkpoint/preflight_collector.py::MemberSession` Expert-shell transport
+(no new SSH client, no reconnect per command, no blind retry). `read_role()`
+reuses the already-approved A3/A5 reads; `submit_admin_down()`/
+`submit_admin_up()` issue exactly one of the two `OP.2.1`-approved literals
+(`clusterXL_admin down`/`up`, no `-p`) on the same shell, mapping to
+`CONFIRMED_NOT_SENT` only on a positively-proven pre-device transport
+failure and `SUBMITTED_OR_AMBIGUOUS` otherwise (`OP.2.0` P6/P7). No change
+to the adapter contract, `OP.2` lifecycle/authorization/readiness policy,
+or `preflight_collector.py`; nothing outside `tests/` references the new
+class, so CLASS 2 stays structurally unreachable. Detail:
+`checkpoint/clusterxl_member_session.py` docstring,
+`tests/test_op2_c1_cp_clusterxl_member_session.py`.
 
 Predecessors (full detail: `project/build_history.json` + linked phase
-docs, not restated here): `op2_1_cp_clusterxl_command_gate` (DONE, drafted,
-2026-09-05 — CP ClusterXL command gate; found `D-V7b`/`D-F3` hard-blocking,
-which this build's own amendment resolved); `op2_a_b_execution_foundation`
-(DONE, 2026-09-04 — typed action lifecycle/lock/mutation boundary,
-`utils/operate/`, zero device I/O, no adapter); `op0b_s9_ui_authority_
-reconciliation` (DONE, 2026-09-04 — closed `OP.0b` S1–S9 read-only scope).
-S8-A/S8-B''/S8-C real-env validated; PAN B2 stays **NOT ESTABLISHED**.
+docs, not restated here): `op2_1b_cp_pilot_readiness_policy_amendment`
+(DONE, 2026-09-05 — `D-V7b`/`D-F3`/`D-F2` advisory-exempt, no longer block
+the readiness roll-up); `op2_1_cp_clusterxl_command_gate` (DONE, drafted,
+2026-09-05 — CP ClusterXL command gate approving `clusterXL_admin down`/
+`up`); `op2_a_b_execution_foundation` (DONE, 2026-09-04 — typed action
+lifecycle/lock/mutation boundary, `utils/operate/`, zero device I/O, no
+adapter). S8-A/S8-B''/S8-C real-env validated; PAN B2 stays **NOT
+ESTABLISHED**.
 
 ## `OP.0b.0` — FROZEN WITH REAL-ENV VALIDATION GATES
 
@@ -113,18 +111,20 @@ a narrower question never promoted toward B2.
 
 ## Exact next build
 
-`now_next.next` is **`op2_c_cp_clusterxl_adapter_scoping`**. The typed CP
-ClusterXL adapter itself (`checkpoint/clusterxl_capability_adapter.py`,
-`tests/test_op2_c_cp_clusterxl_adapter.py`) is now IMPLEMENTED and
-unit-tested end-to-end through the real `ActionCoordinator` (fakes only) —
-wired into no production `adapter_resolver`, so `DenyAllAuthorizer`/no
-taxonomy member keep CLASS 2 unreachable. Remaining before a real-env
-pilot: a real `ClusterXLMemberSession` transport, `DEPLOY.1A` OIDC +
+`now_next.next` is **`op2_c_cp_clusterxl_adapter_scoping`**. Both the typed
+adapter (`checkpoint/clusterxl_capability_adapter.py`) and the real
+`ClusterXLMemberSession` transport (`checkpoint/clusterxl_member_session.py`)
+are now IMPLEMENTED and unit-tested, neither wired into a production
+`adapter_resolver` — `DenyAllAuthorizer`/no taxonomy member still keep
+CLASS 2 unreachable. Remaining before a real-env pilot: `DEPLOY.1A` OIDC +
 `OPERATE`, CP SSH host-key trust hardening, the signed change-management
-review, a real `PreflightProvider`/`EligibilityEvaluator`, and a protected
-entry point constructing a live `adapter_resolver`. `Sonnet 5, normal` for
-wiring; extended thinking only for a genuine new authorization/trust
-decision. Detail: `checkpoint/clusterxl_capability_adapter.py` docstring.
+review, a real `PreflightProvider`/`EligibilityEvaluator` supplying
+`check_statuses`, and a protected entry point constructing a live
+`adapter_resolver` (using `RealClusterXLMemberSession` as its
+`session_resolver` target). `Sonnet 5, normal` for wiring; extended
+thinking only for a genuine new authorization/trust decision. Detail:
+`checkpoint/clusterxl_capability_adapter.py` and
+`checkpoint/clusterxl_member_session.py` docstrings.
 
 `op0b_0_close_d_v3a_d_v7b_pre_class2` (`upcoming`, demoted from `next`
 2026-09-05): now purely a vendor-fact question — D-V7b's readiness-roll-up
@@ -147,7 +147,7 @@ hardware-blocked, not reconciled with the manual 2026-09-04 observation
 | PAN HA serial `B2` establishment | the mismatching member's root cause is `UNKNOWN` (see above) — do not resolve as a side effect of an unrelated build | investigation + hardware |
 | `CON.3` console operational-write actions | open decisions `C-D4`, `C-D6` **and** `RB.3b` | decision + hardware |
 | `RB.3b` CP Gaia backup collection | the watched real R81.10/R81.20 run — hardware, not engineering | hardware |
-| `OP.2` controlled failover execution | architecture FROZEN; readiness no longer blocks (`OP.2.1b`); CP ClusterXL adapter (`OP.2.C`) now IMPLEMENTED + unit-tested, unwired — blocked on `DEPLOY.1A`/`OPERATE`, SSH trust hardening, a real `ClusterXLMemberSession` transport, change-management review | multiple |
+| `OP.2` controlled failover execution | architecture FROZEN; readiness no longer blocks (`OP.2.1b`); CP ClusterXL adapter (`OP.2.C`) and its real `ClusterXLMemberSession` transport now IMPLEMENTED + unit-tested, both unwired — blocked on `DEPLOY.1A`/`OPERATE`, SSH trust hardening, change-management review, a real `PreflightProvider`/`EligibilityEvaluator`, a protected entry point | multiple |
 | `DEPLOY.1` gates | server availability (external) | external |
 | `inventory_exclusions_management_ui_backend` | stays `in_progress` **by design** — do not wire its write functions into any HTTP-reachable surface before `DEPLOY.1A`'s OIDC/RBAC boundary exists | design |
 
