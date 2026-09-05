@@ -113,14 +113,18 @@ a narrower question never promoted toward B2.
 
 ## Exact next build
 
-`now_next.next` is **`op2_c_cp_clusterxl_adapter_scoping`** — the CP
-ClusterXL vendor adapter's own contract (`ActionPlan` construction,
-`check_precondition`, the one-shot submission path), against the frozen
-`OP.2.0` parent. The readiness gate is no longer the blocker (`OP.2.1b`,
-2026-09-05); still blocked on `DEPLOY.1A` OIDC + `OPERATE` RBAC, CP SSH
-host-key trust hardening, and the signed change-management review — none
-of which this build touches. `Sonnet 5, extended thinking (high)` (new
-architecture surface, not mechanical implementation).
+`now_next.next` is **`op2_c_cp_clusterxl_adapter_scoping`**. The typed CP
+ClusterXL adapter itself (`checkpoint/clusterxl_capability_adapter.py`,
+`tests/test_op2_c_cp_clusterxl_adapter.py`) is now IMPLEMENTED and
+unit-tested end-to-end through the real `ActionCoordinator` (fakes only) —
+wired into no production `adapter_resolver`, so `DenyAllAuthorizer`/no
+taxonomy member keep CLASS 2 unreachable. Remaining before a real-env
+pilot: a real `ClusterXLMemberSession` transport, `DEPLOY.1A` OIDC +
+`OPERATE`, CP SSH host-key trust hardening, the signed change-management
+review, a real `PreflightProvider`/`EligibilityEvaluator`, and a protected
+entry point constructing a live `adapter_resolver`. `Sonnet 5, normal` for
+wiring; extended thinking only for a genuine new authorization/trust
+decision. Detail: `checkpoint/clusterxl_capability_adapter.py` docstring.
 
 `op0b_0_close_d_v3a_d_v7b_pre_class2` (`upcoming`, demoted from `next`
 2026-09-05): now purely a vendor-fact question — D-V7b's readiness-roll-up
@@ -143,7 +147,7 @@ hardware-blocked, not reconciled with the manual 2026-09-04 observation
 | PAN HA serial `B2` establishment | the mismatching member's root cause is `UNKNOWN` (see above) — do not resolve as a side effect of an unrelated build | investigation + hardware |
 | `CON.3` console operational-write actions | open decisions `C-D4`, `C-D6` **and** `RB.3b` | decision + hardware |
 | `RB.3b` CP Gaia backup collection | the watched real R81.10/R81.20 run — hardware, not engineering | hardware |
-| `OP.2` controlled failover execution | architecture FROZEN 2026-09-04; `OP.2.1` gate DRAFTED 2026-09-05; readiness (`D-V7b`/`D-F3`/`D-F2`) no longer blocks (`OP.2.1b`, 2026-09-05) — now blocked on `DEPLOY.1A` OIDC + `OPERATE` (P2 admits no local-pilot exemption either), SSH trust hardening, the adapter itself (`OP.2.C`, no code exists), change-management review | multiple |
+| `OP.2` controlled failover execution | architecture FROZEN; readiness no longer blocks (`OP.2.1b`); CP ClusterXL adapter (`OP.2.C`) now IMPLEMENTED + unit-tested, unwired — blocked on `DEPLOY.1A`/`OPERATE`, SSH trust hardening, a real `ClusterXLMemberSession` transport, change-management review | multiple |
 | `DEPLOY.1` gates | server availability (external) | external |
 | `inventory_exclusions_management_ui_backend` | stays `in_progress` **by design** — do not wire its write functions into any HTTP-reachable surface before `DEPLOY.1A`'s OIDC/RBAC boundary exists | design |
 
