@@ -7,13 +7,13 @@ detail is not here either** — it is in `project/build_history.json`
 linked documents under `docs/history/`. `docs/history/INDEX.md` is the
 generated one-line timeline.
 
-- **Checkpoint:** 2026-09-05, branch `claude/nexus-control-plane-arch-mutgr9`.
+- **Checkpoint:** 2026-09-05, branch `claude/pcp0-freeze-merge-4e6kb4`.
 - **Current build** (per `project/roadmap.json` `now_next.now`):
-  `product_control_plane_architecture_draft` — **IN PROGRESS, pending
-  Product Owner review** (docs/state only; see "Active build").
-  `now_next.next` is now `pcp_1_device_registry_manual_enrollment_
-  foundation` (planned, gated on that review); `op2_c_cp_clusterxl_
-  adapter_scoping` moved to `upcoming`, still blocked on `DEPLOY.1`.
+  `product_control_plane_architecture_draft` — **COMPLETE, FROZEN**
+  (docs/state only; see "Active build"). `now_next.next` is
+  `pcp_1_device_registry_manual_enrollment_foundation` (planned, unblocked,
+  not started); `op2_c_cp_clusterxl_adapter_scoping` stays `upcoming`,
+  blocked on `DEPLOY.1`.
 - **OP.2.0 CLASS 2 architecture** (`docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md`):
   **CONTRACT FROZEN 2026-09-04**; `OP.2.A`/`OP.2.B` IMPLEMENTED; `OP.2.1` CP
   command gate DRAFTED — CLASS 2 still has **no member**, no adapter,
@@ -52,31 +52,31 @@ test-enforced boundaries. Current numbers:
 
 ## Active build
 
-**`product_control_plane_architecture_draft`** (`PCP.0`) — **IN PROGRESS**,
-2026-09-05, **merge to `main` blocked pending Product Owner review**. New
-design parent `docs/design/PRODUCT_CONTROL_PLANE_ARCHITECTURE.md` (status
-**DRAFT**) promotes the parked Product Control Plane direction: persistent
-Device Registry with candidate-first explicit enrollment (discovery = an
-enrollment source, not the device universe), capability resolution,
-typed job plane, four-layer truth model (registry / evidence / projection /
-execution preflight), identity layering (`device_id` ≠ `canonical_id` ≠
-`entity_id` ≠ `operational_entity_id`), persistence seam (eighth
-`utils/evidence_backend` concern; engine deferred to recorded criteria),
-capability-driven backup on the `RB.x` contracts, device ≠ failover unit,
-console first-run/device experience inside `CON.x`, SNMPv3 and Diagnostic
-Runbook slots, movements `PCP.1`–`PCP.8`. Reconciled against `main`
-`ff700e38`: one genuine contradiction (manual enrollment from the console
-vs `CON.0` §4 wording + the exclusions-write `DEPLOY.1A` precedent) isolated
-as open decision `pcp_console_registry_write_gate`; every frozen `OP.2`/
-`CLASS 2`, `CON.x`, `RB.x` law preserved; no code, taxonomy, route, device
-command, schema or UI change. New track `PCP.x`, eight features, four open
-decisions, four backlog items. Two Product Owner correction rounds applied
-2026-09-05 (write-gate widened to both enrollment intents; OP.2.0 P8 lock-
-timing fix; §21's deterministic registry contract completed including a
-cross-process registry mutation lock closing a duplicate-record race under
-concurrent CLI writers; AC-2b overclaim and §18 stale wording fixed).
-Status stays DRAFT, freeze still withheld. Detail: `project/roadmap.json`
-`now_next.now`.
+**`product_control_plane_architecture_draft`** (`PCP.0`) — **COMPLETE,
+FROZEN 2026-09-05**. `docs/design/PRODUCT_CONTROL_PLANE_ARCHITECTURE.md`
+(status **FROZEN**) promotes the Product Control Plane direction:
+persistent Device Registry with candidate-first explicit enrollment,
+capability resolution, typed job plane, four-layer truth model, identity
+layering, persistence seam, capability-driven backup, device ≠ failover
+unit, console device experience, movements `PCP.1`–`PCP.8`. Reconciled
+against `main` `ff700e38` (unmoved since): one genuine contradiction — a
+single console enrollment-write boundary covering both manual and
+candidate-based intents — isolated as open decision
+`pcp_console_registry_write_gate`, decided for neither; every frozen
+`OP.2`/`CLASS 2`, `CON.x`, `RB.x` law preserved. Product Owner **APPROVED**,
+conditioned on two mechanical freeze corrections applied at freeze: (1)
+the registry mutation lock's release is now instance-safe — an
+`owner_token` embedded at acquisition, checked before every unlink, so a
+releasing process never deletes a different writer's active lock instance
+after a human recreated one it believed stale (AC-5 widened, AC-15 added);
+the lock file is now classified LOCAL-SENSITIVE and, like the registry
+file, never enters the support bundle. (2) §22 timing corrected: items 1-3
+(`OPERATOR_CONSOLE_ARCHITECTURE.md`, `COMPLIANCE_ASSIGNMENT_AND_
+FRAMEWORKS.md`, `BACKUP_AND_RECOVERY_ARCHITECTURE.md`) applied now; item 4
+(`AI_START_HERE.md` "What this is" sentence) moves to the `PCP.1` close
+scope — only true once `PCP.1` ships. No product code, taxonomy, route,
+device command, schema or UI touched. Detail: `project/build_history.json`
+head record.
 
 Predecessors (full detail: `project/build_history.json` + linked phase
 docs): `op2_c_change_management_review_package_draft` (review package
@@ -125,8 +125,9 @@ a narrower question never promoted toward B2.
 list/--registry-disable` + `tests/test_pcp1_device_registry.py`. No device
 contact, no UI/payload change, no PostgreSQL, no console target-vocabulary
 change. Contract = `docs/design/PRODUCT_CONTROL_PLANE_ARCHITECTURE.md` §21
-(deterministic registry contract incl. the cross-process registry mutation lock, AC-1a..AC-14, non-goals) — **starts only after the PO review flips that
-document to FROZEN**. `Sonnet 5, normal`.
+(ownership-token instance-safe registry mutation lock, AC-1a..AC-15,
+non-goals) — unblocked now the document is FROZEN; **not started by the
+freezing session**. `Sonnet 5, normal`.
 
 `op2_c_cp_clusterxl_adapter_scoping` (`upcoming`, blocked, notes preserved):
 adapter, real `ClusterXLMemberSession` and real `PreflightProvider`/
@@ -170,14 +171,13 @@ Concurrency budget stays at 1 per vendor pending its own real-env evidence.
 ## Automated test baseline
 
 ```
-1825 passed / 24 skipped / 0 failed (2026-09-05, serial baseline,
-  op2_c1_admin_down_pnote_safety_corrections) -- carried forward, not re-run
-  by the PCP.0 docs/state session (no pytest/lxml/paramiko in that sandbox).
-Project-state consistency: metadata_warnings == [] under all cross-authority
-  rules; scripts/build_history_index.py --check clean (verified directly).
-Repository privacy gate: last result FAIL / findings, all known gitignored
-  data/logs/.support_hmac.key runtime artifacts (untracked, not repository
-  content); not re-run for PCP.0 (no secret-bearing content class touched).
+1825 passed / 24 skipped / 0 failed (2026-09-05 baseline) -- carried
+  forward, not re-run by the PCP.0 freeze session (no pytest/lxml/paramiko
+  in this sandbox, reported per CLAUDE.md, not bootstrapped; no code moved).
+Project-state consistency: metadata_warnings == []; build_history_index.py
+  --check clean; git diff --check clean (verified directly, 2026-09-05).
+Repository privacy gate: PASS / 0 findings, 484 files scanned (re-run
+  directly, 2026-09-05).
 ```
 
 Run one-shot and read from file: `py -m pytest -q > pytest_result.log 2>&1`;
