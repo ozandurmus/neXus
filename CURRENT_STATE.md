@@ -119,7 +119,7 @@ a narrower question never promoted toward B2.
 list/--registry-disable` + `tests/test_pcp1_device_registry.py`. No device
 contact, no UI/payload change, no PostgreSQL, no console target-vocabulary
 change. Contract = `docs/design/PRODUCT_CONTROL_PLANE_ARCHITECTURE.md` §21
-(AC-1..AC-9, non-goals) — **starts only after the PO review flips that
+(deterministic registry contract, AC-1a..AC-12, non-goals) — **starts only after the PO review flips that
 document to FROZEN**. `Sonnet 5, normal`.
 
 `op2_c_cp_clusterxl_adapter_scoping` (`upcoming`, blocked, notes preserved):

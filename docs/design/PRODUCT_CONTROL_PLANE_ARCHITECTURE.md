@@ -159,7 +159,7 @@ Three properties of this shape are load-bearing:
 | **ENROLLMENT / REGISTRY** | "neXus should know and manage/observe this resource" | Device Registry | targeting, scheduling, display, relationships | prove identity or runtime state; act as a join key into evidence |
 | **EVIDENCE** | immutable, provenanced observations from an actual run | `RunContext` manifests, CAS, recovery manifests, preflight snapshots, action records | everything downstream | be reinterpreted by a projection |
 | **CURRENT PROJECTION / LAST-KNOWN STATE** | normalized state derived from the latest *acceptable* evidence, stamped with provenance and freshness | projection builders (today: `snapshot.py` LKG, `*_ui.py` builders, `compute_ha_readiness` over stored telemetry) | dashboards, previews, scheduling heuristics, "stale — recollect" affordances | claim freshness it lacks; feed eligibility, authorization or a mutation |
-| **EXECUTION PREFLIGHT** | fresh evidence gathered inside one controlled-operation workflow | `OP.2.0` P4 preflight stage (`checkpoint/clusterxl_preflight_provider.py` for CP) | eligibility → proposal → confirmation → lock → mutation → verification | be cached, reused across actions, or replaced by a projection |
+| **EXECUTION PREFLIGHT** | fresh evidence gathered inside one controlled-operation workflow | `OP.2.0` P4 preflight stage (`checkpoint/clusterxl_preflight_provider.py` for CP) | record creation (acquires the durable operational-entity lock, `OP.2.0` P8 — *before* preflight, not after confirmation) → preflight (inner member admission, held for this device-contact stage only) → eligibility → proposal → confirmation → mutation (inner member admission re-acquired) → verification | be cached, reused across actions, or replaced by a projection |
 
 Rules:
 
@@ -176,6 +176,19 @@ Rules:
   Nothing in this document changes that invariant (AC-6 of `OP.0a`).
 - A projection may say "last seen `ACTIVE` at run X"; it may never be the
   reason a mutation is permitted.
+- **Lock timing corrected to match `OP.2.0` P8 exactly.** The durable
+  operational-entity lock (outer) is the action record's own create-time
+  uniqueness — acquired at `CREATED`, *before* the preflight stage runs, and
+  held until the record is terminal (or, for `OUTCOME_UNKNOWN`,
+  acknowledged). Member admission (inner — the existing per-endpoint
+  coordinator lease) is a separate, narrower hold taken only for the
+  duration of each device-contact stage (preflight; then precondition
+  re-observation + submission + verification) and released between them,
+  never held across the human confirmation wait. This document does not
+  restate P8's full reasoning (crash/quarantine semantics, why a lease
+  cannot carry quarantine) — see `OP_2_0_CONTROLLED_HA_OPERATION_
+  ARCHITECTURE.md` P8 for that; it only corrects the compressed table cell
+  above, which previously implied the lock started after confirmation.
 
 ---
 
@@ -358,9 +371,10 @@ What is preserved verbatim from today's scheduler and console
 What this architecture *adds* (each its own later movement):
 
 - job definitions and runs as durable records keyed by `device_id` targets
-  (`PCP.5`), with the existing plane-scoped workflows (`cp`, `vsx`,
-  `pan-config`, `cp-config`, `recovery-pan`) remaining valid as
-  registry-filtered targets until a collector gains per-target selection;
+  (`PCP.5`); the existing plane-scoped workflows (`cp`, `vsx`, `pan-config`,
+  `cp-config`, `recovery-pan`) **retain their existing explicit plane-wide
+  scope** — a job invoking one of them still means "collect this whole
+  plane," never a silent per-device narrowing;
 - **collector target-selection seams** (`PCP.6`): today CP inventory is
   plane-wide (one MDS script over all gateways, exclusions by name); PAN
   runtime is per-serial; recovery collection is already selective. Per-device
@@ -369,6 +383,21 @@ What this architecture *adds* (each its own later movement):
 - independent cadences for inventory / lightweight health telemetry /
   configuration snapshots / backup / HA-readiness observation /
   compliance-alignment. **No interval is frozen here.**
+
+**Unsupported per-device targeting fails closed, before any device
+contact.** A job type that claims per-device targeting against a collector
+with no target-selection seam yet is **refused at admission** — the missing
+seam is the refusal reason — never silently degraded into "run the whole
+plane, then filter the result to the requested `device_id`s." Filtering a
+plane-wide result after collection is not targeted execution: it still
+contacts every device on the plane (including ones outside the requested
+target set, and potentially ones the registry does not even know about),
+which is exactly the increased/uncontrolled contact this document's
+boundary (§2) forbids and which an audit record naming only the requested
+`device_id`s would misrepresent. Until `PCP.6` lands, a per-device job
+against a not-yet-seamed collector is `UNSUPPORTED`; the operator retains
+the existing explicit plane-wide invocation as a separate, honestly-labeled
+option.
 
 Hard constraint carried forward: independent per-device cadences must not
 multiply device contact. Aggregate contact frequency per endpoint stays
@@ -500,8 +529,8 @@ Boundary rules, restated for the new intents:
 | Intent | Browser sends | Server does | Boundary |
 | --- | --- | --- | --- |
 | device job (today's `CON.2`) | `job_type` + `device_id[]` (replacing `entity_id[]` once the registry is the target universe) | resolves ids against the registry (stricter than today's `unified.json` presence check — explicit enrollment), builds argv from a fixed template | unchanged `CON.0` §4 |
-| enrollment from candidates | `candidate_id[]` | resolves candidates from the last provider run, writes registry records | fits `CON.0` §4 literally: no hostname/address transmitted |
-| **manual enrollment** | a typed, schema-validated entry: endpoint, credential *profile reference*, vendor hint, tags | validates syntax, writes a registry record in `ENROLLED_UNVERIFIED`; **contacts no device in this request** | **contradicts `CON.0` §4's literal wording** ("the browser never transmits … a hostname, an address") and touches the `inventory_exclusions_management_ui_backend` precedent ("write access controls which devices get polled — wait for `DEPLOY.1A`"). Raised as open decision `pcp_console_registry_write_gate` (§19); until decided, manual enrollment ships CLI-first (`PCP.1`) and the console form waits |
+| enrollment from candidates | `candidate_id[]` | resolves candidates from the last provider run, **would** write registry records | satisfies `CON.0` §4's *command-construction* wording (no hostname/address crosses the wire) but that is **not** the same question as whether a persistent product-state write may reach the console before `DEPLOY.1A`. A closed candidate id narrows *what* could be written; it does not by itself authorize *that* a write happens pre-`DEPLOY.1A` — the `inventory_exclusions_management_ui_backend` precedent ("write access controls which devices get polled — wait for `DEPLOY.1A`") applies to this intent exactly as it does to manual enrollment. **Gated by `pcp_console_registry_write_gate` (§19), same as manual enrollment below; not decided by this document.** |
+| **manual enrollment** | a typed, schema-validated entry: endpoint, credential *profile reference*, vendor hint, tags | validates syntax, **would** write a registry record in `ENROLLED_UNVERIFIED`; **contacts no device in this request** | **contradicts `CON.0` §4's literal wording** ("the browser never transmits … a hostname, an address") and touches the same `inventory_exclusions_management_ui_backend` precedent. **Gated by `pcp_console_registry_write_gate` (§19), covering both enrollment intents in this table** — until decided, both manual and candidate-based enrollment ship CLI-first (`PCP.1`/`PCP.2`) and the console form for either waits |
 | HA / failover tab | nothing new | shows the last-known readiness projection with explicit freshness; **"Start failover" begins a NEW `OP.2` workflow with its own authoritative preflight** | `OP_2_0` P4/P14; the UI never computes identity, topology, pairing or readiness |
 | Diagnostics | `runbook_id` + `device_id[]` (future, `PCP.8`) | resolves a closed runbook catalog | §15 |
 
@@ -621,7 +650,7 @@ architecture legitimately replaces).
 | Discovery / current-inventory assumptions | `unified.json` is the device universe: console targets validated by presence in it (`CON.0` §4, `resolve_entity_id`), recovery targeting and readiness units derive from it | **SUPERSEDED ASSUMPTION** | the registry becomes the target universe; presence-in-`unified.json` is replaced by an equal-or-stricter check (explicit enrollment); evidence identities (`entity_id`) remain the evidence keys and are *related* to `device_id`, never replaced |
 | RuntimeRoot / state persistence | `data/state/*` files; `evidence_backend` abstraction; repo↔runtime separation enforced | no conflict | registry lives under RuntimeRoot through the same abstraction |
 | Backup architecture | frozen `RB.x` contracts; `recovery-cp` unscheduled (`D3`); restore hard-gated | no conflict | capability-driven addressing only (§11) |
-| Console architecture | `CON.0` §4 literal "browser never transmits … a hostname, an address"; `C-D7`; exclusions write path `DEPLOY.1A`-gated | **CONTRADICTION** for *manual* enrollment from the console only | open decision `pcp_console_registry_write_gate`; candidate-based enrollment and all device jobs fit §4 verbatim; manual enrollment ships CLI-first |
+| Console architecture | `CON.0` §4 literal "browser never transmits … a hostname, an address"; `C-D7`; exclusions write path `DEPLOY.1A`-gated | **CONTRADICTION**, covering *both* enrollment intents: manual enrollment against §4's literal wording, and candidate-based enrollment against the exclusions-write precedent (a closed candidate id still authorizes a *persistent product-state write*, which §4's wording does not by itself settle) | open decision `pcp_console_registry_write_gate`, widened to cover both intents; existing device jobs (`job_type` + `device_id[]`, no write to the registry) are unaffected and fit §4 verbatim; both manual and candidate-based enrollment ship CLI-first (`PCP.1`/`PCP.2`) until decided |
 | HA identity / topology authority | backend-only derivation; UI heuristics retired (`OP.0b S9`) | no conflict | registry relationships are backend-derived projections; the UI still computes nothing |
 | Readiness freshness laws | `OP.0a` cannot emit `SAFE_TO_FAILOVER`; `OP.2.0` P4 same-workflow, no TTL | no conflict | projection layer = informational; no TTL introduced |
 | `OP.2` operational identity and lock scope | `OP.2.0` P8/P17; `OP.2.1b` | no conflict | untouched (§16) |
@@ -692,7 +721,7 @@ left to the Product Owner as an explicit decision.
 
 | id | Question | Recommendation | Decide by |
 | --- | --- | --- | --- |
-| `pcp_console_registry_write_gate` | May the loopback console accept a *manual* enrollment write (endpoint + credential reference, no device contact in-request) before `DEPLOY.1A`, given `CON.0` §4's wording and the exclusions-write precedent? | **Candidate-based enrollment from the console: yes now** (ids only). **Manual entry: CLI-first in `PCP.1`; console form only with** typed confirmation + audit record + mandatory strict trust preflight on the first-contact job, decided at the `PCP.4` contract review — or wait for `DEPLOY.1A` if the security lead prefers the exclusions precedent verbatim | `PCP.4` contract review |
+| `pcp_console_registry_write_gate` | May the loopback console accept *any* enrollment write — manual (endpoint + credential reference) **or** candidate-based (closed `candidate_id[]` from a prior discovery run) — before `DEPLOY.1A`, given `CON.0` §4's wording and the `inventory_exclusions_management_ui_backend` precedent that a persistent product-state write controlling which devices get polled waits for `DEPLOY.1A`? A closed candidate id narrows *what* could be written, not *whether* a pre-`DEPLOY.1A` write is authorized — the two enrollment intents raise the same authorization question and are decided together, not separately. | No pre-decision for either intent. Three options for the `PCP.4` review: (a) neither ships from the console before `DEPLOY.1A` — both stay CLI-first through `PCP.1`/`PCP.2`; (b) candidate-based enrollment only, permitted pre-`DEPLOY.1A` on the strength of the closed candidate id plus typed confirmation + audit record, manual entry still waits; (c) both permitted pre-`DEPLOY.1A` with typed confirmation + audit record + mandatory strict first-contact trust preflight for any resulting device. Recommendation deferred to the security lead's reading of the exclusions precedent; **CLI-only enrollment in `PCP.1`/`PCP.2` does not depend on this decision and proceeds regardless.** | `PCP.4` contract review |
 | `pcp_auto_enrollment_policy` | Should a future opt-in "trusted management source auto-enrolls" policy exist, and under what audit/allowlist? | Not in the first slices; design only after `PCP.2` shows real candidate volume; default stays explicit | `PCP.2` closure |
 | `pcp_storage_engine` | Which engine backs the registry/job plane in production, against the §10 criteria? | Defer; keep the eighth `evidence_backend` concern filesystem-first; decide with `DEV.4.6` migrations/roles | `PCP.5` contract freeze |
 | `pcp_first_contact_trust_policy` | Must the first-contact job for a *manually* enrolled endpoint require strict host-key / CA trust even in the local development profile, to prevent credential exposure to a mistyped or hostile endpoint? | **Yes for any endpoint not corroborated by a management-plane candidate**; compat mode stays available only for candidate-corroborated endpoints in the dev profile | `PCP.2` contract review |
@@ -740,8 +769,9 @@ shape while the `OP.2.C` release gates wait on the server.
 **Build id:** `pcp_1_device_registry_manual_enrollment_foundation`
 **Movement:** `IMPLEMENTATION` against this section once this document is
 `FROZEN`. **Tier:** `Sonnet 5, normal` — deterministic implementation; the
-only decision content (state names, `basis` vocabulary) is fixed at the PO's
-freeze review of this section, not during implementation.
+only decision content (state names, `basis` vocabulary, the normalization
+and duplicate rules below) is fixed here, at the PO's freeze review of this
+section, not during implementation.
 
 **Objective.** Give neXus its first persistent product object: a Device
 Registry with manual enrollment via the CLI, stored under RuntimeRoot through
@@ -757,10 +787,12 @@ evidence identity.
    profile, resolvable only in the engine process, never a secret field;
    `enrollment_source = manual`; lifecycle state; optional site/tags/
    environment; empty `relationships[]`; `schema_version`), a
-   `DeviceRegistry` service (enroll, list, disable/retire, duplicate-endpoint
-   refusal per vendor), and the lifecycle transition table
-   (`ENROLLED_UNVERIFIED`, `DISABLED`, `RETIRED` reachable in `PCP.1`;
-   `CONTACT_VERIFIED`/`OBSERVED` defined but unreachable until `PCP.2`).
+   `DeviceRegistry` service (enroll, list, disable — see the deterministic
+   contract below for exactly what each does), and the lifecycle transition
+   table (`ENROLLED_UNVERIFIED`, `DISABLED` reachable in `PCP.1`; `RETIRED`,
+   `CONTACT_VERIFIED`, `OBSERVED` defined but unreachable until a later
+   movement adds their trigger — `RETIRED` needs its own CLI verb, not
+   introduced here).
 2. `utils/evidence_backend.py` — an eighth storage concern
    `DeviceRegistryBackend` with the **filesystem implementation only**
    (`data/state/device_registry.json`, atomic tmp→replace write, same
@@ -774,26 +806,135 @@ evidence identity.
    `--registry-list`, `--registry-disable <device_id>`; mutually exclusive
    with every collection/render/maintenance mode; **no credential
    resolution, no network, no vendor import** (the lazy-import invariant
-   `codebase_modularization_backend` AC-3/AC-5 already tests).
+   `codebase_modularization_backend` AC-3/AC-5 already tests). No fourth
+   verb is introduced in `PCP.1`.
 4. `tests/test_pcp1_device_registry.py` — the acceptance criteria below.
 5. Documentation touch limited to: `AI_START_HERE.md` CLI table + directory
    map row; `docs/ARCHITECTURE.md` new short section; one line in
    `PRIVACY_AND_DATA_HANDLING.md` classifying the registry file as CLASS 2
    local data; this section's status.
 
+**Deterministic registry contract**
+
+This subsection is the actual specification `utils/device_registry.py`
+implements; item 1 above names the module, this names its behavior.
+Filesystem-only throughout — no new lock primitive, no distributed
+concurrency framework, no engine decision.
+
+*Lifecycle transitions (`PCP.1`-reachable subset).*
+
+| From | To | Trigger | Notes |
+| --- | --- | --- | --- |
+| *(none — no record)* | `ENROLLED_UNVERIFIED` | `--registry-enroll` | fails closed on a duplicate endpoint (below) before a `device_id` is ever generated |
+| `ENROLLED_UNVERIFIED` | `DISABLED` | `--registry-disable <device_id>` | terminal-for-`PCP.1`: no CLI verb re-enables a `DISABLED` record in this movement; a future movement adds that trigger explicitly rather than this contract assuming it |
+| `DISABLED` | `DISABLED` | `--registry-disable` on an already-`DISABLED` id | idempotent no-op (see "Repeated-operation behavior") |
+| any state | `RETIRED` / `CONTACT_VERIFIED` / `OBSERVED` | *(none exists in `PCP.1`)* | structurally unreachable — no code path produces these transitions (AC-3) |
+
+*Endpoint normalization (representation-only, no network resolution).*
+Applied identically to the enrollment input and to every existing record
+before any duplicate comparison — a proven representation-only
+transformation under `AGENTS.md`'s opaque-identifier law, not an identity
+guess:
+
+- strip leading/trailing whitespace;
+- if the endpoint is a hostname/FQDN (not a bare IP literal), lower-case it
+  (DNS names are case-insensitive, RFC 4343) and strip one trailing `.`
+  (the DNS root label, RFC-equivalent to its absence);
+- an IP literal is compared byte-for-byte after whitespace stripping only —
+  no octet reformatting, no leading-zero handling, no v4/v6 canonicalization;
+- an explicit port, if given, is compared literally as a separate field, not
+  folded into the endpoint string;
+- **no DNS resolution, no reverse lookup, ever.** An IP literal and a
+  hostname that happen to resolve to the same device are two different
+  normalized endpoints and are never unified.
+
+*Duplicate detection.* The duplicate key is the **normalized endpoint
+alone** — `vendor_hint` and `classification_basis` are excluded from the
+key, because a vendor hint is unverified operator annotation (§6), not
+evidence, and must not fork or merge identity. A new `--registry-enroll`
+is refused, before any `device_id` is generated, if **any** existing record
+(`ENROLLED_UNVERIFIED` or `DISABLED` — the only two states `PCP.1` can
+produce) has the same normalized endpoint, regardless of what vendor hint
+or lifecycle state that record carries. The refusal names the existing
+`device_id` and its current state; it never creates a second record for the
+same endpoint. (`RETIRED` is not a duplicate-detection exemption in
+`PCP.1` — it is simply unreachable, so this rule needs no carve-out for it
+yet; a future movement that makes `RETIRED` reachable must decide then
+whether a retired endpoint may be re-enrolled, and is not pre-decided here.)
+
+*Repeated-operation behavior (idempotency).*
+
+- `--registry-enroll` on a normalized-duplicate endpoint: refused every
+  time, deterministically, per "Duplicate detection" above — never
+  idempotent-as-success, because enrollment is a creation, not an
+  upsert.
+- `--registry-disable <device_id>` on an `ENROLLED_UNVERIFIED` record:
+  transitions to `DISABLED`, exit 0.
+- `--registry-disable <device_id>` on an already-`DISABLED` record:
+  idempotent no-op — no state change, no duplicate audit entry, exit 0,
+  an informational message distinguishing "already disabled" from a
+  fresh disable.
+- `--registry-disable <device_id>` on an unknown `device_id`: a distinct
+  failure (non-zero exit, "no such device"), never silently treated as a
+  no-op.
+- `--registry-list`: read-only, trivially idempotent.
+
+*Concurrent CLI write behavior (no new concurrency framework).* `PCP.1` is a
+single-operator local CLI surface, not a multi-actor HTTP surface (that
+question is `PCP.4`/§19's `pcp_console_registry_write_gate`). The registry
+reuses the exact pattern `utils/inventory_exclusions.py::add_exclusion`
+already establishes for a `data/state/*.json` file with concurrent-write
+exposure: read the current document, apply the change in memory, write it
+back with the existing atomic tmp-file-then-`replace()` primitive. That
+primitive guarantees **no torn read and no corrupted file** — a reader
+never observes a half-written document, and a crash mid-write leaves the
+previous valid document in place. It does **not** guarantee mutual
+exclusion between two concurrent CLI processes: two simultaneous
+`--registry-enroll` calls for the same new endpoint can both read the
+registry before either writes, both pass the duplicate check, and both
+write, producing two `device_id`s for one endpoint. This is the same
+known, accepted limitation `inventory_exclusions.py` already carries for
+its own concurrent writers, is not silently claimed as solved, and is
+explicitly **not** closed by inventing a new lock primitive here — a real
+multi-actor write surface (the console, `PCP.4`+) is expected to reuse the
+existing per-endpoint admission coordinator for this purpose rather than a
+bespoke file lock, consistent with `AGENTS.md`'s "no second orchestration
+path" bias. AC-10 pins the "no corruption" half; the race itself is
+recorded as a known `PCP.1` limitation, closed only when a real concurrent
+writer exists.
+
+*Fail-closed handling of corrupt or unsupported persisted data.* Mirrors
+`utils/inventory_exclusions.py::load_inventory_exclusions`/
+`_load_raw_document` exactly: a missing `data/state/device_registry.json`
+is the empty registry (no error). An existing file that is unreadable,
+not valid JSON, not a JSON object, missing or mismatched
+`schema_version`, or whose `devices` value is not a list raises a typed
+`DeviceRegistryError` from every entry point (`enroll`, `list`, `disable`)
+— it is never silently treated as empty, never auto-repaired, and never
+partially loaded. A malformed individual record inside an otherwise valid
+document (wrong types, an unknown lifecycle state, a `credential_ref` that
+fails its format check) raises the same typed error rather than being
+skipped — a corrupt registry fails closed as a whole, not row-by-row.
+
 **Acceptance criteria**
 
 | AC | Assertion |
 | --- | --- |
-| AC-1 | `device_id` is opaque: generated, never derived from endpoint/hostname/serial; two enrollments of identical inputs yield different ids and the second is refused as a duplicate active endpoint for that vendor |
-| AC-2 | `DeviceRecord` has no field that can carry a secret; `credential_ref` is a profile *name*; a test enrolling with a password-like value in any accepted field fails schema validation rather than persisting it |
-| AC-3 | Lifecycle transitions follow the fixed table; `CONTACT_VERIFIED`/`OBSERVED` are unreachable from any `PCP.1` entry point (structural, like `OP.0a` AC-6) |
-| AC-4 | Persistence is atomic and RuntimeRoot-resident; writing to a path equal to or nested with the repository root is refused (`utils/runtime_paths` separation) |
-| AC-5 | The registry file is not included in the support bundle (asserted against `run_support_bundle`'s enumerated inputs) and the repository privacy gate is unaffected |
-| AC-6 | The three CLI modes are mutually exclusive with each other and with every existing mode; none imports a vendor/collector module (static + runtime `sys.modules` check); none resolves a credential or opens a socket |
-| AC-7 | `unified.json`, `entity_id` resolution, `console/registry.py`, `ALLOWLISTED_WORKFLOWS`, `utils/operate/`, `utils/failover/` are byte-unchanged — enforced by the existing convergence tests remaining green with no allowlist edit |
-| AC-8 | Registry content never reaches `output/index.html` or any console payload in `PCP.1` (no payload builder change; render harness not triggered) |
-| AC-9 | `--registry-list` prints device ids, vendor, state and tag keys — never the management endpoint unless `--show-endpoints` is passed (local operator convenience, LOCAL-SENSITIVE, never in logs beyond existing redaction policy) |
+| AC-1a | `device_id` is opaque: generated (not derived from endpoint, hostname, serial, or any other input), and no two records ever share one. |
+| AC-1b | A `--registry-enroll` for a normalized-duplicate endpoint (per "Duplicate detection") is refused **before** a `device_id` is generated — the refused attempt produces zero new records and zero new ids, named against the existing `device_id` it collided with. A differing `vendor_hint` or a `DISABLED` (vs. `ENROLLED_UNVERIFIED`) existing record does not change this outcome. |
+| AC-2a | `DeviceRecord`'s field set is closed (a fixed dataclass, not an open dict): no field named or shaped to carry a secret value exists; an unrecognized key present in `--registry-enroll` input or in a persisted JSON record is rejected, never silently merged in or dropped-and-ignored. |
+| AC-2b | `credential_ref` is validated against a bounded identifier format (e.g. `^[A-Za-z0-9_.-]{1,64}$`) — a shape a real secret value could not satisfy in the general case (no whitespace, no arbitrary-length free text) — and is never resolved to an actual credential anywhere in `PCP.1` (there is no code path that could leak one). |
+| AC-2c | Free-text fields (`tags`, site, environment) are length-bounded and redaction-registry filtered before being written to any log line or CLI error message, the same bounding `console/jobs.py::JobRecord.error_summary` already applies to its own free-text field. |
+| AC-3 | Lifecycle transitions follow exactly the "Lifecycle transitions" table above; `RETIRED`/`CONTACT_VERIFIED`/`OBSERVED` are unreachable from any `PCP.1` entry point (structural, like `OP.0a` AC-6 — no code path, not merely undocumented). |
+| AC-4 | Persistence is atomic (tmp-then-`replace()`) and RuntimeRoot-resident; writing to a path equal to or nested with the repository root is refused (`utils/runtime_paths` separation). |
+| AC-5 | The registry file is not included in the support bundle (asserted against `run_support_bundle`'s enumerated inputs) and the repository privacy gate is unaffected. |
+| AC-6 | The three CLI modes are mutually exclusive with each other and with every existing mode; none imports a vendor/collector module (static + runtime `sys.modules` check); none resolves a credential or opens a socket. |
+| AC-7 | `unified.json`, `entity_id` resolution, `console/registry.py`, `ALLOWLISTED_WORKFLOWS`, `utils/operate/`, `utils/failover/` are byte-unchanged — enforced by the existing convergence tests remaining green with no allowlist edit. |
+| AC-8 | Registry content never reaches `output/index.html` or any console payload in `PCP.1` (no payload builder change; render harness not triggered). |
+| AC-9 | `--registry-list` prints device ids, vendor, state and tag keys — never the management endpoint unless `--show-endpoints` is passed (local operator convenience, LOCAL-SENSITIVE, never in logs beyond existing redaction policy). |
+| AC-10 | A simulated concurrent-write race (two enroll calls interleaved around one read-modify-write cycle) never corrupts `data/state/device_registry.json` into invalid JSON or a torn write — the documented duplicate-`device_id` race outcome is acceptable and asserted as the known result, corruption is not. |
+| AC-11 | Each fail-closed corrupt-data case in "Fail-closed handling" above (unreadable file, invalid JSON, wrong/missing `schema_version`, non-list `devices`, one malformed record inside an otherwise valid document) raises `DeviceRegistryError` from `enroll`, `list`, and `disable` alike — never an empty result, never a partial load. |
+| AC-12 | Repeated-operation behavior matches "Repeated-operation behavior" above exactly: duplicate enroll always refused; disable is idempotent on an already-`DISABLED` id (exit 0, no duplicate audit entry) and fails distinctly on an unknown id. |
 
 **Explicit non-goals**
 
@@ -802,6 +943,12 @@ evidence identity.
 - No capability projection (`PCP.3`); no console/report UI or payload
   change (`PCP.4`); no job definitions or schedule changes (`PCP.5`).
 - No PostgreSQL backend, schema or migration; no engine decision.
+- No new CLI verb beyond the three named in item 3 above — in particular,
+  no `--registry-enable`/re-enable and no `--registry-retire`; `DISABLED`
+  is a one-way transition in `PCP.1`.
+- No cross-process file lock, advisory-lock library, or general
+  concurrency framework — the known duplicate-race limitation is recorded,
+  not closed, in this movement (see "Concurrent CLI write behavior" above).
 - No change to the console job target vocabulary (`entity_id[]` stays until
   `PCP.4`/`PCP.5` re-key it through the registry).
 - No credential storage, vault integration or `credential_profiles`
@@ -809,6 +956,8 @@ evidence identity.
   mounted-file credential set.
 - No new identity semantics: `device_id` relates to nothing yet.
 - No `OP.2`, `RB.x`, `CON.x` or scheduler change of any kind.
+- No `DEPLOY.1`/deployment work of any kind; `PCP.1` runs identically on
+  today's local/laptop RuntimeRoot with no server dependency.
 
 **Affected authority files at `PCP.1` close:** `project/roadmap.json`
 (`now`/`next` rotation; `pcp_1…` → `automated_validated`),
@@ -838,10 +987,14 @@ edited by this session. On `PCP.0` freeze, the freezing session applies:
 
 1. `docs/design/OPERATOR_CONSOLE_ARCHITECTURE.md` — append an
    "Amendment (`PCP.0`)" paragraph: the device experience and first-run
-   onboarding are `CON.x` surface work under this document; §4 gains the
-   candidate-id enrollment intent as a second closed-registry intent; the
-   manual-enrollment intent is recorded as decided by
-   `pcp_console_registry_write_gate`. Prohibitions unrelaxed.
+   onboarding are `CON.x` surface work under this document; **neither the
+   manual-enrollment intent nor the candidate-id enrollment intent is added
+   to §4 as an authorized write** — both are recorded as pending
+   `pcp_console_registry_write_gate` (§19), whichever way that decision
+   lands. A closed candidate id is a *narrower* input than a free-typed
+   endpoint; it is not, by itself, an authorization for a persistent
+   product-state write to reach the console before `DEPLOY.1A`. Prohibitions
+   unrelaxed.
 2. `docs/design/COMPLIANCE_ASSIGNMENT_AND_FRAMEWORKS.md` §4b — one line:
    the "tagged device registry" is delivered by the Product Control Plane's
    Device Registry (`PCP.1`+), not built separately; the assignment editor
