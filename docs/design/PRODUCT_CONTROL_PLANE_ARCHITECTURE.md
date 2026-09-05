@@ -438,10 +438,28 @@ filesystem default and an opt-in PostgreSQL implementation. The Device
 Registry becomes the **eighth storage concern** of that abstraction. That is
 a seam decision, not an engine decision.
 
-**Engine decision deferred** (`pcp_storage_engine`). PostgreSQL is already
-an opt-in path in this repository (DEV.3.2/DEV.3.3); that fact does not
-decide the control plane's engine. Criteria the eventual decision must
-answer, recorded now:
+**Local storage sequencing — DECIDED 2026-09-05** (amendment; companion
+contract §6.4). For the approved local sequence: the `PCP.1` Device Registry
+**remains on its filesystem JSON backend**, and **new local control-plane
+metadata** (job definitions once durable, job/run lifecycle records, schedules,
+capability projections, idempotency/submission metadata, control-plane runtime
+metadata) uses **SQLite**, under movement `M4`'s contract. SQLite owns **none**
+of: registry rows, credential payloads, trust secrets, raw configuration,
+backup bytes, CAS evidence objects, or `OP.2` action authority. The registry
+stays authoritative at job admission **and again immediately before
+execution**; a target that has become disabled or unresolvable causes refusal
+or abort **before contact**, and no copied endpoint is ever retained as
+fallback authority. A future Device Registry migration through the
+`DeviceRegistryBackend` seam remains a **governed storage movement** that must
+prove semantic parity for normalization, duplicate handling, lifecycle,
+concurrency, lock/transaction behaviour, corrupt/unsupported-state failure and
+rollback — the seam's existence does not make it free.
+
+**Production engine decision still deferred** (`pcp_storage_engine`). The local
+decision above **does not select the production engine**, and SQLite is not
+proposed as one. PostgreSQL is already an opt-in path in this repository
+(DEV.3.2/DEV.3.3); that fact does not decide the control plane's engine either.
+Criteria the eventual decision must answer, recorded now:
 
 - transactions (enrollment + relationship writes atomically);
 - migrations (versioned, deployment-controlled — `DEV.4.6` precondition
@@ -729,6 +747,19 @@ explicit decision.
   (fixed at `PCP.1` contract review, §21).
 - Collector target-selection mechanics per collector (`PCP.6`).
 
+### DECIDED 2026-09-05 (amendment; source contract: `docs/design/LOCAL_CONTROL_PLANE_RUNTIME_AND_ENROLLMENT.md`, FROZEN)
+
+These four rows were open below; the Product Owner has decided them. The table
+that follows is kept for its recorded reasoning and its options, and each row's
+outcome is stated here. Nothing else in this document changes.
+
+| id | Outcome |
+| --- | --- |
+| `pcp_console_registry_write_gate` | **DECIDED, scoped to the local profile.** Local-loopback console enrollment is permitted for **both** manual endpoint enrollment and candidate-based enrollment, **only** under the frozen conditions in the companion contract §9.1 and `CON.0` §4.1/§7.11 — closed typed intent, no credential payload or argv, no device I/O in the request, first contact as a separate queued CLASS 0 job, trust before credentials, positive-evidence identity, operator confirmation, immutable audit before mutation, the one existing `DeviceRegistry` path, unchanged duplicate/lock rules, and **no automatic-write exemption for candidates**. **Server / production enrollment exposure is NOT decided by this** and remains blocked on `DEPLOY.1A` OIDC/RBAC — tracked separately as `pcp_server_enrollment_exposure` |
+| `pcp_first_contact_trust_policy` | **DECIDED — strict transport trust before credential submission for every endpoint, including management-plane candidates.** Candidate provenance may select or supply a trust profile; it may **not** waive SSH host-key or TLS trust. No TOFU, automatic trust acceptance, certificate bypass or credential-first probing. Vendor mechanics are movement `M8`'s implementation contract |
+| `pcp_auto_enrollment_policy` | **DECIDED FOR THE CURRENT HORIZON — no automatic persistent enrollment.** No discovery or "trusted source" may create a persistent enrolled device. Manual and candidate enrollment both require positive identity evidence, operator preview and explicit confirmation. A future auto-enrollment capability requires a **new** Product Owner decision; "not now" is not a permanent prohibition |
+| `pcp_storage_engine` | **UNCHANGED — still OPEN, and now explicitly production-scoped.** The *local* control-plane storage sequencing is a **separate, decided** question (§10 amendment below): the `PCP.1` registry stays filesystem JSON and new local control-plane metadata uses SQLite under the `M4` contract. **SQLite is not selected as the production engine**, and this local decision does not pre-empt `pcp_storage_engine`, which still decides with `DEV.4.6` migrations/roles |
+
 ### OPEN DECISIONS (Product Owner; tracked in `project/roadmap.json` `open_decisions`)
 
 | id | Question | Recommendation | Decide by |
@@ -773,6 +804,33 @@ expanded here:
 `PCP.1`–`PCP.4` are **not** blocked on `DEPLOY.1`; they run on the laptop
 console/CLI at zero new device risk and give the product its persistent
 shape while the `OP.2.C` release gates wait on the server.
+
+### 20.1 Amendment (2026-09-05) — local control-plane runtime as a distinct movement
+
+Source contract: `docs/design/LOCAL_CONTROL_PLANE_RUNTIME_AND_ENROLLMENT.md`
+§12/§12.1 (FROZEN). The table above stays as the `PCP.x` theme map; this
+amendment records how the work is actually sequenced.
+
+- The **local control-plane runtime and storage work is a movement distinct
+  from `PCP.2`'s enrollment providers.** It is not folded into `PCP.2`.
+- The executable sequence is the frozen **`M1`…`M14`** list in the companion
+  contract §12, with the §12.1 clarifications. Each `M` is a **separately
+  authorized, bounded movement**; freezing the architecture authorizes none of
+  them.
+- **`M5` — the first real collector target-selection seam — is the critical
+  prerequisite for honest device-targeted collection.** Until it lands, every
+  collection job type remains `target_mode="none"` and per-device collection
+  cannot be offered.
+- **Plane-wide execution followed by result filtering never counts as
+  device-targeted collection.** §9's rule is restated here because the
+  sequencing makes it tempting: filtering a plane-wide result still contacts
+  every device on the plane, and an audit record naming only the requested
+  `device_id`s would misrepresent it. Such a job is `UNSUPPORTED` until its
+  collector has a real seam.
+- **`PCP.1`'s CLI verbs remain a maintenance/bootstrap adapter.** UI-first
+  enrollment is the intended product flow; local-loopback enrollment is
+  permitted only under the frozen conditions above, and production/server
+  enrollment stays `DEPLOY.1A`-gated.
 
 ---
 

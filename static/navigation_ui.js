@@ -3,11 +3,15 @@
 // rule, its authorization seam and its renderers.
 //
 // Contract: docs/design/NAVIGATION_INFORMATION_ARCHITECTURE.md — status
-// **DRAFT, PRODUCT OWNER REVIEW REQUIRED**. This file is a WORKING PROTOTYPE
-// used to test that architecture, not an implementation of an approved one. An
-// earlier revision of both the document and this comment said FROZEN; that was
-// a self-declared freeze without Product Owner authority and it is withdrawn.
-// Nothing here is settled until the DRAFT is reviewed.
+// **FROZEN — PRODUCT OWNER APPROVED (2026-09-05, reviewed head ba56d2b)**.
+// An earlier revision of both the document and this comment declared itself
+// FROZEN without Product Owner authority; that self-declared freeze was
+// withdrawn, and the current freeze is the Product Owner's.
+//
+// The architecture is settled; this file is still the PROTOTYPE of it. Freezing
+// the contract authorized no implementation: movement M2 owes the four
+// accessibility requirements (contract §13.1 / AC-A11Y-1..4) before this
+// prototype may merge.
 //
 // Loads second (right after app_core.js) so every feature module and
 // app_bootstrap.js can read the model; it owns no payload and renders no
@@ -17,8 +21,8 @@
 //
 // What this file actually implements is D-NAV6a's THIRD conjunct only: an entry
 // is rendered iff the shell it is running in actually ships the panel it points
-// at. That is a last-mile shell-integrity check, and the DRAFT is explicit that
-// it is NOT the complete capability rule (§7 there): product-surface
+// at. That is a last-mile shell-integrity check, and the frozen contract is
+// explicit that it is NOT the complete capability rule (§7 there): product-surface
 // eligibility, selected-entity applicability, evidence/capability state and
 // (future) authorization are four separate predicates, and a shipped <section>
 // is not evidence that a backend contract exists. The rule below is sufficient
@@ -30,11 +34,11 @@
 // that HAS a surface but is inapplicable, unsupported, unconfigured or blocked
 // is shown and explained in words (CON.0 §9 honest affordances), not hidden.
 
-// Root order is a CANDIDATE information architecture (DRAFT §4.2), not an
-// approved target: six product domains, evaluated against what the repository
-// can actually serve — not one root per view. A root is either a `module` link
+// Root order is the FROZEN baseline information architecture (contract §4.2,
+// PO-NAV-8): six product domains, evaluated against what the repository can
+// actually serve — not one root per view. A root is either a `module` link
 // (a domain with exactly one shipped view today) or an `items` group; a link
-// becomes a group by gaining children, with no route change. The DRAFT's §4.3
+// becomes a group by gaining children, with no route change. The contract's §4.3
 // target IA additionally reserves Recovery, Automation and Diagnostics — named
 // in the contract, deliberately rendered NOWHERE until their surfaces ship.
 const NAVIGATION_MODEL = [
@@ -103,24 +107,28 @@ const NAVIGATION_CONTEXTUAL_ACTIONS = [
         available: false,
         unavailable_reason:
             "Device enrollment is CLI-only today (PCP.1 --registry-enroll). " +
-            "Whether a registry write may originate in the browser is the OPEN " +
-            "pcp_console_registry_write_gate decision -- open, not decided: " +
-            "PCP.0 section 19 records three options and the Product Owner has " +
-            "chosen none of them. An earlier revision of this string asserted " +
-            "that the write waits for DEPLOY.1A; that pre-decided the question " +
-            "and is withdrawn. No browser enrollment contract exists yet, so no " +
-            "affordance is rendered either way. See " +
-            "docs/design/LOCAL_CONTROL_PLANE_RUNTIME_AND_ENROLLMENT.md section 9.",
+            "pcp_console_registry_write_gate is now DECIDED (2026-09-05), and " +
+            "narrowed to the local loopback profile: both manual and candidate-based " +
+            "enrollment may write, but ONLY once every condition frozen in " +
+            "docs/design/LOCAL_CONTROL_PLANE_RUNTIME_AND_ENROLLMENT.md section " +
+            "9.1 and CON.0 section 4.1/7.11 is implemented -- closed typed " +
+            "intent, no credential payload, no device I/O in the request, first " +
+            "contact as a separate queued CLASS 0 job, trust before credentials, " +
+            "positive-evidence identity, operator confirmation, immutable audit " +
+            "before mutation. Movement M9 owns that work; none of it exists yet, " +
+            "so no affordance is rendered. Server/production exposure remains " +
+            "blocked on DEPLOY.1A (pcp_server_enrollment_exposure).",
     },
 ];
 
-// The device-detail tab strip (DRAFT §6.4 "Tab allocation"). These are
+// The device-detail tab strip (contract §6.4 "Tab allocation"). These are
 // device-scoped views, never navigation roots. The same shell-integrity check
 // applies: a tab whose panel the shell does not ship is dropped, so a partly
 // shipped device experience degrades to fewer honest tabs instead of dead ones.
-// The DRAFT adds two rules this prototype does not yet implement: tab ORDER is
-// canonical and stable across entity types (D-NAV13), and a tab that does not
-// APPLY to an entity type is a different case from a tab with no surface (§8).
+// The frozen contract adds two rules this prototype does not yet implement: tab
+// ORDER is canonical and stable across entity types, and a structurally
+// inapplicable tab stays VISIBLE and selectable with a NOT_APPLICABLE
+// explanation rather than being dropped (D-NAV13, §6.5, AC-WS-7/AC-WS-8).
 const NAVIGATION_DEVICE_TABS = [
     { tab: "overview", label: "Overview", panel: "configOverviewPanel" },
     { tab: "current", label: "Configuration", panel: "configCurrentPanel" },
@@ -164,7 +172,7 @@ let navigationCollapsedGroups = null;
 // UNKNOWN/fail-closed law). Absence of an authorization model is NOT a
 // permissive authorization model; it is no model, and the UI must not imply
 // otherwise. When DEPLOY.1A ships the OIDC/RBAC boundary, authorization becomes
-// an ADDITIONAL, additive predicate (the DRAFT's P4) — never a reuse of the
+// an ADDITIONAL, additive predicate (the contract's P4) — never a reuse of the
 // panel-existence check as a permission proxy — and that is a NAV.2 amendment,
 // not a silent edit. Until then availability is a shell/backend fact only.
 function navigationAuthorizationContext() {

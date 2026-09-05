@@ -1,16 +1,18 @@
 """NAV.1 prototype — left vertical product navigation, AC-1…AC-12.
 
 Contract: `docs/design/NAVIGATION_INFORMATION_ARCHITECTURE.md` — status
-**DRAFT, PRODUCT OWNER REVIEW REQUIRED**. An earlier revision of that document
-and of this docstring said FROZEN; that was a self-declared freeze without
-Product Owner authority and it is withdrawn.
+**FROZEN — PRODUCT OWNER APPROVED** (2026-09-05, reviewed head `ba56d2b`). An
+earlier revision of that document and of this docstring declared itself FROZEN
+without Product Owner authority; that self-declared freeze was withdrawn, and
+the current freeze is the Product Owner's.
 
-**What these tests prove, and what they do not.** They prove the prototype
-matches the contract it was written against, and that it regresses nothing
-(routes, harnesses, action-free report). They do **not** prove that contract is
-the correct product architecture — that is exactly what the DRAFT is under
-review for. Read a failure here as "the prototype drifted", never as "the
-architecture is settled".
+**What these tests prove, and what they do not.** The architecture is now
+frozen, but these tests still only prove that the **prototype** matches the
+subset of it the prototype implements, and that it regresses nothing (routes,
+harnesses, action-free report). They do **not** cover the frozen contract's
+§19 acceptance criteria — those belong to the movements that ship each surface,
+and movement `M2` still owes `AC-A11Y-1`…`AC-A11Y-4` before this prototype may
+merge. Read a failure here as "the prototype drifted".
 
 The horizontal one-root-per-module topbar strip is replaced by a left vertical
 rail grouped by product domain. Two properties carry real product weight and
@@ -332,21 +334,35 @@ def test_ac10_navigation_is_authorization_aware_but_simulates_nothing():
         )
 
 
-def test_contract_document_is_draft_and_linked():
-    """AC-1 of the PO architecture correction: the contract must declare itself
-    DRAFT and must not claim Product Owner approval anywhere, and the module
-    must cite it."""
+def test_contract_document_is_frozen_by_product_owner_and_linked():
+    """Navigation authority guard 1 (M0 freeze).
+
+    Before the freeze this asserted the contract declared itself DRAFT, so a
+    self-declared freeze could not reappear. The Product Owner has now frozen it
+    at reviewed head ``ba56d2b``, so the guard inverts to the same purpose: the
+    status line must record a *Product-Owner-approved* freeze with its audit
+    trail -- approval, date and reviewed head -- never a bare "FROZEN" that a
+    later session could self-declare again."""
     # Check the document's own STATUS LINE, the same token
     # tests/test_architecture_convergence.py keys authority off — the body may
     # legitimately quote the withdrawn FROZEN claim while describing it.
     status = _contract_status_line(CONTRACT)
-    assert "DRAFT" in status and "PRODUCT OWNER REVIEW REQUIRED" in status, status
-    # Case-sensitive, exactly as tests/test_architecture_convergence.py's
-    # _FROZEN_STATUS_MARKERS decides a document's authority. Prose like
-    # "nothing in this document is frozen" is lower-case and is not a claim.
-    assert "FROZEN" not in status, (
-        f"the navigation contract re-declared itself frozen in its status line "
-        f"({status!r}); only the Product Owner may freeze it"
+    # Case-sensitive FROZEN, exactly as tests/test_architecture_convergence.py's
+    # _FROZEN_STATUS_MARKERS decides a document's authority.
+    assert "FROZEN" in status, status
+    assert "PRODUCT OWNER APPROVED" in status, (
+        f"the navigation contract is frozen without recording Product Owner "
+        f"approval ({status!r}); only the Product Owner may freeze it"
+    )
+    assert "DRAFT" not in status, status
+
+    body = CONTRACT.read_text(encoding="utf-8")
+    assert "ba56d2b" in body, "the freeze must record the reviewed branch head"
+    assert "2026-09-05" in status, "the freeze must record its date"
+    # Freezing the architecture is not implementation authority.
+    assert "separately authorized" in body and "M2" in body, (
+        "the freeze must state that M1..M14 remain separately authorized and "
+        "that the prototype is not implementation-complete until M2"
     )
     assert "docs/design/NAVIGATION_INFORMATION_ARCHITECTURE.md" in NAV_JS
     # The companion runtime/enrollment DRAFT and the research appendix the
@@ -355,28 +371,42 @@ def test_contract_document_is_draft_and_linked():
     appendix = ROOT / "docs" / "design" / "research" / "NSPM_NAVIGATION_BENCHMARK.md"
     assert companion.is_file() and appendix.is_file()
     companion_status = _contract_status_line(companion)
-    assert "DRAFT" in companion_status and "FROZEN" not in companion_status, companion_status
+    assert "FROZEN" in companion_status and "PRODUCT OWNER APPROVED" in companion_status, companion_status
+    # The research appendix is evidence, never a frozen product contract.
+    appendix_status = _contract_status_line(appendix)
+    assert "NOT a frozen product contract" in appendix_status, appendix_status
 
 
-def test_no_source_or_test_claims_the_navigation_contract_is_frozen():
-    """AC-1, from the other direction: no branch-local source, test or shell may
-    call the navigation contract FROZEN or PO-approved while it is DRAFT."""
+def test_no_source_claims_the_navigation_prototype_is_implementation_complete():
+    """Navigation authority guard 2 (M0 freeze).
+
+    The architecture is frozen; the prototype is not implementation-complete
+    until movement M2 closes AC-A11Y-1..4. No branch-local source, shell or
+    project-state file may claim otherwise -- a frozen *contract* must never be
+    read as a delivered *feature*."""
+    import json
+
     for path in (
         ROOT / "static" / "navigation_ui.js",
         ROOT / "static" / "app_bootstrap.js",
         ROOT / "utils" / "html_export.py",
         ROOT / "templates" / "index.html",
         ROOT / "templates" / "console.html",
-        Path(__file__),
     ):
-        text = path.read_text(encoding="utf-8")
-        for line in text.splitlines():
-            if "NAVIGATION_INFORMATION_ARCHITECTURE" not in line and "NAV.1" not in line:
-                continue
-            lowered = line.lower()
-            assert "frozen" not in lowered or "withdrawn" in lowered or "self-declared" in lowered, (
-                f"{path.name} still calls the navigation contract frozen: {line.strip()!r}"
-            )
+        text = path.read_text(encoding="utf-8").lower()
+        for claim in ("implementation-complete", "implementation complete", "merge-approved"):
+            assert claim not in text, f"{path.name} claims {claim!r}"
+
+    registry = json.loads((ROOT / "project" / "feature_registry.json").read_text(encoding="utf-8"))
+    feature = next(
+        f for f in registry["features"] if f["id"] == "left_vertical_product_navigation"
+    )
+    assert feature["status"] != "done", (
+        "the navigation feature is marked delivered while movement M2 still owes "
+        "the four accessibility requirements"
+    )
+    accessibility = next(c for c in feature["criteria"] if c["id"] == "accessibility_closure")
+    assert accessibility["state"] == "pending", accessibility
 
 
 # --- Browser-verified halves ----------------------------------------------

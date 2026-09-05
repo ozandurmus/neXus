@@ -2,19 +2,28 @@
 
 ## Status
 
-**DRAFT — PRODUCT OWNER REVIEW REQUIRED.** Architecture and sequencing only.
-It authorizes **no** code: no database, no migration, no enrollment endpoint,
-no credential store, no collector change, no device contact, no production
-wiring (`AGENTS.md` "Contract-status law").
+**FROZEN — PRODUCT OWNER APPROVED, 2026-09-05.** Reviewed branch head
+`ba56d2b` on `claude/left-nav-vertical-redesign-e673q6`.
+
+Architecture and sequencing only. **The freeze authorizes no code**: no
+database, no migration, no enrollment endpoint or route, no credential store,
+no collector change, no device contact, no production wiring. **`M1`…`M14`
+remain separately authorized, bounded movements** (§12/§12.1) — freezing this
+contract is not a go-ahead for any of them. Deferred detail is
+**implementation-contract work inside a frozen direction**, not unresolved
+architecture: exact SQLite schema at `M4`, exact vendor trust mechanics at
+`M8`, exact enrollment API schemas at `M9`, exact domain-specific state names
+at `M3`.
 
 | | |
 | --- | --- |
 | **Movement** | `ARCHITECTURE`, serving the roadmap row `pcp_2_local_control_plane_sequencing_po_review` |
-| **Revision** | **2 — 2026-09-05.** Records the Product Owner's decisions on the enrollment write gate (§9), first-contact trust (§9.3), auto-enrollment (§9.4), storage sequencing (§6.4) and the movement order (§12); withdraws benchmark citations invalidated by the research appendix's §0.2 evidence correction. Still DRAFT |
-| **Companion DRAFT** | `docs/design/NAVIGATION_INFORMATION_ARCHITECTURE.md` — navigation, entity workspace, capability-state presentation |
-| **Design parent** | `docs/design/PRODUCT_CONTROL_PLANE_ARCHITECTURE.md` (`PCP.0`, FROZEN) — **not edited here.** Where an amendment would eventually be needed it is proposed with its trigger in §11 and **not applied** |
+| **Revision** | **3 — 2026-09-05, FROZEN.** Revision 2 recorded the Product Owner's decisions on the enrollment write gate (§9), first-contact trust (§9.3), auto-enrollment (§9.4), storage sequencing (§6.4) and the movement order (§12). Revision 3 freezes them and applies the `CON.0`/`PCP.0` amendments |
+| **Companion contract** | `docs/design/NAVIGATION_INFORMATION_ARCHITECTURE.md` (**FROZEN**, same date and head) — navigation, entity workspace, capability-state presentation |
+| **Design parent** | `docs/design/PRODUCT_CONTROL_PLANE_ARCHITECTURE.md` (`PCP.0`, FROZEN) — narrowly **amended** at this freeze to record the approved decisions (§9.2 `A3`…`A6`); every unrelated frozen law preserved |
+| **Also amended** | `docs/design/OPERATOR_CONSOLE_ARCHITECTURE.md` (`CON.0`) §4/§7 — the enrollment intent carve-out (§9.2 `A1`/`A2`) |
 | **Preserves unchanged** | `CON.0` §3/§4/§6/§7/§9/§10; `OP.2.0` P1–P18; `RB.x` incl. `D3`/`D4`; `utils/action_taxonomy.py`; `PCP.1`'s frozen `PCP.0` §21 registry contract; the admission coordinator and the vendor budget of 1 |
-| **Decides** | nothing. Every fork is listed in §13 for the Product Owner |
+| **Decision status** | §13.1 lists what is frozen; §13.2 lists the deferred implementation contracts and the genuinely separate future decisions |
 
 ---
 
@@ -396,19 +405,20 @@ authority.** The two enrollment intents are therefore held to the same bar.
 Movement **`M9`** owns the implementation; movement `M8` must land first
 because condition 10/11 depend on it.
 
-### 9.2 Required future amendments — recorded, not applied
+### 9.2 Parent-contract amendments — APPLIED at this freeze
 
-These are the exact amendments the decision above will require. **None is
-applied while this architecture remains DRAFT.**
+`A1`…`A4` are **applied** in `CON.0` and `PCP.0` by the freeze commit. `A5`/`A6`
+stay recorded-not-applied because their owning movements must first inventory
+the existing vocabularies.
 
 | # | Document | Amendment | Trigger |
 | --- | --- | --- | --- |
-| A1 | `CON.0` §4 (intent boundary) | A narrow, explicit carve-out for a **typed, schema-validated enrollment intent**: §4's "the browser never transmits … a hostname, an address" remains true for **command construction**, and enrollment is named as a distinct bounded intent that contacts no device in that request, constructs no argv, and is audited before persistence. The carve-out is conditioned on the **loopback binding**, so it does not survive into server mode | start of `M9` |
-| A2 | `CON.0` §7 (security model) | Add the seventeen conditions of §9.1 as the enrollment intent's own hard rules, in the same form as the existing numbered rules | start of `M9` |
-| A3 | `PCP.0` §19 | Record `pcp_console_registry_write_gate` as decided-in-direction (conditioned local-loopback), and `pcp_first_contact_trust_policy` and `pcp_auto_enrollment_policy` per §9.3 and §9.4 | when this DRAFT is frozen |
-| A4 | `PCP.0` §20 | Re-sequence to record the local control-plane runtime/storage work as a movement distinct from `PCP.2`'s enrollment providers (§12) | when this DRAFT is frozen |
-| A5 | `PCP.0` §9 | Record the schedule/capability-policy state concept in the **schedule/capability-policy contract**, explicitly **not** in the job lifecycle vocabulary | `M3` / `M12` |
-| A6 | `PCP.0` §8 | Record the registry/evidence reconciliation state concept in the **reconciliation projection**, explicitly not as a generic capability state | `M3` / `M10` |
+| A1 | `CON.0` §4 (intent boundary) | **APPLIED.** A narrow, explicit carve-out for a **typed, schema-validated enrollment intent**: §4's "the browser never transmits … a hostname, an address" remains true for **command construction**, and enrollment is named as a distinct bounded intent that contacts no device in that request, constructs no argv, and is audited before persistence. Conditioned on the **loopback binding**, so it does not survive into server mode | applied 2026-09-05 |
+| A2 | `CON.0` §7 (security model) | **APPLIED.** The §9.1 conditions added as the enrollment intent's own hard rules, in the same form as the existing numbered rules | applied 2026-09-05 |
+| A3 | `PCP.0` §19 | **APPLIED.** `pcp_console_registry_write_gate` scoped and decided (local loopback, both intents, under the frozen conditions); `pcp_first_contact_trust_policy` and `pcp_auto_enrollment_policy` decided per §9.3/§9.4; local storage sequencing recorded separately from the production engine | applied 2026-09-05 |
+| A4 | `PCP.0` §20 | **APPLIED.** Records the local control-plane runtime/storage work as a movement distinct from `PCP.2`'s enrollment providers, and references the `M1`…`M14` sequence | applied 2026-09-05 |
+| A5 | `PCP.0` §9 | Record the schedule/capability-policy state concept in the **schedule/capability-policy contract**, explicitly **not** in the job lifecycle vocabulary | **not applied** — `M3` / `M12` must inventory the existing vocabulary first |
+| A6 | `PCP.0` §8 | Record the registry/evidence reconciliation state concept in the **reconciliation projection**, explicitly not as a generic capability state | **not applied** — `M3` / `M10` |
 
 ### 9.3 `pcp_first_contact_trust_policy` — APPROVED IN DIRECTION
 
@@ -606,19 +616,29 @@ PAN HA semantics are all inputs to this sequence, never things it replaces.
 | Movement order | **`M1`…`M14` adopted** with the §12.1 clarifications | §12.1 |
 | Schedule ownership | Property of the device capability; global Operations view secondary | §10.2 |
 
-### 13.2 Still open
+### 13.2 Deferred implementation contracts (direction frozen)
 
-| Question | Owner / gate |
+Not unresolved architecture — the direction above is frozen and a named
+movement owns the exact schema or mechanics.
+
+| Deferred detail | Owning movement |
 | --- | --- |
-| **Exact SQLite schema and migration implementation contract** | movement `M4` |
-| **Exact Check Point / Palo Alto trust-profile mechanics** | movement `M8` |
-| **Exact enrollment request / preview / confirmation schemas** | movement `M9` |
-| **Production storage engine** (`pcp_storage_engine`) | remains open; `DEV.4.6` migrations/roles |
+| Exact **SQLite schema and migration** contract, within §6.4's ownership boundary and §6.5's engine contract | `M4` |
+| Exact **Check Point / Palo Alto trust-profile mechanics**, over the existing transport seams | `M8` |
+| Exact **enrollment request / preview / confirmation schemas**, within §9.1's closed intent | `M9` |
+| Final **names and owning schemas** for the two capability-state concepts | `M3` |
+
+### 13.3 Genuinely separate future decisions
+
+| Question | Gate |
+| --- | --- |
+| **Production storage engine** (`pcp_storage_engine`) | open; `DEV.4.6` migrations/roles. **SQLite is not the production engine** and this contract does not propose it as one |
+| **Server / production enrollment exposure** | blocked on `DEPLOY.1A` OIDC/RBAC. The local decision does not extend to it |
 | **Production OIDC/RBAC** | `DEPLOY.1` / `DEPLOY.1A`, external |
-| **Future auto-enrollment**, if ever proposed | a new Product Owner decision |
-| **Raw privileged configuration access** | a separate future security decision (navigation DRAFT §10c) |
+| **Future auto-enrollment**, if ever proposed | a new Product Owner decision (§9.4) |
+| **Raw privileged configuration access** | its own security decision (navigation contract §10c) |
 | **Sanitized exported job-history field schema** | `PCP.5` |
-| **Future Jobs root promotion** | reopen only if later evidence justifies it; not pre-approved |
+| **Future Jobs root promotion** | not pre-approved; a new PO-reviewed IA amendment |
 
 ---
 
@@ -631,3 +651,67 @@ No accessibility implementation. No repair of the `PCP.1` uuid tests. No
 RBAC/OIDC. No second console. No `CLASS 2` movement. **No edit to any frozen
 document** — the §9.2 amendments are recorded and unapplied. **No freeze, no
 merge, no pull request**, and **no movement authorized or begun**.
+
+---
+
+## 15. Frozen acceptance criteria
+
+Testable statements of the frozen runtime/enrollment architecture, deliberately
+**implementation-agnostic**. This freeze writes no test. Each owning movement
+implements the criteria its surface makes exercisable; a criterion whose surface
+does not exist yet is not waived — it becomes that movement's own criterion.
+
+### 15.1 Runtime
+
+| id | Criterion | Owner |
+| --- | --- | --- |
+| `AC-RT-1` | **One Operator Console.** No second console, second registry, second readiness engine or second identity authority is introduced | all |
+| `AC-RT-2` | After the console starts, **normal product operation requires no repeated `main.py` collection cycle**: the operator selects a subject, submits a typed job, and observes its lifecycle | `M6`/`M7` |
+| `AC-RT-3` | Work runs as **background typed jobs** from a closed, source-reviewed registry; a job record is durable in `queued` **before** the runner may start it | shipped; preserved |
+| `AC-RT-4` | **No device I/O inside an HTTP request handler** — including the enrollment request | `M9` |
+| `AC-RT-5` | A record left `running` by a dead process becomes `failed`, never `succeeded`; restart never silently resumes a device action | shipped; preserved |
+| `AC-RT-6` | Retry is a **new typed job**; a historical outcome is never mutated | `M7` |
+| `AC-RT-7` | The console **is not** the scheduler process; the `>= 10 min` floor and default-disabled posture are unchanged | `M12` |
+
+### 15.2 Device-targeted execution
+
+| id | Criterion | Owner |
+| --- | --- | --- |
+| `AC-TGT-1` | Targets are **opaque `device_id`** or a canonical logical-entity id — never a hostname, address, credential, command or path | `M6` |
+| `AC-TGT-2` | Endpoint, credential and trust resolve **server-side, at the authorized execution stage** | `M6`/`M7` |
+| `AC-TGT-3` | An **unsupported target selection is refused at admission, before any device contact**, and the missing seam is the stated refusal reason | `M6` |
+| `AC-TGT-4` | **A plane-wide run is never relabelled as device-targeted.** Running a plane and filtering the result is not targeted execution and must not be recorded as one | `M5`/`M7` |
+| `AC-TGT-5` | Explicitly plane-wide workflows remain **honestly plane-wide** until they gain a real target-selection seam | `M5` |
+| `AC-TGT-6` | Per-device cadences do **not** multiply device contact; aggregate per-endpoint contact stays bounded by the admission coordinator and the vendor budget of 1 | `M12` |
+
+### 15.3 Storage (approved local Option A)
+
+| id | Criterion | Owner |
+| --- | --- | --- |
+| `AC-ST-1` | The **`PCP.1` Device Registry remains filesystem JSON** in the approved local sequence; `M4` performs no registry migration | `M4` |
+| `AC-ST-2` | SQLite owns **only** job definitions (once durable), job/run lifecycle records, schedules, capability projections, idempotency/submission metadata and control-plane runtime metadata | `M4` |
+| `AC-ST-3` | SQLite owns **none** of: Device Registry rows, credential payloads, trust secrets, raw configuration, backup bytes, CAS evidence objects, `OP.2` action authority | `M4` |
+| `AC-ST-4` | The **registry is authoritative at job admission and again immediately before execution**; a target that has become disabled or unresolvable causes refusal/abort **before contact**, with the reason recorded | `M6`/`M7` |
+| `AC-ST-5` | **No copied endpoint is ever retained as fallback authority.** A reference that no longer resolves is a refusal, never a cache hit | `M4`/`M6` |
+| `AC-ST-6` | The store is RuntimeRoot-resident, **excluded from the support bundle**, classified LOCAL-SENSITIVE, and **fails closed** on corruption or an unsupported schema version | `M4` |
+| `AC-ST-7` | **SQLite is not claimed as the production engine**; `pcp_storage_engine` stays a separate open decision | — |
+| `AC-ST-8` | A future registry backend migration **proves semantic parity** for normalization, duplicate handling, lifecycle, concurrency, lock/transaction behaviour, corrupt/unsupported-state failure and rollback, as a governed storage movement | future |
+
+### 15.4 Enrollment, credentials and trust
+
+| id | Criterion | Owner |
+| --- | --- | --- |
+| `AC-EN-1` | The browser submits **only** the closed enrollment schema: endpoint, opaque credential-profile reference, opaque trust-profile reference, permitted tags, and/or a closed candidate id | `M9` |
+| `AC-EN-2` | **No credential payload, command, argv, filesystem path or arbitrary transport field** may be submitted | `M9` |
+| `AC-EN-3` | **Strict transport trust precedes credential submission** for every endpoint, including management-plane candidates; candidate provenance may select a trust profile but **cannot waive** trust. No TOFU, auto-accept, certificate bypass or credential-first probing | `M8` |
+| `AC-EN-4` | First contact runs as a **separate queued CLASS 0 read-only job**, never inside the enrollment request | `M8`/`M9` |
+| `AC-EN-5` | **Vendor and identity require positive evidence.** Never inferred from port, banner, endpoint shape, an operator hint, or credential spraying | `M8` |
+| `AC-EN-6` | `UNKNOWN` / ambiguous / contradictory identity **creates no registry record** — no phantom device | `M8`/`M9` |
+| `AC-EN-7` | The operator **reviews the resolved identity** and **explicitly confirms** before persistence | `M9` |
+| `AC-EN-8` | An **immutable audit record is durable before** the registry mutation | `M9` |
+| `AC-EN-9` | Persistence uses the **one existing `DeviceRegistry` enrollment path**; duplicate detection and the mutation-lock contract are unchanged | `M9` |
+| `AC-EN-10` | **Candidate-based enrollment receives no automatic-write exemption** — the same confirmation, audit and trust requirements apply | `M9` |
+| `AC-EN-11` | Both enrollment intents are permitted **only in the explicitly controlled loopback runtime profile**; non-loopback/server mode stays **blocked until `DEPLOY.1A`** supplies real OIDC/RBAC | `M9` |
+| `AC-EN-12` | **No auto-enrollment in the current horizon**: no discovery or "trusted source" may create a persistent enrolled device | — |
+| `AC-EN-13` | **No credential payload** appears in the browser, the registry, SQLite, logs, job errors, the exported report or the support bundle | all |
+| `AC-EN-14` | **Navigation visibility is never the authorization boundary**; refusal happens server-side | all |

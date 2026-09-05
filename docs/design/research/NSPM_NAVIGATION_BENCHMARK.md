@@ -2,12 +2,17 @@
 
 ## Status
 
-**RESEARCH APPENDIX — evidence record, not a contract.** Directly linked from
-`docs/design/NAVIGATION_INFORMATION_ARCHITECTURE.md` (DRAFT). Nothing here
-authorizes an implementation.
+**RESEARCH APPENDIX — evidence record, NOT a frozen product contract.**
+Directly linked from `docs/design/NAVIGATION_INFORMATION_ARCHITECTURE.md`
+(FROZEN). This appendix is **not** frozen and carries **no** product authority:
+nothing here authorizes an implementation, and **no frozen architecture
+decision depends on it**. It is kept so the research that informed the review
+stays auditable, and so a future session on an unrestricted network can extend
+it.
 
-- **Revision 2 — 2026-09-05. This revision withdraws a serious
-  evidence-classification error.** See §0.2. Read that before using any row.
+- **Revision 3 — 2026-09-05.** Revision 2 withdrew a set of screenshot-derived
+  competitor observations; revision 3 states the withdrawal reason neutrally
+  (§0.2) alongside the freeze of the two architecture contracts.
 - **Access date for every external source below: 2026-09-05.**
 - **Movement:** `ARCHITECTURE` (research input).
 
@@ -24,61 +29,79 @@ control and returned the **same** block, which proves this environment has **no
 direct web-fetch capability for any host**. The only channel to the open web is
 the search tool, which returns excerpts of the pages linked below.
 
-**Consequence: no third-party product UI was directly observed in this session,
-and no competitor screenshot was available.** Where a fact could not be
-established from a retrievable or officially-sourced statement, this document
-says **NOT ESTABLISHED**. It does not reconstruct a competitor UI from memory.
+**Consequence: no third-party product UI was retrievable through this
+environment's own channels, so no observation in this appendix rests on
+inspecting a competitor's interface.** Where a fact could not be established
+from a retrievable or officially-sourced statement, this document says **NOT
+ESTABLISHED**. It does not reconstruct a competitor UI from memory, and it does
+not rely on any image (§0.2).
 
-### 0.2 Evidence correction (revision 2) — withdrawn observations
+### 0.2 Withdrawn screenshot evidence — and why
 
 Revision 1 of this appendix contained a **§9 "Directly observed screenshots
-(Product Owner supplied)"** section that attributed a set of supplied
-screenshots to Tufin, AlgoSec, FireMon, BackBox and OPNsense, and introduced a
-`PO-SCREENSHOT` grade presented as "the strongest grade in this appendix".
+(Product Owner supplied)"** section, introduced a `PO-SCREENSHOT` grade
+presented as "the strongest grade in this appendix", and attributed a set of
+screenshots supplied during the review to Tufin, AlgoSec, FireMon, BackBox and
+OPNsense as directly observed competitor UI.
 
-**That classification is withdrawn in full.** The Product Owner has stated that
-the screenshots supplied during the review were of the current/previous
-neXus / SecurityExpert UI and its mock-data rendering, provided to identify
-**neXus behaviours that must be preserved** — not screenshots of any third-party
-product.
+**All of it is withdrawn.** The reason recorded here is deliberately narrow and
+provenance-neutral:
 
-Everything derived *solely* from those images is therefore removed, not
-softened:
+> The supplied screenshots are **intentionally not committed** to this
+> repository — they carry third-party UI and lab identifiers, which
+> `AGENTS.md` "Privacy and DLP" keeps out of repository files. Their
+> provenance therefore **cannot be audited from the repository**, now or
+> later. Evidence that cannot be re-checked from the repository is
+> **insufficient for repository authority**, whatever it depicts.
+
+Accordingly this appendix **does not assert** that the images were neXus
+screenshots, and **does not assert** that they were third-party product
+screenshots. It asserts only that they cannot carry durable authority here, and
+withdraws every claim that rested on them. **No frozen architecture decision
+relies on those screenshots as external competitor evidence** — the frozen
+decisions are grounded in Product Owner direction and in repository evidence
+(§1, `REPO-VERIFIED`), not in imitation of any competitor.
+
+Everything derived *solely* from those images is removed, not softened:
 
 | Withdrawn claim | Was cited as |
 | --- | --- |
-| Tufin's two-part icon rail + persistent device-tree pane; the `Vendors`/`Groups` tab pair; a four-level Panorama branch; the stacked risk/change/cleanup workspace | PO-SCREENSHOT |
-| AlgoSec's `DEVICES` pane title, collapse chevron, wrench header control, brand filter, `Issues (n)` counter, VDOM-under-firewall nesting, the `OVERVIEW/POLICY/CHANGES/REPORTS/ALL REPORTS/MAP` tab strip, the workspace action toolbar, `Latest Report` freshness header | PO-SCREENSHOT |
-| FireMon's horizontal top menu bar and its menu names, the KPI card row, `Devices Recently Revised`, the per-row `•••` overflow menu, the `Not enough historical data` chip, the `Topology ⚠` badge | PO-SCREENSHOT |
-| BackBox's left rail with `OPERATIONS` / `ADMINISTRATIVE` uppercase group headings; `Schedules` as its own root; `Automations`/`Jobs`/`File Repository`/`Queue`/`History`/`Access` as Operations children; draggable dashboard widgets; the `Identical`/`Changed`/`N/A` and `Successful`/`Suspect`/`Failed` state vocabularies | PO-SCREENSHOT |
-| OPNsense as a control sample in its entirety (it is not in the benchmark set and contributed only screenshot-derived observations) | PO-SCREENSHOT |
+| A two-part icon rail plus a persistent device-tree pane; a `Vendors`/`Groups` tab pair; a deeply nested device-group branch; a stacked risk/change/cleanup workspace | PO-SCREENSHOT |
+| A `DEVICES` pane title, collapse chevron, wrench header control, brand filter and `Issues (n)` counter; virtual-context nesting under a physical firewall; an `OVERVIEW/POLICY/CHANGES/REPORTS/ALL REPORTS/MAP` tab strip; a workspace action toolbar; a `Latest Report` freshness header | PO-SCREENSHOT |
+| A horizontal top menu bar and its menu names; a KPI card row; a `Devices Recently Revised` table; per-row `•••` overflow menus; a `Not enough historical data` chip; a `Topology ⚠` badge | PO-SCREENSHOT |
+| A left rail with `OPERATIONS` / `ADMINISTRATIVE` uppercase group headings; `Schedules` as its own root; `Automations`/`Jobs`/`File Repository`/`Queue`/`History`/`Access` as Operations children; draggable dashboard widgets; the `Identical`/`Changed`/`N/A` and `Successful`/`Suspect`/`Failed` state vocabularies | PO-SCREENSHOT |
+| An OPNsense "control sample" in its entirety | PO-SCREENSHOT |
 
-Three conclusions that revision 1 built on those observations are withdrawn with
-them, because **an attractive conclusion whose evidence is invalid is not kept**:
+Three conclusions built on those observations are withdrawn with them, because
+**an attractive conclusion whose evidence cannot be audited is not kept**:
 
 1. *"Uppercase domain group headings over a left rail is a shipped, mature
-   pattern, so D-NAV3 is externally corroborated."* — **withdrawn.** No
+   pattern, so `D-NAV3` is externally corroborated."* — **withdrawn.** No
    retrievable source establishes any competitor's group-heading treatment.
-   `D-NAV3` now rests on neXus' own product domains and on the Product Owner's
-   accepted direction, which is sufficient and is stated as such.
-2. *"Mature products ship explicit third states (`Not enough historical data`,
-   `N/A`, `Suspect`), which is the external basis for the capability-state
-   matrix."* — **withdrawn.** That matrix rests entirely on **this
-   repository's own existing canonical states** and on `CON.0` §9's honest-
-   affordance law. It never needed external support and no longer claims any.
-3. *"BackBox separates Schedules (root) from Jobs/Automations/Queue/History,
-   so the mature end-state is several execution surfaces."* — **withdrawn as an
-   observation.** The *shape* survives only as a Product Owner decision
+   `D-NAV3` is frozen on neXus' own product domains and Product Owner
+   direction, which is sufficient and is stated as such.
+2. *"Mature products ship explicit third states, which is the external basis
+   for the capability-state matrix."* — **withdrawn.** That matrix rests
+   entirely on **this repository's own canonical states** and `CON.0` §9's
+   honest-affordance law. It never needed external support and no longer
+   claims any.
+3. *"A competitor separates Schedules from Jobs/Automations/Queue/History, so
+   the mature end-state is several execution surfaces."* — **withdrawn as an
+   observation.** That shape survives only as a Product Owner decision
    (`PO-NAV-8`), not as benchmark evidence.
 
-An honest correction makes this appendix **less detailed than revision 1**.
-That is the correct outcome.
+**None of the deleted material is restored anywhere.** No hostname, address,
+email, user identity or lab identifier from any supplied image appears in this
+repository.
 
-### 0.3 Grades used in revision 2
+An honest correction leaves this appendix **less detailed** than revision 1.
+That is the correct outcome, and it does not block the architecture freeze.
+
+### 0.3 Grades used
 
 | Grade | Meaning |
 | --- | --- |
-| **PO-SOURCED-OFFICIAL** | a fact the Product Owner supplied *from the named official vendor page*, which this environment cannot retrieve independently. Recorded with the page named so a future session on an unrestricted network can verify it. |
+| **PO-SOURCED-OFFICIAL** | a fact the Product Owner supplied *from the named official vendor page*, which this environment cannot retrieve independently. Recorded with the page named so a future session on an unrestricted network can verify it. **Not an upgrade to direct page inspection** — no row in this appendix claims one. |
 | **DOC-EXCERPT** | quoted or closely paraphrased by the search tool from the linked official documentation page. |
 | **URL-STRUCTURE** | read off the official documentation URL / table-of-contents path itself (e.g. `TocPath=Administration\|Device\|Devices\|Choose+a+Device+to+Onboard`). Structural, reliable, narrow. |
 | **VENDOR-MARKETING** | from a vendor product/marketing/blog page. Positioning only. **Never** proof of navigation layout or backend semantics. |
@@ -94,9 +117,11 @@ reproduced here (`AGENTS.md` "Privacy and DLP").
 
 ## 1. neXus behaviours to preserve — REPO-VERIFIED
 
-This is the section the supplied screenshots actually serve. Every row is
-verified in this repository's own source, which is a **stronger and more
-durable** record than an image: it can be re-checked at any commit.
+**This is how neXus UI behaviour is preserved in the frozen architecture** —
+through repository evidence, not through images. Every row is verified in this
+repository's own source and can be re-checked at any commit, which is exactly
+the durable audit trail a screenshot cannot provide (§0.2). These rows, not any
+image, are what the frozen contracts' preservation criteria bind to.
 
 | Behaviour | Verified at | Preservation criterion |
 | --- | --- | --- |
