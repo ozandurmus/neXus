@@ -20,29 +20,37 @@ direction**, never unresolved architecture: exact domain-specific state names
 at `M3`, exact SQLite schema at `M4`, exact vendor trust mechanics at `M8`,
 exact enrollment API schemas at `M9`.
 
-An earlier revision of this file declared itself `FROZEN` on the strength of a
-working prototype and its tests. **That was a self-declared freeze without
-Product Owner authority and it is withdrawn.** Tests prove the prototype
-matches the contract it was written against; they do not prove the contract is
-the right product architecture.
+**Revision history — three revisions, one of them invalid.**
 
-**Review round 1 result (2026-09-05).** The Product Owner reviewed revision 1
-and **substantially accepted its direction**, closing eight navigation
-decisions (`PO-NAV-1`…`PO-NAV-8`, §16) plus the runtime, storage, trust and
-enrollment directions in the companion DRAFT. It is **still not frozen**, for
-two reasons: one **evidence-integrity correction** was required — revision 1
-misattributed a set of supplied screenshots to third-party products, and every
-conclusion resting on them is withdrawn (research appendix §0.2) — and several
-decisions were returned with their **ownership corrected** rather than simply
-approved (`PO-NAV-6`, `PO-NAV-7`, `PO-NAV-8`, D-NAV13, the freeze-vs-merge
-gate). **Revision 3 (2026-09-05) closes the remaining rows and freezes the
-contract**: the Product Owner approved `D-NAV3`, `D-NAV6a`, `D-NAV6b`,
-`D-NAV7`, `D-NAV10`, `D-NAV11` and `D-NAV12`, and `D-NAV13`/`D-NAV14` became
-part of the frozen contract with them. No operative decision row remains
-provisional.
+- **Revision 1 (2026-09-05).** Declared itself `FROZEN` on the strength of a
+  working prototype and its own tests, with no Product Owner authority behind
+  that declaration. **This self-freeze was invalid and is withdrawn.** Tests
+  prove a prototype matches the contract it was written against; they do not
+  prove the contract is the right product architecture, and they are not a
+  substitute for approval.
+- **Revision 2 (2026-09-05).** The Product Owner reviewed revision 1 and
+  **substantially accepted its direction**, closing eight navigation decisions
+  (`PO-NAV-1`…`PO-NAV-8`, §16) plus the runtime, storage, trust and enrollment
+  directions in the companion contract. Freeze was withheld at this point for
+  two reasons: an **evidence-integrity correction** was required — revision 1
+  had misattributed a set of supplied screenshots to third-party products, and
+  every conclusion resting on them was withdrawn (research appendix §0.2) —
+  and several decisions came back with their **ownership corrected** rather
+  than simply approved (`PO-NAV-6`, `PO-NAV-7`, `PO-NAV-8`, `D-NAV13`, the
+  freeze-vs-merge gate).
+- **Revision 3 (2026-09-05) — the valid Product Owner freeze.** With the
+  evidence correction applied and the corrected decisions recorded, the
+  Product Owner approved `D-NAV3`, `D-NAV6a`, `D-NAV6b`, `D-NAV7`, `D-NAV10`,
+  `D-NAV11` and `D-NAV12` (the remaining rows that had stayed `PROVISIONAL`
+  through revision 2), and `D-NAV13`/`D-NAV14` became part of the frozen
+  contract with them. **No operative decision row remains provisional.** This
+  is the freeze recorded at the top of this section: approved at reviewed
+  branch head `ba56d2b`, dated 2026-09-05.
 
-The prototype remains **design evidence**. The Product Owner has *not* approved
-the merge, or the replacement of the active roadmap movement.
+The prototype remains **design evidence**, now demonstrating a frozen
+architecture rather than a proposed one. The Product Owner has approved the
+architecture; approving the *merge* of the prototype is a separate, later step
+gated on `M2` (§13.1), and no roadmap movement is replaced by this freeze.
 
 | | |
 | --- | --- |
@@ -53,8 +61,8 @@ the merge, or the replacement of the active roadmap movement.
 | **Implementation** | none in this document. No UI behaviour, no storage, no enrollment, no job, no collector, no production wiring |
 | **Companion contract** | `docs/design/LOCAL_CONTROL_PLANE_RUNTIME_AND_ENROLLMENT.md` (**FROZEN**) — runtime, storage, jobs, enrollment, sequencing |
 | **Research appendix** | `docs/design/research/NSPM_NAVIGATION_BENCHMARK.md` — a **research/evidence appendix, not a frozen product contract**. No frozen decision here depends on it |
-| **Preserves unchanged** | `docs/design/OPERATOR_CONSOLE_ARCHITECTURE.md` (`CON.0`) §3/§4/§6/§7/§9/§10; `docs/design/PRODUCT_CONTROL_PLANE_ARCHITECTURE.md` (`PCP.0`) §8/§9/§12/§13/§19; `docs/design/FAILOVER_ENGINE_ARCHITECTURE.md` §10/§10.1/§10.2; `RB.x`; `utils/action_taxonomy.py`; every payload builder's output; every pre-existing route |
-| **Amends** | `CON.0` §4/§7 and `PCP.0` §8/§9/§10/§19/§20, narrowly, to record the approved decisions. Every unrelated frozen law is preserved |
+| **Amends (this freeze)** | `docs/design/OPERATOR_CONSOLE_ARCHITECTURE.md` (`CON.0`) §4 (new §4.1) and §7 (new rule 11); `docs/design/PRODUCT_CONTROL_PLANE_ARCHITECTURE.md` (`PCP.0`) §10 and §19 (new decided block) and §20 (new §20.1) — narrowly, to record the decisions this freeze approves. Full detail: companion contract §9.2 |
+| **Preserves unchanged** | Everything in `CON.0` and `PCP.0` *not* named above, including `CON.0` §3/§6/§9/§10 and `PCP.0` §8/§9/§12/§13 in full, and every named section's content outside its stated amendment; `docs/design/FAILOVER_ENGINE_ARCHITECTURE.md` §10/§10.1/§10.2; `RB.x`; `utils/action_taxonomy.py`; every payload builder's output; every pre-existing route |
 
 ### Decision grades used throughout
 
@@ -148,16 +156,20 @@ These are correct today and must not be mistaken for product law:
 - **Collapse never changes availability or authority.**
 - **Navigation location alone grants no action authority.**
 
-### 2.4 Prematurely frozen or pre-decided — corrected here
+### 2.4 Prematurely frozen or pre-decided in revision 1 — corrected here
 
-| Prototype claim | Correction |
+Historical record of revision 1's errors and how each was resolved on the path
+to the revision 3 freeze. None of these rows describes the document's current
+status, which is stated at the top of this document.
+
+| Revision 1 claim | Correction |
 | --- | --- |
-| The document declared itself **FROZEN** | Withdrawn. DRAFT, PO review required |
+| The document declared itself **FROZEN** (no Product Owner authority) | That self-freeze was invalid and withdrawn. Revision 2 put the document to Product Owner review; revision 3 records the resulting valid freeze at the top of this document |
 | **D-NAV6** presented DOM presence as *the* anti-placeholder law | Downgraded to a **last-mile surface-integrity check**, one conjunct of four (§7). A `<section>` in a template is not evidence that a backend contract exists |
 | **D-NAV5** stated as fact that browser enrollment "waits for `DEPLOY.1A`" | The prototype's own comment pre-decided a Product Owner question, and was corrected in source. The Product Owner has since decided (`PO-NAV-1`, companion §9.1): a **conditioned local-loopback** direction, not an unconditional wait — so revision 1's assertion was wrong in substance as well as in authority |
 | **Six roots** presented as "the information architecture" | Corrected then approved: Recovery and Jobs/Automation were not evaluated in the first pass and are now (§4), and `PO-NAV-8` freezes the six-root baseline with Recovery reserved seventh |
 | **Jobs rejected as a root** on the strength of one shell | The reasoning (a root absent from one shell is a bad fact) is sound. Revision 1 cited "BackBox ships Jobs as a top-level menu" as external counter-evidence; **that observation is withdrawn** (appendix §0.2) and no retrievable source establishes any competitor's Jobs placement. Settled instead by decision: `PO-NAV-8` keeps Jobs under Operations, with **no** automatic promotion promise |
-| **`NAV.1` recorded as `automated_validated`** in project state | Corrected on this branch: a PO-review movement, non-terminal, prototype status (§ project-state correction in the companion DRAFT §12) |
+| **`NAV.1` recorded as `automated_validated`** in project state | Corrected on this branch: a PO-review movement, non-terminal, prototype status (§ project-state correction in the companion contract §12) |
 
 ### 2.5 What breaks once SQLite, enrollment, schedules, recovery, device jobs and RBAC arrive
 
@@ -178,7 +190,7 @@ This is the most important section of the review.
 4. **Schedules are per-device, per-capability.** FireMon puts "Enable
    Scheduled Retrieval" on the device with its own interval. That does not fit
    anywhere in the current rail and must not be smuggled into navigation state
-   (§4.3, companion DRAFT §9).
+   (§4.3, companion contract §9).
 5. **Recovery becomes a domain, not a tab.** Restore-readiness across the fleet
    (`RB.5`/`CON.4`) is a fleet workflow; leaving it as one device tab under
    Configuration will be wrong then, and is defensible only until then.
@@ -250,7 +262,7 @@ Re-graded. `FROZEN` appears nowhere.
 | **D-NAV2** | The rail is collapsible; **collapse changes presentation density only** — never the entry set, never availability, never authority | **FROZEN** |
 | **D-NAV3** | Group by **stable product domain**, not by action. A domain with one shipped view renders as a direct root link and becomes a group by gaining children, with no route change | **FROZEN** (`PO-NAV-8`). Note: revision 1 claimed external corroboration for domain group headings; that is withdrawn (appendix §0.2) — this rests on neXus' own domains and the PO's decision |
 | **D-NAV4** | **Devices is a first-class root**; the device experience is never a sub-view of Configuration | **FROZEN** |
-| **D-NAV5** | **"Add Device" is never a navigation root.** Primary affordance in the Devices/entity-list pane header; **Administration → Device Management** is the lifecycle home; **one enrollment contract**, no duplicate implementation; Configuration never owns device lifecycle | **FROZEN** (`PO-NAV-1`). Rendering it locally is approved *in direction* under the conditions in the companion DRAFT §9; production exposure stays blocked on `DEPLOY.1A` |
+| **D-NAV5** | **"Add Device" is never a navigation root.** Primary affordance in the Devices/entity-list pane header; **Administration → Device Management** is the lifecycle home; **one enrollment contract**, no duplicate implementation; Configuration never owns device lifecycle | **FROZEN** (`PO-NAV-1`). Rendering it locally is approved *in direction* under the conditions in the companion contract §9; production exposure stays blocked on `DEPLOY.1A` |
 | **D-NAV6** | ~~DOM presence is the availability law~~ → **superseded by D-NAV6a/D-NAV6b** | **CORRECTED** |
 | **D-NAV6a** | A rendered navigation entry requires **product-surface eligibility**: a declared shipped contract, a shell permitted to expose it, and the surface actually present. DOM presence is the *last* of the three, an integrity check, not the rule | **FROZEN** |
 | **D-NAV6b** | **No visual placeholder.** A capability with no product surface is omitted. A capability *with* a surface that is currently inapplicable, unsupported, unconfigured, blocked or evidence-poor is **shown, selectable where useful, and explained in words** — never a bare greyed control (`CON.0` §9 honest affordances) | **FROZEN** |
@@ -344,9 +356,9 @@ re-litigate the IA — it is never a "coming soon" entry (D-NAV6b).
 | Inventory exclusions | shipped, read-only | stays; write path stays blocked (`inventory_exclusions_management_ui_backend`, `DEPLOY.1A`) |
 | Project plan | shipped | see §14 — development visibility now, administration/developer-only later |
 | Device management | **none** | registry lifecycle + the enrollment action's second home (`PCP.2`/`PCP.4`) |
-| Credential profiles | **none** | **opaque references only**, never secret material (companion DRAFT §10) |
+| Credential profiles | **none** | **opaque references only**, never secret material (companion contract §10) |
 | Trust profiles | **none** | host-key/CA trust references (`pcp_first_contact_trust_policy`) |
-| System & runtime health | **none** | control-plane service state, job runner health (companion DRAFT §6) |
+| System & runtime health | **none** | control-plane service state, job runner health (companion contract §6) |
 | Users & roles | **none** | `DEPLOY.1A` only. **Must not be rendered before a real authorization model exists** — a fake user page is worse than none |
 
 ---
@@ -832,17 +844,17 @@ history. **This movement does not redesign the Project Plan UI.**
 
 Checked against Part M's list. Findings, not assurances.
 
-| Property | Status in this DRAFT |
+| Property | Status in this frozen contract |
 | --- | --- |
 | Navigation never grants mutation authority | **Held.** §9 — action authority derives from contract + applicability + evidence + (future) authorization. Nothing is authorized by being reachable |
 | DOM presence is not authorization | **Corrected.** P1 is a *build* fact and explicitly not a permission (§7.1, §7.4) |
-| No credential payload in browser, registry, storage, logs or bundles | **Held.** Navigation carries no credential; profile references only (companion DRAFT §10) |
-| No device I/O in a request handler | **Held** — navigation performs no I/O; the runtime rule is the companion DRAFT §7 |
+| No credential payload in browser, registry, storage, logs or bundles | **Held.** Navigation carries no credential; profile references only (companion contract §10) |
+| No device I/O in a request handler | **Held** — navigation performs no I/O; the runtime rule is the companion contract §7 |
 | No vendor identity inferred without positive evidence | **Held.** The workspace renders backend-derived identity; it computes none (§5.2) |
-| No device targeting by fleet-wide execution + post-filter | **Held** — restated from `PCP.0` §9; navigation must never offer a per-device action a collector cannot target (companion DRAFT §8) |
+| No device targeting by fleet-wide execution + post-filter | **Held** — restated from `PCP.0` §9; navigation must never offer a per-device action a collector cannot target (companion contract §8) |
 | `CLASS 2` / `OP.2` authorization, readiness and locking unweakened | **Held.** `SAFE_TO_FAILOVER` stays unreachable; VSID is never a lock subject; no `CLASS 2` entry renders |
 | No raw secret-bearing configuration exposed | **Held.** §10 authorizes (a) only, defers (b), refuses (c) |
-| A local pilot exemption never becomes production authorization | **Held.** Recorded as the companion DRAFT's central risk (§11 there) |
+| A local pilot exemption never becomes production authorization | **Held.** Recorded as the companion contract's central risk (§11 there) |
 | No second console, registry, readiness engine or identity authority | **Held.** §5.2, §6.2 — one console, one registry, one readiness engine |
 | A stale UI state never authorizes a job | **Held.** §8.1 fail-closed row; `OP.2.0` P4/P14 preserved |
 | Hidden navigation is never a security boundary | **Held.** §7.4 — hiding is presentation; refusal happens server-side |
@@ -869,7 +881,7 @@ are not restated as such anywhere in this document.
 
 | id | Decision | Where it now lives |
 | --- | --- | --- |
-| **`PO-NAV-1`** | **Enrollment location — APPROVED.** "Add Device" is never a navigation root. Primary operator affordance in the **Devices / entity-list pane header**; **Administration → Device Management** is the lifecycle home (list, disable, re-verify, later profile references). Both entry points invoke **one enrollment contract**, no duplicate implementation. **Configuration does not own device lifecycle.** A local loopback console may eventually render enrollment before `DEPLOY.1A` under the companion DRAFT §9 conditions; **production/server exposure stays blocked on `DEPLOY.1A` OIDC/RBAC** | D-NAV5; §9; companion §8.3, §9 |
+| **`PO-NAV-1`** | **Enrollment location — APPROVED.** "Add Device" is never a navigation root. Primary operator affordance in the **Devices / entity-list pane header**; **Administration → Device Management** is the lifecycle home (list, disable, re-verify, later profile references). Both entry points invoke **one enrollment contract**, no duplicate implementation. **Configuration does not own device lifecycle.** A local loopback console may eventually render enrollment before `DEPLOY.1A` under the companion contract §9 conditions; **production/server exposure stays blocked on `DEPLOY.1A` OIDC/RBAC** | D-NAV5; §9; companion §8.3, §9 |
 | **`PO-NAV-2`** | **Recovery — APPROVED.** A **reserved future global root**, not rendered today. Promote only when a real **fleet-level** restore-readiness and/or recovery-store surface ships under its `RB`/`CON` contract. Device/entity Recovery stays a contextual workspace tab. Once the global root ships it **remains visible** whether the selected entity is protected, unsupported or not configured | §4.1, §4.3, §6.4 |
 | **`PO-NAV-3`** | **Configuration — APPROVED.** The global domain keeps fleet-level work: configuration posture, alignment/drift overview, cross-device search and filtering, configuration-change and evidence-coverage summaries, and fleet comparison workflows where a real contract exists. Device-level configuration, alignment, policy/object, history, evidence and sanitized-configuration views use the **shared selected-entity workspace**. **No duplicated data authority**; a global view may **deep-link** into the selected entity's Configuration context | §4.1, §6.2, §6.4 |
 | **`PO-NAV-4`** | **Exported execution history — APPROVED IN PRINCIPLE, ship-triggered** at `PCP.5`'s job-record/export schema, with a hard exclusion list. Creates no Jobs module in the report today and authorizes no schema now | §12 |
@@ -914,7 +926,7 @@ implementation-complete until `M2` closes §13.1.
 
 ---
 
-## 18. Relationship to the companion DRAFT
+## 18. Relationship to the companion contract
 
 `docs/design/LOCAL_CONTROL_PLANE_RUNTIME_AND_ENROLLMENT.md` (**FROZEN**, same
 date and same reviewed head) owns the runtime half of the same product

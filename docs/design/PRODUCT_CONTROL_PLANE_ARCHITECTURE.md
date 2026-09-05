@@ -678,7 +678,7 @@ architecture legitimately replaces).
 | Discovery / current-inventory assumptions | `unified.json` is the device universe: console targets validated by presence in it (`CON.0` §4, `resolve_entity_id`), recovery targeting and readiness units derive from it | **SUPERSEDED ASSUMPTION** | the registry becomes the target universe; presence-in-`unified.json` is replaced by an equal-or-stricter check (explicit enrollment); evidence identities (`entity_id`) remain the evidence keys and are *related* to `device_id`, never replaced |
 | RuntimeRoot / state persistence | `data/state/*` files; `evidence_backend` abstraction; repo↔runtime separation enforced | no conflict | registry lives under RuntimeRoot through the same abstraction |
 | Backup architecture | frozen `RB.x` contracts; `recovery-cp` unscheduled (`D3`); restore hard-gated | no conflict | capability-driven addressing only (§11) |
-| Console architecture | `CON.0` §4 literal "browser never transmits … a hostname, an address"; `C-D7`; exclusions write path `DEPLOY.1A`-gated | **CONTRADICTION**, covering *both* enrollment intents: manual enrollment against §4's literal wording, and candidate-based enrollment against the exclusions-write precedent (a closed candidate id still authorizes a *persistent product-state write*, which §4's wording does not by itself settle) | open decision `pcp_console_registry_write_gate`, widened to cover both intents; existing device jobs (`job_type` + `device_id[]`, no write to the registry) are unaffected and fit §4 verbatim; both manual and candidate-based enrollment ship CLI-first (`PCP.1`/`PCP.2`) until decided |
+| Console architecture | `CON.0` §4 literal "browser never transmits … a hostname, an address"; `C-D7`; exclusions write path `DEPLOY.1A`-gated | **CONTRADICTION AT THE TIME OF THIS FREEZE — RESOLVED 2026-09-05.** Covered *both* enrollment intents: manual enrollment against §4's literal wording, and candidate-based enrollment against the exclusions-write precedent (a closed candidate id still authorizes a *persistent product-state write*, which §4's wording did not by itself settle) | Resolved by the `docs/design/LOCAL_CONTROL_PLANE_RUNTIME_AND_ENROLLMENT.md` freeze and its `CON.0` §4.1 amendment: both intents are now **permitted in the local loopback profile only**, under §4.1's frozen conditions (`pcp_console_registry_write_gate`, decided). **Server/production enrollment exposure is a separate, still-open gate** (`pcp_server_enrollment_exposure`), blocked on `DEPLOY.1A` exactly as this row originally anticipated |
 | HA identity / topology authority | backend-only derivation; UI heuristics retired (`OP.0b S9`) | no conflict | registry relationships are backend-derived projections; the UI still computes nothing |
 | Readiness freshness laws | `OP.0a` cannot emit `SAFE_TO_FAILOVER`; `OP.2.0` P4 same-workflow, no TTL | no conflict | projection layer = informational; no TTL introduced |
 | `OP.2` operational identity and lock scope | `OP.2.0` P8/P17; `OP.2.1b` | no conflict | untouched (§16) |
@@ -688,11 +688,14 @@ architecture legitimately replaces).
 | Vendor scope | CP + PAN only | no conflict | registry vendor enum is CP / PAN / unknown |
 | Roadmap ordering | `now_next.next` = `op2_c_cp_clusterxl_adapter_scoping` (blocked, external) | ordering change, not a demotion of completed work | `OP.2.C` scoping moves to `upcoming` (still `blocked` on `DEPLOY.1`, notes preserved); `PCP.1` becomes `next`, gated on this document's freeze |
 
-No frozen law was removed or reinterpreted to make the direction fit. The
-one genuine contradiction is isolated to a single console enrollment-write
-boundary — covering both the manual and the candidate-based enrollment
-intents together (§13, §19) — and is left to the Product Owner as an
-explicit decision.
+No frozen law was removed or reinterpreted to make the direction fit. The one
+genuine contradiction was isolated to a single console enrollment-write
+boundary — covering both the manual and the candidate-based enrollment intents
+together (§13, §19) — and was **resolved by the Product Owner on 2026-09-05**
+(the `LOCAL_CONTROL_PLANE_RUNTIME_AND_ENROLLMENT.md` freeze): both intents are
+permitted, scoped to the local loopback profile under frozen conditions, while
+server/production exposure remains a separate open gate blocked on
+`DEPLOY.1A`.
 
 ---
 
@@ -735,8 +738,9 @@ explicit decision.
 
 ### IMPLEMENTATION-LEVEL DECISIONS DEFERRED (deliberately not frozen)
 
-- Storage engine (`pcp_storage_engine`, criteria in §10); exact schema /
-  column names; migration tooling.
+- **Production** storage engine (`pcp_storage_engine`, criteria in §10) — the
+  *local* control-plane storage sequencing is decided (Option A, §10); exact
+  schema / column names; migration tooling.
 - Exact polling intervals and per-capability default cadences.
 - Specific SNMP MIBs/OIDs, SNMP library, trap/inform transport.
 - UI framework (none — the one-inline-script invariant stands) and exact
@@ -760,14 +764,28 @@ outcome is stated here. Nothing else in this document changes.
 | `pcp_auto_enrollment_policy` | **DECIDED FOR THE CURRENT HORIZON — no automatic persistent enrollment.** No discovery or "trusted source" may create a persistent enrolled device. Manual and candidate enrollment both require positive identity evidence, operator preview and explicit confirmation. A future auto-enrollment capability requires a **new** Product Owner decision; "not now" is not a permanent prohibition |
 | `pcp_storage_engine` | **UNCHANGED — still OPEN, and now explicitly production-scoped.** The *local* control-plane storage sequencing is a **separate, decided** question (§10 amendment below): the `PCP.1` registry stays filesystem JSON and new local control-plane metadata uses SQLite under the `M4` contract. **SQLite is not selected as the production engine**, and this local decision does not pre-empt `pcp_storage_engine`, which still decides with `DEV.4.6` migrations/roles |
 
-### OPEN DECISIONS (Product Owner; tracked in `project/roadmap.json` `open_decisions`)
+### DECISION HISTORY — questions as originally posed (superseded; see the DECIDED block above)
 
-| id | Question | Recommendation | Decide by |
+**Not an open-decisions table.** Three of these four ids were decided in full
+by the `DECIDED 2026-09-05` block above; the fourth (`pcp_storage_engine`) was
+narrowed to the production-only question that block states. Kept here only for
+the original question framing and the options considered — the **Recommendation
+was accepted** (`pcp_console_registry_write_gate`'s original option (c),
+`pcp_first_contact_trust_policy`'s recommendation, and
+`pcp_auto_enrollment_policy`'s "not in the first slices"), except that
+`pcp_console_registry_write_gate`'s original `PCP.4`-contract-review gate was
+overtaken by the 2026-09-05 architecture freeze deciding it directly. None of
+the rows below describes a currently open question; **the genuinely open
+`pcp_storage_engine` (production engine) and the new `pcp_server_enrollment_exposure`
+(production enrollment exposure) are tracked in `project/roadmap.json`
+`open_decisions`, not here.**
+
+| id | Original question | Original recommendation | Originally to decide by |
 | --- | --- | --- | --- |
-| `pcp_console_registry_write_gate` | May the loopback console accept *any* enrollment write — manual (endpoint + credential reference) **or** candidate-based (closed `candidate_id[]` from a prior discovery run) — before `DEPLOY.1A`, given `CON.0` §4's wording and the `inventory_exclusions_management_ui_backend` precedent that a persistent product-state write controlling which devices get polled waits for `DEPLOY.1A`? A closed candidate id narrows *what* could be written, not *whether* a pre-`DEPLOY.1A` write is authorized — the two enrollment intents raise the same authorization question and are decided together, not separately. | No pre-decision for either intent. Three options for the `PCP.4` review: (a) neither ships from the console before `DEPLOY.1A` — both stay CLI-first through `PCP.1`/`PCP.2`; (b) candidate-based enrollment only, permitted pre-`DEPLOY.1A` on the strength of the closed candidate id plus typed confirmation + audit record, manual entry still waits; (c) both permitted pre-`DEPLOY.1A` with typed confirmation + audit record + mandatory strict first-contact trust preflight for any resulting device. Recommendation deferred to the security lead's reading of the exclusions precedent; **CLI-only enrollment in `PCP.1`/`PCP.2` does not depend on this decision and proceeds regardless.** | `PCP.4` contract review |
-| `pcp_auto_enrollment_policy` | Should a future opt-in "trusted management source auto-enrolls" policy exist, and under what audit/allowlist? | Not in the first slices; design only after `PCP.2` shows real candidate volume; default stays explicit | `PCP.2` closure |
-| `pcp_storage_engine` | Which engine backs the registry/job plane in production, against the §10 criteria? | Defer; keep the eighth `evidence_backend` concern filesystem-first; decide with `DEV.4.6` migrations/roles | `PCP.5` contract freeze |
-| `pcp_first_contact_trust_policy` | Must the first-contact job for a *manually* enrolled endpoint require strict host-key / CA trust even in the local development profile, to prevent credential exposure to a mistyped or hostile endpoint? | **Yes for any endpoint not corroborated by a management-plane candidate**; compat mode stays available only for candidate-corroborated endpoints in the dev profile | `PCP.2` contract review |
+| `pcp_console_registry_write_gate` (decided) | May the loopback console accept *any* enrollment write — manual (endpoint + credential reference) **or** candidate-based (closed `candidate_id[]` from a prior discovery run) — before `DEPLOY.1A`, given `CON.0` §4's wording and the `inventory_exclusions_management_ui_backend` precedent that a persistent product-state write controlling which devices get polled waits for `DEPLOY.1A`? A closed candidate id narrows *what* could be written, not *whether* a pre-`DEPLOY.1A` write is authorized — the two enrollment intents raise the same authorization question and are decided together, not separately. | Three options were named: (a) neither ships pre-`DEPLOY.1A`; (b) candidate-based only; (c) both, with typed confirmation, audit record and mandatory strict first-contact trust preflight. **(c) was adopted**, with seventeen conditions spelled out in the companion contract §9.1 | `PCP.4` contract review — superseded by the 2026-09-05 freeze deciding it directly |
+| `pcp_auto_enrollment_policy` (decided for the current horizon) | Should a future opt-in "trusted management source auto-enrolls" policy exist, and under what audit/allowlist? | Not in the first slices; design only after `PCP.2` shows real candidate volume; default stays explicit — **adopted as stated** | `PCP.2` closure |
+| `pcp_storage_engine` (narrowed; production question stays open) | Which engine backs the registry/job plane in production, against the §10 criteria? | Defer; keep the eighth `evidence_backend` concern filesystem-first; decide with `DEV.4.6` migrations/roles — **still the live recommendation for the now-narrower production-only question** | `PCP.5` contract freeze |
+| `pcp_first_contact_trust_policy` (decided) | Must the first-contact job for a *manually* enrolled endpoint require strict host-key / CA trust even in the local development profile, to prevent credential exposure to a mistyped or hostile endpoint? | **Yes for any endpoint not corroborated by a management-plane candidate** — **adopted, then generalized 2026-09-05 to every endpoint including candidates** (companion contract §9.3) | `PCP.2` contract review |
 
 ---
 

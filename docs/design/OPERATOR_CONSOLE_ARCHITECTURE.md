@@ -339,14 +339,25 @@ The "living product" feeling arrives at `CON.2`, and nothing up to and including
    §22 item 1)** — the device experience and first-run onboarding described
    there (`PCP.4`) are `CON.x` surface work under this document, extended
    with a registry-driven experience; nothing in §3 ("what this is not"),
-   §4 (the intent boundary), §6 (payload parity), §7 (security model) or
-   §10 (phasing) is relaxed. **Neither the manual-enrollment intent nor the
-   candidate-id enrollment intent is added to §4 as an authorized write** —
-   both are recorded as pending the `pcp_console_registry_write_gate` open
-   decision, whichever way that decision lands. A closed candidate id is a
-   *narrower* input than a free-typed endpoint; it is not, by itself, an
-   authorization for a persistent product-state write to reach the console
-   before `DEPLOY.1A`. All prohibitions in this document stand unrelaxed.
+   §6 (payload parity), §7 (security model) or §10 (phasing) is relaxed
+   beyond what item 5 below states for §4/§7. This amendment's own
+   "pending `pcp_console_registry_write_gate`" framing was superseded the
+   same day by item 5.
+5. **Amendment (`CON.0` §4.1/§7 rule 11, 2026-09-05, `LOCAL_CONTROL_PLANE_
+   RUNTIME_AND_ENROLLMENT.md` §9.1/§9.2, FROZEN)** — `pcp_console_registry_write_gate`
+   is **decided**: both the manual-enrollment intent and the candidate-id
+   enrollment intent **are** now authorized writes under §4.1's closed typed
+   enrollment intent, but **only** in the explicitly controlled loopback
+   runtime profile and only once every condition in §4.1 is implemented
+   (movement `M9`). A closed candidate id remains a *narrower* input than a
+   free-typed endpoint, and receives **no automatic-write exemption** — the
+   same confirmation, audit and trust conditions apply to both. Server/
+   production exposure of either intent is a **separate, still-open** gate
+   (`pcp_server_enrollment_exposure`) and stays blocked until `DEPLOY.1A`
+   supplies real OIDC/RBAC. Every other prohibition in this document —
+   including the command/argv boundary in §4 and the closed job registry —
+   stands unrelaxed; this amendment widens nothing beyond the enrollment
+   intent it names.
 
 ## 13. Risks
 
