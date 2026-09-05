@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "current_build": "op2_c1_admin_down_pnote_safety_corrections",
+  "current_build": "op2_c_cp_clusterxl_preflight_eligibility_wiring",
   "current_track": "OP.x",
   "progress_contract": "Weighted acceptance-criterion completion. Percentages describe the declared roadmap, not calendar time or delivery ETA.",
   "tracks": [
@@ -123,9 +123,9 @@
   "now_next": {
     "horizon_contract": "NOW is exactly one build. NEXT is exactly one. Everything else is an `upcoming` row carrying its own true status: planned = AFTER, blocked = waiting on a named external gate, deferred = consciously postponed. `now.build` must equal the newest project/build_history.json record -- utils.project_plan enforces it.",
     "now": {
-      "build": "op2_c1_admin_down_pnote_safety_corrections",
-      "title": "OP.2.C1 - admin_down pnote evidence safety corrections (PR #76 + ambiguous-name follow-up)",
-      "goal": "Two narrow, in-module safety corrections over op2_c1_cp_clusterxl_member_session's first-cut evidence handling in checkpoint/clusterxl_member_session.py and checkpoint/clusterxl_capability_adapter.py -- exact admin_down pnote identification by name (never CP-A5's aggregate any_problem fact), fail-closed UNKNOWN (not HOLDS) for a failback on missing A5 evidence, both role AND pnote signals required for failover/failback postcondition resolution, and CONFIRMED_NOT_SENT narrowed to only a provably unopened session. This follow-up additionally fails closed to None (not False) when a problem-state pnote row carries no usable device name, since that row could itself be admin_down. Preserves the frozen OP.2 lifecycle, exactly-one-submission/no-retry, persistent Expert-session reuse, and CLASS 2 non-reachability verbatim.",
+      "build": "op2_c_cp_clusterxl_preflight_eligibility_wiring",
+      "title": "OP.2.C follow-up - real CP ClusterXL PreflightProvider/EligibilityEvaluator wiring",
+      "goal": "checkpoint/clusterxl_preflight_provider.py wires the typed PreflightProvider/EligibilityEvaluator seams (utils/operate/eligibility.py) to the already-approved checkpoint.preflight_collector.run_cp_preflight battery and the canonical utils.failover.compute_ha_readiness projection -- no second readiness engine. Produces the same-action, same-entity PreflightSnapshot and the adapter's required check_statuses (opaque subject/peer member tokens, cluster mode, honest UNKNOWN recovery mode) with fail-closed behaviour on missing/ambiguous evidence. Preserves authorization DENY, CLASS 2 non-reachability, fresh same-workflow preflight (P4), and every OP.2 lifecycle/mutation law verbatim; adds no production entry point, adapter resolver, UI, trust change, or device command.",
       "status": "automated_validated",
       "started": "2026-09-05",
       "completed": "2026-09-05"
@@ -140,7 +140,8 @@
         "CLOSED 2026-09-05 (op2_c1_cp_clusterxl_member_session): the real ClusterXLMemberSession is now implemented (checkpoint/clusterxl_member_session.py::RealClusterXLMemberSession) over the existing per-member MemberSession transport, unit-tested (tests/test_op2_c1_cp_clusterxl_member_session.py), and unwired -- CLASS 2 still structurally unreachable.",
         "Still blocked on: DEPLOY.1A OIDC boundary + RBAC OPERATE role (authorize() is still unconditional DENY; no PermitAllAuthorizer exists outside tests); cp_production_ssh_host_key_trust_hardening (P0 before CLASS 2); the signed change-management/network-security review (FAILOVER_ENGINE_ARCHITECTURE.md section 10); a real PreflightProvider/EligibilityEvaluator supplying the check_statuses facts (cluster_mode, subject/peer member tokens, recovery_mode) the adapter's contract expects; a protected CLI/console entry point that actually constructs an ActionCoordinator with a real adapter_resolver, using RealClusterXLMemberSession as its session_resolver target.",
         "Recommended: Sonnet 5, normal for the remaining wiring items (deterministic against a now-frozen adapter contract); Sonnet 5, extended thinking (high) only for a genuine new decision inside the authorization/trust-model gates.",
-        "Detail: docs/history/phase/OP_2_1B_CP_PILOT_READINESS_POLICY_AMENDMENT.md \"Exact next step toward OP.2.C\"; checkpoint/clusterxl_capability_adapter.py and checkpoint/clusterxl_member_session.py module docstrings."
+        "Detail: docs/history/phase/OP_2_1B_CP_PILOT_READINESS_POLICY_AMENDMENT.md \"Exact next step toward OP.2.C\"; checkpoint/clusterxl_capability_adapter.py and checkpoint/clusterxl_member_session.py module docstrings.",
+        "CLOSED 2026-09-05 (op2_c_cp_clusterxl_preflight_eligibility_wiring): a real PreflightProvider/EligibilityEvaluator now exists (checkpoint/clusterxl_preflight_provider.py::ClusterXLPreflightProvider/ClusterXLReadinessEligibilityEvaluator), wired to run_cp_preflight + compute_ha_readiness, unit-tested (tests/test_op2_c_cp_clusterxl_real_preflight_wiring.py), and unwired -- CLASS 2 still structurally unreachable. Still blocked on: DEPLOY.1A OIDC boundary + RBAC OPERATE role; cp_production_ssh_host_key_trust_hardening; the signed change-management/network-security review; a protected CLI/console entry point that actually constructs an ActionCoordinator with a real adapter_resolver, using RealClusterXLMemberSession as its session_resolver target and ClusterXLPreflightProvider/ClusterXLReadinessEligibilityEvaluator as its preflight_provider/eligibility_evaluator."
       ]
     },
     "upcoming": [
