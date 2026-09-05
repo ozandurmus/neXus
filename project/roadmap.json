@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0",
-  "current_build": "op2_c_change_management_review_package_draft",
-  "current_track": "OP.x",
+  "current_build": "product_control_plane_architecture_draft",
+  "current_track": "PCP.x",
   "progress_contract": "Weighted acceptance-criterion completion. Percentages describe the declared roadmap, not calendar time or delivery ETA.",
   "tracks": [
     {
@@ -118,35 +118,64 @@
         "operator_console_operational_actions",
         "operator_console_scheduler_view"
       ]
+    },
+    {
+      "id": "PCP.x",
+      "title": "Product Control Plane (persistent registry, enrollment, capabilities, typed jobs)",
+      "theme": "OPERATE",
+      "status": "planned",
+      "weight": 15,
+      "feature_ids": [
+        "device_registry_enrollment_foundation",
+        "management_plane_enrollment_providers",
+        "capability_resolution_module_activation",
+        "control_plane_console_experience",
+        "typed_job_plane_current_projections",
+        "independent_capability_jobs",
+        "fast_telemetry_plane",
+        "diagnostic_runbooks"
+      ]
     }
   ],
   "now_next": {
     "horizon_contract": "NOW is exactly one build. NEXT is exactly one. Everything else is an `upcoming` row carrying its own true status: planned = AFTER, blocked = waiting on a named external gate, deferred = consciously postponed. `now.build` must equal the newest project/build_history.json record -- utils.project_plan enforces it.",
     "now": {
-      "build": "op2_c_change_management_review_package_draft",
-      "title": "OP.2.C - draft the signed change-management/network-security review package",
-      "goal": "Docs-only compilation of the frozen OP.2.0 architecture, FAILOVER_ENGINE_ARCHITECTURE.md section 10/10.2 reconciliation, OP.2.1 CP ClusterXL mutation command gate, OP.2.1b readiness-policy amendment, and the implemented-but-unwired adapter/session/preflight-provider trio into one review package (docs/history/phase/OP_2_C_CHANGE_MANAGEMENT_NETWORK_SECURITY_REVIEW.md) ready for product-owner and network-security-lead sign-off. No code, taxonomy, Authorizer, adapter wiring, UI, device command, or test touched; no frozen decision reopened; no sign-off performed by this build.",
-      "status": "done",
-      "started": "2026-09-05",
-      "completed": "2026-09-05"
+      "build": "product_control_plane_architecture_draft",
+      "title": "PCP.0 - Product Control Plane architecture (DRAFT, pending Product Owner review)",
+      "goal": "Promote the previously parked Product Control Plane direction into one design-parent document (docs/design/PRODUCT_CONTROL_PLANE_ARCHITECTURE.md): target architecture and product boundary, four-layer truth model, identity layering (device_id vs canonical_id vs entity_id vs operational_entity_id), Device Registry, candidate-first enrollment, capability resolution, typed job plane, persistence seam with the storage-engine decision deferred to recorded criteria, capability-driven backup, device != failover unit, console first-run/device experience, SNMPv3 and Diagnostic Runbook slots, reconciliation with main ff700e38 (one genuine contradiction isolated to manual enrollment from the console; everything else a superseded implementation assumption or no conflict), the PCP.0-PCP.8 movement sequence and the bounded PCP.1 contract. Docs/state only: no code, taxonomy, console route, device command, schema or UI change; no frozen OP.2/CLASS 2, CON.x or RB.x decision reopened. Merge to main blocked pending Product Owner review.",
+      "status": "in_progress",
+      "started": "2026-09-05"
     },
     "next": {
-      "build": "op2_c_cp_clusterxl_adapter_scoping",
-      "title": "OP.2.C - CP ClusterXL vendor adapter scoping",
-      "status": "blocked",
+      "build": "pcp_1_device_registry_manual_enrollment_foundation",
+      "title": "PCP.1 - Persistent Device Registry + manual enrollment foundation (CLI, filesystem backend, tests)",
+      "status": "planned",
       "notes": [
-        "Promoted 2026-09-05 (OP.2.1b readiness-policy-amendment session): with D-V7b/D-F3/D-F2 no longer blocking the readiness roll-up, the readiness gate is no longer the reason OP.2.C cannot start -- authorization/trust/adapter/change-management are.",
-        "Adapter itself now IMPLEMENTED + unit-tested (checkpoint/clusterxl_capability_adapter.py, tests/test_op2_c_cp_clusterxl_adapter.py): typed capability()/build_plan()/check_precondition()/execute_once()/observe_postcondition() for the two APPROVED_FOR_OP2C primitives (CP-M1 clusterXL_admin down, CP-M1-R clusterXL_admin up), exercised end-to-end through the real ActionCoordinator with fakes only. Wired into no production adapter_resolver -- CLASS 2 stays structurally unreachable (DenyAllAuthorizer unchanged, no taxonomy member).",
-        "CLOSED 2026-09-05 (op2_c1_cp_clusterxl_member_session): the real ClusterXLMemberSession is now implemented (checkpoint/clusterxl_member_session.py::RealClusterXLMemberSession) over the existing per-member MemberSession transport, unit-tested (tests/test_op2_c1_cp_clusterxl_member_session.py), and unwired -- CLASS 2 still structurally unreachable.",
-        "Still blocked on: DEPLOY.1A OIDC boundary + RBAC OPERATE role (authorize() is still unconditional DENY; no PermitAllAuthorizer exists outside tests); cp_production_ssh_host_key_trust_hardening (P0 before CLASS 2); the signed change-management/network-security review (FAILOVER_ENGINE_ARCHITECTURE.md section 10); a real PreflightProvider/EligibilityEvaluator supplying the check_statuses facts (cluster_mode, subject/peer member tokens, recovery_mode) the adapter's contract expects; a protected CLI/console entry point that actually constructs an ActionCoordinator with a real adapter_resolver, using RealClusterXLMemberSession as its session_resolver target.",
-        "DRAFTED 2026-09-05 (op2_c_change_management_review_package_draft): docs/history/phase/OP_2_C_CHANGE_MANAGEMENT_NETWORK_SECURITY_REVIEW.md compiles the change-management/network-security review package -- unsigned. Sign-off (Product Owner + Network Security Lead, both blank) remains EXTERNAL_SIGN_OFF_REQUIRED and is not this build's action. Drafting it does not unblock DEPLOY.1A, SSH trust hardening, or the protected entry point, all still OPEN_RELEASE_GATE.",
-        "Recommended: Sonnet 5, normal for the remaining wiring items (deterministic against a now-frozen adapter contract); Sonnet 5, extended thinking (high) only for a genuine new decision inside the authorization/trust-model gates.",
-        "Detail: docs/history/phase/OP_2_1B_CP_PILOT_READINESS_POLICY_AMENDMENT.md \"Exact next step toward OP.2.C\"; checkpoint/clusterxl_capability_adapter.py and checkpoint/clusterxl_member_session.py module docstrings.",
-        "CLOSED 2026-09-05 (op2_c_cp_clusterxl_preflight_eligibility_wiring): a real PreflightProvider/EligibilityEvaluator now exists (checkpoint/clusterxl_preflight_provider.py::ClusterXLPreflightProvider/ClusterXLReadinessEligibilityEvaluator), wired to run_cp_preflight + compute_ha_readiness, unit-tested (tests/test_op2_c_cp_clusterxl_real_preflight_wiring.py), and unwired -- CLASS 2 still structurally unreachable. Still blocked on: DEPLOY.1A OIDC boundary + RBAC OPERATE role; cp_production_ssh_host_key_trust_hardening; the signed change-management/network-security review; a protected CLI/console entry point that actually constructs an ActionCoordinator with a real adapter_resolver, using RealClusterXLMemberSession as its session_resolver target and ClusterXLPreflightProvider/ClusterXLReadinessEligibilityEvaluator as its preflight_provider/eligibility_evaluator.",
-        "op2_c_release_gate_dependency_scoping session (2026-09-05, ARCHITECTURE, read-only): classified the four remaining production-reachability gates named in CURRENT_STATE.md's blocker list. DEPLOY.1A OIDC+RBAC and cp_production_ssh_host_key_trust_hardening are both externally blocked -- the latter's own backlog.json target field reads 'production container/pod runtime hardening (post-DEPLOY.1)', i.e. it shares DEPLOY.1's external server-availability blocker rather than being separately closable. The signed change-management/network-security review (FAILOVER_ENGINE_ARCHITECTURE.md section 10) has no drafted artifact anywhere in the repository yet, unlike its sibling per-primitive network-device command gate (OP.2.1, already DRAFTED); its final sign-off is organizational/external (network-security leads), but the review package itself can be drafted now with zero code, zero server, zero device contact -- the one item in this blocker set that is engineering-actionable today. The protected production entry point + live adapter_resolver construction is dependent on DEPLOY.1A and the SSH-trust hardening both landing first (a live adapter_resolver pointed at RealClusterXLMemberSession in a genuinely production context needs both the auth boundary and the hardened transport in place); it stays explicitly out of scope for any build before then -- 'no production ActionCoordinator/adapter resolver/entry point' stays the correct framing, not something this session weakened. Selected smallest next build: op2_c_change_management_review_package_draft (new upcoming row, below) -- drafting only, no sign-off, no code. No stale JSON/CURRENT_STATE.md contradiction found; cp_device_interaction_safety's already-CLOSED status (backlog.json, 2026-08-25) correctly stays outside today's four-gate blocker set."
+        "Starts only after the Product Owner reviews docs/design/PRODUCT_CONTROL_PLANE_ARCHITECTURE.md and its status line becomes FROZEN; section 21 of that document is PCP.1's contract (objective, in-scope items, AC-1..AC-9, explicit non-goals, affected authority files, validation ladder).",
+        "Scope: utils/device_registry.py (DeviceRecord with opaque device_id, endpoints, vendor {checkpoint,paloalto,unknown} + classification_basis, credential profile *reference* never a secret, enrollment_source=manual, lifecycle ENROLLED_UNVERIFIED/DISABLED/RETIRED reachable, CONTACT_VERIFIED/OBSERVED defined but unreachable); an eighth utils/evidence_backend.py concern DeviceRegistryBackend with the filesystem implementation only (data/state/device_registry.json); main.py --registry-enroll / --registry-list / --registry-disable maintenance modes with no credential resolution, no network, no vendor import; tests/test_pcp1_device_registry.py.",
+        "Explicit non-goals: no enrollment providers/candidates/first-contact job or any device contact (PCP.2); no capability projection (PCP.3); no console/report UI or payload change (PCP.4); no job definitions or scheduler change (PCP.5); no PostgreSQL backend/schema/migration (pcp_storage_engine open); no console job-target vocabulary change; no credential storage or vault; no OP.2, RB.x or CON.x change.",
+        "Ceiling status AUTOMATED_VALIDATED (no device contact, no real-env validation owed). Backend + CLI only -- a normal run produces no visible UI change.",
+        "Recommended: Sonnet 5, normal reasoning -- deterministic implementation against the frozen section 21; escalate only if the Product Owner reopens the identity-layering or lifecycle vocabulary at the freeze review."
       ]
     },
     "upcoming": [
+      {
+        "build": "op2_c_cp_clusterxl_adapter_scoping",
+        "title": "OP.2.C - CP ClusterXL vendor adapter scoping",
+        "status": "blocked",
+        "notes": [
+          "Promoted 2026-09-05 (OP.2.1b readiness-policy-amendment session): with D-V7b/D-F3/D-F2 no longer blocking the readiness roll-up, the readiness gate is no longer the reason OP.2.C cannot start -- authorization/trust/adapter/change-management are.",
+          "Adapter itself now IMPLEMENTED + unit-tested (checkpoint/clusterxl_capability_adapter.py, tests/test_op2_c_cp_clusterxl_adapter.py): typed capability()/build_plan()/check_precondition()/execute_once()/observe_postcondition() for the two APPROVED_FOR_OP2C primitives (CP-M1 clusterXL_admin down, CP-M1-R clusterXL_admin up), exercised end-to-end through the real ActionCoordinator with fakes only. Wired into no production adapter_resolver -- CLASS 2 stays structurally unreachable (DenyAllAuthorizer unchanged, no taxonomy member).",
+          "CLOSED 2026-09-05 (op2_c1_cp_clusterxl_member_session): the real ClusterXLMemberSession is now implemented (checkpoint/clusterxl_member_session.py::RealClusterXLMemberSession) over the existing per-member MemberSession transport, unit-tested (tests/test_op2_c1_cp_clusterxl_member_session.py), and unwired -- CLASS 2 still structurally unreachable.",
+          "Still blocked on: DEPLOY.1A OIDC boundary + RBAC OPERATE role (authorize() is still unconditional DENY; no PermitAllAuthorizer exists outside tests); cp_production_ssh_host_key_trust_hardening (P0 before CLASS 2); the signed change-management/network-security review (FAILOVER_ENGINE_ARCHITECTURE.md section 10); a real PreflightProvider/EligibilityEvaluator supplying the check_statuses facts (cluster_mode, subject/peer member tokens, recovery_mode) the adapter's contract expects; a protected CLI/console entry point that actually constructs an ActionCoordinator with a real adapter_resolver, using RealClusterXLMemberSession as its session_resolver target.",
+          "DRAFTED 2026-09-05 (op2_c_change_management_review_package_draft): docs/history/phase/OP_2_C_CHANGE_MANAGEMENT_NETWORK_SECURITY_REVIEW.md compiles the change-management/network-security review package -- unsigned. Sign-off (Product Owner + Network Security Lead, both blank) remains EXTERNAL_SIGN_OFF_REQUIRED and is not this build's action. Drafting it does not unblock DEPLOY.1A, SSH trust hardening, or the protected entry point, all still OPEN_RELEASE_GATE.",
+          "Recommended: Sonnet 5, normal for the remaining wiring items (deterministic against a now-frozen adapter contract); Sonnet 5, extended thinking (high) only for a genuine new decision inside the authorization/trust-model gates.",
+          "Detail: docs/history/phase/OP_2_1B_CP_PILOT_READINESS_POLICY_AMENDMENT.md \"Exact next step toward OP.2.C\"; checkpoint/clusterxl_capability_adapter.py and checkpoint/clusterxl_member_session.py module docstrings.",
+          "CLOSED 2026-09-05 (op2_c_cp_clusterxl_preflight_eligibility_wiring): a real PreflightProvider/EligibilityEvaluator now exists (checkpoint/clusterxl_preflight_provider.py::ClusterXLPreflightProvider/ClusterXLReadinessEligibilityEvaluator), wired to run_cp_preflight + compute_ha_readiness, unit-tested (tests/test_op2_c_cp_clusterxl_real_preflight_wiring.py), and unwired -- CLASS 2 still structurally unreachable. Still blocked on: DEPLOY.1A OIDC boundary + RBAC OPERATE role; cp_production_ssh_host_key_trust_hardening; the signed change-management/network-security review; a protected CLI/console entry point that actually constructs an ActionCoordinator with a real adapter_resolver, using RealClusterXLMemberSession as its session_resolver target and ClusterXLPreflightProvider/ClusterXLReadinessEligibilityEvaluator as its preflight_provider/eligibility_evaluator.",
+          "op2_c_release_gate_dependency_scoping session (2026-09-05, ARCHITECTURE, read-only): classified the four remaining production-reachability gates named in CURRENT_STATE.md's blocker list. DEPLOY.1A OIDC+RBAC and cp_production_ssh_host_key_trust_hardening are both externally blocked -- the latter's own backlog.json target field reads 'production container/pod runtime hardening (post-DEPLOY.1)', i.e. it shares DEPLOY.1's external server-availability blocker rather than being separately closable. The signed change-management/network-security review (FAILOVER_ENGINE_ARCHITECTURE.md section 10) has no drafted artifact anywhere in the repository yet, unlike its sibling per-primitive network-device command gate (OP.2.1, already DRAFTED); its final sign-off is organizational/external (network-security leads), but the review package itself can be drafted now with zero code, zero server, zero device contact -- the one item in this blocker set that is engineering-actionable today. The protected production entry point + live adapter_resolver construction is dependent on DEPLOY.1A and the SSH-trust hardening both landing first (a live adapter_resolver pointed at RealClusterXLMemberSession in a genuinely production context needs both the auth boundary and the hardened transport in place); it stays explicitly out of scope for any build before then -- 'no production ActionCoordinator/adapter resolver/entry point' stays the correct framing, not something this session weakened. Selected smallest next build: op2_c_change_management_review_package_draft (new upcoming row, below) -- drafting only, no sign-off, no code. No stale JSON/CURRENT_STATE.md contradiction found; cp_device_interaction_safety's already-CLOSED status (backlog.json, 2026-08-25) correctly stays outside today's four-gate blocker set.",
+          "Moved from now_next.next to upcoming 2026-09-05 (product_control_plane_architecture_draft session): not a demotion of any completed OP.2 work and not a change to its blockers -- this row stays blocked on DEPLOY.1 (external) exactly as recorded above; it leaves 'next' only because the horizon contract reserves 'next' for one actionable build, and the Product Control Plane's first movement (PCP.1) is actionable on the laptop without the server. OP.2.D's console flow is expected to live on the PCP.4 device/HA tab so a second console is never built (docs/design/PRODUCT_CONTROL_PLANE_ARCHITECTURE.md section 16/20)."
+        ]
+      },
       {
         "build": "op0b_0_close_d_v3a_d_v7b_pre_class2",
         "title": "OP.0b.0 - close D-V3a/D-V7b vendor facts (not a readiness-policy gate any more)",
@@ -286,14 +315,16 @@
     "OP.x Controlled Failover is the first OPERATE-theme work; architecture in docs/design/FAILOVER_ENGINE_ARCHITECTURE.md; open decisions tracked in this file's open_decisions. The write-free parts need only a reachable test CP + PAN cluster (a laptop run is sufficient): OP.0 (HA readiness / failover-safety assessment + SCC dashboard, a read-only VERIFY-plane feature) and OP.1 (dry-run plan compiler). OP.2 controlled execution is hard-gated on mature VERIFY/TRACE/RECOVER, the DEPLOY.1A OIDC boundary + an RBAC OPERATE role + full audit, the CP device-interaction-safety audit, the network-device command gate for the new read and write primitives, and a signed change-management / safety review with the network-security leads. OP.2.0 (docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md) froze the vendor-independent CLASS 2 architecture on 2026-09-04; CLASS 2 stays not implemented and not reachable until the OP.2.C prerequisites are met.",
     "Compliance control assignment, CIS/PCI-DSS/BDDK framework grouping and the coverage/alignment roll-up are designed in docs/design/COMPLIANCE_ASSIGNMENT_AND_FRAMEWORKS.md with an explicit now vs DEPLOY.1 split. 0.7.1 (compliance_control_enrichment) delivers the file-based policy + versioned control catalog + read-only Compliance workbench spine + Overview roll-up - no server. The UI assignment editor and a tagged device registry (compliance_assignment_ui_and_registry) are DEPLOY.1-gated on the app server + DEPLOY.1A OIDC/RBAC + a store.",
     "User-authored compliance checks (the BackBox/Nipper 'define a check: name + evidence + expected pattern -> compliant/not' model) are designed in docs/design/COMPLIANCE_CHECK_ENGINE.md - all decision points D1-D16 resolved 2026-08-29 (design doc section 10). Phased: CE.1 (compliance_check_engine, target 0.7.3) is a data-driven assertion engine + fail-closed RuntimeRoot check pack (data/state/compliance_checks.json) over ALREADY-collected evidence - no new device command, no server; CE.2 (compliance_check_engine_primitives) adds a curated, individually gate-reviewed read-only command-primitive registry - cp_device_interaction_safety (P0) itself closed 2026-08-25, so the remaining gate is per-primitive review through the network-device command gate plus a real-environment validation gate; CE.3 (compliance_check_engine_ui) adds the UI check editor + signed distributable org packs, DEPLOY.1A OIDC/RBAC + store; CE.4 (compliance_remediation_checks) adds an optional write-capable remediation block, hard-gated on the OP.2 / FAILOVER_ENGINE_ARCHITECTURE.md section 10 bar. Arbitrary user-supplied command strings are never executed in any phase. No certification claim.",
-    "Product trajectory (owner, 2026-08-29): the stated end-state is a WRITE-CAPABLE device administration platform; current read-only maturity is a deliberate staging phase on SEE->VERIFY->TRACE->RECOVER->OPERATE, not the ceiling. Binding design consequence on every VERIFY-plane design (control catalog, check engine, alignment, crypto posture): shape the models so a future enforce/remediate capability is an ADDITIVE layer, never a rework - e.g. a check reserves an optional remediation block (rejected by the CE.1 validator), the primitive registry is the single chokepoint for a future write primitive (mode:write + the full OP.2 gate stack), and the verify_after re-check reuses the read grammar verbatim. Write/change automation stays outside the roadmap gate until VERIFY/TRACE/RECOVER are mature AND the OP.2-class safety bar is met."
+    "Product trajectory (owner, 2026-08-29): the stated end-state is a WRITE-CAPABLE device administration platform; current read-only maturity is a deliberate staging phase on SEE->VERIFY->TRACE->RECOVER->OPERATE, not the ceiling. Binding design consequence on every VERIFY-plane design (control catalog, check engine, alignment, crypto posture): shape the models so a future enforce/remediate capability is an ADDITIVE layer, never a rework - e.g. a check reserves an optional remediation block (rejected by the CE.1 validator), the primitive registry is the single chokepoint for a future write primitive (mode:write + the full OP.2 gate stack), and the verify_after re-check reuses the read grammar verbatim. Write/change automation stays outside the roadmap gate until VERIFY/TRACE/RECOVER are mature AND the OP.2-class safety bar is met.",
+    "Product Control Plane (owner direction promoted 2026-09-05): neXus moves from a discovery-driven collection workflow toward a persistent product control plane -- Device Registry with explicit enrollment (discovery becomes an enrollment source, not the device universe), capability-driven modules, independent typed jobs, last-known projections with honest freshness, and the Operator Console's first-run/device experience. Design parent: docs/design/PRODUCT_CONTROL_PLANE_ARCHITECTURE.md (DRAFT pending PO review). Track PCP.x; movements PCP.1-PCP.8; PCP.1-PCP.4 are not blocked on DEPLOY.1. Existing collectors, readiness authority, evidence stores, console foundations and vendor adapters become control-plane capabilities by being addressed through the registry, never rewritten. It preserves every frozen OP.2/CLASS 2, CON.x and RB.x law, adds no generic cross-vendor mutation primitive, and is not a substitute for DEPLOY.1 (nor DEPLOY.1 for it)."
   ],
   "architecture_review_notes": [
     "2026-08-25 architecture review: event-driven webhook, crypto/PQC readiness, DEPLOY.1 OIDC boundary and contextual TI enrichment evaluated for CP/PAN scope.",
     "Vendor scope intentionally limited to Check Point and Palo Alto; no additional vendors will be added at current maturity.",
     "Webhook signal is a read-only collection trigger only; it must never carry collector commands, device credentials or authoritative topology.",
     "TI enrichment operates on normalized findings only; raw configuration, full topology and real IP ranges must not leave the evidence boundary.",
-    "2026-08-31 productization review: retain one worker and the static report while moving to the first server. Do not introduce a generic API around main.py, browser-supplied device commands, per-vendor workers, object storage or Kubernetes until a tested operational need appears. Server-only controls are recorded in docs/design/SERVER_PRODUCTIZATION_AND_MODULARIZATION_ARCHITECTURE.md."
+    "2026-08-31 productization review: retain one worker and the static report while moving to the first server. Do not introduce a generic API around main.py, browser-supplied device commands, per-vendor workers, object storage or Kubernetes until a tested operational need appears. Server-only controls are recorded in docs/design/SERVER_PRODUCTIZATION_AND_MODULARIZATION_ARCHITECTURE.md.",
+    "2026-09-05 Product Control Plane architecture promotion: reconciled the parked product direction against main ff700e38. One genuine contradiction found and isolated (manual enrollment from the console vs OPERATOR_CONSOLE_ARCHITECTURE.md section 4 wording + the exclusions-write DEPLOY.1A precedent -> open decision pcp_console_registry_write_gate); the discovery-is-the-universe and workflow-is-a-whole-plane assumptions are superseded implementation assumptions, not laws. Storage engine, intervals, MIBs, schema names, UI framework and scheduler technology deliberately not frozen."
   ],
   "engineering_tracks": [
     {
@@ -853,6 +884,56 @@
       "decide_by": "OP.2.0 contract freeze",
       "decision": "Quarantine until acknowledged. After the mutation boundary is crossed, process death, worker death, transport timeout or a lost response is OUTCOME_UNKNOWN -- never merely FAILED -- unless independent evidence proves a more specific terminal outcome. The entity stays quarantined (a derived predicate over the unacknowledged OUTCOME_UNKNOWN action record, not a lock or entity state) until an explicit, authorized, audited operator acknowledgement; class 0 reads stay permitted; a later observation appends and never rewrites the terminal state. Class 0's sweep_orphaned_running -> failed stays valid for class 0 only; CLASS 2 does not inherit it.",
       "decided_on": "2026-09-04"
+    },
+    {
+      "id": "pcp_console_registry_write_gate",
+      "area": "PCP.x Product Control Plane",
+      "status": "open",
+      "question": "May the loopback Operator Console accept a MANUAL enrollment write (endpoint + credential profile reference, no device contact in-request) before DEPLOY.1A, given OPERATOR_CONSOLE_ARCHITECTURE.md section 4's wording ('the browser never transmits ... a hostname, an address') and the inventory_exclusions_management_ui_backend precedent (product-state writes that control which devices get polled wait for DEPLOY.1A)?",
+      "options": [
+        "candidate-based enrollment now (ids only); manual entry CLI-first, console form after DEPLOY.1A (exclusions precedent verbatim)",
+        "candidate-based enrollment now; manual console form permitted on loopback with typed confirmation + audit record + mandatory strict trust preflight on the first-contact job"
+      ],
+      "recommendation": "Candidate-based enrollment from the console: yes now (fits section 4 literally). Manual entry: CLI-first in PCP.1; decide the console form at the PCP.4 contract review -- option 2 if the security lead accepts confirmation + audit + strict first-contact trust as equivalent controls, otherwise option 1.",
+      "decide_by": "PCP.4 contract review",
+      "note": "The one genuine contradiction found by the 2026-09-05 reconciliation (docs/design/PRODUCT_CONTROL_PLANE_ARCHITECTURE.md section 18). Isolated to a single console intent; no other control-plane element conflicts with a frozen law."
+    },
+    {
+      "id": "pcp_auto_enrollment_policy",
+      "area": "PCP.x Product Control Plane",
+      "status": "open",
+      "question": "Should a future opt-in 'trusted management source auto-enrolls candidates' policy exist, and under what audit/allowlist?",
+      "options": [
+        "never -- explicit enrollment only",
+        "opt-in per management source, audited, allowlisted, default off"
+      ],
+      "recommendation": "Not in the first slices; design only after PCP.2 shows real candidate volume. 'Everything discovered becomes authoritative inventory' is not the default architecture in any case.",
+      "decide_by": "PCP.2 closure"
+    },
+    {
+      "id": "pcp_storage_engine",
+      "area": "PCP.x Product Control Plane",
+      "status": "open",
+      "question": "Which storage engine backs the Device Registry and typed job plane in production, against the criteria recorded in PRODUCT_CONTROL_PLANE_ARCHITECTURE.md section 10 (transactions, migrations, concurrent workers, uniqueness/locking, append/history, retention, structured evidence, deployment topology, backup/recovery of neXus itself, enterprise operation)?",
+      "options": [
+        "extend the existing opt-in PostgreSQL evidence backend",
+        "another engine chosen against the criteria",
+        "filesystem-only until measured need"
+      ],
+      "recommendation": "Defer. Keep the eighth evidence_backend concern filesystem-first; decide together with DEV.4.6 deployment migrations/roles. The existing opt-in Postgres path is a candidate, not a decision.",
+      "decide_by": "PCP.5 contract freeze"
+    },
+    {
+      "id": "pcp_first_contact_trust_policy",
+      "area": "PCP.x Product Control Plane",
+      "status": "open",
+      "question": "Must the first-contact job for a MANUALLY enrolled endpoint require strict CP host-key / PAN CA trust even in the local development profile, so that real credentials are never presented to a mistyped or hostile endpoint?",
+      "options": [
+        "strict trust mandatory for any endpoint not corroborated by a management-plane candidate",
+        "existing compat-mode default applies to manual endpoints too"
+      ],
+      "recommendation": "Strict trust mandatory for non-corroborated endpoints; compat mode stays available only for candidate-corroborated endpoints in the dev profile.",
+      "decide_by": "PCP.2 contract review"
     }
   ]
 }

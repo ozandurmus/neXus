@@ -3,6 +3,20 @@
   "record_contract": "One structured record per build, newest first. Required: build, status, title, summary (<= 2 sentences). Optional: started, completed, track, movement, supersedes, evidence, risks_forward, docs{agreement,validation,handover} (repo-relative paths under docs/history/). Full detail lives in the linked doc; do not restate it here. Status vocabulary must stay within utils/project_plan.py STATUS_VALUES.",
   "builds": [
     {
+      "build": "product_control_plane_architecture_draft",
+      "status": "in_progress",
+      "title": "PCP.0 - Product Control Plane architecture (DRAFT, pending Product Owner review)",
+      "summary": "Promoted the parked Product Control Plane direction into one design-parent document, docs/design/PRODUCT_CONTROL_PLANE_ARCHITECTURE.md (DRAFT): persistent Device Registry with candidate-first explicit enrollment, capability resolution, typed job plane, four-layer truth model, identity layering, persistence seam with the storage engine deferred to recorded criteria, capability-driven backup, device != failover unit, console first-run/device experience, SNMPv3 and Diagnostic Runbook slots, and the PCP.1-PCP.8 movement sequence with PCP.1 (registry + CLI manual enrollment) as the bounded first implementation movement. Reconciled against main ff700e38 with every frozen OP.2/CLASS 2, CON.x and RB.x law preserved -- the one genuine contradiction (manual enrollment from the console vs the CON.0 section 4 wording and the exclusions-write DEPLOY.1A precedent) is isolated as open decision pcp_console_registry_write_gate; docs/state only, merge blocked pending Product Owner review.",
+      "started": "2026-09-05",
+      "track": "PCP.x",
+      "movement": "ARCHITECTURE",
+      "evidence": "Docs/state session: read AGENTS.md, AI_START_HERE.md, CURRENT_STATE.md, project/*.json, docs/ARCHITECTURE.md, docs/design/OPERATOR_CONSOLE_ARCHITECTURE.md, FAILOVER_ENGINE_ARCHITECTURE.md, SERVER_PRODUCTIZATION_AND_MODULARIZATION_ARCHITECTURE.md, BACKUP_AND_RECOVERY_ARCHITECTURE.md (+ contracts), COMPLIANCE_ASSIGNMENT_AND_FRAMEWORKS.md section 4b, docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md, OP_2_C_CHANGE_MANAGEMENT_NETWORK_SECURITY_REVIEW.md, CON_1/2/3/4/5 heads, utils/collection_executor.py, utils/evidence_backend.py, utils/discovery_lifecycle.py, utils/capability_registry.py, utils/inventory_exclusions.py, console/registry.py, console/app.py, console/jobs.py, utils/restore_readiness.resolve_entity_id, tests/test_architecture_convergence.py, utils/project_plan.py. No code changed; no test suite run required (pytest/lxml/paramiko absent in this sandbox -- reported, not worked around); project-state consistency verified by invoking utils.project_plan.build_project_plan_payload()['metadata_warnings'] == [] and scripts/build_history_index.py --check directly.",
+      "risks_forward": "This record stays in_progress until the Product Owner review flips the design doc to FROZEN (a DRAFT doc may not back a terminal record). PCP.1 must not start before that. The manual-enrollment console intent must not be implemented before pcp_console_registry_write_gate is decided; candidate-based enrollment and CLI manual enrollment do not depend on it.",
+      "docs": {
+        "agreement": "docs/design/PRODUCT_CONTROL_PLANE_ARCHITECTURE.md"
+      }
+    },
+    {
       "build": "op2_c_change_management_review_package_draft",
       "status": "done",
       "title": "OP.2.C - draft the signed change-management/network-security review package",
