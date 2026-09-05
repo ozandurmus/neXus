@@ -3,6 +3,21 @@
   "record_contract": "One structured record per build, newest first. Required: build, status, title, summary (<= 2 sentences). Optional: started, completed, track, movement, supersedes, evidence, risks_forward, docs{agreement,validation,handover} (repo-relative paths under docs/history/). Full detail lives in the linked doc; do not restate it here. Status vocabulary must stay within utils/project_plan.py STATUS_VALUES.",
   "builds": [
     {
+      "build": "op2_c1_admin_down_pnote_safety_corrections",
+      "status": "automated_validated",
+      "title": "OP.2.C1 - admin_down pnote evidence safety corrections (PR #76 + ambiguous-name follow-up)",
+      "summary": "Two narrow, in-module safety corrections to checkpoint/clusterxl_member_session.py and checkpoint/clusterxl_capability_adapter.py, superseding op2_c1_cp_clusterxl_member_session's first-cut evidence handling. PR #76: admin_down_pnote_present now identifies the exact admin_down Critical Device by name (never CP-A5's aggregate any_problem fact); check_precondition() fails closed to UNKNOWN, not HOLDS, for a failback when A5 pnote evidence is missing; observe_postcondition() requires both the OP.2.1-named role and pnote signals for failover and failback, never role alone; _submit_once() maps CONFIRMED_NOT_SENT only to a provably unopened session, with every attempted-send outcome (including a proven pre-device execution_error and any transport exception) now SUBMITTED_OR_AMBIGUOUS. This follow-up: _admin_down_pnote_state() no longer returns False for a problem-state pnote row with no usable device name -- absence of the admin_down name among a read's other named rows does not prove admin_down itself is absent, so ambiguous evidence now fails closed to None, blocking both the failback precondition and postcondition exactly as missing A5 evidence already did. Preserves the frozen OP.2 lifecycle, exactly-one-submission/no-retry, persistent Expert-session reuse, and CLASS 2 non-reachability verbatim; no authorization, production wiring, UI, new commands, or readiness policy added.",
+      "started": "2026-09-05",
+      "completed": "2026-09-05",
+      "track": "OP.2",
+      "movement": "IMPLEMENTATION",
+      "supersedes": "op2_c1_cp_clusterxl_member_session",
+      "evidence": "PR #76 (merged, fast PR CI green): tests/test_op2_c1_cp_clusterxl_member_session.py (23 passed) + tests/test_op2_c_cp_clusterxl_adapter.py (33 passed); full suite 1820 passed/24 skipped/0 failed. This follow-up: tests/test_op2_c1_cp_clusterxl_member_session.py (28 passed, incl. 3 new ambiguous-pnote-evidence regressions wiring RealClusterXLMemberSession directly into CPClusterXLCapabilityAdapter with no ActionCoordinator/fake session) + tests/test_op2_c_cp_clusterxl_adapter.py + tests/test_op2_1_cp_clusterxl_command_gate.py + tests/test_op2_a_b_execution_foundation.py + tests/test_architecture_convergence.py (157 passed); full suite 1825 passed/24 skipped/0 failed.",
+      "docs": {
+        "agreement": "docs/history/phase/OP_2_1_CP_CLUSTERXL_MUTATION_COMMAND_GATE.md"
+      }
+    },
+    {
       "build": "op2_c1_cp_clusterxl_member_session",
       "status": "automated_validated",
       "title": "OP.2.C follow-up - real ClusterXLMemberSession over the validated per-member Expert session",
