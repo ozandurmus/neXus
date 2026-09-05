@@ -70,11 +70,12 @@ class FakeClusterXLMemberSession:
     """
 
     def __init__(self, *, role="ACTIVE", role_sequence=None, admin_down_pnote_present=False,
-                 read_failed=False, fail_starting_from_call=None,
+                 pnote_sequence=None, read_failed=False, fail_starting_from_call=None,
                  submission=SubmissionConfirmation.SUBMITTED_OR_AMBIGUOUS):
         self.role = role
         self.role_sequence = list(role_sequence) if role_sequence is not None else None
         self.admin_down_pnote_present = admin_down_pnote_present
+        self.pnote_sequence = list(pnote_sequence) if pnote_sequence is not None else None
         self.read_failed = read_failed
         self.fail_starting_from_call = fail_starting_from_call
         self.submission = submission
@@ -92,9 +93,14 @@ class FakeClusterXLMemberSession:
             current_role = self.role_sequence[index]
         else:
             current_role = self.role
+        if self.pnote_sequence:
+            pnote_index = min(self.read_role_calls - 1, len(self.pnote_sequence) - 1)
+            current_pnote = self.pnote_sequence[pnote_index]
+        else:
+            current_pnote = self.admin_down_pnote_present
         return MemberRoleReading(
             role=None if failed else current_role,
-            admin_down_pnote_present=None if failed else self.admin_down_pnote_present,
+            admin_down_pnote_present=None if failed else current_pnote,
             read_failed=failed,
         )
 
@@ -352,6 +358,31 @@ def test_execute_once_never_called_when_precondition_no_longer_holds(tmp_path):
     assert sessions["member-a-token"].submit_admin_down_calls == 0
 
 
+def test_failback_precondition_fails_closed_when_admin_down_pnote_evidence_is_missing(tmp_path):
+    """OP.2.C1 safety correction: missing A5 evidence (the pnote read
+    itself failed or was never observed, even though A3 still reports the
+    subject DOWN) must never fall through to HOLDS -- it can never
+    authorize a failback. The role read alone is not sufficient
+    corroboration of the state CP-M1 actually left this member in."""
+    check_statuses = {**_DEFAULT_CHECK_STATUSES, "recovery_mode": "maintain_current_active"}
+    sessions = {
+        "member-a-token": FakeClusterXLMemberSession(role="DOWN", admin_down_pnote_present=None),
+        "member-b-token": FakeClusterXLMemberSession(role="ACTIVE"),
+    }
+    adapter = _make_adapter(sessions)
+    coord = _make_coordinator(tmp_path, adapter=adapter, check_statuses=check_statuses)
+    record = _create_and_preflight(coord, action_type=ACTION_TYPE_HA_GRACEFUL_FAILBACK)
+
+    confirmed = coord.confirm(
+        record.action_id, actor_ref="operator-1", proposal_digest=record.proposal_digest,
+        member_canonical_ids=["member-a-token", "member-b-token"],
+    )
+
+    assert confirmed.state == ActionState.ABORTED_PRE_MUTATION
+    assert confirmed.mutation_boundary_crossed == "NO"
+    assert sessions["member-a-token"].submit_admin_up_calls == 0
+
+
 def test_execute_once_not_sent_maps_to_aborted_pre_mutation(tmp_path):
     sessions = {
         "member-a-token": FakeClusterXLMemberSession(role="ACTIVE", submission=SubmissionConfirmation.CONFIRMED_NOT_SENT),
@@ -416,6 +447,81 @@ def test_ambiguous_submission_with_unreadable_postcondition_is_outcome_unknown(t
     assert confirmed.submission_outcome_family == SubmissionOutcomeFamily.UNKNOWN.value
 
 
+def test_failover_postcondition_requires_the_admin_down_pnote_not_just_the_role_flip(tmp_path):
+    """OP.2.1's own "Expected observable postcondition" row names two
+    independent corroborating signals for CP-M1 -- the role flip to DOWN
+    *and* the admin_down pnote's appearance -- never role alone (OP.2.C1
+    safety correction). A role-only-consistent read that never corroborates
+    the pnote must never resolve to SUCCEEDED."""
+    sessions = {
+        "member-a-token": FakeClusterXLMemberSession(
+            role_sequence=["ACTIVE", "DOWN"], pnote_sequence=[False, False],
+        ),
+        "member-b-token": FakeClusterXLMemberSession(role="ACTIVE"),
+    }
+    adapter = _make_adapter(sessions)
+    coord = _make_coordinator(tmp_path, adapter=adapter)
+    record = _create_and_preflight(coord)
+
+    confirmed = coord.confirm(
+        record.action_id, actor_ref="operator-1", proposal_digest=record.proposal_digest,
+        member_canonical_ids=["member-a-token", "member-b-token"],
+    )
+
+    assert confirmed.state == ActionState.OUTCOME_UNKNOWN
+    assert confirmed.observed_postcondition is None
+
+
+def test_failback_postcondition_requires_the_admin_down_pnote_to_have_cleared(tmp_path):
+    """OP.2.1's CP-M1-R row: the admin_down pnote must disappear, not just
+    the role recover -- a role recovery with the pnote still registered (or
+    unread) must never resolve to SUCCEEDED."""
+    check_statuses = {**_DEFAULT_CHECK_STATUSES, "recovery_mode": "maintain_current_active"}
+    sessions = {
+        "member-a-token": FakeClusterXLMemberSession(
+            role_sequence=["DOWN", "STANDBY"], pnote_sequence=[True, True],
+        ),
+        "member-b-token": FakeClusterXLMemberSession(role="ACTIVE"),
+    }
+    adapter = _make_adapter(sessions)
+    coord = _make_coordinator(tmp_path, adapter=adapter, check_statuses=check_statuses)
+    record = _create_and_preflight(coord, action_type=ACTION_TYPE_HA_GRACEFUL_FAILBACK)
+
+    confirmed = coord.confirm(
+        record.action_id, actor_ref="operator-1", proposal_digest=record.proposal_digest,
+        member_canonical_ids=["member-a-token", "member-b-token"],
+    )
+
+    assert confirmed.state == ActionState.OUTCOME_UNKNOWN
+    assert confirmed.observed_postcondition is None
+
+
+def test_execute_once_succeeds_on_clean_failback_with_pnote_cleared_and_role_recovered(tmp_path):
+    """End-to-end mirror of the existing clean-failover success test: a
+    failback SUCCEEDS only once both OP.2.1-defined postcondition signals
+    corroborate -- the admin_down pnote gone and the role recovered."""
+    check_statuses = {**_DEFAULT_CHECK_STATUSES, "recovery_mode": "maintain_current_active"}
+    sessions = {
+        "member-a-token": FakeClusterXLMemberSession(
+            role_sequence=["DOWN", "STANDBY"], pnote_sequence=[True, False],
+        ),
+        "member-b-token": FakeClusterXLMemberSession(role="ACTIVE"),
+    }
+    adapter = _make_adapter(sessions)
+    coord = _make_coordinator(tmp_path, adapter=adapter, check_statuses=check_statuses)
+    record = _create_and_preflight(coord, action_type=ACTION_TYPE_HA_GRACEFUL_FAILBACK)
+    assert record.intended_postcondition == "subject_member_standby"
+
+    confirmed = coord.confirm(
+        record.action_id, actor_ref="operator-1", proposal_digest=record.proposal_digest,
+        member_canonical_ids=["member-a-token", "member-b-token"],
+    )
+
+    assert confirmed.state == ActionState.SUCCEEDED
+    assert confirmed.observed_postcondition == "subject_member_standby"
+    assert sessions["member-a-token"].submit_admin_up_calls == 1
+
+
 def test_postcondition_read_failure_after_submission_is_outcome_unknown(tmp_path):
     # The precondition re-observation (1st read) succeeds; the submission
     # goes out; the post-action read-back (2nd read onward) itself fails --
@@ -459,10 +565,13 @@ def test_failback_with_undisclosed_recovery_mode_can_never_resolve_to_succeeded(
     check_statuses = {**_DEFAULT_CHECK_STATUSES, "recovery_mode": "unknown"}
     # Precondition-time (1st read): still DOWN/admin_down, exactly what CP-M1
     # left it in. Post-submission (2nd read): reversal actually lands the
-    # subject back in STANDBY -- a real, valid role -- but it can never equal
-    # the literal "UNKNOWN" plan token.
+    # subject back in STANDBY -- a real, valid role -- and the admin_down
+    # pnote has genuinely disappeared, but it can never equal the literal
+    # "UNKNOWN" plan token.
     sessions = {
-        "member-a-token": FakeClusterXLMemberSession(role_sequence=["DOWN", "STANDBY"], admin_down_pnote_present=True),
+        "member-a-token": FakeClusterXLMemberSession(
+            role_sequence=["DOWN", "STANDBY"], pnote_sequence=[True, False],
+        ),
         "member-b-token": FakeClusterXLMemberSession(role="ACTIVE"),
     }
     adapter = _make_adapter(sessions)
