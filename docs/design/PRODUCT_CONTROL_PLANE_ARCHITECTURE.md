@@ -661,8 +661,10 @@ architecture legitimately replaces).
 | Roadmap ordering | `now_next.next` = `op2_c_cp_clusterxl_adapter_scoping` (blocked, external) | ordering change, not a demotion of completed work | `OP.2.C` scoping moves to `upcoming` (still `blocked` on `DEPLOY.1`, notes preserved); `PCP.1` becomes `next`, gated on this document's freeze |
 
 No frozen law was removed or reinterpreted to make the direction fit. The
-one genuine contradiction is isolated to a single console intent and is
-left to the Product Owner as an explicit decision.
+one genuine contradiction is isolated to a single console enrollment-write
+boundary — covering both the manual and the candidate-based enrollment
+intents together (§13, §19) — and is left to the Product Owner as an
+explicit decision.
 
 ---
 
@@ -788,11 +790,12 @@ evidence identity.
    `enrollment_source = manual`; lifecycle state; optional site/tags/
    environment; empty `relationships[]`; `schema_version`), a
    `DeviceRegistry` service (enroll, list, disable — see the deterministic
-   contract below for exactly what each does), and the lifecycle transition
-   table (`ENROLLED_UNVERIFIED`, `DISABLED` reachable in `PCP.1`; `RETIRED`,
-   `CONTACT_VERIFIED`, `OBSERVED` defined but unreachable until a later
-   movement adds their trigger — `RETIRED` needs its own CLI verb, not
-   introduced here).
+   contract below for exactly what each does, including the registry
+   mutation lock `enroll`/`disable` acquire before touching the file), and
+   the lifecycle transition table (`ENROLLED_UNVERIFIED`, `DISABLED`
+   reachable in `PCP.1`; `RETIRED`, `CONTACT_VERIFIED`, `OBSERVED` defined
+   but unreachable until a later movement adds their trigger — `RETIRED`
+   needs its own CLI verb, not introduced here).
 2. `utils/evidence_backend.py` — an eighth storage concern
    `DeviceRegistryBackend` with the **filesystem implementation only**
    (`data/state/device_registry.json`, atomic tmp→replace write, same
@@ -818,8 +821,12 @@ evidence identity.
 
 This subsection is the actual specification `utils/device_registry.py`
 implements; item 1 above names the module, this names its behavior.
-Filesystem-only throughout — no new lock primitive, no distributed
-concurrency framework, no engine decision.
+Filesystem-only throughout — no engine decision, no distributed
+concurrency framework, no database. The one addition is a single, narrow
+cross-process mutation lock ("Concurrent CLI write behavior" below),
+introduced specifically to close the read-check-write race atomic
+tmp-then-`replace()` alone cannot close; it is not a general locking
+framework and guards nothing outside this module.
 
 *Lifecycle transitions (`PCP.1`-reachable subset).*
 
@@ -861,6 +868,10 @@ same endpoint. (`RETIRED` is not a duplicate-detection exemption in
 `PCP.1` — it is simply unreachable, so this rule needs no carve-out for it
 yet; a future movement that makes `RETIRED` reachable must decide then
 whether a retired endpoint may be re-enrolled, and is not pre-decided here.)
+This check and the write that follows it are exactly the operation the
+registry mutation lock (below) makes race-free across concurrent CLI
+processes — without it, two simultaneous callers could each pass this
+check against the same pre-write state.
 
 *Repeated-operation behavior (idempotency).*
 
@@ -879,29 +890,49 @@ whether a retired endpoint may be re-enrolled, and is not pre-decided here.)
   no-op.
 - `--registry-list`: read-only, trivially idempotent.
 
-*Concurrent CLI write behavior (no new concurrency framework).* `PCP.1` is a
-single-operator local CLI surface, not a multi-actor HTTP surface (that
-question is `PCP.4`/§19's `pcp_console_registry_write_gate`). The registry
-reuses the exact pattern `utils/inventory_exclusions.py::add_exclusion`
-already establishes for a `data/state/*.json` file with concurrent-write
-exposure: read the current document, apply the change in memory, write it
-back with the existing atomic tmp-file-then-`replace()` primitive. That
-primitive guarantees **no torn read and no corrupted file** — a reader
-never observes a half-written document, and a crash mid-write leaves the
-previous valid document in place. It does **not** guarantee mutual
-exclusion between two concurrent CLI processes: two simultaneous
-`--registry-enroll` calls for the same new endpoint can both read the
-registry before either writes, both pass the duplicate check, and both
-write, producing two `device_id`s for one endpoint. This is the same
-known, accepted limitation `inventory_exclusions.py` already carries for
-its own concurrent writers, is not silently claimed as solved, and is
-explicitly **not** closed by inventing a new lock primitive here — a real
-multi-actor write surface (the console, `PCP.4`+) is expected to reuse the
-existing per-endpoint admission coordinator for this purpose rather than a
-bespoke file lock, consistent with `AGENTS.md`'s "no second orchestration
-path" bias. AC-10 pins the "no corruption" half; the race itself is
-recorded as a known `PCP.1` limitation, closed only when a real concurrent
-writer exists.
+*Concurrent CLI write behavior — a single, narrow cross-process mutation
+lock (not a general concurrency framework).* The registry is the durable
+product-identity source (§6): a normalized endpoint may never back two
+records, and atomic tmp-then-`replace()` alone cannot guarantee that under
+two concurrent writers — it prevents a torn *file*, not a torn *decision*.
+`--registry-enroll` and `--registry-disable` (the only two mutating verbs
+in `PCP.1`) therefore acquire an exclusive, file-based **registry mutation
+lock** — `data/state/device_registry.lock`, created with an atomic
+exclusive-create primitive (`O_CREAT | O_EXCL`, portable across POSIX and
+Windows, no third-party library) — **before** the load step, and hold it
+across the complete load → validate → duplicate-check-or-transition →
+atomic-replace sequence, releasing it on every exit from that sequence
+(success, a refusal, or a raised `DeviceRegistryError` alike).
+`--registry-list` is read-only and does not take the lock — the existing
+atomic-replace guarantee already makes its reads safe.
+
+**Contention fails closed immediately: no wait, no retry, no queueing.** If
+the exclusive-create fails because the lock file already exists, the
+mutation is refused with a distinct `DeviceRegistryLockError`
+**before** any load, validate, duplicate-check, or write runs. The entire
+serialization boundary is this: one lock file, one exclusive-create
+primitive, one immediate fail-closed outcome on contention — not a queue,
+not a bounded wait, not a distributed lock, not the admission coordinator,
+not a database.
+
+**Crash / stale-lock recovery is explicit and manual, never automatic.**
+The lock file records its holder's PID, hostname and UTC acquisition
+timestamp for a human to read — never for code to act on. No code path in
+`PCP.1` inspects that PID's liveness, computes the lock's age, or applies
+any timeout/heuristic to decide the lock is "probably stale" and clear it
+automatically: that would only trade one guess (a torn decision) for
+another (a wrong liveness/age inference), which is exactly what this
+correction removes. A crashed holder therefore leaves the lock file in
+place indefinitely, and every subsequent mutation fails closed with the
+same contention error until a human (a) confirms, by their own means (the
+OS process list, the deployment's own process supervision — never this
+tool's guess), that the recorded PID is not a live registry mutation, and
+(b) manually deletes `data/state/device_registry.lock`. This is a
+deliberate, documented manual procedure, not a gap: an automatic recovery
+path is exactly the kind of guess the correction exists to remove. Every
+non-crash exit (success, a validation/duplicate refusal, a fail-closed
+corrupt-data error) releases the lock itself; only a genuine process kill
+leaves it behind.
 
 *Fail-closed handling of corrupt or unsupported persisted data.* Mirrors
 `utils/inventory_exclusions.py::load_inventory_exclusions`/
@@ -923,7 +954,7 @@ skipped — a corrupt registry fails closed as a whole, not row-by-row.
 | AC-1a | `device_id` is opaque: generated (not derived from endpoint, hostname, serial, or any other input), and no two records ever share one. |
 | AC-1b | A `--registry-enroll` for a normalized-duplicate endpoint (per "Duplicate detection") is refused **before** a `device_id` is generated — the refused attempt produces zero new records and zero new ids, named against the existing `device_id` it collided with. A differing `vendor_hint` or a `DISABLED` (vs. `ENROLLED_UNVERIFIED`) existing record does not change this outcome. |
 | AC-2a | `DeviceRecord`'s field set is closed (a fixed dataclass, not an open dict): no field named or shaped to carry a secret value exists; an unrecognized key present in `--registry-enroll` input or in a persisted JSON record is rejected, never silently merged in or dropped-and-ignored. |
-| AC-2b | `credential_ref` is validated against a bounded identifier format (e.g. `^[A-Za-z0-9_.-]{1,64}$`) — a shape a real secret value could not satisfy in the general case (no whitespace, no arbitrary-length free text) — and is never resolved to an actual credential anywhere in `PCP.1` (there is no code path that could leak one). |
+| AC-2b | `credential_ref` is a bounded opaque profile identifier: format-validated (e.g. `^[A-Za-z0-9_.-]{1,64}$`) only to reject obviously malformed input, never as a secret-detection guarantee. `DeviceRecord` defines no separate credential-payload field, and `PCP.1` never resolves `credential_ref` to an actual credential anywhere in this movement (no code path fetches, echoes, or transmits one). An operator who pastes a real secret into `--registry-credential-profile` still has it persisted verbatim as that field's string value — the format check constrains shape, it does not and cannot prove the supplied value is not itself a secret. |
 | AC-2c | Free-text fields (`tags`, site, environment) are length-bounded and redaction-registry filtered before being written to any log line or CLI error message, the same bounding `console/jobs.py::JobRecord.error_summary` already applies to its own free-text field. |
 | AC-3 | Lifecycle transitions follow exactly the "Lifecycle transitions" table above; `RETIRED`/`CONTACT_VERIFIED`/`OBSERVED` are unreachable from any `PCP.1` entry point (structural, like `OP.0a` AC-6 — no code path, not merely undocumented). |
 | AC-4 | Persistence is atomic (tmp-then-`replace()`) and RuntimeRoot-resident; writing to a path equal to or nested with the repository root is refused (`utils/runtime_paths` separation). |
@@ -932,9 +963,11 @@ skipped — a corrupt registry fails closed as a whole, not row-by-row.
 | AC-7 | `unified.json`, `entity_id` resolution, `console/registry.py`, `ALLOWLISTED_WORKFLOWS`, `utils/operate/`, `utils/failover/` are byte-unchanged — enforced by the existing convergence tests remaining green with no allowlist edit. |
 | AC-8 | Registry content never reaches `output/index.html` or any console payload in `PCP.1` (no payload builder change; render harness not triggered). |
 | AC-9 | `--registry-list` prints device ids, vendor, state and tag keys — never the management endpoint unless `--show-endpoints` is passed (local operator convenience, LOCAL-SENSITIVE, never in logs beyond existing redaction policy). |
-| AC-10 | A simulated concurrent-write race (two enroll calls interleaved around one read-modify-write cycle) never corrupts `data/state/device_registry.json` into invalid JSON or a torn write — the documented duplicate-`device_id` race outcome is acceptable and asserted as the known result, corruption is not. |
+| AC-10 | Two concurrent `--registry-enroll` invocations for the same normalized endpoint, however their timing interleaves, persist **at most one** record and generate **at most one** `device_id` for that endpoint — never two. The non-winning invocation either fails closed on lock contention (AC-13, before load/validate/duplicate-check ever runs) or, if it acquires the lock after the winner's commit, is refused by the ordinary duplicate-detection check (AC-1b); no interleaving produces a second record. |
 | AC-11 | Each fail-closed corrupt-data case in "Fail-closed handling" above (unreadable file, invalid JSON, wrong/missing `schema_version`, non-list `devices`, one malformed record inside an otherwise valid document) raises `DeviceRegistryError` from `enroll`, `list`, and `disable` alike — never an empty result, never a partial load. |
 | AC-12 | Repeated-operation behavior matches "Repeated-operation behavior" above exactly: duplicate enroll always refused; disable is idempotent on an already-`DISABLED` id (exit 0, no duplicate audit entry) and fails distinctly on an unknown id. |
+| AC-13 | A mutating invocation (`--registry-enroll` or `--registry-disable`) that cannot acquire the registry mutation lock fails closed immediately with a distinct `DeviceRegistryLockError` — before any load, validate, duplicate-check, or write — never a silent wait, retry, queue, or fallback to an unprotected write. |
+| AC-14 | No code path inspects a lock file's recorded PID, hostname, or age to decide it is stale and clear it automatically; a lock left by a crashed holder blocks every subsequent mutation with the same contention error indefinitely, until a human manually deletes `data/state/device_registry.lock`. Every non-crash exit from the critical section (success, a refusal, a raised `DeviceRegistryError`) releases the lock itself. |
 
 **Explicit non-goals**
 
@@ -946,9 +979,16 @@ skipped — a corrupt registry fails closed as a whole, not row-by-row.
 - No new CLI verb beyond the three named in item 3 above — in particular,
   no `--registry-enable`/re-enable and no `--registry-retire`; `DISABLED`
   is a one-way transition in `PCP.1`.
-- No cross-process file lock, advisory-lock library, or general
-  concurrency framework — the known duplicate-race limitation is recorded,
-  not closed, in this movement (see "Concurrent CLI write behavior" above).
+- No general-purpose or reusable locking library/module, no distributed
+  lock (a Postgres advisory lock or otherwise), no blocking/retry/backoff
+  wait behavior, and no automatic stale-lock detection or recovery
+  heuristic — the one exclusive-create file lock described in "Concurrent
+  CLI write behavior" above is narrowly scoped to `utils/device_registry.py`
+  itself, guards only that module's own mutation path, and is not a shared
+  concurrency primitive other modules use.
+- No HTTP wiring and no admission-coordinator involvement in the lock — it
+  is a local, single-process-at-a-time CLI safeguard, unrelated to the
+  multi-actor question `pcp_console_registry_write_gate` still governs.
 - No change to the console job target vocabulary (`entity_id[]` stays until
   `PCP.4`/`PCP.5` re-key it through the registry).
 - No credential storage, vault integration or `credential_profiles`
@@ -967,13 +1007,17 @@ criteria), `project/build_history.json` (new head record),
 directory map), `docs/ARCHITECTURE.md`, `PRIVACY_AND_DATA_HANDLING.md`,
 `docs/history/INDEX.md` (regenerated), this document (§21 status line).
 
-**Validation ladder for `PCP.1`:** targeted test file; subsystem regression
-(`tests/test_architecture_convergence.py`, `tests/test_dev0_3a_runtime_paths.py`,
-`tests/test_phase0_3_support_bundle.py`, the CLI mode-matrix tests); one
-serial full regression before merge (new storage concern = shared-core
-trigger); repository privacy gate; `git diff --check`. No real-environment
-validation is owed (no device contact) — `AUTOMATED_VALIDATED` is the
-ceiling and the honest status.
+**Validation ladder for `PCP.1`:** targeted test file (AC-10/AC-13/AC-14
+need a deterministic concurrency-simulation technique — e.g. a test-only
+hook that holds the lock open, or two coordinated real subprocesses —
+rather than timing-based flakiness; the exact technique is an
+implementation detail for the test file, not frozen here); subsystem
+regression (`tests/test_architecture_convergence.py`,
+`tests/test_dev0_3a_runtime_paths.py`, `tests/test_phase0_3_support_bundle.py`,
+the CLI mode-matrix tests); one serial full regression before merge (new
+storage concern = shared-core trigger); repository privacy gate;
+`git diff --check`. No real-environment validation is owed (no device
+contact) — `AUTOMATED_VALIDATED` is the ceiling and the honest status.
 
 **`main.py`/UI effect:** backend + CLI only; a normal run produces **no
 visible UI change**.
