@@ -7,14 +7,13 @@ detail is not here either** — it is in `project/build_history.json`
 linked documents under `docs/history/`. `docs/history/INDEX.md` is the
 generated one-line timeline.
 
-- **Checkpoint:** 2026-09-05, branch `claude/pcp1-device-registry-gqp7s2`.
+- **Checkpoint:** 2026-09-05, branch `claude/left-nav-vertical-redesign-e673q6`.
 - **Current build** (per `project/roadmap.json` `now_next.now`):
-  `pcp_1_device_registry_manual_enrollment_foundation` —
-  **AUTOMATED_VALIDATED** (PR #83 fast PR CI green; see "Active build").
-  `now_next.next` is `pcp_2_local_control_plane_sequencing_po_review`
-  (blocked on Product Owner review, not started, not pre-designed);
-  `op2_c_cp_clusterxl_adapter_scoping` stays `upcoming`, blocked on
-  `DEPLOY.1`.
+  `nav_1_left_vertical_product_navigation` — **AUTOMATED_VALIDATED** (see
+  "Active build"). `now_next.next` is
+  `pcp_2_local_control_plane_sequencing_po_review` (blocked on Product Owner
+  review). `op2_c_cp_clusterxl_adapter_scoping` stays `upcoming`, blocked on
+  `DEPLOY.1`. `PCP.1` is complete — detail in `project/build_history.json`.
 - **OP.2.0 CLASS 2 architecture** (`docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md`):
   **CONTRACT FROZEN 2026-09-04**; `OP.2.A`/`OP.2.B` IMPLEMENTED; `OP.2.1` CP
   command gate DRAFTED — CLASS 2 still has **no member**, no adapter,
@@ -53,36 +52,37 @@ test-enforced boundaries. Current numbers:
 
 ## Active build
 
-**`pcp_1_device_registry_manual_enrollment_foundation`** (`PCP.1`) —
-**AUTOMATED_VALIDATED**: PR #83's fast PR CI `validate` check ran green.
-Implements `docs/design/PRODUCT_CONTROL_PLANE_ARCHITECTURE.md` §21 exactly:
-`utils/device_registry.py` (opaque `device_id`; endpoint normalization with
-no DNS resolution; vendor-hint- and lifecycle-state-independent duplicate
-detection; `ENROLLED_UNVERIFIED`/`DISABLED` reachable, `RETIRED`/
-`CONTACT_VERIFIED`/`OBSERVED` structurally unreachable; closed schema;
-`credential_ref` format-validated reference only, never resolved;
-fail-closed corrupt-data handling; the registry mutation lock with an
-`owner_token` instance-safe release); the eighth `utils/evidence_backend.py`
-concern `DeviceRegistryBackend` (filesystem-only); `--registry-enroll` /
-`--registry-list` / `--registry-disable` CLI modes
-(`application/cli.py` + `application/workflows/registry.py`), mode-
-exclusive, no vendor import, no credential resolution, no network;
-`tests/test_pcp1_device_registry.py` (AC-1a..AC-15). This sandbox has no
-`pytest`/`lxml`/`paramiko` (reported per `CLAUDE.md`); every behavior was
-hand-verified directly, then confirmed by PR #83's fast PR CI running the
-real suite green (`project/build_history.json` head record has the exact
-CI evidence). No device contact, no console/UI/payload change, no SQLite/
-PostgreSQL. `AI_START_HERE.md` §22 item 4 (deferred from the `PCP.0`
-freeze) landed this session.
+**`nav_1_left_vertical_product_navigation`** (`NAV.1`) —
+**AUTOMATED_VALIDATED**. Implements the new FROZEN
+`docs/design/NAVIGATION_INFORMATION_ARCHITECTURE.md`: both shells drop the
+horizontal one-root-per-module topbar strip for a collapsible left vertical
+rail over six evaluated product domains (Overview; Devices → Inventory,
+Discovery; Configuration; Operations → HA & readiness, Jobs; Compliance;
+Administration → Inventory exclusions, Project plan), driven by one model
+(`static/navigation_ui.js`) shared with the device-detail tab strip.
+**D-NAV6** is the load-bearing rule: an entry renders *iff* the shell ships
+the `[data-module-panel]` it points at, so an unbacked capability is omitted
+— never disabled, greyed or "coming soon". That is how the console shows its
+`CON.2` Jobs panel (moved out of Discovery into its own `jobs` module under
+Operations; no boundary, route or job-type change) while the action-free
+report shows no Jobs entry at all. **"Add Device" is a root nowhere and
+renders nowhere**: a declared contextual action of the `devices` domain,
+`available: false`, reason named (`pcp_console_registry_write_gate` open;
+enrollment CLI-only per `PCP.1`). Routes are derived from the model, fixing
+a drift where `#discovery`/`#failover`/`#exclusions` fell back to Overview
+from the URL hash. Authorization-aware seam only — `model: "none"`,
+`DEPLOY.1A` named, no role/permission/scope/claim in the navigation path.
+No payload builder, collector, vendor semantic, network command, credential
+path, storage/schema or action-class change.
 
-Predecessors (full detail: `project/build_history.json` + linked phase
-docs): `product_control_plane_architecture_draft` (`PCP.0`, FROZEN),
-`op2_c_change_management_review_package_draft` (review package DRAFTED,
-unsigned), `op2_c_release_gate_dependency_scoping`, `op2_c_cp_
-clusterxl_preflight_eligibility_wiring`, `op2_c1_cp_clusterxl_member_
-session`, `op2_1b_cp_pilot_readiness_policy_amendment`, `op2_1_cp_
-clusterxl_command_gate`, `op2_a_b_execution_foundation` — all DONE/
-AUTOMATED_VALIDATED. PAN B2 stays **NOT ESTABLISHED**.
+One deliberate out-of-navigation fix, recorded not folded in silently:
+`static/failover_readiness_ui.js` emitted an inline `style="padding-left:2rem"`
+the console's stricter CSP (`style-src 'self'`) refuses; it is now the
+`.failover-child-cell` class. Invisible until a resolvable Chromium made
+`CON.1`'s live console walk run instead of skip.
+
+Predecessors are `project/build_history.json`'s job. PAN B2 stays
+**NOT ESTABLISHED**.
 
 ## `OP.0b.0` — FROZEN WITH REAL-ENV VALIDATION GATES
 
@@ -118,31 +118,27 @@ a narrower question never promoted toward B2.
 ## Exact next build
 
 `now_next.next` is **`pcp_2_local_control_plane_sequencing_po_review`**:
-not `PCP.2` implementation itself — a Product Owner review of whether/when
-a local interactive console ships and whether/when the filesystem-only
-registry evolves toward SQLite (`pcp_storage_engine` stays open), and how
-both relate to the still-open `pcp_console_registry_write_gate` decision.
-`PCP.1`'s CLI verbs stay a bounded maintenance/bootstrap adapter, not the
-Operator Console device experience, until this sequencing is decided. Not
-started, not pre-designed, not pre-authorized. `Sonnet 5, extended thinking
-(high)` once the Product Owner is ready to decide; `Sonnet 5, normal` for
-any CI-status follow-up on `PCP.1` itself in the meantime.
+not `PCP.2` implementation — a Product Owner review of whether/when a local
+interactive console ships and whether/when the filesystem-only registry
+evolves toward SQLite (`pcp_storage_engine` open), and how both relate to
+the still-open `pcp_console_registry_write_gate`. `PCP.1`'s CLI verbs stay a
+bounded maintenance/bootstrap adapter until this is decided. Not started,
+not pre-designed, not pre-authorized. `Sonnet 5, extended thinking (high)`
+once the Product Owner is ready.
 
-`op2_c_cp_clusterxl_adapter_scoping` (`upcoming`, blocked, notes preserved):
-adapter, real `ClusterXLMemberSession` and real `PreflightProvider`/
-`EligibilityEvaluator` all IMPLEMENTED + unit-tested, none wired;
-`DenyAllAuthorizer`/no taxonomy member keep CLASS 2 unreachable. Still
-waits on `DEPLOY.1A` OIDC + `OPERATE`, CP SSH trust hardening (both on
-`DEPLOY.1`, external), the review's sign-off (drafted, unsigned —
-`docs/history/phase/OP_2_C_CHANGE_MANAGEMENT_NETWORK_SECURITY_REVIEW.md`)
-and a protected entry point. `OP.2.D`'s console flow is expected to live on
-the `PCP.4` device/HA tab (one console, never two).
+`NAV.1` leaves two seams in the model, not in prose: a device-scoped
+capability arrives as a **device tab**, never a new root (`PCP.4`); `Jobs`
+promotes to a root only once `PCP.5` gives it definitions/runs/schedules.
+The authorization conjunct is a `NAV.2` amendment when `DEPLOY.1A` lands.
 
-`op0b_0_close_d_v3a_d_v7b_pre_class2` (`upcoming`): purely a vendor-fact
-question now (D-V7b's readiness role decided; D-V3a/PAN B2 remain the PAN
-identity blocker, `OP.3`). `cp_remote_collection_done_marker_diagnostics`
-(`upcoming`) needs a real recurrence. PAN serial identity closure —
-hardware-blocked (see above).
+`op2_c_cp_clusterxl_adapter_scoping` stays `upcoming`/blocked with its notes
+preserved in `project/roadmap.json` (adapter, real `ClusterXLMemberSession`
+and real `PreflightProvider`/`EligibilityEvaluator` all IMPLEMENTED +
+unit-tested, none wired; CLASS 2 unreachable). `OP.2.D`'s console flow is
+expected on the `PCP.4` device/HA tab — one console, never two.
+`op0b_0_close_d_v3a_d_v7b_pre_class2` is a vendor-fact question only;
+`cp_remote_collection_done_marker_diagnostics` needs a real recurrence; PAN
+serial identity closure is hardware-blocked (see above).
 
 ## Open blockers
 
@@ -170,19 +166,23 @@ Concurrency budget stays at 1 per vendor pending its own real-env evidence.
 ## Automated test baseline
 
 ```
-Prior baseline 1825 passed / 24 skipped / 0 failed -- NOT re-run directly
-  this session (no pytest/lxml/paramiko in this sandbox, per CLAUDE.md).
-  New tests/test_pcp1_device_registry.py confirmed green by PR #83's fast
-  PR CI 'validate' check on commit a149f5a (build_history record has the
-  run URL). Project-state consistency verified directly: metadata_warnings
-  == []; build_history_index.py --check clean.
-Repository privacy gate: PASS / 0 findings, 487 files scanned (re-run
-  directly, 2026-09-05).
+Full serial suite, this machine, 2026-09-05 (this sandbox does have
+  pytest/lxml/paramiko/playwright/fastapi installed, unlike the PCP.1
+  session's):
+    after  NAV.1: 1950 passed / 22 skipped / 2 failed
+    before NAV.1: 1929 passed / 24 skipped / 2 failed
+  The same 2 failures before and after, pre-existing and unrelated to NAV.1
+  (both PCP.1 registry uuid4 call-count tests: the count also catches the
+  registry lock's own owner token, so both assert [1] == [] on HEAD; the AC
+  still holds, the proof technique over-reaches). Backlog
+  `pcp1_registry_uuid_call_count_test_defect`; NOT fixed here. The fast PR
+  `validate` job never ran that file -- that is how it reached main;
+  `full-regression` does. The 2 fewer skips are harness checks that now run
+  here (happy-dom + CON.1's live console walk).
+Render harnesses: node+happy-dom PASS; Playwright/Chromium PASS.
+Repository privacy gate: PASS / 0 findings, 490 files (2026-09-05).
+Project-state consistency: metadata_warnings == []; index --check clean.
 ```
-
-Run one-shot and read from file: `py -m pytest -q > pytest_result.log 2>&1`;
-serially at least once before closing a build; delete gitignored
-`data/`/`logs/` before the privacy gate (`AI_START_HERE.md` "Validation ladder").
 
 ## Known xfails
 

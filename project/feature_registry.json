@@ -153,7 +153,7 @@
     },
     {
       "id": "pan_alignment_foundation",
-      "title": "PAN Expected \u2194 Actual Alignment",
+      "title": "PAN Expected ↔ Actual Alignment",
       "status": "done",
       "introduced": "0.6.0A4.2",
       "weight": 10,
@@ -315,7 +315,7 @@
       "criteria": [
         {
           "id": "expert_clish",
-          "label": "Expert\u2192Clish evidence path",
+          "label": "Expert→Clish evidence path",
           "state": "done",
           "weight": 1
         },
@@ -524,7 +524,7 @@
       "target": "RB.1-RB.3 (rebase of original 0.6.0B)",
       "weight": 10,
       "summary": "Encrypted recovery plane separate from the evidence plane: vendor-native recovery artifacts, manifests, integrity validation, retention/immutability and restore-readiness evidence.",
-      "why": "Configuration evidence is deliberately redacted (secrets_redacted: True) and therefore NON-RESTORABLE by design. It is not a recovery backup, and the Configuration module's existence makes it easy to assume otherwise. docs/design/BACKUP_AND_RECOVERY_ARCHITECTURE.md + docs/design/BACKUP_RECOVERY_CONTRACTS.md (design frozen 2026-08-30). RB.1 landed 2026-08-30: utils/recovery_store.py + recovery_crypto.py (AES-256-GCM envelope encryption) + recovery_manifest.py + recovery_retention.py + main.py --recovery-store-check + resolve_recovery_root (utils/runtime_paths.py). Store/encryption/manifest/retention infrastructure only -- no collector calls it yet (RB.2/RB.3 gated). D2 RESOLVED 2026-08-30 (product owner): PAN service account may hold superuser for device-state export. RB.2 IMPLEMENTED 2026-08-30 (real-env validation owed): utils/recovery_collect.py orchestration (selective gateway targeting, scheduler-integrated, admission-coordinated) + panorama/panorama_recovery_collector.py. CP (RB.3) stays a typed blocked stub. RB.3a (CP Gaia attestation, read class) AUTOMATED_VALIDATED 2026-08-31. RB.3b (CP Gaia backup collection, operational-write): D3 RESOLVED 2026-08-31 (product owner, pilot-scoped, fail-closed); RB.3b unblocking prep DONE 2026-08-31 (feature/rb-3b-gate-prep) -- D4 decision brief (docs/design/D4_BACKUP_CREDENTIAL_IDENTITY_DECISION.md, distinct backup service account recommended), contract \u00a77.7/\u00a77.8 gate entries with literal Gaia strings, \u00a77.3 point 14, the durable operational-write ledger design (docs/design/RECOVERY_OPERATIONAL_WRITE_LEDGER.md), and the \u00a73-rule-5 version-unknown refusal all landed; RB.3b stays blocked pending product-owner / security-lead sign-off. The P0 cp_device_interaction_safety audit closed 2026-08-25 and is not a blocker. UPDATE 2026-08-31: RB.3b unblocking prep sign-off cleared all five blockers and implementation steps 2-7 landed the same day against fixture transports (offline layer, device core + C6, main.py wiring, project-metadata sync) -- superseding the 'stays blocked pending sign-off' line above. Full suite 879 passed / 23 skipped / 2 failed (documented pre-existing pollution), zero regressions. Status stays in_progress -- the cp_backup criterion below stays pending -- until the mandatory watched real R81.10/R81.20 single-gateway run happens; detail in docs/history/phase/RB_3B_CP_GAIA_BACKUP_COLLECTION.md and project/build_history.json.",
+      "why": "Configuration evidence is deliberately redacted (secrets_redacted: True) and therefore NON-RESTORABLE by design. It is not a recovery backup, and the Configuration module's existence makes it easy to assume otherwise. docs/design/BACKUP_AND_RECOVERY_ARCHITECTURE.md + docs/design/BACKUP_RECOVERY_CONTRACTS.md (design frozen 2026-08-30). RB.1 landed 2026-08-30: utils/recovery_store.py + recovery_crypto.py (AES-256-GCM envelope encryption) + recovery_manifest.py + recovery_retention.py + main.py --recovery-store-check + resolve_recovery_root (utils/runtime_paths.py). Store/encryption/manifest/retention infrastructure only -- no collector calls it yet (RB.2/RB.3 gated). D2 RESOLVED 2026-08-30 (product owner): PAN service account may hold superuser for device-state export. RB.2 IMPLEMENTED 2026-08-30 (real-env validation owed): utils/recovery_collect.py orchestration (selective gateway targeting, scheduler-integrated, admission-coordinated) + panorama/panorama_recovery_collector.py. CP (RB.3) stays a typed blocked stub. RB.3a (CP Gaia attestation, read class) AUTOMATED_VALIDATED 2026-08-31. RB.3b (CP Gaia backup collection, operational-write): D3 RESOLVED 2026-08-31 (product owner, pilot-scoped, fail-closed); RB.3b unblocking prep DONE 2026-08-31 (feature/rb-3b-gate-prep) -- D4 decision brief (docs/design/D4_BACKUP_CREDENTIAL_IDENTITY_DECISION.md, distinct backup service account recommended), contract §7.7/§7.8 gate entries with literal Gaia strings, §7.3 point 14, the durable operational-write ledger design (docs/design/RECOVERY_OPERATIONAL_WRITE_LEDGER.md), and the §3-rule-5 version-unknown refusal all landed; RB.3b stays blocked pending product-owner / security-lead sign-off. The P0 cp_device_interaction_safety audit closed 2026-08-25 and is not a blocker. UPDATE 2026-08-31: RB.3b unblocking prep sign-off cleared all five blockers and implementation steps 2-7 landed the same day against fixture transports (offline layer, device core + C6, main.py wiring, project-metadata sync) -- superseding the 'stays blocked pending sign-off' line above. Full suite 879 passed / 23 skipped / 2 failed (documented pre-existing pollution), zero regressions. Status stays in_progress -- the cp_backup criterion below stays pending -- until the mandatory watched real R81.10/R81.20 single-gateway run happens; detail in docs/history/phase/RB_3B_CP_GAIA_BACKUP_COLLECTION.md and project/build_history.json.",
       "criteria": [
         {
           "id": "pan_export",
@@ -965,7 +965,7 @@
     },
     {
       "id": "deploy1_oidc_viewer",
-      "title": "DEPLOY.1A \u00e2\u20ac\u201d Authenticated Read-Only Viewer Boundary",
+      "title": "DEPLOY.1A â€” Authenticated Read-Only Viewer Boundary",
       "status": "planned",
       "target": "DEPLOY.1A",
       "weight": 9,
@@ -1000,7 +1000,7 @@
     },
     {
       "id": "deploy1_evidence_egress_policy",
-      "title": "DEPLOY.1 \u00e2\u20ac\u201d Evidence Egress & Sharing Policy",
+      "title": "DEPLOY.1 â€” Evidence Egress & Sharing Policy",
       "status": "planned",
       "target": "DEPLOY.1",
       "weight": 6,
@@ -1689,6 +1689,53 @@
           "id": "shared_primitive_registry",
           "label": "One primitive registry with CE.2, not two",
           "state": "pending",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "left_vertical_product_navigation",
+      "title": "Left vertical product navigation + one availability-gated navigation model",
+      "status": "done",
+      "introduced": "NAV.1",
+      "weight": 5,
+      "summary": "Collapsible left rail grouped by six product domains over the existing module panels, driven by one model (static/navigation_ui.js) shared by the rail and the device-detail tab strip; an entry renders only when the shell ships the surface it points at.",
+      "why": "The flat one-root-per-view topbar strip could not express which entries are product domains and which are one view inside one, had no room left, and let a navigation entry exist without any backend behind it. Contract: docs/design/NAVIGATION_INFORMATION_ARCHITECTURE.md.",
+      "criteria": [
+        {
+          "id": "domain_grouping",
+          "label": "Six evaluated product-domain roots; Devices first-class; device-scoped views are tabs, not roots",
+          "state": "done",
+          "weight": 2
+        },
+        {
+          "id": "availability_rule",
+          "label": "An entry/tab renders iff its shell ships the surface; no disabled, greyed or 'coming soon' placeholder anywhere",
+          "state": "done",
+          "weight": 2
+        },
+        {
+          "id": "collapse_is_density",
+          "label": "Collapse/expand changes presentation only -- identical entry set, no availability or authorization effect",
+          "state": "done",
+          "weight": 1
+        },
+        {
+          "id": "routes_preserved",
+          "label": "Every pre-existing hash/localStorage route resolves; the module universe is derived from the model, not re-listed",
+          "state": "done",
+          "weight": 1
+        },
+        {
+          "id": "no_enrollment_affordance",
+          "label": "'Add Device' is a declared contextual action of the devices domain, is no root, and renders nowhere while pcp_console_registry_write_gate is open",
+          "state": "done",
+          "weight": 1
+        },
+        {
+          "id": "authorization_seam_only",
+          "label": "Authorization-aware seam with model 'none'; no role/permission/scope/claim gates any navigation decision",
+          "state": "done",
           "weight": 1
         }
       ]

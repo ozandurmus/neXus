@@ -47,32 +47,38 @@ document.getElementById("themeToggle")?.addEventListener("click", toggleTheme);
 
 
 // SecurityExpert Phase 0.6.0A4.3.3 — Configuration UI refinement
+// NAV.1 D-NAV8: the valid-module universe is *derived* from the rendered
+// navigation (navigation_ui.js), never re-listed here. Two hard-coded lists
+// were the previous shape and they had already drifted apart — the hash list
+// honoured five modules while the localStorage list honoured eight, so
+// `#discovery`, `#failover` and `#exclusions` silently fell back to Overview.
+// Deriving the set from the model keeps every pre-existing route working and
+// makes a route impossible to forget when a shell ships a new panel.
 let activeModule = "overview";
 function savedModule() {
+    const modules = navigationModuleIds();
     const hashModule = safe(window.location.hash).replace("#", "");
-    if (["overview", "inventory", "configuration", "compliance", "project-plan"].includes(hashModule)) {
+    if (modules.includes(hashModule)) {
         return hashModule;
     }
     try {
         const value = localStorage.getItem("securityexpert-module");
-        return ["overview", "inventory", "configuration", "compliance", "discovery", "failover", "exclusions", "project-plan"].includes(value) ? value : "overview";
+        return modules.includes(value) ? value : navigationDefaultModule();
     } catch (error) {
-        return "overview";
+        return navigationDefaultModule();
     }
 }
 
 
 function switchModule(nextModule) {
-    activeModule = ["overview", "inventory", "configuration", "compliance", "discovery", "failover", "exclusions", "project-plan"].includes(nextModule)
+    activeModule = navigationModuleIds().includes(nextModule)
         ? nextModule
-        : "overview";
+        : navigationDefaultModule();
 
     document.querySelectorAll("[data-module-panel]").forEach(panel => {
         panel.classList.toggle("active", panel.dataset.modulePanel === activeModule);
     });
-    document.querySelectorAll(".module-nav-item").forEach(button => {
-        button.classList.toggle("active", button.dataset.module === activeModule);
-    });
+    syncNavigationActiveState(activeModule);
 
     const inventoryControls = document.getElementById("inventoryTopControls");
     const configurationControls = document.getElementById("configurationTopControls");
@@ -103,12 +109,19 @@ function switchModule(nextModule) {
     if (activeModule === "failover") renderFailoverModule();
     if (activeModule === "exclusions") renderExclusionsModule();
     if (activeModule === "project-plan") renderProjectPlan();
+    // CON.2's job surface is a console-only panel (NAV.1 §5): console_actions.js
+    // is not part of the composed report script, so this stays a guarded call —
+    // in the exported report the function does not exist and no jobs panel does
+    // either, which is exactly why the report renders no Jobs entry.
+    if (activeModule === "jobs" && typeof consoleRefreshJobsTable === "function") {
+        consoleRefreshJobsTable().catch(() => {});
+    }
 }
 
 
-document.querySelectorAll(".module-nav-item").forEach(button => {
-    button.addEventListener("click", () => switchModule(button.dataset.module));
-});
+// Primary-navigation clicks are dispatched by navigation_ui.js's one delegated
+// listener on the rail, so the rail can be re-rendered without orphaning a
+// handler. Nothing binds per-button here any more.
 
 document.getElementById("overviewOpenConfiguration")?.addEventListener("click", () => switchModule("configuration"));
 document.getElementById("overviewOpenCompliance")?.addEventListener("click", () => switchModule("compliance"));
