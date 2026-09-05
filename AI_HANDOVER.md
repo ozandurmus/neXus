@@ -16,133 +16,128 @@ doc. Prior versions are in git history.
 
 ## 1. Snapshot
 
-- Date: 2026-09-05. Branch: `claude/op2c-release-gate-scoping-bwym22`.
-- Build: `op2_c_release_gate_dependency_scoping` — **DONE**. Read-only
-  ARCHITECTURE / RELEASE-GATE SCOPING movement: classified the four
-  remaining `OP.2.C` production-reachability gates, established their safe
-  dependency order, and selected the smallest currently actionable next
-  build. No product code, taxonomy, `Authorizer`, adapter, UI, or device
-  command touched — this session only reads source/docs and edits
-  project-state metadata (`project/roadmap.json`, `project/build_history.json`,
-  `CURRENT_STATE.md`, `docs/history/INDEX.md`, this file).
-- No PR opened yet for this session's work (pending, see "Exact next
-  action").
+- Date: 2026-09-05. Branch: `claude/pcp0-freeze-merge-4e6kb4` (built on
+  `claude/nexus-control-plane-arch-mutgr9`'s reviewed head `92c9892`, which
+  sits directly on `main` `ff700e38` -- `main` had not advanced).
+- Build: `product_control_plane_architecture_draft` (`PCP.0`) — **COMPLETE,
+  FROZEN 2026-09-05.** Product Owner approved the product direction and
+  architecture, conditioned on exactly two mechanical freeze corrections,
+  both applied this session (see below). This is a bounded freeze movement,
+  not a design review: no product-direction or architecture content beyond
+  those two corrections changed.
+- Docs/state only. No product code, test, taxonomy, console route, device
+  command, schema or UI change.
+- PR to `main` opened this session (see "Delivery" below for number/status
+  once created); merge only after fast CI is green and conflict-free.
 
-## 2. What changed this session
+## 2. What changed this session (the freeze)
 
-- **Classified the four gates** (`docs/design/FAILOVER_ENGINE_ARCHITECTURE.md`
-  section 10; `CURRENT_STATE.md`'s pre-existing blocker list):
-  1. `DEPLOY.1A` OIDC boundary + RBAC `OPERATE` role — **externally blocked**
-     on `DEPLOY.1` server availability (`project/roadmap.json` already
-     records this as "external").
-  2. Production/container CP SSH host-key trust hardening — **dependent on
-     the same external blocker as (1)**: `backlog.json`'s own
-     `cp_production_ssh_host_key_trust_hardening` target field reads
-     "production container/pod runtime hardening (post-DEPLOY.1)" — not an
-     independently closable item.
-  3. The signed change-management/network-security review — **partially
-     engineering-actionable now**. No drafted artifact exists anywhere in
-     the repository for it (confirmed by search), unlike its sibling
-     per-primitive network-device command gate (`OP.2.1`, already DRAFTED,
-     `docs/history/phase/OP_2_1_CP_CLUSTERXL_MUTATION_COMMAND_GATE.md`).
-     Final sign-off is organizational/external (network-security leads),
-     but *drafting* the package needs no server, code, or device contact —
-     the one item in the set actionable today.
-  4. The protected production entry point + live `adapter_resolver`
-     construction — **dependent on (1) and (2) both landing first**; a live
-     resolver pointed at `RealClusterXLMemberSession` in a genuinely
-     production context needs both the auth boundary and the hardened
-     transport in place. Confirmed by repository search: no
-     `adapter_resolver` module and no production `ActionCoordinator`
-     construction exists outside `tests/`.
-- **Selected smallest next build**:
-  `op2_c_change_management_review_package_draft` — draft (not sign) the
-  change-management/network-security review package. DOCS-class, no new
-  architecture/authority decision required (compiles already-frozen facts:
-  `OP.2.0` architecture + its section 10.2 reconciliation, `OP.2.1`'s gate
-  content, `OP.2.1b`'s `D-V7b`/`D-F3` readiness-policy amendment, the
-  IMPLEMENTED-but-unwired adapter/session/preflight-provider trio, the
-  unconditional `DenyAllAuthorizer` boundary). Explicit non-goals and
-  acceptance criteria recorded in `project/roadmap.json`
-  `now_next.upcoming` (new row) — see that entry for the full list rather
-  than restating it here.
-- **No stale JSON/CURRENT_STATE.md contradiction found** needing correction
-  beyond the routine `now`/`next` rotation below; `cp_device_interaction_
-  safety`'s already-CLOSED status (`backlog.json`, 2026-08-25) correctly
-  stays outside today's four-gate blocker set — confirmed, not corrected.
-- **Project-state**: new `project/build_history.json` record (newest,
-  `done`, movement `ARCHITECTURE`); `project/roadmap.json` `now_next.now` =
-  this build (done), one new dated note appended to `now_next.next`
-  (`op2_c_cp_clusterxl_adapter_scoping`, unchanged, still `blocked`), one new
-  `now_next.upcoming` row (`op2_c_change_management_review_package_draft`);
-  `CURRENT_STATE.md` rewritten (exactly at the 200-line cap — "Active
-  build" section replaced, predecessor folded into the one-line list,
-  "Exact next build" section gained a short dependency-order paragraph);
-  `docs/history/INDEX.md` regenerated (`scripts/build_history_index.py`).
+**Correction 1 — registry mutation lock ownership and privacy (§21).** The
+lock's release step is now instance-safe: the exclusive-create call embeds
+a fresh random `owner_token` in `data/state/device_registry.lock` alongside
+the existing `pid`/`hostname`/`acquired_at_utc` diagnostic fields; release
+re-reads the file and deletes it only if its `owner_token` still matches the
+one the releasing process itself wrote. A mismatch or missing file — an
+externally deleted-and-recreated lock now held by a different writer — is
+left untouched, never unlinked. This closes the exact hole where a slow,
+non-crashed holder's own normal release could otherwise destroy a different
+writer's active lock instance after a human wrongly declared the original
+holder dead. AC-5 widened to cover the lock file explicitly; new AC-15
+states the instance-safety guarantee; non-goals/validation-ladder updated.
+The lock file is now explicitly classified **LOCAL-SENSITIVE**
+(`PRIVACY_AND_DATA_HANDLING.md` CLASS 2), same as the registry file, and
+both are kept out of the support bundle (`run_support_bundle` enumerates
+only `data/runs/*`, never `data/state/*`).
+
+**Correction 2 — §22 amendment timing.** Items 1-3 (amendments to
+`OPERATOR_CONSOLE_ARCHITECTURE.md` §12, `COMPLIANCE_ASSIGNMENT_AND_
+FRAMEWORKS.md` §4b, `BACKUP_AND_RECOVERY_ARCHITECTURE.md` §9) are applied
+by this freezing session — appended verbatim to those three documents.
+Item 4 (`AI_START_HERE.md` "What this is" sentence) is explicitly **not**
+applied now: it is only true once `PCP.1` actually ships a persistent
+registry, so writing it into the canonical cold-start entry point today
+would misstate current capability. Moved to the `PCP.1` close scope.
+
+**Status flip.** `docs/design/PRODUCT_CONTROL_PLANE_ARCHITECTURE.md`'s own
+`## Status` line: `DRAFT` → `FROZEN` (§23/§24 updated to match; the
+document's status-line token is what
+`tests/test_architecture_convergence.py::test_a_draft_contract_never_backs_a_terminal_build_history_record`
+checks against the build_history record's own status).
+
+**State reconciliation (no duplicate records created):**
+
+- `project/build_history.json` head record (`product_control_plane_
+  architecture_draft`): status `in_progress` → `complete`, `completed`
+  date added, summary extended with the freeze paragraph, `risks_forward`
+  rewritten for the now-terminal record.
+- `project/roadmap.json`: `now_next.now` marked `complete`/FROZEN;
+  `now_next.next` (`PCP.1`) notes updated (AC-1a..AC-15, ownership-token
+  lock, "not started"); `PCP.x` track status `planned` → `in_progress`;
+  `pcp_console_registry_write_gate` **corrected** — this entry had drifted
+  from the architecture document after round 1's 2026-09-05 widening (it
+  still pre-decided "candidate-based enrollment now" in both of its
+  options); rewritten to the document's actual no-pre-decision, three-option
+  (a/b/c) position, with no new decision content introduced; two
+  roadmap-notes/architecture-review-notes entries updated to match.
+- `project/feature_registry.json`: `device_registry_enrollment_foundation`'s
+  `registry_model` and `privacy_bundle_exclusion` criteria labels extended
+  for the ownership-token release and the lock file's own classification —
+  both criteria stay `pending` (`PCP.1` not started).
+- `CURRENT_STATE.md`: "Active build" / "Exact next build" / checkpoint /
+  test-baseline sections updated to FROZEN; stays ≤ 200 lines; still names
+  `product_control_plane_architecture_draft`.
+- `docs/history/INDEX.md`: regenerated (`scripts/build_history_index.py`).
 
 ## 3. Exact next action
 
-Open a PR from `claude/op2c-release-gate-scoping-bwym22` to `main`, watch
-FAST PR CI, merge when green, sync local `main`. Then start
-`op2_c_change_management_review_package_draft` (`now_next.upcoming`): draft
-`docs/history/phase/OP_2_C_CHANGE_MANAGEMENT_NETWORK_SECURITY_REVIEW.md`
-(naming convention matching `OP_2_1_CP_CLUSTERXL_MUTATION_COMMAND_GATE.md`)
-per the acceptance criteria in `project/roadmap.json`
-`now_next.upcoming[0].notes`. `Sonnet 5, normal` reasoning — deterministic
-compilation against already-frozen contracts, no new decision. Do not
-attempt to close `DEPLOY.1A`, the SSH trust hardening, or the protected
-entry point in that same build — they stay gated on `DEPLOY.1` server
-arrival (external) and, for the entry point, on the first two landing.
+1. Open a PR from `claude/pcp0-freeze-merge-4e6kb4` to `main` (fast PR CI is
+   sufficient — docs/state only). Confirm it is clean and CI is green, then
+   merge, sync local `main` to `origin/main`.
+2. Then `PCP.1` (`pcp_1_device_registry_manual_enrollment_foundation`),
+   `Sonnet 5, normal`: one short prompt pointing at §21 of the now-frozen
+   architecture document and `tests/test_pcp1_device_registry.py`. Implement
+   the registry mutation lock exactly as specified — including the
+   ownership-token instance-safe release (AC-15) — not as a bare
+   unconditional unlink, and not with round 1's since-closed "duplicate-
+   record race is an accepted limitation" framing. No device contact, no UI.
+   At `PCP.1` close, also land the deferred `AI_START_HERE.md` §22 item 4
+   sentence.
 
-Independent, any order, unaffected by this session (unchanged from prior
-handovers): **B.** `op0b_0_close_d_v3a_d_v7b_pre_class2` — vendor-fact
-closure for `D-V3a`/`D-V7b`, official-GitHub-mirror-first technique,
-`Sonnet 5, extended thinking (high)`. **C.** `d_f3_flap_failover_threshold_
-decision` already DECIDED, no action. **D.** PAN serial identity closure —
-hardware-blocked.
-
-Not started by this build, correctly: any code for the adapter_resolver,
-Authorizer, taxonomy member, or entry point; the actual change-management
-review sign-off (that is the next build's *drafting* half only — signing
-is a separate, later, human action).
+Unchanged and independent: `op2_c_cp_clusterxl_adapter_scoping` stays
+blocked on `DEPLOY.1`; `op0b_0_close_d_v3a_d_v7b_pre_class2`; PAN serial
+identity closure (hardware-blocked); `cp_remote_collection_done_marker_
+diagnostics` (needs a recurrence).
 
 ## 4. Test delta
 
-- Docs/project-metadata-only build; no product code path changed. Full
-  `pytest` suite **not run** — this sandbox has no `pytest`/`lxml`/
-  `paramiko`/`requests` installed (`ModuleNotFoundError`) and `AGENTS.md`/
-  `CLAUDE.md` instruct using the existing toolchain directly, never
-  bootstrapping one, so this is reported rather than worked around.
-  Verified instead by directly invoking the same logic the relevant tests
-  assert, without pytest: `utils.project_plan.build_project_plan_payload()
-  ["metadata_warnings"] == []` (passed); `now_next.now.build` string present
-  in `CURRENT_STATE.md` (passed); `CURRENT_STATE.md` line count == 200,
-  `<= 200` (passed); `scripts/build_history_index.py --check` exits 0 after
-  regeneration (passed); every `build_history.json` `docs.*` link resolves
-  (passed, checked directly). A full `py -m pytest -q` run is still owed by
-  whoever next has a working environment, before this branch merges to
-  `main`, per `AI_START_HERE.md`'s validation ladder.
-- Repository privacy gate not run this session (no runtime/`data`/`logs`
-  artifacts created; only `project/*.json`, `CURRENT_STATE.md`,
-  `docs/history/INDEX.md` and this file changed — no secret-bearing content
-  class touched).
+- No product code changed; full `pytest` **not run** — this sandbox has no
+  `pytest`/`lxml`/`paramiko` (reported, not bootstrapped, per `CLAUDE.md`).
+  Verified directly instead: `utils.project_plan.build_project_plan_payload()
+  ["metadata_warnings"] == []`; `scripts/build_history_index.py --check`
+  clean; every `build_history.json` doc link resolves; `CURRENT_STATE.md`
+  names `now.build` and is exactly 200 lines; `git diff --check` clean;
+  the draft/frozen build-history gate
+  (`test_a_draft_contract_never_backs_a_terminal_build_history_record`)
+  hand-verified against the corrected status line and build status.
+- Repository privacy gate re-run this session: **PASS / 0 findings** (484
+  files scanned).
+- Baseline 1825 passed / 24 skipped / 0 failed carried forward, not re-run
+  (no product code touched).
+- `git fetch origin` confirmed `main` had not advanced past the reviewed
+  head (merge-base of `claude/nexus-control-plane-arch-mutgr9` and
+  `origin/main` equals `origin/main`'s own head, `ff700e38`) — no
+  reconciliation against a moved `main` was needed.
 
 ## 5. New risks
 
-- None to any reachable capability — this session changed no code.
-- Process risk only: the `now`/`next` rotation above makes
-  `op2_c_release_gate_dependency_scoping` (a scoping session, not a code
-  build) the `build_history.json` head record, per
-  `utils.project_plan`'s R1 rule ("newest record IS the current build").
-  This is the same pattern the repository already uses for non-code
-  ARCHITECTURE/DOCS sessions (e.g. RB.3b's "unblocking prep") — noted here
-  only so a future session does not mistake `now` for meaning "code
-  shipped."
-- The full automated-test baseline (1825 passed / 24 skipped / 0 failed,
-  `op2_c1_admin_down_pnote_safety_corrections`) was not re-verified this
-  session (no `pytest` available) — carried forward unchanged, not
-  re-claimed as re-run.
-- Everything else unchanged from the prior handover: PAN B2 tension (S0
-  `MISMATCH` vs. manual all-`MATCH` observation) not reconciled; `D-V3a`
-  stays `STILL_UNKNOWN`; CLASS 2 stays frozen architecture, not
-  implemented, not reachable.
+- None to any reachable capability — no code changed.
+- Process: `product_control_plane_architecture_draft` is now a terminal
+  (`complete`) build_history record; do not reopen it for a future
+  correction — any further change to the frozen document is its own new
+  movement/record.
+- Product: a future `PCP.1` session must not quietly drop the ownership-
+  token instance-safe release or reintroduce a bare unconditional unlink.
+  `pcp_console_registry_write_gate` remains open for both enrollment
+  intents, unaffected by this freeze. The `AI_START_HERE.md` §22 item 4
+  sentence must land at `PCP.1` close — do not forget it, and do not pull
+  it forward early.

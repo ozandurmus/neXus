@@ -282,6 +282,18 @@ The "living product" feeling arrives at `CON.2`, and nothing up to and including
 3. **`AI_START_HERE.md`** — the "One Python CLI, no web server" line becomes
    accurate again only after `CON.1` lands; the amendment is part of `CON.1`'s
    own definition of done, not of this document.
+4. **Amendment (`PCP.0`, 2026-09-05, `PRODUCT_CONTROL_PLANE_ARCHITECTURE.md`
+   §22 item 1)** — the device experience and first-run onboarding described
+   there (`PCP.4`) are `CON.x` surface work under this document, extended
+   with a registry-driven experience; nothing in §3 ("what this is not"),
+   §4 (the intent boundary), §6 (payload parity), §7 (security model) or
+   §10 (phasing) is relaxed. **Neither the manual-enrollment intent nor the
+   candidate-id enrollment intent is added to §4 as an authorized write** —
+   both are recorded as pending the `pcp_console_registry_write_gate` open
+   decision, whichever way that decision lands. A closed candidate id is a
+   *narrower* input than a free-typed endpoint; it is not, by itself, an
+   authorization for a persistent product-state write to reach the console
+   before `DEPLOY.1A`. All prohibitions in this document stand unrelaxed.
 
 ## 13. Risks
 
