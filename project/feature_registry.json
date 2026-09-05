@@ -1448,7 +1448,7 @@
       "criteria": [
         {
           "id": "registry_model",
-          "label": "DeviceRecord + lifecycle table; no secret-capable field; opaque ids",
+          "label": "DeviceRecord + lifecycle table; no secret-capable field; opaque ids; mutation lock release is instance-safe (ownership-token equality check, never a bare unlink)",
           "state": "pending",
           "weight": 2
         },
@@ -1466,7 +1466,7 @@
         },
         {
           "id": "privacy_bundle_exclusion",
-          "label": "Registry never in the support bundle, report, console payload or repository",
+          "label": "Registry file and its mutation lock file (both LOCAL-SENSITIVE/CLASS 2) never in the support bundle, report, console payload or repository",
           "state": "pending",
           "weight": 1
         },

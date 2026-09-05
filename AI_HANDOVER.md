@@ -16,98 +16,92 @@ doc. Prior versions are in git history.
 
 ## 1. Snapshot
 
-- Date: 2026-09-05. Branch: `claude/nexus-control-plane-arch-mutgr9`
-  (from `main` `ff700e38`).
-- Build: `product_control_plane_architecture_draft` (`PCP.0`) — **still IN
-  PROGRESS, freeze withheld pending a further Product Owner review.** This
-  is the *second* bounded correction pass on
-  `docs/design/PRODUCT_CONTROL_PLANE_ARCHITECTURE.md`. The PO accepted
-  round 1's corrections 1, 2, 4, 5 and most of correction 3, but rejected
-  round 1's acceptance of a duplicate-`device_id` outcome under concurrent
-  CLI writers as a legitimate `PCP.1` limitation. That contradiction is now
-  closed. Status stays **DRAFT**.
+- Date: 2026-09-05. Branch: `claude/pcp0-freeze-merge-4e6kb4` (built on
+  `claude/nexus-control-plane-arch-mutgr9`'s reviewed head `92c9892`, which
+  sits directly on `main` `ff700e38` -- `main` had not advanced).
+- Build: `product_control_plane_architecture_draft` (`PCP.0`) — **COMPLETE,
+  FROZEN 2026-09-05.** Product Owner approved the product direction and
+  architecture, conditioned on exactly two mechanical freeze corrections,
+  both applied this session (see below). This is a bounded freeze movement,
+  not a design review: no product-direction or architecture content beyond
+  those two corrections changed.
 - Docs/state only. No product code, test, taxonomy, console route, device
   command, schema or UI change.
-- **Merge to `main` is still blocked** pending the next Product Owner
-  review. No PR merged by this session.
+- PR to `main` opened this session (see "Delivery" below for number/status
+  once created); merge only after fast CI is green and conflict-free.
 
-## 2. What changed this session (round 2 only — see git history for round 1
-and the original `PCP.0` build)
+## 2. What changed this session (the freeze)
 
-**The core fix — a cross-process registry mutation lock (§21).** The PO's
-objection: the registry is the durable product-identity source, and atomic
-tmp-then-`replace()` prevents a torn *file*, not a torn *decision* — two
-concurrent `--registry-enroll` calls could each pass the duplicate check
-against the same pre-write state and both commit, producing two records
-for one normalized endpoint. Round 1 had accepted that outcome as a known
-limitation; the PO said this cannot stand for the identity source of
-record. Fixed by requiring `--registry-enroll`/`--registry-disable` to
-acquire a single, narrow, file-based lock —
-`data/state/device_registry.lock`, atomic `O_CREAT | O_EXCL` (portable
-POSIX/Windows, no third-party library) — held across the *complete*
-load → validate → duplicate-check-or-transition → atomic-replace sequence.
-`--registry-list` stays lock-free (already race-safe, read-only).
+**Correction 1 — registry mutation lock ownership and privacy (§21).** The
+lock's release step is now instance-safe: the exclusive-create call embeds
+a fresh random `owner_token` in `data/state/device_registry.lock` alongside
+the existing `pid`/`hostname`/`acquired_at_utc` diagnostic fields; release
+re-reads the file and deletes it only if its `owner_token` still matches the
+one the releasing process itself wrote. A mismatch or missing file — an
+externally deleted-and-recreated lock now held by a different writer — is
+left untouched, never unlinked. This closes the exact hole where a slow,
+non-crashed holder's own normal release could otherwise destroy a different
+writer's active lock instance after a human wrongly declared the original
+holder dead. AC-5 widened to cover the lock file explicitly; new AC-15
+states the instance-safety guarantee; non-goals/validation-ladder updated.
+The lock file is now explicitly classified **LOCAL-SENSITIVE**
+(`PRIVACY_AND_DATA_HANDLING.md` CLASS 2), same as the registry file, and
+both are kept out of the support bundle (`run_support_bundle` enumerates
+only `data/runs/*`, never `data/state/*`).
 
-- **Contention fails closed immediately**: no wait, no retry, no queueing.
-  A `DeviceRegistryLockError` fires before any load/validate/duplicate-
-  check/write.
-- **Crash/stale-lock recovery is explicit and manual, never automatic.**
-  The lock file records PID/hostname/timestamp for a *human* to read; no
-  code path ever inspects PID liveness or lock age to auto-clear it —
-  that would just trade one guess for another. Recovery is a documented
-  manual delete after a human externally confirms the holder is dead.
-- Replaced AC-10 (which had accepted the duplicate-record race) with a
-  corrected AC-10 asserting **at most one record and one `device_id`**
-  under any interleaving; added AC-13 (lock-contention fails closed
-  pre-mutation) and AC-14 (no automatic staleness recovery).
-- Non-goals list rewritten to state precisely what is still *not*
-  introduced: no reusable/general locking library, no distributed or
-  Postgres advisory lock, no blocking/retry/backoff, no HTTP wiring, no
-  admission-coordinator involvement, no deployment work. The lock is
-  scoped to `utils/device_registry.py` alone.
-- Fixed a stale sentence the new lock design broke: the "Deterministic
-  registry contract" intro previously claimed "no new lock primitive,"
-  which the new mutation lock directly contradicted.
+**Correction 2 — §22 amendment timing.** Items 1-3 (amendments to
+`OPERATOR_CONSOLE_ARCHITECTURE.md` §12, `COMPLIANCE_ASSIGNMENT_AND_
+FRAMEWORKS.md` §4b, `BACKUP_AND_RECOVERY_ARCHITECTURE.md` §9) are applied
+by this freezing session — appended verbatim to those three documents.
+Item 4 (`AI_START_HERE.md` "What this is" sentence) is explicitly **not**
+applied now: it is only true once `PCP.1` actually ships a persistent
+registry, so writing it into the canonical cold-start entry point today
+would misstate current capability. Moved to the `PCP.1` close scope.
 
-**Two factual wording fixes:**
+**Status flip.** `docs/design/PRODUCT_CONTROL_PLANE_ARCHITECTURE.md`'s own
+`## Status` line: `DRAFT` → `FROZEN` (§23/§24 updated to match; the
+document's status-line token is what
+`tests/test_architecture_convergence.py::test_a_draft_contract_never_backs_a_terminal_build_history_record`
+checks against the build_history record's own status).
 
-1. **AC-2b overclaim removed.** It previously said the `credential_ref`
-   format regex proves a value "could not satisfy" being a real secret.
-   Rewritten to state only the real guarantees: it is a bounded opaque
-   profile identifier, `DeviceRecord` has no separate credential-payload
-   field, and `PCP.1` never resolves it to an actual credential anywhere —
-   an operator who pastes a real secret into it still has that string
-   persisted verbatim; the format check constrains shape, not secrecy.
-2. **§18 stale wording fixed.** The closing paragraph still said "the one
-   genuine contradiction is isolated to a single console intent" after
-   round 1 had already widened the write-gate to cover both enrollment
-   intents. Now names "a single console enrollment-write boundary —
-   covering both the manual and the candidate-based enrollment intents
-   together."
+**State reconciliation (no duplicate records created):**
 
-- `project/roadmap.json`: the `PCP.1` `next`-note's §21 description updated
-  (mentions the mutation lock; AC-range corrected to `AC-1a..AC-14`).
-- `project/build_history.json`: the existing `in_progress` head record
-  (`product_control_plane_architecture_draft`) amended in place again —
-  summary/evidence/`risks_forward` extended for round 2; still no new
-  record (same still-open build). `docs/history/INDEX.md` regenerated.
+- `project/build_history.json` head record (`product_control_plane_
+  architecture_draft`): status `in_progress` → `complete`, `completed`
+  date added, summary extended with the freeze paragraph, `risks_forward`
+  rewritten for the now-terminal record.
+- `project/roadmap.json`: `now_next.now` marked `complete`/FROZEN;
+  `now_next.next` (`PCP.1`) notes updated (AC-1a..AC-15, ownership-token
+  lock, "not started"); `PCP.x` track status `planned` → `in_progress`;
+  `pcp_console_registry_write_gate` **corrected** — this entry had drifted
+  from the architecture document after round 1's 2026-09-05 widening (it
+  still pre-decided "candidate-based enrollment now" in both of its
+  options); rewritten to the document's actual no-pre-decision, three-option
+  (a/b/c) position, with no new decision content introduced; two
+  roadmap-notes/architecture-review-notes entries updated to match.
+- `project/feature_registry.json`: `device_registry_enrollment_foundation`'s
+  `registry_model` and `privacy_bundle_exclusion` criteria labels extended
+  for the ownership-token release and the lock file's own classification —
+  both criteria stay `pending` (`PCP.1` not started).
+- `CURRENT_STATE.md`: "Active build" / "Exact next build" / checkpoint /
+  test-baseline sections updated to FROZEN; stays ≤ 200 lines; still names
+  `product_control_plane_architecture_draft`.
+- `docs/history/INDEX.md`: regenerated (`scripts/build_history_index.py`).
 
 ## 3. Exact next action
 
-1. Open (or update, if already open) a PR from
-   `claude/nexus-control-plane-arch-mutgr9` to `main` (fast PR CI is
-   sufficient — docs/state only). **Do not merge.** Return to the Product
-   Owner for a further review pass of the corrected
-   `docs/design/PRODUCT_CONTROL_PLANE_ARCHITECTURE.md`, focused on §21's
-   completed mutation-lock design and its AC-10/AC-13/AC-14.
-2. On approval: apply §22 amendments, flip the doc status to `FROZEN`, set
-   the build record to `done`, keep `next` = `PCP.1`, merge, sync `main`.
-   `Sonnet 5, extended thinking (high)`.
-3. Then `PCP.1` (`Sonnet 5, normal`): one short prompt pointing at §21 and
-   `tests/test_pcp1_device_registry.py`. The mutation lock is now part of
-   that contract — implement it exactly as specified (single exclusive-
-   create file lock, fail-closed contention, manual stale-lock recovery),
-   not as a generic concurrency utility. No device contact, no UI.
+1. Open a PR from `claude/pcp0-freeze-merge-4e6kb4` to `main` (fast PR CI is
+   sufficient — docs/state only). Confirm it is clean and CI is green, then
+   merge, sync local `main` to `origin/main`.
+2. Then `PCP.1` (`pcp_1_device_registry_manual_enrollment_foundation`),
+   `Sonnet 5, normal`: one short prompt pointing at §21 of the now-frozen
+   architecture document and `tests/test_pcp1_device_registry.py`. Implement
+   the registry mutation lock exactly as specified — including the
+   ownership-token instance-safe release (AC-15) — not as a bare
+   unconditional unlink, and not with round 1's since-closed "duplicate-
+   record race is an accepted limitation" framing. No device contact, no UI.
+   At `PCP.1` close, also land the deferred `AI_START_HERE.md` §22 item 4
+   sentence.
 
 Unchanged and independent: `op2_c_cp_clusterxl_adapter_scoping` stays
 blocked on `DEPLOY.1`; `op0b_0_close_d_v3a_d_v7b_pre_class2`; PAN serial
@@ -120,24 +114,30 @@ diagnostics` (needs a recurrence).
   `pytest`/`lxml`/`paramiko` (reported, not bootstrapped, per `CLAUDE.md`).
   Verified directly instead: `utils.project_plan.build_project_plan_payload()
   ["metadata_warnings"] == []`; `scripts/build_history_index.py --check`
-  clean; `CURRENT_STATE.md` names `now.build` and is ≤ 200 lines; every
-  `build_history.json` doc link resolves; `git diff --check` clean; no
-  stray unescaped `|` from the new prose lands inside a markdown table
-  row (checked directly); no other stale lock/concurrency claim remains
-  elsewhere in the document (checked directly).
-- Repository privacy gate re-run this session: **PASS / 0 findings**.
+  clean; every `build_history.json` doc link resolves; `CURRENT_STATE.md`
+  names `now.build` and is exactly 200 lines; `git diff --check` clean;
+  the draft/frozen build-history gate
+  (`test_a_draft_contract_never_backs_a_terminal_build_history_record`)
+  hand-verified against the corrected status line and build status.
+- Repository privacy gate re-run this session: **PASS / 0 findings** (484
+  files scanned).
 - Baseline 1825 passed / 24 skipped / 0 failed carried forward, not re-run
   (no product code touched).
+- `git fetch origin` confirmed `main` had not advanced past the reviewed
+  head (merge-base of `claude/nexus-control-plane-arch-mutgr9` and
+  `origin/main` equals `origin/main`'s own head, `ff700e38`) — no
+  reconciliation against a moved `main` was needed.
 
 ## 5. New risks
 
 - None to any reachable capability — no code changed.
-- Process: the head `build_history.json` record stays `in_progress`. Do
-  not flip it to `done` before the PO's next review actually freezes the
-  document.
-- Product: a future `PCP.1` implementation must not quietly drop the
-  mutation lock or reintroduce the "duplicate-record race is an accepted
-  limitation" framing round 1 had — that framing is exactly what this
-  round closed as a genuine architecture contradiction, not a style
-  preference. `pcp_console_registry_write_gate` remains undecided for both
-  enrollment intents, unaffected by this round.
+- Process: `product_control_plane_architecture_draft` is now a terminal
+  (`complete`) build_history record; do not reopen it for a future
+  correction — any further change to the frozen document is its own new
+  movement/record.
+- Product: a future `PCP.1` session must not quietly drop the ownership-
+  token instance-safe release or reintroduce a bare unconditional unlink.
+  `pcp_console_registry_write_gate` remains open for both enrollment
+  intents, unaffected by this freeze. The `AI_START_HERE.md` §22 item 4
+  sentence must land at `PCP.1` close — do not forget it, and do not pull
+  it forward early.

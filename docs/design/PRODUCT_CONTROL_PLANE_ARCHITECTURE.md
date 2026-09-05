@@ -2,15 +2,24 @@
 
 ## Status
 
-**DRAFT — PENDING PRODUCT OWNER REVIEW, 2026-09-05.** Product-direction
-promotion of the previously parked Product Control Plane direction,
-reconciled against live `main` at `ff700e38`. Not yet implementation
-authority (`AGENTS.md` "Authority hierarchy" item 2, "Contract-status law"):
-it may guide investigation and roadmap placement, but no movement below may
-be implemented until the Product Owner reviews this document and its status
-line is changed to `FROZEN`. The one bounded first implementation movement
-(`PCP.1`, §21) carries its own acceptance criteria here so that freezing this
-document freezes `PCP.1`'s contract without a second document.
+**FROZEN — 2026-09-05.** Product Owner reviewed and **approved** the
+Product Control Plane product direction and this architecture, conditioned
+on exactly two mechanical freeze corrections, both applied by this freezing
+session: (1) the registry mutation lock's release step is now instance-safe
+(an ownership-token equality check, never a bare path unlink) and the lock
+file itself is classified LOCAL-SENSITIVE and kept out of the support
+bundle alongside the registry file (§10, §21 "Concurrent CLI write
+behavior", AC-5, AC-15); (2) §22's amendment timing is corrected — items 1-3
+are applied now, and item 4 (`AI_START_HERE.md`) is moved to the `PCP.1`
+close scope because its sentence is only true once `PCP.1` actually ships a
+persistent registry. This is a bounded freeze, not a further design review:
+no product-direction or architecture content beyond these two corrections
+changed. Reconciled against live `main` at `ff700e38` (unchanged since the
+draft — `main` has not advanced). The one bounded first implementation
+movement (`PCP.1`, §21) carries its own acceptance criteria here so that
+freezing this document freezes `PCP.1`'s contract without a second document;
+`PCP.1` implementation itself is **not** started by this freezing session
+(`AGENTS.md` "Authority hierarchy" item 2, "Contract-status law").
 
 - **Movement:** `ARCHITECTURE` (extended reasoning — new cross-subsystem
   product architecture and a persistence/identity boundary).
@@ -456,8 +465,9 @@ answer, recorded now:
 
 Invariants preserved: RuntimeRoot / repository separation
 (`utils/runtime_paths`); secrets never in product records — references only;
-the registry is LOCAL-SENSITIVE data and never enters the support bundle
-(which reads only enumerated run artifacts) or the repository.
+the registry **and its mutation lock file** are LOCAL-SENSITIVE data and
+neither enters the support bundle (which reads only enumerated run
+artifacts) or the repository.
 
 ---
 
@@ -791,8 +801,9 @@ evidence identity.
    environment; empty `relationships[]`; `schema_version`), a
    `DeviceRegistry` service (enroll, list, disable — see the deterministic
    contract below for exactly what each does, including the registry
-   mutation lock `enroll`/`disable` acquire before touching the file), and
-   the lifecycle transition table (`ENROLLED_UNVERIFIED`, `DISABLED`
+   mutation lock `enroll`/`disable` acquire before touching the file, the
+   ownership token they embed in it, and the instance-safe check they run
+   before ever releasing it), and the lifecycle transition table (`ENROLLED_UNVERIFIED`, `DISABLED`
    reachable in `PCP.1`; `RETIRED`, `CONTACT_VERIFIED`, `OBSERVED` defined
    but unreachable until a later movement adds their trigger — `RETIRED`
    needs its own CLI verb, not introduced here).
@@ -814,8 +825,8 @@ evidence identity.
 4. `tests/test_pcp1_device_registry.py` — the acceptance criteria below.
 5. Documentation touch limited to: `AI_START_HERE.md` CLI table + directory
    map row; `docs/ARCHITECTURE.md` new short section; one line in
-   `PRIVACY_AND_DATA_HANDLING.md` classifying the registry file as CLASS 2
-   local data; this section's status.
+   `PRIVACY_AND_DATA_HANDLING.md` classifying both the registry file and
+   its mutation lock file as CLASS 2 local data; this section's status.
 
 **Deterministic registry contract**
 
@@ -901,10 +912,56 @@ lock** — `data/state/device_registry.lock`, created with an atomic
 exclusive-create primitive (`O_CREAT | O_EXCL`, portable across POSIX and
 Windows, no third-party library) — **before** the load step, and hold it
 across the complete load → validate → duplicate-check-or-transition →
-atomic-replace sequence, releasing it on every exit from that sequence
-(success, a refusal, or a raised `DeviceRegistryError` alike).
-`--registry-list` is read-only and does not take the lock — the existing
-atomic-replace guarantee already makes its reads safe.
+atomic-replace sequence. `--registry-list` is read-only and does not take
+the lock — the existing atomic-replace guarantee already makes its reads
+safe.
+
+**Lock content and instance-safe release (freeze correction).** The same
+exclusive-create call that creates the lock file writes its content before
+anything else touches it: a small JSON object carrying `pid`, `hostname`,
+`acquired_at_utc` (the existing human-readable diagnostic fields, see
+"Crash / stale-lock recovery" below) and one field release logic actually
+acts on — `owner_token`, a fresh random opaque value (e.g. a UUID4)
+generated at acquisition and never reused. **Release never unconditionally
+unlinks the lock path.** On every exit from the held section (success, a
+refusal, or a raised `DeviceRegistryError` alike), the releasing process
+re-reads whatever is currently at `data/state/device_registry.lock` and
+compares its `owner_token` to the token that process itself wrote at
+acquisition:
+
+- **token matches** — the file on disk is still the exact lock instance
+  this process created; it deletes it.
+- **token does not match, or the file is missing** — the instance this
+  process created is no longer the one on disk (a human deleted it,
+  believing the recorded holder dead, per "Crash / stale-lock recovery"
+  below, and a different writer's `--registry-enroll` or
+  `--registry-disable` has since created a new instance under the same
+  path). The releasing process **must not delete it**: an unconditional
+  unlink here would remove a different, currently-active writer's lock out
+  from under it, reopening exactly the concurrent-write race this lock
+  exists to close. The releasing process leaves the file untouched and
+  simply completes its own exit; the file at that path belongs entirely to
+  whichever process's `owner_token` is currently inside it.
+
+This `owner_token` equality check is the lock's only instance-safety
+mechanism — a single opaque comparison, nothing more. It never inspects
+PID liveness, lock age, or any other heuristic; "Crash / stale-lock
+recovery" below is unchanged by this correction, and the token is not a
+lease, a fencing token, or a renewal mechanism reused anywhere else in the
+codebase (see the non-goals list).
+
+**Lock file classification.** The lock file's `pid`/`hostname`/
+`owner_token` content is local operational metadata about the RuntimeRoot
+host and the mutating process, not registry evidence about a managed
+device — but it is still host-identifying information an operator would
+not want in a shared artifact. It is classified **LOCAL-SENSITIVE**
+(`PRIVACY_AND_DATA_HANDLING.md` CLASS 2 data), the same classification §6
+already gives the registry's own management-endpoint field, and is
+RuntimeRoot-resident and repository-excluded exactly like
+`device_registry.json`. Like the registry file itself, it is never
+enumerated into the support bundle (§10, AC-5) — `run_support_bundle`
+reads only enumerated `data/runs/*` artifacts and never touches
+`data/state/*` at all.
 
 **Contention fails closed immediately: no wait, no retry, no queueing.** If
 the exclusive-create fails because the lock file already exists, the
@@ -958,7 +1015,7 @@ skipped — a corrupt registry fails closed as a whole, not row-by-row.
 | AC-2c | Free-text fields (`tags`, site, environment) are length-bounded and redaction-registry filtered before being written to any log line or CLI error message, the same bounding `console/jobs.py::JobRecord.error_summary` already applies to its own free-text field. |
 | AC-3 | Lifecycle transitions follow exactly the "Lifecycle transitions" table above; `RETIRED`/`CONTACT_VERIFIED`/`OBSERVED` are unreachable from any `PCP.1` entry point (structural, like `OP.0a` AC-6 — no code path, not merely undocumented). |
 | AC-4 | Persistence is atomic (tmp-then-`replace()`) and RuntimeRoot-resident; writing to a path equal to or nested with the repository root is refused (`utils/runtime_paths` separation). |
-| AC-5 | The registry file is not included in the support bundle (asserted against `run_support_bundle`'s enumerated inputs) and the repository privacy gate is unaffected. |
+| AC-5 | Neither the registry file nor its mutation lock file is included in the support bundle (asserted against `run_support_bundle`'s enumerated inputs, which read only `data/runs/*` — never `data/state/device_registry.json` or `data/state/device_registry.lock`) and the repository privacy gate is unaffected. |
 | AC-6 | The three CLI modes are mutually exclusive with each other and with every existing mode; none imports a vendor/collector module (static + runtime `sys.modules` check); none resolves a credential or opens a socket. |
 | AC-7 | `unified.json`, `entity_id` resolution, `console/registry.py`, `ALLOWLISTED_WORKFLOWS`, `utils/operate/`, `utils/failover/` are byte-unchanged — enforced by the existing convergence tests remaining green with no allowlist edit. |
 | AC-8 | Registry content never reaches `output/index.html` or any console payload in `PCP.1` (no payload builder change; render harness not triggered). |
@@ -968,6 +1025,7 @@ skipped — a corrupt registry fails closed as a whole, not row-by-row.
 | AC-12 | Repeated-operation behavior matches "Repeated-operation behavior" above exactly: duplicate enroll always refused; disable is idempotent on an already-`DISABLED` id (exit 0, no duplicate audit entry) and fails distinctly on an unknown id. |
 | AC-13 | A mutating invocation (`--registry-enroll` or `--registry-disable`) that cannot acquire the registry mutation lock fails closed immediately with a distinct `DeviceRegistryLockError` — before any load, validate, duplicate-check, or write — never a silent wait, retry, queue, or fallback to an unprotected write. |
 | AC-14 | No code path inspects a lock file's recorded PID, hostname, or age to decide it is stale and clear it automatically; a lock left by a crashed holder blocks every subsequent mutation with the same contention error indefinitely, until a human manually deletes `data/state/device_registry.lock`. Every non-crash exit from the critical section (success, a refusal, a raised `DeviceRegistryError`) releases the lock itself. |
+| AC-15 | Lock release is instance-safe: a releasing process deletes `data/state/device_registry.lock` only when the file's current `owner_token` still equals the token that same process wrote at acquisition. If the file is missing or its `owner_token` differs — an externally deleted-and-recreated lock now held by a different writer — the releasing process leaves the file untouched and never deletes another writer's active lock instance. |
 
 **Explicit non-goals**
 
@@ -985,7 +1043,10 @@ skipped — a corrupt registry fails closed as a whole, not row-by-row.
   heuristic — the one exclusive-create file lock described in "Concurrent
   CLI write behavior" above is narrowly scoped to `utils/device_registry.py`
   itself, guards only that module's own mutation path, and is not a shared
-  concurrency primitive other modules use.
+  concurrency primitive other modules use. Its `owner_token` is a single
+  equality check for that module's own release path only — not a lease,
+  not a fencing token, not a renewal mechanism, and not reused by any other
+  module.
 - No HTTP wiring and no admission-coordinator involvement in the lock — it
   is a local, single-process-at-a-time CLI safeguard, unrelated to the
   multi-actor question `pcp_console_registry_write_gate` still governs.
@@ -1004,14 +1065,19 @@ skipped — a corrupt registry fails closed as a whole, not row-by-row.
 `project/feature_registry.json` (`device_registry_enrollment_foundation`
 criteria), `project/build_history.json` (new head record),
 `CURRENT_STATE.md`, `AI_HANDOVER.md`, `AI_START_HERE.md` (CLI table,
-directory map), `docs/ARCHITECTURE.md`, `PRIVACY_AND_DATA_HANDLING.md`,
-`docs/history/INDEX.md` (regenerated), this document (§21 status line).
+directory map, **and the §22 item 4 "What this is" persistent-control-plane
+sentence, deferred from the `PCP.0` freeze to here**), `docs/ARCHITECTURE.md`,
+`PRIVACY_AND_DATA_HANDLING.md` (registry file **and mutation lock file**
+CLASS 2 classification line), `docs/history/INDEX.md` (regenerated), this
+document (§21 status line).
 
-**Validation ladder for `PCP.1`:** targeted test file (AC-10/AC-13/AC-14
-need a deterministic concurrency-simulation technique — e.g. a test-only
-hook that holds the lock open, or two coordinated real subprocesses —
-rather than timing-based flakiness; the exact technique is an
-implementation detail for the test file, not frozen here); subsystem
+**Validation ladder for `PCP.1`:** targeted test file (AC-10/AC-13/AC-14/
+AC-15 need a deterministic concurrency-simulation technique — e.g. a
+test-only hook that holds the lock open, or two coordinated real
+subprocesses, including one that rewrites the lock file with a different
+`owner_token` mid-hold to exercise AC-15's non-match path — rather than
+timing-based flakiness; the exact technique is an implementation detail
+for the test file, not frozen here); subsystem
 regression (`tests/test_architecture_convergence.py`,
 `tests/test_dev0_3a_runtime_paths.py`, `tests/test_phase0_3_support_bundle.py`,
 the CLI mode-matrix tests); one serial full regression before merge (new
@@ -1024,12 +1090,14 @@ visible UI change**.
 
 ---
 
-## 22. Amendments proposed to existing documents (applied only at freeze)
+## 22. Amendments to existing documents (freeze timing corrected)
 
-To avoid pointing frozen documents at a draft, none of the following is
-edited by this session. On `PCP.0` freeze, the freezing session applies:
+Items 1-3 are **applied by this freezing session**: each target document is
+itself `FROZEN` and must not point at a draft, so the amendment could not
+land before `PCP.0` carried Product Owner approval, and lands now that it
+does.
 
-1. `docs/design/OPERATOR_CONSOLE_ARCHITECTURE.md` — append an
+1. `docs/design/OPERATOR_CONSOLE_ARCHITECTURE.md` §12 — appended an
    "Amendment (`PCP.0`)" paragraph: the device experience and first-run
    onboarding are `CON.x` surface work under this document; **neither the
    manual-enrollment intent nor the candidate-id enrollment intent is added
@@ -1039,16 +1107,28 @@ edited by this session. On `PCP.0` freeze, the freezing session applies:
    endpoint; it is not, by itself, an authorization for a persistent
    product-state write to reach the console before `DEPLOY.1A`. Prohibitions
    unrelaxed.
-2. `docs/design/COMPLIANCE_ASSIGNMENT_AND_FRAMEWORKS.md` §4b — one line:
-   the "tagged device registry" is delivered by the Product Control Plane's
-   Device Registry (`PCP.1`+), not built separately; the assignment editor
-   half stays `DEPLOY.1A`-gated.
-3. `docs/design/BACKUP_AND_RECOVERY_ARCHITECTURE.md` §9 — one line: typed
-   backup jobs over registry targets are the `PCP.5`/`PCP.6` form of the
-   scheduling this section already requires to route through the admission
-   coordinator.
+2. `docs/design/COMPLIANCE_ASSIGNMENT_AND_FRAMEWORKS.md` §4b — appended one
+   line: the "tagged device registry" is delivered by the Product Control
+   Plane's Device Registry (`PCP.1`+), not built separately; the assignment
+   editor half stays `DEPLOY.1A`-gated.
+3. `docs/design/BACKUP_AND_RECOVERY_ARCHITECTURE.md` §9 — appended one
+   line: typed backup jobs over registry targets are the `PCP.5`/`PCP.6`
+   form of the scheduling this section already requires to route through
+   the admission coordinator.
+
+Item 4 is different in kind, not only in timing, and stays **explicitly out
+of this freeze**:
+
 4. `AI_START_HERE.md` "What this is" — one sentence acknowledging the
-   persistent control-plane direction once `PCP.1` ships (not before).
+   persistent control-plane direction. §1 above already states the correct
+   condition: that sentence "becomes true only once `PCP.1` ships" an
+   actual persistent registry — today neXus still has none, so writing it
+   into the canonical cold-start entry point now would assert, in the one
+   document new sessions read first, a capability the product does not yet
+   have. This amendment is therefore **moved to the `PCP.1` close scope**
+   (§21 "Affected authority files at `PCP.1` close" now names it
+   explicitly) and is applied only when `PCP.1` actually ships — never at
+   this `PCP.0` freeze.
 
 `AGENTS.md` and `AI_START_HERE.md` governance roles are unchanged; no new
 canonical authority competes with them.
@@ -1067,19 +1147,25 @@ canonical authority competes with them.
   `git diff --check`.
 - Fast PR CI (`validate`) is sufficient for a docs/state PR per
   `docs/AI_DEVELOPMENT_PROTOCOL.md` "CI validation policy".
-- **Merge to `main` is blocked pending Product Owner review** of this
-  document (status `DRAFT`). The freezing review either flips this status
-  line to `FROZEN` (with any corrections) or returns it with decisions.
+- **Product Owner review completed 2026-09-05**: PCP.0 product direction and
+  architecture **APPROVED**, conditioned on exactly the two mechanical
+  freeze corrections named in "Status" above (registry mutation lock
+  ownership/privacy; §22 timing) — both applied by this freezing session.
+  The status line above now reads `FROZEN`. Merge to `main` proceeds once
+  the validation ladder above is green.
 
 ---
 
 ## 24. Next movement / reasoning tier
 
-- **Next movement:** Product Owner review of this document (`ARCHITECTURE`
-  review, human) → on approval, a `Sonnet 5, extended thinking (high)`
-  session applies §22 amendments, flips this status to `FROZEN`, and rotates
-  `project/roadmap.json` (`PCP.0` → done; `PCP.1` stays `next`).
-- **Then:** `PCP.1` implementation, `Sonnet 5, normal`, one short prompt
-  pointing at §21 and `tests/test_pcp1_device_registry.py`.
+- **This freeze session** (`Sonnet 5, extended thinking (high)`) applied
+  §22 amendments 1-3 (item 4 deferred to the `PCP.1` close, see §22), the
+  registry-mutation-lock ownership/privacy correction (AC-5, AC-15),
+  flipped this status to `FROZEN`, and rotated `project/roadmap.json`
+  (`PCP.0` → done; `PCP.1` stays `next`).
+- **Exact next movement:** `PCP.1`
+  (`pcp_1_device_registry_manual_enrollment_foundation`), `Sonnet 5,
+  normal`, one short prompt pointing at §21 and
+  `tests/test_pcp1_device_registry.py`. Not started by this session.
 - Escalate to extended thinking only for the four open decisions in §19 when
   their `decide_by` movement is reached.
