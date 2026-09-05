@@ -55,8 +55,16 @@ never be read as `admin_down`'s appearance). This module reads the pnote
 gate's own "Sensitive output" row already sanctions ("member role token,
 pnote name") -- and pairs each parsed device name with its state locally,
 without widening `parse_cphaprob_ia_list`'s own contract or retained-field
-set. A `Current state:`/state-cell match with no associated device name is
-never assumed to be `admin_down` -- it fails closed to "not present".
+set. A problem-state row with no associated device name is never assumed
+to be `admin_down` -- but it is also never assumed to be *not* `admin_down`
+(a later safety correction: absence of the name among a read's other,
+named rows does not prove `admin_down` itself is absent, since the unnamed
+row could be it). `admin_down_pnote_present` resolves to `False` only when
+A5 positively proves `admin_down` is not in problem state -- every parsed
+problem row is provably some other, named device, or the device's own
+explicit "no pnotes in problem state" sentence. Any unnamed problem row,
+absent a positive `admin_down` identification elsewhere in the same read,
+fails closed to `None`.
 
 **Submission outcome.** `SubmissionConfirmation` is the same two-way split
 `OP.2.0` P6/P7 already fix: `CONFIRMED_NOT_SENT` only when this module can
@@ -177,9 +185,19 @@ def _admin_down_pnote_state(stdout: str) -> bool | None:
     reporting a problem state -- never any other pnote, and never the
     aggregate "any problem device" fact. `None` when the read is not
     observed in any known shape (fail closed, same discipline as
-    `parse_cphaprob_ia_list`). `False` when observed and either the
-    sentence form positively reports no pnote in problem state, or no
-    device is provably named `admin_down` in a problem state."""
+    `parse_cphaprob_ia_list`).
+
+    `False` is returned only when A5 *positively proves* `admin_down` is
+    not in problem state -- either the sentence form's explicit "no pnotes
+    in problem state" statement, or device/state pairs that are each
+    provably not `admin_down` (a real name that isn't `admin_down`, in any
+    state). If any parsed problem-state row carries no usable device name,
+    the absence of the `admin_down` name among the *named* rows is not
+    proof that `admin_down` itself is absent -- that row could be it. Such
+    a row makes the whole read `None` (fail closed) unless `admin_down` was
+    already positively identified by name elsewhere in the same output, in
+    which case that positive identification stands regardless of what else
+    is ambiguous."""
     text = str(stdout or "")
     pairs = _parse_pnote_block_pairs(text)
     if not pairs:
@@ -188,12 +206,21 @@ def _admin_down_pnote_state(stdout: str) -> bool | None:
         if _PNOTE_NONE_IN_PROBLEM_RE.search(text):
             return False
         return None
-    return any(
-        name is not None
-        and name.strip().lower() == _ADMIN_DOWN_DEVICE_NAME
-        and state.strip().lower().startswith(_PNOTE_PROBLEM_PREFIXES)
-        for name, state in pairs
-    )
+
+    admin_down_problem = False
+    unnamed_problem = False
+    for name, state in pairs:
+        if not state.strip().lower().startswith(_PNOTE_PROBLEM_PREFIXES):
+            continue
+        if name is not None and name.strip().lower() == _ADMIN_DOWN_DEVICE_NAME:
+            admin_down_problem = True
+        elif name is None:
+            unnamed_problem = True
+    if admin_down_problem:
+        return True
+    if unnamed_problem:
+        return None
+    return False
 
 
 #: The two `OP.2.1`-approved CP-M1 / CP-M1-R primitives, verbatim, no `-p`
