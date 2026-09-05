@@ -7,10 +7,10 @@ detail is not here either** — it is in `project/build_history.json`
 linked documents under `docs/history/`. `docs/history/INDEX.md` is the
 generated one-line timeline.
 
-- **Checkpoint:** 2026-09-05, branch `claude/clusterxl-op2c1-pnote-name-fail-closed`.
+- **Checkpoint:** 2026-09-05, branch `claude/cp-clusterxl-preflight-wiring-ft80pc`.
 - **Current build** (per `project/roadmap.json` `now_next.now`):
-  `op2_c1_admin_down_pnote_safety_corrections` — **AUTOMATED_VALIDATED** (see
-  "Active build"). `now_next.next` = `op2_c_cp_clusterxl_adapter_scoping`
+  `op2_c_cp_clusterxl_preflight_eligibility_wiring` — **AUTOMATED_VALIDATED**
+  (see "Active build"). `now_next.next` = `op2_c_cp_clusterxl_adapter_scoping`
   (blocked on authorization/trust/change-management/wiring, not readiness).
 - **OP.2.0 CLASS 2 architecture** (`docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md`):
   **CONTRACT FROZEN 2026-09-04**; `OP.2.A`/`OP.2.B` IMPLEMENTED; `OP.2.1` CP
@@ -50,33 +50,34 @@ test-enforced boundaries. Current numbers:
 
 ## Active build
 
-**`op2_c1_admin_down_pnote_safety_corrections`** — **AUTOMATED_VALIDATED**,
-2026-09-05, `supersedes: op2_c1_cp_clusterxl_member_session`. Two narrow,
-in-module safety corrections to `checkpoint/clusterxl_member_session.py` +
-`checkpoint/clusterxl_capability_adapter.py`, PR #76 then a same-day
-follow-up (merged): `admin_down_pnote_present` identifies the exact
-`admin_down` Critical Device by name, never CP-A5's aggregate `any_problem`
-fact; `check_precondition()` fails closed to `UNKNOWN` (not `HOLDS`) for a
-failback on missing A5 evidence; `observe_postcondition()` requires both the
-`OP.2.1`-named role and pnote signals, never role alone; `CONFIRMED_NOT_SENT`
-narrowed to only a provably unopened session (a proven pre-device
-`execution_error`/any transport exception are now `SUBMITTED_OR_AMBIGUOUS`).
-Follow-up: a problem-state pnote row with no usable device name no longer
-resolves `False` (it could itself be `admin_down`) — fails closed to `None`,
-blocking the failback precondition/postcondition exactly as missing A5
-evidence already did. No change to `OP.2` lifecycle/authorization/readiness
-policy or `preflight_collector.py`; CLASS 2 stays structurally unreachable.
-Detail: `checkpoint/clusterxl_member_session.py` docstring,
-`tests/test_op2_c1_cp_clusterxl_member_session.py`,
-`tests/test_op2_c_cp_clusterxl_adapter.py`.
+**`op2_c_cp_clusterxl_preflight_eligibility_wiring`** —
+**AUTOMATED_VALIDATED**, 2026-09-05. New
+`checkpoint/clusterxl_preflight_provider.py`: `ClusterXLPreflightProvider`
+(the real `PreflightProvider`) calls `checkpoint.preflight_collector.
+run_cp_preflight` then the one canonical `utils.failover.assessment.
+compute_ha_readiness` — no second readiness engine — and copies its verdict
+verbatim; `ClusterXLReadinessEligibilityEvaluator` maps that verdict onto
+`EligibilityResult` by equality against `VERDICT_SAFE` only. The provider
+resolves opaque `subject_member_token`/`peer_member_token` from this run's
+own fresh `ha_local_role` fact (never member order), translates the CP
+vendor cluster-mode token to the adapter's canonical `"ha"`, and always
+reports `recovery_mode="unknown"` (`D-V7b`) — every ambiguous/missing/
+split-brain case fails closed to no tokens/no cluster_mode. Same-action/
+same-entity binding (P4): every returned snapshot is stamped with the
+caller's own `action_id`/`operational_entity_id`. No production
+`ActionCoordinator`, adapter resolver, entry point, UI, trust change, or
+device command added — CLASS 2 stays structurally unreachable
+(`DenyAllAuthorizer` unchanged, re-asserted by test). Detail:
+`checkpoint/clusterxl_preflight_provider.py` docstring,
+`tests/test_op2_c_cp_clusterxl_real_preflight_wiring.py` (24 tests: binding,
+canonical verdict mapping, fail-closed evidence, adapter eligibility
+handoff).
 
-Predecessors (full detail: `project/build_history.json` + linked phase docs,
-not restated here): `op2_c1_cp_clusterxl_member_session` (first-cut
-`RealClusterXLMemberSession`, superseded above);
-`op2_1b_cp_pilot_readiness_policy_amendment` (DONE — `D-V7b`/`D-F3`/`D-F2`
-advisory-exempt); `op2_1_cp_clusterxl_command_gate` (DONE, drafted);
-`op2_a_b_execution_foundation` (DONE — typed action lifecycle/lock/mutation
-boundary, `utils/operate/`, no adapter). S8-A/S8-B''/S8-C real-env
+Predecessors (full detail: `project/build_history.json` + linked phase
+docs): `op2_c1_admin_down_pnote_safety_corrections`, `op2_c1_cp_clusterxl_
+member_session`, `op2_1b_cp_pilot_readiness_policy_amendment` (`D-V7b`/
+`D-F3`/`D-F2` advisory-exempt), `op2_1_cp_clusterxl_command_gate`,
+`op2_a_b_execution_foundation` — all DONE. S8-A/S8-B''/S8-C real-env
 validated; PAN B2 stays **NOT ESTABLISHED**.
 
 ## `OP.0b.0` — FROZEN WITH REAL-ENV VALIDATION GATES
@@ -112,20 +113,20 @@ a narrower question never promoted toward B2.
 
 ## Exact next build
 
-`now_next.next` is **`op2_c_cp_clusterxl_adapter_scoping`**. Both the typed
-adapter (`checkpoint/clusterxl_capability_adapter.py`) and the real
-`ClusterXLMemberSession` transport (`checkpoint/clusterxl_member_session.py`)
-are now IMPLEMENTED and unit-tested, neither wired into a production
-`adapter_resolver` — `DenyAllAuthorizer`/no taxonomy member still keep
+`now_next.next` is **`op2_c_cp_clusterxl_adapter_scoping`**. The typed
+adapter, the real `ClusterXLMemberSession` transport, and the real
+`PreflightProvider`/`EligibilityEvaluator` are now all IMPLEMENTED and
+unit-tested, none wired into a production `adapter_resolver`/
+`ActionCoordinator` — `DenyAllAuthorizer`/no taxonomy member still keep
 CLASS 2 unreachable. Remaining before a real-env pilot: `DEPLOY.1A` OIDC +
 `OPERATE`, CP SSH host-key trust hardening, the signed change-management
-review, a real `PreflightProvider`/`EligibilityEvaluator` supplying
-`check_statuses`, and a protected entry point constructing a live
-`adapter_resolver` (using `RealClusterXLMemberSession` as its
-`session_resolver` target). `Sonnet 5, normal` for wiring; extended
-thinking only for a genuine new authorization/trust decision. Detail:
-`checkpoint/clusterxl_capability_adapter.py` and
-`checkpoint/clusterxl_member_session.py` docstrings.
+review, and a protected entry point constructing both live (using
+`RealClusterXLMemberSession`/`ClusterXLPreflightProvider`/
+`ClusterXLReadinessEligibilityEvaluator`). `Sonnet 5, normal` for wiring;
+extended thinking only for a genuine new authorization/trust decision.
+Detail: `checkpoint/clusterxl_capability_adapter.py`,
+`checkpoint/clusterxl_member_session.py`, and
+`checkpoint/clusterxl_preflight_provider.py` docstrings.
 
 `op0b_0_close_d_v3a_d_v7b_pre_class2` (`upcoming`, demoted from `next`
 2026-09-05): now purely a vendor-fact question — D-V7b's readiness-roll-up
@@ -148,7 +149,7 @@ hardware-blocked, not reconciled with the manual 2026-09-04 observation
 | PAN HA serial `B2` establishment | the mismatching member's root cause is `UNKNOWN` (see above) — do not resolve as a side effect of an unrelated build | investigation + hardware |
 | `CON.3` console operational-write actions | open decisions `C-D4`, `C-D6` **and** `RB.3b` | decision + hardware |
 | `RB.3b` CP Gaia backup collection | the watched real R81.10/R81.20 run — hardware, not engineering | hardware |
-| `OP.2` controlled failover execution | architecture FROZEN; readiness no longer blocks (`OP.2.1b`); CP ClusterXL adapter (`OP.2.C`) and its real `ClusterXLMemberSession` transport now IMPLEMENTED + unit-tested, both unwired — blocked on `DEPLOY.1A`/`OPERATE`, SSH trust hardening, change-management review, a real `PreflightProvider`/`EligibilityEvaluator`, a protected entry point | multiple |
+| `OP.2` controlled failover execution | architecture FROZEN; readiness no longer blocks (`OP.2.1b`); CP ClusterXL adapter (`OP.2.C`), its real `ClusterXLMemberSession` transport, and its real `PreflightProvider`/`EligibilityEvaluator` now all IMPLEMENTED + unit-tested, all unwired — blocked on `DEPLOY.1A`/`OPERATE`, SSH trust hardening, change-management review, a protected entry point | multiple |
 | `DEPLOY.1` gates | server availability (external) | external |
 | `inventory_exclusions_management_ui_backend` | stays `in_progress` **by design** — do not wire its write functions into any HTTP-reachable surface before `DEPLOY.1A`'s OIDC/RBAC boundary exists | design |
 
@@ -158,8 +159,7 @@ Concurrency budget stays at 1 per vendor pending its own real-env evidence.
 
 - **`CON.2`** — trigger a `read`-class job from the console against a real
   device. No new code; closes it to DONE.
-- **`OP.0a`/`OP.0c`** — real-device confirmation `ha_cluster_mode` resolves,
-  not `"unknown"`. Fixture-drift, not a safety gate.
+- **`OP.0a`/`OP.0c`** — real-device confirmation `ha_cluster_mode` resolves, not `"unknown"`. Fixture-drift, not a safety gate.
 - **PAN HA serial identity (`OP.0a.P7`/`OP.0b.0`)** — see "PAN HA serial
   evidence" above; its own next technical movement, not folded in here.
 - **`RB.3b`** — the watched single-gateway run.
