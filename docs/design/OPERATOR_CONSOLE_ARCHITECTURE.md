@@ -114,6 +114,47 @@ browser  ──►  POST /api/jobs { job_type, targets[], idempotency_key }
 Consequence: the console's blast radius is exactly the registry's contents,
 which is the same posture the CLI already has.
 
+### 4.1 Amendment (2026-09-05) — the typed enrollment intent
+
+**Approved by the Product Owner; source contract:
+`docs/design/LOCAL_CONTROL_PLANE_RUNTIME_AND_ENROLLMENT.md` §9.1 (FROZEN).**
+This amendment adds exactly one bounded intent and weakens nothing above.
+
+**Device enrollment is a distinct typed control-plane intent.** It is
+deliberately *not* a job submission, and it is **not a command or job-argument
+escape hatch**: nothing in it reaches argv, a shell, a path or a device.
+
+§4's rule — *the browser never transmits a command string, a flag, a hostname,
+an address, a credential, or a free-form argument that reaches a device* —
+**remains true verbatim for command construction**, which is what it governs.
+Enrollment is named here as a separate intent whose payload never becomes part
+of any command, and which contacts no device in its own request.
+
+| Rule | Statement |
+| --- | --- |
+| Closed schema | The browser may submit **only**: an endpoint, an **opaque credential-profile reference**, an **opaque trust-profile reference**, permitted tags, and/or a **closed candidate id**. Schema-validated server-side |
+| Nothing else | **No credential payload, command, argv, filesystem path, or arbitrary transport field** may be submitted, ever |
+| No device I/O in the request | The enrollment HTTP request **contacts no device**. It validates, audits and returns |
+| First contact is a job | Identity/capability discovery runs as a **separate queued CLASS 0 read-only job**, through the existing runner and admission coordinator |
+| Trust precedes credentials | **Strict transport trust is established before any credential is submitted**, for every endpoint **including management-plane candidates**. Candidate provenance may select a trust profile; it may not waive trust. No TOFU, auto-accept, certificate bypass or credential-first probing |
+| Positive evidence only | **Vendor and identity require positive evidence.** Never inferred from port, banner, endpoint shape, an operator hint, or credential spraying |
+| Fail closed on ambiguity | `UNKNOWN`, ambiguous or contradictory identity **creates no registry record**. No phantom device |
+| Operator review | The operator **reviews the resolved identity** before anything is written |
+| Explicit confirmation | Persistence requires **explicit operator confirmation**. There is no implicit or automatic enrollment |
+| Audit before mutation | An **immutable audit record is durable before** the registry is mutated (the same ordering as §7.9) |
+| One persistence path | Persistence uses the **one existing `DeviceRegistry` enrollment path**, identical to the CLI. **Duplicate detection and the mutation-lock contract are unchanged** |
+| No candidate exemption | **Candidate-based enrollment receives no automatic-write exemption.** A closed candidate id narrows the target; it removes no confirmation, audit or trust requirement and grants no write authority of its own |
+| Loopback only | Both enrollment intents are permitted **only in the explicitly controlled loopback runtime profile** (§7.1, `C-D5`) |
+| Server mode blocked | **Non-loopback / server mode remains blocked** until `DEPLOY.1A` supplies real OIDC/RBAC authorization. This permission is conditioned on the loopback binding itself and does not survive into `CON.6` |
+| Navigation is not authorization | **Navigation visibility is never the authorization boundary.** Hiding an affordance is presentation; refusal happens server-side |
+
+**The exported report is untouched by this amendment.** It ships no enrollment
+surface — absent, not disabled — and its action-free contract (§1, §3, §6) is
+unchanged.
+
+**No route, schema or code is created by this amendment.** The exact request,
+preview and confirmation schemas are movement `M9`'s implementation contract.
+
 ## 5. Reuse map — the engine is already shaped for this
 
 Nothing in the list below is new work. It is the reason this track is a thin
@@ -204,6 +245,18 @@ surfaces get it. Enforced by an equality test in `CON.1` (AC-4 there).
 10. **Device contact frequency is unchanged.** The UI polls the job store, never
     a device. Auto-refresh reads artifacts on disk. No console feature may
     cause a collector to run more often than an operator explicitly asked.
+11. **The enrollment intent is bounded by §4.1** (amendment, 2026-09-05).
+    Restated here as security rules because they are: the browser submits only
+    the closed enrollment schema and never a credential payload, command, argv
+    or path; the enrollment request performs no device I/O; first contact is a
+    separate queued CLASS 0 read-only job; strict transport trust precedes
+    credential submission for **every** endpoint, candidates included; identity
+    requires positive evidence and ambiguity persists nothing; confirmation
+    precedes persistence and an immutable audit record precedes the registry
+    mutation; persistence uses the one existing `DeviceRegistry` path with its
+    duplicate-detection and mutation-lock contract unchanged; and the whole
+    permission is conditioned on the loopback binding, with server mode blocked
+    until `DEPLOY.1A`.
 
 ## 8. Deployment shapes
 

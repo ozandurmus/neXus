@@ -1695,28 +1695,28 @@
     },
     {
       "id": "left_vertical_product_navigation",
-      "title": "Left vertical product navigation (working prototype, architecture under PO review)",
+      "title": "Left vertical product navigation (architecture FROZEN; prototype present, M2 accessibility owed)",
       "status": "in_progress",
       "introduced": "NAV.1 (prototype)",
       "weight": 5,
-      "summary": "PROTOTYPE, NOT DELIVERED. A runnable collapsible left rail grouped by six candidate product domains over the existing module panels, driven by one model shared by the rail and the device-detail tab strip. Used as design evidence for the Product Owner review of docs/design/NAVIGATION_INFORMATION_ARCHITECTURE.md (DRAFT); the root set, the availability rule and the enrollment location are all provisional or open.",
-      "why": "The flat one-root-per-view topbar strip could not express which entries are product domains, had no room left, and let a navigation entry exist without any backend behind it. The prototype tested a fix; the DRAFT decides whether it is the right one.",
+      "summary": "ARCHITECTURE FROZEN 2026-09-05, IMPLEMENTATION NOT COMPLETE. docs/design/NAVIGATION_INFORMATION_ARCHITECTURE.md is FROZEN -- PRODUCT OWNER APPROVED, with fifteen frozen D-NAV decisions and section 19 acceptance criteria. A runnable prototype of the collapsible left rail exists (commit 5a5a1f7), driven by one model shared with the device-detail tab strip. It is design evidence: it may not merge or be called implementation-complete until movement M2 closes the four accessibility requirements (AC-A11Y-1..4).",
+      "why": "The flat one-root-per-view topbar strip could not express which entries are product domains, had no room left, and let a navigation entry exist without any backend behind it. The frozen contract settles the shape; the prototype demonstrates it; M2 makes it mergeable.",
       "criteria": [
         {
           "id": "domain_grouping",
-          "label": "Six evaluated product-domain roots; Devices first-class; device-scoped views are tabs, not roots -- Six candidate roots render; the target IA (Recovery, Jobs/Automation, Administration children) is PROVISIONAL and awaits PO-NAV-2/3/8",
-          "state": "pending",
+          "label": "Six evaluated product-domain roots; Devices first-class; device-scoped views are tabs, not roots -- FROZEN: six roots in the approved order, Recovery reserved seventh, Jobs under Operations (PO-NAV-8)",
+          "state": "done",
           "weight": 2
         },
         {
           "id": "availability_rule",
-          "label": "An entry/tab renders iff its shell ships the surface; no disabled, greyed or 'coming soon' placeholder anywhere -- Prototype implements the shell-integrity conjunct only; the DRAFT's four-predicate model (surface eligibility / entity applicability / evidence state / authorization) is not implemented",
+          "label": "An entry/tab renders iff its shell ships the surface; no disabled, greyed or 'coming soon' placeholder anywhere -- Direction FROZEN as four predicates (P1 surface eligibility / P2 entity applicability / P3 evidence state / P4 future authorization); the prototype implements the shell-integrity conjunct only -- later movements implement the rest",
           "state": "pending",
           "weight": 2
         },
         {
           "id": "collapse_is_density",
-          "label": "Collapse/expand changes presentation only -- identical entry set, no availability or authorization effect -- Browser-verified: identical data-module set collapsed and expanded, state persisted, no availability effect",
+          "label": "Collapse/expand changes presentation only -- Browser-verified: identical data-module set collapsed and expanded, state persisted, no availability effect",
           "state": "done",
           "weight": 1
         },
@@ -1728,8 +1728,8 @@
         },
         {
           "id": "no_enrollment_affordance",
-          "label": "'Add Device' is a declared contextual action of the devices domain, is no root, and renders nowhere while pcp_console_registry_write_gate is open -- Holds in the prototype, but pcp_console_registry_write_gate is OPEN -- the location is recommended, not decided",
-          "state": "pending",
+          "label": "'Add Device' is a declared contextual action of the devices domain, is no root, and renders nowhere while pcp_console_registry_write_gate is open -- FROZEN: Add Device is never a root; location decided (PO-NAV-1); nothing renders until M9 implements the section 9.1 conditions",
+          "state": "done",
           "weight": 1
         },
         {
@@ -1740,7 +1740,7 @@
         },
         {
           "id": "accessibility_closure",
-          "label": "Four named accessibility gaps closed: icon-only accessible names, prefers-reduced-motion, focus management after navigation, group semantics",
+          "label": "Four named accessibility gaps closed: icon-only accessible names, prefers-reduced-motion, focus management after navigation, group semantics -- Movement M2 owns AC-A11Y-1..4; blocks implementation merge, not the architecture freeze",
           "state": "pending",
           "weight": 1
         }

@@ -8,12 +8,12 @@ linked documents under `docs/history/`. `docs/history/INDEX.md` is the
 generated one-line timeline.
 
 - **Checkpoint:** 2026-09-05, branch `claude/left-nav-vertical-redesign-e673q6`
-  (unmerged; `origin/main` + 2 commits, no PR).
+  (unmerged; `origin/main` + 4 commits, no PR).
 - **Current build** (per `project/roadmap.json` `now_next.now`):
-  `pcp_2_local_control_plane_sequencing_po_review` — **IN_PROGRESS**, a
-  Product Owner architecture review producing **DRAFTS ONLY** (see "Active
-  build"). `now_next.next` is
-  `pcp1_registry_uuid_call_count_test_defect_repair`.
+  `pcp_2_local_control_plane_sequencing_po_review` (`M0`) — **COMPLETE,
+  ARCHITECTURE FROZEN** by Product Owner approval at reviewed head `ba56d2b`
+  (see "Active build"). `now_next.next` is
+  `pcp1_registry_uuid_call_count_test_defect_repair` (`M1`).
   `op2_c_cp_clusterxl_adapter_scoping` stays `upcoming`, blocked on
   `DEPLOY.1`. `PCP.1` is complete — detail in `project/build_history.json`.
 - **OP.2.0 CLASS 2 architecture** (`docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md`):
@@ -54,38 +54,43 @@ test-enforced boundaries. Current numbers:
 
 ## Active build
 
-**`pcp_2_local_control_plane_sequencing_po_review`** — **IN_PROGRESS**,
-producing **no product code**. A Product Owner review of the architecture a
-left-navigation prototype surfaced. Three DRAFTs under `docs/design/`:
-`NAVIGATION_INFORMATION_ARCHITECTURE.md` (**DRAFT — PRODUCT OWNER REVIEW
-REQUIRED**; its earlier self-declared FROZEN status is withdrawn), the companion
-`LOCAL_CONTROL_PLANE_RUNTIME_AND_ENROLLMENT.md`, and the research appendix
-`research/NSPM_NAVIGATION_BENCHMARK.md`.
+**`pcp_2_local_control_plane_sequencing_po_review`** (`M0`) — **COMPLETE.
+ARCHITECTURE FROZEN 2026-09-05**, Product Owner approved at reviewed head
+`ba56d2b`. It produced **no product code**. Two contracts are now **FROZEN —
+PRODUCT OWNER APPROVED**, each with acceptance criteria:
+`docs/design/NAVIGATION_INFORMATION_ARCHITECTURE.md` (§19) and
+`docs/design/LOCAL_CONTROL_PLANE_RUNTIME_AND_ENROLLMENT.md` (§15).
+`docs/design/research/NSPM_NAVIGATION_BENCHMARK.md` stays a **research
+appendix, deliberately not a frozen contract**.
 
-**The left-navigation implementation is a WORKING PROTOTYPE** (commit
-`5a5a1f7`, runnable and behaviourally unchanged): a collapsible rail over the
-six roots, one model shared by the rail and the device tab strip, routes derived
-from it, no placeholders, no enrollment affordance. **Design evidence, not an
-approved implementation** — not frozen, not merge-approved.
+**Freeze is not implementation authority.** `M1`…`M14` remain separately
+authorized, bounded movements, and the `NAV.1` prototype (commit `5a5a1f7`,
+runnable, behaviourally unchanged) may not merge until **`M2`** closes the four
+accessibility requirements (`AC-A11Y-1`…`4`).
 
-**Review round 1 applied** (decisions: `project/roadmap.json` `now.notes`). The
-Product Owner substantially accepted both DRAFTs' direction and closed fourteen
-decisions — six-root baseline, enrollment location, conditioned local-loopback
-enrollment, storage **Option A**, the `M1`…`M14` order and more. **Both
-documents stay DRAFT.**
+Frozen: fifteen `D-NAV` decisions, **no operative row left provisional**; the
+six-root baseline with Recovery reserved seventh and Jobs under Operations; the
+four-predicate capability model, so **a global module never vanishes because one
+device lacks a capability**; the logical-entity-first workspace with **no second
+identity authority**; the stable-visible device-tab rule; and a difference
+contract **preserving the pale yellow/gold expected-member emphasis** with an
+explicit label and no failure semantics.
 
-**A material evidence correction was required.** The appendix's revision-1
-attribution of supplied screenshots to third-party products is **withdrawn in
-full** — they were neXus UI screenshots supplied to identify behaviours to
-preserve. The grade, every observation from them and three conclusions built on
-them are deleted, not softened; the appendix is rebuilt on supportable grades
-and the preservation evidence re-recorded as **REPO-VERIFIED** rows citing exact
-source symbols. Corrections returned rather than approved: the pale yellow/gold
-member emphasis is **preserved** (explicit label, no warning iconography); the
-two proposed states stay **out** of the global canonical vocabulary; Jobs gets
-**no** automatic root promotion; an inapplicable device tab stays **visible and
-selectable**; the accessibility gaps block **merge**, not **freeze**. PAN B2
-stays **NOT ESTABLISHED**.
+**Parent contracts narrowly amended:** `CON.0` §4.1 (the typed enrollment
+intent) and §7.11; `PCP.0` §19 (decided block), §10 (local storage) and §20.1
+(sequencing). Every unrelated frozen law is preserved.
+
+**Decision register scoped, not overloaded:** `pcp_console_registry_write_gate`
+**DECIDED** for the local loopback profile only; new
+`pcp_server_enrollment_exposure` carries the production question (**OPEN**,
+`DEPLOY.1A`); `pcp_local_control_plane_storage` **DECIDED** (Option A) while
+`pcp_storage_engine` stays **OPEN** — **SQLite is not the production engine**;
+trust and auto-enrollment policies **DECIDED**.
+
+Benchmark screenshot evidence is **excluded from authority** — its provenance
+is not durably auditable from the repository, the appendix asserts no
+provenance either way, and **no frozen decision depends on it**. PAN B2 stays
+**NOT ESTABLISHED**.
 
 ## `OP.0b.0` — FROZEN WITH REAL-ENV VALIDATION GATES
 
@@ -121,20 +126,16 @@ a narrower question never promoted toward B2.
 ## Exact next build
 
 `now_next.next` is **`pcp1_registry_uuid_call_count_test_defect_repair`**
-(movement `M1`): the one bounded build actionable today with **no** PO decision
-required — see "Automated test baseline". Not fixed inside this architecture
-movement: it is a test-mechanism decision inside `PCP.1`'s frozen §21 contract.
-`Sonnet 5, normal`.
+(`M1`): the one bounded build actionable with **no** further PO decision — see
+"Automated test baseline". It runs in a **new session**, branching from
+**current `main`**, as a **clean narrow PR**; this branch then incorporates the
+new `main`. `Sonnet 5, normal`.
 
-`M1` runs **from current `main`**, in its own session and its own narrow PR —
-not from this branch, which then incorporates the new `main`. Still open: the
-SQLite schema/migration contract (`M4`), CP/PAN trust mechanics (`M8`),
-enrollment schemas (`M9`), production `pcp_storage_engine`, production
-OIDC/RBAC, future auto-enrollment, raw privileged configuration access, the
-exported job-history field schema (`PCP.5`), and any future Jobs root
-promotion. Sequence: companion DRAFT §12/§12.1. `M5` stays the critical path —
-**every collection job type today is `target_mode="none"`**, so per-device
-collection cannot be offered honestly until one collector gains a target seam.
+Deferred detail is **implementation-contract work inside a frozen direction**:
+state names at `M3`, SQLite schema at `M4`, trust mechanics at `M8`, enrollment
+schemas at `M9`. Separate future decisions are listed in the two contracts'
+own sections. `M5` stays the critical path — **every collection job type today
+is `target_mode="none"`**.
 
 `op2_c_cp_clusterxl_adapter_scoping` stays `upcoming`/blocked with its notes in
 `project/roadmap.json` (adapter, member session and preflight/eligibility all
