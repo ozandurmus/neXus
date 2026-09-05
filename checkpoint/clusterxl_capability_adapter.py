@@ -295,6 +295,14 @@ class CPClusterXLCapabilityAdapter:
         # exactly the state CP-M1 left it in (DOWN / admin_down registered).
         if reading.role != _ROLE_DOWN:
             return PreconditionResult.CHANGED
+        if reading.admin_down_pnote_present is None:
+            # Missing A5 evidence (the pnote read failed or was never
+            # observed) never authorizes a failback -- fail closed rather
+            # than silently falling through to HOLDS (OP.2.C1 safety
+            # correction). The role read alone is never sufficient
+            # corroboration for the state CP-M1 actually left this member
+            # in.
+            return PreconditionResult.UNKNOWN
         if reading.admin_down_pnote_present is False:
             return PreconditionResult.CHANGED
         return PreconditionResult.HOLDS
@@ -360,11 +368,25 @@ class CPClusterXLCapabilityAdapter:
     def _observed_postcondition(
         *, action_type: str, subject_reading: MemberRoleReading, peer_reading: MemberRoleReading,
     ) -> str | None:
+        # OP.2.1's own "Expected observable postcondition" rows name two
+        # independent corroborating signals for each primitive -- the role
+        # transition and the admin_down pnote's appearance/disappearance --
+        # never role alone (OP.2.C1 safety correction: a role-only read is
+        # a generic "role changed" inference, exactly what the gate's own
+        # pnote signal exists to avoid).
         if action_type == ACTION_TYPE_HA_GRACEFUL_FAILOVER:
-            if subject_reading.role == _ROLE_DOWN and peer_reading.role == _ROLE_ACTIVE:
+            if (
+                subject_reading.role == _ROLE_DOWN
+                and subject_reading.admin_down_pnote_present is True
+                and peer_reading.role == _ROLE_ACTIVE
+            ):
                 return _POSTCONDITION_PEER_ACTIVE
             return None
-        # ACTION_TYPE_HA_GRACEFUL_FAILBACK
+        # ACTION_TYPE_HA_GRACEFUL_FAILBACK -- the admin_down pnote must be
+        # positively confirmed gone; `None` (missing A5 evidence) or `True`
+        # (still registered) both fail to corroborate the reversal.
+        if subject_reading.admin_down_pnote_present is not False:
+            return None
         if subject_reading.role == _ROLE_STANDBY:
             return _POSTCONDITION_SUBJECT_STANDBY
         if subject_reading.role == _ROLE_ACTIVE:

@@ -41,20 +41,43 @@ evidence -- `CPPreflightRead.A3_CPHAPROB_STAT` (local role) and
 exactly what the collector already validated. No new read command is
 introduced.
 
+**Exact `admin_down` pnote identification (`OP.2.C1` safety correction).**
+`admin_down_pnote_present` answers one narrow question: is the Critical
+Device *literally named* `admin_down` -- the exact device
+`clusterXL_admin down` registers, per the gate's "Supported semantics" --
+present and reporting a problem state? This is never the same fact as
+`checkpoint.cp_preflight_extraction.parse_cphaprob_ia_list`'s own
+`any_problem` (an aggregate over every registered Critical Device, scoped
+to the general CP-A5 readiness battery and its D-V6 retained-field limit --
+a `problem` state on some unrelated device, e.g. `Synchronization`, must
+never be read as `admin_down`'s appearance). This module reads the pnote
+*name* to make that distinction -- exactly the narrower disclosure the
+gate's own "Sensitive output" row already sanctions ("member role token,
+pnote name") -- and pairs each parsed device name with its state locally,
+without widening `parse_cphaprob_ia_list`'s own contract or retained-field
+set. A `Current state:`/state-cell match with no associated device name is
+never assumed to be `admin_down` -- it fails closed to "not present".
+
 **Submission outcome.** `SubmissionConfirmation` is the same two-way split
 `OP.2.0` P6/P7 already fix: `CONFIRMED_NOT_SENT` only when this module can
-positively prove the command never reached the device (no established
-shell, or the underlying send itself failed before any device interaction
--- `InteractiveSshSession.run`'s own `"execution_error"` classification, or
-an exception raised out of the run call itself); every other outcome
-(timeout, non-zero exit status, a CLI-rejected/empty response, or an
-ordinary success) is `SUBMITTED_OR_AMBIGUOUS` -- this module never
-distinguishes further, exactly as `SubmissionConfirmation`'s own docstring
-requires. Exactly one call to the underlying transport per submission --
-no retry, no resend, under any circumstance.
+positively prove the command was never even attempted -- the one provable
+case is that no persistent Expert shell was ever established for this
+member (`session._shell is None`). Once a send is attempted on an
+established session, the outcome is `SUBMITTED_OR_AMBIGUOUS` no matter what
+happens next -- a non-zero exit status, a CLI-rejected/empty response, an
+ordinary success, `InteractiveSshSession.run`'s own `"execution_error"`
+classification, or an exception raised out of the run call itself. None of
+those positively proves the bytes never left this session's already-open
+channel (`OP.2.C1` safety correction: an attempted send that fails is
+attempted-send *uncertainty*, not proof of non-delivery, and must never be
+treated as the safer outcome). This module never distinguishes further
+among the `SUBMITTED_OR_AMBIGUOUS` cases, exactly as `SubmissionConfirmation`'s
+own docstring requires. Exactly one call to the underlying transport per
+submission -- no retry, no resend, under any circumstance.
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 
 from checkpoint.clusterxl_capability_adapter import (
@@ -62,7 +85,6 @@ from checkpoint.clusterxl_capability_adapter import (
     SubmissionConfirmation,
 )
 from checkpoint.cp_preflight_battery import CPPreflightRead
-from checkpoint.cp_preflight_extraction import parse_cphaprob_ia_list
 from checkpoint.preflight_collector import INTER_COMMAND_DELAY_SECONDS, MemberSession
 from configuration.checkpoint_config_collector import _parse_clusterxl_runtime_role
 
@@ -72,6 +94,108 @@ __all__ = [
     "RealClusterXLMemberSession",
 ]
 
+#: The exact Critical Device name `clusterXL_admin down` registers
+#: (`OP.2.1` CP-M1 "Supported semantics"). Matched case-insensitively,
+#: exact name only -- never a substring/prefix match against any other
+#: registered device.
+_ADMIN_DOWN_DEVICE_NAME = "admin_down"
+
+#: Local mirrors of `checkpoint.cp_preflight_extraction`'s own CP-A5 shape
+#: knowledge (three real output shapes: per-device block, fixed-width
+#: table, healthy-member sentence). Duplicated rather than imported so this
+#: module's narrower, OP.2.1-sanctioned pnote-*name* read never widens that
+#: module's own public contract (`parse_cphaprob_ia_list`'s return shape,
+#: D-V6's retained-field limit) by so much as a shared private symbol.
+_PNOTE_DEVICE_NAME_RE = re.compile(r"(?im)^\s*device\s+name\s*:\s*(\S[^\r\n]*)$")
+_PNOTE_STATE_RE = re.compile(r"(?im)^\s*current\s+state\s*:\s*(\S[^\r\n]*)$")
+_PNOTE_TABLE_HEADER_RE = re.compile(r"(?i)current\s+state\s*:?")
+_PNOTE_DEVICE_HEADER_RE = re.compile(r"(?i)device\s+name\s*:?")
+_PNOTE_NONE_IN_PROBLEM_RE = re.compile(r"(?im)^\s*there\s+are\s+no\s+pnotes?\s+in\s+(?:a\s+)?problem\s+state\b")
+_PNOTE_PROBLEM_PREFIXES = ("problem", "error", "failed")
+
+
+def _parse_pnote_block_pairs(text: str) -> list[tuple[str | None, str]]:
+    """Per-device block form: pair each `Device Name:` line with the
+    `Current state:` line that follows it. A state line with no preceding
+    (unconsumed) device name line still yields a pair with `name=None` --
+    never dropped, so callers can positively distinguish "an unnamed
+    problem line" from "no problem line at all"."""
+    pairs: list[tuple[str | None, str]] = []
+    current_name: str | None = None
+    for line in text.splitlines():
+        name_match = _PNOTE_DEVICE_NAME_RE.match(line)
+        if name_match:
+            current_name = name_match.group(1).strip()
+            continue
+        state_match = _PNOTE_STATE_RE.match(line)
+        if state_match:
+            pairs.append((current_name, state_match.group(1).strip()))
+            current_name = None
+    return pairs
+
+
+#: A column boundary is the start of a run of non-space text that either
+#: opens the line or follows at least two spaces -- the same fixed-width
+#: convention the real header row uses to separate multi-word labels
+#: ("Device Name:", "Time since last report:") from one another.
+_COLUMN_START_RE = re.compile(r"(?:^|(?<=\s{2}))\S")
+
+
+def _parse_pnote_table_pairs(text: str) -> list[tuple[str | None, str]]:
+    """Fixed-width column table form: locate the `Device Name`/`Current
+    state` header columns by their fixed-width column boundaries and slice
+    each following row at both."""
+    lines = [line for line in text.splitlines() if line.strip()]
+    for index, line in enumerate(lines):
+        state_match = _PNOTE_TABLE_HEADER_RE.search(line)
+        device_match = _PNOTE_DEVICE_HEADER_RE.search(line)
+        if not state_match or not device_match:
+            continue
+
+        column_starts = sorted(m.start() for m in _COLUMN_START_RE.finditer(line))
+
+        def _cell_end(start: int) -> int:
+            following = [c for c in column_starts if c > start]
+            return min(following) if following else len(line)
+
+        state_start, name_start = state_match.start(), device_match.start()
+        state_end, name_end = _cell_end(state_start), _cell_end(name_start)
+        pairs: list[tuple[str | None, str]] = []
+        for row in lines[index + 1:]:
+            if len(row) <= state_start:
+                continue
+            state_cell = row[state_start:state_end].strip()
+            name_cell = row[name_start:name_end].strip() if len(row) > name_start else ""
+            if state_cell:
+                pairs.append((name_cell or None, state_cell))
+        return pairs
+    return []
+
+
+def _admin_down_pnote_state(stdout: str) -> bool | None:
+    """Whether the exact `admin_down` Critical Device is present and
+    reporting a problem state -- never any other pnote, and never the
+    aggregate "any problem device" fact. `None` when the read is not
+    observed in any known shape (fail closed, same discipline as
+    `parse_cphaprob_ia_list`). `False` when observed and either the
+    sentence form positively reports no pnote in problem state, or no
+    device is provably named `admin_down` in a problem state."""
+    text = str(stdout or "")
+    pairs = _parse_pnote_block_pairs(text)
+    if not pairs:
+        pairs = _parse_pnote_table_pairs(text)
+    if not pairs:
+        if _PNOTE_NONE_IN_PROBLEM_RE.search(text):
+            return False
+        return None
+    return any(
+        name is not None
+        and name.strip().lower() == _ADMIN_DOWN_DEVICE_NAME
+        and state.strip().lower().startswith(_PNOTE_PROBLEM_PREFIXES)
+        for name, state in pairs
+    )
+
+
 #: The two `OP.2.1`-approved CP-M1 / CP-M1-R primitives, verbatim, no `-p`
 #: (deferred -- see the gate doc's "Persistence" section). Literal only,
 #: never interpolated -- mirrors the discipline
@@ -79,11 +203,6 @@ __all__ = [
 #: class 0 read.
 ADMIN_DOWN_COMMAND_TEXT = "clusterXL_admin down"
 ADMIN_UP_COMMAND_TEXT = "clusterXL_admin up"
-
-#: `InteractiveSshSession.run`'s own classification for "the send itself
-#: failed" -- the one case that positively proves the command never reached
-#: the device (`configuration.checkpoint_config_collector.InteractiveSshSession.run`).
-_SEND_FAILED_ERROR_CLASS = "execution_error"
 
 
 @dataclass
@@ -108,9 +227,7 @@ class RealClusterXLMemberSession:
         a5 = self.member_session.run(CPPreflightRead.A5_PNOTE_LIST)
         admin_down_pnote_present: bool | None = None
         if a5.get("success"):
-            pnotes = parse_cphaprob_ia_list(str(a5.get("stdout") or ""))
-            if pnotes.get("observed"):
-                admin_down_pnote_present = bool(pnotes.get("any_problem"))
+            admin_down_pnote_present = _admin_down_pnote_state(str(a5.get("stdout") or ""))
 
         return MemberRoleReading(
             role=role,
@@ -128,8 +245,12 @@ class RealClusterXLMemberSession:
         session = self.member_session
         if session._shell is None:
             # No persistent Expert shell was ever established for this
-            # member -- the one positive "never reached the device" case
-            # OP.2.0 P7 carves out, same as an unopened transport.
+            # member -- the one provable "never even attempted" case: no
+            # send was ever issued because there was no channel to send it
+            # on. This is the *only* CONFIRMED_NOT_SENT escape (OP.2.C1
+            # safety correction) -- everything past this point is an
+            # attempted send, whose outcome this module can never prove
+            # negative.
             return SubmissionConfirmation.CONFIRMED_NOT_SENT
 
         # Same pacing discipline as MemberSession.run/run_vsenv: wait before
@@ -139,10 +260,14 @@ class RealClusterXLMemberSession:
         session.command_invocations += 1
 
         try:
-            result = session._run_command(command_text)
+            session._run_command(command_text)
         except Exception:
-            return SubmissionConfirmation.CONFIRMED_NOT_SENT
-
-        if isinstance(result, dict) and result.get("error_class") == _SEND_FAILED_ERROR_CLASS:
-            return SubmissionConfirmation.CONFIRMED_NOT_SENT
+            # A send was attempted on an already-established session and
+            # something went wrong before/while/after it -- this is
+            # attempted-send uncertainty, never proof the command didn't
+            # reach the device (OP.2.C1 safety correction: an exception out
+            # of an opened channel, including InteractiveSshSession.run's
+            # own "execution_error" classification, no longer maps to
+            # CONFIRMED_NOT_SENT).
+            pass
         return SubmissionConfirmation.SUBMITTED_OR_AMBIGUOUS
