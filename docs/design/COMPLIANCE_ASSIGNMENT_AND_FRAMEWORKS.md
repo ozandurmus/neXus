@@ -139,6 +139,13 @@ pieces, both DEPLOY.1:
 Until then: an operator edits the policy file (or a small `--assign` CLI helper,
 optional in `0.7.1`).
 
+**Amendment (`PCP.0`, 2026-09-05, `PRODUCT_CONTROL_PLANE_ARCHITECTURE.md`
+§22 item 2):** the "device registry" above is delivered by the Product
+Control Plane's Device Registry (`PCP.1`+), not built separately — this
+section's tags/groups annotations are the same registry field the control
+plane document's §6 already defines. The assignment editor half of this
+section stays `DEPLOY.1A`-gated exactly as written above.
+
 ## 5. Part D — Coverage & alignment roll-up (`0.7.1`)
 
 Additive `compliance_overview` block (in the compliance payload; the Overview

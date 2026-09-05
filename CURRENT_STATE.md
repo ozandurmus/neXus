@@ -7,11 +7,13 @@ detail is not here either** — it is in `project/build_history.json`
 linked documents under `docs/history/`. `docs/history/INDEX.md` is the
 generated one-line timeline.
 
-- **Checkpoint:** 2026-09-05, branch `claude/op2c-change-management-review-docs-11u25j`.
+- **Checkpoint:** 2026-09-05, branch `claude/pcp0-freeze-merge-4e6kb4`.
 - **Current build** (per `project/roadmap.json` `now_next.now`):
-  `op2_c_change_management_review_package_draft` — **DONE** (docs-only
-  compilation; see "Active build"). `now_next.next` stays `op2_c_cp_
-  clusterxl_adapter_scoping` (blocked).
+  `product_control_plane_architecture_draft` — **COMPLETE, FROZEN**
+  (docs/state only; see "Active build"). `now_next.next` is
+  `pcp_1_device_registry_manual_enrollment_foundation` (planned, unblocked,
+  not started); `op2_c_cp_clusterxl_adapter_scoping` stays `upcoming`,
+  blocked on `DEPLOY.1`.
 - **OP.2.0 CLASS 2 architecture** (`docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md`):
   **CONTRACT FROZEN 2026-09-04**; `OP.2.A`/`OP.2.B` IMPLEMENTED; `OP.2.1` CP
   command gate DRAFTED — CLASS 2 still has **no member**, no adapter,
@@ -50,27 +52,39 @@ test-enforced boundaries. Current numbers:
 
 ## Active build
 
-**`op2_c_change_management_review_package_draft`** — **DONE**, 2026-09-05.
-New `docs/history/phase/OP_2_C_CHANGE_MANAGEMENT_NETWORK_SECURITY_REVIEW.md`
-— the `FAILOVER_ENGINE_ARCHITECTURE.md` §10 change-management/safety review
-— compiles frozen `OP.2.0`/`OP.2.1`/`OP.2.1b` facts and the implemented-but-
-unwired adapter/session/preflight-provider trio: `CP-M1`/`CP-M1-R` gate
-status and reversal; a `§10.1` safety-contract evidence matrix (`SATISFIED_
-IN_UNWIRED_FOUNDATION`/`PARTIALLY_SATISFIED`); `DEPLOY.1A`, SSH trust
-hardening, the protected entry point and this review's own sign-off all
-`OPEN_RELEASE_GATE`/`EXTERNAL_SIGN_OFF_REQUIRED`; `op_four_eyes`/`op_
-continuity_tolerance` recorded unresolved, not decided. No code, taxonomy,
-`Authorizer`, adapter wiring, UI, device command, or test touched; no frozen
-decision reopened; blank sign-off, does not claim `CLASS 2` reachable.
-Detail: `project/roadmap.json` `now_next.now`.
+**`product_control_plane_architecture_draft`** (`PCP.0`) — **COMPLETE,
+FROZEN 2026-09-05**. `docs/design/PRODUCT_CONTROL_PLANE_ARCHITECTURE.md`
+(status **FROZEN**) promotes the Product Control Plane direction:
+persistent Device Registry with candidate-first explicit enrollment,
+capability resolution, typed job plane, four-layer truth model, identity
+layering, persistence seam, capability-driven backup, device ≠ failover
+unit, console device experience, movements `PCP.1`–`PCP.8`. Reconciled
+against `main` `ff700e38` (unmoved since): one genuine contradiction — a
+single console enrollment-write boundary covering both manual and
+candidate-based intents — isolated as open decision
+`pcp_console_registry_write_gate`, decided for neither; every frozen
+`OP.2`/`CLASS 2`, `CON.x`, `RB.x` law preserved. Product Owner **APPROVED**,
+conditioned on two mechanical freeze corrections applied at freeze: (1)
+the registry mutation lock's release is now instance-safe — an
+`owner_token` embedded at acquisition, checked before every unlink, so a
+releasing process never deletes a different writer's active lock instance
+after a human recreated one it believed stale (AC-5 widened, AC-15 added);
+the lock file is now classified LOCAL-SENSITIVE and, like the registry
+file, never enters the support bundle. (2) §22 timing corrected: items 1-3
+(`OPERATOR_CONSOLE_ARCHITECTURE.md`, `COMPLIANCE_ASSIGNMENT_AND_
+FRAMEWORKS.md`, `BACKUP_AND_RECOVERY_ARCHITECTURE.md`) applied now; item 4
+(`AI_START_HERE.md` "What this is" sentence) moves to the `PCP.1` close
+scope — only true once `PCP.1` ships. No product code, taxonomy, route,
+device command, schema or UI touched. Detail: `project/build_history.json`
+head record.
 
 Predecessors (full detail: `project/build_history.json` + linked phase
-docs): `op2_c_release_gate_dependency_scoping`, `op2_c_cp_clusterxl_
-preflight_eligibility_wiring`, `op2_c1_cp_clusterxl_member_session`,
-`op2_1b_cp_pilot_readiness_policy_amendment` (`D-V7b`/`D-F3`/`D-F2`
-advisory-exempt), `op2_1_cp_clusterxl_command_gate`, `op2_a_b_execution_
-foundation` — all DONE/AUTOMATED_VALIDATED. PAN B2 stays **NOT
-ESTABLISHED**.
+docs): `op2_c_change_management_review_package_draft` (review package
+DRAFTED, unsigned), `op2_c_release_gate_dependency_scoping`, `op2_c_cp_
+clusterxl_preflight_eligibility_wiring`, `op2_c1_cp_clusterxl_member_
+session`, `op2_1b_cp_pilot_readiness_policy_amendment`, `op2_1_cp_
+clusterxl_command_gate`, `op2_a_b_execution_foundation` — all DONE/
+AUTOMATED_VALIDATED. PAN B2 stays **NOT ESTABLISHED**.
 
 ## `OP.0b.0` — FROZEN WITH REAL-ENV VALIDATION GATES
 
@@ -105,42 +119,31 @@ a narrower question never promoted toward B2.
 
 ## Exact next build
 
-`now_next.next` is **`op2_c_cp_clusterxl_adapter_scoping`**. The typed
-adapter, the real `ClusterXLMemberSession` transport, and the real
-`PreflightProvider`/`EligibilityEvaluator` are now all IMPLEMENTED and
-unit-tested, none wired into a production `adapter_resolver`/
-`ActionCoordinator` — `DenyAllAuthorizer`/no taxonomy member still keep
-CLASS 2 unreachable. Remaining before a real-env pilot: `DEPLOY.1A` OIDC +
-`OPERATE`, CP SSH host-key trust hardening, the signed change-management
-review's actual sign-off (drafted, unsigned — `docs/history/phase/OP_2_C_
-CHANGE_MANAGEMENT_NETWORK_SECURITY_REVIEW.md`), and a protected entry point
-constructing both live (using
-`RealClusterXLMemberSession`/`ClusterXLPreflightProvider`/
-`ClusterXLReadinessEligibilityEvaluator`). `Sonnet 5, normal` for wiring;
-extended thinking only for a genuine new authorization/trust decision.
-Detail: `checkpoint/clusterxl_capability_adapter.py`,
-`checkpoint/clusterxl_member_session.py`, and
-`checkpoint/clusterxl_preflight_provider.py` docstrings.
+`now_next.next` is **`pcp_1_device_registry_manual_enrollment_foundation`**
+(`PCP.1`): `utils/device_registry.py` + a filesystem-only eighth
+`utils/evidence_backend` concern + `main.py --registry-enroll/--registry-
+list/--registry-disable` + `tests/test_pcp1_device_registry.py`. No device
+contact, no UI/payload change, no PostgreSQL, no console target-vocabulary
+change. Contract = `docs/design/PRODUCT_CONTROL_PLANE_ARCHITECTURE.md` §21
+(ownership-token instance-safe registry mutation lock, AC-1a..AC-15,
+non-goals) — unblocked now the document is FROZEN; **not started by the
+freezing session**. `Sonnet 5, normal`.
 
-Dependency order (2026-09-05 scoping): `DEPLOY.1A` + SSH trust hardening
-both wait on `DEPLOY.1` (external, same blocker); the entry point waits on
-both; the review's sign-off is external — the package itself is now
-DRAFTED (`op2_c_change_management_review_package_draft`, DONE 2026-09-05),
-sign-off remains `EXTERNAL_SIGN_OFF_REQUIRED`.
+`op2_c_cp_clusterxl_adapter_scoping` (`upcoming`, blocked, notes preserved):
+adapter, real `ClusterXLMemberSession` and real `PreflightProvider`/
+`EligibilityEvaluator` all IMPLEMENTED + unit-tested, none wired;
+`DenyAllAuthorizer`/no taxonomy member keep CLASS 2 unreachable. Still
+waits on `DEPLOY.1A` OIDC + `OPERATE`, CP SSH trust hardening (both on
+`DEPLOY.1`, external), the review's sign-off (drafted, unsigned —
+`docs/history/phase/OP_2_C_CHANGE_MANAGEMENT_NETWORK_SECURITY_REVIEW.md`)
+and a protected entry point. `OP.2.D`'s console flow is expected to live on
+the `PCP.4` device/HA tab (one console, never two).
 
-`op0b_0_close_d_v3a_d_v7b_pre_class2` (`upcoming`, demoted from `next`
-2026-09-05): now purely a vendor-fact question — D-V7b's readiness-roll-up
-ROLE is decided (advisory-exempt); D-V3a/PAN B2 remain the PAN identity
-blocker (`OP.3`, out of scope for CP). Try an official GitHub mirror first
-(as closed `D-V4`/`D-V7a`), falling back to a human fetching the contract's
-named source pages.
-
-`cp_remote_collection_done_marker_diagnostics` (`upcoming`) needs a real
-recurrence, independent of `OP.0b`. Backlog (PO request):
-`cp_preflight_ccp_tablestat_evidence` — a NEW command, gate row required
-first. Also independent, any order: PAN serial identity closure —
-hardware-blocked, not reconciled with the manual 2026-09-04 observation
-(see above).
+`op0b_0_close_d_v3a_d_v7b_pre_class2` (`upcoming`): purely a vendor-fact
+question now (D-V7b's readiness role decided; D-V3a/PAN B2 remain the PAN
+identity blocker, `OP.3`). `cp_remote_collection_done_marker_diagnostics`
+(`upcoming`) needs a real recurrence. PAN serial identity closure —
+hardware-blocked (see above).
 
 ## Open blockers
 
@@ -168,16 +171,13 @@ Concurrency budget stays at 1 per vendor pending its own real-env evidence.
 ## Automated test baseline
 
 ```
-1825 passed / 24 skipped / 0 failed (2026-09-05, serial baseline,
-  op2_c1_admin_down_pnote_safety_corrections).
-Focused: test_op2_c1_cp_clusterxl_member_session.py (28) + test_op2_c_cp_
-  clusterxl_adapter.py (33) + test_op2_1_cp_clusterxl_command_gate.py +
-  test_op2_a_b_execution_foundation.py + test_architecture_convergence.py
-  (157 total), all green.
-Repository privacy gate: FAIL / findings, all known gitignored data/logs/
-  .support_hmac.key runtime artifacts (confirmed untracked, not repository
-  content).
-Project-state consistency: metadata_warnings == [] under all cross-authority rules.
+1825 passed / 24 skipped / 0 failed (2026-09-05 baseline) -- carried
+  forward, not re-run by the PCP.0 freeze session (no pytest/lxml/paramiko
+  in this sandbox, reported per CLAUDE.md, not bootstrapped; no code moved).
+Project-state consistency: metadata_warnings == []; build_history_index.py
+  --check clean; git diff --check clean (verified directly, 2026-09-05).
+Repository privacy gate: PASS / 0 findings, 484 files scanned (re-run
+  directly, 2026-09-05).
 ```
 
 Run one-shot and read from file: `py -m pytest -q > pytest_result.log 2>&1`;

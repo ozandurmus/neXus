@@ -457,6 +457,13 @@ workload; everything so far has been on-demand or opportunistically scheduled.
   `docs/AI_DEVELOPMENT_PROTOCOL.md` requires explicit human approval; the
   scheduler proposes, `--apply` disposes, mirroring the existing
   `--storage-deduplicate` dry-run-by-default convention.
+- **Amendment (`PCP.0`, 2026-09-05, `PRODUCT_CONTROL_PLANE_ARCHITECTURE.md`
+  §22 item 3):** typed backup jobs over registry (`device_id`) targets are
+  the `PCP.5`/`PCP.6` form of the scheduling this section already requires
+  to route through `utils/collection_executor.py`'s admission coordinator —
+  the same per-endpoint lock and vendor-budget-of-1 above, addressed
+  through registry targets instead of plane-wide/entity-id selection, not a
+  second scheduling path.
 
 ### 9.1 Recovery collection command infrastructure (added 2026-08-30, product owner request)
 

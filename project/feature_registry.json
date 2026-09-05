@@ -1436,6 +1436,262 @@
           "weight": 1
         }
       ]
+    },
+    {
+      "id": "device_registry_enrollment_foundation",
+      "title": "Product Control Plane - Device Registry + manual enrollment foundation",
+      "status": "planned",
+      "introduced": "PCP.1",
+      "weight": 8,
+      "summary": "Persistent, RuntimeRoot-resident Device Registry (opaque device_id, endpoints, vendor classification with basis, credential profile reference, enrollment source, lifecycle, tags) with CLI manual enrollment; filesystem evidence-backend concern; no device contact, no UI.",
+      "why": "The first persistent product object: stable targets to schedule, display and relate without rediscovering the estate each run. Contract: docs/design/PRODUCT_CONTROL_PLANE_ARCHITECTURE.md section 21.",
+      "criteria": [
+        {
+          "id": "registry_model",
+          "label": "DeviceRecord + lifecycle table; no secret-capable field; opaque ids; mutation lock release is instance-safe (ownership-token equality check, never a bare unlink)",
+          "state": "pending",
+          "weight": 2
+        },
+        {
+          "id": "filesystem_backend",
+          "label": "Eighth evidence_backend concern, filesystem only, atomic, RuntimeRoot-resident",
+          "state": "pending",
+          "weight": 1
+        },
+        {
+          "id": "cli_enrollment",
+          "label": "--registry-enroll / --registry-list / --registry-disable; mode-exclusive; no vendor import, no network",
+          "state": "pending",
+          "weight": 1
+        },
+        {
+          "id": "privacy_bundle_exclusion",
+          "label": "Registry file and its mutation lock file (both LOCAL-SENSITIVE/CLASS 2) never in the support bundle, report, console payload or repository",
+          "state": "pending",
+          "weight": 1
+        },
+        {
+          "id": "evidence_identity_untouched",
+          "label": "unified.json / entity_id / console registry / ALLOWLISTED_WORKFLOWS / utils.operate byte-unchanged",
+          "state": "pending",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "management_plane_enrollment_providers",
+      "title": "Product Control Plane - Panorama and Check Point management enrollment providers",
+      "status": "planned",
+      "introduced": "PCP.2",
+      "weight": 6,
+      "summary": "Candidates derived from already-collected Panorama and MDS/CMA discovery artifacts, explicit operator enrollment, and a first-contact job over existing identity reads (gate entry for the reuse).",
+      "why": "Default behaviour is candidate -> explicit enrollment; no phantom devices from unverified metadata; management-plane provenance stays distinct from direct-device evidence.",
+      "criteria": [
+        {
+          "id": "candidates_from_existing_artifacts",
+          "label": "No new device command; candidates from the existing collections",
+          "state": "pending",
+          "weight": 1
+        },
+        {
+          "id": "explicit_enrollment",
+          "label": "Operator selects candidates; nothing auto-enrolls by default",
+          "state": "pending",
+          "weight": 1
+        },
+        {
+          "id": "first_contact_job",
+          "label": "Class 0 first contact establishes identity/capability evidence; gate entry recorded for the reuse",
+          "state": "pending",
+          "weight": 2
+        },
+        {
+          "id": "trust_policy",
+          "label": "pcp_first_contact_trust_policy decided and enforced",
+          "state": "pending",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "capability_resolution_module_activation",
+      "title": "Product Control Plane - capability resolution + module activation",
+      "status": "planned",
+      "introduced": "PCP.3",
+      "weight": 6,
+      "summary": "Per-device capability projection (inventory, configuration, backup, ha_readiness, controlled_operations, telemetry, diagnostics) from established evidence and implemented vendor support; UNSUPPORTED explicit; never authorization.",
+      "why": "Modules light up from evidence, not from labels or user claims; capability != readiness != authorization.",
+      "criteria": [
+        {
+          "id": "projection_from_evidence",
+          "label": "Derived from existing capability/lifecycle/platform/identity inputs",
+          "state": "pending",
+          "weight": 2
+        },
+        {
+          "id": "unsupported_explicit",
+          "label": "Unresolvable combinations yield UNSUPPORTED(reason)",
+          "state": "pending",
+          "weight": 1
+        },
+        {
+          "id": "not_authorization",
+          "label": "controlled_operations presence never implies permission; DenyAllAuthorizer unchanged",
+          "state": "pending",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "control_plane_console_experience",
+      "title": "Product Control Plane - first-run onboarding + device experience (console)",
+      "status": "planned",
+      "introduced": "PCP.4",
+      "weight": 6,
+      "summary": "Welcome / Add Devices (candidates) and per-device Overview / Inventory / Configuration / Backups / HA / Jobs / Diagnostics as projections over existing payloads, in the existing CON.x console with payload parity and an action-free exported report.",
+      "why": "The product interaction model of a persistent control plane; OP.2.D's class 2 flow is expected to live on this HA tab so a second console is never built.",
+      "criteria": [
+        {
+          "id": "add_devices_from_candidates",
+          "label": "Candidate ids only cross the intent boundary",
+          "state": "pending",
+          "weight": 1
+        },
+        {
+          "id": "device_tabs_projections",
+          "label": "Tabs are projections; UI computes no identity/topology/readiness",
+          "state": "pending",
+          "weight": 2
+        },
+        {
+          "id": "payload_parity_render_harness",
+          "label": "Report/console parity; render harness green; report stays action-free",
+          "state": "pending",
+          "weight": 1
+        },
+        {
+          "id": "manual_entry_gate_decided",
+          "label": "pcp_console_registry_write_gate decided and honoured",
+          "state": "pending",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "typed_job_plane_current_projections",
+      "title": "Product Control Plane - typed job plane + current-state projections",
+      "status": "planned",
+      "introduced": "PCP.5",
+      "weight": 7,
+      "summary": "Job definitions and runs keyed by device_id targets with independent cadences, closed job-type vocabulary, fail-closed policy, admission-coordinator entry, and projections carrying provenance/freshness/staleness with UNKNOWN/STALE first-class.",
+      "why": "Enrollment and collection are separate; schedules reference typed capabilities, never vendor commands; cached state never claims freshness it lacks.",
+      "criteria": [
+        {
+          "id": "job_definitions_runs",
+          "label": "Durable typed definitions/runs over registry targets",
+          "state": "pending",
+          "weight": 2
+        },
+        {
+          "id": "closed_vocabulary_fail_closed",
+          "label": "Closed job types; default-disabled; >= 10 min floor preserved",
+          "state": "pending",
+          "weight": 1
+        },
+        {
+          "id": "projection_freshness",
+          "label": "Provenance/freshness/staleness fields; no TTL invented",
+          "state": "pending",
+          "weight": 1
+        },
+        {
+          "id": "storage_engine_decided",
+          "label": "pcp_storage_engine decided against the recorded criteria",
+          "state": "pending",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "independent_capability_jobs",
+      "title": "Product Control Plane - independent inventory / configuration / backup / readiness jobs",
+      "status": "planned",
+      "introduced": "PCP.6",
+      "weight": 5,
+      "summary": "Collector target-selection seams so each capability runs as its own typed job over registry targets; backup capability-driven through the RB.x contracts.",
+      "why": "Independent cadences without multiplying device contact: every job still enters the admission coordinator under the vendor budget of 1.",
+      "criteria": [
+        {
+          "id": "target_selection_seams",
+          "label": "Each collector accepts a registry-derived target set",
+          "state": "pending",
+          "weight": 2
+        },
+        {
+          "id": "backup_capability_driven",
+          "label": "Backup jobs resolve through RB.x contract state; recovery-cp stays unscheduled per D3",
+          "state": "pending",
+          "weight": 1
+        },
+        {
+          "id": "no_contact_multiplication",
+          "label": "Aggregate per-endpoint contact bounded as today",
+          "state": "pending",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "fast_telemetry_plane",
+      "title": "Product Control Plane - optional fast telemetry plane (SNMPv3 candidate)",
+      "status": "deferred",
+      "introduced": "PCP.7",
+      "weight": 3,
+      "summary": "Inexpensive periodic observation (availability, uptime, interface state, resource health) that marks projections changed/stale and triggers targeted authoritative collectors; never identity, configuration or eligibility authority.",
+      "why": "A future cheap signal plane behind its own security/command/OID gate; explicitly not a first-slice requirement.",
+      "criteria": [
+        {
+          "id": "own_gate",
+          "label": "Security review + OID/command gate + CLASS 3 secret handling before any code",
+          "state": "pending",
+          "weight": 1
+        },
+        {
+          "id": "trigger_not_evidence",
+          "label": "Telemetry only marks stale and triggers; never authoritative",
+          "state": "pending",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "diagnostic_runbooks",
+      "title": "Product Control Plane - Diagnostic Runbooks (CLASS 0, closed catalog)",
+      "status": "planned",
+      "introduced": "PCP.8",
+      "weight": 4,
+      "summary": "Bounded ordered read-only diagnostic sequences over registered targets from a closed source catalog sharing the CE.2 primitive registry; timeouts, output limits, redaction, audit.",
+      "why": "Operators run diagnostics from the product without a browser-to-shell path; every step passes the network-device command gate for this purpose.",
+      "criteria": [
+        {
+          "id": "closed_catalog",
+          "label": "Catalog in source; class 0 steps only; validator rejects class 1+",
+          "state": "pending",
+          "weight": 2
+        },
+        {
+          "id": "bounded_execution",
+          "label": "Timeout, output limits, deterministic framing, redaction, audit",
+          "state": "pending",
+          "weight": 1
+        },
+        {
+          "id": "shared_primitive_registry",
+          "label": "One primitive registry with CE.2, not two",
+          "state": "pending",
+          "weight": 1
+        }
+      ]
     }
   ]
 }
