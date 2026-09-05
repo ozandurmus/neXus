@@ -447,6 +447,12 @@ def test_12_d_f2_skew_threshold_not_invented():
     assert checks(u)["no_split_brain"]["status"] == CHECK_PASS
     snap = cp_snapshot(cp_member("tok-m1", at="not-a-timestamp"), cp_member("tok-m2", role="STANDBY"))
     assert unit(cp_report(snap), _CP_UNIT)["evidence"]["member_skew_ms"] is None
+    # CP pilot readiness-policy amendment: coherent, same-run, successfully
+    # collected nonzero skew is recorded (above) but never blocks a positive
+    # verdict by itself -- D-F2 no longer gates the roll-up (assessment.
+    # UNRESOLVED_POLICY_DECISIONS == {"D-F1"} only). happy_cp() has real,
+    # nonzero skew (1000ms, asserted above) and still reaches SAFE.
+    assert u["verdict"] == VERDICT_SAFE
 
 
 def test_13_d_f3_flap_threshold_not_invented():
@@ -463,15 +469,24 @@ def test_13_d_f3_flap_threshold_not_invented():
     assert u["verdict"] != VERDICT_UNSAFE
 
 
-def test_14_d_v7b_remains_unresolved():
-    c = checks(unit(cp_report(happy_cp()), _CP_UNIT))["preemption_known"]
+def test_14_d_v7b_is_advisory_exempt_not_resolved():
+    u = unit(cp_report(happy_cp()), _CP_UNIT)
+    c = checks(u)["preemption_known"]
+    # The vendor fact remains exactly as unreadable as before -- D-V7b itself
+    # is NOT resolved, only the roll-up's treatment of its absence changed.
     assert c["status"] == CHECK_INSUFFICIENT
     assert c["reason"] == "configured_recovery_not_readable_d_v7b"
     assert "A9" in c["missing_evidence"] and "not authorized" in c["missing_evidence"]
     spec = FACT_CHECK_MAP[("checkpoint", "preemption_known")]
     assert spec.positive_facts == () and spec.not_evaluable_reason
-    # The canonical roll-up still requires it: SAFE stays blocked by this check.
-    assert unit(cp_report(happy_cp()), _CP_UNIT)["verdict"] == VERDICT_INSUFFICIENT
+    # CP pilot readiness-policy amendment: this one, exact, closed-list reason
+    # no longer blocks SAFE by itself once every other stop-condition
+    # (including flap_history's own D-F3 exemption) is satisfied.
+    assert u["verdict"] == VERDICT_SAFE
+    assert "preemption_known" in u["reason"]
+    # PAN keeps a supported read -- an equivalent PAN gap is never exempted.
+    assert ("panorama", "preemption_known", "configured_recovery_not_readable_d_v7b") \
+        not in assessment_module.ADVISORY_EXEMPT_CHECKS
 
 
 def test_15_pan_b2_remains_not_established():
@@ -647,7 +662,15 @@ def test_26_two_independently_observed_pan_members_remain_one_pair_unit():
     c = checks(pan_units[0])
     for cid in ("viable_target", "state_sync_current", "parity", "no_split_brain", "control_sync_link_health", "preemption_known"):
         assert c[cid]["status"] == CHECK_PASS, cid
-    assert pan_units[0]["verdict"] == VERDICT_INSUFFICIENT  # flap_history (D-F3) still blocks
+    # CP pilot readiness-policy amendment: D-F3 (flap_history) is now
+    # advisory-exempt for both vendors, so a PAN pair with everything else
+    # green also reaches SAFE here. This is a readiness-layer side effect
+    # only -- PAN CLASS 2 stays out of scope (OP.3): a future eligibility
+    # layer separately requires PAN's own identity contract (B2), which this
+    # readiness verdict never encodes.
+    assert c["flap_history"]["status"] == CHECK_INSUFFICIENT
+    assert c["flap_history"]["reason"] == "threshold_policy_unresolved:D-F3"
+    assert pan_units[0]["verdict"] == VERDICT_SAFE
 
 
 def test_27_peer_claim_alone_does_not_synthesize_peer():
@@ -1176,38 +1199,109 @@ def test_evaluator_performs_no_socket_io_and_imports_no_collector(monkeypatch):
     assert "panorama.preflight_collector" not in sys.modules
 
 
-def test_safe_and_degraded_unreachable_over_snapshot_matrix():
-    """§21: with every check S7 can evaluate green, SAFE/DEGRADED must still
-    be unreachable -- CP: check 6 (D-V7b) + check 7 (D-F3); PAN: check 7
-    (D-F3). Asserted over a generated matrix, not by reading."""
+def test_safe_reachable_only_for_the_exact_fully_healthy_combination_over_snapshot_matrix():
+    """CP pilot readiness-policy amendment: SAFE is now reachable, but ONLY
+    for the exact combination where every NON-exempt stop-condition
+    genuinely, positively passes -- one ACTIVE + one STANDBY-capable member,
+    no attention/pnote, synchronized (CP); one active + one passive member,
+    HA1 link up, no monitored path down (PAN). `preemption_known` (CP only)
+    and `flap_history` (both vendors) are the only checks the exemption ever
+    covers -- see `test_advisory_exempt_checks_are_closed_list_and_never_
+    cover_fail_or_open_evidence` for the roll-up-level proof of that
+    boundary. Every OTHER combination in this same generated matrix must
+    still never reach SAFE/DEGRADED -- asserted over the matrix, not by
+    reading, so the exemption is proven narrow, not a general loosening."""
     seen = set()
+    safe_seen = 0
     cp_roles = ["ACTIVE", "STANDBY", "DOWN", "ACTIVE ATTENTION"]
     for role_a, role_b, pnote, sync in itertools.product(cp_roles, cp_roles, (False, True), ("ok", "not_ok", None)):
         snap = cp_snapshot(cp_member("tok-m1", role=role_a, attention=role_a in {"DOWN", "ACTIVE ATTENTION"}, pnote=pnote, sync=sync),
                            cp_member("tok-m2", role=role_b, attention=role_b in {"DOWN", "ACTIVE ATTENTION"}, sync=sync))
+        fully_healthy = {role_a, role_b} == {"ACTIVE", "STANDBY"} and pnote is False and sync == "ok"
         for u in cp_report(snap)["units"]:
             seen.add(u["verdict"])
-            assert u["verdict"] not in (VERDICT_SAFE, VERDICT_DEGRADED)
+            if fully_healthy:
+                assert u["verdict"] == VERDICT_SAFE, (role_a, role_b, pnote, sync, u["verdict"])
+                safe_seen += 1
+            else:
+                assert u["verdict"] not in (VERDICT_SAFE, VERDICT_DEGRADED), (role_a, role_b, pnote, sync, u["verdict"])
+    assert safe_seen == 2  # (ACTIVE, STANDBY) and (STANDBY, ACTIVE) -- order-independent predicates
     pan_states = ["active", "passive", "non-functional", "suspended"]
     for state_a, state_b, ha1, path_down in itertools.product(pan_states, pan_states, ("up", "down", "odd"), (False, True)):
         snap = pan_snapshot(pan_member("tok-p1", state=state_a, conn_ha1=ha1, path_any_down=path_down),
                             pan_member("tok-p2", state=state_b))
+        fully_healthy = {state_a, state_b} == {"active", "passive"} and ha1 == "up" and path_down is False
         for u in pan_report(snap)["units"]:
             seen.add(u["verdict"])
-            assert u["verdict"] not in (VERDICT_SAFE, VERDICT_DEGRADED)
-    assert {VERDICT_UNSAFE, VERDICT_INSUFFICIENT} <= seen
+            if fully_healthy:
+                assert u["verdict"] == VERDICT_SAFE, (state_a, state_b, ha1, path_down, u["verdict"])
+            else:
+                assert u["verdict"] not in (VERDICT_SAFE, VERDICT_DEGRADED), (state_a, state_b, ha1, path_down, u["verdict"])
+    assert {VERDICT_UNSAFE, VERDICT_INSUFFICIENT, VERDICT_SAFE} <= seen
 
 
 def test_rollup_refuses_safe_while_a_numeric_policy_is_open():
     """The one roll-up is intact (all-PASS with no open gate is SAFE) and the
-    open-policy gate is explicit: all-PASS evidence that still depends on an
-    unresolved D-F decision is INSUFFICIENT_EVIDENCE, never SAFE."""
+    open-policy gate is explicit: all-PASS evidence that still depends on the
+    one remaining unresolved D-F decision (D-F1) is INSUFFICIENT_EVIDENCE,
+    never SAFE. CP pilot readiness-policy amendment: D-F2/D-F3 were DECIDED
+    (no threshold, permanently) and no longer appear here -- D-F1
+    (configuration-intent max age) is the only decision left in this set."""
     all_pass = [{"id": cid, "label": label, "status": CHECK_PASS, "reason": "x", "missing_evidence": ""} for cid, label in STOP_CONDITIONS]
     ha_unit = HaUnit(unit_id="u", unit_type="cp_clusterxl_cluster", vendor="checkpoint", members=["a", "b"], cluster_mode="ha_new_mode")
     assert assessment_module._verdict_for(ha_unit, all_pass, {"unresolved_policy_gates": []}) == (VERDICT_SAFE, "all_stop_conditions_passed")
-    verdict, reason = assessment_module._verdict_for(ha_unit, all_pass, {"unresolved_policy_gates": ["D-F2", "D-F3"]})
-    assert verdict == VERDICT_INSUFFICIENT and reason == "positive_verdict_blocked_by_unresolved_policy:D-F2,D-F3"
-    assert UNRESOLVED_POLICY_DECISIONS == frozenset({"D-F1", "D-F2", "D-F3"})
+    # D-F2/D-F3 alone, still listed for disclosure, no longer block.
+    assert assessment_module._verdict_for(ha_unit, all_pass, {"unresolved_policy_gates": ["D-F2", "D-F3"]}) \
+        == (VERDICT_SAFE, "all_stop_conditions_passed")
+    verdict, reason = assessment_module._verdict_for(ha_unit, all_pass, {"unresolved_policy_gates": ["D-F1", "D-F2", "D-F3"]})
+    assert verdict == VERDICT_INSUFFICIENT and reason == "positive_verdict_blocked_by_unresolved_policy:D-F1"
+    assert UNRESOLVED_POLICY_DECISIONS == frozenset({"D-F1"})
+
+
+def test_advisory_exempt_checks_are_closed_list_and_never_cover_fail_or_open_evidence():
+    """PO decision boundary, asserted directly against the roll-up: the
+    exemption is closed-list and deterministic. It never fires for a FAIL, an
+    identity/coherence failure, a collection failure, or any reason string
+    outside the exact frozen set -- and it never depends on anything an
+    operator controls."""
+    assert assessment_module.ADVISORY_EXEMPT_CHECKS == frozenset({
+        ("checkpoint", "preemption_known", "configured_recovery_not_readable_d_v7b"),
+        ("checkpoint", "flap_history", "threshold_policy_unresolved:D-F3"),
+        ("panorama", "flap_history", "threshold_policy_unresolved:D-F3"),
+    })
+    ha_unit = HaUnit(unit_id="u", unit_type="cp_clusterxl_cluster", vendor="checkpoint", members=["a", "b"], cluster_mode="ha_new_mode")
+
+    def _checks(overrides):
+        base = {cid: {"id": cid, "label": label, "status": CHECK_PASS, "reason": "x", "missing_evidence": ""} for cid, label in STOP_CONDITIONS}
+        base.update(overrides)
+        return list(base.values())
+
+    # A FAIL on the exempt check is never exempted, even with the exact reason string.
+    failed = _checks({"preemption_known": {
+        "id": "preemption_known", "label": "x", "status": CHECK_FAIL,
+        "reason": "configured_recovery_not_readable_d_v7b", "missing_evidence": "",
+    }})
+    verdict, _ = assessment_module._verdict_for(ha_unit, failed, {"unresolved_policy_gates": []})
+    assert verdict == VERDICT_UNSAFE
+
+    # A generic identity/coherence/collection-failure reason on the same
+    # check id is never exempted -- only the exact registered reason is.
+    for other_reason in ("identity_gate_failed", "preflight_snapshot_incoherent", "collection_failed:local_preemptive", "not_evaluable_without_preflight_battery"):
+        insufficient = _checks({"preemption_known": {
+            "id": "preemption_known", "label": "x", "status": CHECK_INSUFFICIENT,
+            "reason": other_reason, "missing_evidence": "",
+        }})
+        verdict, reason = assessment_module._verdict_for(ha_unit, insufficient, {"unresolved_policy_gates": []})
+        assert verdict == VERDICT_INSUFFICIENT and reason == "stop_conditions_not_fully_evaluable", other_reason
+
+    # PAN preemption_known is never exempted -- an equivalent PAN gap blocks.
+    pan_unit = HaUnit(unit_id="p", unit_type="pan_ha_pair", vendor="panorama", members=["a", "b"], cluster_mode="active-passive")
+    pan_insufficient = _checks({"preemption_known": {
+        "id": "preemption_known", "label": "x", "status": CHECK_INSUFFICIENT,
+        "reason": "configured_recovery_not_readable_d_v7b", "missing_evidence": "",
+    }})
+    verdict, reason = assessment_module._verdict_for(pan_unit, pan_insufficient, {"unresolved_policy_gates": []})
+    assert verdict == VERDICT_INSUFFICIENT and reason == "stop_conditions_not_fully_evaluable"
 
 
 def test_identity_gate_failure_excludes_member_evidence():
@@ -1285,12 +1379,16 @@ def test_evidence_source_exclusivity_fresh_preflight_xor_legacy_telemetry():
     with_snapshot = unit(cp_report(happy_cp(), cp_ha_runtime=stale_cp), _CP_UNIT)
     snapshot_only = unit(cp_report(happy_cp()), _CP_UNIT)
     assert with_snapshot["evidence"]["basis"] == EVIDENCE_BASIS_PREFLIGHT_SNAPSHOT
-    assert with_snapshot["verdict"] == VERDICT_INSUFFICIENT
+    # CP pilot readiness-policy amendment: happy_cp() alone now reaches SAFE
+    # (matching snapshot_only below byte-for-byte) -- proving legacy
+    # telemetry contributed nothing is now the interesting assertion, not the
+    # verdict value itself.
+    assert with_snapshot["verdict"] == VERDICT_SAFE
     assert with_snapshot["checks"] == snapshot_only["checks"]  # byte-identical: legacy contributed nothing
     assert checks(with_snapshot)["no_split_brain"]["status"] == CHECK_PASS
     # A conflicting legacy mode does not leak into the roll-up either.
     stale_ls = {k: {**v, "ha_cluster_mode": "load_sharing_unicast"} for k, v in stale_cp.items()}
-    assert unit(cp_report(happy_cp(), cp_ha_runtime=stale_ls), _CP_UNIT)["verdict"] == VERDICT_INSUFFICIENT
+    assert unit(cp_report(happy_cp(), cp_ha_runtime=stale_ls), _CP_UNIT)["verdict"] == VERDICT_SAFE
     assert unit(cp_report(happy_cp(), cp_ha_runtime=stale_ls), _CP_UNIT)["cluster_mode"] == "ha_new_mode"
 
     # -- Palo Alto: legacy says both active (UNSAFE split-brain), snapshot says active/passive.
@@ -1304,7 +1402,10 @@ def test_evidence_source_exclusivity_fresh_preflight_xor_legacy_telemetry():
                                          preflight_snapshots=[happy_pan()]), _PAN_UNIT)
     pan_only = unit(pan_report(happy_pan()), _PAN_UNIT)
     assert with_pan["evidence"]["basis"] == EVIDENCE_BASIS_PREFLIGHT_SNAPSHOT
-    assert with_pan["verdict"] == VERDICT_INSUFFICIENT and with_pan["reason"] != "split_brain_observed"
+    # CP pilot readiness-policy amendment: D-F3 is now advisory-exempt for
+    # PAN too (readiness-layer side effect only -- PAN CLASS 2 stays out of
+    # scope), so happy_pan() alone reaches SAFE, matching pan_only below.
+    assert with_pan["verdict"] == VERDICT_SAFE and with_pan["reason"] != "split_brain_observed"
     assert with_pan["checks"] == pan_only["checks"]
     assert checks(with_pan)["no_split_brain"]["status"] == CHECK_PASS
     # And the converse: a unit WITHOUT a snapshot never picks up snapshot facts from another unit.
