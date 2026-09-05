@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "current_build": "nav_1_left_vertical_product_navigation",
+  "current_build": "pcp_2_local_control_plane_sequencing_po_review",
   "current_track": "PCP.x",
   "progress_contract": "Weighted acceptance-criterion completion. Percentages describe the declared roadmap, not calendar time or delivery ETA.",
   "tracks": [
@@ -140,25 +140,28 @@
   "now_next": {
     "horizon_contract": "NOW is exactly one build. NEXT is exactly one. Everything else is an `upcoming` row carrying its own true status: planned = AFTER, blocked = waiting on a named external gate, deferred = consciously postponed. `now.build` must equal the newest project/build_history.json record -- utils.project_plan enforces it.",
     "now": {
-      "build": "nav_1_left_vertical_product_navigation",
-      "title": "NAV.1 - left vertical product navigation, one navigation model, availability-gated entries",
-      "goal": "Replace the horizontal one-root-per-module topbar strip with a collapsible left vertical rail grouped by evaluated product domains, and give both shells one navigation model that decides what may appear. Contract: docs/design/NAVIGATION_INFORMATION_ARCHITECTURE.md (FROZEN 2026-09-05). Six roots after evaluating the seven candidate domains: Overview, Devices (Inventory, Discovery), Configuration, Operations (HA & readiness, Jobs), Compliance, Administration (Inventory exclusions, Project plan) -- Jobs evaluated and kept a child of Operations rather than a root, because its only surface today is the console job list the action-free report must not carry. Devices stays first-class; 'Add Device' is a declared contextual action of the devices domain, never a root, and renders nowhere while pcp_console_registry_write_gate is open. Availability rule D-NAV6: an entry renders iff the shell ships its [data-module-panel]; an unbacked capability is omitted, never drawn disabled or 'coming soon'. Collapse is presentation density only -- identical entry set. Routes are derived from the model, so every pre-existing hash route keeps working. Authorization-aware seam only; no RBAC implemented or simulated (DEPLOY.1A).",
-      "status": "automated_validated",
+      "build": "pcp_2_local_control_plane_sequencing_po_review",
+      "title": "PCP.2 sequencing / product-architecture review (Product Owner) - left-navigation prototype as evidence",
+      "goal": "Product Owner review of the product architecture that a left-navigation prototype surfaced: the target information architecture, the logical-entity workspace, per-entity capability state, the long-running local control-plane runtime, the SQLite/storage boundary, UI-first enrollment, and how all of that sequences into small deterministic movements. Deliverables are DRAFTS ONLY: docs/design/NAVIGATION_INFORMATION_ARCHITECTURE.md (rewritten from a self-declared FROZEN contract to DRAFT - PRODUCT OWNER REVIEW REQUIRED), the new companion docs/design/LOCAL_CONTROL_PLANE_RUNTIME_AND_ENROLLMENT.md, and the research appendix docs/design/research/NSPM_NAVIGATION_BENCHMARK.md. The working prototype at commit 5a5a1f7 is preserved runnable and behaviourally unchanged as design evidence.",
+      "status": "in_progress",
       "notes": [
-        "AUTOMATED_VALIDATED 2026-09-05. Full serial suite on this machine: 1950 passed / 22 skipped / 2 failed; both failures pre-existing and unrelated (see backlog pcp1_registry_uuid_call_count_test_defect -- they fail identically on HEAD before this build). Baseline on the same machine beforehand: 1929 passed / 24 skipped / 2 failed. New tests/test_navigation_information_architecture.py: 19 tests, AC-1..AC-12, four of them in a real Chromium (route preservation, collapse-is-density, panel-stripped-so-entry-omitted, and a live console walk proving the Jobs entry exists only where the CON.2 panel is shipped). Both render harnesses green; privacy gate PASS / 0 findings; metadata_warnings == [].",
-        "Scope deliberately excluded: PCP.4's per-device tab consolidation, any browser enrollment affordance, any RBAC/OIDC behaviour, PCP.5 job definitions, any payload builder change, and any change to what a module renders inside its own panel. No collector, vendor semantic, network command, credential path, storage/schema or action-class was touched.",
-        "One deliberate out-of-navigation fix, recorded rather than folded in silently: static/failover_readiness_ui.js emitted an inline style=\"padding-left:2rem\" on OP.0c's virtual-system child rows, which the console's stricter CSP (style-src 'self') refuses. It is now the .failover-child-cell class, matching what compliance_ui.js and project_plan_ui.js already do for the same reason. The violation was invisible until a resolvable Chromium made CON.1's live console walk actually run instead of skip.",
-        "Recommended for the next step: normal reasoning -- the model is frozen and deterministic; extended thinking is only warranted when PCP.4 decides the per-device tab set itself."
+        "NOT FROZEN, NOT APPROVED FOR MERGE, NO PULL REQUEST. The Product Owner accepts the prototype as design evidence and accepts its broad visual direction, and has approved none of: the six-root IA as the permanent target, the DOM-only availability rule as the complete capability rule, the browser-enrollment timing, the SQLite migration boundary, or the global-module versus device-tab allocation.",
+        "This row replaces an earlier self-authorized 'nav_1_left_vertical_product_navigation / automated_validated' NOW row from the same unmerged session. The build_history head record was amended in place rather than duplicated; no canonical history on main was altered.",
+        "Eight open navigation decisions (PO-NAV-1..8) plus the storage-sequencing and movement-order questions are listed in the two DRAFTs. pcp_console_registry_write_gate, pcp_storage_engine, pcp_first_contact_trust_policy and pcp_auto_enrollment_policy all remain OPEN and are not closed by this movement.",
+        "Evidence is targeted only and the full suite is NOT green: the two pre-existing PCP.1 registry uuid4 call-count failures remain, on main and on this branch, unfixed by design (backlog pcp1_registry_uuid_call_count_test_defect; proposed movement M1).",
+        "Recommended next reasoning tier: normal for the M1 test repair and the M2 accessibility closure; extended thinking (high) for the storage decision (M4) and the enrollment/trust gate (M8/M9), each in its own session."
       ]
     },
     "next": {
-      "build": "pcp_2_local_control_plane_sequencing_po_review",
-      "title": "PCP.2 sequencing decision - SQLite-backed local control-plane + UI-first enrollment (Product Owner review pending)",
-      "status": "blocked",
+      "build": "pcp1_registry_uuid_call_count_test_defect_repair",
+      "title": "PCP.1 registry uuid4 call-count test-contract repair (movement M1)",
+      "status": "planned",
       "notes": [
-        "Not started, not pre-authorized, and not pre-designed by the PCP.1 session per its own session-start scope: 'A future movement will decide the local interactive-console and SQLite storage evolution. Do not introduce either in PCP.1 and do not redesign PCP.1 in anticipation of them.'",
-        "Blocked on Product Owner review of the sequencing question itself -- whether/when a local interactive console ships, whether/when the filesystem-only registry evolves toward SQLite (docs/design/PRODUCT_CONTROL_PLANE_ARCHITECTURE.md section 10 pcp_storage_engine remains open), and how those two relate to the still-open pcp_console_registry_write_gate decision (section 19). PCP.1's own CLI verbs stay a bounded maintenance/bootstrap adapter, not the intended primary Operator Console experience, until this sequencing is decided.",
-        "No technical content pre-decided here: this row exists only to name the actual next decision point honestly, not to imply SQLite or a local console are already scoped."
+        "The one bounded build that is actionable today without any Product Owner decision. tests/test_pcp1_device_registry.py::test_duplicate_enroll_refused_before_device_id_generated and ::test_lock_contention_on_enroll_never_generates_a_device_id fail deterministically on main: their uuid4 call-count proof also counts the registry mutation lock's own owner token, so both assert [1] == []. The acceptance criterion they cover ('no device_id is generated before the duplicate/lock refusal') still holds; the proof technique over-reaches.",
+        "Independent of the whole PCP.2 review chain and of the navigation prototype. Deliberately NOT fixed inside the architecture movement: it is a test-mechanism decision inside PCP.1's frozen PRODUCT_CONTROL_PLANE_ARCHITECTURE.md section 21 contract.",
+        "Why it reached main: .github/workflows/validation.yml's fast PR 'validate' job runs a fixed smoke set and never ran that file; full-regression runs on push to main, i.e. after merge.",
+        "Detail: project/backlog.json pcp1_registry_uuid_call_count_test_defect; movement M1 in docs/design/LOCAL_CONTROL_PLANE_RUNTIME_AND_ENROLLMENT.md section 12.",
+        "Recommended: Sonnet 5, normal reasoning."
       ]
     },
     "upcoming": [

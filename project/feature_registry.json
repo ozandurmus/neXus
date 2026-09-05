@@ -1695,47 +1695,53 @@
     },
     {
       "id": "left_vertical_product_navigation",
-      "title": "Left vertical product navigation + one availability-gated navigation model",
-      "status": "done",
-      "introduced": "NAV.1",
+      "title": "Left vertical product navigation (working prototype, architecture under PO review)",
+      "status": "in_progress",
+      "introduced": "NAV.1 (prototype)",
       "weight": 5,
-      "summary": "Collapsible left rail grouped by six product domains over the existing module panels, driven by one model (static/navigation_ui.js) shared by the rail and the device-detail tab strip; an entry renders only when the shell ships the surface it points at.",
-      "why": "The flat one-root-per-view topbar strip could not express which entries are product domains and which are one view inside one, had no room left, and let a navigation entry exist without any backend behind it. Contract: docs/design/NAVIGATION_INFORMATION_ARCHITECTURE.md.",
+      "summary": "PROTOTYPE, NOT DELIVERED. A runnable collapsible left rail grouped by six candidate product domains over the existing module panels, driven by one model shared by the rail and the device-detail tab strip. Used as design evidence for the Product Owner review of docs/design/NAVIGATION_INFORMATION_ARCHITECTURE.md (DRAFT); the root set, the availability rule and the enrollment location are all provisional or open.",
+      "why": "The flat one-root-per-view topbar strip could not express which entries are product domains, had no room left, and let a navigation entry exist without any backend behind it. The prototype tested a fix; the DRAFT decides whether it is the right one.",
       "criteria": [
         {
           "id": "domain_grouping",
-          "label": "Six evaluated product-domain roots; Devices first-class; device-scoped views are tabs, not roots",
-          "state": "done",
+          "label": "Six evaluated product-domain roots; Devices first-class; device-scoped views are tabs, not roots -- Six candidate roots render; the target IA (Recovery, Jobs/Automation, Administration children) is PROVISIONAL and awaits PO-NAV-2/3/8",
+          "state": "pending",
           "weight": 2
         },
         {
           "id": "availability_rule",
-          "label": "An entry/tab renders iff its shell ships the surface; no disabled, greyed or 'coming soon' placeholder anywhere",
-          "state": "done",
+          "label": "An entry/tab renders iff its shell ships the surface; no disabled, greyed or 'coming soon' placeholder anywhere -- Prototype implements the shell-integrity conjunct only; the DRAFT's four-predicate model (surface eligibility / entity applicability / evidence state / authorization) is not implemented",
+          "state": "pending",
           "weight": 2
         },
         {
           "id": "collapse_is_density",
-          "label": "Collapse/expand changes presentation only -- identical entry set, no availability or authorization effect",
+          "label": "Collapse/expand changes presentation only -- identical entry set, no availability or authorization effect -- Browser-verified: identical data-module set collapsed and expanded, state persisted, no availability effect",
           "state": "done",
           "weight": 1
         },
         {
           "id": "routes_preserved",
-          "label": "Every pre-existing hash/localStorage route resolves; the module universe is derived from the model, not re-listed",
+          "label": "Every pre-existing hash/localStorage route resolves; the module universe is derived from the model, not re-listed -- Every pre-existing hash/localStorage route resolves; the module universe is derived from the model, not re-listed",
           "state": "done",
           "weight": 1
         },
         {
           "id": "no_enrollment_affordance",
-          "label": "'Add Device' is a declared contextual action of the devices domain, is no root, and renders nowhere while pcp_console_registry_write_gate is open",
-          "state": "done",
+          "label": "'Add Device' is a declared contextual action of the devices domain, is no root, and renders nowhere while pcp_console_registry_write_gate is open -- Holds in the prototype, but pcp_console_registry_write_gate is OPEN -- the location is recommended, not decided",
+          "state": "pending",
           "weight": 1
         },
         {
           "id": "authorization_seam_only",
-          "label": "Authorization-aware seam with model 'none'; no role/permission/scope/claim gates any navigation decision",
+          "label": "Authorization-aware seam with model 'none'; no role/permission/scope/claim gates any navigation decision -- navigationAuthorizationContext() returns model 'none'; no role/permission/scope/claim gates any navigation decision",
           "state": "done",
+          "weight": 1
+        },
+        {
+          "id": "accessibility_closure",
+          "label": "Four named accessibility gaps closed: icon-only accessible names, prefers-reduced-motion, focus management after navigation, group semantics",
+          "state": "pending",
           "weight": 1
         }
       ]

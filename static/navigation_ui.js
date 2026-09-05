@@ -2,27 +2,41 @@
 // vertical product navigation + the device-detail tab strip), its availability
 // rule, its authorization seam and its renderers.
 //
-// Contract: docs/design/NAVIGATION_INFORMATION_ARCHITECTURE.md (NAV.1, FROZEN).
+// Contract: docs/design/NAVIGATION_INFORMATION_ARCHITECTURE.md — status
+// **DRAFT, PRODUCT OWNER REVIEW REQUIRED**. This file is a WORKING PROTOTYPE
+// used to test that architecture, not an implementation of an approved one. An
+// earlier revision of both the document and this comment said FROZEN; that was
+// a self-declared freeze without Product Owner authority and it is withdrawn.
+// Nothing here is settled until the DRAFT is reviewed.
+//
 // Loads second (right after app_core.js) so every feature module and
 // app_bootstrap.js can read the model; it owns no payload and renders no
 // evidence. It reaches forward to switchModule() only from inside delegated
 // event callbacks (the NAVIGATION_PUBLIC_SURFACE allowance in
 // tests/test_frontend_module_composition.py).
 //
-// D-NAV6, the anti-placeholder law, is the load-bearing rule here: an entry is
-// rendered *iff the shell it is running in actually ships the panel it points
-// at*. A capability with no surface is omitted entirely — never drawn disabled,
-// greyed or "coming soon". That single rule is also what makes the two shells
-// (the action-free exported report and the Operator Console) able to run the
-// identical composed script while exposing different entry sets, and what lets
-// a later build light a capability up by shipping its panel plus one model row
-// (D-NAV7 progressive population).
+// What this file actually implements is D-NAV6a's THIRD conjunct only: an entry
+// is rendered iff the shell it is running in actually ships the panel it points
+// at. That is a last-mile shell-integrity check, and the DRAFT is explicit that
+// it is NOT the complete capability rule (§7 there): product-surface
+// eligibility, selected-entity applicability, evidence/capability state and
+// (future) authorization are four separate predicates, and a shipped <section>
+// is not evidence that a backend contract exists. The rule below is sufficient
+// for today's two shells and will need the other three predicates once
+// capability projection (PCP.3), enrollment and schedules exist.
+//
+// D-NAV6b is the part that must survive: a capability with no product surface is
+// omitted entirely — never drawn disabled, greyed or "coming soon". A capability
+// that HAS a surface but is inapplicable, unsupported, unconfigured or blocked
+// is shown and explained in words (CON.0 §9 honest affordances), not hidden.
 
-// Root order is the information architecture itself (NAV.1 §3): six product
-// domains, evaluated against what the repository can actually serve — not one
-// root per view. A root is either a `module` link (a domain with exactly one
-// shipped view today) or an `items` group; a link becomes a group by gaining
-// children, with no route change.
+// Root order is a CANDIDATE information architecture (DRAFT §4.2), not an
+// approved target: six product domains, evaluated against what the repository
+// can actually serve — not one root per view. A root is either a `module` link
+// (a domain with exactly one shipped view today) or an `items` group; a link
+// becomes a group by gaining children, with no route change. The DRAFT's §4.3
+// target IA additionally reserves Recovery, Automation and Diagnostics — named
+// in the contract, deliberately rendered NOWHERE until their surfaces ship.
 const NAVIGATION_MODEL = [
     {
         id: "overview",
@@ -79,6 +93,8 @@ const NAVIGATION_MODEL = [
 // `available` is a statement about a backend contract that exists, not a
 // preference: an action with no backend is declared here so its future location
 // is decided and reviewable, and omitted by the renderer so nothing is drawn.
+// The entry below is never rendered (the renderer filters on available === true),
+// so its text is documentation of an open question, not a decision.
 const NAVIGATION_CONTEXTUAL_ACTIONS = [
     {
         id: "add_device",
@@ -86,19 +102,25 @@ const NAVIGATION_CONTEXTUAL_ACTIONS = [
         label: "Add device",
         available: false,
         unavailable_reason:
-            "Device enrollment is CLI-only (PCP.1 --registry-enroll). Whether a " +
-            "registry write may originate in the browser is the open " +
-            "pcp_console_registry_write_gate decision, and the " +
-            "inventory_exclusions_management_ui_backend precedent holds it behind " +
-            "DEPLOY.1A's authorization boundary. No browser enrollment contract " +
-            "exists, so no affordance is rendered.",
+            "Device enrollment is CLI-only today (PCP.1 --registry-enroll). " +
+            "Whether a registry write may originate in the browser is the OPEN " +
+            "pcp_console_registry_write_gate decision -- open, not decided: " +
+            "PCP.0 section 19 records three options and the Product Owner has " +
+            "chosen none of them. An earlier revision of this string asserted " +
+            "that the write waits for DEPLOY.1A; that pre-decided the question " +
+            "and is withdrawn. No browser enrollment contract exists yet, so no " +
+            "affordance is rendered either way. See " +
+            "docs/design/LOCAL_CONTROL_PLANE_RUNTIME_AND_ENROLLMENT.md section 9.",
     },
 ];
 
-// The device-detail tab strip (NAV.1 §3 "Device-scoped functions"). These are
-// device-scoped views, never navigation roots. The same availability rule
+// The device-detail tab strip (DRAFT §6.4 "Tab allocation"). These are
+// device-scoped views, never navigation roots. The same shell-integrity check
 // applies: a tab whose panel the shell does not ship is dropped, so a partly
 // shipped device experience degrades to fewer honest tabs instead of dead ones.
+// The DRAFT adds two rules this prototype does not yet implement: tab ORDER is
+// canonical and stable across entity types (D-NAV13), and a tab that does not
+// APPLY to an entity type is a different case from a tab with no surface (§8).
 const NAVIGATION_DEVICE_TABS = [
     { tab: "overview", label: "Overview", panel: "configOverviewPanel" },
     { tab: "current", label: "Configuration", panel: "configCurrentPanel" },
@@ -139,9 +161,12 @@ let navigationCollapsedGroups = null;
 // authorization model here yet. Nothing in this file reads a role, permission,
 // scope or claim, and no entry is ever hidden "because you lack access" — that
 // would be a simulated RBAC the repository has not built (AGENTS.md
-// UNKNOWN/fail-closed law). When DEPLOY.1A ships the OIDC/RBAC boundary,
-// navigationEntryAvailable() gains one additional conjunct and this returns the
-// real model; until then availability is a shell/backend fact only.
+// UNKNOWN/fail-closed law). Absence of an authorization model is NOT a
+// permissive authorization model; it is no model, and the UI must not imply
+// otherwise. When DEPLOY.1A ships the OIDC/RBAC boundary, authorization becomes
+// an ADDITIONAL, additive predicate (the DRAFT's P4) — never a reuse of the
+// panel-existence check as a permission proxy — and that is a NAV.2 amendment,
+// not a silent edit. Until then availability is a shell/backend fact only.
 function navigationAuthorizationContext() {
     return {
         model: "none",

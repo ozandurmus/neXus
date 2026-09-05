@@ -1,16 +1,30 @@
-"""NAV.1 — left vertical product navigation, AC-1…AC-12.
+"""NAV.1 prototype — left vertical product navigation, AC-1…AC-12.
 
-Contract: `docs/design/NAVIGATION_INFORMATION_ARCHITECTURE.md` (FROZEN).
+Contract: `docs/design/NAVIGATION_INFORMATION_ARCHITECTURE.md` — status
+**DRAFT, PRODUCT OWNER REVIEW REQUIRED**. An earlier revision of that document
+and of this docstring said FROZEN; that was a self-declared freeze without
+Product Owner authority and it is withdrawn.
+
+**What these tests prove, and what they do not.** They prove the prototype
+matches the contract it was written against, and that it regresses nothing
+(routes, harnesses, action-free report). They do **not** prove that contract is
+the correct product architecture — that is exactly what the DRAFT is under
+review for. Read a failure here as "the prototype drifted", never as "the
+architecture is settled".
 
 The horizontal one-root-per-module topbar strip is replaced by a left vertical
 rail grouped by product domain. Two properties carry real product weight and
 are therefore checked in a real browser rather than only as source strings:
 
-  * **D-NAV6, the anti-placeholder law** — an entry renders *iff* the shell it
-    runs in actually ships the `[data-module-panel]` it points at. A capability
-    with no surface is omitted, never drawn disabled/greyed/"coming soon". The
-    two shells run the identical composed script, so the only thing that may
-    differ between them is which panels the shell ships (§5).
+  * **D-NAV6a (third conjunct only, as prototyped)** — an entry renders *iff*
+    the shell it runs in actually ships the `[data-module-panel]` it points at.
+    The DRAFT §7 is explicit that this is a last-mile shell-integrity check and
+    **not** the complete capability rule: product-surface eligibility,
+    selected-entity applicability, evidence state and future authorization are
+    four separate predicates. **D-NAV6b** is the part that must survive — a
+    capability with no surface is omitted, never drawn disabled/greyed/"coming
+    soon"; a capability with a surface but no applicability is shown and
+    explained.
   * **D-NAV2, collapse is presentation only** — the collapsed rail renders the
     exact same entry set as the expanded one. Density, never availability and
     never authorization.
@@ -92,6 +106,19 @@ def _launch_kwargs() -> dict:
     return {"executable_path": str(chromium)} if chromium.exists() else {}
 
 
+
+def _contract_status_line(path: Path) -> str:
+    """The first non-empty line under a doc's `## Status` heading — the token
+    `AGENTS.md` "Contract-status law" and tests/test_architecture_convergence.py
+    both treat as a document's declared authority."""
+    lines = path.read_text(encoding="utf-8").splitlines()
+    for index, line in enumerate(lines):
+        if line.strip().lower().startswith("## status"):
+            for following in lines[index + 1:]:
+                if following.strip():
+                    return following.strip()
+    return ""
+
 @pytest.fixture(scope="module")
 def rendered_report(tmp_path_factory) -> Path:
     """The exported static report, rendered from the committed uitest bundle."""
@@ -144,10 +171,15 @@ def test_ac2_every_modelled_module_has_a_panel_in_at_least_one_shell():
 
 
 def test_ac3_availability_is_decided_by_shipped_surface_only():
-    """D-NAV6. The predicate must be the panel-existence question and nothing
-    else — not a mode string (console.html sets SECURITYEXPERT_MODE only after
-    the composed script runs, so a load-time reportMode() gate would silently
-    read "static" in the console) and not a hard-coded per-shell list."""
+    """D-NAV6a, third conjunct as prototyped. The predicate must be the
+    panel-existence question and nothing else — not a mode string (console.html
+    sets SECURITYEXPERT_MODE only after the composed script runs, so a load-time
+    reportMode() gate would silently read "static" in the console) and not a
+    hard-coded per-shell list.
+
+    This locks the prototype's *current* rule so it cannot drift while the DRAFT
+    is under review. It is not a claim that panel existence is the complete
+    capability rule — DRAFT §7 says explicitly that it is not."""
     predicate = NAV_JS[NAV_JS.index("function navigationShellHasPanel"):]
     predicate = predicate[: predicate.index("\n}\n")]
     assert "data-module-panel" in predicate
@@ -300,10 +332,51 @@ def test_ac10_navigation_is_authorization_aware_but_simulates_nothing():
         )
 
 
-def test_contract_document_is_frozen_and_linked():
-    text = CONTRACT.read_text(encoding="utf-8")
-    assert "**FROZEN" in text
+def test_contract_document_is_draft_and_linked():
+    """AC-1 of the PO architecture correction: the contract must declare itself
+    DRAFT and must not claim Product Owner approval anywhere, and the module
+    must cite it."""
+    # Check the document's own STATUS LINE, the same token
+    # tests/test_architecture_convergence.py keys authority off — the body may
+    # legitimately quote the withdrawn FROZEN claim while describing it.
+    status = _contract_status_line(CONTRACT)
+    assert "DRAFT" in status and "PRODUCT OWNER REVIEW REQUIRED" in status, status
+    # Case-sensitive, exactly as tests/test_architecture_convergence.py's
+    # _FROZEN_STATUS_MARKERS decides a document's authority. Prose like
+    # "nothing in this document is frozen" is lower-case and is not a claim.
+    assert "FROZEN" not in status, (
+        f"the navigation contract re-declared itself frozen in its status line "
+        f"({status!r}); only the Product Owner may freeze it"
+    )
     assert "docs/design/NAVIGATION_INFORMATION_ARCHITECTURE.md" in NAV_JS
+    # The companion runtime/enrollment DRAFT and the research appendix the
+    # contract depends on must exist and must also be DRAFT / research-only.
+    companion = ROOT / "docs" / "design" / "LOCAL_CONTROL_PLANE_RUNTIME_AND_ENROLLMENT.md"
+    appendix = ROOT / "docs" / "design" / "research" / "NSPM_NAVIGATION_BENCHMARK.md"
+    assert companion.is_file() and appendix.is_file()
+    companion_status = _contract_status_line(companion)
+    assert "DRAFT" in companion_status and "FROZEN" not in companion_status, companion_status
+
+
+def test_no_source_or_test_claims_the_navigation_contract_is_frozen():
+    """AC-1, from the other direction: no branch-local source, test or shell may
+    call the navigation contract FROZEN or PO-approved while it is DRAFT."""
+    for path in (
+        ROOT / "static" / "navigation_ui.js",
+        ROOT / "static" / "app_bootstrap.js",
+        ROOT / "utils" / "html_export.py",
+        ROOT / "templates" / "index.html",
+        ROOT / "templates" / "console.html",
+        Path(__file__),
+    ):
+        text = path.read_text(encoding="utf-8")
+        for line in text.splitlines():
+            if "NAVIGATION_INFORMATION_ARCHITECTURE" not in line and "NAV.1" not in line:
+                continue
+            lowered = line.lower()
+            assert "frozen" not in lowered or "withdrawn" in lowered or "self-declared" in lowered, (
+                f"{path.name} still calls the navigation contract frozen: {line.strip()!r}"
+            )
 
 
 # --- Browser-verified halves ----------------------------------------------
