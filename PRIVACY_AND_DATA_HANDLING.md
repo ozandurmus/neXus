@@ -51,7 +51,11 @@ Do **not** upload/share by default:
 -   real routes/interfaces,
 -   CAS metadata containing identities,
 -   migration manifests,
--   local operator artifacts.
+-   local operator artifacts,
+-   `data/state/device_registry.json` (`PCP.1` Device Registry: management
+    endpoints, tags) and `data/state/device_registry.lock` (its mutation
+    lock: pid/hostname/owner_token) — both RuntimeRoot-only, repository-
+    excluded, and never enumerated into the support bundle.
 
 A local coding agent may inspect a **narrow requested record** if
 necessary, but must not dump the entire file into conversation/context.

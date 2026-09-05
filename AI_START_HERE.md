@@ -22,6 +22,12 @@ Product maturity axis: `SEE → VERIFY → TRACE → RECOVER → OPERATE`.
 in progress; `RECOVER` has shipped its first controlled writes; `OPERATE` has
 shipped its read-only half.
 
+Since `PCP.1` (`docs/design/PRODUCT_CONTROL_PLANE_ARCHITECTURE.md` §22 item 4,
+deferred from the `PCP.0` freeze to here), neXus also carries a first persistent
+product object: a filesystem-only Device Registry with CLI manual enrollment —
+the foundation of the emerging Product Control Plane, not yet a UI or a
+scheduling/capability surface.
+
 **What the product may do is an explicit taxonomy, not a slogan**
 (`utils/action_taxonomy.py` — the single source of truth):
 
@@ -82,6 +88,7 @@ outside it — on Windows under `%LOCALAPPDATA%\SecurityExpert\runtime\`.
 | `py .\main.py --restore-readiness-check` / `--recovery-attest` / `--recovery-store-check` / `--recovery-validate` | `RB.x` recovery plane, class 0 halves: readiness derivation, backup/snapshot attestation, store inspection, artifact validation. |
 | `py .\main.py --recovery-collect --recovery-vendor <checkpoint\|panorama>` | `RB.x` recovery collection — **class 1**. Ledgered, allowlisted, separately credentialed; never reachable from the console. |
 | `py .\main.py --persistent-secret-material-check` / `--compliance-trend-reconstruct` | Trust-material preflight (`DEV.2.2`) / compliance-trend retro-fill (`0.7.7`). |
+| `py .\main.py --registry-enroll --registry-endpoint <addr> [--registry-vendor-hint ...] [--registry-credential-profile ...] [--registry-tag k=v ...]` / `--registry-list [--show-endpoints]` / `--registry-disable <device_id>` | `PCP.1` Device Registry: manual enrollment, listing, disable. Filesystem-only, RuntimeRoot-resident; no device contact, no credential resolution, no vendor import. A bounded maintenance/bootstrap adapter for the registry foundation, not yet the Operator Console device experience. |
 
 Vendor/config imports are lazy — maintenance modes return before touching them.
 
@@ -106,6 +113,7 @@ Vendor/config imports are lazy — maintenance modes return before touching them
 | `utils/html_export.py`, `config_ui.py`, `compliance_posture.py`, `discovery_capability_ui.py`, `project_plan.py` | HTML payload builders |
 | `utils/support_bundle.py`, `completeness.py` | sanitized shareable zip |
 | `utils/logger.py`, `cp_ssh_trust.py`, `pan_tls_trust.py`, `repository_privacy.py`, `inventory_exclusions.py` | log redaction, trust preflight, DLP gate, exclusion policy |
+| `utils/device_registry.py` | `PCP.1` Device Registry: opaque `device_id`, endpoint normalization, vendor-hint-independent duplicate detection, lifecycle, the registry mutation lock; filesystem-only via `utils/evidence_backend.py::DeviceRegistryBackend` |
 | `templates/index.html` + `static/{app.js,style.css}` | single-page UI (Overview / Network Inventory / Configuration / Compliance / Discovery / Project Plan) |
 | `console/` + `templates/console.html` + `static/console_actions.js` | operator console (`--console`): `registry.py` is the closed job vocabulary, `runner.py` the single-worker executor, `jobs.py` the durable records; imports no vendor/collector module |
 | `utils/action_taxonomy.py` | the five action classes — what each surface may execute, and why not |

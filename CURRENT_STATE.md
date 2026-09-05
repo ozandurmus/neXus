@@ -7,13 +7,14 @@ detail is not here either** — it is in `project/build_history.json`
 linked documents under `docs/history/`. `docs/history/INDEX.md` is the
 generated one-line timeline.
 
-- **Checkpoint:** 2026-09-05, branch `claude/pcp0-freeze-merge-4e6kb4`.
+- **Checkpoint:** 2026-09-05, branch `claude/pcp1-device-registry-gqp7s2`.
 - **Current build** (per `project/roadmap.json` `now_next.now`):
-  `product_control_plane_architecture_draft` — **COMPLETE, FROZEN**
-  (docs/state only; see "Active build"). `now_next.next` is
-  `pcp_1_device_registry_manual_enrollment_foundation` (planned, unblocked,
-  not started); `op2_c_cp_clusterxl_adapter_scoping` stays `upcoming`,
-  blocked on `DEPLOY.1`.
+  `pcp_1_device_registry_manual_enrollment_foundation` — **IMPLEMENTED**,
+  ceiling `AUTOMATED_VALIDATED` pending fast PR CI (see "Active build").
+  `now_next.next` is `pcp_2_local_control_plane_sequencing_po_review`
+  (blocked on Product Owner review, not started, not pre-designed);
+  `op2_c_cp_clusterxl_adapter_scoping` stays `upcoming`, blocked on
+  `DEPLOY.1`.
 - **OP.2.0 CLASS 2 architecture** (`docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md`):
   **CONTRACT FROZEN 2026-09-04**; `OP.2.A`/`OP.2.B` IMPLEMENTED; `OP.2.1` CP
   command gate DRAFTED — CLASS 2 still has **no member**, no adapter,
@@ -52,35 +53,32 @@ test-enforced boundaries. Current numbers:
 
 ## Active build
 
-**`product_control_plane_architecture_draft`** (`PCP.0`) — **COMPLETE,
-FROZEN 2026-09-05**. `docs/design/PRODUCT_CONTROL_PLANE_ARCHITECTURE.md`
-(status **FROZEN**) promotes the Product Control Plane direction:
-persistent Device Registry with candidate-first explicit enrollment,
-capability resolution, typed job plane, four-layer truth model, identity
-layering, persistence seam, capability-driven backup, device ≠ failover
-unit, console device experience, movements `PCP.1`–`PCP.8`. Reconciled
-against `main` `ff700e38` (unmoved since): one genuine contradiction — a
-single console enrollment-write boundary covering both manual and
-candidate-based intents — isolated as open decision
-`pcp_console_registry_write_gate`, decided for neither; every frozen
-`OP.2`/`CLASS 2`, `CON.x`, `RB.x` law preserved. Product Owner **APPROVED**,
-conditioned on two mechanical freeze corrections applied at freeze: (1)
-the registry mutation lock's release is now instance-safe — an
-`owner_token` embedded at acquisition, checked before every unlink, so a
-releasing process never deletes a different writer's active lock instance
-after a human recreated one it believed stale (AC-5 widened, AC-15 added);
-the lock file is now classified LOCAL-SENSITIVE and, like the registry
-file, never enters the support bundle. (2) §22 timing corrected: items 1-3
-(`OPERATOR_CONSOLE_ARCHITECTURE.md`, `COMPLIANCE_ASSIGNMENT_AND_
-FRAMEWORKS.md`, `BACKUP_AND_RECOVERY_ARCHITECTURE.md`) applied now; item 4
-(`AI_START_HERE.md` "What this is" sentence) moves to the `PCP.1` close
-scope — only true once `PCP.1` ships. No product code, taxonomy, route,
-device command, schema or UI touched. Detail: `project/build_history.json`
-head record.
+**`pcp_1_device_registry_manual_enrollment_foundation`** (`PCP.1`) —
+**IMPLEMENTED**, ceiling `AUTOMATED_VALIDATED` pending fast PR CI.
+Implements `docs/design/PRODUCT_CONTROL_PLANE_ARCHITECTURE.md` §21 exactly:
+`utils/device_registry.py` (opaque `device_id`; endpoint normalization with
+no DNS resolution; vendor-hint- and lifecycle-state-independent duplicate
+detection; `ENROLLED_UNVERIFIED`/`DISABLED` reachable, `RETIRED`/
+`CONTACT_VERIFIED`/`OBSERVED` structurally unreachable; closed schema;
+`credential_ref` format-validated reference only, never resolved;
+fail-closed corrupt-data handling; the registry mutation lock with an
+`owner_token` instance-safe release); the eighth `utils/evidence_backend.py`
+concern `DeviceRegistryBackend` (filesystem-only); `--registry-enroll` /
+`--registry-list` / `--registry-disable` CLI modes
+(`application/cli.py` + `application/workflows/registry.py`), mode-
+exclusive, no vendor import, no credential resolution, no network;
+`tests/test_pcp1_device_registry.py` (AC-1a..AC-15). Sandbox has no
+`pytest`/`lxml`/`paramiko` (reported per `CLAUDE.md`); every behavior was
+hand-verified directly instead — see `project/build_history.json` head
+record for the exact evidence and the open risk that CI must still confirm
+the suite green before the ceiling is claimed. No device contact, no
+console/UI/payload change, no SQLite/PostgreSQL. `AI_START_HERE.md` §22
+item 4 (deferred from the `PCP.0` freeze) landed this session.
 
 Predecessors (full detail: `project/build_history.json` + linked phase
-docs): `op2_c_change_management_review_package_draft` (review package
-DRAFTED, unsigned), `op2_c_release_gate_dependency_scoping`, `op2_c_cp_
+docs): `product_control_plane_architecture_draft` (`PCP.0`, FROZEN),
+`op2_c_change_management_review_package_draft` (review package DRAFTED,
+unsigned), `op2_c_release_gate_dependency_scoping`, `op2_c_cp_
 clusterxl_preflight_eligibility_wiring`, `op2_c1_cp_clusterxl_member_
 session`, `op2_1b_cp_pilot_readiness_policy_amendment`, `op2_1_cp_
 clusterxl_command_gate`, `op2_a_b_execution_foundation` — all DONE/
@@ -119,15 +117,16 @@ a narrower question never promoted toward B2.
 
 ## Exact next build
 
-`now_next.next` is **`pcp_1_device_registry_manual_enrollment_foundation`**
-(`PCP.1`): `utils/device_registry.py` + a filesystem-only eighth
-`utils/evidence_backend` concern + `main.py --registry-enroll/--registry-
-list/--registry-disable` + `tests/test_pcp1_device_registry.py`. No device
-contact, no UI/payload change, no PostgreSQL, no console target-vocabulary
-change. Contract = `docs/design/PRODUCT_CONTROL_PLANE_ARCHITECTURE.md` §21
-(ownership-token instance-safe registry mutation lock, AC-1a..AC-15,
-non-goals) — unblocked now the document is FROZEN; **not started by the
-freezing session**. `Sonnet 5, normal`.
+`now_next.next` is **`pcp_2_local_control_plane_sequencing_po_review`**:
+not `PCP.2` implementation itself — a Product Owner review of whether/when
+a local interactive console ships and whether/when the filesystem-only
+registry evolves toward SQLite (`pcp_storage_engine` stays open), and how
+both relate to the still-open `pcp_console_registry_write_gate` decision.
+`PCP.1`'s CLI verbs stay a bounded maintenance/bootstrap adapter, not the
+Operator Console device experience, until this sequencing is decided. Not
+started, not pre-designed, not pre-authorized. `Sonnet 5, extended thinking
+(high)` once the Product Owner is ready to decide; `Sonnet 5, normal` for
+any CI-status follow-up on `PCP.1` itself in the meantime.
 
 `op2_c_cp_clusterxl_adapter_scoping` (`upcoming`, blocked, notes preserved):
 adapter, real `ClusterXLMemberSession` and real `PreflightProvider`/
@@ -171,12 +170,13 @@ Concurrency budget stays at 1 per vendor pending its own real-env evidence.
 ## Automated test baseline
 
 ```
-1825 passed / 24 skipped / 0 failed (2026-09-05 baseline) -- carried
-  forward, not re-run by the PCP.0 freeze session (no pytest/lxml/paramiko
-  in this sandbox, reported per CLAUDE.md, not bootstrapped; no code moved).
-Project-state consistency: metadata_warnings == []; build_history_index.py
-  --check clean; git diff --check clean (verified directly, 2026-09-05).
-Repository privacy gate: PASS / 0 findings, 484 files scanned (re-run
+Prior baseline 1825 passed / 24 skipped / 0 failed -- NOT re-run this
+  session (no pytest/lxml/paramiko in this sandbox, per CLAUDE.md). New
+  tests/test_pcp1_device_registry.py added, hand-verified directly; fast PR
+  CI must confirm the full suite green before AUTOMATED_VALIDATED is
+  claimed (build_history record). Project-state consistency verified
+  directly: metadata_warnings == []; build_history_index.py --check clean.
+Repository privacy gate: PASS / 0 findings, 487 files scanned (re-run
   directly, 2026-09-05).
 ```
 
