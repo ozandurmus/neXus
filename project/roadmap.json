@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "current_build": "op2_a_b_execution_foundation",
+  "current_build": "op2_1_cp_clusterxl_command_gate",
   "current_track": "OP.x",
   "progress_contract": "Weighted acceptance-criterion completion. Percentages describe the declared roadmap, not calendar time or delivery ETA.",
   "tracks": [
@@ -123,12 +123,12 @@
   "now_next": {
     "horizon_contract": "NOW is exactly one build. NEXT is exactly one. Everything else is an `upcoming` row carrying its own true status: planned = AFTER, blocked = waiting on a named external gate, deferred = consciously postponed. `now.build` must equal the newest project/build_history.json record -- utils.project_plan enforces it.",
     "now": {
-      "build": "op2_a_b_execution_foundation",
-      "title": "OP.2.A/B - CLASS 2 execution foundation",
-      "goal": "Vendor-independent typed action lifecycle, durable action_id, operational-HA-entity lock/quarantine, confirmation binding, mutation boundary and OUTCOME_UNKNOWN recovery, per the frozen OP.2.0 contract, in new package utils/operate/. Zero device I/O, no vendor adapter, no console job type, no CLI entry point -- CLASS 2 stays structurally unreachable (authorization is unconditional DENY; independently, eligibility fails no_adapter_capability since no adapter exists anywhere).",
+      "build": "op2_1_cp_clusterxl_command_gate",
+      "title": "OP.2.1 - CP ClusterXL mutation command gate",
+      "goal": "Docs-only network-device command gate for the two FAILOVER_ENGINE_ARCHITECTURE.md mutation primitives, CP ClusterXL only: clusterXL_admin down (CP-M1, graceful failover) APPROVED_FOR_OP2C; clusterXL_admin up (CP-M1-R) APPROVED_FOR_OP2C as its explicit, separately-gated reversal (never automatic, P12); -p variant deferred; cphastop/cpstop/reboot/priority-edit/link-pull/target-side action/Clish set-cluster-member-admin/Maestro g_clusterXL_admin/any preemption write all REJECTED. Separately proves, from the already-implemented utils/failover/assessment.py::_verdict_for and the frozen contract's own eligibility item 6 / safety-contract item 2, that D-V7b and D-F3 are independent, sufficient, already-coded reasons a positive readiness verdict is structurally unreachable for CP -- true for a bounded local pilot exactly as much as for production, with no acknowledged-but-open path for either. No code, no taxonomy member, no device contact.",
       "status": "done",
-      "started": "2026-09-04",
-      "completed": "2026-09-04"
+      "started": "2026-09-05",
+      "completed": "2026-09-05"
     },
     "next": {
       "build": "op0b_0_close_d_v3a_d_v7b_pre_class2",
@@ -140,7 +140,8 @@
         "Fall back to a human fetching the specific pages the contract's source tables name.",
         "Gates only the PAN successor identity model and CLASS 2 (bug register PAN-7, CP-3) -- does not block any other upcoming row.",
         "Recommended: Sonnet 5, extended thinking (high), same as the prior vendor-semantics sessions.",
-        "D-V3a/D-V7b remain genuinely unresolved CLASS-2 blockers under the frozen contract -- not reopened, not closed, just correctly ordered."
+        "D-V3a/D-V7b remain genuinely unresolved CLASS-2 blockers under the frozen contract -- not reopened, not closed, just correctly ordered.",
+        "Sharpened 2026-09-05 (OP.2.1 command-gate session): D-V7b is not merely a listed CLASS-2 blocker -- it is one of two independent, already-implemented reasons utils/failover/assessment.py::_verdict_for can never return a positive verdict for a CP entity (the other is D-F3, see the d_f3_flap_failover_threshold_decision row below), and this holds for a bounded local pilot exactly as much as for production. No new urgency invented -- same open item, sharper reason recorded in docs/history/phase/OP_2_1_CP_CLUSTERXL_MUTATION_COMMAND_GATE.md."
       ]
     },
     "upcoming": [
@@ -161,7 +162,8 @@
         "notes": [
           "Parallel to D-F1/D-F2. Qualitative meaning already frozen in the OP.0b.0 contract; only the number is open.",
           "Needed before OP.0b.1/S2/S3 can compute a real check-7 (flap_history) verdict for either vendor.",
-          "Does not block S1 or the contract's FROZEN status."
+          "Does not block S1 or the contract's FROZEN status.",
+          "Sharpened 2026-09-05 (OP.2.1 command-gate session): utils/failover/assessment.py::_verdict_for's docstring confirms flap_history can never PASS while D-F3 is open -- an independent, already-coded reason (alongside D-V7b) a positive readiness verdict is structurally unreachable for any CP entity, bounded local pilot included. See docs/history/phase/OP_2_1_CP_CLUSTERXL_MUTATION_COMMAND_GATE.md."
         ]
       },
       {
@@ -196,9 +198,9 @@
         "title": "Controlled failover execution -- single vendor pilot",
         "status": "blocked",
         "notes": [
-          "Vendor-independent CLASS 2 architecture FROZEN 2026-09-04: docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md (PO freeze after the independent challenge review of the same date; parent reconciled in docs/design/FAILOVER_ENGINE_ARCHITECTURE.md section 10.2). Architecture authority only: CLASS 2 is NOT IMPLEMENTED and NOT REACHABLE, no mutation command is approved (OP.2.1 not started), no vendor adapter exists, the taxonomy class has no member.",
-          "Implementation order (frozen): OP.2.A typed model/state/audit/DENY boundary (pure, zero device I/O) -> OP.2.B coordinator/lock/idempotency/boundary/reconciliation (still DENY), with OP.2.1 (CP mutation command gate, docs only, official sources, PO approval) in parallel and required before OP.2.C -> OP.2.C CP ClusterXL adapter (first possible CLASS 2 member, still blocked by authorization/readiness prerequisites) -> OP.2.D console flow + controlled real-env pilot. PAN is OP.3. These are future movements; OP.0b S8-B/S8-C closure remains now/next.",
-          "Hard-gated by FAILOVER_ENGINE_ARCHITECTURE.md section 10: DEPLOY.1A OIDC + an RBAC OPERATE role, the command gate for the mutation primitive and its reversal primitive (used only by a separately confirmed reversal action -- no automatic rollback), production SSH trust hardening, D-V7b/D-F3, and a signed-off change-management review. One vendor proven before any cross-vendor abstraction is generalized."
+          "Vendor-independent CLASS 2 architecture FROZEN 2026-09-04: docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md (PO freeze after the independent challenge review of the same date; parent reconciled in docs/design/FAILOVER_ENGINE_ARCHITECTURE.md section 10.2). Architecture authority only: CLASS 2 is NOT IMPLEMENTED and NOT REACHABLE, no vendor adapter exists, the taxonomy class has no member.",
+          "OP.2.A/OP.2.B DONE 2026-09-04 (typed model/state/audit/DENY boundary; coordinator/lock/idempotency/boundary/reconciliation -- still structurally DENY, no adapter). OP.2.1 (CP mutation command gate, docs only) DRAFTED 2026-09-05: docs/history/phase/OP_2_1_CP_CLUSTERXL_MUTATION_COMMAND_GATE.md approves clusterXL_admin down/up (CP ClusterXL only) for OP.2.C's future implementation; does not itself close any other OP.2.C prerequisite.",
+          "Hard-gated by FAILOVER_ENGINE_ARCHITECTURE.md section 10, still all open: DEPLOY.1A OIDC + an RBAC OPERATE role (P2's authorization boundary admits no local-pilot exemption either, per OP.2.1's own finding), production SSH trust hardening, D-V7b/D-F3 (OP.2.1 proved both are independent, already-coded reasons a positive readiness verdict is structurally unreachable -- not merely listed blockers), and a signed-off change-management review. One vendor proven before any cross-vendor abstraction is generalized. OP.2.C (first possible CLASS 2 member) remains blocked on all of the above; OP.2.D is the console flow + controlled real-env pilot; PAN is OP.3."
         ]
       },
       {
@@ -750,13 +752,14 @@
       "id": "D-V7b",
       "area": "OP.0b.0 Vendor Failover Preflight Evidence",
       "status": "open",
-      "question": "CP configured-recovery machine-readable read surface. STILL_UNKNOWN after four sessions -- the Simple Cluster API is officially documented as not exposing every cluster-object feature (\"use SmartConsole\"), and the official CheckPointSW Ansible simple-cluster module's full parameter list has no recovery/failback field. Does NOT block OP.0b.0 freeze -- check 6 (preemption_known) is already specified \"recorded, non-blocking\" (session 1). Blocks CLASS 2 specifically (bug register CP-3, P0 before CLASS 2).",
+      "question": "CP configured-recovery machine-readable read surface. STILL_UNKNOWN after four sessions -- the Simple Cluster API is officially documented as not exposing every cluster-object feature (\"use SmartConsole\"), and the official CheckPointSW Ansible simple-cluster module's full parameter list has no recovery/failback field. Does NOT block OP.0b.0 freeze -- check 6 (preemption_known) was originally specified \"recorded, non-blocking\" (session 1) in the design prose. Blocks CLASS 2 specifically (bug register CP-3, P0 before CLASS 2).",
       "options": [
         "Official GitHub mirror search (Check Point generic-object API schema, unconfirmed to exist)",
         "Human-fetched official page body"
       ],
       "recommendation": "Do not invent an attribute name. Not a freeze blocker; required before CLASS 2.",
-      "decide_by": "human-assisted or GitHub-mirror official doc confirmation, pre-CLASS-2"
+      "decide_by": "human-assisted or GitHub-mirror official doc confirmation, pre-CLASS-2",
+      "implementation_note_2026_09_05": "OP.2.1 (docs/history/phase/OP_2_1_CP_CLUSTERXL_MUTATION_COMMAND_GATE.md) found this 'non-blocking' framing does not hold in the implemented readiness engine: utils/failover/preflight_readiness.py forces preemption_known to INSUFFICIENT_EVIDENCE while D-V7b is open, and utils/failover/assessment.py::_verdict_for requires ALL seven stop-conditions to PASS for a positive verdict -- there is no 'advisory check' concept in the code. D-V7b is therefore fully blocking in practice today, not merely recorded. Reconciling the design text with the implementation (or deciding the implementation should change) is an OP.0a/OP.1 readiness-layer decision (op_degraded_verdict), not something OP.2.1 had authority to resolve -- flagged here, not fixed."
     },
     {
       "id": "D-V8",
@@ -804,7 +807,8 @@
         "Operator-tunable within bounds"
       ],
       "recommendation": "Fixed conservative default in v1; needs product-owner + vendor-guidance input before OP.0b.1/S2/S3 can compute a real check-7 verdict.",
-      "decide_by": "product owner + vendor guidance, before OP.0b.1"
+      "decide_by": "product owner + vendor guidance, before OP.0b.1",
+      "implementation_note_2026_09_05": "OP.2.1 confirmed via utils/failover/assessment.py::_verdict_for's own docstring that flap_history can never PASS while D-F3 is open, independently making a positive verdict unreachable (alongside D-V7b, above) for any CP entity -- true for a bounded local pilot exactly as much as for production. No design-vs-implementation tension here (unlike D-V7b): the design parent always treated flap/instability as a hard stop-condition."
     },
     {
       "id": "op_reversal_model",
