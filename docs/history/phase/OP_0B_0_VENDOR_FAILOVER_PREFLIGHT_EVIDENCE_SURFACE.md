@@ -1976,3 +1976,91 @@ repository's source directly closed two rows outright. The honest next step
 is not "give up on automated access" but **`OFFICIAL_GITHUB_MIRROR_SEARCH`
 first, `HUMAN_ASSISTED_DOC_CONFIRMATION` for whatever that cannot reach** —
 see "Next movement" above.
+
+## Session 5 — pre-CLASS-2 blocker closure attempt (2026-09-05)
+
+Build `op0b_0_close_d_v3a_d_v7b_pre_class2` (`now_next.next`). Reasoning
+tier: `Sonnet 5, extended thinking (high)`. Scope: try to close `D-V3a`/
+`D-V7b` for real, per the freeze decision's own "Next movement." Network
+authority unchanged from sessions 3–4: `WebFetch` against
+`sc1.checkpoint.com`/`registry.terraform.io`/`docs.ansible.com` returned
+`EGRESS_BLOCKED` again; `github.com`/`raw.githubusercontent.com` remained
+reachable and were used as this session's primary evidence channel, per the
+document's own established technique.
+
+**D-V7b — one further official negative, one non-authoritative
+corroboration, no closure.** Beyond the Ansible `cp_mgmt_simple_cluster`
+module (session 4), this session verified the schema of the OTHER official
+CheckPointSW GitHub-published automation surface for the Management API's
+`simple-cluster` object: `CheckPointSW/terraform-provider-checkpoint`,
+`checkpoint/resource_checkpoint_management_simple_cluster.go` (`master`
+branch), read directly via `raw.githubusercontent.com`. Its full schema — 49
+top-level keys enumerated verbatim (`name`, `ipv4_address`, `ipv6_address`,
+`cluster_mode`, `geo_mode`, `members`, `interfaces`, ... `ignore_warnings`,
+`ignore_errors`) — contains **no** recovery, failback, preemption, or
+"maintain current active"/"switch to higher priority" field. This is a
+second, independent, official CheckPointSW automation surface confirmed (not
+merely searched) to lack the attribute, converging with session 4's
+Ansible-module finding. (A `WebSearch`-synthesized claim that this same file
+defined a `member_recovery_mode` field was checked directly against the
+primary source and found **false** — the search-engine summary was
+unsupported by the actual GitHub file; recorded here as a caution against
+treating `WebSearch` prose as a source in itself, consistent with this
+document's own evidence-tier policy of citing only text actually read.)
+Separately, non-authoritative CheckMates community discussion states
+`generic-object` API access to Check Point management objects is "not
+formally supported or documented by Check Point" — consistent with, and not
+promoted above, the existing sk/community-sourced texture already in this
+document; recorded only because it directly bears on the audit task's own
+prohibition against inventing an attribute name via that route. `D-V7b`
+stays `STILL_UNKNOWN`. No new command is proposed; no amendment to the
+existing `OP.2.1` command gate is required — there is nothing new to gate.
+
+**D-V3a — reconfirmed absence in the existing source, one
+adjacent-but-non-binding official field found elsewhere.** This session
+independently re-read (via `raw.githubusercontent.com`, official
+`PaloAltoNetworks` GitHub org) both previously-cited repositories' relevant
+source: `pan-os-upgrade-assurance/panos_upgrade_assurance/firewall_proxy.py`'s
+`get_ha_configuration()` docstring (session 3's source) confirms again, on
+direct re-read, no `serial`/`serial-num` field under `local-info`/
+`peer-info` in its documented `show high-availability state` response shape
+— the `serial` occurrences in that file are all in the unrelated
+`get_licenses()` method. A second, previously-unexamined official
+`PaloAltoNetworks/pan-os-python` GitHub repository source (merged commit
+`37ed2ca9f452490298a8e4f926a790d6722e5b59`,
+`panos/base.py::show_highavailability_state`) independently confirms the
+`show high-availability state` firewall response root is
+`result/group/local-info/...` — corroborating, from a second official code
+source, the same root this contract already uses; that method itself parses
+only the `state` leaf, nothing further.
+
+Genuinely new this session: the same `pan-os-python` repository's
+`Firewall.refreshall_from_xml` (`panos/firewall.py`) defines
+`Var("ha/state/peer/serial", "serial_ha_peer")` as an op-command field for a
+**different** command context — a Panorama-side "show devices"-class
+managed-firewall enumeration, not `show high-availability state` run
+directly against a member. This is official, on-point confirmation that the
+PAN-OS API family does expose an HA peer's serial number as a named,
+machine-readable field somewhere — but under a different leaf name
+(`serial`, not `serial-num`) and a different top-level command than the one
+`D-V3a` asks about. It does **not** establish `local-info/serial-num` /
+`peer-info/serial-num` semantics inside `show high-availability state`, does
+**not** reinterpret PAN B2, and does **not** license normalizing or binding
+the existing collector to this different surface — recorded as evidence and
+a possible future research avenue only, per the audit task's explicit
+instructions. `D-V3a` stays `STILL_UNKNOWN`.
+
+**Outcome:** neither row closes. This does not delay or reopen anything
+already frozen or DONE (`OP.0b`, `OP.2.0`, `OP.2.1`) and does not, by itself,
+change any CLASS 2 gate. `D-V7b` continues to hold, independently of `D-F3`,
+as a proven reason `utils/failover/assessment.py::_verdict_for` cannot
+return a positive CP verdict (per `OP.2.1`). Recommended next movement:
+human-assisted fetch of the specific named pages this document's source
+tables already identify (the Check Point ClusterXL Admin Guide "Cluster
+Management APIs" full body; an official PAN-OS API reference page for `show
+high-availability state` field definitions) — the technique this document
+itself prescribes once the GitHub-mirror avenue is exhausted for a given
+row; alternatively, a product-owner decision on whether to accept
+`preemption_known`/PAN B2 as durably `UNKNOWN` inputs pending a possible
+future explicit human-override path, which is a policy question outside
+this session's authority to decide.
