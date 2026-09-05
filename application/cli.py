@@ -382,10 +382,83 @@ def build_parser() -> argparse.ArgumentParser:
             "run due allowlisted read-only workflows, then exit. No polling loop is created."
         ),
     )
+    parser.add_argument(
+        "--registry-enroll",
+        action="store_true",
+        help=(
+            "PCP.1 manual Device Registry enrollment: creates one ENROLLED_UNVERIFIED "
+            "record for --registry-endpoint under the RuntimeRoot-resident registry. "
+            "No device contact, no credential resolution, no vendor import. Refused, "
+            "before any device_id is generated, if the normalized endpoint already "
+            "matches an existing record in any lifecycle state."
+        ),
+    )
+    parser.add_argument(
+        "--registry-endpoint",
+        default=None,
+        help=(
+            "Management endpoint (IP literal or hostname/FQDN, optionally 'host:port' or "
+            "'[ipv6-literal]:port') for --registry-enroll. Required with --registry-enroll. "
+            "Never resolved via DNS."
+        ),
+    )
+    parser.add_argument(
+        "--registry-vendor-hint",
+        choices=["checkpoint", "paloalto", "unknown"],
+        default="unknown",
+        help=(
+            "Optional operator-asserted vendor hint for --registry-enroll -- never evidence; "
+            "recorded with classification_basis=operator_hint."
+        ),
+    )
+    parser.add_argument(
+        "--registry-credential-profile",
+        default=None,
+        help=(
+            "Optional named credential profile *reference* for --registry-enroll. Never a "
+            "secret value; resolved only in the engine process, never in PCP.1."
+        ),
+    )
+    parser.add_argument(
+        "--registry-tag",
+        action="append",
+        default=None,
+        metavar="KEY=VALUE",
+        help="Optional operator tag for --registry-enroll, repeatable.",
+    )
+    parser.add_argument(
+        "--registry-list",
+        action="store_true",
+        help=(
+            "List every Device Registry record: device_id, vendor, state, tag keys. "
+            "Read-only -- no lock, no device contact."
+        ),
+    )
+    parser.add_argument(
+        "--show-endpoints",
+        action="store_true",
+        help=(
+            "With --registry-list, also print each record's LOCAL-SENSITIVE management "
+            "endpoint (local operator convenience only)."
+        ),
+    )
+    parser.add_argument(
+        "--registry-disable",
+        default=None,
+        metavar="DEVICE_ID",
+        help=(
+            "Disable one Device Registry record by device_id (ENROLLED_UNVERIFIED -> "
+            "DISABLED). Idempotent on an already-DISABLED id; fails distinctly on an "
+            "unknown id."
+        ),
+    )
     return parser
 
 
 def validate_modes(args, parser):
+    registry_mode_count = sum(bool(value) for value in (
+        args.registry_enroll, args.registry_list, args.registry_disable,
+    ))
     maintenance_modes = sum(bool(value) for value in (
         args.repository_privacy_check,
         args.storage_analyze,
@@ -396,6 +469,7 @@ def validate_modes(args, parser):
         args.recovery_store_check,
         args.recovery_validate,
         args.compliance_trend_reconstruct,
+        bool(registry_mode_count),
     ))
     if maintenance_modes > 1:
         parser.error("Choose only one repository/storage maintenance mode")
@@ -442,6 +516,36 @@ def validate_modes(args, parser):
     ):
         parser.error("--recovery-validate cannot be combined with collection/render modes")
 
+    if registry_mode_count > 1:
+        parser.error("Choose only one of --registry-enroll, --registry-list, --registry-disable")
+    if args.registry_enroll and not args.registry_endpoint:
+        parser.error("--registry-enroll requires --registry-endpoint")
+    if args.registry_endpoint and not args.registry_enroll:
+        parser.error("--registry-endpoint is only valid with --registry-enroll")
+    if args.registry_vendor_hint != "unknown" and not args.registry_enroll:
+        parser.error("--registry-vendor-hint is only valid with --registry-enroll")
+    if args.registry_credential_profile and not args.registry_enroll:
+        parser.error("--registry-credential-profile is only valid with --registry-enroll")
+    if args.registry_tag and not args.registry_enroll:
+        parser.error("--registry-tag is only valid with --registry-enroll")
+    if args.show_endpoints and not args.registry_list:
+        parser.error("--show-endpoints is only valid with --registry-list")
+    if registry_mode_count and args.apply:
+        parser.error("--apply is not valid with a --registry-* mode")
+    if registry_mode_count and (
+        args.cp_config_probe or args.cp_config_collect or args.render_only or args.only != "all"
+        or args.recovery_collect or args.recovery_attest or args.storage_analyze
+        or args.storage_deduplicate or args.repository_privacy_check
+        or args.persistent_secret_material_check or args.restore_readiness_check
+        or args.ha_readiness_check or args.recovery_store_check or args.recovery_validate
+        or args.compliance_trend_reconstruct or args.scheduler_once or args.console
+        or args.cp_ha_preflight_check or args.pan_ha_preflight_check
+    ):
+        parser.error(
+            "--registry-enroll / --registry-list / --registry-disable cannot be combined with "
+            "collection/render/maintenance modes"
+        )
+
     if args.cp_ha_preflight_check and not args.cp_preflight_targets:
         parser.error("--cp-ha-preflight-check requires --cp-preflight-targets")
     if args.cp_preflight_targets and not args.cp_ha_preflight_check:
@@ -459,6 +563,7 @@ def validate_modes(args, parser):
         or args.persistent_secret_material_check or args.restore_readiness_check
         or args.ha_readiness_check or args.recovery_store_check or args.recovery_validate
         or args.compliance_trend_reconstruct or args.scheduler_once or args.console
+        or registry_mode_count
     ):
         parser.error(
             "--cp-ha-preflight-check / --pan-ha-preflight-check cannot be combined with "
@@ -518,6 +623,7 @@ def validate_modes(args, parser):
         or args.render_only
         or args.compliance_trend_reconstruct
         or args.only != "all"
+        or registry_mode_count
     ):
         parser.error("--scheduler-once cannot be combined with collection, render, or maintenance modes")
     if args.compliance_trend_reconstruct and (
@@ -545,6 +651,7 @@ def validate_modes(args, parser):
         or args.compliance_trend_reconstruct
         or args.scheduler_once
         or args.only != "all"
+        or registry_mode_count
     ):
         parser.error("--console cannot be combined with collection, render, or maintenance modes")
 
@@ -607,6 +714,13 @@ def dispatch(args, parser, *, runtime_services=None, provenance="manual", admiss
         return recovery_wf.recovery_validate(ctx)
     if args.compliance_trend_reconstruct:
         return maintenance_wf.compliance_trend_reconstruct(ctx)
+    if args.registry_enroll or args.registry_list or args.registry_disable:
+        from application.workflows import registry as registry_wf
+        if args.registry_enroll:
+            return registry_wf.registry_enroll(ctx)
+        if args.registry_list:
+            return registry_wf.registry_list(ctx)
+        return registry_wf.registry_disable(ctx)
 
     ctx.services = services.build_collection_services(
         args, ctx.runtime_paths, runtime_services, parser

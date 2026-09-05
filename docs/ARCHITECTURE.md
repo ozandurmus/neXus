@@ -351,6 +351,29 @@ One large multi-stage function (~750 lines):
 
 ---
 
+## 7A. Device Registry (`PCP.1`)
+
+`utils/device_registry.py` — neXus's first persistent product object,
+frozen contract `docs/design/PRODUCT_CONTROL_PLANE_ARCHITECTURE.md` §21.
+`DeviceRegistry.enroll/list/disable` over a single RuntimeRoot-resident
+`data/state/device_registry.json`, filesystem-only via
+`utils/evidence_backend.py::DeviceRegistryBackend` (the eighth storage
+concern; no PostgreSQL implementation yet). `device_id` is opaque and
+random, never derived from the endpoint; duplicate detection compares the
+normalized endpoint (representation-only — no DNS resolution) independent
+of vendor hint or lifecycle state. `--registry-enroll`/`--registry-disable`
+acquire a single, narrow cross-process mutation lock
+(`data/state/device_registry.lock`, atomic `O_CREAT|O_EXCL`, an
+`owner_token` making release instance-safe) before the load step;
+`--registry-list` is read-only and lock-free. Corrupt/unsupported
+persisted data fails closed as a whole document, never row-by-row. No
+device contact, no vendor/collector import, no credential resolution —
+`credential_ref` is a bounded opaque reference only. Both the registry
+file and its lock file are LOCAL-SENSITIVE (`PRIVACY_AND_DATA_HANDLING.md`
+CLASS 2) and never enumerated into the support bundle.
+
+---
+
 ## 8. Security & privacy model (code level)
 
 - **Action-class invariant.** Every device operation belongs to a declared class

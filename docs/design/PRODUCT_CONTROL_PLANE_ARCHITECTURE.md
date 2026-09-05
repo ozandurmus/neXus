@@ -778,6 +778,20 @@ shape while the `OP.2.C` release gates wait on the server.
 
 ## 21. First implementation movement — `PCP.1` (bounded contract)
 
+**Status: AUTOMATED_VALIDATED — 2026-09-05.** `utils/device_registry.py`,
+`utils/evidence_backend.py::DeviceRegistryBackend`, the three CLI verbs and
+`tests/test_pcp1_device_registry.py` exist and implement AC-1a..AC-15
+exactly as specified below. This session's sandbox has no `pytest`/`lxml`/
+`paramiko` (reported, not bootstrapped, per `CLAUDE.md`); every behavior
+was additionally hand-verified directly (opaque/unique `device_id`,
+normalization, duplicate detection across vendor hints and lifecycle
+states, the closed schema, fail-closed corrupt-data handling, atomic
+persistence, lock contention, and the owner-token instance-safe release),
+then confirmed by PR #83's fast PR CI `validate` check running the real
+suite green on commit `a149f5a264ebd44db005ad7f5bffa4012f8b30dd`. No
+real-environment validation is owed (no device contact). See
+`project/build_history.json` head record for the exact CI evidence.
+
 **Build id:** `pcp_1_device_registry_manual_enrollment_foundation`
 **Movement:** `IMPLEMENTATION` against this section once this document is
 `FROZEN`. **Tier:** `Sonnet 5, normal` — deterministic implementation; the

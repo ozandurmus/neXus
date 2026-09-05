@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "current_build": "product_control_plane_architecture_draft",
+  "current_build": "pcp_1_device_registry_manual_enrollment_foundation",
   "current_track": "PCP.x",
   "progress_contract": "Weighted acceptance-criterion completion. Percentages describe the declared roadmap, not calendar time or delivery ETA.",
   "tracks": [
@@ -140,23 +140,27 @@
   "now_next": {
     "horizon_contract": "NOW is exactly one build. NEXT is exactly one. Everything else is an `upcoming` row carrying its own true status: planned = AFTER, blocked = waiting on a named external gate, deferred = consciously postponed. `now.build` must equal the newest project/build_history.json record -- utils.project_plan enforces it.",
     "now": {
-      "build": "product_control_plane_architecture_draft",
-      "title": "PCP.0 - Product Control Plane architecture (FROZEN 2026-09-05)",
-      "goal": "Promote the previously parked Product Control Plane direction into one design-parent document (docs/design/PRODUCT_CONTROL_PLANE_ARCHITECTURE.md): target architecture and product boundary, four-layer truth model, identity layering (device_id vs canonical_id vs entity_id vs operational_entity_id), Device Registry, candidate-first enrollment, capability resolution, typed job plane, persistence seam with the storage-engine decision deferred to recorded criteria, capability-driven backup, device != failover unit, console first-run/device experience, SNMPv3 and Diagnostic Runbook slots, reconciliation with main ff700e38 (one genuine contradiction isolated to a single console enrollment-write boundary covering both the manual and candidate-based enrollment intents; everything else a superseded implementation assumption or no conflict), the PCP.0-PCP.8 movement sequence and the bounded PCP.1 contract. Product Owner APPROVED 2026-09-05, conditioned on two mechanical freeze corrections applied by the freezing session: the registry mutation lock's release is now instance-safe (ownership-token equality check, never a bare unlink) and the lock file is classified LOCAL-SENSITIVE and kept out of the support bundle alongside the registry file (AC-5, AC-15); and section 22's amendment timing is corrected so its items 1-3 land at this freeze while item 4 (AI_START_HERE.md) moves to the PCP.1 close scope. Docs/state only: no code, taxonomy, console route, device command, schema or UI change; no frozen OP.2/CLASS 2, CON.x or RB.x decision reopened.",
-      "status": "complete",
-      "started": "2026-09-05",
-      "completed": "2026-09-05"
-    },
-    "next": {
       "build": "pcp_1_device_registry_manual_enrollment_foundation",
       "title": "PCP.1 - Persistent Device Registry + manual enrollment foundation (CLI, filesystem backend, tests)",
-      "status": "planned",
+      "goal": "Implement the frozen section 21 contract of docs/design/PRODUCT_CONTROL_PLANE_ARCHITECTURE.md: utils/device_registry.py (DeviceRecord with opaque device_id, endpoint + port, vendor{checkpoint,paloalto,unknown} + classification_basis, credential_ref *reference* only, enrollment_source=manual, lifecycle ENROLLED_UNVERIFIED/DISABLED reachable, RETIRED/CONTACT_VERIFIED/OBSERVED defined but structurally unreachable, empty relationships[]); the eighth utils/evidence_backend.py concern DeviceRegistryBackend, filesystem-only (data/state/device_registry.json); --registry-enroll/--registry-list/--registry-disable maintenance-class CLI modes (application/cli.py + application/workflows/registry.py), mutually exclusive with every other mode, no vendor import, no credential resolution, no network; tests/test_pcp1_device_registry.py covering AC-1a..AC-15 including the registry mutation lock's owner-token instance-safe release. No device contact, no console/UI/payload change, no SQLite/PostgreSQL.",
+      "status": "automated_validated",
+      "started": "2026-09-05",
+      "completed": "2026-09-05",
       "notes": [
-        "Unblocked 2026-09-05: docs/design/PRODUCT_CONTROL_PLANE_ARCHITECTURE.md is now FROZEN; section 21 of that document is PCP.1's contract (objective, in-scope items, the deterministic registry contract -- lifecycle transitions, endpoint normalization, duplicate detection, repeated-operation/idempotency, the cross-process registry mutation lock with an ownership-token instance-safe release, fail-closed contention and explicit manual stale-lock recovery, fail-closed corrupt-data handling -- AC-1a..AC-15, explicit non-goals, affected authority files, validation ladder). Not started by the freezing session.",
-        "Scope: utils/device_registry.py (DeviceRecord with opaque device_id, endpoints, vendor {checkpoint,paloalto,unknown} + classification_basis, credential profile *reference* never a secret, enrollment_source=manual, lifecycle ENROLLED_UNVERIFIED/DISABLED/RETIRED reachable, CONTACT_VERIFIED/OBSERVED defined but unreachable); an eighth utils/evidence_backend.py concern DeviceRegistryBackend with the filesystem implementation only (data/state/device_registry.json); main.py --registry-enroll / --registry-list / --registry-disable maintenance modes with no credential resolution, no network, no vendor import; tests/test_pcp1_device_registry.py.",
-        "Explicit non-goals: no enrollment providers/candidates/first-contact job or any device contact (PCP.2); no capability projection (PCP.3); no console/report UI or payload change (PCP.4); no job definitions or scheduler change (PCP.5); no PostgreSQL backend/schema/migration (pcp_storage_engine open); no console job-target vocabulary change; no credential storage or vault; no OP.2, RB.x or CON.x change.",
-        "Ceiling status AUTOMATED_VALIDATED (no device contact, no real-env validation owed). Backend + CLI only -- a normal run produces no visible UI change.",
-        "Recommended: Sonnet 5, normal reasoning -- deterministic implementation against the frozen section 21; escalate only if the Product Owner reopens the identity-layering or lifecycle vocabulary at the freeze review."
+        "Implementation complete 2026-09-05: all in-scope items from section 21 written and hand-verified directly (opaque/unique device_id, endpoint normalization incl. IPv6/port splitting, vendor-hint-independent duplicate detection across ENROLLED_UNVERIFIED/DISABLED, closed schema, credential_ref format-only validation, fail-closed corrupt-data handling, atomic tmp-then-replace persistence, lock contention fail-closed, owner-token instance-safe release, repository-root separation, support-bundle exclusion). AUTOMATED_VALIDATED claimed once PR #83's fast PR CI 'validate' check ran green on commit a149f5a264ebd44db005ad7f5bffa4012f8b30dd -- see project/build_history.json head record for the exact CI evidence.",
+        "Explicit non-goals preserved: no enrollment providers/candidates/first-contact job or any device contact (PCP.2); no capability projection (PCP.3); no console/report UI or payload change (PCP.4); no job definitions or scheduler change (PCP.5); no PostgreSQL backend/schema/migration (pcp_storage_engine open); no console job-target vocabulary change; no credential storage or vault; no OP.2, RB.x or CON.x change.",
+        "AI_START_HERE.md section 22 item 4 amendment (deferred from the PCP.0 freeze) landed at this close: the 'What this is' section now acknowledges the persistent Device Registry foundation.",
+        "Recommended for closing/validating this build: Sonnet 5, normal reasoning -- deterministic against the frozen section 21, CI-status interpretation only."
+      ]
+    },
+    "next": {
+      "build": "pcp_2_local_control_plane_sequencing_po_review",
+      "title": "PCP.2 sequencing decision - SQLite-backed local control-plane + UI-first enrollment (Product Owner review pending)",
+      "status": "blocked",
+      "notes": [
+        "Not started, not pre-authorized, and not pre-designed by the PCP.1 session per its own session-start scope: 'A future movement will decide the local interactive-console and SQLite storage evolution. Do not introduce either in PCP.1 and do not redesign PCP.1 in anticipation of them.'",
+        "Blocked on Product Owner review of the sequencing question itself -- whether/when a local interactive console ships, whether/when the filesystem-only registry evolves toward SQLite (docs/design/PRODUCT_CONTROL_PLANE_ARCHITECTURE.md section 10 pcp_storage_engine remains open), and how those two relate to the still-open pcp_console_registry_write_gate decision (section 19). PCP.1's own CLI verbs stay a bounded maintenance/bootstrap adapter, not the intended primary Operator Console experience, until this sequencing is decided.",
+        "No technical content pre-decided here: this row exists only to name the actual next decision point honestly, not to imply SQLite or a local console are already scoped."
       ]
     },
     "upcoming": [
