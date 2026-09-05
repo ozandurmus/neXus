@@ -3,6 +3,20 @@
   "record_contract": "One structured record per build, newest first. Required: build, status, title, summary (<= 2 sentences). Optional: started, completed, track, movement, supersedes, evidence, risks_forward, docs{agreement,validation,handover} (repo-relative paths under docs/history/). Full detail lives in the linked doc; do not restate it here. Status vocabulary must stay within utils/project_plan.py STATUS_VALUES.",
   "builds": [
     {
+      "build": "op2_c_cp_clusterxl_preflight_eligibility_wiring",
+      "status": "automated_validated",
+      "title": "OP.2.C follow-up - real CP ClusterXL PreflightProvider/EligibilityEvaluator wiring",
+      "summary": "Adds checkpoint/clusterxl_preflight_provider.py: ClusterXLPreflightProvider (utils.operate.eligibility.PreflightProvider) calls the approved checkpoint.preflight_collector.run_cp_preflight collector plus utils.failover.preflight_model.evaluate_coherence and the canonical utils.failover.assessment.compute_ha_readiness -- no second readiness engine, no reinterpreted check -- and projects the result into the adapter's required check_statuses (opaque subject/peer member tokens resolved from this run's own fresh ha_local_role fact, never member order; the vendor cluster_mode token translated to the adapter's canonical \"ha\"; recovery_mode always honestly \"unknown\", D-V7b), failing closed to no tokens/no cluster_mode on any missing, failed, ambiguous, or split-brain evidence. ClusterXLReadinessEligibilityEvaluator maps compute_ha_readiness's verdict onto EligibilityResult by equality against VERDICT_SAFE only, never re-deriving or overriding readiness. CLASS 2 stays structurally unreachable: neither class is constructed by any production ActionCoordinator, DenyAllAuthorizer is unchanged, and no adapter resolver, entry point, UI, trust change, or device command is added.",
+      "started": "2026-09-05",
+      "completed": "2026-09-05",
+      "track": "OP.2",
+      "movement": "IMPLEMENTATION",
+      "evidence": "tests/test_op2_c_cp_clusterxl_real_preflight_wiring.py (24 passed, incl. action/entity binding, canonical verdict mapping over all five utils.failover.assessment verdicts, fail-closed missing/negative/ambiguous evidence, real compute_ha_readiness end-to-end SAFE/UNSAFE verdicts, and adapter eligibility handoff through the real ActionCoordinator + CPClusterXLCapabilityAdapter) + tests/test_op2_c_cp_clusterxl_adapter.py + tests/test_op2_a_b_execution_foundation.py + tests/test_op2_1_cp_clusterxl_command_gate.py + tests/test_op0b_s7_readiness_v2.py (177 passed); full suite 1822 passed/26 skipped/0 failed (24 pre-existing errors in tests/test_con1_*/test_con2_*, environment-missing fastapi dependency, unrelated to this build).",
+      "docs": {
+        "agreement": "docs/history/phase/OP_2_1_CP_CLUSTERXL_MUTATION_COMMAND_GATE.md"
+      }
+    },
+    {
       "build": "op2_c1_admin_down_pnote_safety_corrections",
       "status": "automated_validated",
       "title": "OP.2.C1 - admin_down pnote evidence safety corrections (PR #76 + ambiguous-name follow-up)",
