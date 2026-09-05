@@ -133,6 +133,24 @@ human fetching the contract's named source pages. Sharpened by `OP.2.1`:
 CP readiness verdict, bounded pilot included. `Sonnet 5, extended thinking
 (high)`.
 
+**2026-09-05 dedicated closure attempt — PO REVIEW, no code change:** ran
+this build for real (docs-only, no device contact). Neither row closes.
+New official GitHub evidence (detail: `project/roadmap.json` open_decisions
+`D-V7b`/`D-V3a` `session5_evidence_2026_09_05`; full account:
+`docs/history/phase/OP_0B_0_VENDOR_FAILOVER_PREFLIGHT_EVIDENCE_SURFACE.md`
+"Session 5" addendum). `D-V7b`: `CheckPointSW/terraform-provider-checkpoint`'s
+`simple-cluster` schema — a second official CheckPointSW automation
+surface — independently confirmed to have no recovery/preemption field,
+converging with the Ansible-module finding; stays `STILL_UNKNOWN`. `D-V3a`:
+re-confirmed no serial field in the already-cited official PAN source;
+newly found an official but non-binding PAN field (`ha/state/peer/serial`)
+in a different command context (Panorama `show devices`, not `local-info`/
+`peer-info` inside `show high-availability state`) — does not close `D-V3a`,
+not used to reinterpret PAN B2. No new command, no `OP.2.1` command-gate
+amendment. Status stays `blocked`: next movement is human-assisted fetch of
+the specific named vendor pages, or a product-owner call on accepting
+durable `UNKNOWN` inputs — both outside engineering authority.
+
 `cp_remote_collection_done_marker_diagnostics` (`upcoming`) needs a real
 recurrence, independent of `OP.0b`. Backlog (PO request):
 `cp_preflight_ccp_tablestat_evidence` — a NEW command, gate row required
