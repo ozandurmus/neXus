@@ -32,12 +32,15 @@ UI_SCHEMA_VERSION = "op0c-failover-readiness-v1"
 # honest state of the evidence -- the exact framing application/workflows/
 # failover.py already prints for the CLI. One string, reused by both.
 FRAMING_NOTE = (
-    "This assessment covers only the stop-conditions answerable from evidence "
-    "already collected. It CANNOT report a cluster safe to fail over -- "
-    "SAFE_TO_FAILOVER is unreachable by design: the OP.0b preflight battery "
-    "now exists, but its evidence cannot yet establish every stop-condition "
-    "(open decisions D-F3 flap threshold, D-V7b Check Point recovery "
-    "setting). INSUFFICIENT_EVIDENCE means 'not established', not 'unhealthy'."
+    "This assessment reports only the stop-conditions the collected evidence "
+    "can establish. Without a fresh OP.0b preflight run, evidence is too thin "
+    "for any unit to reach SAFE_TO_FAILOVER -- INSUFFICIENT_EVIDENCE means "
+    "'not established', not 'unhealthy'. With a fresh preflight run, a unit "
+    "CAN reach SAFE_TO_FAILOVER even while its own preemption_known (Check "
+    "Point) and/or flap_history checks show INSUFFICIENT_EVIDENCE: a "
+    "product-owner decision (CP pilot readiness-policy amendment, D-V7b/"
+    "D-F3) made those two specific, documented evidence gaps non-blocking. "
+    "Read each check's own status for the full picture, not the verdict alone."
 )
 
 # CLASS 2 (failover execution) does not exist yet -- OP.2 hard prerequisites
