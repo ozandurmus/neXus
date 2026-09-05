@@ -21,8 +21,8 @@ at `M3`.
 | **Revision** | **3 — 2026-09-05, FROZEN.** Revision 2 recorded the Product Owner's decisions on the enrollment write gate (§9), first-contact trust (§9.3), auto-enrollment (§9.4), storage sequencing (§6.4) and the movement order (§12). Revision 3 freezes them and applies the `CON.0`/`PCP.0` amendments |
 | **Companion contract** | `docs/design/NAVIGATION_INFORMATION_ARCHITECTURE.md` (**FROZEN**, same date and head) — navigation, entity workspace, capability-state presentation |
 | **Design parent** | `docs/design/PRODUCT_CONTROL_PLANE_ARCHITECTURE.md` (`PCP.0`, FROZEN) — narrowly **amended** at this freeze to record the approved decisions (§9.2 `A3`…`A6`); every unrelated frozen law preserved |
-| **Also amended** | `docs/design/OPERATOR_CONSOLE_ARCHITECTURE.md` (`CON.0`) §4/§7 — the enrollment intent carve-out (§9.2 `A1`/`A2`) |
-| **Preserves unchanged** | `CON.0` §3/§4/§6/§7/§9/§10; `OP.2.0` P1–P18; `RB.x` incl. `D3`/`D4`; `utils/action_taxonomy.py`; `PCP.1`'s frozen `PCP.0` §21 registry contract; the admission coordinator and the vendor budget of 1 |
+| **Also amended** | `docs/design/OPERATOR_CONSOLE_ARCHITECTURE.md` (`CON.0`) §4 (new §4.1) and §7 (new rule 11) — the enrollment intent carve-out (§9.2 `A1`/`A2`) |
+| **Preserves unchanged** | Everything in `CON.0` and `PCP.0` not named above, including `CON.0` §3/§6/§9/§10 in full and `PCP.0` §21 in full (`PCP.1`'s frozen registry contract untouched); `OP.2.0` P1–P18; `RB.x` incl. `D3`/`D4`; `utils/action_taxonomy.py`; the admission coordinator and the vendor budget of 1 |
 | **Decision status** | §13.1 lists what is frozen; §13.2 lists the deferred implementation contracts and the genuinely separate future decisions |
 
 ---
@@ -65,7 +65,7 @@ specific than "we need a local control plane".
 | Evidence refresh visible in the UI | **SHIPPED** — `/api/payloads` re-read + `initializeReport()` | `console_actions.js` |
 | **Device-targeted collection** | **MISSING** | every collection job type is `target_mode="none"` — plane-wide by design |
 | **Registry-keyed job targets** | **MISSING** — targets resolve against `unified.json` entity ids, not `device_id` | `CON.0` §4 |
-| **Enrollment from the browser** | **MISSING and gated** | `pcp_console_registry_write_gate` |
+| **Enrollment from the browser** | **MISSING, but DECIDED in direction** — `pcp_console_registry_write_gate` approved for the local loopback profile under §9.1's conditions; no code exists until `M9` | §9 |
 | **Per-device / per-capability schedules** | **MISSING** | `data/state/scheduler_policy.json` is global and default-disabled |
 | **Capability projection per device** | **MISSING** | `PCP.3` |
 
@@ -115,7 +115,7 @@ HTTP request handlers free of long-running device I/O.
 
 ### 3.3 Report vs console
 
-Unchanged from `CON.0` §1/§6 and the navigation DRAFT §12: the exported report
+Unchanged from `CON.0` §1/§6 and the navigation contract §12: the exported report
 is a portable, action-free evidence artifact; the console is the only
 interactive surface. **No second console is proposed anywhere in this
 document.**
@@ -351,7 +351,7 @@ phantom device (`PCP.0` §1 "no phantom devices").
 
 ### 8.3 Where "Add Device" lives
 
-Never a navigation root (navigation DRAFT D-NAV5). Candidates evaluated:
+Never a navigation root (navigation contract D-NAV5). Candidates evaluated:
 
 | Location | For | Against |
 | --- | --- | --- |
@@ -497,7 +497,7 @@ Schedules surface. Editing scheduler policy from a browser remains gated by
 
 ### 10.3 Progressive menus without fake capability
 
-A capability appears when its contract ships (navigation DRAFT §7 P1). Stable
+A capability appears when its contract ships (navigation contract §7 P1). Stable
 orientation is preserved by the reserved-domain list: the *place* a future
 capability will occupy is written down, so its arrival does not re-arrange the
 operator's map. **No "coming soon" entry is ever rendered.**
@@ -510,25 +510,28 @@ operator's map. **No "coming soon" entry is ever rendered.**
 
 | Property | Status |
 | --- | --- |
-| No mutation authority granted by navigation | held (navigation DRAFT §15) |
+| No mutation authority granted by navigation | held (navigation contract §15) |
 | DOM presence never equals authorization | held |
 | No credential payload in browser, registry, SQLite, logs or bundles | held (§7) |
 | No device I/O in a request handler | held (§3.1, §4.1) |
 | No vendor identity without positive evidence | held (§8.2) |
 | No device targeting via fleet-wide execution + post-filter | held (§5) — the explicit refusal is the point |
 | `CLASS 2` / `OP.2` authorization, readiness, locking unweakened | held — nothing here touches `utils/operate/` or `utils/failover/` |
-| No raw secret-bearing configuration exposed | held (navigation DRAFT §10) |
+| No raw secret-bearing configuration exposed | held (navigation contract §10) |
 | Local pilot exemption never becomes production authorization | **RISK R-1**, §11.3 |
 | No second console, registry, readiness engine or identity authority | held (§3.3) |
 | Stale UI state never authorizes a job | held (§6.4 mitigations, `OP.2.0` P4/P14) |
 | Hidden navigation is not a security boundary | held |
 
-### 11.2 Proposed amendments — listed, **not applied**
+### 11.2 Parent-contract amendments — status
 
 The full list, with triggers, is **§9.2** (`A1`…`A6`). It is maintained there so
-the enrollment decision and the amendments it forces stay together. **None is
-applied while this architecture remains DRAFT**, and no frozen document is
-edited by this movement.
+the enrollment decision and the amendments it forces stay together.
+**`A1`–`A4` were applied at this freeze** (2026-09-05, `CON.0` §4.1/§7.11 and
+`PCP.0` §19/§10/§20.1). **`A5`/`A6` remain recorded and unapplied**: they wait
+on movement `M3` to inventory the existing state vocabularies before either
+`PCP.0` §8 or §9 is touched. No amendment outside this named, bounded set is
+made to any frozen document.
 
 ### 11.3 R-1 — the local-pilot exemption risk
 
@@ -552,10 +555,10 @@ Product Owner's draft list where repository evidence shows a safer dependency.
 
 | # | Movement | Objective | User-visible outcome | Primary files / seams | Security invariant | Prerequisites | Non-goals | Validation | Tier | New session? |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| **M0** | **PO review of these two DRAFTs** — **still open**; review round 1 and this correction are both part of it | Close direction (done, §13.1) then freeze the contracts | none | the two DRAFTs + the research appendix | — | — | no code | doc/state checks | extended (PO-facing) | in progress |
+| **M0** | **Product Owner review and freeze of these two contracts** — **COMPLETE**: direction closed (§13.1), evidence corrected, contracts frozen at reviewed head `ba56d2b` (2026-09-05) | Closed direction, corrected evidence, then froze both contracts | none | the two contracts + the research appendix | — | — | no code | doc/state checks | extended (PO-facing) | complete |
 | **M1** | **`PCP.1` uuid test-contract repair** | Fix the two deterministic failures on `main` | none | `tests/test_pcp1_device_registry.py` (and only if needed `utils/device_registry.py`) | the AC being proven must not weaken | none — **independent of NAV**; branches from **current `main`**, not from this branch | no registry behaviour change; no navigation or architecture change | targeted + full suite | normal | **yes** |
-| **M2** | **Navigation accessibility closure** | Close the four named gaps (nav DRAFT §13.1) | better keyboard/AT/reduced-motion behaviour | `navigation_ui.js`, `style.css` | none touched | M0 approves the rail | no IA change | targeted + both harnesses | normal | no |
-| **M3** | **Capability-state vocabulary + presentation contract** | Map the ten UX semantics onto canonical states; settle the two `PO-NAV-7` concepts in their **correct owning domains**; own the `PO-NAV-6` colour/label contract | none | a contract doc + `docs/ARCHITECTURE.md` | **must not** alter the job lifecycle vocabulary | M0 | no UI, no payload | state/doc checks | extended (vocabulary) | maybe |
+| **M2** | **Navigation accessibility closure** | Close the four named gaps (navigation contract §13.1) | better keyboard/AT/reduced-motion behaviour | `navigation_ui.js`, `style.css` | none touched | M0 complete (it is) | no IA change | targeted + both harnesses | normal | no |
+| **M3** | **Capability-state vocabulary + presentation contract** | Map the ten UX semantics onto canonical states; settle the two `PO-NAV-7` concepts in their **correct owning domains**; own the `PO-NAV-6` colour/label contract | none | a contract doc + `docs/ARCHITECTURE.md` | **must not** alter the job lifecycle vocabulary | M0 complete (it is) | no UI, no payload | state/doc checks | extended (vocabulary) | maybe |
 | **M4** | **Local control-plane metadata store** | Option A, additively (§6.4 boundary) | none | new `evidence_backend` concern(s), RuntimeRoot | fail-closed corruption/version; excluded from bundle; **never owns registry rows, credentials, trust, raw config, backup bytes, CAS or `OP.2` authority** | §6.4 approved; separate authorization to start | **no registry migration**; no job schema yet | targeted + privacy gate | extended (storage) | **yes** |
 | **M5** | **Collector target-selection seam — one collector** | Give exactly one collector a registry-derived target set (`PCP.6`, narrowed) | none yet | one collector + `collection_executor` | no plane-wide-then-filter; contact not multiplied | M4 (or none, if seams land first) | not all collectors at once | targeted + subsystem regression | extended (first), normal (rest) | yes |
 | **M6** | **Registry-keyed job targets** | `device_id` targets resolved against the registry at admission | job targets name real enrolled devices | `console/registry.py`, `console/app.py`, `console/runner.py` | unsupported targeting refused before contact | M4, M5 | no new job types | targeted + console tests | normal | no |
@@ -563,7 +566,7 @@ Product Owner's draft list where repository evidence shows a safer dependency.
 | **M8** | **First-contact trust + identity resolution** | The read-only first-contact job and its trust preflight | identity/capability preview | `pcp_first_contact_trust_policy`, existing identity reads | trust before credential; UNKNOWN persists nothing | M6; the trust-policy decision | no enrollment write | targeted + real-env for trust | extended (trust) | yes |
 | **M9** | **Enrollment preview + confirmation (UI)** | §8's flow under §9.1's seventeen conditions | add a device from the console | console routes + `DeviceRegistry.enroll` | all seventeen §9.1 conditions; amendments `A1`/`A2` applied first | M8; amendments `A1`/`A2` | no credential management; no production exposure | targeted + security review | extended (gate) | yes |
 | **M10** | **Capability projection per device** | `PCP.3` | modules light up per device honestly | `utils/capability_registry.py` + projection | capability ≠ readiness ≠ authorization | M6 | no UI redesign | targeted | normal | no |
-| **M11** | **Shared entity workspace context** | One selected entity across modules (nav DRAFT §6.3) | one selection, many views | `navigation_ui.js`, module renderers | no second identity authority | M10 | no new evidence | targeted + harnesses | normal | no |
+| **M11** | **Shared entity workspace context** | One selected entity across modules (navigation contract §6.3) | one selection, many views | `navigation_ui.js`, module renderers | no second identity authority | M10 | no new evidence | targeted + harnesses | normal | no |
 | **M12** | **Per-device / per-capability schedules** | §10.2 | different cadences per device | job definitions + scheduler policy | ≥10 min floor; default-disabled; `C-D7` for editing | M7, M10 | no new collectors | targeted + subsystem | extended (contract) | yes |
 | **M13** | **Recovery domain promotion** | `PO-NAV-2`, once `RB.5`/`CON.4` surfaces exist | Recovery root | recovery payloads + nav model | no recovery bytes over HTTP | `RB.4`/`RB.5` | no restore workflow | targeted + harnesses | normal | no |
 | **M14** | **Production OIDC/RBAC integration** | `DEPLOY.1A` | real authorization | out of scope here | P4 additive; never a nav proxy | `DEPLOY.1` external | everything else | full | extended | yes |
@@ -575,10 +578,10 @@ authorized or begun by this document.**
 
 | Movement | Clarification |
 | --- | --- |
-| **`M0`** | The current architecture correction **is part of `M0`**. `M0` is not closed by it |
-| **`M1`** | A **new session** and a **clean, narrow PR from current `main`** — it repairs the two `PCP.1` test-contract failures **independently of NAV**. It must not carry navigation or architecture changes |
+| **`M0`** | **COMPLETE.** The architecture is frozen (both contracts, 2026-09-05, reviewed head `ba56d2b`). Freezing `M0` authorizes no other movement — `M1`…`M14` each still need their own separate go-ahead |
+| **`M1`** | A **new session** and a **clean, narrow PR from current `main`** — it repairs the two `PCP.1` test-contract failures **independently of NAV**. It must not carry navigation or architecture changes. Prerequisite: `M0` complete (it is) |
 | *(after `M1` merges)* | The NAV/`PCP.2` branch **must incorporate the new `main` safely** before later validation or any PR |
-| **`M2`** | **Required before the NAV prototype can merge** (§ navigation DRAFT 13.1 gate table). Not a freeze blocker |
+| **`M2`** | Prerequisite: `M0` complete (it is). **Required before the NAV prototype can merge** (navigation contract §13.1 gate table). Not a freeze blocker |
 | **`M3`** | Owns the **domain-specific status vocabulary and the colour/presentation contract**. It **must not modify the job lifecycle vocabulary** incorrectly — the schedule/capability-policy concept never joins `queued`/`running`/`succeeded`/`failed`/`blocked`/`skipped` (`PO-NAV-7`) |
 | **`M4`** | Implements **local SQLite control-plane metadata only**, per approved Option A and the §6.4 ownership boundary |
 | **`M5`** | Remains the **first real collector target-selection seam** and the **critical path** for honest per-device collection |
@@ -648,9 +651,15 @@ No database, schema, migration or DDL. No enrollment endpoint or route. No
 credential store or credential-management product. No collector change or
 targeting. No device contact. No scheduler change. No capability payload state.
 No accessibility implementation. No repair of the `PCP.1` uuid tests. No
-RBAC/OIDC. No second console. No `CLASS 2` movement. **No edit to any frozen
-document** — the §9.2 amendments are recorded and unapplied. **No freeze, no
-merge, no pull request**, and **no movement authorized or begun**.
+RBAC/OIDC. No second console. No `CLASS 2` movement.
+
+This document's own freeze **did** narrowly amend `CON.0` (§4.1, §7 rule 11)
+and `PCP.0` (§19, §10, §20.1) — that is the M0 architecture freeze itself, not
+a non-goal of it, and is recorded in full at §9.2. What stays a non-goal, even
+after the freeze: no amendment beyond that named, bounded set; `A5`/`A6` stay
+recorded and unapplied until `M3`; and **no movement beyond `M0` is authorized
+or begun** — `M1`…`M14` each need their own separate go-ahead, and none of
+them opens a pull request or merges anything.
 
 ---
 

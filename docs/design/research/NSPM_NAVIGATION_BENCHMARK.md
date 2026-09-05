@@ -136,7 +136,7 @@ image, are what the frozen contracts' preservation criteria bind to.
 | **Current / stale / failure provenance** | `utils/snapshot.py` `data_state` ∈ `live` / `last_known_good` / `no_data` / `partial`, surfaced by every module | Provenance and freshness stay visible verbatim |
 | **Vertical navigation prototype** | `static/navigation_ui.js` (rail + device tab strip, one model) | Behaviour unchanged while the architecture is DRAFT |
 
-These rows are the same commitments recorded in the navigation DRAFT's
+These rows are the same commitments recorded in the frozen navigation contract's
 preservation matrix (§11 there); this appendix records **where each is verified
 in source**, so the preservation criteria are checkable rather than asserted.
 
