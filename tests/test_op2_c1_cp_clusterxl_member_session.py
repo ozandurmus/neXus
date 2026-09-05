@@ -12,8 +12,11 @@ collector itself.
 Covers: command resolution (the two literal CP-M1/CP-M1-R primitives, never
 wrapped in `clish -c`), exact one-shot submission behavior (no retry, no
 resend), read framing/exit-status handling for the A3/A5 verification reads,
-transport-failure propagation to `SubmissionConfirmation.CONFIRMED_NOT_SENT`,
-and session reuse (one `MemberSession`, no reconnect, no nested SSH client)
+exact `admin_down` pnote identification (never conflated with any other
+problem device, `OP.2.C1` safety correction), transport-failure handling --
+`CONFIRMED_NOT_SENT` only for a provably unopened session, everything else
+(including a proven pre-device send failure) `SUBMITTED_OR_AMBIGUOUS` -- and
+session reuse (one `MemberSession`, no reconnect, no nested SSH client)
 across both reads and submissions.
 """
 from __future__ import annotations
@@ -43,7 +46,21 @@ _A3_DOWN = "\n".join([
     "2  192.168.1.2  100%  ACTIVE",
 ])
 _A5_NO_PROBLEM = "There are no pnotes in problem state"
-_A5_ADMIN_DOWN = "Current state: problem"
+_A5_ADMIN_DOWN = "\n".join([
+    "Device Name: admin_down",
+    "Current state: problem",
+])
+_A5_OTHER_DEVICE_PROBLEM = "\n".join([
+    "Device Name: Synchronization",
+    "Current state: problem",
+])
+_A5_UNNAMED_PROBLEM = "Current state: problem"
+_A5_ADMIN_DOWN_TABLE = "\n".join([
+    "Device Name:            Registration number:  Timeout:  "
+    "Current state:  Time since last report:",
+    "admin_down              0                     none      problem"
+    "              12.3 sec",
+])
 
 
 class _FakeShell:
@@ -61,8 +78,9 @@ def _cli_rejected() -> dict:
 
 def _send_failed() -> dict:
     """`InteractiveSshSession.run`'s own classification for a `channel.send`
-    that raised before any device interaction -- the one positively-proven
-    "never reached the device" transport failure."""
+    that raised on an already-established channel -- an attempted send, not
+    a provable "never reached the device" case (OP.2.C1 safety correction:
+    only an unopened session is provable non-delivery)."""
     return {
         "success": False, "error_class": "execution_error", "error_detail": "OSError",
         "stdout": "", "stderr": "", "exit_status": None,
@@ -208,6 +226,52 @@ def test_read_role_down_with_admin_down_pnote_present():
     assert reading.read_failed is False
 
 
+def test_admin_down_pnote_present_true_for_the_column_table_form():
+    run_command = _ScriptedRunCommand(responses={
+        "cphaprob stat": _ok(_A3_DOWN),
+        "cphaprob -ia list": _ok(_A5_ADMIN_DOWN_TABLE),
+    })
+    session, _ = _make_session(run_command)
+    real = RealClusterXLMemberSession(member_session=session)
+
+    reading = real.read_role()
+
+    assert reading.admin_down_pnote_present is True
+
+
+def test_admin_down_pnote_present_false_when_a_different_device_is_in_problem_state():
+    """OP.2.C1 safety correction: `admin_down_pnote_present` is never the
+    same fact as "any pnote in problem state" -- a problem reported for an
+    unrelated Critical Device must never be read as `admin_down`'s
+    appearance."""
+    run_command = _ScriptedRunCommand(responses={
+        "cphaprob stat": _ok(_A3_DOWN),
+        "cphaprob -ia list": _ok(_A5_OTHER_DEVICE_PROBLEM),
+    })
+    session, _ = _make_session(run_command)
+    real = RealClusterXLMemberSession(member_session=session)
+
+    reading = real.read_role()
+
+    assert reading.admin_down_pnote_present is False
+
+
+def test_admin_down_pnote_present_false_for_an_unnamed_problem_line():
+    """A `Current state: problem` line with no associated `Device Name:`
+    line is never assumed to be the `admin_down` pnote -- fails closed to
+    "not present", not to "present" (`any_problem`'s old, wrong mapping)."""
+    run_command = _ScriptedRunCommand(responses={
+        "cphaprob stat": _ok(_A3_DOWN),
+        "cphaprob -ia list": _ok(_A5_UNNAMED_PROBLEM),
+    })
+    session, _ = _make_session(run_command)
+    real = RealClusterXLMemberSession(member_session=session)
+
+    reading = real.read_role()
+
+    assert reading.admin_down_pnote_present is False
+
+
 def test_read_role_marks_read_failed_when_a3_fails_regardless_of_a5():
     run_command = _ScriptedRunCommand(responses={
         "cphaprob stat": _cli_rejected(),
@@ -266,18 +330,27 @@ def test_no_established_shell_is_confirmed_not_sent_without_touching_transport()
     assert run_command.calls == []
 
 
-def test_send_failed_before_device_contact_is_confirmed_not_sent():
+def test_send_failed_on_an_established_session_is_submitted_or_ambiguous():
+    """OP.2.C1 safety correction: `InteractiveSshSession.run`'s own
+    "execution_error" classification proves a send was *attempted* on an
+    already-established session, not that it never reached the device --
+    an unopened session is the only provable CONFIRMED_NOT_SENT case."""
     run_command = _ScriptedRunCommand(responses={ADMIN_DOWN_COMMAND_TEXT: _send_failed()})
     session, _ = _make_session(run_command)
     real = RealClusterXLMemberSession(member_session=session)
 
     confirmation = real.submit_admin_down()
 
-    assert confirmation == SubmissionConfirmation.CONFIRMED_NOT_SENT
+    assert confirmation == SubmissionConfirmation.SUBMITTED_OR_AMBIGUOUS
     assert len(run_command.calls) == 1  # attempted once, still no retry
 
 
-def test_transport_exception_is_confirmed_not_sent_not_propagated():
+def test_transport_exception_is_submitted_or_ambiguous_not_propagated():
+    """OP.2.C1 safety correction: an exception out of an already-attempted
+    send on an established session is attempted-send uncertainty, not
+    proof of non-delivery -- it must never resolve to CONFIRMED_NOT_SENT,
+    only to the safer SUBMITTED_OR_AMBIGUOUS (and it must never propagate
+    out of this module either)."""
     def _raising(_command_text: str) -> dict:
         raise ConnectionError("channel closed")
 
@@ -286,7 +359,7 @@ def test_transport_exception_is_confirmed_not_sent_not_propagated():
 
     confirmation = real.submit_admin_down()
 
-    assert confirmation == SubmissionConfirmation.CONFIRMED_NOT_SENT
+    assert confirmation == SubmissionConfirmation.SUBMITTED_OR_AMBIGUOUS
 
 
 @pytest.mark.parametrize("result", [_cli_rejected(), _ok("done"), {
