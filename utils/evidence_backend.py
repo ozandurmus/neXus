@@ -2,8 +2,9 @@
 
 Five independent storage concerns move from per-container local files to an
 opt-in PostgreSQL backend, byte-compatible with today's filesystem behavior
-(a sixth, the CON.2 console job store, was added later — see its own section
-below):
+(a sixth, the CON.2 console job store, and a seventh, the OP.2.A/B class 2
+action record, were added later; an eighth, the PCP.1 Device Registry, is
+filesystem-only for now — see their own sections below):
 
 * **Config snapshot** metadata index (``utils/config_evidence.py``,
   ``utils/config_history.py``) — content-addressed payload blobs
@@ -1331,6 +1332,53 @@ class PostgresActionRecordBackend(ActionRecordBackend):
 
 
 # ---------------------------------------------------------------------------
+# 8. Device registry backend (PCP.1)
+# ---------------------------------------------------------------------------
+#
+# Dumb storage only, same split as the other seven concerns: no duplicate
+# detection, no lifecycle validation, no schema enforcement, no locking --
+# all of that lives in utils/device_registry.py so both backends would
+# behave identically. Filesystem implementation only in PCP.1
+# (docs/design/PRODUCT_CONTROL_PLANE_ARCHITECTURE.md section 21); the
+# abstract interface is shaped for a later PostgreSQL implementation but none
+# is written here (pcp_storage_engine open decision) -- selecting
+# ``postgres`` for this concern raises rather than silently falling back.
+
+class DeviceRegistryBackend(abc.ABC):
+    @abc.abstractmethod
+    def load_raw(self) -> dict[str, Any] | None:
+        """The raw registry document, or ``None`` if it does not exist yet
+        (the empty registry -- never an error by itself)."""
+
+    @abc.abstractmethod
+    def save_raw(self, payload: dict[str, Any]) -> None:
+        ...
+
+
+class FilesystemDeviceRegistryBackend(DeviceRegistryBackend):
+    """``<data_root>/state/device_registry.json`` -- atomic tmp-then-replace,
+    the same posture as every other ``data/state/*`` file."""
+
+    def __init__(self, path: Path) -> None:
+        self.path = Path(path)
+
+    def load_raw(self) -> dict[str, Any] | None:
+        if not self.path.exists():
+            return None
+        try:
+            raw = self.path.read_text(encoding="utf-8")
+        except OSError as exc:
+            raise EvidenceBackendError(f"device registry at {self.path} is unreadable: {exc}") from exc
+        try:
+            return json.loads(raw)
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise EvidenceBackendError(f"device registry at {self.path} is not valid JSON: {exc}") from exc
+
+    def save_raw(self, payload: dict[str, Any]) -> None:
+        _write_json_atomic(self.path, payload)
+
+
+# ---------------------------------------------------------------------------
 # Backend selection
 # ---------------------------------------------------------------------------
 
@@ -1448,3 +1496,15 @@ def select_action_record_backend(*, root: Path) -> ActionRecordBackend:
     if kind not in ("filesystem", ""):
         raise EvidenceBackendError(f"Unsupported {ENV_BACKEND}: {kind!r}")
     return FilesystemActionRecordBackend(root)
+
+
+def select_device_registry_backend(*, path: Path) -> DeviceRegistryBackend:
+    kind = active_evidence_backend_kind()
+    if kind == "postgres":
+        raise EvidenceBackendError(
+            f"{ENV_BACKEND}=postgres has no DeviceRegistryBackend implementation in PCP.1 "
+            "(pcp_storage_engine is still an open decision) -- use the filesystem default"
+        )
+    if kind not in ("filesystem", ""):
+        raise EvidenceBackendError(f"Unsupported {ENV_BACKEND}: {kind!r}")
+    return FilesystemDeviceRegistryBackend(path)
