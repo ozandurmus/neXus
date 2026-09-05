@@ -778,7 +778,7 @@ shape while the `OP.2.C` release gates wait on the server.
 
 ## 21. First implementation movement — `PCP.1` (bounded contract)
 
-**Status: IMPLEMENTED — 2026-09-05.** `utils/device_registry.py`,
+**Status: AUTOMATED_VALIDATED — 2026-09-05.** `utils/device_registry.py`,
 `utils/evidence_backend.py::DeviceRegistryBackend`, the three CLI verbs and
 `tests/test_pcp1_device_registry.py` exist and implement AC-1a..AC-15
 exactly as specified below. This session's sandbox has no `pytest`/`lxml`/
@@ -786,11 +786,11 @@ exactly as specified below. This session's sandbox has no `pytest`/`lxml`/
 was additionally hand-verified directly (opaque/unique `device_id`,
 normalization, duplicate detection across vendor hints and lifecycle
 states, the closed schema, fail-closed corrupt-data handling, atomic
-persistence, lock contention, and the owner-token instance-safe release).
-Ceiling is `AUTOMATED_VALIDATED` once fast PR CI (which does carry the
-Python dependencies) confirms the suite green — no real-environment
-validation is owed (no device contact). See `project/build_history.json`
-head record for the exact CI evidence at merge time.
+persistence, lock contention, and the owner-token instance-safe release),
+then confirmed by PR #83's fast PR CI `validate` check running the real
+suite green on commit `a149f5a264ebd44db005ad7f5bffa4012f8b30dd`. No
+real-environment validation is owed (no device contact). See
+`project/build_history.json` head record for the exact CI evidence.
 
 **Build id:** `pcp_1_device_registry_manual_enrollment_foundation`
 **Movement:** `IMPLEMENTATION` against this section once this document is

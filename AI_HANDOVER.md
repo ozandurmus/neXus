@@ -20,13 +20,13 @@ doc. Prior versions are in git history.
   directly on `origin/main` at `c486a1c49d5968ea16ff42de2509bc305ea8362c`
   (merged PR #82, the `PCP.0` freeze) — `main` had not advanced further.
 - Build: `pcp_1_device_registry_manual_enrollment_foundation` (`PCP.1`) —
-  **IMPLEMENTED**, ceiling `AUTOMATED_VALIDATED` pending fast PR CI
-  confirming the new test file green (this sandbox has no pytest/lxml/
-  paramiko; every AC was hand-verified directly instead).
+  **AUTOMATED_VALIDATED**. This sandbox has no pytest/lxml/paramiko; every
+  AC was hand-verified directly, then confirmed by PR #83's fast PR CI
+  `validate` check running the real suite green on commit `a149f5a`.
 - Implements `docs/design/PRODUCT_CONTROL_PLANE_ARCHITECTURE.md` §21
   exactly as frozen — no reinterpretation, no weakening, no expansion.
-- PR to `main` opened this session (see "Delivery" for number/status once
-  created); merge only after fast CI is green and conflict-free.
+- PR #83 opened to `main`, CI green, `mergeable_state: clean`, no reviews
+  or comments pending. Merging next in this same session.
 
 ## 2. What changed this session
 
@@ -69,16 +69,12 @@ doc. Prior versions are in git history.
 
 ## 3. Exact next action
 
-1. Push this branch, open a PR to `main`, watch fast PR CI. If it fails on
-   anything in `tests/test_pcp1_device_registry.py` or elsewhere in the
-   suite, fix and re-push — do not merge red.
-2. Once CI is green: update `project/build_history.json`'s head record
-   status from `in_progress` to `automated_validated` (with the CI run as
-   evidence) and `project/roadmap.json`'s `now.status` to match, in the
-   same PR, before merging.
-3. Merge once green and conflict-free; sync local `main` to `origin/main`;
-   report the exact merge commit.
-4. Do **not** start `PCP.2`, any SQLite/local-console storage evolution,
+1. This state-update commit (flipping `build_history`/`roadmap` to
+   `automated_validated` with the CI evidence) still needs to be pushed
+   and merged into PR #83 alongside the implementation commit.
+2. Merge once CI is green on the updated head and conflict-free; sync
+   local `main` to `origin/main`; report the exact merge commit.
+3. Do **not** start `PCP.2`, any SQLite/local-console storage evolution,
    or an Add Device UI. The actual next movement
    (`pcp_2_local_control_plane_sequencing_po_review`) is a Product Owner
    decision on sequencing, not yet made — see `project/roadmap.json`
@@ -97,16 +93,13 @@ doc. Prior versions are in git history.
   []`; `scripts/build_history_index.py --check` clean; `git diff --check`
   clean; repository privacy gate re-run directly: **PASS / 0 findings,
   487 files scanned**.
-- Fast PR CI has not yet run at the time of this handover — that is the
-  next session's (or this session's continuation's) first action.
+- Fast PR CI (`validate` check) ran green on commit `a149f5a264ebd44db005ad7f5bffa4012f8b30dd`
+  (https://github.com/ozandurmus/neXus/actions/runs/33979500386/job/101342049427);
+  `full-regression` skipped as designed (PR-only trigger is main
+  push/dispatch).
 
 ## 5. New risks
 
-- `AUTOMATED_VALIDATED` is **not yet claimed** — do not advance
-  `project/build_history.json`/`project/roadmap.json` past
-  `in_progress` until fast PR CI actually confirms the suite green.
-  Hand-verification in a dependency-less sandbox is evidence of intent,
-  not a substitute for the real suite (`AGENTS.md` evidence laws).
 - `pcp_console_registry_write_gate` remains open, untouched by this
   build — still decided for neither manual nor candidate-based
   enrollment intents.
