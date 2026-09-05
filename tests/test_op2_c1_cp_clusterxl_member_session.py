@@ -13,23 +13,35 @@ Covers: command resolution (the two literal CP-M1/CP-M1-R primitives, never
 wrapped in `clish -c`), exact one-shot submission behavior (no retry, no
 resend), read framing/exit-status handling for the A3/A5 verification reads,
 exact `admin_down` pnote identification (never conflated with any other
-problem device, `OP.2.C1` safety correction), transport-failure handling --
-`CONFIRMED_NOT_SENT` only for a provably unopened session, everything else
-(including a proven pre-device send failure) `SUBMITTED_OR_AMBIGUOUS` -- and
-session reuse (one `MemberSession`, no reconnect, no nested SSH client)
-across both reads and submissions.
+problem device, and never falsely resolved to "absent" from an unnamed
+problem row that could itself be `admin_down` -- both `OP.2.C1` safety
+corrections), transport-failure handling -- `CONFIRMED_NOT_SENT` only for a
+provably unopened session, everything else (including a proven pre-device
+send failure) `SUBMITTED_OR_AMBIGUOUS` -- and session reuse (one
+`MemberSession`, no reconnect, no nested SSH client) across both reads and
+submissions. A small end-to-end slice also wires `RealClusterXLMemberSession`
+directly into `CPClusterXLCapabilityAdapter` (no `ActionCoordinator`, no
+fake session) to prove the ambiguous-pnote correction actually blocks a
+failback precondition/postcondition at the adapter seam, not merely at this
+module's own return value.
 """
 from __future__ import annotations
 
 import pytest
 
-from checkpoint.clusterxl_capability_adapter import SubmissionConfirmation
+from checkpoint.clusterxl_capability_adapter import (
+    ACTION_TYPE_HA_GRACEFUL_FAILBACK,
+    CPClusterXLCapabilityAdapter,
+    SubmissionConfirmation,
+)
 from checkpoint.clusterxl_member_session import (
     ADMIN_DOWN_COMMAND_TEXT,
     ADMIN_UP_COMMAND_TEXT,
     RealClusterXLMemberSession,
 )
 from checkpoint.preflight_collector import INTER_COMMAND_DELAY_SECONDS, MemberSession
+from utils.operate.adapter import PreconditionResult
+from utils.operate.eligibility import PreflightSnapshot
 
 pytestmark = pytest.mark.operate
 
@@ -38,6 +50,12 @@ _A3_ACTIVE = "\n".join([
     "ID  Unique Address  Assigned Load  State",
     "1 (local)  192.168.1.1  100%  ACTIVE",
     "2  192.168.1.2  0%  STANDBY",
+])
+_A3_STANDBY = "\n".join([
+    "Cluster mode: High Availability (Active Up) with IGMP Membership",
+    "ID  Unique Address  Assigned Load  State",
+    "1 (local)  192.168.1.1  0%  STANDBY",
+    "2  192.168.1.2  100%  ACTIVE",
 ])
 _A3_DOWN = "\n".join([
     "Cluster mode: High Availability (Active Up) with IGMP Membership",
@@ -60,6 +78,18 @@ _A5_ADMIN_DOWN_TABLE = "\n".join([
     "Current state:  Time since last report:",
     "admin_down              0                     none      problem"
     "              12.3 sec",
+])
+_A5_UNNAMED_PROBLEM_TABLE = "\n".join([
+    "Device Name:            Registration number:  Timeout:  "
+    "Current state:  Time since last report:",
+    "                        0                     none      problem"
+    "              12.3 sec",
+])
+_A5_ADMIN_DOWN_PLUS_UNNAMED_PROBLEM = "\n".join([
+    "Device Name: admin_down",
+    "Current state: problem",
+    "",
+    "Current state: problem",
 ])
 
 
@@ -256,10 +286,14 @@ def test_admin_down_pnote_present_false_when_a_different_device_is_in_problem_st
     assert reading.admin_down_pnote_present is False
 
 
-def test_admin_down_pnote_present_false_for_an_unnamed_problem_line():
-    """A `Current state: problem` line with no associated `Device Name:`
-    line is never assumed to be the `admin_down` pnote -- fails closed to
-    "not present", not to "present" (`any_problem`'s old, wrong mapping)."""
+def test_admin_down_pnote_present_is_ambiguous_none_for_an_unnamed_problem_line():
+    """OP.2.C1 follow-up safety correction: a `Current state: problem` line
+    with no associated `Device Name:` line is never assumed to be the
+    `admin_down` pnote -- but the absence of the name among a read's other,
+    named rows does not prove `admin_down` is absent either, since this
+    unnamed row could be it. A5 has not positively proven `admin_down`
+    is not in problem state, so this must fail closed to `None`, never to
+    the falsely-reassuring `False`."""
     run_command = _ScriptedRunCommand(responses={
         "cphaprob stat": _ok(_A3_DOWN),
         "cphaprob -ia list": _ok(_A5_UNNAMED_PROBLEM),
@@ -269,7 +303,37 @@ def test_admin_down_pnote_present_false_for_an_unnamed_problem_line():
 
     reading = real.read_role()
 
-    assert reading.admin_down_pnote_present is False
+    assert reading.admin_down_pnote_present is None
+
+
+def test_admin_down_pnote_present_is_none_for_an_unnamed_problem_row_in_the_table_form():
+    """Same ambiguity, fixed-width table form: a row whose device-name cell
+    is blank/unusable must not be treated as proof `admin_down` is absent."""
+    run_command = _ScriptedRunCommand(responses={
+        "cphaprob stat": _ok(_A3_DOWN),
+        "cphaprob -ia list": _ok(_A5_UNNAMED_PROBLEM_TABLE),
+    })
+    session, _ = _make_session(run_command)
+    real = RealClusterXLMemberSession(member_session=session)
+
+    reading = real.read_role()
+
+    assert reading.admin_down_pnote_present is None
+
+
+def test_admin_down_pnote_present_true_even_alongside_an_unnamed_problem_row():
+    """A positive `admin_down` identification by name is never undermined
+    by an unrelated, ambiguous unnamed row elsewhere in the same read."""
+    run_command = _ScriptedRunCommand(responses={
+        "cphaprob stat": _ok(_A3_DOWN),
+        "cphaprob -ia list": _ok(_A5_ADMIN_DOWN_PLUS_UNNAMED_PROBLEM),
+    })
+    session, _ = _make_session(run_command)
+    real = RealClusterXLMemberSession(member_session=session)
+
+    reading = real.read_role()
+
+    assert reading.admin_down_pnote_present is True
 
 
 def test_read_role_marks_read_failed_when_a3_fails_regardless_of_a5():
@@ -424,3 +488,119 @@ def test_two_physical_members_never_share_a_session_or_transport():
 
     assert run_command_a.calls == [ADMIN_DOWN_COMMAND_TEXT]
     assert run_command_b.calls == [ADMIN_UP_COMMAND_TEXT]
+
+
+# ---------------------------------------------------------------------------
+# End-to-end seam: RealClusterXLMemberSession wired directly into
+# CPClusterXLCapabilityAdapter (no ActionCoordinator, no fake session) --
+# proves the ambiguous-pnote correction actually blocks a failback at the
+# adapter boundary, not merely inside this module's own return value.
+# ---------------------------------------------------------------------------
+
+_FAILBACK_CHECK_STATUSES = {
+    "cluster_mode": "ha",
+    "subject_member_token": "member-a-token",
+    "peer_member_token": "member-b-token",
+    "recovery_mode": "maintain_current_active",
+}
+
+
+def _failback_plan(adapter: CPClusterXLCapabilityAdapter):
+    return adapter.build_plan(
+        entity=None, action_type=ACTION_TYPE_HA_GRACEFUL_FAILBACK,
+        evidence=PreflightSnapshot(
+            preflight_run_id="pf1", action_id="a1", operational_entity_id="e1", coherent=True,
+            readiness_verdict="positive", check_statuses=_FAILBACK_CHECK_STATUSES,
+        ),
+    )
+
+
+def test_failback_precondition_cannot_proceed_on_ambiguous_pnote_evidence():
+    """OP.2.C1 follow-up safety correction, end-to-end: A3 still reports the
+    subject DOWN (exactly what CP-M1 left it in), but A5 carries a
+    problem-state row with no usable device name -- that row could be
+    `admin_down` itself, so this evidence never proves the pnote either
+    present or absent. The adapter must never authorize the failback on
+    it."""
+    run_command = _ScriptedRunCommand(responses={
+        "cphaprob stat": _ok(_A3_DOWN),
+        "cphaprob -ia list": _ok(_A5_UNNAMED_PROBLEM),
+    })
+    session, _ = _make_session(run_command)
+    real = RealClusterXLMemberSession(member_session=session)
+    adapter = CPClusterXLCapabilityAdapter(session_resolver=lambda token: real)
+
+    result = adapter.check_precondition(plan=_failback_plan(adapter))
+
+    assert result == PreconditionResult.UNKNOWN
+
+
+def test_failback_postcondition_cannot_resolve_on_ambiguous_pnote_evidence():
+    """Same ambiguous A5 read, post-submission: the subject role has
+    genuinely recovered to STANDBY, but the pnote evidence never positively
+    confirms `admin_down` is gone -- the postcondition must stay
+    unresolved (`None`), never inferred from the role recovery alone."""
+    subject_run_command = _ScriptedRunCommand(responses={
+        "cphaprob stat": _ok(_A3_STANDBY),
+        "cphaprob -ia list": _ok(_A5_UNNAMED_PROBLEM),
+    })
+    peer_run_command = _ScriptedRunCommand(responses={
+        "cphaprob stat": _ok(_A3_ACTIVE),
+        "cphaprob -ia list": _ok(_A5_NO_PROBLEM),
+    })
+    subject_session, _ = _make_session(subject_run_command)
+    peer_session, _ = _make_session(peer_run_command)
+    sessions = {
+        "member-a-token": RealClusterXLMemberSession(member_session=subject_session),
+        "member-b-token": RealClusterXLMemberSession(member_session=peer_session),
+    }
+    adapter = CPClusterXLCapabilityAdapter(session_resolver=lambda token: sessions[token])
+    plan = _failback_plan(adapter)
+
+    class _Entity:
+        check_statuses = _FAILBACK_CHECK_STATUSES
+
+    observation = adapter.observe_postcondition(entity=_Entity(), plan=plan)
+
+    assert observation.postcondition_observed is None
+
+
+def test_failback_precondition_and_postcondition_both_proceed_on_complete_named_evidence():
+    """Control: the same failback flow with complete, positively-named A5
+    evidence (never ambiguous) must retain its existing, correct behavior --
+    the correction narrows only the ambiguous case, nothing else."""
+    precondition_run_command = _ScriptedRunCommand(responses={
+        "cphaprob stat": _ok(_A3_DOWN),
+        "cphaprob -ia list": _ok(_A5_ADMIN_DOWN),
+    })
+    precondition_session, _ = _make_session(precondition_run_command)
+    precondition_real = RealClusterXLMemberSession(member_session=precondition_session)
+    precondition_adapter = CPClusterXLCapabilityAdapter(session_resolver=lambda token: precondition_real)
+
+    precondition_result = precondition_adapter.check_precondition(plan=_failback_plan(precondition_adapter))
+
+    assert precondition_result == PreconditionResult.HOLDS
+
+    subject_run_command = _ScriptedRunCommand(responses={
+        "cphaprob stat": _ok(_A3_STANDBY),
+        "cphaprob -ia list": _ok(_A5_NO_PROBLEM),
+    })
+    peer_run_command = _ScriptedRunCommand(responses={
+        "cphaprob stat": _ok(_A3_ACTIVE),
+        "cphaprob -ia list": _ok(_A5_NO_PROBLEM),
+    })
+    subject_session, _ = _make_session(subject_run_command)
+    peer_session, _ = _make_session(peer_run_command)
+    sessions = {
+        "member-a-token": RealClusterXLMemberSession(member_session=subject_session),
+        "member-b-token": RealClusterXLMemberSession(member_session=peer_session),
+    }
+    postcondition_adapter = CPClusterXLCapabilityAdapter(session_resolver=lambda token: sessions[token])
+    plan = _failback_plan(postcondition_adapter)
+
+    class _Entity:
+        check_statuses = _FAILBACK_CHECK_STATUSES
+
+    observation = postcondition_adapter.observe_postcondition(entity=_Entity(), plan=plan)
+
+    assert observation.postcondition_observed == "subject_member_standby"
