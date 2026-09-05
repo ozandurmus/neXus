@@ -70,7 +70,13 @@ vs `CON.0` §4 wording + the exclusions-write `DEPLOY.1A` precedent) isolated
 as open decision `pcp_console_registry_write_gate`; every frozen `OP.2`/
 `CLASS 2`, `CON.x`, `RB.x` law preserved; no code, taxonomy, route, device
 command, schema or UI change. New track `PCP.x`, eight features, four open
-decisions, four backlog items. Detail: `project/roadmap.json` `now_next.now`.
+decisions, four backlog items. Two Product Owner correction rounds applied
+2026-09-05 (write-gate widened to both enrollment intents; OP.2.0 P8 lock-
+timing fix; §21's deterministic registry contract completed including a
+cross-process registry mutation lock closing a duplicate-record race under
+concurrent CLI writers; AC-2b overclaim and §18 stale wording fixed).
+Status stays DRAFT, freeze still withheld. Detail: `project/roadmap.json`
+`now_next.now`.
 
 Predecessors (full detail: `project/build_history.json` + linked phase
 docs): `op2_c_change_management_review_package_draft` (review package
@@ -119,7 +125,7 @@ a narrower question never promoted toward B2.
 list/--registry-disable` + `tests/test_pcp1_device_registry.py`. No device
 contact, no UI/payload change, no PostgreSQL, no console target-vocabulary
 change. Contract = `docs/design/PRODUCT_CONTROL_PLANE_ARCHITECTURE.md` §21
-(deterministic registry contract, AC-1a..AC-12, non-goals) — **starts only after the PO review flips that
+(deterministic registry contract incl. the cross-process registry mutation lock, AC-1a..AC-14, non-goals) — **starts only after the PO review flips that
 document to FROZEN**. `Sonnet 5, normal`.
 
 `op2_c_cp_clusterxl_adapter_scoping` (`upcoming`, blocked, notes preserved):
