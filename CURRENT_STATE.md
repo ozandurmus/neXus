@@ -7,12 +7,11 @@ detail is not here either** — it is in `project/build_history.json`
 linked documents under `docs/history/`. `docs/history/INDEX.md` is the
 generated one-line timeline.
 
-- **Checkpoint:** 2026-09-05, branch `claude/op2c-release-gate-scoping-bwym22`.
+- **Checkpoint:** 2026-09-05, branch `claude/op2c-change-management-review-docs-11u25j`.
 - **Current build** (per `project/roadmap.json` `now_next.now`):
-  `op2_c_release_gate_dependency_scoping` — **DONE** (read-only ARCHITECTURE
-  scoping; see "Active build"). `now_next.next` stays `op2_c_cp_clusterxl_
-  adapter_scoping` (blocked); smallest actionable sub-step: `op2_c_change_
-  management_review_package_draft` (`upcoming`).
+  `op2_c_change_management_review_package_draft` — **DONE** (docs-only
+  compilation; see "Active build"). `now_next.next` stays `op2_c_cp_
+  clusterxl_adapter_scoping` (blocked).
 - **OP.2.0 CLASS 2 architecture** (`docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md`):
   **CONTRACT FROZEN 2026-09-04**; `OP.2.A`/`OP.2.B` IMPLEMENTED; `OP.2.1` CP
   command gate DRAFTED — CLASS 2 still has **no member**, no adapter,
@@ -51,29 +50,27 @@ test-enforced boundaries. Current numbers:
 
 ## Active build
 
-**`op2_c_release_gate_dependency_scoping`** — **DONE**, 2026-09-05. Read-only
-ARCHITECTURE/RELEASE-GATE-SCOPING pass over the four gates already named
-below as blocking `op2_c_cp_clusterxl_adapter_scoping`. Findings: `DEPLOY.1A`
-OIDC+RBAC is externally blocked on `DEPLOY.1` server availability; CP SSH
-host-key trust hardening shares that same external blocker
-(`backlog.json` target: "post-DEPLOY.1", not independently closable); the
-protected entry point + live `adapter_resolver` construction is dependent on
-both landing first; the signed change-management/network-security review
-has no drafted artifact yet (unlike its sibling `OP.2.1` command gate) and
-drafting — not signing — it is the one item engineering-actionable now, with
-zero code/server/device contact. No code, taxonomy, `Authorizer`, adapter,
-UI, or device command touched. Selected next build:
-`op2_c_change_management_review_package_draft`. Detail:
-`project/roadmap.json` `now_next.next.notes` (dated 2026-09-05 entry) and
-`now_next.upcoming`.
+**`op2_c_change_management_review_package_draft`** — **DONE**, 2026-09-05.
+New `docs/history/phase/OP_2_C_CHANGE_MANAGEMENT_NETWORK_SECURITY_REVIEW.md`
+— the `FAILOVER_ENGINE_ARCHITECTURE.md` §10 change-management/safety review
+— compiles frozen `OP.2.0`/`OP.2.1`/`OP.2.1b` facts and the implemented-but-
+unwired adapter/session/preflight-provider trio: `CP-M1`/`CP-M1-R` gate
+status and reversal; a `§10.1` safety-contract evidence matrix (`SATISFIED_
+IN_UNWIRED_FOUNDATION`/`PARTIALLY_SATISFIED`); `DEPLOY.1A`, SSH trust
+hardening, the protected entry point and this review's own sign-off all
+`OPEN_RELEASE_GATE`/`EXTERNAL_SIGN_OFF_REQUIRED`; `op_four_eyes`/`op_
+continuity_tolerance` recorded unresolved, not decided. No code, taxonomy,
+`Authorizer`, adapter wiring, UI, device command, or test touched; no frozen
+decision reopened; blank sign-off, does not claim `CLASS 2` reachable.
+Detail: `project/roadmap.json` `now_next.now`.
 
 Predecessors (full detail: `project/build_history.json` + linked phase
-docs): `op2_c_cp_clusterxl_preflight_eligibility_wiring`, `op2_c1_admin_
-down_pnote_safety_corrections`, `op2_c1_cp_clusterxl_member_session`,
+docs): `op2_c_release_gate_dependency_scoping`, `op2_c_cp_clusterxl_
+preflight_eligibility_wiring`, `op2_c1_cp_clusterxl_member_session`,
 `op2_1b_cp_pilot_readiness_policy_amendment` (`D-V7b`/`D-F3`/`D-F2`
 advisory-exempt), `op2_1_cp_clusterxl_command_gate`, `op2_a_b_execution_
-foundation` — all DONE/AUTOMATED_VALIDATED. S8-A/S8-B''/S8-C real-env
-validated; PAN B2 stays **NOT ESTABLISHED**.
+foundation` — all DONE/AUTOMATED_VALIDATED. PAN B2 stays **NOT
+ESTABLISHED**.
 
 ## `OP.0b.0` — FROZEN WITH REAL-ENV VALIDATION GATES
 
@@ -115,7 +112,9 @@ unit-tested, none wired into a production `adapter_resolver`/
 `ActionCoordinator` — `DenyAllAuthorizer`/no taxonomy member still keep
 CLASS 2 unreachable. Remaining before a real-env pilot: `DEPLOY.1A` OIDC +
 `OPERATE`, CP SSH host-key trust hardening, the signed change-management
-review, and a protected entry point constructing both live (using
+review's actual sign-off (drafted, unsigned — `docs/history/phase/OP_2_C_
+CHANGE_MANAGEMENT_NETWORK_SECURITY_REVIEW.md`), and a protected entry point
+constructing both live (using
 `RealClusterXLMemberSession`/`ClusterXLPreflightProvider`/
 `ClusterXLReadinessEligibilityEvaluator`). `Sonnet 5, normal` for wiring;
 extended thinking only for a genuine new authorization/trust decision.
@@ -125,8 +124,9 @@ Detail: `checkpoint/clusterxl_capability_adapter.py`,
 
 Dependency order (2026-09-05 scoping): `DEPLOY.1A` + SSH trust hardening
 both wait on `DEPLOY.1` (external, same blocker); the entry point waits on
-both; the review's sign-off is external, drafting is not —
-`op2_c_change_management_review_package_draft` (`upcoming`) starts now.
+both; the review's sign-off is external — the package itself is now
+DRAFTED (`op2_c_change_management_review_package_draft`, DONE 2026-09-05),
+sign-off remains `EXTERNAL_SIGN_OFF_REQUIRED`.
 
 `op0b_0_close_d_v3a_d_v7b_pre_class2` (`upcoming`, demoted from `next`
 2026-09-05): now purely a vendor-fact question — D-V7b's readiness-roll-up
@@ -149,7 +149,7 @@ hardware-blocked, not reconciled with the manual 2026-09-04 observation
 | PAN HA serial `B2` establishment | the mismatching member's root cause is `UNKNOWN` (see above) — do not resolve as a side effect of an unrelated build | investigation + hardware |
 | `CON.3` console operational-write actions | open decisions `C-D4`, `C-D6` **and** `RB.3b` | decision + hardware |
 | `RB.3b` CP Gaia backup collection | the watched real R81.10/R81.20 run — hardware, not engineering | hardware |
-| `OP.2` controlled failover execution | architecture FROZEN; readiness no longer blocks (`OP.2.1b`); CP ClusterXL adapter (`OP.2.C`), its real `ClusterXLMemberSession` transport, and its real `PreflightProvider`/`EligibilityEvaluator` now all IMPLEMENTED + unit-tested, all unwired — blocked on `DEPLOY.1A`/`OPERATE`, SSH trust hardening, change-management review, a protected entry point | multiple |
+| `OP.2` controlled failover execution | architecture FROZEN; readiness no longer blocks (`OP.2.1b`); CP ClusterXL adapter (`OP.2.C`), its real `ClusterXLMemberSession` transport, and its real `PreflightProvider`/`EligibilityEvaluator` now all IMPLEMENTED + unit-tested, all unwired — change-management/network-security review now DRAFTED but unsigned (`docs/history/phase/OP_2_C_CHANGE_MANAGEMENT_NETWORK_SECURITY_REVIEW.md`) — blocked on `DEPLOY.1A`/`OPERATE`, SSH trust hardening, this review's sign-off, a protected entry point | multiple |
 | `DEPLOY.1` gates | server availability (external) | external |
 | `inventory_exclusions_management_ui_backend` | stays `in_progress` **by design** — do not wire its write functions into any HTTP-reachable surface before `DEPLOY.1A`'s OIDC/RBAC boundary exists | design |
 
