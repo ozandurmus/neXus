@@ -558,7 +558,12 @@ class TestReadOutcomeDisclosure:
     def test_healthy_run_reports_every_read_successful(self, tmp_path, monkeypatch, capsys):
         _device, out = _drive_cli(tmp_path, monkeypatch, capsys)
         assert "Reads (approved battery, safe outcome only):" in out
-        assert "FAIL" not in out, out
+        # A per-read disclosure line, not a blanket substring check: CP pilot
+        # readiness-policy amendment means a fully healthy run's own
+        # readiness summary now legitimately prints "SAFE_TO_FAILOVER",
+        # which contains "FAIL" as a substring without any read having
+        # failed -- match the sibling test's own convention instead.
+        assert not any(ln.strip().startswith(("FAIL", "GAP")) for ln in out.splitlines()), out
         assert "produced no usable evidence" not in out
 
     def test_expert_reads_failing_are_named_not_hidden_behind_readiness(

@@ -519,8 +519,16 @@ class TestRunCpPreflightVsls:
         `viable_target`/`control_sync_link_health`/`parity` need the shared
         physical facts (pnote, link health, software version) this test
         proves actually reach the VS unit's snapshot; `no_split_brain` needs
-        only the per-VS role read; `preemption_known`/`flap_history` stay
-        INSUFFICIENT regardless (D-V7b/D-F3, unresolved product decisions)."""
+        only the per-VS role read. `preemption_known` is CP pilot
+        readiness-policy advisory-exempt (D-V7b) here exactly as it would be
+        for a physical unit. `flap_history` is NOT exempt for a VS unit
+        specifically -- not because of D-F3, but because `cp_failover_count`
+        is never collected per-VS at all (D-V5b, per-VS applicability
+        unestablished; see checkpoint/preflight_collector.py's
+        `_SHARED_FACT_NAMES_FOR_VS`), a genuine missing-evidence reason
+        outside the closed-list exemption's exact reason string -- so this
+        VS unit still cannot reach SAFE_TO_FAILOVER, illustrating that the
+        exemption is reason-exact, not check-id-wide."""
         from utils.failover import compute_ha_readiness
 
         scripts = {
@@ -549,12 +557,19 @@ class TestRunCpPreflightVsls:
             assert checks["parity"]["status"] == "PASS", checks["parity"]
             for reason in (checks["viable_target"]["reason"], checks["control_sync_link_health"]["reason"]):
                 assert reason != "vs_state_out_of_physical_scope_preflight_battery"
-            # preemption/flap stay insufficient regardless of evidence (open decisions).
+            # preemption stays insufficient (D-V7b, advisory-exempt) but flap
+            # stays insufficient for a DIFFERENT, non-exempt reason (below).
             assert checks["preemption_known"]["status"] == "INSUFFICIENT_EVIDENCE"
+            assert checks["preemption_known"]["reason"] == "configured_recovery_not_readable_d_v7b"
             assert checks["flap_history"]["status"] == "INSUFFICIENT_EVIDENCE"
-            # Task §29: five real PASSes is not a green light -- D-V7b/D-F3
-            # keep SAFE_TO_FAILOVER structurally unreachable (contract P4),
-            # and this asserts that stays true even with rich real evidence.
+            assert checks["flap_history"]["reason"] == "not_collected:cp_failover_count"
+            # CP pilot readiness-policy amendment: `preemption_known`'s exact,
+            # closed-list D-V7b reason no longer blocks by itself, but
+            # `flap_history`'s reason here is real missing evidence (D-V5b:
+            # cp_failover_count is never collected per-VS), NOT the D-F3
+            # policy reason -- so it is never exempt, and this VS unit still
+            # cannot reach SAFE_TO_FAILOVER. Proves the exemption is
+            # reason-exact, not a blanket pass for these two check ids.
             assert unit["verdict"] == "INSUFFICIENT_EVIDENCE"
             # No verdict inherited from the physical parent or the sibling VSID.
             assert unit["parent_id"] == "grp1"

@@ -3,6 +3,21 @@
   "record_contract": "One structured record per build, newest first. Required: build, status, title, summary (<= 2 sentences). Optional: started, completed, track, movement, supersedes, evidence, risks_forward, docs{agreement,validation,handover} (repo-relative paths under docs/history/). Full detail lives in the linked doc; do not restate it here. Status vocabulary must stay within utils/project_plan.py STATUS_VALUES.",
   "builds": [
     {
+      "build": "op2_1b_cp_pilot_readiness_policy_amendment",
+      "status": "automated_validated",
+      "title": "OP.2.1b - CP pilot readiness-policy amendment (D-V7b/D-F3/D-F2)",
+      "summary": "Readiness-layer policy amendment (utils/failover/assessment.py, utils/failover/preflight_readiness.py) per explicit product-owner decision: preemption_known (Check Point only, D-V7b) and flap_history (both vendors, D-F3) are now a closed-list, exact-reason, deterministic 'advisory-exempt' set -- each check stays INSUFFICIENT_EVIDENCE, visible, with its exact existing reason, but that status no longer by itself blocks an otherwise-positive readiness verdict; PAN's preemption_known is deliberately NOT exempted since a supported read exists there. D-F2 (member skew) never gated a check -- its roll-up-level policy gate is simply retired (no threshold, ever); UNRESOLVED_POLICY_DECISIONS shrinks to {D-F1} only. No override, no operator control, no new verdict vocabulary; FAIL, identity/coherence failures, collection failures and any reason string outside the closed list still block exactly as before. Proves over a generated matrix that SAFE_TO_FAILOVER is now reachable for a CP ClusterXL entity given a fresh OP.0b preflight run where the other five stop-conditions genuinely pass, and never reachable for any other combination; OP.0a's stored-telemetry SAFE-unreachable invariant (AC-6) is untouched. No device contact, no vendor adapter, no taxonomy member, no change to OP.2.0/OP.2.1's own frozen text.",
+      "started": "2026-09-05",
+      "completed": "2026-09-05",
+      "track": "OP.2",
+      "movement": "READINESS_POLICY_AMENDMENT",
+      "evidence": "tests/test_op0b_s7_readiness_v2.py (70 passed, incl. 2 new: the rewritten reachability matrix + the advisory-exempt closed-list/no-override proof); tests/test_op0b_s4a_vsls_per_vs.py, tests/test_op0a_ha_readiness.py, tests/test_op2_1_cp_clusterxl_command_gate.py, tests/test_op2_a_b_execution_foundation.py, tests/test_op0c_failover_readiness_ui.py, tests/test_architecture_convergence.py all green; one CLI regression assertion fixed (tests/test_op0b_s8_real_cli_path_regression.py, a literal 'FAIL' substring check false-positived on SAFE_TO_FAILOVER's own spelling); full suite 1764 passed / 24 skipped / 0 failed (serial).",
+      "docs": {
+        "agreement": "docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md",
+        "validation": "docs/history/phase/OP_2_1B_CP_PILOT_READINESS_POLICY_AMENDMENT.md"
+      }
+    },
+    {
       "build": "op2_1_cp_clusterxl_command_gate",
       "status": "automated_validated",
       "title": "OP.2.1 - CP ClusterXL mutation command gate",
