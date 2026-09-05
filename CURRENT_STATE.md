@@ -7,9 +7,9 @@ detail is not here either** — it is in `project/build_history.json`
 linked documents under `docs/history/`. `docs/history/INDEX.md` is the
 generated one-line timeline.
 
-- **Checkpoint:** 2026-09-05, branch `claude/clusterxl-member-session-u9qmtq`.
+- **Checkpoint:** 2026-09-05, branch `claude/clusterxl-op2c1-pnote-name-fail-closed`.
 - **Current build** (per `project/roadmap.json` `now_next.now`):
-  `op2_c1_cp_clusterxl_member_session` — **AUTOMATED_VALIDATED** (see
+  `op2_c1_admin_down_pnote_safety_corrections` — **AUTOMATED_VALIDATED** (see
   "Active build"). `now_next.next` = `op2_c_cp_clusterxl_adapter_scoping`
   (blocked on authorization/trust/change-management/wiring, not readiness).
 - **OP.2.0 CLASS 2 architecture** (`docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md`):
@@ -50,33 +50,34 @@ test-enforced boundaries. Current numbers:
 
 ## Active build
 
-**`op2_c1_cp_clusterxl_member_session`** — **AUTOMATED_VALIDATED**,
-2026-09-05. Implements `checkpoint/clusterxl_member_session.py::
-RealClusterXLMemberSession`, the real `ClusterXLMemberSession` Protocol
-implementation `OP.2.C`'s adapter movement deliberately left unbuilt —
-backed onto the existing, real-environment-validated per-member
-`checkpoint/preflight_collector.py::MemberSession` Expert-shell transport
-(no new SSH client, no reconnect per command, no blind retry). `read_role()`
-reuses the already-approved A3/A5 reads; `submit_admin_down()`/
-`submit_admin_up()` issue exactly one of the two `OP.2.1`-approved literals
-(`clusterXL_admin down`/`up`, no `-p`) on the same shell, mapping to
-`CONFIRMED_NOT_SENT` only on a positively-proven pre-device transport
-failure and `SUBMITTED_OR_AMBIGUOUS` otherwise (`OP.2.0` P6/P7). No change
-to the adapter contract, `OP.2` lifecycle/authorization/readiness policy,
-or `preflight_collector.py`; nothing outside `tests/` references the new
-class, so CLASS 2 stays structurally unreachable. Detail:
-`checkpoint/clusterxl_member_session.py` docstring,
-`tests/test_op2_c1_cp_clusterxl_member_session.py`.
+**`op2_c1_admin_down_pnote_safety_corrections`** — **AUTOMATED_VALIDATED**,
+2026-09-05, `supersedes: op2_c1_cp_clusterxl_member_session`. Two narrow,
+in-module safety corrections to `checkpoint/clusterxl_member_session.py` +
+`checkpoint/clusterxl_capability_adapter.py`, PR #76 then a same-day
+follow-up (merged): `admin_down_pnote_present` identifies the exact
+`admin_down` Critical Device by name, never CP-A5's aggregate `any_problem`
+fact; `check_precondition()` fails closed to `UNKNOWN` (not `HOLDS`) for a
+failback on missing A5 evidence; `observe_postcondition()` requires both the
+`OP.2.1`-named role and pnote signals, never role alone; `CONFIRMED_NOT_SENT`
+narrowed to only a provably unopened session (a proven pre-device
+`execution_error`/any transport exception are now `SUBMITTED_OR_AMBIGUOUS`).
+Follow-up: a problem-state pnote row with no usable device name no longer
+resolves `False` (it could itself be `admin_down`) — fails closed to `None`,
+blocking the failback precondition/postcondition exactly as missing A5
+evidence already did. No change to `OP.2` lifecycle/authorization/readiness
+policy or `preflight_collector.py`; CLASS 2 stays structurally unreachable.
+Detail: `checkpoint/clusterxl_member_session.py` docstring,
+`tests/test_op2_c1_cp_clusterxl_member_session.py`,
+`tests/test_op2_c_cp_clusterxl_adapter.py`.
 
-Predecessors (full detail: `project/build_history.json` + linked phase
-docs, not restated here): `op2_1b_cp_pilot_readiness_policy_amendment`
-(DONE, 2026-09-05 — `D-V7b`/`D-F3`/`D-F2` advisory-exempt, no longer block
-the readiness roll-up); `op2_1_cp_clusterxl_command_gate` (DONE, drafted,
-2026-09-05 — CP ClusterXL command gate approving `clusterXL_admin down`/
-`up`); `op2_a_b_execution_foundation` (DONE, 2026-09-04 — typed action
-lifecycle/lock/mutation boundary, `utils/operate/`, zero device I/O, no
-adapter). S8-A/S8-B''/S8-C real-env validated; PAN B2 stays **NOT
-ESTABLISHED**.
+Predecessors (full detail: `project/build_history.json` + linked phase docs,
+not restated here): `op2_c1_cp_clusterxl_member_session` (first-cut
+`RealClusterXLMemberSession`, superseded above);
+`op2_1b_cp_pilot_readiness_policy_amendment` (DONE — `D-V7b`/`D-F3`/`D-F2`
+advisory-exempt); `op2_1_cp_clusterxl_command_gate` (DONE, drafted);
+`op2_a_b_execution_foundation` (DONE — typed action lifecycle/lock/mutation
+boundary, `utils/operate/`, no adapter). S8-A/S8-B''/S8-C real-env
+validated; PAN B2 stays **NOT ESTABLISHED**.
 
 ## `OP.0b.0` — FROZEN WITH REAL-ENV VALIDATION GATES
 
@@ -167,16 +168,15 @@ Concurrency budget stays at 1 per vendor pending its own real-env evidence.
 ## Automated test baseline
 
 ```
-1764 passed / 24 skipped / 0 failed (2026-09-05, serial baseline,
-  op2_1b_cp_pilot_readiness_policy_amendment).
-Focused: tests/test_op0b_s7_readiness_v2.py (70 passed, incl. the rewritten
-  reachability matrix + the advisory-exempt closed-list/no-override proof) +
-  test_op0b_s4a_vsls_per_vs.py + test_op0a_ha_readiness.py +
-  test_op2_1_cp_clusterxl_command_gate.py + test_op2_a_b_execution_foundation.py +
-  test_op0c_failover_readiness_ui.py + test_architecture_convergence.py, all green.
-Repository privacy gate: FAIL / 3, all the known gitignored data/logs/
-  .support_hmac.key runtime-artifact finding (confirmed untracked, not
-  repository content).
+1825 passed / 24 skipped / 0 failed (2026-09-05, serial baseline,
+  op2_c1_admin_down_pnote_safety_corrections).
+Focused: test_op2_c1_cp_clusterxl_member_session.py (28) + test_op2_c_cp_
+  clusterxl_adapter.py (33) + test_op2_1_cp_clusterxl_command_gate.py +
+  test_op2_a_b_execution_foundation.py + test_architecture_convergence.py
+  (157 total), all green.
+Repository privacy gate: FAIL / findings, all known gitignored data/logs/
+  .support_hmac.key runtime artifacts (confirmed untracked, not repository
+  content).
 Project-state consistency: metadata_warnings == [] under all cross-authority rules.
 ```
 
