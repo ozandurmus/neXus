@@ -10,7 +10,8 @@ generated one-line timeline.
 - **Checkpoint:** 2026-09-07. `now_next.now` (`project/roadmap.json`) is `GOV.SESSION.1`
   (`gov_session_1_transfer_protocol`, track `GOV`) — **AUTOMATED_VALIDATED**, DRAFT protocol
   doc, PO review pending; see "Active build". Product sequence unaffected: `M8.2`
-  **AUTOMATED_VALIDATED** (PR #98 pending); `M8` architecture stays **FROZEN — PRODUCT OWNER
+  **AUTOMATED_VALIDATED**, PR #98 **merged** into `main` (2026-09-06T21:57:27Z, merge
+  commit `16c39ab494b3eb0d2ed3b3583a470d754a9c4e9c`); `M8` architecture stays **FROZEN — PRODUCT OWNER
   APPROVED, 2026-09-06** from verified `main` at `0a9048ceeb2a318444f918e2688b126641eaeab0`.
   `now_next.next` is `M8.3`, `planned`, no blocker; `M8.4` must not begin without it.
   `m7_real_device_targeted_collect_now` and `op2_c_cp_clusterxl_adapter_scoping` stay
@@ -64,7 +65,7 @@ to, and does not change, the `PCP.x`/`M8` product sequence below. Full evidence:
 
 Product sequence, unaffected by the above — Active product build:
 **`m8_2_endpoint_specific_trusted_key_lookup`** (`M8.2`) —
-**AUTOMATED_VALIDATED**, PR #98 (unmerged). New
+**AUTOMATED_VALIDATED**, PR #98 **merged** into `main`. New
 `utils/cp_ssh_trust.py::lookup_trusted_host_key` (contract §4 step 1):
 local-only, read-only trusted-host-key check, immutable typed result,
 fingerprint format shared with `checkpoint_config_probe.py`. Parent —

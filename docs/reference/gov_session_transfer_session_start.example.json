@@ -22,5 +22,9 @@
     "do not mark REAL_ENV_VALIDATED from automated tests alone",
     "do not begin M8.4"
   ],
-  "close_required": true
+  "close_required": true,
+  "git": {
+    "base_sha": "16c39ab494b3eb0d2ed3b3583a470d754a9c4e9c",
+    "branch": "build/m8-3-first-contact-producer-real-env-gate"
+  }
 }
