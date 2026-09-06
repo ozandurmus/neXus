@@ -79,14 +79,16 @@ def test_duplicate_enroll_refused_before_device_id_generated(monkeypatch, data_r
     first = registry.enroll(endpoint="192.0.2.20")
 
     calls = []
-    original_uuid4 = dr.uuid.uuid4
-    monkeypatch.setattr(dr.uuid, "uuid4", lambda: (calls.append(1), original_uuid4())[1])
+    original_generate_device_id = dr._generate_device_id
+    monkeypatch.setattr(
+        dr, "_generate_device_id", lambda: (calls.append(1), original_generate_device_id())[1]
+    )
 
     with pytest.raises(DeviceRegistryError) as excinfo:
         registry.enroll(endpoint="192.0.2.20")
     assert first.device_id in str(excinfo.value)
     assert first.state in str(excinfo.value)
-    assert calls == [], "uuid4 must never be called on the refused duplicate path"
+    assert calls == [], "device_id must never be generated on the refused duplicate path"
     assert len(registry.list()) == 1
 
 
@@ -723,8 +725,10 @@ def test_lock_contention_on_enroll_never_generates_a_device_id(monkeypatch, data
     lock_path = _lock_path(data_root)
     token = dr._acquire_lock(lock_path)
     calls = []
-    original_uuid4 = dr.uuid.uuid4
-    monkeypatch.setattr(dr.uuid, "uuid4", lambda: (calls.append(1), original_uuid4())[1])
+    original_generate_device_id = dr._generate_device_id
+    monkeypatch.setattr(
+        dr, "_generate_device_id", lambda: (calls.append(1), original_generate_device_id())[1]
+    )
     try:
         registry = DeviceRegistry(data_root)
         with pytest.raises(DeviceRegistryLockError):
