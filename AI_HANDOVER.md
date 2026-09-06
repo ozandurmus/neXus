@@ -13,103 +13,109 @@ Overwrite at every session close. Keep it minimal.
 
 ## 1. Snapshot
 
-- Date: 2026-09-06. Branch `claude/m4-local-control-plane-metadata-store`
-  from `main` at `33b6798` (PR #92). PR open; **not merged**.
-- Build: `local_control_plane_metadata_store` (`M4`) — **COMPLETE**,
-  storage infrastructure only.
-- Local SQLite control-plane metadata store at
-  `<data_root>/state/control_plane.db`, schema version 1, seven `STRICT`
-  tables. Additive: nothing existing changed behaviour.
-- Contract: `docs/history/phase/M4_LOCAL_CONTROL_PLANE_METADATA_STORE.md`.
+- Date: 2026-09-06. Branch `build/m5-collector-target-selection-seam` from
+  `main` at `88a8d1610609f96996aca29dc9eeabd9261029c9` (`M4`, PR #93,
+  **merged**). PR open for this branch; **not merged**.
+- Build: `collector_target_selection_seam` (`M5`) — **AUTOMATED_VALIDATED**,
+  `cp-config` seam only.
+- Promoted OP.0d's already-validated `--cp-config-targets` selector into the
+  shared `utils.collection_executor.workflow_argv()` argv seam (CON.2 C2-2).
+- Contract: `docs/design/PRODUCT_CONTROL_PLANE_ARCHITECTURE.md` §9/§12/§12.1
+  (`AC-TGT-3`/`AC-TGT-4`/`AC-TGT-5`), companion
+  `docs/design/LOCAL_CONTROL_PLANE_RUNTIME_AND_ENROLLMENT.md` §12/§12.1.
 
 ## 2. What this session did
 
-- **Corrected the baseline first.** Local `main` was 142 commits behind and
-  had none of the `M4` contract documents; fast-forwarded to `33b6798` under
-  Product Owner approval before any edit.
-- **Added `utils/control_plane_store.py`** — placement validation, WAL +
-  `synchronous=FULL` + `foreign_keys=ON` + explicit 5 s `busy_timeout`,
-  `STRICT` tables, explicit monotonic one-transaction-per-version migrations,
-  deterministic connection ownership, separate read-only reader connections,
-  and seven typed fail-closed errors.
-- **Added a ninth `evidence_backend` concern selector** that refuses
-  `postgres` explicitly, naming `pcp_storage_engine` as still open.
-- **Registered the store LOCAL-SENSITIVE (CLASS 2)** in
-  `PRIVACY_AND_DATA_HANDLING.md`. No `support_bundle.py` or
-  `repository_privacy.py` change was needed: `data/state/*` is already outside
-  the only subtree the bundle enumerates, and `.db`/`.db-wal`/`.db-shm` were
-  already `DATABASE_ARTIFACT` and already gitignored.
-- **74 focused tests**, including ownership-boundary proofs that walk the real
-  schema rather than a maintained list.
-- **PO correction round** (one bounded round on the same branch, PR #93):
-  the migration ledger is validated as an **exact prefix** of `MIGRATIONS`,
-  not by `max(version)` — a foreign migration name at the supported version,
-  an unknown/gapped/non-prefix entry or an unreadable foreign ledger is
-  refused, naming both the encountered and supported ledgers. Open order was
-  corrected so **every refusal precedes every persistent mutation** (WAL
-  activation and ledger creation moved after validation), and connection
-  cleanup is deterministic on every failure path.
+- **Baseline verified, not corrected**: local `main` already equalled
+  `origin/main` at the expected `88a8d161...`, PR #93 (`M4`) already merged,
+  tracked tree clean. No fast-forward needed.
+- **`utils/collection_executor.py::workflow_argv()`**: `cp-config` now
+  appends `--cp-config-targets <comma-joined>` when a non-empty `targets` is
+  passed, preserving requested order and opaque `entity_id` spelling exactly
+  (identity law — no cast/strip/pad/normalize). Target-free `cp-config` argv
+  is byte-identical to before.
+- **New `UnsupportedTargetSelectionError(ValueError)`**: any workflow with no
+  target-selection seam (`cp`, `checkpoint`, `vsx`, `pan-config`) now raises
+  this, inside argv construction, if given a non-empty `targets` — before
+  `main.main()` is ever called, in both the scheduler
+  (`application/workflows/maintenance.py::_scheduler_workflow_argv`) and the
+  console runner (`console/runner.py::_build_argv`). `recovery-pan` /
+  `recovery-cp` keep their pre-existing pass-through behaviour byte-for-byte.
+- **No other file changed.** `console/registry.py::JOB_REGISTRY` untouched —
+  `config_refresh_cp.target_mode` stays `"none"` (M6's job). No registry
+  target resolution, no device contact, no admission/concurrency/storage
+  change.
+- **Added `tests/test_m5_collector_target_selection_seam.py`** — 22 focused
+  tests (target-free/targeted argv shape, opaque-id preservation, CLI
+  round-trip, scheduler/console parity, fail-closed refusal before `main()`
+  for every non-seamed workflow, empty-targets-is-the-only-plane-wide-spelling,
+  recovery-* unaffected, `JOB_REGISTRY.target_mode` unchanged, structural
+  no-new-command/no-concurrency-change checks).
+- **Project-state rotation**: `project/build_history.json` (new `M5` record,
+  newest-first), `project/roadmap.json` (`now`→`M5`/`automated_validated`,
+  `next`→`M6` stub), `project/backlog.json`
+  (`pcp_collector_target_selection_seams`: `planned`→`in_progress`, one CP
+  seam closed, VSX/CP-inventory/pan-config still plane-wide),
+  `docs/history/INDEX.md` regenerated. `CURRENT_STATE.md`'s stale
+  post-merge-`M4` wording (still describing PR #93 as open) reconciled as
+  part of this same rotating-state update, per session instruction — not a
+  separate movement.
 
 ## 3. Exact next action
 
-**Product Owner review of the open PR, then merge decision.** Merge is not
-authorized by the session that opened it.
+**Product Owner review of the open `M5` PR, then merge decision.** Merge is
+not authorized by the session that opened it.
 
-`M5` (`collector_target_selection_seam`) is **next, not started, not
-authorized** — it needs its own go-ahead. It is the critical path: every
-collection job type today is `target_mode="none"`, so nothing device-targeted
-is honest before it.
+`M6` (`registry_keyed_job_targets`) is **next, not started, not
+authorized** — it needs its own go-ahead. It resolves console-submitted
+`device_id` targets against the `PCP.1` Device Registry at admission and
+again immediately before execution, and is the movement that changes
+`JOB_REGISTRY['config_refresh_cp'].target_mode` from `"none"` to
+`"entity_ids"` — M5 deliberately left that field untouched.
 
 **Still outstanding from `M3`:** the Claude-side `nexus-decision-council` was
-never stood up. It was explicitly not required for `M4` (deterministic
-implementation against a frozen contract) but remains a prerequisite for the
-next *architecture* movement.
+never stood up. Not required for `M5` (deterministic implementation against
+an already-frozen contract, per this session's explicit instruction) but
+remains a prerequisite for the next *architecture* movement.
+
+**Pre-existing, unowned, explicitly out of scope here:** the Panorama
+test-residue hygiene issue (full-suite runs leave `data/`/`logs/` in the
+working tree, failing the working-directory privacy gate until removed) —
+not fixed in this session per its explicit boundary.
 
 ## 4. Test delta
 
-- **New:** `tests/test_m4_control_plane_metadata_store.py` — **74 passed**
-  (57 at first review, +17 from the correction round).
-- Affected suites: 161 passed / 9 skipped (architecture convergence, privacy
-  gate, `PCP.1` registry, support bundle, `CON.2` console jobs, evidence
-  backend, runtime paths). One run showed
-  `test_ac9_two_jobs_both_reach_a_terminal_state` failing and green on
-  re-run — a pre-existing timing-sensitive `CON.2` test; no console module
-  references the store.
-- **Full parallel suite, run once:** 1991 passed, 37 skipped, **3 failed,
-  1 collection error — all pre-existing on the clean baseline** and verified
-  as such by re-running them at `33b6798` with the working tree stashed:
-  `test_binary_garbage_fails_closed`,
-  `test_safe_gw_strips_spurious_trailing_underscore...` (both environment/
-  `bash`-dependent), and `test_ci_workflow_fast_pr_regression.py`
-  (`ModuleNotFoundError: yaml` — PyYAML not installed locally).
-- One genuine failure of mine — `CURRENT_STATE.md` exceeding its 200-line cap —
-  was fixed and re-verified targeted; the full suite was not re-run, since the
-  only changed file is covered by that one test.
-- `metadata_warnings == []`; build-history index `--check` clean;
-  `git diff --check` clean.
-- **Privacy gate:** `PASS`, 0 findings, against the exact tree being committed
-  (497 files, exported to a temp dir). Running it in the working directory
-  reports `FAIL` on `data/`, `logs/` and `data/.support_hmac.key` — untracked,
-  gitignored runtime residue written by the pre-existing Panorama alignment
-  tests during the full-suite run, not repository content and not from `M4`.
-- **No device contact, no GitHub full regression, no `workflow_dispatch`,
-  no merge.**
+- **New:** `tests/test_m5_collector_target_selection_seam.py` — 22 passed.
+- **Affected suites, combined 110 passed / 0 failed:**
+  `tests/test_op0d_deterministic_target_selection.py` (re-exercises the
+  underlying OP.0d selector, unmodified here),
+  `tests/test_con2_console_job_engine.py`,
+  `tests/test_rb2_recovery_collect.py`,
+  `tests/test_architecture_convergence.py` (20 passed),
+  `tests/test_application_package.py`.
+- `metadata_warnings == []`; build-history index `--check` clean (after
+  regeneration); `git diff --check` clean.
+- **Repository privacy gate:** `PASS`, 0 findings — `data/`/`logs/` (runtime
+  residue from the focused-suite runs) removed from the working tree first,
+  per `AI_START_HERE.md`'s documented gate procedure.
+- **No full local suite** (blast radius bounded to one shared argv-
+  construction function and its two existing call sites, all covered by the
+  affected-suite run above). **No GitHub full regression, no
+  `workflow_dispatch`, no device contact, no merge.**
 
 ## 5. Risks / notes forward
 
 - **Automated tests do not prove production readiness or real-environment
-  validation.** Nothing here ran against a device.
-- **The store has no caller.** It is infrastructure: no job behaviour, target
-  resolution, runner, scheduling, enrollment or HTTP/UI integration exists yet,
-  so `main.py` and the UI are unchanged and the database is never created
-  during a normal run. `M5`…`M12` own that wiring.
-- **`synchronous=FULL` is a deliberate departure** from WAL's usual `NORMAL`,
-  justified by `CON.0` §7.9's durable-before-runner requirement. If a later
-  movement finds the fsync cost real under load, that is a contract
-  conversation, not a silent flip.
-- **Pre-existing repo hygiene issue, unowned:** the Panorama alignment tests
-  write into a repository-relative `data/` and `logs/` instead of a temp
-  RuntimeRoot, which makes the working-directory privacy gate fail after any
-  full-suite run. Worth a backlog row; not fixed here (out of `M4` scope).
-- **`pcp_storage_engine` stays open.** SQLite is not the production engine and
-  nothing in this movement may be read as selecting one.
+  validation.** No device was contacted; the underlying OP.0d collector-side
+  fail-closed behaviour (unknown/ambiguous/empty `entity_id`, contact only
+  requested targets) was validated previously and is unmodified here.
+- **Only one collector has a seam.** CP inventory (`cp`), VSX and `pan-config`
+  remain honestly plane-wide by design (`AC-TGT-5`) — a second seam is its
+  own future movement, not implied by this one landing.
+- **Console cannot submit a targeted `cp-config` job yet** —
+  `JOB_REGISTRY['config_refresh_cp'].target_mode` stays `"none"` until `M6`.
+  Only a scheduler-policy `targets: [...]` entry or a direct
+  `workflow_argv()`/CLI call can exercise the new seam today.
+- **Admission coordinator, canonical endpoint lock and the vendor
+  concurrency budget of 1 are unchanged** — this movement touches argv
+  construction only.
