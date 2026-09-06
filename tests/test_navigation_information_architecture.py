@@ -391,12 +391,16 @@ def test_contract_document_is_frozen_by_product_owner_and_linked():
 
 
 def test_no_source_claims_the_navigation_prototype_is_implementation_complete():
-    """Navigation authority guard 2 (M0 freeze).
+    """Navigation authority guard 2 (M0 freeze, updated at M2 closure).
 
-    The architecture is frozen; the prototype is not implementation-complete
-    until movement M2 closes AC-A11Y-1..4. No branch-local source, shell or
-    project-state file may claim otherwise -- a frozen *contract* must never be
-    read as a delivered *feature*."""
+    The architecture is frozen; the prototype is not *merged* / delivered
+    until the M2 pull request actually lands on `main` -- movement M2 having
+    closed and validated `AC-A11Y-1`..`4` on this branch is real progress
+    (the `accessibility_closure` criterion legitimately reads `done`), but it
+    is not the same fact as the feature being delivered. No branch-local
+    source, shell or project-state file may claim the feature itself is
+    `done`/merge-approved before the merge -- a validated *branch* must never
+    be read as a delivered *feature*."""
     import json
 
     for path in (
@@ -415,11 +419,13 @@ def test_no_source_claims_the_navigation_prototype_is_implementation_complete():
         f for f in registry["features"] if f["id"] == "left_vertical_product_navigation"
     )
     assert feature["status"] != "done", (
-        "the navigation feature is marked delivered while movement M2 still owes "
-        "the four accessibility requirements"
+        "the navigation feature is marked delivered before its PR has merged to main"
     )
     accessibility = next(c for c in feature["criteria"] if c["id"] == "accessibility_closure")
-    assert accessibility["state"] == "pending", accessibility
+    assert accessibility["state"] == "done", (
+        "movement M2 has closed and validated AC-A11Y-1..4 on this branch; the "
+        "criterion should read done even though the feature itself waits on merge"
+    )
 
 
 # --- Browser-verified halves ----------------------------------------------

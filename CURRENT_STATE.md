@@ -56,10 +56,12 @@ test-enforced boundaries. Current numbers:
 
 ## Active build
 
-**`nav_1_accessibility_closure`** (`M2`) — **IN PROGRESS**. Incorporates
-`main` (`M1`, merged) into the NAV branch, closes `AC-A11Y-1`…`4`, confirms
-`AC-A11Y-5`, validates the combined branch, then opens/merges the NAV PR.
-Predecessors, both complete — full detail in `project/build_history.json`:
+**`nav_1_accessibility_closure`** (`M2`) — **AUTOMATED_VALIDATED**. Incorporated
+`main` (`M1`, merged) into the NAV branch, closed `AC-A11Y-1`…`4`, confirmed
+`AC-A11Y-5`, validated the combined branch (182 targeted + 1958 full-parallel
+passed, 0 failed — see "Automated test baseline"); NAV PR open/merge is the
+exact next action, still owed. Predecessors, both complete — full detail in
+`project/build_history.json`:
 `M0` froze `docs/design/NAVIGATION_INFORMATION_ARCHITECTURE.md` (§19) and
 `docs/design/LOCAL_CONTROL_PLANE_RUNTIME_AND_ENROLLMENT.md` (§15), Product
 Owner approved at reviewed head `ba56d2b`, no product code; `M1` repaired
@@ -163,13 +165,18 @@ Concurrency budget stays at 1 per vendor pending its own real-env evidence.
 ## Automated test baseline
 
 ```
-M1's uuid4 call-count defect is FIXED on main (merged here via PR #84) --
-  tests/test_pcp1_device_registry.py is green. Post-merge narrow check on
-  this branch: tests/test_navigation_information_architecture.py +
-  tests/test_architecture_convergence.py + tests/test_pcp1_device_registry.py
-  = 122 passed, 0 failed. M2's own accessibility + full parallel-suite
-  evidence is recorded in project/build_history.json (nav_1_accessibility_closure)
-  once that validation completes.
+M2 targeted (navigation IA + M2 a11y + architecture convergence + frontend
+  composition + rendering boundary + both render harnesses + CON.1/CON.2 +
+  PCP.1 registry): 182 passed, 1 skipped, 0 failed. Real-Chromium: accessible
+  names (expanded+collapsed), reduced-motion emulation, focus transfer (root
+  + grouped child + keyboard, both shells), group-label association
+  (Devices/Operations/Administration), AC-A11Y-5 confirmed unregressed --
+  zero console errors.
+Full parallel suite: `py -m pytest -q -n auto --dist worksteal` (4 workers) =
+  1958 passed, 23 skipped, 0 failed, 29.46s wall-clock. Completely clean, no
+  serial rerun. M1's uuid4 defect stays fixed (merged via PR #84).
+Repository privacy gate: PASS / 0 findings. metadata_warnings == [];
+  build-history index --check clean; git diff --check clean.
 ```
 ## Known xfails
 

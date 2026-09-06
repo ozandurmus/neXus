@@ -143,12 +143,14 @@
       "build": "nav_1_accessibility_closure",
       "title": "M2 -- NAV.1 accessibility closure, main integration, validation, PR + merge",
       "goal": "Incorporate current main (M1, merged) into the NAV branch non-destructively, close AC-A11Y-1..4 against the frozen navigation contract, confirm AC-A11Y-5 still holds, validate the combined branch (targeted + full parallel suite), then open and merge the NAV pull request. Predecessors: M0 (docs/design/NAVIGATION_INFORMATION_ARCHITECTURE.md + docs/design/LOCAL_CONTROL_PLANE_RUNTIME_AND_ENROLLMENT.md, FROZEN -- PRODUCT OWNER APPROVED at reviewed head ba56d2b, 2026-09-05, no code) and M1 (PCP.1 registry uuid4 call-count test defect repair, AUTOMATED_VALIDATED, merged to main via PR #84, 2026-09-06) are both complete -- see project/build_history.json for their full records.",
-      "status": "in_progress",
+      "status": "automated_validated",
       "started": "2026-09-06",
+      "completed": "2026-09-06",
       "notes": [
         "Integration method: merge (non-destructive, --no-ff) of origin/main (9a946fe, PR #84 merge commit) into claude/left-nav-vertical-redesign-e673q6 at its pre-integration head 259874e. No rewrite, rebase, squash or selective cherry-pick of the frozen NAV review commits (5a5a1f7, ace9813, ba56d2b, 0ed293b, 009d945, 259874e). Merge base 310593e.",
         "Only the four expected authority/state files conflicted (CURRENT_STATE.md, project/roadmap.json, project/build_history.json, docs/history/INDEX.md); every code/doc/test file auto-merged cleanly -- no product or architecture contradiction found.",
         "Scope is exactly AC-A11Y-1..4 (accessible names, reduced motion, focus transfer, group-label association) plus confirming AC-A11Y-5 (comparison-table scroll containment) still holds. No new root/tab/module/state vocabulary, capability, enrollment, storage, job or authorization behavior introduced -- all reserved for M3 onward.",
+        "AUTOMATED_VALIDATED 2026-09-06: targeted suite 182 passed/1 skipped/0 failed (navigation IA + M2 a11y + architecture convergence + frontend composition + rendering boundary + both render harnesses + CON.1/CON.2 + PCP.1 registry); real-Chromium coverage for all four criteria plus console-shell parity and an AC-A11Y-5 regression confirmation; full parallel suite `py -m pytest -q -n auto --dist worksteal` (4 workers) 1958 passed/23 skipped/0 failed in 29.46s wall-clock, completely clean (no serial rerun needed). Privacy gate PASS/0; metadata_warnings == []; build-history index current; git diff --check clean. Full detail: project/build_history.json head record.",
         "Recommended reasoning tier: Sonnet 5, normal -- deterministic accessibility implementation against a frozen contract, no new architecture decision."
       ]
     },
