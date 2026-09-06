@@ -6,19 +6,26 @@
 # (2026-09-06) parallelized that full suite (`-n auto --dist worksteal`,
 # ~11m56s serial -> target <=4 minutes cloud wall-clock) but keeps the
 # PR/push split itself: a same-session attempt to also run `full-regression`
-# on every pull_request was evaluated and reverted -- not because parallel
-# execution is unsafe (it is proven, see the "Full test suite (parallel)"
-# step below), but because this environment's automation identity cannot
-# get GitHub Actions to schedule jobs for pull_request/workflow_dispatch
-# events on a non-default branch (confirmed: check suites for commits this
-# identity pushes to feature branches complete with zero jobs, both for the
-# branch's own push event and for the open PR's pull_request event, while
-# workflow_dispatch against `main` and ordinary push-to-main both work
-# normally) -- a tooling/identity limitation of this environment, not a
-# defect in the workflow or a reason to avoid pull_request-triggered CI in
-# general. This changes test PLACEMENT/FREQUENCY only -- no check is
-# weakened, hidden, or made skippable, and no dependency/service/credential
-# is added beyond what the previous single-job version already used.
+# on every pull_request was evaluated and reverted, independent of the
+# YAML-syntax incident below.
+#
+# CORRECTION (2026-09-06, post-merge): this file briefly shipped a genuine
+# YAML syntax defect -- the "Report worker topology" step's `run:` value was
+# an unquoted plain scalar containing a bare `: ` (colon-space) inside an
+# f-string label ("...target): {os.cpu_count()}"), which YAML parses as an
+# illegal nested mapping. That is a hard parse failure GitHub Actions cannot
+# recover from: it produced a zero-job, immediately-failing check suite for
+# *every* trigger on *every* branch, including ordinary push-to-main, from
+# this file's very first commit through the PR #87 merge. It was initially
+# misdiagnosed in-session as an environment/automation-identity limitation
+# on scheduling pull_request/workflow_dispatch jobs on non-default
+# branches -- that diagnosis was wrong; the real cause was this file failing
+# to parse, full stop, unrelated to branch, event type, or pusher identity.
+# Fixed by quoting/rewording the offending f-string; the PR/push trigger
+# split above was decided independently and stands on its own merits. This
+# changes test PLACEMENT/FREQUENCY only -- no check is weakened, hidden, or
+# made skippable, and no dependency/service/credential is added beyond what
+# the previous single-job version already used.
 name: validation
 
 on:
@@ -122,12 +129,11 @@ jobs:
   # to main, and on demand via workflow_dispatch for any branch that needs
   # it before merge. DEV.TEST.1 (2026-09-06) parallelized the "Full test
   # suite" step itself (see its own step comment); it stays withheld from
-  # pull_request events -- not because parallel execution is unsafe, but
-  # because this environment cannot get GitHub Actions to schedule
-  # pull_request-triggered jobs for commits this session's automation
-  # identity pushes to a non-default branch (see this file's header
-  # comment). A local complete parallel run is accepted as this movement's
-  # own pre-merge evidence instead; the post-merge push-to-main run here
+  # pull_request events per the PR/push kaizen split above (a separate,
+  # independent decision -- see this file's header comment for the
+  # unrelated YAML-syntax incident this job also briefly carried). A local
+  # complete parallel run is accepted as this movement's own pre-merge
+  # evidence; the post-merge push-to-main run here
   # remains the real GitHub Actions cloud proof.
   full-regression:
     if: github.event_name != 'pull_request'
@@ -173,7 +179,7 @@ jobs:
       - name: Report worker topology
         # DEV.TEST.1: makes the parallel step's actual worker count visible in
         # the log rather than leaving `-n auto`'s choice implicit.
-        run: python -c "import os; print(f'CPU count (xdist -n auto target): {os.cpu_count()}')"
+        run: python -c "import os; print(f'CPU count (xdist -n auto target) -> {os.cpu_count()}')"
 
       - name: Full test suite (parallel)
         # DEV.TEST.1 (2026-09-06): parallelized. The prior "serial on purpose"

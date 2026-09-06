@@ -1,21 +1,29 @@
-"""Deterministic, no-new-dependency assertions over the risk-based CI split.
+"""Deterministic assertions over the risk-based CI split.
 
-Text/regex-based on purpose: the repository has no existing YAML-parsing
-test pattern and the kaizen scope explicitly forbids adding a YAML
-dependency merely for this. These checks pin the observable shape that
-AI_START_HERE.md / docs/AI_DEVELOPMENT_PROTOCOL.md now promise: the PR path
-does not invoke the full suite, the main-push and workflow_dispatch paths
-do -- now in parallel (DEV.TEST.1, 2026-09-06:
-`python -m pytest -q -n auto --dist worksteal`, proven locally; kept off
-pull_request events not because parallel execution is unsafe but because
-this environment's automation identity cannot get GitHub Actions to
-schedule pull_request/workflow_dispatch jobs on a non-default branch, see
-the workflow file's own header comment) -- and the cheap safety gates are
-not accidentally dropped from either job.
+Mostly text/regex-based, matching the repository's original no-new-
+YAML-dependency pattern for the shape checks below (the PR path does not
+invoke the full suite; the main-push and workflow_dispatch paths do, now in
+parallel -- `python -m pytest -q -n auto --dist worksteal`, DEV.TEST.1,
+2026-09-06, proven locally; kept off pull_request events per the PR/push
+kaizen split, an independent decision unrelated to the incident below) and
+that the cheap safety gates are not accidentally dropped from either job.
+
+One exception, `test_workflow_yaml_parses` below, DOES take a real YAML
+dependency (`pyyaml`, requirements-dev.txt): DEV.TEST.1's own post-merge
+incident (2026-09-06) shipped a genuine YAML syntax defect in this exact
+file -- an unquoted plain scalar containing a bare `: ` inside an f-string
+label -- which silently broke GitHub Actions' ability to schedule ANY job
+for ANY trigger (push, pull_request, workflow_dispatch alike) for two
+commits and a merge, because nothing validated the YAML before push. The
+regex checks below would not have caught it (they only inspect substrings,
+never parse the document), which is exactly why a real parse check earns
+its keep here despite the repository's general preference against one.
 """
 
 import re
 from pathlib import Path
+
+import yaml
 
 WORKFLOW_PATH = Path(__file__).resolve().parent.parent / ".github" / "workflows" / "validation.yml"
 
@@ -24,6 +32,19 @@ FULL_SUITE_LINE = "run: python -m pytest -q -n auto --dist worksteal"
 
 def _read_workflow() -> str:
     return WORKFLOW_PATH.read_text(encoding="utf-8")
+
+
+def test_workflow_yaml_parses():
+    """DEV.TEST.1 post-merge incident (2026-09-06): a bare `: ` inside an
+    unquoted `run:` f-string label broke every trigger's ability to
+    schedule any job at all, silently -- GitHub Actions returned a
+    completed, zero-job, failing check suite with no readable error
+    surfaced anywhere the earlier regex-only tests would see. Parsing the
+    file for real is the only check that would have caught it."""
+    with WORKFLOW_PATH.open(encoding="utf-8") as f:
+        data = yaml.safe_load(f)
+    assert isinstance(data, dict)
+    assert set(data.get("jobs", {})) == {"validate", "full-regression"}
 
 
 def _job_block(text: str, job_id: str) -> str:
