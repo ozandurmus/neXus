@@ -7,17 +7,15 @@ detail is not here either** — it is in `project/build_history.json`
 linked documents under `docs/history/`. `docs/history/INDEX.md` is the
 generated one-line timeline.
 
-- **Checkpoint:** 2026-09-06, `main` at merge commit `6ca67cc` (PR #88,
-  `DEV.TEST.1` YAML fix, onto `06f73e7`/PR #87's head).
+- **Checkpoint:** 2026-09-06, `main` at merge commit `d363b17` (PR #90,
+  `DEV.TEST.1` final CI trigger policy). The earlier `6ca67cc`/PR #88
+  checkpoint line was stale by two merges and is corrected here.
 - **Current build** (per `project/roadmap.json` `now_next.now`):
-  `parallelize_full_regression_execution` (`DEV.TEST.1`) —
-  **AUTOMATED_VALIDATED**: replaces the serial full-regression suite
-  (`11m56s`, run `34016204567`) with `-n auto --dist worksteal`, dispatched
-  only via `workflow_dispatch` (final policy — see "Active build"; run
-  `34020356372`, `4m36s`, is one-time proof, not an automatic trigger). No
-  product/capability-state change; authorizes no `M3` work. `now_next.next`
-  stays `M3`. `op2_c_cp_clusterxl_adapter_scoping` stays `upcoming`,
-  blocked on `DEPLOY.1`. `PCP.1` complete — build_history.json.
+  `nav_3_capability_state_vocabulary` (`M3`) — **IN_PROGRESS**, contract
+  DRAFT. `now_next.next` is `M4` (`local_control_plane_metadata_store`).
+  `op2_c_cp_clusterxl_adapter_scoping` stays `upcoming`, blocked on
+  `DEPLOY.1`. `DEV.TEST.1`, `PCP.1`, `M1`, `M2` complete —
+  build_history.json.
 - **OP.2.0 CLASS 2 architecture** (`docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md`):
   **CONTRACT FROZEN 2026-09-04**; `OP.2.A`/`OP.2.B` IMPLEMENTED; `OP.2.1` CP
   command gate DRAFTED — CLASS 2 still has **no member**, no adapter,
@@ -56,33 +54,42 @@ test-enforced boundaries. Current numbers:
 
 ## Active build
 
-**`parallelize_full_regression_execution`** (`DEV.TEST.1`) —
-**AUTOMATED_VALIDATED**. Root cause of the prior serial gate: a
-`scripts/render_uitest.py` module-rebind leak, fixed and regression-tested
-(`tests/test_frontend_rendering_boundary.py::
-test_render_uitest_restores_the_builders_it_injects`). Topology: one
-`pytest-xdist` process (`-n auto --dist worksteal`). **Final trigger policy
-(Product Owner directed):** `pull_request` → `validate` only (automatic);
-`workflow_dispatch` → `full-regression` (on demand ONLY); no `push:`
-trigger at all (would otherwise produce an empty, zero-job run). Two
-earlier intermediate designs (auto on every PR; auto on push-to-main) were
-each evaluated and reverted before this final policy. **Post-merge
-incident (misdiagnosis corrected):** a YAML syntax defect (a bare `: `
-inside an unquoted f-string) briefly broke job scheduling under every
-trigger, initially misdiagnosed as an automation-identity limitation —
-fixed, guarded by `test_workflow_yaml_parses`. **Real cloud proof,
-preserved as one-time evidence only, not automatic-trigger authorization**
-(run `34020356372`): `full-regression` SUCCESS, 4 workers, 1944
-passed/38 skipped/0 failed, `275.74s` (`4m36s`) vs `11m56s` serial (~61%
-faster) — ~36s above the 4-min ceiling, a small slow-test tail identified
-as the bottleneck. No product/UI/registry/storage/authorization change;
-authorizes no `M3` work.
+**`nav_3_capability_state_vocabulary`** (`M3`) — **IN_PROGRESS.**
+Capability-state vocabulary + presentation contract. Contract:
+`docs/design/CAPABILITY_STATE_VOCABULARY_AND_PRESENTATION.md` — status
+**DRAFT — DO NOT FREEZE, NOT PRODUCT OWNER APPROVED**; it authorizes no
+implementation and is not citable as design authority. Delivered: seven
+independently owned state dimensions (`D1`–`D7`), a ten-value
+`CapabilityState` plus six non-exclusive qualifiers, a deterministic
+precedence ladder, vendor normalization boundaries, an event→dimension
+transition table and 53 acceptance criteria `AC-CS-1`…`53`. `PO-NAV-7`
+resolved **in contract**: the capability-policy concept → `D5`
+`POLICY_DISABLED`, owned by the schedule/capability-policy contract
+(amendment `A5`, `M12`); "not enrolled" → `D4` `EVIDENCE_ONLY`, owned by the
+registry/evidence reconciliation projection (amendment `A6`, `M10`). The
+console job lifecycle, `OP.2` `ActionState`, action taxonomy, compliance,
+discovery-lifecycle and registry vocabularies are **byte-unchanged**. No
+runtime/UI/CSS/payload/registry/job/authorization change.
 
-**Predecessor build, complete:** `nav_1_accessibility_closure` (`M2`) —
-**AUTOMATED_VALIDATED, MERGED** via PR #85 (`081a976`) — detail in
+**Reported, not reconciled** (`AGENTS.md` authority hierarchy): the FROZEN
+navigation contract contradicts itself on omitting a structurally
+inapplicable tab — §8/§8.1 permit omission for an entity type, while
+§6.5/D-NAV13/`AC-WS-7`/`AC-WS-8` forbid it. Raised as **`PO-M3-1`**; a
+Product Owner decision, not an agent's.
+
+**Six open PO decisions** `PO-M3-1`…`6` (contract §11) gate the freeze. One
+is out-of-scope awareness: two live job-lifecycle vocabularies exist —
+`console/jobs.py` (`queued`…`skipped`) and
+`utils/coordinator_backend.JobStatus` (`pending`…`orphaned`), the latter
+surfaced by `discovery_capability_ui.JOB_STATUS_LABELS`; `PO-NAV-7` protects
+only the first (`PO-M3-4`).
+
+**Predecessor builds, complete:** `parallelize_full_regression_execution`
+(`DEV.TEST.1`) and `nav_1_accessibility_closure` (`M2`), both
+**AUTOMATED_VALIDATED, MERGED** (PR #90, PR #85) — detail in
 `project/build_history.json`. `left_vertical_product_navigation` stays
 `in_progress` (`availability_rule` pending); no `D-NAV`/`PO-NAV` decision
-reopened by `M2` or `DEV.TEST.1`.
+reopened.
 
 ## `OP.0b.0` — FROZEN WITH REAL-ENV VALIDATION GATES
 
@@ -117,20 +124,24 @@ a narrower question never promoted toward B2.
 
 ## Exact next build
 
-`now_next.next` is **`nav_3_capability_state_vocabulary`** (`M3`): map the ten
-UX capability-state semantics onto canonical states, settle the two
-`PO-NAV-7` concepts in their correct owning domains, own the `PO-NAV-6`
-colour/label contract. Prerequisite `M0` complete (it is); must not alter the
-job lifecycle vocabulary. `Sonnet 5, extended thinking (high)`. `M1`/`M2` are
-both complete and merged (PR #84, PR #85); `DEV.TEST.1` (test-execution
-infrastructure, not a product movement) sits between them and `M3` and does
-not change `M3`'s prerequisites. `M3` itself is not started.
+**Product Owner review of the `M3` DRAFT contract** — close `PO-M3-1`…`6`
+(contract §11), then either freeze
+`docs/design/CAPABILITY_STATE_VOCABULARY_AND_PRESENTATION.md` or return it
+with corrections. `PO-M3-1` requires a one-line correction to the FROZEN
+navigation contract and cannot be applied by an agent. `M3` stays
+`in_progress` until then; nothing downstream is authorized by the draft.
 
-Deferred detail is **implementation-contract work inside a frozen direction**:
-state names at `M3`, SQLite schema at `M4`, trust mechanics at `M8`, enrollment
-schemas at `M9`. Separate future decisions are listed in the two contracts'
-own sections. `M5` stays the critical path — **every collection job type today
-is `target_mode="none"`**.
+`now_next.next` is **`local_control_plane_metadata_store`** (`M4`): local
+SQLite control-plane metadata only, additively, inside the companion
+contract's §6.4 ownership boundary and §6.5 engine contract
+(`AC-ST-1`…`AC-ST-8` already frozen). Independent of `M3`'s outcome; needs
+its own separate authorization to start. `Sonnet 5, extended thinking
+(high)`, new session.
+
+Deferred detail remains **implementation-contract work inside a frozen
+direction**: SQLite schema at `M4`, trust mechanics at `M8`, enrollment
+schemas at `M9`. `M5` stays the critical path — **every collection job type
+today is `target_mode="none"`**.
 
 `op2_c_cp_clusterxl_adapter_scoping` stays `upcoming`/blocked with its notes in
 `project/roadmap.json` (adapter, member session and preflight/eligibility all
@@ -161,27 +172,16 @@ Concurrency budget stays at 1 per vendor pending its own real-env evidence.
 ## Automated test baseline
 
 ```
-M2 targeted (navigation IA + M2 a11y + architecture convergence + frontend
-  composition + rendering boundary + both render harnesses + CON.1/CON.2 +
-  PCP.1 registry): 182 passed, 1 skipped, 0 failed. Real-Chromium: accessible
-  names, reduced-motion emulation, focus transfer, group-label association,
-  AC-A11Y-5 confirmed unregressed -- zero console errors.
-Full parallel suite (M2, pre-merge): `py -m pytest -q -n auto --dist
-  worksteal` (4 workers) = 1958 passed, 23 skipped, 0 failed, 29.46s.
-  Completely clean, no serial rerun. M1's uuid4 defect stays fixed (PR #84).
-Post-merge CI on main (PR #85, run 34016204567, commit 081a976):
-  full-regression SUCCESS -- privacy gate, project-state, build-history-index,
-  full SERIAL suite (~11m56s, pre-DEV.TEST.1 baseline) and whitespace check
-  all success (detail: project/build_history.json nav_1_accessibility_closure).
-DEV.TEST.1 local (evidence): `python3 -m pytest -q -n auto --dist
-  worksteal` (4 CPUs) = 1957 passed, 24 skipped, 0 failed, two clean runs
-  (32.27s, 35.01s), 1981 collected.
-DEV.TEST.1 GitHub Actions (one-time proof, run 34020356372): full-regression
-  SUCCESS -- 4 workers, 1944 passed/38 skipped/0 failed, 275.74s (4m36s) vs
-  11m56s serial; ~36s above the 4-min ceiling, a slow-test tail is the
-  bottleneck (0 failed). Detail: build_history.json head record.
-Repository privacy gate: PASS / 0 findings. metadata_warnings == [];
-  build-history index --check clean.
+M3 (contract/docs-only movement) focused: architecture convergence 24 passed,
+  navigation IA 20 passed, 0 failed. metadata_warnings == [];
+  build-history index --check clean; git diff --check clean.
+  No full local suite and no GitHub full regression run -- documentation-only
+  change, per the movement's own validation scope.
+Last full parallel suite (DEV.TEST.1, unchanged by M3): local `-n auto --dist
+  worksteal` (4 CPUs) = 1957 passed, 24 skipped, 0 failed, two clean runs.
+  GitHub Actions one-time proof (run 34020356372): 1944 passed / 38 skipped /
+  0 failed, 275.74s vs 11m56s serial. Detail: project/build_history.json.
+Repository privacy gate: PASS / 0 findings.
 ```
 ## Known xfails
 
