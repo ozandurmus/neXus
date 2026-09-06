@@ -13,8 +13,8 @@ Overwrite at every session close. Keep it minimal.
 
 ## 1. Snapshot
 
-- Date: 2026-09-06. `origin/main` = `d363b179`. Reviewed revision-6 head
-  `53b0c76`; this is **revision 7** on the same branch, no history rewritten.
+- Date: 2026-09-06. `origin/main` = `d363b179`. Reviewed revision-7 head
+  `1127125`; this is **revision 8** on the same branch, no history rewritten.
 - Build: `nav_3_capability_state_vocabulary` (`M3`) — **IN_PROGRESS**.
   `ARCHITECTURE`, documentation only. Contract stays
   **`DRAFT — DO NOT FREEZE, NOT PRODUCT OWNER APPROVED`**.
@@ -24,40 +24,40 @@ Overwrite at every session close. Keep it minimal.
 
 ## 2. What changed this revision
 
-Revision 7 is a bounded correction of three deterministic inconsistencies. The
-tagged-union architecture, four `RESOLVED` outputs, affordance/server-authority
-boundary and `CX1`/`RI` taxonomy are unchanged.
+Revision 8 corrects the fixture model only. The capability model — tagged
+union, four `RESOLVED` outputs, affordance/server boundary, `CX1`/`RI`
+taxonomy — is unchanged.
 
-- **Fixture classification was semantically wrong.** The binary
-  `[CURRENT]`/`[FUTURE]` split asserted that every future case names an action
-  absent from `JOB_REGISTRY` — but `H4e` names `config_refresh_cp`, a real
-  member; its future dependency is the **producer**, not the action. Replaced
-  by three dependency classes: **`[CURRENT]`** (nothing missing),
-  **`[FUTURE_PRODUCER]`** (real current action, absent producer/output, both
-  named), **`[FUTURE_ACTION]`** (no `action_id` at all; asserts no current
-  entry supplies the described semantics). `H4e` → `FUTURE_PRODUCER`;
-  `H5d`/`H8b` → `FUTURE_ACTION`. Invariant now holds mechanically: **every
-  `action_id` anywhere in §5.5 is a real registry member.** Audit: 22 / 1 / 2,
-  25 cases, none untagged, 0 failures.
-- **`UCQ-1` now fails closed.** Defaulting an unclassified `UNSUPPORTED`
-  remediation class to `REVALIDATABLE` made the collection action
-  `AVAILABLE_FOR_SUBMISSION`, inferring without evidence that re-contact is
-  both **useful** and **safe** against a device concluded not to support the
-  capability. `M3` now defines complete behaviour: `primary_status` may remain
-  `UNSUPPORTED` where that conclusion is itself positively supported, but the
-  action resolves **`UNDETERMINED`** with
-  `E6: unsupported_remediation_class_unresolved`, never
-  `AVAILABLE_FOR_SUBMISSION`; copy may claim neither that re-collection helps
-  nor that it cannot; a malformed support conclusion routes to the existing
-  honest-`UNKNOWN` rules. New `[CURRENT]` case `H4f` covers it — the baseline
-  state of every reason today. `TERMINAL` still requires positive evidence
-  (`H4e`). `UCQ-1` is now scoped to concrete reason-code **membership** only,
-  owned by `M10`.
-- **`FA-7`/`FA-9` repaired.** `FA-7` drops "final eligibility is `E1`–`E7`" and
-  proposes the parent Action cell ask only whether a capability state
-  contributes a **presentation-time blocker**, with `E7` and
-  submission/admission authority left server-owned. `FA-9` drops the retired
-  `H9b` and cites `H9a`/`H9a-t` and scope test `S-RI-1`.
+- **The three-class model conflated two independent questions**: *does the
+  named action exist* and *does the producer of the required input exist*. Its
+  `CURRENT` class therefore claimed a case was "fully executable today", which
+  is false for any premise containing a `D3` or `D5` value. `H4f` was the
+  clearest: it needs a positively supported `D3 = UNSUPPORTED`, and `D3` has no
+  producer.
+- **Replaced by two orthogonal axes**, tagged `[ACT:… · IN:…]`.
+  Action basis: `CURRENT` (every named `action_id` is a `JOB_REGISTRY` member),
+  `ACTION_FREE` (no affordance entry produced), `FUTURE` (no action contract,
+  so no affordance entry can exist). Input basis: `CURRENT` (produced today),
+  `SYNTHETIC(owner)` (valid future fixture, producer not shipped, value
+  supplied explicitly), `FUTURE_PRODUCER(owner)` (tests output defined for a
+  future producer contract).
+- **Executability stated precisely.** Source/registry assertions are verifiable
+  today; resolver cases become unit fixtures once the resolver exists, using
+  explicitly identified synthetic inputs; **the focused repository tests
+  neither execute nor prove the resolver**; and no case depending on an absent
+  producer is called fully executable.
+- **The honest result is stark and is stated as such:** 20 of 23 atomic cases
+  are `IN:SYNTHETIC`, because `AVAILABLE` requires `D3 = SUPPORTED` and
+  `D4 = RECONCILED` and neither has a producer. Only `H9a`/`H9a-t` are
+  `IN:CURRENT`; `H4e` alone is `IN:FUTURE_PRODUCER(M10)`; `H4f` is
+  `CURRENT_ACTION + SYNTHETIC(M10)`.
+- **`ACT:FUTURE` cases left the atomic table.** `ActionAffordance` requires a
+  closed-registry `action_id`, so a case without one cannot produce an entry.
+  `H5d`/`H8b` became future contract scenarios `S-FUT-1`/`S-FUT-2` (§5.5.1),
+  each recording the affordance its owning movement must produce once an action
+  is declared, plus the safety requirement preserved for that movement.
+  `AC-CS-65` lists the 23 atomic cases and excludes them. No AC added or
+  renumbered; set stays `AC-CS-1`…`97`.
 
 ## 3. Exact next action
 
