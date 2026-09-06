@@ -59,17 +59,18 @@ test-enforced boundaries. Current numbers:
 infrastructure only. Contract:
 `docs/history/phase/M4_LOCAL_CONTROL_PLANE_METADATA_STORE.md`; frozen parents
 `LOCAL_CONTROL_PLANE_RUNTIME_AND_ENROLLMENT.md` §6.4/§6.5 (`AC-ST-1`…`8`) and
-`CAPABILITY_STATE_VOCABULARY_AND_PRESENTATION.md` §8.2.1 (`AC-CS-70`…`73`,
-`97`).
+`CAPABILITY_STATE_VOCABULARY_AND_PRESENTATION.md` §8.2.1 (`AC-CS-70`…`73`,`97`).
 
 Local SQLite at `<data_root>/state/control_plane.db`, schema version 1, seven
 `STRICT` tables. WAL, `synchronous=FULL` (over WAL's usual `NORMAL`: `CON.0`
 §7.9 needs a job record durable before the runner may start it),
 `foreign_keys=ON`, explicit 5 s `busy_timeout`. Migrations are explicit,
-monotonic and one transaction per version. Typed fail-closed outcomes for
-invalid placement, unsupported/newer schema, corruption, failed migration,
-bounded contention and uniqueness/FK violation — never auto-repair, recreate,
-downgrade or discard.
+monotonic and one transaction per version, and the ledger must be an **exact
+prefix** of `MIGRATIONS` — `max(version)` is not trusted. Open is ordered so
+**every refusal precedes every persistent mutation**, closing every connection
+deterministically. Typed fail-closed outcomes for invalid placement,
+unsupported schema/ledger, corruption, failed migration, bounded contention
+and uniqueness/FK violation — never auto-repair, recreate or downgrade.
 
 **Boundary held.** `PCP.1` Device Registry stays filesystem JSON, unmigrated;
 targets are opaque `device_id`/`logical_entity_id` references with no copied

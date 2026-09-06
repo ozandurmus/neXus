@@ -73,6 +73,34 @@ against the engine's own report, not against the constants that set them.
 per migration, so a failure rolls its own version back entirely and leaves
 every earlier version applied.
 
+### 3.1 Ledger validation — an exact known prefix, not `max(version)`
+
+On open, the recorded ledger must be an **exact prefix** of `MIGRATIONS`:
+entry *i* must equal `(version, name)` of migration *i*, and the ledger may
+not be longer than `MIGRATIONS`.
+
+`max(version)` alone is insufficient and was corrected: a ledger can report
+exactly the supported maximum while carrying a foreign migration *name* at
+that version, or a gap, an unknown extra entry, or a non-prefix sequence.
+Each is a different schema history than this build can reason about, so the
+store refuses rather than assuming its own migrations produced what is on
+disk. The refusal names the encountered ledger and its highest version, and
+the supported ledger and version range.
+
+Because the ledger is a validated exact prefix, the pending set is simply
+`MIGRATIONS[len(ledger):]` — no version arithmetic.
+
+Two cases are worth stating precisely, because their testability differs.
+In **this build's own ledger** `version` is an `INTEGER PRIMARY KEY`, so rowid
+*is* the version: a duplicate version cannot be inserted at all, and SQLite
+stores rows in version order, so an out-of-order application history cannot be
+recorded. Both become representable only in a **foreign ledger table** written
+by another build without that key — where rows are read back in real insertion
+order and the prefix check refuses them. Tests cover both shapes.
+
+A ledger table this build cannot even read (a foreign column set) is likewise
+a schema-version refusal, not a transient error.
+
 | Table | Owns | Notes |
 | --- | --- | --- |
 | `schema_migrations` | `version` (PK), `name`, `applied_at_utc` | monotonic; `max(version)` is the current version |
@@ -163,12 +191,43 @@ repository has no shared base exception to extend.
 
 **Corruption and unsupported-version posture.** Both refuse and stop. The
 store never auto-repairs, silently recreates, downgrades or discards state —
-the file is left byte-for-byte untouched, which is asserted directly. A
-failed open closes its connection rather than leaving a half-open store.
+the file is left byte-for-byte untouched, which is asserted directly.
 
 `sqlite3.connect` is lazy, so a garbage file would otherwise open cleanly and
 fail on first use; an explicit probe at open makes "is this a database?" an
 open-time question with a typed answer.
+
+### 6.1 Open order — refusal precedes every persistent mutation
+
+Open is ordered so that everything which can refuse the store runs **before**
+anything that changes it on disk:
+
+```
+connect  →  connection-local settings (busy_timeout, foreign_keys)
+         →  corruption probe
+         →  ledger read + exact-prefix validation      ← refusals end here
+         ------------------------------------------------ store accepted
+         →  PRAGMA journal_mode = WAL   (persistent)
+         →  PRAGMA synchronous = FULL
+         →  create ledger table, apply pending migrations
+```
+
+`busy_timeout` and `foreign_keys` are connection-local and write nothing, so
+they are safe before the decision. `journal_mode` is a **persistent database
+property**, so WAL activation was moved after validation: refusing a store
+must not leave its journal mode changed. Creating the ledger table likewise
+moved after validation — it is a schema mutation. Tests prove a refused
+database keeps both its journal mode and its ledger, gains no table, and grows
+no `-wal`/`-shm` sidecars.
+
+**Deterministic connection cleanup.** Every connection the store opens is
+closed on any failure, whatever the cause: `_connect` closes its own handle if
+configuration fails (the only place that handle is reachable), and the open
+sequence closes the connection on `BaseException` before re-raising, so a
+failed open never leaves a live connection or a half-open store. `open_reader`
+follows the same pattern. Tests assert this for a configuration failure, a
+corruption refusal and a ledger refusal, by tracking every connection the
+module creates and checking each is closed.
 
 ---
 
@@ -195,15 +254,23 @@ deployment-controlled step (§6.5, `DEV.4.6`).
 
 ## 8. Validation
 
-`tests/test_m4_control_plane_metadata_store.py` — 57 focused tests covering
+`tests/test_m4_control_plane_metadata_store.py` — 74 focused tests covering
 RuntimeRoot placement and per-test isolation; WAL/foreign-keys/STRICT/timeout/
 synchronous read back from the engine; creation and monotonic migrations;
-migration rollback; newer-version refusal without downgrade; corruption
-refusal without repair or recreation; uniqueness and one-active-run;
-concurrent reads and bounded writer contention; Device Registry
-non-migration and unchanged behaviour; absence of copied endpoints and
-forbidden data; support-bundle exclusion, DLP classification and gitignore
-coverage; capability-projection persistence boundaries.
+migration rollback; corruption refusal without repair or recreation;
+uniqueness and one-active-run; concurrent reads and bounded writer contention;
+Device Registry non-migration and unchanged behaviour; absence of copied
+endpoints and forbidden data; support-bundle exclusion, DLP classification and
+gitignore coverage; capability-projection persistence boundaries.
+
+Ledger validation and cleanup (the PO correction round) add: supported version
+under a wrong migration name; unknown lower and extra versions; non-prefix and
+gapped sequences; out-of-order and duplicated *foreign* ledgers, plus the
+structural impossibility of a duplicate in our own; a valid shorter prefix
+still being accepted and completed; refusal naming both ledgers; refusal
+applying and discarding nothing; connection closure on configuration failure,
+corruption refusal and ledger refusal; and journal-mode plus ledger
+preservation across refusal.
 
 Contention is proven non-vacuously: the writer genuinely waits the configured
 bound and then raises the typed refusal.

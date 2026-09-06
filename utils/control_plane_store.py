@@ -388,38 +388,71 @@ class ControlPlaneStore:
         if create:
             self._path.parent.mkdir(parents=True, exist_ok=True)
 
-        self._connection = self._open_writer()
+        # Open order matters. Everything that could refuse this store runs
+        # BEFORE anything that mutates it on disk: the corruption probe and the
+        # migration-ledger validation both complete while only connection-local
+        # settings have been applied. A refusal therefore leaves the database
+        # file, its persistent journal mode and its ledger exactly as found.
+        connection = self._connect()
         try:
-            self._probe_readable(self._connection)
-            self._apply_migrations(self._connection)
-        except Exception:
-            # A store that failed to open safely never stays half-open.
-            self._connection.close()
-            self._connection = None
+            self._probe_readable(connection)
+            ledger = self._read_ledger(connection)
+            self._validate_ledger(ledger)
+            # Past this line the store is accepted, so persistent changes and
+            # schema creation may proceed.
+            self._activate_wal(connection)
+            self._apply_durability(connection)
+            self._apply_pending_migrations(connection, ledger or [])
+        except BaseException:
+            # Deterministic cleanup: a store that failed to open safely never
+            # leaves a connection behind, whatever the failure was.
+            connection.close()
             self._closed = True
             raise
+        self._connection = connection
 
     # -- connection -------------------------------------------------------
 
-    def _open_writer(self) -> sqlite3.Connection:
-        # `isolation_level=None` hands transaction control to this module, so
-        # every migration and every write is an explicit, auditable
-        # transaction rather than an implicit one.
+    def _connect(self) -> sqlite3.Connection:
+        """Open the writer handle and apply connection-local settings only.
+
+        `isolation_level=None` hands transaction control to this module, so
+        every migration and every write is an explicit, auditable transaction
+        rather than an implicit one.
+        """
         connection = sqlite3.connect(
             str(self._path),
             timeout=self._busy_timeout_ms / 1000.0,
             isolation_level=None,
         )
-        connection.row_factory = sqlite3.Row
-        self._apply_pragmas(connection, read_only=False)
+        try:
+            connection.row_factory = sqlite3.Row
+            self._apply_connection_local_settings(connection)
+        except BaseException:
+            # The handle exists only inside this function until it is returned,
+            # so this is the only place that can close it on failure.
+            connection.close()
+            raise
         return connection
 
-    def _apply_pragmas(self, connection: sqlite3.Connection, *, read_only: bool) -> None:
-        connection.execute(f"PRAGMA busy_timeout = {self._busy_timeout_ms}")
-        connection.execute("PRAGMA foreign_keys = ON")
-        if read_only:
-            return
+    def _apply_connection_local_settings(self, connection: sqlite3.Connection) -> None:
+        """`busy_timeout` and `foreign_keys` configure this handle and write
+        nothing to the database, so they are safe to apply before the store has
+        been accepted."""
+        try:
+            connection.execute(f"PRAGMA busy_timeout = {self._busy_timeout_ms}")
+            connection.execute("PRAGMA foreign_keys = ON")
+        except sqlite3.DatabaseError as exc:
+            raise self._classify(exc) from exc
 
+    def _activate_wal(self, connection: sqlite3.Connection) -> None:
+        """Switch the database to WAL.
+
+        `journal_mode` is a **persistent** database property, not a connection
+        setting, so this runs only after the corruption probe and the ledger
+        validation have both passed. Refusing a store must never leave its
+        journal mode changed.
+        """
         try:
             mode = connection.execute("PRAGMA journal_mode = WAL").fetchone()[0]
         except sqlite3.DatabaseError as exc:
@@ -432,6 +465,7 @@ class ControlPlaneStore:
                 "the control-plane store requires a local filesystem (SMB/NFS is unsupported)"
             )
 
+    def _apply_durability(self, connection: sqlite3.Connection) -> None:
         # synchronous=FULL, chosen deliberately over the usual WAL default of
         # NORMAL. Under WAL, NORMAL does not fsync at commit, so recently
         # committed records can be lost on power loss or a kernel panic --
@@ -440,7 +474,10 @@ class ControlPlaneStore:
         # may start it, so trading that guarantee away is not available to us.
         # The cost is one fsync per commit on a local, low-write control plane,
         # which is negligible here.
-        connection.execute("PRAGMA synchronous = FULL")
+        try:
+            connection.execute("PRAGMA synchronous = FULL")
+        except sqlite3.DatabaseError as exc:
+            raise self._classify(exc) from exc
 
     def _probe_readable(self, connection: sqlite3.Connection) -> None:
         """Force the engine to touch the file so corruption surfaces at open.
@@ -496,16 +533,88 @@ class ControlPlaneStore:
 
     # -- migrations -------------------------------------------------------
 
-    def _current_version(self, connection: sqlite3.Connection) -> int:
-        row = connection.execute(
+    def _read_ledger(
+        self, connection: sqlite3.Connection
+    ) -> list[tuple[int, str]] | None:
+        """The recorded migration ledger, or ``None`` for a fresh store.
+
+        Strictly read-only. Creating the ledger table is itself a schema
+        mutation, so it cannot happen before the store has been validated.
+        Rows come back in insertion order so an out-of-order application
+        history is visible rather than silently re-sorted.
+        """
+        exists = connection.execute(
             "SELECT name FROM sqlite_schema WHERE type='table' AND name='schema_migrations'"
         ).fetchone()
-        if row is None:
-            return 0
-        applied = connection.execute("SELECT max(version) FROM schema_migrations").fetchone()[0]
-        return int(applied or 0)
+        if exists is None:
+            return None
+        try:
+            rows = connection.execute(
+                "SELECT version, name FROM schema_migrations ORDER BY rowid"
+            ).fetchall()
+        except sqlite3.DatabaseError as exc:
+            # A ledger table this build cannot even read is a foreign schema
+            # history, not a transient error.
+            raise ControlPlaneSchemaVersionError(
+                f"control-plane store at {self._path} has a schema_migrations table this build "
+                f"cannot read ({exc}). Refusing to open: the migration ledger is never repaired, "
+                "recreated or ignored. Supported ledger: "
+                f"{self._expected_ledger()!r} (versions 1..{SUPPORTED_SCHEMA_VERSION})."
+            ) from exc
+        return [(int(row[0]), str(row[1])) for row in rows]
 
-    def _apply_migrations(self, connection: sqlite3.Connection) -> None:
+    @staticmethod
+    def _expected_ledger() -> list[tuple[int, str]]:
+        return [(version, name) for version, name, _ in MIGRATIONS]
+
+    def _validate_ledger(self, ledger: list[tuple[int, str]] | None) -> None:
+        """The ledger must be an **exact prefix** of ``MIGRATIONS``.
+
+        ``max(version)`` alone is not a sufficient check: a ledger can carry
+        the supported version under a different migration name, or contain a
+        gap, a duplicate, an out-of-order entry or an unknown extra version,
+        and still report exactly the expected maximum. Each of those is a
+        different schema history than this build knows how to reason about, so
+        the store refuses to open rather than assuming its own migrations
+        produced what is on disk.
+        """
+        if ledger is None:
+            return
+        expected = self._expected_ledger()
+
+        if len(ledger) > len(expected):
+            raise self._ledger_refusal(
+                ledger,
+                expected,
+                f"it records {len(ledger)} migrations where this build defines {len(expected)}",
+            )
+        for index, entry in enumerate(ledger):
+            if entry != expected[index]:
+                raise self._ledger_refusal(
+                    ledger,
+                    expected,
+                    f"ledger entry {index + 1} is {entry!r} where this build defines "
+                    f"{expected[index]!r}",
+                )
+
+    def _ledger_refusal(
+        self,
+        ledger: list[tuple[int, str]],
+        expected: list[tuple[int, str]],
+        reason: str,
+    ) -> ControlPlaneSchemaVersionError:
+        encountered_max = max((version for version, _ in ledger), default=0)
+        return ControlPlaneSchemaVersionError(
+            f"control-plane store at {self._path} has a migration ledger this build does not "
+            f"support: {reason}. Refusing to open: a schema history is never auto-upgraded "
+            "downward, migrated backwards, repaired, recreated or discarded. "
+            f"Encountered ledger: {ledger!r} (highest version {encountered_max}). "
+            f"Supported ledger: {expected!r} (versions 1..{SUPPORTED_SCHEMA_VERSION})."
+        )
+
+    def _apply_pending_migrations(
+        self, connection: sqlite3.Connection, ledger: list[tuple[int, str]]
+    ) -> None:
         connection.execute(
             """
             CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -516,19 +625,9 @@ class ControlPlaneStore:
             """
         )
 
-        current = self._current_version(connection)
-        if current > SUPPORTED_SCHEMA_VERSION:
-            raise ControlPlaneSchemaVersionError(
-                f"control-plane store at {self._path} is at schema version {current}, but this "
-                f"build supports at most {SUPPORTED_SCHEMA_VERSION}. Refusing to open: a newer "
-                "schema is never auto-upgraded downward, migrated backwards or recreated. "
-                f"Encountered version: {current}. Supported versions: "
-                f"1..{SUPPORTED_SCHEMA_VERSION}."
-            )
-
-        for version, name, statements in MIGRATIONS:
-            if version <= current:
-                continue
+        # The ledger is a validated exact prefix, so everything after it is
+        # precisely the pending set -- no version arithmetic needed.
+        for version, name, statements in MIGRATIONS[len(ledger):]:
             # One transaction per migration: a failure rolls its own version
             # back completely and leaves every earlier version applied.
             connection.execute("BEGIN IMMEDIATE")
@@ -550,13 +649,11 @@ class ControlPlaneStore:
     # -- introspection ----------------------------------------------------
 
     def schema_version(self) -> int:
-        return self._current_version(self.connection)
+        ledger = self._read_ledger(self.connection) or []
+        return max((version for version, _ in ledger), default=0)
 
     def applied_migrations(self) -> list[tuple[int, str]]:
-        rows = self.connection.execute(
-            "SELECT version, name FROM schema_migrations ORDER BY version"
-        ).fetchall()
-        return [(int(row["version"]), str(row["name"])) for row in rows]
+        return self._read_ledger(self.connection) or []
 
     def runtime_settings(self) -> SqliteRuntimeSettings:
         """Read the settings back from the engine rather than restating them."""
@@ -581,8 +678,14 @@ class ControlPlaneStore:
             timeout=self._busy_timeout_ms / 1000.0,
             isolation_level=None,
         )
-        connection.row_factory = sqlite3.Row
-        self._apply_pragmas(connection, read_only=True)
+        try:
+            connection.row_factory = sqlite3.Row
+            # Connection-local settings only: a reader never activates WAL and
+            # never writes to the database.
+            self._apply_connection_local_settings(connection)
+        except BaseException:
+            connection.close()
+            raise
         return connection
 
     # -- writes -----------------------------------------------------------

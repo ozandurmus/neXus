@@ -39,8 +39,16 @@ Overwrite at every session close. Keep it minimal.
   `repository_privacy.py` change was needed: `data/state/*` is already outside
   the only subtree the bundle enumerates, and `.db`/`.db-wal`/`.db-shm` were
   already `DATABASE_ARTIFACT` and already gitignored.
-- **57 focused tests**, including ownership-boundary proofs that walk the real
+- **74 focused tests**, including ownership-boundary proofs that walk the real
   schema rather than a maintained list.
+- **PO correction round** (one bounded round on the same branch, PR #93):
+  the migration ledger is validated as an **exact prefix** of `MIGRATIONS`,
+  not by `max(version)` — a foreign migration name at the supported version,
+  an unknown/gapped/non-prefix entry or an unreadable foreign ledger is
+  refused, naming both the encountered and supported ledgers. Open order was
+  corrected so **every refusal precedes every persistent mutation** (WAL
+  activation and ledger creation moved after validation), and connection
+  cleanup is deterministic on every failure path.
 
 ## 3. Exact next action
 
@@ -59,10 +67,14 @@ next *architecture* movement.
 
 ## 4. Test delta
 
-- **New:** `tests/test_m4_control_plane_metadata_store.py` — 57 passed.
+- **New:** `tests/test_m4_control_plane_metadata_store.py` — **74 passed**
+  (57 at first review, +17 from the correction round).
 - Affected suites: 161 passed / 9 skipped (architecture convergence, privacy
   gate, `PCP.1` registry, support bundle, `CON.2` console jobs, evidence
-  backend, runtime paths).
+  backend, runtime paths). One run showed
+  `test_ac9_two_jobs_both_reach_a_terminal_state` failing and green on
+  re-run — a pre-existing timing-sensitive `CON.2` test; no console module
+  references the store.
 - **Full parallel suite, run once:** 1991 passed, 37 skipped, **3 failed,
   1 collection error — all pre-existing on the clean baseline** and verified
   as such by re-running them at `33b6798` with the working tree stashed:
