@@ -57,21 +57,20 @@ test-enforced boundaries. Current numbers:
 
 **`m8_first_contact_trust_identity_evidence_producer_architecture`** (`M8`,
 architecture review) — **DRAFT / IN REVIEW, not implemented, not
-automated_validated.** Bounded `nexus-decision-council` synthesis
-(2026-09-06) closing the PO question `M6` left open: what legitimate
-evidence may ever bind a `PCP.1` `device_id` to a collector `entity_id`.
-Confirms `M6 → M8 → M7` as the corrected roadmap order. Proposes a
-candidate-selection (CMA-endpoint-match, hint only) + live first-contact
-identity-gate confirmation design over the *existing, unmodified* CP
-collector/trust seams; the proven relationship as a new table in the
-already-approved `M4` SQLite store (additive migration, no `PCP.1`
-amendment); a binary `identity_mapping_proven` bit, never a subjective
-confidence score. Two open dissents carried forward: inherited
-`operator_assertion`, and single-sourced (non-bidirectionally-corroborated)
-identity evidence (no independent CP management-plane serial source exists
-in this repository today). **Not implemented, by design:** any code, test,
-schema migration, Device Registry write, `M4` migration, or device contact.
-Full contract: `docs/history/phase/M8_FIRST_CONTACT_TRUST_AND_IDENTITY_EVIDENCE_PRODUCER_ARCHITECTURE.md`.
+automated_validated, not yet PO-approved for freeze/merge (PR #96).**
+Proposes a candidate-selection (CMA-endpoint-match, hint only) + live
+first-contact identity-gate confirmation design over the *existing,
+unmodified* CP collector/trust seams, scoped by a closed `mapping_scope =
+CLASS_0_CP_CONFIG_TARGET_SELECTION_ONLY` (never general identity proof —
+correction round 1); the proven relationship as a new table in the
+already-approved `M4` SQLite store (additive migration reusing
+`authority_generations`/`identity_mapping_proven` shapes, no `PCP.1`
+amendment). Confirms `M6 → M8 → M7` as the corrected, PO-accepted roadmap
+order. Two open dissents carried forward: inherited `operator_assertion`,
+and single-sourced (non-bidirectionally-corroborated) identity evidence.
+**Not implemented, by design:** any code, test, schema migration, Device
+Registry write, `M4` migration, or device contact. Full contract + round-1
+correction detail: `docs/history/phase/M8_FIRST_CONTACT_TRUST_AND_IDENTITY_EVIDENCE_PRODUCER_ARCHITECTURE.md`.
 
 Predecessor — **`registry_keyed_job_targets`** (`M6`) —
 **AUTOMATED_VALIDATED, Option D fail-closed admission shell, not functional
