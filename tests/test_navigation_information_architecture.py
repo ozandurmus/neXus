@@ -327,11 +327,24 @@ def test_ac10_navigation_is_authorization_aware_but_simulates_nothing():
     # allowed to *name* the model that does not exist yet.
     head, _, rest = NAV_JS_CODE.partition("function navigationAuthorizationContext")
     body = (head + rest.partition("\n}\n")[2]).lower()
-    for forbidden in ("role", "permission", "rbac", "grant", "scope", "claim", "isadmin", "canaccess"):
+    for forbidden in ("permission", "rbac", "grant", "scope", "claim", "isadmin", "canaccess"):
         assert forbidden not in body, (
             f"navigation code references {forbidden!r} — NAV.1 D-NAV9 forbids "
             f"implementing or simulating RBAC in this movement"
         )
+    # "role" is checked separately: M2 (AC-A11Y-4) introduced the ARIA
+    # `role="group"` attribute that associates a group's children with its
+    # visible label for assistive technology -- a legitimate accessibility
+    # semantic, not an authorization role. Strip that one literal
+    # HTML-attribute value before scanning for the forbidden RBAC sense of
+    # the word, so a real "role" reference (a variable, a check, a claim)
+    # still fails this guard.
+    role_scan = body.replace('role="group"', "")
+    assert "role" not in role_scan, (
+        "navigation code references 'role' outside the AC-A11Y-4 aria "
+        "role=\"group\" attribute — NAV.1 D-NAV9 forbids implementing or "
+        "simulating RBAC in this movement"
+    )
 
 
 def test_contract_document_is_frozen_by_product_owner_and_linked():

@@ -159,7 +159,9 @@ def test_every_top_level_function_survived_the_split():
     # (navigationCollapsed, setNavigationCollapsed, navigationGroupCollapsedSet,
     # setNavigationGroupCollapsed) and the renderers/dispatch (navigationIcon,
     # navigationRootMarkup, renderPrimaryNavigation, syncNavigationActiveState,
-    # renderDeviceTabs, bindNavigationEvents) — 196.
+    # renderDeviceTabs, bindNavigationEvents) — 196. M2 (NAV accessibility
+    # closure, AC-A11Y-3) added app_bootstrap.js's navigationFocusActivePanelHeading
+    # — 197.
     all_defs = []
     per_file = {}
     for name in SCRIPT_MODULE_FILENAMES:
@@ -168,6 +170,6 @@ def test_every_top_level_function_survived_the_split():
         per_file[name] = fns
         all_defs.extend(fns)
 
-    assert len(all_defs) == 196, f"expected 196 top-level functions, found {len(all_defs)}"
+    assert len(all_defs) == 197, f"expected 197 top-level functions, found {len(all_defs)}"
     dupes = sorted({f for f in all_defs if all_defs.count(f) > 1})
     assert not dupes, f"functions defined in more than one module file: {dupes}"
