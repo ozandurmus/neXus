@@ -149,7 +149,11 @@ Governance and engineering law: `AGENTS.md` (canonical constitution) and
 `docs/AI_DEVELOPMENT_PROTOCOL.md` (network-command gate, approval boundaries,
 render-harness mechanics — detail, not restated here). Tool-specific deltas:
 `CLAUDE.md`, `.github/copilot-instructions.md`. These reference this reading
-order and the schemas below rather than restating them.
+order and the schemas below rather than restating them. Handing one bounded
+movement to another session/tool (a compaction, a different tool, a fresh
+chat) — not a substitute for the reading order above —:
+`docs/design/GOV_SESSION_TRANSFER_PROTOCOL.md` +
+`py scripts/gov_session_transfer.py --help`.
 
 ### Locating the active frozen contract
 
