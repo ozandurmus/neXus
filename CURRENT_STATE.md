@@ -7,15 +7,14 @@ detail is not here either** — it is in `project/build_history.json`
 linked documents under `docs/history/`. `docs/history/INDEX.md` is the
 generated one-line timeline.
 
-- **Checkpoint:** 2026-09-06, branch `claude/left-nav-vertical-redesign-e673q6`
-  (incorporates `origin/main` at `9a946fe`, PR #84; NAV lineage preserved
-  unrewritten).
+- **Checkpoint:** 2026-09-06, `main` at merge commit `081a976` (PR #85, `M2`,
+  onto `9a946fe`/PR #84's head). NAV lineage (`5a5a1f7`…`259874e`) unrewritten.
 - **Current build** (per `project/roadmap.json` `now_next.now`):
-  `nav_1_accessibility_closure` (`M2`) — **IN PROGRESS**: closing
-  `AC-A11Y-1`…`4`, confirming `AC-A11Y-5`, validating the combined branch,
-  then the NAV PR (see "Active build"). Predecessors both complete: `M0`
-  architecture FROZEN (reviewed head `ba56d2b`); `M1` AUTOMATED_VALIDATED,
-  merged via PR #84. `now_next.next` is `M3` (`nav_3_capability_state_vocabulary`).
+  `nav_1_accessibility_closure` (`M2`) — **AUTOMATED_VALIDATED, MERGED**:
+  closed `AC-A11Y-1`…`4`, confirmed `AC-A11Y-5`, validated the combined
+  branch, merged to `main` via PR #85 (see "Active build"). Predecessors
+  both complete: `M0` architecture FROZEN (reviewed head `ba56d2b`); `M1`
+  AUTOMATED_VALIDATED, merged via PR #84. `now_next.next` is `M3` (not started).
   `op2_c_cp_clusterxl_adapter_scoping` stays `upcoming`, blocked on
   `DEPLOY.1`. `PCP.1` is complete — detail in `project/build_history.json`.
 - **OP.2.0 CLASS 2 architecture** (`docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md`):
@@ -56,12 +55,12 @@ test-enforced boundaries. Current numbers:
 
 ## Active build
 
-**`nav_1_accessibility_closure`** (`M2`) — **AUTOMATED_VALIDATED**. Incorporated
-`main` (`M1`, merged) into the NAV branch, closed `AC-A11Y-1`…`4`, confirmed
-`AC-A11Y-5`, validated the combined branch (182 targeted + 1958 full-parallel
-passed, 0 failed — see "Automated test baseline"); NAV PR open/merge is the
-exact next action, still owed. Predecessors, both complete — full detail in
-`project/build_history.json`:
+**`nav_1_accessibility_closure`** (`M2`) — **AUTOMATED_VALIDATED, MERGED**.
+Incorporated `main` (`M1`) into the NAV branch, closed `AC-A11Y-1`…`4`,
+confirmed `AC-A11Y-5`, validated the combined branch (182 targeted + 1958
+full-parallel passed, 0 failed — see "Automated test baseline"), merged to
+`main` via **PR #85** (merge commit `081a976a3e1cc16fb57af7f0c9aa0e0501a7625b`).
+Predecessors, both complete — full detail in `project/build_history.json`:
 `M0` froze `docs/design/NAVIGATION_INFORMATION_ARCHITECTURE.md` (§19) and
 `docs/design/LOCAL_CONTROL_PLANE_RUNTIME_AND_ENROLLMENT.md` (§15), Product
 Owner approved at reviewed head `ba56d2b`, no product code; `M1` repaired
@@ -71,9 +70,12 @@ two `tests/test_pcp1_device_registry.py` uuid4 call-count defects via
 `PCP.1` `AC-1a`..`AC-15` behavior changed.
 
 **Freeze is not implementation authority.** `M1`…`M14` remain separately
-authorized movements; the `NAV.1` prototype (`5a5a1f7`, runnable,
-behaviourally unchanged) may not merge until `M2` closes the four
-accessibility requirements. Frozen (unchanged by this movement): fifteen
+authorized movements; `NAV.1` (`5a5a1f7`) required `M2` to close the four
+accessibility requirements before merging — done, via PR #85.
+`left_vertical_product_navigation` stays `in_progress` in
+`project/feature_registry.json` regardless: `availability_rule` (the
+remaining capability predicates) is genuinely pending, owned by later
+movements, independent of `M2`'s scope. Frozen (unchanged): fifteen
 `D-NAV` decisions, no operative row provisional; the six-root baseline,
 Recovery reserved seventh, Jobs under Operations; the four-predicate
 capability model; the logical-entity-first workspace, no second identity
@@ -124,9 +126,9 @@ a narrower question never promoted toward B2.
 UX capability-state semantics onto canonical states, settle the two
 `PO-NAV-7` concepts in their correct owning domains, own the `PO-NAV-6`
 colour/label contract. Prerequisite `M0` complete (it is); must not alter the
-job lifecycle vocabulary. `Sonnet 5, extended thinking (high)`. `M1` (uuid4
-test-defect repair) and `M2` (this movement, NAV accessibility closure) are
-both complete/in progress — see "Active build".
+job lifecycle vocabulary. `Sonnet 5, extended thinking (high)`. `M1`/`M2` are
+both complete and merged (PR #84, PR #85) — see "Active build"; `M3` itself
+is not started.
 
 Deferred detail is **implementation-contract work inside a frozen direction**:
 state names at `M3`, SQLite schema at `M4`, trust mechanics at `M8`, enrollment
@@ -172,9 +174,13 @@ M2 targeted (navigation IA + M2 a11y + architecture convergence + frontend
   + grouped child + keyboard, both shells), group-label association
   (Devices/Operations/Administration), AC-A11Y-5 confirmed unregressed --
   zero console errors.
-Full parallel suite: `py -m pytest -q -n auto --dist worksteal` (4 workers) =
-  1958 passed, 23 skipped, 0 failed, 29.46s wall-clock. Completely clean, no
-  serial rerun. M1's uuid4 defect stays fixed (merged via PR #84).
+Full parallel suite (pre-merge, this branch): `py -m pytest -q -n auto
+  --dist worksteal` (4 workers) = 1958 passed, 23 skipped, 0 failed, 29.46s
+  wall-clock. Completely clean, no serial rerun. M1's uuid4 defect stays
+  fixed (merged via PR #84).
+Post-merge CI on main (PR #85, run 34016204567, commit 081a976): privacy
+  gate/project-state/build-history-index checks success; full-regression
+  terminal result in project/build_history.json (nav_1_accessibility_closure).
 Repository privacy gate: PASS / 0 findings. metadata_warnings == [];
   build-history index --check clean; git diff --check clean.
 ```
