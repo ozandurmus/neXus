@@ -35,6 +35,7 @@ from console.auth import extract_bearer_token, origin_is_trusted, token_matches
 from console.jobs import TERMINAL_STATES, ConsoleJobStore
 from console.payloads import build_console_payloads
 from console.registry import JOB_REGISTRY, get_job_type
+from console.registry_targets import DEVICE_ID_TARGET_MODE, resolve_registry_targets
 from console.runner import ConsoleJobRunner
 from utils.action_taxonomy import console_refusal
 from utils.html_export import compose_modules, read_text_file
@@ -210,6 +211,17 @@ def create_app(
                 raise HTTPException(
                     status_code=400,
                     detail=f"unresolvable entity_id(s) (not present in unified.json): {unresolved}",
+                )
+        elif job_type.target_mode == DEVICE_ID_TARGET_MODE:
+            # M6 (registry_keyed_job_targets, Option D): fail-closed
+            # admission against the PCP.1 Device Registry. A target-free
+            # request (targets == []) is unaffected -- resolve_registry_
+            # targets returns None -- and stays M5's plane-wide behavior.
+            refusal = resolve_registry_targets(targets, data_root=runtime_paths.data_root)
+            if refusal is not None:
+                raise HTTPException(
+                    status_code=400,
+                    detail={"error": refusal.error, "reason": refusal.reason, "detail": refusal.detail},
                 )
         elif targets:
             raise HTTPException(status_code=400, detail=f"job_type {job_type.id!r} does not accept targets")

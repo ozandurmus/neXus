@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "current_build": "collector_target_selection_seam",
+  "current_build": "registry_keyed_job_targets",
   "current_track": "PCP.x",
   "progress_contract": "Weighted acceptance-criterion completion. Percentages describe the declared roadmap, not calendar time or delivery ETA.",
   "tracks": [
@@ -140,25 +140,26 @@
   "now_next": {
     "horizon_contract": "NOW is exactly one build. NEXT is exactly one. Everything else is an `upcoming` row carrying its own true status: planned = AFTER, blocked = waiting on a named external gate, deferred = consciously postponed. `now.build` must equal the newest project/build_history.json record -- utils.project_plan enforces it.",
     "now": {
-      "build": "collector_target_selection_seam",
-      "title": "M5 -- Collector target-selection seam, cp-config only",
-      "goal": "Promote OP.0d's already-validated Check Point --cp-config-targets selector into the shared utils.collection_executor.workflow_argv() argv seam (CON.2 C2-2), scoped to cp-config only. Target-free cp-config stays byte-identical/plane-wide; a target request for any workflow without a seam is refused (UnsupportedTargetSelectionError) before main() or any device contact. AUTOMATED_VALIDATED: PR open, merge not authorized in this movement.",
+      "build": "registry_keyed_job_targets",
+      "title": "M6 -- Registry-keyed job targets, Option D fail-closed admission shell",
+      "goal": "PO decision 2026-09-06 (bounded nexus-decision-council synthesis, Option D only): resolve console-submitted config_refresh_cp device_id targets against the PCP.1 Device Registry at admission (POST /api/jobs) and again immediately before execution (console/runner.py), fail-closed. This is targeting FOUNDATION, not functional per-device collection -- every otherwise-eligible device_id currently refuses with UNSUPPORTED / IDENTITY_TRANSLATION_REQUIRED because no legitimate device_id -> collector entity_id relationship producer exists yet. No PCP.1 relationship write, no M4 schema/table change, no new durable mapping store, no frozen-contract edit. operator_assertion stays an OPEN dissent, not accepted mapping authority. AUTOMATED_VALIDATED: PR open, merge not authorized in this movement. Do not claim M6 DONE as a working device-targeting capability.",
       "status": "automated_validated",
       "started": "2026-09-06",
       "notes": [
-        "One collector only (PCP.6, narrowed), per the frozen M1..M14 sequence (docs/design/LOCAL_CONTROL_PLANE_RUNTIME_AND_ENROLLMENT.md section 12/12.1) and docs/design/PRODUCT_CONTROL_PLANE_ARCHITECTURE.md section 9/AC-TGT-3/AC-TGT-4/AC-TGT-5. No second collector, no JOB_REGISTRY.target_mode change, no registry target resolution (M6), no device contact.",
-        "Security invariant held: no plane-wide-then-filter -- a plane-wide run is never relabelled device-targeted (AC-TGT-4); admission coordinator, canonical endpoint lock and the vendor concurrency budget of 1 are unchanged.",
-        "Tests: tests/test_m5_collector_target_selection_seam.py (22 focused) plus tests/test_op0d_deterministic_target_selection.py, tests/test_con2_console_job_engine.py, tests/test_rb2_recovery_collect.py, tests/test_architecture_convergence.py, tests/test_application_package.py (110 combined, 0 failed)."
+        "JOB_REGISTRY['config_refresh_cp'].target_mode flipped from 'none' to the new 'device_ids' value (console/registry.py) -- scoped to config_refresh_cp only; every other job type's target_mode is unchanged (M5's collector_target_selection_seam, complete/automated_validated, is otherwise untouched).",
+        "New shared admission/pre-execution function console/registry_targets.py::resolve_registry_targets() -- checks only the registry's device_id/state fields, never endpoint, hostname, display name, vendor hint, or spelling equality, and never consults collection output (unified.json). Both console/app.py's POST /api/jobs and console/runner.py's pre-execution re-check call this one function so a target eligible at admission but disabled/retired before execution is refused the same way.",
+        "M7 is explicitly NOT this record's 'next' build -- its viability and the identity-evidence producer/M8 sequencing return to Product Owner review before any concrete 'next' build is named (see now_next.next below).",
+        "Tests: tests/test_m6_registry_keyed_job_targets.py (27 focused) plus tests/test_m5_collector_target_selection_seam.py, tests/test_con2_console_job_engine.py, tests/test_pcp1_device_registry.py, tests/test_m4_control_plane_metadata_store.py, tests/test_architecture_convergence.py, tests/test_application_package.py (234 combined, 0 failed); full local parallel suite (python -m pytest -q -n auto --dist worksteal): 2058 passed, 37 skipped, 2 failed, 1 error -- all four pre-existing and reproduced identically with this branch's changes stashed (a Windows Git Bash `tr` pipeline quoting quirk, an unrelated SSH-trust binary-garbage test, and a missing local pyyaml dependency for a CI-workflow-parsing test), none touching console/registry/device_registry code."
       ]
     },
     "next": {
-      "build": "registry_keyed_job_targets",
-      "title": "M6 -- Registry-keyed job targets",
-      "status": "planned",
+      "build": "m6_next_movement_po_sequencing_review",
+      "title": "PO review -- M7 viability and identity-evidence producer/M8 sequencing",
+      "status": "blocked",
       "notes": [
-        "Per the frozen M1..M14 sequence: resolve console-submitted device_id targets against the PCP.1 Device Registry at admission and again immediately before execution (AC-ST-4). Prerequisites: M4, M5 (both complete/automated_validated).",
-        "Only after M6 does JOB_REGISTRY['config_refresh_cp'].target_mode change from 'none' to 'entity_ids' -- explicitly out of scope for M5.",
-        "Requires its own separate authorization to start. Recommended: Sonnet 5, normal; new session."
+        "PO decision 2026-09-06 explicitly withheld automatic M7 authorization: 'M7 must not begin automatically after M6. Its viability and the sequencing of the identity-evidence producer/M8 must return to PO review.' This placeholder row exists so now_next.next never silently defaults back to M7 or presents it as immediately executable.",
+        "A legitimate device_id -> collector entity_id relationship producer (out of scope for M6) is the actual prerequisite before config_refresh_cp device_id targeting can become functional; operator_assertion (endpoint/hostname/display-name/vendor-hint/spelling equality) remains an OPEN dissent, not accepted mapping evidence, absent a later explicit PO decision.",
+        "Requires its own separate PO decision to convert into a concrete 'next' build. Recommended: Sonnet 5, extended thinking (high) for the sequencing/producer-design decision itself; Sonnet 5, normal once a contract is frozen."
       ]
     },
     "upcoming": [

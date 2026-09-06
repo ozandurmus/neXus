@@ -151,13 +151,21 @@ def test_recovery_cp_targets_still_pass_through_unaffected_by_m5():
     assert argv[-2:] == ["--recovery-gateways", "fw-01"]
 
 
-# --- JOB_REGISTRY.target_mode is explicitly out of scope for M5 ------------
+# --- JOB_REGISTRY.target_mode: M5 left it untouched; M6 flips it -----------
+#
+# M5's own contract (docs/design/PRODUCT_CONTROL_PLANE_ARCHITECTURE.md §9,
+# "Boundary held") named this field explicitly out of M5's scope and M6's
+# job. M6 (registry_keyed_job_targets, Option D) has since flipped it to the
+# registry-keyed "device_ids" mode (tests/test_m6_registry_keyed_job_targets.py)
+# -- fail-closed admission infrastructure, not functional per-device
+# targeting. This assertion tracks that M6 boundary rather than asserting
+# M5's now-superseded "still none" snapshot.
 
-def test_job_registry_cp_config_target_mode_unchanged():
+def test_job_registry_cp_config_target_mode_is_m6_device_ids():
     from console.registry import get_job_type
 
     job_type = get_job_type("config_refresh_cp")
-    assert job_type.target_mode == "none"
+    assert job_type.target_mode == "device_ids"
 
 
 # --- safety invariants: no new command, no admission/concurrency change ----
