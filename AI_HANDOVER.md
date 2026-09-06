@@ -13,109 +13,85 @@ Overwrite at every session close. Keep it minimal.
 
 ## 1. Snapshot
 
-- Date: 2026-09-06. Branch `build/m5-collector-target-selection-seam` from
-  `main` at `88a8d1610609f96996aca29dc9eeabd9261029c9` (`M4`, PR #93,
-  **merged**). PR open for this branch; **not merged**.
-- Build: `collector_target_selection_seam` (`M5`) — **AUTOMATED_VALIDATED**,
-  `cp-config` seam only.
-- Promoted OP.0d's already-validated `--cp-config-targets` selector into the
-  shared `utils.collection_executor.workflow_argv()` argv seam (CON.2 C2-2).
-- Contract: `docs/design/PRODUCT_CONTROL_PLANE_ARCHITECTURE.md` §9/§12/§12.1
-  (`AC-TGT-3`/`AC-TGT-4`/`AC-TGT-5`), companion
-  `docs/design/LOCAL_CONTROL_PLANE_RUNTIME_AND_ENROLLMENT.md` §12/§12.1.
+- Date: 2026-09-06. `M8` architecture — **FROZEN, PRODUCT OWNER APPROVED**,
+  PR #96 merged into `main` via a true merge commit (see
+  `project/build_history.json`/PR #96 for the exact merge SHA and parents).
+- Build: `m8_first_contact_trust_identity_evidence_producer_architecture`
+  (`M8`) — `status: complete` (architecture only; no code exists).
+- Contract: `docs/history/phase/M8_FIRST_CONTACT_TRUST_AND_IDENTITY_EVIDENCE_PRODUCER_ARCHITECTURE.md`
+  — **FROZEN**, compacted to a concise normative contract (~395 lines, down
+  from the ~1086-line working draft). Round-by-round correction narrative
+  now lives only in `project/build_history.json` and this PR's commits.
 
-## 2. What this session did
+## 2. What this session did (final reconciliation, freeze, merge)
 
-- **Baseline verified, not corrected**: local `main` already equalled
-  `origin/main` at the expected `88a8d161...`, PR #93 (`M4`) already merged,
-  tracked tree clean. No fast-forward needed.
-- **`utils/collection_executor.py::workflow_argv()`**: `cp-config` now
-  appends `--cp-config-targets <comma-joined>` when a non-empty `targets` is
-  passed, preserving requested order and opaque `entity_id` spelling exactly
-  (identity law — no cast/strip/pad/normalize). Target-free `cp-config` argv
-  is byte-identical to before.
-- **New `UnsupportedTargetSelectionError(ValueError)`**: any workflow with no
-  target-selection seam (`cp`, `checkpoint`, `vsx`, `pan-config`) now raises
-  this, inside argv construction, if given a non-empty `targets` — before
-  `main.main()` is ever called, in both the scheduler
-  (`application/workflows/maintenance.py::_scheduler_workflow_argv`) and the
-  console runner (`console/runner.py::_build_argv`). `recovery-pan` /
-  `recovery-cp` keep their pre-existing pass-through behaviour byte-for-byte.
-- **No other file changed.** `console/registry.py::JOB_REGISTRY` untouched —
-  `config_refresh_cp.target_mode` stays `"none"` (M6's job). No registry
-  target resolution, no device contact, no admission/concurrency/storage
-  change.
-- **Added `tests/test_m5_collector_target_selection_seam.py`** — 22 focused
-  tests (target-free/targeted argv shape, opaque-id preservation, CLI
-  round-trip, scheduler/console parity, fail-closed refusal before `main()`
-  for every non-seamed workflow, empty-targets-is-the-only-plane-wide-spelling,
-  recovery-* unaffected, `JOB_REGISTRY.target_mode` unchanged, structural
-  no-new-command/no-concurrency-change checks).
-- **Project-state rotation**: `project/build_history.json` (new `M5` record,
-  newest-first), `project/roadmap.json` (`now`→`M5`/`automated_validated`,
-  `next`→`M6` stub), `project/backlog.json`
-  (`pcp_collector_target_selection_seams`: `planned`→`in_progress`, one CP
-  seam closed, VSX/CP-inventory/pan-config still plane-wide),
-  `docs/history/INDEX.md` regenerated. `CURRENT_STATE.md`'s stale
-  post-merge-`M4` wording (still describing PR #93 as open) reconciled as
-  part of this same rotating-state update, per session instruction — not a
-  separate movement.
+PO approved the round-2-corrected direction and requested final
+reconciliation before freeze — **`nexus-decision-council` not invoked**,
+`GOV.SESSION.1` kept parked/untouched, direct repository evidence only.
+
+1. **Serial made explicitly mandatory**: `proof_type =
+   first_contact_identity_gate_and_serial` requires both an accepted
+   identity gate *and* a usable directly-read serial before
+   `identity_mapping_proven` may be `1`. Gate-accepted-but-serial-absent
+   writes no row, leaves `IDENTITY_TRANSLATION_REQUIRED`, and is observable
+   only via the producer's own sanitized run-outcome record.
+2. **Explicit implementation sequence recorded**: `M8.1` (relationship
+   storage/API) → `M8.2` (mandatory endpoint-specific trusted-key lookup)
+   → `M8.3` (read-only producer + real-environment gate, must not begin
+   without `M8.2`) → `M8.4` (`M6` resolver consumption) → `M7` (blocked
+   until `M8.4` and real-environment evidence exist).
+3. **Contract compacted**: rewrote the ~1086-line working draft into a
+   ~395-line normative contract — removed correction-round narratives,
+   superseded schema designs (VSX cardinality, HMAC serial fingerprint),
+   repeated Q&A restatements, and duplicated lists. Retained only
+   rationale, final rules/schema, acceptance criteria, unresolved
+   risks/dissent, non-goals, and the implementation sequence.
+4. **Status flipped DRAFT → FROZEN.** Project state reconciled:
+   `project/build_history.json` (status `complete`, title/summary updated,
+   freeze evidence appended), `project/roadmap.json` (`now` = `M8`
+   `complete`; `next` = `m8_1_relationship_storage_api`, `planned`, no
+   blocker; `m7_real_device_targeted_collect_now` moved to
+   `upcoming`/`blocked`), `CURRENT_STATE.md` (Active build + Exact next
+   build sections).
+5. **PR #96 description updated** to reflect the final physical-only
+   design, no support-HMAC coupling, mandatory trust seam, required
+   serial, and the five-step sequence.
+6. **Merged** via `gh pr merge 96 --merge` (true merge commit, matching
+   PR #93/#94/#95 precedent) after `validate` passed on the final commit.
+   Local `main` fast-forwarded to match `origin/main`.
 
 ## 3. Exact next action
 
-**Product Owner review of the open `M5` PR, then merge decision.** Merge is
-not authorized by the session that opened it.
-
-`M6` (`registry_keyed_job_targets`) is **next, not started, not
-authorized** — it needs its own go-ahead. It resolves console-submitted
-`device_id` targets against the `PCP.1` Device Registry at admission and
-again immediately before execution, and is the movement that changes
-`JOB_REGISTRY['config_refresh_cp'].target_mode` from `"none"` to
-`"entity_ids"` — M5 deliberately left that field untouched.
-
-**Still outstanding from `M3`:** the Claude-side `nexus-decision-council` was
-never stood up. Not required for `M5` (deterministic implementation against
-an already-frozen contract, per this session's explicit instruction) but
-remains a prerequisite for the next *architecture* movement.
-
-**Pre-existing, unowned, explicitly out of scope here:** the Panorama
-test-residue hygiene issue (full-suite runs leave `data/`/`logs/` in the
-working tree, failing the working-directory privacy gate until removed) —
-not fixed in this session per its explicit boundary.
+**`M8.1` — device-identity-relationship storage and typed read/write
+API.** Not started, not authorized to begin without its own `SCOPE →
+AUDIT → CONTRACT` pass against `M8`'s frozen §5/§9 (this is a
+deterministic-implementation movement against an already-frozen contract,
+so a new architecture document is not expected — `AGENTS.md` "Mandatory
+build lifecycle"). `M8.2` (the mandatory trust-lookup seam) is the
+following slice; `M8.3` (the producer) must not begin without `M8.2`.
 
 ## 4. Test delta
 
-- **New:** `tests/test_m5_collector_target_selection_seam.py` — 22 passed.
-- **Affected suites, combined 110 passed / 0 failed:**
-  `tests/test_op0d_deterministic_target_selection.py` (re-exercises the
-  underlying OP.0d selector, unmodified here),
-  `tests/test_con2_console_job_engine.py`,
-  `tests/test_rb2_recovery_collect.py`,
-  `tests/test_architecture_convergence.py` (20 passed),
-  `tests/test_application_package.py`.
-- `metadata_warnings == []`; build-history index `--check` clean (after
-  regeneration); `git diff --check` clean.
-- **Repository privacy gate:** `PASS`, 0 findings — `data/`/`logs/` (runtime
-  residue from the focused-suite runs) removed from the working tree first,
-  per `AI_START_HERE.md`'s documented gate procedure.
-- **No full local suite** (blast radius bounded to one shared argv-
-  construction function and its two existing call sites, all covered by the
-  affected-suite run above). **No GitHub full regression, no
-  `workflow_dispatch`, no device contact, no merge.**
+None this session. No source or test file changed. Validation re-run on
+every state/doc change: `tests/test_architecture_convergence.py` (20
+passed), `tests/test_application_package.py`, `py scripts/build_history_index.py
+--check` (up to date), `py main.py --repository-privacy-check` (PASS, 0
+findings), `git diff --check` (clean). No `full-regression`/
+`workflow_dispatch` triggered (not authorized this session).
 
 ## 5. Risks / notes forward
 
-- **Automated tests do not prove production readiness or real-environment
-  validation.** No device was contacted; the underlying OP.0d collector-side
-  fail-closed behaviour (unknown/ambiguous/empty `entity_id`, contact only
-  requested targets) was validated previously and is unmodified here.
-- **Only one collector has a seam.** CP inventory (`cp`), VSX and `pan-config`
-  remain honestly plane-wide by design (`AC-TGT-5`) — a second seam is its
-  own future movement, not implied by this one landing.
-- **Console cannot submit a targeted `cp-config` job yet** —
-  `JOB_REGISTRY['config_refresh_cp'].target_mode` stays `"none"` until `M6`.
-  Only a scheduler-policy `targets: [...]` entry or a direct
-  `workflow_argv()`/CLI call can exercise the new seam today.
-- **Admission coordinator, canonical endpoint lock and the vendor
-  concurrency budget of 1 are unchanged** — this movement touches argv
-  construction only.
+- `mapping_scope = CLASS_0_CP_CONFIG_TARGET_SELECTION_ONLY` remains the
+  entire authority this design produces — `M8.1`+ must never widen it
+  without a separate, explicit PO decision.
+- Serial-based `CONTRADICTORY_EVIDENCE` detection is `DEFERRED` — `M8.3`
+  must measure real CP config evidence retention before this gap can be
+  honestly closed either way.
+- `M8.2`'s trust-lookup seam does not exist yet and gates `M8.3`.
+- Open implementation-shape question for `M8.4`: whether
+  `console/registry_targets.py` imports the new trust-lookup function
+  directly or through a vendor-neutral wrapper.
+- Three dissents remain open: `operator_assertion`, single-sourced identity
+  evidence, deferred contradiction detection.
+- Table/column names and migration version numbers remain illustrative
+  beyond the `M8.1`–`M8.4`/`M7` ordering itself.

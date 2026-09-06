@@ -7,19 +7,18 @@ detail is not here either** — it is in `project/build_history.json`
 linked documents under `docs/history/`. `docs/history/INDEX.md` is the
 generated one-line timeline.
 
-- **Checkpoint:** 2026-09-06, `M6` branched from `main` at
-  `a4a75e3a9ac31c9de6ca8ae524258c1d2d1dcc0d` (`M5`+`M4` merged). PO-approved
-  at `759ce0dbe6151b286c2d451f4da3f652d0af32ef` (PR #95) after one
-  correction round; fast `validate` green; merge authorized.
+- **Checkpoint:** 2026-09-06, `M8` architecture **FROZEN — PRODUCT OWNER
+  APPROVED** from verified `main` at
+  `0a9048ceeb2a318444f918e2688b126641eaeab0` (`M6` merged). Architecture
+  only — no code, schema, or device contact yet.
 - **Current build** (per `project/roadmap.json` `now_next.now`):
-  `registry_keyed_job_targets` (`M6`) — **AUTOMATED_VALIDATED**, **Option D
-  fail-closed admission shell only, not functional per-device targeting**
-  (PO decision 2026-09-06, bounded `nexus-decision-council` synthesis). Every
-  otherwise-eligible `config_refresh_cp` `device_id` target still refuses
-  with `UNSUPPORTED / IDENTITY_TRANSLATION_REQUIRED` — see "Active build".
-  `now_next.next` is deliberately **not** `M7` (PO review owed first).
+  `m8_first_contact_trust_identity_evidence_producer_architecture` (`M8`) —
+  **complete** (architecture), see "Active build". `now_next.next` is
+  `M8.1` (relationship storage/API), `planned`, no blocker.
+  `m7_real_device_targeted_collect_now` moved to `upcoming`/`blocked`.
   `op2_c_cp_clusterxl_adapter_scoping` stays `upcoming`, blocked on
-  `DEPLOY.1`. `DEV.TEST.1`, `PCP.1`, `M1`-`M5` complete — build_history.json.
+  `DEPLOY.1`. `DEV.TEST.1`, `PCP.1`, `M1`-`M6` complete/automated_validated —
+  `project/build_history.json`.
 - **OP.2.0 CLASS 2 architecture** (`docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md`):
   **CONTRACT FROZEN 2026-09-04**; `OP.2.A`/`OP.2.B` IMPLEMENTED; `OP.2.1` CP
   command gate DRAFTED — CLASS 2 still has **no member**, no adapter,
@@ -58,27 +57,30 @@ test-enforced boundaries. Current numbers:
 
 ## Active build
 
-**`registry_keyed_job_targets`** (`M6`) — **AUTOMATED_VALIDATED, Option D
-fail-closed admission shell, not functional per-device targeting** (PO
-decision 2026-09-06). Full evidence/rationale: `project/build_history.json`
-head record (includes correction round 1 below).
+**`m8_first_contact_trust_identity_evidence_producer_architecture`** (`M8`)
+— **FROZEN, PRODUCT OWNER APPROVED, 2026-09-06 (PR #96, merged).**
+Physical-`entity_id`-only candidate-selection (CMA-endpoint-match, hint
+only) + live first-contact identity-gate confirmation, gated by a new
+**mandatory** target-specific trust-lookup seam, over the *existing* CP
+collector/trust primitives, scoped by a closed `mapping_scope =
+CLASS_0_CP_CONFIG_TARGET_SELECTION_ONLY` (never general identity proof); a
+usable directly-read serial is mandatory alongside the identity gate before
+`identity_mapping_proven` may be `1`. The proven relationship is a new `M4`
+SQLite table that **references** (never copies) existing governed collector
+evidence and the registry's own `updated_at` revision signal for live
+registry/trust-currency checks at admission and pre-execution — no `PCP.1`
+amendment, no `data/.support_hmac.key` coupling. Sequence: `M8.1`
+(storage/API) → `M8.2` (mandatory trust-lookup seam) → `M8.3` (read-only
+producer, real-env gated) → `M8.4` (`M6` resolver consumption) → `M7`. Open:
+inherited `operator_assertion`, single-sourced identity evidence, DEFERRED
+serial-contradiction detection. **Not implemented yet, by design:** any
+code, test, schema migration, Device Registry write, `M4` migration, or
+device contact — those are `M8.1`+. Full contract:
+`docs/history/phase/M8_FIRST_CONTACT_TRUST_AND_IDENTITY_EVIDENCE_PRODUCER_ARCHITECTURE.md`.
 
-`console/registry.py` flips `JOB_REGISTRY['config_refresh_cp'].target_mode`
-`"none"` → `"device_ids"` (`config_refresh_cp` only). Shared
-`console/registry_targets.py::resolve_registry_targets()`, called by both
-`console/app.py` admission and `console/runner.py`'s pre-execution re-check:
-unknown `device_id` → `unknown_device_id`; not `ENROLLED_UNVERIFIED` →
-`device_not_eligible`; known+eligible → `IDENTITY_TRANSLATION_REQUIRED`
-(unconditional — no producer exists); an unreadable registry →
-`device_registry_unavailable` (correction round 1 — distinct from
-`unknown_device_id`, sanitized detail, never the raw exception/path/
-endpoint). Checks only `device_id`/`state`, re-read every call, order and
-opaque spelling preserved (correction round 1) — **never** endpoint,
-hostname, display name, vendor hint, spelling, or `unified.json` output.
-`operator_assertion` stays an **OPEN dissent**. **Not implemented, by
-design:** any functional translation, `PCP.1` relationship write, `M4`
-schema change, new mapping store, frozen-contract edit, `M7` behaviour (PO
-review owed first — see "Exact next build").
+Predecessor — **`registry_keyed_job_targets`** (`M6`) —
+**AUTOMATED_VALIDATED, Option D fail-closed admission shell, not functional
+per-device targeting**. Full evidence/rationale: `project/build_history.json`.
 
 ## Predecessor — `M5`/`M4`
 
@@ -131,14 +133,13 @@ a narrower question never promoted toward B2.
 
 ## Exact next build
 
-`now_next.next` is deliberately **not** `M7`: the PO decision closing `M6`
-(2026-09-06) requires "`M7` must not begin automatically after `M6`. Its
-viability and the sequencing of the identity-evidence producer/`M8` must
-return to PO review." `project/roadmap.json` `now_next.next` names a
-placeholder review row (`m6_next_movement_po_sequencing_review`, `blocked`)
-instead. A legitimate `device_id` → collector `entity_id` relationship
-producer is the real prerequisite for functional targeting;
-`operator_assertion` is not accepted evidence for it without a later PO decision.
+`now_next.next` is `m8_1_relationship_storage_api` (`M8.1`, `planned`, no
+blocker) — the `M4` additive migration + typed read/write API from the
+frozen `M8` contract §5/§9. `M8.2` (mandatory trust-lookup seam) must exist
+before `M8.3` (the producer) begins; `M7` moved to `upcoming`/`blocked`
+until `M8.4` exists with at least one real-environment-proven relationship.
+`operator_assertion` is not accepted mapping evidence without a later,
+separate PO decision — unchanged from `M6`.
 
 `op2_c_cp_clusterxl_adapter_scoping` stays `upcoming`/blocked; `OP.2.D`'s
 console flow is expected on the `PCP.4` device/HA tab — one console, never two.
