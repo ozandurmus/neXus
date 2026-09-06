@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import base64
 import hashlib
 import json
 import os
@@ -14,7 +13,12 @@ from typing import Any
 
 import paramiko
 
-from utils.cp_ssh_trust import CpSshStrictPreflightError, HostKeyNotTrustedError, apply_strict_host_key_policy
+from utils.cp_ssh_trust import (
+    CpSshStrictPreflightError,
+    HostKeyNotTrustedError,
+    apply_strict_host_key_policy,
+    host_key_fingerprint,
+)
 from utils.logger import info, warn, register_sensitive_value, user_fingerprint
 
 OUTPUT_DIR = Path("output")
@@ -266,13 +270,6 @@ def _pick_targets() -> tuple[list[ProbeTarget], list[str]]:
 
 def _sha256_text(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8", errors="ignore")).hexdigest()
-
-
-def _host_key_fingerprint(key: paramiko.PKey | None) -> str | None:
-    if key is None:
-        return None
-    digest = hashlib.sha256(key.asbytes()).digest()
-    return "SHA256:" + base64.b64encode(digest).decode("ascii").rstrip("=")
 
 
 def _looks_like_cli_error(stdout: str, stderr: str) -> bool:
@@ -606,7 +603,7 @@ def _connect(target: ProbeTarget, username: str, secret: str, *, strict: bool, c
             )
             transport = ssh.get_transport()
             key = transport.get_remote_server_key() if transport else None
-            return ssh, _host_key_fingerprint(key)
+            return ssh, (host_key_fingerprint(key) if key is not None else None)
         except (paramiko.AuthenticationException, paramiko.BadHostKeyException, HostKeyNotTrustedError):
             # Not retried: a wrong credential, a host-key mismatch, or an
             # untrusted/unknown host key (RejectPolicy) will not change on a

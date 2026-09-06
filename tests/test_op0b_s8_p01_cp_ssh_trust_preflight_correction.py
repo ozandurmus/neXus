@@ -357,10 +357,13 @@ class TestNoExplicitTrustSourceSurface:
             assert forbidden not in src, f"no new trust-source surface: {forbidden!r}"
 
     def test_public_surface_is_unchanged_plus_loader(self):
-        """M8.2 (contract §4 step 1) adds exactly one new public function
-        (``lookup_trusted_host_key``), its typed result dataclass, its own
-        reason token, and the stdlib imports that back them -- nothing
-        else. The original 0.6.4 surface (asserted below) is unchanged."""
+        """M8.2 (contract §4 step 1) adds `lookup_trusted_host_key`, its
+        typed result dataclass, its own reason token, the shared
+        `host_key_fingerprint` helper (also imported by
+        `configuration/checkpoint_config_probe.py` -- the single shared
+        fingerprint-format authority, not a second implementation), and the
+        stdlib imports that back them -- nothing else. The original 0.6.4
+        surface (asserted below) is unchanged."""
         public = {name for name in dir(cp_ssh_trust) if not name.startswith("_")}
         expected = {
             "CpSshStrictPreflightError",
@@ -378,10 +381,12 @@ class TestNoExplicitTrustSourceSurface:
             "lookup_trusted_host_key",
             "TrustedKeyLookupResult",
             "REASON_ENDPOINT_NOT_TRUSTED",
+            "host_key_fingerprint",
             "base64",
             "hashlib",
             "dataclass",
             "field",
+            "MappingProxyType",
         }
         assert public == expected, f"unexpected public surface change: {sorted(public ^ expected)}"
 
@@ -466,13 +471,14 @@ class TestStructuralSecurityGuards:
                 imported.update(alias.name for alias in node.names)
             elif isinstance(node, ast.ImportFrom):
                 imported.add(node.module or "")
-        # M8.2 adds hashlib/base64 (the same value-free SHA256 fingerprint
-        # format checkpoint_config_probe.py already uses) and dataclasses
-        # (the typed TrustedKeyLookupResult outcome, contract §4 step 1) --
-        # no new network/config/secret-surface import.
+        # M8.2 adds hashlib/base64 (the shared SHA256 fingerprint format,
+        # also imported by checkpoint_config_probe.py), dataclasses (the
+        # typed TrustedKeyLookupResult outcome, contract §4 step 1), and
+        # types (MappingProxyType, making fingerprints immutable) -- no new
+        # network/config/secret-surface import.
         assert imported == {
             "__future__", "os", "paramiko", "paramiko.hostkeys",
-            "hashlib", "base64", "dataclasses",
+            "hashlib", "base64", "dataclasses", "types",
         }
 
     def _enclosing_function_name(self, helper_ast, handler) -> str | None:

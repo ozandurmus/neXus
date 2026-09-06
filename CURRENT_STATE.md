@@ -28,7 +28,7 @@ generated one-line timeline.
 - **Product baseline:** `0.7.7 — Compliance trend retro-fill` — AUTOMATED_VALIDATED.
 - **Engineering baseline:** `DEV.3.3` — AUTOMATED_VALIDATED. `DEV.1`,
   `DEV.4` complete.
-- **Product evidence baseline:** `0.6.1B.1.2` interactive CP config collection is REAL_ENV_VALIDATED.
+- **Product evidence baseline:** `0.6.1B.1.2` interactive CP config is REAL_ENV_VALIDATED.
 
 ## Reading this file
 
@@ -58,13 +58,16 @@ test-enforced boundaries. Current numbers:
 
 **`m8_2_endpoint_specific_trusted_key_lookup`** (`M8.2`) —
 **AUTOMATED_VALIDATED, 2026-09-07**, branch
-`build/m8-2-endpoint-specific-trusted-key-lookup`, PR pending. New
+`build/m8-2-endpoint-specific-trusted-key-lookup`, PR #98 (unmerged). New
 `utils/cp_ssh_trust.py::lookup_trusted_host_key(endpoint, port)` (contract §4
 step 1): local-only, read-only, exact normalized-endpoint+port check against
 the same `known_hosts` source `apply_strict_host_key_policy` already reads;
-typed `TrustedKeyLookupResult` (`trusted`/`reason`/`fingerprints`), never
-raises. No network/device contact, no key add/enroll/TOFU. Existing trust
-behavior unchanged, re-verified. Full evidence: `project/build_history.json`.
+typed `TrustedKeyLookupResult` (`trusted`/`reason`/immutable `fingerprints`
+`MappingProxyType`), never raises. No network/device contact, no
+key add/enroll/TOFU. Correction round 1 (PO review): fingerprints made
+immutable; fingerprint format consolidated into one shared
+`host_key_fingerprint()` also used by `checkpoint_config_probe.py`. Full
+evidence: `project/build_history.json`.
 
 Parent — **`m8_first_contact_trust_identity_evidence_producer_architecture`**
 (`M8` architecture) — **FROZEN, PRODUCT OWNER APPROVED, 2026-09-06 (PR #96,
@@ -75,13 +78,11 @@ serial-contradiction detection. Full contract:
 `docs/history/phase/M8_FIRST_CONTACT_TRUST_AND_IDENTITY_EVIDENCE_PRODUCER_ARCHITECTURE.md`.
 
 Predecessor — **`m8_1_relationship_storage_api`** (`M8.1`) —
-**AUTOMATED_VALIDATED**, `M4` schema-version-2 migration
-(`device_identity_relationships`) plus typed read/write API. No
-producer/consumer yet.
+**AUTOMATED_VALIDATED**, `M4` schema-version-2 migration plus typed
+read/write API. No producer/consumer yet.
 
-Predecessor — **`registry_keyed_job_targets`** (`M6`) —
-**AUTOMATED_VALIDATED, Option D fail-closed admission shell, not functional
-per-device targeting**. Full evidence: `project/build_history.json`.
+Predecessor — **`registry_keyed_job_targets`** (`M6`) — **AUTOMATED_VALIDATED,
+Option D fail-closed admission shell, not functional per-device targeting**.
 
 ## Predecessor — `M5`/`M4`
 
@@ -167,10 +168,9 @@ Concurrency budget stays at 1 per vendor pending its own real-env evidence.
 ## Automated test baseline
 
 ```
-M8.2 targeted: 12 passed. cp_ssh_trust-affected sweep 124 passed, 1
-  pre-existing unrelated Paramiko-drift failure (reproduced with changes
-  stashed). M4/M8.1 (101), architecture convergence (20) re-confirmed
-  green. Privacy gate PASS. No full-regression run. Detail: build_history.json.
+M8.2 (correction round 1): 20 passed (was 12). Wide sweep (checkpoint_config_
+  probe/collector + M4/M8.1/architecture convergence, 26 files): 608 passed,
+  1 skipped, 1 pre-existing unrelated Paramiko-drift failure. Privacy PASS.
 M8.1 targeted: 101 passed. Affected (M4/M8.1/M6/M5/PCP.1/CON.2/architecture
   convergence): 388 passed, 0 failed. Privacy gate PASS. No full-regression
   run (risk-based). Detail: project/build_history.json.

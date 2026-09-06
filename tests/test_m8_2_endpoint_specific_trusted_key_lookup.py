@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import socket
 from pathlib import Path
+from types import MappingProxyType
 
 import paramiko
 import pytest
@@ -22,7 +23,7 @@ from utils.cp_ssh_trust import (
     REASON_TRUST_SOURCE_MALFORMED,
     REASON_TRUST_SOURCE_UNREADABLE,
     TrustedKeyLookupResult,
-    _host_key_fingerprint,
+    host_key_fingerprint,
     lookup_trusted_host_key,
 )
 
@@ -50,7 +51,7 @@ class TestFound:
         assert isinstance(result, TrustedKeyLookupResult)
         assert result.trusted is True
         assert result.reason is None
-        assert result.fingerprints == {key.get_name(): _host_key_fingerprint(key)}
+        assert result.fingerprints == {key.get_name(): host_key_fingerprint(key)}
 
     def test_bare_entry_matches_explicit_default_port_22(self, tmp_path, monkeypatch):
         known_hosts = _isolated_profile(tmp_path, monkeypatch)
@@ -60,7 +61,7 @@ class TestFound:
         result = lookup_trusted_host_key("192.0.2.10", 22)
 
         assert result.trusted is True
-        assert result.fingerprints == {key.get_name(): _host_key_fingerprint(key)}
+        assert result.fingerprints == {key.get_name(): host_key_fingerprint(key)}
 
     def test_non_default_port_uses_bracketed_openssh_form(self, tmp_path, monkeypatch):
         known_hosts = _isolated_profile(tmp_path, monkeypatch)
@@ -70,7 +71,7 @@ class TestFound:
         result = lookup_trusted_host_key("192.0.2.10", 2222)
 
         assert result.trusted is True
-        assert result.fingerprints == {key.get_name(): _host_key_fingerprint(key)}
+        assert result.fingerprints == {key.get_name(): host_key_fingerprint(key)}
 
     def test_multiple_key_types_all_returned(self, tmp_path, monkeypatch):
         known_hosts = _isolated_profile(tmp_path, monkeypatch)
@@ -86,8 +87,8 @@ class TestFound:
 
         assert result.trusted is True
         assert result.fingerprints == {
-            ecdsa_key.get_name(): _host_key_fingerprint(ecdsa_key),
-            rsa_key.get_name(): _host_key_fingerprint(rsa_key),
+            ecdsa_key.get_name(): host_key_fingerprint(ecdsa_key),
+            rsa_key.get_name(): host_key_fingerprint(rsa_key),
         }
 
 
@@ -190,3 +191,101 @@ class TestNoNetworkOrDeviceContact:
         assert result.trusted is False
         assert result.reason == REASON_TRUST_SOURCE_UNREADABLE
         assert result.fingerprints == {}
+
+
+class TestFingerprintsAreImmutable:
+    def test_fingerprints_is_a_mapping_proxy(self, tmp_path, monkeypatch):
+        known_hosts = _isolated_profile(tmp_path, monkeypatch)
+        key = paramiko.ECDSAKey.generate()
+        known_hosts.write_text(f"192.0.2.10 {key.get_name()} {key.get_base64()}\n", encoding="utf-8")
+
+        result = lookup_trusted_host_key("192.0.2.10", None)
+
+        assert isinstance(result.fingerprints, MappingProxyType)
+
+    def test_item_assignment_is_refused(self, tmp_path, monkeypatch):
+        known_hosts = _isolated_profile(tmp_path, monkeypatch)
+        key = paramiko.ECDSAKey.generate()
+        known_hosts.write_text(f"192.0.2.10 {key.get_name()} {key.get_base64()}\n", encoding="utf-8")
+
+        result = lookup_trusted_host_key("192.0.2.10", None)
+
+        with pytest.raises(TypeError):
+            result.fingerprints[key.get_name()] = "tampered"
+
+    def test_deletion_is_refused(self, tmp_path, monkeypatch):
+        known_hosts = _isolated_profile(tmp_path, monkeypatch)
+        key = paramiko.ECDSAKey.generate()
+        known_hosts.write_text(f"192.0.2.10 {key.get_name()} {key.get_base64()}\n", encoding="utf-8")
+
+        result = lookup_trusted_host_key("192.0.2.10", None)
+
+        with pytest.raises(TypeError):
+            del result.fingerprints[key.get_name()]
+
+    def test_constructing_with_a_plain_dict_still_yields_an_immutable_result(self):
+        """The dataclass field accepts a plain dict at construction (as
+        lookup_trusted_host_key itself passes) but always normalizes to a
+        MappingProxyType -- a caller cannot bypass immutability by handing
+        the constructor a mutable mapping and keeping a reference to it."""
+        source = {"ssh-ed25519": "SHA256:AAAA"}
+        result = TrustedKeyLookupResult(trusted=True, reason=None, fingerprints=source)
+
+        assert isinstance(result.fingerprints, MappingProxyType)
+        source["ssh-ed25519"] = "tampered"
+        assert result.fingerprints["ssh-ed25519"] == "SHA256:AAAA"
+
+    def test_result_itself_stays_frozen(self, tmp_path, monkeypatch):
+        known_hosts = _isolated_profile(tmp_path, monkeypatch)
+        key = paramiko.ECDSAKey.generate()
+        known_hosts.write_text(f"192.0.2.10 {key.get_name()} {key.get_base64()}\n", encoding="utf-8")
+
+        result = lookup_trusted_host_key("192.0.2.10", None)
+
+        with pytest.raises(Exception):  # dataclasses.FrozenInstanceError
+            result.trusted = False
+
+
+class TestFingerprintFormatMatchesLiveConnectionEvidence:
+    """Contract §6/§7 requires comparing this lookup's fingerprint against a
+    live connection's captured fingerprint -- so the two must be provably
+    byte-for-byte identical, not merely two implementations that happen to
+    agree today. utils.cp_ssh_trust.host_key_fingerprint is the single
+    shared implementation: configuration/checkpoint_config_probe.py imports
+    and calls it directly for its own live-connection fingerprint
+    (`_connect()`), rather than defining a second copy."""
+
+    def test_checkpoint_config_probe_imports_the_same_function_object(self):
+        import configuration.checkpoint_config_probe as probe
+
+        assert probe.host_key_fingerprint is host_key_fingerprint
+
+    def test_same_key_yields_the_same_fingerprint_via_both_module_references(self):
+        import configuration.checkpoint_config_probe as probe
+
+        key = paramiko.ECDSAKey.generate()
+
+        via_cp_ssh_trust = host_key_fingerprint(key)
+        via_checkpoint_config_probe = probe.host_key_fingerprint(key)
+
+        assert via_cp_ssh_trust == via_checkpoint_config_probe
+        assert via_cp_ssh_trust.startswith("SHA256:")
+
+    def test_lookup_result_fingerprint_matches_a_live_connection_fingerprint_for_the_same_key(
+        self, tmp_path, monkeypatch
+    ):
+        """End-to-end: the fingerprint lookup_trusted_host_key returns for a
+        known_hosts entry is exactly what a live connection presenting the
+        same key would produce via checkpoint_config_probe's own code path
+        -- proven without a real connection, since both sides call the one
+        shared function on the one shared key object."""
+        import configuration.checkpoint_config_probe as probe
+
+        known_hosts = _isolated_profile(tmp_path, monkeypatch)
+        key = paramiko.ECDSAKey.generate()
+        known_hosts.write_text(f"192.0.2.10 {key.get_name()} {key.get_base64()}\n", encoding="utf-8")
+
+        result = lookup_trusted_host_key("192.0.2.10", None)
+        live_connection_fingerprint = probe.host_key_fingerprint(key)
+
+        assert result.fingerprints[key.get_name()] == live_connection_fingerprint
