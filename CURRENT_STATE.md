@@ -7,14 +7,19 @@ detail is not here either** — it is in `project/build_history.json`
 linked documents under `docs/history/`. `docs/history/INDEX.md` is the
 generated one-line timeline.
 
-- **Checkpoint:** 2026-09-06, `M5` branched from `main` at `88a8d161...`
-  (`M4`, PR #93, merged). Implementation complete on the branch; PR CI pending.
+- **Checkpoint:** 2026-09-06, `M6` branched from `main` at
+  `a4a75e3a9ac31c9de6ca8ae524258c1d2d1dcc0d` (`M5`+`M4` merged). Implementation
+  complete on `build/m6-registry-keyed-job-targets-shell`; PR CI pending, not
+  merged.
 - **Current build** (per `project/roadmap.json` `now_next.now`):
-  `collector_target_selection_seam` (`M5`) — **AUTOMATED_VALIDATED**,
-  `cp-config` seam only. `now_next.next` is `M6`
-  (`registry_keyed_job_targets`), not started/unauthorized.
+  `registry_keyed_job_targets` (`M6`) — **AUTOMATED_VALIDATED**, **Option D
+  fail-closed admission shell only, not functional per-device targeting**
+  (PO decision 2026-09-06, bounded `nexus-decision-council` synthesis). Every
+  otherwise-eligible `config_refresh_cp` `device_id` target still refuses
+  with `UNSUPPORTED / IDENTITY_TRANSLATION_REQUIRED` — see "Active build".
+  `now_next.next` is deliberately **not** `M7` (PO review owed first).
   `op2_c_cp_clusterxl_adapter_scoping` stays `upcoming`, blocked on
-  `DEPLOY.1`. `DEV.TEST.1`, `PCP.1`, `M1`-`M4` complete — build_history.json.
+  `DEPLOY.1`. `DEV.TEST.1`, `PCP.1`, `M1`-`M5` complete — build_history.json.
 - **OP.2.0 CLASS 2 architecture** (`docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md`):
   **CONTRACT FROZEN 2026-09-04**; `OP.2.A`/`OP.2.B` IMPLEMENTED; `OP.2.1` CP
   command gate DRAFTED — CLASS 2 still has **no member**, no adapter,
@@ -53,37 +58,33 @@ test-enforced boundaries. Current numbers:
 
 ## Active build
 
-**`collector_target_selection_seam`** (`M5`) — **AUTOMATED_VALIDATED**,
-`cp-config` seam only. Contract:
-`docs/design/PRODUCT_CONTROL_PLANE_ARCHITECTURE.md` §9/§12/§12.1
-(`AC-TGT-3`/`AC-TGT-4`/`AC-TGT-5`), companion
-`docs/design/LOCAL_CONTROL_PLANE_RUNTIME_AND_ENROLLMENT.md` §12/§12.1.
+**`registry_keyed_job_targets`** (`M6`) — **AUTOMATED_VALIDATED, Option D
+fail-closed admission shell, not functional per-device targeting** (PO
+decision 2026-09-06, bounded `nexus-decision-council` synthesis). Full
+evidence/rationale: `project/build_history.json` head record.
 
-Promoted OP.0d's already-validated `--cp-config-targets` selector into the
-shared `utils.collection_executor.workflow_argv()` argv seam (CON.2 C2-2), so
-the scheduler and console job runner build the identical `cp-config` argv the
-direct CLI already built. Target-free `cp-config` stays byte-identical/
-plane-wide; requested order and opaque `entity_id` spelling are preserved
-exactly. A non-empty target set for any workflow with no seam yet (`cp`,
-`checkpoint`, `vsx`, `pan-config`) is refused with the new
-`UnsupportedTargetSelectionError` **inside argv construction, before
-`main.main()` is ever called** — fail-closed pre-invocation, pre-contact, in
-both the scheduler and the console runner. `recovery-pan`/`recovery-cp` keep
-their pre-existing pass-through behaviour byte-for-byte.
+`console/registry.py` flips `JOB_REGISTRY['config_refresh_cp'].target_mode`
+`"none"` → `"device_ids"` (scoped to `config_refresh_cp` only). New shared
+`console/registry_targets.py::resolve_registry_targets()`, called by both
+`console/app.py`'s `POST /api/jobs` (admission) and `console/runner.py`'s
+pre-execution re-check: unknown `device_id` → `unknown_device_id`; known but
+not `ENROLLED_UNVERIFIED` → `device_not_eligible`; known and eligible →
+`IDENTITY_TRANSLATION_REQUIRED` (unconditional — no producer exists). Checks
+only `device_id`/`state`, re-read on every call — **never** endpoint,
+hostname, display name, vendor hint, spelling, or `unified.json` output.
+`operator_assertion` stays an **OPEN dissent**, not accepted mapping
+authority. **Not implemented, by design:** any functional translation, `PCP.1`
+relationship write, `M4` schema change, new mapping store, frozen-contract
+edit, `M7` behaviour (PO review owed first — see "Exact next build").
 
-**Boundary held.** `JOB_REGISTRY` untouched — `config_refresh_cp.target_mode`
-stays `"none"` (`M6`'s job); no registry resolution, no device contact,
-admission/lock/vendor-budget unchanged, no new command/retry/transport path.
-**Not implemented, by design:** a second collector seam (CP inventory, VSX,
-`pan-config` stay honestly plane-wide), `M6` target resolution, `M7` job/UI
-behaviour, scheduling, enrollment, HTTP/UI integration, device contact.
+## Predecessor — `M5`/`M4`
 
-## Predecessor — `M4`
-
-**`local_control_plane_metadata_store`** — COMPLETE, merged via PR #93.
-Additive local SQLite control-plane metadata store, schema version 1, seven
-`STRICT` tables; storage infrastructure only, no job behaviour or target
-resolution. Detail: `docs/history/phase/M4_LOCAL_CONTROL_PLANE_METADATA_STORE.md`.
+**`collector_target_selection_seam`** (`M5`) — COMPLETE/AUTOMATED_VALIDATED,
+merged via PR #94: promoted `--cp-config-targets` into `workflow_argv()`;
+`M6` is the only thing since changed `config_refresh_cp.target_mode`.
+**`local_control_plane_metadata_store`** (`M4`) — COMPLETE, merged via PR #93,
+additive local SQLite control-plane metadata store (seven `STRICT` tables).
+Detail: `docs/history/phase/M4_LOCAL_CONTROL_PLANE_METADATA_STORE.md`.
 
 ## Predecessor — `M3`
 
@@ -127,17 +128,14 @@ a narrower question never promoted toward B2.
 
 ## Exact next build
 
-**Create and configure the Claude-side `nexus-decision-council` before the
-next *architecture* movement** (not required for `M5`/`M6` — deterministic
-implementation against an already-frozen contract). The `M3` council record
-is a single authoring session's self-critique, not independent validation.
-
-`M6` (`registry_keyed_job_targets`) is **not started and not authorized**:
-resolves console-submitted `device_id` targets against the `PCP.1` Device
-Registry at admission and again immediately before execution (`AC-ST-4`), and
-flips `JOB_REGISTRY['config_refresh_cp'].target_mode` from `"none"` to
-`"entity_ids"` — `M5` deliberately left that field untouched. Needs its own
-separate authorization.
+`now_next.next` is deliberately **not** `M7`: the PO decision closing `M6`
+(2026-09-06) requires "`M7` must not begin automatically after `M6`. Its
+viability and the sequencing of the identity-evidence producer/`M8` must
+return to PO review." `project/roadmap.json` `now_next.next` names a
+placeholder review row (`m6_next_movement_po_sequencing_review`, `blocked`)
+instead. A legitimate `device_id` → collector `entity_id` relationship
+producer is the real prerequisite for functional targeting;
+`operator_assertion` is not accepted evidence for it without a later PO decision.
 
 `op2_c_cp_clusterxl_adapter_scoping` stays `upcoming`/blocked; `OP.2.D`'s
 console flow is expected on the `PCP.4` device/HA tab — one console, never two.
@@ -166,21 +164,23 @@ Concurrency budget stays at 1 per vendor pending its own real-env evidence.
 ## Automated test baseline
 
 ```
-M5 focused (cp-config collector target-selection seam):
-  tests/test_m5_collector_target_selection_seam.py 22 passed. Affected
-  suites combined 110 passed / 0 failed: test_op0d_deterministic_target_
-  selection.py, test_con2_console_job_engine.py, test_rb2_recovery_collect.py,
-  test_architecture_convergence.py (20 passed), test_application_package.py.
-  metadata_warnings == []; build-history index --check clean; repository
-  privacy gate PASS / 0 findings (data/, logs/ removed first); git diff
-  --check clean. No full local suite (bounded blast radius: one shared argv
-  function + its two existing call sites, all covered above). No GitHub full
-  regression, no workflow_dispatch, no device contact.
-M3 freeze focused (contract/docs-only, revision 6): combined 36 passed / 4
-  skipped / 0 failed; full detail in project/build_history.json.
-Last full parallel suite (DEV.TEST.1): 1957 passed, 24 skipped, 0 failed
-  locally; GitHub Actions one-time proof (run 34020356372) 1944 passed / 38
-  skipped / 0 failed. Detail: project/build_history.json.
+M6 focused (registry-keyed job target admission shell):
+  tests/test_m6_registry_keyed_job_targets.py 27 passed. Affected suites
+  combined 234 passed / 0 failed: test_m5_collector_target_selection_seam.py,
+  test_con2_console_job_engine.py, test_pcp1_device_registry.py,
+  test_m4_control_plane_metadata_store.py, test_architecture_convergence.py,
+  test_application_package.py. metadata_warnings == []; build-history index
+  regenerated; repository privacy gate PASS / 0 findings (data/, logs/
+  removed first). Full local parallel suite run once (shared admission/
+  execution boundary): 2058 passed, 37 skipped, 2 failed, 1 error -- all four
+  reproduced identically with this branch's changes git-stashed (pre-existing
+  Windows Git Bash `tr` pipeline quirk, an unrelated SSH-trust binary-garbage
+  test, a missing local pyyaml dependency), none touching console/registry/
+  device_registry code. No GitHub full regression, no workflow_dispatch, no
+  device contact. Full evidence: project/build_history.json head record.
+Last full parallel suite before this build (DEV.TEST.1): 1957 passed, 24
+  skipped, 0 failed locally; GitHub Actions one-time proof (run 34020356372)
+  1944 passed / 38 skipped / 0 failed. Detail: project/build_history.json.
 Repository privacy gate: PASS / 0 findings.
 ```
 ## Known xfails
