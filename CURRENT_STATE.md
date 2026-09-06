@@ -54,43 +54,42 @@ test-enforced boundaries. Current numbers:
 
 ## Active build
 
-**`nav_3_capability_state_vocabulary`** (`M3`) — **IN_PROGRESS, revision 2.**
+**`nav_3_capability_state_vocabulary`** (`M3`) — **IN_PROGRESS, revision 3.**
 Contract: `docs/design/CAPABILITY_STATE_VOCABULARY_AND_PRESENTATION.md` —
 **DRAFT — DO NOT FREEZE, NOT PRODUCT OWNER APPROVED**; authorizes no
-implementation, not citable as design authority. Seven independently owned
-dimensions `D1`–`D7` resolved by a staged resolver into four independent
-outputs (`primary_status`, qualifiers, `evidence_presentation`,
-`action_eligibility`). `AC-CS-1`…`72`.
+implementation, not citable as design authority. Seven owned dimensions
+`D1`–`D7`, resolver inputs `I1`–`I17`, four independent outputs
+(`primary_status`, qualifiers, `evidence_presentation`, `action_eligibility`),
+`AC-CS-1`…`85` (no id renumbered or deleted).
 
-**Revision 2** applied an independent review: fourteen draft defects corrected
-in place (§11.1) — provenance / freshness / completeness / collection outcome
-split into four independent facets (`D6a`–`D6d`); status label separated from
-displayed evidence and action eligibility, removing the blanket empty-view
-rule; contradiction narrowed to a closed pre-ladder set `CX1`–`CX3` with
-declared scopes; `AVAILABLE` requires a positive conjunction with a fail-closed
-catch-all; authorization restated as **five regimes** (`OP.2`'s
-`DenyAllAuthorizer` governs CLASS 2 **only**); persistence corrected against
-frozen `AC-ST-2`, which permits a persisted capability projection.
+**Revision 3** applied an independent review — twelve defects (`X15`–`X26`):
+`D1` visibility is now **absolute** and independent of contradiction
+diagnostics (stage 0, cases `V-A`–`V-D`; an absent surface never renders, a
+contradiction there emits diagnostics only, and absent/malformed `D1` fails
+closed toward omission); the resolver input contract is complete, with
+absent / malformed / contradictory / stale / unevaluated / validly-unknown
+handling resolved before affected outputs (`POLICY_UNKNOWN` is valid input and
+erases no evidence); action eligibility splits into **mandatory server-owned
+gates `G1`–`G4`** and action-specific prerequisites, so an empty prerequisite
+set can never omit action identity, taxonomy class, authorization or subject
+integrity, and no target prerequisite is invented for targetless reads;
+unevaluated authorization is distinct from confirmed denial; `H1`–`H11` carry
+baselines and named actions, and `H9`'s inverted eligibility is corrected;
+cache validity binds all consumed generations **plus** producer/support-rule
+versions, assuming missed or delayed invalidation, while live registry checks
+at admission and immediately before execution are preserved.
 
 `PO-NAV-7` resolved **in contract**: capability policy → `D5` `POLICY_DISABLED`
 (`A5`, `M12`); "not enrolled" → `D4` `EVIDENCE_ONLY` (`A6`, `M10`). The console
 job lifecycle, `OP.2` `ActionState`, action taxonomy, compliance,
 discovery-lifecycle and registry vocabularies are **byte-unchanged**.
 
-**Recorded, not applied** (`AGENTS.md` authority hierarchy): five frozen-parent
-corrections `FA-1`…`FA-5` — the navigation contract carries the same
-`PROVENANCE_UNVERIFIED`-as-stale and `UNKNOWN_SHELL`-as-unsupported errors
-(§8 l.627/l.629, §5.4 l.445, `AC-DIF-7`), plus the tab-omission contradiction
-(§8/§8.1 vs §6.5/D-NAV13/`AC-WS-7`/`AC-WS-8`). No frozen file was edited.
-**Withdrawn on evidence:** the earlier claim that the two job-lifecycle
-vocabularies are a defect — verified that no renderer crosses them.
+**Recorded, not applied** (`AGENTS.md` authority hierarchy): nine frozen-parent
+corrections `FA-1`…`FA-9` (contract §2.7), each with exact clause, demonstrated
+conflict, minimal correction and the acceptance criteria blocked if approval is
+withheld. **No frozen file was edited.**
 
 **Six open PO decisions** `PO-M3-1`…`6` (contract §11.2) gate the freeze.
-
-**Predecessor builds, complete:** `DEV.TEST.1` and `M2`, both
-**AUTOMATED_VALIDATED, MERGED** (PR #90, PR #85) —
-`project/build_history.json`. `left_vertical_product_navigation` stays
-`in_progress` (`availability_rule` pending).
 
 ## `OP.0b.0` — FROZEN WITH REAL-ENV VALIDATION GATES
 
@@ -125,11 +124,12 @@ a narrower question never promoted toward B2.
 
 ## Exact next build
 
-**Independent review of the revised `M3` draft**, then Product Owner decisions
-`PO-M3-1`…`6` (contract §11.2) and a ruling on the prepared frozen-parent
-corrections `FA-1`…`FA-5` (§2.7, §11.3). `FA-1`…`FA-5` amend a FROZEN document
-and cannot be applied by an agent. `M3` stays `in_progress` until then; nothing
-downstream is authorized by the draft.
+**Product Owner review of the corrected `M3` draft.** Close `PO-M3-1`…`6`
+(contract §11.2) and rule on the nine prepared frozen-parent corrections
+`FA-1`…`FA-9` (§2.7, §11.3). `FA-*` amend a FROZEN document and cannot be
+applied by an agent; if approval is withheld, the named acceptance criteria are
+**blocked** and the authority conflict stands — implementers are not to be sent
+back to semantics the draft demonstrated false. `M3` stays `in_progress`.
 
 `now_next.next` is **`local_control_plane_metadata_store`** (`M4`): local
 SQLite control-plane metadata only, additively, inside the companion contract's
@@ -167,16 +167,15 @@ Concurrency budget stays at 1 per vendor pending its own real-env evidence.
 ## Automated test baseline
 
 ```
-M3 revision 2 focused (authoritative re-run, contract/docs-only movement):
+M3 revision 3 focused (contract/docs-only movement):
   tests/test_architecture_convergence.py            20 passed, 0 failed
   tests/test_navigation_information_architecture.py 16 passed, 4 skipped
   combined                                          36 passed, 4 skipped, 0 failed
-  CORRECTION: the figures previously recorded here for revision 1 ("24" /
-  "20" passed) were written before the run and were never true; the
-  revision-1 session close figure (36 / 4) was correct. No retained log
-  exists for revision 1 -- the counts above are a fresh revision-2 run.
-  metadata_warnings == []; build-history index --check clean; git diff
-  --check clean. No full local suite, no GitHub full regression.
+  metadata_warnings == []; build-history index --check clean; privacy gate
+  PASS / 0 findings; git diff --check clean; source tree untouched.
+  These validate repository consistency only -- no resolver exists yet, so
+  every resolver acceptance criterion stays unexercised until its owning
+  movement implements it. No full local suite, no GitHub full regression.
 Last full parallel suite (DEV.TEST.1, unchanged by M3): local `-n auto --dist
   worksteal` (4 CPUs) = 1957 passed, 24 skipped, 0 failed, two clean runs.
   GitHub Actions one-time proof (run 34020356372): 1944 passed / 38 skipped /

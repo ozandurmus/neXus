@@ -9,94 +9,86 @@
 
 Overwrite at every session close. Keep it minimal (see `AGENTS.md` "Handover
 economy"): snapshot, what changed, exact next action, test delta, new risks.
-No decision re-litigation, no doc-editing mechanics, no restating the phase
-doc. Prior versions are in git history.
 
 ---
 
 ## 1. Snapshot
 
-- Date: 2026-09-06. `origin/main` = `d363b179` (PR #90). Reviewed revision-1
-  head `5be42b1`; this is **revision 2** on the same branch, no history
-  rewritten.
+- Date: 2026-09-06. `origin/main` = `d363b179`. Reviewed revision-2 head
+  `4b4339f`; this is **revision 3** on the same branch, no history rewritten.
 - Build: `nav_3_capability_state_vocabulary` (`M3`) — **IN_PROGRESS**.
-  Movement type `ARCHITECTURE`. Contract remains
+  Movement `ARCHITECTURE`, documentation only. Contract stays
   **`DRAFT — DO NOT FREEZE, NOT PRODUCT OWNER APPROVED`**.
-- Bounded correction of the draft after an independent review. No runtime, UI,
-  payload, source, test, dependency, workflow, storage or device change. No
-  frozen-parent edit. No PR, no merge, no freeze.
+- No runtime, UI, CSS, template, JavaScript, test, script, workflow,
+  dependency, storage, device, enrollment, registry, authorization or job
+  change. No frozen contract edited. No PR, no merge, no freeze, no `M4`.
 
 ## 2. What changed this revision
 
-Fourteen draft defects corrected in place (contract §11.1). The four that
-matter most:
+Twelve defects (`X15`–`X26`, contract §11.1). The four that matter most:
 
-- **Four facets, not one evidence axis.** `PROVENANCE_UNVERIFIED` is a
-  *source-trust / comparability* classification carrying no age and no
-  timestamp (verified: `pan_setting_alignment.py` l.438-443, l.649-652). It no
-  longer produces `STALE`. Freshness now comes from the evidence the
-  repository already ships — `snapshot.py::_status`'s `fresh`, `collected_at`,
-  `last_successful_collection`, `stale_reason`.
-- **`UNKNOWN_SHELL` is unknown, not unsupported** (verified:
-  `capability_registry.py` l.276-283, the branch commented "Unknown /
-  insufficient evidence", sibling to `INSUFFICIENT_EVIDENCE`).
-- **Status label ≠ displayed evidence ≠ action eligibility.** The resolver now
-  emits four independent outputs. The blanket "non-`AVAILABLE` ⇒ empty view"
-  rule is gone; retained evidence stays displayed when collection fails, a
-  schedule is disabled, or reconciliation is incomplete.
-- **Authorization is five regimes.** `OP.2`'s `DenyAllAuthorizer` governs
-  CLASS 2 **only**; CLASS 0 console operations are governed by the shipped
-  bearer/origin gate and the taxonomy refusal, and are permitted.
+- **`D1` visibility is absolute.** Contradiction detection was ranked *above*
+  the `D1` check, so an absent surface would have rendered on a contradiction.
+  Stage 0 now decides visibility from `D1` alone, before everything, with
+  cases `V-A`–`V-D`. A contradiction on an absent surface emits diagnostics,
+  audit evidence or telemetry and changes **no** rendering. Absent or malformed
+  `D1` fails closed toward **omission**.
+- **Action eligibility has two gate sets.** Set A — action identity, taxonomy
+  class, every applicable authorization regime, subject/target integrity — is
+  mandatory and is never shortened by an empty Set B. Set B stays the action's
+  own semantic prerequisites. Targetless reads gain no invented target
+  prerequisite; manual collection is independent of scheduling policy and of
+  nothing else; retry must satisfy its own retry contract and is never granted
+  by a prior failure.
+- **Unevaluated authorization ≠ denial.** `AUTHZ_NOT_EVALUATED` is
+  non-executable but asserts nothing about permission, and is rendered and
+  audited distinctly.
+- **`H9` was inverted.** Its cells named each contradiction class's *affected*
+  actions under a heading reading "Action eligible" — the opposite of the scope
+  rule. `H1`–`H11` now carry a shared baseline, a named action per row, all
+  four outputs, and no unconditional-permission wording.
 
-Also: contradiction narrowed to a closed pre-ladder set `CX1`–`CX3` with
-declared scopes; `AVAILABLE` requires a positive conjunction plus a fail-closed
-catch-all; hard-case table rebuilt to eleven complete rows; `D5` defaults to
-`POLICY_UNKNOWN` and makes only present-tense schedule claims; persistence
-corrected against frozen `AC-ST-2`; `AC-CS-1`…`72` with existing ids preserved.
-
-**Recorded, not applied:** five frozen-parent corrections `FA-1`…`FA-5`
-(contract §2.7, §11.3). Four are the same two conflations inside the frozen
-navigation contract; one is the tab-omission contradiction.
-
-**Withdrawn on evidence:** the revision-1 claim that the two job-lifecycle
-vocabularies are a defect. `discovery_ui.js` l.30 and
-`console_actions.js::_consoleJobStatePill` l.150-152 each use their own
-subsystem's map; no renderer crosses them. The PO question resting on it is
-withdrawn.
+Also: resolver inputs completed as `I1`–`I17` with input-condition handling
+resolved before affected outputs (`POLICY_UNKNOWN` is valid input, not
+malformed, and erases no evidence); cache validity bound to every consumed
+generation **plus** producer/support-rule versions, with missed or delayed
+invalidation assumed and live registry checks at admission and immediately
+before execution preserved; the unsupported `REGISTRY_ONLY` "never observed"
+claim removed; frozen-parent inventory expanded to `FA-1`…`FA-9`.
 
 ## 3. Exact next action
 
-1. **Independent review of the revised draft.**
-2. Then Product Owner: decide `PO-M3-1`…`PO-M3-6` (§11.2) and rule on
-   `FA-1`…`FA-5`. Those amend a FROZEN document and cannot be applied by an
-   agent. If `FA-1`…`FA-4` are declined, §4.3 and §9 of the draft must be
-   reverted to the parent's wording — the divergence is declared, not silent.
-3. **Do not begin `M4`** or any implementation on the strength of this draft.
+**Product Owner review of the corrected `M3` draft.** Close `PO-M3-1`…`PO-M3-6`
+(§11.2) and rule on `FA-1`…`FA-9` (§2.7, §11.3). Those amend a FROZEN document
+and cannot be applied by an agent. If approval is withheld on a row, the
+acceptance criteria its consequence column names are **blocked** and the
+authority conflict stands — do not send implementers back to semantics the
+draft demonstrated false. **Do not begin `M4`** or any implementation.
 
 ## 4. Test delta
 
-- No test added or changed. Authoritative focused run this revision:
-  `test_architecture_convergence.py` **20 passed**;
-  `test_navigation_information_architecture.py` **16 passed, 4 skipped**;
-  combined **36 passed, 4 skipped, 0 failed**.
-- `metadata_warnings == []`; `build_history_index.py --check` clean; privacy
-  gate **PASS / 0 findings**; `git diff --check` clean.
-- **Evidence correction:** the focused counts previously written into
-  `CURRENT_STATE.md` for revision 1 (24 / 20 passed) were recorded before the
-  run and were never true. The revision-1 session close figure (36 / 4) was
-  correct. No retained log exists for revision 1.
-- No full local suite, no GitHub full regression, no dependency change.
+- No test added or changed. Commands and results:
+  - `python3 -m pytest -q tests/test_architecture_convergence.py` → **20 passed**
+  - `python3 -m pytest -q tests/test_navigation_information_architecture.py` →
+    **16 passed, 4 skipped**
+  - combined → **36 passed, 4 skipped, 0 failed**
+  - `metadata_warnings == []`; `build_history_index.py --check` clean;
+    `main.py --repository-privacy-check` **PASS / 0 findings**;
+    `git diff --check` clean; source tree untouched.
+- These validate **repository consistency only**. No resolver exists, so every
+  resolver acceptance criterion is unexercised until its owning movement
+  implements it. No full local suite, no GitHub full regression, no
+  `workflow_dispatch`, no device contact, no dependency change.
 
 ## 5. New risks / notes forward
 
-- `D3` and `D5` still have **no producer** (`M10`, `M12`). Both resolve to
-  `UNKNOWN` — never to a favourable default, and `D5` never to a confirmed
-  schedule absence.
-- Until `FA-1`…`FA-4` are ruled on, the draft **knowingly diverges** from the
-  frozen navigation contract's presentation rows in favour of verified source
-  semantics. This is declared at §2.7 and is a defect in the draft if the
-  amendments are declined.
-- Council dissents D1–D5 remain unresolved; D1 was amended where this revision
-  withdrew the coverage-arithmetic claim it rested on. The council record is a
-  **single authoring session's structured self-critique** — not an installed
-  skill, not independent execution, not cross-model validation.
+- `D3` and `D5` still have **no producer** (`M10`, `M12`); both resolve to
+  `UNKNOWN`, never a favourable default and never a confirmed absence.
+- `FA-1`…`FA-9` are prepared and unapplied. Until ruled on, the draft
+  **knowingly diverges** from frozen parent wording in favour of verified
+  source semantics — declared at §2.7, and a defect in the draft if declined.
+- `AC-CS-1`…`85`, contiguous; `AC-CS-17` remains marked superseded by
+  `AC-CS-65` rather than renumbered.
+- Council dissents D1–D5 unresolved. The council record is a single authoring
+  session's structured self-critique — not an installed skill, not independent
+  execution, not cross-model validation.
