@@ -1695,12 +1695,12 @@
     },
     {
       "id": "left_vertical_product_navigation",
-      "title": "Left vertical product navigation (architecture FROZEN; M2 accessibility closure validated, merging)",
+      "title": "Left vertical product navigation (architecture FROZEN; M2 accessibility closure merged via PR #85; availability_rule still pending)",
       "status": "in_progress",
       "introduced": "NAV.1 (prototype)",
       "weight": 5,
-      "summary": "ARCHITECTURE FROZEN 2026-09-05, IMPLEMENTATION NOT COMPLETE. docs/design/NAVIGATION_INFORMATION_ARCHITECTURE.md is FROZEN -- PRODUCT OWNER APPROVED, with fifteen frozen D-NAV decisions and section 19 acceptance criteria. A runnable prototype of the collapsible left rail exists (commit 5a5a1f7), driven by one model shared with the device-detail tab strip. It is design evidence: it may not merge or be called implementation-complete until movement M2 closes the four accessibility requirements (AC-A11Y-1..4).",
-      "why": "The flat one-root-per-view topbar strip could not express which entries are product domains, had no room left, and let a navigation entry exist without any backend behind it. The frozen contract settles the shape; the prototype demonstrates it; M2 makes it mergeable.",
+      "summary": "ARCHITECTURE FROZEN 2026-09-05. docs/design/NAVIGATION_INFORMATION_ARCHITECTURE.md is FROZEN -- PRODUCT OWNER APPROVED, with fifteen frozen D-NAV decisions and section 19 acceptance criteria. The collapsible left rail (commit 5a5a1f7), driven by one model shared with the device-detail tab strip, merged to main via PR #85 (M2, 2026-09-06) once the four accessibility requirements (AC-A11Y-1..4) closed. The feature stays in_progress: its own availability_rule criterion (the remaining three of the four frozen capability predicates -- entity applicability, evidence state, future authorization) is genuinely pending and owned by later movements (M10+), independent of M2's scope.",
+      "why": "The flat one-root-per-view topbar strip could not express which entries are product domains, had no room left, and let a navigation entry exist without any backend behind it. The frozen contract settles the shape; the rail implements it; M2 closed the accessibility gate that made it mergeable and has merged; the four-predicate availability rule's remaining predicates are separate, later work.",
       "criteria": [
         {
           "id": "domain_grouping",
@@ -1740,7 +1740,7 @@
         },
         {
           "id": "accessibility_closure",
-          "label": "Four named accessibility gaps closed: icon-only accessible names, prefers-reduced-motion, focus management after navigation, group semantics -- Movement M2 closed AC-A11Y-1..4 2026-09-06 (real-Chromium validated, both shells); feature status flips to done once the NAV PR merges to main",
+          "label": "Four named accessibility gaps closed: icon-only accessible names, prefers-reduced-motion, focus management after navigation, group semantics -- Movement M2 closed AC-A11Y-1..4 2026-09-06 (real-Chromium validated, both shells), merged to main via PR #85. This criterion alone does not complete the feature: availability_rule (below) is a separate, still-pending criterion",
           "state": "done",
           "weight": 1
         }
