@@ -7,16 +7,14 @@ detail is not here either** — it is in `project/build_history.json`
 linked documents under `docs/history/`. `docs/history/INDEX.md` is the
 generated one-line timeline.
 
-- **Checkpoint:** 2026-09-06, `M4` branched from `main` at `33b6798` (PR #92,
-  `M3` post-merge reconciliation). Implementation complete on the branch;
-  PR CI pending.
+- **Checkpoint:** 2026-09-06, `M5` branched from `main` at `88a8d161...`
+  (`M4`, PR #93, merged). Implementation complete on the branch; PR CI pending.
 - **Current build** (per `project/roadmap.json` `now_next.now`):
-  `local_control_plane_metadata_store` (`M4`) — **COMPLETE**, storage
-  infrastructure only. `now_next.next` is `M5`
-  (`collector_target_selection_seam`), not started and unauthorized.
+  `collector_target_selection_seam` (`M5`) — **AUTOMATED_VALIDATED**,
+  `cp-config` seam only. `now_next.next` is `M6`
+  (`registry_keyed_job_targets`), not started/unauthorized.
   `op2_c_cp_clusterxl_adapter_scoping` stays `upcoming`, blocked on
-  `DEPLOY.1`. `DEV.TEST.1`, `PCP.1`, `M1`, `M2`, `M3` complete —
-  build_history.json.
+  `DEPLOY.1`. `DEV.TEST.1`, `PCP.1`, `M1`-`M4` complete — build_history.json.
 - **OP.2.0 CLASS 2 architecture** (`docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md`):
   **CONTRACT FROZEN 2026-09-04**; `OP.2.A`/`OP.2.B` IMPLEMENTED; `OP.2.1` CP
   command gate DRAFTED — CLASS 2 still has **no member**, no adapter,
@@ -55,34 +53,37 @@ test-enforced boundaries. Current numbers:
 
 ## Active build
 
-**`local_control_plane_metadata_store`** (`M4`) — **COMPLETE**, storage
-infrastructure only. Contract:
-`docs/history/phase/M4_LOCAL_CONTROL_PLANE_METADATA_STORE.md`; frozen parents
-`LOCAL_CONTROL_PLANE_RUNTIME_AND_ENROLLMENT.md` §6.4/§6.5 (`AC-ST-1`…`8`) and
-`CAPABILITY_STATE_VOCABULARY_AND_PRESENTATION.md` §8.2.1 (`AC-CS-70`…`73`,`97`).
+**`collector_target_selection_seam`** (`M5`) — **AUTOMATED_VALIDATED**,
+`cp-config` seam only. Contract:
+`docs/design/PRODUCT_CONTROL_PLANE_ARCHITECTURE.md` §9/§12/§12.1
+(`AC-TGT-3`/`AC-TGT-4`/`AC-TGT-5`), companion
+`docs/design/LOCAL_CONTROL_PLANE_RUNTIME_AND_ENROLLMENT.md` §12/§12.1.
 
-Local SQLite at `<data_root>/state/control_plane.db`, schema version 1, seven
-`STRICT` tables. WAL, `synchronous=FULL` (over WAL's usual `NORMAL`: `CON.0`
-§7.9 needs a job record durable before the runner may start it),
-`foreign_keys=ON`, explicit 5 s `busy_timeout`. Migrations are explicit,
-monotonic and one transaction per version, and the ledger must be an **exact
-prefix** of `MIGRATIONS` — `max(version)` is not trusted. Open is ordered so
-**every refusal precedes every persistent mutation**, closing every connection
-deterministically. Typed fail-closed outcomes for invalid placement,
-unsupported schema/ledger, corruption, failed migration, bounded contention
-and uniqueness/FK violation — never auto-repair, recreate or downgrade.
+Promoted OP.0d's already-validated `--cp-config-targets` selector into the
+shared `utils.collection_executor.workflow_argv()` argv seam (CON.2 C2-2), so
+the scheduler and console job runner build the identical `cp-config` argv the
+direct CLI already built. Target-free `cp-config` stays byte-identical/
+plane-wide; requested order and opaque `entity_id` spelling are preserved
+exactly. A non-empty target set for any workflow with no seam yet (`cp`,
+`checkpoint`, `vsx`, `pan-config`) is refused with the new
+`UnsupportedTargetSelectionError` **inside argv construction, before
+`main.main()` is ever called** — fail-closed pre-invocation, pre-contact, in
+both the scheduler and the console runner. `recovery-pan`/`recovery-cp` keep
+their pre-existing pass-through behaviour byte-for-byte.
 
-**Boundary held.** `PCP.1` Device Registry stays filesystem JSON, unmigrated;
-targets are opaque `device_id`/`logical_entity_id` references with no copied
-endpoint; no credential, trust, raw-config, backup, CAS or `OP.2` authority
-column exists — proven by walking the real schema. Projections persist
-`D2`–`D6`, basis/run, semantic identity and producer/support-rule context
-only; no presentation state as truth. **SQLite is not the production engine** —
-`pcp_storage_engine` stays open. Store + WAL/SHM are LOCAL-SENSITIVE and
-bundle-excluded by construction (`data/state/*` is never enumerated).
+**Boundary held.** `JOB_REGISTRY` untouched — `config_refresh_cp.target_mode`
+stays `"none"` (`M6`'s job); no registry resolution, no device contact,
+admission/lock/vendor-budget unchanged, no new command/retry/transport path.
+**Not implemented, by design:** a second collector seam (CP inventory, VSX,
+`pan-config` stay honestly plane-wide), `M6` target resolution, `M7` job/UI
+behaviour, scheduling, enrollment, HTTP/UI integration, device contact.
 
-**Not implemented, by design:** `M5` job behaviour, `M6` target resolution,
-`M7` runner, scheduling, enrollment, HTTP/UI integration, device contact.
+## Predecessor — `M4`
+
+**`local_control_plane_metadata_store`** — COMPLETE, merged via PR #93.
+Additive local SQLite control-plane metadata store, schema version 1, seven
+`STRICT` tables; storage infrastructure only, no job behaviour or target
+resolution. Detail: `docs/history/phase/M4_LOCAL_CONTROL_PLANE_METADATA_STORE.md`.
 
 ## Predecessor — `M3`
 
@@ -126,21 +127,20 @@ a narrower question never promoted toward B2.
 
 ## Exact next build
 
-**Create and configure the Claude-side `nexus-decision-council` before starting
-`M4`.** The `M3` council record is a single authoring session's structured
-self-critique — not an installed skill and not independent validation — and the
-skill named in every `M3` brief was absent from the environment throughout.
-Standing that up is the prerequisite for the next architecture movement.
+**Create and configure the Claude-side `nexus-decision-council` before the
+next *architecture* movement** (not required for `M5`/`M6` — deterministic
+implementation against an already-frozen contract). The `M3` council record
+is a single authoring session's self-critique, not independent validation.
 
-`M4` (`local_control_plane_metadata_store`) is **not started and not
-authorized**: local SQLite control-plane metadata only, additively, inside the
-companion contract's §6.4 ownership boundary and §6.5 engine contract
-(`AC-ST-1`…`AC-ST-8` frozen). It needs its own separate authorization.
+`M6` (`registry_keyed_job_targets`) is **not started and not authorized**:
+resolves console-submitted `device_id` targets against the `PCP.1` Device
+Registry at admission and again immediately before execution (`AC-ST-4`), and
+flips `JOB_REGISTRY['config_refresh_cp'].target_mode` from `"none"` to
+`"entity_ids"` — `M5` deliberately left that field untouched. Needs its own
+separate authorization.
 
-`M5` stays the critical path — **every collection job type today is
-`target_mode="none"`**. `op2_c_cp_clusterxl_adapter_scoping` stays
-`upcoming`/blocked with its notes in `project/roadmap.json`; `OP.2.D`'s console
-flow is expected on the `PCP.4` device/HA tab — one console, never two.
+`op2_c_cp_clusterxl_adapter_scoping` stays `upcoming`/blocked; `OP.2.D`'s
+console flow is expected on the `PCP.4` device/HA tab — one console, never two.
 
 ## Open blockers
 
@@ -166,21 +166,21 @@ Concurrency budget stays at 1 per vendor pending its own real-env evidence.
 ## Automated test baseline
 
 ```
-M3 revision 6 focused (contract/docs-only movement):
-  architecture convergence 20 passed; navigation IA 16 passed / 4 skipped;
-  combined 36 passed, 4 skipped, 0 failed. metadata_warnings == [];
-  build-history index --check clean; privacy gate PASS / 0 findings;
-  git diff --check clean; source/test/script/workflow/dependency trees
-  untouched; rendered-structure audit 0 failures; paragraph-aware
-  stale-token audit 0 flagged; AC continuity and PO-to-FA mapping verified;
-  a deliberate rendered-prose read was performed -- the syntactic audits
-  alone prove nothing about narrative consistency.
-  These validate repository consistency only: no resolver exists yet, so
-  every resolver acceptance criterion stays unexercised until its owning
-  movement implements it. No full local suite, no GitHub full regression.
-Last full parallel suite (DEV.TEST.1, unchanged by M3): 1957 passed, 24
-  skipped, 0 failed locally; GitHub Actions one-time proof (run 34020356372)
-  1944 passed / 38 skipped / 0 failed. Detail: project/build_history.json.
+M5 focused (cp-config collector target-selection seam):
+  tests/test_m5_collector_target_selection_seam.py 22 passed. Affected
+  suites combined 110 passed / 0 failed: test_op0d_deterministic_target_
+  selection.py, test_con2_console_job_engine.py, test_rb2_recovery_collect.py,
+  test_architecture_convergence.py (20 passed), test_application_package.py.
+  metadata_warnings == []; build-history index --check clean; repository
+  privacy gate PASS / 0 findings (data/, logs/ removed first); git diff
+  --check clean. No full local suite (bounded blast radius: one shared argv
+  function + its two existing call sites, all covered above). No GitHub full
+  regression, no workflow_dispatch, no device contact.
+M3 freeze focused (contract/docs-only, revision 6): combined 36 passed / 4
+  skipped / 0 failed; full detail in project/build_history.json.
+Last full parallel suite (DEV.TEST.1): 1957 passed, 24 skipped, 0 failed
+  locally; GitHub Actions one-time proof (run 34020356372) 1944 passed / 38
+  skipped / 0 failed. Detail: project/build_history.json.
 Repository privacy gate: PASS / 0 findings.
 ```
 ## Known xfails

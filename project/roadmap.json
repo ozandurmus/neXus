@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "current_build": "local_control_plane_metadata_store",
+  "current_build": "collector_target_selection_seam",
   "current_track": "PCP.x",
   "progress_contract": "Weighted acceptance-criterion completion. Percentages describe the declared roadmap, not calendar time or delivery ETA.",
   "tracks": [
@@ -140,28 +140,25 @@
   "now_next": {
     "horizon_contract": "NOW is exactly one build. NEXT is exactly one. Everything else is an `upcoming` row carrying its own true status: planned = AFTER, blocked = waiting on a named external gate, deferred = consciously postponed. `now.build` must equal the newest project/build_history.json record -- utils.project_plan enforces it.",
     "now": {
-      "build": "local_control_plane_metadata_store",
-      "title": "M4 -- Local control-plane metadata store (approved Option A)",
-      "goal": "Implement the additive local SQLite control-plane metadata store under RuntimeRoot data_root, within the frozen section 6.4 ownership boundary and section 6.5 engine contract. COMPLETE: schema version 1, explicit monotonic transactional migrations, WAL + synchronous=FULL + foreign_keys=ON + bounded busy_timeout, STRICT tables, and typed fail-closed outcomes. Storage infrastructure only -- no job behaviour, target resolution, runner, scheduling, enrollment, HTTP/UI integration or device contact.",
-      "status": "complete",
+      "build": "collector_target_selection_seam",
+      "title": "M5 -- Collector target-selection seam, cp-config only",
+      "goal": "Promote OP.0d's already-validated Check Point --cp-config-targets selector into the shared utils.collection_executor.workflow_argv() argv seam (CON.2 C2-2), scoped to cp-config only. Target-free cp-config stays byte-identical/plane-wide; a target request for any workflow without a seam is refused (UnsupportedTargetSelectionError) before main() or any device contact. AUTOMATED_VALIDATED: PR open, merge not authorized in this movement.",
+      "status": "automated_validated",
       "started": "2026-09-06",
       "notes": [
-        "Owns only job definitions, job/run lifecycle records, schedules, capability projections, idempotency/submission metadata and control-plane runtime metadata (AC-ST-2). Owns none of: Device Registry rows, copied endpoints or fallback endpoint authority, credential payloads, trust secrets, raw configuration, backup bytes, CAS evidence objects, OP.2 action authority, or resolved presentation state as durable truth (AC-ST-3, AC-CS-72).",
-        "PCP.1 Device Registry remains filesystem JSON and was not migrated, mirrored or read (AC-ST-1). Targets are stored only as opaque device_id / logical_entity_id references; no endpoint is copied or retained as fallback authority (AC-ST-5).",
-        "Uses the frozen CON.2 job lifecycle vocabulary (queued/running/succeeded/failed/blocked/skipped) and adds no member to it (M3 binding X1).",
-        "SQLite is NOT the production engine: pcp_storage_engine stays open and production-scoped (AC-ST-7). Runtime auto-creation is pre-production only; production applies migrations through a deployment-controlled step (DEV.4.6).",
-        "Store, WAL and SHM files are LOCAL-SENSITIVE (CLASS 2), repository-excluded and excluded from the support bundle by construction (AC-ST-6).",
-        "Contract: docs/history/phase/M4_LOCAL_CONTROL_PLANE_METADATA_STORE.md."
+        "One collector only (PCP.6, narrowed), per the frozen M1..M14 sequence (docs/design/LOCAL_CONTROL_PLANE_RUNTIME_AND_ENROLLMENT.md section 12/12.1) and docs/design/PRODUCT_CONTROL_PLANE_ARCHITECTURE.md section 9/AC-TGT-3/AC-TGT-4/AC-TGT-5. No second collector, no JOB_REGISTRY.target_mode change, no registry target resolution (M6), no device contact.",
+        "Security invariant held: no plane-wide-then-filter -- a plane-wide run is never relabelled device-targeted (AC-TGT-4); admission coordinator, canonical endpoint lock and the vendor concurrency budget of 1 are unchanged.",
+        "Tests: tests/test_m5_collector_target_selection_seam.py (22 focused) plus tests/test_op0d_deterministic_target_selection.py, tests/test_con2_console_job_engine.py, tests/test_rb2_recovery_collect.py, tests/test_architecture_convergence.py, tests/test_application_package.py (110 combined, 0 failed)."
       ]
     },
     "next": {
-      "build": "collector_target_selection_seam",
-      "title": "M5 -- Collector target-selection seam (one collector)",
+      "build": "registry_keyed_job_targets",
+      "title": "M6 -- Registry-keyed job targets",
       "status": "planned",
       "notes": [
-        "Per the frozen M1..M14 sequence (docs/design/LOCAL_CONTROL_PLANE_RUNTIME_AND_ENROLLMENT.md section 12/12.1): give exactly one collector a registry-derived target set (PCP.6, narrowed). M5 is the critical path -- nothing device-targeted is honest before it.",
-        "Security invariant: no plane-wide-then-filter. A plane-wide run must never be relabelled as a device-targeted job (AC-TGT-4), and aggregate per-endpoint contact stays bounded by the admission coordinator and the vendor budget of 1.",
-        "Requires its own separate authorization to start. Recommended: extended reasoning for the first collector, normal for the rest; new session."
+        "Per the frozen M1..M14 sequence: resolve console-submitted device_id targets against the PCP.1 Device Registry at admission and again immediately before execution (AC-ST-4). Prerequisites: M4, M5 (both complete/automated_validated).",
+        "Only after M6 does JOB_REGISTRY['config_refresh_cp'].target_mode change from 'none' to 'entity_ids' -- explicitly out of scope for M5.",
+        "Requires its own separate authorization to start. Recommended: Sonnet 5, normal; new session."
       ]
     },
     "upcoming": [
