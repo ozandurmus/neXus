@@ -13,8 +13,8 @@ Overwrite at every session close. Keep it minimal.
 
 ## 1. Snapshot
 
-- Date: 2026-09-06. `origin/main` = `d363b179`. Reviewed revision-4 head
-  `f022ee1`; this is **revision 5** on the same branch, no history rewritten.
+- Date: 2026-09-06. `origin/main` = `d363b179`. Reviewed revision-5 head
+  `ef94f7c`; this is **revision 6** on the same branch, no history rewritten.
 - Build: `nav_3_capability_state_vocabulary` (`M3`) — **IN_PROGRESS**.
   `ARCHITECTURE`, documentation only. Contract stays
   **`DRAFT — DO NOT FREEZE, NOT PRODUCT OWNER APPROVED`**.
@@ -24,36 +24,37 @@ Overwrite at every session close. Keep it minimal.
 
 ## 2. What changed this revision
 
-Defects `X40`–`X49` (§11.1). The five that matter most:
+Revision 6 is a bounded consistency correction; the revision-5 model is
+retained unchanged.
 
-- **Tagged union.** `RESOLVED{primary_status, capability_qualifiers,
-  evidence_presentation, action_affordance}` or `OMITTED{reason, diagnostic}`.
-  `NOT_SHIPPED` is a `SurfaceOmissionReason`, **not** a `CapabilityState`
-  (nine resolved-only states). `OMITTED` carries no capability output at all.
-  The omission diagnostic pass is a separate render-independent pass, stated
-  **optional** consistently everywhere.
-- **Presentation-time vs server-time.** `action_affordance[]` replaces
-  `eligible: true|false`. `AVAILABLE_FOR_SUBMISSION` means *no
-  presentation-time blocker is known* — never that `E7` passed, never an
-  execution grant. "Evaluated once" is **per decision phase**, so `AC-ST-4`'s
-  admission **and** immediately-before-execution checks both survive.
-- **`E4` is total.** `NO_APPLICABLE_AUTHORITY` (the current CLASS 0 case) is
-  distinct from `PERMITTED`/`DENIED`/`AUTHZ_NOT_EVALUATED`, non-blocking, and
-  **explicitly not a grant**.
-- **`CX1` is subject-scoped.** It blocks only actions whose declared subject
-  depends on the disputed identity; targetless actions are unaffected and get
-  no invented prerequisite.
-- **Severity settled.** `CX2`/`CX3` renamed `RI-1`/`RI-2` **bounded
-  inconsistencies** (muted). Danger is reserved for `CX1`, so `AC-DIF-6`,
-  `AC-DIF-8` and `AC-CS-47` reconcile with **no** new parent amendment.
-
-Also: `RI-1` comparability total over `K1`–`K6` with six precedence rows;
-H-cases rewritten against **real registry action ids** (verified
-`enroll_device` ∉ `JOB_REGISTRY`, so the enrollment example produces no action
-entry rather than inventing an authority); former `H9b`/`H9c` reclassified as
-multi-action scope tests; persistable projection separated from the composed
-presentation resolution; stale `R1`/`R2`/`R5` and `G1`–`G4` language removed or
-labelled non-normative.
+- **Stage summary and taxonomy made consistent.** §5's stage block now uses the
+  tagged-union terminology and states the presentation-time / server-phase
+  boundary (submission → admission → immediately before execution, where both
+  `AC-ST-4` registry checks live). `CX1`/`RI-1`/`RI-2` is used in every
+  normative clause; `CX2`/`CX3`, `G1`–`G4` and `R1`–`R5` survive only in
+  clearly-labelled historical notes.
+- **Ten stale criteria reconciled without renumbering** — `AC-CS-17`, `62`,
+  `64`, `65`, `74`, `75`, `76`, `78`, `81`, `86`. Set stays `AC-CS-1`…`97`;
+  none added.
+- **Fixture integrity.** Every hard case is tagged `[CURRENT]` or `[FUTURE]`
+  with a mechanical obligation: a `[CURRENT]` case's `action_id` must be a
+  `JOB_REGISTRY` member, a `[FUTURE]` case's described action must be asserted
+  **absent** — so a `[FUTURE]` case that silently becomes real is caught.
+  `H5b` corrected (`report_rebuild` is `workflow = render-only`, a
+  report-rendering job, **not** a retry); retry moved to `[FUTURE]` `H5d`.
+  `H8b` and new `H4e` are `[FUTURE]`. `H11a`/`H11c` became action-free.
+- **`H4` resolved from source, not the action name.** `config_refresh_cp` runs
+  `configuration/checkpoint_config_collector.py`, whose `_classify_platform`
+  (l.926-941, invoked l.1469-1471) emits a platform-family classification with
+  a confidence grade; frozen `PCP.0` §8 lists that classification among the
+  capability projection's inputs. So a re-collection **can** re-evaluate a
+  `D3` input, and the "collecting again will not help" copy is removed from
+  `H4a`–`H4d`. `UNSUPPORTED` reasons now carry a `REVALIDATABLE`/`TERMINAL`
+  class; **which** reasons are which is **`UCQ-1`**, an open contract question
+  owned by `M10` — deliberately **not** a seventh PO decision.
+- **`PO-M3-2` aligned with §11.3**: withholding approval leaves the conflict
+  recorded and the implementation blocked; it never requires reverting the
+  draft to semantics demonstrated false.
 
 ## 3. Exact next action
 
