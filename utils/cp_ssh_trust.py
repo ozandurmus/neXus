@@ -53,6 +53,7 @@ import base64
 import hashlib
 import os
 from dataclasses import dataclass, field
+from types import MappingProxyType
 
 import paramiko
 from paramiko.hostkeys import InvalidHostKey
@@ -198,12 +199,16 @@ def apply_strict_host_key_policy(ssh: paramiko.SSHClient, strict: bool) -> None:
         ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 
 
-def _host_key_fingerprint(key: paramiko.PKey) -> str:
-    """The same value-free ``SHA256:<base64>`` representation already used
-    for a live-connection host key (``configuration/checkpoint_config_probe.
-    py::_host_key_fingerprint``) -- reused here, not re-derived, so a later
-    M8 slice can compare the two without inventing a second fingerprint
-    format."""
+def host_key_fingerprint(key: paramiko.PKey) -> str:
+    """The single, shared ``SHA256:<base64>`` host-key fingerprint format.
+
+    This is the one implementation: ``configuration/checkpoint_config_probe.
+    py`` imports and calls this function for its own live-connection
+    fingerprint (``_connect()``) rather than defining a second copy, so a
+    later M8 slice comparing a live fingerprint against this module's
+    ``lookup_trusted_host_key`` result is comparing two outputs of the same
+    code path, not two independently-implemented formats that happen to
+    agree today."""
     digest = hashlib.sha256(key.asbytes()).digest()
     return "SHA256:" + base64.b64encode(digest).decode("ascii").rstrip("=")
 
@@ -224,16 +229,24 @@ class TrustedKeyLookupResult:
 
     ``trusted`` is the only field later M8 slices may act on as a gate
     decision. ``fingerprints`` is the minimum evidence a later slice needs
-    (the ``SHA256:``-fingerprint of every key type already trusted for this
-    exact endpoint/port, in the same format a live connection's fingerprint
-    is captured in) -- never the raw key material, never populated when
-    ``trusted`` is ``False``. ``reason`` is a value-free token, populated
-    only when ``trusted`` is ``False``.
+    (the ``SHA256:``-fingerprint, via :func:`host_key_fingerprint`, of every
+    key type already trusted for this exact endpoint/port) -- never the raw
+    key material, never populated when ``trusted`` is ``False``. It is a
+    read-only ``MappingProxyType``, never a plain ``dict``: this result is
+    handed to later M8 slices as evidence of what was trusted at lookup
+    time, and a caller mutating it in place would silently corrupt that
+    evidence for anyone else holding the same result. ``reason`` is a
+    value-free token, populated only when ``trusted`` is ``False``.
     """
 
     trusted: bool
     reason: str | None
-    fingerprints: dict[str, str] = field(default_factory=dict)
+    fingerprints: MappingProxyType[str, str] = field(
+        default_factory=lambda: MappingProxyType({})
+    )
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "fingerprints", MappingProxyType(dict(self.fingerprints)))
 
 
 def lookup_trusted_host_key(endpoint: str, port: int | None) -> TrustedKeyLookupResult:
@@ -287,7 +300,7 @@ def lookup_trusted_host_key(endpoint: str, port: int | None) -> TrustedKeyLookup
         return TrustedKeyLookupResult(trusted=False, reason=REASON_ENDPOINT_NOT_TRUSTED)
 
     fingerprints = {
-        key_type: _host_key_fingerprint(key)
+        key_type: host_key_fingerprint(key)
         for key_type, key in entry.items()
         if key is not None
     }
