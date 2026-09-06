@@ -7,16 +7,16 @@ detail is not here either** — it is in `project/build_history.json`
 linked documents under `docs/history/`. `docs/history/INDEX.md` is the
 generated one-line timeline.
 
-- **Checkpoint:** 2026-09-06, `main` at merge commit `081a976` (PR #85, `M2`,
-  onto `9a946fe`/PR #84's head). NAV lineage (`5a5a1f7`…`259874e`) unrewritten.
+- **Checkpoint:** 2026-09-06, `main` at merge commit `6ca67cc` (PR #88,
+  `DEV.TEST.1` YAML fix, onto `06f73e7`/PR #87's head).
 - **Current build** (per `project/roadmap.json` `now_next.now`):
-  `parallelize_full_regression_execution` (`DEV.TEST.1`) — test-execution
-  infrastructure only: replaces the serial GitHub Actions full-regression
-  suite (`11m56s`, run `34016204567`) with `-n auto --dist worksteal` on
-  push-to-main/workflow_dispatch (PR trigger policy unchanged; see "Active
-  build"). No product/capability-state change; authorizes no `M3` work.
-  `now_next.next` stays `M3` throughout. `op2_c_cp_clusterxl_adapter_scoping`
-  stays `upcoming`, blocked on `DEPLOY.1`. `PCP.1` complete — build_history.json.
+  `parallelize_full_regression_execution` (`DEV.TEST.1`) —
+  **AUTOMATED_VALIDATED**: replaces the serial full-regression suite
+  (`11m56s`, run `34016204567`) with `-n auto --dist worksteal`, proven
+  green on push-to-main (`34020356372`, `4m36s`) — see "Active build". No
+  product/capability-state change; authorizes no `M3` work. `now_next.next`
+  stays `M3`. `op2_c_cp_clusterxl_adapter_scoping` stays `upcoming`,
+  blocked on `DEPLOY.1`. `PCP.1` complete — build_history.json.
 - **OP.2.0 CLASS 2 architecture** (`docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md`):
   **CONTRACT FROZEN 2026-09-04**; `OP.2.A`/`OP.2.B` IMPLEMENTED; `OP.2.1` CP
   command gate DRAFTED — CLASS 2 still has **no member**, no adapter,
@@ -55,31 +55,30 @@ test-enforced boundaries. Current numbers:
 
 ## Active build
 
-**`parallelize_full_regression_execution`** (`DEV.TEST.1`) — **IN PROGRESS**
-(PR #87 merged; a post-merge YAML-syntax fix follow-up in flight; real
-push-to-main cloud proof still owed — full detail in
-`project/build_history.json` head record). Root cause of the prior serial
-gate was a `scripts/render_uitest.py` module-rebind leak, already fixed
-and directly regression-tested regardless of worker/ordering
+**`parallelize_full_regression_execution`** (`DEV.TEST.1`) —
+**AUTOMATED_VALIDATED** via PR #87 + PR #88 (merge `6ca67cc`). Root cause of
+the prior serial gate: a `scripts/render_uitest.py` module-rebind leak,
+already fixed and regression-tested
 (`tests/test_frontend_rendering_boundary.py::
-test_render_uitest_restores_the_builders_it_injects`). Selected topology:
-one `pytest-xdist` process (`-n auto --dist worksteal`), proven locally and
-the documented default elsewhere — one aggregate exit code across every
-worker. **Trigger policy unchanged (approved):** `pull_request` = fast
-`validate` only, push/`workflow_dispatch` = parallel `full-regression`.
-**Post-merge incident (corrects an in-session misdiagnosis):** every CI
-trigger returned a zero-job failing check suite after merge; first
-misdiagnosed as an automation-identity limitation, actually a genuine YAML
-syntax defect in the "Report worker topology" step (a bare `: ` inside an
-unquoted f-string), which breaks job scheduling under any trigger,
-regardless of branch or pusher — fixed, and now guarded by
-`tests/test_ci_workflow_fast_pr_regression.py::test_workflow_yaml_parses`
-(new `pyyaml` dev dependency). No product/UI/registry/storage/
-authorization change; authorizes no `M3` work.
+test_render_uitest_restores_the_builders_it_injects`). Topology: one
+`pytest-xdist` process (`-n auto --dist worksteal`). Trigger policy
+unchanged: `pull_request` = fast `validate` only, push/`workflow_dispatch` =
+parallel `full-regression`. **Post-merge incident (in-session misdiagnosis
+corrected):** every CI trigger returned a zero-job failing check suite
+after PR #87 merged, first wrongly blamed on an automation-identity
+limitation — actually a YAML syntax defect (a bare `: ` inside an unquoted
+f-string in "Report worker topology") breaking job scheduling under any
+trigger — fixed via PR #88, guarded by
+`test_workflow_yaml_parses` (`pyyaml` dev dependency). **Real cloud proof**
+(run `34020356372`, commit `6ca67cc`): `full-regression` SUCCESS, 4 workers,
+1944 passed/38 skipped/0 failed, `275.74s` (`4m36s`) vs `11m56s` serial
+(~61% faster) — ~36s above the 4-min ceiling; a small tail of slow tests
+(98% done by ~1min, last 2% taking ~3m41s) is the reported bottleneck, not a
+correctness gap. No product/UI/registry/storage/authorization change;
+authorizes no `M3` work.
 
 **Predecessor build, complete:** `nav_1_accessibility_closure` (`M2`) —
-**AUTOMATED_VALIDATED, MERGED** via PR #85 (merge commit
-`081a976a3e1cc16fb57af7f0c9aa0e0501a7625b`) — full detail in
+**AUTOMATED_VALIDATED, MERGED** via PR #85 (`081a976`) — full detail in
 `project/build_history.json`. `left_vertical_product_navigation` stays
 `in_progress` (`availability_rule` pending, `M10`+); no `D-NAV`/`PO-NAV`
 decision reopened by `M2` or `DEV.TEST.1`.
@@ -156,7 +155,7 @@ Concurrency budget stays at 1 per vendor pending its own real-env evidence.
 - **`OP.0a`/`OP.0c`** — real-device confirmation `ha_cluster_mode` resolves, not `"unknown"`. Fixture-drift, not a safety gate.
 - **PAN HA serial identity (`OP.0a.P7`/`OP.0b.0`)** — see "PAN HA serial evidence" above; its own next technical movement, not folded in here.
 - **`RB.3b`** — the watched single-gateway run.
-- **`DEV.3.2`** — real multi-container-against-real-MDS Postgres advisory-lock evidence. Server-blocked.
+- **`DEV.3.2`** — real multi-container-against-real-MDS Postgres advisory-lock evidence, server-blocked.
 
 ## Automated test baseline
 
@@ -164,10 +163,8 @@ Concurrency budget stays at 1 per vendor pending its own real-env evidence.
 M2 targeted (navigation IA + M2 a11y + architecture convergence + frontend
   composition + rendering boundary + both render harnesses + CON.1/CON.2 +
   PCP.1 registry): 182 passed, 1 skipped, 0 failed. Real-Chromium: accessible
-  names (expanded+collapsed), reduced-motion emulation, focus transfer (root
-  + grouped child + keyboard, both shells), group-label association
-  (Devices/Operations/Administration), AC-A11Y-5 confirmed unregressed --
-  zero console errors.
+  names, reduced-motion emulation, focus transfer, group-label association,
+  AC-A11Y-5 confirmed unregressed -- zero console errors.
 Full parallel suite (M2, pre-merge): `py -m pytest -q -n auto --dist
   worksteal` (4 workers) = 1958 passed, 23 skipped, 0 failed, 29.46s.
   Completely clean, no serial rerun. M1's uuid4 defect stays fixed (PR #84).
@@ -175,14 +172,17 @@ Post-merge CI on main (PR #85, run 34016204567, commit 081a976):
   full-regression SUCCESS -- privacy gate, project-state, build-history-index,
   full SERIAL suite (~11m56s, pre-DEV.TEST.1 baseline) and whitespace check
   all success (detail: project/build_history.json nav_1_accessibility_closure).
-DEV.TEST.1 local re-validation (accepted as pre-merge evidence):
-  `python3 -m pytest -q -n auto --dist worksteal` (4 CPUs) = 1957 passed,
-  24 skipped, 0 failed, two clean runs (32.27s, 35.01s) -- same 1981
-  collected as the M2 baseline (skip/pass split differs by sandbox
-  Chromium availability). Post-merge push-to-main parallel full-regression:
-  see build_history.json head record once terminal.
+DEV.TEST.1 local (pre-merge evidence): `python3 -m pytest -q -n auto
+  --dist worksteal` (4 CPUs) = 1957 passed, 24 skipped, 0 failed, two
+  clean runs (32.27s, 35.01s), 1981 collected.
+DEV.TEST.1 GitHub Actions (real cloud proof, run 34020356372, commit
+  6ca67cc): full-regression SUCCESS -- `python -m pytest -q -n auto
+  --dist worksteal`, 4 workers, 1944 passed/38 skipped/0 failed, 275.74s
+  (4m36s) vs 11m56s serial (~61% faster); ~36s above the 4-min ceiling,
+  a small tail of slow tests identified as the bottleneck (not a
+  correctness gap -- 0 failed). Full detail: build_history.json head record.
 Repository privacy gate: PASS / 0 findings. metadata_warnings == [];
-  build-history index --check clean; git diff --check clean.
+  build-history index --check clean.
 ```
 ## Known xfails
 
