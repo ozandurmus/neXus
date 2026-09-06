@@ -64,23 +64,22 @@ implementation, not citable as design authority. Result is a tagged union
 via `NO_APPLICABLE_AUTHORITY` (non-blocking, **not a grant**). Only `CX1` is
 unsafe. `D1`–`D7`, `E1`–`E7`, `I1`–`I20`, `AC-CS-1`…`97`.
 
-**Revision 6** — normative consistency and fixture integrity. The §5 stage
-summary uses tagged-union terminology and names the presentation-time /
-server-phase boundary (submission → admission → immediately before execution,
-where both `AC-ST-4` registry checks live). `CX1`/`RI-1`/`RI-2` is consistent in
-every normative clause; `CX2`/`CX3`, `G1`–`G4` and `R1`–`R5` survive only in
-labelled historical notes. Ten stale criteria reconciled without renumbering.
-Hard cases are tagged **`[CURRENT]`** / **`[FUTURE]`** with a mechanical
-obligation — a `[CURRENT]` id must be in `JOB_REGISTRY`, a `[FUTURE]` one
-asserted absent. `H5b` corrected (`report_rebuild` is `render-only`, **not** a
-retry; retry → `[FUTURE]` `H5d`); `H11a`/`H11c` action-free; `PO-M3-2` aligned
-with §11.3.
-
-**`H4` resolved from source** (contract §5.5.3): `config_refresh_cp` re-derives the
-CP platform classification that frozen `PCP.0` §8 names as a capability-projection
-input, so a re-collection can re-evaluate `D3`; "collecting again will not help" is
-removed from `H4a`–`H4d`. Which `UNSUPPORTED` reasons are `REVALIDATABLE` vs
-`TERMINAL` is open contract question **`UCQ-1`** (`M10`), not a PO decision.
+**Revision 7** — fixture classification and fail-closed remediation. The binary
+`[CURRENT]`/`[FUTURE]` split wrongly assumed every future case names an absent
+action; `H4e` uses the real member `config_refresh_cp` and depends on a future
+*producer*. Replaced by three dependency classes — **`[CURRENT]`** (22),
+**`[FUTURE_PRODUCER]`** (1: `H4e`), **`[FUTURE_ACTION]`** (2: `H5d`, `H8b`,
+naming **no** `action_id`) — invariant: every `action_id` in §5.5 is a real
+`JOB_REGISTRY` member. **`UCQ-1` now fails closed** — an unclassified
+`UNSUPPORTED` remediation class no longer defaults to `REVALIDATABLE`; the
+collection action resolves **`UNDETERMINED`**
+(`E6: unsupported_remediation_class_unresolved`), never
+`AVAILABLE_FOR_SUBMISSION`, and copy may claim neither that re-collection helps
+nor that it cannot (new case `H4f`); `TERMINAL` still needs positive evidence.
+`FA-7` no longer says final eligibility is simply `E1`–`E7`; `FA-9` drops the
+retired `H9b`. **`H4` remains resolved from source** (contract §5.5.3):
+`config_refresh_cp` re-derives the CP platform classification that frozen
+`PCP.0` §8 names as a capability-projection input.
 
 `PO-NAV-7` resolved **in contract**: capability policy → `D5` `POLICY_DISABLED`
 (`A5`, `M12`); "not enrolled" → `D4` `EVIDENCE_ONLY` (`A6`, `M10`). The job

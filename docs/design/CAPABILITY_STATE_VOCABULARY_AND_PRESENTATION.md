@@ -249,9 +249,9 @@ uncertainty makes a timestamp stale.
 | **FA-4** | `AC-DIF-7`, l.995 | *"Stale or incomparable evidence uses muted/provenance semantics **with its timestamp**"* | binds a timestamp requirement to classifications that have none (`D6d`, `D6e`) | require the timestamp **only** where a freshness anchor exists (`collected_at` / `last_successful_collection`); provenance/comparability semantics without a timestamp otherwise | `PO-M3-2` | a frozen criterion cannot be satisfied without fabricating data; any test written to it must fail or lie |
 | **FA-5** | nav contract §8 *Not applicable* row (l.630) and §8.1 *"Omit a tab for an entity type"* | tab **may** be omitted for an entity type | contradicts §6.5/D-NAV13/`AC-WS-7`/`AC-WS-8`, which the parent itself says closed this ambiguity, and contradicts D-NAV11 tab stability | replace both with the §6.5/D-NAV13 rule (tab stays visible and selectable, renders `NOT_APPLICABLE`, names supporting entity types, no enabled action); add a cross-pointer so the tables cannot drift again | **`PO-M3-1`** | the parent contradicts itself; implementers may cite either clause, producing flickering tabs on one reading. `AC-CS-25`/`26` unresolvable |
 | **FA-6** | nav contract §8 **Failed** row vs the §8.1 empty-state grouping | Failed row says *"error state + last good evidence retained"*; §8.1 groups **failed** under *"Keep selectable + explanatory empty state"* | one state is required to retain and display last-good evidence **and** to present an explanatory empty state — mutually exclusive presentations | make §8.1's grouping conditional: an explanatory empty state applies **only when no displayable evidence is retained** | `PO-M3-2` | two incompatible presentations for one state; retained evidence may be hidden behind an empty state. `AC-CS-29`/`58` blocked |
-| **FA-7** | nav contract §8 **Action** column, unconditional cells — e.g. Stale *"enabled, with age stated"*, Skipped *"enabled"* | states an action is **enabled**, unconditionally, as a property of the capability state | eligibility is never a property of the capability state alone: it is the conjunction of `E1`–`E7` (§3.4). An unconditional "enabled" cell would grant an action past its taxonomy, authorization and admission gates | reword the Action column as **"not blocked by this state"**, with a note that final eligibility remains the conjunction of the action's own gates | `PO-M3-2` | the table reads as granting actions; implemented literally it bypasses `console_refusal()` and the authorization authority — a safety defect. `AC-CS-30`/`32`/`67` blocked |
+| **FA-7** | nav contract §8 **Action** column, unconditional cells — e.g. Stale *"enabled, with age stated"*, Skipped *"enabled"* | states an action is **enabled**, unconditionally, as a property of the capability state | an action's affordance is never a property of the capability state alone, and no per-state row can express it: it is per-action, and it is split across phases. An unconditional "enabled" cell would read as granting an action past its taxonomy, authorization and admission gates | reword the Action column to ask only **"does this capability state contribute a presentation-time blocker?"** — the one question a per-state row can answer — and add a note that `action_affordance` is resolved per action from the **presentation-time gates** (`E1`–`E3`, `E5`, `E6`, and `E4`'s evaluable part), while submission, admission and immediately-before-execution authority, **`E7` included, remains server-owned** and outside any presentation-time cell | `PO-M3-2` | the table reads as granting actions; implemented literally it bypasses `console_refusal()` and the authorization authority — a safety defect. `AC-CS-30`/`32`/`67` blocked |
 | **FA-8** | nav contract §5.4, contradictory/unsafe row: *"`IDENTITY_TRANSLATION_REQUIRED`, `RELATIONSHIP_INCONSISTENT` … danger/error … 'Contradictory evidence'"* | groups an identity-**translation** requirement with unsafe contradictory state under one **danger/error** treatment and one "Contradictory evidence" label | `IDENTITY_TRANSLATION_REQUIRED` is a `semantic_exclusion` (V12a producer set) — a comparability limitation meaning the two sides use different identifier representations. It is **not** a contradiction: `CX1` (incompatible type/vendor resolution) is a distinct, narrower condition. Rendering it as danger overstates severity and conflicts with `AC-DIF-8`'s "red is reserved for actual fault" | separate the two: `IDENTITY_TRANSLATION_REQUIRED` takes comparability semantics (muted, "identity translation required", its own reason code preserved); genuine contradictory/unsafe state (`CX1`, `RELATIONSHIP_INCONSISTENT`) keeps danger/error and the "Contradictory evidence" label | `PO-M3-2` | a comparability limitation is presented as a fault, and the parent's own `AC-DIF-8` is violated by its own row. `AC-CS-47` and `H11c` cannot both be satisfied |
-| **FA-9** | nav contract §8 table shape (one **UX semantic** row → one nav/view/action/presentation tuple) | each row collapses status, view content, action enablement and presentation into a single state's row | this draft demonstrates the result is a **tagged union** (§4.1) whose `RESOLVED` variant carries four independent outputs: `primary_status`, `evidence_presentation` and `action_affordance` vary independently for the same state — `H4a`/`H4b`/`H5a`/`H5c`/`H9b`/`H11a`/`H11c` each show a case the one-row-per-state shape cannot express | keep §8 as the **UX-semantic index** it is, and add one sentence stating that a row's View and Action columns are *defaults for that state*, resolved finally by the capability-state resolution contract | **`PO-M3-3`** | the parent's shape implies one state determines all four outputs; every corrected case in §5.5 then reads as a deviation rather than a resolution. The four-output model stays in permanent tension with the parent |
+| **FA-9** | nav contract §8 table shape (one **UX semantic** row → one nav/view/action/presentation tuple) | each row collapses status, view content, action enablement and presentation into a single state's row | this draft demonstrates the result is a **tagged union** (§4.1) whose `RESOLVED` variant carries four independent outputs: `primary_status`, `evidence_presentation` and `action_affordance` vary independently for the same state — `H4a`/`H4f`/`H5a`/`H5c`/`H9a`/`H9a-t`/`H11a`/`H11c`, and scope test `S-RI-1`, each show a case the one-row-per-state shape cannot express | keep §8 as the **UX-semantic index** it is, and add one sentence stating that a row's View and Action columns are *defaults for that state*, resolved finally by the capability-state resolution contract | **`PO-M3-3`** | the parent's shape implies one state determines all four outputs; every corrected case in §5.5 then reads as a deviation rather than a resolution. The four-output model stays in permanent tension with the parent |
 
 **If the Product Owner withholds approval on a row**, three things follow and
 nothing else:
@@ -1041,9 +1041,15 @@ produces **no entry**.
 
 | Condition | `affordance` |
 | --- | --- |
-| any presentation-time gate contributes a blocking reason | `DISABLED_KNOWN_BLOCKER` |
-| no blocker, but `E4` is `AUTHZ_NOT_EVALUATED(authority)` | `UNDETERMINED` |
+| any presentation-time gate contributes a **blocking** reason | `DISABLED_KNOWN_BLOCKER` |
+| no blocker, but any presentation-time gate contributes an **undetermined** reason — `E4`'s `AUTHZ_NOT_EVALUATED(authority)`, or an `E6` prerequisite whose value could not be established | `UNDETERMINED` |
 | no blocker and no undetermined reason | `AVAILABLE_FOR_SUBMISSION` |
+
+`UNDETERMINED` is **not** an `E4`-only outcome. Any gate that cannot reach a
+决 decision at presentation time contributes an undetermined reason, and the
+fail-closed direction is `UNDETERMINED` — never `AVAILABLE_FOR_SUBMISSION`,
+because that would assert the absence of a blocker the resolver did not
+establish.
 
 `AVAILABLE_FOR_SUBMISSION` states only that **no presentation-time blocker is
 known**. It never claims `E7` passed, and it is never an execution grant.
@@ -1123,21 +1129,25 @@ Every case is written to be **executable as a test fixture**: one complete
 subject, one concrete declared `action_id` (or explicitly action-free), complete
 input assumptions, one deterministic result.
 
-**Two fixture classes, mechanically distinguishable.** Every case is tagged
-`[CURRENT]` or `[FUTURE]`, and the distinction is testable rather than
-editorial:
+**Three dependency classes, mechanically distinguishable.** A case's class
+records **what it depends on that does not exist yet** — which is not always
+the action. A binary current/future split was wrong: a case can use a real,
+current action and still depend on a producer that has no implementation.
 
-| Class | Rule | Test obligation |
+| Class | Depends on | Test obligation |
 | --- | --- | --- |
-| **`[CURRENT]`** | every `action_id` it names **must** be a member of `console/registry.py::JOB_REGISTRY` at the tested baseline | a test asserts membership for each named id; a missing id fails the fixture |
-| **`[FUTURE]`** | names an action whose contract does **not** exist yet. It **must** state every future assumption explicitly, and is **excluded** from the registry-membership assertion | a test asserts each named id is **absent** from `JOB_REGISTRY`, so a `[FUTURE]` case that silently becomes real is caught |
+| **`[CURRENT]`** | nothing missing — every contract, producer and named action exists now | assert each named `action_id` **is** a `JOB_REGISTRY` member; the case is fully executable today |
+| **`[FUTURE_PRODUCER]`** | a **producer or producer output** that does not exist yet; the action it names **is** a current registry member | assert each named `action_id` **is** a `JOB_REGISTRY` member, **and** assert the named missing producer/output is absent. The action half is executable today; the producer half is not |
+| **`[FUTURE_ACTION]`** | an **action contract** that does not exist yet | name **no** `action_id`. Assert that **no current registry entry supplies the described semantics**, so the case cannot silently become satisfied by an unrelated existing job |
+
+**Invariant across all three:** every `action_id` appearing anywhere in §5.5 is
+a real `JOB_REGISTRY` member. A `[FUTURE_ACTION]` case never fabricates an id —
+it describes the semantics and proves no current entry supplies them.
 
 Registry members verified at this baseline: targetless (`target_mode = "none"`)
 — `inventory_refresh_cp`, `inventory_refresh_vsx`, `config_refresh_pan`,
 `config_refresh_cp`, `report_rebuild`; entity-targeted (`target_mode =
 "entity_ids"`) — `recovery_attest_cp` (CLASS 0), `cp_gaia_backup` (CLASS 1).
-**No case invents an action id**: a `[FUTURE]` case names a *described* action
-whose non-membership is itself asserted.
 
 **`report_rebuild` is a report-rendering job** (`workflow = "render-only"`,
 label "Rebuild report"). It is **not** a retry of collection, and no case may
@@ -1161,16 +1171,17 @@ means *no presentation-time blocker is known*.
 | **H4b** `[CURRENT]` | `D3 = UNSUPPORTED`, reason class `REVALIDATABLE(platform_classification)`; `K1`–`K6` **all `TRUE`** → `RI-1` | `config_refresh_cp` | `UNKNOWN(support_inconsistency)` | none unless independently established | `POPULATED`, labelled as inconsistent with the support conclusion | `AVAILABLE_FOR_SUBMISSION` — a re-collection can re-evaluate the classification input the inconsistency rests on | **`muted`** — a bounded inconsistency, **not** danger | **both** disagreeing inputs, named; that the inconsistency is unresolved and what a re-collection re-evaluates |
 | **H4c** `[CURRENT]` | `D3 = UNSUPPORTED`, reason class `REVALIDATABLE(platform_classification)`; `K6 = UNESTABLISHED` (producer version not comparable) | `config_refresh_cp` | `UNKNOWN(support_comparability_unestablished)` | none unless independently established | `POPULATED` | `AVAILABLE_FOR_SUBMISSION` — a re-collection produces a current-producer generation, which is what comparability lacks | `muted` | **which** comparability condition could not be established; that neither an inconsistency nor a support conclusion is claimed |
 | **H4d** `[CURRENT]` | `D3 = UNSUPPORTED`, reason class `REVALIDATABLE(platform_classification)`; `K2 = FALSE` — the retained evidence is for a **different capability** | `config_refresh_cp` | `UNSUPPORTED` | — | **that evidence is not displayed for this capability at all** (out of scope, not historical); `EMPTY{no_evidence_for_this_capability}` if nothing else is retained | `AVAILABLE_FOR_SUBMISSION` | own `unsupported` token | the vendor reason; nothing about the out-of-scope evidence; and what a re-collection re-evaluates (§5.5.3) |
-| **H4e** `[FUTURE]` | `D3 = UNSUPPORTED` with reason class **`TERMINAL`** — a reason no re-collection can re-evaluate. **Future assumption, stated explicitly:** the capability projection (`M10`) classifies its `UNSUPPORTED` reasons; **no producer does so today** (§5.5.3 `UCQ-1`) | `config_refresh_cp` | `UNSUPPORTED` | — | `POPULATED` if retained, else `EMPTY{no_evidence_collected}` | `DISABLED_KNOWN_BLOCKER`, `[E6: support_conclusion_terminal]` | own `unsupported` token | the vendor reason, and that **no re-collection can change it** — the only case where that copy is permitted |
+| **H4e** `[FUTURE_PRODUCER]` | `D3 = UNSUPPORTED`, positively supported, with remediation class **`TERMINAL`** carried by the reason. **Missing producer, named:** the `M10` capability projection's **remediation classification of `UNSUPPORTED` reason codes** — no producer emits it today (§5.5.3 `UCQ-1`). The **action is current**: `config_refresh_cp` is a `JOB_REGISTRY` member | `config_refresh_cp` | `UNSUPPORTED` | — | `POPULATED` if retained, else `EMPTY{no_evidence_collected}` | `DISABLED_KNOWN_BLOCKER`, `[E6: support_conclusion_terminal]` | own `unsupported` token | the vendor reason, and that **no re-collection can change it** — permitted **only** because the reason positively carries `TERMINAL` |
+| **H4f** `[CURRENT]` | `D3 = UNSUPPORTED`, **positively supported**, but its reason carries **no remediation class** (absent, malformed or unknown) — the state of every reason at this baseline, since no producer emits the classification | `config_refresh_cp` | `UNSUPPORTED` | — | `POPULATED` if retained, else `EMPTY{no_evidence_collected}` | **`UNDETERMINED`**, `undetermined_reasons = [E6: unsupported_remediation_class_unresolved]` — **never** `AVAILABLE_FOR_SUBMISSION` | own `unsupported` token; **neutral/undetermined** on the control | the vendor reason, and that whether re-collection would help **has not been determined**. It must **not** claim re-collection will help, and must **not** claim it cannot |
 | **H5a** `[CURRENT]` | CP cluster; applicable schedule intentionally disabled; retained evidence present; `D6c = failed` on the latest attempt | `config_refresh_cp` | `POLICY_DISABLED` | `STALE(as_of)` if `D6a` is false with an anchor | `POPULATED` — retained evidence with the latest attempt beside it | `AVAILABLE_FOR_SUBMISSION` — `D5` contributes no reason | `muted` + explicit label | that **automatic** refresh is off and manual collection is unaffected; never that refresh is impossible |
 | **H5b** `[CURRENT]` | as H5a; the operator wants the exported report regenerated from the retained evidence | `report_rebuild` *(workflow `render-only` — a report-rendering job, **not** a retry of collection)* | `POLICY_DISABLED` | as H5a | `POPULATED` | `AVAILABLE_FOR_SUBMISSION` — rendering reads retained evidence and declares no `E6` prerequisite on refresh | `muted` | that the report is rebuilt from the evidence shown, whose age is stated; **nothing** about retrying a collection |
 | **H5c** `[CURRENT]` | as H5a, plus a fixture where an applicable authority refuses the named action | `cp_gaia_backup` *(CLASS 1)* | `POLICY_DISABLED` | as H5a | `POPULATED` | `DISABLED_KNOWN_BLOCKER`, `[E3: ACTION_REFUSED(CLASS_1_RECOVERY_WRITE, not console-submittable), E4: ACTION_DENIED(authority, reason)]` — **both preserved** | refusal tone on that control only | **both** reasons — the refusing class and the authorization refusal, refusal last; the policy that disabled automatic refresh is stated separately as the capability's own status |
-| **H5d** `[FUTURE]` | as H5a; a **retry-of-collection** action. **Future assumptions, stated explicitly:** such an action is declared in the closed registry; it is a **new typed job**, never a mutation of a historical outcome (`AC-RT-6`); its own retry contract may impose a ledger window or minimum re-execution interval. **No current registry member supplies retry-of-collection semantics** | *(the described future retry action — asserted **absent** from `JOB_REGISTRY`)* | `POLICY_DISABLED` | as H5a | `POPULATED` | `AVAILABLE_FOR_SUBMISSION` at presentation time; its window is an **`E7`-phase** decision, never claimed here. A prior failure is never a grant | `muted` | that retry is a new typed job and that any governing window is enforced at submission/admission |
+| **H5d** `[FUTURE_ACTION]` | as H5a; a **retry-of-collection** action. **Future assumptions, stated explicitly:** such an action is declared in the closed registry; it is a **new typed job**, never a mutation of a historical outcome (`AC-RT-6`); its own retry contract may impose a ledger window or minimum re-execution interval. **No current registry member supplies retry-of-collection semantics** | *(no `action_id`; the described retry-of-collection semantics — asserted supplied by **no** current registry entry)* | `POLICY_DISABLED` | as H5a | `POPULATED` | `AVAILABLE_FOR_SUBMISSION` at presentation time; its window is an **`E7`-phase** decision, never claimed here. A prior failure is never a grant | `muted` | that retry is a new typed job and that any governing window is enforced at submission/admission |
 | **H6** `[CURRENT]` | ClusterXL logical entity; one member's value legitimately differs; `D6c = success` | *(action-free presentation case)* | `AVAILABLE` | `MEMBER_SPECIFIC` | `POPULATED`, side-by-side member comparison | — | `--member-specific` gold row emphasis | "Expected member difference"; **no** warning icon or failure wording |
 | **H7a** `[CURRENT]` | the **global module** subject; its surface ships | *(action-free presentation case)* | `AVAILABLE` | — | `POPULATED` | — | normal | the module is a product plane and does not disappear (`AC-WS-10`) |
 | **H7b** `[CURRENT]` | the **selected entity** subject; a standalone firewall; the capability does not apply to its type | `recovery_attest_cp` | `NOT_APPLICABLE` | — | `EMPTY{not_applicable_to_entity_type}` | `DISABLED_KNOWN_BLOCKER`, `[E6: capability_not_applicable_to_entity_type]` | `info` | which entity types support the capability |
 | **H8a** `[CURRENT]` | CP cluster; supported, reconciled, `D6a fresh = true`, `D6b = live`, `D6c = success`; **no CLASS 2 action is declared on this surface — the state at this baseline** | *(none declared)* | `AVAILABLE` | — | `POPULATED` | **no entry** — an undeclared action produces none | normal | nothing about a CLASS 2 action; there is no control to explain |
-| **H8b** `[FUTURE]` | as H8a, but a CLASS 2 action is declared. **Future assumptions, stated explicitly:** the action exists in the closed registry (it does **not** today — CLASS 2 has no member); its taxonomy class is `CLASS_2_OPERATIONAL_STATE_CHANGE`; `OP.2`'s authorizer is the applicable authority and returns its unconditional deny. **Excluded from the `[CURRENT]` registry-membership assertion** | *(the described future CLASS 2 action — asserted **absent** from `JOB_REGISTRY`)* | `AVAILABLE` | — | `POPULATED` | `DISABLED_KNOWN_BLOCKER`, `[E3: ACTION_REFUSED(CLASS_2_OPERATIONAL_STATE_CHANGE), E4: ACTION_DENIED(OP.2 authority, authorization_not_configured)]` — **both preserved** | refusal tone on that control only | every refusing gate, named — never a bare greyed control (`CON.0` §9) |
+| **H8b** `[FUTURE_ACTION]` | as H8a, but a CLASS 2 action is declared. **Future assumptions, stated explicitly:** the action exists in the closed registry (it does **not** today — CLASS 2 has no member); its taxonomy class is `CLASS_2_OPERATIONAL_STATE_CHANGE`; `OP.2`'s authorizer is the applicable authority and returns its unconditional deny. **Excluded from the `[CURRENT]` registry-membership assertion** | *(no `action_id`; the described CLASS 2 semantics — asserted supplied by **no** current registry entry)* | `AVAILABLE` | — | `POPULATED` | `DISABLED_KNOWN_BLOCKER`, `[E3: ACTION_REFUSED(CLASS_2_OPERATIONAL_STATE_CHANGE), E4: ACTION_DENIED(OP.2 authority, authorization_not_configured)]` — **both preserved** | refusal tone on that control only | every refusing gate, named — never a bare greyed control (`CON.0` §9) |
 | **H9a** `[CURRENT]` | one canonical id resolves to two incompatible entity types → `CX1`; evidence for that subject withheld | `recovery_attest_cp` *(entity-targeted, naming the disputed subject)* | `UNKNOWN(identity_contradiction)` | — | `EMPTY{identity_contradiction}` | `DISABLED_KNOWN_BLOCKER`, `[E5: subject_integrity_unmet]` | **`danger`** — a genuine unsafe identity contradiction (`AC-DIF-6`) | **both** disagreeing identity resolutions, named |
 | **H9a-t** `[CURRENT]` | the same `CX1` fixture as H9a | `report_rebuild` *(targetless)* | `UNKNOWN(identity_contradiction)` | — | `EMPTY{identity_contradiction}` | `AVAILABLE_FOR_SUBMISSION` — **`CX1` contributes nothing**: this action declares no subject, and none may be invented (§5.1.2) | `danger` on the capability chip; **normal** on this control | that the identity dispute concerns the subject, not this action |
 | **H10** `[CURRENT]` | CP cluster; `D5 = POLICY_UNKNOWN`; `D6b = live`, `D6c = success` | `config_refresh_cp` | `AVAILABLE` | `SCHEDULE_UNKNOWN` | `POPULATED` — `POLICY_UNKNOWN` erases nothing | `AVAILABLE_FOR_SUBMISSION` — `POLICY_UNKNOWN` is valid input, not malformed | normal | that automatic-refresh state could not be determined; **evidence is unaffected** |
@@ -1182,15 +1193,15 @@ means *no presentation-time blocker is known*.
 #### 5.5.1 Multi-action scope tests — not atomic cases
 
 `RI-1` and `RI-2` scope is a statement about **several** actions at once, so it
-cannot be expressed as an atomic one-action case. The previous revision's `H9b`
-and `H9c` are therefore **reclassified as multi-action scope tests** and are
-deliberately outside the atomic set. The false "one named action per row" claim
-they carried is withdrawn.
+cannot be expressed as an atomic one-action case. They are therefore
+**multi-action scope tests**, deliberately outside the atomic set. *(Historical
+note, non-normative: revision 5 carried these as atomic cases `H9b` and `H9c`
+with a false "one named action per row" claim; those identifiers are retired.)*
 
 | id | Fixture | Declared actions | Required assertion |
 | --- | --- | --- | --- |
-| **S-RI-1** *(was H9b)* | `RI-1` holds (`K1`–`K6` all `TRUE`) | `config_refresh_cp` (declares the support fact as an `E6` prerequisite) **and** `report_rebuild` (does not) | `config_refresh_cp` → `DISABLED_KNOWN_BLOCKER [E6: support_inconsistency]`; `report_rebuild` → resolves on its own gates, **unaffected** by `RI-1` |
-| **S-RI-2** *(was H9c)* | `RI-2` holds | any declared enrollment-shaped action, if one exists, **and** `report_rebuild` | the enrollment-shaped action → blocked by `E6: reconciliation_inconsistency`; `report_rebuild` → unaffected. At this baseline no enrollment action is declared, so the first half asserts **no entry** |
+| **S-RI-1** | `RI-1` holds (`K1`–`K6` all `TRUE`) | `config_refresh_cp` (declares the support fact as an `E6` prerequisite) **and** `report_rebuild` (does not) | `config_refresh_cp` → `DISABLED_KNOWN_BLOCKER [E6: support_inconsistency]`; `report_rebuild` → resolves on its own gates, **unaffected** by `RI-1` |
+| **S-RI-2** | `RI-2` holds | **at this baseline: `report_rebuild` alone**, since no enrollment action is declared (`enroll_device` ∉ `JOB_REGISTRY`) | `report_rebuild` → resolves on its own gates, **unaffected** by `RI-2`; and the enrollment-shaped semantics are asserted supplied by **no** current registry entry, so **no entry** is produced for them. Should an enrollment action later be declared, it is blocked by `E6: reconciliation_inconsistency` |
 | **S-CX1** | `CX1` holds | `recovery_attest_cp` (targets the disputed subject) **and** `report_rebuild` (targetless) | `recovery_attest_cp` → `DISABLED_KNOWN_BLOCKER [E5: subject_integrity_unmet]`; `report_rebuild` → `AVAILABLE_FOR_SUBMISSION`, with **no invented subject prerequisite** |
 
 #### 5.5.2 Severity, settled
@@ -1237,16 +1248,42 @@ reason is `TERMINAL` (`H4e`).
 | `REVALIDATABLE(<input>)` | the reason rests on an input a named action can re-derive — e.g. `platform_classification` | the re-deriving action stays submittable; copy names the input |
 | `TERMINAL` | no available action can re-evaluate the reason | the capability-specific action declares an `E6` prerequisite and is `DISABLED_KNOWN_BLOCKER` |
 
-**`UCQ-1` — unresolved contract question, owned by `M10`.** *Which* concrete
-`UNSUPPORTED` reasons are `REVALIDATABLE` and which are `TERMINAL` is **not
-established by the repository**: `D3` has no producer, so no reason codes exist
-to classify. This document defines the classification and its consequences; it
-does **not** invent the membership. Until `M10` supplies it, a reason with no
-declared class is treated as **`REVALIDATABLE` for presentation and `UNKNOWN`
-for any support claim** — the honest reading, since asserting `TERMINAL`
-without evidence would fabricate a permanent product limitation. `UCQ-1` is an
-open contract question, **not** a Product Owner decision, and does not add a
-seventh `PO-M3` item.
+**Separation of responsibility.** `M3` defines **total behaviour when the
+remediation classification is missing or malformed**. `M10` owns the future
+mapping of concrete vendor reason codes to `REVALIDATABLE(<input>)` or
+`TERMINAL`. Neither substitutes for the other.
+
+**Fail-closed fallback — normative, and complete.** When a reason's remediation
+class is **absent, malformed or unknown**:
+
+| Question | Resolution |
+| --- | --- |
+| is the `UNSUPPORTED` conclusion itself still positively supported? | if **yes**, `primary_status` **may remain `UNSUPPORTED`** — the support conclusion and its remediation class are different facts |
+| what does the capability-specific **collection** action resolve to? | **`UNDETERMINED`**, with `undetermined_reasons = [E6: unsupported_remediation_class_unresolved]` |
+| may it resolve `AVAILABLE_FOR_SUBMISSION`? | **No.** Never |
+| what may the copy say? | it may state the vendor reason. It must **not** claim that re-collection will help, and must **not** claim it cannot help |
+| what if the support conclusion is itself malformed or insufficiently evidenced? | do **not** use this fallback — resolve `D3` through the existing honest-`UNKNOWN` rules (rank 8 / §8.2), which already cover it |
+
+**Why `UNDETERMINED` rather than `AVAILABLE_FOR_SUBMISSION`.** The previous
+revision defaulted an unclassified reason to `REVALIDATABLE` for presentation.
+That renders the collection action submittable, which asserts — without
+evidence — both that re-contact is **useful** and that it is **safe** to
+attempt against a device the product has concluded does not support the
+capability. Neither inference is available. `UNDETERMINED` states the actual
+epistemic position: the product does not know whether re-collection would help,
+and says so rather than inviting the attempt.
+
+**`TERMINAL` still requires positive evidence.** The fallback never asserts
+`TERMINAL`; it asserts only that the class is unresolved. `TERMINAL` copy
+("no re-collection can change it") remains permitted **only** where the reason
+positively carries that class — `H4e`.
+
+**`UCQ-1` — open contract question, owned by `M10`.** *Which* concrete
+`UNSUPPORTED` reason codes are `REVALIDATABLE` and which are `TERMINAL` is not
+established by the repository, because `D3` has no producer and no reason codes
+exist to classify. `UCQ-1` is scoped to that **membership** question only —
+`M3`'s behaviour above is complete and deterministic without it. `UCQ-1` is
+**not** a Product Owner decision and adds no seventh `PO-M3` item.
 
 ---
 
@@ -1828,7 +1865,7 @@ This is a contract for what must be proven, not an implementation of the tests.
 | `AC-CS-62` | Stage 1 recognises exactly three classes and keeps them distinct: **`CX1` is the only contradiction** and the only unsafe state; **`RI-1` and `RI-2` are bounded inconsistencies** and are never classified as contradictory, unsafe or danger. At least four co-occurrences are asserted to trigger none of them | `M10` |
 | `AC-CS-63` | Each class applies only its declared scope: `CX1` withholds evidence for the disputed subject and blocks, via `E5`, **only actions whose declared subject or target depends on the disputed identity** — targetless and unrelated-subject actions are unaffected and receive **no invented subject prerequisite**; `RI-1` retains evidence and blocks only actions declaring the support fact; `RI-2` retains evidence and blocks only a declared enrollment-shaped action | `M10` |
 | `AC-CS-64` | `AVAILABLE` requires the rank-10 positive conjunction; a malformed, absent or unclassifiable **required** input resolves to `UNKNOWN(unclassified_input)` and never to `AVAILABLE` or to `AVAILABLE_FOR_SUBMISSION`. A **validly unknown** value (`SUPPORT_UNKNOWN`, `POLICY_UNKNOWN`, `APPLICABILITY_UNKNOWN`, `RECONCILIATION_UNKNOWN`) is **not** malformed and never reaches rank 11 | `M10` |
-| `AC-CS-65` | Every atomic case in §5.5 resolves exactly as its row states across all four `RESOLVED` outputs — `H1`, `H2`, `H3`, `H4a`–`H4e`, `H5a`–`H5d`, `H6`, `H7a`/`H7b`, `H8a`/`H8b`, `H9a`/`H9a-t`, `H10`, `H11a`–`H11c`, `H12`. Each `[CURRENT]` case's named `action_id` is asserted **present** in `JOB_REGISTRY`; each `[FUTURE]` case's described action is asserted **absent** from it, and its future assumptions are stated in the row. No blanket claim asserts that every case names a current registry member | `M10`/`M11` |
+| `AC-CS-65` | Every atomic case in §5.5 resolves exactly as its row states across all four `RESOLVED` outputs — `H1`, `H2`, `H3`, `H4a`–`H4f`, `H5a`–`H5d`, `H6`, `H7a`/`H7b`, `H8a`/`H8b`, `H9a`/`H9a-t`, `H10`, `H11a`–`H11c`, `H12` — plus the §5.5.1 scope tests `S-RI-1`, `S-RI-2`, `S-CX1`. Dependency classes are asserted per §5.5: a `[CURRENT]` or `[FUTURE_PRODUCER]` case's named `action_id` **is** a `JOB_REGISTRY` member; a `[FUTURE_PRODUCER]` case additionally names an absent producer/output; a `[FUTURE_ACTION]` case names **no** `action_id` and asserts no current entry supplies the described semantics. **Every `action_id` appearing in §5.5 is a real registry member** | `M10`/`M11` |
 
 ### Authorization applicability and separation
 
