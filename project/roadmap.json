@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "current_build": "registry_keyed_job_targets",
+  "current_build": "m8_first_contact_trust_identity_evidence_producer_architecture",
   "current_track": "PCP.x",
   "progress_contract": "Weighted acceptance-criterion completion. Percentages describe the declared roadmap, not calendar time or delivery ETA.",
   "tracks": [
@@ -140,26 +140,23 @@
   "now_next": {
     "horizon_contract": "NOW is exactly one build. NEXT is exactly one. Everything else is an `upcoming` row carrying its own true status: planned = AFTER, blocked = waiting on a named external gate, deferred = consciously postponed. `now.build` must equal the newest project/build_history.json record -- utils.project_plan enforces it.",
     "now": {
-      "build": "registry_keyed_job_targets",
-      "title": "M6 -- Registry-keyed job targets, Option D fail-closed admission shell",
-      "goal": "PO decision 2026-09-06 (bounded nexus-decision-council synthesis, Option D only): resolve console-submitted config_refresh_cp device_id targets against the PCP.1 Device Registry at admission (POST /api/jobs) and again immediately before execution (console/runner.py), fail-closed. This is targeting FOUNDATION, not functional per-device collection -- every otherwise-eligible device_id currently refuses with UNSUPPORTED / IDENTITY_TRANSLATION_REQUIRED because no legitimate device_id -> collector entity_id relationship producer exists yet. No PCP.1 relationship write, no M4 schema/table change, no new durable mapping store, no frozen-contract edit. operator_assertion stays an OPEN dissent, not accepted mapping authority. AUTOMATED_VALIDATED: PR open, merge not authorized in this movement. Do not claim M6 DONE as a working device-targeting capability.",
-      "status": "automated_validated",
+      "build": "m8_first_contact_trust_identity_evidence_producer_architecture",
+      "title": "M8 (architecture review) -- First-contact trust and identity-evidence producer",
+      "goal": "DRAFT/IN REVIEW architecture only, not implemented, not automated_validated: a bounded nexus-decision-council synthesis closing the PO question M6 left open -- what legitimate evidence may ever bind a PCP.1 device_id to a collector entity_id. Confirms M6 -> M8 -> M7 as the corrected roadmap order, proposes a candidate-selection (CMA-endpoint-match, hint only) + live first-contact identity-gate confirmation design over the existing unmodified CP collector/trust seams, and places the proven relationship in the already-approved M4 SQLite store via an additive migration -- no PCP.1 amendment, no code, no schema change, no device contact in this movement. Full contract: docs/history/phase/M8_FIRST_CONTACT_TRUST_AND_IDENTITY_EVIDENCE_PRODUCER_ARCHITECTURE.md.",
+      "status": "in_progress",
       "started": "2026-09-06",
       "notes": [
-        "JOB_REGISTRY['config_refresh_cp'].target_mode flipped from 'none' to the new 'device_ids' value (console/registry.py) -- scoped to config_refresh_cp only; every other job type's target_mode is unchanged (M5's collector_target_selection_seam, complete/automated_validated, is otherwise untouched).",
-        "New shared admission/pre-execution function console/registry_targets.py::resolve_registry_targets() -- checks only the registry's device_id/state fields, never endpoint, hostname, display name, vendor hint, or spelling equality, and never consults collection output (unified.json). Both console/app.py's POST /api/jobs and console/runner.py's pre-execution re-check call this one function so a target eligible at admission but disabled/retired before execution is refused the same way.",
-        "M7 is explicitly NOT this record's 'next' build -- its viability and the identity-evidence producer/M8 sequencing return to Product Owner review before any concrete 'next' build is named (see now_next.next below).",
-        "Tests: tests/test_m6_registry_keyed_job_targets.py (27 focused) plus tests/test_m5_collector_target_selection_seam.py, tests/test_con2_console_job_engine.py, tests/test_pcp1_device_registry.py, tests/test_m4_control_plane_metadata_store.py, tests/test_architecture_convergence.py, tests/test_application_package.py (234 combined, 0 failed); full local parallel suite (python -m pytest -q -n auto --dist worksteal): 2058 passed, 37 skipped, 2 failed, 1 error -- all four pre-existing and reproduced identically with this branch's changes stashed (a Windows Git Bash `tr` pipeline quoting quirk, an unrelated SSH-trust binary-garbage test, and a missing local pyyaml dependency for a CI-workflow-parsing test), none touching console/registry/device_registry code."
+        "Predecessor: registry_keyed_job_targets (M6), AUTOMATED_VALIDATED, Option D fail-closed admission shell, PR #95 merged -- full detail in project/build_history.json, not restated here.",
+        "operator_assertion stays an OPEN dissent, not reopened or resolved here. A second, unresolved dissent recorded in the draft: single-sourced (non-bidirectionally-corroborated) identity evidence, because no independent Check Point management-plane serial source was found to exist in this repository today.",
+        "Requires PO review of the draft (freeze, reject, or amend) before any implementation slice (storage/contract -> read-only producer, real-env gated -> M6 resolver consumption -> M7) may begin."
       ]
     },
     "next": {
-      "build": "m6_next_movement_po_sequencing_review",
-      "title": "PO review -- M7 viability and identity-evidence producer/M8 sequencing",
+      "build": "m7_real_device_targeted_collect_now",
+      "title": "M7 -- real device-targeted Collect now",
       "status": "blocked",
       "notes": [
-        "PO decision 2026-09-06 explicitly withheld automatic M7 authorization: 'M7 must not begin automatically after M6. Its viability and the sequencing of the identity-evidence producer/M8 must return to PO review.' This placeholder row exists so now_next.next never silently defaults back to M7 or presents it as immediately executable.",
-        "A legitimate device_id -> collector entity_id relationship producer (out of scope for M6) is the actual prerequisite before config_refresh_cp device_id targeting can become functional; operator_assertion (endpoint/hostname/display-name/vendor-hint/spelling equality) remains an OPEN dissent, not accepted mapping evidence, absent a later explicit PO decision.",
-        "Requires its own separate PO decision to convert into a concrete 'next' build. Recommended: Sonnet 5, extended thinking (high) for the sequencing/producer-design decision itself; Sonnet 5, normal once a contract is frozen."
+        "BLOCKED: has nothing legitimate to target until M8's identity-evidence producer exists and console/registry_targets.py consumes it (docs/history/phase/M8_FIRST_CONTACT_TRUST_AND_IDENTITY_EVIDENCE_PRODUCER_ARCHITECTURE.md section 13). Not started, not authorized. Unblocks only once M8's resolver-consumption slice exists and has at least one real-environment-proven relationship row to target."
       ]
     },
     "upcoming": [

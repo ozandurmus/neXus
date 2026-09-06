@@ -13,109 +13,99 @@ Overwrite at every session close. Keep it minimal.
 
 ## 1. Snapshot
 
-- Date: 2026-09-06. Branch `build/m5-collector-target-selection-seam` from
-  `main` at `88a8d1610609f96996aca29dc9eeabd9261029c9` (`M4`, PR #93,
-  **merged**). PR open for this branch; **not merged**.
-- Build: `collector_target_selection_seam` (`M5`) — **AUTOMATED_VALIDATED**,
-  `cp-config` seam only.
-- Promoted OP.0d's already-validated `--cp-config-targets` selector into the
-  shared `utils.collection_executor.workflow_argv()` argv seam (CON.2 C2-2).
-- Contract: `docs/design/PRODUCT_CONTROL_PLANE_ARCHITECTURE.md` §9/§12/§12.1
-  (`AC-TGT-3`/`AC-TGT-4`/`AC-TGT-5`), companion
-  `docs/design/LOCAL_CONTROL_PLANE_RUNTIME_AND_ENROLLMENT.md` §12/§12.1.
+- Date: 2026-09-06. Branch `architecture/m8-first-contact-trust-identity-evidence`
+  from verified `main` at `0a9048ceeb2a318444f918e2688b126641eaeab0` (`M6`,
+  PR #95, **merged**). Local `main` confirmed equal to `origin/main` before
+  any change — no delta, no correction needed.
+- Build: `m8_first_contact_trust_identity_evidence_producer_architecture`
+  (`M8`, architecture review) — **DRAFT / IN REVIEW**, not implemented, not
+  automated_validated.
+- Contract produced: `docs/history/phase/M8_FIRST_CONTACT_TRUST_AND_IDENTITY_EVIDENCE_PRODUCER_ARCHITECTURE.md`.
 
 ## 2. What this session did
 
-- **Baseline verified, not corrected**: local `main` already equalled
-  `origin/main` at the expected `88a8d161...`, PR #93 (`M4`) already merged,
-  tracked tree clean. No fast-forward needed.
-- **`utils/collection_executor.py::workflow_argv()`**: `cp-config` now
-  appends `--cp-config-targets <comma-joined>` when a non-empty `targets` is
-  passed, preserving requested order and opaque `entity_id` spelling exactly
-  (identity law — no cast/strip/pad/normalize). Target-free `cp-config` argv
-  is byte-identical to before.
-- **New `UnsupportedTargetSelectionError(ValueError)`**: any workflow with no
-  target-selection seam (`cp`, `checkpoint`, `vsx`, `pan-config`) now raises
-  this, inside argv construction, if given a non-empty `targets` — before
-  `main.main()` is ever called, in both the scheduler
-  (`application/workflows/maintenance.py::_scheduler_workflow_argv`) and the
-  console runner (`console/runner.py::_build_argv`). `recovery-pan` /
-  `recovery-cp` keep their pre-existing pass-through behaviour byte-for-byte.
-- **No other file changed.** `console/registry.py::JOB_REGISTRY` untouched —
-  `config_refresh_cp.target_mode` stays `"none"` (M6's job). No registry
-  target resolution, no device contact, no admission/concurrency/storage
-  change.
-- **Added `tests/test_m5_collector_target_selection_seam.py`** — 22 focused
-  tests (target-free/targeted argv shape, opaque-id preservation, CLI
-  round-trip, scheduler/console parity, fail-closed refusal before `main()`
-  for every non-seamed workflow, empty-targets-is-the-only-plane-wide-spelling,
-  recovery-* unaffected, `JOB_REGISTRY.target_mode` unchanged, structural
-  no-new-command/no-concurrency-change checks).
-- **Project-state rotation**: `project/build_history.json` (new `M5` record,
-  newest-first), `project/roadmap.json` (`now`→`M5`/`automated_validated`,
-  `next`→`M6` stub), `project/backlog.json`
-  (`pcp_collector_target_selection_seams`: `planned`→`in_progress`, one CP
-  seam closed, VSX/CP-inventory/pan-config still plane-wide),
-  `docs/history/INDEX.md` regenerated. `CURRENT_STATE.md`'s stale
-  post-merge-`M4` wording (still describing PR #93 as open) reconciled as
-  part of this same rotating-state update, per session instruction — not a
-  separate movement.
+- **Invoked a bounded Claude-side `nexus-decision-council`** (five seats:
+  product/PO intent, security/trust-boundary, evidence/identity-law,
+  storage/ownership, implementation-sequencing), scoped only to the ten
+  questions the PO posed when closing `M6`. Did not reopen the closed `M6`
+  Option D debate. No raw transcript stored — only the synthesis and two
+  recorded dissents are durable (in the produced doc, section 12).
+- **Confirmed `M6 → M8 → M7` as the corrected roadmap order** — the former
+  `M6 → M7 → M8` order is not viable because `M7` has nothing legitimate to
+  target until `M8`'s producer exists.
+- **Designed (not implemented) a two-step evidence sequence**: CMA-endpoint-
+  match candidate selection (hint only, never proof — endpoint/hostname/
+  display-name/vendor-hint/spelling equality stays explicitly non-evidence)
+  followed by a live, strict-trust-gated first-contact session that reuses
+  the *existing, unmodified* Check Point config collector's `_entity_id` /
+  `_identity_gate` / `_collector_identity_gate` / `_parse_asset_semantic`
+  (serial) code and `utils/cp_ssh_trust.py`'s existing strict host-key
+  preflight — no second identity authority, no new collector, no new
+  credential/network path.
+- **Confirmed by direct source inspection** (`grep` over
+  `checkpoint/cp_runner.py`/`checkpoint/*.py`) that no Check Point CMA/MDS
+  management-plane read exposes a device serial today — this closes off a
+  bidirectional-corroboration design as *unavailable* evidence (not merely
+  undesigned), recorded as an open dissent in the produced doc.
+- **Placed the proven relationship in the already-approved `M4` SQLite
+  store** (`control_plane.db`) via a proposed additive migration (a new
+  table, illustratively `device_identity_relationships`) — evaluated and
+  rejected reusing `control_plane_metadata` and `capability_projections`
+  first; explicitly rejected populating `PCP.1`'s frozen `relationships: []`
+  Device Registry field (would reopen the frozen §21 contract; the `M4`
+  alternative needs no amendment). **No `PCP.1` frozen-contract amendment
+  is proposed or pending** — none was found necessary.
+- **Made `identity_mapping_proven` a binary bit only** — explicitly refused
+  to let the collector's own `confidence`/`acceptance_basis` string become
+  relationship authority, per the PO boundary against subjective confidence.
+- **Defined a four-slice implementation sequence** (storage/contract →
+  read-only first-contact producer, real-env gated → `M6` resolver
+  consumption → `M7`) as illustrative, not frozen, names.
+- **Updated durable project state**: `CURRENT_STATE.md` (checkpoint, active
+  build, exact-next-build sections), `project/roadmap.json` (`now_next.next`
+  replaced with this concrete architecture-review row; new explicit
+  `upcoming`/`blocked` `M7` row), `project/build_history.json` (new head
+  record, `movement: ARCHITECTURE`, `status: in_progress`). Did not touch
+  `project/feature_registry.json` or `project/backlog.json` — no feature
+  delivery state or debt item changed by an architecture-only movement.
+- **No source, test, schema, or device-contact change of any kind.** No
+  `git add`/commit/push performed by this session (see §3).
 
 ## 3. Exact next action
 
-**Product Owner review of the open `M5` PR, then merge decision.** Merge is
-not authorized by the session that opened it.
+**Product Owner review of the draft contract**
+(`docs/history/phase/M8_FIRST_CONTACT_TRUST_AND_IDENTITY_EVIDENCE_PRODUCER_ARCHITECTURE.md`):
+freeze it (as-is or with corrections), or reject/redirect. No implementation
+slice (storage/contract, the read-only producer, `M6` resolver consumption,
+or `M7`) may begin before that review — this session produced no
+implementation authority.
 
-`M6` (`registry_keyed_job_targets`) is **next, not started, not
-authorized** — it needs its own go-ahead. It resolves console-submitted
-`device_id` targets against the `PCP.1` Device Registry at admission and
-again immediately before execution, and is the movement that changes
-`JOB_REGISTRY['config_refresh_cp'].target_mode` from `"none"` to
-`"entity_ids"` — M5 deliberately left that field untouched.
-
-**Still outstanding from `M3`:** the Claude-side `nexus-decision-council` was
-never stood up. Not required for `M5` (deterministic implementation against
-an already-frozen contract, per this session's explicit instruction) but
-remains a prerequisite for the next *architecture* movement.
-
-**Pre-existing, unowned, explicitly out of scope here:** the Panorama
-test-residue hygiene issue (full-suite runs leave `data/`/`logs/` in the
-working tree, failing the working-directory privacy gate until removed) —
-not fixed in this session per its explicit boundary.
+If approved to proceed to a PR for PO review: commit the doc + state changes
+on `architecture/m8-first-contact-trust-identity-evidence`, open a PR against
+`main`, **do not merge** — merge authorization is a separate PO decision, as
+with every prior movement in this repository.
 
 ## 4. Test delta
 
-- **New:** `tests/test_m5_collector_target_selection_seam.py` — 22 passed.
-- **Affected suites, combined 110 passed / 0 failed:**
-  `tests/test_op0d_deterministic_target_selection.py` (re-exercises the
-  underlying OP.0d selector, unmodified here),
-  `tests/test_con2_console_job_engine.py`,
-  `tests/test_rb2_recovery_collect.py`,
-  `tests/test_architecture_convergence.py` (20 passed),
-  `tests/test_application_package.py`.
-- `metadata_warnings == []`; build-history index `--check` clean (after
-  regeneration); `git diff --check` clean.
-- **Repository privacy gate:** `PASS`, 0 findings — `data/`/`logs/` (runtime
-  residue from the focused-suite runs) removed from the working tree first,
-  per `AI_START_HERE.md`'s documented gate procedure.
-- **No full local suite** (blast radius bounded to one shared argv-
-  construction function and its two existing call sites, all covered by the
-  affected-suite run above). **No GitHub full regression, no
-  `workflow_dispatch`, no device contact, no merge.**
+None. No source or test file changed. `docs/history/INDEX.md` regenerated
+from the updated `project/build_history.json` (`py scripts/build_history_index.py`)
+as part of this session's state-update step — mechanical, not evidence of
+implementation. Repository privacy gate and `tests/test_architecture_convergence.py`
+state-consistency check were run against the changed documentation/state
+files only (see this session's `SESSION CLOSE`, not restated here).
 
 ## 5. Risks / notes forward
 
-- **Automated tests do not prove production readiness or real-environment
-  validation.** No device was contacted; the underlying OP.0d collector-side
-  fail-closed behaviour (unknown/ambiguous/empty `entity_id`, contact only
-  requested targets) was validated previously and is unmodified here.
-- **Only one collector has a seam.** CP inventory (`cp`), VSX and `pan-config`
-  remain honestly plane-wide by design (`AC-TGT-5`) — a second seam is its
-  own future movement, not implied by this one landing.
-- **Console cannot submit a targeted `cp-config` job yet** —
-  `JOB_REGISTRY['config_refresh_cp'].target_mode` stays `"none"` until `M6`.
-  Only a scheduler-policy `targets: [...]` entry or a direct
-  `workflow_argv()`/CLI call can exercise the new seam today.
-- **Admission coordinator, canonical endpoint lock and the vendor
-  concurrency budget of 1 are unchanged** — this movement touches argv
-  construction only.
+- This is architecture only. Nothing here should be read as authorizing the
+  storage migration, the producer, the `M6` resolver change, or `M7` — each
+  needs its own contract freeze / implementation movement per
+  `AGENTS.md` "Mandatory build lifecycle."
+- Two dissents carried forward unresolved, both explicit in the produced
+  doc's §12: `operator_assertion` (inherited from `M6`, not reopened) and
+  single-sourced (non-bidirectionally-corroborated) identity evidence — flag
+  either if a later session is tempted to treat this design as stronger than
+  documented.
+- Table/column names and migration version numbers in the draft are
+  explicitly illustrative, not frozen (`AGENTS.md` "Contract-status law") —
+  a later contract-freeze review must re-derive them against the real
+  repository state at that time, not copy them verbatim.

@@ -3,6 +3,22 @@
   "record_contract": "One structured record per build, newest first. Required: build, status, title, summary (<= 2 sentences). Optional: started, completed, track, movement, supersedes, evidence, risks_forward, docs{agreement,validation,handover} (repo-relative paths under docs/history/). Full detail lives in the linked doc; do not restate it here. Status vocabulary must stay within utils/project_plan.py STATUS_VALUES.",
   "builds": [
     {
+      "build": "m8_first_contact_trust_identity_evidence_producer_architecture",
+      "status": "in_progress",
+      "title": "M8 (architecture review) -- First-contact trust and identity-evidence producer",
+      "summary": "DRAFT architecture, not implemented: bounded nexus-decision-council synthesis resolving the M6-closing PO question of how a device_id -> collector entity_id relationship may ever be legitimately proven. Confirms M6 -> M8 -> M7 as the corrected roadmap order, proposes a candidate-selection-then-live-first-contact-confirmation evidence design over the existing unmodified CP collector/trust seams, and places the proven relationship in the already-approved M4 SQLite store via an additive migration -- no PCP.1 amendment, no code, no schema change, no device contact in this movement.",
+      "started": "2026-09-06",
+      "track": "PCP",
+      "movement": "ARCHITECTURE",
+      "supersedes": null,
+      "evidence": "Produced docs/history/phase/M8_FIRST_CONTACT_TRUST_AND_IDENTITY_EVIDENCE_PRODUCER_ARCHITECTURE.md (DRAFT, IN REVIEW, not FROZEN) after reading utils/device_registry.py, console/registry_targets.py, configuration/checkpoint_config_collector.py (_entity_id, _identity_gate, _collector_identity_gate, _parse_asset_semantic), utils/cp_ssh_trust.py, docs/history/phase/M4_LOCAL_CONTROL_PLANE_METADATA_STORE.md, docs/design/PRODUCT_CONTROL_PLANE_ARCHITECTURE.md sections 5/6/21, AGENTS.md, and project/roadmap.json's pcp_local_control_plane_storage/pcp_first_contact_trust_policy decisions. Confirmed by direct source inspection (not assumed) that no Check Point CMA/MDS management-plane read anywhere in checkpoint/cp_runner.py or checkpoint/*.py exposes a device serial today -- closing off a bidirectional-corroboration design as unavailable evidence, not merely undesigned. No production code, test, schema migration, or device contact performed. No Device Registry relationship write. No PCP.1 frozen-contract edit applied. Baseline verified: local main == origin/main == 0a9048ceeb2a318444f918e2688b126641eaeab0 before any change.",
+      "risks_forward": "Not implemented; no code path yet exists for any part of this design. The single-sourced (non-bidirectionally-corroborated) evidence limit and the operator_assertion dissent both remain open, carried forward from M6, not resolved by this document. Table/column names and migration version numbers in the draft are illustrative, not frozen. Real-environment validation of the first-contact producer is required before M7 may target any relationship it produces (AGENTS.md evidence laws) and is explicitly out of scope for this movement.",
+      "docs": {
+        "agreement": "docs/history/phase/M8_FIRST_CONTACT_TRUST_AND_IDENTITY_EVIDENCE_PRODUCER_ARCHITECTURE.md",
+        "handover": "docs/design/PRODUCT_CONTROL_PLANE_ARCHITECTURE.md"
+      }
+    },
+    {
       "build": "registry_keyed_job_targets",
       "status": "automated_validated",
       "title": "M6 -- Registry-keyed job targets, Option D fail-closed admission shell",
