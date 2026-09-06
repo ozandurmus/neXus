@@ -50,7 +50,7 @@ candidates.
 
 Do not run expensive real-device collection for UI-only or documentation work.
 
-## CI validation policy (canonical — two jobs, both on every PR)
+## CI validation policy (canonical — risk-based PR CI)
 
 `.github/workflows/validation.yml` implements the tiers above as two jobs.
 This is the one canonical statement of the policy; other files reference it
@@ -62,34 +62,49 @@ rather than restating it.
   check, a small fixed PR smoke/safety-regression set (credential
   redaction, the privacy gate's own tests, known safety gaps, the
   frontend-rendering shared-state-leak guard), and the whitespace/
-  conflict-marker check. Deliberately **not** a path→test classifier — its
-  job is the cheapest possible fast-fail signal, not full coverage.
-- **`full-regression`** (pull_request, push to `main`, and
-  `workflow_dispatch` alike — `DEV.TEST.1`, 2026-09-06): the same gates plus
-  the full pytest suite, **parallel**
-  (`python -m pytest -q -n auto --dist worksteal` — Test execution economy
-  above explains why parallel is safe here). One pytest-xdist master process
-  still yields one aggregate exit code across every worker, so no worker's
-  failure is masked by another's pass. It carries no `if:` condition — it
-  runs unconditionally on every event this workflow's `on:` block triggers
-  on, alongside `validate` (both run concurrently on the same pull_request
-  event, no `needs:` dependency between them), giving every PR pre-merge
-  full-suite proof on its own exact head, not only a post-merge safety net.
+  conflict-marker check. Deliberately **not** a path→test classifier —
+  bounded feature PRs are expected to pay for this job, not the full suite.
+- **`full-regression`** (push to `main`, `workflow_dispatch`): the same
+  gates plus the full pytest suite, **parallel**
+  (`python -m pytest -q -n auto --dist worksteal`, `DEV.TEST.1`, 2026-09-06 —
+  Test execution economy above explains why parallel is safe here). One
+  pytest-xdist master process still yields one aggregate exit code across
+  every worker, so no worker's failure is masked by another's pass. This is
+  the post-merge integration safety net and the on-demand full-regression
+  path.
 
-**History (superseded, kept for context only):** the original kaizen split
-withheld the full suite from pull_request events because the serial suite
-took ~11-12 minutes — too slow to afford on every bounded PR. `DEV.TEST.1`
-parallelized it (target ≤4 minutes cloud wall-clock) and removed that
-affordability constraint, so `full-regression` now runs on every
-pull_request too. The manual "full-regression triggers" judgment call this
-section used to describe (dependency changes, shared test infra,
-schema/storage, concurrency, a security boundary, CI/test infra itself, a
-release milestone, an explicit PO/contract requirement) is now moot for
-triggering CI — every PR already gets full-regression automatically — but
-the same list remains useful judgment for scoping a *local* pre-push full
-regression before CI runs at all.
+**Why `full-regression` still excludes `pull_request` (environment
+limitation, evaluated and reverted 2026-09-06):** parallelizing the full
+suite was expected to make running it on every PR affordable, and a same-
+session attempt did remove the `pull_request` exclusion — but this
+environment's automation identity cannot get GitHub Actions to actually
+schedule a job for a `pull_request` or `workflow_dispatch` event on a
+non-default branch: every check suite for a commit this identity pushes to
+a feature branch completes with **zero jobs**, for both that push's own
+event and the open PR's `pull_request` event, while `workflow_dispatch`
+against `main` and an ordinary push-to-`main` both schedule jobs normally.
+This is a tooling/identity restriction of this specific environment, not a
+defect in the parallel command, the workflow YAML, or a general problem
+with pull_request-triggered CI — a human-authored push/PR is expected to
+trigger it normally. The `if: github.event_name != 'pull_request'` guard
+was restored rather than kept removed, and a complete local parallel run is
+accepted as this movement's own pre-merge evidence in its place (see
+`project/build_history.json`'s `parallelize_full_regression_execution`
+record). Revisit removing this guard once this limitation no longer holds.
 
-If the `full-regression` run on `main` (post-merge) fails, treat `main`'s
+A PR that trips one of the **full-regression triggers** below still needs a
+full regression before merge — run it locally
+(`py -m pytest -q -n auto --dist worksteal > pytest_result.log 2>&1`, or the
+equivalent one-shot `scripts/pytest_one_shot.ps1`) or via `workflow_dispatch`,
+and say so in the PR. Triggers: dependency/requirements changes; shared test infrastructure;
+schema/storage/migrations; concurrency/global shared state; a security or
+authentication boundary; broad common domain behavior; CI/test
+infrastructure itself; a release/integration milestone; an explicit
+PO/contract requirement. This list is deliberately not an automatic
+classifier — the agent applies it by judgment per change, the same way the
+rest of the validation ladder is applied.
+
+If the post-merge `full-regression` run on `main` fails, treat `main`'s
 integration baseline as unhealthy per `AGENTS.md` "Mandatory build
 lifecycle": report it immediately, and do not merge further feature PRs
 until the regression is understood or a PO explicitly waives it for a

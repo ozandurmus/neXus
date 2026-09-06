@@ -1,19 +1,24 @@
 # Deterministic validation gate.
 #
-# History: the original risk-based split (DEV kaizen "fast PR CI") ran a fast
-# `validate` gate on every pull_request and deferred the ~11-minute serial
-# full suite to push-to-main/workflow_dispatch only, because paying that cost
-# on every bounded PR was not affordable. DEV.TEST.1 (2026-09-06)
-# parallelized the full suite (`-n auto --dist worksteal`, target <=4
-# minutes cloud wall-clock) and removed that affordability constraint, so
-# `full-regression` now also runs on every pull_request -- a PR gets
-# pre-merge full-suite proof on its own exact head, not just the fast gate.
-# This is a permanent trigger correction, not a temporary workaround: the
-# PR/push split stays for `validate` (still the cheapest possible fast-fail
-# gate, still worth running first/separately), but `full-regression` is no
-# longer withheld from pull_request events now that it is fast enough to
-# afford there. No check is weakened, hidden, or made skippable, and no
-# dependency/service/credential is added beyond what already existed.
+# Risk-based split (DEV kaizen "fast PR CI"): a bounded PR pays for a fast
+# gate, not the full suite; the full suite runs as an integration safety net
+# on every push to main, plus on demand via workflow_dispatch. DEV.TEST.1
+# (2026-09-06) parallelized that full suite (`-n auto --dist worksteal`,
+# ~11m56s serial -> target <=4 minutes cloud wall-clock) but keeps the
+# PR/push split itself: a same-session attempt to also run `full-regression`
+# on every pull_request was evaluated and reverted -- not because parallel
+# execution is unsafe (it is proven, see the "Full test suite (parallel)"
+# step below), but because this environment's automation identity cannot
+# get GitHub Actions to schedule jobs for pull_request/workflow_dispatch
+# events on a non-default branch (confirmed: check suites for commits this
+# identity pushes to feature branches complete with zero jobs, both for the
+# branch's own push event and for the open PR's pull_request event, while
+# workflow_dispatch against `main` and ordinary push-to-main both work
+# normally) -- a tooling/identity limitation of this environment, not a
+# defect in the workflow or a reason to avoid pull_request-triggered CI in
+# general. This changes test PLACEMENT/FREQUENCY only -- no check is
+# weakened, hidden, or made skippable, and no dependency/service/credential
+# is added beyond what the previous single-job version already used.
 name: validation
 
 on:
@@ -30,16 +35,15 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # FAST PR VALIDATION — runs on every pull_request, alongside
-  # `full-regression` below (both run concurrently on the same PR event; this
-  # job is not a substitute for it any more, just the cheapest possible
-  # fast-fail signal). Cheap, high-value gates only: import sanity, the
-  # repository/privacy gate, project-state consistency, the build-history
-  # index, a small stable safety/regression smoke set, and the
-  # whitespace/conflict-marker check. Job id kept as `validate` (unchanged
-  # from the previous single-job workflow) so an existing branch-protection
-  # required-status-check named `validate` keeps matching on pull_request
-  # events without repository settings needing to change.
+  # FAST PR VALIDATION — runs on every pull_request. Cheap, high-value gates
+  # only: import sanity, the repository/privacy gate, project-state
+  # consistency, the build-history index, a small stable safety/regression
+  # smoke set, and the whitespace/conflict-marker check. Deliberately does
+  # NOT run the full pytest suite (see the `full-regression` job below).
+  # Job id kept as `validate` (unchanged from the previous single-job
+  # workflow) so an existing branch-protection required-status-check named
+  # `validate` keeps matching on pull_request events without repository
+  # settings needing to change.
   validate:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
@@ -113,16 +117,20 @@ jobs:
         run: git diff --check 4b825dc642cb6eb9a060e54bf8d69288fbee4904 HEAD
         continue-on-error: true
 
-  # FULL INTEGRATION REGRESSION — the previous single-job gate. DEV.TEST.1
-  # (2026-09-06) parallelized the "Full test suite" step itself (see its own
-  # step comment) and, on the same evidence (fast enough now to afford this),
-  # removed the `if: github.event_name != 'pull_request'` guard that used to
-  # withhold this job from pull_request events -- it now runs on every
-  # pull_request (pre-merge proof on the PR's own exact head), every push to
-  # main (post-merge integration safety net) and workflow_dispatch (on
-  # demand). No `if` condition: it runs unconditionally on every event this
-  # workflow's `on:` block already triggers on.
+  # FULL INTEGRATION REGRESSION — the previous single-job gate, unchanged in
+  # substance. Runs as the post-merge integration safety net on every push
+  # to main, and on demand via workflow_dispatch for any branch that needs
+  # it before merge. DEV.TEST.1 (2026-09-06) parallelized the "Full test
+  # suite" step itself (see its own step comment); it stays withheld from
+  # pull_request events -- not because parallel execution is unsafe, but
+  # because this environment cannot get GitHub Actions to schedule
+  # pull_request-triggered jobs for commits this session's automation
+  # identity pushes to a non-default branch (see this file's header
+  # comment). A local complete parallel run is accepted as this movement's
+  # own pre-merge evidence instead; the post-merge push-to-main run here
+  # remains the real GitHub Actions cloud proof.
   full-regression:
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
