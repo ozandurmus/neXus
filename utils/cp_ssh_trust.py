@@ -49,7 +49,11 @@ does not introduce one.
 """
 from __future__ import annotations
 
+import base64
+import hashlib
 import os
+from dataclasses import dataclass, field
+from types import MappingProxyType
 
 import paramiko
 from paramiko.hostkeys import InvalidHostKey
@@ -66,6 +70,17 @@ _SYSTEM_KNOWN_HOSTS = "~/.ssh/known_hosts"
 REASON_TRUST_SOURCE_UNREADABLE = "trust_source_unreadable"
 REASON_TRUST_SOURCE_MALFORMED = "trust_source_malformed"
 REASON_NO_USABLE_HOST_KEYS = "no_usable_host_keys_loaded"
+
+# Endpoint-specific lookup outcome tokens (M8.2, contract §4 step 1).  Also
+# value-free: no endpoint, hostname or key material.
+REASON_ENDPOINT_NOT_TRUSTED = "endpoint_not_trusted"
+
+# The port at which OpenSSH/Paramiko's known_hosts entries are keyed by the
+# bare host, matching paramiko.client.SSHClient.connect()'s own
+# ``server_hostkey_name`` derivation (port == this -> bare host; otherwise
+# ``"[host]:port"``) so this lookup consults exactly the entry connect()
+# itself would consult.
+_DEFAULT_SSH_PORT = 22
 
 
 class HostKeyNotTrustedError(paramiko.SSHException):
@@ -182,3 +197,113 @@ def apply_strict_host_key_policy(ssh: paramiko.SSHClient, strict: bool) -> None:
             raise CpSshStrictPreflightError(REASON_NO_USABLE_HOST_KEYS)
     else:
         ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+
+
+def host_key_fingerprint(key: paramiko.PKey) -> str:
+    """The single, shared ``SHA256:<base64>`` host-key fingerprint format.
+
+    This is the one implementation: ``configuration/checkpoint_config_probe.
+    py`` imports and calls this function for its own live-connection
+    fingerprint (``_connect()``) rather than defining a second copy, so a
+    later M8 slice comparing a live fingerprint against this module's
+    ``lookup_trusted_host_key`` result is comparing two outputs of the same
+    code path, not two independently-implemented formats that happen to
+    agree today."""
+    digest = hashlib.sha256(key.asbytes()).digest()
+    return "SHA256:" + base64.b64encode(digest).decode("ascii").rstrip("=")
+
+
+def _known_hosts_lookup_key(endpoint: str, port: int | None) -> str:
+    """The exact string a ``known_hosts`` entry for *endpoint*:*port* is
+    keyed under (mirrors ``paramiko.client.SSHClient.connect()``'s own
+    ``server_hostkey_name`` derivation, so this lookup consults exactly the
+    entry a real ``ssh.connect()`` to the same endpoint/port would)."""
+    if port is None or port == _DEFAULT_SSH_PORT:
+        return endpoint
+    return f"[{endpoint}]:{port}"
+
+
+@dataclass(frozen=True)
+class TrustedKeyLookupResult:
+    """Typed, fail-closed outcome of :func:`lookup_trusted_host_key`.
+
+    ``trusted`` is the only field later M8 slices may act on as a gate
+    decision. ``fingerprints`` is the minimum evidence a later slice needs
+    (the ``SHA256:``-fingerprint, via :func:`host_key_fingerprint`, of every
+    key type already trusted for this exact endpoint/port) -- never the raw
+    key material, never populated when ``trusted`` is ``False``. It is a
+    read-only ``MappingProxyType``, never a plain ``dict``: this result is
+    handed to later M8 slices as evidence of what was trusted at lookup
+    time, and a caller mutating it in place would silently corrupt that
+    evidence for anyone else holding the same result. ``reason`` is a
+    value-free token, populated only when ``trusted`` is ``False``.
+    """
+
+    trusted: bool
+    reason: str | None
+    fingerprints: MappingProxyType[str, str] = field(
+        default_factory=lambda: MappingProxyType({})
+    )
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "fingerprints", MappingProxyType(dict(self.fingerprints)))
+
+
+def lookup_trusted_host_key(endpoint: str, port: int | None) -> TrustedKeyLookupResult:
+    """Local-only, read-only check: does the exact normalized *endpoint*
+    (already normalized by the caller -- e.g.
+    ``utils.device_registry.normalize_endpoint``) at *port* already have a
+    trusted host-key entry in the same ``known_hosts`` source
+    ``apply_strict_host_key_policy`` reads (see module docstring)?
+
+    This is `M8` contract §4 step 1: the mandatory, blocking check that must
+    precede credential resolution for a new first-contact target. It never
+    opens a socket, never contacts a device, never adds or accepts a key,
+    and never performs TOFU -- a miss is a hard refusal, not an invitation
+    to trust on first use.
+
+    Parameters
+    ----------
+    endpoint:
+        Already-normalized host/address (the caller's responsibility -- this
+        function does not re-derive normalization; that authority stays
+        with ``utils.device_registry.normalize_endpoint``).
+    port:
+        Explicit port, or ``None`` for the default SSH port -- the same
+        shape ``normalize_endpoint`` returns.
+
+    Returns
+    -------
+    TrustedKeyLookupResult
+        ``trusted=False`` (with a value-free ``reason``) for: an empty
+        *endpoint*, an unreadable/malformed trust source (mirroring
+        :func:`load_trusted_host_keys`'s own fail-closed reasons), or no
+        entry for the exact endpoint/port. ``trusted=True`` with the
+        fingerprint of every key type already trusted for that exact
+        endpoint/port otherwise.
+    """
+    if not isinstance(endpoint, str) or not endpoint.strip():
+        return TrustedKeyLookupResult(trusted=False, reason=REASON_ENDPOINT_NOT_TRUSTED)
+
+    path = _system_known_hosts_path()
+    trusted = paramiko.HostKeys()
+    try:
+        trusted.load(path)
+    except (InvalidHostKey, ValueError, paramiko.SSHException):
+        return TrustedKeyLookupResult(trusted=False, reason=REASON_TRUST_SOURCE_MALFORMED)
+    except OSError:
+        return TrustedKeyLookupResult(trusted=False, reason=REASON_TRUST_SOURCE_UNREADABLE)
+
+    lookup_key = _known_hosts_lookup_key(endpoint, port)
+    entry = trusted.lookup(lookup_key)
+    if not entry:
+        return TrustedKeyLookupResult(trusted=False, reason=REASON_ENDPOINT_NOT_TRUSTED)
+
+    fingerprints = {
+        key_type: host_key_fingerprint(key)
+        for key_type, key in entry.items()
+        if key is not None
+    }
+    if not fingerprints:
+        return TrustedKeyLookupResult(trusted=False, reason=REASON_ENDPOINT_NOT_TRUSTED)
+    return TrustedKeyLookupResult(trusted=True, reason=None, fingerprints=fingerprints)
