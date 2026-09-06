@@ -7,16 +7,17 @@ detail is not here either** — it is in `project/build_history.json`
 linked documents under `docs/history/`. `docs/history/INDEX.md` is the
 generated one-line timeline.
 
-- **Checkpoint:** 2026-09-07, `M8.1` relationship storage/API
-  **AUTOMATED_VALIDATED** (branch `build/m8-1-relationship-storage-api`, PR
-  pending). `M8` architecture stays **FROZEN — PRODUCT OWNER APPROVED,
+- **Checkpoint:** 2026-09-07, `M8.2` endpoint-specific trusted-key lookup
+  **AUTOMATED_VALIDATED** (branch `build/m8-2-endpoint-specific-trusted-key-lookup`,
+  PR pending). `M8` architecture stays **FROZEN — PRODUCT OWNER APPROVED,
   2026-09-06** from verified `main` at `0a9048ceeb2a318444f918e2688b126641eaeab0`.
 - **Current build** (per `project/roadmap.json` `now_next.now`):
-  `m8_1_relationship_storage_api` (`M8.1`) — **AUTOMATED_VALIDATED**, see
-  "Active build". `now_next.next` is `M8.2`, `planned`, no blocker; `M8.3`
-  must not begin without it. `m7_real_device_targeted_collect_now` stays
+  `m8_2_endpoint_specific_trusted_key_lookup` (`M8.2`) — **AUTOMATED_VALIDATED**,
+  see "Active build". `now_next.next` is `M8.3` (read-only first-contact
+  producer + real-env gate), `planned`, no blocker; `M8.4` must not begin
+  without it. `m7_real_device_targeted_collect_now` stays
   `upcoming`/`blocked`; `op2_c_cp_clusterxl_adapter_scoping` stays
-  `upcoming`, blocked on `DEPLOY.1`. `DEV.TEST.1`, `PCP.1`, `M1`-`M6`
+  `upcoming`, blocked on `DEPLOY.1`. `DEV.TEST.1`, `PCP.1`, `M1`-`M6`, `M8.1`
   complete/automated_validated — `project/build_history.json`.
 - **OP.2.0 CLASS 2 architecture** (`docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md`):
   **CONTRACT FROZEN 2026-09-04**; `OP.2.A`/`OP.2.B` IMPLEMENTED; `OP.2.1` CP
@@ -27,8 +28,7 @@ generated one-line timeline.
 - **Product baseline:** `0.7.7 — Compliance trend retro-fill` — AUTOMATED_VALIDATED.
 - **Engineering baseline:** `DEV.3.3` — AUTOMATED_VALIDATED. `DEV.1`,
   `DEV.4` complete.
-- **Product evidence baseline:** `0.6.1B.1.2` interactive CP config
-  collection is REAL_ENV_VALIDATED.
+- **Product evidence baseline:** `0.6.1B.1.2` interactive CP config is REAL_ENV_VALIDATED.
 
 ## Reading this file
 
@@ -56,28 +56,33 @@ test-enforced boundaries. Current numbers:
 
 ## Active build
 
-**`m8_1_relationship_storage_api`** (`M8.1`) — **AUTOMATED_VALIDATED,
-2026-09-07**, branch `build/m8-1-relationship-storage-api`, PR pending.
-Additive `M4` schema-version-2 migration
-(`utils/control_plane_store.py::device_identity_relationships`, contract §5)
-plus a typed read/write API (`utils/device_identity_relationships.py`):
-closed vocabularies, a transactional `NEW`/`SUPERSEDED`/`AMBIGUOUS_IDENTITY`
-write (§6, no parameter to write an unproven row) and a fail-closed read.
-No producer/consumer — `M8.2`+`M8.4`. Targeted 101 / affected 388 tests
-passed; privacy gate PASS. Full evidence: `project/build_history.json`.
+**`m8_2_endpoint_specific_trusted_key_lookup`** (`M8.2`) —
+**AUTOMATED_VALIDATED, 2026-09-07**, branch
+`build/m8-2-endpoint-specific-trusted-key-lookup`, PR #98 (unmerged). New
+`utils/cp_ssh_trust.py::lookup_trusted_host_key(endpoint, port)` (contract §4
+step 1): local-only, read-only, exact normalized-endpoint+port check against
+the same `known_hosts` source `apply_strict_host_key_policy` already reads;
+typed `TrustedKeyLookupResult` (`trusted`/`reason`/immutable `fingerprints`
+`MappingProxyType`), never raises. No network/device contact, no
+key add/enroll/TOFU. Correction round 1 (PO review): fingerprints made
+immutable; fingerprint format consolidated into one shared
+`host_key_fingerprint()` also used by `checkpoint_config_probe.py`. Full
+evidence: `project/build_history.json`.
 
 Parent — **`m8_first_contact_trust_identity_evidence_producer_architecture`**
 (`M8` architecture) — **FROZEN, PRODUCT OWNER APPROVED, 2026-09-06 (PR #96,
-merged).** Sequence: `M8.1` (above) → `M8.2` (trust-lookup seam) → `M8.3`
-(read-only producer, real-env gated) → `M8.4` (`M6` resolver consumption) →
-`M7`. Open: `operator_assertion`, single-sourced identity evidence,
-DEFERRED serial-contradiction detection.
-Full contract:
+merged).** Sequence: `M8.1` → `M8.2` (above) → `M8.3` (read-only producer,
+real-env gated) → `M8.4` (`M6` resolver consumption) → `M7`. Open:
+`operator_assertion`, single-sourced identity evidence, DEFERRED
+serial-contradiction detection. Full contract:
 `docs/history/phase/M8_FIRST_CONTACT_TRUST_AND_IDENTITY_EVIDENCE_PRODUCER_ARCHITECTURE.md`.
 
-Predecessor — **`registry_keyed_job_targets`** (`M6`) —
-**AUTOMATED_VALIDATED, Option D fail-closed admission shell, not functional
-per-device targeting**. Full evidence/rationale: `project/build_history.json`.
+Predecessor — **`m8_1_relationship_storage_api`** (`M8.1`) —
+**AUTOMATED_VALIDATED**, `M4` schema-version-2 migration plus typed
+read/write API. No producer/consumer yet.
+
+Predecessor — **`registry_keyed_job_targets`** (`M6`) — **AUTOMATED_VALIDATED,
+Option D fail-closed admission shell, not functional per-device targeting**.
 
 ## Predecessor — `M5`/`M4`
 
@@ -130,15 +135,14 @@ a narrower question never promoted toward B2.
 
 ## Exact next build
 
-`now_next.next` is `m8_2_endpoint_specific_trusted_key_lookup` (`M8.2`,
-`planned`, gated on `M8.1` — complete) — the new, required
-`utils/cp_ssh_trust.py` trusted-key lookup (frozen `M8` contract §4 step 1)
-and its own focused tests. `M8.3` must not begin without `M8.2`; `M7` stays
-`upcoming`/`blocked` until `M8.4` exists with a real-environment-proven
-relationship. `operator_assertion` stays unaccepted, unchanged from `M6`.
-
+`now_next.next` is `m8_3_first_contact_producer_real_env_gate` (`M8.3`,
+`planned`, gated on `M8.2` — complete) — the new, minimal, single-target
+first-contact driver (frozen `M8` contract §3/§4), real-environment gated;
+must not be marked `REAL_ENV_VALIDATED` from automated tests alone. `M8.4`
+must not begin without it; `M7` stays `blocked` until `M8.4` exists with a
+real-environment-proven relationship. `operator_assertion` stays unaccepted.
 `op2_c_cp_clusterxl_adapter_scoping` stays `upcoming`/blocked; `OP.2.D`'s
-console flow is expected on the `PCP.4` device/HA tab — one console, never two.
+console flow is expected on the `PCP.4` device/HA tab, never a second one.
 
 ## Open blockers
 
@@ -164,20 +168,16 @@ Concurrency budget stays at 1 per vendor pending its own real-env evidence.
 ## Automated test baseline
 
 ```
-M8.1 targeted (M4 extended + new tests/test_m8_1_device_identity_relationships.py):
-  101 passed. Affected (M4/M8.1/M6/M5/PCP.1/CON.2/architecture convergence):
-  388 passed, 0 failed. Privacy gate PASS. No full-regression run (risk-based).
-  Detail: project/build_history.json head record.
-M6 focused: tests/test_m6_registry_keyed_job_targets.py 27 passed; affected
-  suites (M5/CON.2/PCP.1/M4/architecture/application) 234 passed, 0 failed;
-  privacy gate PASS; full local parallel suite once (shared admission/
-  execution boundary): 2058 passed, 37 skipped, 2 failed, 1 error, all four
-  pre-existing (reproduced with changes stashed), none touching this code.
-M6 correction round 1 (target-order preservation; device_registry_unavailable):
-  focused suite 35 passed (was 27); bounded affected suites (M5/CON.1/CON.2/
-  PCP.1/privacy/architecture/application) 176 passed, 1 skipped, 0 failed;
-  privacy gate PASS; no full-suite repeat needed (scope unchanged). Full
-  evidence for both rounds: project/build_history.json head record.
+M8.2 (correction round 1): 20 passed (was 12). Wide sweep (checkpoint_config_
+  probe/collector + M4/M8.1/architecture convergence, 26 files): 608 passed,
+  1 skipped, 1 pre-existing unrelated Paramiko-drift failure. Privacy PASS.
+M8.1 targeted: 101 passed. Affected (M4/M8.1/M6/M5/PCP.1/CON.2/architecture
+  convergence): 388 passed, 0 failed. Privacy gate PASS. No full-regression
+  run (risk-based). Detail: project/build_history.json.
+M6 (both rounds; full evidence in project/build_history.json): focused 35
+  passed; affected suites 234/176 passed across both rounds, 0 failed;
+  privacy gate PASS; one full local parallel run 2058 passed/37 skipped/2
+  failed/1 error, all four pre-existing, none touching M6 code.
 Last full parallel suite before M6 (DEV.TEST.1): 1957 passed, 24 skipped, 0
   failed locally; GitHub Actions one-time proof (run 34020356372) 1944
   passed / 38 skipped / 0 failed. Detail: project/build_history.json.

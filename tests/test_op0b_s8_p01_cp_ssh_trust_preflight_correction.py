@@ -357,6 +357,13 @@ class TestNoExplicitTrustSourceSurface:
             assert forbidden not in src, f"no new trust-source surface: {forbidden!r}"
 
     def test_public_surface_is_unchanged_plus_loader(self):
+        """M8.2 (contract §4 step 1) adds `lookup_trusted_host_key`, its
+        typed result dataclass, its own reason token, the shared
+        `host_key_fingerprint` helper (also imported by
+        `configuration/checkpoint_config_probe.py` -- the single shared
+        fingerprint-format authority, not a second implementation), and the
+        stdlib imports that back them -- nothing else. The original 0.6.4
+        surface (asserted below) is unchanged."""
         public = {name for name in dir(cp_ssh_trust) if not name.startswith("_")}
         expected = {
             "CpSshStrictPreflightError",
@@ -370,6 +377,16 @@ class TestNoExplicitTrustSourceSurface:
             "annotations",
             "os",
             "paramiko",
+            # M8.2 additions (contract §4 step 1):
+            "lookup_trusted_host_key",
+            "TrustedKeyLookupResult",
+            "REASON_ENDPOINT_NOT_TRUSTED",
+            "host_key_fingerprint",
+            "base64",
+            "hashlib",
+            "dataclass",
+            "field",
+            "MappingProxyType",
         }
         assert public == expected, f"unexpected public surface change: {sorted(public ^ expected)}"
 
@@ -454,20 +471,58 @@ class TestStructuralSecurityGuards:
                 imported.update(alias.name for alias in node.names)
             elif isinstance(node, ast.ImportFrom):
                 imported.add(node.module or "")
-        assert imported == {"__future__", "os", "paramiko", "paramiko.hostkeys"}
+        # M8.2 adds hashlib/base64 (the shared SHA256 fingerprint format,
+        # also imported by checkpoint_config_probe.py), dataclasses (the
+        # typed TrustedKeyLookupResult outcome, contract §4 step 1), and
+        # types (MappingProxyType, making fingerprints immutable) -- no new
+        # network/config/secret-surface import.
+        assert imported == {
+            "__future__", "os", "paramiko", "paramiko.hostkeys",
+            "hashlib", "base64", "dataclasses", "types",
+        }
+
+    def _enclosing_function_name(self, helper_ast, handler) -> str | None:
+        for node in ast.walk(helper_ast):
+            if isinstance(node, ast.FunctionDef) and handler in ast.walk(node):
+                # innermost match: FunctionDef bodies aren't nested here, so
+                # the first (only) enclosing def is authoritative.
+                return node.name
+        return None
 
     def test_every_exception_handler_re_raises(self, helper_ast):
         """No fail-open handler: every except body must end in a raise of one
-        of this module's own value-free, fail-closed exception types."""
+        of this module's own value-free, fail-closed exception types --
+        except inside ``lookup_trusted_host_key``, whose fail-closed outcome
+        is a typed ``TrustedKeyLookupResult(trusted=False, ...)`` return
+        (contract §4 step 1: a typed outcome, not an exception), never a
+        bare/silent pass-through."""
         handlers = [n for n in ast.walk(helper_ast) if isinstance(n, ast.ExceptHandler)]
         assert handlers, "expected the fail-closed handlers around the trust-source load"
-        allowed = {"CpSshStrictPreflightError", "HostKeyNotTrustedError"}
+        allowed_raises = {"CpSshStrictPreflightError", "HostKeyNotTrustedError"}
         for handler in handlers:
+            enclosing = self._enclosing_function_name(helper_ast, handler)
+            if enclosing == "lookup_trusted_host_key":
+                assert handler.body and isinstance(handler.body[-1], ast.Return), (
+                    "lookup_trusted_host_key's handlers must fail closed via a typed return"
+                )
+                returned = handler.body[-1].value
+                assert (
+                    isinstance(returned, ast.Call)
+                    and getattr(returned.func, "id", None) == "TrustedKeyLookupResult"
+                ), "lookup_trusted_host_key must return TrustedKeyLookupResult on every handled error"
+                trusted_kw = next(
+                    (kw for kw in returned.keywords if kw.arg == "trusted"), None
+                )
+                assert trusted_kw is not None and trusted_kw.value.value is False, (
+                    "lookup_trusted_host_key's error handlers must return trusted=False"
+                )
+                continue
             assert handler.body and isinstance(handler.body[-1], ast.Raise), (
-                "exception handler in cp_ssh_trust must fail closed (re-raise)"
+                "exception handler in cp_ssh_trust must fail closed (raise or, in "
+                "lookup_trusted_host_key only, a trusted=False typed return)"
             )
             raised = handler.body[-1].exc
-            assert isinstance(raised, ast.Call) and getattr(raised.func, "id", None) in allowed
+            assert isinstance(raised, ast.Call) and getattr(raised.func, "id", None) in allowed_raises
 
     def test_no_paramiko_private_internals_in_product_code(self, helper_ast):
         attrs = {n.attr for n in ast.walk(helper_ast) if isinstance(n, ast.Attribute)}
