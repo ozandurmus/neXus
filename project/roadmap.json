@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "current_build": "pcp_2_local_control_plane_sequencing_po_review",
+  "current_build": "nav_1_accessibility_closure",
   "current_track": "PCP.x",
   "progress_contract": "Weighted acceptance-criterion completion. Percentages describe the declared roadmap, not calendar time or delivery ETA.",
   "tracks": [
@@ -140,30 +140,27 @@
   "now_next": {
     "horizon_contract": "NOW is exactly one build. NEXT is exactly one. Everything else is an `upcoming` row carrying its own true status: planned = AFTER, blocked = waiting on a named external gate, deferred = consciously postponed. `now.build` must equal the newest project/build_history.json record -- utils.project_plan enforces it.",
     "now": {
-      "build": "pcp_2_local_control_plane_sequencing_po_review",
-      "title": "M0 -- PCP.2 sequencing / product-architecture review, FROZEN by Product Owner",
-      "goal": "Product Owner review and freeze of the product architecture that a left-navigation prototype surfaced: the information architecture, the logical-entity workspace, per-entity capability state, the long-running local control-plane runtime, the local storage boundary, UI-first enrollment, and the bounded movement sequence. FROZEN 2026-09-05 at reviewed head ba56d2b: docs/design/NAVIGATION_INFORMATION_ARCHITECTURE.md and docs/design/LOCAL_CONTROL_PLANE_RUNTIME_AND_ENROLLMENT.md are both FROZEN -- PRODUCT OWNER APPROVED, each with acceptance criteria; docs/design/research/NSPM_NAVIGATION_BENCHMARK.md remains a research appendix and is deliberately not a frozen contract. CON.0 and PCP.0 were narrowly amended to record the approved decisions. The working prototype at 5a5a1f7 is preserved runnable and behaviourally unchanged; it is design evidence, not implementation-complete.",
-      "status": "complete",
+      "build": "nav_1_accessibility_closure",
+      "title": "M2 -- NAV.1 accessibility closure, main integration, validation, PR + merge",
+      "goal": "Incorporate current main (M1, merged) into the NAV branch non-destructively, close AC-A11Y-1..4 against the frozen navigation contract, confirm AC-A11Y-5 still holds, validate the combined branch (targeted + full parallel suite), then open and merge the NAV pull request. Predecessors: M0 (docs/design/NAVIGATION_INFORMATION_ARCHITECTURE.md + docs/design/LOCAL_CONTROL_PLANE_RUNTIME_AND_ENROLLMENT.md, FROZEN -- PRODUCT OWNER APPROVED at reviewed head ba56d2b, 2026-09-05, no code) and M1 (PCP.1 registry uuid4 call-count test defect repair, AUTOMATED_VALIDATED, merged to main via PR #84, 2026-09-06) are both complete -- see project/build_history.json for their full records.",
+      "status": "in_progress",
+      "started": "2026-09-06",
       "notes": [
-        "ARCHITECTURE FROZEN, IMPLEMENTATION NOT AUTHORIZED. Freezing the two contracts does not authorize any future implementation movement: M1..M14 remain separately authorized, bounded movements, and the NAV.1 prototype may not merge or be called implementation-complete until M2 closes its four accessibility requirements. No pull request, no merge; main untouched.",
-        "Frozen decisions: fifteen D-NAV rows (no operative row remains provisional); the six-root baseline with Recovery reserved seventh and Jobs under Operations; the four-predicate capability model; the logical-entity-first workspace; the stable-visible device-tab rule; the difference-presentation contract that preserves the pale yellow/gold expected-member-difference emphasis with an explicit label and no failure semantics; local storage Option A; conditioned local-loopback enrollment for both manual and candidate intents; strict first-contact trust; no auto-enrollment in the current horizon; and the M1..M14 sequence.",
-        "Decision register scoped rather than overloaded: pcp_console_registry_write_gate is DECIDED for the local loopback profile only, with the new pcp_server_enrollment_exposure carrying the production question (OPEN, blocked on DEPLOY.1A); pcp_local_control_plane_storage is DECIDED (Option A) while pcp_storage_engine stays OPEN and production-scoped -- SQLite is not the production engine. pcp_first_contact_trust_policy and pcp_auto_enrollment_policy are DECIDED.",
-        "Benchmark screenshot evidence is EXCLUDED FROM AUTHORITY because its provenance is not durably auditable from the repository (the images are intentionally not committed). The appendix asserts no provenance in either direction, and no frozen decision depends on those images.",
-        "Deferred detail is implementation-contract work inside a frozen direction, not unresolved architecture: exact domain-specific state names at M3, exact SQLite schema at M4, exact vendor trust mechanics at M8, exact enrollment API schemas at M9.",
-        "Evidence is targeted and the full suite is NOT green: the two pre-existing PCP.1 registry uuid4 call-count failures remain on main and on this branch, unfixed by design -- they are the exact input to movement M1 (backlog pcp1_registry_uuid_call_count_test_defect).",
-        "Recommended next reasoning tier: Sonnet 5, normal for M1 and M2; extended thinking (high) for M4, M8 and M9, each in its own session."
+        "Integration method: merge (non-destructive, --no-ff) of origin/main (9a946fe, PR #84 merge commit) into claude/left-nav-vertical-redesign-e673q6 at its pre-integration head 259874e. No rewrite, rebase, squash or selective cherry-pick of the frozen NAV review commits (5a5a1f7, ace9813, ba56d2b, 0ed293b, 009d945, 259874e). Merge base 310593e.",
+        "Only the four expected authority/state files conflicted (CURRENT_STATE.md, project/roadmap.json, project/build_history.json, docs/history/INDEX.md); every code/doc/test file auto-merged cleanly -- no product or architecture contradiction found.",
+        "Scope is exactly AC-A11Y-1..4 (accessible names, reduced motion, focus transfer, group-label association) plus confirming AC-A11Y-5 (comparison-table scroll containment) still holds. No new root/tab/module/state vocabulary, capability, enrollment, storage, job or authorization behavior introduced -- all reserved for M3 onward.",
+        "Recommended reasoning tier: Sonnet 5, normal -- deterministic accessibility implementation against a frozen contract, no new architecture decision."
       ]
     },
     "next": {
-      "build": "pcp1_registry_uuid_call_count_test_defect_repair",
-      "title": "PCP.1 registry uuid4 call-count test-contract repair (movement M1)",
+      "build": "nav_3_capability_state_vocabulary",
+      "title": "M3 - Capability-state vocabulary + presentation contract",
       "status": "planned",
       "notes": [
-        "The one bounded build that is actionable today without any Product Owner decision. tests/test_pcp1_device_registry.py::test_duplicate_enroll_refused_before_device_id_generated and ::test_lock_contention_on_enroll_never_generates_a_device_id fail deterministically on main: their uuid4 call-count proof also counts the registry mutation lock's own owner token, so both assert [1] == []. The acceptance criterion they cover ('no device_id is generated before the duplicate/lock refusal') still holds; the proof technique over-reaches.",
-        "Independent of the whole PCP.2 review chain and of the navigation prototype. Deliberately NOT fixed inside the architecture movement: it is a test-mechanism decision inside PCP.1's frozen PRODUCT_CONTROL_PLANE_ARCHITECTURE.md section 21 contract.",
-        "Why it reached main: .github/workflows/validation.yml's fast PR 'validate' job runs a fixed smoke set and never ran that file; full-regression runs on push to main, i.e. after merge.",
-        "Detail: project/backlog.json pcp1_registry_uuid_call_count_test_defect; movement M1 in docs/design/LOCAL_CONTROL_PLANE_RUNTIME_AND_ENROLLMENT.md section 12.",
-        "Recommended: Sonnet 5, normal reasoning."
+        "Per the frozen M1..M14 sequence (docs/design/LOCAL_CONTROL_PLANE_RUNTIME_AND_ENROLLMENT.md section 12/12.1): map the ten UX capability-state semantics onto canonical states, settle the two PO-NAV-7 concepts in their correct owning domains, and own the PO-NAV-6 colour/label contract. Must NOT alter the job lifecycle vocabulary (queued/running/succeeded/failed/blocked/skipped never gains a schedule/capability-policy member).",
+        "Prerequisite: M0 complete (it is). Independent of M4 (local control-plane metadata store) -- no storage/job/enrollment change in scope.",
+        "Recommended: Sonnet 5, extended thinking (high) -- vocabulary/contract work, not deterministic implementation against an existing frozen shape.",
+        "Detail: docs/design/LOCAL_CONTROL_PLANE_RUNTIME_AND_ENROLLMENT.md section 12 (M3 row) and section 12.1."
       ]
     },
     "upcoming": [
