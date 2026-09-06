@@ -24,9 +24,10 @@ boundaries and render-harness mechanics are detailed in
   cross-subsystem architecture decision is on the table. State the recommendation
   in plain terms, name the lightest tier that fits, and say when a pre-selected
   tier (e.g. "Sonnet high") is more than the step needs.
-- **Test economy.** One-shot, file-backed runs:
-  `py -m pytest -q > pytest_result.log 2>&1`. Do not re-run the full suite while
-  the last evidence still holds.
+- **Test economy.** One-shot, file-backed runs, parallel by default
+  (`DEV.TEST.1`): `py -m pytest -q -n auto --dist worksteal >
+  pytest_result.log 2>&1`. Do not re-run the full suite while the last
+  evidence still holds.
 - **Toolchain.** The workspace Python / PowerShell / Git setup is already
   validated. Use the existing `py` command directly; never invoke environment
   bootstrap or interpreter selection. On a real command failure, report it and

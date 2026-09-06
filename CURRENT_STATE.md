@@ -10,13 +10,13 @@ generated one-line timeline.
 - **Checkpoint:** 2026-09-06, `main` at merge commit `081a976` (PR #85, `M2`,
   onto `9a946fe`/PR #84's head). NAV lineage (`5a5a1f7`…`259874e`) unrewritten.
 - **Current build** (per `project/roadmap.json` `now_next.now`):
-  `nav_1_accessibility_closure` (`M2`) — **AUTOMATED_VALIDATED, MERGED**:
-  closed `AC-A11Y-1`…`4`, confirmed `AC-A11Y-5`, validated the combined
-  branch, merged to `main` via PR #85 (see "Active build"). Predecessors
-  both complete: `M0` architecture FROZEN (reviewed head `ba56d2b`); `M1`
-  AUTOMATED_VALIDATED, merged via PR #84. `now_next.next` is `M3` (not started).
-  `op2_c_cp_clusterxl_adapter_scoping` stays `upcoming`, blocked on
-  `DEPLOY.1`. `PCP.1` is complete — detail in `project/build_history.json`.
+  `parallelize_full_regression_execution` (`DEV.TEST.1`) — test-execution
+  infrastructure only: replaces the serial GitHub Actions full-regression
+  suite (`11m56s`, run `34016204567`) with `-n auto --dist worksteal` on
+  push-to-main/workflow_dispatch (PR trigger policy unchanged; see "Active
+  build"). No product/capability-state change; authorizes no `M3` work.
+  `now_next.next` stays `M3` throughout. `op2_c_cp_clusterxl_adapter_scoping`
+  stays `upcoming`, blocked on `DEPLOY.1`. `PCP.1` complete — build_history.json.
 - **OP.2.0 CLASS 2 architecture** (`docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md`):
   **CONTRACT FROZEN 2026-09-04**; `OP.2.A`/`OP.2.B` IMPLEMENTED; `OP.2.1` CP
   command gate DRAFTED — CLASS 2 still has **no member**, no adapter,
@@ -55,38 +55,33 @@ test-enforced boundaries. Current numbers:
 
 ## Active build
 
-**`nav_1_accessibility_closure`** (`M2`) — **AUTOMATED_VALIDATED, MERGED**.
-Incorporated `main` (`M1`) into the NAV branch, closed `AC-A11Y-1`…`4`,
-confirmed `AC-A11Y-5`, validated the combined branch (182 targeted + 1958
-full-parallel passed, 0 failed — see "Automated test baseline"), merged to
-`main` via **PR #85** (merge commit `081a976a3e1cc16fb57af7f0c9aa0e0501a7625b`).
-Predecessors, both complete — full detail in `project/build_history.json`:
-`M0` froze `docs/design/NAVIGATION_INFORMATION_ARCHITECTURE.md` (§19) and
-`docs/design/LOCAL_CONTROL_PLANE_RUNTIME_AND_ENROLLMENT.md` (§15), Product
-Owner approved at reviewed head `ba56d2b`, no product code; `M1` repaired
-two `tests/test_pcp1_device_registry.py` uuid4 call-count defects via
-`utils/device_registry.py::_generate_device_id()`, AUTOMATED_VALIDATED
-(1931 passed / 24 skipped / 0 failed), merged via PR #84 — no frozen
-`PCP.1` `AC-1a`..`AC-15` behavior changed.
+**`parallelize_full_regression_execution`** (`DEV.TEST.1`) — **IN PROGRESS**
+(local validation + workflow/doc/test edits complete; PR #87 open, post-merge
+push-to-main cloud proof still owed — full detail in
+`project/build_history.json` head record). Root cause of the prior serial
+gate was a `scripts/render_uitest.py` module-rebind leak, already fixed
+(`try`/`finally` restore) and directly regression-tested regardless of
+worker/ordering (`tests/test_frontend_rendering_boundary.py::
+test_render_uitest_restores_the_builders_it_injects`). Selected topology: one
+`pytest-xdist` process (`-n auto --dist worksteal`), already proven locally
+and the documented default elsewhere (`scripts/pytest_one_shot.ps1`,
+`requirements-dev.txt`) — one aggregate exit code across every worker, so no
+worker's failure can be masked. **Trigger policy unchanged (approved):**
+`pull_request` = fast `validate` only, push/`workflow_dispatch` = parallel
+`full-regression`; a same-session attempt to run it on `pull_request` too
+was reverted after finding this environment's automation identity cannot
+get Actions to schedule pull_request/workflow_dispatch jobs on a
+non-default branch (recorded in the workflow file and
+`docs/AI_DEVELOPMENT_PROTOCOL.md`). Two clean local runs accepted as
+pre-merge evidence instead. No product/UI/registry/storage/authorization
+change; authorizes no `M3` work.
 
-**Freeze is not implementation authority.** `M1`…`M14` remain separately
-authorized movements; `NAV.1` (`5a5a1f7`) required `M2` to close the four
-accessibility requirements before merging — done, via PR #85.
-`left_vertical_product_navigation` stays `in_progress`: `availability_rule`
-(remaining capability predicates) is genuinely pending, owned by later
-movements, independent of `M2`'s scope. Frozen (unchanged): fifteen
-`D-NAV` decisions, no operative row provisional; the six-root baseline,
-Recovery reserved seventh, Jobs under Operations; the four-predicate
-capability model; the logical-entity-first workspace, no second identity
-authority; the difference contract preserving pale yellow/gold
-expected-member emphasis. Parent contracts narrowly amended: `CON.0` §4.1/§7.11;
-`PCP.0` §19/§10/§20.1. Decision register: `pcp_console_registry_write_gate`
-DECIDED (local loopback only); `pcp_server_enrollment_exposure` OPEN
-(`DEPLOY.1A`); `pcp_local_control_plane_storage` DECIDED (Option A),
-`pcp_storage_engine` stays OPEN — SQLite is not the production engine;
-trust/auto-enrollment policies DECIDED. Benchmark screenshot evidence stays
-excluded from authority (unauditable provenance, no frozen decision depends
-on it). PAN B2 stays NOT ESTABLISHED.
+**Predecessor build, complete:** `nav_1_accessibility_closure` (`M2`) —
+**AUTOMATED_VALIDATED, MERGED** via PR #85 (merge commit
+`081a976a3e1cc16fb57af7f0c9aa0e0501a7625b`) — full detail in
+`project/build_history.json`. `left_vertical_product_navigation` stays
+`in_progress` (`availability_rule` pending, `M10`+); no `D-NAV`/`PO-NAV`
+decision reopened by `M2` or `DEV.TEST.1`.
 
 ## `OP.0b.0` — FROZEN WITH REAL-ENV VALIDATION GATES
 
@@ -126,8 +121,9 @@ UX capability-state semantics onto canonical states, settle the two
 `PO-NAV-7` concepts in their correct owning domains, own the `PO-NAV-6`
 colour/label contract. Prerequisite `M0` complete (it is); must not alter the
 job lifecycle vocabulary. `Sonnet 5, extended thinking (high)`. `M1`/`M2` are
-both complete and merged (PR #84, PR #85) — see "Active build"; `M3` itself
-is not started.
+both complete and merged (PR #84, PR #85); `DEV.TEST.1` (test-execution
+infrastructure, not a product movement) sits between them and `M3` and does
+not change `M3`'s prerequisites. `M3` itself is not started.
 
 Deferred detail is **implementation-contract work inside a frozen direction**:
 state names at `M3`, SQLite schema at `M4`, trust mechanics at `M8`, enrollment
@@ -158,8 +154,7 @@ Concurrency budget stays at 1 per vendor pending its own real-env evidence.
 - **`CON.2`** — trigger a `read`-class job from the console against a real
   device. No new code; closes it to DONE.
 - **`OP.0a`/`OP.0c`** — real-device confirmation `ha_cluster_mode` resolves, not `"unknown"`. Fixture-drift, not a safety gate.
-- **PAN HA serial identity (`OP.0a.P7`/`OP.0b.0`)** — see "PAN HA serial
-  evidence" above; its own next technical movement, not folded in here.
+- **PAN HA serial identity (`OP.0a.P7`/`OP.0b.0`)** — see "PAN HA serial evidence" above; its own next technical movement, not folded in here.
 - **`RB.3b`** — the watched single-gateway run.
 - **`DEV.3.2`** — real multi-container-against-real-MDS Postgres advisory-lock evidence. Server-blocked.
 
@@ -173,14 +168,19 @@ M2 targeted (navigation IA + M2 a11y + architecture convergence + frontend
   + grouped child + keyboard, both shells), group-label association
   (Devices/Operations/Administration), AC-A11Y-5 confirmed unregressed --
   zero console errors.
-Full parallel suite (pre-merge, this branch): `py -m pytest -q -n auto
-  --dist worksteal` (4 workers) = 1958 passed, 23 skipped, 0 failed, 29.46s
-  wall-clock. Completely clean, no serial rerun. M1's uuid4 defect stays
-  fixed (merged via PR #84).
+Full parallel suite (M2, pre-merge): `py -m pytest -q -n auto --dist
+  worksteal` (4 workers) = 1958 passed, 23 skipped, 0 failed, 29.46s.
+  Completely clean, no serial rerun. M1's uuid4 defect stays fixed (PR #84).
 Post-merge CI on main (PR #85, run 34016204567, commit 081a976):
   full-regression SUCCESS -- privacy gate, project-state, build-history-index,
-  full serial suite (~11m56s) and whitespace check all success (detail:
-  project/build_history.json nav_1_accessibility_closure).
+  full SERIAL suite (~11m56s, pre-DEV.TEST.1 baseline) and whitespace check
+  all success (detail: project/build_history.json nav_1_accessibility_closure).
+DEV.TEST.1 local re-validation (accepted as pre-merge evidence):
+  `python3 -m pytest -q -n auto --dist worksteal` (4 CPUs) = 1957 passed,
+  24 skipped, 0 failed, two clean runs (32.27s, 35.01s) -- same 1981
+  collected as the M2 baseline (skip/pass split differs by sandbox
+  Chromium availability). Post-merge push-to-main parallel full-regression:
+  see build_history.json head record once terminal.
 Repository privacy gate: PASS / 0 findings. metadata_warnings == [];
   build-history index --check clean; git diff --check clean.
 ```
@@ -196,5 +196,5 @@ design at this stage. Open before any production claim: OIDC/RBAC, trusted
 TLS/SSH in production, database role separation, report-only publication
 surface, secret management, off-host recovery custody with a restore drill,
 audit retention. `.github/workflows/validation.yml` is the deterministic CI
-gate (fast PR `validate` + `full-regression` on main push/dispatch); it runs
-no device, container or registry step.
+gate (fast PR `validate` + parallel `full-regression` on push/dispatch,
+`DEV.TEST.1`); it runs no device, container or registry step.
