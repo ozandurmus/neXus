@@ -7,28 +7,23 @@ detail is not here either** — it is in `project/build_history.json`
 linked documents under `docs/history/`. `docs/history/INDEX.md` is the
 generated one-line timeline.
 
-- **Checkpoint:** 2026-09-07, `M8.2` endpoint-specific trusted-key lookup
-  **AUTOMATED_VALIDATED** (branch `build/m8-2-endpoint-specific-trusted-key-lookup`,
-  PR pending). `M8` architecture stays **FROZEN — PRODUCT OWNER APPROVED,
-  2026-09-06** from verified `main` at `0a9048ceeb2a318444f918e2688b126641eaeab0`.
-- **Current build** (per `project/roadmap.json` `now_next.now`):
-  `m8_2_endpoint_specific_trusted_key_lookup` (`M8.2`) — **AUTOMATED_VALIDATED**,
-  see "Active build". `now_next.next` is `M8.3` (read-only first-contact
-  producer + real-env gate), `planned`, no blocker; `M8.4` must not begin
-  without it. `m7_real_device_targeted_collect_now` stays
-  `upcoming`/`blocked`; `op2_c_cp_clusterxl_adapter_scoping` stays
-  `upcoming`, blocked on `DEPLOY.1`. `DEV.TEST.1`, `PCP.1`, `M1`-`M6`, `M8.1`
+- **Checkpoint:** 2026-09-07. `now_next.now` (`project/roadmap.json`) is `GOV.SESSION.1`
+  (`gov_session_1_transfer_protocol`, track `GOV`) — **AUTOMATED_VALIDATED**, DRAFT protocol
+  doc, PO review pending; see "Active build". Product sequence unaffected: `M8.2`
+  **AUTOMATED_VALIDATED** (PR #98 pending); `M8` architecture stays **FROZEN — PRODUCT OWNER
+  APPROVED, 2026-09-06** from verified `main` at `0a9048ceeb2a318444f918e2688b126641eaeab0`.
+  `now_next.next` is `M8.3`, `planned`, no blocker; `M8.4` must not begin without it.
+  `m7_real_device_targeted_collect_now` and `op2_c_cp_clusterxl_adapter_scoping` stay
+  `upcoming`/blocked. `DEV.TEST.1`, `PCP.1`, `M1`-`M6`, `M8.1`, `M8.2`
   complete/automated_validated — `project/build_history.json`.
 - **OP.2.0 CLASS 2 architecture** (`docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md`):
-  **CONTRACT FROZEN 2026-09-04**; `OP.2.A`/`OP.2.B` IMPLEMENTED; `OP.2.1` CP
-  command gate DRAFTED — CLASS 2 still has **no member**, no adapter,
-  unconditional `DENY`. `D-V7b`/`D-F3`/`D-F2` no longer block the readiness
-  roll-up (`OP.2.1b`, see "Active build") — remaining `CLASS 2` blockers are
-  authorization/trust/adapter/change-management, not readiness.
-- **Product baseline:** `0.7.7 — Compliance trend retro-fill` — AUTOMATED_VALIDATED.
-- **Engineering baseline:** `DEV.3.3` — AUTOMATED_VALIDATED. `DEV.1`,
-  `DEV.4` complete.
-- **Product evidence baseline:** `0.6.1B.1.2` interactive CP config is REAL_ENV_VALIDATED.
+  **CONTRACT FROZEN 2026-09-04**; `OP.2.A`/`OP.2.B` IMPLEMENTED; `OP.2.1` CP command gate
+  DRAFTED — CLASS 2 still has **no member**, no adapter, unconditional `DENY`.
+  `D-V7b`/`D-F3`/`D-F2` no longer block the readiness roll-up (`OP.2.1b`) — remaining
+  `CLASS 2` blockers are authorization/trust/adapter/change-management, not readiness.
+- **Baselines:** product `0.7.7` (Compliance trend retro-fill) AUTOMATED_VALIDATED;
+  engineering `DEV.3.3` AUTOMATED_VALIDATED (`DEV.1`/`DEV.4` complete); evidence
+  `0.6.1B.1.2` interactive CP config REAL_ENV_VALIDATED.
 
 ## Reading this file
 
@@ -56,24 +51,27 @@ test-enforced boundaries. Current numbers:
 
 ## Active build
 
-**`m8_2_endpoint_specific_trusted_key_lookup`** (`M8.2`) —
-**AUTOMATED_VALIDATED, 2026-09-07**, branch
-`build/m8-2-endpoint-specific-trusted-key-lookup`, PR #98 (unmerged). New
-`utils/cp_ssh_trust.py::lookup_trusted_host_key(endpoint, port)` (contract §4
-step 1): local-only, read-only, exact normalized-endpoint+port check against
-the same `known_hosts` source `apply_strict_host_key_policy` already reads;
-typed `TrustedKeyLookupResult` (`trusted`/`reason`/immutable `fingerprints`
-`MappingProxyType`), never raises. No network/device contact, no
-key add/enroll/TOFU. Correction round 1 (PO review): fingerprints made
-immutable; fingerprint format consolidated into one shared
-`host_key_fingerprint()` also used by `checkpoint_config_probe.py`. Full
-evidence: `project/build_history.json`.
+**`gov_session_1_transfer_protocol`** (`GOV.SESSION.1`, track `GOV`) — **AUTOMATED_VALIDATED,
+2026-09-07**, branch `governance/gov-session-1-transfer-protocol`, PR pending. Vendor-neutral,
+offline agent session-transfer packet protocol: permanent literal sentinel
+`<<<NEXUS_SESSION_PACKET>>>` wrapping a strict-JSON `SESSION_START`/`SESSION_CLOSE` payload, for
+handing one bounded movement between agent sessions/tools without pasting chat history.
+Repository stays authoritative; a packet is transport only. Protocol doc
+`docs/design/GOV_SESSION_TRANSFER_PROTOCOL.md` is **DRAFT — PO REVIEW PENDING**, not FROZEN.
+Reference CLI `scripts/gov_session_transfer.py` (dependency-free) + 55 tests passing. Parallel
+to, and does not change, the `PCP.x`/`M8` product sequence below. Full evidence:
+`project/build_history.json`.
 
-Parent — **`m8_first_contact_trust_identity_evidence_producer_architecture`**
-(`M8` architecture) — **FROZEN, PRODUCT OWNER APPROVED, 2026-09-06 (PR #96,
-merged).** Sequence: `M8.1` → `M8.2` (above) → `M8.3` (read-only producer,
-real-env gated) → `M8.4` (`M6` resolver consumption) → `M7`. Open:
-`operator_assertion`, single-sourced identity evidence, DEFERRED
+Product sequence, unaffected by the above — Active product build:
+**`m8_2_endpoint_specific_trusted_key_lookup`** (`M8.2`) —
+**AUTOMATED_VALIDATED**, PR #98 (unmerged). New
+`utils/cp_ssh_trust.py::lookup_trusted_host_key` (contract §4 step 1):
+local-only, read-only trusted-host-key check, immutable typed result,
+fingerprint format shared with `checkpoint_config_probe.py`. Parent —
+**`M8` architecture** — **FROZEN, PRODUCT OWNER APPROVED, 2026-09-06 (PR
+#96, merged).** Sequence: `M8.1` → `M8.2` (above) → `M8.3` (read-only
+producer, real-env gated) → `M8.4` (`M6` resolver consumption) → `M7`.
+Open: `operator_assertion`, single-sourced identity evidence, DEFERRED
 serial-contradiction detection. Full contract:
 `docs/history/phase/M8_FIRST_CONTACT_TRUST_AND_IDENTITY_EVIDENCE_PRODUCER_ARCHITECTURE.md`.
 

@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "current_build": "m8_2_endpoint_specific_trusted_key_lookup",
+  "current_build": "gov_session_1_transfer_protocol",
   "current_track": "PCP.x",
   "progress_contract": "Weighted acceptance-criterion completion. Percentages describe the declared roadmap, not calendar time or delivery ETA.",
   "tracks": [
@@ -140,20 +140,14 @@
   "now_next": {
     "horizon_contract": "NOW is exactly one build. NEXT is exactly one. Everything else is an `upcoming` row carrying its own true status: planned = AFTER, blocked = waiting on a named external gate, deferred = consciously postponed. `now.build` must equal the newest project/build_history.json record -- utils.project_plan enforces it.",
     "now": {
-      "build": "m8_2_endpoint_specific_trusted_key_lookup",
-      "title": "M8.2 -- endpoint-specific local trusted-key lookup (mandatory trust-before-credential gate)",
-      "goal": "The new, required utils/cp_ssh_trust.py function (contract §4 step 1): checks whether the exact normalized endpoint/port already has a trusted host-key entry in the same known_hosts source apply_strict_host_key_policy already reads. No network/device contact. No key added or accepted. Not found -> refuse; no credential is ever resolved for that target. Its own focused tests, including a deliberately untrusted endpoint proving no credential is ever resolved and no network/device contact occurs during the lookup itself.",
+      "build": "gov_session_1_transfer_protocol",
+      "title": "GOV.SESSION.1 -- tool-agnostic agent session-transfer protocol + reference CLI",
+      "goal": "A vendor-neutral, offline packet protocol (permanent literal sentinel wrapping a strict-JSON SESSION_START/SESSION_CLOSE payload) for handing one bounded movement between agent sessions/tools without pasting chat history, plus a dependency-free reference CLI. Repository state stays authoritative; a packet is transport only. Parallel GOV engineering track -- unrelated to, and does not change, the PCP.x/M8 product sequence; M8.2 stays AUTOMATED_VALIDATED (PR #98 pending) and M8.3 stays this row's `next`.",
       "status": "automated_validated",
       "started": "2026-09-07",
       "completed": "2026-09-07",
       "notes": [
-        "lookup_trusted_host_key(endpoint, port) -> TrustedKeyLookupResult(trusted, reason, fingerprints): reads only the existing system/user known_hosts source (_system_known_hosts_path(), the same source apply_strict_host_key_policy/load_trusted_host_keys already read) via paramiko.HostKeys().load(path) -- no ssh.connect(), no socket, no key add/enroll/TOFU. The endpoint/port pair is expected already-normalized by the caller (utils.device_registry.normalize_endpoint's own shape); the lookup key mirrors paramiko.client.SSHClient.connect()'s own server_hostkey_name derivation exactly (bare host at port 22/None, '[host]:port' otherwise) so the lookup consults exactly the entry a real connect() to the same endpoint/port would.",
-        "Typed fail-closed outcomes, never an exception: empty endpoint, unreadable known_hosts, malformed known_hosts, and no-entry-for-this-exact-endpoint/port all return trusted=False with a value-free reason token (REASON_ENDPOINT_NOT_TRUSTED is new; REASON_TRUST_SOURCE_UNREADABLE/REASON_TRUST_SOURCE_MALFORMED are reused from the existing preflight, same meaning). trusted=True returns the SHA256: fingerprint of every key type already trusted for that exact endpoint/port, via utils/cp_ssh_trust.py::host_key_fingerprint() -- the minimum evidence a later M8 slice needs for its own trust-currency comparison (contract §6/§7), never raw key material.",
-        "CORRECTION ROUND 1 (PO review of PR #98): fingerprints is now an immutable types.MappingProxyType (a caller cannot mutate the returned evidence in place; TrustedKeyLookupResult.__post_init__ normalizes any constructor-supplied mapping into one). The fingerprint formatter is consolidated into one shared, public function (host_key_fingerprint()) that configuration/checkpoint_config_probe.py now imports and calls directly for its own live-connection fingerprint, replacing its former private duplicate -- one implementation, proven identical by a same-function-object test and an end-to-end same-key-same-fingerprint test, not two copies that merely agreed by inspection.",
-        "Extended tests/test_op0b_s8_p01_cp_ssh_trust_preflight_correction.py's structural pins (public-surface allowlist, minimal-imports allowlist, every-handler-fails-closed) to admit exactly this addition: the new function/dataclass/reason token and the hashlib/base64/dataclasses imports that back them; the every-handler-fails-closed guard now also accepts a typed trusted=False return as fail-closed, scoped to lookup_trusted_host_key only -- apply_strict_host_key_policy/load_trusted_host_keys keep their original raise-only requirement unchanged.",
-        "New tests/test_m8_2_endpoint_specific_trusted_key_lookup.py (12 tests): bare/default-port and explicit-port-22 entries match a no-port lookup; a non-default port only matches its exact '[host]:port' entry (not the bare-host entry, not a different port); multiple key types at one entry all returned; no entry for the endpoint, empty endpoint, missing known_hosts, and malformed known_hosts each refuse with the correct distinct reason and empty fingerprints; reason/fingerprint strings are value-free (never the endpoint, never raw key bytes); the lookup never opens a socket (patched socket.socket/create_connection raise if called) for both a hit and a miss; a deliberately untrusted endpoint's refusal is total, synchronous and typed (contract §8 AC2's M8.2-testable half).",
-        "Original round targeted: 12 passed (new) + 124 passed across the full cp_ssh_trust-affected suite, 1 pre-existing unrelated Paramiko-version-drift failure; broader sweep 210 passed, same pre-existing failure plus a pre-existing unrelated pyyaml collection error; M4/M8.1 (101) and architecture convergence (20) green. Correction round 1: new suite 20 passed (was 12, +5 immutability tests +3 cross-module fingerprint-compatibility tests); wide sweep of every test file touching configuration/checkpoint_config_probe.py or checkpoint_config_collector.py (23 files) plus M4/M8.1/architecture-convergence/application: 608 passed, 1 skipped, the same single pre-existing failure, 0 new failures. Repository privacy gate PASS both rounds. git diff --check clean. No full-regression run (risk-based -- one file's additive function plus one small, safe consolidation in its one existing importer, no shared-core/schema/storage change).",
-        "now_next.next is M8.3 (read-only first-contact producer + real-environment gate) -- must not begin without this build (contract §9); reuses existing per-host primitives, proposes exactly one bounded read-only real-environment validation command, and must measure real CP config evidence retention duration before contradiction detection can be judged buildable."
+        "docs/design/GOV_SESSION_TRANSFER_PROTOCOL.md is DRAFT -- PO REVIEW PENDING, not FROZEN. Full evidence, including the mid-session Product-Owner correction from an earlier versioned/free-text design to the shipped permanent-sentinel/strict-JSON design: project/build_history.json (gov_session_1_transfer_protocol)."
       ]
     },
     "next": {
@@ -537,6 +531,18 @@
           "build": "DEV.TEST.1",
           "title": "Parallelize local and GitHub Actions full-regression execution (pytest-xdist, -n auto --dist worksteal, single aggregate verdict)",
           "status": "done"
+        }
+      ]
+    },
+    {
+      "id": "GOV",
+      "title": "Cross-Agent Governance Tooling",
+      "status": "in_progress",
+      "steps": [
+        {
+          "build": "gov_session_1_transfer_protocol",
+          "title": "GOV.SESSION.1 -- tool-agnostic, offline agent session-transfer packet protocol + reference CLI",
+          "status": "automated_validated"
         }
       ]
     }
