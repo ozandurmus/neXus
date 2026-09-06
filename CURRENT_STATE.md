@@ -7,13 +7,19 @@ detail is not here either** — it is in `project/build_history.json`
 linked documents under `docs/history/`. `docs/history/INDEX.md` is the
 generated one-line timeline.
 
-- **Checkpoint:** 2026-09-05, branch `claude/left-nav-vertical-redesign-e673q6`
-  (unmerged; `origin/main` + 4 commits, no PR).
+- **Checkpoint:** 2026-09-06, branch `claude/left-nav-vertical-redesign-e673q6`
+  (incorporates `origin/main` at `9a946fe`, PR #84; NAV lineage preserved
+  unrewritten).
 - **Current build** (per `project/roadmap.json` `now_next.now`):
-  `pcp_2_local_control_plane_sequencing_po_review` (`M0`) — **COMPLETE,
-  ARCHITECTURE FROZEN** by Product Owner approval at reviewed head `ba56d2b`
-  (see "Active build"). `now_next.next` is
-  `pcp1_registry_uuid_call_count_test_defect_repair` (`M1`).
+  `nav_1_accessibility_closure` (`M2`) — **IN PROGRESS**: closing
+  `AC-A11Y-1`…`4` against the frozen navigation contract, confirming
+  `AC-A11Y-5`, and validating the combined branch before the NAV PR (see
+  "Active build"). Predecessors both complete: `M0`
+  (`pcp_2_local_control_plane_sequencing_po_review`) — architecture FROZEN
+  by Product Owner approval at reviewed head `ba56d2b`; `M1`
+  (`pcp1_registry_uuid_call_count_test_defect_repair`) — AUTOMATED_VALIDATED,
+  merged to `main` via PR #84. `now_next.next` is `M3`
+  (`nav_3_capability_state_vocabulary`).
   `op2_c_cp_clusterxl_adapter_scoping` stays `upcoming`, blocked on
   `DEPLOY.1`. `PCP.1` is complete — detail in `project/build_history.json`.
 - **OP.2.0 CLASS 2 architecture** (`docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md`):
@@ -54,14 +60,28 @@ test-enforced boundaries. Current numbers:
 
 ## Active build
 
+**`nav_1_accessibility_closure`** (`M2`) — **IN PROGRESS**. Incorporates
+`main` (M1, merged) into the NAV branch, closes `AC-A11Y-1`…`4`, confirms
+`AC-A11Y-5`, validates the combined branch, then opens/merges the NAV PR.
+Predecessors, both complete:
 **`pcp_2_local_control_plane_sequencing_po_review`** (`M0`) — **COMPLETE.
 ARCHITECTURE FROZEN 2026-09-05**, Product Owner approved at reviewed head
-`ba56d2b`. It produced **no product code**. Two contracts are now **FROZEN —
+`ba56d2b`. It produced **no product code**. Two contracts are **FROZEN —
 PRODUCT OWNER APPROVED**, each with acceptance criteria:
 `docs/design/NAVIGATION_INFORMATION_ARCHITECTURE.md` (§19) and
 `docs/design/LOCAL_CONTROL_PLANE_RUNTIME_AND_ENROLLMENT.md` (§15).
 `docs/design/research/NSPM_NAVIGATION_BENCHMARK.md` stays a **research
 appendix, deliberately not a frozen contract**.
+**`pcp1_registry_uuid_call_count_test_defect_repair`** (`M1`) —
+**AUTOMATED_VALIDATED**: repaired two `tests/test_pcp1_device_registry.py`
+cases that monkeypatched module-wide `uuid.uuid4` and incorrectly counted
+the registry lock's `owner_token` generation as device-id generation, via a
+single narrow production seam (`utils/device_registry.py::_generate_device_id()`).
+Full suite: 1931 passed, 24 skipped, 0 failed. No frozen PCP.1 AC-1a..AC-15
+behavior, persistence schema, endpoint normalization, duplicate/lifecycle
+behavior, CLI output, or public API changed. Merged to `main` via PR #84.
+`project/build_history.json` carries the exact defect/fix/evidence for `M1`
+and the full freeze record for `M0`.
 
 **Freeze is not implementation authority.** `M1`…`M14` remain separately
 authorized, bounded movements, and the `NAV.1` prototype (commit `5a5a1f7`,
@@ -125,11 +145,13 @@ a narrower question never promoted toward B2.
 
 ## Exact next build
 
-`now_next.next` is **`pcp1_registry_uuid_call_count_test_defect_repair`**
-(`M1`): the one bounded build actionable with **no** further PO decision — see
-"Automated test baseline". It runs in a **new session**, branching from
-**current `main`**, as a **clean narrow PR**; this branch then incorporates the
-new `main`. `Sonnet 5, normal`.
+`now_next.next` is **`nav_3_capability_state_vocabulary`** (`M3`): map the ten
+UX capability-state semantics onto canonical states, settle the two
+`PO-NAV-7` concepts in their correct owning domains, own the `PO-NAV-6`
+colour/label contract. Prerequisite `M0` complete (it is); must not alter the
+job lifecycle vocabulary. `Sonnet 5, extended thinking (high)`. `M1` (uuid4
+test-defect repair) and `M2` (this movement, NAV accessibility closure) are
+both complete/in progress — see "Active build".
 
 Deferred detail is **implementation-contract work inside a frozen direction**:
 state names at `M3`, SQLite schema at `M4`, trust mechanics at `M8`, enrollment

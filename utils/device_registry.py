@@ -285,6 +285,15 @@ LOCK_FILENAME = "device_registry.lock"
 REGISTRY_FILENAME = "device_registry.json"
 
 
+def _generate_device_id() -> str:
+    """Sole production seam for device_id generation (AC-1a). Kept separate
+    from the registry lock's owner-token generation (also a uuid4 call, for
+    an unrelated purpose) so tests can observe device-id generation
+    specifically without incidentally counting lock-token uuid4 calls.
+    """
+    return uuid.uuid4().hex
+
+
 def _acquire_lock(lock_path: Path) -> str:
     owner_token = uuid.uuid4().hex
     payload = {
@@ -431,7 +440,7 @@ class DeviceRegistry:
 
             now = _utc_now_iso()
             record = DeviceRecord(
-                device_id=uuid.uuid4().hex,
+                device_id=_generate_device_id(),
                 endpoint=normalized_endpoint,
                 port=port,
                 vendor=vendor_value,
