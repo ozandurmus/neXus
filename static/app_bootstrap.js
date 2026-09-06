@@ -70,7 +70,24 @@ function savedModule() {
 }
 
 
-function switchModule(nextModule) {
+// AC-A11Y-3: after a genuine navigation activation (never the passive initial
+// render or a console payload refresh -- both call switchModule() with no
+// options, from initializeReport()), move focus to the activated panel's
+// own heading. The heading is given tabindex="-1" once so it is
+// programmatically focusable without joining the ordinary tab order; a
+// panel with no heading (should not happen -- every [data-module-panel]
+// section ships one) is simply a no-op, so a dead/omitted destination can
+// never receive focus.
+function navigationFocusActivePanelHeading(moduleId) {
+    const panel = document.querySelector(`[data-module-panel="${moduleId}"]`);
+    const heading = panel?.querySelector("h1");
+    if (!heading) return;
+    if (!heading.hasAttribute("tabindex")) heading.setAttribute("tabindex", "-1");
+    heading.focus();
+}
+
+
+function switchModule(nextModule, { moveFocus = false } = {}) {
     activeModule = navigationModuleIds().includes(nextModule)
         ? nextModule
         : navigationDefaultModule();
@@ -116,6 +133,8 @@ function switchModule(nextModule) {
     if (activeModule === "jobs" && typeof consoleRefreshJobsTable === "function") {
         consoleRefreshJobsTable().catch(() => {});
     }
+
+    if (moveFocus) navigationFocusActivePanelHeading(activeModule);
 }
 
 
@@ -123,8 +142,8 @@ function switchModule(nextModule) {
 // listener on the rail, so the rail can be re-rendered without orphaning a
 // handler. Nothing binds per-button here any more.
 
-document.getElementById("overviewOpenConfiguration")?.addEventListener("click", () => switchModule("configuration"));
-document.getElementById("overviewOpenCompliance")?.addEventListener("click", () => switchModule("compliance"));
+document.getElementById("overviewOpenConfiguration")?.addEventListener("click", () => switchModule("configuration", { moveFocus: true }));
+document.getElementById("overviewOpenCompliance")?.addEventListener("click", () => switchModule("compliance", { moveFocus: true }));
 document.getElementById("configSearch")?.addEventListener("input", renderConfigDeviceList);
 document.getElementById("configHeaderToggle")?.addEventListener("click", () => setConfigHeaderExpanded(!configHeaderExpanded));
 document.getElementById("configSidebarToggle")?.addEventListener("click", () => setConfigSidebarOpen(!configSidebarOpen));

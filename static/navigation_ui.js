@@ -324,6 +324,11 @@ function setNavigationGroupCollapsed(groupId, collapsed) {
 }
 
 
+// AC-A11Y-1: every accessible name is an explicit `aria-label`, never left to
+// derive from visible text content or from `title` alone -- `title` stays
+// only as a supplementary hover tooltip. This holds in both expanded and
+// icon-only (rail-collapsed) mode, since `aria-label` does not depend on
+// `.nav-label`'s visibility (contract §13.1 item 1).
 function navigationRootMarkup(root) {
     const collapsedGroup = navigationGroupCollapsedSet().has(root.id);
 
@@ -332,7 +337,8 @@ function navigationRootMarkup(root) {
             <li class="nav-root" data-nav-root="${escapeHtml(root.id)}">
                 <button id="${escapeHtml(root.id)}Nav" class="module-nav-item nav-link nav-root-link"
                         type="button" data-module="${escapeHtml(root.module)}"
-                        data-nav-domain="${escapeHtml(root.id)}" title="${escapeHtml(root.label)}">
+                        data-nav-domain="${escapeHtml(root.id)}" title="${escapeHtml(root.label)}"
+                        aria-label="${escapeHtml(root.label)}">
                     ${navigationIcon(root.icon)}<span class="nav-label">${escapeHtml(root.label)}</span>
                 </button>
             </li>
@@ -344,7 +350,8 @@ function navigationRootMarkup(root) {
             <li>
                 <button class="module-nav-item nav-link nav-child-link" type="button"
                         data-module="${escapeHtml(item.module)}"
-                        data-nav-domain="${escapeHtml(root.id)}" title="${escapeHtml(root.label)} · ${escapeHtml(item.label)}">
+                        data-nav-domain="${escapeHtml(root.id)}" title="${escapeHtml(root.label)} · ${escapeHtml(item.label)}"
+                        aria-label="${escapeHtml(root.label)} · ${escapeHtml(item.label)}">
                     <span class="nav-child-rail" aria-hidden="true"></span>
                     ${navigationIcon(item.icon)}<span class="nav-label">${escapeHtml(item.label)}</span>
                 </button>
@@ -352,14 +359,21 @@ function navigationRootMarkup(root) {
         `)
         .join("");
 
+    // AC-A11Y-4: the group's children are associated with its visible label via
+    // `role="group"` + `aria-labelledby` pointing at the toggle button that IS
+    // that label, in both expanded and rail-collapsed states -- not by visual
+    // indentation. `aria-expanded` on the toggle (already present) exposes the
+    // group's own expand/collapse state.
+    const toggleId = `navGroupToggle-${escapeHtml(root.id)}`;
     return `
         <li class="nav-root nav-group${collapsedGroup ? " collapsed" : ""}" data-nav-group="${escapeHtml(root.id)}">
-            <button class="nav-group-toggle" type="button" data-nav-group-toggle="${escapeHtml(root.id)}"
-                    aria-expanded="${collapsedGroup ? "false" : "true"}" title="${escapeHtml(root.label)}">
+            <button id="${toggleId}" class="nav-group-toggle" type="button" data-nav-group-toggle="${escapeHtml(root.id)}"
+                    aria-expanded="${collapsedGroup ? "false" : "true"}" title="${escapeHtml(root.label)}"
+                    aria-label="${escapeHtml(root.label)}">
                 ${navigationIcon(root.icon)}<span class="nav-label">${escapeHtml(root.label)}</span>
                 <svg class="nav-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
             </button>
-            <ul class="nav-children">${children}</ul>
+            <ul class="nav-children" role="group" aria-labelledby="${toggleId}">${children}</ul>
         </li>
     `;
 }
@@ -446,8 +460,13 @@ function bindNavigationEvents() {
             return;
         }
 
+        // AC-A11Y-3: a rail click/keyboard-activation (native buttons fire
+        // "click" for both Enter/Space and pointer activation, so one
+        // listener covers both) is a genuine navigation activation --
+        // moveFocus:true. The passive initial render and console payload
+        // refreshes call switchModule() directly, never through here.
         const link = event.target?.closest?.(".module-nav-item");
-        if (link?.dataset?.module) switchModule(link.dataset.module);
+        if (link?.dataset?.module) switchModule(link.dataset.module, { moveFocus: true });
     });
 }
 

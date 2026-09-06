@@ -1228,6 +1228,20 @@ html[data-theme="light"] {
     opacity: .55;
 }
 
+/* AC-A11Y-2: rail expansion/collapse (.primary-nav's width transition) and
+   accordion expand/collapse (.nav-chevron's rotation) are the only motion
+   this prototype introduces or controls -- both suppressed on request,
+   contract §13.1 item 2. The rail still collapses/expands and groups still
+   open/close instantly; only the animated transition is removed. Unrelated
+   functional state changes (button hover colour, focus rings, etc.) are
+   untouched -- this movement does not redesign the visual system. */
+@media (prefers-reduced-motion: reduce) {
+    .primary-nav,
+    .nav-chevron {
+        transition: none;
+    }
+}
+
 .app-canvas {
     flex: 1 1 auto;
     min-width: 0;
