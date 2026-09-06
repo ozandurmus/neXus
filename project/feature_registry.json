@@ -1695,7 +1695,7 @@
     },
     {
       "id": "left_vertical_product_navigation",
-      "title": "Left vertical product navigation (architecture FROZEN; prototype present, M2 accessibility owed)",
+      "title": "Left vertical product navigation (architecture FROZEN; M2 accessibility closure validated, merging)",
       "status": "in_progress",
       "introduced": "NAV.1 (prototype)",
       "weight": 5,
@@ -1740,8 +1740,8 @@
         },
         {
           "id": "accessibility_closure",
-          "label": "Four named accessibility gaps closed: icon-only accessible names, prefers-reduced-motion, focus management after navigation, group semantics -- Movement M2 owns AC-A11Y-1..4; blocks implementation merge, not the architecture freeze",
-          "state": "pending",
+          "label": "Four named accessibility gaps closed: icon-only accessible names, prefers-reduced-motion, focus management after navigation, group semantics -- Movement M2 closed AC-A11Y-1..4 2026-09-06 (real-Chromium validated, both shells); feature status flips to done once the NAV PR merges to main",
+          "state": "done",
           "weight": 1
         }
       ]
