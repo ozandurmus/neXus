@@ -18,110 +18,107 @@ Overwrite at every session close. Keep it minimal.
   `0a9048ceeb2a318444f918e2688b126641eaeab0` (`M6` merged).
 - Build: `m8_first_contact_trust_identity_evidence_producer_architecture`
   (`M8`, architecture review) — **DRAFT / IN REVIEW**, not implemented, not
-  automated_validated, not yet PO-approved for freeze or merge.
+  automated_validated, not yet PO-approved for freeze or merge, corrected
+  across two PO review rounds.
 - Contract: `docs/history/phase/M8_FIRST_CONTACT_TRUST_AND_IDENTITY_EVIDENCE_PRODUCER_ARCHITECTURE.md`
-  — now carries a **correction round 1** applied this session.
+  — fully rewritten in round 2 to its final, clean state (round-1 inline
+  correction markers removed from the body; history kept in the doc's
+  Status-block "Correction history" and in `project/build_history.json`).
 
-## 2. What this session did (correction round 1, PO architecture review)
+## 2. What this session did (correction round 2, PO architecture review)
 
-The Product Owner reviewed PR #96 and returned seven blockers against the
-draft, all resolvable by direct repository evidence — **the
-`nexus-decision-council` was explicitly not re-invoked**, per instruction.
-Each blocker was verified against real source before correcting the doc:
+The PO returned five further blockers against the round-1-corrected draft —
+**`nexus-decision-council` not re-invoked**, direct repository evidence
+only, per instruction. `GOV.SESSION.1` stayed parked/untouched.
 
-1. **Evidence scope narrowed.** Confirmed the design never independently
-   corroborates the directly-read serial against the CMA/MDS `entity_id` —
-   the candidate is still selected by registry-endpoint == `management_ip`
-   equality; the live session proves liveness/authenticity at that
-   endpoint, not independent confirmation of the CMA's own labeling. Added
-   a closed `mapping_scope` column fixed to
-   `CLASS_0_CP_CONFIG_TARGET_SELECTION_ONLY` (the `utils.action_taxonomy`
-   `CLASS_0_READ` sense — explicitly not the unrelated
-   `PRIVACY_AND_DATA_HANDLING.md` CLASS 0–3 scheme), with an explicit
-   prohibited-uses list (`CLASS_2`, authorization, `operational_entity_id`,
-   enrollment, security identity).
-2. **Trust/credential sequencing corrected**, against a direct read of
-   `configuration/checkpoint_config_probe.py::_connect`: confirmed
-   `apply_strict_host_key_policy` is not target-specific (target host-key
-   verification happens inside `ssh.connect()`'s own handshake instead),
-   and confirmed the collector resolves its run credential into process
-   memory once, before any per-target loop
-   (`checkpoint_config_collector.py:1976-1978`). The original "credential
-   is not read before trust" claim was an overclaim — corrected to the
-   real, narrower guarantee, with the stronger guarantee named as an
-   explicit, not-yet-built implementation prerequisite.
-3. **M4 compatibility corrected.** Confirmed
-   `tests/test_m4_control_plane_metadata_store.py::test_schema_owns_no_forbidden_concept`
-   test-enforces `"trust"` as a forbidden column-name fragment — withdrew
-   the originally-proposed `trust_authority_generation` column (a cosmetic
-   rename was explicitly rejected) in favor of reusing
-   `capability_projections.authority_generations`'s already-approved
-   TEXT/JSON shape. Also corrected "existing five tables" to seven `STRICT`
-   tables including `schema_migrations` (confirmed by reading
-   `utils/control_plane_store.py`).
-4. **Contradictory-evidence comparison mechanism specified.** A raw serial
-   cannot be compared later once discarded (the original design's flaw) —
-   specified a `serial_fingerprint` column: an HMAC-SHA256 digest via the
-   existing, already privacy-reviewed `data/.support_hmac.key` mechanism
-   (`utils/support_bundle.py`), never the raw value, `CLASS 2` classified,
-   with an explicit rule for a missing/rotated key.
-5. **Cardinality corrected.** Confirmed directly from
-   `configuration/checkpoint_config_collector.py`'s own `_entity_id`/
-   `_collect_host` iteration over `target.contexts` that one `device_id`
-   legitimately produces multiple `entity_id` rows under VSX (one physical
-   + one per `VsContext.vs_id`) — added `entity_scope`/`vs_id_slot`
-   columns and corrected the one-active-relationship invariant to be
-   scoped per physical-or-VS-id slot, not per `device_id`.
-6. **Invalidation-mechanics contradiction resolved.** Split explicitly into
-   logical, read-time invalidity (registry disable/retire/endpoint change,
-   authority-contract staleness — computed live by `M6`'s resolver, never a
-   stored mutation) versus durable, producer-only state transitions
-   (`SUPERSEDED`/`AMBIGUOUS_IDENTITY`/`CONTRADICTORY_EVIDENCE`). `console/`
-   remains strictly read-only; no consumer-side write of any kind.
-7. **Status preserved**: still `DRAFT — IN REVIEW`, `M7` still `blocked`, no
-   frozen parent contract touched, no code/schema/device contact.
+1. **Cardinality corrected to physical-only.** Confirmed by reading
+   `configuration/checkpoint_config_collector.py::_apply_cp_target_selector`
+   that it indexes candidates only by `_entity_id(target)` with no
+   `VsContext` argument — `M6`/`M7` targeting never independently selects a
+   VSX child `entity_id`. Round 1's `entity_scope`/`vs_id_slot` one-to-many
+   model solved a problem that does not exist at this boundary — removed
+   entirely; the relationship is now a plain one-to-one
+   `device_id`→physical-`entity_id` association.
+2. **`data/.support_hmac.key` coupling removed entirely.** Confirmed by
+   reading `utils/support_bundle.py::_get_support_key` that the key is
+   created on demand, freely overridable by an environment variable, with
+   no rotation/versioning/identity-association lifecycle — unsuited to
+   gating target-selection authority. `serial_fingerprint`/HMAC design
+   withdrawn; replaced by `producing_run_ref`, an opaque reference to the
+   CP config collector's own already-governed, already-persisted per-run
+   evidence (confirmed present: `_host_key_fingerprint` and the serial
+   parse are both already captured per entity per run). Serial-based
+   contradiction detection is now explicitly **DEFERRED** pending
+   confirmation that evidence retention keeps that evidence resolvable
+   long enough to compare — not fabricated to look solved.
+3. **Target-specific trust lookup made mandatory, not optional.** Confirmed
+   by reading `configuration/checkpoint_config_probe.py::_connect` that
+   `apply_strict_host_key_policy` is not target-specific and that the bulk
+   collector resolves its credential once per run before any per-target
+   check — so `M8`'s producer cannot reuse the bulk entry point at all. It
+   must be a new, minimal, single-target driver that performs a new,
+   required, local-only (no device contact) trusted-key lookup — to be
+   added to `utils/cp_ssh_trust.py` — before resolving any credential, then
+   reuses the existing, unmodified `_collect_host`/`_identity_gate`
+   per-host primitives.
+4. **Relationship bound to live currency, not a source-code proxy.** Added
+   `registry_record_revision` (the registry's own existing
+   `DeviceRecord.updated_at` signal) compared live against the current
+   record; replaced the withdrawn "trust-policy contract version" with a
+   live comparison of the current trusted host-key fingerprint (via item
+   3's lookup) against the fingerprint `producing_run_ref`'s evidence
+   captured — both checks specified to run live, read-only, server-side, at
+   admission and pre-execution, before any credential presentation or
+   device contact.
+5. **Fields reconciled; duplicated round-1 prose removed.** Final minimum
+   field set specified (§Q5 of the doc); `identity_mapping_proven` retained
+   under its `capability_projections` precedent name on the explicit
+   condition every read API pairs it with `mapping_scope`. The document was
+   rewritten wholesale rather than patched incrementally, so the body no
+   longer carries scattered "(corrected, round 1)" qualifiers describing
+   designs that round 2 removed.
 
-Updated in place, no second movement record: the doc itself (correction
-round 1 section + every affected Q&A/section), `project/build_history.json`
-(appended correction-round-1 evidence to the same head record, mirroring
-`M6`'s own correction-round precedent), `project/roadmap.json` (`now` block
-notes), `CURRENT_STATE.md` (Active build section).
+Updated in place, no second movement record: the doc itself (full rewrite),
+`project/build_history.json` (appended correction-round-2 evidence to the
+same head record), `project/roadmap.json` (`now` block notes), `CURRENT_STATE.md`
+(Active build section).
 
 ## 3. Exact next action
 
 **Product Owner re-review of the corrected draft** in PR #96: freeze it (as
 corrected, or with further changes), or reject/redirect. No implementation
-slice may begin before that. The roadmap order (`M6 → M8 → M7`) itself was
-already PO-accepted in round 1 and is not reopened.
+slice may begin before that. The roadmap order (`M6 → M8 → M7`) and the
+`CLASS_0_CP_CONFIG_TARGET_SELECTION_ONLY` scope remain PO-accepted from
+round 1 and were not reopened in round 2.
 
-If approved: push is already done (see §6); await PO decision. If further
-corrections are requested, repeat this session's pattern — verify each claim
-against real source before amending, update the doc in place, append a new
-correction round to the same `build_history.json` record.
+If further corrections are requested, repeat this session's pattern: verify
+each claim against real source before amending, and prefer rewriting the
+affected sections cleanly over layering another "(corrected, round N)"
+marker on top of the last one.
 
 ## 4. Test delta
 
 None. No source or test file changed. Re-ran (all green, all state-only
-changes): `tests/test_architecture_convergence.py` (20 passed, includes the
-`now_next.now` / build-history-head consistency check),
+changes): `tests/test_architecture_convergence.py` (20 passed),
 `tests/test_application_package.py`, `py scripts/build_history_index.py
 --check` (up to date), `py main.py --repository-privacy-check` (PASS, 0
 findings), `git diff --check` (clean).
 
 ## 5. Risks / notes forward
 
-- The `mapping_scope` narrowing is the single most important correction:
-  even once implemented, this design proves an association usable **only**
-  for `CLASS_0` `config_refresh_cp` target selection — never general device
-  identity, never `CLASS_2`/authorization/enrollment evidence. A future
-  session must not silently widen `identity_mapping_proven`'s meaning
-  without a separate, explicit PO decision.
-- Two dissents remain open and were not touched by this round:
-  `operator_assertion` (inherited from `M6`) and single-sourced
-  (non-bidirectionally-corroborated) identity evidence.
-- A new open item from this round: whether `M8`'s slice-2 producer should
-  eventually gain a target-specific pre-connection host-key lookup seam
-  (stronger than the existing protocol-level guarantee) — named, not
-  decided, not built.
+- `mapping_scope` remains the single most important constraint: even once
+  implemented, this design proves an association usable **only** for
+  `CLASS_0` `config_refresh_cp` target selection.
+- Serial-based `CONTRADICTORY_EVIDENCE` detection is **DEFERRED**, not
+  built — the slice-3 implementation movement must measure real CP config
+  evidence retention before this gap can be honestly closed either way.
+- The mandatory trust-lookup seam (`utils/cp_ssh_trust.py`) does not exist
+  yet and blocks the producer slice until built and tested.
+- Open implementation-shape question: whether `console/registry_targets.py`
+  may import the new trust-lookup function directly or needs a
+  vendor-neutral wrapper to preserve "console imports no vendor/collector
+  module."
+- Three dissents remain open: `operator_assertion` (inherited from `M6`),
+  single-sourced identity evidence, and deferred contradiction detection.
 - Table/column names and migration version numbers remain illustrative, not
-  frozen, per `AGENTS.md` "Contract-status law".
+  frozen.
