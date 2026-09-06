@@ -16,14 +16,15 @@ doc. Prior versions are in git history.
 
 ## 1. Snapshot
 
-- Date: 2026-09-06. `main` still at merge commit
-  `081a976a3e1cc16fb57af7f0c9aa0e0501a7625b` (PR #85, `M2`) — this session's
-  work is on branch `claude/parallelize-full-regression-hw0xon`, PR #87, not
-  yet merged.
+- Date: 2026-09-06. `main` is at merge commit
+  `06f73e7df7f80cf415fd146356a677b71e6522b7` (PR #87). A narrow post-merge
+  fix (branch `claude/fix-workflow-yaml-syntax`) is in flight for a genuine
+  YAML syntax defect PR #87 shipped (see item 3) — must land and be proven
+  green via a real push-to-main run before this movement can close.
 - Build: `parallelize_full_regression_execution` (`DEV.TEST.1`) —
   test-execution infrastructure only. The `full-regression` job's full
   suite is parallelized (`-n auto --dist worksteal`); the PR/push trigger
-  split is **unchanged** (approved final policy, see below).
+  split is unchanged (approved final policy, see below).
 - Pure process improvement: no product behavior, capability-state
   vocabulary, navigation, registry, storage, enrollment, trust, or
   authorization change. Does **not** begin `M3`.
@@ -32,110 +33,105 @@ doc. Prior versions are in git history.
 
 Every frozen product/architecture contract is untouched. This build touches
 only `.github/workflows/validation.yml`, one test file asserting the
-workflow's own shape, `scripts/render_uitest.py` history (already fixed,
-not re-touched this build), and documentation/project-state files.
+workflow's own shape, `requirements-dev.txt` (new `pyyaml` dev dependency),
+and documentation/project-state files.
 
 ## 3. What this build actually did
 
-- **Root cause audit**: the `full-regression` job's own long-standing
-  "serial on purpose" comment traced to one concrete defect —
-  `scripts/render_uitest.py::render()` left three `utils.html_export`
-  payload builders bare-rebound after use, already fixed (`try`/`finally`
-  restore, `_injected_builders`) and directly regression-tested regardless
-  of worker/ordering (`tests/test_frontend_rendering_boundary.py::
+- **Root cause audit (the original serial gate)**: traced to one concrete
+  defect — `scripts/render_uitest.py::render()` left three
+  `utils.html_export` payload builders bare-rebound after use, already
+  fixed (`try`/`finally` restore) and directly regression-tested regardless
+  of worker/ordering
+  (`tests/test_frontend_rendering_boundary.py::
   test_render_uitest_restores_the_builders_it_injects`).
 - **Topology selected and kept**: one `pytest-xdist` process
-  (`python -m pytest -q -n auto --dist worksteal`) for the `full-regression`
-  job's full suite step, plus a worker-topology visibility step. Unchanged
-  from first implementation.
-- **PR-trigger expansion attempted, then reverted (same session):** to get
-  automatic pre-merge cloud proof without a manual Product Owner action, a
-  follow-up commit removed `full-regression`'s
-  `if: github.event_name != 'pull_request'` guard so it would also run on
-  every pull_request. Investigation (workflow_dispatch 403s on non-default
-  branches, zero-job check suites on both the branch's push event and the
-  PR's pull_request event, contrasted against historically successful PRs
-  from earlier sessions) established this environment's automation
-  identity cannot get GitHub Actions to schedule pull_request/
-  workflow_dispatch jobs on a non-default branch at all — a tooling/
-  identity limitation, not a defect in the parallel design. Per Product
-  Owner direction, that trigger expansion was **reverted**
-  (`tests/test_ci_workflow_fast_pr_regression.py` reverted to match); the
-  approved final policy is unchanged from before this build started:
-  - local full suite: parallel by default;
-  - `pull_request`: existing fast `validate` job only;
-  - push to `main`: parallel `full-regression`;
-  - `workflow_dispatch`: parallel `full-regression`;
-  - no serial full-suite default anywhere.
-  The limitation itself is recorded in `.github/workflows/validation.yml`'s
-  header comment and `docs/AI_DEVELOPMENT_PROTOCOL.md`'s "CI validation
-  policy" section, not silently dropped.
-- **Pre-merge evidence decision (Product Owner, this session):** two clean
-  complete local parallel runs are accepted as this movement's pre-merge
-  full-suite evidence in place of a PR-triggered cloud run — 1981 collected,
-  1957 passed, 24 skipped, 0 failed, at 32.27s and 35.01s (4 workers,
-  `-n auto --dist worksteal`). No further local full-suite run is to be
-  performed for this movement.
-- **Changed vs preserved**: changed = `.github/workflows/validation.yml`
-  (`full-regression`'s full-suite step parallelized; PR-trigger guard
-  restored after the reverted experiment; header comments document the
-  environment limitation), `tests/test_ci_workflow_fast_pr_regression.py`
-  (`FULL_SUITE_LINE` + assertions matching the final restored shape),
-  `docs/AI_DEVELOPMENT_PROTOCOL.md`/`AI_START_HERE.md`/`CLAUDE.md` (parallel
-  as the default local/CI command). Preserved = the `validate`/
-  `full-regression` PR-vs-push/dispatch trigger split, every other CI gate,
-  `scripts/pytest_one_shot.ps1` (untouched), every targeted/subsystem test
-  invocation that was already serial.
+  (`python -m pytest -q -n auto --dist worksteal`) for the
+  `full-regression` job's full suite step, plus a worker-topology
+  visibility step.
+- **PR-trigger expansion attempted, then reverted (Product Owner
+  direction)**: a follow-up commit removed `full-regression`'s
+  `if: github.event_name != 'pull_request'` guard to get automatic
+  pre-merge cloud proof. It was reverted back to the original approved
+  policy (`pull_request` = fast `validate` only; push/`workflow_dispatch` =
+  parallel `full-regression`) — a standalone decision, independent of the
+  incident below.
+- **Post-merge YAML-syntax incident — corrects an in-session
+  misdiagnosis.** While chasing cloud proof, every check suite for every
+  trigger (push, pull_request, workflow_dispatch) on every branch —
+  including, after merge, the merge commit on `main` itself — completed
+  with **zero jobs**. This was first misdiagnosed as an
+  environment/automation-identity limitation preventing GitHub Actions
+  from scheduling pull_request/workflow_dispatch jobs on a non-default
+  branch. **That diagnosis was wrong.** Parsing the workflow file locally
+  after merge found the real cause: the "Report worker topology" step's
+  `run:` value was an unquoted plain YAML scalar containing a bare `: `
+  inside an f-string label (`"...target): {os.cpu_count()}"`), which YAML
+  parses as an illegal nested mapping. A file that fails to parse cannot
+  schedule a job under any trigger, on any branch, regardless of who
+  pushed it — exactly the symptom observed, and exactly why it looked
+  identity/branch-related until someone ran the file through a real YAML
+  parser. **Fixed** by rewording the f-string. Every place in this
+  session's own docs/state that stated the wrong "automation-identity
+  limitation" theory as fact has been corrected to describe the real cause
+  (`.github/workflows/validation.yml` header, `docs/
+  AI_DEVELOPMENT_PROTOCOL.md`, `CURRENT_STATE.md`, `AI_HANDOVER.md`,
+  `project/roadmap.json`, `project/build_history.json`). The PR-trigger
+  policy decision itself was not reopened by this correction — it stands
+  on its own merits, decided before the misdiagnosis was made.
+- **New regression guard**: `tests/test_ci_workflow_fast_pr_regression.py::
+  test_workflow_yaml_parses` (new, `pyyaml>=6` added to
+  `requirements-dev.txt`) actually parses `.github/workflows/validation.yml`
+  on every test run, specifically so a future YAML syntax defect fails
+  locally before push rather than shipping silently through review and a
+  merge, as this one did.
+- **Pre-merge evidence decision (Product Owner)**: two clean complete local
+  parallel runs are accepted as this movement's pre-merge full-suite
+  evidence in place of a PR-triggered cloud run — 1981 collected, 1957
+  passed, 24 skipped, 0 failed, at 32.27s and 35.01s (4 workers,
+  `-n auto --dist worksteal`).
 
 ## 4. Exact next action
 
-1. Push the reverted-policy commit to PR #87; verify the diff contains only
-   the intended parallelization + isolation fix + tests + docs + state
-   changes (no leftover PR-trigger-expansion artifacts).
-2. Verify PR #87 is still mergeable, then merge it (no manual Product Owner
-   GitHub action required — this session merges directly).
-3. Sync local `main`.
-4. Observe the automatic post-merge push-to-main `full-regression` run
-   (this trigger path has historically worked reliably, including for this
-   same automation identity — unlike pull_request/workflow_dispatch on a
-   non-default branch). Verify from the actual runtime log (not just the
-   YAML text): the exact command, an xdist `N/N workers` / equivalent
-   worker-count line, collected-test count, duration, and terminal
-   conclusion.
-5. If green: amend the existing `parallelize_full_regression_execution`
+1. Push the YAML fix (+ corrected docs/state + new parse-guard test) via a
+   narrow follow-up PR into `main`; verify the diff is exactly that fix and
+   nothing else.
+2. Merge it once its own fast `validate` gate is green.
+3. Sync local `main`, then observe the next real push-to-main
+   `full-regression` run from its actual runtime log (not just the YAML
+   text): exact command, worker-count line, collected-test count, duration,
+   terminal conclusion. Compare against the `11m56s` serial baseline.
+4. If green: amend the existing `parallelize_full_regression_execution`
    build-history record in place (remove placeholders, status →
    `automated_validated`), reconcile roadmap/CURRENT_STATE/AI_HANDOVER/
-   INDEX, and merge that reconciliation via a narrow follow-up PR if the
-   post-merge evidence cannot truthfully exist inside PR #87 before its own
-   merge. Do not duplicate the build-history record.
-6. If it fails: do not mark the movement complete; classify the failure;
-   fix via a narrow follow-up PR if in scope, or prepare a clean revert PR
-   if parallel execution itself proves unsafe. Never fall back silently to
-   serial.
-7. **Then**: `M3` (`nav_3_capability_state_vocabulary`). **New session.**
+   INDEX via a narrow state-only follow-up if the evidence cannot exist
+   inside the fix PR before its own merge. Do not duplicate the record.
+5. If it still fails: do not mark the movement complete; classify the new
+   failure on its own terms (do not assume it's the same root cause again).
+6. **Then**: `M3` (`nav_3_capability_state_vocabulary`). **New session.**
    `Sonnet 5, extended thinking (high)`. Not started in this session.
 
 ## 5. Test delta
 
-- Local (accepted as this movement's pre-merge evidence, see item 3 above):
-  two clean full parallel runs, 1957 passed/24 skipped/0 failed each
-  (32.27s and 35.01s), 1981 collected both times.
-  `tests/test_ci_workflow_fast_pr_regression.py` reverted and re-verified
-  green (7 passed) against the final restored workflow shape.
-- GitHub Actions: no pull_request/workflow_dispatch run available on this
-  branch (environment limitation, see item 3 above). The post-merge
-  push-to-main `full-regression` run is the real cloud proof — pending as
-  of this handover.
+- Local: two clean full parallel runs (pre-fix), 1957 passed/24 skipped/0
+  failed each (32.27s, 35.01s), 1981 collected both times — accepted as
+  pre-merge evidence, unaffected by the YAML fix (no product/test-content
+  change). `tests/test_ci_workflow_fast_pr_regression.py` now 8 tests (new
+  `test_workflow_yaml_parses`), all green against the fixed workflow file.
+- GitHub Actions: still no successful run recorded for this movement — the
+  YAML defect meant every attempted trigger produced a zero-job failure.
+  The next real push-to-main run (after the fix PR merges) is the first
+  chance at genuine cloud proof.
 
 ## 6. New risks / notes forward
 
 - The `parallelize_full_regression_execution` build-history record's
-  `evidence`/`risks_forward` fields stay placeholders until the post-merge
-  push-to-main run is terminal and inspected from its actual log.
-- The environment limitation (no pull_request/workflow_dispatch job
-  scheduling on non-default branches for this automation identity) is now
-  documented in the workflow file and `docs/AI_DEVELOPMENT_PROTOCOL.md` —
-  a future session attempting the same PR-trigger expansion should check
-  whether this still holds before repeating the experiment.
+  `evidence`/`risks_forward` fields stay placeholders until a real
+  push-to-main `full-regression` run (post-YAML-fix) is terminal and
+  inspected from its actual log.
+- Any future session touching `.github/workflows/validation.yml` should run
+  `test_workflow_yaml_parses` (or `python -c "import yaml; yaml.safe_load(open(path))"`)
+  locally before push — this exact defect class produces no useful error
+  anywhere in the GitHub UI, only a silent zero-job check suite.
 - No frozen decision reopened; `M3` remains not started and stays
   `now_next.next` unchanged throughout this movement.
