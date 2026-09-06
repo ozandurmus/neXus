@@ -7,12 +7,13 @@ detail is not here either** — it is in `project/build_history.json`
 linked documents under `docs/history/`. `docs/history/INDEX.md` is the
 generated one-line timeline.
 
-- **Checkpoint:** 2026-09-06, `main` at merge commit `d363b17` (PR #90,
-  `DEV.TEST.1` final CI trigger policy). The earlier `6ca67cc`/PR #88
-  checkpoint line was stale by two merges and is corrected here.
+- **Checkpoint:** 2026-09-06, `main` at merge commit `4b7e651` (PR #91, `M3`
+  contract freeze). The `d363b17`/PR #90 line it replaces was written
+  pre-merge in the same session and was stale on arrival.
 - **Current build** (per `project/roadmap.json` `now_next.now`):
-  `nav_3_capability_state_vocabulary` (`M3`) — **IN_PROGRESS**, contract
-  DRAFT. `now_next.next` is `M4` (`local_control_plane_metadata_store`).
+  `nav_3_capability_state_vocabulary` (`M3`) — **COMPLETE**, contract FROZEN —
+  PRODUCT OWNER APPROVED 2026-09-06. `now_next.next` is `M4`
+  (`local_control_plane_metadata_store`), not started and unauthorized.
   `op2_c_cp_clusterxl_adapter_scoping` stays `upcoming`, blocked on
   `DEPLOY.1`. `DEV.TEST.1`, `PCP.1`, `M1`, `M2` complete —
   build_history.json.

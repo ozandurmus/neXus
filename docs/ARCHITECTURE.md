@@ -334,9 +334,10 @@ One large multi-stage function (~750 lines):
   shell actually ships the `[data-module-panel]` it points at, so the console
   and the action-free report expose different entry sets from identical code.
   This is a **prototype**: its contract
-  (`docs/design/NAVIGATION_INFORMATION_ARCHITECTURE.md`) is DRAFT pending
-  Product Owner review, and that DRAFT downgrades the panel-existence rule to
-  one of four predicates. The inventory-side
+  (`docs/design/NAVIGATION_INFORMATION_ARCHITECTURE.md`) is **FROZEN —
+  PRODUCT OWNER APPROVED, 2026-09-05**, amended by `M3` on 2026-09-06
+  (`FA-1`…`FA-9`), and it downgrades the panel-existence rule to one of four
+  predicates (§7). The inventory-side
   IP math, ClusterXL/VSX/PAN-HA collapsing into one logical cluster,
   member-divergence tabs and hierarchy building live in
   `static/inventory_ui.js`.
