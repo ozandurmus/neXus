@@ -173,7 +173,10 @@ def test_foreign_keys_are_enforced(store):
 
 def test_creation_applies_the_initial_schema_version(store):
     assert store.schema_version() == SUPPORTED_SCHEMA_VERSION
-    assert store.applied_migrations() == [(1, "initial_control_plane_metadata")]
+    assert store.applied_migrations() == [
+        (1, "initial_control_plane_metadata"),
+        (2, "device_identity_relationships"),
+    ]
 
 
 def test_migrations_are_strictly_ascending_and_unique():
@@ -332,20 +335,27 @@ def _read_raw_journal_mode(data_root: Path) -> str:
 
 def test_supported_version_with_the_wrong_migration_name_is_refused(data_root):
     """The core gap: max(version) == SUPPORTED, but the identity is foreign."""
-    _write_ledger(data_root, [(SUPPORTED_SCHEMA_VERSION, "some_other_builds_migration")])
+    _write_ledger(
+        data_root,
+        [(1, "initial_control_plane_metadata"), (SUPPORTED_SCHEMA_VERSION, "some_other_builds_migration")],
+    )
 
     with pytest.raises(ControlPlaneSchemaVersionError) as excinfo:
         ControlPlaneStore(data_root)
 
     message = str(excinfo.value)
     assert "some_other_builds_migration" in message
-    assert "initial_control_plane_metadata" in message
+    assert "device_identity_relationships" in message
 
 
 def test_an_unknown_extra_version_is_refused(data_root):
     _write_ledger(
         data_root,
-        [(1, "initial_control_plane_metadata"), (2, "an_unknown_later_migration")],
+        [
+            (1, "initial_control_plane_metadata"),
+            (2, "device_identity_relationships"),
+            (SUPPORTED_SCHEMA_VERSION + 1, "an_unknown_later_migration"),
+        ],
     )
     with pytest.raises(ControlPlaneSchemaVersionError) as excinfo:
         ControlPlaneStore(data_root)
@@ -371,10 +381,10 @@ def test_a_gapped_sequence_is_refused(data_root, monkeypatch):
     monkeypatch.setattr(
         module,
         "MIGRATIONS",
-        MIGRATIONS + ((2, "second", ("CREATE TABLE t2 (id TEXT NOT NULL PRIMARY KEY) STRICT",)),),
+        MIGRATIONS + ((3, "third", ("CREATE TABLE t2 (id TEXT NOT NULL PRIMARY KEY) STRICT",)),),
     )
     # Ledger records 1 and 3 -- version 2 was never applied.
-    _write_ledger(data_root, [(1, "initial_control_plane_metadata"), (3, "second")])
+    _write_ledger(data_root, [(1, "initial_control_plane_metadata"), (3, "third")])
     with pytest.raises(ControlPlaneSchemaVersionError):
         ControlPlaneStore(data_root)
 
@@ -393,11 +403,11 @@ def test_an_out_of_order_foreign_ledger_is_refused(data_root, monkeypatch):
     monkeypatch.setattr(
         module,
         "MIGRATIONS",
-        MIGRATIONS + ((2, "second", ("CREATE TABLE t2 (id TEXT NOT NULL PRIMARY KEY) STRICT",)),),
+        MIGRATIONS + ((3, "third", ("CREATE TABLE t2 (id TEXT NOT NULL PRIMARY KEY) STRICT",)),),
     )
     _write_ledger(
         data_root,
-        [(2, "second"), (1, "initial_control_plane_metadata")],
+        [(3, "third"), (1, "initial_control_plane_metadata")],
         keyed=False,
     )
     with pytest.raises(ControlPlaneSchemaVersionError):
@@ -430,12 +440,13 @@ def test_a_valid_shorter_prefix_is_accepted_and_completed(data_root, monkeypatch
     monkeypatch.setattr(
         module,
         "MIGRATIONS",
-        MIGRATIONS + ((2, "second", ("CREATE TABLE t2 (id TEXT NOT NULL PRIMARY KEY) STRICT",)),),
+        MIGRATIONS + ((3, "third", ("CREATE TABLE t2 (id TEXT NOT NULL PRIMARY KEY) STRICT",)),),
     )
     with ControlPlaneStore(data_root) as store:
         assert store.applied_migrations() == [
             (1, "initial_control_plane_metadata"),
-            (2, "second"),
+            (2, "device_identity_relationships"),
+            (3, "third"),
         ]
 
 
@@ -846,7 +857,10 @@ def test_no_registry_table_exists(store):
 
 
 def test_schema_owns_no_forbidden_concept(store):
-    """AC-ST-3/AC-ST-5: proven against the real schema, not a maintained list."""
+    """AC-ST-3/AC-ST-5, extended by M8 §8 AC6: proven against the real schema,
+    not a maintained list. M8's relationship table adds "serial" and
+    "host_key" -- neither a device serial nor a host-key fingerprint may ever
+    be a column, only referenced opaquely via `producing_run_ref`."""
     forbidden_fragments = (
         "endpoint",
         "address",
@@ -866,6 +880,9 @@ def test_schema_owns_no_forbidden_concept(store):
         "backup_bytes",
         "cas_",
         "evidence_object",
+        "serial",
+        "host_key",
+        "fingerprint",
     )
     offenders = [
         f"{table}.{column}"

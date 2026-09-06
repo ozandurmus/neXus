@@ -59,7 +59,7 @@ STORE_FILENAME = "control_plane.db"
 
 #: Highest schema version this build understands. A database carrying a
 #: higher version is refused (§6.5 "never auto-upgrade downward").
-SUPPORTED_SCHEMA_VERSION = 1
+SUPPORTED_SCHEMA_VERSION = 2
 
 #: The frozen console job lifecycle (`console/jobs.py`, `CON.2`; bound as `X1`
 #: by the `M3` contract, which may add no member). Declared here as a literal
@@ -268,9 +268,59 @@ _MIGRATION_1_STATEMENTS = (
     """,
 )
 
+#: M8 §5 — device-identity relationship storage. A physical-`entity_id`-only
+#: (`device_id`, `entity_id`) association, referencing (never copying) the
+#: producing run's already-governed CP config evidence and the registry's own
+#: `updated_at` revision signal. Every vocabulary column is closed via CHECK;
+#: no endpoint, serial, host-key fingerprint or trust material is a column
+#: here (M4's existing forbidden-fragment column scan already covers this
+#: table generically -- see `tests/test_m4_control_plane_metadata_store.py`
+#: `test_schema_owns_no_forbidden_concept`).
+_MIGRATION_2_STATEMENTS = (
+    """
+    CREATE TABLE device_identity_relationships (
+        relationship_id         TEXT NOT NULL PRIMARY KEY,
+        device_id               TEXT NOT NULL,
+        entity_id               TEXT NOT NULL,
+        vendor_namespace        TEXT NOT NULL,
+        mapping_scope           TEXT NOT NULL,
+        producing_run_ref       TEXT NOT NULL,
+        registry_record_revision TEXT NOT NULL,
+        proof_type              TEXT NOT NULL,
+        proof_source            TEXT NOT NULL,
+        identity_derivation_contract_version TEXT NOT NULL,
+        identity_mapping_proven INTEGER NOT NULL,
+        observed_at_utc         TEXT NOT NULL,
+        state                   TEXT NOT NULL,
+        invalidation_reason     TEXT,
+        created_at_utc          TEXT NOT NULL,
+        updated_at_utc          TEXT NOT NULL,
+        CHECK (vendor_namespace IN ('checkpoint')),
+        CHECK (mapping_scope IN ('CLASS_0_CP_CONFIG_TARGET_SELECTION_ONLY')),
+        CHECK (proof_type IN ('first_contact_identity_gate_and_serial')),
+        CHECK (proof_source IN ('direct_device_read')),
+        CHECK (identity_mapping_proven IN (0, 1)),
+        CHECK (state IN ('ACTIVE', 'INVALIDATED', 'SUPERSEDED')),
+        CHECK (invalidation_reason IS NULL
+               OR invalidation_reason IN ('AMBIGUOUS_IDENTITY', 'SUPERSEDED'))
+    ) STRICT
+    """,
+    # At most one ACTIVE physical association per (device_id, vendor_namespace,
+    # mapping_scope) triple (§5) -- an engine invariant, not a race-prone
+    # read-then-write check. A second proof for the same triple with a
+    # different entity_id is refused by the typed write API before it can
+    # collide here (AMBIGUOUS_IDENTITY, §6), never a heuristic tie-break.
+    """
+    CREATE UNIQUE INDEX ux_device_identity_relationships_one_active_per_triple
+        ON device_identity_relationships (device_id, vendor_namespace, mapping_scope)
+        WHERE state = 'ACTIVE'
+    """,
+)
+
 #: ``(version, name, statements)``, strictly ascending and applied in order.
 MIGRATIONS: tuple[tuple[int, str, tuple[str, ...]], ...] = (
     (1, "initial_control_plane_metadata", _MIGRATION_1_STATEMENTS),
+    (2, "device_identity_relationships", _MIGRATION_2_STATEMENTS),
 )
 
 
