@@ -11,10 +11,10 @@ generated one-line timeline.
   onto `9a946fe`/PR #84's head). NAV lineage (`5a5a1f7`…`259874e`) unrewritten.
 - **Current build** (per `project/roadmap.json` `now_next.now`):
   `parallelize_full_regression_execution` (`DEV.TEST.1`) — test-execution
-  infrastructure only, replacing the serial GitHub Actions full-regression
-  suite (`11m56s`, run `34016204567`) with the locally-proven
-  `-n auto --dist worksteal`; see "Active build". No product/capability-state
-  change; authorizes no `M3` work. `now_next.next` stays `M3` throughout.
+  infrastructure only: replaces the serial GitHub Actions full-regression
+  suite (`11m56s`, run `34016204567`) with `-n auto --dist worksteal`, also
+  now PR-triggered; see "Active build". No product/capability-state change;
+  authorizes no `M3` work. `now_next.next` stays `M3` throughout.
   `op2_c_cp_clusterxl_adapter_scoping` stays `upcoming`, blocked on
   `DEPLOY.1`. `PCP.1` is complete — detail in `project/build_history.json`.
 - **OP.2.0 CLASS 2 architecture** (`docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md`):
@@ -56,26 +56,30 @@ test-enforced boundaries. Current numbers:
 ## Active build
 
 **`parallelize_full_regression_execution`** (`DEV.TEST.1`) — **IN PROGRESS**
-(local validation + workflow/doc/test edits complete; GitHub Actions
-`workflow_dispatch` proof on this branch/head still owed before merge — full
-detail in `project/build_history.json` head record). Root cause of the prior
-serial gate was a `scripts/render_uitest.py` module-rebind leak, already
-fixed (`try`/`finally` restore) and directly regression-tested regardless of
+(local validation + workflow/doc/test edits complete; GitHub Actions proof on
+this branch/head's exact PR still owed before merge — full detail in
+`project/build_history.json` head record). Root cause of the prior serial
+gate was a `scripts/render_uitest.py` module-rebind leak, already fixed
+(`try`/`finally` restore) and directly regression-tested regardless of
 worker/ordering (`tests/test_frontend_rendering_boundary.py::
 test_render_uitest_restores_the_builders_it_injects`). Selected topology: one
 `pytest-xdist` process (`-n auto --dist worksteal`), already proven locally
-and already the documented default elsewhere (`scripts/pytest_one_shot.ps1`,
-`requirements-dev.txt`) — one master process yields one aggregate exit code,
-so no worker's failure can be masked. No product/UI/registry/storage/
+and the documented default elsewhere (`scripts/pytest_one_shot.ps1`,
+`requirements-dev.txt`) — one aggregate exit code across every worker, so
+no worker's failure can be masked. **Trigger corrected too:**
+`workflow_dispatch` on a non-default branch is blocked by this session's
+token permissions (`403`); rather than require manual PO action,
+`full-regression`'s pull_request exclusion was permanently removed — it now
+runs on every pull_request too (concurrently with `validate`), giving
+automatic pre-merge full-suite proof. No product/UI/registry/storage/
 authorization change; authorizes no `M3` work.
 
 **Predecessor build, complete:** `nav_1_accessibility_closure` (`M2`) —
 **AUTOMATED_VALIDATED, MERGED** via PR #85 (merge commit
-`081a976a3e1cc16fb57af7f0c9aa0e0501a7625b`): closed `AC-A11Y-1`…`4`,
-confirmed `AC-A11Y-5` unregressed. `M0`/`M1` both complete before it — full
-detail in `project/build_history.json`. `left_vertical_product_navigation`
-stays `in_progress` (`availability_rule` pending, owned by `M10`+); no
-`D-NAV`/`PO-NAV` decision reopened by `M2` or `DEV.TEST.1`.
+`081a976a3e1cc16fb57af7f0c9aa0e0501a7625b`) — full detail in
+`project/build_history.json`. `left_vertical_product_navigation` stays
+`in_progress` (`availability_rule` pending, owned by `M10`+); no `D-NAV`/
+`PO-NAV` decision reopened by `M2` or `DEV.TEST.1`.
 
 ## `OP.0b.0` — FROZEN WITH REAL-ENV VALIDATION GATES
 
@@ -163,21 +167,19 @@ M2 targeted (navigation IA + M2 a11y + architecture convergence + frontend
   + grouped child + keyboard, both shells), group-label association
   (Devices/Operations/Administration), AC-A11Y-5 confirmed unregressed --
   zero console errors.
-Full parallel suite (M2, pre-merge): `py -m pytest -q -n auto
-  --dist worksteal` (4 workers) = 1958 passed, 23 skipped, 0 failed, 29.46s
-  wall-clock. Completely clean, no serial rerun. M1's uuid4 defect stays
-  fixed (merged via PR #84).
+Full parallel suite (M2, pre-merge): `py -m pytest -q -n auto --dist
+  worksteal` (4 workers) = 1958 passed, 23 skipped, 0 failed, 29.46s.
+  Completely clean, no serial rerun. M1's uuid4 defect stays fixed (PR #84).
 Post-merge CI on main (PR #85, run 34016204567, commit 081a976):
   full-regression SUCCESS -- privacy gate, project-state, build-history-index,
   full SERIAL suite (~11m56s, the pre-DEV.TEST.1 baseline) and whitespace
   check all success (detail: project/build_history.json
   nav_1_accessibility_closure).
 DEV.TEST.1 local re-validation (this branch): `python3 -m pytest -q -n auto
-  --dist worksteal` (4 CPUs) = 1957 passed, 24 skipped, 0 failed, 35.01s
-  wall-clock -- same 1981 collected total as the M2 baseline (one test's
-  skip/pass split differs by sandbox Chromium availability, not coverage).
-  GitHub Actions parallel full-regression run: see
-  project/build_history.json head record once terminal.
+  --dist worksteal` (4 CPUs) = 1957 passed, 24 skipped, 0 failed, 35.01s --
+  same 1981 collected total as the M2 baseline (skip/pass split differs by
+  sandbox Chromium availability, not coverage). GitHub Actions parallel
+  full-regression (now PR-triggered): see build_history.json head record.
 Repository privacy gate: PASS / 0 findings. metadata_warnings == [];
   build-history index --check clean; git diff --check clean.
 ```
@@ -193,5 +195,6 @@ design at this stage. Open before any production claim: OIDC/RBAC, trusted
 TLS/SSH in production, database role separation, report-only publication
 surface, secret management, off-host recovery custody with a restore drill,
 audit retention. `.github/workflows/validation.yml` is the deterministic CI
-gate (fast PR `validate` + `full-regression` on main push/dispatch); it runs
-no device, container or registry step.
+gate (fast PR `validate` + parallel `full-regression`, now on every
+pull_request/push/dispatch alike, `DEV.TEST.1`); it runs no device,
+container or registry step.

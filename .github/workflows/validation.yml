@@ -1,11 +1,19 @@
 # Deterministic validation gate.
 #
-# Risk-based split (DEV kaizen "fast PR CI"): a bounded PR pays for a fast
-# gate, not the ~11-minute full suite; the full suite runs as an integration
-# safety net on every push to main, plus on demand via workflow_dispatch.
-# This changes test PLACEMENT/FREQUENCY only — no check is weakened, hidden,
-# or made skippable, and no dependency/service/credential is added beyond
-# what the previous single-job version already used.
+# History: the original risk-based split (DEV kaizen "fast PR CI") ran a fast
+# `validate` gate on every pull_request and deferred the ~11-minute serial
+# full suite to push-to-main/workflow_dispatch only, because paying that cost
+# on every bounded PR was not affordable. DEV.TEST.1 (2026-09-06)
+# parallelized the full suite (`-n auto --dist worksteal`, target <=4
+# minutes cloud wall-clock) and removed that affordability constraint, so
+# `full-regression` now also runs on every pull_request -- a PR gets
+# pre-merge full-suite proof on its own exact head, not just the fast gate.
+# This is a permanent trigger correction, not a temporary workaround: the
+# PR/push split stays for `validate` (still the cheapest possible fast-fail
+# gate, still worth running first/separately), but `full-regression` is no
+# longer withheld from pull_request events now that it is fast enough to
+# afford there. No check is weakened, hidden, or made skippable, and no
+# dependency/service/credential is added beyond what already existed.
 name: validation
 
 on:
@@ -22,15 +30,16 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # FAST PR VALIDATION — runs on every pull_request. Cheap, high-value gates
-  # only: import sanity, the repository/privacy gate, project-state
-  # consistency, the build-history index, a small stable safety/regression
-  # smoke set, and the whitespace/conflict-marker check. Deliberately does
-  # NOT run the full pytest suite (see the `full-regression` job below).
-  # Job id kept as `validate` (unchanged from the previous single-job
-  # workflow) so an existing branch-protection required-status-check named
-  # `validate` keeps matching on pull_request events without repository
-  # settings needing to change.
+  # FAST PR VALIDATION — runs on every pull_request, alongside
+  # `full-regression` below (both run concurrently on the same PR event; this
+  # job is not a substitute for it any more, just the cheapest possible
+  # fast-fail signal). Cheap, high-value gates only: import sanity, the
+  # repository/privacy gate, project-state consistency, the build-history
+  # index, a small stable safety/regression smoke set, and the
+  # whitespace/conflict-marker check. Job id kept as `validate` (unchanged
+  # from the previous single-job workflow) so an existing branch-protection
+  # required-status-check named `validate` keeps matching on pull_request
+  # events without repository settings needing to change.
   validate:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
@@ -104,13 +113,16 @@ jobs:
         run: git diff --check 4b825dc642cb6eb9a060e54bf8d69288fbee4904 HEAD
         continue-on-error: true
 
-  # FULL INTEGRATION REGRESSION — the previous single-job gate. Runs as the
-  # post-merge integration safety net on every push to main, and on demand
-  # for any PR/branch that needs it before merge. DEV.TEST.1 (2026-09-06)
-  # parallelized the "Full test suite" step itself (see its own step comment)
-  # -- every other gate and this job's trigger semantics are unchanged.
+  # FULL INTEGRATION REGRESSION — the previous single-job gate. DEV.TEST.1
+  # (2026-09-06) parallelized the "Full test suite" step itself (see its own
+  # step comment) and, on the same evidence (fast enough now to afford this),
+  # removed the `if: github.event_name != 'pull_request'` guard that used to
+  # withhold this job from pull_request events -- it now runs on every
+  # pull_request (pre-merge proof on the PR's own exact head), every push to
+  # main (post-merge integration safety net) and workflow_dispatch (on
+  # demand). No `if` condition: it runs unconditionally on every event this
+  # workflow's `on:` block already triggers on.
   full-regression:
-    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 20
 

@@ -56,34 +56,55 @@ documentation/project-state files.
   already proven locally and already the default in
   `scripts/pytest_one_shot.ps1`/`requirements-dev.txt`. One master process
   yields one aggregate exit code across every worker.
-- **Changed**: `.github/workflows/validation.yml` (`full-regression` job's
-  "Full test suite" step, now parallel, plus a worker-topology visibility
-  step); `tests/test_ci_workflow_fast_pr_regression.py` (`FULL_SUITE_LINE`
-  + assertions updated to match); `docs/AI_DEVELOPMENT_PROTOCOL.md` ("Test
-  execution economy", "CI validation policy"), `AI_START_HERE.md`
-  (validation ladder), `CLAUDE.md` ("Test economy") — all now recommend the
-  parallel command as the default, with `-n0`/`-Serial` documented as an
-  explicit diagnostic override only.
-- **Preserved**: the PR-vs-push/dispatch trigger split, every other CI gate
-  (privacy, project-state consistency, build-history index, whitespace
-  check), and every targeted/subsystem test invocation that was already
-  serial (unaffected — this movement only touches the *full-suite*
-  invocation).
+- **Changed**: `.github/workflows/validation.yml` — `full-regression`
+  job's "Full test suite" step is now parallel (plus a worker-topology
+  visibility step), AND its `if: github.event_name != 'pull_request'` guard
+  is removed (see item 1 below — permanent trigger correction, not a
+  workaround); `tests/test_ci_workflow_fast_pr_regression.py`
+  (`FULL_SUITE_LINE` + assertions updated to match both changes, plus a new
+  test asserting `validate`/`full-regression` intentionally run together on
+  the same PR event); `docs/AI_DEVELOPMENT_PROTOCOL.md` ("Test execution
+  economy", "CI validation policy"), `AI_START_HERE.md` (validation ladder),
+  `CLAUDE.md` ("Test economy") — all now recommend the parallel command as
+  the default, with `-n0`/`-Serial` documented as an explicit diagnostic
+  override only.
+- **Preserved**: `validate` job unchanged (still the cheap PR fast-fail
+  gate); every other CI gate (privacy, project-state consistency,
+  build-history index, whitespace check); no `continue-on-error` added
+  anywhere new; every targeted/subsystem test invocation that was already
+  serial (unaffected).
 
 ## 4. Exact next action
 
-1. Push this branch, open a PR into `main`, and trigger the repository's
-   `workflow_dispatch` on this exact branch/head SHA to get real GitHub
-   Actions timing/topology/accounting evidence for the new parallel
-   `full-regression` job (a PR alone does not run it — the job's `if` guard
-   is `github.event_name != 'pull_request'`).
-2. Record that run's ID, conclusion, elapsed time, and test totals in
+1. **Trigger design corrected (2026-09-06, same session, PO-directed):**
+   attempting `workflow_dispatch` on this exact branch/head hit a hard
+   tooling blocker — the session's GitHub token/App installation returns
+   `403 Resource not accessible by integration` for `workflow_dispatch` on
+   any non-default branch (confirmed via both the GitHub MCP tool and a
+   direct REST call; works fine for `main`, fails for every other branch
+   tried). Rather than require a Product Owner to operate GitHub Actions
+   manually, the durable fix was applied instead: `full-regression` no
+   longer carries `if: github.event_name != 'pull_request'` — it now runs
+   unconditionally on every pull_request, push-to-main, and
+   workflow_dispatch event alike, alongside `validate`. This removes the
+   blocker permanently (a `pull_request` event always fires regardless of
+   token branch-write scope) and is a real design correction, not a
+   workaround: the original PR/push split existed only because the serial
+   suite was too slow to afford on every PR; now parallelized and fast
+   enough, withholding it from PRs was an obsolete policy.
+2. Push this workflow-trigger correction to PR #87. The resulting
+   `pull_request` (synchronize) event will run the new `full-regression` job
+   automatically on the PR's own exact head SHA — no manual dispatch needed.
+3. Verify that run: head SHA, workflow definition, parallel command, worker
+   count, collected-test accounting, duration, and terminal result.
+4. If green, record the evidence in
    `project/build_history.json`'s `parallelize_full_regression_execution`
-   record (currently a placeholder pending this evidence), compare against
-   the `11m56s` baseline (run `34016204567`), then merge only once green.
-3. After merge, sync local `main` and flip `now_next.now`'s status to
-   `automated_validated` alongside the roadmap `DEV.TEST` track's status.
-4. **Then**: `M3` (`nav_3_capability_state_vocabulary`) — capability-state
+   record (currently a placeholder), compare against the `11m56s` baseline
+   (run `34016204567`), push the final state update, confirm the updated
+   head stays green, then merge PR #87 and sync local `main`.
+5. Flip `now_next.now`'s status to `automated_validated` alongside the
+   roadmap `DEV.TEST` track's status once merged.
+6. **Then**: `M3` (`nav_3_capability_state_vocabulary`) — capability-state
    vocabulary + presentation contract. **New session.** `Sonnet 5, extended
    thinking (high)`. Do not begin it in the same session as this movement's
    close (out of scope for `DEV.TEST.1`).
