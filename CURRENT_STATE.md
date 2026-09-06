@@ -12,8 +12,9 @@ generated one-line timeline.
 - **Current build** (per `project/roadmap.json` `now_next.now`):
   `parallelize_full_regression_execution` (`DEV.TEST.1`) —
   **AUTOMATED_VALIDATED**: replaces the serial full-regression suite
-  (`11m56s`, run `34016204567`) with `-n auto --dist worksteal`, proven
-  green on push-to-main (`34020356372`, `4m36s`) — see "Active build". No
+  (`11m56s`, run `34016204567`) with `-n auto --dist worksteal`, dispatched
+  only via `workflow_dispatch` (final policy — see "Active build"; run
+  `34020356372`, `4m36s`, is one-time proof, not an automatic trigger). No
   product/capability-state change; authorizes no `M3` work. `now_next.next`
   stays `M3`. `op2_c_cp_clusterxl_adapter_scoping` stays `upcoming`,
   blocked on `DEPLOY.1`. `PCP.1` complete — build_history.json.
@@ -56,32 +57,32 @@ test-enforced boundaries. Current numbers:
 ## Active build
 
 **`parallelize_full_regression_execution`** (`DEV.TEST.1`) —
-**AUTOMATED_VALIDATED** via PR #87 + PR #88 (merge `6ca67cc`). Root cause of
-the prior serial gate: a `scripts/render_uitest.py` module-rebind leak,
-already fixed and regression-tested
+**AUTOMATED_VALIDATED**. Root cause of the prior serial gate: a
+`scripts/render_uitest.py` module-rebind leak, fixed and regression-tested
 (`tests/test_frontend_rendering_boundary.py::
 test_render_uitest_restores_the_builders_it_injects`). Topology: one
-`pytest-xdist` process (`-n auto --dist worksteal`). Trigger policy
-unchanged: `pull_request` = fast `validate` only, push/`workflow_dispatch` =
-parallel `full-regression`. **Post-merge incident (in-session misdiagnosis
-corrected):** every CI trigger returned a zero-job failing check suite
-after PR #87 merged, first wrongly blamed on an automation-identity
-limitation — actually a YAML syntax defect (a bare `: ` inside an unquoted
-f-string in "Report worker topology") breaking job scheduling under any
-trigger — fixed via PR #88, guarded by
-`test_workflow_yaml_parses` (`pyyaml` dev dependency). **Real cloud proof**
-(run `34020356372`, commit `6ca67cc`): `full-regression` SUCCESS, 4 workers,
-1944 passed/38 skipped/0 failed, `275.74s` (`4m36s`) vs `11m56s` serial
-(~61% faster) — ~36s above the 4-min ceiling; a small tail of slow tests
-(98% done by ~1min, last 2% taking ~3m41s) is the reported bottleneck, not a
-correctness gap. No product/UI/registry/storage/authorization change;
+`pytest-xdist` process (`-n auto --dist worksteal`). **Final trigger policy
+(Product Owner directed):** `pull_request` → `validate` only (automatic);
+`workflow_dispatch` → `full-regression` (on demand ONLY); no `push:`
+trigger at all (would otherwise produce an empty, zero-job run). Two
+earlier intermediate designs (auto on every PR; auto on push-to-main) were
+each evaluated and reverted before this final policy. **Post-merge
+incident (misdiagnosis corrected):** a YAML syntax defect (a bare `: `
+inside an unquoted f-string) briefly broke job scheduling under every
+trigger, initially misdiagnosed as an automation-identity limitation —
+fixed, guarded by `test_workflow_yaml_parses`. **Real cloud proof,
+preserved as one-time evidence only, not automatic-trigger authorization**
+(run `34020356372`): `full-regression` SUCCESS, 4 workers, 1944
+passed/38 skipped/0 failed, `275.74s` (`4m36s`) vs `11m56s` serial (~61%
+faster) — ~36s above the 4-min ceiling, a small slow-test tail identified
+as the bottleneck. No product/UI/registry/storage/authorization change;
 authorizes no `M3` work.
 
 **Predecessor build, complete:** `nav_1_accessibility_closure` (`M2`) —
-**AUTOMATED_VALIDATED, MERGED** via PR #85 (`081a976`) — full detail in
+**AUTOMATED_VALIDATED, MERGED** via PR #85 (`081a976`) — detail in
 `project/build_history.json`. `left_vertical_product_navigation` stays
-`in_progress` (`availability_rule` pending, `M10`+); no `D-NAV`/`PO-NAV`
-decision reopened by `M2` or `DEV.TEST.1`.
+`in_progress` (`availability_rule` pending); no `D-NAV`/`PO-NAV` decision
+reopened by `M2` or `DEV.TEST.1`.
 
 ## `OP.0b.0` — FROZEN WITH REAL-ENV VALIDATION GATES
 
@@ -172,15 +173,13 @@ Post-merge CI on main (PR #85, run 34016204567, commit 081a976):
   full-regression SUCCESS -- privacy gate, project-state, build-history-index,
   full SERIAL suite (~11m56s, pre-DEV.TEST.1 baseline) and whitespace check
   all success (detail: project/build_history.json nav_1_accessibility_closure).
-DEV.TEST.1 local (pre-merge evidence): `python3 -m pytest -q -n auto
-  --dist worksteal` (4 CPUs) = 1957 passed, 24 skipped, 0 failed, two
-  clean runs (32.27s, 35.01s), 1981 collected.
-DEV.TEST.1 GitHub Actions (real cloud proof, run 34020356372, commit
-  6ca67cc): full-regression SUCCESS -- `python -m pytest -q -n auto
-  --dist worksteal`, 4 workers, 1944 passed/38 skipped/0 failed, 275.74s
-  (4m36s) vs 11m56s serial (~61% faster); ~36s above the 4-min ceiling,
-  a small tail of slow tests identified as the bottleneck (not a
-  correctness gap -- 0 failed). Full detail: build_history.json head record.
+DEV.TEST.1 local (evidence): `python3 -m pytest -q -n auto --dist
+  worksteal` (4 CPUs) = 1957 passed, 24 skipped, 0 failed, two clean runs
+  (32.27s, 35.01s), 1981 collected.
+DEV.TEST.1 GitHub Actions (one-time proof, run 34020356372): full-regression
+  SUCCESS -- 4 workers, 1944 passed/38 skipped/0 failed, 275.74s (4m36s) vs
+  11m56s serial; ~36s above the 4-min ceiling, a slow-test tail is the
+  bottleneck (0 failed). Detail: build_history.json head record.
 Repository privacy gate: PASS / 0 findings. metadata_warnings == [];
   build-history index --check clean.
 ```
@@ -196,5 +195,6 @@ design at this stage. Open before any production claim: OIDC/RBAC, trusted
 TLS/SSH in production, database role separation, report-only publication
 surface, secret management, off-host recovery custody with a restore drill,
 audit retention. `.github/workflows/validation.yml` is the deterministic CI
-gate (fast PR `validate` + parallel `full-regression` on push/dispatch,
-`DEV.TEST.1`); it runs no device, container or registry step.
+gate (fast PR `validate`, automatic; parallel `full-regression` via
+`workflow_dispatch` only, `DEV.TEST.1`); it runs no device, container or
+registry step.
