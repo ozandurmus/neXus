@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "current_build": "pcp1_registry_uuid_call_count_test_defect_repair",
+  "current_build": "nav_1_accessibility_closure",
   "current_track": "PCP.x",
   "progress_contract": "Weighted acceptance-criterion completion. Percentages describe the declared roadmap, not calendar time or delivery ETA.",
   "tracks": [
@@ -140,28 +140,29 @@
   "now_next": {
     "horizon_contract": "NOW is exactly one build. NEXT is exactly one. Everything else is an `upcoming` row carrying its own true status: planned = AFTER, blocked = waiting on a named external gate, deferred = consciously postponed. `now.build` must equal the newest project/build_history.json record -- utils.project_plan enforces it.",
     "now": {
-      "build": "pcp1_registry_uuid_call_count_test_defect_repair",
-      "title": "M1 - PCP.1 Device Registry: repair two module-wide uuid4 call-count test defects",
-      "goal": "Repair two deterministic tests/test_pcp1_device_registry.py cases that monkeypatched module-wide utils.device_registry.uuid.uuid4 to prove no device_id is generated on the refused-duplicate and lock-contention paths, but incorrectly also counted the unrelated registry lock owner_token uuid4 call minted by _acquire_lock(). Fix: a single narrow production seam, utils/device_registry.py::_generate_device_id(), and both tests repointed at it. No frozen PCP.1 AC-1a..AC-15 behavior, persistence schema, endpoint normalization, duplicate/lifecycle behavior, CLI output, or public API changed.",
+      "build": "nav_1_accessibility_closure",
+      "title": "M2 -- NAV.1 accessibility closure, main integration, validation, PR + merge",
+      "goal": "Incorporate current main (M1, merged) into the NAV branch non-destructively, close AC-A11Y-1..4 against the frozen navigation contract, confirm AC-A11Y-5 still holds, validate the combined branch (targeted + full parallel suite), then open and merge the NAV pull request. Predecessors: M0 (docs/design/NAVIGATION_INFORMATION_ARCHITECTURE.md + docs/design/LOCAL_CONTROL_PLANE_RUNTIME_AND_ENROLLMENT.md, FROZEN -- PRODUCT OWNER APPROVED at reviewed head ba56d2b, 2026-09-05, no code) and M1 (PCP.1 registry uuid4 call-count test defect repair, AUTOMATED_VALIDATED, merged to main via PR #84, 2026-09-06) are both complete -- see project/build_history.json for their full records.",
       "status": "automated_validated",
       "started": "2026-09-06",
       "completed": "2026-09-06",
       "notes": [
-        "Repair complete 2026-09-06: see project/build_history.json head record (pcp1_registry_uuid_call_count_test_defect_repair) for the exact defect, fix, and full-suite validation evidence.",
-        "PCP.1 implementation history (2026-09-05, PR #83): all in-scope items from section 21 written and hand-verified directly (opaque/unique device_id, endpoint normalization incl. IPv6/port splitting, vendor-hint-independent duplicate detection across ENROLLED_UNVERIFIED/DISABLED, closed schema, credential_ref format-only validation, fail-closed corrupt-data handling, atomic tmp-then-replace persistence, lock contention fail-closed, owner-token instance-safe release, repository-root separation, support-bundle exclusion). AUTOMATED_VALIDATED claimed once PR #83's fast PR CI 'validate' check ran green on commit a149f5a264ebd44db005ad7f5bffa4012f8b30dd -- see project/build_history.json prior record for the exact CI evidence.",
-        "Explicit non-goals preserved: no enrollment providers/candidates/first-contact job or any device contact (PCP.2); no capability projection (PCP.3); no console/report UI or payload change (PCP.4); no job definitions or scheduler change (PCP.5); no PostgreSQL backend/schema/migration (pcp_storage_engine open); no console job-target vocabulary change; no credential storage or vault; no OP.2, RB.x or CON.x change.",
-        "AI_START_HERE.md section 22 item 4 amendment (deferred from the PCP.0 freeze) landed at PCP.1's close: the 'What this is' section acknowledges the persistent Device Registry foundation.",
-        "Recommended for closing/validating this build: Sonnet 5, normal reasoning -- deterministic test-defect repair against a frozen contract."
+        "Integration method: merge (non-destructive, --no-ff) of origin/main (9a946fe, PR #84 merge commit) into claude/left-nav-vertical-redesign-e673q6 at its pre-integration head 259874e. No rewrite, rebase, squash or selective cherry-pick of the frozen NAV review commits (5a5a1f7, ace9813, ba56d2b, 0ed293b, 009d945, 259874e). Merge base 310593e.",
+        "Only the four expected authority/state files conflicted (CURRENT_STATE.md, project/roadmap.json, project/build_history.json, docs/history/INDEX.md); every code/doc/test file auto-merged cleanly -- no product or architecture contradiction found.",
+        "Scope is exactly AC-A11Y-1..4 (accessible names, reduced motion, focus transfer, group-label association) plus confirming AC-A11Y-5 (comparison-table scroll containment) still holds. No new root/tab/module/state vocabulary, capability, enrollment, storage, job or authorization behavior introduced -- all reserved for M3 onward.",
+        "AUTOMATED_VALIDATED 2026-09-06: targeted suite 182 passed/1 skipped/0 failed (navigation IA + M2 a11y + architecture convergence + frontend composition + rendering boundary + both render harnesses + CON.1/CON.2 + PCP.1 registry); real-Chromium coverage for all four criteria plus console-shell parity and an AC-A11Y-5 regression confirmation; full parallel suite `py -m pytest -q -n auto --dist worksteal` (4 workers) 1958 passed/23 skipped/0 failed in 29.46s wall-clock, completely clean (no serial rerun needed). Privacy gate PASS/0; metadata_warnings == []; build-history index current; git diff --check clean. Full detail: project/build_history.json head record.",
+        "Recommended reasoning tier: Sonnet 5, normal -- deterministic accessibility implementation against a frozen contract, no new architecture decision."
       ]
     },
     "next": {
-      "build": "pcp_2_local_control_plane_sequencing_po_review",
-      "title": "PCP.2 sequencing decision - SQLite-backed local control-plane + UI-first enrollment (Product Owner review pending)",
-      "status": "blocked",
+      "build": "nav_3_capability_state_vocabulary",
+      "title": "M3 - Capability-state vocabulary + presentation contract",
+      "status": "planned",
       "notes": [
-        "Not started, not pre-authorized, and not pre-designed by the PCP.1 session per its own session-start scope: 'A future movement will decide the local interactive-console and SQLite storage evolution. Do not introduce either in PCP.1 and do not redesign PCP.1 in anticipation of them.'",
-        "Blocked on Product Owner review of the sequencing question itself -- whether/when a local interactive console ships, whether/when the filesystem-only registry evolves toward SQLite (docs/design/PRODUCT_CONTROL_PLANE_ARCHITECTURE.md section 10 pcp_storage_engine remains open), and how those two relate to the still-open pcp_console_registry_write_gate decision (section 19). PCP.1's own CLI verbs stay a bounded maintenance/bootstrap adapter, not the intended primary Operator Console experience, until this sequencing is decided.",
-        "No technical content pre-decided here: this row exists only to name the actual next decision point honestly, not to imply SQLite or a local console are already scoped."
+        "Per the frozen M1..M14 sequence (docs/design/LOCAL_CONTROL_PLANE_RUNTIME_AND_ENROLLMENT.md section 12/12.1): map the ten UX capability-state semantics onto canonical states, settle the two PO-NAV-7 concepts in their correct owning domains, and own the PO-NAV-6 colour/label contract. Must NOT alter the job lifecycle vocabulary (queued/running/succeeded/failed/blocked/skipped never gains a schedule/capability-policy member).",
+        "Prerequisite: M0 complete (it is). Independent of M4 (local control-plane metadata store) -- no storage/job/enrollment change in scope.",
+        "Recommended: Sonnet 5, extended thinking (high) -- vocabulary/contract work, not deterministic implementation against an existing frozen shape.",
+        "Detail: docs/design/LOCAL_CONTROL_PLANE_RUNTIME_AND_ENROLLMENT.md section 12 (M3 row) and section 12.1."
       ]
     },
     "upcoming": [
@@ -895,53 +896,88 @@
     {
       "id": "pcp_console_registry_write_gate",
       "area": "PCP.x Product Control Plane",
-      "status": "open",
-      "question": "May the loopback Operator Console accept ANY enrollment write -- manual (endpoint + credential profile reference, no device contact in-request) OR candidate-based (closed candidate_id[] from a prior discovery run) -- before DEPLOY.1A, given OPERATOR_CONSOLE_ARCHITECTURE.md section 4's wording ('the browser never transmits ... a hostname, an address') and the inventory_exclusions_management_ui_backend precedent (a persistent product-state write controlling which devices get polled waits for DEPLOY.1A)? A closed candidate id narrows what could be written, not whether a pre-DEPLOY.1A write is authorized -- both enrollment intents raise the same authorization question and are decided together, not separately.",
+      "status": "decided",
+      "question": "SCOPED 2026-09-05 to the LOCAL controlled loopback console profile only. May the local-loopback Operator Console accept an enrollment write -- manual (endpoint + opaque profile references) or candidate-based (closed candidate_id) -- before DEPLOY.1A? Server/production enrollment exposure is a separate decision (pcp_server_enrollment_exposure).",
       "options": [
         "(a) neither intent ships from the console before DEPLOY.1A -- both stay CLI-first through PCP.1/PCP.2",
         "(b) candidate-based enrollment only, permitted pre-DEPLOY.1A on the strength of the closed candidate id plus typed confirmation + audit record; manual entry still waits",
         "(c) both permitted pre-DEPLOY.1A with typed confirmation + audit record + mandatory strict first-contact trust preflight for any resulting device"
       ],
       "recommendation": "No pre-decision for either intent. Recommendation deferred to the security lead's reading of the exclusions precedent at the PCP.4 contract review. CLI-only enrollment in PCP.1/PCP.2 does not depend on this decision and proceeds regardless.",
-      "decide_by": "PCP.4 contract review",
-      "note": "The one genuine contradiction found by the 2026-09-05 reconciliation (docs/design/PRODUCT_CONTROL_PLANE_ARCHITECTURE.md section 18/19), widened the same day to cover both enrollment intents together -- no other control-plane element conflicts with a frozen law. Corrected at the 2026-09-05 PCP.0 freeze: this entry previously still pre-decided 'candidate-based enrollment now' in both of its options after that widening, which disagreed with the frozen document's actual no-pre-decision position; the options/recommendation above now match section 19 of the frozen document exactly, with no new decision content introduced."
+      "decide_by": "DECIDED 2026-09-05 at the M0 architecture freeze (was: PCP.4 contract review)",
+      "note": "Scoped deliberately: this row no longer carries the production question. Server/production enrollment exposure is tracked as pcp_server_enrollment_exposure and remains blocked on DEPLOY.1A OIDC/RBAC.",
+      "decided_on": "2026-09-05",
+      "decision": "DECIDED -- YES for BOTH manual and candidate-based enrollment, in the explicitly controlled loopback runtime profile ONLY, and only under every condition frozen in docs/design/LOCAL_CONTROL_PLANE_RUNTIME_AND_ENROLLMENT.md section 9.1 and CON.0 section 4.1/7.11: closed typed enrollment intent (endpoint, opaque credential-profile reference, opaque trust-profile reference, permitted tags, and/or a closed candidate id) and nothing else; no credential payload, command, argv, filesystem path or arbitrary transport field; no device I/O in the enrollment HTTP request; first contact as a separate queued CLASS 0 read-only job; strict transport trust before credential submission; positive-evidence vendor/identity; UNKNOWN/ambiguous/contradictory identity persists no registry record; operator review of the resolved identity; explicit confirmation; immutable audit durable before registry mutation; the one existing DeviceRegistry enrollment path with duplicate detection and the mutation-lock contract unchanged; NO automatic-write exemption for candidate-based enrollment. The permission is conditioned on the loopback binding itself and does not survive into server mode. This decision authorizes no code: movement M9 implements it."
+    },
+    {
+      "id": "pcp_server_enrollment_exposure",
+      "area": "Product Control Plane / deployment authorization",
+      "status": "open",
+      "question": "May console enrollment (manual or candidate-based) be exposed in non-loopback / server mode, i.e. beyond the explicitly controlled local profile decided in pcp_console_registry_write_gate?",
+      "options": [
+        "Blocked until DEPLOY.1A supplies real OIDC/RBAC authorization (current position)",
+        "Permitted earlier under some other compensating control (not proposed by any frozen contract)"
+      ],
+      "recommendation": "BLOCKED until DEPLOY.1A. CON.0 C-D5 and section 4.1 both condition the local enrollment permission on the loopback binding itself; server mode re-asks the question rather than inheriting the answer. DEPLOY.1A/M14 does not retroactively validate any local shortcut.",
+      "decide_by": "DEPLOY.1A OIDC/RBAC authorization boundary (CON.6 / DEPLOY.1 gate set)",
+      "note": "Created 2026-09-05 at the M0 architecture freeze so the local decision cannot be read as production authority. Splitting the two questions is the point of this row."
     },
     {
       "id": "pcp_auto_enrollment_policy",
       "area": "PCP.x Product Control Plane",
-      "status": "open",
+      "status": "decided",
       "question": "Should a future opt-in 'trusted management source auto-enrolls candidates' policy exist, and under what audit/allowlist?",
       "options": [
         "never -- explicit enrollment only",
         "opt-in per management source, audited, allowlisted, default off"
       ],
       "recommendation": "Not in the first slices; design only after PCP.2 shows real candidate volume. 'Everything discovered becomes authoritative inventory' is not the default architecture in any case.",
-      "decide_by": "PCP.2 closure"
+      "decide_by": "DECIDED 2026-09-05 at the M0 architecture freeze (was: PCP.2 closure)",
+      "decided_on": "2026-09-05",
+      "decision": "DECIDED FOR THE CURRENT HORIZON -- NO automatic persistent enrollment. No discovery source and no 'trusted management source' policy may automatically create a persistent enrolled device. Manual endpoint enrollment and candidate-based enrollment BOTH require positive identity evidence, operator preview and explicit confirmation. A future auto-enrollment capability is a separately gated capability that requires a NEW Product Owner decision; 'not now' is explicitly not a permanent prohibition, and this row must be reopened (or a successor created) rather than silently reinterpreted."
+    },
+    {
+      "id": "pcp_local_control_plane_storage",
+      "area": "Product Control Plane / local storage sequencing",
+      "status": "decided",
+      "decided_on": "2026-09-05",
+      "question": "For the approved LOCAL control-plane sequence, where does new control-plane metadata live, and does the PCP.1 Device Registry move with it?",
+      "options": [
+        "A -- registry stays filesystem JSON; SQLite backs only new local control-plane metadata",
+        "B -- one governed movement migrates registry plus job/control-plane metadata to SQLite",
+        "C -- no SQLite yet; continue with filesystem concerns for another slice"
+      ],
+      "recommendation": "Option A -- it does not reopen PCP.1's frozen section 21 contract, and puts the new engine where the new query-shaped requirements are.",
+      "decision": "DECIDED -- Option A. The PCP.1 Device Registry REMAINS on its frozen filesystem JSON backend. A new SQLite store owns ONLY new local control-plane metadata: job definitions once durable, job/run lifecycle records, schedules, capability projections, idempotency/submission metadata, control-plane runtime metadata. It owns NONE of: Device Registry rows, credential payloads, trust secrets, raw configuration, backup bytes, CAS evidence objects, OP.2 action authority. The registry stays authoritative at job admission and again immediately before execution; a disabled or unresolvable target causes refusal/abort before contact with the reason recorded, and no copied endpoint is ever retained as fallback authority. THIS IS NOT A PRODUCTION ENGINE SELECTION -- see pcp_storage_engine. A future Device Registry backend migration remains a governed storage movement that must prove semantic parity for normalization, duplicate handling, lifecycle, concurrency, lock/transaction behaviour, corrupt/unsupported-state failure and rollback. This decision authorizes no code: movement M4 implements it under its own contract.",
+      "decide_by": "DECIDED 2026-09-05 at the M0 architecture freeze"
     },
     {
       "id": "pcp_storage_engine",
       "area": "PCP.x Product Control Plane",
       "status": "open",
-      "question": "Which storage engine backs the Device Registry and typed job plane in production, against the criteria recorded in PRODUCT_CONTROL_PLANE_ARCHITECTURE.md section 10 (transactions, migrations, concurrent workers, uniqueness/locking, append/history, retention, structured evidence, deployment topology, backup/recovery of neXus itself, enterprise operation)?",
+      "question": "PRODUCTION-SCOPED. Which engine backs the registry/job plane IN PRODUCTION, against the section 10 criteria? (The local sequencing question is separate and decided -- see pcp_local_control_plane_storage.)",
       "options": [
         "extend the existing opt-in PostgreSQL evidence backend",
         "another engine chosen against the criteria",
         "filesystem-only until measured need"
       ],
-      "recommendation": "Defer. Keep the eighth evidence_backend concern filesystem-first; decide together with DEV.4.6 deployment migrations/roles. The existing opt-in Postgres path is a candidate, not a decision.",
-      "decide_by": "PCP.5 contract freeze"
+      "recommendation": "Still defer. The local Option A decision deliberately does NOT select the production engine, and SQLite is not proposed as one. Decide with DEV.4.6 migrations/roles.",
+      "decide_by": "PCP.5 contract freeze / DEV.4.6 migrations and database roles",
+      "note": "Kept OPEN at the 2026-09-05 M0 freeze. Do not read the local SQLite decision as a production engine selection."
     },
     {
       "id": "pcp_first_contact_trust_policy",
       "area": "PCP.x Product Control Plane",
-      "status": "open",
+      "status": "decided",
       "question": "Must the first-contact job for a MANUALLY enrolled endpoint require strict CP host-key / PAN CA trust even in the local development profile, so that real credentials are never presented to a mistyped or hostile endpoint?",
       "options": [
         "strict trust mandatory for any endpoint not corroborated by a management-plane candidate",
         "existing compat-mode default applies to manual endpoints too"
       ],
       "recommendation": "Strict trust mandatory for non-corroborated endpoints; compat mode stays available only for candidate-corroborated endpoints in the dev profile.",
-      "decide_by": "PCP.2 contract review"
+      "decide_by": "DECIDED 2026-09-05 at the M0 architecture freeze (was: PCP.2 contract review)",
+      "decided_on": "2026-09-05",
+      "decision": "DECIDED -- strict transport trust is REQUIRED before credentials are submitted to EVERY endpoint, including management-plane candidates. Candidate provenance may supply or select an approved trust profile; it may NOT waive SSH host-key or TLS trust. Prohibited: TOFU, automatic trust acceptance, certificate verification bypass, credential-first probing. The approved Check Point and Palo Alto trust-establishment mechanics are movement M8's implementation contract, over the existing transport seams (utils/cp_ssh_trust.py, utils/pan_tls_trust.py) -- no new credential or network path."
     }
   ]
 }

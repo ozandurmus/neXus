@@ -20,16 +20,6 @@
         </div>
     </div>
 
-    <nav class="module-nav" aria-label="Primary modules">
-        <button id="overviewNav" class="module-nav-item active" type="button" data-module="overview">Overview</button>
-        <button id="inventoryNav" class="module-nav-item" type="button" data-module="inventory">Network Inventory</button>
-        <button id="configurationNav" class="module-nav-item" type="button" data-module="configuration">Configuration</button>
-        <button id="complianceNav" class="module-nav-item" type="button" data-module="compliance">Compliance</button>
-        <button id="discoveryNav" class="module-nav-item" type="button" data-module="discovery">Discovery</button>
-        <button id="failoverNav" class="module-nav-item" type="button" data-module="failover">Failover</button>
-        <button id="exclusionsNav" class="module-nav-item" type="button" data-module="exclusions">Exclusions</button>
-        <button id="projectPlanNav" class="module-nav-item" type="button" data-module="project-plan">Project Plan</button>
-    </nav>
 
     <div class="controls">
         <div id="inventoryTopControls" class="context-controls" hidden>
@@ -61,6 +51,12 @@
         ></button>
     </div>
 </header>
+
+<div class="app-body">
+
+<nav class="primary-nav" data-primary-nav aria-label="Primary navigation"></nav>
+
+<div class="app-canvas">
 
 <section id="overviewModule" class="app-module active" data-module-panel="overview">
     <main class="overview-shell">
@@ -216,15 +212,7 @@
                 </div>
             </section>
 
-            <nav class="config-tabs" aria-label="Configuration views">
-                <button id="configOverviewTab" class="config-tab active" type="button" data-config-tab="overview">Overview</button>
-                <button id="configCurrentTab" class="config-tab" type="button" data-config-tab="current">Configuration</button>
-                <button id="configAlignmentTab" class="config-tab" type="button" data-config-tab="alignment">Alignment</button>
-                <button id="configPolicyTab" class="config-tab" type="button" data-config-tab="policy">Policy &amp; Objects</button>
-                <button id="configHistoryTab" class="config-tab" type="button" data-config-tab="history">History</button>
-                <button id="configEvidenceTab" class="config-tab" type="button" data-config-tab="evidence">Evidence</button>
-                <button id="configBackupTab" class="config-tab" type="button" data-config-tab="backup">Backup</button>
-            </nav>
+            <nav class="config-tabs" data-device-tabs aria-label="Device views"></nav>
 
             <section class="config-content">
                 <div id="configOverviewPanel" class="config-panel active"></div>
@@ -516,6 +504,9 @@
         </section>
     </main>
 </section>
+
+</div>
+</div>
 
 <script>
 window.SECURITYEXPERT_MODE = "static";

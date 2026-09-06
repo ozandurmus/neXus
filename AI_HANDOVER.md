@@ -16,94 +16,123 @@ doc. Prior versions are in git history.
 
 ## 1. Snapshot
 
-- Date: 2026-09-05. Branch: `claude/pcp1-device-registry-gqp7s2`, built
-  directly on `origin/main` at `c486a1c49d5968ea16ff42de2509bc305ea8362c`
-  (merged PR #82, the `PCP.0` freeze) — `main` had not advanced further.
-- Build: `pcp_1_device_registry_manual_enrollment_foundation` (`PCP.1`) —
-  **AUTOMATED_VALIDATED**. This sandbox has no pytest/lxml/paramiko; every
-  AC was hand-verified directly, then confirmed by PR #83's fast PR CI
-  `validate` check running the real suite green on commit `a149f5a`.
-- Implements `docs/design/PRODUCT_CONTROL_PLANE_ARCHITECTURE.md` §21
-  exactly as frozen — no reinterpretation, no weakening, no expansion.
-- PR #83 opened to `main`, CI green, `mergeable_state: clean`, no reviews
-  or comments pending. Merging next in this same session.
+- Date: 2026-09-06. Branch `claude/left-nav-vertical-redesign-e673q6`,
+  incorporates `origin/main` at `9a946fe` (PR #84, M1) via a non-destructive
+  `--no-ff` merge. NAV review lineage (`5a5a1f7`..`259874e`) preserved
+  unrewritten. PR from this branch into `main` not yet opened at the point
+  this file was last written this session — see "Exact next action".
+- Build: `nav_1_accessibility_closure` (`M2`) — **AUTOMATED_VALIDATED**:
+  `AC-A11Y-1`..`4` closed and validated on this branch; `AC-A11Y-5` confirmed
+  unregressed. Predecessors both complete: `M0` (architecture FROZEN,
+  reviewed head `ba56d2b`) and `M1` (PCP.1 uuid4 test-defect repair,
+  merged via PR #84).
+- **Validated ≠ merged.** The NAV.1 prototype is not delivered/mergeable-complete
+  until this branch's PR actually lands on `main` — see `project/feature_registry.json`
+  and `tests/test_navigation_information_architecture.py`'s guard 2.
 
-## 2. What changed this session
+## 2. What is frozen (unchanged by M2)
 
-- **`utils/device_registry.py`** (new): `DeviceRecord` (closed dataclass),
-  `DeviceRegistry.enroll/list/disable`, endpoint normalization (no DNS
-  resolution, an explicit port split out and compared as a separate
-  literal field), vendor-hint-/lifecycle-independent duplicate detection,
-  fail-closed corrupt-data handling (whole-document, not row-by-row), and
-  the registry mutation lock (`O_CREAT|O_EXCL`, `owner_token`
-  instance-safe release — never a bare unlink).
-- **`utils/evidence_backend.py`**: added the eighth concern,
-  `DeviceRegistryBackend` (abstract) + `FilesystemDeviceRegistryBackend`
-  (dumb `load_raw`/`save_raw`, same split as the other seven) +
-  `select_device_registry_backend` (raises on `postgres` — no
-  implementation exists; `pcp_storage_engine` stays open).
-- **`application/cli.py`**: `--registry-enroll` (`--registry-endpoint`,
-  `--registry-vendor-hint`, `--registry-credential-profile`,
-  `--registry-tag`), `--registry-list` (`--show-endpoints`),
-  `--registry-disable <device_id>` — mode-exclusive with every existing
-  mode, dispatched in Phase D (no vendor import, no credential
-  resolution, before `services.build_collection_services`).
-- **`application/workflows/registry.py`** (new): thin CLI-intent dispatch
-  only; calls `utils/device_registry.py` for all business logic.
-- **`tests/test_pcp1_device_registry.py`** (new): AC-1a..AC-15, including
-  a deterministic lock-contention/instance-safe-release technique (direct
-  calls to the module's private lock primitives, not timing/threads) per
-  section 21's own validation-ladder note that the exact technique is an
-  implementation detail.
-- **Docs**: `docs/design/PRODUCT_CONTROL_PLANE_ARCHITECTURE.md` §21 status
-  line (IMPLEMENTED); `AI_START_HERE.md` CLI table + directory map row +
-  the deferred §22 item 4 "What this is" sentence (now applied, since a
-  persistent registry actually exists); `docs/ARCHITECTURE.md` new §7A;
-  `PRIVACY_AND_DATA_HANDLING.md` CLASS 2 line for the registry + lock
-  files.
-- **State**: `project/roadmap.json` (`now`/`next` rotated; `current_build`
-  updated), `project/feature_registry.json` (all five
-  `device_registry_enrollment_foundation` criteria → `done`, feature
-  status → `in_progress`), `project/build_history.json` (new head
-  record), `docs/history/INDEX.md` (regenerated).
+- **`docs/design/NAVIGATION_INFORMATION_ARCHITECTURE.md`** — FROZEN — PRODUCT
+  OWNER APPROVED. Fifteen `D-NAV` decisions, **no operative row provisional**;
+  three-layer IA; the four-predicate capability model; the capability-state
+  presentation matrix over existing canonical states; the logical-entity-first
+  workspace; the preservation, shell-parity and accessibility contracts; the
+  eight `PO-NAV` decisions; and **§19 acceptance criteria**
+  (`AC-NAV-*`, `AC-WS-*`, `AC-DIF-*`, `AC-SH-*`, `AC-A11Y-*`).
+- **`docs/design/LOCAL_CONTROL_PLANE_RUNTIME_AND_ENROLLMENT.md`** — FROZEN.
+  Runtime lifecycle, background typed jobs, device-targeted execution, local
+  storage **Option A** with its ownership boundary, credential/trust
+  references, UI-first enrollment under **seventeen** conditions, the
+  `M1`…`M14` sequence with §12.1 clarifications, and **§15 acceptance
+  criteria** (`AC-RT-*`, `AC-TGT-*`, `AC-ST-*`, `AC-EN-*`).
+- **`docs/design/research/NSPM_NAVIGATION_BENCHMARK.md`** — deliberately **not**
+  a frozen contract, unchanged.
+- No `D-NAV`/`PO-NAV` decision reopened by M2. No parent-contract amendment
+  beyond M0's own (`CON.0` §4.1/§7.11, `PCP.0` §19/§10/§20.1) — M2 touched none
+  of them.
 
-## 3. Exact next action
+## 3. What M2 actually did
 
-1. This state-update commit (flipping `build_history`/`roadmap` to
-   `automated_validated` with the CI evidence) still needs to be pushed
-   and merged into PR #83 alongside the implementation commit.
-2. Merge once CI is green on the updated head and conflict-free; sync
-   local `main` to `origin/main`; report the exact merge commit.
-3. Do **not** start `PCP.2`, any SQLite/local-console storage evolution,
-   or an Add Device UI. The actual next movement
-   (`pcp_2_local_control_plane_sequencing_po_review`) is a Product Owner
-   decision on sequencing, not yet made — see `project/roadmap.json`
-   `now_next.next`.
+- **Integration:** `--no-ff` merge of `origin/main` (`9a946fe`) into this
+  branch at pre-integration head `259874e`. Only the four expected
+  authority/state files conflicted (`CURRENT_STATE.md`, `project/roadmap.json`,
+  `project/build_history.json`, `docs/history/INDEX.md`); every code/doc/test
+  file auto-merged cleanly — no product/architecture contradiction.
+- **`AC-A11Y-1`** — every rail button (root link, grouped child, group toggle)
+  now carries an explicit `aria-label` matching its visible label, independent
+  of `.nav-label`'s icon-only-mode visibility; `title` stays a supplementary
+  tooltip only.
+- **`AC-A11Y-2`** — a `prefers-reduced-motion: reduce` media query zeroes the
+  two transitions the prototype actually introduces (`.primary-nav` rail
+  width, `.nav-chevron` rotation); nothing else touched.
+- **`AC-A11Y-3`** — `switchModule()` gained an opt-in `moveFocus` option. Every
+  genuine user-triggered navigation call site passes it, moving focus to the
+  activated panel's own `<h1>` (`tabindex="-1"`, so it does not join the
+  ordinary tab order). The passive initial render and console payload
+  refreshes (both call `switchModule()` via `initializeReport()` with no
+  options) never steal focus; neither does a fresh load restoring a route
+  from its hash.
+- **`AC-A11Y-4`** — each group's `<ul class="nav-children">` carries
+  `role="group"` + `aria-labelledby` pointing at its own toggle button,
+  surviving both rail states. Proved for Devices, Operations, Administration
+  (plus the console-only Jobs group).
+- **`AC-A11Y-5`** — confirmed unregressed (not owned by M2, but merge-blocking):
+  the interface matrix still overflows only its own `.table-container` at a
+  narrow viewport; the page body never scrolls horizontally.
+- New `tests/test_m2_nav_accessibility_closure.py` — real-Chromium coverage
+  for all five, computed accessible name/role via Playwright's `get_by_role`
+  (never a source-string search), covering both the exported-report and
+  console shells.
 
-## 4. Test delta
+## 4. Exact next action
 
-- Prior baseline `1825 passed / 24 skipped / 0 failed` carried forward,
-  **not re-run** by this session (no pytest/lxml/paramiko in this
-  sandbox, reported per `CLAUDE.md`, not bootstrapped).
-- New `tests/test_pcp1_device_registry.py` added and hand-verified via ad
-  hoc Python scripts against the real module/CLI code (not a substitute
-  for pytest — see `project/build_history.json` head record for the full
-  list of what was checked this way).
-- `utils.project_plan.build_project_plan_payload()['metadata_warnings'] ==
-  []`; `scripts/build_history_index.py --check` clean; `git diff --check`
-  clean; repository privacy gate re-run directly: **PASS / 0 findings,
-  487 files scanned**.
-- Fast PR CI (`validate` check) ran green on commit `a149f5a264ebd44db005ad7f5bffa4012f8b30dd`
-  (https://github.com/ozandurmus/neXus/actions/runs/33979500386/job/101342049427);
-  `full-regression` skipped as designed (PR-only trigger is main
-  push/dispatch).
+1. Push this branch; open a pull request into `main`.
+2. Inspect CI on the PR (do not assume green); resolve only in-scope failures.
+3. Merge once the PR is mergeable and required checks are green.
+4. Sync local `main` to the resulting `origin/main`; record the exact merge
+   commit in `project/build_history.json`/`CURRENT_STATE.md` if not already
+   done pre-merge, and flip `project/feature_registry.json`'s
+   `left_vertical_product_navigation.status` from `in_progress` to `done`
+   only once the merge has actually happened.
+5. Do **not** start `M3` (capability-state vocabulary) in this session — that
+   is the correctly-derived next movement, but a new session's own
+   authorization.
 
-## 5. New risks
+## 5. Test delta
 
-- `pcp_console_registry_write_gate` remains open, untouched by this
-  build — still decided for neither manual nor candidate-based
-  enrollment intents.
-- The next movement (local interactive console + SQLite storage
-  evolution) stays explicitly not started, not designed, and not
-  pre-authorized by this session; it needs a Product Owner sequencing
-  decision first (`project/roadmap.json` `now_next.next`).
+- Targeted: `tests/test_navigation_information_architecture.py` +
+  `tests/test_m2_nav_accessibility_closure.py` +
+  `tests/test_architecture_convergence.py` +
+  `tests/test_frontend_module_composition.py` +
+  `tests/test_frontend_rendering_boundary.py` + both render harnesses +
+  `tests/test_con1_operator_console_read_only.py` +
+  `tests/test_con2_console_job_engine.py` +
+  `tests/test_pcp1_device_registry.py` — **182 passed, 1 skipped, 0 failed**.
+- Full parallel suite: `py -m pytest -q -n auto --dist worksteal` (4 workers,
+  `nproc`-detected) — **1958 passed, 23 skipped, 0 failed**, wall-clock
+  **29.46s**. Completely clean; no serial rerun performed (none needed).
+- `metadata_warnings == []`; build-history index current; privacy gate
+  PASS / 0 findings; `git diff --check` clean.
+- Two pre-existing tests corrected as a direct consequence of this movement's
+  own legitimate changes (not unrelated/flaky): the D-NAV9 anti-RBAC guard's
+  forbidden-term scan false-positived on the new ARIA `role="group"`
+  attribute (narrowed to exclude that one literal accessibility semantic);
+  the frontend top-level function-count floor moved 196 → 197 for the new
+  `navigationFocusActivePanelHeading` helper. Guard 2
+  (`test_no_source_claims_the_navigation_prototype_is_implementation_complete`)
+  updated to expect `accessibility_closure: done` while still asserting the
+  overall feature `status != "done"` until the PR merges.
+
+## 6. New risks / notes forward
+
+- **Validated ≠ merged.** Everything above is proven on this branch; nothing
+  is claimed about `main` until the PR actually merges — see step 4 above.
+- **`M5` is still the critical path.** Every collection job type is still
+  `target_mode="none"`; plane-wide-then-filter must never be recorded as
+  device-targeted. Untouched by M2.
+- **The local enrollment permission is conditioned on the loopback binding
+  itself.** `M14` does not retroactively validate it; server exposure is a
+  separate open decision. Untouched by M2.
+- **SQLite is local-only.** `pcp_storage_engine` stays open. Untouched by M2.
+- No new root/tab/module/state vocabulary, capability, enrollment, storage,
+  job or authorization behavior was introduced. No visual redesign.

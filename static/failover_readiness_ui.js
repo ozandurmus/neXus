@@ -84,7 +84,7 @@ function renderFailoverModule() {
                 : '';
             return `
                 <tr${isChild ? ' class="failover-child-row"' : ''}>
-                    <td${isChild ? ' style="padding-left:2rem"' : ''}>${isChild ? '<span class="eyebrow">Virtual System</span> ' : ''}${label}${contextLine}</td>
+                    <td${isChild ? ' class="failover-child-cell"' : ''}>${isChild ? '<span class="eyebrow">Virtual System</span> ' : ''}${label}${contextLine}</td>
                     <td>${escapeHtml(unitTypeLabels[unit.unit_type] || unit.unit_type)}</td>
                     <td>${escapeHtml(unit.vendor)}</td>
                     <td>${escapeHtml((unit.members || []).join(", "))}</td>

@@ -1,0 +1,726 @@
+# Local control-plane runtime, storage and UI-first enrollment
+
+## Status
+
+**FROZEN — PRODUCT OWNER APPROVED, 2026-09-05.** Reviewed branch head
+`ba56d2b` on `claude/left-nav-vertical-redesign-e673q6`.
+
+Architecture and sequencing only. **The freeze authorizes no code**: no
+database, no migration, no enrollment endpoint or route, no credential store,
+no collector change, no device contact, no production wiring. **`M1`…`M14`
+remain separately authorized, bounded movements** (§12/§12.1) — freezing this
+contract is not a go-ahead for any of them. Deferred detail is
+**implementation-contract work inside a frozen direction**, not unresolved
+architecture: exact SQLite schema at `M4`, exact vendor trust mechanics at
+`M8`, exact enrollment API schemas at `M9`, exact domain-specific state names
+at `M3`.
+
+| | |
+| --- | --- |
+| **Movement** | `ARCHITECTURE`, serving the roadmap row `pcp_2_local_control_plane_sequencing_po_review` |
+| **Revision** | **3 — 2026-09-05, FROZEN.** Revision 2 recorded the Product Owner's decisions on the enrollment write gate (§9), first-contact trust (§9.3), auto-enrollment (§9.4), storage sequencing (§6.4) and the movement order (§12). Revision 3 freezes them and applies the `CON.0`/`PCP.0` amendments |
+| **Companion contract** | `docs/design/NAVIGATION_INFORMATION_ARCHITECTURE.md` (**FROZEN**, same date and head) — navigation, entity workspace, capability-state presentation |
+| **Design parent** | `docs/design/PRODUCT_CONTROL_PLANE_ARCHITECTURE.md` (`PCP.0`, FROZEN) — narrowly **amended** at this freeze to record the approved decisions (§9.2 `A3`…`A6`); every unrelated frozen law preserved |
+| **Also amended** | `docs/design/OPERATOR_CONSOLE_ARCHITECTURE.md` (`CON.0`) §4 (new §4.1) and §7 (new rule 11) — the enrollment intent carve-out (§9.2 `A1`/`A2`) |
+| **Preserves unchanged** | Everything in `CON.0` and `PCP.0` not named above, including `CON.0` §3/§6/§9/§10 in full and `PCP.0` §21 in full (`PCP.1`'s frozen registry contract untouched); `OP.2.0` P1–P18; `RB.x` incl. `D3`/`D4`; `utils/action_taxonomy.py`; the admission coordinator and the vendor budget of 1 |
+| **Decision status** | §13.1 lists what is frozen; §13.2 lists the deferred implementation contracts and the genuinely separate future decisions |
+
+---
+
+## 1. The operator experience being designed
+
+The Product Owner's target, verbatim in intent:
+
+> Enrol a device once. Keep the local console running. Select a registered
+> device or logical entity. Ask for a collection or another typed job. Watch it
+> queue, run, finish or fail. See the refreshed evidence. Later, give different
+> devices and capabilities different schedules.
+
+Normal product operation must not mean repeatedly starting `main.py`.
+
+This is a **local, controlled development/pilot architecture**. It is not a
+production deployment and must not be blocked merely because the production
+server is unavailable — while equally, nothing here may quietly become
+production authorization (§11).
+
+---
+
+## 2. What already exists — the honest baseline
+
+The single most useful finding of this review: **most of the runtime the
+Product Owner is asking for is already shipped.** The gap is narrower and more
+specific than "we need a local control plane".
+
+| Capability | Status today | Where |
+| --- | --- | --- |
+| Long-running local service | **SHIPPED** — `py main.py --console` runs a loopback ASGI app until stopped | `console/server.py::run_console` (uvicorn), `console/app.py` |
+| Authenticated, cookieless local access | **SHIPPED** — per-launch bearer token in the URL fragment | `CON.0` §7.2, `console/auth.py` |
+| Typed job submission from the browser | **SHIPPED** — `POST /api/jobs {job_type, targets[]}` against a closed source registry | `console/registry.py::JOB_REGISTRY`, `console/app.py` |
+| Durable job records + lifecycle | **SHIPPED** — `queued → running → succeeded/failed/blocked/skipped`, audit-before-action | `console/jobs.py` |
+| Live job state to the UI | **SHIPPED** — SSE over a bearer-authenticated `fetch` stream | `console/app.py`, `console_actions.js::_consoleWatchJob` |
+| Single-worker execution through the one orchestration path | **SHIPPED** | `console/runner.py`, `utils/collection_executor.py` |
+| Crash reconciliation | **SHIPPED** — orphaned `running` records swept to `failed`/`console_restarted` | `console/jobs.py::sweep_orphaned_running` |
+| Persistent device registry | **SHIPPED (CLI only)** | `utils/device_registry.py`, `PCP.1` |
+| Storage seam for a future engine | **SHIPPED** — eighth `evidence_backend` concern | `utils/evidence_backend.py::DeviceRegistryBackend` |
+| Evidence refresh visible in the UI | **SHIPPED** — `/api/payloads` re-read + `initializeReport()` | `console_actions.js` |
+| **Device-targeted collection** | **MISSING** | every collection job type is `target_mode="none"` — plane-wide by design |
+| **Registry-keyed job targets** | **MISSING** — targets resolve against `unified.json` entity ids, not `device_id` | `CON.0` §4 |
+| **Enrollment from the browser** | **MISSING, but DECIDED in direction** — `pcp_console_registry_write_gate` approved for the local loopback profile under §9.1's conditions; no code exists until `M9` | §9 |
+| **Per-device / per-capability schedules** | **MISSING** | `data/state/scheduler_policy.json` is global and default-disabled |
+| **Capability projection per device** | **MISSING** | `PCP.3` |
+
+**Therefore the work is not "build a local control plane".** It is, in order:
+(1) give collectors a target-selection seam; (2) key job targets on the
+registry; (3) decide and add the enrollment path; (4) add per-device schedules.
+Everything else is reuse.
+
+---
+
+## 3. Runtime shape
+
+### 3.1 One service, no second console
+
+```mermaid
+flowchart TB
+  B["Browser (loopback, bearer token)"]
+  A["Console ASGI app<br/>console/app.py"]
+  Q["Job store (durable)<br/>console/jobs.py"]
+  R["Single-worker runner<br/>console/runner.py"]
+  C["Admission coordinator<br/>per-endpoint lock · vendor budget 1"]
+  M["main() orchestration<br/>fixed argv templates"]
+  D["Collectors / adapters"]
+  E["Evidence stores · CAS · LKG · projections"]
+  B -->|typed intent| A
+  A -->|persist queued| Q
+  A -.->|never| D
+  Q --> R --> C --> M --> D --> E
+  E -->|/api/payloads| B
+```
+
+`console/app.py` **never** contacts a device. It writes a `queued` record and
+returns. This is `CON.0` §7.9 (audit before action) and is the rule that keeps
+HTTP request handlers free of long-running device I/O.
+
+### 3.2 Process lifecycle
+
+| Property | Contract |
+| --- | --- |
+| Start | `py main.py --console [--console-port N]`; unchanged |
+| Binding | `127.0.0.1` only; changing it is a `DEPLOY.1A`-class decision (`C-D5`), not a flag |
+| Lifetime | runs until the operator stops it; **no daemonization, no service installer, no auto-start** in this architecture |
+| Restart | on start, sweep orphaned `running` records to `failed`/`console_restarted`; never silently resume a device action |
+| Single instance | one control-plane writer per RuntimeRoot (§6.5); a second instance must fail closed, not race |
+| Scheduler | the console **is not** the scheduler process (`C5-2`); if a scheduled evaluator is later hosted in it, that is its own movement and its own gate |
+| Shutdown | in-flight job marked `failed`/`console_restarted` on next start; **never** marked `succeeded` |
+
+### 3.3 Report vs console
+
+Unchanged from `CON.0` §1/§6 and the navigation contract §12: the exported report
+is a portable, action-free evidence artifact; the console is the only
+interactive surface. **No second console is proposed anywhere in this
+document.**
+
+---
+
+## 4. Background typed jobs
+
+Rules, all of which the shipped engine already satisfies except where noted:
+
+1. **No long-running device contact inside an HTTP request.** Submit → persist
+   → return. The browser polls or streams.
+2. **Durable lifecycle before execution.** `queued` reaches storage before the
+   runner may start (`CON.0` §7.9).
+3. **Execution through the existing runner and admission coordinator only.** One
+   orchestration path; no second path (`CON.2` C2-2).
+4. **Progress by polling or SSE**, carrying **state transitions only** — never
+   collector output (`C2-10`).
+5. **Auditable outcome + evidence reference.** Job records stay identity-lean:
+   target reference, type, timing, outcome, run reference. No credential, no
+   management address, no raw device output, no backup bytes (`CON.0` §7.8).
+6. **Safe restart.** §3.2.
+7. **Never turn an arbitrary command into a job payload.** The registry is a
+   module-level constant reviewed as source (`CON.0` §4).
+8. **Retry is a new job**, never a mutation of a historical outcome. A job-plane
+   retry/backoff policy is class 0 only and is **never** inherited by
+   `utils/operate/` (`PCP.0` §9; `OP.2` no-blind-retry).
+
+---
+
+## 5. Device-targeted execution
+
+The central technical gap, and the place where a shortcut would be a real
+safety regression.
+
+| Rule | Consequence |
+| --- | --- |
+| Targets are **opaque `device_id`** (registry) or a canonical logical-entity id — never a hostname, address, credential or command | `CON.0` §4 preserved; identity law preserved |
+| Endpoint, credential and trust are resolved **server-side, at the authorized execution stage** | nothing device-addressable crosses the wire |
+| An unsupported target selection is **refused at admission, before any device is contacted** | fail-closed; the missing seam is the refusal reason |
+| **A plane-wide run must never be relabelled as a device-targeted job** | running the whole plane and filtering the result contacts every device on the plane — including devices outside the requested set and devices the registry does not know — while an audit record naming only the requested ids would misrepresent it (`PCP.0` §9, verbatim) |
+| Explicitly plane-wide workflows stay **honestly plane-wide** until they gain real target-selection seams | today that is every `target_mode="none"` job type |
+| Aggregate contact per endpoint stays bounded by the admission coordinator and the vendor budget of 1 | per-device cadences must not multiply device contact |
+
+**Current reality, stated plainly:** `JOB_REGISTRY` contains six `read`-class
+types of which only `recovery_attest_cp` takes `entity_ids`; every inventory and
+configuration refresh is `target_mode="none"`. Per-device collection therefore
+**cannot** be offered honestly until the collector seams exist (`PCP.6`). Until
+then the correct UI is "refresh this plane", not "refresh this device".
+
+---
+
+## 6. Storage — the SQLite question
+
+### 6.1 Environment facts (availability, not selection)
+
+Supplied by the Product Owner: `sqlite3` 3.45.3, `pytest` 9.1.1, `lxml` 6.1.2,
+`paramiko` 4.0.0, `git` 2.47.1.windows.1, no local `gh` CLI (GitHub via the
+configured MCP path). These prove SQLite is **available** locally. They do not
+decide the engine — `pcp_storage_engine` is open and stays open (`PCP.0` §19).
+For the record, 3.45.3 does provide everything §6.5 asks for (WAL, `STRICT`
+tables, `RETURNING`, foreign-key enforcement, `busy_timeout`).
+
+### 6.2 Options
+
+- **A — Registry stays filesystem JSON; SQLite backs only new local
+  control-plane metadata (job definitions, runs, schedules, capability
+  projections).**
+- **B — One governed storage movement migrates the registry *and* the job/
+  control-plane metadata into SQLite.**
+- **C — No SQLite yet; continue with filesystem concerns for another slice.**
+
+### 6.3 Decision matrix
+
+| Criterion | A (registry JSON + SQLite for new state) | B (migrate everything) | C (stay filesystem) |
+| --- | --- | --- | --- |
+| **Authority ownership** | registry authority unchanged (`PCP.1` §21); new state owned by the new store | one owner for all control-plane state — cleanest end-state | unchanged |
+| **Reopens the frozen `PCP.1` contract?** | **No** | **Yes** — duplicate detection, lock semantics and fail-closed corrupt-data handling would all be re-expressed in SQL | No |
+| **Migration complexity** | none for existing data; additive schema | real migration + rollback of live product state | none |
+| **Transaction boundaries** | two atomicity domains (see §6.4 risk) | one transaction spans enrollment + relationships + jobs | file-level atomic replace only |
+| **Duplicate protection** | registry keeps its validated in-process check | a `UNIQUE` index enforces it in the engine — structurally stronger | as today |
+| **Concurrency** | registry: existing mutation lock; new state: one writer + WAL readers | one writer + WAL readers throughout | lock files everywhere |
+| **Crash consistency** | registry: atomic replace (proven); new state: WAL | WAL throughout | atomic replace |
+| **Schema versioning** | needed for the new store only | needed, and must version already-shipped data | none |
+| **Backup / restore** | JSON file + DB file | one DB file | files |
+| **Corruption handling** | registry fail-closed (shipped); DB fail-closed (to define) | one fail-closed path | shipped |
+| **Testability** | temp dir + temp DB; existing registry tests untouched | existing registry tests rewritten | shipped |
+| **Local dev ergonomics** | good; JSON registry stays hand-inspectable | good; needs a CLI/`sqlite3` to inspect | best |
+| **Container / server migration** | the `evidence_backend` seam already allows a later engine swap | same | further from it |
+| **Rollback** | drop the new DB; registry untouched | restore both from backup | trivial |
+| **Privacy classification** | both LOCAL-SENSITIVE; both excluded from the support bundle | same | same |
+| **Blast radius if wrong** | new state only | **all product state** | none, but the gap persists |
+
+### 6.4 DECIDED — Option A approved for local sequencing
+
+**The Product Owner approves Option A.** `PCP.1`'s Device Registry stays on its
+frozen filesystem JSON backend; a new SQLite store owns **new local
+control-plane metadata** only. The **production `pcp_storage_engine` decision
+remains open.** *This is not approval to implement SQLite in this session* —
+movement `M4` must be separately authorized.
+
+**Ownership boundary — what SQLite may own once `M4` is authorized:**
+
+- job definitions, **where they become durable data rather than source constants**;
+- job / run lifecycle records;
+- schedules;
+- capability projections;
+- idempotency and submission metadata;
+- control-plane runtime metadata.
+
+**What it must never own under this local option:**
+
+- Device Registry rows;
+- credential payloads;
+- trust secrets;
+- raw configuration;
+- backup bytes;
+- CAS evidence objects;
+- `OP.2` action authority.
+
+**Registry authority, stated as a rule.** The Device Registry remains
+authoritative for enrollment and lifecycle **at job admission and again
+immediately before execution**. If a target becomes disabled or unresolvable
+between submission and execution, the job **must be refused or aborted before
+any device contact, and must record the reason**. **SQLite must never retain a
+copied endpoint as fallback authority** — a job carries an opaque reference, and
+a reference that no longer resolves is a refusal, not a cache hit.
+
+This is the mitigation for Option A's real cost: two atomicity domains. The cost
+is accepted with these rules, not waved away.
+
+**On replacing the registry backend later.** The `DeviceRegistryBackend` seam in
+`utils/evidence_backend.py` preserves the *possibility* of moving the registry
+to another engine. Revision 1 described that later move as "a backend
+implementation, not a contract change". **That characterisation is withdrawn as
+categorically wrong.** An abstract interface existing does not make a migration
+free. A future migration must **prove semantic parity** for:
+
+- endpoint normalization;
+- duplicate handling;
+- lifecycle transitions;
+- concurrency;
+- lock and transaction behaviour;
+- corrupt / unsupported-state failure behaviour;
+- migration rollback.
+
+It would be a **governed storage movement** even though the abstract backend
+interface already exists.
+
+### 6.5 Required future SQLite contract (Option A approved; contract due at `M4`)
+
+Architecture level; **no schema, no DDL, no code in this movement.**
+
+| Concern | Contract |
+| --- | --- |
+| Location | under RuntimeRoot `data_root` (`utils/runtime_paths`), never in the repository, never in `output_root` |
+| Connection ownership | owned by the control-plane process; **one writer**, readers may be concurrent |
+| Journal mode | **WAL**, for one-writer/many-reader and better crash behaviour |
+| Filesystem | **local filesystem only.** WAL requires shared memory and is unsafe on SMB/NFS; a network share is not supported unless a later contract explicitly proves it |
+| `busy_timeout` | set explicitly (order 5 s); contention waits then fails closed — never an unbounded block |
+| Foreign keys | `PRAGMA foreign_keys=ON` |
+| Table strictness | `STRICT` tables (3.37+; 3.45.3 available) |
+| Durability | `synchronous` chosen and justified with WAL; a job record must be durable before the runner may start it (`CON.0` §7.9) |
+| Migrations | an explicit `schema_migrations` table, monotonic version, applied by a **deployment-controlled step**; runtime auto-create stays pre-production only (`DEV.4.6` precondition) |
+| Unsupported / newer schema | **fail closed** — refuse to start, name the version, never auto-upgrade downward |
+| Corruption | fail closed; never auto-repair; never silently recreate. Mirror `utils/device_registry.py`'s whole-document fail-closed posture |
+| Uniqueness | at minimum: one active run per definition; idempotency key unique per job submission |
+| Backup / restore | the DB is product state worth restoring; joins `recovery_offhost_key_custody` in the off-host custody question |
+| Test isolation | a temp `data_root` per test; no shared global connection |
+| Support bundle | **excluded**, like the registry and its lock file |
+| Classification | LOCAL-SENSITIVE; contains device references and job history, never secrets |
+
+---
+
+## 7. Credential and trust references
+
+**A local metadata store must never become an accidental secret vault.**
+
+| Rule | Consequence |
+| --- | --- |
+| The browser submits an **opaque credential-profile reference** and a **trust-profile reference** — never a password, key, token or passphrase | no secret crosses the HTTP boundary |
+| Registry and control-plane rows hold **references only**, format-validated, never resolved at write time (`PCP.1` behaviour, unchanged) | a stolen registry file yields no credential |
+| Credential resolution happens **server-side, at the authorized execution stage**, exactly as `main.py` resolves today | one resolution path |
+| Logs, job errors, UI payloads, exported reports and support bundles never carry secret material | existing redaction registry + support-bundle enumeration |
+| **Trust is established before credentials are submitted** where the vendor transport requires it (SSH host key, TLS CA) | a mistyped or hostile endpoint never receives a credential — `pcp_first_contact_trust_policy` |
+| No credential *management* product is designed here | out of scope, explicitly |
+
+---
+
+## 8. UI-first enrollment
+
+### 8.1 The workflow
+
+```mermaid
+sequenceDiagram
+  participant Op as Operator (browser)
+  participant Con as Console (loopback)
+  participant Job as Job engine
+  participant Dev as Device
+  participant Reg as Device Registry
+  Op->>Con: endpoint + credential-profile ref + trust-profile ref (typed, schema-validated)
+  Con->>Con: validate syntax · no device contact · no argv
+  Con->>Job: queue first-contact job (class 0, read-only)
+  Job->>Dev: trust preflight, then identity read (existing commands only)
+  Dev-->>Job: positive evidence, or none
+  Job-->>Op: discovered identity + capabilities, or UNKNOWN
+  Op->>Con: explicit confirm (or abandon)
+  Con->>Reg: persist enrollment (ENROLLED_UNVERIFIED)
+  Op->>Job: optional initial collection — a separate job
+```
+
+1. Operator enters a management endpoint.
+2. Operator selects an **opaque credential profile**.
+3. Operator selects or establishes a **trust profile**.
+4. The console submits a **typed, auditable, read-only first-contact job**.
+5. Vendor/identity derived **only from positive evidence**.
+6. The result is **presented for review** — identity and capabilities.
+7. The operator **explicitly confirms**.
+8. The registry persists the enrollment.
+9. Initial collection is **offered separately**, as its own job.
+
+### 8.2 Identity rules — what may never decide vendor
+
+Never from: port alone; banner alone; endpoint shape; an unverified operator
+hint; trial-and-error credential spraying. The operator's vendor hint is a
+**routing hint** recorded with a `classification_basis`, never identity
+(`PCP.1`, `AGENTS.md` identity law).
+
+**When evidence is missing, ambiguous or contradictory:** report `UNKNOWN` (or
+the existing canonical equivalent), **persist no enrolled device**, and keep
+only the permitted job/evidence record. A failed first contact must not leave a
+phantom device (`PCP.0` §1 "no phantom devices").
+
+### 8.3 Where "Add Device" lives
+
+Never a navigation root (navigation contract D-NAV5). Candidates evaluated:
+
+| Location | For | Against |
+| --- | --- | --- |
+| Devices / entity-list pane header | matches operator intent ("I am looking at my fleet, add one") | can imply enrollment is casual — answered by the confirmation and audit conditions in §9 |
+| Administration → Device Management | matches lifecycle intent; externally supported — FireMon onboards under `Administration → Device → Devices` (appendix §4, URL-STRUCTURE). Revision 1 also cited an AlgoSec pane-header control; **that observation is withdrawn** (appendix §0.2) | far from where the operator notices the gap |
+| Configuration → Device management | — | **Rejected.** Configuration is a *plane*, not a device-lifecycle owner |
+
+**DECIDED — `PO-NAV-1`, the combined pattern.** The **Devices / entity-list
+pane header** carries the primary operator affordance;
+**Administration → Device Management** is the lifecycle home for listing,
+disabling, re-verifying and later managing profile references. Both entry
+points invoke **one enrollment contract** — no duplicate implementation — and
+**Configuration does not own device lifecycle**.
+
+---
+
+## 9. Enrollment, trust and auto-enrollment — Product Owner decisions
+
+### 9.1 `pcp_console_registry_write_gate` — APPROVED FOR A FUTURE LOCAL-CONTROLLED IMPLEMENTATION
+
+**Not implemented here, and not implemented by this movement.** The Product
+Owner chose the conditioned local-loopback option.
+
+Both **manual endpoint enrollment** and **candidate-based enrollment** may
+eventually write through the local loopback Operator Console **before
+`DEPLOY.1A`** — but **only when every one of the following is implemented**:
+
+1. loopback binding only;
+2. per-launch authenticated console access;
+3. a **closed typed enrollment intent**;
+4. a strict request schema;
+5. **no command or argv input** of any kind;
+6. **credential-profile reference only**;
+7. **trust-profile reference only**;
+8. **no credential payload from the browser**;
+9. **no device contact inside the HTTP request**;
+10. first contact executed as a **queued, read-only typed job**;
+11. **positive-evidence** identity classification;
+12. an explicit **identity preview**;
+13. explicit **operator confirmation**;
+14. an **immutable audit record written before** the registry mutation;
+15. the **same `DeviceRegistry` enrollment path as the CLI** — one implementation;
+16. **server-side duplicate detection and lock contract**;
+17. **production/server mode refuses this local permission** unless `DEPLOY.1A`
+    independently authorizes it.
+
+**A closed candidate id narrows the target. It does not remove confirmation,
+audit or trust requirements, and it does not independently grant write
+authority.** The two enrollment intents are therefore held to the same bar.
+
+Movement **`M9`** owns the implementation; movement `M8` must land first
+because condition 10/11 depend on it.
+
+### 9.2 Parent-contract amendments — APPLIED at this freeze
+
+`A1`…`A4` are **applied** in `CON.0` and `PCP.0` by the freeze commit. `A5`/`A6`
+stay recorded-not-applied because their owning movements must first inventory
+the existing vocabularies.
+
+| # | Document | Amendment | Trigger |
+| --- | --- | --- | --- |
+| A1 | `CON.0` §4 (intent boundary) | **APPLIED.** A narrow, explicit carve-out for a **typed, schema-validated enrollment intent**: §4's "the browser never transmits … a hostname, an address" remains true for **command construction**, and enrollment is named as a distinct bounded intent that contacts no device in that request, constructs no argv, and is audited before persistence. Conditioned on the **loopback binding**, so it does not survive into server mode | applied 2026-09-05 |
+| A2 | `CON.0` §7 (security model) | **APPLIED.** The §9.1 conditions added as the enrollment intent's own hard rules, in the same form as the existing numbered rules | applied 2026-09-05 |
+| A3 | `PCP.0` §19 | **APPLIED.** `pcp_console_registry_write_gate` scoped and decided (local loopback, both intents, under the frozen conditions); `pcp_first_contact_trust_policy` and `pcp_auto_enrollment_policy` decided per §9.3/§9.4; local storage sequencing recorded separately from the production engine | applied 2026-09-05 |
+| A4 | `PCP.0` §20 | **APPLIED.** Records the local control-plane runtime/storage work as a movement distinct from `PCP.2`'s enrollment providers, and references the `M1`…`M14` sequence | applied 2026-09-05 |
+| A5 | `PCP.0` §9 | Record the schedule/capability-policy state concept in the **schedule/capability-policy contract**, explicitly **not** in the job lifecycle vocabulary | **not applied** — `M3` / `M12` must inventory the existing vocabulary first |
+| A6 | `PCP.0` §8 | Record the registry/evidence reconciliation state concept in the **reconciliation projection**, explicitly not as a generic capability state | **not applied** — `M3` / `M10` |
+
+### 9.3 `pcp_first_contact_trust_policy` — APPROVED IN DIRECTION
+
+**Strict transport trust is required before credentials are submitted to every
+endpoint — including management-plane candidates.** There is no candidate
+exemption.
+
+- Candidate provenance **may supply or select an approved trust profile**.
+- Candidate provenance **may not waive** SSH host-key or TLS trust.
+- **Prohibited:** TOFU (trust on first use), automatic trust acceptance,
+  certificate verification bypass, and credential-first probing.
+- Movement **`M8`** must define the approved trust-establishment mechanisms for
+  Check Point and Palo Alto **using the existing transport seams**
+  (`utils/cp_ssh_trust.py`, `utils/pan_tls_trust.py`) — not a new credential or
+  network path (`AGENTS.md` diagnostic-path law).
+
+The rule this protects: a mistyped or hostile endpoint must never receive a
+credential.
+
+### 9.4 `pcp_auto_enrollment_policy` — NOT APPROVED FOR THE CURRENT HORIZON
+
+Manual endpoints and discovered candidates **both** require:
+
+- positive identity evidence;
+- operator preview;
+- explicit confirmation.
+
+**No discovery source may automatically create a persistent enrolled device.**
+
+Auto-enrollment remains a **separately gated future capability requiring a new
+Product Owner decision**. "Not now" is explicitly **not** a permanent
+prohibition — it is a decision deferred until real candidate volume exists to
+reason about (`PCP.0` §19).
+
+---
+
+## 10. Collection, scheduling and progressive menus
+
+### 10.1 The progression after enrollment
+
+Each item is a later movement, not a design to build now:
+
+- collect now, for one device/logical entity (**needs `PCP.6` seams**);
+- select an approved collection profile (closed vocabulary);
+- watch job progress (**shipped**);
+- review evidence freshness and failures (**mostly shipped**);
+- configure different schedules per device/capability;
+- leave a capability unscheduled; disable a schedule **without disabling the
+  device** (the proposed `POLICY_DISABLED` state);
+- retry as a **new typed job**, never by mutating a historical outcome;
+- distinguish **manual**, **scheduled**, **console** and system-reconciliation
+  provenance (`C-D3` already added `console`).
+
+### 10.2 Where schedules live
+
+Externally supported: FireMon puts `Enable Scheduled Retrieval` **on the
+device** with its own interval, alongside a separate **Manual Retrieval**
+action (appendix §4, DOC-EXCERPT). Revision 1 also cited BackBox shipping
+`Schedules` as its own root with sibling Operations children; **that
+observation is withdrawn** (appendix §0.2). The sibling shape survives instead
+as a **Product Owner decision** — `PO-NAV-8` places `Jobs`, `Schedules`,
+`Queue` and `History` under Operations — not as benchmark evidence.
+
+| Ownership | Assessment |
+| --- | --- |
+| The **selected device capability** | where an operator forms the intent ("this device, more often"). **Recommended primary** |
+| A **global Schedules view** under Operations | where an operator audits the whole cadence at once. **Recommended secondary**, read-first |
+| Jobs | conflates a definition with its executions |
+| Administration | too far from the device |
+| Navigation state | **rejected outright** — a schedule is durable product state, never a UI preference. Navigation must never carry it |
+
+**Recommendation:** schedules are a **property of the device capability**,
+edited where the capability lives, and **viewed** in a global Operations →
+Schedules surface. Editing scheduler policy from a browser remains gated by
+`C-D7`; the `>= 10 min` floor and default-disabled posture are unchanged.
+
+### 10.3 Progressive menus without fake capability
+
+A capability appears when its contract ships (navigation contract §7 P1). Stable
+orientation is preserved by the reserved-domain list: the *place* a future
+capability will occupy is written down, so its arrival does not re-arrange the
+operator's map. **No "coming soon" entry is ever rendered.**
+
+---
+
+## 11. Security and authority review, and proposed amendments
+
+### 11.1 Review
+
+| Property | Status |
+| --- | --- |
+| No mutation authority granted by navigation | held (navigation contract §15) |
+| DOM presence never equals authorization | held |
+| No credential payload in browser, registry, SQLite, logs or bundles | held (§7) |
+| No device I/O in a request handler | held (§3.1, §4.1) |
+| No vendor identity without positive evidence | held (§8.2) |
+| No device targeting via fleet-wide execution + post-filter | held (§5) — the explicit refusal is the point |
+| `CLASS 2` / `OP.2` authorization, readiness, locking unweakened | held — nothing here touches `utils/operate/` or `utils/failover/` |
+| No raw secret-bearing configuration exposed | held (navigation contract §10) |
+| Local pilot exemption never becomes production authorization | **RISK R-1**, §11.3 |
+| No second console, registry, readiness engine or identity authority | held (§3.3) |
+| Stale UI state never authorizes a job | held (§6.4 mitigations, `OP.2.0` P4/P14) |
+| Hidden navigation is not a security boundary | held |
+
+### 11.2 Parent-contract amendments — status
+
+The full list, with triggers, is **§9.2** (`A1`…`A6`). It is maintained there so
+the enrollment decision and the amendments it forces stay together.
+**`A1`–`A4` were applied at this freeze** (2026-09-05, `CON.0` §4.1/§7.11 and
+`PCP.0` §19/§10/§20.1). **`A5`/`A6` remain recorded and unapplied**: they wait
+on movement `M3` to inventory the existing state vocabularies before either
+`PCP.0` §8 or §9 is touched. No amendment outside this named, bounded set is
+made to any frozen document.
+
+### 11.3 R-1 — the local-pilot exemption risk
+
+The Product Owner has now approved the conditioned local-loopback direction
+(§9.1), which makes this risk live rather than hypothetical. A permission
+granted for a **loopback, single-operator, audited local profile** must not
+silently become the production posture when `CON.6`/`DEPLOY.1` arrives.
+
+**Mitigation, binding on `M9`:** condition 17 of §9.1 and amendment `A1` both
+tie the permission to the **loopback binding itself**, so server mode re-asks
+the question rather than inheriting the answer. `M14` (production OIDC/RBAC)
+**does not retroactively validate** any local shortcut taken before it.
+
+---
+
+## 12. Proposed bounded movement sequence
+
+Each is one objective, small enough for a normal-reasoning implementation
+prompt. **None is authorized by this document.** The order below reorders the
+Product Owner's draft list where repository evidence shows a safer dependency.
+
+| # | Movement | Objective | User-visible outcome | Primary files / seams | Security invariant | Prerequisites | Non-goals | Validation | Tier | New session? |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| **M0** | **Product Owner review and freeze of these two contracts** — **COMPLETE**: direction closed (§13.1), evidence corrected, contracts frozen at reviewed head `ba56d2b` (2026-09-05) | Closed direction, corrected evidence, then froze both contracts | none | the two contracts + the research appendix | — | — | no code | doc/state checks | extended (PO-facing) | complete |
+| **M1** | **`PCP.1` uuid test-contract repair** | Fix the two deterministic failures on `main` | none | `tests/test_pcp1_device_registry.py` (and only if needed `utils/device_registry.py`) | the AC being proven must not weaken | none — **independent of NAV**; branches from **current `main`**, not from this branch | no registry behaviour change; no navigation or architecture change | targeted + full suite | normal | **yes** |
+| **M2** | **Navigation accessibility closure** | Close the four named gaps (navigation contract §13.1) | better keyboard/AT/reduced-motion behaviour | `navigation_ui.js`, `style.css` | none touched | M0 complete (it is) | no IA change | targeted + both harnesses | normal | no |
+| **M3** | **Capability-state vocabulary + presentation contract** | Map the ten UX semantics onto canonical states; settle the two `PO-NAV-7` concepts in their **correct owning domains**; own the `PO-NAV-6` colour/label contract | none | a contract doc + `docs/ARCHITECTURE.md` | **must not** alter the job lifecycle vocabulary | M0 complete (it is) | no UI, no payload | state/doc checks | extended (vocabulary) | maybe |
+| **M4** | **Local control-plane metadata store** | Option A, additively (§6.4 boundary) | none | new `evidence_backend` concern(s), RuntimeRoot | fail-closed corruption/version; excluded from bundle; **never owns registry rows, credentials, trust, raw config, backup bytes, CAS or `OP.2` authority** | §6.4 approved; separate authorization to start | **no registry migration**; no job schema yet | targeted + privacy gate | extended (storage) | **yes** |
+| **M5** | **Collector target-selection seam — one collector** | Give exactly one collector a registry-derived target set (`PCP.6`, narrowed) | none yet | one collector + `collection_executor` | no plane-wide-then-filter; contact not multiplied | M4 (or none, if seams land first) | not all collectors at once | targeted + subsystem regression | extended (first), normal (rest) | yes |
+| **M6** | **Registry-keyed job targets** | `device_id` targets resolved against the registry at admission | job targets name real enrolled devices | `console/registry.py`, `console/app.py`, `console/runner.py` | unsupported targeting refused before contact | M4, M5 | no new job types | targeted + console tests | normal | no |
+| **M7** | **Device-targeted collection job** | One typed per-device collection job, end to end | "collect now" for one device | job type + runner + UI affordance | class 0 only; admission unchanged | M5, M6 | no schedules | targeted + console + render harness | normal | no |
+| **M8** | **First-contact trust + identity resolution** | The read-only first-contact job and its trust preflight | identity/capability preview | `pcp_first_contact_trust_policy`, existing identity reads | trust before credential; UNKNOWN persists nothing | M6; the trust-policy decision | no enrollment write | targeted + real-env for trust | extended (trust) | yes |
+| **M9** | **Enrollment preview + confirmation (UI)** | §8's flow under §9.1's seventeen conditions | add a device from the console | console routes + `DeviceRegistry.enroll` | all seventeen §9.1 conditions; amendments `A1`/`A2` applied first | M8; amendments `A1`/`A2` | no credential management; no production exposure | targeted + security review | extended (gate) | yes |
+| **M10** | **Capability projection per device** | `PCP.3` | modules light up per device honestly | `utils/capability_registry.py` + projection | capability ≠ readiness ≠ authorization | M6 | no UI redesign | targeted | normal | no |
+| **M11** | **Shared entity workspace context** | One selected entity across modules (navigation contract §6.3) | one selection, many views | `navigation_ui.js`, module renderers | no second identity authority | M10 | no new evidence | targeted + harnesses | normal | no |
+| **M12** | **Per-device / per-capability schedules** | §10.2 | different cadences per device | job definitions + scheduler policy | ≥10 min floor; default-disabled; `C-D7` for editing | M7, M10 | no new collectors | targeted + subsystem | extended (contract) | yes |
+| **M13** | **Recovery domain promotion** | `PO-NAV-2`, once `RB.5`/`CON.4` surfaces exist | Recovery root | recovery payloads + nav model | no recovery bytes over HTTP | `RB.4`/`RB.5` | no restore workflow | targeted + harnesses | normal | no |
+| **M14** | **Production OIDC/RBAC integration** | `DEPLOY.1A` | real authorization | out of scope here | P4 additive; never a nav proxy | `DEPLOY.1` external | everything else | full | extended | yes |
+
+### 12.1 Product Owner clarifications on the sequence (adopted)
+
+The `M1`…`M14` sequence is **adopted** with these corrections. **No movement is
+authorized or begun by this document.**
+
+| Movement | Clarification |
+| --- | --- |
+| **`M0`** | **COMPLETE.** The architecture is frozen (both contracts, 2026-09-05, reviewed head `ba56d2b`). Freezing `M0` authorizes no other movement — `M1`…`M14` each still need their own separate go-ahead |
+| **`M1`** | A **new session** and a **clean, narrow PR from current `main`** — it repairs the two `PCP.1` test-contract failures **independently of NAV**. It must not carry navigation or architecture changes. Prerequisite: `M0` complete (it is) |
+| *(after `M1` merges)* | The NAV/`PCP.2` branch **must incorporate the new `main` safely** before later validation or any PR |
+| **`M2`** | Prerequisite: `M0` complete (it is). **Required before the NAV prototype can merge** (navigation contract §13.1 gate table). Not a freeze blocker |
+| **`M3`** | Owns the **domain-specific status vocabulary and the colour/presentation contract**. It **must not modify the job lifecycle vocabulary** incorrectly — the schedule/capability-policy concept never joins `queued`/`running`/`succeeded`/`failed`/`blocked`/`skipped` (`PO-NAV-7`) |
+| **`M4`** | Implements **local SQLite control-plane metadata only**, per approved Option A and the §6.4 ownership boundary |
+| **`M5`** | Remains the **first real collector target-selection seam** and the **critical path** for honest per-device collection |
+| **`M6`** | Resolves **registry-keyed targets at admission and again at execution** (§6.4) |
+| **`M7`** | Delivers **one real device-targeted "collect now" path** |
+| **`M8`** | Owns **strict first-contact trust** (§9.3) and evidence-based identity resolution |
+| **`M9`** | Owns **enrollment preview/confirmation** and the approved **local-loopback write boundary** (§9.1's seventeen conditions, amendments `A1`/`A2`) |
+| **`M10` / `M11`** | **Default remains two separate movements.** They may be re-evaluated together **only** if capability projection and shared workspace context cannot be separated safely |
+| **`M12`** | Owns **per-device / per-capability schedules** |
+| **`M13`** | Promotes **Recovery only when `PO-NAV-2`'s surface trigger is met** |
+| **`M14`** | Production OIDC/RBAC. It **does not retroactively validate local shortcuts** (§11.3) |
+
+**Dependency note:** `M1` and `M2` are independent of the chain and can run at
+any time; `M1` runs from `main`, not from this branch. `M5` is the critical
+path — nothing device-targeted is honest before it.
+
+**Reuse, not rebuild:** `PCP.1` registry, the existing console and job engine,
+the admission coordinator, existing collectors/adapters, existing evidence
+projections, the uitest render fixtures, and the validated CP ClusterXL / VSX /
+PAN HA semantics are all inputs to this sequence, never things it replaces.
+
+---
+
+## 13. Decision status after the review
+
+### 13.1 Closed in direction by this review
+
+| Decision | Outcome | Where |
+| --- | --- | --- |
+| `pcp_console_registry_write_gate` | **Conditioned local-loopback approved** for a future implementation; seventeen mandatory conditions; production blocked on `DEPLOY.1A` | §9.1 |
+| `pcp_first_contact_trust_policy` | **Approved in direction** — strict transport trust before credentials for **every** endpoint, candidates included; no TOFU/auto-accept/bypass/credential-first probing | §9.3 |
+| `pcp_auto_enrollment_policy` | **Not approved for the current horizon**; positive evidence + preview + confirmation always; no auto-created enrolled device; separately gated later | §9.4 |
+| Local storage sequencing | **Option A approved**, with the ownership boundary and registry-authority rules | §6.4 |
+| Enrollment location | **Combined pattern approved** (`PO-NAV-1`) | §8.3 |
+| Movement order | **`M1`…`M14` adopted** with the §12.1 clarifications | §12.1 |
+| Schedule ownership | Property of the device capability; global Operations view secondary | §10.2 |
+
+### 13.2 Deferred implementation contracts (direction frozen)
+
+Not unresolved architecture — the direction above is frozen and a named
+movement owns the exact schema or mechanics.
+
+| Deferred detail | Owning movement |
+| --- | --- |
+| Exact **SQLite schema and migration** contract, within §6.4's ownership boundary and §6.5's engine contract | `M4` |
+| Exact **Check Point / Palo Alto trust-profile mechanics**, over the existing transport seams | `M8` |
+| Exact **enrollment request / preview / confirmation schemas**, within §9.1's closed intent | `M9` |
+| Final **names and owning schemas** for the two capability-state concepts | `M3` |
+
+### 13.3 Genuinely separate future decisions
+
+| Question | Gate |
+| --- | --- |
+| **Production storage engine** (`pcp_storage_engine`) | open; `DEV.4.6` migrations/roles. **SQLite is not the production engine** and this contract does not propose it as one |
+| **Server / production enrollment exposure** | blocked on `DEPLOY.1A` OIDC/RBAC. The local decision does not extend to it |
+| **Production OIDC/RBAC** | `DEPLOY.1` / `DEPLOY.1A`, external |
+| **Future auto-enrollment**, if ever proposed | a new Product Owner decision (§9.4) |
+| **Raw privileged configuration access** | its own security decision (navigation contract §10c) |
+| **Sanitized exported job-history field schema** | `PCP.5` |
+| **Future Jobs root promotion** | not pre-approved; a new PO-reviewed IA amendment |
+
+---
+
+## 14. Non-goals
+
+No database, schema, migration or DDL. No enrollment endpoint or route. No
+credential store or credential-management product. No collector change or
+targeting. No device contact. No scheduler change. No capability payload state.
+No accessibility implementation. No repair of the `PCP.1` uuid tests. No
+RBAC/OIDC. No second console. No `CLASS 2` movement.
+
+This document's own freeze **did** narrowly amend `CON.0` (§4.1, §7 rule 11)
+and `PCP.0` (§19, §10, §20.1) — that is the M0 architecture freeze itself, not
+a non-goal of it, and is recorded in full at §9.2. What stays a non-goal, even
+after the freeze: no amendment beyond that named, bounded set; `A5`/`A6` stay
+recorded and unapplied until `M3`; and **no movement beyond `M0` is authorized
+or begun** — `M1`…`M14` each need their own separate go-ahead, and none of
+them opens a pull request or merges anything.
+
+---
+
+## 15. Frozen acceptance criteria
+
+Testable statements of the frozen runtime/enrollment architecture, deliberately
+**implementation-agnostic**. This freeze writes no test. Each owning movement
+implements the criteria its surface makes exercisable; a criterion whose surface
+does not exist yet is not waived — it becomes that movement's own criterion.
+
+### 15.1 Runtime
+
+| id | Criterion | Owner |
+| --- | --- | --- |
+| `AC-RT-1` | **One Operator Console.** No second console, second registry, second readiness engine or second identity authority is introduced | all |
+| `AC-RT-2` | After the console starts, **normal product operation requires no repeated `main.py` collection cycle**: the operator selects a subject, submits a typed job, and observes its lifecycle | `M6`/`M7` |
+| `AC-RT-3` | Work runs as **background typed jobs** from a closed, source-reviewed registry; a job record is durable in `queued` **before** the runner may start it | shipped; preserved |
+| `AC-RT-4` | **No device I/O inside an HTTP request handler** — including the enrollment request | `M9` |
+| `AC-RT-5` | A record left `running` by a dead process becomes `failed`, never `succeeded`; restart never silently resumes a device action | shipped; preserved |
+| `AC-RT-6` | Retry is a **new typed job**; a historical outcome is never mutated | `M7` |
+| `AC-RT-7` | The console **is not** the scheduler process; the `>= 10 min` floor and default-disabled posture are unchanged | `M12` |
+
+### 15.2 Device-targeted execution
+
+| id | Criterion | Owner |
+| --- | --- | --- |
+| `AC-TGT-1` | Targets are **opaque `device_id`** or a canonical logical-entity id — never a hostname, address, credential, command or path | `M6` |
+| `AC-TGT-2` | Endpoint, credential and trust resolve **server-side, at the authorized execution stage** | `M6`/`M7` |
+| `AC-TGT-3` | An **unsupported target selection is refused at admission, before any device contact**, and the missing seam is the stated refusal reason | `M6` |
+| `AC-TGT-4` | **A plane-wide run is never relabelled as device-targeted.** Running a plane and filtering the result is not targeted execution and must not be recorded as one | `M5`/`M7` |
+| `AC-TGT-5` | Explicitly plane-wide workflows remain **honestly plane-wide** until they gain a real target-selection seam | `M5` |
+| `AC-TGT-6` | Per-device cadences do **not** multiply device contact; aggregate per-endpoint contact stays bounded by the admission coordinator and the vendor budget of 1 | `M12` |
+
+### 15.3 Storage (approved local Option A)
+
+| id | Criterion | Owner |
+| --- | --- | --- |
+| `AC-ST-1` | The **`PCP.1` Device Registry remains filesystem JSON** in the approved local sequence; `M4` performs no registry migration | `M4` |
+| `AC-ST-2` | SQLite owns **only** job definitions (once durable), job/run lifecycle records, schedules, capability projections, idempotency/submission metadata and control-plane runtime metadata | `M4` |
+| `AC-ST-3` | SQLite owns **none** of: Device Registry rows, credential payloads, trust secrets, raw configuration, backup bytes, CAS evidence objects, `OP.2` action authority | `M4` |
+| `AC-ST-4` | The **registry is authoritative at job admission and again immediately before execution**; a target that has become disabled or unresolvable causes refusal/abort **before contact**, with the reason recorded | `M6`/`M7` |
+| `AC-ST-5` | **No copied endpoint is ever retained as fallback authority.** A reference that no longer resolves is a refusal, never a cache hit | `M4`/`M6` |
+| `AC-ST-6` | The store is RuntimeRoot-resident, **excluded from the support bundle**, classified LOCAL-SENSITIVE, and **fails closed** on corruption or an unsupported schema version | `M4` |
+| `AC-ST-7` | **SQLite is not claimed as the production engine**; `pcp_storage_engine` stays a separate open decision | — |
+| `AC-ST-8` | A future registry backend migration **proves semantic parity** for normalization, duplicate handling, lifecycle, concurrency, lock/transaction behaviour, corrupt/unsupported-state failure and rollback, as a governed storage movement | future |
+
+### 15.4 Enrollment, credentials and trust
+
+| id | Criterion | Owner |
+| --- | --- | --- |
+| `AC-EN-1` | The browser submits **only** the closed enrollment schema: endpoint, opaque credential-profile reference, opaque trust-profile reference, permitted tags, and/or a closed candidate id | `M9` |
+| `AC-EN-2` | **No credential payload, command, argv, filesystem path or arbitrary transport field** may be submitted | `M9` |
+| `AC-EN-3` | **Strict transport trust precedes credential submission** for every endpoint, including management-plane candidates; candidate provenance may select a trust profile but **cannot waive** trust. No TOFU, auto-accept, certificate bypass or credential-first probing | `M8` |
+| `AC-EN-4` | First contact runs as a **separate queued CLASS 0 read-only job**, never inside the enrollment request | `M8`/`M9` |
+| `AC-EN-5` | **Vendor and identity require positive evidence.** Never inferred from port, banner, endpoint shape, an operator hint, or credential spraying | `M8` |
+| `AC-EN-6` | `UNKNOWN` / ambiguous / contradictory identity **creates no registry record** — no phantom device | `M8`/`M9` |
+| `AC-EN-7` | The operator **reviews the resolved identity** and **explicitly confirms** before persistence | `M9` |
+| `AC-EN-8` | An **immutable audit record is durable before** the registry mutation | `M9` |
+| `AC-EN-9` | Persistence uses the **one existing `DeviceRegistry` enrollment path**; duplicate detection and the mutation-lock contract are unchanged | `M9` |
+| `AC-EN-10` | **Candidate-based enrollment receives no automatic-write exemption** — the same confirmation, audit and trust requirements apply | `M9` |
+| `AC-EN-11` | Both enrollment intents are permitted **only in the explicitly controlled loopback runtime profile**; non-loopback/server mode stays **blocked until `DEPLOY.1A`** supplies real OIDC/RBAC | `M9` |
+| `AC-EN-12` | **No auto-enrollment in the current horizon**: no discovery or "trusted source" may create a persistent enrolled device | — |
+| `AC-EN-13` | **No credential payload** appears in the browser, the registry, SQLite, logs, job errors, the exported report or the support bundle | all |
+| `AC-EN-14` | **Navigation visibility is never the authorization boundary**; refusal happens server-side | all |

@@ -605,7 +605,7 @@ function renderComplianceFleetView() {
             ? `<div class="compliance-control-grid">${fleetControls.map(control => complianceControlCard(control, { showFramework: true, showRoadmap: true, showControlId: true })).join("")}</div>`
             : `<div class="empty-state compact"><span>${emptyMsg || "No fleet control rows available."}</span></div>`;
         fleetHost.querySelectorAll("[data-open-plan]").forEach(button => {
-            button.addEventListener("click", () => switchModule("project-plan"));
+            button.addEventListener("click", () => switchModule("project-plan", { moveFocus: true }));
         });
     }
     if (platformHost) {
@@ -613,7 +613,7 @@ function renderComplianceFleetView() {
             ? `<div class="compliance-control-grid">${platformControls.map(control => complianceControlCard(control, { showFramework: true, showRoadmap: true, showControlId: true })).join("")}</div>`
             : `<div class="empty-state compact"><span>${emptyMsg || "No platform control rows available."}</span></div>`;
         platformHost.querySelectorAll("[data-open-plan]").forEach(button => {
-            button.addEventListener("click", () => switchModule("project-plan"));
+            button.addEventListener("click", () => switchModule("project-plan", { moveFocus: true }));
         });
     }
 
