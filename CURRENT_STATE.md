@@ -7,17 +7,15 @@ detail is not here either** — it is in `project/build_history.json`
 linked documents under `docs/history/`. `docs/history/INDEX.md` is the
 generated one-line timeline.
 
-- **Checkpoint:** 2026-09-06, `main` at merge commit `6ca67cc` (PR #88,
-  `DEV.TEST.1` YAML fix, onto `06f73e7`/PR #87's head).
+- **Checkpoint:** 2026-09-06, `main` at merge commit `d363b17` (PR #90,
+  `DEV.TEST.1` final CI trigger policy). The earlier `6ca67cc`/PR #88
+  checkpoint line was stale by two merges and is corrected here.
 - **Current build** (per `project/roadmap.json` `now_next.now`):
-  `parallelize_full_regression_execution` (`DEV.TEST.1`) —
-  **AUTOMATED_VALIDATED**: replaces the serial full-regression suite
-  (`11m56s`, run `34016204567`) with `-n auto --dist worksteal`, dispatched
-  only via `workflow_dispatch` (final policy — see "Active build"; run
-  `34020356372`, `4m36s`, is one-time proof, not an automatic trigger). No
-  product/capability-state change; authorizes no `M3` work. `now_next.next`
-  stays `M3`. `op2_c_cp_clusterxl_adapter_scoping` stays `upcoming`,
-  blocked on `DEPLOY.1`. `PCP.1` complete — build_history.json.
+  `nav_3_capability_state_vocabulary` (`M3`) — **IN_PROGRESS**, contract
+  DRAFT. `now_next.next` is `M4` (`local_control_plane_metadata_store`).
+  `op2_c_cp_clusterxl_adapter_scoping` stays `upcoming`, blocked on
+  `DEPLOY.1`. `DEV.TEST.1`, `PCP.1`, `M1`, `M2` complete —
+  build_history.json.
 - **OP.2.0 CLASS 2 architecture** (`docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md`):
   **CONTRACT FROZEN 2026-09-04**; `OP.2.A`/`OP.2.B` IMPLEMENTED; `OP.2.1` CP
   command gate DRAFTED — CLASS 2 still has **no member**, no adapter,
@@ -56,33 +54,38 @@ test-enforced boundaries. Current numbers:
 
 ## Active build
 
-**`parallelize_full_regression_execution`** (`DEV.TEST.1`) —
-**AUTOMATED_VALIDATED**. Root cause of the prior serial gate: a
-`scripts/render_uitest.py` module-rebind leak, fixed and regression-tested
-(`tests/test_frontend_rendering_boundary.py::
-test_render_uitest_restores_the_builders_it_injects`). Topology: one
-`pytest-xdist` process (`-n auto --dist worksteal`). **Final trigger policy
-(Product Owner directed):** `pull_request` → `validate` only (automatic);
-`workflow_dispatch` → `full-regression` (on demand ONLY); no `push:`
-trigger at all (would otherwise produce an empty, zero-job run). Two
-earlier intermediate designs (auto on every PR; auto on push-to-main) were
-each evaluated and reverted before this final policy. **Post-merge
-incident (misdiagnosis corrected):** a YAML syntax defect (a bare `: `
-inside an unquoted f-string) briefly broke job scheduling under every
-trigger, initially misdiagnosed as an automation-identity limitation —
-fixed, guarded by `test_workflow_yaml_parses`. **Real cloud proof,
-preserved as one-time evidence only, not automatic-trigger authorization**
-(run `34020356372`): `full-regression` SUCCESS, 4 workers, 1944
-passed/38 skipped/0 failed, `275.74s` (`4m36s`) vs `11m56s` serial (~61%
-faster) — ~36s above the 4-min ceiling, a small slow-test tail identified
-as the bottleneck. No product/UI/registry/storage/authorization change;
-authorizes no `M3` work.
+**`nav_3_capability_state_vocabulary`** (`M3`) — **COMPLETE / FROZEN**,
+Product Owner approved 2026-09-06. Contract:
+`docs/design/CAPABILITY_STATE_VOCABULARY_AND_PRESENTATION.md` — **FROZEN —
+PRODUCT OWNER APPROVED**, implementation authority for the capability-state
+vocabulary, the resolution contract and the presentation matrix.
 
-**Predecessor build, complete:** `nav_1_accessibility_closure` (`M2`) —
-**AUTOMATED_VALIDATED, MERGED** via PR #85 (`081a976`) — detail in
-`project/build_history.json`. `left_vertical_product_navigation` stays
-`in_progress` (`availability_rule` pending); no `D-NAV`/`PO-NAV` decision
-reopened by `M2` or `DEV.TEST.1`.
+Normative model: tagged union `RESOLVED{primary_status, capability_qualifiers,
+evidence_presentation, action_affordance}` | `OMITTED{reason, diagnostic}`;
+`NOT_SHIPPED` is a `SurfaceOmissionReason`, not a `CapabilityState`;
+`action_affordance[]` is per-action and **presentation-time only**, never
+claiming an `E7` check passed; `E4` is total over four outcomes including
+`NO_APPLICABLE_AUTHORITY`; `CX1` is a subject-scoped unsafe contradiction while
+`RI-1`/`RI-2` are bounded inconsistencies. Dimensions `D1`–`D7`, gates
+`E1`–`E7`, inputs `I1`–`I20`, criteria `AC-CS-1`…`97`.
+
+**Six PO decisions CLOSED / APPROVED:** `PO-M3-1` stable visible tabs (`FA-5`);
+`PO-M3-2` semantic parent corrections (`FA-1`–`FA-4`, `FA-6`–`FA-8`);
+`PO-M3-3` tagged-union composition (`FA-9`); `PO-M3-4` directional `D4`;
+`PO-M3-5` `--member-specific` as later UI contract direction, **no CSS
+implemented**; `PO-M3-6` evidence-gated `NOT_SCHEDULED`.
+
+**Nine amendments `FA-1`…`FA-9` APPLIED** to
+`docs/design/NAVIGATION_INFORMATION_ARCHITECTURE.md`, which carries its own
+bounded amendment record. No frozen decision reopened — `PO-NAV-1`…`PO-NAV-8`,
+`D-NAV1`…`D-NAV14`, the six-root baseline and the entity-workspace model are
+unchanged; the only amended criterion is `AC-DIF-7` (`FA-4`).
+
+**Not implemented.** `D3` arrives with `M10`, per-(entity, capability) `D5`
+with `M12`; every capability resolves `UNKNOWN` until they ship. `UCQ-1` is an
+`M10`-owned implementation obligation, not an approval gate — the fail-closed
+fallback yields `UNDETERMINED`, never `AVAILABLE_FOR_SUBMISSION`. Council
+dissents are preserved as historical design dissent.
 
 ## `OP.0b.0` — FROZEN WITH REAL-ENV VALIDATION GATES
 
@@ -117,24 +120,20 @@ a narrower question never promoted toward B2.
 
 ## Exact next build
 
-`now_next.next` is **`nav_3_capability_state_vocabulary`** (`M3`): map the ten
-UX capability-state semantics onto canonical states, settle the two
-`PO-NAV-7` concepts in their correct owning domains, own the `PO-NAV-6`
-colour/label contract. Prerequisite `M0` complete (it is); must not alter the
-job lifecycle vocabulary. `Sonnet 5, extended thinking (high)`. `M1`/`M2` are
-both complete and merged (PR #84, PR #85); `DEV.TEST.1` (test-execution
-infrastructure, not a product movement) sits between them and `M3` and does
-not change `M3`'s prerequisites. `M3` itself is not started.
+**Create and configure the Claude-side `nexus-decision-council` before starting
+`M4`.** The `M3` council record is a single authoring session's structured
+self-critique — not an installed skill and not independent validation — and the
+skill named in every `M3` brief was absent from the environment throughout.
+Standing that up is the prerequisite for the next architecture movement.
 
-Deferred detail is **implementation-contract work inside a frozen direction**:
-state names at `M3`, SQLite schema at `M4`, trust mechanics at `M8`, enrollment
-schemas at `M9`. Separate future decisions are listed in the two contracts'
-own sections. `M5` stays the critical path — **every collection job type today
-is `target_mode="none"`**.
+`M4` (`local_control_plane_metadata_store`) is **not started and not
+authorized**: local SQLite control-plane metadata only, additively, inside the
+companion contract's §6.4 ownership boundary and §6.5 engine contract
+(`AC-ST-1`…`AC-ST-8` frozen). It needs its own separate authorization.
 
-`op2_c_cp_clusterxl_adapter_scoping` stays `upcoming`/blocked with its notes in
-`project/roadmap.json` (adapter, member session and preflight/eligibility all
-IMPLEMENTED + unit-tested, none wired; CLASS 2 unreachable). `OP.2.D`'s console
+`M5` stays the critical path — **every collection job type today is
+`target_mode="none"`**. `op2_c_cp_clusterxl_adapter_scoping` stays
+`upcoming`/blocked with its notes in `project/roadmap.json`; `OP.2.D`'s console
 flow is expected on the `PCP.4` device/HA tab — one console, never two.
 
 ## Open blockers
@@ -161,27 +160,22 @@ Concurrency budget stays at 1 per vendor pending its own real-env evidence.
 ## Automated test baseline
 
 ```
-M2 targeted (navigation IA + M2 a11y + architecture convergence + frontend
-  composition + rendering boundary + both render harnesses + CON.1/CON.2 +
-  PCP.1 registry): 182 passed, 1 skipped, 0 failed. Real-Chromium: accessible
-  names, reduced-motion emulation, focus transfer, group-label association,
-  AC-A11Y-5 confirmed unregressed -- zero console errors.
-Full parallel suite (M2, pre-merge): `py -m pytest -q -n auto --dist
-  worksteal` (4 workers) = 1958 passed, 23 skipped, 0 failed, 29.46s.
-  Completely clean, no serial rerun. M1's uuid4 defect stays fixed (PR #84).
-Post-merge CI on main (PR #85, run 34016204567, commit 081a976):
-  full-regression SUCCESS -- privacy gate, project-state, build-history-index,
-  full SERIAL suite (~11m56s, pre-DEV.TEST.1 baseline) and whitespace check
-  all success (detail: project/build_history.json nav_1_accessibility_closure).
-DEV.TEST.1 local (evidence): `python3 -m pytest -q -n auto --dist
-  worksteal` (4 CPUs) = 1957 passed, 24 skipped, 0 failed, two clean runs
-  (32.27s, 35.01s), 1981 collected.
-DEV.TEST.1 GitHub Actions (one-time proof, run 34020356372): full-regression
-  SUCCESS -- 4 workers, 1944 passed/38 skipped/0 failed, 275.74s (4m36s) vs
-  11m56s serial; ~36s above the 4-min ceiling, a slow-test tail is the
-  bottleneck (0 failed). Detail: build_history.json head record.
-Repository privacy gate: PASS / 0 findings. metadata_warnings == [];
-  build-history index --check clean.
+M3 revision 6 focused (contract/docs-only movement):
+  architecture convergence 20 passed; navigation IA 16 passed / 4 skipped;
+  combined 36 passed, 4 skipped, 0 failed. metadata_warnings == [];
+  build-history index --check clean; privacy gate PASS / 0 findings;
+  git diff --check clean; source/test/script/workflow/dependency trees
+  untouched; rendered-structure audit 0 failures; paragraph-aware
+  stale-token audit 0 flagged; AC continuity and PO-to-FA mapping verified;
+  a deliberate rendered-prose read was performed -- the syntactic audits
+  alone prove nothing about narrative consistency.
+  These validate repository consistency only: no resolver exists yet, so
+  every resolver acceptance criterion stays unexercised until its owning
+  movement implements it. No full local suite, no GitHub full regression.
+Last full parallel suite (DEV.TEST.1, unchanged by M3): 1957 passed, 24
+  skipped, 0 failed locally; GitHub Actions one-time proof (run 34020356372)
+  1944 passed / 38 skipped / 0 failed. Detail: project/build_history.json.
+Repository privacy gate: PASS / 0 findings.
 ```
 ## Known xfails
 
