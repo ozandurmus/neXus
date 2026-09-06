@@ -104,9 +104,11 @@ jobs:
         run: git diff --check 4b825dc642cb6eb9a060e54bf8d69288fbee4904 HEAD
         continue-on-error: true
 
-  # FULL INTEGRATION REGRESSION — the previous single-job gate, unchanged in
-  # substance. Runs as the post-merge integration safety net on every push
-  # to main, and on demand for any PR/branch that needs it before merge.
+  # FULL INTEGRATION REGRESSION — the previous single-job gate. Runs as the
+  # post-merge integration safety net on every push to main, and on demand
+  # for any PR/branch that needs it before merge. DEV.TEST.1 (2026-09-06)
+  # parallelized the "Full test suite" step itself (see its own step comment)
+  # -- every other gate and this job's trigger semantics are unchanged.
   full-regression:
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
@@ -148,13 +150,33 @@ jobs:
       - name: Build history index is current
         run: python scripts/build_history_index.py --check
 
-      - name: Full test suite
-        # Serial on purpose. The suite's two long-standing failures were an
-        # in-process module-rebind leak that xdist's work distribution hid
-        # about two runs in three; a parallel-only gate would not have caught
-        # it. tests/test_frontend_rendering_boundary.py holds the guard now,
-        # but the gate stays serial so the next such leak surfaces here.
-        run: python -m pytest -q
+      - name: Report worker topology
+        # DEV.TEST.1: makes the parallel step's actual worker count visible in
+        # the log rather than leaving `-n auto`'s choice implicit.
+        run: python -c "import os; print(f'CPU count (xdist -n auto target): {os.cpu_count()}')"
+
+      - name: Full test suite (parallel)
+        # DEV.TEST.1 (2026-09-06): parallelized. The prior "serial on purpose"
+        # reasoning no longer holds -- the actual root cause of the suite's two
+        # long-standing order-dependent failures was scripts/render_uitest.py
+        # leaving three utils.html_export payload builders rebound after an
+        # in-process call (a bare module-level rebind, not monkeypatch.setattr,
+        # so it silently outlived the call and leaked into whichever later
+        # run_html_export() shared its worker). That is now fixed with a
+        # try/finally restore (scripts/render_uitest.py::_injected_builders)
+        # and directly regression-tested regardless of worker/order
+        # (tests/test_frontend_rendering_boundary.py::
+        # test_render_uitest_restores_the_builders_it_injects) -- so the one
+        # concrete leak that motivated running this job serially is now caught
+        # by a guard test, not by hoping the polluter and its victim land in
+        # the same process. `-n auto --dist worksteal` matches the exact
+        # command already proven locally (requirements-dev.txt,
+        # scripts/pytest_one_shot.ps1, docs/AI_DEVELOPMENT_PROTOCOL.md); a
+        # serial run remains available as an explicit diagnostic override
+        # (`-n0`), never the default validation path. A single pytest-xdist
+        # master process aggregates every worker's result into one exit code,
+        # so no worker's failure can be masked by another worker's pass.
+        run: python -m pytest -q -n auto --dist worksteal
 
       - name: Whitespace / conflict-marker check
         # Checks the whole HEAD tree against git's constant empty-tree SHA,

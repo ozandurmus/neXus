@@ -232,12 +232,17 @@ stay observable. Never use the strongest tier for mechanical work.
 - **Targeted**: tests for the files/behavior actually changed.
 - **Subsystem regression**: the affected vendor/module's test files.
 - **Full regression**: shared-core changes, phase closure, release
-  candidates. One-shot, file-backed: `py -m pytest -q > pytest_result.log
-  2>&1`. Run at least once **serially** before closing a build — a parallel
-  run has previously hidden a real shared-state leak. Risk-based, not
-  mandatory for every bounded PR — `docs/AI_DEVELOPMENT_PROTOCOL.md`
-  "CI validation policy" is the canonical trigger list and CI shape; this
-  entry doesn't repeat it.
+  candidates. One-shot, file-backed, **parallel by default**
+  (`DEV.TEST.1`, 2026-09-06): `py -m pytest -q -n auto --dist worksteal >
+  pytest_result.log 2>&1`. A serial run (`-n0`, or
+  `scripts/pytest_one_shot.ps1 -Serial`) remains available only as an
+  explicit diagnostic override when isolating a single failure — never the
+  default full-suite path; the one shared-state leak a parallel run
+  previously hid is fixed and directly regression-tested regardless of
+  worker/ordering (`docs/AI_DEVELOPMENT_PROTOCOL.md` "Test execution
+  economy"). Risk-based, not mandatory for every bounded PR —
+  `docs/AI_DEVELOPMENT_PROTOCOL.md` "CI validation policy" is the canonical
+  trigger list and CI shape; this entry doesn't repeat it.
 - **Repository privacy gate**: `py .\main.py --repository-privacy-check`.
   Delete gitignored `data/`/`logs/` first; a test run recreates them and the
   gate flags them as runtime directories present.

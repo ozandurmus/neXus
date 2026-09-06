@@ -16,106 +16,98 @@ doc. Prior versions are in git history.
 
 ## 1. Snapshot
 
-- Date: 2026-09-06. `main` at merge commit `081a976a3e1cc16fb57af7f0c9aa0e0501a7625b`
-  (PR #85, `M2`), onto `9a946fe` (PR #84, `M1`)'s head. NAV review lineage
-  (`5a5a1f7`..`259874e`) preserved unrewritten.
-- Build: `nav_1_accessibility_closure` (`M2`) — **AUTOMATED_VALIDATED, MERGED**:
-  `AC-A11Y-1`..`4` closed and validated; `AC-A11Y-5` confirmed unregressed;
-  merged to `main` via PR #85. Predecessors both complete: `M0` (architecture
-  FROZEN, reviewed head `ba56d2b`) and `M1` (PCP.1 uuid4 test-defect repair,
-  merged via PR #84).
-- **`left_vertical_product_navigation` stays `in_progress`.** This is not a
-  gap in M2 — its `accessibility_closure` criterion is `done`. The feature
-  stays `in_progress` because its separate `availability_rule` criterion
-  (the remaining three of the four capability predicates: entity
-  applicability, evidence state, future authorization) is genuinely pending
-  and owned by later movements (`M10`+), independent of M2's scope.
+- Date: 2026-09-06. `main` still at merge commit
+  `081a976a3e1cc16fb57af7f0c9aa0e0501a7625b` (PR #85, `M2`) — this session's
+  work is on branch `claude/parallelize-full-regression-hw0xon`, not yet
+  merged.
+- Build: `parallelize_full_regression_execution` (`DEV.TEST.1`) —
+  test-execution infrastructure only. Local validation and every
+  workflow/doc/test edit are complete; GitHub Actions `workflow_dispatch`
+  proof on this exact branch/head is still owed before merge (see `project/
+  build_history.json` head record for live status).
+- Pure process improvement: no product behavior, capability-state vocabulary,
+  navigation, registry, storage, enrollment, trust, or authorization change.
+  Does **not** begin `M3`.
 
-## 2. What is frozen (unchanged by M2)
+## 2. What is frozen (unchanged by this build)
 
-- **`docs/design/NAVIGATION_INFORMATION_ARCHITECTURE.md`** — FROZEN — PRODUCT
-  OWNER APPROVED. Fifteen `D-NAV` decisions, **no operative row provisional**;
-  three-layer IA; the four-predicate capability model; the capability-state
-  presentation matrix over existing canonical states; the logical-entity-first
-  workspace; the preservation, shell-parity and accessibility contracts; the
-  eight `PO-NAV` decisions; and **§19 acceptance criteria**
-  (`AC-NAV-*`, `AC-WS-*`, `AC-DIF-*`, `AC-SH-*`, `AC-A11Y-*`).
-- **`docs/design/LOCAL_CONTROL_PLANE_RUNTIME_AND_ENROLLMENT.md`** — FROZEN.
-  Runtime lifecycle, background typed jobs, device-targeted execution, local
-  storage **Option A** with its ownership boundary, credential/trust
-  references, UI-first enrollment under **seventeen** conditions, the
-  `M1`…`M14` sequence with §12.1 clarifications, and **§15 acceptance
-  criteria** (`AC-RT-*`, `AC-TGT-*`, `AC-ST-*`, `AC-EN-*`).
-- **`docs/design/research/NSPM_NAVIGATION_BENCHMARK.md`** — deliberately **not**
-  a frozen contract, unchanged.
-- No `D-NAV`/`PO-NAV` decision reopened by M2 or by this post-merge
-  reconciliation. No parent-contract amendment beyond M0's own.
+Every frozen product/architecture contract is untouched: `docs/design/
+NAVIGATION_INFORMATION_ARCHITECTURE.md`, `docs/design/
+LOCAL_CONTROL_PLANE_RUNTIME_AND_ENROLLMENT.md`, `docs/history/phase/
+OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md`, and every other frozen
+decision register entry. This build touches only `.github/workflows/
+validation.yml`, one test file asserting the workflow's own shape, and
+documentation/project-state files.
 
-## 3. What M2 actually did (merged, PR #85)
+## 3. What this build actually did
 
-- **Integration:** `--no-ff` merge of `origin/main` (`9a946fe`) into the NAV
-  branch at pre-integration head `259874e`. Only the four expected
-  authority/state files conflicted; reconciled holding both M0 and M1 as
-  separate, non-duplicated `build_history.json` records.
-- **`AC-A11Y-1`** — explicit `aria-label` on every rail button, independent
-  of icon-only-mode visibility.
-- **`AC-A11Y-2`** — `prefers-reduced-motion: reduce` zeroes the rail/chevron
-  transitions only.
-- **`AC-A11Y-3`** — `switchModule()`'s opt-in `moveFocus` moves focus to the
-  activated panel's `<h1>` (`tabindex="-1"`) on real activation only.
-- **`AC-A11Y-4`** — `role="group"` + `aria-labelledby` associates each
-  group's children with its own toggle, surviving both rail states.
-- **`AC-A11Y-5`** — confirmed unregressed (not M2-owned, merge-blocking).
-- New `tests/test_m2_nav_accessibility_closure.py` — real-Chromium coverage,
-  both shells.
+- **Root cause audit**: the `full-regression` job's own long-standing
+  "serial on purpose" comment traced to one concrete defect —
+  `scripts/render_uitest.py::render()` left three `utils.html_export`
+  payload builders bare-rebound (not `monkeypatch.setattr`) after use, so an
+  in-process caller sharing the same worker could see leaked fixture state.
+  That is already fixed (`try`/`finally` restore, `_injected_builders`) and
+  directly regression-tested regardless of worker/ordering
+  (`tests/test_frontend_rendering_boundary.py::
+  test_render_uitest_restores_the_builders_it_injects`) — confirmed by
+  reading both files. No other shared-mutable-resource pattern was found.
+- **Topology selected**: Candidate A, one `pytest-xdist` process
+  (`python -m pytest -q -n auto --dist worksteal`) — the exact command
+  already proven locally and already the default in
+  `scripts/pytest_one_shot.ps1`/`requirements-dev.txt`. One master process
+  yields one aggregate exit code across every worker.
+- **Changed**: `.github/workflows/validation.yml` (`full-regression` job's
+  "Full test suite" step, now parallel, plus a worker-topology visibility
+  step); `tests/test_ci_workflow_fast_pr_regression.py` (`FULL_SUITE_LINE`
+  + assertions updated to match); `docs/AI_DEVELOPMENT_PROTOCOL.md` ("Test
+  execution economy", "CI validation policy"), `AI_START_HERE.md`
+  (validation ladder), `CLAUDE.md` ("Test economy") — all now recommend the
+  parallel command as the default, with `-n0`/`-Serial` documented as an
+  explicit diagnostic override only.
+- **Preserved**: the PR-vs-push/dispatch trigger split, every other CI gate
+  (privacy, project-state consistency, build-history index, whitespace
+  check), and every targeted/subsystem test invocation that was already
+  serial (unaffected — this movement only touches the *full-suite*
+  invocation).
 
-## 4. Post-merge authority reconciliation (this closeout)
+## 4. Exact next action
 
-A prior session closed M2 as merged but left several files describing the
-pre-merge state (`CURRENT_STATE.md` calling M2 "IN PROGRESS", `AI_START_HERE.md`
-still calling the navigation contract "DRAFT — PRODUCT OWNER REVIEW REQUIRED",
-this file's own "exact next action" still being "open the PR"). This session
-corrected those stale statements without reopening any frozen decision,
-duplicating a build record, or flipping `left_vertical_product_navigation`
-to `done` (see §1 above for why that stays `in_progress`). Root cause: M2's
-own closing session wrote its evidence assuming the PR would merge, then
-closed before verifying the post-merge state of every operative file that
-referenced the pre-merge condition.
+1. Push this branch, open a PR into `main`, and trigger the repository's
+   `workflow_dispatch` on this exact branch/head SHA to get real GitHub
+   Actions timing/topology/accounting evidence for the new parallel
+   `full-regression` job (a PR alone does not run it — the job's `if` guard
+   is `github.event_name != 'pull_request'`).
+2. Record that run's ID, conclusion, elapsed time, and test totals in
+   `project/build_history.json`'s `parallelize_full_regression_execution`
+   record (currently a placeholder pending this evidence), compare against
+   the `11m56s` baseline (run `34016204567`), then merge only once green.
+3. After merge, sync local `main` and flip `now_next.now`'s status to
+   `automated_validated` alongside the roadmap `DEV.TEST` track's status.
+4. **Then**: `M3` (`nav_3_capability_state_vocabulary`) — capability-state
+   vocabulary + presentation contract. **New session.** `Sonnet 5, extended
+   thinking (high)`. Do not begin it in the same session as this movement's
+   close (out of scope for `DEV.TEST.1`).
 
-## 5. Exact next action
+## 5. Test delta
 
-1. **`M3`** — capability-state vocabulary + presentation contract
-   (`nav_3_capability_state_vocabulary`). Map the ten UX capability-state
-   semantics onto canonical states; settle the two `PO-NAV-7` concepts in
-   their correct owning domains; own the `PO-NAV-6` colour/label contract.
-   Prerequisite `M0` complete (it is). Must **not** alter the job lifecycle
-   vocabulary. **New session.** `Sonnet 5, extended thinking (high)`.
-2. Do **not**: reopen `AC-A11Y-1`..`5`, touch storage/enrollment/jobs/RBAC,
-   or flip `left_vertical_product_navigation` to `done` (its
-   `availability_rule` criterion is real, separate, owned by `M10`+).
+- Local: `python3 -m pytest -q -n auto --dist worksteal` (4 CPUs) — 1957
+  passed, 24 skipped, 0 failed, 35.01s wall-clock (this sandbox; same 1981
+  collected total as the prior 1958/23 baseline — the one skip/pass split
+  difference is sandbox Chromium availability, not a coverage change).
+  `tests/test_ci_workflow_fast_pr_regression.py` re-verified green (7
+  passed) against the updated workflow shape.
+- GitHub Actions parallel `full-regression` run: not yet executed — see
+  "Exact next action" above.
+- Repository privacy gate, project-state consistency, build-history-index
+  `--check`, `git diff --check`: run and green as part of this session's own
+  validation ladder before commit (see `project/build_history.json` head
+  record for the exact evidence once finalized).
 
-## 6. Test delta
+## 6. New risks / notes forward
 
-- Post-merge closeout: architecture convergence + navigation authority/state
-  guards + project-metadata-warning check + build-history-index check +
-  privacy gate + `git diff --check` — all green (state/doc-only change, no
-  runtime/test/UI file touched).
-- M2's own evidence (unchanged by this closeout): targeted 182 passed/1
-  skipped/0 failed; full parallel suite (`py -m pytest -q -n auto --dist
-  worksteal`, 4 workers) 1958 passed/23 skipped/0 failed, 29.46s.
-- Post-merge CI on `main` (PR #85, workflow run `34016204567`, commit
-  `081a976`): recorded in `project/build_history.json`'s
-  `nav_1_accessibility_closure` record once terminal — see that record for
-  the exact conclusion.
-
-## 7. New risks / notes forward
-
-- **`M5` is still the critical path.** Every collection job type is still
-  `target_mode="none"`. Untouched by M2 or this closeout.
-- **The local enrollment permission is conditioned on the loopback binding
-  itself.** `M14` does not retroactively validate it. Untouched.
-- **SQLite is local-only.** `pcp_storage_engine` stays open. Untouched.
-- No new root/tab/module/state vocabulary, capability, enrollment, storage,
-  job or authorization behavior introduced by M2 or this closeout. No visual
-  redesign. No source/template/CSS/JS/test file touched by this closeout —
-  state and documentation only.
+- The `parallelize_full_regression_execution` build-history record's
+  `evidence`/`risks_forward` fields are placeholders until the GitHub
+  Actions `workflow_dispatch` run is terminal — do not treat this build as
+  `automated_validated` until that record is filled in and the PR merged.
+- No frozen decision reopened; `M3` remains not started and stays
+  `now_next.next` unchanged throughout this movement.

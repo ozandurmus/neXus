@@ -13,7 +13,7 @@ from pathlib import Path
 
 WORKFLOW_PATH = Path(__file__).resolve().parent.parent / ".github" / "workflows" / "validation.yml"
 
-FULL_SUITE_LINE = "run: python -m pytest -q"
+FULL_SUITE_LINE = "run: python -m pytest -q -n auto --dist worksteal"
 
 
 def _read_workflow() -> str:
@@ -49,8 +49,8 @@ def test_pr_job_does_not_invoke_full_suite():
     full_suite_lines = [line.strip() for line in validate_block.splitlines() if line.strip() == FULL_SUITE_LINE]
     assert not full_suite_lines, (
         "the PR-triggered `validate` job must not run the unrestricted full "
-        "pytest suite (`python -m pytest -q` with no target) -- that is the "
-        "exact behavior this kaizen build removes from the PR critical path"
+        "pytest suite (with no target) -- that is the exact behavior this "
+        "kaizen build removes from the PR critical path"
     )
 
 
@@ -72,7 +72,9 @@ def test_full_regression_job_runs_on_main_push_and_manual_dispatch_only():
     full_suite_lines = [line.strip() for line in full_block.splitlines() if line.strip() == FULL_SUITE_LINE]
     assert full_suite_lines, (
         "the `full-regression` job (push-to-main / workflow_dispatch) must "
-        "still run the unrestricted full pytest suite"
+        "still run the unrestricted full pytest suite, in parallel "
+        "(DEV.TEST.1) -- every test still executes, just distributed across "
+        "pytest-xdist workers under one aggregate exit code"
     )
 
 

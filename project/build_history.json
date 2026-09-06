@@ -3,6 +3,20 @@
   "record_contract": "One structured record per build, newest first. Required: build, status, title, summary (<= 2 sentences). Optional: started, completed, track, movement, supersedes, evidence, risks_forward, docs{agreement,validation,handover} (repo-relative paths under docs/history/). Full detail lives in the linked doc; do not restate it here. Status vocabulary must stay within utils/project_plan.py STATUS_VALUES.",
   "builds": [
     {
+      "build": "parallelize_full_regression_execution",
+      "status": "in_progress",
+      "title": "DEV.TEST.1 -- Parallelize local and GitHub Actions full-regression execution",
+      "summary": "Replaced the GitHub Actions full-regression job's serial `python -m pytest -q` (measured 11m56s, workflow run 34016204567) with the already locally-proven `python -m pytest -q -n auto --dist worksteal`, after confirming the workflow's own 'serial on purpose' root cause (a scripts/render_uitest.py module-rebind leak) is already fixed and directly regression-tested regardless of worker/ordering. Every AI/development instruction recommending a serial full-suite run by default was updated to recommend the parallel command instead, with serial kept only as an explicit single-failure diagnostic override; pure test-execution infrastructure, no product behavior change, M3 not started.",
+      "started": "2026-09-06",
+      "completed": "2026-09-06",
+      "track": "DEV.TEST",
+      "movement": "TEST_INFRASTRUCTURE",
+      "supersedes": null,
+      "evidence": "PLACEHOLDER_PENDING_CI_PROOF",
+      "risks_forward": "PLACEHOLDER_PENDING_CI_PROOF",
+      "docs": {}
+    },
+    {
       "build": "nav_1_accessibility_closure",
       "status": "automated_validated",
       "title": "M2 -- NAV.1 accessibility closure, main integration, validation, PR + merge",
