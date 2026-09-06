@@ -13,8 +13,8 @@ Overwrite at every session close. Keep it minimal.
 
 ## 1. Snapshot
 
-- Date: 2026-09-06. `origin/main` = `d363b179`. Reviewed revision-5 head
-  `ef94f7c`; this is **revision 6** on the same branch, no history rewritten.
+- Date: 2026-09-06. `origin/main` = `d363b179`. Reviewed revision-6 head
+  `53b0c76`; this is **revision 7** on the same branch, no history rewritten.
 - Build: `nav_3_capability_state_vocabulary` (`M3`) — **IN_PROGRESS**.
   `ARCHITECTURE`, documentation only. Contract stays
   **`DRAFT — DO NOT FREEZE, NOT PRODUCT OWNER APPROVED`**.
@@ -24,37 +24,40 @@ Overwrite at every session close. Keep it minimal.
 
 ## 2. What changed this revision
 
-Revision 6 is a bounded consistency correction; the revision-5 model is
-retained unchanged.
+Revision 7 is a bounded correction of three deterministic inconsistencies. The
+tagged-union architecture, four `RESOLVED` outputs, affordance/server-authority
+boundary and `CX1`/`RI` taxonomy are unchanged.
 
-- **Stage summary and taxonomy made consistent.** §5's stage block now uses the
-  tagged-union terminology and states the presentation-time / server-phase
-  boundary (submission → admission → immediately before execution, where both
-  `AC-ST-4` registry checks live). `CX1`/`RI-1`/`RI-2` is used in every
-  normative clause; `CX2`/`CX3`, `G1`–`G4` and `R1`–`R5` survive only in
-  clearly-labelled historical notes.
-- **Ten stale criteria reconciled without renumbering** — `AC-CS-17`, `62`,
-  `64`, `65`, `74`, `75`, `76`, `78`, `81`, `86`. Set stays `AC-CS-1`…`97`;
-  none added.
-- **Fixture integrity.** Every hard case is tagged `[CURRENT]` or `[FUTURE]`
-  with a mechanical obligation: a `[CURRENT]` case's `action_id` must be a
-  `JOB_REGISTRY` member, a `[FUTURE]` case's described action must be asserted
-  **absent** — so a `[FUTURE]` case that silently becomes real is caught.
-  `H5b` corrected (`report_rebuild` is `workflow = render-only`, a
-  report-rendering job, **not** a retry); retry moved to `[FUTURE]` `H5d`.
-  `H8b` and new `H4e` are `[FUTURE]`. `H11a`/`H11c` became action-free.
-- **`H4` resolved from source, not the action name.** `config_refresh_cp` runs
-  `configuration/checkpoint_config_collector.py`, whose `_classify_platform`
-  (l.926-941, invoked l.1469-1471) emits a platform-family classification with
-  a confidence grade; frozen `PCP.0` §8 lists that classification among the
-  capability projection's inputs. So a re-collection **can** re-evaluate a
-  `D3` input, and the "collecting again will not help" copy is removed from
-  `H4a`–`H4d`. `UNSUPPORTED` reasons now carry a `REVALIDATABLE`/`TERMINAL`
-  class; **which** reasons are which is **`UCQ-1`**, an open contract question
-  owned by `M10` — deliberately **not** a seventh PO decision.
-- **`PO-M3-2` aligned with §11.3**: withholding approval leaves the conflict
-  recorded and the implementation blocked; it never requires reverting the
-  draft to semantics demonstrated false.
+- **Fixture classification was semantically wrong.** The binary
+  `[CURRENT]`/`[FUTURE]` split asserted that every future case names an action
+  absent from `JOB_REGISTRY` — but `H4e` names `config_refresh_cp`, a real
+  member; its future dependency is the **producer**, not the action. Replaced
+  by three dependency classes: **`[CURRENT]`** (nothing missing),
+  **`[FUTURE_PRODUCER]`** (real current action, absent producer/output, both
+  named), **`[FUTURE_ACTION]`** (no `action_id` at all; asserts no current
+  entry supplies the described semantics). `H4e` → `FUTURE_PRODUCER`;
+  `H5d`/`H8b` → `FUTURE_ACTION`. Invariant now holds mechanically: **every
+  `action_id` anywhere in §5.5 is a real registry member.** Audit: 22 / 1 / 2,
+  25 cases, none untagged, 0 failures.
+- **`UCQ-1` now fails closed.** Defaulting an unclassified `UNSUPPORTED`
+  remediation class to `REVALIDATABLE` made the collection action
+  `AVAILABLE_FOR_SUBMISSION`, inferring without evidence that re-contact is
+  both **useful** and **safe** against a device concluded not to support the
+  capability. `M3` now defines complete behaviour: `primary_status` may remain
+  `UNSUPPORTED` where that conclusion is itself positively supported, but the
+  action resolves **`UNDETERMINED`** with
+  `E6: unsupported_remediation_class_unresolved`, never
+  `AVAILABLE_FOR_SUBMISSION`; copy may claim neither that re-collection helps
+  nor that it cannot; a malformed support conclusion routes to the existing
+  honest-`UNKNOWN` rules. New `[CURRENT]` case `H4f` covers it — the baseline
+  state of every reason today. `TERMINAL` still requires positive evidence
+  (`H4e`). `UCQ-1` is now scoped to concrete reason-code **membership** only,
+  owned by `M10`.
+- **`FA-7`/`FA-9` repaired.** `FA-7` drops "final eligibility is `E1`–`E7`" and
+  proposes the parent Action cell ask only whether a capability state
+  contributes a **presentation-time blocker**, with `E7` and
+  submission/admission authority left server-owned. `FA-9` drops the retired
+  `H9b` and cites `H9a`/`H9a-t` and scope test `S-RI-1`.
 
 ## 3. Exact next action
 
