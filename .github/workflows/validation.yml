@@ -1,36 +1,44 @@
 # Deterministic validation gate.
 #
-# Risk-based split (DEV kaizen "fast PR CI"): a bounded PR pays for a fast
-# gate, not the full suite; the full suite runs as an integration safety net
-# on every push to main, plus on demand via workflow_dispatch. DEV.TEST.1
-# (2026-09-06) parallelized that full suite (`-n auto --dist worksteal`,
-# ~11m56s serial -> target <=4 minutes cloud wall-clock) but keeps the
-# PR/push split itself: a same-session attempt to also run `full-regression`
-# on every pull_request was evaluated and reverted, independent of the
-# YAML-syntax incident below.
+# DEV.TEST.1 final topology (2026-09-06, Product Owner directed): every
+# pull_request runs the fast `validate` gate only. `full-regression` (the
+# full suite, parallelized -- see its own step comment) never starts
+# automatically -- not on pull_request, not on push to main -- it runs only
+# through an explicit `workflow_dispatch`. There is deliberately no `push:`
+# trigger at all: with `full-regression` withheld from automatic triggers
+# and `validate` restricted to pull_request, a push-to-main event would
+# match no job's `if:` condition and produce an empty, zero-job workflow
+# run -- removed rather than shipped that way. A GitHub-hosted
+# full-regression run is now an exceptional, materially justified action
+# (see docs/AI_DEVELOPMENT_PROTOCOL.md "CI validation policy"); the
+# already-proven local/agent-cloud parallel run
+# (`python -m pytest -q -n auto --dist worksteal`) is normally sufficient
+# evidence. Workflow run 34020356372 (push-to-main, pre-dating this
+# correction) remains on record as one-time proof that parallel execution
+# itself works on GitHub-hosted infrastructure -- it is not authorization
+# for automatic full-regression on every push, which this correction
+# removes.
 #
-# CORRECTION (2026-09-06, post-merge): this file briefly shipped a genuine
-# YAML syntax defect -- the "Report worker topology" step's `run:` value was
-# an unquoted plain scalar containing a bare `: ` (colon-space) inside an
-# f-string label ("...target): {os.cpu_count()}"), which YAML parses as an
-# illegal nested mapping. That is a hard parse failure GitHub Actions cannot
-# recover from: it produced a zero-job, immediately-failing check suite for
-# *every* trigger on *every* branch, including ordinary push-to-main, from
-# this file's very first commit through the PR #87 merge. It was initially
-# misdiagnosed in-session as an environment/automation-identity limitation
-# on scheduling pull_request/workflow_dispatch jobs on non-default
-# branches -- that diagnosis was wrong; the real cause was this file failing
-# to parse, full stop, unrelated to branch, event type, or pusher identity.
-# Fixed by quoting/rewording the offending f-string; the PR/push trigger
-# split above was decided independently and stands on its own merits. This
-# changes test PLACEMENT/FREQUENCY only -- no check is weakened, hidden, or
-# made skippable, and no dependency/service/credential is added beyond what
-# the previous single-job version already used.
+# CORRECTION (2026-09-06, post-merge, kept for context): this file briefly
+# shipped a genuine YAML syntax defect -- the "Report worker topology"
+# step's `run:` value was an unquoted plain scalar containing a bare `: `
+# (colon-space) inside an f-string label ("...target): {os.cpu_count()}"),
+# which YAML parses as an illegal nested mapping. That is a hard parse
+# failure GitHub Actions cannot recover from: it produced a zero-job,
+# immediately-failing check suite for every trigger on every branch,
+# including ordinary push-to-main, from this file's very first commit
+# through the PR #87 merge. It was initially misdiagnosed in-session as an
+# environment/automation-identity limitation on scheduling pull_request/
+# workflow_dispatch jobs on non-default branches -- that diagnosis was
+# wrong; the real cause was this file failing to parse, full stop,
+# unrelated to branch, event type, or pusher identity. Fixed by quoting/
+# rewording the offending f-string. This changes test PLACEMENT/FREQUENCY
+# only -- no check is weakened, hidden, or made skippable, and no
+# dependency/service/credential is added beyond what the previous
+# single-job version already used.
 name: validation
 
 on:
-  push:
-    branches: [main]
   pull_request:
   workflow_dispatch:
 
@@ -124,19 +132,15 @@ jobs:
         run: git diff --check 4b825dc642cb6eb9a060e54bf8d69288fbee4904 HEAD
         continue-on-error: true
 
-  # FULL INTEGRATION REGRESSION — the previous single-job gate, unchanged in
-  # substance. Runs as the post-merge integration safety net on every push
-  # to main, and on demand via workflow_dispatch for any branch that needs
-  # it before merge. DEV.TEST.1 (2026-09-06) parallelized the "Full test
-  # suite" step itself (see its own step comment); it stays withheld from
-  # pull_request events per the PR/push kaizen split above (a separate,
-  # independent decision -- see this file's header comment for the
-  # unrelated YAML-syntax incident this job also briefly carried). A local
-  # complete parallel run is accepted as this movement's own pre-merge
-  # evidence; the post-merge push-to-main run here
-  # remains the real GitHub Actions cloud proof.
+  # FULL INTEGRATION REGRESSION — on-demand only (DEV.TEST.1 final
+  # topology, 2026-09-06): runs ONLY via an explicit `workflow_dispatch`,
+  # never automatically on pull_request or push. DEV.TEST.1 parallelized
+  # the "Full test suite" step itself (see its own step comment); a
+  # GitHub-hosted run of this job is an exceptional, materially justified
+  # action, not the default validation path -- see this file's header
+  # comment and docs/AI_DEVELOPMENT_PROTOCOL.md "CI validation policy".
   full-regression:
-    if: github.event_name != 'pull_request'
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
