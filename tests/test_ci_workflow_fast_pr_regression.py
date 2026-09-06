@@ -1,11 +1,13 @@
-"""Deterministic assertions over the risk-based CI split.
+"""Deterministic assertions over the DEV.TEST.1 final CI topology.
 
 Mostly text/regex-based, matching the repository's original no-new-
-YAML-dependency pattern for the shape checks below (the PR path does not
-invoke the full suite; the main-push and workflow_dispatch paths do, now in
-parallel -- `python -m pytest -q -n auto --dist worksteal`, DEV.TEST.1,
-2026-09-06, proven locally; kept off pull_request events per the PR/push
-kaizen split, an independent decision unrelated to the incident below) and
+YAML-dependency pattern for the shape checks below: `pull_request` ->
+`validate` (fast gate) only; `workflow_dispatch` -> `full-regression` (the
+full suite, parallel -- `python -m pytest -q -n auto --dist worksteal`)
+only, on demand, never automatically; there is no `push` trigger at all,
+since with `full-regression` withheld from automatic triggers and
+`validate` restricted to pull_request, a push event would match no job's
+`if:` condition and produce an empty, zero-job workflow run. Also checks
 that the cheap safety gates are not accidentally dropped from either job.
 
 One exception, `test_workflow_yaml_parses` below, DOES take a real YAML
@@ -58,16 +60,23 @@ def test_workflow_file_exists():
     assert WORKFLOW_PATH.is_file()
 
 
-def test_triggers_cover_pr_main_push_and_manual_dispatch():
+def test_triggers_are_pull_request_and_workflow_dispatch_only():
+    """DEV.TEST.1 final topology (2026-09-06, Product Owner directed): no
+    `push` trigger at all. With `full-regression` withheld from automatic
+    triggers and `validate` restricted to pull_request, a push-to-main
+    event would match no job's `if:` condition and produce an empty,
+    zero-job workflow run -- removed rather than shipped that way."""
     text = _read_workflow()
     on_block = re.search(r"^on:\n(.*?)^permissions:", text, re.S | re.M)
     assert on_block, "no `on:` block found"
     on_text = on_block.group(1)
     assert "pull_request:" in on_text
     assert "workflow_dispatch:" in on_text
-    push_block = re.search(r"push:\n(.*?)(?=\n\S|\Z)", on_text, re.S)
-    assert push_block, "no `push:` trigger found"
-    assert "branches: [main]" in push_block.group(1)
+    assert "push:" not in on_text, (
+        "the workflow must not carry a `push:` trigger -- full-regression "
+        "no longer runs automatically on push-to-main, and validate is "
+        "pull_request-only, so a push event would schedule zero jobs"
+    )
 
 
 def test_pr_job_does_not_invoke_full_suite():
@@ -76,8 +85,8 @@ def test_pr_job_does_not_invoke_full_suite():
     full_suite_lines = [line.strip() for line in validate_block.splitlines() if line.strip() == FULL_SUITE_LINE]
     assert not full_suite_lines, (
         "the PR-triggered `validate` job must not run the unrestricted full "
-        "pytest suite (with no target) -- that is the exact behavior this "
-        "kaizen build removes from the PR critical path"
+        "pytest suite (with no target) -- that stays out of the PR critical "
+        "path"
     )
 
 
@@ -93,15 +102,20 @@ def test_pr_job_retains_the_cheap_safety_gates():
         assert expected in validate_block, f"PR gate missing: {expected!r}"
 
 
-def test_full_regression_job_runs_on_main_push_and_manual_dispatch_only():
+def test_full_regression_job_runs_only_via_workflow_dispatch():
+    """DEV.TEST.1 final topology (2026-09-06, Product Owner directed):
+    `full-regression` must never start automatically -- not on
+    pull_request, not on push to main. A GitHub-hosted full-regression run
+    is an exceptional, materially justified action; the normally-sufficient
+    evidence is the already-proven local/agent-cloud parallel run."""
     full_block = _job_block(_read_workflow(), "full-regression")
-    assert "if: github.event_name != 'pull_request'" in full_block
+    assert "if: github.event_name == 'workflow_dispatch'" in full_block
     full_suite_lines = [line.strip() for line in full_block.splitlines() if line.strip() == FULL_SUITE_LINE]
     assert full_suite_lines, (
-        "the `full-regression` job (push-to-main / workflow_dispatch) must "
-        "still run the unrestricted full pytest suite, in parallel "
-        "(DEV.TEST.1) -- every test still executes, just distributed across "
-        "pytest-xdist workers under one aggregate exit code"
+        "the `full-regression` job (workflow_dispatch only) must still run "
+        "the unrestricted full pytest suite, in parallel (DEV.TEST.1) -- "
+        "every test still executes, just distributed across pytest-xdist "
+        "workers under one aggregate exit code"
     )
 
 
@@ -117,9 +131,21 @@ def test_full_regression_job_retains_the_same_cheap_gates():
         assert expected in full_block, f"full-regression gate missing: {expected!r}"
 
 
-def test_jobs_do_not_both_run_on_the_same_pull_request_event():
+def test_pull_request_schedules_validate_not_full_regression():
     text = _read_workflow()
     validate_block = _job_block(text, "validate")
     full_block = _job_block(text, "full-regression")
     assert "if: github.event_name == 'pull_request'" in validate_block
     assert "if: github.event_name == 'pull_request'" not in full_block
+    assert "if: github.event_name == 'workflow_dispatch'" not in validate_block
+
+
+def test_push_to_main_is_not_an_automatic_full_regression_trigger():
+    """No `push:` trigger exists at all (see test_triggers_are_pull_
+    request_and_workflow_dispatch_only), and full-regression's own `if:`
+    only matches workflow_dispatch -- so even if a push trigger were ever
+    reintroduced elsewhere, this job's condition alone would still refuse
+    to run automatically on push."""
+    full_block = _job_block(_read_workflow(), "full-regression")
+    assert "github.event_name != 'pull_request'" not in full_block
+    assert "if: github.event_name == 'workflow_dispatch'" in full_block
