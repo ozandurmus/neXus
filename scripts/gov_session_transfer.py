@@ -1,456 +1,97 @@
-"""GOV.SESSION.1 -- agent session-transfer packet CLI.
+"""GOV.SESSION.1 -- minimal agent session-boundary packet helper.
 
-    py scripts/gov_session_transfer.py start   ...    # build a SESSION_START packet
-    py scripts/gov_session_transfer.py close   ...    # build a SESSION_CLOSE packet
-    py scripts/gov_session_transfer.py validate FILE|-  [--repo-root DIR]
-    py scripts/gov_session_transfer.py render   FILE|-
-    py scripts/gov_session_transfer.py extract  FILE|-  [--packet-id ID]
+    py scripts/gov_session_transfer.py start   --movement ID --ref PATH [--ref PATH ...]
+    py scripts/gov_session_transfer.py close   --movement ID --outcome OUTCOME --ref PATH [--ref PATH ...]
+    py scripts/gov_session_transfer.py extract  FILE|-
+    py scripts/gov_session_transfer.py validate FILE|-
 
-Full contract: docs/design/GOV_SESSION_TRANSFER_PROTOCOL.md and
-docs/reference/gov_session_transfer_packet.schema.json. This module enforces
-that schema's constraints natively -- dependency-free, stdlib only
-(argparse/json/dataclasses/pathlib/sys) -- and is the authority tests check
-the schema document against, not the other way around.
+Full contract: docs/design/GOV_SESSION_TRANSFER_PROTOCOL.md. A packet is a
+pointer to authoritative repository files -- never a copy of their content,
+never itself an authority (AGENTS.md "Authority hierarchy" is unaffected).
 
-Offline and synchronous only: no network call, no daemon/scheduler, no LLM
-call, no credential or device access, no automatic Git action. `--out` is
-the only way to write a file, and it never writes anywhere the caller did
-not name -- a generated packet is transient and untracked by default.
+Stdlib only. Offline, synchronous, no network, no daemon, no credential or
+device access. `--out` is the only way to write a file, and only to the
+path given.
 
-Exit codes (stable, do not renumber):
-    0  success
-    1  payload/content invalid (schema-shape, size, or field-value violation)
-    2  envelope/boundary malformed (sentinel count, ordering, or pairing)
-    3  CLI usage error (bad arguments, missing file)
-    4  a requested --packet-id was not found in the input
+Exit codes: 0 success, 1 invalid packet (envelope or content), 2 usage
+error (bad arguments, missing file).
 """
 from __future__ import annotations
 
 import argparse
 import json
-import re
 import sys
-from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-REPO = Path(__file__).resolve().parent.parent
-
 SENTINEL = "<<<NEXUS_SESSION_PACKET>>>"
-
-SUPPORTED_PROTOCOL_VERSIONS = {1}
+PROTOCOL_VERSION = 1
 MESSAGE_TYPES = ("SESSION_START", "SESSION_CLOSE")
-SAME_OR_NEW = ("SAME", "NEW")
-OUTCOMES = ("AUTOMATED_VALIDATED", "REAL_ENV_VALIDATED", "DONE", "PARTIAL", "BLOCKED")
-PRIVACY_STATES = ("PASS", "FAIL", "NOT_APPLICABLE", "UNKNOWN")
-
-#: Per-message-type payload ceilings (UTF-8 bytes, between the sentinel
-#: lines / of the canonically-rendered body). SESSION_START is smaller --
-#: it opens a movement and should stay a pointer, never a spec. The coarse,
-#: type-agnostic MAX_PAYLOAD_BYTES below is the larger of the two: it is
-#: the only ceiling available before a payload is parsed enough to know its
-#: message_type, so it runs first and cheaply rejects worst-case input;
-#: the exact per-type ceiling is enforced immediately after, once
-#: message_type is known.
-PAYLOAD_BYTE_LIMITS = {"SESSION_START": 4096, "SESSION_CLOSE": 8192}
-MAX_PAYLOAD_BYTES = max(PAYLOAD_BYTE_LIMITS.values())
-MAX_ID_LEN = 80
-MAX_SHORT_TEXT = 240
-MAX_LONG_TEXT = 600
-MAX_LIST_ITEMS = 24
-MAX_LIST_ITEM_LEN = 300
-
-_SHA_RE = re.compile(r"^[0-9a-f]{7,40}$")
-_BRANCH_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_./-]{0,199}$")
-
-EXIT_OK = 0
-EXIT_INVALID = 1
-EXIT_ENVELOPE = 2
-EXIT_USAGE = 3
-EXIT_NOT_FOUND = 4
-
-_ID_START = set("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789")
-_ID_REST = _ID_START | set("_.-")
+OUTCOMES = ("DONE", "AUTOMATED_VALIDATED", "PARTIAL", "BLOCKED")
+EXIT_OK, EXIT_INVALID, EXIT_USAGE = 0, 1, 2
 
 
 class PacketError(ValueError):
-    """A packet failed a structural (envelope) or content (payload) check."""
-
-    def __init__(self, message: str, exit_code: int = EXIT_INVALID) -> None:
-        super().__init__(message)
-        self.exit_code = exit_code
+    """A packet failed an envelope or content check."""
 
 
-def _is_short_id(value: Any) -> bool:
-    if not isinstance(value, str) or not value or len(value) > MAX_ID_LEN:
-        return False
-    if value[0] not in _ID_START:
-        return False
-    return all(ch in _ID_REST for ch in value)
-
-
-def _is_str_bounded(value: Any, max_len: int, *, allow_empty: bool = False) -> bool:
-    if not isinstance(value, str):
-        return False
-    if not value and not allow_empty:
-        return False
-    return len(value) <= max_len
-
-
-def _is_ref_list(value: Any) -> bool:
-    if not isinstance(value, list) or len(value) > MAX_LIST_ITEMS:
-        return False
-    return all(_is_str_bounded(item, MAX_LIST_ITEM_LEN) for item in value)
-
-
-def _is_protocol_version(value: Any) -> bool:
-    # bool is a subclass of int in Python -- exclude it explicitly so
-    # protocol_version: true/false never passes as an integer.
-    return type(value) is int and value in SUPPORTED_PROTOCOL_VERSIONS
-
-
-def _is_sha(value: Any) -> bool:
-    return isinstance(value, str) and bool(_SHA_RE.match(value))
-
-
-def _is_branch(value: Any) -> bool:
-    return isinstance(value, str) and bool(_BRANCH_RE.match(value)) and "//" not in value and not value.endswith("/")
-
-
-def _is_positive_int_or_none(value: Any) -> bool:
-    if value is None:
-        return True
-    return type(value) is int and value >= 1
-
-
-# --------------------------------------------------------------------------
-# The required `git` object: the machine-readable position of this packet
-# in the repository's own Git history. additionalProperties=false and a
-# fixed field set for each message type, exactly like the outer payload.
-# --------------------------------------------------------------------------
-
-_GIT_START_FIELDS = ("base_sha", "branch")
-_GIT_CLOSE_FIELDS = ("base_sha", "branch", "head_sha", "pr_number", "merged", "merge_sha")
-
-
-def _validate_git_shape(git: Any, allowed_fields: tuple[str, ...]) -> list[str]:
-    if not isinstance(git, dict):
-        return ["git must be an object"]
-    errors = [f"git.{key} is required" for key in allowed_fields if key not in git]
-    errors.extend(f"git.{key} is not permitted for this message_type" for key in git if key not in allowed_fields)
-    return errors
-
-
-def _validate_git_start(git: Any) -> list[str]:
-    errors = _validate_git_shape(git, _GIT_START_FIELDS)
-    if errors or not isinstance(git, dict):
-        return errors
-    if not _is_sha(git["base_sha"]):
-        errors.append("git.base_sha must be a lowercase hex SHA, 7-40 chars")
-    if not _is_branch(git["branch"]):
-        errors.append("git.branch must be a plausible Git ref name")
-    return errors
-
-
-def _validate_git_close(git: Any) -> list[str]:
-    errors = _validate_git_shape(git, _GIT_CLOSE_FIELDS)
-    if errors or not isinstance(git, dict):
-        return errors
-    if not _is_sha(git["base_sha"]):
-        errors.append("git.base_sha must be a lowercase hex SHA, 7-40 chars")
-    if not _is_branch(git["branch"]):
-        errors.append("git.branch must be a plausible Git ref name")
-    if not _is_sha(git["head_sha"]):
-        errors.append("git.head_sha must be a lowercase hex SHA, 7-40 chars")
-    if not _is_positive_int_or_none(git["pr_number"]):
-        errors.append("git.pr_number must be a positive integer or null")
-    if not isinstance(git["merged"], bool):
-        errors.append("git.merged must be a boolean")
-    merge_sha = git["merge_sha"]
-    if merge_sha is not None and not _is_sha(merge_sha):
-        errors.append("git.merge_sha must be a lowercase hex SHA or null")
-    if isinstance(git["merged"], bool):
-        if git["merged"] and merge_sha is None:
-            errors.append("git.merge_sha is required (non-null) when git.merged is true")
-        if not git["merged"] and merge_sha is not None:
-            errors.append("git.merge_sha must be null when git.merged is false")
-    return errors
-
-
-# --------------------------------------------------------------------------
-# Strict JSON parsing: reject duplicate keys, non-finite constants, trailing
-# content, and any non-object top-level value.
-# --------------------------------------------------------------------------
-
-
-def _no_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
-    seen: set[str] = set()
-    result: dict[str, Any] = {}
-    for key, value in pairs:
-        if key in seen:
-            raise PacketError(f"duplicate JSON key: {key!r}")
-        seen.add(key)
-        result[key] = value
-    return result
-
-
-def _reject_non_finite(token: str) -> Any:
-    raise PacketError(f"non-finite JSON constant is not permitted: {token}")
-
-
-def strict_json_object(raw: str) -> dict[str, Any]:
-    """Parse `raw` as exactly one strict JSON object, or raise PacketError."""
-    stripped = raw.strip()
-    if not stripped:
-        raise PacketError("empty payload")
-    decoder = json.JSONDecoder(object_pairs_hook=_no_duplicate_keys, parse_constant=_reject_non_finite)
-    try:
-        obj, end = decoder.raw_decode(stripped)
-    except PacketError:
-        raise
-    except ValueError as exc:
-        raise PacketError(f"malformed JSON: {exc}") from exc
-    remainder = stripped[end:]
-    if remainder.strip():
-        raise PacketError("trailing content after the JSON value")
-    if not isinstance(obj, dict):
-        raise PacketError("payload must be a JSON object")
+def build_packet(message_type: str, movement: str, refs: list[str], outcome: str | None = None) -> dict[str, Any]:
+    obj = {"protocol_version": PROTOCOL_VERSION, "message_type": message_type, "movement": movement, "refs": refs}
+    if outcome is not None:
+        obj["outcome"] = outcome
     return obj
 
 
-def check_size_and_sentinel(raw: str) -> None:
-    """Coarse, type-agnostic gate: the larger of the two per-type ceilings,
-    run before a payload is parsed enough to know its message_type. Cheap
-    protection against worst-case oversized input; see check_type_specific_size
-    for the exact ceiling each message type is actually held to."""
-    size = len(raw.encode("utf-8"))
-    if size > MAX_PAYLOAD_BYTES:
-        raise PacketError(f"payload exceeds the {MAX_PAYLOAD_BYTES}-byte ceiling ({size} bytes)")
-    if SENTINEL in raw:
-        raise PacketError("the sentinel line must not appear inside the payload")
-
-
-def check_type_specific_size(raw: str, message_type: str) -> None:
-    limit = PAYLOAD_BYTE_LIMITS.get(message_type)
-    if limit is None:
-        return  # unknown message_type; validate_fields already rejects it
-    size = len(raw.encode("utf-8"))
-    if size > limit:
-        raise PacketError(f"{message_type} payload exceeds its {limit}-byte ceiling ({size} bytes)")
-
-
-# --------------------------------------------------------------------------
-# Field-level (schema-shape) validation.
-# --------------------------------------------------------------------------
-
-_START_REQUIRED = (
-    "protocol_version", "packet_id", "message_type", "project", "movement",
-    "session_mode", "objective", "authority_refs", "allow", "deny",
-    "stop_on", "close_required", "git",
-)
-_START_OPTIONAL = ("model_hint",)
-_START_ALLOWED = set(_START_REQUIRED) | set(_START_OPTIONAL)
-
-_CLOSE_REQUIRED = (
-    "protocol_version", "packet_id", "message_type", "project", "movement",
-    "outcome", "changed", "preserved", "validation", "privacy_state",
-    "refs", "risks", "durable_state", "next_movement", "session_routing",
-    "ui_effect", "git",
-)
-_CLOSE_OPTIONAL = ("model_hint",)
-_CLOSE_ALLOWED = set(_CLOSE_REQUIRED) | set(_CLOSE_OPTIONAL)
-
-
-def validate_fields(obj: dict[str, Any]) -> list[str]:
-    """Return a list of human-readable errors; empty means valid."""
+def validate_fields(obj: Any) -> list[str]:
+    """Return human-readable errors; empty means valid."""
+    if not isinstance(obj, dict):
+        return ["packet must be a JSON object"]
     errors: list[str] = []
-
+    version = obj.get("protocol_version")
+    if type(version) is not int or version != PROTOCOL_VERSION:  # bool is an int subclass; exclude it
+        errors.append(f"protocol_version must be {PROTOCOL_VERSION}")
     message_type = obj.get("message_type")
     if message_type not in MESSAGE_TYPES:
-        return [f"message_type must be one of {MESSAGE_TYPES}, got {message_type!r}"]
-
-    if not _is_protocol_version(obj.get("protocol_version")):
-        errors.append(f"protocol_version must be one of {sorted(SUPPORTED_PROTOCOL_VERSIONS)} (an integer)")
-    if not _is_short_id(obj.get("packet_id")):
-        errors.append("packet_id must be a non-empty identifier <= 80 chars, matching ^[A-Za-z0-9][A-Za-z0-9_.-]*$")
-    if not _is_short_id(obj.get("project")):
-        errors.append("project must be a non-empty identifier <= 80 chars")
-    if not _is_short_id(obj.get("movement")):
-        errors.append("movement must be a non-empty identifier <= 80 chars")
-
-    required = _START_REQUIRED if message_type == "SESSION_START" else _CLOSE_REQUIRED
-    allowed = _START_ALLOWED if message_type == "SESSION_START" else _CLOSE_ALLOWED
-
-    for key in required:
-        if key not in obj:
-            errors.append(f"missing required field: {key}")
-
-    for key in obj:
-        if key not in allowed:
-            errors.append(f"unexpected field not permitted by the schema: {key}")
-
-    if message_type == "SESSION_START":
-        errors.extend(_validate_start_fields(obj))
-    else:
-        errors.extend(_validate_close_fields(obj))
-
-    return errors
-
-
-def _validate_start_fields(obj: dict[str, Any]) -> list[str]:
-    errors: list[str] = []
-    if "session_mode" in obj and obj["session_mode"] not in SAME_OR_NEW:
-        errors.append(f"session_mode must be one of {SAME_OR_NEW}")
-    if "objective" in obj and not _is_str_bounded(obj["objective"], MAX_LONG_TEXT):
-        errors.append(f"objective must be a non-empty string <= {MAX_LONG_TEXT} chars")
-    for key in ("authority_refs", "allow", "deny", "stop_on"):
-        if key in obj and not _is_ref_list(obj[key]):
-            errors.append(f"{key} must be a list of <= {MAX_LIST_ITEMS} strings, each <= {MAX_LIST_ITEM_LEN} chars")
-    if "close_required" in obj and not isinstance(obj["close_required"], bool):
-        errors.append("close_required must be a boolean")
-    if "git" in obj:
-        errors.extend(_validate_git_start(obj["git"]))
-    if "model_hint" in obj and not _is_str_bounded(obj["model_hint"], MAX_SHORT_TEXT):
-        errors.append(f"model_hint must be a string <= {MAX_SHORT_TEXT} chars")
-    return errors
-
-
-def _validate_close_fields(obj: dict[str, Any]) -> list[str]:
-    errors: list[str] = []
-    if "outcome" in obj and obj["outcome"] not in OUTCOMES:
+        errors.append(f"message_type must be one of {MESSAGE_TYPES}")
+    if not isinstance(obj.get("movement"), str) or not obj.get("movement"):
+        errors.append("movement is required (non-empty string)")
+    refs = obj.get("refs")
+    if not isinstance(refs, list) or not all(isinstance(r, str) and r for r in refs):
+        errors.append("refs is required (list of non-empty strings)")
+    if message_type == "SESSION_CLOSE" and obj.get("outcome") not in OUTCOMES:
         errors.append(f"outcome must be one of {OUTCOMES}")
-    if "privacy_state" in obj and obj["privacy_state"] not in PRIVACY_STATES:
-        errors.append(f"privacy_state must be one of {PRIVACY_STATES}")
-    if "session_routing" in obj and obj["session_routing"] not in SAME_OR_NEW:
-        errors.append(f"session_routing must be one of {SAME_OR_NEW}")
-    if "validation" in obj and not _is_str_bounded(obj["validation"], MAX_LONG_TEXT):
-        errors.append(f"validation must be a non-empty string <= {MAX_LONG_TEXT} chars")
-    if "ui_effect" in obj and not _is_str_bounded(obj["ui_effect"], MAX_SHORT_TEXT):
-        errors.append(f"ui_effect must be a non-empty string <= {MAX_SHORT_TEXT} chars")
-    if "next_movement" in obj:
-        nm = obj["next_movement"]
-        if nm is not None and not _is_str_bounded(nm, MAX_ID_LEN):
-            errors.append("next_movement must be a string <= 80 chars, or null")
-    for key in ("changed", "preserved", "refs", "risks", "durable_state"):
-        if key in obj and not _is_ref_list(obj[key]):
-            errors.append(f"{key} must be a list of <= {MAX_LIST_ITEMS} strings, each <= {MAX_LIST_ITEM_LEN} chars")
-    if "git" in obj:
-        errors.extend(_validate_git_close(obj["git"]))
-    if "model_hint" in obj and not _is_str_bounded(obj["model_hint"], MAX_SHORT_TEXT):
-        errors.append(f"model_hint must be a string <= {MAX_SHORT_TEXT} chars")
     return errors
+
+
+def extract_one(text: str) -> str:
+    """Return the payload text between exactly one sentinel pair found
+    anywhere in `text`, ignoring surrounding content. Rejects a missing,
+    unmatched, or repeated (more than one pair's worth of) sentinel."""
+    lines = text.splitlines()
+    idxs = [i for i, line in enumerate(lines) if line == SENTINEL]
+    if len(idxs) < 2:
+        raise PacketError(f"expected a sentinel pair, found {len(idxs)} sentinel line(s)")
+    if len(idxs) > 2:
+        raise PacketError(f"expected exactly one packet body, found {len(idxs)} sentinel lines")
+    start, end = idxs
+    return "\n".join(lines[start + 1:end])
 
 
 def parse_and_validate(raw_payload: str) -> tuple[dict[str, Any] | None, list[str]]:
-    """Parse+validate one payload. Returns (obj, []) or (None, errors)."""
     try:
-        check_size_and_sentinel(raw_payload)
-        obj = strict_json_object(raw_payload)
-        if isinstance(obj.get("message_type"), str):
-            check_type_specific_size(raw_payload, obj["message_type"])
-    except PacketError as exc:
-        return None, [str(exc)]
+        obj = json.loads(raw_payload)
+    except json.JSONDecodeError as exc:
+        return None, [f"invalid JSON: {exc}"]
     errors = validate_fields(obj)
     return (obj, []) if not errors else (None, errors)
 
 
-def check_authority_refs(obj: dict[str, Any], repo_root: Path) -> list[str]:
-    """Existence-only check (never content) for authority_refs / refs paths."""
-    errors: list[str] = []
-    for key in ("authority_refs", "refs"):
-        for rel in obj.get(key, []) or []:
-            if not (repo_root / rel).exists():
-                errors.append(f"{key} path does not exist under {repo_root}: {rel}")
-    return errors
-
-
-# --------------------------------------------------------------------------
-# Envelope: standalone split and transcript extraction.
-# --------------------------------------------------------------------------
-
-
-def split_standalone(text: str) -> str:
-    """Return the payload text between exactly one sentinel pair, or raise."""
-    lines = text.splitlines()
-    sentinel_idxs = [i for i, line in enumerate(lines) if line == SENTINEL]
-    if len(sentinel_idxs) != 2:
-        raise PacketError(
-            f"standalone input must contain exactly 2 sentinel lines, found {len(sentinel_idxs)}",
-            EXIT_ENVELOPE,
-        )
-    start, end = sentinel_idxs
-    before = "\n".join(lines[:start])
-    after = "\n".join(lines[end + 1:])
-    if before.strip() or after.strip():
-        raise PacketError("unexpected content outside the sentinel pair", EXIT_ENVELOPE)
-    return "\n".join(lines[start + 1:end])
-
-
-@dataclass
-class ExtractedPacket:
-    index: int
-    start_line: int
-    end_line: int
-    valid: bool
-    errors: list[str] = field(default_factory=list)
-    payload: dict[str, Any] | None = None
-
-    @property
-    def packet_id(self) -> str | None:
-        return self.payload.get("packet_id") if self.payload else None
-
-    def to_json(self) -> dict[str, Any]:
-        return {
-            "index": self.index,
-            "start_line": self.start_line,
-            "end_line": self.end_line,
-            "valid": self.valid,
-            "errors": self.errors,
-            "packet_id": self.packet_id,
-            "payload": self.payload,
-        }
-
-
-def extract_all(text: str) -> list[ExtractedPacket]:
-    """Scan `text` for non-overlapping sentinel pairs, paired strictly in
-    sequence (1st+2nd, 3rd+4th, ...). Each pair is validated independently.
-    An odd total sentinel-line count fails the whole scan closed -- it
-    cannot form complete pairs. Two adjacent sentinel lines with no payload
-    line between them are an empty pair, which fails only that pair.
-    """
-    lines = text.splitlines()
-    sentinel_idxs = [i for i, line in enumerate(lines) if line == SENTINEL]
-    if len(sentinel_idxs) % 2 != 0:
-        raise PacketError(
-            f"odd sentinel-line count ({len(sentinel_idxs)}); cannot pair boundaries",
-            EXIT_ENVELOPE,
-        )
-    results: list[ExtractedPacket] = []
-    for pair_index, n in enumerate(range(0, len(sentinel_idxs), 2)):
-        start, end = sentinel_idxs[n], sentinel_idxs[n + 1]
-        if end == start + 1:
-            results.append(ExtractedPacket(pair_index, start, end, False, ["empty pair: no payload between sentinel lines"]))
-            continue
-        raw_payload = "\n".join(lines[start + 1:end])
-        obj, errors = parse_and_validate(raw_payload)
-        results.append(ExtractedPacket(pair_index, start, end, obj is not None, errors, obj))
-    return results
-
-
-def render_packet(obj: dict[str, Any]) -> str:
-    """Validate `obj`, then render it wrapped in the sentinel, deterministically."""
+def render(obj: dict[str, Any]) -> str:
     errors = validate_fields(obj)
     if errors:
         raise PacketError("; ".join(errors))
-    body = json.dumps(obj, sort_keys=True, indent=2, ensure_ascii=False)
-    check_size_and_sentinel(body)
-    check_type_specific_size(body, obj["message_type"])
+    body = json.dumps(obj, sort_keys=True, indent=2)
     return f"{SENTINEL}\n{body}\n{SENTINEL}\n"
-
-
-# --------------------------------------------------------------------------
-# CLI
-# --------------------------------------------------------------------------
 
 
 def _read_input(path: str) -> str:
@@ -458,7 +99,7 @@ def _read_input(path: str) -> str:
         return sys.stdin.read()
     p = Path(path)
     if not p.is_file():
-        raise PacketError(f"no such file: {path}", EXIT_USAGE)
+        raise PacketError(f"no such file: {path}")
     return p.read_text(encoding="utf-8")
 
 
@@ -471,190 +112,81 @@ def _write_output(text: str, out: str | None) -> None:
 
 
 def _cmd_start(args: argparse.Namespace) -> int:
-    obj = {
-        "protocol_version": 1,
-        "packet_id": args.packet_id,
-        "message_type": "SESSION_START",
-        "project": args.project,
-        "movement": args.movement,
-        "session_mode": args.session_mode,
-        "objective": args.objective,
-        "authority_refs": args.authority_ref,
-        "allow": args.allow,
-        "deny": args.deny,
-        "stop_on": args.stop_on,
-        "close_required": args.close_required,
-        "git": {"base_sha": args.base_sha, "branch": args.branch},
-    }
-    if args.model_hint:
-        obj["model_hint"] = args.model_hint
-    return _emit(obj, args.out)
+    return _emit(build_packet("SESSION_START", args.movement, args.ref), args.out)
 
 
 def _cmd_close(args: argparse.Namespace) -> int:
-    obj = {
-        "protocol_version": 1,
-        "packet_id": args.packet_id,
-        "message_type": "SESSION_CLOSE",
-        "project": args.project,
-        "movement": args.movement,
-        "outcome": args.outcome,
-        "changed": args.changed,
-        "preserved": args.preserved,
-        "validation": args.validation,
-        "privacy_state": args.privacy_state,
-        "refs": args.ref,
-        "risks": args.risk,
-        "durable_state": args.durable_state,
-        "next_movement": args.next_movement,
-        "session_routing": args.session_routing,
-        "ui_effect": args.ui_effect,
-        "git": {
-            "base_sha": args.base_sha,
-            "branch": args.branch,
-            "head_sha": args.head_sha,
-            "pr_number": args.pr_number,
-            "merged": args.merged,
-            "merge_sha": args.merge_sha,
-        },
-    }
-    if args.model_hint:
-        obj["model_hint"] = args.model_hint
-    return _emit(obj, args.out)
+    return _emit(build_packet("SESSION_CLOSE", args.movement, args.ref, args.outcome), args.out)
 
 
 def _emit(obj: dict[str, Any], out: str | None) -> int:
     try:
-        text = render_packet(obj)
+        text = render(obj)
     except PacketError as exc:
         print(f"error: {exc}", file=sys.stderr)
-        return exc.exit_code
+        return EXIT_INVALID
     _write_output(text, out)
-    return EXIT_OK
-
-
-def _cmd_validate(args: argparse.Namespace) -> int:
-    try:
-        text = _read_input(args.file)
-    except PacketError as exc:
-        print(f"error: {exc}", file=sys.stderr)
-        return exc.exit_code
-    try:
-        raw_payload = split_standalone(text)
-    except PacketError as exc:
-        print(json.dumps({"valid": False, "errors": [str(exc)]}))
-        return exc.exit_code
-    obj, errors = parse_and_validate(raw_payload)
-    if obj and args.repo_root:
-        errors = check_authority_refs(obj, Path(args.repo_root))
-        obj = obj if not errors else None
-    print(json.dumps({"valid": obj is not None, "errors": errors}, sort_keys=True))
-    return EXIT_OK if obj is not None else EXIT_INVALID
-
-
-def _cmd_render(args: argparse.Namespace) -> int:
-    try:
-        text = _read_input(args.file)
-        obj = strict_json_object(text)
-        rendered = render_packet(obj)
-    except PacketError as exc:
-        print(f"error: {exc}", file=sys.stderr)
-        return exc.exit_code
-    _write_output(rendered, args.out)
     return EXIT_OK
 
 
 def _cmd_extract(args: argparse.Namespace) -> int:
     try:
-        text = _read_input(args.file)
-        results = extract_all(text)
+        raw_payload = extract_one(_read_input(args.file))
     except PacketError as exc:
         print(f"error: {exc}", file=sys.stderr)
-        return exc.exit_code
+        return EXIT_USAGE if str(exc).startswith("no such file") else EXIT_INVALID
+    obj, errors = parse_and_validate(raw_payload)
+    if obj is None:
+        print(f"error: {'; '.join(errors)}", file=sys.stderr)
+        return EXIT_INVALID
+    print(json.dumps(obj, sort_keys=True))
+    return EXIT_OK
 
-    if args.packet_id is not None:
-        match = next((r for r in results if r.packet_id == args.packet_id), None)
-        if match is None:
-            print(f"error: no packet with packet_id={args.packet_id!r} found", file=sys.stderr)
-            return EXIT_NOT_FOUND
-        print(json.dumps(match.to_json(), sort_keys=True))
-        return EXIT_OK if match.valid else EXIT_INVALID
 
-    print(json.dumps([r.to_json() for r in results], sort_keys=True))
-    if not results:
-        return EXIT_OK
-    return EXIT_OK if any(r.valid for r in results) else EXIT_INVALID
+def _cmd_validate(args: argparse.Namespace) -> int:
+    try:
+        raw_payload = extract_one(_read_input(args.file))
+    except PacketError as exc:
+        if str(exc).startswith("no such file"):
+            print(f"error: {exc}", file=sys.stderr)
+            return EXIT_USAGE
+        print(json.dumps({"valid": False, "errors": [str(exc)]}))
+        return EXIT_INVALID
+    obj, errors = parse_and_validate(raw_payload)
+    print(json.dumps({"valid": obj is not None, "errors": errors}, sort_keys=True))
+    return EXIT_OK if obj is not None else EXIT_INVALID
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="gov_session_transfer", description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
 
-    p_start = sub.add_parser("start", help="build a SESSION_START packet")
-    p_start.add_argument("--packet-id", required=True)
-    p_start.add_argument("--project", default="neXus")
+    p_start = sub.add_parser("start", help="emit a SESSION_START packet")
     p_start.add_argument("--movement", required=True)
-    p_start.add_argument("--session-mode", choices=SAME_OR_NEW, default="NEW")
-    p_start.add_argument("--objective", required=True)
-    p_start.add_argument("--authority-ref", action="append", default=[])
-    p_start.add_argument("--allow", action="append", default=[])
-    p_start.add_argument("--deny", action="append", default=[])
-    p_start.add_argument("--stop-on", action="append", default=[])
-    p_start.add_argument("--close-required", dest="close_required", action="store_true", default=True)
-    p_start.add_argument("--no-close-required", dest="close_required", action="store_false")
-    p_start.add_argument("--base-sha", required=True, help="lowercase hex SHA, 7-40 chars")
-    p_start.add_argument("--branch", required=True, help="the working branch for this movement")
-    p_start.add_argument("--model-hint", default=None)
+    p_start.add_argument("--ref", action="append", required=True, dest="ref")
     p_start.add_argument("--out", default=None)
     p_start.set_defaults(func=_cmd_start)
 
-    p_close = sub.add_parser("close", help="build a SESSION_CLOSE packet")
-    p_close.add_argument("--packet-id", required=True)
-    p_close.add_argument("--project", default="neXus")
+    p_close = sub.add_parser("close", help="emit a SESSION_CLOSE packet")
     p_close.add_argument("--movement", required=True)
     p_close.add_argument("--outcome", required=True, choices=OUTCOMES)
-    p_close.add_argument("--changed", action="append", default=[])
-    p_close.add_argument("--preserved", action="append", default=[])
-    p_close.add_argument("--validation", required=True)
-    p_close.add_argument("--privacy-state", required=True, choices=PRIVACY_STATES)
-    p_close.add_argument("--ref", action="append", default=[])
-    p_close.add_argument("--risk", action="append", default=[])
-    p_close.add_argument("--durable-state", action="append", default=[])
-    p_close.add_argument("--next-movement", default=None)
-    p_close.add_argument("--session-routing", required=True, choices=SAME_OR_NEW)
-    p_close.add_argument("--ui-effect", required=True)
-    p_close.add_argument("--base-sha", required=True, help="lowercase hex SHA, 7-40 chars")
-    p_close.add_argument("--branch", required=True)
-    p_close.add_argument("--head-sha", required=True, help="lowercase hex SHA, 7-40 chars")
-    p_close.add_argument("--pr-number", type=int, default=None)
-    p_close.add_argument("--merged", dest="merged", action="store_true", default=False)
-    p_close.add_argument("--no-merged", dest="merged", action="store_false")
-    p_close.add_argument("--merge-sha", default=None, help="required when --merged, must be omitted otherwise")
-    p_close.add_argument("--model-hint", default=None)
+    p_close.add_argument("--ref", action="append", required=True, dest="ref")
     p_close.add_argument("--out", default=None)
     p_close.set_defaults(func=_cmd_close)
 
-    p_validate = sub.add_parser("validate", help="validate one standalone packet")
-    p_validate.add_argument("file", help="path, or - for stdin")
-    p_validate.add_argument("--repo-root", default=None, help="check authority_refs/refs exist under this directory")
-    p_validate.set_defaults(func=_cmd_validate)
-
-    p_render = sub.add_parser("render", help="wrap a bare JSON object in the sentinel envelope")
-    p_render.add_argument("file", help="path, or - for stdin")
-    p_render.add_argument("--out", default=None)
-    p_render.set_defaults(func=_cmd_render)
-
-    p_extract = sub.add_parser("extract", help="extract packet(s) from a larger transcript")
+    p_extract = sub.add_parser("extract", help="extract one packet from surrounding text")
     p_extract.add_argument("file", help="path, or - for stdin")
-    p_extract.add_argument("--packet-id", default=None)
     p_extract.set_defaults(func=_cmd_extract)
+
+    p_validate = sub.add_parser("validate", help="validate one packet")
+    p_validate.add_argument("file", help="path, or - for stdin")
+    p_validate.set_defaults(func=_cmd_validate)
 
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = build_parser()
-    args = parser.parse_args(argv)
+    args = build_parser().parse_args(argv)
     return args.func(args)
 
 
