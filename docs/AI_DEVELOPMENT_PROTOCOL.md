@@ -50,13 +50,14 @@ candidates.
 
 Do not run expensive real-device collection for UI-only or documentation work.
 
-## CI validation policy (canonical — risk-based PR CI)
+## CI validation policy (canonical — DEV.TEST.1 final topology, 2026-09-06)
 
 `.github/workflows/validation.yml` implements the tiers above as two jobs.
-This is the one canonical statement of the policy; other files reference it
-rather than restating it.
+This is the one canonical statement of the policy; other files (`AGENTS.md`/
+`CLAUDE.md`, `AI_START_HERE.md`, `AI_HANDOVER.md`) reference it rather than
+restating it.
 
-- **`validate`** (pull_request): the fast PR gate. Import/compileall
+- **`validate`** (`pull_request`): the fast PR gate. Import/compileall
   sanity, the repository privacy gate, project-state consistency
   (`tests/test_architecture_convergence.py`), the build-history index
   check, a small fixed PR smoke/safety-regression set (credential
@@ -64,68 +65,86 @@ rather than restating it.
   frontend-rendering shared-state-leak guard), and the whitespace/
   conflict-marker check. Deliberately **not** a path→test classifier —
   bounded feature PRs are expected to pay for this job, not the full suite.
-- **`full-regression`** (push to `main`, `workflow_dispatch`): the same
-  gates plus the full pytest suite, **parallel**
+  This is the only job that runs automatically.
+- **`full-regression`** (`workflow_dispatch` **only**): the same gates plus
+  the full pytest suite, **parallel**
   (`python -m pytest -q -n auto --dist worksteal`, `DEV.TEST.1`, 2026-09-06 —
-  Test execution economy above explains why parallel is safe here). One
+  Test execution economy above explains why parallel is safe). One
   pytest-xdist master process still yields one aggregate exit code across
-  every worker, so no worker's failure is masked by another's pass. This is
-  the post-merge integration safety net and the on-demand full-regression
-  path.
+  every worker, so no worker's failure is masked by another's pass. It does
+  **not** run automatically on `pull_request` or on push to `main` — there
+  is no `push:` trigger in the workflow at all. Dispatching it against
+  GitHub-hosted infrastructure is an **exceptional, materially justified
+  action** (e.g. proving the parallel design itself works in the cloud, or
+  a specific reason local/agent-cloud evidence cannot be trusted for a
+  given change) — the already-proven local/agent-cloud parallel run
+  (`python -m pytest -q -n auto --dist worksteal`) is normally sufficient
+  evidence and does not need a GitHub-hosted confirmation.
 
-**Why `full-regression` still excludes `pull_request` (evaluated and
-reverted 2026-09-06, decided independently of the incident below):**
-parallelizing the full suite was expected to make running it on every PR
-affordable, and a same-session attempt did remove the `pull_request`
-exclusion. It was reverted per Product Owner direction back to the
-original approved policy before the true cause of that attempt's own
-verification trouble was known — see the correction paragraph immediately
-below. The reverted state is kept as the current policy on its own merits
-(a same-session decision, not because pull_request-triggered full
-regression is technically unsafe or unworkable): `pull_request` = fast
-`validate` only; push-to-`main`/`workflow_dispatch` = parallel
-`full-regression`. A complete local parallel run is accepted as this
-movement's own pre-merge evidence in its place (see
-`project/build_history.json`'s `parallelize_full_regression_execution`
-record).
+**Why there is no automatic full-suite CI trigger at all (Product Owner
+directed, 2026-09-06, final):** parallelizing the full suite made a
+GitHub-hosted run fast enough to consider running automatically, and this
+movement evaluated two intermediate designs before landing here — running
+`full-regression` on every `pull_request` (evaluated, reverted), and
+running it on every push to `main` (the design actually merged first, then
+also reverted). Both were superseded by this final, explicit Product Owner
+instruction: **no automatic GitHub-hosted full-regression trigger of any
+kind.** `pull_request` schedules `validate` only; `full-regression`
+schedules only via an explicit `workflow_dispatch`. The workflow's `push:`
+trigger was removed entirely — with `full-regression` withheld from
+automatic triggers and `validate` restricted to `pull_request`, a
+push-to-`main` event would otherwise match no job's `if:` condition and
+produce an empty, zero-job workflow run, which is worse than no trigger at
+all. Workflow run `34020356372` (a push-to-main run from the
+intermediate, now-superseded design) remains on record as one-time proof
+that the parallel command itself runs correctly on GitHub-hosted
+infrastructure — it is **not** read as authorization for automatic
+full-regression on every push, which this final topology removes.
 
 **Post-merge YAML-syntax incident (2026-09-06, corrects an in-session
-misdiagnosis):** while verifying the above, every GitHub Actions check
-suite for commits on the working branch — and, after merge, for the merge
-commit on `main` itself — completed with **zero jobs**, for every trigger
-tried (push, pull_request, workflow_dispatch). This was initially
-misdiagnosed as an environment/automation-identity limitation preventing
-GitHub Actions from scheduling pull_request/workflow_dispatch jobs on a
-non-default branch. That diagnosis was **wrong**: the real cause, found
-after merge by parsing the file locally, was a genuine YAML syntax defect
-this movement's own "Report worker topology" step introduced — an unquoted
-plain scalar containing a bare `: ` inside an f-string label, which YAML
-parses as an illegal nested mapping. A file that fails to parse cannot
-schedule a job under **any** trigger, on **any** branch, regardless of who
-pushed it — which is exactly the symptom observed and exactly why it looked
-identity/branch-related until someone actually ran the file through a YAML
-parser. Fixed by rewording the f-string; `tests/test_ci_workflow_fast_pr_
-regression.py::test_workflow_yaml_parses` (new, `pyyaml` dev dependency)
-now parses this file on every test run specifically so a future syntax
-defect fails locally before push, not silently in the cloud after merge.
+misdiagnosis, kept for context):** while iterating on the intermediate
+designs above, every GitHub Actions check suite for commits on the working
+branch — and, after one merge, for the merge commit on `main` itself —
+completed with **zero jobs**. This was initially misdiagnosed as an
+environment/automation-identity limitation preventing GitHub Actions from
+scheduling pull_request/workflow_dispatch jobs on a non-default branch.
+That diagnosis was **wrong**: the real cause, found by parsing the file
+locally, was a genuine YAML syntax defect this movement's own "Report
+worker topology" step introduced — an unquoted plain scalar containing a
+bare `: ` inside an f-string label, which YAML parses as an illegal nested
+mapping. A file that fails to parse cannot schedule a job under **any**
+trigger, on **any** branch, regardless of who pushed it — which is exactly
+the symptom observed and exactly why it looked identity/branch-related
+until someone actually ran the file through a YAML parser. Fixed by
+rewording the f-string; `tests/test_ci_workflow_fast_pr_regression.py::
+test_workflow_yaml_parses` (`pyyaml` dev dependency) now parses this file
+on every test run specifically so a future syntax defect fails locally
+before push, not silently in the cloud after merge.
 
 A PR that trips one of the **full-regression triggers** below still needs a
 full regression before merge — run it locally
 (`py -m pytest -q -n auto --dist worksteal > pytest_result.log 2>&1`, or the
-equivalent one-shot `scripts/pytest_one_shot.ps1`) or via `workflow_dispatch`,
-and say so in the PR. Triggers: dependency/requirements changes; shared test infrastructure;
-schema/storage/migrations; concurrency/global shared state; a security or
-authentication boundary; broad common domain behavior; CI/test
-infrastructure itself; a release/integration milestone; an explicit
-PO/contract requirement. This list is deliberately not an automatic
-classifier — the agent applies it by judgment per change, the same way the
-rest of the validation ladder is applied.
+equivalent one-shot `scripts/pytest_one_shot.ps1`), and say so in the PR.
+Dispatch the GitHub-hosted `full-regression` job explicitly
+(`workflow_dispatch`) only for a materially justified reason beyond that
+local evidence — it is not a routine pre-merge step. Triggers for needing a
+full regression at all (local or, exceptionally, GitHub-hosted): dependency/
+requirements changes; shared test infrastructure; schema/storage/
+migrations; concurrency/global shared state; a security or authentication
+boundary; broad common domain behavior; CI/test infrastructure itself; a
+release/integration milestone; an explicit PO/contract requirement. This
+list is deliberately not an automatic classifier — the agent applies it by
+judgment per change, the same way the rest of the validation ladder is
+applied.
 
-If the post-merge `full-regression` run on `main` fails, treat `main`'s
-integration baseline as unhealthy per `AGENTS.md` "Mandatory build
-lifecycle": report it immediately, and do not merge further feature PRs
-until the regression is understood or a PO explicitly waives it for a
-proven infrastructure-only cause.
+Because `full-regression` no longer runs automatically on push to `main`,
+there is no post-merge integration safety net beyond `validate`'s fast
+gates unless a session explicitly dispatches it. If a dispatched
+`full-regression` run does fail, treat `main`'s integration baseline as
+unhealthy per `AGENTS.md` "Mandatory build lifecycle": report it
+immediately, and do not merge further feature PRs until the regression is
+understood or a PO explicitly waives it for a proven infrastructure-only
+cause.
 
 ## Build size
 

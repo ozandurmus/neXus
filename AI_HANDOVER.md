@@ -16,98 +16,73 @@ doc. Prior versions are in git history.
 
 ## 1. Snapshot
 
-- Date: 2026-09-06. `main` is at merge commit
-  `6ca67cce2c25a8a29f0e1207c5851d0e2756f7f9` (PR #88, on top of PR #87's
-  `06f73e7`). This state-only close-out lands via a narrow follow-up PR.
+- Date: 2026-09-06. This is a narrow, same-session correction to
+  `DEV.TEST.1` — the movement's own build-history/roadmap record is amended
+  in place, not duplicated.
 - Build: `parallelize_full_regression_execution` (`DEV.TEST.1`) —
-  **CLOSED, AUTOMATED_VALIDATED.** Test-execution infrastructure only.
+  **AUTOMATED_VALIDATED, final CI topology now matches Product Owner
+  direction.** Test-execution infrastructure only.
 - Pure process improvement: no product behavior, capability-state
   vocabulary, navigation, registry, storage, enrollment, trust, or
   authorization change. Does **not** begin `M3`.
 
-## 2. What is frozen (unchanged by this build)
+## 2. What changed in this correction
 
-Every frozen product/architecture contract is untouched. This movement
-touched only `.github/workflows/validation.yml`, one CI-shape test file,
-`requirements-dev.txt` (new `pyyaml` dev dependency), and
-documentation/project-state files.
+Prior state (already merged, PR #87/#88/#89): `full-regression` ran
+automatically on push-to-`main` and via `workflow_dispatch`; `pull_request`
+ran `validate` only. That contradicted the Product Owner's final policy.
 
-## 3. What this build actually did (final)
+**Final topology, this correction:**
+- `pull_request` → `validate` (fast gate) — automatic, unchanged.
+- `workflow_dispatch` → `full-regression` (parallel full suite) — **on
+  demand only**.
+- **No `push:` trigger at all** — removed, because with `full-regression`
+  withheld from automatic triggers and `validate` restricted to
+  `pull_request`, a push-to-`main` event would match no job's `if:`
+  condition and produce an empty, zero-job workflow run.
+- `full-regression`'s `if:` changed from `github.event_name != 'pull_request'`
+  to `github.event_name == 'workflow_dispatch'` (explicit, not a double
+  negative now that `push` no longer exists as a possible event).
+- Local/agent-cloud parallel execution stays the default and is normally
+  sufficient evidence; a GitHub-hosted `full-regression` dispatch is now
+  documented as an exceptional, materially justified action, not a routine
+  step.
+- Workflow run `34020356372` (the push-to-main run from the now-superseded
+  intermediate design) is preserved on record as one-time proof the
+  parallel command works on GitHub-hosted infrastructure — explicitly
+  **not** reinterpreted as authorization for automatic full-regression.
 
-- **Root cause (original serial gate)**: `scripts/render_uitest.py::render()`
-  left three `utils.html_export` payload builders bare-rebound after use —
-  already fixed (`try`/`finally` restore) and directly regression-tested
-  regardless of worker/ordering
-  (`tests/test_frontend_rendering_boundary.py::
-  test_render_uitest_restores_the_builders_it_injects`).
-- **Topology**: one `pytest-xdist` process
-  (`python -m pytest -q -n auto --dist worksteal`) for `full-regression`'s
-  full suite step, plus a worker-topology visibility step.
-- **Trigger policy**: unchanged from before this movement —
-  `pull_request` = fast `validate` only; push-to-`main`/`workflow_dispatch`
-  = parallel `full-regression`. A same-session attempt to expand
-  `full-regression` onto `pull_request` too was evaluated and reverted per
-  Product Owner direction, independent of the incident below.
-- **Post-merge YAML-syntax incident, corrected**: PR #87 shipped a genuine
-  YAML defect — an unquoted f-string with a bare `: ` in the "Report worker
-  topology" step — that broke job scheduling under every trigger, on every
-  branch, silently (zero-job "failure" check suites, no readable error).
-  This was first misdiagnosed in-session as an automation-identity
-  limitation preventing pull_request/workflow_dispatch scheduling on
-  non-default branches; that theory was wrong. Fixed via PR #88; every
-  place this session's docs/state had stated the wrong theory was
-  corrected. New permanent guard:
-  `tests/test_ci_workflow_fast_pr_regression.py::test_workflow_yaml_parses`
-  (`pyyaml>=6` added to `requirements-dev.txt`).
-- **Real GitHub Actions cloud proof (closes the movement)**: push-to-main
-  run [`34020356372`](https://github.com/ozandurmus/neXus/actions/runs/34020356372)
-  (commit `6ca67cce2c25a8a29f0e1207c5851d0e2756f7f9`) — `full-regression`
-  **SUCCESS**. From the actual job log: `python -m pytest -q -n auto
-  --dist worksteal`, 4 workers (`CPU count (xdist -n auto target) -> 4`),
-  `1944 passed, 38 skipped, 3 warnings in 275.74s (0:04:35)` (1982
-  collected — one more than the local 1981, an environment-dependent
-  collection difference, not a coverage gap: 0 failed either way).
-  Full-suite step wall-clock 4m36s vs the `11m56s` serial baseline
-  (~61% faster, ~2.6x) — **~36s above the 4-minute acceptable ceiling**,
-  reported honestly. Bottleneck: 98% of tests finish within ~1 minute of
-  actual worker time; a small number of tail tests (consistent with
-  real retry/backoff-timing-bound tests) account for the remaining ~3m41s.
-  Not a correctness/coverage problem.
+## 3. Exact next action
 
-## 4. Exact next action
+1. Open a narrow PR with this correction, inspect its own fast `validate`
+   check, merge once green, sync `main`.
+2. Verify after merge that the push-to-main event did **not** start a
+   `full-regression` run (there is no `push:` trigger to fire one).
+3. **Then**: `M3` (`nav_3_capability_state_vocabulary`). **New session.**
+   `Sonnet 5, extended thinking (high)`. Not started by this or any prior
+   `DEV.TEST.1` session.
 
-1. This state-only close-out PR reconciles `project/build_history.json`
-   (placeholders removed, real evidence filled in, status
-   `automated_validated`), `project/roadmap.json` (`now_next.now.status` →
-   `automated_validated`, `DEV.TEST` track → `done`), `CURRENT_STATE.md`,
-   this file, and `docs/history/INDEX.md`. Merge it once its own fast
-   `validate` gate is green.
-2. **Then**: `M3` (`nav_3_capability_state_vocabulary`) — capability-state
-   vocabulary + presentation contract. **New session.** `Sonnet 5, extended
-   thinking (high)`. Not started by this movement.
+## 4. Test delta
 
-## 5. Test delta
+- `tests/test_ci_workflow_fast_pr_regression.py`: rewritten to prove the
+  final topology — `pull_request` schedules `validate` and not
+  `full-regression`; `workflow_dispatch` schedules `full-regression`;
+  no `push:` trigger exists; the full-suite command remains
+  `python -m pytest -q -n auto --dist worksteal`; the YAML parses.
+- `tests/test_architecture_convergence.py`: green, confirms project-state
+  cross-authority agreement after the roadmap/build-history amendment.
+- No full local or GitHub Actions full-regression run performed for this
+  correction (workflow/docs-only change; the movement's prior real cloud
+  proof, run `34020356372`, stands as evidence parallel execution works).
 
-- Local (pre-merge evidence, PR #87): two clean full parallel runs, 1957
-  passed/24 skipped/0 failed each (32.27s, 35.01s), 1981 collected.
-- GitHub Actions (real cloud proof, post PR #88 fix): run `34020356372`,
-  `full-regression` SUCCESS, 1944 passed/38 skipped/0 failed, 275.74s.
-- `tests/test_ci_workflow_fast_pr_regression.py`: 8 tests (new
-  `test_workflow_yaml_parses`), all green.
+## 5. New risks / notes forward
 
-## 6. New risks / notes forward
-
-- The full-regression parallel step measured 4m36s in the cloud, ~36s over
-  the 4-minute ceiling, due to a small tail of slow tests (not an xdist
-  distribution problem — see item 3). A narrow future follow-up could
-  identify and address the specific slow test(s) if tightening below 4
-  minutes becomes a priority; not required to close this movement, which
-  already delivers a ~61%/2.6x improvement over the 11m56s serial baseline
-  with zero coverage loss.
-- Any future session touching `.github/workflows/validation.yml` should run
-  `test_workflow_yaml_parses` locally before push — a YAML defect in this
-  file produces no readable error anywhere in the GitHub UI, only a silent
-  zero-job failing check suite that can look identity/branch-related until
-  someone actually parses the file.
+- `full-regression` has no automatic trigger of any kind now. There is no
+  post-merge integration safety net beyond `validate`'s fast gates unless a
+  session explicitly dispatches it for a materially justified reason —
+  this is intentional Product Owner policy, not an oversight.
+- The YAML-syntax-defect misdiagnosis lesson from the prior session still
+  applies: run `test_workflow_yaml_parses` locally before touching this
+  workflow file.
 - No frozen decision reopened; `M3` remains not started and is
-  `now_next.next` again, unchanged by this movement.
+  `now_next.next`, unchanged by this correction.
