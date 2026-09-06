@@ -7,15 +7,15 @@ detail is not here either** — it is in `project/build_history.json`
 linked documents under `docs/history/`. `docs/history/INDEX.md` is the
 generated one-line timeline.
 
-- **Checkpoint:** 2026-09-06, `main` at merge commit `4b7e651` (PR #91, `M3`
-  contract freeze). The `d363b17`/PR #90 line it replaces was written
-  pre-merge in the same session and was stale on arrival.
+- **Checkpoint:** 2026-09-06, `M4` branched from `main` at `33b6798` (PR #92,
+  `M3` post-merge reconciliation). Implementation complete on the branch;
+  PR CI pending.
 - **Current build** (per `project/roadmap.json` `now_next.now`):
-  `nav_3_capability_state_vocabulary` (`M3`) — **COMPLETE**, contract FROZEN —
-  PRODUCT OWNER APPROVED 2026-09-06. `now_next.next` is `M4`
-  (`local_control_plane_metadata_store`), not started and unauthorized.
+  `local_control_plane_metadata_store` (`M4`) — **COMPLETE**, storage
+  infrastructure only. `now_next.next` is `M5`
+  (`collector_target_selection_seam`), not started and unauthorized.
   `op2_c_cp_clusterxl_adapter_scoping` stays `upcoming`, blocked on
-  `DEPLOY.1`. `DEV.TEST.1`, `PCP.1`, `M1`, `M2` complete —
+  `DEPLOY.1`. `DEV.TEST.1`, `PCP.1`, `M1`, `M2`, `M3` complete —
   build_history.json.
 - **OP.2.0 CLASS 2 architecture** (`docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md`):
   **CONTRACT FROZEN 2026-09-04**; `OP.2.A`/`OP.2.B` IMPLEMENTED; `OP.2.1` CP
@@ -55,38 +55,42 @@ test-enforced boundaries. Current numbers:
 
 ## Active build
 
-**`nav_3_capability_state_vocabulary`** (`M3`) — **COMPLETE / FROZEN**,
-Product Owner approved 2026-09-06. Contract:
-`docs/design/CAPABILITY_STATE_VOCABULARY_AND_PRESENTATION.md` — **FROZEN —
-PRODUCT OWNER APPROVED**, implementation authority for the capability-state
-vocabulary, the resolution contract and the presentation matrix.
+**`local_control_plane_metadata_store`** (`M4`) — **COMPLETE**, storage
+infrastructure only. Contract:
+`docs/history/phase/M4_LOCAL_CONTROL_PLANE_METADATA_STORE.md`; frozen parents
+`LOCAL_CONTROL_PLANE_RUNTIME_AND_ENROLLMENT.md` §6.4/§6.5 (`AC-ST-1`…`8`) and
+`CAPABILITY_STATE_VOCABULARY_AND_PRESENTATION.md` §8.2.1 (`AC-CS-70`…`73`,
+`97`).
 
-Normative model: tagged union `RESOLVED{primary_status, capability_qualifiers,
-evidence_presentation, action_affordance}` | `OMITTED{reason, diagnostic}`;
-`NOT_SHIPPED` is a `SurfaceOmissionReason`, not a `CapabilityState`;
-`action_affordance[]` is per-action and **presentation-time only**, never
-claiming an `E7` check passed; `E4` is total over four outcomes including
-`NO_APPLICABLE_AUTHORITY`; `CX1` is a subject-scoped unsafe contradiction while
-`RI-1`/`RI-2` are bounded inconsistencies. Dimensions `D1`–`D7`, gates
-`E1`–`E7`, inputs `I1`–`I20`, criteria `AC-CS-1`…`97`.
+Local SQLite at `<data_root>/state/control_plane.db`, schema version 1, seven
+`STRICT` tables. WAL, `synchronous=FULL` (over WAL's usual `NORMAL`: `CON.0`
+§7.9 needs a job record durable before the runner may start it),
+`foreign_keys=ON`, explicit 5 s `busy_timeout`. Migrations are explicit,
+monotonic and one transaction per version. Typed fail-closed outcomes for
+invalid placement, unsupported/newer schema, corruption, failed migration,
+bounded contention and uniqueness/FK violation — never auto-repair, recreate,
+downgrade or discard.
 
-**Six PO decisions CLOSED / APPROVED:** `PO-M3-1` stable visible tabs (`FA-5`);
-`PO-M3-2` semantic parent corrections (`FA-1`–`FA-4`, `FA-6`–`FA-8`);
-`PO-M3-3` tagged-union composition (`FA-9`); `PO-M3-4` directional `D4`;
-`PO-M3-5` `--member-specific` as later UI contract direction, **no CSS
-implemented**; `PO-M3-6` evidence-gated `NOT_SCHEDULED`.
+**Boundary held.** `PCP.1` Device Registry stays filesystem JSON, unmigrated;
+targets are opaque `device_id`/`logical_entity_id` references with no copied
+endpoint; no credential, trust, raw-config, backup, CAS or `OP.2` authority
+column exists — proven by walking the real schema. Projections persist
+`D2`–`D6`, basis/run, semantic identity and producer/support-rule context
+only; no presentation state as truth. **SQLite is not the production engine** —
+`pcp_storage_engine` stays open. Store + WAL/SHM are LOCAL-SENSITIVE and
+bundle-excluded by construction (`data/state/*` is never enumerated).
 
-**Nine amendments `FA-1`…`FA-9` APPLIED** to
-`docs/design/NAVIGATION_INFORMATION_ARCHITECTURE.md`, which carries its own
-bounded amendment record. No frozen decision reopened — `PO-NAV-1`…`PO-NAV-8`,
-`D-NAV1`…`D-NAV14`, the six-root baseline and the entity-workspace model are
-unchanged; the only amended criterion is `AC-DIF-7` (`FA-4`).
+**Not implemented, by design:** `M5` job behaviour, `M6` target resolution,
+`M7` runner, scheduling, enrollment, HTTP/UI integration, device contact.
 
-**Not implemented.** `D3` arrives with `M10`, per-(entity, capability) `D5`
-with `M12`; every capability resolves `UNKNOWN` until they ship. `UCQ-1` is an
-`M10`-owned implementation obligation, not an approval gate — the fail-closed
-fallback yields `UNDETERMINED`, never `AVAILABLE_FOR_SUBMISSION`. Council
-dissents are preserved as historical design dissent.
+## Predecessor — `M3`
+
+**`nav_3_capability_state_vocabulary`** — COMPLETE / FROZEN (PO approved
+2026-09-06). `docs/design/CAPABILITY_STATE_VOCABULARY_AND_PRESENTATION.md` is
+implementation authority for the capability-state vocabulary, resolution
+contract and presentation matrix (`D1`–`D7`, `E1`–`E7`, `AC-CS-1`…`97`). It has
+no implementation: `D3` arrives with `M10`, per-(entity, capability) `D5` with
+`M12`, so every capability resolves `UNKNOWN` until they ship.
 
 ## `OP.0b.0` — FROZEN WITH REAL-ENV VALIDATION GATES
 

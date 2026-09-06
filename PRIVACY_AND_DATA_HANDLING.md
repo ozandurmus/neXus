@@ -56,6 +56,15 @@ Do **not** upload/share by default:
     endpoints, tags) and `data/state/device_registry.lock` (its mutation
     lock: pid/hostname/owner_token) — both RuntimeRoot-only, repository-
     excluded, and never enumerated into the support bundle.
+-   `data/state/control_plane.db` (`M4` local control-plane metadata store:
+    job definitions, job/run lifecycle records, schedules, capability
+    projections, idempotency/submission metadata) and its
+    `control_plane.db-wal` / `control_plane.db-shm` sidecars — RuntimeRoot-
+    only, repository-excluded (`DATABASE_ARTIFACT` in the privacy gate,
+    `*.db*` in `.gitignore`), and never enumerated into the support bundle,
+    which walks `data/runs/*` and never `data/state/*`. It holds **opaque**
+    device/logical-entity references and job history — never an endpoint,
+    credential, trust secret, raw configuration, backup byte or CAS object.
 
 A local coding agent may inspect a **narrow requested record** if
 necessary, but must not dump the entire file into conversation/context.

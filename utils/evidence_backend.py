@@ -4,7 +4,8 @@ Five independent storage concerns move from per-container local files to an
 opt-in PostgreSQL backend, byte-compatible with today's filesystem behavior
 (a sixth, the CON.2 console job store, and a seventh, the OP.2.A/B class 2
 action record, were added later; an eighth, the PCP.1 Device Registry, is
-filesystem-only for now — see their own sections below):
+filesystem-only for now, and a ninth, the M4 local control-plane metadata
+store, is local-SQLite-only — see their own sections below):
 
 * **Config snapshot** metadata index (``utils/config_evidence.py``,
   ``utils/config_history.py``) — content-addressed payload blobs
@@ -1508,3 +1509,32 @@ def select_device_registry_backend(*, path: Path) -> DeviceRegistryBackend:
     if kind not in ("filesystem", ""):
         raise EvidenceBackendError(f"Unsupported {ENV_BACKEND}: {kind!r}")
     return FilesystemDeviceRegistryBackend(path)
+
+
+def select_control_plane_metadata_backend(*, data_root: Path) -> Any:
+    """Ninth concern (M4) -- the local control-plane metadata store.
+
+    Local SQLite only, and deliberately so: approved Option A backs *new*
+    control-plane metadata with SQLite while the PCP.1 Device Registry stays
+    on its frozen filesystem JSON backend
+    (docs/design/LOCAL_CONTROL_PLANE_RUNTIME_AND_ENROLLMENT.md section 6.4).
+    Selecting ``postgres`` raises rather than silently falling back --
+    ``pcp_storage_engine`` is still an open, production-scoped decision and
+    SQLite is explicitly not proposed as the production engine (AC-ST-7).
+
+    Imported lazily so this module keeps no import-time dependency on the
+    store, matching how the other concerns stay independent of their owners.
+    """
+    kind = active_evidence_backend_kind()
+    if kind == "postgres":
+        raise EvidenceBackendError(
+            f"{ENV_BACKEND}=postgres has no control-plane metadata store implementation in M4 "
+            "(pcp_storage_engine is still an open decision, and SQLite is not the production "
+            "engine) -- use the local filesystem default"
+        )
+    if kind not in ("filesystem", ""):
+        raise EvidenceBackendError(f"Unsupported {ENV_BACKEND}: {kind!r}")
+
+    from utils.control_plane_store import ControlPlaneStore
+
+    return ControlPlaneStore(data_root)

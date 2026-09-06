@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "current_build": "nav_3_capability_state_vocabulary",
+  "current_build": "local_control_plane_metadata_store",
   "current_track": "PCP.x",
   "progress_contract": "Weighted acceptance-criterion completion. Percentages describe the declared roadmap, not calendar time or delivery ETA.",
   "tracks": [
@@ -140,30 +140,28 @@
   "now_next": {
     "horizon_contract": "NOW is exactly one build. NEXT is exactly one. Everything else is an `upcoming` row carrying its own true status: planned = AFTER, blocked = waiting on a named external gate, deferred = consciously postponed. `now.build` must equal the newest project/build_history.json record -- utils.project_plan enforces it.",
     "now": {
-      "build": "nav_3_capability_state_vocabulary",
-      "title": "M3 -- Capability-state vocabulary + presentation contract",
-      "goal": "Produce an evidence-backed, testable capability-state and presentation contract. COMPLETE and FROZEN 2026-09-06 by Product Owner approval: six decisions PO-M3-1..PO-M3-6 closed, nine amendments FA-1..FA-9 applied to the frozen navigation contract, and docs/design/CAPABILITY_STATE_VOCABULARY_AND_PRESENTATION.md moved from DRAFT to FROZEN -- PRODUCT OWNER APPROVED. Documentation and project state only; no runtime implementation.",
+      "build": "local_control_plane_metadata_store",
+      "title": "M4 -- Local control-plane metadata store (approved Option A)",
+      "goal": "Implement the additive local SQLite control-plane metadata store under RuntimeRoot data_root, within the frozen section 6.4 ownership boundary and section 6.5 engine contract. COMPLETE: schema version 1, explicit monotonic transactional migrations, WAL + synchronous=FULL + foreign_keys=ON + bounded busy_timeout, STRICT tables, and typed fail-closed outcomes. Storage infrastructure only -- no job behaviour, target resolution, runner, scheduling, enrollment, HTTP/UI integration or device contact.",
       "status": "complete",
       "started": "2026-09-06",
       "notes": [
-        "FROZEN -- PRODUCT OWNER APPROVED, 2026-09-06. docs/design/CAPABILITY_STATE_VOCABULARY_AND_PRESENTATION.md is implementation authority for the capability-state vocabulary, the resolution contract and the presentation matrix.",
-        "Normative model: tagged union RESOLVED{primary_status, capability_qualifiers, evidence_presentation, action_affordance} | OMITTED{reason, diagnostic}; NOT_SHIPPED is a SurfaceOmissionReason, not a CapabilityState; action_affordance is per-action and presentation-time only, never claiming an E7 check passed; E4 is total over four outcomes including NO_APPLICABLE_AUTHORITY; CX1 is a subject-scoped unsafe contradiction while RI-1/RI-2 are bounded inconsistencies; RI-1 comparability is total over K1-K6. 97 acceptance criteria AC-CS-1..97.",
-        "Six PO decisions CLOSED/APPROVED: PO-M3-1 stable visible tabs (FA-5); PO-M3-2 semantic parent corrections (FA-1..FA-4, FA-6..FA-8); PO-M3-3 tagged-union composition (FA-9); PO-M3-4 directional D4; PO-M3-5 --member-specific as later UI contract direction, no CSS implemented; PO-M3-6 evidence-gated NOT_SCHEDULED.",
-        "Nine amendments FA-1..FA-9 APPLIED to docs/design/NAVIGATION_INFORMATION_ARCHITECTURE.md, which carries its own bounded amendment record. No frozen decision reopened: PO-NAV-1..PO-NAV-8, D-NAV1..D-NAV14, the six-root baseline and the entity-workspace model are unchanged; the only amended acceptance criterion is AC-DIF-7 (FA-4).",
-        "NOT implemented: D3 arrives with M10 and per-(entity, capability) D5 with M12, so every capability resolves UNKNOWN until they ship. UCQ-1 is an M10-owned implementation obligation, not an approval gate -- M3's fail-closed fallback yields UNDETERMINED, never AVAILABLE_FOR_SUBMISSION. Council dissents are historical design dissent.",
-        "M4 is NOT started and NOT authorized by this freeze; M4..M14 each require their own separate go-ahead."
-      ],
-      "completed": "2026-09-06"
+        "Owns only job definitions, job/run lifecycle records, schedules, capability projections, idempotency/submission metadata and control-plane runtime metadata (AC-ST-2). Owns none of: Device Registry rows, copied endpoints or fallback endpoint authority, credential payloads, trust secrets, raw configuration, backup bytes, CAS evidence objects, OP.2 action authority, or resolved presentation state as durable truth (AC-ST-3, AC-CS-72).",
+        "PCP.1 Device Registry remains filesystem JSON and was not migrated, mirrored or read (AC-ST-1). Targets are stored only as opaque device_id / logical_entity_id references; no endpoint is copied or retained as fallback authority (AC-ST-5).",
+        "Uses the frozen CON.2 job lifecycle vocabulary (queued/running/succeeded/failed/blocked/skipped) and adds no member to it (M3 binding X1).",
+        "SQLite is NOT the production engine: pcp_storage_engine stays open and production-scoped (AC-ST-7). Runtime auto-creation is pre-production only; production applies migrations through a deployment-controlled step (DEV.4.6).",
+        "Store, WAL and SHM files are LOCAL-SENSITIVE (CLASS 2), repository-excluded and excluded from the support bundle by construction (AC-ST-6).",
+        "Contract: docs/history/phase/M4_LOCAL_CONTROL_PLANE_METADATA_STORE.md."
+      ]
     },
     "next": {
-      "build": "local_control_plane_metadata_store",
-      "title": "M4 -- Local control-plane metadata store (approved Option A)",
+      "build": "collector_target_selection_seam",
+      "title": "M5 -- Collector target-selection seam (one collector)",
       "status": "planned",
       "notes": [
-        "Per the frozen M1..M14 sequence (docs/design/LOCAL_CONTROL_PLANE_RUNTIME_AND_ENROLLMENT.md section 12/12.1): implement local SQLite control-plane metadata only, additively, within the section 6.4 ownership boundary and the section 6.5 engine contract. Acceptance criteria AC-ST-1..AC-ST-8 already frozen.",
-        "Owns ONLY job definitions, job/run lifecycle records, schedules, capability projections, idempotency/submission metadata and control-plane runtime metadata. Owns NONE of: Device Registry rows, credential payloads, trust secrets, raw configuration, backup bytes, CAS evidence objects, OP.2 action authority. No registry migration. SQLite is not the production engine.",
-        "Requires its own separate authorization to start. Independent of M3's outcome -- no storage change is in M3 scope.",
-        "Recommended: extended reasoning (storage/CAS boundary), new session."
+        "Per the frozen M1..M14 sequence (docs/design/LOCAL_CONTROL_PLANE_RUNTIME_AND_ENROLLMENT.md section 12/12.1): give exactly one collector a registry-derived target set (PCP.6, narrowed). M5 is the critical path -- nothing device-targeted is honest before it.",
+        "Security invariant: no plane-wide-then-filter. A plane-wide run must never be relabelled as a device-targeted job (AC-TGT-4), and aggregate per-endpoint contact stays bounded by the admission coordinator and the vendor budget of 1.",
+        "Requires its own separate authorization to start. Recommended: extended reasoning for the first collector, normal for the rest; new session."
       ]
     },
     "upcoming": [
