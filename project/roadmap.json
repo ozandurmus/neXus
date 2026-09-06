@@ -142,12 +142,12 @@
     "now": {
       "build": "gov_session_1_transfer_protocol",
       "title": "GOV.SESSION.1 -- tool-agnostic agent session-transfer protocol + reference CLI",
-      "goal": "A vendor-neutral, offline packet protocol (permanent literal sentinel wrapping a strict-JSON SESSION_START/SESSION_CLOSE payload) for handing one bounded movement between agent sessions/tools without pasting chat history, plus a dependency-free reference CLI. Repository state stays authoritative; a packet is transport only. Parallel GOV engineering track -- unrelated to, and does not change, the PCP.x/M8 product sequence; M8.2 stays AUTOMATED_VALIDATED (PR #98 pending) and M8.3 stays this row's `next`.",
+      "goal": "A vendor-neutral, offline packet protocol (permanent literal sentinel wrapping a strict-JSON SESSION_START/SESSION_CLOSE payload) for handing one bounded movement between agent sessions/tools without pasting chat history, plus a dependency-free reference CLI. Repository state stays authoritative; a packet is transport only. Parallel GOV engineering track -- unrelated to, and does not change, the PCP.x/M8 product sequence; M8.2 (PR #98) is merged into main, and M8.3 stays this row's `next`.",
       "status": "automated_validated",
       "started": "2026-09-07",
       "completed": "2026-09-07",
       "notes": [
-        "docs/design/GOV_SESSION_TRANSFER_PROTOCOL.md is DRAFT -- PO REVIEW PENDING, not FROZEN. Full evidence, including the mid-session Product-Owner correction from an earlier versioned/free-text design to the shipped permanent-sentinel/strict-JSON design: project/build_history.json (gov_session_1_transfer_protocol)."
+        "docs/design/GOV_SESSION_TRANSFER_PROTOCOL.md is DRAFT -- PO REVIEW PENDING, not FROZEN, now at Revision 3. Full evidence, including the round-1 mid-session Product-Owner correction from an earlier versioned/free-text design to the shipped permanent-sentinel/strict-JSON design, and correction round 1's per-type payload ceilings, required git object, canonical-transport-form wording, normative-schema reframing, and the M8.2-merged reconciliation: project/build_history.json (gov_session_1_transfer_protocol)."
       ]
     },
     "next": {

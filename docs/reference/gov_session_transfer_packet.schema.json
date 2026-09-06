@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://nexus.local/schemas/gov_session_transfer_packet.schema.json",
   "title": "GOV.SESSION.1 packet payload (excludes the <<<NEXUS_SESSION_PACKET>>> sentinel envelope)",
-  "description": "Canonical schema for docs/design/GOV_SESSION_TRANSFER_PROTOCOL.md. scripts/gov_session_transfer.py enforces these constraints natively (dependency-free); tests/test_gov_session_transfer.py keeps the two in agreement. This document is descriptive/reference-only -- the CLI does not load or interpret it at runtime.",
+  "description": "Normative schema for docs/design/GOV_SESSION_TRANSFER_PROTOCOL.md. scripts/gov_session_transfer.py is the conforming reference implementation: dependency-free (no jsonschema library load), it enforces every constraint below natively. tests/test_gov_session_transfer.py proves material parity (required fields, additionalProperties, enum values) between this document and that implementation, so the two cannot silently diverge. One constraint this document cannot express as a JSON Schema keyword: the whole-payload UTF-8 byte ceiling is per message_type (SESSION_START 4096, SESSION_CLOSE 8192, both enforced by scripts/gov_session_transfer.py::check_type_specific_size) -- a serialized-size limit, not a field-level one.",
   "type": "object",
   "$defs": {
     "shortId": {
@@ -37,6 +37,50 @@
       "type": "integer",
       "enum": [1],
       "description": "Only integer 1 is supported by this movement. A boolean, string, zero, negative, or any other integer must fail closed as unsupported -- booleans are structurally excluded by the 'type: integer' keyword, which JSON Schema does not satisfy with true/false."
+    },
+    "gitSha": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{7,40}$",
+      "description": "A lowercase hex Git object SHA, short or full."
+    },
+    "gitShaOrNull": {
+      "type": ["string", "null"],
+      "pattern": "^[0-9a-f]{7,40}$"
+    },
+    "branchName": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_./-]{0,199}$",
+      "description": "A plausible Git ref name -- not a full Git ref-name validator."
+    },
+    "prNumberOrNull": {
+      "type": ["integer", "null"],
+      "minimum": 1
+    },
+    "gitStart": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["base_sha", "branch"],
+      "properties": {
+        "base_sha": { "$ref": "#/$defs/gitSha" },
+        "branch": { "$ref": "#/$defs/branchName" }
+      }
+    },
+    "gitClose": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["base_sha", "branch", "head_sha", "pr_number", "merged", "merge_sha"],
+      "properties": {
+        "base_sha": { "$ref": "#/$defs/gitSha" },
+        "branch": { "$ref": "#/$defs/branchName" },
+        "head_sha": { "$ref": "#/$defs/gitSha" },
+        "pr_number": { "$ref": "#/$defs/prNumberOrNull" },
+        "merged": { "type": "boolean" },
+        "merge_sha": { "$ref": "#/$defs/gitShaOrNull" }
+      },
+      "if": { "properties": { "merged": { "const": true } } },
+      "then": { "properties": { "merge_sha": { "type": "string" } } },
+      "else": { "properties": { "merge_sha": { "const": null } } },
+      "description": "SHA/null consistency: merge_sha is required (non-null) when merged is true, and must be null when merged is false -- enforced here via if/then/else, and natively in scripts/gov_session_transfer.py::_validate_git_close."
     }
   },
   "oneOf": [
@@ -56,7 +100,8 @@
         "allow",
         "deny",
         "stop_on",
-        "close_required"
+        "close_required",
+        "git"
       ],
       "properties": {
         "protocol_version": { "$ref": "#/$defs/protocolVersion" },
@@ -71,6 +116,7 @@
         "deny": { "$ref": "#/$defs/refList" },
         "stop_on": { "$ref": "#/$defs/refList" },
         "close_required": { "type": "boolean" },
+        "git": { "$ref": "#/$defs/gitStart" },
         "model_hint": { "$ref": "#/$defs/shortText" }
       }
     },
@@ -94,7 +140,8 @@
         "durable_state",
         "next_movement",
         "session_routing",
-        "ui_effect"
+        "ui_effect",
+        "git"
       ],
       "properties": {
         "protocol_version": { "$ref": "#/$defs/protocolVersion" },
@@ -123,6 +170,7 @@
         },
         "session_routing": { "$ref": "#/$defs/sameOrNew" },
         "ui_effect": { "$ref": "#/$defs/shortText" },
+        "git": { "$ref": "#/$defs/gitClose" },
         "model_hint": { "$ref": "#/$defs/shortText" }
       }
     }

@@ -7,11 +7,16 @@ what it ships: the envelope/schema below, `scripts/gov_session_transfer.py`
 as its reference implementation, and their tests. It authorizes no future
 packet's *content* — a packet is transport, never an authority (§2).
 
-Revision 2 (this document) supersedes the free-text, versioned-sentinel
-design this movement started with. Superseded: a per-packet `packet_id`
-embedded in the sentinel line itself, and a compact `KEY: value` text
-payload. Both are replaced below by one permanent literal sentinel and a
-strict JSON payload, per Product-Owner correction mid-movement.
+Revision 2 superseded the free-text, versioned-sentinel design this movement
+started with (a per-packet `packet_id` embedded in the sentinel line itself,
+and a compact `KEY: value` text payload) with the permanent literal sentinel
+and strict JSON payload below. Revision 3 (this document, final-acceptance
+correction round) added the required `git` object (§4), split the payload
+size ceiling per message type (§4), made the packet the canonical
+chat-transport form of `SESSION START`/`SESSION CLOSE` rather than an
+addition alongside a separate narrative (§2, §5), and made this schema
+document normative rather than reference-only (§4) — a CLI/schema parity
+test in `tests/test_gov_session_transfer.py` enforces the last of these.
 
 | | |
 | --- | --- |
@@ -55,11 +60,15 @@ authority chain — never a copy of that chain's content.
   contract text or project history. Bounded sizes are enforced, not merely
   requested (§4).
 - **Two message types, nothing else.** `SESSION_START` opens a movement;
-  `SESSION_CLOSE` closes it. There is no third type. This mirrors, and does
-  not replace, the existing mandatory `SESSION START`/`SESSION CLOSE`
-  narrative reports in `AI_START_HERE.md` — a packet is the compact,
-  machine-checkable spine of that same pair of reports, not a substitute for
-  producing them in the repository/chat as before.
+  `SESSION_CLOSE` closes it. There is no third type. A valid packet *is* the
+  canonical chat/session-transport form of `AI_START_HERE.md`'s
+  `SESSION START`/`SESSION CLOSE` requirement — an agent that renders one
+  does not also owe a separate, duplicate unstructured prose narrative
+  before or after it in chat. This replaces chat narrative only: the
+  durable repository updates `AGENTS.md` "Mandatory session start/close" and
+  "Project-state update rule" require (`CURRENT_STATE.md`,
+  `AI_HANDOVER.md`, `project/*.json`, phase docs as applicable) remain
+  mandatory and authoritative regardless of whether a packet was rendered.
 - **Session routing is explicit, not inferred.** `SAME` (in `SESSION_START.
   session_mode` or `SESSION_CLOSE.session_routing`) means the movement
   continues in the current session/branch — a correction round, a merge
@@ -133,28 +142,45 @@ and close:
 
 ## 4. Payload contract
 
-Full machine-readable definition:
+**Normative**, alongside this document:
 `docs/reference/gov_session_transfer_packet.schema.json` (JSON Schema,
 `oneOf` branch selected by `message_type`, `additionalProperties: false` on
-both branches). The CLI enforces the identical constraints natively in
-Python (dependency-free — no `jsonschema` library); `tests/test_gov_session_transfer.py`
-keeps the two from drifting apart.
+both branches and on the nested `git` object). `scripts/gov_session_transfer.py`
+is the conforming reference implementation: dependency-free (it does not
+load a `jsonschema` library at runtime), it enforces every constraint below
+natively in Python. `tests/test_gov_session_transfer.py` proves material
+parity between the two — required-field sets, `additionalProperties`, and
+every closed-vocabulary enum are asserted equal — so schema and
+implementation cannot silently diverge. The one constraint the schema
+cannot express as a field-level JSON Schema keyword is the whole-payload
+byte ceiling below (a serialized-size limit); that stays documented here
+and in the schema's own top-level `description`, enforced only by the CLI.
 
-**Size ceilings** (reject before/while parsing, not merely by convention):
+**Size ceilings** (reject before/while parsing, not merely by convention).
+The payload ceiling is **per message type**, not one shared number:
 
 | Bound | Value |
 | --- | --- |
-| Whole payload (bytes, between the sentinel lines) | 8192 |
+| `SESSION_START` whole payload (UTF-8 bytes, between the sentinel lines) | 4096 |
+| `SESSION_CLOSE` whole payload (UTF-8 bytes, between the sentinel lines) | 8192 |
 | `packet_id` / `project` / `movement` | ≤ 80 chars, `^[A-Za-z0-9][A-Za-z0-9_.-]*$` |
 | Short free-text field (`objective`, `ui_effect`, `outcome`, `next_movement`, `model_hint`, …) | ≤ 240 chars |
 | `validation` (test-evidence summary) | ≤ 600 chars |
 | Any list (`authority_refs`, `allow`, `deny`, `stop_on`, `changed`, `preserved`, `refs`, `risks`, `durable_state`) | ≤ 24 items, each ≤ 300 chars |
 
+A payload's `message_type` is not known until it is parsed, so enforcement
+is two-stage: a coarse, type-agnostic gate at the larger of the two values
+(8192 bytes) runs first and cheaply rejects worst-case input before
+parsing; the exact per-type ceiling is then enforced the moment
+`message_type` is known (`scripts/gov_session_transfer.py::check_type_specific_size`,
+called from both `parse_and_validate` and `render_packet`). Both the exact
+boundary and one byte over it are tested for both message types.
+
 **Common fields (both message types):** `protocol_version` (integer, exactly
 `1` in this movement — `true`/`false`, a string, `0`, a negative number or
 any other integer fail closed as unsupported), `packet_id`, `message_type`
 (`SESSION_START` | `SESSION_CLOSE`, closed vocabulary), `project`,
-`movement`.
+`movement`, `git` (below).
 
 **`SESSION_START` additionally requires:** `session_mode` (`SAME` | `NEW`),
 `objective`, `authority_refs` (repository-relative paths this packet's
@@ -169,6 +195,20 @@ reinvented), `changed`, `preserved`, `validation`, `privacy_state`
 (`PASS` | `FAIL` | `NOT_APPLICABLE` | `UNKNOWN`), `refs`, `risks`,
 `durable_state`, `next_movement` (string or `null`), `session_routing`
 (`SAME` | `NEW`), `ui_effect`. Optional: `model_hint`.
+
+**`git` object (required on both message types, `additionalProperties: false`):**
+the machine-readable position of this packet in the repository's own Git
+history — never a substitute for the repository state itself, only a
+pointer to it.
+
+- `SESSION_START.git`: `base_sha` (lowercase hex, 7–40 chars — the commit
+  the branch forks from), `branch` (the working branch for this movement).
+- `SESSION_CLOSE.git`: `base_sha`, `branch`, `head_sha` (lowercase hex),
+  `pr_number` (positive integer or `null` — a direct-to-`main` movement with
+  no PR is legitimate), `merged` (boolean), `merge_sha` (lowercase hex or
+  `null`). SHA/null consistency is enforced, not merely typed: `merge_sha`
+  is required (non-`null`) when `merged` is `true`, and must be `null` when
+  `merged` is `false` — both directions are tested.
 
 Strict-JSON rules enforced ahead of field validation: no duplicate object
 keys, no `NaN`/`Infinity`/`-Infinity` tokens, no trailing non-whitespace
@@ -190,10 +230,12 @@ array, string or number).
    narrower constraint on top of the repository's own approval boundaries —
    never as an expansion of them.
 5. Close the movement the normal way: update durable project state
-   (`AGENTS.md` "Project-state update rule"), rewrite `AI_HANDOVER.md`,
-   produce the narrative `SESSION CLOSE` report, and — when
-   `SESSION_START.close_required` was `true` — also render a `SESSION_CLOSE`
-   packet (`scripts/gov_session_transfer.py close`) as its compact spine.
+   (`AGENTS.md` "Project-state update rule") and rewrite `AI_HANDOVER.md` —
+   those are unaffected by this protocol and remain mandatory. When
+   `SESSION_START.close_required` was `true`, render a `SESSION_CLOSE`
+   packet (`scripts/gov_session_transfer.py close`) as the chat/session
+   transport form of the close — it replaces a separate unstructured prose
+   `SESSION CLOSE` narrative, not the durable repository updates (§2).
    Only after that does a `SESSION_START` packet for the *next* movement
    make sense; this protocol generates none automatically (§2).
 
@@ -212,8 +254,8 @@ in this repository — by following the existing canonical entry point.
 `argparse`, `json`, `dataclasses`, `pathlib`, `sys`). Five subcommands:
 
 ```
-py scripts/gov_session_transfer.py start   --packet-id ... --movement ... --objective ... [--allow X]* [--deny X]* [--stop-on X]* [--authority-ref PATH]* [--session-mode SAME|NEW] [--close-required|--no-close-required] [--model-hint ...] [--out FILE]
-py scripts/gov_session_transfer.py close   --packet-id ... --movement ... --outcome ... --validation ... --privacy-state ... --session-routing SAME|NEW [--changed X]* [--preserved X]* [--ref X]* [--risk X]* [--durable-state X]* [--next-movement ...] [--ui-effect ...] [--out FILE]
+py scripts/gov_session_transfer.py start   --packet-id ... --movement ... --objective ... --base-sha SHA --branch NAME [--allow X]* [--deny X]* [--stop-on X]* [--authority-ref PATH]* [--session-mode SAME|NEW] [--close-required|--no-close-required] [--model-hint ...] [--out FILE]
+py scripts/gov_session_transfer.py close   --packet-id ... --movement ... --outcome ... --validation ... --privacy-state ... --session-routing SAME|NEW --base-sha SHA --branch NAME --head-sha SHA [--pr-number N] [--merged|--no-merged] [--merge-sha SHA] [--changed X]* [--preserved X]* [--ref X]* [--risk X]* [--durable-state X]* [--next-movement ...] [--ui-effect ...] [--out FILE]
 py scripts/gov_session_transfer.py validate  FILE|-  [--repo-root DIR]
 py scripts/gov_session_transfer.py render    FILE|-              # bare JSON object -> sentinel-wrapped canonical text
 py scripts/gov_session_transfer.py extract   FILE|-  [--packet-id ID]
@@ -231,5 +273,8 @@ no scheduler, no credential or device access — see
 `tests/test_gov_session_transfer.py` for the exact contract each subcommand
 enforces, including duplicate-key JSON, unsupported `protocol_version`,
 whitespace-altered/odd/empty sentinel boundaries, sentinel-in-payload,
-multi-packet transcript extraction with `--packet-id` selection, and
-deterministic-rendering/exit-code proof.
+multi-packet transcript extraction with `--packet-id` selection,
+deterministic-rendering/exit-code proof, the `git` object's required-field
+and `merged`/`merge_sha` consistency rules, the exact-boundary and
+one-byte-over cases of each message type's own payload ceiling, and the
+CLI/schema parity assertions (§4).

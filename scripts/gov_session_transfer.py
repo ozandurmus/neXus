@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -43,12 +44,24 @@ SAME_OR_NEW = ("SAME", "NEW")
 OUTCOMES = ("AUTOMATED_VALIDATED", "REAL_ENV_VALIDATED", "DONE", "PARTIAL", "BLOCKED")
 PRIVACY_STATES = ("PASS", "FAIL", "NOT_APPLICABLE", "UNKNOWN")
 
-MAX_PAYLOAD_BYTES = 8192
+#: Per-message-type payload ceilings (UTF-8 bytes, between the sentinel
+#: lines / of the canonically-rendered body). SESSION_START is smaller --
+#: it opens a movement and should stay a pointer, never a spec. The coarse,
+#: type-agnostic MAX_PAYLOAD_BYTES below is the larger of the two: it is
+#: the only ceiling available before a payload is parsed enough to know its
+#: message_type, so it runs first and cheaply rejects worst-case input;
+#: the exact per-type ceiling is enforced immediately after, once
+#: message_type is known.
+PAYLOAD_BYTE_LIMITS = {"SESSION_START": 4096, "SESSION_CLOSE": 8192}
+MAX_PAYLOAD_BYTES = max(PAYLOAD_BYTE_LIMITS.values())
 MAX_ID_LEN = 80
 MAX_SHORT_TEXT = 240
 MAX_LONG_TEXT = 600
 MAX_LIST_ITEMS = 24
 MAX_LIST_ITEM_LEN = 300
+
+_SHA_RE = re.compile(r"^[0-9a-f]{7,40}$")
+_BRANCH_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_./-]{0,199}$")
 
 EXIT_OK = 0
 EXIT_INVALID = 1
@@ -96,6 +109,74 @@ def _is_protocol_version(value: Any) -> bool:
     return type(value) is int and value in SUPPORTED_PROTOCOL_VERSIONS
 
 
+def _is_sha(value: Any) -> bool:
+    return isinstance(value, str) and bool(_SHA_RE.match(value))
+
+
+def _is_branch(value: Any) -> bool:
+    return isinstance(value, str) and bool(_BRANCH_RE.match(value)) and "//" not in value and not value.endswith("/")
+
+
+def _is_positive_int_or_none(value: Any) -> bool:
+    if value is None:
+        return True
+    return type(value) is int and value >= 1
+
+
+# --------------------------------------------------------------------------
+# The required `git` object: the machine-readable position of this packet
+# in the repository's own Git history. additionalProperties=false and a
+# fixed field set for each message type, exactly like the outer payload.
+# --------------------------------------------------------------------------
+
+_GIT_START_FIELDS = ("base_sha", "branch")
+_GIT_CLOSE_FIELDS = ("base_sha", "branch", "head_sha", "pr_number", "merged", "merge_sha")
+
+
+def _validate_git_shape(git: Any, allowed_fields: tuple[str, ...]) -> list[str]:
+    if not isinstance(git, dict):
+        return ["git must be an object"]
+    errors = [f"git.{key} is required" for key in allowed_fields if key not in git]
+    errors.extend(f"git.{key} is not permitted for this message_type" for key in git if key not in allowed_fields)
+    return errors
+
+
+def _validate_git_start(git: Any) -> list[str]:
+    errors = _validate_git_shape(git, _GIT_START_FIELDS)
+    if errors or not isinstance(git, dict):
+        return errors
+    if not _is_sha(git["base_sha"]):
+        errors.append("git.base_sha must be a lowercase hex SHA, 7-40 chars")
+    if not _is_branch(git["branch"]):
+        errors.append("git.branch must be a plausible Git ref name")
+    return errors
+
+
+def _validate_git_close(git: Any) -> list[str]:
+    errors = _validate_git_shape(git, _GIT_CLOSE_FIELDS)
+    if errors or not isinstance(git, dict):
+        return errors
+    if not _is_sha(git["base_sha"]):
+        errors.append("git.base_sha must be a lowercase hex SHA, 7-40 chars")
+    if not _is_branch(git["branch"]):
+        errors.append("git.branch must be a plausible Git ref name")
+    if not _is_sha(git["head_sha"]):
+        errors.append("git.head_sha must be a lowercase hex SHA, 7-40 chars")
+    if not _is_positive_int_or_none(git["pr_number"]):
+        errors.append("git.pr_number must be a positive integer or null")
+    if not isinstance(git["merged"], bool):
+        errors.append("git.merged must be a boolean")
+    merge_sha = git["merge_sha"]
+    if merge_sha is not None and not _is_sha(merge_sha):
+        errors.append("git.merge_sha must be a lowercase hex SHA or null")
+    if isinstance(git["merged"], bool):
+        if git["merged"] and merge_sha is None:
+            errors.append("git.merge_sha is required (non-null) when git.merged is true")
+        if not git["merged"] and merge_sha is not None:
+            errors.append("git.merge_sha must be null when git.merged is false")
+    return errors
+
+
 # --------------------------------------------------------------------------
 # Strict JSON parsing: reject duplicate keys, non-finite constants, trailing
 # content, and any non-object top-level value.
@@ -138,11 +219,24 @@ def strict_json_object(raw: str) -> dict[str, Any]:
 
 
 def check_size_and_sentinel(raw: str) -> None:
+    """Coarse, type-agnostic gate: the larger of the two per-type ceilings,
+    run before a payload is parsed enough to know its message_type. Cheap
+    protection against worst-case oversized input; see check_type_specific_size
+    for the exact ceiling each message type is actually held to."""
     size = len(raw.encode("utf-8"))
     if size > MAX_PAYLOAD_BYTES:
         raise PacketError(f"payload exceeds the {MAX_PAYLOAD_BYTES}-byte ceiling ({size} bytes)")
     if SENTINEL in raw:
         raise PacketError("the sentinel line must not appear inside the payload")
+
+
+def check_type_specific_size(raw: str, message_type: str) -> None:
+    limit = PAYLOAD_BYTE_LIMITS.get(message_type)
+    if limit is None:
+        return  # unknown message_type; validate_fields already rejects it
+    size = len(raw.encode("utf-8"))
+    if size > limit:
+        raise PacketError(f"{message_type} payload exceeds its {limit}-byte ceiling ({size} bytes)")
 
 
 # --------------------------------------------------------------------------
@@ -152,7 +246,7 @@ def check_size_and_sentinel(raw: str) -> None:
 _START_REQUIRED = (
     "protocol_version", "packet_id", "message_type", "project", "movement",
     "session_mode", "objective", "authority_refs", "allow", "deny",
-    "stop_on", "close_required",
+    "stop_on", "close_required", "git",
 )
 _START_OPTIONAL = ("model_hint",)
 _START_ALLOWED = set(_START_REQUIRED) | set(_START_OPTIONAL)
@@ -161,7 +255,7 @@ _CLOSE_REQUIRED = (
     "protocol_version", "packet_id", "message_type", "project", "movement",
     "outcome", "changed", "preserved", "validation", "privacy_state",
     "refs", "risks", "durable_state", "next_movement", "session_routing",
-    "ui_effect",
+    "ui_effect", "git",
 )
 _CLOSE_OPTIONAL = ("model_hint",)
 _CLOSE_ALLOWED = set(_CLOSE_REQUIRED) | set(_CLOSE_OPTIONAL)
@@ -214,6 +308,8 @@ def _validate_start_fields(obj: dict[str, Any]) -> list[str]:
             errors.append(f"{key} must be a list of <= {MAX_LIST_ITEMS} strings, each <= {MAX_LIST_ITEM_LEN} chars")
     if "close_required" in obj and not isinstance(obj["close_required"], bool):
         errors.append("close_required must be a boolean")
+    if "git" in obj:
+        errors.extend(_validate_git_start(obj["git"]))
     if "model_hint" in obj and not _is_str_bounded(obj["model_hint"], MAX_SHORT_TEXT):
         errors.append(f"model_hint must be a string <= {MAX_SHORT_TEXT} chars")
     return errors
@@ -238,6 +334,8 @@ def _validate_close_fields(obj: dict[str, Any]) -> list[str]:
     for key in ("changed", "preserved", "refs", "risks", "durable_state"):
         if key in obj and not _is_ref_list(obj[key]):
             errors.append(f"{key} must be a list of <= {MAX_LIST_ITEMS} strings, each <= {MAX_LIST_ITEM_LEN} chars")
+    if "git" in obj:
+        errors.extend(_validate_git_close(obj["git"]))
     if "model_hint" in obj and not _is_str_bounded(obj["model_hint"], MAX_SHORT_TEXT):
         errors.append(f"model_hint must be a string <= {MAX_SHORT_TEXT} chars")
     return errors
@@ -248,6 +346,8 @@ def parse_and_validate(raw_payload: str) -> tuple[dict[str, Any] | None, list[st
     try:
         check_size_and_sentinel(raw_payload)
         obj = strict_json_object(raw_payload)
+        if isinstance(obj.get("message_type"), str):
+            check_type_specific_size(raw_payload, obj["message_type"])
     except PacketError as exc:
         return None, [str(exc)]
     errors = validate_fields(obj)
@@ -344,6 +444,7 @@ def render_packet(obj: dict[str, Any]) -> str:
         raise PacketError("; ".join(errors))
     body = json.dumps(obj, sort_keys=True, indent=2, ensure_ascii=False)
     check_size_and_sentinel(body)
+    check_type_specific_size(body, obj["message_type"])
     return f"{SENTINEL}\n{body}\n{SENTINEL}\n"
 
 
@@ -383,6 +484,7 @@ def _cmd_start(args: argparse.Namespace) -> int:
         "deny": args.deny,
         "stop_on": args.stop_on,
         "close_required": args.close_required,
+        "git": {"base_sha": args.base_sha, "branch": args.branch},
     }
     if args.model_hint:
         obj["model_hint"] = args.model_hint
@@ -407,6 +509,14 @@ def _cmd_close(args: argparse.Namespace) -> int:
         "next_movement": args.next_movement,
         "session_routing": args.session_routing,
         "ui_effect": args.ui_effect,
+        "git": {
+            "base_sha": args.base_sha,
+            "branch": args.branch,
+            "head_sha": args.head_sha,
+            "pr_number": args.pr_number,
+            "merged": args.merged,
+            "merge_sha": args.merge_sha,
+        },
     }
     if args.model_hint:
         obj["model_hint"] = args.model_hint
@@ -492,6 +602,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_start.add_argument("--stop-on", action="append", default=[])
     p_start.add_argument("--close-required", dest="close_required", action="store_true", default=True)
     p_start.add_argument("--no-close-required", dest="close_required", action="store_false")
+    p_start.add_argument("--base-sha", required=True, help="lowercase hex SHA, 7-40 chars")
+    p_start.add_argument("--branch", required=True, help="the working branch for this movement")
     p_start.add_argument("--model-hint", default=None)
     p_start.add_argument("--out", default=None)
     p_start.set_defaults(func=_cmd_start)
@@ -511,6 +623,13 @@ def build_parser() -> argparse.ArgumentParser:
     p_close.add_argument("--next-movement", default=None)
     p_close.add_argument("--session-routing", required=True, choices=SAME_OR_NEW)
     p_close.add_argument("--ui-effect", required=True)
+    p_close.add_argument("--base-sha", required=True, help="lowercase hex SHA, 7-40 chars")
+    p_close.add_argument("--branch", required=True)
+    p_close.add_argument("--head-sha", required=True, help="lowercase hex SHA, 7-40 chars")
+    p_close.add_argument("--pr-number", type=int, default=None)
+    p_close.add_argument("--merged", dest="merged", action="store_true", default=False)
+    p_close.add_argument("--no-merged", dest="merged", action="store_false")
+    p_close.add_argument("--merge-sha", default=None, help="required when --merged, must be omitted otherwise")
     p_close.add_argument("--model-hint", default=None)
     p_close.add_argument("--out", default=None)
     p_close.set_defaults(func=_cmd_close)

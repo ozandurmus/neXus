@@ -28,5 +28,13 @@
   ],
   "next_movement": "M8.3",
   "session_routing": "NEW",
-  "ui_effect": "None -- backend-only trust lookup, no visible change after a normal run."
+  "ui_effect": "None -- backend-only trust lookup, no visible change after a normal run.",
+  "git": {
+    "base_sha": "0a9048ceeb2a318444f918e2688b126641eaeab0",
+    "branch": "build/m8-2-endpoint-specific-trusted-key-lookup",
+    "head_sha": "759ce0dbe6151b286c2d451f4da3f652d0af32ef",
+    "pr_number": 98,
+    "merged": true,
+    "merge_sha": "16c39ab494b3eb0d2ed3b3583a470d754a9c4e9c"
+  }
 }
