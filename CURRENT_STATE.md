@@ -8,9 +8,9 @@ linked documents under `docs/history/`. `docs/history/INDEX.md` is the
 generated one-line timeline.
 
 - **Checkpoint:** 2026-09-06, `M6` branched from `main` at
-  `a4a75e3a9ac31c9de6ca8ae524258c1d2d1dcc0d` (`M5`+`M4` merged). Implementation
-  complete on `build/m6-registry-keyed-job-targets-shell`; PR CI pending, not
-  merged.
+  `a4a75e3a9ac31c9de6ca8ae524258c1d2d1dcc0d` (`M5`+`M4` merged). PO-approved
+  at `759ce0dbe6151b286c2d451f4da3f652d0af32ef` (PR #95) after one
+  correction round; fast `validate` green; merge authorized.
 - **Current build** (per `project/roadmap.json` `now_next.now`):
   `registry_keyed_job_targets` (`M6`) — **AUTOMATED_VALIDATED**, **Option D
   fail-closed admission shell only, not functional per-device targeting**
@@ -60,22 +60,25 @@ test-enforced boundaries. Current numbers:
 
 **`registry_keyed_job_targets`** (`M6`) — **AUTOMATED_VALIDATED, Option D
 fail-closed admission shell, not functional per-device targeting** (PO
-decision 2026-09-06, bounded `nexus-decision-council` synthesis). Full
-evidence/rationale: `project/build_history.json` head record.
+decision 2026-09-06). Full evidence/rationale: `project/build_history.json`
+head record (includes correction round 1 below).
 
 `console/registry.py` flips `JOB_REGISTRY['config_refresh_cp'].target_mode`
-`"none"` → `"device_ids"` (scoped to `config_refresh_cp` only). New shared
+`"none"` → `"device_ids"` (`config_refresh_cp` only). Shared
 `console/registry_targets.py::resolve_registry_targets()`, called by both
-`console/app.py`'s `POST /api/jobs` (admission) and `console/runner.py`'s
-pre-execution re-check: unknown `device_id` → `unknown_device_id`; known but
-not `ENROLLED_UNVERIFIED` → `device_not_eligible`; known and eligible →
-`IDENTITY_TRANSLATION_REQUIRED` (unconditional — no producer exists). Checks
-only `device_id`/`state`, re-read on every call — **never** endpoint,
+`console/app.py` admission and `console/runner.py`'s pre-execution re-check:
+unknown `device_id` → `unknown_device_id`; not `ENROLLED_UNVERIFIED` →
+`device_not_eligible`; known+eligible → `IDENTITY_TRANSLATION_REQUIRED`
+(unconditional — no producer exists); an unreadable registry →
+`device_registry_unavailable` (correction round 1 — distinct from
+`unknown_device_id`, sanitized detail, never the raw exception/path/
+endpoint). Checks only `device_id`/`state`, re-read every call, order and
+opaque spelling preserved (correction round 1) — **never** endpoint,
 hostname, display name, vendor hint, spelling, or `unified.json` output.
-`operator_assertion` stays an **OPEN dissent**, not accepted mapping
-authority. **Not implemented, by design:** any functional translation, `PCP.1`
-relationship write, `M4` schema change, new mapping store, frozen-contract
-edit, `M7` behaviour (PO review owed first — see "Exact next build").
+`operator_assertion` stays an **OPEN dissent**. **Not implemented, by
+design:** any functional translation, `PCP.1` relationship write, `M4`
+schema change, new mapping store, frozen-contract edit, `M7` behaviour (PO
+review owed first — see "Exact next build").
 
 ## Predecessor — `M5`/`M4`
 
@@ -164,23 +167,19 @@ Concurrency budget stays at 1 per vendor pending its own real-env evidence.
 ## Automated test baseline
 
 ```
-M6 focused (registry-keyed job target admission shell):
-  tests/test_m6_registry_keyed_job_targets.py 27 passed. Affected suites
-  combined 234 passed / 0 failed: test_m5_collector_target_selection_seam.py,
-  test_con2_console_job_engine.py, test_pcp1_device_registry.py,
-  test_m4_control_plane_metadata_store.py, test_architecture_convergence.py,
-  test_application_package.py. metadata_warnings == []; build-history index
-  regenerated; repository privacy gate PASS / 0 findings (data/, logs/
-  removed first). Full local parallel suite run once (shared admission/
-  execution boundary): 2058 passed, 37 skipped, 2 failed, 1 error -- all four
-  reproduced identically with this branch's changes git-stashed (pre-existing
-  Windows Git Bash `tr` pipeline quirk, an unrelated SSH-trust binary-garbage
-  test, a missing local pyyaml dependency), none touching console/registry/
-  device_registry code. No GitHub full regression, no workflow_dispatch, no
-  device contact. Full evidence: project/build_history.json head record.
-Last full parallel suite before this build (DEV.TEST.1): 1957 passed, 24
-  skipped, 0 failed locally; GitHub Actions one-time proof (run 34020356372)
-  1944 passed / 38 skipped / 0 failed. Detail: project/build_history.json.
+M6 focused: tests/test_m6_registry_keyed_job_targets.py 27 passed; affected
+  suites (M5/CON.2/PCP.1/M4/architecture/application) 234 passed, 0 failed;
+  privacy gate PASS; full local parallel suite once (shared admission/
+  execution boundary): 2058 passed, 37 skipped, 2 failed, 1 error, all four
+  pre-existing (reproduced with changes stashed), none touching this code.
+M6 correction round 1 (target-order preservation; device_registry_unavailable):
+  focused suite 35 passed (was 27); bounded affected suites (M5/CON.1/CON.2/
+  PCP.1/privacy/architecture/application) 176 passed, 1 skipped, 0 failed;
+  privacy gate PASS; no full-suite repeat needed (scope unchanged). Full
+  evidence for both rounds: project/build_history.json head record.
+Last full parallel suite before M6 (DEV.TEST.1): 1957 passed, 24 skipped, 0
+  failed locally; GitHub Actions one-time proof (run 34020356372) 1944
+  passed / 38 skipped / 0 failed. Detail: project/build_history.json.
 Repository privacy gate: PASS / 0 findings.
 ```
 ## Known xfails
