@@ -141,26 +141,38 @@
     "horizon_contract": "NOW is exactly one build. NEXT is exactly one. Everything else is an `upcoming` row carrying its own true status: planned = AFTER, blocked = waiting on a named external gate, deferred = consciously postponed. `now.build` must equal the newest project/build_history.json record -- utils.project_plan enforces it.",
     "now": {
       "build": "m8_first_contact_trust_identity_evidence_producer_architecture",
-      "title": "M8 (architecture review) -- First-contact trust and identity-evidence producer",
-      "goal": "DRAFT/IN REVIEW architecture only, not implemented, not automated_validated, not yet PO-approved: proposes a scope-limited (CLASS_0_CP_CONFIG_TARGET_SELECTION_ONLY), physical-entity-id-only candidate-selection (CMA-endpoint-match, hint only) + live first-contact identity-gate confirmation design, gated by a new mandatory target-specific trust-lookup seam, storing the proven relationship in the already-approved M4 SQLite store via an additive migration that references (never copies) existing governed collector evidence and the registry's own revision signal for live currency checks -- no PCP.1 amendment, no code, no schema change, no device contact, no support-bundle-key coupling in this movement. Confirms M6 -> M8 -> M7 as the corrected roadmap order (PO-accepted). Full contract: docs/history/phase/M8_FIRST_CONTACT_TRUST_AND_IDENTITY_EVIDENCE_PRODUCER_ARCHITECTURE.md.",
-      "status": "in_progress",
+      "title": "M8 (architecture) -- First-contact trust and identity-evidence producer (FROZEN, Product Owner approved)",
+      "goal": "FROZEN, PO-approved architecture-only movement (complete): a scope-limited (CLASS_0_CP_CONFIG_TARGET_SELECTION_ONLY), physical-entity-id-only candidate-selection + live first-contact identity-gate confirmation design, gated by a new mandatory target-specific trust-lookup seam, storing the proven relationship in the already-approved M4 SQLite store via an additive migration that references (never copies) existing governed collector evidence and the registry's own revision signal for live currency checks. Confirms the exact implementation sequence M8.1 -> M8.2 -> M8.3 -> M8.4 -> M7. No PCP.1 amendment, no code, no schema change, no device contact, no support-bundle-key coupling. Full contract: docs/history/phase/M8_FIRST_CONTACT_TRUST_AND_IDENTITY_EVIDENCE_PRODUCER_ARCHITECTURE.md.",
+      "status": "complete",
       "started": "2026-09-06",
+      "completed": "2026-09-06",
       "notes": [
         "Predecessor: registry_keyed_job_targets (M6), AUTOMATED_VALIDATED, Option D fail-closed admission shell, PR #95 merged -- full detail in project/build_history.json, not restated here.",
-        "Corrected across two PO architecture-review rounds (2026-09-06, direct repository evidence only, council not re-invoked either time) -- full evidence in project/build_history.json head record, not restated here. Round 1: narrowed the evidence claim to mapping_scope; corrected the trust/credential sequencing claim; withdrew an M4-forbidden column name. Round 2: removed a round-1 VSX one-to-many cardinality model (M6/M7 targeting is confirmed physical-entity-id-only); removed round-1's data/.support_hmac.key/HMAC coupling entirely (that key has no identity-association lifecycle) in favor of referencing existing governed collector evidence; made the stronger target-specific trust guarantee mandatory rather than an open question; bound the relationship to live registry-record and trust-fingerprint currency instead of a source-code version proxy.",
-        "operator_assertion stays an OPEN dissent, not reopened or resolved here. Also open: single-sourced (non-bidirectionally-corroborated) identity evidence, and serial-based CONTRADICTORY_EVIDENCE detection, which is explicitly DEFERRED pending confirmation that CP config evidence retention keeps the needed evidence resolvable long enough to compare.",
-        "Requires PO review of the draft (freeze, reject, or amend) before any implementation slice (storage/contract -> mandatory trust-lookup seam -> read-only producer, real-env gated -> M6 resolver consumption -> M7) may begin."
+        "Corrected across two PO architecture-review rounds then frozen in a third final-reconciliation round (2026-09-06, direct repository evidence only, council not re-invoked in any round) -- full round-by-round evidence in project/build_history.json head record, not restated here or in the design doc (compacted at freeze per explicit PO instruction that correction history must not inflate the contract future agents are required to read).",
+        "Serial evidence is mandatory, not optional: proof_type=first_contact_identity_gate_and_serial requires both an accepted identity gate AND a usable directly-read serial before identity_mapping_proven may be 1 -- gate-accepted-but-serial-absent writes no row and leaves IDENTITY_TRANSLATION_REQUIRED.",
+        "operator_assertion stays an OPEN dissent. Also open: single-sourced (non-bidirectionally-corroborated) identity evidence, and serial-based CONTRADICTORY_EVIDENCE detection, explicitly DEFERRED pending M8.3 confirming CP config evidence retention keeps the needed evidence resolvable long enough to compare.",
+        "now_next.next is M8.1 (relationship storage/API) -- the exact planned next movement, no blocker. M7 moved to upcoming/blocked."
       ]
     },
     "next": {
-      "build": "m7_real_device_targeted_collect_now",
-      "title": "M7 -- real device-targeted Collect now",
-      "status": "blocked",
+      "build": "m8_1_relationship_storage_api",
+      "title": "M8.1 -- Device-identity-relationship storage and typed read/write API",
+      "status": "planned",
       "notes": [
-        "BLOCKED: has nothing legitimate to target until M8's identity-evidence producer exists and console/registry_targets.py consumes it (docs/history/phase/M8_FIRST_CONTACT_TRUST_AND_IDENTITY_EVIDENCE_PRODUCER_ARCHITECTURE.md section 13). Not started, not authorized. Unblocks only once M8's resolver-consumption slice exists and has at least one real-environment-proven relationship row to target."
+        "The M4 additive migration (schema version 2): the new relationship table, its STRICT/CHECK/partial-unique-index definitions, the closed vocabularies (mapping_scope, proof_type, proof_source, state), and the M4 ownership-boundary column-scan test extended to cover it. No producer, no console consumer wired up yet -- pure schema + typed read/write API, unit-tested in isolation, exactly as M4's own tables were. Contract: docs/history/phase/M8_FIRST_CONTACT_TRUST_AND_IDENTITY_EVIDENCE_PRODUCER_ARCHITECTURE.md section 5/9.",
+        "No blocker -- ready to start. M8.2 (mandatory endpoint-specific trusted-key lookup) is next after this, and M8.3 (the producer) must not begin without M8.2."
       ]
     },
     "upcoming": [
+      {
+        "build": "m7_real_device_targeted_collect_now",
+        "title": "M7 -- real device-targeted Collect now",
+        "goal": "Console-submitted config_refresh_cp device_id targeting resolves to a real collector entity_id and actually contacts the device -- functional per-device Collect now.",
+        "status": "blocked",
+        "notes": [
+          "BLOCKED: has nothing legitimate to target until M8.4 (M6 resolver consumption) exists and at least one real-environment-proven relationship row exists to target (docs/history/phase/M8_FIRST_CONTACT_TRUST_AND_IDENTITY_EVIDENCE_PRODUCER_ARCHITECTURE.md section 9). Not started, not authorized. Sequence: M8.1 -> M8.2 -> M8.3 (real-env gated) -> M8.4 -> M7."
+        ]
+      },
       {
         "build": "parallelize_full_regression_execution",
         "title": "DEV.TEST.1 -- Parallelize local and GitHub Actions full-regression execution",

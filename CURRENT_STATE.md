@@ -7,13 +7,15 @@ detail is not here either** — it is in `project/build_history.json`
 linked documents under `docs/history/`. `docs/history/INDEX.md` is the
 generated one-line timeline.
 
-- **Checkpoint:** 2026-09-06, `M8` (architecture review) branched from
-  verified `main` at `0a9048ceeb2a318444f918e2688b126641eaeab0` (`M6`
-  merged). DRAFT/IN REVIEW architecture only — not implemented, not
-  automated_validated.
+- **Checkpoint:** 2026-09-06, `M8` architecture **FROZEN — PRODUCT OWNER
+  APPROVED** from verified `main` at
+  `0a9048ceeb2a318444f918e2688b126641eaeab0` (`M6` merged). Architecture
+  only — no code, schema, or device contact yet.
 - **Current build** (per `project/roadmap.json` `now_next.now`):
   `m8_first_contact_trust_identity_evidence_producer_architecture` (`M8`) —
-  see "Active build". `now_next.next` is `M7`, `blocked` on `M8`.
+  **complete** (architecture), see "Active build". `now_next.next` is
+  `M8.1` (relationship storage/API), `planned`, no blocker.
+  `m7_real_device_targeted_collect_now` moved to `upcoming`/`blocked`.
   `op2_c_cp_clusterxl_adapter_scoping` stays `upcoming`, blocked on
   `DEPLOY.1`. `DEV.TEST.1`, `PCP.1`, `M1`-`M6` complete/automated_validated —
   `project/build_history.json`.
@@ -55,25 +57,25 @@ test-enforced boundaries. Current numbers:
 
 ## Active build
 
-**`m8_first_contact_trust_identity_evidence_producer_architecture`** (`M8`,
-architecture review) — **DRAFT / IN REVIEW, not implemented, not
-automated_validated, not yet PO-approved for freeze/merge (PR #96,
-corrected across two review rounds).** Proposes a physical-`entity_id`-only
-candidate-selection (CMA-endpoint-match, hint only) + live first-contact
-identity-gate confirmation design, gated by a new **mandatory**
-target-specific trust-lookup seam, over the *existing* CP collector/trust
-primitives, scoped by a closed `mapping_scope =
-CLASS_0_CP_CONFIG_TARGET_SELECTION_ONLY` (never general identity proof).
-The proven relationship is a new `M4` SQLite table that **references**
-(never copies) existing governed collector evidence and the registry's own
-`updated_at` revision signal for live registry/trust-currency checks at
-admission and pre-execution — no `PCP.1` amendment, no
-`data/.support_hmac.key` coupling. Confirms `M6 → M8 → M7` as the corrected,
-PO-accepted roadmap order. Open: inherited `operator_assertion`,
-single-sourced identity evidence, and DEFERRED serial-contradiction
-detection (pending CP-config-evidence-retention verification). **Not
-implemented, by design:** any code, test, schema migration, Device Registry
-write, `M4` migration, or device contact. Full contract:
+**`m8_first_contact_trust_identity_evidence_producer_architecture`** (`M8`)
+— **FROZEN, PRODUCT OWNER APPROVED, 2026-09-06 (PR #96, merged).**
+Physical-`entity_id`-only candidate-selection (CMA-endpoint-match, hint
+only) + live first-contact identity-gate confirmation, gated by a new
+**mandatory** target-specific trust-lookup seam, over the *existing* CP
+collector/trust primitives, scoped by a closed `mapping_scope =
+CLASS_0_CP_CONFIG_TARGET_SELECTION_ONLY` (never general identity proof); a
+usable directly-read serial is mandatory alongside the identity gate before
+`identity_mapping_proven` may be `1`. The proven relationship is a new `M4`
+SQLite table that **references** (never copies) existing governed collector
+evidence and the registry's own `updated_at` revision signal for live
+registry/trust-currency checks at admission and pre-execution — no `PCP.1`
+amendment, no `data/.support_hmac.key` coupling. Sequence: `M8.1`
+(storage/API) → `M8.2` (mandatory trust-lookup seam) → `M8.3` (read-only
+producer, real-env gated) → `M8.4` (`M6` resolver consumption) → `M7`. Open:
+inherited `operator_assertion`, single-sourced identity evidence, DEFERRED
+serial-contradiction detection. **Not implemented yet, by design:** any
+code, test, schema migration, Device Registry write, `M4` migration, or
+device contact — those are `M8.1`+. Full contract:
 `docs/history/phase/M8_FIRST_CONTACT_TRUST_AND_IDENTITY_EVIDENCE_PRODUCER_ARCHITECTURE.md`.
 
 Predecessor — **`registry_keyed_job_targets`** (`M6`) —
@@ -131,10 +133,11 @@ a narrower question never promoted toward B2.
 
 ## Exact next build
 
-PO review of the `M8` draft (freeze, reject, or amend) — see "Active build".
-`now_next.next` is `M7` (`m7_real_device_targeted_collect_now`, `blocked`):
-it stays blocked until `M8`'s resolver-consumption slice exists and has at
-least one real-environment-proven relationship to target.
+`now_next.next` is `m8_1_relationship_storage_api` (`M8.1`, `planned`, no
+blocker) — the `M4` additive migration + typed read/write API from the
+frozen `M8` contract §5/§9. `M8.2` (mandatory trust-lookup seam) must exist
+before `M8.3` (the producer) begins; `M7` moved to `upcoming`/`blocked`
+until `M8.4` exists with at least one real-environment-proven relationship.
 `operator_assertion` is not accepted mapping evidence without a later,
 separate PO decision — unchanged from `M6`.
 
