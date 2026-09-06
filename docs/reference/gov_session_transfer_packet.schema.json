@@ -1,0 +1,130 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://nexus.local/schemas/gov_session_transfer_packet.schema.json",
+  "title": "GOV.SESSION.1 packet payload (excludes the <<<NEXUS_SESSION_PACKET>>> sentinel envelope)",
+  "description": "Canonical schema for docs/design/GOV_SESSION_TRANSFER_PROTOCOL.md. scripts/gov_session_transfer.py enforces these constraints natively (dependency-free); tests/test_gov_session_transfer.py keeps the two in agreement. This document is descriptive/reference-only -- the CLI does not load or interpret it at runtime.",
+  "type": "object",
+  "$defs": {
+    "shortId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]*$",
+      "maxLength": 80
+    },
+    "shortText": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 240
+    },
+    "longText": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 600
+    },
+    "refList": {
+      "type": "array",
+      "maxItems": 24,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 300
+      }
+    },
+    "sameOrNew": {
+      "type": "string",
+      "enum": ["SAME", "NEW"]
+    },
+    "protocolVersion": {
+      "type": "integer",
+      "enum": [1],
+      "description": "Only integer 1 is supported by this movement. A boolean, string, zero, negative, or any other integer must fail closed as unsupported -- booleans are structurally excluded by the 'type: integer' keyword, which JSON Schema does not satisfy with true/false."
+    }
+  },
+  "oneOf": [
+    {
+      "title": "SESSION_START",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "protocol_version",
+        "packet_id",
+        "message_type",
+        "project",
+        "movement",
+        "session_mode",
+        "objective",
+        "authority_refs",
+        "allow",
+        "deny",
+        "stop_on",
+        "close_required"
+      ],
+      "properties": {
+        "protocol_version": { "$ref": "#/$defs/protocolVersion" },
+        "packet_id": { "$ref": "#/$defs/shortId" },
+        "message_type": { "const": "SESSION_START" },
+        "project": { "$ref": "#/$defs/shortId" },
+        "movement": { "$ref": "#/$defs/shortId" },
+        "session_mode": { "$ref": "#/$defs/sameOrNew" },
+        "objective": { "$ref": "#/$defs/longText" },
+        "authority_refs": { "$ref": "#/$defs/refList" },
+        "allow": { "$ref": "#/$defs/refList" },
+        "deny": { "$ref": "#/$defs/refList" },
+        "stop_on": { "$ref": "#/$defs/refList" },
+        "close_required": { "type": "boolean" },
+        "model_hint": { "$ref": "#/$defs/shortText" }
+      }
+    },
+    {
+      "title": "SESSION_CLOSE",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "protocol_version",
+        "packet_id",
+        "message_type",
+        "project",
+        "movement",
+        "outcome",
+        "changed",
+        "preserved",
+        "validation",
+        "privacy_state",
+        "refs",
+        "risks",
+        "durable_state",
+        "next_movement",
+        "session_routing",
+        "ui_effect"
+      ],
+      "properties": {
+        "protocol_version": { "$ref": "#/$defs/protocolVersion" },
+        "packet_id": { "$ref": "#/$defs/shortId" },
+        "message_type": { "const": "SESSION_CLOSE" },
+        "project": { "$ref": "#/$defs/shortId" },
+        "movement": { "$ref": "#/$defs/shortId" },
+        "outcome": {
+          "type": "string",
+          "enum": ["AUTOMATED_VALIDATED", "REAL_ENV_VALIDATED", "DONE", "PARTIAL", "BLOCKED"],
+          "description": "Reused verbatim from AGENTS.md's own status-progression vocabulary -- not a second taxonomy."
+        },
+        "changed": { "$ref": "#/$defs/refList" },
+        "preserved": { "$ref": "#/$defs/refList" },
+        "validation": { "$ref": "#/$defs/longText" },
+        "privacy_state": {
+          "type": "string",
+          "enum": ["PASS", "FAIL", "NOT_APPLICABLE", "UNKNOWN"]
+        },
+        "refs": { "$ref": "#/$defs/refList" },
+        "risks": { "$ref": "#/$defs/refList" },
+        "durable_state": { "$ref": "#/$defs/refList" },
+        "next_movement": {
+          "type": ["string", "null"],
+          "maxLength": 80
+        },
+        "session_routing": { "$ref": "#/$defs/sameOrNew" },
+        "ui_effect": { "$ref": "#/$defs/shortText" },
+        "model_hint": { "$ref": "#/$defs/shortText" }
+      }
+    }
+  ]
+}

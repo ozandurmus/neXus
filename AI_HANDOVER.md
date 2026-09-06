@@ -13,96 +13,94 @@ Overwrite at every session close. Keep it minimal.
 
 ## 1. Snapshot
 
-- Date: 2026-09-07. `M8.1` — **AUTOMATED_VALIDATED**, branch
-  `build/m8-1-relationship-storage-api` from `origin/main`, PR not yet
-  opened/merged (awaiting user authorization).
-- Build: `m8_1_relationship_storage_api` (`M8.1`) — `status:
-  automated_validated`.
-- Contract: `docs/history/phase/M8_FIRST_CONTACT_TRUST_AND_IDENTITY_EVIDENCE_PRODUCER_ARCHITECTURE.md`
-  §5/§6/§8/§9 — FROZEN, unchanged by this session.
+- Date: 2026-09-07. `GOV.SESSION.1` — **AUTOMATED_VALIDATED**, branch
+  `governance/gov-session-1-transfer-protocol` from `origin/main`, PR not
+  yet opened (awaiting user authorization to push/open).
+- This is a **parallel `GOV` engineering track**, unrelated to the
+  `PCP.x`/`M8` product sequence — it does not change `now_next.now`/`.next`.
+  `M8.2` stays the current product build; `M8.3` stays `now_next.next`,
+  untouched by this session.
+- Protocol doc: `docs/design/GOV_SESSION_TRANSFER_PROTOCOL.md` — **DRAFT,
+  PO REVIEW PENDING**, not FROZEN.
 
 ## 2. What this session did
 
-Implemented `M8.1` per the frozen `M8` contract, scope exactly as named in
-§9's table (storage/API only; no producer, no consumer).
+Designed and implemented `GOV.SESSION.1` — a vendor-neutral, offline
+packet protocol for handing one bounded movement between agent
+sessions/tools without pasting chat history, plus its reference CLI.
 
-1. **Migration 2** in `utils/control_plane_store.py`: new
-   `device_identity_relationships` `STRICT` table (contract §5's exact
-   field set) plus `ux_device_identity_relationships_one_active_per_triple`
-   (partial unique index, at most one `ACTIVE` row per `(device_id,
-   vendor_namespace, mapping_scope)`). `SUPPORTED_SCHEMA_VERSION` bumped
-   `1` → `2`.
-2. **New typed API** `utils/device_identity_relationships.py`: closed
-   vocabularies (`VENDOR_NAMESPACES`, `MAPPING_SCOPES`, `PROOF_TYPES`,
-   `PROOF_SOURCES`, `RELATIONSHIP_STATES`, `INVALIDATION_REASONS`);
-   `DeviceIdentityRelationship` dataclass; `record_first_contact_proof`
-   (transactional `NEW`/`SUPERSEDED`/`AMBIGUOUS_IDENTITY` write per §6 — no
-   parameter exists to write an unproven or `identity_mapping_proven=0`
-   row, by construction); `get_active_relationship` (fail-closed read,
-   never returns `INVALIDATED`/`SUPERSEDED` as `ACTIVE`, defends against an
-   unexpected multi-row read).
-3. **Extended `tests/test_m4_control_plane_metadata_store.py`**: fixed the
-   migration-count-sensitive tests that assumed exactly one migration
-   (`test_creation_applies_the_initial_schema_version`, the
-   monkeypatch-based prefix/gap/out-of-order-ledger tests — their synthetic
-   extra migration moved from version 2 to 3 to stop colliding with the new
-   real migration 2); extended `test_schema_owns_no_forbidden_concept`'s
-   fragment list with `serial`/`host_key`/`fingerprint` per §8 AC6.
-4. **New `tests/test_m8_1_device_identity_relationships.py`** — 31 tests:
-   schema shape/STRICT/CHECK constraints, the structural
-   one-`ACTIVE`-per-triple index, the three write outcomes (including
-   no-tie-break-after-`AMBIGUOUS_IDENTITY`), read-side `None`/
-   never-returns-invalidated/fail-closed-on-multiplicity, Python-layer
-   closed-vocabulary and empty-identifier validation, and a structural
-   assertion that the write API has no serial/endpoint/credential-shaped
-   parameter.
-5. **Project-state update**: `project/roadmap.json` (`now` = `M8.1`
-   `automated_validated`; `next` = `m8_2_endpoint_specific_trusted_key_lookup`,
-   `planned`), `project/build_history.json` (new head record),
-   `CURRENT_STATE.md` (checkpoint, Active build, Exact next build, test
-   baseline), `docs/history/INDEX.md` regenerated via
+1. Audited `AGENTS.md`, `AI_START_HERE.md`, `AI_HANDOVER.md`,
+   `CURRENT_STATE.md` first, per the movement's own requirement — reused
+   all four by reference, created no competing state authority.
+2. Drafted the protocol with a versioned, per-packet-id sentinel and a
+   compact `KEY: value` text payload; **corrected mid-session** on explicit
+   Product Owner instruction to the shipped design: one **permanent
+   literal** sentinel line (`<<<NEXUS_SESSION_PACKET>>>`, identical
+   open/close, never carrying a version/id/type/timestamp/model) wrapping a
+   **strict JSON** payload of exactly two closed message types
+   (`SESSION_START` / `SESSION_CLOSE`). The superseded design is recorded
+   only in the protocol doc's own Status block, not duplicated here.
+3. `docs/design/GOV_SESSION_TRANSFER_PROTOCOL.md` (DRAFT): envelope law,
+   full payload contract per message type (`outcome` reuses `AGENTS.md`'s
+   own status-progression vocabulary rather than inventing a second one),
+   size ceilings, and the receiving-agent procedure.
+4. `docs/reference/gov_session_transfer_packet.schema.json` (JSON Schema,
+   `oneOf` by `message_type`, `additionalProperties:false`) plus one
+   `SESSION_START` and one `SESSION_CLOSE` example instance.
+5. `scripts/gov_session_transfer.py` — dependency-free (stdlib only)
+   reference implementation: strict JSON parsing (duplicate-key rejection,
+   `NaN`/`Infinity` rejection, trailing-content rejection, non-object
+   top-level rejection), sentinel-in-payload rejection, standalone
+   two-sentinel validation, transcript multi-packet extraction (strict
+   sequential pairing — nesting is structurally unreachable by
+   construction; an odd sentinel count fails the whole scan closed; an
+   adjacent empty pair fails only itself) with `--packet-id` selection,
+   and deterministic rendering. Subcommands: `start`, `close`, `validate`,
+   `render`, `extract`.
+6. `tests/test_gov_session_transfer.py` — 55 tests, all passing.
+7. One sentence added to `AI_START_HERE.md`'s governance paragraph
+   pointing at the new doc + `--help` — explicitly not a second reading
+   order.
+8. Project-state update: `project/roadmap.json` (new `GOV` engineering
+   track, `gov_session_1_transfer_protocol` `automated_validated`),
+   `project/build_history.json` (new head-of-history record — inserted
+   above, not replacing, the `M8.2` record), `CURRENT_STATE.md` (new
+   "Governance tooling" subsection, `now_next` left untouched),
+   `docs/history/INDEX.md` regenerated via
    `py scripts/build_history_index.py`.
 
 ## 3. Exact next action
 
-**`M8.2` — endpoint-specific local trusted-key lookup.** The new, required
-`utils/cp_ssh_trust.py` function (contract §4 step 1): checks whether the
-exact normalized endpoint/port already has a trusted host-key entry in the
-same `known_hosts` source `apply_strict_host_key_policy` already reads. No
-network/device contact, no key added or accepted. Needs its own focused
-tests, including a deliberately untrusted endpoint proving no credential is
-ever resolved and no network/device contact occurs during the lookup
-itself. `M8.3` (the producer) must not begin without `M8.2`.
+Two independent threads, neither blocking the other:
 
-Before that: **this session's PR is not yet opened.** `git status` is clean
-against the new commit once made; branch `build/m8-1-relationship-storage-api`
-is pushed nowhere yet — confirm with the user whether to push/open the PR
-now or continue straight to `M8.2` first.
+- **This movement (`GOV.SESSION.1`):** push the branch, open the PR, wait
+  for the fast `validate` CI gate, then **stop for Product Owner review —
+  do not merge**. The protocol stays DRAFT until the PO freezes it.
+- **Product thread (unaffected by this session):** `M8.2` remains the
+  current build (PR #98, unmerged); `now_next.next` remains `M8.3` — the
+  read-only first-contact producer, real-environment gated, per
+  `docs/history/phase/M8_FIRST_CONTACT_TRUST_AND_IDENTITY_EVIDENCE_PRODUCER_ARCHITECTURE.md`.
+  This session did not touch it.
 
 ## 4. Test delta
 
-New: `tests/test_m8_1_device_identity_relationships.py` (31 tests).
-Extended: `tests/test_m4_control_plane_metadata_store.py` (same test count,
-several bodies updated for the new real migration 2 — see §2.3 above).
-Targeted run: 101 passed. Affected run (`M4`/`M8.1`/`M6`/`M5`/`PCP.1`/
-`CON.2`/`test_architecture_convergence.py`): 388 passed, 0 failed. Privacy
-gate: PASS, 0 findings (`data/`/`logs/` cleared before each run). No
-`full-regression`/`workflow_dispatch` run (risk-based; this is a bounded
-additive-schema change with no shared-core/runner/scheduler surface
-touched).
+New: `tests/test_gov_session_transfer.py` (55 tests, all passing —
+`py -m pytest -q tests/test_gov_session_transfer.py`). No existing test
+file changed; no vendor/collector/schema-migration/device-contact code
+touched, so no affected-suite regression run was required for this
+movement's own scope. `py scripts/build_history_index.py --check` passes.
 
 ## 5. Risks / notes forward
 
-- This movement is `AUTOMATED_VALIDATED` only, by design — no device
-  contact, no producer, no consumer exist yet to real-environment-validate.
-- Closed vocabularies stay exactly as narrow as the frozen contract states;
-  widening any of them (a PAN `vendor_namespace`, a second `proof_type`) is
-  its own migration/contract amendment, not a parameter to loosen in
-  `M8.1`'s API.
-- `CONTRADICTORY_EVIDENCE` detection stays deliberately unbuilt (§6/§10) —
-  do not add it as a side effect of `M8.2`/`M8.3`.
-- Three dissents remain open, unchanged: `operator_assertion`,
-  single-sourced identity evidence, deferred contradiction detection.
-- Table/column names are no longer illustrative for `M8.1` specifically —
-  they are now the real, committed schema; `M8.2`+ must read them from
-  `utils/device_identity_relationships.py`, not re-derive them.
+- The protocol document is explicitly **not FROZEN** — a future packet's
+  *content* is never self-authorizing regardless of this movement's
+  `automated_validated` status.
+- No integration point in this repository actually emits or consumes a
+  packet yet; `scripts/gov_session_transfer.py` is invoked manually. Wiring
+  it into an actual `SESSION START`/`CLOSE` workflow step, if ever wanted,
+  is a separate, later decision.
+- `docs/reference/gov_session_transfer_packet.schema.json` is
+  descriptive/reference-only — the CLI enforces its constraints natively
+  and does not load or interpret the schema file at runtime. Only
+  `tests/test_gov_session_transfer.py` currently guards the two from
+  drifting apart.

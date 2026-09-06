@@ -1,0 +1,32 @@
+{
+  "protocol_version": 1,
+  "packet_id": "example-session-close-1",
+  "message_type": "SESSION_CLOSE",
+  "project": "neXus",
+  "movement": "M8.2",
+  "outcome": "AUTOMATED_VALIDATED",
+  "changed": [
+    "utils/cp_ssh_trust.py::lookup_trusted_host_key",
+    "tests/test_m8_2_endpoint_specific_trusted_key_lookup.py"
+  ],
+  "preserved": [
+    "apply_strict_host_key_policy",
+    "load_trusted_host_keys"
+  ],
+  "validation": "New suite 20 passed; wide sweep 608 passed, 1 pre-existing unrelated failure; privacy gate PASS.",
+  "privacy_state": "PASS",
+  "refs": [
+    "docs/history/phase/M8_FIRST_CONTACT_TRUST_AND_IDENTITY_EVIDENCE_PRODUCER_ARCHITECTURE.md"
+  ],
+  "risks": [
+    "point-in-time local read only, not a live device confirmation"
+  ],
+  "durable_state": [
+    "CURRENT_STATE.md",
+    "project/build_history.json",
+    "project/roadmap.json"
+  ],
+  "next_movement": "M8.3",
+  "session_routing": "NEW",
+  "ui_effect": "None -- backend-only trust lookup, no visible change after a normal run."
+}

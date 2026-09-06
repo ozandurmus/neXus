@@ -1,0 +1,26 @@
+{
+  "protocol_version": 1,
+  "packet_id": "example-session-start-1",
+  "message_type": "SESSION_START",
+  "project": "neXus",
+  "movement": "M8.3",
+  "session_mode": "NEW",
+  "objective": "Illustrative only. Read-only first-contact producer per the frozen M8 contract section 3/4, real-environment gated.",
+  "authority_refs": [
+    "AGENTS.md",
+    "docs/history/phase/M8_FIRST_CONTACT_TRUST_AND_IDENTITY_EVIDENCE_PRODUCER_ARCHITECTURE.md"
+  ],
+  "allow": [
+    "source edits against the frozen M8 contract",
+    "targeted and affected-suite tests"
+  ],
+  "deny": [
+    "Git push or merge without explicit human approval",
+    "device or network contact outside the one proposed real-environment command"
+  ],
+  "stop_on": [
+    "do not mark REAL_ENV_VALIDATED from automated tests alone",
+    "do not begin M8.4"
+  ],
+  "close_required": true
+}
