@@ -23,11 +23,12 @@ from console.registry import get_job_type
 from console.registry_targets import (
     DEVICE_ID_TARGET_MODE,
     DEVICE_NOT_ELIGIBLE,
+    DEVICE_REGISTRY_UNAVAILABLE,
     IDENTITY_TRANSLATION_REQUIRED,
     UNKNOWN_DEVICE_ID,
     resolve_registry_targets,
 )
-from utils.device_registry import DeviceRegistry
+from utils.device_registry import DeviceRegistry, REGISTRY_FILENAME
 
 # Reuses the CON.2 fixture/harness verbatim -- cross-test-file fixture reuse
 # is an existing convention in this suite (tests/test_m2_nav_accessibility_
@@ -49,6 +50,14 @@ def _enroll(data_root: Path, *, endpoint: str, disable: bool = False) -> str:
     if disable:
         registry.disable(record.device_id)
     return record.device_id
+
+
+def _corrupt_registry(data_root: Path) -> None:
+    """Simulate utils.device_registry.DeviceRegistryError -- an unreadable/
+    unparseable persisted document, not merely an empty or absent one."""
+    path = data_root / "state" / REGISTRY_FILENAME
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("{not valid json", encoding="utf-8")
 
 
 # --- JOB_REGISTRY boundary: M6 flips target_mode for config_refresh_cp only -
@@ -102,6 +111,52 @@ def test_one_ineligible_target_refuses_the_whole_request(tmp_path):
     refusal = resolve_registry_targets((eligible, "unknown-id"), data_root=tmp_path)
     assert refusal is not None
     assert refusal.reason == UNKNOWN_DEVICE_ID
+
+
+# --- PO correction round 1, item 1: order/spelling is never sorted ----------
+
+def test_unknown_device_id_refusal_preserves_submitted_order_not_sorted(tmp_path):
+    # Deliberately non-alphabetical: "zzz-unknown" sorts after "aaa-unknown",
+    # but the caller submitted them in the reverse order.
+    submitted = ["zzz-unknown", "mmm-unknown", "aaa-unknown"]
+    refusal = resolve_registry_targets(submitted, data_root=tmp_path)
+    assert refusal is not None
+    assert refusal.reason == UNKNOWN_DEVICE_ID
+    assert f"{submitted}" in refusal.detail
+
+
+def test_ineligible_device_id_refusal_preserves_submitted_order_not_sorted(tmp_path):
+    zzz = _enroll(tmp_path, endpoint="192.0.2.90", disable=True)
+    aaa = _enroll(tmp_path, endpoint="192.0.2.91", disable=True)
+    # zzz enrolled first (so its device_id has no alphabetic relationship to
+    # aaa's) -- submit aaa before zzz and require that exact order back.
+    submitted = [aaa, zzz]
+    refusal = resolve_registry_targets(submitted, data_root=tmp_path)
+    assert refusal is not None
+    assert refusal.reason == DEVICE_NOT_ELIGIBLE
+    assert f"{submitted}" in refusal.detail
+
+
+# --- PO correction round 1, item 2: registry failure vs. unknown device_id -
+
+def test_corrupt_registry_is_not_classified_as_unknown_device_id(tmp_path):
+    _corrupt_registry(tmp_path)
+    refusal = resolve_registry_targets(("any-device-id",), data_root=tmp_path)
+    assert refusal is not None
+    assert refusal.reason == DEVICE_REGISTRY_UNAVAILABLE
+    assert refusal.reason != UNKNOWN_DEVICE_ID
+
+
+def test_corrupt_registry_refusal_detail_is_sanitized(tmp_path):
+    _corrupt_registry(tmp_path)
+    refusal = resolve_registry_targets(("any-device-id",), data_root=tmp_path)
+    assert refusal is not None
+    # Never the raw exception text, a filesystem path, or a parser detail.
+    assert str(tmp_path) not in refusal.detail
+    assert "json" not in refusal.detail.lower()
+    assert "traceback" not in refusal.detail.lower()
+    assert ".py" not in refusal.detail
+    assert "any-device-id" not in refusal.detail
 
 
 def test_registry_state_is_re_read_every_call_not_cached(tmp_path):
@@ -186,6 +241,33 @@ def test_admission_never_creates_a_job_record_for_a_refused_device_id_target(con
     assert console_env.job_store.list_all() == []
 
 
+def test_admission_refuses_unreadable_registry_without_calling_main(console_env):
+    _corrupt_registry(console_env.runtime_paths.data_root)
+    with mock.patch("main.main") as fake_main:
+        response = _post_job(console_env, "config_refresh_cp", targets=["some-device-id"])
+    assert response.status_code == 400
+    detail = response.json()["detail"]
+    assert detail["reason"] == DEVICE_REGISTRY_UNAVAILABLE
+    fake_main.assert_not_called()
+
+
+def test_admission_unreadable_registry_response_is_sanitized(console_env):
+    _corrupt_registry(console_env.runtime_paths.data_root)
+    with mock.patch("main.main"):
+        response = _post_job(console_env, "config_refresh_cp", targets=["some-device-id"])
+    body = response.text
+    assert str(console_env.runtime_paths.data_root) not in body
+    assert "json.decode" not in body.lower()
+    assert "traceback" not in body.lower()
+
+
+def test_admission_unreadable_registry_creates_no_job_record(console_env):
+    _corrupt_registry(console_env.runtime_paths.data_root)
+    with mock.patch("main.main"):
+        _post_job(console_env, "config_refresh_cp", targets=["some-device-id"])
+    assert console_env.job_store.list_all() == []
+
+
 def test_admission_target_free_config_refresh_cp_is_unaffected_by_m6(console_env):
     """M5's plane-wide, target-free behavior must stay byte-identical."""
     with mock.patch("main.main", return_value=None) as fake_main:
@@ -242,6 +324,30 @@ def test_pre_execution_recheck_refuses_even_when_admission_would_have_passed(con
     fake_main.assert_not_called()
     assert final.state == "blocked"
     assert final.error_code == IDENTITY_TRANSLATION_REQUIRED
+
+
+def test_pre_execution_recheck_refuses_registry_that_became_unreadable_after_admission(console_env):
+    """A registry that becomes corrupt between admission and execution --
+    e.g. an external write race -- must mark an already-queued job blocked
+    without ever reaching main.main(), the same as any other pre-execution
+    refusal."""
+    device_id = _enroll(console_env.runtime_paths.data_root, endpoint="192.0.2.68")
+
+    record, is_new = console_env.job_store.submit(
+        job_type="config_refresh_cp", command_class="read",
+        targets=[device_id], idempotency_key="direct-submit-5",
+    )
+    assert is_new
+
+    _corrupt_registry(console_env.runtime_paths.data_root)
+
+    with mock.patch("main.main") as fake_main:
+        console_env.runner.enqueue(record.job_id)
+        final = _wait_terminal(console_env, record.job_id)
+    fake_main.assert_not_called()
+    assert final.state == "blocked"
+    assert final.error_code == DEVICE_REGISTRY_UNAVAILABLE
+    assert str(console_env.runtime_paths.data_root) not in (final.error_summary or "")
 
 
 # --- No refusal path ever reaches main.main(), a collector, or a device ----

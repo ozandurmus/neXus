@@ -48,13 +48,21 @@ _ELIGIBLE_STATES = frozenset({"ENROLLED_UNVERIFIED"})
 UNKNOWN_DEVICE_ID = "unknown_device_id"
 DEVICE_NOT_ELIGIBLE = "device_not_eligible"
 IDENTITY_TRANSLATION_REQUIRED = "IDENTITY_TRANSLATION_REQUIRED"
+#: A corrupt/unreadable/otherwise-invalid registry (utils.device_registry.
+#: DeviceRegistryError) is a distinct failure mode from "this device_id was
+#: not found in an otherwise-healthy registry" -- conflating the two would
+#: misreport a storage/parse fault as if every submitted device_id were
+#: simply unknown. Never paired with the raw exception text, a filesystem
+#: path, an endpoint, or any other internal detail (PO correction round 1).
+DEVICE_REGISTRY_UNAVAILABLE = "device_registry_unavailable"
 
 
 @dataclass(frozen=True)
 class TargetRefusal:
     error: str  # "unresolvable" | "unsupported"
-    reason: str  # one of the three module-level constants above
-    detail: str  # human-readable; never an endpoint, hostname or secret
+    reason: str  # one of the four module-level constants above
+    detail: str  # human-readable; never an endpoint, hostname, secret, raw
+                 # exception, filesystem path, or internal parser detail
 
 
 def resolve_registry_targets(
@@ -67,8 +75,14 @@ def resolve_registry_targets(
     identical, and never reaches either call site with a non-empty list
     otherwise. Every non-empty request currently refuses (Option D):
 
-    1. unknown `device_id` (not present in the registry at all) ->
-       ``UNKNOWN_DEVICE_ID``;
+    0. the registry itself cannot be read/parsed at all
+       (`utils.device_registry.DeviceRegistryError`) ->
+       ``DEVICE_REGISTRY_UNAVAILABLE`` -- a storage/parse fault, never
+       reported as if every submitted device_id were simply unknown, and
+       never paired with the raw exception, a filesystem path, an endpoint,
+       or any other internal detail;
+    1. unknown `device_id` (not present in an otherwise-readable registry)
+       -> ``UNKNOWN_DEVICE_ID``;
     2. a known `device_id` whose lifecycle state is not eligible
        (`DISABLED`/`RETIRED`/anything but `ENROLLED_UNVERIFIED`) ->
        ``DEVICE_NOT_ELIGIBLE``;
@@ -77,23 +91,28 @@ def resolve_registry_targets(
        `device_id` -> collector `entity_id` relationship exists to resolve
        it against.
 
-    Re-reads the registry from disk on every call -- there is no cache to
-    go stale between an admission check and a pre-execution re-check.
+    Cases 1/2 preserve the caller's original ``device_ids`` order and exact
+    opaque spelling in the reported list -- never sorted, never normalized
+    (identity law). Re-reads the registry from disk on every call -- there
+    is no cache to go stale between an admission check and a pre-execution
+    re-check.
     """
     if not device_ids:
         return None
     try:
         records = {record.device_id: record for record in DeviceRegistry(data_root).list()}
-    except DeviceRegistryError as exc:
+    except DeviceRegistryError:
         return TargetRefusal(
-            "unresolvable", UNKNOWN_DEVICE_ID, f"device registry unavailable: {exc}"
+            "unresolvable", DEVICE_REGISTRY_UNAVAILABLE,
+            "device registry is unavailable, unreadable, or invalid; targeting "
+            "cannot be admitted until it is restored",
         )
-    unknown = sorted(t for t in device_ids if t not in records)
+    unknown = [t for t in device_ids if t not in records]
     if unknown:
         return TargetRefusal(
             "unresolvable", UNKNOWN_DEVICE_ID, f"unknown registry device_id(s): {unknown}"
         )
-    ineligible = sorted(t for t in device_ids if records[t].state not in _ELIGIBLE_STATES)
+    ineligible = [t for t in device_ids if records[t].state not in _ELIGIBLE_STATES]
     if ineligible:
         return TargetRefusal(
             "unresolvable", DEVICE_NOT_ELIGIBLE,
