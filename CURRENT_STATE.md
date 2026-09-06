@@ -12,14 +12,10 @@ generated one-line timeline.
   unrewritten).
 - **Current build** (per `project/roadmap.json` `now_next.now`):
   `nav_1_accessibility_closure` (`M2`) — **IN PROGRESS**: closing
-  `AC-A11Y-1`…`4` against the frozen navigation contract, confirming
-  `AC-A11Y-5`, and validating the combined branch before the NAV PR (see
-  "Active build"). Predecessors both complete: `M0`
-  (`pcp_2_local_control_plane_sequencing_po_review`) — architecture FROZEN
-  by Product Owner approval at reviewed head `ba56d2b`; `M1`
-  (`pcp1_registry_uuid_call_count_test_defect_repair`) — AUTOMATED_VALIDATED,
-  merged to `main` via PR #84. `now_next.next` is `M3`
-  (`nav_3_capability_state_vocabulary`).
+  `AC-A11Y-1`…`4`, confirming `AC-A11Y-5`, validating the combined branch,
+  then the NAV PR (see "Active build"). Predecessors both complete: `M0`
+  architecture FROZEN (reviewed head `ba56d2b`); `M1` AUTOMATED_VALIDATED,
+  merged via PR #84. `now_next.next` is `M3` (`nav_3_capability_state_vocabulary`).
   `op2_c_cp_clusterxl_adapter_scoping` stays `upcoming`, blocked on
   `DEPLOY.1`. `PCP.1` is complete — detail in `project/build_history.json`.
 - **OP.2.0 CLASS 2 architecture** (`docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md`):
@@ -61,56 +57,33 @@ test-enforced boundaries. Current numbers:
 ## Active build
 
 **`nav_1_accessibility_closure`** (`M2`) — **IN PROGRESS**. Incorporates
-`main` (M1, merged) into the NAV branch, closes `AC-A11Y-1`…`4`, confirms
+`main` (`M1`, merged) into the NAV branch, closes `AC-A11Y-1`…`4`, confirms
 `AC-A11Y-5`, validates the combined branch, then opens/merges the NAV PR.
-Predecessors, both complete:
-**`pcp_2_local_control_plane_sequencing_po_review`** (`M0`) — **COMPLETE.
-ARCHITECTURE FROZEN 2026-09-05**, Product Owner approved at reviewed head
-`ba56d2b`. It produced **no product code**. Two contracts are **FROZEN —
-PRODUCT OWNER APPROVED**, each with acceptance criteria:
-`docs/design/NAVIGATION_INFORMATION_ARCHITECTURE.md` (§19) and
-`docs/design/LOCAL_CONTROL_PLANE_RUNTIME_AND_ENROLLMENT.md` (§15).
-`docs/design/research/NSPM_NAVIGATION_BENCHMARK.md` stays a **research
-appendix, deliberately not a frozen contract**.
-**`pcp1_registry_uuid_call_count_test_defect_repair`** (`M1`) —
-**AUTOMATED_VALIDATED**: repaired two `tests/test_pcp1_device_registry.py`
-cases that monkeypatched module-wide `uuid.uuid4` and incorrectly counted
-the registry lock's `owner_token` generation as device-id generation, via a
-single narrow production seam (`utils/device_registry.py::_generate_device_id()`).
-Full suite: 1931 passed, 24 skipped, 0 failed. No frozen PCP.1 AC-1a..AC-15
-behavior, persistence schema, endpoint normalization, duplicate/lifecycle
-behavior, CLI output, or public API changed. Merged to `main` via PR #84.
-`project/build_history.json` carries the exact defect/fix/evidence for `M1`
-and the full freeze record for `M0`.
+Predecessors, both complete — full detail in `project/build_history.json`:
+`M0` froze `docs/design/NAVIGATION_INFORMATION_ARCHITECTURE.md` (§19) and
+`docs/design/LOCAL_CONTROL_PLANE_RUNTIME_AND_ENROLLMENT.md` (§15), Product
+Owner approved at reviewed head `ba56d2b`, no product code; `M1` repaired
+two `tests/test_pcp1_device_registry.py` uuid4 call-count defects via
+`utils/device_registry.py::_generate_device_id()`, AUTOMATED_VALIDATED
+(1931 passed / 24 skipped / 0 failed), merged via PR #84 — no frozen
+`PCP.1` `AC-1a`..`AC-15` behavior changed.
 
 **Freeze is not implementation authority.** `M1`…`M14` remain separately
-authorized, bounded movements, and the `NAV.1` prototype (commit `5a5a1f7`,
-runnable, behaviourally unchanged) may not merge until **`M2`** closes the four
-accessibility requirements (`AC-A11Y-1`…`4`).
-
-Frozen: fifteen `D-NAV` decisions, **no operative row left provisional**; the
-six-root baseline with Recovery reserved seventh and Jobs under Operations; the
-four-predicate capability model, so **a global module never vanishes because one
-device lacks a capability**; the logical-entity-first workspace with **no second
-identity authority**; the stable-visible device-tab rule; and a difference
-contract **preserving the pale yellow/gold expected-member emphasis** with an
-explicit label and no failure semantics.
-
-**Parent contracts narrowly amended:** `CON.0` §4.1 (the typed enrollment
-intent) and §7.11; `PCP.0` §19 (decided block), §10 (local storage) and §20.1
-(sequencing). Every unrelated frozen law is preserved.
-
-**Decision register scoped, not overloaded:** `pcp_console_registry_write_gate`
-**DECIDED** for the local loopback profile only; new
-`pcp_server_enrollment_exposure` carries the production question (**OPEN**,
-`DEPLOY.1A`); `pcp_local_control_plane_storage` **DECIDED** (Option A) while
-`pcp_storage_engine` stays **OPEN** — **SQLite is not the production engine**;
-trust and auto-enrollment policies **DECIDED**.
-
-Benchmark screenshot evidence is **excluded from authority** — its provenance
-is not durably auditable from the repository, the appendix asserts no
-provenance either way, and **no frozen decision depends on it**. PAN B2 stays
-**NOT ESTABLISHED**.
+authorized movements; the `NAV.1` prototype (`5a5a1f7`, runnable,
+behaviourally unchanged) may not merge until `M2` closes the four
+accessibility requirements. Frozen (unchanged by this movement): fifteen
+`D-NAV` decisions, no operative row provisional; the six-root baseline,
+Recovery reserved seventh, Jobs under Operations; the four-predicate
+capability model; the logical-entity-first workspace, no second identity
+authority; the difference contract preserving pale yellow/gold
+expected-member emphasis. Parent contracts narrowly amended: `CON.0` §4.1/§7.11;
+`PCP.0` §19/§10/§20.1. Decision register: `pcp_console_registry_write_gate`
+DECIDED (local loopback only); `pcp_server_enrollment_exposure` OPEN
+(`DEPLOY.1A`); `pcp_local_control_plane_storage` DECIDED (Option A),
+`pcp_storage_engine` stays OPEN — SQLite is not the production engine;
+trust/auto-enrollment policies DECIDED. Benchmark screenshot evidence stays
+excluded from authority (unauditable provenance, no frozen decision depends
+on it). PAN B2 stays NOT ESTABLISHED.
 
 ## `OP.0b.0` — FROZEN WITH REAL-ENV VALIDATION GATES
 
@@ -190,21 +163,13 @@ Concurrency budget stays at 1 per vendor pending its own real-env evidence.
 ## Automated test baseline
 
 ```
-THE FULL SUITE IS NOT GREEN. The two PCP.1 registry uuid4 call-count tests
-  fail deterministically on main and on this branch, unchanged and unfixed:
-  the count also catches the registry lock's own owner token, so both assert
-  [1] == []. Backlog pcp1_registry_uuid_call_count_test_defect -> movement M1.
-  The fast PR `validate` job never ran that file; `full-regression` does.
-This movement is documentation/state only and changes no runtime behaviour
-  (diff from ace9813 touches no executable JS/CSS/template/Python), so
-  targeted evidence rather than a full regression:
-    tests/test_navigation_information_architecture.py  20 passed
-      (18 prototype AC checks + 2 DRAFT/authority guards; 4 real Chromium)
-    tests/test_architecture_convergence.py  20 passed
-    render harnesses: node+happy-dom PASS; Playwright/Chromium PASS
-  Last full serial run here: 1950 passed / 22 skipped / 2 failed (same two).
-Repository privacy gate: PASS / 0 findings. metadata_warnings == [];
-  build-history index --check clean; git diff --check clean.
+M1's uuid4 call-count defect is FIXED on main (merged here via PR #84) --
+  tests/test_pcp1_device_registry.py is green. Post-merge narrow check on
+  this branch: tests/test_navigation_information_architecture.py +
+  tests/test_architecture_convergence.py + tests/test_pcp1_device_registry.py
+  = 122 passed, 0 failed. M2's own accessibility + full parallel-suite
+  evidence is recorded in project/build_history.json (nav_1_accessibility_closure)
+  once that validation completes.
 ```
 ## Known xfails
 
