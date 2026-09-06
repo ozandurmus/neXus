@@ -54,42 +54,40 @@ test-enforced boundaries. Current numbers:
 
 ## Active build
 
-**`nav_3_capability_state_vocabulary`** (`M3`) — **IN_PROGRESS, revision 3.**
+**`nav_3_capability_state_vocabulary`** (`M3`) — **IN_PROGRESS, revision 4.**
 Contract: `docs/design/CAPABILITY_STATE_VOCABULARY_AND_PRESENTATION.md` —
 **DRAFT — DO NOT FREEZE, NOT PRODUCT OWNER APPROVED**; authorizes no
-implementation, not citable as design authority. Seven owned dimensions
-`D1`–`D7`, resolver inputs `I1`–`I17`, four independent outputs
-(`primary_status`, qualifiers, `evidence_presentation`, `action_eligibility`),
-`AC-CS-1`…`85` (no id renumbered or deleted).
+implementation, not citable as design authority. Dimensions `D1`–`D7`, gates
+`E1`–`E7`, inputs `I1`–`I20`, a **surface disposition** plus four capability
+outputs, `AC-CS-1`…`93` (no id renumbered or deleted).
 
-**Revision 3** applied an independent review — twelve defects (`X15`–`X26`):
-`D1` visibility is now **absolute** and independent of contradiction
-diagnostics (stage 0, cases `V-A`–`V-D`; an absent surface never renders, a
-contradiction there emits diagnostics only, and absent/malformed `D1` fails
-closed toward omission); the resolver input contract is complete, with
-absent / malformed / contradictory / stale / unevaluated / validly-unknown
-handling resolved before affected outputs (`POLICY_UNKNOWN` is valid input and
-erases no evidence); action eligibility splits into **mandatory server-owned
-gates `G1`–`G4`** and action-specific prerequisites, so an empty prerequisite
-set can never omit action identity, taxonomy class, authorization or subject
-integrity, and no target prerequisite is invented for targetless reads;
-unevaluated authorization is distinct from confirmed denial; `H1`–`H11` carry
-baselines and named actions, and `H9`'s inverted eligibility is corrected;
-cache validity binds all consumed generations **plus** producer/support-rule
-versions, assuming missed or delayed invalidation, while live registry checks
-at admission and immediately before execution are preserved.
+**Revision 4** — thirteen defects (`X27`–`X39`). Structure repaired (duplicated
+`### 4.2` heading, out-of-order §2.6/§2.7, orphan §6.4 fragment). **Surface
+resolution separated from capability resolution**: `D1` is three-valued, an
+unresolvable `D1` omits fail-closed as `OMIT_UNRESOLVABLE` **without** asserting
+`NOT_SHIPPED`, and under either omission the four capability outputs are
+**absent, not empty**. **Action outcomes are action-keyed** under
+`action_eligibility[action_id].blocking_reasons[]`. **Gate ownership
+corrected**: `D7` is actor authorization only, the server-owned concepts are
+`E1`–`E7`, and the taxonomy is evaluated exactly once. **`D6d` expected-source
+trust separated from `D6e` identity translation**, reason codes preserved.
+**`CX2` given comparability conditions `K1`–`K6`** so historical evidence never
+automatically contradicts a later support conclusion. `H1`–`H11` are atomic.
+
+**Closure-report correction:** revision 3's SESSION CLOSE said a duplicated
+heading had been found and fixed — true of one instance, false as a general
+claim: an identical concatenation at `### 4.2` survived, because the audit used
+`uniq -d` over whole heading lines. Recorded as `X27`; a rendered-structure
+audit now guards this class and reports **0 failures**.
 
 `PO-NAV-7` resolved **in contract**: capability policy → `D5` `POLICY_DISABLED`
-(`A5`, `M12`); "not enrolled" → `D4` `EVIDENCE_ONLY` (`A6`, `M10`). The console
-job lifecycle, `OP.2` `ActionState`, action taxonomy, compliance,
-discovery-lifecycle and registry vocabularies are **byte-unchanged**.
+(`A5`, `M12`); "not enrolled" → `D4` `EVIDENCE_ONLY` (`A6`, `M10`). The job
+lifecycle, `ActionState`, taxonomy, compliance, discovery-lifecycle and
+registry vocabularies are **byte-unchanged**.
 
-**Recorded, not applied** (`AGENTS.md` authority hierarchy): nine frozen-parent
-corrections `FA-1`…`FA-9` (contract §2.7), each with exact clause, demonstrated
-conflict, minimal correction and the acceptance criteria blocked if approval is
-withheld. **No frozen file was edited.**
-
-**Six open PO decisions** `PO-M3-1`…`6` (contract §11.2) gate the freeze.
+**Recorded, not applied:** nine frozen-parent corrections `FA-1`…`FA-9`
+(contract §2.7), each now owned by a named PO decision. **No frozen file was
+edited.** **Six open PO decisions** `PO-M3-1`…`6` (§11.2) gate the freeze.
 
 ## `OP.0b.0` — FROZEN WITH REAL-ENV VALIDATION GATES
 
@@ -125,11 +123,12 @@ a narrower question never promoted toward B2.
 ## Exact next build
 
 **Product Owner review of the corrected `M3` draft.** Close `PO-M3-1`…`6`
-(contract §11.2) and rule on the nine prepared frozen-parent corrections
-`FA-1`…`FA-9` (§2.7, §11.3). `FA-*` amend a FROZEN document and cannot be
-applied by an agent; if approval is withheld, the named acceptance criteria are
-**blocked** and the authority conflict stands — implementers are not to be sent
-back to semantics the draft demonstrated false. `M3` stays `in_progress`.
+(§11.2) and rule on the nine prepared frozen-parent corrections `FA-1`…`FA-9`
+(§2.7), each of which names its owning decision. `FA-*` amend a FROZEN document
+and cannot be applied by an agent; if approval is withheld the named acceptance
+criteria are **blocked** and the authority conflict stands — implementers are
+not sent back to semantics the draft demonstrated false, and the draft is not
+silently rewritten. `M3` stays `in_progress`.
 
 `now_next.next` is **`local_control_plane_metadata_store`** (`M4`): local
 SQLite control-plane metadata only, additively, inside the companion contract's
@@ -167,12 +166,13 @@ Concurrency budget stays at 1 per vendor pending its own real-env evidence.
 ## Automated test baseline
 
 ```
-M3 revision 3 focused (contract/docs-only movement):
+M3 revision 4 focused (contract/docs-only movement):
   tests/test_architecture_convergence.py            20 passed, 0 failed
   tests/test_navigation_information_architecture.py 16 passed, 4 skipped
   combined                                          36 passed, 4 skipped, 0 failed
   metadata_warnings == []; build-history index --check clean; privacy gate
-  PASS / 0 findings; git diff --check clean; source tree untouched.
+  PASS / 0 findings; git diff --check clean; source/test/script/workflow/
+  dependency trees untouched; rendered-structure audit 0 failures.
   These validate repository consistency only -- no resolver exists yet, so
   every resolver acceptance criterion stays unexercised until its owning
   movement implements it. No full local suite, no GitHub full regression.
