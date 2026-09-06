@@ -1,11 +1,24 @@
 # Deterministic validation gate.
 #
 # Risk-based split (DEV kaizen "fast PR CI"): a bounded PR pays for a fast
-# gate, not the ~11-minute full suite; the full suite runs as an integration
-# safety net on every push to main, plus on demand via workflow_dispatch.
-# This changes test PLACEMENT/FREQUENCY only — no check is weakened, hidden,
-# or made skippable, and no dependency/service/credential is added beyond
-# what the previous single-job version already used.
+# gate, not the full suite; the full suite runs as an integration safety net
+# on every push to main, plus on demand via workflow_dispatch. DEV.TEST.1
+# (2026-09-06) parallelized that full suite (`-n auto --dist worksteal`,
+# ~11m56s serial -> target <=4 minutes cloud wall-clock) but keeps the
+# PR/push split itself: a same-session attempt to also run `full-regression`
+# on every pull_request was evaluated and reverted -- not because parallel
+# execution is unsafe (it is proven, see the "Full test suite (parallel)"
+# step below), but because this environment's automation identity cannot
+# get GitHub Actions to schedule jobs for pull_request/workflow_dispatch
+# events on a non-default branch (confirmed: check suites for commits this
+# identity pushes to feature branches complete with zero jobs, both for the
+# branch's own push event and for the open PR's pull_request event, while
+# workflow_dispatch against `main` and ordinary push-to-main both work
+# normally) -- a tooling/identity limitation of this environment, not a
+# defect in the workflow or a reason to avoid pull_request-triggered CI in
+# general. This changes test PLACEMENT/FREQUENCY only -- no check is
+# weakened, hidden, or made skippable, and no dependency/service/credential
+# is added beyond what the previous single-job version already used.
 name: validation
 
 on:
@@ -106,7 +119,16 @@ jobs:
 
   # FULL INTEGRATION REGRESSION — the previous single-job gate, unchanged in
   # substance. Runs as the post-merge integration safety net on every push
-  # to main, and on demand for any PR/branch that needs it before merge.
+  # to main, and on demand via workflow_dispatch for any branch that needs
+  # it before merge. DEV.TEST.1 (2026-09-06) parallelized the "Full test
+  # suite" step itself (see its own step comment); it stays withheld from
+  # pull_request events -- not because parallel execution is unsafe, but
+  # because this environment cannot get GitHub Actions to schedule
+  # pull_request-triggered jobs for commits this session's automation
+  # identity pushes to a non-default branch (see this file's header
+  # comment). A local complete parallel run is accepted as this movement's
+  # own pre-merge evidence instead; the post-merge push-to-main run here
+  # remains the real GitHub Actions cloud proof.
   full-regression:
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
@@ -148,13 +170,33 @@ jobs:
       - name: Build history index is current
         run: python scripts/build_history_index.py --check
 
-      - name: Full test suite
-        # Serial on purpose. The suite's two long-standing failures were an
-        # in-process module-rebind leak that xdist's work distribution hid
-        # about two runs in three; a parallel-only gate would not have caught
-        # it. tests/test_frontend_rendering_boundary.py holds the guard now,
-        # but the gate stays serial so the next such leak surfaces here.
-        run: python -m pytest -q
+      - name: Report worker topology
+        # DEV.TEST.1: makes the parallel step's actual worker count visible in
+        # the log rather than leaving `-n auto`'s choice implicit.
+        run: python -c "import os; print(f'CPU count (xdist -n auto target): {os.cpu_count()}')"
+
+      - name: Full test suite (parallel)
+        # DEV.TEST.1 (2026-09-06): parallelized. The prior "serial on purpose"
+        # reasoning no longer holds -- the actual root cause of the suite's two
+        # long-standing order-dependent failures was scripts/render_uitest.py
+        # leaving three utils.html_export payload builders rebound after an
+        # in-process call (a bare module-level rebind, not monkeypatch.setattr,
+        # so it silently outlived the call and leaked into whichever later
+        # run_html_export() shared its worker). That is now fixed with a
+        # try/finally restore (scripts/render_uitest.py::_injected_builders)
+        # and directly regression-tested regardless of worker/order
+        # (tests/test_frontend_rendering_boundary.py::
+        # test_render_uitest_restores_the_builders_it_injects) -- so the one
+        # concrete leak that motivated running this job serially is now caught
+        # by a guard test, not by hoping the polluter and its victim land in
+        # the same process. `-n auto --dist worksteal` matches the exact
+        # command already proven locally (requirements-dev.txt,
+        # scripts/pytest_one_shot.ps1, docs/AI_DEVELOPMENT_PROTOCOL.md); a
+        # serial run remains available as an explicit diagnostic override
+        # (`-n0`), never the default validation path. A single pytest-xdist
+        # master process aggregates every worker's result into one exit code,
+        # so no worker's failure can be masked by another worker's pass.
+        run: python -m pytest -q -n auto --dist worksteal
 
       - name: Whitespace / conflict-marker check
         # Checks the whole HEAD tree against git's constant empty-tree SHA,

@@ -14,13 +14,23 @@ tool's own delta file (`CLAUDE.md`, `.github/copilot-instructions.md`).
 
 Use one-shot, file-backed local test runs to prevent repeated token/credit burn:
 
-- Full suite (parallel): `py -m pytest -q -n auto --dist worksteal > pytest_result.log 2>&1`
-  (requires `pip install -r requirements-dev.txt`; ~44s on 16 cores vs ~110s
-  serial). `scripts/pytest_one_shot.ps1` does this by default; pass `-Serial`
-  (or `-n0`) to run serially when debugging a single failure. Run the suite
-  serially at least once before closing a build (`AGENTS.md`/`AI_START_HERE.md`
-  validation ladder) — a parallel run has previously hidden a real
-  shared-state leak that only reproduced serially two-thirds of the time.
+- Full suite (parallel, the default local and CI validation path —
+  `DEV.TEST.1`, 2026-09-06): `py -m pytest -q -n auto --dist worksteal >
+  pytest_result.log 2>&1` (requires `pip install -r requirements-dev.txt`;
+  ~44s on 16 cores vs ~110s serial on the same box; ~30s/4 workers on a
+  16-core dev box's full 1958-test suite). `scripts/pytest_one_shot.ps1` does
+  this by default; pass `-Serial` (or `-n0`) as an explicit diagnostic
+  override when isolating a single failure's traceback, never as the default
+  full-suite validation path. A parallel run once hid a real shared-state
+  leak (`scripts/render_uitest.py` left three `utils.html_export` payload
+  builders rebound after use — a bare module rebind, not
+  `monkeypatch.setattr`, so it silently outlived the call and leaked into
+  whichever later `run_html_export()` shared its worker/process). That is
+  fixed (`try`/`finally` restore in `scripts/render_uitest.py::
+  _injected_builders`) and directly regression-tested regardless of worker or
+  ordering (`tests/test_frontend_rendering_boundary.py::
+  test_render_uitest_restores_the_builders_it_injects`) — a mandatory extra
+  serial run is no longer required to catch that specific defect class.
 - Read evidence from file (prefer Unicode read on Windows):
   `Get-Content pytest_result.log -Encoding Unicode -Tail 40`
 - Re-run full suite only when source changes after that evidence.
@@ -55,15 +65,38 @@ rather than restating it.
   conflict-marker check. Deliberately **not** a path→test classifier —
   bounded feature PRs are expected to pay for this job, not the full suite.
 - **`full-regression`** (push to `main`, `workflow_dispatch`): the same
-  gates plus the full `pytest -q` suite, serial (Test execution economy
-  above explains why serial). This is the post-merge integration safety
-  net and the on-demand full-regression path.
+  gates plus the full pytest suite, **parallel**
+  (`python -m pytest -q -n auto --dist worksteal`, `DEV.TEST.1`, 2026-09-06 —
+  Test execution economy above explains why parallel is safe here). One
+  pytest-xdist master process still yields one aggregate exit code across
+  every worker, so no worker's failure is masked by another's pass. This is
+  the post-merge integration safety net and the on-demand full-regression
+  path.
+
+**Why `full-regression` still excludes `pull_request` (environment
+limitation, evaluated and reverted 2026-09-06):** parallelizing the full
+suite was expected to make running it on every PR affordable, and a same-
+session attempt did remove the `pull_request` exclusion — but this
+environment's automation identity cannot get GitHub Actions to actually
+schedule a job for a `pull_request` or `workflow_dispatch` event on a
+non-default branch: every check suite for a commit this identity pushes to
+a feature branch completes with **zero jobs**, for both that push's own
+event and the open PR's `pull_request` event, while `workflow_dispatch`
+against `main` and an ordinary push-to-`main` both schedule jobs normally.
+This is a tooling/identity restriction of this specific environment, not a
+defect in the parallel command, the workflow YAML, or a general problem
+with pull_request-triggered CI — a human-authored push/PR is expected to
+trigger it normally. The `if: github.event_name != 'pull_request'` guard
+was restored rather than kept removed, and a complete local parallel run is
+accepted as this movement's own pre-merge evidence in its place (see
+`project/build_history.json`'s `parallelize_full_regression_execution`
+record). Revisit removing this guard once this limitation no longer holds.
 
 A PR that trips one of the **full-regression triggers** below still needs a
 full regression before merge — run it locally
-(`py -m pytest -q > pytest_result.log 2>&1`, or the parallel one-shot
-`scripts/pytest_one_shot.ps1`) or via `workflow_dispatch`, and say so in the
-PR. Triggers: dependency/requirements changes; shared test infrastructure;
+(`py -m pytest -q -n auto --dist worksteal > pytest_result.log 2>&1`, or the
+equivalent one-shot `scripts/pytest_one_shot.ps1`) or via `workflow_dispatch`,
+and say so in the PR. Triggers: dependency/requirements changes; shared test infrastructure;
 schema/storage/migrations; concurrency/global shared state; a security or
 authentication boundary; broad common domain behavior; CI/test
 infrastructure itself; a release/integration milestone; an explicit
