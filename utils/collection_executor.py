@@ -196,6 +196,32 @@ def select_coordinator_backend(data_root: Path | None = None) -> CoordinatorBack
 # Shared argv construction (CON.2 C2-2)
 # ---------------------------------------------------------------------------
 
+# M5: workflows whose collector accepts a real, exact target-selection seam.
+# Every other workflow stays honestly plane-wide (AC-TGT-5) -- a target
+# supplied for one of them is refused by workflow_argv() itself, before
+# main() or any collector/device contact (AC-TGT-3).
+_TARGET_SEAM_WORKFLOWS: frozenset[str] = frozenset({"cp-config", "recovery-pan", "recovery-cp"})
+
+
+class UnsupportedTargetSelectionError(ValueError):
+    """Raised when targets are supplied for a workflow with no target-selection seam.
+
+    M5 (`docs/design/PRODUCT_CONTROL_PLANE_ARCHITECTURE.md` §9,
+    `AC-TGT-3`/`AC-TGT-5`): running the whole plane and filtering the result
+    afterwards is not targeted execution -- it still contacts every device on
+    the plane and would misrepresent the audit record. Refusing here, inside
+    argv construction, keeps that refusal before ``main()`` is ever invoked.
+    """
+
+    def __init__(self, workflow: str) -> None:
+        super().__init__(
+            f"workflow {workflow!r} has no target-selection seam yet; refusing the "
+            "targeted request instead of silently running it plane-wide -- use the "
+            "existing explicit plane-wide invocation instead"
+        )
+        self.workflow = workflow
+
+
 def workflow_argv(workflow: str, runtime_root: Path, *, targets: "tuple[str, ...] | list[str]" = ()) -> list[str]:
     """Build the ``main.py`` argv for one workflow name.
 
@@ -206,11 +232,22 @@ def workflow_argv(workflow: str, runtime_root: Path, *, targets: "tuple[str, ...
     eventually build it wrongly. No string originating from an HTTP request
     is ever placed into argv here except an already-validated ``entity_id``
     (C2-2's one exception).
+
+    Raises ``UnsupportedTargetSelectionError`` if ``targets`` is non-empty for
+    a workflow with no target-selection seam (M5, `AC-TGT-3`/`AC-TGT-5`) --
+    fail-closed, before argv is ever handed to ``main()``.
     """
     normalized = "cp" if workflow == "checkpoint" else workflow
     base = ["--runtime-root", str(runtime_root)]
+    if targets and normalized not in _TARGET_SEAM_WORKFLOWS:
+        raise UnsupportedTargetSelectionError(normalized)
     if normalized == "cp-config":
-        return [*base, "--cp-config-collect", "--cp-config-stage", "all"]
+        argv = [*base, "--cp-config-collect", "--cp-config-stage", "all"]
+        if targets:
+            # Preserve requested order and opaque entity_id spelling exactly
+            # (OP.0d `_apply_cp_target_selector` contract; identity law).
+            argv += ["--cp-config-targets", ",".join(targets)]
+        return argv
     if normalized.startswith("recovery-"):
         vendor = {"recovery-pan": "panorama", "recovery-cp": "checkpoint"}[normalized]
         argv = [*base, "--recovery-collect", "--recovery-vendor", vendor]
@@ -263,9 +300,10 @@ class ScheduledWorkflow:
     interval_minutes: int
     # Additive (contract §10.4): omitted/empty means "all admitted devices
     # of this workflow's vendor" -- every policy file written before this
-    # field existed keeps its exact prior meaning. Only meaningful for
-    # recovery-* workflows today; ignored by the existing checkpoint/cp/vsx/
-    # pan-config workflows, which have never taken a target list.
+    # field existed keeps its exact prior meaning. Meaningful for recovery-*
+    # and, since M5, cp-config; a non-empty value for any other workflow is
+    # refused fail-closed by workflow_argv() before any device contact
+    # (UnsupportedTargetSelectionError, AC-TGT-3/AC-TGT-5).
     targets: tuple[str, ...] = ()
 
 
