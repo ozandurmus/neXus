@@ -2,7 +2,19 @@
 
 ## Status
 
-**Revision 4 (final pre-decision consistency correction).** Revision 3
+**Revision 5 (final deterministic contract-algebra correction).** The result is
+now a **tagged union** (`RESOLVED` \| `OMITTED`), `NOT_SHIPPED` is a
+`SurfaceOmissionReason` rather than a `CapabilityState` (nine values), the
+fourth output is a presentation-time `action_affordance[]` that never claims an
+`E7` check has passed, `E4` is total with `NO_APPLICABLE_AUTHORITY`, `CX1` is
+subject-scoped, `RI-1` comparability is total over `K1`–`K6`, `CX2`/`CX3` are
+renamed bounded inconsistencies so danger stays reserved for `CX1`, the
+H-cases use real registry action ids, and the persisted projection is separated
+from the presentation resolution. Defects `X40`–`X49` at §11.1. Acceptance
+criteria `AC-CS-1`…`97`; no id renumbered or deleted. Still **DRAFT**; nothing
+here is frozen or approved.
+
+**Revision 4 (pre-decision consistency correction).** Revision 3
 (`4b4339f`) was reviewed against the pushed file. This revision repairs the
 document structure (a duplicated concatenated `### 4.2` heading that survived
 revision 3's audit, out-of-order §2.6/§2.7, an orphan §6.4 table fragment),
@@ -305,7 +317,7 @@ uncertainty makes a timestamp stale.
 
 | # | Exact parent clause | Current frozen wording / rule | Demonstrated conflict | Minimal proposed correction | Owner | Consequence if withheld |
 | --- | --- | --- | --- | --- | --- | --- |
-| **FA-1** | nav contract §8, l.627 (**Stale** row) | *"`last_known_good`; `STALE`; `PROVENANCE_UNVERIFIED` … data shown **with age + provenance** … muted badge + timestamp"* | `PROVENANCE_UNVERIFIED` carries no age and **no timestamp** (V12a). The row requires both | strike `PROVENANCE_UNVERIFIED` from the Stale row; give it its own row asserting no age: *"**Source trust insufficient** \| `PROVENANCE_UNVERIFIED` \| shown \| selectable, states that no override/drift claim can be made from this source \| muted, **no timestamp claim**"* | `PO-M3-2` | the parent requires a timestamp that does not exist; an implementer must fabricate one or ignore the clause. `AC-CS-54`/`55` blocked |
+| **FA-1** | nav contract §8, l.627 (**Stale** row) | *"`last_known_good`; `STALE`; `PROVENANCE_UNVERIFIED` \| shown \| **selectable**, data shown **with age + provenance** \| enabled, with age stated \| muted badge + timestamp; never blank"* | `PROVENANCE_UNVERIFIED` carries no age and **no timestamp** (V12a). The row requires both. Its Action cell also reads unconditionally "enabled" — the same defect `FA-7` names | strike `PROVENANCE_UNVERIFIED` from the Stale row and add a new row **in the parent's own six-column shape** (UX semantic \| canonical states \| Nav entry \| View/tab \| Action \| Presentation): *"**Source trust insufficient** \| `PROVENANCE_UNVERIFIED` \| shown \| selectable, states that no override/drift claim can be made from this source \| **not blocked by this state** (per `FA-7`) \| muted, **no timestamp claim**"*. The Action column uses `FA-7`'s corrected semantics, so the two amendments are consistent | `PO-M3-2` | the parent requires a timestamp that does not exist; an implementer must fabricate one or ignore the clause, and the Action cell still reads as granting. `AC-CS-54`/`55` blocked |
 | **FA-2** | nav contract §5.4, l.445 | *"Stale or incomparable evidence \| `PROVENANCE_UNVERIFIED`, `last_known_good` \| muted / provenance \| \"Stale evidence\" + timestamp"* | "stale" and "incomparable" are two different facts sharing one row, one label and one timestamp requirement | split: `last_known_good` keeps "Stale evidence" + timestamp; `PROVENANCE_UNVERIFIED` takes a label asserting no age | `PO-M3-2` | two distinct facts keep one label; operators cannot tell old evidence from untrusted comparison. `AC-CS-54`/`55` blocked |
 | **FA-3** | nav contract §8, l.629 (**Unsupported** row) | *"`UNSUPPORTED(reason)` … ; `UNKNOWN_SHELL`"* | `UNKNOWN_SHELL` is the *unknown* branch of `plan_collection` (V9a), sibling to `INSUFFICIENT_EVIDENCE`. Treating it as a support conclusion inverts the UNKNOWN law | strike `UNKNOWN_SHELL` from the Unsupported row; it belongs in the existing §8 **Unknown / insufficient** row (l.636) | `PO-M3-2` | an unobserved device is reported **unsupported** — a false product claim. `AC-CS-19`/`56` blocked |
 | **FA-4** | `AC-DIF-7`, l.995 | *"Stale or incomparable evidence uses muted/provenance semantics **with its timestamp**"* | binds a timestamp requirement to classifications that have none (`D6d`, `D6e`) | require the timestamp **only** where a freshness anchor exists (`collected_at` / `last_successful_collection`); provenance/comparability semantics without a timestamp otherwise | `PO-M3-2` | a frozen criterion cannot be satisfied without fabricating data; any test written to it must fail or lie |
@@ -313,7 +325,7 @@ uncertainty makes a timestamp stale.
 | **FA-6** | nav contract §8 **Failed** row vs the §8.1 empty-state grouping | Failed row says *"error state + last good evidence retained"*; §8.1 groups **failed** under *"Keep selectable + explanatory empty state"* | one state is required to retain and display last-good evidence **and** to present an explanatory empty state — mutually exclusive presentations | make §8.1's grouping conditional: an explanatory empty state applies **only when no displayable evidence is retained** | `PO-M3-2` | two incompatible presentations for one state; retained evidence may be hidden behind an empty state. `AC-CS-29`/`58` blocked |
 | **FA-7** | nav contract §8 **Action** column, unconditional cells — e.g. Stale *"enabled, with age stated"*, Skipped *"enabled"* | states an action is **enabled**, unconditionally, as a property of the capability state | eligibility is never a property of the capability state alone: it is the conjunction of `E1`–`E7` (§3.4). An unconditional "enabled" cell would grant an action past its taxonomy, authorization and admission gates | reword the Action column as **"not blocked by this state"**, with a note that final eligibility remains the conjunction of the action's own gates | `PO-M3-2` | the table reads as granting actions; implemented literally it bypasses `console_refusal()` and the authorization authority — a safety defect. `AC-CS-30`/`32`/`67` blocked |
 | **FA-8** | nav contract §5.4, contradictory/unsafe row: *"`IDENTITY_TRANSLATION_REQUIRED`, `RELATIONSHIP_INCONSISTENT` … danger/error … 'Contradictory evidence'"* | groups an identity-**translation** requirement with unsafe contradictory state under one **danger/error** treatment and one "Contradictory evidence" label | `IDENTITY_TRANSLATION_REQUIRED` is a `semantic_exclusion` (V12a producer set) — a comparability limitation meaning the two sides use different identifier representations. It is **not** a contradiction: `CX1` (incompatible type/vendor resolution) is a distinct, narrower condition. Rendering it as danger overstates severity and conflicts with `AC-DIF-8`'s "red is reserved for actual fault" | separate the two: `IDENTITY_TRANSLATION_REQUIRED` takes comparability semantics (muted, "identity translation required", its own reason code preserved); genuine contradictory/unsafe state (`CX1`, `RELATIONSHIP_INCONSISTENT`) keeps danger/error and the "Contradictory evidence" label | `PO-M3-2` | a comparability limitation is presented as a fault, and the parent's own `AC-DIF-8` is violated by its own row. `AC-CS-47` and `H11c` cannot both be satisfied |
-| **FA-9** | nav contract §8 table shape (one **UX semantic** row → one nav/view/action/presentation tuple) | each row collapses status, view content, action enablement and presentation into a single state's row | this draft demonstrates these are **four independent outputs** under a separate surface disposition (§4.1): `primary_status`, `evidence_presentation` and `action_eligibility` vary independently for the same state — `H4a`/`H4b`/`H5a`/`H5c`/`H9b`/`H11a`/`H11c` each show a case the one-row-per-state shape cannot express | keep §8 as the **UX-semantic index** it is, and add one sentence stating that a row's View and Action columns are *defaults for that state*, resolved finally by the capability-state resolution contract | **`PO-M3-3`** | the parent's shape implies one state determines all four outputs; every corrected case in §5.5 then reads as a deviation rather than a resolution. The four-output model stays in permanent tension with the parent |
+| **FA-9** | nav contract §8 table shape (one **UX semantic** row → one nav/view/action/presentation tuple) | each row collapses status, view content, action enablement and presentation into a single state's row | this draft demonstrates the result is a **tagged union** (§4.1) whose `RESOLVED` variant carries four independent outputs: `primary_status`, `evidence_presentation` and `action_affordance` vary independently for the same state — `H4a`/`H4b`/`H5a`/`H5c`/`H9b`/`H11a`/`H11c` each show a case the one-row-per-state shape cannot express | keep §8 as the **UX-semantic index** it is, and add one sentence stating that a row's View and Action columns are *defaults for that state*, resolved finally by the capability-state resolution contract | **`PO-M3-3`** | the parent's shape implies one state determines all four outputs; every corrected case in §5.5 then reads as a deviation rather than a resolution. The four-output model stays in permanent tension with the parent |
 
 **If the Product Owner withholds approval on a row**, three things follow and
 nothing else:
@@ -519,22 +531,36 @@ about actors and caused the same taxonomy rule to be evaluated twice (§3.4,
 | Field | Contract |
 | --- | --- |
 | **Owner** | the **authorization authority applicable to the action in question**. Today exactly one exists: `utils/operate/authorization.py`, which governs **CLASS 2 actions only** and returns an unconditional `deny("authorization_not_configured")`. `DEPLOY.1A`'s OIDC/RBAC would add an actor-authorization authority where none exists today |
-| **Values** | per action: `PERMITTED`, `DENIED(authority, reason_code)`, `AUTHZ_NOT_EVALUATED(authority)` |
-| **Meaning** | `AUTHZ_NOT_EVALUATED` means an applicable authorization authority has **not been consulted** — it is neither a grant nor a refusal, and it is **not** the same as "no authorization model exists" |
+| **Values** | per action, one of four: `NO_APPLICABLE_AUTHORITY`, `PERMITTED`, `DENIED(authority, reason_code)`, `AUTHZ_NOT_EVALUATED(authority)` |
+| **Meaning** | see the four-outcome table below. The algebra is **total**: every action resolves to exactly one outcome, including the common current case where *no actor-authorization authority applies at all* |
 | **Persisted?** | derived per decision; the decision is audited |
 | **Scope** | **action-scoped** (actor × action × entity), never capability-scoped |
 | **May affect** | the eligibility and refusal copy of **that one action**, recorded under that action's id (§4.1) |
 | **Must never control** | the surface disposition or any view/tab visibility; and it must never be inferred from `D1`…`D6`, nor may any of them be inferred from it. A shared or cached capability projection **never grants permission** |
 | **Evidence today** | VERIFIED. `OP.2` `DenyAllAuthorizer` = CLASS 2 only, unconditional deny. `navigationAuthorizationContext()` returns `model: "none"` — there is no actor-authorization model, which is **neither an automatic grant nor a blanket denial** |
 
+**The four outcomes.**
+
+| Outcome | Holds when | Contributes | Is a grant? |
+| --- | --- | --- | --- |
+| `NO_APPLICABLE_AUTHORITY` | **no** actor-authorization authority applies to this action at all — today the case for every CLASS 0 console action, since `OP.2`'s authorizer governs CLASS 2 only and no OIDC/RBAC exists | **nothing — non-blocking** | **No.** It records that authorization was not a question here, not that permission was given. The action's other gates `E1`–`E3`, `E5`–`E7` still decide it |
+| `PERMITTED` | an applicable authority was consulted and allowed the action | nothing | it is an authorization allowance, still subject to the other gates and to `E7` at its own phases |
+| `DENIED(authority, reason)` | an applicable authority was consulted and **refused** | a blocking reason | no — a refusal |
+| `AUTHZ_NOT_EVALUATED(authority)` | a **real, named, applicable** authority exists but **was not consulted** | an *undetermined* reason, not a blocker | no — and not a refusal either |
+
+**`AUTHZ_NOT_EVALUATED` is valid only when a real, named, applicable authority
+exists.** It must never stand in for "no authority applies" (that is
+`NO_APPLICABLE_AUTHORITY`) and never for "this action has no implemented
+contract" — an undeclared or unimplemented action produces **no affordance
+entry at all** (§4.1.1), not an undetermined one.
+
 **What the absence of OIDC/RBAC does and does not mean.** For a **CLASS 0**
-action it means no *actor* authorization authority is applicable today, so `D7`
-contributes nothing and the action's eligibility rests on the other gates in
-§3.4 — which are shipped and enforcing. CLASS 0 console reads and job
-submissions are permitted today, and this document does not change that. For a
-**CLASS 2** action the applicable authority exists and denies unconditionally.
-Nothing here treats the missing future model as a grant, and nothing treats it
-as a blanket denial of CLASS 0.
+action it means `NO_APPLICABLE_AUTHORITY`: `D7` contributes nothing and the
+action rests on the other gates, which are shipped and enforcing. CLASS 0
+console reads and job submissions are permitted today and this document does
+not change that. For a **CLASS 2** action the applicable authority exists and
+denies unconditionally. Nothing here treats the missing future model as a
+grant, and nothing treats it as a blanket denial of CLASS 0.
 
 ### 3.4 Server-owned enforcement gates that are **not** authorization
 
@@ -547,15 +573,17 @@ that each is evaluated **exactly once** (§5.4). Seven distinct concepts:
 | **E1** | **request/session authenticity and origin enforcement** | `console/app.py::_require_api_auth` — bearer launch token, `Origin` / `Sec-Fetch-Site` checks, loopback binding | whether this *request* may be served at all | not an actor-authorization decision; it authenticates the session, it does not evaluate who may do what |
 | **E2** | **action identity and closed-registry membership** | `console/registry.py::JOB_REGISTRY` (module-level, not extensible at runtime); the surface's action declarations | whether the requested action is a known member of a closed vocabulary | not authorization, not taxonomy |
 | **E3** | **taxonomy / surface admissibility** | `utils/action_taxonomy.py::console_refusal()` over the action's `ActionClass` | whether an action of this class may be submitted on this surface at all | not actor authorization, and **not** evaluated a second time inside `D7` |
-| **E4** | **the action's applicable authorization authority** | `D7` (§3.3) | whether this actor may perform this action | — |
+| **E4** | **the action's applicable authorization authority** | `D7` (§3.3), four-valued and total | whether an authority applies at all and, if so, its outcome | not a re-evaluation of `E3`; and `NO_APPLICABLE_AUTHORITY` is not a grant |
 | **E5** | **subject/target integrity required by that action** | the action's own contract; canonical-id resolution | whether the action's subject is resolvable and undisputed **where its contract requires one** | not a prerequisite that may be invented for a targetless action |
 | **E6** | **action-specific semantic prerequisites** | the action's own declared prerequisite facts | whether the facts this action needs are present and current enough | not a general evidence gate over unrelated dimensions |
 | **E7** | **admission / execution-time live checks** | the admission coordinator; the registry, read at admission **and again immediately before execution** (`AC-ST-4`) | whether the action may proceed **now**, against live authority | **not** satisfiable by a cached projection, and not replaced by anything `M3` defines |
 
-**`E3` and `E4` are disjoint and are each evaluated once.** The previous
-revision evaluated the action taxonomy in its `G2` gate and then again as an
-"R2 regime" inside `G3`. `E3` is the single evaluation of taxonomy
-admissibility; `D7`/`E4` never re-reads it.
+**`E3` and `E4` are disjoint and are each evaluated once per decision phase.**
+`E3` is the single evaluation of taxonomy admissibility; `D7`/`E4` never
+re-reads it. *(Historical note, non-normative: earlier revisions of this draft
+used a `G1`–`G4` gate set and an `R1`–`R5` "authorization regime" list in which
+the taxonomy was evaluated twice. **Neither model is normative here**; `E1`–`E7`
+and the four-valued `E4` above replace both entirely.)*
 
 **`E7` is authoritative, and `M3` defines nothing that weakens it.** Everything
 this document produces is advisory presentation. A live registry check at
@@ -566,165 +594,204 @@ become disabled or unresolvable causes refusal or abort **before contact**.
 
 ## 4. Canonical vocabulary
 
-### 4.1 Result algebra — surface resolution, then capability resolution
+### 4.1 Result algebra — a tagged union, not four always-present outputs
 
-The seven dimensions are facts. What an operator reads is a **resolution**, and
-resolution happens in two phases that must not be collapsed.
-
-**Phase 1 — surface resolution.** From `D1` alone, §5.0 produces a
-`surface_disposition`. This phase always produces a result.
-
-**Phase 2 — capability resolution.** Runs **only** when phase 1 returns
-`RESOLVE`. It produces the four capability outputs.
+Resolution is a **tagged union**. Exactly one variant is produced, and the
+variants carry disjoint payloads:
 
 ```
-surface_disposition  ∈ { RESOLVE, OMIT_NOT_SHIPPED, OMIT_UNRESOLVABLE }
+CapabilityResolution =
+  | RESOLVED {
+        primary_status        : CapabilityState          # 9 values, §4.2
+        capability_qualifiers : set<CapabilityQualifier> # §4.3
+        evidence_presentation : POPULATED{...} | EMPTY{reason}
+        action_affordance     : list<ActionAffordance>   # keyed by action_id, §4.1.1
+    }
+  | OMITTED {
+        reason     : SurfaceOmissionReason               # NOT_SHIPPED
+                                                         # | SURFACE_ELIGIBILITY_UNRESOLVABLE
+        diagnostic : optional<Diagnostic>                # §4.1.4
+    }
 
-if surface_disposition == RESOLVE:
-    primary_status        : exactly one CapabilityState
-    capability_qualifiers : zero or more CapabilityQualifier
-    evidence_presentation : POPULATED{...} | EMPTY{reason}
-    action_eligibility[]  : one entry per declared action, keyed by action_id
-else:
-    the four capability outputs are ABSENT — not empty, not defaulted, not null-
-    valued placeholders. Nothing renders, and a diagnostic is returned instead.
+SurfaceOmissionReason = NOT_SHIPPED | SURFACE_ELIGIBILITY_UNRESOLVABLE
 ```
 
-| `surface_disposition` | Produced when | Capability outputs | Diagnostic returned | Asserts |
-| --- | --- | --- | --- | --- |
-| `RESOLVE` | `D1 = SURFACE_PRESENT` | all four | none | that this build ships the surface |
-| `OMIT_NOT_SHIPPED` | `D1 = SURFACE_ABSENT` | **absent** | `not_shipped` | the positive fact that this build does not ship the surface — carried as `primary_status = NOT_SHIPPED` **in the disposition record only**, never as a rendered capability state |
-| `OMIT_UNRESOLVABLE` | `D1 = SURFACE_ELIGIBILITY_UNRESOLVABLE` | **absent** | `d1_input_unresolvable` | **nothing about the build.** It records only that eligibility could not be determined and that the surface was therefore withheld |
+**`OMITTED` carries no capability output.** It has no `primary_status`, no
+qualifiers, no evidence presentation and no action affordance — not as empty
+collections, not as null placeholders, not as a defaulted state. The previous
+revision said the outputs were absent while also placing
+`primary_status = NOT_SHIPPED` inside the omission record; both could not be
+true, and the union above resolves it.
 
-**`OMIT_UNRESOLVABLE` never asserts `NOT_SHIPPED`.** Both dispositions omit;
-only one makes a claim. Conflating them would report "this build does not ship
-this surface" on the strength of a missing input — fabricated certainty
-(`AGENTS.md` UNKNOWN law).
+**`NOT_SHIPPED` is no longer a `CapabilityState`.** It is a
+`SurfaceOmissionReason`, because it can only ever occur where no capability was
+resolved. `CapabilityState` therefore contains **only states that can actually
+occur under `RESOLVED`** (§4.2, nine values).
 
-**Cardinality follows from this.** `NOT_SHIPPED` remains a member of
-`CapabilityState` because the disposition record carries it as the reason for
-`OMIT_NOT_SHIPPED`, but it is the one member that is **never rendered** and
-never co-occurs with qualifiers, evidence presentation or action eligibility.
-Every other `CapabilityState` member occurs only under `RESOLVE`.
+| Variant | Produced when | Payload | Asserts |
+| --- | --- | --- | --- |
+| `RESOLVED` | `D1 = SURFACE_PRESENT` | the four capability outputs | that this build ships the surface, plus whatever the capability outputs say |
+| `OMITTED{NOT_SHIPPED}` | `D1 = SURFACE_ABSENT`, **positively established** | reason + optional diagnostic | the positive fact that this build does not ship the surface |
+| `OMITTED{SURFACE_ELIGIBILITY_UNRESOLVABLE}` | `D1` missing, malformed or otherwise unresolvable | reason + optional diagnostic | **nothing about what the build ships.** Only that eligibility could not be determined and the surface was therefore withheld |
 
-#### 4.1.0 The four capability outputs
+#### 4.1.1 `action_affordance[]` — presentation-time state, never execution permission
 
-| Output | Answers | Cardinality |
+The fourth output is **not** an eligibility verdict. The previous revision
+emitted `eligible: true|false`, which asserted that every gate `E1`–`E7` had
+passed — impossible at render time, because `E7` covers admission and a check
+performed **immediately before execution**, neither of which has happened yet.
+
+```
+ActionAffordance = {
+    action_id            : <closed-registry id>          # always present
+    affordance           : AVAILABLE_FOR_SUBMISSION      # no presentation-time blocker is known
+                         | DISABLED_KNOWN_BLOCKER        # a presentation-time blocker exists
+                         | UNDETERMINED                  # a required presentation-time decision
+                                                         # could not be made
+    blocking_reasons     : list<{gate, code, detail}>    # non-empty iff DISABLED_KNOWN_BLOCKER
+    undetermined_reasons : list<{gate, code, detail}>    # non-empty iff UNDETERMINED
+}
+```
+
+| Value | Means | Explicitly does **not** mean |
 | --- | --- | --- |
-| `primary_status` | what is the headline fact about this capability right now | exactly one `CapabilityState` |
-| `capability_qualifiers` | which capability/evidence refinements also hold | zero or more `CapabilityQualifier` |
-| `evidence_presentation` | what should the view show | `POPULATED{as_of, completeness, source_trust, identity_translation}` \| `EMPTY{reason}` |
-| `action_eligibility[]` | for each declared action, may it run, and if not why | one entry per declared action, **keyed by `action_id`** |
+| `AVAILABLE_FOR_SUBMISSION` | no presentation-time blocker is known for this action | **not** permission to execute, and **not** a claim that admission or the pre-execution check will pass |
+| `DISABLED_KNOWN_BLOCKER` | a blocker evaluable now is known, and named | not a claim that it is the only blocker |
+| `UNDETERMINED` | a required presentation-time decision — typically authorization — could not be made | **not** a refusal, and not a grant |
 
-**`evidence_presentation` is decided by whether displayable evidence exists —
-never by the primary label.** `COLLECTION_FAILED`, `POLICY_DISABLED`,
-`DEVICE_DISABLED` and an incomplete `D4` reconciliation all retain and display
-whatever evidence was previously collected, subject unchanged to the existing
-identity, privacy and raw-evidence contracts. This matches the frozen parent,
-which already requires "error state + **last good evidence retained**" for the
-Failed row (navigation contract §8).
+**Two boundaries, stated explicitly.**
 
-#### 4.1.1 Action outcomes are action-keyed, never capability qualifiers
-
-The previous revision carried `ACTION_DENIED`, `ACTION_REFUSED` and
-`AUTHZ_NOT_EVALUATED` in the same flat qualifier list as `STALE` and
-`MEMBER_SPECIFIC`. That is a category error: a qualifier describes the
-**capability/evidence presentation**, while those three describe **one
-action's outcome**. In a flat list they are unscoped — with two declared
-actions, a reader cannot tell which one was refused.
-
-```
-action_eligibility[] : [
-  {
-    action_id        : <closed-vocabulary id>,          # always present
-    eligible         : true | false,
-    blocking_reasons : [ { gate: E1..E7, code: <reason>, detail: <named gate> }, ... ]
-  },
-  ...
-]
-```
+1. **Presentation resolution reports only facts evaluable at that time.** It
+   never claims a future check has passed.
+2. **Server submission, admission and immediately-before-execution checks
+   remain authoritative** and are re-evaluated in their own phases. An
+   `AVAILABLE_FOR_SUBMISSION` control is **advisory**; it is never an execution
+   grant.
 
 Rules:
 
-1. **Every entry identifies its `action_id`.** There is no unkeyed action
-   result.
-2. `ACTION_DENIED(authority, reason)`, `ACTION_REFUSED(class)` and
-   `AUTHZ_NOT_EVALUATED(authority)` appear **only** inside a
-   `blocking_reasons[]` entry, never in `capability_qualifiers`.
-3. **Every blocking reason is preserved** — one action's refusal never removes
-   or masks another's, and no reason is dropped because a higher-ranked
-   dimension supplied the headline label.
-4. `capability_qualifiers` is limited to facts about the capability and its
-   evidence: `STALE`, `PARTIAL`, `NOT_SCHEDULED`, `SCHEDULE_UNKNOWN`,
-   `SOURCE_TRUST_LIMITED`, `IDENTITY_TRANSLATION_REQUIRED`, `MEMBER_SPECIFIC`.
+- **Every entry identifies its `action_id`**; there is no unkeyed entry.
+- `ACTION_DENIED`, `ACTION_REFUSED`, `AUTHZ_NOT_EVALUATED` and
+  `NO_APPLICABLE_AUTHORITY` appear **only** inside an `ActionAffordance`, never
+  in `capability_qualifiers`.
+- **Every reason is preserved** — one action's blocker never removes or masks
+  another's, and none is dropped because a higher-ranked dimension supplied the
+  headline label.
+- `capability_qualifiers` carries only capability/evidence facts: `STALE`,
+  `PARTIAL`, `SOURCE_TRUST_LIMITED`, `IDENTITY_TRANSLATION_REQUIRED`,
+  `NOT_SCHEDULED`, `SCHEDULE_UNKNOWN`, `MEMBER_SPECIFIC`.
+- An action **not declared** on this surface produces **no entry at all** — not
+  an `UNDETERMINED` one.
 
-#### 4.1.2 The resolver's complete input contract
+#### 4.1.2 Which gates are evaluable at presentation time
 
-Each row names the authoritative fact and the output it feeds.
+| Gate | Evaluable at render? | Notes |
+| --- | --- | --- |
+| `E1` request/session authenticity | **yes** — the render request itself carries it | re-evaluated on the submission request, which is a different request |
+| `E2` action identity + closed-registry membership | **yes** | static |
+| `E3` taxonomy / surface admissibility | **yes** | static per (class, surface) |
+| `E4` applicable authorization authority | **partly** — `NO_APPLICABLE_AUTHORITY` and a standing unconditional denial are evaluable; an actor decision requiring submission context is not, and yields `UNDETERMINED` | |
+| `E5` subject/target integrity | **yes**, for the integrity facts already resolved (identity dispute, unresolvable subject) | the live registry state is `E7`'s |
+| `E6` action-specific semantic prerequisites | **yes** | from the same evidence the capability outputs use |
+| `E7` admission / immediately-before-execution checks | **no — never** | belongs to the submission and execution phases |
+
+**"Evaluated exactly once" means once per decision phase**, not once per
+lifecycle. `E3` is evaluated once within each decision. `E7`'s two registry
+checks — at admission **and again immediately before execution** — are both
+required by the frozen `AC-ST-4` and are **both preserved**; they are different
+phases, not a duplicate evaluation.
+
+#### 4.1.3 The resolver's complete input contract
 
 | # | Required input | Authoritative source today | Feeds |
 | --- | --- | --- | --- |
-| I1 | **surface eligibility** `D1` (three-valued) | navigation model + shipped-contract set | §5.0 `surface_disposition` — **and nothing else may** |
+| I1 | **surface eligibility** `D1` (three-valued) | navigation model + shipped-contract set | the union tag — **and nothing else may** |
 | I2 | **entity applicability** `D2` | logical-entity type model | ladder rank 2 |
 | I3 | **vendor-support knowledge** `D3` | capability projection (`M10`; **no producer today**) | ranks 4, 8, 10; CX2 |
-| I4 | **registry presence and lifecycle** `D4` | `utils/device_registry.py` joined on canonical id | ranks 3, 5, 8, 10; CX3 |
+| I4 | **registry presence and lifecycle** `D4` | `utils/device_registry.py` joined on canonical id | ranks 3, 5, 8, 10; RI-1 |
 | I5 | **capability-policy knowledge** `D5` | schedule/capability-policy record (`M12`; **no producer today**) | rank 6; `NOT_SCHEDULED` / `SCHEDULE_UNKNOWN` |
 | I6 | **evidence existence and sufficiency** `D6b` + `INSUFFICIENT_EVIDENCE` | `utils/snapshot.py::_status` `data_state`; subsystem sufficiency verdicts | ranks 8, 9, 10; `PARTIAL` |
 | I7 | **evidence timestamps and freshness, where actually known** `D6a` | `utils/snapshot.py::_status` — `fresh`, `collected_at`, `last_successful_collection`, `stale_reason` | `STALE(as_of)` — **and only this input may produce it** |
 | I8 | **expected-source trust** `D6d`, with its source reason code | `configuration/pan_setting_alignment.py` | `SOURCE_TRUST_LIMITED` — **never** `STALE`, never `IDENTITY_TRANSLATION_REQUIRED` |
 | I9 | **identity-translation requirement** `D6e`, with its source reason code | the same producer set (V12) | `IDENTITY_TRANSLATION_REQUIRED` qualifier — **never** `SOURCE_TRUST_LIMITED`, and never `CX1` on its own |
 | I10 | **identity conflict** — two incompatible type/vendor resolutions for one canonical id | canonical-id resolution | `CX1` only |
-| I11 | **configuration presence, or positively established absence** | subsystem verdicts that assert absence from present evidence (e.g. `restore_readiness` `UNPROTECTED`, config `not_configured`) | rank 9 — **positive absence only**; a missing verdict is rank 8 |
+| I11 | **configuration presence, or positively established absence** | subsystem verdicts asserting absence from present evidence | rank 9 — **positive absence only** |
 | I12 | **retained displayable evidence** for this (entity, capability) | last-known-good state; CAS configuration evidence | `evidence_presentation` — **and the primary label may not** |
 | I13 | **latest collection outcome** `D6c` | run telemetry; `Outcome` (V18) | rank 7 |
-| I14 | **evidence comparability metadata** — evidence generation/time, producer version, vendor support-rule version, platform/entity kind at collection time | run manifest; producer/rule versioning | **CX2 comparability** (§5.1.1); cache validity (§8.2.1) |
+| I14 | **evidence comparability metadata** — canonical subject, exact capability, platform/entity kind at collection time, evidence generation/time, producer version, vendor support-rule version | run manifest; producer/rule versioning | `K1`–`K6` (§5.1.1); cache binding (§8.2.1) |
 | I15 | **member-comparison context** — member set and per-member comparison | merged evidence model | `MEMBER_SPECIFIC` |
-| I16 | **declared action set**, each with `action_id`, closed-registry membership and `utils.action_taxonomy` class | `console/registry.py`; the surface's action declarations | `E2`, `E3`, `action_eligibility[]` keying |
-| I17 | **each action's own declared prerequisite facts and subject requirement** | that action's contract | `E5`, `E6` |
-| I18 | **per-action authorization evaluation status**, with the applicable authority | `D7` / `E4` | `blocking_reasons[]` |
-| I19 | **request/session authenticity outcome** | `console/app.py::_require_api_auth` | `E1` |
-| I20 | **shell** (exported report vs console) | render context | `evidence_presentation`; which actions are declared at all (§6.8) |
+| I16 | **declared action set**, each with `action_id`, closed-registry membership, `utils.action_taxonomy` class and declared subject requirement | `console/registry.py::JOB_REGISTRY`; the surface's action declarations | `E2`, `E3`, `E5`, `action_affordance[]` keying |
+| I17 | **each action's own declared prerequisite facts** | that action's contract | `E6` |
+| I18 | **per-action authorization applicability and outcome** — one of `NO_APPLICABLE_AUTHORITY`, `PERMITTED`, `DENIED(authority, reason)`, `AUTHZ_NOT_EVALUATED(authority)` | `D7` / `E4` (§3.3) | `E4`; affordance value |
+| I19 | **request/session authenticity outcome** for the render request | `console/app.py::_require_api_auth` | `E1` |
+| I20 | **shell** (exported report vs console) | render context | the **declared action set**, and acquisition/liveness characteristics (live refresh vs snapshot). See §6.8 |
 
-#### 4.1.3 Input-condition handling, resolved before the affected output
+**`I20` may not change semantic evidence presentation.** The shell determines
+which actions are declared and how fresh the underlying data can be; it must
+**never** cause identical evidence to be presented with a different capability
+state, different qualifiers or a different evidence-presentation result.
+
+#### 4.1.4 The omission diagnostic pass — render-independent and OPTIONAL
+
+Contradiction and authority-conflict detection under `OMITTED` is **not** stage
+1 of capability resolution. Capability resolution does not run at all under
+`OMITTED`. It is a **separate, render-independent diagnostic pass**, and this
+contract makes it **OPTIONAL**:
+
+- it is **optional** because an omitted surface has no operator-facing
+  consequence, and mandating it would require computing `D2`–`D7` for
+  capabilities that no shipped surface consumes — work with no consumer;
+- when it **is** performed, its output is a `Diagnostic` on the `OMITTED`
+  record and it **never** affects the disposition, the reason, or whether
+  anything renders;
+- it is never required in order to produce a correct `OMITTED` result.
+
+Every table and acceptance criterion in this document states the same thing:
+**optional under `OMITTED`**. Under `RESOLVED`, contradiction detection is part
+of stage 1 and a diagnostic **may** be produced — this document makes no
+unconditional claim that a `RESOLVED` result carries no diagnostic.
+
+#### 4.1.5 Input-condition handling, resolved before the affected output
 
 | Input condition | Definition | Handling |
 | --- | --- | --- |
-| **Absent** | a required input was not supplied | if `I1` — `D1 = SURFACE_ELIGIBILITY_UNRESOLVABLE` → `OMIT_UNRESOLVABLE`. Otherwise ladder rank 11 `UNKNOWN(unclassified_input)`; any action declaring the absent fact is ineligible |
-| **Malformed** | supplied but not a valid value of its domain, or internally inconsistent | same as absent, with reason `malformed_input:<input id>`. Never coerced to a default, never rounded to the nearest valid value |
-| **Contradictory** | two authoritative sources disagree about the same fact for the same subject under a closed class's conditions — exactly CX1–CX3 | §5.1, within the class's declared scope |
-| **Incomparable** | two facts exist but §5.1.1's comparability conditions are not met | **not** a contradiction. Resolved per §5.1.1 without manufacturing either a contradiction or a support conclusion |
+| **Absent** | a required input was not supplied | if `I1` — `OMITTED{SURFACE_ELIGIBILITY_UNRESOLVABLE}`. Otherwise ladder rank 11 `UNKNOWN(unclassified_input)`; an action declaring the absent fact is `DISABLED_KNOWN_BLOCKER` |
+| **Malformed** | supplied but not a valid value of its domain, or internally inconsistent | same as absent, with reason `malformed_input:<input id>`. Never coerced to a default |
+| **Contradictory** | `CX1` — two authoritative sources disagree about what the subject **is** | §5.1, within `CX1`'s declared subject scope |
+| **Bounded inconsistent** | `RI-1` / `RI-2` — two product-internal projections disagree about a bounded fact (§5.1) | §5.1; muted, never danger |
+| **Incomparable** | two facts exist but §5.1.1's comparability conditions are not met | **not** an inconsistency. Resolved per §5.1.1 without manufacturing either an inconsistency or a support conclusion |
 | **Stale** | `D6a` `fresh == false` **with** a real anchor | valid input. `STALE(as_of)`; blocks only actions declaring currency of that fact |
-| **Unevaluated** | `I18` returns `AUTHZ_NOT_EVALUATED` for an applicable authority | **non-executable** eligibility for that action, represented **distinctly from a confirmed denial** |
-| **Validly unknown** | a well-formed value meaning "not determinable" — `SUPPORT_UNKNOWN`, `POLICY_UNKNOWN`, `APPLICABILITY_UNKNOWN`, `RECONCILIATION_UNKNOWN` | **not malformed.** `POLICY_UNKNOWN` in particular must not erase otherwise usable evidence, must not reach rank 11, and yields `SCHEDULE_UNKNOWN` |
+| **Unevaluated** | `I18` returns `AUTHZ_NOT_EVALUATED` for a **real, named, applicable** authority | affordance `UNDETERMINED`, represented distinctly from a confirmed denial |
+| **No applicable authority** | `I18` returns `NO_APPLICABLE_AUTHORITY` | **non-blocking**; contributes no reason and is **not** a grant (§3.3 D7) |
+| **Validly unknown** | `SUPPORT_UNKNOWN`, `POLICY_UNKNOWN`, `APPLICABILITY_UNKNOWN`, `RECONCILIATION_UNKNOWN` | **not malformed.** `POLICY_UNKNOWN` must not erase usable evidence, must not reach rank 11, and yields `SCHEDULE_UNKNOWN` |
 
-**Four inference bans**, each a corrected defect. Freshness is never inferred
-from `I8` or `I9`. Capability support is never inferred from an unknown shell,
-missing evidence, or a failed collection. `I9` never becomes `I10`. And no
-input class is inferred from `I18`, nor `I18` from any of them.
+**Four inference bans.** Freshness is never inferred from `I8` or `I9`.
+Capability support is never inferred from an unknown shell, missing evidence,
+or a failed collection. `I9` never becomes `I10`. No input class is inferred
+from `I18`, nor `I18` from any of them.
 
-### 4.2 `CapabilityState` — the primary vocabulary
+### 4.2 `CapabilityState` — the resolved-only primary vocabulary
 
-Ten values. Nine are rendered capability states produced under `RESOLVE`;
-`NOT_SHIPPED` is the disposition reason for `OMIT_NOT_SHIPPED` and is never
-rendered (§4.1).
+**Nine values.** Every one can occur under `RESOLVED`; none is reachable under
+`OMITTED`. `NOT_SHIPPED` is **not** here — it is a `SurfaceOmissionReason`
+(§4.1).
 
 | Value | Operator meaning | Distinct consequence | Source |
 | --- | --- | --- | --- |
-| `NOT_SHIPPED` | this build does not ship the surface | **disposition only** — carried in the `OMIT_NOT_SHIPPED` record; never rendered, never co-occurs with the other three outputs | `D1 = SURFACE_ABSENT` |
-| `NOT_APPLICABLE` | this function does not apply to this kind of entity | visible, selectable, names the entity types that do support it, no enabled action | D2 |
-| `DEVICE_DISABLED` | the operator disabled this device | visible, evidence retained; re-enable is the meaningful action; jobs refuse at admission | D4 |
+| `NOT_APPLICABLE` | this function does not apply to this kind of entity | visible, selectable, names the entity types that do support it; no action enabled by it | D2 |
+| `DEVICE_DISABLED` | the operator disabled this device | visible, evidence retained; re-enable is the meaningful action | D4 |
 | `UNSUPPORTED` | this vendor/platform cannot do this, and we have evidence of that | visible, evidence retained; states the vendor reason; **collecting again will not help** | D3 |
-| `NOT_ENROLLED` | observed in evidence, absent from the Device Registry | visible, evidence retained; offers enrollment where `M9`'s gate permits | D4 (`EVIDENCE_ONLY`) |
-| `POLICY_DISABLED` | an applicable schedule for this capability is intentionally off for this device | visible, **evidence retained and displayed**; names the policy; states that **automatic** refresh is off — never that refresh is impossible | D5 |
+| `NOT_ENROLLED` | observed in evidence, absent from the Device Registry | visible, evidence retained | D4 (`EVIDENCE_ONLY`) |
+| `POLICY_DISABLED` | an applicable schedule for this capability is intentionally off for this device | visible, **evidence retained and displayed**; states that **automatic** refresh is off — never that refresh is impossible | D5 |
 | `COLLECTION_FAILED` | the **latest attempt** failed | visible; the failure and its time shown **alongside** retained evidence, which keeps its own age | D6c |
-| `UNKNOWN` | we cannot conclude, and we name which fact is missing | visible; names the missing fact; only actions declaring that fact become ineligible | D3 `SUPPORT_UNKNOWN`, D2 `APPLICABILITY_UNKNOWN`, D4 `REGISTRY_ONLY`/`RECONCILIATION_UNKNOWN`, D6b `no_data`, `INSUFFICIENT_EVIDENCE`, CX1–CX3, incomparability (§5.1.1), or unclassified input |
-| `NOT_CONFIGURED` | supported and applicable, and evidence **positively shows** it is not set up | visible; states what configuring it requires; actionable empty state | D6 (positive absence) |
+| `UNKNOWN` | we cannot conclude, and we name which fact is missing | visible; names the missing fact; only actions declaring that fact are blocked by it | D3 `SUPPORT_UNKNOWN`, D2 `APPLICABILITY_UNKNOWN`, D4 `REGISTRY_ONLY`/`RECONCILIATION_UNKNOWN`, D6b `no_data`, `INSUFFICIENT_EVIDENCE`, `CX1`, `RI-1`/`RI-2`, incomparability (§5.1.1), or unclassified input |
+| `NOT_CONFIGURED` | supported and applicable, and evidence **positively shows** it is not set up | visible; states what configuring it requires | D6 (positive absence) |
 | `AVAILABLE` | usable now | normal presentation, populated view | the rank-10 positive conjunction |
 
 **Lexical disjointness (mandatory).** No `CapabilityState` value equals any
 member of X1 (`queued`, `running`, `succeeded`, `failed`, `blocked`, `skipped`)
 or X2 (`CREATED`…`OUTCOME_UNKNOWN`). `COLLECTION_FAILED` is deliberately not
-`FAILED`; no value is named `BLOCKED` (E2 in §2.2).
+`FAILED`; no value is named `BLOCKED`.
 
 ### 4.3 `CapabilityQualifier` — capability and evidence facts only
 
@@ -794,22 +861,19 @@ stage 4  evidence presentation -> from displayable evidence only
 stage 5  action eligibility    -> per action_id; E1-E7, each evaluated once
 ```
 
-### 5.0 Stage 0 — surface resolution, and its result algebra
+### 5.0 Stage 0 — surface resolution, and the union tag
 
-> **Rule.** `D1` is evaluated **before every other input**. Only
-> `SURFACE_PRESENT` permits capability resolution. Neither omission
-> disposition may be overturned by any qualifier, contradiction, evidence
-> fact, policy fact or authorization outcome. Contradiction detection **may
-> still run** under an omission — it may emit diagnostics, audit evidence,
-> telemetry or an authority-conflict result — but a diagnostic is **never** a
-> render decision.
+> **Rule.** `D1` is evaluated **before every other input** and alone decides
+> the union tag. Only `SURFACE_PRESENT` produces `RESOLVED`; capability
+> resolution does not run under `OMITTED`. No qualifier, contradiction,
+> evidence fact, policy fact or authorization outcome can overturn an omission.
 
-| Case | `D1` | Contradiction | `surface_disposition` | Rendered? | Capability outputs | Diagnostic | Positive claim asserted |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| **V-A** — surface positively absent, otherwise usable evidence | `SURFACE_ABSENT` | none | `OMIT_NOT_SHIPPED` (reason `NOT_SHIPPED`) | **no** | **absent** — all four | none required | "this build does not ship this surface" — supported by the positive `SURFACE_ABSENT` determination |
-| **V-B** — surface positively absent, contradictory inputs | `SURFACE_ABSENT` | CX1–CX3 holds | `OMIT_NOT_SHIPPED` | **no** | **absent** | **emitted** — authority-conflict diagnostic naming both disagreeing inputs. It changes no rendering | same as `V-A`; the contradiction adds no product claim |
-| **V-C** — surface positively present, contradictory inputs | `SURFACE_PRESENT` | CX1–CX3 holds | `RESOLVE` | yes | all four, per stage 1's declared scope | emitted **and** rendered | the contradiction, naming both inputs |
-| **V-D** — `D1` missing, malformed or otherwise unresolvable | `SURFACE_ELIGIBILITY_UNRESOLVABLE` | irrelevant | `OMIT_UNRESOLVABLE` | **no** — **fail closed** | **absent** | **emitted** — `d1_input_unresolvable` | **none.** It does **not** assert `NOT_SHIPPED`, and says nothing about what the build ships |
+| Case | `D1` | Variant | Payload | Rendered? | Diagnostic pass | Positive claim asserted |
+| --- | --- | --- | --- | --- | --- | --- |
+| **V-A** — surface positively absent | `SURFACE_ABSENT` | `OMITTED{NOT_SHIPPED}` | reason only — **no** capability outputs | **no** | **optional** (§4.1.4); if run, render-independent | "this build does not ship this surface" — supported by the positive determination |
+| **V-B** — surface positively absent, with an authority conflict in the underlying facts | `SURFACE_ABSENT` | `OMITTED{NOT_SHIPPED}` | reason + optional `Diagnostic` | **no** | **optional**; if run, it names both disagreeing inputs and **changes no rendering** | same as `V-A`; the conflict adds no product claim |
+| **V-C** — surface positively present | `SURFACE_PRESENT` | `RESOLVED` | the four capability outputs | yes | contradiction detection is **stage 1** of resolution; a diagnostic **may** be produced and rendered | the capability outputs' own claims |
+| **V-D** — `D1` missing, malformed or unresolvable | `SURFACE_ELIGIBILITY_UNRESOLVABLE` | `OMITTED{SURFACE_ELIGIBILITY_UNRESOLVABLE}` | reason `d1_input_unresolvable` + optional `Diagnostic` | **no** — **fail closed** | **optional** | **none.** It says nothing about what the build ships |
 
 **Why `V-D` omits rather than renders.** `D1` asserts that this build actually
 ships the surface (navigation contract §7.1). An unresolvable `D1` cannot
@@ -820,67 +884,103 @@ fail-closed direction ("say `UNKNOWN`, keep the surface") presupposes the
 surface exists.
 
 **Why `V-D` is not `NOT_SHIPPED`.** Omitting is a *disposition*; `NOT_SHIPPED`
-is a *claim*. `V-D` takes the safe disposition without making the claim. This
-is the distinction the previous revision collapsed.
+is a *claim*. `V-D` takes the safe disposition without making the claim — which
+is why the two are separate `SurfaceOmissionReason` values and neither is a
+`CapabilityState`.
 
-**Absent is not empty.** Under either omission the four capability outputs are
-**not produced** — not produced as empty collections, not as null placeholders,
-not as a defaulted `primary_status`. A consumer that receives an omission
-disposition has no capability result to read, and must not synthesise one.
+### 5.1 Stage 1 — contradictions and bounded inconsistencies
 
-### 5.1 Stage 1 — contradiction, defined precisely and scoped
+Reached **only** under `RESOLVED`. Three closed classes, and the severity
+distinction between them is normative.
 
-Reached **only** under `RESOLVE`. Contradiction is a **finite, closed set**;
-anything outside it is not a contradiction and does not reach this gate.
+**`CX1` is the only genuine contradiction.** Two authoritative sources disagree
+about *what the subject is*. That is an unsafe identity condition and takes
+**danger** semantics, consistent with the frozen `AC-DIF-6`
+("contradictory/unsafe state … danger/error") and `AC-DIF-8` ("red is reserved
+for actual fault, unsafe drift or failed state").
 
-**Simultaneous independent facts are not contradictions.** `UNSUPPORTED`
-beside retained historical evidence is not a contradiction. `POLICY_DISABLED`
-beside fresh evidence is not a contradiction. `POLICY_UNKNOWN` beside usable
-evidence is not a contradiction. `IDENTITY_TRANSLATION_REQUIRED` is not a
-contradiction — it is an unevaluable comparison (§3.3 D6e).
+**`RI-1` and `RI-2` are bounded reconciliation inconsistencies**, not
+contradictions. Two *product-internal projections* disagree about one bounded
+fact; nothing about the device's identity or safety is in dispute, and the
+operator's remedy is bounded and local. They take **muted** semantics and are
+deliberately **not named "contradiction"**, so that "contradictory state =
+danger" and their muted treatment cannot both be read off this document. They
+were called `CX2` and `CX3` in the previous revision; those identifiers are
+retained as aliases in the acceptance criteria that already cite them.
 
-| id | Contradiction | Scope of effect |
-| --- | --- | --- |
-| **CX1** | the same canonical id resolves to two **incompatible entity types or vendors** (`I10`) — a genuine disagreement about what the subject *is*, not a difference in how it is identified | `primary_status = UNKNOWN(identity_contradiction)`; **evidence withheld** (`AGENTS.md` identity law forbids joining on unproven identity); every action ineligible via `E5`, since none can name a subject whose identity is in dispute |
-| **CX2** | `D3 = UNSUPPORTED` while **comparable** positive evidence for the same subject and capability exists — comparability defined in §5.1.1 | `primary_status = UNKNOWN(support_contradiction)`; **evidence retained and displayed**, labelled; actions declaring the support fact as a prerequisite become **ineligible**; all other actions unaffected by this class |
-| **CX3** | `D4 = EVIDENCE_ONLY` while a registry row for the same canonical id exists and is not disabled | `primary_status = UNKNOWN(reconciliation_contradiction)`; **evidence retained and displayed**; the **enrollment action** becomes ineligible; all other actions unaffected by this class |
+**Simultaneous independent facts are none of these.** `UNSUPPORTED` beside
+retained historical evidence is not an inconsistency. `POLICY_DISABLED` beside
+fresh evidence is not. `POLICY_UNKNOWN` beside usable evidence is not.
+`IDENTITY_TRANSLATION_REQUIRED` is not — it is an unevaluable comparison
+(§3.3 D6e), and it becomes `CX1` only if `CX1`'s own condition independently
+holds.
 
-Every contradiction names **both** disagreeing inputs; the more favourable
-input is never silently chosen. A contradiction never *grants* eligibility to
-any action — it only removes it, within its declared scope, on top of the
-mandatory gates.
+| id | Class | Condition | Severity | Scope of effect |
+| --- | --- | --- | --- | --- |
+| **CX1** | **contradiction — unsafe** | the same canonical id resolves to two **incompatible entity types or vendors** (`I10`) | **danger** | `primary_status = UNKNOWN(identity_contradiction)`; **evidence withheld**; and — per §5.1.2 — `E5` blocks **only** actions whose declared subject or target depends on the disputed identity |
+| **RI-1** *(alias `CX2`)* | **bounded inconsistency** | `D3 = UNSUPPORTED` while **comparable** positive evidence for the same subject and capability exists — comparability per §5.1.1 | **muted** | `primary_status = UNKNOWN(support_inconsistency)`; **evidence retained and displayed**, labelled; `E6` blocks only actions declaring the support fact; all other actions unaffected |
+| **RI-2** *(alias `CX3`)* | **bounded inconsistency** | `D4 = EVIDENCE_ONLY` while a registry row for the same canonical id exists and is not disabled | **muted** | `primary_status = UNKNOWN(reconciliation_inconsistency)`; **evidence retained and displayed**; `E6` blocks only an enrollment action, if one is declared; all other actions unaffected |
 
-#### 5.1.1 CX2 comparability — when evidence and a support conclusion may be compared
+Every class names **both** disagreeing inputs; the more favourable input is
+never silently chosen. None of them ever *grants* an affordance — each only
+removes one, within its declared scope, on top of the other gates.
 
-The previous revision defined CX2 as "`UNSUPPORTED` while a successful
-collection exists in the current evidence set", while elsewhere stating that
-`UNSUPPORTED` may legitimately coexist with retained historical evidence (H4).
-Both cannot hold. The rule is that a contradiction requires the two facts to be
-**semantically comparable**, and comparability is established positively.
+**Reconciliation with `AC-CS-47` and the frozen parent.** Because `RI-1`/`RI-2`
+are not classified as contradictory or unsafe state, `AC-DIF-6`/`AC-DIF-8` and
+`AC-CS-47` apply to `CX1` alone and **no frozen-parent amendment is required
+for this point**. This is a naming correction inside `M3`'s own vocabulary, not
+a change to the parent.
 
-Positive evidence and a current `UNSUPPORTED` conclusion are **comparable**
-only when **all** hold (`I14` supplies the metadata):
+#### 5.1.1 `RI-1` comparability — total over `K1`–`K6`
+
+Each condition is `TRUE`, `FALSE` or `UNESTABLISHED` from `I14`.
 
 | # | Condition |
 | --- | --- |
 | K1 | **same canonical subject** — identical canonical id, joined without an unproven identifier translation |
 | K2 | **same exact capability** — not a sibling or superset capability |
-| K3 | **same platform / entity kind** — the platform family and entity kind at evidence-collection time match those the current support conclusion was computed against |
-| K4 | **evidence generation is not superseded** — the evidence was produced at or after the last platform or entity-kind change known to the product |
-| K5 | **same applicable support-rule version** — the vendor support-rule version that yields today's `UNSUPPORTED` is the version applicable to that evidence generation |
+| K3 | **same platform / entity kind** at evidence-collection time as the current support conclusion was computed against |
+| K4 | **evidence generation not superseded** — produced at or after the last platform or entity-kind change known to the product |
+| K5 | **same applicable support-rule version** as the one yielding today's `UNSUPPORTED` |
 | K6 | **producer version comparable** — the evidence producer version is one the current support rules are defined over |
 
-Outcomes:
+**Precedence, evaluated in this order; the first matching row decides:**
 
-| Situation | Result |
+| Order | Condition | Semantic class | Result |
+| --- | --- | --- | --- |
+| 1 | `K1 = FALSE` **or** `K2 = FALSE` | **irrelevant evidence** — it concerns another subject or another capability | **No `RI-1`.** The evidence is **not displayed as evidence for this subject/capability** at all; it is out of scope, not historical. `primary_status = UNSUPPORTED` on `D3`'s own terms |
+| 2 | `K1 = UNESTABLISHED` **or** `K2 = UNESTABLISHED` | **identity/scope unknown** — a join would have to be guessed | **No `RI-1`, no support conclusion from it.** `primary_status = UNKNOWN(support_comparability_unestablished)`, naming the unestablished condition. Evidence is shown only as **unattributed**, never joined to this subject/capability (`AGENTS.md` identity law) |
+| 3 | `K6 = FALSE` | **known-incompatible producer** — the evidence exists and is correctly scoped, but was produced by a version the current rules are not defined over | **Treated as historical / non-comparable.** No `RI-1`; `primary_status = UNSUPPORTED`; evidence retained and **labelled historical (incompatible producer version)** |
+| 4 | `K3 = FALSE` **or** `K4 = FALSE` **or** `K5 = FALSE` | **historical or rule-context mismatch** | **No `RI-1`.** The current positive `D3` conclusion stands: `primary_status = UNSUPPORTED`; correctly scoped evidence is retained and **labelled historical** |
+| 5 | any of `K3`, `K4`, `K5`, `K6` `= UNESTABLISHED` | **comparability unknown** | `primary_status = UNKNOWN(support_comparability_unestablished)`, naming which condition; evidence retained and displayed; actions declaring the support fact are blocked |
+| 6 | `K1`–`K6` **all `TRUE`** | **contemporaneous comparable evidence** | **`RI-1` holds.** `primary_status = UNKNOWN(support_inconsistency)` |
+
+**Mixed cases are total by construction:** rows 1–2 dominate on scope/identity,
+row 3 on a known-incompatible producer, row 4 on a known context mismatch, row
+5 on any residual unknown, and row 6 only when nothing above matched. A
+`FALSE` on a scope condition therefore always beats an `UNESTABLISHED`
+elsewhere, and a known mismatch always beats an unknown one — the product never
+reports "unknown" where it in fact knows the evidence does not apply.
+
+**Nothing is manufactured in either direction.** A platform or support-rule
+change alone never creates an inconsistency out of historical evidence, and
+contemporaneous comparable evidence is never silently ignored.
+
+#### 5.1.2 `CX1` subject scoping — it does not block every action
+
+`CX1` blocks, via `E5`, **only** actions whose **declared subject or target
+depends on the disputed identity**. It is a subject-integrity failure, not a
+global halt.
+
+| Action shape | Effect of `CX1` |
 | --- | --- |
-| **All of K1–K6 hold** — contemporaneous positive evidence under the same applicable rules | **CX2 holds.** Contemporaneous positive evidence must not be silently ignored merely because a support conclusion says otherwise |
-| **K3, K4 or K5 fails** — the evidence predates a platform change or a support-rule change | **Not a contradiction.** Historical retained evidence never automatically contradicts a later support conclusion. `primary_status = UNSUPPORTED`; the evidence is retained and displayed, labelled as predating the current support determination |
-| **K1, K2 or K6 cannot be established** — the metadata to compare is missing, or the join would need an unproven translation | **Neither a contradiction nor a support conclusion.** `primary_status = UNKNOWN(support_comparability_unestablished)`, naming which condition could not be established; the evidence is retained and displayed; actions declaring the support fact are ineligible. Nothing is manufactured in either direction |
+| declares the disputed subject as its target (`target_mode = "entity_ids"` naming that entity) | `DISABLED_KNOWN_BLOCKER`, reason `E5: subject_integrity_unmet` |
+| **targetless** (`target_mode = "none"`) | **no `E5` prerequisite exists, so `CX1` contributes nothing.** The action resolves through its own gates, and **no subject prerequisite may be invented for it** |
+| targets a **different**, undisputed subject | unaffected by this `CX1` |
 
-**This is the honest-unknown case, not a tiebreak.** Where comparability cannot
-be established the product says so, rather than inventing a contradiction or
-promoting stale evidence into a support claim.
+Evidence for the disputed subject is still withheld (the identity law forbids
+joining on unproven identity), but withholding *evidence about a subject* is
+not the same as blocking *actions that never name it*.
 
 ### 5.2 Stage 2 — the primary ladder
 
@@ -890,17 +990,17 @@ satisfying no rank lands at rank 11.
 
 | Rank | Condition | Primary |
 | --- | --- | --- |
-| 0 | a contradiction class CX1–CX3 holds (stage 1) | `UNKNOWN(<class>)` |
-| 1 | CX2 comparability could not be established (§5.1.1) | `UNKNOWN(support_comparability_unestablished)` |
+| 0 | `CX1`, `RI-1` or `RI-2` holds (stage 1) | `UNKNOWN(<class reason>)` |
+| 1 | `RI-1` comparability could not be established (§5.1.1 rows 2 and 5) | `UNKNOWN(support_comparability_unestablished)` |
 | 2 | `D2 = NOT_APPLICABLE` | `NOT_APPLICABLE` |
 | 3 | `D4 = REGISTRY_DISABLED` | `DEVICE_DISABLED` |
-| 4 | `D3 = UNSUPPORTED` (and CX2 does not hold) | `UNSUPPORTED` |
+| 4 | `D3 = UNSUPPORTED` (and `RI-1` does not hold) | `UNSUPPORTED` |
 | 5 | `D4 = EVIDENCE_ONLY` | `NOT_ENROLLED` |
 | 6 | `D5 = POLICY_DISABLED` | `POLICY_DISABLED` |
 | 7 | `D6c = failed` on the latest attempt | `COLLECTION_FAILED` |
 | 8 | `D3 = SUPPORT_UNKNOWN`, or `D2 = APPLICABILITY_UNKNOWN`, or `D4 ∈ {REGISTRY_ONLY, RECONCILIATION_UNKNOWN}`, or `D6b = no_data`, or `INSUFFICIENT_EVIDENCE` | `UNKNOWN(<named missing fact>)` |
 | 9 | `D6` **positively** evidences absence of configuration (`I11`) | `NOT_CONFIGURED` |
-| 10 | **all** of: `D2 = APPLICABLE` ∧ `D3 = SUPPORTED` ∧ `D4 = RECONCILED` ∧ `D6b ∈ {live, last_known_good, partial}` ∧ `D6c = success` ∧ no contradiction ∧ every required input well-formed | `AVAILABLE` |
+| 10 | **all** of: `D2 = APPLICABLE` ∧ `D3 = SUPPORTED` ∧ `D4 = RECONCILED` ∧ `D6b ∈ {live, last_known_good, partial}` ∧ `D6c = success` ∧ no `CX1`/`RI-1`/`RI-2` ∧ every required input well-formed | `AVAILABLE` |
 | 11 | anything else — a required input absent, malformed, or matching no rank | `UNKNOWN(unclassified_input)` — **fail closed** |
 
 `D1` no longer appears in the ladder: stage 0 owns it entirely, and rank 10's
@@ -930,7 +1030,7 @@ malformed input can never reach rank 10.
 - **Stage 4, evidence presentation.** `POPULATED` whenever displayable
   evidence exists under the existing identity and privacy contracts;
   `EMPTY{reason}` **only** when none does. The primary label is not an input.
-- **Stage 5, action eligibility.** Per `action_id`; §5.4 defines it.
+- **Stage 5, action affordance.** Per `action_id`; §5.4 defines it. It reports presentation-time facts only and is never an execution grant.
 
 ### 5.2.2 Worked resolution
 
@@ -948,14 +1048,15 @@ malformed input can never reach rank 10.
   schedule exists and is disabled).
 - Stage 4: `POPULATED` — last week's evidence displayed with its age, the
   failed latest attempt shown **beside** it, not instead of it.
-- Stage 5, per action:
-  - `collect_now` — **scheduling state alone does not block it.** It is
-    eligible **only if** `E1`–`E7` all pass for it; `D5` contributes no
-    blocking reason.
-  - `retry` — same, **and** it must additionally satisfy its own retry
-    contract; yesterday's failure is not a grant.
-  - a drift/override-claim action — `INELIGIBLE`, blocking reason
-    `E6: trusted_expected_source_required`.
+- Stage 5, per declared `action_id`:
+  - `config_refresh_cp` — **scheduling state alone does not block it**; `D5`
+    contributes no reason. Presentation-time gates `E1`–`E3`, `E5`, `E6` pass
+    and `E4` is `NO_APPLICABLE_AUTHORITY`, so the affordance is
+    `AVAILABLE_FOR_SUBMISSION`. That is **not** permission to execute: `E7`'s
+    admission and immediately-before-execution checks have not run and are
+    re-evaluated in their own phases.
+  - a drift/override-claim action, where one is declared —
+    `DISABLED_KNOWN_BLOCKER`, reason `E6: trusted_expected_source_required`.
 
 ### 5.3 Authorization — independent, action-scoped, server-enforced
 
@@ -979,146 +1080,171 @@ malformed input can never reach rank 10.
    CLASS 0 console reads and submissions are governed by `E1`–`E3` and are
    permitted today; the absence of OIDC/RBAC neither grants nor denies them.
 
-### 5.4 Stage 5 — action eligibility, per `action_id`
+### 5.4 Stage 5 — action affordance, per `action_id`
 
-For each declared action the resolver emits one `action_eligibility[]` entry
-keyed by `action_id` (§4.1.1). Eligibility is the conjunction of **all seven
-gates of §3.4**, each evaluated **exactly once**.
+For each **declared** action the resolver emits one `ActionAffordance` keyed by
+`action_id` (§4.1.1). An action that is **not declared** on this surface
+produces **no entry**.
 
-| Gate | Evaluated once as | Fails when | Blocking reason |
+| Gate | Evaluated once per **decision phase** as | Presentation-time? | Contributes |
 | --- | --- | --- | --- |
-| `E1` | request/session authenticity and origin | the session gate rejects the request | `session_not_authenticated` |
-| `E2` | action identity + closed-registry membership | the `action_id` is unknown or outside the closed vocabulary | `unknown_action_identity` |
-| `E3` | taxonomy / surface admissibility | `console_refusal()` refuses this class on this surface | `ACTION_REFUSED(class)`, the refusing class named |
-| `E4` | the action's applicable **authorization** authority (`D7`) | it returns `DENIED`, **or** returns `AUTHZ_NOT_EVALUATED` | `ACTION_DENIED(authority, reason)` **or** `AUTHZ_NOT_EVALUATED(authority)` |
-| `E5` | subject/target integrity **required by that action's own contract** | a required subject is unresolvable, or is in `CX1` dispute | `subject_integrity_unmet` |
-| `E6` | the action's own declared semantic prerequisites | a declared prerequisite fact is missing, or not current enough for that action | the named prerequisite |
-| `E7` | admission / execution-time live checks | the live check refuses — including a registry target that has become disabled or unresolvable | the live check's own reason |
+| `E1` | request/session authenticity and origin, for the render request | yes | `blocking_reasons`: `session_not_authenticated` |
+| `E2` | action identity + closed-registry membership | yes | `blocking_reasons`: `unknown_action_identity` |
+| `E3` | taxonomy / surface admissibility (`console_refusal()`) | yes | `blocking_reasons`: `ACTION_REFUSED(class)`, refusing class named |
+| `E4` | the action's applicable **authorization** authority (`D7`, four-valued) | partly | `NO_APPLICABLE_AUTHORITY` → nothing; `PERMITTED` → nothing; `DENIED` → `blocking_reasons`; `AUTHZ_NOT_EVALUATED` → `undetermined_reasons` |
+| `E5` | subject/target integrity **required by that action's own contract** | yes, for already-resolved integrity facts | `blocking_reasons`: `subject_integrity_unmet` |
+| `E6` | the action's own declared semantic prerequisites | yes | `blocking_reasons`: the named prerequisite |
+| `E7` | admission and immediately-before-execution live checks | **no — never** | nothing at presentation time; **both** checks run in their own phases |
+
+**Resolution of the affordance value:**
+
+| Condition | `affordance` |
+| --- | --- |
+| any presentation-time gate contributes a blocking reason | `DISABLED_KNOWN_BLOCKER` |
+| no blocker, but `E4` is `AUTHZ_NOT_EVALUATED(authority)` | `UNDETERMINED` |
+| no blocker and no undetermined reason | `AVAILABLE_FOR_SUBMISSION` |
+
+`AVAILABLE_FOR_SUBMISSION` states only that **no presentation-time blocker is
+known**. It never claims `E7` passed, and it is never an execution grant.
 
 **`E3` is never re-evaluated inside `E4`.** Taxonomy admissibility is decided
-once, by `E3`. The previous revision evaluated it in a `G2` gate and again as
-an "R2 regime" inside `G3`; that double evaluation is removed.
+once per decision. **"Once" is per decision phase**, not per lifecycle: `E7`'s
+registry check at admission and its check immediately before execution are
+**both required** (`AC-ST-4`) and both preserved — different phases, not a
+duplicate evaluation.
 
 **`E5` imports no prerequisite the action does not have.** A **targetless**
-read — today every collection job type is `target_mode="none"` — declares no
-subject requirement, so `E5` requires none and must not invent one. A
-device-targeted action inherits its contract's rules unchanged, including the
-frozen requirement that the **registry is authoritative at job admission and
-again immediately before execution** (`AC-ST-4`), with refusal or abort
-**before contact**. `M3` neither relaxes that nor substitutes a cached value.
+action (`target_mode = "none"` — today `inventory_refresh_cp`,
+`inventory_refresh_vsx`, `config_refresh_pan`, `config_refresh_cp`,
+`report_rebuild`) declares no subject requirement, so `E5` requires none and
+**must not invent one**, including under `CX1` (§5.1.2). An entity-targeted
+action (`target_mode = "entity_ids"` — today `recovery_attest_cp`,
+`cp_gaia_backup`) inherits its contract's rules unchanged.
 
-**`E6` is scoped to what the action declares.** Evidence blocks an action only
-where the action declares that fact — the frozen parent's own scoping,
-navigation contract §8 Unknown row: *"disabled **if the action needs the
-missing fact**"*. An action does not become ineligible merely because some
+**`E6` is scoped to what the action declares** — the frozen parent's own
+scoping, navigation contract §8 Unknown row: *"disabled **if the action needs
+the missing fact**"*. An action does not become blocked merely because some
 unrelated dimension is `UNKNOWN` or `STALE`.
 
 **Evidence-gathering actions declare no `E6` prerequisite on the evidence they
-produce.** First contact, `collect_now` and `retry` are never blocked by the
-absence of the evidence they exist to acquire — requiring it would be a
-deadlock, not a safety property. They remain subject to **every** other gate:
+produce** and are never blocked by its absence; requiring it would be a
+deadlock. They remain subject to every other presentation-time gate, and to
+`E7` at its own phases:
 
 - **manual collection** — scheduling state alone (`D5`) does not block it; it
-  is independent of nothing else, still passing `E1`–`E3` and `E5`–`E7`,
-  entering the same admission coordinator and single orchestration path, and
-  staying within the vendor interaction-safety budget;
+  is independent of nothing else, entering the same admission coordinator and
+  single orchestration path and staying within the vendor
+  interaction-safety budget;
 - **retry** — additionally satisfies **its own retry contract**. A previous
   failure is never a grant. Retry is a **new typed job**, never a mutation of a
-  historical outcome (`AC-RT-6`); where a contract imposes a ledger window or
-  minimum re-execution interval, a refusal there is a correct outcome.
+  historical outcome (`AC-RT-6`); a ledger-window or minimum-interval refusal is
+  a correct outcome, and it is an `E7`-phase refusal, not a presentation-time
+  claim.
 
-#### 5.4.1 Unevaluated authorization is not a denial
+#### 5.4.1 Undetermined, denied, and not-applicable are three different things
 
-| | `ACTION_DENIED(authority, reason)` | `AUTHZ_NOT_EVALUATED(authority)` |
-| --- | --- | --- |
-| Meaning | an applicable authority was consulted and **refused** | an applicable authority has **not been consulted** |
-| Eligibility | `false` | `false` |
-| Rendered as a refusal? | yes — name the authority and reason | **no** — it asserts nothing about permission |
-| Operator copy | "refused by \<authority\>: \<reason\>" | "permission for this action has not been determined" |
-| Audit | a denial decision | an unevaluated-gate record, never a denial |
-
-Both are non-executable; only one is a statement about permission. Collapsing
-them would fabricate a refusal the product never made.
+| | `DENIED(authority, reason)` | `AUTHZ_NOT_EVALUATED(authority)` | `NO_APPLICABLE_AUTHORITY` |
+| --- | --- | --- | --- |
+| Meaning | an applicable authority **refused** | a real, named, applicable authority **was not consulted** | **no** actor-authorization authority applies to this action |
+| `affordance` | `DISABLED_KNOWN_BLOCKER` | `UNDETERMINED` | contributes nothing |
+| Presentation | refusal tone and refusal copy | **neutral / undetermined** tone and copy — **never** refusal tone or refusal wording | invisible; nothing is said about authorization |
+| Operator copy | "refused by \<authority\>: \<reason\>" | "permission for this action has not been determined" | — |
+| Audit | a denial decision | an unevaluated-gate record, never a denial | not an authorization event |
+| Is a grant? | no | no | **no** |
 
 #### 5.4.2 The UI state is advisory
 
 Everything stage 5 produces is **advisory presentation**. Server-side
-**admission** (`E7`) and **execution** checks remain authoritative and are
-unchanged: an action shown eligible is still checked server-side, and one shown
-ineligible is still refused server-side.
+**submission**, **admission** and **immediately-before-execution** checks remain
+authoritative and are unchanged: an action shown `AVAILABLE_FOR_SUBMISSION` is
+still fully checked server-side, and one shown `DISABLED_KNOWN_BLOCKER` is still
+refused server-side.
 
-**All blocking reasons are preserved**, whatever the primary label, each naming
-its actual gate under its own `action_id`.
+**All reasons are preserved**, whatever the primary label, each naming its gate
+under its own `action_id`.
 
 ### 5.4.3 What each output may read
 
 | Output | Permitted inputs | Forbidden inputs |
 | --- | --- | --- |
-| `surface_disposition` (root / module / tab rendering) | `D1` only | D2–D7, contradictions, qualifiers, actions |
+| the union tag (root / module / tab rendering) | `D1` only | D2–D7, contradictions, qualifiers, actions |
 | `primary_status` | stages 1–2 inputs | `D1` (stage 0 owns it), `D7`, any action outcome |
 | `capability_qualifiers` | the facet each binds to | any action outcome |
 | `evidence_presentation` | existence of displayable evidence under the identity/privacy contracts | the primary label |
 | action **visibility** | the action contract's existence + the shell | `E4` — an action must not vanish because you lack access |
-| `action_eligibility[action_id]` | `E1`–`E7`, each once, each only where applicable to that action | a dimension the action does not depend on |
+| `action_affordance[action_id]` | the **presentation-time** gates only — `E1`–`E3`, `E5`, `E6`, and `E4`'s evaluable part — each once per decision | `E7`, which is not evaluable at render; a dimension the action does not depend on |
 | explanatory copy | every input that contributed, named | a reason that is not the actual gate |
 | audit / report representation | the resolved state as text | any action affordance in the report (`AC-SH-1`) |
 
 ### 5.5 Atomic resolution cases
 
-**Every case below is atomic**: one resolution subject, one named action (or an
-explicitly action-free presentation case), complete input assumptions, one
-primary result, capability qualifiers only, one evidence presentation, and one
-action-keyed eligibility result where an action exists. The previous revision's
-table contradicted its own "single named action per row" baseline by resolving
-several actions in one cell; those rows are split into lettered subcases here.
-`H1`–`H11` identifiers are preserved.
+Every case is written to be **executable as a test fixture**: one complete
+subject, one concrete declared `action_id` (or explicitly action-free), complete
+input assumptions, one deterministic result.
 
-**Shared assumptions unless a case states otherwise:** `D1 = SURFACE_PRESENT`
-(stage 0 returned `RESOLVE` — no case below is reachable otherwise); console
-shell; the named action is a member of the closed registry (`E2` passes); the
-action is CLASS 0 and `E3` passes; `E1` passes; `E7` is evaluated live and is
-not pre-satisfied by anything here.
+**Action IDs are real.** They are members of the closed registry verified at
+this baseline (`console/registry.py::JOB_REGISTRY`): targetless —
+`inventory_refresh_cp`, `config_refresh_cp`, `report_rebuild`; entity-targeted
+(`target_mode = "entity_ids"`) — `recovery_attest_cp` (CLASS 0),
+`cp_gaia_backup` (CLASS 1). No case invents an action id.
 
-**No case asserts unconditional permission.** "Eligible" always means *all
-seven gates passed for that action*, never "permitted regardless".
+**Shared fixture assumptions unless a case states otherwise:** `D1 =
+SURFACE_PRESENT` → `RESOLVED`; console shell; `E1` passes for the render
+request; the named action is a registry member (`E2` passes); it is CLASS 0 and
+`E3` passes; `E4 = NO_APPLICABLE_AUTHORITY` (no actor-authorization authority
+applies to CLASS 0 today); `E7` is **not evaluated at presentation time**.
 
-| # | Subject + assumptions | Named action | `primary_status` | `capability_qualifiers` | `evidence_presentation` | `action_eligibility[action_id]` | Tone | Copy must say |
+**No case asserts permission to execute.** `AVAILABLE_FOR_SUBMISSION` always
+means *no presentation-time blocker is known*.
+
+| # | Subject + input assumptions | `action_id` | `primary_status` | `capability_qualifiers` | `evidence_presentation` | `action_affordance` | Tone | Copy must say |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| **H1** | supported, reconciled, fresh evidence; the applicable authority refuses this action | `collect_now` | `AVAILABLE` | — | `POPULATED` | `{collect_now: ineligible, [E4: ACTION_DENIED(authority, reason)]}` | normal view; refusal tone on the control | who refused, under which authority; never "unavailable" |
-| **H2** | observed in evidence, absent from the registry | `enroll_device` | `NOT_ENROLLED` | — | `POPULATED` — the evidence is what proves it exists | `{enroll_device: ineligible, [E4: AUTHZ_NOT_EVALUATED(local-enrollment authority)]}` — `M9`'s conditioned gate is unimplemented, so no applicable authority has been consulted; **not** a denial | `info` | that it is observed but unenrolled, what enrolling does, and that the enrollment path is not yet available |
-| **H3** | supported, reconciled; `fresh == false` with a real anchor | `collect_now` | `AVAILABLE` | `STALE(as_of)` | `POPULATED` with age | `{collect_now: eligible}` **if `E1`–`E7` all pass** — staleness is not an `E6` prerequisite of the action that refreshes it | `muted` badge + timestamp | the age, its anchor and `stale_reason`; never blank |
-| **H4a** | `D3 = UNSUPPORTED`; retained evidence **predates** a platform or support-rule change (K3/K4/K5 fail — **not** CX2) | a support-dependent read | `UNSUPPORTED` | `STALE(as_of)` | `POPULATED` — retained evidence displayed, labelled as predating the current support determination | `{read: ineligible, [E6: capability_unsupported]}` | own `unsupported` token | the **vendor** reason; that the retained evidence predates the current support determination; that collecting again will not make it supported |
-| **H4b** | `D3 = UNSUPPORTED`; **contemporaneous** positive evidence, K1–K6 all hold (**CX2 holds**) | a support-dependent read | `UNKNOWN(support_contradiction)` | `STALE(as_of)` if applicable | `POPULATED`, labelled as contradicting the support conclusion | `{read: ineligible, [E6: support_contradiction]}` | `muted` | **both** disagreeing inputs, named; that the contradiction is unresolved |
-| **H4c** | `D3 = UNSUPPORTED`; comparability metadata missing (K1/K2/K6 unestablished) | a support-dependent read | `UNKNOWN(support_comparability_unestablished)` | as they hold | `POPULATED` | `{read: ineligible, [E6: support_comparability_unestablished]}` | `muted` | **which** comparability condition could not be established; that neither a contradiction nor a support conclusion is claimed |
-| **H5a** | applicable schedule intentionally disabled; retained evidence present | `collect_now` | `POLICY_DISABLED` | `STALE(as_of)` if applicable | `POPULATED` — retained evidence with the latest attempt beside it | `{collect_now: eligible}` **if `E1`–`E7` all pass** — `D5` contributes no blocking reason | `muted` + explicit label | that **automatic** refresh is off and manual collection is unaffected; never that refresh is impossible |
-| **H5b** | as H5a; the previous collection failed | `retry` | `POLICY_DISABLED` | as H5a | `POPULATED` | `{retry: eligible}` **only if `E1`–`E7` pass and its own retry contract is satisfied** — a prior failure is never a grant; a ledger/interval refusal is a correct outcome | `muted` | that retry is a new typed job, and any window that governs it |
-| **H5c** | as H5a; a third action whose applicable authority refuses it | that action | `POLICY_DISABLED` | as H5a | `POPULATED` | `{action: ineligible, [E4: ACTION_DENIED(authority, reason)]}` | refusal tone on that control only | **both** reasons — the policy that disabled automatic refresh, and the authorization refusal, refusal last |
-| **H6** | logical entity supported; one member's value legitimately differs | *(action-free presentation case)* | `AVAILABLE` | `MEMBER_SPECIFIC` | `POPULATED`, side-by-side member comparison | — | `--member-specific` gold row emphasis | "Expected member difference"; **no** warning icon or failure wording |
+| **H1** | CP cluster; supported, reconciled, `D6a fresh = true`, `D6c = success`; **`E4 = DENIED(authority, reason)`** for the named action (a fixture where an applicable authority exists and refuses) | `recovery_attest_cp` | `AVAILABLE` | — | `POPULATED` | `DISABLED_KNOWN_BLOCKER`, `[E4: ACTION_DENIED(authority, reason)]` | normal view; **refusal** tone on that control | who refused, under which authority; never "unavailable" |
+| **H2** | PAN device observed in evidence, absent from the registry; **`enroll_device` is not a member of the closed registry at this baseline** | *(none — no enrollment action is declared)* | `NOT_ENROLLED` | — | `POPULATED` — the evidence is what proves it exists | **no entry at all.** An undeclared action produces no affordance; it is **not** `UNDETERMINED`, and no authorization authority is invented for it | `info` | that it is observed but unenrolled, and that no enrollment path is available in this build. Enrollment remains gated by the frozen seventeen conditions, enforced through their own **non-authorization** gates; production/server exposure stays blocked on `DEPLOY.1A` |
+| **H3** | CP cluster; supported, reconciled; `D6a fresh = false` with `collected_at` present | `config_refresh_cp` | `AVAILABLE` | `STALE(as_of)` | `POPULATED` with age | `AVAILABLE_FOR_SUBMISSION` — staleness is not an `E6` prerequisite of the action that refreshes it | `muted` badge + timestamp | the age, its anchor and `stale_reason`; never blank |
+| **H4a** | `D3 = UNSUPPORTED`; retained evidence correctly scoped (`K1`, `K2` `TRUE`) but `K5 = FALSE` (support-rule change); **`D6a fresh = false` with a real anchor supplied by the fixture** | `config_refresh_cp` | `UNSUPPORTED` | `STALE(as_of)` — emitted **only** because `D6a` is explicitly false with an anchor; predating a rule change does **not** by itself prove staleness | `POPULATED`, labelled **historical (support-rule context differs)** | `AVAILABLE_FOR_SUBMISSION` | own `unsupported` token | the **vendor** reason; that the retained evidence is historical; that collecting again will not make it supported |
+| **H4b** | `D3 = UNSUPPORTED`; `K1`–`K6` **all `TRUE`** → `RI-1` | `config_refresh_cp` | `UNKNOWN(support_inconsistency)` | none unless independently established | `POPULATED`, labelled as inconsistent with the support conclusion | `AVAILABLE_FOR_SUBMISSION` | **`muted`** — a bounded inconsistency, **not** danger | **both** disagreeing inputs, named; that the inconsistency is unresolved |
+| **H4c** | `D3 = UNSUPPORTED`; `K6 = UNESTABLISHED` (producer version not comparable) | `config_refresh_cp` | `UNKNOWN(support_comparability_unestablished)` | none unless independently established | `POPULATED` | `AVAILABLE_FOR_SUBMISSION` | `muted` | **which** comparability condition could not be established; that neither an inconsistency nor a support conclusion is claimed |
+| **H4d** | `D3 = UNSUPPORTED`; `K2 = FALSE` — the retained evidence is for a **different capability** | `config_refresh_cp` | `UNSUPPORTED` | — | **that evidence is not displayed for this capability at all** (out of scope, not historical); `EMPTY{no_evidence_for_this_capability}` if nothing else is retained | `AVAILABLE_FOR_SUBMISSION` | own `unsupported` token | the vendor reason; nothing about the out-of-scope evidence |
+| **H5a** | CP cluster; applicable schedule intentionally disabled; retained evidence present; `D6c = failed` on the latest attempt | `config_refresh_cp` | `POLICY_DISABLED` | `STALE(as_of)` if `D6a` is false with an anchor | `POPULATED` — retained evidence with the latest attempt beside it | `AVAILABLE_FOR_SUBMISSION` — `D5` contributes no reason | `muted` + explicit label | that **automatic** refresh is off and manual collection is unaffected; never that refresh is impossible |
+| **H5b** | as H5a | `report_rebuild` *(retry-shaped: a new typed job, not a mutation)* | `POLICY_DISABLED` | as H5a | `POPULATED` | `AVAILABLE_FOR_SUBMISSION` — its own retry contract, including any ledger or minimum-interval window, is an **`E7`-phase** decision and is **not** claimed here | `muted` | that retry is a new typed job, and that any governing window is enforced at submission/admission, not by this control |
+| **H5c** | as H5a, plus a fixture where an applicable authority refuses the named action | `cp_gaia_backup` *(CLASS 1)* | `POLICY_DISABLED` | as H5a | `POPULATED` | `DISABLED_KNOWN_BLOCKER`, `[E3: ACTION_REFUSED(CLASS_1_RECOVERY_WRITE, not console-submittable), E4: ACTION_DENIED(authority, reason)]` — **both preserved** | refusal tone on that control only | **both** reasons — the refusing class and the authorization refusal, refusal last; the policy that disabled automatic refresh is stated separately as the capability's own status |
+| **H6** | ClusterXL logical entity; one member's value legitimately differs; `D6c = success` | *(action-free presentation case)* | `AVAILABLE` | `MEMBER_SPECIFIC` | `POPULATED`, side-by-side member comparison | — | `--member-specific` gold row emphasis | "Expected member difference"; **no** warning icon or failure wording |
 | **H7a** | the **global module** subject; its surface ships | *(action-free presentation case)* | `AVAILABLE` | — | `POPULATED` | — | normal | the module is a product plane and does not disappear (`AC-WS-10`) |
-| **H7b** | the **selected entity** subject; the capability does not apply to its type | an entity-scoped action | `NOT_APPLICABLE` | — | `EMPTY{not_applicable_to_entity_type}` | `{action: ineligible, [E6: capability_not_applicable_to_entity_type]}` | `info` | which entity types support the capability |
-| **H8a** | no CLASS 2 action is declared on this surface — **the state today** | *(none declared)* | any | as they hold | as it resolves | **no entry** — an undeclared action produces no `action_eligibility[]` entry at all | unaffected | nothing; there is no control to explain |
-| **H8b** | a future CLASS 2 action whose contract exists and is declared | that CLASS 2 action | any | as they hold | as it resolves | `{action: ineligible, [E3: ACTION_REFUSED(CLASS_2), E4: ACTION_DENIED(OP.2 authority, authorization_not_configured)]}` — **both preserved** | refusal tone on that control only | every refusing gate, named — never a bare greyed control (`CON.0` §9) |
-| **H9a** | `CX1` — one canonical id resolves to two incompatible entity types/vendors | any action | `UNKNOWN(identity_contradiction)` | as they independently hold | `EMPTY{identity_contradiction}` — evidence withheld | `{action: ineligible, [E5: subject_integrity_unmet]}` for **every** declared action | **`danger`** — a genuine unsafe contradiction, per `AC-DIF-6` | **both** disagreeing identity resolutions, named |
-| **H9b** | `CX2` holds (K1–K6) | a support-dependent read, and one unrelated CLASS 0 read | `UNKNOWN(support_contradiction)` | as they hold | `POPULATED` | `{support_read: ineligible, [E6: support_contradiction]}`; `{unrelated_read: eligible}` if its own gates pass | `muted` | **both** disagreeing inputs, named |
-| **H9c** | `CX3` — `EVIDENCE_ONLY` while a live registry row exists | `enroll_device`, and one unrelated CLASS 0 read | `UNKNOWN(reconciliation_contradiction)` | as they hold | `POPULATED` | `{enroll_device: ineligible, [E6: reconciliation_contradiction]}`; `{unrelated_read: eligible}` if its own gates pass | `muted` | **both** disagreeing inputs, named |
-| **H10** | `D5 = POLICY_UNKNOWN`; evidence usable | `collect_now` | `AVAILABLE` | `SCHEDULE_UNKNOWN`; `STALE` if applicable | `POPULATED` — `POLICY_UNKNOWN` erases nothing | `{collect_now: eligible}` **if `E1`–`E7` all pass** — no schedule-dependent claim is asserted, and `POLICY_UNKNOWN` is valid input, not malformed | normal | that automatic-refresh state could not be determined; **evidence is unaffected** |
-| **H11a** | `D6d` `PROVENANCE_UNVERIFIED`; evidence fresh | a drift/override-claim action | `AVAILABLE` | `SOURCE_TRUST_LIMITED(<source reason code>)` | `POPULATED`, **with its own valid collection timestamp** — this qualifier neither supplies nor suppresses it | `{drift_claim: ineligible, [E6: trusted_expected_source_required]}` | `muted`; **no age claim from this qualifier** | that no override or drift claim can be made from this source; **not** that the evidence is old |
-| **H11b** | as H11a | `collect_now` | `AVAILABLE` | `SOURCE_TRUST_LIMITED(<source reason code>)` | `POPULATED` | `{collect_now: eligible}` **if `E1`–`E7` all pass** — source trust is not its prerequisite | `muted` | as H11a; the collection timestamp stays displayed |
-| **H11c** | `D6e` `IDENTITY_TRANSLATION_REQUIRED`; evidence fresh; `CX1` conditions do **not** hold | a comparison action | `AVAILABLE` | `IDENTITY_TRANSLATION_REQUIRED(<source reason code>)` | `POPULATED`, with its own timestamp | `{comparison: ineligible, [E6: identity_translation_unproven]}` | **`muted`** — a comparability limitation, **not** danger | that the two sides identify this subject differently and the comparison needs a proven translation; **not** that the source is untrusted, and **not** that identities contradict |
+| **H7b** | the **selected entity** subject; a standalone firewall; the capability does not apply to its type | `recovery_attest_cp` | `NOT_APPLICABLE` | — | `EMPTY{not_applicable_to_entity_type}` | `DISABLED_KNOWN_BLOCKER`, `[E6: capability_not_applicable_to_entity_type]` | `info` | which entity types support the capability |
+| **H8a** | CP cluster; supported, reconciled, `D6a fresh = true`, `D6b = live`, `D6c = success`; **no CLASS 2 action is declared on this surface — the state at this baseline** | *(none declared)* | `AVAILABLE` | — | `POPULATED` | **no entry** — an undeclared action produces none | normal | nothing about a CLASS 2 action; there is no control to explain |
+| **H8b** | as H8a, but a **future** CLASS 2 action is declared. **Future-fixture assumptions, stated explicitly:** the action exists in the closed registry; its taxonomy class is `CLASS_2_OPERATIONAL_STATE_CHANGE`; `OP.2`'s authorizer is the applicable authority and returns its unconditional deny | *(the declared CLASS 2 action)* | `AVAILABLE` | — | `POPULATED` | `DISABLED_KNOWN_BLOCKER`, `[E3: ACTION_REFUSED(CLASS_2_OPERATIONAL_STATE_CHANGE), E4: ACTION_DENIED(OP.2 authority, authorization_not_configured)]` — **both preserved** | refusal tone on that control only | every refusing gate, named — never a bare greyed control (`CON.0` §9) |
+| **H9a** | one canonical id resolves to two incompatible entity types → `CX1`; evidence for that subject withheld | `recovery_attest_cp` *(entity-targeted, naming the disputed subject)* | `UNKNOWN(identity_contradiction)` | — | `EMPTY{identity_contradiction}` | `DISABLED_KNOWN_BLOCKER`, `[E5: subject_integrity_unmet]` | **`danger`** — a genuine unsafe identity contradiction (`AC-DIF-6`) | **both** disagreeing identity resolutions, named |
+| **H9a-t** | the same `CX1` fixture as H9a | `report_rebuild` *(targetless)* | `UNKNOWN(identity_contradiction)` | — | `EMPTY{identity_contradiction}` | `AVAILABLE_FOR_SUBMISSION` — **`CX1` contributes nothing**: this action declares no subject, and none may be invented (§5.1.2) | `danger` on the capability chip; **normal** on this control | that the identity dispute concerns the subject, not this action |
+| **H10** | CP cluster; `D5 = POLICY_UNKNOWN`; `D6b = live`, `D6c = success` | `config_refresh_cp` | `AVAILABLE` | `SCHEDULE_UNKNOWN` | `POPULATED` — `POLICY_UNKNOWN` erases nothing | `AVAILABLE_FOR_SUBMISSION` — `POLICY_UNKNOWN` is valid input, not malformed | normal | that automatic-refresh state could not be determined; **evidence is unaffected** |
+| **H11a** | PAN device; `D6d = PROVENANCE_UNVERIFIED`; `D6a fresh = true` | a declared drift/override-claim action, where one exists | `AVAILABLE` | `SOURCE_TRUST_LIMITED(<source reason code>)` | `POPULATED`, **with its own valid collection timestamp** — this qualifier neither supplies nor suppresses it | `DISABLED_KNOWN_BLOCKER`, `[E6: trusted_expected_source_required]` | `muted`; **no age claim from this qualifier** | that no override or drift claim can be made from this source; **not** that the evidence is old |
+| **H11b** | as H11a | `config_refresh_cp` | `AVAILABLE` | `SOURCE_TRUST_LIMITED(<source reason code>)` | `POPULATED` | `AVAILABLE_FOR_SUBMISSION` — source trust is not this action's prerequisite | `muted` | as H11a; the collection timestamp stays displayed |
+| **H11c** | PAN device; `D6e = IDENTITY_TRANSLATION_REQUIRED`; `D6a fresh = true`; **`CX1`'s condition does not hold** | a declared comparison action, where one exists | `AVAILABLE` | `IDENTITY_TRANSLATION_REQUIRED(<source reason code>)` | `POPULATED`, with its own timestamp | `DISABLED_KNOWN_BLOCKER`, `[E6: identity_translation_unproven]` | **`muted`** — a comparability limitation, **not** danger | that the two sides identify this subject differently and the comparison needs a proven translation; **not** that the source is untrusted, and **not** that identities contradict |
+| **H12** | CP cluster; a fixture where a real, named, applicable authority exists but **was not consulted** for the named action | `recovery_attest_cp` | `AVAILABLE` | — | `POPULATED` | `UNDETERMINED`, `undetermined_reasons = [E4: AUTHZ_NOT_EVALUATED(authority)]` | **neutral / undetermined** on the control — **never** refusal tone | "permission for this action has not been determined"; **no** refusal wording |
 
-**Severity reconciliation.** `H9a` is the only case here that takes
-danger/error semantics, because `CX1` is a genuine unsafe contradiction and
-`AC-DIF-6` reserves danger for exactly that. `H11a`/`H11b`/`H11c` are
-**comparability limitations** and take muted semantics; they do not inherit
-danger merely because the frozen parent formerly grouped
-`IDENTITY_TRANSLATION_REQUIRED` with contradictory state (§2.7 `FA-8`).
+#### 5.5.1 Multi-action scope tests — not atomic cases
 
-**What changed from the previous revision.** `H4`, `H5`, `H7`, `H8`, `H9` and
-`H11` each resolved several actions or several subjects in one row; `H9`'s
-eligibility cells additionally named each class's *affected* actions under a
-heading reading "Action eligible" — the inverse of the scope rule. Each is now
-split into atomic subcases with one subject, one action and one deterministic
-result.
+`RI-1` and `RI-2` scope is a statement about **several** actions at once, so it
+cannot be expressed as an atomic one-action case. The previous revision's `H9b`
+and `H9c` are therefore **reclassified as multi-action scope tests** and are
+deliberately outside the atomic set. The false "one named action per row" claim
+they carried is withdrawn.
+
+| id | Fixture | Declared actions | Required assertion |
+| --- | --- | --- | --- |
+| **S-RI-1** *(was H9b)* | `RI-1` holds (`K1`–`K6` all `TRUE`) | `config_refresh_cp` (declares the support fact as an `E6` prerequisite) **and** `report_rebuild` (does not) | `config_refresh_cp` → `DISABLED_KNOWN_BLOCKER [E6: support_inconsistency]`; `report_rebuild` → resolves on its own gates, **unaffected** by `RI-1` |
+| **S-RI-2** *(was H9c)* | `RI-2` holds | any declared enrollment-shaped action, if one exists, **and** `report_rebuild` | the enrollment-shaped action → blocked by `E6: reconciliation_inconsistency`; `report_rebuild` → unaffected. At this baseline no enrollment action is declared, so the first half asserts **no entry** |
+| **S-CX1** | `CX1` holds | `recovery_attest_cp` (targets the disputed subject) **and** `report_rebuild` (targetless) | `recovery_attest_cp` → `DISABLED_KNOWN_BLOCKER [E5: subject_integrity_unmet]`; `report_rebuild` → `AVAILABLE_FOR_SUBMISSION`, with **no invented subject prerequisite** |
+
+#### 5.5.2 Severity, settled
+
+`CX1` (`H9a`, `S-CX1`) is the **only** case taking danger semantics, because it
+is the only genuine unsafe contradiction. `RI-1` and `RI-2` are bounded
+inconsistencies and take **muted** semantics; `SOURCE_TRUST_LIMITED` and
+`IDENTITY_TRANSLATION_REQUIRED` are comparability limitations and take muted
+semantics. Because `RI-1`/`RI-2` are not classified as contradictory or unsafe
+state, `AC-DIF-6`, `AC-DIF-8` and `AC-CS-47` apply to `CX1` alone and **no
+frozen-parent amendment is required for this point**.
 
 ---
 
@@ -1141,12 +1267,19 @@ the evidence timestamp where `STALE` or `PARTIAL` applies, and — for
 
 ### 6.3 Contextual actions
 
-An action is **declared** against a domain with its availability and reason
-(the parent's "declare, don't draw" pattern); the renderer emits only those
-whose backend contract exists. A rendered action that is not currently
-executable is **shown disabled with the refusing gate named**, never a bare
-greyed control. Where `ACTION_DENIED` and `ACTION_REFUSED` both hold, both are
-named (§5.3 rule 2).
+An action is **declared** against a domain with its availability and reason;
+the renderer emits only those whose backend contract exists. A declared action
+that is not `AVAILABLE_FOR_SUBMISSION` is **shown with its state named**, never
+a bare greyed control. Three presentation states must remain distinguishable:
+
+| Presentation state | Source | Tone | Copy shape |
+| --- | --- | --- | --- |
+| **confirmed refusal / denial** | `blocking_reasons` containing `ACTION_REFUSED(class)` or `ACTION_DENIED(authority, reason)` | refusal | names the refusing gate or authority and its reason |
+| **undetermined permission** | `undetermined_reasons` containing `AUTHZ_NOT_EVALUATED(authority)` | **neutral / undetermined — never refusal** | "permission for this action has not been determined"; no refusal wording |
+| **no applicable authority** | `E4 = NO_APPLICABLE_AUTHORITY` | invisible — nothing is said about authorization | the control's state comes from its other gates alone |
+
+A control that is `AVAILABLE_FOR_SUBMISSION` is **advisory**: it says no
+presentation-time blocker is known, never that execution is permitted.
 
 ### 6.4 Status badges / chips and tone tokens
 
@@ -1162,10 +1295,11 @@ the control they belong to, from that action's `blocking_reasons[]` (§4.1.1).
 | `POLICY_DISABLED` | `muted` + explicit "disabled by policy" label | intentional, not a failure |
 | `DEVICE_DISABLED` | `muted` + explicit label | intentional |
 | `UNSUPPORTED` | **its own token**, not `neutral` | C2: `neutral` is what an *unrecognised* value gets; a real product statement must not share that tone |
-| `UNKNOWN(identity_contradiction)` | **`danger`** | a genuine unsafe contradiction (`CX1`), per `AC-DIF-6` |
+| `UNKNOWN(identity_contradiction)` | **`danger`** | `CX1`, the only genuine unsafe contradiction, per `AC-DIF-6` |
+| `UNKNOWN(support_inconsistency)` / `UNKNOWN(reconciliation_inconsistency)` | `muted` | `RI-1` / `RI-2` are **bounded inconsistencies**, not contradictory or unsafe state (§5.1) |
 | `UNKNOWN(<any other reason>)` | `muted` | an honest gap, not a fault |
 | `COLLECTION_FAILED` | `danger` | actual fault |
-| `NOT_SHIPPED` | — | **never rendered** — a disposition reason only (§4.1) |
+| *(`NOT_SHIPPED` is not a `CapabilityState`)* | — | it is a `SurfaceOmissionReason`; under `OMITTED` nothing renders at all (§4.1) |
 
 | `capability_qualifiers` | Tone |
 | --- | --- |
@@ -1177,9 +1311,11 @@ the control they belong to, from that action's `blocking_reasons[]` (§4.1.1).
 | `SCHEDULE_UNKNOWN` | `muted` |
 | `MEMBER_SPECIFIC` | **`--member-specific`** — see §6.6 |
 
-| `blocking_reasons[]` on a control | Tone |
+| `action_affordance` on a control | Tone |
 | --- | --- |
-| any `E1`–`E7` reason, including `ACTION_DENIED`, `ACTION_REFUSED` and `AUTHZ_NOT_EVALUATED` | refusal tone on **that control only**; never applied to the capability's own chip |
+| `DISABLED_KNOWN_BLOCKER` — any `blocking_reasons` entry, including `ACTION_REFUSED` and `ACTION_DENIED` | **refusal** tone on **that control only**; never applied to the capability's own chip |
+| `UNDETERMINED` — `AUTHZ_NOT_EVALUATED(authority)` | **neutral / undetermined** tone on that control only; **never refusal tone and never refusal wording** |
+| `AVAILABLE_FOR_SUBMISSION` | normal; advisory, never presented as an execution grant |
 
 **Distinguishability is by label and reason, not by unique colour.** Several
 states legitimately share a tone — `POLICY_DISABLED`, `DEVICE_DISABLED` and
@@ -1263,27 +1399,35 @@ contract a later movement implements.
 
 ### 6.8 Static report parity, and one structural divergence
 
-| Carried in the exported report | Withheld from the report |
+Parity is compared **per shell-scoped surface**, and only where each shell
+actually resolves that surface: a surface the report does not ship is not a
+parity failure, it is a different `D1` for a different shell. `D1` — and
+therefore the union tag — is an **internal generation decision** in the export
+pipeline. It is **not** exported artifact content: the report contains the
+surfaces it ships and no record of the ones it did not.
+
+| Carried in the exported report | Withheld |
 | --- | --- |
-| `surface_disposition` — the report ships the same surfaces this build ships | — |
+| every surface the report shell itself ships, resolved by its own `D1` | any trace of a surface it does not ship |
 | `primary_status` and its copy | — |
 | every `capability_qualifier`: `STALE`, `PARTIAL`, `SOURCE_TRUST_LIMITED`, `IDENTITY_TRANSLATION_REQUIRED`, `NOT_SCHEDULED`, `SCHEDULE_UNKNOWN`, `MEMBER_SPECIFIC` | — |
 | `evidence_presentation`, with timestamps and provenance | — |
 | the identical information architecture (`AC-SH-3`) | live refresh |
-| — | **the entire `action_eligibility[]` projection** |
+| — | **the entire `action_affordance[]` projection** |
 
 **The divergence is structural, not selective.** The report declares **no
-actions** (`AC-SH-1`: no form, no submit control, no job submission, no
-credential or trust selection, no enrollment — absent, never disabled). With no
-declared action there is no `action_eligibility[]` entry to produce, so the
-whole projection is simply **not generated**. The report is not filtering
-"action qualifiers" out of a shared flat list — that list no longer exists
-(§4.1.1), and there is nothing to filter.
+actions** (`AC-SH-1`: absent, never disabled). With no declared action there is
+no `ActionAffordance` to produce, so the whole projection is **not generated**.
+The report filters nothing: there is no shared flat list of action outcomes to
+filter, because action outcomes live only inside `ActionAffordance` (§4.1.1).
 
-**Every capability qualifier is at parity**, because every one of them
-describes the capability's evidence rather than an action.
+**Where the shells legitimately differ, and where they may not.** The shell
+(`I20`) determines the **declared action set** and the **acquisition/liveness**
+characteristics (snapshot vs live refresh). It must **never** cause identical
+evidence to yield a different `primary_status`, different
+`capability_qualifiers` or a different `evidence_presentation`.
 
-`NOT_ENROLLED` is reported as a state, with no enrollment affordance —
+`NOT_ENROLLED` is reported as a state with no enrollment affordance —
 enrollment is console-only and gated (`AC-SH-1`, `AC-EN-11`).
 
 ---
@@ -1370,9 +1514,13 @@ contract violation, and each forbidden edge corresponds to a conflation in §2.4
 2. **Contradiction resolves to `UNKNOWN` within its declared scope** (CX1–CX3,
    §5.1), naming both inputs. Never the more favourable one, never a silent
    reconciliation. Facts that merely co-occur are not contradictions.
-3. **No R5 authorization model is neither a grant nor a blanket denial.** It is
-   `AUTHZ_NOT_EVALUATED` for R5-governed decisions, and it says nothing about
-   R1/R2-governed CLASS 0 operations, which are permitted today.
+3. **The absence of an actor-authorization model is neither a grant nor a
+   blanket denial.** Where no such authority applies, `E4` is
+   `NO_APPLICABLE_AUTHORITY` — non-blocking and **not a grant** — and the
+   action rests on its other gates. `AUTHZ_NOT_EVALUATED` is reserved for a
+   real, named, applicable authority that was not consulted. CLASS 0 console
+   operations are permitted today under the session and taxonomy gates
+   (`E1`–`E3`).
 4. **Action blocking is prerequisite-scoped** (§5.4 rule 1). `UNKNOWN`,
    `INSUFFICIENT_EVIDENCE` and `STALE` block an action **only where that
    action declares the missing or current fact as its own prerequisite** —
@@ -1382,53 +1530,57 @@ contract violation, and each forbidden edge corresponds to a conflation in §2.4
    label or inferred ordinal (`AGENTS.md` presentation-identity law). CX1
    withholds evidence rather than joining on unproven identity.
 
-#### 8.2.1 Persistence — authoritative records versus derived caches
+#### 8.2.1 Persistence — the capability projection versus the presentation resolution
 
-| Kind | Examples today | Rule |
+Two different objects. Conflating them is what let action, taxonomy and
+authorization state drift toward becoming persisted fields.
+
+| Object | What it holds | Persistable? |
 | --- | --- | --- |
-| **Authoritative durable records** | Device Registry rows (`utils/device_registry.py`); last-known-good evidence (`utils/snapshot.py`); content-addressed configuration evidence (`utils/config_evidence.py`, `config_storage.py`); console job records; schedule/capability-policy records (future, `M12`) | already durable and **unchanged by `M3`**. A capability state never overwrites or invalidates one |
-| **Derived cache — permitted** | the **capability projection** | the frozen `AC-ST-2` explicitly lists *capability projections* among what the approved local store may own. This document **permits** a persisted projection and defines only its validity rules; the schema is `M4`'s and is not designed here |
-| **Never persisted as truth** | a resolved `primary_status` / qualifier / eligibility set presented to an operator | a render-time composition over the inputs above |
+| **capability projection** | capability-domain facts only: the dimension values `D2`–`D6` it computed, its **basis/run information**, its **semantic identity** (canonical subject, exact capability, vendor/platform/entity kind) and the **producer/support-rule context** permitted by the frozen storage contract | **yes** — `AC-ST-2` lists *capability projections* among what the approved local store may own. `M4` owns any schema; **none is designed here** |
+| **presentation resolution** | the composed render-time result: the union tag, `primary_status`, `capability_qualifiers`, `evidence_presentation`, shell composition, `action_affordance`, authorization outcome and contradiction/inconsistency presentation | **no** — never persisted as authoritative truth |
 
-**Cache validity and invalidation expectations** (contract, not schema; `M4`
-owns any storage design, and none is proposed here). A cached projection is a
-**presentation optimisation only**, and its validity is established positively:
+**Action declarations, taxonomy class and authorization state must not become
+fields of the persisted projection.** They belong to the action and to its
+decision phase, not to the capability's domain facts. A projection that carried
+them would silently become an authorization or admission record.
 
-1. **It records every generation and version it consumed** — the *generation*
-   of each consumed authority (registry generation, evidence/last-known-good
-   generation, CAS object generation, schedule/policy record generation,
-   action-declaration set) **and** the version of each producer and support
-   rule that computed them (capability-projection producer version, **vendor
-   support-rule version**, **the `I14` comparability metadata that `CX2`
-   depends on**, taxonomy version, resolver contract version).
-2. **A cache hit is valid only if the resolver can establish that every
-   recorded generation and version still matches current authority.** Matching
-   is affirmative: if any consumed generation or version cannot be compared —
-   unreadable, absent, or from a producer the resolver no longer recognises —
-   the entry is **not** a hit.
-3. **Missed or delayed invalidation is assumed, not excluded.** Invalidation
-   events (§8.1) may be lost, reordered or delayed, so the absence of an
-   invalidation signal is **never** evidence of validity. Validity rests on the
-   comparison in rule 2, which does not depend on any event having been
-   delivered.
-4. **A support-rule or platform change invalidates every projection whose
-   `CX2` outcome depended on it** — otherwise a cached contradiction or a
-   cached "not a contradiction" would outlive the rule that produced it
-   (§5.1.1 K3–K5).
-5. **It fails closed** — a projection that cannot be validated is discarded and
-   recomputed, never served as truth (`AC-ST-6`'s existing posture).
-6. **It is RuntimeRoot-resident and excluded from the support bundle**, per the
-   existing `AC-ST-6`.
+**Every persisted projection is bound to** its canonical subject, its exact
+capability, the vendor/platform/entity kind, and the relevant producer and
+support-rule versions — the same `I14` metadata `RI-1` comparability depends on.
+A projection is reusable only for the exact binding it was computed under.
 
-**A cached presentation result never becomes authority.** Specifically it is
-never:
+**Identity-translation uncertainty forbids cache reuse across an unproven
+identity mapping.** Where `D6e` `IDENTITY_TRANSLATION_REQUIRED` holds, or a
+canonical join would require a translation the product has not proven, a cached
+projection may **not** be reused across that mapping (`AGENTS.md`
+opaque-identifier law).
+
+**Validity and invalidation** (contract, not schema):
+
+1. the projection records every consumed authority **generation** and every
+   producer and support-rule **version**;
+2. a cache hit is valid only when the resolver **affirmatively establishes**
+   that all of them still match current authority; an uncomparable generation
+   or version is **not** a hit;
+3. **missed or delayed invalidation is assumed, not excluded** — the absence of
+   an invalidation signal is never evidence of validity;
+4. a support-rule or platform change **invalidates every projection whose
+   `RI-1` outcome depended on it**, so a cached inconsistency (or a cached
+   absence of one) cannot outlive the rule that produced it;
+5. it **fails closed** — an unvalidatable projection is discarded and
+   recomputed, never served as truth (`AC-ST-6`);
+6. it is RuntimeRoot-resident and excluded from the support bundle (`AC-ST-6`).
+
+**A cached projection never becomes authority.**
 
 | Never | Because |
 | --- | --- |
 | **endpoint authority** | endpoints resolve server-side at the authorized execution stage; no copied endpoint is retained as fallback (`AC-ST-5`) |
 | **authorization authority** | the applicable authority is consulted at decision time (§5.3, `E4`) |
-| **action-admission authority** | **the registry stays authoritative at admission and again immediately before execution** (`AC-ST-4`, `E7`); a cached projection never substitutes for either, and a target that has become disabled or unresolvable causes refusal or abort **before contact** |
-| **persistence authority** | authoritative durable records are unchanged by `M3` and are never overwritten or invalidated by a projection |
+| **action-admission authority** | the registry stays authoritative at admission **and again immediately before execution** (`AC-ST-4`, `E7`); a cached projection substitutes for neither |
+| **execution authority** | presentation never grants execution (§4.1.1, §5.4.2) |
+| **persistence authority** | authoritative durable records are unchanged by `M3` and are never overwritten by a projection |
 
 ---
 
@@ -1441,76 +1593,91 @@ does not yet exist is **not waived** — it becomes that movement's criterion.
 ### 9.1 Coverage contract for the resolver
 
 A later movement proves the resolver over **finite input classes plus named
-boundary cases**, not over an unbounded product and not over a hand-picked
-sample.
+boundary cases**, not an unbounded product and not a hand-picked sample.
 
-| Input | Finite classes to enumerate |
+| Input | Finite classes |
 | --- | --- |
 | D1 | **3** (`SURFACE_PRESENT`, `SURFACE_ABSENT`, `SURFACE_ELIGIBILITY_UNRESOLVABLE`) |
-| D2 | 3 |
-| D3 | 3 |
-| D4 | 5 |
-| D5 | 4 |
-| D6a freshness | 2 (`fresh` true/false) |
+| D2 entity applicability | 3 |
+| D3 vendor support | 3 |
+| D4 reconciliation | 5 |
+| D5 capability policy | 4 |
+| D6a freshness | 2 |
 | D6b completeness | 4 |
-| D6c outcome | 5 |
-| D6d expected-source trust | 2 (absent / `PROVENANCE_UNVERIFIED`) |
-| D6e identity translation | 2 (absent / `IDENTITY_TRANSLATION_REQUIRED`) |
-| CX2 comparability (`I14`) | 3 (K1–K6 all hold / K3–K5 fail / K1, K2 or K6 unestablished) |
-| member context | 3 (single-member / members agree / members differ) |
-| action class | the 5 taxonomy classes |
-| authorization | 3 outcomes (`PERMITTED`, `DENIED`, `AUTHZ_NOT_EVALUATED`) × the authorities applicable to that class |
+| D6c collection outcome | 5 |
+| D6d expected-source trust | 2 |
+| D6e identity translation | 2 |
+| `RI-1` comparability (`I14`) | **6 semantic classes** — the six §5.1.1 precedence rows |
+| member context | 3 |
+| action taxonomy class | the 5 classes |
+| `E4` applicability (`I18`) | **4** (`NO_APPLICABLE_AUTHORITY`, `PERMITTED`, `DENIED`, `AUTHZ_NOT_EVALUATED`) |
+| action subject requirement | 2 (targetless / entity-targeted) |
 | shell | 2 (report / console) |
 
 Required coverage:
 
-1. **All four stage-0 cases** `V-A`–`V-D`, including: a contradiction on an
-   absent surface asserting **nothing renders** and a diagnostic is emitted;
-   and `V-D` asserting the disposition is `OMIT_UNRESOLVABLE` and **never**
-   `NOT_SHIPPED`.
-2. **Absent is not empty** — under either omission, the four capability outputs
-   are asserted **not produced**, not produced-as-empty.
-3. **Every reachable rank of the §5.2 ladder fires at least once**, including
-   ranks 0, 1 and 11.
-4. **Every contradiction class CX1–CX3** is exercised, and at least four
-   *non*-contradictory co-occurrences are asserted **not** to trigger the gate:
+1. **All four stage-0 cases** `V-A`–`V-D`: `OMITTED{NOT_SHIPPED}` requires a
+   positively established `SURFACE_ABSENT`; `OMITTED{SURFACE_ELIGIBILITY_UNRESOLVABLE}`
+   asserts **nothing** about what the build ships; neither carries any
+   capability output.
+2. **Union discipline** — `OMITTED` is asserted to carry no `primary_status`,
+   no qualifiers, no evidence presentation and no affordance, in any form.
+   `NOT_SHIPPED` is asserted **absent** from `CapabilityState`, which is
+   asserted to hold exactly nine values.
+3. **The omission diagnostic pass is optional** — a build that performs it and
+   a build that does not both produce the same `OMITTED` reason and the same
+   (nothing) rendering. Under `RESOLVED`, a diagnostic **may** be present; no
+   assertion requires it to be absent.
+4. **Every reachable ladder rank** fires at least once, including ranks 0, 1
+   and 11.
+5. **`CX1`, `RI-1`, `RI-2`** each exercised, plus at least four
+   non-inconsistent co-occurrences asserted **not** to trigger any of them:
    `UNSUPPORTED` with superseded historical evidence; `POLICY_DISABLED` with
    fresh evidence; `POLICY_UNKNOWN` with usable evidence;
-   `IDENTITY_TRANSLATION_REQUIRED` without `CX1`'s conditions.
-5. **CX2 comparability** is exercised across all three `I14` classes, asserting
-   contradiction / no-contradiction / honest-unknown respectively, and
-   asserting that a support-rule or platform change alone never manufactures a
-   contradiction from historical evidence.
-6. **Every capability qualifier** is exercised alone and with at least one
-   non-`AVAILABLE` primary, and `SOURCE_TRUST_LIMITED` and
-   `IDENTITY_TRANSLATION_REQUIRED` are asserted **independently settable** with
-   their source reason codes preserved.
-7. **Every input class of §4.1.3** — absent, malformed, contradictory,
-   incomparable, stale, unevaluated, validly-unknown — is exercised for at
-   least one input, with `POLICY_UNKNOWN` asserted **not** malformed.
-8. **Every gate `E1`–`E7`** is exercised as the sole blocking reason for one
-   action, and `E3` is asserted to be evaluated **exactly once** (never again
-   inside `E4`).
-9. **Action keying** — with at least two declared actions, one refused and one
-   eligible, each result is asserted to carry its own `action_id` and its own
-   `blocking_reasons[]`, and no action outcome appears in
-   `capability_qualifiers`.
-10. **Named boundary cases**, asserted individually: `fresh == false` with no
-    freshness anchor; `data_state == partial` with `D6c == success`;
-    `PROVENANCE_UNVERIFIED` with `fresh == true`; `IDENTITY_TRANSLATION_REQUIRED`
-    with `fresh == true`; `POLICY_UNKNOWN` with fresh evidence; an action whose
-    `E6` set is empty, asserted still to evaluate `E1`–`E5` and `E7`; a
-    targetless read asserted to acquire no invented subject prerequisite; a
-    malformed dimension value; unresolvable `D1`.
-11. **Generated combination coverage** over the D2–D6 cross-product for the
-    ladder and `evidence_presentation`, which makes the determinism claim
-    (`AC-CS-12`) falsifiable. Action eligibility is covered per (action class ×
-    authorization outcome × `E6` present/absent × subject required/not), not by
-    crossing it with the full dimension product.
-12. **Cache validity** is exercised with a matching generation set, a
-    mismatched generation, a mismatched producer/support-rule version, an
-    uncomparable generation, a **missed invalidation event**, and a
-    **support-rule change that invalidates a cached `CX2` outcome**.
+   `IDENTITY_TRANSLATION_REQUIRED` without `CX1`'s condition.
+6. **`CX1` subject scoping** — with one entity-targeted and one targetless
+   declared action, the targeted one is blocked by `E5` and the targetless one
+   is asserted **unaffected**, with no invented subject prerequisite (`S-CX1`).
+7. **`RI-1` comparability enumerated over all six semantic classes** of
+   §5.1.1: scope-`FALSE` (K1/K2) → evidence excluded from this
+   subject/capability; scope-`UNESTABLISHED` → no guessed join;
+   `K6 = FALSE` → historical/non-comparable; K3/K4/K5 `FALSE` → historical,
+   `D3` conclusion stands; residual `UNESTABLISHED` → honest unknown;
+   all-`TRUE` → `RI-1`. Mixed cases assert the stated precedence.
+8. **Every capability qualifier** exercised alone and with a non-`AVAILABLE`
+   primary; `SOURCE_TRUST_LIMITED` and `IDENTITY_TRANSLATION_REQUIRED`
+   asserted independently settable with source reason codes preserved.
+9. **Every input class of §4.1.5** exercised, with `POLICY_UNKNOWN` asserted
+   **not** malformed and `NO_APPLICABLE_AUTHORITY` asserted non-blocking and
+   **not a grant**.
+10. **Presentation-time boundary** — `E7` is asserted **never** evaluated at
+    render; an `AVAILABLE_FOR_SUBMISSION` action submitted afterwards is
+    asserted still to be checked by the server, and `E7`'s **two** registry
+    checks (admission, immediately before execution) are both asserted to run.
+11. **`E4` totality** — all four outcomes exercised;
+    `AUTHZ_NOT_EVALUATED` asserted emitted only where a real named applicable
+    authority exists; an **undeclared** action asserted to produce **no entry**.
+12. **Affordance keying** — with at least two declared actions resolving
+    differently, each result carries its own `action_id` and reason lists, and
+    no action outcome appears in `capability_qualifiers`.
+13. **Named boundary cases**: `fresh == false` with no anchor;
+    `data_state == partial` with `D6c == success`; `PROVENANCE_UNVERIFIED` with
+    `fresh == true`; `IDENTITY_TRANSLATION_REQUIRED` with `fresh == true`;
+    `POLICY_UNKNOWN` with fresh evidence; an action with an empty `E6` set
+    asserted still to evaluate the other presentation-time gates; a targetless
+    action asserted to acquire no invented subject prerequisite; a malformed
+    dimension value; unresolvable `D1`.
+14. **Generated combination coverage** over the D2–D6 cross-product for the
+    ladder and `evidence_presentation`, making `AC-CS-12` falsifiable.
+    Affordance is covered per (taxonomy class × `E4` outcome × `E6`
+    present/absent × subject required/not), not crossed with the full product.
+15. **Cache** — matching generation set; mismatched generation; mismatched
+    producer/support-rule version; uncomparable generation; a **missed
+    invalidation event**; a support-rule change invalidating a cached `RI-1`
+    outcome; and an attempted reuse **across an unproven identity mapping**,
+    asserted refused.
+16. **Severity** — `CX1` asserted `danger`; `RI-1`, `RI-2`,
+    `SOURCE_TRUST_LIMITED` and `IDENTITY_TRANSLATION_REQUIRED` asserted muted.
 
 This is a contract for what must be proven, not an implementation of the tests.
 
@@ -1539,7 +1706,7 @@ This is a contract for what must be proven, not an implementation of the tests.
 
 | id | Criterion | Owner |
 | --- | --- | --- |
-| `AC-CS-12` | Resolution is a pure function of the **complete input tuple of §4.1.1** — the seven dimensions including D6's four facets, member-comparison context, the declared action set with taxonomy classes, per-action authorization decisions and their regimes, each action's declared prerequisites, and the shell. The same tuple always yields the same four outputs | `M10` |
+| `AC-CS-12` | Resolution is a pure function of the **complete input contract of §4.1.3** — `I1`–`I20`, including D6's **five** facets `D6a`–`D6e`, member-comparison context, the declared action set with taxonomy classes and declared subject requirements, per-action authorization applicability and outcome, and the shell. The same input always yields the same **tagged-union result**: either `RESOLVED` with its four outputs or `OMITTED` with its reason. The four capability outputs do **not** always exist | `M10` |
 | `AC-CS-13` | The §5.2 ladder and `evidence_presentation` are exercised over the generated cross-product of §9.1's finite input classes, plus every named boundary case — not a hand-picked sample | `M10` |
 | `AC-CS-14` | Qualifiers are each a pure function of **one facet** (§4.3) and are computed independently of the primary and of each other | `M10` |
 | `AC-CS-15` | `UNKNOWN` outranks `NOT_CONFIGURED`: `NOT_CONFIGURED` is emitted only on **positive** evidence of absence | `M10` |
@@ -1577,7 +1744,7 @@ This is a contract for what must be proven, not an implementation of the tests.
 
 | id | Criterion | Owner |
 | --- | --- | --- |
-| `AC-CS-30` | A rendered but non-executable action is shown **disabled with its refusing gate named** — never a bare greyed control | `M11` |
+| `AC-CS-30` | A declared action that is not `AVAILABLE_FOR_SUBMISSION` is shown with its state named — never a bare greyed control. **Confirmed refusal**, **undetermined permission** and **no applicable authority** are three distinguishable presentations (§6.3): only the first uses refusal tone and refusal wording | `M11` |
 | `AC-CS-31` | Retry after `COLLECTION_FAILED` is offered as a **new typed job**; no historical job record is mutated (`AC-RT-6`) | `M7` |
 | `AC-CS-32` | Where `ACTION_DENIED` and `ACTION_REFUSED` both hold, both are named | `M11` |
 
@@ -1595,14 +1762,14 @@ This is a contract for what must be proven, not an implementation of the tests.
 | --- | --- | --- |
 | `AC-CS-36` | Every state chip carries a text label; no state is conveyed by hue alone (`AC-DIF-9`) | `M11` |
 | `AC-CS-37` | Every state chip's accessible name includes the state label, its qualifiers and, where applicable, the evidence timestamp | `M11` |
-| `AC-CS-38` | A disabled action's accessible name includes its refusal reason | `M11` |
+| `AC-CS-38` | A control's accessible name states its actual presentation state: a refusal names the refusing gate or authority; an `UNDETERMINED` control announces that permission has not been determined and **never** uses refusal wording; an `AVAILABLE_FOR_SUBMISSION` control announces no authorization claim | `M11` |
 
 ### Report behaviour
 
 | id | Criterion | Owner |
 | --- | --- | --- |
-| `AC-CS-39` | The exported report renders the same `CapabilityState` and non-action qualifiers as the console for the same evidence | `M11` |
-| `AC-CS-40` | The report renders **no** `ACTION_DENIED` / `ACTION_REFUSED` qualifier and no enrollment affordance; both are absent, not disabled (`AC-SH-1`) | `M11` |
+| `AC-CS-39` | For a surface both shells ship, the exported report renders the same `primary_status` and the same `capability_qualifiers` as the console for the same evidence. Parity is asserted per shell-scoped surface only | `M11` |
+| `AC-CS-40` | The report generates **no** `action_affordance[]` projection at all — not a filtered subset — and no enrollment affordance; both are absent, not disabled (`AC-SH-1`). `D1`/the union tag is an internal generation decision, not exported artifact content | `M11` |
 
 ### Unknown / stale evidence
 
@@ -1619,7 +1786,7 @@ This is a contract for what must be proven, not an implementation of the tests.
 | `AC-CS-44` | `.difference-row`, `.scope-chip.diff` and `.divergence-badge` bind to `--member-specific`, not `--warning` | later UI movement |
 | `AC-CS-45` | `MEMBER_SPECIFIC` resolves to one tone and one label in **both** Inventory and Configuration | later UI movement |
 | `AC-CS-46` | A `MEMBER_SPECIFIC` row carries no warning or failure icon and no failure wording (`AC-DIF-3`) | later UI movement |
-| `AC-CS-47` | `--danger` / red is emitted only for `COLLECTION_FAILED`, `EFFECTIVE_DRIFT`, `PANORAMA_OUT_OF_SYNC`, contradictory/unsafe state and failed job outcomes (`AC-DIF-8`) | later UI movement |
+| `AC-CS-47` | `--danger` / red is emitted only for `COLLECTION_FAILED`, `EFFECTIVE_DRIFT`, `PANORAMA_OUT_OF_SYNC`, **`CX1` genuine unsafe identity contradiction** and failed job outcomes (`AC-DIF-8`). `RI-1`/`RI-2` bounded inconsistencies, `SOURCE_TRUST_LIMITED` and `IDENTITY_TRANSLATION_REQUIRED` are **muted**, and are not classified as contradictory or unsafe state — so no frozen-parent amendment is needed for this point | later UI movement |
 
 ### Regression protection for existing vocabularies
 
@@ -1639,7 +1806,7 @@ This is a contract for what must be proven, not an implementation of the tests.
 | `AC-CS-54` | `STALE` is emitted **only** from D6a (`fresh == false`) with a real anchor from `collected_at` / `last_successful_collection`; it is never emitted from `PROVENANCE_UNVERIFIED` or any D6d value (C9, `FA-1`/`FA-2`) | `M10` |
 | `AC-CS-55` | `SOURCE_TRUST_LIMITED` never renders a timestamp and never renders age wording; `PROVENANCE_UNVERIFIED` carries no timestamp in source (V12a) | `M11` |
 | `AC-CS-56` | `UNKNOWN_SHELL` maps to `SUPPORT_UNKNOWN` → `UNKNOWN`, never to `UNSUPPORTED` (V9a, C10, `FA-3`) | `M10` |
-| `AC-CS-57` | D6a, D6b, D6c and D6d are independently settable and independently rendered; a test varying one asserts the other three unchanged | `M10` |
+| `AC-CS-57` | `D6a`, `D6b`, `D6c`, `D6d` and `D6e` are independently settable and independently rendered; a test varying one asserts the other **four** unchanged | `M10` |
 | `AC-CS-58` | A failed latest attempt (D6c) leaves retained evidence, its freshness and its completeness unchanged, and the view `POPULATED` | `M10`/`M11` |
 
 ### Schedule knowledge (added by this revision)
@@ -1655,7 +1822,7 @@ This is a contract for what must be proven, not an implementation of the tests.
 | id | Criterion | Owner |
 | --- | --- | --- |
 | `AC-CS-62` | Contradiction is exactly CX1–CX3; at least three non-contradictory co-occurrences are asserted **not** to trigger the gate | `M10` |
-| `AC-CS-63` | Each contradiction class applies only its declared scope: CX1 withholds evidence and blocks all actions; CX2 retains evidence and blocks support-dependent actions only; CX3 retains evidence and withholds enrollment only | `M10` |
+| `AC-CS-63` | Each class applies only its declared scope: `CX1` withholds evidence for the disputed subject and blocks, via `E5`, **only actions whose declared subject or target depends on the disputed identity** — targetless and unrelated-subject actions are unaffected and receive **no invented subject prerequisite**; `RI-1` retains evidence and blocks only actions declaring the support fact; `RI-2` retains evidence and blocks only a declared enrollment-shaped action | `M10` |
 | `AC-CS-64` | `AVAILABLE` requires the rank-10 positive conjunction; a malformed, absent or unclassifiable **required** input resolves to `UNKNOWN(unclassified_input)` and never to `AVAILABLE` or to executable eligibility. A **validly unknown** value (`SUPPORT_UNKNOWN`, `POLICY_UNKNOWN`, `APPLICABILITY_UNKNOWN`, `RECONCILIATION_UNKNOWN`) is **not** malformed and never reaches rank 11 | `M10` |
 | `AC-CS-65` | Every atomic case in §5.5 (`H1`…`H11`, including every lettered subcase) resolves exactly as its row states, across all four outputs, for the **named action** in that row and under the row's stated assumptions. Each case has one subject and one named action, or is explicitly action-free | `M10`/`M11` |
 
@@ -1663,8 +1830,8 @@ This is a contract for what must be proven, not an implementation of the tests.
 
 | id | Criterion | Owner |
 | --- | --- | --- |
-| `AC-CS-66` | The `OP.2` authorizer is consulted for CLASS 2 only; no CLASS 0 console operation is denied by reference to it, and the absence of an actor-authorization model is neither an automatic grant nor a blanket denial | `M14` |
-| `AC-CS-67` | Each `ACTION_DENIED` names the **applicable authorization authority** that refused it; `AUTHZ_NOT_EVALUATED` names the authority not consulted and is never rendered as either a grant or a refusal | `M11` |
+| `AC-CS-66` | The `OP.2` authorizer is consulted for CLASS 2 only. For an action to which no actor-authorization authority applies, `E4` is `NO_APPLICABLE_AUTHORITY` — non-blocking, **not a grant**, and distinct from `PERMITTED`, `DENIED` and `AUTHZ_NOT_EVALUATED`. No CLASS 0 console operation is denied by reference to the `OP.2` authorizer | `M14` |
+| `AC-CS-67` | `E4` is **total**: every action resolves to exactly one of `NO_APPLICABLE_AUTHORITY`, `PERMITTED`, `DENIED(authority, reason)` or `AUTHZ_NOT_EVALUATED(authority)`. `DENIED` and `AUTHZ_NOT_EVALUATED` each name a real authority; `AUTHZ_NOT_EVALUATED` is emitted **only** when a real, named, applicable authority exists and was not consulted, never for an undeclared or unimplemented action | `M11`/`M14` |
 | `AC-CS-68` | A cached or shared capability projection is never an input to an authorization decision (§5.3 rule 4) | `M10`/`M14` |
 | `AC-CS-69` | Evidence-gathering actions (first contact, collect now, retry) declare no `E6` prerequisite on the evidence they produce and are never blocked by its absence. They remain subject to **every** other gate `E1`–`E5`, `E7`, to their own other prerequisites, and — for retry — to its own retry contract; a prior failure never grants retry | `M7`/`M8` |
 
@@ -1684,7 +1851,7 @@ This is a contract for what must be proven, not an implementation of the tests.
 | `AC-CS-74` | `D1 = SURFACE_ABSENT` yields `OMIT_NOT_SHIPPED` and ends resolution: nothing renders, and no contradiction, qualifier, evidence, policy or authorization outcome can make it render (§5.0 `V-A`/`V-B`) | `M10`/`M11` |
 | `AC-CS-75` | A contradiction on an absent surface emits a diagnostic / audit / telemetry record and changes **no** rendering (§5.0 `V-B`) | `M10` |
 | `AC-CS-76` | `D1 = SURFACE_ELIGIBILITY_UNRESOLVABLE` yields `OMIT_UNRESOLVABLE` with `d1_input_unresolvable`, failing closed toward omission and never toward rendering (§5.0 `V-D`) | `M10` |
-| `AC-CS-77` | No stage after stage 0 can alter the `surface_disposition` — asserted by varying every later input against each fixed omission disposition | `M10` |
+| `AC-CS-77` | No stage after stage 0 can alter the union tag — asserted by varying every later input against each fixed `OMITTED` variant | `M10` |
 
 ### Mandatory action gates (added by this revision)
 
@@ -1692,7 +1859,7 @@ This is a contract for what must be proven, not an implementation of the tests.
 | --- | --- | --- |
 | `AC-CS-78` | Every action evaluates gates `E1`–`E7` (§3.4) regardless of its `E6` contents; an **empty `E6` set never shortens the others** — asserted with an action declaring no semantic prerequisites | `M10`/`M11` |
 | `AC-CS-79` | `E5` requires only what the action's own contract requires; a **targetless** read (`target_mode="none"`) has no device or target prerequisite invented for it | `M10` |
-| `AC-CS-80` | `AUTHZ_NOT_EVALUATED` yields non-executable eligibility and is represented, rendered and audited **distinctly** from a confirmed `ACTION_DENIED`; it is never rendered as a refusal | `M11`/`M14` |
+| `AC-CS-80` | `AUTHZ_NOT_EVALUATED` yields `UNDETERMINED` affordance and is represented, rendered and audited **distinctly** from a confirmed `ACTION_DENIED`; it uses neutral/undetermined tone and copy and is **never** rendered with refusal tone or refusal wording | `M11`/`M14` |
 | `AC-CS-81` | No example, table cell or rule states that an action is enabled, permitted or eligible unconditionally; every eligibility statement is conditional on `E1`–`E7` passing for that action | `M3` onward |
 | `AC-CS-82` | Retry satisfies its own retry contract — a new typed job, never a mutated historical outcome, and subject to any ledger or minimum-re-execution window; a prior failure alone never grants it | `M7` |
 | `AC-CS-83` | Manual collection is independent of `D5` scheduling policy and of nothing else: it passes `E1`–`E3`, `E5`–`E7`, enters the same admission coordinator and single orchestration path, and stays within the vendor interaction-safety budget | `M7`/`M12` |
@@ -1709,13 +1876,22 @@ This is a contract for what must be proven, not an implementation of the tests.
 | id | Criterion | Owner |
 | --- | --- | --- |
 | `AC-CS-86` | `OMIT_UNRESOLVABLE` **never** asserts `NOT_SHIPPED` or any other positive claim about what the build ships; only `OMIT_NOT_SHIPPED`, reached from a positively established `SURFACE_ABSENT`, may | `M10` |
-| `AC-CS-87` | Under either omission disposition the four capability outputs are **absent** — not produced as empty collections, null placeholders or a defaulted `primary_status`. A consumer receiving an omission has no capability result to read and must not synthesise one | `M10` |
-| `AC-CS-88` | Every `action_eligibility[]` entry carries its own `action_id` and its own `blocking_reasons[]`; **no** action outcome (`ACTION_DENIED`, `ACTION_REFUSED`, `AUTHZ_NOT_EVALUATED`) appears in `capability_qualifiers` — asserted with at least two declared actions, one refused and one eligible | `M10`/`M11` |
-| `AC-CS-89` | `E3` (taxonomy/surface admissibility) is evaluated **exactly once** per action and is never re-read inside `E4`; each of `E1`–`E7` is exercised as the sole blocking reason for one action | `M10` |
+| `AC-CS-87` | The result is a **tagged union**: `OMITTED` carries a `SurfaceOmissionReason` and an optional diagnostic and **no** capability output — not empty collections, not null placeholders, not a defaulted state. `NOT_SHIPPED` is a `SurfaceOmissionReason`, not a `CapabilityState`, and `CapabilityState` contains exactly the nine states reachable under `RESOLVED` | `M10` |
+| `AC-CS-88` | Every `action_affordance[]` entry carries its own `action_id`, one `affordance` value, and its own `blocking_reasons` / `undetermined_reasons`; **no** action outcome appears in `capability_qualifiers` — asserted with at least two declared actions resolving differently. An **undeclared** action produces **no entry** | `M10`/`M11` |
+| `AC-CS-89` | `E3` is evaluated **exactly once per decision phase** and is never re-read inside `E4`. This does **not** prohibit checks at different lifecycle phases: `E7`'s registry check at admission **and** its check immediately before execution are both required (`AC-ST-4`) and both preserved | `M10`/`M7` |
 | `AC-CS-90` | `D6d` (`PROVENANCE_UNVERIFIED`) and `D6e` (`IDENTITY_TRANSLATION_REQUIRED`) are independently settable, carry their **source reason codes** into presentation, and neither yields `STALE`, the other's qualifier, or `CX1` on its own | `M10`/`M11` |
-| `AC-CS-91` | `CX2` holds only when comparability conditions `K1`–`K6` all hold. A platform or support-rule change alone never manufactures a contradiction from historical evidence (K3–K5 fail → `UNSUPPORTED`, evidence retained), and unestablished comparability (K1/K2/K6) resolves to `UNKNOWN(support_comparability_unestablished)` rather than either a contradiction or a support conclusion | `M10` |
-| `AC-CS-92` | The exported report generates **no** `action_eligibility[]` projection at all, because it declares no actions — not a filtered subset of one. Every `capability_qualifier` is at parity with the console | `M11` |
+| `AC-CS-91` | `RI-1` comparability is **total** over `K1`–`K6` ∈ {`TRUE`, `FALSE`, `UNESTABLISHED`} with the §5.1.1 precedence: scope-`FALSE` (K1/K2) excludes the evidence from this subject/capability entirely; scope-`UNESTABLISHED` forbids a guessed join; `K6 = FALSE` is historical/non-comparable; K3/K4/K5 `FALSE` is historical with the current `D3` conclusion standing; any residual `UNESTABLISHED` is honest unknown; all-`TRUE` is `RI-1` | `M10` |
+| `AC-CS-92` | The exported report generates no `action_affordance[]` projection at all. The shell may change the declared action set and acquisition/liveness characteristics, but **identical evidence yields identical `primary_status`, `capability_qualifiers` and `evidence_presentation` in both shells** | `M11` |
 | `AC-CS-93` | Every `FA-*` row in §2.7 names exactly one owning `PO-M3-*` decision, and every `PO-M3-*` decision that owns rows lists them — asserted as a two-way mapping over §2.7 and §11.2 | `M3` onward |
+
+### Presentation-time boundary (added by this revision)
+
+| id | Criterion | Owner |
+| --- | --- | --- |
+| `AC-CS-94` | No presentation-time result asserts that `E7` has passed. `AVAILABLE_FOR_SUBMISSION` means only that no presentation-time blocker is known, and is never treated as permission to execute | `M10`/`M11` |
+| `AC-CS-95` | Server submission, admission and immediately-before-execution checks are re-evaluated in their own phases regardless of any affordance value — asserted by submitting an action rendered `AVAILABLE_FOR_SUBMISSION` and showing the server still evaluates every gate | `M7`/`M11` |
+| `AC-CS-96` | The omission diagnostic pass is **optional**, render-independent, and never affects the union tag, the omission reason, or whether anything renders. Under `RESOLVED`, a diagnostic **may** be produced; no rule asserts it is unconditionally absent | `M10` |
+| `AC-CS-97` | A persisted capability projection contains only capability-domain facts, basis/run information, semantic identity and producer/support-rule context. Action declarations, taxonomy class and authorization state are **never** fields of it, and it is never reused across an unproven identity mapping | `M4`/`M10` |
 
 ---
 
@@ -1798,7 +1974,17 @@ revision 4's corrections are listed in full.
 | **X36** | `CX2` conflicted with `H4` and with the contract's own statement that `UNSUPPORTED` may coexist with retained historical evidence | rev 4 | §5.1.1 comparability K1–K6 |
 | **X37** | `H1`–`H11` resolved several actions or subjects per row, contradicting the single-named-action baseline | rev 4 | §5.5 atomic subcases |
 | **X38** | §5.2.2 stated `collect_now` and `retry` "remain eligible" unconditionally | rev 4 | §5.2.2, §5.4, `AC-CS-81` |
-| **X39** | `FA-1`…`FA-9` had no owning PO decision, and the withheld-approval instruction told implementers to revert to semantics the draft had demonstrated false | rev 4 | §2.7 owner column; §11.2; the three-point withheld-approval rule |
+| **X39** | `FA-1`…`FA-9` had no owning PO decision, and the withheld-approval instruction told implementers to revert to semantics the draft had demonstrated false | rev 4 | §2.7 owner column; §11.2; the withheld-approval rule |
+| **X40** | the result was described as "four outputs, absent under omission" while `primary_status = NOT_SHIPPED` sat inside the omission record — both could not be true | rev 5 | §4.1 tagged union; §4.2 (nine values); `AC-CS-87` |
+| **X41** | `eligible: true\|false` claimed every gate `E1`–`E7` had passed, including `E7` checks that cannot run at render time | rev 5 | §4.1.1 `action_affordance`; §4.1.2; §5.4; `AC-CS-94`/`95` |
+| **X42** | `E4` had no outcome for "no actor-authorization authority applies", the current CLASS 0 case | rev 5 | §3.3 D7 four outcomes; `I18`; `AC-CS-66`/`67`/`80` |
+| **X43** | `H2` invented a "local-enrollment authority" and used `AUTHZ_NOT_EVALUATED` for an action absent from the closed registry | rev 5 | §5.5 `H2` (verified: `enroll_device` ∉ `JOB_REGISTRY`) |
+| **X44** | `CX1` blocked **every** action, inventing a subject prerequisite for targetless ones | rev 5 | §5.1.2; `H9a`/`H9a-t`; `S-CX1`; `AC-CS-63` |
+| **X45** | `CX2` comparability was partial — no `FALSE`/`UNESTABLISHED` split, no precedence for mixed cases | rev 5 | §5.1.1 six precedence rows; `AC-CS-91` |
+| **X46** | "all contradictions are danger" stood beside muted `CX2`/`CX3` | rev 5 | §5.1 `RI-1`/`RI-2` renamed bounded inconsistencies; §5.5.2; `AC-CS-47` — no parent amendment needed |
+| **X47** | H-cases used `any action` / `that action` / `as they hold` and were not executable fixtures | rev 5 | §5.5 real registry ids; §5.5.1 multi-action scope tests |
+| **X48** | the cache section mixed the persistable projection with the composed render-time result | rev 5 | §8.2.1 two-object boundary; `AC-CS-97` |
+| **X49** | stale `R1`/`R2`/`R5` regime language in §8.2, four-facet and action-qualifier wording, and `I20` shell scope | rev 5 | §8.2, §4.1.3 `I20`, §6.8, `AC-CS-12`/`39`/`40`/`57` |
 
 ### 11.2 Genuine choices — decision required
 
@@ -1806,12 +1992,12 @@ Six decisions, each explicitly owning its frozen-parent amendments.
 
 | id | Decision | Owns | Recommendation |
 | --- | --- | --- | --- |
-| **PO-M3-1** | **Tab stability.** The navigation contract contradicts itself: §8/§8.1 permit omitting a structurally inapplicable tab for an entity type; §6.5/D-NAV13/`AC-WS-7`/`AC-WS-8` forbid it. Which governs? | **`FA-5`** | **Preserve D-NAV13 / `AC-WS-7` / `AC-WS-8`.** Tab stability wins; §8/§8.1's omission language is residual revision-1 text that §6.5 explicitly closed |
+| **PO-M3-1** | **Stable visible tabs.** The navigation contract contradicts itself: §8/§8.1 permit omitting a structurally inapplicable tab for an entity type; §6.5/D-NAV13/`AC-WS-7`/`AC-WS-8` forbid it. Which governs? | **`FA-5`** | **Preserve D-NAV13 / `AC-WS-7` / `AC-WS-8`.** Tab stability wins; §8/§8.1's omission language is residual revision-1 text that §6.5 explicitly closed |
 | **PO-M3-2** | **Semantic parent corrections.** Approve the corrections that align the parent's presentation tables with verified producer semantics — freshness, provenance, identity translation, unsupported-vs-unknown, retained evidence, and unconditional action cells | **`FA-1`, `FA-2`, `FA-3`, `FA-4`, `FA-6`, `FA-7`, `FA-8`** | **Approve.** Each contradicts a verified source semantic (V9a, V11, V12a) or the parent's own `AC-DIF-8`. If declined, §4.3, §5 and §9 of this draft must be reverted to the parent's wording and the resulting false semantics recorded as known defects |
-| **PO-M3-3** | **Composition model.** Retain the surface disposition plus four capability outputs, with action outcomes keyed by `action_id`? | **`FA-9`** | **Retain provisionally**, subject to §5's resolution contract and §9.1's coverage. §10 dissent D1 remains recorded |
-| **PO-M3-4** | **Registry/evidence reconciliation shape.** Retain the directional `D4` value set, with `RECONCILIATION_UNKNOWN` covering ambiguous or unresolved identity and **no new identity authority**? | — | **Retain.** The concept is two-sided; a flat `NOT_ENROLLED` cannot express the reverse. Ambiguous identity resolves to `RECONCILIATION_UNKNOWN` or `CX1`, never a guessed join (`AGENTS.md` identity law; `AC-WS-2`) |
+| **PO-M3-3** | **Composition model.** Retain the tagged union `RESOLVED{primary_status, capability_qualifiers, evidence_presentation, action_affordance} \| OMITTED{reason, diagnostic}`, with action outcomes keyed by `action_id` and presentation-time affordance separated from server execution authority? | **`FA-9`** | **Retain provisionally**, subject to §5's resolution contract and §9.1's coverage. §10 dissent D1 remains recorded |
+| **PO-M3-4** | **Directional `D4`.** Retain the directional `D4` value set, with `RECONCILIATION_UNKNOWN` covering ambiguous or unresolved identity and **no new identity authority**? | — | **Retain.** The concept is two-sided; a flat `NOT_ENROLLED` cannot express the reverse. Ambiguous identity resolves to `RECONCILIATION_UNKNOWN` or `CX1`, never a guessed join (`AGENTS.md` identity law; `AC-WS-2`) |
 | **PO-M3-5** | **`--member-specific` token.** Approve decoupling the gold member emphasis from `--warning`, preserving the emphasis and its non-fault semantics? | — | **Approve as contract direction**; implementation belongs to a later UI movement |
-| **PO-M3-6** | **`NOT_SCHEDULED` as a qualifier**, emitted only where schedule absence is authoritatively established? | — | **Retain as a qualifier**, gated on `NO_APPLICABLE_SCHEDULE`. Schedules govern future automatic refresh, not current usability |
+| **PO-M3-6** | **Evidence-gated `NOT_SCHEDULED` qualifier**, emitted only where schedule absence is authoritatively established? | — | **Retain as a qualifier**, gated on `NO_APPLICABLE_SCHEDULE`. Schedules govern future automatic refresh, not current usability |
 
 Every `FA-1`…`FA-9` row is owned: `FA-5` by `PO-M3-1`; `FA-1`–`FA-4`, `FA-6`,
 `FA-7`, `FA-8` by `PO-M3-2`; `FA-9` by `PO-M3-3`.
