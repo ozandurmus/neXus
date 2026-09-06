@@ -7,10 +7,12 @@ detail is not here either** — it is in `project/build_history.json`
 linked documents under `docs/history/`. `docs/history/INDEX.md` is the
 generated one-line timeline.
 
-- **Checkpoint:** 2026-09-05, branch `claude/pcp1-device-registry-gqp7s2`.
+- **Checkpoint:** 2026-09-06, branch `claude/pcp1-uuid-test-defect-na5acv`.
 - **Current build** (per `project/roadmap.json` `now_next.now`):
-  `pcp_1_device_registry_manual_enrollment_foundation` —
-  **AUTOMATED_VALIDATED** (PR #83 fast PR CI green; see "Active build").
+  `pcp1_registry_uuid_call_count_test_defect_repair` (`M1`) —
+  **AUTOMATED_VALIDATED** (full suite green; see "Active build"). Its
+  predecessor, `pcp_1_device_registry_manual_enrollment_foundation`, was
+  PR #83 fast PR CI green.
   `now_next.next` is `pcp_2_local_control_plane_sequencing_po_review`
   (blocked on Product Owner review, not started, not pre-designed);
   `op2_c_cp_clusterxl_adapter_scoping` stays `upcoming`, blocked on
@@ -53,27 +55,18 @@ test-enforced boundaries. Current numbers:
 
 ## Active build
 
-**`pcp_1_device_registry_manual_enrollment_foundation`** (`PCP.1`) —
-**AUTOMATED_VALIDATED**: PR #83's fast PR CI `validate` check ran green.
-Implements `docs/design/PRODUCT_CONTROL_PLANE_ARCHITECTURE.md` §21 exactly:
-`utils/device_registry.py` (opaque `device_id`; endpoint normalization with
-no DNS resolution; vendor-hint- and lifecycle-state-independent duplicate
-detection; `ENROLLED_UNVERIFIED`/`DISABLED` reachable, `RETIRED`/
-`CONTACT_VERIFIED`/`OBSERVED` structurally unreachable; closed schema;
-`credential_ref` format-validated reference only, never resolved;
-fail-closed corrupt-data handling; the registry mutation lock with an
-`owner_token` instance-safe release); the eighth `utils/evidence_backend.py`
-concern `DeviceRegistryBackend` (filesystem-only); `--registry-enroll` /
-`--registry-list` / `--registry-disable` CLI modes
-(`application/cli.py` + `application/workflows/registry.py`), mode-
-exclusive, no vendor import, no credential resolution, no network;
-`tests/test_pcp1_device_registry.py` (AC-1a..AC-15). This sandbox has no
-`pytest`/`lxml`/`paramiko` (reported per `CLAUDE.md`); every behavior was
-hand-verified directly, then confirmed by PR #83's fast PR CI running the
-real suite green (`project/build_history.json` head record has the exact
-CI evidence). No device contact, no console/UI/payload change, no SQLite/
-PostgreSQL. `AI_START_HERE.md` §22 item 4 (deferred from the `PCP.0`
-freeze) landed this session.
+**`pcp1_registry_uuid_call_count_test_defect_repair`** (`M1`) —
+**AUTOMATED_VALIDATED**: repaired two `tests/test_pcp1_device_registry.py`
+cases that monkeypatched module-wide `uuid.uuid4` and incorrectly counted
+the registry lock's `owner_token` generation as device-id generation, via a
+single narrow production seam (`utils/device_registry.py::_generate_device_id()`).
+Full suite: 1931 passed, 24 skipped, 0 failed. No frozen PCP.1 AC-1a..AC-15
+behavior, persistence schema, endpoint normalization, duplicate/lifecycle
+behavior, CLI output, or public API changed. `project/build_history.json`
+head record has the exact defect/fix/evidence; its prior record has the
+full `pcp_1_device_registry_manual_enrollment_foundation` (`PCP.1`)
+implementation detail (`docs/design/PRODUCT_CONTROL_PLANE_ARCHITECTURE.md`
+§21, AUTOMATED_VALIDATED via PR #83's fast PR CI).
 
 Predecessors (full detail: `project/build_history.json` + linked phase
 docs): `product_control_plane_architecture_draft` (`PCP.0`, FROZEN),
