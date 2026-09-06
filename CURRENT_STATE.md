@@ -54,31 +54,28 @@ test-enforced boundaries. Current numbers:
 
 ## Active build
 
-**`nav_3_capability_state_vocabulary`** (`M3`) — **IN_PROGRESS, revision 4.**
+**`nav_3_capability_state_vocabulary`** (`M3`) — **IN_PROGRESS, revision 5.**
 Contract: `docs/design/CAPABILITY_STATE_VOCABULARY_AND_PRESENTATION.md` —
 **DRAFT — DO NOT FREEZE, NOT PRODUCT OWNER APPROVED**; authorizes no
 implementation, not citable as design authority. Dimensions `D1`–`D7`, gates
-`E1`–`E7`, inputs `I1`–`I20`, a **surface disposition** plus four capability
-outputs, `AC-CS-1`…`93` (no id renumbered or deleted).
+`E1`–`E7`, inputs `I1`–`I20`, `AC-CS-1`…`97` (no id renumbered or deleted).
 
-**Revision 4** — thirteen defects (`X27`–`X39`). Structure repaired (duplicated
-`### 4.2` heading, out-of-order §2.6/§2.7, orphan §6.4 fragment). **Surface
-resolution separated from capability resolution**: `D1` is three-valued, an
-unresolvable `D1` omits fail-closed as `OMIT_UNRESOLVABLE` **without** asserting
-`NOT_SHIPPED`, and under either omission the four capability outputs are
-**absent, not empty**. **Action outcomes are action-keyed** under
-`action_eligibility[action_id].blocking_reasons[]`. **Gate ownership
-corrected**: `D7` is actor authorization only, the server-owned concepts are
-`E1`–`E7`, and the taxonomy is evaluated exactly once. **`D6d` expected-source
-trust separated from `D6e` identity translation**, reason codes preserved.
-**`CX2` given comparability conditions `K1`–`K6`** so historical evidence never
-automatically contradicts a later support conclusion. `H1`–`H11` are atomic.
-
-**Closure-report correction:** revision 3's SESSION CLOSE said a duplicated
-heading had been found and fixed — true of one instance, false as a general
-claim: an identical concatenation at `### 4.2` survived, because the audit used
-`uniq -d` over whole heading lines. Recorded as `X27`; a rendered-structure
-audit now guards this class and reports **0 failures**.
+**Revision 5** — defects `X40`–`X49`. The result is now a **tagged union**:
+`RESOLVED{primary_status, capability_qualifiers, evidence_presentation,
+action_affordance}` or `OMITTED{reason, diagnostic}`, and `NOT_SHIPPED` is a
+`SurfaceOmissionReason`, not a `CapabilityState` (nine resolved-only states).
+The fourth output is a **presentation-time** `action_affordance[]`
+(`AVAILABLE_FOR_SUBMISSION` / `DISABLED_KNOWN_BLOCKER` / `UNDETERMINED`) that
+**never claims an `E7` check has passed** and is never an execution grant; both
+`AC-ST-4` registry checks stay at their own phases. `E4` is **total** via
+`NO_APPLICABLE_AUTHORITY` — non-blocking and **not a grant**. `CX1` is
+subject-scoped, so targetless actions are unaffected. `RI-1` (was `CX2`)
+comparability is total over `K1`–`K6`; `CX2`/`CX3` are renamed **bounded
+inconsistencies**, so danger stays reserved for `CX1` and `AC-CS-47` needs no
+parent amendment. H-cases use **real registry action ids** — verified that
+`enroll_device` is **not** in `JOB_REGISTRY`, so the enrollment example now
+produces no action entry rather than inventing an authority. The persistable
+capability projection is separated from the composed presentation resolution.
 
 `PO-NAV-7` resolved **in contract**: capability policy → `D5` `POLICY_DISABLED`
 (`A5`, `M12`); "not enrolled" → `D4` `EVIDENCE_ONLY` (`A6`, `M10`). The job
@@ -86,8 +83,8 @@ lifecycle, `ActionState`, taxonomy, compliance, discovery-lifecycle and
 registry vocabularies are **byte-unchanged**.
 
 **Recorded, not applied:** nine frozen-parent corrections `FA-1`…`FA-9`
-(contract §2.7), each now owned by a named PO decision. **No frozen file was
-edited.** **Six open PO decisions** `PO-M3-1`…`6` (§11.2) gate the freeze.
+(§2.7), each owned by a named PO decision. **No frozen file was edited.**
+**Six open PO decisions** `PO-M3-1`…`6` (§11.2) gate the freeze.
 
 ## `OP.0b.0` — FROZEN WITH REAL-ENV VALIDATION GATES
 
@@ -166,13 +163,14 @@ Concurrency budget stays at 1 per vendor pending its own real-env evidence.
 ## Automated test baseline
 
 ```
-M3 revision 4 focused (contract/docs-only movement):
+M3 revision 5 focused (contract/docs-only movement):
   tests/test_architecture_convergence.py            20 passed, 0 failed
   tests/test_navigation_information_architecture.py 16 passed, 4 skipped
   combined                                          36 passed, 4 skipped, 0 failed
   metadata_warnings == []; build-history index --check clean; privacy gate
   PASS / 0 findings; git diff --check clean; source/test/script/workflow/
-  dependency trees untouched; rendered-structure audit 0 failures.
+  dependency trees untouched; rendered-structure audit 0 failures;
+  stale-token audit clean; AC continuity and PO-to-FA mapping verified.
   These validate repository consistency only -- no resolver exists yet, so
   every resolver acceptance criterion stays unexercised until its owning
   movement implements it. No full local suite, no GitHub full regression.
