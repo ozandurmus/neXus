@@ -22,7 +22,7 @@ class JobType:
     label: str
     command_class: str            # legacy wire/persistence value: "read" | "operational-write"
     workflow: str                 # feeds workflow_argv(), or an explicit read mode name
-    target_mode: str              # "none" | "entity_ids"
+    target_mode: str              # "none" | "entity_ids" | "device_ids" (M6)
     vendor: str | None
     requires_confirmation: bool
 
@@ -75,7 +75,12 @@ JOB_REGISTRY: dict[str, JobType] = {
             label="Refresh Check Point configuration",
             command_class="read",
             workflow="cp-config",
-            target_mode="none",
+            # M6 (registry_keyed_job_targets, Option D): registry-keyed
+            # `device_id` targeting, admission shell only -- see
+            # console/registry_targets.py. Every non-empty target set
+            # currently refuses with IDENTITY_TRANSLATION_REQUIRED; a
+            # target-free job stays M5's plane-wide behavior, unchanged.
+            target_mode="device_ids",
             vendor="checkpoint",
             requires_confirmation=False,
         ),

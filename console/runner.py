@@ -16,6 +16,7 @@ import threading
 
 from console.jobs import ConsoleJobStore
 from console.registry import JobType, get_job_type
+from console.registry_targets import DEVICE_ID_TARGET_MODE, resolve_registry_targets
 from utils.action_taxonomy import console_refusal
 
 
@@ -79,6 +80,22 @@ class ConsoleJobRunner:
             # Defense in depth: the route already refuses this at POST time (C2-6).
             self._job_store.mark_terminal(job_id, state="blocked", error_code=refusal)
             return
+
+        if job_type.target_mode == DEVICE_ID_TARGET_MODE and record.targets:
+            # M6 (registry_keyed_job_targets, Option D, AC-ST-4-equivalent):
+            # re-read registry eligibility immediately before execution, not
+            # just at admission -- a target eligible when the job was
+            # queued may have been disabled/retired since. This call is the
+            # only path from a queued job to workflow argv construction, so
+            # a refusal here provably happens before `_build_argv`/
+            # `main.main()` is ever reached.
+            target_refusal = resolve_registry_targets(record.targets, data_root=self._runtime_paths.data_root)
+            if target_refusal is not None:
+                self._job_store.mark_terminal(
+                    job_id, state="blocked",
+                    error_code=target_refusal.reason, error_summary=target_refusal.detail,
+                )
+                return
 
         self._job_store.mark_running(job_id)
 
