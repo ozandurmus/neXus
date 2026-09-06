@@ -360,6 +360,15 @@ One large multi-stage function (~750 lines):
   VSX_VSENV / PAN_API / DEFERRED_STANDBY / DEFERRED_LIFECYCLE / UNKNOWN`); it
   never guesses.
 
+There is **no capability-*state* vocabulary in the repository today** — the
+above produces a *collection plan*, and `PCP.0` §8's capability projection is
+architecture, not code. Movement `M3` is drafting one in
+`docs/design/CAPABILITY_STATE_VOCABULARY_AND_PRESENTATION.md`; that document's
+status is **`DRAFT — DO NOT FREEZE`** and it is **not** implementation
+authority (`AGENTS.md` contract-status law). This pointer is a forward
+reference only, and is replaced by a real description when the contract is
+frozen and its producer ships (`M10`/`M12`).
+
 ---
 
 ## 7A. Device Registry (`PCP.1`)
