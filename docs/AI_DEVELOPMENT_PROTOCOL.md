@@ -73,24 +73,41 @@ rather than restating it.
   the post-merge integration safety net and the on-demand full-regression
   path.
 
-**Why `full-regression` still excludes `pull_request` (environment
-limitation, evaluated and reverted 2026-09-06):** parallelizing the full
-suite was expected to make running it on every PR affordable, and a same-
-session attempt did remove the `pull_request` exclusion — but this
-environment's automation identity cannot get GitHub Actions to actually
-schedule a job for a `pull_request` or `workflow_dispatch` event on a
-non-default branch: every check suite for a commit this identity pushes to
-a feature branch completes with **zero jobs**, for both that push's own
-event and the open PR's `pull_request` event, while `workflow_dispatch`
-against `main` and an ordinary push-to-`main` both schedule jobs normally.
-This is a tooling/identity restriction of this specific environment, not a
-defect in the parallel command, the workflow YAML, or a general problem
-with pull_request-triggered CI — a human-authored push/PR is expected to
-trigger it normally. The `if: github.event_name != 'pull_request'` guard
-was restored rather than kept removed, and a complete local parallel run is
-accepted as this movement's own pre-merge evidence in its place (see
+**Why `full-regression` still excludes `pull_request` (evaluated and
+reverted 2026-09-06, decided independently of the incident below):**
+parallelizing the full suite was expected to make running it on every PR
+affordable, and a same-session attempt did remove the `pull_request`
+exclusion. It was reverted per Product Owner direction back to the
+original approved policy before the true cause of that attempt's own
+verification trouble was known — see the correction paragraph immediately
+below. The reverted state is kept as the current policy on its own merits
+(a same-session decision, not because pull_request-triggered full
+regression is technically unsafe or unworkable): `pull_request` = fast
+`validate` only; push-to-`main`/`workflow_dispatch` = parallel
+`full-regression`. A complete local parallel run is accepted as this
+movement's own pre-merge evidence in its place (see
 `project/build_history.json`'s `parallelize_full_regression_execution`
-record). Revisit removing this guard once this limitation no longer holds.
+record).
+
+**Post-merge YAML-syntax incident (2026-09-06, corrects an in-session
+misdiagnosis):** while verifying the above, every GitHub Actions check
+suite for commits on the working branch — and, after merge, for the merge
+commit on `main` itself — completed with **zero jobs**, for every trigger
+tried (push, pull_request, workflow_dispatch). This was initially
+misdiagnosed as an environment/automation-identity limitation preventing
+GitHub Actions from scheduling pull_request/workflow_dispatch jobs on a
+non-default branch. That diagnosis was **wrong**: the real cause, found
+after merge by parsing the file locally, was a genuine YAML syntax defect
+this movement's own "Report worker topology" step introduced — an unquoted
+plain scalar containing a bare `: ` inside an f-string label, which YAML
+parses as an illegal nested mapping. A file that fails to parse cannot
+schedule a job under **any** trigger, on **any** branch, regardless of who
+pushed it — which is exactly the symptom observed and exactly why it looked
+identity/branch-related until someone actually ran the file through a YAML
+parser. Fixed by rewording the f-string; `tests/test_ci_workflow_fast_pr_
+regression.py::test_workflow_yaml_parses` (new, `pyyaml` dev dependency)
+now parses this file on every test run specifically so a future syntax
+defect fails locally before push, not silently in the cloud after merge.
 
 A PR that trips one of the **full-regression triggers** below still needs a
 full regression before merge — run it locally

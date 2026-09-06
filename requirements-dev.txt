@@ -12,6 +12,14 @@
 pytest>=8
 pytest-xdist>=3.6
 
+# Validates .github/workflows/validation.yml actually parses (DEV.TEST.1
+# post-merge incident, 2026-09-06: an unquoted plain scalar with a bare
+# ": " inside an f-string label broke GitHub Actions' ability to schedule
+# ANY job for ANY trigger on this file, silently, for two commits and a
+# merge, because nothing validated the YAML before push). See
+# tests/test_ci_workflow_fast_pr_regression.py::test_workflow_yaml_parses.
+pyyaml>=6
+
 # Optional: powers the Playwright-based render-harness DOM check
 # (tools/render-harness/check_render_playwright.py), a real-Chromium
 # alternative to the bun+happy-dom path when that toolchain is unavailable

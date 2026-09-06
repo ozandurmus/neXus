@@ -56,25 +56,26 @@ test-enforced boundaries. Current numbers:
 ## Active build
 
 **`parallelize_full_regression_execution`** (`DEV.TEST.1`) — **IN PROGRESS**
-(local validation + workflow/doc/test edits complete; PR #87 open, post-merge
+(PR #87 merged; a post-merge YAML-syntax fix follow-up in flight; real
 push-to-main cloud proof still owed — full detail in
 `project/build_history.json` head record). Root cause of the prior serial
 gate was a `scripts/render_uitest.py` module-rebind leak, already fixed
-(`try`/`finally` restore) and directly regression-tested regardless of
-worker/ordering (`tests/test_frontend_rendering_boundary.py::
-test_render_uitest_restores_the_builders_it_injects`). Selected topology: one
-`pytest-xdist` process (`-n auto --dist worksteal`), already proven locally
-and the documented default elsewhere (`scripts/pytest_one_shot.ps1`,
-`requirements-dev.txt`) — one aggregate exit code across every worker, so no
-worker's failure can be masked. **Trigger policy unchanged (approved):**
-`pull_request` = fast `validate` only, push/`workflow_dispatch` = parallel
-`full-regression`; a same-session attempt to run it on `pull_request` too
-was reverted after finding this environment's automation identity cannot
-get Actions to schedule pull_request/workflow_dispatch jobs on a
-non-default branch (recorded in the workflow file and
-`docs/AI_DEVELOPMENT_PROTOCOL.md`). Two clean local runs accepted as
-pre-merge evidence instead. No product/UI/registry/storage/authorization
-change; authorizes no `M3` work.
+and directly regression-tested regardless of worker/ordering
+(`tests/test_frontend_rendering_boundary.py::
+test_render_uitest_restores_the_builders_it_injects`). Selected topology:
+one `pytest-xdist` process (`-n auto --dist worksteal`), proven locally and
+the documented default elsewhere — one aggregate exit code across every
+worker. **Trigger policy unchanged (approved):** `pull_request` = fast
+`validate` only, push/`workflow_dispatch` = parallel `full-regression`.
+**Post-merge incident (corrects an in-session misdiagnosis):** every CI
+trigger returned a zero-job failing check suite after merge; first
+misdiagnosed as an automation-identity limitation, actually a genuine YAML
+syntax defect in the "Report worker topology" step (a bare `: ` inside an
+unquoted f-string), which breaks job scheduling under any trigger,
+regardless of branch or pusher — fixed, and now guarded by
+`tests/test_ci_workflow_fast_pr_regression.py::test_workflow_yaml_parses`
+(new `pyyaml` dev dependency). No product/UI/registry/storage/
+authorization change; authorizes no `M3` work.
 
 **Predecessor build, complete:** `nav_1_accessibility_closure` (`M2`) —
 **AUTOMATED_VALIDATED, MERGED** via PR #85 (merge commit
@@ -151,8 +152,7 @@ Concurrency budget stays at 1 per vendor pending its own real-env evidence.
 
 ## Real-environment validation owed
 
-- **`CON.2`** — trigger a `read`-class job from the console against a real
-  device. No new code; closes it to DONE.
+- **`CON.2`** — trigger a `read`-class job from the console against a real device. No new code; closes it to DONE.
 - **`OP.0a`/`OP.0c`** — real-device confirmation `ha_cluster_mode` resolves, not `"unknown"`. Fixture-drift, not a safety gate.
 - **PAN HA serial identity (`OP.0a.P7`/`OP.0b.0`)** — see "PAN HA serial evidence" above; its own next technical movement, not folded in here.
 - **`RB.3b`** — the watched single-gateway run.
