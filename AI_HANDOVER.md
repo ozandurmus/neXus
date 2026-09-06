@@ -13,7 +13,7 @@ Overwrite at every session close. Keep it minimal.
 
 ## 1. Snapshot
 
-- Date: 2026-09-06. Branch `claude/capability-state-vocabulary-cube5f`.
+- Date: 2026-09-06. Merged to `main` at `4b7e651` (PR #91).
 - Build: `nav_3_capability_state_vocabulary` (`M3`) — **COMPLETE / FROZEN**,
   Product Owner approved 2026-09-06.
 - `docs/design/CAPABILITY_STATE_VOCABULARY_AND_PRESENTATION.md` is now
