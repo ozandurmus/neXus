@@ -271,10 +271,16 @@ behind an authenticated, authorized, audited actor before any HTTP surface.
 
 Default behaviour for every path: **candidate → explicit operator
 enrollment**. "Everything the management plane sees becomes authoritative
-inventory automatically" is *not* the architecture. A future, opt-in,
-trusted-source auto-enrollment policy is possible (open decision
-`pcp_auto_enrollment_policy`) but is not the default and is not designed
-here.
+inventory automatically" is *not* the architecture.
+
+**`pcp_auto_enrollment_policy` — DECIDED FOR THE CURRENT HORIZON (2026-09-05,
+§19).** No automatic persistent enrollment is approved: manual and candidate
+enrollment both still require positive identity evidence, operator preview
+and explicit confirmation, and no discovery or "trusted source" path may
+create a persistent enrolled device on its own. A future opt-in,
+trusted-source auto-enrollment policy is a **separately gated capability**
+that would require a **new** Product Owner decision — "not now" is not a
+permanent prohibition, but it is not designed here either.
 
 | Path | Input | Produces | Identity / capability evidence comes from |
 | --- | --- | --- | --- |
@@ -438,10 +444,28 @@ filesystem default and an opt-in PostgreSQL implementation. The Device
 Registry becomes the **eighth storage concern** of that abstraction. That is
 a seam decision, not an engine decision.
 
-**Engine decision deferred** (`pcp_storage_engine`). PostgreSQL is already
-an opt-in path in this repository (DEV.3.2/DEV.3.3); that fact does not
-decide the control plane's engine. Criteria the eventual decision must
-answer, recorded now:
+**Local storage sequencing — DECIDED 2026-09-05** (amendment; companion
+contract §6.4). For the approved local sequence: the `PCP.1` Device Registry
+**remains on its filesystem JSON backend**, and **new local control-plane
+metadata** (job definitions once durable, job/run lifecycle records, schedules,
+capability projections, idempotency/submission metadata, control-plane runtime
+metadata) uses **SQLite**, under movement `M4`'s contract. SQLite owns **none**
+of: registry rows, credential payloads, trust secrets, raw configuration,
+backup bytes, CAS evidence objects, or `OP.2` action authority. The registry
+stays authoritative at job admission **and again immediately before
+execution**; a target that has become disabled or unresolvable causes refusal
+or abort **before contact**, and no copied endpoint is ever retained as
+fallback authority. A future Device Registry migration through the
+`DeviceRegistryBackend` seam remains a **governed storage movement** that must
+prove semantic parity for normalization, duplicate handling, lifecycle,
+concurrency, lock/transaction behaviour, corrupt/unsupported-state failure and
+rollback — the seam's existence does not make it free.
+
+**Production engine decision still deferred** (`pcp_storage_engine`). The local
+decision above **does not select the production engine**, and SQLite is not
+proposed as one. PostgreSQL is already an opt-in path in this repository
+(DEV.3.2/DEV.3.3); that fact does not decide the control plane's engine either.
+Criteria the eventual decision must answer, recorded now:
 
 - transactions (enrollment + relationship writes atomically);
 - migrations (versioned, deployment-controlled — `DEV.4.6` precondition
@@ -660,7 +684,7 @@ architecture legitimately replaces).
 | Discovery / current-inventory assumptions | `unified.json` is the device universe: console targets validated by presence in it (`CON.0` §4, `resolve_entity_id`), recovery targeting and readiness units derive from it | **SUPERSEDED ASSUMPTION** | the registry becomes the target universe; presence-in-`unified.json` is replaced by an equal-or-stricter check (explicit enrollment); evidence identities (`entity_id`) remain the evidence keys and are *related* to `device_id`, never replaced |
 | RuntimeRoot / state persistence | `data/state/*` files; `evidence_backend` abstraction; repo↔runtime separation enforced | no conflict | registry lives under RuntimeRoot through the same abstraction |
 | Backup architecture | frozen `RB.x` contracts; `recovery-cp` unscheduled (`D3`); restore hard-gated | no conflict | capability-driven addressing only (§11) |
-| Console architecture | `CON.0` §4 literal "browser never transmits … a hostname, an address"; `C-D7`; exclusions write path `DEPLOY.1A`-gated | **CONTRADICTION**, covering *both* enrollment intents: manual enrollment against §4's literal wording, and candidate-based enrollment against the exclusions-write precedent (a closed candidate id still authorizes a *persistent product-state write*, which §4's wording does not by itself settle) | open decision `pcp_console_registry_write_gate`, widened to cover both intents; existing device jobs (`job_type` + `device_id[]`, no write to the registry) are unaffected and fit §4 verbatim; both manual and candidate-based enrollment ship CLI-first (`PCP.1`/`PCP.2`) until decided |
+| Console architecture | `CON.0` §4 literal "browser never transmits … a hostname, an address"; `C-D7`; exclusions write path `DEPLOY.1A`-gated | **CONTRADICTION AT THE TIME OF THIS FREEZE — RESOLVED 2026-09-05.** Covered *both* enrollment intents: manual enrollment against §4's literal wording, and candidate-based enrollment against the exclusions-write precedent (a closed candidate id still authorizes a *persistent product-state write*, which §4's wording did not by itself settle) | Resolved by the `docs/design/LOCAL_CONTROL_PLANE_RUNTIME_AND_ENROLLMENT.md` freeze and its `CON.0` §4.1 amendment: both intents are now **permitted in the local loopback profile only**, under §4.1's frozen conditions (`pcp_console_registry_write_gate`, decided). **Server/production enrollment exposure is a separate, still-open gate** (`pcp_server_enrollment_exposure`), blocked on `DEPLOY.1A` exactly as this row originally anticipated |
 | HA identity / topology authority | backend-only derivation; UI heuristics retired (`OP.0b S9`) | no conflict | registry relationships are backend-derived projections; the UI still computes nothing |
 | Readiness freshness laws | `OP.0a` cannot emit `SAFE_TO_FAILOVER`; `OP.2.0` P4 same-workflow, no TTL | no conflict | projection layer = informational; no TTL introduced |
 | `OP.2` operational identity and lock scope | `OP.2.0` P8/P17; `OP.2.1b` | no conflict | untouched (§16) |
@@ -670,11 +694,14 @@ architecture legitimately replaces).
 | Vendor scope | CP + PAN only | no conflict | registry vendor enum is CP / PAN / unknown |
 | Roadmap ordering | `now_next.next` = `op2_c_cp_clusterxl_adapter_scoping` (blocked, external) | ordering change, not a demotion of completed work | `OP.2.C` scoping moves to `upcoming` (still `blocked` on `DEPLOY.1`, notes preserved); `PCP.1` becomes `next`, gated on this document's freeze |
 
-No frozen law was removed or reinterpreted to make the direction fit. The
-one genuine contradiction is isolated to a single console enrollment-write
-boundary — covering both the manual and the candidate-based enrollment
-intents together (§13, §19) — and is left to the Product Owner as an
-explicit decision.
+No frozen law was removed or reinterpreted to make the direction fit. The one
+genuine contradiction was isolated to a single console enrollment-write
+boundary — covering both the manual and the candidate-based enrollment intents
+together (§13, §19) — and was **resolved by the Product Owner on 2026-09-05**
+(the `LOCAL_CONTROL_PLANE_RUNTIME_AND_ENROLLMENT.md` freeze): both intents are
+permitted, scoped to the local loopback profile under frozen conditions, while
+server/production exposure remains a separate open gate blocked on
+`DEPLOY.1A`.
 
 ---
 
@@ -717,8 +744,9 @@ explicit decision.
 
 ### IMPLEMENTATION-LEVEL DECISIONS DEFERRED (deliberately not frozen)
 
-- Storage engine (`pcp_storage_engine`, criteria in §10); exact schema /
-  column names; migration tooling.
+- **Production** storage engine (`pcp_storage_engine`, criteria in §10) — the
+  *local* control-plane storage sequencing is decided (Option A, §10); exact
+  schema / column names; migration tooling.
 - Exact polling intervals and per-capability default cadences.
 - Specific SNMP MIBs/OIDs, SNMP library, trap/inform transport.
 - UI framework (none — the one-inline-script invariant stands) and exact
@@ -729,14 +757,41 @@ explicit decision.
   (fixed at `PCP.1` contract review, §21).
 - Collector target-selection mechanics per collector (`PCP.6`).
 
-### OPEN DECISIONS (Product Owner; tracked in `project/roadmap.json` `open_decisions`)
+### DECIDED 2026-09-05 (amendment; source contract: `docs/design/LOCAL_CONTROL_PLANE_RUNTIME_AND_ENROLLMENT.md`, FROZEN)
 
-| id | Question | Recommendation | Decide by |
+These four rows were open below; the Product Owner has decided them. The table
+that follows is kept for its recorded reasoning and its options, and each row's
+outcome is stated here. Nothing else in this document changes.
+
+| id | Outcome |
+| --- | --- |
+| `pcp_console_registry_write_gate` | **DECIDED, scoped to the local profile.** Local-loopback console enrollment is permitted for **both** manual endpoint enrollment and candidate-based enrollment, **only** under the frozen conditions in the companion contract §9.1 and `CON.0` §4.1/§7.11 — closed typed intent, no credential payload or argv, no device I/O in the request, first contact as a separate queued CLASS 0 job, trust before credentials, positive-evidence identity, operator confirmation, immutable audit before mutation, the one existing `DeviceRegistry` path, unchanged duplicate/lock rules, and **no automatic-write exemption for candidates**. **Server / production enrollment exposure is NOT decided by this** and remains blocked on `DEPLOY.1A` OIDC/RBAC — tracked separately as `pcp_server_enrollment_exposure` |
+| `pcp_first_contact_trust_policy` | **DECIDED — strict transport trust before credential submission for every endpoint, including management-plane candidates.** Candidate provenance may select or supply a trust profile; it may **not** waive SSH host-key or TLS trust. No TOFU, automatic trust acceptance, certificate bypass or credential-first probing. Vendor mechanics are movement `M8`'s implementation contract |
+| `pcp_auto_enrollment_policy` | **DECIDED FOR THE CURRENT HORIZON — no automatic persistent enrollment.** No discovery or "trusted source" may create a persistent enrolled device. Manual and candidate enrollment both require positive identity evidence, operator preview and explicit confirmation. A future auto-enrollment capability requires a **new** Product Owner decision; "not now" is not a permanent prohibition |
+| `pcp_storage_engine` | **UNCHANGED — still OPEN, and now explicitly production-scoped.** The *local* control-plane storage sequencing is a **separate, decided** question (§10 amendment below): the `PCP.1` registry stays filesystem JSON and new local control-plane metadata uses SQLite under the `M4` contract. **SQLite is not selected as the production engine**, and this local decision does not pre-empt `pcp_storage_engine`, which still decides with `DEV.4.6` migrations/roles |
+
+### DECISION HISTORY — questions as originally posed (superseded; see the DECIDED block above)
+
+**Not an open-decisions table.** Three of these four ids were decided in full
+by the `DECIDED 2026-09-05` block above; the fourth (`pcp_storage_engine`) was
+narrowed to the production-only question that block states. Kept here only for
+the original question framing and the options considered — the **Recommendation
+was accepted** (`pcp_console_registry_write_gate`'s original option (c),
+`pcp_first_contact_trust_policy`'s recommendation, and
+`pcp_auto_enrollment_policy`'s "not in the first slices"), except that
+`pcp_console_registry_write_gate`'s original `PCP.4`-contract-review gate was
+overtaken by the 2026-09-05 architecture freeze deciding it directly. None of
+the rows below describes a currently open question; **the genuinely open
+`pcp_storage_engine` (production engine) and the new `pcp_server_enrollment_exposure`
+(production enrollment exposure) are tracked in `project/roadmap.json`
+`open_decisions`, not here.**
+
+| id | Original question | Original recommendation | Originally to decide by |
 | --- | --- | --- | --- |
-| `pcp_console_registry_write_gate` | May the loopback console accept *any* enrollment write — manual (endpoint + credential reference) **or** candidate-based (closed `candidate_id[]` from a prior discovery run) — before `DEPLOY.1A`, given `CON.0` §4's wording and the `inventory_exclusions_management_ui_backend` precedent that a persistent product-state write controlling which devices get polled waits for `DEPLOY.1A`? A closed candidate id narrows *what* could be written, not *whether* a pre-`DEPLOY.1A` write is authorized — the two enrollment intents raise the same authorization question and are decided together, not separately. | No pre-decision for either intent. Three options for the `PCP.4` review: (a) neither ships from the console before `DEPLOY.1A` — both stay CLI-first through `PCP.1`/`PCP.2`; (b) candidate-based enrollment only, permitted pre-`DEPLOY.1A` on the strength of the closed candidate id plus typed confirmation + audit record, manual entry still waits; (c) both permitted pre-`DEPLOY.1A` with typed confirmation + audit record + mandatory strict first-contact trust preflight for any resulting device. Recommendation deferred to the security lead's reading of the exclusions precedent; **CLI-only enrollment in `PCP.1`/`PCP.2` does not depend on this decision and proceeds regardless.** | `PCP.4` contract review |
-| `pcp_auto_enrollment_policy` | Should a future opt-in "trusted management source auto-enrolls" policy exist, and under what audit/allowlist? | Not in the first slices; design only after `PCP.2` shows real candidate volume; default stays explicit | `PCP.2` closure |
-| `pcp_storage_engine` | Which engine backs the registry/job plane in production, against the §10 criteria? | Defer; keep the eighth `evidence_backend` concern filesystem-first; decide with `DEV.4.6` migrations/roles | `PCP.5` contract freeze |
-| `pcp_first_contact_trust_policy` | Must the first-contact job for a *manually* enrolled endpoint require strict host-key / CA trust even in the local development profile, to prevent credential exposure to a mistyped or hostile endpoint? | **Yes for any endpoint not corroborated by a management-plane candidate**; compat mode stays available only for candidate-corroborated endpoints in the dev profile | `PCP.2` contract review |
+| `pcp_console_registry_write_gate` (decided) | May the loopback console accept *any* enrollment write — manual (endpoint + credential reference) **or** candidate-based (closed `candidate_id[]` from a prior discovery run) — before `DEPLOY.1A`, given `CON.0` §4's wording and the `inventory_exclusions_management_ui_backend` precedent that a persistent product-state write controlling which devices get polled waits for `DEPLOY.1A`? A closed candidate id narrows *what* could be written, not *whether* a pre-`DEPLOY.1A` write is authorized — the two enrollment intents raise the same authorization question and are decided together, not separately. | Three options were named: (a) neither ships pre-`DEPLOY.1A`; (b) candidate-based only; (c) both, with typed confirmation, audit record and mandatory strict first-contact trust preflight. **(c) was adopted**, with seventeen conditions spelled out in the companion contract §9.1 | `PCP.4` contract review — superseded by the 2026-09-05 freeze deciding it directly |
+| `pcp_auto_enrollment_policy` (decided for the current horizon) | Should a future opt-in "trusted management source auto-enrolls" policy exist, and under what audit/allowlist? | Not in the first slices; design only after `PCP.2` shows real candidate volume; default stays explicit — **adopted as stated** | `PCP.2` closure |
+| `pcp_storage_engine` (narrowed; production question stays open) | Which engine backs the registry/job plane in production, against the §10 criteria? | Defer; keep the eighth `evidence_backend` concern filesystem-first; decide with `DEV.4.6` migrations/roles — **still the live recommendation for the now-narrower production-only question** | `PCP.5` contract freeze |
+| `pcp_first_contact_trust_policy` (decided) | Must the first-contact job for a *manually* enrolled endpoint require strict host-key / CA trust even in the local development profile, to prevent credential exposure to a mistyped or hostile endpoint? | **Yes for any endpoint not corroborated by a management-plane candidate** — **adopted, then generalized 2026-09-05 to every endpoint including candidates** (companion contract §9.3) | `PCP.2` contract review |
 
 ---
 
@@ -773,6 +828,33 @@ expanded here:
 `PCP.1`–`PCP.4` are **not** blocked on `DEPLOY.1`; they run on the laptop
 console/CLI at zero new device risk and give the product its persistent
 shape while the `OP.2.C` release gates wait on the server.
+
+### 20.1 Amendment (2026-09-05) — local control-plane runtime as a distinct movement
+
+Source contract: `docs/design/LOCAL_CONTROL_PLANE_RUNTIME_AND_ENROLLMENT.md`
+§12/§12.1 (FROZEN). The table above stays as the `PCP.x` theme map; this
+amendment records how the work is actually sequenced.
+
+- The **local control-plane runtime and storage work is a movement distinct
+  from `PCP.2`'s enrollment providers.** It is not folded into `PCP.2`.
+- The executable sequence is the frozen **`M1`…`M14`** list in the companion
+  contract §12, with the §12.1 clarifications. Each `M` is a **separately
+  authorized, bounded movement**; freezing the architecture authorizes none of
+  them.
+- **`M5` — the first real collector target-selection seam — is the critical
+  prerequisite for honest device-targeted collection.** Until it lands, every
+  collection job type remains `target_mode="none"` and per-device collection
+  cannot be offered.
+- **Plane-wide execution followed by result filtering never counts as
+  device-targeted collection.** §9's rule is restated here because the
+  sequencing makes it tempting: filtering a plane-wide result still contacts
+  every device on the plane, and an audit record naming only the requested
+  `device_id`s would misrepresent it. Such a job is `UNSUPPORTED` until its
+  collector has a real seam.
+- **`PCP.1`'s CLI verbs remain a maintenance/bootstrap adapter.** UI-first
+  enrollment is the intended product flow; local-loopback enrollment is
+  permitted only under the frozen conditions above, and production/server
+  enrollment stays `DEPLOY.1A`-gated.
 
 ---
 
@@ -1170,16 +1252,33 @@ canonical authority competes with them.
 
 ---
 
-## 24. Next movement / reasoning tier
+## 24. Next movement / reasoning tier — HISTORICAL (at the original `PCP.0` freeze)
 
-- **This freeze session** (`Sonnet 5, extended thinking (high)`) applied
+This section records what was true **at the original `PCP.0` freeze session**
+and is preserved as history, not as current sequencing authority.
+
+- **That freeze session** (`Sonnet 5, extended thinking (high)`) applied
   §22 amendments 1-3 (item 4 deferred to the `PCP.1` close, see §22), the
   registry-mutation-lock ownership/privacy correction (AC-5, AC-15),
   flipped this status to `FROZEN`, and rotated `project/roadmap.json`
   (`PCP.0` → done; `PCP.1` stays `next`).
-- **Exact next movement:** `PCP.1`
+- **At that time, the next movement was `PCP.1`**
   (`pcp_1_device_registry_manual_enrollment_foundation`), `Sonnet 5,
   normal`, one short prompt pointing at §21 and
-  `tests/test_pcp1_device_registry.py`. Not started by this session.
-- Escalate to extended thinking only for the four open decisions in §19 when
-  their `decide_by` movement is reached.
+  `tests/test_pcp1_device_registry.py`. **`PCP.1` has since shipped** (see
+  `project/build_history.json`) — it is neither "next" nor "unstarted" today.
+
+**Current sequencing authority.** This historical note does not track what is
+next now. For the live `now`/`next` movement, see `CURRENT_STATE.md` and
+`project/roadmap.json`'s `now_next` — this document does not duplicate or
+invent a current NEXT.
+
+**Reasoning-tier rule (current, not historical).** Escalate to extended
+thinking only when (a) a genuinely open decision in canonical project state
+(`project/roadmap.json` `open_decisions`) reaches its recorded `decide_by`
+movement, or (b) a new durable architecture or security boundary is being
+proposed. Decided questions are not open decisions regardless of where they
+originated: as of the 2026-09-05 `M0` freeze, first-contact trust, local
+loopback enrollment (scoped as frozen) and current-horizon auto-enrollment are
+**decided**, not open, and do not by themselves justify escalating reasoning
+tier.

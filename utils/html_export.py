@@ -35,6 +35,11 @@ STYLE_FILE = BASE_DIR / "static" / "style.css"
 # statically enforces that no file references an identifier a later file owns.
 SCRIPT_MODULE_FILENAMES = (
     "app_core.js",
+    # NAV.1: the navigation model + its renderers load second — after
+    # app_core.js's escaping/formatting helpers, before every feature module
+    # and before app_bootstrap.js, which derives its route universe from the
+    # model (docs/design/NAVIGATION_INFORMATION_ARCHITECTURE.md D-NAV7/D-NAV8).
+    "navigation_ui.js",
     "inventory_ui.js",
     "configuration_ui.js",
     "compliance_ui.js",

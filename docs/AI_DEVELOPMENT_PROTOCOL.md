@@ -89,8 +89,10 @@ Avoid bundling unrelated architecture, UI, collector and storage work.
 
 ## HTML render harness (mandatory for any UI / payload change)
 
-Any build that changes `templates/index.html`, `static/app.js`,
-`static/style.css`, or a payload builder (`configuration_ui` / `compliance` /
+Any build that changes `templates/index.html`, `templates/console.html`,
+any `static/*.js` UI module (the composed script — see
+`utils.html_export.SCRIPT_MODULE_FILENAMES`), `static/style.css`, or a payload
+builder (`configuration_ui` / `compliance` /
 `crypto` / `discovery` / `project_plan`) must show the render harness green
 alongside the full suite **and the repository privacy gate**
 (`AGENTS.md` "Project-state update rule"):

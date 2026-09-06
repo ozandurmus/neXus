@@ -187,7 +187,6 @@ def test_scheduler_section_default_disabled_when_no_policy():
 
 def test_template_has_discovery_module_markers():
     for marker in [
-        'id="discoveryNav"',
         'id="discoveryModule"',
         'id="discoveryFleetSummary"',
         'id="discoveryCoordinator"',
@@ -198,17 +197,35 @@ def test_template_has_discovery_module_markers():
     ]:
         assert marker in TEMPLATE
 
+    # NAV.1 (docs/design/NAVIGATION_INFORMATION_ARCHITECTURE.md): navigation
+    # reachability moved off the template's static topbar buttons onto the one
+    # navigation model in static/navigation_ui.js (composed into APP). The
+    # contract this test protects is unchanged — the module is reachable from
+    # primary navigation and the shell ships its panel — only where the two
+    # facts are declared changed.
+    for module_id in ("discovery",):
+        assert f'module: "{module_id}"' in APP
+        assert f'data-module-panel="{module_id}"' in TEMPLATE
+
 
 def test_template_preserves_existing_module_markers():
     """Phase 3 additions must not remove pre-existing module markers."""
     for marker in [
-        'id="complianceNav"',
-        'id="projectPlanNav"',
         'id="projectPlanModule"',
         "__PROJECT_PLAN_JSON_PLACEHOLDER__",
         "__COMPLIANCE_JSON_PLACEHOLDER__",
     ]:
         assert marker in TEMPLATE
+
+    # NAV.1 (docs/design/NAVIGATION_INFORMATION_ARCHITECTURE.md): navigation
+    # reachability moved off the template's static topbar buttons onto the one
+    # navigation model in static/navigation_ui.js (composed into APP). The
+    # contract this test protects is unchanged — the module is reachable from
+    # primary navigation and the shell ships its panel — only where the two
+    # facts are declared changed.
+    for module_id in ("compliance", "project-plan",):
+        assert f'module: "{module_id}"' in APP
+        assert f'data-module-panel="{module_id}"' in TEMPLATE
 
 
 def test_app_js_has_discovery_render_function_and_wiring():
