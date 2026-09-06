@@ -360,14 +360,19 @@ One large multi-stage function (~750 lines):
   VSX_VSENV / PAN_API / DEFERRED_STANDBY / DEFERRED_LIFECYCLE / UNKNOWN`); it
   never guesses.
 
-There is **no capability-*state* vocabulary in the repository today** — the
-above produces a *collection plan*, and `PCP.0` §8's capability projection is
-architecture, not code. Movement `M3` is drafting one in
-`docs/design/CAPABILITY_STATE_VOCABULARY_AND_PRESENTATION.md`; that document's
-status is **`DRAFT — DO NOT FREEZE`** and it is **not** implementation
-authority (`AGENTS.md` contract-status law). This pointer is a forward
-reference only, and is replaced by a real description when the contract is
-frozen and its producer ships (`M10`/`M12`).
+There is **no capability-*state* vocabulary in the code today** — the above
+produces a *collection plan*, and `PCP.0` §8's capability projection is
+architecture, not code. Its contract is frozen:
+`docs/design/CAPABILITY_STATE_VOCABULARY_AND_PRESENTATION.md` — **FROZEN —
+PRODUCT OWNER APPROVED, 2026-09-06** (`M3`) — is implementation authority for
+the capability-state vocabulary, the resolution contract and the presentation
+matrix. It defines a tagged union `RESOLVED{primary_status,
+capability_qualifiers, evidence_presentation, action_affordance}` |
+`OMITTED{reason, diagnostic}`, seven owned dimensions `D1`–`D7`, seven
+server-owned gates `E1`–`E7` with `E7` never evaluated at presentation time,
+and acceptance criteria `AC-CS-1`…`97`. **No producer implements it yet**: `D3`
+arrives with `M10` and per-(entity, capability) `D5` with `M12`, so every
+capability resolves `UNKNOWN` until they ship.
 
 ---
 

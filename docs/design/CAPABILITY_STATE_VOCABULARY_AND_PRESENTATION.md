@@ -2,19 +2,48 @@
 
 ## Status
 
-**Revision history.** Six revisions; each corrected defects found by review,
-and the per-defect record with clause references is at §11.1 (`X1`–`X49`) with
-full detail in `project/build_history.json`. The current normative model is the
-one stated in §4 and §5: a tagged union `RESOLVED` | `OMITTED{reason}`,
-`NOT_SHIPPED` as a `SurfaceOmissionReason`, a presentation-time
-`action_affordance[]` that never claims an `E7` check has passed, a total
-four-outcome `E4`, subject-scoped `CX1` with `RI-1`/`RI-2` as bounded
-inconsistencies, and `RI-1` comparability total over `K1`–`K6`. Earlier
-revisions used models (`G1`–`G4` gates, `R1`–`R5` "authorization regimes",
-`CX2`/`CX3`, `eligible: true|false`) that are **not normative here** and survive
-only inside clearly-labelled historical notes and defect records.
-Acceptance criteria `AC-CS-1`…`97`; no id renumbered or deleted. Still
-**DRAFT**; nothing here is frozen or approved.
+**FROZEN — PRODUCT OWNER APPROVED, 2026-09-06.** Movement `M3`, reviewed on
+branch `claude/capability-state-vocabulary-cube5f`. This document is
+**implementation authority** for the capability-state vocabulary, the
+resolution contract and the presentation matrix (`AGENTS.md` "Authority
+hierarchy" item 2).
+
+All six Product Owner decisions are **CLOSED / APPROVED** (§11.2). All nine
+frozen-parent amendments `FA-1`…`FA-9` are **APPLIED** to
+`docs/design/NAVIGATION_INFORMATION_ARCHITECTURE.md` (§2.7), which carries its
+own amendment record.
+
+**What this freeze does and does not do.** It fixes the vocabulary, the
+resolution algebra and the presentation contract so later movements implement
+against a settled shape. It **does not** authorize an implementation movement:
+`M4`…`M14` remain separately authorized and none is begun by this freeze. No
+runtime, UI, payload, registry, storage, authorization or job-lifecycle change
+is made or authorized here.
+
+**Normative model.** A tagged union `RESOLVED{primary_status,
+capability_qualifiers, evidence_presentation, action_affordance}` |
+`OMITTED{reason, diagnostic}`; `NOT_SHIPPED` is a `SurfaceOmissionReason`, not
+a `CapabilityState`; `action_affordance[]` is per-action and
+presentation-time-only, never claiming an `E7` check has passed; `E4` is total
+over four outcomes including `NO_APPLICABLE_AUTHORITY`; `CX1` is a
+subject-scoped unsafe contradiction while `RI-1`/`RI-2` are bounded
+inconsistencies; `RI-1` comparability is total over `K1`–`K6`. Acceptance
+criteria `AC-CS-1`…`97`.
+
+**Open implementation obligation, not an approval gate.** `UCQ-1` (§5.5.4) —
+which concrete `UNSUPPORTED` reason codes are `REVALIDATABLE` and which are
+`TERMINAL` — is owned by `M10`. It does **not** block this freeze: `M3` defines
+deterministic fail-closed fallback behaviour for an absent, malformed or
+unknown remediation class, so the contract is complete without it.
+
+**Revision history, historical.** Eight revisions before the freeze; the
+per-defect record with clause references is at §11.1 (`X1`–`X49`), with full
+detail in `project/build_history.json`. Earlier revisions used models
+(`G1`–`G4` gates, `R1`–`R5` "authorization regimes", `CX2`/`CX3`,
+`eligible: true|false`) that are **not normative here** and survive only inside
+clearly-labelled historical notes and defect records. The council dissents at
+§10 are preserved as **historical design dissent**; they are not open approval
+gates.
 
 ## Decision grades used throughout
 
@@ -22,8 +51,8 @@ Acceptance criteria `AC-CS-1`…`97`; no id renumbered or deleted. Still
 | --- | --- |
 | **VERIFIED** | read directly from repository source, tests or a frozen contract this session; the citation is given |
 | **FROZEN** | already decided by a frozen contract or `AGENTS.md`; carried, never reopened |
-| **PROPOSED** | this document's recommendation; requires Product Owner approval |
-| **OPEN** | a genuine Product Owner decision, listed in §11 |
+| **APPROVED** | decided by the Product Owner at this freeze; §11.2 records each decision |
+| **APPLIED** | a frozen-parent amendment carried into `NAVIGATION_INFORMATION_ARCHITECTURE.md` at this freeze (§2.7) |
 | **UNKNOWN** | not established by repository evidence; stays `UNKNOWN` (`AGENTS.md` UNKNOWN law) |
 
 ---
@@ -31,12 +60,13 @@ Acceptance criteria `AC-CS-1`…`97`; no id renumbered or deleted. Still
 ## 0. How to read this document
 
 §2 is the evidence base — every later claim traces to it. §3–§8 are the
-proposal. §9 is the falsifiable acceptance criteria a later movement
-implements. §10 records the advisory council. §11 is the smallest set of
-decisions the Product Owner must actually make.
+**normative contract**. §9 is the falsifiable acceptance criteria a later
+movement implements. §10 records the advisory council as historical design
+dissent. §11 records the closed Product Owner decisions and the applied
+frozen-parent amendments.
 
-A reader who only wants the answer reads §4.1 (the composition model), §5.1
-(the precedence ladder) and §11 (what is still open).
+A reader who only wants the answer reads §4.1 (the result algebra) and §5
+(the resolution contract).
 
 ---
 
@@ -228,12 +258,15 @@ not this document, closes it. Every rule in §5–§9 that depends on it is mark
 
 ---
 
-### 2.7 Demonstrated conflicts with FROZEN parent wording — recorded, NOT applied
+### 2.7 Frozen-parent amendments `FA-1`…`FA-9` — **APPLIED**
 
-`AGENTS.md` forbids silently amending a frozen contract. **No frozen file is
-edited by this movement.** Each row records the exact clause, its current frozen
-rule, the demonstrated conflict, the minimal correction, the **owning PO
-decision** (§11.2), and the consequence if approval is withheld.
+`AGENTS.md` forbids *silently* amending a frozen contract. These nine
+amendments were put to the Product Owner, **approved** under `PO-M3-1`,
+`PO-M3-2` and `PO-M3-3`, and **applied** to
+`docs/design/NAVIGATION_INFORMATION_ARCHITECTURE.md` at this freeze; that
+document carries its own amendment record naming `M3` and the approving
+decisions. Each row records the clause amended, the rule it replaced, the
+conflict resolved, the correction now in force, and its owning decision.
 
 Producer semantics were verified before any label, severity or presentation is
 proposed (V9a, V11, V12a in §2.1). Freshness claims are made only where actual
@@ -241,32 +274,23 @@ freshness evidence exists. Source-trust wording never suppresses an
 independently valid collection timestamp and never implies that provenance
 uncertainty makes a timestamp stale.
 
-| # | Exact parent clause | Current frozen wording / rule | Demonstrated conflict | Minimal proposed correction | Owner | Consequence if withheld |
+| # | Parent clause amended | Wording replaced | Conflict resolved | Correction now in force | Owner | Status |
 | --- | --- | --- | --- | --- | --- | --- |
-| **FA-1** | nav contract §8, l.627 (**Stale** row) | *"`last_known_good`; `STALE`; `PROVENANCE_UNVERIFIED` \| shown \| **selectable**, data shown **with age + provenance** \| enabled, with age stated \| muted badge + timestamp; never blank"* | `PROVENANCE_UNVERIFIED` carries no age and **no timestamp** (V12a). The row requires both. Its Action cell also reads unconditionally "enabled" — the same defect `FA-7` names | strike `PROVENANCE_UNVERIFIED` from the Stale row and add a new row **in the parent's own six-column shape** (UX semantic \| canonical states \| Nav entry \| View/tab \| Action \| Presentation): *"**Source trust insufficient** \| `PROVENANCE_UNVERIFIED` \| shown \| selectable, states that no override/drift claim can be made from this source \| **not blocked by this state** (per `FA-7`) \| muted, **no timestamp claim**"*. The Action column uses `FA-7`'s corrected semantics, so the two amendments are consistent | `PO-M3-2` | the parent requires a timestamp that does not exist; an implementer must fabricate one or ignore the clause, and the Action cell still reads as granting. `AC-CS-54`/`55` blocked |
-| **FA-2** | nav contract §5.4, l.445 | *"Stale or incomparable evidence \| `PROVENANCE_UNVERIFIED`, `last_known_good` \| muted / provenance \| \"Stale evidence\" + timestamp"* | "stale" and "incomparable" are two different facts sharing one row, one label and one timestamp requirement | split: `last_known_good` keeps "Stale evidence" + timestamp; `PROVENANCE_UNVERIFIED` takes a label asserting no age | `PO-M3-2` | two distinct facts keep one label; operators cannot tell old evidence from untrusted comparison. `AC-CS-54`/`55` blocked |
-| **FA-3** | nav contract §8, l.629 (**Unsupported** row) | *"`UNSUPPORTED(reason)` … ; `UNKNOWN_SHELL`"* | `UNKNOWN_SHELL` is the *unknown* branch of `plan_collection` (V9a), sibling to `INSUFFICIENT_EVIDENCE`. Treating it as a support conclusion inverts the UNKNOWN law | strike `UNKNOWN_SHELL` from the Unsupported row; it belongs in the existing §8 **Unknown / insufficient** row (l.636) | `PO-M3-2` | an unobserved device is reported **unsupported** — a false product claim. `AC-CS-19`/`56` blocked |
-| **FA-4** | `AC-DIF-7`, l.995 | *"Stale or incomparable evidence uses muted/provenance semantics **with its timestamp**"* | binds a timestamp requirement to classifications that have none (`D6d`, `D6e`) | require the timestamp **only** where a freshness anchor exists (`collected_at` / `last_successful_collection`); provenance/comparability semantics without a timestamp otherwise | `PO-M3-2` | a frozen criterion cannot be satisfied without fabricating data; any test written to it must fail or lie |
-| **FA-5** | nav contract §8 *Not applicable* row (l.630) and §8.1 *"Omit a tab for an entity type"* | tab **may** be omitted for an entity type | contradicts §6.5/D-NAV13/`AC-WS-7`/`AC-WS-8`, which the parent itself says closed this ambiguity, and contradicts D-NAV11 tab stability | replace both with the §6.5/D-NAV13 rule (tab stays visible and selectable, renders `NOT_APPLICABLE`, names supporting entity types, no enabled action); add a cross-pointer so the tables cannot drift again | **`PO-M3-1`** | the parent contradicts itself; implementers may cite either clause, producing flickering tabs on one reading. `AC-CS-25`/`26` unresolvable |
-| **FA-6** | nav contract §8 **Failed** row vs the §8.1 empty-state grouping | Failed row says *"error state + last good evidence retained"*; §8.1 groups **failed** under *"Keep selectable + explanatory empty state"* | one state is required to retain and display last-good evidence **and** to present an explanatory empty state — mutually exclusive presentations | make §8.1's grouping conditional: an explanatory empty state applies **only when no displayable evidence is retained** | `PO-M3-2` | two incompatible presentations for one state; retained evidence may be hidden behind an empty state. `AC-CS-29`/`58` blocked |
-| **FA-7** | nav contract §8 **Action** column, unconditional cells — e.g. Stale *"enabled, with age stated"*, Skipped *"enabled"* | states an action is **enabled**, unconditionally, as a property of the capability state | an action's affordance is never a property of the capability state alone, and no per-state row can express it: it is per-action, and it is split across phases. An unconditional "enabled" cell would read as granting an action past its taxonomy, authorization and admission gates | reword the Action column to ask only **"does this capability state contribute a presentation-time blocker?"** — the one question a per-state row can answer — and add a note that `action_affordance` is resolved per action from the **presentation-time gates** (`E1`–`E3`, `E5`, `E6`, and `E4`'s evaluable part), while submission, admission and immediately-before-execution authority, **`E7` included, remains server-owned** and outside any presentation-time cell | `PO-M3-2` | the table reads as granting actions; implemented literally it bypasses `console_refusal()` and the authorization authority — a safety defect. `AC-CS-30`/`32`/`67` blocked |
-| **FA-8** | nav contract §5.4, contradictory/unsafe row: *"`IDENTITY_TRANSLATION_REQUIRED`, `RELATIONSHIP_INCONSISTENT` … danger/error … 'Contradictory evidence'"* | groups an identity-**translation** requirement with unsafe contradictory state under one **danger/error** treatment and one "Contradictory evidence" label | `IDENTITY_TRANSLATION_REQUIRED` is a `semantic_exclusion` (V12a producer set) — a comparability limitation meaning the two sides use different identifier representations. It is **not** a contradiction: `CX1` (incompatible type/vendor resolution) is a distinct, narrower condition. Rendering it as danger overstates severity and conflicts with `AC-DIF-8`'s "red is reserved for actual fault" | separate the two: `IDENTITY_TRANSLATION_REQUIRED` takes comparability semantics (muted, "identity translation required", its own reason code preserved); genuine contradictory/unsafe state (`CX1`, `RELATIONSHIP_INCONSISTENT`) keeps danger/error and the "Contradictory evidence" label | `PO-M3-2` | a comparability limitation is presented as a fault, and the parent's own `AC-DIF-8` is violated by its own row. `AC-CS-47` and `H11c` cannot both be satisfied |
-| **FA-9** | nav contract §8 table shape (one **UX semantic** row → one nav/view/action/presentation tuple) | each row collapses status, view content, action enablement and presentation into a single state's row | this draft demonstrates the result is a **tagged union** (§4.1) whose `RESOLVED` variant carries four independent outputs: `primary_status`, `evidence_presentation` and `action_affordance` vary independently for the same state — `H4a`/`H4f`/`H5a`/`H5c`/`H9a`/`H9a-t`/`H11a`/`H11c`, and scope test `S-RI-1`, each show a case the one-row-per-state shape cannot express | keep §8 as the **UX-semantic index** it is, and add one sentence stating that a row's View and Action columns are *defaults for that state*, resolved finally by the capability-state resolution contract | **`PO-M3-3`** | the parent's shape implies one state determines all four outputs; every corrected case in §5.5 then reads as a deviation rather than a resolution. The four-output model stays in permanent tension with the parent |
+| **FA-1** | nav contract §8, l.627 (**Stale** row) | *"`last_known_good`; `STALE`; `PROVENANCE_UNVERIFIED` \| shown \| **selectable**, data shown **with age + provenance** \| enabled, with age stated \| muted badge + timestamp; never blank"* | `PROVENANCE_UNVERIFIED` carries no age and **no timestamp** (V12a). The row requires both. Its Action cell also reads unconditionally "enabled" — the same defect `FA-7` names | strike `PROVENANCE_UNVERIFIED` from the Stale row and add a new row **in the parent's own six-column shape** (UX semantic \| canonical states \| Nav entry \| View/tab \| Action \| Presentation): *"**Source trust insufficient** \| `PROVENANCE_UNVERIFIED` \| shown \| selectable, states that no override/drift claim can be made from this source \| **not blocked by this state** (per `FA-7`) \| muted, **no timestamp claim**"*. The Action column uses `FA-7`'s corrected semantics, so the two amendments are consistent | `PO-M3-2` | **APPLIED** 2026-09-06 |
+| **FA-2** | nav contract §5.4, l.445 | *"Stale or incomparable evidence \| `PROVENANCE_UNVERIFIED`, `last_known_good` \| muted / provenance \| \"Stale evidence\" + timestamp"* | "stale" and "incomparable" are two different facts sharing one row, one label and one timestamp requirement | split: `last_known_good` keeps "Stale evidence" + timestamp; `PROVENANCE_UNVERIFIED` takes a label asserting no age | `PO-M3-2` | **APPLIED** 2026-09-06 |
+| **FA-3** | nav contract §8, l.629 (**Unsupported** row) | *"`UNSUPPORTED(reason)` … ; `UNKNOWN_SHELL`"* | `UNKNOWN_SHELL` is the *unknown* branch of `plan_collection` (V9a), sibling to `INSUFFICIENT_EVIDENCE`. Treating it as a support conclusion inverts the UNKNOWN law | strike `UNKNOWN_SHELL` from the Unsupported row; it belongs in the existing §8 **Unknown / insufficient** row (l.636) | `PO-M3-2` | **APPLIED** 2026-09-06 |
+| **FA-4** | `AC-DIF-7`, l.995 | *"Stale or incomparable evidence uses muted/provenance semantics **with its timestamp**"* | binds a timestamp requirement to classifications that have none (`D6d`, `D6e`) | require the timestamp **only** where a freshness anchor exists (`collected_at` / `last_successful_collection`); provenance/comparability semantics without a timestamp otherwise | `PO-M3-2` | **APPLIED** 2026-09-06 |
+| **FA-5** | nav contract §8 *Not applicable* row (l.630) and §8.1 *"Omit a tab for an entity type"* | tab **may** be omitted for an entity type | contradicts §6.5/D-NAV13/`AC-WS-7`/`AC-WS-8`, which the parent itself says closed this ambiguity, and contradicts D-NAV11 tab stability | replace both with the §6.5/D-NAV13 rule (tab stays visible and selectable, renders `NOT_APPLICABLE`, names supporting entity types, no enabled action); add a cross-pointer so the tables cannot drift again | **`PO-M3-1`** | **APPLIED** 2026-09-06 |
+| **FA-6** | nav contract §8 **Failed** row vs the §8.1 empty-state grouping | Failed row says *"error state + last good evidence retained"*; §8.1 groups **failed** under *"Keep selectable + explanatory empty state"* | one state is required to retain and display last-good evidence **and** to present an explanatory empty state — mutually exclusive presentations | make §8.1's grouping conditional: an explanatory empty state applies **only when no displayable evidence is retained** | `PO-M3-2` | **APPLIED** 2026-09-06 |
+| **FA-7** | nav contract §8 **Action** column, unconditional cells — e.g. Stale *"enabled, with age stated"*, Skipped *"enabled"* | states an action is **enabled**, unconditionally, as a property of the capability state | an action's affordance is never a property of the capability state alone, and no per-state row can express it: it is per-action, and it is split across phases. An unconditional "enabled" cell would read as granting an action past its taxonomy, authorization and admission gates | reword the Action column to ask only **"does this capability state contribute a presentation-time blocker?"** — the one question a per-state row can answer — and add a note that `action_affordance` is resolved per action from the **presentation-time gates** (`E1`–`E3`, `E5`, `E6`, and `E4`'s evaluable part), while submission, admission and immediately-before-execution authority, **`E7` included, remains server-owned** and outside any presentation-time cell | `PO-M3-2` | **APPLIED** 2026-09-06 |
+| **FA-8** | nav contract §5.4, contradictory/unsafe row: *"`IDENTITY_TRANSLATION_REQUIRED`, `RELATIONSHIP_INCONSISTENT` … danger/error … 'Contradictory evidence'"* | groups an identity-**translation** requirement with unsafe contradictory state under one **danger/error** treatment and one "Contradictory evidence" label | `IDENTITY_TRANSLATION_REQUIRED` is a `semantic_exclusion` (V12a producer set) — a comparability limitation meaning the two sides use different identifier representations. It is **not** a contradiction: `CX1` (incompatible type/vendor resolution) is a distinct, narrower condition. Rendering it as danger overstates severity and conflicts with `AC-DIF-8`'s "red is reserved for actual fault" | separate the two: `IDENTITY_TRANSLATION_REQUIRED` takes comparability semantics (muted, "identity translation required", its own reason code preserved); genuine contradictory/unsafe state (`CX1`, `RELATIONSHIP_INCONSISTENT`) keeps danger/error and the "Contradictory evidence" label | `PO-M3-2` | **APPLIED** 2026-09-06 |
+| **FA-9** | nav contract §8 table shape (one **UX semantic** row → one nav/view/action/presentation tuple) | each row collapses status, view content, action enablement and presentation into a single state's row | this draft demonstrates the result is a **tagged union** (§4.1) whose `RESOLVED` variant carries four independent outputs: `primary_status`, `evidence_presentation` and `action_affordance` vary independently for the same state — `H4a`/`H4f`/`H5a`/`H5c`/`H9a`/`H9a-t`/`H11a`/`H11c`, and scope test `S-RI-1`, each show a case the one-row-per-state shape cannot express | keep §8 as the **UX-semantic index** it is, and add one sentence stating that a row's View and Action columns are *defaults for that state*, resolved finally by the capability-state resolution contract | **`PO-M3-3`** | **APPLIED** 2026-09-06 |
 
-**If the Product Owner withholds approval on a row**, three things follow and
-nothing else:
-
-1. the **authority conflict remains recorded** here, unresolved;
-2. the **affected implementation remains blocked** — the acceptance criteria in
-   that row's consequence column cannot be implemented without contradicting
-   the frozen parent or fabricating data;
-3. **no implementer is instructed to reproduce semantics this document has
-   demonstrated false**, and **this draft is not silently rewritten** to
-   pretend the conflict disappeared.
-
-`FA-1`…`FA-9` are all **prepared, unapplied, and subject to Product Owner
-approval**. Until then this document follows verified source semantics (V9a,
-V11, V12a) and says so at each point of divergence — declared, never silent.
+**All nine are APPLIED.** The parent's §5.4, §8, §8.1 and `AC-DIF-7` now carry
+the corrected semantics, and this document's §4.3, §5, §6 and §9 are aligned to
+them. The declared divergence earlier revisions carried is **closed**: no
+conflict remains between this contract and its frozen parent, and no acceptance
+criterion is blocked by one.
 
 ---
 
@@ -2069,51 +2093,54 @@ revision 4's corrections are listed in full.
 | **X48** | the cache section mixed the persistable projection with the composed render-time result | rev 5 | §8.2.1 two-object boundary; `AC-CS-97` |
 | **X49** | stale `R1`/`R2`/`R5` regime language in §8.2, four-facet and action-qualifier wording, and `I20` shell scope | rev 5 | §8.2, §4.1.3 `I20`, §6.8, `AC-CS-12`/`39`/`40`/`57` |
 
-### 11.2 Genuine choices — decision required
+### 11.2 Product Owner decisions — **CLOSED / APPROVED** 2026-09-06
 
-Six decisions, each explicitly owning its frozen-parent amendments.
+All six were approved by the Product Owner on 2026-09-06 and are **closed**.
 
-| id | Decision | Owns | Recommendation |
+| id | Decision | Amendments authorized | Outcome |
 | --- | --- | --- | --- |
-| **PO-M3-1** | **Stable visible tabs.** The navigation contract contradicts itself: §8/§8.1 permit omitting a structurally inapplicable tab for an entity type; §6.5/D-NAV13/`AC-WS-7`/`AC-WS-8` forbid it. Which governs? | **`FA-5`** | **Preserve D-NAV13 / `AC-WS-7` / `AC-WS-8`.** Tab stability wins; §8/§8.1's omission language is residual revision-1 text that §6.5 explicitly closed |
-| **PO-M3-2** | **Semantic parent corrections.** Approve the corrections that align the parent's presentation tables with verified producer semantics — freshness, provenance, identity translation, unsupported-vs-unknown, retained evidence, and unconditional action cells | **`FA-1`, `FA-2`, `FA-3`, `FA-4`, `FA-6`, `FA-7`, `FA-8`** | **Approve.** Each contradicts a verified source semantic (V9a, V11, V12a) or the parent's own `AC-DIF-8`. **If declined**, §11.3 governs: the authority conflict stays open and recorded, the affected implementation stays blocked, the draft is **not** presented as approved, and **no implementation proceeds using semantics already demonstrated false** — the draft is not reverted to them |
-| **PO-M3-3** | **Composition model.** Retain the tagged union `RESOLVED{primary_status, capability_qualifiers, evidence_presentation, action_affordance} \| OMITTED{reason, diagnostic}`, with action outcomes keyed by `action_id` and presentation-time affordance separated from server execution authority? | **`FA-9`** | **Retain provisionally**, subject to §5's resolution contract and §9.1's coverage. §10 dissent D1 remains recorded |
-| **PO-M3-4** | **Directional `D4`.** Retain the directional `D4` value set, with `RECONCILIATION_UNKNOWN` covering ambiguous or unresolved identity and **no new identity authority**? | — | **Retain.** The concept is two-sided; a flat `NOT_ENROLLED` cannot express the reverse. Ambiguous identity resolves to `RECONCILIATION_UNKNOWN` or `CX1`, never a guessed join (`AGENTS.md` identity law; `AC-WS-2`) |
-| **PO-M3-5** | **`--member-specific` token.** Approve decoupling the gold member emphasis from `--warning`, preserving the emphasis and its non-fault semantics? | — | **Approve as contract direction**; implementation belongs to a later UI movement |
-| **PO-M3-6** | **Evidence-gated `NOT_SCHEDULED` qualifier**, emitted only where schedule absence is authoritatively established? | — | **Retain as a qualifier**, gated on `NO_APPLICABLE_SCHEDULE`. Schedules govern future automatic refresh, not current usability |
+| **PO-M3-1** | **Stable visible tabs.** The navigation contract contradicts itself: §8/§8.1 permit omitting a structurally inapplicable tab for an entity type; §6.5/D-NAV13/`AC-WS-7`/`AC-WS-8` forbid it. Which governs? | **`FA-5`** | **APPROVED.** Stable visible tabs preserved under D-NAV13 / `AC-WS-7` / `AC-WS-8`; `FA-5` applied, withdrawing the parent's tab-omission language |
+| **PO-M3-2** | **Semantic parent corrections.** Approve the corrections that align the parent's presentation tables with verified producer semantics — freshness, provenance, identity translation, unsupported-vs-unknown, retained evidence, and unconditional action cells | **`FA-1`, `FA-2`, `FA-3`, `FA-4`, `FA-6`, `FA-7`, `FA-8`** | **APPROVED.** The verified semantic corrections `FA-1`, `FA-2`, `FA-3`, `FA-4`, `FA-6`, `FA-7`, `FA-8` are applied to the parent |
+| **PO-M3-3** | **Composition model.** Retain the tagged union `RESOLVED{primary_status, capability_qualifiers, evidence_presentation, action_affordance} \| OMITTED{reason, diagnostic}`, with action outcomes keyed by `action_id` and presentation-time affordance separated from server execution authority? | **`FA-9`** | **APPROVED.** The tagged-union composition is adopted, with per-action keying and the presentation-time / server-authority boundary preserved; `FA-9` applied |
+| **PO-M3-4** | **Directional `D4`.** Retain the directional `D4` value set, with `RECONCILIATION_UNKNOWN` covering ambiguous or unresolved identity and **no new identity authority**? | — | **APPROVED.** Directional `D4` retained; ambiguous identity never creates a guessed join or a new identity authority — it resolves to `RECONCILIATION_UNKNOWN` or `CX1` |
+| **PO-M3-5** | **`--member-specific` token.** Approve decoupling the gold member emphasis from `--warning`, preserving the emphasis and its non-fault semantics? | — | **APPROVED** as the later UI contract direction: `--member-specific` is distinct from `--warning`. **No CSS or UI is implemented in this movement** |
+| **PO-M3-6** | **Evidence-gated `NOT_SCHEDULED` qualifier**, emitted only where schedule absence is authoritatively established? | — | **APPROVED.** `NOT_SCHEDULED` is retained as an evidence-gated qualifier, emitted **only** from a positively established `NO_APPLICABLE_SCHEDULE` result |
 
-Every `FA-1`…`FA-9` row is owned: `FA-5` by `PO-M3-1`; `FA-1`–`FA-4`, `FA-6`,
-`FA-7`, `FA-8` by `PO-M3-2`; `FA-9` by `PO-M3-3`.
+Every `FA-1`…`FA-9` row is owned **and applied**: `FA-5` by `PO-M3-1`;
+`FA-1`–`FA-4`, `FA-6`, `FA-7`, `FA-8` by `PO-M3-2`; `FA-9` by `PO-M3-3`.
 
 **Reported for awareness, no decision requested.** C3 — compliance `UNKNOWN`
 counting in the alignment denominator — is inside the compliance contract's
 domain, not `M3`'s, and is unchanged here.
 
-### 11.3 Withheld approval — what follows
+### 11.3 Post-freeze obligations
 
-If the Product Owner withholds approval on any `FA-*` row:
+Nothing in §11 remains open. Two obligations carry forward, neither an approval
+gate:
 
-1. the **authority conflict remains recorded** in §2.7, unresolved;
-2. the **affected implementation remains blocked** — the acceptance criteria in
-   that row's consequence column cannot be implemented without contradicting
-   the frozen parent or fabricating data;
-3. **no implementer is instructed to reproduce semantics already demonstrated
-   false**;
-4. **this draft is not silently rewritten** to pretend the conflict
-   disappeared.
+1. **`UCQ-1`** (§5.5.4) — `M10` maps concrete `UNSUPPORTED` reason codes to
+   `REVALIDATABLE(<input>)` or `TERMINAL`. `M3`'s fail-closed fallback is
+   complete without it: an absent, malformed or unknown class yields
+   `UNDETERMINED`, never `AVAILABLE_FOR_SUBMISSION`.
+2. **`PO-M3-5`'s token direction** is a contract for a later UI movement; no
+   CSS or UI is implemented here.
 
-There is no fifth option, and in particular no instruction to "revert to the
-parent's wording and proceed" — that would be option 3's opposite.
+The §10 council dissents are preserved as **historical design dissent**. They
+were considered at approval and are not open gates.
 
 ---
 
 ## 12. Non-goals of this movement
 
-`M3` implements nothing. It changes no runtime, UI, CSS, JavaScript, template,
-adapter, registry, storage, enrollment, authorization, job or report-generation
-code, and no payload schema. It creates no capability engine. It alters no
-existing job lifecycle, action-state, taxonomy, compliance, discovery-lifecycle
-or registry vocabulary. It does not reopen the six-root navigation baseline,
-the workspace architecture, `PO-NAV-1`…`PO-NAV-8`, or any frozen acceptance
-criterion. It begins no later movement, contacts no device, and claims no
-Product Owner approval or freeze.
+`M3` is a **contract**, not an implementation. It changed no runtime, UI, CSS,
+JavaScript, template, adapter, registry, storage, enrollment, authorization,
+job or report-generation code, and no payload schema. It created no capability
+engine. It altered no existing job lifecycle, action-state, taxonomy,
+compliance, discovery-lifecycle or registry vocabulary. It did not reopen the
+six-root navigation baseline, the workspace architecture, or `PO-NAV-1`…
+`PO-NAV-8`; the only frozen acceptance criterion it amended is `AC-DIF-7`, via
+the approved `FA-4`. It begins no later movement and contacts no device.
+
+**This freeze is design authority, not implementation authority for any
+movement.** `M4`…`M14` each still require their own separate go-ahead, and none
+is begun here.

@@ -54,41 +54,38 @@ test-enforced boundaries. Current numbers:
 
 ## Active build
 
-**`nav_3_capability_state_vocabulary`** (`M3`) — **IN_PROGRESS, revision 6.**
-Contract: `docs/design/CAPABILITY_STATE_VOCABULARY_AND_PRESENTATION.md` —
-**DRAFT — DO NOT FREEZE, NOT PRODUCT OWNER APPROVED**; authorizes no
-implementation, not citable as design authority. Result is a tagged union
-`RESOLVED{...}` | `OMITTED{reason, diagnostic}`; `NOT_SHIPPED` is a
-`SurfaceOmissionReason`, not a `CapabilityState`. `action_affordance[]` is
-**presentation-time only** and never claims an `E7` check passed. `E4` is total
-via `NO_APPLICABLE_AUTHORITY` (non-blocking, **not a grant**). Only `CX1` is
-unsafe. `D1`–`D7`, `E1`–`E7`, `I1`–`I20`, `AC-CS-1`…`97`.
+**`nav_3_capability_state_vocabulary`** (`M3`) — **COMPLETE / FROZEN**,
+Product Owner approved 2026-09-06. Contract:
+`docs/design/CAPABILITY_STATE_VOCABULARY_AND_PRESENTATION.md` — **FROZEN —
+PRODUCT OWNER APPROVED**, implementation authority for the capability-state
+vocabulary, the resolution contract and the presentation matrix.
 
-**Revision 8** — fixture executability and dependency modelling. The three-class
-model conflated *does the action exist* with *does the input's producer exist*,
-and its `CURRENT` class falsely claimed full executability. Replaced by two
-orthogonal axes, `[ACT:… · IN:…]`: action basis `CURRENT` / `ACTION_FREE` /
-`FUTURE`; input basis `CURRENT` / `SYNTHETIC(owner)` / `FUTURE_PRODUCER(owner)`.
-Applied honestly, **20 of 23 atomic cases are `IN:SYNTHETIC`** — `AVAILABLE`
-requires `D3 = SUPPORTED` and `D4 = RECONCILED`, and neither has a producer.
-Only `H9a`/`H9a-t` are `IN:CURRENT`; `H4e` alone is `IN:FUTURE_PRODUCER(M10)`.
-**Executability restated:** source/registry assertions are verifiable today;
-resolver cases become unit fixtures once the resolver exists, using explicitly
-identified synthetic inputs; **the focused tests neither execute nor prove the
-resolver**. The two `ACT:FUTURE` cases left the atomic table (`ActionAffordance`
-requires a registry `action_id`), becoming future contract scenarios `S-FUT-1`
-(was `H5d`) and `S-FUT-2` (was `H8b`) in §5.5.1, each keeping its safety
-requirement. `AC-CS-65` lists 23 atomic cases and excludes them; no AC added or
-renumbered. **`UCQ-1` stays fail-closed** — an unclassified `UNSUPPORTED`
-remediation class resolves `UNDETERMINED`, never `AVAILABLE_FOR_SUBMISSION`.
+Normative model: tagged union `RESOLVED{primary_status, capability_qualifiers,
+evidence_presentation, action_affordance}` | `OMITTED{reason, diagnostic}`;
+`NOT_SHIPPED` is a `SurfaceOmissionReason`, not a `CapabilityState`;
+`action_affordance[]` is per-action and **presentation-time only**, never
+claiming an `E7` check passed; `E4` is total over four outcomes including
+`NO_APPLICABLE_AUTHORITY`; `CX1` is a subject-scoped unsafe contradiction while
+`RI-1`/`RI-2` are bounded inconsistencies. Dimensions `D1`–`D7`, gates
+`E1`–`E7`, inputs `I1`–`I20`, criteria `AC-CS-1`…`97`.
 
-`PO-NAV-7` resolved **in contract**: capability policy → `D5` `POLICY_DISABLED`
-(`A5`, `M12`); "not enrolled" → `D4` `EVIDENCE_ONLY` (`A6`, `M10`). The job
-lifecycle, `ActionState`, taxonomy, compliance, discovery-lifecycle and
-registry vocabularies are **byte-unchanged**. Nine frozen-parent corrections
-`FA-1`…`FA-9` (§2.7) are **recorded, not applied**, each owned by a named PO
-decision; **no frozen file was edited**. **Six open PO decisions**
-`PO-M3-1`…`6` (§11.2) gate the freeze.
+**Six PO decisions CLOSED / APPROVED:** `PO-M3-1` stable visible tabs (`FA-5`);
+`PO-M3-2` semantic parent corrections (`FA-1`–`FA-4`, `FA-6`–`FA-8`);
+`PO-M3-3` tagged-union composition (`FA-9`); `PO-M3-4` directional `D4`;
+`PO-M3-5` `--member-specific` as later UI contract direction, **no CSS
+implemented**; `PO-M3-6` evidence-gated `NOT_SCHEDULED`.
+
+**Nine amendments `FA-1`…`FA-9` APPLIED** to
+`docs/design/NAVIGATION_INFORMATION_ARCHITECTURE.md`, which carries its own
+bounded amendment record. No frozen decision reopened — `PO-NAV-1`…`PO-NAV-8`,
+`D-NAV1`…`D-NAV14`, the six-root baseline and the entity-workspace model are
+unchanged; the only amended criterion is `AC-DIF-7` (`FA-4`).
+
+**Not implemented.** `D3` arrives with `M10`, per-(entity, capability) `D5`
+with `M12`; every capability resolves `UNKNOWN` until they ship. `UCQ-1` is an
+`M10`-owned implementation obligation, not an approval gate — the fail-closed
+fallback yields `UNDETERMINED`, never `AVAILABLE_FOR_SUBMISSION`. Council
+dissents are preserved as historical design dissent.
 
 ## `OP.0b.0` — FROZEN WITH REAL-ENV VALIDATION GATES
 
@@ -123,19 +120,16 @@ a narrower question never promoted toward B2.
 
 ## Exact next build
 
-**Product Owner review of the corrected `M3` draft.** Close `PO-M3-1`…`6`
-(§11.2) and rule on `FA-1`…`FA-9` (§2.7), each of which names its owner.
-`FA-*` amend a FROZEN document and cannot be applied by an agent; if approval
-is withheld the named criteria stay **blocked**, the conflict stays recorded,
-and neither the draft nor any implementer reverts to semantics demonstrated
-false (§11.3). `UCQ-1` (which `UNSUPPORTED` reasons are `REVALIDATABLE` vs
-`TERMINAL`) is an open contract question owned by `M10`, not a PO decision.
-`M3` stays `in_progress`.
+**Create and configure the Claude-side `nexus-decision-council` before starting
+`M4`.** The `M3` council record is a single authoring session's structured
+self-critique — not an installed skill and not independent validation — and the
+skill named in every `M3` brief was absent from the environment throughout.
+Standing that up is the prerequisite for the next architecture movement.
 
-`now_next.next` is **`local_control_plane_metadata_store`** (`M4`): local
-SQLite control-plane metadata only, additively, inside the companion contract's
-§6.4 ownership boundary and §6.5 engine contract (`AC-ST-1`…`AC-ST-8` frozen).
-Independent of `M3`'s outcome; needs its own separate authorization to start.
+`M4` (`local_control_plane_metadata_store`) is **not started and not
+authorized**: local SQLite control-plane metadata only, additively, inside the
+companion contract's §6.4 ownership boundary and §6.5 engine contract
+(`AC-ST-1`…`AC-ST-8` frozen). It needs its own separate authorization.
 
 `M5` stays the critical path — **every collection job type today is
 `target_mode="none"`**. `op2_c_cp_clusterxl_adapter_scoping` stays
