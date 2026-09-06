@@ -265,6 +265,344 @@ def test_a_failing_migration_rolls_back_and_leaves_no_partial_schema(data_root, 
 
 
 # ---------------------------------------------------------------------------
+# §6.5 — the ledger must be an exact known prefix of MIGRATIONS
+#
+# max(version) alone is not enough: a ledger can report exactly the supported
+# maximum while carrying a different migration identity or sequence.
+# ---------------------------------------------------------------------------
+
+def _write_ledger(
+    data_root: Path,
+    entries,
+    *,
+    journal_mode: str = "delete",
+    keyed: bool = True,
+) -> Path:
+    """Build a database carrying an arbitrary ledger, without the store.
+
+    ``keyed=True`` reproduces this build's own ledger shape
+    (``version INTEGER PRIMARY KEY``). ``keyed=False`` reproduces a *foreign*
+    ledger table written by some other build -- the only shape in which a
+    duplicate or an out-of-order application history can physically exist,
+    because an INTEGER PRIMARY KEY makes rowid the version and so
+    canonicalises both away.
+    """
+    path = store_path(data_root)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    raw = sqlite3.connect(str(path), isolation_level=None)
+    try:
+        raw.execute(f"PRAGMA journal_mode = {journal_mode}")
+        version_column = (
+            "version INTEGER NOT NULL PRIMARY KEY" if keyed else "version INTEGER NOT NULL"
+        )
+        raw.execute(
+            f"CREATE TABLE schema_migrations ({version_column}, "
+            "name TEXT NOT NULL, applied_at_utc TEXT NOT NULL) STRICT"
+        )
+        for version, name in entries:
+            raw.execute(
+                "INSERT INTO schema_migrations (version, name, applied_at_utc) VALUES (?, ?, ?)",
+                (version, name, "2026-09-06T00:00:00+00:00"),
+            )
+    finally:
+        raw.close()
+    return path
+
+
+def _read_raw_ledger(data_root: Path) -> list[tuple[int, str]]:
+    raw = sqlite3.connect(str(store_path(data_root)))
+    try:
+        return [
+            (int(v), str(n))
+            for v, n in raw.execute(
+                "SELECT version, name FROM schema_migrations ORDER BY rowid"
+            ).fetchall()
+        ]
+    finally:
+        raw.close()
+
+
+def _read_raw_journal_mode(data_root: Path) -> str:
+    raw = sqlite3.connect(str(store_path(data_root)))
+    try:
+        return str(raw.execute("PRAGMA journal_mode").fetchone()[0]).lower()
+    finally:
+        raw.close()
+
+
+def test_supported_version_with_the_wrong_migration_name_is_refused(data_root):
+    """The core gap: max(version) == SUPPORTED, but the identity is foreign."""
+    _write_ledger(data_root, [(SUPPORTED_SCHEMA_VERSION, "some_other_builds_migration")])
+
+    with pytest.raises(ControlPlaneSchemaVersionError) as excinfo:
+        ControlPlaneStore(data_root)
+
+    message = str(excinfo.value)
+    assert "some_other_builds_migration" in message
+    assert "initial_control_plane_metadata" in message
+
+
+def test_an_unknown_extra_version_is_refused(data_root):
+    _write_ledger(
+        data_root,
+        [(1, "initial_control_plane_metadata"), (2, "an_unknown_later_migration")],
+    )
+    with pytest.raises(ControlPlaneSchemaVersionError) as excinfo:
+        ControlPlaneStore(data_root)
+    assert "an_unknown_later_migration" in str(excinfo.value)
+
+
+def test_an_unknown_lower_version_is_refused(data_root):
+    _write_ledger(data_root, [(0, "a_version_this_build_never_defined")])
+    with pytest.raises(ControlPlaneSchemaVersionError):
+        ControlPlaneStore(data_root)
+
+
+def test_a_non_prefix_sequence_is_refused(data_root):
+    """A ledger starting at 2 skips migration 1 -- not a prefix of MIGRATIONS."""
+    _write_ledger(data_root, [(2, "initial_control_plane_metadata")])
+    with pytest.raises(ControlPlaneSchemaVersionError):
+        ControlPlaneStore(data_root)
+
+
+def test_a_gapped_sequence_is_refused(data_root, monkeypatch):
+    import utils.control_plane_store as module
+
+    monkeypatch.setattr(
+        module,
+        "MIGRATIONS",
+        MIGRATIONS + ((2, "second", ("CREATE TABLE t2 (id TEXT NOT NULL PRIMARY KEY) STRICT",)),),
+    )
+    # Ledger records 1 and 3 -- version 2 was never applied.
+    _write_ledger(data_root, [(1, "initial_control_plane_metadata"), (3, "second")])
+    with pytest.raises(ControlPlaneSchemaVersionError):
+        ControlPlaneStore(data_root)
+
+
+def test_an_out_of_order_foreign_ledger_is_refused(data_root, monkeypatch):
+    """Out-of-order is only representable in a foreign, unkeyed ledger table.
+
+    In this build's own ledger, ``version`` is an INTEGER PRIMARY KEY, so
+    rowid *is* the version and SQLite stores the rows in version order --
+    an out-of-order application history cannot be recorded at all. It can be
+    recorded by another build whose ledger table has no such key, and the
+    prefix check refuses that.
+    """
+    import utils.control_plane_store as module
+
+    monkeypatch.setattr(
+        module,
+        "MIGRATIONS",
+        MIGRATIONS + ((2, "second", ("CREATE TABLE t2 (id TEXT NOT NULL PRIMARY KEY) STRICT",)),),
+    )
+    _write_ledger(
+        data_root,
+        [(2, "second"), (1, "initial_control_plane_metadata")],
+        keyed=False,
+    )
+    with pytest.raises(ControlPlaneSchemaVersionError):
+        ControlPlaneStore(data_root)
+
+
+def test_a_duplicated_foreign_ledger_entry_is_refused(data_root):
+    _write_ledger(
+        data_root,
+        [(1, "initial_control_plane_metadata"), (1, "initial_control_plane_metadata")],
+        keyed=False,
+    )
+    with pytest.raises(ControlPlaneSchemaVersionError):
+        ControlPlaneStore(data_root)
+
+
+def test_this_builds_own_ledger_cannot_record_a_duplicate_version(store):
+    """The duplicate case is structurally impossible in our own ledger."""
+    with pytest.raises(ControlPlaneIntegrityError):
+        store.execute(
+            "INSERT INTO schema_migrations (version, name, applied_at_utc) VALUES (?, ?, ?)",
+            (SUPPORTED_SCHEMA_VERSION, "a_second_row_for_the_same_version", "2026-09-06T00:00:00+00:00"),
+        )
+
+
+def test_a_valid_shorter_prefix_is_accepted_and_completed(data_root, monkeypatch):
+    """The prefix rule must not refuse a legitimately half-migrated store."""
+    import utils.control_plane_store as module
+
+    monkeypatch.setattr(
+        module,
+        "MIGRATIONS",
+        MIGRATIONS + ((2, "second", ("CREATE TABLE t2 (id TEXT NOT NULL PRIMARY KEY) STRICT",)),),
+    )
+    with ControlPlaneStore(data_root) as store:
+        assert store.applied_migrations() == [
+            (1, "initial_control_plane_metadata"),
+            (2, "second"),
+        ]
+
+
+def test_ledger_refusal_names_encountered_and_supported_ledgers(data_root):
+    _write_ledger(data_root, [(SUPPORTED_SCHEMA_VERSION, "wrong_name")])
+    with pytest.raises(ControlPlaneSchemaVersionError) as excinfo:
+        ControlPlaneStore(data_root)
+    message = str(excinfo.value)
+    assert "Encountered ledger:" in message
+    assert "Supported ledger:" in message
+    assert f"1..{SUPPORTED_SCHEMA_VERSION}" in message
+
+
+def test_ledger_refusal_applies_and_discards_nothing(data_root):
+    original = [(SUPPORTED_SCHEMA_VERSION, "wrong_name")]
+    _write_ledger(data_root, original)
+
+    with pytest.raises(ControlPlaneSchemaVersionError):
+        ControlPlaneStore(data_root)
+
+    # The ledger is untouched and no table of ours was created.
+    assert _read_raw_ledger(data_root) == original
+    raw = sqlite3.connect(str(store_path(data_root)))
+    try:
+        tables = {
+            str(row[0])
+            for row in raw.execute(
+                "SELECT name FROM sqlite_schema WHERE type='table'"
+            ).fetchall()
+        }
+    finally:
+        raw.close()
+    assert tables == {"schema_migrations"}
+
+
+# ---------------------------------------------------------------------------
+# §6.5 — deterministic connection cleanup, and non-mutating refusal
+# ---------------------------------------------------------------------------
+
+def _is_closed(connection: sqlite3.Connection) -> bool:
+    try:
+        connection.execute("SELECT 1")
+        return False
+    except sqlite3.ProgrammingError:
+        return True
+
+
+def test_a_connection_configuration_failure_closes_the_connection(data_root, monkeypatch):
+    import utils.control_plane_store as module
+
+    class _FailingConnection:
+        def __init__(self) -> None:
+            self.closed = False
+            self.row_factory = None
+
+        def execute(self, *_args, **_kwargs):
+            raise sqlite3.OperationalError("pragma refused by the engine")
+
+        def close(self) -> None:
+            self.closed = True
+
+    created: list[_FailingConnection] = []
+
+    def _fake_connect(*_args, **_kwargs):
+        connection = _FailingConnection()
+        created.append(connection)
+        return connection
+
+    monkeypatch.setattr(module.sqlite3, "connect", _fake_connect)
+
+    with pytest.raises(ControlPlaneStoreError):
+        ControlPlaneStore(data_root)
+
+    assert created, "expected the store to have opened a connection"
+    assert all(connection.closed for connection in created)
+
+
+def test_a_corrupt_database_closes_every_connection_it_opened(data_root, monkeypatch):
+    import utils.control_plane_store as module
+
+    path = store_path(data_root)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(b"not a database")
+
+    real_connect = module.sqlite3.connect
+    created: list[sqlite3.Connection] = []
+
+    def _tracking_connect(*args, **kwargs):
+        connection = real_connect(*args, **kwargs)
+        created.append(connection)
+        return connection
+
+    monkeypatch.setattr(module.sqlite3, "connect", _tracking_connect)
+
+    with pytest.raises(ControlPlaneCorruptionError):
+        ControlPlaneStore(data_root)
+
+    assert created, "expected the store to have opened a connection"
+    assert all(_is_closed(connection) for connection in created)
+
+
+def test_a_ledger_refusal_closes_every_connection_it_opened(data_root, monkeypatch):
+    import utils.control_plane_store as module
+
+    _write_ledger(data_root, [(SUPPORTED_SCHEMA_VERSION, "wrong_name")])
+
+    real_connect = module.sqlite3.connect
+    created: list[sqlite3.Connection] = []
+
+    def _tracking_connect(*args, **kwargs):
+        connection = real_connect(*args, **kwargs)
+        created.append(connection)
+        return connection
+
+    monkeypatch.setattr(module.sqlite3, "connect", _tracking_connect)
+
+    with pytest.raises(ControlPlaneSchemaVersionError):
+        ControlPlaneStore(data_root)
+
+    assert created
+    assert all(_is_closed(connection) for connection in created)
+
+
+def test_unsupported_schema_refusal_does_not_change_the_journal_mode(data_root):
+    """Refusal must precede every persistent mutation, WAL activation included."""
+    _write_ledger(
+        data_root,
+        [(SUPPORTED_SCHEMA_VERSION, "wrong_name")],
+        journal_mode="delete",
+    )
+    assert _read_raw_journal_mode(data_root) == "delete"
+
+    with pytest.raises(ControlPlaneSchemaVersionError):
+        ControlPlaneStore(data_root)
+
+    assert _read_raw_journal_mode(data_root) == "delete"
+
+
+def test_a_newer_schema_refusal_does_not_change_the_journal_mode(data_root):
+    _write_ledger(
+        data_root,
+        [(1, "initial_control_plane_metadata"), (99, "from_a_much_newer_build")],
+        journal_mode="delete",
+    )
+    with pytest.raises(ControlPlaneSchemaVersionError):
+        ControlPlaneStore(data_root)
+    assert _read_raw_journal_mode(data_root) == "delete"
+    assert _read_raw_ledger(data_root) == [
+        (1, "initial_control_plane_metadata"),
+        (99, "from_a_much_newer_build"),
+    ]
+
+
+def test_corruption_refusal_creates_no_wal_sidecars(data_root):
+    path = store_path(data_root)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(b"not a database")
+
+    with pytest.raises(ControlPlaneCorruptionError):
+        ControlPlaneStore(data_root)
+
+    wal, shm = sidecar_paths(data_root)
+    assert not wal.exists()
+    assert not shm.exists()
+
+
+# ---------------------------------------------------------------------------
 # §6.5 — corruption fails closed, never auto-repaired or recreated
 # ---------------------------------------------------------------------------
 
