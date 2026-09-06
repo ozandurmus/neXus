@@ -72,9 +72,8 @@ two `tests/test_pcp1_device_registry.py` uuid4 call-count defects via
 **Freeze is not implementation authority.** `M1`…`M14` remain separately
 authorized movements; `NAV.1` (`5a5a1f7`) required `M2` to close the four
 accessibility requirements before merging — done, via PR #85.
-`left_vertical_product_navigation` stays `in_progress` in
-`project/feature_registry.json` regardless: `availability_rule` (the
-remaining capability predicates) is genuinely pending, owned by later
+`left_vertical_product_navigation` stays `in_progress`: `availability_rule`
+(remaining capability predicates) is genuinely pending, owned by later
 movements, independent of `M2`'s scope. Frozen (unchanged): fifteen
 `D-NAV` decisions, no operative row provisional; the six-root baseline,
 Recovery reserved seventh, Jobs under Operations; the four-predicate
@@ -178,9 +177,10 @@ Full parallel suite (pre-merge, this branch): `py -m pytest -q -n auto
   --dist worksteal` (4 workers) = 1958 passed, 23 skipped, 0 failed, 29.46s
   wall-clock. Completely clean, no serial rerun. M1's uuid4 defect stays
   fixed (merged via PR #84).
-Post-merge CI on main (PR #85, run 34016204567, commit 081a976): privacy
-  gate/project-state/build-history-index checks success; full-regression
-  terminal result in project/build_history.json (nav_1_accessibility_closure).
+Post-merge CI on main (PR #85, run 34016204567, commit 081a976):
+  full-regression SUCCESS -- privacy gate, project-state, build-history-index,
+  full serial suite (~11m56s) and whitespace check all success (detail:
+  project/build_history.json nav_1_accessibility_closure).
 Repository privacy gate: PASS / 0 findings. metadata_warnings == [];
   build-history index --check clean; git diff --check clean.
 ```
