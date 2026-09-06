@@ -452,6 +452,24 @@ def build_parser() -> argparse.ArgumentParser:
             "unknown id."
         ),
     )
+    parser.add_argument(
+        "--identity-first-contact",
+        default=None,
+        metavar="DEVICE_ID",
+        help=(
+            "M8.3 read-only first-contact identity-evidence producer for exactly one "
+            "PCP.1 Device Registry device_id: resolves the current record fail-closed, "
+            "selects the one CMA/MDS-discovered physical candidate whose management_ip "
+            "matches its endpoint (zero or multiple candidates refuse), enforces the "
+            "mandatory trust-before-credential sequence (utils.cp_ssh_trust."
+            "lookup_trusted_host_key first -- no credential is resolved for an "
+            "untrusted endpoint), then reuses the existing, unmodified physical-host "
+            "_collect_host/_identity_gate collection primitives. Writes a proven "
+            "device_id -> collector entity_id relationship only when the identity gate "
+            "accepts, a usable serial is read, and this run's own CP config evidence is "
+            "concretely resolvable. Not exposed through the Operator Console."
+        ),
+    )
     return parser
 
 
@@ -568,6 +586,19 @@ def validate_modes(args, parser):
         parser.error(
             "--cp-ha-preflight-check / --pan-ha-preflight-check cannot be combined with "
             "collection/render/maintenance modes"
+        )
+
+    if args.identity_first_contact and (
+        args.cp_config_probe or args.cp_config_collect or args.render_only or args.only != "all"
+        or args.recovery_collect or args.recovery_attest or args.storage_analyze
+        or args.storage_deduplicate or args.apply or args.repository_privacy_check
+        or args.persistent_secret_material_check or args.restore_readiness_check
+        or args.ha_readiness_check or args.recovery_store_check or args.recovery_validate
+        or args.compliance_trend_reconstruct or args.scheduler_once or args.console
+        or registry_mode_count or args.cp_ha_preflight_check or args.pan_ha_preflight_check
+    ):
+        parser.error(
+            "--identity-first-contact cannot be combined with collection/render/maintenance modes"
         )
 
     if args.storage_analyze and args.storage_deduplicate:
@@ -736,6 +767,9 @@ def dispatch(args, parser, *, runtime_services=None, provenance="manual", admiss
         return checkpoint_wf.cp_config_probe(ctx)
     if args.cp_config_collect:
         return checkpoint_wf.cp_config_collect(ctx)
+    if args.identity_first_contact:
+        from application.workflows import first_contact as first_contact_wf
+        return first_contact_wf.identity_first_contact(ctx)
     if args.cp_ha_preflight_check:
         from application.workflows import preflight as preflight_wf
         return preflight_wf.cp_ha_preflight_check(ctx)
