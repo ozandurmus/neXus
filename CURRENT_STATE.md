@@ -54,42 +54,43 @@ test-enforced boundaries. Current numbers:
 
 ## Active build
 
-**`nav_3_capability_state_vocabulary`** (`M3`) — **IN_PROGRESS.**
-Capability-state vocabulary + presentation contract. Contract:
-`docs/design/CAPABILITY_STATE_VOCABULARY_AND_PRESENTATION.md` — status
-**DRAFT — DO NOT FREEZE, NOT PRODUCT OWNER APPROVED**; it authorizes no
-implementation and is not citable as design authority. Delivered: seven
-independently owned state dimensions (`D1`–`D7`), a ten-value
-`CapabilityState` plus six non-exclusive qualifiers, a deterministic
-precedence ladder, vendor normalization boundaries, an event→dimension
-transition table and 53 acceptance criteria `AC-CS-1`…`53`. `PO-NAV-7`
-resolved **in contract**: the capability-policy concept → `D5`
-`POLICY_DISABLED`, owned by the schedule/capability-policy contract
-(amendment `A5`, `M12`); "not enrolled" → `D4` `EVIDENCE_ONLY`, owned by the
-registry/evidence reconciliation projection (amendment `A6`, `M10`). The
-console job lifecycle, `OP.2` `ActionState`, action taxonomy, compliance,
-discovery-lifecycle and registry vocabularies are **byte-unchanged**. No
-runtime/UI/CSS/payload/registry/job/authorization change.
+**`nav_3_capability_state_vocabulary`** (`M3`) — **IN_PROGRESS, revision 2.**
+Contract: `docs/design/CAPABILITY_STATE_VOCABULARY_AND_PRESENTATION.md` —
+**DRAFT — DO NOT FREEZE, NOT PRODUCT OWNER APPROVED**; authorizes no
+implementation, not citable as design authority. Seven independently owned
+dimensions `D1`–`D7` resolved by a staged resolver into four independent
+outputs (`primary_status`, qualifiers, `evidence_presentation`,
+`action_eligibility`). `AC-CS-1`…`72`.
 
-**Reported, not reconciled** (`AGENTS.md` authority hierarchy): the FROZEN
-navigation contract contradicts itself on omitting a structurally
-inapplicable tab — §8/§8.1 permit omission for an entity type, while
-§6.5/D-NAV13/`AC-WS-7`/`AC-WS-8` forbid it. Raised as **`PO-M3-1`**; a
-Product Owner decision, not an agent's.
+**Revision 2** applied an independent review: fourteen draft defects corrected
+in place (§11.1) — provenance / freshness / completeness / collection outcome
+split into four independent facets (`D6a`–`D6d`); status label separated from
+displayed evidence and action eligibility, removing the blanket empty-view
+rule; contradiction narrowed to a closed pre-ladder set `CX1`–`CX3` with
+declared scopes; `AVAILABLE` requires a positive conjunction with a fail-closed
+catch-all; authorization restated as **five regimes** (`OP.2`'s
+`DenyAllAuthorizer` governs CLASS 2 **only**); persistence corrected against
+frozen `AC-ST-2`, which permits a persisted capability projection.
 
-**Six open PO decisions** `PO-M3-1`…`6` (contract §11) gate the freeze. One
-is out-of-scope awareness: two live job-lifecycle vocabularies exist —
-`console/jobs.py` (`queued`…`skipped`) and
-`utils/coordinator_backend.JobStatus` (`pending`…`orphaned`), the latter
-surfaced by `discovery_capability_ui.JOB_STATUS_LABELS`; `PO-NAV-7` protects
-only the first (`PO-M3-4`).
+`PO-NAV-7` resolved **in contract**: capability policy → `D5` `POLICY_DISABLED`
+(`A5`, `M12`); "not enrolled" → `D4` `EVIDENCE_ONLY` (`A6`, `M10`). The console
+job lifecycle, `OP.2` `ActionState`, action taxonomy, compliance,
+discovery-lifecycle and registry vocabularies are **byte-unchanged**.
 
-**Predecessor builds, complete:** `parallelize_full_regression_execution`
-(`DEV.TEST.1`) and `nav_1_accessibility_closure` (`M2`), both
-**AUTOMATED_VALIDATED, MERGED** (PR #90, PR #85) — detail in
+**Recorded, not applied** (`AGENTS.md` authority hierarchy): five frozen-parent
+corrections `FA-1`…`FA-5` — the navigation contract carries the same
+`PROVENANCE_UNVERIFIED`-as-stale and `UNKNOWN_SHELL`-as-unsupported errors
+(§8 l.627/l.629, §5.4 l.445, `AC-DIF-7`), plus the tab-omission contradiction
+(§8/§8.1 vs §6.5/D-NAV13/`AC-WS-7`/`AC-WS-8`). No frozen file was edited.
+**Withdrawn on evidence:** the earlier claim that the two job-lifecycle
+vocabularies are a defect — verified that no renderer crosses them.
+
+**Six open PO decisions** `PO-M3-1`…`6` (contract §11.2) gate the freeze.
+
+**Predecessor builds, complete:** `DEV.TEST.1` and `M2`, both
+**AUTOMATED_VALIDATED, MERGED** (PR #90, PR #85) —
 `project/build_history.json`. `left_vertical_product_navigation` stays
-`in_progress` (`availability_rule` pending); no `D-NAV`/`PO-NAV` decision
-reopened.
+`in_progress` (`availability_rule` pending).
 
 ## `OP.0b.0` — FROZEN WITH REAL-ENV VALIDATION GATES
 
@@ -124,28 +125,22 @@ a narrower question never promoted toward B2.
 
 ## Exact next build
 
-**Product Owner review of the `M3` DRAFT contract** — close `PO-M3-1`…`6`
-(contract §11), then either freeze
-`docs/design/CAPABILITY_STATE_VOCABULARY_AND_PRESENTATION.md` or return it
-with corrections. `PO-M3-1` requires a one-line correction to the FROZEN
-navigation contract and cannot be applied by an agent. `M3` stays
-`in_progress` until then; nothing downstream is authorized by the draft.
+**Independent review of the revised `M3` draft**, then Product Owner decisions
+`PO-M3-1`…`6` (contract §11.2) and a ruling on the prepared frozen-parent
+corrections `FA-1`…`FA-5` (§2.7, §11.3). `FA-1`…`FA-5` amend a FROZEN document
+and cannot be applied by an agent. `M3` stays `in_progress` until then; nothing
+downstream is authorized by the draft.
 
 `now_next.next` is **`local_control_plane_metadata_store`** (`M4`): local
-SQLite control-plane metadata only, additively, inside the companion
-contract's §6.4 ownership boundary and §6.5 engine contract
-(`AC-ST-1`…`AC-ST-8` already frozen). Independent of `M3`'s outcome; needs
-its own separate authorization to start. `Sonnet 5, extended thinking
-(high)`, new session.
+SQLite control-plane metadata only, additively, inside the companion contract's
+§6.4 ownership boundary and §6.5 engine contract (`AC-ST-1`…`AC-ST-8` frozen).
+Independent of `M3`'s outcome; needs its own separate authorization to start.
 
 Deferred detail remains **implementation-contract work inside a frozen
-direction**: SQLite schema at `M4`, trust mechanics at `M8`, enrollment
-schemas at `M9`. `M5` stays the critical path — **every collection job type
-today is `target_mode="none"`**.
-
-`op2_c_cp_clusterxl_adapter_scoping` stays `upcoming`/blocked with its notes in
-`project/roadmap.json` (adapter, member session and preflight/eligibility all
-IMPLEMENTED + unit-tested, none wired; CLASS 2 unreachable). `OP.2.D`'s console
+direction**: SQLite schema at `M4`, trust mechanics at `M8`, enrollment schemas
+at `M9`. `M5` stays the critical path — **every collection job type today is
+`target_mode="none"`**. `op2_c_cp_clusterxl_adapter_scoping` stays
+`upcoming`/blocked with its notes in `project/roadmap.json`; `OP.2.D`'s console
 flow is expected on the `PCP.4` device/HA tab — one console, never two.
 
 ## Open blockers
@@ -172,11 +167,16 @@ Concurrency budget stays at 1 per vendor pending its own real-env evidence.
 ## Automated test baseline
 
 ```
-M3 (contract/docs-only movement) focused: architecture convergence 24 passed,
-  navigation IA 20 passed, 0 failed. metadata_warnings == [];
-  build-history index --check clean; git diff --check clean.
-  No full local suite and no GitHub full regression run -- documentation-only
-  change, per the movement's own validation scope.
+M3 revision 2 focused (authoritative re-run, contract/docs-only movement):
+  tests/test_architecture_convergence.py            20 passed, 0 failed
+  tests/test_navigation_information_architecture.py 16 passed, 4 skipped
+  combined                                          36 passed, 4 skipped, 0 failed
+  CORRECTION: the figures previously recorded here for revision 1 ("24" /
+  "20" passed) were written before the run and were never true; the
+  revision-1 session close figure (36 / 4) was correct. No retained log
+  exists for revision 1 -- the counts above are a fresh revision-2 run.
+  metadata_warnings == []; build-history index --check clean; git diff
+  --check clean. No full local suite, no GitHub full regression.
 Last full parallel suite (DEV.TEST.1, unchanged by M3): local `-n auto --dist
   worksteal` (4 CPUs) = 1957 passed, 24 skipped, 0 failed, two clean runs.
   GitHub Actions one-time proof (run 34020356372): 1944 passed / 38 skipped /
