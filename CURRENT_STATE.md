@@ -54,37 +54,41 @@ test-enforced boundaries. Current numbers:
 
 ## Active build
 
-**`nav_3_capability_state_vocabulary`** (`M3`) — **IN_PROGRESS, revision 5.**
+**`nav_3_capability_state_vocabulary`** (`M3`) — **IN_PROGRESS, revision 6.**
 Contract: `docs/design/CAPABILITY_STATE_VOCABULARY_AND_PRESENTATION.md` —
 **DRAFT — DO NOT FREEZE, NOT PRODUCT OWNER APPROVED**; authorizes no
-implementation, not citable as design authority. Dimensions `D1`–`D7`, gates
-`E1`–`E7`, inputs `I1`–`I20`, `AC-CS-1`…`97` (no id renumbered or deleted).
+implementation, not citable as design authority. Result is a tagged union
+`RESOLVED{...}` | `OMITTED{reason, diagnostic}`; `NOT_SHIPPED` is a
+`SurfaceOmissionReason`, not a `CapabilityState`. `action_affordance[]` is
+**presentation-time only** and never claims an `E7` check passed. `E4` is total
+via `NO_APPLICABLE_AUTHORITY` (non-blocking, **not a grant**). Only `CX1` is
+unsafe. `D1`–`D7`, `E1`–`E7`, `I1`–`I20`, `AC-CS-1`…`97`.
 
-**Revision 5** — defects `X40`–`X49`. The result is now a **tagged union**:
-`RESOLVED{primary_status, capability_qualifiers, evidence_presentation,
-action_affordance}` or `OMITTED{reason, diagnostic}`, and `NOT_SHIPPED` is a
-`SurfaceOmissionReason`, not a `CapabilityState` (nine resolved-only states).
-The fourth output is a **presentation-time** `action_affordance[]`
-(`AVAILABLE_FOR_SUBMISSION` / `DISABLED_KNOWN_BLOCKER` / `UNDETERMINED`) that
-**never claims an `E7` check has passed** and is never an execution grant; both
-`AC-ST-4` registry checks stay at their own phases. `E4` is **total** via
-`NO_APPLICABLE_AUTHORITY` — non-blocking and **not a grant**. `CX1` is
-subject-scoped, so targetless actions are unaffected. `RI-1` (was `CX2`)
-comparability is total over `K1`–`K6`; `CX2`/`CX3` are renamed **bounded
-inconsistencies**, so danger stays reserved for `CX1` and `AC-CS-47` needs no
-parent amendment. H-cases use **real registry action ids** — verified that
-`enroll_device` is **not** in `JOB_REGISTRY`, so the enrollment example now
-produces no action entry rather than inventing an authority. The persistable
-capability projection is separated from the composed presentation resolution.
+**Revision 6** — normative consistency and fixture integrity. The §5 stage
+summary uses tagged-union terminology and names the presentation-time /
+server-phase boundary (submission → admission → immediately before execution,
+where both `AC-ST-4` registry checks live). `CX1`/`RI-1`/`RI-2` is consistent in
+every normative clause; `CX2`/`CX3`, `G1`–`G4` and `R1`–`R5` survive only in
+labelled historical notes. Ten stale criteria reconciled without renumbering.
+Hard cases are tagged **`[CURRENT]`** / **`[FUTURE]`** with a mechanical
+obligation — a `[CURRENT]` id must be in `JOB_REGISTRY`, a `[FUTURE]` one
+asserted absent. `H5b` corrected (`report_rebuild` is `render-only`, **not** a
+retry; retry → `[FUTURE]` `H5d`); `H11a`/`H11c` action-free; `PO-M3-2` aligned
+with §11.3.
+
+**`H4` resolved from source** (contract §5.5.3): `config_refresh_cp` re-derives the
+CP platform classification that frozen `PCP.0` §8 names as a capability-projection
+input, so a re-collection can re-evaluate `D3`; "collecting again will not help" is
+removed from `H4a`–`H4d`. Which `UNSUPPORTED` reasons are `REVALIDATABLE` vs
+`TERMINAL` is open contract question **`UCQ-1`** (`M10`), not a PO decision.
 
 `PO-NAV-7` resolved **in contract**: capability policy → `D5` `POLICY_DISABLED`
 (`A5`, `M12`); "not enrolled" → `D4` `EVIDENCE_ONLY` (`A6`, `M10`). The job
 lifecycle, `ActionState`, taxonomy, compliance, discovery-lifecycle and
-registry vocabularies are **byte-unchanged**.
-
-**Recorded, not applied:** nine frozen-parent corrections `FA-1`…`FA-9`
-(§2.7), each owned by a named PO decision. **No frozen file was edited.**
-**Six open PO decisions** `PO-M3-1`…`6` (§11.2) gate the freeze.
+registry vocabularies are **byte-unchanged**. Nine frozen-parent corrections
+`FA-1`…`FA-9` (§2.7) are **recorded, not applied**, each owned by a named PO
+decision; **no frozen file was edited**. **Six open PO decisions**
+`PO-M3-1`…`6` (§11.2) gate the freeze.
 
 ## `OP.0b.0` — FROZEN WITH REAL-ENV VALIDATION GATES
 
@@ -120,21 +124,20 @@ a narrower question never promoted toward B2.
 ## Exact next build
 
 **Product Owner review of the corrected `M3` draft.** Close `PO-M3-1`…`6`
-(§11.2) and rule on the nine prepared frozen-parent corrections `FA-1`…`FA-9`
-(§2.7), each of which names its owning decision. `FA-*` amend a FROZEN document
-and cannot be applied by an agent; if approval is withheld the named acceptance
-criteria are **blocked** and the authority conflict stands — implementers are
-not sent back to semantics the draft demonstrated false, and the draft is not
-silently rewritten. `M3` stays `in_progress`.
+(§11.2) and rule on `FA-1`…`FA-9` (§2.7), each of which names its owner.
+`FA-*` amend a FROZEN document and cannot be applied by an agent; if approval
+is withheld the named criteria stay **blocked**, the conflict stays recorded,
+and neither the draft nor any implementer reverts to semantics demonstrated
+false (§11.3). `UCQ-1` (which `UNSUPPORTED` reasons are `REVALIDATABLE` vs
+`TERMINAL`) is an open contract question owned by `M10`, not a PO decision.
+`M3` stays `in_progress`.
 
 `now_next.next` is **`local_control_plane_metadata_store`** (`M4`): local
 SQLite control-plane metadata only, additively, inside the companion contract's
 §6.4 ownership boundary and §6.5 engine contract (`AC-ST-1`…`AC-ST-8` frozen).
 Independent of `M3`'s outcome; needs its own separate authorization to start.
 
-Deferred detail remains **implementation-contract work inside a frozen
-direction**: SQLite schema at `M4`, trust mechanics at `M8`, enrollment schemas
-at `M9`. `M5` stays the critical path — **every collection job type today is
+`M5` stays the critical path — **every collection job type today is
 `target_mode="none"`**. `op2_c_cp_clusterxl_adapter_scoping` stays
 `upcoming`/blocked with its notes in `project/roadmap.json`; `OP.2.D`'s console
 flow is expected on the `PCP.4` device/HA tab — one console, never two.
@@ -163,21 +166,21 @@ Concurrency budget stays at 1 per vendor pending its own real-env evidence.
 ## Automated test baseline
 
 ```
-M3 revision 5 focused (contract/docs-only movement):
-  tests/test_architecture_convergence.py            20 passed, 0 failed
-  tests/test_navigation_information_architecture.py 16 passed, 4 skipped
-  combined                                          36 passed, 4 skipped, 0 failed
-  metadata_warnings == []; build-history index --check clean; privacy gate
-  PASS / 0 findings; git diff --check clean; source/test/script/workflow/
-  dependency trees untouched; rendered-structure audit 0 failures;
-  stale-token audit clean; AC continuity and PO-to-FA mapping verified.
-  These validate repository consistency only -- no resolver exists yet, so
+M3 revision 6 focused (contract/docs-only movement):
+  architecture convergence 20 passed; navigation IA 16 passed / 4 skipped;
+  combined 36 passed, 4 skipped, 0 failed. metadata_warnings == [];
+  build-history index --check clean; privacy gate PASS / 0 findings;
+  git diff --check clean; source/test/script/workflow/dependency trees
+  untouched; rendered-structure audit 0 failures; paragraph-aware
+  stale-token audit 0 flagged; AC continuity and PO-to-FA mapping verified;
+  a deliberate rendered-prose read was performed -- the syntactic audits
+  alone prove nothing about narrative consistency.
+  These validate repository consistency only: no resolver exists yet, so
   every resolver acceptance criterion stays unexercised until its owning
   movement implements it. No full local suite, no GitHub full regression.
-Last full parallel suite (DEV.TEST.1, unchanged by M3): local `-n auto --dist
-  worksteal` (4 CPUs) = 1957 passed, 24 skipped, 0 failed, two clean runs.
-  GitHub Actions one-time proof (run 34020356372): 1944 passed / 38 skipped /
-  0 failed, 275.74s vs 11m56s serial. Detail: project/build_history.json.
+Last full parallel suite (DEV.TEST.1, unchanged by M3): 1957 passed, 24
+  skipped, 0 failed locally; GitHub Actions one-time proof (run 34020356372)
+  1944 passed / 38 skipped / 0 failed. Detail: project/build_history.json.
 Repository privacy gate: PASS / 0 findings.
 ```
 ## Known xfails
