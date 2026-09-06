@@ -64,22 +64,23 @@ implementation, not citable as design authority. Result is a tagged union
 via `NO_APPLICABLE_AUTHORITY` (non-blocking, **not a grant**). Only `CX1` is
 unsafe. `D1`–`D7`, `E1`–`E7`, `I1`–`I20`, `AC-CS-1`…`97`.
 
-**Revision 7** — fixture classification and fail-closed remediation. The binary
-`[CURRENT]`/`[FUTURE]` split wrongly assumed every future case names an absent
-action; `H4e` uses the real member `config_refresh_cp` and depends on a future
-*producer*. Replaced by three dependency classes — **`[CURRENT]`** (22),
-**`[FUTURE_PRODUCER]`** (1: `H4e`), **`[FUTURE_ACTION]`** (2: `H5d`, `H8b`,
-naming **no** `action_id`) — invariant: every `action_id` in §5.5 is a real
-`JOB_REGISTRY` member. **`UCQ-1` now fails closed** — an unclassified
-`UNSUPPORTED` remediation class no longer defaults to `REVALIDATABLE`; the
-collection action resolves **`UNDETERMINED`**
-(`E6: unsupported_remediation_class_unresolved`), never
-`AVAILABLE_FOR_SUBMISSION`, and copy may claim neither that re-collection helps
-nor that it cannot (new case `H4f`); `TERMINAL` still needs positive evidence.
-`FA-7` no longer says final eligibility is simply `E1`–`E7`; `FA-9` drops the
-retired `H9b`. **`H4` remains resolved from source** (contract §5.5.3):
-`config_refresh_cp` re-derives the CP platform classification that frozen
-`PCP.0` §8 names as a capability-projection input.
+**Revision 8** — fixture executability and dependency modelling. The three-class
+model conflated *does the action exist* with *does the input's producer exist*,
+and its `CURRENT` class falsely claimed full executability. Replaced by two
+orthogonal axes, `[ACT:… · IN:…]`: action basis `CURRENT` / `ACTION_FREE` /
+`FUTURE`; input basis `CURRENT` / `SYNTHETIC(owner)` / `FUTURE_PRODUCER(owner)`.
+Applied honestly, **20 of 23 atomic cases are `IN:SYNTHETIC`** — `AVAILABLE`
+requires `D3 = SUPPORTED` and `D4 = RECONCILED`, and neither has a producer.
+Only `H9a`/`H9a-t` are `IN:CURRENT`; `H4e` alone is `IN:FUTURE_PRODUCER(M10)`.
+**Executability restated:** source/registry assertions are verifiable today;
+resolver cases become unit fixtures once the resolver exists, using explicitly
+identified synthetic inputs; **the focused tests neither execute nor prove the
+resolver**. The two `ACT:FUTURE` cases left the atomic table (`ActionAffordance`
+requires a registry `action_id`), becoming future contract scenarios `S-FUT-1`
+(was `H5d`) and `S-FUT-2` (was `H8b`) in §5.5.1, each keeping its safety
+requirement. `AC-CS-65` lists 23 atomic cases and excludes them; no AC added or
+renumbered. **`UCQ-1` stays fail-closed** — an unclassified `UNSUPPORTED`
+remediation class resolves `UNDETERMINED`, never `AVAILABLE_FOR_SUBMISSION`.
 
 `PO-NAV-7` resolved **in contract**: capability policy → `D5` `POLICY_DISABLED`
 (`A5`, `M12`); "not enrolled" → `D4` `EVIDENCE_ONLY` (`A6`, `M10`). The job
