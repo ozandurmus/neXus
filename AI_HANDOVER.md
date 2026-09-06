@@ -13,69 +13,103 @@ Overwrite at every session close. Keep it minimal.
 
 ## 1. Snapshot
 
-- Date: 2026-09-06. Merged to `main` at `4b7e651` (PR #91).
-- Build: `nav_3_capability_state_vocabulary` (`M3`) — **COMPLETE / FROZEN**,
-  Product Owner approved 2026-09-06.
-- `docs/design/CAPABILITY_STATE_VOCABULARY_AND_PRESENTATION.md` is now
-  **FROZEN — PRODUCT OWNER APPROVED** and is implementation authority for the
-  capability-state vocabulary, the resolution contract and the presentation
-  matrix.
-- Documentation and project state only. No runtime, UI, CSS, JavaScript,
-  template, test, script, workflow, dependency, registry, storage,
-  authorization or job-lifecycle change.
+- Date: 2026-09-06. Branch `claude/m4-local-control-plane-metadata-store`
+  from `main` at `33b6798` (PR #92). PR open; **not merged**.
+- Build: `local_control_plane_metadata_store` (`M4`) — **COMPLETE**,
+  storage infrastructure only.
+- Local SQLite control-plane metadata store at
+  `<data_root>/state/control_plane.db`, schema version 1, seven `STRICT`
+  tables. Additive: nothing existing changed behaviour.
+- Contract: `docs/history/phase/M4_LOCAL_CONTROL_PLANE_METADATA_STORE.md`.
 
 ## 2. What this session did
 
-- **Closed six Product Owner decisions**, all APPROVED: `PO-M3-1` stable
-  visible tabs; `PO-M3-2` semantic parent corrections; `PO-M3-3` tagged-union
-  composition; `PO-M3-4` directional `D4`; `PO-M3-5` `--member-specific` as a
-  later UI contract direction (no CSS implemented); `PO-M3-6` evidence-gated
-  `NOT_SCHEDULED`.
-- **Applied nine amendments `FA-1`…`FA-9`** surgically to the frozen
-  `docs/design/NAVIGATION_INFORMATION_ARCHITECTURE.md`, which now carries its
-  own bounded amendment record naming `M3` and the approving decisions. The
-  parent's first status line, `PO-NAV-1`…`PO-NAV-8`, `D-NAV1`…`D-NAV14`, the
-  six-root baseline and the entity-workspace model are unchanged; the only
-  amended acceptance criterion is `AC-DIF-7` (`FA-4`).
-- **Froze the `M3` contract**: `DRAFT` → `FROZEN — PRODUCT OWNER APPROVED`,
-  with non-authoritative and implementation-blocking language removed.
-- Updated cold-start pointers in `docs/ARCHITECTURE.md` and `AI_START_HERE.md`,
-  marked `M3` complete in roadmap and build history, regenerated the history
-  index.
+- **Corrected the baseline first.** Local `main` was 142 commits behind and
+  had none of the `M4` contract documents; fast-forwarded to `33b6798` under
+  Product Owner approval before any edit.
+- **Added `utils/control_plane_store.py`** — placement validation, WAL +
+  `synchronous=FULL` + `foreign_keys=ON` + explicit 5 s `busy_timeout`,
+  `STRICT` tables, explicit monotonic one-transaction-per-version migrations,
+  deterministic connection ownership, separate read-only reader connections,
+  and seven typed fail-closed errors.
+- **Added a ninth `evidence_backend` concern selector** that refuses
+  `postgres` explicitly, naming `pcp_storage_engine` as still open.
+- **Registered the store LOCAL-SENSITIVE (CLASS 2)** in
+  `PRIVACY_AND_DATA_HANDLING.md`. No `support_bundle.py` or
+  `repository_privacy.py` change was needed: `data/state/*` is already outside
+  the only subtree the bundle enumerates, and `.db`/`.db-wal`/`.db-shm` were
+  already `DATABASE_ARTIFACT` and already gitignored.
+- **74 focused tests**, including ownership-boundary proofs that walk the real
+  schema rather than a maintained list.
+- **PO correction round** (one bounded round on the same branch, PR #93):
+  the migration ledger is validated as an **exact prefix** of `MIGRATIONS`,
+  not by `max(version)` — a foreign migration name at the supported version,
+  an unknown/gapped/non-prefix entry or an unreadable foreign ledger is
+  refused, naming both the encountered and supported ledgers. Open order was
+  corrected so **every refusal precedes every persistent mutation** (WAL
+  activation and ledger creation moved after validation), and connection
+  cleanup is deterministic on every failure path.
 
 ## 3. Exact next action
 
-**Create and configure the Claude-side `nexus-decision-council` before starting
-`M4`.** Every `M3` brief named that skill; it was absent from the environment
-throughout, so the council record is one authoring session's structured
-self-critique — not an installed skill, not independent validation. Standing it
-up is the prerequisite for the next architecture movement.
+**Product Owner review of the open PR, then merge decision.** Merge is not
+authorized by the session that opened it.
 
-**`M4` is not started and not authorized.** It needs its own go-ahead.
+`M5` (`collector_target_selection_seam`) is **next, not started, not
+authorized** — it needs its own go-ahead. It is the critical path: every
+collection job type today is `target_mode="none"`, so nothing device-targeted
+is honest before it.
+
+**Still outstanding from `M3`:** the Claude-side `nexus-decision-council` was
+never stood up. It was explicitly not required for `M4` (deterministic
+implementation against a frozen contract) but remains a prerequisite for the
+next *architecture* movement.
 
 ## 4. Test delta
 
-- No test added or changed. `tests/test_architecture_convergence.py` 20 passed;
-  `tests/test_navigation_information_architecture.py` 16 passed / 4 skipped;
-  combined 36 passed / 4 skipped / 0 failed.
-- `metadata_warnings == []`; build-history index `--check` clean; privacy gate
-  PASS / 0 findings; `git diff --check` clean; runtime/test/script/workflow/
-  dependency trees untouched; rendered-structure audit 0 failures;
-  `AC-CS-1`…`97` contiguous; PO↔FA closure audit complete.
-- **No full local suite, no GitHub full-regression, no `workflow_dispatch`, no
-  device contact.**
+- **New:** `tests/test_m4_control_plane_metadata_store.py` — **74 passed**
+  (57 at first review, +17 from the correction round).
+- Affected suites: 161 passed / 9 skipped (architecture convergence, privacy
+  gate, `PCP.1` registry, support bundle, `CON.2` console jobs, evidence
+  backend, runtime paths). One run showed
+  `test_ac9_two_jobs_both_reach_a_terminal_state` failing and green on
+  re-run — a pre-existing timing-sensitive `CON.2` test; no console module
+  references the store.
+- **Full parallel suite, run once:** 1991 passed, 37 skipped, **3 failed,
+  1 collection error — all pre-existing on the clean baseline** and verified
+  as such by re-running them at `33b6798` with the working tree stashed:
+  `test_binary_garbage_fails_closed`,
+  `test_safe_gw_strips_spurious_trailing_underscore...` (both environment/
+  `bash`-dependent), and `test_ci_workflow_fast_pr_regression.py`
+  (`ModuleNotFoundError: yaml` — PyYAML not installed locally).
+- One genuine failure of mine — `CURRENT_STATE.md` exceeding its 200-line cap —
+  was fixed and re-verified targeted; the full suite was not re-run, since the
+  only changed file is covered by that one test.
+- `metadata_warnings == []`; build-history index `--check` clean;
+  `git diff --check` clean.
+- **Privacy gate:** `PASS`, 0 findings, against the exact tree being committed
+  (497 files, exported to a temp dir). Running it in the working directory
+  reports `FAIL` on `data/`, `logs/` and `data/.support_hmac.key` — untracked,
+  gitignored runtime residue written by the pre-existing Panorama alignment
+  tests during the full-suite run, not repository content and not from `M4`.
+- **No device contact, no GitHub full regression, no `workflow_dispatch`,
+  no merge.**
 
 ## 5. Risks / notes forward
 
-- **The contract has no implementation.** `D3` arrives with `M10` and
-  per-(entity, capability) `D5` with `M12`; every capability resolves `UNKNOWN`
-  until they ship, and 20 of the 23 atomic resolution cases stay
-  synthetic-input fixtures until a resolver exists.
-- **`UCQ-1`** — which concrete `UNSUPPORTED` reason codes are `REVALIDATABLE`
-  vs `TERMINAL` — is an `M10`-owned implementation obligation, **not** an
-  approval gate: the fail-closed fallback yields `UNDETERMINED`, never
-  `AVAILABLE_FOR_SUBMISSION`.
-- Council dissents `D1`–`D5` are preserved as historical design dissent.
-- `left_vertical_product_navigation` stays `in_progress`; its
-  `availability_rule` criterion is an implementation criterion owned by later
-  movements, not closed by this contract freeze.
+- **Automated tests do not prove production readiness or real-environment
+  validation.** Nothing here ran against a device.
+- **The store has no caller.** It is infrastructure: no job behaviour, target
+  resolution, runner, scheduling, enrollment or HTTP/UI integration exists yet,
+  so `main.py` and the UI are unchanged and the database is never created
+  during a normal run. `M5`…`M12` own that wiring.
+- **`synchronous=FULL` is a deliberate departure** from WAL's usual `NORMAL`,
+  justified by `CON.0` §7.9's durable-before-runner requirement. If a later
+  movement finds the fsync cost real under load, that is a contract
+  conversation, not a silent flip.
+- **Pre-existing repo hygiene issue, unowned:** the Panorama alignment tests
+  write into a repository-relative `data/` and `logs/` instead of a temp
+  RuntimeRoot, which makes the working-directory privacy gate fail after any
+  full-suite run. Worth a backlog row; not fixed here (out of `M4` scope).
+- **`pcp_storage_engine` stays open.** SQLite is not the production engine and
+  nothing in this movement may be read as selecting one.
