@@ -5,6 +5,31 @@
 **FROZEN — PRODUCT OWNER APPROVED, 2026-09-05.** Reviewed branch head
 `ba56d2b` on `claude/left-nav-vertical-redesign-e673q6`.
 
+**Amendment record — `M3`, 2026-09-06 (Product Owner approved).** Nine bounded
+semantic corrections `FA-1`…`FA-9` were applied to this contract by movement
+`M3` under Product Owner decisions `PO-M3-1`, `PO-M3-2` and `PO-M3-3`. They
+correct verified producer-semantic errors in the presentation tables; they
+**reopen no frozen decision** — `PO-NAV-1`…`PO-NAV-8`, D-NAV1…D-NAV14, the
+six-root baseline, the entity-workspace model and every acceptance criterion
+other than `AC-DIF-7` are unchanged.
+
+| # | Clause amended | Correction |
+| --- | --- | --- |
+| `FA-1` | §8 **Stale** row | `PROVENANCE_UNVERIFIED` struck (it carries no age and no timestamp); given its own **Source trust insufficient** row asserting no age |
+| `FA-2` | §5.4 stale/incomparable row | split into **Stale evidence** (`last_known_good`, keeps its timestamp) and **Source trust insufficient** (`PROVENANCE_UNVERIFIED`, no timestamp) |
+| `FA-3` | §8 **Unsupported** row | `UNKNOWN_SHELL` struck and moved to **Unknown / insufficient** — it is `plan_collection`'s *unknown* branch, sibling to `INSUFFICIENT_EVIDENCE`, not a support conclusion |
+| `FA-4` | `AC-DIF-7` | timestamp required **only** where a freshness anchor exists |
+| `FA-5` | §8 **Not applicable** row; §8.1 omit-a-tab row | tab omission for an entity type **withdrawn**; the tab stays visible and selectable per §6.5/D-NAV13, `AC-WS-7`/`AC-WS-8`. This closes the §8/§8.1 vs §6.5 contradiction |
+| `FA-6` | §8.1 empty-state grouping | an explanatory empty state applies **only when no displayable evidence is retained**; otherwise the view stays populated, consistent with §8's own **Failed** row |
+| `FA-7` | §8 **Action** column | reworded to ask only whether the state contributes a **presentation-time blocker**; `action_affordance` is per-action, and `E7`/admission authority stays server-owned |
+| `FA-8` | §5.4 contradictory/unsafe row | `IDENTITY_TRANSLATION_REQUIRED` separated out as a **comparability limitation** with muted semantics; danger stays reserved for genuine contradiction, per `AC-DIF-8` |
+| `FA-9` | §8 table scope | a scope note stating the row's View/Action columns are **defaults**, finally resolved by the capability-state resolution contract's four independent outputs |
+
+Companion authority: `docs/design/CAPABILITY_STATE_VOCABULARY_AND_PRESENTATION.md`
+— **FROZEN — PRODUCT OWNER APPROVED, 2026-09-06** — owns the capability-state
+vocabulary, the resolution contract and the presentation matrix these
+amendments align to.
+
 **What this freeze does and does not do.** It fixes the *architecture* — the
 information architecture, the capability model, the entity-workspace model and
 the presentation contract — so later work implements against a settled shape
@@ -441,8 +466,10 @@ the same fact.
 | Unclassified difference | `DIFFERENCE_OBSERVED` | attention / warning semantics | "Difference observed" | attention iconography permitted |
 | Effective unexplained drift | `EFFECTIVE_DRIFT` | **danger / error** | "Effective drift" | error iconography |
 | Manager/device out of sync | `PANORAMA_OUT_OF_SYNC` | **danger / error** | "Out of sync" | error iconography |
-| Contradictory / unsafe state | `IDENTITY_TRANSLATION_REQUIRED`, `RELATIONSHIP_INCONSISTENT` | **danger / error**, with an explicit explanation | "Contradictory evidence" | error iconography |
-| Stale or incomparable evidence | `PROVENANCE_UNVERIFIED`, `last_known_good` | muted / provenance | "Stale evidence" + timestamp | none |
+| Contradictory / unsafe state | `RELATIONSHIP_INCONSISTENT`; a genuine identity contradiction (`M3` `CX1`) | **danger / error**, with an explicit explanation | "Contradictory evidence" | error iconography |
+| Identity translation required *(comparability limitation, **not** a fault — `FA-8`)* | `IDENTITY_TRANSLATION_REQUIRED` | muted / provenance | "Identity translation required" | none |
+| Stale evidence *(`FA-2`)* | `last_known_good` | muted / provenance | "Stale evidence" + timestamp | none |
+| Source trust insufficient *(`FA-2`; asserts **no** age — carries no timestamp)* | `PROVENANCE_UNVERIFIED` | muted / provenance | "Source not verified" | none |
 | Unknown / insufficient | `UNKNOWN`, `INSUFFICIENT_EVIDENCE` | muted | "Insufficient evidence" | none |
 
 **Rules that bind every row:** red is reserved for **actual fault, unsafe drift
@@ -621,30 +648,48 @@ Revision 1 claimed external corroboration from competitor state vocabularies;
 competitor's capability-state vocabulary is established by any retrievable
 source, and this matrix does not rest on one.
 
-| UX semantic | Existing canonical states to reuse | Nav entry | View / tab | Action | Presentation |
+| UX semantic | Existing canonical states to reuse | Nav entry | View / tab | Does this state contribute a presentation-time blocker? *(`FA-7`)* | Presentation |
 | --- | --- | --- | --- | --- | --- |
-| **Current / available** | `live`; config artifact `available`; `PASS`; `READY`; job `succeeded`; action `AVAILABLE` | shown | selectable, populated | enabled | normal |
-| **Stale** | `last_known_good`; `STALE`; `PROVENANCE_UNVERIFIED` | shown | **selectable**, data shown **with age + provenance** | enabled, with age stated | muted badge + timestamp; never blank |
-| **No evidence / not collected** | `no_data`; config `unavailable` | shown | **selectable**, explanatory empty state naming what would produce it | "collect now" enabled where a contract exists | empty state with a reason |
-| **Unsupported** | `UNSUPPORTED(reason)` (`PCP.0` §8, not yet implemented); `UNKNOWN_SHELL` | shown | selectable, states the vendor/platform reason | **disabled, visible, reason shown** | explicit "not supported on this platform" |
-| **Not applicable** | `NOT_APPLICABLE`; `NOT_A_FAILOVER_UNIT` | shown | tab may be **omitted for that entity type** or shown as N/A — never shown broken | n/a | "does not apply to a standalone device" |
-| **Supported but not configured** | `not_configured`; `UNPROTECTED` | shown | selectable, states what configuring it requires | enabled only if a configure path exists, else absent | actionable empty state |
+| **Current / available** | `live`; config artifact `available`; `PASS`; `READY`; job `succeeded`; action `AVAILABLE` | shown | selectable, populated | no | normal |
+| **Stale** | `last_known_good`; `STALE` | shown | **selectable**, data shown **with age + provenance** | no — not blocked by this state | muted badge + timestamp; never blank |
+| **Source trust insufficient** *(`FA-1`)* | `PROVENANCE_UNVERIFIED` | shown | selectable, states that no override/drift claim can be made from this source | no — not blocked by this state | muted, **no timestamp claim** |
+| **No evidence / not collected** | `no_data`; config `unavailable` | shown | **selectable**, explanatory empty state naming what would produce it | no — "collect now" is not blocked by this state | empty state with a reason |
+| **Unsupported** | `UNSUPPORTED(reason)` (`PCP.0` §8, not yet implemented) *(`FA-3`: `UNKNOWN_SHELL` removed — it is the *unknown* branch, see below)* | shown | selectable, states the vendor/platform reason | yes — blocks actions declaring the support fact | explicit "not supported on this platform" |
+| **Not applicable** | `NOT_APPLICABLE`; `NOT_A_FAILOVER_UNIT` | shown | **tab stays visible and selectable**, renders `NOT_APPLICABLE` and names the entity types that support it — see §6.5/D-NAV13 *(`FA-5`)* | yes — no enabled action | "does not apply to a standalone device" |
+| **Supported but not configured** | `not_configured`; `UNPROTECTED` | shown | selectable, states what configuring it requires | no; a configure action is declared only where a contract exists | actionable empty state |
 | **Intentionally disabled by policy** | `EXCLUDED` (polling policy); `DISABLED` (registry lifecycle); *proposed* `POLICY_DISABLED` | shown | selectable, names the policy | **disabled, with the policy named** | never silent |
 | **Blocked** | job `blocked`; action `BLOCKED`; `RecoveryCollectionBlockedError`; taxonomy refusal | shown | selectable | **disabled, refusing gate named** (`CON.0` §9 — never a bare greyed button) | e.g. "not in the D3 pilot allowlist" |
-| **Failed** | job `failed`; `COLLECTION_FAILURE` | shown | selectable, shows the failure and its time | retry offered **as a new typed job**, never by mutating history | error state + last good evidence retained |
-| **Skipped (correct outcome)** | job `skipped`; `RecoveryCollectionSkipped` | shown | selectable | enabled | **not an error** — e.g. ledger window already satisfied |
-| **Unknown / insufficient** | `UNKNOWN`; `INSUFFICIENT_EVIDENCE` | shown | selectable, says what is missing | disabled if the action needs the missing fact | explicit, never inferred as "fine" |
+| **Failed** | job `failed`; `COLLECTION_FAILURE` | shown | selectable, shows the failure and its time **beside retained last-good evidence** *(`FA-6`)* | no — retry is offered **as a new typed job**, never by mutating history | error state + last good evidence retained |
+| **Skipped (correct outcome)** | job `skipped`; `RecoveryCollectionSkipped` | shown | selectable | no | **not an error** — e.g. ledger window already satisfied |
+| **Unknown / insufficient** | `UNKNOWN`; `INSUFFICIENT_EVIDENCE`; `UNKNOWN_SHELL` *(`FA-3`)* | shown | selectable, says what is missing | only for an action that needs the missing fact | explicit, never inferred as "fine" |
 | **Not enrolled** *(proposed)* | *proposed* `NOT_ENROLLED` | shown | selectable, offers enrollment where permitted | enrollment action per `pcp_console_registry_write_gate` | explicit |
+
+**Scope of this table (`FA-9`, `M3`).** §8 is the **UX-semantic index**. A
+row's *View / tab* and *blocker* columns are **defaults for that state**; the
+final result is resolved by the capability-state resolution contract
+(`docs/design/CAPABILITY_STATE_VOCABULARY_AND_PRESENTATION.md` §4, §5), whose
+`RESOLVED` variant carries four **independent** outputs — `primary_status`,
+`capability_qualifiers`, `evidence_presentation` and per-action
+`action_affordance`. One state does not determine all four: `H4a`, `H4f`,
+`H5a`, `H5c`, `H9a`, `H9a-t`, `H11a` and `H11c` there, and scope test `S-RI-1`,
+each show a case this one-row-per-state shape cannot express.
+
+**Action semantics (`FA-7`, `M3`).** The blocker column answers **only**
+whether that capability state contributes a presentation-time blocker.
+`action_affordance` is resolved **per action** from the presentation-time gates
+(`E1`–`E3`, `E5`, `E6`, and `E4`'s evaluable part). Submission, admission and
+immediately-before-execution authority — **`E7` included** — remains
+**server-owned** and is never expressed by a cell in this table.
 
 ### 8.1 Which states change navigation itself
 
 | Effect | States |
 | --- | --- |
 | **Omit the view entirely** | only when **no product surface exists** (P1 fails) — never because of P2/P3 |
-| **Keep selectable + explanatory empty state** | stale, no evidence, not configured, insufficient, failed, skipped |
+| **Keep selectable; explanatory empty state _only when no displayable evidence is retained_** *(`FA-6`)* | stale, no evidence, not configured, insufficient, failed, skipped. Where evidence **is** retained the view stays **populated**, with the failure or limitation shown beside it |
 | **Disable the action, keep it visible with a reason** | unsupported, blocked, policy-disabled, insufficient-for-this-action |
-| **Omit a tab for an entity type** | not applicable (e.g. HA tab on a standalone device) — omitted **consistently for that type**, so it is a stable property of the type, not a flicker |
-| **Explicit warning required** | contradictory evidence, effective drift, out-of-sync |
+| **~~Omit a tab for an entity type~~ — withdrawn (`FA-5`)** | `NOT_APPLICABLE` **never** omits a tab. The tab stays **visible and selectable**, renders `NOT_APPLICABLE`, names the entity types that support it and offers no enabled action (§6.5/D-NAV13, `AC-WS-7`). A tab is omitted **only** on a P1 failure (`AC-WS-8`) |
+| **Explicit warning required** | genuine contradictory/unsafe evidence, effective drift, out-of-sync. **Not** `IDENTITY_TRANSLATION_REQUIRED`, which is a comparability limitation (`FA-8`) |
 | **Must fail closed** | anything feeding an action decision: unknown/insufficient never reads as permitted; a stale projection never authorizes a job (`OP.2.0` P4/P14) |
 
 ---
@@ -992,7 +1037,7 @@ waived — it becomes that movement's own acceptance criterion.
 | `AC-DIF-4` | `LOCAL_OVERRIDE` uses a **stronger attention** treatment with an explicit "Local override" label |
 | `AC-DIF-5` | Unclassified `DIFFERENCE_OBSERVED` uses attention/warning semantics |
 | `AC-DIF-6` | `EFFECTIVE_DRIFT`, contradictory/unsafe state and out-of-sync failures use **danger/error** semantics |
-| `AC-DIF-7` | Stale or incomparable evidence uses **muted/provenance** semantics with its timestamp |
+| `AC-DIF-7` | Stale or incomparable evidence uses **muted/provenance** semantics, **with its timestamp only where a freshness anchor exists** (`collected_at` / `last_successful_collection`); a classification carrying no anchor — `PROVENANCE_UNVERIFIED`, `IDENTITY_TRANSLATION_REQUIRED` — takes provenance semantics **without** a timestamp *(`FA-4`)* |
 | `AC-DIF-8` | **Red is reserved** for actual fault, unsafe drift or failed state |
 | `AC-DIF-9` | **Colour is never the only carrier**: every state is readable from its text, and in high contrast, without hue |
 
