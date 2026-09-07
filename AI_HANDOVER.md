@@ -8,9 +8,9 @@
 ## 1. Snapshot
 
 - Date: 2026-09-08. `gov_po_1_step_4_direction_record_ratification` —
-  **AUTOMATED_VALIDATED**, stacked on step 3 (PR #111); ratification is
-  effective on the authorized merge. Step 3 `gov_po_1_step_3_docs_reconciliation`
-  — **AUTOMATED_VALIDATED**, PR #111 open.
+  **AUTOMATED_VALIDATED, MERGED** (PR #112, `79a90b94…`): `PRODUCT_DIRECTION_RECORD.md`
+  is **RATIFIED**. Step 3 — **MERGED** (PR #111, `e208cb82…`). Phase A
+  **authorized** (`RELAY_DECISION`, relay #5); Phase B closed until T1–T6.
   Predecessor `gov_po_1_step_2_implementation` — **AUTOMATED_VALIDATED,
   MERGED** via PR #110 (`b53e15f1…`); contract `gov_po_1_role_migration_contract`
   **FROZEN, MERGED** via PR #109 (`d66e7dac…`). Both merges executed under an
@@ -54,8 +54,7 @@ Step 2 (merged, PR #110):
 
 ## 3. Exact next action
 
-1. Merge step 3 (PR #111) then step 4 under the recorded `RELAY_DECISION`s;
-   the step-4 merge ratifies the record.
+1. (done) PR #111 and #112 merged; record ratified.
 2. Step 5: first Phase A `PLAN` episode after a `RELAY_DECISION` authorizing
    Phase A: `claude --settings .claude/nexus-po.settings.json` → `/nexus-po PLAN`.
    It chooses the actionable `now_next.next`, ranks the backlog by theme,

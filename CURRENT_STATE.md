@@ -6,8 +6,9 @@ see `AGENTS.md`/`AI_START_HERE.md`. **Predecessor build detail lives in
 docs under `docs/history/`; `docs/history/INDEX.md` is the one-line timeline.
 
 - **Checkpoint:** 2026-09-08, `gov_po_1_step_4_direction_record_ratification`
-  — **AUTOMATED_VALIDATED**, ratification effective on authorized merge (see
-  "Active build"); `gov_po_1_step_3_docs_reconciliation` on PR #111.
+  — **AUTOMATED_VALIDATED, MERGED** (PR #112, `79a90b94…`): the direction
+  record is **RATIFIED**; `gov_po_1_step_3_docs_reconciliation` **MERGED**
+  (PR #111, `e208cb82…`). Phase A **authorized** (relay #5); Phase B closed.
   `gov_po_1_step_2_implementation` **MERGED** (PR #110, `b53e15f1…`);
   contract `gov_po_1_role_migration_contract` **FROZEN, MERGED** (PR #109). Predecessor `M9` **AUTOMATED_VALIDATED, MERGED** via PR #104
   (true merge `5fc88a21462eabb724f767f38a34ffd529eb008f`); PR #105–#108
@@ -61,12 +62,13 @@ against `D-F2`, production timing with security-defect clarification,
 council-tooling direction superseded, environment/secret handling, and
 five second-pass items (backlog umbrella
 `policy_rule_hygiene_and_path_placement_brief`, `nexus-po` skill §5).
-**AUTOMATED_VALIDATED**; ratification effective on the authorized merge
-(contract §4.1). Stacked on step 3 (PR #111). Steps 5–6 remain.
+**AUTOMATED_VALIDATED, MERGED** via PR #112 (2026-09-08) — the record is
+**RATIFIED** (contract §4.1). Phase A authorized by `RELAY_DECISION` on
+relay #5; Phase B closed until T1–T6. Steps 5–6 remain.
 
 Predecessor — **`gov_po_1_step_3_docs_reconciliation`** — documentation-only
 reconciliation (relay roster, council forward notes, `claude-mem` removal,
-PO tier row, `build-start` reading set, toolchain wording), PR #111 open.
+PO tier row, `build-start` reading set, toolchain wording), **MERGED** PR #111.
 
 Predecessor — **`gov_po_1_step_2_implementation`** — **AUTOMATED_VALIDATED,
 MERGED** via PR #110 (2026-09-08): `nexus-po` skill/agent, council skill +
