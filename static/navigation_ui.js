@@ -104,20 +104,19 @@ const NAVIGATION_CONTEXTUAL_ACTIONS = [
         id: "add_device",
         domain: "devices",
         label: "Add device",
-        available: false,
-        unavailable_reason:
-            "Device enrollment is CLI-only today (PCP.1 --registry-enroll). " +
-            "pcp_console_registry_write_gate is now DECIDED (2026-09-05), and " +
-            "narrowed to the local loopback profile: both manual and candidate-based " +
-            "enrollment may write, but ONLY once every condition frozen in " +
-            "docs/design/LOCAL_CONTROL_PLANE_RUNTIME_AND_ENROLLMENT.md section " +
-            "9.1 and CON.0 section 4.1/7.11 is implemented -- closed typed " +
-            "intent, no credential payload, no device I/O in the request, first " +
-            "contact as a separate queued CLASS 0 job, trust before credentials, " +
-            "positive-evidence identity, operator confirmation, immutable audit " +
-            "before mutation. Movement M9 owns that work; none of it exists yet, " +
-            "so no affordance is rendered. Server/production exposure remains " +
-            "blocked on DEPLOY.1A (pcp_server_enrollment_exposure).",
+        // M9 (2026-09-07): implemented -- manual endpoint enrollment only,
+        // wired directly into the Inventory pane header
+        // (`templates/console.html#m9EnrollOpenButton` + `#m9EnrollDialog`,
+        // `static/console_actions.js`'s M9 section), not through this
+        // generic renderer (`navigationContextualActions()` has no call
+        // site anywhere yet -- flipped here for data-model consistency, not
+        // because this list drives anything today). Candidate-based
+        // enrollment stays refused server-side pending M10's registry<->
+        // evidence reconciliation join (§9.2 amendment A6). Server/
+        // production exposure remains blocked on DEPLOY.1A
+        // (pcp_server_enrollment_exposure) via the console's own
+        // SECURITYEXPERT_DEPLOYMENT_PROFILE guard.
+        available: true,
     },
 ];
 

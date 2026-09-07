@@ -143,6 +143,12 @@
                     type="search"
                     placeholder="Example: 192.0.2.0/24 or 192.0.2.5"
                 >
+                <!-- M9 — the frozen "Devices" pane-header entry point
+                     (PO-NAV-1/D-NAV5). Direct markup + a dedicated dialog
+                     rather than the still-unwired navigation_ui.js
+                     `navigationContextualActions()` mechanism, which no
+                     panel calls anywhere today. -->
+                <button id="m9EnrollOpenButton" class="m9-enroll-open-button" type="button">+ Add device</button>
             </div>
             <div id="deviceList" class="device-list"></div>
         </aside>
@@ -538,6 +544,58 @@
 
 </div>
 </div>
+
+<!-- M9 — enrollment preview + confirmation. Native <dialog>: no device I/O
+     ever happens here (condition 9) -- "Probe identity" calls
+     POST /api/enrollment/probe and polls the resulting job; "Confirm &
+     Enroll" is absent (not disabled) until a positive preview exists
+     (honest-affordance rule, never a bare greyed control), and calls
+     POST /api/registry/enrollments only after that. -->
+<dialog id="m9EnrollDialog" class="m9-enroll-dialog">
+    <h2>Add device</h2>
+    <p class="detail-subtitle">
+        Manual endpoint enrollment. Identity is probed read-only and reviewed
+        before anything is written to the Device Registry.
+    </p>
+
+    <div class="m9-enroll-field">
+        <label for="m9EnrollEndpoint">Management endpoint</label>
+        <input id="m9EnrollEndpoint" class="control" type="text" placeholder="192.0.2.10 or host:port">
+    </div>
+
+    <div class="m9-enroll-field">
+        <label for="m9EnrollVendorHint">Vendor (hint only — identity is never taken from this)</label>
+        <select id="m9EnrollVendorHint" class="control">
+            <option value="unknown">Unknown</option>
+            <option value="checkpoint">Check Point</option>
+            <option value="paloalto">Palo Alto</option>
+        </select>
+    </div>
+
+    <div class="m9-enroll-field">
+        <label for="m9EnrollCredentialRef">Credential profile reference</label>
+        <input id="m9EnrollCredentialRef" class="control" type="text" placeholder="opaque reference, e.g. lab-cred-1">
+    </div>
+
+    <div class="m9-enroll-field">
+        <label>Trust profile</label>
+        <div class="detail-subtitle">system_known_hosts (the only trust profile available today)</div>
+    </div>
+
+    <div class="m9-enroll-field">
+        <label for="m9EnrollTags">Tags (optional, comma-separated key=value)</label>
+        <input id="m9EnrollTags" class="control" type="text" placeholder="site=lab, env=test">
+    </div>
+
+    <div id="m9EnrollPreview" class="m9-enroll-preview" hidden></div>
+    <div id="m9EnrollStatus" class="m9-enroll-status"></div>
+
+    <div class="m9-enroll-actions">
+        <button id="m9EnrollCloseButton" class="m9-enroll-open-button" type="button">Close</button>
+        <button id="m9EnrollProbeButton" class="job-type-button" type="button">Probe identity</button>
+        <button id="m9EnrollConfirmButton" class="job-type-button" type="button" hidden>Confirm &amp; Enroll</button>
+    </div>
+</dialog>
 
 <script src="/assets/app.js"></script>
 <script src="/assets/console_actions.js"></script>

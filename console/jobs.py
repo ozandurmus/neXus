@@ -52,6 +52,13 @@ class JobRecord:
     outcome_counts: dict | None = None
     error_code: str | None = None
     error_summary: str | None = None
+    #: M9 -- populated only by the `device_enrollment_identity_probe` job
+    #: type: a sanitized `utils.pre_enrollment_identity_probe.IdentityPreview`
+    #: dict (condition 12, "identity preview"). Never an endpoint, credential,
+    #: raw serial, host-key fingerprint or raw command output -- the same
+    #: forbidden-field posture this module's docstring already states for
+    #: every other field.
+    preview: dict | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -110,6 +117,7 @@ class ConsoleJobStore:
         outcome_counts: dict | None = None,
         error_code: str | None = None,
         error_summary: str | None = None,
+        preview: dict | None = None,
     ) -> None:
         if state not in TERMINAL_STATES:
             raise ValueError(f"not a terminal state: {state!r}")
@@ -124,6 +132,8 @@ class ConsoleJobStore:
             fields["error_code"] = error_code
         if error_summary is not None:
             fields["error_summary"] = _bound_error_summary(error_summary)
+        if preview is not None:
+            fields["preview"] = preview
         self._backend.update(job_id, **fields)
 
     def sweep_orphaned_running(self) -> list[str]:

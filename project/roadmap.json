@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "current_build": "m8_evidence_host_key_fingerprint_not_persisted",
+  "current_build": "m9_enrollment_preview_confirmation_ui",
   "current_track": "PCP.x",
   "progress_contract": "Weighted acceptance-criterion completion. Percentages describe the declared roadmap, not calendar time or delivery ETA.",
   "tracks": [
@@ -140,16 +140,16 @@
   "now_next": {
     "horizon_contract": "NOW is exactly one build. NEXT is exactly one. Everything else is an `upcoming` row carrying its own true status: planned = AFTER, blocked = waiting on a named external gate, deferred = consciously postponed. `now.build` must equal the newest project/build_history.json record -- utils.project_plan enforces it.",
     "now": {
-      "build": "m8_evidence_host_key_fingerprint_not_persisted",
-      "title": "Persist the captured physical-host fingerprint into governed CP config evidence metadata",
-      "goal": "Add the already-captured `host_key_fingerprint` to the governed physical Check Point evidence's `extra_metadata` in `_collect_host` (physical-host artifact only, never the VSX context artifact), so M8.4's local trust-currency check (frozen M8 contract §7) has real evidence to evaluate against instead of failing closed on every relationship for lack of the field.",
-      "status": "automated_validated",
+      "build": "m9_enrollment_preview_confirmation_ui",
+      "title": "M9 -- local-loopback enrollment preview + explicit confirmation UI",
+      "goal": "Implement docs/design/LOCAL_CONTROL_PLANE_RUNTIME_AND_ENROLLMENT.md §9.1's seventeen mandatory conditions for manual-endpoint console enrollment, per the PO-authorized SESSION_START (relay ozandurmus/nexus-agent-relay#3): a pre-registration identity probe, preview, explicit confirmation, immutable audit-before-mutation, and persistence through the one existing DeviceRegistry path. Candidate-based enrollment stays schema-present but refused pending M10.",
+      "status": "in_progress",
       "started": "2026-09-07",
-      "completed": "2026-09-07",
       "notes": [
-        "Full detail (evidence, tests, validation): project/build_history.json's m8_evidence_host_key_fingerprint_not_persisted record.",
-        "Branch m8-evidence-host-key-fingerprint-not-persisted, PR #103 MERGED to main via a true merge commit (06e51d36a11ed2ecc8dfc4d7581656aa09c5c95d), Product Owner approved 2026-09-07.",
-        "M8.3 real-environment validation stays deferred; M7 stays blocked -- neither changed by this fix."
+        "Full detail: project/build_history.json's m9_enrollment_preview_confirmation_ui record.",
+        "DISCLOSED GAP: the authoring environment had no Python 3.10+ (repo minimum) and no node/bun/playwright -- the new pytest file and the render harness have not been executed. Needs a compatible environment before automated_validated is claimed.",
+        "Administration -> Device Management second PO-NAV-1 entry point not built this slice.",
+        "M8.3 real-environment validation stays deferred; M7 stays blocked -- neither changed by this build."
       ]
     },
     "next": {
