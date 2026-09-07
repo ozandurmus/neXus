@@ -340,20 +340,43 @@ def test_syntactically_valid_truncation_missing_trailing_fields_is_rejected():
     assert any("integration" in e for e in errors)
 
 
-# --- extract_one: envelope handling ------------------------------------
+# --- extract_one: envelope handling -------------------------------------
+# GOV.SESSION.1A correction round 1: the envelope is now strict, symmetric
+# transport -- optional leading/trailing whitespace only, never surrounding
+# narrative, headings, chat history, or another payload.
 def test_extract_one_finds_the_payload():
     payload = json.dumps(_start_obj())
     assert gst.extract_one(_wrap(payload)) == payload
 
 
-def test_extract_one_ignores_surrounding_text():
-    text = f"chat before\n{_wrap(json.dumps(_start_obj()))}chat after"
-    assert json.loads(gst.extract_one(text)) == _start_obj()
-
-
 def test_extract_one_accepts_crlf_line_endings():
     text = _wrap(json.dumps(_start_obj())).replace("\n", "\r\n")
     assert json.loads(gst.extract_one(text)) == _start_obj()
+
+
+def test_extract_one_accepts_whitespace_only_surroundings():
+    text = f"\n  \n{_wrap(json.dumps(_start_obj()))}\n   \n"
+    assert json.loads(gst.extract_one(text)) == _start_obj()
+
+
+def test_extract_one_rejects_leading_prose():
+    text = f"chat before\n{_wrap(json.dumps(_start_obj()))}"
+    with pytest.raises(gst.PacketError, match="before the opening sentinel"):
+        gst.extract_one(text)
+
+
+def test_extract_one_rejects_trailing_prose():
+    text = f"{_wrap(json.dumps(_start_obj()))}chat after"
+    with pytest.raises(gst.PacketError, match="after the closing sentinel"):
+        gst.extract_one(text)
+
+
+def test_extract_one_rejects_a_heading_before_the_packet():
+    """A split narrative-plus-packet handoff -- prose/headings ahead of an
+    otherwise-valid packet -- must never pass as valid transport."""
+    text = f"## SESSION CLOSE\n\nHere is the summary.\n\n{_wrap(json.dumps(_close_obj()))}"
+    with pytest.raises(gst.PacketError, match="before the opening sentinel"):
+        gst.extract_one(text)
 
 
 def test_extract_one_rejects_no_sentinel():
@@ -372,10 +395,13 @@ def test_extract_one_rejects_multiple_packet_bodies():
         gst.extract_one(text)
 
 
-def test_extract_one_ignores_a_whitespace_altered_sentinel_line():
-    # Not an exact match -- must not be counted as a boundary.
+def test_extract_one_rejects_a_whitespace_altered_sentinel_line_as_leading_prose():
+    # Not an exact sentinel match -- so it is not a boundary, but it is also
+    # not whitespace, so it is now rejected as leading prose (correction
+    # round 1), not silently skipped over as it was under the old rule.
     text = f" {gst.SENTINEL} \n{_wrap(json.dumps(_start_obj()))}"
-    assert json.loads(gst.extract_one(text)) == _start_obj()
+    with pytest.raises(gst.PacketError, match="before the opening sentinel"):
+        gst.extract_one(text)
 
 
 # --- parse_and_validate / render ----------------------------------------

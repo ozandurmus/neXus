@@ -19,3 +19,10 @@ non-interactive Git dispatch commands in `SESSION CLOSE`.
 
 Do not read historical PHASE docs, the Continuation Pack, data/output/logs or
 runtime artifacts unless the task proves they are necessary.
+
+If this `SESSION START` crosses a session/tool boundary (arrives as, or must
+be answered as, a `NEXUS_SESSION_PACKET`), transport it as exactly one
+sentinel-wrapped protocol-version-2 packet per
+`docs/design/GOV_SESSION_TRANSFER_PROTOCOL.md` — the packet's `report`
+object carries the complete content above, field by field; no narrative
+outside the sentinel pair.

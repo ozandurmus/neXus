@@ -2,9 +2,9 @@
 
 ## Status
 
-**DRAFT — PO REVIEW PENDING.** Not FROZEN. A tool-independent
-session-boundary convention: a packet is informational and never
-self-authorizing (§2). Reference implementation:
+**FROZEN — PRODUCT OWNER APPROVED, 2026-09-07 (GOV.SESSION.1A correction
+round 1).** A tool-independent session-boundary convention: a packet is
+informational and never self-authorizing (§2). Reference implementation:
 `scripts/gov_session_transfer.py` (stdlib only).
 
 **Protocol version 2 (correction round 3, GOV.SESSION.1A):** version 1's
@@ -18,6 +18,19 @@ itself, as one nested `report` object, machine-checked field by field.
 Version 1 packets are now rejected outright (`protocol_version` must be
 `2`) — this is a breaking migration, not an additive one; removed
 capabilities are not restorable without a new, explicit decision.
+
+**GOV.SESSION.1A correction round 1 (2026-09-07):** the envelope itself
+was still permissive — it found and validated one sentinel-wrapped packet
+*anywhere* in a larger text, silently ignoring anything before or after
+it. That let a split narrative-plus-packet handoff (a Markdown heading, an
+explanation, chat history, alongside a structurally valid packet) pass as
+if it were fully canonical transport, even though version 2's whole point
+is that the packet carries the complete report, and nothing legitimate
+should ever need to sit outside it. Tightened to a **symmetric,
+direction-neutral envelope**: a PO-to-engineer `SESSION_START` and an
+engineer-to-PO `SESSION_CLOSE` are transported the exact same way, and
+`extract`/`validate` now reject any non-whitespace content before the
+opening sentinel or after the closing one — see §3.
 
 ## 1. Problem
 
@@ -62,10 +75,21 @@ that remain actually authoritative — never a copy of their content.
 The sentinel is the exact, permanent literal line `<<<NEXUS_SESSION_PACKET>>>`,
 identical to open and close — no version, id, or timestamp in it. A line
 matches only exactly, after stripping the line terminator (LF or CRLF).
-Extraction requires **exactly one** sentinel pair anywhere in the input:
-fewer than two lines is a missing/mismatched envelope; more than two is
-rejected as multiple packet bodies (ambiguous). Content outside the pair
-is ignored. The envelope itself is unchanged from version 1.
+Extraction requires **exactly one** sentinel pair in the input: fewer than
+two lines is a missing/mismatched envelope; more than two is rejected as
+multiple packet bodies (ambiguous).
+
+**Nothing but whitespace may surround the pair (correction round 1).**
+Valid input is optional leading whitespace, the opening sentinel, the JSON
+payload, the closing sentinel, and optional trailing whitespace — nothing
+else. Any other content anywhere before the opening sentinel or after the
+closing one — a heading, an explanation, chat history, another packet's
+worth of text — is rejected, not silently skipped over. This applies
+identically in both directions: a `SESSION_START` a Product Owner sends an
+engineer, and a `SESSION_CLOSE` an engineer returns, are both this one
+envelope and nothing more. Refs (§4.1) remain pointers to authoritative
+repository files; they can never substitute for content the `report`
+object itself is required to carry.
 
 ## 4. Payload
 
@@ -182,9 +206,11 @@ field): the only way to produce a packet is to hand `render` a complete,
 already-assembled report object, so there is no code path capable of
 emitting a report-less, version-1-shaped packet.
 
-`extract` prints the one packet's JSON found in a larger text (a sentinel
-pair already present in the input — e.g. pulled from a chat transcript).
-`validate` prints `{"valid": bool, "errors": [...]}` for a sentinel-wrapped
-input. Exit codes: `0` success, `1` invalid packet, `2` usage error. No
-network, daemon, credential, or device access. See
+`extract` prints the one packet's JSON from a sentinel-wrapped input --
+§3's strict envelope, not a search over a larger transcript: only
+surrounding whitespace is tolerated, so an input still carrying a
+narrative alongside the packet is rejected rather than mined for the
+payload. `validate` prints `{"valid": bool, "errors": [...]}` for the same
+input shape. Exit codes: `0` success, `1` invalid packet, `2` usage error.
+No network, daemon, credential, or device access. See
 `tests/test_gov_session_transfer.py` for the exact contract.

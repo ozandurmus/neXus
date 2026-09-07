@@ -32,6 +32,14 @@ boundaries and render-harness mechanics are detailed in
   validated. Use the existing `py` command directly; never invoke environment
   bootstrap or interpreter selection. On a real command failure, report it and
   stop.
+- **Session-boundary packets.** When a Product Owner message opens with a
+  `SESSION_START` `NEXUS_SESSION_PACKET`, or a reply is expected to close
+  with a `SESSION_CLOSE` one, use exactly one sentinel-wrapped
+  protocol-version-2 packet per `docs/design/GOV_SESSION_TRANSFER_PROTOCOL.md`
+  (FROZEN — PO APPROVED) — the packet's `report` object carries the complete
+  `AI_START_HERE.md` SESSION START/CLOSE content; no heading, summary, or
+  explanation belongs outside the sentinel pair in that case. Build it with
+  `py scripts/gov_session_transfer.py render` and validate before emitting.
 
 Everything else — context order, movement types, build lifecycle, privacy /
 DLP, evidence/identity laws, the `SESSION START` / `SESSION CLOSE` schemas
