@@ -6,11 +6,10 @@ see `AGENTS.md`/`AI_START_HERE.md`. **Predecessor build detail lives in
 docs under `docs/history/`; `docs/history/INDEX.md` is the one-line timeline.
 
 - **Checkpoint:** 2026-09-07, `m8_evidence_host_key_fingerprint_not_persisted`
-  — see "Active build". **AUTOMATED_VALIDATED**, PR open on branch
-  `m8-evidence-host-key-fingerprint-not-persisted`, **unmerged pending PO
-  review**. `M8.4` **AUTOMATED_VALIDATED, MERGED** via PR #101. **PO §12:**
-  `M8.3`'s real-env validation stays deferred; `M7` stays blocked. `M8`
-  architecture **FROZEN — PO APPROVED, 2026-09-06**.
+  — see "Active build". **AUTOMATED_VALIDATED**, PR #103 open, **unmerged
+  pending PO review**. `M8.4` **AUTOMATED_VALIDATED, MERGED** via PR #101.
+  **PO §12:** `M8.3`'s real-env validation stays deferred; `M7` stays
+  blocked. `M8` architecture **FROZEN — PO APPROVED, 2026-09-06**.
 - **Next** (`now_next.next`): `m8_3_real_environment_validation`, `deferred`
   per §12. `m7_real_device_targeted_collect_now`/
   `op2_c_cp_clusterxl_adapter_scoping` stay `upcoming`/`blocked`. `DEV.TEST.1`,
@@ -59,7 +58,7 @@ trust-currency check (frozen `M8` §7) could never pass against real `M8.3`
 evidence. Added `"host_key_fingerprint": key_fp` to the physical-host
 `write_text_snapshot(...)` call only — VSX evidence unchanged.
 **AUTOMATED_VALIDATED**; branch
-`m8-evidence-host-key-fingerprint-not-persisted`, PR open, **unmerged
+`m8-evidence-host-key-fingerprint-not-persisted`, PR #103, **unmerged
 pending PO review**. Full evidence: `project/build_history.json`.
 
 Predecessor — **`gov_session_1_unified_packet`** (`GOV.SESSION.1A`) —

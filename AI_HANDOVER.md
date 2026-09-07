@@ -15,8 +15,9 @@ Overwrite at every session close. Keep it minimal.
 
 - Date: 2026-09-07. `m8_evidence_host_key_fingerprint_not_persisted` —
   **AUTOMATED_VALIDATED**. Branch
-  `m8-evidence-host-key-fingerprint-not-persisted`, PR opened against
-  `main`, **left unmerged pending Product Owner review**.
+  `m8-evidence-host-key-fingerprint-not-persisted`, PR #103 open against
+  `main` (CI `validate` pass, `mergeStateStatus` CLEAN), **left unmerged
+  pending Product Owner review**.
 - `M8.4` — **AUTOMATED_VALIDATED, MERGED** to `main` via PR #101, true
   merge commit `3fd424d0753e63ebca44d0fca9f4805d102e5349`.
 - `gov_session_1_unified_packet` (`GOV.SESSION.1A`) — **AUTOMATED_VALIDATED,
@@ -57,7 +58,11 @@ Overwrite at every session close. Keep it minimal.
 7. Updated `project/build_history.json` (new newest-first record),
    `project/roadmap.json` (`now_next` rotation, `current_build`),
    `project/backlog.json` (closed-out finding note), `CURRENT_STATE.md`.
-8. Committed, pushed, and opened one PR against `main`; left it unmerged.
+8. Committed, pushed, and opened PR #103 against `main`.
+9. CI's privacy gate flagged a local filesystem path in this file's first
+   draft (`AI_HANDOVER.md:30`, `LOCAL_USER_PATH`); fixed in a follow-up
+   commit and re-verified `validate` passes. PR #103 left unmerged, open,
+   `mergeStateStatus` CLEAN.
 
 ## 3. Exact next action
 
