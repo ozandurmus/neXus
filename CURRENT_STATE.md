@@ -5,15 +5,13 @@ see `AGENTS.md`/`AI_START_HERE.md`. **Predecessor build detail lives in
 `project/build_history.json`** (structured, newest-first) and its linked
 docs under `docs/history/`; `docs/history/INDEX.md` is the one-line timeline.
 
-- **Checkpoint:** 2026-09-08, `gov_po_1_step_4_direction_record_ratification`
-  — **AUTOMATED_VALIDATED, MERGED** (PR #112, `79a90b94…`): the direction
-  record is **RATIFIED**; `gov_po_1_step_3_docs_reconciliation` **MERGED**
-  (PR #111, `e208cb82…`). Phase A **authorized** (relay #5); Phase B closed.
-  `gov_po_1_step_2_implementation` **MERGED** (PR #110, `b53e15f1…`);
-  contract `gov_po_1_role_migration_contract` **FROZEN, MERGED** (PR #109). Predecessor `M9` **AUTOMATED_VALIDATED, MERGED** via PR #104
-  (true merge `5fc88a21462eabb724f767f38a34ffd529eb008f`); PR #105–#108
-  (relay/Git governance) all **MERGED**. `M8.4` **MERGED** PR #101.
-  **PO §12:** `M8.3` deferred, `M7` blocked. `M8` **FROZEN 2026-09-06**.
+- **Checkpoint:** 2026-09-08, `gov_po_1_gate_1_command_safety_correction` —
+  **AUTOMATED_VALIDATED** gate fix (see "Active build"). Direction record
+  **RATIFIED** (PR #112); `gov_po_1_step_2/3` **MERGED** (PR #110/#111);
+  contract `gov_po_1_role_migration_contract` **FROZEN, MERGED** (PR #109).
+  Concurrent, unmerged: `gov_po_1_step_5_first_plan` (PR #113). Predecessor
+  `M9` **MERGED** PR #104; `M8.4` **MERGED** PR #101. **PO §12:** `M8.3`
+  deferred, `M7` blocked. `M8` **FROZEN 2026-09-06**.
 - **Next** (`now_next.next`): `m8_3_real_environment_validation`, `deferred`
   per §12, unchanged by M9's out-of-order run. `m7_real_device_targeted_collect_now`/
   `op2_c_cp_clusterxl_adapter_scoping` stay `upcoming`/`blocked`.
@@ -53,22 +51,17 @@ test-enforced boundaries. Current numbers:
 | 4 — policy / deployment / remediation | prohibited | — |
 ## Active build
 
-**`gov_po_1_step_4_direction_record_ratification`** (`GOV.PO.1` §10 step 4)
-— records the Product Owner's 2026-09-08 ratification decisions
-(`PRODUCT_DIRECTION_RECORD.md` §0, DR-1..DR-9e): Tufin path authority
-(`roadmap.json` `tufin_path_authority`), product objective, bounded
-process, one primary movement + integration owner, member-skew verified
-against `D-F2`, production timing with security-defect clarification,
-council-tooling direction superseded, environment/secret handling, and
-five second-pass items (backlog umbrella
-`policy_rule_hygiene_and_path_placement_brief`, `nexus-po` skill §5).
-**AUTOMATED_VALIDATED, MERGED** via PR #112 (2026-09-08) — the record is
-**RATIFIED** (contract §4.1). Phase A authorized by `RELAY_DECISION` on
-relay #5; Phase B closed until T1–T6. Steps 5–6 remain.
-
-Predecessor — **`gov_po_1_step_3_docs_reconciliation`** — documentation-only
-reconciliation (relay roster, council forward notes, `claude-mem` removal,
-PO tier row, `build-start` reading set, toolchain wording), **MERGED** PR #111.
+**`gov_po_1_gate_1_command_safety_correction`** (`GOV_PO_1_GATE_1`) —
+corrects `scripts/nexus_po_tool_gate.py`'s naive substring command-safety
+check (blocked git commit trailers and all relay packet posting) with
+shlex-based real-operator detection, plus a narrow `nexus_po_*.json/.txt`
+scratch-write allowance so a PO episode can stage and post its own
+`SESSION_START`/`SESSION_CLOSE` packets (section 5.1.1). Also neutralizes
+an unrelated local `.claude/settings.local.json` exposure (workstation
+only, not repository state). **AUTOMATED_VALIDATED.** Independent of the
+concurrent `gov_po_1_step_5_first_plan` PO episode (PR #113); whichever PR
+merges second reconciles `now_next.now` with the other, per the
+established pattern.
 
 Predecessors, all **MERGED**, governance-only: `gov_po_1_step_2_implementation`
 (PR #110, PO assistant infrastructure), `gov_po_1_role_migration_contract`
