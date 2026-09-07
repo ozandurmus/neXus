@@ -5,8 +5,9 @@ see `AGENTS.md`/`AI_START_HERE.md`. **Predecessor build detail lives in
 `project/build_history.json`** (structured, newest-first) and its linked
 docs under `docs/history/`; `docs/history/INDEX.md` is the one-line timeline.
 
-- **Checkpoint:** 2026-09-08, `gov_po_1_step_3_docs_reconciliation` —
-  **AUTOMATED_VALIDATED** documentation build (see "Active build").
+- **Checkpoint:** 2026-09-08, `gov_po_1_step_4_direction_record_ratification`
+  — **AUTOMATED_VALIDATED**, ratification effective on authorized merge (see
+  "Active build"); `gov_po_1_step_3_docs_reconciliation` on PR #111.
   `gov_po_1_step_2_implementation` **MERGED** (PR #110, `b53e15f1…`);
   contract `gov_po_1_role_migration_contract` **FROZEN, MERGED** (PR #109). Predecessor `M9` **AUTOMATED_VALIDATED, MERGED** via PR #104
   (true merge `5fc88a21462eabb724f767f38a34ffd529eb008f`); PR #105–#108
@@ -51,13 +52,21 @@ test-enforced boundaries. Current numbers:
 | 4 — policy / deployment / remediation | prohibited | — |
 ## Active build
 
-**`gov_po_1_step_3_docs_reconciliation`** (`GOV.PO.1` §10 step 3) —
-documentation-only reconciliation: role-based relay roster, forward notes
-beside the preserved council disclosures, `claude-mem` paragraph removed,
-PO episode tiers in the tier table, vendor-neutral `build-start` reading
-set, toolchain wording per ratification decision 8. **AUTOMATED_VALIDATED.**
-Step 4 (direction-record ratification, PO-authorized 2026-09-08) is stacked
-on it; steps 5–6 remain.
+**`gov_po_1_step_4_direction_record_ratification`** (`GOV.PO.1` §10 step 4)
+— records the Product Owner's 2026-09-08 ratification decisions
+(`PRODUCT_DIRECTION_RECORD.md` §0, DR-1..DR-9e): Tufin path authority
+(`roadmap.json` `tufin_path_authority`), product objective, bounded
+process, one primary movement + integration owner, member-skew verified
+against `D-F2`, production timing with security-defect clarification,
+council-tooling direction superseded, environment/secret handling, and
+five second-pass items (backlog umbrella
+`policy_rule_hygiene_and_path_placement_brief`, `nexus-po` skill §5).
+**AUTOMATED_VALIDATED**; ratification effective on the authorized merge
+(contract §4.1). Stacked on step 3 (PR #111). Steps 5–6 remain.
+
+Predecessor — **`gov_po_1_step_3_docs_reconciliation`** — documentation-only
+reconciliation (relay roster, council forward notes, `claude-mem` removal,
+PO tier row, `build-start` reading set, toolchain wording), PR #111 open.
 
 Predecessor — **`gov_po_1_step_2_implementation`** — **AUTOMATED_VALIDATED,
 MERGED** via PR #110 (2026-09-08): `nexus-po` skill/agent, council skill +
