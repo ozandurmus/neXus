@@ -6,8 +6,8 @@ see `AGENTS.md`/`AI_START_HERE.md`. **Predecessor build detail lives in
 docs under `docs/history/`; `docs/history/INDEX.md` is the one-line timeline.
 
 - **Checkpoint:** 2026-09-07, `m8_evidence_host_key_fingerprint_not_persisted`
-  — see "Active build". **AUTOMATED_VALIDATED**, PR #103 open, **unmerged
-  pending PO review**. `M8.4` **AUTOMATED_VALIDATED, MERGED** via PR #101.
+  — see "Active build". **AUTOMATED_VALIDATED, MERGED** via PR #103. `M8.4`
+  **AUTOMATED_VALIDATED, MERGED** via PR #101.
   **PO §12:** `M8.3`'s real-env validation stays deferred; `M7` stays
   blocked. `M8` architecture **FROZEN — PO APPROVED, 2026-09-06**.
 - **Next** (`now_next.next`): `m8_3_real_environment_validation`, `deferred`
@@ -57,9 +57,9 @@ governed physical CP config evidence's `extra_metadata`, so `M8.4`'s
 trust-currency check (frozen `M8` §7) could never pass against real `M8.3`
 evidence. Added `"host_key_fingerprint": key_fp` to the physical-host
 `write_text_snapshot(...)` call only — VSX evidence unchanged.
-**AUTOMATED_VALIDATED**; branch
-`m8-evidence-host-key-fingerprint-not-persisted`, PR #103, **unmerged
-pending PO review**. Full evidence: `project/build_history.json`.
+**AUTOMATED_VALIDATED, MERGED** to `main` — branch
+`m8-evidence-host-key-fingerprint-not-persisted`, PR #103, Product Owner
+approved 2026-09-07. Full evidence: `project/build_history.json`.
 
 Predecessor — **`gov_session_1_unified_packet`** (`GOV.SESSION.1A`) —
 **FROZEN, MERGED 2026-09-07** (PR #102): one canonical protocol-v2
