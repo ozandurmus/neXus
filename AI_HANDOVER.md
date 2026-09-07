@@ -13,112 +13,70 @@ Overwrite at every session close. Keep it minimal.
 
 ## 1. Snapshot
 
-- Date: 2026-09-07. `M8.4` — **AUTOMATED_VALIDATED**, branch
-  `claude/m8-4-m6-resolver-consumption-nh0260`, created from `origin/main`
-  at `ef43d59` (the merged `M8.3`). PR #101 OPEN, NOT MERGED (correction
-  round 1 applied; merge decision BLOCKED pending renewed PO review).
-- Build: `m8_4_m6_resolver_consumption` (`M8.4`) — `status:
-  automated_validated`.
-- Contract: `docs/history/phase/M8_FIRST_CONTACT_TRUST_AND_IDENTITY_EVIDENCE_PRODUCER_ARCHITECTURE.md`
-  §6/§7/§8/§9 — FROZEN; **§12 is a new amendment this session added**
-  (Product Owner sequencing: `M8.4` authorized ahead of `M8.3`'s
-  real-environment gate; `M7` unaffected, stays blocked).
-- `M8.3` is confirmed **merged** to `main` via PR #100 (commit `ef43d59`).
-  Its own real-environment validation is **deferred to backlog**
-  (`project/backlog.json`: `m8_3_real_environment_validation`) by explicit
-  Product Owner decision — it stays `AUTOMATED_VALIDATED`, never
-  `REAL_ENV_VALIDATED`/`DONE` from that deferral.
+- Date: 2026-09-07. `M8.4` — **AUTOMATED_VALIDATED, MERGED** to `main` via
+  PR #101, true merge commit `3fd424d0753e63ebca44d0fca9f4805d102e5349`.
+- Active build: `gov_session_1_unified_packet` (`GOV.SESSION.1A`) —
+  governance, bounded, branch `governance/gov-session-1a-unified-packet`,
+  PR #102 **OPEN, NOT MERGED**, merge decision **BLOCKED pending renewed
+  PO review**.
+- Contract: `docs/design/GOV_SESSION_TRANSFER_PROTOCOL.md` — **FROZEN,
+  PRODUCT OWNER APPROVED, 2026-09-07**. The protocol contract being frozen
+  is a separate fact from PR #102's own merge state: the contract text is
+  approved; the branch that implements it is not yet integrated to `main`.
 
 ## 2. What this session did
 
-1. **Repository transition (PO-authorized):** pushed `M8.3`'s branch,
-   opened PR #100, waited for the `validate` CI check (succeeded,
-   `mergeable_state=clean`), merged with a true merge commit (`ef43d59`),
-   fetched and verified the resulting `origin/main`, then branched
-   `claude/m8-4-m6-resolver-consumption-nh0260` from that exact main before
-   any `M8.4` edit.
-2. **Recorded the PO's sequencing decision first**, as a new, dated §12
-   amendment to the frozen `M8` contract (mirroring the existing
-   `docs/design/PRODUCT_CONTROL_PLANE_ARCHITECTURE.md` §20.1 amendment
-   precedent) — before touching any code.
-3. **Extended `console/registry_targets.py`** (§7): a known+eligible
-   `config_refresh_cp` `device_id` now stops refusing with
-   `IDENTITY_TRANSLATION_REQUIRED` only once a currently proven `M8.1`
-   relationship exists and every registry/identity-derivation/trust/evidence
-   currency condition holds — checked identically at admission
-   (`console/app.py`) and pre-execution (`console/runner.py`), before any
-   credential/device operation. New `RELATIONSHIP_STORE_UNAVAILABLE`
-   outcome. Deliberately does **not** implement `M7`: no wiring substitutes
-   a resolved `entity_id` into a collector command, so `config_refresh_cp`
-   stays non-functional for a real device regardless of this build.
-4. **Two small, behavior-preserving refactors**, both justified as
-   necessary for `M8.4` to correctly read state `M8.3` writes, neither
-   changing `M8.3`'s own observable behavior (its 19+18 tests re-verified
-   green after each): moved `IDENTITY_DERIVATION_CONTRACT_VERSION` from
-   `utils/first_contact_producer.py` to `utils/device_identity_relationships.py`
-   (shared by writer and reader); added `utils/config_evidence.py::
-   build_evidence_reference`/`resolve_evidence_reference` (the
-   `producing_run_ref` format `M8.3` already produced, now one documented,
-   shared, vendor-neutral contract instead of an independently-reconstructed
-   guess in `console/`).
-5. **Found and reported, not silently patched:** `_collect_host` (the
-   shared, unmodified collector primitive) never persists a host-key
-   fingerprint into CP config evidence metadata, so `M8.4`'s trust-currency
-   check — fully and correctly implemented against the frozen wording —
-   cannot affirmatively pass for any real `M8.3`-produced relationship
-   today. Recorded as `project/backlog.json`:
-   `m8_evidence_host_key_fingerprint_not_persisted`, proven by a dedicated
-   test, not fixed in this movement (its own scope boundary).
-6. **New `tests/test_m8_4_m6_resolver_consumption.py`** (23 tests) — see
-   §4 below.
-7. **Project-state update**: `project/roadmap.json` (`now` = `M8.4`
-   `automated_validated`; `next` unchanged build id but `status: deferred`;
-   `current_build` updated), `project/backlog.json` (two new items:
-   `m8_3_real_environment_validation` deferred, `m8_evidence_host_key_
-   fingerprint_not_persisted` planned), `project/build_history.json` (new
-   head record), `CURRENT_STATE.md`/this file rewritten, `docs/history/
-   INDEX.md` regenerated.
+Two correction rounds on PR #102 since the build's initial commit
+(7ee554c → 384e834 → this session's head), plus this session's own
+documentation-consistency correction:
+
+1. **Correction round 1**: tightened `scripts/gov_session_transfer.py::extract_one`
+   to a symmetric, direction-neutral envelope — optional leading/trailing
+   whitespace only around the sentinel pair; any other content before the
+   opening sentinel or after the closing one is now rejected, not silently
+   skipped over. Updated `docs/design/GOV_SESSION_TRANSFER_PROTOCOL.md`
+   (status moved to FROZEN — PRODUCT OWNER APPROVED), `AGENTS.md`,
+   `AI_START_HERE.md`, `CLAUDE.md`, `.github/copilot-instructions.md`, and
+   the `build-start`/`build-close` prompts to state the same symmetric-
+   packet rule. Rewrote `tests/test_gov_session_transfer.py`'s envelope
+   tests (124 tests).
+2. **Correction round 2 (this session)**: found and fixed the one
+   remaining stale statement — `project/build_history.json`'s
+   `gov_session_1_unified_packet` evidence text still described the
+   protocol document as "DRAFT... not FROZEN" in a sentence written before
+   the freeze (now clarified as historical, superseded by the later
+   FROZEN status recorded in the same record). Fully rewrote this file
+   (`AI_HANDOVER.md`), which itself still said "DRAFT, PO review pending"
+   in two places — the actual staleness this round exists to fix.
+3. No code, schema, or test change in this round beyond the
+   `build_history.json` text clarification above — per this round's own
+   scope (`DOCS` movement type, no implementation).
 
 ## 3. Exact next action
 
-**`M8.3` real-environment validation — still Product Owner authorization
-required, deferred to backlog by explicit PO decision this session, not
-performed.** Exactly one bounded, read-only command remains proposed:
-
-```
-py main.py --identity-first-contact <one enrolled registry device_id>
-```
-
-`M7` ("real device-targeted Collect now") stays blocked until this runs and
-produces a genuinely real-environment-validated relationship — no automated
-fixture or synthetic relationship may ever satisfy that gate, and `M8.4`'s
-own `AUTOMATED_VALIDATED` completion does not change this.
+Per this session's own `output_contract`, no further movement begins
+here. The next product movement is
+**`m8_evidence_host_key_fingerprint_not_persisted`** — a narrow,
+separately-reviewed, automated implementation persisting the
+already-captured physical-host fingerprint into governed physical CP
+evidence metadata (`configuration/checkpoint_config_collector.py::_collect_host`'s
+`store.write_text_snapshot` call, `PHYSICAL_ARTIFACT_TYPE` only). `M8.3`'s
+real-environment validation stays deferred to backlog. `M7` stays blocked.
+PR #102 stays open pending renewed Product Owner review before any merge.
 
 ## 4. Test delta
 
-New: `tests/test_m8_4_m6_resolver_consumption.py` (23 tests, no real
-device/socket/credential resolution anywhere). Targeted run: 23 passed.
-Affected run (`M6`/`M8.1`/`M8.2`/`M8.3`/`PCP.1`/`M4`/`CON.1`/`CON.2`/`OP.0d`/
-`OP.0b` S7.5/architecture convergence/application-package): 440 passed, 1
-skipped (pre-existing, unrelated). Fixed fast-PR smoke set: 14 passed.
-`compileall` clean. Privacy gate: PASS, 0 findings. `git diff --check`:
-clean. No `full-regression`/`workflow_dispatch` run (risk-based; one
-console module extended plus two small behavior-preserving `utils`
-additions/refactors, no schema/storage-engine/UI change).
+None this round — a text-only reconciliation
+(`project/build_history.json`, this file). `git diff --check`: clean. No
+test suite was re-run per this round's explicit instruction (the prior
+round's 124/158-passing evidence stands, unchanged by this round's diff).
 
 ## 5. Risks / notes forward
 
-- `M7` remains blocked — its own §9 gate (a genuinely real-environment-
-  validated relationship) is unamended by §12's narrow `M8.4` sequencing
-  amendment, and no fixture built for `M8.4`'s own tests may ever satisfy it.
-- The host-key-fingerprint-not-persisted gap (`m8_evidence_host_key_
-  fingerprint_not_persisted`) means `M8.4`'s trust-currency check fails
-  closed for every real relationship until `_collect_host`'s evidence-write
-  path gets a small, separately-reviewed metadata addition — tracked, not
-  fixed here.
-- `CONTRADICTORY_EVIDENCE` detection stays deliberately unbuilt.
-- Three dissents remain open, unchanged: `operator_assertion`,
-  single-sourced identity evidence, deferred contradiction detection.
-- No UI change; no console job type's `target_mode` changed; the operator
-  console still submits only typed intent against a closed job-type
-  registry, and `console/` still imports no vendor/collector module.
+- `M7` remains blocked — unamended §9 gate.
+- `m8_evidence_host_key_fingerprint_not_persisted` remains open, unfixed.
+- `M8.3`'s real-environment validation remains deferred to backlog.
+- The unified packet protocol is **FROZEN — PRODUCT OWNER APPROVED**; PR
+  #102, which implements it, is a separate, still-open, still-unmerged
+  fact — do not conflate the two in future state edits.
+- No UI, device, credential, or network-facing change in this session.

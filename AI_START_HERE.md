@@ -150,9 +150,13 @@ Governance and engineering law: `AGENTS.md` (canonical constitution) and
 render-harness mechanics — detail, not restated here). Tool-specific deltas:
 `CLAUDE.md`, `.github/copilot-instructions.md`. These reference this reading
 order and the schemas below rather than restating them. Handing one bounded
-movement to another session/tool (a compaction, a different tool, a fresh
-chat) — not a substitute for the reading order above —:
-`docs/design/GOV_SESSION_TRANSFER_PROTOCOL.md` +
+movement across a session/tool boundary — a Product Owner instruction in
+(`SESSION START`), an agent's handoff back (`SESSION CLOSE`), a compaction, a
+different tool, a fresh chat — not a substitute for the reading order above
+— transports as one symmetric `NEXUS_SESSION_PACKET` carrying the *complete*
+report below as its nested `report` object, nothing narrative outside the
+sentinel pair, identical in both directions:
+`docs/design/GOV_SESSION_TRANSFER_PROTOCOL.md` (FROZEN — PO APPROVED) +
 `py scripts/gov_session_transfer.py --help`.
 
 ### Locating the active frozen contract
@@ -212,6 +216,11 @@ rule"), then report:
 
 If implementation is complete but human validation is pending, say so and do
 not advance durable state beyond the evidence.
+
+When this report crosses a session/tool boundary, it transports as one
+`NEXUS_SESSION_PACKET` whose `report` object carries every bullet above,
+field by field — never a pointer to a narrative said elsewhere, never
+narrative alongside the packet (`docs/design/GOV_SESSION_TRANSFER_PROTOCOL.md`).
 
 ## Reasoning / model routing tiers
 
