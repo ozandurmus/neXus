@@ -322,6 +322,17 @@ def test_agent_relay_governance_has_one_shared_bootstrap_and_required_pointers()
         assert ".github/prompts/relay-bootstrap.prompt.md" in text, relative
 
 
+def test_git_authority_has_one_unambiguous_execution_meaning():
+    """PO control is an authorization boundary, not a manual-click mandate."""
+    agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
+    detail = (ROOT / "docs" / "AI_DEVELOPMENT_PROTOCOL.md").read_text(encoding="utf-8")
+    assert "## Git authority and execution law" in agents
+    assert "does not require the human to type the command or click" in agents
+    assert "Do not ask for the same permission again" in agents
+    assert "Corporate Git push/merge remains human-controlled" not in agents
+    assert "approval controls the decision, not who operates" in detail
+
+
 # --- Draft-authority machine gate (OP.0b.0 STATE_UPDATE, DEV.4 follow-up) ---
 #
 # AGENTS.md "Authority hierarchy" item 2 and "Contract-status law" both say, in

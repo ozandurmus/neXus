@@ -243,9 +243,12 @@ documentation and explicitly requested read-only local checks.
 
 Require explicit human approval: dependency additions/upgrades, schema/storage
 migration, destructive local-data operations, full-fleet collection when not
-already requested, new network-access patterns, Git push/merge (Corporate
-Git push/merge remains human-controlled — `AGENTS.md` "Architectural
-invariants" — this is a standing rule, not conditioned on any build).
+already requested, new network-access patterns, and Git PR creation/push/merge.
+For Git, approval controls the decision, not who operates the CLI or GitHub UI:
+after the Product Owner explicitly authorizes the named action, the agent
+executes it and verifies the result without asking again. One concrete objection
+is allowed; a repeated informed Product Owner instruction controls unless one of
+the exact exceptions in `AGENTS.md` "Git authority and execution law" remains.
 
 Prohibited at current maturity (taxonomy classes 2-4): firewall configuration
 writes, policy install, commit, reboot/shutdown, forced failover,
