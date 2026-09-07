@@ -26,10 +26,9 @@ Overwrite at every session close. Keep it minimal.
 
 ## 2. What this session did
 
-1. Verified workspace before any edit: repo root
-   `C:\Users\Ozan\Code\neXus`, origin identifies `ozandurmus/neXus`,
-   `origin/main` matched the expected baseline
-   `a5387672273ced352f17f4e8c0f231f1a46e6866`.
+1. Verified workspace before any edit: repo root is the existing neXus
+   checkout, origin identifies `ozandurmus/neXus`, `origin/main` matched
+   the expected baseline `a5387672273ced352f17f4e8c0f231f1a46e6866`.
 2. Created a fresh branch `m8-evidence-host-key-fingerprint-not-persisted`
    from that verified `origin/main`.
 3. Added `"host_key_fingerprint": key_fp` to the `extra_metadata` dict the
