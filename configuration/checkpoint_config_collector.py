@@ -28,7 +28,11 @@ from configuration.checkpoint_config_probe import (
     _run_vsx_clish_context,
 )
 from utils.cp_ssh_trust import CpSshStrictPreflightError, HostKeyNotTrustedError
-from utils.config_evidence import ConfigEvidenceStore
+from utils.config_evidence import (
+    ConfigEvidenceStore,
+    GOVERNED_PHYSICAL_CP_EVIDENCE_ARTIFACT_TYPE,
+    GOVERNED_PHYSICAL_CP_EVIDENCE_SOURCE,
+)
 from utils.logger import info, warn, register_sensitive_value, user_fingerprint
 from utils.runtime_paths import default_output_root
 
@@ -37,8 +41,14 @@ OUTPUT_DIR = default_output_root(repository_root=BASE_DIR)
 
 PHASE = "0.6.1B.1.2"
 COLLECTOR_VERSION = "0.6.1B.1.2"
-SOURCE = "checkpoint-gaia"
-PHYSICAL_ARTIFACT_TYPE = "gaia_show_configuration_redacted"
+# `M8.4` correction round 1: these two values are the governed physical CP
+# evidence provenance `console/registry_targets.py`'s M8.4 currency check
+# fails closed against -- sourced from `utils/config_evidence.py` (the one
+# `utils/` ownership boundary shared by the M8.3 writer and the M8.4 reader)
+# rather than independently declared here, so producer and consumer can
+# never silently drift apart.
+SOURCE = GOVERNED_PHYSICAL_CP_EVIDENCE_SOURCE
+PHYSICAL_ARTIFACT_TYPE = GOVERNED_PHYSICAL_CP_EVIDENCE_ARTIFACT_TYPE
 VSX_ARTIFACT_TYPE = "gaia_vsx_context_show_configuration_redacted"
 PHYSICAL_METHOD = "direct_ssh_interactive_adaptive_gaia_clish_show_configuration"
 VSX_METHOD = "direct_ssh_expert_vsenv_clish_show_configuration"
