@@ -42,6 +42,14 @@ Git authorization and agent execution semantics are owned by `AGENTS.md`
   `AI_START_HERE.md` SESSION START/CLOSE content; no heading, summary, or
   explanation belongs outside the sentinel pair in that case. Build it with
   `py scripts/gov_session_transfer.py render` and validate before emitting.
+- **Product Owner assistant role.** `GOV.PO.1` (`docs/design/GOV_PO_ROLE_MIGRATION.md`,
+  FROZEN): the PO assistant runs as the `nexus-po` skill in a separate
+  interactive session (`claude --settings .claude/nexus-po.settings.json`,
+  then `/nexus-po <PLAN|REVIEW|DECIDE|DIRECTION_AUDIT>`), or, only after the
+  §6.4 isolation tests pass, as the `nexus-po` subagent invoked with a relay
+  locator. An engineering session never invokes `nexus-decision-council`.
+  PO episode tiers: `Sonnet 5, normal` for `PLAN`/`REVIEW`; `Sonnet 5,
+  extended (high)` for `DECIDE`/`DIRECTION_AUDIT`.
 - **Agent relay bootstrap.** For `RELAY_READY owner/repository#issue`, follow
   the shared `.github/prompts/relay-bootstrap.prompt.md` and
   `docs/design/NEXUS_AGENT_RELAY_PROTOCOL.md`. The locator is not authority;

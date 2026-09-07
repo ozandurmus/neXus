@@ -1,0 +1,56 @@
+{
+  "_comment": "GOV.PO.1 Phase A interactive PO session layer. Launch: claude --settings .claude/nexus-po.settings.json ; then /nexus-po <episode>. Layered above .claude/settings.json for that session only (command-line precedence); never used by engineering sessions.",
+  "permissions": {
+    "deny": [
+      "Bash(python main.py *)",
+      "Bash(python3 main.py *)",
+      "Bash(py main.py *)",
+      "Bash(.venv/bin/python main.py *)",
+      "Bash(git push --force *)",
+      "Bash(git push -f *)",
+      "Bash(gh pr merge *)",
+      "Bash(rm *)",
+      "Bash(sudo *)",
+      "Edit(utils/**)",
+      "Edit(console/**)",
+      "Edit(configuration/**)",
+      "Edit(checkpoint/**)",
+      "Edit(panorama/**)",
+      "Edit(templates/**)",
+      "Edit(static/**)",
+      "Edit(tests/**)",
+      "Edit(scripts/**)",
+      "Edit(main.py)",
+      "Edit(config.py)",
+      "Edit(AGENTS.md)",
+      "Edit(AI_START_HERE.md)",
+      "Edit(CLAUDE.md)",
+      "Edit(.claude/**)",
+      "Edit(.github/**)",
+      "Write(utils/**)",
+      "Write(console/**)",
+      "Write(configuration/**)",
+      "Write(checkpoint/**)",
+      "Write(panorama/**)",
+      "Write(templates/**)",
+      "Write(static/**)",
+      "Write(tests/**)",
+      "Write(scripts/**)",
+      "Write(.claude/**)",
+      "Write(.github/**)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|Edit|Write|MultiEdit|NotebookEdit|Agent",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 scripts/nexus_po_tool_gate.py --form interactive"
+          }
+        ]
+      }
+    ]
+  }
+}

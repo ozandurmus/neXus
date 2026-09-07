@@ -1,0 +1,432 @@
+<!-- Placed under docs/design/ by GOV.PO.1 section 10 step 0 (2026-09-07). Authority: docs/design level 6, per GOV_PO_ROLE_MIGRATION.md section 4.1. Not ratified until an explicitly authorized governance PR merge records RATIFIED on the status line. -->
+**Status: DRAFT — extracted from the previous Product Owner assistant, 2026-09-07. Not ratified.**
+
+# neXus / SecurityExpert Product Direction Record
+
+This is a one-time provenance-preserving extraction. It is evidence for human Product Owner review, not a new authority, contract, roadmap, or approval. Repository statements are referenced rather than silently re-ratified; chat-derived statements remain subordinate until the human Product Owner records them durably. [ASSISTANT confidence: high]
+
+### §1 Product thesis and non-negotiables
+
+- neXus / SecurityExpert is a network-security state, evidence, assurance, recovery-readiness, and ultimately controlled-operations platform—not merely an inventory script. See `PROJECT_VISION.md`. The reason for the staged thesis is that write capability is safe only after observation, verification, traceability, and recovery evidence are trustworthy. [REPO [PROJECT_VISION.md — Product identity](https://github.com/ozandurmus/neXus/blob/main/PROJECT_VISION.md)]
+
+- The product progression is `SEE → VERIFY → TRACE → RECOVER → OPERATE`. Schedule pressure must not invert that order by making mutation capability the mechanism used to discover whether the evidence model is correct. See `PROJECT_VISION.md` and `AGENTS.md`. [REPO [AGENTS.md — Engineering laws](https://github.com/ozandurmus/neXus/blob/main/AGENTS.md#engineering-laws)]
+
+- The architecture is vendor-neutral at product-concept boundaries while retaining vendor-native semantics and provenance. A false common model is worse than an explicit vendor difference or `UNSUPPORTED`. See `PROJECT_VISION.md`. [REPO [PROJECT_VISION.md — Multi-vendor direction](https://github.com/ozandurmus/neXus/blob/main/PROJECT_VISION.md#multi-vendor-direction)]
+
+- Inventory, Configuration, and Alignment are distinct planes. Shared input data does not make runtime state, configured intent, and expected-versus-actual comparison interchangeable. See `AGENTS.md` and `PROJECT_VISION.md`. [REPO [AGENTS.md — Engineering laws](https://github.com/ozandurmus/neXus/blob/main/AGENTS.md#engineering-laws)]
+
+- Evidence identity is not operational identity; management-plane observation is not direct-device truth; one member's peer report is not independent peer corroboration; presentation identity is not security identity; pair existence is not pair health; readiness is not authorization. These separations are non-negotiable because collapsing any one of them can turn an uncertain join or observation into permission to act. See `AGENTS.md`. [REPO [AGENTS.md — Evidence laws](https://github.com/ozandurmus/neXus/blob/main/AGENTS.md#evidence-laws)]
+
+- Identifiers are opaque. Do not coerce, trim, zero-strip, case-normalize, or infer equivalence merely to make two observations match. `UNKNOWN`, `MISMATCH`, and `NOT_EVALUABLE` are valid product outcomes. See `AGENTS.md`. [REPO [AGENTS.md — Identity law](https://github.com/ozandurmus/neXus/blob/main/AGENTS.md#identity-law--identifiers-are-opaque)]
+
+- Evidence outranks assumptions. A successful command, present field, plausible label, or familiar vendor term does not establish meaning. Safety-critical vendor semantics require repository evidence, bounded real-environment evidence, and official vendor documentation where applicable. See `AGENTS.md`. [REPO [AGENTS.md — Vendor semantics law](https://github.com/ozandurmus/neXus/blob/main/AGENTS.md#vendor-semantics-law)]
+
+- Automated validation is never silently promoted to real-environment validation. A network-facing build that requires real evidence cannot become `DONE` from fixtures alone. See `AGENTS.md`. [REPO [AGENTS.md — Mandatory build lifecycle](https://github.com/ozandurmus/neXus/blob/main/AGENTS.md#mandatory-build-lifecycle)]
+
+- Secrets and raw local identities must not enter browser payloads, repository metadata, Git history, relay packets, ordinary chat, screenshots for sharing, or support artifacts. Local comparison should emit relationships such as `MATCH`, `MISMATCH`, `MISSING`, `NOT_EVALUABLE`, or `AMBIGUOUS`, not values. See `AGENTS.md`. [REPO [AGENTS.md — Sensitive identity reporting law](https://github.com/ozandurmus/neXus/blob/main/AGENTS.md#sensitive-identity-reporting-law)]
+
+- Browser/UI code projects typed server conclusions; it does not compute identity, topology, readiness, authorization, or vendor semantics. This protects both security authority and report/console parity. See `AGENTS.md`, `PROJECT_VISION.md`, and the active frozen UI contracts. [REPO [AGENTS.md — Architectural invariants](https://github.com/ozandurmus/neXus/blob/main/AGENTS.md#architectural-invariants-test-enforced-not-merely-current)]
+
+- A new diagnostic convenience must not create a second credential or transport path when the controlled application path can answer the question. Reuse the authenticated transport and derive only bounded, sanitized evidence. See `AGENTS.md`. [REPO [AGENTS.md — Diagnostic-path law](https://github.com/ozandurmus/neXus/blob/main/AGENTS.md#diagnostic-path-law)]
+
+- Raw vendor responses are not retained merely to ease debugging. Parse minimum semantics, retain safe classes/relationships/tokens when authorized, and discard the raw response unless a specific evidence/forensics contract governs retention. See `AGENTS.md`. [REPO [AGENTS.md — Raw-evidence law](https://github.com/ozandurmus/neXus/blob/main/AGENTS.md#raw-evidence-law)]
+
+- The repository must be sufficient to cold-start every assistant. Chat memory, handover prose, model identity, and relay locators are never product authority. See `AGENTS.md` and `AI_START_HERE.md`. [REPO [AGENTS.md — Authority hierarchy](https://github.com/ozandurmus/neXus/blob/main/AGENTS.md#authority-hierarchy)]
+
+- Tufin supplies path discovery for future path-based policy placement. neXus must consume the returned device path and must not build an independent topology/path engine. This was repeatedly stated in Product Owner chat; I did not verify an equivalent durable repository statement. [PO-DIRECTION 2026-08–09, ChatGPT PO chat]
+
+- The product goal is a usable control plane: a persistent device identity/registry layer, a database-backed metadata plane, and an interactive operator experience that can support compliance, backup/recovery, and failover workflows without making the UI an authority. [PO-DIRECTION 2026-09-05–07, ChatGPT PO chat]
+
+### §2 Decision record
+
+#### Governance and delivery decisions
+
+1. **`gov_relay_1_protocol` — 2026-09-07.** Question: governed GitHub relay versus ad hoc phrases/comments. Options: locator plus exact protocol-v2 packets and closed intermediate markers; or unconstrained chat/comments. Chosen: `RELAY_READY` is locator-only, issue body is one validated `SESSION_START`, final engineering comment is one validated `SESSION_CLOSE`, material questions use `RELAY_QUESTION`, and only the PO resolves them through `RELAY_DECISION`. Rejected: `RELAY_START`, `RELAY_END`, invented markers, or treating a locator as authority, because they cannot be structurally validated and caused M9 ownership/scope confusion. Status: **decided**; see `project/roadmap.json` and the frozen relay contract. [REPO [project/roadmap.json — gov_relay_1_protocol](https://github.com/ozandurmus/neXus/blob/main/project/roadmap.json)]
+
+2. **`GOV.SESSION.1A` — 2026-09-07.** Question: split/minimal session marker versus one complete symmetric transfer packet. Options: protocol-v1-shaped marker with narrative elsewhere; or protocol-v2 packet whose nested report is complete. Chosen: v2, exact schema, no narrative outside sentinels across a tool/session boundary. Rejected: pointer-only or partial packets because they lose the facts needed for independent validation. Status: **decided/FROZEN**; see `docs/design/GOV_SESSION_TRANSFER_PROTOCOL.md`. [REPO [docs/design/GOV_SESSION_TRANSFER_PROTOCOL.md](https://github.com/ozandurmus/neXus/blob/main/docs/design/GOV_SESSION_TRANSFER_PROTOCOL.md)]
+
+3. **Git authorization/execution — 2026-09-07.** Question: must the human physically operate every PR/push/merge, or may an authorized agent execute the named action? Chosen: the human PO controls authorization; an agent may execute and verify the explicitly authorized Git action without asking again. Rejected: equating human control with manual clicking, because it created repeated blocking despite an explicit decision. Status: **decided**; see `AGENTS.md`. [REPO [AGENTS.md — Git authority and execution law](https://github.com/ozandurmus/neXus/blob/main/AGENTS.md#git-authority-and-execution-law)]
+
+4. **Engineering output language — 2026-09 period.** Question: follow conversation language or use one engineering language. Chosen: Turkish may be used with the human; repository artifacts, prompts, packets, PRs, commits, and handovers are English. Rejected: Turkish engineering preambles because they reduce portability and created inconsistent artifacts. Status: **decided**; see `AGENTS.md`. [REPO [AGENTS.md — Engineering-output language law](https://github.com/ozandurmus/neXus/blob/main/AGENTS.md#engineering-output-language-law)]
+
+5. **Implementation prompt scale — 2026-09 period.** Question: architecture-scale prompts for every movement versus bounded prompts. Chosen: one coherent objective, a few invariants, focused tests, fast CI; long contracts only for genuine durable authority changes. Rejected: mega-prompts for routine work because they caused long loops, reopened settled design, and burned context/credits. Status: **decided operating direction**, partly reflected in `AGENTS.md` and `docs/AI_DEVELOPMENT_PROTOCOL.md`; the causal history came from PO chat. [PO-DIRECTION 2026-09-05–07, ChatGPT PO chat]
+
+6. **Full-regression topology — 2026-09-06.** Question: automatic full suite on every PR/push versus local risk-triggered evidence and on-demand cloud dispatch. Options actually tried: automatic PR, automatic push-to-main, then workflow-dispatch-only. Chosen: PR runs fast `validate`; full regression runs locally when blast-radius triggers demand it; GitHub-hosted full regression is exceptional `workflow_dispatch` only. Rejected: automatic triggers because of cost/latency and empty/duplicative runs; the parallel command itself remains preferred. Status: **decided**; see `docs/AI_DEVELOPMENT_PROTOCOL.md`. [REPO [docs/AI_DEVELOPMENT_PROTOCOL.md — CI validation policy](https://github.com/ozandurmus/neXus/blob/main/docs/AI_DEVELOPMENT_PROTOCOL.md#ci-validation-policy-canonical--devtest1-final-topology-2026-09-06)]
+
+7. **One active movement / one integration owner — 2026-09 period.** Question: continuously split development among multiple chats versus preserve one owner per coupled movement. Chosen for the M-series/M9 period: one implementation owner and one active movement; independent reviewers may work in parallel, but coupled writers do not share a branch. Rejected: ad hoc parallel editing because state files, frozen contracts, and integration ownership collide. Status: **current operating direction, not verified as a durable repository decision**. [PO-DIRECTION 2026-09-05–07, ChatGPT PO chat]
+
+#### Operator Console decisions
+
+8. **`C-D1` — 2026-09-01.** Question: FastAPI/uvicorn optional console dependency, stdlib server, or no console. Chosen: optional FastAPI/uvicorn extra. Rejected: stdlib-only because boundary request validation is a security control; rejected no-console because the operator surface is a product requirement. Status: **decided**. [REPO [project/roadmap.json — C-D1](https://github.com/ozandurmus/neXus/blob/main/project/roadmap.json)]
+
+9. **`C-D2` — 2026-09-01.** Question: fragment-delivered cookieless launch token, cookie session, or loopback-only unauthenticated. Chosen: cookieless per-launch bearer token in the URL fragment. Rejected: cookies because ambient credentials reintroduce CSRF concerns; loopback-only because locality is not authentication. Status: **decided**. [REPO [project/roadmap.json — C-D2](https://github.com/ozandurmus/neXus/blob/main/project/roadmap.json)]
+
+10. **`C-D3` — 2026-09-01.** Question: `console` provenance or reuse `manual`. Chosen: distinct `console`. Rejected: reuse because it destroys audit distinction between CLI and UI-triggered runs. Status: **decided**. [REPO [project/roadmap.json — C-D3](https://github.com/ozandurmus/neXus/blob/main/project/roadmap.json)]
+
+11. **`C-D4` — open.** Question: one target, N targets, or fleet selection per operational-write request. Current recommendation: one target for the pilot. No option ratified; N/fleet remain unchosen because pilot safety should be structural rather than throughput-oriented. Status: **open**. [REPO [project/roadmap.json — C-D4](https://github.com/ozandurmus/neXus/blob/main/project/roadmap.json)]
+
+12. **`C-D5` — open.** Question: console exposure on a server before OIDC/RBAC. Current recommendation: no; local loopback only. Server exposure is not ratified because reverse-proxy placement is not an authorization boundary. Status: **open**, aligned with the separately open `pcp_server_enrollment_exposure`. [REPO [project/roadmap.json — C-D5](https://github.com/ozandurmus/neXus/blob/main/project/roadmap.json)]
+
+13. **`C-D6` — open.** Question: mandatory operator reason and retention for writes. Recommendation: bounded, redaction-filtered, support-bundle-excluded reason. Optional/no reason remain unchosen because timestamps alone are not an adequate audit explanation. Status: **open**. [REPO [project/roadmap.json — C-D6](https://github.com/ozandurmus/neXus/blob/main/project/roadmap.json)]
+
+14. **`C-D7` — open.** Question: browser editing of scheduler policy. Recommendation: read-only in this track. Editing remains unchosen because it becomes a privilege path into unattended device contact. Status: **open**. [REPO [project/roadmap.json — C-D7](https://github.com/ozandurmus/neXus/blob/main/project/roadmap.json)]
+
+15. **`C-D8` — open.** Question: dedicated `CON.x` track versus folding into engineering or trace work. Recommendation: keep `CON.x`, because it is an operator-visible delivery surface across themes. No final choice recorded. Status: **open**. [REPO [project/roadmap.json — C-D8](https://github.com/ozandurmus/neXus/blob/main/project/roadmap.json)]
+
+#### Failover/readiness decisions
+
+16. **`op_track_id` — open.** Question: dedicated `OP.x` OPERATE track or fold into `1.x` after GOVERN. Recommendation: keep dedicated because the mutation gate is materially different from platform governance. Status: **open**. [REPO [project/roadmap.json — op_track_id](https://github.com/ozandurmus/neXus/blob/main/project/roadmap.json)]
+
+17. **`op_four_eyes` — open.** Question: mandatory second approver versus configurable/default-on. Recommendation: configurable/default-on; architecture owns the approval-policy seam, deployment policy chooses quorum. Mandatory-v1 remains unchosen because it can block a legitimate emergency. Status: **open**, not an OP.2.0 freeze blocker. [REPO [project/roadmap.json — op_four_eyes](https://github.com/ozandurmus/neXus/blob/main/project/roadmap.json)]
+
+18. **`op_degraded_verdict` — open.** Question: expose `DEGRADED_PROCEED_WITH_RISK` in v1 versus only SAFE/UNSAFE/INSUFFICIENT. Recommendation: keep DEGRADED structurally unreachable until real-field calibration. Status: **open**, owed before OP.1 planning semantics depend on it. [REPO [project/roadmap.json — op_degraded_verdict](https://github.com/ozandurmus/neXus/blob/main/project/roadmap.json)]
+
+19. **`op_emergency_evac` — open.** Question: emergency evacuation in OP.2 or later OP.3. Recommendation: defer; no emergency path may bypass authorization, fresh preflight, confirmation, or lock. Status: **open**, not an OP.2.0 freeze blocker. [REPO [project/roadmap.json — op_emergency_evac](https://github.com/ozandurmus/neXus/blob/main/project/roadmap.json)]
+
+20. **`op_aa_vsls_scope` — open.** Question: PAN A/A and CP VSLS mutation in initial OP.2 or later. Recommendation: defer execution adapters while preserving read-only assessment. Rejected for initial scope because operational semantics differ and must not leak into the first ClusterXL adapter. Status: **open/deferred in practice**. [REPO [project/roadmap.json — op_aa_vsls_scope](https://github.com/ozandurmus/neXus/blob/main/project/roadmap.json)]
+
+21. **`op_continuity_tolerance` — open.** Question: fixed or per-run-tunable post-action continuity threshold. Recommendation: fixed conservative defaults only after calibration; until then observations are recorded but not verdict-bearing. Rejected now: invented percentages, because no real calibration supports them. Status: **open**. [REPO [project/roadmap.json — op_continuity_tolerance](https://github.com/ozandurmus/neXus/blob/main/project/roadmap.json)]
+
+22. **`D-V1` — open.** Question: exhaustive PAN connection-field vocabulary/missing-field meaning. Options: official documentation or bounded real measurement. Chosen minimum: `up` may support healthy; absent/other is fail-closed. Rejected: generic product-memory completion. Status: **open residual real-env parser validation; not a freeze blocker**. [REPO [project/roadmap.json — D-V1](https://github.com/ozandurmus/neXus/blob/main/project/roadmap.json)]
+
+23. **`D-V2` — open.** Question: exhaustive PAN sync/compatibility/preemption vocabulary and error binding. Options: official documentation or bounded real measurement. Chosen minimum fail-closed binding; rejected invented exhaustive semantics. Status: **open residual; not a freeze blocker**. [REPO [project/roadmap.json — D-V2](https://github.com/ozandurmus/neXus/blob/main/project/roadmap.json)]
+
+24. **`D-V3a` — open.** Question: PAN serial-field semantics in HA state. Options: official-source confirmation routes. No chosen semantic. Rejected: SDK-name correspondence or generic knowledge. Status: **open; blocks successor identity model and PAN CLASS 2, not read-only freeze**. [REPO [project/roadmap.json — D-V3a](https://github.com/ozandurmus/neXus/blob/main/project/roadmap.json)]
+
+25. **`D-V3b` — open.** Question: reciprocal real PAN pair correspondence after conflicting observations. Option: bounded investigation. No resolution chosen. Rejected: coercion/normalization to force a match and side-effect closure in unrelated work. Status: **open/hardware-dependent; B2 not established**. [REPO [project/roadmap.json — D-V3b](https://github.com/ozandurmus/neXus/blob/main/project/roadmap.json)]
+
+26. **`D-V4` — 2026-09-03.** Question: PAN `running-sync` location. Chosen from official source: group-scope state source. Rejected: further speculation once official evidence closed the question. Status: **decided/CLOSED_BY_DOCS**. [REPO [project/roadmap.json — D-V4](https://github.com/ozandurmus/neXus/blob/main/project/roadmap.json)]
+
+27. **`D-V5a` — open.** Question: exact CP failover-statistics flags and shell/schema parity. Options: official mirror, human-fetched official page, or command-gate research. Minimum parser is frozen; exact command approval is not. Status: **open; required before command-gate approval, not architecture freeze**. [REPO [project/roadmap.json — D-V5a](https://github.com/ozandurmus/neXus/blob/main/project/roadmap.json)]
+
+28. **`D-V5b` — 2026-09-03.** Question: CP VSX per-VS applicability of failover statistics. Chosen: not load-bearing; frozen battery uses physical/VS0 level only. Rejected: creating a per-VS requirement with no consumer. Status: **decided**. [REPO [project/roadmap.json — D-V5b](https://github.com/ozandurmus/neXus/blob/main/project/roadmap.json)]
+
+29. **`D-V6` — open.** Question: exact CP pnote command differentiation and state fields. Chosen minimum: complete pnote enumeration and fail-closed problem/no-problem interpretation; exact precision remains. Rejected: earlier “problem-filtered output” hypothesis. Status: **open, non-freeze-blocking**. [REPO [project/roadmap.json — D-V6](https://github.com/ozandurmus/neXus/blob/main/project/roadmap.json)]
+
+30. **`D-V7a` — 2026-09-03.** Question: CP recovery/preemption behavior. Chosen: official distinction between maintaining the active member and switching to higher priority. Rejected: inferring behavior from cluster-mode labels. Status: **decided/CLOSED_BY_DOCS**. [REPO [project/roadmap.json — D-V7a](https://github.com/ozandurmus/neXus/blob/main/project/roadmap.json)]
+
+31. **`D-V7b` — open.** Question: machine-readable CP configured-recovery surface. No surface was invented. The readiness-role decision later made this exact missing fact advisory-exempt for CP, but the vendor question remains open and is still required before CLASS 2. Status: **open vendor fact; readiness role decided separately**. [REPO [project/roadmap.json — D-V7b](https://github.com/ozandurmus/neXus/blob/main/project/roadmap.json)]
+
+32. **`D-V8` — open.** Question: optional CP hotfix-parity command. Options: official docs or bounded real measurement. No command/meaning chosen; rejected generic knowledge. Status: **open/non-blocking**. [REPO [project/roadmap.json — D-V8](https://github.com/ozandurmus/neXus/blob/main/project/roadmap.json)]
+
+33. **`D-V9a` — 2026-09-03.** Question: CP VSX documented caveat. Chosen safe interpretation: contradictory non-VS0 evidence becomes `UNKNOWN/RELATIONSHIP_INCONSISTENT`, never known-bad or an action input. Rejected: allowing uncertain per-VS evidence to drive mutation. Status: **decided/partial but sufficient**. [REPO [project/roadmap.json — D-V9a](https://github.com/ozandurmus/neXus/blob/main/project/roadmap.json)]
+
+34. **`D-V9b` — open.** Question: caveat applicability to the actual estate version. Option: bounded real measurement. No answer chosen; the frozen safe interpretation holds either way. Status: **open/informational**. [REPO [project/roadmap.json — D-V9b](https://github.com/ozandurmus/neXus/blob/main/project/roadmap.json)]
+
+35. **`D-F3` — 2026-09-05.** Question: numeric flap/failover-frequency threshold. Options: fixed, bounded tunable, or no threshold/advisory-exempt. Chosen: no invented threshold; cumulative counters without a window remain visible `INSUFFICIENT_EVIDENCE` but no longer independently block readiness. Rejected: fixed/tunable numbers unsupported by evidence. Status: **decided**. [REPO [project/roadmap.json — D-F3](https://github.com/ozandurmus/neXus/blob/main/project/roadmap.json)]
+
+36. **Member-skew policy — 2026-09-05 period.** Question: invent a numeric skew threshold or retain the observed difference without making it a standalone blocker. Chosen: no numeric threshold; coherent same-run evidence may report nonzero skew without that fact alone blocking. Rejected: fabricated thresholds. Status: **decided**, but verify its current canonical id/location before importing. [PO-DIRECTION 2026-09-05, PO review chat/decision package]
+
+37. **`op_reversal_model` — 2026-09-04.** Question: automatic rollback versus reversal as a new typed action. Chosen: reversal/failback is a new CLASS 2 action with new authorization, preflight, confirmation, lock, one submission, verification, and audit. Rejected: automatic rollback because it issues a second mutation precisely when state is uncertain. Status: **decided/FROZEN**. [REPO [project/roadmap.json — op_reversal_model](https://github.com/ozandurmus/neXus/blob/main/project/roadmap.json)]
+
+38. **`op_outcome_unknown_recovery` — 2026-09-04.** Question: allow a new action after fresh readiness or quarantine after uncertain mutation. Chosen: terminal `OUTCOME_UNKNOWN` quarantines the operational entity until explicit authorized audited acknowledgement; reads remain allowed; later observations append and never rewrite the terminal result. Rejected: green readiness silently clearing action uncertainty because it can enable a double mutation. Status: **decided/FROZEN**. [REPO [project/roadmap.json — op_outcome_unknown_recovery](https://github.com/ozandurmus/neXus/blob/main/project/roadmap.json)]
+
+39. **Initial mutation vendor/mode — 2026-09-04–05.** Question: first controlled failover target. Chosen: classic Check Point ClusterXL only. Rejected for the first pilot: PAN and VSX/VSLS, because their identity and action semantics require separate adapters/evidence. Status: **decided initial scope**; see OP.2.0 P16 and current state. [REPO [docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md — P16](https://github.com/ozandurmus/neXus/blob/main/docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md)]
+
+#### Product Control Plane and M-series decisions
+
+40. **`pcp_console_registry_write_gate` — 2026-09-05.** Question: neither, candidate-only, or both manual/candidate enrollment in controlled loopback before DEPLOY.1A. Chosen: both may exist only under the frozen typed-intent, separate CLASS 0 first-contact, strict trust, positive identity, preview, explicit confirmation, audit-before-mutation, and single registry-path conditions. Rejected: unconfirmed writes and production inheritance. Status: **decided**; M9 implemented the available manual path. [REPO [project/roadmap.json — pcp_console_registry_write_gate](https://github.com/ozandurmus/neXus/blob/main/project/roadmap.json)]
+
+41. **`pcp_server_enrollment_exposure` — open.** Question: may enrollment leave loopback before OIDC/RBAC. Current recommendation: no. Rejected for now: compensating controls not defined by a frozen contract. Status: **open/blocked on DEPLOY.1A**. [REPO [project/roadmap.json — pcp_server_enrollment_exposure](https://github.com/ozandurmus/neXus/blob/main/project/roadmap.json)]
+
+42. **`pcp_auto_enrollment_policy` — 2026-09-05.** Question: automatic enrollment never versus future opt-in policy. Chosen for current horizon: no automatic persistent enrollment; every candidate still needs evidence, preview, and confirmation. Rejected: “everything discovered becomes inventory,” because discovery provenance is not enrollment authority. Status: **decided for current horizon, explicitly reopenable later**. [REPO [project/roadmap.json — pcp_auto_enrollment_policy](https://github.com/ozandurmus/neXus/blob/main/project/roadmap.json)]
+
+43. **`pcp_local_control_plane_storage` — 2026-09-05.** Question: keep registry filesystem + new SQLite metadata, migrate both, or postpone SQLite. Chosen: Option A—registry remains on its frozen filesystem backend; SQLite owns only new local control-plane metadata. Rejected: combined migration because it reopened PCP.1 unnecessarily; rejected no-SQLite because job/projection queries need a proper local metadata store. Status: **decided**. [REPO [project/roadmap.json — pcp_local_control_plane_storage](https://github.com/ozandurmus/neXus/blob/main/project/roadmap.json)]
+
+44. **`pcp_storage_engine` — open.** Question: production registry/job engine—existing PostgreSQL route, another engine, or filesystem until measured need. No engine chosen. Rejected: reading local SQLite as production selection. Status: **open; decide with production migrations/roles**. [REPO [project/roadmap.json — pcp_storage_engine](https://github.com/ozandurmus/neXus/blob/main/project/roadmap.json)]
+
+45. **`pcp_first_contact_trust_policy` — 2026-09-05.** Question: strict trust for all endpoints versus compatibility mode for some candidates. Chosen: strict SSH host-key/TLS trust before any credential submission for every endpoint. Rejected: TOFU, automatic trust, certificate bypass, candidate-based waiver, and credential-first probing. Status: **decided**. [REPO [project/roadmap.json — pcp_first_contact_trust_policy](https://github.com/ozandurmus/neXus/blob/main/project/roadmap.json)]
+
+46. **M8 implementation sequence — 2026-09-06.** Question: how to turn registry ids into identity-safe device targeting. Chosen sequence: M6 registry-keyed targets → M8.1 identity relationships → M8.2 endpoint trust lookup → M8.3 first-contact evidence → M8.4 resolver consumption → M7 real targeted collection. Rejected: direct endpoint substitution or operator assertion because neither establishes the required identity relationship. Status: **decided/FROZEN**, though M8.4 shipped before M8.3 real validation under a later narrow sequencing amendment. [REPO [docs/history/phase/M8_FIRST_CONTACT_TRUST_AND_IDENTITY_EVIDENCE_PRODUCER_ARCHITECTURE.md](https://github.com/ozandurmus/neXus/blob/main/docs/history/phase/M8_FIRST_CONTACT_TRUST_AND_IDENTITY_EVIDENCE_PRODUCER_ARCHITECTURE.md)]
+
+47. **M8.3 real-environment deferral — 2026-09-07.** Question: perform the bounded identity-first-contact real-device gate immediately or defer it. Chosen: defer to backlog; do not promote M8.3 beyond `AUTOMATED_VALIDATED`; M7 remains blocked. Rejected: synthetic evidence satisfying the gate. Status: **decided sequencing amendment/deferred**. [REPO [project/backlog.json — m8_3_real_environment_validation](https://github.com/ozandurmus/neXus/blob/main/project/backlog.json)]
+
+48. **M8 physical fingerprint persistence — 2026-09-07.** Question: persist the already-captured trust fingerprint in physical evidence only, add it to VSX context too, or leave the currency check permanently unable to pass. Chosen: physical artifact metadata only. Rejected: VSX-context copy because that artifact has no independent handshake; rejected no fix because M8.4 could never affirmatively establish currency. Status: **decided/implemented/merged**. [REPO [project/build_history.json — m8_evidence_host_key_fingerprint_not_persisted](https://github.com/ozandurmus/neXus/blob/main/project/build_history.json)]
+
+49. **M9 candidate-id path — 2026-09-07.** Question: invent/borrow a candidate-id source inside M9 or defer until the M10 reconciliation projection. Chosen: honest stable refusal naming the M10/A6 dependency. Rejected: fabricated source or silent manual-only parity claim. Status: **decided/deferred**. [REPO [project/build_history.json — m9_enrollment_preview_confirmation_ui](https://github.com/ozandurmus/neXus/blob/main/project/build_history.json)]
+
+50. **M9 pre-enrollment probe path — 2026-09-07.** Question: narrow direct admission-coordinator exception versus a throwaway pending registry stub so the existing registered-device path could run. Chosen: one M9-only documented/test-pinned exception; no registry mutation before confirmation. Rejected: pending stub because it creates provisional authority/state before enrollment confirmation. Status: **decided/implemented/merged**. [REPO [AI_HANDOVER.md — M9 round 2](https://github.com/ozandurmus/neXus/blob/main/AI_HANDOVER.md)]
+
+51. **M9 credential-profile semantics — 2026-09-07.** Question: accept arbitrary well-formed references or only a reference that selects the real credential source. Chosen: one closed sentinel matching the executed source. Rejected: syntactically valid but semantically inert references. Status: **corrective decision/implemented**. [REPO [project/build_history.json — M9 risks_forward](https://github.com/ozandurmus/neXus/blob/main/project/build_history.json)]
+
+52. **M9 confirmation consumption — 2026-09-07.** Question: list-scan-then-create versus atomic consume/audit creation. Chosen: deterministic audit id and one locked check-and-create. Rejected: process-local sequential reasoning because concurrent confirmations could both mutate. Status: **corrective decision/implemented**. [REPO [project/build_history.json — M9 risks_forward](https://github.com/ozandurmus/neXus/blob/main/project/build_history.json)]
+
+53. **Path authority — 2026-08–09.** Question: build topology/path analysis internally or consume an external path result. Chosen: consume Tufin API results and apply rules to the returned devices. Rejected: internal topology engine because it duplicates an established authority and expands scope dramatically. Status: **human direction; repository durability UNKNOWN**. [PO-DIRECTION 2026-08–09, ChatGPT PO chat]
+
+54. **Production timing — 2026-08–09.** Question: move/refactor for production now or continue local/corporate development. Chosen: do not move to production yet; production/container/pod hardening is a later explicit track and must not casually block the local product loop. Rejected: premature deployment refactor because it diverts from usable product capability. Status: **human direction; see also the repository's staged platform direction**. [PO-DIRECTION 2026-08–09, ChatGPT PO chat]
+
+### §3 Rejected directions
+
+- **Internal topology/path engine.** Rejected by the human PO; Tufin remains the path-discovery authority and neXus consumes its returned path. The rejection remains unless the human explicitly changes external-system strategy. [PO-DIRECTION 2026-08–09, ChatGPT PO chat]
+
+- **Automatic rollback after uncertain failover.** Rejected because it is an unconfirmed second CLASS 2 mutation against unknown state; failback is a new typed action. [REPO [docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md — P12](https://github.com/ozandurmus/neXus/blob/main/docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md)]
+
+- **Blind retry after the mutation boundary.** Rejected because a timeout/lost response cannot prove the first mutation did not execute. Use `OUTCOME_UNKNOWN` and quarantine. [REPO [docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md — P7/P10](https://github.com/ozandurmus/neXus/blob/main/docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md)]
+
+- **Invented numeric flap or member-skew thresholds.** Rejected because cumulative/no-window evidence cannot support such numbers. Keep uncertainty visible; do not manufacture a PASS/FAIL boundary. [REPO [project/roadmap.json — D-F3](https://github.com/ozandurmus/neXus/blob/main/project/roadmap.json)]
+
+- **Hostname, UI label, inferred ordinal, or client heuristic as identity authority.** Rejected because presentation identity is not security identity and browser code must not perform joins. [REPO [AGENTS.md — Evidence laws](https://github.com/ozandurmus/neXus/blob/main/AGENTS.md#evidence-laws)]
+
+- **Automatic enrollment from discovery.** Rejected for the current horizon because discovery/candidate provenance is not authority to create persistent devices. [REPO [project/roadmap.json — pcp_auto_enrollment_policy](https://github.com/ozandurmus/neXus/blob/main/project/roadmap.json)]
+
+- **Pending/throwaway Device Registry stub before M9 confirmation.** Rejected in favor of one narrow probe exception because provisional persistence would violate the enrollment-before-authority boundary. [REPO [AI_HANDOVER.md — M9 round 2](https://github.com/ozandurmus/neXus/blob/main/AI_HANDOVER.md)]
+
+- **Trust-on-first-use, automatic host-key acceptance, TLS verification bypass, or credential-first probing.** Rejected because a mistyped/hostile endpoint must not receive credentials. [REPO [project/roadmap.json — pcp_first_contact_trust_policy](https://github.com/ozandurmus/neXus/blob/main/project/roadmap.json)]
+
+- **A parallel diagnostic credential/network path.** Rejected unless separately reviewed; prefer the existing authenticated transport and bounded projection. [REPO [AGENTS.md — Diagnostic-path law](https://github.com/ozandurmus/neXus/blob/main/AGENTS.md#diagnostic-path-law)]
+
+- **Persisting raw vendor output for convenience.** Rejected absent an explicit evidence/forensics contract and privacy lifecycle. [REPO [AGENTS.md — Raw-evidence law](https://github.com/ozandurmus/neXus/blob/main/AGENTS.md#raw-evidence-law)]
+
+- **Server/production inheritance of local-loopback enrollment permission.** Rejected; server exposure reopens authorization and is blocked on DEPLOY.1A. [REPO [project/roadmap.json — pcp_server_enrollment_exposure](https://github.com/ozandurmus/neXus/blob/main/project/roadmap.json)]
+
+- **Production hardening as a universal blocker for local product work.** Rejected as an operating assumption; only a technically relevant gate blocks the bounded local movement. Production readiness remains mandatory before production claims. [REPO [PROJECT_VISION.md — Platform direction](https://github.com/ozandurmus/neXus/blob/main/PROJECT_VISION.md#platform-direction)]
+
+- **Mega-prompts and architecture re-litigation for routine fixes.** Rejected by the human PO because they slowed delivery, consumed limits, and reduced implementer confidence. [PO-DIRECTION 2026-09-05–07, ChatGPT PO chat]
+
+- **Using council language to inflate confidence.** Rejected: no independent council execution may be claimed where only one author performed structured self-critique. [REPO [project/build_history.json — M3 revision history](https://github.com/ozandurmus/neXus/blob/main/project/build_history.json)]
+
+### §4 Review heuristics
+
+1. Look for the highest applicable authority and its exact status; if a draft, handover, chat statement, or lower authority is being used to authorize implementation over a frozen contract, it is a finding. [REPO [AGENTS.md — Authority hierarchy](https://github.com/ozandurmus/neXus/blob/main/AGENTS.md#authority-hierarchy)]
+
+2. Look for a complete, validated `SESSION_START`/`SESSION_CLOSE` and the correct relay role; if a locator, narrative, unknown field, invented marker, or malformed packet is treated as authority, it is a finding. [REPO [docs/design/NEXUS_AGENT_RELAY_PROTOCOL.md](https://github.com/ozandurmus/neXus/blob/main/docs/design/NEXUS_AGENT_RELAY_PROTOCOL.md)]
+
+3. Look for one coherent objective and explicit in/out scope; if a correction silently adds architecture, storage, credential paths, vendor commands, unrelated UI, or deployment work, it is a finding. [REPO [AGENTS.md — Mandatory build lifecycle](https://github.com/ozandurmus/neXus/blob/main/AGENTS.md#mandatory-build-lifecycle)]
+
+4. Look for the real source seam and its tests before accepting a proposed change; if the design relies on an imagined producer, field, route, parser behavior, or call order, it is a finding. [REPO [AGENTS.md — Engineering laws](https://github.com/ozandurmus/neXus/blob/main/AGENTS.md#engineering-laws)]
+
+5. Look for each identity/provenance join and ask what independently proves both sides; if equality is based on label, endpoint formatting, one-sided peer claims, or identifier coercion, it is a finding. [REPO [AGENTS.md — Evidence laws](https://github.com/ozandurmus/neXus/blob/main/AGENTS.md#evidence-laws)]
+
+6. Look for trust-before-credential and reuse of the controlled network path; if credentials can be resolved/submitted before target-specific trust or a second transport path appears, it is a finding. [REPO [AGENTS.md — Diagnostic-path law](https://github.com/ozandurmus/neXus/blob/main/AGENTS.md#diagnostic-path-law)]
+
+7. Look for the mutation boundary, idempotency key, lock grain, ownership, and atomic consume semantics; if correctness depends on list-then-create, sequential execution, or a process-local check, it is a finding. [ASSISTANT confidence: high]
+
+8. Look for reference fields that actually select behavior; if a `*_ref` is accepted but ignored or maps to no closed provider, it is a finding. This found M9's arbitrary `credential_profile_ref`. [ASSISTANT confidence: high]
+
+9. Look for contract parity across every advertised input mode; if manual and candidate enrollment are both promised but no candidate producer exists, it is a finding, not permission to invent a producer. This found M9's candidate-id gap. [ASSISTANT confidence: high]
+
+10. Look for exceptions to the canonical orchestration path; if an exception is not minimal, documented, unique, tested, and PO-authorized when it crosses a durable boundary, it is a finding. This found M9's pre-enrollment probe bypass. [ASSISTANT confidence: high]
+
+11. Look for replay/confirmation races; if two concurrent requests can both pass the same precondition before either records consumption, it is a finding. This found M9's non-atomic confirmation path. [ASSISTANT confidence: high]
+
+12. Look for the whole UI path: server payload/route, fixture, permanent click-through or DOM test, render harness, navigation entry point, accessibility, and report/console parity. If only the visible dialog exists, it is a finding. This found M9's missing fixture/harness coverage and missing Administration entry. [REPO [docs/AI_DEVELOPMENT_PROTOCOL.md — HTML render harness](https://github.com/ozandurmus/neXus/blob/main/docs/AI_DEVELOPMENT_PROTOCOL.md#html-render-harness-mandatory-for-any-ui--payload-change)]
+
+13. Look for validation proportional to blast radius: targeted first, affected subsystem next, full regression for shared core/schema/concurrency/security/UI milestone triggers, plus privacy and diff checks. If a broad change claims closure on compile-only or skipped harness evidence, it is a finding. [REPO [docs/AI_DEVELOPMENT_PROTOCOL.md — Testing tiers](https://github.com/ozandurmus/neXus/blob/main/docs/AI_DEVELOPMENT_PROTOCOL.md#testing-tiers)]
+
+14. Look for evidence classification: `IMPLEMENTED`, `AUTOMATED_VALIDATED`, `REAL_ENV_VALIDATED`, and `DONE` must match what actually ran. If fixture evidence is used to claim device behavior, it is a finding. [REPO [AGENTS.md — Mandatory build lifecycle](https://github.com/ozandurmus/neXus/blob/main/AGENTS.md#mandatory-build-lifecycle)]
+
+15. Look for state reconciliation across roadmap, feature registry, backlog, build history, current state, and handover; if newest facts coexist with stale blockers/entry points/outcomes, it is a finding. [REPO [AGENTS.md — Project-state update rule](https://github.com/ozandurmus/neXus/blob/main/AGENTS.md#project-state-update-rule)]
+
+16. Look for Git ancestry, actual PR state, exact head, green required checks, and whether the approved bytes are what merged; if a narrative says merged/clean without verifiable integration evidence, it is a finding. [ASSISTANT confidence: high]
+
+### §5 Recurring engineering failure patterns
+
+- **Self-authorized exceptions.** Detection: a canonical “every job/path does X” invariant gains an undocumented `if` branch. Correction: stop only the dependent action, post a durable question, compare narrow exception versus redesign, obtain PO decision, then pin uniqueness with a test. [REPO [AI_HANDOVER.md — M9 round 2](https://github.com/ozandurmus/neXus/blob/main/AI_HANDOVER.md)]
+
+- **Scope widening inside a fix.** Detection: privacy, DLP, CI, parser, or metadata correction begins changing architecture or unrelated modules. Correction: preserve the narrow defect objective and file a separate backlog/movement for incidental debt. [REPO [AGENTS.md — Engineering laws](https://github.com/ozandurmus/neXus/blob/main/AGENTS.md#engineering-laws)]
+
+- **`DONE` from automated evidence.** Detection: network-facing behavior has only fixtures/unit tests or no approved real-device run. Correction: cap at `AUTOMATED_VALIDATED`, record the exact real-env debt, and keep consumers blocked when the frozen gate requires it. [REPO [AGENTS.md — Mandatory build lifecycle](https://github.com/ozandurmus/neXus/blob/main/AGENTS.md#mandatory-build-lifecycle)]
+
+- **Stale handover/state projection.** Detection: handover or feature criterion says open/not-built while current state/build history says merged, or vice versa. Correction: authoritative JSON first, then rewrite projections; never make handover a competing authority. [REPO [AGENTS.md — Handover economy](https://github.com/ozandurmus/neXus/blob/main/AGENTS.md#handover-economy)]
+
+- **Invented vendor semantics.** Detection: a field/command name is treated as meaning, or generic model knowledge fills an official-doc/real-env gap. Correction: mark `UNKNOWN`, identify the exact source/measurement needed, and freeze only the safe minimum. [REPO [AGENTS.md — Vendor semantics law](https://github.com/ozandurmus/neXus/blob/main/AGENTS.md#vendor-semantics-law)]
+
+- **Identity forced to match.** Detection: zero stripping, integer casting, hostname normalization, inferred member ordinal, management/control-link equivalence, or one-sided peer claims. Correction: opaque comparison, independent observations, relationship-only reporting, and `MISMATCH/AMBIGUOUS/NOT_EVALUABLE` when unproven. [REPO [AGENTS.md — Identity law](https://github.com/ozandurmus/neXus/blob/main/AGENTS.md#identity-law--identifiers-are-opaque)]
+
+- **Semantically inert reference fields.** Detection: API accepts a plausible reference but execution always uses the same implicit provider. Correction: either implement closed resolution or constrain to the actual sentinel; never imply selection that does not happen. [REPO [project/build_history.json — M9](https://github.com/ozandurmus/neXus/blob/main/project/build_history.json)]
+
+- **Check-then-create concurrency.** Detection: uniqueness/confirmation is enforced by a list scan before a separate write. Correction: deterministic key plus atomic backend transaction/lock, proven with real concurrent threads/processes where relevant. [REPO [project/build_history.json — M9](https://github.com/ozandurmus/neXus/blob/main/project/build_history.json)]
+
+- **UI exists visually but not operationally covered.** Detection: ad hoc click-through, no permanent fixture, skipped render harness, or one promised navigation entrance missing. Correction: fixture + permanent harness/click-through + both delivery modes + intended navigation route. [REPO [docs/AI_DEVELOPMENT_PROTOCOL.md — HTML render harness](https://github.com/ozandurmus/neXus/blob/main/docs/AI_DEVELOPMENT_PROTOCOL.md#html-render-harness-mandatory-for-any-ui--payload-change)]
+
+- **Plausible root cause accepted before parsing the primary artifact.** Detection: infrastructure/identity is blamed while the actual YAML, JSON, output file, or source was not parsed locally. Correction: validate the primary artifact first and record the corrected diagnosis rather than rewriting history. The CI zero-job incident was a YAML syntax defect, not automation identity. [REPO [docs/AI_DEVELOPMENT_PROTOCOL.md — post-merge YAML incident](https://github.com/ozandurmus/neXus/blob/main/docs/AI_DEVELOPMENT_PROTOCOL.md#ci-validation-policy-canonical--devtest1-final-topology-2026-09-06)]
+
+- **Predicted test evidence written before execution.** Detection: exact pass counts appear before a real run or later differ from the claimed baseline. Correction: only report command-backed evidence, preserve the correction, and do not round away failures/skips. [REPO [project/build_history.json — M3 correction history](https://github.com/ozandurmus/neXus/blob/main/project/build_history.json)]
+
+- **Process ceremony replacing product progress.** Detection: routine work repeatedly asks for architecture/council/model decisions or full-suite reruns without a risk trigger. Correction: one bounded movement, normal reasoning, focused tests, one real stop condition. [PO-DIRECTION 2026-09-05–07, ChatGPT PO chat]
+
+### §6 Sequencing rationale
+
+- The top-level order is `SEE → VERIFY → TRACE → RECOVER → OPERATE`: observation and identity precede controlled change because later actions consume the earlier evidence grades. [REPO [PROJECT_VISION.md](https://github.com/ozandurmus/neXus/blob/main/PROJECT_VISION.md)]
+
+- The M-series exists to turn existing collectors/reports into a persistent, targetable, interactive control plane: local metadata store, collector target seam, registry-keyed jobs, identity/trust/evidence relationship, resolver consumption, real targeted collection, enrollment, then reconciliation/capability projection. The DB and interactive UI are enabling infrastructure for compliance, backup, and failover—not an alternative product track. [REPO [docs/design/PRODUCT_CONTROL_PLANE_ARCHITECTURE.md — movement sequence](https://github.com/ozandurmus/neXus/blob/main/docs/design/PRODUCT_CONTROL_PLANE_ARCHITECTURE.md#20-roadmap-reconciliation-and-movement-sequence)]
+
+- M4 precedes durable job projections because query-shaped local control-plane metadata needs SQLite, while the Device Registry deliberately remains on its frozen filesystem backend. M5/M6 precede M7 because a browser/job must carry stable `device_id`, not raw endpoint/command data. [REPO [project/roadmap.json — pcp_local_control_plane_storage](https://github.com/ozandurmus/neXus/blob/main/project/roadmap.json)]
+
+- M8.1–M8.4 precede real M7 collection because registry identity cannot be substituted directly for collector identity. Trust must precede credential submission, evidence must prove the mapping, and the resolver must check current provenance/currency. [REPO [docs/history/phase/M8_FIRST_CONTACT_TRUST_AND_IDENTITY_EVIDENCE_PRODUCER_ARCHITECTURE.md](https://github.com/ozandurmus/neXus/blob/main/docs/history/phase/M8_FIRST_CONTACT_TRUST_AND_IDENTITY_EVIDENCE_PRODUCER_ARCHITECTURE.md)]
+
+- M9 could deliver manual local enrollment after M8 primitives existed, but candidate-id enrollment correctly remains dependent on M10's registry↔evidence reconciliation projection. M9 must not implement M10 by stealth. [REPO [AI_HANDOVER.md — M9](https://github.com/ozandurmus/neXus/blob/main/AI_HANDOVER.md)]
+
+- Compliance is deliberately split: framework mappings and data-driven checks can consume existing evidence now; curated command primitives need their own command gate/real validation; user-authored/signed organization packs and UI editing wait for the production authorization boundary. [REPO [project/feature_registry.json — compliance_engine](https://github.com/ozandurmus/neXus/blob/main/project/feature_registry.json)]
+
+- Backup/recovery is deliberately separate from redacted configuration evidence because redacted evidence is non-restorable. Store/encryption/manifest/retention precede collectors; artifact validation precedes any restore claim; `RESTORE_PROVEN` requires an actual lab restore. The CP backup criterion remains open pending its watched real run. [REPO [project/feature_registry.json — native_backup_foundation](https://github.com/ozandurmus/neXus/blob/main/project/feature_registry.json)]
+
+- Failover order is readiness evidence → plan/dry-run → controlled execution. The plan must be explicit before mutation; execution then adds authorization, same-workflow preflight, confirmation, operational-entity lock, one submission, independent verification, and audit. [REPO [project/feature_registry.json — failover tracks](https://github.com/ozandurmus/neXus/blob/main/project/feature_registry.json)]
+
+- The first real failover pilot remains classic ClusterXL. PAN and VSX/VSLS execution follow only after their own identity/action semantics and adapters are proven; read-only readiness support does not authorize mutation support. [REPO [docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md — P16](https://github.com/ozandurmus/neXus/blob/main/docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md)]
+
+- Production platform work follows a usable local product loop unless a specific current movement genuinely depends on it. Local loopback permission never automatically becomes server permission. [REPO [PROJECT_VISION.md — Platform direction](https://github.com/ozandurmus/neXus/blob/main/PROJECT_VISION.md#platform-direction)]
+
+- The current roadmap's `now_next.next` names a consciously **deferred** M8.3 real-environment validation. A deferred item is not an executable NEXT; leaving it there risks making the roadmap appear stalled while M10, compliance, backup, and failover preparation remain actionable candidates. I recommend the human PO choose one real actionable `NEXT` while retaining M8.3 as deferred debt, rather than letting a deferred row occupy the sole next slot. [ASSISTANT confidence: high]
+
+- The human PO's expressed product priority is to finish the M-series control-plane loop so compliance, unfinished backup, and failover can be exercised through a real database-backed interactive UI. I believe the repository broadly reflects this direction, but the exact post-M9 priority among M10, compliance closure, backup real validation, and failover preparation still requires ratification. [PO-DIRECTION 2026-09-07, ChatGPT PO chat]
+
+### §7 Council
+
+- The repository's “council” is a set of decision lenses, not evidence of an installed or independently executed council. Past M3 council material is explicitly recorded as one author's structured self-critique, not independent validation. [REPO [PROJECT_VISION.md — Product decision lenses](https://github.com/ozandurmus/neXus/blob/main/PROJECT_VISION.md#product-decision-lenses)]
+
+- **Senior Python Architect** protects module boundaries, maintainability, typing, failure behavior, and reuse of mature seams. [REPO [PROJECT_VISION.md — Product decision lenses](https://github.com/ozandurmus/neXus/blob/main/PROJECT_VISION.md#product-decision-lenses)]
+
+- **Network Security Engineer** protects least privilege, operational safety, blast radius, network-command classification, and change control. [REPO [PROJECT_VISION.md — Product decision lenses](https://github.com/ozandurmus/neXus/blob/main/PROJECT_VISION.md#product-decision-lenses)]
+
+- **Check Point / VSX Engineer** protects Gaia/Expert/Clish context, ClusterXL/VSX/VSLS distinctions, and evidence/action semantics specific to that platform. [REPO [PROJECT_VISION.md — Product decision lenses](https://github.com/ozandurmus/neXus/blob/main/PROJECT_VISION.md#product-decision-lenses)]
+
+- **Palo Alto Engineer** protects Panorama versus device truth, HA mode/peer evidence, TLS/API semantics, and platform-specific action boundaries. [REPO [PROJECT_VISION.md — Product decision lenses](https://github.com/ozandurmus/neXus/blob/main/PROJECT_VISION.md#product-decision-lenses)]
+
+- **Multi-vendor Automation Engineer** protects a normalized product model without erasing vendor-native meaning or forcing generic mutation primitives. [REPO [PROJECT_VISION.md — Product decision lenses](https://github.com/ozandurmus/neXus/blob/main/PROJECT_VISION.md#product-decision-lenses)]
+
+- **Configuration Management Specialist** protects intent/current/effective distinctions, revision/history semantics, and non-restorable versus restorable artifacts. [REPO [PROJECT_VISION.md — Product decision lenses](https://github.com/ozandurmus/neXus/blob/main/PROJECT_VISION.md#product-decision-lenses)]
+
+- **Data / Inventory Architect** protects identity keys, cardinality, provenance, schema ownership, migrations, retention, and reconciliation. [REPO [PROJECT_VISION.md — Product decision lenses](https://github.com/ozandurmus/neXus/blob/main/PROJECT_VISION.md#product-decision-lenses)]
+
+- **DevSecOps / Platform Engineer** protects deployment boundaries, CI economy, secrets, roles, runtime paths, containers, and operational observability. [REPO [PROJECT_VISION.md — Product decision lenses](https://github.com/ozandurmus/neXus/blob/main/PROJECT_VISION.md#product-decision-lenses)]
+
+- **Security Reviewer** protects trust-before-credential, fail-closed behavior, authorization separation, privacy/DLP, and abuse cases. [REPO [PROJECT_VISION.md — Product decision lenses](https://github.com/ozandurmus/neXus/blob/main/PROJECT_VISION.md#product-decision-lenses)]
+
+- **Test Automation Engineer** protects executable acceptance criteria, concurrency tests, fixture coverage, render harnesses, and risk-based regression. [REPO [PROJECT_VISION.md — Product decision lenses](https://github.com/ozandurmus/neXus/blob/main/PROJECT_VISION.md#product-decision-lenses)]
+
+- **UI/UX Product Designer** protects operator comprehension, contextual actions, navigation integrity, accessibility, and honest empty/unknown states. [REPO [PROJECT_VISION.md — Product decision lenses](https://github.com/ozandurmus/neXus/blob/main/PROJECT_VISION.md#product-decision-lenses)]
+
+- **Technical Product Owner** protects one objective, value, sequencing, acceptance evidence, explicit tradeoffs, and a real decision rather than endless option expansion. [REPO [PROJECT_VISION.md — Product decision lenses](https://github.com/ozandurmus/neXus/blob/main/PROJECT_VISION.md#product-decision-lenses)]
+
+- **Network/Security Manager** protects maintainability in the operating organization, separation of duties, emergency practicality, and change-management fit. [REPO [PROJECT_VISION.md — Product decision lenses](https://github.com/ozandurmus/neXus/blob/main/PROJECT_VISION.md#product-decision-lenses)]
+
+- **Business/Executive stakeholder** protects measurable risk reduction, auditability, roadmap clarity, and time-to-usable-product rather than engineering ceremony. [REPO [PROJECT_VISION.md — Product decision lenses](https://github.com/ozandurmus/neXus/blob/main/PROJECT_VISION.md#product-decision-lenses)]
+
+- Invoke these lenses only for a durable high-impact decision: new identity/security authority, storage/concurrency model, vendor mutation semantics, CLASS 2+, major product UX contract, production exposure, or frozen-contract review. Do not invoke them for routine implementation, narrow defects, mechanical state reconciliation, or work already determined by a frozen contract. [ASSISTANT confidence: high]
+
+- A proper council output should separate evidence, assumptions, options, per-seat risks, dissent, and the exact questions requiring human PO ratification. It should never self-ratify or masquerade as multiple independent reviews when one model authored all seats. [ASSISTANT confidence: high]
+
+- The human PO asked not to run council-style work in the ChatGPT PO chat because of token/credit cost; if a council is genuinely necessary during the current Claude-led period, route the bounded review to the engineering environment and return only the decision packet. This is an operating preference, not product law. [PO-DIRECTION 2026-09-05–07, ChatGPT PO chat]
+
+- I remember no council verdict or dissent that I can confidently classify as both material and absent from repository documentation. Any contrary claim should be `UNKNOWN` until the named historical contract is read. [ASSISTANT confidence: medium]
+
+### §8 Real-environment constraints (sanitized)
+
+- Development environments include a local workstation profile and a corporate workstation profile; shell/tool availability differs. A command such as `py` may exist in one shell and not another, and the project interpreter/venv must be discovered from repository/environment evidence rather than assumed. [PO-DIRECTION 2026-09-07, VS Code/Claude relay discussion]
+
+- The corporate workstation can support direct interactive UI validation through VS Code/browser tooling. The human may enter secrets locally when prompted; agents must never ask for those values in chat, relay, GitHub, screenshots, or logs. [PO-DIRECTION 2026-09-07, ChatGPT PO chat]
+
+- Real device contact is separately authorized from code execution. Physical capability, corporate-network presence, or a green test does not grant permission. The action must be bounded by platform class, target class, command/purpose, and human approval. [REPO [docs/AI_DEVELOPMENT_PROTOCOL.md — Human/agent responsibility split](https://github.com/ozandurmus/neXus/blob/main/docs/AI_DEVELOPMENT_PROTOCOL.md#human--agent-responsibility-split)]
+
+- For Check Point, the validated interaction pattern uses a persistent Expert-shell session, explicit `clish -c` for Gaia commands when required, and explicit VS context switching for VSX reads. Do not reconnect per command, nest SSH clients, or blind-retry. [REPO [AGENTS.md — Check Point](https://github.com/ozandurmus/neXus/blob/main/AGENTS.md#check-point)]
+
+- PAN management addressing and HA/control-link addressing are distinct identity planes. One must not substitute for the other. Raw values are intentionally omitted here. [REPO [AGENTS.md — Palo Alto](https://github.com/ozandurmus/neXus/blob/main/AGENTS.md#palo-alto)]
+
+- Endpoint trust is target-specific and precedes credential submission: approved known-host/host-key handling for SSH and CA/certificate validation for TLS; no TOFU or verification bypass. [REPO [project/roadmap.json — pcp_first_contact_trust_policy](https://github.com/ozandurmus/neXus/blob/main/project/roadmap.json)]
+
+- Per-vendor contact concurrency remains one until vendor-specific real-environment evidence supports increasing it. Stability outranks collection speed. [REPO [CURRENT_STATE.md — Open blockers](https://github.com/ozandurmus/neXus/blob/main/CURRENT_STATE.md)]
+
+- Corporate DLP/privacy gates prohibit secrets, raw identities, sensitive local paths, runtime artifacts, and credential material from tracked/shareable surfaces. Report file and location/classification for a finding, never the matched value. [REPO [AGENTS.md — Privacy and DLP](https://github.com/ozandurmus/neXus/blob/main/AGENTS.md#privacy-and-dlp)]
+
+- Corporate Git actions are PO-authorization-controlled. An explicitly authorized agent may execute; a valid packet or green CI alone does not authorize push/PR/merge. [REPO [AGENTS.md — Git authority and execution law](https://github.com/ozandurmus/neXus/blob/main/AGENTS.md#git-authority-and-execution-law)]
+
+- UI/payload changes require permanent fixtures where applicable, the HTML render harness, full regression when the UI milestone/blast radius requires it, and the privacy gate. Node/happy-dom is primary when available; Playwright/Chromium is the real-browser fallback, not authority to skip permanent coverage. [REPO [docs/AI_DEVELOPMENT_PROTOCOL.md — HTML render harness](https://github.com/ozandurmus/neXus/blob/main/docs/AI_DEVELOPMENT_PROTOCOL.md#html-render-harness-mandatory-for-any-ui--payload-change)]
+
+- Real-environment reports must be sanitized to relationship/status vocabulary. No raw device identity, secrets, endpoints, or key material may be copied into the result. [REPO [AGENTS.md — Sensitive identity reporting law](https://github.com/ozandurmus/neXus/blob/main/AGENTS.md#sensitive-identity-reporting-law)]
+
+### §9 Stakeholders and external constraints
+
+- The human Product Owner ratifies product direction, frozen contracts, scope changes, real-environment/device contact, sensitive actions, deployment acceptance, and Git integration decisions. An assistant recommends and records evidence; it does not become the ultimate authority. [REPO [AGENTS.md — Git authority and execution law](https://github.com/ozandurmus/neXus/blob/main/AGENTS.md#git-authority-and-execution-law)]
+
+- Network-security/change-management stakeholders must sign the controlled-failover review before a real CLASS 2 pilot. The current review package is drafted but unsigned; architecture and unit-tested unwired components are not operational approval. [REPO [CURRENT_STATE.md — Open blockers](https://github.com/ozandurmus/neXus/blob/main/CURRENT_STATE.md)]
+
+- The human operator supplies/enters credentials only in the approved local environment and observes bounded real-device tests. Agents report relationships and outcomes without retrieving or reproducing the values. [REPO [docs/AI_DEVELOPMENT_PROTOCOL.md — Human/agent responsibility split](https://github.com/ozandurmus/neXus/blob/main/docs/AI_DEVELOPMENT_PROTOCOL.md#human--agent-responsibility-split)]
+
+- Corporate policy binds DLP/privacy, network access, credential handling, Git authorization, and use of approved environments. Exact corporate policy names and signatory identities are `UNKNOWN`; do not invent them. [ASSISTANT confidence: high]
+
+- “Production” means more than running on a corporate workstation: managed server/runtime, OIDC/RBAC, trusted production TLS/SSH, database role separation, secret management, report-only publication boundaries, audit retention/observability, off-host recovery custody, and restore-drill evidence. See `CURRENT_STATE.md`; exact deployment topology remains unsettled. [REPO [CURRENT_STATE.md — Production posture](https://github.com/ozandurmus/neXus/blob/main/CURRENT_STATE.md)]
+
+- Tufin is the external path-discovery authority for the future path-based rule-placement capability. Its API availability, schema, authentication, and organizational ownership are external dependencies and were not verified in this extraction. [PO-DIRECTION 2026-08–09, ChatGPT PO chat]
+
+- Check Point and Palo Alto official documentation plus bounded approved real-environment evidence constrain vendor-semantic decisions; general model knowledge is not a sign-off source. [REPO [AGENTS.md — Vendor semantics law](https://github.com/ozandurmus/neXus/blob/main/AGENTS.md#vendor-semantics-law)]
+
+- Claude, Codex, Copilot, or any repository-defined subagent are implementation/review instruments, not stakeholders with independent ratification power. The active movement must name ownership; the PO remains the decision authority. [REPO [AGENTS.md — Authority hierarchy](https://github.com/ozandurmus/neXus/blob/main/AGENTS.md#authority-hierarchy)]
+
+### §10 Things you believe are in the repository but may not be
+
+- I relied on “Tufin supplies path discovery; neXus does not build topology/path analysis” as settled product direction, but I did not find/verify a current canonical file stating it. [ASSISTANT confidence: high]
+
+- I relied on the human's formulation that the M-series ends by establishing the DB-backed interactive control plane needed to finish compliance, backup, and failover, but the exact “M-series completion” definition may be distributed rather than stated in one file. [ASSISTANT confidence: medium]
+
+- I relied on “testing requests that require the human should be put in backlog while unrelated work continues,” but I am not sure the repository states that operating rule beyond specific deferred validations. [ASSISTANT confidence: medium]
+
+- I relied on one implementation owner per coupled movement and one integration owner for parallel work; the repository strongly supports bounded movements but may not explicitly prohibit multiple independent worktrees. [ASSISTANT confidence: medium]
+
+- I relied on “no production migration/container refactor now” as a human sequencing direction; the repository states staged platform direction and current non-production posture, but may not preserve the exact temporary prohibition. [ASSISTANT confidence: high]
+
+- I relied on the human being able to run interactive UI tests and enter credentials locally on a corporate workstation; this operational capability is likely intentionally absent from repository authority. [ASSISTANT confidence: high]
+
+- I relied on the PO preference that new movement prompts include a short Turkish explanation of feature, UI location, blocker removed, security relevance, and necessity before the English engineering packet. I am not sure the repository records this human-facing communication format. [ASSISTANT confidence: high]
+
+- I relied on a current tool allocation in which Claude owned M9 implementation and Codex/ChatGPT performed governance/PO review. M9's historical record states that ownership, but no durable rule should assume the same model/vendor for later movements. [ASSISTANT confidence: high]
+
+### §11 Open doubts
+
+- `project/roadmap.json` names deferred M8.3 real-environment validation as the sole `next`. The repository contract says NEXT is exactly one, but a deferred row is not executable. Human PO sequencing is needed to decide whether the actionable next movement is M10/control-plane reconciliation, a compliance closure, backup real validation, failover preparation, or deliberate M8.3 execution. [ASSISTANT confidence: high]
+
+- Candidate-based enrollment is advertised in the local enrollment decision but still lacks its M10 candidate/reconciliation producer. The exact M10 contract, candidate identity basis, lifecycle, and stale/contradictory reconciliation behavior remain to be verified before implementation. [REPO [AI_HANDOVER.md — M9 follow-up](https://github.com/ozandurmus/neXus/blob/main/AI_HANDOVER.md)]
+
+- M7 remains blocked on one genuine M8.3 real-environment-validated relationship. The human intentionally deferred that test; it is unclear when the product wants to pay this debt relative to M10/UI work. [REPO [CURRENT_STATE.md — Exact next build](https://github.com/ozandurmus/neXus/blob/main/CURRENT_STATE.md)]
+
+- PAN B2 pair identity remains unestablished after conflicting observations. It blocks PAN CLASS 2 and must not be closed through normalization or an unrelated movement. [REPO [project/roadmap.json — D-V3b](https://github.com/ozandurmus/neXus/blob/main/project/roadmap.json)]
+
+- CP configured-recovery vendor semantics remain unknown even though their readiness role is advisory-exempt. CLASS 2 still needs an approved semantic or an explicit safe product decision. [REPO [project/roadmap.json — D-V7b](https://github.com/ozandurmus/neXus/blob/main/project/roadmap.json)]
+
+- OP.2 has frozen architecture and several implemented unwired foundations, but authorization, protected entry point, production trust hardening, signed change/network review, and real pilot evidence remain. The feature registry's “implementation not started” wording may now understate actual foundation progress. [ASSISTANT confidence: high]
+
+- CP native backup implementation remains `in_progress` until its watched single-target real-environment run; restore proof is distinct and requires a real lab restore. The timing and environment for those tests remain external. [REPO [project/feature_registry.json — native_backup_foundation](https://github.com/ozandurmus/neXus/blob/main/project/feature_registry.json)]
+
+- Compliance's rule engine is partly delivered, but curated read-only command primitives, signed organization packs/UI editor, and the final evidence-report model remain incomplete and gated differently. The next bounded compliance slice is not selected. [REPO [project/feature_registry.json — compliance_engine](https://github.com/ozandurmus/neXus/blob/main/project/feature_registry.json)]
+
+- Production storage engine, server enrollment exposure, four-eyes policy, operational-write target count/reason retention, scheduler editing, degraded verdict, emergency path, and continuity thresholds remain open roadmap decisions. [REPO [project/roadmap.json — open_decisions](https://github.com/ozandurmus/neXus/blob/main/project/roadmap.json)]
+
+- I observed a likely state drift: the current M9 record says Administration → Device Management was built, while the `left_vertical_product_navigation.no_enrollment_affordance` criterion text still says that second entry point is not built. Verify and reconcile rather than choosing one silently. [ASSISTANT confidence: high]
+
+- I observed a second likely state drift: `failover_controlled_execution` is `planned` and says implementation is not started, while `CURRENT_STATE.md` says the adapter, member session, and preflight/eligibility components are implemented and unit-tested but unwired. The status may intentionally mean “product execution not started,” but the wording should be made unambiguous. [ASSISTANT confidence: high]
+
+- The exact corporate sign-off chain and whether a bounded local failover pilot requires full production OIDC/RBAC or a separately approved pilot boundary remain insufficiently explicit to me. Do not infer the answer from workstation location. [ASSISTANT confidence: medium]
+
+### §12 Advice to your successor
+
+#### The first three mistakes a fresh assistant will make
+
+1. It will read `AI_HANDOVER.md`, a relay locator, or the newest chat message as authority and skip the repository hierarchy. Correction: cold-start in the mandated order, locate the active frozen contract, validate the packet, and report contradictions rather than reconciling them silently. [ASSISTANT confidence: high]
+
+2. It will turn a plausible vendor/identity relationship into certainty—especially management versus direct truth, display labels versus security ids, or one-sided peer evidence versus reciprocal proof. Correction: preserve the separate evidence grades and emit `UNKNOWN/MISMATCH/AMBIGUOUS` when the join is not proven. [ASSISTANT confidence: high]
+
+3. It will try to “finish faster” by combining a deferred producer, a UI affordance, a storage change, and a real-device test into one movement, then call it done from automated evidence. Correction: one objective, one owner, explicit gate, proportional tests, and the honest lifecycle state. [ASSISTANT confidence: high]
+
+#### The first three questions to ask the human Product Owner
+
+1. “`now_next.next` is deferred M8.3. Which single **actionable** movement do you ratify now: run that bounded real-environment gate, start M10 reconciliation/candidate production, close a compliance slice, close backup validation, or advance the next failover prerequisite?” [ASSISTANT confidence: high]
+
+2. “For this episode, what exact real-environment authority is granted—none, read-only against one approved target class, or a separately reviewed operational action—and which evidence must remain local?” [ASSISTANT confidence: high]
+
+3. “Which decisions may the repository-defined PO assistant make routinely, and which must always return to you: frozen-contract changes, new commands/credentials/identity authority, production exposure, device contact, waivers, and merge?” [ASSISTANT confidence: high]
+
+### §13 Second pass — items omitted or only indirectly captured
+
+Supplied by the previous assistant after re-reading its own output; same
+provenance rules.
+
+- The original feature brief also included rule consolidation, shadow-rule cleanup, schedule-object detection, bulk disable/delete based on last-hit age, and placing schedule-bearing rules on the Tufin-provided path. These may not yet be durably represented as one coherent product record. [PO-DIRECTION 2026-08–09, ChatGPT PO chat]
+- Before each engineering prompt, the PO wanted a short Turkish explanation covering the feature, UI location, benefit, blocker removed, security relevance, and necessity. This is a communication preference, not product architecture. [PO-DIRECTION 2026-09 period, ChatGPT PO chat]
+- When human testing is required but deliberately deferred, the preference was to record it in backlog and continue with unrelated authorized work rather than repeatedly stopping the project. [PO-DIRECTION 2026-09 period, ChatGPT PO chat]
+- Once a movement is accepted, the previous PO assistant was expected to supply the exact next prompt without repeated routine confirmation or "if you want" questions. It should not invent work merely to keep an agent occupied. [PO-DIRECTION 2026-09 period, ChatGPT PO chat]
+- The temporary subscription/tooling plan (Claude through the current billing period, ChatGPT Plus for PO review, and a possible later switch to Codex) is volatile and should not become repository product authority. [PO-DIRECTION 2026-09-07, ChatGPT PO chat]
+- Exact model names and subscription prices were omitted. Repository routing should remain task-driven and vendor-neutral; current commercial plans can change independently. [ASSISTANT confidence: high]
+- Parallel development policy is not fully settled. "One writer for a coupled movement" is established operational practice, but independent worktrees/lanes may later be useful for compliance, backup, and failover. This needs an explicit integration-owner contract before adoption. [ASSISTANT confidence: medium]
+- Earlier "device access is deferred" statements were omitted because later M8/OP/RB work introduced bounded real-environment gates. Treat the old blanket statement as superseded, not current authority. [ASSISTANT confidence: high]
+- Exact PR numbers, commit hashes, test totals, workstation paths, and environment-install commands were mostly omitted because `project/build_history.json` already owns that evidence and such details are not durable product direction. [ASSISTANT confidence: high]
+- All raw device identities, endpoints, usernames, credentials, host-key material, and locally sensitive values were deliberately excluded. [REPO AGENTS.md — Sensitive identity reporting law]
