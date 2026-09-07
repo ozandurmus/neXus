@@ -50,6 +50,47 @@ def safe_component(value: Any) -> str:
     return text or "unknown"
 
 
+#: `M8.3`/`M8.4` opaque evidence-reference contract: a `producing_run_ref` is
+#: exactly `"<source>:<entity_id>:<snapshot_id>"`. Neither half is a secret --
+#: `source` and `entity_id` are already plain columns/parameters elsewhere in
+#: this store, and `snapshot_id` is an opaque, content-addressed identifier --
+#: but the three-part *shape* is a private contract between whoever writes a
+#: reference (e.g. `utils/first_contact_producer.py`) and whoever resolves
+#: one later (e.g. `console/registry_targets.py`'s `M8.4` currency check).
+#: Defining both directions here, once, is what keeps the two sides from
+#: silently drifting into two independently-guessed formats.
+def build_evidence_reference(*, source: str, entity_id: str, snapshot_id: str) -> str:
+    """Build one opaque, resolvable evidence reference (see module note above)."""
+    return f"{source}:{entity_id}:{snapshot_id}"
+
+
+def resolve_evidence_reference(store: "ConfigEvidenceStore", reference: str) -> dict[str, Any] | None:
+    """Resolve an opaque evidence reference back to its snapshot metadata.
+
+    Returns `None` -- never raises -- when the reference is malformed, the
+    snapshot no longer exists, or it did not complete successfully (no
+    `sha256`). A vendor-neutral counterpart to `build_evidence_reference`:
+    callers outside `configuration/` (e.g. `console/registry_targets.py`)
+    can resolve a reference without importing a vendor collector module --
+    only the reference string and this store are needed.
+    """
+    parts = str(reference or "").split(":", 2)
+    if len(parts) != 3 or not all(parts):
+        return None
+    source, entity_id, snapshot_id = parts
+    try:
+        snapshots = store.backend.list_snapshots(source=source, entity_id=entity_id)
+    except Exception:
+        return None
+    for candidate_id, payload in snapshots:
+        if candidate_id != snapshot_id:
+            continue
+        if not payload or payload.get("status") != "success" or not payload.get("sha256"):
+            return None
+        return payload
+    return None
+
+
 def validate_xml_config(content: bytes) -> dict[str, Any]:
     if not content or len(content) < 32:
         raise ValueError("Configuration artifact is empty or unexpectedly small")

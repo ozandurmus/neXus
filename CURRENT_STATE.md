@@ -1,23 +1,25 @@
 # SecurityExpert — Current State
 
-Hot-path checkpoint only. **No durable law, no rule, no lifecycle detail
-lives here** — that's `AGENTS.md`/`AI_START_HERE.md`. **Predecessor build
-detail is not here either** — it is in `project/build_history.json`
-(structured, newest-first) and its linked docs under `docs/history/`.
-`docs/history/INDEX.md` is the generated one-line timeline.
+Hot-path checkpoint only. **No durable law/rule/lifecycle detail here** —
+see `AGENTS.md`/`AI_START_HERE.md`. **Predecessor build detail lives in
+`project/build_history.json`** (structured, newest-first) and its linked
+docs under `docs/history/`; `docs/history/INDEX.md` is the one-line timeline.
 
-- **Checkpoint:** 2026-09-07, `M8.3` read-only first-contact producer
-  (`m8_3_first_contact_producer_real_env_gate`) **AUTOMATED_VALIDATED** (branch
-  `claude/m8-3-first-contact-producer-nh0260`, PR not yet opened/merged; see
-  "Active build"). `M8.2` merged to `main` via PR #98 (commit `16c39ab`). `M8`
-  architecture stays **FROZEN — PRODUCT OWNER APPROVED, 2026-09-06** from
-  verified `main` at `0a9048ceeb2a318444f918e2688b126641eaeab0`.
-- **Next** (`now_next.next`): Product-Owner-gated real-environment
-  validation of this producer, `planned`, no new code — `M8.4` must not
-  begin without a real-environment-validated relationship from it.
-  `m7_real_device_targeted_collect_now`/`op2_c_cp_clusterxl_adapter_scoping`
-  stay `upcoming`/`blocked`. `DEV.TEST.1`, `PCP.1`, `M1`-`M6`, `M8.1`, `M8.2`
-  complete/automated_validated — `project/build_history.json`.
+- **Checkpoint:** 2026-09-07, `M8.4` `M6` resolver consumption
+  (`m8_4_m6_resolver_consumption`) **AUTOMATED_VALIDATED** (branch
+  `claude/m8-4-m6-resolver-consumption-nh0260`, PR not yet opened; see
+  "Active build"). `M8.3` merged via PR #100 (`ef43d59`). **PO sequencing
+  amendment (contract §12):** `M8.3`'s real-env validation is deferred to
+  backlog (stays `AUTOMATED_VALIDATED`, never `REAL_ENV_VALIDATED`/`DONE`
+  from the deferral); `M8.4` was explicitly authorized ahead of that gate;
+  `M7` stays blocked regardless. `M8` architecture stays **FROZEN — PO
+  APPROVED, 2026-09-06** from verified `main` at
+  `0a9048ceeb2a318444f918e2688b126641eaeab0`.
+- **Next** (`now_next.next`): the deferred `M8.3` real-environment validation,
+  `deferred`, no new code. `m7_real_device_targeted_collect_now`/
+  `op2_c_cp_clusterxl_adapter_scoping` stay `upcoming`/`blocked`.
+  `DEV.TEST.1`, `PCP.1`, `M1`-`M6`, `M8.1`-`M8.4` complete/automated_validated
+  — `project/build_history.json`.
 - **OP.2.0 CLASS 2 architecture** (`docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md`):
   **CONTRACT FROZEN 2026-09-04**; `OP.2.A`/`OP.2.B` IMPLEMENTED; `OP.2.1` CP
   command gate DRAFTED — CLASS 2 still has **no member**, no adapter,
@@ -25,8 +27,7 @@ detail is not here either** — it is in `project/build_history.json`
   roll-up (`OP.2.1b`, see "Active build") — remaining `CLASS 2` blockers are
   authorization/trust/adapter/change-management, not readiness.
 - **Product baseline:** `0.7.7 — Compliance trend retro-fill` — AUTOMATED_VALIDATED.
-- **Engineering baseline:** `DEV.3.3` — AUTOMATED_VALIDATED. `DEV.1`,
-  `DEV.4` complete.
+- **Engineering baseline:** `DEV.3.3` — AUTOMATED_VALIDATED. `DEV.1`/`DEV.4` complete.
 - **Product evidence baseline:** `0.6.1B.1.2` interactive CP config is REAL_ENV_VALIDATED.
 
 ## Reading this file
@@ -55,37 +56,38 @@ test-enforced boundaries. Current numbers:
 
 ## Active build
 
-**`m8_3_first_contact_producer_real_env_gate`** (`M8.3`) —
-**AUTOMATED_VALIDATED, 2026-09-07**, branch
-`claude/m8-3-first-contact-producer-nh0260`, PR not yet opened. New
-`utils/first_contact_producer.py::run_first_contact_producer` (contract
-§3/§4): fail-closed registry resolution, exact-one `PhysicalTarget` selection
-by `management_ip`, mandatory trust-before-credential
-(`utils.cp_ssh_trust.lookup_trusted_host_key` first), the existing unmodified
-`_collect_host`/`_identity_gate`/`_collector_identity_gate`/`_entity_id`
-primitives, then the positive write gate (identity accepted + serial present
-+ resolvable producing evidence) before the existing `M8.1`
-`record_first_contact_proof`. New CLI mode `--identity-first-contact
-DEVICE_ID`; not console-submittable. Full evidence: `project/build_history.json`.
+**`m8_4_m6_resolver_consumption`** (`M8.4`) — **AUTOMATED_VALIDATED,
+2026-09-07**, branch `claude/m8-4-m6-resolver-consumption-nh0260`, PR not
+yet opened. Extends `console/registry_targets.py` (contract §7): a known+
+eligible `config_refresh_cp` `device_id` stops refusing with
+`IDENTITY_TRANSLATION_REQUIRED` only once a proven `M8.1` relationship
+exists AND registry/identity-derivation/trust/evidence currency all hold —
+checked identically at admission and pre-execution, before any
+credential/device operation. New `RELATIONSHIP_STORE_UNAVAILABLE` outcome;
+new shared `utils/config_evidence.py::build_evidence_reference`/
+`resolve_evidence_reference`; `IDENTITY_DERIVATION_CONTRACT_VERSION` moved
+to `utils/device_identity_relationships.py`. Deliberately does **not**
+implement `M7` — no wiring substitutes a resolved `entity_id` into a
+collector command. **Finding, reported not patched:** `_collect_host` never
+persists a host-key fingerprint into CP config evidence metadata, so the
+trust-currency check fails closed for every real relationship today
+(`project/backlog.json`: `m8_evidence_host_key_fingerprint_not_persisted`).
+Full evidence: `project/build_history.json`.
 
 Parent — **`m8_first_contact_trust_identity_evidence_producer_architecture`**
-(`M8` architecture) — **FROZEN, PRODUCT OWNER APPROVED, 2026-09-06 (PR #96,
-merged).** Sequence: `M8.1` → `M8.2` → `M8.3` (above) → `M8.4` (`M6`
-resolver consumption) → `M7`. Open: `operator_assertion`, single-sourced
-identity evidence, DEFERRED serial-contradiction detection. Full contract:
+(`M8` architecture) — **FROZEN, PO APPROVED 2026-09-06 (PR #96), §12
+amendment 2026-09-07** (`M8.4` authorized ahead of `M8.3`'s real-env gate;
+`M7` unaffected, stays blocked). Sequence: `M8.1` → `M8.2` → `M8.3` → `M8.4`
+(above) → `M7`. Open: `operator_assertion`, single-sourced identity
+evidence, DEFERRED contradiction detection. Full contract:
 `docs/history/phase/M8_FIRST_CONTACT_TRUST_AND_IDENTITY_EVIDENCE_PRODUCER_ARCHITECTURE.md`.
 
-Predecessor — **`m8_2_endpoint_specific_trusted_key_lookup`** (`M8.2`) —
-**AUTOMATED_VALIDATED**, merged to `main` via PR #98 (commit `16c39ab`):
-`utils/cp_ssh_trust.py::lookup_trusted_host_key(endpoint, port)`, local-only
-exact endpoint+port trusted-key check, no device contact.
-
-Predecessor — **`m8_1_relationship_storage_api`** (`M8.1`) —
-**AUTOMATED_VALIDATED**, `M4` schema-version-2 migration plus typed
-read/write API. No producer/consumer yet.
-
-Predecessor — **`registry_keyed_job_targets`** (`M6`) — **AUTOMATED_VALIDATED,
-Option D fail-closed admission shell, not functional per-device targeting**.
+Predecessors, all **AUTOMATED_VALIDATED**, all merged: **`M8.3`** (PR #100,
+`ef43d59` — the read-only producer; real-env validation deferred to
+backlog per §12, not `REAL_ENV_VALIDATED`/`DONE`), **`M8.2`** (PR #98 —
+local-only trusted-key check), **`M8.1`** (`M4` schema-2 relationship
+storage/API), **`M6`** (`registry_keyed_job_targets`, fail-closed admission
+shell, now extended by `M8.4` above).
 
 ## Predecessor — `M5`/`M4`
 
@@ -100,10 +102,9 @@ Detail: `docs/history/phase/M4_LOCAL_CONTROL_PLANE_METADATA_STORE.md`.
 
 **`nav_3_capability_state_vocabulary`** — COMPLETE / FROZEN (PO approved
 2026-09-06). `docs/design/CAPABILITY_STATE_VOCABULARY_AND_PRESENTATION.md` is
-implementation authority for the capability-state vocabulary, resolution
-contract and presentation matrix (`D1`–`D7`, `E1`–`E7`, `AC-CS-1`…`97`). It has
-no implementation: `D3` arrives with `M10`, per-(entity, capability) `D5` with
-`M12`, so every capability resolves `UNKNOWN` until they ship.
+implementation authority for the vocabulary/resolution/presentation matrix
+(`D1`–`D7`, `E1`–`E7`, `AC-CS-1`…`97`); no implementation yet (`D3`/`M10`,
+per-entity `D5`/`M12`), so every capability resolves `UNKNOWN` until then.
 
 ## `OP.0b.0` — FROZEN WITH REAL-ENV VALIDATION GATES
 
@@ -138,11 +139,13 @@ a narrower question never promoted toward B2.
 
 ## Exact next build
 
-`now_next.next` is `m8_3_real_environment_validation` (`planned`, no new
+`now_next.next` is `m8_3_real_environment_validation` (`deferred`, no new
 code) — see "Real-environment validation owed" below for the exact command.
-`operator_assertion` stays unaccepted. `op2_c_cp_clusterxl_adapter_scoping`
-stays `upcoming`/blocked; `OP.2.D`'s console flow is expected on the
-`PCP.4` device/HA tab, never a second one.
+`M7` stays blocked until it runs and produces a genuine
+`REAL_ENV_VALIDATED` relationship; `M8.4`'s own `AUTOMATED_VALIDATED`
+completion does not change that. `operator_assertion` stays unaccepted.
+`op2_c_cp_clusterxl_adapter_scoping` stays `upcoming`/blocked; `OP.2.D`'s
+console flow is expected on the `PCP.4` device/HA tab, never a second one.
 
 ## Open blockers
 
@@ -159,7 +162,7 @@ Concurrency budget stays at 1 per vendor pending its own real-env evidence.
 
 ## Real-environment validation owed
 
-- **`M8.3`** — the one bounded, read-only `--identity-first-contact` command against a real registry device_id, under explicit Product Owner authorization; also measures real CP config evidence-retention duration. Gates `M8.4`.
+- **`M8.3`** — **deferred to backlog** (PO decision, §12): the one bounded, read-only `--identity-first-contact` command against a real device_id, PO-authorized; also measures real CP config evidence-retention duration. Gates `M7`, not `M8.4` (already shipped ahead of it).
 - **`CON.2`** — trigger a `read`-class job from the console against a real device. No new code; closes it to DONE.
 - **`OP.0a`/`OP.0c`** — real-device confirmation `ha_cluster_mode` resolves, not `"unknown"`. Fixture-drift, not a safety gate.
 - **PAN HA serial identity (`OP.0a.P7`/`OP.0b.0`)** — see "PAN HA serial evidence" above; its own next technical movement, not folded in here.
@@ -169,18 +172,15 @@ Concurrency budget stays at 1 per vendor pending its own real-env evidence.
 ## Automated test baseline
 
 ```
-M8.3: targeted 37 passed (19 producer + 18 CLI). Affected sweep (M8.1/M8.2/
-  PCP.1/M4/architecture convergence/OP.0d/OP.0b S7.5): 335 passed. Wide
-  CP-config collector/probe/trust sweep (24 files): 441 passed, 1 skipped, 0
-  failed. Privacy PASS. No full-regression run (risk-based). Detail:
-  project/build_history.json.
-M8.2 (correction round 1): 20 passed. Wide sweep (26 files): 608 passed,
-  1 skipped, 1 pre-existing unrelated Paramiko-drift failure. Privacy PASS.
-M8.1 targeted: 101 passed. Affected (M4/M8.1/M6/M5/PCP.1/CON.2/architecture
-  convergence): 388 passed, 0 failed. Privacy gate PASS. No full-regression
-  run (risk-based). Detail: project/build_history.json.
-Predecessor build detail (M6 and earlier, including the last full parallel
-  suite run) lives only in project/build_history.json now.
+M8.4: targeted 23 passed. Affected sweep (M6/M8.1/M8.2/M8.3/PCP.1/M4/CON.1/
+  CON.2/OP.0d/OP.0b S7.5/architecture convergence/application-package): 440
+  passed, 1 skipped, 0 failed. Fixed fast-PR smoke set: 14 passed.
+  compileall clean. Privacy PASS. No full-regression run (risk-based).
+  Detail: project/build_history.json.
+M8.3: targeted 37 passed. Affected sweep: 335 passed. Wide CP-config sweep
+  (24 files): 441 passed, 1 skipped, 0 failed. Privacy PASS.
+M8.2/M8.1 and earlier predecessor build detail lives only in
+  project/build_history.json now.
 Repository privacy gate: PASS / 0 findings.
 ```
 ## Known xfails

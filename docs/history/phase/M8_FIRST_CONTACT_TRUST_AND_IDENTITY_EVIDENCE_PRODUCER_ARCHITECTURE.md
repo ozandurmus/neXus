@@ -393,3 +393,43 @@ identity-authority claim — `mapping_scope` is the entire authority this
 design produces. No table/column name or migration version number is
 frozen beyond the ordering in §9 — each implementation slice re-derives the
 exact shape against the real repository state at that time.
+
+---
+
+## 12. Amendment (2026-09-07) — Product Owner sequencing: `M8.4` authorized ahead of `M8.3`'s real-environment gate
+
+Source authorization: Product Owner instruction, `M8.4` `SESSION_START`
+packet, 2026-09-07. This amends only the §9 sequencing table's stated gate
+for `M8.4` (previously: "`M8.3` complete, including at least one
+real-environment-validated relationship") — nothing else in this contract
+changes; no existing check, outcome, schema field, or acceptance criterion
+is reinterpreted.
+
+- **`M8.3`'s real-environment validation is deferred to backlog**, at
+  Product Owner discretion (manual/real-device validation requests default
+  to backlog deferral absent an explicit instruction otherwise). This
+  deferral does **not** promote `M8.3` to `REAL_ENV_VALIDATED` or `DONE` —
+  it stays `AUTOMATED_VALIDATED`, and the deferred command
+  (`py main.py --identity-first-contact <device_id>`) remains open
+  validation debt (`project/backlog.json`).
+- **`M8.4`'s fail-closed implementation and automated validation are
+  explicitly authorized to proceed before that gate closes.** `M8.4`'s own
+  build status may reach `AUTOMATED_VALIDATED` — never further — without
+  waiting on `M8.3`'s real-environment evidence.
+- **`M7` ("real device-targeted Collect now") remains blocked regardless.**
+  Its own §9 gate ("`M8.4` complete + real-env evidence") is unchanged and
+  is strictly stronger than `M8.4`'s amended gate above: `M7` requires an
+  actually real-environment-validated relationship, and no automated
+  fixture or synthetic relationship may ever satisfy that specific
+  requirement. `M8.4` opening its own admission gate for a genuinely
+  identity-resolved target does not, by itself, make `config_refresh_cp`
+  functional for a real device — no wiring exists (nor is any added by
+  `M8.4`) that substitutes a resolved `entity_id` into the collector's
+  actual target list; that substitution is `M7`'s own, separately gated
+  scope.
+- This is a narrow sequencing amendment only. Every other frozen provision
+  in this document — the evidence model (§3), the mandatory
+  trust-before-credential sequence (§4), the schema (§5),
+  creation/consumption/invalidation (§6), `M6` resolution (§7),
+  privacy/concurrency/acceptance criteria (§8), and non-goals (§11) — is
+  unchanged and unamended by this entry.
