@@ -1,13 +1,23 @@
-"""GOV.SESSION.1 -- minimal agent session-boundary packet helper.
+"""GOV.SESSION.1 -- agent session-boundary packet helper (protocol v2).
 
-    py scripts/gov_session_transfer.py start   --movement ID --ref PATH [--ref PATH ...]
-    py scripts/gov_session_transfer.py close   --movement ID --outcome OUTCOME --ref PATH [--ref PATH ...]
+    py scripts/gov_session_transfer.py render   FILE|- [--out FILE]
     py scripts/gov_session_transfer.py extract  FILE|-
     py scripts/gov_session_transfer.py validate FILE|-
 
 Full contract: docs/design/GOV_SESSION_TRANSFER_PROTOCOL.md. A packet is a
-pointer to authoritative repository files -- never a copy of their content,
-never itself an authority (AGENTS.md "Authority hierarchy" is unaffected).
+single, self-delimiting JSON object carrying the complete SESSION START /
+SESSION CLOSE report (`AI_START_HERE.md`'s own schema, made structured and
+machine-checkable) plus a pointer (`refs`) to the authoritative repository
+files -- the packet itself is never a copy of their content and never an
+authority in its own right (`AGENTS.md` "Authority hierarchy" is unaffected;
+validating a packet's *structure* never proves the *truth* of its claims).
+
+`render` reads one bare JSON object (no sentinel) from a file or stdin,
+validates it completely, and only on success emits the sentinel-wrapped
+packet -- nothing is written or printed on a validation failure. There is no
+flag-driven path that assembles a packet piece by piece: protocol v1's
+pointer-only `start`/`close` subcommands do not exist here, so there is no
+way to produce a non-canonical, report-less packet with this tool.
 
 Stdlib only. Offline, synchronous, no network, no daemon, no credential or
 device access. `--out` is the only way to write a file, and only to the
@@ -25,41 +35,206 @@ from pathlib import Path
 from typing import Any
 
 SENTINEL = "<<<NEXUS_SESSION_PACKET>>>"
-PROTOCOL_VERSION = 1
+PROTOCOL_VERSION = 2
 MESSAGE_TYPES = ("SESSION_START", "SESSION_CLOSE")
 OUTCOMES = ("DONE", "AUTOMATED_VALIDATED", "PARTIAL", "BLOCKED")
 EXIT_OK, EXIT_INVALID, EXIT_USAGE = 0, 1, 2
+
+#: `AGENTS.md` "Mandatory session start / close" movement-type list.
+#: Duplicated here, not imported, so this helper stays a single,
+#: dependency-free, tool-agnostic file portable outside this repository --
+#: the same "an independent constant at a package boundary beats a cross-
+#: boundary import" precedent this repository already uses elsewhere
+#: (e.g. `console/registry_targets.py`'s own `_ELIGIBLE_STATES`).
+MOVEMENT_TYPES = frozenset({
+    "READ_ONLY_AUDIT", "ARCHITECTURE", "IMPLEMENTATION", "VALIDATION",
+    "ROOT_CAUSE", "UI", "DOCS", "RELEASE_HANDOVER",
+})
+
+#: `utils/project_plan.py::STATUS_VALUES`, duplicated for the same reason.
+STATUS_VALUES = frozenset({
+    "done", "in_progress", "planned", "blocked", "deferred", "complete",
+    "complete_with_followup", "automated_validated", "real_env_validated",
+})
+
+#: `AI_START_HERE.md` "SESSION START" deployment-direction vocabulary.
+DEPLOYMENT_DIRECTIONS = frozenset({"local validation only", "staging-like", "production-gated"})
+
+MERGE_STATES = frozenset({"NOT_OPENED", "OPEN", "MERGED", "CLOSED"})
+CONTINUATIONS = frozenset({"SAME_SESSION", "NEW_SESSION"})
 
 
 class PacketError(ValueError):
     """A packet failed an envelope or content check."""
 
 
-def build_packet(message_type: str, movement: str, refs: list[str], outcome: str | None = None) -> dict[str, Any]:
-    obj = {"protocol_version": PROTOCOL_VERSION, "message_type": message_type, "movement": movement, "refs": refs}
-    if outcome is not None:
-        obj["outcome"] = outcome
-    return obj
+# ---------------------------------------------------------------------------
+# Schema
+#
+# A field spec is one of:
+#   ("str",)                        non-empty string
+#   ("enum", frozenset(...))        value must be a member
+#   ("list_str", allow_empty: bool) list of non-empty strings
+#   ("freeform_obj",)               a non-empty JSON object, shape not checked
+#                                    (the one open-ended field: `baseline`,
+#                                    which legitimately varies build to build)
+#   ("int_or_null",)                a plain int (never bool), or null
+#   ("str_or_null",)                a non-empty string, or null
+#   ("obj", {field: spec, ...})     an object with exactly those fields,
+#                                    nothing missing, nothing extra
+# ---------------------------------------------------------------------------
+
+_REASONING_SCHEMA = ("obj", {"tier": ("str",), "reason": ("str",)})
+
+SESSION_START_REPORT_SCHEMA = ("obj", {
+    "baseline": ("freeform_obj",),
+    "objective": ("str",),
+    "scope": ("obj", {"in": ("list_str", False), "out": ("list_str", False)}),
+    "movement_type": ("enum", MOVEMENT_TYPES),
+    "requirements": ("list_str", False),
+    "acceptance_criteria": ("list_str", False),
+    "validation_plan": ("list_str", False),
+    "invariants": ("list_str", False),
+    "risks": ("list_str", True),
+    "context_not_loaded": ("list_str", True),
+    "recommended_reasoning": _REASONING_SCHEMA,
+    "git": ("obj", {"lane": ("str",), "base": ("str",)}),
+    "merge_gate": ("str",),
+    "deployment_direction": ("enum", DEPLOYMENT_DIRECTIONS),
+    "output_contract": ("list_str", False),
+})
+
+SESSION_CLOSE_REPORT_SCHEMA = ("obj", {
+    "completed": ("list_str", False),
+    "changed": ("list_str", False),
+    "preserved": ("list_str", False),
+    "validation": ("obj", {
+        "targeted": ("str",),
+        "affected": ("str",),
+        "full_regression": ("str",),
+        "privacy": ("str",),
+        "state_consistency": ("str",),
+        "diff_check": ("str",),
+        "real_environment": ("str",),
+    }),
+    "unresolved_risks": ("list_str", True),
+    "state_updates": ("list_str", True),
+    "next": ("obj", {
+        "movement": ("str",),
+        "movement_type": ("enum", MOVEMENT_TYPES),
+        "status": ("enum", STATUS_VALUES),
+        "objective": ("str",),
+    }),
+    "recommended_reasoning": _REASONING_SCHEMA,
+    "continuation": ("enum", CONTINUATIONS),
+    "integration": ("obj", {
+        "branch": ("str",),
+        "head_sha": ("str",),
+        "pr": ("int_or_null",),
+        "pr_url": ("str_or_null",),
+        "ci": ("str",),
+        "merge_state": ("enum", MERGE_STATES),
+        "merge_commit": ("str_or_null",),
+        "merge_decision": ("str",),
+    }),
+    "effects": ("obj", {"main_py": ("str",), "ui": ("str",)}),
+})
+
+_REPORT_SCHEMA_BY_TYPE = {
+    "SESSION_START": SESSION_START_REPORT_SCHEMA,
+    "SESSION_CLOSE": SESSION_CLOSE_REPORT_SCHEMA,
+}
+
+_TOP_LEVEL_COMMON = {"protocol_version", "message_type", "movement", "refs", "report"}
+_TOP_LEVEL_BY_TYPE = {
+    "SESSION_START": _TOP_LEVEL_COMMON,
+    "SESSION_CLOSE": _TOP_LEVEL_COMMON | {"outcome"},
+}
+
+
+def _validate_node(value: Any, spec: tuple, path: str, errors: list[str]) -> None:
+    kind = spec[0]
+    if kind == "str":
+        if not (isinstance(value, str) and value):
+            errors.append(f"{path}: must be a non-empty string")
+    elif kind == "enum":
+        allowed = spec[1]
+        if value not in allowed:
+            errors.append(f"{path}: must be one of {sorted(allowed)}")
+    elif kind == "list_str":
+        allow_empty = spec[1]
+        if not isinstance(value, list) or not all(isinstance(x, str) and x for x in value):
+            errors.append(f"{path}: must be a list of non-empty strings")
+        elif not allow_empty and not value:
+            errors.append(f"{path}: must be a non-empty list")
+    elif kind == "freeform_obj":
+        if not isinstance(value, dict) or not value:
+            errors.append(f"{path}: must be a non-empty object")
+    elif kind == "int_or_null":
+        if value is not None and (type(value) is not int):
+            errors.append(f"{path}: must be an integer or null")
+    elif kind == "str_or_null":
+        if value is not None and not (isinstance(value, str) and value):
+            errors.append(f"{path}: must be a non-empty string or null")
+    elif kind == "obj":
+        subschema = spec[1]
+        if not isinstance(value, dict):
+            errors.append(f"{path}: must be an object")
+            return
+        missing = set(subschema) - set(value)
+        extra = set(value) - set(subschema)
+        for field in sorted(missing):
+            errors.append(f"{path}.{field}: missing required field")
+        for field in sorted(extra):
+            errors.append(f"{path}.{field}: unknown field")
+        for field, field_spec in subschema.items():
+            if field in value:
+                _validate_node(value[field], field_spec, f"{path}.{field}", errors)
+    else:  # pragma: no cover -- programmer error, not a data error
+        raise AssertionError(f"unknown schema kind: {kind}")
 
 
 def validate_fields(obj: Any) -> list[str]:
-    """Return human-readable errors; empty means valid."""
+    """Return human-readable errors; empty means valid.
+
+    Validates structure only (envelope, required/forbidden/unknown fields,
+    types, closed vocabularies) -- it proves the packet is well-formed, not
+    that its claims are true or its instructions authorized (module note
+    above)."""
     if not isinstance(obj, dict):
         return ["packet must be a JSON object"]
+
     errors: list[str] = []
     version = obj.get("protocol_version")
-    if type(version) is not int or version != PROTOCOL_VERSION:  # bool is an int subclass; exclude it
+    if type(version) is not int or version != PROTOCOL_VERSION:  # `type(...) is not int` excludes bool (a bool's type is bool, not int)
         errors.append(f"protocol_version must be {PROTOCOL_VERSION}")
+
     message_type = obj.get("message_type")
     if message_type not in MESSAGE_TYPES:
         errors.append(f"message_type must be one of {MESSAGE_TYPES}")
+
     if not isinstance(obj.get("movement"), str) or not obj.get("movement"):
         errors.append("movement is required (non-empty string)")
-    refs = obj.get("refs")
-    if not isinstance(refs, list) or not all(isinstance(r, str) and r for r in refs):
-        errors.append("refs is required (list of non-empty strings)")
-    if message_type == "SESSION_CLOSE" and obj.get("outcome") not in OUTCOMES:
-        errors.append(f"outcome must be one of {OUTCOMES}")
+
+    _validate_node(obj.get("refs"), ("list_str", True), "refs", errors)
+
+    if message_type in _REPORT_SCHEMA_BY_TYPE:
+        allowed_keys = _TOP_LEVEL_BY_TYPE[message_type]
+        for field in sorted(set(obj) - allowed_keys):
+            errors.append(f"{field}: unknown top-level field")
+        if "report" not in obj:
+            errors.append("report: missing required field")
+        else:
+            _validate_node(obj["report"], _REPORT_SCHEMA_BY_TYPE[message_type], "report", errors)
+        if message_type == "SESSION_CLOSE" and obj.get("outcome") not in OUTCOMES:
+            errors.append(f"outcome must be one of {OUTCOMES}")
+    else:
+        # message_type itself is invalid -- still flag an unrecognized
+        # top-level field set as best-effort, but do not attempt to pick a
+        # report schema for a message type that does not exist.
+        for field in sorted(set(obj) - (_TOP_LEVEL_COMMON | {"outcome"})):
+            errors.append(f"{field}: unknown top-level field")
+
     return errors
 
 
@@ -87,6 +262,9 @@ def parse_and_validate(raw_payload: str) -> tuple[dict[str, Any] | None, list[st
 
 
 def render(obj: dict[str, Any]) -> str:
+    """Validate `obj` completely and, only on success, return the
+    sentinel-wrapped canonical text. Raises `PacketError` (nothing is
+    returned or printed) on any validation failure."""
     errors = validate_fields(obj)
     if errors:
         raise PacketError("; ".join(errors))
@@ -111,21 +289,23 @@ def _write_output(text: str, out: str | None) -> None:
         sys.stdout.write(text)
 
 
-def _cmd_start(args: argparse.Namespace) -> int:
-    return _emit(build_packet("SESSION_START", args.movement, args.ref), args.out)
-
-
-def _cmd_close(args: argparse.Namespace) -> int:
-    return _emit(build_packet("SESSION_CLOSE", args.movement, args.ref, args.outcome), args.out)
-
-
-def _emit(obj: dict[str, Any], out: str | None) -> int:
+def _cmd_render(args: argparse.Namespace) -> int:
+    try:
+        raw = _read_input(args.file)
+    except PacketError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return EXIT_USAGE
+    try:
+        obj = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        print(f"error: invalid JSON: {exc}", file=sys.stderr)
+        return EXIT_INVALID
     try:
         text = render(obj)
     except PacketError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return EXIT_INVALID
-    _write_output(text, out)
+    _write_output(text, args.out)
     return EXIT_OK
 
 
@@ -161,18 +341,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="gov_session_transfer", description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
 
-    p_start = sub.add_parser("start", help="emit a SESSION_START packet")
-    p_start.add_argument("--movement", required=True)
-    p_start.add_argument("--ref", action="append", required=True, dest="ref")
-    p_start.add_argument("--out", default=None)
-    p_start.set_defaults(func=_cmd_start)
-
-    p_close = sub.add_parser("close", help="emit a SESSION_CLOSE packet")
-    p_close.add_argument("--movement", required=True)
-    p_close.add_argument("--outcome", required=True, choices=OUTCOMES)
-    p_close.add_argument("--ref", action="append", required=True, dest="ref")
-    p_close.add_argument("--out", default=None)
-    p_close.set_defaults(func=_cmd_close)
+    p_render = sub.add_parser("render", help="validate and wrap one bare packet JSON object")
+    p_render.add_argument("file", help="path to a bare JSON object, or - for stdin")
+    p_render.add_argument("--out", default=None)
+    p_render.set_defaults(func=_cmd_render)
 
     p_extract = sub.add_parser("extract", help="extract one packet from surrounding text")
     p_extract.add_argument("file", help="path, or - for stdin")
