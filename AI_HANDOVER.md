@@ -14,10 +14,10 @@
   registry↔evidence reconciliation producer, first slice of `M10`.
 - `M8.3` stays **deferred** and `M7` stays **blocked**. Choosing `M10.1`
   pays none of that debt and must never be described as having done so.
-- Predecessors all **MERGED**: PR #114 (`gov_po_1_gate_1_command_safety_correction`
-  -- fixes the packet-emission gate conflict this episode reported below),
-  #112 (record RATIFIED), #111, #110, #109. Phase A **authorized** (relay
-  #5); Phase B closed until `T1`-`T6`.
+- Predecessors all **MERGED**: PR #114 (`GOV_PO_1_GATE_1`, packet emission)
+  and #115 (`GOV_PO_1_GATE_2`, branch self-sync) — the two gaps this episode
+  hit and reported; #112 (record RATIFIED), #111, #110, #109. Phase A
+  **authorized** (relay #5); Phase B closed until `T1`-`T6`.
 
 ## 2. What changed
 
@@ -49,10 +49,11 @@ Governance state only — no product source, test, template or static file.
 
 ## 4. Test delta
 
-None. No test ran and none needed to: this episode changed only governance
-metadata. The owed gates on this branch are the convergence suite, the
-build-history index check, the repository privacy gate and
-`git diff --check`.
+No new tests: this episode changed only governance metadata. Convergence +
+`gov_po_role` + relay + session-transfer suites re-run after the sync merge;
+build-history index `--check` current; `git diff --check` clean. The
+repository privacy gate is delegated to the PR's `validate` CI job — the PO
+role is denied the product CLI by design.
 
 ## 5. Risks / notes forward
 
@@ -70,10 +71,15 @@ build-history index check, the repository privacy gate and
   absent while `settings.local.json` carried `Bash(gh pr merge:*)` in
   `allow`. No merge was attempted; the file is now `"allow": []`. A cheap
   `T7`-shaped repository test would close this.
-- **`scripts/nexus_po_tool_gate.py` has an uncommitted working-tree edit**
-  (`git merge origin/` prefix). It belongs to `GOV_PO_1_GATE_2` (relay #9),
-  not to this governance PR, and is deliberately left unstaged — `scripts/`
-  is outside the PO role's write scope.
+- **Branch self-sync now exists** (`GOV_PO_1_GATE_2`, relay #9, PR #115):
+  `git merge origin/<ref>` is allowlisted for the interactive form. This
+  episode used it to sync and resolved the five governance-path conflicts
+  itself — its first real exercise. Still a capability, not automatic: an
+  episode has to know to run it. Worth a line in the `nexus-po` skill.
+- **The PO gate still cannot discard a working-tree file.** No
+  `git checkout -- <path>`, `git restore` or `git stash`, which is exactly
+  what a stale local edit needs when a fix lands upstream. It cost one
+  human command this episode.
 - **Two verified state drifts, reported not fixed** — backlog
   `project_state_wording_drift_reconciliation`. Both live in free-text
   label/summary fields, so the cross-authority convergence check cannot see

@@ -8,10 +8,10 @@ docs under `docs/history/`; `docs/history/INDEX.md` is the one-line timeline.
 - **Checkpoint:** 2026-09-08, `gov_po_1_step_5_first_plan_episode` — the
   first Phase A `PLAN` episode: `now_next.next` re-sequenced, `M10` sliced,
   backlog re-ranked, `.venv` DLP debt and two verified state drifts filed.
-  Predecessor `gov_po_1_gate_1_command_safety_correction` **AUTOMATED_VALIDATED,
-  MERGED** (PR #114, `6e263a6b…`): fixes the packet-emission gate conflict
-  this episode reported (below) — future PO episodes post their own
-  packets; this episode's were posted by the human, unaffected retroactively.
+  Predecessors `gov_po_1_gate_1_command_safety_correction` (PR #114) and
+  `gov_po_1_gate_2_self_sync_capability` (PR #115) both **MERGED**: they fix
+  the packet-emission conflict this episode reported and the branch self-sync
+  gap it hit; this episode then posted its own packets and self-synced.
   `gov_po_1_step_4_direction_record_ratification` **MERGED** (PR #112): the
   direction record is **RATIFIED**. Phase A **authorized** (relay #5);
   Phase B closed. `gov_po_1_step_2/3` **MERGED** (PR #110/#111); contract
@@ -67,19 +67,20 @@ backlog by theme; filed `dlp_scanner_venv_exclusion` and
 `project_state_wording_drift_reconciliation` (both §11 drifts **verified,
 reported, not fixed**). Reported conflict, fixed below mid-episode: the gate
 could not emit a `NEXUS_SESSION_PACKET`; after PR #114 the agent posted its
-own packets — first end-to-end proof of that path. Relay issue #10.
+own packets — first end-to-end proof of that path. Relay issue #10. Merged
+second of the three concurrent governance branches, so it reconciles
+`now_next.now`.
 
-Predecessor — **`gov_po_1_gate_1_command_safety_correction`** —
-fixes the reported conflict above with `shlex`-based real-operator
-detection plus a narrow scratch-write allowance for packet staging.
-**AUTOMATED_VALIDATED, MERGED** via PR #114. `T1`–`T7` still do not
-exercise packet emission end-to-end — step 6's job.
+Predecessors — the two PO gate corrections this episode's own blockers
+produced, both **MERGED**: **`GOV_PO_1_GATE_1`** (PR #114) replaced the
+gate's substring command check with `shlex` real-operator detection plus a
+`nexus_po_*.json/.txt` scratch-write allowance, enabling packet emission;
+**`GOV_PO_1_GATE_2`** (PR #115) allowlisted `git merge origin/<ref>` for
+branch self-sync. `T1`–`T7` still do not exercise packet emission — step 6.
 
 Predecessor — **`gov_po_1_step_4_direction_record_ratification`** —
-records the Product Owner's ratification decisions
-(`PRODUCT_DIRECTION_RECORD.md` §0, DR-1..DR-9e). **MERGED** via PR #112 —
-the record is **RATIFIED** (contract §4.1). Phase A authorized by
-`RELAY_DECISION` on relay #5; Phase B closed until T1–T6.
+**MERGED** via PR #112: the record is **RATIFIED** (contract §4.1). Phase A
+authorized by `RELAY_DECISION` on relay #5; Phase B closed until T1–T6.
 
 Predecessor — **`m9_enrollment_preview_confirmation_ui`** (`M9`) —
 **MERGED** via PR #104: local-loopback manual-endpoint enrollment;

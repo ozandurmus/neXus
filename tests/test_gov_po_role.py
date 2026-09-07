@@ -292,3 +292,30 @@ def test_gate_end_to_end_packet_emission_flow_now_passes(tmp_path):
     assert gate.decide(stage, "interactive")[0]
     assert gate.decide(render, "interactive")[0]
     assert gate.decide(post, "interactive")[0]
+
+
+# --- GOV_PO_1_GATE_2: git merge origin/<ref> self-sync ---------------------
+
+@pytest.mark.parametrize("cmd", [
+    "git merge origin/main",
+    "git merge origin/gov/po-1-step-5-first-plan",
+    "git merge --ff-only origin/main",
+])
+def test_gate_interactive_allows_merge_from_an_origin_ref(cmd):
+    assert gate.decide(_bash(cmd), "interactive", branch_lookup=lambda cwd: "gov/po-x")[0]
+
+
+def test_gate_delegated_never_merges():
+    assert not gate.decide(_bash("git merge origin/main"), "delegated")[0]
+
+
+@pytest.mark.parametrize("cmd", [
+    "git merge some-other-remote/main",
+    "git merge https://evil.example/repo.git",
+    "git merge /tmp/evil-repo",
+    "git merge origin/main; rm -rf /",
+    "git merge origin/main && rm -rf /",
+    "git merge origin/main `whoami`",
+])
+def test_gate_merge_source_is_restricted_to_origin_and_cannot_chain(cmd):
+    assert not gate.decide(_bash(cmd), "interactive", branch_lookup=lambda cwd: "gov/po-x")[0], cmd
