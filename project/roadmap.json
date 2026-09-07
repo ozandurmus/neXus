@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "current_build": "gov_po_1_step_3_docs_reconciliation",
+  "current_build": "gov_po_1_step_4_direction_record_ratification",
   "current_track": "PCP.x",
   "progress_contract": "Weighted acceptance-criterion completion. Percentages describe the declared roadmap, not calendar time or delivery ETA.",
   "tracks": [
@@ -140,15 +140,15 @@
   "now_next": {
     "horizon_contract": "NOW is exactly one build. NEXT is exactly one. Everything else is an `upcoming` row carrying its own true status: planned = AFTER, blocked = waiting on a named external gate, deferred = consciously postponed. `now.build` must equal the newest project/build_history.json record -- utils.project_plan enforces it.",
     "now": {
-      "build": "gov_po_1_step_3_docs_reconciliation",
-      "title": "GOV.PO.1 step 3 -- rule reconciliation",
-      "goal": "Apply the contract section-12 reconciliation list and ratification decision 8 to the governance/instruction files; documentation only.",
+      "build": "gov_po_1_step_4_direction_record_ratification",
+      "title": "GOV.PO.1 step 4 -- direction record ratification",
+      "goal": "Record the Product Owner's 2026-09-08 ratification decisions DR-1..DR-9e in PRODUCT_DIRECTION_RECORD.md, roadmap open_decisions (tufin_path_authority), the backlog umbrella and the nexus-po skill; the authorized merge ratifies the record.",
       "status": "automated_validated",
       "started": "2026-09-08",
       "completed": "2026-09-08",
       "notes": [
-        "Full detail: project/build_history.json's gov_po_1_step_3_docs_reconciliation record.",
-        "Governance only; no product behavior changed. M8.3 stays deferred, M7 stays blocked."
+        "Full detail: project/build_history.json's gov_po_1_step_4_direction_record_ratification record.",
+        "Governance only; no product behavior, device-write or production authorization is granted (DR-2, DR-6, DR-9a boundaries). M8.3 stays deferred, M7 stays blocked; next actionable movement is chosen by the first PLAN episode (step 5)."
       ]
     },
     "next": {
@@ -546,6 +546,20 @@
     }
   ],
   "open_decisions": [
+    {
+      "id": "tufin_path_authority",
+      "area": "Product scope / external systems",
+      "status": "decided",
+      "question": "Does neXus build its own topology/path engine for path-based policy placement, or consume an external path authority?",
+      "options": [
+        "Consume Tufin-provided device paths and apply rules to the returned devices",
+        "Build an internal topology/path engine"
+      ],
+      "recommendation": "Consume Tufin; an internal engine duplicates an established authority and expands scope dramatically.",
+      "decision": "DECIDED -- neXus consumes Tufin-provided paths and does not build an independent topology/path engine. Missing or insufficient Tufin evidence stays explicit (UNKNOWN / INSUFFICIENT_EVIDENCE); no fallback path authority is invented. Tufin API availability, schema, authentication and organizational ownership are external dependencies, not yet verified in the repository. Ratified with docs/design/PRODUCT_DIRECTION_RECORD.md DR-1.",
+      "decide_by": "DECIDED 2026-09-08 (direction-record ratification)",
+      "decided_on": "2026-09-08"
+    },
     {
       "id": "gov_relay_1_protocol",
       "area": "Agent session governance",

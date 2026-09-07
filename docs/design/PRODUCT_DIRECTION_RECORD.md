@@ -1,7 +1,33 @@
 <!-- Placed under docs/design/ by GOV.PO.1 section 10 step 0 (2026-09-07). Authority: docs/design level 6, per GOV_PO_ROLE_MIGRATION.md section 4.1. Not ratified until an explicitly authorized governance PR merge records RATIFIED on the status line. -->
-**Status: DRAFT — extracted from the previous Product Owner assistant, 2026-09-07. Not ratified.**
+**Status: RATIFIED — PRODUCT OWNER, 2026-09-08, PR #__PR__, decision relay ozandurmus/nexus-agent-relay#7 (`RELAY_DECISION ratification`).** Extracted from the previous Product Owner assistant on 2026-09-07 with provenance tags; every `[PO-DIRECTION]` item was resolved by the Product Owner's written "DIRECTION RECORD RATIFICATION" directive of 2026-09-08 (§0). `[ASSISTANT]` items remain labelled hypotheses until repository evidence promotes them (`GOV_PO_ROLE_MIGRATION.md` §4.1). Authority level 6 (`docs/design`); never implementation authority; a contradiction with `project/*.json` or a FROZEN contract is reported, not reconciled.
 
 # neXus / SecurityExpert Product Direction Record
+
+### §0 Ratification decisions (Product Owner, 2026-09-08)
+
+Each `[PO-DIRECTION]` item below carries `→ ratified DR-n`, pointing here.
+Boundaries are part of the decision.
+
+| id | Decision | Boundary |
+| --- | --- | --- |
+| DR-1 | **Tufin path authority — ACCEPT.** neXus consumes Tufin-provided paths; it does not build an independent topology/path engine. Recorded durably as `project/roadmap.json` `open_decisions` id `tufin_path_authority`. | Missing or insufficient Tufin evidence stays explicit (`UNKNOWN`/`INSUFFICIENT_EVIDENCE`); no fallback authority is invented. |
+| DR-2 | **Product objective — ACCEPT.** Persistent registry, database metadata plane, interactive operator experience. Compliance, backup and failover may use that experience as their contracts and maturity gates permit. | Grants no device-write or production authorization. Sequencing among M10 / compliance / backup / failover belongs to the first `PLAN` episode. |
+| DR-3 | **Bounded prompts and proportionate process — ACCEPT.** Routine work stays concise; settled architecture is not reopened without new evidence. | Existing lifecycle, evidence and required-validation obligations remain applicable. |
+| DR-4 | **Active movement and integration ownership — ACCEPT WITH CHANGE.** One declared primary movement and one integration owner. | Parallel work is allowed where existing governance permits it and independence is demonstrated; separate worktrees alone do not require a new contract. |
+| DR-5 | **Member-skew policy — VERIFIED, converted to `[REPO]`.** Canonical source `D-F2` in `OP_2_1B_CP_PILOT_READINESS_POLICY_AMENDMENT.md`. | Not conflated with `D-F3` (flap) or `D-F1` (intent max age). |
+| DR-6 | **Production timing — ACCEPT WITH CLARIFICATION.** No production migration is authorized now; deployment-specific hardening stays on its designated track. | Security defects affecting currently used behavior are assessed when discovered; "hardening later" is not a blanket deferral. |
+| DR-7 | **Historical council tooling direction — SUPERSEDED** by `GOV_PO_ROLE_MIGRATION.md` (council as a repository skill with fresh-context seats, invoked only from a PO episode). | Historical records and self-critique disclosures are preserved; not retroactively described as independent council work. |
+| DR-8 | **Environment and local secret handling — ACCEPT.** Use the validated interpreter appropriate to the actual environment; do not assume `py` in every shell or bootstrap another runtime without need. | Secrets stay local and never enter chat, relay or repository metadata. |
+| DR-9a | **Original feature brief — recorded** as one discoverable backlog umbrella (`policy_rule_hygiene_and_path_placement_brief`) with its distinct capabilities retained. | Intent only; approves no implementation and no bulk-disable operation. |
+| DR-9b | **Turkish stakeholder explanation — ACCEPT** as a separate artifact from English engineering artifacts (`nexus-po` skill §5). | Never inside or around an exact session packet. |
+| DR-9c | **Deferred human validation — ACCEPT:** tracked durably (backlog/roadmap), independent authorized work continues. | The deferred behavior is never marked validated or complete. |
+| DR-9d | **Next authorized prompt without re-confirmation — ACCEPT** (`nexus-po` skill §5). | No inferred approval of an unaccepted movement; no invented work. |
+| DR-9e | **Subscription plans establish no engineering authority — ACCEPT.** | — |
+
+Ratification mechanics: `GOV_PO_ROLE_MIGRATION.md` §4.1 / D14 — the
+Product Owner's written authorization of 2026-09-08 covers exactly these
+changes; the authorized merge of the governance PR named in the status line
+is the ratification.
 
 This is a one-time provenance-preserving extraction. It is evidence for human Product Owner review, not a new authority, contract, roadmap, or approval. Repository statements are referenced rather than silently re-ratified; chat-derived statements remain subordinate until the human Product Owner records them durably. [ASSISTANT confidence: high]
 
@@ -33,9 +59,9 @@ This is a one-time provenance-preserving extraction. It is evidence for human Pr
 
 - The repository must be sufficient to cold-start every assistant. Chat memory, handover prose, model identity, and relay locators are never product authority. See `AGENTS.md` and `AI_START_HERE.md`. [REPO [AGENTS.md — Authority hierarchy](https://github.com/ozandurmus/neXus/blob/main/AGENTS.md#authority-hierarchy)]
 
-- Tufin supplies path discovery for future path-based policy placement. neXus must consume the returned device path and must not build an independent topology/path engine. This was repeatedly stated in Product Owner chat; I did not verify an equivalent durable repository statement. [PO-DIRECTION 2026-08–09, ChatGPT PO chat]
+- Tufin supplies path discovery for future path-based policy placement. neXus must consume the returned device path and must not build an independent topology/path engine. This was repeatedly stated in Product Owner chat; I did not verify an equivalent durable repository statement. [PO-DIRECTION 2026-08–09, ChatGPT PO chat] → ratified DR-1
 
-- The product goal is a usable control plane: a persistent device identity/registry layer, a database-backed metadata plane, and an interactive operator experience that can support compliance, backup/recovery, and failover workflows without making the UI an authority. [PO-DIRECTION 2026-09-05–07, ChatGPT PO chat]
+- The product goal is a usable control plane: a persistent device identity/registry layer, a database-backed metadata plane, and an interactive operator experience that can support compliance, backup/recovery, and failover workflows without making the UI an authority. [PO-DIRECTION 2026-09-05–07, ChatGPT PO chat] → ratified DR-2
 
 ### §2 Decision record
 
@@ -49,11 +75,11 @@ This is a one-time provenance-preserving extraction. It is evidence for human Pr
 
 4. **Engineering output language — 2026-09 period.** Question: follow conversation language or use one engineering language. Chosen: Turkish may be used with the human; repository artifacts, prompts, packets, PRs, commits, and handovers are English. Rejected: Turkish engineering preambles because they reduce portability and created inconsistent artifacts. Status: **decided**; see `AGENTS.md`. [REPO [AGENTS.md — Engineering-output language law](https://github.com/ozandurmus/neXus/blob/main/AGENTS.md#engineering-output-language-law)]
 
-5. **Implementation prompt scale — 2026-09 period.** Question: architecture-scale prompts for every movement versus bounded prompts. Chosen: one coherent objective, a few invariants, focused tests, fast CI; long contracts only for genuine durable authority changes. Rejected: mega-prompts for routine work because they caused long loops, reopened settled design, and burned context/credits. Status: **decided operating direction**, partly reflected in `AGENTS.md` and `docs/AI_DEVELOPMENT_PROTOCOL.md`; the causal history came from PO chat. [PO-DIRECTION 2026-09-05–07, ChatGPT PO chat]
+5. **Implementation prompt scale — 2026-09 period.** Question: architecture-scale prompts for every movement versus bounded prompts. Chosen: one coherent objective, a few invariants, focused tests, fast CI; long contracts only for genuine durable authority changes. Rejected: mega-prompts for routine work because they caused long loops, reopened settled design, and burned context/credits. Status: **decided operating direction**, partly reflected in `AGENTS.md` and `docs/AI_DEVELOPMENT_PROTOCOL.md`; the causal history came from PO chat. [PO-DIRECTION 2026-09-05–07, ChatGPT PO chat] → ratified DR-3
 
 6. **Full-regression topology — 2026-09-06.** Question: automatic full suite on every PR/push versus local risk-triggered evidence and on-demand cloud dispatch. Options actually tried: automatic PR, automatic push-to-main, then workflow-dispatch-only. Chosen: PR runs fast `validate`; full regression runs locally when blast-radius triggers demand it; GitHub-hosted full regression is exceptional `workflow_dispatch` only. Rejected: automatic triggers because of cost/latency and empty/duplicative runs; the parallel command itself remains preferred. Status: **decided**; see `docs/AI_DEVELOPMENT_PROTOCOL.md`. [REPO [docs/AI_DEVELOPMENT_PROTOCOL.md — CI validation policy](https://github.com/ozandurmus/neXus/blob/main/docs/AI_DEVELOPMENT_PROTOCOL.md#ci-validation-policy-canonical--devtest1-final-topology-2026-09-06)]
 
-7. **One active movement / one integration owner — 2026-09 period.** Question: continuously split development among multiple chats versus preserve one owner per coupled movement. Chosen for the M-series/M9 period: one implementation owner and one active movement; independent reviewers may work in parallel, but coupled writers do not share a branch. Rejected: ad hoc parallel editing because state files, frozen contracts, and integration ownership collide. Status: **current operating direction, not verified as a durable repository decision**. [PO-DIRECTION 2026-09-05–07, ChatGPT PO chat]
+7. **One active movement / one integration owner — 2026-09 period.** Question: continuously split development among multiple chats versus preserve one owner per coupled movement. Chosen for the M-series/M9 period: one implementation owner and one active movement; independent reviewers may work in parallel, but coupled writers do not share a branch. Rejected: ad hoc parallel editing because state files, frozen contracts, and integration ownership collide. Status: **current operating direction, not verified as a durable repository decision**. [PO-DIRECTION 2026-09-05–07, ChatGPT PO chat] → ratified DR-4
 
 #### Operator Console decisions
 
@@ -115,7 +141,7 @@ This is a one-time provenance-preserving extraction. It is evidence for human Pr
 
 35. **`D-F3` — 2026-09-05.** Question: numeric flap/failover-frequency threshold. Options: fixed, bounded tunable, or no threshold/advisory-exempt. Chosen: no invented threshold; cumulative counters without a window remain visible `INSUFFICIENT_EVIDENCE` but no longer independently block readiness. Rejected: fixed/tunable numbers unsupported by evidence. Status: **decided**. [REPO [project/roadmap.json — D-F3](https://github.com/ozandurmus/neXus/blob/main/project/roadmap.json)]
 
-36. **Member-skew policy — 2026-09-05 period.** Question: invent a numeric skew threshold or retain the observed difference without making it a standalone blocker. Chosen: no numeric threshold; coherent same-run evidence may report nonzero skew without that fact alone blocking. Rejected: fabricated thresholds. Status: **decided**, but verify its current canonical id/location before importing. [PO-DIRECTION 2026-09-05, PO review chat/decision package]
+36. **Member-skew policy — 2026-09-05 period.** Question: invent a numeric skew threshold or retain the observed difference without making it a standalone blocker. Chosen: no numeric threshold; coherent same-run evidence may report nonzero skew without that fact alone blocking. Rejected: fabricated thresholds. Status: **decided** — verified 2026-09-08 (DR-5): the canonical decision is `D-F2` in `docs/history/phase/OP_2_1B_CP_PILOT_READINESS_POLICY_AMENDMENT.md` ("no threshold, ever"; skew recorded for disclosure only; the roll-up's unresolved-policy gate no longer lists it). Distinct from `D-F3` (flap threshold) and `D-F1` (configuration-intent max age). `project/roadmap.json` `open_decisions` carries no separate `D-F2` row; it is referenced inside `D-F3`. [REPO docs/history/phase/OP_2_1B_CP_PILOT_READINESS_POLICY_AMENDMENT.md — D-F2]
 
 37. **`op_reversal_model` — 2026-09-04.** Question: automatic rollback versus reversal as a new typed action. Chosen: reversal/failback is a new CLASS 2 action with new authorization, preflight, confirmation, lock, one submission, verification, and audit. Rejected: automatic rollback because it issues a second mutation precisely when state is uncertain. Status: **decided/FROZEN**. [REPO [project/roadmap.json — op_reversal_model](https://github.com/ozandurmus/neXus/blob/main/project/roadmap.json)]
 
@@ -151,13 +177,13 @@ This is a one-time provenance-preserving extraction. It is evidence for human Pr
 
 52. **M9 confirmation consumption — 2026-09-07.** Question: list-scan-then-create versus atomic consume/audit creation. Chosen: deterministic audit id and one locked check-and-create. Rejected: process-local sequential reasoning because concurrent confirmations could both mutate. Status: **corrective decision/implemented**. [REPO [project/build_history.json — M9 risks_forward](https://github.com/ozandurmus/neXus/blob/main/project/build_history.json)]
 
-53. **Path authority — 2026-08–09.** Question: build topology/path analysis internally or consume an external path result. Chosen: consume Tufin API results and apply rules to the returned devices. Rejected: internal topology engine because it duplicates an established authority and expands scope dramatically. Status: **human direction; repository durability UNKNOWN**. [PO-DIRECTION 2026-08–09, ChatGPT PO chat]
+53. **Path authority — 2026-08–09.** Question: build topology/path analysis internally or consume an external path result. Chosen: consume Tufin API results and apply rules to the returned devices. Rejected: internal topology engine because it duplicates an established authority and expands scope dramatically. Status: **human direction; repository durability UNKNOWN**. [PO-DIRECTION 2026-08–09, ChatGPT PO chat] → ratified DR-1
 
-54. **Production timing — 2026-08–09.** Question: move/refactor for production now or continue local/corporate development. Chosen: do not move to production yet; production/container/pod hardening is a later explicit track and must not casually block the local product loop. Rejected: premature deployment refactor because it diverts from usable product capability. Status: **human direction; see also the repository's staged platform direction**. [PO-DIRECTION 2026-08–09, ChatGPT PO chat]
+54. **Production timing — 2026-08–09.** Question: move/refactor for production now or continue local/corporate development. Chosen: do not move to production yet; production/container/pod hardening is a later explicit track and must not casually block the local product loop. Rejected: premature deployment refactor because it diverts from usable product capability. Status: **human direction; see also the repository's staged platform direction**. [PO-DIRECTION 2026-08–09, ChatGPT PO chat] → ratified DR-6
 
 ### §3 Rejected directions
 
-- **Internal topology/path engine.** Rejected by the human PO; Tufin remains the path-discovery authority and neXus consumes its returned path. The rejection remains unless the human explicitly changes external-system strategy. [PO-DIRECTION 2026-08–09, ChatGPT PO chat]
+- **Internal topology/path engine.** Rejected by the human PO; Tufin remains the path-discovery authority and neXus consumes its returned path. The rejection remains unless the human explicitly changes external-system strategy. [PO-DIRECTION 2026-08–09, ChatGPT PO chat] → ratified DR-1
 
 - **Automatic rollback after uncertain failover.** Rejected because it is an unconfirmed second CLASS 2 mutation against unknown state; failback is a new typed action. [REPO [docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md — P12](https://github.com/ozandurmus/neXus/blob/main/docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md)]
 
@@ -181,7 +207,7 @@ This is a one-time provenance-preserving extraction. It is evidence for human Pr
 
 - **Production hardening as a universal blocker for local product work.** Rejected as an operating assumption; only a technically relevant gate blocks the bounded local movement. Production readiness remains mandatory before production claims. [REPO [PROJECT_VISION.md — Platform direction](https://github.com/ozandurmus/neXus/blob/main/PROJECT_VISION.md#platform-direction)]
 
-- **Mega-prompts and architecture re-litigation for routine fixes.** Rejected by the human PO because they slowed delivery, consumed limits, and reduced implementer confidence. [PO-DIRECTION 2026-09-05–07, ChatGPT PO chat]
+- **Mega-prompts and architecture re-litigation for routine fixes.** Rejected by the human PO because they slowed delivery, consumed limits, and reduced implementer confidence. [PO-DIRECTION 2026-09-05–07, ChatGPT PO chat] → ratified DR-3
 
 - **Using council language to inflate confidence.** Rejected: no independent council execution may be claimed where only one author performed structured self-critique. [REPO [project/build_history.json — M3 revision history](https://github.com/ozandurmus/neXus/blob/main/project/build_history.json)]
 
@@ -243,7 +269,7 @@ This is a one-time provenance-preserving extraction. It is evidence for human Pr
 
 - **Predicted test evidence written before execution.** Detection: exact pass counts appear before a real run or later differ from the claimed baseline. Correction: only report command-backed evidence, preserve the correction, and do not round away failures/skips. [REPO [project/build_history.json — M3 correction history](https://github.com/ozandurmus/neXus/blob/main/project/build_history.json)]
 
-- **Process ceremony replacing product progress.** Detection: routine work repeatedly asks for architecture/council/model decisions or full-suite reruns without a risk trigger. Correction: one bounded movement, normal reasoning, focused tests, one real stop condition. [PO-DIRECTION 2026-09-05–07, ChatGPT PO chat]
+- **Process ceremony replacing product progress.** Detection: routine work repeatedly asks for architecture/council/model decisions or full-suite reruns without a risk trigger. Correction: one bounded movement, normal reasoning, focused tests, one real stop condition. [PO-DIRECTION 2026-09-05–07, ChatGPT PO chat] → ratified DR-3
 
 ### §6 Sequencing rationale
 
@@ -269,7 +295,7 @@ This is a one-time provenance-preserving extraction. It is evidence for human Pr
 
 - The current roadmap's `now_next.next` names a consciously **deferred** M8.3 real-environment validation. A deferred item is not an executable NEXT; leaving it there risks making the roadmap appear stalled while M10, compliance, backup, and failover preparation remain actionable candidates. I recommend the human PO choose one real actionable `NEXT` while retaining M8.3 as deferred debt, rather than letting a deferred row occupy the sole next slot. [ASSISTANT confidence: high]
 
-- The human PO's expressed product priority is to finish the M-series control-plane loop so compliance, unfinished backup, and failover can be exercised through a real database-backed interactive UI. I believe the repository broadly reflects this direction, but the exact post-M9 priority among M10, compliance closure, backup real validation, and failover preparation still requires ratification. [PO-DIRECTION 2026-09-07, ChatGPT PO chat]
+- The human PO's expressed product priority is to finish the M-series control-plane loop so compliance, unfinished backup, and failover can be exercised through a real database-backed interactive UI. I believe the repository broadly reflects this direction, but the exact post-M9 priority among M10, compliance closure, backup real validation, and failover preparation still requires ratification. [PO-DIRECTION 2026-09-07, ChatGPT PO chat] → ratified DR-2
 
 ### §7 Council
 
@@ -307,15 +333,15 @@ This is a one-time provenance-preserving extraction. It is evidence for human Pr
 
 - A proper council output should separate evidence, assumptions, options, per-seat risks, dissent, and the exact questions requiring human PO ratification. It should never self-ratify or masquerade as multiple independent reviews when one model authored all seats. [ASSISTANT confidence: high]
 
-- The human PO asked not to run council-style work in the ChatGPT PO chat because of token/credit cost; if a council is genuinely necessary during the current Claude-led period, route the bounded review to the engineering environment and return only the decision packet. This is an operating preference, not product law. [PO-DIRECTION 2026-09-05–07, ChatGPT PO chat]
+- The human PO asked not to run council-style work in the ChatGPT PO chat because of token/credit cost; if a council is genuinely necessary during the current Claude-led period, route the bounded review to the engineering environment and return only the decision packet. This is an operating preference, not product law. [PO-DIRECTION 2026-09-05–07, ChatGPT PO chat] → ratified DR-7 (SUPERSEDED by GOV.PO.1)
 
 - I remember no council verdict or dissent that I can confidently classify as both material and absent from repository documentation. Any contrary claim should be `UNKNOWN` until the named historical contract is read. [ASSISTANT confidence: medium]
 
 ### §8 Real-environment constraints (sanitized)
 
-- Development environments include a local workstation profile and a corporate workstation profile; shell/tool availability differs. A command such as `py` may exist in one shell and not another, and the project interpreter/venv must be discovered from repository/environment evidence rather than assumed. [PO-DIRECTION 2026-09-07, VS Code/Claude relay discussion]
+- Development environments include a local workstation profile and a corporate workstation profile; shell/tool availability differs. A command such as `py` may exist in one shell and not another, and the project interpreter/venv must be discovered from repository/environment evidence rather than assumed. [PO-DIRECTION 2026-09-07, VS Code/Claude relay discussion] → ratified DR-8
 
-- The corporate workstation can support direct interactive UI validation through VS Code/browser tooling. The human may enter secrets locally when prompted; agents must never ask for those values in chat, relay, GitHub, screenshots, or logs. [PO-DIRECTION 2026-09-07, ChatGPT PO chat]
+- The corporate workstation can support direct interactive UI validation through VS Code/browser tooling. The human may enter secrets locally when prompted; agents must never ask for those values in chat, relay, GitHub, screenshots, or logs. [PO-DIRECTION 2026-09-07, ChatGPT PO chat] → ratified DR-8
 
 - Real device contact is separately authorized from code execution. Physical capability, corporate-network presence, or a green test does not grant permission. The action must be bounded by platform class, target class, command/purpose, and human approval. [REPO [docs/AI_DEVELOPMENT_PROTOCOL.md — Human/agent responsibility split](https://github.com/ozandurmus/neXus/blob/main/docs/AI_DEVELOPMENT_PROTOCOL.md#human--agent-responsibility-split)]
 
@@ -347,7 +373,7 @@ This is a one-time provenance-preserving extraction. It is evidence for human Pr
 
 - “Production” means more than running on a corporate workstation: managed server/runtime, OIDC/RBAC, trusted production TLS/SSH, database role separation, secret management, report-only publication boundaries, audit retention/observability, off-host recovery custody, and restore-drill evidence. See `CURRENT_STATE.md`; exact deployment topology remains unsettled. [REPO [CURRENT_STATE.md — Production posture](https://github.com/ozandurmus/neXus/blob/main/CURRENT_STATE.md)]
 
-- Tufin is the external path-discovery authority for the future path-based rule-placement capability. Its API availability, schema, authentication, and organizational ownership are external dependencies and were not verified in this extraction. [PO-DIRECTION 2026-08–09, ChatGPT PO chat]
+- Tufin is the external path-discovery authority for the future path-based rule-placement capability. Its API availability, schema, authentication, and organizational ownership are external dependencies and were not verified in this extraction. [PO-DIRECTION 2026-08–09, ChatGPT PO chat] → ratified DR-1
 
 - Check Point and Palo Alto official documentation plus bounded approved real-environment evidence constrain vendor-semantic decisions; general model knowledge is not a sign-off source. [REPO [AGENTS.md — Vendor semantics law](https://github.com/ozandurmus/neXus/blob/main/AGENTS.md#vendor-semantics-law)]
 
@@ -420,11 +446,11 @@ This is a one-time provenance-preserving extraction. It is evidence for human Pr
 Supplied by the previous assistant after re-reading its own output; same
 provenance rules.
 
-- The original feature brief also included rule consolidation, shadow-rule cleanup, schedule-object detection, bulk disable/delete based on last-hit age, and placing schedule-bearing rules on the Tufin-provided path. These may not yet be durably represented as one coherent product record. [PO-DIRECTION 2026-08–09, ChatGPT PO chat]
-- Before each engineering prompt, the PO wanted a short Turkish explanation covering the feature, UI location, benefit, blocker removed, security relevance, and necessity. This is a communication preference, not product architecture. [PO-DIRECTION 2026-09 period, ChatGPT PO chat]
-- When human testing is required but deliberately deferred, the preference was to record it in backlog and continue with unrelated authorized work rather than repeatedly stopping the project. [PO-DIRECTION 2026-09 period, ChatGPT PO chat]
-- Once a movement is accepted, the previous PO assistant was expected to supply the exact next prompt without repeated routine confirmation or "if you want" questions. It should not invent work merely to keep an agent occupied. [PO-DIRECTION 2026-09 period, ChatGPT PO chat]
-- The temporary subscription/tooling plan (Claude through the current billing period, ChatGPT Plus for PO review, and a possible later switch to Codex) is volatile and should not become repository product authority. [PO-DIRECTION 2026-09-07, ChatGPT PO chat]
+- The original feature brief also included rule consolidation, shadow-rule cleanup, schedule-object detection, bulk disable/delete based on last-hit age, and placing schedule-bearing rules on the Tufin-provided path. These may not yet be durably represented as one coherent product record. [PO-DIRECTION 2026-08–09, ChatGPT PO chat] → ratified DR-9a
+- Before each engineering prompt, the PO wanted a short Turkish explanation covering the feature, UI location, benefit, blocker removed, security relevance, and necessity. This is a communication preference, not product architecture. [PO-DIRECTION 2026-09 period, ChatGPT PO chat] → ratified DR-9b
+- When human testing is required but deliberately deferred, the preference was to record it in backlog and continue with unrelated authorized work rather than repeatedly stopping the project. [PO-DIRECTION 2026-09 period, ChatGPT PO chat] → ratified DR-9c
+- Once a movement is accepted, the previous PO assistant was expected to supply the exact next prompt without repeated routine confirmation or "if you want" questions. It should not invent work merely to keep an agent occupied. [PO-DIRECTION 2026-09 period, ChatGPT PO chat] → ratified DR-9d
+- The temporary subscription/tooling plan (Claude through the current billing period, ChatGPT Plus for PO review, and a possible later switch to Codex) is volatile and should not become repository product authority. [PO-DIRECTION 2026-09-07, ChatGPT PO chat] → ratified DR-9e
 - Exact model names and subscription prices were omitted. Repository routing should remain task-driven and vendor-neutral; current commercial plans can change independently. [ASSISTANT confidence: high]
 - Parallel development policy is not fully settled. "One writer for a coupled movement" is established operational practice, but independent worktrees/lanes may later be useful for compliance, backup, and failover. This needs an explicit integration-owner contract before adoption. [ASSISTANT confidence: medium]
 - Earlier "device access is deferred" statements were omitted because later M8/OP/RB work introduced bounded real-environment gates. Treat the old blanket statement as superseded, not current authority. [ASSISTANT confidence: high]
