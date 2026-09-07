@@ -230,6 +230,17 @@ and that
 `AI_HANDOVER.md` (non-authoritative — see below) must be rewritten as part of
 every `SESSION CLOSE`.
 
+When a `SESSION START`/`SESSION CLOSE` crosses a session or tool boundary —
+a Product Owner instruction to an agent, or an agent's handoff back —
+both directions transport as one symmetric, direction-neutral
+`NEXUS_SESSION_PACKET` carrying the complete report (`docs/design/
+GOV_SESSION_TRANSFER_PROTOCOL.md`, `scripts/gov_session_transfer.py`, both
+FROZEN — PO APPROVED). No narrative, heading, or explanation belongs
+outside the sentinel pair in that case — the packet's `report` object *is*
+the report, not a pointer to one held elsewhere; `refs` stays reference
+only. This does not change the schema content above, only how it is
+transported when a packet is the chosen medium.
+
 Movement types: `READ_ONLY_AUDIT`, `ARCHITECTURE`, `IMPLEMENTATION`,
 `VALIDATION`, `ROOT_CAUSE`, `UI`, `DOCS`, `RELEASE_HANDOVER`.
 

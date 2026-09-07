@@ -19,6 +19,14 @@ flag-driven path that assembles a packet piece by piece: protocol v1's
 pointer-only `start`/`close` subcommands do not exist here, so there is no
 way to produce a non-canonical, report-less packet with this tool.
 
+Symmetric, direction-neutral transport (GOV.SESSION.1A correction round 1):
+the exact same envelope and schema apply to a PO-to-engineer `SESSION_START`
+and an engineer-to-PO `SESSION_CLOSE` alike. Valid input to `extract`/
+`validate` is optional leading whitespace, one opening sentinel, the JSON
+payload, one closing sentinel, and optional trailing whitespace -- nothing
+else. A narrative before or after the packet is rejected, not skipped over,
+so a split narrative-plus-packet handoff can never pass as valid transport.
+
 Stdlib only. Offline, synchronous, no network, no daemon, no credential or
 device access. `--out` is the only way to write a file, and only to the
 path given.
@@ -239,9 +247,20 @@ def validate_fields(obj: Any) -> list[str]:
 
 
 def extract_one(text: str) -> str:
-    """Return the payload text between exactly one sentinel pair found
-    anywhere in `text`, ignoring surrounding content. Rejects a missing,
-    unmatched, or repeated (more than one pair's worth of) sentinel."""
+    """Return the payload text between exactly one sentinel pair.
+
+    Correction round 1 (GOV.SESSION.1A): `text` must consist of optional
+    leading whitespace, one opening sentinel line, the JSON payload, one
+    closing sentinel line, and optional trailing whitespace -- and nothing
+    else. This is a symmetric, direction-neutral envelope: the same rule
+    applies whether the packet is a PO-to-engineer `SESSION_START` or an
+    engineer-to-PO `SESSION_CLOSE`. A narrative before or after the packet
+    (a heading, an explanation, chat history, another payload) is no
+    longer silently skipped over -- it is rejected, the same as a missing
+    or malformed envelope, so a split narrative-plus-packet handoff can
+    never pass as valid transport. Rejects a missing, unmatched, or
+    repeated (more than one pair's worth of) sentinel, and any
+    non-whitespace content outside the sentinel pair."""
     lines = text.splitlines()
     idxs = [i for i, line in enumerate(lines) if line == SENTINEL]
     if len(idxs) < 2:
@@ -249,6 +268,10 @@ def extract_one(text: str) -> str:
     if len(idxs) > 2:
         raise PacketError(f"expected exactly one packet body, found {len(idxs)} sentinel lines")
     start, end = idxs
+    if any(line.strip() for line in lines[:start]):
+        raise PacketError("non-whitespace content found before the opening sentinel")
+    if any(line.strip() for line in lines[end + 1:]):
+        raise PacketError("non-whitespace content found after the closing sentinel")
     return "\n".join(lines[start + 1:end])
 
 
