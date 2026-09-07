@@ -91,6 +91,24 @@ state the minimal intended change, and name any contract/invariant the
 change must not break. Prefer coherent agent-made edits + diff + tests +
 human validation over instructing the human to hand-edit files.
 
+## Git authority and execution law
+
+Corporate Git PR creation, push, and merge are Product Owner controlled. Here,
+"human-controlled" means that the Product Owner makes the authorization
+decision; it does not require the human to type the command or click the GitHub
+button. A task directive or `RELAY_DECISION` that explicitly authorizes a named
+Git action is sufficient authorization for the agent to execute that action and
+verify its result. Do not ask for the same permission again.
+
+An agent may raise one concrete objection before executing an authorized Git
+action. If the Product Owner, informed of that objection, repeats or expressly
+overrules the instruction, the agent MUST proceed. The only exception is a
+specific unresolved conflict with a prohibition in this constitution, a frozen
+security contract, a required failing gate, repository protection, or external
+safety state; the agent must cite that exact conflict rather than repeat general
+caution. Passing checks or a valid relay packet never supplies authorization by
+itself.
+
 ## Evidence laws
 
 These invariants apply across every vendor and every evidence-producing
@@ -390,7 +408,7 @@ frequency) is not a command addition and needs no new gate entry.
 - `OP.0a`'s HA readiness assessment cannot emit `SAFE_TO_FAILOVER` or
   `DEGRADED_PROCEED_WITH_RISK` — enforced over a generated matrix, not
   merely undocumented.
-- Corporate Git push/merge remains human-controlled.
+- Corporate Git operations follow "Git authority and execution law" above.
 
 ## Check Point
 

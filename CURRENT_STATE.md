@@ -6,10 +6,11 @@ see `AGENTS.md`/`AI_START_HERE.md`. **Predecessor build detail lives in
 docs under `docs/history/`; `docs/history/INDEX.md` is the one-line timeline.
 
 - **Checkpoint:** 2026-09-07, `m9_enrollment_preview_confirmation_ui` — see
-  "Active build". **AUTOMATED_VALIDATED** (rounds 1+2), PR #104 open/unmerged,
-  relay `ozandurmus/nexus-agent-relay#3`. Predecessors PR #105/#106 + #107
-  (relay governance) **AUTOMATED_VALIDATED**. `M8.4` **MERGED** PR #101.
-  **PO §12:** `M8.3` deferred, `M7` blocked. `M8` **FROZEN 2026-09-06**.
+  "Active build". **AUTOMATED_VALIDATED** (rounds 1+2), PR #104
+  `APPROVED_FOR_HUMAN_TRUE_MERGE`, relay `ozandurmus/nexus-agent-relay#3`.
+  Predecessors PR #105/#106 + #107 + #108 (relay/Git governance) all
+  **AUTOMATED_VALIDATED**. `M8.4` **MERGED** PR #101. **PO §12:** `M8.3`
+  deferred, `M7` blocked. `M8` **FROZEN 2026-09-06**.
 - **Next** (`now_next.next`): `m8_3_real_environment_validation`, `deferred`
   per §12, unchanged by M9's out-of-order run. `m7_real_device_targeted_collect_now`/
   `op2_c_cp_clusterxl_adapter_scoping` stay `upcoming`/`blocked`.
@@ -60,13 +61,15 @@ deferred per `§9.2 A6`/`M10`; the `runner.py` probe exception authorized,
 M9-only); four corrected directly (`credential_profile_ref` sentinel, atomic
 confirmation, the dialog test, `PO-NAV-1`'s Administration entry point).
 Render harness run for real (Node self-installed) + full regression run
-(2359 passed; 2 pre-existing, unrelated `.venv` DLP false positives, filed
-separately). **AUTOMATED_VALIDATED**. Full evidence: `project/build_history.json`.
+(2359 passed; 2 pre-existing, unrelated `.venv` DLP false positives, waived
+at the approved head). **AUTOMATED_VALIDATED**, PR #104
+`APPROVED_FOR_HUMAN_TRUE_MERGE`. Full evidence: `project/build_history.json`.
 
-Predecessors, both **AUTOMATED_VALIDATED**, governance-only (packet v2 and
-M9/product behavior unchanged): `gov_relay_1_question_routing` (PR #107)
-adds `RELAY_QUESTION` -- every material PO-resolution question is durable on
-the relay, closed only by a matching `RELAY_DECISION`; PR #105/#106 is the
+Predecessors, all **AUTOMATED_VALIDATED**, governance-only (packet v2 and
+M9/product behavior unchanged): `gov_git_authority_reconciliation` (PR #108)
+clarifies Corporate Git as Product-Owner-authorization-controlled, not a
+manual-click mandate; `gov_relay_1_question_routing` (PR #107) adds
+`RELAY_QUESTION`; `gov_relay_1_canonical_agent_relay` (PR #105/#106) is the
 relay contract itself.
 
 Predecessor — **`m8_evidence_host_key_fingerprint_not_persisted`** —
@@ -78,25 +81,6 @@ Predecessor — **`gov_session_1_unified_packet`** (`GOV.SESSION.1A`) —
 **FROZEN, MERGED 2026-09-07** (PR #102): one canonical protocol-v2
 `NEXUS_SESSION_PACKET` replacing `GOV.SESSION.1`'s split close
 (`docs/design/GOV_SESSION_TRANSFER_PROTOCOL.md`); v1 rejected. No M8/M7 work.
-
-Predecessor — **`m8_4_m6_resolver_consumption`** (`M8.4`) —
-**AUTOMATED_VALIDATED, MERGED 2026-09-07**, PR #101: extends
-`console/registry_targets.py` §7 with the `M8.1` identity-translation
-currency check plus a closed evidence-provenance pin. Does **not**
-implement `M7`.
-
-Parent — **`m8_first_contact_trust_identity_evidence_producer_architecture`**
-(`M8` architecture) — **FROZEN, PO APPROVED 2026-09-06 (PR #96), §12
-amendment 2026-09-07** (`M8.4` ahead of `M8.3`'s real-env gate; `M7` stays
-blocked). Sequence: `M8.1`→`M8.2`→`M8.3`→`M8.4`(above)→`M7`. Open:
-`operator_assertion`, single-sourced identity evidence, DEFERRED
-contradiction detection. Full contract:
-`docs/history/phase/M8_FIRST_CONTACT_TRUST_AND_IDENTITY_EVIDENCE_PRODUCER_ARCHITECTURE.md`.
-
-Predecessors, all **AUTOMATED_VALIDATED**, all merged: **`M8.3`** (PR #100
-— read-only producer; real-env validation deferred per §12), **`M8.2`**
-(PR #98), **`M8.1`** (`M4` schema-2 relationship storage/API), **`M6`**
-(fail-closed admission shell, now extended by `M8.4` above).
 
 ## Predecessor — `M5`/`M4`
 **`collector_target_selection_seam`** (`M5`) — COMPLETE, merged via PR #94:

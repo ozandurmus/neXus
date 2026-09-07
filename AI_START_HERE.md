@@ -285,13 +285,17 @@ device reachability in a sandbox that doesn't have it; say so and stop.
 
 ## Git workflow
 
-Approval boundaries (full detail: `docs/AI_DEVELOPMENT_PROTOCOL.md`):
+Approval boundaries (full detail: `AGENTS.md` "Git authority and execution
+law" and `docs/AI_DEVELOPMENT_PROTOCOL.md`):
 generally allowed once scope is accepted — source edits, local tests,
 render-only validation, static analysis, docs, explicitly requested
 read-only local checks. Explicit human approval required — dependency
 additions/upgrades, schema/storage migration, destructive local-data
 operations, full-fleet collection not already requested, new network-access
-patterns or credential paths, new write primitives, Git push/merge.
+patterns or credential paths, new write primitives, Git PR creation/push/merge.
+For Git, explicit Product Owner authorization controls the decision and permits
+the agent to execute and verify the named action; it does not require the human
+to operate GitHub personally.
 Prohibited at current maturity (taxonomy classes 2–4): firewall
 configuration writes, policy install, commit, reboot/shutdown, forced
 failover, interface/routing change, credential change, automatic
