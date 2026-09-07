@@ -8,14 +8,15 @@ docs under `docs/history/`; `docs/history/INDEX.md` is the one-line timeline.
 - **Checkpoint:** 2026-09-08, `gov_po_1_step_5_first_plan_episode` — the
   first Phase A `PLAN` episode: `now_next.next` re-sequenced, `M10` sliced,
   backlog re-ranked, `.venv` DLP debt and two verified state drifts filed.
-  Predecessor `gov_po_1_step_4_direction_record_ratification`
-  **AUTOMATED_VALIDATED, MERGED** (PR #112, `79a90b94…`): the direction
-  record is **RATIFIED**; `gov_po_1_step_3_docs_reconciliation` **MERGED**
-  (PR #111, `e208cb82…`). Phase A **authorized** (relay #5); Phase B closed.
-  `gov_po_1_step_2_implementation` **MERGED** (PR #110, `b53e15f1…`);
-  contract `gov_po_1_role_migration_contract` **FROZEN, MERGED** (PR #109). Predecessor `M9` **AUTOMATED_VALIDATED, MERGED** via PR #104
-  (true merge `5fc88a21462eabb724f767f38a34ffd529eb008f`); PR #105–#108
-  (relay/Git governance) all **MERGED**. `M8.4` **MERGED** PR #101.
+  Predecessor `gov_po_1_gate_1_command_safety_correction` **AUTOMATED_VALIDATED,
+  MERGED** (PR #114, `6e263a6b…`): fixes the packet-emission gate conflict
+  this episode reported (below) — future PO episodes post their own
+  packets; this episode's were posted by the human, unaffected retroactively.
+  `gov_po_1_step_4_direction_record_ratification` **MERGED** (PR #112): the
+  direction record is **RATIFIED**. Phase A **authorized** (relay #5);
+  Phase B closed. `gov_po_1_step_2/3` **MERGED** (PR #110/#111); contract
+  `gov_po_1_role_migration_contract` **FROZEN, MERGED** (PR #109).
+  Predecessor `M9` **MERGED** PR #104. `M8.4` **MERGED** PR #101.
   **PO §12:** `M8.3` deferred, `M7` blocked. `M8` **FROZEN 2026-09-06**.
 - **Next** (`now_next.next`): `m10_1_registry_evidence_reconciliation_projection`
   — the `D4` registry↔evidence reconciliation producer, first slice of `M10`
@@ -60,32 +61,30 @@ test-enforced boundaries.
 
 **`gov_po_1_step_5_first_plan_episode`** (`GOV.PO.1` §10 step 5) — the first
 interactive Phase A `PLAN` episode. Chose `M10.1` as the one actionable
-`next` (every other candidate — `RB.3b`, the remaining `OP.2.C` gates,
-`compliance_check_engine_primitives`, `M8.3` — is externally blocked or is
-not engineering work); sliced the oversized frozen `M10` into `M10.1`/
-`M10.2`/`M10.3` under the §7 `M8.1`–`M8.4` precedent; ranked the backlog by
-production gate / trust-identity / control-plane / hygiene; filed
-`dlp_scanner_venv_exclusion` and `project_state_wording_drift_reconciliation`.
-Both `PRODUCT_DIRECTION_RECORD.md` §11 drifts **verified against source and
-reported, not fixed**. Reported conflict: the interactive PO gate cannot
-emit a `NEXUS_SESSION_PACKET` (sentinel angle brackets are a forbidden shell
-fragment; no writable path outside the governance set), so this episode's
-packets were posted by the human — `T1`–`T7` do not cover packet emission.
+`next` (every other candidate externally blocked or not engineering work);
+sliced `M10` into `M10.1`/`M10.2`/`M10.3` (§7 precedent); ranked the
+backlog by theme; filed `dlp_scanner_venv_exclusion` and
+`project_state_wording_drift_reconciliation` (both §11 drifts **verified,
+reported, not fixed**). Reported conflict, now fixed below: the gate could
+not emit a `NEXUS_SESSION_PACKET`, so this episode's own packets were
+posted by the human.
 
-Predecessor — **`gov_po_1_step_4_direction_record_ratification`**
-(`GOV.PO.1` §10 step 4) — records the Product Owner's 2026-09-08
-ratification decisions (`PRODUCT_DIRECTION_RECORD.md` §0, DR-1..DR-9e).
-**AUTOMATED_VALIDATED, MERGED** via PR #112 — the record is **RATIFIED**
-(contract §4.1). Phase A authorized by `RELAY_DECISION` on relay #5;
-Phase B closed until T1–T6. Step 6 remains.
+Predecessor — **`gov_po_1_gate_1_command_safety_correction`** —
+fixes the reported conflict above with `shlex`-based real-operator
+detection plus a narrow scratch-write allowance for packet staging.
+**AUTOMATED_VALIDATED, MERGED** via PR #114. `T1`–`T7` still do not
+exercise packet emission end-to-end — step 6's job.
+
+Predecessor — **`gov_po_1_step_4_direction_record_ratification`** —
+records the Product Owner's ratification decisions
+(`PRODUCT_DIRECTION_RECORD.md` §0, DR-1..DR-9e). **MERGED** via PR #112 —
+the record is **RATIFIED** (contract §4.1). Phase A authorized by
+`RELAY_DECISION` on relay #5; Phase B closed until T1–T6.
 
 Predecessor — **`m9_enrollment_preview_confirmation_ui`** (`M9`) —
-**AUTOMATED_VALIDATED, MERGED** via PR #104: local-loopback manual-endpoint
-enrollment (pre-registration identity probe, preview, explicit
-confirmation, immutable audit, one `DeviceRegistry.enroll` path), two
-corrective rounds closed on relay #3; **candidate-id enrollment is
-schema-present but server-refused pending `M10`'s `D4` projection** — the
-dependency `M10.1` exists to close.
+**MERGED** via PR #104: local-loopback manual-endpoint enrollment;
+candidate-id enrollment schema-present but server-refused pending `M10`'s
+`D4` projection — `M10.1` exists to close it.
 
 Predecessors, all **MERGED**, detail in `project/build_history.json`:
 `gov_po_1_step_3_docs_reconciliation` (PR #111),

@@ -14,8 +14,10 @@
   registry↔evidence reconciliation producer, first slice of `M10`.
 - `M8.3` stays **deferred** and `M7` stays **blocked**. Choosing `M10.1`
   pays none of that debt and must never be described as having done so.
-- Predecessors all **MERGED**: PR #112 (record RATIFIED), #111, #110, #109.
-  Phase A **authorized** (relay #5); Phase B closed until `T1`–`T6`.
+- Predecessors all **MERGED**: PR #114 (`gov_po_1_gate_1_command_safety_correction`
+  -- fixes the packet-emission gate conflict this episode reported below),
+  #112 (record RATIFIED), #111, #110, #109. Phase A **authorized** (relay
+  #5); Phase B closed until `T1`-`T6`.
 
 ## 2. What changed
 
