@@ -20,6 +20,11 @@ Post every unresolved scope, authority, ownership, security/privacy, required
 validation, merge, or frozen-contract question as `RELAY_QUESTION` on the issue
 and pause only the dependent work. Direct chat may explain the question but
 does not replace the relay record or a matching Product Owner `RELAY_DECISION`.
+After a matching decision authorizes a named action, execute it without asking
+again. You may raise one concrete objection; if the Product Owner repeats or
+expressly overrules the instruction after that objection, proceed unless an
+exact higher-authority exception in `AGENTS.md` "Git authority and execution
+law" remains. Do not turn general caution into a recurring approval loop.
 
 The final engineering comment must be exactly one independently validated
 protocol-version-2 `SESSION_CLOSE` packet. A locator, valid structure, agent

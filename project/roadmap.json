@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "current_build": "gov_relay_1_question_routing",
+  "current_build": "gov_git_authority_reconciliation",
   "current_track": "PCP.x",
   "progress_contract": "Weighted acceptance-criterion completion. Percentages describe the declared roadmap, not calendar time or delivery ETA.",
   "tracks": [
@@ -22,7 +22,7 @@
       "id": "0.6.x",
       "title": "Current State & Evidence Foundation",
       "theme": "SEE",
-      "status": "in_progress",
+      "status": "automated_validated",
       "weight": 35,
       "feature_ids": [
         "pan_config_evidence",
@@ -140,16 +140,15 @@
   "now_next": {
     "horizon_contract": "NOW is exactly one build. NEXT is exactly one. Everything else is an `upcoming` row carrying its own true status: planned = AFTER, blocked = waiting on a named external gate, deferred = consciously postponed. `now.build` must equal the newest project/build_history.json record -- utils.project_plan enforces it.",
     "now": {
-      "build": "gov_relay_1_question_routing",
-      "title": "GOV.RELAY.1 amendment -- durable Product Owner question routing",
-      "goal": "Require every material Product Owner question to be recorded as RELAY_QUESTION on the active relay and resolved by a matching Product Owner RELAY_DECISION.",
-      "status": "automated_validated",
+      "build": "gov_git_authority_reconciliation",
+      "title": "GOV.GIT.1 -- Product Owner authorization and agent execution reconciliation",
+      "goal": "Make Product Owner control and authorized agent Git execution unambiguous, including one-objection/repeated-instruction handling.",
+      "status": "in_progress",
       "started": "2026-09-07",
       "completed": "2026-09-07",
       "notes": [
-        "Full detail: docs/design/NEXUS_AGENT_RELAY_PROTOCOL.md and project/build_history.json's gov_relay_1_question_routing record.",
-        "Governance-only amendment; NEXUS_SESSION_PACKET v2 schema/parser and every product/M9 behavior remain unchanged.",
-        "Claude remains the sole M9 implementation owner; its branch and PR #104 are untouched."
+        "Full detail: AGENTS.md Git authority and execution law, docs/AI_DEVELOPMENT_PROTOCOL.md approval boundaries, and project/build_history.json.",
+        "Governance only; M9 product code and Claude's PR #104 remain untouched."
       ]
     },
     "next": {

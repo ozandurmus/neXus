@@ -5,6 +5,8 @@ cold-start entry point, reading order, and SESSION START/CLOSE/reasoning-tier
 schemas are in `AI_START_HERE.md`; the network-device command gate, approval
 boundaries and render-harness mechanics are detailed in
 `docs/AI_DEVELOPMENT_PROTOCOL.md`. This file does not restate them.
+Git authorization and agent execution semantics are owned by `AGENTS.md`
+"Git authority and execution law"; do not infer a manual-click requirement.
 
 ## Claude delta
 
