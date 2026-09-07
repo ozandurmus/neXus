@@ -16,6 +16,17 @@ behave as if this is a greenfield repository.
 Follow `/AI_START_HERE.md`'s reading order exactly; do not improvise a
 shorter or reordered version of it.
 
+## Session-boundary packets
+
+When a session or handoff crosses a tool/session boundary as a
+`NEXUS_SESSION_PACKET` (a Product Owner `SESSION_START` in, or a
+`SESSION_CLOSE` handoff out), use exactly one sentinel-wrapped
+protocol-version-2 packet per `/docs/design/GOV_SESSION_TRANSFER_PROTOCOL.md`
+(FROZEN — PO APPROVED) — its `report` object carries the complete
+`/AI_START_HERE.md` SESSION START/CLOSE content; no narrative belongs
+outside the sentinel pair in that case. `py scripts/gov_session_transfer.py
+render` builds and validates it before emission.
+
 ## Editing behavior
 
 `/AGENTS.md` "Engineering laws" has the pre-edit checklist (locate
