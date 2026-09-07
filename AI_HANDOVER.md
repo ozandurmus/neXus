@@ -13,96 +13,119 @@ Overwrite at every session close. Keep it minimal.
 
 ## 1. Snapshot
 
-- Date: 2026-09-07. `M8.1` — **AUTOMATED_VALIDATED**, branch
-  `build/m8-1-relationship-storage-api` from `origin/main`, PR not yet
-  opened/merged (awaiting user authorization).
-- Build: `m8_1_relationship_storage_api` (`M8.1`) — `status:
+- Date: 2026-09-07. `M8.3` — **AUTOMATED_VALIDATED**, branch
+  `claude/m8-3-first-contact-producer-nh0260` from `origin/main` at
+  `8547af6faecf0566cc7ab6558f7f9939f8b394e4`, PR not yet opened/merged
+  (awaiting Product Owner authorization for the real-environment gate first).
+- Build: `m8_3_first_contact_producer_real_env_gate` (`M8.3`) — `status:
   automated_validated`.
 - Contract: `docs/history/phase/M8_FIRST_CONTACT_TRUST_AND_IDENTITY_EVIDENCE_PRODUCER_ARCHITECTURE.md`
-  §5/§6/§8/§9 — FROZEN, unchanged by this session.
+  §3/§4/§5/§6/§8 — FROZEN, unchanged by this session.
+- `M8.2` (predecessor) is confirmed **merged** to `main` via PR #98 (commit
+  `16c39ab`) — `CURRENT_STATE.md`'s prior "PR pending"/"unmerged" wording was
+  stale and is corrected as part of this session's state update.
 
 ## 2. What this session did
 
-Implemented `M8.1` per the frozen `M8` contract, scope exactly as named in
-§9's table (storage/API only; no producer, no consumer).
+Implemented `M8.3` per the frozen `M8` contract §3/§4, scope exactly as
+named: the read-only first-contact producer, reusing existing per-host
+primitives, plus preparing (not executing) the real-environment gate.
 
-1. **Migration 2** in `utils/control_plane_store.py`: new
-   `device_identity_relationships` `STRICT` table (contract §5's exact
-   field set) plus `ux_device_identity_relationships_one_active_per_triple`
-   (partial unique index, at most one `ACTIVE` row per `(device_id,
-   vendor_namespace, mapping_scope)`). `SUPPORTED_SCHEMA_VERSION` bumped
-   `1` → `2`.
-2. **New typed API** `utils/device_identity_relationships.py`: closed
-   vocabularies (`VENDOR_NAMESPACES`, `MAPPING_SCOPES`, `PROOF_TYPES`,
-   `PROOF_SOURCES`, `RELATIONSHIP_STATES`, `INVALIDATION_REASONS`);
-   `DeviceIdentityRelationship` dataclass; `record_first_contact_proof`
-   (transactional `NEW`/`SUPERSEDED`/`AMBIGUOUS_IDENTITY` write per §6 — no
-   parameter exists to write an unproven or `identity_mapping_proven=0`
-   row, by construction); `get_active_relationship` (fail-closed read,
-   never returns `INVALIDATED`/`SUPERSEDED` as `ACTIVE`, defends against an
-   unexpected multi-row read).
-3. **Extended `tests/test_m4_control_plane_metadata_store.py`**: fixed the
-   migration-count-sensitive tests that assumed exactly one migration
-   (`test_creation_applies_the_initial_schema_version`, the
-   monkeypatch-based prefix/gap/out-of-order-ledger tests — their synthetic
-   extra migration moved from version 2 to 3 to stop colliding with the new
-   real migration 2); extended `test_schema_owns_no_forbidden_concept`'s
-   fragment list with `serial`/`host_key`/`fingerprint` per §8 AC6.
-4. **New `tests/test_m8_1_device_identity_relationships.py`** — 31 tests:
-   schema shape/STRICT/CHECK constraints, the structural
-   one-`ACTIVE`-per-triple index, the three write outcomes (including
-   no-tie-break-after-`AMBIGUOUS_IDENTITY`), read-side `None`/
-   never-returns-invalidated/fail-closed-on-multiplicity, Python-layer
-   closed-vocabulary and empty-identifier validation, and a structural
-   assertion that the write API has no serial/endpoint/credential-shaped
-   parameter.
-5. **Project-state update**: `project/roadmap.json` (`now` = `M8.1`
-   `automated_validated`; `next` = `m8_2_endpoint_specific_trusted_key_lookup`,
-   `planned`), `project/build_history.json` (new head record),
-   `CURRENT_STATE.md` (checkpoint, Active build, Exact next build, test
-   baseline), `docs/history/INDEX.md` regenerated via
-   `py scripts/build_history_index.py`.
+1. **New `utils/first_contact_producer.py`**: `run_first_contact_producer`
+   — fail-closed Device Registry resolution (no mutation, no lock);
+   exact-one `PhysicalTarget` candidate selection via the existing
+   `configuration.checkpoint_config_collector._resolve_targets`, matched
+   only on `management_ip`; the mandatory trust-before-credential sequence
+   (`utils.cp_ssh_trust.lookup_trusted_host_key` first — the caller-supplied
+   `resolve_credentials` callback is never invoked before it succeeds);
+   the existing, unmodified `_collect_host`/`_identity_gate`/
+   `_collector_identity_gate`/`_entity_id` primitives, `strict_host_key`
+   always forced `True`; the positive write gate (identity accepted +
+   non-empty serial + a resolvable `producing_run_ref`, resolved via
+   `ConfigEvidenceStore.backend.list_snapshots`) before calling the
+   existing, unmodified `M8.1` `record_first_contact_proof`. Every refusal
+   path returns a sanitized `ProducerOutcome` token only.
+2. **New `application/workflows/first_contact.py`**: thin CLI orchestration
+   — resolves CP credentials via `application.services.make_runtime_config`
+   only inside the callback the producer itself invokes, always calls
+   `Config.clear_credentials()`, prints only `device_id`/`outcome`/`reason`/
+   `relationship_id`.
+3. **`application/cli.py`**: new `--identity-first-contact DEVICE_ID` mode,
+   its own mutual-exclusion refusal block (mirrors `--cp-ha-preflight-check`/
+   `--pan-ha-preflight-check`), one dispatch line. Not console-submittable —
+   `console/registry.py`'s `JOB_REGISTRY` has no entry for it.
+4. **`application/services.py`**: `_MODE_PREREQUISITES` gained an
+   `identity-first-contact` entry (same `cp_telemetry.json`/`cp.json`/
+   `vsx.json` prerequisite set as `--cp-config-probe`).
+5. **New tests**: `tests/test_m8_3_first_contact_producer.py` (19 tests) and
+   `tests/test_m8_3_first_contact_cli.py` (18 tests) — see §4 below.
+6. **Project-state update**: `project/roadmap.json` (`now` = `M8.3`
+   `automated_validated`; `next` = `m8_3_real_environment_validation`,
+   `planned`; `current_build` updated), `project/build_history.json` (new
+   head record), `CURRENT_STATE.md` (checkpoint, Active build, Exact next
+   build, test baseline, and the stale M8.2 merge-status wording corrected),
+   `docs/history/INDEX.md` regenerated via `py scripts/build_history_index.py`.
 
 ## 3. Exact next action
 
-**`M8.2` — endpoint-specific local trusted-key lookup.** The new, required
-`utils/cp_ssh_trust.py` function (contract §4 step 1): checks whether the
-exact normalized endpoint/port already has a trusted host-key entry in the
-same `known_hosts` source `apply_strict_host_key_policy` already reads. No
-network/device contact, no key added or accepted. Needs its own focused
-tests, including a deliberately untrusted endpoint proving no credential is
-ever resolved and no network/device contact occurs during the lookup
-itself. `M8.3` (the producer) must not begin without `M8.2`.
+**`M8.3` real-environment validation — Product Owner authorization
+required, not performed in this session.** Exactly one bounded, read-only
+command is proposed:
 
-Before that: **this session's PR is not yet opened.** `git status` is clean
-against the new commit once made; branch `build/m8-1-relationship-storage-api`
-is pushed nowhere yet — confirm with the user whether to push/open the PR
-now or continue straight to `M8.2` first.
+```
+py main.py --identity-first-contact <one enrolled registry device_id>
+```
+
+It must be run only against a registry `device_id` the Product Owner has
+explicitly approved for real-device contact, exercising the full trust →
+credential → `RejectPolicy` → identity gate → serial → governed evidence →
+relationship-write sequence, reporting only relationships/statuses (never
+raw endpoint/serial/fingerprint/username/credential/host-key values),
+confirming the new `producing_run_ref` resolves, and measuring the actually
+observable CP config evidence-retention lower bound/window the frozen
+contract §6/§9 needs before `CONTRADICTORY_EVIDENCE` detection can be judged
+buildable — report `UNKNOWN`/`INSUFFICIENT_EVIDENCE` if it cannot be
+established, never inferred.
+
+`M8.3` stays `AUTOMATED_VALIDATED` until that gate runs; `M8.4` (`M6`
+resolver consumption) must not begin without it.
 
 ## 4. Test delta
 
-New: `tests/test_m8_1_device_identity_relationships.py` (31 tests).
-Extended: `tests/test_m4_control_plane_metadata_store.py` (same test count,
-several bodies updated for the new real migration 2 — see §2.3 above).
-Targeted run: 101 passed. Affected run (`M4`/`M8.1`/`M6`/`M5`/`PCP.1`/
-`CON.2`/`test_architecture_convergence.py`): 388 passed, 0 failed. Privacy
-gate: PASS, 0 findings (`data/`/`logs/` cleared before each run). No
-`full-regression`/`workflow_dispatch` run (risk-based; this is a bounded
-additive-schema change with no shared-core/runner/scheduler surface
-touched).
+New: `tests/test_m8_3_first_contact_producer.py` (19 tests, no real device/
+socket/network — `_collect_host` monkeypatched throughout) and
+`tests/test_m8_3_first_contact_cli.py` (18 tests, CLI/workflow wiring only).
+Targeted run: 37 passed. Affected run (`M8.1`/`M8.2`/`PCP.1`/`M4`/
+architecture convergence/`OP.0d` target selection/`OP.0b` S7.5 preflight
+entrypoint, plus the two new files): 335 passed. Wide CP-config collector/
+probe/trust sweep (24 files) plus `test_phase0_6_1b_1_4_cp_ssh_trust.py`:
+441 passed, 1 skipped (pre-existing, unrelated), 0 failed. Privacy gate:
+PASS, 0 findings (`data/`/`logs/` cleared before each run). `git diff
+--check`: clean. No `full-regression`/`workflow_dispatch` run (risk-based;
+two new files plus one additive CLI mode, no shared-core/schema/storage/
+console/UI change; `M8.1`/`M8.2` reused entirely unmodified).
 
 ## 5. Risks / notes forward
 
-- This movement is `AUTOMATED_VALIDATED` only, by design — no device
-  contact, no producer, no consumer exist yet to real-environment-validate.
-- Closed vocabularies stay exactly as narrow as the frozen contract states;
-  widening any of them (a PAN `vendor_namespace`, a second `proof_type`) is
-  its own migration/contract amendment, not a parameter to loosen in
-  `M8.1`'s API.
+- Real-environment validation is the only thing standing between `M8.3`
+  `AUTOMATED_VALIDATED` and `DONE` — no further code is expected for it.
+- This build deliberately does not add admission-coordinator
+  (`utils.collection_executor`) integration for the device-contact step,
+  unlike `OP.0b` S7.5's CP/PAN HA preflight entry points — a narrow,
+  manually-invoked, single-device CLI maintenance/bootstrap tool, the same
+  category as `--registry-enroll`/`--persistent-secret-material-check`.
+  Add it later only as its own bounded change if a real need appears.
+- The `_ELIGIBLE_REGISTRY_STATES == {"ENROLLED_UNVERIFIED"}` gate is this
+  build's own defensive addition (a `DISABLED`/`RETIRED` device should not
+  be first-contacted) — the frozen contract's §2 does not itself name a
+  lifecycle-eligibility requirement; this is a conservative interpretation,
+  not a restated contract clause.
 - `CONTRADICTORY_EVIDENCE` detection stays deliberately unbuilt (§6/§10) —
-  do not add it as a side effect of `M8.2`/`M8.3`.
+  the real-environment gate's evidence-retention measurement is what will
+  eventually let that gap be judged closeable or not; do not build it as a
+  side effect of any other movement.
 - Three dissents remain open, unchanged: `operator_assertion`,
   single-sourced identity evidence, deferred contradiction detection.
-- Table/column names are no longer illustrative for `M8.1` specifically —
-  they are now the real, committed schema; `M8.2`+ must read them from
+- Table/column names and the relationship write API are `M8.1`'s, unchanged
+  by this session — `M8.4`+ must keep reading them from
   `utils/device_identity_relationships.py`, not re-derive them.
