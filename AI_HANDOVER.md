@@ -3,30 +3,24 @@
 > **NON-AUTHORITATIVE DERIVED SUMMARY**
 > **DO NOT USE AS PROJECT-STATE AUTHORITY**
 > If anything below disagrees with `CURRENT_STATE.md` or `project/roadmap.json`,
-> those win — see `AGENTS.md` "Authority hierarchy". This file exists only so
-> a cold chat can learn the previous session's exact next action in one read;
-> it is never the record of what shipped (that's `project/build_history.json`).
-
-Overwrite at every session close. Keep it minimal.
-
----
+> those win — see `AGENTS.md` "Authority hierarchy".
 
 ## 1. Snapshot
 
 - Date: 2026-09-07. `m9_enrollment_preview_confirmation_ui` (`M9`) —
-  **AUTOMATED_VALIDATED**. Implementation landed and validated on branch
-  `m9-enrollment-preview-confirmation-ui`, two local commits made, **not yet
-  pushed, no PR opened** (pending explicit PO go-ahead — Git push/merge is a
-  standing human-approval boundary, independent of the movement's own
-  authorization). PO-authorized via `SESSION_START` relay
-  `ozandurmus/nexus-agent-relay#3`, out of `now_next` order (the roadmap's
-  own `next` still names `m8_3_real_environment_validation`, deferred,
-  unchanged).
+  **IN_PROGRESS, round 2 (corrective)**. Round 1 landed and validated on
+  branch `m9-enrollment-preview-confirmation-ui`, PR #104 opened, open,
+  unmerged. A Product Owner corrective review (relay
+  `ozandurmus/nexus-agent-relay#3`) found real gaps (see §5). Predecessor
+  `gov_relay_1_canonical_agent_relay` (`GOV.RELAY.1`) —
+  **AUTOMATED_VALIDATED, MERGED** via PR #105; relay #3 repaired, its stored
+  M9 `SESSION_START` revalidated. Claude remains the sole M9 implementation
+  owner; Codex owned only the completed GOV.RELAY.1 recovery.
 - Predecessor `m8_evidence_host_key_fingerprint_not_persisted` —
   **AUTOMATED_VALIDATED, MERGED** via PR #103. `M8.4` **AUTOMATED_VALIDATED,
-  MERGED** via PR #101.
+  MERGED** via PR #101. `M8.3` stays deferred, `M7` stays blocked.
 
-## 2. What this session did
+## 2. What changed (round 1; round 2 in progress)
 
 Full-implementation movement against the frozen
 `docs/design/LOCAL_CONTROL_PLANE_RUNTIME_AND_ENROLLMENT.md` §9.1 contract
@@ -90,46 +84,65 @@ grep: no such join exists anywhere yet).
    (`no_enrollment_affordance` rewritten in place, matching the established
    `accessibility_closure` precedent).
 
+Round 1 also added the frozen `GOV.RELAY.1` relay contract and shared
+Codex/Claude bootstrap prompt (predecessor movement, merged via PR #105),
+mandatory pointers from the constitution/cold-start/Claude/Copilot/build
+prompts, and focused governance/convergence tests; `NEXUS_SESSION_PACKET` v2
+schema/parser behavior is unchanged.
+
 ## 3. Exact next action
 
-**Environment blocker, disclosed to the Product Owner mid-session, then
-resolved with their explicit help:** this authoring session started with
-only Python 3.9.6 (repo needs 3.10+). The Product Owner authorized and
-personally ran the `sudo installer` step for the official python.org 3.12.8
-`.pkg`; a project-local `.venv` was then built and dependencies installed.
-Playwright's Chromium was also installed (`playwright install chromium`,
-no sudo needed). node/bun remain unavailable — not resolved.
-
-Remaining before merge:
-
-1. Push the branch and open the PR — **pending explicit Product Owner
-   go-ahead**, asked once already (answer was "wait — validate first",
-   which is now done; needs to be asked again).
-2. `tools/render-harness/check-render.mjs` (needs node/bun) was not run —
-   the Python/Playwright equivalent (`test_ac1_console_renders_every_module_live_with_zero_console_errors`
-   plus an ad hoc full click-through of the new dialog) was run instead and
-   passed, but the JS-runtime-specific check is still unexercised.
-   `tests/fixtures/uitest/` was not extended for the new module/payload
-   shape either.
-3. A user-assisted, corporate-PC2 real-browser walkthrough of "Add device"
-   against fixture/synthetic data only — per the SESSION_START packet, ask
-   the Product Owner to type any local application authentication directly
-   into the app's own field or a masked terminal prompt, never into chat.
-4. Only after the PR exists: render, validate, and post the protocol-v2
-   `SESSION_CLOSE` to relay issue #3, then return
-   `RELAY_READY ozandurmus/nexus-agent-relay#3` per the packet's
-   `output_contract`.
+Audit the existing M9 implementation against the Product Owner's corrective
+`SESSION_START` (relay `ozandurmus/nexus-agent-relay#3`, revalidated:
+`valid: true`) findings, then correct incrementally — do not restart from
+scratch. Per that packet's own instruction: where the audit finds a real
+frozen-authority dependency conflict (e.g. whether M8's existing controlled
+path can satisfy an unregistered-endpoint probe without a second network/
+credential path), report the exact conflict rather than self-authorizing an
+exception. Close the findings that are correctable in place: make
+`credential_profile_ref`/`trust_profile_ref` select the actual executed
+source or fail closed; make preview confirmation single-use under
+concurrency; implement the closed candidate-id flow or return the exact
+scope conflict; extend `tests/fixtures/uitest` and run the render harness
+(Playwright fallback if node/bun unavailable); add the Administration →
+Device Management second `PO-NAV-1` entry point. Then re-run required
+validation, reconcile project state once more, and post a validated
+`SESSION_CLOSE` as the final raw relay comment. PR #104 stays open/unmerged
+throughout — merge remains a separate, standing Product Owner decision.
 
 ## 4. Test delta
 
-Real run, Python 3.12.8, project `.venv`: `py -m pytest -q -n auto --dist worksteal tests/test_m9_enrollment_preview_and_confirmation.py tests/test_con1_operator_console_read_only.py tests/test_con2_console_job_engine.py tests/test_pcp1_device_registry.py tests/test_architecture_convergence.py` — first run surfaced 3 expected failures (a stale derived doc, two existing closed-set tests needing extension for the new field/routes — not implementation bugs); fixed; **164 passed, 1 skipped (unrelated), 0 failed**. Broader sweep (`-k "architecture_convergence or privacy or application_package"`): **43 passed**. `git diff --check` clean. `compileall` clean on every touched file. Live-Playwright console render walk (real Chromium): **2 passed**, zero console errors. An additional ad hoc script clicked all the way through the new "Add device" dialog (open → fill → probe → real job pipeline → correct negative-evidence status message → close) against a real running console and real browser: **passed, zero console errors**. No M8.3 or M7 command was run; no real device, network, or credential provider was contacted anywhere — every probe outcome exercised was either mocked or a genuine `trust_source_unreadable` refusal against an RFC 5737 documentation address.
+Round 1 (Python 3.12.8, project `.venv`): targeted M9/CON1/CON2/PCP1/
+architecture-convergence suite **164 passed, 1 skipped (unrelated), 0
+failed**; broader sweep **43 passed**; `git diff --check` and `compileall`
+clean; live-Playwright console render walk **2 passed**, zero console
+errors; an ad hoc full click-through of the new dialog also passed, zero
+console errors. No M8.3/M7 command run; no real device, network, or
+credential provider contacted — every probe outcome was mocked or a genuine
+`trust_source_unreadable` refusal against an RFC 5737 documentation address.
+GOV.RELAY.1 (predecessor, merged): focused relay/session-packet/convergence
+149 passed; application-package/privacy 14 passed; repository privacy gate
+PASS/0; state consistency, history index and `git diff --check` clean.
+Round 2 (corrective) validation not yet run — pending the audit above.
 
 ## 5. Risks / notes forward
 
-- `tools/render-harness/check-render.mjs` (node/bun) and a `tests/fixtures/uitest/` extension for the new dialog/module are still not run/done — the Python/Playwright-based checks above are real but narrower coverage.
-- Administration → Device Management second `PO-NAV-1` entry point not built — disclosed scope trim, not silent.
-- `credential_profile_ref`/`trust_profile_ref` are opaque, persisted, audited, but do not select an actual credential/trust source (exactly one of each exists system-wide today) — consistent with the frozen contract's own text, worth PO confirmation at review.
-- Non-default SSH ports remain structurally unprobeable (`configuration/checkpoint_config_probe.py::_connect` uses one global env-var port) — pre-existing M8.3 limitation, inherited not introduced.
-- `M8.3` stays deferred, `M7` stays blocked — unchanged by this session.
-- A new `.venv/` now exists in the repo working tree (gitignored, matches the existing `.venv/`/`venv/` pattern) — local Python 3.12 environment for this repo going forward.
-- No real device, network, or credential provider was contacted anywhere in this session.
+- Product Owner corrective findings still open: candidate-id enrollment not
+  actually implemented (schema-present, server-refused); the new
+  pre-enrollment probe path's relationship to the existing M8 controlled
+  path needs re-verification, not an assumed exception; `credential_profile_ref`/
+  `trust_profile_ref` persisted/audited but not yet selecting the executed
+  source; preview-confirmation consumption not yet proven atomic under
+  concurrency; `tools/render-harness/check-render.mjs` and a
+  `tests/fixtures/uitest` extension still not run; Administration → Device
+  Management second `PO-NAV-1` entry point still not built.
+- Non-default SSH ports remain structurally unprobeable
+  (`configuration/checkpoint_config_probe.py::_connect` uses one global
+  env-var port) — pre-existing M8.3 limitation, inherited not introduced.
+- `M8.3` stays deferred, `M7` stays blocked — unchanged by this movement.
+- A project-local `.venv/` (gitignored) now holds Python 3.12 for this repo.
+- Relay #3 preserves the earlier malformed `M9_CORRECTIVE_REVIEW` comment
+  under `RELAY_CORRECTION`; it is evidence only, not authority — the
+  current validated issue body governs.
+- No real device, network, or credential provider was contacted anywhere in
+  this movement.

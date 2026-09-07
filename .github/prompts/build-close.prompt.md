@@ -24,3 +24,8 @@ sentinel-wrapped protocol-version-2 `NEXUS_SESSION_PACKET` per
 `py scripts/gov_session_transfer.py render` first. The packet's `report`
 object carries the complete content above, field by field; no heading,
 summary, or explanation outside the sentinel pair in that case.
+
+For a GitHub-issue relay, also follow
+`.github/prompts/relay-bootstrap.prompt.md`: intermediate comments use only the
+frozen relay markers, and the final engineering comment is the raw validated
+`SESSION_CLOSE` packet.
