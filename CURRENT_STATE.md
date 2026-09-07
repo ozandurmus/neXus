@@ -6,11 +6,10 @@ see `AGENTS.md`/`AI_START_HERE.md`. **Predecessor build detail lives in
 docs under `docs/history/`; `docs/history/INDEX.md` is the one-line timeline.
 
 - **Checkpoint:** 2026-09-07, `m9_enrollment_preview_confirmation_ui` — see
-  "Active build". **IN_PROGRESS**, not yet automated_validated (no Python
-  3.10+/node/bun this session). PO-authorized out of roadmap order via relay
-  `ozandurmus/nexus-agent-relay#3`. `M8.4` **AUTOMATED_VALIDATED, MERGED**
-  via PR #101. **PO §12:** `M8.3` deferred, `M7` blocked, unchanged by M9.
-  `M8` architecture **FROZEN — PO APPROVED, 2026-09-06**.
+  "Active build". **AUTOMATED_VALIDATED**, PR not yet opened (pending PO
+  go-ahead), relay `ozandurmus/nexus-agent-relay#3`. `M8.4`
+  **AUTOMATED_VALIDATED, MERGED** via PR #101. **PO §12:** `M8.3` deferred,
+  `M7` blocked, unchanged by M9. `M8` **FROZEN — PO APPROVED, 2026-09-06**.
 - **Next** (`now_next.next`): `m8_3_real_environment_validation`, `deferred`
   per §12, unchanged by M9's out-of-order run. `m7_real_device_targeted_collect_now`/
   `op2_c_cp_clusterxl_adapter_scoping` stay `upcoming`/`blocked`.
@@ -61,9 +60,9 @@ three routes persisting through the one existing `DeviceRegistry.enroll`.
 Candidate-based enrollment is schema-present but refused pending `M10`'s
 reconciliation join (`§9.2 A6`). UI: one "Add device" dialog in the
 Inventory pane; the Administration second `PO-NAV-1` entry point is **not**
-built this slice. **IN_PROGRESS** — PR not opened; automated validation not
-run (no Python 3.10+/node/bun this session). Full evidence:
-`project/build_history.json`.
+built this slice. **AUTOMATED_VALIDATED** (164 passed, live-Playwright
+render/dialog click-through, Python 3.12 installed mid-session) — PR not
+opened yet. Full evidence: `project/build_history.json`.
 
 Predecessor — **`m8_evidence_host_key_fingerprint_not_persisted`** —
 **AUTOMATED_VALIDATED, MERGED** via PR #103, 2026-09-07: persisted
@@ -178,8 +177,9 @@ Concurrency budget stays at 1 per vendor pending its own real-env evidence.
 ## Automated test baseline
 
 ```
-M9 (this build): NOT YET RUN -- no Python 3.10+/node/bun this session
-  (py_compile-clean only). Run before claiming automated_validated.
+M9 (this build): 164 passed/1 skipped/0 failed (targeted); sweep 43 passed.
+  Live-Playwright render + dialog click-through passed, 0 console errors.
+  node/bun render-harness (check-render.mjs) still not run.
 M8.4: targeted 23 passed. Affected sweep 440 passed, 1 skipped, 0 failed.
 Earlier predecessor build detail lives only in project/build_history.json.
 ```
