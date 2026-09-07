@@ -1,0 +1,188 @@
+"""GOV.PO.1 -- repository-side guards for the Product Owner assistant role.
+
+Covers the contract's T7 (docs/design/GOV_PO_ROLE_MIGRATION.md section 6.4):
+referenced skills/agents exist and are tracked, the delegated agent has no
+edit tool / memory / fork, council seats cannot spawn agents, the enforcing
+settings layer and gate hook are tracked, and the gate's decision function
+behaves as the contract's role table says. T1-T6 are behavioral platform
+tests and are NOT here; their status stays NOT_RUN until the section 10
+step 6 VALIDATION movement runs them.
+"""
+from __future__ import annotations
+
+import json
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+import pytest
+
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / "scripts"))
+import nexus_po_tool_gate as gate  # noqa: E402
+
+CONTRACT = ROOT / "docs/design/GOV_PO_ROLE_MIGRATION.md"
+PO_AGENT = ROOT / ".claude/agents/nexus-po.md"
+SEAT_AGENT = ROOT / ".claude/agents/nexus-council-seat.md"
+PO_SKILL = ROOT / ".claude/skills/nexus-po/SKILL.md"
+COUNCIL_SKILL = ROOT / ".claude/skills/nexus-decision-council/SKILL.md"
+PO_SETTINGS = ROOT / ".claude/nexus-po.settings.json"
+GATE = ROOT / "scripts/nexus_po_tool_gate.py"
+
+
+def _frontmatter(path: Path) -> str:
+    text = path.read_text(encoding="utf-8")
+    match = re.match(r"^---\n(.*?)\n---\n", text, re.S)
+    assert match, f"{path} has no frontmatter"
+    return match.group(1)
+
+
+def _tracked() -> set[str]:
+    out = subprocess.run(["git", "ls-files", "--cached", "--others", "--exclude-standard"],
+                         cwd=ROOT, capture_output=True, text=True, check=True)
+    return set(out.stdout.split())
+
+
+def test_contract_is_frozen_and_referenced_artifacts_exist():
+    status = CONTRACT.read_text(encoding="utf-8").split("\n## 1.")[0]
+    assert "FROZEN — PRODUCT OWNER APPROVED" in status
+    for path in (PO_AGENT, SEAT_AGENT, PO_SKILL, COUNCIL_SKILL, PO_SETTINGS, GATE,
+                 ROOT / ".github/prompts/po-plan.prompt.md",
+                 ROOT / ".github/prompts/po-review.prompt.md",
+                 ROOT / ".github/prompts/po-knowledge-extraction.prompt.md",
+                 ROOT / "docs/design/PRODUCT_DIRECTION_RECORD.md"):
+        assert path.exists(), path
+
+
+def test_enforcing_layer_is_tracked_not_local_only():
+    tracked = _tracked()
+    for rel in (".claude/agents/nexus-po.md", ".claude/agents/nexus-council-seat.md",
+                ".claude/skills/nexus-po/SKILL.md",
+                ".claude/skills/nexus-decision-council/SKILL.md",
+                ".claude/nexus-po.settings.json", "scripts/nexus_po_tool_gate.py"):
+        assert rel in tracked, f"{rel} must be tracked (or at least not gitignored)"
+    assert ".claude/settings.local.json" not in subprocess.run(
+        ["git", "ls-files", "--cached"], cwd=ROOT, capture_output=True, text=True).stdout.split()
+
+
+def test_delegated_po_agent_has_no_edit_tool_memory_or_fork():
+    fm = _frontmatter(PO_AGENT)
+    tools_line = next(l for l in fm.splitlines() if l.startswith("tools:"))
+    tools = {t.strip() for t in tools_line.split(":", 1)[1].split(",")}
+    assert tools == {"Read", "Grep", "Glob", "Bash"}
+    assert "memory:" not in fm
+    assert "fork" not in fm
+    assert "nexus_po_tool_gate.py --form delegated" in fm
+    assert re.search(r'matcher:\s*"[^"]*Bash[^"]*Edit[^"]*Write[^"]*Agent', fm)
+
+
+def test_council_seat_cannot_spawn_agents_or_run_shell():
+    fm = _frontmatter(SEAT_AGENT)
+    dis = next(l for l in fm.splitlines() if l.startswith("disallowedTools:"))
+    for tool in ("Agent", "Bash", "Edit", "Write"):
+        assert tool in dis
+    assert "permissionMode: plan" in fm
+    assert "memory:" not in fm
+
+
+def test_interactive_settings_deny_product_paths_and_gate_hook():
+    cfg = json.loads(PO_SETTINGS.read_text(encoding="utf-8"))
+    deny = set(cfg["permissions"]["deny"])
+    for rule in ("Edit(utils/**)", "Edit(console/**)", "Edit(tests/**)", "Edit(AGENTS.md)",
+                 "Write(utils/**)", "Bash(gh pr merge *)", "Bash(git push --force *)"):
+        assert rule in deny
+    hooks = cfg["hooks"]["PreToolUse"]
+    assert any("nexus_po_tool_gate.py --form interactive" in h["command"]
+               for entry in hooks for h in entry["hooks"])
+
+
+def test_engineer_prompts_never_invoke_the_council():
+    for rel in ("build-start.prompt.md", "implement-build.prompt.md", "build-close.prompt.md",
+                "architecture-contract.prompt.md", "relay-bootstrap.prompt.md"):
+        text = (ROOT / ".github/prompts" / rel).read_text(encoding="utf-8")
+        assert "nexus-decision-council" not in text, rel
+    assert "never invokes `nexus-decision-council`" in (ROOT / "CLAUDE.md").read_text(encoding="utf-8")
+
+
+def test_amendment_texts_are_present_verbatim():
+    agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
+    relay = (ROOT / "docs/design/NEXUS_AGENT_RELAY_PROTOCOL.md").read_text(encoding="utf-8")
+    assert "**Comment-only Product Owner assistant episodes.**" in agents
+    assert "never a substitute for a `RELAY_DECISION`" in agents
+    assert "`RELAY_NOTE episode close`" in relay
+    assert "published by an agent on the Product Owner's" in relay
+    for marker in ("RELAY_ACK", "RELAY_NOTE", "RELAY_QUESTION", "RELAY_DECISION", "RELAY_CORRECTION"):
+        assert marker in relay
+
+
+# --- gate decision function -------------------------------------------------
+
+def _bash(cmd: str) -> dict:
+    return {"tool_name": "Bash", "tool_input": {"command": cmd}, "cwd": str(ROOT)}
+
+
+@pytest.mark.parametrize("form", ["delegated", "interactive"])
+@pytest.mark.parametrize("cmd", [
+    "git push origin main --force", "git push -f origin x", "python main.py --only cp",
+    "py main.py --recovery-collect", "sudo rm -rf /", "cat AGENTS.md | grep x",
+    "gh issue view 4 -R o/r; git push", "echo x > utils/x.py", "ssh host", "gh pr merge 109",
+])
+def test_gate_denies_writes_collection_and_shell_chaining(form, cmd):
+    allowed, _ = gate.decide(_bash(cmd), form, branch_lookup=lambda cwd: "gov/po-test")
+    assert not allowed, cmd
+
+
+@pytest.mark.parametrize("cmd", [
+    "gh issue view 4 -R o/r --json body,comments", "gh pr checks 109",
+    "git log --oneline -5", "git diff --stat", "python3 scripts/gov_session_transfer.py validate x.txt",
+    "gh issue comment 4 -R o/r --body-file note.txt",
+])
+def test_gate_allows_read_and_relay_commands_in_both_forms(cmd):
+    for form in ("delegated", "interactive"):
+        allowed, reason = gate.decide(_bash(cmd), form, branch_lookup=lambda cwd: "main")
+        assert allowed, (form, cmd, reason)
+
+
+def test_gate_delegated_never_edits_or_spawns():
+    for tool in ("Edit", "Write", "NotebookEdit"):
+        allowed, _ = gate.decide({"tool_name": tool, "tool_input": {"file_path": "project/backlog.json"}}, "delegated")
+        assert not allowed
+    allowed, _ = gate.decide({"tool_name": "Agent", "tool_input": {}}, "delegated")
+    assert not allowed
+    for cmd in ("git commit -m x", "git add .", "gh issue create --title x", "gh pr create"):
+        assert not gate.decide(_bash(cmd), "delegated", branch_lookup=lambda cwd: "gov/po-x")[0], cmd
+
+
+def test_gate_interactive_edits_governance_paths_only():
+    ok = {"tool_name": "Edit", "tool_input": {"file_path": str(ROOT / "project/backlog.json")}, "cwd": str(ROOT)}
+    bad = {"tool_name": "Edit", "tool_input": {"file_path": "console/app.py"}, "cwd": str(ROOT)}
+    assert gate.decide(ok, "interactive")[0]
+    assert not gate.decide(bad, "interactive")[0]
+    assert gate.decide({"tool_name": "Write", "tool_input": {"file_path": "docs/design/PRODUCT_DIRECTION_RECORD.md"}}, "interactive")[0]
+    assert not gate.decide({"tool_name": "Write", "tool_input": {"file_path": "docs/design/OTHER.md"}}, "interactive")[0]
+
+
+def test_gate_interactive_git_writes_only_on_gov_po_branch():
+    for cmd in ("git add project/backlog.json", "git commit -m x", "git push -u origin gov/po-x", "gh pr create --base main"):
+        assert gate.decide(_bash(cmd), "interactive", branch_lookup=lambda cwd: "gov/po-x")[0], cmd
+        assert not gate.decide(_bash(cmd), "interactive", branch_lookup=lambda cwd: "main")[0], cmd
+
+
+def test_gate_relay_comment_requires_marker_or_body_file():
+    assert not gate.decide(_bash('gh issue comment 4 -R o/r --body "hello"'), "delegated")[0]
+    assert gate.decide(_bash('gh issue comment 4 -R o/r --body "RELAY_NOTE review"'), "delegated")[0]
+
+
+def test_gate_cli_blocks_with_exit_2_and_logs_outside_repo(tmp_path, monkeypatch):
+    log = tmp_path / "hook.log"
+    env = {"NEXUS_PO_HOOK_LOG": str(log), "PATH": "/usr/bin:/bin"}
+    proc = subprocess.run([sys.executable, str(GATE), "--form", "delegated"],
+                          input=json.dumps(_bash("git push origin main")), capture_output=True,
+                          text=True, env=env, cwd=ROOT)
+    assert proc.returncode == 2
+    out = json.loads(proc.stdout)
+    assert out["hookSpecificOutput"]["permissionDecision"] == "deny"
+    entry = json.loads(log.read_text().strip().splitlines()[-1])
+    assert entry["decision"] == "deny" and entry["tool"] == "Bash"
+    assert not (ROOT / "nexus_po_hook.log").exists()

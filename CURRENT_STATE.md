@@ -5,9 +5,10 @@ see `AGENTS.md`/`AI_START_HERE.md`. **Predecessor build detail lives in
 `project/build_history.json`** (structured, newest-first) and its linked
 docs under `docs/history/`; `docs/history/INDEX.md` is the one-line timeline.
 
-- **Checkpoint:** 2026-09-07, `gov_po_1_role_migration_contract` —
-  **FROZEN contract, AUTOMATED_VALIDATED** governance build (see "Active
-  build"). Predecessor `M9` **AUTOMATED_VALIDATED, MERGED** via PR #104
+- **Checkpoint:** 2026-09-07, `gov_po_1_step_2_implementation` —
+  **AUTOMATED_VALIDATED** governance build installing the `GOV.PO.1` PO
+  assistant infrastructure (see "Active build"); contract build
+  `gov_po_1_role_migration_contract` **FROZEN**, PR #109 open. Predecessor `M9` **AUTOMATED_VALIDATED, MERGED** via PR #104
   (true merge `5fc88a21462eabb724f767f38a34ffd529eb008f`); PR #105–#108
   (relay/Git governance) all **MERGED**. `M8.4` **MERGED** PR #101.
   **PO §12:** `M8.3` deferred, `M7` blocked. `M8` **FROZEN 2026-09-06**.
@@ -50,16 +51,21 @@ test-enforced boundaries. Current numbers:
 | 4 — policy / deployment / remediation | prohibited | — |
 ## Active build
 
-**`gov_po_1_role_migration_contract`** (`GOV.PO.1`) — freezes
-`docs/design/GOV_PO_ROLE_MIGRATION.md` (**FROZEN — PO APPROVED 2026-09-07**):
-the Product Owner assistant role moves to a repository-defined, context-
-isolated Claude Code role (`nexus-po`) under human-only decision authority,
-with a ratified `PRODUCT_DIRECTION_RECORD.md`, four episode types, size
-planning targets, an isolation acceptance-test gate before delegated
-episodes, and one approved narrow session-lifecycle amendment for
-comment-only PO episodes (§5.1.3, not yet in `AGENTS.md`). **Contract only**
-— nothing installed; §10 steps 0–6 follow. Governance only; no product
-behavior changed. **AUTOMATED_VALIDATED.**
+**`gov_po_1_step_2_implementation`** (`GOV.PO.1` §10 step 2 + step 0) —
+installs the PO assistant infrastructure the frozen contract owes:
+`nexus-po` skill (interactive) and agent (delegated, Phase B-gated),
+`nexus-decision-council` skill + read-only `nexus-council-seat` agent,
+tracked role-scoped `.claude/nexus-po.settings.json` + `scripts/nexus_po_tool_gate.py`
+PreToolUse gate, `po-plan`/`po-review` prompts, `CLAUDE.md` delta, the
+approved §5.1.3 amendment verbatim in `AGENTS.md` and the relay contract,
+`tests/test_gov_po_role.py` (T7 + gate). Lands
+`docs/design/PRODUCT_DIRECTION_RECORD.md` as **DRAFT, not ratified**.
+Stacked on PR #109. **AUTOMATED_VALIDATED.** Phase A opens only after both
+PRs merge and a Product Owner `RELAY_DECISION` authorizes it; Phase B after
+step-6 isolation tests T1–T6 (all `NOT_RUN`).
+
+Predecessor — **`gov_po_1_role_migration_contract`** — contract **FROZEN —
+PO APPROVED 2026-09-07**, PR #109 open, relay #4. Governance only.
 
 Predecessor — **`m9_enrollment_preview_confirmation_ui`** (`M9`) —
 **AUTOMATED_VALIDATED, MERGED** via PR #104: local-loopback manual-endpoint

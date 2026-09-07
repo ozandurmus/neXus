@@ -2,8 +2,9 @@
 
 ## Status
 
-**FROZEN — PRODUCT OWNER APPROVED, 2026-09-07; QUESTION-ROUTING AND
-AUTHORIZED-EXECUTION AMENDMENTS APPROVED, 2026-09-07.** This contract governs the
+**FROZEN — PRODUCT OWNER APPROVED, 2026-09-07; QUESTION-ROUTING,
+AUTHORIZED-EXECUTION AND GOV.PO.1 (agent-published decision, episode-close
+note) AMENDMENTS APPROVED, 2026-09-07.** This contract governs the
 GitHub-issue relay used to move one bounded engineering movement between the
 Product Owner, Codex and Claude. It wraps, but does not modify, the frozen
 protocol-version-2 `NEXUS_SESSION_PACKET` contract in
@@ -26,6 +27,17 @@ authority. For relay recovery and interpretation, precedence is:
 Only the Product Owner may authoritatively issue `RELAY_DECISION`. An agent
 must treat a decision label written by anyone else as an invalid authority
 claim and stop before dependent implementation.
+
+A `RELAY_DECISION` may be **published by an agent on the Product Owner's
+behalf** only inside an authorization the Product Owner gave in writing with
+a stated scope (`docs/design/GOV_PO_ROLE_MIGRATION.md` §6.3, decisions
+D2–D4 and D12). Such a comment carries, directly after the marker line,
+`authorized_by: Product Owner — <source>`, `scope: <...>` and
+`supersedes: <...>`; it is authoritative because that line traces to a dated
+written Product Owner instruction, never because of the GitHub account that
+posted it. A decision comment lacking those lines, from any account, is an
+invalid authority claim. Recording an already-given authorization needs no
+second approval and must not broaden its scope.
 
 ## 2. Locator
 
@@ -86,6 +98,12 @@ English evidence or instruction. The marker meanings are closed:
 
 - `RELAY_ACK` — receipt and structural-validation result; never approval.
 - `RELAY_NOTE` — factual status or evidence; never a decision.
+  A `RELAY_NOTE episode close` is the closing record of a comment-only
+  Product Owner assistant episode (`AGENTS.md` "Mandatory session start /
+  close", comment-only episodes): plain text, not a packet, carrying no
+  authority, and never a substitute for `RELAY_DECISION`. It leaves the
+  one-`SESSION_START`-body / one-final-`SESSION_CLOSE`-comment shape of
+  §3 and the five markers unchanged.
 - `RELAY_QUESTION` — one material question that requires Product Owner input
   before dependent work can continue. It names the blocked action, the exact
   repository evidence or conflict, and the smallest set of options. Unrelated
