@@ -3,6 +3,22 @@
   "record_contract": "One structured record per build, newest first. Required: build, status, title, summary (<= 2 sentences). Optional: started, completed, track, movement, supersedes, evidence, risks_forward, docs{agreement,validation,handover} (repo-relative paths under docs/history/). Full detail lives in the linked doc; do not restate it here. Status vocabulary must stay within utils/project_plan.py STATUS_VALUES.",
   "builds": [
     {
+      "build": "gov_relay_1_question_routing",
+      "status": "automated_validated",
+      "title": "GOV.RELAY.1 amendment -- durable Product Owner question routing",
+      "summary": "Adds RELAY_QUESTION and a mandatory decision tree so every material question requiring Product Owner resolution is durable on the relay issue and closed only by a matching Product Owner RELAY_DECISION. Preserves NEXUS_SESSION_PACKET v2 and introduces no product, M9, device, UI, database, credential, deployment or production behavior.",
+      "started": "2026-09-07",
+      "completed": "2026-09-07",
+      "track": "GOV",
+      "movement": "IMPLEMENTATION",
+      "supersedes": null,
+      "evidence": "Dedicated governance branch gov-relay-1-question-routing from origin/main 2758341bf6b80194bd80210d6382593ee11a7c76. Amended the frozen relay contract and shared bootstrap/build prompts; added focused tests for durable question routing and matching Product Owner decisions. scripts/gov_session_transfer.py and Claude's M9 branch were not modified. Validation: relay/session-packet/architecture-convergence 150 passed; application-package/privacy tests 14 passed; repository privacy gate PASS with 0 findings; CURRENT_STATE.md 194 lines; build-history index check and git diff --check clean.",
+      "risks_forward": "Claude remains the sole M9 implementation owner. A material question may pause only its dependent action; unrelated authorized work continues.",
+      "docs": {
+        "agreement": "docs/design/NEXUS_AGENT_RELAY_PROTOCOL.md"
+      }
+    },
+    {
       "build": "gov_relay_1_canonical_agent_relay",
       "status": "automated_validated",
       "title": "GOV.RELAY.1 -- canonical GitHub-issue agent relay",

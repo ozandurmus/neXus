@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "current_build": "gov_relay_1_canonical_agent_relay",
+  "current_build": "gov_relay_1_question_routing",
   "current_track": "PCP.x",
   "progress_contract": "Weighted acceptance-criterion completion. Percentages describe the declared roadmap, not calendar time or delivery ETA.",
   "tracks": [
@@ -140,16 +140,16 @@
   "now_next": {
     "horizon_contract": "NOW is exactly one build. NEXT is exactly one. Everything else is an `upcoming` row carrying its own true status: planned = AFTER, blocked = waiting on a named external gate, deferred = consciously postponed. `now.build` must equal the newest project/build_history.json record -- utils.project_plan enforces it.",
     "now": {
-      "build": "gov_relay_1_canonical_agent_relay",
-      "title": "GOV.RELAY.1 -- canonical GitHub-issue agent relay",
-      "goal": "Freeze and implement the governance-only relay convention around the unchanged NEXUS_SESSION_PACKET v2 protocol, then repair relay #3 without changing Claude's M9 branch or any product behavior.",
+      "build": "gov_relay_1_question_routing",
+      "title": "GOV.RELAY.1 amendment -- durable Product Owner question routing",
+      "goal": "Require every material Product Owner question to be recorded as RELAY_QUESTION on the active relay and resolved by a matching Product Owner RELAY_DECISION.",
       "status": "automated_validated",
       "started": "2026-09-07",
       "completed": "2026-09-07",
       "notes": [
-        "Full detail: docs/design/NEXUS_AGENT_RELAY_PROTOCOL.md and project/build_history.json's gov_relay_1_canonical_agent_relay record.",
-        "Governance-only change; NEXUS_SESSION_PACKET v2 schema/parser and every product/M9 behavior remain unchanged.",
-        "PR #105 merged at 35e2fe883871f03cfbe4781edd1b48065a15d4c7; relay #3 repaired and stored M9 SESSION_START revalidated; Claude remains the M9 implementation owner."
+        "Full detail: docs/design/NEXUS_AGENT_RELAY_PROTOCOL.md and project/build_history.json's gov_relay_1_question_routing record.",
+        "Governance-only amendment; NEXUS_SESSION_PACKET v2 schema/parser and every product/M9 behavior remain unchanged.",
+        "Claude remains the sole M9 implementation owner; its branch and PR #104 are untouched."
       ]
     },
     "next": {
@@ -557,8 +557,8 @@
         "Ad hoc chat phrases and unconstrained issue comments"
       ],
       "recommendation": "Use the canonical governed relay contract so a locator cannot be mistaken for authority and malformed handoffs fail before implementation.",
-      "decision": "DECIDED -- RELAY_READY owner/repository#issue is locator-only; the issue body is exactly one validated SESSION_START packet; the final engineering comment is exactly one validated SESSION_CLOSE packet; intermediate comments use only RELAY_ACK, RELAY_NOTE, RELAY_DECISION or RELAY_CORRECTION; RELAY_START and RELAY_END are invalid; only the Product Owner may authoritatively issue RELAY_DECISION. The NEXUS_SESSION_PACKET v2 schema and parser are unchanged.",
-      "decide_by": "DECIDED 2026-09-07 at GOV.RELAY.1 freeze",
+      "decision": "DECIDED -- RELAY_READY owner/repository#issue is locator-only; the issue body is exactly one validated SESSION_START packet; the final engineering comment is exactly one validated SESSION_CLOSE packet; intermediate comments use only RELAY_ACK, RELAY_NOTE, RELAY_QUESTION, RELAY_DECISION or RELAY_CORRECTION; RELAY_START and RELAY_END are invalid; only the Product Owner may authoritatively issue RELAY_DECISION. Every material question requiring Product Owner resolution MUST be posted as RELAY_QUESTION on the active relay before its dependent action and remains open until a matching Product Owner RELAY_DECISION or higher repository authority resolves it; direct chat may explain but does not replace the durable question. The NEXUS_SESSION_PACKET v2 schema and parser are unchanged.",
+      "decide_by": "DECIDED 2026-09-07 at GOV.RELAY.1 freeze; question-routing amendment approved 2026-09-07",
       "decided_on": "2026-09-07"
     },
     {

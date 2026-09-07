@@ -5,9 +5,8 @@ see `AGENTS.md`/`AI_START_HERE.md`. **Predecessor build detail lives in
 `project/build_history.json`** (structured, newest-first) and its linked
 docs under `docs/history/`; `docs/history/INDEX.md` is the one-line timeline.
 
-- **Checkpoint:** 2026-09-07, `gov_relay_1_canonical_agent_relay` —
-  **AUTOMATED_VALIDATED, MERGED** via PR #105; relay #3 repaired. `M8.4`
-  **AUTOMATED_VALIDATED, MERGED** via PR #101.
+- **Checkpoint:** 2026-09-07, `gov_relay_1_question_routing` —
+  **AUTOMATED_VALIDATED** governance amendment; Claude remains M9 owner.
   **PO §12:** `M8.3`'s real-env validation stays deferred; `M7` stays
   blocked. `M8` architecture **FROZEN — PO APPROVED, 2026-09-06**.
 - **Next** (`now_next.next`): `m8_3_real_environment_validation`, `deferred`
@@ -50,19 +49,14 @@ test-enforced boundaries. Current numbers:
 | 4 — policy / deployment / remediation | prohibited | — |
 ## Active build
 
-**`gov_relay_1_canonical_agent_relay`** (`GOV.RELAY.1`) — canonical relay
-governance around unchanged packet v2; one shared bootstrap. **AUTOMATED_VALIDATED**;
-**MERGED** via PR #105; relay #3 repaired. No product/M9 behavior changed.
-Predecessor — **`m8_evidence_host_key_fingerprint_not_persisted`** — `_collect_host`
-captured a live SSH host-key fingerprint but never persisted it into
-governed physical CP config evidence's `extra_metadata`, so `M8.4`'s
-trust-currency check (frozen `M8` §7) could never pass against real `M8.3`
-evidence. Added `"host_key_fingerprint": key_fp` to the physical-host
-`write_text_snapshot(...)` call only — VSX evidence unchanged.
-**AUTOMATED_VALIDATED, MERGED** to `main` — branch
-`m8-evidence-host-key-fingerprint-not-persisted`, PR #103, Product Owner
-approved 2026-09-07. Full evidence: `project/build_history.json`.
-
+**`gov_relay_1_question_routing`** (`GOV.RELAY.1` amendment) — adds
+`RELAY_QUESTION` and a mandatory decision tree: every material question that
+requires Product Owner resolution is durable on the active relay and closes
+only through a matching Product Owner `RELAY_DECISION`. **AUTOMATED_VALIDATED**;
+governance-only, with packet v2 and all M9/product behavior unchanged.
+Predecessor — **`gov_relay_1_canonical_agent_relay`** — **AUTOMATED_VALIDATED,
+MERGED** via PR #105; relay #3 repaired. Full evidence:
+`project/build_history.json`.
 Predecessor — **`gov_session_1_unified_packet`** (`GOV.SESSION.1A`) —
 **FROZEN, MERGED 2026-09-07** (PR #102): one canonical protocol-v2
 `NEXUS_SESSION_PACKET` replacing `GOV.SESSION.1`'s split close
