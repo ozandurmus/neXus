@@ -22,9 +22,16 @@ class JobType:
     label: str
     command_class: str            # legacy wire/persistence value: "read" | "operational-write"
     workflow: str                 # feeds workflow_argv(), or an explicit read mode name
-    target_mode: str              # "none" | "entity_ids" | "device_ids" (M6)
+    target_mode: str              # "none" | "entity_ids" | "device_ids" (M6) | "raw_endpoint" (M9)
     vendor: str | None
     requires_confirmation: bool
+    #: M9 -- which POST route may submit this job type. Every existing entry
+    #: defaults to the generic job API (unchanged behavior); the one M9
+    #: identity-probe entry is "enrollment_probe_api" only, so `POST
+    #: /api/jobs` can explicitly refuse it (400) if ever submitted there,
+    #: keeping that route's "never an address" invariant intact even though
+    #: this one job type's `target_mode` carries a raw endpoint.
+    console_reachable_via: str = "generic_jobs_api"
 
     @property
     def action_class(self) -> ActionClass:
@@ -110,6 +117,28 @@ JOB_REGISTRY: dict[str, JobType] = {
             target_mode="entity_ids",
             vendor="checkpoint",
             requires_confirmation=True,
+        ),
+        # M9 (LOCAL_CONTROL_PLANE_RUNTIME_AND_ENROLLMENT.md §9.1 condition 10 /
+        # AC-EN-4): the pre-registration identity probe. CLASS 0 read, so it
+        # is console-submittable with zero new taxonomy code -- but it is not
+        # a scheduler workflow (`workflow` is never added to
+        # ALLOWLISTED_WORKFLOWS) and it carries no vendor/collector CLI argv
+        # at all: `console/runner.py::_execute` dispatches it directly to
+        # `utils.pre_enrollment_identity_probe` via
+        # `utils.collection_executor.execute_admitted_collection`, bypassing
+        # `_build_argv`/`main.main()` entirely (condition 5, "no command/argv
+        # input of any kind" -- there is no argv to construct). Only
+        # `POST /api/enrollment/probe` may submit it (`console_reachable_via`);
+        # the generic `POST /api/jobs` route refuses it explicitly.
+        JobType(
+            id="device_enrollment_identity_probe",
+            label="Probe device identity (pre-enrollment)",
+            command_class="read",
+            workflow="device-enrollment-identity-probe",
+            target_mode="raw_endpoint",
+            vendor=None,
+            requires_confirmation=False,
+            console_reachable_via="enrollment_probe_api",
         ),
     )
 }

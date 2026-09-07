@@ -588,13 +588,17 @@ _CONSOLE_JOB_SCHEMA = (
         coordinator_decision TEXT,
         outcome_counts_json JSONB,
         error_code         TEXT,
-        error_summary      TEXT
+        error_summary      TEXT,
+        preview_json       JSONB
     )
     """,
     "CREATE UNIQUE INDEX IF NOT EXISTS console_job_idempotency_idx "
     "ON console_job (idempotency_key)",
     "CREATE INDEX IF NOT EXISTS console_job_requested_at_idx "
     "ON console_job (requested_at DESC)",
+    # M9: additive column for an already-provisioned table (the CREATE TABLE
+    # above only fires for a brand-new one). Idempotent, safe to re-run.
+    "ALTER TABLE console_job ADD COLUMN IF NOT EXISTS preview_json JSONB",
 )
 
 class ConsoleJobBackend(abc.ABC):
@@ -726,7 +730,7 @@ class PostgresConsoleJobBackend(ConsoleJobBackend):
     def _row_to_record(self, row) -> dict[str, Any]:
         (job_id, idempotency_key, job_type, command_class, targets, state,
          requested_at, started_at, finished_at, run_id, coordinator_decision,
-         outcome_counts, error_code, error_summary) = row
+         outcome_counts, error_code, error_summary, preview) = row
         return {
             "job_id": job_id,
             "idempotency_key": idempotency_key,
@@ -742,6 +746,7 @@ class PostgresConsoleJobBackend(ConsoleJobBackend):
             "outcome_counts": outcome_counts,
             "error_code": error_code,
             "error_summary": error_summary,
+            "preview": preview,
         }
 
     def create(self, job: dict[str, Any]) -> None:
@@ -756,8 +761,9 @@ class PostgresConsoleJobBackend(ConsoleJobBackend):
                         INSERT INTO console_job (
                             job_id, idempotency_key, job_type, command_class, targets_json,
                             state, requested_at, started_at, finished_at, run_id,
-                            coordinator_decision, outcome_counts_json, error_code, error_summary
-                        ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                            coordinator_decision, outcome_counts_json, error_code, error_summary,
+                            preview_json
+                        ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                         """,
                         (
                             job["job_id"], job["idempotency_key"], job["job_type"], job["command_class"],
@@ -766,6 +772,7 @@ class PostgresConsoleJobBackend(ConsoleJobBackend):
                             job.get("coordinator_decision"),
                             Jsonb(job["outcome_counts"]) if job.get("outcome_counts") is not None else None,
                             job.get("error_code"), job.get("error_summary"),
+                            Jsonb(job["preview"]) if job.get("preview") is not None else None,
                         ),
                     )
         except UniqueViolation as exc:
@@ -783,7 +790,7 @@ class PostgresConsoleJobBackend(ConsoleJobBackend):
             "state": "state", "requested_at": "requested_at", "started_at": "started_at",
             "finished_at": "finished_at", "run_id": "run_id",
             "coordinator_decision": "coordinator_decision", "outcome_counts": "outcome_counts_json",
-            "error_code": "error_code", "error_summary": "error_summary",
+            "error_code": "error_code", "error_summary": "error_summary", "preview": "preview_json",
         }
         sets, values = [], []
         for key, value in fields.items():
@@ -793,7 +800,7 @@ class PostgresConsoleJobBackend(ConsoleJobBackend):
             sets.append(f"{column} = %s")
             if key in ("requested_at", "started_at", "finished_at"):
                 values.append(_parse_dt(value))
-            elif key in ("targets", "outcome_counts"):
+            elif key in ("targets", "outcome_counts", "preview"):
                 values.append(Jsonb(value) if value is not None else None)
             else:
                 values.append(value)
@@ -863,7 +870,7 @@ class PostgresConsoleJobBackend(ConsoleJobBackend):
 _CONSOLE_JOB_FIELDS_SQL = (
     "job_id", "idempotency_key", "job_type", "command_class", "targets_json", "state",
     "requested_at", "started_at", "finished_at", "run_id", "coordinator_decision",
-    "outcome_counts_json", "error_code", "error_summary",
+    "outcome_counts_json", "error_code", "error_summary", "preview_json",
 )
 
 # 4. Scheduler state backend
@@ -1380,6 +1387,81 @@ class FilesystemDeviceRegistryBackend(DeviceRegistryBackend):
 
 
 # ---------------------------------------------------------------------------
+# M9 -- enrollment audit records (tenth concern)
+# ---------------------------------------------------------------------------
+#
+# One immutable JSON file per audit record, mirroring ActionRecordBackend's
+# shape exactly: `create` only, never `update` -- a record here is never
+# rewritten once written (condition 14, "immutable audit record"). Endpoint
+# and opaque credential-profile/trust-profile references are legitimate
+# fields here (the same category of data `utils/device_registry.py` already
+# persists) -- this store deliberately lives beside the PCP.1 Device
+# Registry's filesystem-JSON world, not inside `utils/control_plane_store.py`,
+# whose own contract forbids exactly this data ("copied endpoints",
+# "Device Registry rows" -- see that module's docstring, §6.4/AC-ST-3).
+# Filesystem only, matching `DeviceRegistryBackend`'s own posture: the
+# concern this audits has no PostgreSQL implementation either
+# (pcp_storage_engine is still an open decision).
+
+class EnrollmentAuditBackend(abc.ABC):
+    @abc.abstractmethod
+    def create(self, record: dict[str, Any]) -> None:
+        """Insert a new, immutable record keyed by its own ``audit_id``. A
+        duplicate ``audit_id`` raises ``EvidenceBackendError`` -- there is no
+        update path, so a collision is always a caller bug, never a race to
+        resolve by overwriting."""
+
+    @abc.abstractmethod
+    def get(self, audit_id: str) -> dict[str, Any] | None:
+        ...
+
+    @abc.abstractmethod
+    def list_all(self) -> list[dict[str, Any]]:
+        ...
+
+
+class FilesystemEnrollmentAuditBackend(EnrollmentAuditBackend):
+    """One JSON file per ``audit_id`` under ``<root>/``."""
+
+    def __init__(self, root: Path) -> None:
+        self.root = Path(root)
+
+    def _record_path(self, audit_id: str) -> Path:
+        return self.root / f"{_safe_component(audit_id)}.json"
+
+    def create(self, record: dict[str, Any]) -> None:
+        self.root.mkdir(parents=True, exist_ok=True)
+        path = self._record_path(record["audit_id"])
+        if path.exists():
+            raise EvidenceBackendError(f"enrollment audit record already recorded: {record['audit_id']!r}")
+        _write_json_atomic(path, record)
+
+    def get(self, audit_id: str) -> dict[str, Any] | None:
+        path = self._record_path(audit_id)
+        if not path.exists():
+            return None
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+            return None
+
+    def list_all(self) -> list[dict[str, Any]]:
+        if not self.root.exists():
+            return []
+        records: list[dict[str, Any]] = []
+        for child in self.root.iterdir():
+            if not child.is_file() or child.suffix != ".json":
+                continue
+            try:
+                record = json.loads(child.read_text(encoding="utf-8"))
+            except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+                continue
+            if isinstance(record, dict):
+                records.append(record)
+        return records
+
+
+# ---------------------------------------------------------------------------
 # Backend selection
 # ---------------------------------------------------------------------------
 
@@ -1509,6 +1591,18 @@ def select_device_registry_backend(*, path: Path) -> DeviceRegistryBackend:
     if kind not in ("filesystem", ""):
         raise EvidenceBackendError(f"Unsupported {ENV_BACKEND}: {kind!r}")
     return FilesystemDeviceRegistryBackend(path)
+
+
+def select_enrollment_audit_backend(*, root: Path) -> EnrollmentAuditBackend:
+    kind = active_evidence_backend_kind()
+    if kind == "postgres":
+        raise EvidenceBackendError(
+            f"{ENV_BACKEND}=postgres has no EnrollmentAuditBackend implementation "
+            "(pcp_storage_engine is still an open decision) -- use the filesystem default"
+        )
+    if kind not in ("filesystem", ""):
+        raise EvidenceBackendError(f"Unsupported {ENV_BACKEND}: {kind!r}")
+    return FilesystemEnrollmentAuditBackend(root)
 
 
 def select_control_plane_metadata_backend(*, data_root: Path) -> Any:

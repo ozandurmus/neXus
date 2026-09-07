@@ -1728,7 +1728,7 @@
         },
         {
           "id": "no_enrollment_affordance",
-          "label": "'Add Device' is a declared contextual action of the devices domain, is no root, and renders nowhere while pcp_console_registry_write_gate is open -- FROZEN: Add Device is never a root; location decided (PO-NAV-1); nothing renders until M9 implements the section 9.1 conditions",
+          "label": "Movement M9 (2026-09-07) implemented manual-endpoint enrollment: 'Add Device' now renders in the Inventory/entity-list pane header (PO-NAV-1 primary location) and all seventeen section 9.1 conditions are enforced server-side (closed schema, no device I/O in the request, first contact as a separate queued CLASS 0 job, positive-evidence identity, explicit preview and confirmation, immutable audit before the DeviceRegistry mutation, loopback-only). Candidate-based enrollment is schema-present but refused server-side pending M10's registry<->evidence reconciliation join (section 9.2 amendment A6). The Administration -> Device Management second entry point (PO-NAV-1's lifecycle home) is not yet built -- deferred as a disclosed follow-up, not silently dropped.",
           "state": "done",
           "weight": 1
         },
