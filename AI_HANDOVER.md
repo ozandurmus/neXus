@@ -8,23 +8,23 @@
 ## 1. Snapshot
 
 - Date: 2026-09-07. `m9_enrollment_preview_confirmation_ui` (`M9`) —
-  **AUTOMATED_VALIDATED (rounds 1+2)**. Branch
-  `m9-enrollment-preview-confirmation-ui`, PR #104
-  **APPROVED_FOR_HUMAN_TRUE_MERGE** by explicit Product Owner `RELAY_DECISION`
-  at head `d7290f6d5d8ccd5f016b55e1c21703948d29ab54` (waiver granted for two
-  pre-existing, unrelated DLP-scanner failures at that exact head). Round 1
-  shipped manual-endpoint enrollment; a Product Owner corrective review
-  (relay `ozandurmus/nexus-agent-relay#3`) found six gaps, two resolved by
-  explicit `RELAY_DECISION` and four corrected directly (see §2). A second
-  Product Owner validation review then required the mandatory render
-  harness and a full regression to actually run (not just be disclosed as
-  environment-blocked) before a merge decision — both now run for real
-  (§4). Predecessors `gov_relay_1_canonical_agent_relay` (PR #105/#106),
+  **AUTOMATED_VALIDATED, MERGED** to `main` via PR #104, true merge commit
+  `5fc88a21462eabb724f767f38a34ffd529eb008f`, explicit Product Owner
+  `RELAY_DECISION` (waiver granted for two pre-existing, unrelated
+  DLP-scanner failures at the approved head; the merge itself executed by
+  Claude under `AGENTS.md` "Git authority and execution law", PR #108 —
+  explicit Product Owner authorization, not a manual-click requirement).
+  Round 1 shipped manual-endpoint enrollment; a Product Owner corrective
+  review (relay `ozandurmus/nexus-agent-relay#3`) found six gaps, two
+  resolved by explicit `RELAY_DECISION` and four corrected directly (see
+  §2). A second Product Owner validation review then required the
+  mandatory render harness and a full regression to actually run before a
+  merge decision — both run for real (§4). Predecessors
+  `gov_relay_1_canonical_agent_relay` (PR #105/#106),
   `gov_relay_1_question_routing` (PR #107, adds `RELAY_QUESTION`), and
-  `gov_git_authority_reconciliation` (PR #108, clarifies Corporate Git as
-  Product-Owner-authorization-controlled, not a manual-click mandate) —
-  all **AUTOMATED_VALIDATED, MERGED**. Claude is the sole M9 implementation
-  owner; Codex owned only the completed governance movements.
+  `gov_git_authority_reconciliation` (PR #108) — all **AUTOMATED_VALIDATED,
+  MERGED**. Claude was the sole M9 implementation owner; Codex owned only
+  the completed governance movements.
 - Predecessor `m8_evidence_host_key_fingerprint_not_persisted` —
   **AUTOMATED_VALIDATED, MERGED** via PR #103. `M8.4` **AUTOMATED_VALIDATED,
   MERGED** via PR #101. `M8.3` stays deferred, `M7` stays blocked.
@@ -105,15 +105,12 @@ updated for round 1's shipped UI — fixed to reflect actual current reality.
 
 ## 3. Exact next action
 
-PR #104 is approved for true merge at head `d7290f6`; the true merge itself
-is the next action, authorized under `AGENTS.md` "Git authority and
-execution law" (PR #108) -- explicit Product Owner authorization is
-sufficient for the agent to execute and verify it, not a manual-click
-requirement. The two pre-existing, unrelated `.venv`/`venv` DLP-scanner
-false positives found by the full regression (see §4) received a narrow,
-evidence-specific waiver at that exact head; they are explicitly NOT to be
-fixed in this PR (Product Owner `RELAY_DECISION`) — file as a separate
-bounded build.
+None for M9 — merged and closed. Two follow-ups recorded elsewhere, neither
+assigned to a session yet: (1) file and fix the `.venv`/`venv`
+DLP-scanner-exclusion gap as its own bounded build (explicitly kept out of
+M9 per Product Owner decision); (2) `m8_3_real_environment_validation`
+remains the roadmap's own `now_next.next`, still deferred per §12,
+unaffected by M9's out-of-order completion.
 
 ## 4. Test delta
 

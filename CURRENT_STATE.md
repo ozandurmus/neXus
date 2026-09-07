@@ -6,8 +6,8 @@ see `AGENTS.md`/`AI_START_HERE.md`. **Predecessor build detail lives in
 docs under `docs/history/`; `docs/history/INDEX.md` is the one-line timeline.
 
 - **Checkpoint:** 2026-09-07, `m9_enrollment_preview_confirmation_ui` — see
-  "Active build". **AUTOMATED_VALIDATED** (rounds 1+2), PR #104
-  `APPROVED_FOR_HUMAN_TRUE_MERGE`, relay `ozandurmus/nexus-agent-relay#3`.
+  "Active build". **AUTOMATED_VALIDATED, MERGED** via PR #104, true merge
+  commit `5fc88a21462eabb724f767f38a34ffd529eb008f`, Product Owner approved.
   Predecessors PR #105/#106 + #107 + #108 (relay/Git governance) all
   **AUTOMATED_VALIDATED**. `M8.4` **MERGED** PR #101. **PO §12:** `M8.3`
   deferred, `M7` blocked. `M8` **FROZEN 2026-09-06**.
@@ -62,8 +62,9 @@ M9-only); four corrected directly (`credential_profile_ref` sentinel, atomic
 confirmation, the dialog test, `PO-NAV-1`'s Administration entry point).
 Render harness run for real (Node self-installed) + full regression run
 (2359 passed; 2 pre-existing, unrelated `.venv` DLP false positives, waived
-at the approved head). **AUTOMATED_VALIDATED**, PR #104
-`APPROVED_FOR_HUMAN_TRUE_MERGE`. Full evidence: `project/build_history.json`.
+at the approved head). **AUTOMATED_VALIDATED, MERGED** via PR #104, true
+merge `5fc88a21462eabb724f767f38a34ffd529eb008f`. Full evidence:
+`project/build_history.json`.
 
 Predecessors, all **AUTOMATED_VALIDATED**, governance-only (packet v2 and
 M9/product behavior unchanged): `gov_git_authority_reconciliation` (PR #108)
