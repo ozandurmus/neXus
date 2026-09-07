@@ -15,7 +15,10 @@ hierarchy"): `docs/design/PRODUCT_CONTROL_PLANE_ARCHITECTURE.md` §21
 (names `M8` as the trust-establishment movement, no new credential/network
 path). `GOV.SESSION.1` is unrelated and untouched.
 
-Produced by a bounded `nexus-decision-council` synthesis, then corrected
+Produced by a bounded `nexus-decision-council` synthesis (at the time, no
+such skill was installed: single-author structured self-critique, per the
+disclosure pattern in `CAPABILITY_STATE_VOCABULARY_AND_PRESENTATION.md` §10;
+the installed skill of GOV.PO.1 post-dates this record), then corrected
 across two PO architecture-review rounds using direct repository evidence
 only (council not re-invoked for either round) and compacted into this
 normative form for the freeze. **Round-by-round correction narrative is not
