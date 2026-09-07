@@ -148,7 +148,7 @@
       "completed": "2026-09-07",
       "notes": [
         "Full detail (evidence, tests, validation): project/build_history.json's m8_evidence_host_key_fingerprint_not_persisted record.",
-        "Branch m8-evidence-host-key-fingerprint-not-persisted, PR opened against main and left unmerged pending Product Owner review, per this movement's merge_gate.",
+        "Branch m8-evidence-host-key-fingerprint-not-persisted, PR #103 opened against main and left unmerged pending Product Owner review, per this movement's merge_gate.",
         "M8.3 real-environment validation stays deferred; M7 stays blocked -- neither changed by this fix."
       ]
     },
