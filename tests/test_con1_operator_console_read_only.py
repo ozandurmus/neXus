@@ -76,13 +76,18 @@ def test_ac2_no_route_exposes_a_mutating_method(console_client):
     """CON.2 (docs/history/phase/CON_2_CONSOLE_JOB_ENGINE_READ_ACTIONS.md,
     AC-2) deliberately adds exactly one mutating route, ``POST /api/jobs``
     — every other route stays GET/HEAD only, and CON.2 job creation is
-    itself gated to read-class job types only (C2-6)."""
+    itself gated to read-class job types only (C2-6). M9 adds exactly two
+    more, deliberately: ``POST /api/enrollment/probe`` (queues a read-only
+    identity probe, contacts no device) and ``POST /api/registry/enrollments``
+    (the one enrollment confirm+persist path, gated by its own closed schema,
+    preview binding and audit-before-mutation ordering)."""
     client, _ = console_client
+    post_only_routes = {"/api/jobs", "/api/enrollment/probe", "/api/registry/enrollments"}
     for route in client.app.routes:
         methods = getattr(route, "methods", None)
         if methods is None:
             continue
-        if route.path == "/api/jobs" and "POST" in methods:
+        if route.path in post_only_routes and "POST" in methods:
             assert methods <= {"GET", "HEAD", "POST"}, f"{route.path} exposes {methods}"
             continue
         assert methods <= {"GET", "HEAD"}, f"{route.path} exposes {methods}"
