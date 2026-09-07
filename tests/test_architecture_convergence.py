@@ -304,6 +304,24 @@ def test_agents_md_encodes_evidence_identity_and_readiness_distinctions():
     assert "Readiness != authorization" in text
 
 
+def test_agent_relay_governance_has_one_shared_bootstrap_and_required_pointers():
+    """GOV.RELAY.1 is one shared protocol, not tool-specific relay folklore."""
+    contract = ROOT / "docs" / "design" / "NEXUS_AGENT_RELAY_PROTOCOL.md"
+    bootstrap = ROOT / ".github" / "prompts" / "relay-bootstrap.prompt.md"
+    assert contract.is_file()
+    assert bootstrap.is_file()
+    for relative in (
+        "AGENTS.md",
+        "AI_START_HERE.md",
+        "CLAUDE.md",
+        ".github/copilot-instructions.md",
+        ".github/prompts/build-start.prompt.md",
+        ".github/prompts/build-close.prompt.md",
+    ):
+        text = (ROOT / relative).read_text(encoding="utf-8")
+        assert ".github/prompts/relay-bootstrap.prompt.md" in text, relative
+
+
 # --- Draft-authority machine gate (OP.0b.0 STATE_UPDATE, DEV.4 follow-up) ---
 #
 # AGENTS.md "Authority hierarchy" item 2 and "Contract-status law" both say, in

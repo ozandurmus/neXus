@@ -241,6 +241,11 @@ the report, not a pointer to one held elsewhere; `refs` stays reference
 only. This does not change the schema content above, only how it is
 transported when a packet is the chosen medium.
 
+When that transport uses the GitHub-issue agent relay, follow the frozen
+`docs/design/NEXUS_AGENT_RELAY_PROTOCOL.md` and the single shared bootstrap
+prompt `.github/prompts/relay-bootstrap.prompt.md`. `RELAY_READY` is only a
+locator; it never carries authority.
+
 Movement types: `READ_ONLY_AUDIT`, `ARCHITECTURE`, `IMPLEMENTATION`,
 `VALIDATION`, `ROOT_CAUSE`, `UI`, `DOCS`, `RELEASE_HANDOVER`.
 
