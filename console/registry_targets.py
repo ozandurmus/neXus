@@ -46,7 +46,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from utils.config_evidence import ConfigEvidenceStore, resolve_evidence_reference
+from utils.config_evidence import (
+    GOVERNED_PHYSICAL_CP_EVIDENCE_ARTIFACT_TYPE,
+    GOVERNED_PHYSICAL_CP_EVIDENCE_SOURCE,
+    ConfigEvidenceStore,
+    resolve_evidence_reference,
+)
 from utils.control_plane_store import ControlPlaneStore, ControlPlaneStoreError
 from utils.cp_ssh_trust import lookup_trusted_host_key
 from utils.device_identity_relationships import (
@@ -138,6 +143,14 @@ def _identity_resolved(record: DeviceRecord, *, store: ControlPlaneStore) -> boo
     6. the relationship's `producing_run_ref` still resolves to a successful
        CP config evidence snapshot belonging to this same physical
        `entity_id`;
+    6a. (PO correction round 1) that resolved snapshot's own `source` and
+        `artifact_type` are exactly the governed physical Check Point
+        provenance the frozen `M8` contract requires --
+        `GOVERNED_PHYSICAL_CP_EVIDENCE_SOURCE` /
+        `GOVERNED_PHYSICAL_CP_EVIDENCE_ARTIFACT_TYPE`
+        (`utils.config_evidence`, the one `utils/` boundary shared with the
+        `M8.3` writer) -- never any other source or artifact type, however
+        well the `entity_id` and fingerprint otherwise line up;
     7. that evidence's own captured host-key fingerprint is still among the
        endpoint's currently trusted fingerprints.
 
@@ -166,6 +179,15 @@ def _identity_resolved(record: DeviceRecord, *, store: ControlPlaneStore) -> boo
     if evidence is None:
         return False
     if str(evidence.get("entity_id") or "") != relationship.entity_id:
+        return False
+
+    # PO correction round 1: fail closed unless the resolved snapshot is
+    # exactly the governed physical Check Point evidence M8 requires -- a
+    # matching entity_id/fingerprint alone is not provenance. Never any
+    # other source or artifact_type, whatever else lines up.
+    if str(evidence.get("source") or "") != GOVERNED_PHYSICAL_CP_EVIDENCE_SOURCE:
+        return False
+    if str(evidence.get("artifact_type") or "") != GOVERNED_PHYSICAL_CP_EVIDENCE_ARTIFACT_TYPE:
         return False
 
     # Trust-currency cross-check (contract §7): the fingerprint the producing

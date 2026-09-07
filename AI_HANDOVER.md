@@ -15,7 +15,8 @@ Overwrite at every session close. Keep it minimal.
 
 - Date: 2026-09-07. `M8.4` — **AUTOMATED_VALIDATED**, branch
   `claude/m8-4-m6-resolver-consumption-nh0260`, created from `origin/main`
-  at `ef43d59` (the merged `M8.3`). PR not yet opened.
+  at `ef43d59` (the merged `M8.3`). PR #101 OPEN, NOT MERGED (correction
+  round 1 applied; merge decision BLOCKED pending renewed PO review).
 - Build: `m8_4_m6_resolver_consumption` (`M8.4`) — `status:
   automated_validated`.
 - Contract: `docs/history/phase/M8_FIRST_CONTACT_TRUST_AND_IDENTITY_EVIDENCE_PRODUCER_ARCHITECTURE.md`
