@@ -7,7 +7,8 @@ docs under `docs/history/`; `docs/history/INDEX.md` is the one-line timeline.
 
 - **Checkpoint:** 2026-09-07, `M8.4` `M6` resolver consumption
   (`m8_4_m6_resolver_consumption`) **AUTOMATED_VALIDATED** (branch
-  `claude/m8-4-m6-resolver-consumption-nh0260`, PR not yet opened; see
+  `claude/m8-4-m6-resolver-consumption-nh0260`, PR #101 OPEN, NOT MERGED,
+  correction round 1 applied, merge BLOCKED pending renewed PO review; see
   "Active build"). `M8.3` merged via PR #100 (`ef43d59`). **PO sequencing
   amendment (contract §12):** `M8.3`'s real-env validation is deferred to
   backlog (stays `AUTOMATED_VALIDATED`, never `REAL_ENV_VALIDATED`/`DONE`
@@ -57,21 +58,19 @@ test-enforced boundaries. Current numbers:
 ## Active build
 
 **`m8_4_m6_resolver_consumption`** (`M8.4`) — **AUTOMATED_VALIDATED,
-2026-09-07**, branch `claude/m8-4-m6-resolver-consumption-nh0260`, PR not
-yet opened. Extends `console/registry_targets.py` (contract §7): a known+
+2026-09-07**, branch `claude/m8-4-m6-resolver-consumption-nh0260`, PR #101
+OPEN, NOT MERGED, correction round 1 applied, merge BLOCKED pending renewed
+PO review. Extends `console/registry_targets.py` (contract §7): a known+
 eligible `config_refresh_cp` `device_id` stops refusing with
 `IDENTITY_TRANSLATION_REQUIRED` only once a proven `M8.1` relationship
-exists AND registry/identity-derivation/trust/evidence currency all hold —
-checked identically at admission and pre-execution, before any
-credential/device operation. New `RELATIONSHIP_STORE_UNAVAILABLE` outcome;
-new shared `utils/config_evidence.py::build_evidence_reference`/
-`resolve_evidence_reference`; `IDENTITY_DERIVATION_CONTRACT_VERSION` moved
-to `utils/device_identity_relationships.py`. Deliberately does **not**
-implement `M7` — no wiring substitutes a resolved `entity_id` into a
-collector command. **Finding, reported not patched:** `_collect_host` never
-persists a host-key fingerprint into CP config evidence metadata, so the
-trust-currency check fails closed for every real relationship today
-(`project/backlog.json`: `m8_evidence_host_key_fingerprint_not_persisted`).
+exists AND registry/identity-derivation/trust/evidence currency all hold,
+now also pinned to the governed physical CP evidence `source`/
+`artifact_type` (`utils/config_evidence.py`'s `GOVERNED_PHYSICAL_CP_
+EVIDENCE_*` constants; `resolve_evidence_reference` also fixed to parse by
+first/last `:`, correction round 1). Deliberately does **not** implement
+`M7`. **Finding, reported not patched:** `_collect_host` never persists a
+host-key fingerprint into CP config evidence metadata, so the
+trust-currency check fails closed today (`m8_evidence_host_key_fingerprint_not_persisted`).
 Full evidence: `project/build_history.json`.
 
 Parent — **`m8_first_contact_trust_identity_evidence_producer_architecture`**

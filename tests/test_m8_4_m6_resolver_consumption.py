@@ -34,7 +34,7 @@ from console.registry_targets import (
     UNKNOWN_DEVICE_ID,
     resolve_registry_targets,
 )
-from utils.config_evidence import ConfigEvidenceStore, build_evidence_reference
+from utils.config_evidence import ConfigEvidenceStore, build_evidence_reference, resolve_evidence_reference
 from utils.control_plane_store import ControlPlaneStore, store_path
 from utils.cp_ssh_trust import host_key_fingerprint
 from utils.device_identity_relationships import (
@@ -92,15 +92,18 @@ def _bump_updated_at(data_root: Path, device_id: str) -> None:
     path.write_text(json.dumps(document), encoding="utf-8")
 
 
-def _write_evidence(tmp_path: Path, *, entity_id: str, fingerprint: str | None) -> str:
+def _write_evidence(
+    tmp_path: Path, *, entity_id: str, fingerprint: str | None,
+    source: str = _SOURCE, artifact_type: str = _ARTIFACT_TYPE,
+) -> str:
     store = ConfigEvidenceStore(root=tmp_path / "configs")
     extra = {"host_key_fingerprint": fingerprint} if fingerprint else {}
     snapshot = store.write_text_snapshot(
-        source=_SOURCE, entity_id=entity_id, artifact_type=_ARTIFACT_TYPE,
+        source=source, entity_id=entity_id, artifact_type=artifact_type,
         content="set hostname test\n", method="test-fixture",
         artifact_name="gaia-show-configuration.redacted.txt", extra_metadata=extra,
     )
-    return build_evidence_reference(source=_SOURCE, entity_id=entity_id, snapshot_id=snapshot.directory.name)
+    return build_evidence_reference(source=source, entity_id=entity_id, snapshot_id=snapshot.directory.name)
 
 
 def _trust(tmp_path: Path, monkeypatch, *, endpoint: str) -> str:
@@ -283,6 +286,145 @@ class TestCurrencyFailuresFoldToIdentityTranslationRequired:
         refusal = resolve_registry_targets((device_id,), data_root=tmp_path)
         assert refusal is not None
         assert refusal.reason == IDENTITY_TRANSLATION_REQUIRED
+
+
+# ---------------------------------------------------------------------------
+# Evidence provenance is closed (PO correction round 1): a matching
+# entity_id/fingerprint alone is not proof -- the resolved snapshot must be
+# exactly the governed physical Check Point evidence M8 requires.
+# ---------------------------------------------------------------------------
+
+class TestEvidenceProvenanceIsClosed:
+    def test_governed_physical_cp_evidence_resolves(self, tmp_path, monkeypatch):
+        """The exact frozen provenance (source + artifact type) resolves --
+        this is the same shape `_fully_resolved` already writes, pinned here
+        explicitly against the shared canonical constants so a future drift
+        in either producer or consumer constant is caught."""
+        from utils.config_evidence import (
+            GOVERNED_PHYSICAL_CP_EVIDENCE_ARTIFACT_TYPE,
+            GOVERNED_PHYSICAL_CP_EVIDENCE_SOURCE,
+        )
+        assert _SOURCE == GOVERNED_PHYSICAL_CP_EVIDENCE_SOURCE
+        assert _ARTIFACT_TYPE == GOVERNED_PHYSICAL_CP_EVIDENCE_ARTIFACT_TYPE
+        device_id = _fully_resolved(tmp_path, monkeypatch, endpoint="192.0.2.92")
+        assert resolve_registry_targets((device_id,), data_root=tmp_path) is None
+
+    def test_different_source_fails_closed(self, tmp_path, monkeypatch):
+        endpoint = "192.0.2.93"
+        device_id = _enroll(tmp_path, endpoint=endpoint)
+        record = _device_record(tmp_path, device_id)
+        fingerprint = _trust(tmp_path, monkeypatch, endpoint=endpoint)
+        monkeypatch.setattr(
+            registry_targets, "ConfigEvidenceStore", lambda: ConfigEvidenceStore(root=tmp_path / "configs")
+        )
+        ref = _write_evidence(
+            tmp_path, entity_id=_ENTITY_ID, fingerprint=fingerprint,
+            source="panorama",  # a real evidence source, just never the governed one
+        )
+        _proof(tmp_path, device_id=device_id, entity_id=_ENTITY_ID, producing_run_ref=ref,
+               registry_record_revision=record.updated_at)
+
+        refusal = resolve_registry_targets((device_id,), data_root=tmp_path)
+        assert refusal is not None
+        assert refusal.reason == IDENTITY_TRANSLATION_REQUIRED
+
+    def test_different_artifact_type_fails_closed(self, tmp_path, monkeypatch):
+        endpoint = "192.0.2.94"
+        device_id = _enroll(tmp_path, endpoint=endpoint)
+        record = _device_record(tmp_path, device_id)
+        fingerprint = _trust(tmp_path, monkeypatch, endpoint=endpoint)
+        monkeypatch.setattr(
+            registry_targets, "ConfigEvidenceStore", lambda: ConfigEvidenceStore(root=tmp_path / "configs")
+        )
+        ref = _write_evidence(
+            tmp_path, entity_id=_ENTITY_ID, fingerprint=fingerprint,
+            artifact_type="gaia_vsx_context_show_configuration_redacted",  # a real, but non-physical, type
+        )
+        _proof(tmp_path, device_id=device_id, entity_id=_ENTITY_ID, producing_run_ref=ref,
+               registry_record_revision=record.updated_at)
+
+        refusal = resolve_registry_targets((device_id,), data_root=tmp_path)
+        assert refusal is not None
+        assert refusal.reason == IDENTITY_TRANSLATION_REQUIRED
+
+    def test_neither_provenance_refusal_discloses_a_sensitive_value(self, tmp_path, monkeypatch):
+        endpoint = "192.0.2.95"
+        device_id = _enroll(tmp_path, endpoint=endpoint)
+        record = _device_record(tmp_path, device_id)
+        fingerprint = _trust(tmp_path, monkeypatch, endpoint=endpoint)
+        monkeypatch.setattr(
+            registry_targets, "ConfigEvidenceStore", lambda: ConfigEvidenceStore(root=tmp_path / "configs")
+        )
+        for source, artifact_type in (
+            ("panorama", _ARTIFACT_TYPE),
+            (_SOURCE, "gaia_vsx_context_show_configuration_redacted"),
+        ):
+            ref = _write_evidence(
+                tmp_path, entity_id=_ENTITY_ID, fingerprint=fingerprint,
+                source=source, artifact_type=artifact_type,
+            )
+            _proof(tmp_path, device_id=device_id, entity_id=_ENTITY_ID, producing_run_ref=ref,
+                   registry_record_revision=record.updated_at)
+            refusal = resolve_registry_targets((device_id,), data_root=tmp_path)
+            assert refusal is not None
+            for sensitive in (endpoint, fingerprint, _ENTITY_ID, source, artifact_type, ref):
+                assert sensitive not in refusal.detail
+                assert sensitive not in refusal.reason
+
+
+# ---------------------------------------------------------------------------
+# Opaque entity_id parsing (PO correction round 1): an opaque physical
+# entity_id containing embedded ':' characters must round-trip through
+# build_evidence_reference -> resolve_evidence_reference unchanged --
+# parsing by a fixed split(":", 2) count would misparse it.
+# ---------------------------------------------------------------------------
+
+class TestOpaqueEntityIdRoundTrip:
+    _ENTITY_ID_WITH_COLONS = "AA:BB:CC:DD:EE:FF"
+
+    def test_entity_id_containing_colons_resolves_to_the_exact_same_snapshot(self, tmp_path):
+        store = ConfigEvidenceStore(root=tmp_path / "configs")
+        snapshot = store.write_text_snapshot(
+            source=_SOURCE, entity_id=self._ENTITY_ID_WITH_COLONS, artifact_type=_ARTIFACT_TYPE,
+            content="set hostname test\n", method="test-fixture",
+            artifact_name="gaia-show-configuration.redacted.txt",
+        )
+        reference = build_evidence_reference(
+            source=_SOURCE, entity_id=self._ENTITY_ID_WITH_COLONS, snapshot_id=snapshot.directory.name,
+        )
+        resolved = resolve_evidence_reference(store, reference)
+        assert resolved is not None
+        assert resolved["entity_id"] == self._ENTITY_ID_WITH_COLONS
+
+    def test_exact_opaque_entity_id_reaches_the_backend_lookup_unchanged(self, tmp_path, monkeypatch):
+        store = ConfigEvidenceStore(root=tmp_path / "configs")
+        store.write_text_snapshot(
+            source=_SOURCE, entity_id=self._ENTITY_ID_WITH_COLONS, artifact_type=_ARTIFACT_TYPE,
+            content="set hostname test\n", method="test-fixture",
+            artifact_name="gaia-show-configuration.redacted.txt",
+        )
+        reference = build_evidence_reference(
+            source=_SOURCE, entity_id=self._ENTITY_ID_WITH_COLONS, snapshot_id="ignored",
+        )
+        seen: dict = {}
+        real_list_snapshots = store.backend.list_snapshots
+
+        def _spy(*, source, entity_id):
+            seen["source"], seen["entity_id"] = source, entity_id
+            return real_list_snapshots(source=source, entity_id=entity_id)
+
+        monkeypatch.setattr(store.backend, "list_snapshots", _spy)
+        resolve_evidence_reference(store, reference)
+        assert seen["entity_id"] == self._ENTITY_ID_WITH_COLONS
+        assert seen["source"] == _SOURCE
+
+    def test_via_the_m8_4_resolver_end_to_end(self, tmp_path, monkeypatch):
+        """The same opaque-colon entity_id, exercised through the full
+        `console/registry_targets.py` M8.4 currency check, still resolves --
+        not just the standalone `resolve_evidence_reference` helper."""
+        device_id = _fully_resolved(tmp_path, monkeypatch, endpoint="192.0.2.96",
+                                     entity_id=self._ENTITY_ID_WITH_COLONS)
+        assert resolve_registry_targets((device_id,), data_root=tmp_path) is None
 
 
 # ---------------------------------------------------------------------------
