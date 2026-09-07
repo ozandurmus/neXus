@@ -21,8 +21,23 @@ Forms (docs/design/GOV_PO_ROLE_MIGRATION.md section 4 and 6.2):
                  collection, no shell redirection.
   interactive -- Phase A session: the delegated set plus Edit/Write on the
                  governance paths or the nexus_po_* scratch pattern, `gh
-                 issue create`, and Git branch/commit/push/PR only on a
-                 `gov/po-*` branch.
+                 issue create`, Git branch/commit/push/PR only on a
+                 `gov/po-*` branch, and `git merge origin/<ref>` to sync
+                 that branch with a fix landed on `origin/main` or another
+                 `origin/*` ref (merge source restricted to `origin/`;
+                 no arbitrary remote or URL is ever reachable, since
+                 `git remote add` is not allowlisted).
+
+Self-sync capability (GOV_PO_1_GATE_2 correction, 2026-09-08): a fix landed
+on `origin/main` (or pushed directly to a `gov/po-*` branch, as happened for
+this episode) previously had no way to reach a PO episode's own already-
+checked-out working tree -- `git fetch` updates the remote-tracking ref,
+never the working tree, and `git merge`/`git pull` were not allowlisted, so
+neither the agent nor a human relaying its exact commands could self-serve
+the sync; it required a separate engineer session touching the shared
+directory by hand. `git merge origin/<ref>` is now allowed, restricted to
+the `origin/` remote-tracking namespace so no arbitrary remote or URL is
+reachable (`git remote add` stays unavailable).
 
 Command-safety design (GOV_PO_1_GATE_1 correction, 2026-09-08): the original
 implementation banned the literal substrings "<", ">", ";", "|" etc.
@@ -105,6 +120,7 @@ INTERACTIVE_EXTRA_PREFIXES = (
     "gh issue create", "gh pr create",
     "git checkout -b gov/po-", "git switch -c gov/po-",
     "git add ", "git commit", "git push",
+    "git merge origin/", "git merge --ff-only origin/",
     "python3 scripts/build_history_index.py", "py scripts/build_history_index.py",
     ".venv/bin/python scripts/build_history_index.py",
 )
