@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "current_build": "gov_po_1_gate_2_self_sync_capability",
+  "current_build": "gov_po_1_step_5_first_plan_episode",
   "current_track": "PCP.x",
   "progress_contract": "Weighted acceptance-criterion completion. Percentages describe the declared roadmap, not calendar time or delivery ETA.",
   "tracks": [
@@ -140,25 +140,28 @@
   "now_next": {
     "horizon_contract": "NOW is exactly one build. NEXT is exactly one. Everything else is an `upcoming` row carrying its own true status: planned = AFTER, blocked = waiting on a named external gate, deferred = consciously postponed. `now.build` must equal the newest project/build_history.json record -- utils.project_plan enforces it.",
     "now": {
-      "build": "gov_po_1_gate_2_self_sync_capability",
-      "title": "GOV_PO_1_GATE_2 -- allow git merge origin/<ref> for PO branch self-sync",
-      "goal": "Add a narrow, origin-restricted git merge capability to the interactive PO gate so a landed fix on origin/main or a pushed branch can reach an already-checked-out PO episode's working tree without an engineer touching the shared directory by hand.",
+      "build": "gov_po_1_step_5_first_plan_episode",
+      "title": "GOV.PO.1 step 5 -- first Phase A PLAN episode (sequencing, backlog re-rank, drift verification)",
+      "goal": "Replace the deferred m8_3_real_environment_validation in now_next.next with a genuinely actionable movement, re-rank the backlog by theme, file the .venv DLP scanner debt, and verify the two PRODUCT_DIRECTION_RECORD.md section 11 state drifts against source.",
       "status": "automated_validated",
       "started": "2026-09-08",
       "completed": "2026-09-08",
       "notes": [
-        "Full detail: project/build_history.json's gov_po_1_gate_2_self_sync_capability record.",
-        "Independent of gov_po_1_step_5_first_plan_episode (PR #113, branch gov/po-1-step-5-first-plan) -- that branch was already manually synced twice before this landed; whichever PR merges second reconciles now_next.now with the other's, per the established pattern.",
-        "Governance/tooling only; no product source, device, UI or credential behavior changed."
+        "Full detail: project/build_history.json's gov_po_1_step_5_first_plan_episode record.",
+        "Governance only; no product behavior, device-write or production authorization is granted. M8.3 stays deferred and M7 stays blocked -- unchanged by this episode. The two verified drifts are REPORTED, not fixed here (project/backlog.json: project_state_wording_drift_reconciliation).",
+        "This episode merged second, so it reconciles now_next.now per the pattern the two concurrent gate movements recorded: gov_po_1_gate_1_command_safety_correction (PR #114) and gov_po_1_gate_2_self_sync_capability (PR #115) both remain in build_history below this record, with their own relay issues #8 and #9."
       ]
     },
     "next": {
-      "build": "m8_3_real_environment_validation",
-      "title": "M8.3 real-environment validation (deferred, PO decision §12)",
-      "status": "deferred",
+      "build": "m10_1_registry_evidence_reconciliation_projection",
+      "title": "M10.1 -- registry <-> evidence reconciliation projection (D4 producer)",
+      "status": "planned",
       "notes": [
-        "The one bounded, read-only --identity-first-contact command against a real device_id, PO-authorized; also measures real CP config evidence-retention duration. Gates M7, not M8.4 (already shipped ahead of it per §12).",
-        "project/backlog.json / project/roadmap.json now_next.upcoming carries the same entry as status=deferred -- this is a label of the queued next item, not an instruction to start it in this session."
+        "Chosen by the first Phase A PLAN episode (2026-09-08) as the one actionable NEXT, replacing the deferred M8.3 row that previously occupied this slot against the horizon contract's own 'NEXT is exactly one actionable build' meaning (PRODUCT_DIRECTION_RECORD.md section 6, section 11 and section 12 question 1).",
+        "First slice of M10. The frozen M10 scope is far larger than the GOV.PO.1 section 7 targets -- CAPABILITY_STATE_VOCABULARY_AND_PRESENTATION.md assigns M10 roughly fifty acceptance criteria -- so it is sliced at PLAN time under the M8.1-M8.4 precedent; the contract document stays one and no criterion is merged or omitted.",
+        "Why D4 first: it is the only M10 dimension that is solely M10-owned (AC-CS-3), it is the dependency PRODUCT_DIRECTION_RECORD.md section 6 names for M9's still-refused candidate-id enrollment (LOCAL_CONTROL_PLANE_RUNTIME_AND_ENROLLMENT.md section 9.2 amendment A6), its contract is fully frozen and finite (five values, entity-scoped, derived, persists nothing new, joined on the canonical id only), and it is a pure CLASS 0 derivation over two already-shipped unchanged sources.",
+        "Explicitly NOT in this slice: lifting M9's candidate-enrollment server refusal (a write-boundary change with its own gate); the capability-state resolver, its stages and result algebra; the D2/D3/D5/D6/D7 producers; any UI, navigation, payload or report change; the left_vertical_product_navigation availability_rule criterion state.",
+        "Prerequisite M6 is complete. No external gate: no device contact, no credential, no server, no sign-off. Recommended tier: Sonnet 5, normal -- deterministic implementation against a frozen contract."
       ]
     },
     "upcoming": [
@@ -168,7 +171,43 @@
         "status": "deferred",
         "notes": [
           "Deferred to backlog by explicit Product Owner decision, 2026-09-07 (contract section 12 amendment; project/backlog.json: m8_3_real_environment_validation). No new code. Executes the one bounded, read-only command M8.3 prepared but did not run (`py main.py --identity-first-contact <device_id>`) against exactly one Product-Owner-named registry device_id, under explicit authorization -- corporate laptop / controlled environment, matching AI_START_HERE.md 'Real-environment procedure'.",
-          "Measures the actually observable CP config evidence-retention lower bound/window (frozen M8 contract §6/§9) -- report UNKNOWN/INSUFFICIENT_EVIDENCE if it cannot be established from the real run, never inferred -- which determines whether CONTRADICTORY_EVIDENCE detection can ever be judged buildable. Closes M8.3 toward REAL_ENV_VALIDATED/DONE. M7 stays blocked until this step produces a genuinely real-environment-validated relationship -- no automated fixture or synthetic relationship may ever satisfy that gate, and M8.4's own AUTOMATED_VALIDATED, MERGED completion does not change this."
+          "Measures the actually observable CP config evidence-retention lower bound/window (frozen M8 contract §6/§9) -- report UNKNOWN/INSUFFICIENT_EVIDENCE if it cannot be established from the real run, never inferred -- which determines whether CONTRADICTORY_EVIDENCE detection can ever be judged buildable. Closes M8.3 toward REAL_ENV_VALIDATED/DONE. M7 stays blocked until this step produces a genuinely real-environment-validated relationship -- no automated fixture or synthetic relationship may ever satisfy that gate, and M8.4's own AUTOMATED_VALIDATED, MERGED completion does not change this.",
+          "2026-09-08, first Phase A PLAN episode: this row LEFT now_next.next and stays here as retained deferred debt, per PRODUCT_DIRECTION_RECORD.md DR-9c (a deferred human validation is tracked durably while independent authorized work continues) and section 6's finding that a deferred row is not an executable NEXT. Nothing about its own status, authorization or gate changed: it is still deferred by the explicit Product Owner decision of 2026-09-07, it still requires an explicitly authorized bounded real-environment run, and it still gates M7. Choosing M10.1 as NEXT does not pay this debt and must never be described as having done so."
+        ]
+      },
+      {
+        "build": "m10_2_capability_state_resolver_core",
+        "title": "M10.2 -- capability-state resolver core (stage 0, result algebra, primary ladder)",
+        "status": "planned",
+        "notes": [
+          "Second M10 slice, sequenced by the first Phase A PLAN episode 2026-09-08. Not authorized; needs its own SESSION_START. Consumes M10.1's D4 producer plus declared inputs for the dimensions whose producers do not exist yet.",
+          "Scope sketch only: stage-0 surface resolution and the OMITTED/RESOLVED union tag, the CapabilityState nine-value vocabulary, and the primary ladder with its fail-closed fallbacks. Authority: docs/design/CAPABILITY_STATE_VOCABULARY_AND_PRESENTATION.md sections 4 and 5 (FROZEN 2026-09-06). Sizing to the GOV.PO.1 section 7 targets is a PLAN decision for the episode that opens it, after M10.1's REVIEW."
+        ]
+      },
+      {
+        "build": "m10_3_entity_and_vendor_support_producers",
+        "title": "M10.3 -- D2 entity applicability and D3 vendor/platform support producers",
+        "status": "planned",
+        "notes": [
+          "Third M10 slice, sequenced 2026-09-08. Not authorized. Positive-evidence vendor support only -- CAPABILITY_STATE_VOCABULARY_AND_PRESENTATION.md section 7.3 governs what may never prove capability support.",
+          "Together with M10.1 and M10.2 this is what finally lets project/feature_registry.json's left_vertical_product_navigation availability_rule criterion move off 'pending'; that criterion state is owned by the slice that actually delivers the predicates, never by this planning row."
+        ]
+      },
+      {
+        "build": "M11",
+        "title": "M11 -- shared entity workspace context",
+        "status": "planned",
+        "notes": [
+          "One selected entity across modules (navigation contract §6.3). Prerequisite M10. Default remains a separate movement from M10 per LOCAL_CONTROL_PLANE_RUNTIME_AND_ENROLLMENT.md §12.1; they may be re-evaluated together only if capability projection and shared workspace context cannot be separated safely."
+        ]
+      },
+      {
+        "build": "M12",
+        "title": "M12 -- per-device / per-capability schedules (D5 producer)",
+        "status": "planned",
+        "notes": [
+          "Prerequisites M7 and M10; M7 is blocked on M8.3's real-environment evidence, so M12 inherits that block and is not reachable before the deferred debt is paid. Owns the D5 capability-policy producer that CAPABILITY_STATE_VOCABULARY_AND_PRESENTATION.md keeps at POLICY_UNKNOWN today.",
+          "Constraints already frozen: a ten-minute interval floor, default-disabled, editing gated on C-D7; D5 is never derived from LifecycleState.EXCLUDED, Device Registry DISABLED, or the global scheduler flag."
         ]
       },
       {
