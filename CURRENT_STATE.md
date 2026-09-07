@@ -5,12 +5,12 @@ see `AGENTS.md`/`AI_START_HERE.md`. **Predecessor build detail lives in
 `project/build_history.json`** (structured, newest-first) and its linked
 docs under `docs/history/`; `docs/history/INDEX.md` is the one-line timeline.
 
-- **Checkpoint:** 2026-09-07, `m9_enrollment_preview_confirmation_ui` — see
-  "Active build". **AUTOMATED_VALIDATED, MERGED** via PR #104, true merge
-  commit `5fc88a21462eabb724f767f38a34ffd529eb008f`, Product Owner approved.
-  Predecessors PR #105/#106 + #107 + #108 (relay/Git governance) all
-  **AUTOMATED_VALIDATED**. `M8.4` **MERGED** PR #101. **PO §12:** `M8.3`
-  deferred, `M7` blocked. `M8` **FROZEN 2026-09-06**.
+- **Checkpoint:** 2026-09-07, `gov_po_1_role_migration_contract` —
+  **FROZEN contract, AUTOMATED_VALIDATED** governance build (see "Active
+  build"). Predecessor `M9` **AUTOMATED_VALIDATED, MERGED** via PR #104
+  (true merge `5fc88a21462eabb724f767f38a34ffd529eb008f`); PR #105–#108
+  (relay/Git governance) all **MERGED**. `M8.4` **MERGED** PR #101.
+  **PO §12:** `M8.3` deferred, `M7` blocked. `M8` **FROZEN 2026-09-06**.
 - **Next** (`now_next.next`): `m8_3_real_environment_validation`, `deferred`
   per §12, unchanged by M9's out-of-order run. `m7_real_device_targeted_collect_now`/
   `op2_c_cp_clusterxl_adapter_scoping` stay `upcoming`/`blocked`.
@@ -50,28 +50,27 @@ test-enforced boundaries. Current numbers:
 | 4 — policy / deployment / remediation | prohibited | — |
 ## Active build
 
-**`m9_enrollment_preview_confirmation_ui`** (`M9`) — local-loopback
-manual-endpoint enrollment via a pre-registration identity probe, a
-`CLASS 0` admission-coordinator job (not `main.main()`), an immutable audit
-trail beside the Device Registry (not `control_plane_store.py`, which
-forbids endpoint data), and routes through the one `DeviceRegistry.enroll`.
-Round 1 shipped manual-endpoint only (PR #104 opened). PO corrective review
-(relay `#3`) found six gaps; two needed a `RELAY_DECISION` (candidate-id
-deferred per `§9.2 A6`/`M10`; the `runner.py` probe exception authorized,
-M9-only); four corrected directly (`credential_profile_ref` sentinel, atomic
-confirmation, the dialog test, `PO-NAV-1`'s Administration entry point).
-Render harness run for real (Node self-installed) + full regression run
-(2359 passed; 2 pre-existing, unrelated `.venv` DLP false positives, waived
-at the approved head). **AUTOMATED_VALIDATED, MERGED** via PR #104, true
-merge `5fc88a21462eabb724f767f38a34ffd529eb008f`. Full evidence:
-`project/build_history.json`.
+**`gov_po_1_role_migration_contract`** (`GOV.PO.1`) — freezes
+`docs/design/GOV_PO_ROLE_MIGRATION.md` (**FROZEN — PO APPROVED 2026-09-07**):
+the Product Owner assistant role moves to a repository-defined, context-
+isolated Claude Code role (`nexus-po`) under human-only decision authority,
+with a ratified `PRODUCT_DIRECTION_RECORD.md`, four episode types, size
+planning targets, an isolation acceptance-test gate before delegated
+episodes, and one approved narrow session-lifecycle amendment for
+comment-only PO episodes (§5.1.3, not yet in `AGENTS.md`). **Contract only**
+— nothing installed; §10 steps 0–6 follow. Governance only; no product
+behavior changed. **AUTOMATED_VALIDATED.**
 
-Predecessors, all **AUTOMATED_VALIDATED**, governance-only (packet v2 and
-M9/product behavior unchanged): `gov_git_authority_reconciliation` (PR #108)
-clarifies Corporate Git as Product-Owner-authorization-controlled, not a
-manual-click mandate; `gov_relay_1_question_routing` (PR #107) adds
-`RELAY_QUESTION`; `gov_relay_1_canonical_agent_relay` (PR #105/#106) is the
-relay contract itself.
+Predecessor — **`m9_enrollment_preview_confirmation_ui`** (`M9`) —
+**AUTOMATED_VALIDATED, MERGED** via PR #104: local-loopback manual-endpoint
+enrollment (pre-registration identity probe, preview, explicit
+confirmation, immutable audit, one `DeviceRegistry.enroll` path), two
+corrective rounds closed on relay #3; candidate-id enrollment deferred to
+`M10`. Full evidence: `project/build_history.json`.
+
+Predecessors, all **AUTOMATED_VALIDATED, MERGED**, governance-only:
+`gov_git_authority_reconciliation` (PR #108), `gov_relay_1_question_routing`
+(PR #107), `gov_relay_1_canonical_agent_relay` (PR #105/#106).
 
 Predecessor — **`m8_evidence_host_key_fingerprint_not_persisted`** —
 **AUTOMATED_VALIDATED, MERGED** via PR #103, 2026-09-07: persisted
