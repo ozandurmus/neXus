@@ -6,10 +6,11 @@ see `AGENTS.md`/`AI_START_HERE.md`. **Predecessor build detail lives in
 docs under `docs/history/`; `docs/history/INDEX.md` is the one-line timeline.
 
 - **Checkpoint:** 2026-09-07, `m9_enrollment_preview_confirmation_ui` — see
-  "Active build". **AUTOMATED_VALIDATED**, PR not yet opened (pending PO
-  go-ahead), relay `ozandurmus/nexus-agent-relay#3`. `M8.4`
-  **AUTOMATED_VALIDATED, MERGED** via PR #101. **PO §12:** `M8.3` deferred,
-  `M7` blocked, unchanged by M9. `M8` **FROZEN — PO APPROVED, 2026-09-06**.
+  "Active build". **IN_PROGRESS** (round 2, corrective), PR #104 open/
+  unmerged, relay `ozandurmus/nexus-agent-relay#3`. Predecessor
+  `gov_relay_1_canonical_agent_relay` **AUTOMATED_VALIDATED, MERGED** PR
+  #105, relay #3 repaired. `M8.4` **MERGED** PR #101. **PO §12:** `M8.3`
+  deferred, `M7` blocked, unchanged by M9. `M8` **FROZEN 2026-09-06**.
 - **Next** (`now_next.next`): `m8_3_real_environment_validation`, `deferred`
   per §12, unchanged by M9's out-of-order run. `m7_real_device_targeted_collect_now`/
   `op2_c_cp_clusterxl_adapter_scoping` stay `upcoming`/`blocked`.
@@ -47,22 +48,25 @@ test-enforced boundaries. Current numbers:
 | 2 — operational state change (failover) | **no member exists**; architecture frozen (`OP.2.0`), not implemented | hard-gated, `FAILOVER_ENGINE_ARCHITECTURE.md` §10/§10.1/§10.2 |
 | 3 — configuration write | prohibited | — |
 | 4 — policy / deployment / remediation | prohibited | — |
-
 ## Active build
 
-**`m9_enrollment_preview_confirmation_ui`** (`M9`) — local-loopback
-manual-endpoint enrollment: a new pre-registration identity probe (distinct
-from `M8.3`'s producer, which needs an already-registered `device_id`), a
-`CLASS 0` job run through the admission coordinator (not `main.main()`), a
-new immutable audit trail beside the Device Registry (not
-`utils/control_plane_store.py` — that store forbids endpoint data), and
-three routes persisting through the one existing `DeviceRegistry.enroll`.
-Candidate-based enrollment is schema-present but refused pending `M10`'s
-reconciliation join (`§9.2 A6`). UI: one "Add device" dialog in the
-Inventory pane; the Administration second `PO-NAV-1` entry point is **not**
-built this slice. **AUTOMATED_VALIDATED** (164 passed, live-Playwright
-render/dialog click-through, Python 3.12 installed mid-session) — PR not
-opened yet. Full evidence: `project/build_history.json`.
+**`m9_enrollment_preview_confirmation_ui`** (`M9`) — local-loopback manual
++ closed candidate-id enrollment via a pre-registration identity probe, a
+`CLASS 0` admission-coordinator job (not `main.main()`), an immutable audit
+trail beside the Device Registry (not `control_plane_store.py`, which
+forbids endpoint data), and routes through the one `DeviceRegistry.enroll`.
+Round 1 (PR #104 opened) shipped manual-endpoint only. PO corrective review
+(relay `#3`) found real gaps: candidate-id not implemented, an unverified
+new pre-enrollment network/credential path, profile refs not selecting the
+executed source, a non-atomic confirmation-consume check, no UI fixture/
+render-harness coverage, missing Administration `PO-NAV-1` entry point —
+round 2 (corrective) **IN_PROGRESS**. Full evidence:
+`project/build_history.json`.
+
+Predecessor — **`gov_relay_1_canonical_agent_relay`** (`GOV.RELAY.1`) —
+canonical relay governance around unchanged packet v2; one shared
+bootstrap. **AUTOMATED_VALIDATED, MERGED** via PR #105; relay #3 repaired.
+No product/M9 behavior changed.
 
 Predecessor — **`m8_evidence_host_key_fingerprint_not_persisted`** —
 **AUTOMATED_VALIDATED, MERGED** via PR #103, 2026-09-07: persisted
@@ -95,7 +99,6 @@ Predecessors, all **AUTOMATED_VALIDATED**, all merged: **`M8.3`** (PR #100
 (fail-closed admission shell, now extended by `M8.4` above).
 
 ## Predecessor — `M5`/`M4`
-
 **`collector_target_selection_seam`** (`M5`) — COMPLETE/AUTOMATED_VALIDATED,
 merged via PR #94: promoted `--cp-config-targets` into `workflow_argv()`;
 `M6` is the only thing since changed `config_refresh_cp.target_mode`.
@@ -104,7 +107,6 @@ additive local SQLite control-plane metadata store (seven `STRICT` tables).
 Detail: `docs/history/phase/M4_LOCAL_CONTROL_PLANE_METADATA_STORE.md`.
 
 ## Predecessor — `M3`
-
 **`nav_3_capability_state_vocabulary`** — COMPLETE / FROZEN (PO approved
 2026-09-06). `docs/design/CAPABILITY_STATE_VOCABULARY_AND_PRESENTATION.md` is
 implementation authority for the vocabulary/resolution/presentation matrix
@@ -112,7 +114,6 @@ implementation authority for the vocabulary/resolution/presentation matrix
 per-entity `D5`/`M12`), so every capability resolves `UNKNOWN` until then.
 
 ## `OP.0b.0` — FROZEN WITH REAL-ENV VALIDATION GATES
-
 `docs/history/phase/OP_0B_0_VENDOR_FAILOVER_PREFLIGHT_EVIDENCE_SURFACE.md`
 is implementation authority for the bounded S0–S9 slice sequence it defines
 — citable for command/schema/identity-model *interpretation*, but **still
@@ -129,7 +130,6 @@ permanently, both vendors. `D-V8` remains open, non-blocking. Full
 reasoning: `project/roadmap.json` `open_decisions`.
 
 ## PAN HA serial evidence
-
 The approved real PAN pair's S0 result: one member's `self_identity_
 consistent`/`runtime_peer_serial_state` are `MATCH`, the other's both
 `MISMATCH`. **B2 bidirectional corroboration: NOT ESTABLISHED**, root cause
@@ -177,9 +177,9 @@ Concurrency budget stays at 1 per vendor pending its own real-env evidence.
 ## Automated test baseline
 
 ```
-M9 (this build): 164 passed/1 skipped/0 failed (targeted); sweep 43 passed.
+M9 round 1: 164 passed/1 skipped/0 failed (targeted); sweep 43 passed.
   Live-Playwright render + dialog click-through passed, 0 console errors.
-  node/bun render-harness (check-render.mjs) still not run.
+  node/bun render-harness (check-render.mjs) still not run. Round 2 pending.
 M8.4: targeted 23 passed. Affected sweep 440 passed, 1 skipped, 0 failed.
 Earlier predecessor build detail lives only in project/build_history.json.
 ```

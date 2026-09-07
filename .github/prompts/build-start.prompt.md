@@ -26,3 +26,7 @@ sentinel-wrapped protocol-version-2 packet per
 `docs/design/GOV_SESSION_TRANSFER_PROTOCOL.md` — the packet's `report`
 object carries the complete content above, field by field; no narrative
 outside the sentinel pair.
+
+If the boundary is identified by `RELAY_READY owner/repository#issue`, first
+follow `.github/prompts/relay-bootstrap.prompt.md`; do not treat the locator as
+the start instruction.

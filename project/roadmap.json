@@ -142,18 +142,17 @@
     "now": {
       "build": "m9_enrollment_preview_confirmation_ui",
       "title": "M9 -- local-loopback enrollment preview + explicit confirmation UI",
-      "goal": "Implement docs/design/LOCAL_CONTROL_PLANE_RUNTIME_AND_ENROLLMENT.md §9.1's seventeen mandatory conditions for manual-endpoint console enrollment, per the PO-authorized SESSION_START (relay ozandurmus/nexus-agent-relay#3): a pre-registration identity probe, preview, explicit confirmation, immutable audit-before-mutation, and persistence through the one existing DeviceRegistry path. Candidate-based enrollment stays schema-present but refused pending M10.",
-      "status": "automated_validated",
+      "goal": "Implement docs/design/LOCAL_CONTROL_PLANE_RUNTIME_AND_ENROLLMENT.md §9.1's seventeen mandatory conditions for manual-endpoint and closed candidate-id console enrollment, per the PO-authorized SESSION_START (relay ozandurmus/nexus-agent-relay#3, revalidated after a GOV.RELAY.1 correction round): a pre-registration identity probe, preview, explicit confirmation, immutable audit-before-mutation, and persistence through the one existing DeviceRegistry path.",
+      "status": "in_progress",
       "started": "2026-09-07",
       "notes": [
         "Full detail: project/build_history.json's m9_enrollment_preview_confirmation_ui record.",
-        "164 tests passed (0 failed) against a real Python 3.12 environment installed mid-session; broader convergence/privacy/application-package sweep also green (43 passed). Live-Playwright console render walk passed (real Chromium, zero console errors).",
-        "Still not run: the node/bun-based render-harness check and a tests/fixtures/uitest/ extension for the new dialog/module.",
-        "Administration -> Device Management second PO-NAV-1 entry point not built this slice.",
+        "Round 1: 164 tests passed against a real Python 3.12 environment; broader convergence/privacy/application-package sweep also green (43 passed). Live-Playwright console render walk passed (real Chromium, zero console errors). PR #104 opened.",
+        "Product Owner corrective review (relay #3) found real gaps: candidate-id enrollment not actually implemented, a new pre-enrollment network/credential path needing re-verification against the existing M8 path, profile references not selecting the executed credential/trust source, a non-atomic confirmation-consumption check, no UI fixture/render-harness coverage, and the Administration -> Device Management second PO-NAV-1 entry point still missing. Round 2 (corrective) now in progress.",
+        "GOV.RELAY.1 -- canonical GitHub-issue agent relay -- completed and merged via PR #105 as a governance-only predecessor movement (see project/build_history.json's gov_relay_1_canonical_agent_relay record); it changed no product/M9 behavior.",
         "M8.3 real-environment validation stays deferred; M7 stays blocked -- neither changed by this build.",
-        "PR not opened yet -- pending explicit Product Owner go-ahead to push (Git push/merge is a standing human-approval boundary)."
-      ],
-      "completed": "2026-09-07"
+        "PR #104 open, unmerged, pending explicit Product Owner integration decision (Git push/merge is a standing human-approval boundary)."
+      ]
     },
     "next": {
       "build": "m8_3_real_environment_validation",
@@ -550,6 +549,20 @@
     }
   ],
   "open_decisions": [
+    {
+      "id": "gov_relay_1_protocol",
+      "area": "Agent session governance",
+      "status": "decided",
+      "question": "What is the canonical GitHub-issue relay convention for Codex/Claude movement handoffs?",
+      "options": [
+        "A locator plus canonical issue-body/final-comment packets and a closed intermediate-comment vocabulary",
+        "Ad hoc chat phrases and unconstrained issue comments"
+      ],
+      "recommendation": "Use the canonical governed relay contract so a locator cannot be mistaken for authority and malformed handoffs fail before implementation.",
+      "decision": "DECIDED -- RELAY_READY owner/repository#issue is locator-only; the issue body is exactly one validated SESSION_START packet; the final engineering comment is exactly one validated SESSION_CLOSE packet; intermediate comments use only RELAY_ACK, RELAY_NOTE, RELAY_DECISION or RELAY_CORRECTION; RELAY_START and RELAY_END are invalid; only the Product Owner may authoritatively issue RELAY_DECISION. The NEXUS_SESSION_PACKET v2 schema and parser are unchanged.",
+      "decide_by": "DECIDED 2026-09-07 at GOV.RELAY.1 freeze",
+      "decided_on": "2026-09-07"
+    },
     {
       "id": "op_track_id",
       "area": "OP.x Controlled Failover",

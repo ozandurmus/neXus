@@ -159,6 +159,11 @@ sentinel pair, identical in both directions:
 `docs/design/GOV_SESSION_TRANSFER_PROTOCOL.md` (FROZEN — PO APPROVED) +
 `py scripts/gov_session_transfer.py --help`.
 
+For a GitHub-issue relay locator, use the one shared bootstrap prompt
+`.github/prompts/relay-bootstrap.prompt.md` and the frozen
+`docs/design/NEXUS_AGENT_RELAY_PROTOCOL.md`; do not infer scope or authority
+from the locator itself.
+
 ### Locating the active frozen contract
 
 A task may name its own contract (reading-order step 5). If it doesn't:
