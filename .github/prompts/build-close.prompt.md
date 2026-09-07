@@ -29,3 +29,6 @@ For a GitHub-issue relay, also follow
 `.github/prompts/relay-bootstrap.prompt.md`: intermediate comments use only the
 frozen relay markers, and the final engineering comment is the raw validated
 `SESSION_CLOSE` packet.
+
+Do not close while a material `RELAY_QUESTION` lacks a matching Product Owner
+`RELAY_DECISION`; record the exact blocker instead.
