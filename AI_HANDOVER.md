@@ -14,12 +14,14 @@ Overwrite at every session close. Keep it minimal.
 ## 1. Snapshot
 
 - Date: 2026-09-07. `m9_enrollment_preview_confirmation_ui` (`M9`) —
-  **IN_PROGRESS**. Implementation landed on branch
-  `m9-enrollment-preview-confirmation-ui`, local commits made, **not yet
-  pushed, no PR opened, no test run**. PO-authorized via `SESSION_START`
-  relay `ozandurmus/nexus-agent-relay#3`, out of `now_next` order (the
-  roadmap's own `next` still names `m8_3_real_environment_validation`,
-  deferred, unchanged).
+  **AUTOMATED_VALIDATED**. Implementation landed and validated on branch
+  `m9-enrollment-preview-confirmation-ui`, two local commits made, **not yet
+  pushed, no PR opened** (pending explicit PO go-ahead — Git push/merge is a
+  standing human-approval boundary, independent of the movement's own
+  authorization). PO-authorized via `SESSION_START` relay
+  `ozandurmus/nexus-agent-relay#3`, out of `now_next` order (the roadmap's
+  own `next` still names `m8_3_real_environment_validation`, deferred,
+  unchanged).
 - Predecessor `m8_evidence_host_key_fingerprint_not_persisted` —
   **AUTOMATED_VALIDATED, MERGED** via PR #103. `M8.4` **AUTOMATED_VALIDATED,
   MERGED** via PR #101.
@@ -76,7 +78,7 @@ grep: no such join exists anywhere yet).
      path sets it).
    - `tests/test_m9_enrollment_preview_and_confirmation.py` (new, ~25
      tests mapped to the 17 conditions + binding/duplicate/candidate
-     refusal cases) — **written, never executed**.
+     refusal cases) — **written and now passing** (see §4).
    - UI: `static/console_actions.js` + `templates/console.html` +
      `static/style.css` — one "Add device" dialog in the Inventory pane
      header (probe → preview → confirm). `static/navigation_ui.js`'s
@@ -90,33 +92,44 @@ grep: no such join exists anywhere yet).
 
 ## 3. Exact next action
 
-**Environment blocker, disclosed to the Product Owner mid-session and not
-yet resolved:** this authoring session has only Python 3.9.6 (no `py`
-launcher, no pyenv/brew/conda/uv), and the repository requires 3.10+ to
-import most modules (`X | None` evaluated eagerly in several existing
-files, e.g. `utils/runtime_auth.py`) — `pytest` could not be run at all.
-No node/bun/playwright either, so the render harness could not be run.
-VS Code's own Python Environments extension log confirms only
-`/usr/bin/python3` 3.9.6 is discoverable.
+**Environment blocker, disclosed to the Product Owner mid-session, then
+resolved with their explicit help:** this authoring session started with
+only Python 3.9.6 (repo needs 3.10+). The Product Owner authorized and
+personally ran the `sudo installer` step for the official python.org 3.12.8
+`.pkg`; a project-local `.venv` was then built and dependencies installed.
+Playwright's Chromium was also installed (`playwright install chromium`,
+no sudo needed). node/bun remain unavailable — not resolved.
 
-Before this build can honestly become `AUTOMATED_VALIDATED`:
+Remaining before merge:
 
-1. Run `py -m pytest -q -n auto --dist worksteal tests/test_m9_enrollment_preview_and_confirmation.py tests/test_con1_operator_console_read_only.py tests/test_con2_console_job_engine.py tests/test_pcp1_device_registry.py tests/test_architecture_convergence.py > pytest_result.log 2>&1` on a real 3.10+/3.12 interpreter and fix whatever the new test file's first real run surfaces (it has never executed).
-2. Regenerate `tests/fixtures/uitest/` if needed and run the render harness (`check-render.mjs` / `check_render_playwright.py`) against the new dialog markup.
-3. A user-assisted, corporate-PC2 real-browser walkthrough of "Add device" against fixture/synthetic data only — per the SESSION_START packet, ask the Product Owner to type any local application authentication directly into the app's own field or a masked terminal prompt, never into chat.
-4. Push the branch and open the PR (not done yet — Git push/merge is a standing human-approval boundary per `AGENTS.md`, independent of the movement's own authorization).
-5. Only after the PR exists: render, validate, and post the protocol-v2 `SESSION_CLOSE` to relay issue #3, then return `RELAY_READY ozandurmus/nexus-agent-relay#3` per the packet's `output_contract`.
+1. Push the branch and open the PR — **pending explicit Product Owner
+   go-ahead**, asked once already (answer was "wait — validate first",
+   which is now done; needs to be asked again).
+2. `tools/render-harness/check-render.mjs` (needs node/bun) was not run —
+   the Python/Playwright equivalent (`test_ac1_console_renders_every_module_live_with_zero_console_errors`
+   plus an ad hoc full click-through of the new dialog) was run instead and
+   passed, but the JS-runtime-specific check is still unexercised.
+   `tests/fixtures/uitest/` was not extended for the new module/payload
+   shape either.
+3. A user-assisted, corporate-PC2 real-browser walkthrough of "Add device"
+   against fixture/synthetic data only — per the SESSION_START packet, ask
+   the Product Owner to type any local application authentication directly
+   into the app's own field or a masked terminal prompt, never into chat.
+4. Only after the PR exists: render, validate, and post the protocol-v2
+   `SESSION_CLOSE` to relay issue #3, then return
+   `RELAY_READY ozandurmus/nexus-agent-relay#3` per the packet's
+   `output_contract`.
 
 ## 4. Test delta
 
-**None executed.** Every touched/new Python file passed `python3 -m py_compile` (3.9-compatible syntax check only — not a real import or execution). The two new pure modules (`utils/enrollment_audit.py`, `utils/pre_enrollment_identity_probe.py`) were exercised via isolated smoke tests outside the full app (append-only audit writes, duplicate-`audit_id` refusal, trust-before-credential ordering). `project/feature_registry.json`/`project/roadmap.json`/`project/build_history.json` JSON round-tripped byte-identical before any edit, so the formatting of unrelated content is unchanged. No M8.3 or M7 command was run; no real device, network, or credential provider was contacted.
+Real run, Python 3.12.8, project `.venv`: `py -m pytest -q -n auto --dist worksteal tests/test_m9_enrollment_preview_and_confirmation.py tests/test_con1_operator_console_read_only.py tests/test_con2_console_job_engine.py tests/test_pcp1_device_registry.py tests/test_architecture_convergence.py` — first run surfaced 3 expected failures (a stale derived doc, two existing closed-set tests needing extension for the new field/routes — not implementation bugs); fixed; **164 passed, 1 skipped (unrelated), 0 failed**. Broader sweep (`-k "architecture_convergence or privacy or application_package"`): **43 passed**. `git diff --check` clean. `compileall` clean on every touched file. Live-Playwright console render walk (real Chromium): **2 passed**, zero console errors. An additional ad hoc script clicked all the way through the new "Add device" dialog (open → fill → probe → real job pipeline → correct negative-evidence status message → close) against a real running console and real browser: **passed, zero console errors**. No M8.3 or M7 command was run; no real device, network, or credential provider was contacted anywhere — every probe outcome exercised was either mocked or a genuine `trust_source_unreadable` refusal against an RFC 5737 documentation address.
 
 ## 5. Risks / notes forward
 
-- Test file unexecuted — treat every one of its assertions as unverified until a real run happens.
-- UI markup unexecuted/unrendered — hand-written against read code only, no execution feedback loop available this session.
+- `tools/render-harness/check-render.mjs` (node/bun) and a `tests/fixtures/uitest/` extension for the new dialog/module are still not run/done — the Python/Playwright-based checks above are real but narrower coverage.
 - Administration → Device Management second `PO-NAV-1` entry point not built — disclosed scope trim, not silent.
 - `credential_profile_ref`/`trust_profile_ref` are opaque, persisted, audited, but do not select an actual credential/trust source (exactly one of each exists system-wide today) — consistent with the frozen contract's own text, worth PO confirmation at review.
 - Non-default SSH ports remain structurally unprobeable (`configuration/checkpoint_config_probe.py::_connect` uses one global env-var port) — pre-existing M8.3 limitation, inherited not introduced.
 - `M8.3` stays deferred, `M7` stays blocked — unchanged by this session.
-- No UI, device, credential, or network-facing *contact* happened in this session — only new, unexecuted code that will make such contact possible once validated and merged.
+- A new `.venv/` now exists in the repo working tree (gitignored, matches the existing `.venv/`/`venv/` pattern) — local Python 3.12 environment for this repo going forward.
+- No real device, network, or credential provider was contacted anywhere in this session.
