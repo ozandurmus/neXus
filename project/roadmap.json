@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "current_build": "gov_po_1_step_2_implementation",
+  "current_build": "gov_po_1_step_3_docs_reconciliation",
   "current_track": "PCP.x",
   "progress_contract": "Weighted acceptance-criterion completion. Percentages describe the declared roadmap, not calendar time or delivery ETA.",
   "tracks": [
@@ -140,16 +140,15 @@
   "now_next": {
     "horizon_contract": "NOW is exactly one build. NEXT is exactly one. Everything else is an `upcoming` row carrying its own true status: planned = AFTER, blocked = waiting on a named external gate, deferred = consciously postponed. `now.build` must equal the newest project/build_history.json record -- utils.project_plan enforces it.",
     "now": {
-      "build": "gov_po_1_step_2_implementation",
-      "title": "GOV.PO.1 step 2 -- PO assistant role infrastructure + step 0 direction record",
-      "goal": "Install the nexus-po skill/agent, council skill/seat agent, role-scoped settings + gate hook, PO prompts, CLAUDE.md delta, the approved AGENTS.md/relay amendments and the T7 test; land PRODUCT_DIRECTION_RECORD.md as DRAFT.",
+      "build": "gov_po_1_step_3_docs_reconciliation",
+      "title": "GOV.PO.1 step 3 -- rule reconciliation",
+      "goal": "Apply the contract section-12 reconciliation list and ratification decision 8 to the governance/instruction files; documentation only.",
       "status": "automated_validated",
-      "started": "2026-09-07",
-      "completed": "2026-09-07",
+      "started": "2026-09-08",
+      "completed": "2026-09-08",
       "notes": [
-        "Full detail: project/build_history.json's gov_po_1_step_2_implementation record; contract docs/design/GOV_PO_ROLE_MIGRATION.md section 10.",
-        "Stacked on the unmerged contract PR #109; both must merge before Phase A. Phase B (delegated episodes) stays closed until the step-6 isolation VALIDATION movement runs T1-T6.",
-        "Governance only; no product, device, UI or credential behavior changed. M8.3 stays deferred, M7 stays blocked."
+        "Full detail: project/build_history.json's gov_po_1_step_3_docs_reconciliation record.",
+        "Governance only; no product behavior changed. M8.3 stays deferred, M7 stays blocked."
       ]
     },
     "next": {

@@ -30,10 +30,12 @@ Git authorization and agent execution semantics are owned by `AGENTS.md`
   (`DEV.TEST.1`): `py -m pytest -q -n auto --dist worksteal >
   pytest_result.log 2>&1`. Do not re-run the full suite while the last
   evidence still holds.
-- **Toolchain.** The workspace Python / PowerShell / Git setup is already
-  validated. Use the existing `py` command directly; never invoke environment
-  bootstrap or interpreter selection. On a real command failure, report it and
-  stop.
+- **Toolchain.** The workspace already has a validated interpreter for the
+  environment it runs in (`py` on the Windows profile, the project `.venv`
+  interpreter on the macOS profile); use that one directly and do not assume
+  `py` exists in every shell. Never invoke environment bootstrap or
+  interpreter selection without a real need. On a real command failure,
+  report it and stop.
 - **Session-boundary packets.** When a Product Owner message opens with a
   `SESSION_START` `NEXUS_SESSION_PACKET`, or a reply is expected to close
   with a `SESSION_CLOSE` one, use exactly one sentinel-wrapped

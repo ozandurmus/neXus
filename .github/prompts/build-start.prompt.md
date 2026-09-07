@@ -2,8 +2,9 @@
 description: "Start a SecurityExpert build with authoritative scope and reasoning routing"
 ---
 
-Read AGENTS.md, CURRENT_STATE.md, .github/copilot-instructions.md and only the
-current project metadata required for this task.
+Read AGENTS.md, AI_START_HERE.md, CURRENT_STATE.md and only the current
+project metadata required for this task; the tool you run in applies its own
+delta file (CLAUDE.md, .github/copilot-instructions.md) by itself.
 
 Do not change code yet.
 
