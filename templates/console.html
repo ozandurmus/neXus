@@ -463,6 +463,29 @@
     </main>
 </section>
 
+<section id="deviceManagementModule" class="app-module" data-module-panel="device-management">
+    <main class="project-plan-shell">
+        <div class="project-plan-heading">
+            <div>
+                <div class="eyebrow">SecurityExpert · M9 Enrollment</div>
+                <h1>Device Management</h1>
+                <p>Read-only Device Registry listing plus the lifecycle entry point for manual endpoint enrollment (PO-NAV-1). Uses the exact same preview/confirmation dialog as the Devices pane header — one enrollment implementation, two entry points.</p>
+            </div>
+            <!-- M9 — PO-NAV-1's second frozen entry point. Opens the same
+                 #m9EnrollDialog as #m9EnrollOpenButton above; there is no
+                 second dialog or second enrollment contract. -->
+            <button id="m9EnrollOpenButtonAdmin" class="m9-enroll-open-button" type="button">+ Add device</button>
+        </div>
+
+        <section class="project-plan-card">
+            <div class="dashboard-card-header">
+                <div><div class="eyebrow">Device Registry</div><h2>Enrolled devices</h2></div>
+            </div>
+            <div id="deviceManagementTable"></div>
+        </section>
+    </main>
+</section>
+
 <section id="exclusionsModule" class="app-module" data-module-panel="exclusions">
     <main class="project-plan-shell">
         <div class="project-plan-heading">
@@ -573,8 +596,8 @@
     </div>
 
     <div class="m9-enroll-field">
-        <label for="m9EnrollCredentialRef">Credential profile reference</label>
-        <input id="m9EnrollCredentialRef" class="control" type="text" placeholder="opaque reference, e.g. lab-cred-1">
+        <label>Credential profile</label>
+        <div class="detail-subtitle">system_cp_config_ssh (the only credential profile available today)</div>
     </div>
 
     <div class="m9-enroll-field">

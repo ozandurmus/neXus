@@ -87,6 +87,14 @@ const NAVIGATION_MODEL = [
         label: "Administration",
         icon: "administration",
         items: [
+            // PO-NAV-1 (docs/design/NAVIGATION_INFORMATION_ARCHITECTURE.md):
+            // the lifecycle home for enrollment, distinct from the Devices
+            // pane's primary affordance -- both invoke the exact same M9
+            // enrollment dialog contract (`static/console_actions.js`'s M9
+            // section), never a second implementation. Console-only in
+            // practice (D-NAV6 shell-integrity check): the panel this points
+            // at ships only in templates/console.html.
+            { module: "device-management", label: "Device Management", icon: "devices" },
             { module: "exclusions", label: "Inventory exclusions", icon: "exclusions" },
             { module: "project-plan", label: "Project plan", icon: "project-plan" },
         ],

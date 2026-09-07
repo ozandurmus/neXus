@@ -6,10 +6,10 @@ see `AGENTS.md`/`AI_START_HERE.md`. **Predecessor build detail lives in
 docs under `docs/history/`; `docs/history/INDEX.md` is the one-line timeline.
 
 - **Checkpoint:** 2026-09-07, `m9_enrollment_preview_confirmation_ui` — see
-  "Active build". **IN_PROGRESS** (round 2, corrective), PR #104 open/
+  "Active build". **AUTOMATED_VALIDATED** (rounds 1+2), PR #104 open/
   unmerged, relay `ozandurmus/nexus-agent-relay#3`. Predecessor
   `gov_relay_1_canonical_agent_relay` **AUTOMATED_VALIDATED, MERGED** PR
-  #105, relay #3 repaired. `M8.4` **MERGED** PR #101. **PO §12:** `M8.3`
+  #105/#106, relay #3 repaired. `M8.4` **MERGED** PR #101. **PO §12:** `M8.3`
   deferred, `M7` blocked, unchanged by M9. `M8` **FROZEN 2026-09-06**.
 - **Next** (`now_next.next`): `m8_3_real_environment_validation`, `deferred`
   per §12, unchanged by M9's out-of-order run. `m7_real_device_targeted_collect_now`/
@@ -50,23 +50,23 @@ test-enforced boundaries. Current numbers:
 | 4 — policy / deployment / remediation | prohibited | — |
 ## Active build
 
-**`m9_enrollment_preview_confirmation_ui`** (`M9`) — local-loopback manual
-+ closed candidate-id enrollment via a pre-registration identity probe, a
+**`m9_enrollment_preview_confirmation_ui`** (`M9`) — local-loopback
+manual-endpoint enrollment via a pre-registration identity probe, a
 `CLASS 0` admission-coordinator job (not `main.main()`), an immutable audit
 trail beside the Device Registry (not `control_plane_store.py`, which
 forbids endpoint data), and routes through the one `DeviceRegistry.enroll`.
-Round 1 (PR #104 opened) shipped manual-endpoint only. PO corrective review
-(relay `#3`) found real gaps: candidate-id not implemented, an unverified
-new pre-enrollment network/credential path, profile refs not selecting the
-executed source, a non-atomic confirmation-consume check, no UI fixture/
-render-harness coverage, missing Administration `PO-NAV-1` entry point —
-round 2 (corrective) **IN_PROGRESS**. Full evidence:
-`project/build_history.json`.
+Round 1 shipped manual-endpoint only (PR #104 opened). PO corrective review
+(relay `#3`) found six gaps; two needed a `RELAY_DECISION` (candidate-id
+stays deferred per `§9.2 A6`/`M10`; the probe's `runner.py` exception is
+authorized, M9-only, a pending-stub alternative rejected); four were
+corrected directly: `credential_profile_ref` closed to one real sentinel,
+atomic confirmation consumption, the dialog walkthrough promoted to a real
+test, and the Administration `PO-NAV-1` entry point. **AUTOMATED_VALIDATED**
+— 247 passed. Full evidence: `project/build_history.json`.
 
 Predecessor — **`gov_relay_1_canonical_agent_relay`** (`GOV.RELAY.1`) —
-canonical relay governance around unchanged packet v2; one shared
-bootstrap. **AUTOMATED_VALIDATED, MERGED** via PR #105; relay #3 repaired.
-No product/M9 behavior changed.
+canonical relay governance, unchanged packet v2, one shared bootstrap.
+**AUTOMATED_VALIDATED, MERGED** PR #105/#106; relay #3 repaired, no product/M9 change.
 
 Predecessor — **`m8_evidence_host_key_fingerprint_not_persisted`** —
 **AUTOMATED_VALIDATED, MERGED** via PR #103, 2026-09-07: persisted
@@ -177,9 +177,9 @@ Concurrency budget stays at 1 per vendor pending its own real-env evidence.
 ## Automated test baseline
 
 ```
-M9 round 1: 164 passed/1 skipped/0 failed (targeted); sweep 43 passed.
+M9 rounds 1+2: 247 passed, 0 failed (targeted+affected, incl. nav tests).
   Live-Playwright render + dialog click-through passed, 0 console errors.
-  node/bun render-harness (check-render.mjs) still not run. Round 2 pending.
+  node/bun render-harness (check-render.mjs) still not run, env-blocked.
 M8.4: targeted 23 passed. Affected sweep 440 passed, 1 skipped, 0 failed.
 Earlier predecessor build detail lives only in project/build_history.json.
 ```

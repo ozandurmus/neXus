@@ -338,7 +338,7 @@ def test_ac1_console_renders_every_module_live_with_zero_console_errors(uitest_r
                 page.goto(f"{bound_origin}/#t={token}")
                 page.wait_for_timeout(400)
 
-                for module in ("inventory", "configuration", "compliance", "discovery", "exclusions", "project-plan"):
+                for module in ("inventory", "configuration", "compliance", "discovery", "device-management", "exclusions", "project-plan"):
                     page.eval_on_selector(f'.module-nav-item[data-module="{module}"]', "el => el.click()")
                     page.wait_for_timeout(100)
 

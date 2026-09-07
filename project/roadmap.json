@@ -143,13 +143,15 @@
       "build": "m9_enrollment_preview_confirmation_ui",
       "title": "M9 -- local-loopback enrollment preview + explicit confirmation UI",
       "goal": "Implement docs/design/LOCAL_CONTROL_PLANE_RUNTIME_AND_ENROLLMENT.md §9.1's seventeen mandatory conditions for manual-endpoint and closed candidate-id console enrollment, per the PO-authorized SESSION_START (relay ozandurmus/nexus-agent-relay#3, revalidated after a GOV.RELAY.1 correction round): a pre-registration identity probe, preview, explicit confirmation, immutable audit-before-mutation, and persistence through the one existing DeviceRegistry path.",
-      "status": "in_progress",
+      "status": "automated_validated",
       "started": "2026-09-07",
+      "completed": "2026-09-07",
       "notes": [
         "Full detail: project/build_history.json's m9_enrollment_preview_confirmation_ui record.",
         "Round 1: 164 tests passed against a real Python 3.12 environment; broader convergence/privacy/application-package sweep also green (43 passed). Live-Playwright console render walk passed (real Chromium, zero console errors). PR #104 opened.",
-        "Product Owner corrective review (relay #3) found real gaps: candidate-id enrollment not actually implemented, a new pre-enrollment network/credential path needing re-verification against the existing M8 path, profile references not selecting the executed credential/trust source, a non-atomic confirmation-consumption check, no UI fixture/render-harness coverage, and the Administration -> Device Management second PO-NAV-1 entry point still missing. Round 2 (corrective) now in progress.",
-        "GOV.RELAY.1 -- canonical GitHub-issue agent relay -- completed and merged via PR #105 as a governance-only predecessor movement (see project/build_history.json's gov_relay_1_canonical_agent_relay record); it changed no product/M9 behavior.",
+        "Product Owner corrective review (relay #3) found six real gaps. Two required an explicit Product Owner RELAY_DECISION (candidate-id enrollment stays deferred per §9.2 A6/M10; the pre-enrollment probe's console/runner.py exception is explicitly authorized as M9-only, a pending-registry-stub alternative explicitly rejected). The other four were corrected directly: credential_profile_ref closed to one real sentinel, confirmation consumption made atomic under concurrency, the round-1 ad hoc dialog walkthrough promoted to a permanent test, and the Administration -> Device Management second PO-NAV-1 entry point implemented.",
+        "GOV.RELAY.1 -- canonical GitHub-issue agent relay -- completed and merged via PR #105/#106 as a governance-only predecessor movement (see project/build_history.json's gov_relay_1_canonical_agent_relay record); it changed no product/M9 behavior. Its commits were safely true-merged into the M9 branch without discarding any M9 work.",
+        "Round 2 full targeted+affected re-run: 247 passed, 0 failed (includes three pre-existing stale tests in test_navigation_information_architecture.py fixed as incidental convergence debt, not new scope). git diff --check and compileall clean.",
         "M8.3 real-environment validation stays deferred; M7 stays blocked -- neither changed by this build.",
         "PR #104 open, unmerged, pending explicit Product Owner integration decision (Git push/merge is a standing human-approval boundary)."
       ]
