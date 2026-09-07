@@ -51,6 +51,21 @@ def test_material_questions_are_durable_and_require_a_po_decision():
     assert "does not replace the relay record" in bootstrap
 
 
+def test_authorized_action_does_not_reopen_an_approval_loop():
+    contract = " ".join(_text(CONTRACT).split())
+    bootstrap = " ".join(_text(BOOTSTRAP).split())
+    agents = " ".join(_text(ROOT / "AGENTS.md").split())
+    detail = " ".join(_text(ROOT / "docs" / "AI_DEVELOPMENT_PROTOCOL.md").split())
+    assert "executes it without seeking the same permission again" in contract
+    assert "one concrete objection" in contract
+    assert "repeats or expressly overrules" in contract
+    assert "execute it without asking again" in bootstrap
+    assert '"human-controlled" means that the Product Owner makes the authorization' in agents
+    assert "does not require the human to type the command or click" in agents
+    assert "the agent MUST proceed" in agents
+    assert "approval controls the decision, not who operates" in detail
+
+
 def test_relay_ready_is_locator_only_and_stored_packets_are_revalidated():
     contract = _text(CONTRACT)
     bootstrap = _text(BOOTSTRAP)

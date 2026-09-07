@@ -5,8 +5,8 @@ see `AGENTS.md`/`AI_START_HERE.md`. **Predecessor build detail lives in
 `project/build_history.json`** (structured, newest-first) and its linked
 docs under `docs/history/`; `docs/history/INDEX.md` is the one-line timeline.
 
-- **Checkpoint:** 2026-09-07, `gov_relay_1_question_routing` —
-  **AUTOMATED_VALIDATED** governance amendment; Claude remains M9 owner.
+- **Checkpoint:** 2026-09-07, `gov_git_authority_reconciliation` —
+  **AUTOMATED_VALIDATED** governance reconciliation; Claude remains M9 owner.
   **PO §12:** `M8.3`'s real-env validation stays deferred; `M7` stays
   blocked. `M8` architecture **FROZEN — PO APPROVED, 2026-09-06**.
 - **Next** (`now_next.next`): `m8_3_real_environment_validation`, `deferred`
@@ -49,38 +49,18 @@ test-enforced boundaries. Current numbers:
 | 4 — policy / deployment / remediation | prohibited | — |
 ## Active build
 
-**`gov_relay_1_question_routing`** (`GOV.RELAY.1` amendment) — adds
-`RELAY_QUESTION` and a mandatory decision tree: every material question that
-requires Product Owner resolution is durable on the active relay and closes
-only through a matching Product Owner `RELAY_DECISION`. **AUTOMATED_VALIDATED**;
-governance-only, with packet v2 and all M9/product behavior unchanged.
-Predecessor — **`gov_relay_1_canonical_agent_relay`** — **AUTOMATED_VALIDATED,
-MERGED** via PR #105; relay #3 repaired. Full evidence:
-`project/build_history.json`.
-Predecessor — **`gov_session_1_unified_packet`** (`GOV.SESSION.1A`) —
-**FROZEN, MERGED 2026-09-07** (PR #102): one canonical protocol-v2
-`NEXUS_SESSION_PACKET` replacing `GOV.SESSION.1`'s split close
-(`docs/design/GOV_SESSION_TRANSFER_PROTOCOL.md`); v1 packets rejected. No
-product/M8/M7 work.
+**`gov_git_authority_reconciliation`** (`GOV.GIT.1`) — clarifies that
+Corporate Git is Product Owner controlled through explicit authorization and
+that an authorized agent executes and verifies the named Git action. One
+concrete objection is allowed; a repeated informed PO instruction controls
+unless an exact higher-authority/failing-gate exception remains.
+**AUTOMATED_VALIDATED**; governance-only; Claude remains M9 owner and PR #104 is
+untouched.
 
-Predecessor — **`m8_4_m6_resolver_consumption`** (`M8.4`) —
-**AUTOMATED_VALIDATED, MERGED 2026-09-07**, PR #101: extends
-`console/registry_targets.py` §7 with the `M8.1` identity-translation
-currency check plus a closed evidence-provenance pin. Does **not**
-implement `M7`.
-
-Parent — **`m8_first_contact_trust_identity_evidence_producer_architecture`**
-(`M8` architecture) — **FROZEN, PO APPROVED 2026-09-06 (PR #96), §12
-amendment 2026-09-07** (`M8.4` ahead of `M8.3`'s real-env gate; `M7` stays
-blocked). Sequence: `M8.1`→`M8.2`→`M8.3`→`M8.4`(above)→`M7`. Open:
-`operator_assertion`, single-sourced identity evidence, DEFERRED
-contradiction detection. Full contract:
-`docs/history/phase/M8_FIRST_CONTACT_TRUST_AND_IDENTITY_EVIDENCE_PRODUCER_ARCHITECTURE.md`.
-
-Predecessors, all **AUTOMATED_VALIDATED**, all merged: **`M8.3`** (PR #100
-— read-only producer; real-env validation deferred per §12), **`M8.2`**
-(PR #98), **`M8.1`** (`M4` schema-2 relationship storage/API), **`M6`**
-(fail-closed admission shell, now extended by `M8.4` above).
+Predecessors — **`gov_relay_1_question_routing`** and
+**`gov_relay_1_canonical_agent_relay`** — **AUTOMATED_VALIDATED, MERGED**;
+`RELAY_QUESTION` and the canonical relay protocol remain in force. Full
+evidence: `project/build_history.json`.
 
 ## Predecessor — `M5`/`M4`
 **`collector_target_selection_seam`** (`M5`) — COMPLETE/AUTOMATED_VALIDATED,
