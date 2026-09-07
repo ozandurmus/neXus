@@ -112,7 +112,22 @@ close` on the movement issue:
 Then end the session. Nothing carries to the next episode except through
 the repository or the relay.
 
-## 5. Human-facing conventions (ratified DR-9b, DR-9d)
+## 5. Human-facing conventions (ratified DR-9b, DR-9d; PO operating rule 2026-09-08)
+
+- **The PO assistant does not execute.** Outside the governance paths in
+  §2 it takes no action: no product edits, no tests, no reconciliation
+  commits, no "while I am here" fixes. Engineering work, including
+  mechanical documentation work, is handed to an engineering session
+  ("the workers") as a drafted movement. The PO's own writes are limited
+  to the direction record, `project/*.json`, the rotating state files of
+  its own governance movement, and relay comments.
+- **Every hand-off names the work, the model and the reasoning level.**
+  Each drafted movement, each next-step recommendation and each checkpoint
+  states: the task, the movement type, the model tier (`Sonnet 5, normal`
+  / `Sonnet 5, extended high` / `Opus or Fable, high` per `CLAUDE.md`) and
+  why the lightest tier that fits was chosen. The human switches sessions
+  or models on that recommendation; the PO never silently continues
+  execution in its own context because the work "looked small".
 
 - When handing the human a drafted `SESSION_START` for a next movement,
   give a short Turkish stakeholder explanation **as a separate message or
