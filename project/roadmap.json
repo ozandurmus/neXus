@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "current_build": "gov_po_1_step_4_direction_record_ratification",
+  "current_build": "gov_po_1_gate_1_command_safety_correction",
   "current_track": "PCP.x",
   "progress_contract": "Weighted acceptance-criterion completion. Percentages describe the declared roadmap, not calendar time or delivery ETA.",
   "tracks": [
@@ -140,15 +140,16 @@
   "now_next": {
     "horizon_contract": "NOW is exactly one build. NEXT is exactly one. Everything else is an `upcoming` row carrying its own true status: planned = AFTER, blocked = waiting on a named external gate, deferred = consciously postponed. `now.build` must equal the newest project/build_history.json record -- utils.project_plan enforces it.",
     "now": {
-      "build": "gov_po_1_step_4_direction_record_ratification",
-      "title": "GOV.PO.1 step 4 -- direction record ratification",
-      "goal": "Record the Product Owner's 2026-09-08 ratification decisions DR-1..DR-9e in PRODUCT_DIRECTION_RECORD.md, roadmap open_decisions (tufin_path_authority), the backlog umbrella and the nexus-po skill; the authorized merge ratifies the record.",
+      "build": "gov_po_1_gate_1_command_safety_correction",
+      "title": "GOV_PO_1_GATE_1 -- fix nexus_po_tool_gate.py false positives and enable packet emission",
+      "goal": "Correct the interactive/delegated PO gate's naive substring command-safety check (blocked git commit trailers and all relay packet posting) with shlex-based real-operator detection plus a narrow scratch-write allowance for packet staging; neutralize an unrelated local settings.local.json exposure found in the same review.",
       "status": "automated_validated",
       "started": "2026-09-08",
       "completed": "2026-09-08",
       "notes": [
-        "Full detail: project/build_history.json's gov_po_1_step_4_direction_record_ratification record.",
-        "Governance only; no product behavior, device-write or production authorization is granted (DR-2, DR-6, DR-9a boundaries). M8.3 stays deferred, M7 stays blocked; next actionable movement is chosen by the first PLAN episode (step 5)."
+        "Full detail: project/build_history.json's gov_po_1_gate_1_command_safety_correction record.",
+        "Independent of the concurrent gov_po_1_step_5_first_plan PO episode (PR #113, branch gov/po-1-step-5-first-plan) -- unblocks its packet posting but does not touch its branch or its M10.1 sequencing decision. Whichever PR merges second must reconcile this now_next.now pointer with the other's, per the established pattern (M9/GOV.RELAY.1/GOV.GIT.1).",
+        "Governance/tooling only; no product source, device, UI or credential behavior changed."
       ]
     },
     "next": {
