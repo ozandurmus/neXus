@@ -30,3 +30,6 @@ outside the sentinel pair.
 If the boundary is identified by `RELAY_READY owner/repository#issue`, first
 follow `.github/prompts/relay-bootstrap.prompt.md`; do not treat the locator as
 the start instruction.
+
+Any material unresolved gate discovered after bootstrap is a `RELAY_QUESTION`
+on that issue, not a chat-only question.

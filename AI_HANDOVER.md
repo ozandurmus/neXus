@@ -12,11 +12,14 @@
   `m9-enrollment-preview-confirmation-ui`, PR #104 open, unmerged. Round 1
   shipped manual-endpoint enrollment; a Product Owner corrective review
   (relay `ozandurmus/nexus-agent-relay#3`) found six gaps, two resolved by
-  explicit `RELAY_DECISION` and four corrected directly (see §2/§5).
-  Predecessor `gov_relay_1_canonical_agent_relay` (`GOV.RELAY.1`) —
-  **AUTOMATED_VALIDATED, MERGED** via PR #105/#106; relay #3 repaired.
-  Claude is the sole M9 implementation owner; Codex owned only the
-  completed GOV.RELAY.1 recovery.
+  explicit `RELAY_DECISION` and four corrected directly (see §2). A second
+  Product Owner validation review then required the mandatory render
+  harness and a full regression to actually run (not just be disclosed as
+  environment-blocked) before a merge decision — both now run for real
+  (§4). Predecessors `gov_relay_1_canonical_agent_relay` (PR #105/#106) and
+  `gov_relay_1_question_routing` (PR #107, adds the `RELAY_QUESTION`
+  marker) — both **AUTOMATED_VALIDATED, MERGED**. Claude is the sole M9
+  implementation owner; Codex owned only the completed governance recovery.
 - Predecessor `m8_evidence_host_key_fingerprint_not_persisted` —
   **AUTOMATED_VALIDATED, MERGED** via PR #103. `M8.4` **AUTOMATED_VALIDATED,
   MERGED** via PR #101. `M8.3` stays deferred, `M7` stays blocked.
@@ -99,11 +102,10 @@ updated for round 1's shipped UI — fixed to reflect actual current reality.
 
 None outstanding for M9 itself. PR #104 is open, unmerged, and this close's
 `SESSION_CLOSE` is pending. Per this movement's own `merge_gate`: do not
-merge without a later, explicit Product Owner integration decision.
-Disclosed residual risk (unchanged from round 1, not a new gap):
-`tools/render-harness/check-render.mjs` (node/bun) remains unexercised —
-node/bun are still unavailable in this environment; the console's own
-live-Playwright coverage is the real substitute exercised.
+merge without a later, explicit Product Owner integration decision. The
+two pre-existing, unrelated `.venv`/`venv` DLP-scanner false positives found
+by the full regression (see §4) are explicitly NOT to be fixed in this PR
+(Product Owner `RELAY_DECISION`) — file as a separate bounded build.
 
 ## 4. Test delta
 
@@ -121,16 +123,36 @@ atomic-confirmation-under-real-concurrency and the M9-only-exception pin),
 `test_gov_relay_protocol.py`, `test_navigation_information_architecture.py`,
 `test_m2_nav_accessibility_closure.py`, `test_frontend_module_composition.py`:
 **247 passed, 0 failed**. Broader sweep (`-k "architecture_convergence or
-privacy or application_package"`): 44 passed. `git diff --check` and
-`compileall` clean. No M8.3/M7 command run; no real device, network, or
-credential provider contacted in either round — every probe outcome was
-mocked or a genuine `trust_source_unreadable`/identity-gate refusal against
-an RFC 5737 documentation address.
+privacy or application_package"`): 44 passed.
+
+Round 2 closure (Product Owner validation review): downloaded Node.js
+v22.11.0's official darwin-arm64 tarball directly (no sudo needed, unlike
+the earlier Python install), `npm install` in `tools/render-harness/`, then
+ran the actual mandatory render harness for the first time this movement —
+`tests/test_html_render_harness.py`: **6 passed**, including
+`test_headless_navigation_smoke` (previously always skipped for lack of a
+JS runtime). Then ran the **full regression** (not risk-based): **2359
+passed, 24 skipped, 2 failed**. Both failures
+(`tests/test_dev_0_5b_auth_consumer_canonical_config.py::test_repository_text_has_no_known_dlp_assignment_collision`
+and `..._legacy_redaction_collision`) are pre-existing and unrelated to M9:
+their `_repository_text_candidates()` exclusion list never included `.venv`,
+so with a project-local `.venv/` present (this session's Python 3.12
+environment) the scanner walked into third-party library source under
+`.venv/lib/python3.12/site-packages/` (e.g. `paramiko/ecdsakey.py`,
+`httpcore/_async/socks_proxy.py`) and flagged their own internal
+`password=`-style assignments — nothing in tracked repository content.
+Per Product Owner decision, this is filed as separate infrastructure debt,
+not fixed in PR #104. `git diff --check` and `compileall` clean throughout.
+No M8.3/M7 command run; no real device, network, or credential provider
+contacted in either round — every probe outcome was mocked or a genuine
+`trust_source_unreadable`/identity-gate refusal against an RFC 5737
+documentation address.
 
 ## 5. Risks / notes forward
 
-- `tools/render-harness/check-render.mjs` (node/bun) still not run — node/bun
-  unavailable in this environment; unchanged residual risk from round 1.
+- Two pre-existing, unrelated DLP-scanner false positives (see §4) remain a
+  merge blocker per Product Owner decision, pending either a separate fix
+  build or an explicit evidence-specific waiver — neither has happened yet.
 - `credential_profile_ref`/`trust_profile_ref` are each closed to exactly one
   real sentinel today (no multi-credential/multi-trust system exists) —
   consistent with the frozen contract, worth Product Owner confirmation at
@@ -139,7 +161,9 @@ an RFC 5737 documentation address.
   (`configuration/checkpoint_config_probe.py::_connect` uses one global
   env-var port) — pre-existing M8.3 limitation, inherited not introduced.
 - `M8.3` stays deferred, `M7` stays blocked — unchanged by this movement.
-- A project-local `.venv/` (gitignored) now holds Python 3.12 for this repo.
+- A project-local `.venv/` (gitignored) holds Python 3.12; Node.js v22.11.0
+  was downloaded to the session scratchpad (not installed system-wide, not
+  part of the repo) purely to run the render harness.
 - Relay #3 preserves the earlier malformed `M9_CORRECTIVE_REVIEW` comment
   under `RELAY_CORRECTION`; it is evidence only, not authority.
 - No real device, network, or credential provider was contacted anywhere in
