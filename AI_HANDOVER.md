@@ -7,74 +7,65 @@
 
 ## 1. Snapshot
 
-- Date: 2026-09-08. `gov_po_1_step_4_direction_record_ratification` —
-  **AUTOMATED_VALIDATED, MERGED** (PR #112, `79a90b94…`): `PRODUCT_DIRECTION_RECORD.md`
-  is **RATIFIED**. Step 3 — **MERGED** (PR #111, `e208cb82…`). Phase A
-  **authorized** (`RELAY_DECISION`, relay #5); Phase B closed until T1–T6.
-  Predecessor `gov_po_1_step_2_implementation` — **AUTOMATED_VALIDATED,
-  MERGED** via PR #110 (`b53e15f1…`); contract `gov_po_1_role_migration_contract`
-  **FROZEN, MERGED** via PR #109 (`d66e7dac…`). Both merges executed under an
-  explicit Product Owner `RELAY_DECISION` (relay #4/#5).
-- `M9` MERGED (PR #104); `GOV.GIT.1` MERGED (PR #108). `M8.3` deferred,
-  `M7` blocked.
+- Date: 2026-09-08. `gov_po_1_gate_1_command_safety_correction` —
+  **AUTOMATED_VALIDATED**, branch `gov-po-1-gate-fix` (isolated git
+  worktree, deliberately never checked out in the primary working
+  directory), PR open. Found and fixed during the first real Phase A
+  `PLAN` episode (`gov_po_1_step_5_first_plan`, PR #113, unmerged,
+  concurrent): the interactive PO's `PreToolUse` gate blocked its own
+  contractually-required relay packet posting.
+- `gov_po_1_step_4_direction_record_ratification` **MERGED** (PR #112);
+  direction record **RATIFIED**. `M9` **MERGED** (PR #104).
 
 ## 2. What changed
 
-Step 4 (this build): `PRODUCT_DIRECTION_RECORD.md` §0 decision table DR-1..DR-9e,
-every `[PO-DIRECTION]` linked, D-F2 converted to `[REPO]`, status line
-`RATIFIED … PR #<n>`; `roadmap.json` `tufin_path_authority`; backlog umbrella
-`policy_rule_hygiene_and_path_placement_brief`; `nexus-po` skill §5.
-
-Step 3 (PR #111): relay §1 roster role-based; forward notes after the
-CAPABILITY_STATE §10 and M8-header council disclosures (verbatim preserved);
-`claude-mem` paragraph removed and PO episode tier row added in
-`AI_START_HERE.md`; `build-start.prompt.md` reads the vendor-neutral set;
-`CLAUDE.md` toolchain line per ratification decision 8.
-
-Step 2 (merged, PR #110):
-
-- `.claude/skills/nexus-po/SKILL.md`, `.claude/agents/nexus-po.md`
-  (delegated, `tools: Read, Grep, Glob, Bash`, frontmatter PreToolUse gate).
-- `.claude/skills/nexus-decision-council/SKILL.md`,
-  `.claude/agents/nexus-council-seat.md` (read-only, `disallowedTools`
-  incl. `Agent`, `permissionMode: plan`).
-- `.claude/nexus-po.settings.json` (tracked; loaded with
-  `claude --settings` for PO sessions only) + `scripts/nexus_po_tool_gate.py`
-  (stdlib PreToolUse gate, two forms, logs outside the repository).
-- `.github/prompts/po-plan.prompt.md`, `po-review.prompt.md`; `CLAUDE.md`
-  PO-role delta; `.gitignore` now ignores `.claude/settings.local.json`.
-- `AGENTS.md`: the approved comment-only PO episode paragraph, verbatim.
-  `docs/design/NEXUS_AGENT_RELAY_PROTOCOL.md`: episode-close note under
-  `RELAY_NOTE`; agent-published `RELAY_DECISION` clause under §1.
-- `tests/test_gov_po_role.py` (T7 + gate unit/CLI tests).
-- `docs/design/PRODUCT_DIRECTION_RECORD.md` (**DRAFT**, previous assistant's
-  extraction + §13 second pass; 142 `[REPO]`, 15 `[PO-DIRECTION]`,
-  31 `[ASSISTANT]` items).
+- `scripts/nexus_po_tool_gate.py`: replaced the substring ban on
+  `<`/`>`/`;`/`|`/`&&`/`||` with `shlex.shlex(..., punctuation_chars=True)`
+  tokenization, which reproduces bash's real distinction between a
+  metacharacter embedded in a quoted argument (data, harmless) and the
+  same character standalone (a real operator). Backtick/`$(` stay banned
+  unconditionally (they execute even inside double quotes). The
+  destructive-word bans (`rm`/`mv`/`cp`/`sudo`/`chmod`/`curl`/`wget`/`ssh`/
+  `main.py`) became exact-token checks instead of substrings — this also
+  newly denies `find ... -exec rm ...`, which the old substring form
+  missed. A raw embedded newline is denied outright. Added one narrow
+  scratch-write allowance (`nexus_po_*.json`/`.txt` under a recognized
+  system temp root, interactive form only, realpath-checked against
+  traversal) and restricted `--body-file` to that same pattern.
+- `tests/test_gov_po_role.py`: 9 new tests plus one corrected existing test
+  that had accidentally asserted `--body-file` with an arbitrary filename
+  should be allowed (it should not — that's an exfiltration path).
 - Project state files for the build.
+- **Not part of this PR:** `.claude/settings.local.json` on this
+  workstation (untracked, gitignored) carried a blanket
+  `Bash(gh pr merge:*)` allow rule that would have applied uncontested to
+  a PO session launched from the VS Code extension without
+  `--settings .claude/nexus-po.settings.json` (the extension cannot pass
+  that flag) — emptied directly on the workstation; not repository state,
+  cannot be enforced by a repository test.
 
 ## 3. Exact next action
 
-1. (done) PR #111 and #112 merged; record ratified.
-2. Step 5: first Phase A `PLAN` episode after a `RELAY_DECISION` authorizing
-   Phase A: `claude --settings .claude/nexus-po.settings.json` → `/nexus-po PLAN`.
-   It chooses the actionable `now_next.next`, ranks the backlog by theme,
-   files the `.venv` DLP debt, and verifies the two state drifts flagged in
-   the record §11.
-3. Step 6: isolation `VALIDATION` T1–T6 before any delegated episode.
-4. Phase A first `PLAN` episode: `claude --settings .claude/nexus-po.settings.json`
-   → `/nexus-po PLAN`, after a `RELAY_DECISION` authorizing Phase A.
-5. `VALIDATION` step 6: run T1–T6 for real before any delegated episode.
+1. Merge this PR first (small, isolating, unblocks packet posting).
+2. `gov_po_1_step_5_first_plan` (PR #113) retries its blocked
+   `SESSION_START`/`SESSION_CLOSE` packet posting against the fixed gate,
+   then reconciles `project/roadmap.json` `now_next.now` with this PR's
+   pointer (same pattern as the earlier M9/GOV.RELAY.1/GOV.GIT.1 stack).
+3. A PO session must always launch via
+   `claude --settings .claude/nexus-po.settings.json` in a terminal, never
+   the VS Code extension — that remains an operational rule, not something
+   this fix can enforce technically.
 
 ## 4. Test delta
 
-`tests/test_gov_po_role.py` + relay + session-transfer + convergence: 190
-passed. Gate CLI smoke: deny → exit 2 + JSON deny; allow → exit 0; log
-outside repository. Build-history index, privacy gate, `git diff --check`
-in the `SESSION_CLOSE`. No full regression (governance-only, risk-based).
+`tests/test_gov_po_role.py` + relay + session-transfer + convergence: 209
+passed. Repository privacy gate: PASS. `git diff --check`: clean.
 
 ## 5. Risks / notes forward
 
-- Documented ≠ demonstrated: T1–T6 are `NOT_RUN`; Phase B stays closed.
-- Implementation choice recorded as `RELAY_NOTE`: role-scoped settings file
-  instead of project-wide deny rules (which would bind engineers too).
-- The `.venv` DLP false positives are still unfiled (owed by step 5).
+- `docs/design/GOV_SESSION_TRANSFER_PROTOCOL.md` /
+  `scripts/gov_session_transfer.py` were read but not touched; both stay
+  exactly `FROZEN`.
+- The scratch pattern is deliberately narrow; a future different staging
+  need should extend the same regex, not add a second mechanism.
+- This movement does not touch `gov/po-1-step-5-first-plan` or M10.1.
