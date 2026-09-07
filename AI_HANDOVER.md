@@ -140,7 +140,7 @@ so with a project-local `.venv/` present (this session's Python 3.12
 environment) the scanner walked into third-party library source under
 `.venv/lib/python3.12/site-packages/` (e.g. `paramiko/ecdsakey.py`,
 `httpcore/_async/socks_proxy.py`) and flagged their own internal
-`password=`-style assignments — nothing in tracked repository content.
+credential-assignment-shaped — nothing in tracked repository content.
 Per Product Owner decision, this is filed as separate infrastructure debt,
 not fixed in PR #104. `git diff --check` and `compileall` clean throughout.
 No M8.3/M7 command run; no real device, network, or credential provider
