@@ -14,73 +14,69 @@ Overwrite at every session close. Keep it minimal.
 ## 1. Snapshot
 
 - Date: 2026-09-07. `M8.4` — **AUTOMATED_VALIDATED, MERGED** to `main` via
-  PR #101, true merge commit `3fd424d0753e63ebca44d0fca9f4805d102e5349`
-  (correction round 1 applied and PO-approved before merge).
+  PR #101, true merge commit `3fd424d0753e63ebca44d0fca9f4805d102e5349`.
 - Active build: `gov_session_1_unified_packet` (`GOV.SESSION.1A`) —
-  governance, bounded. Replaces `GOV.SESSION.1`'s split narrative-plus-
-  pointer packet with one canonical protocol-v2 `NEXUS_SESSION_PACKET`
-  carrying the complete `AI_START_HERE.md` SESSION START/CLOSE report as a
-  machine-checked nested `report` object. No product, `M8`, or `M7` work.
-- Contract: `docs/design/GOV_SESSION_TRANSFER_PROTOCOL.md` — still DRAFT,
-  PO review pending on this correction round.
+  governance, bounded, branch `governance/gov-session-1a-unified-packet`,
+  PR #102 **OPEN, NOT MERGED**, merge decision **BLOCKED pending renewed
+  PO review**.
+- Contract: `docs/design/GOV_SESSION_TRANSFER_PROTOCOL.md` — **FROZEN,
+  PRODUCT OWNER APPROVED, 2026-09-07**. The protocol contract being frozen
+  is a separate fact from PR #102's own merge state: the contract text is
+  approved; the branch that implements it is not yet integrated to `main`.
 
 ## 2. What this session did
 
-1. Verified and merged PR #101 (`M8.4`) with a true merge commit after PO
-   approval; confirmed the merge commit, ancestry, and clean worktree.
-2. Rewrote `scripts/gov_session_transfer.py` for protocol version 2: the
-   packet's `report` object now carries the complete nested SESSION
-   START/CLOSE schema (`baseline`, `objective`, `scope`, `movement_type`,
-   `requirements`, `acceptance_criteria`, `validation_plan`, `invariants`,
-   `risks`, `context_not_loaded`, `recommended_reasoning`, `git`,
-   `merge_gate`, `deployment_direction`, `output_contract` for
-   `SESSION_START`; `completed`, `changed`, `preserved`, `validation`,
-   `unresolved_risks`, `state_updates`, `next`, `recommended_reasoning`,
-   `continuation`, `integration`, `effects` for `SESSION_CLOSE`), with
-   exact-key (no missing, no extra, at any depth) enforcement. Removed the
-   old flag-driven `start`/`close` subcommands entirely — replaced with one
-   `render FILE|-` command that validates a complete bare JSON object and
-   only emits the sentinel-wrapped packet on success. Version-1 packets
-   (`protocol_version: 1`) are now rejected outright.
-3. Rewrote `docs/design/GOV_SESSION_TRANSFER_PROTOCOL.md` to document the
-   v2 envelope/schema/CLI and the migration rationale.
-4. Rewrote `tests/test_gov_session_transfer.py` (121 tests) covering the
-   full v2 schema, per-field missing/empty/unknown/wrong-type/closed-
-   vocabulary rejection at every nesting level, the exact observed
-   unterminated-string truncation shape, syntactically-valid-but-
-   incomplete truncation, and the removed `start`/`close` subcommands.
-5. Reconciled `CURRENT_STATE.md`/`AI_HANDOVER.md`/`project/build_history.json`'s
-   `M8.4` record from "PR #101 OPEN, NOT MERGED" to merged (PR #101, true
-   merge commit `3fd424d0753e63ebca44d0fca9f4805d102e5349`); set
-   `project/roadmap.json`'s `now`/`current_build` next-movement pointer to
-   `m8_evidence_host_key_fingerprint_not_persisted`.
-6. Added one bounded governance build record, `gov_session_1_unified_packet`,
-   to `project/build_history.json` — does not create a second `M8.4` record.
+Two correction rounds on PR #102 since the build's initial commit
+(7ee554c → 384e834 → this session's head), plus this session's own
+documentation-consistency correction:
+
+1. **Correction round 1**: tightened `scripts/gov_session_transfer.py::extract_one`
+   to a symmetric, direction-neutral envelope — optional leading/trailing
+   whitespace only around the sentinel pair; any other content before the
+   opening sentinel or after the closing one is now rejected, not silently
+   skipped over. Updated `docs/design/GOV_SESSION_TRANSFER_PROTOCOL.md`
+   (status moved to FROZEN — PRODUCT OWNER APPROVED), `AGENTS.md`,
+   `AI_START_HERE.md`, `CLAUDE.md`, `.github/copilot-instructions.md`, and
+   the `build-start`/`build-close` prompts to state the same symmetric-
+   packet rule. Rewrote `tests/test_gov_session_transfer.py`'s envelope
+   tests (124 tests).
+2. **Correction round 2 (this session)**: found and fixed the one
+   remaining stale statement — `project/build_history.json`'s
+   `gov_session_1_unified_packet` evidence text still described the
+   protocol document as "DRAFT... not FROZEN" in a sentence written before
+   the freeze (now clarified as historical, superseded by the later
+   FROZEN status recorded in the same record). Fully rewrote this file
+   (`AI_HANDOVER.md`), which itself still said "DRAFT, PO review pending"
+   in two places — the actual staleness this round exists to fix.
+3. No code, schema, or test change in this round beyond the
+   `build_history.json` text clarification above — per this round's own
+   scope (`DOCS` movement type, no implementation).
 
 ## 3. Exact next action
 
-Per this session's own `output_contract`, no further movement begins in
-this session. The next product movement is **`m8_evidence_host_key_fingerprint_not_persisted`**
-— a narrow, separately-reviewed, automated implementation persisting the
+Per this session's own `output_contract`, no further movement begins
+here. The next product movement is
+**`m8_evidence_host_key_fingerprint_not_persisted`** — a narrow,
+separately-reviewed, automated implementation persisting the
 already-captured physical-host fingerprint into governed physical CP
 evidence metadata (`configuration/checkpoint_config_collector.py::_collect_host`'s
 `store.write_text_snapshot` call, `PHYSICAL_ARTIFACT_TYPE` only). `M8.3`'s
 real-environment validation stays deferred to backlog. `M7` stays blocked.
+PR #102 stays open pending renewed Product Owner review before any merge.
 
 ## 4. Test delta
 
-`tests/test_gov_session_transfer.py`: 121 passed (full rewrite for
-protocol v2). No product/`M8` test file touched by this session; `M8.4`'s
-own suite (30 targeted + 106 affected) was validated and merged in the
-prior session, not re-run here (merge-only handoff, then a governance-only
-build). `git diff --check`: clean. Privacy gate and state-consistency: to
-be re-run as part of this build's own validation before its PR is opened.
+None this round — a text-only reconciliation
+(`project/build_history.json`, this file). `git diff --check`: clean. No
+test suite was re-run per this round's explicit instruction (the prior
+round's 124/158-passing evidence stands, unchanged by this round's diff).
 
 ## 5. Risks / notes forward
 
 - `M7` remains blocked — unamended §9 gate.
 - `m8_evidence_host_key_fingerprint_not_persisted` remains open, unfixed.
 - `M8.3`'s real-environment validation remains deferred to backlog.
-- The unified packet protocol (`docs/design/GOV_SESSION_TRANSFER_PROTOCOL.md`)
-  stays DRAFT — this correction round is PO-review pending, not FROZEN.
+- The unified packet protocol is **FROZEN — PRODUCT OWNER APPROVED**; PR
+  #102, which implements it, is a separate, still-open, still-unmerged
+  fact — do not conflate the two in future state edits.
 - No UI, device, credential, or network-facing change in this session.
