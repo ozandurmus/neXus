@@ -7,74 +7,67 @@
 
 ## 1. Snapshot
 
-- Date: 2026-09-08. `gov_po_1_step_4_direction_record_ratification` —
-  **AUTOMATED_VALIDATED, MERGED** (PR #112, `79a90b94…`): `PRODUCT_DIRECTION_RECORD.md`
-  is **RATIFIED**. Step 3 — **MERGED** (PR #111, `e208cb82…`). Phase A
-  **authorized** (`RELAY_DECISION`, relay #5); Phase B closed until T1–T6.
-  Predecessor `gov_po_1_step_2_implementation` — **AUTOMATED_VALIDATED,
-  MERGED** via PR #110 (`b53e15f1…`); contract `gov_po_1_role_migration_contract`
-  **FROZEN, MERGED** via PR #109 (`d66e7dac…`). Both merges executed under an
-  explicit Product Owner `RELAY_DECISION` (relay #4/#5).
-- `M9` MERGED (PR #104); `GOV.GIT.1` MERGED (PR #108). `M8.3` deferred,
-  `M7` blocked.
+- Date: 2026-09-08. `gov_po_1_step_5_first_plan_episode` (`GOV.PO.1` §10
+  step 5) — the first interactive Phase A `PLAN` episode. Governance only.
+- `now_next.next` is no longer the deferred `M8.3`. It is
+  **`m10_1_registry_evidence_reconciliation_projection`** — the `D4`
+  registry↔evidence reconciliation producer, first slice of `M10`.
+- `M8.3` stays **deferred** and `M7` stays **blocked**. Choosing `M10.1`
+  pays none of that debt and must never be described as having done so.
+- Predecessors all **MERGED**: PR #112 (record RATIFIED), #111, #110, #109.
+  Phase A **authorized** (relay #5); Phase B closed until `T1`–`T6`.
 
 ## 2. What changed
 
-Step 4 (this build): `PRODUCT_DIRECTION_RECORD.md` §0 decision table DR-1..DR-9e,
-every `[PO-DIRECTION]` linked, D-F2 converted to `[REPO]`, status line
-`RATIFIED … PR #<n>`; `roadmap.json` `tufin_path_authority`; backlog umbrella
-`policy_rule_hygiene_and_path_placement_brief`; `nexus-po` skill §5.
+Governance state only — no product source, test, template or static file.
 
-Step 3 (PR #111): relay §1 roster role-based; forward notes after the
-CAPABILITY_STATE §10 and M8-header council disclosures (verbatim preserved);
-`claude-mem` paragraph removed and PO episode tier row added in
-`AI_START_HERE.md`; `build-start.prompt.md` reads the vendor-neutral set;
-`CLAUDE.md` toolchain line per ratification decision 8.
-
-Step 2 (merged, PR #110):
-
-- `.claude/skills/nexus-po/SKILL.md`, `.claude/agents/nexus-po.md`
-  (delegated, `tools: Read, Grep, Glob, Bash`, frontmatter PreToolUse gate).
-- `.claude/skills/nexus-decision-council/SKILL.md`,
-  `.claude/agents/nexus-council-seat.md` (read-only, `disallowedTools`
-  incl. `Agent`, `permissionMode: plan`).
-- `.claude/nexus-po.settings.json` (tracked; loaded with
-  `claude --settings` for PO sessions only) + `scripts/nexus_po_tool_gate.py`
-  (stdlib PreToolUse gate, two forms, logs outside the repository).
-- `.github/prompts/po-plan.prompt.md`, `po-review.prompt.md`; `CLAUDE.md`
-  PO-role delta; `.gitignore` now ignores `.claude/settings.local.json`.
-- `AGENTS.md`: the approved comment-only PO episode paragraph, verbatim.
-  `docs/design/NEXUS_AGENT_RELAY_PROTOCOL.md`: episode-close note under
-  `RELAY_NOTE`; agent-published `RELAY_DECISION` clause under §1.
-- `tests/test_gov_po_role.py` (T7 + gate unit/CLI tests).
-- `docs/design/PRODUCT_DIRECTION_RECORD.md` (**DRAFT**, previous assistant's
-  extraction + §13 second pass; 142 `[REPO]`, 15 `[PO-DIRECTION]`,
-  31 `[ASSISTANT]` items).
-- Project state files for the build.
+- `project/roadmap.json`: `current_build` and `now_next.now` set to this
+  episode; `now_next.next` replaced with `M10.1`; `M8.3` annotated in
+  `upcoming` as retained deferred debt; new `upcoming` rows for `M10.2`,
+  `M10.3`, `M11`, `M12`.
+- `project/backlog.json`: two new items — `dlp_scanner_venv_exclusion`
+  and `project_state_wording_drift_reconciliation`.
+- `project/build_history.json` head record + `docs/history/INDEX.md`
+  regenerated; `CURRENT_STATE.md` checkpoint/active-build/next rewritten
+  and trimmed back inside its 200-line budget.
+- `docs/design/PRODUCT_DIRECTION_RECORD.md` **deliberately untouched** —
+  amending a RATIFIED record was not needed for this episode's outputs.
 
 ## 3. Exact next action
 
-1. (done) PR #111 and #112 merged; record ratified.
-2. Step 5: first Phase A `PLAN` episode after a `RELAY_DECISION` authorizing
-   Phase A: `claude --settings .claude/nexus-po.settings.json` → `/nexus-po PLAN`.
-   It chooses the actionable `now_next.next`, ranks the backlog by theme,
-   files the `.venv` DLP debt, and verifies the two state drifts flagged in
-   the record §11.
-3. Step 6: isolation `VALIDATION` T1–T6 before any delegated episode.
-4. Phase A first `PLAN` episode: `claude --settings .claude/nexus-po.settings.json`
-   → `/nexus-po PLAN`, after a `RELAY_DECISION` authorizing Phase A.
-5. `VALIDATION` step 6: run T1–T6 for real before any delegated episode.
+1. Merge this governance PR — needs its own recorded `RELAY_DECISION`.
+2. Open `M10.1`'s own relay issue with its drafted `SESSION_START`, then
+   run it in a **fresh engineering session** at **`Sonnet 5, normal`**
+   (deterministic implementation against a frozen contract).
+3. `REVIEW` episode after `M10.1`'s `SESSION_CLOSE` lands; the next slice's
+   size follows that review's findings (`GOV.PO.1` §7).
+4. Step 6 still owed: isolation `VALIDATION` `T1`–`T6` before any delegated
+   (Phase B) episode. Extend it to cover **packet emission** — see §5.
 
 ## 4. Test delta
 
-`tests/test_gov_po_role.py` + relay + session-transfer + convergence: 190
-passed. Gate CLI smoke: deny → exit 2 + JSON deny; allow → exit 0; log
-outside repository. Build-history index, privacy gate, `git diff --check`
-in the `SESSION_CLOSE`. No full regression (governance-only, risk-based).
+None. No test ran and none needed to: this episode changed only governance
+metadata. The owed gates on this branch are the convergence suite, the
+build-history index check, the repository privacy gate and
+`git diff --check`.
 
 ## 5. Risks / notes forward
 
-- Documented ≠ demonstrated: T1–T6 are `NOT_RUN`; Phase B stays closed.
-- Implementation choice recorded as `RELAY_NOTE`: role-scoped settings file
-  instead of project-wide deny rules (which would bind engineers too).
-- The `.venv` DLP false positives are still unfiled (owed by step 5).
+- **The interactive PO gate cannot emit a `NEXUS_SESSION_PACKET.**
+  `scripts/nexus_po_tool_gate.py` rejects the angle brackets the packet
+  sentinel is built from as a forbidden shell fragment, and its `Edit`/
+  `Write` rule allows no file outside the governance paths — so neither a
+  `--body` nor a `--body-file` route exists from a gated PO session, while
+  `GOV.PO.1` §5.1.1 requires a state-changing episode to post exactly those
+  two packets. This episode's packets were produced by the human. `T1`–`T7`
+  do not cover packet emission; they should.
+- **`.claude/settings.local.json` allows `Bash(gh pr merge:*)`.** Untracked
+  local settings must not widen the enforcing layer (`GOV.PO.1` §6.2, `I3`).
+  The role-scoped `.claude/nexus-po.settings.json` denies the same pattern,
+  so a correctly launched PO session is safe; a session launched without
+  `--settings` is not.
+- **Two verified state drifts, reported not fixed** — backlog
+  `project_state_wording_drift_reconciliation`. Both live in free-text
+  label/summary fields, so the cross-authority convergence check cannot see
+  them.
+- Documented ≠ demonstrated: `T1`–`T6` are `NOT_RUN`; Phase B stays closed.

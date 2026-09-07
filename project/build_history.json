@@ -3,6 +3,22 @@
   "record_contract": "One structured record per build, newest first. Required: build, status, title, summary (<= 2 sentences). Optional: started, completed, track, movement, supersedes, evidence, risks_forward, docs{agreement,validation,handover} (repo-relative paths under docs/history/). Full detail lives in the linked doc; do not restate it here. Status vocabulary must stay within utils/project_plan.py STATUS_VALUES.",
   "builds": [
     {
+      "build": "gov_po_1_step_5_first_plan_episode",
+      "status": "automated_validated",
+      "title": "GOV.PO.1 step 5 -- first Phase A PLAN episode (sequencing, backlog re-rank, drift verification)",
+      "summary": "The first interactive Phase A Product Owner assistant episode: replaces the deferred m8_3_real_environment_validation in now_next.next with m10_1_registry_evidence_reconciliation_projection, slices the oversized frozen M10 scope into M10.1/M10.2/M10.3 under the GOV.PO.1 section 7 M8.1-M8.4 precedent, records M11 and M12 as upcoming rows, ranks the backlog by the four themes the Product Owner named, files the .venv DLP scanner debt and the two verified state drifts as backlog items, and drafts the M10.1 SESSION_START plus its Turkish stakeholder note. Governance only: no product source, test, template or static file is touched, no device or credential is contacted, and M8.3 stays deferred with M7 still blocked.",
+      "started": "2026-09-08",
+      "completed": "2026-09-08",
+      "track": "GOV",
+      "movement": "ARCHITECTURE",
+      "supersedes": null,
+      "evidence": "Branch gov/po-1-step-5-first-plan from main a7fca51c8d99ba90fc4e07d96703489c6fba82dc, clean tree. Episode authorized by the Phase A RELAY_DECISION on ozandurmus/nexus-agent-relay#5 (2026-09-08). MOVEMENT CHOICE: of the five candidates PRODUCT_DIRECTION_RECORD.md section 12 question 1 lists, RB.3b backup validation and every remaining OP.2.C failover gate are externally blocked (hardware, server availability, organizational sign-off), the next compliance slice (compliance_check_engine_primitives) needs its own contract plus a per-primitive command gate and a real-environment gate, and M8.3 is a deliberately deferred real-environment run rather than engineering work -- leaving M10 as the only candidate with no external gate and a completed prerequisite (M6). DRIFT VERIFICATION, both CONFIRMED against source: the no_enrollment_affordance criterion label contradicts the M9 build record and static/navigation_ui.js, static/console_actions.js and templates/console.html, which all ship the Administration -> Device Management entry point (console shell only, by D-NAV6 design); and failover_controlled_execution's 'not started' summary contradicts CURRENT_STATE.md and the existing checkpoint/clusterxl_*.py and utils/operate/*.py modules. Both reported, neither fixed -- filed as project_state_wording_drift_reconciliation. Validation: relay, session-transfer, gov_po_role and architecture-convergence suites; build-history index --check; repository privacy gate; git diff --check. No full regression (governance-only, risk-based); no render harness (no UI or payload change).",
+      "risks_forward": "TOOLING CONFLICT FOUND AND REPORTED, NOT WORKED AROUND: the interactive PO gate (scripts/nexus_po_tool_gate.py) cannot emit a NEXUS_SESSION_PACKET. Its FORBIDDEN_FRAGMENTS list rejects the angle brackets that the packet sentinel is made of, and its Edit/Write path rule permits no file outside the governance paths, so neither a --body nor a --body-file route exists from a gated PO session. GOV.PO.1 section 5.1.1 nonetheless requires a state-changing PO episode to post its own SESSION_START issue body and SESSION_CLOSE final comment. This episode's packets were therefore rendered and posted by the human rather than by the agent; the isolation acceptance tests T1-T7 do not currently cover packet emission and should. M8.3 stays deferred and M7 stays blocked -- unchanged. Phase B stays closed until T1-T6 run. The M10.1 movement drafted here is NOT authorized by this record: it needs its own relay issue and its own go-ahead.",
+      "docs": {
+        "agreement": "docs/design/GOV_PO_ROLE_MIGRATION.md"
+      }
+    },
+    {
       "build": "gov_po_1_step_4_direction_record_ratification",
       "status": "automated_validated",
       "title": "GOV.PO.1 step 4 -- PRODUCT_DIRECTION_RECORD.md ratification",
