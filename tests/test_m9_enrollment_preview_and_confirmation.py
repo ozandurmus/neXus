@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import shutil
+import threading
 import time
 from pathlib import Path
 from types import SimpleNamespace
@@ -29,6 +30,7 @@ FIXTURE = REPO_ROOT / "tests" / "fixtures" / "uitest"
 
 _PROBE_JOB_TYPE = "device_enrollment_identity_probe"
 _VALID_TRUST_REF = "system_known_hosts"
+_VALID_CREDENTIAL_REF = "system_cp_config_ssh"
 
 
 def _load_fixture(name: str):
@@ -106,7 +108,7 @@ def _wait_terminal(env, job_id, timeout=5.0):
 
 
 def _post_probe(env, *, endpoint="198.51.100.10", vendor_hint="checkpoint",
-                 credential_profile_ref="lab-cred-1", trust_profile_ref=_VALID_TRUST_REF,
+                 credential_profile_ref=_VALID_CREDENTIAL_REF, trust_profile_ref=_VALID_TRUST_REF,
                  idem="probe-idem-1", extra_body=None):
     body = {
         "endpoint": endpoint,
@@ -152,7 +154,7 @@ def _run_probe_to_terminal(env, outcome, *, endpoint="198.51.100.10", idem="prob
 
 
 def _confirm(env, *, probe_job_id, endpoint="198.51.100.10", vendor_hint="checkpoint",
-             credential_profile_ref="lab-cred-1", trust_profile_ref=_VALID_TRUST_REF,
+             credential_profile_ref=_VALID_CREDENTIAL_REF, trust_profile_ref=_VALID_TRUST_REF,
              tags=None, candidate_id=None, confirm=True):
     body = {
         "probe_job_id": probe_job_id,
@@ -175,14 +177,14 @@ def test_ac2_enrollment_routes_require_bearer_token(console_env):
     response = console_env.client.post(
         "/api/enrollment/probe", headers={"Idempotency-Key": "x"},
         json={"endpoint": "198.51.100.10", "vendor_hint": "checkpoint",
-              "credential_profile_ref": "c1", "trust_profile_ref": _VALID_TRUST_REF},
+              "credential_profile_ref": _VALID_CREDENTIAL_REF, "trust_profile_ref": _VALID_TRUST_REF},
     )
     assert response.status_code == 401
 
     response = console_env.client.post(
         "/api/registry/enrollments",
         json={"probe_job_id": "x", "endpoint": "e", "vendor_hint": "checkpoint",
-              "credential_profile_ref": "c1", "trust_profile_ref": _VALID_TRUST_REF, "confirm": True},
+              "credential_profile_ref": _VALID_CREDENTIAL_REF, "trust_profile_ref": _VALID_TRUST_REF, "confirm": True},
     )
     assert response.status_code == 401
 
@@ -208,7 +210,7 @@ def test_ac3_confirm_request_rejects_unknown_fields(console_env):
     # so a genuinely unknown field is what this test targets.
     body = {
         "probe_job_id": "whatever", "endpoint": "e", "vendor_hint": "checkpoint",
-        "credential_profile_ref": "c1", "trust_profile_ref": _VALID_TRUST_REF,
+        "credential_profile_ref": _VALID_CREDENTIAL_REF, "trust_profile_ref": _VALID_TRUST_REF,
         "confirm": True, "command": "rm -rf /",
     }
     response = console_env.client.post(
@@ -440,3 +442,131 @@ def test_get_registry_devices_lists_persisted_enrollments(console_env):
     assert response.status_code == 200
     endpoints = {row["endpoint"] for row in response.json()}
     assert "198.51.100.70" in endpoints
+
+
+# --- HIGH finding, PO corrective review: atomic confirmation consumption ---
+
+def test_confirmation_consumption_is_atomic_under_real_concurrency(console_env):
+    """Product Owner corrective review, relay #3: a check-then-create replay
+    guard (see `test_probe_already_consumed_is_refused_on_replay` above) does
+    not prove atomicity under real concurrency. This drives several threads
+    at the same `probe_job_id` simultaneously and asserts exactly one
+    confirmation audit row and exactly one HTTP 200 ever result."""
+    import concurrent.futures
+
+    from utils.enrollment_audit import EnrollmentAuditStore
+
+    record = _run_probe_to_terminal(
+        console_env, _positive_outcome(), endpoint="198.51.100.80", idem="probe-race-1",
+    )
+
+    def _attempt(_):
+        return _confirm(console_env, probe_job_id=record.job_id, endpoint="198.51.100.80")
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
+        responses = list(pool.map(_attempt, range(8)))
+
+    statuses = sorted(r.status_code for r in responses)
+    assert statuses.count(200) == 1, statuses
+    assert all(s in (200, 409) for s in statuses), statuses
+
+    audit = EnrollmentAuditStore(console_env.runtime_paths.data_root)
+    confirmations = [
+        r for r in audit.list_all() if r.kind == "confirmation" and r.probe_job_id == record.job_id
+    ]
+    assert len(confirmations) == 1, confirmations
+
+
+# --- PO corrective review, relay #3: the M9 runner exception stays scoped --
+
+# --- PO corrective review, relay #3: promote the ad hoc UI walkthrough -----
+
+from tests.test_con1_operator_console_read_only import (  # noqa: E402
+    _free_port,
+    _playwright_chromium_available,
+)
+
+
+@pytest.mark.skipif(
+    not _playwright_chromium_available(),
+    reason="playwright not installed or no Chromium resolvable — "
+           "pip install -r requirements-dev.txt && playwright install chromium",
+)
+def test_add_device_dialog_live_click_through_zero_console_errors(uitest_runtime_paths):
+    """Promotes the round-1 ad hoc smoke script into a permanent, CI-enforced
+    regression test (PO corrective review, relay #3, finding 4). Drives the
+    real 'Add device' dialog end to end against a real running console and a
+    real Chromium tab: open, fill, probe (against an RFC 5737 documentation
+    endpoint so the identity gate genuinely refuses, no real device contact),
+    read the resulting status text, close. Zero console errors throughout."""
+    import uvicorn
+    from console.app import create_app
+    from console.auth import generate_launch_token
+
+    port = _free_port()
+    token = generate_launch_token()
+    bound_origin = f"http://127.0.0.1:{port}"
+    app = create_app(runtime_paths=uitest_runtime_paths, launch_token=token, bound_origin=bound_origin)
+    config = uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning")
+    server = uvicorn.Server(config)
+
+    thread = threading.Thread(target=server.run, daemon=True)
+    thread.start()
+    try:
+        deadline = time.time() + 10
+        while not server.started and time.time() < deadline:
+            time.sleep(0.05)
+        assert server.started, "console server did not start in time"
+
+        from playwright.sync_api import sync_playwright
+
+        console_errors = []
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            try:
+                page = browser.new_page()
+                page.on("console", lambda msg: console_errors.append(msg.text) if msg.type == "error" else None)
+                page.on("pageerror", lambda exc: console_errors.append(str(exc)))
+                page.goto(f"{bound_origin}/#t={token}")
+                page.wait_for_timeout(400)
+
+                page.eval_on_selector('.module-nav-item[data-module="inventory"]', "el => el.click()")
+                page.wait_for_timeout(150)
+
+                open_button = page.query_selector("#m9EnrollOpenButton")
+                assert open_button is not None, "trigger button #m9EnrollOpenButton not found"
+                open_button.click()
+                page.wait_for_timeout(200)
+                assert page.eval_on_selector("#m9EnrollDialog", "el => el.open") is True
+
+                page.fill("#m9EnrollEndpoint", "203.0.113.10")
+                page.click("#m9EnrollProbeButton")
+                page.wait_for_timeout(2000)
+                status_text = page.eval_on_selector("#m9EnrollStatus", "el => el.textContent")
+                assert status_text and status_text.strip()
+
+                close_button = page.query_selector("#m9EnrollCloseButton")
+                close_button.click()
+                page.wait_for_timeout(100)
+                assert page.eval_on_selector("#m9EnrollDialog", "el => el.open") in (False, None)
+            finally:
+                browser.close()
+
+        assert not console_errors, f"console errors during Add device dialog walk: {console_errors}"
+    finally:
+        server.should_exit = True
+        thread.join(timeout=10)
+
+
+def test_enrollment_probe_is_the_only_job_type_exempt_from_main_main(console_env):
+    """RELAY_DECISION (relay #3): the pre-enrollment probe's `main.main()`
+    bypass in `console/runner.py` must stay a documented, M9-only exception,
+    never a general-purpose escape hatch. Asserts exactly one `JobType` in
+    the registry carries the non-default `console_reachable_via`, and that
+    it is the enrollment-probe job type `console/runner.py` special-cases."""
+    from console.registry import JOB_REGISTRY
+    from console.runner import _ENROLLMENT_PROBE_JOB_TYPE_ID
+
+    exempted = [jt for jt in JOB_REGISTRY.values() if jt.console_reachable_via != "generic_jobs_api"]
+    assert len(exempted) == 1, exempted
+    assert exempted[0].id == _ENROLLMENT_PROBE_JOB_TYPE_ID == _PROBE_JOB_TYPE

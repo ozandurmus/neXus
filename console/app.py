@@ -32,7 +32,6 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import re
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
@@ -46,7 +45,11 @@ from console.registry import JOB_REGISTRY, get_job_type
 from console.registry_targets import DEVICE_ID_TARGET_MODE, resolve_registry_targets
 from console.runner import ConsoleJobRunner
 from utils.action_taxonomy import console_refusal
-from utils.enrollment_audit import EnrollmentAuditError, EnrollmentAuditStore
+from utils.enrollment_audit import (
+    EnrollmentAuditConflictError,
+    EnrollmentAuditError,
+    EnrollmentAuditStore,
+)
 from utils.device_registry import (
     VENDOR_VALUES,
     DeviceRegistry,
@@ -74,13 +77,19 @@ _DEPLOYMENT_PROFILES = ("local", "server")
 # nothing.
 _TRUST_PROFILE_SENTINEL = "system_known_hosts"
 
-# M9 condition 6 -- mirrors utils/device_registry.py's own
-# `_CREDENTIAL_REF_RE` exactly (that constant is module-private, so this is a
-# deliberate, documented duplication, not a drift risk in practice: every
-# value accepted here is re-validated by `DeviceRegistry.enroll` itself
-# before anything is persisted -- this route-level copy only exists to fail
-# fast with a clean 400 before a job is even queued).
-_CREDENTIAL_REF_RE = re.compile(r"^[A-Za-z0-9_.-]{1,64}$")
+# M9 condition 6 -- "credential-profile reference only", closed to the one
+# value that actually selects the executed credential source. Round 1 only
+# format-validated this field (mirroring utils/device_registry.py's own
+# module-private `_CREDENTIAL_REF_RE`) without the field ever selecting
+# anything: `console/runner.py::_resolve_probe_credentials` always resolves
+# the single global SECURITYEXPERT_CP_CONFIG_SSH_USERNAME/_PASSWORD source
+# regardless of what was submitted, so an arbitrary accepted string made the
+# audit trail disagree with the credentials actually used. Corrected to the
+# same closed-sentinel pattern `_TRUST_PROFILE_SENTINEL` already uses below:
+# no named-credential-profile system exists anywhere in this repository, and
+# building one is explicitly out of scope, so the console accepts this one
+# sentinel and fails closed on every other value.
+_CREDENTIAL_PROFILE_SENTINEL = "system_cp_config_ssh"
 
 # C1-1: the console's CSP is stricter than the exported report's — served as a
 # real response header (not a <meta> tag), so frame-ancestors is honored here.
@@ -127,12 +136,16 @@ def _normalize_vendor_hint(value) -> str:
 
 
 def _require_credential_ref(value) -> str:
-    if not isinstance(value, str) or not _CREDENTIAL_REF_RE.match(value.strip()):
+    if value != _CREDENTIAL_PROFILE_SENTINEL:
         raise HTTPException(
             status_code=400,
-            detail="credential_profile_ref must match ^[A-Za-z0-9_.-]{1,64}$",
+            detail=(
+                f"credential_profile_ref must be {_CREDENTIAL_PROFILE_SENTINEL!r} -- no other "
+                "credential profile exists yet (exactly one Check Point SSH credential source "
+                "is configured system-wide)"
+            ),
         )
-    return value.strip()
+    return value
 
 
 def _require_trust_ref(value) -> str:
@@ -485,19 +498,26 @@ def create_app(
                 detail="confirm must be true -- explicit operator confirmation is required",
             )
 
-        # M9 scope decision (Product-Owner confirmed): the registry<->
-        # evidence reconciliation join that would produce a real "candidate"
-        # list is §9.2 amendment A6 in the runtime/enrollment contract --
-        # explicitly M10's job, not M9's. This schema accepts the field
+        # M9 scope decision, reconfirmed by explicit Product Owner
+        # RELAY_DECISION (relay ozandurmus/nexus-agent-relay#3, 2026-09-07):
+        # the registry<->evidence reconciliation join that would produce a
+        # real "candidate" list is §9.2 amendment A6 in the runtime/
+        # enrollment contract -- explicitly M10's job, not M9's, and this
+        # movement must not invent, synthesize, infer or persist a
+        # candidate-id source of its own. This schema accepts the field
         # (AC-EN-1's literal wording: "and/or a closed candidate id") and
         # would hold it to the identical trust/audit/confirmation bar if it
         # were ever populated (AC-EN-10, no exemption) -- but there is no
         # data source for it yet, so any actually-populated value is refused
-        # honestly rather than silently accepted or silently ignored.
+        # honestly, with a stable error code naming the exact dependency,
+        # rather than silently accepted or silently ignored.
         if body.get("candidate_id"):
             raise HTTPException(
                 status_code=409,
-                detail={"error": "candidate_enrollment_not_available_pending_m10"},
+                detail={
+                    "error": "candidate_enrollment_not_available_pending_m10",
+                    "dependency": "M10 registry<->evidence reconciliation projection (§9.2 amendment A6)",
+                },
             )
 
         probe_job_id = body.get("probe_job_id")
@@ -545,27 +565,21 @@ def create_app(
             raise HTTPException(status_code=409, detail={"error": "probe_intent_mismatch"})
 
         audit_store = EnrollmentAuditStore(runtime_paths.data_root)
-        # Single-use: a probe result may confirm at most one enrollment.
-        # TOCTOU note: two concurrent confirmations of the same probe_job_id
-        # could both pass this check before either writes -- harmless, since
-        # `DeviceRegistry.enroll`'s own lock+duplicate-check (unchanged,
-        # condition 16) still lets only one of them actually persist a
-        # device; the worst case is a second, harmless confirmation-audit row
-        # for a request that then gets `refused_duplicate`.
-        if any(
-            row.kind == "confirmation" and row.probe_job_id == probe_job_id
-            for row in audit_store.list_all()
-        ):
-            raise HTTPException(status_code=409, detail={"error": "probe_already_consumed"})
-
-        # Condition 14: immutable audit record, durable BEFORE the registry
-        # mutation below.
+        # Single-use (condition 13/`AC-EN-13`), atomic under concurrency:
+        # `record_confirmation` itself checks-and-creates the confirmation
+        # row under one lock, keyed deterministically on `probe_job_id`, so
+        # two concurrent confirmations of the same probe can no longer both
+        # pass a check before either writes -- the second one always loses
+        # here, before `DeviceRegistry.enroll` is ever called. Condition 14:
+        # this row is durable BEFORE the registry mutation below.
         try:
             confirmation = audit_store.record_confirmation(
                 probe_job_id=probe_job_id, endpoint=endpoint, port=port,
                 vendor_hint=vendor_hint, credential_ref=credential_ref,
                 trust_ref=trust_ref, tags=tags,
             )
+        except EnrollmentAuditConflictError:
+            raise HTTPException(status_code=409, detail={"error": "probe_already_consumed"})
         except EnrollmentAuditError:
             raise HTTPException(status_code=503, detail={"error": "enrollment_audit_unavailable"})
 

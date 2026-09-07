@@ -26,6 +26,7 @@ host-key fingerprint.
 """
 from __future__ import annotations
 
+import threading
 import uuid
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
@@ -33,6 +34,14 @@ from pathlib import Path
 from typing import Any
 
 from utils.evidence_backend import EvidenceBackendError, select_enrollment_audit_backend
+
+#: Guards the check-and-create window for confirmation-row consumption
+#: (single process only -- this console runs as one loopback process, so a
+#: `threading.Lock` closes the practical race; the deterministic audit_id
+#: below is the actual collision guarantee, this lock just removes the
+#: TOCTOU window between the filesystem backend's own exists-check and its
+#: write).
+_CONFIRMATION_LOCK = threading.Lock()
 
 _MAX_FREE_TEXT_LENGTH = 255
 
@@ -46,6 +55,13 @@ OUTCOME_VALUES: tuple[str, ...] = (
 
 class EnrollmentAuditError(RuntimeError):
     """Fail-closed error for an invalid request or an unreadable audit store."""
+
+
+class EnrollmentAuditConflictError(EnrollmentAuditError):
+    """Raised by ``record_confirmation`` when the given ``probe_job_id`` has
+    already been consumed by an earlier confirmation -- distinct from a
+    generic storage failure so the caller can map it to its own conflict
+    response instead of a 5xx."""
 
 
 def _utc_now_iso() -> str:
@@ -123,11 +139,21 @@ class EnrollmentAuditStore:
         """Written and durable BEFORE the caller may invoke
         ``DeviceRegistry.enroll`` (condition 14) -- the caller is responsible
         for that ordering; this call itself just makes the row durable and
-        returns."""
+        returns.
+
+        Single-use (condition 13/`AC-EN-13`): the confirmation row's
+        ``audit_id`` is deterministic on ``probe_job_id`` (never a random
+        uuid), so a second confirmation attempt for the same probe collides
+        at the storage layer -- checked and created atomically under
+        ``_CONFIRMATION_LOCK`` -- instead of racing a separate list-scan
+        against a later, independent create. Raises
+        ``EnrollmentAuditConflictError`` if this probe was already consumed.
+        """
+        probe_job_id = _require_nonempty("probe_job_id", probe_job_id)
         record = EnrollmentAuditRecord(
-            audit_id=uuid.uuid4().hex,
+            audit_id=f"confirmation-{probe_job_id}",
             kind="confirmation",
-            probe_job_id=_require_nonempty("probe_job_id", probe_job_id),
+            probe_job_id=probe_job_id,
             confirmation_audit_id=None,
             endpoint=_require_nonempty("endpoint", endpoint),
             port=port,
@@ -137,7 +163,13 @@ class EnrollmentAuditStore:
             tags=dict(tags or {}),
             recorded_at_utc=_utc_now_iso(),
         )
-        self._create(record)
+        with _CONFIRMATION_LOCK:
+            try:
+                self._backend.create(record.to_dict())
+            except EvidenceBackendError as exc:
+                raise EnrollmentAuditConflictError(
+                    f"probe_job_id {probe_job_id!r} was already consumed by an earlier confirmation"
+                ) from exc
         return record
 
     def record_outcome(

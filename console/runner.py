@@ -9,18 +9,34 @@ collector, a vendor module, or ``run_recovery_collection`` directly (AC-2) —
 every device interaction happens inside ``main.main()``, exactly as the
 scheduler's ``_evaluate_and_dispatch_due_workflows`` already does.
 
-**One narrow, named exception (M9):** the single ``device_enrollment_identity_probe``
-job type (`console/registry.py`) has no CLI flag and no argv to construct —
-`docs/design/OPERATOR_CONSOLE_ARCHITECTURE.md` §4.1 requires it to run
-"through the existing runner and admission coordinator" literally, not
-through ``main.main()``. ``_execute_enrollment_probe`` below calls
+**One narrow, named exception (M9), reconfirmed by explicit Product Owner
+RELAY_DECISION** (relay ``ozandurmus/nexus-agent-relay#3``, 2026-09-07,
+resolving the corrective-review finding that this exception needed explicit
+authorization rather than self-authorization): the single
+``device_enrollment_identity_probe`` job type (`console/registry.py`) has no
+CLI flag and no argv to construct — `docs/design/OPERATOR_CONSOLE_ARCHITECTURE.md`
+§4.1 requires it to run "through the existing runner and admission
+coordinator" literally, not through ``main.main()``, because it must probe
+identity for an endpoint **before** any ``device_id``/registry entry exists
+for it — a precondition ``utils/first_contact_producer.py`` (M8.3) cannot
+satisfy. The Product Owner explicitly authorized this exact exception and
+explicitly rejected the alternative of writing a throwaway/"pending"
+`DeviceRegistry` stub just to route through M8.3's producer unmodified.
+``_execute_enrollment_probe`` below calls
 ``utils.collection_executor.execute_admitted_collection`` directly, with a
 **lazy, function-local** import of ``utils.pre_enrollment_identity_probe``
 (the same lazy-import pattern this module already uses for ``import main``),
 so this module's own static import graph stays vendor-free —
 ``tests/test_con1_operator_console_read_only.py::test_ac8_console_app_imports_no_vendor_module``
 still passes unmodified. This is the only job type this module ever executes
-without going through ``main.main()``.
+without going through ``main.main()`` — pinned by
+``tests/test_m9_enrollment_preview_and_confirmation.py::test_enrollment_probe_is_the_only_job_type_exempt_from_main_main``.
+It introduces no new SSH/transport code (``utils.pre_enrollment_identity_probe``
+reuses ``utils.cp_ssh_trust.lookup_trusted_host_key`` and
+``configuration.checkpoint_config_collector._collect_host`` verbatim), no
+second evidence/readiness engine, no registry mutation before confirmation,
+and no device-contact expansion — it is a read-only CLASS 0 job like every
+other job type here.
 """
 from __future__ import annotations
 

@@ -237,6 +237,7 @@ async function consoleInitJobsPanel() {
 // this dialog only ever watches one job at a time.
 
 const _M9_TRUST_PROFILE_SENTINEL = "system_known_hosts";
+const _M9_CREDENTIAL_PROFILE_SENTINEL = "system_cp_config_ssh";
 const _M9_POLL_INTERVAL_MS = 1000;
 const _M9_POLL_TIMEOUT_MS = 60000;
 
@@ -338,7 +339,7 @@ function _m9ResetDialogState() {
 async function _m9HandleProbeSubmit(dialog) {
     const endpoint = dialog.querySelector("#m9EnrollEndpoint")?.value.trim() || "";
     const vendorHint = dialog.querySelector("#m9EnrollVendorHint")?.value || "unknown";
-    const credentialRef = dialog.querySelector("#m9EnrollCredentialRef")?.value.trim() || "";
+    const credentialRef = _M9_CREDENTIAL_PROFILE_SENTINEL;
     const tagsRaw = dialog.querySelector("#m9EnrollTags")?.value.trim() || "";
 
     if (!endpoint) {
@@ -413,17 +414,26 @@ async function _m9HandleConfirmClick() {
 
 function consoleInitEnrollmentDialog() {
     const dialog = document.getElementById("m9EnrollDialog");
-    const openButton = document.getElementById("m9EnrollOpenButton");
-    if (!dialog || !openButton) return; // not on this shell build
+    if (!dialog) return; // not on this shell build
 
-    openButton.addEventListener("click", () => {
-        _m9ResetDialogState();
-        dialog.querySelectorAll("input").forEach((input) => { input.value = ""; });
-        if (typeof dialog.showModal === "function") dialog.showModal();
-        else dialog.setAttribute("open", "open");
+    // PO-NAV-1: both the Devices pane header button and the Administration ->
+    // Device Management button open this exact same dialog -- one enrollment
+    // implementation, two entry points, never two dialogs.
+    const openButtons = [
+        document.getElementById("m9EnrollOpenButton"),
+        document.getElementById("m9EnrollOpenButtonAdmin"),
+    ].filter(Boolean);
+    openButtons.forEach((openButton) => {
+        openButton.addEventListener("click", () => {
+            _m9ResetDialogState();
+            dialog.querySelectorAll("input").forEach((input) => { input.value = ""; });
+            if (typeof dialog.showModal === "function") dialog.showModal();
+            else dialog.setAttribute("open", "open");
+        });
     });
     dialog.querySelector("#m9EnrollCloseButton")?.addEventListener("click", () => {
         dialog.close ? dialog.close() : dialog.removeAttribute("open");
+        consoleRefreshDeviceManagementTable().catch(() => {});
     });
     dialog.querySelector("#m9EnrollProbeButton")?.addEventListener("click", (event) => {
         event.preventDefault();
@@ -435,10 +445,48 @@ function consoleInitEnrollmentDialog() {
     });
 }
 
+// PO-NAV-1 -- Administration -> Device Management, the second frozen
+// enrollment entry point. Read-only registry listing; all enrollment writes
+// still go exclusively through the one #m9EnrollDialog contract above.
+async function consoleRefreshDeviceManagementTable() {
+    const container = document.getElementById("deviceManagementTable");
+    if (!container) return; // not on this shell build
+    const response = await fetch("/api/registry/devices", { headers: _consoleAuthHeaders() });
+    if (!response.ok) {
+        container.textContent = `Device registry unavailable: HTTP ${response.status}`;
+        return;
+    }
+    const devices = await response.json();
+    if (!Array.isArray(devices) || devices.length === 0) {
+        container.textContent = "No devices enrolled yet.";
+        return;
+    }
+    const rows = devices.map((device) => `
+        <tr>
+            <td>${escapeHtml(device.endpoint || "")}</td>
+            <td>${escapeHtml(device.vendor || "unknown")}</td>
+            <td>${escapeHtml(device.state || "")}</td>
+            <td>${escapeHtml(device.enrollment_source || "")}</td>
+        </tr>
+    `).join("");
+    container.innerHTML = `
+        <table class="m9-preview-table">
+            <thead><tr><th>Endpoint</th><th>Vendor</th><th>State</th><th>Source</th></tr></thead>
+            <tbody>${rows}</tbody>
+        </table>
+    `;
+}
+
+async function consoleInitDeviceManagementPanel() {
+    if (!document.getElementById("deviceManagementTable")) return; // not on this shell build
+    await consoleRefreshDeviceManagementTable();
+}
+
 _consoleLaunchToken = _consoleReadLaunchToken();
 consoleRefreshPayloads();
 consoleInitJobsPanel().catch(() => {});
 consoleInitEnrollmentDialog();
+consoleInitDeviceManagementPanel().catch(() => {});
 
 document.getElementById("consoleRefreshButton")?.addEventListener("click", () => {
     consoleRefreshPayloads().catch(() => {});

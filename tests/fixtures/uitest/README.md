@@ -31,6 +31,16 @@ compliance, per-framework COVERED / PARTIALLY_COVERED / UNCOVERED.
 only the three builders whose real inputs are collector telemetry / PAN XML on
 disk / live stores are injected.
 
+M9's Device Management module (`device-management`) and the Inventory pane's
+"Add device" dialog are console-only and have no static-report payload field —
+their data comes live from `GET /api/registry/devices`/the job engine, not
+from any file in this bundle, so there is nothing to add here for them.
+Coverage for that path lives in
+`tests/test_m9_enrollment_preview_and_confirmation.py`'s Playwright-based
+`test_add_device_dialog_live_click_through_zero_console_errors` and
+`tests/test_con1_operator_console_read_only.py`'s module-nav walk (both use
+this same fixture bundle to boot the console).
+
 ## Regenerate
 
 ```
