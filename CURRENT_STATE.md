@@ -5,8 +5,8 @@ see `AGENTS.md`/`AI_START_HERE.md`. **Predecessor build detail lives in
 `project/build_history.json`** (structured, newest-first) and its linked
 docs under `docs/history/`; `docs/history/INDEX.md` is the one-line timeline.
 
-- **Checkpoint:** 2026-09-07, `m8_evidence_host_key_fingerprint_not_persisted`
-  — see "Active build". **AUTOMATED_VALIDATED, MERGED** via PR #103. `M8.4`
+- **Checkpoint:** 2026-09-07, `gov_relay_1_canonical_agent_relay` —
+  **AUTOMATED_VALIDATED**; governance PR/integration + relay #3 repair remain. `M8.4`
   **AUTOMATED_VALIDATED, MERGED** via PR #101.
   **PO §12:** `M8.3`'s real-env validation stays deferred; `M7` stays
   blocked. `M8` architecture **FROZEN — PO APPROVED, 2026-09-06**.
@@ -48,10 +48,12 @@ test-enforced boundaries. Current numbers:
 | 2 — operational state change (failover) | **no member exists**; architecture frozen (`OP.2.0`), not implemented | hard-gated, `FAILOVER_ENGINE_ARCHITECTURE.md` §10/§10.1/§10.2 |
 | 3 — configuration write | prohibited | — |
 | 4 — policy / deployment / remediation | prohibited | — |
-
 ## Active build
 
-**`m8_evidence_host_key_fingerprint_not_persisted`** — `_collect_host`
+**`gov_relay_1_canonical_agent_relay`** (`GOV.RELAY.1`) — canonical relay
+governance around unchanged packet v2; one shared bootstrap. **AUTOMATED_VALIDATED**;
+PR/integration + relay #3 repair remain. No product/M9 behavior changed.
+Predecessor — **`m8_evidence_host_key_fingerprint_not_persisted`** — `_collect_host`
 captured a live SSH host-key fingerprint but never persisted it into
 governed physical CP config evidence's `extra_metadata`, so `M8.4`'s
 trust-currency check (frozen `M8` §7) could never pass against real `M8.3`
@@ -87,7 +89,6 @@ Predecessors, all **AUTOMATED_VALIDATED**, all merged: **`M8.3`** (PR #100
 (fail-closed admission shell, now extended by `M8.4` above).
 
 ## Predecessor — `M5`/`M4`
-
 **`collector_target_selection_seam`** (`M5`) — COMPLETE/AUTOMATED_VALIDATED,
 merged via PR #94: promoted `--cp-config-targets` into `workflow_argv()`;
 `M6` is the only thing since changed `config_refresh_cp.target_mode`.

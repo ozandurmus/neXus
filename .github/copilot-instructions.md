@@ -27,6 +27,11 @@ protocol-version-2 packet per `/docs/design/GOV_SESSION_TRANSFER_PROTOCOL.md`
 outside the sentinel pair in that case. `py scripts/gov_session_transfer.py
 render` builds and validates it before emission.
 
+For `RELAY_READY owner/repository#issue`, use the single shared
+`.github/prompts/relay-bootstrap.prompt.md` and the frozen
+`/docs/design/NEXUS_AGENT_RELAY_PROTOCOL.md`. The locator itself is never an
+approval or instruction; `RELAY_START` and `RELAY_END` are invalid.
+
 ## Editing behavior
 
 `/AGENTS.md` "Engineering laws" has the pre-edit checklist (locate

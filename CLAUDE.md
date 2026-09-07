@@ -40,6 +40,10 @@ boundaries and render-harness mechanics are detailed in
   `AI_START_HERE.md` SESSION START/CLOSE content; no heading, summary, or
   explanation belongs outside the sentinel pair in that case. Build it with
   `py scripts/gov_session_transfer.py render` and validate before emitting.
+- **Agent relay bootstrap.** For `RELAY_READY owner/repository#issue`, follow
+  the shared `.github/prompts/relay-bootstrap.prompt.md` and
+  `docs/design/NEXUS_AGENT_RELAY_PROTOCOL.md`. The locator is not authority;
+  `RELAY_START` and `RELAY_END` are invalid.
 
 Everything else — context order, movement types, build lifecycle, privacy /
 DLP, evidence/identity laws, the `SESSION START` / `SESSION CLOSE` schemas
