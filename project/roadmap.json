@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "current_build": "gov_git_authority_reconciliation",
+  "current_build": "m9_enrollment_preview_confirmation_ui",
   "current_track": "PCP.x",
   "progress_contract": "Weighted acceptance-criterion completion. Percentages describe the declared roadmap, not calendar time or delivery ETA.",
   "tracks": [
@@ -140,15 +140,20 @@
   "now_next": {
     "horizon_contract": "NOW is exactly one build. NEXT is exactly one. Everything else is an `upcoming` row carrying its own true status: planned = AFTER, blocked = waiting on a named external gate, deferred = consciously postponed. `now.build` must equal the newest project/build_history.json record -- utils.project_plan enforces it.",
     "now": {
-      "build": "gov_git_authority_reconciliation",
-      "title": "GOV.GIT.1 -- Product Owner authorization and agent execution reconciliation",
-      "goal": "Make Product Owner control and authorized agent Git execution unambiguous, including one-objection/repeated-instruction handling.",
-      "status": "in_progress",
+      "build": "m9_enrollment_preview_confirmation_ui",
+      "title": "M9 -- local-loopback enrollment preview + explicit confirmation UI",
+      "goal": "Implement docs/design/LOCAL_CONTROL_PLANE_RUNTIME_AND_ENROLLMENT.md §9.1's seventeen mandatory conditions for manual-endpoint and closed candidate-id console enrollment, per the PO-authorized SESSION_START (relay ozandurmus/nexus-agent-relay#3, revalidated after a GOV.RELAY.1 correction round): a pre-registration identity probe, preview, explicit confirmation, immutable audit-before-mutation, and persistence through the one existing DeviceRegistry path.",
+      "status": "automated_validated",
       "started": "2026-09-07",
       "completed": "2026-09-07",
       "notes": [
-        "Full detail: AGENTS.md Git authority and execution law, docs/AI_DEVELOPMENT_PROTOCOL.md approval boundaries, and project/build_history.json.",
-        "Governance only; M9 product code and Claude's PR #104 remain untouched."
+        "Full detail: project/build_history.json's m9_enrollment_preview_confirmation_ui record.",
+        "Round 1: 164 tests passed against a real Python 3.12 environment; broader convergence/privacy/application-package sweep also green (43 passed). Live-Playwright console render walk passed (real Chromium, zero console errors). PR #104 opened.",
+        "Product Owner corrective review (relay #3) found six real gaps. Two required an explicit Product Owner RELAY_DECISION (candidate-id enrollment stays deferred per §9.2 A6/M10; the pre-enrollment probe's console/runner.py exception is explicitly authorized as M9-only, a pending-registry-stub alternative explicitly rejected). The other four were corrected directly: credential_profile_ref closed to one real sentinel, confirmation consumption made atomic under concurrency, the round-1 ad hoc dialog walkthrough promoted to a permanent test, and the Administration -> Device Management second PO-NAV-1 entry point implemented.",
+        "GOV.RELAY.1 -- canonical GitHub-issue agent relay (PR #105/#106), its question-routing amendment (PR #107), and the Git authority and execution law reconciliation (PR #108) -- completed as governance-only predecessor movements (see project/build_history.json); none changed product/M9 behavior. All safely true-merged into the M9 branch without discarding any M9 work.",
+        "Round 2 full targeted+affected re-run: 247 passed, 0 failed (includes two pre-existing stale tests in test_navigation_information_architecture.py fixed as incidental convergence debt, not new scope). A subsequent Product Owner validation review required the mandatory render harness and a full regression to actually run: closed by self-installing Node.js (no sudo) -- tests/test_html_render_harness.py 6 passed -- and running the full suite -- 2359 passed, 2 pre-existing unrelated .venv DLP-scanner false positives, given a narrow evidence-specific Product Owner waiver at the approved head. git diff --check and compileall clean.",
+        "M8.3 real-environment validation stays deferred; M7 stays blocked -- neither changed by this build.",
+        "PR #104 APPROVED_FOR_HUMAN_TRUE_MERGE by explicit Product Owner RELAY_DECISION at head d7290f6d5d8ccd5f016b55e1c21703948d29ab54; per AGENTS.md's Git authority and execution law (PR #108), that explicit authorization is sufficient for Claude to execute and verify the true merge -- not a manual-click requirement."
       ]
     },
     "next": {

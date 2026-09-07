@@ -5,15 +5,16 @@ see `AGENTS.md`/`AI_START_HERE.md`. **Predecessor build detail lives in
 `project/build_history.json`** (structured, newest-first) and its linked
 docs under `docs/history/`; `docs/history/INDEX.md` is the one-line timeline.
 
-- **Checkpoint:** 2026-09-07, `gov_git_authority_reconciliation` —
-  **AUTOMATED_VALIDATED** governance reconciliation; Claude remains M9 owner.
-  **PO §12:** `M8.3`'s real-env validation stays deferred; `M7` stays
-  blocked. `M8` architecture **FROZEN — PO APPROVED, 2026-09-06**.
+- **Checkpoint:** 2026-09-07, `m9_enrollment_preview_confirmation_ui` — see
+  "Active build". **AUTOMATED_VALIDATED** (rounds 1+2), PR #104
+  `APPROVED_FOR_HUMAN_TRUE_MERGE`, relay `ozandurmus/nexus-agent-relay#3`.
+  Predecessors PR #105/#106 + #107 + #108 (relay/Git governance) all
+  **AUTOMATED_VALIDATED**. `M8.4` **MERGED** PR #101. **PO §12:** `M8.3`
+  deferred, `M7` blocked. `M8` **FROZEN 2026-09-06**.
 - **Next** (`now_next.next`): `m8_3_real_environment_validation`, `deferred`
-  per §12. `m7_real_device_targeted_collect_now`/
-  `op2_c_cp_clusterxl_adapter_scoping` stay `upcoming`/`blocked`. `DEV.TEST.1`,
-  `PCP.1`, `M1`-`M6`, `M8.1`-`M8.4`, and this build complete/automated_validated
-  — `project/build_history.json`.
+  per §12, unchanged by M9's out-of-order run. `m7_real_device_targeted_collect_now`/
+  `op2_c_cp_clusterxl_adapter_scoping` stay `upcoming`/`blocked`.
+  `DEV.TEST.1`/`PCP.1`/`M1`-`M6`/`M8.1`-`M8.4` complete/automated_validated.
 - **OP.2.0 CLASS 2 architecture** (`docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md`):
   **CONTRACT FROZEN 2026-09-04**; `OP.2.A`/`OP.2.B` IMPLEMENTED; `OP.2.1` CP
   command gate DRAFTED — CLASS 2 still has **no member**, no adapter,
@@ -49,29 +50,47 @@ test-enforced boundaries. Current numbers:
 | 4 — policy / deployment / remediation | prohibited | — |
 ## Active build
 
-**`gov_git_authority_reconciliation`** (`GOV.GIT.1`) — clarifies that
-Corporate Git is Product Owner controlled through explicit authorization and
-that an authorized agent executes and verifies the named Git action. One
-concrete objection is allowed; a repeated informed PO instruction controls
-unless an exact higher-authority/failing-gate exception remains.
-**AUTOMATED_VALIDATED**; governance-only; Claude remains M9 owner and PR #104 is
-untouched.
+**`m9_enrollment_preview_confirmation_ui`** (`M9`) — local-loopback
+manual-endpoint enrollment via a pre-registration identity probe, a
+`CLASS 0` admission-coordinator job (not `main.main()`), an immutable audit
+trail beside the Device Registry (not `control_plane_store.py`, which
+forbids endpoint data), and routes through the one `DeviceRegistry.enroll`.
+Round 1 shipped manual-endpoint only (PR #104 opened). PO corrective review
+(relay `#3`) found six gaps; two needed a `RELAY_DECISION` (candidate-id
+deferred per `§9.2 A6`/`M10`; the `runner.py` probe exception authorized,
+M9-only); four corrected directly (`credential_profile_ref` sentinel, atomic
+confirmation, the dialog test, `PO-NAV-1`'s Administration entry point).
+Render harness run for real (Node self-installed) + full regression run
+(2359 passed; 2 pre-existing, unrelated `.venv` DLP false positives, waived
+at the approved head). **AUTOMATED_VALIDATED**, PR #104
+`APPROVED_FOR_HUMAN_TRUE_MERGE`. Full evidence: `project/build_history.json`.
 
-Predecessors — **`gov_relay_1_question_routing`** and
-**`gov_relay_1_canonical_agent_relay`** — **AUTOMATED_VALIDATED, MERGED**;
-`RELAY_QUESTION` and the canonical relay protocol remain in force. Full
-evidence: `project/build_history.json`.
+Predecessors, all **AUTOMATED_VALIDATED**, governance-only (packet v2 and
+M9/product behavior unchanged): `gov_git_authority_reconciliation` (PR #108)
+clarifies Corporate Git as Product-Owner-authorization-controlled, not a
+manual-click mandate; `gov_relay_1_question_routing` (PR #107) adds
+`RELAY_QUESTION`; `gov_relay_1_canonical_agent_relay` (PR #105/#106) is the
+relay contract itself.
+
+Predecessor — **`m8_evidence_host_key_fingerprint_not_persisted`** —
+**AUTOMATED_VALIDATED, MERGED** via PR #103, 2026-09-07: persisted
+`_collect_host`'s captured SSH host-key fingerprint into physical CP config
+evidence's `extra_metadata` so `M8.4`'s trust-currency check can pass.
+
+Predecessor — **`gov_session_1_unified_packet`** (`GOV.SESSION.1A`) —
+**FROZEN, MERGED 2026-09-07** (PR #102): one canonical protocol-v2
+`NEXUS_SESSION_PACKET` replacing `GOV.SESSION.1`'s split close
+(`docs/design/GOV_SESSION_TRANSFER_PROTOCOL.md`); v1 rejected. No M8/M7 work.
 
 ## Predecessor — `M5`/`M4`
-**`collector_target_selection_seam`** (`M5`) — COMPLETE/AUTOMATED_VALIDATED,
-merged via PR #94: promoted `--cp-config-targets` into `workflow_argv()`;
-`M6` is the only thing since changed `config_refresh_cp.target_mode`.
+**`collector_target_selection_seam`** (`M5`) — COMPLETE, merged via PR #94:
+promoted `--cp-config-targets` into `workflow_argv()`; `M6` is the only thing
+since changed `config_refresh_cp.target_mode`.
 **`local_control_plane_metadata_store`** (`M4`) — COMPLETE, merged via PR #93,
 additive local SQLite control-plane metadata store (seven `STRICT` tables).
 Detail: `docs/history/phase/M4_LOCAL_CONTROL_PLANE_METADATA_STORE.md`.
 
 ## Predecessor — `M3`
-
 **`nav_3_capability_state_vocabulary`** — COMPLETE / FROZEN (PO approved
 2026-09-06). `docs/design/CAPABILITY_STATE_VOCABULARY_AND_PRESENTATION.md` is
 implementation authority for the vocabulary/resolution/presentation matrix
@@ -79,7 +98,6 @@ implementation authority for the vocabulary/resolution/presentation matrix
 per-entity `D5`/`M12`), so every capability resolves `UNKNOWN` until then.
 
 ## `OP.0b.0` — FROZEN WITH REAL-ENV VALIDATION GATES
-
 `docs/history/phase/OP_0B_0_VENDOR_FAILOVER_PREFLIGHT_EVIDENCE_SURFACE.md`
 is implementation authority for the bounded S0–S9 slice sequence it defines
 — citable for command/schema/identity-model *interpretation*, but **still
@@ -96,7 +114,6 @@ permanently, both vendors. `D-V8` remains open, non-blocking. Full
 reasoning: `project/roadmap.json` `open_decisions`.
 
 ## PAN HA serial evidence
-
 The approved real PAN pair's S0 result: one member's `self_identity_
 consistent`/`runtime_peer_serial_state` are `MATCH`, the other's both
 `MISMATCH`. **B2 bidirectional corroboration: NOT ESTABLISHED**, root cause
@@ -114,9 +131,8 @@ a narrower question never promoted toward B2.
 `now_next.next` is `m8_3_real_environment_validation` (`deferred`, no new
 code) — see "Real-environment validation owed" below for the exact command.
 `M7` stays blocked until it runs and produces a genuine
-`REAL_ENV_VALIDATED` relationship; neither `M8.4`'s nor this build's own
-`AUTOMATED_VALIDATED` completion changes that. `operator_assertion` stays
-unaccepted.
+`REAL_ENV_VALIDATED` relationship; neither `M8.4`'s nor `M9`'s completion
+changes that. `operator_assertion` stays unaccepted.
 `op2_c_cp_clusterxl_adapter_scoping` stays `upcoming`/blocked; `OP.2.D`'s
 console flow is expected on the `PCP.4` device/HA tab, never a second one.
 
@@ -145,17 +161,11 @@ Concurrency budget stays at 1 per vendor pending its own real-env evidence.
 ## Automated test baseline
 
 ```
-m8_evidence_host_key_fingerprint_not_persisted: targeted 70 passed
-  (collector UI/M8.3/M8.4/interactive-project-plan). Convergence/privacy/
-  application-package sweep: 43 passed (1 unrelated pre-existing collection
-  error, missing `yaml`). compileall clean. git diff --check clean.
-M8.4: targeted 23 passed. Affected sweep (M6/M8.1/M8.2/M8.3/PCP.1/M4/CON.1/
-  CON.2/OP.0d/OP.0b S7.5/architecture convergence/application-package): 440
-  passed, 1 skipped, 0 failed. compileall/privacy PASS. Detail:
-  project/build_history.json.
-M8.3 and earlier predecessor build detail lives only in
-  project/build_history.json now.
-Repository privacy gate: PASS / 0 findings.
+M9 rounds 1+2: 247 targeted+affected passed; full regression 2359 passed,
+  2 pre-existing unrelated .venv DLP-scanner false positives (filed
+  separately). Render harness (check-render.mjs) + live-Playwright both green.
+M8.4: targeted 23 passed. Affected sweep 440 passed, 1 skipped, 0 failed.
+Earlier predecessor build detail lives only in project/build_history.json.
 ```
 ## Known xfails
 

@@ -229,9 +229,264 @@ async function consoleInitJobsPanel() {
     await consoleRefreshJobsTable();
 }
 
+// M9 — enrollment preview + confirmation. Reuses the exact auth/idempotency
+// helpers above; adds no new fetch pattern. The browser only ever submits
+// the closed schema below (endpoint, vendor hint, opaque credential/trust
+// references, tags) -- never a credential, a command, or argv (condition
+// 6/7/8). Polling (not SSE) for the probe job's terminal state: simpler and
+// this dialog only ever watches one job at a time.
+
+const _M9_TRUST_PROFILE_SENTINEL = "system_known_hosts";
+const _M9_CREDENTIAL_PROFILE_SENTINEL = "system_cp_config_ssh";
+const _M9_POLL_INTERVAL_MS = 1000;
+const _M9_POLL_TIMEOUT_MS = 60000;
+
+async function _consoleSubmitEnrollmentProbe(body) {
+    const response = await fetch("/api/enrollment/probe", {
+        method: "POST",
+        headers: _consoleAuthHeaders({
+            "Content-Type": "application/json",
+            "Idempotency-Key": _consoleNewIdempotencyKey(),
+        }),
+        body: JSON.stringify(body),
+    });
+    const parsed = await response.json().catch(() => ({}));
+    if (!response.ok) {
+        const detail = typeof parsed.detail === "string" ? parsed.detail : JSON.stringify(parsed.detail || parsed);
+        throw new Error(`identity probe request refused: HTTP ${response.status} — ${detail}`);
+    }
+    return parsed;
+}
+
+async function _consoleFetchJob(jobId) {
+    const response = await fetch(`/api/jobs/${encodeURIComponent(jobId)}`, { headers: _consoleAuthHeaders() });
+    if (!response.ok) throw new Error(`job fetch failed: HTTP ${response.status}`);
+    return response.json();
+}
+
+// Deliberately not `_consoleWatchJob` (SSE reader): this dialog is a single,
+// short-lived, one-job-at-a-time wait, so a bounded poll loop is simpler and
+// carries no persistent-connection lifecycle to manage across dialog close.
+async function _consolePollJobUntilTerminal(jobId) {
+    const deadline = Date.now() + _M9_POLL_TIMEOUT_MS;
+    for (;;) {
+        const record = await _consoleFetchJob(jobId);
+        if (["succeeded", "failed", "blocked", "skipped"].includes(record.state)) return record;
+        if (Date.now() > deadline) throw new Error("identity probe timed out waiting for a result");
+        await new Promise((resolve) => setTimeout(resolve, _M9_POLL_INTERVAL_MS));
+    }
+}
+
+async function _consoleConfirmEnrollment(body) {
+    const response = await fetch("/api/registry/enrollments", {
+        method: "POST",
+        headers: _consoleAuthHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify(body),
+    });
+    const parsed = await response.json().catch(() => ({}));
+    if (!response.ok) {
+        const detail = typeof parsed.detail === "string" ? parsed.detail : JSON.stringify(parsed.detail || parsed);
+        throw new Error(`enrollment refused: HTTP ${response.status} — ${detail}`);
+    }
+    return parsed;
+}
+
+function _m9SetStatus(text) {
+    const el = document.getElementById("m9EnrollStatus");
+    if (el) el.textContent = text || "";
+}
+
+function _m9RenderPreview(preview) {
+    const el = document.getElementById("m9EnrollPreview");
+    const confirmButton = document.getElementById("m9EnrollConfirmButton");
+    if (!el) return;
+    if (!preview) {
+        el.hidden = true;
+        el.innerHTML = "";
+        if (confirmButton) confirmButton.hidden = true;
+        return;
+    }
+    el.hidden = false;
+    const rows = [
+        ["Platform", preview.platform_label || preview.platform_family || "unknown"],
+        ["Model", preview.model || "unknown"],
+        ["Software version", preview.sw_version || "unknown"],
+        ["Identity gate", preview.identity_gate_status || "unknown"],
+        ["HA role", preview.ha_role || "n/a"],
+    ];
+    el.innerHTML = `
+        <table class="m9-preview-table">
+            <tbody>
+                ${rows.map(([label, value]) => `<tr><th>${escapeHtml(label)}</th><td>${escapeHtml(String(value))}</td></tr>`).join("")}
+            </tbody>
+        </table>
+    `;
+    if (confirmButton) confirmButton.hidden = false;
+}
+
+// Bound once per probe attempt: the confirm step must resend the exact same
+// intent the server bound the preview to (condition 13) -- this closure is
+// the browser-side half of that binding, not a security boundary (the
+// server independently re-derives and compares -- `probe_intent_mismatch`).
+let _m9LastProbe = null;
+
+function _m9ResetDialogState() {
+    _m9LastProbe = null;
+    _m9RenderPreview(null);
+    _m9SetStatus("");
+}
+
+async function _m9HandleProbeSubmit(dialog) {
+    const endpoint = dialog.querySelector("#m9EnrollEndpoint")?.value.trim() || "";
+    const vendorHint = dialog.querySelector("#m9EnrollVendorHint")?.value || "unknown";
+    const credentialRef = _M9_CREDENTIAL_PROFILE_SENTINEL;
+    const tagsRaw = dialog.querySelector("#m9EnrollTags")?.value.trim() || "";
+
+    if (!endpoint) {
+        _m9SetStatus("Endpoint is required.");
+        return;
+    }
+
+    let tags = {};
+    if (tagsRaw) {
+        try {
+            tags = Object.fromEntries(
+                tagsRaw.split(",").map((pair) => pair.split("=").map((s) => s.trim())).filter(([k]) => k)
+            );
+        } catch (error) {
+            _m9SetStatus("Tags must be comma-separated key=value pairs.");
+            return;
+        }
+    }
+
+    _m9RenderPreview(null);
+    _m9SetStatus("Probing identity (read-only, no configuration is written)...");
+
+    const probeBody = {
+        endpoint,
+        vendor_hint: vendorHint,
+        credential_profile_ref: credentialRef,
+        trust_profile_ref: _M9_TRUST_PROFILE_SENTINEL,
+    };
+
+    try {
+        const record = await _consoleSubmitEnrollmentProbe(probeBody);
+        const terminal = await _consolePollJobUntilTerminal(record.job_id);
+        if (terminal.state !== "succeeded" || !terminal.preview) {
+            const reason = (terminal.outcome_counts && terminal.outcome_counts.probe_status)
+                || terminal.error_code || "no positive identity evidence";
+            _m9SetStatus(`No positive identity evidence: ${reason}. Nothing was enrolled.`);
+            _m9LastProbe = null;
+            return;
+        }
+        _m9LastProbe = { probeJobId: record.job_id, endpoint, vendorHint, credentialRef, tags };
+        _m9SetStatus("Identity confirmed. Review below, then confirm to enroll.");
+        _m9RenderPreview(terminal.preview);
+    } catch (error) {
+        _m9SetStatus(error.message);
+        _m9LastProbe = null;
+    }
+}
+
+async function _m9HandleConfirmClick() {
+    if (!_m9LastProbe) {
+        _m9SetStatus("Probe an identity first.");
+        return;
+    }
+    _m9SetStatus("Enrolling...");
+    try {
+        const device = await _consoleConfirmEnrollment({
+            probe_job_id: _m9LastProbe.probeJobId,
+            endpoint: _m9LastProbe.endpoint,
+            vendor_hint: _m9LastProbe.vendorHint,
+            credential_profile_ref: _m9LastProbe.credentialRef,
+            trust_profile_ref: _M9_TRUST_PROFILE_SENTINEL,
+            tags: _m9LastProbe.tags,
+            confirm: true,
+        });
+        _m9SetStatus(`Enrolled: device_id ${device.device_id} (state ${device.state}).`);
+        _m9LastProbe = null;
+        _m9RenderPreview(null);
+    } catch (error) {
+        _m9SetStatus(error.message);
+    }
+}
+
+function consoleInitEnrollmentDialog() {
+    const dialog = document.getElementById("m9EnrollDialog");
+    if (!dialog) return; // not on this shell build
+
+    // PO-NAV-1: both the Devices pane header button and the Administration ->
+    // Device Management button open this exact same dialog -- one enrollment
+    // implementation, two entry points, never two dialogs.
+    const openButtons = [
+        document.getElementById("m9EnrollOpenButton"),
+        document.getElementById("m9EnrollOpenButtonAdmin"),
+    ].filter(Boolean);
+    openButtons.forEach((openButton) => {
+        openButton.addEventListener("click", () => {
+            _m9ResetDialogState();
+            dialog.querySelectorAll("input").forEach((input) => { input.value = ""; });
+            if (typeof dialog.showModal === "function") dialog.showModal();
+            else dialog.setAttribute("open", "open");
+        });
+    });
+    dialog.querySelector("#m9EnrollCloseButton")?.addEventListener("click", () => {
+        dialog.close ? dialog.close() : dialog.removeAttribute("open");
+        consoleRefreshDeviceManagementTable().catch(() => {});
+    });
+    dialog.querySelector("#m9EnrollProbeButton")?.addEventListener("click", (event) => {
+        event.preventDefault();
+        _m9HandleProbeSubmit(dialog).catch((error) => _m9SetStatus(error.message));
+    });
+    dialog.querySelector("#m9EnrollConfirmButton")?.addEventListener("click", (event) => {
+        event.preventDefault();
+        _m9HandleConfirmClick().catch((error) => _m9SetStatus(error.message));
+    });
+}
+
+// PO-NAV-1 -- Administration -> Device Management, the second frozen
+// enrollment entry point. Read-only registry listing; all enrollment writes
+// still go exclusively through the one #m9EnrollDialog contract above.
+async function consoleRefreshDeviceManagementTable() {
+    const container = document.getElementById("deviceManagementTable");
+    if (!container) return; // not on this shell build
+    const response = await fetch("/api/registry/devices", { headers: _consoleAuthHeaders() });
+    if (!response.ok) {
+        container.textContent = `Device registry unavailable: HTTP ${response.status}`;
+        return;
+    }
+    const devices = await response.json();
+    if (!Array.isArray(devices) || devices.length === 0) {
+        container.textContent = "No devices enrolled yet.";
+        return;
+    }
+    const rows = devices.map((device) => `
+        <tr>
+            <td>${escapeHtml(device.endpoint || "")}</td>
+            <td>${escapeHtml(device.vendor || "unknown")}</td>
+            <td>${escapeHtml(device.state || "")}</td>
+            <td>${escapeHtml(device.enrollment_source || "")}</td>
+        </tr>
+    `).join("");
+    container.innerHTML = `
+        <table class="m9-preview-table">
+            <thead><tr><th>Endpoint</th><th>Vendor</th><th>State</th><th>Source</th></tr></thead>
+            <tbody>${rows}</tbody>
+        </table>
+    `;
+}
+
+async function consoleInitDeviceManagementPanel() {
+    if (!document.getElementById("deviceManagementTable")) return; // not on this shell build
+    await consoleRefreshDeviceManagementTable();
+}
+
 _consoleLaunchToken = _consoleReadLaunchToken();
 consoleRefreshPayloads();
 consoleInitJobsPanel().catch(() => {});
+consoleInitEnrollmentDialog();
+consoleInitDeviceManagementPanel().catch(() => {});
 
 document.getElementById("consoleRefreshButton")?.addEventListener("click", () => {
     consoleRefreshPayloads().catch(() => {});
