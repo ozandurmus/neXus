@@ -264,6 +264,30 @@ When that transport uses the GitHub-issue agent relay, follow the frozen
 prompt `.github/prompts/relay-bootstrap.prompt.md`. `RELAY_READY` is only a
 locator; it never carries authority.
 
+**Comment-only Product Owner assistant episodes.** A Product Owner
+assistant episode (`nexus-po`, `docs/design/GOV_PO_ROLE_MIGRATION.md`)
+whose only outputs are relay comments on an existing movement issue
+still produces its `SESSION START` at the start of the episode, in the
+PO session (movement type `READ_ONLY_AUDIT` for review and
+direction-audit episodes, `ARCHITECTURE` for decision episodes). It
+closes with exactly one plain-text `RELAY_NOTE episode close` comment on
+that same issue, never sentinel-wrapped, carrying: the episode type, the
+evidence inspected, the outputs produced (each relay comment by marker),
+unresolved risks, the recommended next movement, and its reasoning
+tier. No additional `SESSION_START` or `SESSION_CLOSE` packet is posted
+to that issue. Such an episode is exempt from the "Project-state update
+rule" and from rewriting `AI_HANDOVER.md` **only** when it changes none
+of the state those artifacts govern. A decision made in the episode that
+changes scope, delivery state, architecture, debt, or sequencing
+triggers the applicable durable-state updates through an explicitly
+owned governance or engineering movement: the episode-close note names
+that owner and the required follow-up, and the episode must not declare
+the affected work complete while those updates remain outstanding. The
+episode-close note is never a substitute for a `RELAY_DECISION`; every
+authorization decision retains its own source, scope, and supersession
+record. This paragraph changes neither the `NEXUS_SESSION_PACKET`
+schema/parser nor the relay marker set.
+
 Movement types: `READ_ONLY_AUDIT`, `ARCHITECTURE`, `IMPLEMENTATION`,
 `VALIDATION`, `ROOT_CAUSE`, `UI`, `DOCS`, `RELEASE_HANDOVER`.
 

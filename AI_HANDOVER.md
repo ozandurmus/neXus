@@ -7,57 +7,56 @@
 
 ## 1. Snapshot
 
-- Date: 2026-09-07. `gov_po_1_role_migration_contract` (`GOV.PO.1`) —
-  **contract FROZEN, AUTOMATED_VALIDATED**, governance-only. Branch
-  `gov-po-1-role-migration-contract` from `origin/main`
-  `ae5eb34fee25b16e759f2ed39e9890fe6d11a130`; PR opened, unmerged, merge
-  awaits an explicit Product Owner `RELAY_DECISION`.
-- Predecessor `M9` **MERGED** via PR #104 (true merge `5fc88a21…`);
-  `GOV.GIT.1` **MERGED** via PR #108. `M8.3` stays deferred, `M7` stays
-  blocked.
+- Date: 2026-09-07. `gov_po_1_step_2_implementation` — **AUTOMATED_VALIDATED**,
+  governance-only. Branch `gov-po-1-step-2-implementation`, stacked on
+  `gov-po-1-role-migration-contract` (PR #109, contract FROZEN, open). Both
+  PRs unmerged; merge awaits explicit Product Owner `RELAY_DECISION`s.
+- `M9` MERGED (PR #104); `GOV.GIT.1` MERGED (PR #108). `M8.3` deferred,
+  `M7` blocked.
 
 ## 2. What changed
 
-- `docs/design/GOV_PO_ROLE_MIGRATION.md` (new, FROZEN): sixteen recorded
-  Product Owner decisions (D1–D16), roles and permission boundaries
-  (interactive vs delegated `nexus-po`, council as instrument, engineer,
-  optional independent reviewer), `PRODUCT_DIRECTION_RECORD.md`
-  ratification mechanics, four PO episode types with SESSION START/CLOSE
-  compatibility, the approved §5.1.3 amendment text (exact `AGENTS.md` and
-  relay wording), isolation claims checked against platform docs, seven
-  behavioral acceptance tests (all `NOT_RUN`), size planning targets, and
-  the §10 sequence.
-- `.github/prompts/po-knowledge-extraction.prompt.md` (new): one-time
-  extraction prompt with `[REPO]`/`[PO-DIRECTION]`/`[ASSISTANT]` provenance.
-- `project/build_history.json`, `project/roadmap.json`, `docs/history/INDEX.md`,
-  `CURRENT_STATE.md`: new build record and checkpoint. No source, test,
-  rule or relay-contract text changed.
+- `.claude/skills/nexus-po/SKILL.md`, `.claude/agents/nexus-po.md`
+  (delegated, `tools: Read, Grep, Glob, Bash`, frontmatter PreToolUse gate).
+- `.claude/skills/nexus-decision-council/SKILL.md`,
+  `.claude/agents/nexus-council-seat.md` (read-only, `disallowedTools`
+  incl. `Agent`, `permissionMode: plan`).
+- `.claude/nexus-po.settings.json` (tracked; loaded with
+  `claude --settings` for PO sessions only) + `scripts/nexus_po_tool_gate.py`
+  (stdlib PreToolUse gate, two forms, logs outside the repository).
+- `.github/prompts/po-plan.prompt.md`, `po-review.prompt.md`; `CLAUDE.md`
+  PO-role delta; `.gitignore` now ignores `.claude/settings.local.json`.
+- `AGENTS.md`: the approved comment-only PO episode paragraph, verbatim.
+  `docs/design/NEXUS_AGENT_RELAY_PROTOCOL.md`: episode-close note under
+  `RELAY_NOTE`; agent-published `RELAY_DECISION` clause under §1.
+- `tests/test_gov_po_role.py` (T7 + gate unit/CLI tests).
+- `docs/design/PRODUCT_DIRECTION_RECORD.md` (**DRAFT**, previous assistant's
+  extraction + §13 second pass; 142 `[REPO]`, 15 `[PO-DIRECTION]`,
+  31 `[ASSISTANT]` items).
+- Project state files for the build.
 
 ## 3. Exact next action
 
-`GOV.PO.1` §10, in order: step 0 (human runs the extraction prompt in the
-previous tool, saves `docs/design/PRODUCT_DIRECTION_RECORD.md` as `DRAFT`);
-step 2 `IMPLEMENTATION` (`.claude/agents/nexus-po.md`,
-`.claude/skills/nexus-po/SKILL.md`, `.claude/skills/nexus-decision-council/SKILL.md`,
-tracked `.claude/settings.json` rules + `scripts/` hook, tool-neutral PO
-prompts, `CLAUDE.md` delta, T7 test, relay §6.3 clause, the approved §5.1.3
-amendment verbatim into `AGENTS.md` and the relay contract). Step 0 and
-step 2 are independent and may run in parallel. Do not start Phase A
-until §6.1 prerequisites hold.
+1. Product Owner: merge decisions for PR #109 then this PR (`RELAY_DECISION`
+   on relay #4 / #5).
+2. Product Owner: confirm/deny each `[PO-DIRECTION]` item and keep/drop
+   each `[ASSISTANT]` item in `PRODUCT_DIRECTION_RECORD.md`, then authorize
+   the ratifying governance PR (contract §4.1, D14).
+3. `DOCS` step 3: rule reconciliation list in the contract §12.
+4. Phase A first `PLAN` episode: `claude --settings .claude/nexus-po.settings.json`
+   → `/nexus-po PLAN`, after a `RELAY_DECISION` authorizing Phase A.
+5. `VALIDATION` step 6: run T1–T6 for real before any delegated episode.
 
 ## 4. Test delta
 
-Architecture-convergence, relay-protocol and session-transfer suites,
-build-history index check, repository privacy gate, `git diff --check`
-— results in the `SESSION_CLOSE` on the movement's relay issue. No full
-regression (docs/metadata-only change, risk-based).
+`tests/test_gov_po_role.py` + relay + session-transfer + convergence: 190
+passed. Gate CLI smoke: deny → exit 2 + JSON deny; allow → exit 0; log
+outside repository. Build-history index, privacy gate, `git diff --check`
+in the `SESSION_CLOSE`. No full regression (governance-only, risk-based).
 
 ## 5. Risks / notes forward
 
-- Nothing from the contract is in force yet; a brief naming `nexus-po` or
-  the council before step 2 merges names an uninstalled capability.
-- Same-model context separation is isolation, not independence; §9
-  independent review stays optional for security/identity/governance
-  contracts.
-- The `.venv` DLP-scanner false positives are still not a backlog item
-  (owed by §10 step 5).
+- Documented ≠ demonstrated: T1–T6 are `NOT_RUN`; Phase B stays closed.
+- Implementation choice recorded as `RELAY_NOTE`: role-scoped settings file
+  instead of project-wide deny rules (which would bind engineers too).
+- The `.venv` DLP false positives are still unfiled (owed by step 5).
