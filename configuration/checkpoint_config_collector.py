@@ -1598,6 +1598,7 @@ def _collect_host(target: PhysicalTarget, *, username: str, secret: str, strict_
                     "identity_status": identity.get("status"),
                     "identity_confidence": identity.get("confidence"),
                     "host_key_policy": host_row["host_key_policy"],
+                    "host_key_fingerprint": key_fp,
                     "raw_configuration_persisted": False,
                     "redaction_contract": "secret-bearing lines withheld; full raw canonical SHA256 retained only as change fingerprint",
                     "raw_canonical_sha256": sanitized["raw_canonical_sha256"],
