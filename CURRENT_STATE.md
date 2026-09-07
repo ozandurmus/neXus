@@ -5,20 +5,15 @@ see `AGENTS.md`/`AI_START_HERE.md`. **Predecessor build detail lives in
 `project/build_history.json`** (structured, newest-first) and its linked
 docs under `docs/history/`; `docs/history/INDEX.md` is the one-line timeline.
 
-- **Checkpoint:** 2026-09-07, `GOV.SESSION.1A` unified session-transfer
-  packet (`gov_session_1_unified_packet`) — see "Active build". `M8.4`
-  **AUTOMATED_VALIDATED, MERGED** via PR #101, merge commit
-  `3fd424d0753e63ebca44d0fca9f4805d102e5349`. **PO sequencing amendment
-  (§12):** `M8.3`'s real-env validation is deferred to backlog (stays
-  `AUTOMATED_VALIDATED`, never `REAL_ENV_VALIDATED`/`DONE`); `M7` stays
-  blocked regardless. `M8` architecture stays **FROZEN — PO APPROVED,
-  2026-09-06**.
-- **Next** (`now_next.next`): `m8_evidence_host_key_fingerprint_not_persisted`
-  — persist the already-captured physical-host fingerprint into governed
-  physical CP evidence metadata, `planned`. `M8.3` real-env validation
-  stays `deferred`. `m7_real_device_targeted_collect_now`/
-  `op2_c_cp_clusterxl_adapter_scoping` stay `upcoming`/`blocked`.
-  `DEV.TEST.1`, `PCP.1`, `M1`-`M6`, `M8.1`-`M8.4` complete/automated_validated
+- **Checkpoint:** 2026-09-07, `m8_evidence_host_key_fingerprint_not_persisted`
+  — see "Active build". **AUTOMATED_VALIDATED**, PR #103 open, **unmerged
+  pending PO review**. `M8.4` **AUTOMATED_VALIDATED, MERGED** via PR #101.
+  **PO §12:** `M8.3`'s real-env validation stays deferred; `M7` stays
+  blocked. `M8` architecture **FROZEN — PO APPROVED, 2026-09-06**.
+- **Next** (`now_next.next`): `m8_3_real_environment_validation`, `deferred`
+  per §12. `m7_real_device_targeted_collect_now`/
+  `op2_c_cp_clusterxl_adapter_scoping` stay `upcoming`/`blocked`. `DEV.TEST.1`,
+  `PCP.1`, `M1`-`M6`, `M8.1`-`M8.4`, and this build complete/automated_validated
   — `project/build_history.json`.
 - **OP.2.0 CLASS 2 architecture** (`docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md`):
   **CONTRACT FROZEN 2026-09-04**; `OP.2.A`/`OP.2.B` IMPLEMENTED; `OP.2.1` CP
@@ -56,38 +51,40 @@ test-enforced boundaries. Current numbers:
 
 ## Active build
 
-**`gov_session_1_unified_packet`** (`GOV.SESSION.1A`) — governance,
-bounded: replaces `GOV.SESSION.1`'s split narrative-plus-pointer close with
-one canonical protocol-v2 `NEXUS_SESSION_PACKET` carrying the complete
-SESSION START/CLOSE report as a machine-checked nested `report` object
-(`docs/design/GOV_SESSION_TRANSFER_PROTOCOL.md`, `scripts/gov_session_
-transfer.py`); v1 packets now rejected. No product/M8/M7 work. Full
-evidence: `project/build_history.json`.
+**`m8_evidence_host_key_fingerprint_not_persisted`** — `_collect_host`
+captured a live SSH host-key fingerprint but never persisted it into
+governed physical CP config evidence's `extra_metadata`, so `M8.4`'s
+trust-currency check (frozen `M8` §7) could never pass against real `M8.3`
+evidence. Added `"host_key_fingerprint": key_fp` to the physical-host
+`write_text_snapshot(...)` call only — VSX evidence unchanged.
+**AUTOMATED_VALIDATED**; branch
+`m8-evidence-host-key-fingerprint-not-persisted`, PR #103, **unmerged
+pending PO review**. Full evidence: `project/build_history.json`.
+
+Predecessor — **`gov_session_1_unified_packet`** (`GOV.SESSION.1A`) —
+**FROZEN, MERGED 2026-09-07** (PR #102): one canonical protocol-v2
+`NEXUS_SESSION_PACKET` replacing `GOV.SESSION.1`'s split close
+(`docs/design/GOV_SESSION_TRANSFER_PROTOCOL.md`); v1 packets rejected. No
+product/M8/M7 work.
 
 Predecessor — **`m8_4_m6_resolver_consumption`** (`M8.4`) —
-**AUTOMATED_VALIDATED, MERGED 2026-09-07**, branch
-`claude/m8-4-m6-resolver-consumption-nh0260`, PR #101, merge commit
-`3fd424d0753e63ebca44d0fca9f4805d102e5349`. Extends
+**AUTOMATED_VALIDATED, MERGED 2026-09-07**, PR #101: extends
 `console/registry_targets.py` §7 with the `M8.1` identity-translation
-currency check plus (correction round 1) a closed evidence-provenance pin
-and opaque-safe reference parsing. Does **not** implement `M7`.
-**Finding, reported not patched:** `_collect_host` never persists a
-host-key fingerprint into CP config evidence, so the trust-currency check
-fails closed today (next: `m8_evidence_host_key_fingerprint_not_persisted`).
+currency check plus a closed evidence-provenance pin. Does **not**
+implement `M7`.
 
 Parent — **`m8_first_contact_trust_identity_evidence_producer_architecture`**
 (`M8` architecture) — **FROZEN, PO APPROVED 2026-09-06 (PR #96), §12
-amendment 2026-09-07** (`M8.4` authorized ahead of `M8.3`'s real-env gate;
-`M7` unaffected, stays blocked). Sequence: `M8.1`→`M8.2`→`M8.3`→`M8.4`(above)
-→`M7`. Open: `operator_assertion`, single-sourced identity evidence,
-DEFERRED contradiction detection. Full contract:
+amendment 2026-09-07** (`M8.4` ahead of `M8.3`'s real-env gate; `M7` stays
+blocked). Sequence: `M8.1`→`M8.2`→`M8.3`→`M8.4`(above)→`M7`. Open:
+`operator_assertion`, single-sourced identity evidence, DEFERRED
+contradiction detection. Full contract:
 `docs/history/phase/M8_FIRST_CONTACT_TRUST_AND_IDENTITY_EVIDENCE_PRODUCER_ARCHITECTURE.md`.
 
-Predecessors, all **AUTOMATED_VALIDATED**, all merged: **`M8.3`** (PR #100,
-`ef43d59` — read-only producer; real-env validation deferred per §12),
-**`M8.2`** (PR #98 — local-only trusted-key check), **`M8.1`** (`M4`
-schema-2 relationship storage/API), **`M6`** (fail-closed admission shell,
-now extended by `M8.4` above).
+Predecessors, all **AUTOMATED_VALIDATED**, all merged: **`M8.3`** (PR #100
+— read-only producer; real-env validation deferred per §12), **`M8.2`**
+(PR #98), **`M8.1`** (`M4` schema-2 relationship storage/API), **`M6`**
+(fail-closed admission shell, now extended by `M8.4` above).
 
 ## Predecessor — `M5`/`M4`
 
@@ -142,8 +139,9 @@ a narrower question never promoted toward B2.
 `now_next.next` is `m8_3_real_environment_validation` (`deferred`, no new
 code) — see "Real-environment validation owed" below for the exact command.
 `M7` stays blocked until it runs and produces a genuine
-`REAL_ENV_VALIDATED` relationship; `M8.4`'s own `AUTOMATED_VALIDATED`
-completion does not change that. `operator_assertion` stays unaccepted.
+`REAL_ENV_VALIDATED` relationship; neither `M8.4`'s nor this build's own
+`AUTOMATED_VALIDATED` completion changes that. `operator_assertion` stays
+unaccepted.
 `op2_c_cp_clusterxl_adapter_scoping` stays `upcoming`/blocked; `OP.2.D`'s
 console flow is expected on the `PCP.4` device/HA tab, never a second one.
 
@@ -172,14 +170,15 @@ Concurrency budget stays at 1 per vendor pending its own real-env evidence.
 ## Automated test baseline
 
 ```
+m8_evidence_host_key_fingerprint_not_persisted: targeted 70 passed
+  (collector UI/M8.3/M8.4/interactive-project-plan). Convergence/privacy/
+  application-package sweep: 43 passed (1 unrelated pre-existing collection
+  error, missing `yaml`). compileall clean. git diff --check clean.
 M8.4: targeted 23 passed. Affected sweep (M6/M8.1/M8.2/M8.3/PCP.1/M4/CON.1/
   CON.2/OP.0d/OP.0b S7.5/architecture convergence/application-package): 440
-  passed, 1 skipped, 0 failed. Fixed fast-PR smoke set: 14 passed.
-  compileall clean. Privacy PASS. No full-regression run (risk-based).
-  Detail: project/build_history.json.
-M8.3: targeted 37 passed. Affected sweep: 335 passed. Wide CP-config sweep
-  (24 files): 441 passed, 1 skipped, 0 failed. Privacy PASS.
-M8.2/M8.1 and earlier predecessor build detail lives only in
+  passed, 1 skipped, 0 failed. compileall/privacy PASS. Detail:
+  project/build_history.json.
+M8.3 and earlier predecessor build detail lives only in
   project/build_history.json now.
 Repository privacy gate: PASS / 0 findings.
 ```
