@@ -2,8 +2,8 @@
 
 ## Status
 
-**FROZEN — PRODUCT OWNER APPROVED, 2026-09-07; QUESTION-ROUTING AMENDMENT
-APPROVED, 2026-09-07.** This contract governs the
+**FROZEN — PRODUCT OWNER APPROVED, 2026-09-07; QUESTION-ROUTING AND
+AUTHORIZED-EXECUTION AMENDMENTS APPROVED, 2026-09-07.** This contract governs the
 GitHub-issue relay used to move one bounded engineering movement between the
 Product Owner, Codex and Claude. It wraps, but does not modify, the frozen
 protocol-version-2 `NEXUS_SESSION_PACKET` contract in
@@ -134,6 +134,14 @@ question before asking it:
 5. Direct chat may explain status, but every material question that requires a
    durable Product Owner answer must appear in the relay. The agent must never
    make the Product Owner reconstruct an unresolved gate from another chat.
+6. Once a Product Owner `RELAY_DECISION` authorizes a named action, the agent
+   executes it without seeking the same permission again. The agent may record
+   one concrete objection as `RELAY_QUESTION`; if the Product Owner repeats or
+   expressly overrules the instruction with knowledge of that objection, the
+   question is closed and the agent proceeds, subject only to the exact
+   higher-authority exceptions in `AGENTS.md` "Git authority and execution law".
+   General caution or a stricter personal interpretation cannot keep reopening
+   the decision.
 
 ## 6. Recovery
 
@@ -148,8 +156,11 @@ schema does not recognize.
 Relay content is repository-facing engineering metadata. It must contain no
 credential, token, raw device output, local identity value, management address,
 or other sensitive operational value. Report relationships and sanitized state.
-The relay never authorizes device contact, credential use, Git merge, or a new
-network path unless higher authority explicitly does so for the named movement.
+The relay locator, packet validity, CI state, and agent comments never authorize
+device contact, credential use, Git operations, or a new network path. An
+explicit Product Owner `RELAY_DECISION` may authorize a named action within the
+limits of higher repository authority; the agent then executes it under
+`AGENTS.md` "Git authority and execution law".
 
 ## 8. Acceptance criteria
 
@@ -161,6 +172,9 @@ network path unless higher authority explicitly does so for the named movement.
 - Only the Product Owner can issue an authoritative `RELAY_DECISION`.
 - Every material unresolved gate is posted as `RELAY_QUESTION` and resolved by
   a matching Product Owner `RELAY_DECISION` before dependent work.
+- An authorized action is executed after one objection at most; a repeated
+  informed Product Owner instruction is not refused or reopened through a
+  stricter agent interpretation.
 - All required agent entry points reference the one shared bootstrap prompt.
 - No product, device, UI, database, credential, deployment, or production
   behavior changes as part of GOV.RELAY.1.

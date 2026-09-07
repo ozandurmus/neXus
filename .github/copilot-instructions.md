@@ -7,6 +7,8 @@ boundaries and render-harness mechanics are in
 `/docs/AI_DEVELOPMENT_PROTOCOL.md`. This file does not restate them — follow
 those documents, and read this one only for what's genuinely Copilot-specific
 below. Path-scoped deltas live in `.github/instructions/*.instructions.md`.
+Git authorization and agent execution semantics are owned by `/AGENTS.md`
+"Git authority and execution law"; do not infer a manual-click requirement.
 
 You are working on an existing, validated network-security product. Do not
 behave as if this is a greenfield repository.
