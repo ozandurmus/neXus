@@ -15,68 +15,61 @@ Overwrite at every session close. Keep it minimal.
 
 - Date: 2026-09-07. `M8.4` — **AUTOMATED_VALIDATED, MERGED** to `main` via
   PR #101, true merge commit `3fd424d0753e63ebca44d0fca9f4805d102e5349`.
-- Active build: `gov_session_1_unified_packet` (`GOV.SESSION.1A`) —
-  governance, bounded, branch `governance/gov-session-1a-unified-packet`,
-  PR #102 **OPEN, NOT MERGED**, merge decision **BLOCKED pending renewed
-  PO review**.
+- `gov_session_1_unified_packet` (`GOV.SESSION.1A`) — **AUTOMATED_VALIDATED,
+  MERGED** to `main` via PR #102, true merge commit
+  `69275f9589d73669846b1315813c227236be65e4`, after two correction rounds
+  (envelope-strictness fix; stale-DRAFT-wording reconciliation), both
+  Product Owner reviewed.
 - Contract: `docs/design/GOV_SESSION_TRANSFER_PROTOCOL.md` — **FROZEN,
-  PRODUCT OWNER APPROVED, 2026-09-07**. The protocol contract being frozen
-  is a separate fact from PR #102's own merge state: the contract text is
-  approved; the branch that implements it is not yet integrated to `main`.
+  PRODUCT OWNER APPROVED, 2026-09-07**, now integrated to `main`.
+- No active build. Next: `m8_evidence_host_key_fingerprint_not_persisted`
+  (not yet started).
 
 ## 2. What this session did
 
-Two correction rounds on PR #102 since the build's initial commit
-(7ee554c → 384e834 → this session's head), plus this session's own
-documentation-consistency correction:
-
-1. **Correction round 1**: tightened `scripts/gov_session_transfer.py::extract_one`
-   to a symmetric, direction-neutral envelope — optional leading/trailing
-   whitespace only around the sentinel pair; any other content before the
-   opening sentinel or after the closing one is now rejected, not silently
-   skipped over. Updated `docs/design/GOV_SESSION_TRANSFER_PROTOCOL.md`
-   (status moved to FROZEN — PRODUCT OWNER APPROVED), `AGENTS.md`,
-   `AI_START_HERE.md`, `CLAUDE.md`, `.github/copilot-instructions.md`, and
-   the `build-start`/`build-close` prompts to state the same symmetric-
-   packet rule. Rewrote `tests/test_gov_session_transfer.py`'s envelope
-   tests (124 tests).
-2. **Correction round 2 (this session)**: found and fixed the one
-   remaining stale statement — `project/build_history.json`'s
-   `gov_session_1_unified_packet` evidence text still described the
-   protocol document as "DRAFT... not FROZEN" in a sentence written before
-   the freeze (now clarified as historical, superseded by the later
-   FROZEN status recorded in the same record). Fully rewrote this file
-   (`AI_HANDOVER.md`), which itself still said "DRAFT, PO review pending"
-   in two places — the actual staleness this round exists to fix.
-3. No code, schema, or test change in this round beyond the
-   `build_history.json` text clarification above — per this round's own
-   scope (`DOCS` movement type, no implementation).
+1. Verified PR #102 head was exactly `3d6e9ab2c077c4b90b7edc11522aca3e70a2f882`,
+   base was `main` at `3fd424d0753e63ebca44d0fca9f4805d102e5349`, the
+   automatic `validate` check was pass, `full-regression` was skipping
+   (approved policy), and `mergeStateStatus` was CLEAN/MERGEABLE.
+2. Merged PR #102 with a true merge commit (`gh pr merge --merge`, no
+   squash/rebase): `69275f9589d73669846b1315813c227236be65e4`.
+3. Fetched `origin/main` post-merge and verified the new merge commit,
+   that `3d6e9ab` is an ancestor of `origin/main`, and that the working
+   tree stayed clean.
+4. Reconciled `project/build_history.json`'s `gov_session_1_unified_packet`
+   record (`evidence`/`risks_forward`) to record both correction rounds
+   and this merge; did not create a new build record.
+5. Rewrote this file for the final integration close.
 
 ## 3. Exact next action
 
-Per this session's own `output_contract`, no further movement begins
-here. The next product movement is
 **`m8_evidence_host_key_fingerprint_not_persisted`** — a narrow,
 separately-reviewed, automated implementation persisting the
 already-captured physical-host fingerprint into governed physical CP
-evidence metadata (`configuration/checkpoint_config_collector.py::_collect_host`'s
-`store.write_text_snapshot` call, `PHYSICAL_ARTIFACT_TYPE` only). `M8.3`'s
-real-environment validation stays deferred to backlog. `M7` stays blocked.
-PR #102 stays open pending renewed Product Owner review before any merge.
+evidence metadata: add `host_key_fingerprint` to the `extra_metadata` dict
+`configuration/checkpoint_config_collector.py::_collect_host` already
+passes to `store.write_text_snapshot`, for the physical-host artifact
+(`PHYSICAL_ARTIFACT_TYPE`) only — not the VSX context artifact. No device
+contact, no schema migration, no `M7` work. Recommended tier: Sonnet 5,
+normal (deterministic implementation against an already-frozen contract).
+`M8.3`'s real-environment validation stays deferred to backlog. `M7`
+stays blocked. New session may start fresh — this movement needs none of
+this session's context beyond the roadmap/backlog pointers.
 
 ## 4. Test delta
 
-None this round — a text-only reconciliation
-(`project/build_history.json`, this file). `git diff --check`: clean. No
-test suite was re-run per this round's explicit instruction (the prior
-round's 124/158-passing evidence stands, unchanged by this round's diff).
+None this session — a merge-only handoff plus a merge-state text
+reconciliation. `git status` confirms a clean tree post-merge. The prior
+build's own evidence (`tests/test_gov_session_transfer.py` 124 passed;
+architecture-convergence/application-package/privacy-gate combined 158
+passed) stands, unchanged by this session.
 
 ## 5. Risks / notes forward
 
 - `M7` remains blocked — unamended §9 gate.
-- `m8_evidence_host_key_fingerprint_not_persisted` remains open, unfixed.
+- `m8_evidence_host_key_fingerprint_not_persisted` remains open, unfixed —
+  the exact next movement.
 - `M8.3`'s real-environment validation remains deferred to backlog.
-- The unified packet protocol is **FROZEN — PRODUCT OWNER APPROVED**; PR
-  #102, which implements it, is a separate, still-open, still-unmerged
-  fact — do not conflate the two in future state edits.
+- The unified packet protocol is FROZEN and now integrated to `main`; no
+  further correction is pending on it.
 - No UI, device, credential, or network-facing change in this session.
