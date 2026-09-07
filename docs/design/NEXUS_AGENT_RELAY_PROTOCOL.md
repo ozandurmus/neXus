@@ -2,7 +2,8 @@
 
 ## Status
 
-**FROZEN — PRODUCT OWNER APPROVED, 2026-09-07.** This contract governs the
+**FROZEN — PRODUCT OWNER APPROVED, 2026-09-07; QUESTION-ROUTING AMENDMENT
+APPROVED, 2026-09-07.** This contract governs the
 GitHub-issue relay used to move one bounded engineering movement between the
 Product Owner, Codex and Claude. It wraps, but does not modify, the frozen
 protocol-version-2 `NEXUS_SESSION_PACKET` contract in
@@ -55,7 +56,8 @@ One GitHub issue carries one engineering movement.
   `NEXUS_SESSION_PACKET` whose `message_type` is `SESSION_CLOSE`. It is the last
   engineering handoff for the movement and contains no surrounding narrative.
 - Every comment between them starts with exactly one allowed intermediate
-  marker: `RELAY_ACK`, `RELAY_NOTE`, `RELAY_DECISION`, or `RELAY_CORRECTION`.
+  marker: `RELAY_ACK`, `RELAY_NOTE`, `RELAY_QUESTION`, `RELAY_DECISION`, or
+  `RELAY_CORRECTION`.
   Intermediate comments are plain UTF-8 text, not session packets.
 - A later correction never rewrites history. It names the invalid or stale
   item, states why it cannot govern subsequent work, and points to the
@@ -84,6 +86,10 @@ English evidence or instruction. The marker meanings are closed:
 
 - `RELAY_ACK` — receipt and structural-validation result; never approval.
 - `RELAY_NOTE` — factual status or evidence; never a decision.
+- `RELAY_QUESTION` — one material question that requires Product Owner input
+  before dependent work can continue. It names the blocked action, the exact
+  repository evidence or conflict, and the smallest set of options. Unrelated
+  independent work continues when safe.
 - `RELAY_DECISION` — authoritative Product Owner direction only.
 - `RELAY_CORRECTION` — identifies malformed, stale, or incorrect relay
   material and its replacement; never silently deletes prior evidence.
@@ -110,6 +116,25 @@ Given a `RELAY_READY` locator, the receiver must:
 8. never infer permission from the locator, an agent note, CI success, or a
    structurally valid packet alone.
 
+### 5.1 Question-routing decision tree
+
+After validation and repository reconstruction, the active agent classifies a
+question before asking it:
+
+1. If repository authority already answers it, apply that answer and post a
+   `RELAY_NOTE` only when the fact materially affects the movement.
+2. If it is a harmless implementation choice inside frozen scope, decide it
+   locally and continue.
+3. If it changes or conflicts with scope, authority, ownership, a security or
+   privacy boundary, required validation, merge authorization, or a frozen
+   contract, post `RELAY_QUESTION` to the movement issue before dependent work.
+4. A `RELAY_QUESTION` remains open until the Product Owner posts a matching
+   `RELAY_DECISION` or higher repository authority makes the answer explicit.
+   Agent notes and direct-chat replies do not close it.
+5. Direct chat may explain status, but every material question that requires a
+   durable Product Owner answer must appear in the relay. The agent must never
+   make the Product Owner reconstruct an unresolved gate from another chat.
+
 ## 6. Recovery
 
 When legacy or malformed relay material exists, preserve it and append a
@@ -131,10 +156,11 @@ network path unless higher authority explicitly does so for the named movement.
 - `RELAY_READY` is treated only as a locator.
 - The issue body and final engineering comment independently validate under
   the unchanged protocol-v2 parser.
-- Only the four intermediate markers are accepted; `RELAY_START` and
+- Only the five intermediate markers are accepted; `RELAY_START` and
   `RELAY_END` are rejected.
 - Only the Product Owner can issue an authoritative `RELAY_DECISION`.
+- Every material unresolved gate is posted as `RELAY_QUESTION` and resolved by
+  a matching Product Owner `RELAY_DECISION` before dependent work.
 - All required agent entry points reference the one shared bootstrap prompt.
 - No product, device, UI, database, credential, deployment, or production
   behavior changes as part of GOV.RELAY.1.
-

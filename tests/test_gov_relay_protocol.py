@@ -28,13 +28,27 @@ def test_relay_contract_is_frozen_and_preserves_session_packet_v2():
 def test_relay_vocabulary_is_closed_and_start_end_are_invalid():
     contract = _text(CONTRACT)
     bootstrap = _text(BOOTSTRAP)
-    for marker in ("RELAY_ACK", "RELAY_NOTE", "RELAY_DECISION", "RELAY_CORRECTION"):
+    for marker in (
+        "RELAY_ACK", "RELAY_NOTE", "RELAY_QUESTION", "RELAY_DECISION",
+        "RELAY_CORRECTION",
+    ):
         assert marker in contract
         assert marker in bootstrap
     for invalid in ("RELAY_START", "RELAY_END"):
         assert f"`{invalid}`" in contract
         assert invalid in bootstrap
     assert "Only the Product Owner may authoritatively issue `RELAY_DECISION`" in contract
+
+
+def test_material_questions_are_durable_and_require_a_po_decision():
+    contract = _text(CONTRACT)
+    bootstrap = _text(BOOTSTRAP)
+    assert "Question-routing decision tree" in contract
+    assert "post `RELAY_QUESTION`" in contract
+    assert "matching Product Owner `RELAY_DECISION`" in contract
+    assert "Direct chat" in contract
+    assert "RELAY_QUESTION" in bootstrap
+    assert "does not replace the relay record" in bootstrap
 
 
 def test_relay_ready_is_locator_only_and_stored_packets_are_revalidated():
@@ -59,4 +73,3 @@ def test_every_required_agent_entry_point_uses_the_shared_bootstrap():
         text = _text(path)
         assert ".github/prompts/relay-bootstrap.prompt.md" in text, path
         assert "NEXUS_AGENT_RELAY_PROTOCOL.md" in text or "build-" in path.name
-

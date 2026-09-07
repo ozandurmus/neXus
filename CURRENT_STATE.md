@@ -6,11 +6,10 @@ see `AGENTS.md`/`AI_START_HERE.md`. **Predecessor build detail lives in
 docs under `docs/history/`; `docs/history/INDEX.md` is the one-line timeline.
 
 - **Checkpoint:** 2026-09-07, `m9_enrollment_preview_confirmation_ui` — see
-  "Active build". **AUTOMATED_VALIDATED** (rounds 1+2), PR #104 open/
-  unmerged, relay `ozandurmus/nexus-agent-relay#3`. Predecessor
-  `gov_relay_1_canonical_agent_relay` **AUTOMATED_VALIDATED, MERGED** PR
-  #105/#106, relay #3 repaired. `M8.4` **MERGED** PR #101. **PO §12:** `M8.3`
-  deferred, `M7` blocked, unchanged by M9. `M8` **FROZEN 2026-09-06**.
+  "Active build". **AUTOMATED_VALIDATED** (rounds 1+2), PR #104 open/unmerged,
+  relay `ozandurmus/nexus-agent-relay#3`. Predecessors PR #105/#106 + #107
+  (relay governance) **AUTOMATED_VALIDATED**. `M8.4` **MERGED** PR #101.
+  **PO §12:** `M8.3` deferred, `M7` blocked. `M8` **FROZEN 2026-09-06**.
 - **Next** (`now_next.next`): `m8_3_real_environment_validation`, `deferred`
   per §12, unchanged by M9's out-of-order run. `m7_real_device_targeted_collect_now`/
   `op2_c_cp_clusterxl_adapter_scoping` stay `upcoming`/`blocked`.
@@ -57,16 +56,18 @@ trail beside the Device Registry (not `control_plane_store.py`, which
 forbids endpoint data), and routes through the one `DeviceRegistry.enroll`.
 Round 1 shipped manual-endpoint only (PR #104 opened). PO corrective review
 (relay `#3`) found six gaps; two needed a `RELAY_DECISION` (candidate-id
-stays deferred per `§9.2 A6`/`M10`; the probe's `runner.py` exception is
-authorized, M9-only, a pending-stub alternative rejected); four were
-corrected directly: `credential_profile_ref` closed to one real sentinel,
-atomic confirmation consumption, the dialog walkthrough promoted to a real
-test, and the Administration `PO-NAV-1` entry point. **AUTOMATED_VALIDATED**
-— 247 passed. Full evidence: `project/build_history.json`.
+deferred per `§9.2 A6`/`M10`; the `runner.py` probe exception authorized,
+M9-only); four corrected directly (`credential_profile_ref` sentinel, atomic
+confirmation, the dialog test, `PO-NAV-1`'s Administration entry point).
+Render harness run for real (Node self-installed) + full regression run
+(2359 passed; 2 pre-existing, unrelated `.venv` DLP false positives, filed
+separately). **AUTOMATED_VALIDATED**. Full evidence: `project/build_history.json`.
 
-Predecessor — **`gov_relay_1_canonical_agent_relay`** (`GOV.RELAY.1`) —
-canonical relay governance, unchanged packet v2, one shared bootstrap.
-**AUTOMATED_VALIDATED, MERGED** PR #105/#106; relay #3 repaired, no product/M9 change.
+Predecessors, both **AUTOMATED_VALIDATED**, governance-only (packet v2 and
+M9/product behavior unchanged): `gov_relay_1_question_routing` (PR #107)
+adds `RELAY_QUESTION` -- every material PO-resolution question is durable on
+the relay, closed only by a matching `RELAY_DECISION`; PR #105/#106 is the
+relay contract itself.
 
 Predecessor — **`m8_evidence_host_key_fingerprint_not_persisted`** —
 **AUTOMATED_VALIDATED, MERGED** via PR #103, 2026-09-07: persisted
@@ -76,8 +77,7 @@ evidence's `extra_metadata` so `M8.4`'s trust-currency check can pass.
 Predecessor — **`gov_session_1_unified_packet`** (`GOV.SESSION.1A`) —
 **FROZEN, MERGED 2026-09-07** (PR #102): one canonical protocol-v2
 `NEXUS_SESSION_PACKET` replacing `GOV.SESSION.1`'s split close
-(`docs/design/GOV_SESSION_TRANSFER_PROTOCOL.md`); v1 packets rejected. No
-product/M8/M7 work.
+(`docs/design/GOV_SESSION_TRANSFER_PROTOCOL.md`); v1 rejected. No M8/M7 work.
 
 Predecessor — **`m8_4_m6_resolver_consumption`** (`M8.4`) —
 **AUTOMATED_VALIDATED, MERGED 2026-09-07**, PR #101: extends
@@ -99,9 +99,9 @@ Predecessors, all **AUTOMATED_VALIDATED**, all merged: **`M8.3`** (PR #100
 (fail-closed admission shell, now extended by `M8.4` above).
 
 ## Predecessor — `M5`/`M4`
-**`collector_target_selection_seam`** (`M5`) — COMPLETE/AUTOMATED_VALIDATED,
-merged via PR #94: promoted `--cp-config-targets` into `workflow_argv()`;
-`M6` is the only thing since changed `config_refresh_cp.target_mode`.
+**`collector_target_selection_seam`** (`M5`) — COMPLETE, merged via PR #94:
+promoted `--cp-config-targets` into `workflow_argv()`; `M6` is the only thing
+since changed `config_refresh_cp.target_mode`.
 **`local_control_plane_metadata_store`** (`M4`) — COMPLETE, merged via PR #93,
 additive local SQLite control-plane metadata store (seven `STRICT` tables).
 Detail: `docs/history/phase/M4_LOCAL_CONTROL_PLANE_METADATA_STORE.md`.
@@ -177,9 +177,9 @@ Concurrency budget stays at 1 per vendor pending its own real-env evidence.
 ## Automated test baseline
 
 ```
-M9 rounds 1+2: 247 passed, 0 failed (targeted+affected, incl. nav tests).
-  Live-Playwright render + dialog click-through passed, 0 console errors.
-  node/bun render-harness (check-render.mjs) still not run, env-blocked.
+M9 rounds 1+2: 247 targeted+affected passed; full regression 2359 passed,
+  2 pre-existing unrelated .venv DLP-scanner false positives (filed
+  separately). Render harness (check-render.mjs) + live-Playwright both green.
 M8.4: targeted 23 passed. Affected sweep 440 passed, 1 skipped, 0 failed.
 Earlier predecessor build detail lives only in project/build_history.json.
 ```
