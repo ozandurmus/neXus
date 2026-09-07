@@ -7,10 +7,10 @@
 
 ## 1. Snapshot
 
-- Date: 2026-09-07. `gov_po_1_step_2_implementation` — **AUTOMATED_VALIDATED**,
-  governance-only. Branch `gov-po-1-step-2-implementation`, stacked on
-  `gov-po-1-role-migration-contract` (PR #109, contract FROZEN, open). Both
-  PRs unmerged; merge awaits explicit Product Owner `RELAY_DECISION`s.
+- Date: 2026-09-08. `gov_po_1_step_2_implementation` — **AUTOMATED_VALIDATED,
+  MERGED** via PR #110 (`b53e15f1…`); contract `gov_po_1_role_migration_contract`
+  **FROZEN, MERGED** via PR #109 (`d66e7dac…`). Both merges executed under an
+  explicit Product Owner `RELAY_DECISION` (relay #4/#5).
 - `M9` MERGED (PR #104); `GOV.GIT.1` MERGED (PR #108). `M8.3` deferred,
   `M7` blocked.
 
@@ -37,8 +37,7 @@
 
 ## 3. Exact next action
 
-1. Product Owner: merge decisions for PR #109 then this PR (`RELAY_DECISION`
-   on relay #4 / #5).
+1. (done) PR #109 and #110 merged.
 2. Product Owner: confirm/deny each `[PO-DIRECTION]` item and keep/drop
    each `[ASSISTANT]` item in `PRODUCT_DIRECTION_RECORD.md`, then authorize
    the ratifying governance PR (contract §4.1, D14).
