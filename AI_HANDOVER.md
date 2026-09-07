@@ -7,65 +7,47 @@
 
 ## 1. Snapshot
 
-- Date: 2026-09-08. `gov_po_1_gate_1_command_safety_correction` —
-  **AUTOMATED_VALIDATED**, branch `gov-po-1-gate-fix` (isolated git
-  worktree, deliberately never checked out in the primary working
-  directory), PR open. Found and fixed during the first real Phase A
-  `PLAN` episode (`gov_po_1_step_5_first_plan`, PR #113, unmerged,
-  concurrent): the interactive PO's `PreToolUse` gate blocked its own
-  contractually-required relay packet posting.
-- `gov_po_1_step_4_direction_record_ratification` **MERGED** (PR #112);
-  direction record **RATIFIED**. `M9` **MERGED** (PR #104).
+- Date: 2026-09-08. `gov_po_1_gate_2_self_sync_capability` —
+  **AUTOMATED_VALIDATED**, branch `gov-po-1-gate-2`, PR open. Found and
+  fixed immediately after `GOV_PO_1_GATE_1` (PR #114) landed: the fix
+  reached `origin/main` and the pushed `gov/po-1-step-5-first-plan` branch,
+  but neither the PO episode nor a human relaying its exact commands could
+  bring it into that branch's already-checked-out working tree — `git
+  fetch` updates only the remote-tracking ref, and `git merge`/`git pull`
+  were not allowlisted. An engineer fast-forwarded the shared directory by
+  hand twice before this was recognized as a recurring gap, not a one-off.
 
 ## 2. What changed
 
-- `scripts/nexus_po_tool_gate.py`: replaced the substring ban on
-  `<`/`>`/`;`/`|`/`&&`/`||` with `shlex.shlex(..., punctuation_chars=True)`
-  tokenization, which reproduces bash's real distinction between a
-  metacharacter embedded in a quoted argument (data, harmless) and the
-  same character standalone (a real operator). Backtick/`$(` stay banned
-  unconditionally (they execute even inside double quotes). The
-  destructive-word bans (`rm`/`mv`/`cp`/`sudo`/`chmod`/`curl`/`wget`/`ssh`/
-  `main.py`) became exact-token checks instead of substrings — this also
-  newly denies `find ... -exec rm ...`, which the old substring form
-  missed. A raw embedded newline is denied outright. Added one narrow
-  scratch-write allowance (`nexus_po_*.json`/`.txt` under a recognized
-  system temp root, interactive form only, realpath-checked against
-  traversal) and restricted `--body-file` to that same pattern.
-- `tests/test_gov_po_role.py`: 9 new tests plus one corrected existing test
-  that had accidentally asserted `--body-file` with an arbitrary filename
-  should be allowed (it should not — that's an exfiltration path).
+- `scripts/nexus_po_tool_gate.py`: `git merge origin/<ref>` and
+  `git merge --ff-only origin/<ref>` added to the interactive form's
+  allowlist, restricted to the `origin/` remote-tracking namespace
+  (`git remote add` stays unavailable, so no arbitrary remote/URL is ever
+  reachable); chaining stays denied by the existing token-based checks.
+- `tests/test_gov_po_role.py`: 6 new tests (allowed for both merge forms,
+  denied for delegated, denied for a non-origin remote/URL/path and for
+  any chained/substituted form).
 - Project state files for the build.
-- **Not part of this PR:** `.claude/settings.local.json` on this
-  workstation (untracked, gitignored) carried a blanket
-  `Bash(gh pr merge:*)` allow rule that would have applied uncontested to
-  a PO session launched from the VS Code extension without
-  `--settings .claude/nexus-po.settings.json` (the extension cannot pass
-  that flag) — emptied directly on the workstation; not repository state,
-  cannot be enforced by a repository test.
 
 ## 3. Exact next action
 
-1. Merge this PR first (small, isolating, unblocks packet posting).
-2. `gov_po_1_step_5_first_plan` (PR #113) retries its blocked
-   `SESSION_START`/`SESSION_CLOSE` packet posting against the fixed gate,
-   then reconciles `project/roadmap.json` `now_next.now` with this PR's
-   pointer (same pattern as the earlier M9/GOV.RELAY.1/GOV.GIT.1 stack).
-3. A PO session must always launch via
-   `claude --settings .claude/nexus-po.settings.json` in a terminal, never
-   the VS Code extension — that remains an operational rule, not something
-   this fix can enforce technically.
+Merge this PR. `gov_po_1_step_5_first_plan_episode` (PR #113) then
+reconciles `roadmap.json` `now_next.now` with this PR's pointer when it
+merges — same pattern as GATE_1. The `nexus-po` skill should be told about
+the new `git merge origin/<ref>` self-sync capability in a future DOCS pass
+(not urgent; it is discoverable via `git status`'s own "behind" hint).
 
 ## 4. Test delta
 
-`tests/test_gov_po_role.py` + relay + session-transfer + convergence: 209
-passed. Repository privacy gate: PASS. `git diff --check`: clean.
+`tests/test_gov_po_role.py` (67, 6 new) + relay + session-transfer +
+convergence: 219 passed. Repository privacy gate: PASS. `git diff --check`:
+clean.
 
 ## 5. Risks / notes forward
 
-- `docs/design/GOV_SESSION_TRANSFER_PROTOCOL.md` /
-  `scripts/gov_session_transfer.py` were read but not touched; both stay
-  exactly `FROZEN`.
-- The scratch pattern is deliberately narrow; a future different staging
-  need should extend the same regex, not add a second mechanism.
-- This movement does not touch `gov/po-1-step-5-first-plan` or M10.1.
+- This is a capability, not automatic behavior — a PO episode (or the
+  human relaying its exact commands) must still choose to run it.
+- Does not solve the underlying git-worktree-per-branch limitation for an
+  engineer's own future fixes to a *different* live PO branch; the
+  detached-worktree-then-push pattern remains the safe approach whenever
+  two sessions share one working directory.
