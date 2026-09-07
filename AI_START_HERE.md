@@ -239,6 +239,7 @@ neutral tier labels.
 | Fast/normal | `READ_ONLY_AUDIT`, log/result interpretation, narrow validation, tiny fix, mechanical documentation/test cleanup |
 | Normal (strong) | deterministic implementation against an already-frozen contract, routine multi-file audit, UI, tests, bounded implementation |
 | High | new architecture, security/storage/CAS, vendor-semantic ambiguity, deployment/server/container, major cross-subsystem root cause, phase closure |
+| PO episodes (`GOV.PO.1` §5) | `PLAN`/`REVIEW`: Normal (strong); `DECIDE`/`DIRECTION_AUDIT`: High; `PLAN` re-ranking the track order: High |
 
 Use high reasoning to decide, normal reasoning to implement once the
 contract is deterministic. Auto-routing is acceptable for low-risk work;
@@ -312,7 +313,3 @@ their existing `RB.x` contracts and are never exposed on an HTTP surface.
   `docs/history/`. `docs/history/INDEX.md` is the one-line-per-build human view.
 - **Privacy:** no credential, management IP, device name, serial, or raw
   configuration in any repository file — docs and metadata included.
-- **claude-mem** (if installed on this machine) is a per-developer local memory
-  convenience. It is not shared, not in git, and not authoritative. The
-  repository is the source of truth for handover and state — never rely on
-  local memory for continuation.

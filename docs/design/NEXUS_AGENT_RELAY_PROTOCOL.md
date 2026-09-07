@@ -6,7 +6,9 @@
 AUTHORIZED-EXECUTION AND GOV.PO.1 (agent-published decision, episode-close
 note) AMENDMENTS APPROVED, 2026-09-07.** This contract governs the
 GitHub-issue relay used to move one bounded engineering movement between the
-Product Owner, Codex and Claude. It wraps, but does not modify, the frozen
+Product Owner, the Product Owner assistant, the engineer, and any optional
+independent reviewer, whichever tool each role runs in
+(`docs/design/GOV_PO_ROLE_MIGRATION.md` §4). It wraps, but does not modify, the frozen
 protocol-version-2 `NEXUS_SESSION_PACKET` contract in
 `GOV_SESSION_TRANSFER_PROTOCOL.md`.
 
