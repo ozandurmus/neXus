@@ -50,10 +50,11 @@ from pathlib import Path
 from typing import Callable
 
 from configuration import checkpoint_config_collector as cp_collector
-from utils.config_evidence import ConfigEvidenceStore
+from utils.config_evidence import ConfigEvidenceStore, build_evidence_reference
 from utils.control_plane_store import ControlPlaneStore, ControlPlaneStoreError
 from utils.cp_ssh_trust import lookup_trusted_host_key
 from utils.device_identity_relationships import (
+    IDENTITY_DERIVATION_CONTRACT_VERSION as IDENTITY_DERIVATION_CONTRACT_VERSION,
     OUTCOME_AMBIGUOUS_IDENTITY as OUTCOME_AMBIGUOUS_IDENTITY,
     OUTCOME_NEW as OUTCOME_NEW,
     OUTCOME_SUPERSEDED as OUTCOME_SUPERSEDED,
@@ -61,12 +62,10 @@ from utils.device_identity_relationships import (
 )
 from utils.device_registry import DeviceRegistry, DeviceRegistryError
 
-#: Source-code identity-derivation contract-version constant (contract Section 5's
-#: `identity_derivation_contract_version` column) -- mirrors
-#: `capability_projections.producer_version`'s role. Bump only when
-#: `configuration.checkpoint_config_collector._entity_id`'s physical-only
-#: derivation contract itself changes, never for an unrelated M8.3 change.
-IDENTITY_DERIVATION_CONTRACT_VERSION = "checkpoint_physical_entity_id.v1"
+# IDENTITY_DERIVATION_CONTRACT_VERSION now lives in
+# utils/device_identity_relationships.py (M8.4): the M8.4 console resolver
+# reads the same constant for currency, so both sides import one value
+# rather than each holding a copy that could silently drift apart.
 
 #: Reachable PCP.1 lifecycle states eligible for first contact. Mirrors
 #: `console/registry_targets.py`'s own `_ELIGIBLE_STATES` (M6) in spirit;
@@ -136,7 +135,9 @@ def _resolve_producing_run_ref(evidence_store: ConfigEvidenceStore, entity_id: s
             continue
         if payload.get("artifact_type") != cp_collector.PHYSICAL_ARTIFACT_TYPE:
             continue
-        return f"{cp_collector.SOURCE}:{entity_id}:{snapshot_id}"
+        return build_evidence_reference(
+            source=cp_collector.SOURCE, entity_id=entity_id, snapshot_id=snapshot_id
+        )
     return None
 
 

@@ -50,6 +50,77 @@ def safe_component(value: Any) -> str:
     return text or "unknown"
 
 
+#: `M8.3`/`M8.4` opaque evidence-reference contract: a `producing_run_ref` is
+#: exactly `"<source>:<entity_id>:<snapshot_id>"`. Neither half is a secret --
+#: `source` and `entity_id` are already plain columns/parameters elsewhere in
+#: this store, and `snapshot_id` is an opaque, content-addressed identifier --
+#: but the three-part *shape* is a private contract between whoever writes a
+#: reference (e.g. `utils/first_contact_producer.py`) and whoever resolves
+#: one later (e.g. `console/registry_targets.py`'s `M8.4` currency check).
+#: Defining both directions here, once, is what keeps the two sides from
+#: silently drifting into two independently-guessed formats.
+#:
+#: `entity_id` is an opaque physical-collector identifier (identity law) and
+#: may itself contain `:` characters (e.g. a MAC-derived or serial-derived
+#: value) -- `source` (a closed, small vocabulary; see
+#: `GOVERNED_PHYSICAL_CP_EVIDENCE_SOURCE` below) and `snapshot_id` (this
+#: store's own generated `<utc_stamp>_<uuid8>` shape) never do, so resolving
+#: by first/last `:` -- never a fixed split count -- is the only parse that
+#: round-trips every opaque `entity_id` this contract allows.
+def build_evidence_reference(*, source: str, entity_id: str, snapshot_id: str) -> str:
+    """Build one opaque, resolvable evidence reference (see module note above)."""
+    return f"{source}:{entity_id}:{snapshot_id}"
+
+
+#: The one governed physical Check Point evidence provenance `M8.4`'s
+#: `console/registry_targets.py` currency check is allowed to resolve
+#: against (frozen `M8` contract §7). Owned here -- not in `console/`, which
+#: may never import `configuration`/`checkpoint`/`panorama`, and not
+#: independently re-declared in `configuration/checkpoint_config_collector.py`,
+#: which instead imports these two values from this module -- so the M8.3
+#: writer and the M8.4 reader share one canonical constant pair rather than
+#: two independently-guessed copies that could silently drift apart.
+GOVERNED_PHYSICAL_CP_EVIDENCE_SOURCE = "checkpoint-gaia"
+GOVERNED_PHYSICAL_CP_EVIDENCE_ARTIFACT_TYPE = "gaia_show_configuration_redacted"
+
+
+def resolve_evidence_reference(store: "ConfigEvidenceStore", reference: str) -> dict[str, Any] | None:
+    """Resolve an opaque evidence reference back to its snapshot metadata.
+
+    Returns `None` -- never raises -- when the reference is malformed, the
+    snapshot no longer exists, or it did not complete successfully (no
+    `sha256`). A vendor-neutral counterpart to `build_evidence_reference`:
+    callers outside `configuration/` (e.g. `console/registry_targets.py`)
+    can resolve a reference without importing a vendor collector module --
+    only the reference string and this store are needed.
+
+    Parses by the *first* and *last* `:` -- never a fixed `split(":", 2)`
+    part count -- so an opaque `entity_id` containing one or more embedded
+    `:` characters round-trips exactly as `build_evidence_reference` wrote
+    it (identity law: never normalized, rejected, truncated, or
+    reinterpreted).
+    """
+    raw = str(reference or "")
+    first = raw.find(":")
+    last = raw.rfind(":")
+    if first == -1 or last == -1 or first == last:
+        return None
+    source, entity_id, snapshot_id = raw[:first], raw[first + 1 : last], raw[last + 1 :]
+    if not source or not entity_id or not snapshot_id:
+        return None
+    try:
+        snapshots = store.backend.list_snapshots(source=source, entity_id=entity_id)
+    except Exception:
+        return None
+    for candidate_id, payload in snapshots:
+        if candidate_id != snapshot_id:
+            continue
+        if not payload or payload.get("status") != "success" or not payload.get("sha256"):
+            return None
+        return payload
+    return None
+
+
 def validate_xml_config(content: bytes) -> dict[str, Any]:
     if not content or len(content) < 32:
         raise ValueError("Configuration artifact is empty or unexpectedly small")

@@ -62,6 +62,18 @@ OUTCOME_NEW = "NEW"
 OUTCOME_SUPERSEDED = "SUPERSEDED"
 OUTCOME_AMBIGUOUS_IDENTITY = "AMBIGUOUS_IDENTITY"
 
+#: §5's `identity_derivation_contract_version` column value -- a source-code
+#: constant naming the exact physical-only `_entity_id(target)` derivation
+#: contract a row's `entity_id` was produced under (mirrors `capability_
+#: projections.producer_version`'s role). The sole owner of this value: the
+#: `M8.3` producer (`utils/first_contact_producer.py`) writes it, and the
+#: `M8.4` resolver (`console/registry_targets.py`) reads it for currency --
+#: both import it from here so neither can silently drift out of step with
+#: the other. Bump only when `configuration.checkpoint_config_collector.
+#: _entity_id`'s derivation contract itself changes, never for an unrelated
+#: M8.3/M8.4 change.
+IDENTITY_DERIVATION_CONTRACT_VERSION = "checkpoint_physical_entity_id.v1"
+
 
 class DeviceIdentityRelationshipError(ControlPlaneStoreError):
     """Base fail-closed error for this module's typed API."""
