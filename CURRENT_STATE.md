@@ -51,17 +51,20 @@ test-enforced boundaries. Current numbers:
 | 4 — policy / deployment / remediation | prohibited | — |
 ## Active build
 
-**`gov_po_1_gate_1_command_safety_correction`** (`GOV_PO_1_GATE_1`) —
-corrects `scripts/nexus_po_tool_gate.py`'s naive substring command-safety
-check (blocked git commit trailers and all relay packet posting) with
-shlex-based real-operator detection, plus a narrow `nexus_po_*.json/.txt`
-scratch-write allowance so a PO episode can stage and post its own
-`SESSION_START`/`SESSION_CLOSE` packets (section 5.1.1). Also neutralizes
-an unrelated local `.claude/settings.local.json` exposure (workstation
-only, not repository state). **AUTOMATED_VALIDATED.** Independent of the
-concurrent `gov_po_1_step_5_first_plan` PO episode (PR #113); whichever PR
-merges second reconciles `now_next.now` with the other, per the
-established pattern.
+**`gov_po_1_gate_2_self_sync_capability`** (`GOV_PO_1_GATE_2`) — adds
+`git merge origin/<ref>` (plain and `--ff-only`) to the interactive PO
+gate, restricted to the `origin/` remote-tracking namespace, so a landed
+fix can reach an already-checked-out PO branch without an engineer
+touching the shared directory by hand. **AUTOMATED_VALIDATED.**
+
+Predecessor — **`gov_po_1_gate_1_command_safety_correction`**
+(`GOV_PO_1_GATE_1`) — replaces the gate's naive substring command-safety
+check with `shlex`-based real-operator detection and a narrow
+`nexus_po_*.json/.txt` scratch-write allowance so a PO episode can stage
+and post its own `SESSION_START`/`SESSION_CLOSE` packets. Also neutralized
+an unrelated local `.claude/settings.local.json` exposure. **MERGED**.
+Both fixes are independent of the concurrent `gov_po_1_step_5_first_plan`
+PO episode (PR #113); whichever PR merges second reconciles `now_next.now`.
 
 Predecessors, all **MERGED**, governance-only: `gov_po_1_step_2_implementation`
 (PR #110, PO assistant infrastructure), `gov_po_1_role_migration_contract`
