@@ -149,7 +149,7 @@
       "notes": [
         "Full detail: docs/design/NEXUS_AGENT_RELAY_PROTOCOL.md and project/build_history.json's gov_relay_1_canonical_agent_relay record.",
         "Governance-only change; NEXUS_SESSION_PACKET v2 schema/parser and every product/M9 behavior remain unchanged.",
-        "Claude remains the M9 implementation owner; relay #3 repair follows the governance merge."
+        "PR #105 merged at 35e2fe883871f03cfbe4781edd1b48065a15d4c7; relay #3 repaired and stored M9 SESSION_START revalidated; Claude remains the M9 implementation owner."
       ]
     },
     "next": {
