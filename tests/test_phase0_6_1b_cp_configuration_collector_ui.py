@@ -356,6 +356,89 @@ def test_vsx_virtual_system_gets_independent_ha_role_not_inherited(tmp_path, mon
     assert vs_row["ha_runtime_status"] == "success"
 
 
+def test_physical_evidence_persists_host_key_fingerprint_vsx_context_does_not(tmp_path, monkeypatch):
+    """m8_evidence_host_key_fingerprint_not_persisted: the fingerprint already
+    captured by `_connect` in `_collect_host` must reach the governed physical
+    Check Point evidence's `extra_metadata` (so M8.4's local-trust-currency
+    check has real evidence to evaluate), and must not leak onto VSX context
+    evidence, which is out of this movement's scope."""
+    from utils.config_evidence import ConfigEvidenceStore
+
+    class FakeSSH:
+        def close(self):
+            pass
+
+    fingerprint = "SHA256:fake-host-key-for-m8-evidence"
+
+    def fake_connect(target, username, secret, *, strict, connect_timeout):
+        return FakeSSH(), fingerprint
+
+    def result(stdout, success=True):
+        return {
+            "success": success,
+            "error_class": "none" if success else "command_error",
+            "error_detail": None,
+            "timeout": False,
+            "exit_status": 0 if success else 1,
+            "duration_ms": 1,
+            "stdout": stdout,
+            "stderr": "",
+        }
+
+    def fake_exec(_ssh, command, _timeout):
+        if "show hostname" in command:
+            return result("GW1\n")
+        if "show version all" in command:
+            return result("Product version Check Point Gaia R82\n")
+        if "cpstat os -f hw_info" in command:
+            return result("Appliance SN: SERIAL1\nAppliance Name: Check Point 6500\n")
+        if command.startswith("vsenv "):
+            return result("set hostname VS-A\nset dns primary 10.0.0.53\n")
+        if "show configuration" in command:
+            return result("set hostname GW1\nset dns primary 10.0.0.53\n")
+        raise AssertionError(command)
+
+    monkeypatch.setattr(collector, "_connect", fake_connect)
+    monkeypatch.setattr(collector, "_run_exec", fake_exec)
+    monkeypatch.setattr(
+        collector,
+        "_run_vsx_clish_context",
+        lambda _ssh, _vsid, _timeout: result("set hostname VS-A\nset dns primary 10.0.0.53\n"),
+    )
+
+    store = ConfigEvidenceStore(root=tmp_path / "configs")
+    target = collector.PhysicalTarget(
+        device="GW1",
+        management_ip="10.0.0.1",
+        object_type="cluster_member",
+        entity_type="vsx_host",
+        contexts=[collector.VsContext(vs_id="3", vs_name="VS-A")],
+    )
+    rows = collector._collect_host(
+        target,
+        username="admin",
+        secret="pw",
+        strict_host_key=False,
+        connect_timeout=2,
+        command_timeout=5,
+        store=store,
+    )
+    host_row = next(row for row in rows if row["entity_type"] == "vsx_host")
+    vs_row = next(row for row in rows if row["entity_type"] == "virtual_system")
+    assert host_row["status"] == "success"
+    assert vs_row["status"] == "success"
+
+    [(_, physical_payload)] = store.backend.list_snapshots(
+        source=collector.SOURCE, entity_id=host_row["entity_id"]
+    )
+    assert physical_payload["host_key_fingerprint"] == fingerprint
+
+    [(_, vsx_payload)] = store.backend.list_snapshots(
+        source=collector.SOURCE, entity_id=vs_row["entity_id"]
+    )
+    assert "host_key_fingerprint" not in vsx_payload
+
+
 def test_vsx_virtual_system_falls_back_to_labeled_inherited_role_when_per_vs_probe_fails(tmp_path, monkeypatch):
     """When the per-VS probe cannot produce an independent role, the fallback
     to the physical member's role must be explicitly labeled as inherited,

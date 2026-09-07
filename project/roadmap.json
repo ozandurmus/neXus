@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "current_build": "gov_session_1_unified_packet",
+  "current_build": "m8_evidence_host_key_fingerprint_not_persisted",
   "current_track": "PCP.x",
   "progress_contract": "Weighted acceptance-criterion completion. Percentages describe the declared roadmap, not calendar time or delivery ETA.",
   "tracks": [
@@ -140,25 +140,25 @@
   "now_next": {
     "horizon_contract": "NOW is exactly one build. NEXT is exactly one. Everything else is an `upcoming` row carrying its own true status: planned = AFTER, blocked = waiting on a named external gate, deferred = consciously postponed. `now.build` must equal the newest project/build_history.json record -- utils.project_plan enforces it.",
     "now": {
-      "build": "gov_session_1_unified_packet",
-      "title": "GOV.SESSION.1A -- unified session-transfer packet (protocol v2)",
-      "goal": "Replace GOV.SESSION.1's split narrative-plus-pointer close with one canonical protocol-version-2 NEXUS_SESSION_PACKET carrying the complete AI_START_HERE.md SESSION START/CLOSE report as a machine-checked nested `report` object -- pointer-only version-1 packets are now rejected. No product, M8, or M7 behavior change.",
+      "build": "m8_evidence_host_key_fingerprint_not_persisted",
+      "title": "Persist the captured physical-host fingerprint into governed CP config evidence metadata",
+      "goal": "Add the already-captured `host_key_fingerprint` to the governed physical Check Point evidence's `extra_metadata` in `_collect_host` (physical-host artifact only, never the VSX context artifact), so M8.4's local trust-currency check (frozen M8 contract §7) has real evidence to evaluate against instead of failing closed on every relationship for lack of the field.",
       "status": "automated_validated",
       "started": "2026-09-07",
       "completed": "2026-09-07",
       "notes": [
-        "Full detail (schema, CLI, tests, validation evidence): project/build_history.json's gov_session_1_unified_packet record and docs/design/GOV_SESSION_TRANSFER_PROTOCOL.md -- not restated here.",
-        "Performed the M8.4 integration handoff first, Product Owner approved: merged PR #101 with a true merge commit (3fd424d0753e63ebca44d0fca9f4805d102e5349) after verifying head 890a0dd, base ef43d59, validate=pass, mergeStateStatus=CLEAN; verified ancestry and clean worktree post-merge.",
-        "M8.4 (m8_4_m6_resolver_consumption) is now AUTOMATED_VALIDATED and MERGED -- see project/build_history.json for its own full record, including its correction round 1 (evidence-provenance closure, opaque-entity-id-safe reference parsing)."
+        "Full detail (evidence, tests, validation): project/build_history.json's m8_evidence_host_key_fingerprint_not_persisted record.",
+        "Branch m8-evidence-host-key-fingerprint-not-persisted, PR #103 opened against main and left unmerged pending Product Owner review, per this movement's merge_gate.",
+        "M8.3 real-environment validation stays deferred; M7 stays blocked -- neither changed by this fix."
       ]
     },
     "next": {
-      "build": "m8_evidence_host_key_fingerprint_not_persisted",
-      "title": "Persist the captured physical-host fingerprint into governed CP config evidence metadata",
-      "status": "planned",
+      "build": "m8_3_real_environment_validation",
+      "title": "M8.3 real-environment validation (deferred, PO decision §12)",
+      "status": "deferred",
       "notes": [
-        "project/backlog.json: m8_evidence_host_key_fingerprint_not_persisted. configuration/checkpoint_config_collector.py::_collect_host captures a live host-key fingerprint (host_row['host_key_fingerprint']) but never persists it into the CP config evidence snapshot's extra_metadata -- so M8.4's trust-currency check (frozen M8 contract §7) fails closed for every real M8.3-produced relationship today, exactly as the fail-closed law intends, not a defect in M8.4's own logic.",
-        "Proposed minimal fix (not yet implemented): add \"host_key_fingerprint\": host_row.get(\"host_key_fingerprint\") to the extra_metadata dict _collect_host already passes to store.write_text_snapshot, for the physical-host artifact (PHYSICAL_ARTIFACT_TYPE only -- not the VSX context artifact). A narrow, separately-reviewed, automated implementation; no device contact, no schema migration, no M7 work. Requires its own explicit review before starting, per M8.4's own scope boundary (do not touch the shared, unmodified _collect_host primitive as a side effect of another movement)."
+        "The one bounded, read-only --identity-first-contact command against a real device_id, PO-authorized; also measures real CP config evidence-retention duration. Gates M7, not M8.4 (already shipped ahead of it per §12).",
+        "project/backlog.json / project/roadmap.json now_next.upcoming carries the same entry as status=deferred -- this is a label of the queued next item, not an instruction to start it in this session."
       ]
     },
     "upcoming": [
