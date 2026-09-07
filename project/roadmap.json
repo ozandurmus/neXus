@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "current_build": "m8_evidence_host_key_fingerprint_not_persisted",
+  "current_build": "gov_relay_1_canonical_agent_relay",
   "current_track": "PCP.x",
   "progress_contract": "Weighted acceptance-criterion completion. Percentages describe the declared roadmap, not calendar time or delivery ETA.",
   "tracks": [
@@ -140,16 +140,16 @@
   "now_next": {
     "horizon_contract": "NOW is exactly one build. NEXT is exactly one. Everything else is an `upcoming` row carrying its own true status: planned = AFTER, blocked = waiting on a named external gate, deferred = consciously postponed. `now.build` must equal the newest project/build_history.json record -- utils.project_plan enforces it.",
     "now": {
-      "build": "m8_evidence_host_key_fingerprint_not_persisted",
-      "title": "Persist the captured physical-host fingerprint into governed CP config evidence metadata",
-      "goal": "Add the already-captured `host_key_fingerprint` to the governed physical Check Point evidence's `extra_metadata` in `_collect_host` (physical-host artifact only, never the VSX context artifact), so M8.4's local trust-currency check (frozen M8 contract §7) has real evidence to evaluate against instead of failing closed on every relationship for lack of the field.",
+      "build": "gov_relay_1_canonical_agent_relay",
+      "title": "GOV.RELAY.1 -- canonical GitHub-issue agent relay",
+      "goal": "Freeze and implement the governance-only relay convention around the unchanged NEXUS_SESSION_PACKET v2 protocol, then repair relay #3 without changing Claude's M9 branch or any product behavior.",
       "status": "automated_validated",
       "started": "2026-09-07",
       "completed": "2026-09-07",
       "notes": [
-        "Full detail (evidence, tests, validation): project/build_history.json's m8_evidence_host_key_fingerprint_not_persisted record.",
-        "Branch m8-evidence-host-key-fingerprint-not-persisted, PR #103 MERGED to main via a true merge commit (06e51d36a11ed2ecc8dfc4d7581656aa09c5c95d), Product Owner approved 2026-09-07.",
-        "M8.3 real-environment validation stays deferred; M7 stays blocked -- neither changed by this fix."
+        "Full detail: docs/design/NEXUS_AGENT_RELAY_PROTOCOL.md and project/build_history.json's gov_relay_1_canonical_agent_relay record.",
+        "Governance-only change; NEXUS_SESSION_PACKET v2 schema/parser and every product/M9 behavior remain unchanged.",
+        "Claude remains the M9 implementation owner; relay #3 repair follows the governance merge."
       ]
     },
     "next": {
@@ -547,6 +547,20 @@
     }
   ],
   "open_decisions": [
+    {
+      "id": "gov_relay_1_protocol",
+      "area": "Agent session governance",
+      "status": "decided",
+      "question": "What is the canonical GitHub-issue relay convention for Codex/Claude movement handoffs?",
+      "options": [
+        "A locator plus canonical issue-body/final-comment packets and a closed intermediate-comment vocabulary",
+        "Ad hoc chat phrases and unconstrained issue comments"
+      ],
+      "recommendation": "Use the canonical governed relay contract so a locator cannot be mistaken for authority and malformed handoffs fail before implementation.",
+      "decision": "DECIDED -- RELAY_READY owner/repository#issue is locator-only; the issue body is exactly one validated SESSION_START packet; the final engineering comment is exactly one validated SESSION_CLOSE packet; intermediate comments use only RELAY_ACK, RELAY_NOTE, RELAY_DECISION or RELAY_CORRECTION; RELAY_START and RELAY_END are invalid; only the Product Owner may authoritatively issue RELAY_DECISION. The NEXUS_SESSION_PACKET v2 schema and parser are unchanged.",
+      "decide_by": "DECIDED 2026-09-07 at GOV.RELAY.1 freeze",
+      "decided_on": "2026-09-07"
+    },
     {
       "id": "op_track_id",
       "area": "OP.x Controlled Failover",
