@@ -5,11 +5,10 @@ see `AGENTS.md`/`AI_START_HERE.md`. **Predecessor build detail lives in
 `project/build_history.json`** (structured, newest-first) and its linked
 docs under `docs/history/`; `docs/history/INDEX.md` is the one-line timeline.
 
-- **Checkpoint:** 2026-09-07, `gov_po_1_step_2_implementation` —
-  **AUTOMATED_VALIDATED, MERGED** (PR #110, `b53e15f1…`) governance build
-  installing the `GOV.PO.1` PO assistant infrastructure (see "Active
-  build"); contract build `gov_po_1_role_migration_contract` **FROZEN,
-  MERGED** (PR #109, `d66e7dac…`). Predecessor `M9` **AUTOMATED_VALIDATED, MERGED** via PR #104
+- **Checkpoint:** 2026-09-08, `gov_po_1_step_3_docs_reconciliation` —
+  **AUTOMATED_VALIDATED** documentation build (see "Active build").
+  `gov_po_1_step_2_implementation` **MERGED** (PR #110, `b53e15f1…`);
+  contract `gov_po_1_role_migration_contract` **FROZEN, MERGED** (PR #109). Predecessor `M9` **AUTOMATED_VALIDATED, MERGED** via PR #104
   (true merge `5fc88a21462eabb724f767f38a34ffd529eb008f`); PR #105–#108
   (relay/Git governance) all **MERGED**. `M8.4` **MERGED** PR #101.
   **PO §12:** `M8.3` deferred, `M7` blocked. `M8` **FROZEN 2026-09-06**.
@@ -52,18 +51,19 @@ test-enforced boundaries. Current numbers:
 | 4 — policy / deployment / remediation | prohibited | — |
 ## Active build
 
-**`gov_po_1_step_2_implementation`** (`GOV.PO.1` §10 step 2 + step 0) —
-installs the PO assistant infrastructure the frozen contract owes:
-`nexus-po` skill (interactive) and agent (delegated, Phase B-gated),
-`nexus-decision-council` skill + read-only `nexus-council-seat` agent,
-tracked role-scoped `.claude/nexus-po.settings.json` + `scripts/nexus_po_tool_gate.py`
-PreToolUse gate, `po-plan`/`po-review` prompts, `CLAUDE.md` delta, the
-approved §5.1.3 amendment verbatim in `AGENTS.md` and the relay contract,
-`tests/test_gov_po_role.py` (T7 + gate). Lands
-`docs/design/PRODUCT_DIRECTION_RECORD.md` as **DRAFT, not ratified**.
-**AUTOMATED_VALIDATED, MERGED** via PR #110 (2026-09-08). Phase A opens
-after a Product Owner `RELAY_DECISION` authorizes it; Phase B after
-step-6 isolation tests T1–T6 (all `NOT_RUN`).
+**`gov_po_1_step_3_docs_reconciliation`** (`GOV.PO.1` §10 step 3) —
+documentation-only reconciliation: role-based relay roster, forward notes
+beside the preserved council disclosures, `claude-mem` paragraph removed,
+PO episode tiers in the tier table, vendor-neutral `build-start` reading
+set, toolchain wording per ratification decision 8. **AUTOMATED_VALIDATED.**
+Step 4 (direction-record ratification, PO-authorized 2026-09-08) is stacked
+on it; steps 5–6 remain.
+
+Predecessor — **`gov_po_1_step_2_implementation`** — **AUTOMATED_VALIDATED,
+MERGED** via PR #110 (2026-09-08): `nexus-po` skill/agent, council skill +
+seat agent, role-scoped settings + gate hook, PO prompts, approved
+`AGENTS.md`/relay amendments, T7 test; `PRODUCT_DIRECTION_RECORD.md` DRAFT.
+Phase B stays closed until isolation tests T1–T6 run.
 
 Predecessor — **`gov_po_1_role_migration_contract`** — contract **FROZEN —
 PO APPROVED 2026-09-07**, **MERGED** PR #109 (2026-09-08), relay #4. Governance only.

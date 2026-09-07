@@ -2031,6 +2031,11 @@ is included because the recorded dissents are load-bearing (they produced
 §5.3's rules and §9.1's coverage contract), not because it carries
 verification weight. No transcript is stored in the repository.
 
+*Forward note (GOV.PO.1, 2026-09-08): a `nexus-decision-council` skill with
+fresh-context seats now exists (`.claude/skills/nexus-decision-council/SKILL.md`).
+That does not change this record: the round above remains a single
+authoring session's self-critique and is not re-described as council work.*
+
 **No new council round was run for this revision.** The dissent table below is
 carried forward, with D1 amended where this revision withdrew the claim it
 rested on.

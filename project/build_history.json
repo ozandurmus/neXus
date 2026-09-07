@@ -3,6 +3,22 @@
   "record_contract": "One structured record per build, newest first. Required: build, status, title, summary (<= 2 sentences). Optional: started, completed, track, movement, supersedes, evidence, risks_forward, docs{agreement,validation,handover} (repo-relative paths under docs/history/). Full detail lives in the linked doc; do not restate it here. Status vocabulary must stay within utils/project_plan.py STATUS_VALUES.",
   "builds": [
     {
+      "build": "gov_po_1_step_3_docs_reconciliation",
+      "status": "automated_validated",
+      "title": "GOV.PO.1 step 3 -- rule reconciliation after the PO assistant role migration",
+      "summary": "Applies the frozen contract's section-12 reconciliation list plus ratification decision 8: relay contract roster made role-based, one-line forward notes beside the preserved council self-critique disclosures (CAPABILITY_STATE section 10, M8 header), the claude-mem paragraph removed from AI_START_HERE.md, PO episode tiers added to the AI_START_HERE.md tier table, build-start.prompt.md reading the vendor-neutral set, and CLAUDE.md's toolchain line no longer assuming `py` exists in every shell. Documentation only.",
+      "started": "2026-09-08",
+      "completed": "2026-09-08",
+      "track": "GOV",
+      "movement": "DOCS",
+      "supersedes": null,
+      "evidence": "Branch gov-po-1-step-3-docs-reconciliation from origin/main 3724875 (after PR #109/#110 merges). Historical council disclosures kept verbatim; only forward notes appended. Validation: gov_po_role + relay + session-transfer + convergence suites; build-history index; privacy gate; git diff --check.",
+      "risks_forward": "Step 4 (direction-record ratification PR, authorized by the Product Owner 2026-09-08) follows immediately and is stacked on this branch; step 5 (Phase A PLAN) and step 6 (isolation VALIDATION) remain.",
+      "docs": {
+        "agreement": "docs/design/GOV_PO_ROLE_MIGRATION.md"
+      }
+    },
+    {
       "build": "gov_po_1_step_2_implementation",
       "status": "automated_validated",
       "title": "GOV.PO.1 step 2 -- Product Owner assistant role infrastructure (skills, agents, gate, amendments) + step 0 direction record",
