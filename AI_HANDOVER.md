@@ -37,7 +37,8 @@ Governance state only — no product source, test, template or static file.
 
 ## 3. Exact next action
 
-1. Merge this governance PR — needs its own recorded `RELAY_DECISION`.
+1. Merge this governance PR (#113) — needs its own recorded `RELAY_DECISION`
+   on relay **#10**, this episode's issue.
 2. Open `M10.1`'s own relay issue with its drafted `SESSION_START`, then
    run it in a **fresh engineering session** at **`Sonnet 5, normal`**
    (deterministic implementation against a frozen contract).
@@ -55,19 +56,24 @@ build-history index check, the repository privacy gate and
 
 ## 5. Risks / notes forward
 
-- **The interactive PO gate cannot emit a `NEXUS_SESSION_PACKET.**
-  `scripts/nexus_po_tool_gate.py` rejects the angle brackets the packet
-  sentinel is built from as a forbidden shell fragment, and its `Edit`/
-  `Write` rule allows no file outside the governance paths — so neither a
-  `--body` nor a `--body-file` route exists from a gated PO session, while
-  `GOV.PO.1` §5.1.1 requires a state-changing episode to post exactly those
-  two packets. This episode's packets were produced by the human. `T1`–`T7`
-  do not cover packet emission; they should.
-- **`.claude/settings.local.json` allows `Bash(gh pr merge:*)`.** Untracked
-  local settings must not widen the enforcing layer (`GOV.PO.1` §6.2, `I3`).
-  The role-scoped `.claude/nexus-po.settings.json` denies the same pattern,
-  so a correctly launched PO session is safe; a session launched without
-  `--settings` is not.
+- **Packet emission — reported, then fixed mid-episode.** The gate rejected
+  the angle brackets the packet sentinel is built from and allowed no file
+  outside the governance paths, so a gated PO session had neither a
+  `--body` nor a `--body-file` route, while `GOV.PO.1` §5.1.1 requires a
+  state-changing episode to post exactly those two packets. `GOV_PO_1_GATE_1`
+  (relay #8, PR #114) fixed it; this episode then posted its own packets on
+  relay #10 — first end-to-end proof of that path. **Residual:** `T1`–`T7`
+  still do not exercise packet emission.
+- **Nothing tests that `settings.local.json` cannot widen either enforcing
+  layer**, though `GOV.PO.1` §6.2 `I3` requires it. Observed live: this
+  session launched without `--settings`, so the role-scoped `deny` was
+  absent while `settings.local.json` carried `Bash(gh pr merge:*)` in
+  `allow`. No merge was attempted; the file is now `"allow": []`. A cheap
+  `T7`-shaped repository test would close this.
+- **`scripts/nexus_po_tool_gate.py` has an uncommitted working-tree edit**
+  (`git merge origin/` prefix). It belongs to `GOV_PO_1_GATE_2` (relay #9),
+  not to this governance PR, and is deliberately left unstaged — `scripts/`
+  is outside the PO role's write scope.
 - **Two verified state drifts, reported not fixed** — backlog
   `project_state_wording_drift_reconciliation`. Both live in free-text
   label/summary fields, so the cross-authority convergence check cannot see

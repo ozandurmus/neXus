@@ -65,9 +65,9 @@ interactive Phase A `PLAN` episode. Chose `M10.1` as the one actionable
 sliced `M10` into `M10.1`/`M10.2`/`M10.3` (§7 precedent); ranked the
 backlog by theme; filed `dlp_scanner_venv_exclusion` and
 `project_state_wording_drift_reconciliation` (both §11 drifts **verified,
-reported, not fixed**). Reported conflict, now fixed below: the gate could
-not emit a `NEXUS_SESSION_PACKET`, so this episode's own packets were
-posted by the human.
+reported, not fixed**). Reported conflict, fixed below mid-episode: the gate
+could not emit a `NEXUS_SESSION_PACKET`; after PR #114 the agent posted its
+own packets — first end-to-end proof of that path. Relay issue #10.
 
 Predecessor — **`gov_po_1_gate_1_command_safety_correction`** —
 fixes the reported conflict above with `shlex`-based real-operator
