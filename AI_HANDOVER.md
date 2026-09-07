@@ -8,8 +8,8 @@
 ## 1. Snapshot
 
 - Date: 2026-09-07. `gov_relay_1_canonical_agent_relay` (`GOV.RELAY.1`) —
-  **AUTOMATED_VALIDATED** on `gov-relay-1-canonical-protocol`; governance-only
-  PR/integration and relay #3 repair remain.
+  **AUTOMATED_VALIDATED, MERGED** via PR #105; relay #3 repaired and its stored
+  M9 `SESSION_START` revalidated.
 - Claude remains the sole M9 implementation owner; its branch is untouched.
 - M8.3 stays deferred and M7 stays blocked.
 
@@ -23,9 +23,9 @@
 
 ## 3. Exact next action
 
-Open and integrate the governance-only PR after required checks pass, verify
-`origin/main` ancestry, then repair `ozandurmus/nexus-agent-relay#3` exactly per
-GOV.RELAY.1 and return Claude to M9 ownership through `RELAY_READY`.
+Claude resumes `M9_ENROLLMENT_PREVIEW_CONFIRMATION_UI` from the validated body
+of `ozandurmus/nexus-agent-relay#3`; PR #104 stays open and unmerged pending a
+later Product Owner integration decision.
 
 ## 4. Test delta
 
@@ -35,7 +35,7 @@ history index and `git diff --check`: clean. No full regression, risk-based.
 
 ## 5. Risks / notes forward
 
-- Relay #3 currently contains a malformed corrective handoff that must be
-  preserved through `RELAY_CORRECTION`, not treated as authority.
+- Relay #3 preserves the malformed corrective handoff under `RELAY_CORRECTION`;
+  it is evidence only and not authority.
 - No device, product, UI, database, credential, deployment or production
   behavior belongs in this governance movement.
