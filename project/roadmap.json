@@ -148,7 +148,8 @@
       "completed": "2026-09-08",
       "notes": [
         "Full detail: project/build_history.json's gov_po_1_step_5_first_plan_episode record.",
-        "Governance only; no product behavior, device-write or production authorization is granted. M8.3 stays deferred and M7 stays blocked -- unchanged by this episode. The two verified drifts are REPORTED, not fixed here (project/backlog.json: project_state_wording_drift_reconciliation)."
+        "Governance only; no product behavior, device-write or production authorization is granted. M8.3 stays deferred and M7 stays blocked -- unchanged by this episode. The two verified drifts are REPORTED, not fixed here (project/backlog.json: project_state_wording_drift_reconciliation).",
+        "This episode merged second, so it reconciles now_next.now per the pattern the two concurrent gate movements recorded: gov_po_1_gate_1_command_safety_correction (PR #114) and gov_po_1_gate_2_self_sync_capability (PR #115) both remain in build_history below this record, with their own relay issues #8 and #9."
       ]
     },
     "next": {
