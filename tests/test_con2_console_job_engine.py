@@ -252,6 +252,10 @@ def test_ac5_job_record_has_no_forbidden_fields(console_env):
         "job_id", "idempotency_key", "job_type", "command_class", "targets", "state",
         "requested_at", "started_at", "finished_at", "run_id", "coordinator_decision",
         "outcome_counts", "error_code", "error_summary",
+        # M9: populated only by the device_enrollment_identity_probe job type
+        # (a sanitized identity/capability preview) -- None for every other
+        # job type, including this test's report_rebuild.
+        "preview",
     }
     assert set(record_dict.keys()) == allowed_fields
     serialized = json.dumps(record_dict).lower()
