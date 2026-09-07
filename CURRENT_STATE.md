@@ -70,14 +70,9 @@ Predecessor — **`gov_po_1_step_3_docs_reconciliation`** — documentation-only
 reconciliation (relay roster, council forward notes, `claude-mem` removal,
 PO tier row, `build-start` reading set, toolchain wording), **MERGED** PR #111.
 
-Predecessor — **`gov_po_1_step_2_implementation`** — **AUTOMATED_VALIDATED,
-MERGED** via PR #110 (2026-09-08): `nexus-po` skill/agent, council skill +
-seat agent, role-scoped settings + gate hook, PO prompts, approved
-`AGENTS.md`/relay amendments, T7 test; `PRODUCT_DIRECTION_RECORD.md` DRAFT.
-Phase B stays closed until isolation tests T1–T6 run.
-
-Predecessor — **`gov_po_1_role_migration_contract`** — contract **FROZEN —
-PO APPROVED 2026-09-07**, **MERGED** PR #109 (2026-09-08), relay #4. Governance only.
+Predecessors, all **MERGED**, governance-only: `gov_po_1_step_2_implementation`
+(PR #110, PO assistant infrastructure), `gov_po_1_role_migration_contract`
+(PR #109, contract FROZEN). Detail: `project/build_history.json`.
 
 Predecessor — **`m9_enrollment_preview_confirmation_ui`** (`M9`) —
 **AUTOMATED_VALIDATED, MERGED** via PR #104: local-loopback manual-endpoint
