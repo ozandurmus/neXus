@@ -211,27 +211,44 @@ def test_ac3_nothing_renders_a_disabled_or_placeholder_entry():
 # --- AC-4: "Add Device" is not a root, and is not rendered at all ----------
 
 
-def test_ac4_add_device_is_a_contextual_action_and_renders_nowhere():
+def test_ac4_add_device_is_a_contextual_action_implemented_directly_in_the_console():
     # Declared against the devices domain, not as a navigation root (D-NAV5).
     action_block = NAV_JS[NAV_JS.index("NAVIGATION_CONTEXTUAL_ACTIONS"):NAV_JS.index("NAVIGATION_DEVICE_TABS")]
     assert 'id: "add_device"' in action_block
     assert 'domain: "devices"' in action_block
-    assert "available: false" in action_block
-    assert "pcp_console_registry_write_gate" in action_block, (
-        "the reason an enrollment affordance does not exist must name the open "
-        "decision that holds it, not be an unexplained absence"
+    # M9 (2026-09-07): implemented. `available: true` here is a data-model
+    # statement of fact for a backend contract that now exists
+    # (docs/design/LOCAL_CONTROL_PLANE_RUNTIME_AND_ENROLLMENT.md §9.1) --
+    # `navigationContextualActions()` itself still has no render call site,
+    # so this flag drives nothing today; the actual UI is direct markup in
+    # console.html (`#m9EnrollOpenButton`/`#m9EnrollOpenButtonAdmin` +
+    # `#m9EnrollDialog`), not this generic renderer.
+    assert "available: true" in action_block
+    assert "M9" in action_block, (
+        "the reason this now exists must name the implementing movement, not "
+        "be an unexplained flip"
     )
 
-    # Not a root, not a child, and not a nav label in either shell.
+    # Not a root and not a child in either shell's NAVIGATION_MODEL -- the two
+    # frozen PO-NAV-1 entry points (Devices pane header, Administration ->
+    # Device Management) are direct markup / a `device-management` module
+    # panel, never a `navigationContextualActions()`-rendered item.
     model_block = NAV_JS[NAV_JS.index("const NAVIGATION_MODEL"):NAV_JS.index("NAVIGATION_CONTEXTUAL_ACTIONS")]
     assert "add_device" not in model_block
-    for name, shell in (("index.html", REPORT_SHELL), ("console.html", CONSOLE_SHELL)):
-        assert "Add Device" not in shell and "Add device" not in shell, (
-            f"{name} ships an enrollment affordance; enrollment is CLI-only "
-            f"(PCP.1) and its console gate is undecided"
-        )
 
-    # Only actions whose backend contract exists may reach a renderer.
+    # The console (only) ships the real dialog; the exported static report
+    # never does -- enrollment is a local-loopback-only write surface.
+    assert "Add Device" not in REPORT_SHELL and "Add device" not in REPORT_SHELL, (
+        "index.html ships an enrollment affordance; the exported static report "
+        "must stay action-free (server/non-loopback exposure is a separate, "
+        "still-open gate)"
+    )
+    assert "Add device" in CONSOLE_SHELL, (
+        "console.html should ship the M9 enrollment entry point(s)"
+    )
+
+    # Only actions whose backend contract exists may reach a renderer, for
+    # whichever future action first calls this getter.
     getter = NAV_JS[NAV_JS.index("function navigationContextualActions"):]
     getter = getter[: getter.index("\n}\n")]
     assert "action.available === true" in getter
@@ -709,7 +726,10 @@ def test_ac8_the_console_shell_renders_the_jobs_entry_the_report_cannot(uitest_r
                     ".module-nav-item", "els => els.map(e => e.dataset.module)"
                 )
                 assert "jobs" in rendered, "the console ships a jobs panel but rendered no entry"
-                assert sorted(rendered) == sorted(LEGACY_ROUTES + ["jobs"])
+                assert "device-management" in rendered, (
+                    "the console ships a Device Management panel (PO-NAV-1) but rendered no entry"
+                )
+                assert sorted(rendered) == sorted(LEGACY_ROUTES + ["jobs", "device-management"])
                 # Under Operations, not as a seventh root.
                 assert page.eval_on_selector(
                     '.module-nav-item[data-module="jobs"]',
