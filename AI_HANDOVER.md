@@ -7,26 +7,23 @@
 
 ## 1. Snapshot
 
-- Date: 2026-09-07. `gov_relay_1_question_routing` is **AUTOMATED_VALIDATED** on the
-  dedicated governance branch; `NEXUS_SESSION_PACKET` v2 is unchanged.
-- Claude remains the sole M9 implementation owner; its branch is untouched.
+- Date: 2026-09-07. `gov_git_authority_reconciliation` is AUTOMATED_VALIDATED on a dedicated governance branch; governance PR, merge, and relay correction are pending.
+- Claude remains the sole M9 implementation owner; PR #104 is untouched.
 
 ## 2. What changed
 
-- Added `RELAY_QUESTION` and the frozen decision tree for material PO questions.
-- Updated the shared bootstrap/build prompts and focused governance tests.
+- Defined PO-controlled Git as an authorization decision that permits agent execution; removed the unsupported manual-click interpretation.
+- Added one-objection/repeated-informed-instruction closure to Git and relay governance.
 
 ## 3. Exact next action
 
-Integrate the governance-only amendment, publish its matching PO decision on
-`ozandurmus/nexus-agent-relay#3`, then Claude resumes M9 from that relay.
+Open and merge the governance-only PR, correct relay #3, then let Claude integrate PR #104 under the clarified rule.
 
 ## 4. Test delta
 
-Relay/session-packet/architecture-convergence: 150 passed. Application-package and privacy tests: 14 passed. Repository privacy gate: PASS/0; state consistency, history index and `git diff --check`: clean.
+Relay/architecture convergence: 28 passed. Application/privacy: 14 passed. Repository privacy gate: PASS/0; state consistency, history index and `git diff --check`: clean.
 
 ## 5. Risks / notes forward
 
-- A material question pauses only its dependent action; unrelated authorized
-  work continues.
+- GitHub records the authenticated account, not whether a human or authorized agent operated the client.
 - No product, M9, device, UI, database, credential or deployment behavior changed.
