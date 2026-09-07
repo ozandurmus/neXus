@@ -3,6 +3,22 @@
   "record_contract": "One structured record per build, newest first. Required: build, status, title, summary (<= 2 sentences). Optional: started, completed, track, movement, supersedes, evidence, risks_forward, docs{agreement,validation,handover} (repo-relative paths under docs/history/). Full detail lives in the linked doc; do not restate it here. Status vocabulary must stay within utils/project_plan.py STATUS_VALUES.",
   "builds": [
     {
+      "build": "gov_relay_1_canonical_agent_relay",
+      "status": "automated_validated",
+      "title": "GOV.RELAY.1 -- canonical GitHub-issue agent relay",
+      "summary": "Defines RELAY_READY as a locator, freezes the issue-body/final-comment packet shape and intermediate relay vocabulary, and gives Codex and Claude one shared bootstrap prompt. Preserves the NEXUS_SESSION_PACKET v2 schema/parser unchanged and introduces no product, M9, device, UI, database, credential, deployment or production behavior.",
+      "started": "2026-09-07",
+      "completed": "2026-09-07",
+      "track": "GOV",
+      "movement": "IMPLEMENTATION",
+      "supersedes": null,
+      "evidence": "Dedicated branch gov-relay-1-canonical-protocol from verified origin/main 06bab222a0274b350753c6abff0f28bbebd28c23. Added docs/design/NEXUS_AGENT_RELAY_PROTOCOL.md and .github/prompts/relay-bootstrap.prompt.md; added pointers from AGENTS.md, AI_START_HERE.md, CLAUDE.md, .github/copilot-instructions.md and build-start/build-close prompts; added focused relay and architecture-convergence tests. Existing scripts/gov_session_transfer.py was not modified. Validation: focused relay/session-packet/convergence 149 passed; application-package/privacy tests 14 passed; repository privacy gate PASS with 0 findings; CURRENT_STATE.md exactly 200 lines; build-history index check and git diff --check clean. No full regression, risk-based for a governance/docs/test-only change.",
+      "risks_forward": "Relay #3 must be repaired after the governance merge: append RELAY_CORRECTION for the malformed handoff, replace the issue body with an officially rendered complete M9 SESSION_START, retrieve and validate the stored body, and append RELAY_NOTE naming the governance merge SHA, M9 movement and Claude ownership. Claude's M9 branch remains untouched and unmerged.",
+      "docs": {
+        "agreement": "docs/design/NEXUS_AGENT_RELAY_PROTOCOL.md"
+      }
+    },
+    {
       "build": "m8_evidence_host_key_fingerprint_not_persisted",
       "status": "automated_validated",
       "title": "M8 evidence fix -- persist host-key fingerprint into physical CP config evidence",
