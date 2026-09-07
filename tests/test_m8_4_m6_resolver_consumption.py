@@ -276,12 +276,14 @@ class TestCurrencyFailuresFoldToIdentityTranslationRequired:
         assert refusal is not None
         assert refusal.reason == IDENTITY_TRANSLATION_REQUIRED
 
-    def test_todays_real_m8_3_evidence_shape_has_no_fingerprint_and_fails_closed(self, tmp_path, monkeypatch):
-        """Documents a real gap (reported in this build's SESSION CLOSE, not
-        silently patched): `_collect_host`'s persisted CP config evidence
-        metadata carries no `host_key_fingerprint` field today, so this
-        currency condition can never be affirmatively proven against real
-        M8.3-produced evidence -- it must fail closed, not pass vacuously."""
+    def test_evidence_missing_fingerprint_still_fails_closed(self, tmp_path, monkeypatch):
+        """m8_evidence_host_key_fingerprint_not_persisted closed the real gap
+        this test used to document: `_collect_host` now writes
+        `host_key_fingerprint` into the governed physical CP evidence's
+        `extra_metadata`. This test still pins the fail-closed behavior for
+        the hypothetical/defensive case where that field is absent (e.g. an
+        older snapshot written before this movement) -- it must never be
+        treated as vacuously satisfied."""
         device_id = _fully_resolved(tmp_path, monkeypatch, endpoint="192.0.2.78", include_fingerprint=False)
         refusal = resolve_registry_targets((device_id,), data_root=tmp_path)
         assert refusal is not None
