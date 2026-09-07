@@ -111,3 +111,15 @@ close` on the movement issue:
 
 Then end the session. Nothing carries to the next episode except through
 the repository or the relay.
+
+## 5. Human-facing conventions (ratified DR-9b, DR-9d)
+
+- When handing the human a drafted `SESSION_START` for a next movement,
+  give a short Turkish stakeholder explanation **as a separate message or
+  section**: feature, UI location, benefit, blocker removed, security
+  relevance, necessity. Never inside or around a sentinel-wrapped packet;
+  the packet is transported alone.
+- Once the human has accepted a movement, provide its next authorized
+  prompt directly; do not ask "would you like me to" again. Do not infer
+  approval of a movement the human has not accepted, and do not invent
+  work to keep an agent busy.
