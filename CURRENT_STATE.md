@@ -5,18 +5,20 @@ see `AGENTS.md`/`AI_START_HERE.md`. **Predecessor build detail lives in
 `project/build_history.json`** (structured, newest-first) and its linked
 docs under `docs/history/`; `docs/history/INDEX.md` is the one-line timeline.
 
-- **Checkpoint:** 2026-09-08, `gov_po_1_local_relay_watch_command` — added
-  `scripts/local_relay.py watch` (bounded, read-only poll for a relay
-  file's `next_actor`, `--interval` floor 5s/`--timeout` ceiling 3600s,
-  exit 3 on timeout; never a daemon, never writes, decides nothing —
-  `relay/NXS-LOCAL-0003-local-relay-watch-command.json`). Predecessor
+- **Checkpoint:** 2026-09-08, `gov_po_1_gate_5_worktree_management` — added
+  `git worktree add` (interactive form only; base commit-ish must start
+  `origin/`, mirroring `git merge origin/<ref>`; a `-b`/`-B` branch name
+  must start `feature/`, `gov/po-` reserved for the PO's own branch) and
+  `git worktree list` (both forms, read-only) to
+  `scripts/nexus_po_tool_gate.py` — `remove`/`prune`/`move` stay denied —
+  `relay/NXS-LOCAL-0006-gate-5-worktree-management.json`. Predecessor
+  `gov_po_1_local_relay_watch_command` **MERGED** PR #124 (detail:
+  `project/build_history.json`). Predecessor
   `gov_po_2_po_visibility_and_bounded_authorship` **MERGED** PR #122:
   `docs/design/GOV_PO_2_PO_VISIBILITY_AND_BOUNDED_AUTHORSHIP.md` is
   **FROZEN — PRODUCT OWNER APPROVED, 2026-09-08** (four-seat
   `nexus-decision-council`, all `FREEZE WITH CHANGES`; seven amendments,
   `relay/NXS-LOCAL-0004`), specifying `gov_po_2_implementation`'s scope.
-  Predecessors `gov_po_1_step_6_plan_po2_boundary` **MERGED** PR #121,
-  `gov_po_1_local_relay_protocol` **MERGED** PR #120.
   **PO §12:** `M8.3` deferred, `M7` blocked. `M8` **FROZEN 2026-09-06**.
 - **Next** (`now_next.next`): `gov_po_2_implementation` — unblocked by the
   freeze above; not yet started, no relay artifact opened yet.

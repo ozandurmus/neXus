@@ -51,6 +51,23 @@ the file it watches. `create`/`append` (the only subcommands that write a
 `gh issue create` treatment. Delegated-form write access to relay files is
 unchanged: still denied.
 
+Worktree management (GOV_PO_1_GATE_5, 2026-09-08): `git worktree add` is
+allowed in interactive form only, mirroring the `git checkout -b gov/po-`
+write-action precedent (delegated form stays denied via the ordinary
+"command prefix not in the PO allowlist" path -- no special-case needed).
+Two argument-shape checks apply on top of the prefix match, modeled on
+already-shipped restrictions: the base commit-ish (`git worktree add <path>
+<commit-ish>`) must start with `origin/`, exactly mirroring the `git merge
+origin/<ref>` restriction, so no arbitrary local path, remote, or URL is
+ever reachable as a worktree base; and when `-b`/`-B <branch>` is present,
+`<branch>` must start with `feature/` -- `gov/po-` stays reserved for the
+PO's own governance branch, not for worktrees handed to an engineer. A
+worktree add with no `-b`/`-B` (attaching an existing branch) skips the
+branch-prefix check. `git worktree list` is read-only and allowed in both
+forms, mirroring `git branch --list`. `git worktree remove`/`prune`/`move`
+are deliberately never allowlisted -- a worktree, once created, is never
+destroyed by the PO role in this movement's scope.
+
 Self-sync capability (GOV_PO_1_GATE_2 correction, 2026-09-08): a fix landed
 on `origin/main` (or pushed directly to a `gov/po-*` branch, as happened for
 this episode) previously had no way to reach a PO episode's own already-
@@ -139,6 +156,7 @@ COMMON_PREFIXES = (
     "git status", "git log", "git diff", "git show", "git rev-parse",
     "git fetch", "git branch --show-current", "git branch --list",
     "git merge-base", "git cat-file", "git ls-files",
+    "git worktree list",
     "cat ", "head ", "tail ", "sed -n", "grep ", "rg ", "ls", "wc ", "find ",
     "python3 scripts/gov_session_transfer.py", "python scripts/gov_session_transfer.py",
     "py scripts/gov_session_transfer.py", ".venv/bin/python scripts/gov_session_transfer.py",
@@ -157,6 +175,7 @@ INTERACTIVE_EXTRA_PREFIXES = (
     "git checkout -b gov/po-", "git switch -c gov/po-",
     "git add ", "git commit", "git push",
     "git merge origin/", "git merge --ff-only origin/",
+    "git worktree add",
     "python3 scripts/build_history_index.py", "py scripts/build_history_index.py",
     ".venv/bin/python scripts/build_history_index.py",
     "python3 scripts/local_relay.py create", "python scripts/local_relay.py create",
@@ -282,6 +301,56 @@ def _tokenize(cmd: str) -> list[str] | None:
         return None
 
 
+# `git worktree add [-f] [--detach] [--checkout] [--lock [--reason <s>]]
+#  [--orphan] [(-b | -B) <new-branch>] <path> [<commit-ish>]` (git-worktree(1)).
+# Boolean flags take no argument; `--reason` and `-b`/`-B` each consume the
+# following token. Whatever tokens remain, in order, are the positionals:
+# the first is <path>, the second (if present) is the base <commit-ish>.
+_WORKTREE_ADD_BOOLEAN_FLAGS = {
+    "-f", "--force", "--no-force", "--detach", "--no-detach",
+    "--checkout", "--no-checkout", "--lock", "--no-lock",
+    "--orphan", "--no-orphan", "-q", "--quiet", "--no-quiet",
+    "--track", "--no-track", "--guess-remote", "--no-guess-remote",
+    "--relative-paths", "--no-relative-paths",
+}
+_WORKTREE_ADD_VALUE_FLAGS = {"--reason"}
+_WORKTREE_ADD_BRANCH_FLAGS = {"-b", "-B"}
+
+
+def _check_worktree_add(tokens: list[str]) -> tuple[bool, str]:
+    """AC-2/AC-3: restrict `git worktree add`'s base ref to origin/<ref> and
+    any `-b`/`-B` branch name to feature/*. `tokens` is the full tokenized
+    command (leading "git worktree add" included)."""
+    rest = tokens[3:]
+    branch_name = None
+    positionals: list[str] = []
+    i = 0
+    while i < len(rest):
+        tok = rest[i]
+        if tok in _WORKTREE_ADD_BRANCH_FLAGS:
+            if i + 1 >= len(rest):
+                return False, f"git worktree add {tok} requires a branch name"
+            branch_name = rest[i + 1]
+            i += 2
+            continue
+        if tok in _WORKTREE_ADD_VALUE_FLAGS:
+            i += 2
+            continue
+        if tok in _WORKTREE_ADD_BOOLEAN_FLAGS:
+            i += 1
+            continue
+        positionals.append(tok)
+        i += 1
+    if not positionals:
+        return False, "git worktree add requires a path"
+    base_ref = positionals[1] if len(positionals) > 1 else None
+    if not base_ref or not base_ref.startswith("origin/"):
+        return False, "git worktree add's base commit-ish must start with origin/ (mirrors the git merge origin/<ref> restriction)"
+    if branch_name is not None and not branch_name.startswith("feature/"):
+        return False, "git worktree add -b/-B branch name must start with feature/ (gov/po- is reserved for the PO's own branch)"
+    return True, "worktree add within restrictions"
+
+
 def decide(payload: dict, form: str, branch_lookup=_current_branch) -> tuple[bool, str]:
     """Return (allowed, reason). Pure except for the branch lookup callable."""
     tool = str(payload.get("tool_name", ""))
@@ -345,6 +414,10 @@ def decide(payload: dict, form: str, branch_lookup=_current_branch) -> tuple[boo
                 return False, f"Git writes are allowed only on a gov/po-* branch (current: {branch or 'unknown'})"
         if cmd.startswith("git push") and ("--force" in tokens or cmd.startswith("git push -f")):
             return False, "force push is never allowed"
+        if cmd.startswith("git worktree add"):
+            allowed, reason = _check_worktree_add(tokens)
+            if not allowed:
+                return False, reason
         return True, "allowlisted command"
     return False, f"tool {tool!r} is not available to the PO role"
 
