@@ -13,13 +13,13 @@ docs under `docs/history/`; `docs/history/INDEX.md` is the one-line timeline.
   read-only. Presents `op_degraded_verdict` for this freeze; no code/test/
   FROZEN doc changed. Own worktree, parallel with GOV.PO.3/M10.2. Detail:
   `project/build_history.json`. Predecessor
+  `gov_po_3_orchestrator_observability` **MERGED**. Predecessor
   `gov_po_3_push_hook_baseline_scoping` **MERGED**. Predecessor
   `gov_po_3_approved_movement_orchestration_ac3` **AC-3 only, MERGED** —
   AC-5 demonstrations pending (`relay/NXS-LOCAL-0007`). Predecessor
   `gov_po_1_gate_5_worktree_management` **MERGED**. Predecessor
-  `gov_po_2_po_visibility_and_bounded_authorship` **MERGED** PR #122:
-  `docs/design/GOV_PO_2_PO_VISIBILITY_AND_BOUNDED_AUTHORSHIP.md`
-  **FROZEN — PRODUCT OWNER APPROVED, 2026-09-08**. **PO §12:** `M8.3`
+  `gov_po_2_po_visibility_and_bounded_authorship` **MERGED** PR #122 —
+  FROZEN — PRODUCT OWNER APPROVED, 2026-09-08. **PO §12:** `M8.3`
   deferred, `M7` blocked. `M8` **FROZEN 2026-09-06**.
 - **Next** (`now_next.next`): `gov_po_2_implementation` — unrelated and
   unchanged by this movement; not yet started. `m8_3_real_environment_
