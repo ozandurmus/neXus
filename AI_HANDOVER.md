@@ -7,177 +7,102 @@
 
 ## 1. Snapshot
 
-- Date: 2026-09-08. `gov_po_3_approved_movement_orchestration_ac3` —
-  froze `docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md` and
-  implemented it: `scripts/orchestrator.py` dispatches a Product-Owner-
-  approved movement to a separate `claude -p` engineer process in its own
-  git worktree, tracked through development and serialized integration
-  under the standing `relay#13` merge authorization — no manual message-
-  carrying, no new terminal, no per-step approval for routine engineering
-  movements. Requested at
-  `relay/NXS-LOCAL-0007-gov-po-3-orchestration.json`'s `SESSION_START`
-  (Product Owner architecture direction, 2026-09-08, after a 3-seat
-  `nexus-decision-council` round in the originating PO episode).
-- **This record covers AC-3 only.** AC-5 (four real demonstrations) and
-  AC-8-for-the-demo have not run yet — do not treat GOV.PO.3 as fully
-  validated because this record exists; the relay stays open pending AC-5.
-- Independent of `gov_po_2_po_visibility_and_bounded_authorship`'s (FROZEN,
-  PR #122 merged) own scope; `gov_po_2_implementation` stays `now_next.next`,
-  untouched by this movement.
+- Date: 2026-09-08. `m10_2_capability_state_resolver_core` — implements the
+  capability-state resolver core (stages 0-3 of
+  `docs/design/CAPABILITY_STATE_VOCABULARY_AND_PRESENTATION.md` section 5):
+  the `RESOLVED`/`OMITTED` union tag, the `CX1`/`RI-1`/`RI-2`
+  contradiction/inconsistency gate, the twelve-rank primary ladder, and the
+  seven capability qualifiers — as pure, fully tested functions with no I/O,
+  no device contact, and no consumer wired yet.
+- Ran in its own worktree (`relay/NXS-LOCAL-0008`), in parallel with
+  GOV.PO.3 and OP.1; branch was already even with `origin/main` at the time
+  of this session's own bookkeeping (no merge conflict to resolve).
 
 ## 2. What changed
 
-- `docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md` (new): the AC-1
-  architecture amendment, FROZEN with three Product Owner additions (A:
-  merge-time re-validation against an advanced `main`; B: an `orchestrator
-  status` table plus `--max-workers`; C: the engineer's fixed prompt
-  re-reads the canonical relay before opening its PR).
-- `scripts/orchestrator.py` (new): `start`/`status`/`stop`/`merge-lock`.
-  Worktree creation from the relay's own `report.git.base`/`git.lane`
-  fields (mirroring `GOV_PO_1_GATE_5`'s own restrictions: base must be an
-  `origin/` ref, branch must be `feature/*`); a SHA-256 content hash over
-  the exact `SESSION_START` entry, written verbatim to
-  `.nexus/approved_task.json` in the worktree; process records outside the
-  relay file (`NEXUS_ORCHESTRATOR_STATE_DIR`, default a system-temp
-  subdirectory); duplicate-start prevention and interrupted-run resume both
-  via a live `os.kill(pid, 0)` check, never an inferred staleness
-  threshold; `--max-workers` (default 3) enforced on fresh dispatch only,
-  never on a resume; a TTL-based, self-healing merge lock
-  (`merge-lock acquire/release`) for cross-movement integration
-  serialization. A safety addition beyond the FROZEN text: `--max-budget-usd`
-  (default 3.0) bounds an unattended spawn's spend.
-- `.claude/nexus-engineer.settings.json` + `scripts/nexus_engineer_tool_
-  gate.py` (new): the engineer's own permission profile — default-**allow**
-  ("normal dev tools"), unlike the PO profile's default-deny shape. Two
-  narrow `PreToolUse`/`PostToolUse` checks only: the repository privacy
-  gate before `git push`/`gh pr create`; the merge lock plus Addition A's
-  real `git fetch origin && git merge origin/main` +
-  `tests/test_architecture_convergence.py` + `build_history_index.py
-  --check` before `gh pr merge`, denying and releasing the lock on any
-  failure. `git push --force`/`-f` denied unconditionally (the one overlap
-  with the PO profile).
-- `scripts/nexus_po_tool_gate.py`: added `orchestrator status`
-  (`COMMON_PREFIXES`, both forms) and `orchestrator start`/`stop`
-  (`INTERACTIVE_EXTRA_PREFIXES`); introduced `_prefix_matches()`, a
-  boundary-safe prefix check (matched prefix followed by a space, a `/`,
-  or end-of-string) applied across the *entire* allowlist — closes
-  `GOV_PO_2_PO_VISIBILITY_AND_BOUNDED_AUTHORSHIP.md` §3.1's own open item,
-  and a real pre-existing latent gap where a bare `"ls"` prefix also
-  matched `"lsof ..."` under plain `str.startswith`.
-- `scripts/local_relay.py`: the canonical-location resolver —
-  `NEXUS_CANONICAL_RELAY_DIR` (`create --dir`'s default) and
-  `NEXUS_RELAY_FILE` (`append`/`status`/`validate`/`watch --file`'s
-  default), so every worktree resolves to the one physical relay file the
-  Product Owner's session reads, never a per-worktree copy; an explicit
-  `--dir`/`--file` always wins, and default behavior with neither set is
-  byte-for-byte unchanged. A real, cross-platform (`fcntl`/`msvcrt`,
-  stdlib-only) advisory lock now wraps `append`'s whole read-validate-
-  build-write sequence (sidecar `<file>.lock`), turning a losing concurrent
-  writer's outcome from "fails, needs a human to retry" into "waits, then
-  proceeds automatically" — needed with no human present to react.
-- `docs/design/GOV_PO_2_PO_VISIBILITY_AND_BOUNDED_AUTHORSHIP.md` §§2.4/3.2/4
-  corrected per the Product Owner's freeze decision on this movement's
-  relay (see §3 below).
-- `tests/test_orchestrator.py` (new, 48): pure decision logic — dispatch/
-  resume/refuse, merge-lock acquire/reclaim, phase reconciliation, task
-  hashing, git-ref validation — plus CLI-level `start`/`status`/`merge-lock`
-  tests with git/spawn side effects monkeypatched. No real `claude -p`
-  spawn or git worktree in the test suite itself, by design (§9 of the
-  FROZEN amendment: those are AC-5's job).
-- `tests/test_gov_po_role.py` (+8), `tests/test_local_relay_protocol.py`
-  (+9): the new gate prefixes, the boundary-safe-matching regressions, the
-  resolver env vars and their precedence, and one genuine contended-lock
-  CLI test (a held lock really blocks a second `append`, then times out).
-- `project/build_history.json`: new `gov_po_3_approved_movement_
-  orchestration_ac3` record (`automated_validated`), newest-first.
+- `utils/capability_state_resolver.py` (new): `resolve_union_tag()` (stage
+  0) returns one of two structurally distinct types, `Resolved` (no fields)
+  or `Omitted` (`reason` + optional `diagnostic`, never a `None`-filled
+  capability output). `evaluate_stage1()` (stage 1) plus
+  `evaluate_ri1_comparability()` implement `CX1` (from an explicit
+  `IdentityConflict`, `I10`), the `K1`-`K6` `RI-1` comparability precedence
+  table (5.1.1, six rows, first match wins), and `RI-2` by calling
+  `utils.registry_evidence_reconciliation.detect_ri2` (`M10.1`) directly —
+  not reimplemented. `resolve_primary_status()` (stage 2) implements the
+  primary ladder, ranks 0-11, first-match-wins, over typed `LadderInputs`;
+  malformed/absent fields simply match no rank and fall through to rank 11
+  rather than being specially coerced. `resolve_qualifiers()` (stage 3)
+  derives each of the seven `CapabilityQualifier` values from exactly one
+  input facet. `to_wire()` serializes only under the `capability_state`/
+  `capability_qualifiers` keys (4.4 namespacing rule).
+- `tests/test_m10_2_capability_state_resolver.py` (new, 134 tests): stage-0
+  cases V-A..V-D plus `Omitted`/`Resolved` structural checks; vocabulary
+  size + lexical-disjointness parametrized tests against
+  `console/jobs.py::TERMINAL_STATES`, `utils/operate/states.py::ActionState`
+  and `utils/action_taxonomy.py::ACTION_CLASSES`; the serializer's
+  namespacing; the full `K1`-`K6` table one row at a time plus two mixed-
+  ordering cases; `RI-2` reuse; one test per ladder rank 0-11 plus the
+  rank-8-vs-9 ordering case and a `POLICY_UNKNOWN`-never-reaches-rank-11
+  case; one test per qualifier plus the four 4.1.5 inference-ban negative
+  tests; an AST-based purity check (no `requests`/`paramiko`/`socket`/
+  `subprocess` import, no `utils.capability_registry` import).
+- `project/build_history.json`: new `m10_2_capability_state_resolver_core`
+  record (`automated_validated`), newest-first.
 - `project/roadmap.json`: `current_build`/`now_next.now` →
-  `gov_po_3_approved_movement_orchestration_ac3`; `now_next.next`
-  (`gov_po_2_implementation`) unchanged.
-- `CURRENT_STATE.md`: checkpoint updated, trimmed to stay at the 200-line
-  ceiling.
+  `m10_2_capability_state_resolver_core`; removed its own now-stale
+  `upcoming` row; `now_next.next` (`gov_po_2_implementation`) unchanged.
+- `CURRENT_STATE.md`: checkpoint updated; the stale `## Active build`
+  section (still describing a much older predecessor,
+  `gov_po_1_step_6_plan_po2_boundary`, in full prose) compressed to
+  pointer form to stay within the enforced 200-line ceiling
+  (`test_current_state_stays_a_checkpoint_not_a_history`).
 - `docs/history/INDEX.md`: regenerated via `scripts/build_history_index.py`.
 
-## 3. GOV_PO_2 text corrections applied
+## 3. What was deliberately not done
 
-Both authorized by this movement's own `RELAY_DECISION`
-(`relay/NXS-LOCAL-0007`, entry 3), per the applying-vs-originating rule
-`docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md` §2.2 itself
-states:
-
-1. §§2.4/4: "merge (governance or product, of any kind)" → distinguishes
-   *originating* a new standing merge authorization (still human-only) from
-   *executing* one already recorded (e.g. `relay#13` — not itself a fresh
-   human-decision event, per `AGENTS.md` "Git authority and execution law").
-   The prior text silently contradicted `relay#13`, which was already
-   governing real merges.
-2. §3.2: "those are human-only declarations" → the PO *applying* a freeze/
-   ratification decision the human already made is permitted; *originating*
-   one is not. The `po_drafts/*.md` status-line detection mechanism itself
-   is unchanged — it already denied any PO-authored `FROZEN`/`RATIFIED`
-   claim there regardless of direction; only the prose explaining its
-   intent was overbroad.
+- Stages 4-5 (evidence presentation, action affordance) — explicitly the
+  next slice; nothing here computes them.
+- `D2`/`D3`/`D5` producers — `M10.3`/`M12`; this module only consumes
+  already-resolved values of those dimensions via typed inputs
+  (`EntityApplicability`, `VendorSupport`, `CapabilityPolicy`).
+- The stage-0 diagnostic pass (4.1.4) — explicitly `OPTIONAL`;
+  `Diagnostic` is a plain passthrough type a future caller may populate.
+- No wiring into `html_export`, the console, any payload or navigation
+  module. `utils/capability_registry.py` (the `0.6.1C` collection planner)
+  is neither extended nor imported — proven by a dedicated test.
+- `project/feature_registry.json` — not touched, consistent with `M10.1`'s
+  own precedent; no feature-registry entry names this resolver.
 
 ## 4. Exact next action
 
-1. Commit this movement's changes on a `feature/*` branch, push, open a PR,
-   confirm every required gate is green (targeted + full suite, `git diff
-   --check`, repository privacy gate), then merge under the standing
-   `relay#13` decision — no separate merge `RELAY_DECISION` needed — and
-   post the `RELAY_NOTE` on `relay/NXS-LOCAL-0007`.
-2. AC-5: with the Product Owner's direction (this session, direct
-   instruction, recorded as a `RELAY_DECISION` on `relay/NXS-LOCAL-0007`
-   entry 6), the next step is a small, clearly-labeled, throwaway scratch
-   movement dispatched through the real `orchestrator start` pipeline
-   (real worktree, real spawned `claude -p` engineer process, real commit/
-   push/PR/self-merge) — run only *after* this movement's own AC-3 code is
-   on `origin/main`, since the demo's spawned engineer process needs
-   `scripts/orchestrator.py`/`.claude/nexus-engineer.settings.json`/
-   `scripts/nexus_engineer_tool_gate.py` to already exist in the worktree
-   it is dispatched into.
-3. `gov_po_2_implementation` stays `now_next.next` — unrelated to and
+1. Commit this movement's changes on `feature/m10-2-capability-state-
+   resolver-core`, push, open a PR against `main`, confirm the standing
+   `relay#13` merge gate (green tests) and merge; report via `RELAY_NOTE`
+   on the relay file per the SESSION_START's `merge_gate`.
+2. `M10.3` (D2/D3 producers) and `M12` (D5 producer) remain `planned`,
+   not authorized by this movement — each needs its own SESSION_START.
+   Once available, a later slice wires stages 4-5 and assembles the full
+   `CapabilityResolution` this module's stage 0-3 functions feed into.
+3. `gov_po_2_implementation` stays `now_next.next`, unrelated to and
    unblocked independently of this movement.
 
 ## 5. Test delta
 
-New: `tests/test_orchestrator.py` (48). Targeted: `tests/test_gov_po_role.py`
-(+8), `tests/test_local_relay_protocol.py` (+9). Combined targeted run:
-`tests/test_gov_po_role.py`/`test_local_relay_protocol.py`/
-`test_architecture_convergence.py`/`test_orchestrator.py` — 267 passed.
-Full regression `.venv/bin/python -m pytest -q -n auto --dist worksteal`:
-2662 passed, 25 skipped, 2 failed — both confirmed pre-existing and
-unrelated via `git stash` against a clean `main` checkout taken *before*
-this movement's own changes existed
-(`tests/test_dev_0_5b_auth_consumer_canonical_config.py`'s `.venv/`
-site-packages repository-text DLP scan; the same known false positive
-already documented in `gov_po_1_gate_5`'s and
-`gov_po_1_local_relay_watch_command`'s own evidence — neither that test nor
-the code it scans was touched by this movement). `git diff --check` clean.
-Repository privacy gate `.venv/bin/python main.py --repository-privacy-check`:
-FAIL/5 findings, identical to the 5 already documented in `gov_po_1_gate_5`'s
-own evidence (`data/`, `data/.support_hmac.key`, `logs/` untracked local
-runtime artifacts; the same pre-existing `CREDENTIAL_LITERAL` matches in
-`project/build_history.json:47` and
-`relay/NXS-LOCAL-0003-local-relay-watch-command.json:155`, both already
-committed) — none of this movement's own changed files appear in the
-findings list.
+New: `tests/test_m10_2_capability_state_resolver.py` (134, all passed).
+Affected regression: `tests/test_m10_1_registry_evidence_reconciliation.py`
++ `tests/test_architecture_convergence.py` — 78 passed,
+`project_metadata_has_no_cross_authority_contradictions` clean. Full
+one-shot regression not re-run (`DEV.TEST.1`: backend-only pure-function
+addition with no shared-core change; last full-suite evidence holds).
+`git diff --check` clean.
 
 ## 6. Risks / notes forward
 
-- AC-5's four demonstrations have not run. Do not report GOV.PO.3 as done;
-  the relay (`relay/NXS-LOCAL-0007`) stays open with `next_actor: engineer`
-  pending them.
-- Addition A's merge-time re-validation runs only the two fixed checks
-  (`tests/test_architecture_convergence.py`, `build_history_index.py
-  --check`); a movement's own additional targeted tests are not
-  mechanically re-run at merge time, since `report.validation_plan` is
-  free-text prose, not a machine-executable command list — named explicitly
-  in `docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md` §9 as a
-  residual, narrower risk than the gap Addition A closes.
-- An auto-mode classifier blocked one literal, permission-probing-shaped
-  `claude -p` Bash invocation during AC-4 verification; a differently-
-  worded invocation and the actual production shape (a Python
-  `subprocess.run` call, no literal `claude -p` text in the Bash tool's own
-  command string) were not blocked. Inference from one observed pair of
-  cases, not proof it can never interfere — AC-5 demonstration 1 is the
-  real test; a recurrence there is a blocking finding to report, never
-  something to route around (AC-7).
+- This module has zero callers today — it is inert with respect to any
+  running behavior, product output, or UI. No render-harness or privacy-
+  gate implication beyond the standard PR-time check.
+- The rank-10 `AVAILABLE` conjunction's "every required input well-formed"
+  clause is implemented as membership checks against each dimension's
+  closed domain; a future caller must supply real domain values (not raw
+  strings) for this to fail closed correctly — documented in the module's
+  own `LadderInputs` docstring.
