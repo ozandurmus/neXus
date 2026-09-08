@@ -1,0 +1,153 @@
+{
+  "created_at": "2026-09-08T07:35:41Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1: docs/design/GOV_PO_2_PO_VISIBILITY_AND_BOUNDED_AUTHORSHIP.md's Status section status line changes from 'DRAFT -- NOT IMPLEMENTATION AUTHORITY, awaiting Product Owner freeze.' to 'FROZEN -- PRODUCT OWNER APPROVED, 2026-09-08.', immediately followed by one paragraph recording: (a) the four-seat nexus-decision-council round (Security Reviewer, Senior Python Architect, DevSecOps/Platform Engineer, Technical Product Owner -- all four recommended FREEZE WITH CHANGES, none recommended DO NOT FREEZE) that reviewed this document under GOV_PO_ROLE_MIGRATION.md section 7 trigger (b); (b) the seven amendments the Product Owner authorized from that round's consolidated dissent, landed at relay/NXS-LOCAL-0004-gov-po-2-freeze-amendments.json; (c) that an optional independent cross-model review (GOV_PO_ROLE_MIGRATION.md section 9/D8) was considered and explicitly declined by the Product Owner for this decision, with the stated reasoning (every new capability stays read-only or DRAFT-gated; easily correctable; council already surfaced substantive findings); (d) the Product Owner's freeze authorization itself: 'authorized_by: Product Owner -- chat directive 2026-09-08 (this session)'.",
+          "AC-2: rewording elsewhere in the document that assumes DRAFT status (e.g. any remaining 'awaiting Product Owner freeze' phrasing outside the Status section) is reconciled to reflect FROZEN, without altering any of section 1-8's substantive content -- this is a status-line and framing change only, not a re-opening of any amendment.",
+          "AC-3: PR #122 merges to main once this change is committed and green (git diff --check, repository privacy gate run for real) -- per the standing relay#13 decision, no further separate merge RELAY_DECISION is needed for the PR merge itself; the freeze authorization above is the decision, already recorded in AC-1.",
+          "AC-4: project/roadmap.json's now_next is updated: current_build/now_next.now promoted to gov_po_2_po_visibility_and_bounded_authorship (now FROZEN, no longer complete_with_followup -- reconcile the status field); now_next.next set to gov_po_2_implementation, no longer blocked (its own prerequisite -- this freeze -- is satisfied); project/build_history.json gains a small record or amendment noting the freeze event and PR #122's merge commit."
+        ],
+        "baseline": {
+          "authority": "This freeze IS the authority event -- docs/design/GOV_PO_2_PO_VISIBILITY_AND_BOUNDED_AUTHORSHIP.md becomes FROZEN by this movement, per AGENTS.md 'Authority hierarchy' and GOV_PO_ROLE_MIGRATION.md D14 (an explicitly authorized merge is the ratification; authority comes from the Product Owner's authorization, recorded here, not from the merge event itself).",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 -- Compliance trend retro-fill (AUTOMATED_VALIDATED)",
+          "sequencing": "Final step of the GOV.PO.2 (1/2) DRAFT-contract track: gov_po_1_step_6_plan_po2_boundary (PLAN, PR #121, merged) -> gov_po_2_po_visibility_and_bounded_authorship (ARCHITECTURE, PR #122, drafted the document) -> a 4-seat council round (this session, not a movement) -> gov_po_2_freeze_amendments (DOCS, landed 7 amendments on the same PR #122) -> this movement (freeze + merge). gov_po_2_implementation (2/2, the actual code) starts only after this movement completes."
+        },
+        "context_not_loaded": [
+          "Every other subsystem -- this movement touches only the one document's status line and routine project-state bookkeeping"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "feature/gov-po-2-visibility-and-bounded-authorship (same branch, PR #122)",
+          "lane": "feature/gov-po-2-visibility-and-bounded-authorship"
+        },
+        "invariants": [
+          "No amendment content from relay/NXS-LOCAL-0004 is reopened or altered -- this movement changes only the status line and directly-dependent framing",
+          "This is the one point where the document's own text asserts FROZEN status -- everything else in the two-movement GOV.PO.2 plan depends on this being accurate and dated"
+        ],
+        "merge_gate": "Standing decision on relay#13 applies once AC-1/AC-2 are committed and green: merge PR #122 to main, no separate merge RELAY_DECISION needed -- the freeze authorization in AC-1 is the decision.",
+        "movement_type": "DOCS",
+        "objective": "Record the Product Owner's freeze decision directly in docs/design/GOV_PO_2_PO_VISIBILITY_AND_BOUNDED_AUTHORSHIP.md's own status line (with full provenance: council round, seven amendments, declined cross-model review, explicit chat authorization), then merge PR #122 to main and unblock gov_po_2_implementation in project/roadmap.json.",
+        "output_contract": [
+          "docs/design/GOV_PO_2_PO_VISIBILITY_AND_BOUNDED_AUTHORSHIP.md: status line FROZEN + provenance paragraph",
+          "PR #122 merged to main",
+          "project/roadmap.json: now_next.now/next reconciled; gov_po_2_implementation unblocked",
+          "project/build_history.json: freeze event noted",
+          "This relay artifact's SESSION_CLOSE, naming the merge commit"
+        ],
+        "recommended_reasoning": {
+          "reason": "Mechanical status-line update plus routine bookkeeping and a merge already authorized by the standing decision -- no design judgment involved.",
+          "tier": "Sonnet 5, normal"
+        },
+        "requirements": [
+          "Do not alter sections 1-8's substantive amendment content -- this is a status/provenance change only"
+        ],
+        "risks": [],
+        "scope": {
+          "in": [
+            "The status-line/provenance update",
+            "Merging PR #122",
+            "project/roadmap.json and project/build_history.json reconciliation"
+          ],
+          "out": [
+            "Starting gov_po_2_implementation itself -- that is a separate, next movement with its own relay artifact"
+          ]
+        },
+        "validation_plan": [
+          "git diff --check",
+          "Repository privacy gate via --repository-privacy-check, run for real",
+          "tests/test_architecture_convergence.py metadata_warnings empty after the roadmap.json update"
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-08T07:35:41Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "AUTOMATED_VALIDATED",
+      "report": {
+        "changed": [
+          "docs/design/GOV_PO_2_PO_VISIBILITY_AND_BOUNDED_AUTHORSHIP.md: Status section (status line + provenance paragraph) and section 6 tense only -- sections 1-5, 7, 8 substantively untouched",
+          "project/build_history.json, project/roadmap.json, CURRENT_STATE.md, AI_HANDOVER.md, docs/history/INDEX.md: routine project-state bookkeeping"
+        ],
+        "completed": [
+          "docs/design/GOV_PO_2_PO_VISIBILITY_AND_BOUNDED_AUTHORSHIP.md's Status section rewritten: status line FROZEN -- PRODUCT OWNER APPROVED, 2026-09-08, immediately followed by a provenance paragraph recording the four-seat nexus-decision-council round, the seven Product-Owner-authorized amendments, the declined optional independent cross-model review, and the explicit freeze authorization (authorized_by: Product Owner -- chat directive 2026-09-08, this session)",
+          "Section 6 reworded to past tense to match the now-completed freeze path, without altering its substantive claim",
+          "project/build_history.json's existing gov_po_2_po_visibility_and_bounded_authorship record amended in place (status done, summary/risks_forward updated with the freeze event) rather than duplicated with a new near-identical record",
+          "project/roadmap.json: now_next.now marked done; now_next.next promoted from unset to gov_po_2_implementation (planned, unblocked); removed from upcoming accordingly",
+          "CURRENT_STATE.md and AI_HANDOVER.md rewritten to FROZEN framing; docs/history/INDEX.md regenerated",
+          "PR #122 merged to main as 664fd7f5336196f5315fcfaf40aca0fafc3f17c8, per the standing relay#13 decision (no separate merge RELAY_DECISION needed -- the freeze authorization was the decision)"
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "No effect -- this movement changes only one document's status line and routine project-state bookkeeping",
+          "ui": "No visible UI change"
+        },
+        "integration": {
+          "branch": "feature/gov-po-2-visibility-and-bounded-authorship",
+          "ci": "validate: pass",
+          "head_sha": "873d42730d811804ca182644b0399ea8f7b4e41a",
+          "merge_commit": "664fd7f5336196f5315fcfaf40aca0fafc3f17c8",
+          "merge_decision": "APPROVED_AND_INTEGRATED",
+          "merge_state": "MERGED",
+          "pr": 122,
+          "pr_url": "https://github.com/ozandurmus/neXus/pull/122"
+        },
+        "next": {
+          "movement": "GOV_PO_2_IMPLEMENTATION",
+          "movement_type": "IMPLEMENTATION",
+          "objective": "Build exactly the five mechanisms docs/design/GOV_PO_2_PO_VISIBILITY_AND_BOUNDED_AUTHORSHIP.md section 3 specifies into scripts/nexus_po_tool_gate.py, .claude/nexus-po.settings.json, the new nexus-po-evidence-reviewer agent, and tests/test_gov_po_role.py, including the two amendment-added required acceptance criteria, with its own bookkeeping in the same commit",
+          "status": "planned"
+        },
+        "preserved": [
+          "No amendment content from relay/NXS-LOCAL-0004 reopened or altered",
+          "No code, test, gate, or agent-definition file touched -- this movement is a status/provenance change plus merge, per its own stated scope",
+          "gov_po_2_implementation's own scope and acceptance criteria (sections 3.1-3.5) unchanged by this freeze"
+        ],
+        "recommended_reasoning": {
+          "reason": "gov_po_2_implementation is deterministic implementation against a now-frozen contract that the amendment round already closed every open design question on -- no new architecture or ambiguity remains",
+          "tier": "Sonnet 5, normal"
+        },
+        "state_updates": [
+          "project/build_history.json: gov_po_2_po_visibility_and_bounded_authorship record amended to done + freeze note",
+          "project/roadmap.json: now_next.now done, now_next.next promoted to gov_po_2_implementation, removed from upcoming",
+          "CURRENT_STATE.md: checkpoint rewritten (198 lines)",
+          "AI_HANDOVER.md: rewritten",
+          "docs/history/INDEX.md: regenerated"
+        ],
+        "unresolved_risks": [
+          "gov_po_2_implementation is unblocked but not yet started -- no relay artifact opened yet for it",
+          "The two amendment-added required acceptance criteria (section 3.1 boundary-safe prefix matching, section 3.4 privacy-check equivalence regression test) remain specified, not implemented -- gov_po_2_implementation must satisfy them",
+          "Section 5's bookkeeping-stays-with-the-engineer rule and section 4's standing-delegation re-confirmation requirement are both policy-only, not gate-enforced, exactly as the frozen document itself states"
+        ],
+        "validation": {
+          "affected": "tests/test_architecture_convergence.py: 22 passed, including the build-history-index-is-derived-not-hand-maintained check after regenerating docs/history/INDEX.md",
+          "diff_check": "git diff --check clean on the committed files",
+          "full_regression": "not run, risk-based -- pure documentation/bookkeeping change, no code or schema surface",
+          "privacy": ".venv/bin/python main.py --repository-privacy-check run for real: PASS, 0 findings",
+          "real_environment": "NOT_RUN -- no network-device, UI, or product-behavior surface is touched",
+          "state_consistency": "tests/test_architecture_convergence.py::test_project_metadata_has_no_cross_authority_contradictions: PASS after the roadmap.json/build_history.json update",
+          "targeted": "N/A -- no code/test change"
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-08T07:44:30Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0005",
+  "movement": "GOV_PO_2_FREEZE_AND_MERGE",
+  "next_actor": null,
+  "refs": [
+    "docs/design/GOV_PO_2_PO_VISIBILITY_AND_BOUNDED_AUTHORSHIP.md",
+    "project/roadmap.json",
+    "project/build_history.json"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-08T07:44:30Z"
+}
