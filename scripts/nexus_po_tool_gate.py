@@ -20,7 +20,9 @@ Forms (docs/design/GOV_PO_ROLE_MIGRATION.md section 4 and 6.2):
                  No Edit/Write/NotebookEdit, no Agent, no Git write, no
                  collection, no shell redirection.
   interactive -- Phase A session: the delegated set plus Edit/Write on the
-                 governance paths or the nexus_po_* scratch pattern, `gh
+                 governance paths, the `relay/*.json` local relay files
+                 (GOV_PO_1_LOCAL_RELAY_PROTOCOL, 2026-09-08 -- see below),
+                 or the nexus_po_* scratch pattern, `gh
                  issue create`, `gh issue close` (any inline `--comment`
                  must carry one of the five relay markers, exactly like
                  `gh issue comment`; a close with no comment is allowed
@@ -34,6 +36,17 @@ Forms (docs/design/GOV_PO_ROLE_MIGRATION.md section 4 and 6.2):
                  named Agent exception: a `nexus-council-seat` subagent
                  launch (GOV_PO_1_GATE_3, 2026-09-08) -- every other Agent
                  spawn, in either form, stays denied.
+
+Local relay transport (GOV_PO_1_LOCAL_RELAY_PROTOCOL, 2026-09-08;
+docs/design/LOCAL_RELAY_PROTOCOL.md, DRAFT): an additional, same-machine
+transport alongside the GitHub-based relay, not a replacement for it.
+`relay/*.json` is a new Edit/Write pattern, interactive form only, alongside
+-- not weakening -- the existing exact-match `GOVERNANCE_PATHS` list.
+`scripts/local_relay.py status`/`validate` (read-only) are allowlisted in
+both forms, mirroring `gov_session_transfer.py`'s own treatment; `create`/
+`append` (the only subcommands that write a `relay/*.json` file) are
+interactive-form only, mirroring the existing `gh issue create` treatment.
+Delegated-form write access to relay files is unchanged: still denied.
 
 Self-sync capability (GOV_PO_1_GATE_2 correction, 2026-09-08): a fix landed
 on `origin/main` (or pushed directly to a `gov/po-*` branch, as happened for
@@ -98,6 +111,13 @@ GOVERNANCE_PATHS = (
     "AI_HANDOVER.md",
 )
 
+# GOV_PO_1_LOCAL_RELAY_PROTOCOL, 2026-09-08 (docs/design/LOCAL_RELAY_PROTOCOL.md,
+# DRAFT): a new pattern alongside GOVERNANCE_PATHS above, not a widening of
+# it -- the eight exact-match paths there are unchanged. Flat directory only
+# (no subdirectories), matching scripts/local_relay.py's own filename
+# contract (relay/NXS-LOCAL-<id>-<slug>.json).
+LOCAL_RELAY_FILE_PATTERN = "relay/*.json"
+
 # Transient packet-staging scratch pattern (GOV.PO.1 section 4 item (c): "drafted
 # SESSION_START packets rendered by scripts/gov_session_transfer.py"). Interactive
 # form only; never a permanent artifact, never inside the repository, never
@@ -122,6 +142,10 @@ COMMON_PREFIXES = (
     "python3 scripts/build_history_index.py --check", "py scripts/build_history_index.py --check",
     ".venv/bin/python scripts/build_history_index.py --check",
     "python3 -m pytest", "py -m pytest", ".venv/bin/python -m pytest",
+    "python3 scripts/local_relay.py status", "python scripts/local_relay.py status",
+    "py scripts/local_relay.py status", ".venv/bin/python scripts/local_relay.py status",
+    "python3 scripts/local_relay.py validate", "python scripts/local_relay.py validate",
+    "py scripts/local_relay.py validate", ".venv/bin/python scripts/local_relay.py validate",
 )
 INTERACTIVE_EXTRA_PREFIXES = (
     "gh issue create", "gh issue close", "gh pr create",
@@ -130,6 +154,10 @@ INTERACTIVE_EXTRA_PREFIXES = (
     "git merge origin/", "git merge --ff-only origin/",
     "python3 scripts/build_history_index.py", "py scripts/build_history_index.py",
     ".venv/bin/python scripts/build_history_index.py",
+    "python3 scripts/local_relay.py create", "python scripts/local_relay.py create",
+    "py scripts/local_relay.py create", ".venv/bin/python scripts/local_relay.py create",
+    "python3 scripts/local_relay.py append", "python scripts/local_relay.py append",
+    "py scripts/local_relay.py append", ".venv/bin/python scripts/local_relay.py append",
 )
 
 # Always denied regardless of quoting: both keep executing even inside a
@@ -167,19 +195,38 @@ def _current_branch(cwd: str | None) -> str:
         return ""
 
 
-def _path_is_governance(path: str, cwd: str | None) -> bool:
+def _repo_relative(path: str, cwd: str | None) -> str | None:
+    """Normalize `path` to a repository-relative, `/`-separated form for
+    fnmatch comparison against a path-pattern list. Returns None when an
+    absolute path cannot be made relative to `cwd` -- callers treat that as
+    "does not match any pattern", never as a free pass."""
     if not path:
-        return False
+        return None
     rel = path
     if cwd and os.path.isabs(path):
         try:
             rel = os.path.relpath(path, cwd)
         except ValueError:
-            return False
+            return None
     rel = rel.replace(os.sep, "/")
     if rel.startswith("./"):
         rel = rel[2:]
-    return any(fnmatch(rel, pat) for pat in GOVERNANCE_PATHS)
+    return rel
+
+
+def _path_is_governance(path: str, cwd: str | None) -> bool:
+    rel = _repo_relative(path, cwd)
+    return rel is not None and any(fnmatch(rel, pat) for pat in GOVERNANCE_PATHS)
+
+
+def _path_is_local_relay_file(path: str, cwd: str | None) -> bool:
+    rel = _repo_relative(path, cwd)
+    if rel is None:
+        return False
+    # fnmatch's "*" matches "/" too (it has no path-segment concept), so
+    # "relay/*.json" alone would also match "relay/sub/x.json" -- the
+    # explicit single-"/" count is what actually keeps this flat.
+    return rel.count("/") == 1 and fnmatch(rel, LOCAL_RELAY_FILE_PATTERN)
 
 
 def _scratch_roots() -> list[str]:
@@ -248,9 +295,11 @@ def decide(payload: dict, form: str, branch_lookup=_current_branch) -> tuple[boo
         target = str(tool_input.get("file_path") or tool_input.get("notebook_path") or "")
         if _path_is_governance(target, cwd):
             return True, "governance path"
+        if _path_is_local_relay_file(target, cwd):
+            return True, "local relay file (relay/*.json, GOV_PO_1_LOCAL_RELAY_PROTOCOL)"
         if _path_is_po_scratch(target, cwd):
             return True, "scratch path (transient packet staging, GOV.PO.1 section 4 item c)"
-        return False, "interactive PO edits are limited to the governance paths and the nexus_po_*.json/.txt scratch pattern in GOV.PO.1 section 4"
+        return False, "interactive PO edits are limited to the governance paths, relay/*.json, and the nexus_po_*.json/.txt scratch pattern in GOV.PO.1 section 4"
     if tool == "Bash":
         raw = str(tool_input.get("command", ""))
         if "\n" in raw or "\r" in raw:

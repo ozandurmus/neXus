@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "current_build": "gov_po_1_gate_4_issue_close_path",
+  "current_build": "gov_po_1_local_relay_protocol",
   "current_track": "PCP.x",
   "progress_contract": "Weighted acceptance-criterion completion. Percentages describe the declared roadmap, not calendar time or delivery ETA.",
   "tracks": [
@@ -140,16 +140,16 @@
   "now_next": {
     "horizon_contract": "NOW is exactly one build. NEXT is exactly one. Everything else is an `upcoming` row carrying its own true status: planned = AFTER, blocked = waiting on a named external gate, deferred = consciously postponed. `now.build` must equal the newest project/build_history.json record -- utils.project_plan enforces it.",
     "now": {
-      "build": "gov_po_1_gate_4_issue_close_path",
-      "title": "GOV_PO_1_GATE_4 -- allow gh issue close from interactive PO sessions",
-      "goal": "Add 'gh issue close' to the interactive-form PO tool gate allowlist, with the same relay-marker discipline 'gh issue comment' already enforces on any inline closing comment, so a Product Owner can close a resolved relay issue without a manual terminal command.",
-      "status": "automated_validated",
+      "build": "gov_po_1_local_relay_protocol",
+      "title": "GOV.PO.1 -- local, file-based relay protocol for same-machine PO<->engineer coordination",
+      "goal": "Design and implement relay/*.json plus scripts/local_relay.py as an additional, git-tracked, turn-enforced local transport for same-machine PO/engineer coordination, reusing NEXUS_AGENT_RELAY_PROTOCOL.md's markers and GOV.SESSION.1's report schema verbatim, without amending or superseding the GitHub-based relay.",
+      "status": "complete_with_followup",
       "started": "2026-09-08",
       "completed": "2026-09-08",
       "notes": [
-        "Full detail: project/build_history.json's gov_po_1_gate_4_issue_close_path record.",
-        "Filed and closed from relay ozandurmus/nexus-agent-relay#14. Delegated form still denies 'gh issue close' entirely, matching the existing 'gh issue create'/'gh pr create' precedent. No other decide() branch changes.",
-        "Predecessor m10_1_registry_evidence_reconciliation_projection MERGED PR #117 -- full detail in its own build_history record."
+        "Full detail: project/build_history.json's gov_po_1_local_relay_protocol record.",
+        "Filed from relay ozandurmus/nexus-agent-relay#15. Status is complete_with_followup, not automated_validated: docs/design/LOCAL_RELAY_PROTOCOL.md stays DRAFT (tests/test_architecture_convergence.py's own rule forbids a DRAFT contract backing a terminal build status), and promoting it beyond the small gate-fix-scale movements it was built for is an explicit future PO DECIDE question -- that ratification is the followup. A nexus-decision-council REVIEW round is recommended once relay#14's own council-path fix has proven itself in real use.",
+        "Predecessor gov_po_1_gate_4_issue_close_path -- full detail in its own build_history record."
       ]
     },
     "next": {
