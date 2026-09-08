@@ -5,25 +5,25 @@ see `AGENTS.md`/`AI_START_HERE.md`. **Predecessor build detail lives in
 `project/build_history.json`** (structured, newest-first) and its linked
 docs under `docs/history/`; `docs/history/INDEX.md` is the one-line timeline.
 
-- **Checkpoint:** 2026-09-08, `m10_1_registry_evidence_reconciliation_projection`
-  — `M10`'s first slice ships: `utils/registry_evidence_reconciliation.py`
-  derives `D4` (`RECONCILED`/`EVIDENCE_ONLY`/`REGISTRY_ONLY`/
-  `REGISTRY_DISABLED`/`RECONCILIATION_UNKNOWN`) plus `RI-2` bounded-
-  inconsistency detection. `RELAY_DECISION` on relay #11: no canonical id
-  spans `utils/device_registry.py`'s `device_id` and the merged evidence
-  model's `entity_id` today, so every entity resolves `RECONCILIATION_UNKNOWN`
-  except a disabled row (`REGISTRY_DISABLED`, registry-only fact);
-  `utils/device_identity_relationships.py` (`M8.1`) stays unread, its
-  `mapping_scope` out of bounds for this purpose. No UI/nav/payload change.
+- **Checkpoint:** 2026-09-08, `gov_po_1_gate_4_issue_close_path` — adds
+  `gh issue close` to the interactive-form PO tool gate allowlist (an
+  inline `--comment` must carry one of the five relay markers; a close
+  with no comment is unconditional) so a Product Owner can close a
+  resolved relay issue without a manual terminal command; delegated form
+  still denies it entirely. Filed and closed from relay #14.
+  Predecessor `gov_po_1_gate_3_agent_tool_council_path` **MERGED** PR #116
+  (Agent-tool council-seat exception); own history record still outstanding.
+  Predecessor `m10_1_registry_evidence_reconciliation_projection` **MERGED**
+  PR #117 (`M10`'s first slice: `D4`/`RI-2` registry↔evidence projection).
   Predecessor `gov_po_1_step_5_first_plan_episode` **MERGED** PR #113: first
-  Phase A `PLAN` episode, sliced `M10`, chose this build as `next`.
+  Phase A `PLAN` episode, sliced `M10`, chose the M10.1 build above as `next`.
   Predecessor `M9` **MERGED** PR #104. `M8.4` **MERGED** PR #101.
   **PO §12:** `M8.3` deferred, `M7` blocked. `M8` **FROZEN 2026-09-06**.
-- **Next** (`now_next.next`): **unset** — `m10_1` (above) was the queued
-  candidate and is now complete. Sizing/authorizing the next actionable
-  build (e.g. `M10.2`, whose own `upcoming` row already says it needs its
-  own `PLAN`/`REVIEW` episode) is a Product Owner function, not decided by
-  an engineering build. `m8_3_real_environment_validation` stays `upcoming`,
+- **Next** (`now_next.next`): **unset** — sizing/authorizing the next
+  actionable build (e.g. `M10.2`, whose own `upcoming` row already says it
+  needs its own `PLAN`/`REVIEW` episode) is a Product Owner function, not
+  decided by an engineering build. `m8_3_real_environment_validation` stays
+  `upcoming`,
   **deferred debt**, unpaid; `m7_real_device_targeted_collect_now`/
   `op2_c_cp_clusterxl_adapter_scoping` stay `upcoming`/`blocked`.
   `DEV.TEST.1`/`PCP.1`/`M1`-`M6`/`M8.1`-`M8.4`/`M10.1` complete/automated_validated.
