@@ -149,7 +149,7 @@
       "notes": [
         "Full detail: project/build_history.json's m10_2_capability_state_resolver_core record.",
         "Authorized 2026-09-08 (Product Owner direction: UI/interactive control-plane track is top priority), sequenced by the first M10 Phase A PLAN episode. Runs in parallel with GOV.PO.3 and OP.1 in its own worktree (relay/NXS-LOCAL-0008); consumed M10.1's D4 producer plus declared typed inputs for D2/D3/D5, whose own producers do not exist yet (M10.3/M12).",
-        "Predecessor now-slot: gov_po_3_orchestrator_observability -- automated_validated, merged (origin/main advanced during this movement's own session; merged into this branch before opening the PR, per this build's own SESSION_START instruction). gov_po_3_push_hook_baseline_scoping merged before that; both unaffected by this build."
+        "Predecessor now-slot: m10_3_entity_and_vendor_support_producers -- automated_validated, merged (origin/main advanced twice during this movement's own session, once mid-PR; each merged into this branch before completing the PR/merge, per this build's own SESSION_START instruction). gov_po_3_orchestrator_observability and gov_po_3_push_hook_baseline_scoping merged before that; all three unaffected by this build."
       ]
     },
     "next": {
@@ -171,15 +171,6 @@
           "Deferred to backlog by explicit Product Owner decision, 2026-09-07 (contract section 12 amendment; project/backlog.json: m8_3_real_environment_validation). No new code. Executes the one bounded, read-only command M8.3 prepared but did not run (`py main.py --identity-first-contact <device_id>`) against exactly one Product-Owner-named registry device_id, under explicit authorization -- corporate laptop / controlled environment, matching AI_START_HERE.md 'Real-environment procedure'.",
           "Measures the actually observable CP config evidence-retention lower bound/window (frozen M8 contract §6/§9) -- report UNKNOWN/INSUFFICIENT_EVIDENCE if it cannot be established from the real run, never inferred -- which determines whether CONTRADICTORY_EVIDENCE detection can ever be judged buildable. Closes M8.3 toward REAL_ENV_VALIDATED/DONE. M7 stays blocked until this step produces a genuinely real-environment-validated relationship -- no automated fixture or synthetic relationship may ever satisfy that gate, and M8.4's own AUTOMATED_VALIDATED, MERGED completion does not change this.",
           "2026-09-08, first Phase A PLAN episode: this row LEFT now_next.next and stays here as retained deferred debt, per PRODUCT_DIRECTION_RECORD.md DR-9c (a deferred human validation is tracked durably while independent authorized work continues) and section 6's finding that a deferred row is not an executable NEXT. Nothing about its own status, authorization or gate changed: it is still deferred by the explicit Product Owner decision of 2026-09-07, it still requires an explicitly authorized bounded real-environment run, and it still gates M7. Choosing M10.1 as NEXT does not pay this debt and must never be described as having done so."
-        ]
-      },
-      {
-        "build": "m10_3_entity_and_vendor_support_producers",
-        "title": "M10.3 -- D2 entity applicability and D3 vendor/platform support producers",
-        "status": "planned",
-        "notes": [
-          "Third M10 slice, sequenced 2026-09-08. Not authorized. Positive-evidence vendor support only -- CAPABILITY_STATE_VOCABULARY_AND_PRESENTATION.md section 7.3 governs what may never prove capability support.",
-          "Together with M10.1 and M10.2 this is what finally lets project/feature_registry.json's left_vertical_product_navigation availability_rule criterion move off 'pending'; that criterion state is owned by the slice that actually delivers the predicates, never by this planning row."
         ]
       },
       {
