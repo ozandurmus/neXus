@@ -32,6 +32,7 @@ docs under `docs/history/`; `docs/history/INDEX.md` is the one-line timeline.
   `gov_po_2_po_visibility_and_bounded_authorship` **MERGED** PR #122 —
   FROZEN — PRODUCT OWNER APPROVED, 2026-09-08. **PO §12:** `M8.3`
   deferred, `M7` blocked. `M8` **FROZEN 2026-09-06**.
+- `orchestrator_interactive_dashboard_app` **MERGED** — interactive PO + Orchestrator workbench (`py scripts/orchestrator.py dashboard`), read+relay-write only. Detail: `project/backlog.json` id `orchestrator_interactive_dashboard_app`.
 - **Next** (`now_next.next`): `gov_po_2_implementation` — unrelated and
   unchanged by this movement; not yet started. `m8_3_real_environment_
   validation` stays `upcoming`, **deferred debt**, unpaid; `m7_real_device_

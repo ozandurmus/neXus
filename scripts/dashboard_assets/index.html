@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>neXus -- PO + Orchestrator workbench</title>
+<link rel="stylesheet" href="/dashboard.css">
+</head>
+<body>
+<header id="topbar">
+  <h1>neXus workbench</h1>
+  <div id="summary-strip">loading...</div>
+  <div id="poll-config">
+    <label for="poll-interval">refresh (s)</label>
+    <input id="poll-interval" type="number" min="2" max="3600" value="5">
+    <span id="poll-save-state"></span>
+  </div>
+</header>
+
+<main id="app">
+  <section id="section-awaiting" class="movement-section">
+    <h2>Awaiting you</h2>
+    <div class="cards" id="cards-awaiting"></div>
+  </section>
+
+  <section id="section-running" class="movement-section">
+    <h2>Running movements</h2>
+    <div class="cards" id="cards-running"></div>
+  </section>
+
+  <section id="section-agenda" class="movement-section">
+    <h2>PO agenda</h2>
+    <div class="cards" id="cards-agenda">
+      <p class="muted">Not-yet-started backlog items are not yet surfaced here in this first delivery -- see project/backlog.json directly.</p>
+    </div>
+  </section>
+
+  <section id="section-integration" class="movement-section">
+    <h2>Integration queue</h2>
+    <div class="cards" id="cards-integration"></div>
+  </section>
+
+  <section id="section-recent" class="movement-section collapsed">
+    <h2 id="recent-toggle">Recently completed / archive &#9656;</h2>
+    <div class="cards" id="cards-recent"></div>
+  </section>
+</main>
+
+<aside id="detail-panel" class="hidden">
+  <div id="detail-header">
+    <button id="detail-close">&times;</button>
+    <h2 id="detail-title"></h2>
+  </div>
+  <nav id="detail-tabs">
+    <button data-tab="summary" class="active">Summary</button>
+    <button data-tab="activity">Live activity</button>
+    <button data-tab="conversation">Conversation</button>
+    <button data-tab="changes">Changes</button>
+    <button data-tab="evidence">Evidence</button>
+    <button data-tab="history">History</button>
+  </nav>
+  <div id="detail-body">
+    <div class="tab-pane active" data-pane="summary" id="pane-summary"></div>
+    <div class="tab-pane" data-pane="activity" id="pane-activity"></div>
+    <div class="tab-pane" data-pane="conversation" id="pane-conversation"></div>
+    <div class="tab-pane" data-pane="changes" id="pane-changes"></div>
+    <div class="tab-pane" data-pane="evidence" id="pane-evidence"></div>
+    <div class="tab-pane" data-pane="history" id="pane-history"></div>
+  </div>
+</aside>
+
+<script src="/dashboard.js"></script>
+</body>
+</html>
