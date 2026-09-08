@@ -58,6 +58,17 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--compliance-probe",
+        action="store_true",
+        help=(
+            "CE.2 opt-in read-only compliance command-primitive probe "
+            "(docs/design/COMPLIANCE_CHECK_ENGINE.md section 5). Runs the "
+            "curated configuration.command_primitives.PRIMITIVE_REGISTRY "
+            "against one already-discovered device per vendor, once per "
+            "device per run. Never wired into a normal collection run."
+        ),
+    )
+    parser.add_argument(
         "--cp-config-collect",
         action="store_true",
         help=(
@@ -506,7 +517,7 @@ def validate_modes(args, parser):
     if args.repository_privacy_check and args.apply:
         parser.error("--apply is not valid with --repository-privacy-check")
     if args.repository_privacy_check and (
-        args.cp_config_probe or args.cp_config_collect or args.render_only or args.only != "all"
+        args.cp_config_probe or args.cp_config_collect or args.compliance_probe or args.render_only or args.only != "all"
         or args.recovery_collect or args.recovery_attest
     ):
         parser.error("--repository-privacy-check cannot be combined with collection/render modes")
@@ -515,35 +526,35 @@ def validate_modes(args, parser):
     if args.persistent_secret_material_check and args.apply:
         parser.error("--apply is not valid with --persistent-secret-material-check")
     if args.persistent_secret_material_check and (
-        args.cp_config_probe or args.cp_config_collect or args.render_only or args.only != "all"
+        args.cp_config_probe or args.cp_config_collect or args.compliance_probe or args.render_only or args.only != "all"
         or args.recovery_collect or args.recovery_attest
     ):
         parser.error("--persistent-secret-material-check cannot be combined with collection/render modes")
     if args.restore_readiness_check and args.apply:
         parser.error("--apply is not valid with --restore-readiness-check")
     if args.restore_readiness_check and (
-        args.cp_config_probe or args.cp_config_collect or args.render_only or args.only != "all"
+        args.cp_config_probe or args.cp_config_collect or args.compliance_probe or args.render_only or args.only != "all"
         or args.recovery_collect or args.recovery_attest
     ):
         parser.error("--restore-readiness-check cannot be combined with collection/render modes")
     if args.ha_readiness_check and args.apply:
         parser.error("--apply is not valid with --ha-readiness-check")
     if args.ha_readiness_check and (
-        args.cp_config_probe or args.cp_config_collect or args.render_only or args.only != "all"
+        args.cp_config_probe or args.cp_config_collect or args.compliance_probe or args.render_only or args.only != "all"
         or args.recovery_collect or args.recovery_attest
     ):
         parser.error("--ha-readiness-check cannot be combined with collection/render modes")
     if args.recovery_store_check and args.apply:
         parser.error("--apply is not valid with --recovery-store-check")
     if args.recovery_store_check and (
-        args.cp_config_probe or args.cp_config_collect or args.render_only or args.only != "all"
+        args.cp_config_probe or args.cp_config_collect or args.compliance_probe or args.render_only or args.only != "all"
         or args.recovery_collect or args.recovery_attest
     ):
         parser.error("--recovery-store-check cannot be combined with collection/render modes")
     if args.recovery_validate and args.apply:
         parser.error("--apply is not valid with --recovery-validate")
     if args.recovery_validate and (
-        args.cp_config_probe or args.cp_config_collect or args.render_only or args.only != "all"
+        args.cp_config_probe or args.cp_config_collect or args.compliance_probe or args.render_only or args.only != "all"
         or args.recovery_collect or args.recovery_attest
     ):
         parser.error("--recovery-validate cannot be combined with collection/render modes")
@@ -565,7 +576,7 @@ def validate_modes(args, parser):
     if registry_mode_count and args.apply:
         parser.error("--apply is not valid with a --registry-* mode")
     if registry_mode_count and (
-        args.cp_config_probe or args.cp_config_collect or args.render_only or args.only != "all"
+        args.cp_config_probe or args.cp_config_collect or args.compliance_probe or args.render_only or args.only != "all"
         or args.recovery_collect or args.recovery_attest or args.storage_analyze
         or args.storage_deduplicate or args.repository_privacy_check
         or args.persistent_secret_material_check or args.restore_readiness_check
@@ -589,7 +600,7 @@ def validate_modes(args, parser):
     if args.cp_ha_preflight_check and args.pan_ha_preflight_check:
         parser.error("--cp-ha-preflight-check and --pan-ha-preflight-check cannot be combined")
     if (args.cp_ha_preflight_check or args.pan_ha_preflight_check) and (
-        args.cp_config_probe or args.cp_config_collect or args.render_only or args.only != "all"
+        args.cp_config_probe or args.cp_config_collect or args.compliance_probe or args.render_only or args.only != "all"
         or args.recovery_collect or args.recovery_attest or args.storage_analyze
         or args.storage_deduplicate or args.apply or args.repository_privacy_check
         or args.persistent_secret_material_check or args.restore_readiness_check
@@ -603,7 +614,7 @@ def validate_modes(args, parser):
         )
 
     if args.identity_first_contact and (
-        args.cp_config_probe or args.cp_config_collect or args.render_only or args.only != "all"
+        args.cp_config_probe or args.cp_config_collect or args.compliance_probe or args.render_only or args.only != "all"
         or args.recovery_collect or args.recovery_attest or args.storage_analyze
         or args.storage_deduplicate or args.apply or args.repository_privacy_check
         or args.persistent_secret_material_check or args.restore_readiness_check
@@ -646,7 +657,7 @@ def validate_modes(args, parser):
     if args.recovery_attest and args.recovery_vendor and args.recovery_vendor != "checkpoint":
         parser.error("--recovery-attest is Check Point only (omit --recovery-vendor, or set it to 'checkpoint')")
     if (args.recovery_collect or args.recovery_attest) and (
-        args.cp_config_probe or args.cp_config_collect or args.render_only
+        args.cp_config_probe or args.cp_config_collect or args.compliance_probe or args.render_only
         or args.only != "all" or args.storage_analyze or args.storage_deduplicate or args.apply
         or args.compliance_trend_reconstruct
     ):
@@ -665,6 +676,7 @@ def validate_modes(args, parser):
         or args.apply
         or args.cp_config_probe
         or args.cp_config_collect
+        or args.compliance_probe
         or args.render_only
         or args.compliance_trend_reconstruct
         or args.only != "all"
@@ -672,7 +684,7 @@ def validate_modes(args, parser):
     ):
         parser.error("--scheduler-once cannot be combined with collection, render, or maintenance modes")
     if args.compliance_trend_reconstruct and (
-        args.cp_config_probe or args.cp_config_collect or args.render_only or args.apply or args.only != "all"
+        args.cp_config_probe or args.cp_config_collect or args.compliance_probe or args.render_only or args.apply or args.only != "all"
         or args.recovery_collect or args.recovery_attest
     ):
         parser.error("--compliance-trend-reconstruct cannot be combined with collection/render modes")
@@ -692,6 +704,7 @@ def validate_modes(args, parser):
         or args.recovery_attest
         or args.cp_config_probe
         or args.cp_config_collect
+        or args.compliance_probe
         or args.render_only
         or args.compliance_trend_reconstruct
         or args.scheduler_once
@@ -699,6 +712,16 @@ def validate_modes(args, parser):
         or registry_mode_count
     ):
         parser.error("--console cannot be combined with collection, render, or maintenance modes")
+    if args.compliance_probe and args.only != "all":
+        parser.error("--compliance-probe cannot be combined with --only")
+    if args.compliance_probe and args.render_only:
+        parser.error("--compliance-probe cannot be combined with --render-only")
+    if args.compliance_probe and (args.storage_analyze or args.storage_deduplicate or args.apply):
+        parser.error("--compliance-probe cannot be combined with storage maintenance options")
+    if args.compliance_probe and args.cp_config_probe:
+        parser.error("--compliance-probe cannot be combined with --cp-config-probe")
+    if args.compliance_probe and args.cp_config_collect:
+        parser.error("--compliance-probe cannot be combined with --cp-config-collect")
 
 
 def dispatch(args, parser, *, runtime_services=None, provenance="manual", admission_run_context=None):
@@ -777,6 +800,9 @@ def dispatch(args, parser, *, runtime_services=None, provenance="manual", admiss
         return recovery_wf.recovery_collect(ctx)
     if args.recovery_attest:
         return recovery_wf.recovery_attest(ctx)
+    if args.compliance_probe:
+        from application.workflows import compliance as compliance_wf
+        return compliance_wf.compliance_probe(ctx)
     if args.cp_config_probe:
         return checkpoint_wf.cp_config_probe(ctx)
     if args.cp_config_collect:
