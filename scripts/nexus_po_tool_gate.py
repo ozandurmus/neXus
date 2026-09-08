@@ -22,11 +22,14 @@ Forms (docs/design/GOV_PO_ROLE_MIGRATION.md section 4 and 6.2):
   interactive -- Phase A session: the delegated set plus Edit/Write on the
                  governance paths or the nexus_po_* scratch pattern, `gh
                  issue create`, Git branch/commit/push/PR only on a
-                 `gov/po-*` branch, and `git merge origin/<ref>` to sync
+                 `gov/po-*` branch, `git merge origin/<ref>` to sync
                  that branch with a fix landed on `origin/main` or another
                  `origin/*` ref (merge source restricted to `origin/`;
                  no arbitrary remote or URL is ever reachable, since
-                 `git remote add` is not allowlisted).
+                 `git remote add` is not allowlisted), and exactly one
+                 named Agent exception: a `nexus-council-seat` subagent
+                 launch (GOV_PO_1_GATE_3, 2026-09-08) -- every other Agent
+                 spawn, in either form, stays denied.
 
 Self-sync capability (GOV_PO_1_GATE_2 correction, 2026-09-08): a fix landed
 on `origin/main` (or pushed directly to a `gov/po-*` branch, as happened for
@@ -232,6 +235,8 @@ def decide(payload: dict, form: str, branch_lookup=_current_branch) -> tuple[boo
     if tool in READ_TOOLS:
         return True, "read tool"
     if tool == "Agent":
+        if form == "interactive" and tool_input.get("subagent_type") == "nexus-council-seat":
+            return True, "nexus-decision-council seat launch (GOV_PO_ROLE_MIGRATION.md section 7/8)"
         return False, "the PO role does not spawn agents except council seats from the nexus-po skill; use the council skill's documented path"
     if tool in EDIT_TOOLS:
         if form != "interactive":
