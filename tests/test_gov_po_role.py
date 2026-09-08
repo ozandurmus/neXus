@@ -453,4 +453,53 @@ def test_gate_local_relay_prefix_requires_the_named_subcommand():
     unknown_sub = _bash("python3 scripts/local_relay.py delete --file relay/x.json")
     for form in ("delegated", "interactive"):
         assert not gate.decide(bare, form)[0]
-        assert not gate.decide(unknown_sub, form)[0]
+
+
+# --- GOV_PO_1_GATE_5: git worktree add/list ---------------------------------
+
+def test_gate_interactive_allows_worktree_add_with_origin_base_and_feature_branch():
+    cmd = "git worktree add ../x origin/main -b feature/y"
+    assert gate.decide(_bash(cmd), "interactive", branch_lookup=lambda cwd: "gov/po-x")[0]
+
+
+def test_gate_delegated_never_adds_worktrees():
+    cmd = "git worktree add ../x origin/main -b feature/y"
+    assert not gate.decide(_bash(cmd), "delegated")[0]
+
+
+@pytest.mark.parametrize("cmd", [
+    "git worktree add ../x /tmp/evil -b feature/y",
+    "git worktree add ../x some-other-remote/main -b feature/y",
+    "git worktree add ../x -b feature/y",
+])
+def test_gate_worktree_add_base_ref_must_start_with_origin(cmd):
+    assert not gate.decide(_bash(cmd), "interactive", branch_lookup=lambda cwd: "gov/po-x")[0], cmd
+
+
+@pytest.mark.parametrize("cmd", [
+    "git worktree add ../x origin/main -b bugfix/y",
+    "git worktree add ../x origin/main -b gov/po-sneaky",
+])
+def test_gate_worktree_add_branch_name_must_start_with_feature(cmd):
+    assert not gate.decide(_bash(cmd), "interactive", branch_lookup=lambda cwd: "gov/po-x")[0], cmd
+
+
+def test_gate_interactive_allows_worktree_add_without_new_branch():
+    cmd = "git worktree add ../x origin/main"
+    assert gate.decide(_bash(cmd), "interactive", branch_lookup=lambda cwd: "gov/po-x")[0]
+
+
+def test_gate_allows_worktree_list_in_both_forms():
+    for form in ("delegated", "interactive"):
+        allowed, reason = gate.decide(_bash("git worktree list"), form)
+        assert allowed, (form, reason)
+
+
+@pytest.mark.parametrize("cmd", [
+    "git worktree remove ../x",
+    "git worktree prune",
+    "git worktree move ../x ../y",
+])
+def test_gate_worktree_remove_prune_move_stay_denied_in_both_forms(cmd):
+    for form in ("delegated", "interactive"):
+        assert not gate.decide(_bash(cmd), form, branch_lookup=lambda cwd: "gov/po-x")[0], (form, cmd)

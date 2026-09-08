@@ -1,0 +1,89 @@
+{
+  "created_at": "2026-09-08T08:12:41Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1: gate.decide() allows 'git worktree add' in interactive form only (new entry in INTERACTIVE_EXTRA_PREFIXES), mirroring the existing 'git checkout -b gov/po-' write-action precedent -- delegated form continues to deny it (falls through to the existing 'command prefix not in the PO allowlist' denial, no special-case needed).",
+          "AC-2: 'git worktree add' is restricted by a new, specific check (not merely the prefix match): the base ref argument (the commit-ish 'git worktree add <path> <commit-ish> [-b <branch>]' takes) must start with 'origin/' -- exactly mirroring the existing 'git merge origin/<ref>' restriction so no arbitrary local path, remote, or URL is ever reachable as a worktree base (git remote add stays unavailable, as today).",
+          "AC-3: when '-b <branch>' is present, the new branch name must start with 'feature/' -- explicitly excluding 'gov/po-' (that prefix is reserved for the PO's own governance branch via the existing 'git checkout -b gov/po-' path, not for worktrees handed to an engineer) and excluding any other prefix. A worktree add without '-b' (attaching an existing branch) is allowed without this check.",
+          "AC-4: 'git worktree list' is added to COMMON_PREFIXES (both forms, read-only, mirroring 'git branch --list').",
+          "AC-5: 'git worktree remove', 'git worktree prune', and 'git worktree move' are explicitly NOT added to any allowlist -- they stay denied by the existing default-deny path. A worktree, once created, is never destroyed by the PO role in this movement's scope; removal is a human or engineer action, or a future separately-justified movement.",
+          "AC-6: new targeted tests in tests/test_gov_po_role.py cover: interactive 'git worktree add ../x origin/main -b feature/y' allowed; the same command in delegated form denied; a base ref not starting with 'origin/' denied (e.g. a local path or a different remote) in interactive form; a '-b' branch name not starting with 'feature/' denied (including an attempted 'gov/po-' branch name) in interactive form; 'git worktree add ../x origin/main' (no -b) allowed; 'git worktree list' allowed in both forms; 'git worktree remove'/'prune'/'move' denied in both forms.",
+          "AC-7: every existing test in tests/test_gov_po_role.py keeps passing unmodified; no other decide() branch (Agent, Edit/Write governance paths, relay/*.json pattern, existing git-write branch check, --body-file, RELAY_MARKERS) changes behavior."
+        ],
+        "baseline": {
+          "authority": "This session's own established pattern (GOV_PO_1_GATE_1 through GATE_4): a narrow, justified allowlist addition to scripts/nexus_po_tool_gate.py, mirroring an already-shipped precedent (here: the existing 'git merge origin/<ref>' remote-restriction pattern and the 'git checkout -b gov/po-' write-action pattern).",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 -- Compliance trend retro-fill (AUTOMATED_VALIDATED)",
+          "sequencing": "Product Owner direction (2026-09-08): future engineering movements should run in isolated git worktrees (separate physical checkouts) rather than sharing this session's single checkout, after two same-checkout collision risks were caught and avoided in real use this session (gov_po_1_gate_3 vs m10_1; the paused gov_po_1_local_relay_watch_command vs gov_po_2_freeze_and_merge). The PO role creates the worktree and its branch; the relay file for the new movement is still authored in the main checkout (Edit/Write path-matching is anchored to the main checkout's cwd, not portable to a sibling worktree directory) and handed to the engineer by absolute path, or via a small premerge to origin/main first -- this movement does not change that mechanic, only adds the worktree-creation capability itself."
+        },
+        "context_not_loaded": [
+          "Every other subsystem -- this movement touches only the PO tool gate and its own tests"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/gov-po-1-gate-5-worktree-management"
+        },
+        "invariants": [
+          "No arbitrary remote, URL, or local path is ever reachable as a worktree base -- origin/<ref> only, exactly mirroring the existing git merge restriction",
+          "The PO role never destroys a worktree in this movement's scope -- add/list only",
+          "gov/po-* stays reserved for the PO's own governance branch naming; worktree branches are feature/* only",
+          "No other decide() branch changes behavior"
+        ],
+        "merge_gate": "Standing decision on relay#13 applies: once tests/test_gov_po_role.py is green (plus git diff --check and the repository privacy gate, run for real), the engineer merges to main itself and reports via RELAY_NOTE; no separate merge RELAY_DECISION needed.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Allow the interactive PO role to create a git worktree (new physical checkout + feature/* branch, based only on origin/<ref>) for handing off an isolated engineering movement, and to list existing worktrees, while never allowing worktree removal and never allowing an arbitrary remote/path/URL as the base.",
+        "output_contract": [
+          "scripts/nexus_po_tool_gate.py: the worktree-add restriction logic (AC-1/AC-2/AC-3), the worktree-list COMMON_PREFIXES entry (AC-4), module docstring update",
+          "New targeted tests in tests/test_gov_po_role.py (AC-6)",
+          "Project-state updates: build_history record, roadmap.json, CURRENT_STATE.md, AI_HANDOVER.md, regenerated history index -- land them in this movement's own commit",
+          "This issue: SESSION_START body (this packet) and a SESSION_CLOSE final comment/entry",
+          "No visible UI change, no product/device behavior change"
+        ],
+        "recommended_reasoning": {
+          "reason": "A narrow, well-precedented allowlist addition with two extra argument-shape checks (base-ref restriction, branch-prefix restriction) modeled directly on the existing git merge origin/<ref> and git checkout -b gov/po- patterns. Deterministic, no new architecture.",
+          "tier": "Sonnet 5, normal"
+        },
+        "requirements": [
+          "Read scripts/nexus_po_tool_gate.py's decide() function and module docstring in full before editing",
+          "Model the base-ref check on the existing 'git merge origin/' prefix restriction and the branch-prefix check on the existing 'git checkout -b gov/po-' prefix restriction -- reuse the same tokenization/argument-scanning approach the file already uses for --body-file's argument-position check, rather than inventing a new parsing style"
+        ],
+        "risks": [
+          "git worktree add's actual argument order/flags can vary (path first, then commit-ish, with -b optionally anywhere) -- verify the real 'git worktree add --help' argument grammar before writing the token-position check, rather than assuming a fixed order."
+        ],
+        "scope": {
+          "in": [
+            "scripts/nexus_po_tool_gate.py's worktree add/list handling",
+            "New targeted tests in tests/test_gov_po_role.py"
+          ],
+          "out": [
+            "'git worktree remove'/'prune'/'move' -- explicitly not allowlisted (AC-5)",
+            "Any change to relay/*.json's own path-matching to make it portable across worktree directories -- out of scope, a separate future movement if ever needed",
+            "Any other decide() branch"
+          ]
+        },
+        "validation_plan": [
+          "Targeted: tests/test_gov_po_role.py (full file)",
+          "git diff --check",
+          "Repository privacy gate via --repository-privacy-check, run for real and reported with actual command output"
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-08T08:12:41Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0006",
+  "movement": "GOV_PO_1_GATE_5_WORKTREE_MANAGEMENT",
+  "next_actor": "engineer",
+  "refs": [
+    "scripts/nexus_po_tool_gate.py",
+    "tests/test_gov_po_role.py"
+  ],
+  "schema_version": 1,
+  "status": "OPEN",
+  "updated_at": "2026-09-08T08:12:41Z"
+}
