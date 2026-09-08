@@ -1,0 +1,128 @@
+{
+  "created_at": "2026-09-08T11:40:55Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "A RELAY_ACK and a RELAY_QUESTION both appear on this movement's canonical relay file after the first (fresh) dispatch",
+          "After the Product Owner posts a RELAY_DECISION and the movement is resumed, a RELAY_NOTE quoting that RELAY_DECISION's subject verbatim appears on the canonical relay file, followed by SESSION_CLOSE(DONE)",
+          "No file anywhere in the repository is created, edited, or committed by this movement at any point"
+        ],
+        "baseline": {
+          "authority": "This is relay/NXS-LOCAL-0015's own AC-4 reproduction test: a real dispatch+resume cycle through scripts/orchestrator.py, reproducing relay/NXS-LOCAL-0012's real failure shape (RELAY_QUESTION posted, session exits, RELAY_DECISION posted, resumed session must read it). Run AFTER the --add-dir fix in scripts/orchestrator.py::_spawn_engineer, to serve as the primary AC-4 acceptance evidence that the fix works.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "sequencing": "Dispatched by the engineer session working relay/NXS-LOCAL-0015, as its own AC-3/AC-4 acceptance evidence, after the fix was applied."
+        },
+        "context_not_loaded": [
+          "everything else -- this is an isolated relay/orchestrator protocol-mechanics scratch movement"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/nxs-local-ac4-repro-postfix-scratch"
+        },
+        "invariants": [
+          "This is a disposable protocol-reproduction scratch movement, never real product scope",
+          "No file may be created, edited, or committed",
+          "No PR is opened for this movement -- it is closed by relay SESSION_CLOSE only"
+        ],
+        "merge_gate": "None -- this movement never opens a PR; it is closed by relay SESSION_CLOSE only, per its own scope",
+        "movement_type": "VALIDATION",
+        "objective": "Prove that a resumed engineer session can read the canonical relay file outside its own worktree, exactly as a fresh dispatch already can, by reproducing the literal failure scenario end to end: dispatch, post RELAY_QUESTION, exit; Product Owner posts RELAY_DECISION; resume; confirm the resumed session reads and acts on it.",
+        "output_contract": [
+          "RELAY_ACK + RELAY_QUESTION on this movement's own canonical relay file (dispatch phase)",
+          "RELAY_NOTE (quoting the RELAY_DECISION verbatim) + SESSION_CLOSE on the same file (resume phase)"
+        ],
+        "recommended_reasoning": {
+          "reason": "Trivial, deterministic protocol interaction; no product reasoning needed",
+          "tier": "Sonnet 5, normal"
+        },
+        "requirements": [
+          "Read .nexus/approved_task.json in the current directory as this SESSION_START",
+          "Use scripts/local_relay.py (never hand-edit relay/*.json) for every relay interaction",
+          "Report the exact, literal outcome of every relay read/write attempt -- do not paraphrase or assume success"
+        ],
+        "risks": [
+          "This reproduces a real orchestrator bug (relay/NXS-LOCAL-0015); the resumed session being unable to read the canonical relay file would mean the fix did not work and must be reported honestly, not worked around"
+        ],
+        "scope": {
+          "in": [
+            "Immediately on start: append one RELAY_ACK to the canonical relay file (path in $NEXUS_RELAY_FILE; use scripts/local_relay.py append --role engineer --marker RELAY_ACK --next engineer --in-progress) announcing you have started this reproduction.",
+            "Then append one RELAY_QUESTION to the same file (scripts/local_relay.py append --role engineer --marker RELAY_QUESTION --next po --subject ... --text ...) asking the Product Owner a trivial placeholder question (e.g. whether to proceed), matching relay/NXS-LOCAL-0012's real shape.",
+            "Immediately after the RELAY_QUESTION is appended, stop. Take no further action, make no further tool calls, and end your turn -- do not wait, do not poll, do not create or edit any file. This deliberately leaves the movement interrupted so a later `orchestrator start` invocation exercises the real resume path.",
+            "On a LATER resume of this same session: re-read the canonical relay file fresh from disk ($NEXUS_RELAY_FILE) and look for a RELAY_DECISION entry appended by the Product Owner after your RELAY_QUESTION.",
+            "If you can read it: append one RELAY_NOTE to the canonical relay file quoting the RELAY_DECISION's `subject` field verbatim (so the quote is checkable, provable evidence you actually read it, not a guess), then append SESSION_CLOSE with outcome DONE.",
+            "If you cannot read it (access denied, tool error, or any other failure): do not guess or fabricate its content. Append one RELAY_NOTE stating exactly what happened (the literal error/denial you observed), then append SESSION_CLOSE with outcome BLOCKED."
+          ],
+          "out": [
+            "Creating, editing, or committing any file anywhere in the repository or any worktree",
+            "Opening a PR or running any git command beyond what scripts/local_relay.py itself needs",
+            "Any change to product code, tests, project/*.json, CURRENT_STATE.md, AI_HANDOVER.md, or docs"
+          ]
+        },
+        "validation_plan": [
+          "git status/git diff in the worktree show zero changes at every point in this movement's lifecycle",
+          "the canonical relay file's own entry history is the acceptance evidence for this movement"
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-08T11:40:55Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "RELAY_ACK",
+      "seq": 2,
+      "subject": "AC-4 reproduction started",
+      "text": "Engineer session for NXS-LOCAL-0017 has started the AC-4 reproduction. Read .nexus/approved_task.json as SESSION_START. Proceeding to post a placeholder RELAY_QUESTION next, per scope.",
+      "timestamp": "2026-09-08T11:42:23Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "RELAY_QUESTION",
+      "seq": 3,
+      "subject": "Proceed with AC-4 reproduction resume test?",
+      "text": "Placeholder question matching relay/NXS-LOCAL-0012's real shape: should I proceed with this reproduction? This session will now exit; a later orchestrator resume should let this same engineer session read a RELAY_DECISION posted here and act on it.",
+      "timestamp": "2026-09-08T11:42:26Z"
+    },
+    {
+      "actor": "po",
+      "authorized_by": "Product Owner -- AC-4 reproduction test, relay/NXS-LOCAL-0015",
+      "marker": "RELAY_DECISION",
+      "scope": "This scratch reproduction movement only",
+      "seq": 4,
+      "subject": "AC-4 repro: proceed and confirm resume can read this decision",
+      "supersedes": "none",
+      "text": "Decision: yes, proceed. This RELAY_DECISION is the literal payload the resumed engineer session must read back verbatim (its subject field) to prove AC-4. Quote this entry's subject exactly in your RELAY_NOTE, then close with SESSION_CLOSE(DONE).",
+      "timestamp": "2026-09-08T11:43:19Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "RELAY_NOTE",
+      "seq": 5,
+      "subject": "AC-4 repro: resumed session read RELAY_DECISION",
+      "text": "Resumed engineer session for NXS-LOCAL-0017 re-read the canonical relay file at $NEXUS_RELAY_FILE fresh from disk and found the RELAY_DECISION (seq 4) posted by the Product Owner. Quoting its subject verbatim: \"AC-4 repro: proceed and confirm resume can read this decision\". This confirms the resumed session can read the canonical relay file outside its own worktree.",
+      "timestamp": "2026-09-08T11:43:43Z"
+    },
+    {
+      "actor": "po",
+      "marker": "RELAY_NOTE",
+      "seq": 6,
+      "subject": "AC-4 reproduction: PASS -- resumed session read the canonical relay file",
+      "text": "Confirmed: after scripts/orchestrator.py::_spawn_engineer was fixed (relay/NXS-LOCAL-0015 AC-3, --add-dir <canonical_relay_dir> added for both dispatch and resume), a real dispatch of this scratch movement posted RELAY_ACK+RELAY_QUESTION and exited (seq 2-3); a RELAY_DECISION was posted (seq 4); a real orchestrator resume (same worktree/branch, pid 72588) re-read the canonical relay file fresh from disk and quoted the RELAY_DECISION subject verbatim in RELAY_NOTE seq 5 -- this is the literal AC-4 acceptance evidence. The resumed session then hit an unrelated self-inflicted snag (passed --next po instead of --next engineer on its own RELAY_NOTE append, so its own SESSION_CLOSE was rejected as wrong-turn) and correctly stopped rather than hand-editing the relay file or fabricating a PO action -- reported honestly, exactly as instructed. The Product Owner (this scratch movement's own driver) is closing this disposable reproduction directly rather than handing the turn back for a purely mechanical unstick. No file was created, edited, or committed by this movement at any point.",
+      "timestamp": "2026-09-08T11:46:02Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0017",
+  "movement": "GOV_PO_3_RESUME_FIX_AC4_REPRO_POSTFIX",
+  "next_actor": null,
+  "refs": [
+    "relay/NXS-LOCAL-0015-resume-canonical-relay-access-fix.json",
+    "docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-08T11:46:02Z"
+}
