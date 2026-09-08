@@ -5,25 +5,27 @@ see `AGENTS.md`/`AI_START_HERE.md`. **Predecessor build detail lives in
 `project/build_history.json`** (structured, newest-first) and its linked
 docs under `docs/history/`; `docs/history/INDEX.md` is the one-line timeline.
 
-- **Checkpoint:** 2026-09-08, `op0b_s7_s6_test_order_isolation` — fixed a
-  module-rebind leak: S7's `test_evaluator_performs_no_socket_io_and_
-  imports_no_collector` popped `panorama.preflight_collector`/`checkpoint.
-  preflight_collector` from `sys.modules` without restoring, leaving S6's
-  re-import rebind against a fresh module object while `collect_member`
-  kept resolving globals against the original one — defeating S6's
-  patches, real HTTP calls when S7 ran first. Fixed with save/restore
-  `try/finally` + regression test; test-infra only. Also fixed, PO-
-  authorized (relay/NXS-LOCAL-0016): `nexus_engineer_tool_gate.py`'s
-  merge-lock interpreter resolution. Detail: `project/build_history.json`.
-  Predecessors PR #122/#127/#129/#130/#131/#132 **MERGED** (`#132` =
-  `m10_2_capability_state_resolver_core`, resolver stages 0-3), doc
-  **FROZEN — PO APPROVED**. **PO §12:** `M8.3` deferred, `M7` blocked,
-  `M8` **FROZEN 2026-09-06**.
-- **Next** (`now_next.next`): `gov_po_2_implementation` — unrelated,
-  unchanged, not yet started. `m8_3_real_environment_validation` stays
-  `upcoming`/**deferred debt**; `m7_real_device_targeted_collect_now`/
-  `op2_c_cp_clusterxl_adapter_scoping` stay `upcoming`/`blocked`.
-  `DEV.TEST.1`/`PCP.1`/`M1`-`M10.3` complete/automated_validated.
+- **Checkpoint:** 2026-09-08, `op1_failover_plan_compiler_contract_draft` —
+  DRAFT contract `docs/history/phase/OP_1_FAILOVER_PLAN_COMPILER_AND_DRY_RUN.md`
+  (awaiting Product Owner freeze): write-free `FailoverPlan`/`DryRunReport`
+  for classic CP ClusterXL only, from already-collected OP.0a/OP.0b
+  evidence, reusing OP.2.0/OP.2.1's pure `capability()`/`build_plan()`
+  read-only. Presents `op_degraded_verdict` for this freeze; no code/test/
+  FROZEN doc changed. Own worktree, parallel with GOV.PO.3/M10.2. Detail:
+  `project/build_history.json`. Predecessor
+  `gov_po_3_orchestrator_observability` **MERGED**. Predecessor
+  `gov_po_3_push_hook_baseline_scoping` **MERGED**. Predecessor
+  `gov_po_3_approved_movement_orchestration_ac3` **AC-3 only, MERGED** —
+  AC-5 demonstrations pending (`relay/NXS-LOCAL-0007`). Predecessor
+  `gov_po_1_gate_5_worktree_management` **MERGED**. Predecessor
+  `gov_po_2_po_visibility_and_bounded_authorship` **MERGED** PR #122 —
+  FROZEN — PRODUCT OWNER APPROVED, 2026-09-08. **PO §12:** `M8.3`
+  deferred, `M7` blocked. `M8` **FROZEN 2026-09-06**.
+- **Next** (`now_next.next`): `gov_po_2_implementation` — unrelated and
+  unchanged by this movement; not yet started. `m8_3_real_environment_
+  validation` stays `upcoming`, **deferred debt**, unpaid; `m7_real_device_
+  targeted_collect_now`/`op2_c_cp_clusterxl_adapter_scoping` stay
+  `upcoming`/`blocked`. `DEV.TEST.1`/`PCP.1`/`M1`-`M10.1` complete/automated_validated.
 - **OP.2.0 CLASS 2 architecture** (`docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md`):
   **CONTRACT FROZEN 2026-09-04**; `OP.2.A`/`OP.2.B` IMPLEMENTED; `OP.2.1` CP
   command gate DRAFTED — CLASS 2 still has **no member**, no adapter,
