@@ -5,18 +5,17 @@ see `AGENTS.md`/`AI_START_HERE.md`. **Predecessor build detail lives in
 `project/build_history.json`** (structured, newest-first) and its linked
 docs under `docs/history/`; `docs/history/INDEX.md` is the one-line timeline.
 
-- **Checkpoint:** 2026-09-08, `gov_po_2_po_visibility_and_bounded_authorship`
-  — `docs/design/GOV_PO_2_PO_VISIBILITY_AND_BOUNDED_AUTHORSHIP.md` is now
-  **FROZEN — PRODUCT OWNER APPROVED, 2026-09-08**, after a four-seat
-  `nexus-decision-council` round (all `FREEZE WITH CHANGES`) and seven
-  Product-Owner-authorized amendments (`relay/NXS-LOCAL-0004`). Specifies
-  the capability-based PO boundary `gov_po_2_implementation` builds:
-  `gh pr diff`/`gh run` read-only commands (boundary-safe matching
-  required), `docs/design/po_drafts/*.md` + a FROZEN/RATIFIED status-line
-  regex (`MultiEdit` excluded), `docs/history/INDEX.md` generator-only, a
-  standalone `scripts/repository_privacy_check.py` + required equivalence
-  test, the `nexus-po-evidence-reviewer` agent. Predecessor
-  `gov_po_1_step_6_plan_po2_boundary` **MERGED** PR #121. Predecessor
+- **Checkpoint:** 2026-09-08, `gov_po_1_local_relay_watch_command` — added
+  `scripts/local_relay.py watch` (bounded, read-only poll for a relay
+  file's `next_actor`, `--interval` floor 5s/`--timeout` ceiling 3600s,
+  exit 3 on timeout; never a daemon, never writes, decides nothing —
+  `relay/NXS-LOCAL-0003-local-relay-watch-command.json`). Predecessor
+  `gov_po_2_po_visibility_and_bounded_authorship` **MERGED** PR #122:
+  `docs/design/GOV_PO_2_PO_VISIBILITY_AND_BOUNDED_AUTHORSHIP.md` is
+  **FROZEN — PRODUCT OWNER APPROVED, 2026-09-08** (four-seat
+  `nexus-decision-council`, all `FREEZE WITH CHANGES`; seven amendments,
+  `relay/NXS-LOCAL-0004`), specifying `gov_po_2_implementation`'s scope.
+  Predecessors `gov_po_1_step_6_plan_po2_boundary` **MERGED** PR #121,
   `gov_po_1_local_relay_protocol` **MERGED** PR #120.
   **PO §12:** `M8.3` deferred, `M7` blocked. `M8` **FROZEN 2026-09-06**.
 - **Next** (`now_next.next`): `gov_po_2_implementation` — unblocked by the

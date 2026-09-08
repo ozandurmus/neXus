@@ -203,16 +203,34 @@ its own `authorized_by`/`scope`/`supersedes`, `good_to_go` or not.
 
 ## 8. Notification model — honest, not automatic
 
-There is no background watcher, daemon, or polling loop, and this slice
-does not add one (explicitly out of scope). A Claude Code session is not an
-always-running process: "the next actor gets notified" means exactly what
-it already means for the GitHub transport — **the next invoked session
-reads the relevant `relay/<file>.json`'s current state as the first step of
-its own episode start**, the same discipline `AI_START_HERE.md` already
-requires before treating any packet's claims as true. A human still starts
-each session and points it at the right file (or the PO/engineer skill
-prompts do, exactly as `RELAY_READY owner/repo#issue` is a human- or
-skill-supplied locator today, not a push notification either).
+There is no background watcher, daemon, or persistent polling service, and
+this section's honesty claim is unchanged: "the next actor gets notified"
+still means exactly what it already means for the GitHub transport — **the
+next invoked session reads the relevant `relay/<file>.json`'s current state
+as the first step of its own episode start**, the same discipline
+`AI_START_HERE.md` already requires before treating any packet's claims as
+true. A human still starts each session and points it at the right file (or
+the PO/engineer skill prompts do, exactly as `RELAY_READY owner/repo#issue`
+is a human- or skill-supplied locator today, not a push notification
+either).
+
+`scripts/local_relay.py watch` (GOV_PO_1_LOCAL_RELAY_WATCH_COMMAND,
+2026-09-08) narrows, but does not remove, the manual-re-checking friction
+that discipline implies: it is a single bounded, blocking, read-only
+polling command a session invokes explicitly — directly, or backgrounded
+via the harness's own background-process-plus-monitor mechanism where one
+is available — never a persistent background service, and never triggered
+without that explicit invocation. It polls `--file`'s `next_actor` field
+every `--interval` seconds (default 20, hard floor 5) until it equals
+`--for`, up to a bounded `--timeout` (default 1800 seconds, hard ceiling
+3600); a caller could set a low `--interval` and the `--timeout` ceiling to
+approximate a near-continuous poll for up to an hour, which is accepted as
+a deliberate consequence of the bound, not an oversight. `watch` decides
+nothing: a detected `next_actor` flip is reported to the invoking session
+as its exit code and the newly appended entries, which still requires the
+human's explicit written authorization before acting on any
+`RELAY_DECISION`-class content per `GOV_PO_ROLE_MIGRATION.md` D2-D4/D12,
+unchanged by this command.
 
 ## 9. CLI — `scripts/local_relay.py`
 

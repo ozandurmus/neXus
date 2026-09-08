@@ -1,0 +1,179 @@
+{
+  "created_at": "2026-09-08T06:37:32Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1: new `watch` subcommand in scripts/local_relay.py: `watch --file FILE --for {po|engineer} [--interval SECONDS] [--timeout SECONDS]`. Polls the file's `next_actor` field every `--interval` seconds (default 20, hard floor 5 -- reject anything lower as a usage error, exit 2); exits 0 and prints, as JSON to stdout, every entry with `seq` greater than the entry count observed at the start of the watch, as soon as `next_actor` equals `--for`.",
+          "AC-2: bounded, not a daemon -- `--timeout` defaults to 1800 seconds (30 min), hard ceiling 3600 seconds (1 hour); a `--timeout` above the ceiling is a usage error (exit 2). On timeout with no qualifying change, watch exits with a new, documented exit code 3 ('timeout, no change') -- distinct from the existing 0/1/2 convention, and the module docstring's exit-code list is updated to name it.",
+          "AC-3: watch is strictly read-only -- it never appends, writes, or mutates the file (mirrors `status`/`validate`'s existing read-only nature); a test proves a watch invocation that times out leaves the file byte-for-byte unchanged.",
+          "AC-4: `python3 scripts/local_relay.py watch` (plus the `py`/`.venv/bin/python` spellings) is added to COMMON_PREFIXES (both PO forms, read-only, mirroring `status`/`validate`'s existing treatment) in scripts/nexus_po_tool_gate.py.",
+          "AC-5: docs/design/LOCAL_RELAY_PROTOCOL.md section 8 ('Notification model -- honest, not automatic') is updated, not replaced, to describe `watch` precisely: it is a single bounded, blocking, read-only polling command a session invokes explicitly (directly, or backgrounded via the harness's own background-process + Monitor mechanism where available) -- never a persistent background service, never triggered without an explicit invocation, and it decides nothing: a detected next_actor flip is reported to the invoking session, which still requires the human's explicit written authorization before acting on any RELAY_DECISION-class content per GOV_PO_ROLE_MIGRATION.md D2-D4/D12, unchanged by this movement.",
+          "AC-6: tests/test_local_relay_protocol.py covers: exits 0 with the correct new entries printed once next_actor flips (simulate a flip mid-poll by writing to the file from the test between poll iterations, using a short interval), exits 3 on timeout with no flip, exits 2 on an interval below the floor or a timeout above the ceiling, and the read-only guarantee (AC-3).",
+          "AC-7: tests/test_gov_po_role.py gets one new targeted test proving the `watch` prefix is allowlisted in both PO forms, mirroring the existing `status`/`validate` test pattern; every existing test in both files keeps passing unmodified."
+        ],
+        "baseline": {
+          "authority": "docs/design/LOCAL_RELAY_PROTOCOL.md (DRAFT) section 8's existing honest-non-daemon disclosure -- this movement extends that section's tooling, not its honesty claim.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 -- Compliance trend retro-fill (AUTOMATED_VALIDATED)",
+          "sequencing": "Product Owner direction (2026-09-08), after using the local relay protocol in real use (relay#11-#16 pattern, now movement gov_po_2_po_visibility_and_bounded_authorship): manual re-checking of relay/*.json files for a next_actor flip is real friction. Requested: a bounded, 20-second-default polling watch command -- explicitly not a background daemon, decisions still require the human's explicit authorization exactly as today."
+        },
+        "context_not_loaded": [
+          "Every other subsystem -- this movement touches only scripts/local_relay.py's watch subcommand, its gate prefix, and its own tests"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/gov-po-1-local-relay-watch-command"
+        },
+        "invariants": [
+          "watch never writes to the relay file it watches or any other file",
+          "watch is bounded (a --timeout ceiling exists and is enforced) -- it can never become an unbounded background daemon by construction",
+          "A detected next_actor flip is reported, never acted upon by the tool itself -- RELAY_DECISION-class authorization still requires the human's explicit written instruction in the invoking session, exactly as GOV_PO_ROLE_MIGRATION.md D2-D4/D12 already require",
+          "No change to create/append/status/validate's existing behavior or to any existing exit code's meaning"
+        ],
+        "merge_gate": "Standing decision on relay#13 applies: once tests/test_local_relay_protocol.py and tests/test_gov_po_role.py are green (plus git diff --check and the repository privacy gate, run for real), the engineer merges to main itself and reports via RELAY_NOTE; no separate merge RELAY_DECISION needed.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Add a bounded, read-only `watch` subcommand to scripts/local_relay.py (default 20-second poll interval, capped timeout) so a session can wait for a relay file's next_actor to flip to it without manual re-checking, while preserving the local relay protocol's existing honest non-daemon disclosure and its unchanged human-authorization requirement for any decision.",
+        "output_contract": [
+          "scripts/local_relay.py: new watch subcommand",
+          "scripts/nexus_po_tool_gate.py: new COMMON_PREFIXES entries for `local_relay.py watch` (4 interpreter spellings, both forms)",
+          "docs/design/LOCAL_RELAY_PROTOCOL.md section 8: updated, not replaced",
+          "tests/test_local_relay_protocol.py and tests/test_gov_po_role.py: new targeted tests",
+          "Project-state updates: build_history record, roadmap.json, CURRENT_STATE.md, AI_HANDOVER.md, regenerated history index -- land them in this movement's own commit",
+          "This relay artifact: SESSION_START body and a SESSION_CLOSE final entry",
+          "No visible UI change, no product/device behavior change"
+        ],
+        "recommended_reasoning": {
+          "reason": "Deterministic implementation adding one bounded, read-only CLI subcommand to an already-understood, already-tested script. No new architecture, no security boundary opened.",
+          "tier": "Sonnet 5, normal"
+        },
+        "requirements": [
+          "Read scripts/local_relay.py in full before adding watch -- reuse its existing atomic-read helpers and JSON schema rather than duplicating file-parsing logic",
+          "Read docs/design/LOCAL_RELAY_PROTOCOL.md section 8 in full before editing it -- extend its honest disclosure, do not soften or contradict it"
+        ],
+        "risks": [
+          "A caller could set --interval very low and --timeout at the ceiling to approximate a near-continuous poll for up to an hour -- acceptable given the hard ceiling and the read-only guarantee, but worth a one-line note in section 8 so a future reader understands the bound is deliberate, not an oversight.",
+          "If the invoking session backgrounds watch (e.g. via the harness's own background-Bash + Monitor mechanism) and then the session itself ends before the timeout, the backgrounded process's fate depends on the harness, not on this script -- this movement does not attempt to manage that lifecycle; it only guarantees watch itself exits cleanly within its own timeout."
+        ],
+        "scope": {
+          "in": [
+            "scripts/local_relay.py's new watch subcommand",
+            "The new gate prefix in scripts/nexus_po_tool_gate.py",
+            "docs/design/LOCAL_RELAY_PROTOCOL.md section 8's update",
+            "New targeted tests in both test files",
+            "This movement's own project-state bookkeeping"
+          ],
+          "out": [
+            "Any change to create/append/status/validate's existing behavior",
+            "Any real background daemon or service",
+            "Any change to who may post RELAY_DECISION or under what authorization -- unchanged"
+          ]
+        },
+        "validation_plan": [
+          "Targeted: tests/test_local_relay_protocol.py (full file, including new watch tests)",
+          "Targeted: the new assertion added to tests/test_gov_po_role.py",
+          "git diff --check",
+          "Repository privacy gate via --repository-privacy-check, run for real and reported with actual command output",
+          "No render harness needed"
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-08T06:37:32Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "AUTOMATED_VALIDATED",
+      "report": {
+        "changed": [
+          "scripts/local_relay.py",
+          "scripts/nexus_po_tool_gate.py",
+          "docs/design/LOCAL_RELAY_PROTOCOL.md",
+          "tests/test_local_relay_protocol.py",
+          "tests/test_gov_po_role.py",
+          "project/build_history.json",
+          "project/roadmap.json",
+          "CURRENT_STATE.md",
+          "AI_HANDOVER.md",
+          "docs/history/INDEX.md"
+        ],
+        "completed": [
+          "scripts/local_relay.py: added the bounded, read-only `watch` subcommand (--file, --for {po|engineer}, --interval default 20/floor 5, --timeout default 1800/ceiling 3600), a new exit code 3 for timeout-with-no-change, documented in the module docstring alongside the unchanged 0/1/2 convention.",
+          "scripts/nexus_po_tool_gate.py: added the four `local_relay.py watch` interpreter-spelling prefixes to COMMON_PREFIXES (both PO forms, read-only), mirroring status/validate; module docstring updated to mention watch.",
+          "docs/design/LOCAL_RELAY_PROTOCOL.md section 8 updated (not replaced) to document watch precisely: bounded, blocking, explicit-invocation-only, decides nothing.",
+          "tests/test_local_relay_protocol.py: 9 new watch tests (immediate match with zero sleeps, a simulated mid-poll flip via a real append call inside a monkeypatched time.sleep, timeout via a fake monotonic clock, the AC-3 byte-for-byte-unchanged-on-timeout proof, interval-floor and timeout-ceiling usage errors, missing-file and invalid-file handling).",
+          "tests/test_gov_po_role.py: 1 new test proving watch is allowlisted in both delegated and interactive forms, mirroring the existing status/validate test.",
+          "Project-state bookkeeping: project/build_history.json new record, project/roadmap.json now_next.now updated, CURRENT_STATE.md checkpoint rewritten, AI_HANDOVER.md rewritten, docs/history/INDEX.md regenerated via scripts/build_history_index.py."
+        ],
+        "continuation": "SAME_SESSION",
+        "effects": {
+          "main_py": "none",
+          "ui": "none"
+        },
+        "integration": {
+          "branch": "feature/gov-po-1-local-relay-watch-command",
+          "ci": "n/a -- local validation only",
+          "head_sha": "c406a809f1f0f9311a3603a5eb676cc4d1dd092d",
+          "merge_commit": null,
+          "merge_decision": "STANDING_RELAY_13_DECISION",
+          "merge_state": "NOT_OPENED",
+          "pr": null,
+          "pr_url": null
+        },
+        "next": {
+          "movement": "gov_po_2_implementation",
+          "movement_type": "IMPLEMENTATION",
+          "objective": "Build the five mechanisms in docs/design/GOV_PO_2_PO_VISIBILITY_AND_BOUNDED_AUTHORSHIP.md section 3 into scripts/nexus_po_tool_gate.py, .claude/nexus-po.settings.json, the new nexus-po-evidence-reviewer agent, and tests/test_gov_po_role.py.",
+          "status": "planned"
+        },
+        "preserved": [
+          "create/append/status/validate's existing behavior and every existing exit code's meaning",
+          "GOVERNANCE_PATHS' eight exact-match paths, unchanged",
+          "Who may post RELAY_DECISION or under what authorization"
+        ],
+        "recommended_reasoning": {
+          "reason": "Deterministic implementation against a frozen contract -- no new architecture, no security boundary opened.",
+          "tier": "Sonnet 5, normal"
+        },
+        "state_updates": [
+          "project/build_history.json: new gov_po_1_local_relay_watch_command record",
+          "project/roadmap.json: now_next.now -> gov_po_1_local_relay_watch_command (automated_validated)",
+          "CURRENT_STATE.md checkpoint rewritten",
+          "AI_HANDOVER.md rewritten",
+          "docs/history/INDEX.md regenerated"
+        ],
+        "unresolved_risks": [
+          "This movement's SESSION_START scoped the doc change to docs/design/LOCAL_RELAY_PROTOCOL.md section 8 only; section 9's CLI synopsis and exit-code table still lists only create/append/status/validate -- a future movement should extend section 9 to keep the full CLI reference in sync.",
+          "A caller can set a low --interval with the --timeout ceiling to approximate a near-continuous poll for up to an hour; this is a deliberate, documented consequence of the bound (section 8), not an oversight."
+        ],
+        "validation": {
+          "affected": "tests/test_architecture_convergence.py: 22 passed (build-history-index-is-derived check green after regeneration)",
+          "diff_check": "git diff --check: clean",
+          "full_regression": ".venv/bin/python -m pytest -q -n auto --dist worksteal: 2585 passed, 25 skipped, 2 failed -- both pre-existing and unrelated (tests/test_dev_0_5b_auth_consumer_canonical_config.py's repository-text scan walks .venv/ site-packages on this machine, which contain literal 'password='/'PASSWORD:' substrings in third-party source; confirmed unrelated by inspection and by reproducing the same 2 failures on origin/main before this movement's changes)",
+          "privacy": ".venv/bin/python main.py --repository-privacy-check: FAIL/3 findings, all pre-existing local runtime artifacts outside git (data/, data/.support_hmac.key, logs/ -- .gitignore'd, untracked, unrelated to this movement's changed files; confirmed identical finding set on origin/main before this movement)",
+          "real_environment": "NOT_RUN",
+          "state_consistency": "tests/test_architecture_convergence.py: 22 passed",
+          "targeted": "tests/test_local_relay_protocol.py + tests/test_gov_po_role.py: 168 passed"
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-08T08:08:36Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0003",
+  "movement": "GOV_PO_1_LOCAL_RELAY_WATCH_COMMAND",
+  "next_actor": null,
+  "refs": [
+    "docs/design/LOCAL_RELAY_PROTOCOL.md",
+    "scripts/local_relay.py",
+    "scripts/nexus_po_tool_gate.py",
+    "tests/test_local_relay_protocol.py",
+    "tests/test_gov_po_role.py"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-08T08:08:36Z"
+}
