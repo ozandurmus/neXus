@@ -5,9 +5,9 @@
       "id": "orchestrator_tool_gate_hook_cwd_relative_script_path_footgun",
       "category": "Orchestrator / reliability",
       "title": "scripts/nexus_engineer_tool_gate.py (PreToolUse hook) resolves its own script path relative to CWD -- an accidental cd outside the worktree permanently breaks the engineer session's Bash tool",
-      "status": "planned",
+      "status": "done",
       "priority": "P1",
-      "target": "scripts/nexus_engineer_tool_gate.py -- observed live on NXS-LOCAL-0027 (private_replay_agent_operated_test_environment), 2026-09-08",
+      "target": "RESOLVED 2026-09-09 (commit 624cd68): scripts/orchestrator.py::_spawn_engineer now exports NEXUS_WORKTREE_ROOT into the engineer environment; .claude/nexus-engineer.settings.json's PreToolUse/PostToolUse hook commands resolve against \"${NEXUS_WORKTREE_ROOT:-.}\" instead of a bare relative path. Recurred 3x live before the fix (NXS-LOCAL-0027, 0030, 0031), each losing self-merge/push ability until the Product Owner intervened by hand.",
       "note": "NXS-LOCAL-0027's engineer accidentally `cd`-ed into the sibling directory /Users/OzanDur/Codo/neXus/relay (outside its own worktree). The GOV.PO.3 PreToolUse hook (scripts/nexus_engineer_tool_gate.py) resolves its own script path relative to the current working directory rather than an absolute/fixed path, so once CWD changed the hook could no longer even launch -- permanently disabling the Bash tool for the rest of that session (confirmed reproducible via a fresh subagent hitting the identical failure). EnterWorktree(path=...) back into the worktree was also denied (no human approval surface available in an unattended engineer session). Consequence: all work was completed and committed locally, but git push / gh pr create / the standing relay#13 self-merge could not run -- the Product Owner had to push and open the PR manually the next session. Fix direction (not yet designed): the hook should resolve its own script location from something CWD-independent (e.g. the hook's own __file__ path, or an absolute path baked into the PreToolUse config at spawn time) so a stray cd cannot break it; consider also whether the engineer prompt should warn against cd-ing outside the worktree at all."
     },
     {
