@@ -642,6 +642,14 @@ def _spawn_engineer(
     env = dict(os.environ)
     env[lr.ENV_CANONICAL_RELAY_DIR] = str(canonical_relay_dir)
     env[lr.ENV_RELAY_FILE] = str(relay_file)
+    # orchestrator_tool_gate_hook_cwd_relative_script_path_footgun: the
+    # PreToolUse/PostToolUse hook command in .claude/nexus-engineer.settings.json
+    # invokes this script by a path relative to the Bash tool's own tracked
+    # session cwd, not the worktree root -- an engineer `cd` anywhere else
+    # (even outside the worktree entirely) permanently breaks every future
+    # Bash call for that session. NEXUS_WORKTREE_ROOT is a stable,
+    # cwd-independent anchor the hook command resolves itself against instead.
+    env["NEXUS_WORKTREE_ROOT"] = str(worktree_path)
     # AC-3: raise the engineer session's own Bash-tool auto-background
     # threshold (see DEFAULT_ENGINEER_BASH_TIMEOUT_MS) -- setdefault so an
     # operator's own pre-set env var is never overridden by this spawn.
