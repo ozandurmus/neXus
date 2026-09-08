@@ -5,19 +5,18 @@ see `AGENTS.md`/`AI_START_HERE.md`. **Predecessor build detail lives in
 `project/build_history.json`** (structured, newest-first) and its linked
 docs under `docs/history/`; `docs/history/INDEX.md` is the one-line timeline.
 
-- **Checkpoint:** 2026-09-08, `m10_3_entity_and_vendor_support_producers` —
-  `M10`'s third slice: `utils/capability_applicability.py` (`resolve_d2`) and
-  `utils/capability_vendor_support.py` (`resolve_d3`) — pure, offline,
-  closed-table producers for D2/D3, every entry citing a real source, every
-  uncited pair resolving `APPLICABILITY_UNKNOWN`/`SUPPORT_UNKNOWN` naming the
-  gap. No `UNSUPPORTED` entry populated — no positive non-support evidence
-  found. No resolver/UI/navigation/payload wiring (`M10.2`'s job). Ran
-  concurrently with `M10.2`/`GOV.PO.3`/`GOV.PO.2` in separate worktrees.
-  Detail: `project/build_history.json`. Predecessors
-  `gov_po_3_orchestrator_observability` **MERGED** PR #129 (streaming
-  `orchestrator` output/`watch`) and `gov_po_3_push_hook_baseline_scoping`
-  **MERGED** PR #127 (baseline-aware pre-push privacy gate). **PO §12:**
-  `M8.3` deferred, `M7` blocked. `M8` **FROZEN 2026-09-06**.
+- **Checkpoint:** 2026-09-08, `gov_po_3_resume_canonical_relay_access_fix` —
+  fixes `orchestrator start`'s `--resume` path so a resumed engineer session
+  can reliably read/write the canonical relay file outside its own worktree,
+  same as a fresh dispatch (`--add-dir <canonical_relay_dir>` on every
+  engineer spawn) — closes the finding from `relay/NXS-LOCAL-0012`'s
+  SESSION_CLOSE. Detail: `project/build_history.json`. Predecessors
+  `m10_3_entity_and_vendor_support_producers` **MERGED** PR #131 (D2/D3
+  producers, unrelated track), `gov_po_3_orchestrator_observability`
+  **MERGED** PR #129 (streaming `orchestrator` output/`watch`) and
+  `gov_po_3_push_hook_baseline_scoping` **MERGED** PR #127 (baseline-aware
+  pre-push privacy gate). **PO §12:** `M8.3` deferred, `M7` blocked. `M8`
+  **FROZEN 2026-09-06**.
 - **Next** (`now_next.next`): `gov_po_2_implementation` — unrelated,
   unchanged, not yet started. `m8_3_real_environment_validation` stays
   `upcoming`/deferred debt; `m7_real_device_targeted_collect_now`/
@@ -177,10 +176,10 @@ Concurrency budget stays at 1 per vendor pending real-env evidence.
 ## Automated test baseline
 
 ```
-m10_3_entity_and_vendor_support_producers: targeted 107 passed;
-architecture-convergence 22 passed unchanged. New, previously unimported
-modules plus their own test file only -- no full regression (DEV.TEST.1:
-last evidence holds).
+gov_po_3_resume_canonical_relay_access_fix: 2 new tests,
+tests/test_orchestrator.py (detail: project/build_history.json). Full
+one-shot suite re-run post-merge: 2699 passed, 25 skipped, 2 failed -- both
+pre-existing/unrelated (known DLP self-check false positive).
 Earlier predecessor build detail lives only in project/build_history.json.
 ```
 ## Known xfails

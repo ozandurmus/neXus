@@ -446,6 +446,51 @@ def test_start_cli_rejects_a_base_ref_outside_origin(tmp_path):
     assert rc == orch.EXIT_USAGE
 
 
+# --- engineer spawn argv (relay/NXS-LOCAL-0015 AC-1/AC-2/AC-3: a resumed --
+# --- session must reach the canonical relay directory as reliably as a ---
+# --- fresh dispatch already does) --------------------------------------------
+
+def test_spawn_engineer_grants_add_dir_for_the_canonical_relay_directory_on_fresh_dispatch(tmp_path, monkeypatch):
+    calls = []
+
+    def fake_popen(argv, **kwargs):
+        calls.append(argv)
+        return _FakeProc(12345)
+
+    monkeypatch.setattr(orch.subprocess, "Popen", fake_popen)
+    canonical_relay_dir = tmp_path / "canonical" / "relay"
+    orch._spawn_engineer(
+        worktree_path=tmp_path / "wt", profile_path=tmp_path / "profile.json",
+        canonical_relay_dir=canonical_relay_dir, relay_file=canonical_relay_dir / "NXS-LOCAL-0001-x.json",
+    )
+    argv = calls[0]  # the engineer process's own argv, not the summary-tailer companion's
+    assert "--add-dir" in argv
+    assert argv[argv.index("--add-dir") + 1] == str(canonical_relay_dir)
+    assert "--resume" not in argv
+
+
+def test_spawn_engineer_grants_add_dir_for_the_canonical_relay_directory_on_resume_too(tmp_path, monkeypatch):
+    calls = []
+
+    def fake_popen(argv, **kwargs):
+        calls.append(argv)
+        return _FakeProc(12345)
+
+    monkeypatch.setattr(orch.subprocess, "Popen", fake_popen)
+    canonical_relay_dir = tmp_path / "canonical" / "relay"
+    orch._spawn_engineer(
+        worktree_path=tmp_path / "wt", profile_path=tmp_path / "profile.json",
+        canonical_relay_dir=canonical_relay_dir, relay_file=canonical_relay_dir / "NXS-LOCAL-0001-x.json",
+        resume_session_id="11111111-1111-1111-1111-111111111111",
+    )
+    argv = calls[0]  # the engineer process's own argv, not the summary-tailer companion's
+    # The exact same grant a fresh dispatch gets (AC-3/AC-5: no regression,
+    # no divergence between the two paths) -- resume only adds --resume.
+    assert "--add-dir" in argv
+    assert argv[argv.index("--add-dir") + 1] == str(canonical_relay_dir)
+    assert argv[-2:] == ["--resume", "11111111-1111-1111-1111-111111111111"]
+
+
 # --- AC-2: stream-json line -> summary parser (representative real shapes) --
 # Captured from a real `claude -p --output-format stream-json --verbose`
 # run against the installed claude version, trimmed to the fields the
