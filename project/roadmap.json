@@ -149,6 +149,7 @@
       "notes": [
         "Full detail: project/build_history.json's gov_po_3_resume_canonical_relay_access_fix record.",
         "Relay: relay/NXS-LOCAL-0015-resume-canonical-relay-access-fix.json (Product Owner priority, 2026-09-08, found live during relay/NXS-LOCAL-0012's GOV.PO.3 AC-5 demonstration 1). AC-4 reproduced for real on relay/NXS-LOCAL-0017-gov-po-3-resume-fix-ac4-repro-postfix.json (CLOSED).",
+        "Rebased/merged onto origin/main after relay/NXS-LOCAL-0013 (gov_po_3_orchestrator_observability, below) merged concurrently as PR #129 -- both movements touched scripts/orchestrator.py's _spawn_engineer argv construction, reconciled by hand so both additions coexist.",
         "A small, independent corrective fix inserted ahead of gov_po_2_implementation (below) in build order -- part of the ongoing GOV.PO.3 initiative's own AC-5 demonstration/recovery sequence, not a change to its scope. AC-5's remaining demonstrations and AC-8-for-the-demo are still pending, unchanged by this record; see gov_po_3_approved_movement_orchestration_ac3's own build_history.json entry for that status."
       ]
     },
