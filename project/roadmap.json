@@ -141,37 +141,28 @@
     "horizon_contract": "NOW is exactly one build. NEXT is exactly one. Everything else is an `upcoming` row carrying its own true status: planned = AFTER, blocked = waiting on a named external gate, deferred = consciously postponed. `now.build` must equal the newest project/build_history.json record -- utils.project_plan enforces it.",
     "now": {
       "build": "gov_po_2_po_visibility_and_bounded_authorship",
-      "title": "GOV.PO.2 (1/2) -- capability-based PO boundary, DRAFT amendment",
-      "goal": "Produce one DRAFT design document specifying a capability-based PO boundary (observation / governance authorship / engineering execution / human decision authority) precisely enough that gov_po_2_implementation can build it deterministically once the human freezes it.",
-      "status": "complete_with_followup",
+      "title": "GOV.PO.2 (1/2) -- capability-based PO boundary, FROZEN",
+      "goal": "Produce one design document specifying a capability-based PO boundary (observation / governance authorship / engineering execution / human decision authority) precisely enough that gov_po_2_implementation can build it deterministically once the human freezes it.",
+      "status": "done",
       "started": "2026-09-08",
       "completed": "2026-09-08",
       "notes": [
         "Full detail: project/build_history.json's gov_po_2_po_visibility_and_bounded_authorship record.",
-        "Status is complete_with_followup, not done: docs/design/GOV_PO_2_PO_VISIBILITY_AND_BOUNDED_AUTHORSHIP.md stays DRAFT until a separate future Product Owner freeze DECIDE episode (recommended to invoke nexus-decision-council per GOV_PO_ROLE_MIGRATION.md section 7 trigger (b)); gov_po_2_implementation (below, upcoming) stays blocked until then.",
-        "Predecessor gov_po_1_step_6_plan_po2_boundary -- the PLAN episode that requested this document -- full detail in its own build_history record."
+        "FROZEN -- PRODUCT OWNER APPROVED, 2026-09-08, after a four-seat nexus-decision-council round (all FREEZE WITH CHANGES) and seven Product-Owner-authorized amendments (relay/NXS-LOCAL-0004). gov_po_2_implementation (below, next) is unblocked.",
+        "Predecessor gov_po_1_step_6_plan_po2_boundary -- the PLAN episode that requested this document -- MERGED PR #121."
       ]
     },
     "next": {
-      "build": "",
-      "title": "",
-      "status": "",
+      "build": "gov_po_2_implementation",
+      "title": "GOV.PO.2 (2/2) -- implement the frozen PO permission model",
+      "status": "planned",
       "notes": [
-        "Unset: the actual next step is the Product Owner's own freeze decision on docs/design/GOV_PO_2_PO_VISIBILITY_AND_BOUNDED_AUTHORSHIP.md (above), a human act, not an engineering-sizeable build.",
-        "gov_po_2_implementation (below, upcoming, blocked) is the queued candidate once that freeze lands; sizing/authorizing any other next build is a separate Product Owner PLAN/REVIEW function."
+        "Unblocked 2026-09-08: docs/design/GOV_PO_2_PO_VISIBILITY_AND_BOUNDED_AUTHORSHIP.md is now FROZEN -- PRODUCT OWNER APPROVED. Not yet started; no relay artifact opened yet.",
+        "Scope: gh pr diff/gh run view/gh run list read-only prefixes (boundary-safe matching required); docs/design/po_drafts/*.md + FROZEN/RATIFIED status-line regex (MultiEdit excluded, falls to default-deny); docs/history/INDEX.md removed from GOVERNANCE_PATHS; new scripts/repository_privacy_check.py + an equivalence regression test against main.py --repository-privacy-check; new nexus-po-evidence-reviewer agent + closed-set Agent-branch generalization; full regression proving every existing GOV.PO.1 protection stays intact.",
+        "Sonnet 5, normal -- deterministic implementation against a contract the frozen document leaves with zero open design questions."
       ]
     },
     "upcoming": [
-      {
-        "build": "gov_po_2_implementation",
-        "title": "GOV.PO.2 (2/2) -- implement the frozen PO permission model",
-        "status": "blocked",
-        "notes": [
-          "BLOCKED on gov_po_2_po_visibility_and_bounded_authorship (above, `next`) reaching FROZEN status by explicit Product Owner decision. Do not start on the DRAFT alone.",
-          "Fully drafted SESSION_START held (validated, scripts/gov_session_transfer.py validate: true) -- not yet opened as its own relay artifact, since it cannot start. Scope once unblocked: gh pr diff/gh run read-only commands, the exact-mechanism repository-privacy-check capability the frozen document chooses, docs/design/po_drafts/*.md with FROZEN/RATIFIED status-line rejection, docs/history/INDEX.md removed from direct Edit/Write (generator-only), one new nexus-po-evidence-reviewer agent (Read/Grep/Glob only, modeled on nexus-council-seat.md), and full regression proving every existing GOV.PO.1 protection stays intact.",
-          "Sonnet 5, normal once unblocked -- deterministic implementation against a contract the frozen document must leave with zero open design questions."
-        ]
-      },
       {
         "build": "m8_3_real_environment_validation",
         "title": "M8.3 -- Product-Owner-gated real-environment validation of the first-contact producer",
