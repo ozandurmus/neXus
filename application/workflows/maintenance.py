@@ -131,7 +131,13 @@ def scheduler_once(ctx):
 def repository_privacy_check(ctx):
     # Repository privacy validation is deliberately local/offline and returns
     # before RuntimeRoot creation, credential prompts, or any collector import.
-    from utils.repository_privacy import RepositoryPrivacyError, scan_repository
+    from utils.repository_privacy import (
+        RepositoryPrivacyError,
+        baseline_finding_keys,
+        finding_key,
+        scan_repository,
+    )
+    baseline_ref = ctx.args.privacy_baseline_ref
     print("=== SECURITYEXPERT LOCAL REPOSITORY PRIVACY GATE — DEV.0.4 ===\n")
     try:
         report = scan_repository(_REPO_ROOT)
@@ -143,14 +149,24 @@ def repository_privacy_check(ctx):
     print(f"Files scanned:        {report.files_scanned}")
     print(f"Files skipped:        {report.files_skipped}")
     print(f"Findings:             {len(report.findings)}")
+    new_findings = report.findings
     if report.findings:
         print("\nFindings (matched values intentionally withheld):")
         for finding in report.findings:
             location = f"{finding.path}:{finding.line}" if finding.line else finding.path
             print(f"  {location}  {finding.rule}")
-    print(f"\nGate:                 {report.gate}")
+        # AC-5 (shared with scripts/nexus_engineer_tool_gate.py): the baseline
+        # scan only runs when the current scan is already non-empty -- never
+        # on the common zero-findings path. baseline_ref=None here reduces to
+        # exactly the pre-baseline behavior below (every finding is new).
+        baseline_keys, baseline_note = baseline_finding_keys(_REPO_ROOT, baseline_ref)
+        new_findings = tuple(f for f in report.findings if finding_key(_REPO_ROOT, f) not in baseline_keys)
+        print(f"\nBaseline:              {baseline_note}")
+        print(f"New findings:          {len(new_findings)}")
+    gate_pass = not new_findings
+    print(f"\nGate:                 {'PASS' if gate_pass else 'FAIL'}")
     print("No network access performed. No matched values were printed.")
-    raise SystemExit(0 if report.gate == "PASS" else 1)
+    raise SystemExit(0 if gate_pass else 1)
 
 
 def storage_analyze(ctx):

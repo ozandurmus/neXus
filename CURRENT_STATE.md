@@ -5,14 +5,18 @@ see `AGENTS.md`/`AI_START_HERE.md`. **Predecessor build detail lives in
 `project/build_history.json`** (structured, newest-first) and its linked
 docs under `docs/history/`; `docs/history/INDEX.md` is the one-line timeline.
 
-- **Checkpoint:** 2026-09-08, `op1_failover_plan_compiler_contract_draft` —
-  DRAFT contract `docs/history/phase/OP_1_FAILOVER_PLAN_COMPILER_AND_DRY_RUN.md`
-  (awaiting Product Owner freeze): write-free `FailoverPlan`/`DryRunReport`
-  for classic CP ClusterXL only, from already-collected OP.0a/OP.0b
-  evidence, reusing OP.2.0/OP.2.1's pure `capability()`/`build_plan()`
-  read-only. Presents `op_degraded_verdict` for this freeze; no code/test/
-  FROZEN doc changed. Own worktree, parallel with GOV.PO.3/M10.2. Detail:
-  `project/build_history.json`. Predecessor
+- **Checkpoint:** 2026-09-08, `gov_po_3_ci_privacy_gate_baseline_scoping` —
+  extends relay/NXS-LOCAL-0014's baseline-aware privacy-gate fix (previously
+  local pre-push-hook-only) to the GitHub Actions `validation` workflow's own
+  Repository privacy gate step, so it stops permanently red-failing every PR
+  on the same two pre-existing, already-accepted findings. Shared
+  content-fingerprint baseline-comparison primitives extracted into
+  `utils/repository_privacy.py`; new `--privacy-baseline-ref` flag on
+  `--repository-privacy-check`; workflow now fetches full history and passes
+  `--privacy-baseline-ref origin/main`. Own worktree, no file overlap with
+  other in-flight movements. Detail: `project/build_history.json`.
+  Predecessor `op1_failover_plan_compiler_contract_draft` **MERGED PR #133**
+  (DRAFT contract, awaiting Product Owner freeze). Predecessor
   `gov_po_3_orchestrator_observability` **MERGED**. Predecessor
   `gov_po_3_push_hook_baseline_scoping` **MERGED**. Predecessor
   `gov_po_3_approved_movement_orchestration_ac3` **AC-3 only, MERGED** —
