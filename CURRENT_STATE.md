@@ -5,26 +5,28 @@ see `AGENTS.md`/`AI_START_HERE.md`. **Predecessor build detail lives in
 `project/build_history.json`** (structured, newest-first) and its linked
 docs under `docs/history/`; `docs/history/INDEX.md` is the one-line timeline.
 
-- **Checkpoint:** 2026-09-08, `gov_po_1_step_5_first_plan_episode` — the
-  first Phase A `PLAN` episode: `now_next.next` re-sequenced, `M10` sliced,
-  backlog re-ranked, `.venv` DLP debt and two verified state drifts filed.
-  Predecessors `gov_po_1_gate_1_command_safety_correction` (PR #114) and
-  `gov_po_1_gate_2_self_sync_capability` (PR #115) both **MERGED**: they fix
-  the packet-emission conflict this episode reported and the branch self-sync
-  gap it hit; this episode then posted its own packets and self-synced.
-  `gov_po_1_step_4_direction_record_ratification` **MERGED** (PR #112): the
-  direction record is **RATIFIED**. Phase A **authorized** (relay #5);
-  Phase B closed. `gov_po_1_step_2/3` **MERGED** (PR #110/#111); contract
-  `gov_po_1_role_migration_contract` **FROZEN, MERGED** (PR #109).
+- **Checkpoint:** 2026-09-08, `m10_1_registry_evidence_reconciliation_projection`
+  — `M10`'s first slice ships: `utils/registry_evidence_reconciliation.py`
+  derives `D4` (`RECONCILED`/`EVIDENCE_ONLY`/`REGISTRY_ONLY`/
+  `REGISTRY_DISABLED`/`RECONCILIATION_UNKNOWN`) plus `RI-2` bounded-
+  inconsistency detection. `RELAY_DECISION` on relay #11: no canonical id
+  spans `utils/device_registry.py`'s `device_id` and the merged evidence
+  model's `entity_id` today, so every entity resolves `RECONCILIATION_UNKNOWN`
+  except a disabled row (`REGISTRY_DISABLED`, registry-only fact);
+  `utils/device_identity_relationships.py` (`M8.1`) stays unread, its
+  `mapping_scope` out of bounds for this purpose. No UI/nav/payload change.
+  Predecessor `gov_po_1_step_5_first_plan_episode` **MERGED** PR #113: first
+  Phase A `PLAN` episode, sliced `M10`, chose this build as `next`.
   Predecessor `M9` **MERGED** PR #104. `M8.4` **MERGED** PR #101.
   **PO §12:** `M8.3` deferred, `M7` blocked. `M8` **FROZEN 2026-09-06**.
-- **Next** (`now_next.next`): `m10_1_registry_evidence_reconciliation_projection`
-  — the `D4` registry↔evidence reconciliation producer, first slice of `M10`
-  (`M10.2`/`M10.3`/`M11`/`M12` are `upcoming`). `m8_3_real_environment_validation`
-  left `next` for `upcoming` and stays **deferred debt**, unchanged and unpaid;
-  `m7_real_device_targeted_collect_now`/`op2_c_cp_clusterxl_adapter_scoping`
-  stay `upcoming`/`blocked`.
-  `DEV.TEST.1`/`PCP.1`/`M1`-`M6`/`M8.1`-`M8.4` complete/automated_validated.
+- **Next** (`now_next.next`): **unset** — `m10_1` (above) was the queued
+  candidate and is now complete. Sizing/authorizing the next actionable
+  build (e.g. `M10.2`, whose own `upcoming` row already says it needs its
+  own `PLAN`/`REVIEW` episode) is a Product Owner function, not decided by
+  an engineering build. `m8_3_real_environment_validation` stays `upcoming`,
+  **deferred debt**, unpaid; `m7_real_device_targeted_collect_now`/
+  `op2_c_cp_clusterxl_adapter_scoping` stay `upcoming`/`blocked`.
+  `DEV.TEST.1`/`PCP.1`/`M1`-`M6`/`M8.1`-`M8.4`/`M10.1` complete/automated_validated.
 - **OP.2.0 CLASS 2 architecture** (`docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md`):
   **CONTRACT FROZEN 2026-09-04**; `OP.2.A`/`OP.2.B` IMPLEMENTED; `OP.2.1` CP
   command gate DRAFTED — CLASS 2 still has **no member**, no adapter,
@@ -59,33 +61,36 @@ test-enforced boundaries.
 | 4 — policy / deployment / remediation | prohibited | — |
 ## Active build
 
-**`gov_po_1_step_5_first_plan_episode`** (`GOV.PO.1` §10 step 5) — the first
-interactive Phase A `PLAN` episode. Chose `M10.1` as the one actionable
-`next` (every other candidate externally blocked or not engineering work);
-sliced `M10` into `M10.1`/`M10.2`/`M10.3` (§7 precedent); ranked the
-backlog by theme; filed `dlp_scanner_venv_exclusion` and
-`project_state_wording_drift_reconciliation` (both §11 drifts **verified,
-reported, not fixed**). Reported conflict, fixed below mid-episode: the gate
-could not emit a `NEXUS_SESSION_PACKET`; after PR #114 the agent posted its
-own packets — first end-to-end proof of that path. Relay issue #10. Merged
-second of the three concurrent governance branches, so it reconciles
-`now_next.now`.
+**`m10_1_registry_evidence_reconciliation_projection`** (`M10`'s first
+slice, `D4` producer) — new `utils/registry_evidence_reconciliation.py`:
+`resolve_d4()` derives the five frozen values from classified registry/
+evidence sides; `detect_ri2()` implements `RI-2` (`AC-7`). Blocked, then
+resolved: no canonical id spans `device_id` and the merged evidence model's
+`entity_id` (`console/registry_targets.py` already refuses to translate
+between them); posted `RELAY_QUESTION` on relay #11 rather than inventing a
+join. Product Owner `RELAY_DECISION` (option 4): ship with no join input —
+`utils/device_identity_relationships.py` stays unread, its `mapping_scope`-
+widening question stays undecided. Only `REGISTRY_DISABLED` and
+`RECONCILIATION_UNKNOWN` are reachable in production today; `RECONCILED`/
+`EVIDENCE_ONLY`/`REGISTRY_ONLY` are implemented and unit-tested but need a
+future movement's authorized canonical id. No resolver/UI/navigation/payload
+wiring — scoped to the module plus its test file. Full detail:
+`project/build_history.json`.
 
-Predecessors — the two PO gate corrections this episode's own blockers
-produced, both **MERGED**: **`GOV_PO_1_GATE_1`** (PR #114) replaced the
-gate's substring command check with `shlex` real-operator detection plus a
-`nexus_po_*.json/.txt` scratch-write allowance, enabling packet emission;
-**`GOV_PO_1_GATE_2`** (PR #115) allowlisted `git merge origin/<ref>` for
-branch self-sync. `T1`–`T7` still do not exercise packet emission — step 6.
+Predecessor — **`gov_po_1_step_5_first_plan_episode`** (`GOV.PO.1` §10 step
+5) — **MERGED** PR #113: first interactive Phase A `PLAN` episode. Chose
+`M10.1` as `next`; sliced `M10` into `M10.1`/`M10.2`/`M10.3` (§7 precedent);
+ranked the backlog; filed `dlp_scanner_venv_exclusion` and
+`project_state_wording_drift_reconciliation` (verified, not fixed).
+Predecessors — its own two PO gate corrections, both **MERGED**: `GOV_PO_1_GATE_1` (PR #114) and `GOV_PO_1_GATE_2` (PR #115); `T1`–`T7` still do not exercise packet emission (step 6).
 
 Predecessor — **`gov_po_1_step_4_direction_record_ratification`** —
-**MERGED** via PR #112: the record is **RATIFIED** (contract §4.1). Phase A
-authorized by `RELAY_DECISION` on relay #5; Phase B closed until T1–T6.
+**MERGED** PR #112: the record is **RATIFIED** (contract §4.1). Phase A
+authorized (relay #5); Phase B closed until T1–T6.
 
 Predecessor — **`m9_enrollment_preview_confirmation_ui`** (`M9`) —
-**MERGED** via PR #104: local-loopback manual-endpoint enrollment;
-candidate-id enrollment schema-present but server-refused pending `M10`'s
-`D4` projection — `M10.1` exists to close it.
+**MERGED** PR #104: local-loopback manual-endpoint enrollment; candidate-id
+enrollment stays server-refused pending `M10`'s `D4` — closed above.
 
 Predecessors, all **MERGED**, detail in `project/build_history.json`:
 `gov_po_1_step_3_docs_reconciliation` (PR #111),
@@ -103,9 +108,9 @@ Predecessors, all **MERGED**, detail in `project/build_history.json`:
 **`nav_3_capability_state_vocabulary`** — COMPLETE / FROZEN (PO approved
 2026-09-06). `docs/design/CAPABILITY_STATE_VOCABULARY_AND_PRESENTATION.md` is
 implementation authority for the vocabulary/resolution/presentation matrix
-(`D1`–`D7`, `E1`–`E7`, `AC-CS-1`…`97`); no producer implemented yet, so every
-capability resolves `UNKNOWN`. `M10.1`/`M10.2`/`M10.3` build `D4`, the
-resolver core, and `D2`/`D3`; `M12` builds `D5`; `M14` builds `D7`.
+(`D1`–`D7`, `E1`–`E7`, `AC-CS-1`…`97`). `D4` has its producer as of `M10.1`
+(above); every other dimension still resolves `UNKNOWN`. `M10.2`/`M10.3`
+build the resolver core and `D2`/`D3`; `M12` builds `D5`; `M14` builds `D7`.
 
 ## `OP.0b.0` — FROZEN WITH REAL-ENV VALIDATION GATES
 `docs/history/phase/OP_0B_0_VENDOR_FAILOVER_PREFLIGHT_EVIDENCE_SURFACE.md`
@@ -135,21 +140,15 @@ Tracked as `pan_serial_representation_identity_evidence_closure`. A manual
 established fresh **management-plane** (not serial) correspondence = `MATCH`,
 a narrower question never promoted toward B2.
 
-## Exact next build
+## Next candidate and open mapping question
 
-`now_next.next` is `m10_1_registry_evidence_reconciliation_projection` —
-the `D4` producer (`RECONCILED` / `EVIDENCE_ONLY` / `REGISTRY_ONLY` /
-`REGISTRY_DISABLED` / `RECONCILIATION_UNKNOWN`), derived over
-`utils/device_registry.py` and the merged evidence model, joined on the
-canonical id only, persisting nothing new. Authority:
-`CAPABILITY_STATE_VOCABULARY_AND_PRESENTATION.md` §3.3 `D4` + `AC-CS-3`;
-`LOCAL_CONTROL_PLANE_RUNTIME_AND_ENROLLMENT.md` §9.2 `A6`. Not authorized
-yet — it needs its own relay issue and go-ahead.
-
-`M8.3` stays `deferred` (see "Real-environment validation owed" for the
-exact command) and `M7` stays blocked until it runs and produces a genuine
-`REAL_ENV_VALIDATED` relationship; choosing `M10.1` pays none of that debt.
-`operator_assertion` stays unaccepted.
+`now_next.next` is unset (see checkpoint above). A future PLAN episode
+needs to (1) size/authorize `M10.2` or another candidate and (2) decide
+whether `utils/device_identity_relationships.py`'s `mapping_scope` may
+widen beyond `CLASS_0_CP_CONFIG_TARGET_SELECTION_ONLY` to give `D4` a real
+join — `RELAY_DECISION` #11 left that undecided. `M8.3` stays `deferred`
+(see "Real-environment validation owed") and `M7` stays blocked until it
+runs; `M10.1` pays none of that debt. `operator_assertion` stays unaccepted.
 `op2_c_cp_clusterxl_adapter_scoping` stays `upcoming`/blocked; `OP.2.D`'s
 console flow is expected on the `PCP.4` device/HA tab, never a second one.
 
@@ -177,10 +176,11 @@ Concurrency budget stays at 1 per vendor pending real-env evidence.
 ## Automated test baseline
 
 ```
+M10.1: targeted 56 passed; targeted + PCP.1/CON.1/CON.2/M6/architecture-
+  convergence sweep 308 passed, metadata_warnings empty.
 M9 rounds 1+2: 247 targeted+affected passed; full regression 2359 passed,
   2 pre-existing unrelated .venv DLP-scanner false positives (now filed:
   backlog `dlp_scanner_venv_exclusion`). Render harness + Playwright green.
-M8.4: targeted 23 passed. Affected sweep 440 passed, 1 skipped, 0 failed.
 Earlier predecessor build detail lives only in project/build_history.json.
 ```
 ## Known xfails
