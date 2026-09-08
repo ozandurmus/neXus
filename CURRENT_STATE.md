@@ -5,22 +5,21 @@ see `AGENTS.md`/`AI_START_HERE.md`. **Predecessor build detail lives in
 `project/build_history.json`** (structured, newest-first) and its linked
 docs under `docs/history/`; `docs/history/INDEX.md` is the one-line timeline.
 
-- **Checkpoint:** 2026-09-08, `gov_po_3_orchestrator_observability` —
-  extended the already-frozen `scripts/orchestrator.py` (no council
-  trigger) with real-time visibility: streaming `claude -p` output
-  (`--output-format stream-json --verbose`), a stdlib-only
-  `engineer.summary.log` parser, `status`'s new `last_activity` field, and
-  a read-only `orchestrator watch` terminal dashboard. Backward compatible.
-  Detail: `project/build_history.json`. Predecessor
-  `gov_po_3_approved_movement_orchestration_ac3` **AC-3 only** — froze
-  `docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md` and built the
-  orchestrator itself; AC-5's real demonstrations not yet run, tracked on
-  `relay/NXS-LOCAL-0007`. Predecessor `gov_po_1_gate_5_worktree_management`
-  **MERGED**. Predecessor `gov_po_2_po_visibility_and_bounded_authorship`
-  **MERGED** PR #122: `docs/design/GOV_PO_2_PO_VISIBILITY_AND_BOUNDED_
-  AUTHORSHIP.md` is **FROZEN — PRODUCT OWNER APPROVED, 2026-09-08**,
-  specifying `gov_po_2_implementation`'s scope. **PO §12:** `M8.3`
-  deferred, `M7` blocked. `M8` **FROZEN 2026-09-06**.
+- **Checkpoint:** 2026-09-08, `gov_po_3_orchestrator_observability` — extended
+  already-frozen `scripts/orchestrator.py` with real-time visibility: streaming
+  `claude -p` output (`--output-format stream-json --verbose`), a stdlib-only
+  `engineer.summary.log` parser, `status`'s new `last_activity` field, and a
+  read-only `orchestrator watch` terminal dashboard. Backward compatible; no
+  council trigger. Detail: `project/build_history.json`. Predecessors:
+  `gov_po_3_push_hook_baseline_scoping` **MERGED**;
+  `gov_po_3_approved_movement_orchestration_ac3` **AC-3 only, MERGED** (froze
+  `docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md`; AC-5's real
+  demonstrations still pending, `relay/NXS-LOCAL-0007`);
+  `gov_po_1_gate_5_worktree_management` **MERGED**;
+  `gov_po_2_po_visibility_and_bounded_authorship` **MERGED** PR #122 —
+  `docs/design/GOV_PO_2_PO_VISIBILITY_AND_BOUNDED_AUTHORSHIP.md` is **FROZEN —
+  PRODUCT OWNER APPROVED, 2026-09-08**, specifying `gov_po_2_implementation`'s
+  scope. **PO §12:** `M8.3` deferred, `M7` blocked, `M8` **FROZEN 2026-09-06**.
 - **Next** (`now_next.next`): `gov_po_2_implementation` — unrelated and
   unchanged by this movement; not yet started. `m8_3_real_environment_
   validation` stays `upcoming`, **deferred debt**, unpaid; `m7_real_device_
@@ -178,9 +177,9 @@ Concurrency budget stays at 1 per vendor pending real-env evidence.
 ## Automated test baseline
 
 ```
-gov_po_3_approved_movement_orchestration_ac3: 57 new/changed tests (detail:
-project/build_history.json). Full suite: 2662 passed, 25 skipped, 2 failed
--- both pre-existing/unrelated (confirmed via git stash against clean main).
+gov_po_3_push_hook_baseline_scoping: 7 new tests, tests/test_orchestrator.py
+unaffected (48 passed) (detail: project/build_history.json). Hook-only
+change; full one-shot regression not re-run (DEV.TEST.1: last evidence holds).
 Earlier predecessor build detail lives only in project/build_history.json.
 ```
 ## Known xfails
