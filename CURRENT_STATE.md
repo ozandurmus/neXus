@@ -178,10 +178,10 @@ Concurrency budget stays at 1 per vendor pending real-env evidence.
 ```
 op0b_s7_s6_test_order_isolation: full one-shot regression re-run after
 merging origin/main (DEV.TEST.1): 2670 passed, 25 skipped, 2 failed -- both
-pre-existing/unrelated self-referential 'password='/'PASSWORD:' prose
-matches inside project/build_history.json (documented since gov_po_1_
-local_relay_watch_command). S7+S6 both orders: 110 passed each.
-Earlier predecessor build detail lives only in project/build_history.json.
+pre-existing/unrelated DLP-token collisions inside project/build_history.
+json's own prose (documented since gov_po_1_local_relay_watch_command).
+S7+S6 both orders: 110 passed each. Earlier predecessor build detail lives
+only in project/build_history.json.
 ```
 ## Known xfails
 
