@@ -9,21 +9,20 @@ docs under `docs/history/`; `docs/history/INDEX.md` is the one-line timeline.
   module-rebind leak: S7's `test_evaluator_performs_no_socket_io_and_
   imports_no_collector` popped `panorama.preflight_collector`/`checkpoint.
   preflight_collector` from `sys.modules` without restoring, leaving S6's
-  later re-import rebind against a fresh module object while
-  `collect_member` still resolved globals against the original one —
-  defeating S6's patches, real HTTP calls when S7 ran first (frontend-
-  rendering shared-state-leak guard family). Fixed with a save/restore
-  `try/finally` + regression test; test-infra only. Detail: `project/
-  build_history.json`. Predecessors `gov_po_3_orchestrator_observability`,
-  `gov_po_3_push_hook_baseline_scoping`, `gov_po_3_approved_movement_
-  orchestration_ac3` (AC-3), `gov_po_1_gate_5_worktree_management`/
-  `gov_po_2_po_visibility_and_bounded_authorship` all **MERGED** PR #122,
-  doc **FROZEN — PO APPROVED**. **PO §12:** `M8.3` deferred, `M7` blocked.
-- **Next** (`now_next.next`): `gov_po_2_implementation` — unrelated and
-  unchanged by this movement; not yet started. `m8_3_real_environment_
-  validation` stays `upcoming`, **deferred debt**, unpaid; `m7_real_device_
-  targeted_collect_now`/`op2_c_cp_clusterxl_adapter_scoping` stay
-  `upcoming`/`blocked`. `DEV.TEST.1`/`PCP.1`/`M1`-`M10.1` complete/automated_validated.
+  re-import rebind against a fresh module object while `collect_member`
+  kept resolving globals against the original one — defeating S6's
+  patches, real HTTP calls when S7 ran first. Fixed with save/restore
+  `try/finally` + regression test; test-infra only. Also fixed, PO-
+  authorized (relay/NXS-LOCAL-0016): `nexus_engineer_tool_gate.py`'s
+  merge-lock interpreter resolution. Detail: `project/build_history.json`.
+  Predecessors PR #122/#127/#129/#130/#131 **MERGED**, doc **FROZEN — PO
+  APPROVED**. **PO §12:** `M8.3` deferred, `M7` blocked, `M8` **FROZEN 2026-09-06**.
+- **Next** (`now_next.next`): `gov_po_2_implementation` — unrelated,
+  unchanged, not yet started. `m8_3_real_environment_validation` stays
+  `upcoming`/**deferred debt**; `m7_real_device_targeted_collect_now`/
+  `op2_c_cp_clusterxl_adapter_scoping`/`m10_2_capability_state_resolver_
+  core` (consumes `D2`/`D3`/`D4`) stay `upcoming`/`blocked`.
+  `DEV.TEST.1`/`PCP.1`/`M1`-`M10.1`/`M10.3` complete/automated_validated.
 - **OP.2.0 CLASS 2 architecture** (`docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md`):
   **CONTRACT FROZEN 2026-09-04**; `OP.2.A`/`OP.2.B` IMPLEMENTED; `OP.2.1` CP
   command gate DRAFTED — CLASS 2 still has **no member**, no adapter,
@@ -108,9 +107,10 @@ exercise packet emission (step 6).
 **`nav_3_capability_state_vocabulary`** — COMPLETE / FROZEN (PO approved
 2026-09-06). `docs/design/CAPABILITY_STATE_VOCABULARY_AND_PRESENTATION.md` is
 implementation authority for the vocabulary/resolution/presentation matrix
-(`D1`–`D7`, `E1`–`E7`, `AC-CS-1`…`97`). `D4` has its producer as of `M10.1`
-(above); every other dimension still resolves `UNKNOWN`. `M10.2`/`M10.3`
-build the resolver core and `D2`/`D3`; `M12` builds `D5`; `M14` builds `D7`.
+(`D1`–`D7`, `E1`–`E7`, `AC-CS-1`…`97`). `D4`/`D2`/`D3` have producers as of
+`M10.1`/`M10.3` (above); none is wired to a resolver, UI or payload, so every
+dimension still resolves `UNKNOWN` in any actual render. `M10.2` builds the
+resolver core; `M12` builds `D5`; `M14` builds `D7`.
 
 ## `OP.0b.0` — FROZEN WITH REAL-ENV VALIDATION GATES
 `docs/history/phase/OP_0B_0_VENDOR_FAILOVER_PREFLIGHT_EVIDENCE_SURFACE.md`
@@ -176,12 +176,12 @@ Concurrency budget stays at 1 per vendor pending real-env evidence.
 ## Automated test baseline
 
 ```
-op0b_s7_s6_test_order_isolation: full one-shot regression re-run after
-merging origin/main (DEV.TEST.1): 2698 passed, 25 skipped, 2 failed -- both
-pre-existing/unrelated DLP-token collisions inside project/build_history.
-json's own prose (documented since gov_po_1_local_relay_watch_command).
-S7+S6 both orders: 110 passed each. Earlier predecessor build detail lives
-only in project/build_history.json.
+op0b_s7_s6_test_order_isolation: full one-shot regression after merging
+origin/main + tool-gate interpreter fix (+2 tests, DEV.TEST.1): 2809
+passed, 25 skipped, 2 failed -- both pre-existing/unrelated DLP-token
+collisions in project/build_history.json's own prose (documented since
+gov_po_1_local_relay_watch_command). S7+S6 both orders: 110 passed each.
+Earlier predecessor build detail lives only in project/build_history.json.
 ```
 ## Known xfails
 
