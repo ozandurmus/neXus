@@ -5,14 +5,17 @@ see `AGENTS.md`/`AI_START_HERE.md`. **Predecessor build detail lives in
 `project/build_history.json`** (structured, newest-first) and its linked
 docs under `docs/history/`; `docs/history/INDEX.md` is the one-line timeline.
 
-- **Checkpoint:** 2026-09-08, `op1_failover_plan_compiler_contract_draft` —
-  DRAFT contract `docs/history/phase/OP_1_FAILOVER_PLAN_COMPILER_AND_DRY_RUN.md`
-  (awaiting Product Owner freeze): write-free `FailoverPlan`/`DryRunReport`
-  for classic CP ClusterXL only, from already-collected OP.0a/OP.0b
-  evidence, reusing OP.2.0/OP.2.1's pure `capability()`/`build_plan()`
-  read-only. Presents `op_degraded_verdict` for this freeze; no code/test/
-  FROZEN doc changed. Own worktree, parallel with GOV.PO.3/M10.2. Detail:
-  `project/build_history.json`. Predecessor
+- **Checkpoint:** 2026-09-08, `orchestrator_background_task_exit_race` —
+  `scripts/orchestrator.py`'s `ENGINEER_PROMPT` now forbids treating a
+  long-running validation command (the full pytest regression) as
+  backgroundable and raises the engineer session's own
+  `BASH_DEFAULT_TIMEOUT_MS`; `decide_start`'s resume path now detects the
+  live-observed staged-changes/`SESSION_START`/dead-pid pattern
+  (`relay/NXS-LOCAL-0018`) and injects a recovery note. Detail:
+  `project/build_history.json`. Parallel, unmerged, unaffected:
+  `op1_failover_plan_compiler_contract_draft` (DRAFT contract
+  `docs/history/phase/OP_1_FAILOVER_PLAN_COMPILER_AND_DRY_RUN.md`, awaiting
+  Product Owner freeze, own worktree). Predecessor
   `gov_po_3_orchestrator_observability` **MERGED**. Predecessor
   `gov_po_3_push_hook_baseline_scoping` **MERGED**. Predecessor
   `gov_po_3_approved_movement_orchestration_ac3` **AC-3 only, MERGED** —
