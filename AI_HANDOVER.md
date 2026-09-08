@@ -7,100 +7,75 @@
 
 ## 1. Snapshot
 
-- Date: 2026-09-08. `op1_failover_plan_compiler_contract_draft` — produces
-  `docs/history/phase/OP_1_FAILOVER_PLAN_COMPILER_AND_DRY_RUN.md`, status
-  line `DRAFT — awaiting Product Owner freeze`.
-- Runs in its own worktree/branch (`feature/op1-failover-plan-compiler-
-  contract`), dispatched in parallel with `GOV.PO.3` and `M10.2` per the
-  Product Owner's 2026-09-08 sequencing direction (`relay#13` standing PR
-  authorization).
-- This movement changes no code, no test and no `FROZEN` document — design
-  + bookkeeping only.
+- Date: 2026-09-08. `m14_local_ldap_d7_authorization_architecture_draft`
+  (relay/NXS-LOCAL-0024) — produces
+  `docs/design/M14_LOCAL_LDAP_AUTHORIZATION_ARCHITECTURE.md`, status
+  `DRAFT — discussion proposal`.
+- Own worktree/branch
+  (`feature/m14-local-ldap-authorization-architecture-draft`), standing
+  `relay#13` merge authorization.
+- Design-only: no code, no test, no `FROZEN` document changed, no live
+  LDAP/AD call made.
 
 ## 2. What changed
 
-- `docs/history/phase/OP_1_FAILOVER_PLAN_COMPILER_AND_DRY_RUN.md` (new,
-  DRAFT): defines `FailoverPlan`/`DryRunReport` for classic Check Point
-  ClusterXL only. Compiled entirely from already-collected `OP.0a`/`OP.0b`
-  evidence (`utils.failover.assessment.compute_ha_readiness`), reusing
-  `OP.2.0`/`OP.2.1`'s already-pure, zero-I/O
-  `checkpoint.clusterxl_capability_adapter.CPClusterXLCapabilityAdapter.
-  capability()`/`build_plan()` methods read-only — never
-  `check_precondition()`/`execute_once()`/`observe_postcondition()`, never
-  an `ActionCoordinator`, no taxonomy change. Presents `op_degraded_verdict`
-  to the Product Owner as one decision (§8) with the existing recommendation
-  (keep `DEGRADED_PROCEED_WITH_RISK` structurally unreachable) and the
-  consequence of each option for the plan/dry-run vocabulary; confirms
-  `op_four_eyes`/`op_emergency_evac`/`op_continuity_tolerance`/
-  `op_aa_vsls_scope` stay non-blocking. Includes a one-slice implementation
-  plan (`OP.1.S1`, 5 non-test files, 8 acceptance criteria, §9) sized to
-  `GOV_PO_ROLE_MIGRATION.md` §7 targets so implementation can start
-  immediately after freeze.
-- `project/build_history.json`: new `op1_failover_plan_compiler_contract_
-  draft` record (`in_progress`, movement `ARCHITECTURE`), newest-first.
-- `project/roadmap.json`: `current_build`/`now_next.now` →
-  `op1_failover_plan_compiler_contract_draft`; the `OP.1` `upcoming` row's
-  `status`/`notes` updated to reflect the DRAFT contract. `now_next.next`
-  (`gov_po_2_implementation`) unchanged — unrelated to this movement.
-- `CURRENT_STATE.md`: checkpoint updated (stays at the 200-line ceiling);
-  predecessor `gov_po_3_push_hook_baseline_scoping` folded to one line.
-- `docs/history/INDEX.md`: regenerated via `scripts/build_history_index.py`.
+- `docs/design/M14_LOCAL_LDAP_AUTHORIZATION_ARCHITECTURE.md` (new, DRAFT):
+  a `D7` actor-authorization producer that binds to the operator's own
+  corporate AD Domain Controller and authorizes from AD group membership,
+  explicitly decoupled from the `DEPLOY.1A` server/OIDC track. Splits the
+  work into `A1` (actor binding + session admission — augments `E1`, and is
+  deliberately **not** `D7`) and `A2` (the `local_ldap` `D7`/`E4` producer),
+  so the frozen contract's own "a session gate is not `D7`" rule is kept.
+  Seven resolved decisions `LD-1`…`LD-7`, twelve acceptance gates
+  `AG-1`…`AG-12`, four named unknowns `U-1`…`U-4`, three delivery slices.
+- `project/backlog.json`: new `m14_local_ldap_d7_authorization_architecture`
+  item (`planned`, `P2`) pointing at the document. No other project-state
+  file touched, per the movement's own AC-6.
 
 ## 3. Exact next action
 
-1. Immediately before opening the PR: re-read the canonical relay file
-   (`NEXUS_RELAY_FILE`) for this movement and act on any `RELAY_CORRECTION`/
-   `RELAY_DECISION` appended after dispatch.
-2. `git fetch origin && git merge origin/main` — `GOV.PO.3` and `M10.2` run
-   in parallel from the same base commit and may have already advanced
-   `current_build`/`build_history.json`'s newest record; resolve any
-   mechanical bookkeeping conflict in `project/roadmap.json`/
-   `project/build_history.json` by hand (this movement's own instruction —
-   not a generic merge policy), then re-run
-   `tests/test_architecture_convergence.py` and
-   `scripts/build_history_index.py --check`.
-3. Commit, push, open the PR under the standing `relay#13` merge
-   authorization named in this movement's own `SESSION_START.merge_gate` —
-   no separate merge `RELAY_DECISION` needed for the PR itself. Freezing the
-   contract document and deciding `op_degraded_verdict` remain a separate,
-   later Product Owner action — do not treat opening/merging this PR as
-   that freeze.
-4. Post the `SESSION_CLOSE` on the relay file named in the handoff, per
-   `output_contract`.
+1. Product Owner review of the DRAFT. Two things need a Product Owner
+   decision before anything else moves: the §7 authority contradiction
+   (`M14` vs a new `M14L` id — see Risks) and whether to freeze.
+2. Do **not** dispatch an implementation movement from this document.
+   Freezing it would still not authorize slice 1; that is a separate
+   go-ahead, and `LD-5`'s `ldap3` dependency needs its own approval under
+   `docs/AI_DEVELOPMENT_PROTOCOL.md` "Approval boundaries".
+3. `U-1` (nested-group matching semantics, Microsoft documentation) must be
+   closed **before** any freeze — it determines whether the membership check
+   is correct.
 
 ## 4. Test delta
 
-No test added or changed — this movement is docs + bookkeeping only, per
-its own explicit scope. Targeted:
-`.venv/bin/python -m pytest -q tests/test_architecture_convergence.py` —
-22 passed (was 2 failed before the `current_build`/`CURRENT_STATE.md`/
-`docs/history/INDEX.md` bookkeeping updates above: the cross-authority
-check and the derived-index check, both fixed by those same edits, not by
-touching the test). `git diff --check` clean. Full-suite regression not
-re-run (`DEV.TEST.1`: no source/test file changed by this movement; last
-evidence holds). Repository privacy gate run once, at PR time, per the
-`SESSION_START`'s own `validation_plan`.
+No test added or changed. Full parallel regression run once on this branch
+with the main checkout's interpreter:
+`/Users/OzanDur/Codo/neXus/.venv/bin/python -m pytest -q -n auto --dist
+worksteal` → **3022 passed, 25 skipped, 2 failed** in 167.79s. Both failures
+are the pre-existing DLP-token collision tests in
+`tests/test_dev_0_5b_auth_consumer_canonical_config.py`; their findings are
+`project/build_history.json` + two `relay/*.json` files, none of them touched
+by this movement, and neither new file appears in either finding list.
+`git diff --check` clean. Repository privacy gate against the `origin/main`
+baseline: **PASS, 0 new findings** (5 pre-existing, all in files this
+movement did not touch).
 
 ## 5. Risks / notes forward
 
-- The document is `DRAFT` only. Do not report `OP.1` as decided or
-  implementable until the Product Owner freezes it together with
-  `op_degraded_verdict` (§8 of the contract).
-- `current_build`/`now_next.now` were pointed at this movement's own build
-  id so the cross-authority convergence test passes on this branch in
-  isolation; because `GOV.PO.3`/`M10.2` are separate parallel movements from
-  the same base commit, this is expected to produce a real merge conflict
-  against `origin/main` at PR time, not a defect in this movement's own
-  bookkeeping — see "Exact next action" step 2.
-- This worktree (`NXS-LOCAL-0009`) has no `.venv` of its own; all commands
-  above were run with the main checkout's already-validated interpreter
-  (`/Users/OzanDur/Codo/neXus/.venv/bin/python`) against this worktree's
-  files, per `AGENTS.md` "Context/token discipline" (no environment
-  bootstrap invoked). A future orchestrated engineer worktree lacking its
-  own `.venv` should do the same rather than create one.
-- The implementation slice (`OP.1.S1`) leaves one narrow, explicitly-flagged
-  open implementation-detail question for its own `PLAN` step: whether to
-  duplicate or extract-and-share
-  `checkpoint.clusterxl_preflight_provider`'s two private helpers
-  (`_map_cluster_mode`/`_resolve_member_tokens`) — deliberately left
-  unresolved at contract level (contract §4 note).
+- `DRAFT` only. Do not report `D7` as having a producer, and do not report
+  `M14` as unblocked, on the strength of this document.
+- **Authority contradiction, reported not resolved** (§7): the FROZEN
+  `docs/design/LOCAL_CONTROL_PLANE_RUNTIME_AND_ENROLLMENT.md` §12/§12.1
+  defines `M14` as *production OIDC/RBAC* with a `DEPLOY.1` prerequisite.
+  This draft proposes different content under the same id. Recommendation is
+  option (1): give this work a distinct id (`M14L`) so `M14` keeps its frozen
+  meaning and §11.3's "does not retroactively validate local shortcuts" rule
+  stays intact. Product Owner decides; this draft amends nothing.
+- The most likely implementation defect is named as `AG-4`: a configured but
+  unreachable `local_ldap` authority silently degrading to
+  `NO_APPLICABLE_AUTHORITY`, which the frozen contract makes non-blocking —
+  i.e. a fail-open with no visible symptom. It must be tested directly.
+- This worktree has no `.venv` of its own, and the exported `VIRTUAL_ENV`
+  points at a non-existent `.venv312`. Use the main checkout's already-
+  validated interpreter (`/Users/OzanDur/Codo/neXus/.venv/bin/python`)
+  directly; do not bootstrap an environment (`AGENTS.md` "Context/token
+  discipline").
