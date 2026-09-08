@@ -686,10 +686,10 @@
       "id": "recovery_offhost_key_custody",
       "category": "Recovery / Security",
       "title": "Off-host recovery artifacts and encryption-key custody",
-      "status": "planned",
+      "status": "in_progress",
       "priority": "P0",
       "target": "DEPLOY.1; blocks reliance on RB.3b recovery",
-      "note": "Move recovery-key custody to a server secret manager/KMS, keep encrypted recovery artifacts in durable off-host storage, and pass a restore drill before claiming the operational backup path is dependable."
+      "note": "Move recovery-key custody to a server secret manager/KMS, keep encrypted recovery artifacts in durable off-host storage, and pass a restore drill before claiming the operational backup path is dependable. Done locally (2026-09-08, local-feasible slice, no live server/KMS available): utils/recovery_key_custody.py adds a real KeyCustodyBackend ABC (wrap/unwrap only -- raw master-key bytes never cross the boundary) plus LocalFileKeyCustodyBackend, the one implementation that exists tonight (delegates vault-key resolution to the existing recovery_store.get_or_create_vault_key so both share one tested path); tests/test_recovery_key_custody.py is a restore-drill proving encrypt/wrap/store/retrieve/unwrap/decrypt round-trip through the interface with synthetic key material only, including across a simulated process restart and a cross-custody-backend rejection case. Still blocked on DEPLOY.1 and not claimed done: (1) an actual off-host/KMS backend implementing KeyCustodyBackend against a real server secret manager, (2) durable off-host storage for the encrypted recovery artifacts themselves (today's vault/ store is still local disk), (3) a restore drill run against that real off-host infra -- none of the above exists or was attempted tonight; the local backend is not a rename standing in for off-host readiness."
     },
     {
       "id": "operator_console",
