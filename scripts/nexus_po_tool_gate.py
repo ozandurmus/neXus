@@ -42,11 +42,14 @@ docs/design/LOCAL_RELAY_PROTOCOL.md, DRAFT): an additional, same-machine
 transport alongside the GitHub-based relay, not a replacement for it.
 `relay/*.json` is a new Edit/Write pattern, interactive form only, alongside
 -- not weakening -- the existing exact-match `GOVERNANCE_PATHS` list.
-`scripts/local_relay.py status`/`validate` (read-only) are allowlisted in
-both forms, mirroring `gov_session_transfer.py`'s own treatment; `create`/
-`append` (the only subcommands that write a `relay/*.json` file) are
-interactive-form only, mirroring the existing `gh issue create` treatment.
-Delegated-form write access to relay files is unchanged: still denied.
+`scripts/local_relay.py status`/`validate`/`watch` (read-only) are
+allowlisted in both forms, mirroring `gov_session_transfer.py`'s own
+treatment -- `watch` (GOV_PO_1_LOCAL_RELAY_WATCH_COMMAND, 2026-09-08) is a
+bounded, blocking poll, never a background daemon, and it never writes to
+the file it watches. `create`/`append` (the only subcommands that write a
+`relay/*.json` file) are interactive-form only, mirroring the existing
+`gh issue create` treatment. Delegated-form write access to relay files is
+unchanged: still denied.
 
 Self-sync capability (GOV_PO_1_GATE_2 correction, 2026-09-08): a fix landed
 on `origin/main` (or pushed directly to a `gov/po-*` branch, as happened for
@@ -146,6 +149,8 @@ COMMON_PREFIXES = (
     "py scripts/local_relay.py status", ".venv/bin/python scripts/local_relay.py status",
     "python3 scripts/local_relay.py validate", "python scripts/local_relay.py validate",
     "py scripts/local_relay.py validate", ".venv/bin/python scripts/local_relay.py validate",
+    "python3 scripts/local_relay.py watch", "python scripts/local_relay.py watch",
+    "py scripts/local_relay.py watch", ".venv/bin/python scripts/local_relay.py watch",
 )
 INTERACTIVE_EXTRA_PREFIXES = (
     "gh issue create", "gh issue close", "gh pr create",

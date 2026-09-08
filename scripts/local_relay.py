@@ -4,6 +4,8 @@
     py scripts/local_relay.py append   --file FILE --role {po|engineer} --marker MARKER [...]
     py scripts/local_relay.py status   --file FILE
     py scripts/local_relay.py validate --file FILE
+    py scripts/local_relay.py watch    --file FILE --for {po|engineer}
+                                        [--interval SECONDS] [--timeout SECONDS]
 
 Full contract: docs/design/LOCAL_RELAY_PROTOCOL.md (DRAFT). This is an
 ADDITIONAL transport for same-machine, same-checkout Product-Owner/engineer
@@ -28,11 +30,21 @@ existing, unchanged schema (`_REPORT_SCHEMA_BY_TYPE`, `_validate_node`,
 `OUTCOMES`) -- reused directly, never re-derived, so the two transports can
 never drift into two different ideas of what a valid report looks like.
 
+`watch` is a bounded, blocking, read-only poll of one relay file's
+`next_actor` field -- never a background daemon (a hard `--timeout`
+ceiling makes that impossible by construction). It never writes, appends,
+or mutates the watched file; a detected `next_actor` flip is only ever
+reported to the invoking session, which still needs the human's explicit
+written authorization before acting on any `RELAY_DECISION`-class content,
+exactly as today.
+
 Offline, synchronous. No network, daemon, credential, or device access.
 Exit codes: 0 success, 1 invalid/rejected (schema violation, wrong-turn
 append, concurrent-write conflict, append to a CLOSED movement), 2 usage
-error (bad arguments, missing file) -- the same convention
-`gov_session_transfer.py` uses.
+error (bad arguments, missing file, an out-of-range `watch` `--interval`/
+`--timeout`), 3 `watch` timed out with no qualifying `next_actor` change --
+the same convention `gov_session_transfer.py` uses, extended with 3 for
+`watch` only.
 """
 from __future__ import annotations
 
@@ -42,6 +54,7 @@ import os
 import re
 import sys
 import tempfile
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -49,7 +62,14 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import gov_session_transfer as gst  # noqa: E402
 
-EXIT_OK, EXIT_INVALID, EXIT_USAGE = 0, 1, 2
+EXIT_OK, EXIT_INVALID, EXIT_USAGE, EXIT_TIMEOUT = 0, 1, 2, 3
+
+#: `watch` bounds (AC-1/AC-2): a floor on --interval and a ceiling on
+#: --timeout so it can never approximate an unbounded background daemon.
+WATCH_INTERVAL_DEFAULT = 20
+WATCH_INTERVAL_FLOOR = 5
+WATCH_TIMEOUT_DEFAULT = 1800
+WATCH_TIMEOUT_CEILING = 3600
 
 SCHEMA_VERSION = 1
 ID_PREFIX = "NXS-LOCAL-"
@@ -508,6 +528,51 @@ def _cmd_validate(args: argparse.Namespace) -> int:
 
 
 # ---------------------------------------------------------------------------
+# watch
+# ---------------------------------------------------------------------------
+
+def _cmd_watch(args: argparse.Namespace) -> int:
+    """Bounded, blocking, read-only poll of `--file`'s `next_actor` field.
+    Never a daemon (AC-2): `--timeout` has a hard ceiling and this function
+    always returns once it elapses. Never writes (AC-3): every filesystem
+    touch below is a read."""
+    if args.interval < WATCH_INTERVAL_FLOOR:
+        print(f"error: --interval must be at least {WATCH_INTERVAL_FLOOR} seconds", file=sys.stderr)
+        return EXIT_USAGE
+    if args.timeout > WATCH_TIMEOUT_CEILING:
+        print(f"error: --timeout must be at most {WATCH_TIMEOUT_CEILING} seconds", file=sys.stderr)
+        return EXIT_USAGE
+
+    path = Path(args.file)
+    try:
+        obj = _load_json_file(path)
+    except LocalRelayError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return EXIT_USAGE if str(exc).startswith("no such file") else EXIT_INVALID
+    errors = validate_relay_object(obj)
+    if errors:
+        print(f"error: {path} fails validation, refusing to watch: {'; '.join(errors)}", file=sys.stderr)
+        return EXIT_INVALID
+
+    baseline = len(obj["entries"])
+    deadline = time.monotonic() + args.timeout
+
+    while True:
+        if obj.get("next_actor") == args.for_role:
+            new_entries = [e for e in obj["entries"] if isinstance(e, dict) and e.get("seq", 0) > baseline]
+            print(json.dumps({"next_actor": args.for_role, "entries": new_entries}, sort_keys=True))
+            return EXIT_OK
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            return EXIT_TIMEOUT
+        time.sleep(min(args.interval, remaining))
+        try:
+            obj = _load_json_file(path)
+        except LocalRelayError:
+            continue  # transient read failure -- try again next iteration, still bounded by deadline
+
+
+# ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
 
@@ -546,6 +611,13 @@ def build_parser() -> argparse.ArgumentParser:
     p_validate = sub.add_parser("validate", help="schema-check one relay file")
     p_validate.add_argument("--file", required=True)
     p_validate.set_defaults(func=_cmd_validate)
+
+    p_watch = sub.add_parser("watch", help="bounded, read-only poll for next_actor to flip to --for")
+    p_watch.add_argument("--file", required=True)
+    p_watch.add_argument("--for", dest="for_role", required=True, choices=ROLES)
+    p_watch.add_argument("--interval", type=int, default=WATCH_INTERVAL_DEFAULT)
+    p_watch.add_argument("--timeout", type=int, default=WATCH_TIMEOUT_DEFAULT)
+    p_watch.set_defaults(func=_cmd_watch)
 
     return parser
 
