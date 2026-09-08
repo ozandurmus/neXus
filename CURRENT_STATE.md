@@ -5,24 +5,25 @@ see `AGENTS.md`/`AI_START_HERE.md`. **Predecessor build detail lives in
 `project/build_history.json`** (structured, newest-first) and its linked
 docs under `docs/history/`; `docs/history/INDEX.md` is the one-line timeline.
 
-- **Checkpoint:** 2026-09-08, `gov_po_1_step_6_plan_po2_boundary` — PLAN
-  episode: two-movement `GOV.PO.2` PO-boundary correction, filed after a run
-  of small gate-fix movements surfaced repeated PO-permission friction.
-  Drafted `gov_po_2_po_visibility_and_bounded_authorship` (ARCHITECTURE, one
-  new DRAFT document, opened at `relay/NXS-LOCAL-0002-gov-po-2-visibility.json`,
-  ready for an engineer) and `gov_po_2_implementation` (IMPLEMENTATION,
-  blocked until the first is FROZEN by the Product Owner). Predecessor
-  `gov_po_1_local_relay_protocol` **MERGED** PR #120 (relay#15, now closed).
-  Predecessor `gov_po_1_gate_4_issue_close_path` **MERGED** PR #118.
+- **Checkpoint:** 2026-09-08, `gov_po_2_po_visibility_and_bounded_authorship`
+  — new `docs/design/GOV_PO_2_PO_VISIBILITY_AND_BOUNDED_AUTHORSHIP.md`
+  (**DRAFT — NOT IMPLEMENTATION AUTHORITY**, awaiting Product Owner freeze):
+  a capability-based PO boundary (observation / governance authorship /
+  engineering execution / human decision authority) closing every open
+  design question `gov_po_2_implementation` needs: `gh pr diff`/`gh run`
+  read-only commands, `docs/design/po_drafts/*.md` + a FROZEN/RATIFIED
+  status-line regex, `docs/history/INDEX.md` generator-only, a standalone
+  `scripts/repository_privacy_check.py` (not a `main.py` exception), the
+  `nexus-po-evidence-reviewer` agent. Stays `blocked` until the Product
+  Owner freezes it (council review recommended, §7 trigger (b), not
+  invoked here). Predecessor `gov_po_1_step_6_plan_po2_boundary` — PR #121
+  **OPEN**. Predecessor `gov_po_1_local_relay_protocol` **MERGED** PR #120.
   **PO §12:** `M8.3` deferred, `M7` blocked. `M8` **FROZEN 2026-09-06**.
-- **Next** (`now_next.next`): `gov_po_2_po_visibility_and_bounded_authorship`
-  — DRAFT amendment defining a capability-based PO boundary (observation /
-  governance authorship / engineering execution / human decision authority);
-  assigned to an engineer as a bootstrap consequence of the current PO gate
-  being unable to write a new `docs/design/*` contract file, not a
-  precedent. `gov_po_2_implementation` stays `upcoming`/`blocked` on that
-  freeze. `m8_3_real_environment_validation` stays `upcoming`, **deferred
-  debt**, unpaid; `m7_real_device_targeted_collect_now`/
+- **Next** (`now_next.next`): **unset** — the actual next step is the
+  Product Owner's own freeze decision on the document above, a human act;
+  `gov_po_2_implementation` is the queued candidate once that freeze lands.
+  `m8_3_real_environment_validation` stays `upcoming`, **deferred debt**,
+  unpaid; `m7_real_device_targeted_collect_now`/
   `op2_c_cp_clusterxl_adapter_scoping` stay `upcoming`/`blocked`.
   `DEV.TEST.1`/`PCP.1`/`M1`-`M6`/`M8.1`-`M8.4`/`M10.1` complete/automated_validated.
 - **OP.2.0 CLASS 2 architecture** (`docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md`):
