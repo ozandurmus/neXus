@@ -378,3 +378,66 @@ def test_gate_delegated_never_merges():
 ])
 def test_gate_merge_source_is_restricted_to_origin_and_cannot_chain(cmd):
     assert not gate.decide(_bash(cmd), "interactive", branch_lookup=lambda cwd: "gov/po-x")[0], cmd
+
+
+# --- GOV_PO_1_LOCAL_RELAY_PROTOCOL: relay/*.json Edit/Write + local_relay.py ---
+
+def test_gate_interactive_may_edit_relay_json_but_not_other_new_paths():
+    ok = {"tool_name": "Edit", "tool_input": {"file_path": "relay/NXS-LOCAL-0001-x.json"}, "cwd": str(ROOT)}
+    ok_write = {"tool_name": "Write", "tool_input": {"file_path": "relay/NXS-LOCAL-0002-y.json"}, "cwd": str(ROOT)}
+    not_relay = {"tool_name": "Edit", "tool_input": {"file_path": "relay/sub/x.json"}, "cwd": str(ROOT)}
+    not_json = {"tool_name": "Edit", "tool_input": {"file_path": "relay/x.txt"}, "cwd": str(ROOT)}
+    other_dir = {"tool_name": "Edit", "tool_input": {"file_path": "console/app.py"}, "cwd": str(ROOT)}
+    assert gate.decide(ok, "interactive")[0]
+    assert gate.decide(ok_write, "interactive")[0]
+    assert not gate.decide(not_relay, "interactive")[0]
+    assert not gate.decide(not_json, "interactive")[0]
+    assert not gate.decide(other_dir, "interactive")[0]
+
+
+def test_gate_delegated_never_edits_relay_json():
+    for tool in ("Edit", "Write", "NotebookEdit"):
+        allowed, _ = gate.decide({"tool_name": tool, "tool_input": {"file_path": "relay/NXS-LOCAL-0001-x.json"}}, "delegated")
+        assert not allowed
+
+
+def test_gate_existing_governance_paths_still_exact_match_only():
+    # AC-5: relay/*.json is a new pattern ALONGSIDE GOVERNANCE_PATHS, not a
+    # widening of it -- the eight existing exact-match paths are unchanged.
+    assert len(gate.GOVERNANCE_PATHS) == 8
+    almost = {"tool_name": "Edit", "tool_input": {"file_path": "project/roadmap.json.bak"}, "cwd": str(ROOT)}
+    assert not gate.decide(almost, "interactive")[0]
+
+
+@pytest.mark.parametrize("cmd", [
+    "python3 scripts/local_relay.py status --file relay/x.json",
+    "py scripts/local_relay.py status --file relay/x.json",
+    ".venv/bin/python scripts/local_relay.py status --file relay/x.json",
+    "python3 scripts/local_relay.py validate --file relay/x.json",
+    "py scripts/local_relay.py validate --file relay/x.json",
+])
+def test_gate_allows_local_relay_status_and_validate_in_both_forms(cmd):
+    for form in ("delegated", "interactive"):
+        allowed, reason = gate.decide(_bash(cmd), form, branch_lookup=lambda cwd: "gov/po-x")
+        assert allowed, (form, cmd, reason)
+
+
+@pytest.mark.parametrize("cmd", [
+    'python3 scripts/local_relay.py create --role po --start /tmp/nexus_po_x.json',
+    'py scripts/local_relay.py append --file relay/x.json --role po --marker RELAY_NOTE --subject x --text y --next engineer',
+])
+def test_gate_local_relay_create_and_append_are_interactive_only(cmd):
+    assert gate.decide(_bash(cmd), "interactive", branch_lookup=lambda cwd: "gov/po-x")[0], cmd
+    assert not gate.decide(_bash(cmd), "delegated")[0], cmd
+
+
+def test_gate_local_relay_prefix_requires_the_named_subcommand():
+    # A bare invocation with no allowlisted subcommand (or an unrecognized
+    # one) falls through to the same "not in the PO allowlist" refusal as
+    # any other command -- create/append/status/validate are the only
+    # subcommands ever granted, never the bare script.
+    bare = _bash("python3 scripts/local_relay.py")
+    unknown_sub = _bash("python3 scripts/local_relay.py delete --file relay/x.json")
+    for form in ("delegated", "interactive"):
+        assert not gate.decide(bare, form)[0]
+        assert not gate.decide(unknown_sub, form)[0]
