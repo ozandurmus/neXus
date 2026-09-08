@@ -74,16 +74,24 @@
       },
       "seq": 1,
       "timestamp": "2026-09-08T08:12:41Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "RELAY_NOTE",
+      "seq": 2,
+      "subject": "gov_po_1_gate_5_worktree_management merged",
+      "text": "Implemented AC-1..AC-7: git worktree add allowlisted interactive-only with base-ref (origin/<ref>) and -b/-B branch (feature/*) restrictions; git worktree list allowlisted both forms, read-only; remove/prune/move stay default-denied. tests/test_gov_po_role.py 105 passed (10 new). Full regression: 2597 passed, 25 skipped, 2 pre-existing unrelated failures (test_dev_0_5b_auth_consumer_canonical_config.py's .venv site-packages DLP scan). git diff --check clean. Repository privacy gate: 5 pre-existing findings only (data/, data/.support_hmac.key, logs/, and two pre-existing CREDENTIAL_LITERAL matches already committed at 4533edb). Project-state updated (build_history.json, roadmap.json, CURRENT_STATE.md, AI_HANDOVER.md, docs/history/INDEX.md). Merged to main via 328c824 per the standing relay#13 merge decision -- no separate merge RELAY_DECISION needed.",
+      "timestamp": "2026-09-08T08:31:19Z"
     }
   ],
   "id": "NXS-LOCAL-0006",
   "movement": "GOV_PO_1_GATE_5_WORKTREE_MANAGEMENT",
-  "next_actor": "engineer",
+  "next_actor": null,
   "refs": [
     "scripts/nexus_po_tool_gate.py",
     "tests/test_gov_po_role.py"
   ],
   "schema_version": 1,
-  "status": "OPEN",
-  "updated_at": "2026-09-08T08:12:41Z"
+  "status": "CLOSED",
+  "updated_at": "2026-09-08T08:31:19Z"
 }
