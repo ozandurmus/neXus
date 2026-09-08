@@ -1710,7 +1710,7 @@
         },
         {
           "id": "availability_rule",
-          "label": "An entry/tab renders iff its shell ships the surface; no disabled, greyed or 'coming soon' placeholder anywhere -- Direction FROZEN as four predicates (P1 surface eligibility / P2 entity applicability / P3 evidence state / P4 future authorization); the prototype implements the shell-integrity conjunct only -- later movements implement the rest",
+          "label": "An entry/tab renders iff its shell ships the surface; no disabled, greyed or 'coming soon' placeholder anywhere -- Direction FROZEN as four predicates (P1 surface eligibility / P2 entity applicability / P3 evidence state / P4 future authorization). M11 (relay/NXS-LOCAL-0022, 2026-09-08): P1/D1 is now the sole, explicit render/not-render gate, formalized as the client-side mirror of the M10.2 resolver's stage 0 union tag (static/navigation_ui.js::navigationResolveSurface), with a cross-product regression test proving D2..D7 never change it (AC-CS-2). P2 (entity applicability) and P3 (evidence state) stay pending at the CONTENT level -- they are structurally forbidden from ever gating render (AC-CS-2/AC-CS-25/AC-CS-33) so 'closing' them can only ever mean a content-level case (e.g. a D-NAV13 NOT_APPLICABLE device tab), which needs a real-device -> logical-entity-type classifier that does not exist yet and is out of this movement's own producer scope; tracked as future work. P4 stays pending/out-of-scope (no D7/RBAC model exists).",
           "state": "pending",
           "weight": 2
         },

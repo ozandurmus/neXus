@@ -404,6 +404,7 @@ function renderComplianceSubjectList() {
     host.querySelectorAll("[data-compliance-subject]").forEach(node => {
         node.addEventListener("click", () => {
             complianceSelectedSubjectId = node.dataset.complianceSubject || "__fleet__";
+            if (complianceSelectedSubjectId !== "__fleet__") setSharedEntityId(complianceSelectedSubjectId);
             renderComplianceSubjectList();
             renderComplianceContent();
         });

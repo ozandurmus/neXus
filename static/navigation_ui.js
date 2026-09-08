@@ -11,7 +11,7 @@
 // The architecture is settled; this file is still the PROTOTYPE of it. Freezing
 // the contract authorized no implementation: movement M2 owes the four
 // accessibility requirements (contract §13.1 / AC-A11Y-1..4) before this
-// prototype may merge.
+// prototype may merge. M2 merged (PR #85).
 //
 // Loads second (right after app_core.js) so every feature module and
 // app_bootstrap.js can read the model; it owns no payload and renders no
@@ -19,15 +19,23 @@
 // event callbacks (the NAVIGATION_PUBLIC_SURFACE allowance in
 // tests/test_frontend_module_composition.py).
 //
-// What this file actually implements is D-NAV6a's THIRD conjunct only: an entry
-// is rendered iff the shell it is running in actually ships the panel it points
-// at. That is a last-mile shell-integrity check, and the frozen contract is
-// explicit that it is NOT the complete capability rule (§7 there): product-surface
-// eligibility, selected-entity applicability, evidence/capability state and
-// (future) authorization are four separate predicates, and a shipped <section>
-// is not evidence that a backend contract exists. The rule below is sufficient
-// for today's two shells and will need the other three predicates once
-// capability projection (PCP.3), enrollment and schedules exist.
+// M11: `navigationResolveSurface()` below is the client-side mirror of
+// `utils/capability_state_resolver.py`'s stage 0 (`resolve_union_tag`,
+// contract 5.0/AC-CS-2) -- it is now the sole, explicit, named gate for both
+// the rail and the device-tab strip, replacing the previous ad hoc boolean.
+// It still answers only D1's third P1 conjunct (does this shell actually
+// ship the panel) -- the only conjunct a browser can observe; a shipped
+// <section> is not evidence that a backend contract exists, and D1's other
+// two conjuncts are enforced upstream by what the composed script even
+// ships. Selected-entity applicability (P2/D2) and evidence/capability state
+// (P3/D3-D6) are separate predicates the frozen contract (§7 there, and
+// docs/design/CAPABILITY_STATE_VOCABULARY_AND_PRESENTATION.md §3.3) is
+// explicit must NEVER gate render/not-render (AC-CS-2, AC-CS-25, AC-CS-33,
+// D-NAV13/AC-CS-26) -- they may only affect a rendered surface's *content*.
+// No content-level P2/P3 case is wired in this file: doing so honestly needs
+// a real-device -> logical-entity-type classifier that does not exist yet
+// (relay/NXS-LOCAL-0022 RELAY_NOTE) and is explicitly future work, not a
+// silent completion or a silent drop of that obligation.
 //
 // D-NAV6b is the part that must survive: a capability with no product surface is
 // omitted entirely — never drawn disabled, greyed or "coming soon". A capability
@@ -204,8 +212,52 @@ function navigationShellHasPanel(moduleId) {
 }
 
 
+// The device-tab strip's own shell-integrity check: its panels are addressed
+// by element id (`NAVIGATION_DEVICE_TABS[].panel`), not by the
+// `data-module-panel` attribute the rail's roots use -- a different DOM
+// convention for the same P1 "is the panel actually shipped" question.
+function navigationShellHasElementId(elementId) {
+    if (!safe(elementId)) return false;
+    return Boolean(document.getElementById(elementId));
+}
+
+
+// M11 -- the client-side mirror of `utils/capability_state_resolver.py`'s
+// stage 0 (`resolve_union_tag`, contract 5.0): `D1` is the ONLY input any
+// render/not-render decision reads, and it is a tri-state union tag, never a
+// bare boolean. `navigationShellHasPanel` above supplies D1's third P1
+// conjunct (the shell actually ships the panel) -- the only conjunct a
+// browser can observe; the other two (a declared shipped contract exists,
+// this shell is permitted to expose it) are enforced upstream, by what the
+// composed script even ships. A malformed/missing moduleId fails closed to
+// SURFACE_ELIGIBILITY_UNRESOLVABLE (case V-D) rather than being coerced to
+// SURFACE_ABSENT, exactly as the Python resolver does.
+const NAV_SURFACE_PRESENT = "SURFACE_PRESENT";
+const NAV_SURFACE_ABSENT = "SURFACE_ABSENT";
+const NAV_SURFACE_ELIGIBILITY_UNRESOLVABLE = "SURFACE_ELIGIBILITY_UNRESOLVABLE";
+
+function navigationSurfaceEligibility(id, { byElementId = false } = {}) {
+    if (!safe(id)) return NAV_SURFACE_ELIGIBILITY_UNRESOLVABLE;
+    const present = byElementId ? navigationShellHasElementId(id) : navigationShellHasPanel(id);
+    return present ? NAV_SURFACE_PRESENT : NAV_SURFACE_ABSENT;
+}
+
+
+// Stage 0's union tag (contract 4.1/5.0), mirrored client-side: RESOLVED only
+// on SURFACE_PRESENT (case V-C); every other D1 value -- including the
+// unresolvable one -- is OMITTED and renders nothing (cases V-A/V-B/V-D). No
+// later fact (P2/P3/P4 -- entity applicability, evidence state, authorization)
+// is ever consulted here, and none may overturn this (AC-CS-2, AC-CS-25).
+function navigationResolveSurface(id, options = {}) {
+    const d1 = navigationSurfaceEligibility(id, options);
+    if (d1 === NAV_SURFACE_PRESENT) return { tag: "RESOLVED" };
+    if (d1 === NAV_SURFACE_ABSENT) return { tag: "OMITTED", reason: "NOT_SHIPPED" };
+    return { tag: "OMITTED", reason: NAV_SURFACE_ELIGIBILITY_UNRESOLVABLE };
+}
+
+
 function navigationEntryAvailable(entry) {
-    return navigationShellHasPanel(entry?.module);
+    return navigationResolveSurface(entry?.module).tag === "RESOLVED";
 }
 
 
@@ -439,7 +491,7 @@ function renderDeviceTabs() {
     if (!strip) return;
 
     strip.innerHTML = NAVIGATION_DEVICE_TABS
-        .filter(entry => document.getElementById(entry.panel))
+        .filter(entry => navigationResolveSurface(entry.panel, { byElementId: true }).tag === "RESOLVED")
         .map((entry, index) => `
             <button id="config${entry.tab.charAt(0).toUpperCase()}${entry.tab.slice(1)}Tab"
                     class="config-tab${index === 0 ? " active" : ""}" type="button"
