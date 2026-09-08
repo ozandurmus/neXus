@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "current_build": "gov_po_3_push_hook_baseline_scoping",
+  "current_build": "op1_failover_plan_compiler_contract_draft",
   "current_track": "PCP.x",
   "progress_contract": "Weighted acceptance-criterion completion. Percentages describe the declared roadmap, not calendar time or delivery ETA.",
   "tracks": [
@@ -140,16 +140,16 @@
   "now_next": {
     "horizon_contract": "NOW is exactly one build. NEXT is exactly one. Everything else is an `upcoming` row carrying its own true status: planned = AFTER, blocked = waiting on a named external gate, deferred = consciously postponed. `now.build` must equal the newest project/build_history.json record -- utils.project_plan enforces it.",
     "now": {
-      "build": "gov_po_3_push_hook_baseline_scoping",
-      "title": "GOV.PO.3 -- push-hook baseline scoping: block only genuinely new privacy findings",
-      "goal": "Make the orchestrated-engineer pre-push privacy-gate hook (scripts/nexus_engineer_tool_gate.py) baseline-aware -- block only findings genuinely new relative to the movement's own base commit, never pre-existing repository debt -- fixing the real bug found live during GOV.PO.3 AC-5 demonstration 1 that would otherwise block every future orchestrated push.",
-      "status": "automated_validated",
+      "build": "op1_failover_plan_compiler_contract_draft",
+      "title": "OP.1 -- failover plan compiler and dry-run: contract draft",
+      "goal": "Produce the DRAFT OP.1 contract (docs/history/phase/OP_1_FAILOVER_PLAN_COMPILER_AND_DRY_RUN.md): a write-free failover plan compiler and dry-run over existing readiness/preflight evidence for classic Check Point ClusterXL, structurally non-authorizing, with op_degraded_verdict presented to the Product Owner for one freeze decision.",
+      "status": "in_progress",
       "started": "2026-09-08",
       "completed": "2026-09-08",
       "notes": [
-        "Full detail: project/build_history.json's gov_po_3_push_hook_baseline_scoping record.",
-        "Relay: relay/NXS-LOCAL-0014-push-hook-baseline-scoping.json (Product Owner priority, 2026-09-08, found live during relay/NXS-LOCAL-0012's GOV.PO.3 AC-5 demonstration 1).",
-        "A small, independent corrective fix inserted ahead of gov_po_2_implementation (below) in build order -- part of the ongoing GOV.PO.3 initiative's own AC-5 demonstration sequence, not a change to its scope. AC-5's remaining demonstrations and AC-8-for-the-demo are still pending, unchanged by this record; see gov_po_3_approved_movement_orchestration_ac3's own build_history.json entry for that status."
+        "Full detail: project/build_history.json's op1_failover_plan_compiler_contract_draft record.",
+        "Runs in its own worktree/branch (feature/op1-failover-plan-compiler-contract) in parallel with GOV.PO.3 and M10.2, per the Product Owner's 2026-09-08 sequencing direction (failover-side gaps are priority). This movement itself changes no code, test or FROZEN document -- design + bookkeeping only.",
+        "Freeze of the DRAFT contract and the op_degraded_verdict decision are a separate Product Owner action, not part of this record."
       ]
     },
     "next": {
@@ -306,9 +306,11 @@
       {
         "build": "OP.1",
         "title": "Failover plan compiler and dry-run",
-        "status": "planned",
+        "status": "in_progress",
         "notes": [
-          "Still write-free. Open decision op_degraded_verdict decides at this freeze."
+          "DRAFT contract produced 2026-09-08: docs/history/phase/OP_1_FAILOVER_PLAN_COMPILER_AND_DRY_RUN.md (status line: DRAFT -- awaiting Product Owner freeze). Defines the FailoverPlan/DryRunReport artifacts for classic CP ClusterXL only, reusing utils.operate.adapter/eligibility types read-only (never constructing ActionCoordinator, never calling check_precondition()/execute_once()/observe_postcondition()). Still write-free.",
+          "Presents op_degraded_verdict to the Product Owner as one decision at this freeze (recommendation unchanged: keep DEGRADED_PROCEED_WITH_RISK structurally unreachable until real-field calibration) plus the consequence of each option for the plan/dry-run vocabulary. op_four_eyes/op_emergency_evac/op_continuity_tolerance/op_aa_vsls_scope confirmed non-blocking for this freeze.",
+          "Implementation slicing plan included in the contract doc (OP.1.S1, one slice, 5 non-test files, 8 acceptance criteria) so implementation can start immediately after freeze."
         ]
       },
       {
