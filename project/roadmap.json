@@ -149,7 +149,7 @@
       "notes": [
         "Full detail: project/build_history.json's gov_po_3_orchestrator_observability record.",
         "Relay: relay/NXS-LOCAL-0013-orchestrator-observability.json (Product Owner direction, 2026-09-08, immediately after AC-3/AC-5 demonstration 1 of gov_po_3_approved_movement_orchestration_ac3 confirmed engineer.log stayed empty until process exit under the prior non-streaming invocation).",
-        "Predecessor gov_po_3_approved_movement_orchestration_ac3 (AC-3 only; AC-5's real demonstrations still not run, tracked on relay/NXS-LOCAL-0007) is unaffected -- this movement only adds observability around the same, already-frozen dispatch/status/stop/merge-lock logic.",
+        "Predecessor gov_po_3_push_hook_baseline_scoping (a small, independent corrective fix to the pre-push privacy-gate hook, found live during the same AC-5 demonstration sequence) and predecessor gov_po_3_approved_movement_orchestration_ac3 (AC-3 only; AC-5's real demonstrations still not run, tracked on relay/NXS-LOCAL-0007) are both unaffected -- this movement only adds observability around the same, already-frozen dispatch/status/stop/merge-lock logic.",
         "gov_po_2_implementation (below) is unrelated, separate scope -- this movement does not touch it."
       ]
     },
