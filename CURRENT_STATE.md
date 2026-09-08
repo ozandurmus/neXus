@@ -5,26 +5,25 @@ see `AGENTS.md`/`AI_START_HERE.md`. **Predecessor build detail lives in
 `project/build_history.json`** (structured, newest-first) and its linked
 docs under `docs/history/`; `docs/history/INDEX.md` is the one-line timeline.
 
-- **Checkpoint:** 2026-09-08, `gov_po_1_gate_4_issue_close_path` — adds
-  `gh issue close` to the interactive-form PO tool gate allowlist (an
-  inline `--comment` must carry one of the five relay markers; a close
-  with no comment is unconditional) so a Product Owner can close a
-  resolved relay issue without a manual terminal command; delegated form
-  still denies it entirely. Filed and closed from relay #14.
-  Predecessor `gov_po_1_gate_3_agent_tool_council_path` **MERGED** PR #116
-  (Agent-tool council-seat exception); history backfilled via relay #16.
+- **Checkpoint:** 2026-09-08, `gov_po_1_local_relay_protocol` — new
+  `relay/*.json` + `scripts/local_relay.py` (DRAFT,
+  `docs/design/LOCAL_RELAY_PROTOCOL.md`): a git-tracked, turn-enforced local
+  transport for same-machine PO/engineer coordination, reusing
+  `NEXUS_AGENT_RELAY_PROTOCOL.md`'s markers and `GOV.SESSION.1`'s report
+  schema verbatim. Does not amend or replace the GitHub-based relay.
+  `scripts/nexus_po_tool_gate.py` extended (`relay/*.json` Edit/Write;
+  `local_relay.py status`/`validate` both forms, `create`/`append`
+  interactive-only) without touching any existing `GOVERNANCE_PATHS` entry.
+  Predecessor `gov_po_1_gate_4_issue_close_path` **MERGED** PR #118.
   Predecessor `m10_1_registry_evidence_reconciliation_projection` **MERGED**
   PR #117 (`M10`'s first slice: `D4`/`RI-2` registry↔evidence projection).
-  Predecessor `gov_po_1_step_5_first_plan_episode` **MERGED** PR #113: first
-  Phase A `PLAN` episode, sliced `M10`, chose the M10.1 build above as `next`.
   Predecessor `M9` **MERGED** PR #104. `M8.4` **MERGED** PR #101.
   **PO §12:** `M8.3` deferred, `M7` blocked. `M8` **FROZEN 2026-09-06**.
 - **Next** (`now_next.next`): **unset** — sizing/authorizing the next
   actionable build (e.g. `M10.2`, whose own `upcoming` row already says it
   needs its own `PLAN`/`REVIEW` episode) is a Product Owner function, not
   decided by an engineering build. `m8_3_real_environment_validation` stays
-  `upcoming`,
-  **deferred debt**, unpaid; `m7_real_device_targeted_collect_now`/
+  `upcoming`, **deferred debt**, unpaid; `m7_real_device_targeted_collect_now`/
   `op2_c_cp_clusterxl_adapter_scoping` stay `upcoming`/`blocked`.
   `DEV.TEST.1`/`PCP.1`/`M1`-`M6`/`M8.1`-`M8.4`/`M10.1` complete/automated_validated.
 - **OP.2.0 CLASS 2 architecture** (`docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md`):
@@ -61,38 +60,38 @@ test-enforced boundaries.
 | 4 — policy / deployment / remediation | prohibited | — |
 ## Active build
 
-**`m10_1_registry_evidence_reconciliation_projection`** (`M10`'s first
-slice, `D4` producer) — new `utils/registry_evidence_reconciliation.py`:
-`resolve_d4()` derives the five frozen values from classified registry/
-evidence sides; `detect_ri2()` implements `RI-2` (`AC-7`). Blocked, then
-resolved: no canonical id spans `device_id` and the merged evidence model's
-`entity_id` (`console/registry_targets.py` already refuses to translate
-between them); posted `RELAY_QUESTION` on relay #11 rather than inventing a
-join. Product Owner `RELAY_DECISION` (option 4): ship with no join input —
-`utils/device_identity_relationships.py` stays unread, its `mapping_scope`-
-widening question stays undecided. Only `REGISTRY_DISABLED` and
-`RECONCILIATION_UNKNOWN` are reachable in production today; `RECONCILED`/
-`EVIDENCE_ONLY`/`REGISTRY_ONLY` are implemented and unit-tested but need a
-future movement's authorized canonical id. No resolver/UI/navigation/payload
-wiring — scoped to the module plus its test file. Full detail:
-`project/build_history.json`.
+**`gov_po_1_local_relay_protocol`** — see checkpoint above for what shipped.
+`next_actor` turn ownership is enforced by the tool itself, not convention
+(a wrong-role `append` is rejected); the appender states `--next` explicitly
+rather than every append auto-flipping, since a real exchange is not strict
+ping-pong — an engineer's `RELAY_ACK` on a `SESSION_START` does not hand the
+turn back. `append` re-reads and byte-compares the file immediately before
+writing, failing closed on a concurrent edit (optimistic, not a durable
+lock). Full detail: `project/build_history.json`.
+
+Predecessor — **`gov_po_1_gate_4_issue_close_path`** — **MERGED** PR #118:
+`gh issue close` added to the interactive PO gate allowlist (marker
+discipline on any inline comment); delegated form still denies it.
+
+Predecessor — **`m10_1_registry_evidence_reconciliation_projection`**
+(`M10`'s first slice, `D4` producer) — **MERGED** PR #117: new
+`utils/registry_evidence_reconciliation.py` (`resolve_d4()`/`detect_ri2()`).
+No canonical id spans `device_id` and the merged evidence model's
+`entity_id` today (`RELAY_DECISION` #11, option 4: ship with no join input);
+only `REGISTRY_DISABLED`/`RECONCILIATION_UNKNOWN` are reachable in
+production until a future movement supplies an authorized canonical id.
 
 Predecessor — **`gov_po_1_step_5_first_plan_episode`** (`GOV.PO.1` §10 step
-5) — **MERGED** PR #113: first interactive Phase A `PLAN` episode. Chose
-`M10.1` as `next`; sliced `M10` into `M10.1`/`M10.2`/`M10.3` (§7 precedent);
-ranked the backlog; filed `dlp_scanner_venv_exclusion` and
-`project_state_wording_drift_reconciliation` (verified, not fixed).
-Predecessors — its own two PO gate corrections, both **MERGED**: `GOV_PO_1_GATE_1` (PR #114) and `GOV_PO_1_GATE_2` (PR #115); `T1`–`T7` still do not exercise packet emission (step 6).
-
-Predecessor — **`gov_po_1_step_4_direction_record_ratification`** —
-**MERGED** PR #112: the record is **RATIFIED** (contract §4.1). Phase A
-authorized (relay #5); Phase B closed until T1–T6.
-
-Predecessor — **`m9_enrollment_preview_confirmation_ui`** (`M9`) —
-**MERGED** PR #104: local-loopback manual-endpoint enrollment; candidate-id
-enrollment stays server-refused pending `M10`'s `D4` — closed above.
+5) — **MERGED** PR #113: first interactive Phase A `PLAN` episode; chose
+`M10.1` as `next`, sliced `M10` into `M10.1`/`M10.2`/`M10.3` (§7 precedent).
+Predecessor **`m9_enrollment_preview_confirmation_ui`** (`M9`) — **MERGED**
+PR #104: local-loopback manual-endpoint enrollment; candidate-id enrollment
+stays server-refused pending `M10`'s `D4`.
 
 Predecessors, all **MERGED**, detail in `project/build_history.json`:
+`gov_po_1_gate_1_command_safety_correction` (PR #114),
+`gov_po_1_gate_2_self_sync_capability` (PR #115),
+`gov_po_1_step_4_direction_record_ratification` (PR #112, `RATIFIED`),
 `gov_po_1_step_3_docs_reconciliation` (PR #111),
 `gov_po_1_step_2_implementation` (PR #110),
 `gov_po_1_role_migration_contract` (PR #109, contract FROZEN),
@@ -102,7 +101,8 @@ Predecessors, all **MERGED**, detail in `project/build_history.json`:
 `m8_evidence_host_key_fingerprint_not_persisted` (PR #103),
 `gov_session_1_unified_packet` (`GOV.SESSION.1A`, PR #102, protocol-v2
 `NEXUS_SESSION_PACKET`), `collector_target_selection_seam` (`M5`, PR #94),
-`local_control_plane_metadata_store` (`M4`, PR #93).
+`local_control_plane_metadata_store` (`M4`, PR #93). `T1`–`T7` still do not
+exercise packet emission (step 6).
 
 ## Predecessor — `M3`
 **`nav_3_capability_state_vocabulary`** — COMPLETE / FROZEN (PO approved
@@ -176,11 +176,11 @@ Concurrency budget stays at 1 per vendor pending real-env evidence.
 ## Automated test baseline
 
 ```
+Local relay protocol: targeted 67 passed; targeted + gov_po_role (90) +
+  gov_session_transfer + gov_relay_protocol + architecture-convergence
+  sweep 309 passed.
 M10.1: targeted 56 passed; targeted + PCP.1/CON.1/CON.2/M6/architecture-
   convergence sweep 308 passed, metadata_warnings empty.
-M9 rounds 1+2: 247 targeted+affected passed; full regression 2359 passed,
-  2 pre-existing unrelated .venv DLP-scanner false positives (now filed:
-  backlog `dlp_scanner_venv_exclusion`). Render harness + Playwright green.
 Earlier predecessor build detail lives only in project/build_history.json.
 ```
 ## Known xfails
