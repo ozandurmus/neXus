@@ -1,0 +1,33 @@
+{
+  "_comment": "GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md (FROZEN) engineer permission profile. Loaded only via `claude -p --settings .claude/nexus-engineer.settings.json` by scripts/orchestrator.py when it spawns an engineer process in its own worktree -- never used by an interactively-started engineer session, which needs no such profile. Default-allow (normal dev tools: Read/Edit/Write/Bash/Git), distinct from .claude/nexus-po.settings.json's default-deny shape -- see scripts/nexus_engineer_tool_gate.py's own module docstring for the two narrow boundaries this profile actually gates.",
+  "permissions": {
+    "deny": [
+      "Bash(git push --force *)",
+      "Bash(git push -f *)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 scripts/nexus_engineer_tool_gate.py --event pre"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 scripts/nexus_engineer_tool_gate.py --event post"
+          }
+        ]
+      }
+    ]
+  }
+}

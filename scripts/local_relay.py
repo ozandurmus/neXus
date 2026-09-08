@@ -38,6 +38,32 @@ reported to the invoking session, which still needs the human's explicit
 written authorization before acting on any `RELAY_DECISION`-class content,
 exactly as today.
 
+Canonical-location resolver (GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md,
+FROZEN, section 3.6): a git worktree checks out its own copy of `relay/`,
+so a bare relative `--file`/`--dir` argument resolved against an engineer
+worktree's own cwd would silently read/write that worktree's copy instead
+of the one physical file the Product Owner's session reads -- never the
+live channel. Two environment variables let a caller omit `--dir`/`--file`
+entirely and always resolve to the one canonical location the orchestrator
+sets when it spawns an engineer process, with no change to behavior when
+neither is set (today's cwd-relative default, unchanged byte-for-byte):
+`NEXUS_CANONICAL_RELAY_DIR` (an absolute path) is `create`'s `--dir`
+default when `--dir` is omitted; `NEXUS_RELAY_FILE` (an absolute path to
+one exact relay file) is `append`/`status`/`validate`/`watch`'s `--file`
+default when `--file` is omitted. An explicit `--dir`/`--file` argument
+always wins over either variable.
+
+Shared append lock: `append`'s existing optimistic re-read-and-compare
+(below) never corrupts or silently loses an entry, but leaves a losing
+concurrent writer to be retried by whoever called it -- fine when a human
+is present, not when the orchestrator and an unattended engineer process
+can both legitimately touch the same canonical file for the same movement
+while both are alive. `append` now wraps its whole read-validate-build-
+write sequence in a real advisory file lock (`fcntl.flock` on POSIX,
+`msvcrt.locking` on Windows -- stdlib only, no third-party dependency) on
+a sidecar `<file>.lock`, bounded by a wait timeout; the existing hash
+compare stays as defense-in-depth underneath it, unchanged.
+
 Offline, synchronous. No network, daemon, credential, or device access.
 Exit codes: 0 success, 1 invalid/rejected (schema violation, wrong-turn
 append, concurrent-write conflict, append to a CLOSED movement), 2 usage
@@ -62,7 +88,31 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import gov_session_transfer as gst  # noqa: E402
 
+try:
+    import fcntl as _fcntl
+except ImportError:  # pragma: no cover -- Windows
+    _fcntl = None
+try:
+    import msvcrt as _msvcrt
+except ImportError:  # pragma: no cover -- POSIX
+    _msvcrt = None
+
 EXIT_OK, EXIT_INVALID, EXIT_USAGE, EXIT_TIMEOUT = 0, 1, 2, 3
+
+#: GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md section 3.6: an absolute
+#: canonical relay directory / exact relay file, set by the orchestrator in
+#: every engineer process it spawns so every worktree resolves to the one
+#: physical location the Product Owner's own session reads -- never a
+#: per-worktree copy. Unset in every session that does not opt in (the
+#: Product Owner's own interactive session, today); default behavior is
+#: then byte-for-byte unchanged from before this variable existed.
+ENV_CANONICAL_RELAY_DIR = "NEXUS_CANONICAL_RELAY_DIR"
+ENV_RELAY_FILE = "NEXUS_RELAY_FILE"
+
+#: How long `append` waits for the shared file lock before giving up.
+#: Module-level so tests can shrink it rather than waiting out the real
+#: default against a genuinely held lock.
+APPEND_LOCK_TIMEOUT = 30.0
 
 #: `watch` bounds (AC-1/AC-2): a floor on --interval and a ceiling on
 #: --timeout so it can never approximate an unbounded background daemon.
@@ -269,6 +319,21 @@ def _next_id(relay_dir: Path) -> int:
     return best + 1
 
 
+def _resolve_relay_dir(explicit: str | None) -> Path:
+    """`create --dir`'s effective value: the explicit flag always wins;
+    otherwise `NEXUS_CANONICAL_RELAY_DIR` when set; otherwise today's
+    unchanged cwd-relative default."""
+    return Path(explicit or os.environ.get(ENV_CANONICAL_RELAY_DIR) or "relay")
+
+
+def _resolve_relay_file(explicit: str | None) -> str | None:
+    """`append`/`status`/`validate`/`watch --file`'s effective value: the
+    explicit flag always wins; otherwise `NEXUS_RELAY_FILE` when set;
+    otherwise None (caller reports a usage error, exactly as an absent
+    required argument would have before this resolver existed)."""
+    return explicit or os.environ.get(ENV_RELAY_FILE)
+
+
 def _dump(obj: dict) -> str:
     return json.dumps(obj, indent=2, sort_keys=True, ensure_ascii=False) + "\n"
 
@@ -286,6 +351,57 @@ def _atomic_write(path: Path, text: str) -> None:
         except OSError:
             pass
         raise
+
+
+class FileLockTimeout(LocalRelayError):
+    """A real advisory lock on a relay file could not be acquired in time --
+    a genuinely concurrent writer (not merely the wrong-turn/hash checks
+    above) is holding it."""
+
+
+class _FileLock:
+    """Real, cross-platform (stdlib-only) advisory exclusive lock on a
+    sidecar `<path>.lock` file, bounded by `timeout` seconds. `fcntl.flock`
+    on POSIX, `msvcrt.locking` on Windows; degrades to a no-op (documented,
+    not silent -- see module docstring) on a platform with neither, which
+    leaves the existing optimistic hash-compare in `append` as the only
+    concurrency guard, exactly as before this class existed."""
+
+    def __init__(self, target: Path, timeout: float = 30.0) -> None:
+        self._lock_path = Path(str(target) + ".lock")
+        self._timeout = timeout
+        self._fh = None
+
+    def __enter__(self) -> "_FileLock":
+        self._lock_path.parent.mkdir(parents=True, exist_ok=True)
+        self._fh = open(self._lock_path, "a+b")
+        deadline = time.monotonic() + self._timeout
+        while True:
+            try:
+                if _fcntl is not None:
+                    _fcntl.flock(self._fh.fileno(), _fcntl.LOCK_EX | _fcntl.LOCK_NB)
+                elif _msvcrt is not None:
+                    self._fh.seek(0)
+                    _msvcrt.locking(self._fh.fileno(), _msvcrt.LK_NBLCK, 1)
+                else:  # pragma: no cover -- no known stdlib primitive on this platform
+                    break
+                return self
+            except OSError:
+                if time.monotonic() >= deadline:
+                    self._fh.close()
+                    raise FileLockTimeout(
+                        f"could not acquire lock {self._lock_path} within {self._timeout}s")
+                time.sleep(0.05)
+
+    def __exit__(self, *exc_info: object) -> None:
+        try:
+            if _fcntl is not None:
+                _fcntl.flock(self._fh.fileno(), _fcntl.LOCK_UN)
+            elif _msvcrt is not None:  # pragma: no cover -- exercised on Windows only
+                self._fh.seek(0)
+                _msvcrt.locking(self._fh.fileno(), _msvcrt.LK_UNLCK, 1)
+        finally:
+            self._fh.close()
 
 
 def _load_json_file(path: Path) -> Any:
@@ -323,7 +439,7 @@ def _cmd_create(args: argparse.Namespace) -> int:
         print(f"error: {'; '.join(errors)}", file=sys.stderr)
         return EXIT_INVALID
 
-    relay_dir = Path(args.dir)
+    relay_dir = _resolve_relay_dir(args.dir)
     next_id = _next_id(relay_dir)
     full_id = f"{ID_PREFIX}{next_id:04d}"
     slug = _slugify(args.slug or start_obj["movement"])
@@ -408,7 +524,20 @@ def _build_entry(args: argparse.Namespace, seq: int, timestamp: str) -> tuple[di
 
 
 def _cmd_append(args: argparse.Namespace) -> int:
-    path = Path(args.file)
+    resolved = _resolve_relay_file(args.file)
+    if not resolved:
+        print(f"error: --file is required (or set {ENV_RELAY_FILE})", file=sys.stderr)
+        return EXIT_USAGE
+    path = Path(resolved)
+    try:
+        with _FileLock(path, timeout=APPEND_LOCK_TIMEOUT):
+            return _cmd_append_locked(args, path)
+    except FileLockTimeout as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return EXIT_INVALID
+
+
+def _cmd_append_locked(args: argparse.Namespace, path: Path) -> int:
     try:
         raw_before = path.read_text(encoding="utf-8")
     except OSError as exc:
@@ -486,7 +615,11 @@ def _cmd_append(args: argparse.Namespace) -> int:
 # ---------------------------------------------------------------------------
 
 def _cmd_status(args: argparse.Namespace) -> int:
-    path = Path(args.file)
+    resolved = _resolve_relay_file(args.file)
+    if not resolved:
+        print(f"error: --file is required (or set {ENV_RELAY_FILE})", file=sys.stderr)
+        return EXIT_USAGE
+    path = Path(resolved)
     try:
         obj = _load_json_file(path)
     except LocalRelayError as exc:
@@ -511,7 +644,11 @@ def _cmd_status(args: argparse.Namespace) -> int:
 
 
 def _cmd_validate(args: argparse.Namespace) -> int:
-    path = Path(args.file)
+    resolved = _resolve_relay_file(args.file)
+    if not resolved:
+        print(f"error: --file is required (or set {ENV_RELAY_FILE})", file=sys.stderr)
+        return EXIT_USAGE
+    path = Path(resolved)
     try:
         obj = _load_json_file(path)
     except LocalRelayError as exc:
@@ -543,7 +680,11 @@ def _cmd_watch(args: argparse.Namespace) -> int:
         print(f"error: --timeout must be at most {WATCH_TIMEOUT_CEILING} seconds", file=sys.stderr)
         return EXIT_USAGE
 
-    path = Path(args.file)
+    resolved = _resolve_relay_file(args.file)
+    if not resolved:
+        print(f"error: --file is required (or set {ENV_RELAY_FILE})", file=sys.stderr)
+        return EXIT_USAGE
+    path = Path(resolved)
     try:
         obj = _load_json_file(path)
     except LocalRelayError as exc:
@@ -583,12 +724,14 @@ def build_parser() -> argparse.ArgumentParser:
     p_create = sub.add_parser("create", help="open a new relay file with a SESSION_START entry")
     p_create.add_argument("--start", required=True, help="bare SESSION_START packet JSON file, or - for stdin")
     p_create.add_argument("--role", required=True, choices=ROLES)
-    p_create.add_argument("--dir", default="relay")
+    p_create.add_argument("--dir", default=None,
+                           help=f"defaults to {ENV_CANONICAL_RELAY_DIR} if set, else 'relay'")
     p_create.add_argument("--slug", default=None)
     p_create.set_defaults(func=_cmd_create)
 
     p_append = sub.add_parser("append", help="append one entry; rejected if it is not --role's turn")
-    p_append.add_argument("--file", required=True)
+    p_append.add_argument("--file", default=None,
+                           help=f"defaults to {ENV_RELAY_FILE} if set")
     p_append.add_argument("--role", required=True, choices=ROLES)
     p_append.add_argument("--marker", required=True, choices=APPENDABLE_MARKERS)
     p_append.add_argument("--subject", default=None)
@@ -605,15 +748,15 @@ def build_parser() -> argparse.ArgumentParser:
     p_append.set_defaults(func=_cmd_append)
 
     p_status = sub.add_parser("status", help="read-only summary of one relay file")
-    p_status.add_argument("--file", required=True)
+    p_status.add_argument("--file", default=None, help=f"defaults to {ENV_RELAY_FILE} if set")
     p_status.set_defaults(func=_cmd_status)
 
     p_validate = sub.add_parser("validate", help="schema-check one relay file")
-    p_validate.add_argument("--file", required=True)
+    p_validate.add_argument("--file", default=None, help=f"defaults to {ENV_RELAY_FILE} if set")
     p_validate.set_defaults(func=_cmd_validate)
 
     p_watch = sub.add_parser("watch", help="bounded, read-only poll for next_actor to flip to --for")
-    p_watch.add_argument("--file", required=True)
+    p_watch.add_argument("--file", default=None, help=f"defaults to {ENV_RELAY_FILE} if set")
     p_watch.add_argument("--for", dest="for_role", required=True, choices=ROLES)
     p_watch.add_argument("--interval", type=int, default=WATCH_INTERVAL_DEFAULT)
     p_watch.add_argument("--timeout", type=int, default=WATCH_TIMEOUT_DEFAULT)

@@ -503,3 +503,49 @@ def test_gate_allows_worktree_list_in_both_forms():
 def test_gate_worktree_remove_prune_move_stay_denied_in_both_forms(cmd):
     for form in ("delegated", "interactive"):
         assert not gate.decide(_bash(cmd), form, branch_lookup=lambda cwd: "gov/po-x")[0], (form, cmd)
+
+
+# --- GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION: orchestrator.py dispatch -----
+
+@pytest.mark.parametrize("cmd", [
+    "python3 scripts/orchestrator.py status --movement NXS-LOCAL-0001",
+    "py scripts/orchestrator.py status --movement NXS-LOCAL-0001",
+    ".venv/bin/python scripts/orchestrator.py status",
+])
+def test_gate_allows_orchestrator_status_in_both_forms(cmd):
+    for form in ("delegated", "interactive"):
+        allowed, reason = gate.decide(_bash(cmd), form, branch_lookup=lambda cwd: "gov/po-x")
+        assert allowed, (form, cmd, reason)
+
+
+@pytest.mark.parametrize("cmd", [
+    "python3 scripts/orchestrator.py start --movement NXS-LOCAL-0001",
+    "py scripts/orchestrator.py stop --movement NXS-LOCAL-0001",
+])
+def test_gate_orchestrator_start_stop_are_interactive_only(cmd):
+    assert gate.decide(_bash(cmd), "interactive", branch_lookup=lambda cwd: "gov/po-x")[0], cmd
+    assert not gate.decide(_bash(cmd), "delegated")[0], cmd
+
+
+def test_gate_orchestrator_merge_lock_is_never_granted_to_the_po_role():
+    # merge-lock is the engineer profile's own internal primitive
+    # (scripts/nexus_engineer_tool_gate.py); it is never added to either
+    # PO allowlist, in either form.
+    cmd = "python3 scripts/orchestrator.py merge-lock acquire --movement NXS-LOCAL-0001"
+    for form in ("delegated", "interactive"):
+        assert not gate.decide(_bash(cmd), form)[0]
+
+
+# --- GOV_PO_2 section 3.1's boundary-safe fix, applied to the whole allowlist -
+
+def test_gate_boundary_safe_matching_rejects_a_near_miss_program_name():
+    # The exact defect a bare "ls" prefix had under plain str.startswith:
+    # "lsof" is a different program, not a continuation of "ls".
+    assert not gate.decide(_bash("lsof -i :8080"), "interactive")[0]
+    assert gate.decide(_bash("ls -la"), "interactive")[0]
+
+
+def test_gate_boundary_safe_matching_rejects_a_near_miss_orchestrator_subcommand():
+    cmd = "python3 scripts/orchestrator.py statuscheck --movement NXS-LOCAL-0001"
+    for form in ("delegated", "interactive"):
+        assert not gate.decide(_bash(cmd), form)[0]

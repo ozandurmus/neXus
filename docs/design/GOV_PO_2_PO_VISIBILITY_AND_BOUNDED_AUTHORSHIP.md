@@ -158,11 +158,21 @@ Restated as a closed list, not because §4 left it ambiguous but because a
 capability-based document should be explicit about what it deliberately
 does not touch: **freeze, ratification, scope expansion, any security /
 identity / credential / storage-schema boundary, real-device contact,
-waiver, deployment, and merge (governance or product, of any kind)**. No
-standing-delegation class in §4 below ever covers an item on this list; an
-agent-published `RELAY_DECISION` still requires the Product Owner's written
-authorization behind it exactly as `GOV_PO_ROLE_MIGRATION.md` §6.3 (D2–D4,
-D12) already requires. This document proposes no exception to that.
+waiver, deployment, and merge of the Product Owner assistant's own
+`gov/po-*` governance branch (`GOV_PO_ROLE_MIGRATION.md` §4.1); *originating*
+a new class of standing merge authorization for engineering movements**
+(corrected by `docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md`
+§2.1, FROZEN, 2026-09-08 — the prior text, "merge (governance or product,
+of any kind)," silently contradicted the already-operating standing merge
+authorization at `ozandurmus/nexus-agent-relay#13`). *Executing* an
+already-recorded standing merge authorization is not itself a fresh
+human-decision event — it was authorized once, in writing, per `AGENTS.md`
+"Git authority and execution law" ("Do not ask for the same permission
+again"). No standing-delegation class in §4 below ever covers an item on
+this list; an agent-published `RELAY_DECISION` still requires the Product
+Owner's written authorization behind it exactly as `GOV_PO_ROLE_MIGRATION.md`
+§6.3 (D2–D4, D12) already requires. This document proposes no exception to
+that.
 
 ## 3. Exact mechanisms (`GOV_PO_2_IMPLEMENTATION` build targets)
 
@@ -235,8 +245,19 @@ check below; delegated form is unaffected (it has no `Edit`/`Write` tool
 at all).
 
 **Status-line detection rule.** A PO-authored write must never claim
-`FROZEN` or `RATIFIED` status for the document it is writing — those are
-human-only declarations (§2.4). The repository's own status-line
+`FROZEN` or `RATIFIED` status for the document it is writing. Precisely
+(corrected by `docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md`
+§2.2, FROZEN, 2026-09-08): the PO *applying* a freeze or ratification
+decision the human already made — including writing the status word at
+the human's explicit, contemporaneous direction — is permitted
+(`GOV_PO_ROLE_MIGRATION.md` §6.3/D2); the PO *originating* such a decision
+on its own, unprompted, is forbidden. This mechanism does not loosen on
+that distinction: it denies *any* PO-authored write to `docs/design/
+po_drafts/*.md` claiming `FROZEN`/`RATIFIED`, applied-by-direction or not,
+because `po_drafts/*.md` is by construction a pre-promotion drafting area
+(§2.2 "Genuinely new") — the correction is to the prose describing the
+rule's intent, not to the mechanism below, which was already scoped
+correctly. The repository's own status-line
 convention, verified against three current documents
 (`GOV_PO_ROLE_MIGRATION.md`: `**FROZEN — PRODUCT OWNER APPROVED,
 2026-09-07**`; `GOV_SESSION_TRANSFER_PROTOCOL.md`:
@@ -430,9 +451,16 @@ closed list as §2.4, restated for emphasis because this is exactly where
 a standing delegation could be misread as broader than it is:** freeze,
 ratification, scope expansion, any security/identity/credential/
 storage-schema boundary, real-device contact, waiver, deployment, and
-merge of any kind. A `RELAY_DECISION` citing a standing-delegation class
-for one of these is an invalid authority claim regardless of the class
-name used, exactly as an unlabeled decision comment is today
+merge of the Product Owner assistant's own `gov/po-*` governance branch, or
+*originating* a new class of standing merge authorization for engineering
+movements (corrected by `docs/design/GOV_PO_3_APPROVED_MOVEMENT_
+ORCHESTRATION.md` §2.1, FROZEN, 2026-09-08, for the same reason as §2.4
+above). *Executing* an already-recorded standing merge authorization (e.g.
+`ozandurmus/nexus-agent-relay#13`) is not itself a fresh human-decision
+event, per `AGENTS.md` "Git authority and execution law." A `RELAY_DECISION`
+citing a standing-delegation class for one of the still-excluded items
+above is an invalid authority claim regardless of the class name used,
+exactly as an unlabeled decision comment is today
 (`NEXUS_AGENT_RELAY_PROTOCOL.md` §1).
 
 **Re-confirmation requirement.** A standing delegation is not a permanent
