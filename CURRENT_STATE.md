@@ -9,18 +9,16 @@ docs under `docs/history/`; `docs/history/INDEX.md` is the one-line timeline.
   module-rebind leak: S7's `test_evaluator_performs_no_socket_io_and_
   imports_no_collector` popped `panorama.preflight_collector`/`checkpoint.
   preflight_collector` from `sys.modules` without restoring, leaving S6's
-  later re-import bound to a fresh module object while its already-
-  imported `collect_member` still resolved globals against the original
-  one — defeating S6's patches, real HTTP calls when S7 ran first
-  (frontend-rendering shared-state-leak guard family). Fixed with a
-  save/restore `try/finally` + regression test; test-infra only, no
-  product code changed. Detail: `project/build_history.json`. Predecessor
-  `gov_po_3_approved_movement_orchestration_ac3` **MERGED**, **AC-3 only**
-  (`relay/NXS-LOCAL-0007`); predecessors `gov_po_1_gate_5_worktree_
-  management`/`gov_po_2_po_visibility_and_bounded_authorship` **MERGED**
-  PR #122, `docs/design/GOV_PO_2_PO_VISIBILITY_AND_BOUNDED_AUTHORSHIP.md`
-  **FROZEN — PRODUCT OWNER APPROVED, 2026-09-08**. **PO §12:** `M8.3`
-  deferred, `M7` blocked. `M8` **FROZEN 2026-09-06**.
+  later re-import rebind against a fresh module object while
+  `collect_member` still resolved globals against the original one —
+  defeating S6's patches, real HTTP calls when S7 ran first (frontend-
+  rendering shared-state-leak guard family). Fixed with a save/restore
+  `try/finally` + regression test; test-infra only. Detail: `project/
+  build_history.json`. Predecessors `gov_po_3_push_hook_baseline_scoping`,
+  `gov_po_3_approved_movement_orchestration_ac3` **AC-3 only**,
+  `gov_po_1_gate_5_worktree_management`/`gov_po_2_po_visibility_and_
+  bounded_authorship` all **MERGED** PR #122 (its doc **FROZEN — PO
+  APPROVED, 2026-09-08**). **PO §12:** `M8.3` deferred, `M7` blocked.
 - **Next** (`now_next.next`): `gov_po_2_implementation` — unrelated and
   unchanged by this movement; not yet started. `m8_3_real_environment_
   validation` stays `upcoming`, **deferred debt**, unpaid; `m7_real_device_
@@ -178,9 +176,11 @@ Concurrency budget stays at 1 per vendor pending real-env evidence.
 ## Automated test baseline
 
 ```
-gov_po_3_approved_movement_orchestration_ac3: 57 new/changed tests (detail:
-project/build_history.json). Full suite: 2662 passed, 25 skipped, 2 failed
--- both pre-existing/unrelated (confirmed via git stash against clean main).
+op0b_s7_s6_test_order_isolation: full one-shot regression re-run after
+merging origin/main (DEV.TEST.1): 2670 passed, 25 skipped, 2 failed -- both
+pre-existing/unrelated self-referential 'password='/'PASSWORD:' prose
+matches inside project/build_history.json (documented since gov_po_1_
+local_relay_watch_command). S7+S6 both orders: 110 passed each.
 Earlier predecessor build detail lives only in project/build_history.json.
 ```
 ## Known xfails
