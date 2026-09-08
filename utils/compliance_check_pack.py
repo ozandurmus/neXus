@@ -44,8 +44,15 @@ _NUMERIC_OPS = frozenset({"gte", "lte", "count_gte", "count_lte"})
 _LIST_OPS = frozenset({"in", "not_in"})
 
 SOURCE_NAMESPACES = frozenset({
-    "current_configuration", "unified", "crypto_facts", "alignment",
+    "current_configuration", "unified", "crypto_facts", "alignment", "primitive",
 })
+
+# "primitive" (CE.2, docs/design/COMPLIANCE_CHECK_ENGINE.md section 5, decision
+# D8) resolves against configuration.command_primitives.PRIMITIVE_REGISTRY
+# output keyed by primitive_id, e.g. "primitive.cp_gaia_show_version_all.bytes"
+# — never a raw command string. Threaded into subject_evidence only when the
+# caller supplies primitive_facts_by_subject (utils.compliance_posture); an
+# opt-in --compliance-probe run is the only current producer.
 
 # CE.1 fast-follow: `unified.interfaces` / `unified.routes` are merged-inventory
 # collections whose rows carry network identity (interface addresses / names,
