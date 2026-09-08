@@ -1,0 +1,76 @@
+{
+  "actor": "po",
+  "marker": "SESSION_START",
+  "report": {
+    "acceptance_criteria": [
+      "AC-1: read project/backlog.json id orchestrator_interactive_dashboard_app IN FULL before doing anything else. It is the complete, Product-Owner-decided bounded spec (prior-art survey, recommended architecture, the AMENDMENT into a PO+Orchestrator workbench, and the final 'PO SCOPE BOUNDARY' section with IN SCOPE / DEFERRED lists). This SESSION_START does not restate it -- treat the IN SCOPE section as build-it and DEFERRED as report-if-tempted-via-RELAY_QUESTION, not as open questions for another design round.",
+      "AC-2: post one short technical-design RELAY_NOTE on this relay BEFORE writing any code, covering exactly three things the backlog note leaves as implementation detail: (a) the action-id registry design -- what identifies a registered relay-write action, how it stores the exact operation/argument-set/working-directory it resolves to, and how staleness is detected ('if the underlying command has changed since the id was issued, the stale approval must not apply'); (b) the relay-write schema each dashboard action appends -- RELAY_DECISION vs. a new lighter marker, justified against docs/design/LOCAL_RELAY_PROTOCOL.md's existing marker set (do not invent an incompatible file format); (c) the session-token + Origin/CSRF scheme for the localhost-bound server. Wait for a Product Owner acknowledgment RELAY_NOTE/RELAY_DECISION on this relay before proceeding past this note -- the same two-phase pattern relay/NXS-LOCAL-0007 itself used (design reviewed once, then implementation), except here the design is scoped to these three technical questions only, not the whole feature (already decided in the backlog note).",
+      "AC-3: once AC-2 is acknowledged, implement per the backlog note's IN SCOPE section: the five-section main screen (Awaiting you / Running movements / PO agenda / Integration queue / Recently completed), the six-tab detail panel (Summary / Live activity / Conversation / Changes / Evidence / History), movement cards with three distinct fields -- process status, work stage, last observed activity -- never inferred from git dirtiness alone and never a fabricated progress percentage, and the structured executable-request card (action id, exact operation, working directory, expected effect, blocker source, with the three-way routing: already-authorized -> auto-route to engineer with no PO question; genuinely new decision -> show and record to relay; platform/policy block -> show the real blocker, no button pretends to override it).",
+      "AC-4: read+relay-write only, as decided in the backlog note's scope boundary -- every card/button ends by appending to the movement's own relay file (a RELAY_DECISION, a queued note, or an equivalent structured instruction); the dashboard backend never executes git/gh/shell directly. 'Automatic routing of an already-authorized action' and a 'run this' button are the SAME mechanism (append the instruction to the relay so the next dispatch/resume picks it up) -- build it once.",
+      "AC-5: message-delivery UI copy defaults to 'Saved -> queued for next resume' as the normal, achievable outcome -- never implies a live session-control channel this repository does not have (orchestrator.py's --resume is a fresh respawn into the same worktree, not a reconnect to a running session -- relay/NXS-LOCAL-0015's own finding).",
+      "AC-6: reuse scripts/orchestrator.py's existing status-computation functions and scripts/local_relay.py directly -- no new scheduler, no new state model, no third-party/npm dependency; stdlib backend (http.server/wsgiref), vanilla JS frontend, bound to 127.0.0.1 only, matching relay/NXS-LOCAL-0013's own precedent.",
+      "AC-7: targeted tests for the new stage-derivation logic, the action-id registry/staleness check, and the config read/write endpoint, in isolation (no browser test harness needed -- test the data/API layer, same testing philosophy as relay/NXS-LOCAL-0013's own watch-loop tests).",
+      "AC-8: acceptance demonstration per the backlog note: track several concurrent movements through the UI, answer a pending design question through it, deliver a message to the correct worker, route an authorized command request through it, resume the affected work, open its produced UI -- without manual chat-to-chat copying or git commands. Record real command/UI evidence (screenshots or terminal output), not a description.",
+      "AC-9: validation and state: targeted tests green; because this is new scope touching scripts/orchestrator.py's status functions, run the full one-shot regression once (DEV.TEST.1); project-state bookkeeping in this PR."
+    ],
+    "baseline": {
+      "authority": "project/backlog.json id orchestrator_interactive_dashboard_app is this movement's complete authority -- an external design review ('Astra'), a Product Owner counter-review, and a final Product-Owner-decided scope boundary, all dated 2026-09-08. docs/design/PRODUCT_DIRECTION_RECORD.md section 14 (reasoning-tier/dispatch-pacing defaults, also 2026-09-08) applies to how this movement itself is run if it ever needs to reference orchestrator dispatch behavior, though it dispatches no sub-work of its own.",
+      "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+      "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+      "sequencing": "Independent of the CI-privacy-gate and background-task-exit-race movements dispatched alongside it -- new file surface (a dashboard subcommand + assets), no shared-file overlap."
+    },
+    "context_not_loaded": [
+      "everything outside orchestrator.py's status/state surface and the new dashboard code"
+    ],
+    "deployment_direction": "local validation only",
+    "git": {
+      "base": "origin/main",
+      "lane": "feature/orchestrator-interactive-dashboard-app"
+    },
+    "invariants": [
+      "Session token + Origin/CSRF checking is IN SCOPE from the first version, not deferred -- relay-write buttons are a real action, not merely a read",
+      "No direct git/gh/shell execution from the dashboard backend -- relay-write only (AC-4)",
+      "No fabricated progress percentage, liveness, or delivery-state data ever -- show 'unknown' honestly when there is no evidence",
+      "No new scheduler, no new state model, no third-party/npm dependency (AC-6)"
+    ],
+    "merge_gate": "AC-2's design note needs an explicit Product Owner acknowledgment before AC-3 implementation begins (a design checkpoint, not a full stop on the whole movement). Once AC-3 onward is green, standing relay#13 applies: self-merge, report via RELAY_NOTE.",
+    "movement_type": "ARCHITECTURE",
+    "objective": "Build the interactive PO + Orchestrator workbench the Product Owner scoped and bounded in project/backlog.json id orchestrator_interactive_dashboard_app -- a human-action inbox, live movement tracking with a real detail panel, message delivery, and authorized-command routing, all read+relay-write only.",
+    "output_contract": [
+      "A short technical-design RELAY_NOTE (AC-2), acknowledged before AC-3 begins",
+      "scripts/orchestrator.py dashboard subcommand + backend + frontend assets (AC-3 through AC-6)",
+      "Targeted tests (AC-7)",
+      "Real acceptance-demonstration evidence (AC-8)",
+      "Project-state bookkeeping in this PR",
+      "SESSION_CLOSE on this relay file (absolute path)"
+    ],
+    "recommended_reasoning": {
+      "reason": "New architecture on top of an already-fully-scoped backlog spec -- AC-2's three technical-design questions (action-id registry, relay-write schema, CSRF scheme) are genuine design decisions needing real reasoning; AC-3 onward is deterministic once AC-2 is acknowledged.",
+      "tier": "Sonnet 5, extended thinking (high) for AC-2's design note; Sonnet 5, normal for AC-3 onward implementation"
+    },
+    "requirements": [
+      "Do not restate or redesign the backlog note's already-decided IN SCOPE/DEFERRED boundary -- implement it"
+    ],
+    "risks": [
+      "If AC-2's design questions turn out to need a genuinely new file format or dependency to answer well, stop and report via RELAY_QUESTION rather than silently expanding scope."
+    ],
+    "scope": {
+      "in": [
+        "Everything listed IN SCOPE in the backlog note's 'PO SCOPE BOUNDARY 2026-09-08' section",
+        "AC-2's three technical-design questions"
+      ],
+      "out": [
+        "Everything listed DEFERRED in that same section -- direct git/gh/shell execution buttons, real Evidence-tab content, embedded terminal, desktop packaging, drag-and-drop editor, advanced charting, any true live-session message channel"
+      ]
+    },
+    "validation_plan": [
+      "Targeted tests (AC-7)",
+      "Full one-shot regression once (AC-9)",
+      "The real acceptance demonstration (AC-8)",
+      "git diff --check",
+      "privacy gate once at PR time"
+    ]
+  },
+  "seq": 1,
+  "timestamp": "2026-09-08T16:40:52Z"
+}
