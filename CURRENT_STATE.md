@@ -8,39 +8,33 @@ docs under `docs/history/`; `docs/history/INDEX.md` is the one-line timeline.
 - **Checkpoint:** 2026-09-08, `m10_2_capability_state_resolver_core` — new
   `utils/capability_state_resolver.py` implements resolver stages 0-3 of
   `docs/design/CAPABILITY_STATE_VOCABULARY_AND_PRESENTATION.md` section 5
-  (union tag, `CX1`/`RI-1`/`RI-2` contradiction/inconsistency gate reusing
+  (union tag, `CX1`/`RI-1`/`RI-2` gate reusing
   `utils.registry_evidence_reconciliation.detect_ri2` for `RI-2`, the
   twelve-rank primary ladder, the seven qualifiers) as pure typed-input
-  functions — no I/O, no device contact, no consumer wired yet
-  (stages 4-5 are still open; `D5`'s producer is still `M12`). 134 new
-  tests; `tests/test_m10_1_registry_evidence_reconciliation.py` +
+  functions — no I/O, no device contact, no consumer wired yet (stages 4-5
+  open; `D5`'s producer is still `M12`). 134 new tests;
+  `tests/test_m10_1_registry_evidence_reconciliation.py` +
   `tests/test_architecture_convergence.py` unaffected (78 passed). Ran in
   its own worktree in parallel with GOV.PO.3/OP.1/`M10.3`; merged
-  `origin/main` twice (once mid-PR) before completing the merge. Detail:
-  `project/build_history.json`. Predecessor
-  `m10_3_entity_and_vendor_support_producers` **MERGED** — `M10`'s third
-  slice: `utils/capability_applicability.py` (`resolve_d2`) and
-  `utils/capability_vendor_support.py` (`resolve_d3`), closed-table
-  producers for `D2`/`D3`, not yet wired to this resolver. Predecessor
-  `gov_po_3_orchestrator_observability` **MERGED** — extended already-frozen
-  `scripts/orchestrator.py` with real-time visibility: streaming `claude -p`
-  output, an `engineer.summary.log` parser, `status`'s new `last_activity`
-  field, and a read-only `orchestrator watch` dashboard. Predecessor
-  `gov_po_3_push_hook_baseline_scoping` **MERGED** — makes the pre-push
-  privacy-gate hook baseline-aware. Predecessor
-  `gov_po_3_approved_movement_orchestration_ac3` **AC-3 only, MERGED** — its
-  own AC-5 demonstrations are still pending (`relay/NXS-LOCAL-0007`).
-  Predecessor `gov_po_1_gate_5_worktree_management` **MERGED**. Predecessor
-  `gov_po_2_po_visibility_and_bounded_authorship` **MERGED** PR #122:
-  `docs/design/GOV_PO_2_PO_VISIBILITY_AND_BOUNDED_AUTHORSHIP.md` is
-  **FROZEN — PRODUCT OWNER APPROVED, 2026-09-08**, specifying
-  `gov_po_2_implementation`'s scope. **PO §12:** `M8.3` deferred, `M7`
+  `origin/main` three times (twice mid-PR). Detail:
+  `project/build_history.json`. Predecessors, all **MERGED**:
+  `gov_po_3_resume_canonical_relay_access_fix` (PR #130, `--resume`
+  canonical-relay-access fix), `m10_3_entity_and_vendor_support_producers`
+  (PR #131, `D2`/`D3` producers), `gov_po_3_orchestrator_observability`
+  (PR #129, streaming `orchestrator` output + `watch`),
+  `gov_po_3_push_hook_baseline_scoping` (PR #127, baseline-aware pre-push
+  privacy gate), `gov_po_3_approved_movement_orchestration_ac3` (AC-3 only;
+  AC-5 demos pending, `relay/NXS-LOCAL-0007`),
+  `gov_po_1_gate_5_worktree_management`,
+  `gov_po_2_po_visibility_and_bounded_authorship` (PR #122,
+  `docs/design/GOV_PO_2_PO_VISIBILITY_AND_BOUNDED_AUTHORSHIP.md` **FROZEN —
+  PRODUCT OWNER APPROVED, 2026-09-08**). **PO §12:** `M8.3` deferred, `M7`
   blocked. `M8` **FROZEN 2026-09-06**.
-- **Next** (`now_next.next`): `gov_po_2_implementation` — unrelated and
-  unchanged by this movement; not yet started. `m8_3_real_environment_
-  validation` stays `upcoming`, **deferred debt**, unpaid; `m7_real_device_
-  targeted_collect_now`/`op2_c_cp_clusterxl_adapter_scoping` stay
-  `upcoming`/`blocked`. `DEV.TEST.1`/`PCP.1`/`M1`-`M10.3` complete/automated_validated.
+- **Next** (`now_next.next`): `gov_po_2_implementation` — unrelated,
+  unchanged, not yet started. `m8_3_real_environment_validation` stays
+  `upcoming`/deferred debt; `m7_real_device_targeted_collect_now`/
+  `op2_c_cp_clusterxl_adapter_scoping` stay `upcoming`/`blocked`.
+  `DEV.TEST.1`/`PCP.1`/`M1`-`M10.3` complete/automated_validated.
 - **OP.2.0 CLASS 2 architecture** (`docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md`):
   **CONTRACT FROZEN 2026-09-04**; `OP.2.A`/`OP.2.B` IMPLEMENTED; `OP.2.1` CP
   command gate DRAFTED — CLASS 2 still has **no member**, no adapter,
@@ -176,10 +170,14 @@ Concurrency budget stays at 1 per vendor pending real-env evidence.
 ## Automated test baseline
 
 ```
-m10_3_entity_and_vendor_support_producers: targeted 107 passed;
-architecture-convergence 22 passed unchanged. New, previously unimported
-modules plus their own test file only -- no full regression (DEV.TEST.1:
-last evidence holds).
+m10_2_capability_state_resolver_core: targeted
+tests/test_m10_2_capability_state_resolver.py 134 passed; affected
+tests/test_m10_1_registry_evidence_reconciliation.py +
+tests/test_architecture_convergence.py 78 passed; post-merge regression
+tests/test_orchestrator.py 78 passed (gov_po_3_resume_canonical_relay_access_fix's
+own predecessor evidence: full one-shot suite 2699 passed, 25 skipped, 2
+failed -- both pre-existing/unrelated DLP self-check false positive; not
+re-run here, DEV.TEST.1 last-evidence-holds). git diff --check clean.
 Earlier predecessor build detail lives only in project/build_history.json.
 ```
 ## Known xfails
