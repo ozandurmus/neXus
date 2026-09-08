@@ -312,7 +312,21 @@ def _spawn_engineer(
     env = dict(os.environ)
     env[lr.ENV_CANONICAL_RELAY_DIR] = str(canonical_relay_dir)
     env[lr.ENV_RELAY_FILE] = str(relay_file)
+    # AC-1/AC-2/AC-3 (relay/NXS-LOCAL-0015): with --permission-prompts none
+    # there is no human to answer a Read/Edit/Write-tool permission prompt
+    # for a path outside the worktree, so any such prompt is denied
+    # automatically -- and, once denied, stays denied for the rest of the
+    # session, no retries. A fresh dispatch only ever appeared to work
+    # because the engineer session happened to reach the canonical relay
+    # file through a Bash-invoked scripts/local_relay.py call, which this
+    # per-tool directory allowlist does not gate; nothing guarantees an
+    # engineer session -- fresh or resumed -- will choose Bash over its own
+    # Read/Edit tools for a "read the relay file" instruction. --add-dir
+    # pre-authorizes exactly the canonical relay directory for every tool,
+    # identically for a fresh dispatch and a resume, so access no longer
+    # depends on which tool the session happens to pick.
     argv = ["claude", "-p", ENGINEER_PROMPT, "--settings", str(profile_path),
+            "--add-dir", str(canonical_relay_dir),
             "--permission-prompts", "none", "--max-budget-usd", str(max_budget_usd)]
     if resume_session_id:
         argv += ["--resume", resume_session_id]
