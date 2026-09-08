@@ -181,11 +181,10 @@
       {
         "build": "m8_3_real_environment_validation",
         "title": "M8.3 -- Product-Owner-gated real-environment validation of the first-contact producer",
-        "status": "deferred",
+        "status": "real_env_validated",
         "notes": [
-          "Deferred to backlog by explicit Product Owner decision, 2026-09-07 (contract section 12 amendment; project/backlog.json: m8_3_real_environment_validation). No new code. Executes the one bounded, read-only command M8.3 prepared but did not run (`py main.py --identity-first-contact <device_id>`) against exactly one Product-Owner-named registry device_id, under explicit authorization -- corporate laptop / controlled environment, matching AI_START_HERE.md 'Real-environment procedure'.",
-          "Measures the actually observable CP config evidence-retention lower bound/window (frozen M8 contract \u00a76/\u00a79) -- report UNKNOWN/INSUFFICIENT_EVIDENCE if it cannot be established from the real run, never inferred -- which determines whether CONTRADICTORY_EVIDENCE detection can ever be judged buildable. Closes M8.3 toward REAL_ENV_VALIDATED/DONE. M7 stays blocked until this step produces a genuinely real-environment-validated relationship -- no automated fixture or synthetic relationship may ever satisfy that gate, and M8.4's own AUTOMATED_VALIDATED, MERGED completion does not change this.",
-          "2026-09-08, first Phase A PLAN episode: this row LEFT now_next.next and stays here as retained deferred debt, per PRODUCT_DIRECTION_RECORD.md DR-9c (a deferred human validation is tracked durably while independent authorized work continues) and section 6's finding that a deferred row is not an executable NEXT. Nothing about its own status, authorization or gate changed: it is still deferred by the explicit Product Owner decision of 2026-09-07, it still requires an explicitly authorized bounded real-environment run, and it still gates M7. Choosing M10.1 as NEXT does not pay this debt and must never be described as having done so."
+          "RESOLVED 2026-09-08: the bounded read-only command ran for real, Product-Owner-executed on their own Windows machine (`py main.py --identity-first-contact 65aca68e9bd54ebc8fea9fd8face81db`), against a real Check Point ClusterXL member (endpoint 192.168.60.94, FW-CKP-GARANTIDMZWEB-1) discovered via a real `--only cp` run against MDS 10.230.88.11. `outcome: NEW`, `relationship_id: e4671bc45e5e49e2bf9257d32b3fa067` -- a proven device_id -> collector entity_id relationship. Full detail: project/backlog.json id m8_3_real_environment_validation.",
+          "M7 is now UNBLOCKED to start (implementation not yet begun -- unblocking is not the same as M7 being done). M12 still additionally needs M7 itself completed, not merely unblocked."
         ]
       },
       {
@@ -193,7 +192,7 @@
         "title": "M12 -- per-device / per-capability schedules (D5 producer)",
         "status": "planned",
         "notes": [
-          "Prerequisites M7 and M10; M7 is blocked on M8.3's real-environment evidence, so M12 inherits that block and is not reachable before the deferred debt is paid. Owns the D5 capability-policy producer that CAPABILITY_STATE_VOCABULARY_AND_PRESENTATION.md keeps at POLICY_UNKNOWN today.",
+          "Prerequisites M7 and M10. M10 complete (M10.1-M10.3, merged). M8.3's real-environment evidence is now paid (2026-09-08), unblocking M7 to start -- M12 still needs M7 itself completed (not merely unblocked) before it is reachable. Owns the D5 capability-policy producer that CAPABILITY_STATE_VOCABULARY_AND_PRESENTATION.md keeps at POLICY_UNKNOWN today.",
           "Constraints already frozen: a ten-minute interval floor, default-disabled, editing gated on C-D7; D5 is never derived from LifecycleState.EXCLUDED, Device Registry DISABLED, or the global scheduler flag."
         ]
       },
@@ -201,9 +200,9 @@
         "build": "m7_real_device_targeted_collect_now",
         "title": "M7 -- real device-targeted Collect now",
         "goal": "Console-submitted config_refresh_cp device_id targeting resolves to a real collector entity_id and actually contacts the device -- functional per-device Collect now.",
-        "status": "blocked",
+        "status": "planned",
         "notes": [
-          "BLOCKED: M8.4 (M6 resolver consumption) is now AUTOMATED_VALIDATED and MERGED (PR #101, 3fd424d0753e63ebca44d0fca9f4805d102e5349), but M7 still stays blocked until at least one M8.3 relationship is genuinely REAL_ENV_VALIDATED (docs/history/phase/M8_FIRST_CONTACT_TRUST_AND_IDENTITY_EVIDENCE_PRODUCER_ARCHITECTURE.md section 9, unamended by section 12's narrow M8.4-sequencing amendment) -- no automated fixture or synthetic relationship may ever satisfy that gate, and M8.4 opening its own admission gate for a genuinely identity-resolved target does not by itself make config_refresh_cp functional for a real device (no entity_id-substitution wiring exists yet; that is M7's own scope). Not started, not authorized. Sequence: M8.1 (complete) -> M8.2 (complete) -> M8.3 (AUTOMATED_VALIDATED; real-environment validation deferred to backlog, project/backlog.json m8_3_real_environment_validation) -> M8.4 (AUTOMATED_VALIDATED) -> M7 (blocked on M8.3 real-env evidence)."
+          "UNBLOCKED 2026-09-08: M8.4 (M6 resolver consumption) was already AUTOMATED_VALIDATED and MERGED (PR #101); M8.3's real-environment validation (docs/history/phase/M8_FIRST_CONTACT_TRUST_AND_IDENTITY_EVIDENCE_PRODUCER_ARCHITECTURE.md section 9) is now genuinely REAL_ENV_VALIDATED (project/backlog.json m8_3_real_environment_validation, relationship_id e4671bc45e5e49e2bf9257d32b3fa067). Not started, not yet scoped as its own movement -- entity_id-substitution wiring for config_refresh_cp against a real device is still M7's own scope to build. Sequence: M8.1 (complete) -> M8.2 (complete) -> M8.3 (REAL_ENV_VALIDATED) -> M8.4 (AUTOMATED_VALIDATED) -> M7 (unblocked, not started)."
         ]
       },
       {

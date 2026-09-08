@@ -32,9 +32,11 @@ docs under `docs/history/`; `docs/history/INDEX.md` is the one-line timeline.
   deferred, `M7` blocked. `M8` **FROZEN 2026-09-06**.
 - **Next** (`now_next.next`): `gov_po_2_implementation` — unrelated and
   unchanged by this movement; not yet started. `m8_3_real_environment_
-  validation` stays `upcoming`, **deferred debt**, unpaid; `m7_real_device_
-  targeted_collect_now`/`op2_c_cp_clusterxl_adapter_scoping` stay
-  `upcoming`/`blocked`. `DEV.TEST.1`/`PCP.1`/`M1`-`M10.1` complete/automated_validated.
+  validation` **REAL_ENV_VALIDATED 2026-09-08** — real relationship proven
+  (`relationship_id e4671bc45e5e49e2bf9257d32b3fa067`), debt paid;
+  `m7_real_device_targeted_collect_now` now **unblocked**, not yet started.
+  `op2_c_cp_clusterxl_adapter_scoping` stays `upcoming`/`blocked`.
+  `DEV.TEST.1`/`PCP.1`/`M1`-`M11` complete/automated_validated/real_env_validated.
 - **OP.2.0 CLASS 2 architecture** (`docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md`):
   **CONTRACT FROZEN 2026-09-04**; `OP.2.A`/`OP.2.B` IMPLEMENTED; `OP.2.1` CP
   command gate DRAFTED — CLASS 2 still has **no member**, no adapter,
@@ -141,9 +143,9 @@ a narrower question never promoted toward B2.
 needs to (1) size/authorize `M10.2` or another candidate and (2) decide
 whether `utils/device_identity_relationships.py`'s `mapping_scope` may
 widen beyond `CLASS_0_CP_CONFIG_TARGET_SELECTION_ONLY` to give `D4` a real
-join — `RELAY_DECISION` #11 left that undecided. `M8.3` stays `deferred`
-(see "Real-environment validation owed") and `M7` stays blocked until it
-runs; `M10.1` pays none of that debt. `operator_assertion` stays unaccepted.
+join — `RELAY_DECISION` #11 left that undecided. `M8.3` is now
+`real_env_validated` (2026-09-08, see "Real-environment validation owed")
+and `M7` is unblocked (not yet started). `operator_assertion` stays unaccepted.
 `op2_c_cp_clusterxl_adapter_scoping` stays `upcoming`/blocked; `OP.2.D`'s
 console flow is expected on the `PCP.4` device/HA tab, never a second one.
 
@@ -157,13 +159,13 @@ console flow is expected on the `PCP.4` device/HA tab, never a second one.
 | `OP.2` controlled failover execution | architecture FROZEN; readiness no longer blocks (`OP.2.1b`); CP ClusterXL adapter (`OP.2.C`), its real `ClusterXLMemberSession` transport, and its real `PreflightProvider`/`EligibilityEvaluator` now all IMPLEMENTED + unit-tested, all unwired — change-management/network-security review now DRAFTED but unsigned (`docs/history/phase/OP_2_C_CHANGE_MANAGEMENT_NETWORK_SECURITY_REVIEW.md`) — blocked on `DEPLOY.1A`/`OPERATE`, SSH trust hardening, this review's sign-off, a protected entry point | multiple |
 | `DEPLOY.1` gates | server availability (external) | external |
 | `inventory_exclusions_management_ui_backend` | stays `in_progress` **by design** — do not wire its write functions into any HTTP-reachable surface before `DEPLOY.1A`'s OIDC/RBAC boundary exists | design |
-| `M12` per-device schedules | inherits `M7`'s block, which is `M8.3`'s deferred real-environment run | deferred debt |
+| `M12` per-device schedules | needs `M7` completed (unblocked, not yet started -- `M8.3`'s real-env debt is paid) | in-scope work, not a deferral |
 
 Concurrency budget stays at 1 per vendor pending real-env evidence.
 
 ## Real-environment validation owed
 
-- **`M8.3`** — **deferred to backlog** (PO decision, §12): the one bounded, read-only `--identity-first-contact` command against a real device_id, PO-authorized; also measures real CP config evidence-retention duration. Gates `M7`, not `M8.4` (already shipped ahead of it).
+- **`M8.3`** — **PAID 2026-09-08**: real `--identity-first-contact` run, `relationship_id e4671bc45e5e49e2bf9257d32b3fa067`, Product-Owner-executed. `M7` unblocked. Full detail: `project/backlog.json` id `m8_3_real_environment_validation`.
 - **`CON.2`** — trigger a `read`-class job from the console against a real device. No new code; closes it to DONE.
 - **`OP.0a`/`OP.0c`** — real-device confirmation `ha_cluster_mode` resolves, not `"unknown"`. Fixture-drift, not a safety gate.
 - **PAN HA serial identity (`OP.0a.P7`/`OP.0b.0`)** — see "PAN HA serial evidence" above; its own movement. **`RB.3b`** — the watched single-gateway run. **`DEV.3.2`** — real multi-container-against-real-MDS Postgres advisory-lock evidence, server-blocked.
