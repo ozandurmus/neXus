@@ -5,21 +5,21 @@ see `AGENTS.md`/`AI_START_HERE.md`. **Predecessor build detail lives in
 `project/build_history.json`** (structured, newest-first) and its linked
 docs under `docs/history/`; `docs/history/INDEX.md` is the one-line timeline.
 
-- **Checkpoint:** 2026-09-08, `gov_po_3_resume_canonical_relay_access_fix`
-  — fixes `orchestrator start`'s `--resume` path so a resumed engineer session
+- **Checkpoint:** 2026-09-08, `gov_po_3_resume_canonical_relay_access_fix` —
+  fixes `orchestrator start`'s `--resume` path so a resumed engineer session
   can reliably read/write the canonical relay file outside its own worktree,
   same as a fresh dispatch (`--add-dir <canonical_relay_dir>` on every
   engineer spawn) — closes the finding from `relay/NXS-LOCAL-0012`'s
-  SESSION_CLOSE. Detail: `project/build_history.json`. Predecessor
-  `gov_po_3_push_hook_baseline_scoping` **MERGED** — separate live bug from
-  the same AC-5 demo 1. Predecessor `gov_po_3_approved_movement_orchestration_ac3`
-  **AC-3 only, MERGED** — AC-5 demonstrations still pending (`relay/NXS-LOCAL-0007`).
-  Predecessor `gov_po_1_gate_5_worktree_management` **MERGED**. Predecessor
-  `gov_po_2_po_visibility_and_bounded_authorship` **MERGED** PR #122:
-  `docs/design/GOV_PO_2_PO_VISIBILITY_AND_BOUNDED_AUTHORSHIP.md` is
-  **FROZEN — PRODUCT OWNER APPROVED, 2026-09-08**, specifying
-  `gov_po_2_implementation`'s scope. **PO §12:** `M8.3` deferred, `M7`
-  blocked. `M8` **FROZEN 2026-09-06**.
+  SESSION_CLOSE. Detail: `project/build_history.json`. Predecessors:
+  `gov_po_3_orchestrator_observability` **MERGED** (streaming engineer
+  output, `watch` dashboard); `gov_po_3_push_hook_baseline_scoping`
+  **MERGED**; `gov_po_3_approved_movement_orchestration_ac3` **AC-3 only,
+  MERGED** — AC-5's real demonstrations still pending (`relay/NXS-LOCAL-0007`).
+  `gov_po_1_gate_5_worktree_management` **MERGED**;
+  `gov_po_2_po_visibility_and_bounded_authorship` **MERGED** PR #122 —
+  `docs/design/GOV_PO_2_PO_VISIBILITY_AND_BOUNDED_AUTHORSHIP.md` is **FROZEN —
+  PRODUCT OWNER APPROVED, 2026-09-08**, specifying `gov_po_2_implementation`'s
+  scope. **PO §12:** `M8.3` deferred, `M7` blocked, `M8` **FROZEN 2026-09-06**.
 - **Next** (`now_next.next`): `gov_po_2_implementation` — unrelated and
   unchanged by this movement; not yet started. `m8_3_real_environment_
   validation` stays `upcoming`, **deferred debt**, unpaid; `m7_real_device_
@@ -179,9 +179,9 @@ Concurrency budget stays at 1 per vendor pending real-env evidence.
 ```
 gov_po_3_resume_canonical_relay_access_fix: 2 new tests,
 tests/test_orchestrator.py (detail: project/build_history.json). Full
-one-shot suite re-run: 2671 passed, 25 skipped, 2 failed -- both pre-existing/
-unrelated (known DLP self-check false positive, documented by prior builds).
-Earlier predecessor build detail lives only in project/build_history.json.
+one-shot suite re-run post-merge: see this build's own build_history.json
+evidence for the exact count. Earlier predecessor build detail lives only
+in project/build_history.json.
 ```
 ## Known xfails
 
