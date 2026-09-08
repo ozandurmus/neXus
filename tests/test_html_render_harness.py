@@ -181,6 +181,24 @@ def test_all_topologies_present(rendered_html):
     assert {"PASS", "FINDING", "UNKNOWN"} <= crypto_status
 
 
+def test_failover_readiness_data_renders_a_genuine_unsafe_row(rendered_html):
+    """op0c_uitest_fixture_verdict_diversity: the uitest bundle's
+    cp_config_telemetry.json fixture puts both vsx-cls-01 and vsx-cls-02
+    (the existing vsx-cls VSX cluster in unified.json) ACTIVE at once -- a
+    real split-brain evidence shape, mirroring
+    test_op0a_ha_readiness.py's synthetic case -- so the render harness
+    actually exercises the UNSAFE_DO_NOT_FAILOVER verdict path, not just
+    INSUFFICIENT_EVIDENCE/NOT_A_FAILOVER_UNIT."""
+    from utils.failover import VERDICT_UNSAFE
+
+    html = rendered_html.read_text(encoding="utf-8")
+    failover = _const(html, "failoverReadinessData")
+    unit = next(u for u in failover["units"] if u["unit_id"] == "vsx-cls")
+    assert unit["verdict"] == VERDICT_UNSAFE
+    assert unit["reason"] == "split_brain_observed"
+    assert failover["summary"][VERDICT_UNSAFE] >= 1
+
+
 def _dig(obj, *keys):
     for k in keys:
         obj = (obj or {}).get(k) if isinstance(obj, dict) else None
