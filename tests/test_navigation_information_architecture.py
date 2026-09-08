@@ -187,10 +187,24 @@ def test_ac3_availability_is_decided_by_shipped_surface_only():
     assert "data-module-panel" in predicate
     assert "reportMode" not in predicate
 
+    # M11: navigationEntryAvailable now goes through navigationResolveSurface
+    # (the client-side mirror of the M10.2 resolver's stage 0/union tag) —
+    # still ultimately grounded in navigationShellHasPanel, one indirection
+    # deeper so the render decision is the explicit RESOLVED/OMITTED union
+    # tag rather than a bare boolean (AC-CS-2/AC-CS-25).
     entry_rule = NAV_JS[NAV_JS.index("function navigationEntryAvailable"):]
     entry_rule = entry_rule[: entry_rule.index("\n}\n")]
-    assert entry_rule.count("navigationShellHasPanel") == 1
+    assert entry_rule.count("navigationResolveSurface") == 1
     assert "console" not in entry_rule and "static" not in entry_rule
+
+    resolve_rule = NAV_JS[NAV_JS.index("function navigationResolveSurface"):]
+    resolve_rule = resolve_rule[: resolve_rule.index("\n}\n")]
+    assert "navigationSurfaceEligibility" in resolve_rule
+
+    eligibility_rule = NAV_JS[NAV_JS.index("function navigationSurfaceEligibility"):]
+    eligibility_rule = eligibility_rule[: eligibility_rule.index("\n}\n")]
+    assert "navigationShellHasPanel" in eligibility_rule
+    assert "navigationShellHasElementId" in eligibility_rule
 
 
 def test_ac3_nothing_renders_a_disabled_or_placeholder_entry():
@@ -321,10 +335,16 @@ def test_ac9_device_scoped_views_are_tabs_not_roots():
         assert 'class="config-tabs" data-device-tabs' in shell
         assert 'data-config-tab="' not in shell
 
-    # A tab whose panel is absent is dropped, not left dead.
+    # A tab whose panel is absent is dropped, not left dead. M11: goes through
+    # navigationResolveSurface (byElementId) rather than a bare
+    # document.getElementById — see navigationShellHasElementId.
     renderer = NAV_JS[NAV_JS.index("function renderDeviceTabs"):]
     renderer = renderer[: renderer.index("\n}\n")]
-    assert "document.getElementById(entry.panel)" in renderer
+    assert "navigationResolveSurface(entry.panel, { byElementId: true })" in renderer
+
+    element_id_rule = NAV_JS[NAV_JS.index("function navigationShellHasElementId"):]
+    element_id_rule = element_id_rule[: element_id_rule.index("\n}\n")]
+    assert "document.getElementById" in element_id_rule
 
 
 # --- AC-10: authorization seam, with no RBAC simulated --------------------

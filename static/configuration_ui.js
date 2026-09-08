@@ -257,6 +257,7 @@ function renderConfigDeviceList() {
     list.querySelectorAll("[data-config-device]").forEach(item => {
         item.addEventListener("click", () => {
             configSelectedId = item.dataset.configDevice;
+            if (configSelectedId !== "__fleet__") setSharedEntityId(configSelectedId);
             renderConfigDeviceList();
             renderConfigSelected();
             switchConfigTab(configSelectedId === "__fleet__" ? "overview" : "current");

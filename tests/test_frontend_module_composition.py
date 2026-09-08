@@ -49,7 +49,13 @@ PAGE_LEVEL_CONSTS = {
 # after every file has loaded, so a forward reference to these two names is safe
 # and expected — this is the D-MOD2 "genuinely public surface" the ordering check
 # is otherwise the substitute for a window.SecurityExpert namespace.
-NAVIGATION_PUBLIC_SURFACE = {"switchModule", "savedModule"}
+#
+# M11: setSharedEntityId joins this surface for the same reason. It is also
+# owned by app_bootstrap.js (the shared entity workspace context, contract
+# §6.3), and inventory_ui.js/configuration_ui.js/compliance_ui.js each call it
+# only from inside their own deferred device/subject-selection click handlers
+# — never at load time.
+NAVIGATION_PUBLIC_SURFACE = {"switchModule", "savedModule", "setSharedEntityId"}
 
 _DEF_RE = re.compile(
     r"^(?:function\s+([A-Za-z_$][\w$]*)\s*\(|"
@@ -161,7 +167,11 @@ def test_every_top_level_function_survived_the_split():
     # navigationRootMarkup, renderPrimaryNavigation, syncNavigationActiveState,
     # renderDeviceTabs, bindNavigationEvents) — 196. M2 (NAV accessibility
     # closure, AC-A11Y-3) added app_bootstrap.js's navigationFocusActivePanelHeading
-    # — 197.
+    # — 197. M11 (D1 stage-0 wiring + shared entity workspace) added
+    # navigation_ui.js's navigationShellHasElementId, navigationSurfaceEligibility,
+    # navigationResolveSurface, and app_bootstrap.js's parsedHashRoute,
+    # savedSharedEntityId, setSharedEntityId, navigationAdoptSharedEntityId,
+    # writeActiveHashRoute — 205.
     all_defs = []
     per_file = {}
     for name in SCRIPT_MODULE_FILENAMES:
@@ -170,6 +180,6 @@ def test_every_top_level_function_survived_the_split():
         per_file[name] = fns
         all_defs.extend(fns)
 
-    assert len(all_defs) == 197, f"expected 197 top-level functions, found {len(all_defs)}"
+    assert len(all_defs) == 205, f"expected 205 top-level functions, found {len(all_defs)}"
     dupes = sorted({f for f in all_defs if all_defs.count(f) > 1})
     assert not dupes, f"functions defined in more than one module file: {dupes}"
