@@ -55,9 +55,23 @@ document.getElementById("themeToggle")?.addEventListener("click", toggleTheme);
 // Deriving the set from the model keeps every pre-existing route working and
 // makes a route impossible to forget when a shell ships a new panel.
 let activeModule = "overview";
+
+// M11 -- shared entity workspace context (contract §6.3): one selected
+// entity persists across module navigation. Extends this SAME hash +
+// localStorage route model — `#<module>[/<entityId>]` — rather than a second
+// mechanism (the recommended option in §6.3, and the routes_preserved
+// criterion's own stated design intent). `parsedHashRoute()` is the one place
+// the hash is split into its module/entity segments so both stay in sync.
+function parsedHashRoute() {
+    const raw = safe(window.location.hash).replace("#", "");
+    const slash = raw.indexOf("/");
+    if (slash === -1) return { module: raw, entityId: "" };
+    return { module: raw.slice(0, slash), entityId: raw.slice(slash + 1) };
+}
+
 function savedModule() {
     const modules = navigationModuleIds();
-    const hashModule = safe(window.location.hash).replace("#", "");
+    const hashModule = parsedHashRoute().module;
     if (modules.includes(hashModule)) {
         return hashModule;
     }
@@ -66,6 +80,70 @@ function savedModule() {
         return modules.includes(value) ? value : navigationDefaultModule();
     } catch (error) {
         return navigationDefaultModule();
+    }
+}
+
+
+const SHARED_ENTITY_STORAGE_KEY = "securityexpert-entity";
+let sharedEntityId = null;
+
+// A hash entity segment always wins when present (it is the shareable/
+// deep-linkable form §6.3 asks for); localStorage is only the last-selection
+// fallback for a bare `#<module>` route. Never coerced to a default — no
+// selection is a valid, safe value.
+function savedSharedEntityId() {
+    const fromHash = parsedHashRoute().entityId;
+    if (fromHash) return fromHash;
+    try {
+        return localStorage.getItem(SHARED_ENTITY_STORAGE_KEY) || null;
+    } catch (error) {
+        return null;
+    }
+}
+
+
+// Called once from each module's own selection handler (inventory, config,
+// compliance) — never invents a cross-module identity mapping itself; it only
+// records what the operator just picked, in whatever id space that module
+// natively uses. `navigationAdoptSharedEntityId` is what decides, safely, per
+// target module, whether that id also means something there.
+function setSharedEntityId(entityId) {
+    sharedEntityId = safe(entityId) || null;
+    try {
+        if (sharedEntityId) {
+            localStorage.setItem(SHARED_ENTITY_STORAGE_KEY, sharedEntityId);
+        } else {
+            localStorage.removeItem(SHARED_ENTITY_STORAGE_KEY);
+        }
+    } catch (error) {
+        // Standalone file:// exports may restrict storage.
+    }
+    writeActiveHashRoute();
+}
+
+
+// The one honest join point (§6.3: "an unknown or unresolvable entity
+// segment falls back to no selection rather than an error"). No canonical id
+// is confirmed to span every module's own id space today (relay/
+// NXS-LOCAL-0022 RELAY_NOTE) — so a shared id is adopted into a module's own
+// selection ONLY when that module's own already-computed id set actually
+// contains it. A miss is silently "no selection" for that module, never a
+// guessed match onto a different device (AGENTS.md opaque-identifier law).
+function navigationAdoptSharedEntityId(knownIds) {
+    if (!sharedEntityId) return null;
+    const ids = knownIds instanceof Set ? knownIds : new Set(knownIds || []);
+    return ids.has(sharedEntityId) ? sharedEntityId : null;
+}
+
+
+function writeActiveHashRoute() {
+    const nextHash = sharedEntityId ? `#${activeModule}/${sharedEntityId}` : `#${activeModule}`;
+    try {
+        if (window.location.hash !== nextHash) {
+            history.replaceState(null, "", nextHash);
+        }
+    } catch (error) {
+        // file:// history can be restricted; module switching still works.
     }
 }
 
@@ -107,21 +185,25 @@ function switchModule(nextModule, { moveFocus = false } = {}) {
     } catch (error) {
         // Standalone file exports can restrict storage.
     }
-    try {
-        if (window.location.hash !== `#${activeModule}`) {
-            history.replaceState(null, "", `#${activeModule}`);
-        }
-    } catch (error) {
-        // file:// history can be restricted; module switching still works.
-    }
+    writeActiveHashRoute();
 
     if (activeModule === "overview") renderOverviewModule();
-    if (activeModule === "inventory") renderDeviceList();
+    if (activeModule === "inventory") {
+        const adopted = navigationAdoptSharedEntityId(inventory.map(item => item.id));
+        if (adopted) selectedId = adopted;
+        renderDeviceList();
+    }
     if (activeModule === "configuration") {
+        const adopted = navigationAdoptSharedEntityId(configDevices.map(device => device.id));
+        if (adopted) configSelectedId = adopted;
         renderConfigDeviceList();
         renderConfigSelected();
     }
-    if (activeModule === "compliance") renderComplianceModule();
+    if (activeModule === "compliance") {
+        const adopted = navigationAdoptSharedEntityId(complianceSubjects.map(subject => subject.subject_id));
+        if (adopted) complianceSelectedSubjectId = adopted;
+        renderComplianceModule();
+    }
     if (activeModule === "discovery") renderDiscoveryModule();
     if (activeModule === "failover") renderFailoverModule();
     if (activeModule === "exclusions") renderExclusionsModule();
@@ -207,6 +289,7 @@ function initializeReport(payloads) {
     rebuildInventoryModel();
     rebuildConfigDevices();
     rebuildComplianceSubjects();
+    sharedEntityId = savedSharedEntityId();
 
     renderOverviewModule();
     renderComplianceModule();

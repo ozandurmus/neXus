@@ -5,14 +5,26 @@ see `AGENTS.md`/`AI_START_HERE.md`. **Predecessor build detail lives in
 `project/build_history.json`** (structured, newest-first) and its linked
 docs under `docs/history/`; `docs/history/INDEX.md` is the one-line timeline.
 
-- **Checkpoint:** 2026-09-08, `orchestrator_background_task_exit_race` —
-  `scripts/orchestrator.py`'s `ENGINEER_PROMPT` now forbids treating a
-  long-running validation command (the full pytest regression) as
-  backgroundable and raises the engineer session's own
-  `BASH_DEFAULT_TIMEOUT_MS`; `decide_start`'s resume path now detects the
-  live-observed staged-changes/`SESSION_START`/dead-pid pattern
-  (`relay/NXS-LOCAL-0018`) and injects a recovery note. Detail:
-  `project/build_history.json`. Parallel, unmerged, unaffected:
+- **Checkpoint:** 2026-09-08, `m11_shared_entity_workspace_and_availability_rule`
+  (relay/NXS-LOCAL-0022) — `static/navigation_ui.js::navigationResolveSurface`
+  is now the sole, explicit, client-side render/not-render gate for the rail
+  and device-tab strip, mirroring `utils/capability_state_resolver.py`'s
+  stage 0 (`resolve_union_tag`); a cross-product regression test
+  (`tests/test_m11_navigation_availability_wiring.py`) proves `D2`..`D7`
+  (including a `CX1`/`RI-1`/`RI-2` contradiction case) never change it
+  (`AC-CS-2`). The shared entity workspace (navigation contract §6.3) extends
+  the existing `#<module>` hash/localStorage route to
+  `#<module>[/<entityId>]`, with Inventory/Configuration/Compliance
+  publishing their selection and each module adopting a shared id only when
+  its own known-id set already contains it. Content-level `P2`/`P3` (e.g. a
+  `NOT_APPLICABLE` device tab) stays pending — RE-SCOPED, not silently
+  dropped, per this movement's own `RELAY_NOTE`: it needs a real-device ->
+  logical-entity-type classifier that does not exist
+  (`navigation_entity_type_classifier_for_content_level_p2_p3`,
+  `project/backlog.json`). Predecessor
+  `orchestrator_background_task_exit_race` **MERGED** — engineer
+  spawn/resume exit-race closure. Detail: `project/build_history.json`.
+  Parallel, unmerged, unaffected:
   `op1_failover_plan_compiler_contract_draft` (DRAFT contract
   `docs/history/phase/OP_1_FAILOVER_PLAN_COMPILER_AND_DRY_RUN.md`, awaiting
   Product Owner freeze, own worktree). Predecessor
