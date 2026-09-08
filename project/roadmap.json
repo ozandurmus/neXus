@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "current_build": "m10_1_registry_evidence_reconciliation_projection",
+  "current_build": "gov_po_1_gate_4_issue_close_path",
   "current_track": "PCP.x",
   "progress_contract": "Weighted acceptance-criterion completion. Percentages describe the declared roadmap, not calendar time or delivery ETA.",
   "tracks": [
@@ -140,16 +140,16 @@
   "now_next": {
     "horizon_contract": "NOW is exactly one build. NEXT is exactly one. Everything else is an `upcoming` row carrying its own true status: planned = AFTER, blocked = waiting on a named external gate, deferred = consciously postponed. `now.build` must equal the newest project/build_history.json record -- utils.project_plan enforces it.",
     "now": {
-      "build": "m10_1_registry_evidence_reconciliation_projection",
-      "title": "M10.1 -- registry <-> evidence reconciliation projection (D4 producer)",
-      "goal": "Implement the D4 registry-evidence reconciliation projection: one entity-scoped, derived answer to whether an entity is enrolled, observed, both, neither, or disabled, over the already-shipped Device Registry and the merged evidence model, persisting nothing new.",
+      "build": "gov_po_1_gate_4_issue_close_path",
+      "title": "GOV_PO_1_GATE_4 -- allow gh issue close from interactive PO sessions",
+      "goal": "Add 'gh issue close' to the interactive-form PO tool gate allowlist, with the same relay-marker discipline 'gh issue comment' already enforces on any inline closing comment, so a Product Owner can close a resolved relay issue without a manual terminal command.",
       "status": "automated_validated",
       "started": "2026-09-08",
       "completed": "2026-09-08",
       "notes": [
-        "Full detail: project/build_history.json's m10_1_registry_evidence_reconciliation_projection record.",
-        "BLOCKED, THEN RESOLVED via relay: no canonical id spans utils/device_registry.py's device_id and the merged evidence model's entity_id today. Posted RELAY_QUESTION on ozandurmus/nexus-agent-relay#11 rather than inventing a join; Product Owner RELAY_DECISION (option 4): ship with no join input -- utils/device_identity_relationships.py (M8.1) stays unread, its mapping_scope-widening question stays explicitly undecided. Only REGISTRY_DISABLED and RECONCILIATION_UNKNOWN are reachable in production today; the other three values are implemented and unit-tested but need a future movement's authorized canonical id.",
-        "No resolver, UI, navigation or payload wiring -- scoped to utils/registry_evidence_reconciliation.py and its test module only, per this movement's own output_contract. M8.3 stays deferred and M7 stays blocked -- unchanged by this build."
+        "Full detail: project/build_history.json's gov_po_1_gate_4_issue_close_path record.",
+        "Filed and closed from relay ozandurmus/nexus-agent-relay#14. Delegated form still denies 'gh issue close' entirely, matching the existing 'gh issue create'/'gh pr create' precedent. No other decide() branch changes.",
+        "Predecessor m10_1_registry_evidence_reconciliation_projection MERGED PR #117 -- full detail in its own build_history record."
       ]
     },
     "next": {
