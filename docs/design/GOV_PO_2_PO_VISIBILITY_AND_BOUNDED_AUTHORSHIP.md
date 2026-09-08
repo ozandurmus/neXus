@@ -2,7 +2,7 @@
 
 ## Status
 
-**DRAFT — NOT IMPLEMENTATION AUTHORITY, awaiting Product Owner freeze.**
+**FROZEN — PRODUCT OWNER APPROVED, 2026-09-08.**
 Produced by a Phase A `PLAN` episode (movement
 `GOV_PO_2_PO_VISIBILITY_AND_BOUNDED_AUTHORSHIP`, local relay
 `relay/NXS-LOCAL-0002-gov-po-2-visibility.json`, 2026-09-08), on Product
@@ -11,11 +11,29 @@ Owner direction after a run of small PO tool-gate fix movements
 itself) surfaced repeated friction between the PO role's actual working
 needs and its current tool-gate boundary. Explicitly subordinate to, and
 **non-amending of**, `docs/design/GOV_PO_ROLE_MIGRATION.md` (FROZEN —
-PRODUCT OWNER APPROVED, 2026-09-07) unless and until the Product Owner
-separately freezes this document. This movement changes no FROZEN
-document's text — it is a new, separate DRAFT contract only.
-`GOV_PO_2_IMPLEMENTATION` (the code/test/agent-definition half) is blocked
-until that freeze decision.
+PRODUCT OWNER APPROVED, 2026-09-07) — this document proposes an amendment
+candidate to its §4/§6, applied only through `GOV_PO_2_IMPLEMENTATION`
+after this freeze, per §8. This movement changed no FROZEN document's
+text at drafting time — it was a new, separate DRAFT contract, now frozen
+in its own right by this status line.
+
+**Freeze provenance.** A four-seat `nexus-decision-council` round
+(Security Reviewer, Senior Python Architect, DevSecOps/Platform Engineer,
+Technical Product Owner) reviewed this document under
+`GOV_PO_ROLE_MIGRATION.md` §7 trigger (b); all four seats recommended
+**FREEZE WITH CHANGES**, none recommended `DO NOT FREEZE`. The Product
+Owner authorized seven specific amendments from that round's consolidated
+dissent, landed at `relay/NXS-LOCAL-0004-gov-po-2-freeze-amendments.json`
+(sections 1, 3.1, 3.2, 3.4, 4, 5 above). An optional independent
+cross-model review (`GOV_PO_ROLE_MIGRATION.md` §9/D8) was considered and
+explicitly declined by the Product Owner for this decision: every new
+capability stays read-only or DRAFT-gated (low blast radius, easily
+correctable), and the council itself already surfaced substantive,
+actionable findings. Freeze authorization:
+`authorized_by: Product Owner — chat directive 2026-09-08 (this session)`,
+recorded at `relay/NXS-LOCAL-0005-gov-po-2-freeze-and-merge.json`.
+`GOV_PO_2_IMPLEMENTATION` (the code/test/agent-definition half) is
+unblocked by this freeze and may now start.
 
 ## 1. Purpose
 
@@ -463,20 +481,21 @@ comparing a PR's changed-file set against whether `build_history.json`
 changed in the same commit) remains a legitimate future improvement, not
 undertaken by this document or required of `GOV_PO_2_IMPLEMENTATION`.
 
-## 6. Recommended freeze path: independent review before freeze
+## 6. Freeze path: independent review before freeze
 
-This document's own eventual freeze decision — a separate, future `DECIDE`
-episode, not this `PLAN` — should invoke `nexus-decision-council` under
+This document's freeze decision invoked `nexus-decision-council` under
 `GOV_PO_ROLE_MIGRATION.md` §7 trigger (b): *"a freeze candidate introducing
 a security, identity, credential, storage-schema or write boundary."* This
 document proposes a real widening of what the PO role may author
 (`po_drafts/*.md`) and spawn (`nexus-po-evidence-reviewer`), even though
 every new capability stays either strictly read-only or DRAFT-only with a
-tool-enforced status check — it is exactly the class of change trigger (b)
-names for council review rather than freezing on the human's own read
-alone. This movement records the recommendation; it does not act on it
-(`GOV_PO_ROLE_MIGRATION.md` §7: council is invoked only from `PLAN`/`DECIDE`
-episodes, never performed inside the episode that merely recommends it).
+tool-enforced status check — it was exactly the class of change trigger
+(b) names for council review rather than freezing on the human's own read
+alone. This `PLAN`/`ARCHITECTURE` movement recorded the recommendation
+without acting on it (`GOV_PO_ROLE_MIGRATION.md` §7: council is invoked
+only from `PLAN`/`DECIDE` episodes); the recommendation was then followed
+at the Product Owner's own freeze decision — see the Status section above
+for the four-seat round's outcome and provenance.
 
 ## 7. Scope
 

@@ -6,22 +6,21 @@ see `AGENTS.md`/`AI_START_HERE.md`. **Predecessor build detail lives in
 docs under `docs/history/`; `docs/history/INDEX.md` is the one-line timeline.
 
 - **Checkpoint:** 2026-09-08, `gov_po_2_po_visibility_and_bounded_authorship`
-  — new `docs/design/GOV_PO_2_PO_VISIBILITY_AND_BOUNDED_AUTHORSHIP.md`
-  (**DRAFT — NOT IMPLEMENTATION AUTHORITY**, awaiting Product Owner freeze):
-  a capability-based PO boundary (observation / governance authorship /
-  engineering execution / human decision authority) closing every open
-  design question `gov_po_2_implementation` needs: `gh pr diff`/`gh run`
-  read-only commands, `docs/design/po_drafts/*.md` + a FROZEN/RATIFIED
-  status-line regex, `docs/history/INDEX.md` generator-only, a standalone
-  `scripts/repository_privacy_check.py` (not a `main.py` exception), the
-  `nexus-po-evidence-reviewer` agent. Stays `blocked` until the Product
-  Owner freezes it (council review recommended, §7 trigger (b), not
-  invoked here). Predecessor `gov_po_1_step_6_plan_po2_boundary` — PR #121
-  **OPEN**. Predecessor `gov_po_1_local_relay_protocol` **MERGED** PR #120.
+  — `docs/design/GOV_PO_2_PO_VISIBILITY_AND_BOUNDED_AUTHORSHIP.md` is now
+  **FROZEN — PRODUCT OWNER APPROVED, 2026-09-08**, after a four-seat
+  `nexus-decision-council` round (all `FREEZE WITH CHANGES`) and seven
+  Product-Owner-authorized amendments (`relay/NXS-LOCAL-0004`). Specifies
+  the capability-based PO boundary `gov_po_2_implementation` builds:
+  `gh pr diff`/`gh run` read-only commands (boundary-safe matching
+  required), `docs/design/po_drafts/*.md` + a FROZEN/RATIFIED status-line
+  regex (`MultiEdit` excluded), `docs/history/INDEX.md` generator-only, a
+  standalone `scripts/repository_privacy_check.py` + required equivalence
+  test, the `nexus-po-evidence-reviewer` agent. Predecessor
+  `gov_po_1_step_6_plan_po2_boundary` **MERGED** PR #121. Predecessor
+  `gov_po_1_local_relay_protocol` **MERGED** PR #120.
   **PO §12:** `M8.3` deferred, `M7` blocked. `M8` **FROZEN 2026-09-06**.
-- **Next** (`now_next.next`): **unset** — the actual next step is the
-  Product Owner's own freeze decision on the document above, a human act;
-  `gov_po_2_implementation` is the queued candidate once that freeze lands.
+- **Next** (`now_next.next`): `gov_po_2_implementation` — unblocked by the
+  freeze above; not yet started, no relay artifact opened yet.
   `m8_3_real_environment_validation` stays `upcoming`, **deferred debt**,
   unpaid; `m7_real_device_targeted_collect_now`/
   `op2_c_cp_clusterxl_adapter_scoping` stay `upcoming`/`blocked`.
