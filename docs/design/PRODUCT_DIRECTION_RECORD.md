@@ -456,3 +456,72 @@ provenance rules.
 - Earlier "device access is deferred" statements were omitted because later M8/OP/RB work introduced bounded real-environment gates. Treat the old blanket statement as superseded, not current authority. [ASSISTANT confidence: high]
 - Exact PR numbers, commit hashes, test totals, workstation paths, and environment-install commands were mostly omitted because `project/build_history.json` already owns that evidence and such details are not durable product direction. [ASSISTANT confidence: high]
 - All raw device identities, endpoints, usernames, credentials, host-key material, and locally sensitive values were deliberately excluded. [REPO AGENTS.md — Sensitive identity reporting law]
+
+### §14 PO orchestration operating efficiency (2026-09-08)
+
+Decided directly by the Product Owner in the live PO/orchestrator session on
+2026-09-08, after monitoring an eight-movement batch
+(`relay/NXS-LOCAL-0008`–`0018`) surfaced several avoidable cost/context
+drivers. Effective immediately as PO operating defaults; none of these
+require a repository code change — process discipline, not new authority,
+and none relax `AGENTS.md`/`CLAUDE.md`'s existing reasoning-routing law.
+
+55. **Reasoning-tier scaling by scope, not one fixed default — 2026-09-08.**
+    Question: keep every movement at "Sonnet 5, normal" regardless of how
+    narrow its scope is, or scale with scope. Chosen: for a narrow,
+    mechanical, already-fully-specified movement (a single bookkeeping
+    merge-conflict fix, a one-file test-isolation fix), `Sonnet 5, low` or
+    `Sonnet 5, medium` is acceptable when the PO's own `SESSION_START`
+    packet already resolves the ambiguity end to end; `Sonnet 5, normal`
+    remains the default for ordinary deterministic implementation;
+    `Opus, medium-high` (or "Fast") is reserved for freezing a
+    contract/design document itself (new architecture, a cross-subsystem
+    decision, a security/privacy boundary) — never for routine
+    implementation against an already-frozen contract. Rejected: a single
+    fixed tier for every movement, which over-spends on trivial mechanical
+    fixes. Status: **decided operating direction**, applied via each
+    movement's own `recommended_reasoning` field going forward.
+    [PO-DIRECTION 2026-09-08, this session]
+56. **Wave-based dispatch over all-at-once — 2026-09-08.** Question:
+    dispatch every queued/approved movement in one batch (as this session
+    did with eight concurrent movements) or stagger them. Chosen: dispatch
+    in bounded waves (a lower `max-workers`, e.g. 3-4 concurrent), opening
+    the next wave once the current one clears, rather than opening the full
+    queue at once. Rejected: opening everything immediately, which forces
+    continuous, expensive full-batch status monitoring. Status: **decided
+    operating direction**. [PO-DIRECTION 2026-09-08, this session]
+57. **Event-driven monitoring as the default over fixed-interval polling —
+    2026-09-08.** Question: default to a fixed short polling interval
+    (e.g. `/loop 1m`) for movement monitoring, or watch for state changes
+    and poll only as a fallback. Chosen: default to event-driven monitoring
+    (e.g. a `Monitor` against a relay file/process) with a longer fallback
+    loop (5-10+ minutes); a short interval is used only when a movement is
+    already known to be near completion. Rejected: a 1-minute fixed loop as
+    the default — it spends a full turn every minute regardless of whether
+    anything changed. Status: **decided operating direction**.
+    [PO-DIRECTION 2026-09-08, this session]
+58. **Batched governance commits over one commit per edit — 2026-09-08.**
+    Question: commit each individual backlog/governance-file edit
+    separately (as this session did, four separate commits to
+    `project/backlog.json` in one sitting) or batch related edits into one
+    commit. Chosen: batch multiple related governance-file edits (backlog
+    additions, roadmap notes, direction-record entries) planned within the
+    same PO turn into a single commit, unless the user asks to see them
+    land separately. Rejected: one commit per edit, which multiplies
+    `git fetch`/merge round-trips against a fast-moving `origin/main`.
+    Status: **decided operating direction**. [PO-DIRECTION 2026-09-08, this
+    session]
+59. **PO reference notes over re-reading large source files in full —
+    2026-09-08.** Question: re-read a large tool source file (e.g.
+    `scripts/orchestrator.py`, `scripts/local_relay.py`) in full whenever
+    its exact behavior (a required CLI flag, a resume/dispatch decision
+    rule) is needed again, or keep a durable compact reference. Chosen:
+    capture the operational facts the PO session repeatedly needs (required
+    flags, the `decide_start` resume/dispatch/refuse rule, the
+    CLOSED-relay append rule, the `git.base`/`git.lane` reuse pattern for
+    completing a PR whose original relay is closed) as a small persistent
+    PO-session reference instead of re-reading the full source file each
+    time; the real source is still read before acting on anything the
+    reference does not cover or that looks stale. Rejected: full re-reads
+    as the default habit. Status: **decided operating direction**,
+    reference captured 2026-09-08. [PO-DIRECTION 2026-09-08, this session]
