@@ -12,11 +12,16 @@ docs under `docs/history/`; `docs/history/INDEX.md` is the one-line timeline.
   `utils.registry_evidence_reconciliation.detect_ri2` for `RI-2`, the
   twelve-rank primary ladder, the seven qualifiers) as pure typed-input
   functions — no I/O, no device contact, no consumer wired yet
-  (stages 4-5 and the `D2`/`D3`/`D5` producers are `M10.3`/`M12`). 134 new
+  (stages 4-5 are still open; `D5`'s producer is still `M12`). 134 new
   tests; `tests/test_m10_1_registry_evidence_reconciliation.py` +
   `tests/test_architecture_convergence.py` unaffected (78 passed). Ran in
-  its own worktree in parallel with GOV.PO.3/OP.1; merged `origin/main`
-  before opening the PR. Detail: `project/build_history.json`. Predecessor
+  its own worktree in parallel with GOV.PO.3/OP.1/`M10.3`; merged
+  `origin/main` twice (once mid-PR) before completing the merge. Detail:
+  `project/build_history.json`. Predecessor
+  `m10_3_entity_and_vendor_support_producers` **MERGED** — `M10`'s third
+  slice: `utils/capability_applicability.py` (`resolve_d2`) and
+  `utils/capability_vendor_support.py` (`resolve_d3`), closed-table
+  producers for `D2`/`D3`, not yet wired to this resolver. Predecessor
   `gov_po_3_orchestrator_observability` **MERGED** — extended already-frozen
   `scripts/orchestrator.py` with real-time visibility: streaming `claude -p`
   output, an `engineer.summary.log` parser, `status`'s new `last_activity`
@@ -32,12 +37,10 @@ docs under `docs/history/`; `docs/history/INDEX.md` is the one-line timeline.
   `gov_po_2_implementation`'s scope. **PO §12:** `M8.3` deferred, `M7`
   blocked. `M8` **FROZEN 2026-09-06**.
 - **Next** (`now_next.next`): `gov_po_2_implementation` — unrelated and
-  unchanged by this movement; not yet started. `m10_3_entity_and_vendor_
-  support_producers` stays `upcoming`/`planned` (D2/D3 producers, not yet
-  authorized). `m8_3_real_environment_validation` stays `upcoming`,
-  **deferred debt**, unpaid; `m7_real_device_targeted_collect_now`/
-  `op2_c_cp_clusterxl_adapter_scoping` stay `upcoming`/`blocked`.
-  `DEV.TEST.1`/`PCP.1`/`M1`-`M10.2` complete/automated_validated.
+  unchanged by this movement; not yet started. `m8_3_real_environment_
+  validation` stays `upcoming`, **deferred debt**, unpaid; `m7_real_device_
+  targeted_collect_now`/`op2_c_cp_clusterxl_adapter_scoping` stay
+  `upcoming`/`blocked`. `DEV.TEST.1`/`PCP.1`/`M1`-`M10.3` complete/automated_validated.
 - **OP.2.0 CLASS 2 architecture** (`docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md`):
   **CONTRACT FROZEN 2026-09-04**; `OP.2.A`/`OP.2.B` IMPLEMENTED; `OP.2.1` CP
   command gate DRAFTED — CLASS 2 still has **no member**, no adapter,
@@ -102,12 +105,12 @@ exercise packet emission (step 6).
 **`nav_3_capability_state_vocabulary`** — COMPLETE / FROZEN (PO approved
 2026-09-06). `docs/design/CAPABILITY_STATE_VOCABULARY_AND_PRESENTATION.md` is
 implementation authority for the vocabulary/resolution/presentation matrix
-(`D1`–`D7`, `E1`–`E7`, `AC-CS-1`…`97`). `D4` has its producer as of `M10.1`;
-the resolver core (stages 0-3: union tag, `CX1`/`RI-1`/`RI-2`, primary
-ladder, qualifiers) has its implementation as of `M10.2` (above), consuming
-already-resolved `D2`/`D3`/`D5` values via typed inputs — those producers,
-and resolver stages 4-5 (evidence presentation, action affordance), are
-still `M10.3`/`M12`. `D7` still resolves `UNKNOWN`; `M14` builds it.
+(`D1`–`D7`, `E1`–`E7`, `AC-CS-1`…`97`). `D4` has its producer as of
+`M10.1`; `D2`/`D3` as of `M10.3`; the resolver core (stages 0-3: union tag,
+`CX1`/`RI-1`/`RI-2`, primary ladder, qualifiers) as of `M10.2` (both
+above) — none wired to a caller/UI/payload yet, so every dimension still
+resolves `UNKNOWN` in any actual render. Stages 4-5 and `D5`'s producer
+are still open; `M12` builds `D5`, `M14` builds `D7`.
 
 ## `OP.0b.0` — FROZEN WITH REAL-ENV VALIDATION GATES
 `docs/history/phase/OP_0B_0_VENDOR_FAILOVER_PREFLIGHT_EVIDENCE_SURFACE.md`
@@ -173,9 +176,10 @@ Concurrency budget stays at 1 per vendor pending real-env evidence.
 ## Automated test baseline
 
 ```
-gov_po_3_push_hook_baseline_scoping: 7 new tests, tests/test_orchestrator.py
-unaffected (48 passed) (detail: project/build_history.json). Hook-only
-change; full one-shot regression not re-run (DEV.TEST.1: last evidence holds).
+m10_3_entity_and_vendor_support_producers: targeted 107 passed;
+architecture-convergence 22 passed unchanged. New, previously unimported
+modules plus their own test file only -- no full regression (DEV.TEST.1:
+last evidence holds).
 Earlier predecessor build detail lives only in project/build_history.json.
 ```
 ## Known xfails
