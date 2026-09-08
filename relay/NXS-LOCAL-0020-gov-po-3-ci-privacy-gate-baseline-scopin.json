@@ -1,0 +1,93 @@
+{
+  "created_at": "2026-09-08T16:40:52Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1 (real bug, found live 2026-09-08 while monitoring the orchestrator's own in-flight PRs): the GitHub Actions 'validation' workflow's 'Repository privacy gate' step (`python main.py --repository-privacy-check`) fails unconditionally on every PR opened in this repository right now -- confirmed on PR #127, #128, #129, #130, #131 -- because it scans the full working tree and blocks on the SAME two pre-existing, already-accepted, build-history-immutable false positives (project/build_history.json CREDENTIAL_LITERAL, relay/NXS-LOCAL-0003-local-relay-watch-command.json CREDENTIAL_LITERAL) that relay/NXS-LOCAL-0014 already fixed for the LOCAL engineer pre-push hook (scripts/nexus_engineer_tool_gate.py). That local fix was never applied to the CI-level check (application/cli.py's --repository-privacy-check path, invoked directly by .github/workflows/validation.yml), so CI now shows a permanent, uninformative red 'validate' status on every PR -- and there is no branch protection requiring it to pass, so this has not blocked merges so far, but it defeats CI's own purpose (a genuinely new leak now looks identical to this permanent noise) and must not be left standing.",
+          "AC-2: extract the baseline-aware comparison logic that relay/NXS-LOCAL-0014 built inside scripts/nexus_engineer_tool_gate.py (content-fingerprint matching per (file, finding_type, stable span fingerprint), not line-number matching -- see that file's _finding_fingerprint/_finding_key/_baseline_finding_keys functions) into a shared, importable location (utils/repository_privacy.py is the natural home, or a new small module) so both the local engineer hook and the CI check use ONE implementation, not two copies that can drift.",
+          "AC-3: application/cli.py's --repository-privacy-check path (and/or the CI workflow step directly, whichever is the cleaner integration point -- your call, name which one and why) becomes baseline-aware for the CI context specifically: CI's natural baseline is the PR's merge-base with origin/main (or, for a push directly to main, the previous main commit) -- a finding present in both the baseline scan and the current scan is pre-existing repository debt and must not fail the gate; a finding present only in the current scan is genuinely new and must still fail the gate exactly as today.",
+          "AC-4: the CI workflow step's own invocation (.github/workflows/validation.yml, both places main.py --repository-privacy-check is called, lines ~92 and ~172) gains whatever new flag/argument is needed to pass the baseline ref through (e.g. --privacy-baseline-ref origin/main, or auto-detected via git merge-base against the PR's target -- verify what git refs/env vars are actually available in a GitHub Actions checkout for a PR, e.g. github.event.pull_request.base.sha, before assuming).",
+          "AC-5: no expansion of scan surface or finding-detection rules -- this narrows false blocks only, exactly like relay/NXS-LOCAL-0014's own invariant; a genuinely new finding must still fail CI exactly as today.",
+          "AC-6: real reproduction test: run the fixed CI-equivalent check locally against this repository's actual current state (which has exactly the two named pre-existing findings) with a baseline of origin/main and confirm it now passes; then synthetically introduce one new, clearly-fake finding-shaped string in a scratch file and confirm the fixed check still fails on that one. Also re-run (or point to) the already-open PRs (#128, #130, #131) as real-world confirmation once the fix is on their branches (they will need to merge origin/main first to pick up this fix, same as any other movement).",
+          "AC-7: targeted tests for the shared baseline module (extending whatever test file already covers scripts/nexus_engineer_tool_gate.py's baseline logic from relay/NXS-LOCAL-0014, or a new one for the CI-facing entry point) plus confirmation that tests/test_dev0_4_repository_privacy_gate.py and the existing CI-invoking tests (tests/test_ci_workflow_fast_pr_regression.py) still pass.",
+          "AC-8: validation and state: targeted tests green; project-state bookkeeping in this PR."
+        ],
+        "baseline": {
+          "authority": "relay/NXS-LOCAL-0014 (GOV_PO_3_PUSH_HOOK_BASELINE_SCOPING, merged PR #127) already solved this exact problem shape for the local pre-push hook -- this movement extends the same fix to the CI-level invocation of the identical underlying scanner, closing the other half of the gap. docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md section 3.10 ('not a new or expanded scan surface') applies identically here.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "sequencing": "Found live 2026-09-08 while the Product Owner was monitoring five other in-flight orchestrated movements (NXS-LOCAL-0008/0009/0010/0015/0016); every one of their PRs (or PRs opened so far: #128, #130, #131) shows the identical spurious CI failure. Dispatched independently -- touches .github/workflows/validation.yml, application/cli.py, utils/repository_privacy.py -- no file overlap with orchestrator.py (in use by NXS-LOCAL-0015) or with any of the product movements' own scope."
+        },
+        "context_not_loaded": [
+          "everything else"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/gov-po-3-ci-privacy-gate-baseline-scoping"
+        },
+        "invariants": [
+          "Never edit project/build_history.json or any other build-history-immutable file to silence a false positive -- the fix is scope/baseline-awareness, not content",
+          "A genuinely new finding still fails CI exactly as today -- this narrows false blocks only, never widens what is missed",
+          "One shared implementation for baseline comparison, not a second forked copy of relay/NXS-LOCAL-0014's logic (AC-2)"
+        ],
+        "merge_gate": "Standing relay#13: green tests -> self-merge, report via RELAY_NOTE. Note: this movement's own PR will very likely hit the SAME currently-broken CI check before this fix lands -- that is expected and self-resolving once this movement's own diff IS the fix (same precedent noted in relay/NXS-LOCAL-0014's own SESSION_START); do not treat it as a new blocker, and do not let a real regression hide behind that expectation -- confirm AC-6's local reproduction passes before merging regardless of what CI shows.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Extend relay/NXS-LOCAL-0014's baseline-aware privacy-gate fix (currently local-engineer-hook-only) to the GitHub Actions CI 'validation' workflow's own privacy-gate invocation, so CI stops permanently failing on the same two pre-existing, already-accepted findings on every future PR.",
+        "output_contract": [
+          "A shared baseline-comparison module (utils/repository_privacy.py extension or new module) used by both scripts/nexus_engineer_tool_gate.py and the CI-facing entry point",
+          "application/cli.py and/or .github/workflows/validation.yml: baseline-aware CI privacy check",
+          "Targeted tests (AC-7)",
+          "Project-state bookkeeping in this PR",
+          "SESSION_CLOSE on this relay file (absolute path)"
+        ],
+        "recommended_reasoning": {
+          "reason": "Directly analogous to an already-solved, already-frozen problem (relay/NXS-LOCAL-0014) -- the main work is refactoring for reuse and adapting the baseline-ref source for a CI/PR context instead of a worktree's approved_task.json; deterministic once the GitHub Actions ref-availability question (AC-4) is confirmed for real.",
+          "tier": "Sonnet 5, normal"
+        },
+        "requirements": [
+          "Read scripts/nexus_engineer_tool_gate.py's existing baseline logic (relay/NXS-LOCAL-0014's own implementation) in full before writing anything new -- reuse, do not reinvent",
+          "Confirm for real what git ref information is available in this repo's actual GitHub Actions checkout for a pull_request event before assuming a baseline source (AC-4)"
+        ],
+        "risks": [
+          "If GitHub Actions' checkout step in this workflow does a shallow/single-commit checkout, computing a merge-base with origin/main may need a `fetch-depth` change to .github/workflows/validation.yml -- that is in scope if needed, but keep it minimal and report via RELAY_QUESTION if it looks like it needs a bigger workflow restructure than a fetch-depth bump."
+        ],
+        "scope": {
+          "in": [
+            "CI-level privacy gate baseline-awareness",
+            "shared module extraction",
+            "targeted tests"
+          ],
+          "out": [
+            "Any change to the local engineer pre-push hook's own already-working baseline logic beyond extracting it for reuse",
+            "Any change to finding-detection rules themselves",
+            "orchestrator.py"
+          ]
+        },
+        "validation_plan": [
+          "AC-6's real local reproduction against this repo's actual current findings",
+          "targeted tests (AC-7)",
+          "git diff --check"
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-08T16:40:52Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0020",
+  "movement": "GOV_PO_3_CI_PRIVACY_GATE_BASELINE_SCOPING",
+  "next_actor": "engineer",
+  "refs": [
+    ".github/workflows/validation.yml",
+    "application/cli.py",
+    "utils/repository_privacy.py",
+    "scripts/nexus_engineer_tool_gate.py",
+    "docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md"
+  ],
+  "schema_version": 1,
+  "status": "OPEN",
+  "updated_at": "2026-09-08T16:40:52Z"
+}

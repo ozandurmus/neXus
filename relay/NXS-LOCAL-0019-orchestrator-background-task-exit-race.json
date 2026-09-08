@@ -1,0 +1,86 @@
+{
+  "created_at": "2026-09-08T16:40:32Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1: read project/backlog.json id orchestrator_background_task_exit_race in full before anything else -- it records the real, live-observed incident (relay/NXS-LOCAL-0018, 2026-09-08) this movement fixes, including its own two candidate fix directions. This SESSION_START does not restate that note.",
+          "AC-2: confirm current state before changing anything -- read scripts/orchestrator.py's ENGINEER_PROMPT and confirm it does not currently instruct engineer sessions to run validation commands in the foreground/awaited regardless of the CLI's own auto-background timeout; confirm decide_start's resume path has no detection today for 'worktree has staged-but-uncommitted git changes AND relay never advanced past SESSION_START AND pid is dead'.",
+          "AC-3: strengthen the ENGINEER_PROMPT so every engineer session is explicitly instructed to never treat a long-running validation command (the full pytest regression in particular) as backgroundable -- it must run to completion in the foreground and the session must wait for and read its real result before committing/pushing/merging on the strength of it. Investigate for real whether the claude CLI exposes any flag/env var to raise or disable its own auto-background threshold for a spawned engineer process; if none exists, say so explicitly in your SESSION_CLOSE and rely on the prompt instruction alone.",
+          "AC-4: add resume-path detection to decide_start (or an adjacent function orchestrator.py already calls at resume time): when a movement's worktree shows staged-but-uncommitted git changes, its relay is still at SESSION_START (no RELAY_ACK/NOTE/QUESTION/CLOSE ever posted), and its recorded pid is dead, inject an explicit note into the resumed session's own prompt/context instructing it to first check for and finish any prior staged-but-uncommitted work and any pending/completed background task result before doing anything else.",
+          "AC-5: no change to any other decide_start branch or outcome (dispatch / refuse / ordinary resume for an already-active relay all behave exactly as before); no change to the merge-lock hook or the privacy-gate hook.",
+          "AC-6: targeted tests for AC-4's new detection logic as a pure function (git status parsed/monkeypatched, no real subprocess spawn), following tests/test_orchestrator.py's existing style for decide_start coverage.",
+          "AC-7: validation and state: targeted tests green; because scripts/orchestrator.py is shared core, run the full one-shot regression once (DEV.TEST.1) rather than reusing stale evidence; project-state bookkeeping (backlog.json status update for this item, build_history record) lands in this PR."
+        ],
+        "baseline": {
+          "authority": "project/backlog.json id orchestrator_background_task_exit_race (priority P0, raised 2026-09-08 per Product Owner direction) -- the real incident, its root cause, and both candidate fix directions are already recorded there.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "sequencing": "Independent of every other in-flight movement -- touches only scripts/orchestrator.py's ENGINEER_PROMPT and decide_start-adjacent resume logic, plus its own tests. No file overlap with the CI-privacy-gate or dashboard-app movements dispatched alongside it."
+        },
+        "context_not_loaded": [
+          "everything else"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/orchestrator-background-task-exit-race"
+        },
+        "invariants": [
+          "The standing relay#13 'green tests -> self-merge' authorization must never again be reachable on the strength of a background test run the session did not actually wait to see the result of",
+          "No change to dispatch/refuse/ordinary-resume behavior -- this only adds detection for the specific dead-pid-plus-staged-changes pattern"
+        ],
+        "merge_gate": "Standing relay#13: green tests -> self-merge, report via RELAY_NOTE.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Close the real, live-observed gap where an engineer session's own background validation run can outlive its turn, leaving staged-but-uncommitted work with no relay update -- so the standing self-merge authorization is never exposed to an unverified test result.",
+        "output_contract": [
+          "scripts/orchestrator.py: strengthened ENGINEER_PROMPT (AC-3) and resume-path detection (AC-4)",
+          "Targeted tests (AC-6)",
+          "Project-state bookkeeping in this PR",
+          "SESSION_CLOSE on this relay file (absolute path)"
+        ],
+        "recommended_reasoning": {
+          "reason": "Bounded fix to one already-diagnosed file (scripts/orchestrator.py), with two already-named candidate directions from the backlog note -- narrow enough for a scaled-down tier per this session's own 2026-09-08 reasoning-tier policy, but involves a real judgment call between/combination of the two fix directions, so kept at the ordinary implementation tier rather than the lowest one.",
+          "tier": "Sonnet 5, normal"
+        },
+        "requirements": [
+          "Investigate the CLI's real auto-background behavior before assuming a flag exists or doesn't (AC-3)"
+        ],
+        "risks": [
+          "If the CLI truly gives no way to control or query background-task behavior from outside the session, AC-3 may only be achievable via the prompt instruction, not a hard guarantee -- report this honestly rather than overclaiming AC-3 as a complete fix."
+        ],
+        "scope": {
+          "in": [
+            "scripts/orchestrator.py: ENGINEER_PROMPT strengthening, resume-path detection, targeted tests"
+          ],
+          "out": [
+            "Any UI/dashboard work (separate movement)",
+            "The merge-lock or privacy-gate hooks",
+            "Any change to dispatch/refuse/ordinary-resume behavior"
+          ]
+        },
+        "validation_plan": [
+          "Targeted tests for AC-4 (AC-6)",
+          "Full one-shot regression once (AC-7)",
+          "git diff --check",
+          "privacy gate once at PR time"
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-08T16:40:32Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0019",
+  "movement": "ORCHESTRATOR_BACKGROUND_TASK_EXIT_RACE",
+  "next_actor": "engineer",
+  "refs": [
+    "project/backlog.json",
+    "scripts/orchestrator.py",
+    "tests/test_orchestrator.py"
+  ],
+  "schema_version": 1,
+  "status": "OPEN",
+  "updated_at": "2026-09-08T16:40:32Z"
+}

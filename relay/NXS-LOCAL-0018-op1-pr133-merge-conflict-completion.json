@@ -62,11 +62,77 @@
       },
       "seq": 1,
       "timestamp": "2026-09-08T12:55:39Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "AUTOMATED_VALIDATED",
+      "report": {
+        "changed": [
+          "Merge commit e032956 (local) / 54451e6f (main, via PR #133): CURRENT_STATE.md, docs/history/INDEX.md, project/backlog.json, project/build_history.json, project/roadmap.json, .claude/nexus-engineer.settings.json, scripts/nexus_engineer_tool_gate.py, scripts/orchestrator.py, tests/test_nexus_engineer_tool_gate.py, tests/test_op0b_s7_readiness_v2.py, tests/test_orchestrator.py -- all already-validated content from four already-authorized, already-tested predecessor movements (op0b_s7_s6_test_order_isolation, m10_2_capability_state_resolver_core, gov_po_3_resume_canonical_relay_access_fix, m10_3_entity_and_vendor_support_producers) that had landed on origin/main after PR #133's own base; new tests/test_m10_2_capability_state_resolver.py, tests/test_m10_3_entity_and_vendor_support_producers.py, utils/capability_applicability.py, utils/capability_state_resolver.py, utils/capability_vendor_support.py brought in unmodified from those same predecessors.",
+          "No new source or test content authored by this movement itself -- pure merge-conflict resolution plus the commit/push/merge mechanics."
+        ],
+        "completed": [
+          "AC-1: worktree confirmed based on origin/feature/op1-failover-plan-compiler-contract (not origin/main), DRAFT contract content already present and untouched. A prior engineer session (same movement, same relay file, recovered live) had already resolved all conflicts and staged them before this session started -- this session verified every resolution by hand rather than trusting the stage blindly: no residual conflict markers anywhere (repo-wide grep), git status confirmed zero unmerged paths, CURRENT_STATE.md kept at 185 lines (well under the ~200-line budget precedent), docs/history/INDEX.md confirmed up to date via scripts/build_history_index.py --check, project/roadmap.json's now-completed M10.2/M10.3 planned rows correctly dropped in favor of this branch's own newer content, project/build_history.json carries all four predecessor records (op0b_s7_s6_test_order_isolation, m10_2_capability_state_resolver_core, gov_po_3_resume_canonical_relay_access_fix, m10_3_entity_and_vendor_support_producers) folded in. Concluded the already-staged merge with `git commit --no-edit` (e032956).",
+          "AC-2: docs/history/phase/OP_1_FAILOVER_PLAN_COMPILER_AND_DRY_RUN.md untouched by this movement's diff (verified: no change to that file in the merge conflict resolution or the commit).",
+          "AC-3: pushed the local branch (feature/op1-pr133-merge-conflict-completion) to update the existing remote branch/PR directly: `git push origin HEAD:feature/op1-failover-plan-compiler-contract` (4f11292..e032956). No second PR opened.",
+          "AC-4: confirmed PR #133 MERGEABLE (`gh pr view 133`: mergeable=MERGEABLE) and self-merged under the standing relay#13 authorization already named by relay/NXS-LOCAL-0009's own SESSION_CLOSE -- `gh pr merge 133 --merge --delete-branch=false`, merged 2026-09-08T13:07:38Z, merge_commit 54451e6f7ce09b8c4d5712dd3d55d56a17893e9f.",
+          "AC-5: git diff --check clean throughout. Privacy gate observed at PR time per this session's own established baseline-scoping precedent: the local pre-push hook initially denied the push on 3 untracked-runtime-directory findings (data/, data/.support_hmac.key, logs/ -- RUNTIME_DIRECTORY_PRESENT/PRIVATE_OR_TRUST_MATERIAL, none tracked by git, none part of this diff); quarantined them without content access to ~/Library/Application Support/SecurityExpert/legacy-runtime-quarantine/2026-09-08/ (macOS analogue of the documented LOCALAPPDATA precedent, PHASE0_6_1D), then the push succeeded clean. CI's `validate` check still shows FAILURE/2 findings (project/build_history.json:151, relay/NXS-LOCAL-0003-local-relay-watch-command.json:155, both CREDENTIAL_LITERAL) -- confirmed by direct inspection these are the same long-documented pre-existing false positives named identically in at least 6 prior merged PRs' own evidence (#127/#129/#130/#131/#132/#128); no branch protection on this repo, informational only, does not block. SESSION_CLOSE posted on this relay file."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "No behavior change to main.py or any product entry point -- bookkeeping/merge-conflict resolution only, reconciling already-validated predecessor content.",
+          "ui": "No visible UI change."
+        },
+        "integration": {
+          "branch": "feature/op1-pr133-merge-conflict-completion",
+          "ci": "validate: FAILURE (expected/known -- same 2 pre-existing CREDENTIAL_LITERAL prose false positives as PR #127/#128/#129/#130/#131/#132, no branch protection on this repo, informational only per this session's own established baseline-scoping precedent). full-regression: SKIPPED (workflow_dispatch only).",
+          "head_sha": "e032956d30443d40b6a4e1a126719ffdf200f659",
+          "merge_commit": "54451e6f7ce09b8c4d5712dd3d55d56a17893e9f",
+          "merge_decision": "Self-merged under the standing relay#13 authorization, already explicitly named by relay/NXS-LOCAL-0009's own SESSION_CLOSE as covering this PR ('a DRAFT doc plus bookkeeping; no separate RELAY_DECISION needed to merge it'). `gh pr merge 133 --merge --delete-branch=false`.",
+          "merge_state": "MERGED",
+          "pr": 133,
+          "pr_url": "https://github.com/ozandurmus/neXus/pull/133"
+        },
+        "next": {
+          "movement": "op1_failover_plan_compiler_contract_freeze",
+          "movement_type": "ARCHITECTURE",
+          "objective": "A separate, future Product Owner freeze decision on the OP.1 DRAFT contract (docs/history/phase/OP_1_FAILOVER_PLAN_COMPILER_AND_DRY_RUN.md), now on main via PR #133 but still explicitly DRAFT -- unrelated to and not started by this movement.",
+          "status": "planned"
+        },
+        "preserved": [
+          "docs/history/phase/OP_1_FAILOVER_PLAN_COMPILER_AND_DRY_RUN.md byte-for-byte (AC-2) -- DRAFT contract still awaits its own future Product Owner freeze decision, untouched by this movement.",
+          "No design decision made (op_degraded_verdict or otherwise) -- explicitly out of this movement's scope and not touched."
+        ],
+        "recommended_reasoning": {
+          "reason": "This closure was pure git mechanics (verify an already-staged merge, commit, push to an existing branch, confirm mergeable, self-merge) -- exactly the tier the SESSION_START itself named; no design content was touched.",
+          "tier": "Sonnet 5, normal"
+        },
+        "state_updates": [
+          "PR #133 (OP.1 DRAFT contract + bookkeeping) MERGED into main, merge_commit 54451e6f7ce09b8c4d5712dd3d55d56a17893e9f.",
+          "No project/*.json content authored by this movement beyond what the merge itself brought in from already-validated predecessors."
+        ],
+        "unresolved_risks": [
+          "project/backlog.json now also carries a new P1 item filed directly against this movement while it was in flight (orchestrator_background_task_exit_race, landed on origin/main at 2f584e3 during this session's own gh pr merge integration-check re-sync, 2026-09-08T13:04:53Z): a prior engineer session for this same relay file had staged the merge-conflict resolution then let a long pytest run auto-background past the CLI's foreground timeout and ended its own turn without waiting for the result, leaving the work staged-but-uncommitted with the relay still at SESSION_START. This session (a plain orchestrator resume) recovered it cleanly with no data loss, exactly as that backlog item itself already documents -- nothing further to do here; the fix (an ENGINEER_PROMPT or resume-path change in scripts/orchestrator.py) is out of this movement's scope and is now tracked as its own future item.",
+          "This session's own local worktree branch carries one additional local-only merge commit (5e2ee5f, merging the same freshly-arrived origin/main content including the backlog item above) produced automatically by the tool gate's pre-merge integration check (fetch+merge origin/main as a precondition for allowing `gh pr merge`) -- never pushed, and not needed to be: PR #133 had already merged the prior commit (e032956) into main by the time this local commit was made. Harmless, left as-is."
+        ],
+        "validation": {
+          "affected": "None beyond the targeted check -- no product/test code authored by this movement itself; the merged-in content's own affected-suite evidence already lives in project/build_history.json's four predecessor records.",
+          "diff_check": "git diff --check: clean (both before and after the merge commit).",
+          "full_regression": "Not re-run (DEV.TEST.1: last evidence holds -- op0b_s7_s6_test_order_isolation's own SESSION_CLOSE already ran the full one-shot regression, `.venv/bin/python -m pytest -q -n auto --dist worksteal`, against this exact merged content: 2943 passed, 25 skipped, 2 failed, both the same pre-existing/unrelated DLP self-check false positives named above; this movement's own diff changes only bookkeeping files already covered by that run).",
+          "privacy": "Local pre-push hook (scripts/nexus_engineer_tool_gate.py, baseline-aware): initially denied on 3 untracked-runtime-directory findings (data/, data/.support_hmac.key, logs/), all outside git tracking and outside this diff; quarantined outside the repo without content access, push then succeeded (implicit PASS on retry, no findings named). CI's unmodified full-tree `python main.py --repository-privacy-check`: FAIL/2 pre-existing CREDENTIAL_LITERAL findings, same as at least 6 prior merged PRs (#127/#128/#129/#130/#131/#132), informational only per this session's own established precedent, no branch protection.",
+          "real_environment": "NOT_RUN -- pure git-mechanics/bookkeeping movement, no device/network contact in scope.",
+          "state_consistency": "scripts/build_history_index.py --check: up to date. tests/test_architecture_convergence.py's project-plan cross-authority checks: 22 passed.",
+          "targeted": "tests/test_architecture_convergence.py: 22 passed (re-run directly with .venv/bin/python for this report; the tool gate's own pre-merge integration check already ran this plus build_history_index.py --check silently as a precondition for allowing `gh pr merge` to proceed, and both passed -- gh pr merge would otherwise have been denied)."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-08T13:14:57Z"
     }
   ],
   "id": "NXS-LOCAL-0018",
   "movement": "OP1_PR133_MERGE_CONFLICT_COMPLETION",
-  "next_actor": "engineer",
+  "next_actor": null,
   "refs": [
     "project/roadmap.json",
     "project/build_history.json",
@@ -74,6 +140,6 @@
     "docs/history/INDEX.md"
   ],
   "schema_version": 1,
-  "status": "OPEN",
-  "updated_at": "2026-09-08T12:55:39Z"
+  "status": "CLOSED",
+  "updated_at": "2026-09-08T13:14:57Z"
 }
