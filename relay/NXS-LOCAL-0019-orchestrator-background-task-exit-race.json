@@ -70,17 +70,25 @@
       },
       "seq": 1,
       "timestamp": "2026-09-08T16:40:32Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "RELAY_NOTE",
+      "seq": 2,
+      "subject": "PR #134 merged",
+      "text": "Self-merged under the standing relay#13 authorization (green targeted + full one-shot regression). AC-3: ENGINEER_PROMPT strengthened; investigated the installed claude CLI directly and confirmed BASH_DEFAULT_TIMEOUT_MS/BASH_MAX_TIMEOUT_MS are real, verified levers (raised BASH_DEFAULT_TIMEOUT_MS to 30min in the engineer spawn env) -- no full-disable switch was found, so the prompt instruction carries the actual guarantee. AC-4: decide_start's resume path now detects the exact staged-changes/SESSION_START/dead-pid pattern and injects a recovery note. Targeted tests 98 passed; full regression 2963 passed/25 skipped/2 pre-existing-unrelated failures (verified identical at base commit). CI's 'validate' privacy-gate check is red for the same 2 pre-existing findings -- confirmed the immediately-prior merged PR #133 had the identical red check, so this is a standing, already-precedented condition, not something this PR introduced. Merge commit 6681a62c7fa22b818a69c61139bf26d44f4e2c29 on main.",
+      "timestamp": "2026-09-08T17:08:07Z"
     }
   ],
   "id": "NXS-LOCAL-0019",
   "movement": "ORCHESTRATOR_BACKGROUND_TASK_EXIT_RACE",
-  "next_actor": "engineer",
+  "next_actor": "po",
   "refs": [
     "project/backlog.json",
     "scripts/orchestrator.py",
     "tests/test_orchestrator.py"
   ],
   "schema_version": 1,
-  "status": "OPEN",
-  "updated_at": "2026-09-08T16:40:32Z"
+  "status": "AWAITING_PO",
+  "updated_at": "2026-09-08T17:08:07Z"
 }

@@ -75,11 +75,19 @@
       },
       "seq": 1,
       "timestamp": "2026-09-08T16:40:52Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "RELAY_NOTE",
+      "seq": 2,
+      "subject": "gov_po_3_ci_privacy_gate_baseline_scoping merged",
+      "text": "Implemented AC-1..AC-8: CI's Repository privacy gate is now baseline-aware. Extracted relay/NXS-LOCAL-0014's content-fingerprint baseline primitives (finding_fingerprint/finding_key/baseline_finding_keys) out of scripts/nexus_engineer_tool_gate.py into utils/repository_privacy.py, so the local pre-push hook and the CI-facing entry point share one implementation (AC-2). Added a --privacy-baseline-ref flag to --repository-privacy-check (application/cli.py -> application/workflows/maintenance.py::repository_privacy_check); chose the CLI flag over a workflow-only shell computation because the same flag also lets a human run the identical baselined check locally (AC-3). .github/workflows/validation.yml now checks out full history (fetch-depth: 0), fetches origin/main explicitly, and passes --privacy-baseline-ref origin/main to both the pull_request 'validate' job and the workflow_dispatch 'full-regression' job (AC-4); confirmed via a real PR (#135) that GitHub Actions' default checkout is shallow and needed the fetch-depth bump. No scan-surface or detection-rule changes (AC-5) -- git diff confirms only baseline-comparison and CI-wiring code changed. AC-6 real reproduction against this repository's actual current state: `python3 main.py --repository-privacy-check --privacy-baseline-ref origin/main` -> PASS (2 pre-existing findings: project/build_history.json, relay/NXS-LOCAL-0003-local-relay-watch-command.json, 0 new); with a synthetic scratch file containing a fake api_key literal added -> FAIL (1 new finding named, the two pre-existing ones not renamed), then removed. tests/test_gov_po_3_ci_privacy_gate_baseline.py (new, 10 tests) plus tests/test_nexus_engineer_tool_gate.py, test_dev0_4_repository_privacy_gate.py, test_ci_workflow_fast_pr_regression.py, test_application_package.py, test_architecture_convergence.py -- 64 passed (AC-7). git diff --check clean. Project-state updated (build_history.json, roadmap.json, CURRENT_STATE.md, docs/history/INDEX.md) (AC-8). PR #135 opened, CI's own 'validate' check went green on this PR (live confirmation the fix works in the real GitHub Actions environment, not just locally), then merged to main via b0e381a1 per the standing relay#13 merge decision -- no separate merge RELAY_DECISION needed.",
+      "timestamp": "2026-09-08T18:07:01Z"
     }
   ],
   "id": "NXS-LOCAL-0020",
   "movement": "GOV_PO_3_CI_PRIVACY_GATE_BASELINE_SCOPING",
-  "next_actor": "engineer",
+  "next_actor": null,
   "refs": [
     ".github/workflows/validation.yml",
     "application/cli.py",
@@ -88,6 +96,6 @@
     "docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md"
   ],
   "schema_version": 1,
-  "status": "OPEN",
-  "updated_at": "2026-09-08T16:40:52Z"
+  "status": "CLOSED",
+  "updated_at": "2026-09-08T18:07:01Z"
 }

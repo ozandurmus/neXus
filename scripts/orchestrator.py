@@ -86,6 +86,22 @@ DEFAULT_ENGINEER_PROFILE = REPO_ROOT / ".claude" / "nexus-engineer.settings.json
 #: first real dispatch, named as such in this movement's own evidence.
 DEFAULT_MAX_BUDGET_USD = 3.0
 
+#: AC-3 (orchestrator_background_task_exit_race, relay/NXS-LOCAL-0019):
+#: verified against the installed `claude` CLI's own runtime behavior (its
+#: shipped code reads BASH_DEFAULT_TIMEOUT_MS as the fallback timeout for a
+#: Bash-tool call that does not pass its own explicit `timeout`, default
+#: 120000ms -- exactly the "120s timeout" the incident's log line named --
+#: and separately reads BASH_MAX_TIMEOUT_MS, floored at that same default,
+#: as the ceiling on any explicit `timeout` a tool call does pass). Setting
+#: only BASH_DEFAULT_TIMEOUT_MS raises both: the fallback itself, and (since
+#: the ceiling's own fallback is `max(600000, BASH_DEFAULT_TIMEOUT_MS)`) the
+#: ceiling too. This does not disable auto-backgrounding outright -- no such
+#: switch was found -- it only buys a full pytest regression more foreground
+#: headroom before the CLI would consider backgrounding it; ENGINEER_PROMPT's
+#: own instruction (never treat validation as backgroundable; wait for a real
+#: result) is what AC-3 actually leans on for the guarantee.
+DEFAULT_ENGINEER_BASH_TIMEOUT_MS = 1_800_000  # 30 minutes
+
 #: AC-3's dashboard default poll interval, and AC-2's engineer-log summary
 #: line/argument truncation widths -- short enough that `watch`'s table
 #: stays legible without wrapping on an ordinary terminal.
@@ -114,7 +130,36 @@ ENGINEER_PROMPT = (
     "(NEXUS_RELAY_FILE) and act on any RELAY_CORRECTION or RELAY_DECISION "
     "entries appended after dispatch. Proceed as the engineer role under "
     "AGENTS.md, AI_START_HERE.md, and CLAUDE.md exactly as an interactively "
-    "started session would."
+    "started session would. Never treat a long-running validation command -- "
+    "the full pytest regression in particular -- as backgroundable: run it "
+    "as a foreground, awaited Bash command (pass an explicit long `timeout` "
+    "on that tool call rather than accepting its default) and wait for it to "
+    "actually finish. If the CLI still auto-backgrounds it anyway, do not end "
+    "your turn until you have polled for and read that background task's own "
+    "real completion result -- the standing relay#13 'green tests -> "
+    "self-merge' authorization must never be exercised on the strength of a "
+    "test run you did not actually wait to see the result of."
+)
+
+#: AC-4: injected as an extra line onto ENGINEER_PROMPT for one specific
+#: resume dispatch -- when the detection in `needs_resume_recovery_note`
+#: fires (staged-but-uncommitted git changes, relay still at its own
+#: SESSION_START, prior pid dead: the exact pattern observed live in
+#: relay/NXS-LOCAL-0018) -- so the resumed session is told this explicitly
+#: rather than left to notice it unprompted.
+RESUME_RECOVERY_NOTE = (
+    "Before doing anything else this turn: this resume was dispatched "
+    "because your worktree has staged-but-uncommitted git changes while the "
+    "relay is still at its own SESSION_START (no RELAY_ACK/RELAY_NOTE/"
+    "RELAY_QUESTION/SESSION_CLOSE was ever posted) and the prior engineer "
+    "process is dead -- this matches the known background-task-exit-race "
+    "pattern, where a previous turn's own long-running validation command "
+    "outlived that turn without the session waiting to see its result. "
+    "Run `git status` and `git log` to find the prior staged-but-uncommitted "
+    "work, and check whether a background task from the prior turn has a "
+    "pending or already-completed result, before taking any further action -- "
+    "in particular, before committing/pushing/merging on the strength of any "
+    "test run, confirm it actually finished and you saw the real result."
 )
 
 
@@ -190,6 +235,42 @@ def decide_start(
     if active_count >= max_workers:
         return "refuse", f"max_workers ({max_workers}) reached; no free slot"
     return "dispatch", "fresh dispatch"
+
+
+def relay_never_advanced_past_session_start(relay_obj: dict) -> bool:
+    """True iff `entries` holds only its own SESSION_START (index 0) -- no
+    RELAY_ACK/RELAY_NOTE/RELAY_QUESTION/RELAY_DECISION/RELAY_CORRECTION or
+    SESSION_CLOSE was ever appended after dispatch."""
+    entries = relay_obj.get("entries") or []
+    return len(entries) <= 1
+
+
+def has_staged_uncommitted_changes(porcelain_status: str) -> bool:
+    """Parses already-captured `git status --porcelain` output (never spawns
+    git itself -- callers pass the text in, keeping this a pure function per
+    AC-6). Porcelain's first column is the index/staged status; anything
+    other than ' ' (unstaged-only) or '?' (untracked) there means the file
+    has a staged, uncommitted change."""
+    for line in porcelain_status.splitlines():
+        if not line:
+            continue
+        if line[0] not in (" ", "?"):
+            return True
+    return False
+
+
+def needs_resume_recovery_note(
+    *, relay_obj: dict, has_staged_uncommitted_changes: bool, is_pid_alive: bool,
+) -> bool:
+    """AC-4's detection: the exact background-task-exit-race pattern observed
+    live in relay/NXS-LOCAL-0018 -- staged-but-uncommitted git changes, the
+    relay still at its own SESSION_START, and the recorded pid dead. Only
+    ever consulted from the resume branch of `decide_start` (where the pid
+    being dead is already established), but takes `is_pid_alive` explicitly
+    so this stays correct and testable independent of that caller."""
+    if is_pid_alive or not has_staged_uncommitted_changes:
+        return False
+    return relay_never_advanced_past_session_start(relay_obj)
 
 
 def decide_merge_lock_acquire(
@@ -519,6 +600,23 @@ def _git_worktree_remove(worktree_path: Path, cwd: Path) -> None:
                     capture_output=True, text=True, timeout=60)
 
 
+def _git_status_porcelain(worktree_path: Path) -> str:
+    """AC-4: feeds `has_staged_uncommitted_changes`. Advisory only -- a
+    failure here (e.g. the worktree directory is gone) must not block a
+    resume that would otherwise proceed, so it is swallowed and treated as
+    "nothing staged" rather than raised."""
+    try:
+        result = subprocess.run(
+            ["git", "status", "--porcelain"], cwd=str(worktree_path),
+            capture_output=True, text=True, timeout=30,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return ""
+    if result.returncode != 0:
+        return ""
+    return result.stdout
+
+
 def _spawn_summary_tailer(log_path: Path, summary_path: Path, pid: int) -> None:
     """AC-2: a second detached process, independent of both the engineer
     process and of `start`'s own (immediately-returning) invocation, that
@@ -537,10 +635,15 @@ def _spawn_engineer(
     *, worktree_path: Path, profile_path: Path, canonical_relay_dir: Path,
     relay_file: Path, resume_session_id: str | None = None,
     max_budget_usd: float = DEFAULT_MAX_BUDGET_USD,
+    extra_prompt_note: str | None = None,
 ) -> subprocess.Popen:
     env = dict(os.environ)
     env[lr.ENV_CANONICAL_RELAY_DIR] = str(canonical_relay_dir)
     env[lr.ENV_RELAY_FILE] = str(relay_file)
+    # AC-3: raise the engineer session's own Bash-tool auto-background
+    # threshold (see DEFAULT_ENGINEER_BASH_TIMEOUT_MS) -- setdefault so an
+    # operator's own pre-set env var is never overridden by this spawn.
+    env.setdefault("BASH_DEFAULT_TIMEOUT_MS", str(DEFAULT_ENGINEER_BASH_TIMEOUT_MS))
     # AC-1/AC-2/AC-3 (relay/NXS-LOCAL-0015): with --permission-prompts none
     # there is no human to answer a Read/Edit/Write-tool permission prompt
     # for a path outside the worktree, so any such prompt is denied
@@ -559,7 +662,11 @@ def _spawn_engineer(
     # version's own --help/runtime error before writing this, per that
     # movement's own requirement) -- engineer.log now fills incrementally,
     # one JSON object per line, instead of only at process exit.
-    argv = ["claude", "-p", ENGINEER_PROMPT, "--settings", str(profile_path),
+    # AC-4: for the one specific resume this fires on, `needs_resume_recovery_note`
+    # appends RESUME_RECOVERY_NOTE onto the prompt for this dispatch only --
+    # ENGINEER_PROMPT itself stays movement- and dispatch-invariant.
+    prompt = ENGINEER_PROMPT if not extra_prompt_note else ENGINEER_PROMPT + "\n\n" + extra_prompt_note
+    argv = ["claude", "-p", prompt, "--settings", str(profile_path),
             "--add-dir", str(canonical_relay_dir),
             "--output-format", "stream-json", "--verbose",
             "--permission-prompts", "none", "--max-budget-usd", str(max_budget_usd)]
@@ -641,17 +748,29 @@ def _cmd_start(args: argparse.Namespace) -> int:
         base_sha = existing["base_sha"]
         revision = existing["revision"]
         session_id = existing.get("session_id")
+        # AC-4: detect the background-task-exit-race pattern (staged-but-
+        # uncommitted changes + relay never advanced past SESSION_START +
+        # dead pid, the last of which is already established here -- a
+        # resume is only reachable when is_pid_alive was False) and, if it
+        # matches, inject RESUME_RECOVERY_NOTE onto this one dispatch's
+        # prompt. Does not change the resume decision itself (AC-5).
+        staged = has_staged_uncommitted_changes(_git_status_porcelain(worktree_path))
+        recovery_note_needed = needs_resume_recovery_note(
+            relay_obj=relay_obj, has_staged_uncommitted_changes=staged, is_pid_alive=False,
+        )
         proc = _spawn_engineer(
             worktree_path=worktree_path, profile_path=Path(args.profile),
             canonical_relay_dir=relay_dir, relay_file=relay_file,
             resume_session_id=session_id, max_budget_usd=args.max_budget_usd,
+            extra_prompt_note=RESUME_RECOVERY_NOTE if recovery_note_needed else None,
         )
         record = {**existing, "pid": proc.pid, "phase": PHASE_RUNNING,
                   "last_action": "resumed", "task_hash": hash_hex,
                   "dispatch_seq": len(relay_obj["entries"])}
         _save_state(state_dir, args.movement, record)
         print(json.dumps({"action": "resume", "movement_id": args.movement, "pid": proc.pid,
-                           "worktree_path": str(worktree_path), "revision": revision}))
+                           "worktree_path": str(worktree_path), "revision": revision,
+                           "recovery_note_injected": recovery_note_needed}))
         return EXIT_OK
 
     # action == "dispatch"

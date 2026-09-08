@@ -1,0 +1,25 @@
+# Shell scripts are uploaded byte-for-byte over SFTP to remote Unix/Gaia
+# hosts (checkpoint/cp_runner.py, checkpoint/vsx_runner.py) -- a CRLF line
+# ending breaks the remote bash interpreter outright (bad interpreter /
+# syntax error / command not found). Force LF unconditionally regardless
+# of the checking-out machine's core.autocrlf setting or platform default.
+*.sh text eol=lf
+
+# General text-source hygiene: normalize on checkin, keep the checked-out
+# line ending native (does not affect the .sh rule above, which pins eol
+# explicitly). Binary artifact types are excluded so git never attempts a
+# text diff/merge on them.
+*.py text
+*.json text
+*.md text
+*.html text
+*.js text
+*.css text
+*.yml text
+*.yaml text
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.ico binary
+*.pdf binary
