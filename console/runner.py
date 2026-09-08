@@ -45,7 +45,11 @@ import threading
 
 from console.jobs import ConsoleJobStore
 from console.registry import JobType, get_job_type
-from console.registry_targets import DEVICE_ID_TARGET_MODE, resolve_registry_targets
+from console.registry_targets import (
+    DEVICE_ID_TARGET_MODE,
+    TargetRefusal,
+    resolve_registry_target_entities,
+)
 from utils.action_taxonomy import console_refusal
 
 #: M9 — the one job type `_execute` dispatches outside `main.main()` (see
@@ -139,6 +143,7 @@ class ConsoleJobRunner:
             self._execute_enrollment_probe(job_id)
             return
 
+        argv_targets = record.targets
         if job_type.target_mode == DEVICE_ID_TARGET_MODE and record.targets:
             # M6 (registry_keyed_job_targets, Option D, AC-ST-4-equivalent):
             # re-read registry eligibility immediately before execution, not
@@ -146,14 +151,20 @@ class ConsoleJobRunner:
             # queued may have been disabled/retired since. This call is the
             # only path from a queued job to workflow argv construction, so
             # a refusal here provably happens before `_build_argv`/
-            # `main.main()` is ever reached.
-            target_refusal = resolve_registry_targets(record.targets, data_root=self._runtime_paths.data_root)
-            if target_refusal is not None:
+            # `main.main()` is ever reached. M7: this same call also resolves
+            # each device_id to its proven collector entity_id, so argv
+            # construction below substitutes entity_id(s) -- never the raw
+            # device_id(s) -- into the workflow's target selector.
+            translation = resolve_registry_target_entities(
+                record.targets, data_root=self._runtime_paths.data_root
+            )
+            if isinstance(translation, TargetRefusal):
                 self._job_store.mark_terminal(
                     job_id, state="blocked",
-                    error_code=target_refusal.reason, error_summary=target_refusal.detail,
+                    error_code=translation.reason, error_summary=translation.detail,
                 )
                 return
+            argv_targets = [translation[device_id] for device_id in record.targets]
 
         self._job_store.mark_running(job_id)
 
@@ -161,7 +172,7 @@ class ConsoleJobRunner:
         from utils.coordinator_backend import CollectionAdmissionError, Provenance
         from utils.run_context import RunContext
 
-        argv = _build_argv(job_type, self._runtime_paths.runtime_root, record.targets)
+        argv = _build_argv(job_type, self._runtime_paths.runtime_root, argv_targets)
         ctx = RunContext.create(
             data_root=self._runtime_paths.data_root,
             output_root=self._runtime_paths.output_root,
