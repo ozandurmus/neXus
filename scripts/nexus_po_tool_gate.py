@@ -21,8 +21,12 @@ Forms (docs/design/GOV_PO_ROLE_MIGRATION.md section 4 and 6.2):
                  collection, no shell redirection.
   interactive -- Phase A session: the delegated set plus Edit/Write on the
                  governance paths or the nexus_po_* scratch pattern, `gh
-                 issue create`, Git branch/commit/push/PR only on a
-                 `gov/po-*` branch, `git merge origin/<ref>` to sync
+                 issue create`, `gh issue close` (any inline `--comment`
+                 must carry one of the five relay markers, exactly like
+                 `gh issue comment`; a close with no comment is allowed
+                 unconditionally -- GOV_PO_1_GATE_4, 2026-09-08), Git
+                 branch/commit/push/PR only on a `gov/po-*` branch,
+                 `git merge origin/<ref>` to sync
                  that branch with a fix landed on `origin/main` or another
                  `origin/*` ref (merge source restricted to `origin/`;
                  no arbitrary remote or URL is ever reachable, since
@@ -120,7 +124,7 @@ COMMON_PREFIXES = (
     "python3 -m pytest", "py -m pytest", ".venv/bin/python -m pytest",
 )
 INTERACTIVE_EXTRA_PREFIXES = (
-    "gh issue create", "gh pr create",
+    "gh issue create", "gh issue close", "gh pr create",
     "git checkout -b gov/po-", "git switch -c gov/po-",
     "git add ", "git commit", "git push",
     "git merge origin/", "git merge --ff-only origin/",
@@ -278,6 +282,9 @@ def decide(payload: dict, form: str, branch_lookup=_current_branch) -> tuple[boo
         if cmd.startswith("gh issue comment"):
             if "--body-file" not in tokens and not any(m in cmd for m in RELAY_MARKERS):
                 return False, "relay comments must start with one of the five markers"
+        if cmd.startswith("gh issue close"):
+            if ("--comment" in tokens or "-c" in tokens) and not any(m in cmd for m in RELAY_MARKERS):
+                return False, "an inline closing comment must contain one of the five relay markers"
         if form == "interactive" and cmd.startswith(("git add", "git commit", "git push", "gh pr create")):
             branch = branch_lookup(cwd)
             if not branch.startswith("gov/po-"):
