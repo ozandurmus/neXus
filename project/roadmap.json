@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "current_build": "gov_po_3_push_hook_baseline_scoping",
+  "current_build": "m10_2_capability_state_resolver_core",
   "current_track": "PCP.x",
   "progress_contract": "Weighted acceptance-criterion completion. Percentages describe the declared roadmap, not calendar time or delivery ETA.",
   "tracks": [
@@ -140,16 +140,16 @@
   "now_next": {
     "horizon_contract": "NOW is exactly one build. NEXT is exactly one. Everything else is an `upcoming` row carrying its own true status: planned = AFTER, blocked = waiting on a named external gate, deferred = consciously postponed. `now.build` must equal the newest project/build_history.json record -- utils.project_plan enforces it.",
     "now": {
-      "build": "gov_po_3_push_hook_baseline_scoping",
-      "title": "GOV.PO.3 -- push-hook baseline scoping: block only genuinely new privacy findings",
-      "goal": "Make the orchestrated-engineer pre-push privacy-gate hook (scripts/nexus_engineer_tool_gate.py) baseline-aware -- block only findings genuinely new relative to the movement's own base commit, never pre-existing repository debt -- fixing the real bug found live during GOV.PO.3 AC-5 demonstration 1 that would otherwise block every future orchestrated push.",
+      "build": "m10_2_capability_state_resolver_core",
+      "title": "M10.2 -- capability-state resolver core (stage 0, result algebra, primary ladder, qualifiers)",
+      "goal": "Implement the capability-state resolver core (stages 0-3 of docs/design/CAPABILITY_STATE_VOCABULARY_AND_PRESENTATION.md section 5: union tag, contradiction/inconsistency gate, primary ladder, qualifiers) as pure, fully tested functions, so the console/device experience has a real resolver to consume in the next slices.",
       "status": "automated_validated",
       "started": "2026-09-08",
       "completed": "2026-09-08",
       "notes": [
-        "Full detail: project/build_history.json's gov_po_3_push_hook_baseline_scoping record.",
-        "Relay: relay/NXS-LOCAL-0014-push-hook-baseline-scoping.json (Product Owner priority, 2026-09-08, found live during relay/NXS-LOCAL-0012's GOV.PO.3 AC-5 demonstration 1).",
-        "A small, independent corrective fix inserted ahead of gov_po_2_implementation (below) in build order -- part of the ongoing GOV.PO.3 initiative's own AC-5 demonstration sequence, not a change to its scope. AC-5's remaining demonstrations and AC-8-for-the-demo are still pending, unchanged by this record; see gov_po_3_approved_movement_orchestration_ac3's own build_history.json entry for that status."
+        "Full detail: project/build_history.json's m10_2_capability_state_resolver_core record.",
+        "Authorized 2026-09-08 (Product Owner direction: UI/interactive control-plane track is top priority), sequenced by the first M10 Phase A PLAN episode. Runs in parallel with GOV.PO.3 and OP.1 in its own worktree (relay/NXS-LOCAL-0008); consumed M10.1's D4 producer plus declared typed inputs for D2/D3/D5, whose own producers do not exist yet (M10.3/M12).",
+        "Predecessor now-slot: gov_po_3_push_hook_baseline_scoping -- automated_validated, merged; unaffected by this build."
       ]
     },
     "next": {
@@ -171,15 +171,6 @@
           "Deferred to backlog by explicit Product Owner decision, 2026-09-07 (contract section 12 amendment; project/backlog.json: m8_3_real_environment_validation). No new code. Executes the one bounded, read-only command M8.3 prepared but did not run (`py main.py --identity-first-contact <device_id>`) against exactly one Product-Owner-named registry device_id, under explicit authorization -- corporate laptop / controlled environment, matching AI_START_HERE.md 'Real-environment procedure'.",
           "Measures the actually observable CP config evidence-retention lower bound/window (frozen M8 contract §6/§9) -- report UNKNOWN/INSUFFICIENT_EVIDENCE if it cannot be established from the real run, never inferred -- which determines whether CONTRADICTORY_EVIDENCE detection can ever be judged buildable. Closes M8.3 toward REAL_ENV_VALIDATED/DONE. M7 stays blocked until this step produces a genuinely real-environment-validated relationship -- no automated fixture or synthetic relationship may ever satisfy that gate, and M8.4's own AUTOMATED_VALIDATED, MERGED completion does not change this.",
           "2026-09-08, first Phase A PLAN episode: this row LEFT now_next.next and stays here as retained deferred debt, per PRODUCT_DIRECTION_RECORD.md DR-9c (a deferred human validation is tracked durably while independent authorized work continues) and section 6's finding that a deferred row is not an executable NEXT. Nothing about its own status, authorization or gate changed: it is still deferred by the explicit Product Owner decision of 2026-09-07, it still requires an explicitly authorized bounded real-environment run, and it still gates M7. Choosing M10.1 as NEXT does not pay this debt and must never be described as having done so."
-        ]
-      },
-      {
-        "build": "m10_2_capability_state_resolver_core",
-        "title": "M10.2 -- capability-state resolver core (stage 0, result algebra, primary ladder)",
-        "status": "planned",
-        "notes": [
-          "Second M10 slice, sequenced by the first Phase A PLAN episode 2026-09-08. Not authorized; needs its own SESSION_START. Consumes M10.1's D4 producer plus declared inputs for the dimensions whose producers do not exist yet.",
-          "Scope sketch only: stage-0 surface resolution and the OMITTED/RESOLVED union tag, the CapabilityState nine-value vocabulary, and the primary ladder with its fail-closed fallbacks. Authority: docs/design/CAPABILITY_STATE_VOCABULARY_AND_PRESENTATION.md sections 4 and 5 (FROZEN 2026-09-06). Sizing to the GOV.PO.1 section 7 targets is a PLAN decision for the episode that opens it, after M10.1's REVIEW."
         ]
       },
       {
