@@ -6,6 +6,7 @@
     py scripts/orchestrator.py stop       --movement <relay-id> [--force] [options]
     py scripts/orchestrator.py merge-lock {acquire|release} --movement <relay-id> [options]
     py scripts/orchestrator.py watch      [--interval SECONDS] [options]
+    py scripts/orchestrator.py dashboard  [--port N] [options]
 
 `<relay-id>` is the relay file's own id (`NXS-LOCAL-NNNN`), unambiguous and
 resolvable to exactly one file (`relay/<relay-id>-*.json`).
@@ -997,6 +998,25 @@ def _cmd_watch(args: argparse.Namespace) -> int:
 
 
 # ---------------------------------------------------------------------------
+# dashboard (AC-3 onward, project/backlog.json id
+# orchestrator_interactive_dashboard_app -- design acknowledged
+# relay/NXS-LOCAL-0021 seq 2-3): a thin CLI wrapper. All real logic (HTTP
+# server, action-id registry, stage derivation, config) lives in
+# scripts/orchestrator_dashboard.py, imported lazily so `orchestrator.py`'s
+# other subcommands never pay for http.server's import cost.
+# ---------------------------------------------------------------------------
+
+def _cmd_dashboard(args: argparse.Namespace) -> int:
+    import orchestrator_dashboard as dash
+    port = args.port if args.port is not None else dash.DEFAULT_PORT
+    dash.run_dashboard(
+        port=port, relay_dir=Path(args.relay_dir).resolve(), state_dir=Path(args.state_dir),
+        repo_root=Path(args.repo_root).resolve(), retry_limit=args.retry_limit,
+    )
+    return EXIT_OK
+
+
+# ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
 
@@ -1046,6 +1066,16 @@ def build_parser() -> argparse.ArgumentParser:
     p_watch.add_argument("--interval", type=int, default=WATCH_INTERVAL_DEFAULT)
     p_watch.add_argument("--retry-limit", type=int, default=DEFAULT_RETRY_LIMIT)
     p_watch.set_defaults(func=_cmd_watch)
+
+    p_dashboard = sub.add_parser(
+        "dashboard",
+        help="interactive PO + Orchestrator workbench: local HTTP server + browser UI (read+relay-write only)",
+    )
+    _add_common(p_dashboard)
+    p_dashboard.add_argument("--port", type=int, default=None)
+    p_dashboard.add_argument("--repo-root", default=str(REPO_ROOT))
+    p_dashboard.add_argument("--retry-limit", type=int, default=DEFAULT_RETRY_LIMIT)
+    p_dashboard.set_defaults(func=_cmd_dashboard)
 
     # Internal only -- spawned by _spawn_engineer, never invoked directly by
     # a human or documented in this module's own CLI docstring.

@@ -149,7 +149,9 @@
       "notes": [
         "Full detail: project/build_history.json's m11_shared_entity_workspace_and_availability_rule record; relay/NXS-LOCAL-0022.",
         "Content-level P2/P3 (a D-NAV13 NOT_APPLICABLE device tab) explicitly re-scoped out -- tracked as project/backlog.json id navigation_entity_type_classifier_for_content_level_p2_p3.",
-        "Predecessor orchestrator_background_task_exit_race (2026-09-08): ENGINEER_PROMPT forbids treating long-running validation as backgroundable and waits for a real result before commit/push/merge; decide_start's resume path detects the live-observed staged-changes/SESSION_START/dead-pid pattern and injects a recovery note. Full detail: project/build_history.json's orchestrator_background_task_exit_race record."
+        "Predecessor orchestrator_background_task_exit_race (2026-09-08): ENGINEER_PROMPT forbids treating long-running validation as backgroundable and waits for a real result before commit/push/merge; decide_start's resume path detects the live-observed staged-changes/SESSION_START/dead-pid pattern and injects a recovery note. Full detail: project/build_history.json's orchestrator_background_task_exit_race record.",
+        "Predecessor gov_po_3_ci_privacy_gate_baseline_scoping, MERGED PR #135 -- CI's own repository-privacy-gate invocation is now baseline-aware (utils/repository_privacy.py), stopping the permanent red 'validate' status on every PR. Full detail: project/build_history.json's gov_po_3_ci_privacy_gate_baseline_scoping record.",
+        "Predecessor orchestrator_interactive_dashboard_app, MERGED PR #136 -- interactive PO + Orchestrator workbench (py scripts/orchestrator.py dashboard), read+relay-write only. Full detail: project/backlog.json id orchestrator_interactive_dashboard_app."
       ]
     },
     "next": {
@@ -182,7 +184,7 @@
         "status": "deferred",
         "notes": [
           "Deferred to backlog by explicit Product Owner decision, 2026-09-07 (contract section 12 amendment; project/backlog.json: m8_3_real_environment_validation). No new code. Executes the one bounded, read-only command M8.3 prepared but did not run (`py main.py --identity-first-contact <device_id>`) against exactly one Product-Owner-named registry device_id, under explicit authorization -- corporate laptop / controlled environment, matching AI_START_HERE.md 'Real-environment procedure'.",
-          "Measures the actually observable CP config evidence-retention lower bound/window (frozen M8 contract §6/§9) -- report UNKNOWN/INSUFFICIENT_EVIDENCE if it cannot be established from the real run, never inferred -- which determines whether CONTRADICTORY_EVIDENCE detection can ever be judged buildable. Closes M8.3 toward REAL_ENV_VALIDATED/DONE. M7 stays blocked until this step produces a genuinely real-environment-validated relationship -- no automated fixture or synthetic relationship may ever satisfy that gate, and M8.4's own AUTOMATED_VALIDATED, MERGED completion does not change this.",
+          "Measures the actually observable CP config evidence-retention lower bound/window (frozen M8 contract \u00a76/\u00a79) -- report UNKNOWN/INSUFFICIENT_EVIDENCE if it cannot be established from the real run, never inferred -- which determines whether CONTRADICTORY_EVIDENCE detection can ever be judged buildable. Closes M8.3 toward REAL_ENV_VALIDATED/DONE. M7 stays blocked until this step produces a genuinely real-environment-validated relationship -- no automated fixture or synthetic relationship may ever satisfy that gate, and M8.4's own AUTOMATED_VALIDATED, MERGED completion does not change this.",
           "2026-09-08, first Phase A PLAN episode: this row LEFT now_next.next and stays here as retained deferred debt, per PRODUCT_DIRECTION_RECORD.md DR-9c (a deferred human validation is tracked durably while independent authorized work continues) and section 6's finding that a deferred row is not an executable NEXT. Nothing about its own status, authorization or gate changed: it is still deferred by the explicit Product Owner decision of 2026-09-07, it still requires an explicitly authorized bounded real-environment run, and it still gates M7. Choosing M10.1 as NEXT does not pay this debt and must never be described as having done so."
         ]
       },
@@ -364,7 +366,7 @@
     "VSX configuration evidence was originally targeted for 0.6.2 but was delivered early inside the 0.6.1B Check Point configuration track.",
     "The original 0.6.0B native-backup milestone was deferred pending a rebase; that rebase landed 2026-08-30 as docs/design/BACKUP_AND_RECOVERY_ARCHITECTURE.md + docs/design/BACKUP_RECOVERY_CONTRACTS.md (phases RB.0-RB.6). The original constraint stands and is now the design's first principle: configuration evidence is not a recovery backup -- the evidence plane is deliberately redacted and therefore non-restorable, so a separate encrypted recovery plane is required. Backup artifact bytes must never reach output/index.html, the support bundle, or repository metadata; only manifests may be read by other subsystems.",
     "Write/change automation remains outside the current roadmap gate until SEE, VERIFY, TRACE and RECOVER are sufficiently mature.",
-    "Future 0.7.xâ€“1.0 major-track numbering is a planning map, not a frozen release commitment; rebase it explicitly when a preceding phase changes implementation order.",
+    "Future 0.7.x\u00e2\u20ac\u201c1.0 major-track numbering is a planning map, not a frozen release commitment; rebase it explicitly when a preceding phase changes implementation order.",
     "DEPLOY.1 pulls the server_data_plane portion of the 1.0 GOVERN track forward to host the living SEE-track platform; it must not be used to bypass the write/change automation gate stated above.",
     "DEV.1 establishes the controlled Corporate Git/Copilot operating baseline; after acceptance, engineering returns to product work at 0.6.1C. DEV.0.3C remains deferred to the pre-server storage-sensitive checkpoint.",
     "0.7.x early VERIFY foundation was delivered ahead of schedule in 0.6.1B.1.5 and 0.6.1B.1.6; the 0.7.x formal track opens with compliance_posture_rulepack_transition promoting those controls to versioned rule packs.",
@@ -517,7 +519,7 @@
         },
         {
           "build": "DEV.3.4",
-          "title": "Per-vendor worker containers — DEFERRED until collection duration is a real operational pain; requires DEV.3.3 first",
+          "title": "Per-vendor worker containers \u2014 DEFERRED until collection duration is a real operational pain; requires DEV.3.3 first",
           "status": "deferred"
         }
       ]

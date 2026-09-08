@@ -9,9 +9,15 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import ast
+import hashlib
+import io
 import ipaddress
 from pathlib import Path
 import re
+import shutil
+import subprocess
+import tarfile
+import tempfile
 from typing import Iterable
 
 
@@ -253,3 +259,90 @@ def scan_repository(repository_root: Path) -> PrivacyReport:
     # Deduplicate without ever retaining matched values.
     unique = sorted(set(findings), key=lambda item: (item.path, item.line, item.rule))
     return PrivacyReport(scanned, skipped, tuple(unique))
+
+
+# ---------------------------------------------------------------------------
+# Baseline-aware comparison (relay/NXS-LOCAL-0014's push-hook logic, shared).
+#
+# A finding present at some prior commit is pre-existing repository debt, not
+# a new leak -- matched on (file, finding_type, a stable content fingerprint
+# of the flagged span), not (file, exact line number), so a pre-existing
+# finding whose line number merely drifted because of unrelated earlier
+# lines in the same file still counts as pre-existing. Originally built only
+# for scripts/nexus_engineer_tool_gate.py's pre-push hook; the CI privacy
+# gate (application/workflows/maintenance.py::repository_privacy_check) uses
+# the same primitives with a different baseline-ref source (relay/
+# NXS-LOCAL-0020: extending the fix's other half). Callers own the "only
+# scan the baseline when the current scan is non-empty" ordering -- that
+# invariant is caller policy, not part of this module's contract.
+# ---------------------------------------------------------------------------
+def finding_fingerprint(root: Path, finding: PrivacyFinding) -> str:
+    # File-level findings (finding.line == 0, e.g. RUNTIME_DIRECTORY_PRESENT)
+    # have no line span; (path, rule) alone is already stable for those. The
+    # hash is never printed -- only compared in-process -- consistent with
+    # "matched values are never returned or printed".
+    if finding.line <= 0:
+        return ""
+    try:
+        lines = (root / finding.path).read_text(encoding="utf-8").splitlines()
+    except (OSError, UnicodeDecodeError):
+        return ""
+    if not (1 <= finding.line <= len(lines)):
+        return ""
+    return hashlib.sha256(lines[finding.line - 1].strip().encode("utf-8")).hexdigest()
+
+
+def finding_key(root: Path, finding: PrivacyFinding) -> tuple[str, str, str]:
+    return (finding.path, finding.rule, finding_fingerprint(root, finding))
+
+
+def _export_ref_to_tempdir(ref_sha: str, cwd: Path | str) -> Path:
+    tmp_dir = Path(tempfile.mkdtemp(prefix="nexus-privacy-baseline-"))
+    archive = subprocess.run(
+        ["git", "archive", ref_sha], cwd=str(cwd), capture_output=True, timeout=120,
+    )
+    if archive.returncode != 0:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+        raise RepositoryPrivacyError(
+            f"git archive {ref_sha} failed: {archive.stderr.decode(errors='replace').strip()}"
+        )
+    with tarfile.open(fileobj=io.BytesIO(archive.stdout)) as tar:
+        tar.extractall(tmp_dir, filter="data")
+    return tmp_dir
+
+
+def baseline_finding_keys(
+    cwd: Path | str, baseline_ref: str | None,
+) -> tuple[frozenset[tuple[str, str, str]], str]:
+    """Scan ``baseline_ref``'s merge-base with HEAD and return its finding keys.
+
+    ``baseline_ref`` is caller-resolved (a movement's own base commit for the
+    local pre-push hook, a PR's target branch for CI) -- this function only
+    knows how to turn a ref into a set of finding keys, not where the ref
+    itself comes from. ``baseline_ref=None`` (or empty) means no baseline is
+    available; every current finding is then treated as new, exactly the
+    fail-closed behavior this replaces.
+    """
+    if not baseline_ref:
+        return frozenset(), "baseline unavailable (no baseline ref provided)"
+    merge_base = subprocess.run(
+        ["git", "merge-base", "HEAD", baseline_ref], cwd=str(cwd), capture_output=True, text=True, timeout=60,
+    )
+    if merge_base.returncode != 0:
+        return frozenset(), (
+            f"baseline unavailable (git merge-base HEAD {baseline_ref} failed: {merge_base.stderr.strip()})"
+        )
+    base_sha = merge_base.stdout.strip()
+    try:
+        baseline_root = _export_ref_to_tempdir(base_sha, cwd)
+    except RepositoryPrivacyError as exc:
+        return frozenset(), f"baseline unavailable ({exc})"
+    try:
+        try:
+            baseline_report = scan_repository(baseline_root)
+        except RepositoryPrivacyError as exc:
+            return frozenset(), f"baseline scan of {base_sha[:12]} failed ({exc})"
+        keys = frozenset(finding_key(baseline_root, f) for f in baseline_report.findings)
+        return keys, f"baseline={base_sha[:12]}"
+    finally:
+        shutil.rmtree(baseline_root, ignore_errors=True)

@@ -1,0 +1,97 @@
+{
+  "created_at": "2026-09-08T11:20:36Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1 (real bug, found live during AC-5 demonstration 1, relay/NXS-LOCAL-0012 seq 3-4): scripts/nexus_engineer_tool_gate.py's pre-push privacy-gate hook (GOV_PO_3 section 3.4 item 1) currently runs scan_repository() against the FULL working tree and fails closed on ANY finding, including findings already present on origin/main before the current movement's changes -- confirmed live: two pre-existing prose false positives (project/build_history.json:47, relay/NXS-LOCAL-0003-...json:155, both build-history-immutable, never to be edited to silence the scanner) blocked an entirely unrelated one-file movement's push. This blocks every future orchestrated movement's push for as long as any pre-existing finding remains anywhere in the repository, which defeats the hook's own purpose (catching NEW leaks this movement introduces) and silently removes the human-judgment override that has, until now, let engineers manually confirm 'pre-existing, unrelated' and proceed (documented repeatedly this session, e.g. PR #124's own CI precedent).",
+          "AC-2: the hook becomes baseline-aware: before push, it runs scan_repository() twice -- once against the current working tree (post-changes), once against the movement's own recorded base commit (report.git.base from the relay SESSION_START, already resolved to base_sha in the orchestrator's process record, §3.5/§3.7 of GOV_PO_3) checked out to a throwaway location or via git show at that ref for each flagged file. A finding present in BOTH scans (same file, same line-region, same finding type) is pre-existing debt -- do not block. A finding present ONLY in the post-changes scan is genuinely new -- block, exactly as today.",
+          "AC-3: the baseline diff must be robust to line-number drift (a pre-existing finding whose line number shifted because of unrelated earlier lines in the same file, without the flagged content itself changing, must still count as pre-existing, not new) -- match on (file, finding_type, a stable content fingerprint of the flagged span) rather than (file, exact line number) alone.",
+          "AC-4: the hook's denial message, when it does block, names exactly which finding(s) are new (only those, not the pre-existing ones alongside them) so the engineer session gets an actionable, minimal report.",
+          "AC-5: performance is bounded -- the baseline scan runs once per push attempt (not once per file), and is skipped entirely (no baseline comparison overhead) on the common case where the post-changes scan already reports zero findings.",
+          "AC-6: targeted tests: a synthetic repo-shape fixture with (a) a pre-existing finding untouched by the diff -- push allowed; (b) a pre-existing finding whose containing file the diff also touches elsewhere -- still allowed if the flagged span itself is unchanged; (c) a genuinely new finding -- push denied, message names only the new one; (d) a pre-existing finding whose line number shifted due to unrelated earlier edits in the same file -- still recognized as pre-existing (AC-3). Also a regression test reproducing the exact live bug (the two real findings named in AC-1, run against this repository's real current state) proving the fix resolves this movement's own motivating incident.",
+          "AC-7: validation and state: targeted tests green; tests/test_orchestrator.py unaffected (this hook lives in nexus_engineer_tool_gate.py, not orchestrator.py itself); project-state bookkeeping in this PR."
+        ],
+        "baseline": {
+          "authority": "docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md section 3.4 item 1 (the push-time privacy hook this movement corrects) and section 3.10 ('not a new or expanded scan surface' -- this fix keeps that true: it narrows false blocks, it does not add scanning scope).",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "sequencing": "Found live during relay/NXS-LOCAL-0012 (GOV.PO.3 AC-5 demonstration 1), 2026-09-08. Product Owner priority: this blocks every subsequent orchestrated push, fix before it recurs on real product movements (M10.2, OP.1, M10.3, the backlog bundle -- relay/NXS-LOCAL-0008/0009/0010/0011 -- all still queued and will each hit this same wall at their own push time otherwise)."
+        },
+        "context_not_loaded": [
+          "everything else"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/gov-po-3-push-hook-baseline-scoping"
+        },
+        "invariants": [
+          "Never edit project/build_history.json or any other build-history-immutable file to silence a false positive -- the fix is scope, not content",
+          "A genuinely new finding still blocks push exactly as today -- this narrows false blocks only, never widens what is missed",
+          "No expansion of the scan surface itself (still the same scan_repository() function, same finding types)"
+        ],
+        "merge_gate": "Standing relay#13: green tests -> self-merge, report via RELAY_NOTE. This is a hook-only change (nexus_engineer_tool_gate.py); if this movement's own push hits the SAME pre-existing-finding bug before the fix lands, that is expected and self-resolving once this movement's own diff is the fix -- note it plainly rather than treating it as a new blocker.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Make the orchestrated-engineer pre-push privacy-gate hook baseline-aware (block only genuinely new findings, never pre-existing repository debt), fixing the real bug found live during AC-5 demonstration 1 that would otherwise block every future orchestrated push.",
+        "output_contract": [
+          "scripts/nexus_engineer_tool_gate.py: baseline-aware push hook",
+          "tests/test_nexus_engineer_tool_gate.py (new, or extended if a test file already exists for it)",
+          "Project-state bookkeeping in this PR",
+          "SESSION_CLOSE on this relay file (absolute path)"
+        ],
+        "recommended_reasoning": {
+          "reason": "A real, observed bug with a precisely specified fix (diff a known-good baseline against current state); no design ambiguity once the fingerprint-matching approach in AC-3 is followed.",
+          "tier": "Sonnet 5, normal"
+        },
+        "requirements": [
+          "Read scripts/nexus_engineer_tool_gate.py in full before editing",
+          "Reproduce the live bug (AC-1's two real findings) as your first test, before writing the fix, to prove you are fixing the actual observed failure"
+        ],
+        "risks": [
+          "If utils.repository_privacy.scan_repository() has no clean way to scan an arbitrary git ref (only the working tree), the baseline scan may need a temporary git worktree/checkout of the base commit -- prefer 'git show <base_sha>:<path>' per flagged file over a full second checkout if scan_repository() can be pointed at an in-memory/temp-file representation; report via RELAY_QUESTION if neither is clean rather than inventing a third scanning code path."
+        ],
+        "scope": {
+          "in": [
+            "The push hook's baseline-awareness logic",
+            "targeted tests"
+          ],
+          "out": [
+            "Any change to utils/repository_privacy.py's own finding-detection rules",
+            "Any change to the CI-run privacy gate (main.py --repository-privacy-check itself, unaffected)",
+            "orchestrator.py's own logic"
+          ]
+        },
+        "validation_plan": [
+          "Targeted tests including the live-bug regression (AC-6)",
+          "git diff --check",
+          "privacy gate once at PR time"
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-08T11:20:36Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "RELAY_NOTE",
+      "seq": 2,
+      "subject": "gov_po_3_push_hook_baseline_scoping merged",
+      "text": "Implemented AC-1..AC-7: scripts/nexus_engineer_tool_gate.py's pre-push privacy gate is now baseline-aware -- scans the working tree, and only when non-empty also scans the movement's own base commit (git archive into a throwaway tempdir, reusing scan_repository() unmodified), blocking only findings absent from that baseline, matched on (path, rule, a content fingerprint of the flagged line) so line-number drift doesn't misclassify pre-existing debt as new; a denial names only the genuinely new finding(s). tests/test_nexus_engineer_tool_gate.py: 7 passed, including a regression reproducing the exact AC-1 live-bug findings (project/build_history.json, relay/NXS-LOCAL-0003-local-relay-watch-command.json:155) against this repository's real state, proving both are now recognized as pre-existing. tests/test_orchestrator.py unaffected: 48 passed. tests/test_architecture_convergence.py: 22 passed. git diff --check clean. Repository privacy gate at PR time (main.py --repository-privacy-check, unmodified/out-of-scope full-tree scan): FAIL/5 pre-existing findings only. Live confirmation of the fix: this movement's own git push was denied once by 3 genuinely-new findings from untracked, gitignored data/logs/ runtime artifacts left over from local test runs (no git baseline possible for uncommitted files, a separate documented out-of-scope gap) -- removed as disposable local state, then the push succeeded cleanly through the fixed hook. Project-state updated (build_history.json, roadmap.json, CURRENT_STATE.md, docs/history/INDEX.md). PR #127 merged to main via 3efaa1ce per the standing relay#13 merge decision -- no separate merge RELAY_DECISION needed.",
+      "timestamp": "2026-09-08T11:45:40Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0014",
+  "movement": "GOV_PO_3_PUSH_HOOK_BASELINE_SCOPING",
+  "next_actor": null,
+  "refs": [
+    "scripts/nexus_engineer_tool_gate.py",
+    ".claude/nexus-engineer.settings.json",
+    "utils/repository_privacy.py",
+    "docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-08T11:45:40Z"
+}

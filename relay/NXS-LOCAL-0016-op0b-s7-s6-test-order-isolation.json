@@ -1,0 +1,172 @@
+{
+  "created_at": "2026-09-08T11:32:08Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1: reproduce first (before fixing): `pytest tests/test_op0b_s7_readiness_v2.py tests/test_op0b_s6_pan_preflight_collector.py` (S7 first) fails S6 tests with a real requests HTTPError; confirm this reproduces at current HEAD exactly as backlog.json describes before touching anything.",
+          "AC-2: root-cause is a module-rebind/state-leak: S7's own test setup patches a target that S6's collect_member also binds to at import/call time, and the patch outlives S7's own test scope, leaking into S6 when S7 runs first. Identify the exact patch (monkeypatch/mock target) responsible -- name it in your evidence, not a guess.",
+          "AC-3: fix the leak at its source -- proper teardown/scoping of the S7 patch (e.g. a fixture with correct scope, or an explicit unpatch/restore) so it never outlives its own test, regardless of run order. Do not fix this by reordering tests, renaming files to force alphabetical safety, or adding a global conftest hack that papers over the specific leak without naming it.",
+          "AC-4: order-independence proven: both invocation orders (`test_op0b_s7... test_op0b_s6...` and the reverse) pass cleanly; add a regression test or a documented one-shot verification command in your SESSION_CLOSE proving this, since this defect class (module-rebind leaking across test order) has recurred before in this repository (per the frontend-rendering guard precedent this backlog item cites) and deserves a durable, re-checkable proof.",
+          "AC-5: no product code change -- this is test-infrastructure only, per the backlog item's own note ('no product change expected'); if investigation finds this actually requires a product-code change, stop and report via RELAY_QUESTION rather than silently expanding scope.",
+          "AC-6: validation and state: both test files green individually and in both orders; the full existing pass counts for each file are unchanged (no test silently skipped or removed to make the symptom disappear); project-state bookkeeping (backlog.json status update for this item, build_history record) lands in this PR."
+        ],
+        "baseline": {
+          "authority": "project/backlog.json id op0b_s7_s6_test_order_isolation (the exact reproduction command and root-cause hypothesis are already recorded there -- read it in full).",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "sequencing": "Small, independent, already-documented test-infra debt. Dispatched alongside GOV.PO.3's own in-flight movements (relay/NXS-LOCAL-0013/0014/0015) -- zero file overlap with any of them or with the queued M10.2/M10.3/OP.1/backlog-bundle movements, chosen specifically to avoid any merge/worktree collision."
+        },
+        "context_not_loaded": [
+          "everything outside the two named test files"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/op0b-s7-s6-test-order-isolation"
+        },
+        "invariants": [
+          "No product code change (AC-5)",
+          "The fix names and addresses the actual leak, never papers over it with reordering or a broad hack"
+        ],
+        "merge_gate": "Standing relay#13: green tests -> self-merge, report via RELAY_NOTE.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Fix the module-rebind state leak where OP.0b S7 readiness tests, run before S6 PAN preflight collector tests, break 25 S6 tests -- make the two test files order-independent.",
+        "output_contract": [
+          "tests/test_op0b_s7_readiness_v2.py and/or tests/test_op0b_s6_pan_preflight_collector.py: the isolation fix",
+          "Project-state bookkeeping in this PR",
+          "SESSION_CLOSE on this relay file (absolute path)"
+        ],
+        "recommended_reasoning": {
+          "reason": "A well-documented, isolated test-infrastructure bug with an already-recorded reproduction and hypothesis; deterministic once the exact patch target is confirmed.",
+          "tier": "Sonnet 5, normal"
+        },
+        "requirements": [
+          "Reproduce the failure for real before writing any fix (AC-1)"
+        ],
+        "risks": [],
+        "scope": {
+          "in": [
+            "The two named test files' isolation fix"
+          ],
+          "out": [
+            "Any product code",
+            "Any other test file"
+          ]
+        },
+        "validation_plan": [
+          "Both files, both orders, real command output",
+          "git diff --check",
+          "privacy gate once at PR time"
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-08T11:32:08Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "RELAY_QUESTION",
+      "seq": 2,
+      "subject": "op0b_s7_s6_test_order_isolation: fix complete, self-merge blocked by broken merge-lock re-validation hook",
+      "text": "AC-1..AC-6 satisfied: reproduced original failure, root-caused to test_op0b_s7_readiness_v2.py's test_evaluator_performs_no_socket_io_and_imports_no_collector popping panorama.preflight_collector/checkpoint.preflight_collector from sys.modules without restoring, fixed with a save/restore try/finally + new regression test (no product code touched). Verified directly with the .venv interpreter (not sys.executable, which resolves to a pytest-less system python3 in this session): both invocation orders 110/110 passed; full one-shot regression 2698 passed, 25 skipped, 2 failed -- both pre-existing/unrelated self-referential CREDENTIAL_LITERAL prose matches in project/build_history.json and relay/NXS-LOCAL-0003-local-relay-watch-command.json, confirmed identical to PR #127/#129's own validate-CI failures (already merged to main with the same red X). Branch merged twice against an advancing origin/main (bookkeeping-only conflicts in CURRENT_STATE.md/docs/history/INDEX.md/project/build_history.json/project/roadmap.json, resolved by hand: op0b entry kept newest, current_build/now_next.now agree, INDEX.md regenerated via scripts/build_history_index.py, CURRENT_STATE.md kept <=200 lines) and pushed; PR #128 is MERGEABLE.  is blocked by scripts/nexus_engineer_tool_gate.py's own VALIDATION_COMMANDS using sys.executable for the merge-lock re-validation pytest call -- in this session sys.executable resolves to /usr/local/bin/python3 (no pytest installed), not the project .venv, so the hook itself fails with 'No module named pytest' before it can even re-run the real check I already ran manually. This is orchestration tooling (scripts/nexus_engineer_tool_gate.py), not one of the two files this movement is scoped to (AC-5/scope.out), so I have not touched it. Requesting direction: fix the session's python3 resolution and retry, have a differently-configured session run gh pr merge, or explicitly authorize me to patch the hook's interpreter resolution as a narrow, separate, tooling-only fix.",
+      "timestamp": "2026-09-08T12:11:56Z"
+    },
+    {
+      "actor": "po",
+      "authorized_by": "Product Owner (Ozan Durmus)",
+      "marker": "RELAY_DECISION",
+      "scope": "scripts/nexus_engineer_tool_gate.py: the merge-lock re-validation hook's interpreter-resolution call site only",
+      "seq": 3,
+      "subject": "op0b_s7_s6_test_order_isolation: authorize narrow interpreter-resolution fix to the merge-lock re-validation hook",
+      "supersedes": "none",
+      "text": "Confirmed real bug, option (c) authorized: patch scripts/nexus_engineer_tool_gate.py's VALIDATION_COMMANDS (or wherever it invokes sys.executable for the merge-lock pytest re-validation) to resolve the project's actual validated interpreter the same way CLAUDE.md already directs every session to (the .venv interpreter on this macOS profile), not sys.executable, which can resolve to a pytest-less system python3 depending on how the parent process was launched. Scope this as a narrow, separate, tooling-only fix to that one interpreter-resolution call site -- do not touch anything else in the hook. Land it as part of this movement's own PR (small enough not to need its own relay episode), re-run the merge-lock re-validation for real once fixed, confirm it now passes, then proceed to self-merge PR #128 under the standing relay#13 authorization exactly as planned. Report the fix and the real re-validation result in your SESSION_CLOSE.",
+      "timestamp": "2026-09-08T12:25:28Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "AUTOMATED_VALIDATED",
+      "report": {
+        "changed": [
+          "tests/test_op0b_s7_readiness_v2.py (save/restore try/finally + new regression test)",
+          "scripts/nexus_engineer_tool_gate.py (_resolve_interpreter/_validation_commands, narrow scope per RELAY_DECISION seq 3)",
+          "tests/test_nexus_engineer_tool_gate.py (+2 tests for the interpreter-resolution fix)",
+          "project/backlog.json, project/build_history.json, project/roadmap.json, docs/history/INDEX.md, CURRENT_STATE.md (project-state bookkeeping)"
+        ],
+        "completed": [
+          "AC-1: reproduced the original failure at HEAD before any change -- S7-then-S6 order produced real S6 HTTPError/hanging-requests failures exactly as backlog.json described.",
+          "AC-2: root-caused to the exact patch target -- tests/test_op0b_s7_readiness_v2.py::test_evaluator_performs_no_socket_io_and_imports_no_collector's sys.modules.pop of panorama.preflight_collector/checkpoint.preflight_collector, never restored, causing S6's later import to rebind against a fresh module object while collect_member kept resolving globals against the original one.",
+          "AC-3: fixed at the source with a save/restore try/finally around the same test body; no reordering, no renaming, no global conftest hack.",
+          "AC-4: both invocation orders proven green (110 passed each), plus a new direct regression test asserting module-identity restoration.",
+          "AC-5: no product code changed (test-infra only, confirmed via git diff).",
+          "AC-6: both files green individually and in both orders; pass counts unchanged apart from the one added regression test; backlog.json/build_history.json bookkeeping landed in the same PR.",
+          "Additionally (PO-authorized via RELAY_DECISION, relay/NXS-LOCAL-0016 seq 3): fixed scripts/nexus_engineer_tool_gate.py's merge-lock re-validation subprocess calls, which used sys.executable directly and could resolve to a pytest-less interpreter from a worktree checkout (this session's own live blocker, relay/NXS-LOCAL-0016 seq 2). New _resolve_interpreter()/_validation_commands() locate the shared .venv via git rev-parse --git-common-dir, with 2 new regression tests."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "No behavior change to main.py or any product entry point -- test-infrastructure and orchestration-tooling only.",
+          "ui": "No visible UI change."
+        },
+        "integration": {
+          "branch": "feature/op0b-s7-s6-test-order-isolation",
+          "ci": "validate: FAILURE (expected/known -- same 2 pre-existing CREDENTIAL_LITERAL prose false positives as PR #127/#129/#130/#131/#132, no branch protection, tracked separately as backlog item gov_po_3_ci_privacy_gate_baseline_scoping). full-regression: SKIPPED (workflow_dispatch only).",
+          "head_sha": "97621c60c45e25b1d44c6875b16cc87bcbc21fb5",
+          "merge_commit": "97621c60c45e25b1d44c6875b16cc87bcbc21fb5",
+          "merge_decision": "Self-merged under the standing relay#13 authorization ('green tests -> self-merge, report via RELAY_NOTE') after the PO-authorized merge-lock interpreter-resolution fix (relay/NXS-LOCAL-0016 seq 3) let the real merge-lock re-validation pass; merged squash via gh pr merge 128 --squash.",
+          "merge_state": "MERGED",
+          "pr": 128,
+          "pr_url": "https://github.com/ozandurmus/neXus/pull/128"
+        },
+        "next": {
+          "movement": "gov_po_2_implementation",
+          "movement_type": "IMPLEMENTATION",
+          "objective": "Implement the frozen GOV.PO.2 PO permission model (docs/design/GOV_PO_2_PO_VISIBILITY_AND_BOUNDED_AUTHORSHIP.md, FROZEN -- PRODUCT OWNER APPROVED): gh pr diff/gh run view/gh run list read-only prefixes, docs/design/po_drafts/*.md + FROZEN/RATIFIED status-line regex, docs/history/INDEX.md removed from GOVERNANCE_PATHS, new repository-privacy-check equivalence module, new nexus-po-evidence-reviewer agent. Unrelated to this movement; not yet dispatched.",
+          "status": "planned"
+        },
+        "preserved": [
+          "tests/test_op0b_s6_pan_preflight_collector.py untouched (fix lives entirely in S7's own test file, per AC-3's instruction not to touch S6)",
+          "scripts/nexus_engineer_tool_gate.py's other sys.executable use (the merge-lock acquire/release orchestrator.py subprocess call) left as-is -- not reported broken, out of the PO's narrow authorization scope",
+          "No product code touched anywhere in this movement"
+        ],
+        "recommended_reasoning": {
+          "reason": "gov_po_2_implementation is deterministic implementation against a contract the frozen document already leaves with zero open design questions (per roadmap.json's own note on it).",
+          "tier": "Sonnet 5, normal"
+        },
+        "state_updates": [
+          "project/backlog.json: op0b_s7_s6_test_order_isolation -> automated_validated.",
+          "project/build_history.json: new op0b_s7_s6_test_order_isolation record (newest), reconciled against 4 concurrently-merging predecessors across the merge cycle (PR #130, #131, #132) as this branch was rebased against an advancing origin/main.",
+          "project/roadmap.json: current_build/now_next.now -> op0b_s7_s6_test_order_isolation.",
+          "docs/history/INDEX.md: regenerated via scripts/build_history_index.py.",
+          "CURRENT_STATE.md: checkpoint updated, kept at 183 lines (<=200 budget)."
+        ],
+        "unresolved_risks": [
+          "None for the S7/S6 fix itself. The interpreter-resolution fix is scoped only to the merge-lock re-validation call sites per the PO's authorization; the hook's other sys.executable use (merge-lock acquire/release) was left untouched since it was not reported broken."
+        ],
+        "validation": {
+          "affected": "tests/test_architecture_convergence.py: 22 passed.",
+          "diff_check": "git diff --check: clean.",
+          "full_regression": ".venv/bin/python -m pytest -q -n auto --dist worksteal: 2943 passed, 25 skipped, 2 failed -- both pre-existing/unrelated (tests/test_dev_0_5b_auth_consumer_canonical_config.py's own DLP self-check false positive against project/build_history.json's own prose, documented since gov_po_1_local_relay_watch_command).",
+          "privacy": ".venv/bin/python main.py --repository-privacy-check: FAIL/2 pre-existing findings only (CREDENTIAL_LITERAL in project/build_history.json and relay/NXS-LOCAL-0003-local-relay-watch-command.json, both baseline-recognized by nexus_engineer_tool_gate.py's own content-fingerprint matching); local runtime artifacts (data/, logs/) removed before push so the actual pre-push gate ran clean: PASS.",
+          "real_environment": "NOT_RUN -- test-infrastructure only, no device/network contact in scope.",
+          "state_consistency": "tests/test_architecture_convergence.py's project-plan cross-authority checks pass; scripts/build_history_index.py --check: up to date.",
+          "targeted": "tests/test_op0b_s7_readiness_v2.py + tests/test_op0b_s6_pan_preflight_collector.py, both orders: 110 passed each (S7 69 incl. 1 new test, S6 41 unchanged). tests/test_nexus_engineer_tool_gate.py: 9 passed (7 pre-existing + 2 new)."
+        }
+      },
+      "seq": 4,
+      "timestamp": "2026-09-08T12:51:31Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0016",
+  "movement": "OP0B_S7_S6_TEST_ORDER_ISOLATION",
+  "next_actor": null,
+  "refs": [
+    "tests/test_op0b_s7_readiness_v2.py",
+    "tests/test_op0b_s6_pan_preflight_collector.py",
+    "project/backlog.json"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-08T12:51:31Z"
+}

@@ -1,0 +1,95 @@
+{
+  "created_at": "2026-09-08T11:18:05Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1 streaming engineer output: _spawn_engineer's claude -p invocation gains --output-format stream-json --verbose (or the currently-correct flag combination for line-delimited streaming JSON in this claude version -- verify with claude -p --help before assuming the exact flag names). The engineer.log file inside each worktree's .nexus/ directory now fills incrementally as the engineer session runs, one JSON object per line, instead of only at process exit.",
+          "AC-2 a real-time text summary alongside the raw JSONL: add a small, dependency-free JSONL line parser (stdlib json only) that extracts, per line, a short human-readable one-line summary (tool name + short argument summary for a tool_use event; a truncated text snippet for an assistant text event) and appends it to a sibling file worktree/.nexus/engineer.summary.log -- so tail -f on the summary file is legible without parsing raw JSON by eye. The raw engineer.log stays untouched/unparsed-in-place; this is an additional derived file, not a replacement.",
+          "AC-3 dashboard command: python3 scripts/orchestrator.py watch [--interval SECONDS, default 5] -- a terminal loop (stdlib only: os.system('clear')/ANSI clear-and-redraw, no curses/rich/textual dependency) that polls the same data orchestrator status already computes and redraws a table: movement id, phase, pid alive yes/no, heartbeat age, branch, worktree, last relay marker+timestamp, and the last 1-2 lines of engineer.summary.log (AC-2) truncated to terminal width. Exits cleanly on Ctrl-C. Read-only -- no state mutation, mirrors local_relay.py watch's own bounded/read-only precedent (though this one loops until interrupted rather than a single bounded wait, since it is an explicit human-facing dashboard, not an unattended polling primitive -- state this distinction explicitly in the code's own docstring).",
+          "AC-4 status/watch surface the new summary data: orchestrator status (no --watch) gains one more field per movement, last_activity (the most recent engineer.summary.log line, or null if AC-1/AC-2 produced nothing yet e.g. for a movement dispatched before this change).",
+          "AC-5 backward compatible: a movement already dispatched before this change (old-format engineer.log, no summary.log) does not crash status or watch -- last_activity is null, the table shows an em-dash or 'n/a', no exception.",
+          "AC-6 targeted tests: the JSONL-line-to-summary parser (a table of representative real claude -p stream-json line shapes -> expected one-line summaries, including malformed/partial-line handling -- a truncated last line at read time must not crash, just be skipped until complete); orchestrator status's new last_activity field; watch's redraw loop is NOT tested by literally spawning a terminal -- test its data-gathering function in isolation (given a set of state records + log files, what table rows would it produce), not the terminal-rendering side.",
+          "AC-7 validation and state: targeted tests green; tests/test_orchestrator.py's existing tests keep passing (the stream-json flag change must not break the existing dispatch/status/duplicate-start/recovery tests -- update any test that asserted the old argv shape). Project-state bookkeeping in this PR."
+        ],
+        "baseline": {
+          "authority": "docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md section 3.4 (_spawn_engineer) -- this movement extends the existing, already-frozen orchestrator with observability, not a new capability class; no council trigger applies (read-only/output-format additions, no new write/execute boundary).",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "sequencing": "Product Owner direction 2026-09-08, immediately after AC-3/AC-5 demonstration 1 of GOV_PO_3 ran live and confirmed engineer.log stays empty until process exit under the current (non-streaming) claude -p invocation -- a real, observed gap, not speculative."
+        },
+        "context_not_loaded": [
+          "everything else"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/gov-po-3-orchestrator-observability"
+        },
+        "invariants": [
+          "No new third-party dependency -- stdlib only, matching every other scripts/ tool in this repo",
+          "watch is read-only and mutates no state; it is a human-facing loop, not an unattended primitive (distinct from local_relay.py watch's bounded single-wait design -- state why explicitly)",
+          "Backward compatible with movements already dispatched before this change lands"
+        ],
+        "merge_gate": "Standing relay#13: green tests -> self-merge, report via RELAY_NOTE. Dispatch this movement itself through orchestrator start once its relay file exists, as a further live proof of the pipeline.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Give the orchestrator real-time visibility: streaming engineer output (not only visible at process exit) and a terminal dashboard (orchestrator watch) showing every active movement's phase, process liveness, and last activity.",
+        "output_contract": [
+          "scripts/orchestrator.py: --output-format streaming flag, the JSONL summary parser, the watch subcommand, status's new last_activity field",
+          "tests/test_orchestrator.py: targeted extensions",
+          "Project-state bookkeeping in this PR",
+          "SESSION_CLOSE on this relay file (absolute path)"
+        ],
+        "recommended_reasoning": {
+          "reason": "Deterministic extension of an already-built, already-tested script -- verify the exact claude -p streaming flag names for real before coding against them (AC-1's own requirement), otherwise routine implementation.",
+          "tier": "Sonnet 5, normal"
+        },
+        "requirements": [
+          "Run 'claude -p --help' for real and confirm the exact streaming-output flag names before writing AC-1 -- do not assume the flag spelling"
+        ],
+        "risks": [
+          "If the installed claude version's stream-json line shapes differ from what AC-2's parser expects, the summary extraction may silently produce empty/wrong summaries for some event types -- handle an unrecognized line shape by falling back to a truncated raw-JSON one-liner, never crashing or dropping the line from engineer.log itself."
+        ],
+        "scope": {
+          "in": [
+            "AC-1 through AC-6 as specified",
+            "bookkeeping"
+          ],
+          "out": [
+            "Any change to the merge/lock/recovery logic already frozen in GOV_PO_3",
+            "A web UI or any GUI -- terminal only, per AC-3",
+            "Historical backfill of summary.log for already-completed movements"
+          ]
+        },
+        "validation_plan": [
+          "tests/test_orchestrator.py (full file)",
+          "git diff --check",
+          "privacy gate once at PR time"
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-08T11:18:05Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "RELAY_NOTE",
+      "seq": 2,
+      "subject": "gov_po_3_orchestrator_observability merged",
+      "text": "Implemented AC-1..AC-7. AC-1: _spawn_engineer's claude -p invocation now carries --output-format stream-json --verbose, confirmed for real via claude -p --help and a live run without --verbose that failed closed with the exact 'requires --verbose' error. AC-2: new stdlib-only summarize_stream_json_line parser plus a detached _tail-summary companion process append one human-readable line per engineer.log event to a sibling engineer.summary.log, leaving a truncated last line unconsumed until complete and falling back to a truncated raw-JSON line for an unrecognized-but-valid shape rather than dropping it; real-shape table captured from a live claude -p --output-format stream-json --verbose run. AC-3: new read-only 'orchestrator watch [--interval SECONDS]' terminal dashboard, stdlib-only (os.system/shutil.get_terminal_size), exits cleanly on Ctrl-C, docstring states why it loops unlike local_relay.py watch's bounded design. AC-4/AC-5: status/watch gained last_activity, null/'n/a' and no exception for a pre-change movement, verified directly. AC-6: tests/test_orchestrator.py gained 28 new tests (21 functions, one parametrized 8 ways over real line shapes) covering the parser, partial-line draining, argv shape, last_activity, and watch's data-gathering/rendering in isolation -- no terminal spawned. AC-7: 76 passed (48 pre-existing + 28 new); full one-shot suite 2697 passed, 25 skipped, 2 failed -- both the same pre-existing tests/test_dev_0_5b_auth_consumer_canonical_config.py DLP-scan false positive already documented in prior movements' evidence, unrelated to this diff. git diff --check clean. Repository privacy gate: FAIL/5 findings, identical to the 5 already documented in prior movements' evidence (data/, data/.support_hmac.key, logs/, two pre-existing CREDENTIAL_LITERAL matches), none in this movement's changed files. Merged origin/main (which had advanced with gov_po_3_ac5_demo_1 and gov_po_3_push_hook_baseline_scoping) into this branch before opening the PR, resolving bookkeeping conflicts so this record sits on top of both predecessors. GitHub Actions 'validate' check failed on this PR (pre-existing repository-privacy-gate CREDENTIAL_LITERAL findings in project/build_history.json/relay/NXS-LOCAL-0003-...json, same 2 findings also failing on PR #125 and #127 before this one) -- not caused by this movement's diff; self-merged on local validation per the standing relay#13 merge decision, consistent with #125/#127's own precedent. Project-state updated (build_history.json, roadmap.json, CURRENT_STATE.md, docs/history/INDEX.md). Merged to main via PR #129.",
+      "timestamp": "2026-09-08T12:01:20Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0013",
+  "movement": "GOV_PO_3_ORCHESTRATOR_OBSERVABILITY",
+  "next_actor": null,
+  "refs": [
+    "scripts/orchestrator.py",
+    "scripts/local_relay.py",
+    "docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-08T12:01:20Z"
+}
