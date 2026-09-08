@@ -721,12 +721,64 @@ def test_append_status_validate_watch_default_to_the_relay_file_env_var(tmp_path
     assert lr.main(["validate"]) == lr.EXIT_OK
 
 
-def test_append_explicit_file_wins_over_the_env_var(tmp_path, monkeypatch):
+def test_append_explicit_file_wins_when_the_env_var_is_unset(tmp_path, monkeypatch):
     real = _create(tmp_path)
-    monkeypatch.setenv(lr.ENV_RELAY_FILE, str(tmp_path / "does-not-exist.json"))
+    monkeypatch.delenv(lr.ENV_RELAY_FILE, raising=False)
     rc = lr.main(["append", "--file", str(real), "--role", "engineer", "--marker", "RELAY_ACK",
                   "--subject", "x", "--text", "y", "--next", "po"])
     assert rc == lr.EXIT_OK
+
+
+def test_append_explicit_file_matching_the_env_var_still_works(tmp_path, monkeypatch):
+    real = _create(tmp_path)
+    monkeypatch.setenv(lr.ENV_RELAY_FILE, str(real))
+    rc = lr.main(["append", "--file", str(real), "--role", "engineer", "--marker", "RELAY_ACK",
+                  "--subject", "x", "--text", "y", "--next", "po"])
+    assert rc == lr.EXIT_OK
+
+
+def test_append_rejects_an_explicit_file_that_does_not_match_the_env_var(tmp_path, monkeypatch, capsys):
+    # NXS-LOCAL-0021: a relative --file used to silently resolve against cwd
+    # instead of the canonical NEXUS_RELAY_FILE, creating a divergent shadow
+    # relay file the orchestrator/PO never saw. append now refuses instead.
+    real = _create(tmp_path)
+    monkeypatch.setenv(lr.ENV_RELAY_FILE, str(real))
+    shadow = tmp_path / "shadow.json"
+    shadow.write_text(real.read_text(encoding="utf-8"), encoding="utf-8")
+    rc = lr.main(["append", "--file", str(shadow), "--role", "engineer", "--marker", "RELAY_ACK",
+                  "--subject", "x", "--text", "y", "--next", "po"])
+    assert rc == lr.EXIT_USAGE
+    assert lr.ENV_RELAY_FILE in capsys.readouterr().err
+    # Neither file was mutated by the rejected call.
+    assert json.loads(shadow.read_text(encoding="utf-8"))["entries"] == \
+        json.loads(real.read_text(encoding="utf-8"))["entries"]
+
+
+def test_append_rejects_a_relative_file_resolving_outside_the_canonical_dir(tmp_path, monkeypatch):
+    # AC-3 repro: NEXUS_RELAY_FILE/NEXUS_CANONICAL_RELAY_DIR set (as the
+    # orchestrator sets them for a spawned engineer worktree), append invoked
+    # with a relative --file that would previously resolve against cwd (here,
+    # a separate "worktree" directory) instead of the canonical file.
+    canonical_base = tmp_path / "canonical-base"
+    canonical_base.mkdir()
+    real = _create(canonical_base, role="po")
+    canonical_dir = real.parent
+    monkeypatch.setenv(lr.ENV_CANONICAL_RELAY_DIR, str(canonical_dir))
+    monkeypatch.setenv(lr.ENV_RELAY_FILE, str(real))
+
+    worktree = tmp_path / "worktree"
+    worktree.mkdir()
+    relative_name = real.name  # e.g. "NXS-LOCAL-0021-....json", relative to cwd
+    monkeypatch.chdir(worktree)
+
+    before = real.read_text(encoding="utf-8")
+    rc = lr.main(["append", "--file", relative_name, "--role", "engineer", "--marker", "RELAY_ACK",
+                  "--subject", "x", "--text", "y", "--next", "po"])
+    assert rc == lr.EXIT_USAGE
+    # No second, divergent relay file was silently created in the worktree cwd,
+    # and the canonical file was left untouched.
+    assert not (worktree / relative_name).exists()
+    assert real.read_text(encoding="utf-8") == before
 
 
 def test_append_reports_usage_error_when_neither_flag_nor_env_var_is_set(tmp_path, monkeypatch, capsys):
