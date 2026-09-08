@@ -68,15 +68,10 @@ covered by the lock's own TTL-based staleness reclaim
 """
 from __future__ import annotations
 
-import hashlib
-import io
 import json
 import os
-import shutil
 import subprocess
 import sys
-import tarfile
-import tempfile
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -88,6 +83,8 @@ from utils.repository_privacy import (  # noqa: E402
     RepositoryPrivacyError,
     scan_repository,
 )
+from utils.repository_privacy import baseline_finding_keys as _shared_baseline_finding_keys  # noqa: E402
+from utils.repository_privacy import finding_key as _finding_key  # noqa: E402
 
 def _resolve_interpreter(cwd: str) -> str:
     """Resolve the project's validated interpreter for the merge-lock
@@ -149,49 +146,9 @@ def _approved_task_git_base(cwd: str) -> str | None:
     return base if isinstance(base, str) and base else None
 
 
-def _finding_fingerprint(root: Path, finding: PrivacyFinding) -> str:
-    # AC-3: match on (file, finding_type, a stable content fingerprint of the
-    # flagged span), not (file, exact line number) -- a pre-existing finding
-    # whose line number shifted because of unrelated earlier lines in the
-    # same file, without the flagged content itself changing, must still
-    # count as pre-existing. File-level findings (finding.line == 0, e.g.
-    # RUNTIME_DIRECTORY_PRESENT) have no line span; (path, rule) alone is
-    # already stable for those. The hash is never printed -- only compared
-    # in-process -- consistent with "matched values are never returned or
-    # printed".
-    if finding.line <= 0:
-        return ""
-    try:
-        lines = (root / finding.path).read_text(encoding="utf-8").splitlines()
-    except (OSError, UnicodeDecodeError):
-        return ""
-    if not (1 <= finding.line <= len(lines)):
-        return ""
-    return hashlib.sha256(lines[finding.line - 1].strip().encode("utf-8")).hexdigest()
-
-
-def _finding_key(root: Path, finding: PrivacyFinding) -> tuple[str, str, str]:
-    return (finding.path, finding.rule, _finding_fingerprint(root, finding))
-
-
 def _format_finding(finding: PrivacyFinding) -> str:
     location = f"{finding.path}:{finding.line}" if finding.line else finding.path
     return f"{location} {finding.rule}"
-
-
-def _export_ref_to_tempdir(ref_sha: str, cwd: str) -> Path:
-    tmp_dir = Path(tempfile.mkdtemp(prefix="nexus-privacy-baseline-"))
-    archive = subprocess.run(
-        ["git", "archive", ref_sha], cwd=cwd, capture_output=True, timeout=120,
-    )
-    if archive.returncode != 0:
-        shutil.rmtree(tmp_dir, ignore_errors=True)
-        raise RepositoryPrivacyError(
-            f"git archive {ref_sha} failed: {archive.stderr.decode(errors='replace').strip()}"
-        )
-    with tarfile.open(fileobj=io.BytesIO(archive.stdout)) as tar:
-        tar.extractall(tmp_dir, filter="data")
-    return tmp_dir
 
 
 def _baseline_finding_keys(cwd: str) -> tuple[frozenset[tuple[str, str, str]], str]:
@@ -199,28 +156,14 @@ def _baseline_finding_keys(cwd: str) -> tuple[frozenset[tuple[str, str, str]], s
 
     AC-5: this is the *only* place a second scan happens, and the caller
     only invokes it when the post-changes scan already found something --
-    never once per file, never on the common zero-findings path.
+    never once per file, never on the common zero-findings path. The
+    fingerprint-matching and baseline-scan mechanics themselves now live in
+    ``utils.repository_privacy`` (relay/NXS-LOCAL-0020, AC-2) so the CI
+    privacy gate can reuse them with its own baseline-ref source instead of
+    this movement-local one -- this wrapper only supplies that source
+    (``.nexus/approved_task.json``'s ``report.git.base``).
     """
-    base_ref = _approved_task_git_base(cwd)
-    if not base_ref:
-        return frozenset(), "baseline unavailable (no .nexus/approved_task.json report.git.base)"
-    merge_base = _run(["git", "merge-base", "HEAD", base_ref], cwd)
-    if merge_base.returncode != 0:
-        return frozenset(), f"baseline unavailable (git merge-base HEAD {base_ref} failed: {merge_base.stderr.strip()})"
-    base_sha = merge_base.stdout.strip()
-    try:
-        baseline_root = _export_ref_to_tempdir(base_sha, cwd)
-    except RepositoryPrivacyError as exc:
-        return frozenset(), f"baseline unavailable ({exc})"
-    try:
-        try:
-            baseline_report = scan_repository(baseline_root)
-        except RepositoryPrivacyError as exc:
-            return frozenset(), f"baseline scan of {base_sha[:12]} failed ({exc})"
-        keys = frozenset(_finding_key(baseline_root, f) for f in baseline_report.findings)
-        return keys, f"baseline={base_sha[:12]}"
-    finally:
-        shutil.rmtree(baseline_root, ignore_errors=True)
+    return _shared_baseline_finding_keys(cwd, _approved_task_git_base(cwd))
 
 
 def _privacy_check(cwd: str) -> tuple[bool, str]:

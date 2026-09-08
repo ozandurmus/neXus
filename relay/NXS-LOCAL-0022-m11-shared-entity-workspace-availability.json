@@ -1,0 +1,98 @@
+{
+  "created_at": "2026-09-08T17:34:19Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1: read docs/design/CAPABILITY_STATE_VOCABULARY_AND_PRESENTATION.md in full (FROZEN -- PRODUCT OWNER APPROVED), with particular attention to AC-CS-2 ('D1 is the only input any surface-disposition decision reads... a test over the full cross-product shows no rendering change when D2..D7 vary' -- owned M10/M11), AC-CS-1 (every dimension has exactly one owning module, owned M10/M12), section 5.0 stages 0-5, and the 'availability_rule' criterion text in project/feature_registry.json id left_vertical_product_navigation (P1 surface eligibility / P2 entity applicability / P3 evidence state / P4 future authorization -- three of four predicates still 'pending', explicitly deferred to 'later movements (M10+)'). Also read docs/design/NAVIGATION_INFORMATION_ARCHITECTURE.md section 6.3 (shared entity workspace context) and project/roadmap.json's own M11 upcoming-row note ('One selected entity across modules... Prerequisite M10'). Do not restate these documents -- they are this movement's complete design authority; this SESSION_START only points to them.",
+          "AC-2: before writing any code, confirm the CURRENT real state in a short RELAY_NOTE: (a) which resolver stages/producers M10.1/M10.2/M10.3 actually shipped (D2/D3/D4 producers, resolver core stages 0-3) and whether any caller/UI/payload builder currently consumes them at all -- CURRENT_STATE.md's M3 predecessor section claims 'none wired to a caller/UI/payload yet, so every dimension still resolves UNKNOWN in any actual render'; verify this against the actual code, don't just trust the doc; (b) exactly which of the four availability_rule predicates (P1-P4) the existing NAV.1 prototype already implements (the doc says only the P1 shell-integrity conjunct) and which this movement must add; (c) whether a shared-entity-workspace-context mechanism exists anywhere today (grep static/navigation_ui.js and friends) or this is greenfield. If AC-CS-2's scope and the shared-entity-workspace scope turn out to be more tightly coupled or more separable than this SESSION_START assumes, say so in this same RELAY_NOTE and propose the split -- do not silently expand or silently narrow scope.",
+          "AC-3: implement the D1-driven availability_rule wiring -- connect the M10 resolver's stage 0 (union tag) output as the sole input to each navigation entry/tab's render-or-not decision, closing predicates P2 (entity applicability) and P3 (evidence state) at minimum (P4 future authorization stays out of scope -- no authorization/RBAC model exists yet, D7/M14 territory). An absent or unresolvable surface must never render (section 5.0 V-B/V-D). No disabled/greyed/'coming soon' placeholder is ever introduced -- the frozen contract already forbids this.",
+          "AC-4: implement AC-CS-2's own regression test: a cross-product test proving D2..D7 varying (including a contradiction-class case) produces zero change in which entries/tabs render, with D1 alone controlling that decision.",
+          "AC-5: implement shared entity workspace context per NAVIGATION_INFORMATION_ARCHITECTURE.md section 6.3 -- one selected entity persists across module navigation (e.g. selecting a device in Inventory keeps that same device selected when the user moves to Configuration/Compliance/Operations), using the existing hash/localStorage route model already in place (routes_preserved criterion, already done) rather than inventing a second state mechanism.",
+          "AC-6: no change to any dimension's own producer (D2/D3/D4 stay exactly as M10 shipped them), no new placeholder/disabled-state UI pattern, no scope creep into D5 (M12, blocked on M7/M8.3) or D7 (M14, blocked on DEPLOY.1A) -- both stay explicitly out of scope and must keep resolving UNKNOWN/POLICY_UNKNOWN exactly as today.",
+          "AC-7: targeted tests for the new wiring and the shared-entity-workspace mechanism, following tests/test_html_render_harness.py's and the existing NAV.1/M2 accessibility test style (real-Chromium browser assertions where the existing suite already uses them, not a new test harness).",
+          "AC-8: validation and state: targeted tests green; because this closes real criteria on an already-registered feature, update project/feature_registry.json (left_vertical_product_navigation: availability_rule criterion P2/P3 predicates -> done, noting P4 stays pending/out-of-scope), project/roadmap.json (M11 row: planned -> in_progress/done as appropriate), CURRENT_STATE.md and project/build_history.json in this PR; run the full one-shot regression once (DEV.TEST.1) since this touches shared navigation/rendering code paths."
+        ],
+        "baseline": {
+          "authority": "docs/design/CAPABILITY_STATE_VOCABULARY_AND_PRESENTATION.md (FROZEN -- PRODUCT OWNER APPROVED, 2026-09-06) and docs/design/NAVIGATION_INFORMATION_ARCHITECTURE.md (FROZEN -- PRODUCT OWNER APPROVED) are this movement's complete design authority for, respectively, the D1 availability_rule wiring and the shared entity workspace context. M10.1/M10.2/M10.3 (all MERGED, D2/D3/D4 producers + resolver core stages 0-3) are the direct prerequisite this movement now builds on, per project/roadmap.json's own M11 upcoming-row note.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "sequencing": "Dispatched in parallel with NXS-LOCAL-0020 (CI privacy-gate finishing) and NXS-LOCAL-0021 (orchestrator dashboard app finishing) -- new/different file surface (navigation_ui.js, templates/index.html, html_export.py's payload builders, no orchestrator.py or scripts/ overlap). Product Owner direction 2026-09-08: dispatch M11 now; M8.3's real-environment validation is a separate, PO-gated real-device action to run once a target device is named; M12/M14 remain blocked pending M8.3/DEPLOY.1A respectively and are explicitly out of this movement's scope."
+        },
+        "context_not_loaded": [
+          "M12/M14 (D5/D7 producers) -- explicitly out of scope, blocked on separate debt",
+          "everything outside navigation/availability-rule wiring and shared-entity-workspace context"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/m11-shared-entity-workspace-and-availability-rule"
+        },
+        "invariants": [
+          "No disabled/greyed/'coming soon' placeholder is ever introduced for an unavailable surface -- it simply does not render",
+          "D1 (stage 0, union tag) is the only input any surface-disposition (render/not-render) decision reads -- D2..D7 never gate visibility",
+          "P4 (future authorization) stays out of scope -- no D7/RBAC model exists yet",
+          "D5/D7 producers and their consumers stay untouched -- they keep resolving POLICY_UNKNOWN/their current UNKNOWN semantics exactly as today"
+        ],
+        "merge_gate": "Standing relay#13: green tests -> self-merge, report via RELAY_NOTE.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Wire the already-built M10 capability-state resolver (D1 stage 0 in particular) into the navigation rail's real availability_rule decision -- closing the P2/P3 predicates that have kept every nav entry's visibility decision structurally unwired since M10 shipped -- and add the shared entity workspace context the navigation contract's section 6.3 already specifies, so that real per-entity/per-capability UI state becomes visible for the first time ahead of UI/workflow testing.",
+        "output_contract": [
+          "A short current-state RELAY_NOTE (AC-2) before implementation begins",
+          "D1-driven availability_rule wiring (AC-3) + its cross-product regression test (AC-4)",
+          "Shared entity workspace context (AC-5)",
+          "Targeted tests (AC-7)",
+          "Project-state bookkeeping in this PR (AC-8)",
+          "SESSION_CLOSE on this relay file (absolute path)"
+        ],
+        "recommended_reasoning": {
+          "reason": "Deterministic implementation against two already-FROZEN, Product-Owner-approved design contracts (CAPABILITY_STATE_VOCABULARY_AND_PRESENTATION.md, NAVIGATION_INFORMATION_ARCHITECTURE.md) -- no new architecture or design decision is being made here, only wiring already-decided semantics into already-built producers. AC-2's current-state confirmation needs real investigation but not novel judgment.",
+          "tier": "Sonnet 5, normal"
+        },
+        "requirements": [
+          "Confirm current wiring state for real before assuming CURRENT_STATE.md's 'nothing wired yet' claim is still accurate (AC-2)"
+        ],
+        "risks": [
+          "If AC-2's investigation finds the D1/availability_rule wiring and the shared-entity-workspace context are more entangled (or more separable) than this SESSION_START assumes, report via RELAY_NOTE with a proposed re-scoping before proceeding rather than silently picking one interpretation",
+          "P4 (authorization) must not be accidentally implemented as a stub/fake gate just because it's the fourth predicate -- it stays genuinely absent until D7/M14 exists"
+        ],
+        "scope": {
+          "in": [
+            "D1-driven availability_rule wiring closing P2/P3 (AC-3)",
+            "AC-CS-2's cross-product regression test (AC-4)",
+            "Shared entity workspace context per navigation contract section 6.3 (AC-5)"
+          ],
+          "out": [
+            "D5 (M12) and D7 (M14) producers and any consumer of them",
+            "P4 (future authorization) predicate",
+            "Any change to D2/D3/D4 producers themselves"
+          ]
+        },
+        "validation_plan": [
+          "Targeted tests (AC-7)",
+          "Full one-shot regression once (AC-8)",
+          "git diff --check",
+          "privacy gate once at PR time"
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-08T17:34:19Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0022",
+  "movement": "M11_SHARED_ENTITY_WORKSPACE_AND_AVAILABILITY_RULE_WIRING",
+  "next_actor": "engineer",
+  "refs": [
+    "docs/design/NAVIGATION_INFORMATION_ARCHITECTURE.md",
+    "docs/design/CAPABILITY_STATE_VOCABULARY_AND_PRESENTATION.md",
+    "docs/design/LOCAL_CONTROL_PLANE_RUNTIME_AND_ENROLLMENT.md",
+    "project/feature_registry.json",
+    "project/roadmap.json",
+    "CURRENT_STATE.md"
+  ],
+  "schema_version": 1,
+  "status": "OPEN",
+  "updated_at": "2026-09-08T17:34:19Z"
+}

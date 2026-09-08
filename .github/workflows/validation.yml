@@ -66,6 +66,25 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          # AC-4 (relay/NXS-LOCAL-0020): the privacy gate's baseline scan
+          # below needs `git merge-base HEAD origin/main` to resolve, which
+          # needs both HEAD's and main's history actually present locally.
+          # actions/checkout's default fetch-depth (1) only fetches the
+          # single commit being built -- no parents, no other branches --
+          # so merge-base would fail closed with "fatal: no merge base"
+          # every time. fetch-depth: 0 fetches full history for the ref
+          # being checked out (the PR merge commit), whose own ancestry
+          # already includes origin/main's history up to the merge point.
+          fetch-depth: 0
+
+      - name: Fetch origin/main for the privacy-gate baseline
+        # `origin/main` is not created as a local ref by the checkout above
+        # (it only fetches the PR merge/head ref by name, with no configured
+        # remote-tracking refspec) -- fetch it explicitly, to the exact ref
+        # name `--privacy-baseline-ref origin/main` resolves, so it exists
+        # to resolve. Cheap: this is a single branch, not the whole repository.
+        run: git fetch origin +main:refs/remotes/origin/main
 
       - uses: actions/setup-python@v5
         with:
@@ -89,7 +108,12 @@ jobs:
       - name: Repository privacy gate
         # Must run on the clean checkout, BEFORE any test run: a test run
         # creates gitignored data/ + logs/ that the gate would otherwise flag.
-        run: python main.py --repository-privacy-check
+        # AC-3/AC-4 (relay/NXS-LOCAL-0020): baselined against origin/main's
+        # merge-base with HEAD -- a finding already present there is
+        # pre-existing repository debt (scripts/nexus_engineer_tool_gate.py's
+        # pre-push hook already treats it that way) and must not fail CI on
+        # every PR; a genuinely new finding still fails exactly as before.
+        run: python main.py --repository-privacy-check --privacy-baseline-ref origin/main
 
       - name: Project-state consistency
         # The cross-authority rules in utils/project_plan. Fails when
@@ -146,6 +170,22 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          # See the `validate` job's identical step comment above: the
+          # privacy gate's baseline scan needs origin/main's history
+          # actually present locally, which the default depth-1 checkout
+          # does not provide.
+          fetch-depth: 0
+
+      - name: Fetch origin/main for the privacy-gate baseline
+        # workflow_dispatch is normally run against a PR branch, in which
+        # case origin/main is a real, distinct baseline exactly as in the
+        # `validate` job. Dispatched directly on main itself, HEAD and
+        # origin/main coincide and the comparison is a no-op (every finding
+        # reads as pre-existing) -- an accepted, narrow gap for this
+        # exceptional, human-triggered path (AC-4/AC-5): it does not touch
+        # the actual live bug (AC-1), which is pull_request's `validate` job.
+        run: git fetch origin +main:refs/remotes/origin/main
 
       - uses: actions/setup-python@v5
         with:
@@ -169,7 +209,7 @@ jobs:
       - name: Repository privacy gate
         # Must run on the clean checkout, BEFORE the suite: a test run creates
         # gitignored data/ + logs/ that the gate would otherwise flag.
-        run: python main.py --repository-privacy-check
+        run: python main.py --repository-privacy-check --privacy-baseline-ref origin/main
 
       - name: Project-state consistency
         # The cross-authority rules in utils/project_plan. Fails when

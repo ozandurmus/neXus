@@ -1,0 +1,170 @@
+{
+  "created_at": "2026-09-08T09:03:51Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1: one new DRAFT contract, docs/history/phase/OP_1_FAILOVER_PLAN_COMPILER_AND_DRY_RUN.md (status line: DRAFT -- awaiting Product Owner freeze), defining OP.1: a write-free plan compiler that turns already-collected evidence (OP.0a compute_ha_readiness roll-up, OP.0b preflight surface, ClusterXL preflight provider outputs) into a typed failover plan artifact plus a dry-run report. Scope: classic Check Point ClusterXL first (OP.2.0 P16); PAN and VSX/VSLS explicitly deferred.",
+          "AC-2: the plan schema is specified exactly -- ordered steps, each with the primitive it would use (only the two OP.2.1-approved primitives, CP-M1 clusterXL_admin down / CP-M1-R up, may appear), preconditions bound to named readiness/preflight facts, expected post-conditions, verification reads, and the reversal step per op_reversal_model (failback is a new typed action, never automatic rollback). A dry-run evaluates preconditions against current evidence and reports which would pass/fail/are INSUFFICIENT_EVIDENCE -- it issues no command and constructs no ActionCoordinator.",
+          "AC-3: non-authorization is structural, not prose: the contract states that a compiled plan grants nothing (readiness != authorization; a plan != permission), CLASS 2 keeps no taxonomy member, DenyAllAuthorizer stays unconditional, and the plan artifact is a class-0 read-derived document that must never be consumed by any execution path in this track.",
+          "AC-4: open decisions are resolved or explicitly parked: op_degraded_verdict is presented to the Product Owner as one decision with the existing recommendation (keep DEGRADED_PROCEED_WITH_RISK structurally unreachable until real-field calibration) and the consequence of each option for the plan/dry-run vocabulary; op_four_eyes, op_emergency_evac, op_continuity_tolerance, op_aa_vsls_scope are listed as NOT blocking OP.1 with a one-line reason each.",
+          "AC-5: inputs are only existing producers -- list each consumed field with its source module/function; where a fact is STILL_UNKNOWN as a vendor fact (D-V3a, D-V7b) the plan/dry-run must carry INSUFFICIENT_EVIDENCE for that precondition, never an invented value; no new device command is introduced (any would need the network-device command gate first).",
+          "AC-6: an implementation slicing plan sized to the GOV.PO.1 section 7 targets (each slice <= 8 acceptance criteria, <= 12 non-test files) so OP.1 implementation can start immediately after freeze without a second planning round.",
+          "AC-7: this movement changes no code, tests, or FROZEN document; bookkeeping (build_history, roadmap upcoming row for OP.1, CURRENT_STATE.md, AI_HANDOVER.md, INDEX.md) lands in its PR; merge origin/main before the PR (M10.2 and GOV.PO.3 run in parallel) and resolve mechanical bookkeeping conflicts yourself."
+        ],
+        "baseline": {
+          "authority": "docs/design/FAILOVER_ENGINE_ARCHITECTURE.md (parent; section 10 gates) and docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md (CLASS 2 architecture, FROZEN 2026-09-04); OP.2.1 command gate (DRAFTED) names the only approved primitives; OP.0a/OP.0b are the evidence producers.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "sequencing": "Product Owner direction 2026-09-08: failover-side gaps are priority. OP.2.C stays externally blocked (DEPLOY.1A, SSH trust hardening, unsigned review); OP.1 is the unblocked, write-free failover movement the roadmap has carried as 'planned'. Runs in parallel with GOV.PO.3 and M10.2 in its own worktree. Freeze plus the op_degraded_verdict decision are the single human touchpoint."
+        },
+        "context_not_loaded": [
+          "PCP.x/M-series, console job engine, compliance, backup"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/op1-failover-plan-compiler-contract"
+        },
+        "invariants": [
+          "Readiness != authorization; a plan != permission; CLASS 2 has no member and this contract adds none",
+          "Vendor semantics law: STILL_UNKNOWN facts stay INSUFFICIENT_EVIDENCE -- never inferred from a plausible label or a successful command",
+          "No new device command; no execution path; no ActionCoordinator construction; no console flow (OP.2.D is separate)",
+          "One vendor (classic ClusterXL) before any cross-vendor abstraction"
+        ],
+        "merge_gate": "Standing relay#13 for the PR (a DRAFT doc plus bookkeeping). The document's promotion to FROZEN is the Product Owner's separate decision, taken together with op_degraded_verdict.",
+        "movement_type": "ARCHITECTURE",
+        "objective": "Produce the OP.1 contract: a write-free failover plan compiler and dry-run over existing readiness/preflight evidence for classic Check Point ClusterXL, structurally non-authorizing, with the open decisions it depends on presented to the Product Owner for one freeze decision.",
+        "output_contract": [
+          "docs/history/phase/OP_1_FAILOVER_PLAN_COMPILER_AND_DRY_RUN.md (DRAFT)",
+          "Bookkeeping in this PR",
+          "SESSION_CLOSE on the relay file (absolute path in the handoff), including the op_degraded_verdict decision table for the Product Owner"
+        ],
+        "recommended_reasoning": {
+          "reason": "New architecture on the CLASS 2-adjacent boundary with vendor-semantic ambiguity (D-V3a/D-V7b) -- the routing table's high tier.",
+          "tier": "Sonnet 5, extended thinking (high)"
+        },
+        "requirements": [
+          "Read FAILOVER_ENGINE_ARCHITECTURE.md section 10/10.1/10.2 and OP_2_0 in full before drafting; cite them, do not restate them",
+          "Consume only existing producer outputs; name each source function",
+          "Do not touch utils/failover/ or checkpoint/ code in this movement"
+        ],
+        "risks": [
+          "Temptation to design the executor: OP.1 stops at plan + dry-run. Anything that would issue a command belongs to OP.2.C and its unsigned review -- out of scope here."
+        ],
+        "scope": {
+          "in": [
+            "The OP.1 contract document",
+            "the decision table for op_degraded_verdict",
+            "implementation slicing plan",
+            "bookkeeping"
+          ],
+          "out": [
+            "any code or test change",
+            "execution, adapters, ActionCoordinator wiring",
+            "PAN / VSX / VSLS",
+            "console flow (OP.2.D)",
+            "new device commands"
+          ]
+        },
+        "validation_plan": [
+          "git diff --check",
+          "tests/test_architecture_convergence.py (metadata_warnings empty after roadmap/build_history edits)",
+          "privacy gate once at PR time"
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-08T09:03:51Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "PARTIAL",
+      "report": {
+        "changed": [
+          "One new file: docs/history/phase/OP_1_FAILOVER_PLAN_COMPILER_AND_DRY_RUN.md.",
+          "Five bookkeeping files updated as listed under completed."
+        ],
+        "completed": [
+          "New DRAFT contract docs/history/phase/OP_1_FAILOVER_PLAN_COMPILER_AND_DRY_RUN.md (status line: DRAFT -- awaiting Product Owner freeze), satisfying AC-1 through AC-6 of the SESSION_START: the FailoverPlan/DryRunReport schema (ordered step, named preconditions, postcondition, verification reads, the CP-M1-R reversal per op_reversal_model), structural non-authorization (AC-3), the op_degraded_verdict decision table plus the four confirmed-non-blocking decisions (AC-4), the existing-producers-only input table (AC-5), and a one-slice implementation plan sized to GOV.PO.1 section 7 targets (AC-6).",
+          "Bookkeeping (AC-7): project/roadmap.json (OP.1 upcoming row + current_build/now_next.now), project/build_history.json (new op1_failover_plan_compiler_contract_draft record), CURRENT_STATE.md, AI_HANDOVER.md, docs/history/INDEX.md (regenerated).",
+          "Merged origin/main (which had already absorbed the parallel gov_po_3_orchestrator_observability movement) and resolved the resulting bookkeeping conflicts in project/roadmap.json, project/build_history.json, CURRENT_STATE.md and docs/history/INDEX.md by hand.",
+          "Opened PR #133 under the standing relay#13 merge authorization named in this movement's own SESSION_START.merge_gate."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "No behavior change -- this movement adds no code.",
+          "ui": "No visible UI change -- documentation and bookkeeping only."
+        },
+        "integration": {
+          "branch": "feature/op1-failover-plan-compiler-contract",
+          "ci": "Repository CI (.github/workflows/validation.yml) not yet observed to complete for this PR at handoff time.",
+          "head_sha": "4f11292bff81af7fb9aa873034fef2c9110e97c4",
+          "merge_commit": null,
+          "merge_decision": "Standing relay#13 merge authorization covers this PR (a DRAFT doc plus bookkeeping); no separate RELAY_DECISION needed to merge it. Freezing the contract document itself and deciding op_degraded_verdict remain a separate, later Product Owner action -- merging this PR is not that freeze.",
+          "merge_state": "OPEN",
+          "pr": 133,
+          "pr_url": "https://github.com/ozandurmus/neXus/pull/133"
+        },
+        "next": {
+          "movement": "op1_s1_plan_compiler_dry_run_implementation",
+          "movement_type": "IMPLEMENTATION",
+          "objective": "After the Product Owner freezes docs/history/phase/OP_1_FAILOVER_PLAN_COMPILER_AND_DRY_RUN.md together with op_degraded_verdict, implement slice OP.1.S1 exactly as specified in the contract's section 9: the new utils/failover_plan/ package (model.py, compiler.py, dry_run.py), the poison-resolver purity proof, and the --failover-plan-dry-run CLI mode, against the 8 acceptance criteria named there.",
+          "status": "planned"
+        },
+        "preserved": [
+          "No code file changed. No test file changed (tests/test_orchestrator.py's diff is entirely origin/main's own gov_po_3_orchestrator_observability content, auto-merged cleanly).",
+          "utils/failover/ and checkpoint/ untouched, per the SESSION_START's explicit requirement.",
+          "No FROZEN document amended; OP_2_0/OP_2_1/OP_0A/OP_0B_0 are cited, not edited."
+        ],
+        "recommended_reasoning": {
+          "reason": "Deterministic implementation against a frozen contract (CLAUDE.md reasoning-routing table) once the freeze lands; escalate only if the freeze changes the schema materially from this draft.",
+          "tier": "Sonnet 5, normal"
+        },
+        "state_updates": [
+          "project/roadmap.json: current_build and now_next.now -> op1_failover_plan_compiler_contract_draft; the OP.1 upcoming row's status/notes updated to reflect the DRAFT contract.",
+          "project/build_history.json: new op1_failover_plan_compiler_contract_draft record (in_progress, movement ARCHITECTURE), newest-first.",
+          "CURRENT_STATE.md: checkpoint updated (stays at the 200-line ceiling); predecessor chain compressed.",
+          "AI_HANDOVER.md: rewritten per this session.",
+          "docs/history/INDEX.md: regenerated via scripts/build_history_index.py."
+        ],
+        "unresolved_risks": [
+          "op_degraded_verdict decision table for the Product Owner (contract section 8): Option A (recommended, no change) -- keep DEGRADED_PROCEED_WITH_RISK structurally unreachable until real-field calibration; consequence: FailoverPlan/DryRunReport.readiness_verdict can only ever show SAFE_TO_FAILOVER/UNSAFE_DO_NOT_FAILOVER/INSUFFICIENT_EVIDENCE/NOT_A_FAILOVER_UNIT, would_proceed stays a plain boolean, no severity/acceptability field is needed -- the contract's schema as drafted already assumes this option. Option B -- make DEGRADED reachable now; consequence: requires reopening utils/failover/assessment.py::_verdict_for and its AC-6 structural-unreachability test (explicitly out of this movement's own scope), a new undefined per-check risk-acceptability judgment, a new risk_items structure on both artifacts, and eventually a matching utils.operate.approval_policy amendment -- work this contract cannot scope alone. Recommendation: choose Option A at this freeze.",
+          "Non-blocking, listed only per the SESSION_START: op_four_eyes (approval-policy input to OP.2's confirmation boundary, not this contract's concern), op_emergency_evac (OP.3 scope, no emergency variant compiled here), op_continuity_tolerance (governs OP.2's post-action verification, this contract performs no action), op_aa_vsls_scope (already governs this contract's own vendor-scope boundary as deferred).",
+          "The document is DRAFT only -- do not treat OP.1 as decided or implementable until the Product Owner freezes it together with op_degraded_verdict.",
+          "Implementation slice OP.1.S1 leaves one narrow, explicitly-flagged implementation-detail question for its own PLAN step: whether to duplicate or extract-and-share checkpoint.clusterxl_preflight_provider's two private helpers (_map_cluster_mode/_resolve_member_tokens).",
+          "current_build/now_next.now were pointed at this movement's own build id for its own branch-local convergence check; because GOV.PO.3/M10.2 are separate parallel movements, this is expected to need the same kind of reconciliation again if a further movement merges before this PR does."
+        ],
+        "validation": {
+          "affected": "tests/test_orchestrator.py -- 76 passed (unaffected; auto-merged cleanly from origin/main, not touched by this movement).",
+          "diff_check": "git diff --check clean, pre- and post-merge.",
+          "full_regression": "Not re-run (DEV.TEST.1: no source/test file changed by this movement; last evidence on origin/main holds).",
+          "privacy": "main.py --repository-privacy-check: FAIL/2 findings, both confirmed pre-existing (project/build_history.json's and relay/NXS-LOCAL-0003-local-relay-watch-command.json's already-committed CREDENTIAL_LITERAL matches, line-shifted only by this movement's own insertions); none of this movement's changed content is among the findings.",
+          "real_environment": "Not applicable -- this movement performs no device contact and issues no command; it is a documentation/bookkeeping contract movement only.",
+          "state_consistency": "tests/test_architecture_convergence.py::test_project_metadata_has_no_cross_authority_contradictions and test_current_state_names_the_same_active_build_as_the_roadmap both pass post-merge.",
+          "targeted": "tests/test_architecture_convergence.py -- 22 passed (metadata_warnings empty after the roadmap/build_history bookkeeping edits)."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-08T12:12:20Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0009",
+  "movement": "OP_1_FAILOVER_PLAN_COMPILER_CONTRACT",
+  "next_actor": null,
+  "refs": [
+    "docs/design/FAILOVER_ENGINE_ARCHITECTURE.md",
+    "docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md",
+    "docs/history/phase/OP_0B_0_VENDOR_FAILOVER_PREFLIGHT_EVIDENCE_SURFACE.md",
+    "docs/history/phase/OP_2_1_CP_CLUSTERXL_MUTATION_COMMAND_GATE.md",
+    "utils/failover/",
+    "checkpoint/clusterxl_preflight_provider.py",
+    "utils/action_taxonomy.py",
+    "project/roadmap.json"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-08T12:12:20Z"
+}

@@ -1,0 +1,168 @@
+{
+  "created_at": "2026-09-08T11:04:26Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "docs/history/demo/GOV_PO_3_AC5_DEMO_1.md exists on main with exactly the given content after merge",
+          "A RELAY_ACK and a SESSION_CLOSE entry both appear on this movement's own canonical relay file",
+          "No file other than the one new demo doc differs from origin/main's tip at dispatch time"
+        ],
+        "baseline": {
+          "authority": "Product Owner direct instruction, 2026-09-08 (this engineering session, via AskUserQuestion), recorded as a RELAY_DECISION on relay/NXS-LOCAL-0007 entry 6: dispatch a small, throwaway, clearly-labeled scratch movement through the real orchestrator pipeline for AC-5 demonstration 1.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "sequencing": "AC-5 demonstration 1 only (one approved movement completes end-to-end with no manual message transport). Demonstrations 2-4 are separate, larger follow-ups, not authorized by this movement."
+        },
+        "context_not_loaded": [
+          "vendor collectors, product console, every real product subsystem -- untouched"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/gov-po-3-ac5-demo-1"
+        },
+        "invariants": [
+          "This is a disposable AC-5 demonstration, never real product scope",
+          "Human decides; software executes -- this movement's own dispatch was itself an explicit Product Owner decision, recorded on relay/NXS-LOCAL-0007 entry 6"
+        ],
+        "merge_gate": "Standing relay#13 decision applies once every required gate named in validation_plan is green.",
+        "movement_type": "DOCS",
+        "objective": "Prove the GOV.PO.3 orchestrator pipeline (scripts/orchestrator.py) end-to-end with a trivial, disposable task: create exactly one new file with fixed content, interact with the canonical relay via the two environment variables the orchestrator sets, and self-merge under the standing relay#13 authorization once every required gate is green -- with no human carrying a message or opening a terminal for this movement.",
+        "output_contract": [
+          "docs/history/demo/GOV_PO_3_AC5_DEMO_1.md",
+          "RELAY_ACK + SESSION_CLOSE on this movement's own canonical relay file",
+          "a merged PR clearly labeled as a disposable AC-5 orchestration demonstration"
+        ],
+        "recommended_reasoning": {
+          "reason": "deterministic, trivial content-only task against a frozen, fully-specified instruction",
+          "tier": "Sonnet 5, normal"
+        },
+        "requirements": [
+          "Write the demo file's content byte-for-byte as given above, nothing else",
+          "Read .nexus/approved_task.json as this SESSION_START; re-read the canonical relay file (NEXUS_RELAY_FILE) immediately before opening the PR"
+        ],
+        "risks": [
+          "First-ever live use of the orchestrator/engineer-gate pipeline -- report any gate or mechanism problem as a RELAY_QUESTION on the canonical relay rather than working around it"
+        ],
+        "scope": {
+          "in": [
+            "Create docs/history/demo/GOV_PO_3_AC5_DEMO_1.md with exactly this content (verbatim, including trailing newline):\n\n# GOV.PO.3 AC-5 Demonstration 1\n\nThis file exists solely to prove the GOV.PO.3 orchestrator pipeline\n(scripts/orchestrator.py) can dispatch an approved movement to an isolated\ngit worktree, run there unattended under the engineer permission profile,\nand self-merge under the standing relay#13 authorization -- with no manual\nmessage-carrying. It is disposable infrastructure evidence, not product\ndocumentation, and may be deleted once its evidence value has been\nrecorded elsewhere.\n\nMovement: GOV_PO_3_AC5_DEMO_1_SCRATCH.\nParent movement: relay/NXS-LOCAL-0007-gov-po-3-orchestration.json.\n",
+            "Append one RELAY_ACK to this movement's own canonical relay file (path in $NEXUS_RELAY_FILE; use scripts/local_relay.py append --role engineer --marker RELAY_ACK --next engineer --in-progress) as soon as you start, then append the SESSION_CLOSE at the very end after merging",
+            "git add/commit/push a feature/* branch, open a PR whose title and body clearly say this is a disposable GOV.PO.3 AC-5 orchestration demonstration, and self-merge it once every required gate is green, per the standing relay#13 authorization (report the exact evidence, do not skip a gate)"
+          ],
+          "out": [
+            "Any change to product code, tests, project/*.json, CURRENT_STATE.md, AI_HANDOVER.md, or docs/history/INDEX.md -- this is a throwaway infrastructure demonstration, not real product work, and none of those files should ever mention it",
+            "Any file other than the one new demo doc"
+          ]
+        },
+        "validation_plan": [
+          "git diff --check",
+          "git diff --stat against the merge-base confirms only the one new file",
+          "the repository privacy gate (run once, for real) reports no new finding beyond the pre-existing, already-documented ones"
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-08T11:04:26Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "RELAY_ACK",
+      "seq": 2,
+      "subject": "AC-5 demo 1 engineer session started",
+      "text": "Engineer session started for GOV_PO_3_AC5_DEMO_1_SCRATCH; will create the single demo doc, open a labeled disposable PR, and self-merge once required gates are green per relay#13.",
+      "timestamp": "2026-09-08T11:13:39Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "RELAY_QUESTION",
+      "seq": 3,
+      "subject": "Push-time privacy gate blocks on pre-existing, unrelated findings",
+      "text": "Local file docs/history/demo/GOV_PO_3_AC5_DEMO_1.md created and committed exactly as specified (byte-for-byte verified). git diff --stat/--check against origin/main confirm only that one new file differs. A direct scan_repository() run also shows my change introduces zero new findings. However, 'git push' was rejected by a pre-push hook: 'nexus-engineer gate: repository privacy gate did not report PASS (exit 1)', reporting exactly 2 CREDENTIAL_LITERAL findings at project/build_history.json:47 and relay/NXS-LOCAL-0003-local-relay-watch-command.json:155. I diffed both files against origin/main byte-for-byte -- both are IDENTICAL to origin/main, i.e. these two findings already exist on main today, unrelated to this movement's one-file change. The gate as wired at push-time appears to fail closed on ANY finding in the full repository scan, not just new findings introduced by the diff, which would make it impossible for any movement to push while these two pre-existing findings remain unresolved on main. Per this movement's own risks section ('report any gate or mechanism problem as a RELAY_QUESTION on the canonical relay rather than working around it'), I am stopping here rather than modifying either flagged file (out of scope) or bypassing the hook. Commit 4b2cb92 on feature/gov-po-3-ac5-demo-1 is ready locally; RELAY_ACK already posted at seq 2. How should I proceed -- is there an existing allowlist/baseline mechanism for these two known findings that I'm missing, or does this block need PO/engineering attention on main before any movement can push?",
+      "timestamp": "2026-09-08T11:15:04Z"
+    },
+    {
+      "actor": "po",
+      "authorized_by": "Product Owner -- chat directive 2026-09-08 (this session)",
+      "marker": "RELAY_DECISION",
+      "scope": "This push only, these two named pre-existing findings only",
+      "seq": 4,
+      "subject": "Accept the two known pre-existing findings for this push; proceed to merge",
+      "supersedes": "none",
+      "text": "Decision: the two flagged findings (project/build_history.json:47, relay/NXS-LOCAL-0003-local-relay-watch-command.json:155) are confirmed pre-existing on origin/main, identical to the ones CI itself reported as FAIL on PR #124 and treated as accepted, known debt at that time (established precedent). They are prose false positives (the literal substrings 'password=' and 'PASSWORD:' appearing inside text describing an unrelated .venv DLP-scanner false-positive issue, not real credentials) in build_history.json and a relay file, both covered by build-history immutability -- they are not to be edited to silence the scanner. For THIS push only: proceed with git push and gh pr merge; do not modify either flagged file. Record in your SESSION_CLOSE that these two findings were present, pre-existing, and explicitly accepted by this RELAY_DECISION, exactly as CI/PR #124 already established as precedent -- do not describe this movement's own privacy gate result as a clean PASS. This is a one-time exception for this specific push; it does not authorize ignoring any NEW finding this movement's own changes would introduce (none exist here per your own scan_repository() check).",
+      "timestamp": "2026-09-08T11:19:30Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "PARTIAL",
+      "report": {
+        "changed": [
+          "docs/history/demo/GOV_PO_3_AC5_DEMO_1.md (new, throwaway per SESSION_START scope)"
+        ],
+        "completed": [
+          "AC-5 demonstration 1 (relay/NXS-LOCAL-0012): dispatched via orchestrator start, developed autonomously in an isolated worktree (feature/gov-po-3-ac5-demo-1), committed, and blocked at push time by a real, previously-unknown bug -- the pre-push privacy hook fails closed on repository-wide pre-existing findings, not just new ones introduced by the diff. Reported honestly via RELAY_QUESTION rather than routed around.",
+          "Product Owner accepted the two named pre-existing findings for this push only (RELAY_DECISION, seq 4).",
+          "A second bug surfaced on recovery: orchestrator start's --resume path could not read the canonical relay file (outside the worktree) at all -- 'no approval surface... no retries possible' -- so the resumed session could not itself see the RELAY_DECISION or proceed. This blocks the AC-5 recovery demonstration for this exact scenario (interrupted mid-question, resumed, needing to re-read canonical state) and is a real GOV.PO.3 section 3.6 gap, not solved by this movement.",
+          "Given the resume path was structurally blocked, the Product Owner completed the mechanical git steps directly (git push, gh pr create, gh pr merge) outside the orchestrated pipeline, once satisfied the code itself was correct and the push-gate finding was pre-existing. PR #126 merged, commit 5f35e863e0d8198337a53bd1c9b0717514c09d86."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "none",
+          "ui": "none"
+        },
+        "integration": {
+          "branch": "feature/gov-po-3-ac5-demo-1",
+          "ci": "not checked (human-completed merge)",
+          "head_sha": "n/a",
+          "merge_commit": "5f35e863e0d8198337a53bd1c9b0717514c09d86",
+          "merge_decision": "Human-completed after the orchestrated pipeline's own resume path failed; not a clean automated self-merge.",
+          "merge_state": "MERGED",
+          "pr": 126,
+          "pr_url": "https://github.com/ozandurmus/neXus/pull/126"
+        },
+        "next": {
+          "movement": "orchestrator resume canonical-relay access fix",
+          "movement_type": "IMPLEMENTATION",
+          "objective": "Fix orchestrator start's --resume path so a resumed engineer session can read/write the canonical relay file outside its own worktree, exactly as a fresh dispatch already can -- likely needs the engineer permission profile's additionalDirectories (or equivalent) to include the canonical relay directory explicitly, so resume does not depend on whatever implicit access a fresh session's first tool call happened to get.",
+          "status": "planned"
+        },
+        "preserved": [
+          "No build-history-immutable file edited to silence the two accepted findings"
+        ],
+        "recommended_reasoning": {
+          "reason": "AC-5 demonstration 1 partially succeeded (dispatch, isolated development, honest bug reporting all worked) and found two real bugs (push-hook baseline-unawareness, already queued as relay/NXS-LOCAL-0014; resume canonical-relay access, newly found here) -- both deterministic fixes once specified.",
+          "tier": "Sonnet 5, normal"
+        },
+        "state_updates": [],
+        "unresolved_risks": [
+          "orchestrator start --resume cannot reach the canonical relay file outside its worktree -- blocks any future recovery scenario that needs the resumed session to read a Product Owner decision posted after the original process exited. Needs its own fix movement.",
+          "This demonstration's own merge was human-completed, not a clean automated self-merge under relay#13 -- AC-5 demonstration 1's 'end-to-end with no manual message transport' bar is not yet fully met; it will be re-attempted once both this movement's findings (relay/NXS-LOCAL-0014, and the resume fix above) land."
+        ],
+        "validation": {
+          "affected": "n/a -- this movement produced one throwaway doc file, no code",
+          "diff_check": "clean (per the engineer's own report before the block)",
+          "full_regression": "not run -- throwaway scratch movement, no product code",
+          "privacy": "2 pre-existing findings, explicitly accepted by RELAY_DECISION seq 4, no new findings",
+          "real_environment": "not applicable",
+          "state_consistency": "not applicable -- no project/*.json touched",
+          "targeted": "n/a"
+        }
+      },
+      "seq": 5,
+      "timestamp": "2026-09-08T11:30:11Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0012",
+  "movement": "GOV_PO_3_AC5_DEMO_1_SCRATCH",
+  "next_actor": null,
+  "refs": [
+    "docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md",
+    "relay/NXS-LOCAL-0007-gov-po-3-orchestration.json"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-08T11:30:11Z"
+}
