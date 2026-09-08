@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "current_build": "gov_po_1_local_relay_watch_command",
+  "current_build": "gov_po_1_gate_5_worktree_management",
   "current_track": "PCP.x",
   "progress_contract": "Weighted acceptance-criterion completion. Percentages describe the declared roadmap, not calendar time or delivery ETA.",
   "tracks": [
@@ -140,15 +140,15 @@
   "now_next": {
     "horizon_contract": "NOW is exactly one build. NEXT is exactly one. Everything else is an `upcoming` row carrying its own true status: planned = AFTER, blocked = waiting on a named external gate, deferred = consciously postponed. `now.build` must equal the newest project/build_history.json record -- utils.project_plan enforces it.",
     "now": {
-      "build": "gov_po_1_local_relay_watch_command",
-      "title": "GOV.PO.1 -- bounded, read-only `watch` subcommand for the local relay",
-      "goal": "Add a bounded, read-only watch subcommand to scripts/local_relay.py (default 20s poll, capped timeout) so a session can wait for a relay file's next_actor to flip to it without manual re-checking, preserving the local relay protocol's existing honest non-daemon disclosure and unchanged human-authorization requirement.",
+      "build": "gov_po_1_gate_5_worktree_management",
+      "title": "GOV_PO_1_GATE_5 -- allow git worktree add/list from interactive PO sessions",
+      "goal": "Allow the interactive PO role to create a git worktree (new physical checkout + feature/* branch, based only on origin/<ref>) for handing off an isolated engineering movement, and to list existing worktrees, while never allowing worktree removal and never allowing an arbitrary remote/path/URL as the base.",
       "status": "automated_validated",
       "started": "2026-09-08",
       "completed": "2026-09-08",
       "notes": [
-        "Full detail: project/build_history.json's gov_po_1_local_relay_watch_command record.",
-        "Relay: relay/NXS-LOCAL-0003-local-relay-watch-command.json (Product Owner direction, 2026-09-08, after real relay#11-#16/local-relay-protocol use surfaced manual re-checking friction).",
+        "Full detail: project/build_history.json's gov_po_1_gate_5_worktree_management record.",
+        "Relay: relay/NXS-LOCAL-0006-gate-5-worktree-management.json (Product Owner direction, 2026-09-08, after two same-checkout collision risks were caught and avoided this session).",
         "Inserted ahead of gov_po_2_implementation (below) in build order -- a small, independent GOV.PO.1 tooling movement, not a change to GOV.PO.2's own scope or sequencing."
       ]
     },
