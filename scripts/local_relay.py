@@ -51,7 +51,21 @@ neither is set (today's cwd-relative default, unchanged byte-for-byte):
 default when `--dir` is omitted; `NEXUS_RELAY_FILE` (an absolute path to
 one exact relay file) is `append`/`status`/`validate`/`watch`'s `--file`
 default when `--file` is omitted. An explicit `--dir`/`--file` argument
-always wins over either variable.
+always wins over either variable -- except `append`'s, below.
+
+`append --file` reject-on-mismatch (NXS-LOCAL-0021 footgun fix): if
+`NEXUS_RELAY_FILE` is set *and* an explicit `--file` is also given, `append`
+now refuses to run unless the two resolve to the exact same absolute path.
+Before this check, a relative `--file` silently resolved against the
+engineer's own worktree cwd instead of the canonical file, so an engineer
+process spawned with the environment variable correctly set could still be
+told (by a stale command, copy-pasted example, or manual slip) to operate
+on a second, divergent relay file in its own worktree that the
+orchestrator/PO never sees -- observed live on NXS-LOCAL-0021. `status`/
+`validate`/`watch` are unaffected (out of this fix's scope); only `append`,
+the one subcommand that mutates the canonical file, rejects the mismatch.
+No `--file` at all, or an absolute `--file` that already matches
+`NEXUS_RELAY_FILE`, behave exactly as before.
 
 Shared append lock: `append`'s existing optimistic re-read-and-compare
 (below) never corrupts or silently loses an entry, but leaves a losing
@@ -528,6 +542,13 @@ def _cmd_append(args: argparse.Namespace) -> int:
     if not resolved:
         print(f"error: --file is required (or set {ENV_RELAY_FILE})", file=sys.stderr)
         return EXIT_USAGE
+    env_file = os.environ.get(ENV_RELAY_FILE)
+    if args.file is not None and env_file and os.path.abspath(args.file) != os.path.abspath(env_file):
+        print(f"error: --file {args.file!r} does not resolve to the canonical "
+              f"{ENV_RELAY_FILE} ({env_file!r}) -- refusing to risk creating a second, "
+              f"divergent relay file for this movement; omit --file to use the canonical "
+              f"default, or pass it matching that exact path", file=sys.stderr)
+        return EXIT_USAGE
     path = Path(resolved)
     try:
         with _FileLock(path, timeout=APPEND_LOCK_TIMEOUT):
@@ -731,7 +752,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_append = sub.add_parser("append", help="append one entry; rejected if it is not --role's turn")
     p_append.add_argument("--file", default=None,
-                           help=f"defaults to {ENV_RELAY_FILE} if set")
+                           help=f"defaults to {ENV_RELAY_FILE} if set; if given while "
+                                f"{ENV_RELAY_FILE} is also set, must resolve to the same "
+                                f"absolute path or the append is rejected")
     p_append.add_argument("--role", required=True, choices=ROLES)
     p_append.add_argument("--marker", required=True, choices=APPENDABLE_MARKERS)
     p_append.add_argument("--subject", default=None)
