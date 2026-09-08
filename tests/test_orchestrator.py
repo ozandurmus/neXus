@@ -186,6 +186,70 @@ def test_decide_start_a_terminal_prior_run_still_needs_a_free_slot():
     assert "max_workers" in reason
 
 
+# --- AC-4 (orchestrator_background_task_exit_race): resume recovery-note ---
+# --- detection -- the exact live-observed pattern from relay/NXS-LOCAL-0018:
+# --- staged-but-uncommitted changes, relay still at its own SESSION_START,
+# --- pid dead. All pure -- git status is parsed/monkeypatched, never a real
+# --- subprocess spawn.
+
+def _relay_obj_with_entries(n: int) -> dict:
+    return {"next_actor": "engineer", "entries": [{"marker": "SESSION_START"}] * n}
+
+
+def test_relay_never_advanced_past_session_start_true_for_just_the_start_entry():
+    assert orch.relay_never_advanced_past_session_start(_relay_obj_with_entries(1)) is True
+
+
+def test_relay_never_advanced_past_session_start_false_once_anything_is_appended():
+    assert orch.relay_never_advanced_past_session_start(_relay_obj_with_entries(2)) is False
+
+
+def test_relay_never_advanced_past_session_start_true_when_entries_is_missing():
+    assert orch.relay_never_advanced_past_session_start({}) is True
+
+
+@pytest.mark.parametrize("status,expected", [
+    ("", False),
+    (" M unstaged.py\n", False),
+    ("?? untracked.py\n", False),
+    (" M unstaged.py\n?? untracked.py\n", False),
+    ("M  staged.py\n", True),
+    ("A  added.py\n", True),
+    ("MM partially_staged.py\n", True),
+    (" M unstaged.py\nA  staged.py\n", True),
+])
+def test_has_staged_uncommitted_changes(status, expected):
+    assert orch.has_staged_uncommitted_changes(status) is expected
+
+
+def test_needs_resume_recovery_note_fires_for_the_exact_pattern():
+    assert orch.needs_resume_recovery_note(
+        relay_obj=_relay_obj_with_entries(1), has_staged_uncommitted_changes=True,
+        is_pid_alive=False,
+    ) is True
+
+
+def test_needs_resume_recovery_note_false_when_pid_is_alive():
+    assert orch.needs_resume_recovery_note(
+        relay_obj=_relay_obj_with_entries(1), has_staged_uncommitted_changes=True,
+        is_pid_alive=True,
+    ) is False
+
+
+def test_needs_resume_recovery_note_false_when_nothing_is_staged():
+    assert orch.needs_resume_recovery_note(
+        relay_obj=_relay_obj_with_entries(1), has_staged_uncommitted_changes=False,
+        is_pid_alive=False,
+    ) is False
+
+
+def test_needs_resume_recovery_note_false_once_relay_advanced_past_session_start():
+    assert orch.needs_resume_recovery_note(
+        relay_obj=_relay_obj_with_entries(2), has_staged_uncommitted_changes=True,
+        is_pid_alive=False,
+    ) is False
+
+
 # --- merge-lock decision (section 3.8) --------------------------------------
 
 def test_merge_lock_acquire_grants_when_free():
@@ -423,6 +487,64 @@ def test_start_cli_resumes_after_an_interrupted_run_without_recreating_the_workt
     assert resumed["revision"] == 1  # unchanged -- a resume, not a fresh redispatch
 
 
+def test_start_cli_resume_injects_recovery_note_for_the_background_task_exit_race(tmp_path, monkeypatch):
+    """AC-4: relay/NXS-LOCAL-0018's exact live pattern -- resuming a dead pid
+    whose relay never advanced past its own SESSION_START and whose worktree
+    still has staged-but-uncommitted changes."""
+    relay_dir = _make_relay(tmp_path)
+    relay_id = json.loads(next(relay_dir.glob("*.json")).read_text())["id"]
+    state_dir = tmp_path / "state"
+    worktrees_dir = tmp_path / "worktrees"
+    spawn_calls = []
+
+    def fake_spawn_engineer(**kwargs):
+        spawn_calls.append(kwargs)
+        return _FakeProc(os.getpid())
+
+    monkeypatch.setattr(orch, "_git_rev_parse", lambda ref, cwd: "sha")
+    monkeypatch.setattr(orch, "_git_worktree_add", lambda *a, **k: None)
+    monkeypatch.setattr(orch, "_spawn_engineer", fake_spawn_engineer)
+
+    args = ["start", "--movement", relay_id, "--relay-dir", str(relay_dir), "--state-dir", str(state_dir),
+            "--worktrees-dir", str(worktrees_dir), "--profile", str(tmp_path / "profile.json")]
+    assert orch.main(args) == orch.EXIT_OK  # fresh dispatch -- relay is still just SESSION_START
+    assert spawn_calls[-1].get("extra_prompt_note") is None
+
+    record = orch._load_state(state_dir, relay_id)
+    orch._save_state(state_dir, relay_id, {**record, "pid": _dead_pid()})
+    monkeypatch.setattr(orch, "_git_status_porcelain", lambda worktree_path: "M  some_staged_change.py\n")
+
+    assert orch.main(args) == orch.EXIT_OK  # resume
+    assert spawn_calls[-1].get("extra_prompt_note") == orch.RESUME_RECOVERY_NOTE
+
+
+def test_start_cli_resume_injects_no_recovery_note_when_nothing_is_staged(tmp_path, monkeypatch):
+    relay_dir = _make_relay(tmp_path)
+    relay_id = json.loads(next(relay_dir.glob("*.json")).read_text())["id"]
+    state_dir = tmp_path / "state"
+    worktrees_dir = tmp_path / "worktrees"
+    spawn_calls = []
+
+    def fake_spawn_engineer(**kwargs):
+        spawn_calls.append(kwargs)
+        return _FakeProc(os.getpid())
+
+    monkeypatch.setattr(orch, "_git_rev_parse", lambda ref, cwd: "sha")
+    monkeypatch.setattr(orch, "_git_worktree_add", lambda *a, **k: None)
+    monkeypatch.setattr(orch, "_spawn_engineer", fake_spawn_engineer)
+
+    args = ["start", "--movement", relay_id, "--relay-dir", str(relay_dir), "--state-dir", str(state_dir),
+            "--worktrees-dir", str(worktrees_dir), "--profile", str(tmp_path / "profile.json")]
+    assert orch.main(args) == orch.EXIT_OK  # fresh dispatch
+
+    record = orch._load_state(state_dir, relay_id)
+    orch._save_state(state_dir, relay_id, {**record, "pid": _dead_pid()})
+    monkeypatch.setattr(orch, "_git_status_porcelain", lambda worktree_path: "")
+
+    assert orch.main(args) == orch.EXIT_OK  # resume, nothing staged -- no note
+    assert spawn_calls[-1].get("extra_prompt_note") is None
+
+
 def test_start_cli_refuses_when_relay_says_it_is_not_engineers_turn(tmp_path):
     relay_dir = _make_relay(tmp_path)
     relay_file = next(relay_dir.glob("*.json"))
@@ -489,6 +611,61 @@ def test_spawn_engineer_grants_add_dir_for_the_canonical_relay_directory_on_resu
     assert "--add-dir" in argv
     assert argv[argv.index("--add-dir") + 1] == str(canonical_relay_dir)
     assert argv[-2:] == ["--resume", "11111111-1111-1111-1111-111111111111"]
+
+
+# --- AC-3/AC-4: extra_prompt_note gets appended onto the prompt argv element
+# --- for exactly the one dispatch it is passed for, never by default --------
+
+def test_spawn_engineer_prompt_is_unmodified_without_an_extra_note(tmp_path, monkeypatch):
+    calls = []
+    monkeypatch.setattr(orch.subprocess, "Popen", lambda argv, **k: (calls.append(argv), _FakeProc(1))[1])
+    canonical_relay_dir = tmp_path / "canonical" / "relay"
+    orch._spawn_engineer(
+        worktree_path=tmp_path / "wt", profile_path=tmp_path / "profile.json",
+        canonical_relay_dir=canonical_relay_dir, relay_file=canonical_relay_dir / "NXS-LOCAL-0001-x.json",
+    )
+    argv = calls[0]
+    assert argv[argv.index("-p") + 1] == orch.ENGINEER_PROMPT
+
+
+def test_spawn_engineer_appends_the_extra_note_onto_the_prompt_when_given(tmp_path, monkeypatch):
+    calls = []
+    monkeypatch.setattr(orch.subprocess, "Popen", lambda argv, **k: (calls.append(argv), _FakeProc(1))[1])
+    canonical_relay_dir = tmp_path / "canonical" / "relay"
+    orch._spawn_engineer(
+        worktree_path=tmp_path / "wt", profile_path=tmp_path / "profile.json",
+        canonical_relay_dir=canonical_relay_dir, relay_file=canonical_relay_dir / "NXS-LOCAL-0001-x.json",
+        extra_prompt_note=orch.RESUME_RECOVERY_NOTE,
+    )
+    argv = calls[0]
+    prompt = argv[argv.index("-p") + 1]
+    assert prompt.startswith(orch.ENGINEER_PROMPT)
+    assert orch.RESUME_RECOVERY_NOTE in prompt
+
+
+def test_spawn_engineer_sets_a_raised_bash_default_timeout_without_clobbering_the_operators_own(tmp_path, monkeypatch):
+    captured_env = {}
+
+    def fake_popen(argv, env=None, **k):
+        captured_env.update(env or {})
+        return _FakeProc(1)
+
+    monkeypatch.setattr(orch.subprocess, "Popen", fake_popen)
+    canonical_relay_dir = tmp_path / "canonical" / "relay"
+
+    monkeypatch.delenv("BASH_DEFAULT_TIMEOUT_MS", raising=False)
+    orch._spawn_engineer(
+        worktree_path=tmp_path / "wt", profile_path=tmp_path / "profile.json",
+        canonical_relay_dir=canonical_relay_dir, relay_file=canonical_relay_dir / "NXS-LOCAL-0001-x.json",
+    )
+    assert captured_env["BASH_DEFAULT_TIMEOUT_MS"] == str(orch.DEFAULT_ENGINEER_BASH_TIMEOUT_MS)
+
+    monkeypatch.setenv("BASH_DEFAULT_TIMEOUT_MS", "999")
+    orch._spawn_engineer(
+        worktree_path=tmp_path / "wt", profile_path=tmp_path / "profile.json",
+        canonical_relay_dir=canonical_relay_dir, relay_file=canonical_relay_dir / "NXS-LOCAL-0001-x.json",
+    )
+    assert captured_env["BASH_DEFAULT_TIMEOUT_MS"] == "999"
 
 
 # --- AC-2: stream-json line -> summary parser (representative real shapes) --
