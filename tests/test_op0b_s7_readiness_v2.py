@@ -1190,13 +1190,59 @@ def test_evaluator_performs_no_socket_io_and_imports_no_collector(monkeypatch):
 
     monkeypatch.setattr(socket, "socket", _boom)
     monkeypatch.setattr(socket, "create_connection", _boom)
-    for name in ("checkpoint.preflight_collector", "panorama.preflight_collector"):
-        sys.modules.pop(name, None)
-    report = cp_report(happy_cp())
-    pan_report(happy_pan())
-    assert report["units"]
-    assert "checkpoint.preflight_collector" not in sys.modules
-    assert "panorama.preflight_collector" not in sys.modules
+    # Popping these from sys.modules (to force a fresh, uncached import below)
+    # must not outlive this test: leaving the entries popped causes any test
+    # file that does `import panorama.preflight_collector as pc` afterward to
+    # rebind `pc` to a brand-new module object, while symbols the test file
+    # imported at collection time (e.g. `collect_member`) keep resolving
+    # globals against the original module dict -- so patches applied via the
+    # new `pc` silently stop reaching the real call sites (module-rebind
+    # leak, same family as the frontend-rendering guard precedent).
+    saved_modules = {
+        name: sys.modules.pop(name, None)
+        for name in ("checkpoint.preflight_collector", "panorama.preflight_collector")
+    }
+    try:
+        report = cp_report(happy_cp())
+        pan_report(happy_pan())
+        assert report["units"]
+        assert "checkpoint.preflight_collector" not in sys.modules
+        assert "panorama.preflight_collector" not in sys.modules
+    finally:
+        for name, module in saved_modules.items():
+            if module is not None:
+                sys.modules[name] = module
+
+
+def test_evaluator_probe_restores_the_collector_modules_it_pops():
+    """Test-isolation regression, same shape as
+    test_render_uitest_restores_the_builders_it_injects (frontend-rendering
+    shared-state-leak guard precedent): assert the restoration directly,
+    so an order-independence regression is caught here instead of showing
+    up as 25 unrelated S6 failures when this file happens to run first.
+
+    Before this fix, test_evaluator_performs_no_socket_io_and_imports_no_collector
+    popped checkpoint.preflight_collector / panorama.preflight_collector out
+    of sys.modules and never put them back; any later
+    `import panorama.preflight_collector as pc` (e.g. inside S6's `_collect`
+    helper) then rebound `pc` to a brand-new module object, while functions
+    imported earlier at S6's own file-collection time (`collect_member`)
+    kept resolving globals against the original module dict -- so S6's own
+    patches silently stopped reaching the real call sites.
+    """
+    import panorama.preflight_collector as pan_before
+    import checkpoint.preflight_collector as cp_before
+
+    mp = pytest.MonkeyPatch()
+    try:
+        test_evaluator_performs_no_socket_io_and_imports_no_collector(mp)
+    finally:
+        mp.undo()
+
+    import panorama.preflight_collector as pan_after
+    import checkpoint.preflight_collector as cp_after
+    assert pan_after is pan_before
+    assert cp_after is cp_before
 
 
 def test_safe_reachable_only_for_the_exact_fully_healthy_combination_over_snapshot_matrix():
