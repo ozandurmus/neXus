@@ -18,7 +18,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 scripts/nexus_engineer_tool_gate.py --event pre"
+            "command": "python3 \"${NEXUS_WORKTREE_ROOT:-.}/scripts/nexus_engineer_tool_gate.py\" --event pre"
           }
         ]
       }
@@ -29,7 +29,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 scripts/nexus_engineer_tool_gate.py --event post"
+            "command": "python3 \"${NEXUS_WORKTREE_ROOT:-.}/scripts/nexus_engineer_tool_gate.py\" --event post"
           }
         ]
       }
