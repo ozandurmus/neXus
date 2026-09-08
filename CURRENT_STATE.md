@@ -14,11 +14,11 @@ docs under `docs/history/`; `docs/history/INDEX.md` is the one-line timeline.
   defeating S6's patches, real HTTP calls when S7 ran first (frontend-
   rendering shared-state-leak guard family). Fixed with a save/restore
   `try/finally` + regression test; test-infra only. Detail: `project/
-  build_history.json`. Predecessors `gov_po_3_push_hook_baseline_scoping`,
-  `gov_po_3_approved_movement_orchestration_ac3` **AC-3 only**,
-  `gov_po_1_gate_5_worktree_management`/`gov_po_2_po_visibility_and_
-  bounded_authorship` all **MERGED** PR #122 (its doc **FROZEN — PO
-  APPROVED, 2026-09-08**). **PO §12:** `M8.3` deferred, `M7` blocked.
+  build_history.json`. Predecessors `gov_po_3_orchestrator_observability`,
+  `gov_po_3_push_hook_baseline_scoping`, `gov_po_3_approved_movement_
+  orchestration_ac3` (AC-3), `gov_po_1_gate_5_worktree_management`/
+  `gov_po_2_po_visibility_and_bounded_authorship` all **MERGED** PR #122,
+  doc **FROZEN — PO APPROVED**. **PO §12:** `M8.3` deferred, `M7` blocked.
 - **Next** (`now_next.next`): `gov_po_2_implementation` — unrelated and
   unchanged by this movement; not yet started. `m8_3_real_environment_
   validation` stays `upcoming`, **deferred debt**, unpaid; `m7_real_device_
