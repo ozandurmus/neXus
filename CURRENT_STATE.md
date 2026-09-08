@@ -5,38 +5,41 @@ see `AGENTS.md`/`AI_START_HERE.md`. **Predecessor build detail lives in
 `project/build_history.json`** (structured, newest-first) and its linked
 docs under `docs/history/`; `docs/history/INDEX.md` is the one-line timeline.
 
-- **Checkpoint:** 2026-09-08, `m11_shared_entity_workspace_and_availability_rule`
-  (relay/NXS-LOCAL-0022) — `static/navigation_ui.js::navigationResolveSurface`
-  is now the sole, explicit render/not-render gate for the rail and
-  device-tab strip, mirroring the M10.2 resolver's stage 0
-  (`resolve_union_tag`); `tests/test_m11_navigation_availability_wiring.py`
-  proves `D2`..`D7` never change it (`AC-CS-2`). Shared entity workspace
-  (navigation contract §6.3) extends the existing `#<module>` route to
-  `#<module>[/<entityId>]`. Content-level `P2`/`P3` RE-SCOPED, not dropped —
-  needs a real-device -> logical-entity-type classifier that does not exist
+- **Checkpoint:** 2026-09-08, `m7_real_device_targeted_collect_now`
+  (relay/NXS-LOCAL-0023) — closes the last gap keeping `config_refresh_cp`
+  non-functional for a real device: `console/registry_targets.py`'s
+  `_identity_resolved` now returns the resolved `M8.1` collector `entity_id`
+  (was bool-only), and a new `resolve_registry_target_entities` returns the
+  `device_id -> entity_id` mapping so `console/runner.py`'s pre-execution
+  re-check substitutes the resolved `entity_id`(s) — never the raw
+  `device_id`(s) — into `--cp-config-targets`. `resolve_registry_targets`'s
+  own admission-gate contract is byte-identical; no `M6`/`M8.4` refusal
+  code/condition/ordering changed. `AC-1(c)`'s conditional
+  `host_key_fingerprint` metadata fix was found already shipped (PR #103,
+  2026-09-07, predating this movement's own SESSION_START) — only two
+  stale comments describing that closed gap as current fact were corrected.
+  Real-device end-to-end confirmation still needs the Product Owner to run
+  the bounded command; `M12`'s `M7` prerequisite is now AUTOMATED_VALIDATED
+  and reachable. Predecessor `m11_shared_entity_workspace_and_availability_rule`
+  (relay/NXS-LOCAL-0022, **MERGED**) — `static/navigation_ui.js`'s
+  render/not-render gate now mirrors the M10.2 resolver's stage 0; shared
+  entity workspace route added; content-level `P2`/`P3` RE-SCOPED
   (`navigation_entity_type_classifier_for_content_level_p2_p3`). Predecessor
-  `orchestrator_interactive_dashboard_app` **MERGED PR #136** — interactive
-  PO + Orchestrator workbench. Predecessor
-  `gov_po_3_ci_privacy_gate_baseline_scoping` **MERGED PR #135** — CI's
-  privacy gate is now baseline-aware. Predecessor
-  `orchestrator_background_task_exit_race` **MERGED PR #134** — engineer
-  spawn/resume exit-race closure. Parallel, unmerged, unaffected:
-  `op1_failover_plan_compiler_contract_draft` (DRAFT contract, awaiting
-  Product Owner freeze). Predecessor
-  `gov_po_3_push_hook_baseline_scoping` **MERGED**. Predecessor
-  `gov_po_3_approved_movement_orchestration_ac3` **AC-3 only, MERGED** —
-  AC-5 demonstrations pending (`relay/NXS-LOCAL-0007`). Predecessor
-  `gov_po_1_gate_5_worktree_management` **MERGED**. Predecessor
-  `gov_po_2_po_visibility_and_bounded_authorship` **MERGED** PR #122 —
-  FROZEN — PRODUCT OWNER APPROVED, 2026-09-08. **PO §12:** `M8.3`
-  deferred, `M7` blocked. `M8` **FROZEN 2026-09-06**.
+  `orchestrator_interactive_dashboard_app` **MERGED PR #136**. Predecessor
+  `gov_po_3_ci_privacy_gate_baseline_scoping` **MERGED PR #135**. Predecessor
+  `orchestrator_background_task_exit_race` **MERGED PR #134**. Parallel,
+  unmerged, unaffected: `op1_failover_plan_compiler_contract_draft` (DRAFT,
+  awaiting freeze). `gov_po_2_po_visibility_and_bounded_authorship`
+  **MERGED** PR #122 — FROZEN — PRODUCT OWNER APPROVED, 2026-09-08.
+  **PO §12:** `M8.3` deferred (now REAL_ENV_VALIDATED). `M8` **FROZEN
+  2026-09-06**.
 - **Next** (`now_next.next`): `gov_po_2_implementation` — unrelated and
-  unchanged by this movement; not yet started. `m8_3_real_environment_
-  validation` **REAL_ENV_VALIDATED 2026-09-08** — real relationship proven
-  (`relationship_id e4671bc45e5e49e2bf9257d32b3fa067`), debt paid;
-  `m7_real_device_targeted_collect_now` now **unblocked**, not yet started.
+  unchanged by this movement; not yet started. `m7_real_device_targeted_
+  collect_now` **AUTOMATED_VALIDATED 2026-09-08** — entity_id-substitution
+  wiring shipped (relay/NXS-LOCAL-0023), fixture-proven; real-device
+  end-to-end confirmation pending Product Owner execution.
   `op2_c_cp_clusterxl_adapter_scoping` stays `upcoming`/`blocked`.
-  `DEV.TEST.1`/`PCP.1`/`M1`-`M11` complete/automated_validated/real_env_validated.
+  `DEV.TEST.1`/`PCP.1`/`M1`-`M11`/`M7` complete/automated_validated/real_env_validated.
 - **OP.2.0 CLASS 2 architecture** (`docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md`):
   **CONTRACT FROZEN 2026-09-04**; `OP.2.A`/`OP.2.B` IMPLEMENTED; `OP.2.1` CP
   command gate DRAFTED — CLASS 2 still has **no member**, no adapter,
