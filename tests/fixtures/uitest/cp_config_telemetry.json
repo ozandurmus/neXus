@@ -1,0 +1,14 @@
+{
+  "devices": [
+    {
+      "entity_id": "vsx-cls-01",
+      "ha_role": "ACTIVE",
+      "ha_cluster_mode": "high_availability"
+    },
+    {
+      "entity_id": "vsx-cls-02",
+      "ha_role": "ACTIVE",
+      "ha_cluster_mode": "high_availability"
+    }
+  ]
+}
