@@ -128,6 +128,33 @@
       "supersedes": "none",
       "text": "Decision: for AC-5, the engineer invents and dispatches a small, clearly-labeled, throwaway scratch movement through the real orchestrator pipeline (real worktree, real spawned claude -p engineer process, real commit/push/PR/self-merge under relay#13) rather than using one of the four real queued movements (NXS-LOCAL-0008/0009/0010/0011) as the first live subject. Nothing load-bearing rides on the first live self-merge this new infrastructure performs.",
       "timestamp": "2026-09-08T10:48:38Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "RELAY_NOTE",
+      "seq": 7,
+      "subject": "AC-3 merged to main (PR #125)",
+      "text": "AC-3 merged to main. What changed: docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md\n(FROZEN with three additions), scripts/orchestrator.py, .claude/nexus-engineer.settings.json\n+ scripts/nexus_engineer_tool_gate.py, scripts/nexus_po_tool_gate.py extensions,\nscripts/local_relay.py canonical-location resolver + real shared lock, the two\nGOV_PO_2 text corrections (sections 2.4/3.2/4), and 57 new/changed tests.\n\nTest/gate evidence (not rounded): tests/test_orchestrator.py 48 passed;\ntests/test_gov_po_role.py/test_local_relay_protocol.py/test_architecture_convergence.py/\ntest_orchestrator.py combined 267 passed. Full one-shot suite\n.venv/bin/python -m pytest -q -n auto --dist worksteal: 2662 passed, 25 skipped,\n2 failed -- both confirmed pre-existing/unrelated via git stash against clean main\nbefore this movement's own changes existed (tests/test_dev_0_5b_auth_consumer_\ncanonical_config.py's .venv/ site-packages DLP scan). git diff --check clean.\nRepository privacy gate FAIL/5 findings, identical to gov_po_1_gate_5's own\ndocumented findings, none in this movement's changed files. CI's validate job\nalso reported fail for the same 2 pre-existing CREDENTIAL_LITERAL findings\n(project/build_history.json:47, relay/NXS-LOCAL-0003...:155) -- confirmed\nidentical on PR #124 (the immediately-preceding merged PR) before merging,\nestablished precedent for this known, accepted debt.\n\nMerge result: PR #125, https://github.com/ozandurmus/neXus/pull/125, squash\nmerge commit 0fb7ef0d665ae09a5500a827514b68a25f142204. Local main fast-forwarded\ncleanly after gh pr merge's own local ref-sync step failed transiently (a local\nhousekeeping error, not a merge failure -- the remote merge had already\nsucceeded; confirmed via gh pr view before resyncing).\n\nAC-3 only. AC-5 (four real demonstrations) has not run. Per the Product Owner's\ndirection recorded at this relay's entry 6, the next step is a small, throwaway\nscratch movement dispatched through orchestrator start for real -- now unblocked\nsince the orchestrator infrastructure this demo needs is on origin/main.",
+      "timestamp": "2026-09-08T11:03:33Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "RELAY_QUESTION",
+      "seq": 8,
+      "subject": "AC-5 demonstration 1 blocked by the auto-mode classifier at the real dispatch call",
+      "text": "The AC-5 demo movement (relay/NXS-LOCAL-0012-gov-po-3-ac5-demo-1-scratch.json, GOV_PO_3_AC5_DEMO_1_SCRATCH) was created and validated. Running the real dispatch -- python3 scripts/orchestrator.py start --movement NXS-LOCAL-0012 -- was denied by the Claude Code auto-mode classifier before it ran at all. This is the same class of block observed during AC-4 verification (docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md section 4's disclosure), but it contradicts that section's own inference: there, a Python subprocess.run wrapper (no literal claude -p text in the Bash tool's own command string) was NOT blocked; here, the same wrapping shape (a plain python3 scripts/orchestrator.py start invocation, no literal claude -p text either) WAS blocked. The classifier is evidently reacting to something more substantive than literal command text -- most likely the fact that this command spawns an unattended, unsupervised subprocess that will itself commit/push/open a PR/self-merge. Per AGENTS.md/this document's own AC-7 ('auto-mode blocks are handled by addressing their stated reason, never routed around with another tool'), no bypass was attempted. This blocks AC-5 demonstration 1 until the Product Owner decides how to proceed: (a) the Product Owner runs the exact same dispatch command themselves (outside this session's own auto-mode classifier, e.g. via a plain terminal or the chat's own '!' passthrough), since a human-initiated invocation is not subject to this session's classifier; (b) the Product Owner grants a standing Bash permission rule for this exact command shape so future orchestrator dispatches are not blocked; or (c) AC-5 stays open and unresolved until a session without this restriction can run it. The demo movement (relay/NXS-LOCAL-0012) is untouched -- no worktree, no state record, nothing spawned.",
+      "timestamp": "2026-09-08T11:06:03Z"
+    },
+    {
+      "actor": "po",
+      "authorized_by": "Product Owner (Ozan Durmus)",
+      "marker": "RELAY_DECISION",
+      "scope": "AC-5/AC-8 closure",
+      "seq": 9,
+      "subject": "Close: AC-5 satisfied by real batch evidence",
+      "supersedes": "none",
+      "text": "AC-5 satisfied by real batch evidence (PR 126-133). Details recorded separately. Closing this relay file.",
+      "timestamp": "2026-09-08T16:39:04Z"
     }
   ],
   "id": "NXS-LOCAL-0007",
@@ -144,5 +171,5 @@
   ],
   "schema_version": 1,
   "status": "AWAITING_ENGINEER",
-  "updated_at": "2026-09-08T10:48:38Z"
+  "updated_at": "2026-09-08T16:39:04Z"
 }
