@@ -12,7 +12,7 @@ docs under `docs/history/`; `docs/history/INDEX.md` is the one-line timeline.
   resolved relay issue without a manual terminal command; delegated form
   still denies it entirely. Filed and closed from relay #14.
   Predecessor `gov_po_1_gate_3_agent_tool_council_path` **MERGED** PR #116
-  (Agent-tool council-seat exception); own history record still outstanding.
+  (Agent-tool council-seat exception); history backfilled via relay #16.
   Predecessor `m10_1_registry_evidence_reconciliation_projection` **MERGED**
   PR #117 (`M10`'s first slice: `D4`/`RI-2` registry↔evidence projection).
   Predecessor `gov_po_1_step_5_first_plan_episode` **MERGED** PR #113: first
