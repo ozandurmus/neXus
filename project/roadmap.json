@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "current_build": "gov_po_3_orchestrator_observability",
+  "current_build": "gov_po_3_resume_canonical_relay_access_fix",
   "current_track": "PCP.x",
   "progress_contract": "Weighted acceptance-criterion completion. Percentages describe the declared roadmap, not calendar time or delivery ETA.",
   "tracks": [
@@ -140,17 +140,17 @@
   "now_next": {
     "horizon_contract": "NOW is exactly one build. NEXT is exactly one. Everything else is an `upcoming` row carrying its own true status: planned = AFTER, blocked = waiting on a named external gate, deferred = consciously postponed. `now.build` must equal the newest project/build_history.json record -- utils.project_plan enforces it.",
     "now": {
-      "build": "gov_po_3_orchestrator_observability",
-      "title": "GOV.PO.3 -- orchestrator observability: streaming engineer output + watch dashboard",
-      "goal": "Give the orchestrator real-time visibility: stream the engineer's claude -p output incrementally instead of only at process exit, derive a human-readable engineer.summary.log alongside the raw log, surface a last_activity field on status, and add a read-only orchestrator watch terminal dashboard -- extending the already-frozen scripts/orchestrator.py with observability only, no new capability class.",
+      "build": "gov_po_3_resume_canonical_relay_access_fix",
+      "title": "GOV.PO.3 -- resume canonical-relay access fix: --add-dir the canonical relay directory on every engineer spawn",
+      "goal": "Fix orchestrator start's --resume path so a resumed engineer session can reliably read/write the canonical relay file outside its own worktree, exactly as a fresh dispatch already can -- closing the real gap found live during AC-5 demonstration 1 (relay/NXS-LOCAL-0012), recorded there as its own SESSION_CLOSE `next` movement.",
       "status": "automated_validated",
       "started": "2026-09-08",
       "completed": "2026-09-08",
       "notes": [
-        "Full detail: project/build_history.json's gov_po_3_orchestrator_observability record.",
-        "Relay: relay/NXS-LOCAL-0013-orchestrator-observability.json (Product Owner direction, 2026-09-08, immediately after AC-3/AC-5 demonstration 1 of gov_po_3_approved_movement_orchestration_ac3 confirmed engineer.log stayed empty until process exit under the prior non-streaming invocation).",
-        "Predecessor gov_po_3_push_hook_baseline_scoping (a small, independent corrective fix to the pre-push privacy-gate hook, found live during the same AC-5 demonstration sequence) and predecessor gov_po_3_approved_movement_orchestration_ac3 (AC-3 only; AC-5's real demonstrations still not run, tracked on relay/NXS-LOCAL-0007) are both unaffected -- this movement only adds observability around the same, already-frozen dispatch/status/stop/merge-lock logic.",
-        "gov_po_2_implementation (below) is unrelated, separate scope -- this movement does not touch it."
+        "Full detail: project/build_history.json's gov_po_3_resume_canonical_relay_access_fix record.",
+        "Relay: relay/NXS-LOCAL-0015-resume-canonical-relay-access-fix.json (Product Owner priority, 2026-09-08, found live during relay/NXS-LOCAL-0012's GOV.PO.3 AC-5 demonstration 1). AC-4 reproduced for real on relay/NXS-LOCAL-0017-gov-po-3-resume-fix-ac4-repro-postfix.json (CLOSED).",
+        "Reconciled two concurrent merges to origin/main during integration: relay/NXS-LOCAL-0013 (gov_po_3_orchestrator_observability, PR #129 -- code-level conflict in scripts/orchestrator.py's _spawn_engineer, resolved by hand) and relay/NXS-LOCAL-0010 (m10_3_entity_and_vendor_support_producers, PR #131 -- bookkeeping-only conflict).",
+        "A small, independent corrective fix inserted ahead of gov_po_2_implementation (below) in build order -- part of the ongoing GOV.PO.3 initiative's own AC-5 demonstration/recovery sequence, not a change to its scope. AC-5's remaining demonstrations and AC-8-for-the-demo are still pending, unchanged by this record; see gov_po_3_approved_movement_orchestration_ac3's own build_history.json entry for that status."
       ]
     },
     "next": {
@@ -181,15 +181,6 @@
         "notes": [
           "Second M10 slice, sequenced by the first Phase A PLAN episode 2026-09-08. Not authorized; needs its own SESSION_START. Consumes M10.1's D4 producer plus declared inputs for the dimensions whose producers do not exist yet.",
           "Scope sketch only: stage-0 surface resolution and the OMITTED/RESOLVED union tag, the CapabilityState nine-value vocabulary, and the primary ladder with its fail-closed fallbacks. Authority: docs/design/CAPABILITY_STATE_VOCABULARY_AND_PRESENTATION.md sections 4 and 5 (FROZEN 2026-09-06). Sizing to the GOV.PO.1 section 7 targets is a PLAN decision for the episode that opens it, after M10.1's REVIEW."
-        ]
-      },
-      {
-        "build": "m10_3_entity_and_vendor_support_producers",
-        "title": "M10.3 -- D2 entity applicability and D3 vendor/platform support producers",
-        "status": "planned",
-        "notes": [
-          "Third M10 slice, sequenced 2026-09-08. Not authorized. Positive-evidence vendor support only -- CAPABILITY_STATE_VOCABULARY_AND_PRESENTATION.md section 7.3 governs what may never prove capability support.",
-          "Together with M10.1 and M10.2 this is what finally lets project/feature_registry.json's left_vertical_product_navigation availability_rule criterion move off 'pending'; that criterion state is owned by the slice that actually delivers the predicates, never by this planning row."
         ]
       },
       {
