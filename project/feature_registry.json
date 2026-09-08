@@ -1059,7 +1059,7 @@
     {
       "id": "event_signal_intake",
       "title": "External Change Signal Intake & Bounded Evidence Trigger",
-      "status": "planned",
+      "status": "in_progress",
       "target": "0.8.x",
       "weight": 8,
       "summary": "Authenticated webhook ingress (e.g. Splunk correlation action) that validates, deduplicates and rate-limits inbound signals, resolves canonical device identity, and queues a bounded read-only evidence capture through the collection coordinator. Requires safe-diff and collection coordinator foundations.",
@@ -1068,31 +1068,34 @@
         {
           "id": "authenticated_ingress",
           "label": "Authenticated / signed webhook ingress (mTLS or OIDC-client)",
-          "state": "pending",
-          "weight": 2
+          "state": "done",
+          "weight": 2,
+          "note": "Slice 1 (docs/design/EVENT_SIGNAL_INTAKE_ARCHITECTURE.md) ships HMAC-SHA256 shared-secret ingress (signal_intake/app.py, utils/event_signal_intake.py) instead of mTLS/OIDC -- a deliberate substitution, not a gap left unbuilt. Upgrading to mTLS/OIDC-client is a separate, later decision."
         },
         {
           "id": "signal_validation",
           "label": "Schema allowlist, replay protection and dedup/cooldown",
-          "state": "pending",
+          "state": "done",
           "weight": 2
         },
         {
           "id": "identity_resolution",
           "label": "Canonical device identity resolution via discovery lifecycle",
-          "state": "pending",
-          "weight": 1
+          "state": "done",
+          "weight": 1,
+          "note": "Resolves via utils.device_registry.DeviceRegistry (reused, not a parallel model) rather than utils/discovery_lifecycle.py -- AC-3 asked to reuse existing identity/registry code, and DeviceRegistry is the Product Control Plane's own identity registry; discovery_lifecycle tracks management-plane trust confidence, a different concept."
         },
         {
           "id": "coordinator_queue",
           "label": "Coordinator-queued bounded read-only evidence capture",
-          "state": "pending",
-          "weight": 1
+          "state": "done",
+          "weight": 1,
+          "note": "Check Point only in Slice 1 -- no PAN per-device config target-selection seam exists yet (utils.collection_executor._TARGET_SEAM_WORKFLOWS omits pan-config); see project/backlog.json's event_signal_intake note."
         },
         {
           "id": "signal_outcome",
           "label": "Explicit signal outcome: triggered / coalesced / ignored / unknown_identity",
-          "state": "pending",
+          "state": "done",
           "weight": 1
         }
       ]

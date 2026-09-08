@@ -76,10 +76,18 @@ def _build_argv(job_type: JobType, runtime_root, targets: list[str]) -> list[str
 
 
 class ConsoleJobRunner:
-    def __init__(self, *, job_store: ConsoleJobStore, runtime_paths, services) -> None:
+    def __init__(
+        self, *, job_store: ConsoleJobStore, runtime_paths, services, provenance: str = "console"
+    ) -> None:
+        """``provenance`` (default ``"console"``, byte-identical to prior
+        behavior) is additive: ``signal_intake/app.py`` (event_signal_intake
+        slice 1) passes ``Provenance.EVENT.value`` so a signal-triggered job
+        is distinguishable in every manifest/audit record from an
+        operator-console-submitted one, without duplicating this runner."""
         self._job_store = job_store
         self._runtime_paths = runtime_paths
         self._services = services
+        self._provenance = provenance
         self._queue: "queue.Queue[str]" = queue.Queue()
         self._thread: threading.Thread | None = None
         self._stop = threading.Event()
@@ -169,7 +177,7 @@ class ConsoleJobRunner:
         self._job_store.mark_running(job_id)
 
         import main  # entry-ward re-invocation; kept patchable as main.main, same pattern the scheduler uses
-        from utils.coordinator_backend import CollectionAdmissionError, Provenance
+        from utils.coordinator_backend import CollectionAdmissionError
         from utils.run_context import RunContext
 
         argv = _build_argv(job_type, self._runtime_paths.runtime_root, argv_targets)
@@ -181,7 +189,7 @@ class ConsoleJobRunner:
             main.main(
                 argv,
                 runtime_services=self._services,
-                provenance=Provenance.CONSOLE.value,
+                provenance=self._provenance,
                 admission_run_context=ctx,
             )
         except CollectionAdmissionError as exc:

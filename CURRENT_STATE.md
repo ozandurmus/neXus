@@ -5,40 +5,35 @@ see `AGENTS.md`/`AI_START_HERE.md`. **Predecessor build detail lives in
 `project/build_history.json`** (structured, newest-first) and its linked
 docs under `docs/history/`; `docs/history/INDEX.md` is the one-line timeline.
 
-- **Checkpoint:** 2026-09-08, `m7_real_device_targeted_collect_now`
-  (relay/NXS-LOCAL-0023) — closes the last gap keeping `config_refresh_cp`
-  non-functional for a real device: `console/registry_targets.py`'s
-  `_identity_resolved` now returns the resolved `M8.1` collector `entity_id`
-  (was bool-only), and a new `resolve_registry_target_entities` returns the
-  `device_id -> entity_id` mapping so `console/runner.py`'s pre-execution
-  re-check substitutes the resolved `entity_id`(s) — never the raw
-  `device_id`(s) — into `--cp-config-targets`. `resolve_registry_targets`'s
-  own admission-gate contract is byte-identical; no `M6`/`M8.4` refusal
-  code/condition/ordering changed. `AC-1(c)`'s conditional
-  `host_key_fingerprint` metadata fix was found already shipped (PR #103,
-  2026-09-07, predating this movement's own SESSION_START) — only two
-  stale comments describing that closed gap as current fact were corrected.
-  Real-device end-to-end confirmation still needs the Product Owner to run
-  the bounded command; `M12`'s `M7` prerequisite is now AUTOMATED_VALIDATED
-  and reachable. Predecessor `m11_shared_entity_workspace_and_availability_rule`
-  (relay/NXS-LOCAL-0022, **MERGED**) — `static/navigation_ui.js`'s
-  render/not-render gate now mirrors the M10.2 resolver's stage 0; shared
-  entity workspace route added; content-level `P2`/`P3` RE-SCOPED
-  (`navigation_entity_type_classifier_for_content_level_p2_p3`). Predecessor
-  `orchestrator_interactive_dashboard_app` **MERGED PR #136**. Predecessor
-  `gov_po_3_ci_privacy_gate_baseline_scoping` **MERGED PR #135**. Predecessor
-  `orchestrator_background_task_exit_race` **MERGED PR #134**. Parallel,
-  unmerged, unaffected: `op1_failover_plan_compiler_contract_draft` (DRAFT,
-  awaiting freeze). `gov_po_2_po_visibility_and_bounded_authorship`
-  **MERGED** PR #122 — FROZEN — PRODUCT OWNER APPROVED, 2026-09-08.
-  **PO §12:** `M8.3` deferred (now REAL_ENV_VALIDATED). `M8` **FROZEN
-  2026-09-06**.
+- **Checkpoint:** 2026-09-09, `event_signal_intake` Slice 1
+  (relay/NXS-LOCAL-0032) — `docs/design/EVENT_SIGNAL_INTAKE_ARCHITECTURE.md`
+  (FROZEN, Slice 1 only). AC-1: coordinator + safe diff (0.6.3, PAN-scoped)
+  EXIST AND WORK; cross-vendor timeline (0.8.x) still MISSING, doesn't gate
+  the intake boundary. New `utils/event_signal_intake.py` +
+  `signal_intake/app.py` (FastAPI, `POST /events`): HMAC-signed auth +
+  replay window/nonce + schema allowlist + per-device/event cooldown +
+  identity resolution reusing `DeviceRegistry` (no parallel model). Success
+  only ever calls the existing `CON.2` job engine (`config_refresh_cp`) —
+  never a collector, never a direct evidence write.
+  `ConsoleJobRunner` gained an additive `provenance` param (default
+  unchanged) and `Provenance.EVENT` fills the reserved value. Scoped down:
+  Check-Point-only (no PAN per-device target seam yet), no network exposure
+  (`TestClient` only), HMAC instead of the feature registry's aspirational
+  mTLS/OIDC. Full detail: `project/backlog.json`'s `event_signal_intake`
+  note. Tests: 19 passed. Full regression: 3070 passed/25 skipped/2 failed
+  (both pre-existing DLP-token prose collisions, confirmed unrelated).
+  Privacy gate PASS, 0 new findings vs `origin/main`. Predecessor
+  `m7_real_device_targeted_collect_now` (relay/NXS-LOCAL-0023,
+  **AUTOMATED_VALIDATED**) — `M7` entity_id substitution into
+  `--cp-config-targets`, real-device confirmation still pending PO
+  execution. Full predecessor chain: `project/build_history.json`.
 - **Next** (`now_next.next`): `gov_po_2_implementation` — unrelated and
   unchanged by this movement; not yet started. `m7_real_device_targeted_
-  collect_now` **AUTOMATED_VALIDATED 2026-09-08** — entity_id-substitution
-  wiring shipped (relay/NXS-LOCAL-0023), fixture-proven; real-device
-  end-to-end confirmation pending Product Owner execution.
-  `op2_c_cp_clusterxl_adapter_scoping` stays `upcoming`/`blocked`.
+  collect_now` **AUTOMATED_VALIDATED 2026-09-08**, real-device confirmation
+  pending Product Owner execution. `op2_c_cp_clusterxl_adapter_scoping`
+  stays `upcoming`/`blocked`. `event_signal_intake` stays `in_progress` —
+  cross-vendor timeline (0.8.x) and any real network exposure of
+  `signal_intake/` remain later, separately-decided work.
   `DEV.TEST.1`/`PCP.1`/`M1`-`M11`/`M7` complete/automated_validated/real_env_validated.
 - **OP.2.0 CLASS 2 architecture** (`docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md`):
   **CONTRACT FROZEN 2026-09-04**; `OP.2.A`/`OP.2.B` IMPLEMENTED; `OP.2.1` CP
