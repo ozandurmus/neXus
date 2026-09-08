@@ -1671,6 +1671,7 @@ function renderDeviceList() {
 
         item.addEventListener("click", () => {
             selectedId = entry.id;
+            setSharedEntityId(selectedId);
             renderDeviceList();
             renderSelected();
         });
