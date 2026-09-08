@@ -7,28 +7,22 @@ docs under `docs/history/`; `docs/history/INDEX.md` is the one-line timeline.
 
 - **Checkpoint:** 2026-09-08, `m11_shared_entity_workspace_and_availability_rule`
   (relay/NXS-LOCAL-0022) — `static/navigation_ui.js::navigationResolveSurface`
-  is now the sole, explicit, client-side render/not-render gate for the rail
-  and device-tab strip, mirroring `utils/capability_state_resolver.py`'s
-  stage 0 (`resolve_union_tag`); a cross-product regression test
-  (`tests/test_m11_navigation_availability_wiring.py`) proves `D2`..`D7`
-  (including a `CX1`/`RI-1`/`RI-2` contradiction case) never change it
-  (`AC-CS-2`). The shared entity workspace (navigation contract §6.3) extends
-  the existing `#<module>` hash/localStorage route to
-  `#<module>[/<entityId>]`, with Inventory/Configuration/Compliance
-  publishing their selection and each module adopting a shared id only when
-  its own known-id set already contains it. Content-level `P2`/`P3` (e.g. a
-  `NOT_APPLICABLE` device tab) stays pending — RE-SCOPED, not silently
-  dropped, per this movement's own `RELAY_NOTE`: it needs a real-device ->
-  logical-entity-type classifier that does not exist
-  (`navigation_entity_type_classifier_for_content_level_p2_p3`,
-  `project/backlog.json`). Predecessor
-  `orchestrator_background_task_exit_race` **MERGED** — engineer
-  spawn/resume exit-race closure. Detail: `project/build_history.json`.
-  Parallel, unmerged, unaffected:
-  `op1_failover_plan_compiler_contract_draft` (DRAFT contract
-  `docs/history/phase/OP_1_FAILOVER_PLAN_COMPILER_AND_DRY_RUN.md`, awaiting
-  Product Owner freeze, own worktree). Predecessor
-  `gov_po_3_orchestrator_observability` **MERGED**. Predecessor
+  is now the sole, explicit render/not-render gate for the rail and
+  device-tab strip, mirroring the M10.2 resolver's stage 0
+  (`resolve_union_tag`); `tests/test_m11_navigation_availability_wiring.py`
+  proves `D2`..`D7` never change it (`AC-CS-2`). Shared entity workspace
+  (navigation contract §6.3) extends the existing `#<module>` route to
+  `#<module>[/<entityId>]`. Content-level `P2`/`P3` RE-SCOPED, not dropped —
+  needs a real-device -> logical-entity-type classifier that does not exist
+  (`navigation_entity_type_classifier_for_content_level_p2_p3`). Predecessor
+  `orchestrator_interactive_dashboard_app` **MERGED PR #136** — interactive
+  PO + Orchestrator workbench. Predecessor
+  `gov_po_3_ci_privacy_gate_baseline_scoping` **MERGED PR #135** — CI's
+  privacy gate is now baseline-aware. Predecessor
+  `orchestrator_background_task_exit_race` **MERGED PR #134** — engineer
+  spawn/resume exit-race closure. Parallel, unmerged, unaffected:
+  `op1_failover_plan_compiler_contract_draft` (DRAFT contract, awaiting
+  Product Owner freeze). Predecessor
   `gov_po_3_push_hook_baseline_scoping` **MERGED**. Predecessor
   `gov_po_3_approved_movement_orchestration_ac3` **AC-3 only, MERGED** —
   AC-5 demonstrations pending (`relay/NXS-LOCAL-0007`). Predecessor
@@ -108,9 +102,10 @@ implementation authority for the vocabulary/resolution/presentation matrix
 (`D1`–`D7`, `E1`–`E7`, `AC-CS-1`…`97`). `D4` has its producer as of
 `M10.1`; `D2`/`D3` as of `M10.3`; the resolver core (stages 0-3: union tag,
 `CX1`/`RI-1`/`RI-2`, primary ladder, qualifiers) as of `M10.2` (both
-above) — none wired to a caller/UI/payload yet, so every dimension still
-resolves `UNKNOWN` in any actual render. Stages 4-5 and `D5`'s producer
-are still open; `M12` builds `D5`, `M14` builds `D7`.
+above); `D1` (stage 0) is now wired into the navigation availability_rule
+as of `M11` (2026-09-08) — `D2`..`D7` still resolve `UNKNOWN`/`POLICY_UNKNOWN`
+in any actual render pending their own producers. Stages 4-5 and `D5`'s
+producer are still open; `M12` builds `D5`, `M14` builds `D7`.
 
 ## `OP.0b.0` — FROZEN WITH REAL-ENV VALIDATION GATES
 `docs/history/phase/OP_0B_0_VENDOR_FAILOVER_PREFLIGHT_EVIDENCE_SURFACE.md`

@@ -165,6 +165,18 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--privacy-baseline-ref",
+        default=None,
+        help=(
+            "Only valid with --repository-privacy-check. A git ref/SHA (e.g. origin/main) "
+            "whose merge-base with HEAD is the privacy-gate baseline: a finding present in "
+            "both the baseline and the current scan is pre-existing repository debt and does "
+            "not fail the gate, using the same content-fingerprint matching as "
+            "scripts/nexus_engineer_tool_gate.py's pre-push baseline check. Omitted -> "
+            "unbaselined, exactly as before this option existed (every finding fails the gate)."
+        ),
+    )
+    parser.add_argument(
         "--persistent-secret-material-check",
         action="store_true",
         help=(
@@ -498,6 +510,8 @@ def validate_modes(args, parser):
         or args.recovery_collect or args.recovery_attest
     ):
         parser.error("--repository-privacy-check cannot be combined with collection/render modes")
+    if args.privacy_baseline_ref and not args.repository_privacy_check:
+        parser.error("--privacy-baseline-ref is only valid with --repository-privacy-check")
     if args.persistent_secret_material_check and args.apply:
         parser.error("--apply is not valid with --persistent-secret-material-check")
     if args.persistent_secret_material_check and (

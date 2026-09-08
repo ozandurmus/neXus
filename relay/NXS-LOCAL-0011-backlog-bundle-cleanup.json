@@ -1,0 +1,85 @@
+{
+  "created_at": "2026-09-08T09:23:25Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1 (pcp1_registry_uuid_call_count_test_defect): tests/test_pcp1_device_registry.py::test_duplicate_enroll_refused_before_device_id_generated and ::test_lock_contention_on_enroll_never_generates_a_device_id both fail deterministically on main because they monkeypatch dr.uuid.uuid4 and assert zero calls, but utils/device_registry.py::_acquire_lock legitimately calls uuid4() once for the lock's own owner_token before the enroll refusal. Fix the test mechanism, not the product code: count only uuid4 calls made for device_id generation specifically (e.g. assert no call after lock acquisition, or assert directly on the persisted record instead of a global call count) per backlog.json's own note. No utils/device_registry.py behavior change -- the AC being proven (no device_id generated before refusal) already holds; only the proof technique was wrong.",
+          "AC-2 (dlp_scanner_venv_exclusion): the repository-text DLP scanner(s) that walk .venv and flag third-party library internals as false positives are given an explicit .venv exclusion. Locate the actual scanner(s) (search for the DLP/privacy scan implementation, likely utils/repository_privacy.py or a sibling) and its directory-walk logic; add .venv (and any equivalent virtualenv directory name already excluded elsewhere in the repo, e.g. .git) to its skip list. Verify with a real --repository-privacy-check run before and after: the false positives disappear, no new finding appears, and no real repository file's scan result changes.",
+          "AC-3 (project_state_wording_drift_reconciliation): read project/backlog.json's own entry for this id for the exact two verified drifts (feature_registry.json wording contradicting build_history.json and the shipped source -- named in gov_po_1_step_5's own build_history record: the no_enrollment_affordance criterion label vs. the actual M9 Administration -> Device Management entry point, and failover_controlled_execution's 'not started' summary vs. the existing checkpoint/clusterxl_*.py and utils/operate/*.py modules). Correct project/feature_registry.json's wording to match the verified current state -- do not change any criterion's actual state/status value, only the stale prose that contradicts already-shipped, already-recorded reality.",
+          "AC-4 all three fixes land as one PR with one shared commit history (they are independent bug/wording fixes, bundled for handoff efficiency, not because they are related) -- each fix is still individually verifiable: run tests/test_pcp1_device_registry.py (both named tests now pass), the privacy gate before/after comparison (AC-2), and tests/test_architecture_convergence.py (feature_registry consistency, AC-3).",
+          "AC-5 project-state bookkeeping (build_history record covering all three fixes, roadmap.json backlog-status updates marking these three items done, CURRENT_STATE.md, AI_HANDOVER.md, INDEX.md) lands in this same PR. This movement runs in parallel with GOV.PO.3, M10.2, M10.3 and OP.1, each in its own worktree: merge origin/main before opening/merging your PR and resolve mechanical bookkeeping conflicts yourself."
+        ],
+        "baseline": {
+          "authority": "project/backlog.json entries pcp1_registry_uuid_call_count_test_defect, dlp_scanner_venv_exclusion, project_state_wording_drift_reconciliation (all pre-existing, verified debt, read the exact notes there before starting).",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "sequencing": "Product Owner direction 2026-09-08: fast-fill bundle of small, independent, low-risk backlog debt, run alongside the larger parallel movements to keep a worker slot productive without waiting on a bigger design."
+        },
+        "context_not_loaded": [
+          "everything outside the three named items"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/backlog-bundle-test-and-state-cleanup"
+        },
+        "invariants": [
+          "No product behavior change from AC-1 or AC-2 -- both are proof/tooling corrections",
+          "AC-3 changes wording only, never a criterion's actual state/status value"
+        ],
+        "merge_gate": "Standing relay#13: green tests -> engineer merges, reports via RELAY_NOTE on this relay file.",
+        "movement_type": "DOCS",
+        "objective": "Clear three small, independent, already-documented backlog items in one bundled movement: a test-mechanism defect, a DLP scanner false-positive source, and a feature_registry wording drift.",
+        "output_contract": [
+          "tests/test_pcp1_device_registry.py fix",
+          "DLP scanner .venv exclusion",
+          "project/feature_registry.json wording correction",
+          "Project-state bookkeeping in this PR",
+          "SESSION_CLOSE on this relay file (absolute path)"
+        ],
+        "recommended_reasoning": {
+          "reason": "Three small, independent, well-documented fixes with no design ambiguity.",
+          "tier": "Sonnet 5, normal"
+        },
+        "requirements": [
+          "Read each backlog.json entry's own note in full before touching its fix -- they already name the exact defect and fix direction"
+        ],
+        "risks": [],
+        "scope": {
+          "in": [
+            "The three named fixes",
+            "bookkeeping"
+          ],
+          "out": [
+            "Any other backlog item",
+            "any change beyond what each entry's own note describes"
+          ]
+        },
+        "validation_plan": [
+          "tests/test_pcp1_device_registry.py",
+          "repository privacy gate before/after (real run)",
+          "tests/test_architecture_convergence.py",
+          "git diff --check"
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-08T09:23:25Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0011",
+  "movement": "BACKLOG_BUNDLE_TEST_AND_STATE_CLEANUP",
+  "next_actor": "engineer",
+  "refs": [
+    "tests/test_pcp1_device_registry.py",
+    "utils/device_registry.py",
+    "scripts/",
+    "project/backlog.json",
+    "project/feature_registry.json"
+  ],
+  "schema_version": 1,
+  "status": "OPEN",
+  "updated_at": "2026-09-08T09:23:25Z"
+}
