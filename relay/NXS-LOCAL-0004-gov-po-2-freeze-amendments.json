@@ -1,0 +1,157 @@
+{
+  "created_at": "2026-09-08T06:58:03Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1 (resolves council findings Security-D1 + Python-Architect-D2, both on section 3.2): section 3.2 gains two additions: (a) explicit handling for the MultiEdit tool -- state plainly that MultiEdit is NOT permitted against docs/design/po_drafts/*.md (Edit/Write only; a MultiEdit attempt falls through to the existing default-deny, exactly as it does for every other path today) since MultiEdit's tool_input is a list of {old_string,new_string} objects, not a single new_string, and the status-line regex has no defined behavior across multiple edit objects; (b) one explicit sentence recording that the Product Owner reviewed and accepted the status-line regex's residual bypass risk (a determined edit could evade `^\\s*\\*\\*\\s*(FROZEN|RATIFIED)\\b` by omitting the bold marker or rephrasing) as an acceptable trade-off given the PO role is not modeled as an adversarial actor -- this is a written acceptance, not a stronger regex.",
+          "AC-2 (resolves Python-Architect-D1): section 3.1 gains one new acceptance-criterion line for GOV_PO_2_IMPLEMENTATION requiring the new gh pr diff/gh run view/gh run list prefix matches to be boundary-safe -- i.e. the matched prefix must be followed by a space or end-of-string, not merely `cmd.startswith(p)` unbounded, so a hypothetical colliding gh subcommand (e.g. a future `gh run viewer`) cannot slip through. State this as a required GOV_PO_2_IMPLEMENTATION acceptance criterion, not implemented in this amendment.",
+          "AC-3 (resolves Security-D2): section 3.1 gains one new prerequisite: before gh run view/gh run list ship, a one-time audit of .github/workflows/*.yml confirms no CI step echoes a secret or a CLASS-2+ identity value to stdout in a way GitHub Actions' own secret-masking would not catch -- perform this audit now, in this amendment movement (it is read-only, no code change), and record its result (pass/fail, and if fail, what must change first) directly in this section.",
+          "AC-4 (resolves DevSecOps-D1 + Python-Architect-D3, the same finding from two angles): section 3.4 gains one new required GOV_PO_2_IMPLEMENTATION acceptance criterion: a regression test that runs both main.py --repository-privacy-check and scripts/repository_privacy_check.py and asserts matching stdout (modulo the stated banner-line exception) and matching exit code, for at least one PASS case and one non-PASS gate value.",
+          "AC-5 (resolves DevSecOps-D2): section 5 gains one explicit sentence acknowledging that the bookkeeping-stays-with-the-engineer rule is accepted as policy-only (not gate-enforced) for now, despite the gate_3 precedent showing policy alone already failed twice before a dedicated backfill closed it -- name this explicitly as accepted risk rather than leaving it implicit, and note a structural convergence-test enforcement remains a legitimate future improvement not undertaken here.",
+          "AC-6 (resolves Technical-PO-D1): section 4 gains an explicit standing-delegation re-confirmation clause: each standing-delegation class named in section 4 must be re-affirmed by the Product Owner at the next relevant PLAN/REVIEW/DECIDE episode that actually uses it for the first time in a new context, or after any six-month gap, whichever comes first -- a single use outside a class's plain-language description reverts to the unnamed section 6.3/D2 restatement path (no standing delegation applies) until re-affirmed.",
+          "AC-7 (resolves Technical-PO-D2, light touch): section 1 gains one clarifying sentence: sections 3.4 (privacy-check script) and 3.5 (evidence-reviewer agent) are enabling mechanisms subordinate to seams 1 and 2 respectively, not independently-justified new scope beyond the three named seams -- so the document's own proportionality claim is accurate rather than implicit."
+        ],
+        "baseline": {
+          "authority": "docs/design/GOV_PO_2_PO_VISIBILITY_AND_BOUNDED_AUTHORSHIP.md (DRAFT, on branch feature/gov-po-2-visibility-and-bounded-authorship / PR #122, not yet merged) -- this amendment lands on the SAME branch/PR, before merge, not a new PR.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 -- Compliance trend retro-fill (AUTOMATED_VALIDATED)",
+          "sequencing": "A 4-seat nexus-decision-council round (Security Reviewer, Senior Python Architect, DevSecOps/Platform Engineer, Technical Product Owner) reviewed the DRAFT document per GOV_PO_ROLE_MIGRATION.md section 7 trigger (b). All four seats recommended FREEZE WITH CHANGES (none recommended DO NOT FREEZE); the Product Owner reviewed the synthesis and authorized these seven specific amendments before freeze. An optional independent cross-model review (GOV_PO_ROLE_MIGRATION.md section 9/D8) was considered and explicitly declined by the Product Owner for this decision -- low blast radius (every new capability stays read-only or DRAFT-gated, easily correctable), and the council itself already surfaced substantive, actionable findings."
+        },
+        "context_not_loaded": [
+          "Every other subsystem -- this amendment touches only the one DRAFT document's text plus one read-only CI-workflow audit"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "feature/gov-po-2-visibility-and-bounded-authorship (amend in place, same branch as PR #122)",
+          "lane": "feature/gov-po-2-visibility-and-bounded-authorship"
+        },
+        "invariants": [
+          "This remains a DRAFT document amendment only -- no code, test, gate, or agent-definition file changes in this movement",
+          "AC-2 and AC-4 add new REQUIRED acceptance criteria to GOV_PO_2_IMPLEMENTATION's own future scope -- they do not implement anything now",
+          "AC-3's CI-log audit is read-only (grep/read .github/workflows/*.yml) -- no workflow file is edited in this movement",
+          "The document's status line stays DRAFT until the Product Owner's separate freeze RELAY_DECISION, after this amendment lands"
+        ],
+        "merge_gate": "This amendment lands as additional commits on the existing feature/gov-po-2-visibility-and-bounded-authorship branch / PR #122 (not a new PR). Once green (git diff --check, privacy gate, and AC-3's audit result recorded), the Product Owner reviews the amended document once more and then either freezes it directly or asks for a further round -- per relay#13's standing decision, no separate merge RELAY_DECISION is needed for the PR merge itself once green, but the document's own FROZEN status line still requires the Product Owner's explicit freeze act, unchanged from before.",
+        "movement_type": "DOCS",
+        "objective": "Land the seven specific amendments the Product Owner authorized (from the 4-seat council's consolidated dissent) into docs/design/GOV_PO_2_PO_VISIBILITY_AND_BOUNDED_AUTHORSHIP.md, on the same branch/PR, before the Product Owner's freeze decision.",
+        "output_contract": [
+          "docs/design/GOV_PO_2_PO_VISIBILITY_AND_BOUNDED_AUTHORSHIP.md: seven targeted amendments (AC-1 through AC-7), still DRAFT",
+          "AC-3's CI-workflow audit result recorded directly in the amended section 3.1",
+          "This relay artifact's SESSION_CLOSE",
+          "No code, test, gate, or agent-definition file touched"
+        ],
+        "recommended_reasoning": {
+          "reason": "Deterministic textual amendments against a precise, already-council-reviewed list -- no new design judgment required beyond AC-3's audit, which is a bounded read-only check.",
+          "tier": "Sonnet 5, normal"
+        },
+        "requirements": [
+          "Make exactly these seven amendments -- do not reopen or re-litigate any other part of the document",
+          "For AC-3, actually read .github/workflows/*.yml and report a real finding, not a placeholder"
+        ],
+        "risks": [
+          "If AC-3's audit finds a real CI log exposure risk, stop and post a RELAY_QUESTION rather than silently working around it or silently dropping gh run view/list from scope -- that would be a genuine new finding requiring a Product Owner decision, not a routine amendment."
+        ],
+        "scope": {
+          "in": [
+            "The seven amendments to docs/design/GOV_PO_2_PO_VISIBILITY_AND_BOUNDED_AUTHORSHIP.md",
+            "The read-only CI-workflow audit for AC-3"
+          ],
+          "out": [
+            "Any code, test, gate, or agent-definition file",
+            "Freezing the document -- remains the Product Owner's separate act",
+            "Any other section of the document not named in AC-1 through AC-7"
+          ]
+        },
+        "validation_plan": [
+          "git diff --check",
+          "Repository privacy gate via --repository-privacy-check, run for real",
+          "Re-read the full amended document once to confirm no amendment contradicts another part of the document"
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-08T06:58:03Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "AUTOMATED_VALIDATED",
+      "report": {
+        "changed": [
+          "docs/design/GOV_PO_2_PO_VISIBILITY_AND_BOUNDED_AUTHORSHIP.md: seven targeted amendments across sections 1, 3.1, 3.2, 3.4, 4, 5 -- still DRAFT"
+        ],
+        "completed": [
+          "Amendment AC-1: section 3.2 gained explicit MultiEdit non-permission (falls to default-deny) and the Product Owner's written acceptance of the status-line regex's residual bypass risk as a trade-off",
+          "Amendment AC-2: section 3.1 gained a required GOV_PO_2_IMPLEMENTATION acceptance criterion for boundary-safe prefix matching (space/end-of-string terminated, not bare cmd.startswith)",
+          "Amendment AC-3: CI-workflow secret-exposure audit performed now (read-only) against .github/workflows/validation.yml -- result PASS, recorded directly in section 3.1: no secrets context referenced anywhere in the file, permissions: contents: read only, and the privacy-check step is independently verified to withhold matched values by construction",
+          "Amendment AC-4: section 3.4 gained a required GOV_PO_2_IMPLEMENTATION equivalence regression test acceptance criterion (main.py --repository-privacy-check vs scripts/repository_privacy_check.py, matching stdout modulo banner line and exit code, for one PASS and one non-PASS case)",
+          "Amendment AC-5: section 5 gained an explicit acknowledgment that the bookkeeping-stays-with-the-engineer rule is policy-only (not gate-enforced), naming the gate_3 double-deferral as evidence policy alone already failed twice, and naming a structural convergence-test check as a legitimate future improvement not undertaken here",
+          "Amendment AC-6: section 4 gained a standing-delegation re-confirmation requirement (next relevant first-use in a genuinely new context, or a six-month gap, whichever comes first; an out-of-description use reverts to the unnamed D2 path until re-affirmed)",
+          "Amendment AC-7: section 1 gained one clarifying sentence stating sections 3.4/3.5 are enabling mechanisms subordinate to seams 1/2, not independently-justified new scope",
+          "Re-read the full amended document once end to end: no amendment contradicts another part of the document",
+          "Both commits pushed to the existing branch/PR #122 (not a new PR), per this movement's own merge_gate"
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "No effect -- this movement amends one Markdown document only, no code path touched",
+          "ui": "No visible UI change"
+        },
+        "integration": {
+          "branch": "feature/gov-po-2-visibility-and-bounded-authorship",
+          "ci": "NOT_YET_REPORTED",
+          "head_sha": "c30b4f2660da7b031af2be9c6884e11125ba8ee8",
+          "merge_commit": null,
+          "merge_decision": "BLOCKED_PENDING_PR_121_AND_DOCUMENT_FREEZE",
+          "merge_state": "OPEN",
+          "pr": 122,
+          "pr_url": "https://github.com/ozandurmus/neXus/pull/122"
+        },
+        "next": {
+          "movement": "GOV_PO_2_FREEZE_DECISION",
+          "movement_type": "ARCHITECTURE",
+          "objective": "Product Owner reviews the amended docs/design/GOV_PO_2_PO_VISIBILITY_AND_BOUNDED_AUTHORSHIP.md once more and either freezes it directly or requests a further round; only after freeze does gov_po_2_implementation start",
+          "status": "blocked"
+        },
+        "preserved": [
+          "No other section of the document touched beyond the seven named amendments -- section 2, 3.3, 3.5, 6, 7, 8 unchanged",
+          "No code, test, gate, or agent-definition file touched -- this remains a DRAFT document amendment only",
+          "The document's own status line stays DRAFT -- this movement does not freeze it"
+        ],
+        "recommended_reasoning": {
+          "reason": "This movement was deterministic textual amendment against a precise, already-council-reviewed list; the next real decision (freeze) is the Product Owner's own act, not a reasoning-tier question for an engineering session",
+          "tier": "Sonnet 5, normal"
+        },
+        "state_updates": [],
+        "unresolved_risks": [
+          "The document remains DRAFT -- the Product Owner's separate freeze decision is still outstanding after this amendment round",
+          "AC-2 and AC-4's new required acceptance criteria are specified, not implemented -- GOV_PO_2_IMPLEMENTATION must satisfy them when it starts",
+          "AC-5's accepted policy-only bookkeeping risk and AC-6's standing-delegation re-confirmation requirement are both process obligations on future PO/engineering episodes, not gate-enforced -- nothing in tooling currently checks either"
+        ],
+        "validation": {
+          "affected": "N/A -- no test surface for a Markdown document; the CI-workflow audit (AC-3) was performed as a manual read-only review, not an automated test, and its result is recorded in the document itself",
+          "diff_check": "git diff --check clean on the committed files",
+          "full_regression": "not run, risk-based -- pure documentation amendment, no code or schema surface",
+          "privacy": ".venv/bin/python main.py --repository-privacy-check run for real: PASS, 0 findings",
+          "real_environment": "NOT_RUN -- no network-device, UI, or product-behavior surface is touched",
+          "state_consistency": "N/A -- this movement makes no project/*.json or CURRENT_STATE.md change",
+          "targeted": "N/A -- no code/test change; the amendments are text-only"
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-08T07:02:02Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0004",
+  "movement": "GOV_PO_2_FREEZE_AMENDMENTS",
+  "next_actor": null,
+  "refs": [
+    "docs/design/GOV_PO_2_PO_VISIBILITY_AND_BOUNDED_AUTHORSHIP.md",
+    "scripts/nexus_po_tool_gate.py",
+    ".github/workflows/validation.yml"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-08T07:02:02Z"
+}
