@@ -17,16 +17,21 @@ collection output (`unified.json`) is never consulted here either, unlike
 the `entity_ids` target_mode's `_known_entity_ids`.
 
 `M8.4` (frozen `M8` contract §7): once a target is known and eligible, this
-module now performs one more live, read-only check -- does a currently
+module performs one more live, read-only check -- does a currently
 *proven* `device_id` -> collector `entity_id` relationship exist for it
 (the `M8.1` table, populated only by the `M8.3` producer)? Only when every
-`M8` currency condition holds does a target stop refusing here; nothing in
-this module ever consumes that proof to build a collector command or
-substitute an `entity_id` into job targets -- that wiring (`M7`, "functional
-per-device `config_refresh_cp`") is a separate, still-blocked movement.
+`M8` currency condition holds does a target stop refusing here.
 `operator_assertion` (asserting that relationship from any of the signals
 above) is an OPEN dissent, not accepted mapping authority, absent a later
 explicit PO decision.
+
+`M7` ("functional per-device `config_refresh_cp`"): `resolve_registry_target_entities`
+performs the identical admission/eligibility/identity checks as
+`resolve_registry_targets` and, on success, returns the resolved
+`device_id` -> collector `entity_id` mapping so a caller can substitute the
+proven `entity_id`(s) -- never the raw `device_id`(s) -- into a collector
+command. `resolve_registry_targets` itself is unchanged: still a pure
+admission gate, still returning only a refusal or `None`.
 
 Both admission call sites share this one function so a target that was
 eligible (or fully identity-resolved) at admission but becomes disabled/
@@ -117,9 +122,10 @@ def _identity_translation_required() -> TargetRefusal:
     )
 
 
-def _identity_resolved(record: DeviceRecord, *, store: ControlPlaneStore) -> bool:
+def _identity_resolved(record: DeviceRecord, *, store: ControlPlaneStore) -> "str | None":
     """`M8.4` (contract §7): does a currently *proven and current* `device_id`
-    -> collector `entity_id` relationship exist for `record`?
+    -> collector `entity_id` relationship exist for `record`? Returns the
+    resolved `entity_id` on success (`M7`), `None` otherwise.
 
     Every condition below must hold, live, read-only, with no device contact
     and no credential resolution:
@@ -165,48 +171,45 @@ def _identity_resolved(record: DeviceRecord, *, store: ControlPlaneStore) -> boo
         mapping_scope=_MAPPING_SCOPE,
     )
     if relationship is None or relationship.identity_mapping_proven != 1:
-        return False
+        return None
     if relationship.registry_record_revision != record.updated_at:
-        return False
+        return None
     if relationship.identity_derivation_contract_version != IDENTITY_DERIVATION_CONTRACT_VERSION:
-        return False
+        return None
 
     trust = lookup_trusted_host_key(record.endpoint, record.port)
     if not trust.trusted:
-        return False
+        return None
 
     evidence = resolve_evidence_reference(ConfigEvidenceStore(), relationship.producing_run_ref)
     if evidence is None:
-        return False
+        return None
     if str(evidence.get("entity_id") or "") != relationship.entity_id:
-        return False
+        return None
 
     # PO correction round 1: fail closed unless the resolved snapshot is
     # exactly the governed physical Check Point evidence M8 requires -- a
     # matching entity_id/fingerprint alone is not provenance. Never any
     # other source or artifact_type, whatever else lines up.
     if str(evidence.get("source") or "") != GOVERNED_PHYSICAL_CP_EVIDENCE_SOURCE:
-        return False
+        return None
     if str(evidence.get("artifact_type") or "") != GOVERNED_PHYSICAL_CP_EVIDENCE_ARTIFACT_TYPE:
-        return False
+        return None
 
     # Trust-currency cross-check (contract §7): the fingerprint the producing
     # run actually observed must still be among the endpoint's currently
-    # trusted fingerprints. NOTE (M8.4 finding, not fixed here per this
-    # movement's own scope boundary -- "do not modify the M8.3 producer
-    # unless a material defect makes M8.4 impossible", and this evidence
-    # write path is the shared, unmodified _collect_host, not the producer
-    # itself): the CP config evidence snapshot metadata `_collect_host`
-    # writes today carries no "host_key_fingerprint" field, so this
-    # condition cannot currently be affirmatively satisfied by any real
-    # M8.3-produced relationship -- it fails closed (returns False) exactly
-    # as intended by the fail-closed law, rather than treating an absent
-    # fingerprint as a vacuous match. See this build's SESSION CLOSE.
+    # trusted fingerprints. `m8_evidence_host_key_fingerprint_not_persisted`
+    # (PR #103) closed the once-real gap where the CP config evidence
+    # snapshot metadata `_collect_host` writes carried no
+    # "host_key_fingerprint" field -- it now does, for every physical-host
+    # snapshot, sourced from the same `_connect`/`utils.cp_ssh_trust`
+    # fingerprint the trust lookup above uses. An absent fingerprint (e.g. an
+    # older pre-fix snapshot) still fails closed here, never a vacuous match.
     evidence_fingerprint = evidence.get("host_key_fingerprint")
     if not evidence_fingerprint or evidence_fingerprint not in trust.fingerprints.values():
-        return False
+        return None
 
-    return True
+    return relationship.entity_id
 
 
 def _resolve_identity_translation(
@@ -214,36 +217,42 @@ def _resolve_identity_translation(
     records: dict,
     *,
     data_root: Path,
-) -> "TargetRefusal | None":
-    """`M8.4`: fail-closed, whole-request identity-translation resolution
-    over already-known-and-eligible `device_ids`. Returns `None` only when
-    *every* target currently resolves (§7); a single unresolved target
-    refuses the entire request, same all-or-nothing philosophy `M6` already
-    uses for unknown/ineligible targets.
+) -> "TargetRefusal | dict[str, str]":
+    """`M8.4`/`M7`: fail-closed, whole-request identity-translation resolution
+    over already-known-and-eligible `device_ids`. Returns the resolved
+    `device_id` -> `entity_id` mapping only when *every* target currently
+    resolves (§7); a single unresolved target refuses the entire request,
+    same all-or-nothing philosophy `M6` already uses for unknown/ineligible
+    targets.
     """
     try:
         with ControlPlaneStore(data_root) as store:
+            translated: dict[str, str] = {}
             for device_id in device_ids:
-                if not _identity_resolved(records[device_id], store=store):
+                entity_id = _identity_resolved(records[device_id], store=store)
+                if entity_id is None:
                     return _identity_translation_required()
+                translated[device_id] = entity_id
     except ControlPlaneStoreError:
         return TargetRefusal(
             "unresolvable", RELATIONSHIP_STORE_UNAVAILABLE,
             "the device identity relationship store is unavailable, unreadable, or "
             "invalid; targeting cannot be admitted until it is restored",
         )
-    return None
+    return translated
 
 
-def resolve_registry_targets(
+def _resolve_registry_targets_full(
     device_ids: "tuple[str, ...] | list[str]", *, data_root: Path
-) -> "TargetRefusal | None":
-    """Fail-closed `device_id` resolution for `config_refresh_cp` (`M6`/`M8.4`).
-
-    Returns ``None`` when ``device_ids`` is empty -- a target-free
+) -> "TargetRefusal | dict[str, str]":
+    """Fail-closed `device_id` resolution for `config_refresh_cp` (`M6`/`M8.4`/`M7`),
+    shared by `resolve_registry_targets` (admission gate) and
+    `resolve_registry_target_entities` (`M7` argv-substitution). Returns an
+    empty mapping when ``device_ids`` is empty -- a target-free
     `config_refresh_cp` job stays M5's existing plane-wide behavior, byte-
-    identical -- or when every submitted `device_id` is known, eligible, and
-    (`M8.4`) currently identity-resolved. Every other request refuses:
+    identical -- or the resolved `device_id` -> `entity_id` mapping when
+    every submitted `device_id` is known, eligible, and (`M8.4`) currently
+    identity-resolved. Every other request refuses:
 
     0. the registry itself cannot be read/parsed at all
        (`utils.device_registry.DeviceRegistryError`) ->
@@ -270,7 +279,7 @@ def resolve_registry_targets(
     check and a pre-execution re-check, for either.
     """
     if not device_ids:
-        return None
+        return {}
     try:
         records = {record.device_id: record for record in DeviceRegistry(data_root).list()}
     except DeviceRegistryError:
@@ -291,3 +300,27 @@ def resolve_registry_targets(
             f"registry device_id(s) not eligible for targeting: {ineligible}",
         )
     return _resolve_identity_translation(device_ids, records, data_root=data_root)
+
+
+def resolve_registry_targets(
+    device_ids: "tuple[str, ...] | list[str]", *, data_root: Path
+) -> "TargetRefusal | None":
+    """Fail-closed `device_id` admission check for `config_refresh_cp`
+    (`M6`/`M8.4`) -- see `_resolve_registry_targets_full` for the full
+    refusal-code contract. Returns ``None`` on success; never exposes the
+    resolved `entity_id` mapping (`resolve_registry_target_entities` does,
+    for `M7`'s argv-substitution step)."""
+    result = _resolve_registry_targets_full(device_ids, data_root=data_root)
+    return result if isinstance(result, TargetRefusal) else None
+
+
+def resolve_registry_target_entities(
+    device_ids: "tuple[str, ...] | list[str]", *, data_root: Path
+) -> "TargetRefusal | dict[str, str]":
+    """`M7`: identical admission/eligibility/identity checks as
+    `resolve_registry_targets` (see `_resolve_registry_targets_full`), but
+    returns the resolved `device_id` -> collector `entity_id` mapping on
+    success instead of `None`, so a caller can substitute the proven
+    `entity_id`(s) -- never the raw `device_id`(s) -- into a collector
+    command. An empty ``device_ids`` returns an empty mapping."""
+    return _resolve_registry_targets_full(device_ids, data_root=data_root)

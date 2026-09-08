@@ -140,10 +140,9 @@ def _fully_resolved(
 ) -> str:
     """The complete, currently-resolvable M8 state for one device: registry
     record + trust + evidence + M8.1 relationship, exactly as M8.2/M8.3
-    would have produced them (evidence carrying a `host_key_fingerprint`
-    field is this test file's own fixture assumption -- see the module-level
-    `_identity_resolved` docstring/comment for why real M8.3-produced
-    evidence does not carry one today)."""
+    would have produced them, including the `host_key_fingerprint` field
+    real M8.3-produced physical-host evidence carries since
+    `m8_evidence_host_key_fingerprint_not_persisted` (PR #103)."""
     device_id = _enroll(tmp_path, endpoint=endpoint)
     record = _device_record(tmp_path, device_id)
     fingerprint = _trust(tmp_path, monkeypatch, endpoint=endpoint)
@@ -599,3 +598,55 @@ def test_m6_device_registry_unavailable_unchanged(tmp_path):
     refusal = resolve_registry_targets(("any-device-id",), data_root=tmp_path)
     assert refusal is not None
     assert refusal.reason == DEVICE_REGISTRY_UNAVAILABLE
+
+
+# ---------------------------------------------------------------------------
+# M7 -- entity_id substitution wiring
+# ---------------------------------------------------------------------------
+
+class TestEntityIdSubstitution:
+    """`M7`: a device_id-targeted config_refresh_cp job's constructed argv
+    carries the resolved collector entity_id, never the raw device_id."""
+
+    def test_resolve_registry_target_entities_returns_the_mapping(self, tmp_path, monkeypatch):
+        device_id = _fully_resolved(tmp_path, monkeypatch, endpoint="192.0.2.92", entity_id="FW-M7-1")
+        result = registry_targets.resolve_registry_target_entities((device_id,), data_root=tmp_path)
+        assert result == {device_id: "FW-M7-1"}
+
+    def test_resolve_registry_target_entities_empty_targets_returns_empty_mapping(self, tmp_path):
+        assert registry_targets.resolve_registry_target_entities((), data_root=tmp_path) == {}
+
+    def test_resolve_registry_target_entities_unresolved_still_refuses(self, tmp_path):
+        device_id = _enroll(tmp_path, endpoint="192.0.2.93")
+        result = registry_targets.resolve_registry_target_entities((device_id,), data_root=tmp_path)
+        assert isinstance(result, registry_targets.TargetRefusal)
+        assert result.reason == IDENTITY_TRANSLATION_REQUIRED
+
+    def test_resolved_device_id_substitutes_entity_id_into_constructed_argv(self, console_env, monkeypatch):
+        device_id = _fully_resolved(
+            console_env.runtime_paths.data_root, monkeypatch, endpoint="192.0.2.94", entity_id="FW-M7-2",
+        )
+        with mock.patch("main.main", return_value=None) as fake_main:
+            response = _post_job(console_env, "config_refresh_cp", targets=[device_id])
+            assert response.status_code == 200
+            job_id = response.json()["job_id"]
+            final = _wait_terminal(console_env, job_id)
+        assert final.state == "succeeded"
+        fake_main.assert_called_once()
+        argv = fake_main.call_args.args[0]
+        assert "--cp-config-targets" in argv
+        cp_targets = argv[argv.index("--cp-config-targets") + 1]
+        assert cp_targets == "FW-M7-2"
+        assert device_id not in cp_targets
+
+    def test_stale_relationship_still_refuses_no_regression_to_identity_translation_required(
+        self, console_env, monkeypatch
+    ):
+        device_id = _fully_resolved(console_env.runtime_paths.data_root, monkeypatch, endpoint="192.0.2.95")
+        _bump_updated_at(console_env.runtime_paths.data_root, device_id)
+        with mock.patch("main.main", return_value=None) as fake_main:
+            response = _post_job(console_env, "config_refresh_cp", targets=[device_id])
+        # Admission itself must still refuse -- no job record, main.main never reached.
+        assert response.status_code == 400
+        assert response.json()["detail"]["reason"] == IDENTITY_TRANSLATION_REQUIRED
+        fake_main.assert_not_called()
