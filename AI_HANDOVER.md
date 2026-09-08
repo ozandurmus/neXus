@@ -7,81 +7,85 @@
 
 ## 1. Snapshot
 
-- Date: 2026-09-08. `gov_po_1_step_5_first_plan_episode` (`GOV.PO.1` §10
-  step 5) — the first interactive Phase A `PLAN` episode. Governance only.
-- `now_next.next` is no longer the deferred `M8.3`. It is
-  **`m10_1_registry_evidence_reconciliation_projection`** — the `D4`
-  registry↔evidence reconciliation producer, first slice of `M10`.
-- `M8.3` stays **deferred** and `M7` stays **blocked**. Choosing `M10.1`
-  pays none of that debt and must never be described as having done so.
-- Predecessors all **MERGED**: PR #114 (`GOV_PO_1_GATE_1`, packet emission)
-  and #115 (`GOV_PO_1_GATE_2`, branch self-sync) — the two gaps this episode
-  hit and reported; #112 (record RATIFIED), #111, #110, #109. Phase A
-  **authorized** (relay #5); Phase B closed until `T1`-`T6`.
+- Date: 2026-09-08. `m10_1_registry_evidence_reconciliation_projection`
+  (`M10`'s first slice) — the `D4` registry↔evidence reconciliation
+  projection. Product/engineering, no UI/nav/payload change.
+- New `utils/registry_evidence_reconciliation.py`: `resolve_d4()` derives
+  the five frozen values from classified registry/evidence sides;
+  `detect_ri2()` implements `RI-2`.
+- Blocked, then resolved via relay: no canonical id spans
+  `utils/device_registry.py`'s `device_id` and the merged evidence model's
+  `entity_id`. `RELAY_DECISION` on relay **#11** (option 4): ship with no
+  join input — `utils/device_identity_relationships.py` stays unread.
+- `now_next.next` is now **unset**: the queued candidate (`m10_1`) is
+  complete; sizing the next actionable build is a Product Owner function.
+  `M8.3` stays deferred and `M7` stays blocked, unchanged by this build.
 
 ## 2. What changed
 
-Governance state only — no product source, test, template or static file.
+Product/engineering: one new module and its test file, plus the standard
+project-state bookkeeping. No template, static, payload, schema, storage,
+console, resolver or navigation change.
 
-- `project/roadmap.json`: `current_build` and `now_next.now` set to this
-  episode; `now_next.next` replaced with `M10.1`; `M8.3` annotated in
-  `upcoming` as retained deferred debt; new `upcoming` rows for `M10.2`,
-  `M10.3`, `M11`, `M12`.
-- `project/backlog.json`: two new items — `dlp_scanner_venv_exclusion`
-  and `project_state_wording_drift_reconciliation`.
+- `utils/registry_evidence_reconciliation.py` (new): `D4_VALUES`,
+  `RegistrySide`/`EvidenceSide` enums, `ReconciliationResult`, `resolve_d4()`,
+  `detect_ri2()`.
+- `tests/test_m10_1_registry_evidence_reconciliation.py` (new, 56 tests):
+  every `RegistrySide`×`EvidenceSide` combination, `REGISTRY_DISABLED`
+  reported regardless of evidence-side value, today's default join input
+  (`EvidenceSide.UNRESOLVABLE`) resolving `RECONCILIATION_UNKNOWN` rather
+  than `REGISTRY_ONLY`, `RI-2` boundary cases, and vocabulary-separation
+  against the job lifecycle / `OP.2` action-state / action-taxonomy tokens.
 - `project/build_history.json` head record + `docs/history/INDEX.md`
   regenerated; `CURRENT_STATE.md` checkpoint/active-build/next rewritten
-  and trimmed back inside its 200-line budget.
-- `docs/design/PRODUCT_DIRECTION_RECORD.md` **deliberately untouched** —
-  amending a RATIFIED record was not needed for this episode's outputs.
+  and trimmed back inside its 200-line budget; `project/roadmap.json`
+  `now_next` updated (`now` -> this build, `next` -> unset).
+- Relay `ozandurmus/nexus-agent-relay#11`: `RELAY_QUESTION` (canonical-id
+  gap), Product Owner `RELAY_DECISION` (option 4), `RELAY_ACK`.
 
 ## 3. Exact next action
 
-1. Merge this governance PR (#113) — needs its own recorded `RELAY_DECISION`
-   on relay **#10**, this episode's issue.
-2. Open `M10.1`'s own relay issue with its drafted `SESSION_START`, then
-   run it in a **fresh engineering session** at **`Sonnet 5, normal`**
-   (deterministic implementation against a frozen contract).
-3. `REVIEW` episode after `M10.1`'s `SESSION_CLOSE` lands; the next slice's
-   size follows that review's findings (`GOV.PO.1` §7).
-4. Step 6 still owed: isolation `VALIDATION` `T1`–`T6` before any delegated
-   (Phase B) episode. Extend it to cover **packet emission** — see §5.
+1. Merge this PR — needs the same relay issue's `SESSION_CLOSE` posted and
+   validated, per this movement's own `merge_gate`.
+2. A Product Owner `PLAN`/`REVIEW` episode sizes and authorizes the next
+   actionable build (`M10.2` is sketched in `upcoming` but explicitly not
+   yet sized or authorized).
+3. Separately (not blocking `M10.1`): decide whether
+   `utils/device_identity_relationships.py`'s `mapping_scope` may ever
+   widen beyond `CLASS_0_CP_CONFIG_TARGET_SELECTION_ONLY` to give `D4` a
+   real join — `RELAY_DECISION` #11 left this explicitly undecided.
 
 ## 4. Test delta
 
-No new tests: this episode changed only governance metadata. Convergence +
-`gov_po_role` + relay + session-transfer suites re-run after the sync merge;
-build-history index `--check` current; `git diff --check` clean. The
-repository privacy gate is delegated to the PR's `validate` CI job — the PO
-role is denied the product CLI by design.
+New: `tests/test_m10_1_registry_evidence_reconciliation.py`, 56 tests, all
+passing. Affected sweep (this file + `test_pcp1_device_registry.py` +
+`test_m4_control_plane_metadata_store.py` + `test_con1_operator_console_
+read_only.py` + `test_con2_console_job_engine.py` +
+`test_m6_registry_keyed_job_targets.py` + `test_architecture_convergence.py`):
+308 passed, `metadata_warnings` empty. Repository privacy gate PASS/0
+findings (`data/`, `logs/` cleared first). `git diff --check` clean;
+`compileall` clean. No full regression run: no schema/storage/console/UI
+change, one new previously-unimported module plus its own test file. No
+render harness: no template/static/payload change.
 
 ## 5. Risks / notes forward
 
-- **Packet emission — reported, then fixed mid-episode.** The gate rejected
-  the angle brackets the packet sentinel is built from and allowed no file
-  outside the governance paths, so a gated PO session had neither a
-  `--body` nor a `--body-file` route, while `GOV.PO.1` §5.1.1 requires a
-  state-changing episode to post exactly those two packets. `GOV_PO_1_GATE_1`
-  (relay #8, PR #114) fixed it; this episode then posted its own packets on
-  relay #10 — first end-to-end proof of that path. **Residual:** `T1`–`T7`
-  still do not exercise packet emission.
-- **Nothing tests that `settings.local.json` cannot widen either enforcing
-  layer**, though `GOV.PO.1` §6.2 `I3` requires it. Observed live: this
-  session launched without `--settings`, so the role-scoped `deny` was
-  absent while `settings.local.json` carried `Bash(gh pr merge:*)` in
-  `allow`. No merge was attempted; the file is now `"allow": []`. A cheap
-  `T7`-shaped repository test would close this.
-- **Branch self-sync now exists** (`GOV_PO_1_GATE_2`, relay #9, PR #115):
-  `git merge origin/<ref>` is allowlisted for the interactive form. This
-  episode used it to sync and resolved the five governance-path conflicts
-  itself — its first real exercise. Still a capability, not automatic: an
-  episode has to know to run it. Worth a line in the `nexus-po` skill.
-- **The PO gate still cannot discard a working-tree file.** No
-  `git checkout -- <path>`, `git restore` or `git stash`, which is exactly
-  what a stale local edit needs when a fix lands upstream. It cost one
-  human command this episode.
-- **Two verified state drifts, reported not fixed** — backlog
-  `project_state_wording_drift_reconciliation`. Both live in free-text
-  label/summary fields, so the cross-authority convergence check cannot see
-  them.
-- Documented ≠ demonstrated: `T1`–`T6` are `NOT_RUN`; Phase B stays closed.
+- `RECONCILED`, `EVIDENCE_ONLY` and `REGISTRY_ONLY` are implemented and
+  unit-tested but structurally unreachable in production today — nothing
+  calls `resolve_d4()` with anything but `EvidenceSide.UNRESOLVABLE` for a
+  real entity, by the `RELAY_DECISION`'s own design, until a future
+  movement supplies an authorized canonical id. This is disclosed, not a
+  defect: `AC-3` requires exactly this behavior given no join input.
+- Concurrent working-tree note: this checkout also carried an unrelated,
+  unstaged `GOV_PO_1_GATE_3` fix to `scripts/nexus_po_tool_gate.py` and
+  `tests/test_gov_po_role.py` from a Product Owner assistant session
+  running against the same working directory. Left untouched and out of
+  this movement's commit; this movement's own diffs to shared files
+  (`project/build_history.json`, `CURRENT_STATE.md`, `docs/history/INDEX.md`)
+  were built against `origin/main`, not against that session's uncommitted
+  edits, so they should merge the same way any two concurrent movements do.
+- `now_next.next` is left unset rather than unilaterally promoted to
+  `M10.2` — its own `upcoming` row already says it needs its own sizing
+  decision, which is a Product Owner function this engineering build does
+  not perform.
+- `M8.3` stays deferred and `M7` stays blocked; nothing here changes either.
