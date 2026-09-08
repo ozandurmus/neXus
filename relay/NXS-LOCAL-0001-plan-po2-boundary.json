@@ -1,0 +1,90 @@
+{
+  "created_at": "2026-09-08T06:22:12Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1: two bounded SESSION_START drafts are produced and validated (scripts/gov_session_transfer.py validate: true each) -- GOV_PO_2_PO_VISIBILITY_AND_BOUNDED_AUTHORSHIP (ARCHITECTURE, one new DRAFT document only) and GOV_PO_2_IMPLEMENTATION (IMPLEMENTATION, blocked until movement 1 is frozen).",
+          "AC-2: project/roadmap.json's now_next is reconciled: now stays gov_po_1_local_relay_protocol until this PLAN's own governance PR merges (at which point now becomes this build); next is set to gov_po_1_gov_po_2_po_visibility_and_bounded_authorship; GOV_PO_2_IMPLEMENTATION is added to upcoming, status blocked, with an explicit note naming what unblocks it.",
+          "AC-3: no FROZEN document's text is amended by this PLAN episode -- it drafts, it does not decide.",
+          "AC-4: the council-invocation question is addressed explicitly: this PLAN episode does not invoke nexus-decision-council (no genuine trigger is met by planning/drafting alone), but movement 1's own drafted SESSION_START records a recommendation that the council be invoked at the later, separate freeze DECIDE episode, per GOV_PO_ROLE_MIGRATION.md section 7 trigger (b).",
+          "AC-5: project-state bookkeeping (build_history, CURRENT_STATE.md, AI_HANDOVER.md, history index) lands in this movement's own gov/po-* branch commit."
+        ],
+        "baseline": {
+          "authority": "docs/design/GOV_PO_ROLE_MIGRATION.md (FROZEN, whole-document, 2026-09-07) -- this PLAN episode operates entirely within its existing §1 PLAN episode type and §2 write boundary; it does not amend the contract.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 -- Compliance trend retro-fill (AUTOMATED_VALIDATED)",
+          "sequencing": "Product Owner direction (2026-09-08): plan a bounded correction to the PO assistant's own permission architecture after a run of small gate-fix movements (relay#11-#16, the local relay protocol) surfaced repeated friction. Filed as its own governance movement per GOV_PO_ROLE_MIGRATION.md's PLAN-episode rule (a PLAN changing project/*.json is itself a governance movement with its own relay artifact)."
+        },
+        "context_not_loaded": [
+          "Every product/engineering subsystem outside the PO governance layer"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/gov-po-1-step-6-plan-po2-boundary"
+        },
+        "invariants": [
+          "This PLAN episode implements no executable change -- it drafts, sequences, and updates project state only",
+          "The human Product Owner freezes GOV_PO_2_PO_VISIBILITY_AND_BOUNDED_AUTHORSHIP.md before any implementation begins",
+          "Council is not invoked merely because this is governance work -- only where section 7's triggers are genuinely met (movement 1's future freeze episode, not this PLAN)"
+        ],
+        "merge_gate": "gov/po-* branch merge requires an explicit Product Owner RELAY_DECISION on this movement's own relay artifact, per GOV_PO_ROLE_MIGRATION.md section 2 (unaffected by relay#13's engineer-movement carve-out).",
+        "movement_type": "DOCS",
+        "objective": "Plan a bounded, two-movement correction to the PO assistant's permission architecture: one ARCHITECTURE movement producing a DRAFT capability-based boundary document, blocked-until-frozen by the human, followed by one IMPLEMENTATION movement building exactly what that frozen document specifies.",
+        "output_contract": [
+          "Two validated SESSION_START drafts (this packet's report, plus the separately rendered GOV_PO_2_PO_VISIBILITY_AND_BOUNDED_AUTHORSHIP and GOV_PO_2_IMPLEMENTATION packets)",
+          "project/roadmap.json now_next reconciliation",
+          "Project-state bookkeeping: build_history record, CURRENT_STATE.md, AI_HANDOVER.md, regenerated history index",
+          "This relay artifact's own SESSION_START and SESSION_CLOSE",
+          "A separate local relay file opened for GOV_PO_2_PO_VISIBILITY_AND_BOUNDED_AUTHORSHIP, ready to hand to an engineering session"
+        ],
+        "recommended_reasoning": {
+          "reason": "Sequencing and sizing a plan against an already-frozen parent contract, plus verifying the current gate/settings/agent state in detail -- routine PLAN-episode work per the contract's own tier table (PLAN: Normal (strong); PLAN re-ranking the track order: High). No re-ranking of the product track here, so Normal.",
+          "tier": "Sonnet 5, normal"
+        },
+        "requirements": [
+          "Verify every capability claim in the two drafted movements against the actual current scripts/nexus_po_tool_gate.py, .claude/nexus-po.settings.json, .claude/agents/*.md, and tests/test_gov_po_role.py -- already done in this episode"
+        ],
+        "risks": [
+          "GOV_PO_2_IMPLEMENTATION's SESSION_START is drafted now but its git.base must be re-verified against origin/main at actual start time -- it may sit blocked for a while behind the human's freeze review of movement 1."
+        ],
+        "scope": {
+          "in": [
+            "Two drafted SESSION_START packets",
+            "project/roadmap.json now_next reconciliation",
+            "This movement's own project-state bookkeeping",
+            "Opening movement 1's own relay artifact"
+          ],
+          "out": [
+            "Any executable code, test, or gate change",
+            "Freezing any document",
+            "Invoking nexus-decision-council"
+          ]
+        },
+        "validation_plan": [
+          "git diff --check",
+          "Repository privacy gate via --repository-privacy-check, run for real",
+          "tests/test_architecture_convergence.py metadata_warnings empty",
+          "scripts/gov_session_transfer.py validate on both drafted movement packets"
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-08T06:22:12Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0001",
+  "movement": "GOV_PO_1_STEP_6_PLAN_PO2_BOUNDARY",
+  "next_actor": "engineer",
+  "refs": [
+    "docs/design/GOV_PO_ROLE_MIGRATION.md",
+    "scripts/nexus_po_tool_gate.py",
+    ".claude/nexus-po.settings.json",
+    "project/roadmap.json"
+  ],
+  "schema_version": 1,
+  "status": "OPEN",
+  "updated_at": "2026-09-08T06:22:12Z"
+}
