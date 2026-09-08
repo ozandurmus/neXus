@@ -149,7 +149,7 @@
       "notes": [
         "Full detail: project/build_history.json's gov_po_3_resume_canonical_relay_access_fix record.",
         "Relay: relay/NXS-LOCAL-0015-resume-canonical-relay-access-fix.json (Product Owner priority, 2026-09-08, found live during relay/NXS-LOCAL-0012's GOV.PO.3 AC-5 demonstration 1). AC-4 reproduced for real on relay/NXS-LOCAL-0017-gov-po-3-resume-fix-ac4-repro-postfix.json (CLOSED).",
-        "Rebased/merged onto origin/main after relay/NXS-LOCAL-0013 (gov_po_3_orchestrator_observability, below) merged concurrently as PR #129 -- both movements touched scripts/orchestrator.py's _spawn_engineer argv construction, reconciled by hand so both additions coexist.",
+        "Reconciled two concurrent merges to origin/main during integration: relay/NXS-LOCAL-0013 (gov_po_3_orchestrator_observability, PR #129 -- code-level conflict in scripts/orchestrator.py's _spawn_engineer, resolved by hand) and relay/NXS-LOCAL-0010 (m10_3_entity_and_vendor_support_producers, PR #131 -- bookkeeping-only conflict).",
         "A small, independent corrective fix inserted ahead of gov_po_2_implementation (below) in build order -- part of the ongoing GOV.PO.3 initiative's own AC-5 demonstration/recovery sequence, not a change to its scope. AC-5's remaining demonstrations and AC-8-for-the-demo are still pending, unchanged by this record; see gov_po_3_approved_movement_orchestration_ac3's own build_history.json entry for that status."
       ]
     },
@@ -181,15 +181,6 @@
         "notes": [
           "Second M10 slice, sequenced by the first Phase A PLAN episode 2026-09-08. Not authorized; needs its own SESSION_START. Consumes M10.1's D4 producer plus declared inputs for the dimensions whose producers do not exist yet.",
           "Scope sketch only: stage-0 surface resolution and the OMITTED/RESOLVED union tag, the CapabilityState nine-value vocabulary, and the primary ladder with its fail-closed fallbacks. Authority: docs/design/CAPABILITY_STATE_VOCABULARY_AND_PRESENTATION.md sections 4 and 5 (FROZEN 2026-09-06). Sizing to the GOV.PO.1 section 7 targets is a PLAN decision for the episode that opens it, after M10.1's REVIEW."
-        ]
-      },
-      {
-        "build": "m10_3_entity_and_vendor_support_producers",
-        "title": "M10.3 -- D2 entity applicability and D3 vendor/platform support producers",
-        "status": "planned",
-        "notes": [
-          "Third M10 slice, sequenced 2026-09-08. Not authorized. Positive-evidence vendor support only -- CAPABILITY_STATE_VOCABULARY_AND_PRESENTATION.md section 7.3 governs what may never prove capability support.",
-          "Together with M10.1 and M10.2 this is what finally lets project/feature_registry.json's left_vertical_product_navigation availability_rule criterion move off 'pending'; that criterion state is owned by the slice that actually delivers the predicates, never by this planning row."
         ]
       },
       {
