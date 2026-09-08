@@ -168,6 +168,33 @@ def test_gate_delegated_never_edits_or_spawns():
         assert not gate.decide(_bash(cmd), "delegated", branch_lookup=lambda cwd: "gov/po-x")[0], cmd
 
 
+def test_gate_interactive_allows_only_the_named_council_seat_agent():
+    # GOV_PO_1_GATE_3: the one narrow Agent exception is form == "interactive"
+    # AND subagent_type == "nexus-council-seat", exactly.
+    allowed, reason = gate.decide(
+        {"tool_name": "Agent", "tool_input": {"subagent_type": "nexus-council-seat"}}, "interactive")
+    assert allowed, reason
+
+
+def test_gate_delegated_still_denies_council_seat_agent():
+    # AC-2: delegated form denies Agent regardless of subagent_type -- the
+    # council-seat exception never reaches Phase B delegated episodes.
+    allowed, _ = gate.decide(
+        {"tool_name": "Agent", "tool_input": {"subagent_type": "nexus-council-seat"}}, "delegated")
+    assert not allowed
+
+
+@pytest.mark.parametrize("subagent_type", [
+    None, "", "nexus_council_seat", "Nexus-Council-Seat", "nexus-council-seats", "nexus-po",
+])
+def test_gate_interactive_denies_agent_for_any_other_subagent_type(subagent_type):
+    # AC-3: interactive form denies Agent for anything other than exactly
+    # "nexus-council-seat", including missing/empty and near-miss strings.
+    tool_input = {} if subagent_type is None else {"subagent_type": subagent_type}
+    allowed, _ = gate.decide({"tool_name": "Agent", "tool_input": tool_input}, "interactive")
+    assert not allowed
+
+
 def test_gate_interactive_edits_governance_paths_only():
     ok = {"tool_name": "Edit", "tool_input": {"file_path": str(ROOT / "project/backlog.json")}, "cwd": str(ROOT)}
     bad = {"tool_name": "Edit", "tool_input": {"file_path": "console/app.py"}, "cwd": str(ROOT)}
