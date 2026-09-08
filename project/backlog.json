@@ -2,6 +2,15 @@
   "schema_version": "1.0",
   "items": [
     {
+      "id": "ui2_0_architecture_requirements",
+      "category": "Product Surface / Platform",
+      "title": "UI 2.0 -- empty-shell, DB-backed, LDAP-authenticated, role-scoped live operator console: requirements-and-tradeoffs draft",
+      "status": "planned",
+      "priority": "P2",
+      "target": "docs/design/UI2_0_ARCHITECTURE_REQUIREMENTS.md -- DRAFT, requirements and tradeoffs only, awaiting Product Owner review (relay/NXS-LOCAL-0025, 2026-09-09). Not a scope decision, not implementation authority; freezing it would still not authorize dispatch.",
+      "note": "Code-grounded audit (section 2) shows the static-export coupling is narrow and located: six run_html_export tail calls in application/workflows/* plus the eight *_ui.py payload builders as the console's only read model; the registry, M4 control-plane store, seven Postgres-capable evidence concerns, the admission coordinator and the D4/M10.2 resolver chain are already DB-ready-shaped. Recommendations (section 6, not decisions): incremental DB + typed live-state API over the existing foundation rather than a rewrite; PostgreSQL as the production engine against PCP section 10's own criteria (SQLite stays local, CAS/recovery blobs stay on the volume); collection modules stay Python workers behind a queue-through-database boundary; Java, if binding, only for the new service/API/DB layer (option i), never a Python-to-Java rewrite of the real-env-validated collectors (option ii). Reports six contradictions with frozen authority (C-1..C-6: CON.0 payload parity and bundler rule, AC-CS-33 menu hiding, class 1 backup from a browser, M14 single-operator vs multi-user login, HA cadence vs polling gate, production write exposure) and six unknowns (U-1 the exact Java requirement first). Next step is a Product Owner DECIDE episode, not an engineering movement."
+    },
+    {
       "id": "m14_local_ldap_d7_authorization_architecture",
       "category": "Architecture / Security",
       "title": "Local LDAP / Active-Directory group-membership authorization producer for D7, decoupled from the DEPLOY.1A server track",
