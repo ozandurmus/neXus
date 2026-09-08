@@ -60,37 +60,17 @@ test-enforced boundaries.
 | 4 — policy / deployment / remediation | prohibited | — |
 ## Active build
 
-**`gov_po_1_step_6_plan_po2_boundary`** — see checkpoint above for what
-shipped. Verified the current gate/settings/agent/test state in full before
-drafting; found several requested capabilities already true today
-(unrestricted file read via `READ_TOOLS`; all five relay markers already
-handled consistently by both transports; `RELAY_DECISION` already requiring
-`authorized_by`/`scope`/`supersedes`), so `gov_po_2_implementation` scopes to
-the genuine gaps only: `gh pr diff`/`gh run` read commands, the
-privacy-check mechanism (`main.py` otherwise fully denied), a
-`docs/design/po_drafts/*.md` authoring area with `FROZEN`/`RATIFIED`
-status-line rejection, `docs/history/INDEX.md` made truly generator-only
-(currently direct-Edit/Write-reachable via `GOVERNANCE_PATHS`), and one new
-`nexus-po-evidence-reviewer` agent modeled on `nexus-council-seat.md`.
-Council not invoked (no genuine `GOV_PO_ROLE_MIGRATION.md` §7 trigger for
-planning alone); recommends one at movement 1's later freeze `DECIDE`
-episode (§7 trigger (b), a PO write-boundary expansion). Full detail:
-`project/build_history.json`.
+See checkpoint above for `m10_2_capability_state_resolver_core`, the
+current build. Full detail: `project/build_history.json`.
 
-Predecessor — **`gov_po_1_local_relay_protocol`** — **MERGED** PR #120
-(relay#15, closed): `relay/*.json` + `scripts/local_relay.py`, a
-git-tracked, turn-enforced local transport for same-machine PO/engineer
-coordination; does not amend or replace the GitHub-based relay.
-
-Predecessor — **`gov_po_1_gate_4_issue_close_path`** — **MERGED** PR #118:
-`gh issue close` added to the interactive PO gate allowlist.
-Predecessor — **`m10_1_registry_evidence_reconciliation_projection`**
-(`M10`'s first slice, `D4` producer) — **MERGED** PR #117. No canonical id
-spans `device_id`/`entity_id` today (`RELAY_DECISION` #11, option 4).
-Predecessor — **`gov_po_1_step_5_first_plan_episode`** — **MERGED** PR #113.
-Predecessor **`m9_enrollment_preview_confirmation_ui`** — **MERGED** PR #104.
-
-Predecessors, all **MERGED**, detail in `project/build_history.json`:
+Predecessors, all **MERGED**, detail in `project/build_history.json` /
+`docs/history/INDEX.md`: `gov_po_1_step_6_plan_po2_boundary` (PO2 boundary
+plan), `gov_po_1_local_relay_protocol` (PR #120), `gov_po_1_gate_4_issue_
+close_path` (PR #118), `m10_1_registry_evidence_reconciliation_projection`
+(`M10`'s first slice, `D4` producer, PR #117 — no canonical id spans
+`device_id`/`entity_id` today, `RELAY_DECISION` #11 option 4),
+`gov_po_1_step_5_first_plan_episode` (PR #113),
+`m9_enrollment_preview_confirmation_ui` (PR #104),
 `gov_po_1_gate_1_command_safety_correction` (PR #114),
 `gov_po_1_gate_2_self_sync_capability` (PR #115),
 `gov_po_1_step_4_direction_record_ratification` (PR #112, `RATIFIED`),
@@ -110,9 +90,12 @@ exercise packet emission (step 6).
 **`nav_3_capability_state_vocabulary`** — COMPLETE / FROZEN (PO approved
 2026-09-06). `docs/design/CAPABILITY_STATE_VOCABULARY_AND_PRESENTATION.md` is
 implementation authority for the vocabulary/resolution/presentation matrix
-(`D1`–`D7`, `E1`–`E7`, `AC-CS-1`…`97`). `D4` has its producer as of `M10.1`
-(above); every other dimension still resolves `UNKNOWN`. `M10.2`/`M10.3`
-build the resolver core and `D2`/`D3`; `M12` builds `D5`; `M14` builds `D7`.
+(`D1`–`D7`, `E1`–`E7`, `AC-CS-1`…`97`). `D4` has its producer as of
+`M10.1`; `D2`/`D3` as of `M10.3`; the resolver core (stages 0-3: union tag,
+`CX1`/`RI-1`/`RI-2`, primary ladder, qualifiers) as of `M10.2` (both
+above) — none wired to a caller/UI/payload yet, so every dimension still
+resolves `UNKNOWN` in any actual render. Stages 4-5 and `D5`'s producer
+are still open; `M12` builds `D5`, `M14` builds `D7`.
 
 ## `OP.0b.0` — FROZEN WITH REAL-ENV VALIDATION GATES
 `docs/history/phase/OP_0B_0_VENDOR_FAILOVER_PREFLIGHT_EVIDENCE_SURFACE.md`
@@ -178,9 +161,11 @@ Concurrency budget stays at 1 per vendor pending real-env evidence.
 ## Automated test baseline
 
 ```
-gov_po_3_push_hook_baseline_scoping: 7 new tests, tests/test_orchestrator.py
-unaffected (48 passed) (detail: project/build_history.json). Hook-only
-change; full one-shot regression not re-run (DEV.TEST.1: last evidence holds).
+op0b_s7_s6_test_order_isolation: full one-shot regression after merging
+origin/main (through m10_2_capability_state_resolver_core, PR #132) +
+tool-gate interpreter fix (+2 tests, DEV.TEST.1): 2943 passed, 25 skipped,
+2 failed -- both pre-existing/unrelated DLP-token collisions in
+project/build_history.json's own prose. S7+S6 both orders: 110 passed each.
 Earlier predecessor build detail lives only in project/build_history.json.
 ```
 ## Known xfails
