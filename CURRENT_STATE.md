@@ -15,14 +15,15 @@ docs under `docs/history/`; `docs/history/INDEX.md` is the one-line timeline.
   `try/finally` + regression test; test-infra only. Also fixed, PO-
   authorized (relay/NXS-LOCAL-0016): `nexus_engineer_tool_gate.py`'s
   merge-lock interpreter resolution. Detail: `project/build_history.json`.
-  Predecessors PR #122/#127/#129/#130/#131 **MERGED**, doc **FROZEN — PO
-  APPROVED**. **PO §12:** `M8.3` deferred, `M7` blocked, `M8` **FROZEN 2026-09-06**.
+  Predecessors PR #122/#127/#129/#130/#131/#132 **MERGED** (`#132` =
+  `m10_2_capability_state_resolver_core`, resolver stages 0-3), doc
+  **FROZEN — PO APPROVED**. **PO §12:** `M8.3` deferred, `M7` blocked,
+  `M8` **FROZEN 2026-09-06**.
 - **Next** (`now_next.next`): `gov_po_2_implementation` — unrelated,
   unchanged, not yet started. `m8_3_real_environment_validation` stays
   `upcoming`/**deferred debt**; `m7_real_device_targeted_collect_now`/
-  `op2_c_cp_clusterxl_adapter_scoping`/`m10_2_capability_state_resolver_
-  core` (consumes `D2`/`D3`/`D4`) stay `upcoming`/`blocked`.
-  `DEV.TEST.1`/`PCP.1`/`M1`-`M10.1`/`M10.3` complete/automated_validated.
+  `op2_c_cp_clusterxl_adapter_scoping` stay `upcoming`/`blocked`.
+  `DEV.TEST.1`/`PCP.1`/`M1`-`M10.3` complete/automated_validated.
 - **OP.2.0 CLASS 2 architecture** (`docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md`):
   **CONTRACT FROZEN 2026-09-04**; `OP.2.A`/`OP.2.B` IMPLEMENTED; `OP.2.1` CP
   command gate DRAFTED — CLASS 2 still has **no member**, no adapter,
@@ -57,37 +58,17 @@ test-enforced boundaries.
 | 4 — policy / deployment / remediation | prohibited | — |
 ## Active build
 
-**`gov_po_1_step_6_plan_po2_boundary`** — see checkpoint above for what
-shipped. Verified the current gate/settings/agent/test state in full before
-drafting; found several requested capabilities already true today
-(unrestricted file read via `READ_TOOLS`; all five relay markers already
-handled consistently by both transports; `RELAY_DECISION` already requiring
-`authorized_by`/`scope`/`supersedes`), so `gov_po_2_implementation` scopes to
-the genuine gaps only: `gh pr diff`/`gh run` read commands, the
-privacy-check mechanism (`main.py` otherwise fully denied), a
-`docs/design/po_drafts/*.md` authoring area with `FROZEN`/`RATIFIED`
-status-line rejection, `docs/history/INDEX.md` made truly generator-only
-(currently direct-Edit/Write-reachable via `GOVERNANCE_PATHS`), and one new
-`nexus-po-evidence-reviewer` agent modeled on `nexus-council-seat.md`.
-Council not invoked (no genuine `GOV_PO_ROLE_MIGRATION.md` §7 trigger for
-planning alone); recommends one at movement 1's later freeze `DECIDE`
-episode (§7 trigger (b), a PO write-boundary expansion). Full detail:
-`project/build_history.json`.
+See checkpoint above for `m10_2_capability_state_resolver_core`, the
+current build. Full detail: `project/build_history.json`.
 
-Predecessor — **`gov_po_1_local_relay_protocol`** — **MERGED** PR #120
-(relay#15, closed): `relay/*.json` + `scripts/local_relay.py`, a
-git-tracked, turn-enforced local transport for same-machine PO/engineer
-coordination; does not amend or replace the GitHub-based relay.
-
-Predecessor — **`gov_po_1_gate_4_issue_close_path`** — **MERGED** PR #118:
-`gh issue close` added to the interactive PO gate allowlist.
-Predecessor — **`m10_1_registry_evidence_reconciliation_projection`**
-(`M10`'s first slice, `D4` producer) — **MERGED** PR #117. No canonical id
-spans `device_id`/`entity_id` today (`RELAY_DECISION` #11, option 4).
-Predecessor — **`gov_po_1_step_5_first_plan_episode`** — **MERGED** PR #113.
-Predecessor **`m9_enrollment_preview_confirmation_ui`** — **MERGED** PR #104.
-
-Predecessors, all **MERGED**, detail in `project/build_history.json`:
+Predecessors, all **MERGED**, detail in `project/build_history.json` /
+`docs/history/INDEX.md`: `gov_po_1_step_6_plan_po2_boundary` (PO2 boundary
+plan), `gov_po_1_local_relay_protocol` (PR #120), `gov_po_1_gate_4_issue_
+close_path` (PR #118), `m10_1_registry_evidence_reconciliation_projection`
+(`M10`'s first slice, `D4` producer, PR #117 — no canonical id spans
+`device_id`/`entity_id` today, `RELAY_DECISION` #11 option 4),
+`gov_po_1_step_5_first_plan_episode` (PR #113),
+`m9_enrollment_preview_confirmation_ui` (PR #104),
 `gov_po_1_gate_1_command_safety_correction` (PR #114),
 `gov_po_1_gate_2_self_sync_capability` (PR #115),
 `gov_po_1_step_4_direction_record_ratification` (PR #112, `RATIFIED`),
@@ -107,10 +88,12 @@ exercise packet emission (step 6).
 **`nav_3_capability_state_vocabulary`** — COMPLETE / FROZEN (PO approved
 2026-09-06). `docs/design/CAPABILITY_STATE_VOCABULARY_AND_PRESENTATION.md` is
 implementation authority for the vocabulary/resolution/presentation matrix
-(`D1`–`D7`, `E1`–`E7`, `AC-CS-1`…`97`). `D4`/`D2`/`D3` have producers as of
-`M10.1`/`M10.3` (above); none is wired to a resolver, UI or payload, so every
-dimension still resolves `UNKNOWN` in any actual render. `M10.2` builds the
-resolver core; `M12` builds `D5`; `M14` builds `D7`.
+(`D1`–`D7`, `E1`–`E7`, `AC-CS-1`…`97`). `D4` has its producer as of
+`M10.1`; `D2`/`D3` as of `M10.3`; the resolver core (stages 0-3: union tag,
+`CX1`/`RI-1`/`RI-2`, primary ladder, qualifiers) as of `M10.2` (both
+above) — none wired to a caller/UI/payload yet, so every dimension still
+resolves `UNKNOWN` in any actual render. Stages 4-5 and `D5`'s producer
+are still open; `M12` builds `D5`, `M14` builds `D7`.
 
 ## `OP.0b.0` — FROZEN WITH REAL-ENV VALIDATION GATES
 `docs/history/phase/OP_0B_0_VENDOR_FAILOVER_PREFLIGHT_EVIDENCE_SURFACE.md`
@@ -177,10 +160,10 @@ Concurrency budget stays at 1 per vendor pending real-env evidence.
 
 ```
 op0b_s7_s6_test_order_isolation: full one-shot regression after merging
-origin/main + tool-gate interpreter fix (+2 tests, DEV.TEST.1): 2809
-passed, 25 skipped, 2 failed -- both pre-existing/unrelated DLP-token
-collisions in project/build_history.json's own prose (documented since
-gov_po_1_local_relay_watch_command). S7+S6 both orders: 110 passed each.
+origin/main (through m10_2_capability_state_resolver_core, PR #132) +
+tool-gate interpreter fix (+2 tests, DEV.TEST.1): 2943 passed, 25 skipped,
+2 failed -- both pre-existing/unrelated DLP-token collisions in
+project/build_history.json's own prose. S7+S6 both orders: 110 passed each.
 Earlier predecessor build detail lives only in project/build_history.json.
 ```
 ## Known xfails
