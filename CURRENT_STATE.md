@@ -5,26 +5,25 @@ see `AGENTS.md`/`AI_START_HERE.md`. **Predecessor build detail lives in
 `project/build_history.json`** (structured, newest-first) and its linked
 docs under `docs/history/`; `docs/history/INDEX.md` is the one-line timeline.
 
-- **Checkpoint:** 2026-09-08, `gov_po_3_orchestrator_observability` — extended
-  already-frozen `scripts/orchestrator.py` with real-time visibility: streaming
-  `claude -p` output (`--output-format stream-json --verbose`), a stdlib-only
-  `engineer.summary.log` parser, `status`'s new `last_activity` field, and a
-  read-only `orchestrator watch` terminal dashboard. Backward compatible; no
-  council trigger. Detail: `project/build_history.json`. Predecessors:
-  `gov_po_3_push_hook_baseline_scoping` **MERGED**;
-  `gov_po_3_approved_movement_orchestration_ac3` **AC-3 only, MERGED** (froze
-  `docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md`; AC-5's real
-  demonstrations still pending, `relay/NXS-LOCAL-0007`);
-  `gov_po_1_gate_5_worktree_management` **MERGED**;
-  `gov_po_2_po_visibility_and_bounded_authorship` **MERGED** PR #122 —
-  `docs/design/GOV_PO_2_PO_VISIBILITY_AND_BOUNDED_AUTHORSHIP.md` is **FROZEN —
-  PRODUCT OWNER APPROVED, 2026-09-08**, specifying `gov_po_2_implementation`'s
-  scope. **PO §12:** `M8.3` deferred, `M7` blocked, `M8` **FROZEN 2026-09-06**.
-- **Next** (`now_next.next`): `gov_po_2_implementation` — unrelated and
-  unchanged by this movement; not yet started. `m8_3_real_environment_
-  validation` stays `upcoming`, **deferred debt**, unpaid; `m7_real_device_
-  targeted_collect_now`/`op2_c_cp_clusterxl_adapter_scoping` stay
-  `upcoming`/`blocked`. `DEV.TEST.1`/`PCP.1`/`M1`-`M10.1` complete/automated_validated.
+- **Checkpoint:** 2026-09-08, `m10_3_entity_and_vendor_support_producers` —
+  `M10`'s third slice: `utils/capability_applicability.py` (`resolve_d2`) and
+  `utils/capability_vendor_support.py` (`resolve_d3`) — pure, offline,
+  closed-table producers for D2/D3, every entry citing a real source, every
+  uncited pair resolving `APPLICABILITY_UNKNOWN`/`SUPPORT_UNKNOWN` naming the
+  gap. No `UNSUPPORTED` entry populated — no positive non-support evidence
+  found. No resolver/UI/navigation/payload wiring (`M10.2`'s job). Ran
+  concurrently with `M10.2`/`GOV.PO.3`/`GOV.PO.2` in separate worktrees.
+  Detail: `project/build_history.json`. Predecessors
+  `gov_po_3_orchestrator_observability` **MERGED** PR #129 (streaming
+  `orchestrator` output/`watch`) and `gov_po_3_push_hook_baseline_scoping`
+  **MERGED** PR #127 (baseline-aware pre-push privacy gate). **PO §12:**
+  `M8.3` deferred, `M7` blocked. `M8` **FROZEN 2026-09-06**.
+- **Next** (`now_next.next`): `gov_po_2_implementation` — unrelated,
+  unchanged, not yet started. `m8_3_real_environment_validation` stays
+  `upcoming`/deferred debt; `m7_real_device_targeted_collect_now`/
+  `op2_c_cp_clusterxl_adapter_scoping`/`m10_2_capability_state_resolver_core`
+  (consumes `D2`/`D3`/`D4`) stay `upcoming`. `DEV.TEST.1`/`PCP.1`/`M1`-`M9`/
+  `M10.1`/`M10.3` complete/automated_validated.
 - **OP.2.0 CLASS 2 architecture** (`docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md`):
   **CONTRACT FROZEN 2026-09-04**; `OP.2.A`/`OP.2.B` IMPLEMENTED; `OP.2.1` CP
   command gate DRAFTED — CLASS 2 still has **no member**, no adapter,
@@ -109,9 +108,10 @@ exercise packet emission (step 6).
 **`nav_3_capability_state_vocabulary`** — COMPLETE / FROZEN (PO approved
 2026-09-06). `docs/design/CAPABILITY_STATE_VOCABULARY_AND_PRESENTATION.md` is
 implementation authority for the vocabulary/resolution/presentation matrix
-(`D1`–`D7`, `E1`–`E7`, `AC-CS-1`…`97`). `D4` has its producer as of `M10.1`
-(above); every other dimension still resolves `UNKNOWN`. `M10.2`/`M10.3`
-build the resolver core and `D2`/`D3`; `M12` builds `D5`; `M14` builds `D7`.
+(`D1`–`D7`, `E1`–`E7`, `AC-CS-1`…`97`). `D4`/`D2`/`D3` have producers as of
+`M10.1`/`M10.3` (above); none is wired to a resolver, UI or payload, so every
+dimension still resolves `UNKNOWN` in any actual render. `M10.2` builds the
+resolver core; `M12` builds `D5`; `M14` builds `D7`.
 
 ## `OP.0b.0` — FROZEN WITH REAL-ENV VALIDATION GATES
 `docs/history/phase/OP_0B_0_VENDOR_FAILOVER_PREFLIGHT_EVIDENCE_SURFACE.md`
@@ -177,9 +177,10 @@ Concurrency budget stays at 1 per vendor pending real-env evidence.
 ## Automated test baseline
 
 ```
-gov_po_3_push_hook_baseline_scoping: 7 new tests, tests/test_orchestrator.py
-unaffected (48 passed) (detail: project/build_history.json). Hook-only
-change; full one-shot regression not re-run (DEV.TEST.1: last evidence holds).
+m10_3_entity_and_vendor_support_producers: targeted 107 passed;
+architecture-convergence 22 passed unchanged. New, previously unimported
+modules plus their own test file only -- no full regression (DEV.TEST.1:
+last evidence holds).
 Earlier predecessor build detail lives only in project/build_history.json.
 ```
 ## Known xfails
