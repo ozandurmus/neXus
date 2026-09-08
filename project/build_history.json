@@ -3,6 +3,22 @@
   "record_contract": "One structured record per build, newest first. Required: build, status, title, summary (<= 2 sentences). Optional: started, completed, track, movement, supersedes, evidence, risks_forward, docs{agreement,validation,handover} (repo-relative paths under docs/history/). Full detail lives in the linked doc; do not restate it here. Status vocabulary must stay within utils/project_plan.py STATUS_VALUES.",
   "builds": [
     {
+      "build": "m10_2_capability_state_resolver_core",
+      "status": "automated_validated",
+      "title": "M10.2 -- capability-state resolver core (stage 0, result algebra, primary ladder, qualifiers)",
+      "summary": "New utils/capability_state_resolver.py implements resolver stages 0-3 of docs/design/CAPABILITY_STATE_VOCABULARY_AND_PRESENTATION.md section 5, as pure typed-input functions with no I/O and no device contact: resolve_union_tag() decides the RESOLVED/OMITTED tag from D1 alone (Resolved and Omitted are structurally distinct dataclasses -- OMITTED carries only reason + optional diagnostic, never a None-filled capability output); evaluate_stage1()/evaluate_ri1_comparability() implement the CX1/RI-1/RI-2 contradiction-and-inconsistency gate, reusing utils.registry_evidence_reconciliation.detect_ri2 (M10.1) for RI-2 rather than reimplementing it, and the K1-K6 comparability precedence table for RI-1, in the frozen row order; resolve_primary_status() implements the twelve-rank primary ladder (ranks 0-11) first-match-wins; resolve_qualifiers() implements the seven independent CapabilityQualifier facets. The nine-value CapabilityState and seven-value CapabilityQualifier vocabularies are proven lexically disjoint from the console job lifecycle (X1), the OP.2 action-state vocabulary (X2) and utils.action_taxonomy tokens; to_wire() serializes only under the capability_state/capability_qualifiers keys the contract's namespacing rule (4.4) names.",
+      "started": "2026-09-08",
+      "completed": "2026-09-08",
+      "track": "M10",
+      "movement": "IMPLEMENTATION",
+      "supersedes": null,
+      "evidence": "SESSION_START relay/NXS-LOCAL-0008, dispatched into this movement's own git worktree; read docs/design/CAPABILITY_STATE_VOCABULARY_AND_PRESENTATION.md sections 3.3/4/5 in full before writing code, per the SESSION_START's own requirement. New tests/test_m10_2_capability_state_resolver.py (134 tests): stage 0's four union-tag cases V-A..V-D plus OMITTED/Resolved structural-distinctness checks (AC-1); exactly-nine/exactly-seven vocabulary checks plus lexical-disjointness parametrized tests against console/jobs.py TERMINAL_STATES, utils/operate/states.py ActionState and utils/action_taxonomy.py ACTION_CLASSES, plus a to_wire() namespacing test (AC-2); CX1 from I10, the full K1-K6 precedence table one row at a time plus two mixed-ordering cases, and RI-2 reuse via detect_ri2 (AC-3); one test per primary-ladder rank 0-11 plus the rank-8-vs-9 fail-closed-ordering case and a D5=POLICY_UNKNOWN-never-reaches-rank-11 case (AC-4); one test per qualifier plus the four 4.1.5 inference-ban negative tests (AC-5); an AST-based purity check proving no requests/paramiko/socket/subprocess import and no utils.capability_registry import (AC-6). All 134 passed. Affected regression: tests/test_m10_1_registry_evidence_reconciliation.py + tests/test_architecture_convergence.py, 78 passed, metadata_warnings empty. git diff --check clean.",
+      "risks_forward": "Stages 4-5 (evidence presentation, action affordance) and the D2/D3/D5 producers remain unimplemented by design (M10.3/M12) -- this module only consumes already-resolved values of those dimensions via typed inputs (EntityApplicability, VendorSupport, CapabilityPolicy), and no caller wires it into html_export, console, any payload or navigation module yet. The stage-0 diagnostic pass (4.1.4) is explicitly OPTIONAL and not computed here; Diagnostic is a plain passthrough a future caller may attach.",
+      "docs": {
+        "agreement": "docs/design/CAPABILITY_STATE_VOCABULARY_AND_PRESENTATION.md"
+      }
+    },
+    {
       "build": "gov_po_3_resume_canonical_relay_access_fix",
       "status": "automated_validated",
       "title": "GOV.PO.3 -- resume canonical-relay access fix: --add-dir the canonical relay directory on every engineer spawn",
