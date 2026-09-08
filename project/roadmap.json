@@ -150,7 +150,7 @@
         "Full detail: project/build_history.json's gov_po_3_ci_privacy_gate_baseline_scoping record.",
         "Relay: relay/NXS-LOCAL-0020-gov-po-3-ci-privacy-gate-baseline-scopin.json (Product Owner priority, 2026-09-08, found live while monitoring PRs #127-#131).",
         "A small, independent corrective fix dispatched in parallel with several other movements (own worktree, no file overlap) -- does not change the 'now'/'next' status of any of them.",
-        "Predecessor 'now': op1_failover_plan_compiler_contract_draft (in_progress) -- Full detail: project/build_history.json's op1_failover_plan_compiler_contract_draft record."
+        "Predecessor 'now': orchestrator_background_task_exit_race, MERGED PR #134 -- Full detail: project/build_history.json's orchestrator_background_task_exit_race record."
       ]
     },
     "next": {
@@ -164,6 +164,19 @@
       ]
     },
     "upcoming": [
+      {
+        "build": "op1_failover_plan_compiler_contract_draft",
+        "title": "OP.1 -- failover plan compiler and dry-run: contract draft",
+        "goal": "Produce the DRAFT OP.1 contract (docs/history/phase/OP_1_FAILOVER_PLAN_COMPILER_AND_DRY_RUN.md): a write-free failover plan compiler and dry-run over existing readiness/preflight evidence for classic Check Point ClusterXL, structurally non-authorizing, with op_degraded_verdict presented to the Product Owner for one freeze decision.",
+        "status": "in_progress",
+        "started": "2026-09-08",
+        "completed": "2026-09-08",
+        "notes": [
+          "Full detail: project/build_history.json's op1_failover_plan_compiler_contract_draft record.",
+          "Moved from now_next.now 2026-09-08 (orchestrator_background_task_exit_race session): not a demotion of any completed OP.1 work -- the DRAFT contract still awaits Product Owner freeze, unchanged. Leaves 'now' only because horizon_contract reserves that slot for the newest project/build_history.json record, which is now a smaller orchestrator-reliability fix dispatched in parallel (relay/NXS-LOCAL-0019); the OP.1 freeze decision is still pending and unaffected.",
+          "Runs in its own worktree/branch (feature/op1-failover-plan-compiler-contract), independent of GOV.PO.3."
+        ]
+      },
       {
         "build": "m8_3_real_environment_validation",
         "title": "M8.3 -- Product-Owner-gated real-environment validation of the first-contact producer",

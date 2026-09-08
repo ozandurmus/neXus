@@ -15,7 +15,14 @@ docs under `docs/history/`; `docs/history/INDEX.md` is the one-line timeline.
   `--repository-privacy-check`; workflow now fetches full history and passes
   `--privacy-baseline-ref origin/main`. Own worktree, no file overlap with
   other in-flight movements. Detail: `project/build_history.json`.
-  Predecessor `op1_failover_plan_compiler_contract_draft` **MERGED PR #133**
+  Predecessor `orchestrator_background_task_exit_race` **MERGED PR #134** —
+  `scripts/orchestrator.py`'s `ENGINEER_PROMPT` now forbids treating a
+  long-running validation command (the full pytest regression) as
+  backgroundable and raises the engineer session's own
+  `BASH_DEFAULT_TIMEOUT_MS`; `decide_start`'s resume path now detects the
+  live-observed staged-changes/`SESSION_START`/dead-pid pattern
+  (`relay/NXS-LOCAL-0018`) and injects a recovery note. Predecessor
+  `op1_failover_plan_compiler_contract_draft` **MERGED PR #133**
   (DRAFT contract, awaiting Product Owner freeze). Predecessor
   `gov_po_3_orchestrator_observability` **MERGED**. Predecessor
   `gov_po_3_push_hook_baseline_scoping` **MERGED**. Predecessor
