@@ -637,6 +637,7 @@ def _spawn_engineer(
     max_budget_usd: float = DEFAULT_MAX_BUDGET_USD,
     extra_prompt_note: str | None = None,
     model: str | None = None,
+    effort: str | None = None,
 ) -> subprocess.Popen:
     env = dict(os.environ)
     env[lr.ENV_CANONICAL_RELAY_DIR] = str(canonical_relay_dir)
@@ -673,6 +674,8 @@ def _spawn_engineer(
             "--permission-prompts", "none", "--max-budget-usd", str(max_budget_usd)]
     if model:
         argv += ["--model", model]
+    if effort:
+        argv += ["--effort", effort]
     if resume_session_id:
         argv += ["--resume", resume_session_id]
     log_path = worktree_path / ".nexus" / "engineer.log"
@@ -767,6 +770,7 @@ def _cmd_start(args: argparse.Namespace) -> int:
             resume_session_id=session_id, max_budget_usd=args.max_budget_usd,
             extra_prompt_note=RESUME_RECOVERY_NOTE if recovery_note_needed else None,
             model=args.model,
+            effort=args.effort,
         )
         record = {**existing, "pid": proc.pid, "phase": PHASE_RUNNING,
                   "last_action": "resumed", "task_hash": hash_hex,
@@ -800,6 +804,7 @@ def _cmd_start(args: argparse.Namespace) -> int:
         canonical_relay_dir=relay_dir, relay_file=relay_file,
         max_budget_usd=args.max_budget_usd,
         model=args.model,
+        effort=args.effort,
     )
     record = {
         "movement_id": args.movement, "revision": revision, "base_sha": base_sha,
@@ -1042,6 +1047,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_start.add_argument("--max-workers", type=int, default=DEFAULT_MAX_WORKERS)
     p_start.add_argument("--max-budget-usd", type=float, default=DEFAULT_MAX_BUDGET_USD)
     p_start.add_argument("--model", default=None, help="Passed through to claude -p --model (e.g. 'opus'). Unset uses the CLI's own default.")
+    p_start.add_argument("--effort", default=None, help="Passed through to claude -p --effort (e.g. 'high'). Unset uses the CLI's own default.")
     p_start.set_defaults(func=_cmd_start)
 
     p_status = sub.add_parser("status", help="report one movement, or every known movement")
