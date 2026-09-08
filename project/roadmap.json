@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "current_build": "op1_failover_plan_compiler_contract_draft",
+  "current_build": "orchestrator_background_task_exit_race",
   "current_track": "PCP.x",
   "progress_contract": "Weighted acceptance-criterion completion. Percentages describe the declared roadmap, not calendar time or delivery ETA.",
   "tracks": [
@@ -140,16 +140,15 @@
   "now_next": {
     "horizon_contract": "NOW is exactly one build. NEXT is exactly one. Everything else is an `upcoming` row carrying its own true status: planned = AFTER, blocked = waiting on a named external gate, deferred = consciously postponed. `now.build` must equal the newest project/build_history.json record -- utils.project_plan enforces it.",
     "now": {
-      "build": "op1_failover_plan_compiler_contract_draft",
-      "title": "OP.1 -- failover plan compiler and dry-run: contract draft",
-      "goal": "Produce the DRAFT OP.1 contract (docs/history/phase/OP_1_FAILOVER_PLAN_COMPILER_AND_DRY_RUN.md): a write-free failover plan compiler and dry-run over existing readiness/preflight evidence for classic Check Point ClusterXL, structurally non-authorizing, with op_degraded_verdict presented to the Product Owner for one freeze decision.",
-      "status": "in_progress",
+      "build": "orchestrator_background_task_exit_race",
+      "title": "Orchestrator: close the background-task-exit-race gap in the engineer spawn/resume path",
+      "goal": "ENGINEER_PROMPT forbids treating long-running validation as backgroundable and waits for a real result before commit/push/merge; decide_start's resume path detects the live-observed staged-changes/SESSION_START/dead-pid pattern and injects a recovery note.",
+      "status": "automated_validated",
       "started": "2026-09-08",
       "completed": "2026-09-08",
       "notes": [
-        "Full detail: project/build_history.json's op1_failover_plan_compiler_contract_draft record.",
-        "Runs in its own worktree/branch (feature/op1-failover-plan-compiler-contract) in parallel with GOV.PO.3 and M10.2, per the Product Owner's 2026-09-08 sequencing direction (failover-side gaps are priority). This movement itself changes no code, test or FROZEN document -- design + bookkeeping only.",
-        "Freeze of the DRAFT contract and the op_degraded_verdict decision are a separate Product Owner action, not part of this record."
+        "Full detail: project/build_history.json's orchestrator_background_task_exit_race record.",
+        "Dispatched in parallel with OP.1's contract-draft session and other 2026-09-08 movements (relay/NXS-LOCAL-0019); touches only scripts/orchestrator.py and its own tests."
       ]
     },
     "next": {
@@ -163,6 +162,19 @@
       ]
     },
     "upcoming": [
+      {
+        "build": "op1_failover_plan_compiler_contract_draft",
+        "title": "OP.1 -- failover plan compiler and dry-run: contract draft",
+        "goal": "Produce the DRAFT OP.1 contract (docs/history/phase/OP_1_FAILOVER_PLAN_COMPILER_AND_DRY_RUN.md): a write-free failover plan compiler and dry-run over existing readiness/preflight evidence for classic Check Point ClusterXL, structurally non-authorizing, with op_degraded_verdict presented to the Product Owner for one freeze decision.",
+        "status": "in_progress",
+        "started": "2026-09-08",
+        "completed": "2026-09-08",
+        "notes": [
+          "Full detail: project/build_history.json's op1_failover_plan_compiler_contract_draft record.",
+          "Moved from now_next.now 2026-09-08 (orchestrator_background_task_exit_race session): not a demotion of any completed OP.1 work -- the DRAFT contract still awaits Product Owner freeze, unchanged. Leaves 'now' only because horizon_contract reserves that slot for the newest project/build_history.json record, which is now a smaller orchestrator-reliability fix dispatched in parallel (relay/NXS-LOCAL-0019); the OP.1 freeze decision is still pending and unaffected.",
+          "Runs in its own worktree/branch (feature/op1-failover-plan-compiler-contract), independent of GOV.PO.3."
+        ]
+      },
       {
         "build": "m8_3_real_environment_validation",
         "title": "M8.3 -- Product-Owner-gated real-environment validation of the first-contact producer",
