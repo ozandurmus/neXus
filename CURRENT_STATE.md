@@ -15,9 +15,12 @@ docs under `docs/history/`; `docs/history/INDEX.md` is the one-line timeline.
   (stages 4-5 and the `D2`/`D3`/`D5` producers are `M10.3`/`M12`). 134 new
   tests; `tests/test_m10_1_registry_evidence_reconciliation.py` +
   `tests/test_architecture_convergence.py` unaffected (78 passed). Ran in
-  its own worktree in parallel with GOV.PO.3/OP.1; merged
-  `origin/main` (predecessor `gov_po_3_push_hook_baseline_scoping`, below)
+  its own worktree in parallel with GOV.PO.3/OP.1; merged `origin/main`
   before opening the PR. Detail: `project/build_history.json`. Predecessor
+  `gov_po_3_orchestrator_observability` **MERGED** — extended already-frozen
+  `scripts/orchestrator.py` with real-time visibility: streaming `claude -p`
+  output, an `engineer.summary.log` parser, `status`'s new `last_activity`
+  field, and a read-only `orchestrator watch` dashboard. Predecessor
   `gov_po_3_push_hook_baseline_scoping` **MERGED** — makes the pre-push
   privacy-gate hook baseline-aware. Predecessor
   `gov_po_3_approved_movement_orchestration_ac3` **AC-3 only, MERGED** — its

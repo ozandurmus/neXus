@@ -149,7 +149,7 @@
       "notes": [
         "Full detail: project/build_history.json's m10_2_capability_state_resolver_core record.",
         "Authorized 2026-09-08 (Product Owner direction: UI/interactive control-plane track is top priority), sequenced by the first M10 Phase A PLAN episode. Runs in parallel with GOV.PO.3 and OP.1 in its own worktree (relay/NXS-LOCAL-0008); consumed M10.1's D4 producer plus declared typed inputs for D2/D3/D5, whose own producers do not exist yet (M10.3/M12).",
-        "Predecessor now-slot: gov_po_3_push_hook_baseline_scoping -- automated_validated, merged; unaffected by this build."
+        "Predecessor now-slot: gov_po_3_orchestrator_observability -- automated_validated, merged (origin/main advanced during this movement's own session; merged into this branch before opening the PR, per this build's own SESSION_START instruction). gov_po_3_push_hook_baseline_scoping merged before that; both unaffected by this build."
       ]
     },
     "next": {
