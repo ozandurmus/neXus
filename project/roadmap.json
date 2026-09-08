@@ -174,24 +174,6 @@
         ]
       },
       {
-        "build": "m10_2_capability_state_resolver_core",
-        "title": "M10.2 -- capability-state resolver core (stage 0, result algebra, primary ladder)",
-        "status": "planned",
-        "notes": [
-          "Second M10 slice, sequenced by the first Phase A PLAN episode 2026-09-08. Not authorized; needs its own SESSION_START. Consumes M10.1's D4 producer plus declared inputs for the dimensions whose producers do not exist yet.",
-          "Scope sketch only: stage-0 surface resolution and the OMITTED/RESOLVED union tag, the CapabilityState nine-value vocabulary, and the primary ladder with its fail-closed fallbacks. Authority: docs/design/CAPABILITY_STATE_VOCABULARY_AND_PRESENTATION.md sections 4 and 5 (FROZEN 2026-09-06). Sizing to the GOV.PO.1 section 7 targets is a PLAN decision for the episode that opens it, after M10.1's REVIEW."
-        ]
-      },
-      {
-        "build": "m10_3_entity_and_vendor_support_producers",
-        "title": "M10.3 -- D2 entity applicability and D3 vendor/platform support producers",
-        "status": "planned",
-        "notes": [
-          "Third M10 slice, sequenced 2026-09-08. Not authorized. Positive-evidence vendor support only -- CAPABILITY_STATE_VOCABULARY_AND_PRESENTATION.md section 7.3 governs what may never prove capability support.",
-          "Together with M10.1 and M10.2 this is what finally lets project/feature_registry.json's left_vertical_product_navigation availability_rule criterion move off 'pending'; that criterion state is owned by the slice that actually delivers the predicates, never by this planning row."
-        ]
-      },
-      {
         "build": "M11",
         "title": "M11 -- shared entity workspace context",
         "status": "planned",
