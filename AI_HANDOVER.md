@@ -7,82 +7,79 @@
 
 ## 1. Snapshot
 
-- Date: 2026-09-08. `gov_po_1_step_6_plan_po2_boundary` — a `PLAN` episode:
-  Product Owner direction to correct the PO assistant's own permission
-  architecture after a run of small gate-fix movements (relay#11-#16, the
-  local relay protocol) surfaced repeated friction.
-- Two-movement plan: `gov_po_2_po_visibility_and_bounded_authorship`
-  (ARCHITECTURE, one new DRAFT document, `next`) and
-  `gov_po_2_implementation` (IMPLEMENTATION, `upcoming`/blocked until the
-  first is FROZEN by the Product Owner).
-- Predecessor `gov_po_1_local_relay_protocol` **MERGED** PR #120
-  (relay#15, now closed).
+- Date: 2026-09-08. `gov_po_2_po_visibility_and_bounded_authorship` — new
+  `docs/design/GOV_PO_2_PO_VISIBILITY_AND_BOUNDED_AUTHORSHIP.md`
+  (**DRAFT — NOT IMPLEMENTATION AUTHORITY**, awaiting Product Owner freeze).
+- Picked up from `relay/NXS-LOCAL-0002-gov-po-2-visibility.json`'s
+  `SESSION_START` (local relay transport, `docs/design/
+  LOCAL_RELAY_PROTOCOL.md`, DRAFT); this movement's own `SESSION_CLOSE`
+  entry is appended to that same file.
+- `gov_po_2_implementation` (code/test/agent-definition half) stays
+  `blocked` in `project/roadmap.json` until the Product Owner separately
+  freezes this document.
 
 ## 2. What changed
 
-- `project/roadmap.json`: `now_next.next` set to
-  `gov_po_2_po_visibility_and_bounded_authorship`; `gov_po_2_implementation`
-  added to `upcoming`, status `blocked`.
+- `docs/design/GOV_PO_2_PO_VISIBILITY_AND_BOUNDED_AUTHORSHIP.md` (new,
+  DRAFT): a capability-based PO boundary (OBSERVATION / GOVERNANCE
+  AUTHORSHIP / ENGINEERING EXECUTION / HUMAN DECISION AUTHORITY) closing
+  every open design question the `SESSION_START` named — see `project/
+  build_history.json`'s own record for the full list (new Bash prefixes,
+  `po_drafts/*.md` + status-line regex, `INDEX.md` narrowing, the
+  standalone privacy-check script decision, the evidence-reviewer agent).
 - `project/build_history.json`: new head record
-  `gov_po_1_step_6_plan_po2_boundary`, status `complete_with_followup`.
-- `CURRENT_STATE.md`: checkpoint/active-build sections rewritten, kept at
-  or under 200 lines.
-- `docs/history/INDEX.md`: regenerated.
-- No code, test, gate, or agent-definition file touched — this episode is
-  planning only, per `GOV_PO_ROLE_MIGRATION.md` §2's PO write boundary.
-- Two SESSION_START packets validated
-  (`scripts/gov_session_transfer.py validate`: true each) but only the
-  first is opened as its own relay artifact:
-  `relay/NXS-LOCAL-0002-gov-po-2-visibility.json` (next_actor: engineer).
-  This PLAN episode's own record is at
-  `relay/NXS-LOCAL-0001-plan-po2-boundary.json`.
-- `gov_po_2_implementation`'s SESSION_START is fully drafted and validated
-  but deliberately not yet opened as a relay artifact, since it cannot
-  start until movement 1 is FROZEN.
+  `gov_po_2_po_visibility_and_bounded_authorship`, status
+  `complete_with_followup` (DRAFT-backed, per `tests/
+  test_architecture_convergence.py::test_a_draft_contract_never_backs_a_
+  terminal_build_history_record`).
+- `project/roadmap.json`: `now_next.now` promoted to this build;
+  `now_next.next` set to unset (`build: ""`) — the actual next step is
+  the Product Owner's freeze decision, not an engineering-sizeable build;
+  `current_build` updated to match.
+- `CURRENT_STATE.md`: checkpoint rewritten, kept at 199 lines.
+- `docs/history/INDEX.md`: regenerated via `scripts/build_history_index.py`.
+- No code, test, gate, agent-definition, or settings file touched (AC-7 —
+  this movement is, by design, the one document plus its own bookkeeping).
 
 ## 3. Exact next action
 
-1. An engineering session picks up
-   `relay/NXS-LOCAL-0002-gov-po-2-visibility.json` and writes
-   `docs/design/GOV_PO_2_PO_VISIBILITY_AND_BOUNDED_AUTHORSHIP.md`
-   (DRAFT) per that SESSION_START's acceptance criteria — one new document
-   only, no code.
-2. The Product Owner reviews and FREEZES that document (a separate,
-   explicit `DECIDE` episode; a `nexus-decision-council` round is
-   recommended there per `GOV_PO_ROLE_MIGRATION.md` §7 trigger (b)).
-3. Only then does `gov_po_2_implementation` open its own relay artifact and
-   start — implementing exactly what the frozen document specifies in
-   `scripts/nexus_po_tool_gate.py` plus the new
-   `nexus-po-evidence-reviewer` agent.
-4. This PLAN episode's own `gov/po-*` branch/PR still needs the Product
-   Owner's explicit `RELAY_DECISION` before merge
-   (`GOV_PO_ROLE_MIGRATION.md` §2 — unaffected by relay#13's
-   engineer-movement merge carve-out).
+1. The Product Owner reviews `docs/design/
+   GOV_PO_2_PO_VISIBILITY_AND_BOUNDED_AUTHORSHIP.md` and decides whether
+   to freeze it — a separate, future `DECIDE` episode. A
+   `nexus-decision-council` round is recommended there
+   (`GOV_PO_ROLE_MIGRATION.md` §7 trigger (b) — a write-boundary expansion
+   for the PO role itself) but not required by this document.
+2. Only after that freeze does `gov_po_2_implementation` start: it builds
+   exactly §3's five mechanisms into `scripts/nexus_po_tool_gate.py`,
+   `.claude/nexus-po.settings.json`, the new
+   `.claude/agents/nexus-po-evidence-reviewer.md`, and
+   `tests/test_gov_po_role.py`, with its own bookkeeping landing in the
+   same commit (§5 of the new document).
+3. This movement's own PR (branch
+   `feature/gov-po-2-visibility-and-bounded-authorship`, built on top of
+   the still-open `gov_po_1_step_6_plan_po2_boundary` PR #121) needs the
+   standing relay#13 green-gate treatment before merge; the document's own
+   promotion from DRAFT to FROZEN is separate and later.
 
 ## 4. Test delta
 
-None — this episode is planning/drafting only, no code or test change.
-`project/roadmap.json`/`build_history.json` JSON parse-validated;
-`tests/test_architecture_convergence.py` re-run before merge is still owed.
+No code/test change. `tests/test_architecture_convergence.py`: 22 passed
+(the `now_next`/`current_build`/build-history reconciliation and the
+DRAFT-status/terminal-build-status check both green). `git diff --check`
+clean. Repository privacy gate PASS/0 findings via
+`.venv/bin/python main.py --repository-privacy-check`.
 
 ## 5. Risks / notes forward
 
-- Verified against the actual current gate/settings/agent state (not
-  assumed): `READ_TOOLS` already gives the PO unrestricted file read; all
-  five relay markers are already handled consistently by both the GitHub
-  gate and `scripts/local_relay.py`; `RELAY_DECISION` already requires
-  `authorized_by`/`scope`/`supersedes` in both transports. `gov_po_2_
-  implementation` is scoped to the genuine remaining gaps only —
-  `gh pr diff`/`gh run` read commands, the privacy-check mechanism,
-  `docs/design/po_drafts/*.md` with status-line rejection,
-  `docs/history/INDEX.md` made truly generator-only (currently direct-
-  Edit/Write-reachable via `GOVERNANCE_PATHS`, a real gap this plan found),
-  and the new evidence-reviewer agent.
-- Movement 1's document must close, not defer, three real open design
-  questions (privacy-check mechanism choice, exact FROZEN/RATIFIED
-  status-line detection rule, evidence-reviewer agent's exact tool list) —
-  if it leaves any ambiguous, `gov_po_2_implementation` must stop and post
-  a `RELAY_QUESTION` rather than guess.
-- Council was not invoked in this PLAN episode — no genuine
-  `GOV_PO_ROLE_MIGRATION.md` §7 trigger applies to planning/drafting alone;
-  the recommendation is recorded for movement 1's later freeze episode.
+- This document is DRAFT — it must not be treated as implementation
+  authority by any session until the Product Owner's explicit freeze
+  (`AGENTS.md` "Authority hierarchy" item 2).
+- The FROZEN/RATIFIED status-line detection regex is an honest heuristic
+  (the document says so explicitly) — not adversarial-proof; human review
+  of any `po_drafts/*.md` content remains the real control.
+- This movement's branch sits on top of `gov_po_1_step_6_plan_po2_boundary`
+  (PR #121, still open) — its own PR will carry PR #121's diff until #121
+  merges first; that is expected, not a conflict to resolve here.
+- Council review is recommended, not invoked, for the future freeze
+  decision — no genuine `GOV_PO_ROLE_MIGRATION.md` §7 trigger applies to
+  drafting alone.

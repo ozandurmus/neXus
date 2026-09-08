@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "current_build": "gov_po_1_step_6_plan_po2_boundary",
+  "current_build": "gov_po_2_po_visibility_and_bounded_authorship",
   "current_track": "PCP.x",
   "progress_contract": "Weighted acceptance-criterion completion. Percentages describe the declared roadmap, not calendar time or delivery ETA.",
   "tracks": [
@@ -140,27 +140,25 @@
   "now_next": {
     "horizon_contract": "NOW is exactly one build. NEXT is exactly one. Everything else is an `upcoming` row carrying its own true status: planned = AFTER, blocked = waiting on a named external gate, deferred = consciously postponed. `now.build` must equal the newest project/build_history.json record -- utils.project_plan enforces it.",
     "now": {
-      "build": "gov_po_1_step_6_plan_po2_boundary",
-      "title": "GOV.PO.1 step 6 -- PLAN episode: two-movement GOV.PO.2 PO-boundary correction",
-      "goal": "Plan a bounded, two-movement correction to the PO assistant's own permission architecture: one ARCHITECTURE movement producing a DRAFT capability-based boundary document, blocked-until-frozen by the human, followed by one IMPLEMENTATION movement building exactly what that frozen document specifies.",
+      "build": "gov_po_2_po_visibility_and_bounded_authorship",
+      "title": "GOV.PO.2 (1/2) -- capability-based PO boundary, DRAFT amendment",
+      "goal": "Produce one DRAFT design document specifying a capability-based PO boundary (observation / governance authorship / engineering execution / human decision authority) precisely enough that gov_po_2_implementation can build it deterministically once the human freezes it.",
       "status": "complete_with_followup",
       "started": "2026-09-08",
       "completed": "2026-09-08",
       "notes": [
-        "Full detail: project/build_history.json's gov_po_1_step_6_plan_po2_boundary record.",
-        "Filed at Product Owner direction after a run of small gate-fix movements (relay#11-#16, the local relay protocol) surfaced repeated PO-permission friction. Status is complete_with_followup, not done: the drafted movements below are the followup, and this PLAN itself still needs its own gov/po-* branch RELAY_DECISION before its PR merges (GOV_PO_ROLE_MIGRATION.md section 2).",
-        "Predecessor gov_po_1_local_relay_protocol -- MERGED PR #120 (relay#15, closed) -- full detail in its own build_history record."
+        "Full detail: project/build_history.json's gov_po_2_po_visibility_and_bounded_authorship record.",
+        "Status is complete_with_followup, not done: docs/design/GOV_PO_2_PO_VISIBILITY_AND_BOUNDED_AUTHORSHIP.md stays DRAFT until a separate future Product Owner freeze DECIDE episode (recommended to invoke nexus-decision-council per GOV_PO_ROLE_MIGRATION.md section 7 trigger (b)); gov_po_2_implementation (below, upcoming) stays blocked until then.",
+        "Predecessor gov_po_1_step_6_plan_po2_boundary -- the PLAN episode that requested this document -- full detail in its own build_history record."
       ]
     },
     "next": {
-      "build": "gov_po_2_po_visibility_and_bounded_authorship",
-      "title": "GOV.PO.2 (1/2) -- capability-based PO boundary, DRAFT amendment",
-      "status": "planned",
+      "build": "",
+      "title": "",
+      "status": "",
       "notes": [
-        "Chosen 2026-09-08 by this PLAN episode (relay/NXS-LOCAL-0001-plan-po2-boundary.json): Product Owner direction to correct the PO assistant's permission architecture, judged too restrictive after a run of small gate-fix movements (relay#11-#16, the local relay protocol) surfaced repeated friction (blocked Agent spawns, blocked gh issue close, blocked bookkeeping writes, no PR-diff/CI read access, no drafting area).",
-        "ARCHITECTURE movement, one new file only: docs/design/GOV_PO_2_PO_VISIBILITY_AND_BOUNDED_AUTHORSHIP.md, status DRAFT -- NOT IMPLEMENTATION AUTHORITY. Assigned to an engineering session as a bootstrap consequence of the current PO gate being unable to write a new docs/design/* contract file -- explicitly not a precedent for routing future design authorship to engineers once this document's own po_drafts/ area exists and is frozen.",
-        "Drafted SESSION_START ready at relay/NXS-LOCAL-0002-gov-po-2-visibility.json. Must be reviewed and FROZEN by the human Product Owner before gov_po_2_implementation (below) may start; recommends (does not invoke) a nexus-decision-council round at that separate freeze DECIDE episode per GOV_PO_ROLE_MIGRATION.md section 7 trigger (b) -- a write-boundary expansion for the PO role itself.",
-        "M10.2 (capability-state resolver core) stays in `upcoming` below, still needing its own separate PLAN/REVIEW sizing episode; not superseded by this governance-track NEXT slot."
+        "Unset: the actual next step is the Product Owner's own freeze decision on docs/design/GOV_PO_2_PO_VISIBILITY_AND_BOUNDED_AUTHORSHIP.md (above), a human act, not an engineering-sizeable build.",
+        "gov_po_2_implementation (below, upcoming, blocked) is the queued candidate once that freeze lands; sizing/authorizing any other next build is a separate Product Owner PLAN/REVIEW function."
       ]
     },
     "upcoming": [
