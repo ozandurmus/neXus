@@ -79,6 +79,21 @@ directory by hand. `git merge origin/<ref>` is now allowed, restricted to
 the `origin/` remote-tracking namespace so no arbitrary remote or URL is
 reachable (`git remote add` stays unavailable).
 
+Orchestrator dispatch (GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md, FROZEN,
+section 7): `python3 scripts/orchestrator.py status` (read-only, both forms,
+mirroring `local_relay.py status`/`validate`) and, interactive form only,
+`... start`/`... stop` (spawning/cancelling a detached engineer process is a
+write-ish action, matching the `local_relay.py create`/`append` precedent).
+Prefix matching for every `COMMON_PREFIXES`/`INTERACTIVE_EXTRA_PREFIXES`
+entry is now boundary-safe (the matched prefix must be followed by a space
+or the end of the command string, never merely `cmd.startswith(p)`
+unbounded) -- the fix GOV_PO_2_PO_VISIBILITY_AND_BOUNDED_AUTHORSHIP.md
+section 3.1 already required for its own three new prefixes, applied here
+across the whole allowlist because these three new prefixes need it and a
+second, differently-scoped fix would leave the exact defect open for
+whichever prefixes it didn't cover (e.g. a bare `"ls"` prefix previously
+also matched `"lsof ..."` under plain `startswith`).
+
 Command-safety design (GOV_PO_1_GATE_1 correction, 2026-09-08): the original
 implementation banned the literal substrings "<", ">", ";", "|" etc.
 anywhere in the command text. That blocked entirely legitimate quoted data
@@ -169,6 +184,8 @@ COMMON_PREFIXES = (
     "py scripts/local_relay.py validate", ".venv/bin/python scripts/local_relay.py validate",
     "python3 scripts/local_relay.py watch", "python scripts/local_relay.py watch",
     "py scripts/local_relay.py watch", ".venv/bin/python scripts/local_relay.py watch",
+    "python3 scripts/orchestrator.py status", "python scripts/orchestrator.py status",
+    "py scripts/orchestrator.py status", ".venv/bin/python scripts/orchestrator.py status",
 )
 INTERACTIVE_EXTRA_PREFIXES = (
     "gh issue create", "gh issue close", "gh pr create",
@@ -182,6 +199,10 @@ INTERACTIVE_EXTRA_PREFIXES = (
     "py scripts/local_relay.py create", ".venv/bin/python scripts/local_relay.py create",
     "python3 scripts/local_relay.py append", "python scripts/local_relay.py append",
     "py scripts/local_relay.py append", ".venv/bin/python scripts/local_relay.py append",
+    "python3 scripts/orchestrator.py start", "python scripts/orchestrator.py start",
+    "py scripts/orchestrator.py start", ".venv/bin/python scripts/orchestrator.py start",
+    "python3 scripts/orchestrator.py stop", "python scripts/orchestrator.py stop",
+    "py scripts/orchestrator.py stop", ".venv/bin/python scripts/orchestrator.py stop",
 )
 
 # Always denied regardless of quoting: both keep executing even inside a
@@ -287,6 +308,22 @@ def _path_is_po_scratch(path: str, cwd: str | None) -> bool:
     if not any(p == root or p.startswith(root + os.sep) for root in _scratch_roots()):
         return False
     return bool(SCRATCH_NAME_RE.match(os.path.basename(p)))
+
+
+def _prefix_matches(cmd: str, prefix: str) -> bool:
+    """Boundary-safe prefix match (GOV_PO_2 section 3.1's fix, applied
+    across the whole allowlist -- see module docstring): `cmd` must equal
+    `prefix` exactly, or `prefix` must be followed by a space in `cmd`.
+    A prefix already ending in a natural token boundary -- a space (e.g.
+    "cat ") or a path separator (e.g. "git merge origin/", deliberately
+    meant to glue directly onto a following ref name with no space) --
+    needs no further check; adding one would wrongly demand a second
+    delimiter right where the prefix already intends none."""
+    if not cmd.startswith(prefix):
+        return False
+    if prefix.endswith(" ") or prefix.endswith("/"):
+        return True
+    return len(cmd) == len(prefix) or cmd[len(prefix)] == " "
 
 
 def _tokenize(cmd: str) -> list[str] | None:
@@ -395,7 +432,7 @@ def decide(payload: dict, form: str, branch_lookup=_current_branch) -> tuple[boo
             if tok == "main.py" or tok.endswith("/main.py"):
                 return False, "main.py must not be invoked from the PO role"
         prefixes = COMMON_PREFIXES + (INTERACTIVE_EXTRA_PREFIXES if form == "interactive" else ())
-        if not any(cmd.startswith(p) for p in prefixes):
+        if not any(_prefix_matches(cmd, p) for p in prefixes):
             return False, "command prefix not in the PO allowlist"
         if "--body-file" in tokens:
             idx = tokens.index("--body-file")

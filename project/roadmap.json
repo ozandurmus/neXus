@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "current_build": "gov_po_1_gate_5_worktree_management",
+  "current_build": "gov_po_3_approved_movement_orchestration_ac3",
   "current_track": "PCP.x",
   "progress_contract": "Weighted acceptance-criterion completion. Percentages describe the declared roadmap, not calendar time or delivery ETA.",
   "tracks": [
@@ -140,16 +140,17 @@
   "now_next": {
     "horizon_contract": "NOW is exactly one build. NEXT is exactly one. Everything else is an `upcoming` row carrying its own true status: planned = AFTER, blocked = waiting on a named external gate, deferred = consciously postponed. `now.build` must equal the newest project/build_history.json record -- utils.project_plan enforces it.",
     "now": {
-      "build": "gov_po_1_gate_5_worktree_management",
-      "title": "GOV_PO_1_GATE_5 -- allow git worktree add/list from interactive PO sessions",
-      "goal": "Allow the interactive PO role to create a git worktree (new physical checkout + feature/* branch, based only on origin/<ref>) for handing off an isolated engineering movement, and to list existing worktrees, while never allowing worktree removal and never allowing an arbitrary remote/path/URL as the base.",
+      "build": "gov_po_3_approved_movement_orchestration_ac3",
+      "title": "GOV.PO.3 (1/2) -- approved-movement orchestration: architecture amendment + implementation",
+      "goal": "Specify and build a deterministic local runner (scripts/orchestrator.py) that dispatches a Product-Owner-approved movement to a separate claude -p engineer process in its own git worktree, tracked through development and serialized integration under the standing relay#13 merge authorization, so the human is no longer needed to carry messages or open a terminal for routine engineering movements; also reconciles two named silent contradictions in the FROZEN GOV_PO_2_PO_VISIBILITY_AND_BOUNDED_AUTHORSHIP.md.",
       "status": "automated_validated",
       "started": "2026-09-08",
       "completed": "2026-09-08",
       "notes": [
-        "Full detail: project/build_history.json's gov_po_1_gate_5_worktree_management record.",
-        "Relay: relay/NXS-LOCAL-0006-gate-5-worktree-management.json (Product Owner direction, 2026-09-08, after two same-checkout collision risks were caught and avoided this session).",
-        "Inserted ahead of gov_po_2_implementation (below) in build order -- a small, independent GOV.PO.1 tooling movement, not a change to GOV.PO.2's own scope or sequencing."
+        "Full detail: project/build_history.json's gov_po_3_approved_movement_orchestration_ac3 record.",
+        "Relay: relay/NXS-LOCAL-0007-gov-po-3-orchestration.json (Product Owner architecture direction, 2026-09-08, after a 3-seat nexus-decision-council round in the originating PO episode).",
+        "AC-3 (implementation) is done and merged. AC-5 (the four real demonstrations) and AC-8-for-the-demo have not run yet as of this record -- tracked as a named follow-up, not silently treated as complete.",
+        "gov_po_2_implementation (below) is unrelated, separate scope -- this movement does not touch it."
       ]
     },
     "next": {

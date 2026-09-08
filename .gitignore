@@ -8,6 +8,11 @@
 /.cas/
 /support_bundles/
 
+# scripts/local_relay.py's shared append lock (GOV_PO_3_APPROVED_MOVEMENT_
+# ORCHESTRATION.md section 3.6): an ephemeral sidecar advisory-lock file,
+# never durable governance content -- the relay/*.json file it locks is.
+relay/*.json.lock
+
 # RB.1 recovery-plane store (docs/design/BACKUP_RECOVERY_CONTRACTS.md §2) --
 # lives on SECURITYEXPERT_RECOVERY_ROOT, physically separate from the repo,
 # but ignore it here too in case a local/dev recovery root is ever pointed

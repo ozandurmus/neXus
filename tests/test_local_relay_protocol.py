@@ -687,6 +687,105 @@ def test_watch_rejects_an_invalid_relay_file(tmp_path):
 
 # --- full lifecycle round trip ---------------------------------------------------------
 
+# --- canonical-location resolver (GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md,
+# FROZEN, section 3.6) ------------------------------------------------------
+
+def test_create_dir_defaults_to_the_canonical_env_var_when_omitted(tmp_path, monkeypatch):
+    canonical = tmp_path / "canonical-relay"
+    monkeypatch.setenv(lr.ENV_CANONICAL_RELAY_DIR, str(canonical))
+    start = tmp_path / "start.json"
+    start.write_text(json.dumps(_start_bare()), encoding="utf-8")
+    rc = lr.main(["create", "--role", "po", "--start", str(start)])
+    assert rc == lr.EXIT_OK
+    assert len(list(canonical.glob("*.json"))) == 1
+
+
+def test_create_explicit_dir_always_wins_over_the_env_var(tmp_path, monkeypatch):
+    canonical = tmp_path / "canonical-relay"
+    explicit = tmp_path / "explicit-relay"
+    monkeypatch.setenv(lr.ENV_CANONICAL_RELAY_DIR, str(canonical))
+    start = tmp_path / "start.json"
+    start.write_text(json.dumps(_start_bare()), encoding="utf-8")
+    rc = lr.main(["create", "--role", "po", "--start", str(start), "--dir", str(explicit)])
+    assert rc == lr.EXIT_OK
+    assert len(list(explicit.glob("*.json"))) == 1
+    assert not canonical.exists()
+
+
+def test_append_status_validate_watch_default_to_the_relay_file_env_var(tmp_path, monkeypatch):
+    path = _create(tmp_path)
+    monkeypatch.setenv(lr.ENV_RELAY_FILE, str(path))
+    assert lr.main(["append", "--role", "engineer", "--marker", "RELAY_ACK",
+                     "--subject", "x", "--text", "y", "--next", "po"]) == lr.EXIT_OK
+    assert lr.main(["status"]) == lr.EXIT_OK
+    assert lr.main(["validate"]) == lr.EXIT_OK
+
+
+def test_append_explicit_file_wins_over_the_env_var(tmp_path, monkeypatch):
+    real = _create(tmp_path)
+    monkeypatch.setenv(lr.ENV_RELAY_FILE, str(tmp_path / "does-not-exist.json"))
+    rc = lr.main(["append", "--file", str(real), "--role", "engineer", "--marker", "RELAY_ACK",
+                  "--subject", "x", "--text", "y", "--next", "po"])
+    assert rc == lr.EXIT_OK
+
+
+def test_append_reports_usage_error_when_neither_flag_nor_env_var_is_set(tmp_path, monkeypatch, capsys):
+    monkeypatch.delenv(lr.ENV_RELAY_FILE, raising=False)
+    rc = lr.main(["append", "--role", "engineer", "--marker", "RELAY_ACK",
+                  "--subject", "x", "--text", "y", "--next", "po"])
+    assert rc == lr.EXIT_USAGE
+    assert "NEXUS_RELAY_FILE" in capsys.readouterr().err
+
+
+def test_status_reports_usage_error_when_neither_flag_nor_env_var_is_set(monkeypatch):
+    monkeypatch.delenv(lr.ENV_RELAY_FILE, raising=False)
+    assert lr.main(["status"]) == lr.EXIT_USAGE
+
+
+# --- shared append lock (section 3.6) ---------------------------------------
+
+def test_append_cli_fails_closed_when_another_process_holds_the_lock(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(lr, "APPEND_LOCK_TIMEOUT", 0.2)
+    path = _create(tmp_path)
+    holder = lr._FileLock(path, timeout=1.0)
+    holder.__enter__()
+    try:
+        capsys.readouterr()
+        rc = lr.main(["append", "--file", str(path), "--role", "engineer", "--marker", "RELAY_ACK",
+                      "--subject", "x", "--text", "y", "--next", "po"])
+        assert rc == lr.EXIT_INVALID
+        assert "lock" in capsys.readouterr().err.lower()
+        assert len(_read(path)["entries"]) == 1  # nothing was appended
+    finally:
+        holder.__exit__(None, None, None)
+
+
+def test_real_lock_blocks_a_second_acquirer_until_released(tmp_path):
+    target = tmp_path / "x.json"
+    lock_a = lr._FileLock(target, timeout=0.3)
+    lock_a.__enter__()
+    try:
+        lock_b = lr._FileLock(target, timeout=0.3)
+        with pytest.raises(lr.FileLockTimeout):
+            lock_b.__enter__()
+    finally:
+        lock_a.__exit__(None, None, None)
+
+    lock_c = lr._FileLock(target, timeout=1.0)
+    lock_c.__enter__()
+    lock_c.__exit__(None, None, None)  # does not raise -- released cleanly
+
+
+def test_append_still_works_normally_with_the_lock_in_place(tmp_path):
+    # The lock wraps the whole critical section but must not change any
+    # existing observable behavior for the ordinary, uncontended case.
+    path = _create(tmp_path)
+    rc = lr.main(["append", "--file", str(path), "--role", "engineer", "--marker", "RELAY_ACK",
+                  "--subject", "x", "--text", "y", "--next", "po"])
+    assert rc == lr.EXIT_OK
+    assert len(_read(path)["entries"]) == 2
+
+
 def test_full_lifecycle_round_trip(tmp_path):
     path = _create(tmp_path)  # po opens, next_actor=engineer, status=OPEN
 
