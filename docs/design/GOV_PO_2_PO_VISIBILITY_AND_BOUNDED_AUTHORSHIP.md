@@ -62,7 +62,14 @@ over an authorization the human already had to give explicitly today. The
 human Product Owner's own decision authority is unchanged and is restated
 below as a closed list, not because it was ambiguous, but because a
 capability-based document should say what it does *not* touch as plainly
-as what it does.
+as what it does. §3.4 (the privacy-check script) and §3.5 (the
+evidence-reviewer agent) are **enabling mechanisms subordinate to seams 1
+and 2 respectively** — the privacy-check script exists so a PO episode can
+verify its own §3.2 output before handing it to the human, and the
+evidence-reviewer agent exists so a PO episode can actually use the §3.1
+observation capability at scale; neither is independently-justified new
+scope beyond the three seams named above, so this document's own
+proportionality claim is accurate rather than merely asserted.
 
 ## 2. Four authorities
 
@@ -160,6 +167,44 @@ write or long-blocking effect stays out. This is a straight prefix
 addition; no new content-inspection logic is needed since these commands
 take no PO-authored text as input.
 
+**Required `GOV_PO_2_IMPLEMENTATION` acceptance criterion — boundary-safe
+prefix matching.** Every existing prefix in `COMMON_PREFIXES`/
+`INTERACTIVE_EXTRA_PREFIXES` is matched with a bare `cmd.startswith(p)`
+today; a prefix like `"gh run view"` also matches an unbounded future
+collision (a hypothetical `gh run viewer` subcommand, or any command whose
+name happens to extend the allowed prefix as a substring). `GOV_PO_2_
+IMPLEMENTATION` must match these three new prefixes (and is free to fix
+the existing ones in the same pass, though that is not required by this
+document) so the matched prefix is followed by either a space or the end
+of the command string — never merely `cmd.startswith(p)` unbounded. This
+is a required acceptance criterion for that future movement; it is **not**
+implemented by this amendment.
+
+**Required prerequisite — CI-workflow secret-exposure audit (performed
+now, read-only).** Before `gh run view`/`gh run list` ship, this document
+requires a one-time audit confirming no CI step echoes a secret or a
+CLASS-2+ identity value to stdout in a way GitHub Actions' own
+secret-masking would not already catch — because these two new commands
+let a PO episode read that stdout for the first time. **Audit performed
+2026-09-08 against `.github/workflows/validation.yml` (the repository's
+only workflow file): result PASS.** The file references no
+`${{ secrets.* }}` context anywhere — neither job accepts, forwards, or
+could echo a repository secret, so there is nothing for GitHub's masking
+to even need to catch. `permissions: contents: read` is the only
+permission granted (no write scope, not even for the default `GITHUB_TOKEN`).
+The one step most likely to touch sensitive repository content —
+`python main.py --repository-privacy-check` — is verified (§3.4;
+`application/workflows/maintenance.py::repository_privacy_check()`) to
+print only file path, line number, and rule classification, never a
+matched value, matching this repository's own "Sensitive identity
+reporting law." No other step (`compileall`, the convergence test, the
+history-index check, the smoke test set, or `git diff --check`) prints
+raw device, credential, or identity content by design. This audit does not
+need to be repeated for every future workflow change unless a new
+workflow file is added or an existing one gains a `secrets` reference —
+`GOV_PO_2_IMPLEMENTATION` should re-check at that point, not treat this
+result as permanent.
+
 ### 3.2 `docs/design/po_drafts/*.md` and its status-line detection rule
 
 **Path pattern.** `docs/design/po_drafts/*.md` — flat directory (no
@@ -197,17 +242,36 @@ on "first word of a bolded line" matches the convention precisely and
 verifiably (three real examples above) without banning ordinary references
 to frozen contracts elsewhere in the same file.
 
-**Honest limitation.** This is a heuristic over free-text Markdown, not a
-cryptographic guarantee — a sufficiently determined edit could phrase a
-status claim to evade the regex (e.g. splitting the bold span, or omitting
-the leading `**`). The PO assistant is not modeled as an adversarial actor
-in this trust boundary (`GOV_PO_ROLE_MIGRATION.md` §2's whole premise), so
-this is not a security control against a hostile PO session; it is a
-fail-fast correctness check that catches the honest mistake ("the PO
-episode wrote FROZEN because it echoed the target document's eventual
-intended status"). The real control, as for any `po_drafts/*.md` output,
-remains the human's own review of the file's content before ever treating
-it as authoritative — this document does not claim otherwise.
+**`MultiEdit` is not permitted against `docs/design/po_drafts/*.md`.**
+Only `Edit` and `Write` are named above. `MultiEdit`'s `tool_input` carries
+a *list* of `{old_string, new_string}` objects, not one `new_string`, and
+the status-line regex has no defined behavior across multiple edit
+objects (applying it to each independently could miss a status claim
+assembled across two edits; applying it to their concatenation is
+undefined ordering). Rather than define that behavior, `MultiEdit` against
+this pattern falls through to the existing default-deny — exactly as it
+already does for every other path today, since `EDIT_TOOLS` includes
+`MultiEdit` but only `Edit`/`Write`'s `tool_input` shapes are checked
+against any allow-pattern. `GOV_PO_2_IMPLEMENTATION` must not special-case
+`MultiEdit` for `po_drafts/*.md` without first defining and testing that
+behavior explicitly — this document does not authorize it.
+
+**Honest limitation, and the Product Owner's acceptance of it.** This is a
+heuristic over free-text Markdown, not a cryptographic guarantee — a
+sufficiently determined edit could phrase a status claim to evade the
+regex (e.g. splitting the bold span, or omitting the leading `**`). The PO
+assistant is not modeled as an adversarial actor in this trust boundary
+(`GOV_PO_ROLE_MIGRATION.md` §2's whole premise), so this is not a security
+control against a hostile PO session; it is a fail-fast correctness check
+that catches the honest mistake ("the PO episode wrote FROZEN because it
+echoed the target document's eventual intended status"). The real control,
+as for any `po_drafts/*.md` output, remains the human's own review of the
+file's content before ever treating it as authoritative — this document
+does not claim otherwise. **The Product Owner reviewed this residual
+bypass risk during this document's freeze-amendment round and accepted it
+as a trade-off** given the non-adversarial trust model above; this is a
+written acceptance of the risk, not a commitment to a stronger regex or a
+different mechanism.
 
 ### 3.3 `docs/history/INDEX.md` leaves `GOVERNANCE_PATHS`
 
@@ -271,6 +335,18 @@ line. Add `"python3 scripts/repository_privacy_check.py"` (and its
 `python`/`py`/`.venv/bin/python` siblings) to `COMMON_PREFIXES` — read-only,
 no arguments, safe in both forms, mirroring
 `gov_session_transfer.py validate`'s own treatment.
+
+**Required `GOV_PO_2_IMPLEMENTATION` acceptance criterion — equivalence
+regression test.** The claim that the two entry points produce identical
+output is a claim this document makes, not (yet) a claim a test enforces.
+`GOV_PO_2_IMPLEMENTATION` must add a regression test that runs both
+`main.py --repository-privacy-check` and
+`scripts/repository_privacy_check.py` and asserts matching `stdout`
+(modulo the stated banner-line exception) and matching exit code, for at
+least one `PASS`-gate case and one non-`PASS`-gate case (a fixture-induced
+finding). Without this test, the "byte-for-byte other than the banner
+line" claim above is unverified prose; this criterion is required before
+`gov_po_2_implementation` can be marked done, not merely recommended.
 
 ### 3.5 The `nexus-po-evidence-reviewer` agent
 
@@ -341,6 +417,20 @@ for one of these is an invalid authority claim regardless of the class
 name used, exactly as an unlabeled decision comment is today
 (`NEXUS_AGENT_RELAY_PROTOCOL.md` §1).
 
+**Re-confirmation requirement.** A standing delegation is not a permanent
+grant issued once and forgotten. Each class named above must be
+re-affirmed by the Product Owner at the next relevant `PLAN`/`REVIEW`/
+`DECIDE` episode that actually uses it for the first time in a genuinely
+new context, **or after any six-month gap since its last use, whichever
+comes first**. A single use of a class outside its plain-language
+description above does not itself invalidate the class, but that one
+instance reverts to the unnamed `GOV_PO_ROLE_MIGRATION.md` §6.3/D2
+restatement path (no standing delegation applies to it) until the
+Product Owner re-affirms either the class's scope or that specific use.
+This keeps a standing delegation from silently drifting into a broader
+grant than the Product Owner originally gave through repeated citation
+alone.
+
 ## 5. Project-state bookkeeping stays inside the engineering movement
 
 **Policy, not a new gate mechanism** — restating and generalizing the
@@ -360,6 +450,18 @@ blocking condition (an actually-shared, actually-racing checkout, as
 as `gate_3`'s did — but the default expectation this document states is
 that engineers land their own bookkeeping in the same commit, and treat a
 deferral as the exception requiring justification, not the routine path.
+
+**Accepted as policy-only, not gate-enforced, for now.** This rule has no
+tool-level enforcement — nothing rejects a commit that touches code without
+also touching `project/build_history.json`. The `gate_3` precedent is
+direct evidence that policy alone already failed twice (both its own
+`SESSION_CLOSE` and `gate_4`'s deferred it again) before a third, dedicated
+movement closed the gap. This document names that failure mode explicitly
+and accepts the residual risk of a repeat, rather than leaving it implicit
+— a structural check (e.g. a `test_architecture_convergence.py` rule
+comparing a PR's changed-file set against whether `build_history.json`
+changed in the same commit) remains a legitimate future improvement, not
+undertaken by this document or required of `GOV_PO_2_IMPLEMENTATION`.
 
 ## 6. Recommended freeze path: independent review before freeze
 
