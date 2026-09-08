@@ -3,6 +3,22 @@
   "record_contract": "One structured record per build, newest first. Required: build, status, title, summary (<= 2 sentences). Optional: started, completed, track, movement, supersedes, evidence, risks_forward, docs{agreement,validation,handover} (repo-relative paths under docs/history/). Full detail lives in the linked doc; do not restate it here. Status vocabulary must stay within utils/project_plan.py STATUS_VALUES.",
   "builds": [
     {
+      "build": "gov_po_1_step_6_plan_po2_boundary",
+      "status": "complete_with_followup",
+      "title": "GOV.PO.1 step 6 -- PLAN episode: two-movement GOV.PO.2 PO-boundary correction",
+      "summary": "Product Owner direction: plan a bounded correction to the PO assistant's own permission architecture after a run of small gate-fix movements (relay#11-#16, the local relay protocol) surfaced repeated friction. Produces two validated SESSION_START drafts -- gov_po_2_po_visibility_and_bounded_authorship (ARCHITECTURE, one new DRAFT document, next) and gov_po_2_implementation (IMPLEMENTATION, blocked until the first is FROZEN) -- and opens the first as its own local relay artifact ready for an engineering session.",
+      "started": "2026-09-08",
+      "completed": "2026-09-08",
+      "track": "GOV",
+      "movement": "DOCS",
+      "supersedes": null,
+      "evidence": "Verified the current state of docs/design/GOV_PO_ROLE_MIGRATION.md (sections 1-10), scripts/nexus_po_tool_gate.py (full decide() and docstring), .claude/nexus-po.settings.json, .claude/agents/nexus-po.md and nexus-council-seat.md, docs/design/LOCAL_RELAY_PROTOCOL.md, and tests/test_gov_po_role.py before drafting either movement, so every capability named in the two SESSION_STARTs maps to a real, exact current mechanism (or its precise absence). Key finding: several requested capabilities are already true today (unrestricted file read via READ_TOOLS bypassing every path check; all five relay markers already handled consistently by both the GitHub gate and scripts/local_relay.py; RELAY_DECISION already requires authorized_by/scope/supersedes in both transports) -- the plan scopes gov_po_2_implementation to the genuine gaps only: gh pr diff/gh run read-only commands, the repository-privacy-check mechanism (main.py is otherwise fully denied), docs/design/po_drafts/*.md with a FROZEN/RATIFIED status-line rejection, docs/history/INDEX.md made generator-only (currently directly Edit/Write-reachable via GOVERNANCE_PATHS, which is not actually 'generator-only' today), and one new nexus-po-evidence-reviewer agent modeled on nexus-council-seat.md. Both packets validated (scripts/gov_session_transfer.py validate: true each). Movement 1 opened at relay/NXS-LOCAL-0002-gov-po-2-visibility.json (next_actor: engineer); this PLAN episode itself recorded at relay/NXS-LOCAL-0001-plan-po2-boundary.json. project/roadmap.json now_next.next set to gov_po_2_po_visibility_and_bounded_authorship; gov_po_2_implementation added to upcoming, status blocked.",
+      "risks_forward": "gov_po_2_implementation's SESSION_START is fully drafted but deliberately not yet opened as its own relay artifact, since it cannot start -- it is held pending movement 1's freeze and will be re-verified against origin/main at actual start time. Movement 1's own document must close, not defer, three real open design questions (the privacy-check mechanism choice, the exact FROZEN/RATIFIED status-line detection rule, the evidence-reviewer agent's exact tool list) -- if it leaves any ambiguous, gov_po_2_implementation must stop and post a RELAY_QUESTION rather than guess. This PLAN recommends (does not invoke) a nexus-decision-council round at the later, separate freeze DECIDE episode for movement 1, per GOV_PO_ROLE_MIGRATION.md section 7 trigger (b) -- a write-boundary expansion for the PO role itself; council was not exercised in this PLAN episode because no genuine trigger applies to planning/drafting alone.",
+      "docs": {
+        "agreement": "relay/NXS-LOCAL-0002-gov-po-2-visibility.json"
+      }
+    },
+    {
       "build": "gov_po_1_local_relay_protocol",
       "status": "complete_with_followup",
       "title": "GOV.PO.1 -- local, file-based relay protocol for same-machine PO<->engineer coordination",

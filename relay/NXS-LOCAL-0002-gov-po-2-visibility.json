@@ -1,0 +1,101 @@
+{
+  "created_at": "2026-09-08T06:22:16Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1: docs/design/GOV_PO_2_PO_VISIBILITY_AND_BOUNDED_AUTHORSHIP.md is a single new file, status line 'DRAFT -- NOT IMPLEMENTATION AUTHORITY, awaiting Product Owner freeze', explicitly subordinate to and non-amending of the FROZEN GOV_PO_ROLE_MIGRATION.md unless and until the human freezes it -- this movement changes no existing frozen document's text.",
+          "AC-2: the document specifies a capability-based PO boundary organized around four separated authorities named explicitly: OBSERVATION (read-only inspection -- already largely true today via READ_TOOLS' unrestricted file access, plus the new gh pr diff/gh run read-only commands and the evidence-reviewer agent this document scopes), GOVERNANCE AUTHORSHIP (writes confined to GOVERNANCE_PATHS, relay/*.json, and the new docs/design/po_drafts/*.md area, still never product source/tests/scripts), ENGINEERING EXECUTION (unchanged -- code, tests, state-file bookkeeping, merges, all remain the engineer's role), and HUMAN DECISION AUTHORITY (freeze, ratification, scope expansion, security/identity/credential/storage boundaries, real-device contact, waiver, deployment, and merge -- explicit human gates, listed as a closed set, not a PO capability under any standing delegation).",
+          "AC-3: the document specifies, precisely enough for GOV_PO_2_IMPLEMENTATION to build deterministically: (a) the exact new Bash prefixes to allowlist (gh pr diff, gh run view, gh run list -- read-only only, no gh run cancel/rerun/watch-with-side-effects) in both PO forms; (b) the docs/design/po_drafts/*.md pattern and the exact, deterministic status-line detection rule the gate must enforce to reject a PO-authored write containing a FROZEN or RATIFIED status marker (a concrete regex or field-based rule, not a vague 'detect intent' instruction); (c) that docs/history/INDEX.md is removed from the Edit/Write-reachable GOVERNANCE_PATHS list -- it becomes reachable only through scripts/build_history_index.py, already allowlisted, so this is a narrowing, not a new capability; (d) the exact mechanism for the offline repository-privacy-check capability -- this document must choose definitively between (i) a narrow, exact-match exception in the existing main.py token-denial check for precisely `<interpreter> main.py --repository-privacy-check` with no other arguments, or (ii) a new standalone equivalent checker script reusing utils/repository_privacy.py's logic without importing main.py's CLI surface -- state the choice and why, so GOV_PO_2_IMPLEMENTATION has zero open design questions on this point; (e) the new .claude/agents/nexus-po-evidence-reviewer.md agent's exact tool list and disallowed-tools list, modeled on the existing .claude/agents/nexus-council-seat.md pattern (Read/Grep/Glob only, Agent/Bash/Edit/Write explicitly disallowed, permissionMode: plan, no memory), plus the exact gate-side Agent-branch addition (subagent_type == 'nexus-po-evidence-reviewer', interactive form only, alongside the existing nexus-council-seat exception -- never a general allow-any-subagent_type widening).",
+          "AC-4: the document defines bounded standing-delegation classes -- routine review, correction, sequencing, backlog prioritization, movement slicing, and next-prompt production -- as named categories the Product Owner can authorize once, in writing, by class (mirroring GOV_PO_ROLE_MIGRATION.md D2's existing 'authorization persists within its stated scope until revoked or superseded' pattern), not as a new tool-enforced mechanism; a RELAY_DECISION's authorized_by field may cite a standing-delegation class by name as its source. Explicitly excluded from any standing-delegation class, restated as a closed list: freeze, ratification, scope expansion, security/identity/credential/storage-schema boundaries, real-device contact, waiver, deployment, and merge (of any kind, governance or product).",
+          "AC-5: the document states, as explicit policy (not a new gate mechanism -- restates and generalizes the practice already followed for gov_po_1_gate_4_issue_close_path and the M10.1/gate-3 backfill precedent), that project-state bookkeeping for a code-touching engineering movement is the engineer's own responsibility inside that movement's own commit/PR, not a separate PO-opened Lane-1 follow-up movement -- citing the gov_po_1_gate_3_agent_tool_council_path deferred-bookkeeping incident as the motivating precedent this rule closes.",
+          "AC-6: the document explicitly recommends that its own eventual freeze decision (a separate future DECIDE episode, not this PLAN) invoke nexus-decision-council under GOV_PO_ROLE_MIGRATION.md section 7 trigger (b) -- a freeze candidate introducing a write-boundary expansion for the PO role itself -- rather than freezing on the human's read alone; this movement does not invoke the council itself.",
+          "AC-7: this movement performs no other repository change -- no test, no gate code, no agent file, no roadmap logic beyond the bookkeeping GOV_PO_1's own contract already requires of every movement. It is, by design, the one document."
+        ],
+        "baseline": {
+          "authority": "docs/design/GOV_PO_ROLE_MIGRATION.md (FROZEN, whole-document, 2026-09-07) -- this movement drafts an amendment candidate to it, subordinate until the human freezes it; nothing here amends the FROZEN text.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 -- Compliance trend retro-fill (AUTOMATED_VALIDATED)",
+          "sequencing": "Chosen as the first of a two-movement plan by this PLAN episode (2026-09-08), Product Owner direction: current PO tool-gate boundary judged too restrictive after a run of small gate-fix movements (relay#11-#16, local relay protocol) surfaced repeated friction points. This movement is the DRAFT half; GOV_PO_2_IMPLEMENTATION is the frozen-contract half, blocked until a human freeze decision on this movement's own output."
+        },
+        "context_not_loaded": [
+          "Every product/engineering subsystem outside the PO governance layer",
+          "Any change to docs/design/NEXUS_AGENT_RELAY_PROTOCOL.md, docs/design/GOV_SESSION_TRANSFER_PROTOCOL.md, or docs/design/LOCAL_RELAY_PROTOCOL.md -- all three are read as parent/sibling authority, none is amended here"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/gov-po-2-visibility-and-bounded-authorship"
+        },
+        "invariants": [
+          "This movement changes no FROZEN document's text -- it is a new, separate DRAFT document only",
+          "The human Product Owner remains sole decision authority for freeze, ratification, scope expansion, security/identity/credential/storage boundaries, real-device contact, waiver, deployment, and merge -- this document proposes no exception to that closed list",
+          "The bootstrap consequence stated explicitly: this document itself had to be assigned to an engineering session because the current PO gate cannot write a new docs/design/* contract file -- that is a one-time consequence of the CURRENT restriction being planned around, not a precedent for routing future design authorship to engineers once GOV_PO_2_IMPLEMENTATION's po_drafts/ area exists",
+          "No code, test, gate, or agent-definition file changes in this movement -- those belong to GOV_PO_2_IMPLEMENTATION only, after freeze"
+        ],
+        "merge_gate": "This is a DRAFT contract, not code -- 'merge_gate' in the code-movement sense does not apply the same way. The PR merging this document to main requires the standing relay#13 decision's normal green-gate treatment (git diff --check, privacy gate) for the PR itself, but the document's own promotion from DRAFT to FROZEN is a separate, later, explicit human freeze decision -- this movement's SESSION_CLOSE must not describe the document as approved or authoritative beyond DRAFT.",
+        "movement_type": "ARCHITECTURE",
+        "objective": "Produce one DRAFT design document, docs/design/GOV_PO_2_PO_VISIBILITY_AND_BOUNDED_AUTHORSHIP.md, specifying a capability-based PO boundary (observation / governance authorship / engineering execution / human decision authority) precisely enough that GOV_PO_2_IMPLEMENTATION can build it deterministically once the human freezes this document.",
+        "output_contract": [
+          "docs/design/GOV_PO_2_PO_VISIBILITY_AND_BOUNDED_AUTHORSHIP.md (new, DRAFT)",
+          "Project-state updates: build_history record, roadmap.json now_next reconciliation, CURRENT_STATE.md, AI_HANDOVER.md, regenerated history index -- land them in this movement's own commit",
+          "This relay issue/file: SESSION_START body (this packet) and a SESSION_CLOSE final comment/entry",
+          "No visible UI change, no product/device behavior change, no code or test change"
+        ],
+        "recommended_reasoning": {
+          "reason": "New architecture -- defining a permission/trust boundary for a governance role, with several open design choices this movement must close precisely (the privacy-check mechanism, the status-line detection rule, the standing-delegation-class scoping). CLAUDE.md's routing table reserves high reasoning for exactly this class of decision.",
+          "tier": "Sonnet 5, extended thinking (high)"
+        },
+        "requirements": [
+          "Read docs/design/GOV_PO_ROLE_MIGRATION.md in full, especially section 3 (D1-D16), section 4 (roles table), section 6 (forms), and section 7 (council triggers) before drafting -- the new document must not silently contradict or restate any of it incorrectly",
+          "Read scripts/nexus_po_tool_gate.py, .claude/nexus-po.settings.json, .claude/agents/nexus-po.md, and .claude/agents/nexus-council-seat.md in full so every capability named in this document maps to a real, exact mechanism the implementer can build against",
+          "Read docs/design/LOCAL_RELAY_PROTOCOL.md so the document's authorship-boundary language is consistent with the already-shipped local relay transport's own turn-ownership and marker discipline",
+          "State explicitly which existing capabilities are already true today (e.g. unrestricted file read via READ_TOOLS) versus which are genuinely new, so the human reviewing the freeze can see exactly what is changing"
+        ],
+        "risks": [
+          "The FROZEN/RATIFIED status-line detection rule is inherently a heuristic (a regex or field check over free-text Markdown) -- it can be evaded by a determined bad actor, but the PO assistant is not an adversarial actor in this trust model; the document must state this limitation honestly rather than claim a perfect guarantee, and note that the human's own review of any po_drafts/*.md file before treating it as authoritative remains the real control.",
+          "Choosing between a narrow main.py exception and a standalone privacy-check script is a real security-adjacent design call (does a narrow, well-tested exception in an already-hardened token-denial check introduce more risk than a new, smaller, purpose-built script reusing the same underlying utils.repository_privacy logic?) -- this document must give a reasoned recommendation, not defer the choice to the implementation movement.",
+          "This document proposes a real widening of what the PO role may do (new agent, new commands, new authoring area) -- even though every new capability stays read-only or DRAFT-only, it is the kind of change GOV_PO_ROLE_MIGRATION.md section 7 trigger (b) names for council review before freeze; AC-6 records that recommendation but does not act on it."
+        ],
+        "scope": {
+          "in": [
+            "docs/design/GOV_PO_2_PO_VISIBILITY_AND_BOUNDED_AUTHORSHIP.md (new)",
+            "This movement's own project-state bookkeeping"
+          ],
+          "out": [
+            "Any change to scripts/nexus_po_tool_gate.py, .claude/nexus-po.settings.json, any agent definition file, or tests/test_gov_po_role.py -- all belong to GOV_PO_2_IMPLEMENTATION, after freeze",
+            "Any change to a FROZEN document's own text",
+            "Freezing or ratifying this document -- that is the human's separate, later act",
+            "Invoking nexus-decision-council -- AC-6 only records the recommendation for the future freeze episode"
+          ]
+        },
+        "validation_plan": [
+          "git diff --check",
+          "Repository privacy gate via --repository-privacy-check, run for real and reported with actual command output, after clearing gitignored runtime directories",
+          "tests/test_architecture_convergence.py metadata_warnings empty after the roadmap.json/build_history.json update",
+          "No render harness, no code tests needed -- this movement adds one Markdown document plus routine project-state bookkeeping"
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-08T06:22:16Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0002",
+  "movement": "GOV_PO_2_PO_VISIBILITY_AND_BOUNDED_AUTHORSHIP",
+  "next_actor": "engineer",
+  "refs": [
+    "docs/design/GOV_PO_ROLE_MIGRATION.md",
+    "scripts/nexus_po_tool_gate.py",
+    ".claude/nexus-po.settings.json",
+    ".claude/agents/nexus-po.md",
+    ".claude/agents/nexus-council-seat.md",
+    "docs/design/LOCAL_RELAY_PROTOCOL.md",
+    "docs/design/NEXUS_AGENT_RELAY_PROTOCOL.md",
+    "tests/test_gov_po_role.py"
+  ],
+  "schema_version": 1,
+  "status": "OPEN",
+  "updated_at": "2026-09-08T06:22:16Z"
+}

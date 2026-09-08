@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "current_build": "gov_po_1_local_relay_protocol",
+  "current_build": "gov_po_1_step_6_plan_po2_boundary",
   "current_track": "PCP.x",
   "progress_contract": "Weighted acceptance-criterion completion. Percentages describe the declared roadmap, not calendar time or delivery ETA.",
   "tracks": [
@@ -140,29 +140,40 @@
   "now_next": {
     "horizon_contract": "NOW is exactly one build. NEXT is exactly one. Everything else is an `upcoming` row carrying its own true status: planned = AFTER, blocked = waiting on a named external gate, deferred = consciously postponed. `now.build` must equal the newest project/build_history.json record -- utils.project_plan enforces it.",
     "now": {
-      "build": "gov_po_1_local_relay_protocol",
-      "title": "GOV.PO.1 -- local, file-based relay protocol for same-machine PO<->engineer coordination",
-      "goal": "Design and implement relay/*.json plus scripts/local_relay.py as an additional, git-tracked, turn-enforced local transport for same-machine PO/engineer coordination, reusing NEXUS_AGENT_RELAY_PROTOCOL.md's markers and GOV.SESSION.1's report schema verbatim, without amending or superseding the GitHub-based relay.",
+      "build": "gov_po_1_step_6_plan_po2_boundary",
+      "title": "GOV.PO.1 step 6 -- PLAN episode: two-movement GOV.PO.2 PO-boundary correction",
+      "goal": "Plan a bounded, two-movement correction to the PO assistant's own permission architecture: one ARCHITECTURE movement producing a DRAFT capability-based boundary document, blocked-until-frozen by the human, followed by one IMPLEMENTATION movement building exactly what that frozen document specifies.",
       "status": "complete_with_followup",
       "started": "2026-09-08",
       "completed": "2026-09-08",
       "notes": [
-        "Full detail: project/build_history.json's gov_po_1_local_relay_protocol record.",
-        "Filed from relay ozandurmus/nexus-agent-relay#15. Status is complete_with_followup, not automated_validated: docs/design/LOCAL_RELAY_PROTOCOL.md stays DRAFT (tests/test_architecture_convergence.py's own rule forbids a DRAFT contract backing a terminal build status), and promoting it beyond the small gate-fix-scale movements it was built for is an explicit future PO DECIDE question -- that ratification is the followup. A nexus-decision-council REVIEW round is recommended once relay#14's own council-path fix has proven itself in real use.",
-        "Predecessor gov_po_1_gate_4_issue_close_path -- full detail in its own build_history record."
+        "Full detail: project/build_history.json's gov_po_1_step_6_plan_po2_boundary record.",
+        "Filed at Product Owner direction after a run of small gate-fix movements (relay#11-#16, the local relay protocol) surfaced repeated PO-permission friction. Status is complete_with_followup, not done: the drafted movements below are the followup, and this PLAN itself still needs its own gov/po-* branch RELAY_DECISION before its PR merges (GOV_PO_ROLE_MIGRATION.md section 2).",
+        "Predecessor gov_po_1_local_relay_protocol -- MERGED PR #120 (relay#15, closed) -- full detail in its own build_history record."
       ]
     },
     "next": {
-      "build": "",
-      "title": "",
-      "status": "",
+      "build": "gov_po_2_po_visibility_and_bounded_authorship",
+      "title": "GOV.PO.2 (1/2) -- capability-based PO boundary, DRAFT amendment",
+      "status": "planned",
       "notes": [
-        "Unset as of m10_1_registry_evidence_reconciliation_projection's completion (2026-09-08): the previously-queued next candidate (m10_1, above) is now finished. Sizing/authorizing the next actionable build is a Product Owner PLAN/REVIEW function, not decided by this engineering build.",
-        "M10.2 (capability-state resolver core) is sketched in `upcoming` below but its own note already says it 'needs its own SESSION_START' and sizing 'is a PLAN decision for the episode that opens it, after M10.1's REVIEW' -- not promoted here without that decision.",
-        "m8_3_real_environment_validation stays in `upcoming` as retained deferred debt, unchanged and unpaid; m7_real_device_targeted_collect_now/op2_c_cp_clusterxl_adapter_scoping stay upcoming/blocked."
+        "Chosen 2026-09-08 by this PLAN episode (relay/NXS-LOCAL-0001-plan-po2-boundary.json): Product Owner direction to correct the PO assistant's permission architecture, judged too restrictive after a run of small gate-fix movements (relay#11-#16, the local relay protocol) surfaced repeated friction (blocked Agent spawns, blocked gh issue close, blocked bookkeeping writes, no PR-diff/CI read access, no drafting area).",
+        "ARCHITECTURE movement, one new file only: docs/design/GOV_PO_2_PO_VISIBILITY_AND_BOUNDED_AUTHORSHIP.md, status DRAFT -- NOT IMPLEMENTATION AUTHORITY. Assigned to an engineering session as a bootstrap consequence of the current PO gate being unable to write a new docs/design/* contract file -- explicitly not a precedent for routing future design authorship to engineers once this document's own po_drafts/ area exists and is frozen.",
+        "Drafted SESSION_START ready at relay/NXS-LOCAL-0002-gov-po-2-visibility.json. Must be reviewed and FROZEN by the human Product Owner before gov_po_2_implementation (below) may start; recommends (does not invoke) a nexus-decision-council round at that separate freeze DECIDE episode per GOV_PO_ROLE_MIGRATION.md section 7 trigger (b) -- a write-boundary expansion for the PO role itself.",
+        "M10.2 (capability-state resolver core) stays in `upcoming` below, still needing its own separate PLAN/REVIEW sizing episode; not superseded by this governance-track NEXT slot."
       ]
     },
     "upcoming": [
+      {
+        "build": "gov_po_2_implementation",
+        "title": "GOV.PO.2 (2/2) -- implement the frozen PO permission model",
+        "status": "blocked",
+        "notes": [
+          "BLOCKED on gov_po_2_po_visibility_and_bounded_authorship (above, `next`) reaching FROZEN status by explicit Product Owner decision. Do not start on the DRAFT alone.",
+          "Fully drafted SESSION_START held (validated, scripts/gov_session_transfer.py validate: true) -- not yet opened as its own relay artifact, since it cannot start. Scope once unblocked: gh pr diff/gh run read-only commands, the exact-mechanism repository-privacy-check capability the frozen document chooses, docs/design/po_drafts/*.md with FROZEN/RATIFIED status-line rejection, docs/history/INDEX.md removed from direct Edit/Write (generator-only), one new nexus-po-evidence-reviewer agent (Read/Grep/Glob only, modeled on nexus-council-seat.md), and full regression proving every existing GOV.PO.1 protection stays intact.",
+          "Sonnet 5, normal once unblocked -- deterministic implementation against a contract the frozen document must leave with zero open design questions."
+        ]
+      },
       {
         "build": "m8_3_real_environment_validation",
         "title": "M8.3 -- Product-Owner-gated real-environment validation of the first-contact producer",

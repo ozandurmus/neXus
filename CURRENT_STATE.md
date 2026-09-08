@@ -5,25 +5,24 @@ see `AGENTS.md`/`AI_START_HERE.md`. **Predecessor build detail lives in
 `project/build_history.json`** (structured, newest-first) and its linked
 docs under `docs/history/`; `docs/history/INDEX.md` is the one-line timeline.
 
-- **Checkpoint:** 2026-09-08, `gov_po_1_local_relay_protocol` — new
-  `relay/*.json` + `scripts/local_relay.py` (DRAFT,
-  `docs/design/LOCAL_RELAY_PROTOCOL.md`): a git-tracked, turn-enforced local
-  transport for same-machine PO/engineer coordination, reusing
-  `NEXUS_AGENT_RELAY_PROTOCOL.md`'s markers and `GOV.SESSION.1`'s report
-  schema verbatim. Does not amend or replace the GitHub-based relay.
-  `scripts/nexus_po_tool_gate.py` extended (`relay/*.json` Edit/Write;
-  `local_relay.py status`/`validate` both forms, `create`/`append`
-  interactive-only) without touching any existing `GOVERNANCE_PATHS` entry.
+- **Checkpoint:** 2026-09-08, `gov_po_1_step_6_plan_po2_boundary` — PLAN
+  episode: two-movement `GOV.PO.2` PO-boundary correction, filed after a run
+  of small gate-fix movements surfaced repeated PO-permission friction.
+  Drafted `gov_po_2_po_visibility_and_bounded_authorship` (ARCHITECTURE, one
+  new DRAFT document, opened at `relay/NXS-LOCAL-0002-gov-po-2-visibility.json`,
+  ready for an engineer) and `gov_po_2_implementation` (IMPLEMENTATION,
+  blocked until the first is FROZEN by the Product Owner). Predecessor
+  `gov_po_1_local_relay_protocol` **MERGED** PR #120 (relay#15, now closed).
   Predecessor `gov_po_1_gate_4_issue_close_path` **MERGED** PR #118.
-  Predecessor `m10_1_registry_evidence_reconciliation_projection` **MERGED**
-  PR #117 (`M10`'s first slice: `D4`/`RI-2` registry↔evidence projection).
-  Predecessor `M9` **MERGED** PR #104. `M8.4` **MERGED** PR #101.
   **PO §12:** `M8.3` deferred, `M7` blocked. `M8` **FROZEN 2026-09-06**.
-- **Next** (`now_next.next`): **unset** — sizing/authorizing the next
-  actionable build (e.g. `M10.2`, whose own `upcoming` row already says it
-  needs its own `PLAN`/`REVIEW` episode) is a Product Owner function, not
-  decided by an engineering build. `m8_3_real_environment_validation` stays
-  `upcoming`, **deferred debt**, unpaid; `m7_real_device_targeted_collect_now`/
+- **Next** (`now_next.next`): `gov_po_2_po_visibility_and_bounded_authorship`
+  — DRAFT amendment defining a capability-based PO boundary (observation /
+  governance authorship / engineering execution / human decision authority);
+  assigned to an engineer as a bootstrap consequence of the current PO gate
+  being unable to write a new `docs/design/*` contract file, not a
+  precedent. `gov_po_2_implementation` stays `upcoming`/`blocked` on that
+  freeze. `m8_3_real_environment_validation` stays `upcoming`, **deferred
+  debt**, unpaid; `m7_real_device_targeted_collect_now`/
   `op2_c_cp_clusterxl_adapter_scoping` stay `upcoming`/`blocked`.
   `DEV.TEST.1`/`PCP.1`/`M1`-`M6`/`M8.1`-`M8.4`/`M10.1` complete/automated_validated.
 - **OP.2.0 CLASS 2 architecture** (`docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md`):
@@ -60,33 +59,35 @@ test-enforced boundaries.
 | 4 — policy / deployment / remediation | prohibited | — |
 ## Active build
 
-**`gov_po_1_local_relay_protocol`** — see checkpoint above for what shipped.
-`next_actor` turn ownership is enforced by the tool itself, not convention
-(a wrong-role `append` is rejected); the appender states `--next` explicitly
-rather than every append auto-flipping, since a real exchange is not strict
-ping-pong — an engineer's `RELAY_ACK` on a `SESSION_START` does not hand the
-turn back. `append` re-reads and byte-compares the file immediately before
-writing, failing closed on a concurrent edit (optimistic, not a durable
-lock). Full detail: `project/build_history.json`.
+**`gov_po_1_step_6_plan_po2_boundary`** — see checkpoint above for what
+shipped. Verified the current gate/settings/agent/test state in full before
+drafting; found several requested capabilities already true today
+(unrestricted file read via `READ_TOOLS`; all five relay markers already
+handled consistently by both transports; `RELAY_DECISION` already requiring
+`authorized_by`/`scope`/`supersedes`), so `gov_po_2_implementation` scopes to
+the genuine gaps only: `gh pr diff`/`gh run` read commands, the
+privacy-check mechanism (`main.py` otherwise fully denied), a
+`docs/design/po_drafts/*.md` authoring area with `FROZEN`/`RATIFIED`
+status-line rejection, `docs/history/INDEX.md` made truly generator-only
+(currently direct-Edit/Write-reachable via `GOVERNANCE_PATHS`), and one new
+`nexus-po-evidence-reviewer` agent modeled on `nexus-council-seat.md`.
+Council not invoked (no genuine `GOV_PO_ROLE_MIGRATION.md` §7 trigger for
+planning alone); recommends one at movement 1's later freeze `DECIDE`
+episode (§7 trigger (b), a PO write-boundary expansion). Full detail:
+`project/build_history.json`.
+
+Predecessor — **`gov_po_1_local_relay_protocol`** — **MERGED** PR #120
+(relay#15, closed): `relay/*.json` + `scripts/local_relay.py`, a
+git-tracked, turn-enforced local transport for same-machine PO/engineer
+coordination; does not amend or replace the GitHub-based relay.
 
 Predecessor — **`gov_po_1_gate_4_issue_close_path`** — **MERGED** PR #118:
-`gh issue close` added to the interactive PO gate allowlist (marker
-discipline on any inline comment); delegated form still denies it.
-
+`gh issue close` added to the interactive PO gate allowlist.
 Predecessor — **`m10_1_registry_evidence_reconciliation_projection`**
-(`M10`'s first slice, `D4` producer) — **MERGED** PR #117: new
-`utils/registry_evidence_reconciliation.py` (`resolve_d4()`/`detect_ri2()`).
-No canonical id spans `device_id` and the merged evidence model's
-`entity_id` today (`RELAY_DECISION` #11, option 4: ship with no join input);
-only `REGISTRY_DISABLED`/`RECONCILIATION_UNKNOWN` are reachable in
-production until a future movement supplies an authorized canonical id.
-
-Predecessor — **`gov_po_1_step_5_first_plan_episode`** (`GOV.PO.1` §10 step
-5) — **MERGED** PR #113: first interactive Phase A `PLAN` episode; chose
-`M10.1` as `next`, sliced `M10` into `M10.1`/`M10.2`/`M10.3` (§7 precedent).
-Predecessor **`m9_enrollment_preview_confirmation_ui`** (`M9`) — **MERGED**
-PR #104: local-loopback manual-endpoint enrollment; candidate-id enrollment
-stays server-refused pending `M10`'s `D4`.
+(`M10`'s first slice, `D4` producer) — **MERGED** PR #117. No canonical id
+spans `device_id`/`entity_id` today (`RELAY_DECISION` #11, option 4).
+Predecessor — **`gov_po_1_step_5_first_plan_episode`** — **MERGED** PR #113.
+Predecessor **`m9_enrollment_preview_confirmation_ui`** — **MERGED** PR #104.
 
 Predecessors, all **MERGED**, detail in `project/build_history.json`:
 `gov_po_1_gate_1_command_safety_correction` (PR #114),
@@ -176,11 +177,8 @@ Concurrency budget stays at 1 per vendor pending real-env evidence.
 ## Automated test baseline
 
 ```
-Local relay protocol: targeted 67 passed; targeted + gov_po_role (90) +
-  gov_session_transfer + gov_relay_protocol + architecture-convergence
-  sweep 309 passed.
-M10.1: targeted 56 passed; targeted + PCP.1/CON.1/CON.2/M6/architecture-
-  convergence sweep 308 passed, metadata_warnings empty.
+gov_po_1_step_6_plan_po2_boundary: planning only, no code -- no new test run.
+Local relay protocol: targeted 67 passed; affected sweep 309 passed.
 Earlier predecessor build detail lives only in project/build_history.json.
 ```
 ## Known xfails
