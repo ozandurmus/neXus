@@ -599,6 +599,92 @@ def test_validate_rejects_a_filename_id_mismatch(tmp_path):
     assert rc == lr.EXIT_INVALID
 
 
+# --- watch (bounded, read-only poll for next_actor) -----------------------------------
+
+def test_watch_exits_immediately_when_already_matching(tmp_path, monkeypatch, capsys):
+    path = _create(tmp_path)  # next_actor is already "engineer"
+    monkeypatch.setattr(lr.time, "sleep", lambda seconds: (_ for _ in ()).throw(AssertionError("should not sleep")))
+    capsys.readouterr()
+    rc = lr.main(["watch", "--file", str(path), "--for", "engineer", "--timeout", "60"])
+    assert rc == lr.EXIT_OK
+    out = json.loads(capsys.readouterr().out)
+    assert out == {"next_actor": "engineer", "entries": []}
+
+
+def test_watch_exits_ok_when_next_actor_flips_mid_poll(tmp_path, monkeypatch, capsys):
+    path = _create(tmp_path)  # next_actor starts as "engineer"; watch waits for "po"
+    calls = {"n": 0}
+
+    def fake_sleep(seconds):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            rc = lr.main(["append", "--file", str(path), "--role", "engineer", "--marker", "RELAY_ACK",
+                          "--subject", "done", "--text", "handing back", "--next", "po"])
+            assert rc == lr.EXIT_OK
+            capsys.readouterr()  # discard append's own stdout summary line
+
+    monkeypatch.setattr(lr.time, "sleep", fake_sleep)
+    capsys.readouterr()
+    rc = lr.main(["watch", "--file", str(path), "--for", "po", "--interval", "5", "--timeout", "60"])
+    assert rc == lr.EXIT_OK
+    assert calls["n"] == 1
+    out = json.loads(capsys.readouterr().out)
+    assert out["next_actor"] == "po"
+    assert [e["marker"] for e in out["entries"]] == ["RELAY_ACK"]
+    assert [e["seq"] for e in out["entries"]] == [2]
+
+
+def test_watch_exits_timeout_with_no_flip(tmp_path, monkeypatch):
+    path = _create(tmp_path)  # next_actor stays "engineer" -- watch waits for "po"
+    clock = {"t": 0.0}
+    monkeypatch.setattr(lr.time, "monotonic", lambda: clock["t"])
+
+    def fake_sleep(seconds):
+        clock["t"] += seconds
+
+    monkeypatch.setattr(lr.time, "sleep", fake_sleep)
+    rc = lr.main(["watch", "--file", str(path), "--for", "po", "--interval", "5", "--timeout", "10"])
+    assert rc == lr.EXIT_TIMEOUT
+
+
+def test_watch_timeout_leaves_the_file_byte_for_byte_unchanged(tmp_path, monkeypatch):
+    path = _create(tmp_path)
+    before = path.read_bytes()
+    clock = {"t": 0.0}
+    monkeypatch.setattr(lr.time, "monotonic", lambda: clock["t"])
+    monkeypatch.setattr(lr.time, "sleep", lambda seconds: clock.__setitem__("t", clock["t"] + seconds))
+    rc = lr.main(["watch", "--file", str(path), "--for", "po", "--interval", "5", "--timeout", "10"])
+    assert rc == lr.EXIT_TIMEOUT
+    assert path.read_bytes() == before
+
+
+def test_watch_rejects_interval_below_the_floor(tmp_path, capsys):
+    path = _create(tmp_path)
+    rc = lr.main(["watch", "--file", str(path), "--for", "po", "--interval", "4"])
+    assert rc == lr.EXIT_USAGE
+    assert "--interval" in capsys.readouterr().err
+
+
+def test_watch_rejects_timeout_above_the_ceiling(tmp_path, capsys):
+    path = _create(tmp_path)
+    rc = lr.main(["watch", "--file", str(path), "--for", "po", "--timeout", "3601"])
+    assert rc == lr.EXIT_USAGE
+    assert "--timeout" in capsys.readouterr().err
+
+
+def test_watch_usage_error_for_missing_file():
+    assert lr.main(["watch", "--file", "does-not-exist.json", "--for", "po"]) == lr.EXIT_USAGE
+
+
+def test_watch_rejects_an_invalid_relay_file(tmp_path):
+    path = _create(tmp_path)
+    obj = _read(path)
+    del obj["movement"]
+    path.write_text(json.dumps(obj), encoding="utf-8")
+    rc = lr.main(["watch", "--file", str(path), "--for", "po"])
+    assert rc == lr.EXIT_INVALID
+
+
 # --- full lifecycle round trip ---------------------------------------------------------
 
 def test_full_lifecycle_round_trip(tmp_path):

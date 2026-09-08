@@ -431,6 +431,19 @@ def test_gate_local_relay_create_and_append_are_interactive_only(cmd):
     assert not gate.decide(_bash(cmd), "delegated")[0], cmd
 
 
+@pytest.mark.parametrize("cmd", [
+    "python3 scripts/local_relay.py watch --file relay/x.json --for po",
+    "py scripts/local_relay.py watch --file relay/x.json --for po",
+    ".venv/bin/python scripts/local_relay.py watch --file relay/x.json --for po",
+])
+def test_gate_allows_local_relay_watch_in_both_forms(cmd):
+    # GOV_PO_1_LOCAL_RELAY_WATCH_COMMAND: watch is bounded and read-only,
+    # mirroring status/validate's own both-forms, read-only treatment above.
+    for form in ("delegated", "interactive"):
+        allowed, reason = gate.decide(_bash(cmd), form, branch_lookup=lambda cwd: "gov/po-x")
+        assert allowed, (form, cmd, reason)
+
+
 def test_gate_local_relay_prefix_requires_the_named_subcommand():
     # A bare invocation with no allowlisted subcommand (or an unrecognized
     # one) falls through to the same "not in the PO allowlist" refusal as
