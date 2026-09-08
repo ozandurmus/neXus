@@ -5,14 +5,15 @@ see `AGENTS.md`/`AI_START_HERE.md`. **Predecessor build detail lives in
 `project/build_history.json`** (structured, newest-first) and its linked
 docs under `docs/history/`; `docs/history/INDEX.md` is the one-line timeline.
 
-- **Checkpoint:** 2026-09-08, `gov_po_3_push_hook_baseline_scoping` — makes
-  the pre-push privacy-gate hook (`scripts/nexus_engineer_tool_gate.py`)
-  baseline-aware: blocks only findings genuinely new vs. the movement's own
-  base commit, never pre-existing debt — fixes the live bug from GOV.PO.3
-  AC-5 demo 1 (`relay/NXS-LOCAL-0012`) that blocked every orchestrated push.
-  Detail: `project/build_history.json`. Predecessor
-  `gov_po_3_approved_movement_orchestration_ac3` **AC-3 only, MERGED** — its
-  own AC-5 demonstrations are still pending (`relay/NXS-LOCAL-0007`).
+- **Checkpoint:** 2026-09-08, `gov_po_3_resume_canonical_relay_access_fix`
+  — fixes `orchestrator start`'s `--resume` path so a resumed engineer session
+  can reliably read/write the canonical relay file outside its own worktree,
+  same as a fresh dispatch (`--add-dir <canonical_relay_dir>` on every
+  engineer spawn) — closes the finding from `relay/NXS-LOCAL-0012`'s
+  SESSION_CLOSE. Detail: `project/build_history.json`. Predecessor
+  `gov_po_3_push_hook_baseline_scoping` **MERGED** — separate live bug from
+  the same AC-5 demo 1. Predecessor `gov_po_3_approved_movement_orchestration_ac3`
+  **AC-3 only, MERGED** — AC-5 demonstrations still pending (`relay/NXS-LOCAL-0007`).
   Predecessor `gov_po_1_gate_5_worktree_management` **MERGED**. Predecessor
   `gov_po_2_po_visibility_and_bounded_authorship` **MERGED** PR #122:
   `docs/design/GOV_PO_2_PO_VISIBILITY_AND_BOUNDED_AUTHORSHIP.md` is
@@ -176,9 +177,10 @@ Concurrency budget stays at 1 per vendor pending real-env evidence.
 ## Automated test baseline
 
 ```
-gov_po_3_push_hook_baseline_scoping: 7 new tests, tests/test_orchestrator.py
-unaffected (48 passed) (detail: project/build_history.json). Hook-only
-change; full one-shot regression not re-run (DEV.TEST.1: last evidence holds).
+gov_po_3_resume_canonical_relay_access_fix: 2 new tests,
+tests/test_orchestrator.py (detail: project/build_history.json). Full
+one-shot suite re-run: 2671 passed, 25 skipped, 2 failed -- both pre-existing/
+unrelated (known DLP self-check false positive, documented by prior builds).
 Earlier predecessor build detail lives only in project/build_history.json.
 ```
 ## Known xfails
