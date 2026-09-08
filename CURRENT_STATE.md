@@ -10,21 +10,19 @@ docs under `docs/history/`; `docs/history/INDEX.md` is the one-line timeline.
   can reliably read/write the canonical relay file outside its own worktree,
   same as a fresh dispatch (`--add-dir <canonical_relay_dir>` on every
   engineer spawn) — closes the finding from `relay/NXS-LOCAL-0012`'s
-  SESSION_CLOSE. Detail: `project/build_history.json`. Predecessors:
-  `gov_po_3_orchestrator_observability` **MERGED** (streaming engineer
-  output, `watch` dashboard); `gov_po_3_push_hook_baseline_scoping`
-  **MERGED**; `gov_po_3_approved_movement_orchestration_ac3` **AC-3 only,
-  MERGED** — AC-5's real demonstrations still pending (`relay/NXS-LOCAL-0007`).
-  `gov_po_1_gate_5_worktree_management` **MERGED**;
-  `gov_po_2_po_visibility_and_bounded_authorship` **MERGED** PR #122 —
-  `docs/design/GOV_PO_2_PO_VISIBILITY_AND_BOUNDED_AUTHORSHIP.md` is **FROZEN —
-  PRODUCT OWNER APPROVED, 2026-09-08**, specifying `gov_po_2_implementation`'s
-  scope. **PO §12:** `M8.3` deferred, `M7` blocked, `M8` **FROZEN 2026-09-06**.
-- **Next** (`now_next.next`): `gov_po_2_implementation` — unrelated and
-  unchanged by this movement; not yet started. `m8_3_real_environment_
-  validation` stays `upcoming`, **deferred debt**, unpaid; `m7_real_device_
-  targeted_collect_now`/`op2_c_cp_clusterxl_adapter_scoping` stay
-  `upcoming`/`blocked`. `DEV.TEST.1`/`PCP.1`/`M1`-`M10.1` complete/automated_validated.
+  SESSION_CLOSE. Detail: `project/build_history.json`. Predecessors
+  `m10_3_entity_and_vendor_support_producers` **MERGED** PR #131 (D2/D3
+  producers, unrelated track), `gov_po_3_orchestrator_observability`
+  **MERGED** PR #129 (streaming `orchestrator` output/`watch`) and
+  `gov_po_3_push_hook_baseline_scoping` **MERGED** PR #127 (baseline-aware
+  pre-push privacy gate). **PO §12:** `M8.3` deferred, `M7` blocked. `M8`
+  **FROZEN 2026-09-06**.
+- **Next** (`now_next.next`): `gov_po_2_implementation` — unrelated,
+  unchanged, not yet started. `m8_3_real_environment_validation` stays
+  `upcoming`/deferred debt; `m7_real_device_targeted_collect_now`/
+  `op2_c_cp_clusterxl_adapter_scoping`/`m10_2_capability_state_resolver_core`
+  (consumes `D2`/`D3`/`D4`) stay `upcoming`. `DEV.TEST.1`/`PCP.1`/`M1`-`M9`/
+  `M10.1`/`M10.3` complete/automated_validated.
 - **OP.2.0 CLASS 2 architecture** (`docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md`):
   **CONTRACT FROZEN 2026-09-04**; `OP.2.A`/`OP.2.B` IMPLEMENTED; `OP.2.1` CP
   command gate DRAFTED — CLASS 2 still has **no member**, no adapter,
@@ -109,9 +107,10 @@ exercise packet emission (step 6).
 **`nav_3_capability_state_vocabulary`** — COMPLETE / FROZEN (PO approved
 2026-09-06). `docs/design/CAPABILITY_STATE_VOCABULARY_AND_PRESENTATION.md` is
 implementation authority for the vocabulary/resolution/presentation matrix
-(`D1`–`D7`, `E1`–`E7`, `AC-CS-1`…`97`). `D4` has its producer as of `M10.1`
-(above); every other dimension still resolves `UNKNOWN`. `M10.2`/`M10.3`
-build the resolver core and `D2`/`D3`; `M12` builds `D5`; `M14` builds `D7`.
+(`D1`–`D7`, `E1`–`E7`, `AC-CS-1`…`97`). `D4`/`D2`/`D3` have producers as of
+`M10.1`/`M10.3` (above); none is wired to a resolver, UI or payload, so every
+dimension still resolves `UNKNOWN` in any actual render. `M10.2` builds the
+resolver core; `M12` builds `D5`; `M14` builds `D7`.
 
 ## `OP.0b.0` — FROZEN WITH REAL-ENV VALIDATION GATES
 `docs/history/phase/OP_0B_0_VENDOR_FAILOVER_PREFLIGHT_EVIDENCE_SURFACE.md`
@@ -179,9 +178,9 @@ Concurrency budget stays at 1 per vendor pending real-env evidence.
 ```
 gov_po_3_resume_canonical_relay_access_fix: 2 new tests,
 tests/test_orchestrator.py (detail: project/build_history.json). Full
-one-shot suite re-run post-merge: see this build's own build_history.json
-evidence for the exact count. Earlier predecessor build detail lives only
-in project/build_history.json.
+one-shot suite re-run post-merge: 2699 passed, 25 skipped, 2 failed -- both
+pre-existing/unrelated (known DLP self-check false positive).
+Earlier predecessor build detail lives only in project/build_history.json.
 ```
 ## Known xfails
 
