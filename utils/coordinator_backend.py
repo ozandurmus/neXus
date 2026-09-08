@@ -57,7 +57,11 @@ class Provenance(str, Enum):
     # discovery/coordinator UI payload) -- this member is additive and
     # required no schema or consumer change (CON.2 build history entry
     # carries the full enumeration).
-    # "event" is a reserved schema value; no trigger implemented.
+    EVENT = "event"  # event_signal_intake slice 1: a signal-triggered job
+    # submitted through the reused CON.2 job engine (ConsoleJobRunner's own
+    # optional `provenance` parameter -- see console/runner.py), never a
+    # console- or CLI-triggered run. Same additive posture as CONSOLE above:
+    # every consumer already stores/echoes provenance as a free string.
 
 
 class CoordinatorDecision(str, Enum):
