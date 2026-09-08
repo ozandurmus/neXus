@@ -101,3 +101,4 @@ render_only_*.log
 
 # Claude Code per-developer local settings (GOV.PO.1: role-scoped tracked settings live in .claude/nexus-po.settings.json)
 .claude/settings.local.json
+.nexus/
