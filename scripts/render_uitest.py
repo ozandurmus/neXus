@@ -61,6 +61,7 @@ def render(out_root: Path, *, profile: bool = False) -> Path:
     configuration_ui = _load("configuration_ui.json")
     crypto_ui = _load("crypto_ui.json")
     discovery_ui = _load("discovery_ui.json")
+    cp_config_telemetry = _load("cp_config_telemetry.json")
 
     from utils import html_export
 
@@ -91,6 +92,7 @@ def render(out_root: Path, *, profile: bool = False) -> Path:
                               "checkpoint": False, "mixed_cycle": True},
             record_checkpoint=False,
             profile=profile,
+            checkpoint_config_result=cp_config_telemetry,
         )
     return index_html
 
