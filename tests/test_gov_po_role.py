@@ -176,6 +176,38 @@ def test_gate_interactive_allows_only_the_named_council_seat_agent():
     assert allowed, reason
 
 
+def test_gate_interactive_allows_issue_close_without_comment():
+    # AC-1/AC-2: a close with no comment at all is allowed unconditionally.
+    allowed, reason = gate.decide(_bash("gh issue close 11 -R o/r"), "interactive",
+                                   branch_lookup=lambda cwd: "gov/po-x")
+    assert allowed, reason
+
+
+def test_gate_interactive_allows_issue_close_with_marked_comment():
+    # AC-2: an inline --comment carrying a relay marker is allowed.
+    allowed, reason = gate.decide(
+        _bash('gh issue close 11 -R o/r --comment "RELAY_NOTE episode close"'), "interactive",
+        branch_lookup=lambda cwd: "gov/po-x")
+    assert allowed, reason
+
+
+def test_gate_interactive_denies_issue_close_with_unmarked_comment():
+    # AC-2: an inline --comment with no relay marker is denied, mirroring
+    # the existing 'gh issue comment' marker discipline.
+    allowed, _ = gate.decide(
+        _bash('gh issue close 11 -R o/r --comment "done"'), "interactive",
+        branch_lookup=lambda cwd: "gov/po-x")
+    assert not allowed
+
+
+def test_gate_delegated_denies_issue_close_regardless_of_comment():
+    # AC-3: delegated form never gets 'gh issue close', with or without a
+    # marked comment -- mirrors the existing 'gh issue create'/'gh pr
+    # create' precedent.
+    for cmd in ('gh issue close 11 -R o/r', 'gh issue close 11 -R o/r --comment "RELAY_NOTE x"'):
+        assert not gate.decide(_bash(cmd), "delegated")[0], cmd
+
+
 def test_gate_delegated_still_denies_council_seat_agent():
     # AC-2: delegated form denies Agent regardless of subagent_type -- the
     # council-seat exception never reaches Phase B delegated episodes.
