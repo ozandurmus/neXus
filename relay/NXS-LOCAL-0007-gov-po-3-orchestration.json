@@ -1,0 +1,148 @@
+{
+  "created_at": "2026-09-08T08:45:48Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1 (architecture amendment, produced first, reviewed before implementation starts): one document, docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md, covering: PO-controlled dispatch through a deterministic local runner (scripts/orchestrator.py, invoked as `orchestrator start <movement-id>`, never accepting arbitrary shell text -- commands built from argument lists); separate Claude CLI engineer processes (`claude -p`), one git worktree per movement, created from the approved base commit on a feature/* branch; an explicit engineer permission profile distinct from the PO profile (normal dev tools: Read/Edit/Write/Bash/Git); exact approved-task revision delivery with a SHA-256 content hash recorded per run (movement id, revision, base SHA, task hash); one canonical local relay location shared across all worktrees (worktree copies are never the live channel); automatic review/correction and serialized integration under the existing standing merge authorization; project-state finalization inside each movement's own PR at integration time; persistent process records (PID, session id, heartbeat, retry count -- kept outside the relay file), duplicate-start prevention, bounded retries, cancellation and recovery after interruption.",
+          "AC-2 (explicit reconciliation of a real frozen-text contradiction): docs/design/GOV_PO_2_PO_VISIBILITY_AND_BOUNDED_AUTHORSHIP.md section 2.4 (line ~161) and section 4 (line ~433) list 'merge (governance or product, of any kind)' as human-only and outside every standing-delegation class -- this directly contradicts the already-operating standing merge decision on ozandurmus/nexus-agent-relay#13 (engineer self-merges once tests are green). The amendment reconciles this ONCE, explicitly: code integration under standing authorization is automatic; real-device execution authority stays separate and human-approved (including a predefined test plan that may cover many commands without per-command re-approval). It also corrects GOV.PO.2 section 3.2's 'PO cannot write FROZEN' rule: the PO applying a freeze decision the human already made is permitted; only the PO originating a freeze decision on its own is forbidden.",
+          "AC-3 (implementation, after AC-1 is approved by the Product Owner): scripts/orchestrator.py implemented per the amendment; engineer permission profile file added; scripts/nexus_po_tool_gate.py extended so the PO role may invoke `orchestrator start/status/stop <movement-id>` (argument-list only, allowlisted prefix) -- not arbitrary `claude` invocations; scripts/local_relay.py extended with a shared append lock and a canonical-location resolver so PO, orchestrator and engineer worktrees all read/write the same relay file. Existing relay marker/packet schemas, validators and governance capabilities are reused, not replaced -- no second framework.",
+          "AC-4 (verified, not assumed, before relying on it): a short real test confirming actual installed behavior of (a) `claude -p` with a separate `--settings` profile -- do not assume `--settings` clears existing settings; verify the documented setting-merge behavior -- and (b) that a spawned process's working directory really is the intended worktree. Record both results in the amendment.",
+          "AC-5 (demonstrations, all four required): (1) one approved movement completes end-to-end with no manual message transport; (2) two independent movements develop concurrently in separate worktrees and integrate in order (start with two worker slots; independence judged by shared schema/API/fixture/ordering dependency, not file lists alone); (3) duplicate launch, a changed task revision, and an interrupted execution each recover without duplicate work or lost relay entries; (4) a failed check returns automatically to engineering, an out-of-scope decision returns to the human as one concrete question, and an authorized merge proceeds automatically.",
+          "AC-6: human interaction is reduced to exactly two touchpoints -- work selection and material design/scope decisions. In-scope code/test/fixture development, build, test, commit, push, PR creation, in-scope correction loops, and merge under standing authorization require no copy-paste, no new terminal, and no repeated human approval. Rate limits / login / corporate access blocks surface only when genuine human action is required.",
+          "AC-7: privacy-check invocation scope is right-sized -- run at the code-publish / artifact-egress boundary, not on every relay note or local edit; any change to currently mandatory full scans is stated explicitly in the amendment; false positives fixed with regression examples. Auto-mode blocks are handled by addressing their stated reason, never routed around with another tool; managed platform restrictions are never bypassed by opening another process.",
+          "AC-8: project-state and handover reconciliation (build_history, roadmap now_next, CURRENT_STATE.md, AI_HANDOVER.md, history index) is included inside this movement's own PR; every existing test in tests/test_gov_po_role.py, tests/test_local_relay_protocol.py and tests/test_architecture_convergence.py keeps passing."
+        ],
+        "baseline": {
+          "authority": "Product Owner architecture direction, 2026-09-08 (chat, after a 3-seat council round whose findings this design directly resolves). Parent: GOV_PO_ROLE_MIGRATION.md (FROZEN) and GOV_PO_2_PO_VISIBILITY_AND_BOUNDED_AUTHORSHIP.md (FROZEN) -- extended and explicitly reconciled by the AC-1/AC-2 amendment, not silently overridden.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "sequencing": "One architecture correction plus one implementation. Do NOT reopen the six small gate movements' pattern; do NOT redesign work done or in progress under GOV.PO.2 (gov_po_2_implementation stays its own separate movement). gov_po_1_gate_5_worktree_management (worktree add/list from the PO role) landed 2026-09-08 and is a building block here."
+        },
+        "context_not_loaded": [
+          "vendor collectors, OP.2, console job engine -- untouched"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/gov-po-3-approved-movement-orchestration"
+        },
+        "invariants": [
+          "Human decides; software executes the decision. The PO applying an already-made human decision (including writing a freeze) is allowed; the PO originating one is not.",
+          "Code integration (automatic under standing authorization) and real-device execution authority (separately human-approved) are distinct events -- this separation is the actual safety boundary, not per-commit human waiting.",
+          "Worktree isolation reduces file collisions; it is NOT claimed to be a security sandbox.",
+          "The task hash proves approved-text == sent-text only; it is not a signature and does not prove the agent obeyed -- that is judged by diff, tests and review.",
+          "No second framework, no new SDK dependency: reuse local_relay.py schemas/validators and the existing gate. Do not silently disable any gate; reconcile contradictory frozen clauses explicitly (AC-2)."
+        ],
+        "merge_gate": "Standing relay#13 decision applies to this PR itself once green. The AC-1 amendment must be reviewed and approved by the Product Owner before AC-3 implementation begins -- one review, not per-file.",
+        "movement_type": "ARCHITECTURE",
+        "objective": "Design and implement an approved-movement orchestration extension on top of GOV.PO.1/GOV.PO.2 and scripts/local_relay.py, so that an approved movement runs from dispatch through development, test, correction and authorized merge without the human carrying messages, opening terminals, or running Git commands.",
+        "output_contract": [
+          "docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md (amendment, AC-1/AC-2, reviewed first)",
+          "scripts/orchestrator.py; engineer permission profile; gate + local_relay.py extensions (AC-3)",
+          "Verification records for AC-4; the four demonstrations for AC-5",
+          "Project-state/handover reconciliation in this PR (AC-8)",
+          "SESSION_START + SESSION_CLOSE on this relay artifact"
+        ],
+        "recommended_reasoning": {
+          "reason": "New architecture with a real frozen-clause reconciliation and process-lifecycle design (AC-1/AC-2/AC-4); the implementation half is deterministic once the amendment is approved.",
+          "tier": "Sonnet 5, extended thinking (high) for the amendment; Sonnet 5, normal for implementation"
+        },
+        "requirements": [
+          "Produce the AC-1 amendment first and post it on this relay for Product Owner review before writing scripts/orchestrator.py",
+          "Reuse scripts/local_relay.py and scripts/gov_session_transfer.py validators directly; extend, do not fork",
+          "Build orchestrator commands from argument lists only -- never interpolate shell text",
+          "Run the AC-4 real checks before designing around either assumption"
+        ],
+        "risks": [
+          "If `claude -p` with a separate settings profile does not behave as documented on the installed version (AC-4a), the engineer-profile mechanism must be redesigned before AC-3 -- report, do not work around.",
+          "The relay lock must be genuinely shared across worktrees (same canonical path); a per-worktree copy silently breaks agent visibility -- AC-5 demonstration 2 exists to catch this."
+        ],
+        "scope": {
+          "in": [
+            "The AC-1 amendment",
+            "scripts/orchestrator.py + engineer profile + gate/relay extensions",
+            "the AC-4 verifications and AC-5 demonstrations",
+            "project-state reconciliation"
+          ],
+          "out": [
+            "gov_po_2_implementation (separate, unchanged)",
+            "any real-device execution capability",
+            "any change to vendor collectors, OP.2, or the console job engine",
+            "a second orchestration/agent framework"
+          ]
+        },
+        "validation_plan": [
+          "tests/test_gov_po_role.py, tests/test_local_relay_protocol.py, tests/test_architecture_convergence.py plus new orchestrator tests",
+          "The four AC-5 demonstrations, with real command output recorded",
+          "git diff --check; repository privacy gate at the publish boundary (once, for real)"
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-08T08:45:48Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "RELAY_NOTE",
+      "seq": 2,
+      "subject": "AC-1/AC-2 amendment ready for review",
+      "text": "AC-1 amendment produced, ready for Product Owner review; no AC-3 code written yet, per this movement's own merge_gate (\"reviewed first, one review, not per-file\").\n\nOutput: docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md (DRAFT).\n\nCovers, section by section: SS3 the full orchestrator/worktree/engineer-profile/\ncanonical-relay/process-lifecycle/merge-serialization architecture (AC-1); SS2 both\nrequired reconciliations (AC-2) -- the GOV_PO_2 SS2.4/SS4 \"merge...of any kind\" text\nvs. the already-operating relay#13 standing merge authorization, and the GOV_PO_2\nSS3.2 \"PO cannot write FROZEN\" prose corrected to the applying-vs-originating\ndistinction this movement's own invariant states; SS4 both AC-4 platform checks run\nfor real (not assumed) against installed claude 2.1.263 in a disposable scratch\nrepo outside neXus:\n  (a) --settings is additive to project/local settings, not a replacement --\n      confirmed via permission_denials on a live claude -p run: a project-level\n      deny blocked a Bash call that a --settings-supplied allow permitted.\n  (b) a spawned claude -p process's Bash cwd and Read-tool resolution both track\n      the actual OS working directory exactly -- confirmed against a real git\n      worktree with a unique marker file.\n  Also disclosed (not a required AC-4 item, but material): an auto-mode\n  classifier blocked one literal, permission-probing-shaped claude -p invocation\n  typed directly as a Bash command; a differently-worded invocation, and the\n  actual production shape (a Python subprocess.run call, no literal \"claude -p\"\n  text in the Bash tool's own command string), were not blocked. Flagged as an\n  open risk to be confirmed by AC-5 demonstration 1, not claimed solved.\nSS7 lists the concrete AC-3 build targets deferred until this document is\napproved; SS9 names three residual risks including the classifier finding and a\nnamed, unsolved gap (the merge lock does not force re-validation against an\nadvanced main after a rebase).\n\nRequesting Product Owner review of docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md\nbefore scripts/orchestrator.py or any other AC-3 file is written.",
+      "timestamp": "2026-09-08T09:03:44Z"
+    },
+    {
+      "actor": "po",
+      "authorized_by": "Product Owner -- chat directive 2026-09-08 (this session, AskUserQuestion selection: freeze with additions A/B/C)",
+      "marker": "RELAY_DECISION",
+      "scope": "freeze of docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md and authorization of its AC-3/AC-5/AC-8 implementation inside movement GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION; the GOV_PO_2 text corrections it specifies in section 2",
+      "seq": 3,
+      "subject": "FREEZE docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md with three additions; proceed to AC-3",
+      "supersedes": "GOV_PO_2_PO_VISIBILITY_AND_BOUNDED_AUTHORSHIP.md sections 2.4 and 4 wording 'merge (governance or product, of any kind)' and section 3.2's 'human-only declarations' prose, to the extent section 2 of the frozen document corrects them",
+      "text": "Decision: the AC-1/AC-2 amendment is FROZEN -- PRODUCT OWNER APPROVED, 2026-09-08, with the three additions below folded in before AC-3 code starts (apply the FROZEN status line and these additions yourself; the applying-vs-originating rule in section 2.2 covers this). Section 2's two reconciliations (merge: executing an already-recorded standing authorization is not a fresh human decision, originating one is; PO applying a human-made freeze is permitted, originating one is not) are approved as written and are applied to GOV_PO_2_PO_VISIBILITY_AND_BOUNDED_AUTHORSHIP.md sections 2.4/3.2/4 in this same movement. ADDITION A (closes section 3.8's named gap; matches the PO design point 5): the integration phase, under the merge lock, must (1) merge origin/main into the movement branch, (2) re-run tests/test_architecture_convergence.py, scripts/build_history_index.py --check and the movement's own targeted tests against that merged state, (3) only then gh pr merge -- so project-state finalization is applied against current main and parallel-movement bookkeeping conflicts are resolved mechanically here, not left to discipline. ADDITION B: orchestrator status with no --movement prints a table of every known movement (movement id, phase, pid alive yes/no, heartbeat age, branch, worktree, last relay marker and timestamp); add --max-workers (default 3) enforced at start (refuse with a clear reason when all slots hold a live non-terminal movement). An automatic queue/auto-dispatch needs a persistent supervisor and is explicitly deferred to a follow-up after the AC-5 demonstrations. ADDITION C: the fixed engineer prompt instructs the engineer session to re-read the canonical relay file (via NEXUS_CANONICAL_RELAY_DIR) immediately before opening its PR and to act on any RELAY_CORRECTION/RELAY_DECISION entries appended after dispatch, so a changed task revision is applied end-to-end, not only detected by status. Everything else in the document stands as written. AC-4's classifier disclosure is accepted: AC-5 demonstration 1 is the real test; if ordinary dispatch is blocked, report it as a blocking finding, never route around it. Proceed with AC-3 in this movement, then AC-5, then AC-8; merge under relay#13 once green and post the RELAY_NOTE here.",
+      "timestamp": "2026-09-08T09:19:26Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "RELAY_NOTE",
+      "seq": 4,
+      "subject": "AC-3 implemented, full suite green",
+      "text": "AC-3 implemented; full one-shot suite green (2662 passed, 25 skipped, 2 pre-existing unrelated failures). Nothing committed to git yet -- working tree only, pending the AC-5 question below.\n\nBuilt: scripts/orchestrator.py (start/status/stop/merge-lock, per section 3.2-3.7);\n.claude/nexus-engineer.settings.json + scripts/nexus_engineer_tool_gate.py (the\ntwo-check hook: privacy gate before push/PR-create, merge-lock + Addition A's\nreal git-merge-origin/main-plus-convergence-and-build-history-check before\ngh pr merge); scripts/nexus_po_tool_gate.py extended with orchestrator\nstart/status/stop prefixes plus a boundary-safe prefix-matching fix applied to\nthe whole allowlist (GOV_PO_2 section 3.1's own open item -- also closes a real\nlatent \"ls\" vs \"lsof\" false-allow); scripts/local_relay.py extended with the\ncanonical-location resolver (NEXUS_CANONICAL_RELAY_DIR for create --dir,\nNEXUS_RELAY_FILE for append/status/validate/watch --file -- two env vars\ninstead of one, to match each subcommand's real argument shape) and a real\ncross-platform (fcntl/msvcrt, stdlib-only) shared append lock.\n\nGOV_PO_2_PO_VISIBILITY_AND_BOUNDED_AUTHORSHIP.md sections 2.4/3.2/4 corrected\nper the freeze decision's own authorization.\n\nTests: tests/test_orchestrator.py (48 new, pure decision logic -- dispatch/\nresume/refuse, merge-lock acquire/reclaim, phase reconciliation, task hashing,\ngit-ref validation -- plus CLI-level start/status/merge-lock tests with\ngit/spawn side effects monkeypatched); targeted additions to\ntests/test_gov_po_role.py (orchestrator prefixes, the boundary-safe-matching\nregression) and tests/test_local_relay_protocol.py (resolver env vars, the\nreal lock). Full suite: 2662 passed, 25 skipped, 2 failed -- both confirmed\npre-existing on main via git stash (tests/test_dev_0_5b_auth_consumer_canonical_\nconfig.py's .venv/ site-packages DLP scan; same known false positive already\ndocumented in gov_po_1_gate_5's own evidence, untouched by this movement).\n\nAC-4's two real verifications and the classifier disclosure are recorded in\ndocs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md section 4, unchanged\nfrom the version reviewed at freeze.",
+      "timestamp": "2026-09-08T09:46:44Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "RELAY_QUESTION",
+      "seq": 5,
+      "subject": "AC-5 execution approach -- real spawned engineer processes will self-merge",
+      "text": "Blocked action: dispatching real orchestrator start runs for AC-5. AC-5's four\ndemonstrations require the orchestrator to actually spawn real `claude -p`\nengineer subprocesses that will themselves develop, test, commit, push, open a\nPR, and -- once green -- self-merge to origin/main under the standing relay#13\nauthorization. That is a materially different, higher-blast-radius, real-cost\nclass of action (API spend per spawned session; real branches/PRs/merges\nlanding on main, potentially several times over) than the local doc/code/test\nwork this session has done so far, and I have no small, disposable,\nalready-approved movement on hand to use as a demonstration subject that\nwould not itself be a real, meaningful piece of product work.\n\nFour real, already-open, unrelated movements exist on this same checkout right\nnow, awaiting an engineer (relay/NXS-LOCAL-0008 M10_2_CAPABILITY_STATE_\nRESOLVER_CORE, relay/NXS-LOCAL-0009 OP_1_FAILOVER_PLAN_COMPILER_CONTRACT,\nrelay/NXS-LOCAL-0010 M10_3_ENTITY_AND_VENDOR_SUPPORT_PRODUCERS,\nrelay/NXS-LOCAL-0011 BACKLOG_BUNDLE_TEST_AND_STATE_CLEANUP) -- these look like\nplausible real subjects for demonstrations 1 and 2 (two independent, no\nshared schema/API/fixture/ordering dependency) rather than an invented\nscratch movement, but that means AC-5 would be the very first time this new,\njust-built orchestration path runs unsupervised against real product work,\nnot a synthetic test.\n\nOptions, smallest set: (a) dispatch orchestrator start against one or two of\nthe four open movements above for real, accepting the cost/footprint and that\nthis is genuinely the first live use of the new pipeline; (b) I invent a\nsmall, clearly-labeled, throwaway scratch movement (e.g. a one-line docs\nchange) for AC-5 instead, so nothing load-bearing rides on the first live\nrun; (c) the Product Owner runs/watches orchestrator start interactively for\nthe first demonstration rather than have me trigger it autonomously, so a\nhuman is present for the very first live self-merge this mechanism ever\nperforms; (d) AC-5 stays open as a named follow-up and this movement closes\nnow with AC-3 done, tests green, nothing merged yet -- GOV_PO_3 is not marked\ndone until AC-5 actually runs, and this movement's own PR (once opened) does\nnot claim otherwise.\n\nI have not chosen among these on my own judgment because each carries a real\ncost/blast-radius trade-off (spend, first-ever unsupervised self-merge via\nnew infrastructure, using someone else's queued work as a test subject) that\nthis document's own AC-6/human-touchpoints framing reserves for a material\ndesign/scope decision, not a routine implementation choice.",
+      "timestamp": "2026-09-08T09:46:44Z"
+    },
+    {
+      "actor": "po",
+      "authorized_by": "Product Owner -- chat directive 2026-09-08 (this engineering session, direct instruction via AskUserQuestion, not a nexus-po episode)",
+      "marker": "RELAY_DECISION",
+      "scope": "AC-5 demonstration subject selection for movement GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION only",
+      "seq": 6,
+      "subject": "AC-5 approach: invent a small throwaway demo movement",
+      "supersedes": "none",
+      "text": "Decision: for AC-5, the engineer invents and dispatches a small, clearly-labeled, throwaway scratch movement through the real orchestrator pipeline (real worktree, real spawned claude -p engineer process, real commit/push/PR/self-merge under relay#13) rather than using one of the four real queued movements (NXS-LOCAL-0008/0009/0010/0011) as the first live subject. Nothing load-bearing rides on the first live self-merge this new infrastructure performs.",
+      "timestamp": "2026-09-08T10:48:38Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0007",
+  "movement": "GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION",
+  "next_actor": "engineer",
+  "refs": [
+    "docs/design/GOV_PO_ROLE_MIGRATION.md",
+    "docs/design/GOV_PO_2_PO_VISIBILITY_AND_BOUNDED_AUTHORSHIP.md",
+    "docs/design/LOCAL_RELAY_PROTOCOL.md",
+    "scripts/local_relay.py",
+    "scripts/nexus_po_tool_gate.py",
+    ".claude/nexus-po.settings.json",
+    ".claude/agents/nexus-po.md"
+  ],
+  "schema_version": 1,
+  "status": "AWAITING_ENGINEER",
+  "updated_at": "2026-09-08T10:48:38Z"
+}
