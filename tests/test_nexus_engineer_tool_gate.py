@@ -155,3 +155,35 @@ def test_ac1_live_bug_regression_against_real_repository_state():
     baseline_keys, baseline_note = gate._baseline_finding_keys(str(ROOT))
     for finding in ac1_findings:
         assert gate._finding_key(ROOT, finding) in baseline_keys, (finding, baseline_note)
+
+
+def test_resolve_interpreter_finds_shared_venv_via_git_common_dir(tmp_path):
+    # relay/NXS-LOCAL-0016 seq 2: a worktree checkout has no .venv of its own
+    # -- every worktree shares the one .venv next to the main checkout -- so
+    # sys.executable there can resolve to whatever python3 launched the
+    # process, not necessarily the interpreter with pytest installed.
+    main_repo = tmp_path / "main"
+    main_repo.mkdir()
+    _init_repo(main_repo)
+    _write(main_repo, "README.md", "root\n")
+    _commit_all(main_repo, "base")
+
+    venv_python = main_repo / ".venv" / "bin" / "python3"
+    venv_python.parent.mkdir(parents=True)
+    venv_python.write_text("#!/bin/sh\n", encoding="utf-8")
+    venv_python.chmod(0o755)
+
+    worktree = tmp_path / "worktree"
+    _git(main_repo, "worktree", "add", str(worktree), "-b", "feature/x")
+
+    resolved = gate._resolve_interpreter(str(worktree))
+    assert resolved == str(venv_python)
+
+
+def test_resolve_interpreter_falls_back_to_sys_executable_without_a_venv(tmp_path):
+    _init_repo(tmp_path)
+    _write(tmp_path, "README.md", "root\n")
+    _commit_all(tmp_path, "base")
+
+    resolved = gate._resolve_interpreter(str(tmp_path))
+    assert resolved == sys.executable

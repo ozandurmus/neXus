@@ -5,34 +5,23 @@ see `AGENTS.md`/`AI_START_HERE.md`. **Predecessor build detail lives in
 `project/build_history.json`** (structured, newest-first) and its linked
 docs under `docs/history/`; `docs/history/INDEX.md` is the one-line timeline.
 
-- **Checkpoint:** 2026-09-08, `m10_2_capability_state_resolver_core` — new
-  `utils/capability_state_resolver.py` implements resolver stages 0-3 of
-  `docs/design/CAPABILITY_STATE_VOCABULARY_AND_PRESENTATION.md` section 5
-  (union tag, `CX1`/`RI-1`/`RI-2` gate reusing
-  `utils.registry_evidence_reconciliation.detect_ri2` for `RI-2`, the
-  twelve-rank primary ladder, the seven qualifiers) as pure typed-input
-  functions — no I/O, no device contact, no consumer wired yet (stages 4-5
-  open; `D5`'s producer is still `M12`). 134 new tests;
-  `tests/test_m10_1_registry_evidence_reconciliation.py` +
-  `tests/test_architecture_convergence.py` unaffected (78 passed). Ran in
-  its own worktree in parallel with GOV.PO.3/OP.1/`M10.3`; merged
-  `origin/main` three times (twice mid-PR). Detail:
-  `project/build_history.json`. Predecessors, all **MERGED**:
-  `gov_po_3_resume_canonical_relay_access_fix` (PR #130, `--resume`
-  canonical-relay-access fix), `m10_3_entity_and_vendor_support_producers`
-  (PR #131, `D2`/`D3` producers), `gov_po_3_orchestrator_observability`
-  (PR #129, streaming `orchestrator` output + `watch`),
-  `gov_po_3_push_hook_baseline_scoping` (PR #127, baseline-aware pre-push
-  privacy gate), `gov_po_3_approved_movement_orchestration_ac3` (AC-3 only;
-  AC-5 demos pending, `relay/NXS-LOCAL-0007`),
-  `gov_po_1_gate_5_worktree_management`,
-  `gov_po_2_po_visibility_and_bounded_authorship` (PR #122,
-  `docs/design/GOV_PO_2_PO_VISIBILITY_AND_BOUNDED_AUTHORSHIP.md` **FROZEN —
-  PRODUCT OWNER APPROVED, 2026-09-08**). **PO §12:** `M8.3` deferred, `M7`
-  blocked. `M8` **FROZEN 2026-09-06**.
+- **Checkpoint:** 2026-09-08, `op0b_s7_s6_test_order_isolation` — fixed a
+  module-rebind leak: S7's `test_evaluator_performs_no_socket_io_and_
+  imports_no_collector` popped `panorama.preflight_collector`/`checkpoint.
+  preflight_collector` from `sys.modules` without restoring, leaving S6's
+  re-import rebind against a fresh module object while `collect_member`
+  kept resolving globals against the original one — defeating S6's
+  patches, real HTTP calls when S7 ran first. Fixed with save/restore
+  `try/finally` + regression test; test-infra only. Also fixed, PO-
+  authorized (relay/NXS-LOCAL-0016): `nexus_engineer_tool_gate.py`'s
+  merge-lock interpreter resolution. Detail: `project/build_history.json`.
+  Predecessors PR #122/#127/#129/#130/#131/#132 **MERGED** (`#132` =
+  `m10_2_capability_state_resolver_core`, resolver stages 0-3), doc
+  **FROZEN — PO APPROVED**. **PO §12:** `M8.3` deferred, `M7` blocked,
+  `M8` **FROZEN 2026-09-06**.
 - **Next** (`now_next.next`): `gov_po_2_implementation` — unrelated,
   unchanged, not yet started. `m8_3_real_environment_validation` stays
-  `upcoming`/deferred debt; `m7_real_device_targeted_collect_now`/
+  `upcoming`/**deferred debt**; `m7_real_device_targeted_collect_now`/
   `op2_c_cp_clusterxl_adapter_scoping` stay `upcoming`/`blocked`.
   `DEV.TEST.1`/`PCP.1`/`M1`-`M10.3` complete/automated_validated.
 - **OP.2.0 CLASS 2 architecture** (`docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md`):
@@ -170,14 +159,11 @@ Concurrency budget stays at 1 per vendor pending real-env evidence.
 ## Automated test baseline
 
 ```
-m10_2_capability_state_resolver_core: targeted
-tests/test_m10_2_capability_state_resolver.py 134 passed; affected
-tests/test_m10_1_registry_evidence_reconciliation.py +
-tests/test_architecture_convergence.py 78 passed; post-merge regression
-tests/test_orchestrator.py 78 passed (gov_po_3_resume_canonical_relay_access_fix's
-own predecessor evidence: full one-shot suite 2699 passed, 25 skipped, 2
-failed -- both pre-existing/unrelated DLP self-check false positive; not
-re-run here, DEV.TEST.1 last-evidence-holds). git diff --check clean.
+op0b_s7_s6_test_order_isolation: full one-shot regression after merging
+origin/main (through m10_2_capability_state_resolver_core, PR #132) +
+tool-gate interpreter fix (+2 tests, DEV.TEST.1): 2943 passed, 25 skipped,
+2 failed -- both pre-existing/unrelated DLP-token collisions in
+project/build_history.json's own prose. S7+S6 both orders: 110 passed each.
 Earlier predecessor build detail lives only in project/build_history.json.
 ```
 ## Known xfails

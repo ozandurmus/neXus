@@ -89,10 +89,41 @@ from utils.repository_privacy import (  # noqa: E402
     scan_repository,
 )
 
-VALIDATION_COMMANDS = (
-    [sys.executable, "-m", "pytest", "tests/test_architecture_convergence.py", "-q"],
-    [sys.executable, "scripts/build_history_index.py", "--check"],
-)
+def _resolve_interpreter(cwd: str) -> str:
+    """Resolve the project's validated interpreter for the merge-lock
+    re-validation subprocess calls below.
+
+    A worktree checkout has no `.venv` of its own -- every worktree shares
+    the one `.venv` next to the main checkout -- so `sys.executable` here
+    resolves to whatever `python3` the *parent* process (this hook) happened
+    to be launched with, which is not necessarily the interpreter with
+    pytest installed (relay/NXS-LOCAL-0016 seq 2: the live incident this
+    closes). Locate the shared `.venv` via `git rev-parse --git-common-dir`,
+    which is stable across every worktree, and fall back to
+    `sys.executable` if it is not found (e.g. a profile with no `.venv`).
+    """
+    result = _run(["git", "rev-parse", "--git-common-dir"], cwd)
+    if result.returncode != 0:
+        return sys.executable
+    common_dir = Path(result.stdout.strip())
+    if not common_dir.is_absolute():
+        common_dir = (Path(cwd) / common_dir).resolve()
+    venv_root = common_dir.parent
+    for candidate in (
+        venv_root / ".venv" / "bin" / "python3",
+        venv_root / ".venv" / "Scripts" / "python.exe",
+    ):
+        if candidate.is_file():
+            return str(candidate)
+    return sys.executable
+
+
+def _validation_commands(cwd: str) -> tuple[list[str], ...]:
+    python = _resolve_interpreter(cwd)
+    return (
+        [python, "-m", "pytest", "tests/test_architecture_convergence.py", "-q"],
+        [python, "scripts/build_history_index.py", "--check"],
+    )
 
 
 def _movement_id(cwd: str) -> str | None:
@@ -237,7 +268,7 @@ def _integration_check(movement_id: str, cwd: str) -> tuple[bool, str]:
     # NOTE: `report.validation_plan` (GOV.SESSION.1 schema) is free-text
     # English prose ("run the focused suite"), not a machine-executable
     # command list -- there is no general way to run "the movement's own
-    # targeted tests" from it mechanically. VALIDATION_COMMANDS above is
+    # targeted tests" from it mechanically. _validation_commands() above is
     # the mechanically-enforced floor Addition A actually specifies
     # (tests/test_architecture_convergence.py + build_history_index.py
     # --check); a movement's own targeted tests remain the engineer
@@ -249,7 +280,7 @@ def _integration_check(movement_id: str, cwd: str) -> tuple[bool, str]:
     merge = _run(["git", "merge", "origin/main"], cwd)
     if merge.returncode != 0:
         return False, f"git merge origin/main failed (resolve conflicts and retry): {merge.stderr.strip()}"
-    for argv in VALIDATION_COMMANDS:
+    for argv in _validation_commands(cwd):
         result = _run(argv, cwd)
         if result.returncode != 0:
             tail = (result.stdout + result.stderr).strip()[-2000:]

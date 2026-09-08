@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "current_build": "m10_2_capability_state_resolver_core",
+  "current_build": "op0b_s7_s6_test_order_isolation",
   "current_track": "PCP.x",
   "progress_contract": "Weighted acceptance-criterion completion. Percentages describe the declared roadmap, not calendar time or delivery ETA.",
   "tracks": [
@@ -140,16 +140,17 @@
   "now_next": {
     "horizon_contract": "NOW is exactly one build. NEXT is exactly one. Everything else is an `upcoming` row carrying its own true status: planned = AFTER, blocked = waiting on a named external gate, deferred = consciously postponed. `now.build` must equal the newest project/build_history.json record -- utils.project_plan enforces it.",
     "now": {
-      "build": "m10_2_capability_state_resolver_core",
-      "title": "M10.2 -- capability-state resolver core (stage 0, result algebra, primary ladder, qualifiers)",
-      "goal": "Implement the capability-state resolver core (stages 0-3 of docs/design/CAPABILITY_STATE_VOCABULARY_AND_PRESENTATION.md section 5: union tag, contradiction/inconsistency gate, primary ladder, qualifiers) as pure, fully tested functions, so the console/device experience has a real resolver to consume in the next slices.",
+      "build": "op0b_s7_s6_test_order_isolation",
+      "title": "OP.0b S7/S6 test-order isolation -- fix the module-rebind state leak",
+      "goal": "Fix the module-rebind state leak where OP.0b S7 readiness tests, run before S6 PAN preflight collector tests, break 25 S6 tests -- make the two test files order-independent. Test-infrastructure only, no product code change.",
       "status": "automated_validated",
       "started": "2026-09-08",
       "completed": "2026-09-08",
       "notes": [
-        "Full detail: project/build_history.json's m10_2_capability_state_resolver_core record.",
-        "Authorized 2026-09-08 (Product Owner direction: UI/interactive control-plane track is top priority), sequenced by the first M10 Phase A PLAN episode. Runs in parallel with GOV.PO.3 and OP.1 in its own worktree (relay/NXS-LOCAL-0008); consumed M10.1's D4 producer plus declared typed inputs for D2/D3/D5, whose own producers do not exist yet (M10.3/M12).",
-        "Predecessor now-slot: gov_po_3_resume_canonical_relay_access_fix -- automated_validated, merged (origin/main advanced again during this movement's own PR window; merged into this branch before completing the PR/merge, per this build's own SESSION_START instruction). m10_3_entity_and_vendor_support_producers, gov_po_3_orchestrator_observability and gov_po_3_push_hook_baseline_scoping merged before that; all unaffected by this build."
+        "Full detail: project/build_history.json's op0b_s7_s6_test_order_isolation record.",
+        "Backlog: project/backlog.json id op0b_s7_s6_test_order_isolation. Small, independent, already-documented test-infra debt, dispatched with zero file overlap against concurrent in-flight movements.",
+        "Root cause: tests/test_op0b_s7_readiness_v2.py popped panorama.preflight_collector / checkpoint.preflight_collector out of sys.modules without restoring them, rebinding the module S6's collector tests patch against -- same family as the frontend-rendering shared-state-leak guard precedent.",
+        "In passing, also fixed scripts/nexus_engineer_tool_gate.py's merge-lock re-validation interpreter resolution (PO-authorized, relay/NXS-LOCAL-0016 seq 2-3): sys.executable resolved to a pytest-less interpreter from a worktree checkout; now resolves the shared .venv via git rev-parse --git-common-dir instead."
       ]
     },
     "next": {
