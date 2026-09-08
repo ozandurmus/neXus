@@ -444,3 +444,275 @@ def test_start_cli_rejects_a_base_ref_outside_origin(tmp_path):
                      "--state-dir", str(tmp_path / "state"), "--worktrees-dir", str(tmp_path / "worktrees"),
                      "--profile", str(tmp_path / "profile.json")])
     assert rc == orch.EXIT_USAGE
+
+
+# --- AC-2: stream-json line -> summary parser (representative real shapes) --
+# Captured from a real `claude -p --output-format stream-json --verbose`
+# run against the installed claude version, trimmed to the fields the
+# parser actually looks at.
+
+REAL_LINE_SUMMARY_TABLE = [
+    (
+        '{"type":"assistant","message":{"model":"claude-sonnet-5","id":"msg_1","type":"message",'
+        '"role":"assistant","content":[{"type":"text","text":"4"}],"stop_reason":null}}',
+        "assistant: 4",
+    ),
+    (
+        '{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_1","name":"Bash",'
+        '"input":{"command":"echo hi","description":"Print hi to stdout"}}]}}',
+        "tool_use: Bash echo hi",
+    ),
+    (
+        '{"type":"assistant","message":{"content":[{"type":"thinking","thinking":"","signature":"x"}]}}',
+        "assistant: (thinking)",
+    ),
+    (
+        '{"type":"user","message":{"role":"user","content":[{"tool_use_id":"toolu_1","type":"tool_result",'
+        '"content":"hi","is_error":false}]}}',
+        "tool_result (ok): hi",
+    ),
+    (
+        '{"type":"user","message":{"role":"user","content":[{"tool_use_id":"toolu_1","type":"tool_result",'
+        '"content":"boom","is_error":true}]}}',
+        "tool_result (error): boom",
+    ),
+    (
+        '{"duration_api_ms":5361,"stop_reason":"end_turn","session_id":"s","total_cost_usd":0.039,'
+        '"type":"result","subtype":"success","result":"Done."}',
+        "result (success): Done.",
+    ),
+    (
+        '{"type":"system","subtype":"init","cwd":"/repo","session_id":"s","tools":[],"model":"claude-sonnet-5"}',
+        "system: init",
+    ),
+    (
+        '{"type":"rate_limit_event","rate_limit_info":{"status":"allowed"},"session_id":"s"}',
+        "rate_limit: allowed",
+    ),
+]
+
+
+@pytest.mark.parametrize("raw,expected", REAL_LINE_SUMMARY_TABLE)
+def test_summarize_stream_json_line_real_shapes(raw, expected):
+    assert orch.summarize_stream_json_line(raw) == expected
+
+
+def test_summarize_stream_json_line_skips_blank_lines():
+    assert orch.summarize_stream_json_line("") is None
+    assert orch.summarize_stream_json_line("   \n") is None
+
+
+def test_summarize_stream_json_line_skips_a_truncated_partial_line():
+    # A line the writer has not finished appending yet -- not a parse
+    # error to report, just not ready; the tailer re-reads it next poll.
+    partial = '{"type":"assistant","message":{"content":[{"type":"text","text":"unfinished'
+    assert orch.summarize_stream_json_line(partial) is None
+
+
+def test_summarize_stream_json_line_falls_back_to_raw_for_an_unrecognized_shape():
+    # Valid JSON, but a shape this parser does not know -- AC-2's own risk
+    # note: never silently drop a real event, fall back to the raw line.
+    raw = '{"type":"some_future_event_type","payload":{"a":1}}'
+    assert orch.summarize_stream_json_line(raw) == raw
+
+
+def test_summarize_stream_json_line_truncates_long_text():
+    long_text = "x" * 500
+    raw = json.dumps({"type": "assistant", "message": {"content": [{"type": "text", "text": long_text}]}})
+    result = orch.summarize_stream_json_line(raw)
+    assert result.startswith("assistant: xxxxxxxxxx")
+    assert len(result) < 120
+
+
+def test_summarize_stream_json_line_prefers_command_over_other_tool_fields():
+    raw = json.dumps({"type": "assistant", "message": {"content": [
+        {"type": "tool_use", "name": "Bash", "input": {"command": "ls -la", "description": "list files"}}
+    ]}})
+    assert orch.summarize_stream_json_line(raw) == "tool_use: Bash ls -la"
+
+
+# --- AC-2: the tailer's partial-line-safe draining ---------------------------
+
+def test_drain_log_once_leaves_a_truncated_last_line_for_next_time(tmp_path):
+    log_path = tmp_path / "engineer.log"
+    summary_path = tmp_path / "engineer.summary.log"
+    complete = json.dumps({"type": "assistant", "message": {"content": [{"type": "text", "text": "hi"}]}})
+    full_second = json.dumps({"type": "assistant", "message": {"content": [{"type": "text", "text": "more"}]}})
+    partial_second = full_second[:20]
+    log_path.write_bytes((complete + "\n").encode("utf-8") + partial_second.encode("utf-8"))
+
+    with open(summary_path, "a", encoding="utf-8") as fh:
+        offset = orch._drain_log_once(log_path, fh, 0)
+    assert summary_path.read_text() == "assistant: hi\n"
+    assert offset == len(complete) + 1  # the partial second line was not consumed
+
+    with open(log_path, "ab") as f:
+        f.write(full_second[20:].encode("utf-8") + b"\n")
+    with open(summary_path, "a", encoding="utf-8") as fh:
+        offset = orch._drain_log_once(log_path, fh, offset)
+    assert summary_path.read_text() == "assistant: hi\nassistant: more\n"
+
+
+def test_drain_log_once_is_a_noop_when_log_file_does_not_exist_yet(tmp_path):
+    log_path = tmp_path / "engineer.log"
+    summary_path = tmp_path / "engineer.summary.log"
+    with open(summary_path, "a", encoding="utf-8") as fh:
+        offset = orch._drain_log_once(log_path, fh, 0)
+    assert offset == 0
+    assert summary_path.read_text() == ""
+
+
+# --- AC-1: _spawn_engineer's argv gains the streaming flags ------------------
+
+class _FakePopen:
+    def __init__(self, pid):
+        self.pid = pid
+
+
+def test_spawn_engineer_argv_includes_stream_json_and_verbose(tmp_path, monkeypatch):
+    calls = []
+
+    def fake_popen(argv, **kwargs):
+        calls.append(argv)
+        return _FakePopen(pid=1000 + len(calls))
+
+    monkeypatch.setattr(orch.subprocess, "Popen", fake_popen)
+    worktree = tmp_path / "wt"
+
+    proc = orch._spawn_engineer(
+        worktree_path=worktree, profile_path=tmp_path / "profile.json",
+        canonical_relay_dir=tmp_path / "relay", relay_file=tmp_path / "relay" / "X.json",
+    )
+
+    assert len(calls) == 2  # the engineer process, then the summary-tailer companion
+    engineer_argv = calls[0]
+    assert engineer_argv[engineer_argv.index("--output-format") + 1] == "stream-json"
+    assert "--verbose" in engineer_argv
+
+    tailer_argv = calls[1]
+    assert "_tail-summary" in tailer_argv
+    assert str(proc.pid) in tailer_argv
+
+
+# --- AC-4/AC-5: last_activity -------------------------------------------------
+
+def test_read_last_activity_returns_none_for_no_worktree_path():
+    assert orch._read_last_activity(None) is None
+
+
+def test_read_last_activity_returns_none_when_summary_log_is_absent(tmp_path):
+    # A movement dispatched before AC-1/AC-2 landed: old-format engineer.log,
+    # no summary.log at all -- must not raise (AC-5).
+    assert orch._read_last_activity(str(tmp_path)) is None
+
+
+def test_read_last_activity_returns_the_last_nonblank_line(tmp_path):
+    nexus_dir = tmp_path / ".nexus"
+    nexus_dir.mkdir()
+    (nexus_dir / "engineer.summary.log").write_text("assistant: hi\ntool_use: Bash ls\n\n", encoding="utf-8")
+    assert orch._read_last_activity(str(tmp_path)) == "tool_use: Bash ls"
+
+
+def test_status_row_carries_last_activity(tmp_path):
+    nexus_dir = tmp_path / "wt" / ".nexus"
+    nexus_dir.mkdir(parents=True)
+    (nexus_dir / "engineer.summary.log").write_text("assistant: working\n", encoding="utf-8")
+    record = {
+        "movement_id": "NXS-LOCAL-0001", "phase": orch.PHASE_RUNNING, "pid": os.getpid(),
+        "worktree_path": str(tmp_path / "wt"), "retry_count": 0, "branch": "feature/x",
+    }
+    row = orch._status_row(record, tmp_path / "relay", retry_limit=2)
+    assert row["last_activity"] == "assistant: working"
+
+
+def test_status_row_last_activity_is_none_for_a_pre_change_movement(tmp_path):
+    # AC-5 backward compatibility: no .nexus dir at all under the recorded
+    # worktree path (a movement dispatched before this change) -- no crash.
+    record = {
+        "movement_id": "NXS-LOCAL-0001", "phase": orch.PHASE_DONE, "pid": 1,
+        "worktree_path": str(tmp_path / "nonexistent-wt"), "retry_count": 0, "branch": "feature/x",
+    }
+    row = orch._status_row(record, tmp_path / "relay", retry_limit=2)
+    assert row["last_activity"] is None
+
+
+def test_status_cli_reports_last_activity_field(tmp_path, monkeypatch, capsys):
+    relay_dir = _make_relay(tmp_path, movement="M")
+    relay_id = json.loads(next(relay_dir.glob("*.json")).read_text())["id"]
+    worktree = tmp_path / "wt"
+    nexus_dir = worktree / ".nexus"
+    nexus_dir.mkdir(parents=True)
+    (nexus_dir / "engineer.summary.log").write_text("assistant: on it\n", encoding="utf-8")
+    state_dir = tmp_path / "state"
+    orch._save_state(state_dir, relay_id, {
+        "movement_id": relay_id, "phase": orch.PHASE_RUNNING, "pid": os.getpid(),
+        "worktree_path": str(worktree), "retry_count": 0, "branch": "feature/x", "dispatch_seq": 1,
+    })
+    capsys.readouterr()
+    rc = orch.main(["status", "--movement", relay_id, "--state-dir", str(state_dir), "--relay-dir", str(relay_dir)])
+    assert rc == orch.EXIT_OK
+    row = json.loads(capsys.readouterr().out)
+    assert row["last_activity"] == "assistant: on it"
+
+
+# --- AC-3/AC-6: watch's data-gathering function, tested in isolation --------
+
+def test_gather_watch_rows_is_read_only(tmp_path):
+    state_dir = tmp_path / "state"
+    relay_dir = tmp_path / "relay"
+    orch._save_state(state_dir, "NXS-LOCAL-0001", {
+        "movement_id": "NXS-LOCAL-0001", "phase": orch.PHASE_DONE, "pid": 1,
+        "branch": "feature/old", "worktree_path": str(tmp_path / "old-wt"), "retry_count": 0,
+    })
+    before = (state_dir / "NXS-LOCAL-0001.json").read_text()
+
+    rows = orch._gather_watch_rows(state_dir, relay_dir, retry_limit=2)
+
+    after = (state_dir / "NXS-LOCAL-0001.json").read_text()
+    assert after == before  # watch never writes state, unlike status's own reconciliation
+
+
+def test_gather_watch_rows_backward_compatible_with_a_pre_change_movement(tmp_path):
+    state_dir = tmp_path / "state"
+    relay_dir = tmp_path / "relay"
+    orch._save_state(state_dir, "NXS-LOCAL-0001", {
+        "movement_id": "NXS-LOCAL-0001", "phase": orch.PHASE_DONE, "pid": 1,
+        "branch": "feature/old", "worktree_path": str(tmp_path / "old-wt-no-summary-log"), "retry_count": 0,
+    })
+
+    rows = orch._gather_watch_rows(state_dir, relay_dir, retry_limit=2)
+
+    assert len(rows) == 1
+    assert rows[0]["movement_id"] == "NXS-LOCAL-0001"
+    assert rows[0]["last_activity"] is None
+
+
+def test_gather_watch_rows_sorted_and_multiple(tmp_path):
+    state_dir = tmp_path / "state"
+    relay_dir = tmp_path / "relay"
+    orch._save_state(state_dir, "NXS-LOCAL-0002", {"movement_id": "NXS-LOCAL-0002", "phase": orch.PHASE_DONE, "pid": 1})
+    orch._save_state(state_dir, "NXS-LOCAL-0001", {"movement_id": "NXS-LOCAL-0001", "phase": orch.PHASE_DONE, "pid": 1})
+    rows = orch._gather_watch_rows(state_dir, relay_dir, retry_limit=2)
+    assert [r["movement_id"] for r in rows] == ["NXS-LOCAL-0001", "NXS-LOCAL-0002"]
+
+
+def test_render_watch_screen_no_rows_known():
+    assert "no movements known" in orch._render_watch_screen([], 80)
+
+
+def test_render_watch_screen_shows_na_for_missing_last_activity():
+    row = {
+        "movement_id": "NXS-LOCAL-0001", "phase": "running", "pid_alive": True,
+        "heartbeat_age_seconds": 5, "branch": "feature/x", "worktree_path": "/tmp/x",
+        "last_marker": None, "last_timestamp": None, "last_activity": None,
+    }
+    screen = orch._render_watch_screen([row], 80)
+    assert "n/a" in screen
+    assert "NXS-LOCAL-0001" in screen
+
+
+def test_format_age_buckets():
+    assert orch._format_age(None) == "-"
+    assert orch._format_age(5) == "5s"
+    assert orch._format_age(65) == "1m05s"
+    assert orch._format_age(3700) == "1h01m"
