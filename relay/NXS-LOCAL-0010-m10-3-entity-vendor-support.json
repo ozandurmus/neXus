@@ -1,0 +1,99 @@
+{
+  "created_at": "2026-09-08T09:23:24Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1 D2 entity applicability producer: pure function(s) deriving, per (entity, capability), one of APPLICABLE / NOT_APPLICABLE / APPLICABILITY_UNKNOWN from the entity's logical type (physical member, VSX virtual system, cluster, Panorama-managed device, etc.) and each capability's declared applicable-entity-type set. The declared set is read from a single, explicit, closed table this movement adds (not inferred from naming, vendor guesses, or capability id substrings) -- cite the exact source for each entry or mark it UNKNOWN rather than guess.",
+          "AC-2 D3 vendor/platform support producer: pure function(s) deriving SUPPORTED / UNSUPPORTED / SUPPORT_UNKNOWN per (vendor/platform, capability) from positive evidence only -- section 7.3's rule (grep the contract yourself: what may and may not prove capability support) governs; a missing/absent producer, a failed collection, or an unrecognized platform must never be read as UNSUPPORTED, only as SUPPORT_UNKNOWN.",
+          "AC-3 both producers are pure, offline, no device/network/registry I/O -- callers (the M10.2 resolver, once wired, out of this movement's scope) supply the typed inputs (entity kind, vendor/platform, capability id); this movement does not import or extend utils/capability_registry.py (the distinct 0.6.1C collection-capability planner named as a namespace-collision risk in M10.1's own history) and does not wire anything into html_export, console, payloads, or navigation.",
+          "AC-4 vocabulary discipline: output values match docs/design/CAPABILITY_STATE_VOCABULARY_AND_PRESENTATION.md section 4 exactly (APPLICABILITY_UNKNOWN, SUPPORT_UNKNOWN as named there); a test asserts these tokens are disjoint from the job lifecycle (X1), the OP.2 action-state set (X2), and utils.action_taxonomy -- mirroring M10.1's own AC-8 precedent.",
+          "AC-5 evidence and closed sources: the entity-type table (AC-1) and the vendor/platform support table (AC-2) each cite their real source (an existing repository module, a frozen contract section, or an explicit vendor documentation reference) per entry; no entry is invented from plausible-sounding vendor knowledge -- if a genuine gap exists, the entry is SUPPORT_UNKNOWN/APPLICABILITY_UNKNOWN with the gap named, not filled by guessing.",
+          "AC-6 validation and state: targeted test module green; tests/test_architecture_convergence.py unchanged and green; project-state bookkeeping in this PR. This movement runs in parallel with M10.2, GOV.PO.3, OP.1 and a small backlog-fix bundle, each in its own worktree: merge origin/main before opening/merging your PR and resolve any mechanical bookkeeping conflicts yourself."
+        ],
+        "baseline": {
+          "authority": "docs/design/CAPABILITY_STATE_VOCABULARY_AND_PRESENTATION.md sections 3.3 (I2/I3), 4 (vocabulary), 7.3 (what may prove support) -- FROZEN 2026-09-06.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "sequencing": "Third M10 slice, authorized 2026-09-08 alongside M10.2 -- the two are independent (M10.2 is resolver logic over typed inputs; M10.3 produces two of those input dimensions) and run concurrently in separate worktrees, not sequentially."
+        },
+        "context_not_loaded": [
+          "console, templates/static, OP.x, vendor collector internals beyond what AC-1/AC-2 need to cite"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/m10-3-entity-and-vendor-support-producers"
+        },
+        "invariants": [
+          "Positive-evidence-only support proof (section 7.3) -- absence, failure, or an unrecognized platform is never read as UNSUPPORTED",
+          "No coercion/inference to fill a genuine gap -- UNKNOWN with a named reason is always the correct answer over a guess",
+          "Pure functions only; no I/O, no device contact, no new collector"
+        ],
+        "merge_gate": "Standing relay#13: green tests -> engineer merges, reports via RELAY_NOTE on this relay file.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Implement the D2 entity-applicability and D3 vendor/platform-support producers as pure, cited, fully tested functions -- the second and third of M10's three independent input dimensions (D4 shipped in M10.1, D2/D3 here, resolver core in M10.2).",
+        "output_contract": [
+          "utils/capability_applicability.py and utils/capability_vendor_support.py (or one module -- engineer's call, keep them clearly separable), new",
+          "tests/test_m10_3_entity_and_vendor_support_producers.py, new",
+          "Project-state bookkeeping in this PR",
+          "SESSION_CLOSE on this relay file (absolute path)"
+        ],
+        "recommended_reasoning": {
+          "reason": "Deterministic implementation once the two source tables are correctly sourced; the vendor-semantics discipline (AC-5) is the one place needing care, escalate via RELAY_QUESTION only on a genuine sourcing gap.",
+          "tier": "Sonnet 5, normal (strong)"
+        },
+        "requirements": [
+          "Read contract sections 3.3, 4, and 7.3 in full before writing either table",
+          "Cite the real source for every table entry; do not extend utils/capability_registry.py"
+        ],
+        "risks": [
+          "The frozen contract's own D2/D3 input rows (I2/I3) reference producers as 'no producer today' -- verify there isn't a second, half-built producer already in the tree before starting, to avoid duplicating one."
+        ],
+        "scope": {
+          "in": [
+            "D2 and D3 producer modules",
+            "targeted tests",
+            "bookkeeping"
+          ],
+          "out": [
+            "Resolver wiring (M10.2's job)",
+            "D5/D6/D7",
+            "any UI/payload/navigation change",
+            "utils/capability_registry.py"
+          ]
+        },
+        "validation_plan": [
+          "Targeted test module",
+          "tests/test_architecture_convergence.py",
+          "git diff --check; privacy gate once at PR time"
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-08T09:23:24Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "RELAY_NOTE",
+      "seq": 2,
+      "subject": "m10_3_entity_and_vendor_support_producers merged",
+      "text": "Implemented AC-1..AC-6: new utils/capability_applicability.py (resolve_d2) and utils/capability_vendor_support.py (resolve_d3) -- pure, offline, closed-table producers for CAPABILITY_STATE_VOCABULARY_AND_PRESENTATION.md section 3.3's D2 (APPLICABLE/NOT_APPLICABLE/APPLICABILITY_UNKNOWN, from NAVIGATION_INFORMATION_ARCHITECTURE.md section 5.2's eight logical entity types) and D3 (SUPPORTED/UNSUPPORTED/SUPPORT_UNKNOWN, from real repository collector/adapter evidence). Every APPLICABLE/NOT_APPLICABLE/SUPPORTED entry cites its exact source; every uncited pair resolves the UNKNOWN value naming the gap, never a guess (section 7.3, section 8.2 point 1). No UNSUPPORTED entry populated -- no citable positive evidence of vendor non-support found for any of the seven PCP.0 capabilities; utils/operate/adapter.py (D3's own cited input for controlled_operations) carries zero concrete vendor adapter, and no telemetry/diagnostics producer exists anywhere -- both treated as absent-producer SUPPORT_UNKNOWN per section 8.2 point 1, not UNSUPPORTED, correcting PRODUCT_CONTROL_PLANE_ARCHITECTURE.md section 8's own informal worked-example wording. Neither module imports or extends utils/capability_registry.py; no resolver/UI/navigation/payload wiring (M10.2's job). tests/test_m10_3_entity_and_vendor_support_producers.py: 107 passed, including vocabulary-separation against the job lifecycle/OP.2 action-state/action-taxonomy tokens (AC-4, mirroring M10.1's AC-8 precedent) and D2/D3 mutual disjointness. tests/test_architecture_convergence.py: 22 passed, unchanged. utils.project_plan.build_project_plan_payload()['metadata_warnings'] == []. git diff --check clean. Repository privacy gate (main.py --repository-privacy-check): FAIL/3 pre-existing findings only, identical to origin/main before this branch and to PR #127/#129's own evidence -- none introduced by this movement. origin/main merged into this branch before opening the PR (reconciled build_history.json/roadmap.json/CURRENT_STATE.md/docs/history/INDEX.md against the concurrently-merged gov_po_3_orchestrator_observability, PR #129). PR #131 merged to main via 63a1fdf per the standing relay#13 merge decision -- no separate merge RELAY_DECISION needed. Project-state updated.",
+      "timestamp": "2026-09-08T12:11:44Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0010",
+  "movement": "M10_3_ENTITY_AND_VENDOR_SUPPORT_PRODUCERS",
+  "next_actor": null,
+  "refs": [
+    "docs/design/CAPABILITY_STATE_VOCABULARY_AND_PRESENTATION.md",
+    "utils/capability_registry.py",
+    "utils/registry_evidence_reconciliation.py",
+    "utils/merge.py",
+    "project/roadmap.json"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-08T12:11:44Z"
+}

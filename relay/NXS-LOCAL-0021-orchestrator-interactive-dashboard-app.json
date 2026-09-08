@@ -76,11 +76,99 @@
       },
       "seq": 1,
       "timestamp": "2026-09-08T16:40:52Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "RELAY_NOTE",
+      "seq": 2,
+      "subject": "AC-2 design note: action-id registry, relay-write schema, session-token/CSRF",
+      "text": "(a) Action-id registry. An action_id is issued only when the backend renders an executable-request card (GET /api/movements/<id>). It is sha256(canonical_json({movement_id, relay_file, operation, args, working_directory, source_relay_seq}))[:16], where operation is one of {route_to_engineer, record_decision, reject} and args is the exact local_relay.py append parameters (marker/subject/text/next/authorized_by/scope/supersedes) the button will submit verbatim -- never free-form text typed in the browser. source_relay_seq = len(relay_obj[\"entries\"]) at issuance time, reusing the same signal orchestrator.py._status_row already computes for its REVISION_CHANGED_SINCE_DISPATCH check, rather than inventing a second staleness idea. Registry storage follows the existing runtime-bookkeeping pattern (outside the relay file, like orchestrator's own process records): one file per movement under NEXUS_ORCHESTRATOR_STATE_DIR, \"<movement_id>.actions.json\", mapping action_id to {operation, args, working_directory, source_relay_seq, issued_at, consumed_at, consumed_relay_seq}. On click: unknown id is 404; an already-consumed id is rejected (duplicate-click guard); the live relay file's current entry count is compared to source_relay_seq and a mismatch is rejected as stale (something was appended since the card was rendered -- a RELAY_CORRECTION or a newer decision). Only then does the backend call local_relay.py append with the registered args and record consumed_at/consumed_relay_seq from that call's result. local_relay.py's own content-hash optimistic-concurrency check (LOCAL_RELAY_PROTOCOL.md section 6) remains a second, independent guard at the actual write, not replaced by this registry.\n\n(b) Relay-write schema. No new marker. LOCAL_RELAY_PROTOCOL.md section 4 states the seven-marker vocabulary is exactly closed; adding an eighth would violate that already-written contract and this AC's own instruction not to invent an incompatible file format. Every dashboard action maps onto an existing marker: a genuinely new PO decision (AMENDMENT case 2) becomes RELAY_DECISION with authorized_by/scope/supersedes populated from the session (authorized_by = the bearer-token session's identity, scope = \"<movement_id> dashboard action\", supersedes = the prior entry's seq if this replaces one, else \"none\"); an already-authorized auto-route or a queued message-box note (case 1, and the \"send a note\" field) becomes RELAY_NOTE -- factual status/instruction, never itself a new authority; a reject on a genuinely-new-decision card becomes RELAY_DECISION recording the decline, since declining is still a PO decision. Case 3 (platform/policy block) gets no write button at all -- there is nothing to append, only the real blocker text the card already shows. The action_id/operation metadata rides as plain, greppable text inside subject (e.g. \"DASHBOARD_ACTION action_id=<id> op=<operation>\") rather than as new JSON fields, so no schema change is needed anywhere -- the engineer session already reads relay entries as free text today (the standing ENGINEER_PROMPT instruction to act on RELAY_CORRECTION/RELAY_DECISION entries), exactly like every other entry.\n\n(c) Session-token + Origin/CSRF. Reuses docs/design/OPERATOR_CONSOLE_ARCHITECTURE.md section 7.2's cookieless-bearer-token pattern directly, adapted to stdlib http.server since that document's fastapi/uvicorn stack is out of scope here per AC-6. The dashboard subcommand generates one secrets.token_urlsafe(32) per process launch, printed once to the terminal as http://127.0.0.1:<port>/#t=<token>; the frontend reads it from location.hash, strips it via history.replaceState, holds it only in memory, and sends it as an Authorization: Bearer header on every /api/* call. No cookie is ever set, so the ambient-credential class of CSRF is structurally impossible, the same reasoning that document already gives; Origin is still checked as defence in depth on every state-changing (PUT/POST) /api/* route -- rejected if present and not equal to http://127.0.0.1:<port> (absence is allowed, since the bearer token, not Origin, is the real authorization boundary). Server-side token comparison uses hmac.compare_digest, never ==. GET / and static assets stay unauthenticated (no evidence lives in them, matching that document's own rule); every /api/* route, read or write, requires the token. The token lives only in a module-level in-memory variable, regenerated on every dashboard invocation, never written to disk -- the same \"runtime bookkeeping, not durable governance history\" posture orchestrator.py's own state directory already uses.\n\nWaiting for acknowledgment before starting AC-3 implementation, per this movement's merge_gate.",
+      "timestamp": "2026-09-08T16:45:23Z"
+    },
+    {
+      "actor": "po",
+      "authorized_by": "Product Owner -- chat directive 2026-09-08 (this engineering session, direct instruction, not a nexus-po episode)",
+      "marker": "RELAY_DECISION",
+      "scope": "AC-2 design-note acknowledgment for movement ORCHESTRATOR_INTERACTIVE_DASHBOARD_APP only",
+      "seq": 3,
+      "subject": "AC-2 design acknowledged, AC-3 implementation authorized",
+      "supersedes": "none",
+      "text": "The action-id registry design (sha256-derived id keyed to movement/relay_file/operation/args/working_directory/source_relay_seq, staleness checked against live relay entry count), the relay-write schema choice (reusing RELAY_NOTE/RELAY_DECISION only, no new marker, per LOCAL_RELAY_PROTOCOL.md's closed vocabulary), and the session-token/CSRF scheme (ephemeral bearer token via URL fragment, never persisted, hmac.compare_digest comparison, Origin checked as defense in depth) are all acknowledged and approved as designed. Proceed to AC-3 implementation per this movement's SESSION_START. No changes requested.",
+      "timestamp": "2026-09-08T17:06:49Z"
+    },
+    {
+      "actor": "engineer",
+      "good_to_go": true,
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "report": {
+        "changed": [
+          "scripts/orchestrator_dashboard.py (new)",
+          "scripts/dashboard_assets/ (new)",
+          "tests/test_orchestrator_dashboard.py (new)",
+          "scripts/orchestrator.py (+30 lines, dashboard subcommand wiring only)",
+          "project/backlog.json (status done)",
+          "CURRENT_STATE.md (new bullet)"
+        ],
+        "completed": [
+          "AC-3..AC-6 dashboard implementation",
+          "AC-7 targeted tests (36 green)",
+          "AC-8 live acceptance demo, one real bug found+fixed",
+          "AC-9 full regression"
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "n/a -- no main.py in this repo",
+          "ui": "new opt-in dashboard subcommand only; no existing UI/CLI output changed"
+        },
+        "integration": {
+          "branch": "feature/orchestrator-interactive-dashboard-app",
+          "ci": "n/a -- local only",
+          "head_sha": "07c7da8fb98c78ab8a4fc8a1b6a2f113c1eca67d",
+          "merge_commit": null,
+          "merge_decision": "approved -- self-merge per standing relay#13, pending git dispatch",
+          "merge_state": "NOT_OPENED",
+          "pr": null,
+          "pr_url": null
+        },
+        "next": {
+          "movement": "none",
+          "movement_type": "IMPLEMENTATION",
+          "objective": "n/a -- this movement dispatches no sub-work of its own",
+          "status": "done"
+        },
+        "preserved": [
+          "All existing orchestrator.py status-computation functions unchanged",
+          "local_relay.py append/turn-ownership logic reused, not reimplemented"
+        ],
+        "recommended_reasoning": {
+          "reason": "no next step recommended by this movement",
+          "tier": "Sonnet 5, normal"
+        },
+        "state_updates": [
+          "project/backlog.json id orchestrator_interactive_dashboard_app: planned -> done",
+          "CURRENT_STATE.md: new bullet added"
+        ],
+        "unresolved_risks": [
+          "none blocking"
+        ],
+        "validation": {
+          "affected": "scripts/orchestrator.py status functions exercised via _status_row reuse, no behavior change",
+          "diff_check": "to run at PR time",
+          "full_regression": "2979 passed, 25 skipped, 2 pre-existing failures unrelated (test_dev_0_5b_auth_consumer_canonical_config.py against already-committed files)",
+          "privacy": "to run at PR time",
+          "real_environment": "n/a -- local validation only per deployment_direction",
+          "state_consistency": "backlog.json/CURRENT_STATE.md updated this PR",
+          "targeted": "36/36 passed, tests/test_orchestrator_dashboard.py"
+        }
+      },
+      "seq": 4,
+      "timestamp": "2026-09-08T17:38:07Z"
     }
   ],
   "id": "NXS-LOCAL-0021",
   "movement": "ORCHESTRATOR_INTERACTIVE_DASHBOARD_APP",
-  "next_actor": "engineer",
+  "next_actor": null,
   "refs": [
     "project/backlog.json",
     "scripts/orchestrator.py",
@@ -89,6 +177,6 @@
     "docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md"
   ],
   "schema_version": 1,
-  "status": "OPEN",
-  "updated_at": "2026-09-08T16:40:52Z"
+  "status": "CLOSED",
+  "updated_at": "2026-09-08T17:38:07Z"
 }

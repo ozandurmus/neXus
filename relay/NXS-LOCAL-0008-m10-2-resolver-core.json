@@ -1,0 +1,104 @@
+{
+  "created_at": "2026-09-08T09:03:35Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1 Stage 0 / result algebra (contract 4.1, 5.0): a new module resolves the union tag from D1 alone -- SURFACE_PRESENT -> RESOLVED, SURFACE_ABSENT -> OMITTED{NOT_SHIPPED}, D1 missing/malformed -> OMITTED{SURFACE_ELIGIBILITY_UNRESOLVABLE} (fail closed). OMITTED is a structurally distinct type carrying reason + optional diagnostic and NO capability outputs (not None-filled fields). Cases V-A..V-D each tested.",
+          "AC-2 Vocabulary (4.2, 4.3, 4.4): CapabilityState has exactly the nine values (NOT_APPLICABLE, DEVICE_DISABLED, UNSUPPORTED, NOT_ENROLLED, POLICY_DISABLED, COLLECTION_FAILED, UNKNOWN, NOT_CONFIGURED, AVAILABLE) -- NOT_SHIPPED is a SurfaceOmissionReason, never a state; CapabilityQualifier has exactly the seven; a test proves lexical disjointness from the job vocabularies X1 (queued/running/succeeded/failed/blocked/skipped) and X2 (OP.2 action states) and from utils.action_taxonomy tokens. A serializer emits only under the keys capability_state / capability_qualifiers -- a bare state string never crosses a boundary.",
+          "AC-3 Stage 1 (5.1, 5.1.1, 5.1.2): CX1 only from I10 (two incompatible type/vendor resolutions for one canonical id); RI-2 reuses utils.registry_evidence_reconciliation.detect_ri2 (M10.1), not a reimplementation; RI-1 only when the K1-K6 precedence table (5.1.1, rows 1-6, evaluated in order) reaches row 6. A parametrized test covers all six rows including mixed cases (a FALSE on K1/K2 beats an UNESTABLISHED elsewhere; a known mismatch beats an unknown one). CX1 subject scoping per 5.1.2 is represented in the result (which subject is disputed), even though action gating (stage 5) is out of scope.",
+          "AC-4 Stage 2 primary ladder (5.2): ranks 0-11 implemented first-match-wins exactly as the table; AVAILABLE is reachable only via rank 10's full conjunction; rank 11 UNKNOWN(unclassified_input) catches absent/malformed input -- never coerced to a default; D5=POLICY_UNKNOWN never reaches rank 11 and yields SCHEDULE_UNKNOWN; every UNKNOWN carries its named missing fact / reason code. One test per rank plus the rank-8-vs-9 fail-closed ordering.",
+          "AC-5 Stage 3 qualifiers (4.3, 4.1.5): STALE(as_of) only from D6a fresh==false with a real anchor; PARTIAL only from D6b partial; SOURCE_TRUST_LIMITED only from D6d with its source reason code; IDENTITY_TRANSLATION_REQUIRED only from D6e with its reason code and never promoted to CX1 on its own; NOT_SCHEDULED only from D5 NO_APPLICABLE_SCHEDULE; SCHEDULE_UNKNOWN from POLICY_UNKNOWN; MEMBER_SPECIFIC from I15. The four inference bans (4.1.5) each have a negative test.",
+          "AC-6 Boundaries: pure functions over a typed input record (D1-D6, I10, I14 K1-K6, I15); no I/O, no device contact, no reading of registry/evidence files inside the resolver (callers supply inputs); nothing wired into html_export, console, payloads or navigation; utils/capability_registry.py (the 0.6.1C collection planner -- a different concept) is neither extended nor imported. Stages 4-5 (evidence presentation, action affordance) are explicitly the next slice.",
+          "AC-7 Validation and state: targeted test module green; tests/test_m10_1_registry_evidence_reconciliation.py and tests/test_architecture_convergence.py unchanged and green; project-state bookkeeping (build_history, roadmap now_next, CURRENT_STATE.md, AI_HANDOVER.md, INDEX.md) lands in this PR. Two other movements run in parallel (GOV.PO.3 orchestrator, OP.1 contract): merge origin/main before opening/merging the PR and resolve bookkeeping conflicts yourself -- they are mechanical."
+        ],
+        "baseline": {
+          "authority": "docs/design/CAPABILITY_STATE_VOCABULARY_AND_PRESENTATION.md sections 4 and 5 (FROZEN -- PRODUCT OWNER APPROVED 2026-09-06); M10.1's D4 producer (utils/registry_evidence_reconciliation.py, merged PR #117) is an input.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "sequencing": "Second M10 slice, sequenced by the first PLAN episode; authorized now by Product Owner direction 2026-09-08 (UI/interactive control-plane track is top priority). Runs in parallel with GOV.PO.3 and OP.1 in its own worktree. Prerequisites M6, M10.1 complete."
+        },
+        "context_not_loaded": [
+          "vendor collectors, OP.x, console job engine, templates/static"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/m10-2-capability-state-resolver-core"
+        },
+        "invariants": [
+          "capability is not readiness, and readiness is not authorization",
+          "UNKNOWN is a valid outcome; it always names the missing fact; nothing is coerced to a favourable default",
+          "Identifiers are opaque; no normalization to force a join; CX1 only from an actual incompatible-type/vendor resolution",
+          "No producer for D2/D3/D5 exists yet -- their absence resolves to the corresponding *_UNKNOWN values, never to a positive default"
+        ],
+        "merge_gate": "Standing relay#13: green tests -> engineer merges, reports via RELAY_NOTE on this relay file.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Implement the capability-state resolver core (stages 0-3 of contract section 5: union tag, contradiction/inconsistency gate, primary ladder, qualifiers) as pure, fully tested functions, so the console/device experience has a real resolver to consume in the next slices.",
+        "output_contract": [
+          "utils/capability_state_resolver.py (new; name deliberately distinct from utils/capability_registry.py)",
+          "tests/test_m10_2_capability_state_resolver.py (new)",
+          "Project-state bookkeeping in this PR",
+          "SESSION_CLOSE on relay/NXS-LOCAL-0008 (absolute path in the handoff)"
+        ],
+        "recommended_reasoning": {
+          "reason": "Deterministic implementation of a precise frozen table; section 5.1.1 totality needs care but is fully specified. Escalate via RELAY_QUESTION only on a genuine contradiction in the contract.",
+          "tier": "Sonnet 5, normal (strong)"
+        },
+        "requirements": [
+          "Read contract sections 3.3, 4 and 5 in full before writing code; use its identifiers verbatim",
+          "Reuse detect_ri2 from M10.1; do not re-derive RI-2",
+          "Work in your own worktree; the relay file lives in the main checkout -- read/append it by absolute path"
+        ],
+        "risks": [
+          "The contract is large; this slice deliberately stops at stage 3. Stages 4-5 need I12/I16-I19 (job registry, auth) and are the next slice -- do not pull them in."
+        ],
+        "scope": {
+          "in": [
+            "Resolver core stages 0-3 with typed inputs",
+            "targeted tests",
+            "bookkeeping"
+          ],
+          "out": [
+            "Stages 4-5 (evidence presentation, action affordance)",
+            "D2/D3/D5 producers",
+            "any UI/payload/navigation/template change",
+            "feature_registry availability_rule criterion",
+            "utils/capability_registry.py"
+          ]
+        },
+        "validation_plan": [
+          "Targeted: tests/test_m10_2_capability_state_resolver.py",
+          "Affected: tests/test_m10_1_registry_evidence_reconciliation.py, tests/test_architecture_convergence.py (metadata_warnings empty)",
+          "git diff --check; privacy gate once at PR time"
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-08T09:03:35Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "RELAY_NOTE",
+      "seq": 2,
+      "subject": "m10_2_capability_state_resolver_core already implemented and merged -- relay closed",
+      "text": "utils/capability_state_resolver.py already implements AC-1..AC-7 and is merged to origin/main (commit 8bb0a1e, PR #132, HEAD 897f8b2) -- this session found the branch and relay file in that state on pickup, with only the SESSION_START entry posted; no further implementation was needed, and this note closes the relay. Verified rather than assumed: stage 0 resolve_union_tag() decides the union tag from D1 alone (Resolved/Omitted are distinct dataclasses, Omitted carries reason + optional diagnostic only, no capability-output fields) covering V-A..V-D; CapabilityState has exactly the nine values and CapabilityQualifier exactly the seven, both closed frozensets; evaluate_stage1() derives CX1 only from an IdentityConflict (I10), RI-2 via the reused utils.registry_evidence_reconciliation.detect_ri2 (no reimplementation), and RI-1 only through evaluate_ri1_comparability()'s six-row K1-K6 precedence table evaluated in order; resolve_primary_status() implements ranks 0-11 first-match-wins with AVAILABLE reachable only via rank 10's full conjunction and rank 11 UNKNOWN(unclassified_input) as the fail-closed catch-all (malformed/absent input never coerced -- LadderInputs carries raw values and _all_well_formed() gates rank 10 only); POLICY_UNKNOWN yields SCHEDULE_UNKNOWN and never reaches rank 11; resolve_qualifiers() derives each of the seven qualifiers from exactly one facet, independently of the ladder rank; to_wire() emits only under capability_state/capability_qualifiers. The module is pure (no I/O, no device contact, only typed dataclass/enum inputs) and imports neither utils/capability_registry.py nor any console/payload/navigation module. Re-ran validation this session rather than trusting the prior commit message: tests/test_m10_2_capability_state_resolver.py 134 passed, tests/test_m10_1_registry_evidence_reconciliation.py 56 passed, tests/test_architecture_convergence.py 22 passed (212 total, .venv/bin/python -m pytest -q -n auto --dist worksteal). utils.project_plan.build_project_plan_payload()['metadata_warnings'] == []. git diff --check clean. git rev-parse HEAD == origin/main (897f8b2) -- already merged, nothing to open a new PR for. Repository privacy gate (main.py --repository-privacy-check): FAIL/2 findings, both pre-existing and unrelated -- project/build_history.json:123 (a credential-shaped substring inside an older, unrelated build record's prose evidence field, commit 4533edb7) and relay/NXS-LOCAL-0003-local-relay-watch-command.json:155; neither touched by this movement. Project-state bookkeeping (build_history, roadmap now_next, CURRENT_STATE.md, AI_HANDOVER.md, docs/history/INDEX.md) already landed in commit 8bb0a1e. No RELAY_CORRECTION or RELAY_DECISION entries were appended to this relay file after dispatch.",
+      "timestamp": "2026-09-08T12:47:49Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0008",
+  "movement": "M10_2_CAPABILITY_STATE_RESOLVER_CORE",
+  "next_actor": null,
+  "refs": [
+    "docs/design/CAPABILITY_STATE_VOCABULARY_AND_PRESENTATION.md",
+    "utils/registry_evidence_reconciliation.py",
+    "utils/capability_registry.py",
+    "utils/action_taxonomy.py",
+    "console/registry.py",
+    "project/roadmap.json"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-08T12:47:49Z"
+}
