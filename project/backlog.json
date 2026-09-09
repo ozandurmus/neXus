@@ -993,9 +993,9 @@
       "id": "ui2_b1_01_skeleton_ci_docker",
       "title": "UI2 B1-1 -- Gradle multi-module skeleton under ui2/, CI job, Docker image, Testcontainers PostgreSQL, P-1 dependency-graph test",
       "priority": "P1 -- UI 2.0",
-      "status": "planned",
-      "note": "Starts when C1-C4 and the authorization/audit rows are frozen (dependency gate, not serial wall). 2026-09-09: contract-first (PO direction); dispatched as NXS-LOCAL-0061 (Fable 5.1 low). HELD 2026-09-09: stopped before output (credit conservation); packet ready in the relay file, resume from there.",
-      "target": "workflow §5 B1-1"
+      "status": "in_progress",
+      "note": "Starts when C1-C4 and the authorization/audit rows are frozen (dependency gate, not serial wall). 2026-09-09: contract-first (PO direction); implementation follows against frozen contract. Dispatched as NXS-LOCAL-0061 and resumed 2026-09-10 after the PO selected it as an initial B1 movement. CONTRACT FROZEN -- PRODUCT OWNER APPROVED 2026-09-10 after portability and cold-cache CI corrections: docs/design/UI2_0_B1_01_SKELETON_CI_DOCKER_CONTRACT.md fixes the module map and dependency direction, exact build/test/image commands, Testcontainers/Flyway/audit_context_missing harness, one-to-one P-1 ArchUnit specification, isolated CI coexistence with unchanged validation.yml, minimal non-root image and per-component secret boundaries, 15 runnable implementation checks, and explicit technology choices. Contract only: no ui2/ code/build files, Line-1 source, validation.yml, or device contact. The backlog item remains in_progress because actual ui2/ implementation follows as a separate movement.",
+      "target": "workflow §5 B1-1; docs/design/UI2_0_B1_01_SKELETON_CI_DOCKER_CONTRACT.md"
     },
     {
       "category": "UI 2.0 (Java product line)",

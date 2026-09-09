@@ -84,11 +84,93 @@
       },
       "seq": 1,
       "timestamp": "2026-09-09T20:21:24Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "RELAY_NOTE",
+      "seq": 2,
+      "subject": "Contract draft and validation complete",
+      "text": "AC-1..AC-8 are covered by sections 2-9 of docs/design/UI2_0_B1_01_SKELETON_CI_DOCKER_CONTRACT.md; AC-9 scope guards pass: no ui2/ directory, Line-1 source and .github/workflows/validation.yml unchanged, git diff --check clean, repository privacy gate PASS with 0 new findings against origin/main. Project-state consistency: 22 passed. Branch was fast-forwarded to origin/main 04b99c0 before drafting, preserving later UI2/logo decisions. Proceeding under standing relay#13 merge authorization.",
+      "timestamp": "2026-09-09T21:30:05Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "RELAY_NOTE",
+      "seq": 3,
+      "subject": "Git integration blocked",
+      "text": "Local contract work and commit e875c5e are complete.  failed: Permission to ozandurmus/neXus.git denied to OzanDur_garanti; HTTP 403. No PR or CI run exists. Standing relay#13 remains the merge authority once push access is restored.",
+      "timestamp": "2026-09-09T21:31:17Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "PARTIAL",
+      "report": {
+        "changed": [
+          "Added docs/design/UI2_0_B1_01_SKELETON_CI_DOCKER_CONTRACT.md.",
+          "Updated CURRENT_STATE.md, AI_HANDOVER.md, project roadmap/backlog/build history, generated history index, and relay records."
+        ],
+        "completed": [
+          "Validated relay NXS-LOCAL-0061 before editing.",
+          "Fast-forwarded the branch to origin/main 04b99c0 and preserved later UI2/logo decisions.",
+          "Wrote the DRAFT B1-1 skeleton, CI and Docker contract and movement bookkeeping.",
+          "Committed the local movement as e875c5e."
+        ],
+        "continuation": "SAME_SESSION",
+        "effects": {
+          "main_py": "No change.",
+          "ui": "No visible change; contract and bookkeeping only."
+        },
+        "integration": {
+          "branch": "feature/ui2-b1-01-skeleton-contract",
+          "ci": "Not started because push was rejected with HTTP 403.",
+          "head_sha": "e875c5e",
+          "merge_commit": null,
+          "merge_decision": "Blocked solely by GitHub push authorization; standing relay#13 otherwise authorizes self-merge after green checks.",
+          "merge_state": "NOT_OPENED",
+          "pr": null,
+          "pr_url": null
+        },
+        "next": {
+          "movement": "ui2_b1_01_skeleton_ci_docker",
+          "movement_type": "ARCHITECTURE",
+          "objective": "Restore authorized GitHub push access, push local commit e875c5e, open the documentation-only PR, run required CI, and merge under standing relay#13.",
+          "status": "blocked"
+        },
+        "preserved": [
+          "No ui2/ source or build file was created.",
+          "Line-1 source, .github/workflows/validation.yml, runtime behavior, and device state are unchanged."
+        ],
+        "recommended_reasoning": {
+          "reason": "Only Git integration remains; the contract and local validation are complete.",
+          "tier": "Fast/normal"
+        },
+        "state_updates": [
+          "Backlog movement remains in_progress pending freeze/integration.",
+          "Roadmap/current state/build history now point to the B1-1 contract movement.",
+          "AI_HANDOVER.md was rewritten for this movement."
+        ],
+        "unresolved_risks": [
+          "DRAFT requires Product Owner freeze before implementation.",
+          "Push failed with HTTP 403 for the active GitHub account, so no PR, CI run, or merge exists."
+        ],
+        "validation": {
+          "affected": "Contract self-check AC-1 through AC-9 complete; no ui2/ directory and protected files unchanged.",
+          "diff_check": "PASS before commit.",
+          "full_regression": "Not run: documentation/project-state-only movement; standing relay requires docs/project-state tests.",
+          "privacy": "PASS: 0 new findings against origin/main; 6 pre-existing findings withheld.",
+          "real_environment": "Not applicable; contract-only movement and device contact prohibited.",
+          "state_consistency": "PASS: tests/test_architecture_convergence.py, 22 passed.",
+          "targeted": "Project-state consistency: 22 passed."
+        }
+      },
+      "seq": 4,
+      "timestamp": "2026-09-09T21:31:17Z"
     }
   ],
   "id": "NXS-LOCAL-0061",
   "movement": "UI2_B1_01_SKELETON_CI_DOCKER_CONTRACT",
-  "next_actor": "engineer",
+  "next_actor": null,
   "refs": [
     "docs/design/UI2_0_BASELINE_CONTRACT.md",
     "docs/design/UI2_0_DEVELOPMENT_WORKFLOW.md",
@@ -104,6 +186,6 @@
     "project/backlog.json"
   ],
   "schema_version": 1,
-  "status": "OPEN",
-  "updated_at": "2026-09-09T20:21:24Z"
+  "status": "CLOSED",
+  "updated_at": "2026-09-09T21:31:17Z"
 }
