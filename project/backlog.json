@@ -975,8 +975,8 @@
       "id": "ui2_b0_baseline_directory",
       "title": "UI2 B0 -- baseline directory (product objects & navigation, shared screen states UX-D1..D5, feature contribution contract, alarm lifecycle contract, log/audit data classes, SNMP status exposure) with owner document and version per area",
       "priority": "P0 -- UI 2.0 primary",
-      "status": "planned",
-      "note": "Sonnet 5 extended (high). References existing frozen documents bindingly instead of rewriting them; new text only where no owner exists. 2026-09-09: VISUAL-DESIGN-LANGUAGE decided -- Material Design 3 (docs/design/UI2_0_BASELINE_CONTRACT.md). Mockup content (19 artboards, \"neXus 2026 Design Refresh\" canvas) is the UX reference for this movement's shared-screen-state vocabulary and product navigation; notes saved in the orchestrator scratchpad (ui2_mockup_notes.md) for the engineer to request if not otherwise available.",
+      "status": "in_progress",
+      "note": "Sonnet 5 extended (high). References existing frozen documents bindingly instead of rewriting them; new text only where no owner exists. 2026-09-09: VISUAL-DESIGN-LANGUAGE decided -- Material Design 3 (docs/design/UI2_0_BASELINE_CONTRACT.md). Mockup content (19 artboards, \"neXus 2026 Design Refresh\" canvas) is the UX reference for this movement's shared-screen-state vocabulary and product navigation; notes saved in the orchestrator scratchpad (ui2_mockup_notes.md) for the engineer to request if not otherwise available. 2026-09-09: dispatched as NXS-LOCAL-0058, Sonnet 5 extended (high).",
       "target": "workflow §5 B0-8"
     },
     {
@@ -984,8 +984,8 @@
       "id": "ui2_b0_extraction_tooling",
       "title": "UI2 B0 -- extraction tooling (Line-1): run the Private Replay tokenizer over an existing evidence/capture directory and emit a fixture set in the C6 layout; DLP-gated; preserved-property checks",
       "priority": "P1 -- UI 2.0",
-      "status": "planned",
-      "note": "Sonnet 5 normal. The one Python deliverable serving UI 2.0, at extraction time only (P-1 not violated). Depends on C6.",
+      "status": "in_progress",
+      "note": "Sonnet 5 normal. The one Python deliverable serving UI 2.0, at extraction time only (P-1 not violated). Depends on C6. 2026-09-09: dispatched as NXS-LOCAL-0059, Sonnet 5 normal.",
       "target": "workflow §5 B0-9"
     },
     {
