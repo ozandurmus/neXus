@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "current_build": "ui2_b0_baseline_directory",
+  "current_build": "gov_po_2_implementation",
   "current_track": "PCP.x",
   "progress_contract": "Weighted acceptance-criterion completion. Percentages describe the declared roadmap, not calendar time or delivery ETA.",
   "tracks": [
@@ -150,33 +150,25 @@
   "now_next": {
     "horizon_contract": "NOW is exactly one build. NEXT is exactly one. Everything else is an `upcoming` row carrying its own true status: planned = AFTER, blocked = waiting on a named external gate, deferred = consciously postponed. `now.build` must equal the newest project/build_history.json record -- utils.project_plan enforces it.",
     "now": {
-      "build": "ui2_b0_baseline_directory",
-      "title": "UI2 B0 -- baseline directory (DRAFT, for Product Owner freeze)",
-      "goal": "Write the DRAFT baseline directory (docs/design/UI2_0_BASELINE_DIRECTORY.md): a single index cataloguing owner document/section/version for the six B0-8 baseline concerns -- product objects and navigation, shared screen states, the feature-contribution contract, the alarm lifecycle contract, log/audit data classes, and SNMP status exposure -- referencing C1-C7 and NAVIGATION_INFORMATION_ARCHITECTURE.md bindingly instead of rewriting them, with new schema-level text only where no owner exists (alarm lifecycle; the feature-contribution contract's own tie between C4 and C2). Documentation only; authorizes no device execution.",
-      "status": "in_progress",
-      "started": "2026-09-09",
-      "completed": "2026-09-09",
+      "build": "gov_po_2_implementation",
+      "title": "GOV.PO.2 (2/2) -- implement the frozen PO permission model",
+      "goal": "Implement docs/design/GOV_PO_2_PO_VISIBILITY_AND_BOUNDED_AUTHORSHIP.md without widening Product Owner decision authority: bounded read-only PR/CI observation, flat DRAFT-only po_drafts authorship, generated-history narrowing, the standalone privacy check, and the closed-set PO evidence reviewer.",
+      "status": "automated_validated",
+      "started": "2026-09-10",
+      "completed": "2026-09-10",
       "notes": [
-        "Full detail: project/backlog.json's ui2_b0_baseline_directory note; docs/design/UI2_0_BASELINE_DIRECTORY.md (DRAFT -- FOR PRODUCT OWNER FREEZE, 2026-09-09).",
-        "This is the second-to-last B0 item; runs concurrently with the extraction-tooling movement (Line-1 scripts/, fully independent). Once both merge, B0 is complete and the Product Owner can move to the actual freeze decision for C1-C7 as a whole, then to B1.",
-        "Predecessor ui2_b0_c7_backup_artefact_restore_engine_contract (C7): backup profile model, artefact store/manifest/validation/retention, key custody, restore execution (plan, preconditions, execution via C4, verification, a restore-specific OUTCOME_UNKNOWN), routine-vs-per-operation approval, device/version matrix. MERGED PR #170. Full detail: project/build_history.json's ui2_b0_c7_backup_artefact_restore_engine_contract record.",
-        "Predecessor ui2_b0_c5_amendments_bundle (C5): CON.0 separate-shell amendment text cited, action_taxonomy.py UI-OPERATIONAL-RUN-NOW clarification (docstring/comment only, no new ActionClass member), design document APPROVAL-MODEL/CAP-* replacements, PRIVACY_AND_DATA_HANDLING.md UI 2.0 database section. MERGED PR #169. Full detail: project/build_history.json's ui2_b0_c5_amendments_bundle record.",
-        "Predecessor ui2_b0_c6_capability_extraction_contract (C6): the extraction procedure against C4's exact schema, fixture-generation procedure, FIRST-CAPABILITY worked example, ordered extraction inventory. MERGED PR #168. Full detail: project/build_history.json's ui2_b0_c6_capability_extraction_contract record.",
-        "Predecessor ui2_b0_c3_identity_sessions_rbac_contract (C3): LDAP bind, single-active-session rule, role tokens -> bindings -> AD group references, E1-E7 gate chain -- the exact mechanism this movement's own §2.2 RBAC visible-but-refused rendering cites. MERGED PR #167. Full detail: project/build_history.json's ui2_b0_c3_identity_sessions_rbac_contract record.",
-        "Predecessor ui2_b0_c4_capability_registry_gate_resolution_contract (C4): the runtime capability registry schema, K-4 gate-registry resolution rule, closed step-kind set, shared-fact produces_facts/consumes_facts mechanism -- the exact schema this movement's own §4 feature-contribution contract ties to C2's job_type. MERGED PR #166. Full detail: project/build_history.json's ui2_b0_c4_capability_registry_gate_resolution_contract record.",
-        "Predecessor ui2_b0_c2_job_execution_contract (C2, 2026-09-09): job record and closed state machine, leasing/heartbeat/fencing, OUTCOME_UNKNOWN as terminal-until-reconciled -- the model this movement's own §5 alarm-delivery-failure section mirrors for DELIVERY_UNKNOWN. MERGED PR #164. Full detail: project/build_history.json's ui2_b0_c2_job_execution_contract record.",
-        "Predecessor ui2_b0_c1_platform_schema_contract (C1, ran concurrently with C2 each in its own worktree/branch): UI 2.0 schema ownership, Flyway as sole migration authority, audit-from-first-mutation (C1-1), the five data classes (C1 §4) this movement's own §6 cites directly. MERGED 2026-09-09 PR #163. Full detail: project/build_history.json's ui2_b0_c1_platform_schema_contract record.",
-        "Predecessor failover_plan_compiler (OP.1.S1, 2026-09-09): write-free failover plan compiler and dry-run for classic CP ClusterXL, AUTOMATED_VALIDATED, merged PR #162. Full detail: project/build_history.json's failover_plan_compiler record."
+        "Implemented under relay/NXS-LOCAL-0062-gov-po-2-implementation.json and the frozen GOV.PO.2 contract; no product source, vendor command, device path, storage schema, or frozen contract changed.",
+        "Focused GOV.PO.2: 141 passed. Affected governance/convergence: 242 passed. Final full regression: 3253 passed, 27 skipped, 3 unrelated failures -- the two documented historical DLP-token collisions plus one environment-dependent engineer-gate test caused by this manually opened session having no .nexus/approved_task.json baseline pointer.",
+        "Standalone privacy entry point matches main.py without a baseline and therefore reports the six pre-existing repository findings; the baseline-aware repository gate against origin/main passes with 0 new findings."
       ]
     },
     "next": {
-      "build": "gov_po_2_implementation",
-      "title": "GOV.PO.2 (2/2) -- implement the frozen PO permission model",
+      "build": "ui2_taxonomy_device_write_class_and_step_kind",
+      "title": "UI2 D1 -- decide the restore/config-apply action class and device-write step kind",
       "status": "planned",
       "notes": [
-        "Unblocked 2026-09-08: docs/design/GOV_PO_2_PO_VISIBILITY_AND_BOUNDED_AUTHORSHIP.md is now FROZEN -- PRODUCT OWNER APPROVED. Not yet started; no relay artifact opened yet.",
-        "Scope: gh pr diff/gh run view/gh run list read-only prefixes (boundary-safe matching required); docs/design/po_drafts/*.md + FROZEN/RATIFIED status-line regex (MultiEdit excluded, falls to default-deny); docs/history/INDEX.md removed from GOVERNANCE_PATHS; new scripts/repository_privacy_check.py + an equivalence regression test against main.py --repository-privacy-check; new nexus-po-evidence-reviewer agent + closed-set Agent-branch generalization; full regression proving every existing GOV.PO.1 protection stays intact.",
-        "Sonnet 5, normal -- deterministic implementation against a contract the frozen document leaves with zero open design questions."
+        "Resume the already-open NXS-LOCAL-0060 relay; decision-document scope only, no taxonomy/source edit. High scrutiny because it defines a future device-write boundary.",
+        "The independent NXS-LOCAL-0061 UI2 B1-1 skeleton-contract movement merged as PR #174 on 2026-09-10; reconcile origin/main before integrating this branch."
       ]
     },
     "upcoming": [

@@ -26,6 +26,7 @@ import nexus_po_tool_gate as gate  # noqa: E402
 CONTRACT = ROOT / "docs/design/GOV_PO_ROLE_MIGRATION.md"
 PO_AGENT = ROOT / ".claude/agents/nexus-po.md"
 SEAT_AGENT = ROOT / ".claude/agents/nexus-council-seat.md"
+EVIDENCE_REVIEWER_AGENT = ROOT / ".claude/agents/nexus-po-evidence-reviewer.md"
 PO_SKILL = ROOT / ".claude/skills/nexus-po/SKILL.md"
 COUNCIL_SKILL = ROOT / ".claude/skills/nexus-decision-council/SKILL.md"
 PO_SETTINGS = ROOT / ".claude/nexus-po.settings.json"
@@ -48,7 +49,8 @@ def _tracked() -> set[str]:
 def test_contract_is_frozen_and_referenced_artifacts_exist():
     status = CONTRACT.read_text(encoding="utf-8").split("\n## 1.")[0]
     assert "FROZEN — PRODUCT OWNER APPROVED" in status
-    for path in (PO_AGENT, SEAT_AGENT, PO_SKILL, COUNCIL_SKILL, PO_SETTINGS, GATE,
+    for path in (PO_AGENT, SEAT_AGENT, EVIDENCE_REVIEWER_AGENT, PO_SKILL,
+                 COUNCIL_SKILL, PO_SETTINGS, GATE,
                  ROOT / ".github/prompts/po-plan.prompt.md",
                  ROOT / ".github/prompts/po-review.prompt.md",
                  ROOT / ".github/prompts/po-knowledge-extraction.prompt.md",
@@ -59,9 +61,11 @@ def test_contract_is_frozen_and_referenced_artifacts_exist():
 def test_enforcing_layer_is_tracked_not_local_only():
     tracked = _tracked()
     for rel in (".claude/agents/nexus-po.md", ".claude/agents/nexus-council-seat.md",
+                ".claude/agents/nexus-po-evidence-reviewer.md",
                 ".claude/skills/nexus-po/SKILL.md",
                 ".claude/skills/nexus-decision-council/SKILL.md",
-                ".claude/nexus-po.settings.json", "scripts/nexus_po_tool_gate.py"):
+                ".claude/nexus-po.settings.json", "scripts/nexus_po_tool_gate.py",
+                "scripts/repository_privacy_check.py"):
         assert rel in tracked, f"{rel} must be tracked (or at least not gitignored)"
     assert ".claude/settings.local.json" not in subprocess.run(
         ["git", "ls-files", "--cached"], cwd=ROOT, capture_output=True, text=True).stdout.split()
@@ -85,6 +89,18 @@ def test_council_seat_cannot_spawn_agents_or_run_shell():
         assert tool in dis
     assert "permissionMode: plan" in fm
     assert "memory:" not in fm
+
+
+def test_evidence_reviewer_is_read_only_fresh_context():
+    fm = _frontmatter(EVIDENCE_REVIEWER_AGENT)
+    tools = next(l for l in fm.splitlines() if l.startswith("tools:"))
+    assert {t.strip() for t in tools.split(":", 1)[1].split(",")} == {"Read", "Grep", "Glob"}
+    disallowed = next(l for l in fm.splitlines() if l.startswith("disallowedTools:"))
+    for tool in ("Agent", "Bash", "Edit", "Write", "MultiEdit", "NotebookEdit"):
+        assert tool in disallowed
+    assert "permissionMode: plan" in fm
+    assert "memory:" not in fm
+    assert "fork" not in fm
 
 
 def test_interactive_settings_deny_product_paths_and_gate_hook():
@@ -136,7 +152,9 @@ def test_gate_denies_writes_collection_and_shell_chaining(form, cmd):
 
 @pytest.mark.parametrize("cmd", [
     "gh issue view 4 -R o/r --json body,comments", "gh pr checks 109",
+    "gh pr diff 109", "gh run view 123", "gh run list --limit 5",
     "git log --oneline -5", "git diff --stat", "python3 scripts/gov_session_transfer.py validate x.txt",
+    "python3 scripts/repository_privacy_check.py",
     "gh issue comment 4 -R o/r --body-file /tmp/nexus_po_close.txt",
 ])
 def test_gate_allows_read_and_relay_commands_in_both_forms(cmd):
@@ -168,11 +186,10 @@ def test_gate_delegated_never_edits_or_spawns():
         assert not gate.decide(_bash(cmd), "delegated", branch_lookup=lambda cwd: "gov/po-x")[0], cmd
 
 
-def test_gate_interactive_allows_only_the_named_council_seat_agent():
-    # GOV_PO_1_GATE_3: the one narrow Agent exception is form == "interactive"
-    # AND subagent_type == "nexus-council-seat", exactly.
+@pytest.mark.parametrize("subagent_type", sorted(gate.ALLOWED_INTERACTIVE_SUBAGENTS))
+def test_gate_interactive_allows_only_the_named_po_subagents(subagent_type):
     allowed, reason = gate.decide(
-        {"tool_name": "Agent", "tool_input": {"subagent_type": "nexus-council-seat"}}, "interactive")
+        {"tool_name": "Agent", "tool_input": {"subagent_type": subagent_type}}, "interactive")
     assert allowed, reason
 
 
@@ -218,6 +235,8 @@ def test_gate_delegated_still_denies_council_seat_agent():
 
 @pytest.mark.parametrize("subagent_type", [
     None, "", "nexus_council_seat", "Nexus-Council-Seat", "nexus-council-seats", "nexus-po",
+    "nexus_po_evidence_reviewer", "Nexus-PO-Evidence-Reviewer",
+    "nexus-po-evidence-reviewers",
 ])
 def test_gate_interactive_denies_agent_for_any_other_subagent_type(subagent_type):
     # AC-3: interactive form denies Agent for anything other than exactly
@@ -234,6 +253,47 @@ def test_gate_interactive_edits_governance_paths_only():
     assert not gate.decide(bad, "interactive")[0]
     assert gate.decide({"tool_name": "Write", "tool_input": {"file_path": "docs/design/PRODUCT_DIRECTION_RECORD.md"}}, "interactive")[0]
     assert not gate.decide({"tool_name": "Write", "tool_input": {"file_path": "docs/design/OTHER.md"}}, "interactive")[0]
+
+
+@pytest.mark.parametrize("tool,content_key", [("Edit", "new_string"), ("Write", "content")])
+def test_gate_interactive_allows_flat_draft_only_po_authorship(tool, content_key):
+    safe = {
+        "tool_name": tool,
+        "tool_input": {
+            "file_path": "docs/design/po_drafts/candidate.md",
+            content_key: "**DRAFT — not ratified.**\nReferences FROZEN parent authority in prose.",
+        },
+        "cwd": str(ROOT),
+    }
+    assert gate.decide(safe, "interactive")[0]
+    assert not gate.decide(safe, "delegated")[0]
+
+    for status in ("FROZEN", "RATIFIED"):
+        promoted = dict(safe)
+        promoted["tool_input"] = dict(safe["tool_input"])
+        promoted["tool_input"][content_key] = f"  ** {status} — PRODUCT OWNER **\n"
+        assert not gate.decide(promoted, "interactive")[0]
+
+
+@pytest.mark.parametrize("path", [
+    "docs/design/po_drafts/nested/candidate.md",
+    "docs/design/po_drafts/candidate.txt",
+    "docs/design/po_drafts.md",
+])
+def test_gate_po_draft_path_is_flat_markdown_only(path):
+    payload = {"tool_name": "Write", "tool_input": {"file_path": path, "content": "**DRAFT**"}}
+    assert not gate.decide(payload, "interactive")[0]
+
+
+def test_gate_po_drafts_keep_multiedit_denied():
+    payload = {
+        "tool_name": "MultiEdit",
+        "tool_input": {
+            "file_path": "docs/design/po_drafts/candidate.md",
+            "edits": [{"old_string": "DRAFT", "new_string": "FROZEN"}],
+        },
+    }
+    assert not gate.decide(payload, "interactive")[0]
 
 
 def test_gate_interactive_git_writes_only_on_gov_po_branch():
@@ -403,8 +463,10 @@ def test_gate_delegated_never_edits_relay_json():
 
 def test_gate_existing_governance_paths_still_exact_match_only():
     # AC-5: relay/*.json is a new pattern ALONGSIDE GOVERNANCE_PATHS, not a
-    # widening of it -- the eight existing exact-match paths are unchanged.
-    assert len(gate.GOVERNANCE_PATHS) == 8
+    # widening of it. GOV.PO.2 narrows the list by removing the generated
+    # history index, which remains reachable only through its generator.
+    assert len(gate.GOVERNANCE_PATHS) == 7
+    assert "docs/history/INDEX.md" not in gate.GOVERNANCE_PATHS
     almost = {"tool_name": "Edit", "tool_input": {"file_path": "project/roadmap.json.bak"}, "cwd": str(ROOT)}
     assert not gate.decide(almost, "interactive")[0]
 
@@ -549,3 +611,26 @@ def test_gate_boundary_safe_matching_rejects_a_near_miss_orchestrator_subcommand
     cmd = "python3 scripts/orchestrator.py statuscheck --movement NXS-LOCAL-0001"
     for form in ("delegated", "interactive"):
         assert not gate.decide(_bash(cmd), form)[0]
+
+
+@pytest.mark.parametrize("cmd", [
+    "gh pr differential 109",
+    "gh run viewer 123",
+    "gh run listing",
+    "gh run watch 123",
+    "gh run cancel 123",
+    "gh run rerun 123",
+])
+def test_gate_gov_po_2_read_prefixes_reject_near_miss_and_write_forms(cmd):
+    for form in ("delegated", "interactive"):
+        assert not gate.decide(_bash(cmd), form)[0], (form, cmd)
+
+
+@pytest.mark.parametrize("cmd", [
+    "python3 scripts/repository_privacy_check.py --unexpected",
+    "python scripts/repository_privacy_check.py extra",
+    "py scripts/repository_privacy_check.pyx",
+])
+def test_gate_standalone_privacy_check_accepts_no_arguments_or_near_misses(cmd):
+    for form in ("delegated", "interactive"):
+        assert not gate.decide(_bash(cmd), form)[0], (form, cmd)
