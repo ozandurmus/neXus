@@ -2,11 +2,14 @@
 
 ## Status
 
-**DRAFT — awaiting Product Owner freeze.** Not implementation authority
-(`AGENTS.md` "Authority hierarchy" / "Contract-status law"). This document
-changes no code. Promotion to `FROZEN` is a separate Product Owner decision,
-taken together with the `op_degraded_verdict` decision this contract depends
-on (§8).
+**FROZEN — PRODUCT OWNER APPROVED, 2026-09-09.** Frozen together with the
+`op_degraded_verdict` decision this contract depends on (§8): the Product
+Owner chose **Option A — `DEGRADED_PROCEED_WITH_RISK` stays structurally
+unreachable** until real-field calibration, so §3/§5's schema stands exactly
+as specified and no `risk_items`/severity vocabulary is added. This freeze
+authorizes exactly one implementation slice, `OP.1.S1` (§9), and nothing
+else; it changes no code itself. (Drafted 2026-09-08 as
+`op1_failover_plan_compiler_contract_draft`, PR #133.)
 
 Parent authority: `docs/design/FAILOVER_ENGINE_ARCHITECTURE.md` §10 ("`OP.1`
 — Failover Plan Compiler + Dry-Run. §3 action/rollback compilation,
@@ -27,7 +30,8 @@ Command approval authority for the two primitives named below:
 (`CP-M1`/`CP-M1-R`, `APPROVED_FOR_OP2C`).
 
 Movement: `ARCHITECTURE` (this document) → Product Owner freeze (with
-`op_degraded_verdict`) → `IMPLEMENTATION` (§9 slicing).
+`op_degraded_verdict`, done 2026-09-09, Option A) → `IMPLEMENTATION` (§9
+slicing, `OP.1.S1`).
 
 ---
 

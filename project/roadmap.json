@@ -168,13 +168,14 @@
         "build": "op1_failover_plan_compiler_contract_draft",
         "title": "OP.1 -- failover plan compiler and dry-run: contract draft",
         "goal": "Produce the DRAFT OP.1 contract (docs/history/phase/OP_1_FAILOVER_PLAN_COMPILER_AND_DRY_RUN.md): a write-free failover plan compiler and dry-run over existing readiness/preflight evidence for classic Check Point ClusterXL, structurally non-authorizing, with op_degraded_verdict presented to the Product Owner for one freeze decision.",
-        "status": "in_progress",
+        "status": "automated_validated",
         "started": "2026-09-08",
         "completed": "2026-09-08",
         "notes": [
           "Full detail: project/build_history.json's op1_failover_plan_compiler_contract_draft record.",
           "Moved from now_next.now 2026-09-08 (orchestrator_background_task_exit_race session): not a demotion of any completed OP.1 work -- the DRAFT contract still awaits Product Owner freeze, unchanged. Leaves 'now' only because horizon_contract reserves that slot for the newest project/build_history.json record, which is now a smaller orchestrator-reliability fix dispatched in parallel (relay/NXS-LOCAL-0019); the OP.1 freeze decision is still pending and unaffected.",
-          "Runs in its own worktree/branch (feature/op1-failover-plan-compiler-contract), independent of GOV.PO.3."
+          "Runs in its own worktree/branch (feature/op1-failover-plan-compiler-contract), independent of GOV.PO.3.",
+          "Contract frozen 2026-09-09 (Option A); this draft build is complete. Implementation continues under the OP.1 row / OP.1.S1."
         ]
       },
       {
@@ -302,7 +303,8 @@
         "notes": [
           "DRAFT contract produced 2026-09-08: docs/history/phase/OP_1_FAILOVER_PLAN_COMPILER_AND_DRY_RUN.md (status line: DRAFT -- awaiting Product Owner freeze). Defines the FailoverPlan/DryRunReport artifacts for classic CP ClusterXL only, reusing utils.operate.adapter/eligibility types read-only (never constructing ActionCoordinator, never calling check_precondition()/execute_once()/observe_postcondition()). Still write-free.",
           "Presents op_degraded_verdict to the Product Owner as one decision at this freeze (recommendation unchanged: keep DEGRADED_PROCEED_WITH_RISK structurally unreachable until real-field calibration) plus the consequence of each option for the plan/dry-run vocabulary. op_four_eyes/op_emergency_evac/op_continuity_tolerance/op_aa_vsls_scope confirmed non-blocking for this freeze.",
-          "Implementation slicing plan included in the contract doc (OP.1.S1, one slice, 5 non-test files, 8 acceptance criteria) so implementation can start immediately after freeze."
+          "Implementation slicing plan included in the contract doc (OP.1.S1, one slice, 5 non-test files, 8 acceptance criteria) so implementation can start immediately after freeze.",
+          "FROZEN -- PRODUCT OWNER APPROVED 2026-09-09 with op_degraded_verdict = Option A (DEGRADED stays unreachable). OP.1.S1 implementation dispatched the same day (relay/NXS-LOCAL-0048)."
         ]
       },
       {
@@ -369,7 +371,7 @@
     "VSX configuration evidence was originally targeted for 0.6.2 but was delivered early inside the 0.6.1B Check Point configuration track.",
     "The original 0.6.0B native-backup milestone was deferred pending a rebase; that rebase landed 2026-08-30 as docs/design/BACKUP_AND_RECOVERY_ARCHITECTURE.md + docs/design/BACKUP_RECOVERY_CONTRACTS.md (phases RB.0-RB.6). The original constraint stands and is now the design's first principle: configuration evidence is not a recovery backup -- the evidence plane is deliberately redacted and therefore non-restorable, so a separate encrypted recovery plane is required. Backup artifact bytes must never reach output/index.html, the support bundle, or repository metadata; only manifests may be read by other subsystems.",
     "Write/change automation remains outside the current roadmap gate until SEE, VERIFY, TRACE and RECOVER are sufficiently mature.",
-    "Future 0.7.x\u00e2\u20ac\u201c1.0 major-track numbering is a planning map, not a frozen release commitment; rebase it explicitly when a preceding phase changes implementation order.",
+    "Future 0.7.xâ€“1.0 major-track numbering is a planning map, not a frozen release commitment; rebase it explicitly when a preceding phase changes implementation order.",
     "DEPLOY.1 pulls the server_data_plane portion of the 1.0 GOVERN track forward to host the living SEE-track platform; it must not be used to bypass the write/change automation gate stated above.",
     "DEV.1 establishes the controlled Corporate Git/Copilot operating baseline; after acceptance, engineering returns to product work at 0.6.1C. DEV.0.3C remains deferred to the pre-server storage-sensitive checkpoint.",
     "0.7.x early VERIFY foundation was delivered ahead of schedule in 0.6.1B.1.5 and 0.6.1B.1.6; the 0.7.x formal track opens with compliance_posture_rulepack_transition promoting those controls to versioned rule packs.",
@@ -522,7 +524,7 @@
         },
         {
           "build": "DEV.3.4",
-          "title": "Per-vendor worker containers \u2014 DEFERRED until collection duration is a real operational pain; requires DEV.3.3 first",
+          "title": "Per-vendor worker containers — DEFERRED until collection duration is a real operational pain; requires DEV.3.3 first",
           "status": "deferred"
         }
       ]
@@ -634,7 +636,7 @@
     {
       "id": "op_degraded_verdict",
       "area": "OP.0 Readiness Assessment",
-      "status": "open",
+      "status": "resolved",
       "question": "Support DEGRADED_PROCEED_WITH_RISK (per-risk operator acceptance) in v1, or restrict to SAFE_TO_FAILOVER / UNSAFE_DO_NOT_FAILOVER / INSUFFICIENT_EVIDENCE until there is field experience?",
       "options": [
         "include DEGRADED in v1",
@@ -642,7 +644,9 @@
       ],
       "recommendation": "SAFE / UNSAFE / INSUFFICIENT only in v1; add DEGRADED once the battery is validated against real clusters.",
       "decide_by": "OP.1 contract freeze",
-      "note": "Rebased from 'OP.0 contract freeze' on 2026-09-01, not resolved. The OP.0a contract (docs/history/phase/OP_0A_HA_READINESS_ASSESSMENT.md, decision P4) reserves DEGRADED_PROCEED_WITH_RISK in the frozen verdict enum but makes it structurally unreachable, along with SAFE_TO_FAILOVER, because OP.0a has evidence for only part of the design-doc section 4 stop-condition set. The decision therefore does not block OP.0a and is owed before OP.1 compiles a plan against the verdict. PO classification 2026-09-04: a readiness-layer decision, not coupled to the OP.2.0 CLASS 2 architecture freeze -- OP.2.0 consumes only the currently authoritative eligibility outcomes of the readiness authority and needs no change when this is decided."
+      "note": "Rebased from 'OP.0 contract freeze' on 2026-09-01, not resolved. The OP.0a contract (docs/history/phase/OP_0A_HA_READINESS_ASSESSMENT.md, decision P4) reserves DEGRADED_PROCEED_WITH_RISK in the frozen verdict enum but makes it structurally unreachable, along with SAFE_TO_FAILOVER, because OP.0a has evidence for only part of the design-doc section 4 stop-condition set. The decision therefore does not block OP.0a and is owed before OP.1 compiles a plan against the verdict. PO classification 2026-09-04: a readiness-layer decision, not coupled to the OP.2.0 CLASS 2 architecture freeze -- OP.2.0 consumes only the currently authoritative eligibility outcomes of the readiness authority and needs no change when this is decided. RESOLVED 2026-09-09 at the OP.1 contract freeze (Product Owner decision, this engineering session under the standing PO-in-session precedent): Option A. docs/history/phase/OP_1_FAILOVER_PLAN_COMPILER_AND_DRY_RUN.md is FROZEN -- PRODUCT OWNER APPROVED with its section 3/5 schema unchanged; OP.1.S1 (section 9) is the only authorized implementation slice.",
+      "decided": "2026-09-09",
+      "decision": "SAFE / UNSAFE / INSUFFICIENT only in v1 -- Option A: DEGRADED_PROCEED_WITH_RISK stays structurally unreachable until real-field calibration."
     },
     {
       "id": "op_emergency_evac",
