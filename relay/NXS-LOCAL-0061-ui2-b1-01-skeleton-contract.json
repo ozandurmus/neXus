@@ -1,0 +1,109 @@
+{
+  "created_at": "2026-09-09T20:21:24Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1: Module map lists every module with responsibility, allowed dependencies and the C-contract it serves; every C1 component has a home.",
+          "AC-2: Dependency-direction rules are stated as a table and mirrored one-to-one by the P-1 architecture test specification in section 5 (test name, tool, each rule).",
+          "AC-3: Exact build, unit-test, integration-test and image-build commands are given and consistent with the CI section.",
+          "AC-4: Testcontainers section states how Flyway runs on test start and how C1 section 3.5's audit_context_missing behaviour is exercised.",
+          "AC-5: CI section shows the ui2 job coexisting with validation.yml without altering Line-1 gates.",
+          "AC-6: Docker section states what is inside the image and lists credentials, Line-1 code and runtime data as explicitly excluded; secrets injected per C1 section 6.",
+          "AC-7: At least ten runnable acceptance checks for the implementing movement.",
+          "AC-8: Every technology choice made here is either cited to a frozen document or listed in section 9 with a rationale.",
+          "AC-9: No ui2/ file is created; git diff --check clean; privacy gate 0 new findings against origin/main."
+        ],
+        "baseline": {
+          "authority": "UI2_0_BASELINE_CONTRACT.md (FROZEN) section 1 principles (RUNTIME-DIRECTION P-1..P-5: Java is the only runtime; Line-1 is reference), section 4 Release 1 definition. UI2_0_DEVELOPMENT_WORKFLOW.md section 5 B1 step 1 ('Gradle multi-module skeleton, CI job, Docker image, Testcontainers PostgreSQL; ui2/ sub-tree; P-1 dependency-graph test present from day one') and section 3.2 (Java collection engine shape). UI2_0_ARCHITECTURE_DESIGN.md for the module/layer picture as amended by C5. C1 (schema/Flyway/secrets per component), C2 (worker/scheduler as components), C3 (LDAP adapter as a component), C4 (capability registry) -- all FROZEN 2026-09-09 -- define the components the skeleton must have a home for. VISUAL-DESIGN-LANGUAGE = Material Design 3 (baseline contract section 2) -- the front-end module choice must be compatible with it; UI2_0_MOCKUP_REFERENCE_NOTES.md is the UX reference. .github/workflows/validation.yml is the existing CI whose shape the ui2 job must sit beside without breaking Line-1's gates.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED); UI 2.0 B0 complete, both freezes made 2026-09-09",
+          "sequencing": "Runs concurrently with the taxonomy decision movement (different files). First of the contracts-first B1 queue; B1-5 extraction follows."
+        },
+        "context_not_loaded": [
+          "Line-1 collector internals",
+          "Device contact or credentials",
+          "Restore/taxonomy decision (separate movement)",
+          "Any actual Java/Gradle/Docker file authoring"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/ui2-b1-01-skeleton-contract"
+        },
+        "invariants": [
+          "Contract, not code: no ui2/ files are created; the document is complete enough that creating them is mechanical",
+          "P-1 is test-enforced from the first commit: specify the dependency-graph/architecture test (tool, rule set, e.g. no module may depend on a Python runtime, no vendor adapter may be imported by the web layer) as a concrete named test",
+          "Every component named by C1 (service, worker, scheduler, LDAP adapter, migration step) has a module or package home and a per-component secret scope in the skeleton",
+          "Technology choices already made by the frozen design/contracts are cited, not re-decided (Flyway per C1; UnboundID per C3; PostgreSQL); any genuinely open technology choice (web framework, front-end toolkit compatible with Material Design 3, Testcontainers version policy, Java/Gradle version policy) is decided here with a one-paragraph rationale and listed in the open-items section so the PO can veto at freeze",
+          "The Docker image contains no credential, no Line-1 code, no runtime data; runtime paths and secrets are injected per C1 section 6",
+          "CI: the ui2 job must run in isolation from Line-1's pytest job and must not change Line-1's existing gates"
+        ],
+        "merge_gate": "Standing relay#13: green tests -> self-merge, report via RELAY_NOTE. Documentation-only PR; DLP privacy gate at push; git diff --check.",
+        "movement_type": "ARCHITECTURE",
+        "objective": "Write the B1-1 skeleton contract as docs/design/UI2_0_B1_01_SKELETON_CI_DOCKER_CONTRACT.md (status: DRAFT -- FOR PRODUCT OWNER FREEZE). Product Owner direction 2026-09-09: remaining Claude budget goes to contracts, not code; implementation of each B1 step will be done later, possibly in another tool (Codex / Copilot), against frozen text. So this contract must be precise enough that an engineer with only the repository can build the ui2/ Gradle multi-module skeleton, the CI job, the Docker image and the Testcontainers PostgreSQL harness without asking questions: module names and boundaries, dependency direction rules (P-1: no Line-1 Python at runtime, test-enforced from day one), the package/layer conventions the later C1/C2/C3/C4 implementations will slot into, build/test commands, CI gates, image shape, and the exact acceptance tests that prove the skeleton. No Java is written in this movement.",
+        "output_contract": [
+          "docs/design/UI2_0_B1_01_SKELETON_CI_DOCKER_CONTRACT.md: section 1 scope/authority; section 2 module map (name, responsibility, allowed dependencies, which C-contract it implements) plus the dependency-direction rules as a table; section 3 build (Gradle version policy, Java version policy, toolchain pinning, reproducibility) and the exact commands; section 4 test harness (unit vs integration, Testcontainers PostgreSQL lifecycle, Flyway-on-test-start, how C1's audit trigger is exercised in tests); section 5 the P-1 architecture test specification; section 6 CI job definition (steps, gates, artefacts, how it coexists with validation.yml); section 7 Docker image contract (base image policy, non-root user, healthcheck, what is and is not inside, per-component secret injection); section 8 acceptance criteria for the implementing movement (at least ten, each a runnable check); section 9 open items / technology decisions for PO veto; section 10 cross-references",
+          "project/backlog.json ui2_b1_01_skeleton_ci_docker: status in_progress, note 'contract first (PO direction 2026-09-09); implementation follows against frozen contract'; build_history record",
+          "RELAY_NOTE + SESSION_CLOSE"
+        ],
+        "recommended_reasoning": {
+          "reason": "A build/CI/container contract on frozen inputs; deterministic once the module map is drawn. Low effort fits.",
+          "tier": "Fable 5.1, low effort"
+        },
+        "requirements": [
+          "Read the baseline contract section 1, workflow sections 3.2/5 B1, C1 sections 3.5/6, C2/C3/C4 component-level sections, and validation.yml before writing",
+          "English, per AGENTS.md engineering-output language law",
+          "git diff --check; privacy gate at push; existing docs/project-state tests green"
+        ],
+        "risks": [
+          "Re-deciding technology already frozen (Flyway, UnboundID, PostgreSQL)",
+          "A module map that silently lets the web layer import vendor adapters -- the dependency table must forbid it",
+          "Writing Gradle/Java files instead of the contract"
+        ],
+        "scope": {
+          "in": [
+            "docs/design/UI2_0_B1_01_SKELETON_CI_DOCKER_CONTRACT.md",
+            "project-state bookkeeping"
+          ],
+          "out": [
+            "Any ui2/ source or build file",
+            "Any Line-1 code",
+            ".github/workflows/validation.yml edits",
+            "Device contact"
+          ]
+        },
+        "validation_plan": [
+          "Self-check against AC-1..AC-9 in the RELAY_NOTE",
+          "docs/project-state tests",
+          "git diff --check",
+          "privacy gate at push"
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-09T20:21:24Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0061",
+  "movement": "UI2_B1_01_SKELETON_CI_DOCKER_CONTRACT",
+  "next_actor": "engineer",
+  "refs": [
+    "docs/design/UI2_0_BASELINE_CONTRACT.md",
+    "docs/design/UI2_0_DEVELOPMENT_WORKFLOW.md",
+    "docs/design/UI2_0_ARCHITECTURE_DESIGN.md",
+    "docs/design/UI2_0_C1_PLATFORM_SCHEMA_CONTRACT.md",
+    "docs/design/UI2_0_C2_JOB_EXECUTION_CONTRACT.md",
+    "docs/design/UI2_0_C3_IDENTITY_SESSIONS_RBAC_CONTRACT.md",
+    "docs/design/UI2_0_C4_CAPABILITY_REGISTRY_GATE_RESOLUTION_CONTRACT.md",
+    "docs/design/UI2_0_BASELINE_DIRECTORY.md",
+    "docs/design/UI2_0_MOCKUP_REFERENCE_NOTES.md",
+    ".github/workflows/validation.yml",
+    "AGENTS.md",
+    "project/backlog.json"
+  ],
+  "schema_version": 1,
+  "status": "OPEN",
+  "updated_at": "2026-09-09T20:21:24Z"
+}

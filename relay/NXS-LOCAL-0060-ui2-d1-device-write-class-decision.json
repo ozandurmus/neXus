@@ -1,0 +1,109 @@
+{
+  "created_at": "2026-09-09T20:21:23Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1: Section 1 quotes C7 sections 9.1, 9.2 and 9.3 by number and reproduces the gap exactly (no class fits; no device-push step kind; sftp_put reserved/refused).",
+          "AC-2: At least four options (A-D above) each with: taxonomy change, C4 step-kind change, approval-model fit, audit/ledger needs, test files/assertions that would change, FROZEN documents that would need amendment.",
+          "AC-3: Section 4 states explicitly whether a restore write is distinguishable from CLASS 3 and on what criterion (e.g. artefact provenance: the bytes pushed are a verified, manifest-bound backup of the same device identity, never operator-authored configuration).",
+          "AC-4: Exactly one recommendation, with a numbered follow-up amendment list naming file + section for each edit.",
+          "AC-5: The document states that restore remains disabled and unimplementable until the PO decision is recorded in UI2_0_BASELINE_CONTRACT.md section 2.",
+          "AC-6: No FROZEN document, utils/action_taxonomy.py, or test file is modified in the PR.",
+          "AC-7: A contradictions/open-items section lists every document checked by name and status.",
+          "AC-8: git diff --check clean; privacy gate 0 new findings against origin/main."
+        ],
+        "baseline": {
+          "authority": "UI2_0_BASELINE_CONTRACT.md (FROZEN): RESTORE-IN-RELEASE-1 (D-7 ACCEPTED -- restore is in Release 1 on declared-supported platforms), APPROVAL-MODEL (restore = per-operation independent approval), acceptance sentences A-2 (OUTCOME_UNKNOWN never triggers an automatic second write) and A-3. C7 (FROZEN) sections 5 (restore execution), 6 (approval), 9.1-9.3 (the gap, verbatim the problem statement). C4 (FROZEN) section 2.3 (the eight closed step kinds; adding one is a C4 amendment) and section 3.3 step 7 (a class 2/3/4 gate row can never be SIGNED_OFF). utils/action_taxonomy.py is the single source of truth for the five action classes and is test-enforced (tests named in AGENTS.md 'Architectural invariants'); AGENTS.md prohibits inventing a new command class silently. OP_2_0 architecture: CLASS 2 has no member and is hard-gated; its authorization/trust/change-management prerequisites are the closest precedent for a device-write class.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED); UI 2.0 B0 complete, both freezes made 2026-09-09",
+          "sequencing": "Runs concurrently with the B1-1 skeleton contract movement (different files, no overlap). This is the single HIGH SCRUTINY item of the UI 2.0 backlog; nothing in B1 depends on it, REL-BACKUP's restore half does."
+        },
+        "context_not_loaded": [
+          "Any Java source",
+          "Line-1 recovery code beyond the two named design documents",
+          "Device contact or credentials",
+          "Failover execution itself (OP.2.C) -- only its gating precedent is relevant"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/ui2-d1-device-write-class-decision"
+        },
+        "invariants": [
+          "No edit to utils/action_taxonomy.py, C4, C7 or any FROZEN document -- this movement writes one new decision document only",
+          "Every option must name concretely which test-enforced boundary (test file and assertion) it would change and which FROZEN document it would amend, so the PO sees the real cost",
+          "Options must include at minimum: (A) a new class between 1 and 2 (e.g. controlled restore write) with its own admission rules; (B) widening CLASS_1_RECOVERY_WRITE's scope to cover restore under per-operation approval; (C) placing restore under CLASS 2's gating machinery (OP.2 prerequisites) as a distinct member; (D) keeping restore disabled and renaming Release 1 per D-7's own rule ('platform pilot / backup collection release'). State for each: blast radius honesty, approval model fit (C7 section 6), C4 step-kind consequence (which kind, e.g. a restore_push kind with its evidence bar, vs. un-reserving sftp_put), audit/ledger needs, and what CLASS 3 (config write, prohibited) protection remains intact",
+          "The recommendation must be one option, argued, with the exact amendment list a follow-up movement would execute -- not a menu",
+          "A restore write is a config write at the device level; the document must say plainly why it is or is not distinguishable from the prohibited CLASS 3, or the PO cannot decide safely"
+        ],
+        "merge_gate": "Standing relay#13: green tests -> self-merge, report via RELAY_NOTE. Documentation-only PR; DLP privacy gate at push; git diff --check.",
+        "movement_type": "ARCHITECTURE",
+        "objective": "Write the DECISION DOCUMENT for backlog item ui2_taxonomy_device_write_class_and_step_kind as docs/design/UI2_0_D1_DEVICE_WRITE_CLASS_AND_STEP_KIND_DECISION.md (status: DRAFT -- FOR PRODUCT OWNER DECISION). C7 (FROZEN) sections 9.1-9.3 found that restore is fully specified but structurally not executable: no utils/action_taxonomy.py class fits a restore write (CLASS_1_RECOVERY_WRITE is scoped to backup creation/artifact cleanup; BACKUP_AND_RECOVERY_ARCHITECTURE.md section 8 places restore at OP.2-level blast radius) and C4's closed step-kind set has no device-directed write/push kind (sftp_put is reserved and refused). This movement does NOT decide and does NOT edit utils/action_taxonomy.py or C4. It produces the options, their consequences, the test-enforced boundaries each would have to change, and a single recommendation, so the Product Owner can make a recorded decision. Restore stays disabled until then.",
+        "output_contract": [
+          "docs/design/UI2_0_D1_DEVICE_WRITE_CLASS_AND_STEP_KIND_DECISION.md: section 1 problem statement (quoting C7 9.1-9.3 by section, not paraphrasing the finding away); section 2 constraints from FROZEN authority; section 3 options A-D (and any further genuine option) in a comparison table plus prose; section 4 the CLASS 3 distinguishability argument; section 5 recommendation with the exact follow-up amendment list (files, sections, tests); section 6 what stays true regardless of the decision (restore disabled until decided; no Java implementation of restore before the amendment lands); section 7 cross-references",
+          "project/backlog.json ui2_taxonomy_device_write_class_and_step_kind: status in_progress, note with the PR reference; build_history record",
+          "RELAY_NOTE + SESSION_CLOSE"
+        ],
+        "recommended_reasoning": {
+          "reason": "A security-boundary decision (opening a device-write-capable action class) -- the one place the PO asked for more than low effort; medium is enough because the options space is bounded by C4/C7 and the taxonomy's test-enforced invariants.",
+          "tier": "Fable 5.1, medium effort"
+        },
+        "requirements": [
+          "Read C7 sections 5, 6, 9 in full, C4 sections 2.3 and 3.3 in full, utils/action_taxonomy.py in full with its tests, and BACKUP_AND_RECOVERY_ARCHITECTURE.md section 8 before writing",
+          "English, per AGENTS.md engineering-output language law",
+          "git diff --check; privacy gate at push; existing docs/project-state tests green"
+        ],
+        "risks": [
+          "Recommending a class that is CLASS 3 with a new name -- the distinguishability argument must be honest or the PO is misled",
+          "Under-stating the OP.2-level prerequisites (authorization, trust, change management) that a device-write class inherits",
+          "Editing the taxonomy 'while there' -- explicitly out of scope"
+        ],
+        "scope": {
+          "in": [
+            "docs/design/UI2_0_D1_DEVICE_WRITE_CLASS_AND_STEP_KIND_DECISION.md",
+            "project-state bookkeeping"
+          ],
+          "out": [
+            "utils/action_taxonomy.py",
+            "Any FROZEN document",
+            "Any test file",
+            "Any ui2/ source",
+            "Device contact"
+          ]
+        },
+        "validation_plan": [
+          "Self-check against AC-1..AC-8 in the RELAY_NOTE",
+          "docs/project-state tests",
+          "git diff --check",
+          "privacy gate at push"
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-09T20:21:23Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0060",
+  "movement": "UI2_TAXONOMY_DEVICE_WRITE_CLASS_AND_STEP_KIND_DECISION",
+  "next_actor": "engineer",
+  "refs": [
+    "docs/design/UI2_0_BASELINE_CONTRACT.md",
+    "docs/design/UI2_0_C7_BACKUP_ARTEFACT_RESTORE_ENGINE_CONTRACT.md",
+    "docs/design/UI2_0_C4_CAPABILITY_REGISTRY_GATE_RESOLUTION_CONTRACT.md",
+    "docs/design/UI2_0_C2_JOB_EXECUTION_CONTRACT.md",
+    "docs/design/UI2_0_C3_IDENTITY_SESSIONS_RBAC_CONTRACT.md",
+    "docs/design/UI2_0_C5_AMENDMENTS_BUNDLE.md",
+    "docs/design/BACKUP_AND_RECOVERY_ARCHITECTURE.md",
+    "docs/design/FAILOVER_ENGINE_ARCHITECTURE.md",
+    "docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md",
+    "utils/action_taxonomy.py",
+    "AGENTS.md",
+    "AI_START_HERE.md",
+    "project/backlog.json"
+  ],
+  "schema_version": 1,
+  "status": "OPEN",
+  "updated_at": "2026-09-09T20:21:23Z"
+}
