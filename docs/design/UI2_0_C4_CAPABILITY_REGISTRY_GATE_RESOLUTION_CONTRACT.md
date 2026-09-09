@@ -2,7 +2,7 @@
 
 ## Status
 
-**DRAFT — FOR PRODUCT OWNER FREEZE.** Written under
+**FROZEN — PRODUCT OWNER APPROVED, 2026-09-09** (platform contract freeze (C1–C6 + baseline directory), per `UI2_0_BASELINE_CONTRACT.md` §2 `FREEZE-SLICING`). Open items listed in this document's own open-items section are deferred to the movements they name; they do not reopen this freeze. Previous status: DRAFT — FOR PRODUCT OWNER FREEZE. Written under
 `docs/design/UI2_0_BASELINE_CONTRACT.md` (FROZEN — PRODUCT OWNER APPROVED,
 2026-09-09) and `docs/design/UI2_0_DEVELOPMENT_WORKFLOW.md` §3.1–§3.2 (BASELINE,
 revision 2). Direct inputs: council items `K-3`, `K-4`, `CP-D6`, `CP-D7`

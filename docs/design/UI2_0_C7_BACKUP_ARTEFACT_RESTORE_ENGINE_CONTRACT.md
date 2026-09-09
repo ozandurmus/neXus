@@ -2,7 +2,7 @@
 
 ## Status
 
-**DRAFT — FOR PRODUCT OWNER FREEZE.** Written under
+**FROZEN — PRODUCT OWNER APPROVED, 2026-09-09** (backup/artefact/restore engine freeze (C7), per `UI2_0_BASELINE_CONTRACT.md` §2 `FREEZE-SLICING`). Open items listed in this document's own open-items section are deferred to the movements they name; they do not reopen this freeze. Restore execution remains structurally disabled until `ui2_taxonomy_device_write_class_and_step_kind` resolves the §9.1–9.3 gaps (`DIRECTORY-POSTURE`-style: specified, not enabled). Previous status: DRAFT — FOR PRODUCT OWNER FREEZE. Written under
 `docs/design/UI2_0_BASELINE_CONTRACT.md` (FROZEN — PRODUCT OWNER APPROVED,
 2026-09-09), decisions `RESTORE-IN-RELEASE-1` (D-7), `APPROVAL-MODEL` (D-2c)
 and `RAW-RETENTION` (D-2d), and `docs/design/UI2_0_DEVELOPMENT_WORKFLOW.md`
