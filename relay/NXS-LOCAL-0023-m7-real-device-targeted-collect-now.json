@@ -1,0 +1,105 @@
+{
+  "created_at": "2026-09-08T19:22:48Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1: confirm current state before changing anything, report via a short RELAY_NOTE. (a) console/registry_targets.py::resolve_registry_targets/_identity_resolved is the M6/M8.4 admission gate for a device_id-targeted config_refresh_cp job -- it returns a bool, never the resolved entity_id, even though it internally reads `relationship.entity_id` (the ACTIVE M8.1 relationship row) to cross-check evidence. Confirm this reading is still accurate. (b) console/runner.py::_build_argv -> utils.collection_executor.workflow_argv passes the raw submitted `targets` (device_ids) straight through as `--cp-config-targets` for the cp-config workflow, which expects `entity_id`s (its own docstring: 'the physical-host entity_id already used throughout the repository'). Confirm no translation step exists anywhere between admission and argv construction. (c) CRITICAL: console/registry_targets.py's own module comment (near _identity_resolved's trust-currency cross-check) documents that the CP config evidence snapshot metadata `_collect_host` writes today carries NO `host_key_fingerprint` field, so `_identity_resolved`'s final check fails closed (returns False) for EVERY real M8.3-produced relationship, including the one just proven live 2026-09-08 (relationship_id e4671bc45e5e49e2bf9257d32b3fa067, project/backlog.json id m8_3_real_environment_validation) -- meaning the M8.4 admission gate cannot currently pass for any real device, this movement's own wiring included, until that gap closes. Confirm this is still true against current code. A prior movement (M8.4) deliberately left this alone under the instruction 'do not modify the M8.3 producer unless a material defect makes M8.4 impossible' -- that condition now appears to hold. If your investigation confirms (c), this movement's scope MUST include adding host_key_fingerprint to the evidence metadata the physical-host collection primitive (_collect_host, shared by the bulk collector and the M8.3 producer) writes, sourced from the same utils.cp_ssh_trust.host_key_fingerprint the M8.3 producer's own trust lookup already computes -- do not invent a second fingerprint source. If your investigation finds (c) is no longer accurate, or finds a narrower fix, report via RELAY_NOTE and adjust scope accordingly rather than assuming this SESSION_START's framing is still exactly right.",
+          "AC-2: build the entity_id-substitution wiring: given an admitted device_id-targeted config_refresh_cp job, resolve each device_id to its currently proven collector entity_id (the same ACTIVE M8.1 relationship the admission gate already reads) and substitute the resolved entity_id(s) -- never the raw device_id(s) -- into the argv passed to --cp-config-targets. Preserve every existing M6/M8.4 admission/eligibility/re-check behavior exactly (resolve_registry_targets's refusal codes, the re-check-immediately-before-execution call in console/runner.py, the fail-closed identity law already documented there) -- this movement adds the missing translation step, it does not relax or duplicate the existing gate.",
+          "AC-3: end-to-end functional proof. Real-device confirmation needs the Product Owner to run the actual console job against a real device (per AI_START_HERE.md's Real-environment procedure -- you propose the exact bounded command, you do not execute it) -- report this as a request if reached. At minimum, build a realistic fixture-based test proving: a device_id submitted to config_refresh_cp with a proven relationship resolves to the correct entity_id and that entity_id (not the device_id) appears in the constructed argv; an unproven/stale relationship still refuses exactly as before (no regression to the existing IDENTITY_TRANSLATION_REQUIRED path).",
+          "AC-4: no change to any other job type's target handling (entity_ids mode, none mode), no change to the M6/M8.4 refusal codes or their conditions/ordering, no change to the M8.3 producer's own write gate (Section 6/§8 AC1/AC10) beyond the narrow fingerprint-field addition from AC-1(c) if confirmed necessary.",
+          "AC-5: targeted tests for the new translation step and (if AC-1(c) is confirmed) the fingerprint metadata addition, following tests/test_m6_registry_keyed_job_targets.py's existing style. AC-6: validation and state: targeted tests green; full one-shot regression once (DEV.TEST.1) since this touches the shared collection_executor/console job path; update project/roadmap.json (m7_real_device_targeted_collect_now: planned -> in_progress/done as appropriate; M12's note if this changes its own reachability), project/feature_registry.json if a relevant criterion closes, CURRENT_STATE.md and project/build_history.json in this PR."
+        ],
+        "baseline": {
+          "authority": "docs/history/phase/M8_FIRST_CONTACT_TRUST_AND_IDENTITY_EVIDENCE_PRODUCER_ARCHITECTURE.md (frozen M8 contract, sections 6/7/9) and the existing M6/M8.4 admission-gate code (console/registry_targets.py) are this movement's design authority -- M7 fills the one gap those already-frozen decisions left open (no entity_id-substitution wiring), it does not redesign anything upstream of it.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "sequencing": "M8.3's real-environment debt is now paid (2026-09-08, relationship_id e4671bc45e5e49e2bf9257d32b3fa067) -- this is what unblocked M7 to start. Independent worktree; touches console/, utils/collection_executor.py -- check for overlap with any other in-flight movement before assuming none."
+        },
+        "context_not_loaded": [
+          "M12/M14 (D5/D7 producers) -- separately blocked/scoped, out of this movement",
+          "everything outside console job targeting, argv construction, and (conditionally) the shared physical-host collection evidence-metadata primitive"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/m7-real-device-targeted-collect-now"
+        },
+        "invariants": [
+          "A device_id is never passed to --cp-config-targets directly -- only its resolved entity_id, and only when a currently proven relationship exists",
+          "No relaxation of any existing M6/M8.4 refusal code, condition or ordering",
+          "The M8.3 producer's positive write gate (accepted identity gate + non-empty serial + resolvable producing_run_ref, all three) is unchanged -- AC-1(c)'s fix, if needed, only adds a metadata field to evidence the shared _collect_host primitive already writes"
+        ],
+        "merge_gate": "Standing relay#13: green tests -> self-merge, report via RELAY_NOTE.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Close the last gap keeping config_refresh_cp non-functional for a real device-targeted collection: translate an admitted device_id into its proven collector entity_id before argv construction, and (if confirmed still necessary) add the missing host_key_fingerprint evidence metadata that currently fails the M8.4 admission gate closed for every real relationship.",
+        "output_contract": [
+          "A short current-state RELAY_NOTE (AC-1) before implementation begins, including confirmation or correction of the fingerprint-gap finding",
+          "entity_id-substitution wiring (AC-2)",
+          "Fixture-based functional proof (AC-3); a real-device demonstration request if the Product Owner wants to close AC-3 with real evidence too",
+          "Targeted tests (AC-5)",
+          "Project-state bookkeeping in this PR (AC-6)",
+          "SESSION_CLOSE on this relay file (absolute path)"
+        ],
+        "recommended_reasoning": {
+          "reason": "AC-1's investigation carries a real judgment call (confirming and possibly extending scope into the previously-protected M8.3 evidence-writing primitive) -- not pure mechanical work. AC-2 onward is deterministic once AC-1 is confirmed.",
+          "tier": "Sonnet 5, extended thinking (high) for AC-1's investigation and scope confirmation; Sonnet 5, normal for AC-2 onward implementation"
+        },
+        "requirements": [
+          "Investigate AC-1(c) for real before assuming this SESSION_START's framing is still accurate -- code may have changed since this was written"
+        ],
+        "risks": [
+          "If AC-1(c) is confirmed and the fingerprint fix turns out to need more than a metadata field addition (e.g. a real semantic change to _collect_host's own contract), stop and report via RELAY_QUESTION rather than silently expanding scope further",
+          "Do not attempt a real-device demonstration yourself -- propose the exact bounded command and let the Product Owner run it, per AI_START_HERE.md's Real-environment procedure"
+        ],
+        "scope": {
+          "in": [
+            "entity_id-substitution wiring for device_id-targeted config_refresh_cp (AC-2)",
+            "host_key_fingerprint evidence-metadata addition, only if AC-1(c) confirms it's still needed",
+            "Fixture-based tests (AC-3, AC-5)"
+          ],
+          "out": [
+            "Any other job type's target handling",
+            "M8.3 producer's positive-write-gate semantics (beyond the narrow metadata addition)",
+            "M12/M14 (separately blocked/scoped)",
+            "A real-device demonstration run (propose only, Product Owner executes)"
+          ]
+        },
+        "validation_plan": [
+          "Targeted tests (AC-5)",
+          "Full one-shot regression once (AC-6)",
+          "git diff --check",
+          "privacy gate once at PR time"
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-08T19:22:48Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "RELAY_NOTE",
+      "seq": 2,
+      "subject": "AC-1 investigation: (a)/(b) confirmed, (c) is STALE -- already fixed by PR #103",
+      "text": "AC-1(a): confirmed, code unchanged -- console/registry_targets.py::_identity_resolved still returns bool, never the resolved entity_id, though it reads relationship.entity_id internally (line ~161-181).\nAC-1(b): confirmed, code unchanged -- console/runner.py::_execute passes record.targets (raw device_ids) straight to _build_argv -> utils.collection_executor.workflow_argv, which places them verbatim after --cp-config-targets (collection_executor.py line ~249). No translation step exists anywhere in this path.\nAC-1(c): NOT accurate against current code -- the gap this SESSION_START describes was already closed by project/build_history.json's 'm8_evidence_host_key_fingerprint_not_persisted' (PR #103, merged 2026-09-07, merge commit 06e51d36a11ed2ecc8dfc4d7581656aa09c5c95d), BEFORE this SESSION_START (2026-09-08 19:22:48Z) was issued. configuration/checkpoint_config_collector.py::_collect_host's physical-host store.write_text_snapshot(...) call already includes host_key_fingerprint: key_fp in extra_metadata (line ~1596), sourced from the same _connect()/utils.cp_ssh_trust fingerprint _identity_resolved's own trust lookup uses -- exactly the fix AC-1(c) asks for, already shipped. console/registry_targets.py's own comment above the evidence_fingerprint check (lines ~193-207) and tests/test_m8_4_m6_resolver_consumption.py::_fully_resolved's docstring (lines ~141-146) are the only things still describing the closed gap as current fact; both are now stale prose, not a functional defect. tests/test_m8_4_m6_resolver_consumption.py::test_evidence_missing_fingerprint_still_fails_closed already reflects the fix (renamed and re-documented as part of PR #103) and correctly keeps only the defensive fail-closed-on-absent-fingerprint case, not the general-case gap.\nScope adjustment: AC-1(c)'s conditional fingerprint-metadata fix is NOT needed -- dropping it from this movement's scope. Proceeding with AC-2 (entity_id-substitution wiring) only, plus correcting the two stale-comment locations identified above as part of this movement's own housekeeping (no functional change to _collect_host or the M8.3 producer).",
+      "timestamp": "2026-09-08T19:25:05Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0023",
+  "movement": "M7_REAL_DEVICE_TARGETED_COLLECT_NOW",
+  "next_actor": "engineer",
+  "refs": [
+    "console/registry_targets.py",
+    "console/runner.py",
+    "console/registry.py",
+    "utils/collection_executor.py",
+    "utils/device_identity_relationships.py",
+    "docs/history/phase/M8_FIRST_CONTACT_TRUST_AND_IDENTITY_EVIDENCE_PRODUCER_ARCHITECTURE.md",
+    "project/roadmap.json",
+    "tests/test_m6_registry_keyed_job_targets.py"
+  ],
+  "schema_version": 1,
+  "status": "IN_PROGRESS",
+  "updated_at": "2026-09-08T19:25:05Z"
+}

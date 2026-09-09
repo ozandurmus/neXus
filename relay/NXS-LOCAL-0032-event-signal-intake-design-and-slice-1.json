@@ -1,0 +1,87 @@
+{
+  "created_at": "2026-09-08T22:18:08Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1: verify the three gating prerequisites (collection coordinator, safe diff, cross-vendor timeline) actually exist in the codebase and work -- name the real files/functions. If any is missing or only partially built, scope this movement down to what's genuinely buildable on top of what exists, and say so plainly rather than building on an assumed foundation.",
+          "AC-2: design + implement the webhook intake boundary: authentication, a strict schema allowlist, replay protection (nonce/timestamp-window or equivalent), dedup/cooldown.",
+          "AC-3: canonical identity resolution mapping an inbound signal's device reference to the registry's own identity model -- reuse existing identity/registry code, do not invent a parallel one.",
+          "AC-4: the trigger path must only enqueue a bounded, coordinator-managed read-only collection -- never write evidence directly from the webhook handler itself.",
+          "AC-5: tests with synthetic payloads proving replay rejection, malformed/out-of-allowlist schema rejection, dedup/cooldown behavior, and that the signal path cannot write evidence.",
+          "AC-6: update backlog.json's event_signal_intake note.",
+          "AC-7: if blocked on a genuine PO-only decision, RELAY_NOTE and stop; PO reviews in the morning."
+        ],
+        "baseline": {
+          "authority": "project/backlog.json id event_signal_intake is this movement's authority. It is gated on: collection coordinator, safe diff (0.6.3), cross-vendor timeline (0.8.x) -- verify each of these actually exists/works before building on it; if any gate is not actually satisfied, say so and scope down rather than building on a missing foundation.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "sequencing": "Independent of other in-flight movements."
+        },
+        "context_not_loaded": [
+          "Any real external caller/Splunk integration -- design and test with synthetic webhook payloads only"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/event-signal-intake-design-and-slice-1"
+        },
+        "invariants": [
+          "A signal must never be treated as authoritative evidence -- it can only trigger a bounded, coordinator-queued READ-ONLY collection, never write evidence directly itself",
+          "Authentication + schema allowlist + replay protection are mandatory on the intake boundary from the first slice, not deferred"
+        ],
+        "merge_gate": "Standing relay#13: green tests -> self-merge, report via RELAY_NOTE.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Design and, as far as feasible without a real Splunk/external caller, implement project/backlog.json id event_signal_intake (P1): an authenticated webhook intake for external change signals, with a schema allowlist, replay protection, dedup/cooldown, canonical identity resolution, and coordinator-queued read-only collection triggering. Signal is trigger-only, never authoritative evidence by itself -- this must be structurally enforced, not just documented.",
+        "output_contract": [
+          "AC-1's gate-verification findings (does the collection coordinator / safe diff / cross-vendor timeline actually exist and work)",
+          "The webhook intake module: auth, schema allowlist, replay protection, dedup/cooldown, canonical identity resolution, coordinator-queued trigger -- scoped down explicitly if a gate is missing",
+          "Tests with synthetic payloads proving replay rejection, schema rejection, dedup/cooldown, and that a signal never writes evidence directly",
+          "backlog.json note update",
+          "RELAY_NOTE + SESSION_CLOSE"
+        ],
+        "recommended_reasoning": {
+          "reason": "New external-facing intake boundary (authentication, replay protection) -- a real security boundary, warrants care.",
+          "tier": "Sonnet 5, extended thinking (high) for the boundary design; normal for the rest"
+        },
+        "requirements": [
+          "Do not build on a gating prerequisite that AC-1 finds missing -- scope down and say so instead"
+        ],
+        "risks": [
+          "Treating a signal as authoritative evidence anywhere in the path -- must never happen",
+          "Assuming gates are satisfied without checking"
+        ],
+        "scope": {
+          "in": [
+            "Gate verification",
+            "Webhook intake boundary + coordinator-trigger wiring + tests"
+          ],
+          "out": [
+            "Any real external Splunk/caller integration",
+            "Writing evidence directly from the webhook path"
+          ]
+        },
+        "validation_plan": [
+          "New targeted tests for the intake boundary",
+          "Full one-shot regression once",
+          "git diff --check",
+          "privacy gate at PR time"
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-08T22:18:08Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0032",
+  "movement": "EVENT_SIGNAL_INTAKE_DESIGN_AND_SLICE_1",
+  "next_actor": "engineer",
+  "refs": [
+    "project/backlog.json",
+    "project/roadmap.json"
+  ],
+  "schema_version": 1,
+  "status": "OPEN",
+  "updated_at": "2026-09-08T22:18:08Z"
+}

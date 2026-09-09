@@ -1,0 +1,97 @@
+{
+  "created_at": "2026-09-09T00:24:58Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1: confirm line 94 of relay/NXS-LOCAL-0012-gov-po-3-ac5-demo-1-scratch.json is still the exact colliding line NXS-LOCAL-0042 identified (re-verify, don't assume the line number hasn't shifted).",
+          "AC-2: add the entry to _KNOWN_PROSE_COLLISION_LINE_HASHES with its correct sha256 hash and an explanatory comment matching the existing two entries' style.",
+          "AC-3: run the full one-shot regression and confirm it is now literally 0 failures for this scanner (report the actual number, don't just claim green).",
+          "AC-4: update backlog.json's dlp_scanner_prose_collision_third_relay_scratch_file to done.",
+          "AC-5: coordinate this branch's merge with NXS-LOCAL-0042's own PR #156 -- both need to land together for main to actually be green."
+        ],
+        "baseline": {
+          "authority": "project/backlog.json id dlp_scanner_prose_collision_third_relay_scratch_file (filed by NXS-LOCAL-0042) is this movement's authority. This branches from feature/dlp-scanner-prose-collision-standing-exception (NXS-LOCAL-0042's own branch, not yet merged to main), because the allowlist mechanism this movement extends only exists there.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "sequencing": "Must merge to main together with (or immediately after) NXS-LOCAL-0042's own PR #156 -- this is a direct follow-up on the same branch/mechanism, not independent."
+        },
+        "context_not_loaded": [
+          "Any change to the allowlist mechanism's own matching logic -- adding one entry only"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/feature/dlp-scanner-prose-collision-standing-exception",
+          "lane": "feature/dlp-scanner-prose-collision-third-finding"
+        },
+        "invariants": [
+          "Add exactly one new entry, keyed by (file, line-content sha256 hash), matching the existing mechanism's shape exactly",
+          "Do not broaden the matching logic itself -- content-hash-per-file, same as the two existing entries"
+        ],
+        "merge_gate": "Standing relay#13: green tests -> self-merge, report via RELAY_NOTE. This movement's success criterion is a literal 0-failure full regression -- verify it, don't assume.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Add the third, previously-uncatalogued prose collision found by NXS-LOCAL-0042 to the exact same narrow, content-hash-keyed exception mechanism it built (_KNOWN_PROSE_COLLISION_LINE_HASHES in tests/test_dev_0_5b_auth_consumer_canonical_config.py). The finding: relay/NXS-LOCAL-0012-gov-po-3-ac5-demo-1-scratch.json line 94 quotes the same two originally-catalogued findings verbatim in its own RELAY_DECISION text -- the identical historical-prose class as the two already-allowlisted entries, only surfaced after commit a911ed5 synced missing relay files to main. Product Owner decision (2026-09-09): treat it exactly the same way -- option (b), narrow allowlist entry, not a broader mechanism change.",
+        "output_contract": [
+          "The third allowlist entry added to _KNOWN_PROSE_COLLISION_LINE_HASHES for relay/NXS-LOCAL-0012-gov-po-3-ac5-demo-1-scratch.json, keyed by the sha256 of its exact colliding line (94)",
+          "Full one-shot regression genuinely showing 0 failures related to this scanner",
+          "project/backlog.json's dlp_scanner_prose_collision_third_relay_scratch_file marked done",
+          "RELAY_NOTE + SESSION_CLOSE, and this branch merged together with/immediately after NXS-LOCAL-0042's own PR"
+        ],
+        "recommended_reasoning": {
+          "reason": "A one-line, already-decided, mechanically-scoped addition to an existing mechanism.",
+          "tier": "Sonnet 5, normal"
+        },
+        "requirements": [
+          "Verify the line/hash is still current before adding it"
+        ],
+        "risks": [
+          "Adding a stale hash if the line shifted since NXS-LOCAL-0042's diagnosis"
+        ],
+        "scope": {
+          "in": [
+            "The one allowlist entry"
+          ],
+          "out": [
+            "Any other change to the scanner mechanism"
+          ]
+        },
+        "validation_plan": [
+          "Full one-shot regression, verified literal 0 failures",
+          "git diff --check",
+          "privacy gate at PR time"
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-09T00:24:58Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "RELAY_NOTE",
+      "seq": 2,
+      "subject": "Third allowlist entry landed; main gated on PR #156",
+      "text": "AC-1..AC-4 done: re-verified relay/NXS-LOCAL-0012-gov-po-3-ac5-demo-1-scratch.json:94 unchanged (sha256 matches), added the third _KNOWN_PROSE_COLLISION_LINE_HASHES entry (no matching-logic change), marked backlog.json's dlp_scanner_prose_collision_third_relay_scratch_file done. Full one-shot regression independently re-run by this session (not assumed from the prior local commit's own claim): python -m pytest -q -n auto --dist worksteal, exit 0, 3131 passed, 27 skipped, 0 failures. git diff --check clean. AC-5: pushed feature/dlp-scanner-prose-collision-third-finding, opened PR #158 against feature/dlp-scanner-prose-collision-standing-exception (this movement's own git.base), self-merged under relay#13's standing green-tests authorization. PR #156 (that branch -> main) now carries both changes in its diff and will bring main to the literal 0-failure state when it merges -- landing on main itself is PR #156's own scope, not this movement's. Note: the nexus-engineer pre-push privacy gate initially flagged untracked, gitignored local test-run artifacts (data/, logs/) as new findings; removed those regenerable artifacts (no tracked file was affected) and the gate passed cleanly on retry.",
+      "timestamp": "2026-09-09T04:21:43Z"
+    },
+    {
+      "actor": "po",
+      "marker": "RELAY_ACK",
+      "seq": 3,
+      "subject": "PO ack: third entry landed; PR #156 merged to main 2026-09-09",
+      "text": "Accepted. PR #158 correctly targeted this movement's own git.base (the 0042 branch); the Product Owner merged the combined PR #156 into main today, so main now carries both the narrow content-hash exception mechanism and the third catalogued entry. Independent re-run evidence (3131 passed / 27 skipped / 0 failures, exit 0) is the first literal-zero-failure full regression this project has had; a post-merge verification on main is the Product Owner's next check. Both dlp_scanner_prose_collision_* backlog items close with this.",
+      "timestamp": "2026-09-09T06:56:29Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0044",
+  "movement": "DLP_SCANNER_PROSE_COLLISION_THIRD_FINDING",
+  "next_actor": null,
+  "refs": [
+    "tests/test_dev_0_5b_auth_consumer_canonical_config.py",
+    "relay/NXS-LOCAL-0012-gov-po-3-ac5-demo-1-scratch.json",
+    "project/backlog.json"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-09T06:56:29Z"
+}

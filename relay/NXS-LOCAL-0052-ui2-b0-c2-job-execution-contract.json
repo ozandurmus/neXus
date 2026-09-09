@@ -87,11 +87,30 @@
       },
       "seq": 1,
       "timestamp": "2026-09-09T14:45:55Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "RELAY_NOTE",
+      "seq": 2,
+      "subject": "UI2 B0/C2 job execution contract delivered, PR #164 merged",
+      "text": "docs/design/UI2_0_C2_JOB_EXECUTION_CONTRACT.md (DRAFT -- FOR PRODUCT OWNER FREEZE) written and merged. Self-check against AC-1..AC-10: AC-1 closed state machine (doc §3), AC-2 five-point crash matrix (§8), AC-3 lease/heartbeat/fencing specific enough for a Testcontainers test (§4), AC-4 per-action-class retry rules keyed on utils/action_taxonomy.py (§5.3), AC-5 owner/approver/execution-identity as three distinct sourced fields resolving council-brief SR-D6 (§7.2), AC-6 six ordered pre-execution checks with recorded outcome fields (§6), AC-7 Run Now approval re-checked at claim time not only request time (§7.3, criterion 10), AC-8 schedule optimistic concurrency with a defined SCHEDULE_VERSION_CONFLICT refusal shape (§7.1), AC-9 twelve testable acceptance criteria for B1-4/B1-10/B1-11 (§9), AC-10 no contradiction with frozen authority found, no PO-reserved decision reopened, open items named explicitly (§10). Merge gate: standing relay#13 (green tests -> self-merge) exercised after full one-shot regression run in the foreground and awaited to actual completion three times (3216 passed / 0 failed each time, most recently at merge commit b38564987f80c540df619d134ade32029b5d4ddf), git diff --check clean, and the repository privacy gate 0 new findings vs. origin/main. Two concurrent origin/main advances during this movement (C1's own merge, PR #163, then its post-merge status chore, PR #165) required two merge-conflict resolutions in project-state files (backlog.json/roadmap.json/build_history.json/CURRENT_STATE.md/docs/history/INDEX.md) -- resolved by keeping both C1's and C2's build records, with C2 as the newest now_next.now per horizon_contract, and C1 correctly demoted to a predecessor/upcoming row. Full detail: project/backlog.json's ui2_b0_c2_job_execution_contract note and project/build_history.json's own record.",
+      "timestamp": "2026-09-09T15:30:56Z"
+    },
+    {
+      "actor": "po",
+      "authorized_by": "Product Owner (in-session precedent, 2026-09-09)",
+      "marker": "RELAY_DECISION",
+      "scope": "C2 job execution contract acceptance",
+      "seq": 3,
+      "subject": "C2 accepted as DRAFT -- FOR FREEZE; freezes with C1,C3-C5",
+      "supersedes": "none",
+      "text": "AC-1..AC-10 self-check accepted, no contradictions. Open items 1-2 (lease/heartbeat/retry defaults) accepted as proposed. Open item 3 (SR-D6 resolved via owner/approver/execution-identity separation) accepted as this contract's answer, not a PO override. Open item 4 (lapsed-schedule reauthorization state/screen deferred to C7 and later UI integration) accepted. Not yet FROZEN -- freezes together with C1,C3-C5.",
+      "timestamp": "2026-09-09T15:32:12Z"
     }
   ],
   "id": "NXS-LOCAL-0052",
   "movement": "UI2_B0_C2_JOB_EXECUTION_CONTRACT",
-  "next_actor": "engineer",
+  "next_actor": null,
   "refs": [
     "docs/design/UI2_0_BASELINE_CONTRACT.md",
     "docs/design/UI2_0_DEVELOPMENT_WORKFLOW.md",
@@ -111,6 +130,6 @@
     "project/roadmap.json"
   ],
   "schema_version": 1,
-  "status": "OPEN",
-  "updated_at": "2026-09-09T14:45:55Z"
+  "status": "CLOSED",
+  "updated_at": "2026-09-09T15:32:12Z"
 }

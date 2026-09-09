@@ -1,0 +1,87 @@
+{
+  "created_at": "2026-09-09T00:26:34Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1: read docs/design/NAVIGATION_INFORMATION_ARCHITECTURE.md section 5.2 in full (the 8-value EntityType model) and M11's own relay/session record (relay/NXS-LOCAL-0022 if still present, or docs/history/phase's M11 record) to understand exactly what M11 deferred and why.",
+          "AC-2: read utils/capability_applicability.py's D2 table in full, including the ha_readiness worked example, to understand what EntityType values D2 already expects to receive.",
+          "AC-3: implement the classifier as a new, clearly-scoped producer -- input a real device/unified-evidence entry, output exactly one of the 8 closed EntityType values or a fail-closed 'cannot classify' result, never a guess.",
+          "AC-4: tests covering each of the 8 values plus a fail-closed edge case.",
+          "AC-5: demonstrate composition with resolve_d2/resolve_d3 for the ha_readiness worked example as one real, concrete content case.",
+          "AC-6: update backlog.json's note, naming explicitly what remains for a future movement to wire this into actual UI rendering (a device tab showing NOT_APPLICABLE) if that's still separate work.",
+          "AC-7: if blocked on a genuine PO-only decision, RELAY_NOTE and stop; PO reviews in the morning."
+        ],
+        "baseline": {
+          "authority": "docs/design/NAVIGATION_INFORMATION_ARCHITECTURE.md section 5.2 (the closed 8-value EntityType model) + utils/capability_applicability.py's D2 table (which already has worked examples like ha_readiness's 'a standalone firewall has no HA readiness') + project/backlog.json id navigation_entity_type_classifier_for_content_level_p2_p3.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "sequencing": "Follow-up to M11 (relay/NXS-LOCAL-0022) -- read that movement's own scope.out to understand exactly why it deferred this. Independent of other in-flight movements otherwise."
+        },
+        "context_not_loaded": [
+          "Wiring this classifier all the way through to actual UI rendering (a device tab showing NOT_APPLICABLE) -- that's a separate follow-on; this movement produces the classifier itself"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/navigation-entity-type-classifier-p2-p3"
+        },
+        "invariants": [
+          "The classifier must map onto exactly the closed 8-value EntityType enum from section 5.2 -- never introduce a 9th value or a fuzzy/partial classification",
+          "This classifier is a NEW producer surface distinct from D2 (capability_applicability.resolve_d2) and D3 (capability_vendor_support.resolve_d3) -- it feeds them, it does not replace or duplicate their own contracts"
+        ],
+        "merge_gate": "Standing relay#13: green tests -> self-merge, report via RELAY_NOTE.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Implement project/backlog.json id navigation_entity_type_classifier_for_content_level_p2_p3 (P2): a producer mapping a real device/unified-evidence entry onto the closed 8-value docs/design/NAVIGATION_INFORMATION_ARCHITECTURE.md section 5.2 EntityType model. This classifier does not exist anywhere today and is not part of D2's own producer contract (D2 only maps EntityType -> ApplicabilityResult, per utils/capability_applicability.py). M11 deliberately did not build this -- it was out of M11's own scope.out as new identity/producer-surface scope creep.",
+        "output_contract": [
+          "A classifier function/module mapping a real device/unified-evidence entry to one of the 8 closed EntityType values",
+          "Tests covering each of the 8 EntityType values with a realistic input case, plus at least one ambiguous/edge case showing the classifier fails closed (never guesses) if it cannot confidently classify",
+          "A demonstration wiring into resolve_d2/resolve_d3 for at least the ha_readiness worked example already in utils/capability_applicability.py's D2 table (the 'standalone firewall has no HA readiness' case), proving the classifier + existing D2/D3 producers compose correctly for one real content case",
+          "backlog.json note update marking this done, and naming the remaining UI-wiring follow-on if any",
+          "RELAY_NOTE + SESSION_CLOSE"
+        ],
+        "recommended_reasoning": {
+          "reason": "New identity/producer-surface classifier feeding a frozen closed-enum contract -- a real design decision (classification boundaries, fail-closed behavior) on top of already-frozen D2/D3 producers.",
+          "tier": "Sonnet 5, extended thinking (high) for the classifier design; normal for the rest"
+        },
+        "requirements": [
+          "Fail closed on ambiguous input -- never guess an EntityType"
+        ],
+        "risks": [
+          "Scope creep into full UI wiring (explicitly out of scope, M11's own precedent) or into D2/D3's own contracts (must not modify their frozen shape)"
+        ],
+        "scope": {
+          "in": [
+            "The classifier + tests + one demonstration composition with D2/D3"
+          ],
+          "out": [
+            "Actual UI/device-tab rendering wiring",
+            "Any change to D2/D3's own frozen producer contracts"
+          ]
+        },
+        "validation_plan": [
+          "New targeted tests for all 8 EntityType values + fail-closed case",
+          "Full one-shot regression once",
+          "git diff --check",
+          "privacy gate at PR time"
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-09T00:26:34Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0046",
+  "movement": "NAVIGATION_ENTITY_TYPE_CLASSIFIER_P2_P3",
+  "next_actor": "engineer",
+  "refs": [
+    "docs/design/NAVIGATION_INFORMATION_ARCHITECTURE.md",
+    "utils/capability_applicability.py",
+    "docs/history/phase",
+    "project/backlog.json"
+  ],
+  "schema_version": 1,
+  "status": "OPEN",
+  "updated_at": "2026-09-09T00:26:34Z"
+}

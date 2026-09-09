@@ -1,0 +1,90 @@
+{
+  "created_at": "2026-09-08T23:25:44Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1: read tests/fixtures/uitest/unified.json's current shape and scripts/render_uitest.py's rendering path, plus tests/test_op0c_failover_readiness_ui.py's synthetic split-brain evidence shape to model the new fixture on a real, already-proven-correct verdict input.",
+          "AC-2: add the HA-runtime fixture producing an UNSAFE/split-brain verdict.",
+          "AC-3: prove the rendered output actually shows the new row/verdict (a snapshot or an assertion on render_uitest.py's output, not just fixture-file validity).",
+          "AC-4: update backlog.json's op0c_uitest_fixture_verdict_diversity status to done.",
+          "AC-5: if blocked on a genuine PO-only decision, RELAY_NOTE and stop; PO reviews in the morning."
+        ],
+        "baseline": {
+          "authority": "project/backlog.json id op0c_uitest_fixture_verdict_diversity is this movement's authority. Explicitly NOT required for OP.0c's own Definition of Done -- this is a nice-to-have visual-check improvement, not a correctness fix.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "sequencing": "Independent of other in-flight movements -- test fixture only."
+        },
+        "context_not_loaded": [
+          "Any change to the actual failover-verdict computation logic -- fixture/render-harness only"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/op0c-uitest-fixture-verdict-diversity"
+        },
+        "invariants": [
+          "No change to the verdict-computation logic itself (tests/test_op0c_failover_readiness_ui.py's unit-level coverage stays authoritative) -- this only adds a fixture input that exercises an existing code path visually"
+        ],
+        "merge_gate": "Standing relay#13: green tests -> self-merge, report via RELAY_NOTE.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Implement project/backlog.json id op0c_uitest_fixture_verdict_diversity (P3): add an HA-runtime fixture (cp_config_telemetry/pan_config_telemetry) to tests/fixtures/uitest/unified.json that produces a non-INSUFFICIENT_EVIDENCE failover verdict (specifically an UNSAFE/split-brain row) when rendered through scripts/render_uitest.py, so the visual render harness actually exercises that path instead of only the unit-level synthetic-evidence tests in tests/test_op0c_failover_readiness_ui.py.",
+        "output_contract": [
+          "An HA-runtime fixture producing a genuine UNSAFE (split-brain) row, wired through scripts/render_uitest.py",
+          "Proof the rendered output actually shows the UNSAFE row (not just that the fixture parses)",
+          "backlog.json note update marking this done",
+          "RELAY_NOTE + SESSION_CLOSE"
+        ],
+        "recommended_reasoning": {
+          "reason": "Small, well-scoped, explicitly non-critical test-fixture addition.",
+          "tier": "Sonnet 5, normal"
+        },
+        "requirements": [
+          "The new fixture must exercise a genuinely different verdict path than the existing INSUFFICIENT_EVIDENCE/NOT_A_FAILOVER_UNIT-only coverage"
+        ],
+        "risks": [
+          "Adding a fixture that happens to still resolve to INSUFFICIENT_EVIDENCE, missing the point of the exercise"
+        ],
+        "scope": {
+          "in": [
+            "The new fixture + render-harness wiring + proof"
+          ],
+          "out": [
+            "Any change to verdict-computation logic"
+          ]
+        },
+        "validation_plan": [
+          "New/adjusted targeted proof of the rendered UNSAFE row",
+          "Full one-shot regression once",
+          "git diff --check",
+          "privacy gate at PR time"
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-08T23:25:44Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "RELAY_NOTE",
+      "seq": 2,
+      "subject": "PR #152 merged",
+      "text": "op0c_uitest_fixture_verdict_diversity implemented and merged: PR https://github.com/ozandurmus/neXus/pull/152 (feature/op0c-uitest-fixture-verdict-diversity -> main), merged 2026-09-08T23:51:36Z under standing relay#13 (green tests -> self-merge). Full detail in the accompanying SESSION_CLOSE entry. No genuine PO-only decision was hit (AC-5 not triggered).",
+      "timestamp": "2026-09-08T23:52:39Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0040",
+  "movement": "OP0C_UITEST_FIXTURE_VERDICT_DIVERSITY",
+  "next_actor": "po",
+  "refs": [
+    "tests/fixtures/uitest/unified.json",
+    "scripts/render_uitest.py",
+    "tests/test_op0c_failover_readiness_ui.py",
+    "project/backlog.json"
+  ],
+  "schema_version": 1,
+  "status": "AWAITING_PO",
+  "updated_at": "2026-09-08T23:52:39Z"
+}

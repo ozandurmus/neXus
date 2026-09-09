@@ -349,7 +349,7 @@ feature slices; real mutation acceptance never skips audit/authorization
 
 | # | Movement | Scope |
 |---|---|---|
-| 1 | **C1 Platform & schema contract** | UI 2.0 schema ownership, Flyway as sole migration authority, projection tables, audit table from the first mutation (new finding id, correcting the brief's §11.5 misattribution to SR-D8/DO-D8), per-component secrets (K-8), key custody (K-7) |
+| 1 | **C1 Platform & schema contract** | UI 2.0 schema ownership, Flyway as sole migration authority, projection tables, audit table from the first mutation (finding id C1-1, docs/design/UI2_0_C1_PLATFORM_SCHEMA_CONTRACT.md §1/§3.5 -- corrects the earlier "brief §11.5" mislabel; the brief has no §11, the actual source is §8), per-component secrets (K-8), key custody (K-7) |
 | 2 | **C2 Job execution contract** | job record, leasing/heartbeat, timeout, worker loss, duplicate detection, `OUTCOME_UNKNOWN`, owner/approver/execution identity for scheduled jobs, schedule optimistic concurrency. **No worker mode in Python.** |
 | 3 | **C3 Identity, sessions, RBAC contract** | design §5/§7 as amended; single active session table; role tokens → bindings → AD group refs; gate chain E1–E7 on HTTP |
 | 4 | **C4 Capability registry & command-gate resolution contract** | runtime form of §3.1; gate-registry resolution rule (K-4); closed step kinds; VSX/ClusterXL rules (CP-D6); transport decision (CP-D7) |

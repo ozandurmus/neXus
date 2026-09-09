@@ -1,0 +1,93 @@
+{
+  "created_at": "2026-09-08T23:55:05Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1: re-verify DRIFT A against current source (static/navigation_ui.js, static/console_actions.js, templates/console.html) and DRIFT B against current source (checkpoint/clusterxl_capability_adapter.py, checkpoint/clusterxl_member_session.py, checkpoint/clusterxl_preflight_provider.py, utils/operate/{coordinator,authorization,eligibility}.py) -- confirm both are still accurate on tonight's HEAD before editing anything.",
+          "AC-2: fix DRIFT A's label wording in project/feature_registry.json -- correct the stale sentence only, no criterion state change.",
+          "AC-3: fix DRIFT B's summary wording -- the backlog note's suggested replacement is a starting point to review, not to paste verbatim; use it if it still holds, adjust if source has moved since 2026-09-08.",
+          "AC-4: update backlog.json's project_state_wording_drift_reconciliation status to done.",
+          "AC-5: if either drift no longer matches current source (something changed since the note was written), say so plainly and adjust the fix accordingly rather than applying stale wording.",
+          "AC-6: if blocked on a genuine PO-only decision, RELAY_NOTE and stop; PO reviews in the morning."
+        ],
+        "baseline": {
+          "authority": "project/backlog.json id project_state_wording_drift_reconciliation is this movement's authority -- it already fully specifies both drifts, the verified source evidence for each, and a suggested (not mandatory) replacement wording for DRIFT B to review rather than paste verbatim.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "sequencing": "Independent of other in-flight movements -- wording-only, no shared file surface with code movements."
+        },
+        "context_not_loaded": [
+          "Any criterion state change, feature status change, or project_metadata_has_no_cross_authority_contradictions extension to prose -- explicitly out of scope per the backlog note's own framing"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/project-state-wording-drift-reconciliation"
+        },
+        "invariants": [
+          "No criterion state (done/planned/etc) changes -- both drifts are wording-only per the backlog note's own analysis",
+          "Re-verify both drifts against current source yourself before editing -- do not paste the backlog note's suggested wording without checking it's still accurate on tonight's HEAD"
+        ],
+        "merge_gate": "Standing relay#13: green tests -> self-merge, report via RELAY_NOTE. The 2 pre-existing DLP-collision failures (or their now-resolved-if-NXS-LOCAL-dlp-prose-movement-landed-first state) are a standing accepted exception if still present.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Implement project/backlog.json id project_state_wording_drift_reconciliation (P3): a DOCS-only wording fix for two verified feature_registry.json label/summary drifts (DRIFT A: left_vertical_product_navigation's no_enrollment_affordance criterion label has a stale trailing sentence claiming the Administration -> Device Management entry point 'is not yet built', though the criterion's own 'done' state is correct and the entry point IS built per build_history.json's M9 record and the shipped source; DRIFT B: failover_controlled_execution's summary says 'implementation hard-gated, not started' while several adapters/providers are actually implemented-but-unwired). Wording only -- no criterion state or feature status changes.",
+        "output_contract": [
+          "DRIFT A fixed: the stale trailing sentence in feature_registry.json's no_enrollment_affordance label corrected to reflect the entry point being built (console-shell-only by design, D-NAV6)",
+          "DRIFT B fixed: failover_controlled_execution's summary corrected to reflect implemented-but-unwired reality without changing any criterion state",
+          "backlog.json note update marking this done",
+          "RELAY_NOTE + SESSION_CLOSE"
+        ],
+        "recommended_reasoning": {
+          "reason": "Already-verified, well-scoped documentation wording fix.",
+          "tier": "Sonnet 5, normal"
+        },
+        "requirements": [
+          "Re-verify against current source before writing -- do not blindly copy the backlog note's analysis without checking it still holds"
+        ],
+        "risks": [
+          "Copying stale wording that no longer matches source that moved since the drift was first verified"
+        ],
+        "scope": {
+          "in": [
+            "The two named wording fixes in feature_registry.json"
+          ],
+          "out": [
+            "Any criterion state, feature status, or code change",
+            "Extending project_metadata_has_no_cross_authority_contradictions to prose"
+          ]
+        },
+        "validation_plan": [
+          "Existing project-state tests must still pass",
+          "Full one-shot regression once",
+          "git diff --check",
+          "privacy gate at PR time"
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-08T23:55:05Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "RELAY_NOTE",
+      "seq": 2,
+      "subject": "Both drifts fixed, done, merged",
+      "text": "Re-verified DRIFT A and DRIFT B against current HEAD before editing -- both still matched source exactly as the backlog note described. Applied both wording fixes verbatim (DRIFT B's suggested replacement held up against utils/operate/__init__.py and utils/action_taxonomy.py). backlog.json marked done. Full regression: 3097 passed, 27 skipped, 3 failed (2 standing accepted DLP-collision exceptions per merge_gate, 1 parallel-worker scratch-file race confirmed non-reproducing in isolation -- not a regression). PR #155 merged to main at 9f542ce under standing relay#13 self-merge authorization.",
+      "timestamp": "2026-09-09T00:02:46Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0043",
+  "movement": "PROJECT_STATE_WORDING_DRIFT_RECONCILIATION",
+  "next_actor": "po",
+  "refs": [
+    "project/feature_registry.json",
+    "project/build_history.json",
+    "PRODUCT_DIRECTION_RECORD.md",
+    "project/backlog.json"
+  ],
+  "schema_version": 1,
+  "status": "AWAITING_PO",
+  "updated_at": "2026-09-09T00:02:46Z"
+}

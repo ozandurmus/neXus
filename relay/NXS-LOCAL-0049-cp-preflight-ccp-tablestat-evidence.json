@@ -1,0 +1,104 @@
+{
+  "created_at": "2026-09-09T06:54:45Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1: read the backlog note in full, OP_0B_1_COMMAND_GATE_PACKAGE.md's CP-A4 row (the model), and how CP-A4/CP-A5 are parsed and wired today; confirm the real `cphaprob tablestat` output shape from the repository's existing fixtures/docs (there is operator-supplied evidence referenced in the note) -- if no real sample exists in-repo, build the parser against the documented CCP Unique IP's Table shape and say so explicitly, fail-closed.",
+          "AC-2: add the gate row in CP-A4's exact format, marked APPROVED (Product Owner 2026-09-09).",
+          "AC-3: implement the value-free parser with the structural-skeleton diagnostic; prove by test that no IP/MAC/interface-name token from a realistic fixture survives.",
+          "AC-4: wire exactly one call per member into the existing Expert session with unchanged pacing/order; prove by test that battery order and every existing command's authority are unchanged.",
+          "AC-5: write the readiness-mapping proposal (PROPOSED, awaiting PO review) with explicit reasoning against the never-KNOWN_BAD-from-absence law, and implement it behind a named decision constant so it can be flipped without re-implementation.",
+          "AC-6: VSX/physical-VS0-only rule enforced and tested.",
+          "AC-7: update backlog note; RELAY_NOTE summarises the mapping proposal in 3-4 sentences for the Product Owner."
+        ],
+        "baseline": {
+          "authority": "project/backlog.json id cp_preflight_ccp_tablestat_evidence is the full specification -- its note already defines the gate row (modelled on CP-A4), the retained-field rule, the candidate readiness checks, the VSX rule and the required tests. docs/history/phase/OP_0B_1_COMMAND_GATE_PACKAGE.md is the gate-row format authority; docs/history/phase/OP_0A_HA_READINESS_ASSESSMENT.md (FROZEN) and utils/failover/assessment.py define the checks the mapping targets and the 'never KNOWN_BAD from absence' law.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "sequencing": "Independent of every in-flight movement. Touches checkpoint/clusterxl_preflight_provider.py, which OP.1.S1 (NXS-LOCAL-0048, running in parallel) only imports read-only -- no conflict expected, but merge origin/main before opening the PR."
+        },
+        "context_not_loaded": [
+          "Any live device contact -- the parser and wiring are proven against fixtures; the first real-battery run including tablestat is a later, Product-Owner-run real-environment step",
+          "PAN HA -- this is a Check Point ClusterXL-only evidence source"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/cp-preflight-ccp-tablestat-evidence"
+        },
+        "invariants": [
+          "Retained fields are value-free by construction: NO IP address, NO MAC address, NO interface name survives parsing -- only bounded counts/booleans (cluster interfaces observed; interfaces where BOTH members are seen; interfaces where the peer is absent; local member seen on every required interface, cross-referenced by COUNT against CP-A4's 'Required interfaces:'). A test must prove no address/MAC token from the fixture appears anywhere in the output",
+          "Exactly one `cphaprob tablestat` call per member, in the existing per-member persistent Expert session, same INTER_COMMAND_DELAY_SECONDS pacing, NO_RETRY, CLASS_0_READ -- battery order and S4 command authority for every existing command unchanged",
+          "Physical/VS0 context only; VSX per-VS semantics are NOT established -- a VSX unit gets no per-VS tablestat call",
+          "The readiness mapping (FAIL vs INSUFFICIENT_EVIDENCE when the peer row is absent on a required interface) is PROPOSED with explicit reasoning against the frozen 'never KNOWN_BAD from absence' law -- the contract text must say why an absence inside the device's own positively-reported table differs from a read that produced nothing. Implement the proposed mapping behind a clearly named decision point so the Product Owner can flip it in review without a re-implementation; do not silently decide it as settled",
+          "Structural-skeleton diagnostic on unrecognised shape; parser fails closed, never guesses"
+        ],
+        "merge_gate": "Standing relay#13: green tests -> self-merge, report via RELAY_NOTE. Because the readiness mapping is a Product Owner review item, the RELAY_NOTE must state the proposed mapping and its reasoning in three or four sentences so it can be accepted or flipped on read.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Implement project/backlog.json id cp_preflight_ccp_tablestat_evidence (P1), approved by the Product Owner 2026-09-09: add `cphaprob tablestat` (the CCP 'Unique IP's Table') to the Check Point ClusterXL preflight battery as positive, per-interface, cross-member CCP-reachability evidence -- the one thing the approved battery cannot see today (cphaprob -a if / CP-A4 proves local link state, not that CCP traffic actually reaches the peer). Deliver (1) the new command-gate row, (2) a value-free parser retaining counts/booleans only, (3) a PROPOSED readiness-contract mapping written for Product Owner review, and (4) the wiring, exactly per the backlog note's five 'WHAT IMPLEMENTATION NEEDS' points.",
+        "output_contract": [
+          "Gate row for `cphaprob tablestat` added to docs/history/phase/OP_0B_1_COMMAND_GATE_PACKAGE.md in CP-A4's exact format (Vendor, Action class CLASS_0_READ, Execution plane, Shell/context Expert direct physical/VS0, Expected calls per member 1, Concurrency/timeout/retry as CP-A4 NO_RETRY, Session reuse yes, Read-only evidence yes, Evidence category F and/or split-brain), status APPROVED (Product Owner 2026-09-09)",
+          "Parser in checkpoint/clusterxl_preflight_provider.py (or its parsing sibling, following where CP-A4/CP-A5 parsers live) emitting only the bounded counts/booleans above, with the structural-skeleton diagnostic",
+          "Readiness mapping proposal added to the OP.0a/OP.0b contract text (an amendment section, clearly marked PROPOSED -- awaiting Product Owner review) covering no_split_brain and control_sync_link_health, plus the wiring into utils/failover/assessment.py behind a named decision constant",
+          "Tests: parser fail-closed on unknown shape; value-free retained fields (no IP/MAC/interface-name survives); one call per member in the same shell; battery order and existing command authority unchanged; the mapping's FAIL/INSUFFICIENT_EVIDENCE behaviour for peer-absent-on-required-interface under the proposed decision",
+          "project/backlog.json cp_preflight_ccp_tablestat_evidence updated (status stays in_progress until the mapping is reviewed and a real battery run includes the command)",
+          "RELAY_NOTE (with the mapping proposal summarised) + SESSION_CLOSE"
+        ],
+        "recommended_reasoning": {
+          "reason": "A new device command entering a frozen, gate-reviewed battery plus a readiness-semantics proposal that must be argued against a frozen evidence law -- vendor-semantic and safety-boundary work.",
+          "tier": "Sonnet 5, extended thinking (high) for the gate row, retained-field design and mapping proposal; normal for parser/tests"
+        },
+        "requirements": [
+          "Value-free retained fields proven by test, not asserted",
+          "Mapping is proposed-and-flippable, not silently settled"
+        ],
+        "risks": [
+          "Leaking an interface name or address into evidence 'for debugging' -- forbidden, test must catch it",
+          "Treating peer-row-absent as FAIL without arguing it against the absence law -- the note explicitly requires the contract to say so before the code does"
+        ],
+        "scope": {
+          "in": [
+            "Gate row",
+            "parser",
+            "wiring",
+            "mapping proposal + flippable implementation",
+            "tests",
+            "backlog note"
+          ],
+          "out": [
+            "Any live device run",
+            "PAN",
+            "per-VS VSX semantics",
+            "changing any existing battery command"
+          ]
+        },
+        "validation_plan": [
+          "Targeted tests for AC-3/AC-4/AC-5/AC-6",
+          "Existing OP.0a/OP.0b suites untouched and green",
+          "Full one-shot regression once",
+          "git diff --check",
+          "privacy gate at PR time"
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-09T06:54:45Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0049",
+  "movement": "CP_PREFLIGHT_CCP_TABLESTAT_EVIDENCE",
+  "next_actor": "engineer",
+  "refs": [
+    "docs/history/phase/OP_0B_1_COMMAND_GATE_PACKAGE.md",
+    "docs/history/phase/OP_0B_0_VENDOR_FAILOVER_PREFLIGHT_EVIDENCE_SURFACE.md",
+    "docs/history/phase/OP_0A_HA_READINESS_ASSESSMENT.md",
+    "checkpoint/clusterxl_preflight_provider.py",
+    "utils/failover/assessment.py",
+    "project/backlog.json"
+  ],
+  "schema_version": 1,
+  "status": "OPEN",
+  "updated_at": "2026-09-09T06:54:45Z"
+}

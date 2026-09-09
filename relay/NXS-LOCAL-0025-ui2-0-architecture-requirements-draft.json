@@ -1,0 +1,112 @@
+{
+  "created_at": "2026-09-08T20:02:09Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1: read docs/design/PRODUCT_CONTROL_PLANE_ARCHITECTURE.md section 10 (pcp_storage_engine decision), docs/design/OPERATOR_CONSOLE_ARCHITECTURE.md, console/app.py and console/runner.py, and utils/collection_executor.py's workflow_argv to establish, as fact from the code, exactly which parts of today's console path are static-export-shaped (HTML/JSON snapshot formatting) versus which parts already produce structured, DB-ready data (the D1-D7 producers, registry, resolver). This is the evidentiary basis for the whole document -- do not assume the extent of the mismatch, show it.",
+          "AC-2: produce docs/design/UI2_0_ARCHITECTURE_REQUIREMENTS.md (status DRAFT), following the same document shape as docs/design/PRIVATE_REPLAY_ARCHITECTURE.md and docs/design/M14_LOCAL_LDAP_AUTHORIZATION_ARCHITECTURE.md, that captures the Product Owner's 11-point functional target verbatim-referenced and organized as: (1) empty-shell UI, (2) DB-backed state + LDAP auth + role-based menu authorization (link to M14's D7 design, do not re-derive LDAP/AD decisions -- reference them), (3) device onboarding (discovery + manual, no static HTML generation, no unnecessary data pull), (4) auto config/inventory population post-onboarding eligible for compliance checking, (5) configuration-only fetch scripts that write straight to DB with no formatting side-output, (6) inventory-only fetch with no other data pulled, (7) compliance: operator selects benchmark (e.g. CIS) then applies to selected devices, (8) backup: add/select-device/schedule, plus drift comparison against prior backups, (9) failover menu auto-populated from live active/passive state at configurable intervals, (10) a live/dynamic project-plan view, optionally GitHub-sourced.",
+          "AC-3: for each of the 11 points, state as a concrete requirement: (a) what data/module already exists today that can feed it (name the real file/function), (b) what is genuinely new work, (c) whether it depends on the DB-engine decision, the M14 LDAP design, or is independent of both.",
+          "AC-4: resolve, as real recommendations with stated tradeoffs (not left open), these cross-cutting sub-decisions: (a) full ground-up rewrite (discard the static-export console entirely) versus an incremental DB + typed live-state API layer added over the existing D1-D7/resolver/registry foundation, reusing collection modules as data producers only -- state which better serves the Product Owner's own stated constraint that Line-1 (M-series) keeps shipping in parallel and maturing features 'evolve' into UI2.0 one at a time; (b) storage engine choice, resolving pcp_storage_engine's deferred criteria against UI2.0's live-query/role-based-access/audit needs specifically (not a generic re-derivation -- build on section 10's existing criteria); (c) deployment runtime split -- must every request-serving/UI component be one language, or can collection modules stay Python subprocesses/workers behind a typed boundary while a new service layer is written in another language; (d) the Product Owner's explicit ask: whether and how much of this should be written in Java instead of Python, given a stated corporate-infrastructure requirement for Java. Evaluate at minimum: (i) Java only for the new UI2.0 service/API/DB-access layer, with existing Python collection modules kept as-is and invoked as subprocess workers or via a queue/API boundary (polyglot, minimal rewrite of already-frozen/tested collection logic); (ii) full Python-to-Java rewrite of the collection modules themselves; state the cost, risk, and rework-of-frozen-work implications of each, and give a clear recommendation with reasoning, but do not treat this as decided -- it is a requirements-document recommendation only.",
+          "AC-5: explicitly state what this document does NOT decide: final storage engine, final language/runtime split, final LDAP persistence model (defer entirely to the M14 draft), and that no implementation movement is authorized by this document alone. Also explicitly reconcile with the Product Owner's stated intent that this evolves incrementally alongside Line-1 rather than as a stop-the-world replacement -- describe what an incremental migration path could look like (e.g. UI2.0 shell + DB + auth first, wired to read-only views of existing evidence store, expanding module-by-module) as one section, not as the decided plan.",
+          "AC-6: no implementation, no test changes, no project-state file changes beyond adding this document and a short project/backlog.json note pointing to it -- same validation floor as prior design-only movements (git diff --check, privacy gate, no code/test touched)."
+        ],
+        "baseline": {
+          "authority": "No existing frozen contract targets this scope. docs/design/PRODUCT_CONTROL_PLANE_ARCHITECTURE.md section 10 already records the open pcp_storage_engine decision (filesystem-first evidence store, Postgres opt-in path exists for scheduler/job/CAS-metadata state only, engine choice deferred) -- this document extends that same open decision, it does not reopen or contradict it.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "sequencing": "Independent of every in-flight movement (M7/NXS-LOCAL-0023, M14 design/NXS-LOCAL-0024) -- new document only, no shared file surface. Product Owner explicitly wants the current M-series (Line 1) to keep shipping in parallel; this document must describe an incremental evolution path where maturing Line-1 features (D1-D7 producers, registry, resolver) become UI2.0's live data sources one at a time, not a stop-the-world rewrite."
+        },
+        "context_not_loaded": [
+          "Any live LDAP/AD or database network call",
+          "DEPLOY.1A / server OIDC-RBAC track (referenced only for contrast, not extended)"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/ui2-0-architecture-requirements-draft"
+        },
+        "invariants": [
+          "This document does not authorize implementation of any kind -- it is requirements-and-tradeoffs only, mirroring the DRAFT framing of PRIVATE_REPLAY_ARCHITECTURE.md, OP_1's contract draft, and M14's local-LDAP draft",
+          "Must not silently discard or contradict frozen work: D1-D7 capability-state vocabulary, the M10-M14 resolver/producer chain, and the evidence-store/CAS design are inputs to reuse or wrap, not facts to relitigate in this document",
+          "No credential, schema, or migration decision is made final here -- open sub-decisions are stated as options with tradeoffs, per Product Owner instruction to not decide scope yet"
+        ],
+        "merge_gate": "Standing relay#13: green tests -> self-merge, report via RELAY_NOTE. Design-only movement -- 'green tests' means the unchanged existing suite plus git diff --check plus the privacy gate, not new tests.",
+        "movement_type": "ARCHITECTURE",
+        "objective": "Produce a requirements-and-tradeoffs document (not a scope decision, not code) for a proposed 'UI 2.0' deployment track: an empty-shell, DB-backed, LDAP-authenticated, role-scoped live operator console -- fed incrementally by the existing collection modules -- to replace today's static-export-oriented console/html_export path for production operational use. Product Owner direction 2026-09-08: this is requirements-gathering only; the eventual scope decision (full rewrite vs incremental DB/API layer over the existing D1-D7 capability-state foundation) is explicitly deferred to a later round.",
+        "output_contract": [
+          "docs/design/UI2_0_ARCHITECTURE_REQUIREMENTS.md (DRAFT status, requirements/tradeoffs -- not a decided scope)",
+          "A short RELAY_NOTE summarizing the resolved sub-questions and the still-open scope choice, for quick Product Owner review",
+          "SESSION_CLOSE on this relay file (absolute path)"
+        ],
+        "recommended_reasoning": {
+          "reason": "A genuine cross-subsystem architecture requirements exercise spanning storage engine choice, authentication/authorization, deployment runtime, and a possible cross-language platform decision -- per this repo's own reasoning-routing policy (CLAUDE.md) and explicit Product Owner direction 2026-09-08 ('Opus High').",
+          "tier": "Opus, high reasoning -- explicit Product Owner direction"
+        },
+        "requirements": [
+          "Cover all 11 of the Product Owner's stated functional points (AC-2/AC-3) with concrete, code-grounded requirements, not generic restatement",
+          "Resolve AC-4's four cross-cutting sub-decisions as real recommendations with tradeoffs"
+        ],
+        "risks": [
+          "Treating the Product Owner's proposal as already-decided scope instead of requirements input -- this document recommends, it does not commit",
+          "Silently assuming a full rewrite is necessary without first showing, from the actual code, how much of the D1-D7/resolver/registry foundation is already DB-ready-shaped and reusable",
+          "Under-weighting the Java-infrastructure requirement or treating it as out of scope -- it was explicitly raised by the Product Owner and must get a real recommendation, not a footnote"
+        ],
+        "scope": {
+          "in": [
+            "The DRAFT requirements document and its resolved sub-decisions (AC-3, AC-4)",
+            "Code-grounded audit of what in the current console/collection path is reusable vs static-export-shaped (AC-1)"
+          ],
+          "out": [
+            "Any code, test, or live DB/LDAP call",
+            "A final, binding scope decision (full rewrite vs incremental) -- recommendation only",
+            "M14's own LDAP/AD sub-decisions -- reference, do not re-derive"
+          ]
+        },
+        "validation_plan": [
+          "git diff --check",
+          "privacy gate once at PR time",
+          "No test suite changes -- confirm the existing suite is untouched"
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-08T20:02:09Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "RELAY_NOTE",
+      "seq": 2,
+      "subject": "UI2.0 requirements draft merged (PR #140) -- resolved sub-questions and the still-open scope choice",
+      "text": "docs/design/UI2_0_ARCHITECTURE_REQUIREMENTS.md (DRAFT) merged via PR #140, merge commit d519581. AUDIT (section 2): the static-export coupling is six run_html_export tail calls in application/workflows/* (checkpoint.py:195/312/536/703/724, maintenance.py:297, preflight.py:183) plus the eight *_ui.py payload builders as the console's only read model (C1-4 parity); the registry, M4 SQLite store, seven Postgres-capable evidence concerns, the Postgres-capable admission coordinator and the pure D4/M10.2 resolver chain are already DB-ready. One notable finding: build_compliance_posture takes the configuration UI projection as its subject input. RESOLVED AS RECOMMENDATIONS (section 6): X-1 incremental DB + typed live-state API over the existing foundation, not a rewrite -- the only option compatible with Line-1 shipping in parallel; X-2 PostgreSQL as production engine against PCP section 10's own criteria, SQLite stays local, CAS/recovery blobs stay on the volume; X-3 collection modules stay Python workers behind a queue-through-database boundary (argv template stays in workflow_argv only); X-4 Java, if the corporate requirement is binding on services, only for the new service/API/DB layer (option i); a Python-to-Java collector rewrite (option ii) is recommended against because it resets every REAL_ENV_VALIDATED collector to PLANNED and halts Line-1. STILL OPEN (section 8): the rewrite-vs-incremental scope decision itself, the engine, the language split, the LDAP persistence model (deferred to M14). NEEDS PO DECISION BEFORE ANY FREEZE (section 9): C-1 CON.0 payload parity + bundler rule vs a separate shell; C-2 'role-based menu authorization' as menu hiding contradicts frozen AC-CS-33; C-3 backup add/select/schedule from a browser vs class 1 console refusal and the C-D7 gate; C-4 multi-user browser login is the DEPLOY.1A shape, not M14's single-operator TTY bind; plus U-1, the exact content of the Java requirement. Recommended next: a PO DECIDE episode (Sonnet 5, extended high), not an engineering movement. Validation: full parallel regression 3022 passed / 25 skipped / 2 failed (the two pre-existing DLP-token collision tests, same as PR #138, findings in files this PR does not touch); git diff --check clean; privacy gate vs origin/main baseline PASS 0 new findings. CI validate job was still pending at self-merge time; local evidence is the merge basis.",
+      "timestamp": "2026-09-08T21:48:48Z"
+    },
+    {
+      "actor": "po",
+      "marker": "RELAY_ACK",
+      "seq": 3,
+      "subject": "PO ack: UI2.0 requirements delivered, freeze decisions parked overnight",
+      "text": "Delivered work (PR #140, merged) reviewed and accepted as-is: this is a requirements/tradeoffs document, not a scope freeze, exactly as scoped. The four flagged decision points (C-1 CON.0 payload parity vs separate shell; C-2 role-based menu hiding vs frozen AC-CS-33; C-3 backup add/select/schedule from a browser vs class 1 console refusal + C-D7 gate; C-4 multi-user browser login vs M14's single-operator TTY bind) plus U-1 (exact Java requirement scope) are real authority-contradiction-adjacent questions that need the Product Owner awake and a formal DECIDE episode (per this document's own recommendation), not an overnight unilateral call. Parked for morning review. No further engineering action on this movement until that review.",
+      "timestamp": "2026-09-08T22:15:23Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0025",
+  "movement": "UI2_0_ARCHITECTURE_REQUIREMENTS_DRAFT",
+  "next_actor": null,
+  "refs": [
+    "docs/design/PRODUCT_CONTROL_PLANE_ARCHITECTURE.md",
+    "docs/design/OPERATOR_CONSOLE_ARCHITECTURE.md",
+    "docs/design/CAPABILITY_STATE_VOCABULARY_AND_PRESENTATION.md",
+    "docs/design/OP_1_FAILOVER_PLAN_COMPILER_AND_DRY_RUN.md",
+    "console/app.py",
+    "console/runner.py",
+    "utils/collection_executor.py",
+    "utils/evidence_backend.py",
+    "project/backlog.json",
+    "project/roadmap.json"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-08T22:15:23Z"
+}

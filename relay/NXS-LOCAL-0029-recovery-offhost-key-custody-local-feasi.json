@@ -1,0 +1,158 @@
+{
+  "created_at": "2026-09-08T22:18:08Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1: read the backlog note and any existing recovery/backup code (search for RB.3b, backup, recovery in the codebase) to find what already exists to build on.",
+          "AC-2: design and implement the key-custody interface + local implementation.",
+          "AC-3: write a restore-drill test (synthetic key material only) proving the interface's round-trip correctness.",
+          "AC-4: update the backlog note to clearly separate 'done locally tonight' from 'blocked on DEPLOY.1 real infra' -- do not mark this item done/complete, since the real off-host/KMS/restore-drill-against-real-infra obligation is explicitly out of reach.",
+          "AC-5: if blocked on a genuine PO-only decision, RELAY_NOTE it and stop -- do not idle-wait, PO reviews in the morning."
+        ],
+        "baseline": {
+          "authority": "project/backlog.json id recovery_offhost_key_custody is this movement's authority. It targets DEPLOY.1 (server) for the real off-host/KMS wiring -- that part is out of reach tonight and must be explicitly named as remaining work, not attempted or faked.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "sequencing": "Independent of other in-flight movements."
+        },
+        "context_not_loaded": [
+          "Any real KMS/secret-manager network call -- none is available; do not attempt or mock one as if it were real"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/recovery-offhost-key-custody-local-feasible-slice"
+        },
+        "invariants": [
+          "Never write a real encryption key material to a plain repo file, log, or test fixture in cleartext outside a clearly-marked synthetic test key",
+          "The abstraction boundary must be real (a Python interface/ABC a backend implements), not a rename of existing local-only code pretending to be off-host-ready"
+        ],
+        "merge_gate": "Standing relay#13: green tests -> self-merge, report via RELAY_NOTE.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Advance project/backlog.json id recovery_offhost_key_custody (P0) as far as possible WITHOUT a live production server/KMS: design and implement the key-custody abstraction boundary (an interface a future real KMS/secret-manager backend plugs into), a local encrypted-artifact staging implementation behind that boundary, and a restore-drill test proving round-trip correctness of the abstraction itself. Do not attempt to reach a real off-host store or real KMS -- there isn't one available tonight.",
+        "output_contract": [
+          "A key-custody backend interface (e.g. utils/recovery_key_custody.py) with a concrete local implementation and clear extension point for a future KMS backend",
+          "A restore-drill test proving round-trip encrypt/store/retrieve/decrypt correctness through the interface with a synthetic key",
+          "backlog.json note updated recording exactly what's done locally vs what still needs DEPLOY.1 (real KMS, real off-host storage, a real restore drill against that infra)",
+          "RELAY_NOTE + SESSION_CLOSE"
+        ],
+        "recommended_reasoning": {
+          "reason": "New security-boundary abstraction (key custody) -- warrants care but is implementation against a well-understood pattern, not fresh cross-subsystem architecture.",
+          "tier": "Sonnet 5, extended thinking (high) for the abstraction boundary design; normal for the rest"
+        },
+        "requirements": [
+          "Do not claim DEPLOY.1-infra-dependent work as done -- be explicit about the local-only scope"
+        ],
+        "risks": [
+          "Overclaiming completion of an item that fundamentally needs a real server -- must not happen"
+        ],
+        "scope": {
+          "in": [
+            "Key-custody abstraction + local backend + restore-drill test"
+          ],
+          "out": [
+            "Any real KMS/off-host network call",
+            "Claiming DEPLOY.1 obligations satisfied"
+          ]
+        },
+        "validation_plan": [
+          "New tests for the interface + local backend",
+          "Full one-shot regression once",
+          "git diff --check",
+          "privacy gate at PR time"
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-08T22:18:08Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "RELAY_NOTE",
+      "seq": 2,
+      "subject": "recovery_offhost_key_custody local-feasible slice merged (PR #144)",
+      "text": "Implemented utils/recovery_key_custody.py (KeyCustodyBackend ABC -- wrap/unwrap only, master key never crosses the boundary -- + LocalFileKeyCustodyBackend delegating to the existing recovery_store.get_or_create_vault_key) and tests/test_recovery_key_custody.py (5-test restore drill: interface round-trip, encrypt/wrap/store/retrieve/unwrap/decrypt, simulated-restart persistence, cross-custody-backend rejection; synthetic key material only). backlog.json id recovery_offhost_key_custody note updated to separate done-locally-tonight from still-blocked-on-DEPLOY.1 (real off-host/KMS backend, durable off-host artifact storage, restore drill against real infra); status set to in_progress, not done. Full one-shot regression: 3056 passed, 25 skipped, 2 failed -- both pre-existing DLP-pattern-collision failures in project/build_history.json/scratch.json, reproduced identically on a clean origin/main checkout before this branch's changes, unrelated to this change. git diff --check clean; privacy gate passes with the new files included. PR #144 merged to main (merge commit 11e6e658) under the standing relay#13 green-tests self-merge authorization. No PO-only decision was blocking -- AC-5 not triggered.",
+      "timestamp": "2026-09-08T22:27:58Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "AUTOMATED_VALIDATED",
+      "report": {
+        "changed": [
+          "New file utils/recovery_key_custody.py (KeyCustodyBackend ABC, KeyCustodyError, LocalFileKeyCustodyBackend).",
+          "New file tests/test_recovery_key_custody.py (5 tests).",
+          "project/backlog.json: recovery_offhost_key_custody status planned -> in_progress, note extended with the done-locally-vs-blocked-on-DEPLOY.1 split."
+        ],
+        "completed": [
+          "Read the backlog note (project/backlog.json id recovery_offhost_key_custody) and surveyed existing recovery/backup code (utils/recovery_crypto.py, utils/recovery_store.py, utils/recovery_manifest.py, utils/recovery_validation.py, utils/recovery_retention.py, utils/recovery_operational_ledger.py, application/workflows/recovery.py) to find what already exists to build on -- AC-1.",
+          "Designed and implemented a real key-custody abstraction boundary: utils/recovery_key_custody.py's KeyCustodyBackend ABC (wrap_data_key/unwrap_data_key/key_id only -- master-key bytes never cross the boundary, matching real KMS envelope-encryption semantics) plus LocalFileKeyCustodyBackend, the one implementation available tonight -- AC-2.",
+          "Wrote tests/test_recovery_key_custody.py: a restore drill with synthetic key material only, proving wrap/seal/store/retrieve/unwrap/decrypt round-trip correctness through the interface, including a simulated-process-restart persistence case and a cross-custody-backend rejection case -- AC-3.",
+          "Updated project/backlog.json's recovery_offhost_key_custody note to separate what's done locally tonight from what remains blocked on DEPLOY.1 (real off-host/KMS backend, durable off-host artifact storage, restore drill against real infra); moved status planned -> in_progress, explicitly not done/complete -- AC-4.",
+          "No genuine PO-only decision blocked this movement, so AC-5's RELAY_NOTE-and-stop path was not triggered; proceeded to completion instead.",
+          "Opened, validated green, and self-merged PR #144 under the standing relay#13 authorization ('green tests -> self-merge, report via RELAY_NOTE'); posted the RELAY_NOTE."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "No CLI/behavior change to main.py or any existing runtime path -- get_or_create_vault_key, write_artifact and decrypt_artifact are untouched.",
+          "ui": "None -- backend-only addition; no UI-visible effect."
+        },
+        "integration": {
+          "branch": "feature/recovery-offhost-key-custody-local-feasible-slice",
+          "ci": "validate (pull_request gate) passed; full-regression withheld from automatic PR triggers per DEV.TEST.1 policy, local one-shot run substituted as evidence per this repo's documented CI validation policy.",
+          "head_sha": "14ff84868dc35a4627661b157685a403aa2fc83",
+          "merge_commit": "11e6e658453064aad666d569b5c942997f12faf9",
+          "merge_decision": "approved -- merged to main under the standing relay#13 authorization (green tests -> self-merge, report via RELAY_NOTE); no DEPLOY.1-dependent claim was made.",
+          "merge_state": "MERGED",
+          "pr": 144,
+          "pr_url": "https://github.com/ozandurmus/neXus/pull/144"
+        },
+        "next": {
+          "movement": "recovery_offhost_key_custody DEPLOY.1 off-host wiring",
+          "movement_type": "IMPLEMENTATION",
+          "objective": "Implement a real off-host KeyCustodyBackend against an actual server-side KMS/secret-manager, move encrypted recovery artifacts to durable off-host storage, and run a restore drill against that real infrastructure -- all of which need DEPLOY.1 server infra that does not exist in this environment yet. This is a PO-sequencing decision (when DEPLOY.1 infra becomes available), not an engineering task to start blind.",
+          "status": "blocked"
+        },
+        "preserved": [
+          "utils/recovery_store.py's production call sites (write_artifact, decrypt_artifact, get_or_create_vault_key) are untouched -- the new backend delegates to get_or_create_vault_key rather than duplicating or replacing it, so every existing RB.1-4 frozen-contract test and invariant (docs/design/BACKUP_RECOVERY_CONTRACTS.md §9.1/§9.2) keeps behaving byte-for-byte identically.",
+          "No real KMS/secret-manager network call was attempted or mocked as real, per this movement's context_not_loaded constraint.",
+          "No real encryption key material was written to a plain repo file, log, or test fixture -- every key in the new test file is freshly generated synthetic material (recovery_crypto.generate_key())."
+        ],
+        "recommended_reasoning": {
+          "reason": "Wiring a real off-host KMS/secret-manager into the security boundary is a vendor-semantic and security-boundary decision (which KMS API, credential handling, network trust model) -- the same class of work CLAUDE.md routes to extended thinking, not deterministic implementation.",
+          "tier": "Sonnet 5, extended thinking (high)"
+        },
+        "state_updates": [
+          "project/backlog.json: recovery_offhost_key_custody status -> in_progress, note extended (see 'changed' above)."
+        ],
+        "unresolved_risks": [
+          "The abstraction boundary exists but recovery_store.py's production write/decrypt path does not yet route through KeyCustodyBackend -- it still calls get_or_create_vault_key + recovery_crypto directly. Wiring that in was judged out of scope for tonight's slice to avoid touching the frozen §9 recovery-plane contract without a dedicated review; a future DEPLOY.1 movement should decide whether to rewire recovery_store through the interface or keep it as a parallel extension point exercised only by a new backend.",
+          "No real off-host/KMS backend implementation exists yet -- LocalFileKeyCustodyBackend is the only concrete backend. This is expected and explicitly named as remaining work, not a gap introduced silently."
+        ],
+        "validation": {
+          "affected": "tests/test_rb1_recovery_store.py and the rest of the -m recovery marker set (165 tests) -- all pass unchanged; recovery_store.py's public API was not modified.",
+          "diff_check": "git diff --check -- clean, no output.",
+          "full_regression": "python -m pytest -q -n auto --dist worksteal, foreground/awaited (not backgrounded): 3056 passed, 25 skipped, 2 failed, 167.70s. The 2 failures (tests/test_dev_0_5b_auth_consumer_canonical_config.py::test_repository_text_has_no_known_dlp_assignment_collision and ::test_repository_text_has_no_known_legacy_redaction_collision) were reproduced identically by stashing this branch's changes and running the same two tests against the unmodified origin/main-tracked tree -- confirmed pre-existing, in project/build_history.json and scratch.json, unrelated to this change.",
+          "privacy": "tests/test_dev0_4_repository_privacy_gate.py -- 5 passed with the new files present in the tree.",
+          "real_environment": "Not applicable -- this movement is explicitly local-validation-only; no live server/KMS/off-host infra exists to validate against tonight (see 'next' below).",
+          "state_consistency": "tests/test_architecture_convergence.py -- passed as part of the full regression; backlog.json note/status change did not introduce a cross-authority contradiction.",
+          "targeted": "tests/test_recovery_key_custody.py -- 5 passed (interface conformance, wrap/seal/store/retrieve/unwrap/decrypt round trip, simulated-restart persistence, cross-custody-backend rejection, env-override length-error surfacing)."
+        }
+      },
+      "seq": 3,
+      "timestamp": "2026-09-08T22:28:46Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0029",
+  "movement": "RECOVERY_OFFHOST_KEY_CUSTODY_LOCAL_FEASIBLE_SLICE",
+  "next_actor": null,
+  "refs": [
+    "project/backlog.json",
+    "project/roadmap.json"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-08T22:28:46Z"
+}

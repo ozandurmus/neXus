@@ -1,0 +1,89 @@
+{
+  "created_at": "2026-09-08T23:25:43Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1: read COMPLIANCE_CHECK_ENGINE.md section 5 (D8) in full, plus the existing --cp-config-probe opt-in precedent to mirror its shape.",
+          "AC-2: implement the static registry with the full per-entry metadata the design requires (vendor, shell/context, timeout, retry, max frequency, session reuse, redaction rule).",
+          "AC-3: implement --compliance-probe admission wiring: runs referenced primitives once per device per run inside the 1-per-vendor budget + CP stage cooldown.",
+          "AC-4: at least one concrete, gate-reviewed primitive per major vendor (CP and/or PAN) wired end to end as proof.",
+          "AC-5: tests proving the safety boundary (read-only, frequency/session-reuse limits, redaction, no write admission possible).",
+          "AC-6: update backlog.json's compliance_check_engine_primitives note.",
+          "AC-7: if blocked on a genuine PO-only decision, RELAY_NOTE and stop; PO reviews in the morning."
+        ],
+        "baseline": {
+          "authority": "docs/design/COMPLIANCE_CHECK_ENGINE.md section 5 (decision D8) is this movement's authority. cp_device_interaction_safety (P0) is already closed (2026-08-25, corrected 2026-08-30) -- the remaining prerequisite is each primitive's own network-device command gate review + a real-environment validation gate before promotion beyond opt-in probe mode.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "sequencing": "diagnostic_runbooks_read_only (backlog id) shares this same primitive registry per its own note -- do NOT build a second registry; leave clear extension points but do not implement the runbook catalog itself in this movement, that's separate follow-on work."
+        },
+        "context_not_loaded": [
+          "diagnostic_runbooks_read_only's own runbook-catalog implementation -- separate follow-on, shares this registry but is out of scope here",
+          "Any write/config-changing command -- never admitted"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/ce2-compliance-check-engine-primitives"
+        },
+        "invariants": [
+          "Every registered primitive must be read-only, with an explicit per-primitive network-device command gate review documented inline",
+          "No write/config-changing command is ever admitted, at any maturity",
+          "Output is a new evidence artifact class, redacted by the primitive's own redaction rule, exposed to the engine only as source namespace primitive.<primitive_id> -- checks reference primitive.<id>, never a raw command string",
+          "Opt-in --compliance-probe mode only -- never wired into a normal collection run in this movement"
+        ],
+        "merge_gate": "Standing relay#13: green tests -> self-merge, report via RELAY_NOTE. If the suite hits the same pre-existing DLP baseline pair (project/build_history.json + relay/NXS-LOCAL-0003) other movements tonight hit, that's an accepted standing exception -- self-merge anyway and say so, don't block on it.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Implement project/backlog.json id compliance_check_engine_primitives (P2, CE.2): a curated, static, read-only command-primitive registry (configuration/command_primitives.py) per docs/design/COMPLIANCE_CHECK_ENGINE.md section 5 decision D8. Each entry is an individually 10-point-network-device-command-gate-reviewed READ-ONLY command with vendor, shell/context, timeout, retry, max frequency per endpoint, session reuse, and a per-primitive redaction rule. Opt-in --compliance-probe mode only, like the existing --cp-config-probe precedent -- never a normal-run stage at this maturity.",
+        "output_contract": [
+          "configuration/command_primitives.py: the static registry + admission wiring under --compliance-probe",
+          "At least one real, gate-reviewed CP and/or PAN read-only primitive as a concrete example wired end to end",
+          "Tests proving: read-only enforcement, per-primitive frequency/session-reuse limits, redaction, and that no write command can be registered",
+          "backlog.json note update",
+          "RELAY_NOTE + SESSION_CLOSE"
+        ],
+        "recommended_reasoning": {
+          "reason": "New evidence-producing surface with a real safety boundary (read-only enforcement) -- warrants care.",
+          "tier": "Sonnet 5, extended thinking (high) for the registry/admission design; normal for the rest"
+        },
+        "requirements": [
+          "Every primitive needs a documented command-gate review rationale, not just a command string"
+        ],
+        "risks": [
+          "Under-specifying the safety boundary and letting a write-capable command slip through registration"
+        ],
+        "scope": {
+          "in": [
+            "The primitive registry + admission wiring + tests"
+          ],
+          "out": [
+            "The runbook catalog itself (diagnostic_runbooks_read_only)",
+            "Promotion beyond opt-in probe mode"
+          ]
+        },
+        "validation_plan": [
+          "New targeted tests for the safety boundary",
+          "Full one-shot regression once",
+          "git diff --check",
+          "privacy gate at PR time"
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-08T23:25:43Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0037",
+  "movement": "CE2_COMPLIANCE_CHECK_ENGINE_PRIMITIVES",
+  "next_actor": "engineer",
+  "refs": [
+    "docs/design/COMPLIANCE_CHECK_ENGINE.md",
+    "configuration/command_primitives.py",
+    "project/backlog.json"
+  ],
+  "schema_version": 1,
+  "status": "OPEN",
+  "updated_at": "2026-09-08T23:25:43Z"
+}

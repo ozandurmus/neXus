@@ -85,11 +85,30 @@
       },
       "seq": 1,
       "timestamp": "2026-09-09T14:45:55Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "RELAY_NOTE",
+      "seq": 2,
+      "subject": "UI2 B0/C1 platform & schema contract -- complete, self-checked, merged",
+      "text": "docs/design/UI2_0_C1_PLATFORM_SCHEMA_CONTRACT.md written (DRAFT -- FOR PRODUCT OWNER FREEZE), PR #163 merged (5ca75bf), follow-up bookkeeping PR #165 merged (69225ca). Self-check against the movement's AC-1..AC-8:\n\nAC-1 (every table names owner + data class): satisfied -- section 3.1 ownership matrix covers all 9 tables (devices/endpoints/credential_references -> B1-4b; jobs/job_steps -> C1 identity + C2 lifecycle by reference; audit_log/provenance_records/secrets_metadata -> C1; cp_inventory_projection -> C1 + C4 by reference), each with an explicit data class from section 4. No orphan table.\n\nAC-2 (audit-from-first-mutation mechanism precise enough for a B1-2 test): satisfied -- section 3.5 specifies a PostgreSQL AFTER-row trigger (fn_audit_capture, SECURITY DEFINER) requiring SET LOCAL app.actor_fingerprint/app.action_id in the same transaction; a mutation without that context raises audit_context_missing and never commits; ui2_app has no direct write grant on audit_log. Section 9 items 2-4 give the exact tests (bypass rejection, atomicity, trigger-coverage completeness).\n\nAC-3 (no raw device output; provenance schema complete; UI claim rules stated): satisfied -- section 5's provenance_records table carries every field workflow section 3.5 names (run_id, step_id, parser_version, capability_version, capture_artifact_id, source_location, sanitized_fragment, fingerprint_sha256); section 5 states explicitly what the UI/API may and may not claim about discarded raw content.\n\nAC-4 (per-component secrets, storage/rotation/outage, no shared secret): satisfied -- section 6.1 enumerates service/worker/scheduler/LDAP-adapter/migration-step scopes each with storage (DEV.2.1 <VAR>_FILE), rotation and fail-closed outage behaviour; no shared \"app\" secret anywhere.\n\nAC-5 (every PostgreSQL-specific construct + Oracle equivalent or reason none needed): satisfied -- section 8's table covers GENERATED ALWAYS AS IDENTITY, opaque TEXT ids, TIMESTAMPTZ, JSONB, the PL/pgSQL trigger, session GUCs and SECURITY DEFINER, each with its Oracle equivalent or a stated reason none is needed.\n\nAC-6 (>= 8 testable B1-2 acceptance criteria): satisfied -- section 9 gives 10.\n\nAC-7 (contradictions with FROZEN authority, or none + documents checked): satisfied -- section 10 states none found and lists every document checked; two documentation-hygiene gaps (a stale internal \"S11.5\" citation; PRIVACY_AND_DATA_HANDLING.md not yet naming UI 2.0's database) are flagged for the PO as open items, explicitly distinguished from contradictions.\n\nAC-8 (no PO-reserved decision re-decided): satisfied -- section 7 references RAW-RETENTION (NO) and DIRECTORY-POSTURE (conditional) as already-decided/conditional throughout, never re-opened.\n\nNew finding id C1-1 minted for \"audit from the first mutation\" (section 1), correcting the stale \"brief S11.5\" citation propagated into UI2_0_DEVELOPMENT_WORKFLOW.md:352 and this movement's own backlog note -- the brief has no S11 (it ends at S8); the actual correction is brief S8, quoted in full in section 1. Distinguished from SR-D8/DO-D8 (an unrelated key-custody finding, brief S4.1/K-7).\n\nValidation: tests/test_architecture_convergence.py 22 passed. Full regression run in the foreground and awaited to completion (not backgrounded): 1829 passed, 63 failed, 148 errors -- every failure/error traced to this worktree's own missing/broken packages (cryptography not installed despite being in requirements.txt; paramiko broken, \"'paramiko' is not a package\"), confirmed pre-existing via git diff (only .md/.json changed) and identical tracebacks in unrelated modules never touched by this PR. Environment bootstrap was deliberately not attempted per AGENTS.md/CLAUDE.md's no-bootstrap rule; reported, not fixed. Repository privacy gate: 5 pre-existing findings, confirmed byte-identical against origin/main outside this PR's diff hunks -- 0 new findings. git diff --check clean throughout.\n\nA concurrent C2 dispatch (NXS-LOCAL-0052) and a VISUAL-DESIGN-LANGUAGE decision landed on origin/main mid-session, producing a real merge conflict in project/backlog.json (both sessions touched the same C1 backlog entry's note/target fields at dispatch time vs. completion time) -- resolved by keeping this movement's completion note as authoritative over the dispatch-time placeholder; project/roadmap.json and docs/design/UI2_0_BASELINE_CONTRACT.md merged cleanly. Full detail in project/build_history.json's ui2_b0_c1_platform_schema_contract record and the SESSION_CLOSE packet.\n\nFull detail: SESSION_CLOSE packet (following).",
+      "timestamp": "2026-09-09T15:19:27Z"
+    },
+    {
+      "actor": "po",
+      "authorized_by": "Product Owner (in-session precedent, 2026-09-09)",
+      "marker": "RELAY_DECISION",
+      "scope": "C1 platform & schema contract acceptance",
+      "seq": 3,
+      "subject": "C1 accepted as DRAFT -- FOR FREEZE; freezes with C2-C5",
+      "supersedes": "none",
+      "text": "AC-1..AC-8 self-check accepted. C1-1 finding correction applied to UI2_0_DEVELOPMENT_WORKFLOW.md (the earlier 'brief S11.5' citation was wrong -- the brief has no S11; corrected to reference C1-1/S3.5 directly). Open item (b) PRIVACY_AND_DATA_HANDLING.md not naming the UI 2.0 database tracked as backlog ui2_privacy_doc_amendment, folded into C5. Not yet FROZEN -- freezes together with C2-C5 per FREEZE-SLICING.",
+      "timestamp": "2026-09-09T15:32:12Z"
     }
   ],
   "id": "NXS-LOCAL-0051",
   "movement": "UI2_B0_C1_PLATFORM_SCHEMA_CONTRACT",
-  "next_actor": "engineer",
+  "next_actor": null,
   "refs": [
     "docs/design/UI2_0_BASELINE_CONTRACT.md",
     "docs/design/UI2_0_DEVELOPMENT_WORKFLOW.md",
@@ -108,6 +127,6 @@
     "project/roadmap.json"
   ],
   "schema_version": 1,
-  "status": "OPEN",
-  "updated_at": "2026-09-09T14:45:55Z"
+  "status": "CLOSED",
+  "updated_at": "2026-09-09T15:32:12Z"
 }

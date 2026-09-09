@@ -1,0 +1,90 @@
+{
+  "created_at": "2026-09-08T22:54:13Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1: read tests/test_dev_0_5b_auth_consumer_canonical_config.py's _repository_text_candidates() and test_production_python_has_no_legacy_config_auth_consumers in full to confirm the diagnosed blind spot.",
+          "AC-2: implement the fix -- prefer deriving the candidate set from tracked repository content (e.g. git ls-files) per the backlog's own stated preference; fall back to a maintained exclusion list only if the git-based approach proves infeasible, with justification.",
+          "AC-3: fix the latent sibling the same way.",
+          "AC-4: add/adjust a test proving both functions still catch a real match in tracked content (temporary fixture) while ignoring .venv-style installed dependency internals.",
+          "AC-5: update backlog.json's dlp_scanner_venv_exclusion status to done.",
+          "AC-6: if blocked on a genuine PO-only decision, RELAY_NOTE and stop; PO reviews in the morning."
+        ],
+        "baseline": {
+          "authority": "project/backlog.json id dlp_scanner_venv_exclusion is this movement's authority. Its own proposed fix direction: derive the candidate set from tracked repository content (e.g. `git ls-files`) rather than a filesystem walk, so the assertion means what its name claims -- a directory-exclusion list is the weaker fallback (must be maintained for every future tool directory). It also names a latent sibling with the same blind spot: test_production_python_has_no_legacy_config_auth_consumers.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "sequencing": "Independent of other in-flight movements -- test-infrastructure only."
+        },
+        "context_not_loaded": [
+          "Everything outside the two named test candidate-selection functions"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/dlp-scanner-venv-exclusion-fix"
+        },
+        "invariants": [
+          "The fix must not weaken what the DLP scanner actually catches in real tracked repository content -- only its candidate-selection scope changes",
+          "Prefer the backlog's own preferred direction (git-tracked-content-based candidate set) over a directory-exclusion list if feasible; if you choose the exclusion-list fallback instead, justify why"
+        ],
+        "merge_gate": "Standing relay#13: green tests -> self-merge, report via RELAY_NOTE.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Fix project/backlog.json id dlp_scanner_venv_exclusion (P2): tests/test_dev_0_5b_auth_consumer_canonical_config.py::_repository_text_candidates() walks the full filesystem (ROOT.rglob) excluding only .git/__pycache__/.pytest_cache/node_modules -- not .venv/venv/.tox/site-packages/build/dist -- so on any workstation with a project-local virtualenv it scans third-party library internals and produces 2 false-positive DLP-pattern-collision failures. This has been cited as 'pre-existing, unrelated' in nearly every movement tonight; fixing it cleans up the real signal.",
+        "output_contract": [
+          "Fixed _repository_text_candidates() (and the latent sibling in test_production_python_has_no_legacy_config_auth_consumers) so a project-local virtualenv no longer produces false positives",
+          "Proof: both previously-failing tests pass on a workstation with a .venv present, and both still correctly catch a real match if one is deliberately introduced into tracked content (a temporary test fixture, not a real leak)",
+          "backlog.json note update marking this done",
+          "RELAY_NOTE + SESSION_CLOSE"
+        ],
+        "recommended_reasoning": {
+          "reason": "Well-scoped, already-diagnosed test-infrastructure bug fix.",
+          "tier": "Sonnet 5, normal"
+        },
+        "requirements": [
+          "Both previously-failing tests must actually pass with a real .venv present -- verify, don't assume"
+        ],
+        "risks": [
+          "Fixing the symptom (excluding .venv) without actually deriving from tracked content, leaving the same blind spot for the next new tool directory"
+        ],
+        "scope": {
+          "in": [
+            "The two named candidate-selection functions + their tests"
+          ],
+          "out": [
+            "Any other DLP/privacy-gate scanner (utils/repository_privacy.py is a different, already-correct mechanism -- do not touch it)"
+          ]
+        },
+        "validation_plan": [
+          "New/adjusted targeted tests",
+          "Full one-shot regression once -- this is the fix that should make the '2 failed' noise disappear from tonight's own baseline",
+          "git diff --check",
+          "privacy gate at PR time"
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-08T22:54:13Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "RELAY_NOTE",
+      "seq": 2,
+      "subject": "AC1-5 complete and verified; AC-6 stop -- merge gate blocked on a genuine PO-only decision",
+      "text": "AC-1..AC-4 done and verified. Both named functions (_repository_text_candidates and test_production_python_has_no_legacy_config_auth_consumers) now derive their candidate set from `git ls-files` via a new shared _tracked_repository_files() helper, per backlog's preferred direction -- no exclusion-list fallback was needed, since .venv/venv/.tox/site-packages/build/dist (all .gitignore'd) structurally cannot appear in git-tracked output, for this or any future tool directory. New fixture test (test_candidate_scanners_catch_tracked_matches_and_ignore_venv_content) stages a real tracked-content match via git add and a synthetic .venv-style untracked file with identical colliding text, proving both functions still catch the former and ignore the latter. Targeted tests: 6 passed. Full one-shot regression (.venv/bin/python -m pytest -q -n auto --dist worksteal, foreground, awaited to actual completion): 3093 passed, 25 skipped, 2 failed. AC-5 done: backlog.json's dlp_scanner_venv_exclusion marked done with full resolution note. STOP per AC-6: the 2 full-regression failures are NOT the .venv-walk symptom this item targeted -- this worktree has no project-local .venv at all, and the fixture test independently proves the .venv blind spot is closed. They are project/build_history.json:47 and relay/NXS-LOCAL-0003-local-relay-watch-command.json:155, both containing literal collision substrings inside prose describing this exact defect -- i.e. the historical record of the bug trips the bug's own detector, independent of any .venv. This was previously conflated with real .venv/site-packages noise and never isolated. RELAY_DECISION NXS-LOCAL-0012 already ruled these same 2 findings pre-existing/accepted, build-history-immutable, not to be edited -- but scoped that explicitly as 'a one-time exception for this specific push', not a standing waiver. Filed as new backlog item dlp_scanner_prose_collision_in_frozen_records (out of this movement's declared scope: candidate-selection logic only, not the frozen records). Standing relay#13 merge gate is 'green tests -> self-merge'; the full suite is not green, and I do not have authority to redact/rewrite build_history.json or the relay file, or to unilaterally decide this movement's push counts as another one-time exception. Work committed locally (35e455b) on feature/dlp-scanner-venv-exclusion-fix, NOT pushed, NOT merged. Awaiting PO decision on whether to extend a standing acceptance for these 2 findings (enabling self-merge now) or handle otherwise; PO reviews in the morning.",
+      "timestamp": "2026-09-08T23:03:14Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0034",
+  "movement": "DLP_SCANNER_VENV_EXCLUSION_FIX",
+  "next_actor": "po",
+  "refs": [
+    "tests/test_dev_0_5b_auth_consumer_canonical_config.py",
+    "project/backlog.json"
+  ],
+  "schema_version": 1,
+  "status": "AWAITING_PO",
+  "updated_at": "2026-09-08T23:03:14Z"
+}

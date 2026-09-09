@@ -1,0 +1,98 @@
+{
+  "created_at": "2026-09-08T23:25:44Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1: read OP_0A_PAN_HA_PEER_PAIRING_IDENTITY_CLOSURE.md in full to understand exactly why the prior movement deferred this.",
+          "AC-2: grep the codebase for every real consumer of the current PAN entity_id (utils.restore_readiness.resolve_entity_id and its call sites) -- name them all, don't estimate.",
+          "AC-3: propose a migration strategy (e.g. dual-identity/compatibility period vs hard cutover) with concrete tradeoffs for each consumer found in AC-2.",
+          "AC-4: state whether a hostname-rename-in-place scenario needs a data migration for already-persisted records, and if so, sketch it (design only, no implementation).",
+          "AC-5: give a clear recommendation and say explicitly whether this is freezable now or needs a PO DECIDE episode given the blast radius.",
+          "AC-6: update backlog.json's note.",
+          "AC-7: if blocked on a genuine PO-only decision, RELAY_NOTE and stop; PO reviews in the morning."
+        ],
+        "baseline": {
+          "authority": "docs/history/phase/OP_0A_PAN_HA_PEER_PAIRING_IDENTITY_CLOSURE.md (the prior movement that deliberately deferred this) + FAILOVER_ENGINE_ARCHITECTURE.md section 10.1 + project/backlog.json id pan_ha_serial_identity_hardening.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "sequencing": "Independent of other in-flight movements. This is explicitly a design decision, not the migration itself -- the prior movement already judged the actual migration too large for a narrow fix (touches every PAN entity_id consumer and existing tests)."
+        },
+        "context_not_loaded": [
+          "The actual entity_id migration implementation -- explicitly out of scope, decision only"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/pan-ha-serial-identity-hardening-decision"
+        },
+        "invariants": [
+          "No change to utils.restore_readiness.resolve_entity_id or any PAN entity_id consumer in this movement -- decision document only",
+          "AGENTS.md's opaque-identifier law applies: any proposed identity scheme must not silently reinterpret or normalize identifiers"
+        ],
+        "merge_gate": "Standing relay#13: green tests -> self-merge, report via RELAY_NOTE. Design-only movement -- git diff --check + privacy gate only.",
+        "movement_type": "ARCHITECTURE",
+        "objective": "Produce a decision document (not implementation) for project/backlog.json id pan_ha_serial_identity_hardening (P2): whether/how to migrate PAN entity identity (utils.restore_readiness.resolve_entity_id) from hostname-based to serial-based, given hostname is mutable (admin rename) while serial is stable and already collected/used elsewhere (configuration/panorama_config_collector.py's _collect_direct_compare identity_mismatch check) as this codebase's own precedent for authoritative device identity. This decision must land before OP.2's identity gate (FAILOVER_ENGINE_ARCHITECTURE.md section 10.1) can depend on PAN pair identity being stable under a real-world hostname change.",
+        "output_contract": [
+          "A decision document naming every real consumer of the current hostname-based PAN entity_id (grep the codebase, don't guess), the blast radius of a migration to serial, a migration strategy (e.g. dual-identity transition period, or a hard cutover with a data-migration step) with tradeoffs, and a clear recommendation",
+          "backlog.json note update recording the recommendation and whether it's ready for a PO freeze or needs a DECIDE episode",
+          "RELAY_NOTE + SESSION_CLOSE"
+        ],
+        "recommended_reasoning": {
+          "reason": "Real cross-cutting identity architecture decision with a real blast radius across existing tests/consumers -- vendor-semantic and cross-subsystem, warrants extended thinking.",
+          "tier": "Sonnet 5, extended thinking (high)"
+        },
+        "requirements": [
+          "Every real consumer found by AC-2 must be individually addressed in the migration strategy, not hand-waved"
+        ],
+        "risks": [
+          "Underestimating the blast radius by not actually greping for every consumer",
+          "Proposing an identifier reinterpretation that violates the opaque-identifier law"
+        ],
+        "scope": {
+          "in": [
+            "The decision document + consumer inventory + migration strategy proposal"
+          ],
+          "out": [
+            "Any actual code change to entity_id resolution or its consumers"
+          ]
+        },
+        "validation_plan": [
+          "git diff --check",
+          "privacy gate at PR time",
+          "No test changes expected"
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-08T23:25:44Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "RELAY_NOTE",
+      "report": {
+        "disposition": "AWAITING_PO",
+        "summary": "Decision document produced: docs/design/PAN_HA_SERIAL_IDENTITY_HARDENING_DECISION.md (merged, PR #153, commit 8d4125e). AC-1..AC-6 addressed in full: prior-movement deferral read (AC-1); nine real non-test consumers of utils.restore_readiness.resolve_entity_id found by grep, plus three persisted-record consumers of its output value -- recovery vault path (utils/recovery_store.py), config-history key (utils/config_storage.py/config_history.py), operate lock/quarantine key (utils/operate/store.py) -- each individually addressed, none hand-waved (AC-2); three migration-strategy options with tradeoffs per consumer -- hard cutover, dual-identity via an M8 device_identity_relationships-style PAN extension, and a narrower option confirming the existing execution-time serial gate already substantially satisfies FAILOVER_ENGINE_ARCHITECTURE.md section 10.1 item 2 without touching resolve_entity_id at all (AC-3); a hostname-rename-in-place data-migration sketch, design only, confirmed necessary today regardless of which option is chosen (AC-4); project/backlog.json note updated, appended not overwritten (AC-6). No code change: resolve_entity_id and every named consumer are untouched, per this movement's invariants. Full suite (docs/backlog-only diff): 3097 passed / 27 skipped / 2 failed (serial run) -- both failures (test_repository_text_has_no_known_dlp_assignment_collision, test_repository_text_has_no_known_legacy_redaction_collision) confirmed pre-existing and unrelated: both flagged files (project/build_history.json, relay/NXS-LOCAL-0003-local-relay-watch-command.json) are byte-identical to origin/main, so the pattern trips there too, independent of this branch. A third failure (test_ac1_live_bug_regression_against_real_repository_state) only reproduced under -n auto parallelism -- a race against a sibling test that writes a scratch file directly into the real repo root -- and passed cleanly both in isolation and in the full serial run; not a regression from this diff. git diff --check clean. Repository privacy gate PASS / 0 new findings against baseline 1b2c34dd8bbf (5 pre-existing findings, all already in baseline; two leftover gitignored data/logs runtime-artifact findings from the test run were cleared before the final gate run). Merged per relay#13's design-only merge gate (git diff --check + privacy gate only, no test changes expected).",
+        "blocked_on_genuine_po_decision": true,
+        "question_for_po": "AC-5: not freezable as scoped. Three independent PO-level reasons, detailed in the document section 7: (1) scope-fit is unresolved -- does FAILOVER_ENGINE_ARCHITECTURE.md section 10.1's actual requirement (a fresh execution-time PAN serial gate, already substantially built in panorama/preflight_collector.py's P1 gate) need resolve_entity_id itself to migrate to serial, or is it already satisfied by what exists (the document's Option C / preliminary lean)? (2) project/backlog.json id pan_serial_representation_identity_evidence_closure (P0, AWAITING_PO, still open) recorded a real-environment MATCH/MISMATCH asymmetry on the same serial-identity comparison this migration would elevate to authoritative -- root cause undetermined -- and should resolve, or be explicitly accepted as a bounded risk, before either migration option is adopted. (3) the persisted-record migration for a hard cutover (recovery vault, config-history keys) is substantial cross-cutting engineering work needing its own contract. Requests a PO DECIDE episode before Option A/B/C in the document is adopted."
+      },
+      "seq": 2,
+      "timestamp": "2026-09-08T23:52:00Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0039",
+  "movement": "PAN_HA_SERIAL_IDENTITY_HARDENING_DECISION_DOCUMENT",
+  "next_actor": "po",
+  "refs": [
+    "docs/history/phase/OP_0A_PAN_HA_PEER_PAIRING_IDENTITY_CLOSURE.md",
+    "docs/design/FAILOVER_ENGINE_ARCHITECTURE.md",
+    "utils/restore_readiness.py",
+    "configuration/panorama_config_collector.py",
+    "project/backlog.json",
+    "docs/design/PAN_HA_SERIAL_IDENTITY_HARDENING_DECISION.md"
+  ],
+  "schema_version": 1,
+  "status": "AWAITING_PO",
+  "updated_at": "2026-09-08T23:52:00Z"
+}

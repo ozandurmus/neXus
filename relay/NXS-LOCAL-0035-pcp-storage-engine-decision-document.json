@@ -1,0 +1,97 @@
+{
+  "created_at": "2026-09-08T22:54:13Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1: read PRODUCT_CONTROL_PLANE_ARCHITECTURE.md section 10 in full (the recorded decision criteria) and docs/design/UI2_0_ARCHITECTURE_REQUIREMENTS.md's X-2 section in full.",
+          "AC-2: produce the decision document evaluating section 10's criteria against X-2's recommendation -- do not just restate X-2, actually check it against every criterion section 10 names.",
+          "AC-3: state plainly whether this document's conclusion is sufficient to formally freeze pcp_storage_engine_decision, or what specifically is still missing before a freeze (e.g. a PO DECIDE episode, given UI2.0's own C-1..C-4 are still open and may bear on this).",
+          "AC-4: update backlog.json's pcp_storage_engine_decision note to record this document's conclusion, without marking the item done unless AC-3 concludes it's genuinely freezable now.",
+          "AC-5: if blocked on a genuine PO-only decision, RELAY_NOTE and stop; PO reviews in the morning."
+        ],
+        "baseline": {
+          "authority": "docs/design/PRODUCT_CONTROL_PLANE_ARCHITECTURE.md section 10 (the criteria) + docs/design/UI2_0_ARCHITECTURE_REQUIREMENTS.md (X-2, the most recent recommendation) + project/backlog.json id pcp_storage_engine_decision.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "sequencing": "Independent of other in-flight movements. Any actual schema/migration work explicitly requires separate PO approval per the backlog note -- this movement produces the decision document only."
+        },
+        "context_not_loaded": [
+          "Any actual schema/migration implementation -- explicitly out of scope, requires separate approval"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/pcp-storage-engine-decision-document"
+        },
+        "invariants": [
+          "This document proposes a decision, it does not itself authorize any schema/migration work",
+          "Must reconcile with, not contradict, UI2.0's X-2 recommendation and M14's own persistence-model conclusions (in-memory only, no DB assumed) without re-litigating either from zero"
+        ],
+        "merge_gate": "Standing relay#13: green tests -> self-merge, report via RELAY_NOTE. Design-only movement -- git diff --check + privacy gate only.",
+        "movement_type": "ARCHITECTURE",
+        "objective": "Produce a decision document (not implementation, no schema/migration) formalizing project/backlog.json id pcp_storage_engine_decision (P1): the storage-engine choice for the Device Registry and typed job plane, against docs/design/PRODUCT_CONTROL_PLANE_ARCHITECTURE.md section 10's own recorded criteria. This decision is now additionally informed by docs/design/UI2_0_ARCHITECTURE_REQUIREMENTS.md's own recommendation X-2 (PostgreSQL as production engine, SQLite stays local, CAS/recovery blobs stay on the volume) -- reconcile the two rather than re-deriving from scratch, and be explicit about whether X-2's recommendation is sufficient to actually close this decision or whether it's still only a recommendation pending PO freeze.",
+        "output_contract": [
+          "A decision document (docs/design/PCP_STORAGE_ENGINE_DECISION.md or similar) evaluating PRODUCT_CONTROL_PLANE_ARCHITECTURE.md section 10's criteria against UI2.0's X-2 recommendation, with a clear proposed decision and what it would take to actually freeze it",
+          "backlog.json note update",
+          "RELAY_NOTE + SESSION_CLOSE"
+        ],
+        "recommended_reasoning": {
+          "reason": "A real architecture decision spanning multiple already-produced documents that must be reconciled without contradiction -- extended thinking warranted.",
+          "tier": "Sonnet 5, extended thinking (high)"
+        },
+        "requirements": [
+          "Every section 10 criterion must be explicitly addressed, not skipped"
+        ],
+        "risks": [
+          "Treating X-2's recommendation as already-decided when it was itself only a recommendation inside a requirements document awaiting a PO DECIDE episode"
+        ],
+        "scope": {
+          "in": [
+            "The decision document + backlog note"
+          ],
+          "out": [
+            "Any schema/migration implementation"
+          ]
+        },
+        "validation_plan": [
+          "git diff --check",
+          "privacy gate at PR time",
+          "No test changes expected"
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-08T22:54:13Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "RELAY_NOTE",
+      "seq": 2,
+      "subject": "PCP storage-engine decision document produced, merged (PR #147); not yet freezable",
+      "text": "Produced docs/design/PCP_STORAGE_ENGINE_DECISION.md checking UI2_0_ARCHITECTURE_REQUIREMENTS.md's X-2 recommendation (PostgreSQL production engine; SQLite stays local; CAS/recovery blobs stay on volume) against every criterion PRODUCT_CONTROL_PLANE_ARCHITECTURE.md section 10 recorded -- all ten addressed, nine map soundly and are grounded in existing code (utils/evidence_backend.py's seven concerns, PRIVACY_AND_DATA_HANDLING.md's Distributed evidence store section), one (backup/recovery vs recovery_offhost_key_custody) answers a narrower question than section 10 asked and needs an explicit PO answer.\n\nConclusion (AC-3): X-2's direction is a sound, well-evidenced standing recommendation, but NOT sufficient to freeze pcp_storage_engine now. Three reasons, all already on record rather than newly invented: (1) X-2 itself disclaims freeze authority -- it lives inside UI2_0_ARCHITECTURE_REQUIREMENTS.md, whose own Status line says DRAFT, DO NOT FREEZE without the C-1..C-4 decisions; (2) the recorded decide_by gate for this exact item (project/roadmap.json: PCP.5 contract freeze / DEV.4.6 migrations and database roles) has not been reached; (3) UI2.0's own open C-1/C-4 bear on whether/when a production multi-user engine is even needed, not just which one. What it would take to freeze: a PO DECIDE episode closing the off-host-custody gap, sequencing against DEV.4.6, timed at or after C-1/C-4 resolve.\n\nproject/backlog.json's pcp_storage_engine_decision note updated to record this conclusion; item left status=planned, not marked done, per AC-4.\n\nThis is a genuine PO-only decision (AC-5) -- not a blocking question, the movement itself completed and merged per the standing relay#13 self-merge authorization (design-only gate: git diff --check clean, repository privacy gate showed the same 5 pre-existing findings before and after this change via stash-diff comparison -- zero new findings, CI validate check green, full-regression correctly skipped for a docs-only diff). PO reviews the conclusion and decides whether/when to run the DECIDE episode -- nothing here is blocked on that review, it is just not itself a freeze.",
+      "timestamp": "2026-09-08T23:00:44Z"
+    },
+    {
+      "actor": "po",
+      "marker": "RELAY_ACK",
+      "seq": 3,
+      "subject": "PO ack: storage-engine analysis received, freeze decision parked for a DECIDE episode",
+      "text": "docs/design/PCP_STORAGE_ENGINE_DECISION.md (PR #147, merged) reviewed and accepted as delivered -- correctly stops short of freezing, since UI2.0's X-2 recommendation it builds on is itself still DRAFT pending the C-1..C-4 decisions. Agreed this needs a formal PO DECIDE episode, sequenced after (or alongside) that UI2.0 review, not an overnight unilateral call. Parked for morning: read docs/design/PCP_STORAGE_ENGINE_DECISION.md and docs/design/UI2_0_ARCHITECTURE_REQUIREMENTS.md section 9 together.",
+      "timestamp": "2026-09-08T23:22:40Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0035",
+  "movement": "PCP_STORAGE_ENGINE_DECISION_DOCUMENT",
+  "next_actor": null,
+  "refs": [
+    "docs/design/PRODUCT_CONTROL_PLANE_ARCHITECTURE.md",
+    "docs/design/UI2_0_ARCHITECTURE_REQUIREMENTS.md",
+    "project/backlog.json",
+    "project/roadmap.json"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-08T23:22:40Z"
+}
