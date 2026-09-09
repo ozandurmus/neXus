@@ -1,0 +1,113 @@
+{
+  "created_at": "2026-09-09T14:45:55Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1: Every table in §3 names its owner contract (C1/C2/C3/C4/C7 or B1-4b) and its data class from §4; no orphan table.",
+          "AC-2: The audit-from-first-mutation mechanism is specified precisely enough that B1-2 can write a test proving a mutation without an audit row fails.",
+          "AC-3: No column or blob stores raw device output; the provenance record schema in §5 is complete (all fields of workflow §3.5) and states what the UI may and may not claim about discarded raw content.",
+          "AC-4: Per-component secret scopes are enumerated with storage, rotation and outage behaviour; no shared application secret exists.",
+          "AC-5: §8 lists every PostgreSQL-specific construct used and its Oracle equivalent or the reason none is needed.",
+          "AC-6: §9 gives at least eight testable acceptance criteria for the B1-2 Flyway V1 movement.",
+          "AC-7: §10 lists every contradiction with frozen authority found while writing (or states none were found and which documents were checked).",
+          "AC-8: The document introduces no decision that UI2_0_BASELINE_CONTRACT.md reserves for the PO (RAW-RETENTION, DIRECTORY-POSTURE) -- those are referenced as decided/conditional, not re-decided."
+        ],
+        "baseline": {
+          "authority": "docs/design/UI2_0_BASELINE_CONTRACT.md (FROZEN -- PRODUCT OWNER APPROVED 2026-09-09) binds direction and Phase 0 decisions: RUNTIME-DIRECTION (no Python in the UI 2.0 runtime), RAW-RETENTION default NO, FREEZE-SLICING (C1-C5 = platform freeze), DIRECTORY-POSTURE conditional, acceptance sentences A-1..A-3. docs/design/UI2_0_DEVELOPMENT_WORKFLOW.md (BASELINE rev 2) §3.5 (provenance record after discard_raw), §5 B0-1 scope, §10. UI2_0_ARCHITECTURE_DESIGN.md §4 (shell boundary), §9 (storage: recorded, not re-derived; Oracle portability rules) and §10 invariants apply as amended by the brief §7 and workflow §2 (the F-ladder, main.py --worker and AG-U2's Python half are withdrawn).",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED); UI 2.0 baseline adopted 2026-09-09",
+          "sequencing": "Runs concurrently with C2 (job execution contract, movement UI2_B0_C2_JOB_EXECUTION_CONTRACT). C1 owns the tables; C2 owns the job/lease/outcome semantics. Where C1 must name job tables, define only the columns C1 owns (identity, audit linkage, data class) and reference C2 for lifecycle columns by name -- do not duplicate C2's state machine. C3/C4/C5/C6/C7 come later and will reference this document."
+        },
+        "context_not_loaded": [
+          "Any Java source, Gradle build, Flyway migration file or Docker artefact -- B1 writes those against this contract",
+          "Line-1's utils/db_migrations.py and migrations/ as anything other than provenance: UI 2.0 does not share them (workflow P-1/P-4)",
+          "Device contact, credentials, network access of any kind",
+          "The identity/RBAC/session tables beyond the foreign keys C1 must reserve for them (C3 owns them)"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/ui2-b0-c1-platform-schema-contract"
+        },
+        "invariants": [
+          "Flyway is the ONLY migration authority for the UI 2.0 schema; no table is created or altered by application code, by Python, or by hand",
+          "RAW-RETENTION default NO: no column, table or blob stores raw device output; evidence rows carry a provenance record (run/step id, parser+capability version, capture/artefact id, source location, permitted sanitized fragment) per workflow §3.5",
+          "The audit table exists in migration V1 and every later mutation-bearing table is designed so that a mutation without an audit row is structurally impossible (state how: trigger, application-layer transaction rule, or both -- and which one is test-enforced)",
+          "Per-component secrets: the service, the worker, the scheduler and any adapter each have their own credential/secret scope; no shared 'app' secret; document storage, rotation and outage behaviour",
+          "Oracle portability rules from design §9 are preserved (no PostgreSQL-only types where a portable equivalent exists; name the exceptions)",
+          "Identifiers: device/cluster/context identities are opaque product identifiers; corporate hostnames/serials/IPs live only in fields the privacy law (PRIVACY_AND_DATA_HANDLING.md, DLP gate) classifies as such, never in log/audit free text",
+          "No decision already frozen in UI2_0_BASELINE_CONTRACT.md is reopened; contradictions with any frozen authority are REPORTED in a dedicated section, never silently resolved"
+        ],
+        "merge_gate": "Standing relay#13: green tests -> self-merge, report via RELAY_NOTE. Documentation-only PR; the DLP privacy gate at push time is the substantive gate. The known worktree-only red (tests/test_nexus_engineer_tool_gate.py::test_ac1_live_bug_regression_against_real_repository_state) passes inside orchestrated worktrees; anything else red is real.",
+        "movement_type": "ARCHITECTURE",
+        "objective": "Write the UI 2.0 B0/C1 platform & schema contract as docs/design/UI2_0_C1_PLATFORM_SCHEMA_CONTRACT.md (status: DRAFT -- FOR PRODUCT OWNER FREEZE). It defines the UI 2.0 (Java) product's own PostgreSQL schema ownership, Flyway as the sole migration authority, the projection-table model, the audit table that exists from the first mutation, per-component secrets, key custody for backup artefacts, and the data classes (job log / audit / evidence / encrypted artefact / sanitized fragment). This is a contract, not code: no ui2/ source is written in this movement.",
+        "output_contract": [
+          "docs/design/UI2_0_C1_PLATFORM_SCHEMA_CONTRACT.md with: §1 scope and authority chain; §2 schema ownership and Flyway rules (versioning, naming, forbidden operations, rollback posture); §3 core tables for B1 as DDL-level sketches (devices/endpoints/credential_references placeholders owned by B1-4b, capability registry rows owned by C4 by reference, projections for the first capability, jobs/job_steps identity columns with C2 reference, audit, secrets metadata); §4 data classes and retention per class; §5 provenance record schema; §6 secrets and key custody (per component; backup artefact keys per recovery_key_custody semantics); §7 privacy and identity rules in the schema; §8 Oracle portability exceptions; §9 acceptance criteria for B1-2 (the Flyway V1 movement) -- at least eight, each testable; §10 contradictions/open items for the PO; §11 cross-references",
+          "A new finding id for 'audit from the first mutation' (the brief §11.5 correction) recorded in §1 and used consistently",
+          "project/backlog.json ui2_b0_c1_platform_schema_contract status -> in_progress with the PR reference; build_history record per the usual pattern",
+          "RELAY_NOTE + SESSION_CLOSE"
+        ],
+        "recommended_reasoning": {
+          "reason": "A storage/schema and security-boundary contract on new scope; per CLAUDE.md this is extended-thinking work, but it is bounded by a frozen baseline and an existing design, so Sonnet 5 high is the lightest tier that fits.",
+          "tier": "Sonnet 5, extended thinking (high)"
+        },
+        "requirements": [
+          "Read UI2_0_BASELINE_CONTRACT.md, UI2_0_DEVELOPMENT_WORKFLOW.md and UI2_0_ARCHITECTURE_DESIGN.md §4/§9/§10 in full before writing",
+          "English, per AGENTS.md engineering-output language law",
+          "git diff --check; privacy gate at push; existing docs/project-state tests green"
+        ],
+        "risks": [
+          "Re-deriving C2's job state machine inside C1 -- reference it by name instead",
+          "Sneaking raw retention in 'for debugging' -- RAW-RETENTION is decided NO by default",
+          "Writing Java code or migrations instead of the contract -- B1 does that"
+        ],
+        "scope": {
+          "in": [
+            "docs/design/UI2_0_C1_PLATFORM_SCHEMA_CONTRACT.md",
+            "project-state bookkeeping"
+          ],
+          "out": [
+            "Any ui2/ source",
+            "Any Line-1 code change",
+            "C2..C7 content beyond references",
+            "Device contact"
+          ]
+        },
+        "validation_plan": [
+          "Self-check against AC-1..AC-8 in the RELAY_NOTE",
+          "docs/project-state tests",
+          "git diff --check",
+          "privacy gate at push"
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-09T14:45:55Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0051",
+  "movement": "UI2_B0_C1_PLATFORM_SCHEMA_CONTRACT",
+  "next_actor": "engineer",
+  "refs": [
+    "docs/design/UI2_0_BASELINE_CONTRACT.md",
+    "docs/design/UI2_0_DEVELOPMENT_WORKFLOW.md",
+    "docs/design/UI2_0_ARCHITECTURE_DESIGN.md",
+    "docs/design/UI2_0_COUNCIL_REVIEW_AND_SECOND_OPINION_BRIEF.md",
+    "docs/design/BACKUP_RECOVERY_CONTRACTS.md",
+    "docs/design/PRIVATE_REPLAY_ARCHITECTURE.md",
+    "docs/design/PCP_STORAGE_ENGINE_DECISION.md",
+    "utils/action_taxonomy.py",
+    "utils/capability_state_resolver.py",
+    "utils/recovery_key_custody.py",
+    "utils/db_migrations.py",
+    "AGENTS.md",
+    "PRIVACY_AND_DATA_HANDLING.md",
+    "project/backlog.json",
+    "project/roadmap.json"
+  ],
+  "schema_version": 1,
+  "status": "OPEN",
+  "updated_at": "2026-09-09T14:45:55Z"
+}
