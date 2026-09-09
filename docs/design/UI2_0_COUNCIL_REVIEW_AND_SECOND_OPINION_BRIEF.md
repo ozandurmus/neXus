@@ -282,24 +282,277 @@ and this record. Asked specifically, in order of leverage:
 
 ---
 
-## 6. Recommended path to the freeze (for the `DECIDE` episode)
+## 6. External second opinion — Astra's response (2026-09-09)
 
-1. Product Owner answers §4.3 items 1–9 first (they change the document's
-   text); items 10–20 can be answered in the `DECIDE` episode.
-2. Amend `UI2_0_ARCHITECTURE_DESIGN.md` accordingly: replace the §6.3 sample
-   with the RB.3b sequence (K-3), add the gate-registry resolution rule
-   (K-4), name the real job table and the worker contract (K-5), add the
-   infrastructure/preconditions rows (K-6), key custody (K-7), per-component
-   secrets (K-8), `UA-9` or the PO ruling (SR-D4), the VSX/ClusterXL rules
-   (CP-D6), the transport decision (CP-D7), and the UX items (UX-D1…D5).
-3. Freeze in two decisions: the **UI 2.0 platform contract** (§3, §4, §5,
-   §7, §8, §9 with `UA-1`…`UA-3`, `UA-6`…`UA-9`) and the **backup profile
-   engine contract** (§6 with `UA-4`, `UA-5` Phase 2 decided).
-4. First engineering movements after the platform freeze, in order: a Line-1
-   `CONTRACT` for `main.py --worker` + the job table (K-5); the UI 2.0
-   skeleton (service, login, sessions, role bindings, gate chain) against
-   Testcontainers or the `DEPLOY.1` server if it exists; the first F2 on a
-   concern with an existing Postgres seam (K-11).
+**Basis and honest disclosure (Astra's own framing, preserved):** Astra's
+review is based on this record only — it did **not** independently read
+`UI2_0_ARCHITECTURE_DESIGN.md` or the codebase, and could not run Fable in
+its own session. The comparison below is therefore *this record's account of
+the Fable design* vs. Astra's assessment, not a fresh two-model
+cross-examination.
+
+**Headline position:** supports two development lines, but **rejects** the
+design's "Python develops indefinitely, Java ports mature features later"
+shape as written — without a per-feature Python-closure rule, the Java
+effort chases a permanently moving target. Does **not** recommend freezing
+the whole document as one candidate; the size/coupling concern (§4.1 K-1,
+`freeze size`) is independently reached, not prompted by this record.
+
+### 6.1 Point-by-point divergence from the design record
+
+| Topic | Design record's shape | Astra's position |
+| --- | --- | --- |
+| Two-line model | Python develops indefinitely; Java ports mature features | When a feature moves to Java, **development ownership moves with it**. Python needs a feature-by-feature closure rule, not indefinite parallel growth |
+| UI integration vs. language migration | Bundled: F2→F5 ends in Java authority | Should be **two independent axes**: (1) is it reachable from persisted state / a UI job request — product integration; (2) does Python or Java execute it — runtime migration. A screen can be real-product-complete while still Python-executed |
+| New features | Written in Python first (§3.2 rule 1) | Where Java infrastructure already exists for that concern, write **directly in Java**; writing every feature twice should not be a standing requirement |
+| Backup scope | General-purpose profile engine (any SSH/SFTP device) is in scope early | Start with a **narrow, validated-platform** product flow; generalize afterward |
+| F4 shadow | Java replaces Python on pilot targets; fingerprint `MATCH` is the proof | That is a **pilot rollout**, not a shadow comparison. Real parity needs the same recorded inputs replayed against both implementations, offline; **writes must not run twice** for comparison's sake; `MATCH` alone is an insufficient acceptance criterion (two implementations can share the same bug; independent expected outputs, missing-data cases, error classification and recovery behaviour must all be tested; retrying blindly in Python after a Java cutover is not a safe rollback either) |
+| Authorization | Every menu visible; server refuses | Agrees the server-side check is correct; disputes that "every menu always visible" is a **security requirement** — calls it a UX preference, separable from the D1/D7 rule itself |
+| Scheduled-job actor | Last editor proposed as the execution actor | Prefers separating **owner**, **approver**, and **execution identity** — a more standard enterprise-automation shape |
+| Architecture freeze | Two decisions: platform, backup | Agrees with the split; adds: fix the **platform contract the first end-to-end flow actually needs** before freezing either broadly |
+
+### 6.2 Root cause, as Astra names it
+
+The static-export/single-user assumptions live in the *scripts* (HTML tail
+calls, shared files, single-operator state), not in the language. A
+line-by-line Java port can carry those same assumptions forward unchanged.
+Astra's target shape:
+
+```mermaid
+flowchart LR
+    U["Product UI"] --> A["Java application layer"]
+    A --> R["Persistent read models"]
+    A --> J["Persistent job requests"]
+    J --> W["Authorized worker"]
+    W --> D["Devices"]
+    W --> R
+    R --> E["Static report generation"]
+```
+
+Opening a screen never starts a device connection; the user explicitly
+requests an action, the request is persisted, a worker executes it, the
+result becomes readable — the static report is another consumer of the same
+data. A modular Java application with separate worker processes is proposed
+for the start (registry / inventory / compliance / backup as separate
+responsibilities in code, not necessarily separate microservices); **device
+credentials live only in the worker**, and that separation must be enforced
+by deployment, network access, database privilege and secret access — not
+by package naming convention alone.
+
+**Astra's two-line management model**, offered as an alternative to §3's
+Track A/Track B split:
+
+- **Line-1**: maintenance of not-yet-migrated Python features, the changes
+  they still need, and the decompositions that make the Java migration
+  possible.
+- **Line-2**: the Java product platform — migrating existing features and
+  developing new features directly where the ground is ready.
+- **Shared foundation**: versioned data/job contracts, shared conformance
+  fixtures, one priority order.
+- Short-lived branches in the **same repository** (agrees with `U-J4`'s
+  recommendation); two development lines living apart for months turns every
+  contract change and bugfix into a merge problem.
+- **One development owner per feature.** Once inventory is accepted in Java,
+  new inventory behaviour is developed in Java; the Python implementation is
+  kept only for a defined fallback window. Without that handoff, "two lines"
+  becomes two separate products over time.
+
+**Astra's correction to the F0–F5 ladder** — two separate questions, not one
+axis:
+
+| Product integration | Execution migration |
+| --- | --- |
+| Is it readable from persistent data? | Is Python or Java executing it? |
+| Can a job be safely requested from the UI? | Was behaviour compared on identical inputs? |
+| Can the operator complete their daily task? | Was the Java pilot and its rollback path verified? |
+
+Under this framing, a Java screen can serve a feature that still executes
+through a temporary Python worker — the full-Java destination is preserved,
+but the UI does not wait on every collector's rewrite.
+
+### 6.3 What the council did not go deep enough on, in Astra's view: the job-execution contract
+
+A job table alone is not sufficient. The design must have an explicit answer
+to: *a worker sends the backup command to the device, then dies before the
+result is written to the database — what does the second worker do?*
+Automatic retry can start the same device operation twice. The job contract
+must define: distinguishing a duplicate request, job ownership/leasing,
+timeout, worker-loss handling, and an explicit "outcome unknown" state. An
+API-level idempotency key is useful, but it does not make the **device-side
+command** itself idempotent — these are different guarantees (cites AWS's
+idempotent-API pattern as a useful reference for the distinction, not as an
+implementation to copy). Separately: two admins editing the same schedule
+need version control so the last save does not silently clobber the other —
+named as one of the basic tests of being a genuinely multi-user product.
+
+### 6.4 "Back up now" — disagrees with the design's framing
+
+Does not accept describing the safety boundary as "never accepted over
+HTTP." The UI can create an authorized, audited request; a worker still
+performs the device operation. If the current taxonomy forbids this, that
+is an explicit contract change to make — not something to reach indirectly
+via a one-shot schedule (using a schedule to simulate "run now" blurs the
+design rather than resolving the question the council already raised, K-2).
+
+### 6.5 Profile engine — more conservative than the design
+
+Would not promise "any SSH-reachable device is supported." Start with
+validated device families and immutable profile versions; a browser editor
+should first **compose already-approved steps**, with free command
+authoring treated as a separate, later capability; an interactive shell
+should be added only where a validated device genuinely needs one. A
+branch-free step list may be sufficient for a narrow platform scope; Astra
+does not accept it as sufficient for universal device support — prompt
+behaviour, pagination, session context and post-error recovery all need
+proof against real devices, matching council seat CP's CP-D7 concern
+independently.
+
+### 6.6 F4 shadow — sharper disagreement than the council's
+
+A Java pilot replacing Python on real targets does not by itself prove
+output equivalence. Proposes: first replay the same recorded, safe test
+inputs through both implementations for a semantic comparison (offline,
+no double writes for comparison's sake); only then run Java on a bounded
+device set. Fingerprint `MATCH` alone is not a sufficient acceptance
+criterion — both implementations can share the same defect; tests need
+independently-derived expected outputs, missing-data cases, error
+classification and recovery behaviour. Blind Python retry after a Java
+cutover is not treated as a safe rollback either.
+
+### 6.7 Identity — reopens three of the design's decisions
+
+1. **AD does not require the application to bind LDAP directly.** An
+   OIDC identity provider federated to AD (e.g. Keycloak, which supports
+   both LDAP/AD federation and OIDC) could be evaluated first if the
+   corporate estate already has one; if a direct LDAP bind is truly
+   mandatory, record that as an explicit corporate constraint, not a
+   default choice.
+2. **Does not accept single-active-session as a default security win** —
+   asks what threat "blocking two browser tabs for one operator" actually
+   mitigates. If required at all, `takeover` should be asked only on an
+   actual conflict, and ending a session must not leave an in-flight device
+   operation in an ambiguous state.
+3. **Would not bind a schedule permanently to its last editor** — separate
+   owner, approver, and execution identity; on authorization loss, what
+   stops (and that the result is not silently going unprotected) must be
+   visible with a notification, not implicit.
+
+### 6.8 Technology choices
+
+Accepts the Java decision and the Spring base; would validate the
+jOOQ/Flyway choice against the real database and corporate-support terms
+specifically — jOOQ's Oracle dialect support is commercial-tier, and the
+licence question needs resolving early (agrees with council DevSecOps
+seat's `U-J3`); a JPA switch alone would not be treated as "solving" Oracle
+portability, since data types, migrations and SQL behaviour still need
+separate verification either way. One migration authority for the shared
+schema is required; "we added a column, therefore it's compatible" is not
+sufficient — old-Python/new-Java interoperability windows need their own
+tests; do not assume PostgreSQL production behaviour is proven by SQLite
+tests. If "everything is Java" extends to the UI implementation language
+itself, the TypeScript SPA row should be revisited — proposes evaluating
+Vaadin Flow (server-side UI logic bound to browser components) as an
+alternative, while flagging that server-resident screen state needs a real
+capacity/session-cost measurement against the first real screen before
+being adopted, not assumed.
+
+### 6.9 Astra's proposed build order
+
+1. Fix the migration rules first: feature ownership, the Python-closure
+   rule, shared contracts, and schema authority.
+2. Ship the first real **read** flow: one feature whose data is already in
+   PostgreSQL — last successful result per device, data age, last error.
+   If the Registry's PostgreSQL blocker is not resolved yet, do not anchor
+   the first screen to it (independently reaches council's K-11).
+3. Ship the second screen as **job history**: the user can create a request
+   and track progress/failure reason; prove the execution chain first with
+   a low-risk collection job.
+4. Fully migrate one feature to Java: comparison, pilot, rollback
+   verification, and the development-ownership handoff, together.
+5. Add the validated backup flow; then expand the profile editor and new
+   device coverage.
+
+Local PostgreSQL/Testcontainers can carry step 2 while waiting for a real
+server; production acceptance still happens in a real deployment
+environment. The open PAN credential-transport finding (P0, §2 above) should
+be closed before that path is accepted for production, independent of the
+UI 2.0 timeline.
+
+### 6.10 The three objections Astra is taking back to Fable
+
+1. What capacity/feature-handoff rule guarantees the Java migration queue
+   shrinks while Python keeps growing indefinitely?
+2. If a worker crashes after sending the device command but before the
+   result is written, what mechanism prevents a second worker from
+   starting the same device operation again?
+3. Before the general-purpose backup engine is complete, what exactly is
+   the first end-to-end product flow an operator uses daily?
+
+**Astra will not sign off on a comprehensive freeze without concrete answers
+to these three.** As first acceptance evidence, Astra asks for a scenario,
+not a PR/test count: three admins working on the same device concurrently,
+a worker dying mid-operation, and the product recovering safely while
+showing correct state throughout.
+
+---
+
+## 7. Reconciliation and recommended path to the freeze (for the `DECIDE` episode)
+
+Astra's position **agrees with and sharpens** council consensus K-1 (freeze
+size), K-2 ("back up now" — Astra goes further: reopen the taxonomy question
+directly, don't route around it via schedules), K-5/PA-D2/D3 (the job
+contract is underspecified — Astra's crash-mid-operation scenario is the
+concrete test case K-5 lacked), K-11/PA-D4 (don't anchor the first screen to
+the blocked Registry-Postgres seam), CP-D7 (interactive-shell transport
+needs real-device proof), and SR-D6/DO's identity concerns (scheduled-job
+actor). It **goes beyond** the council on F4 (rejects `MATCH`-only as
+sufficient; wants an offline replay comparison before any pilot) and
+introduces two points no seat raised: the Python-closure rule (without which
+Track A/Track B is not actually "parallel" — it is "Python forever, Java
+behind") and the product-integration vs. execution-migration split to the
+F-ladder (a screen can be real without being Java-executed yet).
+
+1. Product Owner answers §4.3 items 1–9 plus Astra's three objections
+   (§6.10) first — they change the document's text and, per Astra, are a
+   precondition for any comprehensive freeze, not a parallel track.
+2. Amend `UI2_0_ARCHITECTURE_DESIGN.md`:
+   - Replace §3's Track A "indefinite" framing with an explicit per-feature
+     Python-closure rule (ownership transfers with the port; a named
+     fallback window; §6.1/§6.2 above) and split the F-ladder into the two
+     independent axes Astra proposes (§6.2).
+   - Replace the §6.3 sample with the RB.3b sequence (K-3); add the
+     gate-registry resolution rule (K-4).
+   - Write a real job-execution contract answering Astra's crash scenario
+     (§6.3 above) — ownership/leasing, timeout, worker-loss, duplicate
+     detection, `OUTCOME_UNKNOWN` — before naming the real job table and the
+     worker contract (K-5).
+   - Add schedule optimistic-concurrency/versioning (§6.3 above, two admins
+     editing one schedule).
+   - Add the infrastructure/preconditions rows (K-6), key custody (K-7),
+     per-component secrets (K-8), `UA-9` or the PO ruling (SR-D4), the
+     VSX/ClusterXL rules (CP-D6), the transport decision (CP-D7 / Astra
+     §6.5 — validated-device-first, interactive shell only where proven
+     necessary), and the UX items (UX-D1…D5).
+   - Decide "back up now" as an explicit taxonomy amendment question (§6.4
+     above), not a schedule workaround.
+   - Revisit F4's acceptance criterion per Astra §6.6 (offline replay before
+     pilot; `MATCH` insufficient alone).
+   - Decouple owner / approver / execution identity for scheduled jobs
+     (§6.7.3) instead of "last editor."
+3. Freeze in two decisions, narrower than originally scoped: the **UI 2.0
+   platform contract** covering only what the first end-to-end flow needs
+   (Astra §6.9 steps 1–3: migration rules, one read screen, one job-request
+   screen with the crash-safe job contract) — **not** the full §3/§4/§5/§7/
+   §8/§9 sweep at once — and the **backup profile engine contract** (§6,
+   narrowed per Astra §6.5 to validated platforms first).
+4. First engineering movements, in order: (a) a Line-1 `CONTRACT` for the
+   job-execution contract + `main.py --worker` + the real job table,
+   answering Astra's crash scenario explicitly (K-5); (b) the UI 2.0
+   skeleton limited to one read screen (K-11: a concern with an existing
+   Postgres seam, not the blocked Registry) against Testcontainers or the
+   `DEPLOY.1` server if found; (c) the job-history screen proving the
+   execution chain end to end on a low-risk collection job, per Astra's
+   step 3 — before any backup or Java-stack expansion work begins.
 
 Tier for the `DECIDE` episode and both `CONTRACT` movements: `Sonnet 5,
 extended thinking (high)`. This record required no higher tier than the
