@@ -3,6 +3,21 @@
   "record_contract": "One structured record per build, newest first. Required: build, status, title, summary (<= 2 sentences). Optional: started, completed, track, movement, supersedes, evidence, risks_forward, docs{agreement,validation,handover} (repo-relative paths under docs/history/). Full detail lives in the linked doc; do not restate it here. Status vocabulary must stay within utils/project_plan.py STATUS_VALUES.",
   "builds": [
     {
+      "build": "ui2_b0_baseline_directory",
+      "status": "in_progress",
+      "title": "UI2 B0 -- baseline directory (DRAFT, for Product Owner freeze)",
+      "summary": "New docs/design/UI2_0_BASELINE_DIRECTORY.md: a single index cataloguing owner document/section/version for the six B0-8 baseline concerns -- product objects and navigation (adopts NAVIGATION_INFORMATION_ARCHITECTURE.md's frozen D-NAV principles and C3's RBAC visible-but-refused mechanism, without carrying over Line-1's own six-root baseline as UI 2.0's root set), shared screen states (the mockup's own eight-term vocabulary and severity rule, adopted verbatim, with an informative alignment table against Line-1's frozen canonical states), the feature-contribution contract (new minimal text tying C4's capability registry/produces_facts to C2's job_type reference, gated on CAP-RELEASED), the alarm lifecycle contract (confirmed genuinely new -- no existing ALARM/ALERT owner found -- kept schema-level: alarm_definitions/alarm_instances/alarm_delivery_attempts against C1's audit/data-class pattern and C2's job-state-machine/OUTCOME_UNKNOWN pattern), log/audit data classes (cites C1 section 4 directly, no new class), and SNMP status exposure (restates the read-vs-poll and status-vs-trap-out distinction from workflow B2-5b, schema-level). 11 acceptance criteria for B1-9/B2-1/B2-3/B2-5b. No contradiction with frozen authority found; three open items reported for the PO (UI 2.0's own root set, alarm severity enum, SNMP status exposure's exact taxonomy framing). Documentation-only; no ui2/ source, no Line-1 code change, no device contact.",
+      "started": "2026-09-09",
+      "completed": "2026-09-09",
+      "track": "UI 2.0 (Java product line)",
+      "movement": "ARCHITECTURE",
+      "supersedes": null,
+      "evidence": "Relay-authorized movement (.nexus/approved_task.json SESSION_START, content-hash-verified against relay/NXS-LOCAL-0058-ui2-b0-baseline-directory.json; the relay file's own single SESSION_START entry re-read immediately before opening the PR, no RELAY_CORRECTION/RELAY_DECISION appended). Written under UI2_0_BASELINE_CONTRACT.md (FROZEN 2026-09-09) and UI2_0_DEVELOPMENT_WORKFLOW.md section 5 B0-8, cataloguing against UI2_0_C1/C2/C3/C4/C6/C7 (all MERGED as DRAFT -- FOR PO FREEZE) and NAVIGATION_INFORMATION_ARCHITECTURE.md/CAPABILITY_STATE_VOCABULARY_AND_PRESENTATION.md (both FROZEN). Read in full or by targeted section before writing: AI_START_HERE.md, AGENTS.md, CURRENT_STATE.md, UI2_0_DEVELOPMENT_WORKFLOW.md, UI2_0_BASELINE_CONTRACT.md, NAVIGATION_INFORMATION_ARCHITECTURE.md, UI2_0_C1/C2/C3/C4's relevant sections, UI2_0_C6's status/headers (checked for an existing alarm/alert owner -- none found), FAILOVER_ENGINE_ARCHITECTURE.md's \"alarm\" usage (checked, unrelated). Self-checked against AC-1..AC-8 named in the session packet.",
+      "docs": {
+        "agreement": "docs/design/UI2_0_BASELINE_DIRECTORY.md"
+      }
+    },
+    {
       "build": "ui2_b0_extraction_tooling",
       "status": "in_progress",
       "title": "UI2 B0/B0-9 -- extraction tooling (Line-1 Python): Private Replay tokenizer over an evidence/capture directory, C6-layout fixture set, shape-preserving encoding",
