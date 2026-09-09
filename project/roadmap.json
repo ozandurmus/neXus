@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "current_build": "ui2_b0_c7_backup_artefact_restore_engine_contract",
+  "current_build": "ui2_b0_baseline_directory",
   "current_track": "PCP.x",
   "progress_contract": "Weighted acceptance-criterion completion. Percentages describe the declared roadmap, not calendar time or delivery ETA.",
   "tracks": [
@@ -150,21 +150,22 @@
   "now_next": {
     "horizon_contract": "NOW is exactly one build. NEXT is exactly one. Everything else is an `upcoming` row carrying its own true status: planned = AFTER, blocked = waiting on a named external gate, deferred = consciously postponed. `now.build` must equal the newest project/build_history.json record -- utils.project_plan enforces it.",
     "now": {
-      "build": "ui2_b0_c7_backup_artefact_restore_engine_contract",
-      "title": "UI2 B0/C7 -- backup, artefact and restore engine contract (DRAFT, for Product Owner freeze)",
-      "goal": "Write the DRAFT backup/artefact/restore engine contract (docs/design/UI2_0_C7_BACKUP_ARTEFACT_RESTORE_ENGINE_CONTRACT.md): the backup profile model against C1/C2/C4's real schema, the artefact store/manifest/validation/retention model carrying forward BACKUP_RECOVERY_CONTRACTS.md, key custody, restore execution (plan, preconditions, execution via C4, verification, a restore-specific OUTCOME_UNKNOWN), the routine-vs-per-operation approval model, and the device/version support matrix template acceptance sentence A-3 depends on. Documentation only; authorizes no device execution.",
+      "build": "ui2_b0_baseline_directory",
+      "title": "UI2 B0 -- baseline directory (DRAFT, for Product Owner freeze)",
+      "goal": "Write the DRAFT baseline directory (docs/design/UI2_0_BASELINE_DIRECTORY.md): a single index cataloguing owner document/section/version for the six B0-8 baseline concerns -- product objects and navigation, shared screen states, the feature-contribution contract, the alarm lifecycle contract, log/audit data classes, and SNMP status exposure -- referencing C1-C7 and NAVIGATION_INFORMATION_ARCHITECTURE.md bindingly instead of rewriting them, with new schema-level text only where no owner exists (alarm lifecycle; the feature-contribution contract's own tie between C4 and C2). Documentation only; authorizes no device execution.",
       "status": "in_progress",
       "started": "2026-09-09",
       "completed": "2026-09-09",
       "notes": [
-        "Full detail: project/backlog.json's ui2_b0_c7_backup_artefact_restore_engine_contract note; docs/design/UI2_0_C7_BACKUP_ARTEFACT_RESTORE_ENGINE_CONTRACT.md (DRAFT -- FOR PRODUCT OWNER FREEZE, 2026-09-09).",
-        "This is the second and final platform-adjacent freeze candidate (FREEZE-SLICING, D-3); the first is C1-C5. It is the last movement before the PO can consider both platform freezes together.",
-        "Predecessor ui2_b0_c5_amendments_bundle (C5, ran concurrently with this movement, each in its own worktree/branch): CON.0 separate-shell amendment text cited, action_taxonomy.py UI-OPERATIONAL-RUN-NOW clarification (docstring/comment only, no new ActionClass member, CLASS_1_RECOVERY_WRITE unchanged -- confirmed directly against this movement's own §9.1 finding on restore's action class, which stays accurate), design document APPROVAL-MODEL/CAP-* replacements, PRIVACY_AND_DATA_HANDLING.md UI 2.0 database section. MERGED PR #169. Full detail: project/build_history.json's ui2_b0_c5_amendments_bundle record.",
+        "Full detail: project/backlog.json's ui2_b0_baseline_directory note; docs/design/UI2_0_BASELINE_DIRECTORY.md (DRAFT -- FOR PRODUCT OWNER FREEZE, 2026-09-09).",
+        "This is the second-to-last B0 item; runs concurrently with the extraction-tooling movement (Line-1 scripts/, fully independent). Once both merge, B0 is complete and the Product Owner can move to the actual freeze decision for C1-C7 as a whole, then to B1.",
+        "Predecessor ui2_b0_c7_backup_artefact_restore_engine_contract (C7): backup profile model, artefact store/manifest/validation/retention, key custody, restore execution (plan, preconditions, execution via C4, verification, a restore-specific OUTCOME_UNKNOWN), routine-vs-per-operation approval, device/version matrix. MERGED PR #170. Full detail: project/build_history.json's ui2_b0_c7_backup_artefact_restore_engine_contract record.",
+        "Predecessor ui2_b0_c5_amendments_bundle (C5): CON.0 separate-shell amendment text cited, action_taxonomy.py UI-OPERATIONAL-RUN-NOW clarification (docstring/comment only, no new ActionClass member), design document APPROVAL-MODEL/CAP-* replacements, PRIVACY_AND_DATA_HANDLING.md UI 2.0 database section. MERGED PR #169. Full detail: project/build_history.json's ui2_b0_c5_amendments_bundle record.",
         "Predecessor ui2_b0_c6_capability_extraction_contract (C6): the extraction procedure against C4's exact schema, fixture-generation procedure, FIRST-CAPABILITY worked example, ordered extraction inventory. MERGED PR #168. Full detail: project/build_history.json's ui2_b0_c6_capability_extraction_contract record.",
-        "Predecessor ui2_b0_c3_identity_sessions_rbac_contract (C3): LDAP bind, single-active-session rule, role tokens -> bindings -> AD group references, E1-E7 gate chain. MERGED PR #167. Full detail: project/build_history.json's ui2_b0_c3_identity_sessions_rbac_contract record.",
-        "Predecessor ui2_b0_c4_capability_registry_gate_resolution_contract (C4): the runtime capability registry schema, K-4 gate-registry resolution rule, closed step-kind set, CP-D6 VSX/ClusterXL target model, CP-D7 transport decision -- the exact schema this movement's profile compilation step (C7 section 2.3) targets. MERGED PR #166. Full detail: project/build_history.json's ui2_b0_c4_capability_registry_gate_resolution_contract record.",
-        "Predecessor ui2_b0_c2_job_execution_contract (C2, 2026-09-09): job record and closed state machine, leasing/heartbeat/fencing, OUTCOME_UNKNOWN as terminal-until-reconciled, owner/approver/execution-identity separation -- the exact model a BackupRun/RestoreRun is one instance of. MERGED PR #164. Full detail: project/build_history.json's ui2_b0_c2_job_execution_contract record.",
-        "Predecessor ui2_b0_c1_platform_schema_contract (C1, ran concurrently with C2 each in its own worktree/branch): UI 2.0 schema ownership, Flyway as sole migration authority, audit-from-first-mutation (C1-1), the key-custody boundary this movement's own key-custody section (C7 section 4) builds inside. MERGED 2026-09-09 PR #163. Full detail: project/build_history.json's ui2_b0_c1_platform_schema_contract record.",
+        "Predecessor ui2_b0_c3_identity_sessions_rbac_contract (C3): LDAP bind, single-active-session rule, role tokens -> bindings -> AD group references, E1-E7 gate chain -- the exact mechanism this movement's own §2.2 RBAC visible-but-refused rendering cites. MERGED PR #167. Full detail: project/build_history.json's ui2_b0_c3_identity_sessions_rbac_contract record.",
+        "Predecessor ui2_b0_c4_capability_registry_gate_resolution_contract (C4): the runtime capability registry schema, K-4 gate-registry resolution rule, closed step-kind set, shared-fact produces_facts/consumes_facts mechanism -- the exact schema this movement's own §4 feature-contribution contract ties to C2's job_type. MERGED PR #166. Full detail: project/build_history.json's ui2_b0_c4_capability_registry_gate_resolution_contract record.",
+        "Predecessor ui2_b0_c2_job_execution_contract (C2, 2026-09-09): job record and closed state machine, leasing/heartbeat/fencing, OUTCOME_UNKNOWN as terminal-until-reconciled -- the model this movement's own §5 alarm-delivery-failure section mirrors for DELIVERY_UNKNOWN. MERGED PR #164. Full detail: project/build_history.json's ui2_b0_c2_job_execution_contract record.",
+        "Predecessor ui2_b0_c1_platform_schema_contract (C1, ran concurrently with C2 each in its own worktree/branch): UI 2.0 schema ownership, Flyway as sole migration authority, audit-from-first-mutation (C1-1), the five data classes (C1 §4) this movement's own §6 cites directly. MERGED 2026-09-09 PR #163. Full detail: project/build_history.json's ui2_b0_c1_platform_schema_contract record.",
         "Predecessor failover_plan_compiler (OP.1.S1, 2026-09-09): write-free failover plan compiler and dry-run for classic CP ClusterXL, AUTOMATED_VALIDATED, merged PR #162. Full detail: project/build_history.json's failover_plan_compiler record."
       ]
     },
@@ -179,6 +180,20 @@
       ]
     },
     "upcoming": [
+      {
+        "build": "ui2_b0_c7_backup_artefact_restore_engine_contract",
+        "title": "UI2 B0/C7 -- backup, artefact and restore engine contract (DRAFT, for Product Owner freeze)",
+        "goal": "Write the DRAFT backup/artefact/restore engine contract (docs/design/UI2_0_C7_BACKUP_ARTEFACT_RESTORE_ENGINE_CONTRACT.md): the backup profile model against C1/C2/C4's real schema, the artefact store/manifest/validation/retention model carrying forward BACKUP_RECOVERY_CONTRACTS.md, key custody, restore execution (plan, preconditions, execution via C4, verification, a restore-specific OUTCOME_UNKNOWN), the routine-vs-per-operation approval model, and the device/version support matrix template acceptance sentence A-3 depends on. Documentation only; authorizes no device execution.",
+        "status": "in_progress",
+        "started": "2026-09-09",
+        "completed": "2026-09-09",
+        "notes": [
+          "MERGED 2026-09-09, PR #170. The document itself stays DRAFT pending a separate Product Owner freeze decision -- project/backlog.json's own status stays in_progress for that reason.",
+          "Full detail: project/backlog.json's ui2_b0_c7_backup_artefact_restore_engine_contract note; docs/design/UI2_0_C7_BACKUP_ARTEFACT_RESTORE_ENGINE_CONTRACT.md (DRAFT -- FOR PRODUCT OWNER FREEZE).",
+          "This is the second and final platform-adjacent freeze candidate (FREEZE-SLICING, D-3); the first is C1-C5.",
+          "Moved from now_next.now 2026-09-09 (ui2_b0_baseline_directory session): not a demotion -- this build is complete and merged (PR #170), and was already PO-accepted (commit b1b439c). Leaves 'now' only because horizon_contract reserves that slot for the newest project/build_history.json record, which is now the baseline directory."
+        ]
+      },
       {
         "build": "ui2_b0_c5_amendments_bundle",
         "title": "UI2 B0/C5 -- amendments bundle (DRAFT -- FOR PRODUCT OWNER FREEZE)",
