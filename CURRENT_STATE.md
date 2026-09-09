@@ -5,28 +5,7 @@ see `AGENTS.md`/`AI_START_HERE.md`. **Predecessor build detail lives in
 `project/build_history.json`** (structured, newest-first) and its linked
 docs under `docs/history/`; `docs/history/INDEX.md` is the one-line timeline.
 
-- **Checkpoint:** 2026-09-09, `ui2_b0_c7_backup_artefact_restore_engine_contract`
-  (`UI2 B0/C7`) — new `docs/design/UI2_0_C7_BACKUP_ARTEFACT_RESTORE_ENGINE_CONTRACT.md`
-  (status: **DRAFT — FOR PRODUCT OWNER FREEZE**), written under
-  `docs/design/UI2_0_BASELINE_CONTRACT.md` (FROZEN 2026-09-09) against `C1`/
-  `C2`/`C4`'s schemas. The second and final platform-adjacent freeze
-  candidate (`C1`–`C5` being the first). Backup profile model, artefact
-  store/manifest/validation/retention (carrying forward
-  `BACKUP_RECOVERY_CONTRACTS.md`), key custody, and — with no Line-1
-  precedent — restore execution (plan, preconditions, execution via `C4`,
-  verification, a restore-specific `OUTCOME_UNKNOWN`), the routine-vs-
-  per-operation approval model, and the device/version support matrix (both
-  worked rows land `declared_supported: false` on their actual evidence).
-  Reports, not resolves, two load-bearing open items: restore's write does
-  not fit any `utils/action_taxonomy.py` class, and `C4`'s closed step-kind
-  set has no device-push step kind — named for a taxonomy/`C4`-successor
-  movement; `action_taxonomy.py` is not edited. No code, no device contact —
-  documentation only. Full detail: `project/backlog.json`'s
-  `ui2_b0_c7_backup_artefact_restore_engine_contract` note. Predecessors
-  `C6` (**MERGED same day**), `C3` (**MERGED PR #167**), `C4` (**MERGED PR
-  #166**), `C2` (**MERGED PR #164**) and `C1` (**MERGED PR #163**), all
-  DRAFT pending Product Owner freeze. Full predecessor chain:
-  `project/build_history.json`.
+- **Checkpoint:** 2026-09-09, `ui2_b0_c7_backup_artefact_restore_engine_contract` (`UI2 B0/C7`) — new `docs/design/UI2_0_C7_BACKUP_ARTEFACT_RESTORE_ENGINE_CONTRACT.md` (status: **DRAFT — FOR PRODUCT OWNER FREEZE**), written under `docs/design/UI2_0_BASELINE_CONTRACT.md` (FROZEN) against `C1`/`C2`/`C4`. Second/final platform-adjacent freeze candidate (`C1`–`C5` first, now all merged). Backup profile model; artefact store/manifest/validation/retention (carrying forward `BACKUP_RECOVERY_CONTRACTS.md`); key custody; restore execution with no Line-1 precedent (plan, preconditions, execution via `C4`, verification, a restore-specific `OUTCOME_UNKNOWN`); routine-vs-per-operation approval; the device/version matrix (both worked rows `declared_supported: false` on their actual evidence). Reports, not resolves, two open items: restore's write fits no `utils/action_taxonomy.py` class, and `C4`'s step-kind set has no device-push kind, both named for a successor movement; `action_taxonomy.py` not edited. Documentation only. Detail: `project/backlog.json`'s own note. Predecessors `C5` (PR #169), `C6` (PR #168), `C3` (PR #167), `C4` (PR #166), `C2` (PR #164), `C1` (PR #163), all DRAFT pending Product Owner freeze. Full chain: `project/build_history.json`.
 - **Next** (`now_next.next`): `gov_po_2_implementation` — unrelated and
   unchanged by this movement; not yet started. `m7_real_device_targeted_
   collect_now` **AUTOMATED_VALIDATED 2026-09-08**, real-device confirmation
@@ -173,12 +152,20 @@ Concurrency budget stays at 1 per vendor pending real-env evidence.
 ## Automated test baseline
 
 ```
-op0b_s7_s6_test_order_isolation: full one-shot regression after merging
-origin/main (through m10_2_capability_state_resolver_core, PR #132) +
-tool-gate interpreter fix (+2 tests, DEV.TEST.1): 2943 passed, 25 skipped,
-2 failed -- both pre-existing/unrelated DLP-token collisions in
-project/build_history.json's own prose. S7+S6 both orders: 110 passed each.
-Earlier predecessor build detail lives only in project/build_history.json.
+ui2_b0_c5_amendments_bundle: full one-shot regression, foreground, awaited
+(.venv/bin/python -m pytest -q -n auto --dist worksteal, 170.64s): 3214
+passed, 27 skipped, 2 failed -- both pre-existing/unrelated DLP-token
+collisions (tests/test_dev_0_5b_auth_consumer_canonical_config.py, tripping
+on relay/NXS-LOCAL-0030-credential-profiles-reference-model.json and other
+already-committed historical prose), unchanged in kind from the prior
+baseline below and untouched by this movement's own diff.
+
+Prior baseline, op0b_s7_s6_test_order_isolation: full one-shot regression
+after merging origin/main (through m10_2_capability_state_resolver_core, PR
+#132) + tool-gate interpreter fix (+2 tests, DEV.TEST.1): 2943 passed, 25
+skipped, 2 failed -- the same DLP-token collisions. S7+S6 both orders: 110
+passed each. Earlier predecessor build detail lives only in
+project/build_history.json.
 ```
 ## Known xfails
 
