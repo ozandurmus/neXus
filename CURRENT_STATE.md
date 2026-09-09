@@ -5,24 +5,22 @@ see `AGENTS.md`/`AI_START_HERE.md`. **Predecessor build detail lives in
 `project/build_history.json`** (structured, newest-first) and its linked
 docs under `docs/history/`; `docs/history/INDEX.md` is the one-line timeline.
 
-- **Checkpoint:** 2026-09-09, `ui2_b0_c4_capability_registry_gate_resolution_contract`
-  (`UI2 B0/C4`) — new
-  `docs/design/UI2_0_C4_CAPABILITY_REGISTRY_GATE_RESOLUTION_CONTRACT.md`
-  (status: **DRAFT — FOR PRODUCT OWNER FREEZE**), written under
-  `docs/design/UI2_0_BASELINE_CONTRACT.md` (FROZEN — PRODUCT OWNER APPROVED
-  2026-09-09). Defines the runtime capability registry schema (transport,
-  closed 8-member step-kind set, gate references, field-state model,
-  shared-fact reuse); the `K-4` gate-registry resolution rule (`UNKNOWN`
-  blocks device execution, never the offline spec/parser); the `CP-D6`
-  VSX/ClusterXL target model; the `CP-D7` transport decision (`ssh_exec`
-  default with a stated evidence bar for `ssh_interactive`). No code, no
-  schema migration, no device execution — documentation only. Full detail:
-  `project/backlog.json`'s
-  `ui2_b0_c4_capability_registry_gate_resolution_contract` note.
-  Predecessors `ui2_b0_c2_job_execution_contract` (`C2`, **MERGED PR #164**)
-  and `ui2_b0_c1_platform_schema_contract` (`C1`, ran concurrently with
-  `C2`, **MERGED PR #163**), both DRAFT pending Product Owner freeze. Full
-  predecessor chain: `project/build_history.json`.
+- **Checkpoint:** 2026-09-09, `ui2_b0_c3_identity_sessions_rbac_contract`
+  (`UI2 B0/C3`) — new
+  `docs/design/UI2_0_C3_IDENTITY_SESSIONS_RBAC_CONTRACT.md` (status:
+  **DRAFT — FOR PRODUCT OWNER FREEZE**). Defines LDAP bind, a
+  structurally-enforced single-active-session rule with takeover/refuse,
+  role tokens → bindings → AD group references (`DIRECTORY-POSTURE`'s
+  service account specified but disabled per `D-6`), RBAC's
+  visible-but-refused HTTP refusal contract, and the `E1`–`E7` gate chain
+  composed with (not duplicating) `C2`'s own `E7`. No code, no migration,
+  no device execution. Full detail: `project/backlog.json`'s
+  `ui2_b0_c3_identity_sessions_rbac_contract` note. Predecessors `C4`
+  (capability registry & gate resolution, ran concurrently in its own
+  worktree, out of C3's own scope, **MERGED PR #166**), `C2`
+  (**MERGED PR #164**) and `C1` (**MERGED PR #163**) — all three documents
+  stay DRAFT pending Product Owner freeze. Full predecessor chain:
+  `project/build_history.json`.
 - **Next** (`now_next.next`): `gov_po_2_implementation` — unrelated and
   unchanged by this movement; not yet started. `m7_real_device_targeted_
   collect_now` **AUTOMATED_VALIDATED 2026-09-08**, real-device confirmation

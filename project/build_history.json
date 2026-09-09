@@ -3,6 +3,22 @@
   "record_contract": "One structured record per build, newest first. Required: build, status, title, summary (<= 2 sentences). Optional: started, completed, track, movement, supersedes, evidence, risks_forward, docs{agreement,validation,handover} (repo-relative paths under docs/history/). Full detail lives in the linked doc; do not restate it here. Status vocabulary must stay within utils/project_plan.py STATUS_VALUES.",
   "builds": [
     {
+      "build": "ui2_b0_c3_identity_sessions_rbac_contract",
+      "status": "in_progress",
+      "title": "UI2 B0/C3 -- identity, sessions and RBAC contract (DRAFT, for Product Owner freeze)",
+      "summary": "New docs/design/UI2_0_C3_IDENTITY_SESSIONS_RBAC_CONTRACT.md: LDAP bind (UnboundID, no local password storage), a structurally-enforced single-active-session rule with takeover/refuse, role tokens -> bindings -> AD group references (encrypted, DIRECTORY-POSTURE's service account fully specified but disabled), RBAC's visible-but-refused HTTP refusal contract, the E1-E7 gate chain with its composition boundary against C2's own E7, and owner/approver/execution-identity resolution from sessions/roles. Documentation-only; no code, no schema migration, no device execution.",
+      "started": "2026-09-09",
+      "completed": "2026-09-09",
+      "track": "UI 2.0 (Java product line)",
+      "movement": "ARCHITECTURE",
+      "supersedes": null,
+      "evidence": "Relay-authorized movement (.nexus/approved_task.json SESSION_START, content-hash-verified against the Product Owner's own relay entry, relay/NXS-LOCAL-0053-ui2-b0-c3-identity-sessions-rbac-contrac.json). Implements docs/design/UI2_0_BASELINE_CONTRACT.md (FROZEN -- PRODUCT OWNER APPROVED 2026-09-09) DIRECTORY-POSTURE (D-6) and acceptance sentence A-1. Read before writing: UI2_0_BASELINE_CONTRACT.md, UI2_0_DEVELOPMENT_WORKFLOW.md (§5 B0-3/B1), UI2_0_ARCHITECTURE_DESIGN.md (§5, §7, §11, §12), UI2_0_C1_PLATFORM_SCHEMA_CONTRACT.md (§2.4, §3.1, §3.3, §3.5, §6), UI2_0_C2_JOB_EXECUTION_CONTRACT.md (§1.2, §6, §7.2), UI2_0_COUNCIL_REVIEW_AND_SECOND_OPINION_BRIEF.md (SR-D4, SR-D5, SR-D7, SR-D10, UX-D3), OPERATOR_CONSOLE_ARCHITECTURE.md (CON.0, §4.1/§7 rule 11), M14_LOCAL_LDAP_AUTHORIZATION_ARCHITECTURE.md, utils/logger.py::principal_fingerprint. Self-checked against AC-1..AC-10 in the document's own §8/§9 (full self-check in the RELAY_NOTE). Runs concurrently with C1 (PR #163, merged), C2 (PR #164, merged) and C4 (docs/design/UI2_0_C4_CAPABILITY_REGISTRY_GATE_RESOLUTION_CONTRACT.md, PR #166, merged, out of this document's scope per the baseline's own sequencing note). PR #167: https://github.com/ozandurmus/neXus/pull/167. Full one-shot regression (3214 passed, 27 skipped, 2 failed -- both confirmed pre-existing on origin/main via a disposable detached-worktree comparison, traced to relay/NXS-LOCAL-0030-credential-profiles-reference-model.json's prose, unrelated to this diff), git diff --check, and the repository privacy/DLP gate all green before push.",
+      "risks_forward": "The document is DRAFT -- FOR PRODUCT OWNER FREEZE, not yet implementation authority. Session idle/absolute timeouts (30 min / 10 h), the re-validation interval (15 min) and connection-pool sizing are proposed defaults, named in the doc's own §3.6/§9 as tunable. DIRECTORY-POSTURE's practical consequence -- no actor holds PERMITTED against a real corporate directory for longer than one re-validation interval past login until D-6 clears -- is stated plainly in §9 as a near-term operational ceiling, not merely a documentation gap. SR-D4 is treated as already answered by design's own UA-8 disposition rather than opened as a new UA-9; flagged for explicit PO confirmation at freeze. SR-D10 (fingerprint attributability) and M14 U-1 (nested-group semantics) are left open, not decided here.",
+      "docs": {
+        "agreement": "docs/design/UI2_0_C3_IDENTITY_SESSIONS_RBAC_CONTRACT.md"
+      }
+    },
+    {
       "build": "ui2_b0_c4_capability_registry_gate_resolution_contract",
       "status": "in_progress",
       "title": "UI2 B0/C4 -- capability registry & command-gate resolution contract (DRAFT, for Product Owner freeze)",
