@@ -1,0 +1,117 @@
+{
+  "created_at": "2026-09-09T18:30:22Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1: The CON.0 amendment section states precisely what changed or why nothing needed to change, citing OPERATOR_CONSOLE_ARCHITECTURE.md's actual current text.",
+          "AC-2: The action_taxonomy.py amendment preserves the class-1 non-console-submittable rule verbatim while adding the UI-OPERATIONAL-RUN-NOW clarification; a regression test (existing or new) proves DenyAllAuthorizer/CLASS_2_OPERATIONAL_STATE_CHANGE membership is unchanged.",
+          "AC-3: The APPROVAL-MODEL replacement text matches baseline D-2c exactly (profile-version + schedule four-eyes; routine runs need D7 role + reason only; restore/failover need per-operation approval).",
+          "AC-4: The CAP-* states replacement matches workflow section 2's table exactly, with no fifth undocumented state invented.",
+          "AC-5: The PRIVACY_AND_DATA_HANDLING.md amendment names the UI 2.0 database and at least the audit_log/provenance_records/secrets_metadata data classes from C1 section 4, without contradicting Line-1's existing rules.",
+          "AC-6: Every amendment traces to a specific baseline/workflow/C1-C4 citation; any genuinely new decision surfaced while writing is reported in section 7, not silently made.",
+          "AC-7: If action_taxonomy.py required an actual code change (not just documentation), a targeted test proves the change and the full regression is unaffected elsewhere.",
+          "AC-8: Section 7 lists every contradiction with frozen authority found (or states none and which documents were checked); no PO-reserved decision is reopened."
+        ],
+        "baseline": {
+          "authority": "docs/design/UI2_0_BASELINE_CONTRACT.md (FROZEN -- PRODUCT OWNER APPROVED 2026-09-09) section 5 ('Amendments this contract requires (to be written in C5)') is this movement's literal table of contents -- five numbered items, each already decided, none to be re-argued. UI-OPERATIONAL-RUN-NOW, APPROVAL-MODEL, JOB-UNCERTAIN-OUTCOME are FROZEN Phase-0 rulings (baseline section 2); this movement writes their exact amendment TEXT into the target documents' own vocabulary, it does not re-decide any of them. All four sibling contracts (C1, C2, C3, C4) are now MERGED as DRAFT -- FOR PO FREEZE; read each one's own section on what it already amended or deferred (C1 section 7 references RAW-RETENTION/DIRECTORY-POSTURE as decided; C2 section 2.2 already implements UI-OPERATIONAL-RUN-NOW's request-time fixation; C3 section 3.4 already implements the takeover/refuse UX-D3 sequencing and section 4 already implements APPROVAL-MODEL's role/reason check; C4 section 1.3 item 7 already flags the design section 6.3 sample and interactive-shell-assumption supersession). This movement's job is to make the SOURCE documents (action_taxonomy.py, the design doc, PRIVACY_AND_DATA_HANDLING.md) textually consistent with what C1-C4 already built, not to build anything new.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED); UI 2.0 baseline adopted 2026-09-09; C1, C2, C3, C4, C6 delivered as DRAFT -- FOR PO FREEZE",
+          "sequencing": "Runs concurrently with C7 (backup, artefact and restore engine contract, movement NXS-LOCAL-<next>). C5 and C7 are largely independent: C5 touches action_taxonomy.py, the design document and PRIVACY_AND_DATA_HANDLING.md; C7 touches backup/restore semantics referencing C1/C2/C4. If C7 also needs a taxonomy amendment for restore's approval class, name it as an item C7 defers to C5's SUCCESSOR (a second, later C5-class movement) rather than editing action_taxonomy.py inside C7's own scope -- avoid a two-writer collision on the same source file in one dispatch wave. This is the last of C1-C5; once it merges, the PO can move to the actual FREEZE decision for the platform contract (C1-C5) as a whole."
+        },
+        "context_not_loaded": [
+          "Any Java source, Gradle build, Flyway migration or Docker artefact -- B1 implements against the frozen contracts",
+          "C6's extraction inventory or C7's backup/restore rules -- this movement only touches action_taxonomy.py, UI2_0_ARCHITECTURE_DESIGN.md, and PRIVACY_AND_DATA_HANDLING.md",
+          "Device contact, credentials, network access of any kind",
+          "The AGENTS.md amendments for the Phase 2 browser profile editor (UA-5) or the mediated terminal -- those are Phase S, explicitly out of C5's scope per the baseline contract"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/ui2-b0-c5-amendments-bundle"
+        },
+        "invariants": [
+          "utils/action_taxonomy.py's UI-OPERATIONAL-RUN-NOW amendment must preserve the existing law that class-1 (operational-write) actions are never console-submittable; the amendment text must make explicit that a Run Now is a JOB REQUEST subject to the full job-execution/gate chain (C2/C3), never a direct console-submitted command -- do not weaken the existing class-1 rule while adding the amendment",
+          "The APPROVAL-MODEL replacement of design section 6's per-run four-eyes text must exactly match baseline section 2's D-2c ruling (four-eyes on profile version + schedule authorization; routine runs in an approved scope need D7 role + reason, no second approver; restore/controlled-failover need per-operation independent approval) -- do not soften or re-scope it",
+          "The CAP-* states replacement of the design's F0-F5 ladder must match workflow section 2's table exactly (CAP-SPEC -> CAP-OFFLINE -> CAP-VALIDATED -> CAP-RELEASED; REL-* for feature slices) -- this is a rename/restructure of already-decided content, not new content",
+          "The PRIVACY_AND_DATA_HANDLING.md amendment must name the UI 2.0 PostgreSQL database and its data classes (referencing C1 section 4 by name) without contradicting that document's existing rules for Line-1's own data",
+          "Every amendment in this bundle must be traceable to an already-decided baseline/workflow/C1-C4 ruling; if writing the amendment text surfaces a genuinely NEW decision not already made, that is reported as an open item for the PO, not silently decided in this movement",
+          "No decision frozen in UI2_0_BASELINE_CONTRACT.md is reopened; contradictions with frozen authority are REPORTED in a dedicated section, never silently resolved"
+        ],
+        "merge_gate": "Standing relay#13: green tests -> self-merge, report via RELAY_NOTE. This movement DOES touch a Line-1 source file (utils/action_taxonomy.py) and a top-level product document (PRIVACY_AND_DATA_HANDLING.md), not only docs/design/ -- run the full targeted test suite for action_taxonomy.py plus the full one-shot regression in the foreground, awaited to actual completion; the DLP privacy gate at push time is the substantive additional gate. If this worktree's own environment is broken in a way confirmed pre-existing on origin/main (as NXS-LOCAL-0051 found and reported, not fixed), report it exactly that way rather than attempting a bootstrap.",
+        "movement_type": "ARCHITECTURE",
+        "objective": "Write the UI 2.0 B0/C5 amendments bundle as docs/design/UI2_0_C5_AMENDMENTS_BUNDLE.md (status: DRAFT -- FOR PRODUCT OWNER FREEZE). It is the single place that states, verbatim, every textual amendment C1-C4 (now all merged as DRAFT -- FOR PO FREEZE) require to documents outside themselves: the CON.0 separate-shell amendment (already PO-approved, needs the actual CON.0 document text), the utils/action_taxonomy.py UI-OPERATIONAL-RUN-NOW amendment, UI2_0_ARCHITECTURE_DESIGN.md's section 6 APPROVAL-MODEL replacement and its F-ladder -> CAP-* states replacement, AG-U2's restatement as one Java execution path, and the PRIVACY_AND_DATA_HANDLING.md amendment naming the UI 2.0 database (backlog item ui2_privacy_doc_amendment, from C1's own open item). This is the last of C1-C5 to close before the platform freeze; it is a synthesis and precise-wording movement, not new architecture -- C1-C4 already decided everything it states.",
+        "output_contract": [
+          "docs/design/UI2_0_C5_AMENDMENTS_BUNDLE.md with: §1 scope and the exact list of five amendments from baseline section 5; §2 the CON.0 separate-shell amendment (cite the already-FROZEN OPERATOR_CONSOLE_ARCHITECTURE.md and the baseline's CON.0-AMENDMENT row; state precisely what text in that document, if any, needs updating to reflect UI 2.0 existing as a separate shell, or state that no text change is needed and why); §3 the utils/action_taxonomy.py UI-OPERATIONAL-RUN-NOW amendment (actual diff/patch description against the real file, preserving class-1's non-console-submittable rule); §4 the design document amendments (section 6 APPROVAL-MODEL replacement text, F-ladder -> CAP-* states replacement text, AG-U2 restatement) as literal replacement text for UI2_0_ARCHITECTURE_DESIGN.md's own sections, or a smaller diff if the sections already read consistently after C1-C4; §5 the PRIVACY_AND_DATA_HANDLING.md amendment (literal new section/paragraph naming the UI 2.0 database); §6 acceptance criteria proving each amendment is textually applied and internally consistent with C1-C4 -- at least eight, each testable; §7 contradictions/open items for the PO; §8 cross-references",
+          "The actual amendments SHOULD be applied to the target files (utils/action_taxonomy.py's docstring/comments where the rule is stated, UI2_0_ARCHITECTURE_DESIGN.md's sections 6/3.2/8.5's AG-U2 mention, PRIVACY_AND_DATA_HANDLING.md) in this same movement if they are pure documentation/comment changes with no behavioral code change; if action_taxonomy.py needs an actual new constant/member, STOP and ask via RELAY_QUESTION before adding one -- baseline section 2 (UI-OPERATIONAL-RUN-NOW) says this is a taxonomy amendment but does not specify whether it needs a new enum member or only clarifying documentation that a job request is not a console submission; decide with one sentence of reasoning unless it is genuinely ambiguous",
+          "project/backlog.json ui2_b0_c5_amendments_bundle AND ui2_privacy_doc_amendment status -> in_progress/done as appropriate, with the PR reference; build_history record per the usual pattern",
+          "RELAY_NOTE + SESSION_CLOSE"
+        ],
+        "recommended_reasoning": {
+          "reason": "A precise-wording synthesis movement over four already-merged contracts and one already-frozen baseline -- no new architectural ground, but touches a constitutional source file (action_taxonomy.py) and needs the full authority chain read correctly, so Sonnet 5 high is the lightest tier that fits.",
+          "tier": "Sonnet 5, extended thinking (high)"
+        },
+        "requirements": [
+          "Read UI2_0_BASELINE_CONTRACT.md section 5 (the literal amendment list), UI2_0_DEVELOPMENT_WORKFLOW.md section 2, and all four sibling contracts' relevant sections in full before writing",
+          "English, per AGENTS.md engineering-output language law",
+          "git diff --check; privacy gate at push; existing docs/project-state tests green; action_taxonomy.py's own test suite green if touched"
+        ],
+        "risks": [
+          "Treating this as a chance to make a new architectural decision instead of synthesizing already-made ones",
+          "Weakening the class-1 non-console-submittable rule while trying to add the Run Now amendment",
+          "Adding a new action_taxonomy.py enum member without asking, when documentation alone may suffice",
+          "Editing C1-C4's own documents instead of the SOURCE documents (action_taxonomy.py, design doc, PRIVACY_AND_DATA_HANDLING.md) that need to catch up to them"
+        ],
+        "scope": {
+          "in": [
+            "docs/design/UI2_0_C5_AMENDMENTS_BUNDLE.md",
+            "utils/action_taxonomy.py (documentation/comment amendment only, unless a code change is asked-and-approved)",
+            "docs/design/UI2_0_ARCHITECTURE_DESIGN.md (targeted section replacements)",
+            "PRIVACY_AND_DATA_HANDLING.md (new section)",
+            "project-state bookkeeping"
+          ],
+          "out": [
+            "Any ui2/ source",
+            "Any Line-1 behavioral code change",
+            "C1/C2/C3/C4/C6/C7 content beyond references",
+            "Device contact",
+            "Phase S amendments (browser profile editor, mediated terminal)"
+          ]
+        },
+        "validation_plan": [
+          "Self-check against AC-1..AC-8 in the RELAY_NOTE",
+          "action_taxonomy.py's own tests if touched",
+          "docs/project-state tests",
+          "git diff --check",
+          "privacy gate at push"
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-09T18:30:22Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0056",
+  "movement": "UI2_B0_C5_AMENDMENTS_BUNDLE",
+  "next_actor": "engineer",
+  "refs": [
+    "docs/design/UI2_0_BASELINE_CONTRACT.md",
+    "docs/design/UI2_0_DEVELOPMENT_WORKFLOW.md",
+    "docs/design/UI2_0_ARCHITECTURE_DESIGN.md",
+    "docs/design/UI2_0_C1_PLATFORM_SCHEMA_CONTRACT.md",
+    "docs/design/UI2_0_C2_JOB_EXECUTION_CONTRACT.md",
+    "docs/design/UI2_0_C3_IDENTITY_SESSIONS_RBAC_CONTRACT.md",
+    "docs/design/UI2_0_C4_CAPABILITY_REGISTRY_GATE_RESOLUTION_CONTRACT.md",
+    "docs/design/UI2_0_COUNCIL_REVIEW_AND_SECOND_OPINION_BRIEF.md",
+    "docs/design/OPERATOR_CONSOLE_ARCHITECTURE.md",
+    "utils/action_taxonomy.py",
+    "AGENTS.md",
+    "PRIVACY_AND_DATA_HANDLING.md",
+    "project/backlog.json",
+    "project/roadmap.json"
+  ],
+  "schema_version": 1,
+  "status": "OPEN",
+  "updated_at": "2026-09-09T18:30:22Z"
+}
