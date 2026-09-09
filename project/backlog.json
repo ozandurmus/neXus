@@ -939,8 +939,8 @@
       "id": "ui2_b0_c4_capability_registry_gate_resolution_contract",
       "title": "UI2 B0/C4 -- capability registry & command-gate resolution contract (runtime form of the capability spec; gate-registry resolution rule K-4; closed step kinds; VSX/ClusterXL rules CP-D6; transport decision CP-D7)",
       "priority": "P0 -- UI 2.0 primary",
-      "status": "planned",
-      "note": "CONTRACT, Sonnet 5 extended (high). Frozen together with C6.",
+      "status": "in_progress",
+      "note": "CONTRACT, Sonnet 5 extended (high). Frozen together with C6. 2026-09-09: dispatched as NXS-LOCAL-0054, Sonnet 5 extended (high).",
       "target": "workflow §5 B0-4; docs/design/UI2_0_BASELINE_CONTRACT.md (FROZEN 2026-09-09); plan: docs/design/UI2_0_DEVELOPMENT_WORKFLOW.md"
     },
     {

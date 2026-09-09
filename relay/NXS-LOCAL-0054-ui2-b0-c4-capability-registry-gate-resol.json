@@ -1,0 +1,116 @@
+{
+  "created_at": "2026-09-09T15:34:12Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1: The capability schema allows a fact (e.g. HA identity) to be shared across multiple capabilities without duplicating its extraction; a worked example is given.",
+          "AC-2: The closed step-kind set is enumerated exhaustively and the document states that adding a kind is an amendment.",
+          "AC-3: The gate-registry resolution rule is a concrete, testable algorithm; the UNKNOWN case is shown blocking device execution while leaving the offline spec/parser buildable.",
+          "AC-4: The VSX/ClusterXL multiplicity model is demonstrated against a worked ClusterXL example and a worked VSX example, each preserving distinct member/context identity.",
+          "AC-5: The transport decision names the exact evidence bar (what a Line-1 capture must show) before a capability may default to interactive SSH instead of exec-per-step.",
+          "AC-6: KNOWN/UNKNOWN/NOT_APPLICABLE are modeled as first-class states in the registry schema, not booleans.",
+          "AC-7: C2's step interface (kind, gate reference, timeout, expect/validation result) is shown populated from this registry with a concrete worked example.",
+          "AC-8: §7 gives at least ten testable acceptance criteria for B1-4/B1-5/B1-6.",
+          "AC-9: §8 lists every contradiction with frozen authority found (or states none and which documents were checked); no PO-reserved decision is reopened.",
+          "AC-10: The document does not perform capability extraction or define the extraction inventory (C6's scope) -- it defines only the schema a completed extraction spec populates, and states this boundary explicitly."
+        ],
+        "baseline": {
+          "authority": "docs/design/UI2_0_BASELINE_CONTRACT.md (FROZEN -- PRODUCT OWNER APPROVED 2026-09-09): RUNTIME-DIRECTION, FREEZE-SLICING (C4 frozen together with C6). docs/design/UI2_0_DEVELOPMENT_WORKFLOW.md section 3.1 (the nine-field capability extraction spec: identity, transport, command/call tuple, parser semantics, evidence shape, known vendor quirks, Line-1 source pointers, inherited validation status KNOWN/UNKNOWN/NOT_APPLICABLE, re-validation plan) and section 3.2 (collection engine core: capability registry, step executor, parser framework, evidence writer) -- C4 is the runtime schema those specs populate. docs/design/UI2_0_C1_PLATFORM_SCHEMA_CONTRACT.md already reserves a cp_inventory_projection table 'owned by C1 + C4 by reference' -- read its section 3 and do not redefine that table, only the capability/step/gate model that populates it. docs/design/UI2_0_C2_JOB_EXECUTION_CONTRACT.md section 5 already assumes 'a step has a kind, a gate reference, a timeout and an expect/validation result' -- C4 supplies exactly that interface, precisely, not a competing job model. Council items K-3 (RB.3b's frozen command tuple as the sample), K-4 (gate-registry resolution rule), CP-D6 (VSX/ClusterXL rules), CP-D7 (transport decision) from docs/design/UI2_0_COUNCIL_REVIEW_AND_SECOND_OPINION_BRIEF.md section 4 are this contract's direct inputs.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED); UI 2.0 baseline adopted 2026-09-09; C1 and C2 delivered as DRAFT -- FOR PO FREEZE (NXS-LOCAL-0051/0052, PRs #163-165, #164)",
+          "sequencing": "Runs concurrently with C3 (identity, sessions and RBAC contract, movement UI2_B0_C3_IDENTITY_SESSIONS_RBAC_CONTRACT). C4 owns capability/step/gate semantics; C3 owns who may invoke them. Where C4 must reference 'a role token required to run this capability,' name only the interface (an opaque role-token id) and defer its resolution to C3 -- do not redefine it. C1 and C2 are MERGED; read them, do not reopen anything they settled. This contract and C6 (capability extraction contract) are frozen together per FREEZE-SLICING but are separate documents; C6 is NOT in this movement's scope -- write only what C4 needs to reference from it (the nine-field spec shape), not the extraction process itself or the extraction inventory."
+        },
+        "context_not_loaded": [
+          "Any Java source, Gradle build, Flyway migration or Docker artefact -- B1 implements this contract",
+          "The capability extraction PROCESS and the extraction inventory itself (workflow section 4) -- that is C6's scope, not C4's; C4 only defines the runtime schema a completed spec populates",
+          "Device contact, credentials, network access of any kind",
+          "The backup profile approval rules (C7) and the identity/session model (C3) beyond the minimal interfaces named above"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/ui2-b0-c4-capability-registry-gate-resolution-contract"
+        },
+        "invariants": [
+          "A capability is a semantic unit, not a Line-1 file (workflow section 3.3, Astra 4.1): the registry's schema must allow one capability to be composed from facts originally read from multiple Line-1 sources (e.g. HA identity shared by inventory, readiness and backup) -- do not model capabilities as a 1:1 mirror of Line-1 file boundaries",
+          "Closed step kinds only (design section 6.3): enumerate the exact set (e.g. exec-command, expect-match, fetch-file, xml-api-call) and state that this set is closed -- adding a kind is itself an amendment, not a runtime configuration choice",
+          "Every step names its gate-registry entry; the gate-registry resolution rule (K-4) specifies exactly how a step's command/call tuple resolves to one network-device command gate row (AGENTS.md), and what happens when no row exists (workflow section 3.1 field 3: recorded UNKNOWN, blocks device execution, does not block the offline spec/parser)",
+          "VSX/ClusterXL multiplicity rules (CP-D6): a capability against a ClusterXL cluster or a VSX virtual-system context must specify how member/context multiplicity is represented in the capability's target model without collapsing distinct members/contexts into one identity",
+          "Transport decision (CP-D7): validated-device-first -- a capability defaults to the least-interactive transport proven sufficient by its Line-1 evidence (SSH exec-per-step, PAN XML API, SFTP/SCP); interactive/expect-style SSH is used only where the extraction spec's Line-1 provenance proves it necessary, and the contract states the evidence bar for that proof",
+          "Field states from workflow section 3.1 (KNOWN/UNKNOWN/NOT_APPLICABLE) are first-class in the registry schema, not flattened to booleans or omitted fields",
+          "No decision frozen in UI2_0_BASELINE_CONTRACT.md is reopened; contradictions with frozen authority are REPORTED in a dedicated section, never silently resolved"
+        ],
+        "merge_gate": "Standing relay#13: green tests -> self-merge, report via RELAY_NOTE. Documentation-only PR; the DLP privacy gate at push time is the substantive gate. Run the full one-shot regression in the foreground and await its actual completion (do not treat it as backgroundable); if this worktree's own environment is broken in a way confirmed pre-existing on origin/main (as NXS-LOCAL-0051 found and reported, not fixed), report it exactly that way rather than attempting a bootstrap.",
+        "movement_type": "ARCHITECTURE",
+        "objective": "Write the UI 2.0 B0/C4 capability registry & command-gate resolution contract as docs/design/UI2_0_C4_CAPABILITY_REGISTRY_GATE_RESOLUTION_CONTRACT.md (status: DRAFT -- FOR PRODUCT OWNER FREEZE). It defines the runtime form of a UI 2.0 capability (as workflow section 3.1's extraction spec becomes executable), the gate-registry resolution rule (council K-4), the closed set of step kinds, the VSX/ClusterXL multiplicity rules (CP-D6), and the transport decision (CP-D7: validated-device-first, interactive shell only where proven necessary). This is a contract, not code: no ui2/ source is written in this movement.",
+        "output_contract": [
+          "docs/design/UI2_0_C4_CAPABILITY_REGISTRY_GATE_RESOLUTION_CONTRACT.md with: §1 scope, authority chain and the C4/C6 boundary stated explicitly; §2 capability registry schema (identity, transport, closed step-kind set, gate-registry references, parser reference, evidence-shape reference, field-state model KNOWN/UNKNOWN/NOT_APPLICABLE) as the runtime target of workflow section 3.1's spec; §3 gate-registry resolution rule (K-4): exact resolution algorithm from a step's command/call tuple to a gate row, and the UNKNOWN-blocks-execution-not-spec rule; §4 VSX/ClusterXL multiplicity model (CP-D6) with a worked example against fw-ist-core-CLS-shaped and vsx-ist-CLS-shaped targets; §5 transport decision (CP-D7) with the evidence bar for choosing interactive SSH; §6 how C2's 'step has a kind, gate reference, timeout, expect/validation result' interface is populated from this registry, with a concrete example; §7 acceptance criteria for B1-4 (collection engine core) and B1-5/B1-6 (extract/implement the first CP inventory capability) -- at least ten, each testable; §8 contradictions/open items for the PO; §9 cross-references",
+          "project/backlog.json ui2_b0_c4_capability_registry_gate_resolution_contract status -> in_progress with the PR reference; build_history record per the usual pattern",
+          "RELAY_NOTE + SESSION_CLOSE"
+        ],
+        "recommended_reasoning": {
+          "reason": "A cross-vendor semantic and security-gate contract on new scope (capability model, transport safety default); extended thinking is warranted, bounded by two already-merged sibling contracts -- Sonnet 5 high is the lightest tier that fits.",
+          "tier": "Sonnet 5, extended thinking (high)"
+        },
+        "requirements": [
+          "Read UI2_0_BASELINE_CONTRACT.md, UI2_0_DEVELOPMENT_WORKFLOW.md sections 3.1-3.3, UI2_0_C1_PLATFORM_SCHEMA_CONTRACT.md section 3, UI2_0_C2_JOB_EXECUTION_CONTRACT.md section 5, and the brief's K-3/K-4/CP-D6/CP-D7 entries in full before writing",
+          "English, per AGENTS.md engineering-output language law",
+          "git diff --check; privacy gate at push; existing docs/project-state tests green"
+        ],
+        "risks": [
+          "Modeling capabilities 1:1 against Line-1 files instead of as semantic units -- explicitly forbidden by workflow section 3.3",
+          "Writing the extraction PROCESS or inventory instead of the registry schema -- that is C6's scope",
+          "Redefining a table C1 already owns instead of referencing it by name",
+          "Defaulting to interactive SSH without a stated evidence bar, reopening the CP-D7 safety default silently"
+        ],
+        "scope": {
+          "in": [
+            "docs/design/UI2_0_C4_CAPABILITY_REGISTRY_GATE_RESOLUTION_CONTRACT.md",
+            "project-state bookkeeping"
+          ],
+          "out": [
+            "Any ui2/ source",
+            "Any Line-1 code change",
+            "C1/C2/C3/C6/C7 content beyond references",
+            "Device contact",
+            "The C6 extraction process/inventory itself"
+          ]
+        },
+        "validation_plan": [
+          "Self-check against AC-1..AC-10 in the RELAY_NOTE",
+          "docs/project-state tests",
+          "git diff --check",
+          "privacy gate at push"
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-09T15:34:12Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0054",
+  "movement": "UI2_B0_C4_CAPABILITY_REGISTRY_GATE_RESOLUTION_CONTRACT",
+  "next_actor": "engineer",
+  "refs": [
+    "docs/design/UI2_0_BASELINE_CONTRACT.md",
+    "docs/design/UI2_0_DEVELOPMENT_WORKFLOW.md",
+    "docs/design/UI2_0_ARCHITECTURE_DESIGN.md",
+    "docs/design/UI2_0_C1_PLATFORM_SCHEMA_CONTRACT.md",
+    "docs/design/UI2_0_C2_JOB_EXECUTION_CONTRACT.md",
+    "docs/design/UI2_0_COUNCIL_REVIEW_AND_SECOND_OPINION_BRIEF.md",
+    "utils/capability_registry.py",
+    "utils/capability_state_resolver.py",
+    "utils/capability_applicability.py",
+    "utils/capability_vendor_support.py",
+    "utils/action_taxonomy.py",
+    "checkpoint/clusterxl_capability_adapter.py",
+    "AGENTS.md",
+    "project/backlog.json",
+    "project/roadmap.json"
+  ],
+  "schema_version": 1,
+  "status": "OPEN",
+  "updated_at": "2026-09-09T15:34:12Z"
+}
