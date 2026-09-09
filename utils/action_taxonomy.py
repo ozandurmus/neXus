@@ -58,6 +58,33 @@ persisted vocabulary is untouched. In particular the RB.3b ledger's own
 ``command_class`` column is a different concept (it stores an *artifact*
 class, ``"cp_gaia_backup"``) and must not be conflated with an action class.
 
+UI 2.0 amendment — a job REQUEST is not a console SUBMISSION
+--------------------------------------------------------------
+``UI-OPERATIONAL-RUN-NOW`` (``docs/design/UI2_0_BASELINE_CONTRACT.md`` §2,
+D-2b; written up in full in ``docs/design/UI2_0_C5_AMENDMENTS_BUNDLE.md``
+§3): UI 2.0 lets an operator trigger a one-off ("Run Now") execution of an
+*already-approved* backup profile against an *already-approved* target from
+the browser. This does **not** weaken ``CLASS_1_RECOVERY_WRITE.console_
+submittable``, which stays ``False`` — a Run Now is a **job request**, not a
+console submission:
+
+- the browser's request creates a queued job row (``REQUESTED`` state) with
+  its target, profile version and reason fixed at request time; no device is
+  contacted by that request;
+- a worker claims the row, re-checks approval state, and only then executes
+  the class 1 steps under the unchanged ``RB.x`` ledger/credential/allowlist
+  contracts — exactly the same execution path a scheduled run takes;
+- no route accepts a command, and no route causes a step to run
+  synchronously inside the HTTP request/response cycle.
+
+``console_submittable`` therefore continues to mean "may this class's
+*execution* be triggered directly and synchronously from a browser
+request" — a meaning a queued, worker-executed job request never satisfies,
+by construction, regardless of what created the row. This module needs no
+new ``ActionClass`` member for the amendment: ``docs/design/
+UI2_0_C2_JOB_EXECUTION_CONTRACT.md`` §2.2/§7.3 already builds the Run Now
+job record against this unchanged flag.
+
 This module is a classification vocabulary, not an enforcement engine. Each
 surface keeps its own gate; they just describe the gate in the same terms.
 """
@@ -92,6 +119,10 @@ CLASS_0_READ = ActionClass(
     why="Evidence collection only; no device state is altered.",
 )
 
+# UI-OPERATIONAL-RUN-NOW (see module docstring): a UI 2.0 browser-initiated
+# "Run Now" of an approved profile is a queued job REQUEST, executed later by
+# a worker — never a direct, synchronous console submission. This class's
+# `console_submittable` stays False; nothing about the fields below changes.
 CLASS_1_RECOVERY_WRITE = ActionClass(
     id="recovery-write",
     level=1,
