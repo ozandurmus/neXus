@@ -15,6 +15,15 @@
   `relay#13` merge authorization. PR #172 merged (commit `23df8f9d`).
 - New: `docs/design/UI2_0_BASELINE_DIRECTORY.md` only. No `ui2/` source, no
   Line-1 code change, no device contact.
+- **PO closure (same day, after PR #172/#173):** `NXS-LOCAL-0058` and
+  `NXS-LOCAL-0059` both `CLOSED` by `RELAY_DECISION`; `ui2_b0_baseline_
+  directory` and `ui2_b0_extraction_tooling` are `done` in
+  `project/backlog.json`. **B0 is complete, 9/9.** The M3 mockup sources
+  the baseline directory cites are now in the repository:
+  `docs/design/ui2_mockups/*.dc.html` (+ `canvas.json`) and
+  `docs/design/UI2_0_MOCKUP_REFERENCE_NOTES.md` (private IP literals in the
+  mock data remapped to `192.0.2.0/24` for the DLP gate). The neXus logo
+  files are NOT in the repository — the Product Owner holds them.
 
 ## 2. What changed
 
@@ -65,6 +74,15 @@
    to a later movement (`B1`/`B2`), not blocking this document's freeze.
 3. No other movement is blocked by this one; `gov_po_2_implementation`
    remains `now_next.next`, untouched.
+4. **Queue after the freeze**, in order: (a) `ui2_taxonomy_device_write_
+   class_and_step_kind` (P0, HIGH SCRUTINY — a DECIDE-level review before
+   any dispatch; it opens a device-write action class and a `C4` step kind;
+   never fold it into routine dispatch); (b) B1 per
+   `UI2_0_DEVELOPMENT_WORKFLOW.md` §5, starting at B1-1, FIRST-CAPABILITY =
+   the CP inventory narrow subset; (c) `ui2_c5_followup_ladder_sweep`
+   (small DOCS, any time). Standing dispatch rule: at most 2 concurrent
+   movements; default tier `Fable 5.1, low effort` (credit conservation,
+   PO 2026-09-09), `medium` only for freeze/security-boundary decisions.
 
 ## 4. Test delta
 
@@ -89,3 +107,53 @@
   no implementation, no schema, and no device execution — the risks it
   surfaces are the three open items in §3 above, each already named as a
   later movement's own decision, not a defect in this one.
+
+## 6. Continuing in another tool (Codex / Copilot Enterprise) if Claude credit runs out
+
+Everything that carries authority is tool-neutral and in the repository;
+only the *automation* around it is Claude-specific. Nothing below needs a
+Claude session.
+
+**Tool-neutral (use as-is):** `AGENTS.md` (Codex reads it natively; Copilot
+via `.github/copilot-instructions.md` + `.github/instructions/*`),
+`AI_START_HERE.md` reading order and SESSION START/CLOSE schemas,
+`docs/design/GOV_SESSION_TRANSFER_PROTOCOL.md` packets
+(`scripts/gov_session_transfer.py render|validate`), the relay files under
+`relay/` and `scripts/local_relay.py` (plain Python, any agent can `append
+--role engineer`), `project/*.json`, the test suite, the DLP gate
+(`main.py --repository-privacy-check --privacy-baseline-ref origin/main`),
+and every `docs/design/UI2_0_*` document.
+
+**Claude-specific (do not expect elsewhere):** `scripts/orchestrator.py`
+(spawns `claude -p` headless engineers in worktrees), `.claude/*`
+settings/skills (`nexus-po`, `nexus-decision-council`, engineer tool gate),
+`CLAUDE.md`, and the "standing relay#13 self-merge" authorization as granted
+inside Claude sessions. `scripts/orchestrator.py status` output is stale
+history in that case — the relay file is the truth.
+
+**Procedure per movement without Claude:**
+
+1. PO picks the backlog id, writes the SESSION_START packet (same content
+   the last nine `NXS-LOCAL-0051..0059` packets used: objective,
+   `baseline.authority`, scope in/out, invariants, acceptance criteria,
+   `movement_type`, `deployment_direction: local validation only`),
+   validates it with `scripts/gov_session_transfer.py`, and creates the
+   relay: `python scripts/local_relay.py create --start <packet.json>
+   --role po --slug <slug>`.
+2. Paste the packet into the Codex / Copilot agent chat with the
+   instruction to follow `AI_START_HERE.md`, work on
+   `feature/<slug>`, append progress via `scripts/local_relay.py append
+   --role engineer --marker RELAY_NOTE ...`, and end with a SESSION_CLOSE
+   packet. State the merge authorization explicitly in the packet (green
+   tests + clean `git diff --check` + DLP gate 0 new findings → open PR;
+   say whether self-merge is allowed) — the Claude-era standing relay#13
+   authorization does not carry over by itself.
+3. PO reviews the self-check, closes with `scripts/local_relay.py append
+   --role po --marker RELAY_DECISION --close ...`, flips the backlog item,
+   commits. Keep the 2-concurrent limit by hand.
+4. On macOS the interpreter is `.venv/bin/python` (the Copilot delta's `py`
+   is the Windows profile). Never bootstrap an environment; report a real
+   failure and stop.
+
+When Claude credit returns, `scripts/orchestrator.py` resumes from the same
+relay files; nothing needs to be migrated back.

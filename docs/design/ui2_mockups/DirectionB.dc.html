@@ -1,0 +1,92 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap">
+  <style>
+    :root{
+      --bg:#f5f6f8;--surface:#ffffff;--surface-2:#f2f4f7;--surface-3:#e9edf2;--line:#e3e7ec;--line-strong:#cfd5dd;
+      --text:#171b22;--text-soft:#343b46;--muted:#5f6978;--muted-2:#8a93a1;
+      --accent:#3457d5;--accent-ink:#2a47b3;--accent-soft:#eaeefb;
+      --success:#1a8a4c;--success-soft:#e7f5ec;
+      --warning:#b45f06;--warning-soft:#fbf1e3;--attention:#e09b3c;
+      --danger:#c8323f;--danger-soft:#fbe9eb;--danger-deep:#8b1e2b;
+      --member:#7a5c12;--member-soft:#fbf4dc;--member-bar:#d8b64a;
+      --info:#4b5b73;--info-soft:#eef1f5;
+      --cp:#c2338a;--vsx:#4a3aa7;--pan:#d9731a;
+      --mark-bg:#171b22;--mark-fg:#ffffff;
+    }
+    body{margin:0;background:var(--bg);color:var(--text);font-family:"IBM Plex Sans","Segoe UI",system-ui,sans-serif;font-size:13px;line-height:1.45;-webkit-font-smoothing:antialiased;font-feature-settings:"tnum" 1,"cv05" 1;}
+    a{color:var(--accent-ink);text-decoration:none} a:hover{color:var(--accent)}
+    .mono{font-family:"JetBrains Mono","IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;font-size:11.5px;letter-spacing:0}
+    td.mono{font-size:11.5px}
+    .eyebrow{color:var(--muted);font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase}
+    .chip{display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 8px;border-radius:6px;font-size:11.5px;font-weight:500;white-space:nowrap;border:1px solid transparent}
+    .chip svg{width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+    .chip.ok{color:var(--success);background:var(--success-soft)}
+    .chip.warn{color:var(--warning);background:var(--warning-soft)}
+    .chip.bad{color:var(--danger);background:var(--danger-soft)}
+    .chip.member{color:var(--member);background:var(--member-soft)}
+    .chip.info{color:var(--info);background:var(--info-soft)}
+    .chip.neutral{color:var(--muted);background:var(--surface-2);border-color:var(--line)}
+    .chip.accent{color:var(--accent-ink);background:var(--accent-soft)}
+    .vendor{display:inline-flex;align-items:center;gap:6px;height:20px;padding:0 7px 0 6px;border:1px solid var(--line-strong);border-radius:5px;background:var(--surface);color:var(--text-soft);font-size:11px;font-weight:600;letter-spacing:.02em}
+    .vendor i{width:7px;height:7px;border-radius:2px;display:block}
+    .card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:18px 20px;display:flex;flex-direction:column;gap:14px;min-width:0}
+    .card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+    .card-title{font-size:15px;font-weight:600;letter-spacing:-.01em;margin-top:2px}
+    .ico{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round;flex:0 0 16px}
+    .topbar{height:56px;display:flex;align-items:center;gap:16px;padding:0 16px 0 14px;background:var(--surface);border-bottom:1px solid var(--line)}
+    .brand{display:flex;align-items:center;gap:10px;min-width:226px}
+    .mark{width:28px;height:28px;border-radius:7px;background:var(--mark-bg);color:var(--mark-fg);display:flex;align-items:center;justify-content:center;font-weight:600;font-size:12px;letter-spacing:.02em}
+    .brand-title{font-size:15px;font-weight:600;letter-spacing:-.01em}
+    .brand-sub{font-size:11px;color:var(--muted);margin-top:-1px}
+    .search{flex:1;max-width:440px;height:34px;display:flex;align-items:center;gap:8px;padding:0 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface-2);color:var(--muted-2);font-size:12.5px}
+    .kbd{margin-left:auto;font-size:10.5px;color:var(--muted-2);border:1px solid var(--line-strong);border-radius:4px;padding:0 5px;line-height:16px}
+    .top-right{margin-left:auto;display:flex;align-items:center;gap:10px}
+    .iconbtn{width:34px;height:34px;display:flex;align-items:center;justify-content:center;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--text-soft)}
+    .avatar{width:30px;height:30px;border-radius:50%;background:var(--surface-3);color:var(--text-soft);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600}
+    .rail{width:224px;flex:0 0 224px;display:flex;flex-direction:column;gap:2px;padding:14px 10px;background:var(--surface);border-right:1px solid var(--line)}
+    .rail-group{margin-top:10px;padding:0 10px 4px;font-size:10.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted-2)}
+    .nav{display:flex;align-items:center;gap:10px;height:34px;padding:0 10px;border-radius:7px;color:var(--text-soft);font-size:13px;font-weight:500}
+    .nav.child{padding-left:36px;font-weight:400;color:var(--muted)}
+    .nav.active{background:var(--accent-soft);color:var(--text);font-weight:600}
+    .nav.active .ico{color:var(--accent)}
+    .rail-foot{margin-top:auto;padding:10px;border-top:1px solid var(--line);font-size:11px;color:var(--muted);display:flex;flex-direction:column;gap:3px}
+    table{border-collapse:separate;border-spacing:0;width:100%;font-size:12.5px}
+    th{position:sticky;top:0;text-align:left;padding:8px 12px;font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);background:var(--surface-2);border-bottom:1px solid var(--line);white-space:nowrap}
+    td{padding:9px 12px;border-bottom:1px solid var(--line);color:var(--text-soft);white-space:nowrap;vertical-align:middle}
+    tr:last-child td{border-bottom:0}
+    .num{font-variant-numeric:tabular-nums;text-align:right}
+  </style>
+</helmet>
+<div style="width:760px;height:460px;background:#f7f5f1;color:#1c1a17;padding:28px 32px;box-sizing:border-box;display:flex;flex-direction:column;gap:18px;overflow:hidden;font-family:'IBM Plex Sans',system-ui,sans-serif">
+  <div style="display:flex;justify-content:space-between;align-items:flex-start">
+    <div style="display:flex;flex-direction:column;gap:4px">
+      <span style="font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#7a746b">Direction B · low-fi sketch</span>
+      <span style="font-size:20px;font-weight:600;letter-spacing:-.02em">Warm graphite + verify-green</span>
+      <span style="font-size:12.5px;color:#6b655c;max-width:460px">Warm off-white paper, graphite text, a single deep teal-green accent that reads as "verified". Calmer and more editorial; trades some "security-tech" familiarity for distinctiveness.</span>
+    </div>
+    <div style="display:flex;gap:6px"><span style="width:22px;height:22px;border-radius:5px;background:#f7f5f1;border:1px solid #d9d4cb"></span><span style="width:22px;height:22px;border-radius:5px;background:#1c1a17"></span><span style="width:22px;height:22px;border-radius:5px;background:#0f7b6c"></span><span style="width:22px;height:22px;border-radius:5px;background:#b8471f"></span><span style="width:22px;height:22px;border-radius:5px;background:#c9a227"></span></div>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(4, minmax(0, 1fr));gap:12px">
+    <div style="background:#fffdf9;border:1px solid #e4dfd5;border-radius:8px;padding:14px 16px;display:flex;flex-direction:column;gap:8px"><span style="font-size:10.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#7a746b">Inventory</span><span style="font-size:28px;font-weight:600;letter-spacing:-.02em;line-height:1">42</span><span style="font-size:11.5px;color:#6b655c">of 46 live · 4 stale</span></div>
+    <div style="background:#fffdf9;border:1px solid #e4dfd5;border-radius:8px;padding:14px 16px;display:flex;flex-direction:column;gap:8px"><span style="font-size:10.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#7a746b">Configuration</span><span style="font-size:28px;font-weight:600;letter-spacing:-.02em;line-height:1">40<span style="font-size:14px;color:#6b655c;font-weight:400"> / 42</span></span><span style="font-size:11.5px;color:#0f7b6c;font-weight:500">Primary evidence</span></div>
+    <div style="background:#fffdf9;border:1px solid #e4dfd5;border-radius:8px;padding:14px 16px;display:flex;flex-direction:column;gap:8px"><span style="font-size:10.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#7a746b">Overrides</span><span style="font-size:28px;font-weight:600;letter-spacing:-.02em;line-height:1">6</span><span style="font-size:11.5px;color:#6b655c">intentional · recorded</span></div>
+    <div style="background:#fffdf9;border:1px solid #e4dfd5;border-radius:8px;padding:14px 16px;display:flex;flex-direction:column;gap:8px"><span style="font-size:10.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#7a746b">Effective drift</span><span style="font-size:28px;font-weight:600;letter-spacing:-.02em;line-height:1">2</span><span style="font-size:11.5px;color:#b8471f;font-weight:500">Needs review</span></div>
+  </div>
+  <div style="background:#fffdf9;border:1px solid #e4dfd5;border-radius:8px;padding:14px 16px;display:flex;flex-direction:column;gap:10px">
+    <div style="display:flex;justify-content:space-between;font-size:12.5px"><span style="font-weight:600">Alignment</span><span style="color:#0f7b6c;font-weight:500">Open Configuration →</span></div>
+    <div style="display:flex;gap:2px;height:12px;border-radius:3px;overflow:hidden"><div style="flex:31;background:#0f7b6c"></div><div style="flex:5;background:#c9a227"></div><div style="flex:6;background:#d9832e"></div><div style="flex:3;background:#a89f92"></div><div style="flex:3;background:#b8471f"></div></div>
+    <div style="display:flex;gap:16px;font-size:11.5px;color:#6b655c"><span>Aligned 31</span><span>Member-specific 5</span><span>Override 6</span><span>Observed 3</span><span>Drift 3</span></div>
+  </div>
+  <div style="font-size:11.5px;color:#7a746b">Tradeoff: warm paper is less common in security tooling, so it feels fresh and timeless, but dark mode needs its own warm-graphite scale and the green accent must stay away from the success state (here success reuses the accent hue deliberately: verified = good).</div>
+</div>
+</x-dc>
+</body>
+</html>

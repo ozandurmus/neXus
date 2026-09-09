@@ -85,11 +85,30 @@
       },
       "seq": 1,
       "timestamp": "2026-09-09T19:14:06Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "RELAY_NOTE",
+      "seq": 2,
+      "subject": "UI2 B0-8 baseline directory delivered, PR #172 merged",
+      "text": "DELIVERED: docs/design/UI2_0_BASELINE_DIRECTORY.md (DRAFT -- FOR PRODUCT OWNER FREEZE). PR #172 MERGED (merge commit 23df8f9d174f1837e11d2a50f67ecb771a044a57). Merged origin/main mid-session to pick up the concurrent extraction-tooling movement (PR #171, NXS-LOCAL-0059) after it landed first; resolved a project-state bookkeeping conflict in project/backlog.json and project/build_history.json (kept both movements' build records; roadmap.json/CURRENT_STATE.md/docs/history/INDEX.md auto-merged clean); re-ran the full regression and the privacy gate against the new base before merging.\n\nSelf-check against AC-1..AC-8:\nAC-1 (each of the six concerns has an explicit owner statement): SATISFIED -- section 2 cites NAVIGATION_INFORMATION_ARCHITECTURE.md (FROZEN) + C3 sections 5/6; section 3 cites the mockup + VISUAL-DESIGN-LANGUAGE; section 4 states 'no existing document owns this end to end' and supplies new minimal text tying C4+C2; section 5 states 'genuinely new -- no existing document owns it' with the search performed named explicitly; section 6 cites C1 section 4 directly, no new text; section 7 cites workflow section 5 B2-5b and restates its distinction.\nAC-2 (screen-state vocabulary matches the mockup's own words and severity rule exactly, with citation): SATISFIED -- section 3.1/3.2 reproduce the eight-term vocabulary and the exact severity sentence verbatim from this movement's own session packet (the 'neXus 2026 Design Refresh' design canvas), cited as the source; section 3.3 adds an explicitly informative (non-binding) alignment table against Line-1's own frozen states, not a substitute vocabulary.\nAC-3 (navigation shows RBAC visible-but-refused rendering consistent with C3 and the mockup's console-only pattern): SATISFIED -- section 2.2 ties C3 section 5.2/5.4's action_affordance/reason_code rendering directly to the mockup's 'Collect now... console only' example named in the task packet.\nAC-4 (alarm lifecycle, if genuinely new, stays schema-level and cites C1/C2 for table/job boundaries): SATISFIED -- section 5 confirms no existing owner (FAILOVER_ENGINE_ARCHITECTURE.md and C6 checked and named), then stays at table/state-machine sketch level throughout (5.3-5.5), citing C1's audit-trigger/data-class pattern and C2's job-state-machine/idempotency/OUTCOME_UNKNOWN pattern by section number throughout; explicitly defers rule authoring, channel schemas and retry/backoff numbers to the B2 movements (section 5.6).\nAC-5 (SNMP status exposure distinguished from SNMP-trap-out and device polling): SATISFIED -- section 7.1 gives both distinctions explicitly, each with its own sub-bullet and a named reason.\nAC-6 (feature-contribution contract states concretely how a CAP-RELEASED capability's screen/job-type/alarm-source registration works, referencing C4 and C2 by name): SATISFIED -- section 4.2/4.3/4.4 name C4 section 2.2/2.5 and C2 section 2.1 by section number for each of the three registrations.\nAC-7 (at least eight testable acceptance criteria for the B1/B2 movements this catalogue feeds): SATISFIED -- section 8 gives 11, tagged by movement (B1-9/B2-1/B2-3/B2-5b).\nAC-8 (contradictions/open items section lists every document checked, states none found or names them precisely, no PO-reserved decision reopened): SATISFIED -- section 9 lists 13 documents checked by name/status, states 'none found' for contradictions with an explicit rationale for the two closest calls (the six-root baseline scope note; CAPABILITY_STATE_VOCABULARY_AND_PRESENTATION.md checked and explicitly not engaged), and names three genuinely open items for the PO.\n\nValidation: full one-shot regression, foreground, awaited, against the final merged base (python -m pytest -q -n auto --dist worksteal, 183.81s): 3226 passed, 27 skipped, 2 failed -- the same pre-existing/unrelated DLP-token collisions (tests/test_dev_0_5b_auth_consumer_canonical_config.py, relay/NXS-LOCAL-0030-credential-profiles-reference-model.json) CURRENT_STATE.md's own baseline already documents, confirmed unchanged by this diff. git diff --check clean. Repository privacy gate against origin/main baseline (python main.py --repository-privacy-check --privacy-baseline-ref origin/main): PASS, 0 new findings (6 pre-existing, unchanged). CI validate gate: pass (full-regression is by-design skipped on pull_request).\n\nproject-state bookkeeping: project/backlog.json ui2_b0_baseline_directory -> in_progress with the PR-#172 delivery note; project/build_history.json new record; project/roadmap.json now_next.now advanced to this build, C7 (PR #170, already PO-accepted) moved to upcoming; CURRENT_STATE.md checkpoint updated; docs/history/INDEX.md regenerated.",
+      "timestamp": "2026-09-09T20:08:08Z"
+    },
+    {
+      "actor": "po",
+      "authorized_by": "Product Owner (in-session, GOV.PO.3)",
+      "marker": "RELAY_DECISION",
+      "scope": "NXS-LOCAL-0058 / UI2_B0_BASELINE_DIRECTORY",
+      "seq": 3,
+      "subject": "Accepted -- B0-8 baseline directory delivered (PR #172, #173)",
+      "supersedes": "none",
+      "text": "PO review of UI2_0_BASELINE_DIRECTORY.md section 9: no contradiction with FROZEN authority; the four open items (UI 2.0 root set, alarm severity enum, Stale/provenance two-state split, SNMP-agent taxonomy framing) are correctly deferred to B1/B2 movements and reopen no Phase 0 ruling. Screen-state vocabulary adopted verbatim from the M3 mockup set, whose sources are now committed under docs/design/ui2_mockups/ with UI2_0_MOCKUP_REFERENCE_NOTES.md. Document stays DRAFT -- FOR PRODUCT OWNER FREEZE alongside C1-C7. B0 is now complete (9/9). Movement CLOSED.",
+      "timestamp": "2026-09-09T20:13:07Z"
     }
   ],
   "id": "NXS-LOCAL-0058",
   "movement": "UI2_B0_BASELINE_DIRECTORY",
-  "next_actor": "engineer",
+  "next_actor": null,
   "refs": [
     "docs/design/UI2_0_BASELINE_CONTRACT.md",
     "docs/design/UI2_0_DEVELOPMENT_WORKFLOW.md",
@@ -107,6 +126,6 @@
     "project/roadmap.json"
   ],
   "schema_version": 1,
-  "status": "OPEN",
-  "updated_at": "2026-09-09T19:14:06Z"
+  "status": "CLOSED",
+  "updated_at": "2026-09-09T20:13:07Z"
 }

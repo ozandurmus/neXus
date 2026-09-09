@@ -89,11 +89,30 @@
       },
       "seq": 1,
       "timestamp": "2026-09-09T19:14:06Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "RELAY_NOTE",
+      "seq": 2,
+      "subject": "PR #171 merged -- extraction-tooling delivered",
+      "text": "scripts/ui2_extract_fixtures.py implements C6 section 3's fixture-generation procedure; Tokenizer.shaped_token closes C6 section 7 open item 1 (shape-preserving encoding, addition not replacement). AC-1..AC-9 proven by tests/test_ui2_b0_extraction_tooling.py plus the existing tests/test_phase0_3_support_bundle.py suite staying green. Full foreground regression: 3226 passed/27 skipped/2 failed, both confirmed pre-existing/unrelated via a disposable detached worktree of the pre-change commit (AC-10). git diff --check clean. Repository privacy gate FAIL/9 findings, all pre-existing and outside this diff. PR #171 opened and self-merged (squash, c1eaa50) under the standing relay#13 authorization. project/backlog.json and project/build_history.json updated with the PR reference. Full detail in the following SESSION_CLOSE.",
+      "timestamp": "2026-09-09T19:27:29Z"
+    },
+    {
+      "actor": "po",
+      "authorized_by": "Product Owner (in-session, GOV.PO.3)",
+      "marker": "RELAY_DECISION",
+      "scope": "NXS-LOCAL-0059 / UI2_B0_EXTRACTION_TOOLING",
+      "seq": 3,
+      "subject": "Accepted -- B0-9 extraction tooling delivered (PR #171)",
+      "supersedes": "none",
+      "text": "PO review: scripts/ui2_extract_fixtures.py implements C6 section 3; Tokenizer.shaped_token is additive (existing token() untouched, distinct HMAC domain); P-1 holds (extraction-time Python only, no device contact, no UI 2.0 runtime use). tests/test_ui2_b0_extraction_tooling.py re-run by PO on main: 12 passed. The two pre-existing failures are the known DLP prose-collision findings, unrelated. Movement CLOSED. C6 section 7 open item 1 is now closed; C6 itself stays DRAFT -- FOR PRODUCT OWNER FREEZE.",
+      "timestamp": "2026-09-09T20:06:50Z"
     }
   ],
   "id": "NXS-LOCAL-0059",
   "movement": "UI2_B0_EXTRACTION_TOOLING",
-  "next_actor": "engineer",
+  "next_actor": null,
   "refs": [
     "docs/design/UI2_0_C6_CAPABILITY_EXTRACTION_CONTRACT.md",
     "docs/design/UI2_0_C4_CAPABILITY_REGISTRY_GATE_RESOLUTION_CONTRACT.md",
@@ -105,6 +124,6 @@
     "project/roadmap.json"
   ],
   "schema_version": 1,
-  "status": "OPEN",
-  "updated_at": "2026-09-09T19:14:06Z"
+  "status": "CLOSED",
+  "updated_at": "2026-09-09T20:06:50Z"
 }

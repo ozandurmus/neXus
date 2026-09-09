@@ -1,0 +1,192 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap">
+  <style>
+    :root{
+      --bg:#f5f6f8;--surface:#ffffff;--surface-2:#f2f4f7;--surface-3:#e9edf2;--line:#e3e7ec;--line-strong:#cfd5dd;
+      --text:#171b22;--text-soft:#343b46;--muted:#5f6978;--muted-2:#8a93a1;
+      --accent:#3457d5;--accent-ink:#2a47b3;--accent-soft:#eaeefb;
+      --success:#1a8a4c;--success-soft:#e7f5ec;
+      --warning:#b45f06;--warning-soft:#fbf1e3;--attention:#e09b3c;
+      --danger:#c8323f;--danger-soft:#fbe9eb;--danger-deep:#8b1e2b;
+      --member:#7a5c12;--member-soft:#fbf4dc;--member-bar:#d8b64a;
+      --info:#4b5b73;--info-soft:#eef1f5;
+      --cp:#c2338a;--vsx:#4a3aa7;--pan:#d9731a;
+      --mark-bg:#171b22;--mark-fg:#ffffff;
+    }
+    body{margin:0;background:var(--bg);color:var(--text);font-family:"IBM Plex Sans","Segoe UI",system-ui,sans-serif;font-size:13px;line-height:1.45;-webkit-font-smoothing:antialiased;font-feature-settings:"tnum" 1,"cv05" 1;}
+    a{color:var(--accent-ink);text-decoration:none} a:hover{color:var(--accent)}
+    .mono{font-family:"JetBrains Mono","IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;font-size:11.5px;letter-spacing:0}
+    td.mono{font-size:11.5px}
+    .eyebrow{color:var(--muted);font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase}
+    .chip{display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 8px;border-radius:6px;font-size:11.5px;font-weight:500;white-space:nowrap;border:1px solid transparent}
+    .chip svg{width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+    .chip.ok{color:var(--success);background:var(--success-soft)}
+    .chip.warn{color:var(--warning);background:var(--warning-soft)}
+    .chip.bad{color:var(--danger);background:var(--danger-soft)}
+    .chip.member{color:var(--member);background:var(--member-soft)}
+    .chip.info{color:var(--info);background:var(--info-soft)}
+    .chip.neutral{color:var(--muted);background:var(--surface-2);border-color:var(--line)}
+    .chip.accent{color:var(--accent-ink);background:var(--accent-soft)}
+    .vendor{display:inline-flex;align-items:center;gap:6px;height:20px;padding:0 7px 0 6px;border:1px solid var(--line-strong);border-radius:5px;background:var(--surface);color:var(--text-soft);font-size:11px;font-weight:600;letter-spacing:.02em}
+    .vendor i{width:7px;height:7px;border-radius:2px;display:block}
+    .card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:18px 20px;display:flex;flex-direction:column;gap:14px;min-width:0}
+    .card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+    .card-title{font-size:15px;font-weight:600;letter-spacing:-.01em;margin-top:2px}
+    .ico{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round;flex:0 0 16px}
+    .topbar{height:56px;display:flex;align-items:center;gap:16px;padding:0 16px 0 14px;background:var(--surface);border-bottom:1px solid var(--line)}
+    .brand{display:flex;align-items:center;gap:10px;min-width:226px}
+    .mark{width:28px;height:28px;border-radius:7px;background:var(--mark-bg);color:var(--mark-fg);display:flex;align-items:center;justify-content:center;font-weight:600;font-size:12px;letter-spacing:.02em}
+    .brand-title{font-size:15px;font-weight:600;letter-spacing:-.01em}
+    .brand-sub{font-size:11px;color:var(--muted);margin-top:-1px}
+    .search{flex:1;max-width:440px;height:34px;display:flex;align-items:center;gap:8px;padding:0 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface-2);color:var(--muted-2);font-size:12.5px}
+    .kbd{margin-left:auto;font-size:10.5px;color:var(--muted-2);border:1px solid var(--line-strong);border-radius:4px;padding:0 5px;line-height:16px}
+    .top-right{margin-left:auto;display:flex;align-items:center;gap:10px}
+    .iconbtn{width:34px;height:34px;display:flex;align-items:center;justify-content:center;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--text-soft)}
+    .avatar{width:30px;height:30px;border-radius:50%;background:var(--surface-3);color:var(--text-soft);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600}
+    .rail{width:224px;flex:0 0 224px;display:flex;flex-direction:column;gap:2px;padding:14px 10px;background:var(--surface);border-right:1px solid var(--line)}
+    .rail-group{margin-top:10px;padding:0 10px 4px;font-size:10.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted-2)}
+    .nav{display:flex;align-items:center;gap:10px;height:34px;padding:0 10px;border-radius:7px;color:var(--text-soft);font-size:13px;font-weight:500}
+    .nav.child{padding-left:36px;font-weight:400;color:var(--muted)}
+    .nav.active{background:var(--accent-soft);color:var(--text);font-weight:600}
+    .nav.active .ico{color:var(--accent)}
+    .rail-foot{margin-top:auto;padding:10px;border-top:1px solid var(--line);font-size:11px;color:var(--muted);display:flex;flex-direction:column;gap:3px}
+    table{border-collapse:separate;border-spacing:0;width:100%;font-size:12.5px}
+    th{position:sticky;top:0;text-align:left;padding:8px 12px;font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);background:var(--surface-2);border-bottom:1px solid var(--line);white-space:nowrap}
+    td{padding:9px 12px;border-bottom:1px solid var(--line);color:var(--text-soft);white-space:nowrap;vertical-align:middle}
+    tr:last-child td{border-bottom:0}
+    .num{font-variant-numeric:tabular-nums;text-align:right}
+  </style>
+</helmet>
+<div style="width:1440px;height:900px;display:flex;flex-direction:column;background:var(--bg);overflow:hidden">
+  <div class="topbar">
+    <div class="brand">
+      <div class="mark">SX</div>
+      <div style="display:flex;flex-direction:column">
+        <div class="brand-title">SecurityExpert</div>
+        <div class="brand-sub">neXus · verified network-security state</div>
+      </div>
+    </div>
+    <div class="search">
+      <svg class="ico" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg>
+      <span>Search device, VS, serial, IP or setting</span>
+      <span class="kbd">⌘K</span>
+    </div>
+    <div class="top-right">
+      <span class="chip ok"><svg viewBox="0 0 24 24"><path d="M4 12l5 5L20 7"></path></svg>Checkpoint · run-20260908-0640</span>
+      <div class="iconbtn"><svg class="ico" viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.7 21a2 2 0 0 1-3.4 0"></path></svg></div>
+      <div class="iconbtn"><svg class="ico" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"></path></svg></div>
+      <div class="avatar">OP</div>
+    </div>
+  </div>
+  <div style="display:flex;flex:1;min-height:0">
+    <nav class="rail">
+      <div class="nav"><svg class="ico" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"></rect><rect x="14" y="3" width="7" height="7" rx="1"></rect><rect x="3" y="14" width="7" height="7" rx="1"></rect><rect x="14" y="14" width="7" height="7" rx="1"></rect></svg><span>Overview</span></div>
+      <div class="rail-group">Devices</div>
+      <div class="nav"><svg class="ico" viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="13" rx="2"></rect><path d="M8 21h8M12 17v4"></path></svg><span>Inventory</span></div>
+      <div class="nav child"><span>Discovery</span></div>
+      <div class="rail-group">Planes</div>
+      <div class="nav active"><svg class="ico" viewBox="0 0 24 24"><path d="M4 6h8M16 6h4M4 12h3M11 12h9M4 18h11M19 18h1"></path><circle cx="14" cy="6" r="2"></circle><circle cx="9" cy="12" r="2"></circle><circle cx="17" cy="18" r="2"></circle></svg><span>Configuration</span></div>
+      <div class="nav"><svg class="ico" viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"></path><path d="M9 12l2 2 4-4"></path></svg><span>Compliance</span></div>
+      <div class="rail-group">Operations</div>
+      <div class="nav"><svg class="ico" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-3-6.7"></path><path d="M21 3v6h-6"></path></svg><span>HA &amp; readiness</span></div>
+      <div class="nav child"><span>Jobs</span></div>
+      <div class="rail-group">Administration</div>
+      <div class="nav"><svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"></path></svg><span>Device management</span></div>
+      <div class="nav child"><span>Inventory exclusions</span></div>
+      <div class="nav child"><span>Project plan</span></div>
+      <div class="rail-foot"><span>Report exported 2026-09-08 06:58 UTC</span><span>Read-only evidence · class 0</span></div>
+    </nav>
+    <aside style="width:272px;flex:0 0 272px;display:flex;flex-direction:column;background:var(--surface);border-right:1px solid var(--line);min-height:0">
+      <div style="padding:16px 14px 12px;display:flex;flex-direction:column;gap:10px;border-bottom:1px solid var(--line)">
+        <div style="display:flex;justify-content:space-between;align-items:center"><span class="eyebrow">Devices · 42</span><a href="#" style="font-size:12px;font-weight:500">+ Add device</a></div>
+        <div class="search" style="max-width:none;height:32px"><svg class="ico" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg><span>Device, serial, model or IP</span></div>
+        <div style="display:flex;gap:4px;font-size:12px">
+          <span style="padding:4px 10px;border-radius:6px;background:var(--surface-3);color:var(--text);font-weight:600">All 42</span>
+          <span style="padding:4px 10px;border-radius:6px;color:var(--muted)">CP 24</span>
+          <span style="padding:4px 10px;border-radius:6px;color:var(--muted)">PAN 16</span>
+          <span style="padding:4px 10px;border-radius:6px;color:var(--danger)">Drift 3</span>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;overflow:hidden">
+        <div style="padding:11px 14px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:5px"><div style="display:flex;justify-content:space-between;align-items:center"><span class="mono" style="color:var(--text);font-weight:500">cp-mds-01</span><span class="vendor"><i style="background:var(--cp)"></i>CP · MDS</span></div><div style="font-size:11.5px;color:var(--muted)">3 CMA · 24 managed gateways</div><div style="display:flex;gap:6px"><span class="chip ok" style="height:20px"><svg viewBox="0 0 24 24"><path d="M4 12l5 5L20 7"></path></svg>Aligned</span></div></div>
+        <div style="padding:11px 14px;border-bottom:1px solid var(--line);background:var(--accent-soft);box-shadow:inset 2px 0 0 var(--accent);display:flex;flex-direction:column;gap:5px"><div style="display:flex;justify-content:space-between;align-items:center"><span class="mono" style="color:var(--text);font-weight:500">fw-ist-core-CLS</span><span class="vendor"><i style="background:var(--cp)"></i>CP · ClusterXL</span></div><div style="font-size:11.5px;color:var(--muted)">Members fw-ist-core-01 · fw-ist-core-02</div><div style="display:flex;gap:6px"><span class="chip bad" style="height:20px"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><path d="M15 9l-6 6M9 9l6 6"></path></svg>1 effective drift</span><span class="chip member" style="height:20px">2 member-specific</span></div></div>
+        <div style="padding:11px 14px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:5px"><div style="display:flex;justify-content:space-between;align-items:center"><span class="mono" style="color:var(--text);font-weight:500">vsx-ist-CLS</span><span class="vendor"><i style="background:var(--vsx)"></i>VSX</span></div><div style="font-size:11.5px;color:var(--muted)">12 virtual systems · VS-PAYMENTS, VS-CORP …</div><div style="display:flex;gap:6px"><span class="chip warn" style="height:20px"><svg viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01"></path><path d="M10.3 3.9L2.7 17a2 2 0 0 0 1.7 3h15.2a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"></path></svg>2 local overrides</span></div></div>
+        <div style="padding:11px 14px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:5px"><div style="display:flex;justify-content:space-between;align-items:center"><span class="mono" style="color:var(--text);font-weight:500">cp-edge-CLS</span><span class="vendor"><i style="background:var(--cp)"></i>CP · ClusterXL</span></div><div style="font-size:11.5px;color:var(--muted)">Members cp-edge-a · cp-edge-b</div><div style="display:flex;gap:6px"><span class="chip neutral" style="height:20px">Stale · last-known-good 6 d</span></div></div>
+        <div style="padding:11px 14px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:5px"><div style="display:flex;justify-content:space-between;align-items:center"><span class="mono" style="color:var(--text);font-weight:500">pan-ank-edge-01</span><span class="vendor"><i style="background:var(--pan)"></i>PAN · HA</span></div><div style="font-size:11.5px;color:var(--muted)">PA-3420 · PAN-OS 11.1.4 · pano-ank-01</div><div style="display:flex;gap:6px"><span class="chip ok" style="height:20px"><svg viewBox="0 0 24 24"><path d="M4 12l5 5L20 7"></path></svg>Aligned</span></div></div>
+        <div style="padding:11px 14px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:5px"><div style="display:flex;justify-content:space-between;align-items:center"><span class="mono" style="color:var(--text);font-weight:500">pan-ank-edge-02</span><span class="vendor"><i style="background:var(--pan)"></i>PAN · HA</span></div><div style="font-size:11.5px;color:var(--muted)">PA-3420 · PAN-OS 11.1.4 · pano-ank-01</div><div style="display:flex;gap:6px"><span class="chip bad" style="height:20px"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><path d="M15 9l-6 6M9 9l6 6"></path></svg>Out of sync</span></div></div>
+        <div style="padding:11px 14px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:5px"><div style="display:flex;justify-content:space-between;align-items:center"><span class="mono" style="color:var(--text);font-weight:500">pan-izm-edge-01</span><span class="vendor"><i style="background:var(--pan)"></i>PAN</span></div><div style="font-size:11.5px;color:var(--muted)">PA-1410 · PAN-OS 10.2.9 · pano-izm-01</div><div style="display:flex;gap:6px"><span class="chip bad" style="height:20px"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><path d="M15 9l-6 6M9 9l6 6"></path></svg>1 effective drift</span></div></div>
+        <div style="padding:11px 14px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:5px"><div style="display:flex;justify-content:space-between;align-items:center"><span class="mono" style="color:var(--text);font-weight:500">fw-brs-dr-01</span><span class="vendor"><i style="background:var(--cp)"></i>CP</span></div><div style="font-size:11.5px;color:var(--muted)">DR site · standalone gateway</div><div style="display:flex;gap:6px"><span class="chip info" style="height:20px">Partial · SSH timeout</span></div></div>
+      </div>
+    </aside>
+    <main style="flex:1;min-width:0;display:flex;flex-direction:column;overflow:hidden">
+      <div style="padding:20px 24px 0;display:flex;justify-content:space-between;gap:20px;border-bottom:1px solid var(--line);background:var(--surface)">
+        <div style="display:flex;flex-direction:column;gap:6px;padding-bottom:16px;min-width:0;flex:1 1 auto">
+          <span class="eyebrow">Configuration · Check Point ClusterXL</span>
+          <h1 style="margin:0;font-size:22px;font-weight:600;letter-spacing:-.02em;line-height:1.15;display:flex;align-items:center;gap:10px"><span class="mono" style="font-size:22px;font-weight:500">fw-ist-core-CLS</span><span class="vendor"><i style="background:var(--cp)"></i>CP · R81.20</span></h1>
+          <div style="display:flex;gap:16px;font-size:12.5px;color:var(--muted);flex-wrap:wrap">
+            <span>Members <span class="mono" style="color:var(--text-soft)">fw-ist-core-01</span> · <span class="mono" style="color:var(--text-soft)">fw-ist-core-02</span> (01 active)</span>
+            <span>Managed by <span class="mono" style="color:var(--text-soft)">cp-mds-01 / cma-ist</span></span>
+            <span>Policy <span class="mono" style="color:var(--text-soft)">IST-Core-Standard</span> · installed 2026-09-05</span>
+          </div>
+          <div style="display:flex;gap:6px;margin-top:4px">
+            <span class="chip ok"><svg viewBox="0 0 24 24"><path d="M4 12l5 5L20 7"></path></svg>Primary evidence · 06:41 UTC</span>
+            <span class="chip ok"><svg viewBox="0 0 24 24"><path d="M4 12l5 5L20 7"></path></svg>Identity verified</span>
+            <span class="chip neutral">Backup 2026-09-07 23:10 · verified</span>
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px;padding-bottom:16px;flex:0 0 auto">
+          <span class="chip bad"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><path d="M15 9l-6 6M9 9l6 6"></path></svg>1 effective drift · needs review</span>
+          <div style="display:flex;gap:8px"><span style="height:32px;padding:0 12px;display:inline-flex;align-items:center;border:1px solid var(--line-strong);border-radius:8px;font-size:12.5px;font-weight:500;color:var(--text-soft);white-space:nowrap">Export evidence</span><span style="height:32px;padding:0 12px;display:inline-flex;align-items:center;border:1px solid var(--line-strong);border-radius:8px;font-size:12.5px;font-weight:500;color:var(--muted-2);white-space:nowrap" title="Collect now is not available in the exported report">Collect now</span></div>
+        </div>
+      </div>
+      <div style="display:flex;gap:4px;padding:0 24px;background:var(--surface);border-bottom:1px solid var(--line)">
+        <span style="padding:11px 12px;font-size:13px;font-weight:500;color:var(--muted)">Overview</span>
+        <span style="padding:11px 12px;font-size:13px;font-weight:500;color:var(--muted)">Configuration</span>
+        <span style="padding:11px 12px;font-size:13px;font-weight:600;color:var(--text);box-shadow:inset 0 -2px 0 var(--accent)">Alignment</span>
+        <span style="padding:11px 12px;font-size:13px;font-weight:500;color:var(--muted)">Policy &amp; Objects</span>
+        <span style="padding:11px 12px;font-size:13px;font-weight:500;color:var(--muted)">History</span>
+        <span style="padding:11px 12px;font-size:13px;font-weight:500;color:var(--muted)">Evidence</span>
+        <span style="padding:11px 12px;font-size:13px;font-weight:500;color:var(--muted)">Backup</span>
+      </div>
+      <div style="padding:18px 24px;display:flex;flex-direction:column;gap:14px;overflow:hidden">
+        <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:16px">
+          <div style="display:flex;flex-direction:column;gap:2px;flex:0 0 auto;white-space:nowrap"><span class="eyebrow">Expected ↔ Effective</span><span style="font-size:16px;font-weight:600;letter-spacing:-.01em">Configuration alignment</span></div>
+          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
+            <span class="chip ok">Aligned 21</span><span class="chip member">Expected member difference 2</span><span class="chip warn">Local override 1</span><span class="chip warn" style="color:var(--attention)">Difference observed 1</span><span class="chip bad">Effective drift 1</span>
+            <span style="height:30px;padding:0 10px;display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:8px;background:var(--surface);font-size:12px;color:var(--muted)">Filter <svg class="ico" style="width:12px;height:12px" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"></path></svg></span>
+          </div>
+        </div>
+        <div style="border:1px solid var(--line);border-radius:10px;background:var(--surface);overflow:hidden">
+          <table style="table-layout:fixed">
+            <thead><tr><th style="width:140px">Setting</th><th>Expected (CMA)</th><th>Effective · 01</th><th>Effective · 02</th><th style="width:220px">State</th></tr></thead>
+            <tbody>
+              <tr><td style="color:var(--text);font-weight:500">Cluster VIP · eth0</td><td class="mono">192.0.2.34/24</td><td class="mono">192.0.2.34/24</td><td class="mono">192.0.2.34/24</td><td><span class="chip ok"><svg viewBox="0 0 24 24"><path d="M4 12l5 5L20 7"></path></svg>Aligned</span></td></tr>
+              <tr style="background:var(--member-soft)"><td style="color:var(--text);font-weight:500">Hostname</td><td class="mono">fw-ist-core-{member}</td><td class="mono">fw-ist-core-01</td><td class="mono">fw-ist-core-02</td><td><span class="chip member">Expected member difference</span></td></tr>
+              <tr style="background:var(--member-soft)"><td style="color:var(--text);font-weight:500">Member IP · eth0</td><td class="mono">10.20.0.{2,3}/24</td><td class="mono">192.0.2.37/24</td><td class="mono">192.0.2.31/24</td><td><span class="chip member">Expected member difference</span></td></tr>
+              <tr><td style="color:var(--text);font-weight:500">NTP · server 1</td><td class="mono">192.0.2.40</td><td class="mono">192.0.2.40</td><td class="mono">192.0.2.40</td><td><span class="chip ok"><svg viewBox="0 0 24 24"><path d="M4 12l5 5L20 7"></path></svg>Aligned</span></td></tr>
+              <tr style="background:var(--danger-soft)"><td style="color:var(--text);font-weight:500">NTP · server 2</td><td class="mono">192.0.2.10</td><td class="mono">192.0.2.10</td><td class="mono" style="color:var(--danger);font-weight:500">192.0.2.13</td><td style="white-space:normal"><div style="display:flex;flex-direction:column;gap:3px"><span class="chip bad"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><path d="M15 9l-6 6M9 9l6 6"></path></svg>Effective drift</span><span style="font-size:11px;color:var(--muted)">Unexplained since 2026-09-06 · no local-override record</span></div></td></tr>
+              <tr><td style="color:var(--text);font-weight:500">DNS · primary</td><td class="mono">192.0.2.25</td><td class="mono">192.0.2.25</td><td class="mono">192.0.2.25</td><td><span class="chip ok"><svg viewBox="0 0 24 24"><path d="M4 12l5 5L20 7"></path></svg>Aligned</span></td></tr>
+              <tr style="background:var(--warning-soft)"><td style="color:var(--text);font-weight:500">SNMP · trap receiver</td><td class="mono">192.0.2.19</td><td class="mono">192.0.2.22</td><td class="mono">192.0.2.22</td><td style="white-space:normal"><div style="display:flex;flex-direction:column;gap:3px"><span class="chip warn"><svg viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01"></path><path d="M10.3 3.9L2.7 17a2 2 0 0 0 1.7 3h15.2a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"></path></svg>Local override</span><span style="font-size:11px;color:var(--muted)">Recorded CHG-4471 · monitoring migration</span></div></td></tr>
+              <tr><td style="color:var(--text);font-weight:500">Syslog · target</td><td class="mono">192.0.2.16:514</td><td class="mono">192.0.2.16:514</td><td class="mono">192.0.2.16:514</td><td><span class="chip ok"><svg viewBox="0 0 24 24"><path d="M4 12l5 5L20 7"></path></svg>Aligned</span></td></tr>
+              <tr><td style="color:var(--text);font-weight:500">Time zone</td><td class="mono">Europe/Istanbul</td><td class="mono">Europe/Istanbul</td><td class="mono">Europe/Istanbul</td><td><span class="chip ok"><svg viewBox="0 0 24 24"><path d="M4 12l5 5L20 7"></path></svg>Aligned</span></td></tr>
+              <tr><td style="color:var(--text);font-weight:500">Login banner</td><td class="mono">—  (not in intent)</td><td class="mono">Authorized use only …</td><td class="mono">Authorized use only …</td><td style="white-space:normal"><div style="display:flex;flex-direction:column;gap:3px"><span class="chip warn" style="color:var(--attention)"><svg viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01"></path><path d="M10.3 3.9L2.7 17a2 2 0 0 0 1.7 3h15.2a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"></path></svg>Difference observed</span><span style="font-size:11px;color:var(--muted)">Unclassified · not yet mapped to intent</span></div></td></tr>
+              <tr><td style="color:var(--text);font-weight:500">SSH · ciphers</td><td class="mono">aes256-gcm,aes128-gcm</td><td class="mono">aes256-gcm,aes128-gcm</td><td class="mono">aes256-gcm,aes128-gcm</td><td><span class="chip ok"><svg viewBox="0 0 24 24"><path d="M4 12l5 5L20 7"></path></svg>Aligned</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:11.5px;color:var(--muted)"><span>Showing 11 of 26 settings · expected values from CMA <span class="mono">cma-ist</span> intent snapshot 2026-09-08 06:40 · effective values from member SSH evidence 06:41</span><span>Red is reserved for unexplained drift and failures. Expected member differences carry no warning.</span></div>
+      </div>
+    </main>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>
