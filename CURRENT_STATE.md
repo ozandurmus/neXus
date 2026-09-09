@@ -168,6 +168,7 @@ Concurrency budget stays at 1 per vendor pending real-env evidence.
 - **`OP.0a`/`OP.0c`** — real-device confirmation `ha_cluster_mode` resolves, not `"unknown"`. Fixture-drift, not a safety gate.
 - **PAN HA serial identity (`OP.0a.P7`/`OP.0b.0`)** — see "PAN HA serial evidence" above; its own movement. **`RB.3b`** — the watched single-gateway run. **`DEV.3.2`** — real multi-container-against-real-MDS Postgres advisory-lock evidence, server-blocked.
 - **`CE.2`** (`compliance_check_engine_primitives`, `relay/NXS-LOCAL-0037`) — the two proof primitives (`cp_gaia_show_version_all`, `pan_show_system_info`) are AUTOMATED_VALIDATED only; a real device/Panorama run confirming their actual output shape against the registry's redaction rule is owed before promotion beyond opt-in `--compliance-probe` mode. No live device reachable from this workspace.
+- **`diagnostic_runbooks_read_only`** (`PCP.8`, `relay/NXS-LOCAL-0045`) — the catalog/validator layer is AUTOMATED_VALIDATED; it executes entirely through `CE.2`'s own primitives above, so it inherits the same real-device output-shape debt and stays owed together with it. No live device reachable from this workspace.
 
 ## Automated test baseline
 

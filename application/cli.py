@@ -69,6 +69,28 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--runbook-execute",
+        action="store_true",
+        help=(
+            "PCP.8 opt-in read-only diagnostic runbook execution "
+            "(docs/design/PRODUCT_CONTROL_PLANE_ARCHITECTURE.md section 15). "
+            "Runs one closed, ordered sequence of "
+            "configuration.command_primitives.PRIMITIVE_REGISTRY entries "
+            "(configuration.runbook_catalog.RUNBOOK_CATALOG) against one "
+            "already-discovered device of the runbook's own vendor. Never "
+            "wired into a normal collection run."
+        ),
+    )
+    parser.add_argument(
+        "--runbook-id",
+        default=None,
+        help=(
+            "The runbook_id to execute; required with --runbook-execute and "
+            "must name an entry already in "
+            "configuration.runbook_catalog.RUNBOOK_CATALOG."
+        ),
+    )
+    parser.add_argument(
         "--cp-config-collect",
         action="store_true",
         help=(
@@ -517,7 +539,7 @@ def validate_modes(args, parser):
     if args.repository_privacy_check and args.apply:
         parser.error("--apply is not valid with --repository-privacy-check")
     if args.repository_privacy_check and (
-        args.cp_config_probe or args.cp_config_collect or args.compliance_probe or args.render_only or args.only != "all"
+        args.cp_config_probe or args.cp_config_collect or args.compliance_probe or args.runbook_execute or args.render_only or args.only != "all"
         or args.recovery_collect or args.recovery_attest
     ):
         parser.error("--repository-privacy-check cannot be combined with collection/render modes")
@@ -526,35 +548,35 @@ def validate_modes(args, parser):
     if args.persistent_secret_material_check and args.apply:
         parser.error("--apply is not valid with --persistent-secret-material-check")
     if args.persistent_secret_material_check and (
-        args.cp_config_probe or args.cp_config_collect or args.compliance_probe or args.render_only or args.only != "all"
+        args.cp_config_probe or args.cp_config_collect or args.compliance_probe or args.runbook_execute or args.render_only or args.only != "all"
         or args.recovery_collect or args.recovery_attest
     ):
         parser.error("--persistent-secret-material-check cannot be combined with collection/render modes")
     if args.restore_readiness_check and args.apply:
         parser.error("--apply is not valid with --restore-readiness-check")
     if args.restore_readiness_check and (
-        args.cp_config_probe or args.cp_config_collect or args.compliance_probe or args.render_only or args.only != "all"
+        args.cp_config_probe or args.cp_config_collect or args.compliance_probe or args.runbook_execute or args.render_only or args.only != "all"
         or args.recovery_collect or args.recovery_attest
     ):
         parser.error("--restore-readiness-check cannot be combined with collection/render modes")
     if args.ha_readiness_check and args.apply:
         parser.error("--apply is not valid with --ha-readiness-check")
     if args.ha_readiness_check and (
-        args.cp_config_probe or args.cp_config_collect or args.compliance_probe or args.render_only or args.only != "all"
+        args.cp_config_probe or args.cp_config_collect or args.compliance_probe or args.runbook_execute or args.render_only or args.only != "all"
         or args.recovery_collect or args.recovery_attest
     ):
         parser.error("--ha-readiness-check cannot be combined with collection/render modes")
     if args.recovery_store_check and args.apply:
         parser.error("--apply is not valid with --recovery-store-check")
     if args.recovery_store_check and (
-        args.cp_config_probe or args.cp_config_collect or args.compliance_probe or args.render_only or args.only != "all"
+        args.cp_config_probe or args.cp_config_collect or args.compliance_probe or args.runbook_execute or args.render_only or args.only != "all"
         or args.recovery_collect or args.recovery_attest
     ):
         parser.error("--recovery-store-check cannot be combined with collection/render modes")
     if args.recovery_validate and args.apply:
         parser.error("--apply is not valid with --recovery-validate")
     if args.recovery_validate and (
-        args.cp_config_probe or args.cp_config_collect or args.compliance_probe or args.render_only or args.only != "all"
+        args.cp_config_probe or args.cp_config_collect or args.compliance_probe or args.runbook_execute or args.render_only or args.only != "all"
         or args.recovery_collect or args.recovery_attest
     ):
         parser.error("--recovery-validate cannot be combined with collection/render modes")
@@ -576,7 +598,7 @@ def validate_modes(args, parser):
     if registry_mode_count and args.apply:
         parser.error("--apply is not valid with a --registry-* mode")
     if registry_mode_count and (
-        args.cp_config_probe or args.cp_config_collect or args.compliance_probe or args.render_only or args.only != "all"
+        args.cp_config_probe or args.cp_config_collect or args.compliance_probe or args.runbook_execute or args.render_only or args.only != "all"
         or args.recovery_collect or args.recovery_attest or args.storage_analyze
         or args.storage_deduplicate or args.repository_privacy_check
         or args.persistent_secret_material_check or args.restore_readiness_check
@@ -600,7 +622,7 @@ def validate_modes(args, parser):
     if args.cp_ha_preflight_check and args.pan_ha_preflight_check:
         parser.error("--cp-ha-preflight-check and --pan-ha-preflight-check cannot be combined")
     if (args.cp_ha_preflight_check or args.pan_ha_preflight_check) and (
-        args.cp_config_probe or args.cp_config_collect or args.compliance_probe or args.render_only or args.only != "all"
+        args.cp_config_probe or args.cp_config_collect or args.compliance_probe or args.runbook_execute or args.render_only or args.only != "all"
         or args.recovery_collect or args.recovery_attest or args.storage_analyze
         or args.storage_deduplicate or args.apply or args.repository_privacy_check
         or args.persistent_secret_material_check or args.restore_readiness_check
@@ -614,7 +636,7 @@ def validate_modes(args, parser):
         )
 
     if args.identity_first_contact and (
-        args.cp_config_probe or args.cp_config_collect or args.compliance_probe or args.render_only or args.only != "all"
+        args.cp_config_probe or args.cp_config_collect or args.compliance_probe or args.runbook_execute or args.render_only or args.only != "all"
         or args.recovery_collect or args.recovery_attest or args.storage_analyze
         or args.storage_deduplicate or args.apply or args.repository_privacy_check
         or args.persistent_secret_material_check or args.restore_readiness_check
@@ -657,7 +679,8 @@ def validate_modes(args, parser):
     if args.recovery_attest and args.recovery_vendor and args.recovery_vendor != "checkpoint":
         parser.error("--recovery-attest is Check Point only (omit --recovery-vendor, or set it to 'checkpoint')")
     if (args.recovery_collect or args.recovery_attest) and (
-        args.cp_config_probe or args.cp_config_collect or args.compliance_probe or args.render_only
+        args.cp_config_probe or args.cp_config_collect or args.compliance_probe or args.runbook_execute
+        or args.render_only
         or args.only != "all" or args.storage_analyze or args.storage_deduplicate or args.apply
         or args.compliance_trend_reconstruct
     ):
@@ -677,6 +700,7 @@ def validate_modes(args, parser):
         or args.cp_config_probe
         or args.cp_config_collect
         or args.compliance_probe
+        or args.runbook_execute
         or args.render_only
         or args.compliance_trend_reconstruct
         or args.only != "all"
@@ -684,7 +708,8 @@ def validate_modes(args, parser):
     ):
         parser.error("--scheduler-once cannot be combined with collection, render, or maintenance modes")
     if args.compliance_trend_reconstruct and (
-        args.cp_config_probe or args.cp_config_collect or args.compliance_probe or args.render_only or args.apply or args.only != "all"
+        args.cp_config_probe or args.cp_config_collect or args.compliance_probe or args.runbook_execute
+        or args.render_only or args.apply or args.only != "all"
         or args.recovery_collect or args.recovery_attest
     ):
         parser.error("--compliance-trend-reconstruct cannot be combined with collection/render modes")
@@ -705,6 +730,7 @@ def validate_modes(args, parser):
         or args.cp_config_probe
         or args.cp_config_collect
         or args.compliance_probe
+        or args.runbook_execute
         or args.render_only
         or args.compliance_trend_reconstruct
         or args.scheduler_once
@@ -722,6 +748,30 @@ def validate_modes(args, parser):
         parser.error("--compliance-probe cannot be combined with --cp-config-probe")
     if args.compliance_probe and args.cp_config_collect:
         parser.error("--compliance-probe cannot be combined with --cp-config-collect")
+
+    if args.runbook_execute and not args.runbook_id:
+        parser.error("--runbook-execute requires --runbook-id")
+    if args.runbook_id and not args.runbook_execute:
+        parser.error("--runbook-id is only valid with --runbook-execute")
+    if args.runbook_execute:
+        from configuration.runbook_catalog import RUNBOOK_CATALOG
+        if args.runbook_id not in RUNBOOK_CATALOG:
+            parser.error(
+                f"unknown --runbook-id {args.runbook_id!r}; known runbook ids: "
+                f"{sorted(RUNBOOK_CATALOG)}"
+            )
+    if args.runbook_execute and args.only != "all":
+        parser.error("--runbook-execute cannot be combined with --only")
+    if args.runbook_execute and args.render_only:
+        parser.error("--runbook-execute cannot be combined with --render-only")
+    if args.runbook_execute and (args.storage_analyze or args.storage_deduplicate or args.apply):
+        parser.error("--runbook-execute cannot be combined with storage maintenance options")
+    if args.runbook_execute and args.cp_config_probe:
+        parser.error("--runbook-execute cannot be combined with --cp-config-probe")
+    if args.runbook_execute and args.cp_config_collect:
+        parser.error("--runbook-execute cannot be combined with --cp-config-collect")
+    if args.runbook_execute and args.compliance_probe:
+        parser.error("--runbook-execute cannot be combined with --compliance-probe")
 
 
 def dispatch(args, parser, *, runtime_services=None, provenance="manual", admission_run_context=None):
@@ -803,6 +853,9 @@ def dispatch(args, parser, *, runtime_services=None, provenance="manual", admiss
     if args.compliance_probe:
         from application.workflows import compliance as compliance_wf
         return compliance_wf.compliance_probe(ctx)
+    if args.runbook_execute:
+        from application.workflows import runbook as runbook_wf
+        return runbook_wf.runbook_execute(ctx)
     if args.cp_config_probe:
         return checkpoint_wf.cp_config_probe(ctx)
     if args.cp_config_collect:
