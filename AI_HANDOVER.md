@@ -7,96 +7,85 @@
 
 ## 1. Snapshot
 
-- Date: 2026-09-09. `event_signal_intake` Slice 1 (relay/NXS-LOCAL-0032) —
-  design + first implementation slice of `project/backlog.json`'s
-  `event_signal_intake` (P1), dispatched as one bounded `IMPLEMENTATION`
-  movement.
-- Own worktree/branch (`feature/event-signal-intake-design-and-slice-1`),
-  standing `relay#13` merge authorization.
-- New code: `docs/design/EVENT_SIGNAL_INTAKE_ARCHITECTURE.md` (FROZEN, Slice
-  1 only), `utils/event_signal_intake.py`, `signal_intake/` (new package,
-  `app.py`), `tests/test_event_signal_intake.py`. Two small additive edits
-  to existing `CON.2` code: `console/runner.py` (`ConsoleJobRunner` gained
-  an optional `provenance` parameter, default unchanged) and
-  `utils/coordinator_backend.py` (`Provenance.EVENT` added, filling in a
-  reserved value its own comment already named).
+- Date: 2026-09-09. `ui2_b0_baseline_directory` (`UI2 B0-8`) — new
+  `docs/design/UI2_0_BASELINE_DIRECTORY.md` (DRAFT — FOR PRODUCT OWNER
+  FREEZE), written under `UI2_0_BASELINE_CONTRACT.md` (FROZEN) and
+  `UI2_0_DEVELOPMENT_WORKFLOW.md` §5 B0-8.
+- Own worktree/branch (`feature/ui2-b0-baseline-directory`), standing
+  `relay#13` merge authorization. PR #172 merged (commit `23df8f9d`).
+- New: `docs/design/UI2_0_BASELINE_DIRECTORY.md` only. No `ui2/` source, no
+  Line-1 code change, no device contact.
 
 ## 2. What changed
 
-- AC-1 gate re-verification (see the design doc's own section): collection
-  coordinator and safe diff (0.6.3, PAN-scoped) confirmed EXISTS AND WORKS;
-  cross-vendor timeline (0.8.x) confirmed still MISSING — Slice 1 does not
-  depend on it and does not attempt to build it, per this movement's own
-  scoping requirement.
-- Webhook intake boundary: HMAC-SHA256 shared-secret auth
-  (`SECURITYEXPERT_EVENT_SIGNAL_HMAC_SECRET`, timestamp+nonce bound into
-  the signature), timestamp-window + nonce replay protection, a five-field
-  strict schema allowlist, per-`(device_id, event_type)` 600s cooldown.
-- Canonical identity resolution (AC-3): reuses
-  `utils.device_registry.normalize_endpoint` + `DeviceRegistry` — no
-  parallel identity model invented.
-- Trigger (AC-4): on success, submits to the *existing*, unmodified `CON.2`
-  job engine (`console.jobs.ConsoleJobStore` / `console.runner.
-  ConsoleJobRunner`) using the existing `config_refresh_cp` job type. The
-  intake path never calls a collector and never writes evidence — proven
-  structurally (an AC-8-style import-graph probe) and behaviorally (a
-  `_RecordingRunner` whose worker thread never starts, so no test in the
-  suite can reach `main.main()`).
-- Explicitly scoped down and stated as such (not silently left unbuilt):
-  Check-Point-only trigger target (no PAN per-device config
-  target-selection seam exists yet), no real Splunk/network exposure
-  (`fastapi.testclient` only — no `main.py` CLI flag, no server binder),
-  HMAC shared-secret instead of the feature registry's aspirational
-  mTLS/OIDC wording.
-- `project/backlog.json` and `project/feature_registry.json`:
-  `event_signal_intake` moved `planned` → `in_progress` with a detailed
-  note; four of five feature criteria marked `done` (with a `note` on each
-  substitution/scope decision), `authenticated_ingress`'s mTLS/OIDC wording
-  explicitly not literally satisfied — HMAC is a documented substitution.
+- A single index cataloguing owner document/section/version for the six
+  B0-8 baseline concerns: navigation (§2, adopts `NAVIGATION_INFORMATION_
+  ARCHITECTURE.md`'s frozen `D-NAV` principles + `C3`'s RBAC
+  visible-but-refused mechanism, without carrying over Line-1's own
+  six-root baseline as UI 2.0's root set); shared screen states (§3, the
+  mockup's own eight-term vocabulary and severity rule adopted verbatim);
+  feature-contribution contract (§4, new minimal text tying `C4`'s
+  registry/`produces_facts` to `C2`'s `job_type`, gated on `CAP-RELEASED`);
+  alarm lifecycle contract (§5, confirmed genuinely new — no existing
+  ALARM/ALERT owner found — kept schema-level against `C1`'s audit/
+  data-class pattern and `C2`'s job-state-machine/`OUTCOME_UNKNOWN`
+  pattern); log/audit data classes (§6, cites `C1` §4 directly); SNMP
+  status exposure (§7, restates the read-vs-poll/status-vs-trap-out
+  distinction from workflow B2-5b).
+- §8: 11 acceptance criteria for `B1-9`/`B2-1`/`B2-3`/`B2-5b`. §9: no
+  contradiction with frozen authority found; three open items for the PO
+  (UI 2.0's own root set not yet fixed; alarm severity enum left to
+  `B2-3`; SNMP status exposure's exact `utils.action_taxonomy` framing
+  left to `B2-5b`).
+- Mid-session: the concurrent extraction-tooling movement (`ui2_b0_
+  extraction_tooling`, PR #171) merged into `main` first. Merged
+  `origin/main`, resolved a conflict in `project/backlog.json` and
+  `project/build_history.json` (kept both movements' build records;
+  `roadmap.json`/`CURRENT_STATE.md`/`docs/history/INDEX.md` auto-merged
+  clean), re-ran the full regression and the privacy gate against the new
+  base before merging.
+- `project/backlog.json`, `project/build_history.json`,
+  `project/roadmap.json`: active build advanced to this movement; `C7`
+  (already PO-accepted, PR #170) moved from `now` to `upcoming`.
+  `docs/history/INDEX.md` regenerated via `scripts/build_history_index.py`.
+- `RELAY_NOTE` appended to `relay/NXS-LOCAL-0058-ui2-b0-baseline-directory.json`
+  (self-check against `AC-1`..`AC-8`); relay now `AWAITING_PO`.
 
 ## 3. Exact next action
 
-1. No PO decision is blocking — this movement completed without a
-   `RELAY_NOTE` stop. Line-1 (`gov_po_2_implementation`, next per
-   `project/roadmap.json`) is untouched and unaffected.
-2. Whenever `cross_vendor_change_timeline` (0.8.x) is eventually built, a
-   later movement should decide whether/how to link a signal-triggered
-   collection's resulting evidence into it — not authorized or attempted
-   here.
-3. Any expansion of this slice (a PAN per-device target seam, real network
-   exposure, mTLS/OIDC ingress, a new event type) needs its own explicit
-   Product Owner decision and, if it changes load-bearing semantics, its
-   own amendment to `docs/design/EVENT_SIGNAL_INTAKE_ARCHITECTURE.md` — the
-   current freeze authorizes Slice 1 only.
+1. Product Owner review/freeze decision for `docs/design/UI2_0_BASELINE_
+   DIRECTORY.md`, most naturally alongside the C1–C7 freeze decision it
+   was sequenced to precede (`UI2_0_BASELINE_CONTRACT.md` §6: once the
+   baseline directory and extraction tooling both merge, "the Product
+   Owner can move to the actual freeze decision for C1-C7 as a whole, then
+   to B1"). Both B0-8 items (this movement and extraction tooling) are now
+   merged — B0 is complete.
+2. §9's three open items (UI 2.0's own root set; alarm severity enum;
+   SNMP status exposure's taxonomy framing) are each explicitly deferred
+   to a later movement (`B1`/`B2`), not blocking this document's freeze.
+3. No other movement is blocked by this one; `gov_po_2_implementation`
+   remains `now_next.next`, untouched.
 
 ## 4. Test delta
 
-- New: `tests/test_event_signal_intake.py`, 19 passed (schema rejection,
-  signature/replay rejection, cooldown/dedup, idempotent resend,
-  `unknown_identity`, `unsupported_vendor_target_seam`, and the structural
-  no-vendor-import probe).
-- Subsystem regression (`console`/`coordinator` reuse surfaces):
-  `tests/test_con2_console_job_engine.py`,
-  `tests/test_m9_enrollment_preview_and_confirmation.py`,
-  `tests/test_m8_4_m6_resolver_consumption.py`,
-  `tests/test_m6_registry_keyed_job_targets.py`,
-  `tests/test_phase0_6_1c_collection_executor.py` — 154 passed, unaffected
-  by the additive `ConsoleJobRunner.provenance` parameter.
-- Full regression (`py -m pytest -q -n auto --dist worksteal`): 3070
-  passed, 25 skipped, 2 failed — both pre-existing DLP-token-collision
-  findings in `project/build_history.json`/`relay/*.json` prose, confirmed
-  present on `origin/main` and untouched by this diff.
-- Repository privacy gate (`--privacy-baseline-ref origin/main`): PASS, 0
-  new findings (5 pre-existing, none in a file this movement touched).
+- No new test files (documentation-only movement).
+- Full regression (`python -m pytest -q -n auto --dist worksteal`, against
+  the final merged base): 3226 passed, 27 skipped, 2 failed — both
+  pre-existing DLP-token-collision findings in
+  `tests/test_dev_0_5b_auth_consumer_canonical_config.py`
+  (`relay/NXS-LOCAL-0030-credential-profiles-reference-model.json`),
+  confirmed unrelated and unchanged by this diff, matching the baseline
+  `CURRENT_STATE.md` already documents.
 - `git diff --check`: clean.
+- Repository privacy gate against `origin/main` baseline
+  (`--privacy-baseline-ref origin/main`): PASS, 0 new findings (6
+  pre-existing, unchanged).
+- CI `validate` gate on PR #172: pass (`full-regression` is by-design
+  skipped on `pull_request`, per `.github/workflows/validation.yml`).
 
 ## 5. New risks
 
-- `SECURITYEXPERT_EVENT_SIGNAL_HMAC_SECRET` has no fallback generation —
-  intentional (design doc "Authentication"), but means the intake app
-  fails closed (401 on every request) until an operator sets it; this is
-  correct behavior, not a bug, should it surprise a future session.
-- The in-process `event_signal_intake_state.json` nonce/cooldown store is
-  single-process, filesystem-JSON, no cross-process lock — adequate for
-  Slice 1 (no server binder exists to run two processes against it yet);
-  revisit if/when real network exposure is authorized.
+- None new. This is a documentation-only catalogue movement; it authorizes
+  no implementation, no schema, and no device execution — the risks it
+  surfaces are the three open items in §3 above, each already named as a
+  later movement's own decision, not a defect in this one.
