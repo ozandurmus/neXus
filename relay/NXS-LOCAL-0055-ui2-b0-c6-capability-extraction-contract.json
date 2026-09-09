@@ -1,0 +1,120 @@
+{
+  "created_at": "2026-09-09T16:35:48Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1: The extraction procedure explicitly checks for an existing produces_facts entry before starting a new extraction, with a worked negative example (a fact already available, so extraction is skipped/referenced instead).",
+          "AC-2: The spec template names C4's actual section-2 field names, not a paraphrase.",
+          "AC-3: UNKNOWN fields require a validation_plan_ref in every worked example; no field is left ambiguous between UNKNOWN and NOT_APPLICABLE.",
+          "AC-4: The fixture procedure names the exact tokenizer entry point and the SYNTHETIC/DERIVED marking rule with an example of each.",
+          "AC-5: The preserved-property checklist gives a concrete proof method for each of: address format, serial length/shape, cross-output identity equality, cluster/context membership, ordering.",
+          "AC-6: The DLP gate step names the exact command/check and states it is mandatory before a fixture is committed.",
+          "AC-7: §4's worked FIRST-CAPABILITY example produces a complete, C4-schema-valid spec (all fields present with a state) and a described fixture set, and cross-references rather than duplicates C4 section 6.",
+          "AC-8: §5's corrected extraction inventory names, for every row, at least one target C4 gate-registry entry or C1 table.",
+          "AC-9: §6 gives at least ten testable acceptance criteria for B1-5 and the extraction-tooling movement.",
+          "AC-10: §7 lists every contradiction with frozen authority found (or states none and which documents were checked); no PO-reserved decision is reopened; this document performs no actual extraction of a real capability."
+        ],
+        "baseline": {
+          "authority": "docs/design/UI2_0_BASELINE_CONTRACT.md (FROZEN -- PRODUCT OWNER APPROVED 2026-09-09): FREEZE-SLICING names C6 as frozen together with C4 (both delivered DRAFT -- FOR PO FREEZE as of this dispatch). docs/design/UI2_0_DEVELOPMENT_WORKFLOW.md section 3.1 (the nine-field spec: identity, transport, command/call tuple, parser semantics, evidence shape, known vendor quirks, Line-1 source pointers, inherited validation status, re-validation plan) and section 3.5 (fixture rules: SYNTHETIC/DERIVED marking, tokenizer preserved-property list) are this document's direct starting point -- do not re-derive them from scratch, cite and sharpen them into a template with worked fields. docs/design/UI2_0_C4_CAPABILITY_REGISTRY_GATE_RESOLUTION_CONTRACT.md (MERGED, DRAFT -- FOR PO FREEZE) already defines the runtime schema a completed spec populates (its section 2: capability identity, closed step-kind set, gate-registry references, produces_facts/consumes_facts, KNOWN/UNKNOWN/NOT_APPLICABLE field states, gate_registry's sign_off_state vocabulary) and worked the RB.3b add-backup-local example against it in its section 6 -- C6 must produce specs that populate EXACTLY that schema, field by field, and should reuse C4's RB.3b worked example as its own worked extraction example rather than inventing a different one. docs/design/UI2_0_C1_PLATFORM_SCHEMA_CONTRACT.md's cp_inventory_projection table and provenance_records table (section 3, section 5) are what the first extracted capability's evidence ultimately writes into -- reference by name, do not redefine.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED); UI 2.0 baseline adopted 2026-09-09; C1, C2 and C4 delivered as DRAFT -- FOR PO FREEZE (NXS-LOCAL-0051/0052/0054)",
+          "sequencing": "Runs concurrently with C3 (identity, sessions and RBAC contract, movement NXS-LOCAL-0053, still in progress at dispatch time). C6 does not depend on C3's content; if C3 merges first and C6's document needs a session/role reference (it should not -- extraction produces specs and fixtures, it does not touch identity), name only the interface, do not wait. C1, C2 and C4 are MERGED; read them, do not reopen anything they settled. C5 (amendments bundle) and C7 (backup/artefact/restore engine) are NOT yet dispatched and are out of scope for this movement."
+        },
+        "context_not_loaded": [
+          "Any Java source, Gradle build, Flyway migration or Docker artefact -- B1 implements against this contract",
+          "Performing the extraction itself for any real capability (that is B1-5's job, using this contract as its procedure) -- this movement writes the PROCEDURE and the QUEUE, not a filled-in spec",
+          "Any Line-1 code change, including the extraction tooling script itself (backlog item ui2_b0_extraction_tooling is a separate, later movement that implements the tokenizer-driven fixture generator this contract specifies)",
+          "Device contact, credentials, network access of any kind",
+          "The identity/session model (C3) and the backup profile/restore rules (C7)"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/ui2-b0-c6-capability-extraction-contract"
+        },
+        "invariants": [
+          "A capability is a semantic unit, not a Line-1 file (workflow section 3.3, C4 section 2.5's produces_facts/consumes_facts model, Astra 4.1): the extraction procedure must show how to recognize when a fact (e.g. HA identity) is already produced by a prior extraction and should be referenced, not re-extracted, before starting a new one",
+          "Every extracted spec is filled against C4's exact schema (section 2's field names), not a paraphrase of it -- name C4's actual field names in the template",
+          "Field states are KNOWN/UNKNOWN/NOT_APPLICABLE (workflow section 3.1 field 9, C4 section 2.6); UNKNOWN requires a validation_plan_ref exactly as C4 mandates; the procedure states this is never relaxed to invent certainty",
+          "Fixtures are sanitized REAL captures through the Private Replay tokenizer (utils/support_bundle.py::Tokenizer, docs/design/PRIVATE_REPLAY_ARCHITECTURE.md) by default; SYNTHETIC (never-captured error path) and DERIVED (variant of a real capture) are the only exceptions and must be marked as such in the fixture's own metadata",
+          "The tokenizer preserved-property checklist (workflow section 3.5, R-05) is restated as a concrete, testable checklist for THIS contract: address format, serial length/shape, cross-output identity equality, cluster/context membership, ordering -- each with how the extraction movement proves it was preserved",
+          "The DLP privacy gate (utils/repository_privacy.py) applies to every fixture file exactly as to any other repository file; the contract states this is not optional and gives the check command",
+          "The ordered extraction inventory (workflow section 4) is carried forward, corrected: each row now names the specific C4 gate-registry entries and C1 tables it will populate, not just the workflow's original prose description; the FIRST-CAPABILITY narrow subset (CP inventory show version + HA state, per UI2_0_BASELINE_CONTRACT.md) is confirmed as the queue's first row and B1-5/B1-6's exact scope",
+          "No decision frozen in UI2_0_BASELINE_CONTRACT.md is reopened; contradictions with frozen authority are REPORTED in a dedicated section, never silently resolved"
+        ],
+        "merge_gate": "Standing relay#13: green tests -> self-merge, report via RELAY_NOTE. Documentation-only PR; the DLP privacy gate at push time is the substantive gate. Run the full one-shot regression in the foreground and await its actual completion (do not treat it as backgroundable); if this worktree's own environment is broken in a way confirmed pre-existing on origin/main (as NXS-LOCAL-0051 found and reported, not fixed), report it exactly that way rather than attempting a bootstrap.",
+        "movement_type": "ARCHITECTURE",
+        "objective": "Write the UI 2.0 B0/C6 capability extraction contract as docs/design/UI2_0_C6_CAPABILITY_EXTRACTION_CONTRACT.md (status: DRAFT -- FOR PRODUCT OWNER FREEZE). It is the operational template a movement follows to turn one Line-1 collector/runner into a UI2_0_C4-shaped capability spec plus a sanitized fixture set: the exact procedure, the nine-field spec template already sketched in workflow section 3.1 made precise and filled against C4's actual schema, the fixture-generation procedure through the Private Replay tokenizer with the preserved-property checklist (workflow section 3.5, R-05), and the ordered extraction inventory from workflow section 4 carried forward as this contract's queue, corrected against C4's now-frozen-in-draft schema and C1's table names.",
+        "output_contract": [
+          "docs/design/UI2_0_C6_CAPABILITY_EXTRACTION_CONTRACT.md with: §1 scope, authority chain, and the C6/B1-5 boundary (this document is the procedure and the queue; B1-5 is the first execution of it); §2 the extraction procedure as an ordered checklist (identify candidate Line-1 source(s), check for existing produces_facts before extracting, fill each C4 schema field, mark validation status, name the gate-registry entries the spec's steps will need, write source pointers); §3 the fixture-generation procedure (tokenizer invocation, preserved-property checklist with a proof method per property, SYNTHETIC/DERIVED marking rule, DLP gate step); §4 a fully worked example extracting the FIRST-CAPABILITY subset (CP inventory show version + HA state) end to end -- a filled C4-shaped spec plus a description of its fixture set -- reusing/cross-referencing C4 section 6's RB.3b worked example for the mechanics, not duplicating it; §5 the corrected ordered extraction inventory (workflow section 4's rows, each now naming its target C4 gate-registry entries / C1 tables); §6 acceptance criteria for B1-5 (extract) and the later extraction tooling movement -- at least ten, each testable; §7 contradictions/open items for the PO; §8 cross-references",
+          "project/backlog.json ui2_b0_c6_capability_extraction_contract status -> in_progress with the PR reference; build_history record per the usual pattern",
+          "RELAY_NOTE + SESSION_CLOSE"
+        ],
+        "recommended_reasoning": {
+          "reason": "A procedure/template contract built directly on two already-merged sibling contracts (C1, C4) rather than new architectural ground; still involves a vendor-semantic extraction worked example and privacy-sensitive fixture rules, so Sonnet 5 high is the lightest tier that fits.",
+          "tier": "Sonnet 5, extended thinking (high)"
+        },
+        "requirements": [
+          "Read UI2_0_BASELINE_CONTRACT.md, UI2_0_DEVELOPMENT_WORKFLOW.md sections 3.1/3.4/3.5/4, UI2_0_C1_PLATFORM_SCHEMA_CONTRACT.md section 3/5, and UI2_0_C4_CAPABILITY_REGISTRY_GATE_RESOLUTION_CONTRACT.md sections 2 and 6 in full before writing",
+          "English, per AGENTS.md engineering-output language law",
+          "git diff --check; privacy gate at push; existing docs/project-state tests green"
+        ],
+        "risks": [
+          "Re-deriving the nine-field spec model from scratch instead of citing and sharpening workflow section 3.1",
+          "Producing a spec template that doesn't match C4's actual field names",
+          "Treating the worked example as license to actually extract and commit a real capability spec/fixtures in this movement -- that is B1-5's job",
+          "Skipping the DLP gate step for fixture files on the theory that they are 'just documentation'"
+        ],
+        "scope": {
+          "in": [
+            "docs/design/UI2_0_C6_CAPABILITY_EXTRACTION_CONTRACT.md",
+            "project-state bookkeeping"
+          ],
+          "out": [
+            "Any ui2/ source",
+            "Any Line-1 code change",
+            "The extraction tooling script itself",
+            "C1/C2/C3/C4/C5/C7 content beyond references",
+            "Device contact",
+            "Actually extracting a real capability's spec/fixtures"
+          ]
+        },
+        "validation_plan": [
+          "Self-check against AC-1..AC-10 in the RELAY_NOTE",
+          "docs/project-state tests",
+          "git diff --check",
+          "privacy gate at push"
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-09T16:35:48Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0055",
+  "movement": "UI2_B0_C6_CAPABILITY_EXTRACTION_CONTRACT",
+  "next_actor": "engineer",
+  "refs": [
+    "docs/design/UI2_0_BASELINE_CONTRACT.md",
+    "docs/design/UI2_0_DEVELOPMENT_WORKFLOW.md",
+    "docs/design/UI2_0_C1_PLATFORM_SCHEMA_CONTRACT.md",
+    "docs/design/UI2_0_C4_CAPABILITY_REGISTRY_GATE_RESOLUTION_CONTRACT.md",
+    "docs/design/PRIVATE_REPLAY_ARCHITECTURE.md",
+    "docs/design/BACKUP_RECOVERY_CONTRACTS.md",
+    "checkpoint/scripts/cp_inventory.sh",
+    "checkpoint/cp_runner.py",
+    "checkpoint/vsx_runner.py",
+    "checkpoint/vsx_parser.py",
+    "panorama/panorama_runtime_runner.py",
+    "panorama/pan_identity.py",
+    "utils/support_bundle.py",
+    "utils/repository_privacy.py",
+    "project/backlog.json",
+    "project/roadmap.json"
+  ],
+  "schema_version": 1,
+  "status": "OPEN",
+  "updated_at": "2026-09-09T16:35:48Z"
+}
