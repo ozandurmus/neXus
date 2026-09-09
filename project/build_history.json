@@ -4,8 +4,8 @@
   "builds": [
     {
       "build": "ui2_b1_01_skeleton_ci_docker",
-      "status": "in_progress",
-      "title": "UI2 B1-1 -- skeleton, CI and Docker contract (DRAFT, for Product Owner freeze)",
+      "status": "done",
+      "title": "UI2 B1-1 -- skeleton, CI and Docker contract (FROZEN)",
       "summary": "New docs/design/UI2_0_B1_01_SKELETON_CI_DOCKER_CONTRACT.md specifies the mechanical ui2/ multi-module implementation: component homes and one-way dependencies, exact build/test/image commands, Testcontainers PostgreSQL with Flyway-first and C1 audit-context coverage, a one-to-one P-1 architecture-test matrix, an isolated CI workflow beside unchanged Line-1 validation, a minimal non-root image, scoped secret injection, and 15 runnable acceptance checks. Contract only; no ui2/ code/build file, Line-1 source, validation.yml, or device behavior changed.",
       "started": "2026-09-10",
       "completed": "2026-09-10",
@@ -13,7 +13,7 @@
       "movement": "ARCHITECTURE",
       "supersedes": null,
       "evidence": "Relay NXS-LOCAL-0061 validated with scripts/local_relay.py before editing. Branch fast-forwarded from 97a5cd9 to current origin/main 04b99c0 before drafting, preserving the later UI2 logo and portfolio decisions. Contract self-check maps AC-1..AC-9 to sections 2, 3, 4, 5, 6, 7, 8 and 9.",
-      "risks_forward": "The document remains DRAFT pending Product Owner freeze. Patch versions are intentionally selected and pinned only during implementation; every dependency addition remains approval-gated. The frontend React/MUI choice and image-base choice are explicit PO veto points.",
+      "risks_forward": "The contract is frozen after portability and cold-cache CI corrections. Patch versions are intentionally selected and pinned only during implementation; every dependency addition remains approval-gated. The frontend React/MUI choice and image-base choice are accepted for this contract but remain change-controlled implementation decisions.",
       "docs": {
         "agreement": "docs/design/UI2_0_B1_01_SKELETON_CI_DOCKER_CONTRACT.md"
       }
