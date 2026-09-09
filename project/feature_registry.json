@@ -1235,7 +1235,7 @@
       "status": "planned",
       "introduced": "OP.2",
       "weight": 8,
-      "summary": "The single write-capable component: one authorised, confirmed action with fresh same-workflow preflight, independent post-action verification, no automatic rollback (reversal is a new confirmed action), OUTCOME_UNKNOWN quarantine, full audit, and per-vendor adapters. Vendor-independent architecture FROZEN 2026-09-04 (docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md); implementation hard-gated, not started.",
+      "summary": "The single write-capable component: one authorised, confirmed action with fresh same-workflow preflight, independent post-action verification, no automatic rollback (reversal is a new confirmed action), OUTCOME_UNKNOWN quarantine, full audit, and per-vendor adapters. Vendor-independent architecture FROZEN 2026-09-04 (docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md); several foundations implemented and unit-tested but structurally unreachable and unwired (no taxonomy member, unconditional DENY authorizer, no production entry point). Product execution not started.",
       "why": "The payoff of a trustworthy SEE/VERIFY/TRACE/RECOVER stack; the tool's first OPERATE capability.",
       "criteria": [
         {
@@ -1731,7 +1731,7 @@
         },
         {
           "id": "no_enrollment_affordance",
-          "label": "Movement M9 (2026-09-07) implemented manual-endpoint enrollment: 'Add Device' now renders in the Inventory/entity-list pane header (PO-NAV-1 primary location) and all seventeen section 9.1 conditions are enforced server-side (closed schema, no device I/O in the request, first contact as a separate queued CLASS 0 job, positive-evidence identity, explicit preview and confirmation, immutable audit before the DeviceRegistry mutation, loopback-only). Candidate-based enrollment is schema-present but refused server-side pending M10's registry<->evidence reconciliation join (section 9.2 amendment A6). The Administration -> Device Management second entry point (PO-NAV-1's lifecycle home) is not yet built -- deferred as a disclosed follow-up, not silently dropped.",
+          "label": "Movement M9 (2026-09-07) implemented manual-endpoint enrollment: 'Add Device' now renders in the Inventory/entity-list pane header (PO-NAV-1 primary location) and all seventeen section 9.1 conditions are enforced server-side (closed schema, no device I/O in the request, first contact as a separate queued CLASS 0 job, positive-evidence identity, explicit preview and confirmation, immutable audit before the DeviceRegistry mutation, loopback-only). Candidate-based enrollment is schema-present but refused server-side pending M10's registry<->evidence reconciliation join (section 9.2 amendment A6). The Administration -> Device Management second entry point (PO-NAV-1's lifecycle home) is built (Movement M9, round 2) and opens the same shared enrollment dialog as the primary location; it is console-shell-only by design (D-NAV6 shell integrity).",
           "state": "done",
           "weight": 1
         },
