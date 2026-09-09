@@ -557,3 +557,40 @@ F-ladder (a screen can be real without being Java-executed yet).
 Tier for the `DECIDE` episode and both `CONTRACT` movements: `Sonnet 5,
 extended thinking (high)`. This record required no higher tier than the
 design it reviews.
+
+---
+
+## 8. Product Owner directive (2026-09-09, after Astra's second round) — Line-1 code is reference, not runtime
+
+The Product Owner rejected, explicitly and in full, any direct reuse of the
+existing Python feature scripts inside UI 2.0: not as a transitional worker,
+not as "first shipped profiles", not as the executor behind a Java shell.
+The scripts were written to feed static, task-specific pages; the shared
+purpose has changed. A new collect-and-parse structure is to be built in the
+new architecture, using the old scripts only as the source of vendor
+knowledge.
+
+Consequences, recorded here and worked out in
+`docs/design/UI2_0_DEVELOPMENT_WORKFLOW.md`:
+
+- §7 step 4(a) (`main.py --worker`, Python job-queue consumer) and the
+  `F2`/`F3` rest states of the design's ladder are withdrawn; the worker and
+  the collection engine are Java from B1.
+- Astra's two-axis ladder (§6.2), Python-closure rule (§6.1) and offline
+  replay comparison (§6.6) are resolved by construction: there is one
+  runtime, and parity is proven against sanitized real-capture fixtures plus
+  a PO-run validation.
+- K-3 ("RB.3b sequence as the §6.3 sample") and K-11 ("first read screen
+  from an existing Postgres seam") are re-framed: RB.3b's frozen command
+  tuple and gate records become the *specification* of the CP Gaia backup
+  capability; UI 2.0 owns its own schema from the first migration.
+- `C6` now means the **capability extraction contract** (spec + fixture set
+  per Line-1 collector), and the extraction inventory is the ordered queue.
+- Astra's three objections (§6.10): 1 is moot (Line-1 stops growing
+  features); 2 is answered once, in the Java job contract (`C2`); 3 is a Java
+  read-collection job end to end (B1 step 6–9), not a backup.
+- Correction to §6.9/§7 wording: "audit from the first mutation" was
+  attributed to SR-D8/DO-D8, which are key-custody findings. It is a new
+  finding, carried into `C1` under its own id.
+- Karar 2 ("back up now" = taxonomy amendment, option B) is recorded as the
+  proposed answer, pending the Product Owner's explicit confirmation.
