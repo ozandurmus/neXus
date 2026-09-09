@@ -27,6 +27,7 @@
       "Edit(CLAUDE.md)",
       "Edit(.claude/**)",
       "Edit(.github/**)",
+      "MultiEdit(docs/design/po_drafts/**)",
       "Write(utils/**)",
       "Write(console/**)",
       "Write(configuration/**)",
