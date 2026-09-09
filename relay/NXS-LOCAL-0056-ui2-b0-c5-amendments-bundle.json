@@ -90,11 +90,30 @@
       },
       "seq": 1,
       "timestamp": "2026-09-09T18:30:22Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "RELAY_NOTE",
+      "seq": 2,
+      "subject": "UI2 B0/C5 delivered, merged",
+      "text": "docs/design/UI2_0_C5_AMENDMENTS_BUNDLE.md (DRAFT -- FOR PRODUCT OWNER FREEZE) written and its amendments applied: utils/action_taxonomy.py's UI-OPERATIONAL-RUN-NOW clarification (docstring+comment only, no new ActionClass member, all CLASS_1_RECOVERY_WRITE fields unchanged); UI2_0_ARCHITECTURE_DESIGN.md's APPROVAL-MODEL replacement (sec6.1/6.6/6.7/13, matches baseline D-2c) and CAP-* states replacement (sec3.2/3.3/8.5, AG-U2 restated as one Java execution path); PRIVACY_AND_DATA_HANDLING.md's new UI 2.0 database section (closes ui2_privacy_doc_amendment). CON.0's own text is cited, not applied -- OPERATOR_CONSOLE_ARCHITECTURE.md is FROZEN and outside this movement's scope; the replacement text already exists as design sec4.3 UA-1/UA-2. Two open items flagged for the PO in bundle sec7 (schedule-authorisation edit-boundary interpretation; OPERATOR_CONSOLE_ARCHITECTURE.md's own freeze act still pending) plus one residual-scope item (F0-F5 vocabulary remains outside sec3.2/sec8.5 in the same DRAFT design doc). Targeted tests 164 passed; full one-shot regression run twice in the foreground (before and after merging origin/main), 3214 passed/27 skipped/2 pre-existing-unrelated failed both times; git diff --check clean; privacy gate FAIL/6, all 6 pre-existing and untouched by this diff. PR #169 merged (squash, 13a2fb2) under standing relay#13 authorization after fast validate CI passed.",
+      "timestamp": "2026-09-09T18:54:35Z"
+    },
+    {
+      "actor": "po",
+      "authorized_by": "Product Owner (in-session precedent, 2026-09-09)",
+      "marker": "RELAY_DECISION",
+      "scope": "C5 amendments bundle acceptance plus schedule-authorisation boundary confirmation",
+      "seq": 3,
+      "subject": "C5 accepted as DRAFT -- FOR FREEZE",
+      "supersedes": "none",
+      "text": "AC-1..AC-8 accepted, no contradictions. Judgment call 1 (no new action_taxonomy.py member, resolved by reading C2 already) accepted. Judgment call 2 (schedule-authorisation boundary: enable/widen needs four-eyes, disable/narrow does not) CONFIRMED as the correct reading of D-2c. Judgment call 3 (OPERATOR_CONSOLE_ARCHITECTURE.md left unedited, UA-1/UA-2 application deferred to actual freeze mechanics) accepted. Judgment call 4 (residual F0-F5 vocabulary outside S3.2/S8.5 left unamended) accepted; tracked as a follow-up DOCS movement (backlog ui2_c5_followup_ladder_sweep). Judgment call 5 (AG-J10 wording amended as a necessary corollary) accepted. Not yet FROZEN -- freezes together with C1-C4,C6.",
+      "timestamp": "2026-09-09T19:11:20Z"
     }
   ],
   "id": "NXS-LOCAL-0056",
   "movement": "UI2_B0_C5_AMENDMENTS_BUNDLE",
-  "next_actor": "engineer",
+  "next_actor": null,
   "refs": [
     "docs/design/UI2_0_BASELINE_CONTRACT.md",
     "docs/design/UI2_0_DEVELOPMENT_WORKFLOW.md",
@@ -112,6 +131,6 @@
     "project/roadmap.json"
   ],
   "schema_version": 1,
-  "status": "OPEN",
-  "updated_at": "2026-09-09T18:30:22Z"
+  "status": "CLOSED",
+  "updated_at": "2026-09-09T19:11:20Z"
 }
