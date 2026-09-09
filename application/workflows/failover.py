@@ -1,11 +1,13 @@
-"""Failover-plane modes (OP.0a).
+"""Failover-plane modes (OP.0a, OP.1).
 
-Contract: docs/history/phase/OP_0A_HA_READINESS_ASSESSMENT.md.
+Contracts: docs/history/phase/OP_0A_HA_READINESS_ASSESSMENT.md,
+docs/history/phase/OP_1_FAILOVER_PLAN_COMPILER_AND_DRY_RUN.md.
 
-``--ha-readiness-check`` only. This is an **offline maintenance-class mode**:
-it opens no network connection, holds no credential and issues no device
-command — it derives an assessment from evidence a previous collection run
-already stored. Same posture as ``--restore-readiness-check``.
+``--ha-readiness-check`` and ``--failover-plan-dry-run``. Both are **offline
+maintenance-class modes**: they open no network connection, hold no
+credential and issue no device command -- each derives its report from
+evidence a previous collection run already stored. Same posture as
+``--restore-readiness-check``.
 
 Nothing vendor-bound is imported at module scope (the AC-3 lazy-import
 boundary the ``application`` package establishes).
@@ -100,6 +102,75 @@ def ha_readiness_check(ctx):
         "SAFE_TO_FAILOVER is unreachable by design until the OP.0b preflight "
         "battery is gated and built. INSUFFICIENT_EVIDENCE here means "
         "'not asked yet', not 'unhealthy'."
+    )
+    print(f"\nWrote {state_path}")
+    return 0
+
+
+def failover_plan_dry_run(ctx):
+    """OP.1: compile a `FailoverPlan` + `DryRunReport` for every HA unit this
+    run's readiness assessment derives (or exactly one, with
+    `--failover-plan-unit`) -- no network access, no credential, no device
+    command, no `ClusterXLMemberSession` is ever resolved (`compile_
+    failover_plan`'s own AC-1 poison-resolver proof)."""
+    runtime_paths = ctx.runtime_paths
+    _require_bootstrap("failover-plan-dry-run", runtime_paths.output_root)
+    from utils.failover import compute_ha_readiness
+    from utils.failover_plan import compile_failover_plan, evaluate_dry_run
+
+    print("=== SECURITYEXPERT FAILOVER PLAN DRY-RUN — OP.1 ===\n")
+    unified_path = runtime_paths.output_root / "unified.json"
+    unified_devices = json.loads(unified_path.read_text(encoding="utf-8"))
+
+    cp_ha_runtime = _load_cp_ha_runtime(runtime_paths.output_root)
+    pan_ha_runtime, pan_ha_peers = _load_pan_ha_runtime(runtime_paths.output_root)
+
+    readiness_record = compute_ha_readiness(
+        unified_devices,
+        cp_ha_runtime=cp_ha_runtime,
+        pan_ha_runtime=pan_ha_runtime,
+        pan_ha_peers=pan_ha_peers,
+    )
+
+    all_unit_ids = [unit["unit_id"] for unit in readiness_record["units"]]
+    requested_unit_id = getattr(ctx.args, "failover_plan_unit", None)
+    if requested_unit_id is not None:
+        if requested_unit_id not in all_unit_ids:
+            print(f"Unknown --failover-plan-unit {requested_unit_id!r}: no such unit in this run's HA readiness assessment.")
+            return 2
+        unit_ids = [requested_unit_id]
+    else:
+        unit_ids = all_unit_ids
+
+    reports = []
+    for unit_id in unit_ids:
+        plan = compile_failover_plan(unit_id, readiness_record=readiness_record, cp_ha_runtime=cp_ha_runtime)
+        reports.append(evaluate_dry_run(plan).to_dict())
+
+    document = {
+        "schema": "securityexpert-failover-plan-dry-run-v1",
+        "generated_at": readiness_record["generated_at"],
+        "reports": reports,
+    }
+
+    state_dir = runtime_paths.data_root / "state" / "failover_plan"
+    state_dir.mkdir(parents=True, exist_ok=True)
+    state_path = state_dir / "dry_run.json"
+    state_path.write_text(json.dumps(document, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+
+    print(f"Units assessed:         {len(reports)}")
+    for report in reports:
+        plan = report["plan"]
+        print(
+            f"  {plan['unit_id']:<40} compilable={plan['plan_compilable']!s:<5} "
+            f"would_proceed={report['would_proceed']!s:<5} verdict={report['readiness_verdict']}"
+        )
+
+    print(
+        "\nNote: this dry-run grants no authorization. It issues no command and "
+        "constructs no ActionCoordinator. Executing a compiled plan requires a "
+        "separate, independently authorized OP.2 action once that track's own "
+        "prerequisites are met."
     )
     print(f"\nWrote {state_path}")
     return 0

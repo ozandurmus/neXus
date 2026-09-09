@@ -1203,7 +1203,7 @@
     {
       "id": "failover_plan_compiler",
       "title": "Failover Plan Compiler & Dry-Run",
-      "status": "planned",
+      "status": "automated_validated",
       "introduced": "OP.1",
       "weight": 4,
       "summary": "Compiles the exact graceful vendor action, rollback, impact window and preemption note into a FailoverPlan. Dry-run only.",
@@ -1212,19 +1212,19 @@
         {
           "id": "action_rollback_compile",
           "label": "Compile active-initiated action + rollback per vendor/mode",
-          "state": "pending",
+          "state": "done",
           "weight": 1
         },
         {
           "id": "impact_window_preemption",
           "label": "Impact-window estimate + preemption/fall-back note",
-          "state": "pending",
+          "state": "done",
           "weight": 1
         },
         {
           "id": "dry_run_only",
           "label": "Dry-run only; executes nothing",
-          "state": "pending",
+          "state": "done",
           "weight": 1
         }
       ]

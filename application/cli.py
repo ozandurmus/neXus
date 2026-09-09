@@ -247,6 +247,31 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--failover-plan-dry-run",
+        action="store_true",
+        help=(
+            "OP.1 local/offline failover plan compiler + dry-run: compiles what a "
+            "controlled Check Point ClusterXL failover would look like -- the exact "
+            "primitive, its preconditions, its postcondition and its explicit reversal "
+            "-- from evidence already collected (same inputs as --ha-readiness-check). "
+            "Reads the latest local unified.json plus already-collected HA runtime "
+            "evidence -- no network access, no credentials, no device command, no "
+            "ClusterXLMemberSession is ever resolved. Writes data/state/failover_plan/"
+            "dry_run.json. Grants no authorization: constructs no ActionCoordinator and "
+            "executes nothing."
+        ),
+    )
+    parser.add_argument(
+        "--failover-plan-unit",
+        default=None,
+        metavar="UNIT_ID",
+        help=(
+            "OP.1: restrict --failover-plan-dry-run to exactly one HA unit_id (as "
+            "reported by --ha-readiness-check). Omitted means every unit this run's "
+            "readiness assessment derives."
+        ),
+    )
+    parser.add_argument(
         "--cp-ha-preflight-check",
         action="store_true",
         help=(
@@ -529,6 +554,7 @@ def validate_modes(args, parser):
         args.persistent_secret_material_check,
         args.restore_readiness_check,
         args.ha_readiness_check,
+        args.failover_plan_dry_run,
         args.recovery_store_check,
         args.recovery_validate,
         args.compliance_trend_reconstruct,
@@ -566,6 +592,15 @@ def validate_modes(args, parser):
         or args.recovery_collect or args.recovery_attest
     ):
         parser.error("--ha-readiness-check cannot be combined with collection/render modes")
+    if args.failover_plan_dry_run and args.apply:
+        parser.error("--apply is not valid with --failover-plan-dry-run")
+    if args.failover_plan_dry_run and (
+        args.cp_config_probe or args.cp_config_collect or args.compliance_probe or args.runbook_execute or args.render_only or args.only != "all"
+        or args.recovery_collect or args.recovery_attest
+    ):
+        parser.error("--failover-plan-dry-run cannot be combined with collection/render modes")
+    if args.failover_plan_unit and not args.failover_plan_dry_run:
+        parser.error("--failover-plan-unit is only valid with --failover-plan-dry-run")
     if args.recovery_store_check and args.apply:
         parser.error("--apply is not valid with --recovery-store-check")
     if args.recovery_store_check and (
@@ -602,7 +637,7 @@ def validate_modes(args, parser):
         or args.recovery_collect or args.recovery_attest or args.storage_analyze
         or args.storage_deduplicate or args.repository_privacy_check
         or args.persistent_secret_material_check or args.restore_readiness_check
-        or args.ha_readiness_check or args.recovery_store_check or args.recovery_validate
+        or args.ha_readiness_check or args.failover_plan_dry_run or args.recovery_store_check or args.recovery_validate
         or args.compliance_trend_reconstruct or args.scheduler_once or args.console
         or args.cp_ha_preflight_check or args.pan_ha_preflight_check
     ):
@@ -626,7 +661,7 @@ def validate_modes(args, parser):
         or args.recovery_collect or args.recovery_attest or args.storage_analyze
         or args.storage_deduplicate or args.apply or args.repository_privacy_check
         or args.persistent_secret_material_check or args.restore_readiness_check
-        or args.ha_readiness_check or args.recovery_store_check or args.recovery_validate
+        or args.ha_readiness_check or args.failover_plan_dry_run or args.recovery_store_check or args.recovery_validate
         or args.compliance_trend_reconstruct or args.scheduler_once or args.console
         or registry_mode_count
     ):
@@ -640,7 +675,7 @@ def validate_modes(args, parser):
         or args.recovery_collect or args.recovery_attest or args.storage_analyze
         or args.storage_deduplicate or args.apply or args.repository_privacy_check
         or args.persistent_secret_material_check or args.restore_readiness_check
-        or args.ha_readiness_check or args.recovery_store_check or args.recovery_validate
+        or args.ha_readiness_check or args.failover_plan_dry_run or args.recovery_store_check or args.recovery_validate
         or args.compliance_trend_reconstruct or args.scheduler_once or args.console
         or registry_mode_count or args.cp_ha_preflight_check or args.pan_ha_preflight_check
     ):
@@ -691,7 +726,7 @@ def validate_modes(args, parser):
         or args.storage_deduplicate
         or args.persistent_secret_material_check
         or args.restore_readiness_check
-        or args.ha_readiness_check
+        or args.ha_readiness_check or args.failover_plan_dry_run
         or args.recovery_store_check
         or args.recovery_validate
         or args.recovery_collect
@@ -722,7 +757,7 @@ def validate_modes(args, parser):
         or args.apply
         or args.persistent_secret_material_check
         or args.restore_readiness_check
-        or args.ha_readiness_check
+        or args.ha_readiness_check or args.failover_plan_dry_run
         or args.recovery_store_check
         or args.recovery_validate
         or args.recovery_collect
@@ -826,6 +861,9 @@ def dispatch(args, parser, *, runtime_services=None, provenance="manual", admiss
     if args.ha_readiness_check:
         from application.workflows import failover as failover_wf
         return failover_wf.ha_readiness_check(ctx)
+    if args.failover_plan_dry_run:
+        from application.workflows import failover as failover_wf
+        return failover_wf.failover_plan_dry_run(ctx)
     if args.recovery_store_check:
         return recovery_wf.recovery_store_check(ctx)
     if args.recovery_validate:
