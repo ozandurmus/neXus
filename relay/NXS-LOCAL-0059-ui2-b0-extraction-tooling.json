@@ -1,0 +1,110 @@
+{
+  "created_at": "2026-09-09T19:14:06Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1: A representative IPv4-shaped input tokenizes to another syntactically IPv4-shaped string (four dot-separated octets in range).",
+          "AC-2: A representative hex-serial input of length N tokenizes to a hex string of the same length N.",
+          "AC-3: The same real input string, tokenized in two separate tool invocations against the same key material, produces the identical pseudonym both times.",
+          "AC-4: Two DIFFERENT real inputs never collide to the same pseudonym in a representative test set (no accidental identity merging).",
+          "AC-5: A fixture whose content would fail the DLP privacy gate is refused by the tool (not written, with a clear error), proven by a test.",
+          "AC-6: Every emitted fixture carries provenance metadata (source path, date, capability id) per C6 section 3's layout.",
+          "AC-7: SYNTHETIC/DERIVED marking only appears when explicitly requested by the caller, never inferred.",
+          "AC-8: The tool never opens a network connection or reads a credential-shaped input -- proven by a test that the tool's code path has no such call.",
+          "AC-9: The existing utils/support_bundle.py test suite (deterministic pseudonyms, exclusion of selected fixture identifiers) stays green -- the shape-preserving addition does not regress it.",
+          "AC-10: The full one-shot regression run in the foreground, awaited to completion, is unaffected outside this movement's own new files."
+        ],
+        "baseline": {
+          "authority": "docs/design/UI2_0_C6_CAPABILITY_EXTRACTION_CONTRACT.md section 3 (the fixture-generation procedure) and its open item 1 (exact wording: 'the tokenizer's default Tokenizer.token() hex-token shape does not by itself preserve a real identifier's original length/character class... this document requires the extraction-tooling movement to add a shape-preserving encoding on top of the existing primitive') are this movement's literal specification. Section 3.3's preserved-property checklist (address format, serial length/shape, cross-output identity equality, cluster/context membership, ordering) is the exact list this tool must prove it preserves, with a proof method per property (already named in C6 -- read and implement each one, do not invent a different list). utils/support_bundle.py::Tokenizer is the EXISTING primitive to extend, not replace (workflow section 3.1's own note: 'utils/support_bundle.py: Tokenizer provides HMAC-SHA256 pseudonyms... a useful primitive, not a complete export policy'). This is the same tokenizer already used successfully in the Private Replay Phase A slice (movement NXS-LOCAL-0027, merged) -- read that merged code for the established pattern before writing new code.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED); UI 2.0 baseline adopted 2026-09-09; C1-C7 delivered as DRAFT -- FOR PO FREEZE",
+          "sequencing": "Runs concurrently with the baseline-directory movement (docs-only, movement NXS-LOCAL-<next>). Fully independent: that movement touches only docs/design/; this movement touches scripts/ and/or utils/support_bundle.py plus tests. This is the LAST B0 item; once both merge, B0 is complete."
+        },
+        "context_not_loaded": [
+          "Any Java source, Gradle build, Flyway migration or Docker artefact",
+          "Actually extracting a real capability's spec/fixtures for FIRST-CAPABILITY (that is B1-5's job, using this tool)",
+          "Device contact, credentials, network access of any kind -- this tool operates on already-captured evidence directories only, never contacts a device",
+          "The baseline-directory movement's content"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/ui2-b0-extraction-tooling"
+        },
+        "invariants": [
+          "The tool takes an existing evidence/capture directory as input and an output directory as the C6-layout fixture set; it never contacts a device, never reads live credentials, and never runs as part of any product code path (RUNTIME-DIRECTION P-1)",
+          "Shape-preserving encoding: a tokenized value's length and character class (e.g. an IPv4-shaped string stays IPv4-shaped syntactically, a hex serial of length N stays a hex string of length N) are preserved even though the actual bytes are pseudonymized -- implement this as an addition to Tokenizer, not a parallel competing tokenizer",
+          "Cross-output identity equality: the same real identifier appearing in two different capture files (e.g. the same device's hostname in an inventory capture and a config capture) tokenizes to the SAME pseudonym both times -- this requires a stable, deterministic mapping (HMAC-SHA256 keyed, per Tokenizer's existing domain-separation model), not per-invocation randomness",
+          "Every produced fixture is marked with its provenance (source capture path/date, capability id it feeds) and passes the DLP privacy gate (utils/repository_privacy.py) before being considered ready to commit -- the tool's own test suite proves this, and the tool itself should refuse to write a fixture that fails the gate rather than silently emitting it",
+          "SYNTHETIC/DERIVED markings (C6 section 3, workflow section 3.5) are the tool's responsibility to APPLY when asked (a flag or mode), not to invent on its own -- a fixture generated from a real capture is marked as such by default; SYNTHETIC/DERIVED requires an explicit caller choice",
+          "No decision frozen in UI2_0_BASELINE_CONTRACT.md is reopened; this is an implementation of an already-specified procedure, not a new design"
+        ],
+        "merge_gate": "Standing relay#13: green tests -> self-merge, report via RELAY_NOTE. This movement DOES touch Line-1 source code (not only docs) -- write real tests for the shape-preserving encoding and the cross-output identity equality property, run them plus the existing utils/support_bundle.py test suite, then the full one-shot regression in the foreground, awaited to actual completion. The DLP privacy gate at push time is an additional substantive gate given this tool's own output is fixture data. If this worktree's own environment is broken in a way confirmed pre-existing on origin/main (as NXS-LOCAL-0051 found and reported, not fixed), report it exactly that way rather than attempting a bootstrap.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Implement the Line-1 extraction-tooling script that C6's fixture-generation procedure (docs/design/UI2_0_C6_CAPABILITY_EXTRACTION_CONTRACT.md section 3) specifies: a script that runs the Private Replay tokenizer over an existing evidence/capture directory and emits a fixture set in C6's layout, closing C6's open item 1 (a shape-preserving encoding on top of utils/support_bundle.py::Tokenizer's existing hex-token primitive, so serial length/character-class and the other preserved properties from workflow section 3.5/C6 section 3.3 survive tokenization). This is Line-1 Python code -- the one deliverable that serves UI 2.0 at extraction time only (RUNTIME-DIRECTION P-1 is not violated: this tool never runs inside the UI 2.0 product).",
+        "output_contract": [
+          "A script (e.g. scripts/ui2_extract_fixtures.py, or a new utils/private_replay-adjacent module if that fits the existing replay/ package's shape better -- your call, name it in the RELAY_NOTE with one sentence of reasoning) that: reads an evidence/capture directory, applies a shape-preserving extension to utils/support_bundle.py::Tokenizer (or a clearly-scoped sibling of it), emits fixture files in C6 section 3's layout with provenance metadata, and refuses to write output that fails the DLP privacy gate",
+          "Tests proving: shape preservation (address format, serial length/shape) for representative synthetic inputs; cross-output identity equality (the same input string tokenizes identically across two separate invocations/files); the DLP-gate-refusal behavior (a deliberately-unsanitized input is rejected, not silently written)",
+          "A short usage note (in the script's own docstring or a small README-adjacent comment) showing the CLI invocation shape, since this is the tool B1-5 will actually run",
+          "project/backlog.json ui2_b0_extraction_tooling status -> in_progress/done with the PR reference; build_history record per the usual pattern",
+          "RELAY_NOTE + SESSION_CLOSE"
+        ],
+        "recommended_reasoning": {
+          "reason": "Deterministic implementation against an already-specified procedure (C6 section 3) with a clear existing primitive to extend (Tokenizer) and a precedent movement to follow (NXS-LOCAL-0027) -- normal reasoning is enough for the implementation; extended thinking only if the shape-preserving encoding's collision/security properties turn out to need real design judgment.",
+          "tier": "Sonnet 5, normal (extended thinking only if the shape-preserving encoding needs a genuine security-property judgment call)"
+        },
+        "requirements": [
+          "Read UI2_0_C6_CAPABILITY_EXTRACTION_CONTRACT.md section 3 in full, utils/support_bundle.py in full, and the merged NXS-LOCAL-0027 Private Replay Phase A code before writing",
+          "English, per AGENTS.md engineering-output language law",
+          "git diff --check; privacy gate at push; full regression green"
+        ],
+        "risks": [
+          "Building a parallel tokenizer instead of extending the existing one -- creates two sources of truth for pseudonymization",
+          "Weakening the HMAC-SHA256 domain separation while adding shape preservation (e.g. a shape-preserving scheme that leaks more bits of the original than the un-shaped hex token did)",
+          "Treating this as license to actually extract a real capability's fixtures -- that is B1-5's job, this movement only builds the tool"
+        ],
+        "scope": {
+          "in": [
+            "The extraction/fixture-generation tool",
+            "Its tests",
+            "project-state bookkeeping"
+          ],
+          "out": [
+            "Any ui2/ source",
+            "docs/design/ content beyond the backlog/build-history bookkeeping",
+            "Device contact",
+            "Actually extracting FIRST-CAPABILITY's real spec/fixtures"
+          ]
+        },
+        "validation_plan": [
+          "AC-1..AC-10 as real tests",
+          "utils/support_bundle.py existing suite green",
+          "full one-shot regression",
+          "git diff --check",
+          "privacy gate at push"
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-09T19:14:06Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0059",
+  "movement": "UI2_B0_EXTRACTION_TOOLING",
+  "next_actor": "engineer",
+  "refs": [
+    "docs/design/UI2_0_C6_CAPABILITY_EXTRACTION_CONTRACT.md",
+    "docs/design/UI2_0_C4_CAPABILITY_REGISTRY_GATE_RESOLUTION_CONTRACT.md",
+    "docs/design/PRIVATE_REPLAY_ARCHITECTURE.md",
+    "utils/support_bundle.py",
+    "utils/repository_privacy.py",
+    "replay/",
+    "project/backlog.json",
+    "project/roadmap.json"
+  ],
+  "schema_version": 1,
+  "status": "OPEN",
+  "updated_at": "2026-09-09T19:14:06Z"
+}

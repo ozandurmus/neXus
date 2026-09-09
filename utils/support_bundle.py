@@ -60,6 +60,45 @@ def _get_support_key(support_key_file=SUPPORT_KEY_FILE) -> bytes:
     return key
 
 
+_SHAPE_IPV4_RE = re.compile(r"^(?:\d{1,3}\.){3}\d{1,3}$")
+_SHAPE_HEX_RE = re.compile(r"^[0-9a-fA-F]+$")
+_SHAPE_DIGIT_RE = re.compile(r"^[0-9]+$")
+_SHAPE_ALNUM_RE = re.compile(r"^[0-9a-zA-Z]+$")
+_SHAPE_ALPHABETS = {
+    "hex": "0123456789abcdef",
+    "digit": "0123456789",
+    "alnum": "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ",
+}
+
+
+def _classify_shape(text: str) -> str:
+    """The character-class/format family ``Tokenizer.shaped_token`` preserves.
+
+    Order matters: an all-digit value is also valid hex, so digit-only is
+    checked first to keep e.g. a numeric-only serial from picking up stray
+    a-f letters it never had.
+    """
+    if _SHAPE_IPV4_RE.match(text) and all(0 <= int(part) <= 255 for part in text.split(".")):
+        return "ipv4"
+    if _SHAPE_DIGIT_RE.match(text):
+        return "digit"
+    if _SHAPE_HEX_RE.match(text):
+        return "hex"
+    if _SHAPE_ALNUM_RE.match(text):
+        return "alnum"
+    return "opaque"
+
+
+def _expand_digest(seed: bytes, length: int) -> bytes:
+    """Deterministically stretch ``seed`` to at least ``length`` bytes."""
+    out = bytearray()
+    counter = 0
+    while len(out) < length:
+        out.extend(hashlib.sha256(seed + counter.to_bytes(4, "big")).digest())
+        counter += 1
+    return bytes(out[:length])
+
+
 class Tokenizer:
     def __init__(self, key: bytes):
         self.key = key
@@ -70,6 +109,34 @@ class Tokenizer:
         text = str(value)
         digest = hmac.new(self.key, f"{kind}:{text}".encode("utf-8"), hashlib.sha256).hexdigest()
         return f"{kind.upper()}_{digest[:length]}"
+
+    def shaped_token(self, kind: str, value: Any) -> str | None:
+        """A pseudonym that preserves ``value``'s length and character
+        class -- e.g. an IPv4-shaped input tokenizes to another
+        syntactically IPv4-shaped string, and a length-``N`` hex serial
+        tokenizes to a length-``N`` hex string.
+
+        Deterministic per ``(key, kind, value)``, exactly like ``token()``,
+        so cross-output identity equality still holds. Uses a distinct HMAC
+        domain (``"shaped:{kind}"``) so this never collides with ``token()``'s
+        own output space for the same ``(kind, value)`` pair. A value whose
+        shape is not recognized (``_classify_shape`` returns ``"opaque"``)
+        falls back to ``token()`` -- shape preservation has nothing to add
+        for free-form text.
+        """
+        if value in (None, ""):
+            return None
+        text = str(value)
+        shape = _classify_shape(text)
+        if shape == "opaque":
+            return self.token(kind, value)
+        seed = hmac.new(self.key, f"shaped:{kind}:{text}".encode("utf-8"), hashlib.sha256).digest()
+        if shape == "ipv4":
+            stream = _expand_digest(seed, 4)
+            return ".".join(str(b) for b in stream)
+        alphabet = _SHAPE_ALPHABETS[shape]
+        stream = _expand_digest(seed, len(text))
+        return "".join(alphabet[b % len(alphabet)] for b in stream)
 
     def network_token(self, value: Any) -> dict[str, Any] | None:
         if value in (None, ""):
