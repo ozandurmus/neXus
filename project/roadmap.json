@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "current_build": "ui2_b0_c2_job_execution_contract",
+  "current_build": "ui2_b0_c4_capability_registry_gate_resolution_contract",
   "current_track": "PCP.x",
   "progress_contract": "Weighted acceptance-criterion completion. Percentages describe the declared roadmap, not calendar time or delivery ETA.",
   "tracks": [
@@ -150,17 +150,17 @@
   "now_next": {
     "horizon_contract": "NOW is exactly one build. NEXT is exactly one. Everything else is an `upcoming` row carrying its own true status: planned = AFTER, blocked = waiting on a named external gate, deferred = consciously postponed. `now.build` must equal the newest project/build_history.json record -- utils.project_plan enforces it.",
     "now": {
-      "build": "ui2_b0_c2_job_execution_contract",
-      "title": "UI2 B0/C2 -- job execution contract (DRAFT, for Product Owner freeze)",
-      "goal": "Write the DRAFT job-execution contract (docs/design/UI2_0_C2_JOB_EXECUTION_CONTRACT.md): how a Java worker claims, executes, records and completes a job -- job record and closed state machine, leasing/heartbeat/fencing, OUTCOME_UNKNOWN as terminal-until-reconciled, per-action-class retry rules, pre-execution checks, owner/approver/execution-identity separation, schedule optimistic concurrency. Documentation only; authorizes no device execution.",
+      "build": "ui2_b0_c4_capability_registry_gate_resolution_contract",
+      "title": "UI2 B0/C4 -- capability registry & command-gate resolution contract (DRAFT, for Product Owner freeze)",
+      "goal": "Write the DRAFT capability registry & command-gate resolution contract (docs/design/UI2_0_C4_CAPABILITY_REGISTRY_GATE_RESOLUTION_CONTRACT.md): the runtime capability registry schema, the K-4 gate-registry resolution rule, the closed step-kind set, the CP-D6 VSX/ClusterXL target model, and the CP-D7 transport decision. Documentation only; authorizes no device execution.",
       "status": "in_progress",
       "started": "2026-09-09",
       "completed": "2026-09-09",
       "notes": [
-        "Full detail: project/backlog.json's ui2_b0_c2_job_execution_contract note; docs/design/UI2_0_C2_JOB_EXECUTION_CONTRACT.md (DRAFT -- FOR PRODUCT OWNER FREEZE, 2026-09-09).",
-        "Predecessor ui2_b0_c1_platform_schema_contract (C1, ran concurrently with C2 each in its own worktree/branch): UI 2.0 schema ownership, Flyway as sole migration authority, audit-from-first-mutation (C1-1), MERGED 2026-09-09 PR #163. 'automated_validated' describes that movement's own deliverable; its document stays DRAFT pending Product Owner freeze. Moved to upcoming below -- not a demotion; it leaves 'now' only because horizon_contract reserves that slot for the newest project/build_history.json record. Full detail: project/build_history.json's ui2_b0_c1_platform_schema_contract record.",
-        "Predecessor failover_plan_compiler (OP.1.S1, 2026-09-09): write-free failover plan compiler and dry-run for classic CP ClusterXL, AUTOMATED_VALIDATED, merged PR #162. Full detail: project/build_history.json's failover_plan_compiler record.",
-        "Predecessor m7_real_device_targeted_collect_now (2026-09-08): console-submitted config_refresh_cp device_id targeting now resolves to a real collector entity_id and actually contacts the device. Full detail: project/build_history.json's m7_real_device_targeted_collect_now record; relay/NXS-LOCAL-0023."
+        "Full detail: project/backlog.json's ui2_b0_c4_capability_registry_gate_resolution_contract note; docs/design/UI2_0_C4_CAPABILITY_REGISTRY_GATE_RESOLUTION_CONTRACT.md (DRAFT -- FOR PRODUCT OWNER FREEZE, 2026-09-09).",
+        "Predecessor ui2_b0_c2_job_execution_contract (C2): job record, nine-state closed state machine, leasing/heartbeat/fencing, OUTCOME_UNKNOWN as terminal-until-reconciled, per-action-class retry rules, pre-execution checks, owner/approver/execution-identity separation, schedule optimistic concurrency. Moved to upcoming below -- not a demotion; it leaves 'now' only because horizon_contract reserves that slot for the newest project/build_history.json record. Full detail: project/build_history.json's ui2_b0_c2_job_execution_contract record.",
+        "Predecessor ui2_b0_c1_platform_schema_contract (C1, ran concurrently with C2 each in its own worktree/branch): UI 2.0 schema ownership, Flyway as sole migration authority, audit-from-first-mutation (C1-1), MERGED 2026-09-09 PR #163. Full detail: project/build_history.json's ui2_b0_c1_platform_schema_contract record.",
+        "Predecessor failover_plan_compiler (OP.1.S1, 2026-09-09): write-free failover plan compiler and dry-run for classic CP ClusterXL, AUTOMATED_VALIDATED, merged PR #162. Full detail: project/build_history.json's failover_plan_compiler record."
       ]
     },
     "next": {
@@ -202,6 +202,20 @@
           "Full detail: project/backlog.json's ui2_b0_c1_platform_schema_contract note; docs/design/UI2_0_C1_PLATFORM_SCHEMA_CONTRACT.md (DRAFT -- FOR PRODUCT OWNER FREEZE).",
           "Ran concurrently with C2 (job execution contract, movement UI2_B0_C2_JOB_EXECUTION_CONTRACT), each in its own worktree/branch.",
           "Moved from now_next.now 2026-09-09 (ui2_b0_c2_job_execution_contract session): not a demotion -- this build is complete and merged. Leaves 'now' only because horizon_contract reserves that slot for the newest project/build_history.json record, which is now C2."
+        ]
+      },
+      {
+        "build": "ui2_b0_c2_job_execution_contract",
+        "title": "UI2 B0/C2 -- job execution contract (DRAFT -- FOR PRODUCT OWNER FREEZE)",
+        "goal": "Define how a Java worker claims, executes, records and completes a job: job record and closed state machine, leasing/heartbeat/fencing, OUTCOME_UNKNOWN as terminal-until-reconciled, per-action-class retry rules, pre-execution checks, owner/approver/execution-identity separation, schedule optimistic concurrency. Contract only: no ui2/ source, no schema migration, no device execution.",
+        "status": "automated_validated",
+        "started": "2026-09-09",
+        "completed": "2026-09-09",
+        "notes": [
+          "MERGED 2026-09-09, PR #164. 'automated_validated' describes this movement's own deliverable (produced and merged); the document itself stays DRAFT pending a separate Product Owner freeze decision -- project/backlog.json's own status stays in_progress for that reason.",
+          "Full detail: project/backlog.json's ui2_b0_c2_job_execution_contract note; docs/design/UI2_0_C2_JOB_EXECUTION_CONTRACT.md (DRAFT -- FOR PRODUCT OWNER FREEZE).",
+          "Ran concurrently with C1 (platform & schema contract), each in its own worktree/branch.",
+          "Moved from now_next.now 2026-09-09 (ui2_b0_c4_capability_registry_gate_resolution_contract session): not a demotion -- this build is complete and merged. Leaves 'now' only because horizon_contract reserves that slot for the newest project/build_history.json record, which is now C4."
         ]
       },
       {
