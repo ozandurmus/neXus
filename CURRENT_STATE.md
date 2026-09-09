@@ -5,18 +5,30 @@ see `AGENTS.md`/`AI_START_HERE.md`. **Predecessor build detail lives in
 `project/build_history.json`** (structured, newest-first) and its linked
 docs under `docs/history/`; `docs/history/INDEX.md` is the one-line timeline.
 
-- **Checkpoint:** 2026-09-09, `ui2_b0_c1_platform_schema_contract` (UI 2.0
-  `B0`/`C1`) — new `docs/design/UI2_0_C1_PLATFORM_SCHEMA_CONTRACT.md`
-  (DRAFT — FOR PRODUCT OWNER FREEZE): schema ownership, Flyway as sole
-  migration authority, trigger-enforced audit-from-first-mutation (new
-  finding id `C1-1`), provenance record schema, per-component secrets,
-  backup-artefact key custody, Oracle portability exceptions, 10 testable
-  `B1-2` acceptance criteria. Documentation-only; runs concurrently with
-  `C2`. Full detail: `project/backlog.json`'s
-  `ui2_b0_c1_platform_schema_contract` note. Predecessor
-  `failover_plan_compiler` (`OP.1.S1`, **AUTOMATED_VALIDATED**, PR #162
-  merged as the `OP.1` contract's reference implementation). Full
-  predecessor chain: `project/build_history.json`.
+- **Checkpoint:** 2026-09-09, `ui2_b0_c2_job_execution_contract` (`UI2 B0/C2`)
+  — new `docs/design/UI2_0_C2_JOB_EXECUTION_CONTRACT.md` (status: **DRAFT —
+  FOR PRODUCT OWNER FREEZE**), written under
+  `docs/design/UI2_0_BASELINE_CONTRACT.md` (FROZEN — PRODUCT OWNER APPROVED
+  2026-09-09). Defines how the Java worker claims, executes, records and
+  completes a job: job record with request-time fixation; a nine-state
+  closed state machine (`REQUESTED`/`CLAIMED`/`EXECUTING` non-terminal,
+  `COMPLETED`/`FAILED`/`REJECTED`/`CANCELLED`/`OUTCOME_UNKNOWN`/`RECONCILED`
+  terminal — `OUTCOME_UNKNOWN`'s only outgoing edge is to `RECONCILED` via a
+  reconciliation record, implementing `JOB-UNCERTAIN-OUTCOME`/A-2);
+  PostgreSQL `FOR UPDATE SKIP LOCKED` claim + `lease_epoch` fencing token +
+  heartbeat; step-attempt-before-contact with per-action-class retry rules
+  (`utils/action_taxonomy.py`: class-0 read bounded retry, class-1
+  recovery-write never auto-retries); a six-check ordered pre-execution
+  battery at claim time; `BackupSchedule` optimistic concurrency
+  (`SCHEDULE_VERSION_CONFLICT`); owner/approver/execution-identity as three
+  distinct fields, resolving council-brief `SR-D6` per Astra's objection. No
+  code, no schema migration, no device execution — documentation only.
+  Full detail: `project/backlog.json`'s `ui2_b0_c2_job_execution_contract`
+  note. Predecessor `ui2_b0_c1_platform_schema_contract` (`C1`, ran
+  concurrently, **MERGED PR #163**) — UI 2.0 schema ownership, Flyway sole
+  migration authority, audit-from-first-mutation (`C1-1`); document stays
+  DRAFT pending Product Owner freeze. Full predecessor chain:
+  `project/build_history.json`.
 - **Next** (`now_next.next`): `gov_po_2_implementation` — unrelated and
   unchanged by this movement; not yet started. `m7_real_device_targeted_
   collect_now` **AUTOMATED_VALIDATED 2026-09-08**, real-device confirmation
