@@ -91,11 +91,30 @@
       },
       "seq": 1,
       "timestamp": "2026-09-09T18:30:22Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "RELAY_NOTE",
+      "seq": 2,
+      "subject": "UI2 B0/C7 delivered, PR #170 merged",
+      "text": "DELIVERED: docs/design/UI2_0_C7_BACKUP_ARTEFACT_RESTORE_ENGINE_CONTRACT.md (DRAFT -- FOR PRODUCT OWNER FREEZE). PR #170 MERGED (merge commit 7e692451f6aae6940ef8e1938d18fb0390459350). Rebased twice during the session onto origin/main to pick up the concurrent C5 (amendments bundle, PR #169) and C6 merges; confirmed C5's own action_taxonomy.py edit (UI-OPERATIONAL-RUN-NOW docstring/comment only, no new ActionClass member) does not affect this document's own findings.\n\nSelf-check against AC-1..AC-12:\nAC-1 (Section 1 states RAW-RETENTION does not forbid backup artefact storage): SATISFIED -- section 1.4 states this explicitly, distinguishing \"raw device transcript\" (RAW-RETENTION's actual scope) from \"backup artefact\" (its own data class per workflow section 3.5's own text).\nAC-2 (backup profile model against C1/C2/C4's actual schema): SATISFIED -- section 2 restates design section 6 field-for-field: BackupRun/StepResult are C2 jobs/job_step_attempt rows (not new tables); an APPROVED profile version compiles into a C4 capability_registry row.\nAC-3 (artefact store/manifest/validation/retention carries forward BACKUP_RECOVERY_CONTRACTS.md with named cross-references): SATISFIED -- section 3 carries forward BRC sections 2-9 as a Flyway-owned backup_artefact table, retention ledger, consistency-group table, with named section cross-references throughout.\nAC-4 (key custody names a concrete hierarchy/rotation, referencing C1 section 6): SATISFIED -- section 4 names the vault-master-key-wraps-per-artefact-DEK hierarchy and a concrete rotation procedure (re-wrap DEK only), referencing C1 section 6.3 and recovery_key_custody.py by name.\nAC-5 (restore precondition list, execution-step model via C4, verification method, each concrete/testable): SATISFIED -- section 5.3's six-check precondition battery, 5.4's C4 step-model reuse, 5.5's re-collection-based verification.\nAC-6 (restore-specific OUTCOME_UNKNOWN defined): SATISFIED -- section 5.7 names three possible device states, the out-of-band human verification required, and states retry is never automatic.\nAC-7 (approval model distinguishes routine vs restore, record shape specified): SATISFIED -- section 6 gives the restore_approval record shape (per-operation, non-reusable, requester != approver) distinct from routine backup's D7+reason shortcut.\nAC-8 (device/version matrix filled for PAN RB.2 and CP Gaia RB.3b with inherited evidence class): SATISFIED -- section 7 works both rows (UNPROVEN and FIXTURE_ONLY respectively).\nAC-9 (section 8 gives >=12 testable AC including restore-failure scenario): SATISFIED -- 14 criteria, criterion 10 is the restore-failure/OUTCOME_UNKNOWN scenario.\nAC-10 (platform never declared supported on FIXTURE_ONLY-only evidence; rule stated, both worked examples respect it): SATISFIED -- section 7.1 states the rule; both worked rows land declared_supported=false.\nAC-11 (section 9 lists every contradiction found or states none; no PO-reserved decision reopened): SATISFIED -- section 9 reports two load-bearing open items (taxonomy class gap, C4 step-kind gap) plus a documentation-inconsistency flag (RB.2's real-env status), explicitly states RESTORE-IN-RELEASE-1/APPROVAL-MODEL/RAW-RETENTION are implemented as ruled, not reopened.\nAC-12 (no utils/action_taxonomy.py edit; genuine gap named for a C5-successor movement): SATISFIED -- action_taxonomy.py is not touched by this movement's diff; section 9.1 names the gap explicitly for a taxonomy-successor movement.\n\nValidation: full one-shot regression run in the foreground (this worktree has no own .venv; the sibling checkout's validated interpreter at /Users/OzanDur/Codo/neXus/.venv/bin/python was used directly, no bootstrap performed), awaited to actual completion each time, re-run after both the checkpoint-consistency fix and the C5 rebase: final state 3214 passed, 27 skipped, 2 failed -- both the same pre-existing/unrelated DLP-token-collision failures already documented in CURRENT_STATE.md's baseline, confirmed unrelated to this diff by a stash-and-compare against the pre-change tree. git diff --check clean. Repository privacy gate: FAIL/6 findings, all 6 confirmed pre-existing/unrelated by the same stash-and-compare method (project/backlog.json, project/build_history.json, project/roadmap.json and three historical relay/*.json files -- none touched by this movement's own diff). CI's validate check passed on GitHub before self-merge (standing relay#13 authorization).\n\nProject-state bookkeeping: project/backlog.json (status in_progress, PR #170 recorded), project/build_history.json (new record, newest-first), project/roadmap.json (now_next.now -> C7, C5/C6 moved to upcoming with correct PR references), CURRENT_STATE.md checkpoint (kept under the 200-line cap), docs/history/INDEX.md regenerated.\n\nNot yet FROZEN -- this is the second and final platform-adjacent freeze candidate; the Product Owner can now consider both platform freezes (C1-C5 and C7) together per the baseline's own framing.",
+      "timestamp": "2026-09-09T19:07:12Z"
+    },
+    {
+      "actor": "po",
+      "authorized_by": "Product Owner (in-session precedent, 2026-09-09)",
+      "marker": "RELAY_DECISION",
+      "scope": "C7 backup/artefact/restore engine contract acceptance",
+      "seq": 3,
+      "subject": "C7 accepted as DRAFT -- FOR FREEZE; restore fully specified but correctly NOT enabled pending a taxonomy-successor movement",
+      "supersedes": "none",
+      "text": "AC-1..AC-12 accepted, no contradictions, RESTORE-IN-RELEASE-1/APPROVAL-MODEL/RAW-RETENTION correctly not reopened. Critical finding accepted at face value and NOT worked around: 9.1+9.2+9.3 (restore's write has no action_taxonomy.py class and C4's closed step-kind set has no device-directed write step; sftp_put is unconditionally refused) is a genuine combined blocker, correctly left unfixed inside this movement's scope rather than silently inventing a class or a step kind. This is now tracked as its own dedicated, high-scrutiny backlog item (ui2_taxonomy_device_write_class_and_step_kind) -- NOT auto-dispatched in this wave; the Product Owner will decide how to scope and review it given its constitutional weight (a new device-write-capable action class). 9.4 (RB.2 status documentation inconsistency) will be corrected directly by the Product Owner in UI2_0_DEVELOPMENT_WORKFLOW.md. 9.5 (no emergency version-mismatch override) accepted, default refusal stands. 9.6 (retention-deletion intent schema not fully specified) accepted as a REL-BACKUP-scoped gap. 9.7 (off-host key custody, inherited from C1) accepted as still open. 9.8 (multi-member consistency-group restore) accepted as a REL-BACKUP-scoped open item. Not yet FROZEN -- freezes together with C1-C6.",
+      "timestamp": "2026-09-09T19:11:20Z"
     }
   ],
   "id": "NXS-LOCAL-0057",
   "movement": "UI2_B0_C7_BACKUP_ARTEFACT_RESTORE_ENGINE_CONTRACT",
-  "next_actor": "engineer",
+  "next_actor": null,
   "refs": [
     "docs/design/UI2_0_BASELINE_CONTRACT.md",
     "docs/design/UI2_0_DEVELOPMENT_WORKFLOW.md",
@@ -117,6 +136,6 @@
     "project/roadmap.json"
   ],
   "schema_version": 1,
-  "status": "OPEN",
-  "updated_at": "2026-09-09T18:30:22Z"
+  "status": "CLOSED",
+  "updated_at": "2026-09-09T19:11:20Z"
 }
