@@ -143,6 +143,54 @@ artifact:
 Default (`filesystem`, unset) behavior and its existing CLASS 2 rules above
 are unchanged.
 
+## UI 2.0 database (Java product line)
+
+UI 2.0 (`docs/design/UI2_0_BASELINE_CONTRACT.md`, FROZEN) owns a dedicated
+PostgreSQL instance (`docs/design/UI2_0_C1_PLATFORM_SCHEMA_CONTRACT.md` §2,
+§7) — unlike `DEV.3.3` above, this instance is **mandatory**, not opt-in: it
+is the only storage UI 2.0 has, from the first schema migration. By the same
+rule `DEV.3.3` already states for Line-1's own opt-in Postgres backend
+("architecturally equivalent to local disk, not a CLASS 1/shareable
+artifact"), the **entire UI 2.0 PostgreSQL instance is CLASS 2**:
+
+-   a **dedicated instance** for this product, never shared/multi-tenant;
+-   **TLS on the connection DSN** in production; the DSN itself is a
+    component secret and is handled exactly as any other credential-bearing
+    configuration value (never in Git, never in AI conversation);
+-   the application database role is restricted to the tables UI 2.0 needs;
+-   volume/disk encryption at rest wherever the deployment already encrypts
+    other local-disk evidence.
+
+Named CLASS 2 data classes in this instance (`UI2_0_C1_PLATFORM_SCHEMA_
+CONTRACT.md` §4, §7 — full DDL-level detail lives there, not here):
+
+-   **`audit_log`** — append-only record of every mutation to control-plane
+    state (who, when, what changed); indefinite retention, no deletion path,
+    mirroring the Line-1 operational-write ledger precedent
+    (`RECOVERY_OPERATIONAL_WRITE_LEDGER.md` §8).
+-   **`provenance_records`** — links a derived evidence fact to the
+    (discarded) raw device output that proved it: run/step id, parser and
+    capability version, capture/artifact id, source location, integrity
+    fingerprint, and a bounded, redaction-filtered `sanitized_fragment`
+    where the data class permits one. Never a device transcript.
+-   **`secrets_metadata`** — references/metadata for component secrets
+    (credential profiles, trust material); never a secret value itself
+    (§6 of this document, "Secret material never enters browser/shareable
+    artifacts or repository metadata" applies identically here).
+-   Every other UI 2.0 table (`jobs`/`job_steps` job logs, capability
+    projections such as `cp_inventory_projection`, `devices`/`endpoints`/
+    `credential_references` control-plane rows, encrypted-backup-artefact
+    manifests) is CLASS 2 by the same instance-wide rule — it carries
+    opaque device/entity identifiers, management endpoint references, or an
+    audit trail over them.
+
+No table in this instance is ever a CLASS 0/1/shareable artefact; none is
+ever enumerated into a support bundle. This does not change any existing
+Line-1 rule above — Line-1's own runtime directories, its opt-in `DEV.3.3`
+Postgres backend, and this document's CLASS 0–3 vocabulary are unchanged;
+this section only names UI 2.0's own, separate database within that same
+vocabulary.
+
 ## Raw configuration
 
 ### Check Point
