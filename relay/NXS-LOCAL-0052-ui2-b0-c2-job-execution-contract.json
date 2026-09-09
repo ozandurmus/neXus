@@ -1,0 +1,116 @@
+{
+  "created_at": "2026-09-09T14:45:55Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1: The state machine is closed: every state has an explicit set of allowed transitions and causers; no transition leads out of OUTCOME_UNKNOWN except a reconciliation record or an authorised intervention.",
+          "AC-2: The crash matrix (§8) covers all five crash points and, for each, names the resulting state, whether a second device contact is possible (must be 'no' for any point after contact), and what the operator sees.",
+          "AC-3: Lease/heartbeat/fencing rules make it impossible for two workers to execute the same step attempt; the mechanism is specific enough for a Testcontainers test.",
+          "AC-4: Retry rules are stated per action class of utils/action_taxonomy.py; operational-write never auto-retries.",
+          "AC-5: Owner, approver(s) and execution identity are three distinct fields with their sources; the scheduled-job actor problem from the brief (SR-D6) is resolved.",
+          "AC-6: Pre-execution checks are enumerated in order with their recorded outcome fields and run before any device contact.",
+          "AC-7: Run Now is specified as a job request satisfying UI-OPERATIONAL-RUN-NOW and APPROVAL-MODEL, with the approval state checked at claim time, not only at request time.",
+          "AC-8: Schedule optimistic concurrency refuses on version conflict; the refusal shape is defined.",
+          "AC-9: §9 provides at least ten testable acceptance criteria for B1-4 / B1-10 / B1-11.",
+          "AC-10: §10 lists every contradiction with frozen authority found (or states none and which documents were checked); the document reopens no PO-reserved decision."
+        ],
+        "baseline": {
+          "authority": "docs/design/UI2_0_BASELINE_CONTRACT.md (FROZEN -- PRODUCT OWNER APPROVED 2026-09-09): JOB-UNCERTAIN-OUTCOME (OUTCOME_UNKNOWN, no automatic second write, reopening needs recorded reconciliation evidence or a separate authorised intervention), UI-OPERATIONAL-RUN-NOW (UI creates an authorised job request; the worker executes; target, profile version, reason and audit fixed at request time; pre-execution checks before device contact), APPROVAL-MODEL (four-eyes on profile version + schedule; routine runs in approved scope need D7 role + reason; restore/failover per-operation approval), acceptance sentences A-1/A-2/A-3. Workflow §3.2 (step executor, closed step kinds, evidence writer), §3.4 (Line-1/Java device-contact coordination), §5 B0-2, B1-10/B1-11 acceptance scenarios. Design §5.4 (E1-E7 gate chain), §6.3-6.7 (steps, gates, discard_raw, versions, schedule-edit intent) as amended. Line-1's utils/operate (ActionCoordinator states, record) and RECOVERY_OPERATIONAL_WRITE_LEDGER.md are REFERENCE semantics for operational-write bookkeeping: read them for what they got right; do not port their code.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED); UI 2.0 baseline adopted 2026-09-09",
+          "sequencing": "Runs concurrently with C1 (platform & schema contract, movement UI2_B0_C1_PLATFORM_SCHEMA_CONTRACT). C2 owns lifecycle semantics and the columns that carry them; C1 owns table identity, audit linkage and data classes. Name your lifecycle columns explicitly so C1/B1-2 can adopt them; do not define audit or secrets. C4 (capability registry) will supply what a 'step' is; C2 must only assume a step has a kind, a gate reference, a timeout and an expect/validation result."
+        },
+        "context_not_loaded": [
+          "Any Java source, Gradle build or Flyway migration -- B1-4 implements this contract",
+          "Line-1 execution paths (utils/collection_executor.py::workflow_argv, console/runner.py::_execute, main.py) as anything other than reference: the Java worker never invokes them (workflow P-1)",
+          "Device contact, credentials, network access",
+          "The backup profile rules themselves (C7) and the capability/step definitions (C4) beyond the minimal step interface named above"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/ui2-b0-c2-job-execution-contract"
+        },
+        "invariants": [
+          "OUTCOME_UNKNOWN is a terminal-until-reconciled state: a job whose write was sent but whose result could not be recorded never auto-retries a write; reopening requires a reconciliation record (what evidence, who) or a separately authorised intervention -- exactly acceptance sentence A-2",
+          "Read-class steps may be retried under explicit, bounded rules; operational-write steps never auto-retry; the contract states the rule per action class of utils/action_taxonomy.py",
+          "Exactly-once device contact per step attempt is proven by design: lease ownership + fencing token + step-attempt record written BEFORE the device is contacted; the crash scenario (worker dies after sending the command, before recording the result) must land in OUTCOME_UNKNOWN with no second contact -- B1-11 will test this",
+          "Owner (who created the request/schedule), approver(s) (who approved the profile version / schedule / per-operation approval) and execution identity (which credential reference the worker used) are three distinct recorded fields; 'last editor' is never the execution identity",
+          "Pre-execution checks (E1-E7 gate chain, D7 role, approval state of profile version + target + schedule, connectivity check where required, Line-1/Java contact-coordination window per workflow §3.4) run at claim time, before any device contact, and their result is recorded on the job",
+          "Class-1 actions remain non-submittable from a console; a Run Now is a job request, never a console submission (UI-OPERATIONAL-RUN-NOW)",
+          "Schedule edits use optimistic concurrency (version check) and refuse on conflict; they never clamp or silently merge (design §6.7 semantics preserved)",
+          "No decision frozen in UI2_0_BASELINE_CONTRACT.md is reopened; contradictions with frozen authority are REPORTED in a dedicated section"
+        ],
+        "merge_gate": "Standing relay#13: green tests -> self-merge, report via RELAY_NOTE. Documentation-only PR; the DLP privacy gate at push time is the substantive gate. The known worktree-only red (tests/test_nexus_engineer_tool_gate.py::test_ac1_live_bug_regression_against_real_repository_state) passes inside orchestrated worktrees; anything else red is real.",
+        "movement_type": "ARCHITECTURE",
+        "objective": "Write the UI 2.0 B0/C2 job execution contract as docs/design/UI2_0_C2_JOB_EXECUTION_CONTRACT.md (status: DRAFT -- FOR PRODUCT OWNER FREEZE). It defines how a Java worker claims, executes, records and completes a job: the job record and its state machine, leasing and heartbeat, timeouts, worker loss, duplicate detection, OUTCOME_UNKNOWN semantics (JOB-UNCERTAIN-OUTCOME, acceptance sentence A-2), the separation of owner / approver / execution identity for scheduled and Run Now jobs, schedule optimistic concurrency, and the step log. There is no Python worker: the executor is Java from the first job.",
+        "output_contract": [
+          "docs/design/UI2_0_C2_JOB_EXECUTION_CONTRACT.md with: §1 scope and authority chain; §2 job record (fields, owner/approver/execution identity, idempotency key, request-time fixation of target/profile version/reason); §3 state machine (states, transitions, who may cause each, terminal states incl. OUTCOME_UNKNOWN and its reconciliation path) as a table plus a diagram-as-text; §4 claiming: lease, heartbeat, fencing token, lease expiry, worker loss detection, multi-worker safety; §5 step execution: step-attempt record before contact, per-step timeout, expect/validation result, retry rules per action class, step log data class (reference C1); §6 pre-execution checks and their recording; §7 schedules: versioning, optimistic concurrency, actor decoupling, Run Now as a job request; §8 crash matrix: for each crash point (before claim, after claim before contact, after contact before result, after result before commit, after commit before notify) the resulting state and the operator's view; §9 acceptance criteria for B1-4 and the two acceptance scenarios B1-10/B1-11 -- at least ten, each testable; §10 contradictions/open items for the PO; §11 cross-references",
+          "project/backlog.json ui2_b0_c2_job_execution_contract status -> in_progress with the PR reference; build_history record per the usual pattern",
+          "RELAY_NOTE + SESSION_CLOSE"
+        ],
+        "recommended_reasoning": {
+          "reason": "A concurrency/safety contract on new scope (crash-safe execution, exactly-once device contact); extended thinking is warranted, bounded by a frozen baseline -- Sonnet 5 high is the lightest tier that fits.",
+          "tier": "Sonnet 5, extended thinking (high)"
+        },
+        "requirements": [
+          "Read UI2_0_BASELINE_CONTRACT.md, UI2_0_DEVELOPMENT_WORKFLOW.md, UI2_0_ARCHITECTURE_DESIGN.md §5.4/§6.3-6.7 and the brief §6.3/§6.7 in full before writing",
+          "English, per AGENTS.md engineering-output language law",
+          "git diff --check; privacy gate at push; existing docs/project-state tests green"
+        ],
+        "risks": [
+          "Porting utils/operate's ActionCoordinator instead of writing a job contract for a multi-worker server -- it is a single-process reference, not the target",
+          "Allowing a 'safe' automatic retry of an operational write 'because the command is idempotent' -- forbidden by A-2",
+          "Defining audit/secrets/tables that C1 owns -- reference them by name"
+        ],
+        "scope": {
+          "in": [
+            "docs/design/UI2_0_C2_JOB_EXECUTION_CONTRACT.md",
+            "project-state bookkeeping"
+          ],
+          "out": [
+            "Any ui2/ source",
+            "Any Line-1 code change",
+            "C1/C4/C7 content beyond references",
+            "Device contact"
+          ]
+        },
+        "validation_plan": [
+          "Self-check against AC-1..AC-10 in the RELAY_NOTE",
+          "docs/project-state tests",
+          "git diff --check",
+          "privacy gate at push"
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-09T14:45:55Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0052",
+  "movement": "UI2_B0_C2_JOB_EXECUTION_CONTRACT",
+  "next_actor": "engineer",
+  "refs": [
+    "docs/design/UI2_0_BASELINE_CONTRACT.md",
+    "docs/design/UI2_0_DEVELOPMENT_WORKFLOW.md",
+    "docs/design/UI2_0_ARCHITECTURE_DESIGN.md",
+    "docs/design/UI2_0_COUNCIL_REVIEW_AND_SECOND_OPINION_BRIEF.md",
+    "docs/design/RECOVERY_OPERATIONAL_WRITE_LEDGER.md",
+    "docs/design/BACKUP_RECOVERY_CONTRACTS.md",
+    "utils/action_taxonomy.py",
+    "utils/operate/coordinator.py",
+    "utils/operate/states.py",
+    "utils/operate/record.py",
+    "utils/collection_executor.py",
+    "console/runner.py",
+    "AGENTS.md",
+    "docs/AI_DEVELOPMENT_PROTOCOL.md",
+    "project/backlog.json",
+    "project/roadmap.json"
+  ],
+  "schema_version": 1,
+  "status": "OPEN",
+  "updated_at": "2026-09-09T14:45:55Z"
+}
