@@ -91,11 +91,30 @@
       },
       "seq": 1,
       "timestamp": "2026-09-09T16:35:48Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "RELAY_NOTE",
+      "seq": 2,
+      "subject": "AC self-check + delivery",
+      "text": "docs/design/UI2_0_C6_CAPABILITY_EXTRACTION_CONTRACT.md delivered (DRAFT -- FOR PO FREEZE), PR #168, MERGED (merge commit 0ba5404). Self-check against AC-1..AC-10: AC-1 (section 2.2 step 2 -- mandatory existing-produces_facts check + worked negative example reused from C4 section 2.5, OP.0 HA readiness consumes rather than re-derives ha_state) SATISFIED. AC-2 (section 2 spec template names C4 section 2.2's literal column names, mapped from workflow's nine fields) SATISFIED. AC-3 (section 4.1's worked example: every UNKNOWN field carries a validation_plan_ref; every NOT_APPLICABLE field carries a structural rationale, none conflated) SATISFIED. AC-4 (section 3.1 names utils/support_bundle.py::Tokenizer as the exact entry point; section 3.2 gives one worked SYNTHETIC and one worked DERIVED example) SATISFIED. AC-5 (section 3.3 gives a concrete proof method for each of the five named properties) SATISFIED. AC-6 (section 3.5 names the exact command, <same interpreter> main.py --repository-privacy-check, and states it is mandatory before a fixture is committed, exactly as for any other file) SATISFIED. AC-7 (section 4.1 fills every C4 section 2.2 field with a state; section 4.2 describes a five-fixture set; section 4.3 cross-references rather than duplicates C4 section 6) SATISFIED. AC-8 (section 5's table names a target C4 gate-registry entry or C1/future-C1-successor table for every capability-producing row; non-capability infrastructure rows are listed separately with the reason they carry no target, per workflow section 4's own original ruling) SATISFIED. AC-9 (section 6 gives 12 acceptance criteria covering both B1-5 and the extraction-tooling movement, each independently testable) SATISFIED. AC-10 (section 7: no contradiction with frozen authority found, documents checked named explicitly; no PO-reserved decision reopened; explicit statement that this document performs no actual extraction of a real capability) SATISFIED. Full one-shot regression run in the foreground, awaited to actual completion (never backgrounded), twice: 3214 passed, 27 skipped, 2 failed -- both pre-existing/unrelated (relay/NXS-LOCAL-0030-credential-profiles-reference-model.json's own DLP-collision text, confirmed via a uniquely-tagged git-stash before/after comparison). Two self-introduced regressions were found and fixed before commit: this movement's own new build_history.json prose initially reproduced the literal DLP-collision trigger substrings while describing the pre-existing finding (reworded without reproducing them), and the first CURRENT_STATE.md rewrite landed at 201 lines against the enforced 200-line budget (condensed). git diff --check clean; repository privacy gate confirmed pre-existing/unrelated by the same stash-and-compare method; push-time nexus-engineer gate passed cleanly after removing test-run-generated data/logs/ runtime artifacts. CI validate check passed; full-regression is workflow_dispatch-only, not run by design. Self-merged per the standing relay#13 authorization; no RELAY_CORRECTION/RELAY_DECISION was appended to this relay file before merge.",
+      "timestamp": "2026-09-09T17:42:34Z"
+    },
+    {
+      "actor": "po",
+      "authorized_by": "Product Owner (in-session precedent, 2026-09-09)",
+      "marker": "RELAY_DECISION",
+      "scope": "C6 capability extraction contract acceptance",
+      "seq": 3,
+      "subject": "C6 accepted as DRAFT -- FOR FREEZE; freezes with C4",
+      "supersedes": "none",
+      "text": "Contract accepted, no contradictions, no actual extraction performed (correct per scope). All six open items are engineering deferrals to specific later movements (extraction-tooling for shape-preserving tokenization; gate-authoring before B1-5; each row's own future Extract movement for evidence-bar clearance, table consolidation, capability granularity, and the enrollment gate-chain question) -- none require a PO ruling now, all accepted as proposed. Not yet FROZEN -- freezes with C4.",
+      "timestamp": "2026-09-09T18:27:28Z"
     }
   ],
   "id": "NXS-LOCAL-0055",
   "movement": "UI2_B0_C6_CAPABILITY_EXTRACTION_CONTRACT",
-  "next_actor": "engineer",
+  "next_actor": null,
   "refs": [
     "docs/design/UI2_0_BASELINE_CONTRACT.md",
     "docs/design/UI2_0_DEVELOPMENT_WORKFLOW.md",
@@ -115,6 +134,6 @@
     "project/roadmap.json"
   ],
   "schema_version": 1,
-  "status": "OPEN",
-  "updated_at": "2026-09-09T16:35:48Z"
+  "status": "CLOSED",
+  "updated_at": "2026-09-09T18:27:28Z"
 }
