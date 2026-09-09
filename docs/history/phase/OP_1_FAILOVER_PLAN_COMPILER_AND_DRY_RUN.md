@@ -9,7 +9,9 @@ unreachable** until real-field calibration, so §3/§5's schema stands exactly
 as specified and no `risk_items`/severity vocabulary is added. This freeze
 authorizes exactly one implementation slice, `OP.1.S1` (§9), and nothing
 else; it changes no code itself. (Drafted 2026-09-08 as
-`op1_failover_plan_compiler_contract_draft`, PR #133.)
+`op1_failover_plan_compiler_contract_draft`, PR #133.) `OP.1.S1` itself
+shipped the same day (`project/backlog.json`'s `failover_plan_compiler`
+note; `project/build_history.json`).
 
 Parent authority: `docs/design/FAILOVER_ENGINE_ARCHITECTURE.md` §10 ("`OP.1`
 — Failover Plan Compiler + Dry-Run. §3 action/rollback compilation,

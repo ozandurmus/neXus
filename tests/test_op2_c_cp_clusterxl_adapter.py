@@ -683,7 +683,14 @@ def test_production_coordinator_default_stays_unreachable(tmp_path):
 def test_adapter_module_is_not_referenced_by_any_production_coordinator_construction():
     """No non-test file anywhere in the repository constructs an
     ActionCoordinator with this adapter -- OP.2.C ships the typed adapter,
-    it does not wire it live."""
+    it does not wire it live.
+
+    `utils/failover_plan/compiler.py` (OP.1) is a deliberate, contract-named
+    exception (`docs/history/phase/OP_1_FAILOVER_PLAN_COMPILER_AND_DRY_RUN.md`
+    §4.1/§9): it constructs this adapter with a poison `session_resolver`
+    that raises if ever invoked, and never constructs an `ActionCoordinator`
+    at all (AC-6 above) -- a structurally different thing from what this test
+    guards against."""
     marker = "CPClusterXLCapabilityAdapter("
     for py_file in REPO_ROOT.rglob("*.py"):
         relative = py_file.relative_to(REPO_ROOT)
@@ -691,6 +698,8 @@ def test_adapter_module_is_not_referenced_by_any_production_coordinator_construc
         if parts[0] in ("tests", ".git", "node_modules"):
             continue
         if parts[0] == "checkpoint" and relative.name == "clusterxl_capability_adapter.py":
+            continue
+        if parts[0] == "utils" and len(parts) > 1 and parts[1] == "failover_plan":
             continue
         text = py_file.read_text(encoding="utf-8", errors="ignore")
         assert marker not in text, f"{relative} constructs the CP ClusterXL adapter outside tests/"

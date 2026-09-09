@@ -5,24 +5,25 @@ see `AGENTS.md`/`AI_START_HERE.md`. **Predecessor build detail lives in
 `project/build_history.json`** (structured, newest-first) and its linked
 docs under `docs/history/`; `docs/history/INDEX.md` is the one-line timeline.
 
-- **Checkpoint:** 2026-09-09, `event_signal_intake` Slice 1
-  (relay/NXS-LOCAL-0032) — `docs/design/EVENT_SIGNAL_INTAKE_ARCHITECTURE.md`
-  (FROZEN, Slice 1 only). AC-1: coordinator + safe diff (0.6.3, PAN-scoped)
-  EXIST AND WORK; cross-vendor timeline (0.8.x) still MISSING, doesn't gate
-  the intake boundary. New `utils/event_signal_intake.py` +
-  `signal_intake/app.py` (FastAPI, `POST /events`): HMAC-signed auth +
-  replay window/nonce + schema allowlist + per-device/event cooldown +
-  identity resolution reusing `DeviceRegistry` (no parallel model). Success
-  only ever calls the existing `CON.2` job engine (`config_refresh_cp`) —
-  never a collector, never a direct evidence write.
-  `ConsoleJobRunner` gained an additive `provenance` param (default
-  unchanged) and `Provenance.EVENT` fills the reserved value. Scoped down:
-  Check-Point-only (no PAN per-device target seam yet), no network exposure
-  (`TestClient` only), HMAC instead of the feature registry's aspirational
-  mTLS/OIDC. Full detail: `project/backlog.json`'s `event_signal_intake`
-  note. Tests: 19 passed. Full regression: 3070 passed/25 skipped/2 failed
-  (both pre-existing DLP-token prose collisions, confirmed unrelated).
-  Privacy gate PASS, 0 new findings vs `origin/main`. Predecessor
+- **Checkpoint:** 2026-09-09, `failover_plan_compiler` (`OP.1.S1`) —
+  `docs/history/phase/OP_1_FAILOVER_PLAN_COMPILER_AND_DRY_RUN.md` (FROZEN —
+  PRODUCT OWNER APPROVED 2026-09-09, `op_degraded_verdict` decided Option A:
+  `DEGRADED_PROCEED_WITH_RISK` stays structurally unreachable). New
+  `utils/failover_plan/` package compiles a write-free `FailoverPlan`/
+  `DryRunReport` for one classic CP ClusterXL unit from already-collected
+  `OP.0a`/`OP.0b` evidence; every `CPClusterXLCapabilityAdapter` it
+  constructs is given a poison `session_resolver` (structural zero-I/O
+  proof). New `main.py --failover-plan-dry-run [--failover-plan-unit
+  UNIT_ID]`, mirroring `--ha-readiness-check`'s offline shape. Constructs no
+  `ActionCoordinator`; `CLASS_2_OPERATIONAL_STATE_CHANGE` still has no
+  member. Full detail: `project/backlog.json`'s `failover_plan_compiler`
+  note. Tests: 33 new plus the existing allowlist/convergence suites, 228
+  passed together; CLI-adjacent suites 329 passed. Predecessor
+  `event_signal_intake` Slice 1 (relay/NXS-LOCAL-0032,
+  `docs/design/EVENT_SIGNAL_INTAKE_ARCHITECTURE.md`, FROZEN Slice 1 only) —
+  HMAC-signed `POST /events` intake resolving identity via `DeviceRegistry`,
+  success only ever calling the existing `CON.2` job engine. Full detail:
+  `project/backlog.json`'s `event_signal_intake` note. Predecessor
   `m7_real_device_targeted_collect_now` (relay/NXS-LOCAL-0023,
   **AUTOMATED_VALIDATED**) — `M7` entity_id substitution into
   `--cp-config-targets`, real-device confirmation still pending PO

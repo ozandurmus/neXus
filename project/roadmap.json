@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "current_build": "m7_real_device_targeted_collect_now",
+  "current_build": "failover_plan_compiler",
   "current_track": "PCP.x",
   "progress_contract": "Weighted acceptance-criterion completion. Percentages describe the declared roadmap, not calendar time or delivery ETA.",
   "tracks": [
@@ -140,14 +140,15 @@
   "now_next": {
     "horizon_contract": "NOW is exactly one build. NEXT is exactly one. Everything else is an `upcoming` row carrying its own true status: planned = AFTER, blocked = waiting on a named external gate, deferred = consciously postponed. `now.build` must equal the newest project/build_history.json record -- utils.project_plan enforces it.",
     "now": {
-      "build": "m7_real_device_targeted_collect_now",
-      "title": "M7 -- real device-targeted Collect now",
-      "goal": "Console-submitted config_refresh_cp device_id targeting resolves to a real collector entity_id and actually contacts the device -- functional per-device Collect now.",
+      "build": "failover_plan_compiler",
+      "title": "OP.1.S1 -- write-free failover plan compiler and dry-run",
+      "goal": "Compile what a controlled Check Point ClusterXL failover would look like -- the primitive, its preconditions, its postcondition, its explicit reversal -- from evidence the platform already holds, and answer whether it would proceed today. Runs no command, contacts no device, authorizes nothing.",
       "status": "automated_validated",
-      "started": "2026-09-08",
-      "completed": "2026-09-08",
+      "started": "2026-09-09",
+      "completed": "2026-09-09",
       "notes": [
-        "Full detail: project/build_history.json's m7_real_device_targeted_collect_now record; relay/NXS-LOCAL-0023.",
+        "Full detail: project/backlog.json's failover_plan_compiler note; docs/history/phase/OP_1_FAILOVER_PLAN_COMPILER_AND_DRY_RUN.md (FROZEN 2026-09-09).",
+        "Predecessor m7_real_device_targeted_collect_now (2026-09-08): console-submitted config_refresh_cp device_id targeting now resolves to a real collector entity_id and actually contacts the device. Full detail: project/build_history.json's m7_real_device_targeted_collect_now record; relay/NXS-LOCAL-0023.",
         "Predecessor m11_shared_entity_workspace_and_availability_rule (2026-09-08): static/navigation_ui.js's render/not-render gate is the sole, explicit mirror of the M10.2 resolver's stage 0 union tag. Full detail: project/build_history.json's m11_shared_entity_workspace_and_availability_rule record; relay/NXS-LOCAL-0022.",
         "Predecessor orchestrator_background_task_exit_race (2026-09-08): ENGINEER_PROMPT forbids treating long-running validation as backgroundable and waits for a real result before commit/push/merge. Full detail: project/build_history.json's orchestrator_background_task_exit_race record.",
         "Predecessor gov_po_3_ci_privacy_gate_baseline_scoping, MERGED PR #135 -- CI's own repository-privacy-gate invocation is now baseline-aware. Full detail: project/build_history.json's gov_po_3_ci_privacy_gate_baseline_scoping record."
@@ -299,12 +300,13 @@
       {
         "build": "OP.1",
         "title": "Failover plan compiler and dry-run",
-        "status": "in_progress",
+        "status": "automated_validated",
         "notes": [
           "DRAFT contract produced 2026-09-08: docs/history/phase/OP_1_FAILOVER_PLAN_COMPILER_AND_DRY_RUN.md (status line: DRAFT -- awaiting Product Owner freeze). Defines the FailoverPlan/DryRunReport artifacts for classic CP ClusterXL only, reusing utils.operate.adapter/eligibility types read-only (never constructing ActionCoordinator, never calling check_precondition()/execute_once()/observe_postcondition()). Still write-free.",
           "Presents op_degraded_verdict to the Product Owner as one decision at this freeze (recommendation unchanged: keep DEGRADED_PROCEED_WITH_RISK structurally unreachable until real-field calibration) plus the consequence of each option for the plan/dry-run vocabulary. op_four_eyes/op_emergency_evac/op_continuity_tolerance/op_aa_vsls_scope confirmed non-blocking for this freeze.",
           "Implementation slicing plan included in the contract doc (OP.1.S1, one slice, 5 non-test files, 8 acceptance criteria) so implementation can start immediately after freeze.",
-          "FROZEN -- PRODUCT OWNER APPROVED 2026-09-09 with op_degraded_verdict = Option A (DEGRADED stays unreachable). OP.1.S1 implementation dispatched the same day (relay/NXS-LOCAL-0048)."
+          "FROZEN -- PRODUCT OWNER APPROVED 2026-09-09: docs/history/phase/OP_1_FAILOVER_PLAN_COMPILER_AND_DRY_RUN.md, op_degraded_verdict decided Option A (DEGRADED_PROCEED_WITH_RISK stays structurally unreachable; see open_decisions). Slice OP.1.S1 (the only slice) implemented and AUTOMATED_VALIDATED the same day: write-free FailoverPlan/DryRunReport compiler for classic CP ClusterXL only. Full detail: project/backlog.json's failover_plan_compiler note.",
+          "Deliberately not in this slice, per the contract: Operator Console job type, any change to utils/failover/ or utils/operate/ beyond read-only imports, Palo Alto/VSX/VSLS support, anything responsive to op_degraded_verdict Option B. OP.2 (execution) remains separately gated and unimplemented at production scope."
         ]
       },
       {
@@ -636,17 +638,17 @@
     {
       "id": "op_degraded_verdict",
       "area": "OP.0 Readiness Assessment",
-      "status": "resolved",
+      "status": "decided",
       "question": "Support DEGRADED_PROCEED_WITH_RISK (per-risk operator acceptance) in v1, or restrict to SAFE_TO_FAILOVER / UNSAFE_DO_NOT_FAILOVER / INSUFFICIENT_EVIDENCE until there is field experience?",
       "options": [
         "include DEGRADED in v1",
         "SAFE / UNSAFE / INSUFFICIENT only in v1"
       ],
       "recommendation": "SAFE / UNSAFE / INSUFFICIENT only in v1; add DEGRADED once the battery is validated against real clusters.",
-      "decide_by": "OP.1 contract freeze",
-      "note": "Rebased from 'OP.0 contract freeze' on 2026-09-01, not resolved. The OP.0a contract (docs/history/phase/OP_0A_HA_READINESS_ASSESSMENT.md, decision P4) reserves DEGRADED_PROCEED_WITH_RISK in the frozen verdict enum but makes it structurally unreachable, along with SAFE_TO_FAILOVER, because OP.0a has evidence for only part of the design-doc section 4 stop-condition set. The decision therefore does not block OP.0a and is owed before OP.1 compiles a plan against the verdict. PO classification 2026-09-04: a readiness-layer decision, not coupled to the OP.2.0 CLASS 2 architecture freeze -- OP.2.0 consumes only the currently authoritative eligibility outcomes of the readiness authority and needs no change when this is decided. RESOLVED 2026-09-09 at the OP.1 contract freeze (Product Owner decision, this engineering session under the standing PO-in-session precedent): Option A. docs/history/phase/OP_1_FAILOVER_PLAN_COMPILER_AND_DRY_RUN.md is FROZEN -- PRODUCT OWNER APPROVED with its section 3/5 schema unchanged; OP.1.S1 (section 9) is the only authorized implementation slice.",
-      "decided": "2026-09-09",
-      "decision": "SAFE / UNSAFE / INSUFFICIENT only in v1 -- Option A: DEGRADED_PROCEED_WITH_RISK stays structurally unreachable until real-field calibration."
+      "decision": "DECIDED -- Option A: SAFE / UNSAFE / INSUFFICIENT (+ NOT_A_FAILOVER_UNIT) only. DEGRADED_PROCEED_WITH_RISK stays structurally unreachable until real-field calibration. Ratified at the OP.1 contract freeze, docs/history/phase/OP_1_FAILOVER_PLAN_COMPILER_AND_DRY_RUN.md section 8.",
+      "decide_by": "DECIDED 2026-09-09 (OP.1 contract freeze)",
+      "decided_on": "2026-09-09",
+      "note": "Rebased from 'OP.0 contract freeze' on 2026-09-01. The OP.0a contract (docs/history/phase/OP_0A_HA_READINESS_ASSESSMENT.md, decision P4) reserves DEGRADED_PROCEED_WITH_RISK in the frozen verdict enum but made it structurally unreachable, along with SAFE_TO_FAILOVER, because OP.0a has evidence for only part of the design-doc section 4 stop-condition set. Resolved at the OP.1 freeze with the existing recommendation: Option B would have required reopening utils/failover/assessment.py::_verdict_for and its AC-6 unreachability test (both out of OP.1's scope), a new undefined risk-acceptance notion, and a new risk_items structure -- cost not owed by OP.1's own value. utils/failover_plan's own AC-5/AC-6 tests (tests/test_op1_failover_plan_compiler.py) re-prove DEGRADED_PROCEED_WITH_RISK is never reachable through would_proceed."
     },
     {
       "id": "op_emergency_evac",
