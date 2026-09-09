@@ -39,12 +39,19 @@ def test_normalize_pan_hostname_falls_back_to_serial_when_blank():
 def test_both_parsers_use_the_shared_seam_not_independent_logic():
     """Source-level guard (contract point 7 / point 8): both call sites must
     import and call the shared helper rather than re-implementing their own
-    strip/fallback logic, so they cannot silently diverge again."""
+    strip/fallback logic, so they cannot silently diverge again.
+
+    backlog pan_hostname_parser_unification closure: the shared seam moved
+    from `normalize_pan_hostname` (hostname-only) up to
+    `parse_pan_managed_device_entry` (the whole <devices><entry> parse,
+    which itself calls `normalize_pan_hostname` internally) -- both call
+    sites still go through panorama.pan_identity, they just no longer name
+    `normalize_pan_hostname` directly in their own source."""
     import panorama.panorama_runtime_runner as runtime_runner
     import configuration.panorama_config_collector as config_collector
 
-    assert "normalize_pan_hostname" in inspect.getsource(runtime_runner)
-    assert "normalize_pan_hostname" in inspect.getsource(config_collector)
+    assert "parse_pan_managed_device_entry" in inspect.getsource(runtime_runner)
+    assert "parse_pan_managed_device_entry" in inspect.getsource(config_collector)
 
 
 def test_two_parsers_agree_on_a_hostname_with_incidental_whitespace():
