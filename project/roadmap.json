@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "current_build": "ui2_b0_baseline_directory",
+  "current_build": "ui2_b1_01_skeleton_ci_docker",
   "current_track": "PCP.x",
   "progress_contract": "Weighted acceptance-criterion completion. Percentages describe the declared roadmap, not calendar time or delivery ETA.",
   "tracks": [
@@ -150,15 +150,16 @@
   "now_next": {
     "horizon_contract": "NOW is exactly one build. NEXT is exactly one. Everything else is an `upcoming` row carrying its own true status: planned = AFTER, blocked = waiting on a named external gate, deferred = consciously postponed. `now.build` must equal the newest project/build_history.json record -- utils.project_plan enforces it.",
     "now": {
-      "build": "ui2_b0_baseline_directory",
-      "title": "UI2 B0 -- baseline directory (DRAFT, for Product Owner freeze)",
-      "goal": "Write the DRAFT baseline directory (docs/design/UI2_0_BASELINE_DIRECTORY.md): a single index cataloguing owner document/section/version for the six B0-8 baseline concerns -- product objects and navigation, shared screen states, the feature-contribution contract, the alarm lifecycle contract, log/audit data classes, and SNMP status exposure -- referencing C1-C7 and NAVIGATION_INFORMATION_ARCHITECTURE.md bindingly instead of rewriting them, with new schema-level text only where no owner exists (alarm lifecycle; the feature-contribution contract's own tie between C4 and C2). Documentation only; authorizes no device execution.",
+      "build": "ui2_b1_01_skeleton_ci_docker",
+      "title": "UI2 B1-1 -- skeleton, CI and Docker contract (DRAFT, for Product Owner freeze)",
+      "goal": "Write the DRAFT contract that makes the later ui2/ Gradle multi-module skeleton, isolated CI job, Docker image, Testcontainers PostgreSQL harness and P-1 dependency test mechanical, without creating implementation files or changing Line-1.",
       "status": "in_progress",
-      "started": "2026-09-09",
-      "completed": "2026-09-09",
+      "started": "2026-09-10",
+      "completed": "2026-09-10",
       "notes": [
-        "Full detail: project/backlog.json's ui2_b0_baseline_directory note; docs/design/UI2_0_BASELINE_DIRECTORY.md (DRAFT -- FOR PRODUCT OWNER FREEZE, 2026-09-09).",
-        "This is the second-to-last B0 item; runs concurrently with the extraction-tooling movement (Line-1 scripts/, fully independent). Once both merge, B0 is complete and the Product Owner can move to the actual freeze decision for C1-C7 as a whole, then to B1.",
+        "Full detail: project/backlog.json's ui2_b1_01_skeleton_ci_docker note; docs/design/UI2_0_B1_01_SKELETON_CI_DOCKER_CONTRACT.md (DRAFT -- FOR PRODUCT OWNER FREEZE, 2026-09-10).",
+        "Contract-first movement only. No ui2/ implementation, Line-1 source, validation.yml, or device contact.",
+        "Predecessor ui2_b0_baseline_directory completed B0 with extraction tooling; later origin/main UI2 logo and portfolio decisions were preserved before this draft.",
         "Predecessor ui2_b0_c7_backup_artefact_restore_engine_contract (C7): backup profile model, artefact store/manifest/validation/retention, key custody, restore execution (plan, preconditions, execution via C4, verification, a restore-specific OUTCOME_UNKNOWN), routine-vs-per-operation approval, device/version matrix. MERGED PR #170. Full detail: project/build_history.json's ui2_b0_c7_backup_artefact_restore_engine_contract record.",
         "Predecessor ui2_b0_c5_amendments_bundle (C5): CON.0 separate-shell amendment text cited, action_taxonomy.py UI-OPERATIONAL-RUN-NOW clarification (docstring/comment only, no new ActionClass member), design document APPROVAL-MODEL/CAP-* replacements, PRIVACY_AND_DATA_HANDLING.md UI 2.0 database section. MERGED PR #169. Full detail: project/build_history.json's ui2_b0_c5_amendments_bundle record.",
         "Predecessor ui2_b0_c6_capability_extraction_contract (C6): the extraction procedure against C4's exact schema, fixture-generation procedure, FIRST-CAPABILITY worked example, ordered extraction inventory. MERGED PR #168. Full detail: project/build_history.json's ui2_b0_c6_capability_extraction_contract record.",
