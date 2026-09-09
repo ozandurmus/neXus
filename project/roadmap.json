@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "current_build": "failover_plan_compiler",
+  "current_build": "ui2_b0_c1_platform_schema_contract",
   "current_track": "PCP.x",
   "progress_contract": "Weighted acceptance-criterion completion. Percentages describe the declared roadmap, not calendar time or delivery ETA.",
   "tracks": [
@@ -150,18 +150,16 @@
   "now_next": {
     "horizon_contract": "NOW is exactly one build. NEXT is exactly one. Everything else is an `upcoming` row carrying its own true status: planned = AFTER, blocked = waiting on a named external gate, deferred = consciously postponed. `now.build` must equal the newest project/build_history.json record -- utils.project_plan enforces it.",
     "now": {
-      "build": "failover_plan_compiler",
-      "title": "OP.1.S1 -- write-free failover plan compiler and dry-run",
-      "goal": "Compile what a controlled Check Point ClusterXL failover would look like -- the primitive, its preconditions, its postcondition, its explicit reversal -- from evidence the platform already holds, and answer whether it would proceed today. Runs no command, contacts no device, authorizes nothing.",
-      "status": "automated_validated",
+      "build": "ui2_b0_c1_platform_schema_contract",
+      "title": "UI2 B0/C1 -- platform & schema contract (DRAFT -- FOR PRODUCT OWNER FREEZE)",
+      "goal": "Define UI 2.0's own PostgreSQL schema ownership, Flyway as sole migration authority, the projection-table model, the audit mechanism that exists from the first mutation (C1-1), per-component secrets, backup-artefact key custody, data classes and Oracle portability exceptions. Contract only: no ui2/ source, no migration file, no Docker artefact.",
+      "status": "in_progress",
       "started": "2026-09-09",
-      "completed": "2026-09-09",
+      "completed": null,
       "notes": [
-        "Full detail: project/backlog.json's failover_plan_compiler note; docs/history/phase/OP_1_FAILOVER_PLAN_COMPILER_AND_DRY_RUN.md (FROZEN 2026-09-09).",
-        "Predecessor m7_real_device_targeted_collect_now (2026-09-08): console-submitted config_refresh_cp device_id targeting now resolves to a real collector entity_id and actually contacts the device. Full detail: project/build_history.json's m7_real_device_targeted_collect_now record; relay/NXS-LOCAL-0023.",
-        "Predecessor m11_shared_entity_workspace_and_availability_rule (2026-09-08): static/navigation_ui.js's render/not-render gate is the sole, explicit mirror of the M10.2 resolver's stage 0 union tag. Full detail: project/build_history.json's m11_shared_entity_workspace_and_availability_rule record; relay/NXS-LOCAL-0022.",
-        "Predecessor orchestrator_background_task_exit_race (2026-09-08): ENGINEER_PROMPT forbids treating long-running validation as backgroundable and waits for a real result before commit/push/merge. Full detail: project/build_history.json's orchestrator_background_task_exit_race record.",
-        "Predecessor gov_po_3_ci_privacy_gate_baseline_scoping, MERGED PR #135 -- CI's own repository-privacy-gate invocation is now baseline-aware. Full detail: project/build_history.json's gov_po_3_ci_privacy_gate_baseline_scoping record."
+        "Full detail: project/backlog.json's ui2_b0_c1_platform_schema_contract note; docs/design/UI2_0_C1_PLATFORM_SCHEMA_CONTRACT.md (DRAFT -- FOR PRODUCT OWNER FREEZE).",
+        "Runs concurrently with C2 (job execution contract, movement UI2_B0_C2_JOB_EXECUTION_CONTRACT), each in its own worktree/branch, independent of the OP.x row below.",
+        "Predecessor failover_plan_compiler (2026-09-09, OP.1.S1): write-free failover plan compiler and dry-run, merged PR #162 as the reference implementation of the frozen OP.1 contract. Moved to upcoming -- not a demotion, complete and automated_validated; leaves 'now' only because horizon_contract reserves that slot for the newest project/build_history.json record. Full detail: project/build_history.json's failover_plan_compiler record."
       ]
     },
     "next": {
@@ -175,6 +173,22 @@
       ]
     },
     "upcoming": [
+      {
+        "build": "failover_plan_compiler",
+        "title": "OP.1.S1 -- write-free failover plan compiler and dry-run",
+        "goal": "Compile what a controlled Check Point ClusterXL failover would look like -- the primitive, its preconditions, its postcondition, its explicit reversal -- from evidence the platform already holds, and answer whether it would proceed today. Runs no command, contacts no device, authorizes nothing.",
+        "status": "automated_validated",
+        "started": "2026-09-09",
+        "completed": "2026-09-09",
+        "notes": [
+          "Full detail: project/backlog.json's failover_plan_compiler note; docs/history/phase/OP_1_FAILOVER_PLAN_COMPILER_AND_DRY_RUN.md (FROZEN 2026-09-09). Merged PR #162 as the reference implementation of the frozen OP.1 contract; the product implementation is Java, REL-FAILOVER-READINESS.",
+          "Moved from now_next.now 2026-09-09 (ui2_b0_c1_platform_schema_contract session): not a demotion -- this build is complete and automated_validated. Leaves 'now' only because horizon_contract reserves that slot for the newest project/build_history.json record, which is now a concurrent, independently-worktreed UI 2.0 contract movement.",
+          "Predecessor m7_real_device_targeted_collect_now (2026-09-08): console-submitted config_refresh_cp device_id targeting now resolves to a real collector entity_id and actually contacts the device. Full detail: project/build_history.json's m7_real_device_targeted_collect_now record; relay/NXS-LOCAL-0023.",
+          "Predecessor m11_shared_entity_workspace_and_availability_rule (2026-09-08): static/navigation_ui.js's render/not-render gate is the sole, explicit mirror of the M10.2 resolver's stage 0 union tag. Full detail: project/build_history.json's m11_shared_entity_workspace_and_availability_rule record; relay/NXS-LOCAL-0022.",
+          "Predecessor orchestrator_background_task_exit_race (2026-09-08): ENGINEER_PROMPT forbids treating long-running validation as backgroundable and waits for a real result before commit/push/merge. Full detail: project/build_history.json's orchestrator_background_task_exit_race record.",
+          "Predecessor gov_po_3_ci_privacy_gate_baseline_scoping, MERGED PR #135 -- CI's own repository-privacy-gate invocation is now baseline-aware. Full detail: project/build_history.json's gov_po_3_ci_privacy_gate_baseline_scoping record."
+        ]
+      },
       {
         "build": "op1_failover_plan_compiler_contract_draft",
         "title": "OP.1 -- failover plan compiler and dry-run: contract draft",

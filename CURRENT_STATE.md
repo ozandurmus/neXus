@@ -5,29 +5,18 @@ see `AGENTS.md`/`AI_START_HERE.md`. **Predecessor build detail lives in
 `project/build_history.json`** (structured, newest-first) and its linked
 docs under `docs/history/`; `docs/history/INDEX.md` is the one-line timeline.
 
-- **Checkpoint:** 2026-09-09, `failover_plan_compiler` (`OP.1.S1`) —
-  `docs/history/phase/OP_1_FAILOVER_PLAN_COMPILER_AND_DRY_RUN.md` (FROZEN —
-  PRODUCT OWNER APPROVED 2026-09-09, `op_degraded_verdict` decided Option A:
-  `DEGRADED_PROCEED_WITH_RISK` stays structurally unreachable). New
-  `utils/failover_plan/` package compiles a write-free `FailoverPlan`/
-  `DryRunReport` for one classic CP ClusterXL unit from already-collected
-  `OP.0a`/`OP.0b` evidence; every `CPClusterXLCapabilityAdapter` it
-  constructs is given a poison `session_resolver` (structural zero-I/O
-  proof). New `main.py --failover-plan-dry-run [--failover-plan-unit
-  UNIT_ID]`, mirroring `--ha-readiness-check`'s offline shape. Constructs no
-  `ActionCoordinator`; `CLASS_2_OPERATIONAL_STATE_CHANGE` still has no
-  member. Full detail: `project/backlog.json`'s `failover_plan_compiler`
-  note. Tests: 33 new plus the existing allowlist/convergence suites, 228
-  passed together; CLI-adjacent suites 329 passed. Predecessor
-  `event_signal_intake` Slice 1 (relay/NXS-LOCAL-0032,
-  `docs/design/EVENT_SIGNAL_INTAKE_ARCHITECTURE.md`, FROZEN Slice 1 only) —
-  HMAC-signed `POST /events` intake resolving identity via `DeviceRegistry`,
-  success only ever calling the existing `CON.2` job engine. Full detail:
-  `project/backlog.json`'s `event_signal_intake` note. Predecessor
-  `m7_real_device_targeted_collect_now` (relay/NXS-LOCAL-0023,
-  **AUTOMATED_VALIDATED**) — `M7` entity_id substitution into
-  `--cp-config-targets`, real-device confirmation still pending PO
-  execution. Full predecessor chain: `project/build_history.json`.
+- **Checkpoint:** 2026-09-09, `ui2_b0_c1_platform_schema_contract` (UI 2.0
+  `B0`/`C1`) — new `docs/design/UI2_0_C1_PLATFORM_SCHEMA_CONTRACT.md`
+  (DRAFT — FOR PRODUCT OWNER FREEZE): schema ownership, Flyway as sole
+  migration authority, trigger-enforced audit-from-first-mutation (new
+  finding id `C1-1`), provenance record schema, per-component secrets,
+  backup-artefact key custody, Oracle portability exceptions, 10 testable
+  `B1-2` acceptance criteria. Documentation-only; runs concurrently with
+  `C2`. Full detail: `project/backlog.json`'s
+  `ui2_b0_c1_platform_schema_contract` note. Predecessor
+  `failover_plan_compiler` (`OP.1.S1`, **AUTOMATED_VALIDATED**, PR #162
+  merged as the `OP.1` contract's reference implementation). Full
+  predecessor chain: `project/build_history.json`.
 - **Next** (`now_next.next`): `gov_po_2_implementation` — unrelated and
   unchanged by this movement; not yet started. `m7_real_device_targeted_
   collect_now` **AUTOMATED_VALIDATED 2026-09-08**, real-device confirmation
