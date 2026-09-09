@@ -5,28 +5,18 @@ see `AGENTS.md`/`AI_START_HERE.md`. **Predecessor build detail lives in
 `project/build_history.json`** (structured, newest-first) and its linked
 docs under `docs/history/`; `docs/history/INDEX.md` is the one-line timeline.
 
-- **Checkpoint:** 2026-09-09, `ui2_b0_c2_job_execution_contract` (`UI2 B0/C2`)
-  — new `docs/design/UI2_0_C2_JOB_EXECUTION_CONTRACT.md` (status: **DRAFT —
-  FOR PRODUCT OWNER FREEZE**), written under
-  `docs/design/UI2_0_BASELINE_CONTRACT.md` (FROZEN — PRODUCT OWNER APPROVED
-  2026-09-09). Defines how the Java worker claims, executes, records and
-  completes a job: job record with request-time fixation; a nine-state
-  closed state machine (`REQUESTED`/`CLAIMED`/`EXECUTING` non-terminal,
-  `COMPLETED`/`FAILED`/`REJECTED`/`CANCELLED`/`OUTCOME_UNKNOWN`/`RECONCILED`
-  terminal — `OUTCOME_UNKNOWN`'s only outgoing edge is to `RECONCILED` via a
-  reconciliation record, implementing `JOB-UNCERTAIN-OUTCOME`/A-2);
-  PostgreSQL `FOR UPDATE SKIP LOCKED` claim + `lease_epoch` fencing token +
-  heartbeat; step-attempt-before-contact with per-action-class retry rules
-  (`utils/action_taxonomy.py`: class-0 read bounded retry, class-1
-  recovery-write never auto-retries); a six-check ordered pre-execution
-  battery at claim time; `BackupSchedule` optimistic concurrency
-  (`SCHEDULE_VERSION_CONFLICT`); owner/approver/execution-identity as three
-  distinct fields, resolving council-brief `SR-D6` per Astra's objection. No
-  code, no schema migration, no device execution — documentation only.
-  Full detail: `project/backlog.json`'s `ui2_b0_c2_job_execution_contract`
-  note. Predecessor `ui2_b0_c1_platform_schema_contract` (`C1`, ran
-  concurrently, **MERGED PR #163**) — UI 2.0 schema ownership, Flyway sole
-  migration authority, audit-from-first-mutation (`C1-1`); document stays
+- **Checkpoint:** 2026-09-09, `ui2_b0_c3_identity_sessions_rbac_contract`
+  (`UI2 B0/C3`) — new
+  `docs/design/UI2_0_C3_IDENTITY_SESSIONS_RBAC_CONTRACT.md` (status:
+  **DRAFT — FOR PRODUCT OWNER FREEZE**). Defines LDAP bind, a
+  structurally-enforced single-active-session rule with takeover/refuse,
+  role tokens → bindings → AD group references (`DIRECTORY-POSTURE`'s
+  service account specified but disabled per `D-6`), RBAC's
+  visible-but-refused HTTP refusal contract, and the `E1`–`E7` gate chain
+  composed with (not duplicating) `C2`'s own `E7`. No code, no migration,
+  no device execution. Full detail: `project/backlog.json`'s
+  `ui2_b0_c3_identity_sessions_rbac_contract` note. Predecessors `C2`
+  (**MERGED PR #164**) and `C1` (**MERGED PR #163**) — both documents stay
   DRAFT pending Product Owner freeze. Full predecessor chain:
   `project/build_history.json`.
 - **Next** (`now_next.next`): `gov_po_2_implementation` — unrelated and
