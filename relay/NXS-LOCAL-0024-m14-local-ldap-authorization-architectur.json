@@ -1,0 +1,93 @@
+{
+  "created_at": "2026-09-08T19:31:39Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1: read docs/design/CAPABILITY_STATE_VOCABULARY_AND_PRESENTATION.md's D7 section in full (FROZEN -- PRODUCT OWNER APPROVED): 'D7 describes authorization and nothing else... A bearer-token session gate... keep their full enforcement power; they simply are not D7' and its historical note about a prior overreach that folded taxonomy/session gates into D7. Also read utils/action_taxonomy.py (E3, the single evaluation of taxonomy admissibility -- D7/E4 never re-evaluate it) and console/app.py's existing bearer-token/loopback authentication. This design must not duplicate or re-evaluate either of those -- D7 is specifically actor authorization (is THIS actor permitted THIS action), a layer on top of, not a replacement for, taxonomy admissibility and the existing session gate.",
+          "AC-2: produce a DRAFT design document (docs/design/M14_LOCAL_LDAP_AUTHORIZATION_ARCHITECTURE.md, status DRAFT -- discussion proposal, following the same document shape as docs/history/phase/OP_1_FAILOVER_PLAN_COMPILER_AND_DRY_RUN.md and docs/design/PRIVATE_REPLAY_ARCHITECTURE.md) proposing a D7 authorization producer that authenticates via a local LDAP bind against the operator's existing corporate Active Directory Domain Controller and authorizes via AD group membership -- explicitly decoupled from DEPLOY.1A (server/OIDC/RBAC track): this is a local-operator, loopback-console-scoped design, not a multi-tenant server design, and must say so explicitly rather than silently inheriting DEPLOY.1A's assumptions.",
+          "AC-3: the design must resolve, as real decisions with stated tradeoffs (not left as open questions for a second round): (a) LDAP bind credential sourcing -- reuse the existing DEV.2.1/DEV.2.2 env-var/`<VAR>_FILE`-mount pattern (application/services.py::_resolve_or_prompt/_build_runtime_config) rather than inventing a second credential path; never a credential in a config file committed to the repo, never in a URL, never in an argv the console/orchestrator would log. (b) fail-open vs fail-closed when the DC is unreachable or the bind fails -- default recommendation and why. (c) what this design can do with NO database available today: what group-membership/session state, if any, needs to persist across requests (in-memory only for the life of the console process? a short-TTL cache? never persisted at all, re-checked per request?) -- explicitly separate 'what works today, filesystem/memory only' from 'what a future DB would additionally enable (e.g. an encrypted persistent group-membership cache with a longer TTL, audit history)' as a clearly labeled later amendment, not something this draft assumes exists. (d) group-to-permission mapping model -- one group gates console access entirely, or does D7 need per-action granularity (per the frozen contract's own action-scoped E4 outcomes: NO_APPLICABLE_AUTHORITY / PERMITTED / DENIED(authority, reason) / AUTHZ_NOT_EVALUATED(authority))? State which this design targets first and why. (e) library/dependency choice for the LDAP bind (e.g. ldap3 vs python-ldap) -- state the tradeoff (pure-Python vs libldap binding, Windows/macOS/Linux portability given this runs on the operator's own machine, not just a Linux server) and a recommendation; this is a new third-party dependency, unlike the orchestrator/dashboard's own stdlib-only precedent, so justify it explicitly rather than silently assuming it's fine.",
+          "AC-4: explicitly scope what this draft does NOT decide or authorize: no code changes in this movement; no live LDAP/AD network call; this document alone does not authorize dispatch of an implementation movement (mirrors PRIVATE_REPLAY_ARCHITECTURE.md's and OP.1's own 'DRAFT, not approved' framing). Name the smallest first implementation slice (e.g. 'bind + single-group check, console-login-gating only, no per-action granularity yet') as a clearly separated, later-authorized next step, distinct from the fuller D7/per-action model this design should still describe as the eventual target.",
+          "AC-5: reconcile with the existing console authentication (console/app.py's bearer-token/session model, CON.0/CON.1) -- this LDAP-based D7 producer is an ADDITIONAL authorization layer answering 'is this authenticated actor in an authorized group', not a replacement for the existing session-token mechanism, which stays exactly as it is.",
+          "AC-6: no implementation, no test changes, no project-state file changes beyond adding this document and (if warranted) a short project/backlog.json note pointing to it -- this is a design-only movement, same validation floor as the OP.1 contract-draft and Private-Replay-draft movements before it (git diff --check, repository privacy gate, no code/test touched)."
+        ],
+        "baseline": {
+          "authority": "This movement's own authority is entirely what it produces -- there is no existing frozen contract for local-LDAP D7 authorization to implement against. docs/design/CAPABILITY_STATE_VOCABULARY_AND_PRESENTATION.md's D7 section (FROZEN) is the one constraint this draft must not violate: D7 is authorization only, never re-evaluates taxonomy admissibility (E3) or the existing session gate.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "sequencing": "Independent of every other in-flight movement -- new document only, no shared file surface. Product Owner direction 2026-09-08: this decouples M14 from its previous (incorrect) DEPLOY.1A dependency -- M14 was blocked in project state pending server infrastructure that this local-LDAP approach does not need. Not urgent to implement today (the Product Owner is currently fine using their own credentials manually); this movement is architecture-only, to have a resolved design ready before implementation is prioritized."
+        },
+        "context_not_loaded": [
+          "DEPLOY.1A / server OIDC-RBAC track -- explicitly out of scope, this design does not extend or depend on it",
+          "everything outside D7/local-LDAP-authorization design"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/m14-local-ldap-authorization-architecture-draft"
+        },
+        "invariants": [
+          "D7 never re-evaluates taxonomy admissibility (E3) or replaces the existing console session-token gate -- it is an additional, narrower layer",
+          "No credential (LDAP bind or otherwise) ever appears in a config file committed to the repo, a URL, or a logged argv",
+          "This document does not authorize implementation by existing -- a separate, later Product Owner decision does"
+        ],
+        "merge_gate": "Standing relay#13: green tests -> self-merge, report via RELAY_NOTE. Design-only movement -- 'green tests' means the unchanged existing suite plus git diff --check plus the privacy gate, not new tests (none are added).",
+        "movement_type": "ARCHITECTURE",
+        "objective": "Produce a DRAFT architecture document for a local, LDAP/Active-Directory-group-membership-based D7 authorization producer, explicitly decoupled from the DEPLOY.1A server track, resolving the real design questions (credential sourcing, fail-open/closed, what persists without a database today vs what a future database would add, group-to-permission granularity, dependency choice) as concrete recommendations rather than open questions.",
+        "output_contract": [
+          "docs/design/M14_LOCAL_LDAP_AUTHORIZATION_ARCHITECTURE.md (DRAFT status)",
+          "A short RELAY_NOTE summarizing the key recommendations for quick Product Owner review",
+          "SESSION_CLOSE on this relay file (absolute path)"
+        ],
+        "recommended_reasoning": {
+          "reason": "A genuine cross-subsystem architecture/security-boundary decision (new authentication/authorization producer, new third-party dependency, credential-handling model, persistence-without-a-database constraint) -- per this repo's own reasoning-routing policy (CLAUDE.md) and explicit Product Owner direction 2026-09-08, this is Opus-tier work, not routine implementation.",
+          "tier": "Opus, high reasoning -- explicit Product Owner direction for this design movement"
+        },
+        "requirements": [
+          "Resolve AC-3's five sub-questions as real decisions with stated tradeoffs, not left open for a second design round"
+        ],
+        "risks": [
+          "Scope creep into DEPLOY.1A territory (multi-user/server assumptions) -- stay strictly local-operator/loopback-console scoped",
+          "Silently assuming a database exists for persistence -- explicitly separate what works today (no DB) from a later DB-enabled amendment"
+        ],
+        "scope": {
+          "in": [
+            "The DRAFT design document and its five resolved sub-decisions (AC-3)",
+            "Reconciliation with existing D7 contract text and console session model (AC-1, AC-5)"
+          ],
+          "out": [
+            "Any code, test, or live LDAP/AD call",
+            "DEPLOY.1A / server OIDC-RBAC design",
+            "Implementation authorization -- a separate later decision"
+          ]
+        },
+        "validation_plan": [
+          "git diff --check",
+          "privacy gate once at PR time",
+          "No test suite changes -- confirm the existing suite is untouched"
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-08T19:31:39Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0024",
+  "movement": "M14_LOCAL_LDAP_AUTHORIZATION_ARCHITECTURE_DRAFT",
+  "next_actor": "engineer",
+  "refs": [
+    "docs/design/CAPABILITY_STATE_VOCABULARY_AND_PRESENTATION.md",
+    "docs/design/LOCAL_CONTROL_PLANE_RUNTIME_AND_ENROLLMENT.md",
+    "docs/design/OPERATOR_CONSOLE_ARCHITECTURE.md",
+    "utils/action_taxonomy.py",
+    "application/services.py",
+    "console/app.py",
+    "project/backlog.json",
+    "project/roadmap.json",
+    "docs/history/phase/OP_1_FAILOVER_PLAN_COMPILER_AND_DRY_RUN.md"
+  ],
+  "schema_version": 1,
+  "status": "OPEN",
+  "updated_at": "2026-09-08T19:31:39Z"
+}

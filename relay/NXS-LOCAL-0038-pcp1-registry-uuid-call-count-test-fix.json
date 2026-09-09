@@ -1,0 +1,142 @@
+{
+  "created_at": "2026-09-08T23:25:43Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1: read utils/device_registry.py's _acquire_lock and the two named tests in full to confirm the diagnosed over-counting.",
+          "AC-2: fix using one of the backlog's own suggested directions (post-lock-acquisition call counting, or asserting on the persisted record) or a better one you find -- state which and why.",
+          "AC-3: both tests pass deterministically, and still genuinely prove the intended property.",
+          "AC-4: update backlog.json's pcp1_registry_uuid_call_count_test_defect status to done.",
+          "AC-5: if blocked on a genuine PO-only decision, RELAY_NOTE and stop; PO reviews in the morning."
+        ],
+        "baseline": {
+          "authority": "project/backlog.json id pcp1_registry_uuid_call_count_test_defect is this movement's authority, including its own suggested fix directions (count only calls made after lock acquisition, or assert on the persisted record instead of the call count) inside PCP.1's frozen section 21 contract.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "sequencing": "Independent of other in-flight movements -- test-mechanism fix only, no product code behavior change."
+        },
+        "context_not_loaded": [
+          "Any change to PCP.1's actual device-id generation/lock-acquisition behavior -- test-proof-technique fix only"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/pcp1-registry-uuid-call-count-test-fix"
+        },
+        "invariants": [
+          "No product behavior change to utils/device_registry.py -- this is a test-mechanism fix within PCP.1's frozen section 21 contract",
+          "The actual property (no device_id generated before duplicate/lock refusal) must still be genuinely proven, not weakened"
+        ],
+        "merge_gate": "Standing relay#13: green tests -> self-merge, report via RELAY_NOTE.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Fix project/backlog.json id pcp1_registry_uuid_call_count_test_defect (P2): tests/test_pcp1_device_registry.py::test_duplicate_enroll_refused_before_device_id_generated and ::test_lock_contention_on_enroll_never_generates_a_device_id monkeypatch dr.uuid.uuid4 and assert the call list is empty, but utils/device_registry.py::_acquire_lock legitimately generates the lock's owner_token with uuid.uuid4() before the O_CREAT|O_EXCL attempt -- the proof technique over-counts. No product behavior change is expected; the AC being proven (no device_id is generated before the duplicate/lock refusal) is still correct and still holds.",
+        "output_contract": [
+          "Fixed test(s) that correctly distinguish the lock's own owner_token uuid4() call from a device_id-generating uuid4() call",
+          "Both tests pass deterministically",
+          "backlog.json note update marking this done",
+          "RELAY_NOTE + SESSION_CLOSE"
+        ],
+        "recommended_reasoning": {
+          "reason": "Well-scoped, already-diagnosed test-mechanism bug fix inside a frozen contract.",
+          "tier": "Sonnet 5, normal"
+        },
+        "requirements": [
+          "Do not weaken the property being tested -- fix the proof technique, not the assertion's intent"
+        ],
+        "risks": [
+          "Fixing the test by making it assert something weaker than the original intent"
+        ],
+        "scope": {
+          "in": [
+            "The two named tests + minimal supporting change if needed"
+          ],
+          "out": [
+            "Any change to device_registry.py's actual runtime behavior"
+          ]
+        },
+        "validation_plan": [
+          "Both named tests pass",
+          "Full one-shot regression once",
+          "git diff --check",
+          "privacy gate at PR time"
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-08T23:25:43Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "report": {
+        "changed": [
+          "project/backlog.json"
+        ],
+        "completed": [
+          "Read utils/device_registry.py::_acquire_lock and both named tests in full (AC-1); confirmed the diagnosed over-counting and that it was already fixed",
+          "Discovered the code-level fix (a _generate_device_id() seam separate from _acquire_lock's own owner_token uuid4() call) already landed on main via commit ebfe081 (2026-09-06), before this movement's dispatch -- both named tests already monkeypatch dr._generate_device_id and pass deterministically (2 passed) (AC-2, AC-3)",
+          "Updated project/backlog.json's pcp1_registry_uuid_call_count_test_defect status planned -> done with a resolution note explaining the staleness (AC-4)",
+          "PR #151 opened, validate check green, self-merged per standing relay#13, merge commit c40b9951a8f549b9c5d312c661e2e72db82a5076"
+        ],
+        "continuation": "SAME_SESSION",
+        "effects": {
+          "main_py": "none",
+          "ui": "none"
+        },
+        "integration": {
+          "branch": "feature/pcp1-registry-uuid-call-count-test-fix",
+          "ci": "validate: pass; full-regression: skipped (push-to-main-only job, correctly not triggered on PR)",
+          "head_sha": "c40b9951a8f549b9c5d312c661e2e72db82a5076",
+          "merge_commit": "c40b9951a8f549b9c5d312c661e2e72db82a5076",
+          "merge_decision": "SELF_MERGE_RELAY_13",
+          "merge_state": "MERGED",
+          "pr": 151,
+          "pr_url": "https://github.com/ozandurmus/neXus/pull/151"
+        },
+        "next": {
+          "movement": "n/a",
+          "movement_type": "IMPLEMENTATION",
+          "objective": "n/a",
+          "status": "done"
+        },
+        "preserved": [
+          "utils/device_registry.py runtime behavior unchanged -- no product code touched on this branch (the fix for the tests themselves already existed on main via commit ebfe081)",
+          "The intended property (no device_id generated before duplicate/lock refusal) is still genuinely proven -- not weakened"
+        ],
+        "recommended_reasoning": {
+          "reason": "Verification and bookkeeping only -- the diagnosed defect was already repaired in code before dispatch; no new implementation decision was made.",
+          "tier": "Sonnet 5, normal"
+        },
+        "state_updates": [
+          "project/backlog.json::pcp1_registry_uuid_call_count_test_defect status planned -> done"
+        ],
+        "unresolved_risks": [],
+        "validation": {
+          "affected": "No product code changed; no affected surface beyond the backlog entry itself",
+          "diff_check": "clean",
+          "full_regression": "python -m pytest -q -n auto --dist worksteal (repo .venv interpreter): 3097 passed, 27 skipped; the only 2 failures (DLP-collision source scans on project/build_history.json and an unrelated scratch file) reproduced identically against the origin/main baseline before this change, confirmed pre-existing and unrelated to this movement",
+          "privacy": "tests/test_dev0_4_repository_privacy_gate.py passed in the full regression; the push-time privacy gate's initial findings were untracked, gitignored local test-run artifacts (data/, logs/) created by running the suite, removed before push and not part of the commit",
+          "real_environment": "n/a -- local validation only per movement's deployment_direction",
+          "state_consistency": "git diff --check: clean; only project/backlog.json changed, JSON re-validated after edit",
+          "targeted": "Both named tests re-run directly: 2 passed"
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-08T23:33:12Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0038",
+  "movement": "PCP1_REGISTRY_UUID_CALL_COUNT_TEST_FIX",
+  "next_actor": null,
+  "refs": [
+    "utils/device_registry.py",
+    "tests/test_pcp1_device_registry.py",
+    "project/backlog.json"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-08T23:33:12Z"
+}

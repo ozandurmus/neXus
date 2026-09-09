@@ -1,0 +1,99 @@
+{
+  "created_at": "2026-09-08T22:54:13Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1: find and read every PAN authentication/transport code path (older runtime path and newer configuration paths) -- name them precisely.",
+          "AC-2: document the exact divergence -- what differs, under what conditions each path is taken, and whether an operator/device could be affected differently depending on which path executes.",
+          "AC-3: assess severity: if the divergence itself constitutes a live security exposure (e.g. one path skips a check the other performs), stop implementation-thinking entirely and RELAY_NOTE it as urgent for the Product Owner -- do not attempt a fix.",
+          "AC-4: if not urgent, propose (do not implement) a convergence design, explicitly gated on a future dedicated security build + TLS trust review per the backlog's own instruction.",
+          "AC-5: update backlog.json's note with the audit's findings.",
+          "AC-6: no code behavior change of any kind in this movement."
+        ],
+        "baseline": {
+          "authority": "project/backlog.json id pan_auth_transport_convergence is this movement's authority and its own explicit caution.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "sequencing": "Independent of other in-flight movements."
+        },
+        "context_not_loaded": [
+          "Any live PAN device contact",
+          "Any actual behavior change to authentication/transport code"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/pan-auth-transport-convergence-audit"
+        },
+        "invariants": [
+          "No behavioral change to any PAN authentication or transport code path in this movement -- audit and design only",
+          "If the audit finds the divergence is itself a live security defect (not just an inconsistency), stop and flag it as a RELAY_NOTE for immediate Product Owner attention rather than silently fixing it"
+        ],
+        "merge_gate": "Standing relay#13: green tests -> self-merge, report via RELAY_NOTE. Design-only movement -- git diff --check + privacy gate only, unless the audit itself needs no code changes at all (likely).",
+        "movement_type": "ARCHITECTURE",
+        "objective": "Audit-only movement for project/backlog.json id pan_auth_transport_convergence (P1): a Corporate Copilot source audit observed divergent PAN authentication transport behavior between an older runtime path and newer configuration paths. The backlog note explicitly says: converge only in an explicit security build together with a TLS trust review, do not change current behavior implicitly. This movement documents the divergence precisely and proposes a convergence design -- it does NOT change any authentication/transport behavior.",
+        "output_contract": [
+          "A findings document identifying exactly where the older-runtime-path and newer-configuration-path PAN authentication transport behaviors diverge (name the actual files/functions)",
+          "An assessment of whether the divergence is a live security risk (report immediately if so) or a benign inconsistency safe to converge later",
+          "A convergence design proposal, explicitly scoped as requiring a dedicated security build + TLS trust review before implementation -- not authorized by this document",
+          "backlog.json note update",
+          "RELAY_NOTE + SESSION_CLOSE"
+        ],
+        "recommended_reasoning": {
+          "reason": "Security-boundary audit (authentication transport) -- vendor-semantic and security-boundary work per this repo's own reasoning routing.",
+          "tier": "Sonnet 5, extended thinking (high)"
+        },
+        "requirements": [
+          "Zero behavioral changes to authentication/transport code -- audit and design only"
+        ],
+        "risks": [
+          "Being tempted to 'just fix the small inconsistency' -- explicitly forbidden by the backlog's own instruction and this movement's scope"
+        ],
+        "scope": {
+          "in": [
+            "Audit findings + convergence design proposal"
+          ],
+          "out": [
+            "Any actual code change to authentication/transport behavior",
+            "Any live PAN device contact"
+          ]
+        },
+        "validation_plan": [
+          "git diff --check",
+          "privacy gate at PR time",
+          "No test/code changes expected"
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-08T22:54:13Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "RELAY_NOTE",
+      "seq": 2,
+      "subject": "URGENT: PAN auth transport divergence is a live credential-exposure defect, not a benign inconsistency",
+      "text": "AC-1..AC-3 complete, AC-5/AC-6 complete, merged as PR #148 (squash 52e77a9), no auth/transport code behavior changed. Full findings: docs/design/PAN_AUTH_TRANSPORT_CONVERGENCE_AUDIT.md.\n\nSeverity call (AC-3): URGENT. The older runtime path -- panorama/panorama_runtime_runner.py::get_api_key/op_cmd/get_devices, which is the live --only panorama/all collection path and is also reused as-is by panorama/panorama_recovery_collector.py's RB.2 device-state recovery collector -- sends the PAN admin username, password, and every subsequent session API key as HTTPS GET URL query parameters. The newer path -- configuration/panorama_config_collector.py::_keygen/api_post, used by --only pan-config/all and by panorama/preflight_collector.py's OP.0b preflight collector -- already fixed this deliberately (POST body for credentials, X-PAN-KEY header for the session key), with an inline comment ('Credentials are POST body fields, never URL query parameters.') and evidence-store provenance recording the choice. The fix was never back-ported to the older path. This repo's own register_sensitive_value() redaction only covers this application's own log output; it has no reach into the PAN device's server-side httpd logs or any TLS-terminating intermediary the URL passes through, where the credential and key are already exposed on the wire before this process logs anything.\n\nPer AC-3 and this movement's invariant, implementation-thinking stopped here -- no fix attempted or proposed. AC-4 (convergence design) is superseded per its own 'if not urgent' condition; the audit doc records that the newer path's _keygen/api_post pattern is already the target shape for whoever is directed to build the eventual fix, but does not design or authorize it. Per the backlog note's own original instruction, any fix still requires a dedicated security build together with a TLS trust review before implementation, regardless of urgency -- this RELAY_NOTE is asking for a Product Owner decision on how urgently to schedule that build, not for permission to implement now.\n\nValidation: full regression run in the foreground with an explicit long timeout, awaited to actual completion twice (once before an unrelated self-inflicted DLP-scan trip from the audit doc's own prose was fixed, once after): py -m pytest -q -n auto --dist worksteal, 3092 passed, 25 skipped, 2 failed both times -- both failures pre-existing/unrelated (test_dev_0_5b_auth_consumer_canonical_config.py's repo-wide DLP text-scan tripping on project/build_history.json), confirmed identical finding-count (3) against a clean stashed baseline. git diff --check clean. Repository privacy gate initially blocked push on local pytest-run-generated runtime artifacts (data/.support_hmac.key, data/, logs/ -- gitignored, not committed, this worktree's own test-run byproducts); removed them (regeneratable, untracked) and the gate passed clean on retry. PR #148 CI (validate) passed; full-regression job skipped by CI's own path filtering for a docs+backlog-note-only change.",
+      "timestamp": "2026-09-08T23:07:10Z"
+    },
+    {
+      "actor": "po",
+      "marker": "RELAY_ACK",
+      "seq": 3,
+      "subject": "PO ack: URGENT credential-exposure finding received, escalated",
+      "text": "docs/design/PAN_AUTH_TRANSPORT_CONVERGENCE_AUDIT.md (PR #148, merged) reviewed and accepted -- correctly stopped at audit-only per its own scope, no fix attempted. The URGENT finding (panorama/panorama_runtime_runner.py's older path sends admin credentials and session API keys as HTTPS GET URL query parameters, exposed in PAN-side/intermediary logs outside this application's own redaction reach) is escalated: project/backlog.json's pan_auth_transport_convergence priority raised P1 -> P0 with this finding recorded verbatim. This needs the dedicated security build + TLS trust review the original backlog note required, scheduled by the Product Owner, not decided here. Parked for morning as the top-priority item to review first.",
+      "timestamp": "2026-09-08T23:22:40Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0036",
+  "movement": "PAN_AUTH_TRANSPORT_CONVERGENCE_AUDIT",
+  "next_actor": null,
+  "refs": [
+    "project/backlog.json"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-08T23:22:40Z"
+}

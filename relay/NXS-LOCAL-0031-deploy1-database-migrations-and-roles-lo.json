@@ -1,0 +1,85 @@
+{
+  "created_at": "2026-09-08T22:18:08Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1: read the existing DEV.3.2/DEV.3.3 Postgres opt-in code in full to find what schema/DDL already exists and whether any migration mechanism already exists (do not build a second one if so).",
+          "AC-2: write versioned migration files replacing/formalizing any implicit startup DDL.",
+          "AC-3: write DML-only role grant SQL and a test proving the boundary (can INSERT/SELECT/UPDATE/DELETE, cannot CREATE/ALTER/DROP).",
+          "AC-4: update backlog.json's note to separate what's done tonight from the DEPLOY.1-server-only remainder (TLS, real backup/restore ownership) -- do not mark the item fully done.",
+          "AC-5: if blocked on a genuine PO-only decision, RELAY_NOTE and stop; PO reviews in the morning."
+        ],
+        "baseline": {
+          "authority": "project/backlog.json id deploy1_database_migrations_and_roles is this movement's authority.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "sequencing": "Independent of other in-flight movements -- coordinate only if it touches the same Postgres-opt-in code DEV.3.2/DEV.3.3 already established; read that code first to avoid duplicating its own migration mechanism if one already exists."
+        },
+        "context_not_loaded": [
+          "Any real production server/TLS/backup infra -- not available tonight"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/deploy1-database-migrations-and-roles-local-feasible-slice"
+        },
+        "invariants": [
+          "Migrations must be reviewed, versioned files, never startup DDL run implicitly on every boot",
+          "The application runtime role must be DML-only (no DDL, no superuser) by grant, provably testable against the local opt-in Postgres"
+        ],
+        "merge_gate": "Standing relay#13: green tests -> self-merge, report via RELAY_NOTE.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Advance project/backlog.json id deploy1_database_migrations_and_roles (P1) as far as possible using the existing opt-in local/test PostgreSQL path (DEV.3.2/DEV.3.3), without a real DEPLOY.1 production server: write reviewed migration files (not startup DDL) for whatever schema currently exists only as implicit/ad-hoc DDL, and define the DML-only least-privilege runtime role's grant statements. TLS enforcement and real backup/restore ownership are DEPLOY.1-server-only concerns -- name them as remaining work, do not fake them.",
+        "output_contract": [
+          "Versioned migration files for the current schema (whatever DEV.3.2/DEV.3.3 already defines via ad-hoc DDL, if any)",
+          "Role/grant SQL for a DML-only application role",
+          "A test proving the DML-only role can do its required operations and cannot DDL",
+          "backlog.json note update explicitly separating done-tonight from DEPLOY.1-server-only remaining work (TLS enforcement, real backup/restore ownership)",
+          "RELAY_NOTE + SESSION_CLOSE"
+        ],
+        "recommended_reasoning": {
+          "reason": "Deterministic implementation (migrations + role grants) against an existing opt-in Postgres path -- routine.",
+          "tier": "Sonnet 5, normal"
+        },
+        "requirements": [
+          "Do not claim TLS/backup-ownership/production-server obligations satisfied -- explicitly out of reach tonight"
+        ],
+        "risks": [
+          "Overclaiming DEPLOY.1 completion for a locally-testable slice"
+        ],
+        "scope": {
+          "in": [
+            "Migration files",
+            "DML-only role grants + test"
+          ],
+          "out": [
+            "Real TLS setup",
+            "Real backup/restore ownership",
+            "Any real production server"
+          ]
+        },
+        "validation_plan": [
+          "New role-boundary test",
+          "Full one-shot regression once",
+          "git diff --check",
+          "privacy gate at PR time"
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-08T22:18:08Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0031",
+  "movement": "DEPLOY1_DATABASE_MIGRATIONS_AND_ROLES_LOCAL_FEASIBLE_SLICE",
+  "next_actor": "engineer",
+  "refs": [
+    "project/backlog.json",
+    "project/roadmap.json"
+  ],
+  "schema_version": 1,
+  "status": "OPEN",
+  "updated_at": "2026-09-08T22:18:08Z"
+}

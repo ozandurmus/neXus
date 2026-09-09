@@ -1,0 +1,105 @@
+{
+  "created_at": "2026-09-08T21:40:51Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1: read the full backlog note, docs/history/phase/OP_0B_0_VENDOR_FAILOVER_PREFLIGHT_EVIDENCE_SURFACE.md section 26 (the PAN-15 gap this closes), and the actual PAN identity-evidence code path (find it -- likely under configuration/ or utils/, follow the same producer chain pattern used for the CP identity evidence) to establish, from source, exactly how self_identity_consistent and runtime_peer_serial_state are computed and compared.",
+          "AC-2: locate the actual persisted evidence from the S0 real-PAN-pair run referenced in the backlog note (evidence store / build_history / any run_ref it points to) and re-derive the MATCH/MISMATCH computation from that raw evidence by hand (or with a small script) to confirm the recorded finding is reproducible from what was actually captured -- this is the evidentiary basis for everything else in this movement.",
+          "AC-3: rule in or out, with source-code and evidence-based reasoning (not speculation): representation divergence (e.g. different serial string formatting between the two members' own self-report vs peer-report fields), a genuine runtime identity discrepancy (the devices actually disagree), or another semantic mismatch class you identify from the actual data.",
+          "AC-4: explicitly address the 2026-09-04 update's tension -- the manually-captured `show high-availability all` output reportedly showed reciprocal serial correspondence, apparently contradicting the original MISMATCH. Explain, from the code and evidence, whether this is consistent with your root-cause finding or remains unreconciled, and say which.",
+          "AC-5: if a real root cause is found, propose (but do not implement without Product Owner approval, since this touches identity-evidence gate semantics) a closure fix direction with its own tradeoffs.",
+          "AC-6: if the root cause cannot be determined from already-persisted evidence and source code alone, say so plainly, name exactly what additional real-device evidence capture would resolve it, and leave a RELAY_NOTE marking this AWAITING_PO with that specific question -- the Product Owner is offline overnight and will review in the morning. Do not attempt a live PAN device run yourself; per AI_START_HERE.md's Real-environment procedure, at most propose the bounded command for the Product Owner to run later."
+        ],
+        "baseline": {
+          "authority": "project/backlog.json id pan_serial_representation_identity_evidence_closure is this movement's full authority -- read its note in full, including the 2026-09-04 update about a manually-captured, not-independently-reconciled reciprocal-serial observation. Do not treat that update as resolving anything.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "sequencing": "Independent of every other in-flight movement -- read-only investigation into already-persisted evidence and the PAN HA identity-evidence code path, no shared file surface with the M-series/console work."
+        },
+        "context_not_loaded": [
+          "Any live PAN device contact -- this movement works from already-persisted evidence and code only"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/pan-serial-representation-identity-evidence-closure-investigation"
+        },
+        "invariants": [
+          "AGENTS.md's opaque-identifier law stands: leading-zero normalization or any other identifier reinterpretation is NOT AUTHORIZED by this movement -- if your investigation concludes normalization would 'fix' the mismatch, that is a finding to report, not a change to make",
+          "Never fabricate or assume evidence that was not actually captured -- work strictly from what is already persisted (evidence store / build_history / prior run artifacts) and from source code, not from a live device",
+          "Do not overwrite or reinterpret the existing recorded MATCH/MISMATCH findings -- add a reconciling analysis, don't erase disagreement"
+        ],
+        "merge_gate": "Standing relay#13: green tests -> self-merge, report via RELAY_NOTE. If this movement produces only a findings document and no code change, the merge gate is git diff --check + privacy gate only, same as prior design-only movements.",
+        "movement_type": "ARCHITECTURE",
+        "objective": "Root-cause the PAN HA runtime peer-serial representation mismatch recorded in project/backlog.json id pan_serial_representation_identity_evidence_closure (P0): on the approved real PAN pair, one member showed self_identity_consistent = MATCH / runtime_peer_serial_state = MATCH, the other showed MISMATCH on both, and B2 bidirectional corroboration was NOT ESTABLISHED. Root cause is UNKNOWN. This movement is investigation-and-closure-design, not a live device run.",
+        "output_contract": [
+          "A findings document (docs/design/PAN_SERIAL_REPRESENTATION_IDENTITY_EVIDENCE_CLOSURE.md or a docs/history/phase/ entry, your call on the right home given the existing OP_0B_0 phase doc) that either (a) identifies the actual root cause from code + persisted evidence, with a proposed closure fix, or (b) if the root cause cannot be determined from what's already captured, states precisely what additional evidence would be needed and why, without recommending unauthorized identifier reinterpretation",
+          "project/backlog.json note update recording this movement's findings, whatever they are",
+          "A short RELAY_NOTE summarizing the conclusion",
+          "SESSION_CLOSE on this relay file (absolute path)"
+        ],
+        "recommended_reasoning": {
+          "reason": "Cross-subsystem root-cause investigation into vendor-semantic identity evidence with a real prior finding of irreconcilable MATCH/MISMATCH results -- per CLAUDE.md's reasoning routing, vendor-semantic ambiguity and cross-subsystem root cause both call for extended thinking.",
+          "tier": "Sonnet 5, extended thinking (high)"
+        },
+        "requirements": [
+          "Ground every claim in either source code or a specific persisted evidence artifact -- name the file/run_ref"
+        ],
+        "risks": [
+          "Concluding normalization is 'safe' and implementing it anyway -- explicitly forbidden by the opaque-identifier law regardless of what the investigation finds",
+          "Treating the unreconciled 2026-09-04 manual observation as resolving the original finding without explicit justification"
+        ],
+        "scope": {
+          "in": [
+            "Root-cause investigation from code + already-persisted evidence",
+            "A findings document",
+            "backlog note update"
+          ],
+          "out": [
+            "Any live PAN device contact",
+            "Identifier normalization or reinterpretation",
+            "Implementing a closure fix without separate Product Owner approval"
+          ]
+        },
+        "validation_plan": [
+          "git diff --check",
+          "privacy gate once at PR time",
+          "If code changes beyond docs/backlog: full one-shot regression once"
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-08T21:40:51Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "RELAY_NOTE",
+      "seq": 2,
+      "subject": "PAN serial mismatch investigation: inconclusive, needs PO decision on follow-up capture",
+      "text": "Findings landed: PR #141 (merged, docs/design/PAN_SERIAL_REPRESENTATION_IDENTITY_EVIDENCE_CLOSURE.md + project/backlog.json note update). Root cause NOT conclusively determined from source code + already-persisted evidence (no raw S0 field data was ever persisted anywhere reachable -- only the narrative MATCH/MISMATCH conclusion). Ruled out: representation-divergence parsing bugs in this codebase (whitespace/numeric-conversion re-confirmed clean). Found but not causal for this S0 result: self_identity_consistent/runtime_peer_serial_state compare against I1 (Panorama discovery serial) rather than I2 as the code's own naming and the frozen OP.0b.0 identity contract both imply -- a real naming/contract-vs-implementation gap, separately fixable, does not explain the asymmetry since I1==I2 held for both members per the original note. Leading hypothesis (not proven): a genuine member-B-specific irregularity or an unconfirmed vendor semantic (D-V3a stays STILL_UNKNOWN in the frozen OP.0b.0 contract), supported by two independent pre-existing real anomalies on the same physical member (PAN-3 HA1 config/runtime inconsistency, PAN-12 peer-info completeness). The 2026-09-04 manual show-high-availability-all observation remains unreconciled (different command, no provenance stamp, different time) -- not treated as resolving the original MISMATCH finding, which stands as recorded. QUESTION FOR PO: authorize the one bounded read-only capture proposed in the findings doc -- 'py main.py --only pan-config --pan-config-targets <serial_A>,<serial_B> --pan-ha-peer-diagnostic' against the two already-approved real PAN pair devices -- and separately decide whether to authorize a small additive instrumentation change first (persist which pairwise relationship, I1-vs-I2 / I1-vs-I3 / I2-vs-I3, actually breaks for member B, still booleans only, never raw values) so a second run is diagnosable instead of reproducing the same evidence gap. No identifier normalization performed or recommended either way.",
+      "timestamp": "2026-09-08T21:52:53Z"
+    },
+    {
+      "actor": "po",
+      "marker": "RELAY_ACK",
+      "seq": 3,
+      "subject": "PO ack: findings received, real-device capture + instrumentation decision parked overnight",
+      "text": "Findings (PR #141, merged) reviewed and accepted -- honest 'inconclusive' outcome, no unauthorized identifier normalization, real I1-vs-I2 naming/contract gap surfaced as a separate fixable item. Both open questions require either a live-device-contacting command (AI_START_HERE.md Real-environment procedure: agent proposes, human executes -- not something this session can authorize itself for an unattended overnight run) or an instrumentation-scope decision. Parked for morning: Product Owner to review docs/design/PAN_SERIAL_REPRESENTATION_IDENTITY_EVIDENCE_CLOSURE.md and decide whether/when to run the proposed bounded read-only capture personally, and whether to authorize the additive pairwise-diagnostic instrumentation first. No further engineering action on this movement until that review.",
+      "timestamp": "2026-09-08T22:15:36Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0028",
+  "movement": "PAN_SERIAL_REPRESENTATION_IDENTITY_EVIDENCE_CLOSURE_INVESTIGATION",
+  "next_actor": null,
+  "refs": [
+    "project/backlog.json",
+    "project/roadmap.json",
+    "docs/history/phase/OP_0B_0_VENDOR_FAILOVER_PREFLIGHT_EVIDENCE_SURFACE.md",
+    "AGENTS.md"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-08T22:15:36Z"
+}

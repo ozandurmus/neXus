@@ -1,0 +1,175 @@
+{
+  "created_at": "2026-09-09T04:16:54Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-0 -- PURPOSE (read this first, it is the Product Owner's own explanation of why this matters, not background color): today's console (`py main.py --console`) is a thin wrapper reusing collection modules built for static HTML/JSON export -- it is not a real operational tool: it showed content on first load, then broke when a real job ran. The Product Owner's actual product goal is a genuinely usable, production-grade operator console -- the kind of tool a real network security team runs daily to onboard devices, pull configuration/inventory, run compliance checks, manage backups, and monitor failover readiness -- not a demo. UI 2.0 is that product's first real definition. It must be built right, even if that means a large, deliberate, incremental commitment (a new language stack, a new auth model, a real backup subsystem) rather than a quick patch on the existing static-export console. Every design choice in this movement should be evaluated against that bar: would a real operator trust and rely on this daily?",
+          "AC-1 (Purpose and parallel-track model): document explicitly, as its own section, the Product Owner's operating model decided this morning: two tracks run in parallel and do not block each other. Track A ('Line-1') is the existing Python feature/collection-module development (M-series, PCC, etc.) -- it continues exactly as before, indefinitely. Track B is UI 2.0 itself. As a Track-A feature matures (reaches real-environment validation), it is ported/evolved into UI 2.0 one feature at a time -- never a stop-the-world migration of everything at once. This design must describe HOW that per-feature migration actually works mechanically (what changes about a feature when it moves from 'a Python collection module feeding a static export' to 'a UI 2.0-integrated Java service'), not just state the principle.",
+          "AC-2 (C-1, resolved -- amend CON.0): UI 2.0 is a separate shell/application from today's console, NOT built inside the existing console's payload model. This requires amending CON.0 section 6 from 'the console never introduces a payload shape the exporter does not also produce' to 'both surfaces read the same persisted projections' (both UI 2.0 and the static exporter read from the same underlying database/projection layer, they no longer need to produce byte-identical payload shapes), and narrowing CON.0 section 3's bundler rule to apply only to the shared report bundle, not to UI 2.0 itself. Document the exact proposed replacement wording for both frozen sections, in the same style AC-CS's own frozen sections are written, ready for a Product Owner freeze decision -- do not just describe the change, draft the actual amended text.",
+          "AC-3 (C-2, resolved -- RBAC is D1/D7, never menu-hiding): role-based screen/menu authorization is NOT implemented as hiding menu entries by role. It is implemented exactly as the frozen AC-CS-33 already requires: every navigation entry always renders per D1 (surface eligibility), every action shows its own D7 (authorization) outcome, and the server refuses an unauthorized action -- the UI communicates 'you cannot do this and here is why' rather than making the option disappear. Design the concrete role model on top of this: an operator's AD-group membership (per M14's LDAP design) maps to a set of D7-authorized actions; design how that mapping is expressed, stored, and evaluated per-request in UI 2.0's own request path (server-side, never a client-side visibility toggle).",
+          "AC-4 (C-3, resolved -- Backbox-style profile-based backup subsystem, browser UI): design UI 2.0's backup subsystem in real detail, modeled explicitly on Backbox's own approach (the Product Owner will share reference screenshots separately -- design generously and note where a screenshot would resolve an open UI detail, don't block on it): (a) device addition/onboarding is code-driven -- reuses the existing Device Registry (PCP.1) and discovery/manual enrollment, NOT part of the backup subsystem itself; (b) backup is profile-based -- a profile (e.g. 'CP R81.20') is an ordered sequence of steps, each step being an SSH/SFTP interaction with an expected-response validation gate (connect -> expect a prompt/banner -> proceed; each step's success is checked before the next runs, exactly like an expect script) -- this must work even for a device/vendor the product has no native collector for, as long as SSH/SFTP is reachable and the operator manually authors the step sequence per that vendor's own admin guide; (c) there is no single static built-in backup method -- backup is entirely profile-driven and operator-configurable; (d) the UI itself shows backup state/readiness/history and lets an operator create/select a profile, select target devices, and set a schedule -- reconcile this explicitly against utils/action_taxonomy.py's class 1 submission boundary and the C-D7 gate (per the requirements draft's own C-3 analysis): design exactly which parts of this flow are a browser-safe read/schedule-intent action versus which parts require a CLI/file-level operation, and what D7-authorized, audited schedule-edit intent looks like if the browser needs to trigger one.",
+          "AC-5 (C-4, resolved -- concurrent multi-admin, single-session-per-user): UI 2.0's authentication must support multiple administrators working concurrently (e.g. 3 admins simultaneously, each with their own live session), but a single admin identity must not be logged in from more than one active session/screen at a time (logging in elsewhere should end or refuse the prior session, operator's choice which). Design this as the successor to DEPLOY.1A's auth shape, using LDAP (per M14's design) instead of OIDC, reusing M14's A1/A2 split and LD-1/LD-2/LD-3/LD-4/LD-6 decisions where they still apply to a multi-user server context rather than M14's own single-operator TTY-bind scope -- name explicitly which M14 decisions carry over unchanged and which need a multi-user-specific amendment (e.g. LD-3's in-memory-only state doesn't survive a multi-process/multi-user server the same way).",
+          "AC-6 (U-1, resolved -- full Java stack, incremental per-feature port): UI 2.0's entire stack (service layer, API, DB access, and every feature once it's migrated) is Java, not just a thin new layer over Python workers. Design the migration mechanics per AC-1's model: for one concrete example feature (pick the CE.2 compliance-check-primitives work merged last night as the worked example, since it is real and recent), describe concretely what porting it to Java looks like -- the primitive registry's shape in Java, how the read-only safety boundary is enforced in the new language, what test-parity proof is required before the Python version is retired for that feature. State the language/library choices this implies (a JVM web framework, a DB access layer, a build/packaging approach) with tradeoffs, matching the rigor M14's own LD-5 (library choice) decision used.",
+          "AC-7 (X-2, already resolved -- record, don't re-derive): PostgreSQL is the frozen production storage engine for UI 2.0's control-plane/projection/audit state; SQLite remains the local engine unchanged; content-addressed evidence blobs and the recovery store stay on the filesystem volume unchanged. Oracle was considered (corporate default) and explicitly deferred, not rejected -- record that a future corporate mandate could still introduce it, and that today's storage-access design should not make an Oracle option needlessly hard, without spending further design effort on it now.",
+          "AC-8: produce docs/design/UI2_0_ARCHITECTURE_DESIGN.md capturing AC-0 through AC-7 as a coherent, freeze-ready document (status DRAFT) -- ready for the Product Owner to share externally for a second opinion and eventually run through a formal decision process, not yet authorizing implementation.",
+          "AC-9: update project/backlog.json's relevant note(s) (ui2_0_architecture_requirements and/or a new entry for this design) pointing at the new document and its resolved-vs-still-open status.",
+          "AC-10: no implementation, no test changes, no code changes beyond the new document and the backlog note -- same validation floor as prior design-only movements (git diff --check, privacy gate, no code/test touched)."
+        ],
+        "baseline": {
+          "authority": "docs/design/UI2_0_ARCHITECTURE_REQUIREMENTS.md is the evidentiary base -- its section 2 code-grounded audit (which parts of today's console/collection path are static-export-shaped vs already DB-ready) and its section 7 table of options for C-1..C-4/U-1 are the material this movement resolves, not re-derives from zero. The Product Owner's decisions below are the resolution; where the requirements draft's own analysis conflicts with a decision below, the decision below wins.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "sequencing": "Independent of every in-flight movement (Line-1/M-series/backlog batch work continues unaffected in parallel -- that parallelism is itself part of the Product Owner's own explicit direction, see 'Purpose and parallel-track model' below)."
+        },
+        "context_not_loaded": [
+          "Any implementation of UI 2.0 itself -- this movement produces the design, not code",
+          "The M14/M14L naming contradiction and the PAN serial real-device investigation -- both explicitly parked by the Product Owner this morning for later, unrelated to this movement"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/ui2-0-architecture-design-fable-high"
+        },
+        "invariants": [
+          "This document does not authorize implementation -- it is the design the Product Owner will review, share externally for a second opinion, and eventually run through a formal decision process before any code is written",
+          "Every one of C-1, C-2, C-3, C-4, U-1 (and X-2, already resolved) must be resolved as a stated decision matching the Product Owner's direction below -- not re-opened as options",
+          "AGENTS.md's opaque-identifier law and the frozen D1-D7 capability-state model stand -- this design extends them, it does not relitigate or violate them"
+        ],
+        "merge_gate": "Standing relay#13: green tests -> self-merge, report via RELAY_NOTE. Design-only movement -- git diff --check + privacy gate only, no test changes expected.",
+        "movement_type": "ARCHITECTURE",
+        "objective": "Produce the successor architecture design for UI 2.0, taking docs/design/UI2_0_ARCHITECTURE_REQUIREMENTS.md (the requirements/tradeoffs draft, PR #140) as its evidentiary base and resolving every open decision it left (C-1..C-4, U-1) according to the Product Owner's real decisions made this morning (2026-09-09), listed in full below. This is a design document, not a scope freeze and not implementation -- but unlike the requirements draft, every one of the five open points must now be resolved as a stated decision, not left as options.",
+        "output_contract": [
+          "docs/design/UI2_0_ARCHITECTURE_DESIGN.md (status DRAFT -- design resolved, not yet frozen/implementation-authorized), the successor document to UI2_0_ARCHITECTURE_REQUIREMENTS.md",
+          "A short RELAY_NOTE summarizing the resolved design for quick Product Owner review",
+          "SESSION_CLOSE on this relay file (absolute path)"
+        ],
+        "recommended_reasoning": {
+          "reason": "A genuine, wide-scope cross-subsystem architecture design covering a new authentication/authorization model, a new backup subsystem, a language/runtime migration strategy, and a UI/console shell boundary -- explicit Product Owner direction for Fable, high reasoning, given the scale and product-defining nature of this design.",
+          "tier": "Fable, high reasoning -- explicit Product Owner direction for this design movement"
+        },
+        "requirements": [
+          "Every one of AC-2 through AC-7 must land as a concrete, stated decision matching the Product Owner's direction given -- not restated as still-open options",
+          "AC-2's CON.0 amendment must include actual proposed replacement text, not just a description of the change"
+        ],
+        "risks": [
+          "Treating this as another open-options requirements document instead of resolving the decisions the Product Owner already made",
+          "Under-specifying the backup subsystem's step-validation mechanics (AC-4) -- this is the part the Product Owner cares most about getting right, treat it with real design depth, not a paragraph"
+        ],
+        "scope": {
+          "in": [
+            "The design document resolving AC-0 through AC-7",
+            "The CON.0 amendment's proposed replacement text",
+            "The CE.2-to-Java worked-migration-example in AC-6"
+          ],
+          "out": [
+            "Any implementation",
+            "The M14/M14L naming decision",
+            "The PAN serial real-device investigation",
+            "A final Java library/framework commitment beyond a reasoned recommendation with tradeoffs"
+          ]
+        },
+        "validation_plan": [
+          "git diff --check",
+          "privacy gate once at PR time",
+          "No test suite changes -- confirm the existing suite is untouched"
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-09T04:16:54Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "RELAY_NOTE",
+      "seq": 2,
+      "subject": "UI 2.0 architecture design delivered (PR #160, merged 2b229db)",
+      "text": "docs/design/UI2_0_ARCHITECTURE_DESIGN.md (DRAFT, design resolved). Resolved as stated decisions: C-1 separate Java shell, CON.0 section 3/6 replacement text drafted (UA-1/UA-2); C-2 RBAC is D1/D7 never menu-hiding, action -> role token -> encrypted audited role binding -> AD group, evaluated per request in the server gate chain; C-3 Backbox-style profile-based backup: onboarding stays PCP.1/M9, profiles are versioned four-eyes-approved expect-style step sequences (every step gated, raw transcript discarded), browser selects/assigns/schedules/approves, 'back up now' from the browser always refused (class 1 stays RB.x + scheduler/CLI), D7-authorized audited schedule-edit intent succeeds C-D7; C-4 concurrent multi-admin LDAP sessions, single active session per identity (takeover|refuse), M14 LD-1..LD-7 carried over or amended one by one; U-1 full Java stack ported per feature via F0..F5 (F4 shadow + parity + real-env MATCH before Python retirement), Spring Boot 3 / jOOQ+Flyway / UnboundID / MINA SSHD / Gradle recommended with tradeoffs, CE.2 as the worked port; X-2 recorded (PostgreSQL; Oracle deferred-not-rejected). Read first: section 11 -- eight contradictions with frozen/constitutional authority reported for your freeze decision, notably AGENTS.md 'no browser-originated command' vs a Phase-2 in-browser profile editor (Phase 1 file/CLI authoring needs no amendment). Backbox screenshot items in section 6.11 with defaults; none blocking. Validation: diff check clean, privacy gate PASS vs origin/main, convergence test 22 passed, no code/test touched. Squash-merged to main as 2b229db under standing relay#13.",
+      "timestamp": "2026-09-09T04:31:21Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "AUTOMATED_VALIDATED",
+      "report": {
+        "changed": [
+          "docs/design/UI2_0_ARCHITECTURE_DESIGN.md (new)",
+          "project/backlog.json (one entry added, one target updated)"
+        ],
+        "completed": [
+          "docs/design/UI2_0_ARCHITECTURE_DESIGN.md (DRAFT, design resolved, not frozen, not implementation authority): AC-0 purpose bar; AC-1 parallel-track model with the mechanical F0..F5 per-feature port ladder; AC-2 separate shell with CON.0 section 3/6 replacement text (UA-1/UA-2) and a PCP section 13 companion; AC-3 RBAC as D1/D7 with action_id -> role token -> role binding -> AD group model evaluated per request server-side; AC-4 Backbox-style profile-based backup subsystem (step kinds, expect-gate semantics, raw-output policy, lifecycle, taxonomy reconciliation, D7-authorized audited schedule-edit intent, screenshot-resolvable defaults); AC-5 concurrent multi-admin LDAP sessions with single active session per identity and an LD-1..LD-7 carry-over/amendment table; AC-6 full Java stack with tradeoffs and the CE.2 worked port (registry shape, boundary enforcement, parity proof); AC-7 PostgreSQL recorded, Oracle deferred-not-rejected with portability rules",
+          "project/backlog.json: new entry ui2_0_architecture_design (P1, planned); ui2_0_architecture_requirements target points forward to the design",
+          "PR #160 opened against main under the standing relay#13 authorization"
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "none: no code changed; py main.py behaves exactly as before",
+          "ui": "none: no UI module, payload builder or fixture changed; the design document is not rendered anywhere"
+        },
+        "integration": {
+          "branch": "feature/ui2-0-architecture-design-fable-high",
+          "ci": "local gates green (diff check, privacy gate vs origin/main, targeted convergence test); GitHub checks not awaited beyond the merge command's own result",
+          "head_sha": "a76554d05d969e74cf7f1b578f6ee6eecb0de71c",
+          "merge_commit": "2b229dbb6bfaf05d397c79ed61b96a545821442a",
+          "merge_decision": "approved under standing relay#13 (design-only: git diff --check + privacy gate); squash merge executed by the engineer session -- see merge_state for the actual result",
+          "merge_state": "MERGED",
+          "pr": 160,
+          "pr_url": "https://github.com/ozandurmus/neXus/pull/160"
+        },
+        "next": {
+          "movement": "Product Owner review -> external second opinion -> DECIDE episode on UI2_0_ARCHITECTURE_DESIGN.md plus amendments UA-1..UA-4 (UA-5 Phase 2 and UA-8 as separate decisions)",
+          "movement_type": "ARCHITECTURE",
+          "objective": "Freeze decision on the resolved UI 2.0 design; if frozen, the first engineering movement is a CONTRACT draft for F2 on two features (Device Registry rows, HA readiness projection) plus the UI 2.0 skeleton (service, login/sessions, role bindings, gate chain, read API)",
+          "status": "planned"
+        },
+        "preserved": [
+          "every source, test, FROZEN document and runtime artifact untouched",
+          "utils/action_taxonomy.py unchanged; class 1 stays non-console-submittable",
+          "AGENTS.md opaque-identifier law and the frozen D1-D7 model extended, not relitigated",
+          "M14/M14L naming and the PAN serial investigation untouched (parked by the Product Owner)"
+        ],
+        "recommended_reasoning": {
+          "reason": "A storage and security boundary contract; Fable/high was right for this cross-subsystem design and is more than either follow-up needs",
+          "tier": "Sonnet 5, extended thinking (high) for the eventual CONTRACT draft; the PO DECIDE episode at its GOV.PO.1 tier (High)"
+        },
+        "state_updates": [
+          "project/backlog.json: ui2_0_architecture_design added; ui2_0_architecture_requirements target updated. No roadmap/feature_registry/build_history change: no delivery state advanced"
+        ],
+        "unresolved_risks": [
+          "Eight contradictions with frozen/constitutional authority are reported, not resolved (document section 11, UA-1..UA-8); the most consequential is AGENTS.md 'no browser-originated command' versus a Phase-2 in-browser backup-profile editor -- Phase 1 file/CLI authoring needs no amendment",
+          "M14 U-1 (nested AD group semantics), DEV.4.6 migration discipline and off-host custody of the database's own backups must close before any freeze/implementation",
+          "Corporate JDK version, build tool and repository placement of the Java tree (U-J1/U-J2/U-J4) are assumptions awaiting Product Owner confirmation",
+          "Backbox reference screenshots may change the chosen UI defaults (section 6.11); none blocks the design"
+        ],
+        "validation": {
+          "affected": "none beyond the targeted file; design-only movement",
+          "diff_check": "git diff --check clean",
+          "full_regression": "not run: no code or test changed; the last full-suite evidence on origin/main still holds (3126 passed / 27 skipped / 2 pre-existing DLP-prose-collision failures, PR #154)",
+          "privacy": "py main.py --repository-privacy-check --privacy-baseline-ref origin/main: Gate PASS, 0 new findings",
+          "real_environment": "not applicable: design document, no device, directory or database contact",
+          "state_consistency": "project_metadata_has_no_cross_authority_contradictions green (within the 22 passed)",
+          "targeted": "tests/test_architecture_convergence.py: 22 passed (project-state cross-authority consistency after the backlog edit)"
+        }
+      },
+      "seq": 3,
+      "timestamp": "2026-09-09T04:31:21Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0047",
+  "movement": "UI2_0_ARCHITECTURE_DESIGN_FABLE_HIGH",
+  "next_actor": null,
+  "refs": [
+    "docs/design/UI2_0_ARCHITECTURE_REQUIREMENTS.md",
+    "docs/design/OPERATOR_CONSOLE_ARCHITECTURE.md",
+    "docs/design/CAPABILITY_STATE_VOCABULARY_AND_PRESENTATION.md",
+    "docs/design/M14_LOCAL_LDAP_AUTHORIZATION_ARCHITECTURE.md",
+    "docs/design/PCP_STORAGE_ENGINE_DECISION.md",
+    "console/app.py",
+    "utils/action_taxonomy.py",
+    "project/backlog.json"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-09T04:31:21Z"
+}

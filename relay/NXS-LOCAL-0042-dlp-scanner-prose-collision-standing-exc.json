@@ -1,0 +1,103 @@
+{
+  "created_at": "2026-09-08T23:55:05Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1: read the two collision-assertion tests and the two named findings in full to confirm the exact matched content/location.",
+          "AC-2: implement the exception as a small, explicit, content-hash-or-triple-keyed allowlist (e.g. a short list of (file, line-range-or-hash) entries with an inline comment explaining why each exists and pointing at this backlog item) -- not a generic exclusion.",
+          "AC-3: prove with a synthetic fixture that a genuinely new collision is still caught (the exception does not generalize).",
+          "AC-4: run the full one-shot regression and confirm literally 0 failures -- if anything else is still red, do not claim this movement fixed everything, report exactly what remains.",
+          "AC-5: update backlog.json's dlp_scanner_prose_collision_in_frozen_records status to done, with a note that this closes the ad-hoc 'standing exception' every movement tonight applied informally.",
+          "AC-6: if the full suite is not actually green after this fix, RELAY_NOTE what's still failing and stop rather than self-merging on an unverified claim."
+        ],
+        "baseline": {
+          "authority": "project/backlog.json id dlp_scanner_prose_collision_in_frozen_records is this movement's authority, including its own three named options. Product Owner decision (recorded here): option (b), narrowly scoped. Do not choose (a) a blanket standing waiver or (c) rewriting the frozen historical prose -- both explicitly rejected.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "sequencing": "Independent of other in-flight movements -- test-infrastructure only, builds on tonight's already-merged dlp_scanner_venv_exclusion fix (PR #150)."
+        },
+        "context_not_loaded": [
+          "Any edit to project/build_history.json's or the named relay file's actual content -- build-history immutability stands"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/dlp-scanner-prose-collision-standing-exception"
+        },
+        "invariants": [
+          "The exception mechanism must match on the EXACT byte-identical finding (e.g. a content hash of the matched span, or file+line+matched-substring triple), never a path-based or pattern-based blanket exclusion",
+          "A genuinely new collision anywhere else in the repository, including a new line added to either of these two specific files, must still fail the gate -- only the two already-catalogued, currently-known matches are excepted",
+          "Never edit project/build_history.json's or the relay file's actual historical content"
+        ],
+        "merge_gate": "Standing relay#13: green tests -> self-merge, report via RELAY_NOTE. This movement's own success criterion is that the full suite becomes ACTUALLY green (0 failures) for the first time tonight -- verify that literally, don't just claim it.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Implement project/backlog.json id dlp_scanner_prose_collision_in_frozen_records (P2): resolve the genuine PO-only decision this item raised, per the Product Owner's decision made tonight (2026-09-09, during the same overnight session that discovered it): OPTION (b) from the item's own note -- authorize a narrow, justified exception mechanism in the two scanners for byte-identical, already-catalogued prose matches. This must NOT be a general bypass; it recognizes only the two specific, already-identified findings (project/build_history.json:47 and relay/NXS-LOCAL-0003-local-relay-watch-command.json:155) by content hash, not by file path or a blanket pattern-suppression.",
+        "output_contract": [
+          "A narrow, catalogued-exception mechanism in tests/test_dev_0_5b_auth_consumer_canonical_config.py's two collision-assertion tests, recognizing exactly the two named pre-existing findings and nothing else",
+          "A test proving a THIRD, novel collision (synthetic fixture) is still caught -- the exception must not generalize",
+          "backlog.json note update marking this done, and referencing this as the closure of the standing acceptance every other movement tonight relied on informally",
+          "RELAY_NOTE + SESSION_CLOSE"
+        ],
+        "recommended_reasoning": {
+          "reason": "A real, already-decided PO-level test-infrastructure fix -- deterministic implementation against a clear decision.",
+          "tier": "Sonnet 5, normal"
+        },
+        "requirements": [
+          "The allowlist must be narrow and explicit -- no wildcard/path-based bypass"
+        ],
+        "risks": [
+          "Building a bypass broad enough to hide a real future leak",
+          "Claiming the suite is green without actually re-running it to completion"
+        ],
+        "scope": {
+          "in": [
+            "The two named tests' exception mechanism + proof it doesn't generalize"
+          ],
+          "out": [
+            "Editing the frozen historical files' content",
+            "Any other DLP/privacy-gate mechanism"
+          ]
+        },
+        "validation_plan": [
+          "New synthetic-collision test proving non-generalization",
+          "Full one-shot regression once, verified literally 0 failures",
+          "git diff --check",
+          "privacy gate at PR time"
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-08T23:55:05Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "RELAY_NOTE",
+      "seq": 2,
+      "subject": "AC-4/AC-6: narrow exception implemented, full suite NOT green -- third out-of-scope finding, not self-merging",
+      "text": "Implemented PO option (b): tests/test_dev_0_5b_auth_consumer_canonical_config.py's two collision-assertion tests now scan line-by-line and exempt a match only when its exact line's sha256 hash is catalogued in a new _KNOWN_PROSE_COLLISION_LINE_HASHES allowlist keyed by (file, line hash) -- exactly the two originally-named findings, nothing else. Line-number keying was rejected: build_history.json's matching line had already drifted from the originally-recorded line 47 to line 216 (append-only history growth) by the time of this fix. Non-generalization proved by two new tests: a fabricated new line in either named file is not exempted by file path alone, and a real new tracked file with a fresh colliding line is still caught end-to-end. Targeted: 10 tests, 8 passed / 2 failed. Full one-shot regression after merging origin/main: 2 failed, 3129 passed, 27 skipped -- NOT literal 0 failures. Both remaining failures are the two collision tests, failing solely because of a THIRD, previously-uncatalogued prose collision in relay/NXS-LOCAL-0012-gov-po-3-ac5-demo-1-scratch.json:94 (its own RELAY_DECISION text quoting the collision token shapes verbatim), which only became a scan candidate after commit a911ed5 synced missing relay files to main on 2026-09-08 -- out of this movement's authorized two-finding scope, so it was NOT added to the allowlist. Filed as new backlog item dlp_scanner_prose_collision_third_relay_scratch_file (same three-option shape as the parent item) for a Product Owner decision. Also observed once, non-reproducibly, on an earlier pre-merge run: an unrelated pytest-xdist scratch-file race (tests/test_gov_po_3_ci_privacy_gate_baseline.py's own transient fixture colliding with tests/test_nexus_engineer_tool_gate.py::test_ac1_live_bug_regression_against_real_repository_state's full-tree scan); confirmed pre-existing and unrelated to this diff (serial re-run 11/11 passed), filed as pytest_xdist_privacy_scan_scratch_file_race, did not recur on the final run. git diff --check: clean. PR #156 opened (branch feature/dlp-scanner-prose-collision-standing-exception, head 74e082c0083fb7a4c0590ad06aa829db89867c51) but NOT merged -- per this item's own AC-6, this movement does not self-merge on an unqualified-green claim. Awaiting Product Owner decision on dlp_scanner_prose_collision_third_relay_scratch_file before the standing relay#13 green-tests-to-self-merge gate can be exercised for this PR.",
+      "timestamp": "2026-09-09T00:09:36Z"
+    },
+    {
+      "actor": "po",
+      "marker": "RELAY_ACK",
+      "seq": 3,
+      "subject": "PO ack: third finding accepted under the same decision, follow-up dispatched",
+      "text": "Correct call not to self-merge on an unverified-green claim, and correct not to unilaterally expand the allowlist beyond this movement's authorized two-finding scope. The third finding (relay/NXS-LOCAL-0012-gov-po-3-ac5-demo-1-scratch.json:94) is the same historical-prose class as the original two -- Product Owner decision: same option (b), narrow allowlist entry, no mechanism change. Dispatched as NXS-LOCAL-0044 on top of this branch; the two will merge together. No further action needed on this relay.",
+      "timestamp": "2026-09-09T00:25:08Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0042",
+  "movement": "DLP_SCANNER_PROSE_COLLISION_STANDING_EXCEPTION",
+  "next_actor": null,
+  "refs": [
+    "tests/test_dev_0_5b_auth_consumer_canonical_config.py",
+    "project/build_history.json",
+    "relay/NXS-LOCAL-0003-local-relay-watch-command.json",
+    "project/backlog.json"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-09T00:25:08Z"
+}

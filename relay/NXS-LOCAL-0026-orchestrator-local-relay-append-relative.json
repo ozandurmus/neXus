@@ -1,0 +1,160 @@
+{
+  "created_at": "2026-09-08T21:40:51Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1: read scripts/local_relay.py's append CLI and _resolve_relay_file in full; choose ONE fix direction from the backlog note's three sketched options (reject-on-mismatch, resolve-relative-to-canonical-dir, or ENGINEER_PROMPT-only warning) or a better one you find -- state which and why in a RELAY_NOTE before implementing.",
+          "AC-2: implement the fix with no behavior change for the already-correct paths (no --file given; absolute --file matching NEXUS_RELAY_FILE).",
+          "AC-3: add a regression test in tests/test_local_relay.py reproducing the exact NXS-LOCAL-0021 shape: NEXUS_RELAY_FILE/NEXUS_CANONICAL_RELAY_DIR set, append invoked with a relative --file that would previously resolve to a worktree-local path -- assert it no longer silently creates a second file.",
+          "AC-4: update project/backlog.json's orchestrator_local_relay_append_relative_file_path_footgun status to done with a short resolution note.",
+          "AC-5: if genuinely blocked on a decision only the Product Owner can make (none expected -- this is a well-scoped bug fix), leave a RELAY_NOTE stating exactly the open question and stop; the Product Owner is offline overnight and will review and unblock in the morning. Do not idle-wait."
+        ],
+        "baseline": {
+          "authority": "project/backlog.json id orchestrator_local_relay_append_relative_file_path_footgun (P1) is this movement's full authority -- read it in full before starting.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "sequencing": "Independent of every other in-flight movement -- scripts/local_relay.py only, no shared file surface with orchestrator.py or the console/M-series work."
+        },
+        "context_not_loaded": [
+          "Everything outside scripts/local_relay.py's append/--file path resolution"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/orchestrator-local-relay-append-relative-file-path-fix"
+        },
+        "invariants": [
+          "Never silently create a second, divergent relay file for the same movement -- either reject a --file value that doesn't match NEXUS_RELAY_FILE, or resolve --file against NEXUS_CANONICAL_RELAY_DIR rather than cwd",
+          "The existing correct behavior (no --file given, or an absolute --file matching the env default) must not regress"
+        ],
+        "merge_gate": "Standing relay#13: green tests -> self-merge, report via RELAY_NOTE.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Fix the real footgun observed live 2026-09-08 on NXS-LOCAL-0021: scripts/local_relay.py append's --file argument, given a relative path, silently resolves relative to the engineer's worktree cwd instead of the canonical relay directory, creating a divergent shadow relay file that the orchestrator/PO never sees.",
+        "output_contract": [
+          "The fix in scripts/local_relay.py per your own AC-1 chosen direction",
+          "A regression test proving a relative --file path with a set NEXUS_RELAY_FILE/NEXUS_CANONICAL_RELAY_DIR either resolves to the canonical file or is rejected with a clear error -- not silently shadowed",
+          "A short RELAY_NOTE summarizing the fix",
+          "SESSION_CLOSE on this relay file (absolute path)"
+        ],
+        "recommended_reasoning": {
+          "reason": "Deterministic implementation against a well-scoped, already-diagnosed bug -- routine bug fix, not an architecture decision.",
+          "tier": "Sonnet 5, normal"
+        },
+        "requirements": [
+          "Fix must be provably correct via the new regression test, not just by inspection"
+        ],
+        "risks": [
+          "Over-fixing into a larger CLI redesign -- keep the change narrowly scoped to the diagnosed path-resolution bug"
+        ],
+        "scope": {
+          "in": [
+            "scripts/local_relay.py's --file resolution",
+            "one regression test",
+            "backlog status update"
+          ],
+          "out": [
+            "Any other local_relay.py subcommand",
+            "orchestrator.py itself"
+          ]
+        },
+        "validation_plan": [
+          "Targeted new test",
+          "Full one-shot regression once",
+          "git diff --check",
+          "privacy gate once at PR time"
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-08T21:40:51Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "RELAY_NOTE",
+      "seq": 2,
+      "subject": "AC-1 fix direction: reject-on-mismatch",
+      "text": "Chose reject-on-mismatch (backlog option 1) over resolve-relative-to-canonical-dir. append's _cmd_append will compare os.path.abspath(explicit --file) against os.path.abspath(NEXUS_RELAY_FILE) whenever both are present; on mismatch it refuses with a clear error naming the canonical path instead of silently operating on the cwd-relative one. Rationale: append never creates a file (it reads an existing one and errors 'no such file' otherwise), so the NXS-LOCAL-0021 shadow file was created via a prior relative-path create/append against the worktree cwd, not appended into thin air -- reject-on-mismatch closes that path unconditionally and needs no guess about which directory the caller meant, whereas resolve-relative-to-canonical-dir would still let a wrong relative --file silently open a different, also-wrong file under the canonical dir if its basename happened to exist there. No --file (env-default) and absolute --file matching NEXUS_RELAY_FILE are both unaffected: the compared paths are identical so the mismatch check never fires. Scoped to append only, per the movement's scope-out of every other subcommand.",
+      "timestamp": "2026-09-08T21:42:20Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "report": {
+        "changed": [
+          "scripts/local_relay.py",
+          "tests/test_local_relay_protocol.py",
+          "tests/conftest.py",
+          "project/backlog.json"
+        ],
+        "completed": [
+          "reject-on-mismatch fix in scripts/local_relay.py _cmd_append",
+          "regression tests in tests/test_local_relay_protocol.py (NXS-LOCAL-0021 repro + mismatch + env-unset cases)",
+          "autouse env-clearing fixture in tests/conftest.py for suite hermeticity",
+          "project/backlog.json footgun entry marked done with resolution note",
+          "PR #142 opened, merged (self-merge per relay#13), merge commit b5be8bd9c33f41677e99f16595b6ca381baccf3a"
+        ],
+        "continuation": "SAME_SESSION",
+        "effects": {
+          "main_py": "none",
+          "ui": "none"
+        },
+        "integration": {
+          "branch": "feature/orchestrator-local-relay-append-relative-file-path-fix",
+          "ci": "n/a (local gate + full suite run locally)",
+          "head_sha": "b5be8bd9c33f41677e99f16595b6ca381baccf3a",
+          "merge_commit": "b5be8bd9c33f41677e99f16595b6ca381baccf3a",
+          "merge_decision": "SELF_MERGE_RELAY_13",
+          "merge_state": "MERGED",
+          "pr": 142,
+          "pr_url": "https://github.com/ozandurmus/neXus/pull/142"
+        },
+        "next": {
+          "movement": "n/a",
+          "movement_type": "IMPLEMENTATION",
+          "objective": "n/a",
+          "status": "done"
+        },
+        "preserved": [
+          "no --file / absolute --file matching NEXUS_RELAY_FILE behavior",
+          "every other local_relay.py subcommand",
+          "orchestrator.py"
+        ],
+        "recommended_reasoning": {
+          "reason": "Deterministic bug fix against a well-scoped, already-diagnosed defect; no architecture decision involved",
+          "tier": "Sonnet 5, normal"
+        },
+        "state_updates": [
+          "project/backlog.json orchestrator_local_relay_append_relative_file_path_footgun: planned -> done"
+        ],
+        "unresolved_risks": [
+          "pre-existing DLP-collision test failures in test_dev_0_5b_auth_consumer_canonical_config.py, out of this movement's scope"
+        ],
+        "validation": {
+          "affected": "test_orchestrator.py / test_orchestrator_dashboard.py append-related tests re-verified green after the conftest fixture fix",
+          "diff_check": "clean",
+          "full_regression": "pytest -q -n auto --dist worksteal, real ambient env: 3025 passed, 25 skipped, 2 failed (pre-existing, unrelated DLP-collision checks, confirmed via stash)",
+          "privacy": "local pre-push gate PASS, 0 new findings vs base commit 60fa4012606f",
+          "real_environment": "NOT_RUN",
+          "state_consistency": "git diff --check clean",
+          "targeted": "pytest tests/test_local_relay_protocol.py -q: 87 passed"
+        }
+      },
+      "seq": 3,
+      "timestamp": "2026-09-08T22:00:58Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0026",
+  "movement": "ORCHESTRATOR_LOCAL_RELAY_APPEND_RELATIVE_FILE_PATH_FOOTGUN_FIX",
+  "next_actor": null,
+  "refs": [
+    "scripts/local_relay.py",
+    "tests/test_local_relay.py",
+    "project/backlog.json"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-08T22:00:58Z"
+}

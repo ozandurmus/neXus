@@ -1,0 +1,170 @@
+{
+  "created_at": "2026-09-09T00:26:34Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1: read PRODUCT_CONTROL_PLANE_ARCHITECTURE.md section 15 and configuration/command_primitives.py (CE.2, just merged) in full.",
+          "AC-2: implement the runbook catalog as ordered sequences of existing CE.2 primitive references only.",
+          "AC-3: implement the validator rejecting any CLASS 1+ or unregistered step.",
+          "AC-4: at least one concrete example runbook wired end to end, opt-in only.",
+          "AC-5: tests proving the safety boundary.",
+          "AC-6: update backlog.json's diagnostic_runbooks_read_only status to done.",
+          "AC-7: if blocked on a genuine PO-only decision, RELAY_NOTE and stop; PO reviews in the morning."
+        ],
+        "baseline": {
+          "authority": "docs/design/PRODUCT_CONTROL_PLANE_ARCHITECTURE.md section 15 + project/backlog.json id diagnostic_runbooks_read_only. CE.2 (configuration/command_primitives.py, PR #154, merged tonight) is the primitive registry this runbook catalog must build on top of, not duplicate.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "sequencing": "Depends on CE.2 (configuration/command_primitives.py) already being on main -- confirmed merged. Read it in full before designing the runbook layer on top of it."
+        },
+        "context_not_loaded": [
+          "Any user-authored/arbitrary script execution -- explicitly forbidden in this first implementation",
+          "Any write/config-changing step"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/diagnostic-runbooks-read-only-catalog"
+        },
+        "invariants": [
+          "A runbook is a closed, ordered sequence of already-registered CE.2 primitives -- never a raw command, never a user-authored script",
+          "The validator must reject any step that isn't already an admitted read-only primitive (CLASS 0)",
+          "Deterministic framing, output limits, and redaction must be enforced per-step, reusing CE.2's own redaction-rule mechanism, not a new one"
+        ],
+        "merge_gate": "Standing relay#13: green tests -> self-merge, report via RELAY_NOTE.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Implement project/backlog.json id diagnostic_runbooks_read_only (P2, PCP.8): a closed-source catalog of bounded, ordered, read-only diagnostic sequences over registered targets, per docs/design/PRODUCT_CONTROL_PLANE_ARCHITECTURE.md section 15. Every step is gate-reviewed for this purpose; timeout/runtime, output limits, deterministic framing, redaction, and audit are enforced. The validator rejects any CLASS 1+ step. Never browser-to-arbitrary-shell; no user-authored scripts in this first implementation. This shares ONE registry with CE.2's just-merged configuration/command_primitives.py -- do not build a second registry.",
+        "output_contract": [
+          "A runbook catalog module built on top of configuration/command_primitives.py's registry -- a runbook references primitive.<id> steps, never a raw command",
+          "A validator rejecting any non-registered-primitive or write-capable step",
+          "At least one concrete example runbook wired end to end (opt-in, not a normal-run stage)",
+          "Tests proving the safety boundary: rejection of an unregistered/write-capable step, output-limit enforcement, redaction",
+          "backlog.json note update marking this done",
+          "RELAY_NOTE + SESSION_CLOSE"
+        ],
+        "recommended_reasoning": {
+          "reason": "New product-surface safety boundary built directly on top of a just-shipped registry -- warrants care to avoid duplicating or diverging from CE.2's own model.",
+          "tier": "Sonnet 5, extended thinking (high) for the catalog/validator design; normal for the rest"
+        },
+        "requirements": [
+          "Must reuse CE.2's registry, not build a parallel one -- verify this explicitly in the RELAY_NOTE"
+        ],
+        "risks": [
+          "Building a second, divergent primitive registry instead of extending CE.2's",
+          "Under-specifying the validator, letting a non-primitive step slip through"
+        ],
+        "scope": {
+          "in": [
+            "The runbook catalog + validator + one example runbook + tests"
+          ],
+          "out": [
+            "Any user-authored script execution",
+            "Any write/config-changing step",
+            "A UI/browser trigger surface -- backend catalog + validator only in this movement"
+          ]
+        },
+        "validation_plan": [
+          "New targeted tests for the safety boundary",
+          "Full one-shot regression once",
+          "git diff --check",
+          "privacy gate at PR time"
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-09T00:26:34Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "RELAY_NOTE",
+      "seq": 2,
+      "subject": "PCP.8 diagnostic_runbooks_read_only implemented, tested, merged",
+      "text": "AC-1..AC-5 complete: configuration/runbook_catalog.py (Runbook dataclass + register_runbook()/validate_runbook_steps(), fail-closed on an unregistered/non-CLASS_0/vendor-mismatched step, independent of but consistent with command_primitives.register_primitive's own gate) + application/workflows/runbook.py wiring main.py --runbook-execute --runbook-id <id> (application/cli.py; the parser/validate_modes surface for this flag pair was already present, uncommitted, from an interrupted prior attempt at this same backlog item in this worktree -- inspected, found correct, completed rather than redone). One concrete example runbook: cp_basic_health_check (Check Point, reuses CE.2's cp_gaia_show_version_all proof primitive). Requirement explicitly verified: this shares CE.2's PRIMITIVE_REGISTRY outright -- every resolved runbook step is the literal registry object (identity-checked in tests), no second registry, no new command, no new credential path, no new redaction rule (reuses CE.2's redact() unchanged). 15 new tests (tests/test_pcp8_diagnostic_runbooks.py, tests/test_pcp8_diagnostic_runbooks_cli.py) prove validator rejection (unregistered step, fabricated CLASS_1 step, vendor mismatch, empty sequence) and an end-to-end mocked-transport run proving raw command output never survives into the written artifact. Full regression 3157 passed/27 skipped/2 failed (same pre-existing DLP-token-collision pair as origin/main; a third apparent parallel-run failure was an unrelated pre-existing pytest-xdist scratch-file race, confirmed non-reproducing). Privacy gate PASS/0 new findings. git diff --check clean. Merged via PR #159 (merge commit 86ed3657f08d79023b405c6f23b7d5b67dd29f0a) under standing relay#13 self-merge authorization after CI validate passed. AC-6 judgment call: backlog status set to automated_validated, not the literally-requested done -- this layer's own automated coverage is complete, but every step it can run executes through CE.2's own primitives, whose real-device output-shape confirmation is still owed (no live device reachable here), matching CE.2's own backlog precedent and AGENTS.md's 'never mark a network-facing behavior DONE from automated tests alone.' Full detail in the SESSION_CLOSE packet that follows.",
+      "timestamp": "2026-09-09T04:29:42Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "AUTOMATED_VALIDATED",
+      "report": {
+        "changed": [
+          "New: configuration/runbook_catalog.py, application/workflows/runbook.py, tests/test_pcp8_diagnostic_runbooks.py, tests/test_pcp8_diagnostic_runbooks_cli.py.",
+          "application/cli.py: added the dispatch() branch for --runbook-execute (the parser/validate_modes wiring for --runbook-execute/--runbook-id was already present, uncommitted, in this worktree from an interrupted prior attempt at this same backlog item -- inspected, found correct, and completed rather than discarded or redone).",
+          "project/backlog.json: diagnostic_runbooks_read_only entry updated (status planned -> automated_validated, detailed implementation note).",
+          "CURRENT_STATE.md: real-environment-validation-owed list gained a diagnostic_runbooks_read_only line, tracked together with the CE.2 line it depends on."
+        ],
+        "completed": [
+          "AC-1: read docs/design/PRODUCT_CONTROL_PLANE_ARCHITECTURE.md section 15 and configuration/command_primitives.py (CE.2) in full before design.",
+          "AC-2: new configuration/runbook_catalog.py -- a Runbook dataclass holding an ordered tuple of existing CE.2 PRIMITIVE_REGISTRY primitive_id references only; RUNBOOK_CATALOG is a dict of these, resolved in declared order.",
+          "AC-3: validate_runbook_steps()/register_runbook() fail closed on any step that is not already a registered primitive, that is not CLASS_0_READ, or whose vendor does not match the runbook's declared vendor -- an independent choke point, not a re-read of command_primitives.register_primitive's own gate.",
+          "AC-4: one concrete example runbook wired end to end -- cp_basic_health_check (Check Point, single step cp_gaia_show_version_all), reachable only via main.py --runbook-execute --runbook-id cp_basic_health_check (application/workflows/runbook.py, application/cli.py dispatch), opt-in and mutually exclusive with every other mode.",
+          "AC-5: tests/test_pcp8_diagnostic_runbooks.py and tests/test_pcp8_diagnostic_runbooks_cli.py prove the safety boundary: rejection of an unregistered step, rejection of a fabricated CLASS_1 step against a hostile registry, rejection of a vendor mismatch, rejection of an empty step sequence, shared-registry identity, step-order preservation, CLI parser/mutual-exclusion/not-console-submittable, and an end-to-end mocked-transport run proving raw command output never survives into the written artifact (output-limit/redaction boundary).",
+          "AC-6: project/backlog.json's diagnostic_runbooks_read_only note updated with full implementation detail; status set to automated_validated rather than the literally-requested done -- see requirement verification and unresolved_risks below for why.",
+          "Requirement verification (explicit, per this movement's own requirements field): this runbook layer shares CE.2's registry outright and builds no second one -- every resolved step is the literal PRIMITIVE_REGISTRY object (identity-checked in tests, not just equal-by-value), and execution reuses run_check_point_primitives/run_palo_alto_primitives unchanged via their existing primitives= extension point. No new command, no new credential path, no new redaction rule."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "New opt-in flags only: --runbook-execute --runbook-id cp_basic_health_check. No effect on any existing mode, including the normal full checkpoint run (checkpoint_wf.integration_checkpoint is untouched and this mode is never invoked from it).",
+          "ui": "None -- backend catalog + validator + CLI mode only, explicitly out of scope for a UI/browser trigger surface per this movement's own scope.out."
+        },
+        "integration": {
+          "branch": "feature/diagnostic-runbooks-read-only-catalog",
+          "ci": "validate: SUCCESS. full-regression: SKIPPED (workflow_dispatch-only per repository policy, not run automatically on PR).",
+          "head_sha": "f44cfa0daf46a629ab3bdc9c051be65ee4dccd59",
+          "merge_commit": "86ed3657f08d79023b405c6f23b7d5b67dd29f0a",
+          "merge_decision": "approved -- self-merged under the standing relay#13 'green tests -> self-merge' authorization named in this movement's own merge_gate, after the fast PR validate CI check passed.",
+          "merge_state": "MERGED",
+          "pr": 159,
+          "pr_url": "https://github.com/ozandurmus/neXus/pull/159"
+        },
+        "next": {
+          "movement": "gov_po_2_implementation",
+          "movement_type": "IMPLEMENTATION",
+          "objective": "Unrelated and unaffected by this movement -- already project/roadmap.json's now_next.next per CURRENT_STATE.md at session start; not started here.",
+          "status": "planned"
+        },
+        "preserved": [
+          "configuration/command_primitives.py (CE.2) untouched -- no registry field, function signature, or admission/redaction behaviour changed.",
+          "application/workflows/compliance.py untouched -- its target-selection helpers (_pick_cp_target, _pick_pan_target, _env_bool, _env_int) are imported and reused verbatim by the new runbook workflow, not copied or modified.",
+          "console/registry.py's JOB_REGISTRY untouched -- the new mode is not console/browser-submittable by construction (test-proven)."
+        ],
+        "recommended_reasoning": {
+          "reason": "The next candidate (gov_po_2_implementation) is unrelated to this movement's own scope; no recommendation on its reasoning tier is made here beyond what CURRENT_STATE.md/roadmap.json already carry. For any follow-up specifically extending diagnostic_runbooks_read_only itself (a second vendor's example runbook, multi-step runbooks, promotion past opt-in), Sonnet 5 normal is sufficient -- the contract (section 15) is already frozen and the extension points are already proven; no new architecture decision is on the table.",
+          "tier": "Sonnet 5, normal"
+        },
+        "state_updates": [
+          "project/backlog.json: diagnostic_runbooks_read_only status planned -> automated_validated, note rewritten with full implementation detail.",
+          "CURRENT_STATE.md: real-environment-validation-owed list gained a diagnostic_runbooks_read_only line under the CE.2 line it depends on."
+        ],
+        "unresolved_risks": [
+          "diagnostic_runbooks_read_only's backlog status was deliberately left at automated_validated, not the literally-requested done (AC-6): this catalog/validator layer is itself fully exercised by automated tests, but every step it can ever run is executed through CE.2's own primitives, whose real-device output-shape confirmation is still owed (no live device reachable from this workspace) -- promoting to done would claim real-environment evidence this movement does not have, which AGENTS.md 'Never mark a network-facing behavior DONE from automated tests alone' and CE.2's own backlog entry (also held at automated_validated, not done, for the identical reason) both argue against. This is a judgment call inside AC-6, not a full stop under AC-7 -- everything else in scope was completed and merged; flagging it here for PO confirmation rather than silently complying with the literal wording or silently overriding it.",
+          "The catalog currently ships exactly one example runbook (Check Point only, one step) -- sufficient for AC-4's 'at least one', but a Palo Alto example and multi-step runbooks are unbuilt; explicitly out of this movement's minimal scope, not a defect."
+        ],
+        "validation": {
+          "affected": "tests/test_ce2_compliance_check_engine_primitives.py (the registry this movement builds on): 22 passing, unaffected.",
+          "diff_check": "git diff --check: clean.",
+          "full_regression": "py -m pytest -q -n auto --dist worksteal: 3157 passed / 27 skipped / 2 failed -- both the same pre-existing, unrelated DLP-token-collision pair already present on origin/main (test_repository_text_has_no_known_dlp_assignment_collision, test_repository_text_has_no_known_legacy_redaction_collision). A third apparent failure seen in one parallel run (test_nexus_engineer_tool_gate.py::test_ac1_live_bug_regression_against_real_repository_state) was isolated and re-run: a pytest-xdist scratch-file race between two unrelated pre-existing tests (tests/test_gov_po_3_ci_privacy_gate_baseline.py writes a scratch file directly into the repo root; a concurrent worker's real-repo scan can observe it mid-write/mid-delete) -- did not reproduce on the isolated re-run, confirmed unrelated to this change and to any file this movement touched.",
+          "privacy": "py main.py --repository-privacy-check --privacy-baseline-ref origin/main: PASS, 0 new findings (5 pre-existing, none in a file this movement touched).",
+          "real_environment": "Not performed and not owed by this movement's own scope -- the runbook layer executes entirely through CE.2's already-existing run_check_point_primitives/run_palo_alto_primitives, whose own real-device output-shape confirmation is separately tracked (CURRENT_STATE.md real-environment-validation-owed, CE.2 line) and was already deferred at CE.2's own freeze; this movement adds no new device command and therefore adds no new real-environment obligation.",
+          "state_consistency": "tests/test_architecture_convergence.py: 22 passed (project_metadata_has_no_cross_authority_contradictions included).",
+          "targeted": "tests/test_pcp8_diagnostic_runbooks.py + tests/test_pcp8_diagnostic_runbooks_cli.py: 15 new tests, all passing."
+        }
+      },
+      "seq": 3,
+      "timestamp": "2026-09-09T04:29:45Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0045",
+  "movement": "DIAGNOSTIC_RUNBOOKS_READ_ONLY_CATALOG",
+  "next_actor": null,
+  "refs": [
+    "docs/design/PRODUCT_CONTROL_PLANE_ARCHITECTURE.md",
+    "configuration/command_primitives.py",
+    "project/backlog.json"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-09T04:29:45Z"
+}
