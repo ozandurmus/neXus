@@ -1,6 +1,6 @@
-# Backup & Recovery — Architecture (design, phased; `RB.0`–`RB.2`/`RB.4` landed)
+# Backup & Recovery — Architecture (design, phased; `RB.0`–`RB.2`/`RB.4`/`RB.5` landed)
 
-**Status:** `RB.0`, `RB.1` and `RB.4` AUTOMATED_VALIDATED; `RB.2` (PAN device-state
+**Status:** `RB.0`, `RB.1`, `RB.4` and `RB.5` AUTOMATED_VALIDATED; `RB.2` (PAN device-state
 export + collection orchestration) IMPLEMENTED, real-environment validation
 owed. `RB.3` (CP Gaia backup) is a blocked stub — the P0
 `cp_device_interaction_safety` audit **closed 2026-08-25** (corrected
@@ -599,7 +599,7 @@ consistent with the existing control model.
 | **`RB.2`** | PAN device-state export + collection orchestration (target selection, scheduler) | command gate (documented §7.1, `read` class); **D2 RESOLVED 2026-08-30** | **IMPLEMENTED 2026-08-30 — real-env validation owed** (PAN configuration-XML export, §7.2, not yet implemented) |
 | **`RB.3`** | CP Gaia backup + management export; consistency groups | command gate **+ `operational-write` class (§5) + `D3`** (P0 CP safety audit closed 2026-08-25) | blocked stub only — after `D3` |
 | **`RB.4`** | Validation battery V1–V3 (§6) | none beyond `RB.1`–`RB.3` | **AUTOMATED_VALIDATED 2026-08-30** — built and tested against synthetic manifests ahead of `RB.2`/`RB.3` landing, same "offline-first, real-env validation owed" pattern already used for `RB.0` |
-| **`RB.5`** | Readiness scoring + Recovery UI module (§11) | render harness + uitest fixtures | after `RB.4` |
+| **`RB.5`** | Readiness scoring + Recovery UI module (§11) | render harness + uitest fixtures | **AUTOMATED_VALIDATED 2026-09-09** |
 | **`RB.6`** | Controlled restore | **`OP.2` bar (§8)** | **no** |
 
 **RB.2/RB.3 real-environment note:** the PAN device-state collector

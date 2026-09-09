@@ -206,6 +206,7 @@ function switchModule(nextModule, { moveFocus = false } = {}) {
     }
     if (activeModule === "discovery") renderDiscoveryModule();
     if (activeModule === "failover") renderFailoverModule();
+    if (activeModule === "recovery") renderRecoveryModule();
     if (activeModule === "exclusions") renderExclusionsModule();
     if (activeModule === "project-plan") renderProjectPlan();
     // CON.2's job surface is a console-only panel (NAV.1 §5): console_actions.js
@@ -280,6 +281,7 @@ function initializeReport(payloads) {
     discoveryUiData = payloads.discoveryUiData || {};
     exclusionsUiData = payloads.exclusionsUiData || {};
     failoverReadinessData = payloads.failoverReadinessData || {};
+    recoveryUiData = payloads.recoveryUiData || {};
 
     // These derived collections are computed from the payloads above, not
     // read from them directly on every render (unlike every renderX()
@@ -295,6 +297,7 @@ function initializeReport(payloads) {
     renderComplianceModule();
     renderDiscoveryModule();
     renderFailoverModule();
+    renderRecoveryModule();
     renderExclusionsModule();
     renderProjectPlan();
     renderConfigDeviceList();

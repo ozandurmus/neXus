@@ -247,7 +247,7 @@ def test_ac_a11y_4_group_children_are_labelled_for_devices_operations_administra
 
             for group_label, expected_children in (
                 ("Devices", {"Devices · Inventory", "Devices · Discovery"}),
-                ("Operations", {"Operations · HA & readiness"}),
+                ("Operations", {"Operations · HA & readiness", "Operations · Recovery"}),
                 ("Administration", {"Administration · Inventory exclusions", "Administration · Project plan"}),
             ):
                 group = page.get_by_role("group", name=group_label, exact=True)

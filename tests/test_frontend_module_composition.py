@@ -1,7 +1,7 @@
 """codebase_modularization (frontend) — AC-3 static dependency-order check.
 
 ``static/app.js`` (one flat 4,905-line script, 173 implicit top-level globals)
-was split into responsibility-owned files (nine as of OP.0c) that ``utils.html_export``
+was split into responsibility-owned files (ten as of RB.5) that ``utils.html_export``
 concatenates, in a fixed order, back into the same single inline ``<script>``
 (D-MOD1: no bundler, no ES modules, no build step). Nothing at runtime changed
 — the browser still executes one flat top-level script.
@@ -38,7 +38,7 @@ STATIC = ROOT / "static"
 PAGE_LEVEL_CONSTS = {
     "rawData", "configUiData", "complianceUiData", "cryptoUiData",
     "projectPlanData", "discoveryUiData", "exclusionsUiData",
-    "failoverReadinessData",
+    "failoverReadinessData", "recoveryUiData",
 }
 
 # The cross-module navigation dispatcher (D-MOD5 audit: "switchModule/savedModule
@@ -171,7 +171,8 @@ def test_every_top_level_function_survived_the_split():
     # navigation_ui.js's navigationShellHasElementId, navigationSurfaceEligibility,
     # navigationResolveSurface, and app_bootstrap.js's parsedHashRoute,
     # savedSharedEntityId, setSharedEntityId, navigationAdoptSharedEntityId,
-    # writeActiveHashRoute — 205.
+    # writeActiveHashRoute — 205. RB.5 added static/recovery_ui.js's
+    # recoveryStateTone, recoveryProvenBadge, renderRecoveryModule — 208.
     all_defs = []
     per_file = {}
     for name in SCRIPT_MODULE_FILENAMES:
@@ -180,6 +181,6 @@ def test_every_top_level_function_survived_the_split():
         per_file[name] = fns
         all_defs.extend(fns)
 
-    assert len(all_defs) == 205, f"expected 205 top-level functions, found {len(all_defs)}"
+    assert len(all_defs) == 208, f"expected 208 top-level functions, found {len(all_defs)}"
     dupes = sorted({f for f in all_defs if all_defs.count(f) > 1})
     assert not dupes, f"functions defined in more than one module file: {dupes}"

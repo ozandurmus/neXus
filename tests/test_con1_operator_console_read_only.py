@@ -128,7 +128,7 @@ def test_ac4_api_payloads_are_byte_equal_to_the_exported_report(uitest_runtime_p
     exported = {}
     for key in ("rawData", "configUiData", "complianceUiData", "cryptoUiData",
                 "projectPlanData", "discoveryUiData", "exclusionsUiData",
-                "failoverReadinessData"):
+                "failoverReadinessData", "recoveryUiData"):
         import re
         m = re.search(rf"\b{re.escape(key)}: (.*?),\n", html)
         assert m, f"{key} not found in exported report"

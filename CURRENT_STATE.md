@@ -5,6 +5,14 @@ see `AGENTS.md`/`AI_START_HERE.md`. **Predecessor build detail lives in
 `project/build_history.json`** (structured, newest-first) and its linked
 docs under `docs/history/`; `docs/history/INDEX.md` is the one-line timeline.
 
+- **Checkpoint:** 2026-09-09, `rb5_recovery_readiness_projection_and_ui_module`
+  (relay `feature/rb5-recovery-readiness-projection-and-ui-module`) —
+  **AUTOMATED_VALIDATED**. RB.5, the last unbuilt `native_backup` `RB.0`-`RB.5`
+  slice: `utils/recovery_ui.py`'s pure `recovery_ui` projection over the RB.0
+  readiness record (contracts §6 frozen rules 1-4), the Recovery HTML module +
+  Overview posture tile, and `compliance_posture`'s additive readiness
+  evidence source. Full detail: `project/build_history.json`'s
+  `rb5_recovery_readiness_projection_and_ui_module` record.
 - **Checkpoint:** 2026-09-09, `event_signal_intake` Slice 1
   (relay/NXS-LOCAL-0032) — `docs/design/EVENT_SIGNAL_INTAKE_ARCHITECTURE.md`
   (FROZEN, Slice 1 only). AC-1: coordinator + safe diff (0.6.3, PAN-scoped)

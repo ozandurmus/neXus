@@ -3,6 +3,19 @@
   "record_contract": "One structured record per build, newest first. Required: build, status, title, summary (<= 2 sentences). Optional: started, completed, track, movement, supersedes, evidence, risks_forward, docs{agreement,validation,handover} (repo-relative paths under docs/history/). Full detail lives in the linked doc; do not restate it here. Status vocabulary must stay within utils/project_plan.py STATUS_VALUES.",
   "builds": [
     {
+      "build": "rb5_recovery_readiness_projection_and_ui_module",
+      "status": "automated_validated",
+      "title": "RB.5 -- readiness scoring roll-up + Recovery UI module",
+      "summary": "New utils/recovery_ui.py: a pure projection builder (build_recovery_ui_payload) over the RB.0 persisted readiness record producing contracts BACKUP_RECOVERY_CONTRACTS.md section 6's recovery_ui shape (frozen rules 1-4 enforced by construction), plus readiness_by_entity() for compliance_posture's new additive recovery_readiness_by_entity evidence source (no new control). New static/recovery_ui.js Recovery module + Overview posture tile, wired through the existing SCRIPT_MODULE_FILENAMES/*_JSON_PLACEHOLDER__ mechanism in utils/html_export.py alongside every other *_ui payload; templates/index.html + templates/console.html + static/navigation_ui.js gained the panel/nav entry.",
+      "started": "2026-09-09",
+      "completed": "2026-09-09",
+      "track": "Recovery",
+      "movement": "IMPLEMENTATION",
+      "supersedes": null,
+      "evidence": "Relay-authorized movement (.nexus/approved_task.json SESSION_START). New tests/test_rb5_recovery_ui.py (13 cases: every readiness state, coverage arithmetic, extra-manifest-field stripping, restore_proven default, readiness_by_entity, retention pass-through, load_persisted_readiness_record fail-safe). tests/fixtures/uitest/state/restore_readiness.json added (all five states plus a held artifact carrying two extra manifest-only fields a real manifest record would also have, proving contracts section 9.3 end-to-end -- neither reaches the rendered HTML). tests/test_html_render_harness.py extended (recoveryUiData populated-module assertion, a test proving those two extra fields never leak into the rendered HTML, source-level bare-'verified' check). Existing suites updated for the new nav route/payload key with no behavior change: tests/test_navigation_information_architecture.py, tests/test_m2_nav_accessibility_closure.py, tests/test_con1_operator_console_read_only.py, tests/test_frontend_module_composition.py. Full detail: project/backlog.json native_backup note (2026-09-09 update).",
+      "risks_forward": "Retention view renders its explicit empty state in the uitest fixture/render harness (no recovery store configured there); real non-empty retention rows are covered only by a direct unit test on the pure builder, not end-to-end through render_uitest.py. compliance_posture's recovery_readiness namespace is wired but unconsumed by any control yet (architecture section 11: 'for a future backup-coverage control')."
+    },
+    {
       "build": "m7_real_device_targeted_collect_now",
       "status": "automated_validated",
       "title": "M7 -- real device-targeted Collect now (entity_id-substitution wiring)",

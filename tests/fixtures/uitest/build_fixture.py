@@ -760,6 +760,66 @@ def compliance_history():
     return {"schema_version": "0.7.5", "updated_at": rows[-1]["collected_at"], "records": rows}
 
 
+def restore_readiness():
+    # RB.5: hand-authored securityexpert-restore-readiness-v1 record (RB.0's
+    # own output shape) covering every readiness state -- entity_ids match
+    # real devices/virtual systems from unified() above (utils.restore_
+    # readiness.resolve_entity_id convention: physical device, or
+    # <device>__vsid_<vs_id> for a VSX virtual system) so the Recovery
+    # module's per-device rows correspond to real inventory rows.
+    def artifact(cls, age_days, level, matches, *, proven=False):
+        return {"class": cls, "age_days": age_days, "validation_level": level,
+                "version_matches_running": matches, "restore_proven": proven}
+
+    devices = [
+        {"entity_id": "cp-edge-01", "vendor": "checkpoint", "state": "READY",
+         "reason": "validated_current_artifact_held",
+         # contracts §9.3 / §6 rule 1 proof: a real recovery_manifest.py record
+         # also carries a content digest and other manifest-only fields
+         # alongside the §5-frozen class/age_days/validation_level/
+         # version_matches_running summary this readiness record embeds.
+         # build_recovery_ui_payload must project only the frozen fields --
+         # these two extras must never reach the rendered HTML (see
+         # tests/test_html_render_harness.py::test_recovery_module_never_leaks_payload_bytes).
+         "held_artifacts": [{**artifact("full_config_snapshot", 2, "V3", True, proven=True),
+                             "manifest_digest": "sha256:" + "a" * 64,
+                             "artifact_bytes_sentinel": "UITEST_FORBIDDEN_PAYLOAD_BYTES"}],
+         "attested_not_held": [], "missing_required": [], "evidence_basis": "recovery_manifest"},
+        {"entity_id": "cp-core-01", "vendor": "checkpoint", "state": "STALE",
+         "reason": "held_artifact_unvalidated_or_version_mismatch",
+         "held_artifacts": [artifact("full_config_snapshot", 40, "V1", False)],
+         "attested_not_held": [], "missing_required": [], "evidence_basis": "recovery_manifest"},
+        {"entity_id": "cp-core-02", "vendor": "checkpoint", "state": "PARTIAL",
+         "reason": "required_artifact_classes_missing",
+         "held_artifacts": [artifact("full_config_snapshot", 5, "V3", True, proven=True)],
+         "attested_not_held": [], "missing_required": ["policy_package"],
+         "evidence_basis": "recovery_manifest"},
+        {"entity_id": "pan-ha-01", "vendor": "panorama", "state": "PARTIAL",
+         "reason": "only_device_attested_artifact_no_held_copy",
+         "held_artifacts": [],
+         # RB.3a amendment C1: age_days is nullable -- an unparsed device-reported date.
+         "attested_not_held": [{"class": "local_snapshot", "age_days": None, "source": "device_reported"}],
+         "missing_required": [], "evidence_basis": "device_attestation"},
+        {"entity_id": "vsx-gw-01", "vendor": "checkpoint", "state": "UNPROTECTED",
+         "reason": "no_recovery_artifact_of_any_class",
+         "held_artifacts": [], "attested_not_held": [], "missing_required": [],
+         "evidence_basis": "none"},
+        {"entity_id": "pan-mvha-02", "vendor": "panorama", "state": "UNKNOWN",
+         "reason": "inventory_data_state_no_data",
+         "held_artifacts": [], "attested_not_held": [], "missing_required": [],
+         "evidence_basis": "none"},
+    ]
+    summary = {"READY": 0, "STALE": 0, "PARTIAL": 0, "UNPROTECTED": 0, "UNKNOWN": 0}
+    for device in devices:
+        summary[device["state"]] += 1
+    return {
+        "schema": "securityexpert-restore-readiness-v1",
+        "generated_at": _ISO,
+        "devices": devices,
+        "summary": summary,
+    }
+
+
 def main():
     (HERE / "state").mkdir(parents=True, exist_ok=True)
     writes = {
@@ -771,6 +831,7 @@ def main():
         "state/control_assignments.json": control_assignments(),
         "state/compliance_history.json": compliance_history(),
         "state/inventory_exclusions.json": inventory_exclusions(),
+        "state/restore_readiness.json": restore_readiness(),
     }
     for rel, payload in writes.items():
         path = HERE / rel

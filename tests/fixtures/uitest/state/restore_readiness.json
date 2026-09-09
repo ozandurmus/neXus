@@ -1,0 +1,107 @@
+{
+  "schema": "securityexpert-restore-readiness-v1",
+  "generated_at": "2026-08-30T12:00:00Z",
+  "devices": [
+    {
+      "entity_id": "cp-edge-01",
+      "vendor": "checkpoint",
+      "state": "READY",
+      "reason": "validated_current_artifact_held",
+      "held_artifacts": [
+        {
+          "class": "full_config_snapshot",
+          "age_days": 2,
+          "validation_level": "V3",
+          "version_matches_running": true,
+          "restore_proven": true,
+          "manifest_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "artifact_bytes_sentinel": "UITEST_FORBIDDEN_PAYLOAD_BYTES"
+        }
+      ],
+      "attested_not_held": [],
+      "missing_required": [],
+      "evidence_basis": "recovery_manifest"
+    },
+    {
+      "entity_id": "cp-core-01",
+      "vendor": "checkpoint",
+      "state": "STALE",
+      "reason": "held_artifact_unvalidated_or_version_mismatch",
+      "held_artifacts": [
+        {
+          "class": "full_config_snapshot",
+          "age_days": 40,
+          "validation_level": "V1",
+          "version_matches_running": false,
+          "restore_proven": false
+        }
+      ],
+      "attested_not_held": [],
+      "missing_required": [],
+      "evidence_basis": "recovery_manifest"
+    },
+    {
+      "entity_id": "cp-core-02",
+      "vendor": "checkpoint",
+      "state": "PARTIAL",
+      "reason": "required_artifact_classes_missing",
+      "held_artifacts": [
+        {
+          "class": "full_config_snapshot",
+          "age_days": 5,
+          "validation_level": "V3",
+          "version_matches_running": true,
+          "restore_proven": true
+        }
+      ],
+      "attested_not_held": [],
+      "missing_required": [
+        "policy_package"
+      ],
+      "evidence_basis": "recovery_manifest"
+    },
+    {
+      "entity_id": "pan-ha-01",
+      "vendor": "panorama",
+      "state": "PARTIAL",
+      "reason": "only_device_attested_artifact_no_held_copy",
+      "held_artifacts": [],
+      "attested_not_held": [
+        {
+          "class": "local_snapshot",
+          "age_days": null,
+          "source": "device_reported"
+        }
+      ],
+      "missing_required": [],
+      "evidence_basis": "device_attestation"
+    },
+    {
+      "entity_id": "vsx-gw-01",
+      "vendor": "checkpoint",
+      "state": "UNPROTECTED",
+      "reason": "no_recovery_artifact_of_any_class",
+      "held_artifacts": [],
+      "attested_not_held": [],
+      "missing_required": [],
+      "evidence_basis": "none"
+    },
+    {
+      "entity_id": "pan-mvha-02",
+      "vendor": "panorama",
+      "state": "UNKNOWN",
+      "reason": "inventory_data_state_no_data",
+      "held_artifacts": [],
+      "attested_not_held": [],
+      "missing_required": [],
+      "evidence_basis": "none"
+    }
+  ],
+  "summary": {
+    "READY": 1,
+    "STALE": 1,
+    "PARTIAL": 2,
+    "UNPROTECTED": 1,
+    "UNKNOWN": 1
+  }
+}

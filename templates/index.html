@@ -426,6 +426,43 @@
     </main>
 </section>
 
+<section id="recoveryModule" class="app-module" data-module-panel="recovery">
+    <main class="project-plan-shell">
+        <div class="project-plan-heading">
+            <div>
+                <div class="eyebrow">SecurityExpert · RB.5</div>
+                <h1>Recovery</h1>
+                <p>Restore-readiness roll-up, per-device recovery timeline, coverage vs inventory, and retention -- manifests and readiness only. Never payload, never a download link, never a decrypt path.</p>
+            </div>
+        </div>
+
+        <section id="recoveryFramingNote" class="inline-message neutral"></section>
+
+        <div id="recoveryFleetSummary" class="project-plan-hero"></div>
+
+        <section class="project-plan-card">
+            <div class="dashboard-card-header">
+                <div><div class="eyebrow">Fleet</div><h2>Per-device recovery timeline</h2></div>
+            </div>
+            <div id="recoveryDeviceTable"></div>
+        </section>
+
+        <section class="project-plan-card">
+            <div class="dashboard-card-header">
+                <div><div class="eyebrow">Gap view</div><h2>Coverage vs inventory</h2></div>
+            </div>
+            <div id="recoveryCoverageGap"></div>
+        </section>
+
+        <section class="project-plan-card">
+            <div class="dashboard-card-header">
+                <div><div class="eyebrow">Retention</div><h2>Pending deletion</h2></div>
+            </div>
+            <div id="recoveryRetentionTable"></div>
+        </section>
+    </main>
+</section>
+
 <section id="exclusionsModule" class="app-module" data-module-panel="exclusions">
     <main class="project-plan-shell">
         <div class="project-plan-heading">
@@ -522,6 +559,7 @@ initializeReport({
     discoveryUiData: __DISCOVERY_JSON_PLACEHOLDER__,
     exclusionsUiData: __EXCLUSIONS_JSON_PLACEHOLDER__,
     failoverReadinessData: __FAILOVER_READINESS_JSON_PLACEHOLDER__,
+    recoveryUiData: __RECOVERY_JSON_PLACEHOLDER__,
 });
 </script>
 

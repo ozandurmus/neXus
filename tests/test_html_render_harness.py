@@ -53,7 +53,7 @@ PLAYWRIGHT_HARNESS = ROOT / "tools" / "render-harness" / "check_render_playwrigh
 _PAYLOAD_CONSTS = (
     "rawData", "configUiData", "complianceUiData",
     "cryptoUiData", "projectPlanData", "discoveryUiData",
-    "exclusionsUiData", "failoverReadinessData",
+    "exclusionsUiData", "failoverReadinessData", "recoveryUiData",
 )
 
 
@@ -135,6 +135,12 @@ def test_all_six_modules_are_populated(rendered_html):
     assert len(ov["history"]) >= 2 and ov["trend"] is not None       # 0.7.5 trend renders
     assert _const(html, "cryptoUiData").get("available") is True
     assert _const(html, "discoveryUiData")["entities"]
+    recovery = _const(html, "recoveryUiData")
+    assert recovery.get("available") is True
+    assert recovery["devices"]
+    assert {"READY", "STALE", "PARTIAL", "UNPROTECTED", "UNKNOWN"} <= {
+        state for state, count in recovery["readiness_summary"].items() if count
+    }
 
 
 def test_all_topologies_present(rendered_html):
@@ -179,6 +185,34 @@ def test_all_topologies_present(rendered_html):
         for f in s["findings"]:
             crypto_status.add(f["status"])
     assert {"PASS", "FINDING", "UNKNOWN"} <= crypto_status
+
+
+def test_recovery_module_never_leaks_payload_bytes(rendered_html):
+    """RB.5 contract §6 rule 1 / contracts §9.3: the uitest fixture's cp-edge-01
+    held artifact carries a manifest digest and a payload-bytes sentinel
+    alongside the frozen class/age_days/validation_level fields (real
+    recovery_manifest.py records carry exactly this kind of extra field) --
+    build_recovery_ui_payload must drop both, and static/recovery_ui.js must
+    never touch them, so neither string can ever reach the rendered HTML."""
+    html = rendered_html.read_text(encoding="utf-8")
+    assert "UITEST_FORBIDDEN_PAYLOAD_BYTES" not in html
+    assert "manifest_digest" not in html
+    assert ("sha256:" + "a" * 64) not in html
+
+    recovery = _const(html, "recoveryUiData")
+    ready_device = next(d for d in recovery["devices"] if d["entity_id"] == "cp-edge-01")
+    artifact = ready_device["artifacts"][0]
+    assert set(artifact) == {"class", "age_days", "validation_level", "restore_proven"}
+
+
+def test_recovery_module_source_never_says_bare_verified():
+    """RB.5 contract §6 rule 2: restore_proven renders as an explicit badge;
+    the unqualified word "verified" must never appear in anything the module
+    actually renders (comments discussing the rule itself are fine -- they
+    never reach the DOM)."""
+    source = (ROOT / "static" / "recovery_ui.js").read_text(encoding="utf-8")
+    code = re.sub(r"//[^\n]*", "", source).lower()
+    assert "verified" not in code
 
 
 def test_failover_readiness_data_renders_a_genuine_unsafe_row(rendered_html):

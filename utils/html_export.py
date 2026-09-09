@@ -16,6 +16,12 @@ from utils.inventory_exclusions import InventoryExclusionPolicyError, load_inven
 from utils.inventory_exclusions_ui import build_inventory_exclusions_payload
 from utils.logger import info
 from utils.project_plan import build_project_plan_payload
+from utils.recovery_ui import (
+    build_recovery_ui_payload,
+    load_persisted_readiness_record,
+    load_retention_pending_deletion,
+    readiness_by_entity,
+)
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -45,6 +51,7 @@ SCRIPT_MODULE_FILENAMES = (
     "compliance_ui.js",
     "discovery_ui.js",
     "failover_readiness_ui.js",
+    "recovery_ui.js",
     "project_plan_ui.js",
     "overview_ui.js",
     "app_bootstrap.js",
@@ -173,11 +180,11 @@ def build_report_payloads(
     timings: list[tuple[str, float]] | None = None,
     failover_readiness_report=None,
 ) -> dict:
-    """Build the eight payload dicts the report embeds and the console (CON.1)
+    """Build the nine payload dicts the report embeds and the console (CON.1)
     serves at ``/api/payloads`` — ``rawData``, ``configUiData``,
     ``complianceUiData``, ``cryptoUiData``, ``projectPlanData``,
-    ``discoveryUiData``, ``exclusionsUiData``, ``failoverReadinessData``. Pure
-    computation, no write side
+    ``discoveryUiData``, ``exclusionsUiData``, ``failoverReadinessData``,
+    ``recoveryUiData``. Pure computation, no write side
     effect: ``run_html_export`` is the only caller that appends a trend-ledger
     record, and only for a full checkpoint (``record_checkpoint=True``).
 
@@ -227,6 +234,14 @@ def build_report_payloads(
         # 0.7.5 — the trend ledger (read on every render; written only on a full
         # checkpoint, below). Fail-safe: a missing/corrupt ledger -> [].
         compliance_history = load_history(compliance_data_root)
+    # RB.5: the persisted RB.0 readiness record (data/state/restore_readiness.json),
+    # read once here and reshaped two ways below -- the recovery_ui projection
+    # (rendered module) and readiness_by_entity (compliance_posture's additive
+    # evidence namespace). No I/O beyond this one read; a missing/corrupt record
+    # degrades to recovery_ui's own explicit empty state (§6 rule 3), never an
+    # error.
+    with _stage_timer(timings, "load_persisted_readiness_record"):
+        readiness_record = load_persisted_readiness_record(compliance_data_root)
     with _stage_timer(timings, "build_compliance_posture"):
         compliance_ui = build_compliance_posture(
             configuration_ui, project_plan,
@@ -237,6 +252,7 @@ def build_report_payloads(
             # --render-only (it rebuilds from the same unified.json).
             unified_inventory=data if isinstance(data, list) else None,
             history=compliance_history,
+            recovery_readiness_by_entity=readiness_by_entity(readiness_record),
         )
     # 0.6.1C Phase 3: additive discovery/capability/coordinator observability.
     # Callers that have not yet wired Phase 4 collector integration may omit
@@ -277,6 +293,16 @@ def build_report_payloads(
             readiness_report=failover_readiness_report,
         )
 
+    # RB.5: a pure projection over the readiness record + retention scan
+    # already read above -- no device contact, no payload bytes (contract §6).
+    with _stage_timer(timings, "build_recovery_ui_payload"):
+        recovery_ui = build_recovery_ui_payload(
+            readiness_record,
+            retention_pending_deletion=load_retention_pending_deletion(
+                repository_root=repository_root,
+            ),
+        )
+
     return {
         "rawData": data,
         "configUiData": configuration_ui,
@@ -286,6 +312,7 @@ def build_report_payloads(
         "discoveryUiData": discovery_ui,
         "exclusionsUiData": exclusions_ui,
         "failoverReadinessData": failover_readiness_ui,
+        "recoveryUiData": recovery_ui,
     }
 
 
@@ -350,6 +377,7 @@ def run_html_export(
     discovery_ui = payloads["discoveryUiData"]
     exclusions_ui = payloads["exclusionsUiData"]
     failover_readiness_ui = payloads["failoverReadinessData"]
+    recovery_ui = payloads["recoveryUiData"]
 
     with _stage_timer(timings, "read_template_files"):
         template = read_text_file(template_file)
@@ -376,6 +404,7 @@ def run_html_export(
             "__DISCOVERY_JSON_PLACEHOLDER__": _script_json(discovery_ui),
             "__EXCLUSIONS_JSON_PLACEHOLDER__": _script_json(exclusions_ui),
             "__FAILOVER_READINESS_JSON_PLACEHOLDER__": _script_json(failover_readiness_ui),
+            "__RECOVERY_JSON_PLACEHOLDER__": _script_json(recovery_ui),
         }
 
     # One pass. Do NOT chain str.replace() here (see _fill_template): a payload

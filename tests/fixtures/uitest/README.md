@@ -11,7 +11,8 @@ multi-vsys firewall, multi-vsys HA pair. Plus: interface/route divergence betwee
 cluster members, stale + disconnected inventory, the full alignment
 classification set, SAME / CHANGED / FIRST / insufficient history, crypto
 PASS / FINDING / UNKNOWN across every category, enforced + advisory + WAIVED
-compliance, per-framework COVERED / PARTIALLY_COVERED / UNCOVERED.
+compliance, per-framework COVERED / PARTIALLY_COVERED / UNCOVERED, and every
+restore-readiness state (READY / STALE / PARTIAL / UNPROTECTED / UNKNOWN).
 
 ## Files
 
@@ -25,6 +26,7 @@ compliance, per-framework COVERED / PARTIALLY_COVERED / UNCOVERED.
 | `state/control_assignments.json` | a WAIVED control | copied to `<data_root>/state/`, read by `load_control_assignments` |
 | `state/compliance_history.json` | 0.7.5 trend sparkline + delta chip | copied to `<data_root>/state/`, read by `load_history` |
 | `state/inventory_exclusions.json` | Exclusions module | copied to `<data_root>/state/`, read for real by `load_inventory_exclusions` (not injected -- runs the real payload builder, like `build_compliance_posture`) |
+| `state/restore_readiness.json` | Recovery module + Overview recovery-posture tile + `compliance_posture`'s additive readiness evidence | copied to `<data_root>/state/`, read for real by `utils.recovery_ui.load_persisted_readiness_record` / `build_recovery_ui_payload` (not injected -- same real-builder pattern as `inventory_exclusions.json`) |
 
 `build_compliance_posture`, `build_project_plan_payload` (from the real
 `project/*.json`), the template fill and `_script_json` all run for real —

@@ -77,6 +77,7 @@ const NAVIGATION_MODEL = [
         icon: "operations",
         items: [
             { module: "failover", label: "HA & readiness", icon: "failover" },
+            { module: "recovery", label: "Recovery", icon: "recovery" },
             // Console-only in practice: the CON.2 job engine exists only behind
             // the authenticated loopback console, so templates/index.html ships
             // no jobs panel and this entry simply does not render there. That is
@@ -168,6 +169,7 @@ const NAVIGATION_ICONS = {
     "inventory": '<path d="M4 5h16v5H4V5Zm0 9h16v5H4v-5Zm3-6.5h.01M7 16.5h.01"/>',
     "discovery": '<path d="M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14Zm5 12 4 4"/>',
     "failover": '<path d="M4 9a8 8 0 0 1 13.7-5.7L20 5.6M20 4v4h-4M20 15a8 8 0 0 1-13.7 5.7L4 18.4M4 20v-4h4"/>',
+    "recovery": '<path d="M12 3v10m0 0-3-3m3 3 3-3M5 14v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4"/>',
     "jobs": '<path d="M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01"/>',
     "exclusions": '<path d="M12 4a8 8 0 1 0 0 16 8 8 0 0 0 0-16Zm-5.6 2.4 11.2 11.2"/>',
     "project-plan": '<path d="M6 4h9l4 4v12H6V4Zm9 0v4h4M9 13h6M9 17h4"/>',

@@ -1033,6 +1033,7 @@ def _subject_evidence(
     crypto_facts: dict[str, Any] | None = None,
     unified_rows: list[dict[str, Any]] | None = None,
     primitive_facts: dict[str, Any] | None = None,
+    recovery_readiness: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """The read-only evidence namespaces a user check can assert over (D4).
 
@@ -1049,7 +1050,11 @@ def _subject_evidence(
     run, keyed by ``primitive_id``; omitted/empty (the normal-run default —
     primitives never execute in a normal collection) leaves the namespace
     empty, so any check referencing it is on_no_evidence, never a fabricated
-    pass.
+    pass. ``recovery_readiness`` (RB.5, architecture §11 "for a future
+    backup-coverage control") is this subject's RB.0 readiness record
+    (``utils.recovery_ui.readiness_by_entity``'s per-entity dict), keyed by
+    device name -- no control references this namespace yet, so it is
+    additive and inert until one is defined.
     """
     return {
         "current_configuration": _as_dict(device.get("current_configuration")),
@@ -1070,6 +1075,7 @@ def _subject_evidence(
         },
         "crypto_facts": _as_dict(crypto_facts),
         "primitive": _as_dict(primitive_facts),
+        "recovery_readiness": _as_dict(recovery_readiness),
     }
 
 
@@ -1083,6 +1089,7 @@ def _subject_user_checks(
     crypto_facts: dict[str, Any] | None = None,
     unified_rows: list[dict[str, Any]] | None = None,
     primitive_facts: dict[str, Any] | None = None,
+    recovery_readiness: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     """0.7.3 (CE.1) — evaluate the user pack's checks for one subject.
 
@@ -1095,7 +1102,7 @@ def _subject_user_checks(
     vendor_key = str(device.get("vendor_key") or "")
     platform_family = str(device.get("platform_family") or "")
     entity_type = str(device.get("entity_type") or "")
-    evidence = _subject_evidence(device, crypto_facts, unified_rows, primitive_facts)
+    evidence = _subject_evidence(device, crypto_facts, unified_rows, primitive_facts, recovery_readiness)
     results: list[dict[str, Any]] = []
     for check in pack.checks:
         if not check.applies_to_subject(
@@ -1381,6 +1388,7 @@ def build_compliance_posture(
     unified_inventory: list[dict[str, Any]] | None = None,
     history: list[dict[str, Any]] | None = None,
     primitive_facts_by_subject: dict[str, dict[str, Any]] | None = None,
+    recovery_readiness_by_entity: dict[str, dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     payload = _as_dict(configuration_ui)
     plan = _as_dict(project_plan)
@@ -1391,6 +1399,13 @@ def build_compliance_posture(
     # mode, never a normal collection run — so this stays byte-identical
     # until a future promotion threads a real producer through.
     primitive_by_subject = _as_dict(primitive_facts_by_subject)
+    # RB.5 (architecture §11: "compliance_posture gains readiness as an
+    # evidence source for a future backup-coverage control -- additive"):
+    # keyed by device name (utils.recovery_ui.readiness_by_entity's entity_id,
+    # which equals the unified `device` field for every non-VSX identity, the
+    # same identity `device_name` below already resolves). No control
+    # references this namespace yet -- see _subject_evidence.
+    recovery_by_entity = _as_dict(recovery_readiness_by_entity)
     # CE.1 fast-follow: the merged inventory (utils/merge.py → unified.json), keyed
     # by device identity, so a user check can assert over unified.interfaces /
     # unified.routes. Omitted (render paths that pre-date the wire) → the
@@ -1496,6 +1511,7 @@ def build_compliance_posture(
                 crypto_by_subject.get(subject_id),
                 subject_unified_rows,
                 primitive_by_subject.get(subject_id),
+                recovery_by_entity.get(device_name),
             )
             if has_current else []
         )

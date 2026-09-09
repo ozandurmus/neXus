@@ -82,7 +82,7 @@ EXPECTED_ROOTS = [
 #: Every route that existed before NAV.1 and must keep resolving (D-NAV8).
 LEGACY_ROUTES = [
     "overview", "inventory", "configuration", "compliance",
-    "discovery", "failover", "exclusions", "project-plan",
+    "discovery", "failover", "recovery", "exclusions", "project-plan",
 ]
 
 #: Device-scoped views — device tabs, never navigation roots (NAV.1 §3).

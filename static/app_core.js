@@ -21,6 +21,7 @@ let projectPlanData = {};
 let discoveryUiData = {};
 let exclusionsUiData = {};
 let failoverReadinessData = {};
+let recoveryUiData = {};
 
 // F-Buddy Phase 0.5 Final UI Closure
 function safe(value) {
