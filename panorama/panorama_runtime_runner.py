@@ -10,7 +10,7 @@ from pathlib import Path
 
 from utils.logger import info, err, warn, register_sensitive_value
 from utils.pan_tls_trust import PanTlsStrictPreflightError, preflight_pan_tls_ca_bundle
-from panorama.pan_identity import normalize_pan_hostname
+from panorama.pan_identity import parse_pan_managed_device_entry
 
 TELEMETRY_OUT = "output/panorama_telemetry.json"
 
@@ -113,18 +113,16 @@ def get_devices(host, key, *, verify: bool | str = False):
     devices = []
 
     for d in tree.xpath("//devices/entry"):
-        serial = d.findtext("serial")
-        hostname = d.findtext("hostname")
-        connected = (d.findtext("connected") or "").strip().lower()
-        management_ip = (d.findtext("ip-address") or "").strip()
+        parsed = parse_pan_managed_device_entry(d)
+        if not parsed["serial"]:
+            continue
 
-        if serial:
-            devices.append({
-                "serial": serial,
-                "hostname": normalize_pan_hostname(hostname, serial=serial),
-                "connected": connected,
-                "management_ip": management_ip or None,
-            })
+        devices.append({
+            "serial": parsed["serial"],
+            "hostname": parsed["hostname"],
+            "connected": parsed["connected"],
+            "management_ip": parsed["management_ip"],
+        })
 
     return devices
 
