@@ -5,7 +5,7 @@ see `AGENTS.md`/`AI_START_HERE.md`. **Predecessor build detail lives in
 `project/build_history.json`** (structured, newest-first) and its linked
 docs under `docs/history/`; `docs/history/INDEX.md` is the one-line timeline.
 
-- **Checkpoint:** 2026-09-10, `ui2_b1_01_skeleton_ci_docker` (`UI2 B1-1`) — new `docs/design/UI2_0_B1_01_SKELETON_CI_DOCKER_CONTRACT.md` (status: **DRAFT — FOR PRODUCT OWNER FREEZE**). It fixes the module/dependency map, reproducible build commands, Testcontainers/Flyway harness, one-to-one P-1 architecture tests, isolated UI2 CI coexistence, minimal non-root image, component-scoped secrets, and 15 runnable implementation checks. Contract only: no `ui2/` implementation, Line-1 source, `validation.yml`, or device contact. Detail: `project/backlog.json`; full chain: `project/build_history.json`.
+- **Checkpoint:** 2026-09-10, `ui2_b1_01_skeleton_ci_docker` (`UI2 B1-1`) — `docs/design/UI2_0_B1_01_SKELETON_CI_DOCKER_CONTRACT.md` is **FROZEN — PRODUCT OWNER APPROVED** after portability and cold-cache CI corrections. It fixes the module/dependency map, reproducible build commands, Testcontainers/Flyway harness, one-to-one P-1 architecture tests, isolated UI2 CI coexistence, minimal non-root image, component-scoped secrets, and 15 runnable implementation checks. Contract only: no `ui2/` implementation, Line-1 source, `validation.yml`, or device contact. Detail: `project/backlog.json`; full chain: `project/build_history.json`.
 - **Next** (`now_next.next`): `gov_po_2_implementation` — unrelated and
   unchanged by this movement; not yet started. `m7_real_device_targeted_
   collect_now` **AUTOMATED_VALIDATED 2026-09-08**, real-device confirmation

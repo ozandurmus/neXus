@@ -151,13 +151,13 @@
     "horizon_contract": "NOW is exactly one build. NEXT is exactly one. Everything else is an `upcoming` row carrying its own true status: planned = AFTER, blocked = waiting on a named external gate, deferred = consciously postponed. `now.build` must equal the newest project/build_history.json record -- utils.project_plan enforces it.",
     "now": {
       "build": "ui2_b1_01_skeleton_ci_docker",
-      "title": "UI2 B1-1 -- skeleton, CI and Docker contract (DRAFT, for Product Owner freeze)",
-      "goal": "Write the DRAFT contract that makes the later ui2/ Gradle multi-module skeleton, isolated CI job, Docker image, Testcontainers PostgreSQL harness and P-1 dependency test mechanical, without creating implementation files or changing Line-1.",
-      "status": "in_progress",
+      "title": "UI2 B1-1 -- skeleton, CI and Docker contract (FROZEN)",
+      "goal": "Freeze the contract that makes the later ui2/ Gradle multi-module skeleton, isolated CI job, Docker image, Testcontainers PostgreSQL harness and P-1 dependency test mechanical, without creating implementation files or changing Line-1.",
+      "status": "done",
       "started": "2026-09-10",
       "completed": "2026-09-10",
       "notes": [
-        "Full detail: project/backlog.json's ui2_b1_01_skeleton_ci_docker note; docs/design/UI2_0_B1_01_SKELETON_CI_DOCKER_CONTRACT.md (DRAFT -- FOR PRODUCT OWNER FREEZE, 2026-09-10).",
+        "Full detail: project/backlog.json's ui2_b1_01_skeleton_ci_docker note; docs/design/UI2_0_B1_01_SKELETON_CI_DOCKER_CONTRACT.md (FROZEN -- PRODUCT OWNER APPROVED, 2026-09-10).",
         "Contract-first movement only. No ui2/ implementation, Line-1 source, validation.yml, or device contact.",
         "Predecessor ui2_b0_baseline_directory completed B0 with extraction tooling; later origin/main UI2 logo and portfolio decisions were preserved before this draft.",
         "Predecessor ui2_b0_c7_backup_artefact_restore_engine_contract (C7): backup profile model, artefact store/manifest/validation/retention, key custody, restore execution (plan, preconditions, execution via C4, verification, a restore-specific OUTCOME_UNKNOWN), routine-vs-per-operation approval, device/version matrix. MERGED PR #170. Full detail: project/build_history.json's ui2_b0_c7_backup_artefact_restore_engine_contract record.",
