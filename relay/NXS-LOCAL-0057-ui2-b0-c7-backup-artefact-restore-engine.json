@@ -1,0 +1,122 @@
+{
+  "created_at": "2026-09-09T18:30:22Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1: Section 1 states explicitly, in its own sentence, that RAW-RETENTION's 'no raw collection output' rule does not forbid backup artefact storage -- artefacts are their own data class.",
+          "AC-2: The backup profile model is expressed against C1/C2/C4's actual schema/field names, not re-invented independent of them.",
+          "AC-3: The artefact store/manifest/validation/retention design carries forward BACKUP_RECOVERY_CONTRACTS.md's rules with named section cross-references, not a from-scratch redesign.",
+          "AC-4: Key custody names a concrete key hierarchy and rotation rule, referencing C1 section 6 by name.",
+          "AC-5: Restore's precondition list, execution-step model (via C4) and result-verification method are each concrete and testable.",
+          "AC-6: A restore-specific OUTCOME_UNKNOWN behaviour is defined (what state the device may be left in, what a human must verify, whether/when a retry is permitted) -- not just a reference to C2's generic definition.",
+          "AC-7: The approval model distinguishes routine backup (D7+reason) from restore (per-operation independent approval) exactly per baseline APPROVAL-MODEL, with the approval record's shape specified.",
+          "AC-8: The device/version support matrix template is filled in for at least the PAN RB.2 and CP Gaia RB.3b candidates, each with an inherited evidence class (not invented certainty where Line-1 evidence is FIXTURE_ONLY or UNPROVEN).",
+          "AC-9: Section 8 gives at least twelve testable acceptance criteria for REL-BACKUP, including a restore-failure scenario.",
+          "AC-10: A platform is never declared 'supported' in the matrix on FIXTURE_ONLY-only evidence for a class-1 write -- the rule is stated and the two worked examples respect it.",
+          "AC-11: Section 9 lists every contradiction with frozen authority found (or states none and which documents were checked); no PO-reserved decision (RESTORE-IN-RELEASE-1, APPROVAL-MODEL, RAW-RETENTION) is reopened -- each is referenced as already decided.",
+          "AC-12: This document does not add a new utils/action_taxonomy.py member or edit that file; if a genuine gap is found, it is named as an open item for a C5-successor movement, not fixed here."
+        ],
+        "baseline": {
+          "authority": "docs/design/UI2_0_BASELINE_CONTRACT.md (FROZEN -- PRODUCT OWNER APPROVED 2026-09-09): RESTORE-IN-RELEASE-1 (D-7, ACCEPTED) -- restore is IN Release 1 on declared-supported platforms; a release without it must be named 'platform pilot / backup collection release', never Release 1; high risk strengthens the contract and acceptance tests, is not a reason to drop the promise. APPROVAL-MODEL (D-2c) -- restore requires PER-OPERATION independent approval, distinct from the profile-version/schedule four-eyes that covers routine backup runs; this is the one class of action in the whole platform that is NOT covered by the routine-scope shortcut. Acceptance sentence A-3 (Release 1 completion measured by product-flow acceptance on an explicit device/version matrix, not movement count) -- this contract's device/version matrix is that measurement's object. RAW-RETENTION default NO does NOT apply to backup artefacts themselves (an encrypted backup artefact is its own data class per workflow section 3.5's own text: 'job logs, audit and complete encrypted backup artefacts are distinct data classes') -- do not conflate 'no raw device COLLECTION output' with 'no backup artefact storage'; the two are different data classes and this contract must say so explicitly to prevent the confusion. docs/design/BACKUP_RECOVERY_CONTRACTS.md sections 7.1-7.8 (frozen network-device command gate entries: PAN export read-class, CP Gaia 'add backup local' operational-write, SCP fetch read-class, 'show backups'/'show snapshots' read-class, mds_backup operational-write) are VENDOR SEMANTICS this contract carries forward as specification inputs to C4's gate-registry, not as Python code to import (workflow P-4). docs/design/D4_BACKUP_CREDENTIAL_IDENTITY_DECISION.md and RECOVERY_OPERATIONAL_WRITE_LEDGER.md are Line-1 REFERENCE precedent for credential-identity-for-writes and write-ledger bookkeeping -- read for what they got right (the write-ledger idea in particular anticipates this contract's audit needs), do not port their code. UI2_0_C1_PLATFORM_SCHEMA_CONTRACT.md's provenance_records/audit_log (section 3/5) and UI2_0_C2_JOB_EXECUTION_CONTRACT.md's crash-safe job contract (its full section 3-8) are what a backup or restore JOB runs on -- a backup/restore is a job per C2's model with a stricter admission gate, not a second execution engine (workflow section 3.2's own text: 'the profile engine is therefore not a second engine; it is the same executor with stricter admission').",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED); UI 2.0 baseline adopted 2026-09-09; C1, C2, C3, C4, C6 delivered as DRAFT -- FOR PO FREEZE",
+          "sequencing": "Runs concurrently with C5 (amendments bundle, movement NXS-LOCAL-<next>). C7 is largely independent of C5's content; if C7's restore-approval semantics need a taxonomy amendment beyond what C5 already covers (UI-OPERATIONAL-RUN-NOW), NAME it as an open item for a C5-successor movement rather than editing utils/action_taxonomy.py inside C7's own scope -- avoid a two-writer collision on the same source file in one dispatch wave; C5 owns that file in this wave. All four platform contracts (C1, C2, C3, C4) plus C6 are MERGED as DRAFT -- FOR PO FREEZE; read them, do not reopen anything they settled. C7 is the LAST movement before the PO can consider both platform freezes (C1-C5 and C7) together."
+        },
+        "context_not_loaded": [
+          "Any Java source, Gradle build, Flyway migration or Docker artefact -- B1/REL-BACKUP implement against this contract",
+          "The identity/session model (C3, already merged, reference by name) and the capability extraction procedure (C6, already merged, reference by name)",
+          "Device contact, credentials, network access of any kind",
+          "Controlled failover execution (OP.2) -- explicitly a different, later release per the baseline contract's Release 1 definition; this contract is backup/restore only"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/ui2-b0-c7-backup-artefact-restore-engine-contract"
+        },
+        "invariants": [
+          "A backup or restore runs on C2's job executor with C1's schema and C4's capability/gate model, under stricter admission (APPROVAL-MODEL) -- this contract specifies the admission rules and the artefact-specific data, not a competing execution model",
+          "Backup artefacts are their OWN data class, distinct from RAW-RETENTION's 'no raw collection output' rule -- state this distinction explicitly in section 1 so it cannot be misread as forbidding backup storage",
+          "Restore requires per-operation independent approval (APPROVAL-MODEL) -- distinct from a routine backup run's D7-role-plus-reason shortcut; specify the approval record's shape and who may hold the approving role, referencing C3's role model by name",
+          "The device/version support matrix names, for each declared-supported platform/version, at minimum: backup capability status, restore capability status, and the evidence class backing that declaration (REAL_ENV_VALIDATED / FIXTURE_ONLY / UNPROVEN, per workflow section 3.1 field 8) -- a platform is never declared 'supported' on FIXTURE_ONLY evidence alone for a class-1 write",
+          "Restore's failure behaviour follows C2's crash-safety model (OUTCOME_UNKNOWN, no automatic second write) -- specify concretely what OUTCOME_UNKNOWN means for a restore specifically (partial config applied? device left in an unknown state? what must a human verify before retrying) since a restore's failure mode is more consequential than a read job's",
+          "Key custody for backup artefacts follows C1 section 6's per-component secrets model and the frozen recovery_key_custody.py semantics (Line-1 reference, ported as rules not code) -- name the key hierarchy (artefact encryption key, its own custody/rotation) precisely",
+          "No decision frozen in UI2_0_BASELINE_CONTRACT.md is reopened; contradictions with frozen authority are REPORTED in a dedicated section, never silently resolved"
+        ],
+        "merge_gate": "Standing relay#13: green tests -> self-merge, report via RELAY_NOTE. Documentation-only PR; the DLP privacy gate at push time is the substantive gate. Run the full one-shot regression in the foreground and await its actual completion (do not treat it as backgroundable); if this worktree's own environment is broken in a way confirmed pre-existing on origin/main (as NXS-LOCAL-0051 found and reported, not fixed), report it exactly that way rather than attempting a bootstrap.",
+        "movement_type": "ARCHITECTURE",
+        "objective": "Write the UI 2.0 B0/C7 backup, artefact and restore engine contract as docs/design/UI2_0_C7_BACKUP_ARTEFACT_RESTORE_ENGINE_CONTRACT.md (status: DRAFT -- FOR PRODUCT OWNER FREEZE). It defines: the backup profile rules (design section 6 as amended by C1-C4 and by baseline APPROVAL-MODEL), the artefact store/manifest/validation/retention/key-custody model (as UI 2.0-native semantics carrying forward the frozen Line-1 RB contracts' rules, not the Line-1 code), and -- the part with no Line-1 precedent -- restore execution: plan, preconditions, execution steps, result verification, and failure behaviour, plus the device/version support matrix acceptance sentence A-3 depends on. This is the second and final platform-adjacent freeze candidate (the first being C1-C5); it is a contract, not code.",
+        "output_contract": [
+          "docs/design/UI2_0_C7_BACKUP_ARTEFACT_RESTORE_ENGINE_CONTRACT.md with: §1 scope, authority chain, and the RAW-RETENTION-vs-backup-artefact-data-class distinction stated explicitly up front; §2 the backup profile model (design section 6 concepts -- closed step kinds via C4, immutable versions, connectivity check before enable, schedule-edit intent -- restated against C1/C2/C4's actual schemas, not re-invented); §3 the artefact store/manifest/validation/retention model (carrying forward BACKUP_RECOVERY_CONTRACTS.md sections 1-6/8-9's rules as UI-2.0-native table/object designs referencing C1); §4 key custody (artefact encryption key hierarchy, rotation, referencing C1 section 6 and Line-1's recovery_key_custody.py semantics by name); §5 restore execution -- plan compilation, preconditions (connectivity, backup validity, target identity match), execution steps via C4's capability/step model, result verification, and a concrete failure/OUTCOME_UNKNOWN behaviour specific to restore; §6 the approval model for backup (routine, D7+reason) vs restore (per-operation, independent) referencing C3's role model and baseline APPROVAL-MODEL exactly; §7 the device/version support matrix template with at least the two Line-1-inherited candidates (PAN device-state/config export per RB.2; CP Gaia 'add backup local' per RB.3b) filled in with their inherited evidence class; §8 acceptance criteria for the REL-BACKUP feature slice (extract/implement/validate/integrate for both backup and restore) -- at least twelve, each testable, explicitly including a restore-failure acceptance scenario; §9 contradictions/open items for the PO; §10 cross-references",
+          "project/backlog.json ui2_b0_c7_backup_artefact_restore_engine_contract status -> in_progress with the PR reference; build_history record per the usual pattern",
+          "RELAY_NOTE + SESSION_CLOSE"
+        ],
+        "recommended_reasoning": {
+          "reason": "A cross-vendor, class-1-write, restore-safety contract on genuinely new scope (restore execution has no Line-1 precedent at all) built on four already-merged sibling contracts -- Sonnet 5 high is the lightest tier that fits; this is close to the edge of where a cross-subsystem architecture call could be needed, but it is bounded tightly enough by C1/C2/C4 and the baseline's explicit D-7/APPROVAL-MODEL rulings that Sonnet high should suffice without escalating.",
+          "tier": "Sonnet 5, extended thinking (high)"
+        },
+        "requirements": [
+          "Read UI2_0_BASELINE_CONTRACT.md (RESTORE-IN-RELEASE-1, APPROVAL-MODEL, A-3), UI2_0_DEVELOPMENT_WORKFLOW.md section 3.5's data-class distinction, BACKUP_RECOVERY_CONTRACTS.md in full, and UI2_0_C1/C2/C4's relevant sections in full before writing",
+          "English, per AGENTS.md engineering-output language law",
+          "git diff --check; privacy gate at push; existing docs/project-state tests green"
+        ],
+        "risks": [
+          "Conflating RAW-RETENTION with a prohibition on backup artefact storage -- they are different data classes, must be distinguished explicitly",
+          "Treating restore's OUTCOME_UNKNOWN identically to a read job's -- a restore left half-applied on a device is a materially different, more consequential state than an uncertain read outcome",
+          "Declaring a platform 'supported' in the matrix on weaker evidence than the class-1-write bar requires",
+          "Editing utils/action_taxonomy.py in this movement -- that file belongs to the concurrent C5 dispatch in this wave"
+        ],
+        "scope": {
+          "in": [
+            "docs/design/UI2_0_C7_BACKUP_ARTEFACT_RESTORE_ENGINE_CONTRACT.md",
+            "project-state bookkeeping"
+          ],
+          "out": [
+            "Any ui2/ source",
+            "Any Line-1 code change",
+            "utils/action_taxonomy.py edits",
+            "C1/C2/C3/C4/C5/C6 content beyond references",
+            "Device contact",
+            "Controlled failover execution (OP.2)"
+          ]
+        },
+        "validation_plan": [
+          "Self-check against AC-1..AC-12 in the RELAY_NOTE",
+          "docs/project-state tests",
+          "git diff --check",
+          "privacy gate at push"
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-09T18:30:22Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0057",
+  "movement": "UI2_B0_C7_BACKUP_ARTEFACT_RESTORE_ENGINE_CONTRACT",
+  "next_actor": "engineer",
+  "refs": [
+    "docs/design/UI2_0_BASELINE_CONTRACT.md",
+    "docs/design/UI2_0_DEVELOPMENT_WORKFLOW.md",
+    "docs/design/UI2_0_ARCHITECTURE_DESIGN.md",
+    "docs/design/UI2_0_C1_PLATFORM_SCHEMA_CONTRACT.md",
+    "docs/design/UI2_0_C2_JOB_EXECUTION_CONTRACT.md",
+    "docs/design/UI2_0_C4_CAPABILITY_REGISTRY_GATE_RESOLUTION_CONTRACT.md",
+    "docs/design/BACKUP_RECOVERY_CONTRACTS.md",
+    "docs/design/BACKUP_AND_RECOVERY_ARCHITECTURE.md",
+    "docs/design/D4_BACKUP_CREDENTIAL_IDENTITY_DECISION.md",
+    "docs/design/RECOVERY_OPERATIONAL_WRITE_LEDGER.md",
+    "utils/recovery_manifest.py",
+    "utils/recovery_validation.py",
+    "utils/recovery_retention.py",
+    "utils/recovery_crypto.py",
+    "utils/recovery_key_custody.py",
+    "utils/action_taxonomy.py",
+    "project/backlog.json",
+    "project/roadmap.json"
+  ],
+  "schema_version": 1,
+  "status": "OPEN",
+  "updated_at": "2026-09-09T18:30:22Z"
+}

@@ -948,8 +948,8 @@
       "id": "ui2_b0_c5_amendments_bundle",
       "title": "UI2 B0/C5 -- amendments bundle (CON.0 separate shell; action_taxonomy UI-OPERATIONAL-RUN-NOW; design §6 APPROVAL-MODEL; ladder -> CAP-* states; AG-U2 restated)",
       "priority": "P0 -- UI 2.0 primary",
-      "status": "planned",
-      "note": "CONTRACT, Sonnet 5 extended (high). AGENTS.md amendments (free-command editor, mediated terminal) are NOT in this bundle -- Phase S.",
+      "status": "in_progress",
+      "note": "CONTRACT, Sonnet 5 extended (high). AGENTS.md amendments (free-command editor, mediated terminal) are NOT in this bundle -- Phase S. 2026-09-09: dispatched as NXS-LOCAL-0056, Sonnet 5 extended (high).",
       "target": "workflow §5 B0-5; baseline contract §5"
     },
     {
@@ -966,8 +966,8 @@
       "id": "ui2_b0_c7_backup_artefact_restore_engine_contract",
       "title": "UI2 B0/C7 -- backup, artefact and restore engine contract (profile rules per design §6 as amended; store/manifest/validation/retention/key custody from RB contracts; restore execution: plan, preconditions, execute, verify, failure behaviour; per-operation approval; device/version matrix)",
       "priority": "P0 -- UI 2.0 primary",
-      "status": "planned",
-      "note": "CONTRACT, Sonnet 5 extended (high). RESTORE-IN-RELEASE-1 (D-7) accepted: restore is in Release 1 on declared-supported platforms; a release without it is a \"platform pilot / backup collection release\".",
+      "status": "in_progress",
+      "note": "CONTRACT, Sonnet 5 extended (high). RESTORE-IN-RELEASE-1 (D-7) accepted: restore is in Release 1 on declared-supported platforms; a release without it is a \"platform pilot / backup collection release\". 2026-09-09: dispatched as NXS-LOCAL-0057, Sonnet 5 extended (high).",
       "target": "workflow §5 B0-7; docs/design/UI2_0_BASELINE_CONTRACT.md (FROZEN 2026-09-09); plan: docs/design/UI2_0_DEVELOPMENT_WORKFLOW.md"
     },
     {
