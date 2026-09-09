@@ -24,9 +24,11 @@ docs under `docs/history/`; `docs/history/INDEX.md` is the one-line timeline.
   distinct fields, resolving council-brief `SR-D6` per Astra's objection. No
   code, no schema migration, no device execution — documentation only.
   Full detail: `project/backlog.json`'s `ui2_b0_c2_job_execution_contract`
-  note. Predecessor `failover_plan_compiler` (`OP.1.S1`, AUTOMATED_VALIDATED,
-  merged PR #162) — write-free failover plan compiler and dry-run for
-  classic CP ClusterXL. Full predecessor chain: `project/build_history.json`.
+  note. Predecessor `ui2_b0_c1_platform_schema_contract` (`C1`, ran
+  concurrently, **MERGED PR #163**) — UI 2.0 schema ownership, Flyway sole
+  migration authority, audit-from-first-mutation (`C1-1`); document stays
+  DRAFT pending Product Owner freeze. Full predecessor chain:
+  `project/build_history.json`.
 - **Next** (`now_next.next`): `gov_po_2_implementation` — unrelated and
   unchanged by this movement; not yet started. `m7_real_device_targeted_
   collect_now` **AUTOMATED_VALIDATED 2026-09-08**, real-device confirmation
