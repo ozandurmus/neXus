@@ -1,0 +1,111 @@
+{
+  "created_at": "2026-09-09T15:34:12Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1: The refusal shape for an unbound action (RBAC visible-but-refused) is specified precisely enough for a B1-3 test to assert the exact HTTP status, body shape and audit record.",
+          "AC-2: The single-active-session state machine names both the refuse and takeover paths, states which is default, and specifies the audit record for a takeover.",
+          "AC-3: Role tokens -> bindings -> AD group references never place a corporate group name in application code; the persistence and encryption of group references names the key source by reference to C1 section 6, not redefined.",
+          "AC-4: The DIRECTORY-POSTURE service account's credential scope, storage, rotation and outage behaviour are fully specified, with the document stating explicitly that the function stays disabled pending corporate verification per D-6.",
+          "AC-5: The E1-E7 gate chain is enumerated in order with each gate's exact check, and its composition boundary with C2's pre-execution checks is stated without duplication.",
+          "AC-6: C2's owner/approver/execution-identity fields are shown resolving from this contract's session/role model with a concrete example.",
+          "AC-7: §8 gives at least ten testable acceptance criteria covering B1-3 and the B1-10 acceptance scenario (three concurrent admins, one takeover, one refuse).",
+          "AC-8: §9 lists every contradiction with frozen authority found (or states none and which documents were checked); no PO-reserved decision (DIRECTORY-POSTURE, RAW-RETENTION) is reopened.",
+          "AC-9: No identity/session/role table is redefined that C1 section 3 already owns; only C3-owned columns/semantics are specified, by reference to C1's table names.",
+          "AC-10: The document does not enable DIRECTORY-POSTURE's persisted-group-reference function; it specifies it as ready-but-disabled."
+        ],
+        "baseline": {
+          "authority": "docs/design/UI2_0_BASELINE_CONTRACT.md (FROZEN -- PRODUCT OWNER APPROVED 2026-09-09): FREEZE-SLICING (C1-C5 = platform freeze), DIRECTORY-POSTURE (D-6) CONDITIONAL -- persisted encrypted group references and a read-only directory service account are acceptable ONLY subject to corporate-policy verification this session cannot provide; the related function stays disabled until that verification is recorded. Acceptance sentence A-1 (baseline acceptance permits no device execution; every capability passes its own gate). docs/design/UI2_0_C1_PLATFORM_SCHEMA_CONTRACT.md (this movement's sibling, MERGED as DRAFT -- FOR PO FREEZE) already reserves the identity/session tables' foreign keys and names their data classes -- read its section 3 ownership matrix and do not redefine those tables, only the columns/semantics C3 owns. docs/design/UI2_0_C2_JOB_EXECUTION_CONTRACT.md (MERGED as DRAFT -- FOR PO FREEZE) already defines owner/approver/execution-identity separation for jobs (its section 7.2) -- C3 supplies WHO these identities resolve from (the session/role model), not a competing identity model. UI2_0_ARCHITECTURE_DESIGN.md section 5 (RBAC is D1/D7, never menu-hiding) and section 7 (concurrent multi-admin, single active session per identity) are the design-level content this contract turns into a testable specification, amended by the workflow/baseline as listed below.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED); UI 2.0 baseline adopted 2026-09-09; C1 and C2 delivered as DRAFT -- FOR PO FREEZE (NXS-LOCAL-0051/0052, PRs #163-165, #164)",
+          "sequencing": "Runs concurrently with C4 (capability registry & command-gate resolution contract, movement UI2_B0_C4_CAPABILITY_REGISTRY_GATE_RESOLUTION_CONTRACT). C3 owns identity/session/role semantics; C4 owns what a capability and a gate-covered step are. Where C3 must reference 'a capability the RBAC layer gates access to,' name only the interface (an opaque capability id with a required role token) and defer its shape to C4 -- do not redefine it. C1 and C2 are MERGED; read them, do not reopen anything they settled."
+        },
+        "context_not_loaded": [
+          "Any Java source, Gradle build, Flyway migration or Docker artefact -- B1 implements this contract",
+          "Any function this contract gates being enabled before C3 exists: DIRECTORY-POSTURE stays disabled until corporate verification is recorded, regardless of what this document specifies",
+          "Device contact, credentials, network access of any kind",
+          "The capability/step definitions themselves (C4) and the backup approval rules (C7, though C2 section 7 already names the pieces C3 must supply identities for)"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/ui2-b0-c3-identity-sessions-rbac-contract"
+        },
+        "invariants": [
+          "RBAC is never menu-hiding: a role without a binding sees the action and a stated reason it is refused (design section 5) -- this contract specifies the refusal shape (HTTP status, body, audit record) precisely enough to test",
+          "Single active session per identity: a second login either refuses with the first session's context shown, or offers an explicit takeover that terminates the first session and is itself audited -- specify both paths and which one is default (design section 7.4's table becomes this contract's test matrix)",
+          "Role tokens -> bindings -> AD group references keep three levels of indirection: no corporate group name appears in application code, only in a binding record; specify exactly what is persisted (encrypted group refs) and where the encryption key lives (reference C1 section 6 secrets, do not redefine)",
+          "DIRECTORY-POSTURE (D-6): the read-only directory service account's credential scope, storage, rotation and outage (fail-closed vs fail-open) behaviour must be fully specified even though the function stays disabled -- 'conditional' means the spec is ready, not that the spec is skipped",
+          "E1-E7 gate chain on the HTTP layer: name what each gate checks (authentication, session validity, role binding, capability existence, action-class admissibility, target/profile approval state, connectivity/precondition) and in what order; this must compose with C2's pre-execution checks (C2 section 6) without duplicating them -- state the boundary explicitly",
+          "No decision frozen in UI2_0_BASELINE_CONTRACT.md is reopened; contradictions with frozen authority are REPORTED in a dedicated section, never silently resolved",
+          "Owner/approver/execution-identity (C2 section 7.2) resolve from this contract's session/role model -- state exactly how a job's 'approver' identity is captured from an authenticated session at approval time"
+        ],
+        "merge_gate": "Standing relay#13: green tests -> self-merge, report via RELAY_NOTE. Documentation-only PR; the DLP privacy gate at push time is the substantive gate. Run the full one-shot regression in the foreground and await its actual completion (do not treat it as backgroundable); if this worktree's own environment is broken in a way confirmed pre-existing on origin/main (as NXS-LOCAL-0051 found and reported, not fixed), report it exactly that way rather than attempting a bootstrap.",
+        "movement_type": "ARCHITECTURE",
+        "objective": "Write the UI 2.0 B0/C3 identity, sessions and RBAC contract as docs/design/UI2_0_C3_IDENTITY_SESSIONS_RBAC_CONTRACT.md (status: DRAFT -- FOR PRODUCT OWNER FREEZE). It defines LDAP bind, the single-active-session-per-identity rule and its takeover/refuse semantics, role tokens -> bindings -> AD group references, and the E1-E7 gate chain as it runs on the HTTP layer. This is a contract, not code: no ui2/ source is written in this movement.",
+        "output_contract": [
+          "docs/design/UI2_0_C3_IDENTITY_SESSIONS_RBAC_CONTRACT.md with: §1 scope, authority chain and what this contract does NOT own (session/role tables' identity columns are C1's, job lifecycle is C2's); §2 LDAP bind (UnboundID, connection/pool/failure behaviour, no local password storage); §3 session model (single-active-session state machine, refuse vs takeover paths, session token shape, expiry); §4 role tokens -> bindings -> AD group references (persistence, encryption, DIRECTORY-POSTURE-conditional service account spec in full even though disabled); §5 RBAC enforcement (visible-but-refused shape, refusal HTTP contract, audit linkage to C1's audit_log); §6 the E1-E7 gate chain (each gate's check, order, and its composition boundary with C2's pre-execution checks); §7 how C2's owner/approver/execution-identity resolve from sessions/roles; §8 acceptance criteria for B1-3 (identity & sessions movement) and the B1-10 acceptance scenario (three admins, single-session takeover/refuse) -- at least ten, each testable; §9 contradictions/open items for the PO, explicitly separating DIRECTORY-POSTURE's already-conditional status from any new contradiction; §10 cross-references",
+          "project/backlog.json ui2_b0_c3_identity_sessions_rbac_contract status -> in_progress with the PR reference; build_history record per the usual pattern",
+          "RELAY_NOTE + SESSION_CLOSE"
+        ],
+        "recommended_reasoning": {
+          "reason": "A security/identity boundary contract on new scope (session takeover, directory credential handling); extended thinking is warranted, bounded by two already-merged sibling contracts -- Sonnet 5 high is the lightest tier that fits.",
+          "tier": "Sonnet 5, extended thinking (high)"
+        },
+        "requirements": [
+          "Read UI2_0_BASELINE_CONTRACT.md, UI2_0_DEVELOPMENT_WORKFLOW.md, UI2_0_ARCHITECTURE_DESIGN.md sections 5 and 7, UI2_0_C1_PLATFORM_SCHEMA_CONTRACT.md section 3/6, and UI2_0_C2_JOB_EXECUTION_CONTRACT.md section 7.2 in full before writing",
+          "English, per AGENTS.md engineering-output language law",
+          "git diff --check; privacy gate at push; existing docs/project-state tests green"
+        ],
+        "risks": [
+          "Redefining a table C1 already owns instead of referencing it by name",
+          "Treating DIRECTORY-POSTURE's conditional status as permission to enable the function -- it is not",
+          "Duplicating C2's pre-execution checks instead of stating the composition boundary",
+          "Inventing a new job-identity model instead of showing how C2's existing fields resolve from sessions"
+        ],
+        "scope": {
+          "in": [
+            "docs/design/UI2_0_C3_IDENTITY_SESSIONS_RBAC_CONTRACT.md",
+            "project-state bookkeeping"
+          ],
+          "out": [
+            "Any ui2/ source",
+            "Any Line-1 code change",
+            "C1/C2/C4/C7 content beyond references",
+            "Device contact",
+            "Enabling DIRECTORY-POSTURE's disabled function"
+          ]
+        },
+        "validation_plan": [
+          "Self-check against AC-1..AC-10 in the RELAY_NOTE",
+          "docs/project-state tests",
+          "git diff --check",
+          "privacy gate at push"
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-09T15:34:12Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0053",
+  "movement": "UI2_B0_C3_IDENTITY_SESSIONS_RBAC_CONTRACT",
+  "next_actor": "engineer",
+  "refs": [
+    "docs/design/UI2_0_BASELINE_CONTRACT.md",
+    "docs/design/UI2_0_DEVELOPMENT_WORKFLOW.md",
+    "docs/design/UI2_0_ARCHITECTURE_DESIGN.md",
+    "docs/design/UI2_0_C1_PLATFORM_SCHEMA_CONTRACT.md",
+    "docs/design/UI2_0_C2_JOB_EXECUTION_CONTRACT.md",
+    "docs/design/UI2_0_COUNCIL_REVIEW_AND_SECOND_OPINION_BRIEF.md",
+    "AGENTS.md",
+    "docs/AI_DEVELOPMENT_PROTOCOL.md",
+    "project/backlog.json",
+    "project/roadmap.json"
+  ],
+  "schema_version": 1,
+  "status": "OPEN",
+  "updated_at": "2026-09-09T15:34:12Z"
+}
