@@ -168,7 +168,7 @@
       "status": "planned",
       "notes": [
         "Resume the already-open NXS-LOCAL-0060 relay; decision-document scope only, no taxonomy/source edit. High scrutiny because it defines a future device-write boundary.",
-        "The independent NXS-LOCAL-0061 UI2 B1-1 skeleton-contract movement merged as PR #174 on 2026-09-10; reconcile origin/main before integrating this branch."
+        "The independent UI2 B1-1 skeleton contract and freeze merged as PR #174/#175; this GOV.PO.2 branch is reconciled with current main."
       ]
     },
     "upcoming": [

@@ -30,9 +30,9 @@
 ## 3. Exact next action
 
 Resume `relay/NXS-LOCAL-0060-ui2-d1-device-write-class-decision.json` as the
-roadmap NEXT movement. The independent `NXS-LOCAL-0061` UI2 B1-1
-skeleton-contract movement merged as PR #174; reconcile `origin/main` before
-integrating this branch.
+roadmap NEXT movement in the separately owned PO session. UI2 B1-1 contract
+and freeze are preserved from PR #174/#175; this GOV.PO.2 branch is reconciled
+with current `main`.
 
 ## 4. Test delta
 
@@ -49,4 +49,4 @@ integrating this branch.
 
 - The frozen status-line regex remains an accepted correctness heuristic,
   not a hostile-author security boundary.
-- Git push, PR creation, and merge remain unauthorized.
+- Git push, PR creation, and merge were authorized by the Product Owner on 2026-09-10, subject to green required checks.
