@@ -31,7 +31,7 @@ from utils.logger import err, info, register_sensitive_value, warn
 from utils.pan_tls_trust import PanTlsStrictPreflightError, preflight_pan_tls_ca_bundle
 from utils.runtime_paths import default_output_root
 from utils.support_bundle import Tokenizer, _get_support_key
-from panorama.pan_identity import normalize_pan_hostname
+from panorama.pan_identity import parse_pan_managed_device_entry
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -226,28 +226,10 @@ def get_devices(host: str, key: str, *, verify: bool | str, timeout: float) -> l
     )
     devices = []
     for entry in root.xpath("//devices/entry"):
-        serial = (entry.findtext("serial") or entry.get("name") or "").strip()
-        if not serial:
+        parsed = parse_pan_managed_device_entry(entry)
+        if not parsed["serial"]:
             continue
-        devices.append({
-            "serial": serial,
-            "hostname": normalize_pan_hostname(entry.findtext("hostname"), serial=serial),
-            "connected": (entry.findtext("connected") or "").strip().lower(),
-            "management_ip": (entry.findtext("ip-address") or "").strip() or None,
-            "model": (entry.findtext("model") or "").strip() or None,
-            "sw_version": (entry.findtext("sw-version") or "").strip() or None,
-            "shared_policy_status": (
-                entry.findtext("shared-policy-status")
-                or entry.findtext("shared-policy")
-                or ""
-            ).strip() or None,
-            "template_status": (
-                entry.findtext("template-status")
-                or entry.findtext("template")
-                or ""
-            ).strip() or None,
-            "ha_state": (entry.findtext("ha-state") or "").strip() or None,
-        })
+        devices.append(parsed)
     return devices
 
 
