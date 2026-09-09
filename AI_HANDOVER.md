@@ -9,7 +9,7 @@
 
 - Date: 2026-09-10. `ui2_b1_01_skeleton_ci_docker`, contract-only movement
   on `feature/ui2-b1-01-skeleton-contract`.
-- New DRAFT: `docs/design/UI2_0_B1_01_SKELETON_CI_DOCKER_CONTRACT.md`.
+- FROZEN: `docs/design/UI2_0_B1_01_SKELETON_CI_DOCKER_CONTRACT.md` (Product Owner approved 2026-09-10 after portability and cold-cache CI corrections).
 - No `ui2/` implementation, Line-1 source, `validation.yml`, or device contact.
 - Branch was fast-forwarded to `origin/main` `04b99c0` before drafting,
   preserving the later UI2 logo and portfolio decisions.
@@ -27,11 +27,9 @@
 
 ## 3. Exact next action
 
-1. Product Owner reviews/freezes
-   `docs/design/UI2_0_B1_01_SKELETON_CI_DOCKER_CONTRACT.md`.
-2. After freeze, dispatch the B1-1 IMPLEMENTATION movement to create `ui2/`
+1. Dispatch the B1-1 IMPLEMENTATION movement to create `ui2/`
    and the isolated UI2 workflow exactly against its 15 checks.
-3. Keep the taxonomy decision movement independent; this contract authorizes
+2. Keep the taxonomy decision movement independent; this contract authorizes
    no device execution or restore-write semantics.
 
 ## 4. Test delta
@@ -43,7 +41,7 @@
 
 ## 5. New risks
 
-- The DRAFT needs Product Owner freeze before implementation.
+- The contract is frozen; implementation still requires its own dependency approvals and movement gate.
 - Patch versions are selected and pinned during implementation; dependency
   additions remain separately approval-gated.
 - React/MUI and the distroless image choice remain explicit PO veto points.
