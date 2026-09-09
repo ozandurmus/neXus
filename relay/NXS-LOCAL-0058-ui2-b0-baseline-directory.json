@@ -1,0 +1,112 @@
+{
+  "created_at": "2026-09-09T19:14:06Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1: Each of the six named concerns (navigation, screen states, feature contribution, alarm lifecycle, log/audit classes, SNMP status) has an explicit owner statement (existing document+section+version, or 'new, this document').",
+          "AC-2: The screen-state vocabulary matches the mockup's own words and severity rule exactly, with a citation to the mockup source.",
+          "AC-3: The navigation section shows RBAC visible-but-refused rendering consistent with C3 and the mockup's console-only pattern.",
+          "AC-4: If the alarm lifecycle contract is genuinely new, it stays schema-level and cites C1/C2 for table/job boundaries rather than designing a new execution engine.",
+          "AC-5: SNMP status exposure is explicitly distinguished from SNMP-trap-out and from device polling.",
+          "AC-6: The feature-contribution contract states concretely how a CAP-RELEASED capability's screen/job-type/alarm-source registration works, referencing C4 and C2 by name.",
+          "AC-7: At least eight testable acceptance criteria are given for the B1/B2 movements this catalogue feeds.",
+          "AC-8: Contradictions/open items section lists every document checked and states none found, or names them precisely; no PO-reserved or already-frozen decision is reopened."
+        ],
+        "baseline": {
+          "authority": "docs/design/UI2_0_DEVELOPMENT_WORKFLOW.md section 5 ('B0 opens as the primary development backlog... the baseline directory') names this movement's exact scope: 'product objects and navigation, shared screen states UX-D1..D5, feature contribution contract, alarm lifecycle contract (outbox, de-duplication, resolve/silence, delivery failure, causality limits), log/audit data classes, SNMP status exposure -- each with owner document and version'. All six C1-C4,C6,C7 platform/backup contracts (plus C5's amendments) are now MERGED as DRAFT -- FOR PO FREEZE; this movement's job is to CATALOGUE where each of the six baseline directory concerns is already answered by one of them (do not re-answer), and write only the genuinely unowned remainder. docs/design/UI2_0_BASELINE_CONTRACT.md's VISUAL-DESIGN-LANGUAGE row (Material Design 3, decided 2026-09-09) and the mockup analysis it references (a 'neXus 2026 Design Refresh' design canvas: Overview, Devices->Inventory, Configuration->Alignment, Compliance, Operations, Administration, Navigation & components screens) are the UX ground truth for the shared screen-state vocabulary and navigation structure -- the mockup's own classification vocabulary (Aligned/healthy, Member-specific, Local override, Difference observed, Effective drift, Not applicable, Not configured, Stale/provenance) and its RBAC visible-but-refused pattern are exactly what UX-D1..D5 need to formalize; adopt that vocabulary rather than inventing a new one, since baseline section 1 (VISUAL-DESIGN-LANGUAGE) already decided the mockup's UI expressions are 'adopted into the baseline directory (B0-8), not re-decided'. docs/design/NAVIGATION_INFORMATION_ARCHITECTURE.md (FROZEN, Line-1's own left-rail navigation contract, fifteen frozen D-NAV decisions) is the closest existing owner for navigation structure -- check whether UI 2.0's navigation should reference its PRINCIPLES (one-root-per-domain, availability-rule-gated visibility) while being its own document (since UI 2.0 is a separate shell per CON.0-AMENDMENT), or whether it needs no new text at all beyond a citation.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED); UI 2.0 baseline adopted 2026-09-09; C1-C7 (all seven, including C5's amendments) delivered as DRAFT -- FOR PO FREEZE",
+          "sequencing": "Runs concurrently with the extraction-tooling movement (Line-1 Python script implementing C6's fixture-generation procedure, movement NXS-LOCAL-<next>). Fully independent: extraction tooling touches Line-1 scripts/ code; this movement touches only docs/design/. This is the SECOND-TO-LAST B0 item; once both this and extraction tooling merge, B0 is complete and the Product Owner can move to the actual freeze decision for C1-C7 as a whole, then to B1."
+        },
+        "context_not_loaded": [
+          "Any Java source, Gradle build, Flyway migration or Docker artefact -- B1 implements against this and the C1-C7 contracts",
+          "The extraction tooling script itself (a separate, concurrently-dispatched movement)",
+          "Device contact, credentials, network access of any kind",
+          "Re-deciding VISUAL-DESIGN-LANGUAGE (already decided: Material Design 3) or any other already-frozen baseline row"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/ui2-b0-baseline-directory"
+        },
+        "invariants": [
+          "For each of the six named concerns, this document states EITHER 'owned by <document, section, version>, no new text needed' OR a minimal new section here -- never a full re-derivation of something C1-C7 already specify (e.g. audit data classes are C1 section 4's; do not repeat, cite)",
+          "The shared screen-state vocabulary is adopted from the M3 mockup's own words (Aligned/healthy, Member-specific, Local override [intentional], Difference observed [unclassified], Effective drift [fault], Not applicable, Not configured, Stale/provenance) and from the mockup's own stated rule ('red is reserved for real fault, unsafe drift, out-of-sync and failure; expected member differences carry no warning icon and no failure wording') -- do not invent a competing vocabulary",
+          "RBAC visible-but-refused (C3 section 5/6) is the navigation model's enforcement mechanism -- the navigation section must show how a nav entry the actor's role cannot use is rendered visible-with-reason, not hidden, consistent with both C3 and the mockup's own 'Collect now... console only' pattern",
+          "The alarm lifecycle contract (outbox, de-duplication, resolve/silence, delivery failure, causality limits) is new text if no existing document owns it -- check first (search for an existing ALERT/ALARM design doc); if genuinely new, keep it schema-level (referencing C1's table-ownership model and C2's job/notification boundary), not a full implementation design",
+          "SNMP status exposure (the product answering NMS reads about its own/its devices' recorded state) is explicitly NOT device polling -- restate this distinction from workflow section 5 B2-5b clearly so it is never confused with the SNMP-trap-out capability",
+          "No decision frozen in UI2_0_BASELINE_CONTRACT.md is reopened; contradictions with frozen authority are REPORTED in a dedicated section, never silently resolved"
+        ],
+        "merge_gate": "Standing relay#13: green tests -> self-merge, report via RELAY_NOTE. Documentation-only PR; the DLP privacy gate at push time is the substantive gate. Run the full one-shot regression in the foreground and await its actual completion; if this worktree's own environment is broken in a way confirmed pre-existing on origin/main (as NXS-LOCAL-0051 found and reported, not fixed), report it exactly that way rather than attempting a bootstrap.",
+        "movement_type": "ARCHITECTURE",
+        "objective": "Write the UI 2.0 B0 baseline directory as docs/design/UI2_0_BASELINE_DIRECTORY.md (status: DRAFT -- FOR PRODUCT OWNER FREEZE). It is a single INDEX document naming, with an owner document/section and a version, every product-baseline concern the council settled that C1-C7 do not individually own: shared product objects and navigation, shared screen states (the classification vocabulary), the feature-contribution contract (how a capability adds a screen/job-type/alarm-source), the alarm lifecycle contract, log/audit data classes, and SNMP status exposure. Where an existing frozen or already-merged document owns a concern, this document references it bindingly instead of re-writing it; only concerns with no current owner get new text here, kept minimal.",
+        "output_contract": [
+          "docs/design/UI2_0_BASELINE_DIRECTORY.md with: §1 scope and the ownership-catalogue method; §2 product objects and navigation (structure, RBAC visible-but-refused rendering, citing NAVIGATION_INFORMATION_ARCHITECTURE.md's principles and C3); §3 shared screen states (the adopted vocabulary, its color/severity rule, citing the mockup source and VISUAL-DESIGN-LANGUAGE); §4 feature-contribution contract (how a REL-* capability, once CAP-RELEASED, adds a screen entry, a job type, and an alarm source -- referencing C4's capability model and C2's job types); §5 alarm lifecycle contract (outbox/dedup/resolve-silence/delivery-failure/causality, schema-level, citing C1/C2 for table/job boundaries -- or a citation to an existing owner if one is found); §6 log/audit data classes (citing C1 section 4 directly, minimal new text); §7 SNMP status exposure (the read-vs-poll distinction, schema-level); §8 acceptance criteria for the relevant B1/B2 movements this catalogue feeds (B1-9 device workspace, B2-1 capability registry UI, B2-3 alert pipeline, B2-5b SNMP status exposure) -- at least eight, each testable; §9 contradictions/open items for the PO; §10 cross-references",
+          "project/backlog.json ui2_b0_baseline_directory status -> in_progress with the PR reference; build_history record per the usual pattern",
+          "RELAY_NOTE + SESSION_CLOSE"
+        ],
+        "recommended_reasoning": {
+          "reason": "A cataloguing/synthesis movement over six already-merged contracts plus one genuinely new schema-level design (alarm lifecycle, if unowned) -- Sonnet 5 high is the lightest tier that fits given the amount of frozen authority to read correctly and the one new design surface.",
+          "tier": "Sonnet 5, extended thinking (high)"
+        },
+        "requirements": [
+          "Read UI2_0_DEVELOPMENT_WORKFLOW.md section 5 (B0-8's exact scope), UI2_0_BASELINE_CONTRACT.md's VISUAL-DESIGN-LANGUAGE row, and C1-C7's relevant sections before writing; check for an existing alarm/alert design document before writing new alarm-lifecycle text",
+          "English, per AGENTS.md engineering-output language law",
+          "git diff --check; privacy gate at push; existing docs/project-state tests green"
+        ],
+        "risks": [
+          "Re-deriving something C1-C7 already own instead of citing it -- defeats the purpose of a catalogue document",
+          "Inventing a screen-state vocabulary instead of adopting the mockup's own words",
+          "Designing a full alarm execution engine instead of a schema-level lifecycle contract",
+          "Confusing SNMP status exposure (read) with SNMP-trap-out (write, B2-5) or device polling"
+        ],
+        "scope": {
+          "in": [
+            "docs/design/UI2_0_BASELINE_DIRECTORY.md",
+            "project-state bookkeeping"
+          ],
+          "out": [
+            "Any ui2/ source",
+            "Any Line-1 code change",
+            "C1-C7 content beyond references",
+            "Device contact",
+            "The extraction tooling script"
+          ]
+        },
+        "validation_plan": [
+          "Self-check against AC-1..AC-8 in the RELAY_NOTE",
+          "docs/project-state tests",
+          "git diff --check",
+          "privacy gate at push"
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-09T19:14:06Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0058",
+  "movement": "UI2_B0_BASELINE_DIRECTORY",
+  "next_actor": "engineer",
+  "refs": [
+    "docs/design/UI2_0_BASELINE_CONTRACT.md",
+    "docs/design/UI2_0_DEVELOPMENT_WORKFLOW.md",
+    "docs/design/UI2_0_ARCHITECTURE_DESIGN.md",
+    "docs/design/UI2_0_C1_PLATFORM_SCHEMA_CONTRACT.md",
+    "docs/design/UI2_0_C2_JOB_EXECUTION_CONTRACT.md",
+    "docs/design/UI2_0_C3_IDENTITY_SESSIONS_RBAC_CONTRACT.md",
+    "docs/design/UI2_0_C4_CAPABILITY_REGISTRY_GATE_RESOLUTION_CONTRACT.md",
+    "docs/design/UI2_0_C5_AMENDMENTS_BUNDLE.md",
+    "docs/design/UI2_0_C6_CAPABILITY_EXTRACTION_CONTRACT.md",
+    "docs/design/UI2_0_C7_BACKUP_ARTEFACT_RESTORE_ENGINE_CONTRACT.md",
+    "docs/design/NAVIGATION_INFORMATION_ARCHITECTURE.md",
+    "docs/design/UI2_0_COUNCIL_REVIEW_AND_SECOND_OPINION_BRIEF.md",
+    "project/backlog.json",
+    "project/roadmap.json"
+  ],
+  "schema_version": 1,
+  "status": "OPEN",
+  "updated_at": "2026-09-09T19:14:06Z"
+}
