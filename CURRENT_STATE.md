@@ -15,9 +15,11 @@ docs under `docs/history/`; `docs/history/INDEX.md` is the one-line timeline.
   visible-but-refused HTTP refusal contract, and the `E1`–`E7` gate chain
   composed with (not duplicating) `C2`'s own `E7`. No code, no migration,
   no device execution. Full detail: `project/backlog.json`'s
-  `ui2_b0_c3_identity_sessions_rbac_contract` note. Predecessors `C2`
-  (**MERGED PR #164**) and `C1` (**MERGED PR #163**) — both documents stay
-  DRAFT pending Product Owner freeze. Full predecessor chain:
+  `ui2_b0_c3_identity_sessions_rbac_contract` note. Predecessors `C4`
+  (capability registry & gate resolution, ran concurrently in its own
+  worktree, out of C3's own scope, **MERGED PR #166**), `C2`
+  (**MERGED PR #164**) and `C1` (**MERGED PR #163**) — all three documents
+  stay DRAFT pending Product Owner freeze. Full predecessor chain:
   `project/build_history.json`.
 - **Next** (`now_next.next`): `gov_po_2_implementation` — unrelated and
   unchanged by this movement; not yet started. `m7_real_device_targeted_
