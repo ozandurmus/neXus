@@ -2,7 +2,7 @@
 
 ## Status
 
-**DRAFT — FOR PRODUCT OWNER FREEZE.** Produced 2026-09-09 as `B0` movement 1
+**FROZEN — PRODUCT OWNER APPROVED, 2026-09-09** (platform contract freeze (C1–C6 + baseline directory), per `UI2_0_BASELINE_CONTRACT.md` §2 `FREEZE-SLICING`). Open items listed in this document's own open-items section are deferred to the movements they name; they do not reopen this freeze. Previous status: DRAFT — FOR PRODUCT OWNER FREEZE. Produced 2026-09-09 as `B0` movement 1
 (`project/backlog.json` id `ui2_b0_c1_platform_schema_contract`), against
 `docs/design/UI2_0_BASELINE_CONTRACT.md` (FROZEN — PRODUCT OWNER APPROVED,
 2026-09-09) and `docs/design/UI2_0_DEVELOPMENT_WORKFLOW.md` (BASELINE,

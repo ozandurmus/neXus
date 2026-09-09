@@ -127,6 +127,18 @@ every `C*` contract; `Sonnet 5, normal` for the tooling. `B1` items are
 listed behind them and start when `C1`–`C4` and the authorization/audit rows
 are frozen.
 
+**2026-09-09 update — B0 complete, both freezes made.** Slice 1 (platform:
+`C1`–`C6` + `UI2_0_BASELINE_DIRECTORY.md`) and slice 2 (`C7` engine) are
+FROZEN — PRODUCT OWNER APPROVED. `B1` may start. Credit-conservation
+direction (PO): remaining Claude budget goes to contracts, not code — every
+`B1`/`B2` step gets a contract/spec movement first (tier Fable 5.1 low;
+medium for security-boundary decisions), so implementation can proceed in
+any tool against frozen text. Order: taxonomy DECIDE
+(`ui2_taxonomy_device_write_class_and_step_kind`) → B1-1 skeleton contract →
+B1-5 CP inventory extraction → B1-7/8/9 screen contracts → B1-10/11
+acceptance scenarios → B1-12 deployment → B1-13 PAN export extraction →
+B2 contracts as DRAFT pending B1-6 feedback.
+
 ## 7. Cross-references
 
 - `docs/design/UI2_0_DEVELOPMENT_WORKFLOW.md` — the plan (BASELINE rev 2).
