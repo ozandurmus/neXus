@@ -912,8 +912,8 @@
       "id": "ui2_b0_c1_platform_schema_contract",
       "title": "UI2 B0/C1 -- platform & schema contract (UI 2.0 schema ownership, Flyway sole migration authority, projection tables, audit from first mutation, per-component secrets, key custody)",
       "priority": "P0 -- UI 2.0 primary",
-      "status": "planned",
-      "note": "CONTRACT, Sonnet 5 extended (high). Audit-from-first-mutation gets its own finding id (brief §11.5 correction). RAW-RETENTION default NO.",
+      "status": "in_progress",
+      "note": "CONTRACT, Sonnet 5 extended (high). Audit-from-first-mutation gets its own finding id (brief §11.5 correction). RAW-RETENTION default NO. 2026-09-09: dispatched as NXS-LOCAL-0051 (feature/ui2-b0-c1-platform-schema-contract), Sonnet 5 extended (high).",
       "target": "workflow §5 B0-1; docs/design/UI2_0_BASELINE_CONTRACT.md (FROZEN 2026-09-09); plan: docs/design/UI2_0_DEVELOPMENT_WORKFLOW.md"
     },
     {
@@ -921,8 +921,8 @@
       "id": "ui2_b0_c2_job_execution_contract",
       "title": "UI2 B0/C2 -- job execution contract (Java worker; leasing/heartbeat, timeout, worker loss, duplicate detection, OUTCOME_UNKNOWN, owner/approver/execution identity, schedule optimistic concurrency)",
       "priority": "P0 -- UI 2.0 primary",
-      "status": "planned",
-      "note": "CONTRACT, Sonnet 5 extended (high). Implements JOB-UNCERTAIN-OUTCOME and acceptance sentence A-2. No Python worker mode.",
+      "status": "in_progress",
+      "note": "CONTRACT, Sonnet 5 extended (high). Implements JOB-UNCERTAIN-OUTCOME and acceptance sentence A-2. No Python worker mode. 2026-09-09: dispatched as NXS-LOCAL-0052 (feature/ui2-b0-c2-job-execution-contract), Sonnet 5 extended (high).",
       "target": "workflow §5 B0-2; docs/design/UI2_0_BASELINE_CONTRACT.md (FROZEN 2026-09-09); plan: docs/design/UI2_0_DEVELOPMENT_WORKFLOW.md"
     },
     {
