@@ -74,7 +74,13 @@
    to a later movement (`B1`/`B2`), not blocking this document's freeze.
 3. No other movement is blocked by this one; `gov_po_2_implementation`
    remains `now_next.next`, untouched.
-4. **Queue after the freeze**, in order: (a) `ui2_taxonomy_device_write_
+4. **Both freezes are MADE (2026-09-09, commit 2911661).** Two movements
+   were dispatched and then HELD before producing anything (credit
+   conservation): `NXS-LOCAL-0060` (taxonomy decision document, packet
+   ready, tier medium) and `NXS-LOCAL-0061` (B1-1 skeleton contract,
+   packet ready, tier low). Resume them first, from their relay files, in
+   whichever tool has budget (§6). Direction: contracts before code.
+5. **Queue after those**, in order: (a) `ui2_taxonomy_device_write_
    class_and_step_kind` (P0, HIGH SCRUTINY — a DECIDE-level review before
    any dispatch; it opens a device-write action class and a `C4` step kind;
    never fold it into routine dispatch); (b) B1 per
