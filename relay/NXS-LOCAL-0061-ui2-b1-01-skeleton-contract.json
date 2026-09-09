@@ -84,6 +84,14 @@
       },
       "seq": 1,
       "timestamp": "2026-09-09T20:21:24Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "RELAY_NOTE",
+      "seq": 2,
+      "subject": "Contract draft and validation complete",
+      "text": "AC-1..AC-8 are covered by sections 2-9 of docs/design/UI2_0_B1_01_SKELETON_CI_DOCKER_CONTRACT.md; AC-9 scope guards pass: no ui2/ directory, Line-1 source and .github/workflows/validation.yml unchanged, git diff --check clean, repository privacy gate PASS with 0 new findings against origin/main. Project-state consistency: 22 passed. Branch was fast-forwarded to origin/main 04b99c0 before drafting, preserving later UI2/logo decisions. Proceeding under standing relay#13 merge authorization.",
+      "timestamp": "2026-09-09T21:30:05Z"
     }
   ],
   "id": "NXS-LOCAL-0061",
@@ -104,6 +112,6 @@
     "project/backlog.json"
   ],
   "schema_version": 1,
-  "status": "OPEN",
-  "updated_at": "2026-09-09T20:21:24Z"
+  "status": "IN_PROGRESS",
+  "updated_at": "2026-09-09T21:30:05Z"
 }
