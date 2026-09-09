@@ -957,8 +957,8 @@
       "id": "ui2_b0_c6_capability_extraction_contract",
       "title": "UI2 B0/C6 -- capability extraction contract (spec template with KNOWN/UNKNOWN/NOT_APPLICABLE field states, fixture set rules SYNTHETIC/DERIVED, tokenizer preserved-property list) + ordered extraction inventory",
       "priority": "P0 -- UI 2.0 primary",
-      "status": "planned",
-      "note": "CONTRACT, Sonnet 5 extended (high). Capabilities are semantic units, not Line-1 files.",
+      "status": "in_progress",
+      "note": "CONTRACT, Sonnet 5 extended (high). Capabilities are semantic units, not Line-1 files. 2026-09-09: dispatched as NXS-LOCAL-0055, Sonnet 5 extended (high).",
       "target": "workflow §3.1, §4, §5 B0-6; docs/design/UI2_0_BASELINE_CONTRACT.md (FROZEN 2026-09-09); plan: docs/design/UI2_0_DEVELOPMENT_WORKFLOW.md"
     },
     {
