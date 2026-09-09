@@ -63,6 +63,7 @@ _MODE_PREREQUISITES = {
     "render-only": ("unified.json",),
     "restore-readiness-check": ("unified.json",),
     "ha-readiness-check": ("unified.json",),
+    "failover-plan-dry-run": ("unified.json",),
     "recovery-collect": ("unified.json",),
     "recovery-attest": ("unified.json",),
     "cp-config-probe": ("cp_telemetry.json", "cp.json", "vsx.json"),
