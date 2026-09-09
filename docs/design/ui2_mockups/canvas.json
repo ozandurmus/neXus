@@ -1,0 +1,314 @@
+{
+  "artboards": [
+    {
+      "file": "Main.dc.html",
+      "title": "1 · Instrument",
+      "x": 0,
+      "y": 0,
+      "w": 1440,
+      "h": 1240,
+      "page": "page-1"
+    },
+    {
+      "file": "Editorial.dc.html",
+      "title": "2 · Editorial paper",
+      "x": 1560,
+      "y": 0,
+      "w": 1440,
+      "h": 1240,
+      "page": "page-1"
+    },
+    {
+      "file": "Operator.dc.html",
+      "title": "3 · Operator grid",
+      "x": 3120,
+      "y": 0,
+      "w": 1440,
+      "h": 820,
+      "page": "page-1"
+    },
+    {
+      "file": "Shadcn.dc.html",
+      "title": "4 · Tailwind / shadcn",
+      "x": 0,
+      "y": 1400,
+      "w": 1440,
+      "h": 1108,
+      "page": "page-1"
+    },
+    {
+      "file": "Material3.dc.html",
+      "title": "5 · Material Design 3",
+      "x": 1560,
+      "y": 1400,
+      "w": 1440,
+      "h": 1186,
+      "page": "page-1"
+    },
+    {
+      "file": "Carbon.dc.html",
+      "title": "6 · Carbon (IBM)",
+      "x": 3120,
+      "y": 1400,
+      "w": 1440,
+      "h": 1092,
+      "page": "page-1"
+    },
+    {
+      "file": "Bento.dc.html",
+      "title": "7 · Bento grid",
+      "x": 0,
+      "y": 2680,
+      "w": 1440,
+      "h": 1076,
+      "page": "page-1"
+    },
+    {
+      "file": "OverviewDark.dc.html",
+      "title": "Instrument · dark theme",
+      "x": 0,
+      "y": 0,
+      "w": 1440,
+      "h": 1240,
+      "page": "page-2"
+    },
+    {
+      "file": "Configuration.dc.html",
+      "title": "Instrument · Configuration alignment",
+      "x": 1560,
+      "y": 0,
+      "w": 1440,
+      "h": 900,
+      "page": "page-2"
+    },
+    {
+      "file": "Palette.dc.html",
+      "title": "Instrument · design tokens",
+      "x": 3120,
+      "y": 0,
+      "w": 1440,
+      "h": 940,
+      "page": "page-2"
+    },
+    {
+      "file": "DirectionB.dc.html",
+      "title": "Early sketch · warm graphite",
+      "x": 1560,
+      "y": 1060,
+      "w": 760,
+      "h": 460,
+      "page": "page-2"
+    },
+    {
+      "file": "M3Overview.dc.html",
+      "title": "M3 · Overview (dashboard)",
+      "x": 0,
+      "y": 0,
+      "w": 1440,
+      "h": 1186,
+      "page": "page-3"
+    },
+    {
+      "file": "M3Inventory.dc.html",
+      "title": "M3 · Devices → Inventory",
+      "x": 1560,
+      "y": 0,
+      "w": 1440,
+      "h": 1004,
+      "page": "page-3"
+    },
+    {
+      "file": "M3Configuration.dc.html",
+      "title": "M3 · Configuration → Alignment",
+      "x": 3120,
+      "y": 0,
+      "w": 1440,
+      "h": 1216,
+      "page": "page-3"
+    },
+    {
+      "file": "M3Compliance.dc.html",
+      "title": "M3 · Compliance",
+      "x": 0,
+      "y": 1420,
+      "w": 1440,
+      "h": 1012,
+      "page": "page-3"
+    },
+    {
+      "file": "M3Operations.dc.html",
+      "title": "M3 · Operations",
+      "x": 1560,
+      "y": 1420,
+      "w": 1440,
+      "h": 1000,
+      "page": "page-3"
+    },
+    {
+      "file": "M3Administration.dc.html",
+      "title": "M3 · Administration",
+      "x": 3120,
+      "y": 1420,
+      "w": 1440,
+      "h": 916,
+      "page": "page-3"
+    },
+    {
+      "file": "M3Components.dc.html",
+      "title": "M3 · Navigation drawer, menus, components",
+      "x": 0,
+      "y": 2620,
+      "w": 1440,
+      "h": 1164,
+      "page": "page-3"
+    }
+  ],
+  "annotations": [
+    {
+      "id": "brief",
+      "x": -340,
+      "y": 0,
+      "w": 300,
+      "page": "page-1",
+      "text": "neXus 2026 refresh — seven design languages for the same Overview screen, with the same mock data so only the design language differs.\n\nAll device names, sites, runs and numbers are fictional.\n\nEvery example keeps the frozen contracts: left rail or equivalent, colour never the sole carrier, member-specific decoupled from warning, red reserved for real fault."
+    },
+    {
+      "id": "n1",
+      "x": 0,
+      "y": -150,
+      "w": 420,
+      "page": "page-1",
+      "text": "1 · Instrument\nCool-neutral surfaces, one cobalt accent, IBM Plex Sans + JetBrains Mono, hairline cards. The safest all-round choice; the most conventional of the seven."
+    },
+    {
+      "id": "n2",
+      "x": 1560,
+      "y": -150,
+      "w": 420,
+      "page": "page-1",
+      "text": "2 · Editorial paper\nWarm paper, Newsreader serif headings, no cards — sections divided by rules, a written lede. Reads like a briefing document. Best for executives and audit; lowest density."
+    },
+    {
+      "id": "n3",
+      "x": 3120,
+      "y": -150,
+      "w": 420,
+      "page": "page-1",
+      "text": "3 · Operator grid\nDark monochrome chrome on a shared 1px grid, icon rail, monospace labels, evidence log. Highest density and the strongest console feel; least comfortable for non-technical readers."
+    },
+    {
+      "id": "n4",
+      "x": 0,
+      "y": 1250,
+      "w": 420,
+      "page": "page-1",
+      "text": "4 · Tailwind / shadcn\nZinc neutrals, 6px radii, bordered cards with no shadow, muted secondary text, pill badges, black primary button. The current SaaS default: familiar to every engineer, easy to hire for, but it looks like everyone else."
+    },
+    {
+      "id": "n5",
+      "x": 1560,
+      "y": 1250,
+      "w": 420,
+      "page": "page-1",
+      "text": "5 · Material Design 3\nTonal surface containers, 16px corners, filled and tonal buttons, navigation rail with a pill indicator, elevation shadows, Roboto. Most familiar to users and best for a future mobile or tablet view; the roundness and elevation read softer and less instrument-like."
+    },
+    {
+      "id": "n6",
+      "x": 3120,
+      "y": 1250,
+      "w": 420,
+      "page": "page-1",
+      "text": "6 · Carbon (IBM)\nSquare corners, black product header, IBM Plex, 48px data-table rows, IBM blue for interaction only. Purpose-built for dense enterprise data and the most credible in a security or audit setting; the least warm and the least distinctive."
+    },
+    {
+      "id": "n7",
+      "x": 0,
+      "y": 2530,
+      "w": 420,
+      "page": "page-1",
+      "text": "7 · Bento grid\nRounded tiles of varying spans on a tinted page, one dark hero tile carrying the headline numbers, pill navigation. Visually the most attractive and the best for a landing or executive view; the varied tile sizes fight you as the fleet list and tables grow."
+    },
+    {
+      "id": "m3-brief",
+      "x": -340,
+      "y": 0,
+      "w": 300,
+      "page": "page-3",
+      "text": "neXus in Material Design 3 — the dashboard plus every other menu in the product.\n\nTonal surface containers, 16px corners, navigation rail with a pill indicator, filled and tonal buttons, 28px dialogs, Roboto.\n\nAll data is fictional. Class 0 read stays read: actions the product may not perform are shown and explained, never rendered as enabled controls."
+    },
+    {
+      "id": "m3-n1",
+      "x": 0,
+      "y": -140,
+      "w": 420,
+      "page": "page-3",
+      "text": "Overview\nThe landing dashboard: four posture tiles, alignment roll-up, evidence trust, readiness, compliance and fleet composition."
+    },
+    {
+      "id": "m3-n2",
+      "x": 1560,
+      "y": -140,
+      "w": 420,
+      "page": "page-3",
+      "text": "Devices → Inventory\nList pane with MD3 selection shape, device header with provenance chips, tabbed detail and the interface table."
+    },
+    {
+      "id": "m3-n3",
+      "x": 3120,
+      "y": -140,
+      "w": 420,
+      "page": "page-3",
+      "text": "Configuration → Alignment\nExpected against effective per cluster member. Row tints carry the classification; every row still names its state in words."
+    },
+    {
+      "id": "m3-n4",
+      "x": 0,
+      "y": 1280,
+      "w": 420,
+      "page": "page-3",
+      "text": "Compliance\nFramework filter chips, four posture tiles, control families with coverage bars, and the findings list."
+    },
+    {
+      "id": "m3-n5",
+      "x": 1560,
+      "y": 1280,
+      "w": 420,
+      "page": "page-3",
+      "text": "Operations\nHA readiness per cluster and the job list. Read jobs are class 0; backup creation is the only class 1 write and one job is blocked by the pilot allowlist."
+    },
+    {
+      "id": "m3-n6",
+      "x": 3120,
+      "y": 1280,
+      "w": 420,
+      "page": "page-3",
+      "text": "Administration\nDevice registry, enrollment states, collection scope switches and runtime paths. Backup creation stays off by default."
+    },
+    {
+      "id": "m3-n7",
+      "x": 0,
+      "y": 2480,
+      "w": 420,
+      "page": "page-3",
+      "text": "Navigation and components\nThe expanded navigation drawer with every destination, the device overflow menu, the enrollment dialog, a snackbar, and the button, chip, switch, tab and state vocabulary."
+    }
+  ],
+  "launch": {
+    "view": "canvas",
+    "page": "page-3"
+  },
+  "pages": [
+    {
+      "id": "page-1",
+      "name": "Design languages"
+    },
+    {
+      "id": "page-2",
+      "name": "Example 1 · full set"
+    },
+    {
+      "id": "page-3",
+      "name": "Material 3 · full app"
+    }
+  ]
+}

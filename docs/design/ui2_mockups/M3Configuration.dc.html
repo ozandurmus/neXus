@@ -1,0 +1,231 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500&amp;family=Roboto+Mono:wght@400;500&amp;display=swap">
+  <style>
+    :root{
+      --primary:#415f91;--on-primary:#ffffff;--primary-container:#d6e3ff;--on-primary-container:#001b3e;
+      --secondary-container:#dae2f9;--on-secondary-container:#131c2b;
+      --surface:#f9f9ff;--surface-dim:#d9d9e0;--sc-lowest:#ffffff;--sc-low:#f3f3fa;--sc:#eeedf4;--sc-high:#e8e7ef;--sc-highest:#e2e2e9;
+      --on-surface:#191c20;--on-surface-var:#44474e;--outline:#74777f;--outline-var:#c4c6d0;
+      --error:#ba1a1a;--on-error:#ffffff;--error-container:#ffdad6;--on-error-container:#410002;
+      --success:#3d6b3f;--success-container:#c0ecbe;--on-success-container:#00210a;
+      --warning:#7d5700;--warning-container:#ffdea6;--on-warning-container:#281900;
+      --member:#6b5d1f;--member-container:#f4e3a6;--on-member-container:#221b00;
+      --attention:#8b5000;--attention-container:#ffdcc2;
+      --cp:#8e4585;--vsx:#4a4a8f;--pan:#8b4513;
+      --e1:0 1px 2px rgba(0,0,0,.28), 0 1px 3px 1px rgba(0,0,0,.13);
+      --e2:0 1px 2px rgba(0,0,0,.28), 0 2px 6px 2px rgba(0,0,0,.13);
+    }
+    body{margin:0;background:var(--surface);color:var(--on-surface);font-family:Roboto,"Helvetica Neue",Arial,sans-serif;font-size:14px;line-height:1.43;-webkit-font-smoothing:antialiased}
+    a{color:var(--primary);text-decoration:none}
+    .mono{font-family:"Roboto Mono",ui-monospace,monospace;font-size:12.5px}
+    .lbl-l{font-size:14px;font-weight:500;letter-spacing:.1px}
+    .lbl-m{font-size:12px;font-weight:500;letter-spacing:.5px}
+    .lbl-s{font-size:11px;font-weight:500;letter-spacing:.5px}
+    .body-m{font-size:14px;letter-spacing:.25px;color:var(--on-surface-var)}
+    .body-s{font-size:12px;letter-spacing:.4px;color:var(--on-surface-var)}
+    .title-l{font-size:22px;letter-spacing:0}
+    .title-m{font-size:16px;font-weight:500;letter-spacing:.15px}
+    .head-l{font-size:32px;letter-spacing:0;line-height:40px}
+    .disp-s{font-size:36px;letter-spacing:0;line-height:44px}
+    .card{background:var(--sc-low);border-radius:16px;padding:20px;display:flex;flex-direction:column;gap:14px;min-width:0}
+    .card.out{background:var(--surface);border:1px solid var(--outline-var)}
+    .card.elev{background:var(--sc-lowest);box-shadow:var(--e1)}
+    .chip{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 10px;border-radius:8px;font-size:12px;font-weight:500;letter-spacing:.3px;white-space:nowrap;background:var(--sc-high);color:var(--on-surface-var)}
+    .chip svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+    .chip.ok{background:var(--success-container);color:var(--on-success-container)}
+    .chip.mem{background:var(--member-container);color:var(--on-member-container)}
+    .chip.warn{background:var(--warning-container);color:var(--on-warning-container)}
+    .chip.attn{background:var(--attention-container);color:#2b1700}
+    .chip.bad{background:var(--error-container);color:var(--on-error-container)}
+    .btn{height:40px;padding:0 24px;display:inline-flex;align-items:center;gap:8px;border-radius:20px;font-size:14px;font-weight:500;letter-spacing:.1px;white-space:nowrap;background:var(--secondary-container);color:var(--on-secondary-container)}
+    .btn.filled{background:var(--primary);color:var(--on-primary)}
+    .btn.text{background:transparent;color:var(--primary);padding:0 12px}
+    .ico{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:0 0 20px}
+    .rail-item{width:80px;display:flex;flex-direction:column;align-items:center;gap:4px;color:var(--on-surface-var)}
+    .rail-pill{width:56px;height:32px;border-radius:16px;display:flex;align-items:center;justify-content:center}
+    .rail-item.on .rail-pill{background:var(--secondary-container);color:var(--on-secondary-container)}
+    .rail-item.on{color:var(--on-surface)}
+    table{border-collapse:collapse;width:100%;font-size:13px}
+    th{text-align:left;padding:8px 12px 8px 0;font-size:12px;font-weight:500;letter-spacing:.5px;color:var(--on-surface-var);border-bottom:1px solid var(--outline-var)}
+    td{padding:12px 12px 12px 0;border-bottom:1px solid var(--outline-var);color:var(--on-surface);white-space:nowrap;vertical-align:middle}
+    tr:last-child td{border-bottom:0}
+  </style>
+</helmet>
+
+<style>
+  .m3-list-item{display:flex;gap:12px;padding:10px 16px;border-radius:0 24px 24px 0;margin-right:12px;align-items:flex-start}
+  .m3-list-item.sel{background:var(--secondary-container);color:var(--on-secondary-container)}
+  .m3-tab{height:48px;padding:0 16px;display:inline-flex;align-items:center;font-size:14px;font-weight:500;letter-spacing:.1px;color:var(--on-surface-var);white-space:nowrap}
+  .m3-tab.on{color:var(--primary);box-shadow:inset 0 -3px 0 var(--primary);border-radius:3px 3px 0 0}
+  .m3-field{height:52px;border-radius:4px 4px 0 0;background:var(--sc-high);border-bottom:1px solid var(--on-surface-var);padding:8px 16px;display:flex;flex-direction:column;justify-content:center;gap:1px;min-width:0}
+  .m3-field .lb{font-size:11px;letter-spacing:.4px;color:var(--on-surface-var)}
+  .m3-field .vl{font-size:15px;color:var(--on-surface)}
+  .m3-field.focus{border-bottom:2px solid var(--primary)}
+  .m3-field.focus .lb{color:var(--primary)}
+  .m3-menu{background:var(--sc);border-radius:4px;box-shadow:var(--e2);padding:8px 0;min-width:220px}
+  .m3-menu .it{height:48px;display:flex;align-items:center;gap:12px;padding:0 12px;font-size:14px;letter-spacing:.1px;color:var(--on-surface)}
+  .m3-menu .it.on{background:var(--secondary-container)}
+  .m3-fab{height:56px;padding:0 20px;border-radius:16px;display:inline-flex;align-items:center;gap:12px;background:var(--primary-container);color:var(--on-primary-container);box-shadow:var(--e2);font-size:14px;font-weight:500}
+  .m3-switch{width:52px;height:32px;border-radius:16px;background:var(--primary);display:flex;align-items:center;padding:4px;box-sizing:border-box}
+  .m3-switch .knob{width:24px;height:24px;border-radius:12px;background:var(--on-primary);margin-left:auto}
+  .m3-switch.off{background:var(--sc-highest);border:2px solid var(--outline)}
+  .m3-switch.off .knob{width:16px;height:16px;background:var(--outline);margin-left:0}
+  .drawer-item{height:56px;display:flex;align-items:center;gap:12px;padding:0 24px 0 16px;border-radius:28px;font-size:14px;font-weight:500;letter-spacing:.1px;color:var(--on-surface-var)}
+  .drawer-item.on{background:var(--secondary-container);color:var(--on-secondary-container)}
+  .drawer-head{padding:18px 16px 8px;font-size:14px;font-weight:500;letter-spacing:.1px;color:var(--on-surface-var)}
+  .cell-num{font-variant-numeric:tabular-nums}
+</style>
+
+<div style="width:1440px;height:1216px;display:flex;background:var(--surface);overflow:hidden">
+<nav style="width:88px;flex:0 0 88px;display:flex;flex-direction:column;align-items:center;padding:16px 0 20px;gap:12px;background:var(--surface)">
+<div style="width:48px;height:48px;border-radius:16px;background:var(--primary-container);color:var(--on-primary-container);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:500;margin-bottom:8px">SX</div>
+<div style="height:56px;width:56px;border-radius:16px;background:var(--sc-low);box-shadow:var(--e1);display:flex;align-items:center;justify-content:center;color:var(--primary);margin-bottom:12px"><svg class="ico" style="width:24px;height:24px;flex:0 0 24px;stroke-width:1.8" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-3-6.7"></path><path d="M21 3v6h-6"></path></svg></div>
+<div class="rail-item"><div class="rail-pill"><svg class="ico" style="width:20px;height:20px;flex:0 0 20px;stroke-width:1.8" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"></rect><rect x="14" y="3" width="7" height="7" rx="1"></rect><rect x="3" y="14" width="7" height="7" rx="1"></rect><rect x="14" y="14" width="7" height="7" rx="1"></rect></svg></div><span class="lbl-m">Overview</span></div>
+<div class="rail-item"><div class="rail-pill"><svg class="ico" style="width:20px;height:20px;flex:0 0 20px;stroke-width:1.8" viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="13" rx="2"></rect><path d="M8 21h8M12 17v4"></path></svg></div><span class="lbl-m">Devices</span></div>
+<div class="rail-item on"><div class="rail-pill"><svg class="ico" style="width:20px;height:20px;flex:0 0 20px;stroke-width:1.8" viewBox="0 0 24 24"><path d="M4 6h8M16 6h4M4 12h3M11 12h9M4 18h11M19 18h1"></path><circle cx="14" cy="6" r="2"></circle><circle cx="9" cy="12" r="2"></circle><circle cx="17" cy="18" r="2"></circle></svg></div><span class="lbl-m">Config</span></div>
+<div class="rail-item"><div class="rail-pill"><svg class="ico" style="width:20px;height:20px;flex:0 0 20px;stroke-width:1.8" viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"></path><path d="M9 12l2 2 4-4"></path></svg></div><span class="lbl-m">Compliance</span></div>
+<div class="rail-item"><div class="rail-pill"><svg class="ico" style="width:20px;height:20px;flex:0 0 20px;stroke-width:1.8" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-3-6.7"></path><path d="M21 3v6h-6"></path></svg></div><span class="lbl-m">Operations</span></div>
+<div class="rail-item" style="margin-top:auto"><div class="rail-pill"><svg class="ico" style="width:20px;height:20px;flex:0 0 20px;stroke-width:1.8" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"></path></svg></div><span class="lbl-m">Admin</span></div>
+</nav>
+  <div style="flex:1;min-width:0;display:flex;flex-direction:column;overflow:hidden">
+<div style="height:64px;display:flex;align-items:center;gap:16px;padding:0 24px 0 8px"><span class="title-l">SecurityExpert</span><div style="flex:1;max-width:520px;height:48px;display:flex;align-items:center;gap:12px;padding:0 16px;border-radius:24px;background:var(--sc-high);color:var(--on-surface-var);font-size:15px"><svg class="ico" style="width:20px;height:20px;flex:0 0 20px;stroke-width:1.8" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg>Search devices, settings, evidence</div><div style="margin-left:auto;display:flex;align-items:center;gap:14px"><span class="chip ok"><svg style="width:13px;height:13px;flex:0 0 13px;stroke-width:2.2" viewBox="0 0 24 24"><path d="M4 12l5 5L20 7"></path></svg>Checkpoint run-20260908-0640</span><svg class="ico" style="width:20px;height:20px;flex:0 0 20px;stroke-width:1.8;color:var(--on-surface-var)" viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.7 21a2 2 0 0 1-3.4 0"></path></svg><div style="width:36px;height:36px;border-radius:18px;background:var(--primary-container);color:var(--on-primary-container);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:500">OP</div></div></div>
+<main style="flex:1;min-height:0;padding:8px 24px 24px;display:flex;flex-direction:column;gap:16px;overflow:hidden">
+  <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:24px;padding:0 4px 4px">
+    <div style="display:flex;flex-direction:column;gap:6px">
+      <span class="head-l">Configuration</span>
+      <span class="body-m">Expected intent from the management plane against effective device state · 48 settings classified across 42 devices</span>
+    </div>
+    <div style="display:flex;gap:10px"><span class="btn"><svg class="ico" style="width:20px;height:20px;flex:0 0 20px;stroke-width:1.8" viewBox="0 0 24 24"><path d="M12 3v12M7 11l5 5 5-5M4 21h16"></path></svg>Export evidence</span><span class="btn filled">Compare revisions</span></div>
+  </div>
+  <div style="flex:1;min-height:0;display:grid;grid-template-columns:312px minmax(0, 1fr);gap:16px">
+    <div class="card" style="padding:12px 0;gap:10px">
+      <div style="padding:0 16px;display:flex;flex-direction:column;gap:12px">
+        <div style="height:48px;display:flex;align-items:center;gap:12px;padding:0 16px;border-radius:24px;background:var(--sc-high);color:var(--on-surface-var);font-size:14px"><svg class="ico" style="width:20px;height:20px;flex:0 0 20px;stroke-width:1.8" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg>Device, serial or model</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <span class="chip" style="background:var(--secondary-container);color:var(--on-secondary-container)">All 42</span>
+          <span class="chip bad">Drift 3</span>
+          <span class="chip warn">Override 6</span>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:2px;overflow:hidden">
+<div class="m3-list-item">
+      <div style="display:flex;flex-direction:column;gap:3px;min-width:0;flex:1">
+        <span class="mono" style="font-size:13.5px;color:var(--on-surface)">cp-mds-01</span>
+        <span class="body-s" style="font-size:12px">Management · 3 CMA</span>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:2px"><span class="chip ok" style="height:22px;font-size:11px">Aligned</span></div>
+      </div>
+    </div>
+<div class="m3-list-item sel">
+      <div style="display:flex;flex-direction:column;gap:3px;min-width:0;flex:1">
+        <span class="mono" style="font-size:13.5px;color:var(--on-surface)">fw-ist-core-CLS</span>
+        <span class="body-s" style="font-size:12px">ClusterXL · 2 members</span>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:2px"><span class="chip bad" style="height:22px;font-size:11px">1 effective drift</span><span class="chip mem" style="height:22px;font-size:11px">2 member-specific</span></div>
+      </div>
+    </div>
+<div class="m3-list-item">
+      <div style="display:flex;flex-direction:column;gap:3px;min-width:0;flex:1">
+        <span class="mono" style="font-size:13.5px;color:var(--on-surface)">vsx-ist-CLS</span>
+        <span class="body-s" style="font-size:12px">VSX · 12 virtual systems</span>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:2px"><span class="chip warn" style="height:22px;font-size:11px">2 local overrides</span></div>
+      </div>
+    </div>
+<div class="m3-list-item">
+      <div style="display:flex;flex-direction:column;gap:3px;min-width:0;flex:1">
+        <span class="mono" style="font-size:13.5px;color:var(--on-surface)">cp-edge-CLS</span>
+        <span class="body-s" style="font-size:12px">ClusterXL · 2 members</span>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:2px"><span class="chip " style="height:22px;font-size:11px">Stale 6 d</span></div>
+      </div>
+    </div>
+<div class="m3-list-item">
+      <div style="display:flex;flex-direction:column;gap:3px;min-width:0;flex:1">
+        <span class="mono" style="font-size:13.5px;color:var(--on-surface)">pan-ank-edge-01</span>
+        <span class="body-s" style="font-size:12px">PA-3420 · pano-ank-01</span>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:2px"><span class="chip ok" style="height:22px;font-size:11px">Aligned</span></div>
+      </div>
+    </div>
+<div class="m3-list-item">
+      <div style="display:flex;flex-direction:column;gap:3px;min-width:0;flex:1">
+        <span class="mono" style="font-size:13.5px;color:var(--on-surface)">pan-ank-edge-02</span>
+        <span class="body-s" style="font-size:12px">PA-3420 · pano-ank-01</span>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:2px"><span class="chip bad" style="height:22px;font-size:11px">Out of sync</span></div>
+      </div>
+    </div>
+<div class="m3-list-item">
+      <div style="display:flex;flex-direction:column;gap:3px;min-width:0;flex:1">
+        <span class="mono" style="font-size:13.5px;color:var(--on-surface)">pan-izm-edge-01</span>
+        <span class="body-s" style="font-size:12px">PA-1410 · pano-izm-01</span>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:2px"><span class="chip bad" style="height:22px;font-size:11px">1 effective drift</span></div>
+      </div>
+    </div>
+<div class="m3-list-item">
+      <div style="display:flex;flex-direction:column;gap:3px;min-width:0;flex:1">
+        <span class="mono" style="font-size:13.5px;color:var(--on-surface)">fw-brs-dr-01</span>
+        <span class="body-s" style="font-size:12px">DR site · standalone</span>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:2px"><span class="chip " style="height:22px;font-size:11px">Partial · SSH timeout</span></div>
+      </div>
+    </div>
+      </div>
+    </div>
+    <div class="card" style="gap:0;padding:0;overflow:hidden">
+      <div style="padding:20px 24px 0;display:flex;flex-direction:column;gap:10px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px">
+          <div style="display:flex;flex-direction:column;gap:6px;min-width:0">
+            <span class="body-s">Configuration · Check Point ClusterXL</span>
+            <span class="mono" style="font-size:24px;color:var(--on-surface)">fw-ist-core-CLS</span>
+            <span class="body-m">Policy <span class="mono">IST-Core-Standard</span> installed 2026-09-05 · intent snapshot <span class="mono">cma-ist</span> 06:40 · effective evidence 06:41</span>
+          </div>
+          <span class="chip bad"><svg style="width:13px;height:13px;flex:0 0 13px;stroke-width:2.2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><path d="M15 9l-6 6M9 9l6 6"></path></svg>1 effective drift · needs review</span>
+        </div>
+        <div style="display:flex;gap:0;border-bottom:1px solid var(--outline-var);margin:6px -24px 0;padding:0 24px;overflow:hidden">
+          <span class="m3-tab">Overview</span>
+          <span class="m3-tab">Current state</span>
+          <span class="m3-tab on">Alignment</span>
+          <span class="m3-tab">Policy &amp; objects</span>
+          <span class="m3-tab">History</span>
+          <span class="m3-tab">Evidence</span>
+          <span class="m3-tab">Backup</span>
+        </div>
+      </div>
+      <div style="padding:14px 24px 20px;display:flex;flex-direction:column;gap:12px;overflow:hidden">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap">
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <span class="chip ok">Aligned 21</span><span class="chip mem">Member-specific 2</span><span class="chip warn">Local override 1</span><span class="chip attn">Difference observed 1</span><span class="chip bad">Effective drift 1</span>
+          </div>
+          <span class="chip"><svg style="width:13px;height:13px;flex:0 0 13px;stroke-width:2" viewBox="0 0 24 24"><path d="M4 6h16M7 12h10M10 18h4"></path></svg>All classifications</span>
+        </div>
+        <table style="table-layout:fixed">
+          <thead><tr><th style="width:158px">Setting</th><th style="width:176px">Expected · CMA intent</th><th style="width:168px">Effective · member 01</th><th style="width:168px">Effective · member 02</th><th style="text-align:right">State</th></tr></thead>
+          <tbody>
+<tr><td style="color:var(--on-surface)">Cluster VIP · eth0</td><td class="mono">192.0.2.34/24</td><td class="mono">192.0.2.34/24</td><td class="mono" style="">192.0.2.34/24</td><td style="white-space:normal;text-align:right"><span class="chip ok">Aligned</span></td></tr>
+<tr style="background:#f9efd0"><td style="color:var(--on-surface)">Hostname</td><td class="mono">fw-ist-core-{member}</td><td class="mono">fw-ist-core-01</td><td class="mono" style="">fw-ist-core-02</td><td style="white-space:normal;text-align:right"><span class="chip mem">Member-specific</span></td></tr>
+<tr style="background:#f9efd0"><td style="color:var(--on-surface)">Member IP · eth0</td><td class="mono">10.20.0.{2,3}/24</td><td class="mono">192.0.2.37/24</td><td class="mono" style="">192.0.2.31/24</td><td style="white-space:normal;text-align:right"><span class="chip mem">Member-specific</span></td></tr>
+<tr><td style="color:var(--on-surface)">NTP · server 1</td><td class="mono">192.0.2.40</td><td class="mono">192.0.2.40</td><td class="mono" style="">192.0.2.40</td><td style="white-space:normal;text-align:right"><span class="chip ok">Aligned</span></td></tr>
+<tr style="background:#ffe7e3"><td style="color:var(--on-surface)">NTP · server 2</td><td class="mono">192.0.2.10</td><td class="mono">192.0.2.10</td><td class="mono" style="color:var(--error)">192.0.2.13</td><td style="white-space:normal;text-align:right"><span class="chip bad">Effective drift</span><div class="body-s" style="font-size:11.5px;margin-top:4px;white-space:normal">Unexplained since 2026-09-06 · no local-override record</div></td></tr>
+<tr><td style="color:var(--on-surface)">DNS · primary</td><td class="mono">192.0.2.25</td><td class="mono">192.0.2.25</td><td class="mono" style="">192.0.2.25</td><td style="white-space:normal;text-align:right"><span class="chip ok">Aligned</span></td></tr>
+<tr style="background:#fdeed4"><td style="color:var(--on-surface)">SNMP · trap receiver</td><td class="mono">192.0.2.19</td><td class="mono">192.0.2.22</td><td class="mono" style="">192.0.2.22</td><td style="white-space:normal;text-align:right"><span class="chip warn">Local override</span><div class="body-s" style="font-size:11.5px;margin-top:4px;white-space:normal">Recorded CHG-4471 · monitoring migration</div></td></tr>
+<tr><td style="color:var(--on-surface)">Syslog · target</td><td class="mono">192.0.2.16:514</td><td class="mono">192.0.2.16:514</td><td class="mono" style="">192.0.2.16:514</td><td style="white-space:normal;text-align:right"><span class="chip ok">Aligned</span></td></tr>
+<tr><td style="color:var(--on-surface)">Login banner</td><td class="mono">— not in intent</td><td class="mono">Authorized use only…</td><td class="mono" style="">Authorized use only…</td><td style="white-space:normal;text-align:right"><span class="chip attn">Difference observed</span><div class="body-s" style="font-size:11.5px;margin-top:4px;white-space:normal">Unclassified · not yet mapped to intent</div></td></tr>
+<tr><td style="color:var(--on-surface)">SSH · ciphers</td><td class="mono">aes256-gcm, aes128-gcm</td><td class="mono">aes256-gcm, aes128-gcm</td><td class="mono" style="">aes256-gcm, aes128-gcm</td><td style="white-space:normal;text-align:right"><span class="chip ok">Aligned</span></td></tr>
+          </tbody>
+        </table>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding-top:12px;border-top:1px solid var(--outline-var)">
+          <span class="body-s">Showing 10 of 26 settings. Red is reserved for unexplained drift and failure; expected member differences carry no warning.</span>
+          <span class="btn text">Open evidence</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

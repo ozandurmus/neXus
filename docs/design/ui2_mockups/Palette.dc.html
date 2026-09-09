@@ -1,0 +1,154 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap">
+  <style>
+    :root{
+      --bg:#f5f6f8;--surface:#ffffff;--surface-2:#f2f4f7;--surface-3:#e9edf2;--line:#e3e7ec;--line-strong:#cfd5dd;
+      --text:#171b22;--text-soft:#343b46;--muted:#5f6978;--muted-2:#8a93a1;
+      --accent:#3457d5;--accent-ink:#2a47b3;--accent-soft:#eaeefb;
+      --success:#1a8a4c;--success-soft:#e7f5ec;
+      --warning:#b45f06;--warning-soft:#fbf1e3;--attention:#e09b3c;
+      --danger:#c8323f;--danger-soft:#fbe9eb;--danger-deep:#8b1e2b;
+      --member:#7a5c12;--member-soft:#fbf4dc;--member-bar:#d8b64a;
+      --info:#4b5b73;--info-soft:#eef1f5;
+      --cp:#c2338a;--vsx:#4a3aa7;--pan:#d9731a;
+      --mark-bg:#171b22;--mark-fg:#ffffff;
+    }
+    body{margin:0;background:var(--bg);color:var(--text);font-family:"IBM Plex Sans","Segoe UI",system-ui,sans-serif;font-size:13px;line-height:1.45;-webkit-font-smoothing:antialiased;font-feature-settings:"tnum" 1,"cv05" 1;}
+    a{color:var(--accent-ink);text-decoration:none} a:hover{color:var(--accent)}
+    .mono{font-family:"JetBrains Mono","IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;font-size:11.5px;letter-spacing:0}
+    td.mono{font-size:11.5px}
+    .eyebrow{color:var(--muted);font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase}
+    .chip{display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 8px;border-radius:6px;font-size:11.5px;font-weight:500;white-space:nowrap;border:1px solid transparent}
+    .chip svg{width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+    .chip.ok{color:var(--success);background:var(--success-soft)}
+    .chip.warn{color:var(--warning);background:var(--warning-soft)}
+    .chip.bad{color:var(--danger);background:var(--danger-soft)}
+    .chip.member{color:var(--member);background:var(--member-soft)}
+    .chip.info{color:var(--info);background:var(--info-soft)}
+    .chip.neutral{color:var(--muted);background:var(--surface-2);border-color:var(--line)}
+    .chip.accent{color:var(--accent-ink);background:var(--accent-soft)}
+    .vendor{display:inline-flex;align-items:center;gap:6px;height:20px;padding:0 7px 0 6px;border:1px solid var(--line-strong);border-radius:5px;background:var(--surface);color:var(--text-soft);font-size:11px;font-weight:600;letter-spacing:.02em}
+    .vendor i{width:7px;height:7px;border-radius:2px;display:block}
+    .card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:18px 20px;display:flex;flex-direction:column;gap:14px;min-width:0}
+    .card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+    .card-title{font-size:15px;font-weight:600;letter-spacing:-.01em;margin-top:2px}
+    .ico{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round;flex:0 0 16px}
+    .topbar{height:56px;display:flex;align-items:center;gap:16px;padding:0 16px 0 14px;background:var(--surface);border-bottom:1px solid var(--line)}
+    .brand{display:flex;align-items:center;gap:10px;min-width:226px}
+    .mark{width:28px;height:28px;border-radius:7px;background:var(--mark-bg);color:var(--mark-fg);display:flex;align-items:center;justify-content:center;font-weight:600;font-size:12px;letter-spacing:.02em}
+    .brand-title{font-size:15px;font-weight:600;letter-spacing:-.01em}
+    .brand-sub{font-size:11px;color:var(--muted);margin-top:-1px}
+    .search{flex:1;max-width:440px;height:34px;display:flex;align-items:center;gap:8px;padding:0 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface-2);color:var(--muted-2);font-size:12.5px}
+    .kbd{margin-left:auto;font-size:10.5px;color:var(--muted-2);border:1px solid var(--line-strong);border-radius:4px;padding:0 5px;line-height:16px}
+    .top-right{margin-left:auto;display:flex;align-items:center;gap:10px}
+    .iconbtn{width:34px;height:34px;display:flex;align-items:center;justify-content:center;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--text-soft)}
+    .avatar{width:30px;height:30px;border-radius:50%;background:var(--surface-3);color:var(--text-soft);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600}
+    .rail{width:224px;flex:0 0 224px;display:flex;flex-direction:column;gap:2px;padding:14px 10px;background:var(--surface);border-right:1px solid var(--line)}
+    .rail-group{margin-top:10px;padding:0 10px 4px;font-size:10.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted-2)}
+    .nav{display:flex;align-items:center;gap:10px;height:34px;padding:0 10px;border-radius:7px;color:var(--text-soft);font-size:13px;font-weight:500}
+    .nav.child{padding-left:36px;font-weight:400;color:var(--muted)}
+    .nav.active{background:var(--accent-soft);color:var(--text);font-weight:600}
+    .nav.active .ico{color:var(--accent)}
+    .rail-foot{margin-top:auto;padding:10px;border-top:1px solid var(--line);font-size:11px;color:var(--muted);display:flex;flex-direction:column;gap:3px}
+    table{border-collapse:separate;border-spacing:0;width:100%;font-size:12.5px}
+    th{position:sticky;top:0;text-align:left;padding:8px 12px;font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);background:var(--surface-2);border-bottom:1px solid var(--line);white-space:nowrap}
+    td{padding:9px 12px;border-bottom:1px solid var(--line);color:var(--text-soft);white-space:nowrap;vertical-align:middle}
+    tr:last-child td{border-bottom:0}
+    .num{font-variant-numeric:tabular-nums;text-align:right}
+  </style>
+</helmet>
+<div style="width:1440px;height:940px;background:var(--bg);padding:36px 44px;box-sizing:border-box;display:flex;flex-direction:column;gap:22px;overflow:hidden">
+  <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:24px">
+    <div style="display:flex;flex-direction:column;gap:6px">
+      <span class="eyebrow">neXus · design tokens 2026</span>
+      <h1 style="margin:0;font-size:26px;font-weight:600;letter-spacing:-.02em">From "SaaS dashboard" to "instrument for evidence"</h1>
+      <div style="color:var(--muted);font-size:13px;max-width:760px">One low-chroma neutral scale, one restrained accent, semantic colours that are never the accent, vendor identity that is never a status colour. Colour is never the only carrier: every state ships with a text label.</div>
+    </div>
+    <div style="display:flex;gap:8px"><span class="chip neutral">Validated · light &amp; dark</span><span class="chip neutral">WCAG contrast ≥ 4.5:1 text</span><span class="chip neutral">CVD-safe vendor trio</span></div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:repeat(2, minmax(0, 1fr));gap:18px">
+    <div class="card" style="gap:12px">
+      <div class="card-head"><span class="card-title">Neutrals &amp; accent — current</span><span class="chip warn">blue-tinted · high contrast · glass topbar</span></div>
+      <div style="display:flex;gap:6px">
+        <div style="flex:1;height:52px;border-radius:6px;background:#0a1020;display:flex;align-items:flex-end;padding:6px;color:#dbe5f4;font-family:JetBrains Mono,monospace;font-size:10.5px">#0a1020 bg</div>
+        <div style="flex:1;height:52px;border-radius:6px;background:#111b2f;display:flex;align-items:flex-end;padding:6px;color:#dbe5f4;font-family:JetBrains Mono,monospace;font-size:10.5px">#111b2f surface</div>
+        <div style="flex:1;height:52px;border-radius:6px;background:#2c3b55;display:flex;align-items:flex-end;padding:6px;color:#dbe5f4;font-family:JetBrains Mono,monospace;font-size:10.5px">#2c3b55 line</div>
+        <div style="flex:1;height:52px;border-radius:6px;background:#f4f7fb;border:1px solid #d3deeb;display:flex;align-items:flex-end;padding:6px;color:#27364b;font-family:JetBrains Mono,monospace;font-size:10.5px">#f4f7fb bg</div>
+        <div style="flex:1;height:52px;border-radius:6px;background:#42b7f5;display:flex;align-items:flex-end;padding:6px;color:#06213a;font-family:JetBrains Mono,monospace;font-size:10.5px">#42b7f5 accent</div>
+        <div style="flex:1;height:52px;border-radius:6px;background:linear-gradient(145deg,#49c4ff,#2b6ef3);display:flex;align-items:flex-end;padding:6px;color:#fff;font-family:JetBrains Mono,monospace;font-size:10.5px">brand gradient</div>
+      </div>
+      <div style="font-size:12px;color:var(--muted);line-height:1.5">Sky-cyan accent + navy surfaces + gradient mark read as 2021–23 SaaS. Vendor blue (#3d82f6) collides with the accent; Panorama green (#27bf74) collides with success. Metric cards carry meaning in a coloured left stripe.</div>
+    </div>
+    <div class="card" style="gap:12px">
+      <div class="card-head"><span class="card-title">Neutrals &amp; accent — proposed</span><span class="chip ok">chroma ≤ 0.01 neutrals · one cobalt accent</span></div>
+      <div style="display:flex;gap:6px">
+        <div style="flex:1;height:52px;border-radius:6px;background:#0f1216;display:flex;align-items:flex-end;padding:6px;color:#cfd6df;font-family:JetBrains Mono,monospace;font-size:10.5px">#0f1216 bg</div>
+        <div style="flex:1;height:52px;border-radius:6px;background:#161a20;display:flex;align-items:flex-end;padding:6px;color:#cfd6df;font-family:JetBrains Mono,monospace;font-size:10.5px">#161a20 surface</div>
+        <div style="flex:1;height:52px;border-radius:6px;background:#272e38;display:flex;align-items:flex-end;padding:6px;color:#cfd6df;font-family:JetBrains Mono,monospace;font-size:10.5px">#272e38 line</div>
+        <div style="flex:1;height:52px;border-radius:6px;background:#f5f6f8;border:1px solid #e3e7ec;display:flex;align-items:flex-end;padding:6px;color:#343b46;font-family:JetBrains Mono,monospace;font-size:10.5px">#f5f6f8 bg</div>
+        <div style="flex:1;height:52px;border-radius:6px;background:#3457d5;display:flex;align-items:flex-end;padding:6px;color:#fff;font-family:JetBrains Mono,monospace;font-size:10.5px">#3457d5 accent</div>
+        <div style="flex:1;height:52px;border-radius:6px;background:#7b9cff;display:flex;align-items:flex-end;padding:6px;color:#0f1216;font-family:JetBrains Mono,monospace;font-size:10.5px">#7b9cff accent · dark</div>
+      </div>
+      <div style="font-size:12px;color:var(--muted);line-height:1.5">Near-neutral greys (OKLCH C ≈ 0.008) age well and let the semantic colours own attention. Text #171b22 on #ffffff = 15.6:1; #eef1f5 on #161a20 = 14.1:1. Flat monochrome mark, no gradients, no backdrop blur, hairline borders instead of shadows.</div>
+    </div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:repeat(3, minmax(0, 1fr));gap:18px">
+    <div class="card" style="gap:12px">
+      <div class="card-head"><span class="card-title">Semantic states</span><span class="chip neutral">label + icon, never colour alone</span></div>
+      <div style="display:grid;grid-template-columns:100px 1fr auto;gap:8px 10px;align-items:center;font-size:12px;white-space:nowrap">
+        <span style="color:var(--muted)">Aligned / OK</span><span class="chip ok"><svg viewBox="0 0 24 24"><path d="M4 12l5 5L20 7"></path></svg>Aligned</span><span class="mono" style="color:var(--muted);font-size:10.5px">#1a8a4c · #3fb97a</span>
+        <span style="color:var(--muted)">Member-specific</span><span class="chip member">Expected member difference</span><span class="mono" style="color:var(--muted);font-size:10.5px">#7a5c12 on #fbf4dc</span>
+        <span style="color:var(--muted)">Attention</span><span class="chip warn"><svg viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01"></path><path d="M10.3 3.9L2.7 17a2 2 0 0 0 1.7 3h15.2a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"></path></svg>Local override</span><span class="mono" style="color:var(--muted);font-size:10.5px">#b45f06 · #e0a63e</span>
+        <span style="color:var(--muted)">Fault / drift</span><span class="chip bad"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><path d="M15 9l-6 6M9 9l6 6"></path></svg>Effective drift</span><span class="mono" style="color:var(--muted);font-size:10.5px">#c8323f · #f26b77</span>
+        <span style="color:var(--muted)">Not applicable</span><span class="chip info">Not configured</span><span class="mono" style="color:var(--muted);font-size:10.5px">#4b5b73 · #a9b6c8</span>
+        <span style="color:var(--muted)">Provenance</span><span class="chip neutral">Stale · last-known-good 6 d</span><span class="mono" style="color:var(--muted);font-size:10.5px">muted · surface-2</span>
+      </div>
+      <div style="font-size:11.5px;color:var(--muted);line-height:1.5">Implements the frozen D-NAV14 / M3 contract: <span class="mono">--member-specific</span> is its own token, decoupled from <span class="mono">--warning</span>; red is reserved for real fault, unsafe drift, out-of-sync and failure.</div>
+    </div>
+    <div class="card" style="gap:12px">
+      <div class="card-head"><span class="card-title">Vendor identity</span><span class="chip ok">passes CVD + contrast, all pairs</span></div>
+      <div style="display:flex;flex-direction:column;gap:8px;font-size:12px">
+        <div style="display:flex;flex-direction:column;gap:4px"><div style="display:flex;align-items:center;gap:10px"><span style="color:var(--muted);width:104px">Current</span><span style="display:flex;gap:6px"><span style="width:26px;height:18px;border-radius:4px;background:#3d82f6"></span><span style="width:26px;height:18px;border-radius:4px;background:#8c5cf6"></span><span style="width:26px;height:18px;border-radius:4px;background:#27bf74"></span></span></div><span class="chip warn" style="height:20px;align-self:flex-start;margin-left:114px">CP = accent hue · PAN = success hue</span></div>
+        <div style="display:flex;flex-direction:column;gap:4px"><div style="display:flex;align-items:center;gap:10px"><span style="color:var(--muted);width:104px">Proposed · light</span><span style="display:flex;gap:6px"><span class="vendor"><i style="background:#c2338a"></i>CP</span><span class="vendor"><i style="background:#4a3aa7"></i>VSX</span><span class="vendor"><i style="background:#d9731a"></i>PAN</span></span></div><span class="mono" style="color:var(--muted);margin-left:114px">#c2338a · #4a3aa7 · #d9731a</span></div>
+        <div style="display:flex;flex-direction:column;gap:4px;background:#161a20;border-radius:6px;padding:8px 10px"><div style="display:flex;align-items:center;gap:10px"><span style="color:#929cab;width:94px">Proposed · dark</span><span style="display:flex;gap:6px"><span class="vendor" style="background:#161a20;border-color:#343d49;color:#cfd6df"><i style="background:#cf4f9a"></i>CP</span><span class="vendor" style="background:#161a20;border-color:#343d49;color:#cfd6df"><i style="background:#8f83ea"></i>VSX</span><span class="vendor" style="background:#161a20;border-color:#343d49;color:#cfd6df"><i style="background:#d95926"></i>PAN</span></span></div><span class="mono" style="color:#929cab;margin-left:104px">#cf4f9a · #8f83ea · #d95926</span></div>
+      </div>
+      <div style="font-size:11.5px;color:var(--muted);line-height:1.5">Vendor is identity, not health: a monogram chip with a small swatch, never a filled coloured badge. The same three hues are the only categorical series in fleet charts (worst CVD ΔE 12.4 dark / 15.8 light; every slot ≥ 3:1 on its surface).</div>
+    </div>
+    <div class="card" style="gap:12px">
+      <div class="card-head"><span class="card-title">Typography</span><span class="chip neutral">IBM Plex Sans · JetBrains Mono</span></div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div style="font-size:24px;font-weight:600;letter-spacing:-.02em;line-height:1.15">Operational posture</div>
+        <div style="font-size:15px;font-weight:600;letter-spacing:-.01em">Alignment · expected vs effective</div>
+        <div style="font-size:13px;color:var(--text-soft)">Body 13 / 1.45 · weights 400 · 500 · 600 only</div>
+        <div class="eyebrow">Eyebrow 11 · 600 · tracking .08em</div>
+        <div class="mono" style="color:var(--text)">fw-ist-core-02 · 192.0.2.31/24 · sha256:9f3a…c1e0</div>
+        <div style="font-size:30px;font-weight:600;letter-spacing:-.02em;line-height:1;font-variant-numeric:tabular-nums">87.4% <span style="font-size:13px;font-weight:400;color:var(--muted);letter-spacing:0">tabular figures</span></div>
+      </div>
+      <div style="font-size:11.5px;color:var(--muted);line-height:1.5">Replaces Inter at 780–850 weights and 10.5px eyebrows. Plex has engineering credibility and true tabular numerals; mono carries every identifier, IP, hash and timestamp so evidence looks like evidence.</div>
+    </div>
+  </div>
+
+  <div class="card" style="gap:10px">
+    <div class="card-head"><span class="card-title">Rules that keep it timeless</span></div>
+    <div style="display:grid;grid-template-columns:repeat(5, minmax(0, 1fr));gap:18px;font-size:12.5px;line-height:1.5;color:var(--text-soft)">
+      <div><b style="font-weight:600;color:var(--text)">One accent, used for wayfinding only.</b> Active nav, links, focus ring, primary bar fills. Never for status.</div>
+      <div><b style="font-weight:600;color:var(--text)">Depth from tone, not shadow.</b> Surface → surface-2 → surface-3 steps and hairlines; no card shadows, no radial gradients, no blur.</div>
+      <div><b style="font-weight:600;color:var(--text)">Meaning is text first.</b> Every chip carries its label; icons only on attention and fault; expected differences carry none.</div>
+      <div><b style="font-weight:600;color:var(--text)">Evidence is monospaced and timestamped.</b> Freshness, provenance and run id are visible on every screen, not in a tooltip.</div>
+      <div><b style="font-weight:600;color:var(--text)">Density is a setting, not a redesign.</b> 34px controls, 9px row padding, 13px type; a compact mode reduces spacing only.</div>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

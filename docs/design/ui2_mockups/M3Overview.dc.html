@@ -1,0 +1,159 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500&amp;family=Roboto+Mono:wght@400;500&amp;display=swap">
+  <style>
+    :root{
+      --primary:#415f91;--on-primary:#ffffff;--primary-container:#d6e3ff;--on-primary-container:#001b3e;
+      --secondary-container:#dae2f9;--on-secondary-container:#131c2b;
+      --surface:#f9f9ff;--surface-dim:#d9d9e0;--sc-lowest:#ffffff;--sc-low:#f3f3fa;--sc:#eeedf4;--sc-high:#e8e7ef;--sc-highest:#e2e2e9;
+      --on-surface:#191c20;--on-surface-var:#44474e;--outline:#74777f;--outline-var:#c4c6d0;
+      --error:#ba1a1a;--on-error:#ffffff;--error-container:#ffdad6;--on-error-container:#410002;
+      --success:#3d6b3f;--success-container:#c0ecbe;--on-success-container:#00210a;
+      --warning:#7d5700;--warning-container:#ffdea6;--on-warning-container:#281900;
+      --member:#6b5d1f;--member-container:#f4e3a6;--on-member-container:#221b00;
+      --attention:#8b5000;--attention-container:#ffdcc2;
+      --cp:#8e4585;--vsx:#4a4a8f;--pan:#8b4513;
+      --e1:0 1px 2px rgba(0,0,0,.28), 0 1px 3px 1px rgba(0,0,0,.13);
+      --e2:0 1px 2px rgba(0,0,0,.28), 0 2px 6px 2px rgba(0,0,0,.13);
+    }
+    body{margin:0;background:var(--surface);color:var(--on-surface);font-family:Roboto,"Helvetica Neue",Arial,sans-serif;font-size:14px;line-height:1.43;-webkit-font-smoothing:antialiased}
+    a{color:var(--primary);text-decoration:none}
+    .mono{font-family:"Roboto Mono",ui-monospace,monospace;font-size:12.5px}
+    .lbl-l{font-size:14px;font-weight:500;letter-spacing:.1px}
+    .lbl-m{font-size:12px;font-weight:500;letter-spacing:.5px}
+    .lbl-s{font-size:11px;font-weight:500;letter-spacing:.5px}
+    .body-m{font-size:14px;letter-spacing:.25px;color:var(--on-surface-var)}
+    .body-s{font-size:12px;letter-spacing:.4px;color:var(--on-surface-var)}
+    .title-l{font-size:22px;letter-spacing:0}
+    .title-m{font-size:16px;font-weight:500;letter-spacing:.15px}
+    .head-l{font-size:32px;letter-spacing:0;line-height:40px}
+    .disp-s{font-size:36px;letter-spacing:0;line-height:44px}
+    .card{background:var(--sc-low);border-radius:16px;padding:20px;display:flex;flex-direction:column;gap:14px;min-width:0}
+    .card.out{background:var(--surface);border:1px solid var(--outline-var)}
+    .card.elev{background:var(--sc-lowest);box-shadow:var(--e1)}
+    .chip{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 10px;border-radius:8px;font-size:12px;font-weight:500;letter-spacing:.3px;white-space:nowrap;background:var(--sc-high);color:var(--on-surface-var)}
+    .chip svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+    .chip.ok{background:var(--success-container);color:var(--on-success-container)}
+    .chip.mem{background:var(--member-container);color:var(--on-member-container)}
+    .chip.warn{background:var(--warning-container);color:var(--on-warning-container)}
+    .chip.attn{background:var(--attention-container);color:#2b1700}
+    .chip.bad{background:var(--error-container);color:var(--on-error-container)}
+    .btn{height:40px;padding:0 24px;display:inline-flex;align-items:center;gap:8px;border-radius:20px;font-size:14px;font-weight:500;letter-spacing:.1px;white-space:nowrap;background:var(--secondary-container);color:var(--on-secondary-container)}
+    .btn.filled{background:var(--primary);color:var(--on-primary)}
+    .btn.text{background:transparent;color:var(--primary);padding:0 12px}
+    .ico{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:0 0 20px}
+    .rail-item{width:80px;display:flex;flex-direction:column;align-items:center;gap:4px;color:var(--on-surface-var)}
+    .rail-pill{width:56px;height:32px;border-radius:16px;display:flex;align-items:center;justify-content:center}
+    .rail-item.on .rail-pill{background:var(--secondary-container);color:var(--on-secondary-container)}
+    .rail-item.on{color:var(--on-surface)}
+    table{border-collapse:collapse;width:100%;font-size:13px}
+    th{text-align:left;padding:8px 12px 8px 0;font-size:12px;font-weight:500;letter-spacing:.5px;color:var(--on-surface-var);border-bottom:1px solid var(--outline-var)}
+    td{padding:12px 12px 12px 0;border-bottom:1px solid var(--outline-var);color:var(--on-surface);white-space:nowrap;vertical-align:middle}
+    tr:last-child td{border-bottom:0}
+  </style>
+</helmet>
+<div style="width:1440px;height:1186px;display:flex;background:var(--surface);overflow:hidden">
+  <nav style="width:88px;flex:0 0 88px;display:flex;flex-direction:column;align-items:center;padding:16px 0 20px;gap:12px;background:var(--surface)">
+    <div style="width:48px;height:48px;border-radius:16px;background:var(--primary-container);color:var(--on-primary-container);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:500;margin-bottom:8px">SX</div>
+    <div style="height:56px;width:56px;border-radius:16px;background:var(--sc-low);box-shadow:var(--e1);display:flex;align-items:center;justify-content:center;color:var(--primary);margin-bottom:12px"><svg class="ico" style="width:24px;height:24px" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-3-6.7"></path><path d="M21 3v6h-6"></path></svg></div>
+    <div class="rail-item on"><div class="rail-pill"><svg class="ico" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"></rect><rect x="14" y="3" width="7" height="7" rx="1"></rect><rect x="3" y="14" width="7" height="7" rx="1"></rect><rect x="14" y="14" width="7" height="7" rx="1"></rect></svg></div><span class="lbl-m">Overview</span></div>
+    <div class="rail-item"><div class="rail-pill"><svg class="ico" viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="13" rx="2"></rect><path d="M8 21h8M12 17v4"></path></svg></div><span class="lbl-m">Devices</span></div>
+    <div class="rail-item"><div class="rail-pill"><svg class="ico" viewBox="0 0 24 24"><path d="M4 6h8M16 6h4M4 12h3M11 12h9M4 18h11M19 18h1"></path><circle cx="14" cy="6" r="2"></circle><circle cx="9" cy="12" r="2"></circle><circle cx="17" cy="18" r="2"></circle></svg></div><span class="lbl-m">Config</span></div>
+    <div class="rail-item"><div class="rail-pill"><svg class="ico" viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"></path><path d="M9 12l2 2 4-4"></path></svg></div><span class="lbl-m">Compliance</span></div>
+    <div class="rail-item"><div class="rail-pill"><svg class="ico" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-3-6.7"></path><path d="M21 3v6h-6"></path></svg></div><span class="lbl-m">Operations</span></div>
+    <div class="rail-item" style="margin-top:auto"><div class="rail-pill"><svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"></path></svg></div><span class="lbl-m">Admin</span></div>
+  </nav>
+  <div style="flex:1;min-width:0;display:flex;flex-direction:column;overflow:hidden">
+    <div style="height:64px;display:flex;align-items:center;gap:16px;padding:0 24px 0 8px">
+      <span class="title-l">SecurityExpert</span>
+      <div style="flex:1;max-width:520px;height:48px;display:flex;align-items:center;gap:12px;padding:0 16px;border-radius:24px;background:var(--sc-high);color:var(--on-surface-var);font-size:15px"><svg class="ico" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg>Search devices, settings, evidence</div>
+      <div style="margin-left:auto;display:flex;align-items:center;gap:14px">
+        <span class="chip ok"><svg viewBox="0 0 24 24"><path d="M4 12l5 5L20 7"></path></svg>Checkpoint run-20260908-0640</span>
+        <svg class="ico" style="color:var(--on-surface-var)" viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.7 21a2 2 0 0 1-3.4 0"></path></svg>
+        <div style="width:36px;height:36px;border-radius:18px;background:var(--primary-container);color:var(--on-primary-container);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:500">OP</div>
+      </div>
+    </div>
+    <main style="flex:1;min-height:0;padding:8px 24px 24px;display:flex;flex-direction:column;gap:16px;overflow:hidden">
+      <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:24px;padding:0 4px 4px">
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <span class="head-l">Operational posture</span>
+          <span class="body-m">42 devices · 3 management planes · evidence collected 06:40–06:58 UTC</span>
+        </div>
+        <div style="display:flex;gap:10px"><span class="btn">Export bundle</span><span class="btn filled">Open Configuration</span></div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(4, minmax(0, 1fr));gap:16px">
+        <div class="card elev" style="gap:10px"><div style="display:flex;justify-content:space-between;align-items:center"><span class="title-m">Network inventory</span><svg class="ico" style="color:var(--on-surface-var)" viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="13" rx="2"></rect><path d="M8 21h8M12 17v4"></path></svg></div><span class="disp-s">42<span style="font-size:16px;color:var(--on-surface-var)"> / 46 live</span></span><span class="chip warn" style="align-self:flex-start"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg>4 stale · last-known-good</span></div>
+        <div class="card elev" style="gap:10px"><div style="display:flex;justify-content:space-between;align-items:center"><span class="title-m">Configuration</span><svg class="ico" style="color:var(--on-surface-var)" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"></path></svg></div><span class="disp-s">40<span style="font-size:16px;color:var(--on-surface-var)"> / 42 evidence</span></span><span class="chip" style="align-self:flex-start">2 partial · SSH timeout</span></div>
+        <div class="card elev" style="gap:10px"><div style="display:flex;justify-content:space-between;align-items:center"><span class="title-m">Local overrides</span><svg class="ico" style="color:var(--on-surface-var)" viewBox="0 0 24 24"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"></path></svg></div><span class="disp-s">6<span style="font-size:16px;color:var(--on-surface-var)"> intentional</span></span><span class="chip mem" style="align-self:flex-start">5 expected member differences</span></div>
+        <div class="card elev" style="gap:10px"><div style="display:flex;justify-content:space-between;align-items:center"><span class="title-m">Effective drift</span><svg class="ico" style="color:var(--error)" viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01"></path><path d="M10.3 3.9L2.7 17a2 2 0 0 0 1.7 3h15.2a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"></path></svg></div><span class="disp-s" style="color:var(--error)">2<span style="font-size:16px;color:var(--on-surface-var)"> unexplained</span></span><span class="chip bad" style="align-self:flex-start"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><path d="M15 9l-6 6M9 9l6 6"></path></svg>1 Panorama out of sync</span></div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:minmax(0, 2fr) minmax(0, 1fr);gap:16px">
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start"><div style="display:flex;flex-direction:column;gap:2px"><span class="title-m">Configuration alignment</span><span class="body-s">48 settings classified · expected from CMA intent, effective from device evidence</span></div><span class="btn text">View all</span></div>
+          <div style="display:flex;gap:3px;height:12px;border-radius:6px;overflow:hidden"><div style="flex:31;background:var(--success)"></div><div style="flex:5;background:#c9ab3f"></div><div style="flex:6;background:var(--warning)"></div><div style="flex:3;background:var(--attention)"></div><div style="flex:2;background:var(--error)"></div><div style="flex:1;background:#7d1010"></div></div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap"><span class="chip ok">Aligned 31</span><span class="chip mem">Member-specific 5</span><span class="chip warn">Local override 6</span><span class="chip attn">Difference observed 3</span><span class="chip bad">Effective drift 2</span><span class="chip bad">Out of sync 1</span></div>
+          <table>
+            <thead><tr><th style="width:160px">Device</th><th>Setting</th><th>Expected</th><th>Effective</th><th style="text-align:right">State</th></tr></thead>
+            <tbody>
+              <tr><td class="mono">fw-ist-core-02</td><td class="body-s">ntp.server[2]</td><td class="mono" style="color:var(--on-surface-var)">192.0.2.10</td><td class="mono" style="color:var(--error)">192.0.2.13</td><td style="text-align:right"><span class="chip bad">Effective drift</span></td></tr>
+              <tr><td class="mono">pan-izm-edge-01</td><td class="body-s">log.syslog.target</td><td class="mono" style="color:var(--on-surface-var)">192.0.2.16:514</td><td class="mono" style="color:var(--error)">removed</td><td style="text-align:right"><span class="chip bad">Effective drift</span></td></tr>
+              <tr><td class="mono">pan-ank-edge-02</td><td class="body-s">panorama.commit</td><td class="mono" style="color:var(--on-surface-var)">committed</td><td class="mono" style="color:var(--error)">3 pending</td><td style="text-align:right"><span class="chip bad">Out of sync</span></td></tr>
+              <tr><td class="mono">vsx-ist-CLS</td><td class="body-s">snmp.trap.receiver</td><td class="mono" style="color:var(--on-surface-var)">192.0.2.19</td><td class="mono">192.0.2.22</td><td style="text-align:right"><span class="chip warn">Local override</span></td></tr>
+              <tr><td class="mono">fw-brs-dr-01</td><td class="body-s">dns.primary</td><td class="mono" style="color:var(--on-surface-var)">192.0.2.25</td><td class="mono">192.0.2.28</td><td style="text-align:right"><span class="chip warn">Local override</span></td></tr>
+              <tr><td class="mono">fw-ist-core-CLS</td><td class="body-s">system.hostname</td><td class="mono" style="color:var(--on-surface-var)">fw-ist-core-{m}</td><td class="mono">-01 · -02</td><td style="text-align:right"><span class="chip mem">Expected member difference</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:16px;min-width:0">
+          <div class="card out" style="gap:12px">
+            <span class="title-m">Evidence trust</span>
+            <div style="display:flex;flex-direction:column;gap:10px">
+              <div style="display:flex;flex-direction:column;gap:6px"><div style="display:flex;justify-content:space-between;font-size:13px"><span class="body-s">Primary evidence</span><span class="lbl-l">40 / 42</span></div><div style="height:8px;border-radius:4px;background:var(--sc-high);overflow:hidden"><div style="width:95%;height:100%;background:var(--primary);border-radius:4px"></div></div></div>
+              <div style="display:flex;flex-direction:column;gap:6px"><div style="display:flex;justify-content:space-between;font-size:13px"><span class="body-s">Identity verified</span><span class="lbl-l">42 / 42</span></div><div style="height:8px;border-radius:4px;background:var(--sc-high);overflow:hidden"><div style="width:100%;height:100%;background:var(--primary);border-radius:4px"></div></div></div>
+              <div style="display:flex;flex-direction:column;gap:6px"><div style="display:flex;justify-content:space-between;font-size:13px"><span class="body-s">Fresh this cycle</span><span class="lbl-l">38 / 42</span></div><div style="height:8px;border-radius:4px;background:var(--sc-high);overflow:hidden"><div style="width:90%;height:100%;background:var(--primary);border-radius:4px"></div></div></div>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center"><span class="body-s">TLS peer verification</span><span class="chip ok"><svg viewBox="0 0 24 24"><path d="M4 12l5 5L20 7"></path></svg>Enabled</span></div>
+          </div>
+          <div class="card out" style="gap:12px">
+            <span class="title-m">HA readiness</span>
+            <div style="display:flex;flex-direction:column;gap:10px;font-size:13px">
+              <div style="display:flex;justify-content:space-between;align-items:center"><span class="mono">fw-ist-core-CLS</span><span class="chip ok">Ready · sync OK</span></div>
+              <div style="display:flex;justify-content:space-between;align-items:center"><span class="mono">vsx-ist-CLS</span><span class="chip ok">Ready · 12 VS</span></div>
+              <div style="display:flex;justify-content:space-between;align-items:center"><span class="mono">pan-ank-edge HA</span><span class="chip warn">Not ready · mismatch</span></div>
+              <div style="display:flex;justify-content:space-between;align-items:center"><span class="mono">cp-edge-CLS</span><span class="chip">Undetermined</span></div>
+            </div>
+            <span class="body-s">Readiness is observed. No class 2 action exists in this build.</span>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(3, minmax(0, 1fr));gap:16px">
+        <div class="card" style="gap:10px"><span class="title-m">Compliance coverage</span><div style="display:flex;align-items:baseline;gap:10px"><span class="disp-s">87.4%</span><span class="chip ok">+3.2 pts · 30 days</span></div>
+          <svg viewBox="0 0 320 48" width="100%" height="48" style="display:block;overflow:visible"><path d="M0 34 L23 35 L46 32 L69 33 L92 30 L115 31 L138 27 L161 28 L184 24 L207 22 L230 23 L253 18 L276 16 L299 14 L320 12" fill="none" stroke="#415f91" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"></path><circle cx="320" cy="12" r="4.5" fill="#415f91" stroke="#f3f3fa" stroke-width="2"></circle></svg>
+          <span class="body-s">CIS · 148 of 169 controls covered</span></div>
+        <div class="card" style="gap:10px"><span class="title-m">Recovery artifacts</span><span class="disp-s">37<span style="font-size:16px;color:var(--on-surface-var)"> / 42 protected</span></span>
+          <div style="display:flex;flex-direction:column;gap:9px;font-size:13px"><div style="display:flex;justify-content:space-between"><span class="body-s">Last successful run</span><span class="mono">2026-09-07 23:10</span></div><div style="display:flex;justify-content:space-between;align-items:center"><span class="body-s">Not configured</span><span class="chip">4 devices</span></div><div style="display:flex;justify-content:space-between;align-items:center"><span class="body-s">Blocked by policy</span><span class="chip">1 · outside D3</span></div></div></div>
+        <div class="card" style="gap:10px"><span class="title-m">Fleet composition</span>
+          <div style="display:flex;flex-direction:column;gap:10px;font-size:13px">
+            <div style="display:grid;grid-template-columns:140px 1fr 28px;align-items:center;gap:10px"><span class="body-s">R81.20 gateway</span><div style="height:8px;border-radius:4px;background:var(--sc-high);overflow:hidden"><div style="width:90%;height:100%;background:var(--cp);border-radius:4px"></div></div><span class="lbl-l" style="text-align:right">18</span></div>
+            <div style="display:grid;grid-template-columns:140px 1fr 28px;align-items:center;gap:10px"><span class="body-s">R81.20 VSX</span><div style="height:8px;border-radius:4px;background:var(--sc-high);overflow:hidden"><div style="width:30%;height:100%;background:var(--vsx);border-radius:4px"></div></div><span class="lbl-l" style="text-align:right">6</span></div>
+            <div style="display:grid;grid-template-columns:140px 1fr 28px;align-items:center;gap:10px"><span class="body-s">PAN-OS 11.1.4</span><div style="height:8px;border-radius:4px;background:var(--sc-high);overflow:hidden"><div style="width:70%;height:100%;background:var(--pan);border-radius:4px"></div></div><span class="lbl-l" style="text-align:right">14</span></div>
+            <div style="display:grid;grid-template-columns:140px 1fr 28px;align-items:center;gap:10px"><span class="body-s">PAN-OS 10.2.9</span><div style="height:8px;border-radius:4px;background:var(--sc-high);overflow:hidden"><div style="width:10%;height:100%;background:var(--pan);border-radius:4px"></div></div><span class="lbl-l" style="text-align:right">2</span></div>
+          </div>
+          <span class="body-s">PAN-OS 10.2.9 reaches end of life in Q1 2027.</span></div>
+      </div>
+    </main>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

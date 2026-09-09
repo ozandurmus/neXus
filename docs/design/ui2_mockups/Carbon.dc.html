@@ -1,0 +1,160 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap">
+  <style>
+    :root{
+      --bg:#f4f4f4;--layer:#ffffff;--layer-2:#f4f4f4;--layer-3:#e0e0e0;--field:#f4f4f4;
+      --bd-subtle:#e0e0e0;--bd-strong:#8d8d8d;--bd-inverse:#161616;
+      --text:#161616;--text-2:#525252;--text-3:#6f6f6f;--text-inv:#ffffff;
+      --interactive:#0f62fe;--link:#0f62fe;--focus:#0f62fe;
+      --ok:#198038;--ok-bg:#defbe6;--warn:#8e6a00;--warn-bg:#fff8e1;--attn:#b06a00;--attn-bg:#fff2e8;
+      --err:#da1e28;--err-bg:#fff1f1;--err-deep:#a2191f;--info:#0043ce;--info-bg:#edf5ff;
+      --mem:#8a6a00;--mem-bg:#fcf4d6;--mem-bar:#d2a106;
+      --cp:#9f1853;--vsx:#491d8b;--pan:#a2500a;
+    }
+    body{margin:0;background:var(--bg);color:var(--text);font-family:"IBM Plex Sans",system-ui,sans-serif;font-size:14px;line-height:1.43;letter-spacing:.16px;-webkit-font-smoothing:antialiased}
+    a{color:var(--link);text-decoration:none} a:hover{text-decoration:underline}
+    .mono{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12px;letter-spacing:.32px}
+    .lab{font-size:12px;letter-spacing:.32px;color:var(--text-2)}
+    .heading-c{font-size:14px;font-weight:600;letter-spacing:.16px}
+    .tile{background:var(--layer);padding:16px;display:flex;flex-direction:column;gap:12px;min-width:0}
+    .tag{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 8px;border-radius:12px;font-size:12px;letter-spacing:.32px;white-space:nowrap;background:var(--layer-3);color:var(--text)}
+    .tag svg{width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+    .tag.ok{background:var(--ok-bg);color:#044317}.tag.warn{background:var(--warn-bg);color:#553b00}.tag.attn{background:var(--attn-bg);color:#5c3000}
+    .tag.bad{background:var(--err-bg);color:#750e13}.tag.mem{background:var(--mem-bg);color:#544600}.tag.info{background:var(--info-bg);color:#00297a}
+    .btn{height:40px;padding:0 15px;display:inline-flex;align-items:center;gap:24px;font-size:14px;letter-spacing:.16px;white-space:nowrap;background:var(--interactive);color:#fff}
+    .btn.sec{background:#393939;color:#fff}
+    .btn.ghost{background:transparent;color:var(--interactive);padding:0 12px}
+    .ico{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;flex:0 0 16px}
+    .side{width:256px;flex:0 0 256px;background:var(--layer);border-right:1px solid var(--bd-subtle);display:flex;flex-direction:column;padding-top:8px}
+    .sitem{height:32px;display:flex;align-items:center;gap:12px;padding:0 16px;font-size:14px;color:var(--text-2)}
+    .sitem.on{background:var(--layer-3);color:var(--text);font-weight:600;box-shadow:inset 3px 0 0 var(--interactive)}
+    .sitem.sub{padding-left:44px;font-size:13px}
+    .sgrp{padding:16px 16px 6px;font-size:12px;letter-spacing:.32px;color:var(--text-3)}
+    table{border-collapse:collapse;width:100%;font-size:13px}
+    th{text-align:left;padding:0 12px;height:40px;font-size:12px;font-weight:600;letter-spacing:.16px;color:var(--text);background:var(--layer-3);white-space:nowrap}
+    td{padding:0 12px;height:44px;border-bottom:1px solid var(--bd-subtle);color:var(--text-2);white-space:nowrap;vertical-align:middle}
+    tbody tr:nth-child(odd){background:var(--layer)}
+    tbody tr:nth-child(even){background:#fbfbfb}
+  </style>
+</helmet>
+<div style="width:1440px;height:1092px;display:flex;flex-direction:column;background:var(--bg);overflow:hidden">
+  <header style="height:48px;background:#161616;color:#fff;display:flex;align-items:center;gap:0;padding-left:16px">
+    <div style="display:flex;align-items:center;gap:8px;padding-right:24px"><span style="font-size:14px;font-weight:600">SecurityExpert</span><span style="font-size:14px;color:#c6c6c6">neXus</span></div>
+    <div style="display:flex;align-items:center;height:48px;gap:0">
+      <span style="padding:0 16px;height:48px;display:flex;align-items:center;font-size:14px;color:#fff;box-shadow:inset 0 -3px 0 var(--interactive)">Overview</span>
+      <span style="padding:0 16px;height:48px;display:flex;align-items:center;font-size:14px;color:#c6c6c6">Devices</span>
+      <span style="padding:0 16px;height:48px;display:flex;align-items:center;font-size:14px;color:#c6c6c6">Configuration</span>
+      <span style="padding:0 16px;height:48px;display:flex;align-items:center;font-size:14px;color:#c6c6c6">Compliance</span>
+    </div>
+    <div style="margin-left:auto;display:flex;align-items:center;height:48px">
+      <span class="mono" style="color:#c6c6c6;padding:0 16px">run-20260908-0640 · 06:58Z</span>
+      <div style="width:48px;height:48px;display:flex;align-items:center;justify-content:center;color:#fff"><svg class="ico" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg></div>
+      <div style="width:48px;height:48px;display:flex;align-items:center;justify-content:center;color:#fff"><svg class="ico" viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.7 21a2 2 0 0 1-3.4 0"></path></svg></div>
+      <div style="width:48px;height:48px;display:flex;align-items:center;justify-content:center;background:#393939;font-size:12px;font-weight:600">OP</div>
+    </div>
+  </header>
+  <div style="display:flex;flex:1;min-height:0;align-items:stretch">
+    <nav class="side" style="align-self:stretch">
+      <div class="sitem on">Overview</div>
+      <div class="sgrp">Devices</div>
+      <div class="sitem">Inventory</div>
+      <div class="sitem sub">Discovery</div>
+      <div class="sgrp">Planes</div>
+      <div class="sitem">Configuration</div>
+      <div class="sitem">Compliance</div>
+      <div class="sgrp">Operations</div>
+      <div class="sitem">HA &amp; readiness</div>
+      <div class="sitem sub">Jobs</div>
+      <div class="sgrp">Administration</div>
+      <div class="sitem">Device management</div>
+      <div class="sitem sub">Inventory exclusions</div>
+      <div class="sitem sub">Project plan</div>
+      <div style="margin-top:auto;padding:12px 16px;border-top:1px solid var(--bd-subtle);display:flex;flex-direction:column;gap:3px"><span class="lab">Report exported 06:58 UTC</span><span class="lab">Read-only evidence · class 0</span></div>
+    </nav>
+    <main style="flex:1;min-width:0;display:flex;flex-direction:column;overflow:hidden">
+      <div style="padding:24px 32px 20px;background:var(--bg);display:flex;justify-content:space-between;align-items:flex-end;gap:24px">
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <span class="lab">neXus / Overview</span>
+          <h1 style="margin:0;font-size:28px;font-weight:400;letter-spacing:0;line-height:1.25">Operational posture</h1>
+          <span style="font-size:14px;color:var(--text-2)">42 devices across 3 management planes · evidence collected 06:40–06:58 UTC</span>
+        </div>
+        <div style="display:flex;gap:1px"><span class="btn sec">Export bundle</span><span class="btn">Open Configuration<svg class="ico" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></span></div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:1px;background:var(--bd-subtle);margin:0 32px 24px;overflow:hidden;border-top:1px solid var(--bd-subtle)">
+        <div style="display:grid;grid-template-columns:repeat(4, minmax(0, 1fr));gap:1px;background:var(--bd-subtle)">
+          <div class="tile" style="gap:8px"><span class="heading-c">Network inventory</span><span style="font-size:42px;font-weight:300;line-height:1.1;letter-spacing:0">42<span style="font-size:16px;color:var(--text-2)"> / 46</span></span><span class="lab">logical views live</span><span class="tag warn" style="align-self:flex-start"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg>4 stale · last-known-good</span></div>
+          <div class="tile" style="gap:8px"><span class="heading-c">Current configuration</span><span style="font-size:42px;font-weight:300;line-height:1.1">40<span style="font-size:16px;color:var(--text-2)"> / 42</span></span><span class="lab">with primary evidence</span><span class="tag" style="align-self:flex-start">2 partial · SSH timeout</span></div>
+          <div class="tile" style="gap:8px"><span class="heading-c">Local overrides</span><span style="font-size:42px;font-weight:300;line-height:1.1">6</span><span class="lab">intentional, recorded</span><span class="tag mem" style="align-self:flex-start">5 expected member differences</span></div>
+          <div class="tile" style="gap:8px"><span class="heading-c">Effective drift</span><span style="font-size:42px;font-weight:300;line-height:1.1;color:var(--err)">2</span><span class="lab">unexplained · needs review</span><span class="tag bad" style="align-self:flex-start"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><path d="M15 9l-6 6M9 9l6 6"></path></svg>1 Panorama out of sync</span></div>
+        </div>
+        <div style="display:grid;grid-template-columns:minmax(0, 2.1fr) minmax(0, 1fr);gap:1px;background:var(--bd-subtle)">
+          <div class="tile" style="gap:14px;padding:16px 16px 0">
+            <div style="display:flex;justify-content:space-between;align-items:baseline"><span class="heading-c">Configuration alignment · expected vs effective</span><span class="lab">48 settings classified</span></div>
+            <div style="display:flex;gap:2px;height:8px"><div style="flex:31;background:var(--ok)"></div><div style="flex:5;background:var(--mem-bar)"></div><div style="flex:6;background:var(--warn)"></div><div style="flex:3;background:var(--attn)"></div><div style="flex:2;background:var(--err)"></div><div style="flex:1;background:var(--err-deep)"></div></div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap"><span class="tag ok">Aligned 31</span><span class="tag mem">Member-specific 5</span><span class="tag warn">Local override 6</span><span class="tag attn">Difference observed 3</span><span class="tag bad">Effective drift 2</span><span class="tag bad">Out of sync 1</span></div>
+            <div style="margin:0 -16px;overflow:hidden">
+              <table style="table-layout:fixed">
+                <thead><tr><th style="width:142px">Device</th><th style="width:132px">Setting</th><th style="width:118px">Expected</th><th style="width:108px">Effective</th><th>State</th></tr></thead>
+                <tbody>
+                  <tr><td class="mono" style="color:var(--text)">fw-ist-core-02</td><td>ntp.server[2]</td><td class="mono">192.0.2.10</td><td class="mono" style="color:var(--err)">192.0.2.13</td><td><span class="tag bad">Effective drift</span></td></tr>
+                  <tr><td class="mono" style="color:var(--text)">pan-izm-edge-01</td><td>log.syslog.target</td><td class="mono">192.0.2.16:514</td><td class="mono" style="color:var(--err)">removed</td><td><span class="tag bad">Effective drift</span></td></tr>
+                  <tr><td class="mono" style="color:var(--text)">pan-ank-edge-02</td><td>panorama.commit</td><td class="mono">committed</td><td class="mono" style="color:var(--err)">3 pending</td><td><span class="tag bad">Out of sync</span></td></tr>
+                  <tr><td class="mono" style="color:var(--text)">vsx-ist-CLS</td><td>snmp.trap.receiver</td><td class="mono">192.0.2.19</td><td class="mono">192.0.2.22</td><td><span class="tag warn">Local override</span></td></tr>
+                  <tr><td class="mono" style="color:var(--text)">fw-brs-dr-01</td><td>dns.primary</td><td class="mono">192.0.2.25</td><td class="mono">192.0.2.28</td><td><span class="tag warn">Local override</span></td></tr>
+                  <tr><td class="mono" style="color:var(--text)">fw-ist-core-CLS</td><td>system.hostname</td><td class="mono">fw-ist-core-{m}</td><td class="mono">-01 · -02</td><td><span class="tag mem">Member-specific</span></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-rows:auto auto;gap:1px;background:var(--bd-subtle)">
+            <div class="tile" style="gap:12px">
+              <span class="heading-c">Evidence trust</span>
+              <div style="display:flex;flex-direction:column;gap:10px;font-size:13px">
+                <div style="display:flex;flex-direction:column;gap:5px"><div style="display:flex;justify-content:space-between"><span class="lab">Primary evidence</span><span style="font-weight:600">40 / 42</span></div><div style="height:6px;background:var(--layer-3)"><div style="width:95%;height:100%;background:var(--interactive)"></div></div></div>
+                <div style="display:flex;flex-direction:column;gap:5px"><div style="display:flex;justify-content:space-between"><span class="lab">Identity verified</span><span style="font-weight:600">42 / 42</span></div><div style="height:6px;background:var(--layer-3)"><div style="width:100%;height:100%;background:var(--interactive)"></div></div></div>
+                <div style="display:flex;flex-direction:column;gap:5px"><div style="display:flex;justify-content:space-between"><span class="lab">Fresh this cycle</span><span style="font-weight:600">38 / 42</span></div><div style="height:6px;background:var(--layer-3)"><div style="width:90%;height:100%;background:var(--interactive)"></div></div></div>
+                <div style="display:flex;justify-content:space-between;align-items:center;border-top:1px solid var(--bd-subtle);padding-top:10px"><span class="lab">TLS peer verification</span><span class="tag ok"><svg viewBox="0 0 24 24"><path d="M4 12l5 5L20 7"></path></svg>Enabled</span></div>
+              </div>
+            </div>
+            <div class="tile" style="gap:12px">
+              <span class="heading-c">HA readiness · read-only</span>
+              <div style="display:flex;flex-direction:column;gap:10px;font-size:13px">
+                <div style="display:flex;justify-content:space-between;align-items:center"><span class="mono" style="color:var(--text)">fw-ist-core-CLS</span><span class="tag ok">Ready · sync OK</span></div>
+                <div style="display:flex;justify-content:space-between;align-items:center"><span class="mono" style="color:var(--text)">vsx-ist-CLS</span><span class="tag ok">Ready · 12 VS</span></div>
+                <div style="display:flex;justify-content:space-between;align-items:center"><span class="mono" style="color:var(--text)">pan-ank-edge HA</span><span class="tag warn">Not ready · mismatch</span></div>
+                <div style="display:flex;justify-content:space-between;align-items:center"><span class="mono" style="color:var(--text)">cp-edge-CLS</span><span class="tag">Undetermined</span></div>
+              </div>
+              <span class="lab">No class 2 action exists in this build.</span>
+            </div>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(3, minmax(0, 1fr));gap:1px;background:var(--bd-subtle)">
+          <div class="tile" style="gap:10px"><span class="heading-c">Compliance coverage · CIS</span><div style="display:flex;align-items:baseline;gap:10px"><span style="font-size:32px;font-weight:300;line-height:1">87.4%</span><span class="tag ok">+3.2 pts · 30 days</span></div>
+            <svg viewBox="0 0 320 46" width="100%" height="46" style="display:block;overflow:visible"><line x1="0" y1="45.5" x2="320" y2="45.5" stroke="#e0e0e0"></line><path d="M0 34 L23 35 L46 32 L69 33 L92 30 L115 31 L138 27 L161 28 L184 24 L207 22 L230 23 L253 18 L276 16 L299 14 L320 12" fill="none" stroke="#0f62fe" stroke-width="2" stroke-linejoin="round"></path><circle cx="320" cy="12" r="4" fill="#0f62fe" stroke="#ffffff" stroke-width="2"></circle></svg>
+            <span class="lab">148 of 169 controls covered</span></div>
+          <div class="tile" style="gap:10px"><span class="heading-c">Recovery artifacts</span><span style="font-size:32px;font-weight:300;line-height:1">37<span style="font-size:14px;color:var(--text-2)"> / 42 protected</span></span>
+            <div style="display:flex;flex-direction:column;gap:9px;font-size:13px"><div style="display:flex;justify-content:space-between"><span class="lab">Last successful run</span><span class="mono">2026-09-07 23:10</span></div><div style="display:flex;justify-content:space-between;align-items:center"><span class="lab">Not configured</span><span class="tag">4 devices</span></div><div style="display:flex;justify-content:space-between;align-items:center"><span class="lab">Blocked by policy</span><span class="tag">1 · outside D3 allowlist</span></div></div></div>
+          <div class="tile" style="gap:10px"><span class="heading-c">Fleet composition</span>
+            <div style="display:flex;flex-direction:column;gap:9px;font-size:13px">
+              <div style="display:grid;grid-template-columns:150px 1fr 26px;align-items:center;gap:10px"><span class="lab">R81.20 gateway</span><div style="height:8px;background:var(--layer-3)"><div style="width:90%;height:100%;background:var(--cp)"></div></div><span style="text-align:right;font-weight:600">18</span></div>
+              <div style="display:grid;grid-template-columns:150px 1fr 26px;align-items:center;gap:10px"><span class="lab">R81.20 VSX</span><div style="height:8px;background:var(--layer-3)"><div style="width:30%;height:100%;background:var(--vsx)"></div></div><span style="text-align:right;font-weight:600">6</span></div>
+              <div style="display:grid;grid-template-columns:150px 1fr 26px;align-items:center;gap:10px"><span class="lab">PAN-OS 11.1.4</span><div style="height:8px;background:var(--layer-3)"><div style="width:70%;height:100%;background:var(--pan)"></div></div><span style="text-align:right;font-weight:600">14</span></div>
+              <div style="display:grid;grid-template-columns:150px 1fr 26px;align-items:center;gap:10px"><span class="lab">PAN-OS 10.2.9</span><div style="height:8px;background:var(--layer-3)"><div style="width:10%;height:100%;background:var(--pan)"></div></div><span style="text-align:right;font-weight:600">2</span></div>
+            </div>
+            <span class="lab">PAN-OS 10.2.9 reaches end of life in Q1 2027.</span></div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

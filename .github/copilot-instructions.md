@@ -52,6 +52,9 @@ and Git push/merge require the approval rules in
   workspace fact — `/AGENTS.md` "Context/token discipline"). Never invoke
   `configure_python_environment`, interpreter selection, venv creation, or
   any environment-bootstrap UI. Run the existing `py` command directly.
+- On the macOS profile the validated interpreter is the project
+  `.venv/bin/python` (there is no `py` launcher); `AI_HANDOVER.md` §6 has
+  the tool-switch procedure for continuing UI 2.0 work outside Claude Code.
 - If the existing `py` command fails, report that exact failure and leave
   tests pending. Do not configure or replace the environment unless
   explicitly requested in the same chat.
