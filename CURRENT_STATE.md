@@ -5,7 +5,7 @@ see `AGENTS.md`/`AI_START_HERE.md`. **Predecessor build detail lives in
 `project/build_history.json`** (structured, newest-first) and its linked
 docs under `docs/history/`; `docs/history/INDEX.md` is the one-line timeline.
 
-- **Checkpoint:** 2026-09-09, `ui2_b0_baseline_directory` (`UI2 B0-8`) — new `docs/design/UI2_0_BASELINE_DIRECTORY.md` (status: **DRAFT — FOR PRODUCT OWNER FREEZE**), written under `docs/design/UI2_0_BASELINE_CONTRACT.md` (FROZEN) and `UI2_0_DEVELOPMENT_WORKFLOW.md` §5 B0-8. A single index cataloguing owner document/section/version for the six baseline-directory concerns: navigation (adopts `NAVIGATION_INFORMATION_ARCHITECTURE.md`'s frozen `D-NAV` principles and `C3`'s RBAC visible-but-refused mechanism, without carrying over Line-1's own six-root baseline as UI 2.0's root set); shared screen states (the mockup's own eight-term vocabulary and severity rule, adopted verbatim); feature-contribution contract (new minimal text tying `C4`'s registry to `C2`'s `job_type`, gated on `CAP-RELEASED`); alarm lifecycle (confirmed genuinely new — no existing owner found — kept schema-level against `C1`'s audit pattern and `C2`'s job-state-machine/`OUTCOME_UNKNOWN` pattern); log/audit data classes (cites `C1` §4 directly); SNMP status exposure (restates the read-vs-poll/status-vs-trap-out distinction, schema-level). Second-to-last `B0` item; runs concurrently with the extraction-tooling movement. Detail: `project/backlog.json`'s own note. Predecessors `C7` (PR #170), `C5` (PR #169), `C6` (PR #168), `C3` (PR #167), `C4` (PR #166), `C2` (PR #164), `C1` (PR #163), all DRAFT pending Product Owner freeze. Full chain: `project/build_history.json`.
+- **Checkpoint:** 2026-09-10, `ui2_b1_01_skeleton_ci_docker` (`UI2 B1-1`) — new `docs/design/UI2_0_B1_01_SKELETON_CI_DOCKER_CONTRACT.md` (status: **DRAFT — FOR PRODUCT OWNER FREEZE**). It fixes the module/dependency map, reproducible build commands, Testcontainers/Flyway harness, one-to-one P-1 architecture tests, isolated UI2 CI coexistence, minimal non-root image, component-scoped secrets, and 15 runnable implementation checks. Contract only: no `ui2/` implementation, Line-1 source, `validation.yml`, or device contact. Detail: `project/backlog.json`; full chain: `project/build_history.json`.
 - **Next** (`now_next.next`): `gov_po_2_implementation` — unrelated and
   unchanged by this movement; not yet started. `m7_real_device_targeted_
   collect_now` **AUTOMATED_VALIDATED 2026-09-08**, real-device confirmation
@@ -48,8 +48,8 @@ test-enforced boundaries.
 | 4 — policy / deployment / remediation | prohibited | — |
 ## Active build
 
-See checkpoint above for `m10_2_capability_state_resolver_core`, the
-current build. Full detail: `project/build_history.json`.
+See checkpoint above for `ui2_b1_01_skeleton_ci_docker`, the current build.
+Full detail: `project/build_history.json`.
 
 Predecessors, all **MERGED**, detail in `project/build_history.json` /
 `docs/history/INDEX.md`: `gov_po_1_step_6_plan_po2_boundary` (PO2 boundary
