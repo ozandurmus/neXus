@@ -22,7 +22,9 @@ Forms (docs/design/GOV_PO_ROLE_MIGRATION.md section 4 and 6.2):
   interactive -- Phase A session: the delegated set plus Edit/Write on the
                  governance paths, the `relay/*.json` local relay files
                  (GOV_PO_1_LOCAL_RELAY_PROTOCOL, 2026-09-08 -- see below),
-                 or the nexus_po_* scratch pattern, `gh
+                 flat `docs/design/po_drafts/*.md` files whose new content
+                 does not claim a leading bold FROZEN/RATIFIED status, or
+                 the nexus_po_* scratch pattern, `gh
                  issue create`, `gh issue close` (any inline `--comment`
                  must carry one of the five relay markers, exactly like
                  `gh issue comment`; a close with no comment is allowed
@@ -32,10 +34,11 @@ Forms (docs/design/GOV_PO_ROLE_MIGRATION.md section 4 and 6.2):
                  that branch with a fix landed on `origin/main` or another
                  `origin/*` ref (merge source restricted to `origin/`;
                  no arbitrary remote or URL is ever reachable, since
-                 `git remote add` is not allowlisted), and exactly one
-                 named Agent exception: a `nexus-council-seat` subagent
-                 launch (GOV_PO_1_GATE_3, 2026-09-08) -- every other Agent
-                 spawn, in either form, stays denied.
+                 `git remote add` is not allowlisted), and exactly two
+                 named Agent exceptions: `nexus-council-seat` and
+                 `nexus-po-evidence-reviewer` (GOV_PO_1_GATE_3 and
+                 GOV.PO.2 section 3.5) -- every other Agent spawn, in
+                 either form, stays denied.
 
 Local relay transport (GOV_PO_1_LOCAL_RELAY_PROTOCOL, 2026-09-08;
 docs/design/LOCAL_RELAY_PROTOCOL.md, DRAFT): an additional, same-machine
@@ -141,10 +144,12 @@ GOVERNANCE_PATHS = (
     "project/backlog.json",
     "project/feature_registry.json",
     "project/build_history.json",
-    "docs/history/INDEX.md",
     "CURRENT_STATE.md",
     "AI_HANDOVER.md",
 )
+
+PO_DRAFT_PATTERN = "docs/design/po_drafts/*.md"
+_PROMOTED_STATUS_RE = re.compile(r"^\s*\*\*\s*(FROZEN|RATIFIED)\b", re.MULTILINE)
 
 # GOV_PO_1_LOCAL_RELAY_PROTOCOL, 2026-09-08 (docs/design/LOCAL_RELAY_PROTOCOL.md,
 # DRAFT): a new pattern alongside GOVERNANCE_PATHS above, not a widening of
@@ -160,6 +165,14 @@ LOCAL_RELAY_FILE_PATTERN = "relay/*.json"
 SCRATCH_NAME_RE = re.compile(r"^nexus_po_[A-Za-z0-9_.-]+\.(?:json|txt)$")
 
 RELAY_MARKERS = ("RELAY_ACK", "RELAY_NOTE", "RELAY_QUESTION", "RELAY_DECISION", "RELAY_CORRECTION")
+ALLOWED_INTERACTIVE_SUBAGENTS = {"nexus-council-seat", "nexus-po-evidence-reviewer"}
+
+REPOSITORY_PRIVACY_PREFIXES = (
+    "python3 scripts/repository_privacy_check.py",
+    "python scripts/repository_privacy_check.py",
+    "py scripts/repository_privacy_check.py",
+    ".venv/bin/python scripts/repository_privacy_check.py",
+)
 
 # Command prefixes allowed in both forms. Matching is on the normalized
 # leading tokens of the command; real shell operators and a small set of
@@ -167,7 +180,8 @@ RELAY_MARKERS = ("RELAY_ACK", "RELAY_NOTE", "RELAY_QUESTION", "RELAY_DECISION", 
 # docstring) so an allowed prefix cannot smuggle a second command.
 COMMON_PREFIXES = (
     "gh issue view", "gh issue list", "gh issue comment",
-    "gh pr view", "gh pr checks", "gh pr list",
+    "gh pr view", "gh pr checks", "gh pr list", "gh pr diff",
+    "gh run view", "gh run list",
     "git status", "git log", "git diff", "git show", "git rev-parse",
     "git fetch", "git branch --show-current", "git branch --list",
     "git merge-base", "git cat-file", "git ls-files",
@@ -186,6 +200,7 @@ COMMON_PREFIXES = (
     "py scripts/local_relay.py watch", ".venv/bin/python scripts/local_relay.py watch",
     "python3 scripts/orchestrator.py status", "python scripts/orchestrator.py status",
     "py scripts/orchestrator.py status", ".venv/bin/python scripts/orchestrator.py status",
+    *REPOSITORY_PRIVACY_PREFIXES,
 )
 INTERACTIVE_EXTRA_PREFIXES = (
     "gh issue create", "gh issue close", "gh pr create",
@@ -262,6 +277,15 @@ def _repo_relative(path: str, cwd: str | None) -> str | None:
 def _path_is_governance(path: str, cwd: str | None) -> bool:
     rel = _repo_relative(path, cwd)
     return rel is not None and any(fnmatch(rel, pat) for pat in GOVERNANCE_PATHS)
+
+
+def _path_is_po_draft(path: str, cwd: str | None) -> bool:
+    rel = _repo_relative(path, cwd)
+    return (
+        rel is not None
+        and rel.count("/") == 3
+        and fnmatch(rel, PO_DRAFT_PATTERN)
+    )
 
 
 def _path_is_local_relay_file(path: str, cwd: str | None) -> bool:
@@ -397,20 +421,32 @@ def decide(payload: dict, form: str, branch_lookup=_current_branch) -> tuple[boo
     if tool in READ_TOOLS:
         return True, "read tool"
     if tool == "Agent":
-        if form == "interactive" and tool_input.get("subagent_type") == "nexus-council-seat":
-            return True, "nexus-decision-council seat launch (GOV_PO_ROLE_MIGRATION.md section 7/8)"
-        return False, "the PO role does not spawn agents except council seats from the nexus-po skill; use the council skill's documented path"
+        subagent_type = tool_input.get("subagent_type")
+        if form == "interactive" and subagent_type in ALLOWED_INTERACTIVE_SUBAGENTS:
+            return True, (
+                f"{subagent_type} launch "
+                "(GOV_PO_ROLE_MIGRATION.md section 7/8, GOV.PO.2 section 3.5)"
+            )
+        return False, "the PO role may spawn only its exact-name council seat or evidence reviewer from an interactive episode"
     if tool in EDIT_TOOLS:
         if form != "interactive":
             return False, "delegated PO episodes never edit files"
         target = str(tool_input.get("file_path") or tool_input.get("notebook_path") or "")
         if _path_is_governance(target, cwd):
             return True, "governance path"
+        if tool in {"Edit", "Write"} and _path_is_po_draft(target, cwd):
+            content_key = "new_string" if tool == "Edit" else "content"
+            content = tool_input.get(content_key)
+            if not isinstance(content, str):
+                return False, f"{tool} on a PO draft requires string {content_key}"
+            if _PROMOTED_STATUS_RE.search(content):
+                return False, "PO drafts may not claim a leading bold FROZEN or RATIFIED status"
+            return True, "flat DRAFT-only PO authorship path (GOV.PO.2 section 3.2)"
         if _path_is_local_relay_file(target, cwd):
             return True, "local relay file (relay/*.json, GOV_PO_1_LOCAL_RELAY_PROTOCOL)"
         if _path_is_po_scratch(target, cwd):
             return True, "scratch path (transient packet staging, GOV.PO.1 section 4 item c)"
-        return False, "interactive PO edits are limited to the governance paths, relay/*.json, and the nexus_po_*.json/.txt scratch pattern in GOV.PO.1 section 4"
+        return False, "interactive PO edits are limited to governance paths, flat DRAFT-only po_drafts/*.md, relay/*.json, and the nexus_po_*.json/.txt scratch pattern"
     if tool == "Bash":
         raw = str(tool_input.get("command", ""))
         if "\n" in raw or "\r" in raw:
@@ -431,6 +467,9 @@ def decide(payload: dict, form: str, branch_lookup=_current_branch) -> tuple[boo
                 return False, f"forbidden bare command {tok!r}"
             if tok == "main.py" or tok.endswith("/main.py"):
                 return False, "main.py must not be invoked from the PO role"
+        if any(_prefix_matches(cmd, prefix) for prefix in REPOSITORY_PRIVACY_PREFIXES):
+            if cmd not in REPOSITORY_PRIVACY_PREFIXES:
+                return False, "the standalone repository privacy check accepts no arguments"
         prefixes = COMMON_PREFIXES + (INTERACTIVE_EXTRA_PREFIXES if form == "interactive" else ())
         if not any(_prefix_matches(cmd, p) for p in prefixes):
             return False, "command prefix not in the PO allowlist"
