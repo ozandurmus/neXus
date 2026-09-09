@@ -5,25 +5,22 @@ see `AGENTS.md`/`AI_START_HERE.md`. **Predecessor build detail lives in
 `project/build_history.json`** (structured, newest-first) and its linked
 docs under `docs/history/`; `docs/history/INDEX.md` is the one-line timeline.
 
-- **Checkpoint:** 2026-09-09, `ui2_b0_c6_capability_extraction_contract`
-  (`UI2 B0/C6`) — new `docs/design/UI2_0_C6_CAPABILITY_EXTRACTION_CONTRACT.md`
-  (status: **DRAFT — FOR PRODUCT OWNER FREEZE**), written under
-  `docs/design/UI2_0_BASELINE_CONTRACT.md` (FROZEN 2026-09-09) against `C4`'s
-  schema. Defines the extraction procedure as an ordered checklist with a
-  mandatory existing-`produces_facts` pre-check before any new extraction
-  (worked negative example: HA readiness consumes rather than re-derives
-  `ha_state`); the fixture-generation procedure
-  (`utils/support_bundle.py::Tokenizer`, `SYNTHETIC`/`DERIVED` marking, the
-  preserved-property checklist, the mandatory `--repository-privacy-check`
-  DLP gate); a fully worked `FIRST-CAPABILITY` spec plus a described fixture
-  set; the corrected ordered extraction inventory. No code, no schema
-  migration, no device contact, no actual extraction performed —
-  documentation only. Full detail: `project/backlog.json`'s
-  `ui2_b0_c6_capability_extraction_contract` note. Predecessors `C3`
-  (identity/sessions/RBAC, ran concurrently, out of scope, **MERGED PR
-  #167**), `C4` (**MERGED PR #166**), `C2` (**MERGED PR #164**) and `C1`
-  (**MERGED PR #163**), all DRAFT pending Product Owner freeze. Full
-  predecessor chain: `project/build_history.json`.
+- **Checkpoint:** 2026-09-09, `ui2_b0_c5_amendments_bundle` (`UI2 B0/C5`) —
+  new `docs/design/UI2_0_C5_AMENDMENTS_BUNDLE.md` (status: **DRAFT — FOR
+  PRODUCT OWNER FREEZE**), written under `UI2_0_BASELINE_CONTRACT.md`
+  (FROZEN) §5 against `C1`–`C4` (all merged). States and applies every
+  textual amendment `C1`–`C4` require of documents outside themselves:
+  `action_taxonomy.py`'s `UI-OPERATIONAL-RUN-NOW` clarification (no new enum
+  member); the design document's `APPROVAL-MODEL` replacement (baseline
+  D-2c) and its withdrawn `F0`–`F5` ladder replaced by `CAP-*` states;
+  `PRIVACY_AND_DATA_HANDLING.md` naming the UI 2.0 database (closes
+  `ui2_privacy_doc_amendment`). `CON.0`'s amendment is cited, not applied —
+  target file is FROZEN, outside this movement's scope. Last of `C1`–`C5`
+  before the platform-contract freeze. Full detail:
+  `project/backlog.json`'s `ui2_b0_c5_amendments_bundle` note. Predecessors
+  `C6` (PR #168), `C3` (PR #167), `C4` (PR #166), `C2` (PR #164), `C1` (PR
+  #163), all DRAFT pending Product Owner freeze. Full chain:
+  `project/build_history.json`.
 - **Next** (`now_next.next`): `gov_po_2_implementation` — unrelated and
   unchanged by this movement; not yet started. `m7_real_device_targeted_
   collect_now` **AUTOMATED_VALIDATED 2026-09-08**, real-device confirmation
@@ -170,12 +167,20 @@ Concurrency budget stays at 1 per vendor pending real-env evidence.
 ## Automated test baseline
 
 ```
-op0b_s7_s6_test_order_isolation: full one-shot regression after merging
-origin/main (through m10_2_capability_state_resolver_core, PR #132) +
-tool-gate interpreter fix (+2 tests, DEV.TEST.1): 2943 passed, 25 skipped,
-2 failed -- both pre-existing/unrelated DLP-token collisions in
-project/build_history.json's own prose. S7+S6 both orders: 110 passed each.
-Earlier predecessor build detail lives only in project/build_history.json.
+ui2_b0_c5_amendments_bundle: full one-shot regression, foreground, awaited
+(.venv/bin/python -m pytest -q -n auto --dist worksteal, 170.64s): 3214
+passed, 27 skipped, 2 failed -- both pre-existing/unrelated DLP-token
+collisions (tests/test_dev_0_5b_auth_consumer_canonical_config.py, tripping
+on relay/NXS-LOCAL-0030-credential-profiles-reference-model.json and other
+already-committed historical prose), unchanged in kind from the prior
+baseline below and untouched by this movement's own diff.
+
+Prior baseline, op0b_s7_s6_test_order_isolation: full one-shot regression
+after merging origin/main (through m10_2_capability_state_resolver_core, PR
+#132) + tool-gate interpreter fix (+2 tests, DEV.TEST.1): 2943 passed, 25
+skipped, 2 failed -- the same DLP-token collisions. S7+S6 both orders: 110
+passed each. Earlier predecessor build detail lives only in
+project/build_history.json.
 ```
 ## Known xfails
 
