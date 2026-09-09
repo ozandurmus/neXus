@@ -5,25 +5,28 @@ see `AGENTS.md`/`AI_START_HERE.md`. **Predecessor build detail lives in
 `project/build_history.json`** (structured, newest-first) and its linked
 docs under `docs/history/`; `docs/history/INDEX.md` is the one-line timeline.
 
-- **Checkpoint:** 2026-09-09, `ui2_b0_c6_capability_extraction_contract`
-  (`UI2 B0/C6`) — new `docs/design/UI2_0_C6_CAPABILITY_EXTRACTION_CONTRACT.md`
+- **Checkpoint:** 2026-09-09, `ui2_b0_c7_backup_artefact_restore_engine_contract`
+  (`UI2 B0/C7`) — new `docs/design/UI2_0_C7_BACKUP_ARTEFACT_RESTORE_ENGINE_CONTRACT.md`
   (status: **DRAFT — FOR PRODUCT OWNER FREEZE**), written under
-  `docs/design/UI2_0_BASELINE_CONTRACT.md` (FROZEN 2026-09-09) against `C4`'s
-  schema. Defines the extraction procedure as an ordered checklist with a
-  mandatory existing-`produces_facts` pre-check before any new extraction
-  (worked negative example: HA readiness consumes rather than re-derives
-  `ha_state`); the fixture-generation procedure
-  (`utils/support_bundle.py::Tokenizer`, `SYNTHETIC`/`DERIVED` marking, the
-  preserved-property checklist, the mandatory `--repository-privacy-check`
-  DLP gate); a fully worked `FIRST-CAPABILITY` spec plus a described fixture
-  set; the corrected ordered extraction inventory. No code, no schema
-  migration, no device contact, no actual extraction performed —
+  `docs/design/UI2_0_BASELINE_CONTRACT.md` (FROZEN 2026-09-09) against `C1`/
+  `C2`/`C4`'s schemas. The second and final platform-adjacent freeze
+  candidate (`C1`–`C5` being the first). Backup profile model, artefact
+  store/manifest/validation/retention (carrying forward
+  `BACKUP_RECOVERY_CONTRACTS.md`), key custody, and — with no Line-1
+  precedent — restore execution (plan, preconditions, execution via `C4`,
+  verification, a restore-specific `OUTCOME_UNKNOWN`), the routine-vs-
+  per-operation approval model, and the device/version support matrix (both
+  worked rows land `declared_supported: false` on their actual evidence).
+  Reports, not resolves, two load-bearing open items: restore's write does
+  not fit any `utils/action_taxonomy.py` class, and `C4`'s closed step-kind
+  set has no device-push step kind — named for a taxonomy/`C4`-successor
+  movement; `action_taxonomy.py` is not edited. No code, no device contact —
   documentation only. Full detail: `project/backlog.json`'s
-  `ui2_b0_c6_capability_extraction_contract` note. Predecessors `C3`
-  (identity/sessions/RBAC, ran concurrently, out of scope, **MERGED PR
-  #167**), `C4` (**MERGED PR #166**), `C2` (**MERGED PR #164**) and `C1`
-  (**MERGED PR #163**), all DRAFT pending Product Owner freeze. Full
-  predecessor chain: `project/build_history.json`.
+  `ui2_b0_c7_backup_artefact_restore_engine_contract` note. Predecessors
+  `C6` (**MERGED same day**), `C3` (**MERGED PR #167**), `C4` (**MERGED PR
+  #166**), `C2` (**MERGED PR #164**) and `C1` (**MERGED PR #163**), all
+  DRAFT pending Product Owner freeze. Full predecessor chain:
+  `project/build_history.json`.
 - **Next** (`now_next.next`): `gov_po_2_implementation` — unrelated and
   unchanged by this movement; not yet started. `m7_real_device_targeted_
   collect_now` **AUTOMATED_VALIDATED 2026-09-08**, real-device confirmation
