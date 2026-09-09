@@ -976,7 +976,7 @@
       "title": "UI2 B0 -- baseline directory (product objects & navigation, shared screen states UX-D1..D5, feature contribution contract, alarm lifecycle contract, log/audit data classes, SNMP status exposure) with owner document and version per area",
       "priority": "P0 -- UI 2.0 primary",
       "status": "planned",
-      "note": "Sonnet 5 extended (high). References existing frozen documents bindingly instead of rewriting them; new text only where no owner exists.",
+      "note": "Sonnet 5 extended (high). References existing frozen documents bindingly instead of rewriting them; new text only where no owner exists. 2026-09-09: VISUAL-DESIGN-LANGUAGE decided -- Material Design 3 (docs/design/UI2_0_BASELINE_CONTRACT.md). Mockup content (19 artboards, \"neXus 2026 Design Refresh\" canvas) is the UX reference for this movement's shared-screen-state vocabulary and product navigation; notes saved in the orchestrator scratchpad (ui2_mockup_notes.md) for the engineer to request if not otherwise available.",
       "target": "workflow §5 B0-8"
     },
     {
