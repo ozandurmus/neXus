@@ -88,11 +88,30 @@
       },
       "seq": 1,
       "timestamp": "2026-09-09T15:34:12Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "RELAY_NOTE",
+      "seq": 2,
+      "subject": "UI2 B0/C4 delivered, PR #166 merged",
+      "text": "DELIVERED: docs/design/UI2_0_C4_CAPABILITY_REGISTRY_GATE_RESOLUTION_CONTRACT.md (DRAFT -- FOR PRODUCT OWNER FREEZE). PR #166 MERGED (merge commit ab4c6a13b14a61faf94012b3c15952a120055c77).\n\nSelf-check against AC-1..AC-10:\nAC-1 (shared fact, no duplicate extraction): SATISFIED -- §2.5 defines produces_facts/consumes_facts and works ha_state shared across cp_gaia_inventory_show_version_ha_state, cp_gaia_ha_readiness and cp_gaia_backup_local via a provenance_id reference, not re-derivation.\nAC-2 (closed step-kind set, exhaustive, amendment law stated): SATISFIED -- §2.3 enumerates 8 kinds (connect/exec/poll/sftp_get/scp_get/sftp_put/xml_api_call/verify/disconnect), states the set is closed and that adding a kind is a C4-successor amendment.\nAC-3 (concrete testable gate-resolution algorithm; UNKNOWN blocks execution not spec): SATISFIED -- §3.3's 7-step deterministic algorithm (exact-match canonical-command-key, zero/one/many-row cases, sign-off-state gating); §3.5's execution-eligible-view mechanism realizes the UNKNOWN-blocks-device-execution-not-offline-build rule without adding a new C2 pre-execution check.\nAC-4 (VSX/ClusterXL worked examples, distinct identity preserved): SATISFIED -- §4.3 (fw-ist-core, two independent physical members, MEMBER_SPECIFIC facts) and §4.4 (vsx-ist-01, VS0/VS2/VS5 as three distinct provenance chains over one physical device_id); §4.2's composite target_ref never creates a VS-scoped or cluster-scoped devices/endpoints row (CP-D6).\nAC-5 (transport decision names the exact evidence bar): SATISFIED -- §5.2: a capability may declare ssh_interactive only when its C6 spec's Line-1 source pointers include a captured cross-command shell-state dependency (worked against vsx_runner.py's vsenv <VSID> pattern); session reuse alone is explicitly named as insufficient evidence.\nAC-6 (KNOWN/UNKNOWN/NOT_APPLICABLE first-class, not booleans): SATISFIED -- §2.6 fixes every state-carrying field as a three-valued enum with UNKNOWN requiring a mandatory validation_plan_ref, mirrored against C1's existing nullable-column pattern.\nAC-7 (C2 interface populated, concrete example): SATISFIED -- §6 populates step_kind/action_class/gate_reference/timeout_s/expect-result for the real RB.3b add-backup-local step, leaving the expect.regex value itself UNKNOWN (C6's job) rather than inventing vendor semantics.\nAC-8 (>=10 testable AC for B1-4/B1-5/B1-6): SATISFIED -- §7 gives 12.\nAC-9 (contradictions section, documents checked, no PO-reserved decision reopened): SATISFIED -- §8: no contradiction with frozen authority found; documents checked named explicitly (including a deliberate check of CAPABILITY_STATE_VOCABULARY_AND_PRESENTATION.md's D1-D7 resolver for a naming collision with this document's own \"capability registry\" -- none found once distinguished); two DRAFT-document amendments (design §6.3's sample and its transport assumption) are named as this document's own K-3/CP-D7 mandate, not a reopening of FROZEN authority; 4 open items recorded, none touching a PO-reserved decision.\nAC-10 (no extraction performed, boundary stated): SATISFIED -- §1.2's table states the C4/C6 boundary explicitly; §6's worked example deliberately leaves the RB.3b step's expect-regex value UNKNOWN rather than asserting it; §8 item 4 defers the shared-fact freshness window to C6.\n\nValidation ladder: git diff --check clean. Full one-shot regression, foreground, awaited to actual completion twice (pre-merge and post-merge-of-origin/main): 3214 passed, 27 skipped, 2 failed both times -- both failures (tests/test_dev_0_5b_auth_consumer_canonical_config.py's DLP/legacy-redaction-collision tests against relay/NXS-LOCAL-0030-credential-profiles-reference-model.json) confirmed pre-existing on origin/main at this branch's fork point (fdf25d3), a file this movement never touched -- reported per merge_gate instruction rather than bootstrapped around. docs/project-state tests (test_architecture_convergence.py, test_phase0_6_1b_1_2_interactive_project_plan.py) green after fixing this movement's own roadmap/CURRENT_STATE/build_history-index staleness. Repository privacy gate against origin/main baseline: 6 findings, 0 new, both before and after the origin/main merge.\n\nEnvironment note: origin/main advanced one commit (060c458, B0 dispatch of C3+C4) between SESSION_START and push, touching this same backlog.json C4 entry (status planned->in_progress, dispatch note). Merged cleanly; conflict resolved by keeping this movement's full delivered note with the dispatch phrase folded in for continuity. CI's validate check passed; full-regression skipped per the CI validation policy for a docs-only PR, consistent with the two local full-regression runs above.\n\nproject-state bookkeeping: project/backlog.json (status in_progress, full delivery note -- PR #166 reference not yet folded into that note text, since the doc/PR commit necessarily preceded PR creation; per C1/C2 precedent this repo treats \"reflect PR merge in build_history/roadmap status\" as a separate later bookkeeping movement, not left undone by oversight -- flagging for the PO rather than unilaterally deciding to fold it in now), project/build_history.json (new record, status in_progress matching C2's own still-in_progress precedent), project/roadmap.json (now_next.now advanced to C4, C1+C2 both now upcoming/automated_validated/merged, current_build updated), CURRENT_STATE.md checkpoint updated (kept under the 200-line cap), docs/history/INDEX.md regenerated via scripts/build_history_index.py.\n\nNo device contact. No ui2/ source. No Line-1 code change.",
+      "timestamp": "2026-09-09T16:34:10Z"
+    },
+    {
+      "actor": "po",
+      "authorized_by": "Product Owner (in-session precedent, 2026-09-09)",
+      "marker": "RELAY_DECISION",
+      "scope": "C4 capability registry & gate resolution contract acceptance",
+      "seq": 3,
+      "subject": "C4 accepted as DRAFT -- FOR FREEZE; freezes with C1,C2,C3,C5",
+      "supersedes": "none",
+      "text": "AC-1..AC-10 self-check accepted, no contradictions. Two DRAFT-document amendments (design S6.3 sample superseded by RB.3b sequence per K-3; interactive-shell assumption superseded by ssh_exec default per CP-D7) accepted as exactly the resolution the council brief assigned this document, not an unauthorized reopening. Open items 1-4 (VSX/ClusterXL migration deferred to each capability's own Extract/Implement movement; gate_registry sign_off_state vocabulary is this document's own proposal, relabeling allowed without touching the algorithm; xml_api_call step kind added to cover PAN, this document's own gap-filling decision; C6 freshness-window rule left to C6) all accepted as proposed. Not yet FROZEN -- freezes together with C1,C2,C3,C5 per FREEZE-SLICING.",
+      "timestamp": "2026-09-09T16:34:43Z"
     }
   ],
   "id": "NXS-LOCAL-0054",
   "movement": "UI2_B0_C4_CAPABILITY_REGISTRY_GATE_RESOLUTION_CONTRACT",
-  "next_actor": "engineer",
+  "next_actor": null,
   "refs": [
     "docs/design/UI2_0_BASELINE_CONTRACT.md",
     "docs/design/UI2_0_DEVELOPMENT_WORKFLOW.md",
@@ -111,6 +130,6 @@
     "project/roadmap.json"
   ],
   "schema_version": 1,
-  "status": "OPEN",
-  "updated_at": "2026-09-09T15:34:12Z"
+  "status": "CLOSED",
+  "updated_at": "2026-09-09T16:34:43Z"
 }
