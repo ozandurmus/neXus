@@ -66,6 +66,7 @@ _MODE_PREREQUISITES = {
     "recovery-collect": ("unified.json",),
     "recovery-attest": ("unified.json",),
     "cp-config-probe": ("cp_telemetry.json", "cp.json", "vsx.json"),
+    "compliance-probe": ("cp_telemetry.json", "cp.json", "vsx.json"),
     "cp-config-collect": ("cp.json", "vsx.json"),
     "identity-first-contact": ("cp_telemetry.json", "cp.json", "vsx.json"),
     "cp": ("vsx.json", "panorama_runtime.json"),

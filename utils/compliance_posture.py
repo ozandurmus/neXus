@@ -1032,6 +1032,7 @@ def _subject_evidence(
     device: dict[str, Any],
     crypto_facts: dict[str, Any] | None = None,
     unified_rows: list[dict[str, Any]] | None = None,
+    primitive_facts: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """The read-only evidence namespaces a user check can assert over (D4).
 
@@ -1043,6 +1044,12 @@ def _subject_evidence(
     certificate body. ``unified_rows`` is the matched merged-inventory record(s)
     for this subject (CE.1 fast-follow); when unmatched the ``interfaces`` /
     ``routes`` namespaces stay ``None`` → any check using them is on_no_evidence.
+    ``primitive_facts`` (CE.2) is this subject's already-redacted
+    ``primitive.<primitive_id>`` evidence from an opt-in ``--compliance-probe``
+    run, keyed by ``primitive_id``; omitted/empty (the normal-run default —
+    primitives never execute in a normal collection) leaves the namespace
+    empty, so any check referencing it is on_no_evidence, never a fabricated
+    pass.
     """
     return {
         "current_configuration": _as_dict(device.get("current_configuration")),
@@ -1062,6 +1069,7 @@ def _subject_evidence(
             "results": _as_list(_as_dict(device.get("alignment")).get("findings")),
         },
         "crypto_facts": _as_dict(crypto_facts),
+        "primitive": _as_dict(primitive_facts),
     }
 
 
@@ -1074,6 +1082,7 @@ def _subject_user_checks(
     now: datetime,
     crypto_facts: dict[str, Any] | None = None,
     unified_rows: list[dict[str, Any]] | None = None,
+    primitive_facts: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     """0.7.3 (CE.1) — evaluate the user pack's checks for one subject.
 
@@ -1086,7 +1095,7 @@ def _subject_user_checks(
     vendor_key = str(device.get("vendor_key") or "")
     platform_family = str(device.get("platform_family") or "")
     entity_type = str(device.get("entity_type") or "")
-    evidence = _subject_evidence(device, crypto_facts, unified_rows)
+    evidence = _subject_evidence(device, crypto_facts, unified_rows, primitive_facts)
     results: list[dict[str, Any]] = []
     for check in pack.checks:
         if not check.applies_to_subject(
@@ -1371,10 +1380,17 @@ def build_compliance_posture(
     crypto_facts_by_subject: dict[str, dict[str, Any]] | None = None,
     unified_inventory: list[dict[str, Any]] | None = None,
     history: list[dict[str, Any]] | None = None,
+    primitive_facts_by_subject: dict[str, dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     payload = _as_dict(configuration_ui)
     plan = _as_dict(project_plan)
     crypto_by_subject = _as_dict(crypto_facts_by_subject)
+    # CE.2 (docs/design/COMPLIANCE_CHECK_ENGINE.md section 5): additive, same
+    # shape as crypto_facts_by_subject. Omitted in every normal-run caller
+    # today — primitives execute only under the opt-in --compliance-probe
+    # mode, never a normal collection run — so this stays byte-identical
+    # until a future promotion threads a real producer through.
+    primitive_by_subject = _as_dict(primitive_facts_by_subject)
     # CE.1 fast-follow: the merged inventory (utils/merge.py → unified.json), keyed
     # by device identity, so a user check can assert over unified.interfaces /
     # unified.routes. Omitted (render paths that pre-date the wire) → the
@@ -1479,6 +1495,7 @@ def build_compliance_posture(
                 device, check_pack, policy, device_name, resolved_ids, now,
                 crypto_by_subject.get(subject_id),
                 subject_unified_rows,
+                primitive_by_subject.get(subject_id),
             )
             if has_current else []
         )
