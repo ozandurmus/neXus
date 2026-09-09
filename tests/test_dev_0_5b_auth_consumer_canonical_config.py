@@ -77,6 +77,12 @@ _KNOWN_PROSE_COLLISION_LINE_HASHES = {
         # Same historical evidence prose, recorded in the movement's own relay file.
         "b8acd99d1c4bf36cbe3b9ef8b323746bd261a9da58fdf3152b95be36774546e1",
     },
+    "relay/NXS-LOCAL-0012-gov-po-3-ac5-demo-1-scratch.json": {
+        # Same historical evidence prose, quoted verbatim in this movement's own
+        # RELAY_DECISION text (surfaced after commit a911ed5 synced missing relay
+        # files to main).
+        "e531a2802635972596abea1d6ef0c54b555093720abaf18d6a056c908b7bb41c",
+    },
 }
 
 
