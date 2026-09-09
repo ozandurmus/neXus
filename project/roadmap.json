@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "current_build": "ui2_b0_c3_identity_sessions_rbac_contract",
+  "current_build": "ui2_b0_c6_capability_extraction_contract",
   "current_track": "PCP.x",
   "progress_contract": "Weighted acceptance-criterion completion. Percentages describe the declared roadmap, not calendar time or delivery ETA.",
   "tracks": [
@@ -150,15 +150,16 @@
   "now_next": {
     "horizon_contract": "NOW is exactly one build. NEXT is exactly one. Everything else is an `upcoming` row carrying its own true status: planned = AFTER, blocked = waiting on a named external gate, deferred = consciously postponed. `now.build` must equal the newest project/build_history.json record -- utils.project_plan enforces it.",
     "now": {
-      "build": "ui2_b0_c3_identity_sessions_rbac_contract",
-      "title": "UI2 B0/C3 -- identity, sessions and RBAC contract (DRAFT, for Product Owner freeze)",
-      "goal": "Write the DRAFT identity/sessions/RBAC contract (docs/design/UI2_0_C3_IDENTITY_SESSIONS_RBAC_CONTRACT.md): LDAP bind, the single-active-session-per-identity rule and its takeover/refuse semantics, role tokens -> bindings -> AD group references, DIRECTORY-POSTURE's service account specified but disabled, and the E1-E7 gate chain on the HTTP layer. Documentation only; authorizes no device execution.",
+      "build": "ui2_b0_c6_capability_extraction_contract",
+      "title": "UI2 B0/C6 -- capability extraction contract (DRAFT, for Product Owner freeze)",
+      "goal": "Write the DRAFT capability extraction contract (docs/design/UI2_0_C6_CAPABILITY_EXTRACTION_CONTRACT.md): the extraction procedure against C4's exact schema, the fixture-generation procedure through the Private Replay tokenizer with the preserved-property checklist, a fully worked FIRST-CAPABILITY example, and the corrected ordered extraction inventory. Documentation only; authorizes no device execution and performs no actual extraction.",
       "status": "in_progress",
       "started": "2026-09-09",
       "completed": "2026-09-09",
       "notes": [
-        "Full detail: project/backlog.json's ui2_b0_c3_identity_sessions_rbac_contract note; docs/design/UI2_0_C3_IDENTITY_SESSIONS_RBAC_CONTRACT.md (DRAFT -- FOR PRODUCT OWNER FREEZE, 2026-09-09).",
-        "Predecessor ui2_b0_c4_capability_registry_gate_resolution_contract (C4, ran concurrently with this movement each in its own worktree/branch, out of C3's own scope): runtime capability registry schema, K-4 gate-registry resolution rule, closed step-kind set, CP-D6/CP-D7, MERGED PR #166. Its document stays DRAFT pending Product Owner freeze. Moved to upcoming below -- not a demotion; it leaves 'now' only because horizon_contract reserves that slot for the newest project/build_history.json record, which is now C3 (this movement lands after C4's PR merged). Full detail: project/build_history.json's ui2_b0_c4_capability_registry_gate_resolution_contract record.",
+        "Full detail: project/backlog.json's ui2_b0_c6_capability_extraction_contract note; docs/design/UI2_0_C6_CAPABILITY_EXTRACTION_CONTRACT.md (DRAFT -- FOR PRODUCT OWNER FREEZE, 2026-09-09).",
+        "Predecessor ui2_b0_c3_identity_sessions_rbac_contract (C3, ran concurrently with this movement, out of C6's own scope -- extraction produces specs and fixtures, it does not touch identity): LDAP bind, single-active-session rule, role tokens -> bindings -> AD group references, E1-E7 gate chain. MERGED PR #167. Its document stays DRAFT pending Product Owner freeze. Moved to upcoming below -- not a demotion; it leaves 'now' only because horizon_contract reserves that slot for the newest project/build_history.json record, which is now C6. Full detail: project/build_history.json's ui2_b0_c3_identity_sessions_rbac_contract record.",
+        "Predecessor ui2_b0_c4_capability_registry_gate_resolution_contract (C4): the runtime capability registry schema, K-4 gate-registry resolution rule, closed step-kind set, CP-D6 VSX/ClusterXL target model, CP-D7 transport decision -- the exact schema this movement's spec template fills field by field. MERGED PR #166. Full detail: project/build_history.json's ui2_b0_c4_capability_registry_gate_resolution_contract record.",
         "Predecessor ui2_b0_c2_job_execution_contract (C2, 2026-09-09): job record and closed state machine, leasing/heartbeat/fencing, OUTCOME_UNKNOWN as terminal-until-reconciled, owner/approver/execution-identity separation, MERGED PR #164. Its document stays DRAFT pending Product Owner freeze. Full detail: project/build_history.json's ui2_b0_c2_job_execution_contract record.",
         "Predecessor ui2_b0_c1_platform_schema_contract (C1, ran concurrently with C2 each in its own worktree/branch): UI 2.0 schema ownership, Flyway as sole migration authority, audit-from-first-mutation (C1-1), MERGED 2026-09-09 PR #163. Full detail: project/build_history.json's ui2_b0_c1_platform_schema_contract record.",
         "Predecessor failover_plan_compiler (OP.1.S1, 2026-09-09): write-free failover plan compiler and dry-run for classic CP ClusterXL, AUTOMATED_VALIDATED, merged PR #162. Full detail: project/build_history.json's failover_plan_compiler record."
@@ -175,6 +176,20 @@
       ]
     },
     "upcoming": [
+      {
+        "build": "ui2_b0_c3_identity_sessions_rbac_contract",
+        "title": "UI2 B0/C3 -- identity, sessions and RBAC contract (DRAFT -- FOR PRODUCT OWNER FREEZE)",
+        "goal": "Define LDAP bind, the single-active-session-per-identity rule and its takeover/refuse semantics, role tokens -> bindings -> AD group references, DIRECTORY-POSTURE's service account specified but disabled, and the E1-E7 gate chain on the HTTP layer. Documentation only; authorizes no device execution.",
+        "status": "in_progress",
+        "started": "2026-09-09",
+        "completed": "2026-09-09",
+        "notes": [
+          "MERGED 2026-09-09, PR #167. The document itself stays DRAFT pending a separate Product Owner freeze decision -- project/backlog.json's own status stays in_progress for that reason.",
+          "Full detail: project/backlog.json's ui2_b0_c3_identity_sessions_rbac_contract note; docs/design/UI2_0_C3_IDENTITY_SESSIONS_RBAC_CONTRACT.md (DRAFT -- FOR PRODUCT OWNER FREEZE).",
+          "Ran concurrently with C6 (capability extraction contract), each in its own worktree/branch; out of C6's own scope.",
+          "Moved from now_next.now 2026-09-09 (ui2_b0_c6_capability_extraction_contract session): not a demotion -- this build is complete and merged. Leaves 'now' only because horizon_contract reserves that slot for the newest project/build_history.json record, which is now C6."
+        ]
+      },
       {
         "build": "ui2_b0_c4_capability_registry_gate_resolution_contract",
         "title": "UI2 B0/C4 -- capability registry & command-gate resolution contract (DRAFT -- FOR PRODUCT OWNER FREEZE)",
