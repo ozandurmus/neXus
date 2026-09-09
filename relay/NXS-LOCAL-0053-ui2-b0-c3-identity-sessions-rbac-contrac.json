@@ -88,11 +88,30 @@
       },
       "seq": 1,
       "timestamp": "2026-09-09T15:34:12Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "RELAY_NOTE",
+      "seq": 2,
+      "subject": "UI2 B0/C3 identity, sessions and RBAC contract delivered, PR #167 merged",
+      "text": "docs/design/UI2_0_C3_IDENTITY_SESSIONS_RBAC_CONTRACT.md (DRAFT -- FOR PRODUCT OWNER FREEZE) written and merged. Self-check against AC-1..AC-10: AC-1 the unbound-action refusal shape specified precisely (403, closed reason_code vocabulary role_token_unbound/actor_not_in_required_group/actor_group_set_stale, authz_decisions audit row -- doc section 5.2, acceptance criteria 6-8); AC-2 single-active-session state machine names both refuse and takeover paths, states refuse-by-inaction is default, and specifies the takeover audit record via the sessions trigger (section 3.3/3.4/3.5); AC-3 role tokens -> bindings -> AD group references never place a corporate group name in application code, persistence/encryption named by reference to C1 section 6 secrets, not redefined (section 4.2); AC-4 DIRECTORY-POSTURE service account credential scope/storage/rotation/outage fully specified with the function stated explicitly disabled pending corporate verification per D-6 (section 4.4); AC-5 E1-E7 gate chain enumerated in order with each gate's exact check and its composition boundary with C2's own E7/pre-execution checks stated without duplication (section 6); AC-6 C2's owner/approver/execution-identity fields shown resolving from this contract's session/role model with a concrete worked example (section 7); AC-7 section 8 gives twelve testable acceptance criteria covering B1-3 and the B1-10 scenario (three concurrent admins, one takeover, one refuse); AC-8 section 9 lists open items (DIRECTORY-POSTURE's practical consequence, the UX-D3 sequencing refinement, SR-D5/SR-D4/SR-D10/M14-U-1 dispositions), no PO-reserved decision reopened, no contradiction with frozen authority found; AC-9 no identity/session/role table redefined that C1 section 3 already owns -- only the four tables (role_bindings/sessions/actor_authz_state/authz_decisions) C1 section 3.1 explicitly deferred to this contract are sketched, and C1's own jobs/audit_log actor_fingerprint columns are referenced, not redefined; AC-10 the document does not enable DIRECTORY-POSTURE's persisted-group-reference function -- section 4.4.3 specifies a named off-by-default switch plus a bounded test-scope exception for B1-3's own acceptance tests only. Merge gate: standing relay#13 (green tests -> self-merge) exercised after the full one-shot regression run in the foreground and awaited to actual completion three times (3214 passed / 27 skipped / 2 failed each time, the 2 failures confirmed pre-existing on origin/main via a disposable detached-worktree comparison -- traced to relay/NXS-LOCAL-0030-credential-profiles-reference-model.json's prose, unrelated to this diff; most recently at merge commit c9b3ff1d0a3335bf3732a93582c237859a56c451), git diff --check clean, and the repository privacy/DLP gate green at push (after clearing local pytest-run byproducts -- data/, logs/, pytest_result.log -- none ever tracked or committed). One concurrent origin/main advance during this movement (C4's own dispatch and later PR #166 merge, sibling movement NXS-LOCAL-0054, out of C3's own scope) required one merge-conflict resolution in project-state files (backlog.json/roadmap.json/build_history.json/CURRENT_STATE.md/docs/history/INDEX.md) -- resolved by keeping both C4's and C3's build records, with C3 as the newest now_next.now per horizon_contract (this movement's own PR lands after C4's), and C4 correctly demoted to a predecessor/upcoming row. Full detail: project/backlog.json's ui2_b0_c3_identity_sessions_rbac_contract note and project/build_history.json's own record.",
+      "timestamp": "2026-09-09T16:43:16Z"
+    },
+    {
+      "actor": "po",
+      "authorized_by": "Product Owner (in-session precedent, 2026-09-09)",
+      "marker": "RELAY_DECISION",
+      "scope": "C3 identity/sessions/RBAC contract acceptance plus two PO rulings (SR-D4-DISPOSITION, SR-D10-DISPOSITION)",
+      "seq": 3,
+      "subject": "C3 accepted as DRAFT -- FOR FREEZE; SR-D4 confirmed covered by UA-8; SR-D10 decided attributable-on-demand",
+      "supersedes": "none",
+      "text": "Contract accepted, no contradictions. Open item 1 (DIRECTORY-POSTURE operational ceiling) noted, informational, no action needed now. Open item 2 (UX-D3 post-409 /login/resolve sequencing) accepted. Open item 3 (SR-D5 self-grant/bootstrap resolved by this contract's own construction) accepted. Open item 4 (SR-D4): CONFIRMED -- UA-8's disposition covers SR-D4's OIDC-vs-LDAP-group wording; this contract is that reserved DEPLOY.1A-class decision; no UA-9 needed. Open item 5 (SR-D10, principal_fingerprint pseudonymous vs attributable): DECIDED -- attributable-on-demand via a gated, audited security_admin resolve action over role_bindings' existing encrypted-at-rest linkage; default surfaces stay pseudonymous. Both rulings recorded in docs/design/UI2_0_BASELINE_CONTRACT.md as SR-D4-DISPOSITION and SR-D10-DISPOSITION. Open item 6 (M14 U-1 nested groups) stays open per design section 12, unaffected. Not yet FROZEN -- freezes with C1,C2,C4,C5.",
+      "timestamp": "2026-09-09T18:27:28Z"
     }
   ],
   "id": "NXS-LOCAL-0053",
   "movement": "UI2_B0_C3_IDENTITY_SESSIONS_RBAC_CONTRACT",
-  "next_actor": "engineer",
+  "next_actor": null,
   "refs": [
     "docs/design/UI2_0_BASELINE_CONTRACT.md",
     "docs/design/UI2_0_DEVELOPMENT_WORKFLOW.md",
@@ -106,6 +125,6 @@
     "project/roadmap.json"
   ],
   "schema_version": 1,
-  "status": "OPEN",
-  "updated_at": "2026-09-09T15:34:12Z"
+  "status": "CLOSED",
+  "updated_at": "2026-09-09T18:27:28Z"
 }
