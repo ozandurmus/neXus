@@ -3,8 +3,10 @@
 ## Status
 
 **BASELINE — Product Owner adopted as the foundation of the architecture
-(2026-09-09, revision 2, after Astra's final review, §10). Not a frozen
-contract; freezes happen in B0.**
+(2026-09-09, revision 2, after Astra's final review, §10). Phase 0 `DECIDE`
+is complete: the decisions are recorded in
+`docs/design/UI2_0_BASELINE_CONTRACT.md` (FROZEN — PO APPROVED). The B0
+contracts (`C1`–`C7`) are separate freezes.**
 Produced 2026-09-09 in the Product Owner's engineering session (standing
 in-session PO precedent) after the council round and two Astra rounds
 (`docs/design/UI2_0_COUNCIL_REVIEW_AND_SECOND_OPINION_BRIEF.md` §4–§7). It
@@ -467,7 +469,7 @@ resumed after an `error_max_budget_usd` death.
 
 ---
 
-## 8. Open confirmations for the Product Owner
+## 8. Confirmations for the Product Owner — RESOLVED 2026-09-09 (see `UI2_0_BASELINE_CONTRACT.md` §2 for the rulings)
 
 | id | Question | Proposed |
 |---|---|---|

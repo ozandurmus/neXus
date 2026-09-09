@@ -135,6 +135,16 @@
         "fast_telemetry_plane",
         "diagnostic_runbooks"
       ]
+    },
+    {
+      "id": "UI2.x",
+      "title": "UI 2.0 -- Java product line (the only product development line from 2026-09-09)",
+      "theme": "PRODUCT",
+      "status": "in_progress",
+      "weight": 30,
+      "feature_ids": [
+        "ui2_java_product_line"
+      ]
     }
   ],
   "now_next": {
@@ -391,7 +401,8 @@
     "Compliance control assignment, CIS/PCI-DSS/BDDK framework grouping and the coverage/alignment roll-up are designed in docs/design/COMPLIANCE_ASSIGNMENT_AND_FRAMEWORKS.md with an explicit now vs DEPLOY.1 split. 0.7.1 (compliance_control_enrichment) delivers the file-based policy + versioned control catalog + read-only Compliance workbench spine + Overview roll-up - no server. The UI assignment editor and a tagged device registry (compliance_assignment_ui_and_registry) are DEPLOY.1-gated on the app server + DEPLOY.1A OIDC/RBAC + a store.",
     "User-authored compliance checks (the BackBox/Nipper 'define a check: name + evidence + expected pattern -> compliant/not' model) are designed in docs/design/COMPLIANCE_CHECK_ENGINE.md - all decision points D1-D16 resolved 2026-08-29 (design doc section 10). Phased: CE.1 (compliance_check_engine, target 0.7.3) is a data-driven assertion engine + fail-closed RuntimeRoot check pack (data/state/compliance_checks.json) over ALREADY-collected evidence - no new device command, no server; CE.2 (compliance_check_engine_primitives) adds a curated, individually gate-reviewed read-only command-primitive registry - cp_device_interaction_safety (P0) itself closed 2026-08-25, so the remaining gate is per-primitive review through the network-device command gate plus a real-environment validation gate; CE.3 (compliance_check_engine_ui) adds the UI check editor + signed distributable org packs, DEPLOY.1A OIDC/RBAC + store; CE.4 (compliance_remediation_checks) adds an optional write-capable remediation block, hard-gated on the OP.2 / FAILOVER_ENGINE_ARCHITECTURE.md section 10 bar. Arbitrary user-supplied command strings are never executed in any phase. No certification claim.",
     "Product trajectory (owner, 2026-08-29): the stated end-state is a WRITE-CAPABLE device administration platform; current read-only maturity is a deliberate staging phase on SEE->VERIFY->TRACE->RECOVER->OPERATE, not the ceiling. Binding design consequence on every VERIFY-plane design (control catalog, check engine, alignment, crypto posture): shape the models so a future enforce/remediate capability is an ADDITIVE layer, never a rework - e.g. a check reserves an optional remediation block (rejected by the CE.1 validator), the primitive registry is the single chokepoint for a future write primitive (mode:write + the full OP.2 gate stack), and the verify_after re-check reuses the read grammar verbatim. Write/change automation stays outside the roadmap gate until VERIFY/TRACE/RECOVER are mature AND the OP.2-class safety bar is met.",
-    "Product Control Plane (owner direction promoted 2026-09-05, architecture FROZEN 2026-09-05): neXus moves from a discovery-driven collection workflow toward a persistent product control plane -- Device Registry with explicit enrollment (discovery becomes an enrollment source, not the device universe), capability-driven modules, independent typed jobs, last-known projections with honest freshness, and the Operator Console's first-run/device experience. Design parent: docs/design/PRODUCT_CONTROL_PLANE_ARCHITECTURE.md (FROZEN). Track PCP.x; movements PCP.1-PCP.8; PCP.1-PCP.4 are not blocked on DEPLOY.1. Existing collectors, readiness authority, evidence stores, console foundations and vendor adapters become control-plane capabilities by being addressed through the registry, never rewritten. It preserves every frozen OP.2/CLASS 2, CON.x and RB.x law, adds no generic cross-vendor mutation primitive, and is not a substitute for DEPLOY.1 (nor DEPLOY.1 for it). PCP.1 is the next implementation movement; not started at freeze."
+    "Product Control Plane (owner direction promoted 2026-09-05, architecture FROZEN 2026-09-05): neXus moves from a discovery-driven collection workflow toward a persistent product control plane -- Device Registry with explicit enrollment (discovery becomes an enrollment source, not the device universe), capability-driven modules, independent typed jobs, last-known projections with honest freshness, and the Operator Console's first-run/device experience. Design parent: docs/design/PRODUCT_CONTROL_PLANE_ARCHITECTURE.md (FROZEN). Track PCP.x; movements PCP.1-PCP.8; PCP.1-PCP.4 are not blocked on DEPLOY.1. Existing collectors, readiness authority, evidence stores, console foundations and vendor adapters become control-plane capabilities by being addressed through the registry, never rewritten. It preserves every frozen OP.2/CLASS 2, CON.x and RB.x law, adds no generic cross-vendor mutation primitive, and is not a substitute for DEPLOY.1 (nor DEPLOY.1 for it). PCP.1 is the next implementation movement; not started at freeze.",
+    "2026-09-09: UI 2.0 baseline adopted (UI2_0_DEVELOPMENT_WORKFLOW.md rev 2) and Phase 0 DECIDE recorded (UI2_0_BASELINE_CONTRACT.md, FROZEN). Line-1 is the reference/maintenance line; no new Line-1 product features. B0 contracts C1-C7 are the primary backlog."
   ],
   "architecture_review_notes": [
     "2026-08-25 architecture review: event-driven webhook, crypto/PQC readiness, DEPLOY.1 OIDC boundary and contextual TI enrichment evaluated for CP/PAN scope.",
@@ -1088,6 +1099,18 @@
       "decide_by": "DECIDED 2026-09-05 at the M0 architecture freeze (was: PCP.2 contract review)",
       "decided_on": "2026-09-05",
       "decision": "DECIDED -- strict transport trust is REQUIRED before credentials are submitted to EVERY endpoint, including management-plane candidates. Candidate provenance may supply or select an approved trust profile; it may NOT waive SSH host-key or TLS trust. Prohibited: TOFU, automatic trust acceptance, certificate verification bypass, credential-first probing. The approved Check Point and Palo Alto trust-establishment mechanics are movement M8's implementation contract, over the existing transport seams (utils/cp_ssh_trust.py, utils/pan_tls_trust.py) -- no new credential or network path."
+    },
+    {
+      "id": "ui2_phase0_decide_2026_09_09",
+      "area": "UI2.x",
+      "status": "decided",
+      "question": "UI 2.0 Phase 0 DECIDE: runtime direction, JOB-UNCERTAIN-OUTCOME, UI-OPERATIONAL-RUN-NOW, APPROVAL-MODEL, RAW-RETENTION, FREEZE-SLICING, HISTORY-IMPORT, IN-FLIGHT-LINE-1, DIRECTORY-POSTURE, RESTORE-IN-RELEASE-1, FIRST-CAPABILITY",
+      "options": [
+        "see docs/design/UI2_0_BASELINE_CONTRACT.md §2"
+      ],
+      "recommendation": "Recorded rulings; DIRECTORY-POSTURE conditional on corporate verification; RAW-RETENTION default NO; HISTORY-IMPORT deferred.",
+      "decided_on": "2026-09-09",
+      "decision": "docs/design/UI2_0_BASELINE_CONTRACT.md (FROZEN -- PRODUCT OWNER APPROVED 2026-09-09)"
     }
   ]
 }

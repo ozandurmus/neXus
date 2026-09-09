@@ -1,0 +1,129 @@
+{
+  "created_at": "2026-09-09T06:54:45Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1: read contracts section 5 and 6 and architecture section 11 in full, plus the existing *_ui.py payload-builder pattern (configuration_ui / crypto_ui / discovery_ui) and how the render harness/uitest fixtures exercise a module -- mirror them, do not invent a second injection mechanism.",
+          "AC-2: implement the pure recovery_ui projection builder producing the section 6 shape from persisted RB.0/RB.3a/RB.4/retention state; unit tests cover every readiness state and the coverage arithmetic.",
+          "AC-3: render the Recovery module + Overview tile from the projection; uitest fixture extended; render harness green.",
+          "AC-4: prove section 6 rules 1-3 by test: no payload bytes/digests-of-payload in rendered HTML; restore_proven badge and no unqualified 'verified'; explicit empty state for available:false.",
+          "AC-5: compliance_posture consumes readiness additively; existing compliance tests unchanged and green.",
+          "AC-6: update native_backup backlog note, architecture status/section 12 table, build_history; full one-shot regression once; git diff --check; privacy gate at PR time.",
+          "AC-7: if blocked on a genuine PO-only decision, RELAY_NOTE and stop."
+        ],
+        "baseline": {
+          "authority": "docs/design/BACKUP_RECOVERY_CONTRACTS.md section 5 (readiness record, frozen rules 1-5) and section 6 (recovery_ui payload, frozen rules 1-4) plus BACKUP_AND_RECOVERY_ARCHITECTURE.md section 11 (module content: readiness roll-up, per-device recovery timeline, coverage-vs-inventory gap view, retention view; Overview gains one recovery-posture tile; compliance_posture gains readiness as an evidence source -- additive). Existing producers this slice consumes unchanged: utils/restore_readiness.py (RB.0), utils/recovery_manifest.py, utils/recovery_validation.py (RB.4 V1-V3 verdicts), utils/recovery_retention.py, data/state/recovery_attestations.json (RB.3a).",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "sequencing": "Independent of every in-flight movement. RB.3b's real-hardware run (the only other open native_backup item) is Product-Owner-run and unrelated to this slice."
+        },
+        "context_not_loaded": [
+          "Any device contact, credential, or recovery payload bytes -- this slice renders manifests/readiness only (section 11), never payload, never a download link, never a decrypt path",
+          "RB.3b's watched real R81.x run -- separate, hardware-gated, Product-Owner-run"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/rb5-recovery-readiness-projection-and-ui-module"
+        },
+        "invariants": [
+          "Section 6 rule 1: no payload bytes, no download URL, no decrypt affordance, ever -- a test greps the rendered HTML for artifact bytes / digests-of-payload and must find none (contracts 9.3)",
+          "Section 6 rule 2: restore_proven renders as an explicit badge; the unqualified word 'verified' never appears in the module",
+          "Section 6 rule 3: available:false renders an explicit empty state, never a silent blank module",
+          "Section 5 rules 1-3 are consumed, not re-derived: held_artifacts and attested_not_held are never merged; READY requires a held artifact at >= V3 AND version_matches_running; inventory device with no record is UNPROTECTED, UNKNOWN only when inventory itself is insufficient",
+          "The recovery_ui builder is a pure function over persisted state (readiness record + manifests + validation + retention) -- no rendering concerns inside it -- so UI 2.0 can call the same projection later",
+          "AGENTS.md: adding the module obliges a tests/fixtures/uitest/ extension and a green render harness"
+        ],
+        "merge_gate": "Standing relay#13: green tests -> self-merge, report via RELAY_NOTE.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Implement RB.5 -- the last unbuilt slice of project/backlog.json id native_backup's RB.0-RB.5 line: readiness scoring roll-up and the Recovery UI module, per docs/design/BACKUP_AND_RECOVERY_ARCHITECTURE.md section 11 and docs/design/BACKUP_RECOVERY_CONTRACTS.md section 6 (`recovery_ui` payload, frozen rules 1-4). RB.4 (validation battery V1-V3) is AUTOMATED_VALIDATED, so RB.5's stated gate ('after RB.4') is satisfied. The core deliverable is the `recovery_ui` PROJECTION -- a persisted, value-free posture payload built from the RB.0 readiness record, held manifests, validation levels and retention state; the static HTML Recovery module renders that projection. Product Owner context 2026-09-09: this projection is exactly the kind of 'persisted projection both surfaces read' that the upcoming UI 2.0 (separate shell, Java, PostgreSQL) will consume -- so the payload builder must be a clean, standalone function over persisted state, not logic buried in the HTML renderer.",
+        "output_contract": [
+          "A recovery_ui payload builder (e.g. utils/recovery_ui.py or the existing *_ui.py builder pattern's home) producing exactly the section 6 shape: available, generated_at, readiness_summary, coverage {devices_in_inventory, devices_with_any_artifact, coverage_percent}, devices[].artifacts[] {class, age_days, validation_level, restore_proven}, retention_pending_deletion[]",
+          "The Recovery module rendered from that payload (readiness roll-up, per-device timeline with validation level shown per artifact, coverage-vs-inventory gap view, retention view), injected via the same mechanism as configuration_ui / crypto_ui / discovery_ui, plus the single Overview recovery-posture tile",
+          "compliance_posture: readiness exposed as an additive evidence source (no new control yet -- section 11 says 'for a future backup-coverage control')",
+          "tests/fixtures/uitest/ extended with a recovery fixture covering READY / STALE / PARTIAL / UNPROTECTED / UNKNOWN and available:false; render harness green",
+          "Tests for section 6 rules 1-4 and contracts 9.3 (no payload bytes in HTML), 9.7 (restore_proven:true without restore_proof rejected -- if the validator does not already enforce it, do not weaken it) and the empty state",
+          "project/backlog.json native_backup note + BACKUP_AND_RECOVERY_ARCHITECTURE.md status line / section 12 table updated: RB.5 AUTOMATED_VALIDATED; build_history record",
+          "RELAY_NOTE + SESSION_CLOSE"
+        ],
+        "recommended_reasoning": {
+          "reason": "Deterministic implementation against two frozen contract sections with an explicit payload schema and frozen rendering rules; the only design care is keeping the projection builder pure so UI 2.0 can reuse it.",
+          "tier": "Sonnet 5, normal (extended thinking only if the existing *_ui.py builder pattern turns out not to separate projection from rendering cleanly)"
+        },
+        "requirements": [
+          "Projection builder is pure and independently testable",
+          "Section 6 rules 1-4 proven by tests"
+        ],
+        "risks": [
+          "Rendering any artifact digest, name, or payload-derived bytes 'for traceability' -- forbidden by section 6 rule 1 / contracts 9.3",
+          "Burying projection logic in the HTML renderer so UI 2.0 cannot reuse it"
+        ],
+        "scope": {
+          "in": [
+            "recovery_ui projection builder",
+            "Recovery HTML module + Overview tile",
+            "compliance_posture additive evidence source",
+            "uitest fixture + render harness",
+            "tests",
+            "project-state bookkeeping"
+          ],
+          "out": [
+            "Any device contact",
+            "RB.3b real run",
+            "Any download/decrypt/restore affordance",
+            "A new compliance control"
+          ]
+        },
+        "validation_plan": [
+          "Targeted tests for AC-2..AC-5",
+          "Render harness",
+          "Full one-shot regression once",
+          "git diff --check",
+          "privacy gate at PR time"
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-09T06:54:45Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "RELAY_NOTE",
+      "seq": 2,
+      "subject": "Engineer process dead; orchestrator hand-back",
+      "text": "Appended by the orchestrator on behalf of the dead engineer process (API error 'Application Blocked', pid not alive; orchestrator phase set to cancelled). Turn returned to the Product Owner for disposition under docs/design/UI2_0_BASELINE_CONTRACT.md D-5.",
+      "timestamp": "2026-09-09T14:16:25Z"
+    },
+    {
+      "actor": "po",
+      "authorized_by": "Product Owner (in-session precedent, 2026-09-09)",
+      "marker": "RELAY_DECISION",
+      "scope": "movement disposition under UI 2.0 baseline D-5",
+      "seq": 3,
+      "subject": "Closed under UI 2.0 D-5",
+      "supersedes": "none",
+      "text": "See docs/design/UI2_0_BASELINE_CONTRACT.md §2 IN-FLIGHT-LINE-1. 0048: merged as the reference implementation of the frozen OP.1 contract (PR #162). 0050: stopped; readiness projection shape harvested for REL-BACKUP extraction; branch feature/rb5-recovery-readiness-projection-and-ui-module kept as a reference checkpoint, not merged.",
+      "timestamp": "2026-09-09T14:16:25Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0050",
+  "movement": "RB5_RECOVERY_READINESS_PROJECTION_AND_UI_MODULE",
+  "next_actor": null,
+  "refs": [
+    "docs/design/BACKUP_AND_RECOVERY_ARCHITECTURE.md",
+    "docs/design/BACKUP_RECOVERY_CONTRACTS.md",
+    "utils/restore_readiness.py",
+    "utils/recovery_manifest.py",
+    "utils/recovery_validation.py",
+    "utils/recovery_retention.py",
+    "utils/recovery_store.py",
+    "tests/fixtures/uitest",
+    "tests/test_html_render_harness.py",
+    "project/backlog.json"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-09T14:16:25Z"
+}
