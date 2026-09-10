@@ -107,6 +107,34 @@ carried stale "one narrow exception" language from an earlier draft that
 are now explicitly keyed per vendor/platform (§3.3.1), not a single global
 flag.
 
+**Fourth revision note (this pass, PO review decision on VSX scoping).**
+The Product Owner reviewed this document against the repository's own
+actual schemas and corrected a factual error in the prior pass: **VSX
+virtual-system-scoped restore was framed as an already-live targeting
+option** needing a conservative-default admission-scope choice, when in
+fact **no current restore capability, and no current CP Gaia backup
+capability, targets an individual virtual system at all** —
+`BACKUP_RECOVERY_CONTRACTS.md` §7.3 point 7/§7.7 (FROZEN) state plainly
+that Check Point Gaia backup collection is categorically excluded from
+VSX virtual-system contexts, and `C7` §5.2's `restore_plan` schema carries
+no `virtual_system_ref` field at all. §3.1.1 is rewritten to state the
+scope this repository's evidence actually supports: physical
+`device_id`/`endpoint_id` only; VSX-context restore is explicitly
+unsupported and out of scope, requiring its own future, separate
+vendor/platform-and-target-scope contract, not a parameter of this
+ledger. ClusterXL's physical-member identity separation is retained,
+reframed explicitly as forward-looking since no restore capability exists
+for any platform today. This pass also adds §3.6, the explicit `C7` §5.3
+companion amendment the Product Owner requested: proposed replacement
+text resolving the direct contradiction between `C7` §5.3's own frozen
+note ("check 4 is `NOT_APPLICABLE` for a restore job," written before
+this class existed) and this document's own §3.1.0 (which repurposes
+check 4's slot for restore's reconciliation-pending check) — the
+proposed text states plainly that class 1 (backup) keeps the existing
+`RB.x` cadence-ledger interpretation of check 4 unchanged, class 1.5
+(restore) reads check 4 as this document's own reconciliation-pending
+check, and every other class remains `NOT_APPLICABLE`.
+
 ---
 
 ## 1. Why this exists, and why it is not `RECOVERY_OPERATIONAL_WRITE_LEDGER.md` reused
@@ -298,58 +326,102 @@ purely static, spec-time predicate, independent of every row in this
 table, exactly as seq 7 established and as seq 13's own text reaffirms
 ("static `C4` sign-off remains independent from runtime `C2` admission").
 
-#### 3.1.1 Ledger key/scope, including VSX/ClusterXL implications
+#### 3.1.1 Ledger key/scope: physical `device_id`/`endpoint_id` only; VSX virtual-system restore is out of scope (revised per PO review decision, correcting this document's own prior over-speculation)
 
-The ledger's key remains **`device_id`** (§4.0's original resolution,
-unchanged) as the default, conservative scope — restated here with the
-VSX/ClusterXL implications this pass makes explicit rather than leaving
-implicit in `C4` §4's target-model vocabulary:
+**PO review decision, correcting this subsection's own prior text.** The
+previous revision of this subsection treated VSX virtual-system-scoped
+restore as an already-live targeting option needing an admission-scope
+policy choice (`device_id`-wide default vs. `virtual_system_ref`-scoped
+override). Checked against this repository's own actual schemas, that
+framing was wrong: **no current restore capability, and no current
+backup capability for the one vendor with a VSX model (Check Point),
+targets an individual virtual system at all.** This subsection is
+rewritten to state the actual current scope, not a hypothetical one.
 
-- **ClusterXL.** Per `C4` §4.2/§4.3, each ClusterXL cluster member is its
-  own, independently registered physical device with its own `device_id`
-  — `cluster_member_ref` is a display/grouping label only, never a row of
-  its own and never an identity. A `device_id`-keyed ledger therefore
-  **naturally isolates cluster members from each other by construction**:
-  a reconciliation-pending state on member A's ledger entry does not block
-  a restore-write against member B, because they are, correctly, two
-  distinct `device_id`s. This document does **not** invent any
-  cross-member blocking mechanism — whether a restore of one ClusterXL
-  member (e.g. the active one) can leave the *other* member's own
-  operational state uncertain (a failover the restore procedure itself
-  might trigger) is a question this document's ledger cannot answer by
-  construction, and is named here as an **open item** (§9), cross-
-  referenced to `C7` §9.8's own already-open "multi-member consistency-
-  group restore is not fully worked out" item — this document does not
-  attempt to resolve what `C7` itself leaves open.
-- **VSX.** Per `C4` §4.2/§4.4, a VSX host is **one physical device**
-  (`device_id`) hosting several virtual-system contexts
-  (`virtual_system_ref`, e.g. `"vsx-ist-01__vsid_2"`). A restore targeting
-  one virtual system (VS2) and a restore targeting a different virtual
-  system on the **same physical device** (VS5) share the same `device_id`
-  under this ledger's key — meaning a reconciliation-pending state on VS2
-  **blocks** a restore-write to VS5 on the same box, under the default
-  scope. This is the conservative reading, for the same reason §4.0
-  originally gave for multi-endpoint devices: an uncertain restore outcome
-  anywhere on a physical device (including one virtual-system context)
-  casts doubt on whether *that physical device* — the thing actually
-  running the restore procedure, the thing that might reboot or hang
-  mid-restore per `C7` §5.7 — is in a known-good state, independent of
-  which virtual system's configuration was being replaced. **This
-  document does not claim `device_id`-level blocking is the only correct
-  answer for VSX** — a vendor/platform whose VSX restore procedure is
-  provably scoped narrowly enough (no shared reboot/apply path across
-  virtual systems) might justify `virtual_system_ref`-level granularity
-  instead. Per this document's own pattern for the connectivity-freshness
-  semantic-sufficiency question (§3.3.1), any such narrower-scoping claim
-  is itself a vendor-specific semantic claim about restore blast radius,
-  and **must go through the same `GOV_PO_ROLE_MIGRATION.md` §7 trigger
-  (b) council review** before a successor movement may adopt
-  `virtual_system_ref`-level scoping for any specific vendor/platform —
-  the default stays `device_id`-level until such a review authorizes a
-  narrower one. `RestoreWriteLedgerEntry` (§4) carries an optional
-  `virtual_system_ref` field precisely so this narrower scoping can be
-  *recorded* today (for audit/analysis) without being *authoritative* for
-  blocking decisions until a reviewed contract says otherwise.
+**The evidence, read directly from this repository's own frozen
+contracts, not assumed:**
+
+- `C7` §5.2's `restore_plan` schema carries exactly `target_device_id` and
+  `target_endpoint_id` — **no `virtual_system_ref` field exists on
+  `restore_plan` at all**, unlike `backup_artefact` (§3.2 of that
+  document), whose `virtual_system_ref` column is `C4`'s generic
+  composite-target-model field, populated only where a capability's own
+  target model actually uses it.
+- `BACKUP_RECOVERY_CONTRACTS.md` §7.3 point 7 and §7.7 state, for the one
+  vendor this repository's restore precedent (`cp_gaia_backup_local`, per
+  `C4` §2.4) is modeled on, **explicitly and in FROZEN text**: *"Per
+  physical endpoint only. A VSX virtual-system entity
+  (`<device>__vsid_<vs_id>`) is never contacted and is never credited
+  with its host's attestation — a Gaia snapshot of a VSX host is not a
+  per-virtual-system recovery artifact"* and (§7.7) *"Not valid inside a
+  VSX virtual-system context."* Check Point Gaia backup collection — the
+  only concrete backup precedent this repository has for the vendor that
+  has a VSX model at all — is **categorically excluded** from VSX
+  virtual-system contexts, by the vendor's own command semantics, not by
+  an admission-policy choice this document could relax or tighten.
+- Consequently, **`backup_artefact.virtual_system_ref` is, for every
+  artefact this repository's actual collectors can produce today, always
+  `NULL`** — it is a generic `C4` field present on the table for a
+  capability model that might one day need it, not evidence that a
+  VSX-scoped backup or restore capability exists or is even contemplated
+  as buildable today.
+
+**Resolved scope: physical `device_id`/`endpoint_id`, full stop, no
+virtual-system dimension.** This ledger's key is `device_id` (§4.0's
+original resolution, unchanged), read against the same physical
+`devices`/`endpoints` identity `C1` §3.2 and `restore_plan` itself already
+use — never a virtual-system-qualified identity, because no restore
+capability this repository can currently build has one to qualify against.
+
+**VSX virtual-system-context restore is explicitly UNSUPPORTED, blocked,
+and not in this document's or `C7`'s current scope** — restated plainly,
+not left to be inferred from an absent field: a capability whose target
+would require a `virtual_system_ref` (a hypothetical future "restore
+this specific VS's configuration" operation, distinct from a physical-
+device Gaia restore) does not exist in `C7` §5 today, is not compiled by
+`C4` §2.4's worked example, and is not something this ledger's admission
+model is designed to gate. **Any future VSX-context restore capability
+requires its own, separate vendor/platform-and-target-scope contract** —
+a new capability model (what "restoring a virtual system's own
+configuration" even means at the vendor-command level, since Check
+Point's Gaia restore precedent is physical-device-only by the same
+constraint that excludes VSX from backup), a new `restore_plan` target
+shape (adding `virtual_system_ref` where `C7` §5.2 does not carry one
+today), and its own admission-ledger design — none of which this document
+invents, proposes, or gestures at a shape for. Building such a contract
+is squarely a `GOV_PO_ROLE_MIGRATION.md` §7 trigger-(b) freeze candidate
+in its own right (a new write boundary for a target scope this product
+does not admit today), not a parameter this ledger's existing design
+could absorb by widening a key.
+
+**`RestoreWriteLedgerEntry`'s `virtual_system_ref` field (§4) is removed
+this pass** — it was added in the prior revision specifically to support
+the now-corrected VSX-scoping framing above; carrying an always-`NULL`
+field for a target dimension no current capability populates is dead
+schema, not forward-compatibility, and a genuine future VSX-restore
+contract would define its own key shape rather than inherit an unused
+column from this one.
+
+**ClusterXL identity separation — retained, reframed as forward-looking
+only, since no restore capability exists at all today.** Per `C4` §4.2/
+§4.3, each ClusterXL cluster member is its own, independently registered
+*physical* device with its own `device_id` — `cluster_member_ref` is a
+display/grouping label only, never a row of its own and never an
+identity. This is **unaffected** by the VSX correction above: ClusterXL
+multiplicity is a physical-member model (two real devices), categorically
+different from VSX's single-physical-device/multiple-virtual-context
+model, and this document's `device_id`-keyed ledger continues to isolate
+cluster members from each other **by construction**, whenever/if a
+ClusterXL member's own physical restore capability is eventually built —
+today, no restore capability exists for any platform (`C7` §7.3/§7.4 both
+record `NOT_BUILT`), so this remains a statement about a **future
+physical-member capability's** admission behavior, not a currently
+exercised one. Whether a restore of one ClusterXL member can leave the
+*other* member's own operational state uncertain (a failover the restore
+procedure itself might trigger) remains this document's own open item
+(§9), cross-referenced to `C7` §9.8's already-open "multi-member
+consistency-group restore is not fully worked out" — unresolved by this
+correction, exactly as before.
 
 #### 3.1.2 `restore_run`/step cardinality — one ledger attempt entry per `restore_run`, never per step
 
@@ -689,20 +761,86 @@ equivalents substituted for each part."* This keeps the section's existing
 shape (a stated contract requirement plus a stated gate-entry requirement)
 rather than inventing a new shape for one class.
 
+### 3.6 `C7` §5.3 companion amendment: resolving the check-4 contradiction (new this pass, per PO instruction)
+
+**The contradiction, stated plainly.** `C7` §5.3 (FROZEN) carries its own
+note on `C2` §6 check 4, written before this class existed: *"that check
+is `NOT_APPLICABLE` for a restore job. The ledger's 24-hour ceiling exists
+to bound a *recurring* class-1 resource-consuming operation... restore is
+not recurring and is not admitted by cadence at all."* This document's
+§3.1.0 now proposes reading check 4, for `controlled-restore-write` jobs
+specifically, as **this ledger's own reconciliation-pending check** — a
+different admission question than the `RB.x` cadence ceiling, but still
+occupying the *same numbered slot* `C7` §5.3's own frozen note describes
+as unconditionally `NOT_APPLICABLE` for any restore job. Left as written,
+`C7` §5.3's note and this document's §3.1.0 **directly contradict each
+other** about what check 4 means for a restore-class job — a reader of
+`C7` alone would conclude check 4 never applies to restore; a reader of
+this document alone would conclude it does, for the reconciliation fact
+specifically. This is not a disagreement to leave for a successor movement
+to notice by accident; it is named here and given the exact proposed fix.
+
+**Proposed replacement text for `C7` §5.3's existing note** (a successor
+`C7`-amendment movement would replace the quoted paragraph above with the
+following, preserving the surrounding section's structure and its own
+frozen numbering of checks 1–6):
+
+> **Note on `C2` §6 check 4, per-class interpretation (revised for
+> `CLASS_1B_CONTROLLED_RESTORE_WRITE`, `docs/design/D1_DEVICE_WRITE_
+> CLASS_AND_STEP_KIND_DECISION.md`/`UI2_0_BASELINE_CONTRACT.md` §2
+> `DEVICE-WRITE-CLASS`):** check 4's applicability is class-scoped, not a
+> single restore-blanket `NOT_APPLICABLE`:
+>
+> - **`CLASS_1_RECOVERY_WRITE` (backup) — unchanged.** Check 4 remains the
+>   `RB.x` operational-write ledger (`RECOVERY_OPERATIONAL_WRITE_LEDGER.md`),
+>   the existing 24-hour cadence-ceiling interpretation, exactly as before
+>   this amendment. Nothing about backup's own admission changes.
+> - **`CLASS_1B_CONTROLLED_RESTORE_WRITE` (restore) — new.** Check 4 reads
+>   `docs/design/RESTORE_CONTROLLED_WRITE_LEDGER.md`'s own reconciliation-
+>   pending check instead of the `RB.x` cadence ledger — a materially
+>   different admission question (whether a *prior* restore-write against
+>   this same target left an unresolved `OUTCOME_UNKNOWN` outcome, not
+>   whether *this* operation has run too recently; that document's §1
+>   explains at length why a cadence ceiling does not apply to restore at
+>   all). Fail-closed on an unreadable ledger, per that document's own §5.
+> - **Every other class — unchanged.** `NOT_APPLICABLE`, exactly as
+>   before.
+>
+> This replaces this section's prior text (*"that check is `NOT_APPLICABLE`
+> for a restore job"*), which predates the `controlled-restore-write`
+> class and its own ledger, and was accurate only because no restore
+> class existed yet to give check 4 a second meaning. Check 5 above (no
+> concurrent restore or backup against the same target) remains restore's
+> own **additional**, unaffected mutual-exclusion mechanism — a live-job
+> concurrency lock, distinct from check 4's now-class-scoped
+> reconciliation-pending question about a *terminal, unreconciled* prior
+> outcome; the two checks answer different temporal questions and neither
+> substitutes for the other.
+
+**Scope of this proposal.** This is proposed text for a successor `C7`-
+amendment movement to apply, per this document's own standing scope
+boundary — `C7` is FROZEN and is not edited here. It is named as its own
+subsection, distinct from §3.5's `docs/AI_DEVELOPMENT_PROTOCOL.md`
+proposal, because it targets a different FROZEN document and resolves a
+different kind of gap (an internal contradiction between two documents'
+own text, not a missing registration path).
+
 ## 4. `RestoreWriteLedger` — module API sketch (non-binding; a successor movement writes the real module; identity scope and reconciliation representation now resolved, see §4.0)
 
-### 4.0 Two representation questions resolved this pass (identity scope restated in full at §3.1.1, including VSX/ClusterXL)
+### 4.0 Two representation questions resolved this pass (identity scope restated in full at §3.1.1: physical device only, VSX out of scope)
 
-**Ledger identity scope: `device_id`, resolved; full VSX/ClusterXL
-treatment moved to §3.1.1 this pass.** The initial DRAFT left open
-whether this ledger's key should be `device_id` or the finer-grained
-`endpoint_id` (`C7` §5.2's `restore_plan` carries both). **Resolved:
-`device_id`**, the coarser scope, for the reason §3.1.1 now states in
-full (a reconciliation-pending state on one endpoint/virtual-system
-casts doubt on the whole physical device, per this document's own
-fail-closed posture, §5) — including the ClusterXL-independence and
-VSX-conservative-default treatment §3.1.1 adds this pass, which is not
-repeated here to avoid two documents disagreeing by drift.
+**Ledger identity scope: `device_id`, resolved; full scope treatment
+(now corrected to physical-only, VSX explicitly out of scope) moved to
+§3.1.1 this pass.** The initial DRAFT left open whether this ledger's key
+should be `device_id` or the finer-grained `endpoint_id` (`C7` §5.2's
+`restore_plan` carries both). **Resolved: `device_id`**, the coarser
+scope, for the reason §3.1.1 now states in full (a reconciliation-pending
+state on one endpoint casts doubt on the whole physical device, per this
+document's own fail-closed posture, §5) — including the ClusterXL-
+independence treatment and the corrected, evidence-grounded statement
+that no virtual-system dimension exists in this ledger's scope at all
+(§3.1.1), which is not repeated here to avoid two documents disagreeing
+by drift.
 
 **Reconciliation representation: append-only, tamper-evident, resolved
 (restated unambiguously in §6, this pass).** The initial DRAFT offered a
@@ -736,22 +874,21 @@ subsection's own resolution; append-only is unqualified, full stop.
 ```python
 @dataclass(frozen=True)
 class RestoreWriteLedgerEntry:
-    device_id: str                 # primary ledger key (§3.1.1); for VSX,
-                                   # the physical device's own device_id,
-                                   # shared across every virtual_system_ref
-                                   # on that device (§3.1.1's conservative
-                                   # default); for ClusterXL, each member's
-                                   # own independent device_id (C4 §4.2/4.3)
-    virtual_system_ref: str | None # NEW (§3.1.1): recorded for audit/
-                                   # analysis when the restore targets a
-                                   # specific VSX virtual system; NOT part
-                                   # of the ledger key and NOT authoritative
-                                   # for blocking decisions unless/until a
-                                   # council-reviewed, vendor/platform-keyed
-                                   # contract (mirroring §3.3.1's shape)
-                                   # authorizes virtual_system_ref-level
-                                   # scoping for that specific vendor/
-                                   # platform -- default stays device_id-wide
+    device_id: str                 # primary ledger key (§3.1.1) -- a
+                                   # physical device identity only; no
+                                   # virtual-system dimension exists,
+                                   # because no current restore capability
+                                   # targets one (§3.1.1); for ClusterXL,
+                                   # each member's own independent
+                                   # device_id (C4 §4.2/4.3)
+    endpoint_id: str                # physical endpoint identity (C1 §3.2),
+                                   # carried for parity with C7 §5.2's
+                                   # restore_plan.target_endpoint_id;
+                                   # NOT part of the ledger's blocking key
+                                   # (device_id remains the coarser,
+                                   # blocking scope per §4.0's original
+                                   # resolution) -- recorded for audit/
+                                   # traceability against the exact plan
     restore_run_id: str            # C2 jobs.job_id / restore_run.run_id --
                                    # one entry per restore_run (§3.1.2), never
                                    # per individual write step within a run
@@ -797,10 +934,10 @@ class RestoreWriteLedger:
         "outcome_unknown" and no later "reconciliation" entry in this
         ledger names that attempt's restore_run_id (§4.0: append-only —
         a reconciliation is looked up by reference, never by mutating the
-        attempt). Scoped by device_id only (§3.1.1) -- virtual_system_ref
-        is never consulted here unless a council-reviewed contract
-        authorizes narrower scoping for a specific vendor/platform, which
-        this default implementation does not assume. Raises
+        attempt). Scoped by physical device_id only (§3.1.1) -- there is
+        no virtual-system dimension to this check; it is not applicable
+        because no current restore capability has one, not because a
+        deployment configuration chooses to ignore one. Raises
         RestoreWriteLedgerUnreadableError if the store cannot be read —
         never conflates 'unreadable' with 'no unreconciled entry'. This
         method is the one consulted by BOTH the compile-time C7 §5.3
@@ -860,15 +997,16 @@ the underlying fail-closed logic itself.
 
 ## 6. Retention and privacy
 
-Same posture as `RECOVERY_OPERATIONAL_WRITE_LEDGER.md` §9: `device_id` is
-already a `safe_component`; `virtual_system_ref` (§3.1.1/§4) follows the
-same existing Line-1 composite-identity convention `C4` §4.2 already
-reuses, not a new identifier shape; `restore_run_id`/`restore_approval_id`/
-`reconciliation_ref` are internal identifiers; timestamps and `outcome` are
-value-free. **No manifest path, no artefact bytes, no restore payload, no
-credential, no raw device transcript ever enters this ledger** — the
-`RAW-RETENTION` (D-2d) default-NO and `C7` §1.4's raw-retention-vs-artefact
-distinction both apply unchanged; this ledger is neither the artefact store
+Same posture as `RECOVERY_OPERATIONAL_WRITE_LEDGER.md` §9: `device_id` and
+`endpoint_id` are already `safe_component`-shaped identifiers, per `C1`
+§3.2 — no virtual-system identity shape is carried by this ledger at all
+(§3.1.1: no current restore capability has one to carry); `restore_run_id`/
+`restore_approval_id`/`reconciliation_ref` are internal identifiers;
+timestamps and `outcome` are value-free. **No manifest path, no artefact
+bytes, no restore payload, no credential, no raw device transcript ever
+enters this ledger** — the `RAW-RETENTION` (D-2d) default-NO and `C7`
+§1.4's raw-retention-vs-artefact distinction both apply unchanged; this
+ledger is neither the artefact store
 nor a device-transcript log.
 
 **Append-only, stated unambiguously (revised this pass — a council finding
@@ -990,14 +1128,14 @@ restatement (§6):
   approval, or reconciliation — distinguished from a `CLAIMED`/`EXECUTING`
   job's own never-auto-retry rule (§3.4), which this test asserts does
   **not** apply to a job that was never claimed (§3.1.3);
-- (n) **(new)** a ClusterXL two-member target (`C4` §4.3-shaped) with an
-  unreconciled prior outcome on member A's `device_id` does **not** block
-  a restore-write claim against member B's own, independent `device_id`
-  (§3.1.1); a VSX target (`C4` §4.4-shaped) with an unreconciled prior
-  outcome recorded against the physical `device_id` (regardless of which
-  `virtual_system_ref` it was recorded under) **does** block a
-  restore-write claim against every `virtual_system_ref` on that same
-  physical device, under the default `device_id`-wide scope (§3.1.1).
+- (n) **(revised)** a ClusterXL two-member target (`C4` §4.3-shaped,
+  forward-looking per §3.1.1 since no restore capability exists yet) with
+  an unreconciled prior outcome on member A's `device_id` does **not**
+  block a restore-write claim against member B's own, independent
+  `device_id` (§3.1.1); **(removed)** the prior revision's VSX-scoping
+  test is dropped — VSX virtual-system-context restore is out of scope
+  entirely (§3.1.1), so no test asserts behavior for a target dimension
+  this ledger does not model.
 
 ## 9. Open items / unresolved semantics for review
 
@@ -1009,8 +1147,12 @@ policy) — recorded honestly as such, not silently smoothed over. This
 pass's own seq 13 decision **narrowly reopened and re-resolved** the
 reconciliation-check placement (compile-time fold alone → compile-time
 early pass **plus** an explicit claim-time check, §3.1) — also recorded
-honestly, not silently smoothed over. What remains genuinely open is
-narrower still:
+honestly, not silently smoothed over. **This pass's own PO review decision
+additionally corrects item 5 below** (VSX scoping), which the prior
+revision had wrongly framed as an open policy choice rather than a
+question the repository's own evidence already answers — the correction
+is recorded as such, not silently rewritten as if it had always read this
+way. What remains genuinely open is narrower still:
 
 1. **This document's own freeze path is gated on the taxonomy/`C4`
    amendments it presupposes landing first** — it specifies the admission
@@ -1043,14 +1185,19 @@ narrower still:
    `evidence_source` should default to `active_probe` for every real
    deployment, and `cached_telemetry` remains a documented-but-unusable
    option for every vendor/platform pair.
-5. **`device_id`-wide scoping for VSX (§3.1.1) is this document's own
-   conservative default, not a settled answer for every vendor's actual
-   restore-procedure blast radius** — a narrower, `virtual_system_ref`-
-   scoped alternative may be justified for a specific vendor/platform, but
-   only through the same council-reviewed, per-vendor/platform-keyed
-   contract mechanism §3.3.1 establishes for connectivity evidence; no
-   such contract exists today for any vendor/platform, so the default
-   stands unqualified.
+5. **RESOLVED THIS PASS, no longer open: VSX virtual-system-context
+   restore is out of scope, not a conservative-default policy choice
+   (§3.1.1).** The prior revision of this item read as though a
+   `virtual_system_ref`-scoped restore capability already existed and
+   this ledger merely had to pick a conservative blocking default for it.
+   Checked against `C7` §5.2's actual `restore_plan` schema (no
+   `virtual_system_ref` field) and `BACKUP_RECOVERY_CONTRACTS.md` §7.3
+   point 7/§7.7's FROZEN text (Check Point Gaia backup is categorically
+   excluded from VSX virtual-system contexts), no such capability exists
+   or is implied to exist — this item is retired as an open policy
+   question and restated as a scope statement in §3.1.1 instead. **Any
+   future VSX-context restore is its own, separate vendor/platform-and-
+   target-scope contract**, not a parameter of this ledger.
 6. **Whether a restore against one ClusterXL cluster member can leave the
    *other* member's own operational state uncertain (e.g. via a
    failover the restore procedure itself triggers) is not answered by
@@ -1058,7 +1205,9 @@ narrower still:
    (§3.1.1)** — this is the same open question `C7` §9.8 already names
    ("multi-member consistency-group restore is not fully worked out");
    this document does not attempt to resolve what `C7` itself leaves open,
-   and cross-references it rather than inventing a competing answer.
+   and cross-references it rather than inventing a competing answer. This
+   item is genuinely forward-looking, since no restore capability exists
+   for any ClusterXL-capable platform today (`C7` §7.3/§7.4: `NOT_BUILT`).
 7. **Whether a `BLOCKED`-at-claim `REQUESTED` job should ever auto-expire
    or auto-cancel (§3.1.3) is a generic `C2` job-lifecycle question** this
    document does not have the scope to answer — named so it is not
@@ -1091,22 +1240,30 @@ narrower still:
 - `docs/design/UI2_0_C7_BACKUP_ARTEFACT_RESTORE_ENGINE_CONTRACT.md` (FROZEN)
   §5.2–§5.7, §6.2, §9.8 — unchanged, referenced not restated; §9.8's own
   open multi-member consistency-group question is cross-referenced, not
-  resolved, at §9 item 6 above.
+  resolved, at §9 item 6 above; §5.3's own check-4 note is the subject of
+  §3.6's proposed companion amendment.
 - `docs/design/UI2_0_C4_CAPABILITY_REGISTRY_GATE_RESOLUTION_CONTRACT.md`
   (FROZEN) §2.3, §3.2, §3.3, §3.5, §4.2–§4.4 (VSX/ClusterXL target model,
-  informing §3.1.1) — unchanged, referenced not restated.
+  informing §3.1.1's ClusterXL treatment and this pass's VSX correction) —
+  unchanged, referenced not restated.
 - `docs/design/UI2_0_C2_JOB_EXECUTION_CONTRACT.md` (FROZEN) §3.1 (state
   machine), §5.3, §6 — unchanged; §3.1/§3.4 above propose text for a
   successor movement to add, including the check-4-slot repurposing.
+- `docs/design/BACKUP_RECOVERY_CONTRACTS.md` §7.3 point 7, §7.7 (FROZEN) —
+  the Check Point Gaia VSX-exclusion evidence §3.1.1's this-pass
+  correction is grounded in, quoted not paraphrased.
 - `docs/design/RECOVERY_OPERATIONAL_WRITE_LEDGER.md` — the fail-closed and
   evidence-plane-placement precedent; §1 above states exactly where this
   document diverges from it and why.
 - `docs/design/GOV_PO_ROLE_MIGRATION.md` §7 — council-trigger process this
   document's own eventual freeze must pass through, and the process any
-  future semantic-sufficiency or VSX-scoping contract (§3.3.1, §3.1.1)
-  must itself pass before being referenced.
+  future semantic-sufficiency contract (§3.3.1) or genuinely new
+  VSX-context restore contract (§3.1.1) must itself pass before being
+  referenced or built.
 - `docs/AI_DEVELOPMENT_PROTOCOL.md` "Network-device command gate" — §3.5
   above proposes the addition that closes this gap.
 - `relay/NXS-LOCAL-0060-ui2-d1-device-write-class-decision.json` seq 5, 7,
   9, 13, plus a PO chat clarification rejecting the 15-minute freshness
-  value — the governing decisions behind this document's every revision.
+  value and a PO review decision correcting this document's own VSX
+  framing — the governing decisions behind this document's every
+  revision.
