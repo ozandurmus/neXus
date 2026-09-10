@@ -57,6 +57,26 @@ wording) is addressed section-by-section below and cross-indexed in
 review entry point for this pass — read it first; it names exactly what
 changed in this document and in the amendment bundle, and why.
 
+**Second revision note (this pass, relay seq 9 + PO freshness
+clarification).** Two more things changed after the revision note above
+was written:
+
+- **Relay seq 9**: the PO selected the recommended `C2`/`C7` integration
+  path — fold the ledger's admission facts into `C7` §5.3's existing
+  checks 1/2, **do not** retain the standalone `C2` §6 check 7 the first
+  revision proposed. §3.1 below is rewritten accordingly.
+- **PO clarification (chat, superseding the first revision's own
+  proposal)**: **the proposed 15-minute connectivity freshness bound is
+  explicitly rejected.** §3.3 below no longer proposes any fixed number;
+  it instead specifies freshness as **configurable policy**, separates
+  background polling cadence from claim-time restore safety, and names
+  two alternative evidence sources (mandatory active probe; optional
+  cached telemetry/SNMP under strict, explicitly-configured conditions,
+  with a hard requirement that SNMP-style reachability is never treated
+  as proof of write-channel readiness absent an established vendor-
+  specific contract). A short, explicitly non-authoritative research note
+  on public BackBox documentation is included per instruction, at §3.3.2.
+
 ---
 
 ## 1. Why this exists, and why it is not `RECOVERY_OPERATIONAL_WRITE_LEDGER.md` reused
@@ -156,38 +176,44 @@ are separate predicates."** This document adopts that split exactly:
   and predicate 2 passing today says nothing about tomorrow's claim.
 
 A `controlled-restore-write` capability that is `SIGNED_OFF` (predicate 1)
-but whose target has an unreconciled prior outcome (predicate 2, §3.2
-check 2 below) is refused at claim — the row's existence in the registry
-never substitutes for this document's own runtime check, and vice versa: a
-target with no unreconciled history but a capability row that is not (or
-not yet) `SIGNED_OFF` is refused by `C4` §3.5's execution-eligible view
+but whose target has an unreconciled prior outcome (predicate 2, folded
+into `C7` §5.3 check 2 per §3.1 below) is refused at claim — the row's
+existence in the registry never substitutes for this document's own
+runtime check, and vice versa: a target with no unreconciled history but a
+capability row that is not (or not yet) `SIGNED_OFF` is refused by `C4`
+§3.5's execution-eligible view
 before this document's checks are ever reached. Neither predicate is
 sufficient alone; both are necessary, evaluated by different documents, at
 different times, never merged into one combined score.
 
-### 3.1 Predicate 2 in full — the runtime admission battery (three checks, none of them new machinery)
+### 3.1 Predicate 2 in full — folded into `C7` §5.3's existing precondition-battery model (revised per relay seq 9; supersedes this document's original standalone-`C2`-check proposal)
 
-This class's `C2`-claim-time admission (predicate 2 above) is the
-conjunction of three checks, run inside `C2` §6's own pre-execution
-battery as an added, ordered check (§3.4 below proposes its exact row and
-number), **never before that battery, never replacing any existing check
-in it**:
+**Revision note.** The initial DRAFT of this section proposed a brand-new,
+standalone `C2` §6 check (row 7) to carry predicate 2's three facts. The
+Product Owner's relay seq 9 decision supersedes that proposal: *"fold the
+restore ledger admission facts into `C7`'s existing check 1/check 2 model;
+do not retain a separate check 7."* This subsection is rewritten to state
+the folded model directly; §3.4 below (renamed) now covers only the one
+genuinely separate `C2` concern that decision does not touch — the
+per-class **retry rule**, which is not an admission check at all.
 
-| # | Check | Source of truth | Failure behavior |
-|---|---|---|---|
-| 1 | **Valid, unexpired, unrevoked `restore_approval` row exists for this exact `plan_id`**, `requested_by ≠ approved_by` | `C7` §6.2's `restore_approval` table (unchanged, not redefined here) | Refuse job claim; no device contact |
-| 2 | **No unreconciled prior restore-write outcome against this `device_id`** — this ledger's own new check (§1 point 2 above) | This document's `RestoreWriteLedger` (§4 below) | Refuse job claim; no device contact; surfaced reason names the unreconciled prior `restore_run_id` |
-| 3 | **`C7` §5.3's six-check compile-time precondition battery passed for this plan** (connectivity, backup validity ≥ `V2`, target identity match, version match, no concurrent job, credential resolution), **re-verified fresh at claim, not read stale from compile time** — §3.3 below fixes a numeric bound on how fresh check 1's connectivity evidence must be | `restore_plan` row's own recorded precondition results (`C7` §5.3, unchanged) | Refuse job claim if any compile-time precondition is stale/no-longer-true at claim time |
+Predicate 2's three original facts map onto `C7` §5.3's existing
+compile-time precondition battery (unchanged in shape — six checks,
+re-verified fresh at `C2` claim per that document's own text) as follows:
 
-Check 2 is genuinely new; checks 1 and 3 are **references to existing `C7`
-records**, not reimplementations — this document does not duplicate
-`restore_approval` or the precondition battery, it names them as the other
-two legs of predicate 2 so a reviewer sees the complete runtime picture in
-one place. All three checks are evaluated **every claim**, unaffected by
-`C4`'s predicate 1 having already resolved the row to `SIGNED_OFF` at
-spec-load time — repeated here because it is the one place a reviewer
-might otherwise assume "signed off once" means "admitted forever," which
-seq 7 explicitly rules out.
+| Original fact | Disposition |
+|---|---|
+| Valid, unexpired, unrevoked `restore_approval` for this `plan_id`, `requested_by ≠ approved_by` | **Already covered, no fold needed.** `C7` §6.2 states this is already `C2` §6 check 1's "restore-specific instance" — existing FROZEN text, unmodified by this document at any point. |
+| Connectivity evidence fresh enough to trust | **Folds into `C7` §5.3 check 1** (Connectivity) — the natural, direct home; that check already names connectivity as its subject, and §3.3 below (revised) supplies the configurable freshness policy this check now consults instead of an unstated "bounded freshness window." |
+| No unreconciled prior restore-write outcome against this target | **Proposed fold: `C7` §5.3 check 2** (currently "Backup validity — ... `V2`+"), reframed to a broader "artefact and target admission validity" check that additionally requires this ledger's `has_unreconciled_prior` to be `False`. This is **this document's own proposed mapping, not the only defensible one** — check 5 ("no concurrent restore or backup against the same target") is thematically closer in one sense (both gate "is this target currently blocked"), but check 5's own text is scoped to *live* `REQUESTED`/`CLAIMED`/`EXECUTING` jobs, not a *terminal-but-unreconciled* outcome, which is a different temporal concept; check 2 is proposed instead because the PO's own decision names "check 1/check 2" specifically. A reviewer or the council may re-map this to check 5 (or split it as its own bullet within check 2's existing text) without disturbing anything else in this document. |
+
+No new row is added to `C7` §5.3's table under this fold — checks 1 and 2
+are **amended in place** (their existing numbers, existing position in the
+ordered battery, existing re-verification-at-claim behavior all unchanged);
+this is a smaller, more conservative edit than the original DRAFT's
+standalone new-check proposal, and it reuses a battery that already runs
+at both compile time and claim time rather than adding a second parallel
+mechanism `C2` would also have to invoke.
 
 ### 3.2 Level-consumer and wire-field inventory (relay seq 5's required inventory)
 
@@ -218,65 +244,199 @@ currently enforces in code is broken by `level=1.5` — the two tests named
 above are the entire blast radius, both to be edited by the movement that
 actually adds the class, not by this document.
 
-### 3.3 Numeric freshness bound for the connectivity check consulted by predicate 2 check 3
+### 3.3 Connectivity freshness — configurable policy, not a fixed number (revised: the proposed 15-minute value is REJECTED per PO clarification)
 
-`C7` §5.3 check 1 requires connectivity confirmed "within a bounded
-freshness window" but — checked against `C7`, `C2`, and
-`UI2_0_ARCHITECTURE_DESIGN.md` directly — **no document anywhere in this
-repository states what that bound actually is**, for backup or for
-restore; it is abstract everywhere it appears. This is tolerable for a
-class-1 backup write (§7.3 point 6's own 24-hour ceiling is a separate,
-coarser control on the *same* operation); it is not tolerable, unstated,
-for a class whose failure mode (`C7` §5.7) can leave a device mid-outage.
-This document proposes a **concrete number, scoped only to this class's
-own consultation of that check**, not a retroactive edit to `C7`'s own
-abstract text for backup:
+**This value is explicitly rejected; do not freeze 15 minutes anywhere in
+a successor movement.** The prior revision of this document proposed a
+concrete 15-minute connectivity freshness bound. The Product Owner's
+clarification supersedes that proposal outright: *"do not freeze 15
+minutes... model freshness as configurable policy, explicitly separating
+background polling cadence from claim-time restore safety."* No numeric
+default in this subsection is a decided value — every bound named below is
+either an illustrative range (explicitly marked as such) or `UNKNOWN`,
+left for the successor movement's own contract-freeze step to set,
+informed by real vendor telemetry-latency evidence this document does not
+have.
 
-**Proposed: 15 minutes.** A restore-write's connectivity evidence
-(predicate 2 check 3's re-read of `C7` §5.3 check 1) is fresh only if the
-underlying class-0 connect-check job succeeded within the last 15 minutes
-of the claim attempt; older evidence is treated as `FAILED`, not `PASSED`,
-forcing a fresh connect-check before a restore-write claim can proceed.
-Rationale: short enough that a device which became unreachable minutes
-before claim (exactly the scenario `C7` §5.7 case 2 worries about) is
-caught before a write is attempted, long enough that a legitimate
-operator-initiated restore is not forced to re-run a connect-check on
-every retry of the approval/compile step. This is a **proposal**, not a
-resolved contract clause — the exact number is the successor movement's
-(or the council's) to confirm or override; it is stated as a concrete
-number here specifically because "bounded" with no number is exactly the
-kind of unstated numeric bound the council finding named.
+**Two concepts this document was previously conflating, now separated:**
 
-### 3.4 The `C2` admission/retry row this class needs (proposed; `C2` itself unedited)
+- **Background polling cadence** — the interval at which a *separate*,
+  already-existing telemetry/inventory mechanism (a class-0 connect-check
+  scheduler, an SNMP poll loop, or equivalent) refreshes its own cached
+  view of a device's reachability, independent of any particular restore
+  job. This cadence is an operational/performance concern (how much load
+  the polling itself puts on the device and the collector), and its value
+  is out of this document's scope entirely — it belongs to whatever
+  subsystem owns that poller.
+- **Claim-time restore safety** — the wholly separate question this
+  document actually owns: *at the moment a specific restore-write job is
+  about to be claimed*, is the evidence that the target is currently
+  reachable **trustworthy enough, right now**, to proceed with a write
+  whose failure mode (`C7` §5.7) can leave a device mid-outage? A cache
+  refreshed on a background cadence is not automatically an answer to this
+  question merely because the cadence exists — the two must never be
+  treated as the same test, which is exactly the conflation the initial
+  DRAFT's single "15 minutes" number risked normalizing.
 
-`docs/design/UI2_0_C2_JOB_EXECUTION_CONTRACT.md` (FROZEN) §6's six-check
-pre-execution battery and §5.3's per-action-class retry table are not
-edited by this document. The following is the proposed exact text a
-successor `C2`-amendment movement would add — named here in full because
-"a `C2` admission/retry row" was raised as its own council finding,
-distinct from this document's own three-check battery (§3.1), which
-describes *what* is checked; this subsection fixes *where* in `C2`'s own
-tables that check lives and what `C2`'s retry rule for the new class is.
+**Two alternative evidence sources for claim-time restore safety, not one:**
 
-**Proposed new `C2` §6 check (row 7, after existing check 6):**
+**(1) Mandatory claim-time active connectivity/protocol probe — the
+authoritative path, always available.** A live, synchronous class-0
+connect-check (the same `backup_profile_connect_check`-equivalent job
+`C7` §5.3 check 1 already names) executed as close as practicable to the
+claim moment itself, using the **actual restore-write transport/protocol**
+(the same `ssh_exec`/`xml_api_call` session kind `C4` §5 would use for the
+real write) — not a different, lower-fidelity protocol. This path proves
+the one fact that matters: the specific channel the restore-write will
+use is live, right now. This path is **always available as the fallback**
+regardless of what is configured for path (2) below; a deployment may
+choose to use it as the *sole* evidence source (never configuring cached
+telemetry at all), in which case §3.3's policy fields below are moot for
+that deployment.
 
-| # | Check | Outcome field | What it re-reads |
-|---|---|---|---|
-| 7 | **Controlled restore-write admission** (`controlled-restore-write` jobs only) — §3.1's three-check battery (`restore_approval` validity, this document's ledger has no unreconciled prior outcome for the target, `C7` §5.3's precondition battery re-verified fresh per §3.3's 15-minute connectivity bound) | `PASSED` / `BLOCKED(reason)` / `NOT_APPLICABLE` (every other class) | `restore_approval`, this document's `RestoreWriteLedger`, the `restore_plan` row's recorded preconditions |
+**(2) Cached telemetry/SNMP — optional, lower device/collector load,
+conditional on policy, never the sole source unless every condition below
+is met.** A deployment **may** configure a cached-telemetry evidence
+source (SNMP reachability, an inventory poller's last-known state, or
+equivalent) to avoid a live probe on every single claim, **but only when
+all four of the following hold**; failing any one **falls back to path
+(1)** (active probe), never silently proceeds on stale or insufficient
+cached evidence:
 
-Placed last (after credential resolution, check 6) because it is the one
-check specific to a single class, mirroring where check 4 (the `RB.x`
-ledger, class-1-only) already sits relative to the five checks that apply
-more broadly — consistent ordering, not a new pattern.
+| Condition | Requirement |
+|---|---|
+| **TTL** | The cached evidence's own timestamp is within a configured `cached_evidence_ttl_seconds` policy field (§3.3.1 below) — a per-deployment, per-vendor-class configurable value, not a fixed constant this document sets. |
+| **Identity binding** | The cached evidence is bound to the **same device identity** the restore-write targets (matching `device_id`/hostname-fingerprint, the same identity-match discipline `C7` §5.3 check 3 already requires for the artefact itself) — a cache entry for the wrong device, or one that cannot prove which device it describes, is treated as absent, not stale-but-usable. |
+| **Semantic sufficiency** | **SNMP (or any read-only telemetry protocol) reachability does NOT by itself prove the write channel (`ssh_exec`/`xml_api_call`) is usable**, and this document does not claim otherwise. A cached-telemetry source may be used as claim-time evidence **only if a vendor-specific contract (a gate-registry-equivalent, reviewed document) establishes that this particular telemetry signal is a sufficient proxy for this particular write channel's own readiness** for the vendor/platform in question. Absent such an established contract, cached telemetry is **never sufficient alone**, regardless of how fresh or well-identity-bound it is — this is the one condition this document treats as a hard requirement, not a tunable, because it is a semantic claim about vendor behavior this document has no evidence for (see §3.3.2's research note below on why even public third-party documentation does not substitute for this). |
+| **Explicit configuration** | The evidence source for a given deployment/vendor-class is an explicit, named policy choice (§3.3.1's `evidence_source` field) — never an implicit default inferred from "a cache happens to exist." |
 
-**Proposed new `C2` §5.3 retry-rule row:**
+Any condition failing (stale TTL, no identity binding, no established
+semantic-sufficiency contract, or no explicit configuration) means
+**fail closed to path (1)**: a fresh active probe is required before the
+claim can proceed; the claim is never admitted on the strength of
+insufficient cached evidence, and a probe failure/timeout is `BLOCKED`,
+never treated as "no evidence, so proceed."
+
+#### 3.3.1 Proposed policy schema (fields, precedence, bounds as proposals — none frozen)
+
+```python
+@dataclass(frozen=True)
+class RestoreConnectivityFreshnessPolicy:
+    evidence_source: str          # "active_probe" | "cached_telemetry" —
+                                   # explicit per-deployment/vendor-class
+                                   # configuration; UNKNOWN/unset defaults
+                                   # to "active_probe" (the safe default:
+                                   # absence of configuration never silently
+                                   # enables the lower-assurance path)
+
+    # --- path (1): active probe --------------------------------------
+    active_probe_protocol: str     # the same transport/protocol the real
+                                   # restore-write step will use; UNKNOWN
+                                   # until a concrete capability names it
+    active_probe_timeout_s: float  # UNKNOWN -- proposal only, no default
+                                   # claimed here; must be short enough not
+                                   # to itself become the bottleneck at
+                                   # claim time, long enough not to produce
+                                   # false BLOCKED results on a healthy but
+                                   # slow device -- the successor movement's
+                                   # own number to set, informed by real
+                                   # per-vendor probe latency evidence
+
+    # --- path (2): cached telemetry (optional) ------------------------
+    cached_evidence_ttl_seconds: float | None
+        # UNKNOWN / proposal-range-only (see below) -- NOT 15 minutes,
+        # NOT any other single frozen value. Illustrative range only,
+        # for discussion, not a decided bound:
+        #   min_bound_seconds: 60        (illustrative floor)
+        #   max_bound_seconds: 3600      (illustrative ceiling)
+        #   default: UNKNOWN             (explicitly not set here)
+    cached_evidence_identity_binding_required: bool  # always True;
+        # not a tunable -- an unbound cache entry is never usable evidence
+    cached_evidence_semantic_sufficiency_contract_ref: str | None
+        # a pointer to the vendor-specific contract establishing this
+        # telemetry signal proves this write channel's readiness; None
+        # means "no such contract exists yet" and cached_telemetry MUST
+        # NOT be selected as evidence_source regardless of any other field
+
+    # --- precedence, staleness, audit --------------------------------
+    fallback_on_insufficient: str  # "active_probe" -- fixed, not
+        # configurable: whatever the configured evidence_source, an
+        # insufficient cached-telemetry read (any condition in the table
+        # above failing) always falls back to an active probe, never to
+        # "proceed anyway" and never to a second cached source
+    stale_or_unknown_behavior: str  # "BLOCK" -- fixed, not configurable;
+        # matches this document's own fail-closed posture (§5) exactly
+    audit_evidence_source_used: str        # recorded per claim: which
+                                            # path actually supplied the
+                                            # evidence for this attempt
+    audit_evidence_age_at_use_seconds: float | None  # recorded per claim
+    audit_fallback_triggered: bool                    # recorded per claim
+    audit_policy_config_snapshot_ref: str             # recorded per claim:
+        # a reference to the exact policy configuration in force at claim
+        # time, so a later audit can reconstruct why a claim was admitted
+        # or blocked without re-deriving today's live configuration
+```
+
+**Precedence, stated plainly:** `active_probe` is always the authoritative
+and always-available path. `cached_telemetry`, if configured, is
+consulted first only to avoid unnecessary device/collector load, but its
+result is used **only** when every condition in the table above is
+satisfied; any failure of any condition **falls back to `active_probe`
+automatically and unconditionally** — a deployment can configure whether
+to *attempt* cached telemetry first, it cannot configure the fallback
+behavior itself, which stays fixed as stated.
+
+**None of this schema's numeric fields (TTL bounds, probe timeout) are
+decided values.** They are named here as **proposals with illustrative
+ranges** so the successor movement/council has a concrete shape to review
+and fill in with real evidence — not so this document can claim a number
+was chosen. Where the initial DRAFT said "15 minutes," this revision says
+`UNKNOWN`, explicitly, everywhere that number previously appeared.
+
+#### 3.3.2 Research note: BackBox public documentation (informational only, NOT authoritative for neXus)
+
+Public BackBox documentation (a third-party commercial network backup/
+recovery product, unrelated to this repository) describes, in its own
+marketing/support materials, that its restore workflow performs automated
+pre-restore availability and credential checks, and validates backup
+integrity both at creation time and again immediately before restore
+(sources: `backbox.com/backup-and-recovery/`, BackBox community/support
+user-guide pages, accessed via public web search 2026-09-10 for this
+note). This is recorded here **purely as external context that a
+comparable commercial product performs some analogous pre-restore
+checks** — it is **not** treated as evidence for how neXus's own
+connectivity-freshness or evidence-sufficiency semantics should work, per
+`AGENTS.md`'s vendor-semantics law ("a command name is not its semantics...
+if official documentation cannot establish a load-bearing semantic, mark
+it `UNKNOWN`") and per this repository's own standing rule against filling
+a semantic gap from general product knowledge. BackBox's own product
+behavior is not a vendor whose devices neXus manages, is not evidence
+about Check Point/PAN-OS/any managed device's actual telemetry semantics,
+and **establishes nothing** about whether SNMP or any other cached signal
+proves write-channel readiness for any vendor this repository actually
+targets — that determination remains exactly what §3.3's "semantic
+sufficiency" condition requires: a vendor-specific contract this document
+does not have and does not invent one for.
+
+### 3.4 The `C2` retry rule this class needs (proposed; `C2` itself unedited; admission checks are no longer proposed here — see §3.1)
+
+`docs/design/UI2_0_C2_JOB_EXECUTION_CONTRACT.md` (FROZEN) §5.3's
+per-action-class retry table is not edited by this document. **Revision
+note:** the original DRAFT proposed both a new `C2` §6 admission check
+(row 7) and this retry-rule row in the same subsection. Per relay seq 9,
+the admission check is withdrawn — those facts now fold into `C7` §5.3
+checks 1/2 (§3.1 above). Only the retry-rule proposal below survives
+unchanged from the original DRAFT, because it answers a genuinely
+different question (what happens on failure/retry) that the seq 9
+decision does not touch:
 
 | Action class | Retry rule |
 |---|---|
 | `CLASS_1B_CONTROLLED_RESTORE_WRITE` (`controlled-restore-write`) | **Never auto-retries, at any stage, for any reason** — identical rule to `CLASS_1_RECOVERY_WRITE`'s row, for a stronger reason: `C7` §5.7 already mandates this at the job-state level ("closes only via `RECONCILED`... no exception for restore"; a new attempt is always a **new** `restore_plan`/job, never a retried one). This row makes `C2`'s own per-class retry table state the same rule explicitly, rather than leaving the new class implicitly covered only by `C7`'s restatement of `C2` §3.5's generic mechanism. |
 
-Both proposed rows are additive to `C2`'s existing tables; no existing row,
-class-0/1/2/3/4 check, or retry rule is modified.
+This proposed row is additive to `C2`'s existing retry table; no existing
+row, class-0/1/2/3/4 rule, or `C7` check is modified beyond §3.1's
+in-place amendment of `C7` §5.3 checks 1/2.
 
 ### 3.5 Command-gate registration path for the new class (proposed; `docs/AI_DEVELOPMENT_PROTOCOL.md` itself unedited)
 
@@ -450,19 +610,18 @@ second-row model).
 This document adds **zero** new fields to `restore_plan`/`restore_run`/
 `restore_approval` (`C7` §5.2/§5.6/§6.2, all unchanged) and **zero** new
 step kinds beyond the one already proposed in the amendment bundle
-(`restore_push`, item 2 of the D1 follow-up list). §3.4 above proposes one
-new row in `C2`'s own pre-execution check table and one new row in its
-retry-rule table — a textual amendment to `C2`'s existing documented
-battery, not a new job-execution mechanism: the new check is purely an
-**admission-time consultation** of records that already exist (this
-ledger, `restore_approval`, the `restore_plan` precondition results), and
-the new retry row states a rule `C7` §5.7 already mandates at the job-state
-level, it does not introduce a new state or transition to `C2`'s state
-machine (§3.1 of that document, unchanged). The new action class's
+(`restore_push`, item 2 of the D1 follow-up list). Per relay seq 9, §3.1
+above folds the ledger's admission facts into `C7` §5.3's existing checks
+1/2 **in place** — no new row, no new table, no new mechanism in either
+`C2` or `C7`; only §3.4's retry-rule row is a genuinely additive row, in
+`C2` §5.3's existing per-class retry table. Neither amendment introduces a
+new state or transition to `C2`'s state machine (§3.1 of that document,
+unchanged) or to `C7`'s own precondition-battery shape (six checks,
+compile-time then re-verified at claim, unchanged). The new action class's
 `permitted` predicate, evaluated at `C2` claim time alongside the class's
 own gate-resolution outcome (`C4` §3's algorithm, unchanged, per §3.0
-above's two-predicate split), consults this ledger the same way
-`CLASS_1_RECOVERY_WRITE`'s admission consults
+above's two-predicate split), consults `C7`'s own (amended) precondition
+results the same way `CLASS_1_RECOVERY_WRITE`'s admission consults
 `RECOVERY_OPERATIONAL_WRITE_LEDGER.md` — a sibling check, not a parallel
 execution path.
 
@@ -470,8 +629,9 @@ execution path.
 
 No test file is added or edited by this document. Listed so a successor
 movement's `TARGETED_TEST` plan is not written from nothing; updated this
-pass for the append-only reconciliation model (§4.0) and the new
-`C2`/inventory items (§3.2–§3.4):
+pass for the append-only reconciliation model (§4.0), the `C7`-fold model
+(§3.1), and the configurable freshness policy (§3.3):
+
 
 - (a) a restore-write job claim against a device with no unreconciled prior
   entry, valid approval, and a passing precondition battery is admitted;
@@ -501,15 +661,29 @@ pass for the append-only reconciliation model (§4.0) and the new
   sibling assertion guarding `controlled-restore-write`'s
   non-console-submittability are both updated together (§3.2's inventory)
   — a test asserting one without the other is an incomplete edit;
-- (i) **(new)** a restore-write job claim whose connectivity evidence is
-  older than §3.3's proposed 15-minute bound is refused at the new `C2` §6
-  check 7 (§3.4), with a fresh connect-check required before retry.
+- (i) **(revised)** a restore-write job claim whose active-probe connectivity
+  evidence fails (`C7` §5.3 check 1, amended per §3.1/§3.3) is refused
+  before device contact; a cached-telemetry evidence source configured but
+  failing any of §3.3's four conditions (TTL, identity binding, semantic
+  sufficiency, explicit configuration) falls back to a fresh active probe,
+  never silently proceeds — both paths tested independently;
+- (j) **(new)** `evidence_source="cached_telemetry"` with no
+  `cached_evidence_semantic_sufficiency_contract_ref` set is refused at
+  policy-validation time (never reaches claim time) — the one condition
+  in §3.3's table this document treats as non-negotiable;
+- (k) **(new)** `audit_evidence_source_used`, `audit_evidence_age_at_use_
+  seconds`, `audit_fallback_triggered`, and `audit_policy_config_snapshot_
+  ref` are recorded on every claim attempt, regardless of admit/block
+  outcome — an audit trail assertion, not merely a functional one.
 
 ## 9. Open items / unresolved semantics for review
 
 Several items the initial DRAFT left fully open are now resolved (§4.0,
-§3.2, §3.3) per this pass's governing PO decisions and council findings;
-what remains genuinely open is narrower:
+§3.2) per this pass's governing PO decisions and council findings; §3.3's
+freshness bound was **resolved-then-reopened** by the PO's own
+clarification (a fixed number was rejected in favor of configurable
+policy) — recorded honestly as such, not silently smoothed over. What
+remains genuinely open is narrower:
 
 1. **This document's own freeze path is gated on the taxonomy/`C4`
    amendments it presupposes landing first** — it specifies the admission
@@ -526,19 +700,29 @@ what remains genuinely open is narrower:
    real Postgres/filesystem schema; both satisfy §4.0's append-only
    invariant identically, and this document does not mandate one over the
    other.
-3. **§3.3's proposed 15-minute connectivity freshness bound is a proposal,
-   not a resolved number** — stated concretely so the council/PO have an
-   actual value to confirm or override, per the finding that named the
-   absence of any number as the gap, not a claim that 15 minutes is
-   uniquely correct.
-4. **Restore-write's own gate-registry rows** (the literal `restore_push`
+3. **§3.3's connectivity freshness policy has no decided numeric value —
+   by explicit PO instruction, not by omission.** The proposed 15-minute
+   bound from the prior revision is **rejected**; `active_probe_timeout_s`
+   and `cached_evidence_ttl_seconds` are `UNKNOWN`, with only illustrative
+   ranges named for discussion. The successor movement (or council) sets
+   real numbers informed by actual per-vendor probe-latency evidence this
+   document does not have — this item is intentionally left open, not a
+   gap to silently fill later.
+4. **Whether any vendor/platform this repository actually targets has an
+   established semantic-sufficiency contract for cached telemetry
+   (§3.3's hard condition) is itself `UNKNOWN`** — this document does not
+   claim one exists for Check Point Gaia, PAN-OS, or any other managed
+   platform; until one is written and reviewed, `evidence_source` should
+   default to `active_probe` for every real deployment, and
+   `cached_telemetry` remains a documented-but-unusable option.
+5. **Restore-write's own gate-registry rows** (the literal `restore_push`
    command/call template's ten-field gate entry — vendor, timeout, retry,
    frequency, session reuse, unsupported behavior, secret-output risk, safe
    telemetry) are not specified by this document; they are per-vendor,
    per-capability detail that `C4` §2.4's worked-example pattern already
    shows how to produce once a concrete restore capability is authored —
    out of scope here, named so it is not mistaken for already covered.
-5. **§3.2's inventory is scoped to this repository** — it cannot rule out
+6. **§3.2's inventory is scoped to this repository** — it cannot rule out
    an external client of `console/app.py`'s `action_class_level` field
    parsing it as a strict integer; that residual risk is named, not
    closed, since it is outside what this repository's own source can
