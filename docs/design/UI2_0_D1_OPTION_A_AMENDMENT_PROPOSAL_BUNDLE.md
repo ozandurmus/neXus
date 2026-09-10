@@ -44,6 +44,17 @@ proposed, replacing it with configurable policy (specified in full in
 `docs/design/RESTORE_CONTROLLED_WRITE_LEDGER.md` §3.3, summarized in
 Step 2b below).
 
+**Third revision note (this pass, relay seq 13).** Relay seq 13 **narrowly
+supersedes seq 9** for exactly one fact: an explicit claim-time
+reconciliation-pending check is now required, because that fact "cannot
+remain compile-time-only." Step 2's "necessary, never sufficient"
+paragraph and Step 2b are both rewritten below to state the resulting
+two-tier model (a non-authoritative early pass at `C7` §5.3 compile time,
+plus an authoritative check at `C2` §6's already-existing, already-class-
+scoped check-4 slot at claim time) — `C4` static sign-off remains fully
+independent of runtime admission throughout, exactly as seq 13's own text
+reaffirms.
+
 ---
 
 ## Step 1 — `utils/action_taxonomy.py`: new `ActionClass` member (proposed)
@@ -295,15 +306,20 @@ Proposed restatement:
 > execute is a wholly separate, `C7`/`C2`-side runtime predicate, evaluated
 > fresh at every claim, independent of this row's own `sign_off_state`:
 > `docs/design/RESTORE_CONTROLLED_WRITE_LEDGER.md` §3.1's fact set (valid
-> per-operation `restore_approval`, no unreconciled prior restore-write
-> against the target, connectivity evidence meeting §3.3's configurable
-> freshness policy), folded per relay seq 9 into `C7` §5.3's own existing
-> checks 1/2, re-verified fresh at `C2` claim exactly as that battery
-> already requires for every check. A `SIGNED_OFF` row with no valid
-> approval, or against a target carrying an unreconciled prior outcome, is
-> refused at claim exactly as if the row were not `SIGNED_OFF` at all —
-> the two predicates are independent, and **both** must hold for a device
-> to be contacted; neither one, alone, ever authorizes execution.
+> per-operation `restore_approval`; connectivity evidence meeting §3.3's
+> configurable freshness policy, with an early pass at `C7` §5.3 check 1
+> and an authoritative re-check at `C2` §6 check 2; no unreconciled prior
+> restore-write against the target, with an early pass at `C7` §5.3 check
+> 2 and, **per relay seq 13**, an authoritative, independently named check
+> at `C2` §6's existing check-4 slot — the one fact this repository's own
+> revision history shows cannot safely remain compile-time-only). A
+> `SIGNED_OFF` row with no valid approval, or against a target carrying an
+> unreconciled prior outcome at claim time, is refused at claim exactly as
+> if the row were not `SIGNED_OFF` at all — the two predicates are
+> independent, and **both** must hold for a device to be contacted;
+> neither one, alone, ever authorizes execution, and `C4`'s own predicate
+> is untouched by any of this document's revisions to date.
+
 
 This restatement resolves what the original DRAFT flagged as "the one
 genuine policy call in the bundle" — not by choosing narrow-signability
@@ -315,7 +331,7 @@ in the same place a reviewer would look for the answer.
 
 ---
 
-## Step 2b — `C7` §5.3 checks 1/2 (folded admission facts) and `C2` §5.3 retry rule (revised this pass: `C2` admission check withdrawn per relay seq 9)
+## Step 2b — `C7` §5.3 compile-time checks 1/2 (early, non-authoritative), `C2` §6 check 2/check-4-slot (claim-time, authoritative), and `C2` §5.3 retry rule (revised this pass: relay seq 13 adds back an explicit claim-time check for one fact)
 
 `docs/design/UI2_0_C7_BACKUP_ARTEFACT_RESTORE_ENGINE_CONTRACT.md` and
 `docs/design/UI2_0_C2_JOB_EXECUTION_CONTRACT.md` (both FROZEN) are not
@@ -323,43 +339,78 @@ edited by this document. This step is new relative to the original DRAFT's
 four steps — a council finding named "a `C2` admission/retry row" as its
 own item, distinct from `C4`'s static sign-off (Step 2 above).
 
-**Revision note.** The first revision of this bundle proposed a standalone
-`C2` §6 check (row 7) to carry the ledger's admission facts, alongside a
-proposed 15-minute connectivity freshness bound. Two Product Owner
-decisions supersede both parts of that proposal: relay seq 9 folds the
-admission facts into `C7` §5.3's existing checks 1/2 instead of a new `C2`
-row, and a subsequent chat clarification **rejects the 15-minute bound
-outright**, requiring configurable policy instead. The summary below
-reflects both changes; the full specification (the policy schema, the
-active-probe/cached-telemetry alternatives, and the check-1/check-2
-mapping rationale) lives in `docs/design/RESTORE_CONTROLLED_WRITE_
-LEDGER.md` §3.1 and §3.3, which this bundle cross-references rather than
-duplicates.
+**Revision history, stated plainly.** Three Product Owner inputs have
+shaped this step in sequence, and each is recorded honestly rather than
+silently overwritten:
 
-**Folded into `C7` §5.3 (no new row; two existing checks amended):**
+1. The first revision of this bundle proposed a standalone `C2` §6 check
+   (row 7) to carry the ledger's admission facts, alongside a proposed
+   15-minute connectivity freshness bound.
+2. Relay seq 9 folded the admission facts into `C7` §5.3's existing
+   checks 1/2 instead of a new `C2` row, and a subsequent chat
+   clarification rejected the 15-minute bound outright, requiring
+   configurable policy instead.
+3. **Relay seq 13 narrowly supersedes seq 9's "fold, no separate check"
+   framing for exactly one fact**: the reconciliation-pending check
+   "cannot remain compile-time-only" and must have an explicit claim-time
+   instance. This step is rewritten to state the resulting two-tier model
+   — compile-time early refusal plus claim-time authoritative check — in
+   full, cross-referencing `RESTORE_CONTROLLED_WRITE_LEDGER.md` §3.1
+   (including its new §3.1.0/§3.1.1/§3.1.2/§3.1.3 subsections) rather than
+   duplicating it.
+
+**Compile-time (`C7` §5.3) — early, non-authoritative, unchanged in shape
+from seq 9's fold, two existing checks amended in place, no new row:**
 
 - **Check 1 (Connectivity)** — amended to consult a configurable
   `RestoreConnectivityFreshnessPolicy` (`RESTORE_CONTROLLED_WRITE_LEDGER.md`
   §3.3.1) instead of an unstated "bounded freshness window": a mandatory
   active-probe path (always available, using the actual restore-write
   transport) and an optional cached-telemetry/SNMP path usable only when
-  TTL, identity-binding, semantic-sufficiency, and explicit-configuration
+  TTL, identity-binding, semantic-sufficiency (now keyed per vendor/
+  platform, and itself requiring `GOV_PO_ROLE_MIGRATION.md` §7 trigger (b)
+  council review before any pair is added), and explicit-configuration
   conditions are all met, falling back to the active probe otherwise. No
   numeric default is proposed for the probe timeout or cache TTL — both
   are `UNKNOWN`, left to the successor movement.
 - **Check 2 (Backup validity)** — proposed to be reframed as a broader
   "artefact and target admission validity" check, additionally requiring
-  this ledger's `has_unreconciled_prior` to be `False` for the target.
-  Flagged, per `RESTORE_CONTROLLED_WRITE_LEDGER.md` §3.1, as this
-  document's own proposed mapping (check 5's concurrency check is a
-  plausible alternative home) — open to council re-mapping.
+  this ledger's `has_unreconciled_prior` to be `False` for the target, as
+  an **early, non-authoritative** pass only. Flagged, per
+  `RESTORE_CONTROLLED_WRITE_LEDGER.md` §3.1.0, as this document's own
+  proposed mapping (check 5's concurrency check is a plausible alternative
+  home) — open to council re-mapping.
 
-**Genuinely additive (unaffected by the fold): one new `C2` §5.3 retry-rule
-row** stating `CLASS_1B_CONTROLLED_RESTORE_WRITE` never auto-retries,
-mirroring `CLASS_1_RECOVERY_WRITE`'s existing row, for a reason `C7` §5.7
-already establishes at the job-state level. This row is unrelated to the
-admission-fact fold — it answers a retry-behavior question, not an
-admission question — and is therefore unaffected by relay seq 9.
+**Claim-time (`C2` §6) — authoritative, re-verified fresh regardless of
+how long ago the compile-time pass above ran:**
+
+- **Check 2 (Connectivity precondition)** — its existing FROZEN scope
+  ("for a class-1 profile... re-verified at every claim") is proposed to
+  be read as extending to `controlled-restore-write` (class 1.5) jobs,
+  consulting the same `RestoreConnectivityFreshnessPolicy` as the
+  compile-time pass above, but as the **authoritative** result.
+- **Check 4 (currently the `RB.x` operational-write ledger, stated
+  `NOT_APPLICABLE` for restore) — proposed, per relay seq 13, to gain an
+  explicit second class-scoped clause**: *for `controlled-restore-write`
+  jobs, this document's own `RestoreWriteLedger.has_unreconciled_prior`
+  check (fail-closed on an unreadable ledger); `NOT_APPLICABLE` for every
+  other class, unchanged.* This reuses check 4's existing, already-class-
+  scoped row — **zero new rows**, honoring seq 9's original preference in
+  letter — while making the claim-time instance an independently named,
+  independently tracked, always-run check, per seq 13's explicit
+  requirement that this fact not remain compile-time-only.
+
+**Genuinely additive (unaffected by any of the above): one new `C2` §5.3
+retry-rule row** stating `CLASS_1B_CONTROLLED_RESTORE_WRITE` never
+auto-retries, mirroring `CLASS_1_RECOVERY_WRITE`'s existing row, for a
+reason `C7` §5.7 already establishes at the job-state level. This row
+answers a retry-*behavior* question (what happens after a `CLAIMED`/
+`EXECUTING` job fails), distinguished explicitly (per
+`RESTORE_CONTROLLED_WRITE_LEDGER.md` §3.1.3) from a `BLOCKED`-at-claim
+job's own retry eligibility (which is ordinary, unaffected by this row,
+since such a job never reached `EXECUTING` at all) — this row is
+unrelated to the admission-fact placement and is therefore unaffected by
+either seq 9 or seq 13.
 
 ---
 
@@ -408,13 +459,13 @@ what the gap was stays intact):
 
 `docs/design/UI2_0_BASELINE_CONTRACT.md` is FROZEN and is not edited by this
 document. Proposed new row for §2's Phase 0 decisions table (next available
-lettered id after `RESTORE-IN-RELEASE-1` (D-7)), **revised this pass** to
-fold in the two representation/policy decisions (relay seq 5, seq 7) so the
-baseline row records the actual decided shape, not the original DRAFT's
-open questions:
+lettered id after `RESTORE-IN-RELEASE-1` (D-7)), **revised across three
+passes** to fold in the governing PO decisions (relay seq 5, 7, 9, 13, plus
+the freshness clarification) so the baseline row records the actual
+decided shape, not any earlier draft's open questions:
 
 ```markdown
-| **DEVICE-WRITE-CLASS** (D-8) | How restore's device write is admitted, per `C7` §9.1–§9.3's reported (not fixed) gap | **ACCEPTED: Option A** (`docs/design/UI2_0_D1_DEVICE_WRITE_CLASS_AND_STEP_KIND_DECISION.md`) — a new, narrowly-scoped `utils/action_taxonomy.py` class (`CLASS_1B_CONTROLLED_RESTORE_WRITE`, `level=1.5`, non-renumbering — relay `NXS-LOCAL-0060` seq 5) between `CLASS_1_RECOVERY_WRITE` and `CLASS_2_OPERATIONAL_STATE_CHANGE`, plus a new `C4` §2.3 device-directed step kind (`restore_push`), both scoped to a provenance-bound replay of a previously-verified backup artefact back to its own originating device only — never operator-authored content, never a different target, never console-submittable. The class is narrowly `SIGNED_OFF`-eligible at `C4`'s static/spec level for restore-scoped rows only, independent of a wholly separate runtime admission predicate (relay seq 7) folded into `C7` §5.3's existing checks 1/2 (relay seq 9), not a standalone `C2` check, and gated by a dedicated ledger/approval/precondition contract (`docs/design/RESTORE_CONTROLLED_WRITE_LEDGER.md`) whose connectivity-freshness component is configurable policy, not a fixed number (no value frozen; 15 minutes explicitly rejected). Not by `RECOVERY_OPERATIONAL_WRITE_LEDGER.md`'s cadence model (`NOT_APPLICABLE` to restore, `C7` §5.3). `CLASS_3_CONFIGURATION_WRITE`/`CLASS_4_POLICY_DEPLOYMENT` remain prohibited, unaffected. Restore stays disabled in Java until the amendments named in `D1` §5's follow-up list (this row is item 5 of that list) are all applied and, for the admission contract specifically, taken through `GOV_PO_ROLE_MIGRATION.md` §7 council review before its own freeze | `utils/action_taxonomy.py`; `C4` §2.3, §3.3 step 7; `C7` §5.3 checks 1/2, §9.1–§9.3; `C2` §5.3; `docs/design/RESTORE_CONTROLLED_WRITE_LEDGER.md`; `docs/design/UI2_0_D1_OPTION_A_CONSOLIDATED_REVIEW.md`; `REL-BACKUP` |
+| **DEVICE-WRITE-CLASS** (D-8) | How restore's device write is admitted, per `C7` §9.1–§9.3's reported (not fixed) gap | **ACCEPTED: Option A** (`docs/design/UI2_0_D1_DEVICE_WRITE_CLASS_AND_STEP_KIND_DECISION.md`) — a new, narrowly-scoped `utils/action_taxonomy.py` class (`CLASS_1B_CONTROLLED_RESTORE_WRITE`, `level=1.5`, non-renumbering — relay `NXS-LOCAL-0060` seq 5) between `CLASS_1_RECOVERY_WRITE` and `CLASS_2_OPERATIONAL_STATE_CHANGE`, plus a new `C4` §2.3 device-directed step kind (`restore_push`), both scoped to a provenance-bound replay of a previously-verified backup artefact back to its own originating device only — never operator-authored content, never a different target, never console-submittable. The class is narrowly `SIGNED_OFF`-eligible at `C4`'s static/spec level for restore-scoped rows only, independent of a wholly separate runtime admission predicate (relay seq 7), gated by a dedicated ledger/approval/precondition contract (`docs/design/RESTORE_CONTROLLED_WRITE_LEDGER.md`) that consults `C7` §5.3's existing checks 1/2 as an early, non-authoritative compile-time pass (relay seq 9) **and** an explicit, authoritative claim-time check at `C2` §6's existing check-4 slot (relay seq 13, narrowly superseding seq 9's "no separate check" framing for the one fact that cannot remain compile-time-only). Connectivity-freshness is configurable policy, not a fixed number (no value frozen; 15 minutes explicitly rejected), with any cached-telemetry semantic-sufficiency contract keyed per vendor/platform and itself requiring council review before being referenced. Not by `RECOVERY_OPERATIONAL_WRITE_LEDGER.md`'s cadence model (`NOT_APPLICABLE` to restore, `C7` §5.3). `CLASS_3_CONFIGURATION_WRITE`/`CLASS_4_POLICY_DEPLOYMENT` remain prohibited, unaffected. Restore stays disabled in Java until the amendments named in `D1` §5's follow-up list (this row is item 5 of that list) are all applied and, for the admission contract specifically, taken through `GOV_PO_ROLE_MIGRATION.md` §7 council review before its own freeze | `utils/action_taxonomy.py`; `C4` §2.3, §3.3 step 7; `C7` §5.3 checks 1/2, §9.1–§9.3; `C2` §5.3, §6 check 2/check 4; `docs/design/RESTORE_CONTROLLED_WRITE_LEDGER.md`; `docs/design/UI2_0_D1_OPTION_A_CONSOLIDATED_REVIEW.md`; `REL-BACKUP` |
 ```
 
 The row id `DEVICE-WRITE-CLASS (D-8)` is this bundle's own proposal (the
