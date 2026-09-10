@@ -14,10 +14,10 @@
       "id": "ui2_b1_01_contract_status_reconciliation",
       "category": "UI2 / contract consistency",
       "title": "Reconcile B1-1 contract status and freeze blockers",
-      "status": "planned",
+      "status": "done",
       "priority": "P1",
-      "target": "Resolve the DRAFT-versus-FROZEN authority contradiction and the B1-1 secret-source, Testcontainers DSN, and cold-cache CI gaps before UI2 source implementation.",
-      "note": "No UI2 source is authorized while the B1-1 contract status and freeze-readiness conditions disagree."
+      "target": "RESOLVED 2026-09-10: freeze B1-1 only after resolving secret profiles, isolated Testcontainers DSNs, cold-cache CI resolution, and SBOM acceptance.",
+      "note": "The B1-1 contract is FROZEN for implementation. Exact dependency patch versions and implementation artifacts remain in the next build; no device behavior is authorized."
     },
     {
       "id": "orchestrator_tool_gate_hook_cwd_relative_script_path_footgun",

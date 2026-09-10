@@ -3,6 +3,22 @@
   "record_contract": "One structured record per build, newest first. Required: build, status, title, summary (<= 2 sentences). Optional: started, completed, track, movement, supersedes, evidence, risks_forward, docs{agreement,validation,handover} (repo-relative paths under docs/history/). Full detail lives in the linked doc; do not restate it here. Status vocabulary must stay within utils/project_plan.py STATUS_VALUES.",
   "builds": [
     {
+      "build": "ui2_b1_01_contract_status_reconciliation",
+      "status": "automated_validated",
+      "title": "UI2 B1-1 -- contract status and freeze-blocker reconciliation",
+      "summary": "Resolved the B1-1 secret-profile, isolated Testcontainers role/DSN, cold-cache CI, and SBOM contract gaps, then froze the contract for implementation. No UI2 source, device behavior, or Line-1 workflow changed.",
+      "evidence": "The frozen contract adds runnable acceptance checks for profile precedence, role separation, cache miss/hit paths, and non-empty CycloneDX artifacts; targeted repository gates are required before implementation handoff.",
+      "started": "2026-09-10",
+      "completed": "2026-09-10",
+      "track": "UI 2.0 (Java product line)",
+      "movement": "ARCHITECTURE",
+      "risks_forward": "Exact dependency patch versions and implementation artifacts remain to be selected and validated in the B1-1 implementation movement; no device contact is authorized.",
+      "docs": {
+        "agreement": "docs/design/UI2_0_B1_01_SKELETON_CI_DOCKER_CONTRACT.md",
+        "handover": "AI_HANDOVER.md"
+      }
+    },
+    {
       "build": "ui2_d1_restore_c7_c2_amendments",
       "status": "automated_validated",
       "title": "UI2 D1 -- C7/C2 restore admission amendments",
