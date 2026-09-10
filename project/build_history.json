@@ -3,6 +3,23 @@
   "record_contract": "One structured record per build, newest first. Required: build, status, title, summary (<= 2 sentences). Optional: started, completed, track, movement, supersedes, evidence, risks_forward, docs{agreement,validation,handover} (repo-relative paths under docs/history/). Full detail lives in the linked doc; do not restate it here. Status vocabulary must stay within utils/project_plan.py STATUS_VALUES.",
   "builds": [
     {
+      "build": "ui2_d1_option_a_baseline_recording",
+      "status": "complete_with_followup",
+      "title": "UI2 D1 Option A -- record controlled restore-write decision in baseline",
+      "summary": "Applied the frozen Option A DEVICE-WRITE-CLASS (D-8) row to UI2_0_BASELINE_CONTRACT.md §2, preserving the physical-device-only scope, separate static signability/runtime admission, fail-closed topology, C7 check 1 and check 7, and C2 claim checks. No taxonomy, C2/C4/C7, tests, Java/UI, device path, or write execution changed.",
+      "started": "2026-09-10",
+      "completed": "2026-09-10",
+      "track": "UI 2.0 (Java product line)",
+      "movement": "IMPLEMENTATION",
+      "supersedes": "ui2_d1_option_a_contract_freeze",
+      "evidence": "Frozen UI2_0_D1_OPTION_A_AMENDMENT_PROPOSAL_BUNDLE.md Step 5; relay NXS-LOCAL-0060 seq 21-23; targeted architecture/project-state validation and repository privacy gate against origin/main.",
+      "risks_forward": "Restore remains disabled until the subsequent frozen taxonomy, C4, C7, C2, test, and Java/UI amendments are applied in order; VSX-context and ClusterXL-member restore remain unsupported.",
+      "docs": {
+        "agreement": "docs/design/UI2_0_BASELINE_CONTRACT.md",
+        "handover": "AI_HANDOVER.md"
+      }
+    },
+    {
       "build": "ui2_d1_option_a_contract_freeze",
       "status": "complete_with_followup",
       "title": "UI2 D1 Option A -- controlled restore-write admission and amendment contract freeze",

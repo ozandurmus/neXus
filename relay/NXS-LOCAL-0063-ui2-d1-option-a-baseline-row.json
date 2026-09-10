@@ -1,0 +1,120 @@
+{
+  "created_at": "2026-09-10T07:43:27Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "The baseline row records CLASS_1B_CONTROLLED_RESTORE_WRITE at level 1.5 and restore_push.",
+          "The row records separate C4 static signability and C2 runtime admission.",
+          "The row records C7 check 1 plus C7_RESTORE_NO_UNRECONCILED_PRIOR check 7 and fail-closed topology eligibility.",
+          "No source, test, Java/UI, or device behavior changes.",
+          "Targeted authority/convergence tests, privacy gate, and git diff check pass."
+        ],
+        "baseline": {
+          "authority": "FROZEN UI2_0_BASELINE_CONTRACT.md plus FROZEN UI2 D1 Option A amendment contract; relay NXS-LOCAL-0060 seq 21-23",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "sequencing": "First implementation slice after the D1 contract freeze; later taxonomy/C4/C7/C2/test/Java work is separate."
+        },
+        "context_not_loaded": [
+          "runtime data/logs",
+          "credentials",
+          "device output",
+          "unrelated historical phase docs"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/ui2-d1-option-a-baseline-row"
+        },
+        "invariants": [
+          "Restore remains disabled until the ordered successor amendments land.",
+          "Option A is provenance-bound and physical-device/endpoint scoped; VSX and ClusterXL-member restore remain unsupported.",
+          "Class 3 and class 4 remain prohibited; no Browser-to-device path is introduced."
+        ],
+        "merge_gate": "Local validation only; push/PR/merge require a later explicit Product Owner authorization.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Record the Product Owner-selected Option A decision in UI2_0_BASELINE_CONTRACT.md section 2 without applying any runtime amendment.",
+        "output_contract": [
+          "Baseline contract row",
+          "minimal state update",
+          "RELAY_NOTE"
+        ],
+        "recommended_reasoning": {
+          "reason": "Deterministic single-row amendment against a frozen contract.",
+          "tier": "Luna medium"
+        },
+        "requirements": [
+          "Read frozen baseline and Option A bundle",
+          "English engineering output",
+          "No source/test/device edits"
+        ],
+        "risks": [
+          "Accidentally authorizing implementation before the baseline row and ordered amendments are complete"
+        ],
+        "scope": {
+          "in": [
+            "docs/design/UI2_0_BASELINE_CONTRACT.md section 2",
+            "minimal project-state bookkeeping"
+          ],
+          "out": [
+            "utils/action_taxonomy.py",
+            "C2",
+            "C4",
+            "C7",
+            "tests",
+            "Java/UI",
+            "device contact",
+            "push/PR/merge"
+          ]
+        },
+        "validation_plan": [
+          "targeted project-state/convergence tests",
+          "git diff --check",
+          "privacy gate"
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-10T07:43:27Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "RELAY_NOTE",
+      "seq": 2,
+      "subject": "UI2 D1 Option A baseline row recorded",
+      "text": "IMPLEMENTED: Added the frozen DEVICE-WRITE-CLASS (D-8) row to docs/design/UI2_0_BASELINE_CONTRACT.md §2. It records CLASS_1B_CONTROLLED_RESTORE_WRITE at level=1.5, restore_push, provenance-bound physical device/endpoint-only scope, explicit VSX and ClusterXL-member unsupported scope, separate C4 static signability vs C2 runtime admission, C7 check 1 plus C7_RESTORE_NO_UNRECONCILED_PRIOR check 7, C2 claim checks, fail-closed RESTORE_TARGET_TOPOLOGY_ELIGIBILITY, configurable freshness, and restore-disabled-until-amendments. Minimal state/handover bookkeeping updated in CURRENT_STATE.md, AI_HANDOVER.md, project/roadmap.json, project/backlog.json, project/build_history.json, and generated docs/history/INDEX.md. No taxonomy, C2/C4/C7, test, Java/UI, device path, device contact, push, PR, or merge change. Validation: git diff --check clean; project JSON parse clean; targeted architecture/project-state tests 32 passed; baseline-aware repository privacy gate against origin/main PASS with 0 new findings (6 pre-existing).",
+      "timestamp": "2026-09-10T08:10:00Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "RELAY_CORRECTION",
+      "seq": 3,
+      "subject": "Relay turn correction: delivery awaits PO",
+      "text": "The implementation delivery is complete and validation evidence is recorded in seq 2. Correcting the relay turn so the Product Owner can review and close this baseline-only movement.",
+      "timestamp": "2026-09-10T07:47:06Z"
+    },
+    {
+      "actor": "po",
+      "authorized_by": "Product Owner — chat directive 2026-09-10; Codex PO + Orchestrator",
+      "marker": "RELAY_DECISION",
+      "scope": "Baseline row only; no runtime behavior",
+      "seq": 4,
+      "subject": "PO ACCEPT: Option A baseline row recorded",
+      "supersedes": "none",
+      "text": "PO accepts the baseline-only implementation slice. The D-8 Option A row is recorded in UI2_0_BASELINE_CONTRACT.md §2 with the frozen scope and fail-closed topology language. Worker evidence: targeted architecture/project-state validation passed (32 tests), privacy gate PASS with 0 new findings, JSON validation passed, and git diff check is clean. No taxonomy, C2/C4/C7, test, Java/UI, device, push, PR, or merge action was performed. The next taxonomy/C4/C7/C2 amendment movement must be separately authorized and relayed.",
+      "timestamp": "2026-09-10T07:47:29Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0063",
+  "movement": "IMPLEMENTATION",
+  "next_actor": null,
+  "refs": [
+    "docs/design/UI2_0_BASELINE_CONTRACT.md",
+    "relay/NXS-LOCAL-0060-ui2-d1-device-write-class-decision.json"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-10T07:47:29Z"
+}

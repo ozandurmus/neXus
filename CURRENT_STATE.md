@@ -5,11 +5,10 @@ see `AGENTS.md`/`AI_START_HERE.md`. **Predecessor build detail lives in
 `project/build_history.json`** (structured, newest-first) and its linked
 docs under `docs/history/`; `docs/history/INDEX.md` is the one-line timeline.
 
-- **Checkpoint:** 2026-09-10, `ui2_d1_option_a_contract_freeze` — **COMPLETE_WITH_FOLLOWUP**. `RESTORE_CONTROLLED_WRITE_LEDGER.md` is FROZEN; `UI2_0_D1_OPTION_A_AMENDMENT_PROPOSAL_BUNDLE.md` is a FROZEN amendment contract not yet applied; the consolidated review is FINAL/non-authoritative. Relay `NXS-LOCAL-0060` seq 21 records the PO freeze. Restore remains disabled; no taxonomy/C2/C4/C7/test/Java/UI or device path changed. Full detail: `project/build_history.json`.
+- **Checkpoint:** 2026-09-10, `ui2_d1_option_a_baseline_recording` — **IMPLEMENTED**. The frozen Option A `DEVICE-WRITE-CLASS` (D-8) row is recorded in `UI2_0_BASELINE_CONTRACT.md` §2, including `CLASS_1B_CONTROLLED_RESTORE_WRITE` level 1.5, `restore_push`, physical-device-only scope, separate C4/C2 predicates, C7 checks 1 and 7, C2 claim checks, and fail-closed topology. Restore remains disabled until subsequent amendments; no taxonomy/C2/C4/C7/test/Java/UI or device path changed. Full detail: `project/build_history.json`.
 - **Next** (`now_next.next`): `ui2_taxonomy_device_write_class_and_step_kind`
-  requires a separate PO-authorized implementation movement: record Option A
-  in `UI2_0_BASELINE_CONTRACT.md`, then apply the frozen taxonomy/C4/C7/C2,
-  test, and Java/UI sequence. The freeze itself is not implementation authority.
+  applies the frozen taxonomy/C4/C7/C2, test, and Java/UI sequence under its
+  own authorization. No device contact or real write is implied.
   `m7_real_device_targeted_
   collect_now` **AUTOMATED_VALIDATED 2026-09-08**, real-device confirmation
   pending Product Owner execution. `op2_c_cp_clusterxl_adapter_scoping`
