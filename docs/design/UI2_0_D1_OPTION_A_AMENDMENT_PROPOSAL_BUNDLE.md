@@ -55,6 +55,22 @@ scoped check-4 slot at claim time) — `C4` static sign-off remains fully
 independent of runtime admission throughout, exactly as seq 13's own text
 reaffirms.
 
+**Fourth revision note (this pass, PO review decision).** Two changes:
+(1) a factual correction — the sibling ledger document's prior VSX
+treatment (a `virtual_system_ref`-scoped restore admission choice) is
+retracted; this repository's own evidence (`C7` §5.2's `restore_plan`
+schema, `BACKUP_RECOVERY_CONTRACTS.md` §7.3 point 7/§7.7's frozen VSX
+exclusion for Check Point Gaia backup) shows no current capability
+targets an individual virtual system, so the current restore/ledger
+scope is **physical `device_id`/`endpoint_id` only**; VSX-context restore
+is explicitly unsupported, and any future VSX-context restore is its own
+separate contract, not this document's concern. ClusterXL member-identity
+separation is retained, unaffected, as forward-looking preparation for a
+future physical-member capability. (2) **new Step 4b**, the explicit `C7`
+§5.3 companion amendment the Product Owner requested, resolving a direct
+contradiction between `C7` §5.3's own frozen check-4 note and this
+document's claim-time check-4-slot proposal.
+
 ---
 
 ## Step 1 — `utils/action_taxonomy.py`: new `ActionClass` member (proposed)
@@ -455,6 +471,30 @@ what the gap was stays intact):
 
 ---
 
+## Step 4b — `C7` §5.3's check-4 note: proposed companion amendment resolving a contradiction (new this pass, per PO instruction)
+
+`docs/design/UI2_0_C7_BACKUP_ARTEFACT_RESTORE_ENGINE_CONTRACT.md` is FROZEN
+and is not edited by this document. This step is new relative to the prior
+passes' four/five steps — the Product Owner identified that `C7` §5.3's
+own frozen note on `C2` §6 check 4 (*"that check is `NOT_APPLICABLE` for a
+restore job"*, written before `CLASS_1B_CONTROLLED_RESTORE_WRITE` existed)
+now **directly contradicts** `RESTORE_CONTROLLED_WRITE_LEDGER.md` §3.1.0's
+own proposal to repurpose check 4's slot as restore's authoritative,
+claim-time reconciliation-pending check. The full proposed replacement
+text — quoted in full, with its own rationale — lives in
+`RESTORE_CONTROLLED_WRITE_LEDGER.md` §3.6, cross-referenced rather than
+duplicated here; summarized: `C7` §5.3's note is proposed to be rewritten
+so that check 4 reads as **class-scoped**, not restore-blanket
+`NOT_APPLICABLE` — `CLASS_1_RECOVERY_WRITE` keeps the existing `RB.x`
+cadence-ledger interpretation unchanged; `CLASS_1B_CONTROLLED_RESTORE_
+WRITE` reads this ledger's own reconciliation-pending check instead; every
+other class remains `NOT_APPLICABLE`. Check 5 (no concurrent operation
+against the same target) is explicitly restated as unaffected — a live-job
+concurrency lock, answering a different temporal question than check 4's
+now-class-scoped, terminal-outcome reconciliation question.
+
+---
+
 ## Step 5 — `UI2_0_BASELINE_CONTRACT.md` §2: proposed new decision row
 
 `docs/design/UI2_0_BASELINE_CONTRACT.md` is FROZEN and is not edited by this
@@ -465,7 +505,7 @@ the freshness clarification) so the baseline row records the actual
 decided shape, not any earlier draft's open questions:
 
 ```markdown
-| **DEVICE-WRITE-CLASS** (D-8) | How restore's device write is admitted, per `C7` §9.1–§9.3's reported (not fixed) gap | **ACCEPTED: Option A** (`docs/design/UI2_0_D1_DEVICE_WRITE_CLASS_AND_STEP_KIND_DECISION.md`) — a new, narrowly-scoped `utils/action_taxonomy.py` class (`CLASS_1B_CONTROLLED_RESTORE_WRITE`, `level=1.5`, non-renumbering — relay `NXS-LOCAL-0060` seq 5) between `CLASS_1_RECOVERY_WRITE` and `CLASS_2_OPERATIONAL_STATE_CHANGE`, plus a new `C4` §2.3 device-directed step kind (`restore_push`), both scoped to a provenance-bound replay of a previously-verified backup artefact back to its own originating device only — never operator-authored content, never a different target, never console-submittable. The class is narrowly `SIGNED_OFF`-eligible at `C4`'s static/spec level for restore-scoped rows only, independent of a wholly separate runtime admission predicate (relay seq 7), gated by a dedicated ledger/approval/precondition contract (`docs/design/RESTORE_CONTROLLED_WRITE_LEDGER.md`) that consults `C7` §5.3's existing checks 1/2 as an early, non-authoritative compile-time pass (relay seq 9) **and** an explicit, authoritative claim-time check at `C2` §6's existing check-4 slot (relay seq 13, narrowly superseding seq 9's "no separate check" framing for the one fact that cannot remain compile-time-only). Connectivity-freshness is configurable policy, not a fixed number (no value frozen; 15 minutes explicitly rejected), with any cached-telemetry semantic-sufficiency contract keyed per vendor/platform and itself requiring council review before being referenced. Not by `RECOVERY_OPERATIONAL_WRITE_LEDGER.md`'s cadence model (`NOT_APPLICABLE` to restore, `C7` §5.3). `CLASS_3_CONFIGURATION_WRITE`/`CLASS_4_POLICY_DEPLOYMENT` remain prohibited, unaffected. Restore stays disabled in Java until the amendments named in `D1` §5's follow-up list (this row is item 5 of that list) are all applied and, for the admission contract specifically, taken through `GOV_PO_ROLE_MIGRATION.md` §7 council review before its own freeze | `utils/action_taxonomy.py`; `C4` §2.3, §3.3 step 7; `C7` §5.3 checks 1/2, §9.1–§9.3; `C2` §5.3, §6 check 2/check 4; `docs/design/RESTORE_CONTROLLED_WRITE_LEDGER.md`; `docs/design/UI2_0_D1_OPTION_A_CONSOLIDATED_REVIEW.md`; `REL-BACKUP` |
+| **DEVICE-WRITE-CLASS** (D-8) | How restore's device write is admitted, per `C7` §9.1–§9.3's reported (not fixed) gap | **ACCEPTED: Option A** (`docs/design/UI2_0_D1_DEVICE_WRITE_CLASS_AND_STEP_KIND_DECISION.md`) — a new, narrowly-scoped `utils/action_taxonomy.py` class (`CLASS_1B_CONTROLLED_RESTORE_WRITE`, `level=1.5`, non-renumbering — relay `NXS-LOCAL-0060` seq 5) between `CLASS_1_RECOVERY_WRITE` and `CLASS_2_OPERATIONAL_STATE_CHANGE`, plus a new `C4` §2.3 device-directed step kind (`restore_push`), both scoped to a provenance-bound replay of a previously-verified backup artefact back to its own **physical device/endpoint** only (`device_id`/`endpoint_id` — VSX virtual-system-context restore is explicitly unsupported and out of scope; a future VSX-context restore capability requires its own separate vendor/platform-and-target-scope contract) — never operator-authored content, never a different target, never console-submittable. The class is narrowly `SIGNED_OFF`-eligible at `C4`'s static/spec level for restore-scoped rows only, independent of a wholly separate runtime admission predicate (relay seq 7), gated by a dedicated ledger/approval/precondition contract (`docs/design/RESTORE_CONTROLLED_WRITE_LEDGER.md`) that consults `C7` §5.3's existing checks 1/2 as an early, non-authoritative compile-time pass (relay seq 9) **and** an explicit, authoritative claim-time check at `C2` §6's existing check-4 slot (relay seq 13, narrowly superseding seq 9's "no separate check" framing for the one fact that cannot remain compile-time-only) — `C7` §5.3's own check-4 note itself requires a companion amendment (class-scoped: class 1 keeps the `RB.x` cadence interpretation, class 1.5 reads the restore reconciliation ledger, every other class stays `NOT_APPLICABLE`). Connectivity-freshness is configurable policy, not a fixed number (no value frozen; 15 minutes explicitly rejected), with any cached-telemetry semantic-sufficiency contract keyed per vendor/platform and itself requiring council review before being referenced. `CLASS_3_CONFIGURATION_WRITE`/`CLASS_4_POLICY_DEPLOYMENT` remain prohibited, unaffected. Restore stays disabled in Java until the amendments named in `D1` §5's follow-up list (this row is item 5 of that list) are all applied and, for the admission contract specifically, taken through `GOV_PO_ROLE_MIGRATION.md` §7 council review before its own freeze | `utils/action_taxonomy.py`; `C4` §2.3, §3.3 step 7; `C7` §5.3 checks 1/2/check-4-note companion amendment, §9.1–§9.3; `C2` §5.3, §6 check 2/check 4; `docs/design/RESTORE_CONTROLLED_WRITE_LEDGER.md`; `docs/design/UI2_0_D1_OPTION_A_CONSOLIDATED_REVIEW.md`; `REL-BACKUP` |
 ```
 
 The row id `DEVICE-WRITE-CLASS (D-8)` is this bundle's own proposal (the
@@ -486,9 +526,18 @@ remains disabled and unimplementable exactly as it is today.
   rather than folding it into this proposal-diff-shaped document.
 - **Step 2b** (`C7`/`C2` amendment text) is new this pass and is
   cross-referenced to, not duplicated from,
-  `RESTORE_CONTROLLED_WRITE_LEDGER.md` §3.1 (the `C7` checks 1/2 fold) and
-  §3.4 (the `C2` retry-rule row), where their own rationale lives
-  alongside them.
+  `RESTORE_CONTROLLED_WRITE_LEDGER.md` §3.1 (the compile/claim check
+  mapping) and §3.4 (the `C2` retry-rule row), where their own rationale
+  lives alongside them.
+- **Step 4b** (the `C7` §5.3 companion amendment) is new this pass and is
+  cross-referenced to, not duplicated from,
+  `RESTORE_CONTROLLED_WRITE_LEDGER.md` §3.6, where the full proposed
+  replacement text and its rationale live.
+- **A genuine future VSX-context restore capability is explicitly out of
+  scope** — this bundle's Step 1/Step 5 text now states plainly that
+  restore's current scope is physical `device_id`/`endpoint_id` only, per
+  the PO's own review decision; no VSX-scoped target model, step kind, or
+  admission rule is proposed anywhere in this bundle.
 - **Step 6** (test-file edits) and **step 7** (Java implementation) are
   explicitly out of this preparation movement's scope; Step 1 above names
   the specific assertions a successor `TARGETED_TEST` phase would touch,
@@ -498,21 +547,26 @@ remains disabled and unimplementable exactly as it is today.
   file is modified by this document's existence** — every block above is
   proposed text for a reviewer, not an applied diff; `git diff --check`
   against this revision shows only edits to this file, its sibling
-  admission-contract document, and one new consolidated review document
+  admission-contract document, and the consolidated review document
   under `docs/design/`.
 
 ## Cross-references
 
 - `docs/design/UI2_0_D1_DEVICE_WRITE_CLASS_AND_STEP_KIND_DECISION.md` §5 —
   the follow-up list this bundle executes items 1, 2, 4, 5 of (plus the new
-  Step 2b, a council-raised addition not in the original seven-item list).
+  Step 2b/4b, council-raised and PO-raised additions not in the original
+  seven-item list).
 - `docs/design/RESTORE_CONTROLLED_WRITE_LEDGER.md` — item 3, the admission
-  contract this bundle's Step 1/Step 2/Step 2b proposals presuppose exists;
-  §3.2's inventory and §3.4's `C2` proposal are shared with this bundle by
-  cross-reference, not duplicated.
+  contract this bundle's Step 1/Step 2/Step 2b/Step 4b proposals
+  presuppose exists; §3.2's inventory, §3.4's `C2` proposal, §3.6's `C7`
+  companion amendment, and §3.1.1's physical-scope-only correction are
+  shared with this bundle by cross-reference, not duplicated.
 - `docs/design/UI2_0_D1_OPTION_A_CONSOLIDATED_REVIEW.md` — the primary
   review entry point for this revision pass, naming every council finding
-  and where each is resolved across both documents.
+  and PO review decision and where each is resolved across both documents.
+- `docs/design/BACKUP_RECOVERY_CONTRACTS.md` §7.3 point 7, §7.7 (FROZEN)
+  — the Check Point Gaia VSX-exclusion evidence grounding this pass's
+  scope correction.
 - `docs/design/GOV_PO_ROLE_MIGRATION.md` §7 — council-trigger process
   governing this bundle's own path to becoming an executable movement.
 - `AGENTS.md` "Network action taxonomy", "Identity law", "Evidence laws" —
