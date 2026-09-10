@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "current_build": "gov_po_2_implementation",
+  "current_build": "ui2_d1_option_a_taxonomy_step_kind",
   "current_track": "PCP.x",
   "progress_contract": "Weighted acceptance-criterion completion. Percentages describe the declared roadmap, not calendar time or delivery ETA.",
   "tracks": [
@@ -150,25 +150,25 @@
   "now_next": {
     "horizon_contract": "NOW is exactly one build. NEXT is exactly one. Everything else is an `upcoming` row carrying its own true status: planned = AFTER, blocked = waiting on a named external gate, deferred = consciously postponed. `now.build` must equal the newest project/build_history.json record -- utils.project_plan enforces it.",
     "now": {
-      "build": "gov_po_2_implementation",
-      "title": "GOV.PO.2 (2/2) -- implement the frozen PO permission model",
-      "goal": "Implement docs/design/GOV_PO_2_PO_VISIBILITY_AND_BOUNDED_AUTHORSHIP.md without widening Product Owner decision authority: bounded read-only PR/CI observation, flat DRAFT-only po_drafts authorship, generated-history narrowing, the standalone privacy check, and the closed-set PO evidence reviewer.",
-      "status": "automated_validated",
+      "build": "ui2_d1_option_a_taxonomy_step_kind",
+      "title": "UI2 D1 Option A -- apply taxonomy class and restore_push step kind",
+      "goal": "Apply the frozen controlled-restore action class and C4 restore_push step-kind contract without enabling runtime restore behavior.",
+      "status": "complete_with_followup",
       "started": "2026-09-10",
       "completed": "2026-09-10",
       "notes": [
-        "Implemented under relay/NXS-LOCAL-0062-gov-po-2-implementation.json and the frozen GOV.PO.2 contract; no product source, vendor command, device path, storage schema, or frozen contract changed.",
-        "Focused GOV.PO.2: 141 passed. Affected governance/convergence: 242 passed. Final full regression: 3253 passed, 27 skipped, 3 unrelated failures -- the two documented historical DLP-token collisions plus one environment-dependent engineer-gate test caused by this manually opened session having no .nexus/approved_task.json baseline pointer.",
-        "Standalone privacy entry point matches main.py without a baseline and therefore reports the six pre-existing repository findings; the baseline-aware repository gate against origin/main passes with 0 new findings."
+        "Applied the frozen taxonomy class and C4 restore_push step-kind amendment; relay NXS-LOCAL-0064 seq 1-3 is closed.",
+        "CLASS_1B_CONTROLLED_RESTORE_WRITE is level 1.5 and non-console-submittable; restore_push is the sole permitted device-directed write kind for that class, with runtime admission still separate.",
+        "C2/C7, Java/UI, device-path, and write execution remain separate follow-up work; no device contact or write execution is implied."
       ]
     },
     "next": {
-      "build": "ui2_taxonomy_device_write_class_and_step_kind",
-      "title": "UI2 D1 -- decide the restore/config-apply action class and device-write step kind",
+      "build": "ui2_d1_restore_c7_c2_amendments",
+      "title": "UI2 D1 Option A -- apply C7 and C2 restore admission amendments",
       "status": "planned",
       "notes": [
-        "Resume the already-open NXS-LOCAL-0060 relay; decision-document scope only, no taxonomy/source edit. High scrutiny because it defines a future device-write boundary.",
-        "The independent UI2 B1-1 skeleton contract and freeze merged as PR #174/#175; this GOV.PO.2 branch is reconciled with current main."
+        "Apply only the frozen C7 and C2 restore admission amendments under separate authorization; tests and Java/UI remain later slices.",
+        "No device contact or real write is implied."
       ]
     },
     "upcoming": [
