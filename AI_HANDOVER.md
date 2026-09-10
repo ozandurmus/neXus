@@ -2,41 +2,30 @@
 
 > **NON-AUTHORITATIVE DERIVED SUMMARY**
 > **DO NOT USE AS PROJECT-STATE AUTHORITY**
-> If this disagrees with `CURRENT_STATE.md` or `project/*.json`, those win.
+> If this disagrees with `CURRENT_STATE.md` or `project/roadmap.json`, those
+> sources win.
 
 ## 1. Snapshot
 
-- 2026-09-10: `ui2_d1_option_a_taxonomy_step_kind` is IMPLEMENTED on
-  `ozandur-garanti-cautious-waffle` in local commit `a6e94ef`; not pushed.
-- The frozen taxonomy class and C4 `restore_push` step kind are applied.
-  Relay `NXS-LOCAL-0064` is CLOSED at seq 3; baseline relay `NXS-LOCAL-0063`
-  remains CLOSED at seq 4.
+- 2026-09-10: `ui2_b1_01_skeleton_ci_docker`, contract-only movement integrated from worker relay `NXS-LOCAL-0061`.
+- New DRAFT: `docs/design/UI2_0_B1_01_SKELETON_CI_DOCKER_CONTRACT.md`.
+- No `ui2/` implementation, Line-1 source, validation workflow, or device contact.
 
 ## 2. What changed
 
-- Added `CLASS_1B_CONTROLLED_RESTORE_WRITE` at level 1.5 without renumbering
-  existing classes and added C4 `restore_push` as the sole device-directed
-  write kind for this class; `sftp_put` remains refused.
-- Static signability remains separate from C2/C7 runtime admission. ClusterXL-
-  member and VSX-context restore remain unsupported; no device contact or
-  write execution occurred.
+- The contract defines component homes, one-way dependencies, reproducible build/test/image commands, Testcontainers/Flyway, isolated CI, scoped secrets, and 15 implementation checks.
+- The worker’s completed relay and contract were imported without restoring its stale pre-D1 state snapshot; D1 remains in build history and restore remains disabled.
 
 ## 3. Exact next action
 
-Open a separate authorized movement for `ui2_d1_restore_c7_c2_amendments`.
-Apply only the frozen C7/C2 admission amendments next; restore remains
-disabled until later tests and Java/UI gates are complete.
+Product Owner review and freeze of the B1-1 contract. After freeze, dispatch a separate B1-1 implementation movement to create `ui2/`.
 
 ## 4. Test delta
 
-- Targeted architecture tests: 23 passed; prior baseline movement: 109 passed.
-- Baseline-aware privacy gate against `origin/main`: PASS, 0 new findings
-  (6 pre-existing findings unchanged). `git diff --check`: clean.
-- Baseline/state documentation slice; targeted architecture/project-state
-  validation and privacy gate are required; no full regression is required.
+- Worker evidence: AC-1..AC-9 self-check, architecture/state tests 22 passed, privacy 0 new findings, diff check clean.
+- Integration validation: JSON/state consistency and generated history index are required before PR merge.
 
 ## 5. New risks
 
-- The C2/C7 admission bundle and downstream tests/Java/UI are not yet applied;
-  restore remains structurally disabled.
-- Push/PR/merge are not authorized in this movement.
+- Contract is DRAFT; implementation is not authorized until freeze.
+- Worker had no PR/CI at close; integration is now pending push, PR, CI, and PO merge verification.
