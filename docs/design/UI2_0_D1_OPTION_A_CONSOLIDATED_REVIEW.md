@@ -361,7 +361,8 @@ honestly as a retraction rather than silently overwritten.
   `UNSUPPORTED_CLUSTERXL_MEMBER`; missing, stale, or conflicting membership
   evidence yields `NOT_EVALUABLE`; both are refused before approval.
   At claim, existing `C2` §6 check 5 registry/allowlist re-checks the same
-  eligibility and refuses with distinct named reasons. This is target
+  eligibility and maps the compile-time `UNSUPPORTED_CLUSTERXL_MEMBER` outcome
+  to the distinct claim-time `TARGET_CLUSTERXL_MEMBER_UNSUPPORTED` reason. This is target
   eligibility, not folding the ledger predicate into check 5.
 - ClusterXL member restore is made explicitly unsupported. Distinct
   member `device_id` values prove identity separation only; `C7` §9.8's

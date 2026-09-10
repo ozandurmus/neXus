@@ -652,8 +652,10 @@ evidence. Known ClusterXL members yield `UNSUPPORTED_CLUSTERXL_MEMBER`;
 missing, stale or conflicting membership evidence yields `NOT_EVALUABLE`.
 Either refuses compilation before approval. Targets are physical
 `device_id`/`endpoint_id` only; VSX-context restore is unsupported. Claim-time
-`C2` §6 check 5 re-evaluates eligibility with its distinct refusal reasons
-(`RESTORE_CONTROLLED_WRITE_LEDGER.md` §3.7). Per-member identity separation
+`C2` §6 check 5 re-evaluates eligibility with its distinct claim-time refusal
+reasons: this compile-time `UNSUPPORTED_CLUSTERXL_MEMBER` outcome maps to
+`TARGET_CLUSTERXL_MEMBER_UNSUPPORTED` at claim (`RESTORE_CONTROLLED_WRITE_LEDGER.md`
+§3.7). Per-member identity separation
 does not prove cross-member restore safety.
 
 **Note on `C2` §6 check 4, per-class interpretation (D1 Option A):**
