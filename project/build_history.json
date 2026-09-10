@@ -3,6 +3,21 @@
   "record_contract": "One structured record per build, newest first. Required: build, status, title, summary (<= 2 sentences). Optional: started, completed, track, movement, supersedes, evidence, risks_forward, docs{agreement,validation,handover} (repo-relative paths under docs/history/). Full detail lives in the linked doc; do not restate it here. Status vocabulary must stay within utils/project_plan.py STATUS_VALUES.",
   "builds": [
     {
+      "build": "ui2_d1_restore_c7_c2_amendments",
+      "status": "blocked",
+      "title": "UI2 D1 -- C7/C2 restore admission amendments",
+      "summary": "Applied the independent C7 check 7, connectivity and topology requirements, and companion C2 claim-time ledger text. The retry amendment is held for a frozen-contract lifecycle conflict; runtime restore remains disabled.",
+      "evidence": "Targeted contract and architecture/state tests: 26 passed; C7 checks 2-6 byte-for-byte preserved against 3993d95; tracked-candidate privacy: 6 existing findings, 0 new; diff and generated index checks passed. Full regression and device validation not run; no runtime code changed.",
+      "started": "2026-09-10",
+      "movement": "IMPLEMENTATION",
+      "track": "UI 2.0 (Java product line)",
+      "risks_forward": "Ledger section 3.1.3 says refused claims remain REQUESTED; C2 section 6 transitions CLAIMED to REJECTED. PO resolution is required before the retry amendment.",
+      "docs": {
+        "agreement": "docs/design/RESTORE_CONTROLLED_WRITE_LEDGER.md",
+        "handover": "AI_HANDOVER.md"
+      }
+    },
+    {
       "build": "ui2_b1_01_skeleton_ci_docker",
       "status": "in_progress",
       "title": "UI2 B1-1 -- skeleton, CI and Docker contract (DRAFT, for Product Owner freeze)",

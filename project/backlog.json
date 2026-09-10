@@ -2,6 +2,15 @@
   "schema_version": "1.0",
   "items": [
     {
+      "id": "ui2_d1_claim_refusal_lifecycle_resolution",
+      "category": "UI2 / contract consistency",
+      "title": "Resolve restore claim refusal lifecycle",
+      "status": "planned",
+      "priority": "P1",
+      "target": "PO architecture decision before the D1 retry amendment or runtime implementation",
+      "note": "Frozen ledger section 3.1.3 says refused claims remain REQUESTED; frozen C2 section 6 transitions CLAIMED to REJECTED. The partial amendment preserves C2's state machine and holds the retry-table change."
+    },
+    {
       "id": "orchestrator_tool_gate_hook_cwd_relative_script_path_footgun",
       "category": "Orchestrator / reliability",
       "title": "scripts/nexus_engineer_tool_gate.py (PreToolUse hook) resolves its own script path relative to CWD -- an accidental cd outside the worktree permanently breaks the engineer session's Bash tool",
