@@ -224,11 +224,80 @@
       "subject": "D1 revision complete (commit e2e18d3): VSX scoping corrected to physical device/endpoint only; explicit C7 5.3 companion amendment for check-4 contradiction drafted",
       "text": "Completed the revision per PO review decision seq 15 (correcting VSX scoping; requiring explicit C7 5.3 companion amendment). Committed as e2e18d3 on branch ozandur-garanti-cautious-waffle (sibling worktree to this relay file's own -- same caveat as prior commits 5492960/339d964/9dbd3d0/b0be28a: not on this branch, not pushed, no PR).\n\nCORRECTIONS APPLIED, exactly as directed:\n\n(1) Current restore/ledger scope is physical device_id/endpoint_id. Section 3.1.1 of the ledger document is rewritten in full, grounded directly in this repository's own evidence: C7 5.2's restore_plan schema carries target_device_id/target_endpoint_id only -- no virtual_system_ref field exists on it at all; BACKUP_RECOVERY_CONTRACTS.md 7.3 point 7 and 7.7 (FROZEN) state, quoted not paraphrased, that Check Point Gaia backup collection is \"per physical endpoint only... a VSX virtual-system entity is never contacted... not a per-virtual-system recovery artifact\" and \"not valid inside a VSX virtual-system context.\"\n\n(2) VSX virtual_system_ref restore is explicitly UNSUPPORTED/blocked/not in current scope -- restated as a scope fact, not a conservative-default policy choice among live options. RestoreWriteLedgerEntry's virtual_system_ref field is removed as dead schema (no capability populates it); a physical, non-key endpoint_id field is added instead for audit/traceability parity with C7's own restore_plan.\n\n(3) Any future VSX-context restore requires a separate vendor/platform and target-scope contract -- stated explicitly as its own future GOV_PO_ROLE_MIGRATION.md section 7 trigger-(b) freeze candidate (a new capability model, a new restore_plan target shape, its own admission design), not a parameter this ledger absorbs.\n\n(4) ClusterXL member identity separation is retained, explicitly reframed as forward-looking only, since no restore capability exists for any platform today (C7 7.3/7.4 both record NOT_BUILT). Cross-member risk remains cross-referenced to C7's own already-open section 9.8, unresolved by this correction.\n\nEXPLICIT C7 5.3 COMPANION AMENDMENT (new section 3.6 in the ledger document, cross-referenced as new Step 4b in the amendment bundle): full proposed replacement text for C7 5.3's own frozen note on C2 6 check 4 (\"that check is NOT_APPLICABLE for a restore job\" -- written before this class existed, and now directly contradicted by this document's own section 3.1.0 repurposing of check 4's slot for restore). The proposed text makes check 4's applicability class-scoped: class 1 (backup) keeps the existing RB.x cadence-ledger interpretation, unchanged; class 1.5 (restore) reads this ledger's own reconciliation-pending check instead; every other class remains NOT_APPLICABLE. Check 5 (concurrency) is explicitly restated as unaffected -- a live-job lock answering a different temporal question than check 4's now-class-scoped, terminal-outcome reconciliation question.\n\nWHAT CHANGED (3 docs/design/*.md files revised, no source/test/FROZEN-contract/project-state file touched):\n\n1. docs/design/RESTORE_CONTROLLED_WRITE_LEDGER.md -- section 3.1.1 rewritten in full (corrected scope + evidence); section 4's module API loses virtual_system_ref, gains endpoint_id; sections 4.0/6/8/9 updated to match; new section 3.6 (C7 5.3 companion amendment); section 9 item 5 marked \"RESOLVED THIS PASS, no longer open\" (retraction recorded honestly, not silently deleted); section 10 gains BACKUP_RECOVERY_CONTRACTS.md cross-reference.\n\n2. docs/design/UI2_0_D1_OPTION_A_AMENDMENT_PROPOSAL_BUNDLE.md -- Step 5's baseline row updated (physical scope stated, VSX out of scope, C7 5.3 companion amendment added to target-file list); new Step 4b (companion amendment, cross-referenced not duplicated); closing sections state no VSX-scoped target model/step kind/admission rule is proposed anywhere in this bundle.\n\n3. docs/design/UI2_0_D1_OPTION_A_CONSOLIDATED_REVIEW.md -- finding 10 marked superseded by new finding 15 (full evidentiary grounding for the VSX correction); new finding 16 (C7 5.3 companion amendment); new fourth-pass change-log subsection; open-items/cross-references updated.\n\nVALIDATION: git diff --check clean. Repository privacy gate: 6 pre-existing findings, identical to baseline, 0 new. git status/diff --stat confirm only the three docs/design/*.md files changed. No device contact, no credential use, no network access this pass.\n\nOPEN RISKS handed back to PO/council (in addition to those already named in prior relay notes):\n(a) The compile-time check-1/check-2 mapping (which check absorbs \"no unreconciled prior outcome\" as an early, non-authoritative pass) remains this document's own proposal -- unaffected by this pass, still flagged for council confirmation.\n(b) ClusterXL cross-member risk remains unresolved, cross-referenced to C7's own open section 9.8 -- genuinely forward-looking since no restore capability exists for any ClusterXL platform today.\n(c) A genuinely new future VSX-context restore capability, if ever proposed, is entirely undesigned by this pass or its predecessors -- named explicitly so it is not mistaken for a covered case.\n(d) All three documents still require nexus-decision-council review before any may freeze.\n\nHanding back to PO: review the corrected consolidated review document (finding 15's evidentiary grounding, finding 16's C7 5.3 companion amendment, section 5's updated open items), confirm the C7 5.3 amendment's exact proposed text, and route all three documents to nexus-decision-council per GOV_PO_ROLE_MIGRATION.md section 7 before any may freeze.",
       "timestamp": "2026-09-10T06:12:39Z"
+    },
+    {
+      "actor": "po",
+      "authorized_by": "Product Owner — chat directive 2026-09-10; Codex PO + Orchestrator fresh review",
+      "marker": "RELAY_DECISION",
+      "scope": "D1 Option A DRAFT package only: compile-time reconciliation check placement and ClusterXL cross-member scope correction",
+      "seq": 17,
+      "subject": "PO DECISION: separate C7 compile-time check 7; ClusterXL restore remains unsupported pending its own safety contract",
+      "supersedes": "RELAY_DECISION seq 9 only for the C7 compile-time fold mapping; seq 13 and seq 15 otherwise remain in force",
+      "text": "Product Owner decision after a fresh review of the two remaining topics. First, do not fold the compile-time no-unreconciled-prior predicate into C7 section 5.3 check 2 or check 5: either fold would combine independently failing predicates and lose the named refusal cause. Add a new C7 section 5.3 check 7, appended after check 6 without renumbering or changing checks 1-6. It is an early, non-authoritative, staleness-tolerant check and never substitutes for the already-decided authoritative claim-time check in C2 section 6 check 4. Second, C7 section 9.8 is explicitly about CP management-HA consistency groups and does not establish ClusterXL gateway cross-member restore semantics. The present Option A restore model remains physical-device/endpoint scoped, but ClusterXL member restore is UNSUPPORTED and out of current scope. Any future ClusterXL physical-member restore capability requires a separate vendor/platform, target-scope, and cross-member safety contract; per-member device_id separation proves identity separation only and must not be treated as proof of operational independence or cross-member safety. This authorizes revisions to the three DRAFT package documents only. It does not authorize edits to frozen C2/C4/C7, taxonomy, tests, Java/UI, freeze, push, PR, merge, or device contact.",
+      "timestamp": "2026-09-10T06:54:12Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "RELAY_NOTE",
+      "seq": 18,
+      "subject": "Seq 17 DRAFT revision complete; bounded council changes applied; missing primary D1 decision document discovered",
+      "text": "Revised the three Option A DRAFT documents per seq 17 and the bounded same-model-family fresh-context Security Reviewer and Senior Python Architect reviews. Added C7_RESTORE_NO_UNRECONCILED_PRIOR as the stable check_id for new C7 section 5.3 check 7; preserved the separate earlier check-1 connectivity amendment; left checks 2-6 unchanged; named six-to-seven fixed-cardinality consumer/test updates. Corrected ClusterXL scope: C7 section 9.8 covers CP management-HA consistency groups, not ClusterXL gateway members; member restore is unsupported pending a separate vendor/platform, target-scope, and cross-member safety contract. Added the enforceable fail-closed path: RESTORE_TARGET_TOPOLOGY_ELIGIBILITY must resolve from authoritative registry plus current topology evidence to STANDALONE_PHYSICAL_DEVICE before approval and again through C2 section 6 check 5 at claim; known ClusterXL members and missing/stale/conflicting topology evidence are refused with distinct named reasons. Validation: git diff --check clean; relay validator valid; targeted local relay plus architecture convergence tests 109 passed; privacy gate PASS with 0 new findings and 6 pre-existing baseline findings. No FROZEN contract, taxonomy, test, Java/UI, or project-state file changed. New blocker discovered during PO review: the primary docs/design/UI2_0_D1_DEVICE_WRITE_CLASS_AND_STEP_KIND_DECISION.md referenced by all three DRAFTs is absent from this branch and origin/main; an untracked recoverable copy exists in the sibling ozandur-garanti-d1-option-a-integration worktree. Do not freeze until the PO authorizes recovery and reviews that authority-chain gap.",
+      "timestamp": "2026-09-10T07:14:36Z"
+    },
+    {
+      "actor": "po",
+      "authorized_by": "Product Owner — chat directive 2026-09-10; Codex PO + Orchestrator",
+      "marker": "RELAY_DECISION",
+      "scope": "Recover one missing DRAFT authority-chain document only",
+      "seq": 19,
+      "subject": "Recover the missing primary D1 decision document from the sibling worktree",
+      "supersedes": "none",
+      "text": "Product Owner authorizes recovery of docs/design/UI2_0_D1_DEVICE_WRITE_CLASS_AND_STEP_KIND_DECISION.md from the intact untracked copy in sibling worktree ozandur-garanti-d1-option-a-integration into the current cautious-waffle branch. Preserve its option analysis and provenance argument; update only its status/governing-decision references as needed to reflect that Option A was selected in relay seq 3 and refined by seq 5, 7, 9, 11, 13, 15, and 17. Do not import the sibling worktree's uncommitted CURRENT_STATE.md, project JSON, history index, or relay copy because they were prepared against a different/stale branch state and require a separate authority reconciliation. This recovery authorizes no FROZEN amendment, implementation, freeze, push, PR, merge, or device contact.",
+      "timestamp": "2026-09-10T07:14:55Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "RELAY_NOTE",
+      "seq": 20,
+      "subject": "Primary D1 decision document recovered and aligned; freeze/implementation ordering contradiction removed",
+      "text": "Recovered docs/design/UI2_0_D1_DEVICE_WRITE_CLASS_AND_STEP_KIND_DECISION.md from the intact sibling worktree copy authorized by seq 19. Updated its status to DRAFT — OPTION A SELECTED IN RELAY; FROZEN BASELINE AMENDMENT PENDING, and aligned its follow-up list with relay seq 5/7/13/15/17: CLASS_1B_CONTROLLED_RESTORE_WRITE level 1.5, restore_push, narrow static signability plus separate runtime admission, C7_RESTORE_NO_UNRECONCILED_PRIOR check 7, claim-time C2 checks, and fail-closed topology eligibility with VSX/ClusterXL excluded. Did not import the sibling's stale uncommitted CURRENT_STATE/project/history/relay changes. Also corrected RESTORE_CONTROLLED_WRITE_LEDGER section 9 item 1: council+PO contract freeze may precede the separately authorized baseline/taxonomy/C4/C7/C2/test/Java implementation movement; freeze does not itself create or authorize code. git diff --check is clean, including the recovered untracked document via no-index check. No FROZEN contract, project state, source, test, Java/UI, or device contact changed.",
+      "timestamp": "2026-09-10T07:18:16Z"
+    },
+    {
+      "actor": "po",
+      "authorized_by": "Product Owner — chat directive 2026-09-10; Codex PO + Orchestrator",
+      "marker": "RELAY_DECISION",
+      "scope": "Freeze two Option A contract artifacts, finalize the review record, update durable state/handover, local validation and commit only",
+      "seq": 21,
+      "subject": "PO FREEZE DECISION: Option A admission contract and amendment bundle approved; review record finalized",
+      "supersedes": "none; incorporates relay seq 3, 5, 7, 9, 11, 13, 15, 17, and 19",
+      "text": "Product Owner approves freeze after the required bounded council review. Council disclosure: two same-model-family, fresh-context seats ran independently — Security Reviewer and Senior Python Architect; this is not a cross-model review. Both returned FREEZE WITH CHANGES. Their required changes are satisfied: stable check_id C7_RESTORE_NO_UNRECONCILED_PRIOR; explicit six-to-seven cardinality updates while preserving the earlier check-1 amendment and checks 2-6; and an enforceable fail-closed RESTORE_TARGET_TOPOLOGY_ELIGIBILITY path before approval and at C2 section 6 check 5 claim-time recheck, with ClusterXL member restore unsupported and missing/stale/conflicting topology evidence not evaluable. Product Owner declines an additional optional cross-model review because the two disputed issues are now bounded, independently reviewed, fail-closed, and mechanically corrected; this is not a claim of cross-model independence. Authorize status changes: RESTORE_CONTROLLED_WRITE_LEDGER.md becomes FROZEN — PRODUCT OWNER APPROVED, 2026-09-10; UI2_0_D1_OPTION_A_AMENDMENT_PROPOSAL_BUNDLE.md becomes FROZEN — PRODUCT OWNER APPROVED AMENDMENT CONTRACT, NOT YET APPLIED, 2026-09-10; UI2_0_D1_OPTION_A_CONSOLIDATED_REVIEW.md becomes FINAL — PO/COUNCIL REVIEW RECORD, NOT IMPLEMENTATION AUTHORITY, 2026-09-10. UI2_0_D1_DEVICE_WRITE_CLASS_AND_STEP_KIND_DECISION.md remains DRAFT because the authoritative Option A baseline row is not yet applied to UI2_0_BASELINE_CONTRACT.md. Also authorize the required durable project-state, history index, and AI_HANDOVER updates for this freeze, validation, and one local commit. This freeze authorizes no taxonomy/C2/C4/C7/test/Java/UI implementation, device contact, push, PR, or merge. The exact next movement is a separate implementation-contract amendment movement: first apply the Option A baseline row, then the frozen bundle's taxonomy/C4/C7/C2 amendments and tests, with Java/UI only after those gates.",
+      "timestamp": "2026-09-10T07:19:11Z"
+    },
+    {
+      "actor": "engineer",
+      "good_to_go": true,
+      "marker": "RELAY_NOTE",
+      "seq": 22,
+      "subject": "Freeze/state update complete and validated",
+      "text": "Applied the seq 21 freeze statuses and completed the required durable state update. RESTORE_CONTROLLED_WRITE_LEDGER.md is FROZEN; UI2_0_D1_OPTION_A_AMENDMENT_PROPOSAL_BUNDLE.md is a FROZEN amendment contract not yet applied; UI2_0_D1_OPTION_A_CONSOLIDATED_REVIEW.md is FINAL and non-authoritative; the recovered UI2_0_D1_DEVICE_WRITE_CLASS_AND_STEP_KIND_DECISION.md remains DRAFT pending the frozen baseline recording act. Updated CURRENT_STATE.md, project/roadmap.json, project/backlog.json, project/build_history.json, AI_HANDOVER.md, and regenerated docs/history/INDEX.md. Validation: local relay validator valid; targeted tests tests/test_architecture_convergence.py plus tests/test_local_relay_protocol.py: 109 passed; repository privacy gate against origin/main PASS, 0 new findings, 6 pre-existing unchanged; git diff --check clean. No product source, test, taxonomy, target FROZEN C2/C4/C7, Java/UI, device contact, push, PR, or merge.",
+      "timestamp": "2026-09-10T07:30:55Z"
+    },
+    {
+      "actor": "po",
+      "authorized_by": "Product Owner — chat directive 2026-09-10; Codex PO + Orchestrator",
+      "marker": "RELAY_DECISION",
+      "scope": "Close NXS-LOCAL-0060 contract-freeze movement only",
+      "seq": 23,
+      "subject": "PO CLOSE: Option A contract freeze movement accepted",
+      "supersedes": "none",
+      "text": "Product Owner accepts the seq 22 delivery and closes this architecture movement as COMPLETE_WITH_FOLLOWUP. The frozen ledger and amendment contract are approved; the consolidated review is final; the primary options document remains DRAFT until the Option A row is applied to UI2_0_BASELINE_CONTRACT.md. The next movement is separately authorized implementation preparation in the frozen order, not automatic continuation. Main merge remains blocked in this movement because push/PR/merge were not authorized; local commit only. Restore remains disabled and no device-write behavior is authorized.",
+      "timestamp": "2026-09-10T07:31:15Z"
     }
   ],
   "id": "NXS-LOCAL-0060",
   "movement": "UI2_TAXONOMY_DEVICE_WRITE_CLASS_AND_STEP_KIND_DECISION",
-  "next_actor": "po",
+  "next_actor": null,
   "refs": [
     "docs/design/UI2_0_BASELINE_CONTRACT.md",
     "docs/design/UI2_0_C7_BACKUP_ARTEFACT_RESTORE_ENGINE_CONTRACT.md",
@@ -245,6 +314,6 @@
     "project/backlog.json"
   ],
   "schema_version": 1,
-  "status": "AWAITING_PO",
-  "updated_at": "2026-09-10T06:12:39Z"
+  "status": "CLOSED",
+  "updated_at": "2026-09-10T07:31:15Z"
 }

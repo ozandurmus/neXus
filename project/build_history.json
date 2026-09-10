@@ -3,6 +3,23 @@
   "record_contract": "One structured record per build, newest first. Required: build, status, title, summary (<= 2 sentences). Optional: started, completed, track, movement, supersedes, evidence, risks_forward, docs{agreement,validation,handover} (repo-relative paths under docs/history/). Full detail lives in the linked doc; do not restate it here. Status vocabulary must stay within utils/project_plan.py STATUS_VALUES.",
   "builds": [
     {
+      "build": "ui2_d1_option_a_contract_freeze",
+      "status": "complete_with_followup",
+      "title": "UI2 D1 Option A -- controlled restore-write admission and amendment contract freeze",
+      "summary": "The Product Owner froze RESTORE_CONTROLLED_WRITE_LEDGER.md and the Option A amendment contract after bounded same-model-family council review; the consolidated review is final and the recovered options document remains DRAFT pending the frozen baseline recording act. Restore remains disabled, and no taxonomy, C2, C4, C7, test, Java/UI, or device path changed.",
+      "started": "2026-09-10",
+      "completed": "2026-09-10",
+      "track": "UI 2.0 (Java product line)",
+      "movement": "ARCHITECTURE",
+      "supersedes": null,
+      "evidence": "relay/NXS-LOCAL-0060-ui2-d1-device-write-class-decision.json seq 17-21; two independent fresh-context seats (Security Reviewer and Senior Python Architect), same model family and not cross-model, both FREEZE WITH CHANGES; required changes applied; local relay plus architecture-convergence targeted tests 109 passed; repository privacy gate PASS with 0 new findings; git diff --check clean.",
+      "risks_forward": "The frozen bundle is not applied. A new explicit PO authorization must record Option A in UI2_0_BASELINE_CONTRACT.md before the taxonomy/C4/C7/C2/test/Java sequence; VSX-context and ClusterXL-member restore remain unsupported; no device-write execution is authorized.",
+      "docs": {
+        "agreement": "docs/design/RESTORE_CONTROLLED_WRITE_LEDGER.md",
+        "validation": "docs/design/UI2_0_D1_OPTION_A_CONSOLIDATED_REVIEW.md"
+      }
+    },
+    {
       "build": "gov_po_2_implementation",
       "status": "automated_validated",
       "title": "GOV.PO.2 -- Product Owner visibility and bounded authorship implementation",

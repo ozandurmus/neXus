@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "current_build": "gov_po_2_implementation",
+  "current_build": "ui2_d1_option_a_contract_freeze",
   "current_track": "PCP.x",
   "progress_contract": "Weighted acceptance-criterion completion. Percentages describe the declared roadmap, not calendar time or delivery ETA.",
   "tracks": [
@@ -150,25 +150,25 @@
   "now_next": {
     "horizon_contract": "NOW is exactly one build. NEXT is exactly one. Everything else is an `upcoming` row carrying its own true status: planned = AFTER, blocked = waiting on a named external gate, deferred = consciously postponed. `now.build` must equal the newest project/build_history.json record -- utils.project_plan enforces it.",
     "now": {
-      "build": "gov_po_2_implementation",
-      "title": "GOV.PO.2 (2/2) -- implement the frozen PO permission model",
-      "goal": "Implement docs/design/GOV_PO_2_PO_VISIBILITY_AND_BOUNDED_AUTHORSHIP.md without widening Product Owner decision authority: bounded read-only PR/CI observation, flat DRAFT-only po_drafts authorship, generated-history narrowing, the standalone privacy check, and the closed-set PO evidence reviewer.",
-      "status": "automated_validated",
+      "build": "ui2_d1_option_a_contract_freeze",
+      "title": "UI2 D1 Option A -- controlled restore-write contract freeze",
+      "goal": "Freeze the reviewed Option A admission contract and amendment contract without applying taxonomy, C2, C4, C7, test, Java/UI, or device-write changes.",
+      "status": "complete_with_followup",
       "started": "2026-09-10",
       "completed": "2026-09-10",
       "notes": [
-        "Implemented under relay/NXS-LOCAL-0062-gov-po-2-implementation.json and the frozen GOV.PO.2 contract; no product source, vendor command, device path, storage schema, or frozen contract changed.",
-        "Focused GOV.PO.2: 141 passed. Affected governance/convergence: 242 passed. Final full regression: 3253 passed, 27 skipped, 3 unrelated failures -- the two documented historical DLP-token collisions plus one environment-dependent engineer-gate test caused by this manually opened session having no .nexus/approved_task.json baseline pointer.",
-        "Standalone privacy entry point matches main.py without a baseline and therefore reports the six pre-existing repository findings; the baseline-aware repository gate against origin/main passes with 0 new findings."
+        "Relay NXS-LOCAL-0060 seq 21 records the Product Owner freeze after two same-model-family, fresh-context bounded reviews; no cross-model independence claim.",
+        "RESTORE_CONTROLLED_WRITE_LEDGER.md is FROZEN; UI2_0_D1_OPTION_A_AMENDMENT_PROPOSAL_BUNDLE.md is a FROZEN amendment contract not yet applied; the consolidated review is FINAL and non-authoritative.",
+        "Restore remains disabled. The separately authorized next movement must first record Option A in UI2_0_BASELINE_CONTRACT.md, then apply the declared taxonomy/C4/C7/C2/test/Java sequence."
       ]
     },
     "next": {
       "build": "ui2_taxonomy_device_write_class_and_step_kind",
-      "title": "UI2 D1 -- decide the restore/config-apply action class and device-write step kind",
+      "title": "UI2 D1 Option A -- apply frozen amendments and implement in declared order",
       "status": "planned",
       "notes": [
-        "Resume the already-open NXS-LOCAL-0060 relay; decision-document scope only, no taxonomy/source edit. High scrutiny because it defines a future device-write boundary.",
-        "The independent UI2 B1-1 skeleton contract and freeze merged as PR #174/#175; this GOV.PO.2 branch is reconciled with current main."
+        "Requires a new explicit Product Owner authorization; the NXS-LOCAL-0060 freeze does not authorize implementation.",
+        "First record Option A in UI2_0_BASELINE_CONTRACT.md, then apply taxonomy/C4/C7/C2 amendments, tests, and Java/UI in the frozen bundle's order. No device contact or real write is implied."
       ]
     },
     "upcoming": [

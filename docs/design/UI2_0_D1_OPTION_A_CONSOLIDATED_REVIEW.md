@@ -1,10 +1,14 @@
-# UI 2.0 — D1 Option A: consolidated review (revision pass, relay seq 5–13 + council findings + PO freshness clarification + PO scope-correction review decision)
+# UI 2.0 — D1 Option A: consolidated review (revision pass, relay seq 5–17 + council findings + PO freshness/scope decisions)
 
-**Status: DRAFT — CONSOLIDATED REVIEW BUNDLE FOR PO/COUNCIL, NOT FROZEN, NOT
-APPLIED.** This document is the **primary entry point** for reviewing this
+**Status: FINAL — PO/COUNCIL REVIEW RECORD, NOT IMPLEMENTATION AUTHORITY,
+2026-09-10.** Council disclosure: two same-model-family, fresh-context seats
+(Security Reviewer and Senior Python Architect) reviewed independently; this
+was not a cross-model review. Both returned `FREEZE WITH CHANGES`, and relay
+`NXS-LOCAL-0060` seq 21 records that their required changes were satisfied
+before Product Owner approval. This document is the **primary record** of this
 revision pass. It edits no product source, no test, no `C1`–`C7` FROZEN
 contract, no `utils/action_taxonomy.py`, and no project-state file. It ties
-together two sibling DRAFT documents — `docs/design/RESTORE_CONTROLLED_
+together two sibling contract documents — `docs/design/RESTORE_CONTROLLED_
 WRITE_LEDGER.md` (the admission contract) and `docs/design/UI2_0_D1_
 OPTION_A_AMENDMENT_PROPOSAL_BUNDLE.md` (the proposed edit text for D1 §5
 follow-up items 1, 2, 2b, 4, 4b, 5) — both revised across four passes so
@@ -57,6 +61,15 @@ not have to diff two 400+ line documents by hand to find the substance.
   separation is retained only where relevant to future physical-member
   capabilities. Also requested: an explicit `C7` §5.3 companion amendment
   resolving the check-4 contradiction (finding 16).
+- **Relay `NXS-LOCAL-0060` seq 17 (`RELAY_DECISION`, PO):** reject
+  folding the compile-time reconciliation predicate into `C7` §5.3 check
+  2 or check 5; add a separately recorded check 7 after check 6,
+  preserving the separate earlier check-1 amendment and leaving checks
+  2–6 unchanged. Also correct the ClusterXL boundary: member
+  identity separation does not prove cross-member restore safety;
+  `C7` §9.8 covers CP management-HA consistency groups, not ClusterXL
+  gateway members; ClusterXL member restore remains unsupported pending
+  its own vendor/platform, target-scope, and cross-member safety contract.
 - Council findings (relayed via the Nexus PO orchestrator session), listed
   and resolved one-by-one in the table below.
 
@@ -79,13 +92,15 @@ is a map, cross-reference, and change log, not a third source of truth.
 | 7 | Numeric freshness bound (the connectivity check's "bounded freshness window" is stated nowhere as an actual number, for backup or restore) | **Revised twice.** First resolved as a concrete proposal (15 minutes); **explicitly rejected by a subsequent PO clarification** — freezing any fixed number was ruled out. Now specified as **configurable policy**: a mandatory claim-time active-probe path (always available, authoritative) and an optional cached-telemetry/SNMP path usable only under strict, explicit TTL/identity-binding/semantic-sufficiency conditions, falling back to the active probe otherwise. Background polling cadence is explicitly separated from claim-time restore safety — the two are not the same test. SNMP-style reachability is never treated as proof of write-channel readiness absent an established, **now per-vendor/platform-keyed** contract (finding 13 below). All numeric fields (probe timeout, cache TTL) are `UNKNOWN`/illustrative-range-only, not decided. | `RESTORE_CONTROLLED_WRITE_LEDGER.md` §3.3 (policy model), §3.3.1 (schema/bounds), §3.3.2 (BackBox research note, non-authoritative) |
 | 8 | Command-gate registration path for a class that is neither 1 nor 2/3/4 | **Resolved: concrete proposed sentence** for `docs/AI_DEVELOPMENT_PROTOCOL.md`'s "Network-device command gate" section, mirroring class 1's existing two-part shape (a named contract requirement **and** a named gate-entry requirement) with the class-1.5 equivalents substituted, **updated this pass** to name both the compile-time and claim-time halves of the reconciliation-pending contract. | `RESTORE_CONTROLLED_WRITE_LEDGER.md` §3.5 |
 | 9 | **(new, this pass)** Compile-time vs. claim-time re-evaluation — must be a stated distinction, not left implicit | **Resolved: its own subsection.** `C7` §5.3 (compile time) is early and non-authoritative; `C2` §6 (claim time) is the sole authoritative gate, re-verified fresh regardless of how long ago compile-time checks passed. Both of this document's own facts (connectivity, reconciliation-pending) are now placed explicitly against this distinction, with the reason relay seq 13 gave for why one of them (reconciliation-pending) needed a claim-time instance it previously lacked. | `RESTORE_CONTROLLED_WRITE_LEDGER.md` §3.1.0 |
-| 10 | **(new, this pass, per PO instruction; corrected by a subsequent PO review decision — see finding 15)** Ledger key/scope: exact VSX/ClusterXL endpoint/member implications | **Superseded by finding 15.** The resolution first recorded here (a `device_id`-wide conservative default for VSX, with a council-reviewed narrower-scoping escape hatch) is **retracted** as a factual error, not merely refined — see finding 15 for the corrected position. ClusterXL's own treatment (each member's independent `device_id`, naturally isolated by construction; cross-member risk cross-referenced to `C7` §9.8, unresolved) is **unaffected** by the correction and stands as originally resolved. | `RESTORE_CONTROLLED_WRITE_LEDGER.md` §3.1.1 (superseding text) |
+| 10 | **(new, this pass, per PO instruction; corrected by subsequent PO decisions — see findings 15 and 18)** Ledger key/scope: exact VSX/ClusterXL endpoint/member implications | **Superseded.** The resolution first recorded here (a `device_id`-wide conservative default for VSX, plus independent ClusterXL member admission) is retracted: finding 15 corrects VSX; finding 18 corrects ClusterXL. | `RESTORE_CONTROLLED_WRITE_LEDGER.md` §3.1.1 (superseding text) |
 | 11 | **(new, this pass, per PO instruction)** `restore_run`/step cardinality and multiple-step resolution | **Resolved: one ledger `"attempt"` entry per `restore_run` (`C2` job), never per individual write step**, matching `C7` §5.6's own job-level granularity and `C7` §5.7's own job-level (not step-level) `OUTCOME_UNKNOWN` handling — this ledger does not attempt a finer-grained judgment than `C7`/`C2` already make. `record_attempt`'s docstring is corrected this pass (it previously said "once per restore-write step," which conflated a run's granularity with its steps). | `RESTORE_CONTROLLED_WRITE_LEDGER.md` §3.1.2, §4 (corrected `record_attempt` docstring) |
 | 12 | **(new, this pass, per PO instruction)** Retry behavior for the claim-time reconciliation check | **Resolved: distinguished explicitly from the class's own never-auto-retry rule.** A job `BLOCKED` at claim by this check never reached `EXECUTING` and remains ordinarily claimable on a future cycle, exactly like any other `C2` §6 precondition failure — this is not the same event as a `CLAIMED`/`EXECUTING` job's own no-retry rule (§3.4), which governs failure *after* device contact was attempted. Whether a perpetually-`BLOCKED` job should ever auto-expire is named as a separate, generic `C2` job-lifecycle open item, not decided here. | `RESTORE_CONTROLLED_WRITE_LEDGER.md` §3.1.3 |
 | 13 | **(new, this pass, per PO instruction)** Cached-telemetry semantic-sufficiency contracts must be keyed per vendor/platform, and must themselves pass trigger-(b) council review | **Resolved: both requirements added together.** `cached_evidence_semantic_sufficiency_contract_ref` is now a mapping keyed by `(vendor, platform_role_scope)` (mirroring `C4` §3.2's own gate-registry key shape), never a single global flag one vendor's contract could be misread as covering every vendor; and every entry in that mapping is itself named as a `GOV_PO_ROLE_MIGRATION.md` §7 trigger-(b) freeze candidate, requiring council review from a `nexus-po` `PLAN`/`DECIDE` episode before being added — no entry exists today for any vendor/platform. | `RESTORE_CONTROLLED_WRITE_LEDGER.md` §3.3.1 |
 | 14 | **(new, this pass, per PO instruction)** Make the append-only decision unambiguous in §6 specifically | **Resolved: §6 rewritten to state the invariant without qualification** — no code path ever issues an `UPDATE` or `DELETE` against any row this ledger has ever written, for any reason, including reconciliation; the prior "one narrow, audited exception a successor movement's schema review may keep or replace" hedge is explicitly retracted as stale text that had outlived §4.0's own resolution. | `RESTORE_CONTROLLED_WRITE_LEDGER.md` §6 |
 | 15 | **(new, this pass, per PO review decision)** VSX scoping was a factual error, not an open policy question — corrects finding 10 | **Resolved by grounding in repository evidence, not by policy choice.** `C7` §5.2's own `restore_plan` schema carries `target_device_id`/`target_endpoint_id` only — **no `virtual_system_ref` field exists on it at all.** `BACKUP_RECOVERY_CONTRACTS.md` §7.3 point 7 and §7.7 (FROZEN) state, for Check Point Gaia — this repository's one concrete restore precedent's vendor — that backup collection is categorically excluded from VSX virtual-system contexts ("per physical endpoint only... never contacted... not a per-virtual-system recovery artifact"). No restore capability, and no backup capability for the one vendor with a VSX model, targets an individual virtual system today. The ledger's scope is corrected to **physical `device_id`/`endpoint_id` only**; VSX-context restore is stated as **explicitly unsupported and out of current scope**, not as a conservative default among live options; `RestoreWriteLedgerEntry`'s `virtual_system_ref` field is removed as dead schema for a target dimension no capability populates. **Any future VSX-context restore requires its own, separate vendor/platform-and-target-scope contract** — a new capability model, a new `restore_plan` target shape, and its own admission design, itself a `GOV_PO_ROLE_MIGRATION.md` §7 trigger-(b) freeze candidate, not a parameter this ledger absorbs. | `RESTORE_CONTROLLED_WRITE_LEDGER.md` §3.1.1 (rewritten), §4 (field removed) |
 | 16 | **(new, this pass, per PO instruction)** `C7` §5.3's own check-4 note directly contradicts this document's claim-time check-4-slot proposal — needs an explicit companion amendment | **Resolved: full proposed replacement text for `C7` §5.3's note.** `C7` §5.3 (FROZEN) states, in text written before this class existed, that check 4 "is `NOT_APPLICABLE` for a restore job" — unconditionally. This document's own §3.1.0 (relay seq 13) repurposes check 4's same numbered slot as restore's authoritative reconciliation-pending check, directly contradicting that frozen sentence if left unaddressed. The proposed companion amendment makes check 4's applicability **class-scoped**: `CLASS_1_RECOVERY_WRITE` keeps the existing `RB.x` cadence-ledger interpretation, unchanged; `CLASS_1B_CONTROLLED_RESTORE_WRITE` reads this ledger's own reconciliation-pending check; every other class remains `NOT_APPLICABLE` — restated as a class-scoped rule the same way this document's other proposals are class-scoped, not as a blanket override of the frozen text. | `RESTORE_CONTROLLED_WRITE_LEDGER.md` §3.6 (new); cross-referenced from `UI2_0_D1_OPTION_A_AMENDMENT_PROPOSAL_BUNDLE.md` new Step 4b |
+| 17 | **(relay seq 17)** Which `C7` §5.3 check owns the compile-time no-unreconciled-prior predicate? | **Resolved: new check 7 (`C7_RESTORE_NO_UNRECONCILED_PRIOR`), appended after check 6.** Seq 17 preserves the separate earlier check-1 connectivity amendment, leaves checks 2–6 unchanged, and appends check 7; it does not claim checks 1–6 are textually unchanged. Fixed-cardinality consumers/tests that say six must move to seven, including the C7 battery count/order assertion and equivalent six-check consumers. Check 7 is early/non-authoritative and never replaces `C2` §6 check 4 at claim time. | `RESTORE_CONTROLLED_WRITE_LEDGER.md` §3.1.0, §3.7; amendment bundle Step 2b |
+| 18 | **(relay seq 17)** Does per-member `device_id` separation authorize independent ClusterXL member restore or make `C7` §9.8 its owner? | **Resolved for current scope: no.** Identity separation is not operational independence. `C7` §9.8 concerns CP management-HA consistency groups, not ClusterXL gateway members. ClusterXL member restore is unsupported until a separate vendor/platform, target-scope, and cross-member safety contract is frozen. | `RESTORE_CONTROLLED_WRITE_LEDGER.md` §3.1.1, §9 item 6 |
 
 Findings 5–8 were left as open items in the original DRAFT pass; this
 revision closes all four with a concrete, reviewable position rather than
@@ -289,9 +304,10 @@ honestly as a retraction rather than silently overwritten.
   live options), names what a genuine future VSX-context restore
   contract would need to define for itself, and states that
   `RestoreWriteLedgerEntry`'s `virtual_system_ref` field is removed as
-  dead schema. The ClusterXL treatment is retained, explicitly reframed
-  as forward-looking only, since no restore capability exists for any
-  platform today.
+  dead schema. Relay seq 17 later supersedes the earlier ClusterXL
+  forward-looking admission sketch: identity separation is not
+  cross-member safety evidence, so ClusterXL member restore is unsupported
+  pending its own contract.
 - §4.0 updated to point at §3.1.1's corrected scope rather than restate a
   now-superseded VSX treatment.
 - §4's module API: `virtual_system_ref` field removed from
@@ -303,9 +319,10 @@ honestly as a retraction rather than silently overwritten.
 - §6 (retention/privacy) updated: the `virtual_system_ref`-follows-`C4`-
   §4.2-convention sentence is replaced with a statement that no
   virtual-system identity shape is carried by this ledger at all.
-- §8 (test obligations) item (n) revised: the ClusterXL half is kept,
-  explicitly marked forward-looking; the VSX half is dropped entirely,
-  since no target dimension exists for it to test.
+- §8 (test obligations) item (n) revised again by relay seq 17: a
+  ClusterXL target is refused as unsupported, and no test may infer
+  independent restore safety from distinct member identities. The VSX
+  half remains dropped because no target dimension exists for it to test.
 - §9 (open items) item 5 rewritten: marked "RESOLVED THIS PASS, no longer
   open," restating what was previously an open conservative-default
   policy question as a retired item, with the correction's own rationale
@@ -328,6 +345,31 @@ honestly as a retraction rather than silently overwritten.
 - Step 5's baseline row updated: restore's scope is now stated as
   physical device/endpoint only with VSX explicitly out of scope; the
   target-file list gains `C7` §5.3's check-4-note companion amendment.
+
+### Fifth revision pass: relay seq 17
+
+- The compile-time no-unreconciled-prior predicate moves to a new,
+  separately recorded `C7` §5.3 check 7 appended after check 6; checks
+  1–6 remain unchanged in number/order/text except that seq 17 preserves the
+  separate earlier check-1 connectivity amendment; checks 2–6 remain
+  unchanged, and `C7_RESTORE_NO_UNRECONCILED_PRIOR` is appended. Fixed-
+  cardinality consumers/tests move from six to seven. `C2` §6 check 4
+  remains authoritative for the ledger predicate at claim.
+- Plan compilation evaluates `RESTORE_TARGET_TOPOLOGY_ELIGIBILITY` from
+  authoritative registry plus current topology evidence and must obtain
+  `STANDALONE_PHYSICAL_DEVICE`: a known ClusterXL member yields
+  `UNSUPPORTED_CLUSTERXL_MEMBER`; missing, stale, or conflicting membership
+  evidence yields `NOT_EVALUABLE`; both are refused before approval.
+  At claim, existing `C2` §6 check 5 registry/allowlist re-checks the same
+  eligibility and refuses with distinct named reasons. This is target
+  eligibility, not folding the ledger predicate into check 5.
+- ClusterXL member restore is made explicitly unsupported. Distinct
+  member `device_id` values prove identity separation only; `C7` §9.8's
+  CP management-HA consistency-group item does not supply ClusterXL
+  gateway cross-member semantics.
+- Any future ClusterXL restore capability now has an explicit prerequisite:
+  a separate vendor/platform, target-scope, and cross-member safety
+  contract.
 - **New Step 4b**: the explicit `C7` §5.3 companion amendment, summarized
   and cross-referenced to `RESTORE_CONTROLLED_WRITE_LEDGER.md` §3.6 rather
   than duplicated.
@@ -390,25 +432,22 @@ referenced, never redefined, exactly as the original DRAFT stated.
   `active_probe` for every real deployment until a specific pair's
   contract is written and passes `GOV_PO_ROLE_MIGRATION.md` §7 trigger (b)
   review.
-- Which existing `C7` §5.3 check (2, or alternatively 5) absorbs the
-  **compile-time, non-authoritative** "no unreconciled prior restore-write
-  outcome" pass is this pass's own proposed mapping, not a settled one —
-  flagged for council confirmation. (The **claim-time, authoritative**
-  instance of the same fact is separately resolved this pass as `C2` §6
-  check 4's repurposed slot, per relay seq 13 — not open.)
+- **The compile-time reconciliation mapping is no longer open:** relay
+  seq 17 selects a new, independently recorded `C7` §5.3 check 7 after
+  check 6; checks 2 and 5 retain their existing meanings. The claim-time,
+  authoritative instance remains `C2` §6 check 4 per relay seq 13.
 - **A genuinely new VSX-context restore capability, if ever proposed, is
   entirely undesigned** — this pass corrects the record to state that no
   such capability exists today (finding 15), not that one exists and needs
   a scoping policy; a future proposal would need its own vendor/platform-
   specific command semantics, `restore_plan` target-shape amendment, and
   admission design, none of which this document or its siblings sketch.
-- **Whether a restore against one ClusterXL member can leave the other
-  member's operational state uncertain is not answered by this ledger**
-  (`device_id`-keyed scope naturally isolates members from each other,
-  which says nothing about cross-member risk) — cross-referenced to `C7`
-  §9.8's own already-open "multi-member consistency-group restore" item,
-  not resolved by this pass; genuinely forward-looking, since no restore
-  capability exists for any ClusterXL-capable platform today.
+- **ClusterXL is no longer an unresolved admission assumption inside this
+  contract:** relay seq 17 makes member restore unsupported and out of
+  current scope. `C7` §9.8 cannot be used as its owner because that text
+  covers CP management-HA consistency groups. A future ClusterXL restore
+  capability has an explicit prerequisite: its own vendor/platform,
+  target-scope, and cross-member safety contract.
 - **Whether a perpetually `BLOCKED`-at-claim job should ever auto-expire
   is a generic `C2` job-lifecycle question** this pass does not have the
   scope to answer.
@@ -419,11 +458,11 @@ referenced, never redefined, exactly as the original DRAFT stated.
 - §3.2/Step 1's inventory is scoped to what this repository's own source
   can confirm; it cannot rule out an external client of `console/app.py`'s
   wire field parsing `action_class_level` as a strict integer.
-- Both sibling documents still require `nexus-decision-council` review
-  (`GOV_PO_ROLE_MIGRATION.md` §7 trigger (b)) from a `nexus-po` `PLAN` or
-  `DECIDE` episode before either may move from DRAFT to FROZEN — this
-  consolidated review does not substitute for that council round, it
-  prepares the two documents to be reviewable in one.
+- The required bounded council review is complete. Relay `NXS-LOCAL-0060`
+  seq 21 records the two independent same-model-family fresh-context seats,
+  their `FREEZE WITH CHANGES` results, satisfaction of the required changes,
+  and the Product Owner freeze decision. This review record is not itself
+  implementation authority.
 
 ## 6. Cross-references
 
@@ -438,9 +477,9 @@ referenced, never redefined, exactly as the original DRAFT stated.
   value and a PO review decision correcting this document's own VSX
   framing — the governing inputs to this revision.
 - `docs/design/GOV_PO_ROLE_MIGRATION.md` §7 — the council-trigger process
-  both sibling documents must still pass through, and the process any
-  future semantic-sufficiency or genuinely new VSX-context restore
-  contract must itself pass.
+  completed for these contract artifacts, and the process any future
+  semantic-sufficiency or genuinely new VSX-context restore contract must
+  itself pass.
 - `docs/design/UI2_0_C2_JOB_EXECUTION_CONTRACT.md` §3.1 (state machine),
   §5.3, §6 — unchanged; the ledger document's §3.1/§3.4 propose text for a
   successor movement to add, including the check-4-slot repurposing.
@@ -451,5 +490,6 @@ referenced, never redefined, exactly as the original DRAFT stated.
   — the Check Point Gaia VSX-exclusion evidence this pass's scope
   correction is grounded in.
 - `docs/design/UI2_0_C7_BACKUP_ARTEFACT_RESTORE_ENGINE_CONTRACT.md` §5.2–
-  §5.7, §6.2, §9.8 (multi-member consistency-group restore, cross-
-  referenced not resolved) — unchanged, referenced not restated.
+  §5.7, §6.2, §9.8 — unchanged; §9.8 is cited to delimit its CP
+  management-HA scope and is not treated as ClusterXL gateway-member
+  authority.

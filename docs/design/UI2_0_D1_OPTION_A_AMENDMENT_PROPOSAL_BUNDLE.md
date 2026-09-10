@@ -1,6 +1,11 @@
 # UI 2.0 — D1 Option A: amendment proposal bundle (steps 1, 2, 4, 5)
 
-**Status: DRAFT — REVIEWABLE PROPOSAL, NOT APPLIED.** This document edits no
+**Status: FROZEN — PRODUCT OWNER APPROVED AMENDMENT CONTRACT, NOT YET APPLIED,
+2026-09-10.** Council disclosure: two same-model-family, fresh-context seats
+(Security Reviewer and Senior Python Architect) reviewed independently; this
+was not a cross-model review. Both returned `FREEZE WITH CHANGES`, and relay
+`NXS-LOCAL-0060` seq 21 records that their required changes were satisfied
+before Product Owner approval. This document edits no
 other file. It carries the literal proposed text for four of the seven items
 in `docs/design/UI2_0_D1_DEVICE_WRITE_CLASS_AND_STEP_KIND_DECISION.md` §5's
 follow-up amendment list, prepared after the Product Owner selected
@@ -64,12 +69,20 @@ exclusion for Check Point Gaia backup) shows no current capability
 targets an individual virtual system, so the current restore/ledger
 scope is **physical `device_id`/`endpoint_id` only**; VSX-context restore
 is explicitly unsupported, and any future VSX-context restore is its own
-separate contract, not this document's concern. ClusterXL member-identity
-separation is retained, unaffected, as forward-looking preparation for a
-future physical-member capability. (2) **new Step 4b**, the explicit `C7`
+separate contract, not this document's concern. (2) **new Step 4b**, the explicit `C7`
 §5.3 companion amendment the Product Owner requested, resolving a direct
 contradiction between `C7` §5.3's own frozen check-4 note and this
 document's claim-time check-4-slot proposal.
+
+**Fifth revision note (relay seq 17).** The compile-time reconciliation
+predicate is a new, independently recorded `C7` §5.3 check 7, appended
+after check 6; it is not folded into check 2 or check 5. The same decision
+corrects the ClusterXL boundary: per-member `device_id` separation proves
+identity separation only, not cross-member restore safety. `C7` §9.8 is
+about CP management-HA consistency groups, not ClusterXL gateway members.
+ClusterXL member restore is therefore unsupported and out of current
+scope; any future capability needs its own vendor/platform, target-scope,
+and cross-member safety contract.
 
 ---
 
@@ -325,9 +338,11 @@ Proposed restatement:
 > per-operation `restore_approval`; connectivity evidence meeting §3.3's
 > configurable freshness policy, with an early pass at `C7` §5.3 check 1
 > and an authoritative re-check at `C2` §6 check 2; no unreconciled prior
-> restore-write against the target, with an early pass at `C7` §5.3 check
-> 2 and, **per relay seq 13**, an authoritative, independently named check
-> at `C2` §6's existing check-4 slot — the one fact this repository's own
+> restore-write against the target, with an early pass at **`C7` §5.3's
+> new check 7** (council-informed, relay seq 17 — checks 2/5 were both
+> rejected as fold targets by two independent council seats) and, **per
+> relay seq 13**, an authoritative, independently named check at `C2`
+> §6's existing check-4 slot — the one fact this repository's own
 > revision history shows cannot safely remain compile-time-only). A
 > `SIGNED_OFF` row with no valid approval, or against a target carrying an
 > unreconciled prior outcome at claim time, is refused at claim exactly as
@@ -347,7 +362,7 @@ in the same place a reviewer would look for the answer.
 
 ---
 
-## Step 2b — `C7` §5.3 compile-time checks 1/2 (early, non-authoritative), `C2` §6 check 2/check-4-slot (claim-time, authoritative), and `C2` §5.3 retry rule (revised this pass: relay seq 13 adds back an explicit claim-time check for one fact)
+## Step 2b — `C7` §5.3 checks 1 (amended) and new check 7 (early, non-authoritative); `C2` §6 check 2/check-4-slot (claim-time, authoritative); `C2` §5.3 retry rule (revised this pass: council-informed PO decision replaces the check-2 fold with a new check 7)
 
 `docs/design/UI2_0_C7_BACKUP_ARTEFACT_RESTORE_ENGINE_CONTRACT.md` and
 `docs/design/UI2_0_C2_JOB_EXECUTION_CONTRACT.md` (both FROZEN) are not
@@ -355,7 +370,7 @@ edited by this document. This step is new relative to the original DRAFT's
 four steps — a council finding named "a `C2` admission/retry row" as its
 own item, distinct from `C4`'s static sign-off (Step 2 above).
 
-**Revision history, stated plainly.** Three Product Owner inputs have
+**Revision history, stated plainly.** Four Product Owner inputs have
 shaped this step in sequence, and each is recorded honestly rather than
 silently overwritten:
 
@@ -366,19 +381,32 @@ silently overwritten:
    checks 1/2 instead of a new `C2` row, and a subsequent chat
    clarification rejected the 15-minute bound outright, requiring
    configurable policy instead.
-3. **Relay seq 13 narrowly supersedes seq 9's "fold, no separate check"
-   framing for exactly one fact**: the reconciliation-pending check
-   "cannot remain compile-time-only" and must have an explicit claim-time
-   instance. This step is rewritten to state the resulting two-tier model
-   — compile-time early refusal plus claim-time authoritative check — in
-   full, cross-referencing `RESTORE_CONTROLLED_WRITE_LEDGER.md` §3.1
-   (including its new §3.1.0/§3.1.1/§3.1.2/§3.1.3 subsections) rather than
-   duplicating it.
+3. Relay seq 13 narrowly superseded seq 9's "fold, no separate check"
+   framing for exactly one fact: the reconciliation-pending check "cannot
+   remain compile-time-only" and must have an explicit claim-time
+   instance (`C2` §6 check 4's slot).
+4. **A council-informed PO decision (relay seq 17) narrows the remaining
+   open question — which `C7` §5.3 check absorbs the compile-time,
+   non-authoritative reconciliation pass.** Two independent, fresh-context
+   council seats (a Security Reviewer and a Senior Python Architect)
+   reviewed folding it into check 2 or check 5 and **both rejected folding
+   into either**, citing the same maintainability/fail-closed risk: mixing
+   two independently-failing predicates under one recorded result loses
+   which one actually failed, inconsistent with how the claim-time
+   check-4-slot extension was already done (independently named and
+   tracked, never blended). The Product Owner accepted this input and
+   decided: **a new `C7` §5.3 check — check 7 — appended after check 6**,
+   never reordering or renumbering checks 1–6. Recorded as
+   **council-informed, not council-decided**: the seats named the risk,
+   the Product Owner made the placement call, per this movement's own
+   procedure. This step is rewritten below to reflect check 7 in place of
+   the withdrawn check-2 fold; cross-referencing
+   `RESTORE_CONTROLLED_WRITE_LEDGER.md` §3.1/§3.1.0/§3.7 (including its
+   §3.1.1/§3.1.2/§3.1.3 subsections) rather than duplicating them.
 
-**Compile-time (`C7` §5.3) — early, non-authoritative, unchanged in shape
-from seq 9's fold, two existing checks amended in place, no new row:**
+**Compile-time (`C7` §5.3) — early, non-authoritative:**
 
-- **Check 1 (Connectivity)** — amended to consult a configurable
+- **Check 1 (Connectivity)** — amended in place to consult a configurable
   `RestoreConnectivityFreshnessPolicy` (`RESTORE_CONTROLLED_WRITE_LEDGER.md`
   §3.3.1) instead of an unstated "bounded freshness window": a mandatory
   active-probe path (always available, using the actual restore-write
@@ -389,13 +417,30 @@ from seq 9's fold, two existing checks amended in place, no new row:**
   conditions are all met, falling back to the active probe otherwise. No
   numeric default is proposed for the probe timeout or cache TTL — both
   are `UNKNOWN`, left to the successor movement.
-- **Check 2 (Backup validity)** — proposed to be reframed as a broader
-  "artefact and target admission validity" check, additionally requiring
-  this ledger's `has_unreconciled_prior` to be `False` for the target, as
-  an **early, non-authoritative** pass only. Flagged, per
-  `RESTORE_CONTROLLED_WRITE_LEDGER.md` §3.1.0, as this document's own
-  proposed mapping (check 5's concurrency check is a plausible alternative
-  home) — open to council re-mapping.
+- **Checks 2–6 — unchanged, no fold.** The prior revision's proposed
+  reframing of check 2 ("Backup validity" → a broader "artefact and
+  target admission validity" check absorbing the reconciliation-pending
+  fact) is **withdrawn** per the council-informed decision above; check 2
+  reverts to its own existing FROZEN meaning, untouched by this document.
+- **Check 7 (new, `check_id=C7_RESTORE_NO_UNRECONCILED_PRIOR`) — "No unreconciled prior restore-write outcome"**,
+  appended after check 6; seq 17 preserves the separate earlier check-1
+  connectivity amendment and leaves checks 2–6 unchanged: an
+  early, non-authoritative, staleness-tolerant pass against
+  `RESTORE_CONTROLLED_WRITE_LEDGER.md`'s own `has_unreconciled_prior`
+  check for `controlled-restore-write` plans only; `NOT_APPLICABLE` for
+  every other class's plan. The literal proposed table row and full
+  rationale are in that document's §3.7, cross-referenced not duplicated.
+
+  Plan compilation also evaluates the named predicate
+  `RESTORE_TARGET_TOPOLOGY_ELIGIBILITY` from authoritative registry plus
+  current topology evidence: only `STANDALONE_PHYSICAL_DEVICE` proceeds;
+  a known member yields `UNSUPPORTED_CLUSTERXL_MEMBER`, while missing,
+  stale, or conflicting membership evidence yields `NOT_EVALUABLE` and
+  refuses compilation before approval. At claim time, the
+  existing `C2` §6 check 5 registry/allowlist re-checks the same eligibility
+  and refuses with distinct named reasons. This is target eligibility, not a
+  folding of the ledger predicate into check 5; the two predicates remain
+  independently recorded.
 
 **Claim-time (`C2` §6) — authoritative, re-verified fresh regardless of
 how long ago the compile-time pass above ran:**
@@ -411,10 +456,11 @@ how long ago the compile-time pass above ran:**
   jobs, this document's own `RestoreWriteLedger.has_unreconciled_prior`
   check (fail-closed on an unreadable ledger); `NOT_APPLICABLE` for every
   other class, unchanged.* This reuses check 4's existing, already-class-
-  scoped row — **zero new rows**, honoring seq 9's original preference in
-  letter — while making the claim-time instance an independently named,
-  independently tracked, always-run check, per seq 13's explicit
-  requirement that this fact not remain compile-time-only.
+  scoped row — **zero new rows in `C2`'s own table** — while making the
+  claim-time instance an independently named, independently tracked,
+  always-run check, per seq 13's explicit requirement that this fact not
+  remain compile-time-only. Unaffected by this pass's check-7 decision,
+  which concerns `C7`'s battery, not `C2`'s.
 
 **Genuinely additive (unaffected by any of the above): one new `C2` §5.3
 retry-rule row** stating `CLASS_1B_CONTROLLED_RESTORE_WRITE` never
@@ -426,7 +472,7 @@ answers a retry-*behavior* question (what happens after a `CLAIMED`/
 job's own retry eligibility (which is ordinary, unaffected by this row,
 since such a job never reached `EXECUTING` at all) — this row is
 unrelated to the admission-fact placement and is therefore unaffected by
-either seq 9 or seq 13.
+seq 9, seq 13, or seq 17.
 
 ---
 
@@ -505,7 +551,7 @@ the freshness clarification) so the baseline row records the actual
 decided shape, not any earlier draft's open questions:
 
 ```markdown
-| **DEVICE-WRITE-CLASS** (D-8) | How restore's device write is admitted, per `C7` §9.1–§9.3's reported (not fixed) gap | **ACCEPTED: Option A** (`docs/design/UI2_0_D1_DEVICE_WRITE_CLASS_AND_STEP_KIND_DECISION.md`) — a new, narrowly-scoped `utils/action_taxonomy.py` class (`CLASS_1B_CONTROLLED_RESTORE_WRITE`, `level=1.5`, non-renumbering — relay `NXS-LOCAL-0060` seq 5) between `CLASS_1_RECOVERY_WRITE` and `CLASS_2_OPERATIONAL_STATE_CHANGE`, plus a new `C4` §2.3 device-directed step kind (`restore_push`), both scoped to a provenance-bound replay of a previously-verified backup artefact back to its own **physical device/endpoint** only (`device_id`/`endpoint_id` — VSX virtual-system-context restore is explicitly unsupported and out of scope; a future VSX-context restore capability requires its own separate vendor/platform-and-target-scope contract) — never operator-authored content, never a different target, never console-submittable. The class is narrowly `SIGNED_OFF`-eligible at `C4`'s static/spec level for restore-scoped rows only, independent of a wholly separate runtime admission predicate (relay seq 7), gated by a dedicated ledger/approval/precondition contract (`docs/design/RESTORE_CONTROLLED_WRITE_LEDGER.md`) that consults `C7` §5.3's existing checks 1/2 as an early, non-authoritative compile-time pass (relay seq 9) **and** an explicit, authoritative claim-time check at `C2` §6's existing check-4 slot (relay seq 13, narrowly superseding seq 9's "no separate check" framing for the one fact that cannot remain compile-time-only) — `C7` §5.3's own check-4 note itself requires a companion amendment (class-scoped: class 1 keeps the `RB.x` cadence interpretation, class 1.5 reads the restore reconciliation ledger, every other class stays `NOT_APPLICABLE`). Connectivity-freshness is configurable policy, not a fixed number (no value frozen; 15 minutes explicitly rejected), with any cached-telemetry semantic-sufficiency contract keyed per vendor/platform and itself requiring council review before being referenced. `CLASS_3_CONFIGURATION_WRITE`/`CLASS_4_POLICY_DEPLOYMENT` remain prohibited, unaffected. Restore stays disabled in Java until the amendments named in `D1` §5's follow-up list (this row is item 5 of that list) are all applied and, for the admission contract specifically, taken through `GOV_PO_ROLE_MIGRATION.md` §7 council review before its own freeze | `utils/action_taxonomy.py`; `C4` §2.3, §3.3 step 7; `C7` §5.3 checks 1/2/check-4-note companion amendment, §9.1–§9.3; `C2` §5.3, §6 check 2/check 4; `docs/design/RESTORE_CONTROLLED_WRITE_LEDGER.md`; `docs/design/UI2_0_D1_OPTION_A_CONSOLIDATED_REVIEW.md`; `REL-BACKUP` |
+| **DEVICE-WRITE-CLASS** (D-8) | How restore's device write is admitted, per `C7` §9.1–§9.3's reported (not fixed) gap | **ACCEPTED: Option A** (`docs/design/UI2_0_D1_DEVICE_WRITE_CLASS_AND_STEP_KIND_DECISION.md`) — a new, narrowly-scoped `utils/action_taxonomy.py` class (`CLASS_1B_CONTROLLED_RESTORE_WRITE`, `level=1.5`, non-renumbering — relay `NXS-LOCAL-0060` seq 5) between `CLASS_1_RECOVERY_WRITE` and `CLASS_2_OPERATIONAL_STATE_CHANGE`, plus a new `C4` §2.3 device-directed step kind (`restore_push`), both scoped to a provenance-bound replay of a previously-verified backup artefact back to its own **physical device/endpoint** only (`device_id`/`endpoint_id` — VSX virtual-system-context restore and ClusterXL member restore are both explicitly unsupported and out of current scope; either future capability requires its own vendor/platform-and-target-scope contract, and ClusterXL additionally requires a cross-member safety contract) — never operator-authored content, never a different target, never console-submittable. The class is narrowly `SIGNED_OFF`-eligible at `C4`'s static/spec level for restore-scoped rows only, independent of a wholly separate runtime admission predicate (relay seq 7), gated by a dedicated ledger/approval/precondition contract (`docs/design/RESTORE_CONTROLLED_WRITE_LEDGER.md`) that uses the separately amended `C7` §5.3 check 1 for early connectivity and a new, independently recorded `C7_RESTORE_NO_UNRECONCILED_PRIOR` check 7 for the early no-unreconciled-prior pass (relay seq 17; appended after check 6, checks 2–6 unchanged), plus authoritative claim-time checks at `C2` §6 check 2 and the existing check-4 slot (relay seq 13). `RESTORE_TARGET_TOPOLOGY_ELIGIBILITY` must resolve to `STANDALONE_PHYSICAL_DEVICE` both before approval and at claim; known ClusterXL members and missing/stale/conflicting topology evidence are refused fail-closed through the existing target-eligibility/allowlist boundary. `C7` §5.3's own check-4 note itself requires a companion amendment (class-scoped: class 1 keeps the `RB.x` cadence interpretation, class 1.5 reads the restore reconciliation ledger, every other class stays `NOT_APPLICABLE`). Connectivity-freshness is configurable policy, not a fixed number (no value frozen; 15 minutes explicitly rejected), with any cached-telemetry semantic-sufficiency contract keyed per vendor/platform and itself requiring council review before being referenced. `CLASS_3_CONFIGURATION_WRITE`/`CLASS_4_POLICY_DEPLOYMENT` remain prohibited, unaffected. Restore stays disabled in Java until the amendments named in `D1` §5's follow-up list (this row is item 5 of that list) are all applied and, for the admission contract specifically, taken through `GOV_PO_ROLE_MIGRATION.md` §7 council review before its own freeze | `utils/action_taxonomy.py`; `C4` §2.3, §3.3 step 7; `C7` §5.3 check 1/new check 7/check-4-note companion amendment, §9.1–§9.3; `C2` §5.3, §6 check 2/check 4/check 5; `docs/design/RESTORE_CONTROLLED_WRITE_LEDGER.md`; `docs/design/UI2_0_D1_OPTION_A_CONSOLIDATED_REVIEW.md`; `REL-BACKUP` |
 ```
 
 The row id `DEVICE-WRITE-CLASS (D-8)` is this bundle's own proposal (the
