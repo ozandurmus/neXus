@@ -437,8 +437,9 @@ silently overwritten:
   a known member yields `UNSUPPORTED_CLUSTERXL_MEMBER`, while missing,
   stale, or conflicting membership evidence yields `NOT_EVALUABLE` and
   refuses compilation before approval. At claim time, the
-  existing `C2` §6 check 5 registry/allowlist re-checks the same eligibility
-  and refuses with distinct named reasons. This is target eligibility, not a
+  existing `C2` §6 check 5 registry/allowlist re-checks the same eligibility:
+  its distinct claim-time counterpart is `TARGET_CLUSTERXL_MEMBER_UNSUPPORTED`.
+  This is target eligibility, not a
   folding of the ledger predicate into check 5; the two predicates remain
   independently recorded.
 

@@ -46,6 +46,7 @@ def test_c2_keeps_six_claim_time_checks_with_independent_restore_ledger():
                    "TARGET_TOPOLOGY_EVIDENCE_MISSING_OR_STALE",
                    "TARGET_TOPOLOGY_EVIDENCE_CONFLICTING"):
         assert reason in rows["5"]
+    assert "claim-time counterpart of C7's compile-time `UNSUPPORTED_CLUSTERXL_MEMBER`" in rows["5"]
     assert "VSX-context targets remain unsupported" in rows["5"]
     assert "CLAIMED` → `REJECTED`" in battery
     assert "no device is contacted" in battery.lower()
@@ -72,6 +73,7 @@ def test_restore_topology_and_connectivity_never_infer_permission():
                  "UNSUPPORTED_CLUSTERXL_MEMBER", "NOT_EVALUABLE", "before approval",
                  "VSX-context restore is unsupported", "runtime restore remains disabled"):
         assert term.lower() in battery.lower()
+    assert "compile-time `UNSUPPORTED_CLUSTERXL_MEMBER` outcome maps to `TARGET_CLUSTERXL_MEMBER_UNSUPPORTED` at claim" in battery
     assert "Numeric timeout/TTL values remain `UNKNOWN`" in battery
     assert "insufficient cached evidence falls back to the active probe" in battery
     assert "per-vendor/platform council-reviewed" in battery
