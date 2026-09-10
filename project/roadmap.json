@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "current_build": "ui2_d1_option_a_baseline_recording",
+  "current_build": "ui2_d1_option_a_taxonomy_step_kind",
   "current_track": "PCP.x",
   "progress_contract": "Weighted acceptance-criterion completion. Percentages describe the declared roadmap, not calendar time or delivery ETA.",
   "tracks": [
@@ -150,24 +150,24 @@
   "now_next": {
     "horizon_contract": "NOW is exactly one build. NEXT is exactly one. Everything else is an `upcoming` row carrying its own true status: planned = AFTER, blocked = waiting on a named external gate, deferred = consciously postponed. `now.build` must equal the newest project/build_history.json record -- utils.project_plan enforces it.",
     "now": {
-      "build": "ui2_d1_option_a_baseline_recording",
-      "title": "UI2 D1 Option A -- record controlled restore-write decision in baseline",
-      "goal": "Record the frozen Option A DEVICE-WRITE-CLASS decision in UI2_0_BASELINE_CONTRACT.md §2 as the first authorized implementation slice, without applying subsequent amendments or device-write behavior.",
+      "build": "ui2_d1_option_a_taxonomy_step_kind",
+      "title": "UI2 D1 Option A -- apply taxonomy class and restore_push step kind",
+      "goal": "Apply the frozen controlled-restore action class and C4 restore_push step-kind contract without enabling runtime restore behavior.",
       "status": "complete_with_followup",
       "started": "2026-09-10",
       "completed": "2026-09-10",
       "notes": [
-        "Applied the frozen Step 5 row from UI2_0_D1_OPTION_A_AMENDMENT_PROPOSAL_BUNDLE.md; relay NXS-LOCAL-0060 seq 21-23 is closed and not edited.",
-        "The row records CLASS_1B_CONTROLLED_RESTORE_WRITE at level 1.5, restore_push, physical device/endpoint-only scope, separate C4/C2 predicates, C7 checks 1 and 7, C2 claim checks, fail-closed topology, and restore-disabled-until-amendments semantics.",
-        "Subsequent taxonomy, C4/C7/C2, tests, Java/UI, and device-path changes remain a later authorized slice; no device contact or write execution is implied."
+        "Applied the frozen taxonomy class and C4 restore_push step-kind amendment; relay NXS-LOCAL-0064 seq 1-3 is closed.",
+        "CLASS_1B_CONTROLLED_RESTORE_WRITE is level 1.5 and non-console-submittable; restore_push is the sole permitted device-directed write kind for that class, with runtime admission still separate.",
+        "C2/C7, Java/UI, device-path, and write execution remain separate follow-up work; no device contact or write execution is implied."
       ]
     },
     "next": {
-      "build": "ui2_taxonomy_device_write_class_and_step_kind",
-      "title": "UI2 D1 Option A -- apply frozen amendments and implement in declared order",
+      "build": "ui2_d1_restore_c7_c2_amendments",
+      "title": "UI2 D1 Option A -- apply C7 and C2 restore admission amendments",
       "status": "planned",
       "notes": [
-        "Apply the frozen taxonomy/C4/C7/C2 amendments, then tests and Java/UI in the frozen bundle's order under separate authorization.",
+        "Apply only the frozen C7 and C2 restore admission amendments under separate authorization; tests and Java/UI remain later slices.",
         "No device contact or real write is implied."
       ]
     },

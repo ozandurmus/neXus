@@ -41,11 +41,11 @@ def _load(name: str) -> dict:
 
 # --- Action taxonomy -------------------------------------------------------
 
-def test_the_five_classes_exist_and_are_ordered():
+def test_the_action_classes_exist_and_are_ordered():
     from utils import action_taxonomy as tax
 
-    assert [c.level for c in tax.ACTION_CLASSES] == [0, 1, 2, 3, 4]
-    assert len({c.id for c in tax.ACTION_CLASSES}) == 5
+    assert [c.level for c in tax.ACTION_CLASSES] == [0, 1, 1.5, 2, 3, 4]
+    assert len({c.id for c in tax.ACTION_CLASSES}) == 6
 
 
 def test_recovery_write_and_operational_state_change_are_distinct_classes():
@@ -67,6 +67,20 @@ def test_recovery_write_and_operational_state_change_are_distinct_classes():
     # ledger contracts); an operational state change is not permitted anywhere.
     assert backup.permitted is True
     assert failover.permitted is False
+
+
+def test_controlled_restore_write_is_narrow_and_between_recovery_and_state_change():
+    from utils import action_taxonomy as tax
+
+    restore = tax.CLASS_1B_CONTROLLED_RESTORE_WRITE
+
+    assert restore.level == 1.5
+    assert tax.CLASS_1_RECOVERY_WRITE.level < restore.level < tax.CLASS_2_OPERATIONAL_STATE_CHANGE.level
+    assert restore.permitted is True
+    assert restore.console_submittable is False
+    assert restore.refusal_code == "controlled_restore_write_not_console_submittable"
+    assert "provenance-bound" in restore.why
+    assert "physical" in restore.why
 
 
 def test_configuration_write_and_policy_deployment_stay_prohibited():

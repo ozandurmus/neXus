@@ -2,7 +2,7 @@
 
 ## Status
 
-**FROZEN — PRODUCT OWNER APPROVED, 2026-09-09** (platform contract freeze (C1–C6 + baseline directory), per `UI2_0_BASELINE_CONTRACT.md` §2 `FREEZE-SLICING`). Open items listed in this document's own open-items section are deferred to the movements they name; they do not reopen this freeze. Previous status: DRAFT — FOR PRODUCT OWNER FREEZE. Written under
+**FROZEN — PRODUCT OWNER APPROVED, 2026-09-09; OPTION A AMENDMENT APPLIED, 2026-09-10** (platform contract freeze (C1–C6 + baseline directory), per `UI2_0_BASELINE_CONTRACT.md` §2 `FREEZE-SLICING`; amendment limited to the D1 controlled-restore step kind and static sign-off rule). Open items listed in this document's own open-items section are deferred to the movements they name; they do not reopen this freeze. Previous status: DRAFT — FOR PRODUCT OWNER FREEZE. Written under
 `docs/design/UI2_0_BASELINE_CONTRACT.md` (FROZEN — PRODUCT OWNER APPROVED,
 2026-09-09) and `docs/design/UI2_0_DEVELOPMENT_WORKFLOW.md` §3.1–§3.2 (BASELINE,
 revision 2). Direct inputs: council items `K-3`, `K-4`, `CP-D6`, `CP-D7`
@@ -77,7 +77,7 @@ this registry.
 9. `docs/design/BACKUP_RECOVERY_CONTRACTS.md` §7.3/§7.4/§7.7/§7.8 — the
    frozen, gate-signed-off `RB.3b` command tuple used as this document's
    worked example (`K-3`'s correction).
-10. `utils/action_taxonomy.py` — the five action classes, ported verbatim.
+10. `utils/action_taxonomy.py` — the action classes, ported verbatim.
 
 ### 1.4 Reference-only, not ported
 
@@ -116,7 +116,7 @@ capability_registry
 ├─ capability_id            opaque, e.g. "cp_gaia_inventory_show_version_ha_state"
 ├─ vendor                   e.g. "check_point" | "panorama"
 ├─ platform_role_scope      e.g. "cp_gaia_gateway" | "cp_management" | "pan_firewall" | "panorama"
-├─ action_class             one of utils.action_taxonomy's five classes (field 1)
+├─ action_class             one of utils.action_taxonomy's action classes (field 1)
 ├─ maturity_state           CAP-SPEC | CAP-OFFLINE | CAP-VALIDATED | CAP-RELEASED (baseline §1)
 ├─ transport                {kind, trust_rule_ref}                              (field 2, §5 below)
 ├─ target_shape_ref         which §4 target model this capability's steps run against
@@ -154,9 +154,16 @@ free-form step definition.
 | `poll` | repeats `send` every `interval_s` until `until.regex`/`fail_on.regex`/`timeout_s` | as design §6.3's rule 2–4 | `KNOWN`/`UNKNOWN` per §3 |
 | `sftp_get` / `scp_get` | fetches one remote path into the recovery/evidence store's staging area (streamed, never to a database) | size bounds; transfer integrity | `NOT_APPLICABLE` if the fetch path/name was itself produced by a gated prior step (the fetch operation is not a new command, per `AGENTS.md`'s parse-scope-extension rule); otherwise `KNOWN`/`UNKNOWN` |
 | `sftp_put` | reserved, refused at spec-validation time — no capability may push bytes to a device at current maturity | — | — |
+| `restore_push` | pushes one previously-fetched, manifest-bound backup artefact (identified only by its `backup_artefact.artefact_id`, never a free-form path or operator-supplied byte stream) to the device for the vendor's subsequent restore/apply command; legal only when the resolved `action_class` is `controlled-restore-write` | transfer integrity (size/digest match against the artefact's recorded digest per C7 §3.2), never merely bytes sent | `KNOWN`/`UNKNOWN` per §3; same resolution algorithm, no bypass |
 | `xml_api_call` | sends one PAN HTTPS XML API request (`{http_method, type, category, target_scope: direct_firewall\|panorama}`), reads the response | HTTP status + `min_bytes`/`max_bytes`/`content_type` per §7.1/§7.2's shape | `KNOWN`/`UNKNOWN` per §3 |
 | `verify` | local checks over a fetched artifact (no device contact) | all listed checks pass | `NOT_APPLICABLE` |
 | `disconnect` | closes the session | — | `NOT_APPLICABLE` |
+
+`restore_push` is the one device-directed write kind this registry permits.
+It is legal only for a capability whose resolved `action_class` is
+`controlled-restore-write` (`utils/action_taxonomy.py`); any other class
+declaring it is refused at spec validation. `sftp_put` remains reserved and
+refused for every other purpose.
 
 The six expectation-semantics rules of design §6.3 (no step without an
 expectation; anchored matching with the `CE.1`/`D3` safeguards; fail-closed on
@@ -358,9 +365,15 @@ a sign-off state change:
    runtime condition to route around.
 7. A row whose `action_class` is class 2, 3 or 4 can never be `SIGNED_OFF`
    by construction (`AGENTS.md`: "No new class 2, 3 or 4 command at the
-   current product maturity") — the write-marker denylist is therefore
-   enforced once, at gate-row creation, and every step resolution inherits
-   it automatically rather than re-checking it per step.
+   current product maturity"). A `controlled-restore-write` row (`level=1.5`)
+   may be `SIGNED_OFF` only when its canonical step kind is `restore_push`,
+   or an `exec`/`poll` row whose gate is explicitly scoped to a restore-apply
+   command for the same capability. This is a static spec-time predicate;
+   runtime restore approval, reconciliation, topology, and claim-time
+   preconditions remain separate C2/C7 predicates and are not implied by
+   `SIGNED_OFF`. Any other controlled-restore step kind is refused. The
+   write-marker denylist is enforced at gate-row creation and every step
+   resolution inherits it automatically rather than re-checking it per step.
 
 ### 3.4 Worked resolution — the `cp_gaia_backup_local` example (§2.4)
 
@@ -610,7 +623,7 @@ ends and `C6`'s begins: the regex value itself is not invented here.
 At least ten, each independently testable:
 
 1. **Closed step-kind enforcement.** Loading a capability spec whose any
-   step's `kind` is not one of §2.3's eight members fails registry
+   step's `kind` is not one of §2.3's nine members fails registry
    validation with a named error (`STEP_KIND_NOT_IN_CLOSED_SET`); no code
    path accepts an unrecognized kind string, logs a warning, and continues.
 2. **Gate resolution is deterministic and exact-match only.** A property/
@@ -769,4 +782,4 @@ line), and its §5 cross-reference note already anticipates amendment by the
   input facts to, without redefining it (§1.2).
 - `AGENTS.md` — network-device command gate, identity law, VSX/ClusterXL
   vendor notes, action taxonomy pointer.
-- `utils/action_taxonomy.py` — the five action classes.
+- `utils/action_taxonomy.py` — the action classes.

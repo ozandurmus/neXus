@@ -1,0 +1,110 @@
+{
+  "created_at": "2026-09-10T07:49:09Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "Taxonomy defines CLASS_1B_CONTROLLED_RESTORE_WRITE without renumbering existing classes.",
+          "C4 defines restore_push with the frozen static signability boundaries and no runtime admission.",
+          "Targeted taxonomy/C4/convergence tests pass; privacy gate and git diff check pass.",
+          "No C2/C7, Java/UI, device, push, PR, or merge change is made."
+        ],
+        "baseline": {
+          "authority": "FROZEN UI2_0_BASELINE_CONTRACT.md and frozen UI2 D1 Option A amendment contract; baseline relay NXS-LOCAL-0063 seq 4",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "sequencing": "Second implementation slice: taxonomy class and C4 step-kind registry only; later C7/C2, tests, and Java/UI slices remain separate."
+        },
+        "context_not_loaded": [
+          "runtime data/logs",
+          "credentials",
+          "device output",
+          "unrelated historical phase docs"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/ui2-d1-taxonomy-step-kind"
+        },
+        "invariants": [
+          "Restore remains disabled until the ordered C2/C4/C7/test/Java/UI amendments land.",
+          "CLASS_1B_CONTROLLED_RESTORE_WRITE remains level 1.5, physical-device/endpoint-only, and provenance-bound.",
+          "No Browser-to-device path, operator-authored restore payload, VSX restore, or ClusterXL-member restore is introduced."
+        ],
+        "merge_gate": "Local commit only; push/PR/merge require later explicit Product Owner authorization.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Apply the frozen Option A taxonomy class and restore_push step-kind contract without enabling runtime restore behavior.",
+        "output_contract": [
+          "taxonomy class and C4 step-kind changes",
+          "minimal project-state bookkeeping",
+          "RELAY_NOTE"
+        ],
+        "recommended_reasoning": {
+          "reason": "Bounded deterministic amendments against frozen contracts; no new semantic choice.",
+          "tier": "Luna medium"
+        },
+        "requirements": [
+          "Read frozen contracts and current implementation/tests",
+          "English engineering output",
+          "No C2/C7/Java/UI/device edits"
+        ],
+        "risks": [
+          "Accidentally enabling runtime restore before C2/C7 and downstream gates are applied"
+        ],
+        "scope": {
+          "in": [
+            "utils/action_taxonomy.py",
+            "C4 step-kind registry/contract",
+            "minimal project-state bookkeeping"
+          ],
+          "out": [
+            "C2 runtime admission",
+            "C7 amendments",
+            "Java/UI behavior",
+            "device contact",
+            "push/PR/merge"
+          ]
+        },
+        "validation_plan": [
+          "targeted taxonomy/C4/convergence tests",
+          "git diff --check",
+          "privacy gate"
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-10T07:49:09Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "RELAY_NOTE",
+      "seq": 2,
+      "subject": "Taxonomy and C4 restore_push amendment applied",
+      "text": "Implemented the authorized Option A taxonomy/C4 slice only. Exact files: utils/action_taxonomy.py (added CLASS_1B_CONTROLLED_RESTORE_WRITE at level 1.5, preserved class 0/1/2/3/4 levels, non-console-submittable, provenance-bound physical-device restore scope); docs/design/UI2_0_C4_CAPABILITY_REGISTRY_GATE_RESOLUTION_CONTRACT.md (added restore_push to the closed step-kind table with manifest/digest integrity semantics, restricted it to controlled-restore-write, preserved sftp_put refusal, and restated static sign-off versus separate runtime admission); tests/test_architecture_convergence.py (updated ordered-class assertion and added narrow class-boundary assertions). No C2/C7 amendment, Java/UI behavior, device contact, push, PR, or merge. Validation: tests/test_architecture_convergence.py: 23 passed; local relay validate: valid; project JSON parsing: valid; git diff --check: clean (fsmonitor IPC warning is nonblocking). Repository privacy gate was not run in this worker slice; PO should run it before acceptance. No blocker; restore remains disabled pending later C2/C7 and execution slices.",
+      "timestamp": "2026-09-10T07:52:08Z"
+    },
+    {
+      "actor": "po",
+      "authorized_by": "Product Owner — chat directive 2026-09-10; Codex PO + Orchestrator",
+      "marker": "RELAY_DECISION",
+      "scope": "Taxonomy class and C4 restore_push step-kind only; runtime disabled",
+      "seq": 3,
+      "subject": "PO ACCEPT: taxonomy and restore_push step-kind slice",
+      "supersedes": "none",
+      "text": "PO accepts this bounded Option A implementation slice. CLASS_1B_CONTROLLED_RESTORE_WRITE is present at level 1.5 without renumbering existing classes, and C4 now admits only the frozen restore_push step kind for this class while preserving sftp_put refusal and separating static signability from runtime C2/C7 admission. Evidence: targeted architecture tests 23 passed; relay validation, JSON validation, git diff check, and baseline-aware privacy gate against origin/main passed with 0 new findings. No C2/C7, Java/UI, device, push, PR, or merge action was performed. The next movement remains the separately relayed C7/C2 amendment slice.",
+      "timestamp": "2026-09-10T07:53:17Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0064",
+  "movement": "IMPLEMENTATION",
+  "next_actor": null,
+  "refs": [
+    "docs/design/UI2_0_BASELINE_CONTRACT.md",
+    "docs/design/UI2_0_D1_OPTION_A_AMENDMENT_PROPOSAL_BUNDLE.md",
+    "relay/NXS-LOCAL-0063-ui2-d1-option-a-baseline-row.json"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-10T07:53:17Z"
+}
