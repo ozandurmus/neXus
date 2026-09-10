@@ -21,8 +21,8 @@ Before this module, the console carried a two-value vocabulary:
 the same risk, they need different gates, and ``OP.x`` cannot be built on a
 vocabulary that cannot tell them apart.
 
-The five classes
-----------------
+The action classes
+------------------
 ``CLASS_0_READ``
     Discovery, inventory, configuration collection, compliance, verification,
     history, preflight, health/readiness. The overwhelming majority of the
@@ -35,6 +35,12 @@ The five classes
     (``docs/design/RECOVERY_OPERATIONAL_WRITE_LEDGER.md``: per-entity ledger,
     minimum re-execution interval, distinct backup credential, fail-closed
     allowlist). Not reachable from the console.
+
+``CLASS_1B_CONTROLLED_RESTORE_WRITE``
+    A provenance-bound replay of a previously verified backup artefact to its
+    originating physical device only. Permitted only through the dedicated
+    restore approval, reconciliation ledger and claim-time contracts; never
+    operator-authored, cross-target, or console-submittable.
 
 ``CLASS_2_OPERATIONAL_STATE_CHANGE``
     Failover, cluster role transition, other explicitly approved runtime-state
@@ -96,7 +102,7 @@ from dataclasses import dataclass
 @dataclass(frozen=True)
 class ActionClass:
     id: str
-    level: int
+    level: int | float
     label: str
     #: May this class execute anywhere in the product today?
     permitted: bool
@@ -138,6 +144,28 @@ CLASS_1_RECOVERY_WRITE = ActionClass(
     ),
 )
 
+# UI2_TAXONOMY_DEVICE_WRITE_CLASS_AND_STEP_KIND (D1, Option A; PO decision
+# recorded in UI2_0_BASELINE_CONTRACT.md §2, DEVICE-WRITE-CLASS / D-8): a
+# narrowly scoped restore write, distinct from backup creation and from
+# operational state change. Admission remains governed by the dedicated
+# restore ledger and claim-time contracts; this class does not authorize
+# console submission or generic configuration writes.
+CLASS_1B_CONTROLLED_RESTORE_WRITE = ActionClass(
+    id="controlled-restore-write",
+    level=1.5,
+    label="Controlled restore write",
+    permitted=True,
+    console_submittable=False,
+    refusal_code="controlled_restore_write_not_console_submittable",
+    why=(
+        "Permitted only for a provenance-bound restore of a previously "
+        "verified backup artefact back to its own originating physical "
+        "device, under C7's per-operation restore_approval and the "
+        "restore-controlled-write ledger. Never operator-authored content, "
+        "never a different target device, and never console-submittable."
+    ),
+)
+
 CLASS_2_OPERATIONAL_STATE_CHANGE = ActionClass(
     id="operational-state-change",
     level=2,
@@ -176,6 +204,7 @@ CLASS_4_POLICY_DEPLOYMENT = ActionClass(
 ACTION_CLASSES: tuple[ActionClass, ...] = (
     CLASS_0_READ,
     CLASS_1_RECOVERY_WRITE,
+    CLASS_1B_CONTROLLED_RESTORE_WRITE,
     CLASS_2_OPERATIONAL_STATE_CHANGE,
     CLASS_3_CONFIGURATION_WRITE,
     CLASS_4_POLICY_DEPLOYMENT,

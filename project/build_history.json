@@ -3,6 +3,23 @@
   "record_contract": "One structured record per build, newest first. Required: build, status, title, summary (<= 2 sentences). Optional: started, completed, track, movement, supersedes, evidence, risks_forward, docs{agreement,validation,handover} (repo-relative paths under docs/history/). Full detail lives in the linked doc; do not restate it here. Status vocabulary must stay within utils/project_plan.py STATUS_VALUES.",
   "builds": [
     {
+      "build": "ui2_d1_option_a_taxonomy_step_kind",
+      "status": "complete_with_followup",
+      "title": "UI2 D1 Option A -- apply taxonomy class and restore_push step kind",
+      "summary": "Applied CLASS_1B_CONTROLLED_RESTORE_WRITE at level 1.5 and the C4 restore_push step kind, preserving sftp_put refusal and separating static signability from runtime admission. No C2/C7, Java/UI, device, push, PR, or merge action was performed.",
+      "started": "2026-09-10",
+      "completed": "2026-09-10",
+      "track": "UI 2.0 (Java product line)",
+      "movement": "IMPLEMENTATION",
+      "supersedes": "ui2_d1_option_a_baseline_recording",
+      "evidence": "Frozen Option A amendment contract; relay NXS-LOCAL-0064 seq 1-3; targeted architecture tests 23 passed; baseline-aware repository privacy gate against origin/main with 0 new findings.",
+      "risks_forward": "Runtime restore remains disabled until the separately authorized C7/C2 admission amendments and later test/Java/UI slices land; VSX-context and ClusterXL-member restore remain unsupported.",
+      "docs": {
+        "agreement": "docs/design/UI2_0_C4_CAPABILITY_REGISTRY_GATE_RESOLUTION_CONTRACT.md",
+        "handover": "AI_HANDOVER.md"
+      }
+    },
+    {
       "build": "ui2_d1_option_a_baseline_recording",
       "status": "complete_with_followup",
       "title": "UI2 D1 Option A -- record controlled restore-write decision in baseline",

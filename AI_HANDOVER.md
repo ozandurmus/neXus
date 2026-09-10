@@ -6,31 +6,30 @@
 
 ## 1. Snapshot
 
-- 2026-09-10: `ui2_d1_option_a_baseline_recording` is IMPLEMENTED on
-  `ozandur-garanti-cautious-waffle` in local commit `da6b180`; not pushed.
-- The frozen Option A row is now recorded in `UI2_0_BASELINE_CONTRACT.md` §2.
-  Relay `NXS-LOCAL-0063` is CLOSED at seq 4; prior relay `NXS-LOCAL-0060`
-  remains CLOSED at seq 23.
+- 2026-09-10: `ui2_d1_option_a_taxonomy_step_kind` is IMPLEMENTED on
+  `ozandur-garanti-cautious-waffle` in local commit `a6e94ef`; not pushed.
+- The frozen taxonomy class and C4 `restore_push` step kind are applied.
+  Relay `NXS-LOCAL-0064` is CLOSED at seq 3; baseline relay `NXS-LOCAL-0063`
+  remains CLOSED at seq 4.
 
 ## 2. What changed
 
-- Recorded the approved `DEVICE-WRITE-CLASS` (D-8) row: level-1.5
-  `CLASS_1B_CONTROLLED_RESTORE_WRITE`, `restore_push`, physical endpoint-only
-  scope, separate static/runtime predicates, C7 checks 1 and 7, C2 claims,
-  and fail-closed topology eligibility.
-- ClusterXL-member and VSX-context restore remain unsupported. No taxonomy,
-  C2/C4/C7, test, Java/UI, device path, or device contact changed.
+- Added `CLASS_1B_CONTROLLED_RESTORE_WRITE` at level 1.5 without renumbering
+  existing classes and added C4 `restore_push` as the sole device-directed
+  write kind for this class; `sftp_put` remains refused.
+- Static signability remains separate from C2/C7 runtime admission. ClusterXL-
+  member and VSX-context restore remain unsupported; no device contact or
+  write execution occurred.
 
 ## 3. Exact next action
 
-Continue the separately authorized implementation movement for backlog
-`ui2_taxonomy_device_write_class_and_step_kind`: apply the frozen
-taxonomy/C4/C7/C2, test, and Java/UI sequence in order. Restore remains
-disabled until those amendments are applied; no device contact is implied.
+Open a separate authorized movement for `ui2_d1_restore_c7_c2_amendments`.
+Apply only the frozen C7/C2 admission amendments next; restore remains
+disabled until later tests and Java/UI gates are complete.
 
 ## 4. Test delta
 
-- Targeted relay + architecture-convergence tests: 109 passed.
+- Targeted architecture tests: 23 passed; prior baseline movement: 109 passed.
 - Baseline-aware privacy gate against `origin/main`: PASS, 0 new findings
   (6 pre-existing findings unchanged). `git diff --check`: clean.
 - Baseline/state documentation slice; targeted architecture/project-state
@@ -38,6 +37,6 @@ disabled until those amendments are applied; no device contact is implied.
 
 ## 5. New risks
 
-- The amendment bundle is not otherwise applied; restore remains structurally
-  disabled until the subsequent taxonomy/C4/C7/C2/test/Java/UI slices.
+- The C2/C7 admission bundle and downstream tests/Java/UI are not yet applied;
+  restore remains structurally disabled.
 - Push/PR/merge are not authorized in this movement.
