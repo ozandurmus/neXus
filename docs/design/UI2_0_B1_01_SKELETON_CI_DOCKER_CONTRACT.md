@@ -2,7 +2,7 @@
 
 ## Status
 
-**FROZEN — PRODUCT OWNER APPROVED, 2026-09-10.**
+**DRAFT — FOR PRODUCT OWNER FREEZE, 2026-09-10.**
 
 This document specifies the mechanical implementation contract for
 `ui2_b1_01_skeleton_ci_docker`. It creates no `ui2/` files, authorizes no
@@ -174,12 +174,8 @@ The job order is:
 
 1. checkout with the history needed by repository privacy comparison;
 2. set up pinned Java 21 and pinned Node LTS caches;
-3. restore the dependency cache; on a cold cache, run
-   `./ui2/gradlew -p ui2 dependencies` once against only the repositories,
-   locks and verification metadata committed by the implementing movement,
-   then run `./ui2/gradlew -p ui2 --offline dependencies`; both paths fail if
-   verification metadata or locks disagree, and the offline pass proves the
-   resolved cache is complete before tests begin;
+3. run `./ui2/gradlew -p ui2 --offline dependencies` after a dependency-cache
+   restore, failing if verification metadata or locks disagree;
 4. run `./ui2/gradlew -p ui2 check`;
 5. run `docker build --file ui2/Dockerfile --tag nexus-ui2:ci ui2`;
 6. inspect the image as required by `dir8` and `dir10`;
@@ -250,12 +246,9 @@ All checks are runnable from the repository root:
     persisting those values into the container writable layer or logs.
 13. `.github/workflows/validation.yml` is byte-identical to its pre-movement
     version and both workflow job names are distinct.
-14. Using the already-validated project interpreter for the current workspace
-    profile (`<validated-project-python>` below), run
-    `<validated-project-python> main.py --repository-privacy-check
-    --privacy-baseline-ref origin/main`; it reports zero new findings. The
-    placeholder is resolved from the workspace/tool-specific runtime rule and
-    is never replaced in this contract by a user-specific absolute path.
+14. `/Users/OzanDur/Codo/neXus/.venv/bin/python main.py
+    --repository-privacy-check --privacy-baseline-ref origin/main` reports
+    zero new findings.
 15. `git diff --check origin/main...HEAD` is clean.
 
 ## 9. Technology decisions and PO veto points

@@ -463,3 +463,27 @@ frequency) is not a command addition and needs no new gate entry.
   TLS-verification exceptions are technical debt, never production design.
 - PAN authentication transport convergence remains a hardening concern; do
   not silently normalize behavior without an explicit build.
+
+## graphify
+
+This project has a knowledge graph at `graphify-out/` with god nodes,
+community structure, and cross-file relationships.
+
+The primary agent and every delegated worker MUST use the graphify skill for
+codebase, architecture, file-relationship, and project-content questions.
+This is agent workflow, not a user-facing command requirement; never wait for
+the user to type `/graphify`.
+
+Rules:
+- Before broad source browsing, first check `graphify-out/graph.json`. When it
+  exists, run `graphify query "<question>"` for scoped context, `graphify path
+  "<A>" "<B>"` for relationships, or `graphify explain "<concept>"` for a
+  focused concept. Then inspect only the relevant files/directories indicated
+  by the result.
+- When the graph is absent or stale, build/update the smallest relevant scope
+  with the installed graphify skill before continuing. The primary agent and
+  workers MUST reuse the existing graph and MUST NOT create competing graph
+  stores for the same repository.
+- Dirty `graphify-out/` files are expected after hooks or incremental updates;
+  skip graphify only for stale/incorrect graph output or explicit opt-out.
+- After modifying code, run `graphify update .` to keep the graph current.

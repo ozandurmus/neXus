@@ -5,12 +5,8 @@ see `AGENTS.md`/`AI_START_HERE.md`. **Predecessor build detail lives in
 `project/build_history.json`** (structured, newest-first) and its linked
 docs under `docs/history/`; `docs/history/INDEX.md` is the one-line timeline.
 
-- **Checkpoint:** 2026-09-10, `ui2_d1_option_a_taxonomy_step_kind` — **IMPLEMENTED**. The frozen Option A taxonomy class (`CLASS_1B_CONTROLLED_RESTORE_WRITE`, level 1.5) and C4 `restore_push` step kind are applied; static signability remains separate from C2/C7 runtime admission, and restore remains disabled pending those amendments. No device contact or write execution occurred. Full detail: `project/build_history.json`.
-- **Next** (`now_next.next`): `ui2_d1_restore_c7_c2_amendments`
-  applies only the frozen C7/C2 restore-admission amendments under separate
-  authorization; tests and Java/UI remain later slices. No device contact or
-  real write is implied.
-  `m7_real_device_targeted_
+- **Checkpoint:** 2026-09-10, `ui2_b1_01_skeleton_ci_docker` (`UI2 B1-1`) — new `docs/design/UI2_0_B1_01_SKELETON_CI_DOCKER_CONTRACT.md` (status: **DRAFT — FOR PRODUCT OWNER FREEZE**). Contract only: module/dependency map, reproducible build commands, Testcontainers/Flyway harness, isolated CI, minimal non-root image, scoped secrets, and 15 runnable checks. No `ui2/` implementation, Line-1 source, validation workflow, or device contact. D1 Option A remains implemented as its predecessor; restore remains disabled. Detail: `project/build_history.json`.
+- **Next** (`now_next.next`): `ui2_d1_restore_c7_c2_amendments` — separate authorization for frozen C7/C2 restore-admission amendments; tests and Java/UI remain later slices, and no device contact or real write is implied. `m7_real_device_targeted_
   collect_now` **AUTOMATED_VALIDATED 2026-09-08**, real-device confirmation
   pending Product Owner execution. `op2_c_cp_clusterxl_adapter_scoping`
   stays `upcoming`/`blocked`. `event_signal_intake` stays `in_progress` —
@@ -46,14 +42,14 @@ test-enforced boundaries.
 | --- | --- | --- |
 | 0 — read | yes | everywhere; most of the product |
 | 1 — controlled recovery write | yes, **only** under the `RB.x` contracts | CLI only; never console-submittable |
-| 1.5 — controlled restore write | yes, only under the frozen restore ledger and C2/C7 admission contracts | `restore_push` only; never console-submittable |
+| 1.5 — controlled restore-write signability | taxonomy/registry only; runtime restore disabled | no device contact or write |
 | 2 — operational state change (failover) | **no member exists**; architecture frozen (`OP.2.0`), not implemented | hard-gated, `FAILOVER_ENGINE_ARCHITECTURE.md` §10/§10.1/§10.2 |
 | 3 — configuration write | prohibited | — |
 | 4 — policy / deployment / remediation | prohibited | — |
 ## Active build
 
-See checkpoint above for `ui2_d1_option_a_taxonomy_step_kind`, the current build.
-Full detail: `project/build_history.json`.
+See checkpoint above for `ui2_b1_01_skeleton_ci_docker`, the current
+build. Full detail: `project/build_history.json`.
 
 Predecessors, all **MERGED**, detail in `project/build_history.json` /
 `docs/history/INDEX.md`: `gov_po_1_step_6_plan_po2_boundary` (PO2 boundary
