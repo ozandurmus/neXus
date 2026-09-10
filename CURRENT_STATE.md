@@ -5,8 +5,8 @@ see `AGENTS.md`/`AI_START_HERE.md`. **Predecessor build detail lives in
 `project/build_history.json`** (structured, newest-first) and its linked
 docs under `docs/history/`; `docs/history/INDEX.md` is the one-line timeline.
 
-- **Checkpoint:** 2026-09-10, `ui2_d1_restore_c7_c2_amendments` — **BLOCKED / partial patch**: C7 check 7 and companion C2 admission text applied; retry amendment awaits PO resolution of ledger `REQUESTED` versus C2 `REJECTED` claim-refusal semantics. Runtime restore remains disabled. Detail: `docs/design/RESTORE_CONTROLLED_WRITE_LEDGER.md` application checkpoint and `project/build_history.json`.
-- **Next** (`now_next.next`): `ui2_d1_claim_refusal_lifecycle_resolution` — PO resolution of the frozen lifecycle conflict before completing the retry amendment. `m7_real_device_targeted_
+- **Checkpoint:** 2026-09-10, `ui2_d1_restore_c7_c2_amendments` — **AUTOMATED_VALIDATED**: C7 check 7, companion C2 admission text, the claim-time `CLAIMED` → `REJECTED` terminal lifecycle, and the Class 1B no-auto-retry row are aligned. Runtime restore remains disabled. Detail: `docs/design/RESTORE_CONTROLLED_WRITE_LEDGER.md` application checkpoint and `project/build_history.json`.
+- **Next** (`now_next.next`): `ui2_b1_01_contract_status_reconciliation` — resolve the B1-1 DRAFT-versus-FROZEN authority contradiction and freeze blockers before source implementation. `m7_real_device_targeted_
   collect_now` **AUTOMATED_VALIDATED 2026-09-08**, real-device confirmation
   pending Product Owner execution. `op2_c_cp_clusterxl_adapter_scoping`
   stays `upcoming`/`blocked`. `event_signal_intake` stays `in_progress` —

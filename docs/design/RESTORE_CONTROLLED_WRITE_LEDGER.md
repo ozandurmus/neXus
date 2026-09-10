@@ -1,15 +1,12 @@
 # Controlled restore-write admission contract — design
 
-**Application checkpoint (2026-09-10, PARTIAL):** the separately authorized
+**Application checkpoint (2026-09-10, AUTOMATED_VALIDATED):** the separately authorized
 `ui2_d1_restore_c7_c2_amendments` movement applies §3.1/§3.3/§3.6/§3.7
 to C7 §5.3 and C2 §6, including the independent check 7 and physical-target
-topology gate. No ledger backend or runtime restore is implemented.
-The §3.4 retry-table amendment is held for PO resolution: §3.1.3 and test
-obligation (m) say a refused claim remains `REQUESTED`, but frozen C2 §6
-explicitly runs checks in `CLAIMED` and transitions failure to `REJECTED`.
-These incompatible lifecycle claims are not reconciled by this movement;
-C2's existing state machine is preserved. Numeric freshness fields and
-per-vendor cached-evidence semantics remain `UNKNOWN` as already recorded.
+topology gate, the claim-refusal lifecycle alignment, and C2 §5.3's
+`CLASS_1B_CONTROLLED_RESTORE_WRITE` retry row. No ledger backend or runtime
+restore is implemented. Numeric freshness fields and per-vendor cached-evidence
+semantics remain `UNKNOWN` as already recorded.
 
 **Status: FROZEN — PRODUCT OWNER APPROVED, 2026-09-10.** Council disclosure:
 two same-model-family, fresh-context seats (Security Reviewer and Senior
@@ -512,35 +509,14 @@ run.** Rationale, tied directly to `C7`'s own existing model:
   said "called once per restore-write step," which this subsection
   corrects — restated in full in §4 below.
 
-#### 3.1.3 Retry behavior for the claim-time reconciliation check, distinguished from the class's own no-auto-retry rule
+#### 3.1.3 Claim-time refusal lifecycle
 
-Two different questions, easily conflated, are answered separately:
-
-- **"Does a job that is `BLOCKED` at claim by this check get retried?"**
-  Yes, in the ordinary `C2` §6 sense every other precondition check
-  already has: a job whose claim is refused by a precondition (this check,
-  or any of `C2` §6's other five) **never left `REQUESTED`** —
-  `mutation_boundary_crossed` was never set, no device was contacted, and
-  the job simply remains claimable again on a future claim attempt,
-  exactly like a credential-resolution failure (check 6) or a coordination-
-  window conflict (check 3) would. This is **not** the class's own
-  never-auto-retry rule (§3.4) — that rule governs a job that reached
-  `EXECUTING` and then failed or hit `OUTCOME_UNKNOWN`; a job refused at
-  claim, before `EXECUTING`, was never attempted in the sense §3.4's rule
-  is about, and remains eligible for a normal future claim cycle without
-  any new `restore_plan`, new approval, or reconciliation being required
-  — the block simply lifts once the prior outcome is reconciled (or, for
-  the connectivity check, once a fresh probe succeeds).
-- **"Can a job stuck `BLOCKED` on this check forever eventually be
-  surfaced or expired?"** This document does not invent a new expiry
-  mechanism — a `REQUESTED` job repeatedly refused at claim is visible to
-  an operator via its own `precheck_results`/refusal-reason trail (`C2`
-  §6's existing per-check outcome recording, extended to this check per
-  §3.1.0's table), naming the specific unreconciled `restore_run_id`
-  blocking it; whether such a job should eventually auto-cancel is a
-  generic `C2` job-lifecycle question this document does not have the
-  authority or the scope to answer, and is named as an open item (§9)
-  rather than silently assumed either way.
+A claim-time pre-execution failure (this check or any other `C2` §6 check)
+transitions the claimed job from `CLAIMED` to terminal `REJECTED`. No device is
+contacted and no step attempt is created. `REJECTED` has no outgoing transition
+and is not selected by claim queries; a later restore attempt requires a new
+job and approval path. This is distinct from worker-loss recovery before any
+step attempt, which C2 returns from `CLAIMED` to `REQUESTED`.
 
 ### 3.2 Level-consumer and wire-field inventory (relay seq 5's required inventory)
 
@@ -765,11 +741,11 @@ targets — that determination remains exactly what §3.3's "semantic
 sufficiency" condition requires: a vendor-specific contract this document
 does not have and does not invent one for.
 
-### 3.4 The `C2` retry rule this class needs (proposed; `C2` itself unedited; admission checks live in §3.1, both compile-time and claim-time)
+### 3.4 The `C2` retry rule this class needs
 
 `docs/design/UI2_0_C2_JOB_EXECUTION_CONTRACT.md` (FROZEN) §5.3's
-per-action-class retry table is not edited by this document. **Revision
-note (updated this pass):** the original DRAFT proposed both a new `C2`
+per-action-class retry table now carries this row. **Revision note (updated
+this pass):** the original DRAFT proposed both a new `C2`
 §6 admission check (row 7) and this retry-rule row in the same
 subsection; relay seq 9 withdrew the standalone check in favor of a `C7`
 fold; relay seq 13 then required an explicit claim-time check after all,
@@ -782,9 +758,9 @@ DRAFT through every revision so far:
 
 | Action class | Retry rule |
 |---|---|
-| `CLASS_1B_CONTROLLED_RESTORE_WRITE` (`controlled-restore-write`) | **Never auto-retries, at any stage, for any reason** — identical rule to `CLASS_1_RECOVERY_WRITE`'s row, for a stronger reason: `C7` §5.7 already mandates this at the job-state level ("closes only via `RECONCILED`... no exception for restore"; a new attempt is always a **new** `restore_plan`/job, never a retried one). This row makes `C2`'s own per-class retry table state the same rule explicitly, rather than leaving the new class implicitly covered only by `C7`'s restatement of `C2` §3.5's generic mechanism. **This rule governs a job that reached `EXECUTING`** — a job refused earlier, at claim, by §3.1.0's table (including the new §3.1.3 claim-time reconciliation check) never reached `EXECUTING` at all, and is governed instead by §3.1.3's own retry-eligibility answer, not this row; the two are not the same event and this document does not conflate them. |
+| `CLASS_1B_CONTROLLED_RESTORE_WRITE` (`controlled-restore-write`) | **Never auto-retries after execution begins.** A failed or ambiguous execution is terminal for that job; any later restore attempt is a new job with its own approval path. A claim-time refusal is separately terminal under §3.1.3. |
 
-This proposed row is additive to `C2`'s existing retry table; no existing
+This additive row leaves every existing
 row, class-0/1/2/3/4 rule, `C7` check, or `C2` §6 check-4 slot is modified
 beyond §3.1's own in-place amendments.
 
@@ -1254,12 +1230,11 @@ pass for the compile-time/claim-time distinction (§3.1.0), the explicit
   step, `C7` §5.7 case 3) produces exactly **one** ledger `"attempt"`
   entry for the whole run, written at the first write step's send time,
   never one entry per step (§3.1.2's cardinality rule);
-- (m) **(new)** a `BLOCKED`-at-claim job (refused by the check-4-slot
-  check, or by any other `C2` §6 check) remains `REQUESTED` and is
-  claimable again on a future cycle without a new `restore_plan`, new
-  approval, or reconciliation — distinguished from a `CLAIMED`/`EXECUTING`
-  job's own never-auto-retry rule (§3.4), which this test asserts does
-  **not** apply to a job that was never claimed (§3.1.3);
+- (m) **(revised)** a failed claim-time pre-execution check transitions the
+  job `CLAIMED` → `REJECTED`; it is terminal for that `job_id`, creates no
+  step attempt and contacts no device. A later restore attempt uses a new
+  job and approval path. `CLASS_1B_CONTROLLED_RESTORE_WRITE` never
+  auto-retries after execution begins (§3.4);
 - (n) **(revised per relay seq 17)** ClusterXL member targets are refused
   as unsupported before any restore-write claim is admitted; no test may
   infer that member B is safe to restore merely because member A has a
@@ -1357,12 +1332,7 @@ open is narrower still:
    future ClusterXL physical-member restore therefore requires a separate
    vendor/platform, target-scope, and cross-member safety contract before
    implementation or admission is authorized.
-7. **Whether a `BLOCKED`-at-claim `REQUESTED` job should ever auto-expire
-   or auto-cancel (§3.1.3) is a generic `C2` job-lifecycle question** this
-   document does not have the scope to answer — named so it is not
-   silently assumed either way (neither "it retries forever" nor "it
-   expires after N attempts" is asserted).
-8. **Restore-write's own gate-registry rows** (the literal `restore_push`
+7. **Restore-write's own gate-registry rows** (the literal `restore_push`
    command/call template's ten-field gate entry — vendor, timeout, retry,
    frequency, session reuse, unsupported behavior, secret-output risk, safe
    telemetry) are not specified by this document; they are per-vendor,
