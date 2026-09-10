@@ -77,6 +77,36 @@ was written:
   specific contract). A short, explicitly non-authoritative research note
   on public BackBox documentation is included per instruction, at §3.3.2.
 
+**Third revision note (this pass, relay seq 13 + further council
+findings).** Relay seq 13 (`RELAY_DECISION`, PO) **narrowly supersedes
+seq 9** for one specific fact this document had folded into `C7` §5.3's
+compile-time battery: *"add an explicit restore-ledger reconciliation-
+pending check at C2 claim time, with fail-closed behavior... This narrowly
+supersedes the prior no-standalone-check-7 preference only for the
+claim-time safety fact that cannot remain compile-time-only... static `C4`
+sign-off remains independent from runtime `C2` admission."* §3.1 is
+rewritten below to state, explicitly, the distinction between a
+compile-time early-refusal check and a claim-time authoritative check —
+the reconciliation-pending fact now has **both**, because a fact this
+consequential must be re-verified fresh at the moment of claim, not
+trusted from however long ago the `restore_plan` was compiled. New §3.1.1
+defines the ledger's key/scope including `VSX`/ClusterXL implications; new
+§3.1.2 defines `restore_run`/step cardinality; new §3.1.3 defines retry
+behavior for this specific check, distinguished from the class's own
+never-auto-retry rule (§3.4, unaffected). `C4`'s static sign-off predicate
+(§3.0) is **not reopened** by this decision — it remains fully independent
+of runtime admission, exactly as seq 7 established. Further council
+findings addressed this pass, per instruction: the `C7` check mapping is
+made fully explicit (§3.1); compile-time vs. claim-time re-evaluation is
+its own stated distinction (§3.1); any future cached-telemetry semantic-
+sufficiency contract must itself pass `GOV_PO_ROLE_MIGRATION.md` §7
+trigger (b) council review before being referenced (§3.3.1, revised); the
+append-only decision is restated unambiguously in §6 (previously it still
+carried stale "one narrow exception" language from an earlier draft that
+§4.0 had already superseded); and cached-telemetry sufficiency contracts
+are now explicitly keyed per vendor/platform (§3.3.1), not a single global
+flag.
+
 ---
 
 ## 1. Why this exists, and why it is not `RECOVERY_OPERATIONAL_WRITE_LEDGER.md` reused
@@ -152,7 +182,7 @@ its entries from.
 
 ## 3. The admission model — two independent predicates (revised per relay seq 7)
 
-### 3.0 Static sign-off and runtime admission are separate predicates, not one blended gate
+### 3.0 Static sign-off and runtime admission are separate predicates, not one blended gate (relay seq 13 reaffirms, does not reopen, this section)
 
 The initial DRAFT of this document described a "three-leg gate" without
 being explicit about whether satisfying it was the same question as the
@@ -175,45 +205,217 @@ are separate predicates."** This document adopts that split exactly:
   `SIGNED_OFF` gate row does not carry any of predicate 2's checks forward,
   and predicate 2 passing today says nothing about tomorrow's claim.
 
-A `controlled-restore-write` capability that is `SIGNED_OFF` (predicate 1)
-but whose target has an unreconciled prior outcome (predicate 2, folded
-into `C7` §5.3 check 2 per §3.1 below) is refused at claim — the row's
-existence in the registry never substitutes for this document's own
-runtime check, and vice versa: a target with no unreconciled history but a
-capability row that is not (or not yet) `SIGNED_OFF` is refused by `C4`
-§3.5's execution-eligible view
-before this document's checks are ever reached. Neither predicate is
-sufficient alone; both are necessary, evaluated by different documents, at
-different times, never merged into one combined score.
+**Relay seq 13 (this pass) only revises *where within predicate 2* the
+reconciliation-pending fact is checked** (§3.1: an explicit `C2` §6
+check-4-slot check, not a compile-time-only fold) — it does not touch,
+reopen, or narrow this section's own two-predicate split, which is exactly
+what seq 13's own text reaffirms ("static `C4` sign-off remains independent
+from runtime `C2` admission"). Predicate 1 and predicate 2 remain as
+described above, unconditionally.
 
-### 3.1 Predicate 2 in full — folded into `C7` §5.3's existing precondition-battery model (revised per relay seq 9; supersedes this document's original standalone-`C2`-check proposal)
+A `controlled-restore-write` capability that is `SIGNED_OFF` (predicate 1)
+but whose target has an unreconciled prior outcome (predicate 2's
+authoritative claim-time check, `C2` §6 check 4's slot per §3.1 below) is
+refused at claim — the row's existence in the registry never substitutes
+for this document's own runtime check, and vice versa: a target with no
+unreconciled history but a capability row that is not (or not yet)
+`SIGNED_OFF` is refused by `C4` §3.5's execution-eligible view before this
+document's checks are ever reached. Neither predicate is sufficient alone;
+both are necessary, evaluated by different documents, at different times,
+never merged into one combined score.
+
+
+### 3.1 Predicate 2 in full — compile-time early refusal (`C7` §5.3) plus an explicit claim-time check (`C2` §6, revised per relay seq 13)
 
 **Revision note.** The initial DRAFT of this section proposed a brand-new,
-standalone `C2` §6 check (row 7) to carry predicate 2's three facts. The
-Product Owner's relay seq 9 decision supersedes that proposal: *"fold the
-restore ledger admission facts into `C7`'s existing check 1/check 2 model;
-do not retain a separate check 7."* This subsection is rewritten to state
-the folded model directly; §3.4 below (renamed) now covers only the one
-genuinely separate `C2` concern that decision does not touch — the
-per-class **retry rule**, which is not an admission check at all.
+standalone `C2` §6 check (row 7) to carry predicate 2's facts. Relay seq 9
+superseded that with a fold into `C7` §5.3's existing checks 1/2. Relay
+seq 13 **narrowly supersedes seq 9 in turn**, for exactly one fact: the
+reconciliation-pending check cannot live at compile time only, because
+compile time and claim time can be arbitrarily far apart, and a **new**
+unreconciled outcome can appear on the target in that gap (a second,
+unrelated restore attempt against the same device landing in
+`OUTCOME_UNKNOWN` between this plan's compilation and its claim). A
+compile-time-only check would silently trust stale evidence at exactly
+the moment this document's own fail-closed posture (§5) says "cannot tell"
+must never be read as "safe to proceed."
 
-Predicate 2's three original facts map onto `C7` §5.3's existing
-compile-time precondition battery (unchanged in shape — six checks,
-re-verified fresh at `C2` claim per that document's own text) as follows:
+#### 3.1.0 Compile-time vs. claim-time re-evaluation, stated explicitly (addresses a council finding)
 
-| Original fact | Disposition |
-|---|---|
-| Valid, unexpired, unrevoked `restore_approval` for this `plan_id`, `requested_by ≠ approved_by` | **Already covered, no fold needed.** `C7` §6.2 states this is already `C2` §6 check 1's "restore-specific instance" — existing FROZEN text, unmodified by this document at any point. |
-| Connectivity evidence fresh enough to trust | **Folds into `C7` §5.3 check 1** (Connectivity) — the natural, direct home; that check already names connectivity as its subject, and §3.3 below (revised) supplies the configurable freshness policy this check now consults instead of an unstated "bounded freshness window." |
-| No unreconciled prior restore-write outcome against this target | **Proposed fold: `C7` §5.3 check 2** (currently "Backup validity — ... `V2`+"), reframed to a broader "artefact and target admission validity" check that additionally requires this ledger's `has_unreconciled_prior` to be `False`. This is **this document's own proposed mapping, not the only defensible one** — check 5 ("no concurrent restore or backup against the same target") is thematically closer in one sense (both gate "is this target currently blocked"), but check 5's own text is scoped to *live* `REQUESTED`/`CLAIMED`/`EXECUTING` jobs, not a *terminal-but-unreconciled* outcome, which is a different temporal concept; check 2 is proposed instead because the PO's own decision names "check 1/check 2" specifically. A reviewer or the council may re-map this to check 5 (or split it as its own bullet within check 2's existing text) without disturbing anything else in this document. |
+`C7` §5.3's own text already establishes the general principle this
+document now applies concretely: *"Checks 1–6 above are the compile-time
+battery; `C2` §6's own six checks... still run again at claim time,
+unchanged, exactly as they do for a backup job — compile-time checking
+does not replace claim-time re-checking, it adds an earlier, human-facing
+refusal point."* Two distinct properties follow, and this document treats
+them as genuinely distinct, not interchangeable:
 
-No new row is added to `C7` §5.3's table under this fold — checks 1 and 2
-are **amended in place** (their existing numbers, existing position in the
-ordered battery, existing re-verification-at-claim behavior all unchanged);
-this is a smaller, more conservative edit than the original DRAFT's
-standalone new-check proposal, and it reuses a battery that already runs
-at both compile time and claim time rather than adding a second parallel
-mechanism `C2` would also have to invoke.
+- **Compile-time (`C7` §5.3, when a `restore_plan` is first compiled)** —
+  an **early, human-facing, non-authoritative** refusal point. Its purpose
+  is UX and cost-avoidance: an operator proposing a doomed restore sees the
+  refusal before requesting approval (`C7` §5.2), rather than discovering
+  it only when a worker claims the job. A compile-time pass does **not**
+  certify anything about the state of the world at claim time, which may
+  be minutes, hours, or (if approval is pending) potentially longer after
+  compilation.
+- **Claim-time (`C2` §6, immediately before device contact)** — the
+  **sole authoritative** gate. Every fact re-checked here is re-read fresh,
+  against current state, no matter how long ago compile-time checks
+  passed. A fact whose staleness has a real safety consequence (this
+  document's reconciliation-pending check; the connectivity-freshness
+  policy, §3.3) **must** have a claim-time instance; a fact whose staleness
+  has no safety consequence within the operation's own timeframe (e.g.
+  `restore_approval`'s validity window, already re-checked at claim per
+  `C7` §6.2) is adequately covered by the existing generic re-check.
+
+This document's own two facts are resolved differently under this
+principle, and the table below states each explicitly rather than
+collapsing them into one shared disposition:
+
+| Fact | Compile-time (`C7` §5.3) | Claim-time (`C2` §6) |
+|---|---|---|
+| `restore_approval` validity, `requested_by ≠ approved_by` | Not this document's concern — `C7` §6.2 states this is already `C2` §6 check 1's "restore-specific instance," unmodified by this document. | Same as compile-time column: `C2` §6 check 1, existing FROZEN text, unaffected by any revision in this document. |
+| Connectivity evidence meets §3.3's freshness policy | **Folds into `C7` §5.3 check 1** (Connectivity) — an early pass using whatever evidence (active probe or cached telemetry, per §3.3) is available at compile time. Non-authoritative; a pass here is not carried forward. | **`C2` §6 check 2** (Connectivity precondition), whose scope is extended by this document to explicitly cover `controlled-restore-write` jobs (its FROZEN text today reads "for a class-1 profile" — this document proposes reading that as inclusive of the new class-1.5, consulting the same §3.3 policy, re-verified fresh, "not only at schedule-enable time" per that check's own existing wording). **Authoritative.** |
+| No unreconciled prior restore-write outcome against the ledger's key (§3.1.1) | **`C7` §5.3 check 2** (reframed, per the prior revision, as a broader "artefact and target admission validity" check) — an early pass, exactly as connectivity above: useful for UX, not authoritative, and can go stale before claim. | **NEW, per relay seq 13: `C2` §6 check 4**, whose slot already exists and is already class-scoped (`RB.x` ledger, currently stated `NOT_APPLICABLE` for restore). This document proposes reading check 4 as: *for `controlled-restore-write` jobs, this ledger's own `has_unreconciled_prior` check, fail-closed on an unreadable ledger; `NOT_APPLICABLE` for every other class, unchanged.* This reuses check 4's existing row rather than adding a seventh — no new row, per seq 9's still-standing preference against a standalone check — while making the claim-time instance an **explicit, separately named, always-run check**, not folded silently into check 2's prose, per seq 13's own requirement that this fact "cannot remain compile-time-only." **Authoritative.** |
+
+**Why check 4's slot, not a new row.** `C2` §6 check 4 is already
+class-scoped and already reads `NOT_APPLICABLE` for a class other than the
+one it names (today: `RB.x`'s ledger, `NOT_APPLICABLE` for restore per
+`C7` §5.3's own note). Extending that same row's applicability to a second
+class — *"class-1: `RB.x` ledger; class-1.5: this document's ledger;
+`NOT_APPLICABLE` otherwise"* — reuses an existing, already-`NOT_APPLICABLE`
+slot rather than inventing a new numbered row, honoring seq 9's original
+"do not retain a separate check 7" preference in letter, while seq 13's
+explicit-claim-time-check requirement is honored by making this an
+independently named, independently outcome-tracked check within that row
+— never silently absorbed into check 2's or check 6's own text the way
+the withdrawn `C7`-only fold had risked (§3.4 below, unaffected, still
+answers the retry-rule question this table does not touch).
+
+**`C4` static sign-off is untouched by this table.** Nothing above alters
+§3.0's two-predicate split — `C4`'s `SIGNED_OFF` determination remains a
+purely static, spec-time predicate, independent of every row in this
+table, exactly as seq 7 established and as seq 13's own text reaffirms
+("static `C4` sign-off remains independent from runtime `C2` admission").
+
+#### 3.1.1 Ledger key/scope, including VSX/ClusterXL implications
+
+The ledger's key remains **`device_id`** (§4.0's original resolution,
+unchanged) as the default, conservative scope — restated here with the
+VSX/ClusterXL implications this pass makes explicit rather than leaving
+implicit in `C4` §4's target-model vocabulary:
+
+- **ClusterXL.** Per `C4` §4.2/§4.3, each ClusterXL cluster member is its
+  own, independently registered physical device with its own `device_id`
+  — `cluster_member_ref` is a display/grouping label only, never a row of
+  its own and never an identity. A `device_id`-keyed ledger therefore
+  **naturally isolates cluster members from each other by construction**:
+  a reconciliation-pending state on member A's ledger entry does not block
+  a restore-write against member B, because they are, correctly, two
+  distinct `device_id`s. This document does **not** invent any
+  cross-member blocking mechanism — whether a restore of one ClusterXL
+  member (e.g. the active one) can leave the *other* member's own
+  operational state uncertain (a failover the restore procedure itself
+  might trigger) is a question this document's ledger cannot answer by
+  construction, and is named here as an **open item** (§9), cross-
+  referenced to `C7` §9.8's own already-open "multi-member consistency-
+  group restore is not fully worked out" item — this document does not
+  attempt to resolve what `C7` itself leaves open.
+- **VSX.** Per `C4` §4.2/§4.4, a VSX host is **one physical device**
+  (`device_id`) hosting several virtual-system contexts
+  (`virtual_system_ref`, e.g. `"vsx-ist-01__vsid_2"`). A restore targeting
+  one virtual system (VS2) and a restore targeting a different virtual
+  system on the **same physical device** (VS5) share the same `device_id`
+  under this ledger's key — meaning a reconciliation-pending state on VS2
+  **blocks** a restore-write to VS5 on the same box, under the default
+  scope. This is the conservative reading, for the same reason §4.0
+  originally gave for multi-endpoint devices: an uncertain restore outcome
+  anywhere on a physical device (including one virtual-system context)
+  casts doubt on whether *that physical device* — the thing actually
+  running the restore procedure, the thing that might reboot or hang
+  mid-restore per `C7` §5.7 — is in a known-good state, independent of
+  which virtual system's configuration was being replaced. **This
+  document does not claim `device_id`-level blocking is the only correct
+  answer for VSX** — a vendor/platform whose VSX restore procedure is
+  provably scoped narrowly enough (no shared reboot/apply path across
+  virtual systems) might justify `virtual_system_ref`-level granularity
+  instead. Per this document's own pattern for the connectivity-freshness
+  semantic-sufficiency question (§3.3.1), any such narrower-scoping claim
+  is itself a vendor-specific semantic claim about restore blast radius,
+  and **must go through the same `GOV_PO_ROLE_MIGRATION.md` §7 trigger
+  (b) council review** before a successor movement may adopt
+  `virtual_system_ref`-level scoping for any specific vendor/platform —
+  the default stays `device_id`-level until such a review authorizes a
+  narrower one. `RestoreWriteLedgerEntry` (§4) carries an optional
+  `virtual_system_ref` field precisely so this narrower scoping can be
+  *recorded* today (for audit/analysis) without being *authoritative* for
+  blocking decisions until a reviewed contract says otherwise.
+
+#### 3.1.2 `restore_run`/step cardinality — one ledger attempt entry per `restore_run`, never per step
+
+**One `RestoreWriteLedgerEntry` of `entry_kind="attempt"` is recorded per
+`restore_run` (`C2` job), never per individual write step within that
+run.** Rationale, tied directly to `C7`'s own existing model:
+
+- `C7` §5.6 already models `restore_run` as **one** `C2` job row (1:1 with
+  `job_id`) — the ledger's own granularity matches the granularity of the
+  thing it is gating admission for (a new `restore_run`/job request
+  against a target), not a finer-grained sub-unit `C2`/`C7` do not
+  themselves expose as separately admissible.
+- `C7` §5.7's `OUTCOME_UNKNOWN` handling is explicitly **job-level**: *"`C2`'s
+  own durable state cannot, by construction, distinguish [a fully-applied-
+  but-confirmation-lost outcome] and [a partially-applied outcome] from
+  each other"* — even `C7` itself, which has far more visibility into the
+  step sequence than this ledger does, does not attempt step-level
+  outcome tracking for reconciliation purposes. A restore capability's
+  step sequence may genuinely contain multiple device-write steps
+  (transfer, then a separate vendor apply/commit action, `C7` §5.7 case 3)
+  — this ledger's single attempt entry records the **`restore_run`'s own
+  terminal outcome** (`applied_verified` / `applied_unverified` /
+  `outcome_unknown` / `failed`), drawn from whatever `C7`/`C2` ultimately
+  resolve the job to, not an independent per-step judgment this ledger
+  would have no way to make more precise than `C7` already can.
+- `record_attempt` (§4) is therefore called **once per `restore_run`**, at
+  the moment the run's *first* device-write step is sent (mirroring
+  `RECOVERY_OPERATIONAL_WRITE_LEDGER.md` §6's send-time-not-confirm-time
+  rule, applied to the run as a whole rather than to each of its steps),
+  and the entry's `outcome` field is updated only in the append-only sense
+  §4.0 already establishes: a **later** entry (a `"reconciliation"` entry,
+  or — see below — a terminal-outcome update) references the run, it does
+  not go back and edit the original attempt entry's own recorded fields.
+  **Revision to §4's API surface**: `record_attempt`'s original docstring
+  said "called once per restore-write step," which this subsection
+  corrects — restated in full in §4 below.
+
+#### 3.1.3 Retry behavior for the claim-time reconciliation check, distinguished from the class's own no-auto-retry rule
+
+Two different questions, easily conflated, are answered separately:
+
+- **"Does a job that is `BLOCKED` at claim by this check get retried?"**
+  Yes, in the ordinary `C2` §6 sense every other precondition check
+  already has: a job whose claim is refused by a precondition (this check,
+  or any of `C2` §6's other five) **never left `REQUESTED`** —
+  `mutation_boundary_crossed` was never set, no device was contacted, and
+  the job simply remains claimable again on a future claim attempt,
+  exactly like a credential-resolution failure (check 6) or a coordination-
+  window conflict (check 3) would. This is **not** the class's own
+  never-auto-retry rule (§3.4) — that rule governs a job that reached
+  `EXECUTING` and then failed or hit `OUTCOME_UNKNOWN`; a job refused at
+  claim, before `EXECUTING`, was never attempted in the sense §3.4's rule
+  is about, and remains eligible for a normal future claim cycle without
+  any new `restore_plan`, new approval, or reconciliation being required
+  — the block simply lifts once the prior outcome is reconciled (or, for
+  the connectivity check, once a fresh probe succeeds).
+- **"Can a job stuck `BLOCKED` on this check forever eventually be
+  surfaced or expired?"** This document does not invent a new expiry
+  mechanism — a `REQUESTED` job repeatedly refused at claim is visible to
+  an operator via its own `precheck_results`/refusal-reason trail (`C2`
+  §6's existing per-check outcome recording, extended to this check per
+  §3.1.0's table), naming the specific unreconciled `restore_run_id`
+  blocking it; whether such a job should eventually auto-cancel is a
+  generic `C2` job-lifecycle question this document does not have the
+  authority or the scope to answer, and is named as an open item (§9)
+  rather than silently assumed either way.
 
 ### 3.2 Level-consumer and wire-field inventory (relay seq 5's required inventory)
 
@@ -307,7 +509,7 @@ cached evidence:
 |---|---|
 | **TTL** | The cached evidence's own timestamp is within a configured `cached_evidence_ttl_seconds` policy field (§3.3.1 below) — a per-deployment, per-vendor-class configurable value, not a fixed constant this document sets. |
 | **Identity binding** | The cached evidence is bound to the **same device identity** the restore-write targets (matching `device_id`/hostname-fingerprint, the same identity-match discipline `C7` §5.3 check 3 already requires for the artefact itself) — a cache entry for the wrong device, or one that cannot prove which device it describes, is treated as absent, not stale-but-usable. |
-| **Semantic sufficiency** | **SNMP (or any read-only telemetry protocol) reachability does NOT by itself prove the write channel (`ssh_exec`/`xml_api_call`) is usable**, and this document does not claim otherwise. A cached-telemetry source may be used as claim-time evidence **only if a vendor-specific contract (a gate-registry-equivalent, reviewed document) establishes that this particular telemetry signal is a sufficient proxy for this particular write channel's own readiness** for the vendor/platform in question. Absent such an established contract, cached telemetry is **never sufficient alone**, regardless of how fresh or well-identity-bound it is — this is the one condition this document treats as a hard requirement, not a tunable, because it is a semantic claim about vendor behavior this document has no evidence for (see §3.3.2's research note below on why even public third-party documentation does not substitute for this). |
+| **Semantic sufficiency** | **SNMP (or any read-only telemetry protocol) reachability does NOT by itself prove the write channel (`ssh_exec`/`xml_api_call`) is usable**, and this document does not claim otherwise. A cached-telemetry source may be used as claim-time evidence **only if this vendor/platform pair has an entry in §3.3.1's `cached_evidence_semantic_sufficiency_contract_ref` mapping** — a vendor-specific, council-reviewed contract establishing that this particular telemetry signal is a sufficient proxy for this particular write channel's own readiness, for this particular vendor/platform (never a global flag covering every vendor at once). Absent such an established, per-vendor/platform-keyed contract, cached telemetry is **never sufficient alone** for that pair, regardless of how fresh or well-identity-bound it is — this is the one condition this document treats as a hard requirement, not a tunable, because it is a semantic claim about vendor behavior this document has no evidence for (see §3.3.2's research note below on why even public third-party documentation does not substitute for this). |
 | **Explicit configuration** | The evidence source for a given deployment/vendor-class is an explicit, named policy choice (§3.3.1's `evidence_source` field) — never an implicit default inferred from "a cache happens to exist." |
 
 Any condition failing (stale TTL, no identity binding, no established
@@ -317,7 +519,7 @@ claim can proceed; the claim is never admitted on the strength of
 insufficient cached evidence, and a probe failure/timeout is `BLOCKED`,
 never treated as "no evidence, so proceed."
 
-#### 3.3.1 Proposed policy schema (fields, precedence, bounds as proposals — none frozen)
+#### 3.3.1 Proposed policy schema (fields, precedence, bounds as proposals — none frozen; contract reference now keyed per vendor/platform, per council finding)
 
 ```python
 @dataclass(frozen=True)
@@ -352,11 +554,31 @@ class RestoreConnectivityFreshnessPolicy:
         #   default: UNKNOWN             (explicitly not set here)
     cached_evidence_identity_binding_required: bool  # always True;
         # not a tunable -- an unbound cache entry is never usable evidence
-    cached_evidence_semantic_sufficiency_contract_ref: str | None
-        # a pointer to the vendor-specific contract establishing this
-        # telemetry signal proves this write channel's readiness; None
-        # means "no such contract exists yet" and cached_telemetry MUST
-        # NOT be selected as evidence_source regardless of any other field
+    cached_evidence_semantic_sufficiency_contract_ref: dict[tuple[str, str], str]
+        # REVISED (this pass): keyed per (vendor, platform_role_scope) --
+        # e.g. {("check_point", "cp_gaia_gateway"): "<contract doc ref>"} --
+        # mirroring C4 §3.2's own gate_registry key shape (vendor,
+        # platform_role_scope, ...), never a single global flag. A vendor/
+        # platform pair absent from this mapping has NO established
+        # contract; cached_telemetry MUST NOT be selected as evidence_source
+        # for that pair regardless of any other field, exactly as the
+        # single-flag version already required -- this only prevents one
+        # vendor's established contract from being silently read as if it
+        # applied to every vendor/platform this product manages, which a
+        # single shared flag would risk.
+        #
+        # EVERY entry in this mapping is itself a freeze candidate: per
+        # this document's own §9 open item and GOV_PO_ROLE_MIGRATION.md §7
+        # trigger (b) ("a freeze candidate introducing a security,
+        # identity, credential, storage-schema or write boundary"), a
+        # cached-telemetry semantic-sufficiency contract is exactly such a
+        # candidate -- it establishes that a read-only signal (SNMP or
+        # equivalent) may substitute for direct proof of write-channel
+        # readiness, a security-relevant claim about vendor behavior. NO
+        # entry may be added to this mapping without first passing council
+        # review from a nexus-po PLAN or DECIDE episode; a vendor/platform
+        # pair's absence from this mapping is therefore the SAFE default,
+        # never a gap to fill informally.
 
     # --- precedence, staleness, audit --------------------------------
     fallback_on_insufficient: str  # "active_probe" -- fixed, not
@@ -418,25 +640,28 @@ targets — that determination remains exactly what §3.3's "semantic
 sufficiency" condition requires: a vendor-specific contract this document
 does not have and does not invent one for.
 
-### 3.4 The `C2` retry rule this class needs (proposed; `C2` itself unedited; admission checks are no longer proposed here — see §3.1)
+### 3.4 The `C2` retry rule this class needs (proposed; `C2` itself unedited; admission checks live in §3.1, both compile-time and claim-time)
 
 `docs/design/UI2_0_C2_JOB_EXECUTION_CONTRACT.md` (FROZEN) §5.3's
 per-action-class retry table is not edited by this document. **Revision
-note:** the original DRAFT proposed both a new `C2` §6 admission check
-(row 7) and this retry-rule row in the same subsection. Per relay seq 9,
-the admission check is withdrawn — those facts now fold into `C7` §5.3
-checks 1/2 (§3.1 above). Only the retry-rule proposal below survives
-unchanged from the original DRAFT, because it answers a genuinely
-different question (what happens on failure/retry) that the seq 9
-decision does not touch:
+note (updated this pass):** the original DRAFT proposed both a new `C2`
+§6 admission check (row 7) and this retry-rule row in the same
+subsection; relay seq 9 withdrew the standalone check in favor of a `C7`
+fold; relay seq 13 then required an explicit claim-time check after all,
+resolved in §3.1 above as a repurposing of `C2` §6 check 4's existing
+slot (not a new row). None of that affects this subsection's own answer —
+the retry rule below is a genuinely different question (what happens
+after a claimed job fails or reaches `OUTCOME_UNKNOWN`, not whether a job
+may be claimed at all) — and it survives unchanged from the original
+DRAFT through every revision so far:
 
 | Action class | Retry rule |
 |---|---|
-| `CLASS_1B_CONTROLLED_RESTORE_WRITE` (`controlled-restore-write`) | **Never auto-retries, at any stage, for any reason** — identical rule to `CLASS_1_RECOVERY_WRITE`'s row, for a stronger reason: `C7` §5.7 already mandates this at the job-state level ("closes only via `RECONCILED`... no exception for restore"; a new attempt is always a **new** `restore_plan`/job, never a retried one). This row makes `C2`'s own per-class retry table state the same rule explicitly, rather than leaving the new class implicitly covered only by `C7`'s restatement of `C2` §3.5's generic mechanism. |
+| `CLASS_1B_CONTROLLED_RESTORE_WRITE` (`controlled-restore-write`) | **Never auto-retries, at any stage, for any reason** — identical rule to `CLASS_1_RECOVERY_WRITE`'s row, for a stronger reason: `C7` §5.7 already mandates this at the job-state level ("closes only via `RECONCILED`... no exception for restore"; a new attempt is always a **new** `restore_plan`/job, never a retried one). This row makes `C2`'s own per-class retry table state the same rule explicitly, rather than leaving the new class implicitly covered only by `C7`'s restatement of `C2` §3.5's generic mechanism. **This rule governs a job that reached `EXECUTING`** — a job refused earlier, at claim, by §3.1.0's table (including the new §3.1.3 claim-time reconciliation check) never reached `EXECUTING` at all, and is governed instead by §3.1.3's own retry-eligibility answer, not this row; the two are not the same event and this document does not conflate them. |
 
 This proposed row is additive to `C2`'s existing retry table; no existing
-row, class-0/1/2/3/4 rule, or `C7` check is modified beyond §3.1's
-in-place amendment of `C7` §5.3 checks 1/2.
+row, class-0/1/2/3/4 rule, `C7` check, or `C2` §6 check-4 slot is modified
+beyond §3.1's own in-place amendments.
 
 ### 3.5 Command-gate registration path for the new class (proposed; `docs/AI_DEVELOPMENT_PROTOCOL.md` itself unedited)
 
@@ -452,8 +677,10 @@ for a class that is neither — the gap named in this document's original
 sentence in that section): *"A new `controlled-restore-write` (class 1.5)
 command requires this document's own admission contract
 (`docs/design/RESTORE_CONTROLLED_WRITE_LEDGER.md`: per-target
-reconciliation-pending ledger, `C7` §6.2 per-operation approval, `C7` §5.3
-precondition battery) **and** an approved gate entry whose
+reconciliation-pending ledger — checked both at `restore_plan` compile
+time (`C7` §5.3, non-authoritative) and at `C2` claim time (`C2` §6 check
+4's slot, authoritative, per §3.1.0), `C7` §6.2 per-operation approval,
+`C7` §5.3 precondition battery) **and** an approved gate entry whose
 `sign_off_state` may reach `SIGNED_OFF` only for a capability row scoped to
 a `restore_push` step (or a restore-apply `exec`/`poll` step) under
 `C4` §3.3 step 7's restated rule — mirroring class 1's own two-part
@@ -464,27 +691,25 @@ rather than inventing a new shape for one class.
 
 ## 4. `RestoreWriteLedger` — module API sketch (non-binding; a successor movement writes the real module; identity scope and reconciliation representation now resolved, see §4.0)
 
-### 4.0 Two representation questions resolved this pass
+### 4.0 Two representation questions resolved this pass (identity scope restated in full at §3.1.1, including VSX/ClusterXL)
 
-**Ledger identity scope: `device_id`, resolved.** The initial DRAFT left
-open whether this ledger's key should be `device_id` or the finer-grained
+**Ledger identity scope: `device_id`, resolved; full VSX/ClusterXL
+treatment moved to §3.1.1 this pass.** The initial DRAFT left open
+whether this ledger's key should be `device_id` or the finer-grained
 `endpoint_id` (`C7` §5.2's `restore_plan` carries both). **Resolved:
-`device_id`**, the coarser scope. Rationale: a reconciliation-pending state
-on any one endpoint of a multi-endpoint device means that device's actual
-configuration is not fully confirmed — admitting a second restore-write
-against a *different* endpoint of the *same physically uncertain device*
-does not reduce risk, it compounds it (a device mid-outage on one endpoint
-is not verifiably healthy on another until the whole device is
-reconciled). This is the more conservative reading and matches this
-document's own fail-closed posture elsewhere (§5); it is not the only
-defensible choice, but it is the one consistent with every other
-fail-closed rule in this document, so it is adopted rather than left open.
+`device_id`**, the coarser scope, for the reason §3.1.1 now states in
+full (a reconciliation-pending state on one endpoint/virtual-system
+casts doubt on the whole physical device, per this document's own
+fail-closed posture, §5) — including the ClusterXL-independence and
+VSX-conservative-default treatment §3.1.1 adds this pass, which is not
+repeated here to avoid two documents disagreeing by drift.
 
-**Reconciliation representation: append-only, tamper-evident, resolved.**
-The initial DRAFT offered a targeted `UPDATE` of `reconciled_at`/
-`reconciliation_ref` on the original attempt row as one option, alongside a
-second-linked-row alternative, without choosing. **Resolved: append-only,
-a second linked row** — `record_reconciliation` below **inserts** a new
+**Reconciliation representation: append-only, tamper-evident, resolved
+(restated unambiguously in §6, this pass).** The initial DRAFT offered a
+targeted `UPDATE` of `reconciled_at`/`reconciliation_ref` on the original
+attempt row as one option, alongside a second-linked-row alternative,
+without choosing. **Resolved: append-only, a second linked row** —
+`record_reconciliation` below **inserts** a new
 `RestoreWriteLedgerEntry`-shaped reconciliation record referencing the
 original attempt's `restore_run_id`, rather than mutating the original
 row. Rationale, tied directly to the council finding ("tamper-evident
@@ -502,19 +727,47 @@ either. `has_unreconciled_prior` (below) is then defined over the
 **latest entry for the device_id, of either kind** — an attempt entry with
 no later reconciliation entry referencing it is unreconciled; a
 reconciliation entry closes exactly the attempt `restore_run_id` it names.
+**This subsection's own wording is superseded, where it once hedged, by
+§6's unambiguous restatement this pass** — §6 no longer describes this as
+"one narrow, audited exception a successor movement's schema review may
+keep or replace," which was stale text carried over from before this
+subsection's own resolution; append-only is unqualified, full stop.
 
 ```python
 @dataclass(frozen=True)
 class RestoreWriteLedgerEntry:
-    device_id: str
-    restore_run_id: str            # C2 jobs.job_id / restore_run.run_id
+    device_id: str                 # primary ledger key (§3.1.1); for VSX,
+                                   # the physical device's own device_id,
+                                   # shared across every virtual_system_ref
+                                   # on that device (§3.1.1's conservative
+                                   # default); for ClusterXL, each member's
+                                   # own independent device_id (C4 §4.2/4.3)
+    virtual_system_ref: str | None # NEW (§3.1.1): recorded for audit/
+                                   # analysis when the restore targets a
+                                   # specific VSX virtual system; NOT part
+                                   # of the ledger key and NOT authoritative
+                                   # for blocking decisions unless/until a
+                                   # council-reviewed, vendor/platform-keyed
+                                   # contract (mirroring §3.3.1's shape)
+                                   # authorizes virtual_system_ref-level
+                                   # scoping for that specific vendor/
+                                   # platform -- default stays device_id-wide
+    restore_run_id: str            # C2 jobs.job_id / restore_run.run_id --
+                                   # one entry per restore_run (§3.1.2), never
+                                   # per individual write step within a run
     restore_approval_id: str       # C7 §6.2 restore_approval.approval_id
     recorded_at: datetime          # tz-aware UTC; written the moment the
-                                   # restore-write step is sent (mirrors
-                                   # RECOVERY_OPERATIONAL_WRITE_LEDGER.md §6's
-                                   # "record at send time, not at confirm time")
+                                   # restore_run's FIRST device-write step is
+                                   # sent (§3.1.2; mirrors RECOVERY_
+                                   # OPERATIONAL_WRITE_LEDGER.md §6's "record
+                                   # at send time, not at confirm time",
+                                   # applied to the run as a whole)
     outcome: str                   # "applied_verified" | "applied_unverified"
-                                   # | "outcome_unknown" | "failed"
+                                   # | "outcome_unknown" | "failed" -- the
+                                   # restore_run's OWN terminal outcome
+                                   # (§3.1.2), never a per-step judgment this
+                                   # ledger has no basis to make more
+                                   # precisely than C7/C2 already can
     entry_kind: str                # "attempt" | "reconciliation" (new, §4.0) --
                                    # a "reconciliation" entry's own `outcome` is
                                    # always NOT_APPLICABLE; it exists to close a
@@ -544,15 +797,25 @@ class RestoreWriteLedger:
         "outcome_unknown" and no later "reconciliation" entry in this
         ledger names that attempt's restore_run_id (§4.0: append-only —
         a reconciliation is looked up by reference, never by mutating the
-        attempt). Raises RestoreWriteLedgerUnreadableError if the store
-        cannot be read — never conflates 'unreadable' with 'no
-        unreconciled entry'."""
+        attempt). Scoped by device_id only (§3.1.1) -- virtual_system_ref
+        is never consulted here unless a council-reviewed contract
+        authorizes narrower scoping for a specific vendor/platform, which
+        this default implementation does not assume. Raises
+        RestoreWriteLedgerUnreadableError if the store cannot be read —
+        never conflates 'unreadable' with 'no unreconciled entry'. This
+        method is the one consulted by BOTH the compile-time C7 §5.3
+        early-refusal pass and the claim-time C2 §6 check-4-slot
+        authoritative check (§3.1.0) -- one implementation, two call
+        sites at two different times, never two divergent logics."""
 
     def record_attempt(self, *, entry: RestoreWriteLedgerEntry) -> None:
-        """Append one entry_kind="attempt" entry, called once per
-        restore-write step the moment it is sent to the device — mirrors
-        RECOVERY_OPERATIONAL_WRITE_LEDGER.md §6's send-time recording
-        rule, not confirm-time."""
+        """Append one entry_kind="attempt" entry, called ONCE per
+        restore_run (§3.1.2 -- corrected this pass from the prior
+        revision's "once per restore-write step," which conflated a
+        run's own granularity with its individual steps), at the moment
+        the run's first device-write step is sent — mirrors RECOVERY_
+        OPERATIONAL_WRITE_LEDGER.md §6's send-time recording rule, not
+        confirm-time, applied at the run level."""
 
     def record_reconciliation(self, *, reconciles_restore_run_id: str,
                                reconciliation_ref: str,
@@ -573,9 +836,9 @@ re-derive the abstraction.
 
 ## 5. Fail-closed contract
 
-| Ledger state for `device_id` (append-only, per §4.0) | Meaning | Decision |
+| Ledger state for `device_id` (append-only, per §4.0/§6; consulted at both compile time and claim time per §3.1.0) | Meaning | Decision |
 |---|---|---|
-| **Absent** (no entry ever recorded for this device) | no prior restore-write | **admit** (subject to checks 1 and 3) |
+| **Absent** (no entry ever recorded for this device) | no prior restore-write | **admit** (subject to `restore_approval` validity and the rest of `C7` §5.3's/`C2` §6's own batteries) |
 | **Readable, latest entry is a `"reconciliation"` entry, or an `"attempt"` entry whose outcome is a terminal non-`outcome_unknown` state** | prior attempt is closed, or was never ambiguous | **admit** |
 | **Readable, latest `"attempt"` entry has `outcome = "outcome_unknown"` and no later `"reconciliation"` entry names its `restore_run_id`** | prior attempt unresolved | **BLOCK** — refuse job claim; this is the substantive check, not a degrade case |
 | **Unreadable** (corrupt store, unreachable Postgres, query error) | cannot tell whether an unreconciled prior attempt exists | **BLOCK** — `RestoreWriteLedgerUnreadableError`; no device command sent |
@@ -589,92 +852,152 @@ possibly-mid-outage restore outcome (a false-proceed here risks compiling a
 second restore-write against a device whose actual configuration state is
 still unconfirmed per `C7` §5.7's cases 2/3) — a strictly more severe
 consequence than a missed backup, so the same fail-closed shape is applied
-with a stronger, not merely analogous, justification.
+with a stronger, not merely analogous, justification. This table's
+decision is the **same** at both the `C7` §5.3 compile-time consultation
+and the `C2` §6 claim-time consultation (§3.1.0) — only the *authority* of
+the two consultations differs (non-authoritative vs. authoritative), never
+the underlying fail-closed logic itself.
 
 ## 6. Retention and privacy
 
 Same posture as `RECOVERY_OPERATIONAL_WRITE_LEDGER.md` §9: `device_id` is
-already a `safe_component`; `restore_run_id`/`restore_approval_id`/
+already a `safe_component`; `virtual_system_ref` (§3.1.1/§4) follows the
+same existing Line-1 composite-identity convention `C4` §4.2 already
+reuses, not a new identifier shape; `restore_run_id`/`restore_approval_id`/
 `reconciliation_ref` are internal identifiers; timestamps and `outcome` are
 value-free. **No manifest path, no artefact bytes, no restore payload, no
 credential, no raw device transcript ever enters this ledger** — the
 `RAW-RETENTION` (D-2d) default-NO and `C7` §1.4's raw-retention-vs-artefact
 distinction both apply unchanged; this ledger is neither the artefact store
-nor a device-transcript log. Append-only at the attempt-record level (§4's
-`reconciliation_ref` note names the one narrow, audited exception a
-successor movement's schema review may keep or replace with a
-second-row model).
+nor a device-transcript log.
 
-## 7. Relationship to `C2` and `C7` — no new job-execution mechanism
+**Append-only, stated unambiguously (revised this pass — a council finding
+named the prior wording as still hedged).** Every row this ledger ever
+writes is an **insert**, with **no exception of any kind**: `record_attempt`
+inserts one `entry_kind="attempt"` row; `record_reconciliation` inserts one
+`entry_kind="reconciliation"` row that references an existing attempt by
+`reconciles_restore_run_id` (§4). **No code path in this design ever issues
+an `UPDATE` or a `DELETE` against any row this ledger has ever written, for
+any reason, including reconciliation.** This is not "append-only with one
+narrow exception a later schema review may keep or replace" — that was the
+first revision's own leftover hedge from before §4.0 fully resolved the
+representation question, and it is retracted here: the representation
+question is **closed**, and the invariant it closed to is the unqualified
+one stated in this paragraph. `RECOVERY_OPERATIONAL_WRITE_LEDGER.md` §8's
+own "insert-only... no code path issues `UPDATE` or `DELETE`" rule is
+matched exactly, not merely approximated, and §8 below (test obligation
+(g)) is this ledger's own static/property-test equivalent of that rule.
+
+## 7. Relationship to `C2` and `C7` — no new job-execution mechanism, `C7` check mapping made explicit (revised per relay seq 13)
 
 This document adds **zero** new fields to `restore_plan`/`restore_run`/
 `restore_approval` (`C7` §5.2/§5.6/§6.2, all unchanged) and **zero** new
 step kinds beyond the one already proposed in the amendment bundle
-(`restore_push`, item 2 of the D1 follow-up list). Per relay seq 9, §3.1
-above folds the ledger's admission facts into `C7` §5.3's existing checks
-1/2 **in place** — no new row, no new table, no new mechanism in either
-`C2` or `C7`; only §3.4's retry-rule row is a genuinely additive row, in
-`C2` §5.3's existing per-class retry table. Neither amendment introduces a
-new state or transition to `C2`'s state machine (§3.1 of that document,
-unchanged) or to `C7`'s own precondition-battery shape (six checks,
-compile-time then re-verified at claim, unchanged). The new action class's
-`permitted` predicate, evaluated at `C2` claim time alongside the class's
-own gate-resolution outcome (`C4` §3's algorithm, unchanged, per §3.0
-above's two-predicate split), consults `C7`'s own (amended) precondition
-results the same way `CLASS_1_RECOVERY_WRITE`'s admission consults
-`RECOVERY_OPERATIONAL_WRITE_LEDGER.md` — a sibling check, not a parallel
-execution path.
+(`restore_push`, item 2 of the D1 follow-up list). §3.1.0's table is the
+authoritative statement of exactly which check, in which document, at
+which time, carries which fact — restated here in one sentence per
+council's "make the `C7` check mapping explicit" finding: **connectivity**
+is an early, non-authoritative pass at `C7` §5.3 check 1 (compile time)
+and an authoritative, freshness-policy-consulting pass at `C2` §6 check 2
+(claim time, scope extended to this class); **no-unreconciled-prior** is
+an early, non-authoritative pass at `C7` §5.3 check 2 (compile time,
+reframed per the earlier revision) and an authoritative, independently
+named pass at `C2` §6 check 4's existing, already-class-scoped slot
+(claim time, scope extended to this class per relay seq 13) — **zero new
+rows** in either document's table, only in-place amendments to rows that
+already exist. Only §3.4's retry-rule row is a genuinely additive row, in
+`C2` §5.3's existing per-class retry table. None of these amendments
+introduces a new state or transition to `C2`'s state machine (§3.1 of that
+document, unchanged) or to `C7`'s own precondition-battery shape (six
+checks, compile-time then re-verified/extended at claim, unchanged in
+count). The new action class's `permitted` predicate, evaluated at `C2`
+claim time alongside the class's own gate-resolution outcome (`C4` §3's
+algorithm, unchanged, per §3.0 above's two-predicate split — **untouched
+by this revision**, exactly as relay seq 13 itself reaffirms), consults
+this ledger directly at claim (§3.1.0's authoritative row) the same way
+`CLASS_1_RECOVERY_WRITE`'s admission consults `RECOVERY_OPERATIONAL_WRITE_
+LEDGER.md` — a sibling check, not a parallel execution path.
 
 ## 8. Test obligations a successor implementation movement would need (descriptive, not delivered here)
 
 No test file is added or edited by this document. Listed so a successor
 movement's `TARGETED_TEST` plan is not written from nothing; updated this
-pass for the append-only reconciliation model (§4.0), the `C7`-fold model
-(§3.1), and the configurable freshness policy (§3.3):
+pass for the compile-time/claim-time distinction (§3.1.0), the explicit
+`C2` §6 check-4-slot claim-time check (§3.1), `restore_run` cardinality
+(§3.1.2), VSX/ClusterXL scoping (§3.1.1), and the unambiguous append-only
+restatement (§6):
 
 
 - (a) a restore-write job claim against a device with no unreconciled prior
   entry, valid approval, and a passing precondition battery is admitted;
 - (b) a restore-write job claim against a device with an `outcome_unknown`,
-  unreconciled prior `"attempt"` entry is refused, zero device contact,
-  before `C2`'s own claim-time checks even run;
-- (c) an unreadable ledger blocks admission (filesystem: corrupt JSON;
-  Postgres: unreachable DSN), mirroring RB.3b's obligation (b);
+  unreconciled prior `"attempt"` entry is refused **at the `C2` §6
+  check-4-slot claim-time check specifically** (§3.1.0), zero device
+  contact, regardless of whether `C7` §5.3's own compile-time pass (run
+  earlier, against possibly-stale state) happened to pass;
+- (b2) **(new)** a `restore_plan` whose `C7` §5.3 compile-time pass
+  succeeded (no unreconciled prior entry existed at compile time) is
+  still refused at `C2` claim if a **new** unreconciled entry appeared on
+  the same target in the interim — the scenario §3.1's own revision note
+  names as the reason compile-time-only was insufficient; this is the one
+  test that most directly exercises relay seq 13's own rationale;
+- (c) an unreadable ledger blocks admission at claim time (filesystem:
+  corrupt JSON; Postgres: unreachable DSN), mirroring RB.3b's obligation
+  (b);
 - (d) `record_reconciliation` appends a new `"reconciliation"` entry
   naming the matching prior `"attempt"` entry's `restore_run_id`, and the
   **original attempt row is byte-for-byte unchanged** afterward (the
-  append-only assertion this pass's §4.0 revision requires); a **new**
-  `restore_plan`/job compiled per `C7` §5.7's `superseding_prior_run_id`
-  rule is then admitted — never the same job re-claimed;
+  unambiguous append-only assertion §6 now states without qualification);
+  a **new** `restore_plan`/job compiled per `C7` §5.7's
+  `superseding_prior_run_id` rule is then admitted — never the same job
+  re-claimed;
 - (e) filesystem and Postgres backends return the same admit/block decision
   for the same synthetic history (mirroring RB.3b obligation (d));
 - (f) the ledger read occurs inside the same admission section `C2` claim
   processes, never before a job is legitimately claimable, and never
   bypassable by a direct call outside that path;
-- (g) **(new)** no code path issues an `UPDATE` or `DELETE` against any
-  existing ledger row — a static/property test mirroring
-  `RECOVERY_OPERATIONAL_WRITE_LEDGER.md` §10 obligation (e), extended here
-  to cover reconciliation specifically, since §4.0 makes append-only a
-  load-bearing property of this ledger, not an incidental implementation
-  choice;
-- (h) **(new)** `test_the_five_classes_exist_and_are_ordered` and a new
-  sibling assertion guarding `controlled-restore-write`'s
-  non-console-submittability are both updated together (§3.2's inventory)
-  — a test asserting one without the other is an incomplete edit;
-- (i) **(revised)** a restore-write job claim whose active-probe connectivity
-  evidence fails (`C7` §5.3 check 1, amended per §3.1/§3.3) is refused
-  before device contact; a cached-telemetry evidence source configured but
+- (g) no code path issues an `UPDATE` or `DELETE` against any existing
+  ledger row, ever, for any reason — a static/property test mirroring
+  `RECOVERY_OPERATIONAL_WRITE_LEDGER.md` §10 obligation (e), now the
+  direct test of §6's unqualified append-only restatement;
+- (h) `test_the_five_classes_exist_and_are_ordered` and a new sibling
+  assertion guarding `controlled-restore-write`'s non-console-
+  submittability are both updated together (§3.2's inventory) — a test
+  asserting one without the other is an incomplete edit;
+- (i) a restore-write job claim whose active-probe connectivity evidence
+  fails (`C2` §6 check 2, extended per §3.1.0/§3.3) is refused before
+  device contact; a cached-telemetry evidence source configured but
   failing any of §3.3's four conditions (TTL, identity binding, semantic
   sufficiency, explicit configuration) falls back to a fresh active probe,
   never silently proceeds — both paths tested independently;
-- (j) **(new)** `evidence_source="cached_telemetry"` with no
-  `cached_evidence_semantic_sufficiency_contract_ref` set is refused at
-  policy-validation time (never reaches claim time) — the one condition
-  in §3.3's table this document treats as non-negotiable;
-- (k) **(new)** `audit_evidence_source_used`, `audit_evidence_age_at_use_
-  seconds`, `audit_fallback_triggered`, and `audit_policy_config_snapshot_
-  ref` are recorded on every claim attempt, regardless of admit/block
-  outcome — an audit trail assertion, not merely a functional one.
+- (j) `evidence_source="cached_telemetry"` for a vendor/platform pair with
+  no entry in §3.3.1's keyed `cached_evidence_semantic_sufficiency_
+  contract_ref` mapping is refused at policy-validation time (never
+  reaches claim time) — the one condition in §3.3's table this document
+  treats as non-negotiable, now asserted per-pair rather than globally;
+- (k) `audit_evidence_source_used`, `audit_evidence_age_at_use_seconds`,
+  `audit_fallback_triggered`, and `audit_policy_config_snapshot_ref` are
+  recorded on every claim attempt, regardless of admit/block outcome — an
+  audit trail assertion, not merely a functional one;
+- (l) **(new)** a `restore_run` whose capability's step sequence contains
+  multiple device-write steps (transfer, then a separate apply/commit
+  step, `C7` §5.7 case 3) produces exactly **one** ledger `"attempt"`
+  entry for the whole run, written at the first write step's send time,
+  never one entry per step (§3.1.2's cardinality rule);
+- (m) **(new)** a `BLOCKED`-at-claim job (refused by the check-4-slot
+  check, or by any other `C2` §6 check) remains `REQUESTED` and is
+  claimable again on a future cycle without a new `restore_plan`, new
+  approval, or reconciliation — distinguished from a `CLAIMED`/`EXECUTING`
+  job's own never-auto-retry rule (§3.4), which this test asserts does
+  **not** apply to a job that was never claimed (§3.1.3);
+- (n) **(new)** a ClusterXL two-member target (`C4` §4.3-shaped) with an
+  unreconciled prior outcome on member A's `device_id` does **not** block
+  a restore-write claim against member B's own, independent `device_id`
+  (§3.1.1); a VSX target (`C4` §4.4-shaped) with an unreconciled prior
+  outcome recorded against the physical `device_id` (regardless of which
+  `virtual_system_ref` it was recorded under) **does** block a
+  restore-write claim against every `virtual_system_ref` on that same
+  physical device, under the default `device_id`-wide scope (§3.1.1).
 
 ## 9. Open items / unresolved semantics for review
 
@@ -682,8 +1005,12 @@ Several items the initial DRAFT left fully open are now resolved (§4.0,
 §3.2) per this pass's governing PO decisions and council findings; §3.3's
 freshness bound was **resolved-then-reopened** by the PO's own
 clarification (a fixed number was rejected in favor of configurable
-policy) — recorded honestly as such, not silently smoothed over. What
-remains genuinely open is narrower:
+policy) — recorded honestly as such, not silently smoothed over. This
+pass's own seq 13 decision **narrowly reopened and re-resolved** the
+reconciliation-check placement (compile-time fold alone → compile-time
+early pass **plus** an explicit claim-time check, §3.1) — also recorded
+honestly, not silently smoothed over. What remains genuinely open is
+narrower still:
 
 1. **This document's own freeze path is gated on the taxonomy/`C4`
    amendments it presupposes landing first** — it specifies the admission
@@ -697,9 +1024,9 @@ remains genuinely open is narrower:
    `"reconciliation"` are one table with an `entry_kind` discriminator
    column (as sketched) or two separate tables sharing a `device_id`/
    `restore_run_id` foreign key — is left to whichever movement writes the
-   real Postgres/filesystem schema; both satisfy §4.0's append-only
-   invariant identically, and this document does not mandate one over the
-   other.
+   real Postgres/filesystem schema; both satisfy §6's unqualified
+   append-only invariant identically, and this document does not mandate
+   one over the other.
 3. **§3.3's connectivity freshness policy has no decided numeric value —
    by explicit PO instruction, not by omission.** The proposed 15-minute
    bound from the prior revision is **rejected**; `active_probe_timeout_s`
@@ -708,21 +1035,43 @@ remains genuinely open is narrower:
    real numbers informed by actual per-vendor probe-latency evidence this
    document does not have — this item is intentionally left open, not a
    gap to silently fill later.
-4. **Whether any vendor/platform this repository actually targets has an
-   established semantic-sufficiency contract for cached telemetry
-   (§3.3's hard condition) is itself `UNKNOWN`** — this document does not
-   claim one exists for Check Point Gaia, PAN-OS, or any other managed
-   platform; until one is written and reviewed, `evidence_source` should
-   default to `active_probe` for every real deployment, and
-   `cached_telemetry` remains a documented-but-unusable option.
-5. **Restore-write's own gate-registry rows** (the literal `restore_push`
+4. **No vendor/platform pair has an entry in §3.3.1's keyed semantic-
+   sufficiency contract mapping today** — this document does not claim one
+   exists for Check Point Gaia, PAN-OS, or any other managed platform;
+   until a specific pair's contract is written and passes
+   `GOV_PO_ROLE_MIGRATION.md` §7 trigger (b) council review (§3.3.1),
+   `evidence_source` should default to `active_probe` for every real
+   deployment, and `cached_telemetry` remains a documented-but-unusable
+   option for every vendor/platform pair.
+5. **`device_id`-wide scoping for VSX (§3.1.1) is this document's own
+   conservative default, not a settled answer for every vendor's actual
+   restore-procedure blast radius** — a narrower, `virtual_system_ref`-
+   scoped alternative may be justified for a specific vendor/platform, but
+   only through the same council-reviewed, per-vendor/platform-keyed
+   contract mechanism §3.3.1 establishes for connectivity evidence; no
+   such contract exists today for any vendor/platform, so the default
+   stands unqualified.
+6. **Whether a restore against one ClusterXL cluster member can leave the
+   *other* member's own operational state uncertain (e.g. via a
+   failover the restore procedure itself triggers) is not answered by
+   this ledger's `device_id`-keyed, per-member-independent scope
+   (§3.1.1)** — this is the same open question `C7` §9.8 already names
+   ("multi-member consistency-group restore is not fully worked out");
+   this document does not attempt to resolve what `C7` itself leaves open,
+   and cross-references it rather than inventing a competing answer.
+7. **Whether a `BLOCKED`-at-claim `REQUESTED` job should ever auto-expire
+   or auto-cancel (§3.1.3) is a generic `C2` job-lifecycle question** this
+   document does not have the scope to answer — named so it is not
+   silently assumed either way (neither "it retries forever" nor "it
+   expires after N attempts" is asserted).
+8. **Restore-write's own gate-registry rows** (the literal `restore_push`
    command/call template's ten-field gate entry — vendor, timeout, retry,
    frequency, session reuse, unsupported behavior, secret-output risk, safe
    telemetry) are not specified by this document; they are per-vendor,
    per-capability detail that `C4` §2.4's worked-example pattern already
    shows how to produce once a concrete restore capability is authored —
    out of scope here, named so it is not mistaken for already covered.
-6. **§3.2's inventory is scoped to this repository** — it cannot rule out
+9. **§3.2's inventory is scoped to this repository** — it cannot rule out
    an external client of `console/app.py`'s `action_class_level` field
    parsing it as a strict integer; that residual risk is named, not
    closed, since it is outside what this repository's own source can
@@ -740,17 +1089,24 @@ remains genuinely open is narrower:
   finding and names exactly what changed in this document and in the
   amendment bundle.
 - `docs/design/UI2_0_C7_BACKUP_ARTEFACT_RESTORE_ENGINE_CONTRACT.md` (FROZEN)
-  §5.2–§5.7, §6.2 — unchanged, referenced not restated.
+  §5.2–§5.7, §6.2, §9.8 — unchanged, referenced not restated; §9.8's own
+  open multi-member consistency-group question is cross-referenced, not
+  resolved, at §9 item 6 above.
 - `docs/design/UI2_0_C4_CAPABILITY_REGISTRY_GATE_RESOLUTION_CONTRACT.md`
-  (FROZEN) §2.3, §3.2, §3.3, §3.5 — unchanged, referenced not restated.
-- `docs/design/UI2_0_C2_JOB_EXECUTION_CONTRACT.md` (FROZEN) §5.3, §6 —
-  unchanged; §3.4 above proposes text for a successor movement to add.
+  (FROZEN) §2.3, §3.2, §3.3, §3.5, §4.2–§4.4 (VSX/ClusterXL target model,
+  informing §3.1.1) — unchanged, referenced not restated.
+- `docs/design/UI2_0_C2_JOB_EXECUTION_CONTRACT.md` (FROZEN) §3.1 (state
+  machine), §5.3, §6 — unchanged; §3.1/§3.4 above propose text for a
+  successor movement to add, including the check-4-slot repurposing.
 - `docs/design/RECOVERY_OPERATIONAL_WRITE_LEDGER.md` — the fail-closed and
   evidence-plane-placement precedent; §1 above states exactly where this
   document diverges from it and why.
 - `docs/design/GOV_PO_ROLE_MIGRATION.md` §7 — council-trigger process this
-  document's own eventual freeze must pass through.
+  document's own eventual freeze must pass through, and the process any
+  future semantic-sufficiency or VSX-scoping contract (§3.3.1, §3.1.1)
+  must itself pass before being referenced.
 - `docs/AI_DEVELOPMENT_PROTOCOL.md` "Network-device command gate" — §3.5
   above proposes the addition that closes this gap.
-- `relay/NXS-LOCAL-0060-ui2-d1-device-write-class-decision.json` seq 5, 7 —
-  the two PO decisions governing this revision.
+- `relay/NXS-LOCAL-0060-ui2-d1-device-write-class-decision.json` seq 5, 7,
+  9, 13, plus a PO chat clarification rejecting the 15-minute freshness
+  value — the governing decisions behind this document's every revision.
