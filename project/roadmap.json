@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "current_build": "ui2_d1_restore_c7_c2_amendments",
+  "current_build": "ui2_b1_01_contract_status_reconciliation",
   "current_track": "PCP.x",
   "progress_contract": "Weighted acceptance-criterion completion. Percentages describe the declared roadmap, not calendar time or delivery ETA.",
   "tracks": [
@@ -150,35 +150,34 @@
   "now_next": {
     "horizon_contract": "NOW is exactly one build. NEXT is exactly one. Everything else is an `upcoming` row carrying its own true status: planned = AFTER, blocked = waiting on a named external gate, deferred = consciously postponed. `now.build` must equal the newest project/build_history.json record -- utils.project_plan enforces it.",
     "now": {
-      "build": "ui2_d1_restore_c7_c2_amendments",
-      "title": "UI2 D1 -- C7/C2 admission amendments",
+      "build": "ui2_b1_01_contract_status_reconciliation",
+      "title": "UI2 B1-1 -- contract status and freeze-blocker reconciliation",
       "status": "automated_validated",
       "started": "2026-09-10",
-      "goal": "Apply the frozen seven-check C7 shape and companion C2 admission text while keeping runtime restore disabled.",
+      "goal": "Resolve B1-1 freeze blockers and freeze the skeleton, CI, Docker, and Testcontainers contract before UI2 source implementation.",
       "notes": [
-        "C7 checks 2-6 are preserved; C2 retains six checks.",
-        "Claim-time refusal is CLAIMED to REJECTED and terminal for the job; Class 1B never auto-retries after execution begins. Runtime restore remains disabled."
+        "Secret profiles, distinct migration/application roles, cold-cache dependency resolution, and CycloneDX SBOM acceptance are explicit. No UI2 source or device behavior changed."
       ]
     },
     "next": {
-      "build": "ui2_b1_01_contract_status_reconciliation",
-      "title": "Reconcile B1-1 contract-status authority",
+      "build": "ui2_b1_01_skeleton_ci_docker",
+      "title": "UI2 B1-1 -- skeleton, CI and Docker implementation",
       "status": "planned",
       "notes": [
-        "The B1-1 document declares DRAFT while backlog text claims FROZEN. Resolve this authority contradiction and the identified freeze-readiness gaps before source implementation.",
-        "No UI2 source, device behavior, network access, or remote Git action is authorized by this planning movement."
+        "Implement only the frozen B1-1 contract: Java skeleton, isolated CI workflow, Docker image, Testcontainers/Flyway harness, and architecture checks.",
+        "Exact dependency versions must be pinned and validated. No device behavior, Line-1 workflow change, or remote Git action is authorized by the implementation movement."
       ]
     },
     "upcoming": [
       {
         "build": "ui2_b1_01_skeleton_ci_docker",
-        "title": "UI2 B1-1 -- skeleton, CI and Docker contract (DRAFT, for Product Owner freeze)",
+        "title": "UI2 B1-1 -- skeleton, CI and Docker implementation (contract frozen)",
         "goal": "Write the DRAFT B1-1 contract for the ui2 Gradle multi-module skeleton, isolated CI job, minimal Docker image, Testcontainers PostgreSQL harness, and P-1 dependency architecture tests. Contract only; no ui2 implementation or device behavior.",
-        "status": "in_progress",
+        "status": "planned",
         "started": "2026-09-10",
         "completed": "2026-09-10",
         "notes": [
-          "Full detail: project/build_history.json's ui2_b1_01_skeleton_ci_docker record and docs/design/UI2_0_B1_01_SKELETON_CI_DOCKER_CONTRACT.md.",
+          "Contract frozen 2026-09-10: docs/design/UI2_0_B1_01_SKELETON_CI_DOCKER_CONTRACT.md. Implementation is the next actionable build.",
           "This is the second-to-last B0 item; runs concurrently with the extraction-tooling movement (Line-1 scripts/, fully independent). Once both merge, B0 is complete and the Product Owner can move to the actual freeze decision for C1-C7 as a whole, then to B1.",
           "Predecessor ui2_b0_c7_backup_artefact_restore_engine_contract (C7): backup profile model, artefact store/manifest/validation/retention, key custody, restore execution (plan, preconditions, execution via C4, verification, a restore-specific OUTCOME_UNKNOWN), routine-vs-per-operation approval, device/version matrix. MERGED PR #170. Full detail: project/build_history.json's ui2_b0_c7_backup_artefact_restore_engine_contract record.",
           "Predecessor ui2_b0_c5_amendments_bundle (C5): CON.0 separate-shell amendment text cited, action_taxonomy.py UI-OPERATIONAL-RUN-NOW clarification (docstring/comment only, no new ActionClass member), design document APPROVAL-MODEL/CAP-* replacements, PRIVACY_AND_DATA_HANDLING.md UI 2.0 database section. MERGED PR #169. Full detail: project/build_history.json's ui2_b0_c5_amendments_bundle record.",
