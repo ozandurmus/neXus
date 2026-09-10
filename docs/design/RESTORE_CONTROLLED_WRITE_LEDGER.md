@@ -1,5 +1,16 @@
 # Controlled restore-write admission contract — design
 
+**Application checkpoint (2026-09-10, PARTIAL):** the separately authorized
+`ui2_d1_restore_c7_c2_amendments` movement applies §3.1/§3.3/§3.6/§3.7
+to C7 §5.3 and C2 §6, including the independent check 7 and physical-target
+topology gate. No ledger backend or runtime restore is implemented.
+The §3.4 retry-table amendment is held for PO resolution: §3.1.3 and test
+obligation (m) say a refused claim remains `REQUESTED`, but frozen C2 §6
+explicitly runs checks in `CLAIMED` and transitions failure to `REJECTED`.
+These incompatible lifecycle claims are not reconciled by this movement;
+C2's existing state machine is preserved. Numeric freshness fields and
+per-vendor cached-evidence semantics remain `UNKNOWN` as already recorded.
+
 **Status: FROZEN — PRODUCT OWNER APPROVED, 2026-09-10.** Council disclosure:
 two same-model-family, fresh-context seats (Security Reviewer and Senior
 Python Architect) reviewed independently; this was not a cross-model review.

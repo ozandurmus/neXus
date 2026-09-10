@@ -1,31 +1,41 @@
 # AI_HANDOVER
 
-> **NON-AUTHORITATIVE DERIVED SUMMARY**
-> **DO NOT USE AS PROJECT-STATE AUTHORITY**
-> If this disagrees with `CURRENT_STATE.md` or `project/roadmap.json`, those
-> sources win.
+> NON-AUTHORITATIVE DERIVED SUMMARY. CURRENT_STATE.md and project/*.json win.
+> DO NOT USE AS PROJECT-STATE AUTHORITY.
 
-## 1. Snapshot
+## Snapshot
 
-- 2026-09-10: `ui2_b1_01_skeleton_ci_docker`, contract-only movement integrated from worker relay `NXS-LOCAL-0061`.
-- New DRAFT: `docs/design/UI2_0_B1_01_SKELETON_CI_DOCKER_CONTRACT.md`.
-- No `ui2/` implementation, Line-1 source, validation workflow, or device contact.
+- 2026-09-10: `ui2_d1_restore_c7_c2_amendments` is BLOCKED with a partial local patch.
+- Branch: `build/ui2-d1-c7-c2-frozen-amendments`; base `3993d95`.
+- Runtime restore remains disabled; no device contact or remote Git operations.
 
-## 2. What changed
+## What changed
 
-- The contract defines component homes, one-way dependencies, reproducible build/test/image commands, Testcontainers/Flyway, isolated CI, scoped secrets, and 15 implementation checks.
-- The worker’s completed relay and contract were imported without restoring its stale pre-D1 state snapshot; D1 remains in build history and restore remains disabled.
+- Applied C7 check 1 policy and independent check 7; preserved checks 2–6.
+- Applied C2 connectivity, class-scoped ledger and topology rechecks without adding check 7.
+- Recorded resolved taxonomy/step-kind gaps and the remaining lifecycle conflict.
 
-## 3. Exact next action
+## Exact next action
 
-Product Owner review and freeze of the B1-1 contract. After freeze, dispatch a separate B1-1 implementation movement to create `ui2/`.
+PO resolves `ui2_d1_claim_refusal_lifecycle_resolution`: ledger §3.1.3 says
+refused claims remain REQUESTED; C2 §6 says CLAIMED → REJECTED. The retry-table
+amendment remains unapplied. See the ledger application checkpoint; review the
+partial diff before dispatching completion. Recommended movement: ARCHITECTURE,
+High reasoning because this is a frozen security-contract conflict.
 
-## 4. Test delta
+## Test delta
 
-- Worker evidence: AC-1..AC-9 self-check, architecture/state tests 22 passed, privacy 0 new findings, diff check clean.
-- Integration validation: JSON/state consistency and generated history index are required before PR merge.
+- Targeted contract + architecture/state tests: 26 passed (3 new).
+- C7 checks 2–6 are byte-for-byte unchanged against base `3993d95`.
+- Candidate privacy against that base: 6 existing findings, 0 new; diff/index clean.
+- Full workspace privacy scan was interrupted; generated/untracked content is not
+  covered by the passing tracked-candidate gate. User-owned paths were preserved.
+- Graphify local AST update completed; 44 SQL files omitted (missing parser),
+  document semantics were not refreshed. No external model calls were used.
+- Runtime/backend behavior tests remain a separate implementation gate.
 
-## 5. New risks
+## New risks
 
-- Contract is DRAFT; implementation is not authorized until freeze.
-- Worker had no PR/CI at close; integration is now pending push, PR, CI, and PO merge verification.
+- No lifecycle interpretation was chosen; C2's existing state machine is preserved.
+- Freshness numeric values and cached-evidence vendor semantics remain UNKNOWN.
+- Local patch only; no push, PR or merge authorized for this worker.

@@ -5,8 +5,8 @@ see `AGENTS.md`/`AI_START_HERE.md`. **Predecessor build detail lives in
 `project/build_history.json`** (structured, newest-first) and its linked
 docs under `docs/history/`; `docs/history/INDEX.md` is the one-line timeline.
 
-- **Checkpoint:** 2026-09-10, `ui2_b1_01_skeleton_ci_docker` (`UI2 B1-1`) — new `docs/design/UI2_0_B1_01_SKELETON_CI_DOCKER_CONTRACT.md` (status: **DRAFT — FOR PRODUCT OWNER FREEZE**). Contract only: module/dependency map, reproducible build commands, Testcontainers/Flyway harness, isolated CI, minimal non-root image, scoped secrets, and 15 runnable checks. No `ui2/` implementation, Line-1 source, validation workflow, or device contact. D1 Option A remains implemented as its predecessor; restore remains disabled. Detail: `project/build_history.json`.
-- **Next** (`now_next.next`): `ui2_d1_restore_c7_c2_amendments` — separate authorization for frozen C7/C2 restore-admission amendments; tests and Java/UI remain later slices, and no device contact or real write is implied. `m7_real_device_targeted_
+- **Checkpoint:** 2026-09-10, `ui2_d1_restore_c7_c2_amendments` — **BLOCKED / partial patch**: C7 check 7 and companion C2 admission text applied; retry amendment awaits PO resolution of ledger `REQUESTED` versus C2 `REJECTED` claim-refusal semantics. Runtime restore remains disabled. Detail: `docs/design/RESTORE_CONTROLLED_WRITE_LEDGER.md` application checkpoint and `project/build_history.json`.
+- **Next** (`now_next.next`): `ui2_d1_claim_refusal_lifecycle_resolution` — PO resolution of the frozen lifecycle conflict before completing the retry amendment. `m7_real_device_targeted_
   collect_now` **AUTOMATED_VALIDATED 2026-09-08**, real-device confirmation
   pending Product Owner execution. `op2_c_cp_clusterxl_adapter_scoping`
   stays `upcoming`/`blocked`. `event_signal_intake` stays `in_progress` —
@@ -48,7 +48,7 @@ test-enforced boundaries.
 | 4 — policy / deployment / remediation | prohibited | — |
 ## Active build
 
-See checkpoint above for `ui2_b1_01_skeleton_ci_docker`, the current
+See checkpoint above for `ui2_d1_restore_c7_c2_amendments`, the current
 build. Full detail: `project/build_history.json`.
 
 Predecessors, all **MERGED**, detail in `project/build_history.json` /
