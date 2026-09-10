@@ -47,6 +47,21 @@ def test_c2_keeps_six_claim_time_checks_with_independent_restore_ledger():
                    "TARGET_TOPOLOGY_EVIDENCE_CONFLICTING"):
         assert reason in rows["5"]
     assert "VSX-context targets remain unsupported" in rows["5"]
+    assert "CLAIMED` → `REJECTED`" in battery
+    assert "no device is contacted" in battery.lower()
+    assert "no step attempt" in battery.lower()
+
+
+def test_restore_claim_refusal_is_terminal_and_class_1b_never_auto_retries():
+    ledger = (DESIGN / "RESTORE_CONTROLLED_WRITE_LEDGER.md").read_text(encoding="utf-8")
+    retry_table = section("UI2_0_C2_JOB_EXECUTION_CONTRACT.md",
+                          "### 5.3 Retry rules per action class", "### 5.4 Step log")
+    assert "terminal `REJECTED`" in ledger
+    assert "not selected by claim queries" in ledger
+    assert "new job and approval path" in " ".join(ledger.split())
+    assert "CLASS_1B_CONTROLLED_RESTORE_WRITE" in retry_table
+    assert "Never auto-retries after execution begins" in retry_table
+    assert "new job with its own approval path" in retry_table
 
 
 def test_restore_topology_and_connectivity_never_infer_permission():

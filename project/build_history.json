@@ -4,14 +4,14 @@
   "builds": [
     {
       "build": "ui2_d1_restore_c7_c2_amendments",
-      "status": "blocked",
+      "status": "automated_validated",
       "title": "UI2 D1 -- C7/C2 restore admission amendments",
-      "summary": "Applied the independent C7 check 7, connectivity and topology requirements, and companion C2 claim-time ledger text. The retry amendment is held for a frozen-contract lifecycle conflict; runtime restore remains disabled.",
-      "evidence": "Targeted contract and architecture/state tests: 26 passed; C7 checks 2-6 byte-for-byte preserved against 3993d95; tracked-candidate privacy: 6 existing findings, 0 new; diff and generated index checks passed. Full regression and device validation not run; no runtime code changed.",
+      "summary": "Applied the independent C7 check 7, companion C2 admission text, terminal CLAIMED-to-REJECTED claim refusal, and the explicit Class 1B retry rule. Runtime restore remains disabled.",
+      "evidence": "Prior targeted contract and architecture/state tests: 26 passed; lifecycle alignment adds targeted assertions and requires the same local gates. C7 checks 2-6 remain byte-for-byte preserved against 3993d95; full regression and device validation are not applicable to this contract-only change.",
       "started": "2026-09-10",
       "movement": "IMPLEMENTATION",
       "track": "UI 2.0 (Java product line)",
-      "risks_forward": "Ledger section 3.1.3 says refused claims remain REQUESTED; C2 section 6 transitions CLAIMED to REJECTED. PO resolution is required before the retry amendment.",
+      "risks_forward": "Freshness numeric values and per-vendor cached-evidence semantics remain UNKNOWN. B1-1 has a separate DRAFT-versus-FROZEN authority contradiction and freeze-readiness gaps; no UI2 source is authorized by this record.",
       "docs": {
         "agreement": "docs/design/RESTORE_CONTROLLED_WRITE_LEDGER.md",
         "handover": "AI_HANDOVER.md"

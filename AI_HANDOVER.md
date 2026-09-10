@@ -5,7 +5,7 @@
 
 ## Snapshot
 
-- 2026-09-10: `ui2_d1_restore_c7_c2_amendments` is BLOCKED with a partial local patch.
+- 2026-09-10: `ui2_d1_restore_c7_c2_amendments` is AUTOMATED_VALIDATED locally.
 - Branch: `build/ui2-d1-c7-c2-frozen-amendments`; base `3993d95`.
 - Runtime restore remains disabled; no device contact or remote Git operations.
 
@@ -13,19 +13,18 @@
 
 - Applied C7 check 1 policy and independent check 7; preserved checks 2–6.
 - Applied C2 connectivity, class-scoped ledger and topology rechecks without adding check 7.
-- Recorded resolved taxonomy/step-kind gaps and the remaining lifecycle conflict.
+- Aligned claim-time refusal to terminal `CLAIMED` → `REJECTED` and added the Class 1B retry row.
 
 ## Exact next action
 
-PO resolves `ui2_d1_claim_refusal_lifecycle_resolution`: ledger §3.1.3 says
-refused claims remain REQUESTED; C2 §6 says CLAIMED → REJECTED. The retry-table
-amendment remains unapplied. See the ledger application checkpoint; review the
-partial diff before dispatching completion. Recommended movement: ARCHITECTURE,
-High reasoning because this is a frozen security-contract conflict.
+Resolve the B1-1 DRAFT-versus-FROZEN authority contradiction, then its
+secret-source precedence, isolated Testcontainers DSN provisioning, and
+cold-cache-safe CI dependency path. Recommended movement: ARCHITECTURE,
+medium reasoning.
 
 ## Test delta
 
-- Targeted contract + architecture/state tests: 26 passed (3 new).
+- Targeted contract + architecture/state tests must be rerun after this lifecycle alignment.
 - C7 checks 2–6 are byte-for-byte unchanged against base `3993d95`.
 - Candidate privacy against that base: 6 existing findings, 0 new; diff/index clean.
 - Full workspace privacy scan was interrupted; generated/untracked content is not
@@ -36,6 +35,5 @@ High reasoning because this is a frozen security-contract conflict.
 
 ## New risks
 
-- No lifecycle interpretation was chosen; C2's existing state machine is preserved.
 - Freshness numeric values and cached-evidence vendor semantics remain UNKNOWN.
 - Local patch only; no push, PR or merge authorized for this worker.

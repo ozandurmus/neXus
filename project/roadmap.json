@@ -151,22 +151,22 @@
     "horizon_contract": "NOW is exactly one build. NEXT is exactly one. Everything else is an `upcoming` row carrying its own true status: planned = AFTER, blocked = waiting on a named external gate, deferred = consciously postponed. `now.build` must equal the newest project/build_history.json record -- utils.project_plan enforces it.",
     "now": {
       "build": "ui2_d1_restore_c7_c2_amendments",
-      "title": "UI2 D1 -- C7/C2 admission amendments (partial)",
-      "status": "blocked",
+      "title": "UI2 D1 -- C7/C2 admission amendments",
+      "status": "automated_validated",
       "started": "2026-09-10",
       "goal": "Apply the frozen seven-check C7 shape and companion C2 admission text while keeping runtime restore disabled.",
       "notes": [
-        "Frozen ledger section 3.1.3 says refused claims remain REQUESTED; frozen C2 section 6 transitions CLAIMED to REJECTED. PO must resolve before applying the retry amendment.",
-        "C7 checks 2-6 are preserved; C2 retains six checks. Retry-table amendment remains unapplied pending PO resolution."
+        "C7 checks 2-6 are preserved; C2 retains six checks.",
+        "Claim-time refusal is CLAIMED to REJECTED and terminal for the job; Class 1B never auto-retries after execution begins. Runtime restore remains disabled."
       ]
     },
     "next": {
-      "build": "ui2_d1_claim_refusal_lifecycle_resolution",
-      "title": "Resolve refused-claim lifecycle conflict",
+      "build": "ui2_b1_01_contract_status_reconciliation",
+      "title": "Reconcile B1-1 contract-status authority",
       "status": "planned",
       "notes": [
-        "Frozen ledger section 3.1.3 says refused claims remain REQUESTED; frozen C2 section 6 transitions CLAIMED to REJECTED. PO must resolve before applying the retry amendment.",
-        "Review the local amendment patch; no runtime restore, network access or remote Git action is authorized by this worker."
+        "The B1-1 document declares DRAFT while backlog text claims FROZEN. Resolve this authority contradiction and the identified freeze-readiness gaps before source implementation.",
+        "No UI2 source, device behavior, network access, or remote Git action is authorized by this planning movement."
       ]
     },
     "upcoming": [

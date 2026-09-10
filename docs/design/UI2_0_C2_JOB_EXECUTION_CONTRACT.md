@@ -333,6 +333,7 @@ whether the timeout comes from a genuine crash or from a slow/hung device.
 |---|---|
 | `CLASS_0_READ` (`read`) | Bounded automatic retry — proposed: up to 2 retries, exponential backoff starting at 2 s — **only** for a transport-level failure before any response was received (connection refused, connect timeout, DNS/handshake failure). A retry creates a new `job_step_attempt` row at the same `step_index` with an incremented `attempt_number`; it never retries after a response was received and parsed (that is a semantic failure, not a transient one, and is `FAILED`, not retried). Retry exhaustion is `FAILED` (or, if the boundary was somehow already crossed by an earlier attempt at the same step — which cannot happen for a class-0 step by construction, since a read step's precondition is that it declares no mutation — `OUTCOME_UNKNOWN` never applies to a pure class-0 job). |
 | `CLASS_1_RECOVERY_WRITE` (`recovery-write`) | **Never auto-retries, at any stage, for any reason** — this is the direct implementation of `UI2_0_BASELINE_CONTRACT.md` D-2a and the risk this contract's own dispatch explicitly names ("allowing a 'safe' automatic retry ... because the command is idempotent"). A class-1 step's failure or ambiguity ends the job (`FAILED` or `OUTCOME_UNKNOWN`, §3, §8); any further attempt is a brand-new job with its own owner, reason and (where `OUTCOME_UNKNOWN` is involved) reconciliation evidence, per §3.5. This holds even when the underlying device command is documented as idempotent — idempotency of the **device command** is not the same guarantee as safety of an **automatic** retry with no human decision point (brief §6.3), and this contract does not let one substitute for the other. |
+| `CLASS_1B_CONTROLLED_RESTORE_WRITE` (`controlled-restore-write`) | **Never auto-retries after execution begins.** Failure or ambiguity ends the job; any later restore attempt is a new job with its own approval path. A claim-time pre-execution failure is separately `CLAIMED` → `REJECTED` under §6. |
 | `CLASS_2`/`CLASS_3`/`CLASS_4` | Not applicable — no member of these classes is executable through this job contract (`utils.action_taxonomy`: class 2 has no member yet, classes 3–4 are prohibited); a job whose resolved `action_class` is one of these is refused at admission (`E3`/`E6`), never reaches `CLAIMED`. |
 
 A profile that mixes classes (design §6.3's example: class-0 `connect`/
@@ -355,7 +356,8 @@ fixes the field set and the write-ordering invariant above.
 ## 6. Pre-execution checks
 
 Pre-execution checks run **at claim time**, inside the `CLAIMED` state,
-strictly before the first device contact (`EXECUTING`). They are the `E7`
+strictly before the first device contact (`EXECUTING`). A refused check creates
+no step attempt. They are the `E7`
 step of the gate chain (design §5.3: "`E7` (execution phase only) admission
 + immediately-before-execution checks") plus the additional battery this
 contract's own scope requires. Every check is recorded on the job's

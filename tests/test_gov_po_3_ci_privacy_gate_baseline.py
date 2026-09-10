@@ -184,19 +184,17 @@ def test_ac6_live_repository_findings_are_pre_existing_against_origin_main():
         assert finding_key(ROOT, finding) in keys, (finding, note)
 
 
-def test_ac6_synthetic_new_finding_still_fails_against_origin_main():
-    # AC-6: one clearly-fake, untracked finding-shaped scratch file, dropped
-    # directly into this repository's own working tree (not committed) and
-    # removed again immediately after -- the exact reproduction the
-    # acceptance criterion asks for, not a copy.
-    scratch = ROOT / "scratch_ac6_synthetic_leak.md"
-    assert not scratch.exists(), "scratch fixture path unexpectedly already present"
-    scratch.write_text('api_key = "brand-new-synthetic-leak-ac6"\n', encoding="utf-8")
-    try:
-        keys, _note = baseline_finding_keys(ROOT, "origin/main")
-        current = scan_repository(ROOT)
-        new_only = [f for f in current.findings if f.path == "scratch_ac6_synthetic_leak.md"]
-        assert new_only, "expected the synthetic finding to be detected at all"
-        assert finding_key(ROOT, new_only[0]) not in keys
-    finally:
-        scratch.unlink()
+def test_ac6_synthetic_new_finding_still_fails_against_origin_main(tmp_path):
+    # Keep the synthetic scratch file out of the real checkout.  A concurrent
+    # full-repository privacy scan must never observe this deliberately bad
+    # fixture between creation and cleanup (pytest-xdist regression).
+    _init_repo(tmp_path)
+    _write(tmp_path, "tracked.md", "safe synthetic baseline\n")
+    _commit_all(tmp_path, "base")
+    _write(tmp_path, "scratch_ac6_synthetic_leak.md", 'api_key = "brand-new-synthetic-leak-ac6"\n')
+
+    keys, _note = baseline_finding_keys(tmp_path, "main")
+    current = scan_repository(tmp_path)
+    new_only = [f for f in current.findings if f.path == "scratch_ac6_synthetic_leak.md"]
+    assert new_only, "expected the synthetic finding to be detected at all"
+    assert finding_key(tmp_path, new_only[0]) not in keys
