@@ -199,7 +199,13 @@ def test_load_price_table_drops_the_comment_key(tmp_path):
     assert table["m"]["input_per_mtok"] == 1
 
 
-def test_load_price_table_committed_file_ships_empty(tmp_path):
-    # config/model_prices.json in the real repository -- ships with only a
-    # _comment key (section 3.2), so this must resolve to an empty table.
-    assert ou.load_price_table(ROOT / "config" / "model_prices.json") == {}
+def test_load_price_table_committed_file_is_well_formed():
+    # config/model_prices.json in the real repository -- PO-maintained
+    # (section 3.2). Every entry must carry the four per-MTok rates as
+    # non-negative numbers; the _comment key is stripped by the loader.
+    table = ou.load_price_table(ROOT / "config" / "model_prices.json")
+    assert "_comment" not in table
+    for model, entry in table.items():
+        assert isinstance(model, str) and model
+        for key in ("input_per_mtok", "cache_write_per_mtok", "cache_read_per_mtok", "output_per_mtok"):
+            assert isinstance(entry[key], (int, float)) and entry[key] >= 0, (model, key)
