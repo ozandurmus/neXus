@@ -30,67 +30,90 @@ body {
   top: 0;
   background: var(--bg);
   z-index: 5;
+  flex-wrap: wrap;
 }
 
 #topbar h1 { font-size: 1.1rem; margin: 0; }
-#summary-strip { color: var(--muted); flex: 1; }
-#poll-config { display: flex; align-items: center; gap: 0.4rem; }
-#poll-config input { width: 4rem; background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: 4px; padding: 0.2rem; }
-#poll-save-state { color: var(--muted); font-size: 0.8rem; min-width: 6rem; }
+#summary-strip { color: var(--muted); flex: 1; min-width: 16rem; }
+#poll-config { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
+#poll-config input { width: 4.5rem; background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: 4px; padding: 0.2rem; }
+#poll-save-state { color: var(--muted); font-size: 0.8rem; min-width: 4rem; }
 
-main#app { padding: 1rem 1.25rem; max-width: 1100px; margin: 0 auto; }
-
-.movement-section { margin-bottom: 1.5rem; }
-.movement-section h2 { font-size: 0.95rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin-bottom: 0.5rem; cursor: default; }
-.movement-section.collapsed .cards { display: none; }
-#recent-toggle { cursor: pointer; }
-
-.cards { display: flex; flex-direction: column; gap: 0.5rem; }
+main#app { padding: 1rem 1.25rem; max-width: 1400px; margin: 0 auto; }
 .muted { color: var(--muted); }
+.hidden { display: none !important; }
 
-.card {
-  background: var(--panel);
+/* -- token panel ------------------------------------------------------- */
+
+#token-panel {
+  max-width: 32rem; margin: 3rem auto; background: var(--panel); border: 1px solid var(--border);
+  border-radius: 8px; padding: 1.25rem;
+}
+#token-panel input { width: 100%; margin: 0.5rem 0; padding: 0.4rem; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 4px; }
+#token-panel button { cursor: pointer; border: 1px solid var(--accent); color: var(--accent); background: none; border-radius: 4px; padding: 0.4rem 0.9rem; }
+#token-error { margin-top: 0.5rem; }
+
+/* -- Kanban board -------------------------------------------------------- */
+
+#board-columns {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(15rem, 1fr));
+  gap: 0.75rem;
+  overflow-x: auto;
+  padding-bottom: 0.5rem;
+}
+@media (max-width: 900px) {
+  #board-columns { grid-template-columns: 1fr; overflow-x: visible; }
+}
+
+.board-column { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 0.6rem; min-width: 0; }
+.board-column h2 { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.03em; color: var(--muted); margin: 0 0 0.5rem; }
+.column-cards { display: flex; flex-direction: column; gap: 0.5rem; max-height: 70vh; overflow-y: auto; }
+.show-all { margin-top: 0.5rem; width: 100%; cursor: pointer; border: 1px solid var(--border); background: var(--bg); color: var(--muted); border-radius: 4px; padding: 0.3rem; }
+
+.board-card {
+  background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 6px;
-  padding: 0.65rem 0.85rem;
+  padding: 0.55rem 0.7rem;
   cursor: pointer;
 }
-.card:hover { border-color: var(--accent); }
-.card-top { display: flex; justify-content: space-between; gap: 1rem; align-items: baseline; }
-.card-id { font-weight: 600; }
-.card-fields { display: flex; gap: 1rem; color: var(--muted); font-size: 0.85rem; margin-top: 0.3rem; flex-wrap: wrap; }
-.badge { display: inline-block; padding: 0.05rem 0.4rem; border-radius: 3px; font-size: 0.75rem; border: 1px solid var(--border); }
-.badge.running { color: var(--ok); border-color: var(--ok); }
-.badge.exited, .badge.disconnected { color: var(--muted); }
-.badge.blocked { color: var(--warn); border-color: var(--warn); }
+.board-card:hover { border-color: var(--accent); }
+.card-top { display: flex; justify-content: space-between; gap: 0.5rem; align-items: baseline; }
+.card-id { font-weight: 600; font-size: 0.85rem; word-break: break-word; }
+.card-objective { margin-top: 0.2rem; font-size: 0.85rem; }
+.card-fields { display: flex; flex-direction: column; gap: 0.15rem; color: var(--muted); font-size: 0.78rem; margin-top: 0.35rem; }
 
-.exec-card { border-color: var(--warn); margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px dashed var(--border); }
+.badge { display: inline-block; padding: 0.05rem 0.4rem; border-radius: 3px; font-size: 0.72rem; border: 1px solid var(--border); white-space: nowrap; }
+.badge.health-healthy { color: var(--ok); border-color: var(--ok); }
+.badge.health-silent { color: var(--warn); border-color: var(--warn); }
+.badge.health-failed, .badge.health-exited_without_close { color: var(--danger); border-color: var(--danger); }
+.badge.health-awaiting_po { color: var(--warn); border-color: var(--warn); }
+.badge.health-done { color: var(--muted); }
+
+/* -- detail panel, below the board (not a modal / side pane) ------------ */
+
+#detail-panel { margin-top: 1.25rem; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; }
+#detail-header { display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem 1rem; border-bottom: 1px solid var(--border); }
+#detail-close { background: none; border: none; color: var(--text); font-size: 1.3rem; cursor: pointer; margin-left: auto; order: 2; }
+#detail-title { font-size: 1rem; margin: 0; }
+#detail-sections { padding: 0 1rem 1rem; }
+
+.detail-section { border-bottom: 1px solid var(--border); padding: 0.5rem 0; }
+.detail-section:last-child { border-bottom: none; }
+.detail-section > summary { cursor: pointer; font-weight: 600; padding: 0.3rem 0; }
+.detail-body { padding: 0.5rem 0.25rem; }
+
+.kv { display: grid; grid-template-columns: 9rem 1fr; gap: 0.25rem 0.75rem; margin-bottom: 0.75rem; }
+.kv dt { color: var(--muted); }
+.kv dd { margin: 0; word-break: break-word; }
+
+.exec-card { border: 1px dashed var(--warn); border-radius: 6px; margin-top: 0.75rem; padding: 0.6rem; }
 .exec-card .buttons { display: flex; gap: 0.5rem; margin-top: 0.5rem; }
 .exec-card button { cursor: pointer; border: 1px solid var(--border); background: var(--bg); color: var(--text); border-radius: 4px; padding: 0.3rem 0.6rem; }
 .exec-card button.primary { border-color: var(--accent); color: var(--accent); }
 .exec-card button.danger { border-color: var(--danger); color: var(--danger); }
-.exec-card .platform-blocked { color: var(--danger); font-size: 0.85rem; }
-
-#detail-panel {
-  position: fixed; top: 0; right: 0; bottom: 0; width: 520px; max-width: 96vw;
-  background: var(--panel); border-left: 1px solid var(--border);
-  overflow-y: auto; padding: 0; transition: transform 0.15s ease;
-  z-index: 10;
-}
-#detail-panel.hidden { transform: translateX(100%); pointer-events: none; }
-#detail-header { display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem 1rem; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--panel); }
-#detail-close { background: none; border: none; color: var(--text); font-size: 1.3rem; cursor: pointer; }
-#detail-title { font-size: 1rem; margin: 0; }
-#detail-tabs { display: flex; border-bottom: 1px solid var(--border); overflow-x: auto; }
-#detail-tabs button { flex: 1; background: none; border: none; color: var(--muted); padding: 0.5rem; cursor: pointer; white-space: nowrap; }
-#detail-tabs button.active { color: var(--accent); border-bottom: 2px solid var(--accent); }
-#detail-body { padding: 0.85rem 1rem; }
-.tab-pane { display: none; }
-.tab-pane.active { display: block; }
-
-.kv { display: grid; grid-template-columns: 9rem 1fr; gap: 0.25rem 0.75rem; margin-bottom: 0.75rem; }
-.kv dt { color: var(--muted); }
-.kv dd { margin: 0; }
+.exec-card .platform-blocked { color: var(--danger); font-size: 0.85rem; margin-top: 0.4rem; }
 
 .msg-box { margin-top: 1rem; }
 .msg-box textarea { width: 100%; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 4px; padding: 0.4rem; min-height: 4rem; }
@@ -101,3 +124,6 @@ pre.log { background: var(--bg); border: 1px solid var(--border); border-radius:
 
 .entry { border-left: 2px solid var(--border); padding: 0.3rem 0 0.3rem 0.6rem; margin-bottom: 0.4rem; }
 .entry .entry-head { color: var(--muted); font-size: 0.8rem; }
+.entry-sent { border-left-color: var(--accent); }
+.entry-received { border-left-color: var(--ok); }
+.entry-orchestrator { border-left-color: var(--muted); }

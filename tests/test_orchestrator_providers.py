@@ -274,3 +274,62 @@ def test_build_adapter_returns_the_right_class(tmp_path):
 def test_build_adapter_rejects_an_unknown_provider():
     with pytest.raises(ValueError):
         op.build_adapter("gemini")
+
+
+# --- GOV.ORCH.4 section 3.1: usage_from_event -------------------------------
+
+def test_claude_usage_from_event_system_init_yields_model_kind():
+    adapter = op.ClaudeAdapter(profile_path=Path("/dev/null"))
+    obj = {"type": "system", "subtype": "init", "model": "claude-sonnet-5"}
+    assert adapter.usage_from_event(obj) == {"kind": "model", "model": "claude-sonnet-5"}
+
+
+def test_claude_usage_from_event_assistant_carries_message_id_and_usage():
+    adapter = op.ClaudeAdapter(profile_path=Path("/dev/null"))
+    obj = {"type": "assistant", "message": {"id": "msg_1", "usage": {
+        "input_tokens": 10, "cache_creation_input_tokens": 2, "cache_read_input_tokens": 3, "output_tokens": 4,
+    }}}
+    normalized = adapter.usage_from_event(obj)
+    assert normalized["kind"] == "assistant"
+    assert normalized["message_id"] == "msg_1"
+    assert normalized["usage"] == {
+        "input_tokens": 10, "cache_creation_input_tokens": 2, "cache_read_input_tokens": 3, "output_tokens": 4,
+    }
+
+
+def test_claude_usage_from_event_result_carries_total_cost_usd():
+    adapter = op.ClaudeAdapter(profile_path=Path("/dev/null"))
+    obj = {"type": "result", "usage": {"input_tokens": 1, "output_tokens": 2}, "total_cost_usd": 0.5}
+    normalized = adapter.usage_from_event(obj)
+    assert normalized["kind"] == "result"
+    assert normalized["total_cost_usd"] == 0.5
+    assert normalized["usage"]["input_tokens"] == 1
+    assert normalized["usage"]["cache_creation_input_tokens"] == 0
+
+
+def test_claude_usage_from_event_ignores_unrelated_events():
+    adapter = op.ClaudeAdapter(profile_path=Path("/dev/null"))
+    assert adapter.usage_from_event({"type": "user"}) is None
+
+
+def test_codex_usage_from_event_turn_completed_maps_cached_input_tokens():
+    adapter = op.CodexAdapter()
+    obj = {"type": "turn.completed", "usage": {"input_tokens": 5, "cached_input_tokens": 6, "output_tokens": 7}}
+    normalized = adapter.usage_from_event(obj)
+    assert normalized == {
+        "kind": "turn",
+        "usage": {
+            "input_tokens": 5, "cache_creation_input_tokens": 0, "cache_read_input_tokens": 6, "output_tokens": 7,
+        },
+    }
+
+
+def test_codex_usage_from_event_thread_started_with_model_yields_model_kind():
+    adapter = op.CodexAdapter()
+    obj = {"type": "thread.started", "model": "gpt-5-codex"}
+    assert adapter.usage_from_event(obj) == {"kind": "model", "model": "gpt-5-codex"}
+
+
+def test_codex_usage_from_event_ignores_unrelated_events():
+    adapter = op.CodexAdapter()
+    assert adapter.usage_from_event({"type": "item.completed", "item": {}}) is None

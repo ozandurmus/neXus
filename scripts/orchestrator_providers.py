@@ -125,6 +125,8 @@ class ProviderAdapter(Protocol):
 
     def observed_model(self, log_path: Path) -> tuple[str | None, str | None]: ...
 
+    def usage_from_event(self, obj: dict) -> dict | None: ...
+
 
 def _iter_json_lines(log_path: Path):
     """Yields one parsed JSON object per complete, valid line of `log_path`.
@@ -220,6 +222,45 @@ class ClaudeAdapter:
                 model = obj.get("model")
                 return (model if isinstance(model, str) and model else None), None
         return None, None
+
+    def usage_from_event(self, obj: dict) -> dict | None:
+        """GOV.ORCH.4 section 3.1: one already-JSON-decoded stream-json
+        event -> a normalized partial-usage record for `orchestrator_usage.py`,
+        or `None` for an event that carries no usage-relevant information.
+        `orchestrator_usage.py` never looks inside `message.usage` or any
+        other Claude-specific field itself -- only this adapter does."""
+        kind = obj.get("type")
+        if kind == "system" and obj.get("subtype") == "init":
+            model = obj.get("model")
+            return {"kind": "model", "model": model if isinstance(model, str) and model else None}
+        if kind == "assistant":
+            message = obj.get("message") if isinstance(obj.get("message"), dict) else {}
+            usage = message.get("usage") if isinstance(message.get("usage"), dict) else {}
+            message_id = message.get("id")
+            return {
+                "kind": "assistant",
+                "message_id": message_id if isinstance(message_id, str) else None,
+                "usage": {
+                    "input_tokens": usage.get("input_tokens") or 0,
+                    "cache_creation_input_tokens": usage.get("cache_creation_input_tokens") or 0,
+                    "cache_read_input_tokens": usage.get("cache_read_input_tokens") or 0,
+                    "output_tokens": usage.get("output_tokens") or 0,
+                },
+            }
+        if kind == "result":
+            usage = obj.get("usage") if isinstance(obj.get("usage"), dict) else {}
+            cost = obj.get("total_cost_usd")
+            return {
+                "kind": "result",
+                "usage": {
+                    "input_tokens": usage.get("input_tokens") or 0,
+                    "cache_creation_input_tokens": usage.get("cache_creation_input_tokens") or 0,
+                    "cache_read_input_tokens": usage.get("cache_read_input_tokens") or 0,
+                    "output_tokens": usage.get("output_tokens") or 0,
+                },
+                "total_cost_usd": cost if isinstance(cost, (int, float)) and not isinstance(cost, bool) else None,
+            }
+        return None
 
 
 class CodexAdapter:
@@ -336,6 +377,32 @@ class CodexAdapter:
                         effort if isinstance(effort, str) and effort else None,
                     )
         return None, None
+
+    def usage_from_event(self, obj: dict) -> dict | None:
+        """GOV.ORCH.4 section 3.1: Codex's `turn.completed` carries `usage`
+        keyed `input_tokens`/`cached_input_tokens`/`output_tokens` -- mapped
+        here to the shared normalized shape (`cached_input_tokens` ->
+        `cache_read_input_tokens`; Codex has no cache-write/creation
+        concept, so that field is always 0). `thread.started`/`turn.started`/
+        `configured` are consulted opportunistically for a model id, exactly
+        like `observed_model` above."""
+        kind = obj.get("type")
+        if kind == "turn.completed":
+            usage = obj.get("usage") if isinstance(obj.get("usage"), dict) else {}
+            return {
+                "kind": "turn",
+                "usage": {
+                    "input_tokens": usage.get("input_tokens") or 0,
+                    "cache_creation_input_tokens": 0,
+                    "cache_read_input_tokens": usage.get("cached_input_tokens") or 0,
+                    "output_tokens": usage.get("output_tokens") or 0,
+                },
+            }
+        if kind in ("thread.started", "turn.started", "configured"):
+            model = obj.get("model")
+            if isinstance(model, str) and model:
+                return {"kind": "model", "model": model}
+        return None
 
 
 _ADAPTER_CLASSES: dict[str, type] = {"claude": ClaudeAdapter, "codex": CodexAdapter}

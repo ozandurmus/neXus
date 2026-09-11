@@ -9,6 +9,7 @@
     py scripts/orchestrator.py merge-lock {acquire|release} --movement <relay-id> [options]
     py scripts/orchestrator.py watch      [--interval SECONDS] [options]
     py scripts/orchestrator.py dashboard  [--port N] [options]
+    py scripts/orchestrator.py usage      [--movement <relay-id>] [--since ISO] [--json] [options]
 
 `<relay-id>` is the relay file's own id (`NXS-LOCAL-NNNN`), unambiguous and
 resolvable to exactly one file (`relay/<relay-id>-*.json`).
@@ -70,6 +71,7 @@ sys.path.insert(0, str(REPO_ROOT / "scripts"))
 import local_relay as lr  # noqa: E402
 import orchestrator_verify as ov  # noqa: E402
 import orchestrator_providers as op  # noqa: E402
+import orchestrator_usage as ou  # noqa: E402
 
 EXIT_OK, EXIT_REFUSED, EXIT_USAGE = 0, 1, 2
 
@@ -89,6 +91,9 @@ DEFAULT_STATE_DIR = Path(
 #: `status` still reads a record found only here for one release, flagging
 #: it `legacy_state_dir` rather than losing track of it.
 LEGACY_STATE_DIR = Path(os.path.join(tempfile.gettempdir(), "nexus_orchestrator"))
+
+#: GOV.ORCH.4 section 3.2: the PO-owned, hand-maintained token price table.
+DEFAULT_PRICE_TABLE_PATH = REPO_ROOT / "config" / "model_prices.json"
 
 DEFAULT_MAX_WORKERS = 3
 DEFAULT_RETRY_LIMIT = 2
@@ -1161,14 +1166,15 @@ def _build_run_report(
     verify_result: dict, worktree_path: Path, branch: str | None,
     provider: str = "claude", merge_mode: str | None = None,
     model_observed: str | None = None, effort_observed: str | None = None,
-    integrate_result: dict | None = None,
+    integrate_result: dict | None = None, usage: dict | None = None,
 ) -> dict:
     """GOV.ORCH.1 section 2.4's report object, extended by GOV.ORCH.2
     section 2.4 with provider/model/effort requested-vs-observed fields and
     the `provider_default_used` audit exception (section 2.4: a dispatch
     whose observed values are null -- the engineer log never surfaced a
     model -- is flagged rather than silently reported as if nothing was
-    recorded)."""
+    recorded), and by GOV.ORCH.4 section 3.1 with the movement's own token/
+    cost usage, read from the usage file `orchestrator_usage.py` maintains."""
     report = {
         "movement": movement, "phase": phase, "exit_code": exit_code,
         "failure_reason": failure_reason, "relay_status": relay_status,
@@ -1177,7 +1183,7 @@ def _build_run_report(
         "model_observed": model_observed, "effort_observed": effort_observed,
         "merge_mode": merge_mode,
         "duration_s": round(duration_s, 3), "verify": verify_result,
-        "worktree_path": str(worktree_path), "branch": branch,
+        "worktree_path": str(worktree_path), "branch": branch, "usage": usage,
     }
     if model_observed is None:
         report["audit_exception"] = "provider_default_used"
@@ -1245,9 +1251,17 @@ def _cmd_run(args: argparse.Namespace) -> int:
             phase = PHASE_FAILED
             failure_reason = "integration_failed"
 
+    # GOV.ORCH.4 section 3.1: the movement's own token/cost usage, refreshed
+    # one last time from the now-finished engineer.log and persisted in the
+    # record itself (§3.4's board reads it from the record, never
+    # re-deriving it) alongside `verify` (§3.4's Evidence tab / verify.passed).
+    price_table = ou.load_price_table(DEFAULT_PRICE_TABLE_PATH)
+    usage = ou.compute_usage(state_dir, movement, str(worktree_path), provider, price_table)
+
     _save_state(state_dir, movement, {
         **record, "phase": phase, "failure_reason": failure_reason, "exit_code": exit_code,
         "model_observed": model_observed, "effort_observed": effort_observed,
+        "verify": verify_result, "usage": usage,
     })
 
     report_obj = _build_run_report(
@@ -1256,7 +1270,7 @@ def _cmd_run(args: argparse.Namespace) -> int:
         verify_result=verify_result, worktree_path=worktree_path, branch=branch,
         provider=provider, merge_mode=merge_mode,
         model_observed=model_observed, effort_observed=effort_observed,
-        integrate_result=integrate_result,
+        integrate_result=integrate_result, usage=usage,
     )
     print(json.dumps(report_obj))
     return EXIT_OK if phase == PHASE_DONE else EXIT_REFUSED
@@ -1502,6 +1516,39 @@ def _cmd_watch(args: argparse.Namespace) -> int:
 # other subcommands never pay for http.server's import cost.
 # ---------------------------------------------------------------------------
 
+def _cmd_usage(args: argparse.Namespace) -> int:
+    """GOV.ORCH.4 section 3.6: prints the same data as `GET /api/usage` for
+    the same state dir (AC-9) -- table by default, `--json` for the exact
+    payload. Lazily imports `orchestrator_dashboard` for the same reason
+    `_cmd_dashboard` does (it, not this module, owns http.server's import
+    cost, but the aggregation function this reuses lives there since it
+    needs both `orchestrator.py`'s own state records and
+    `orchestrator_usage.py`)."""
+    import orchestrator_dashboard as dash
+
+    state_dir = Path(args.state_dir)
+    relay_dir = Path(args.relay_dir).resolve()
+    repo_root = Path(args.repo_root).resolve()
+    report = dash.build_usage_report(state_dir, relay_dir, repo_root, since=args.since)
+    if args.movement:
+        rows = [m for m in report["movements"] if m["movement_id"] == args.movement]
+        report = {"movements": rows, "totals": dash._sum_usage_rows(rows)}
+
+    if args.json:
+        print(json.dumps(report, sort_keys=True))
+        return EXIT_OK
+
+    print(f"{'movement':<24}{'provider':<9}{'tokens':>12}{'cache%':>8}{'cost':>10}")
+    for m in report["movements"]:
+        cache_pct = f"{(m.get('cache_hit_ratio') or 0) * 100:.0f}%"
+        cost = f"${m['cost_usd']:.4f}" if m.get("cost_usd") is not None else (m.get("cost_source") or "-")
+        print(f"{m['movement_id']:<24}{(m.get('provider') or '-'):<9}{m.get('total_tokens', 0):>12}{cache_pct:>8}{cost:>10}")
+    totals = report["totals"]
+    cost_total = f"${totals['cost_usd']:.4f}" if totals.get("cost_usd") is not None else "-"
+    print(f"TOTAL movements={totals['movements']} tokens={totals['total_tokens']} cost={cost_total}")
+    return EXIT_OK
+
+
 def _cmd_dashboard(args: argparse.Namespace) -> int:
     import orchestrator_dashboard as dash
     port = args.port if args.port is not None else dash.DEFAULT_PORT
@@ -1591,6 +1638,16 @@ def build_parser() -> argparse.ArgumentParser:
     p_watch.add_argument("--interval", type=int, default=WATCH_INTERVAL_DEFAULT)
     p_watch.add_argument("--retry-limit", type=int, default=DEFAULT_RETRY_LIMIT)
     p_watch.set_defaults(func=_cmd_watch)
+
+    p_usage = sub.add_parser(
+        "usage", help="per-movement token/cost usage accounting (GOV.ORCH.4 section 3.6)"
+    )
+    _add_common(p_usage)
+    p_usage.add_argument("--repo-root", default=str(REPO_ROOT))
+    p_usage.add_argument("--movement", default=None)
+    p_usage.add_argument("--since", default=None, help="ISO timestamp -- only movements started_at this or later")
+    p_usage.add_argument("--json", action="store_true")
+    p_usage.set_defaults(func=_cmd_usage)
 
     p_dashboard = sub.add_parser(
         "dashboard",

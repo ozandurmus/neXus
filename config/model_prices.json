@@ -1,0 +1,3 @@
+{
+  "_comment": "GOV.ORCH.4 section 3.2 -- PO-owned, hand-maintained token price table. One entry per model id: {\"input_per_mtok\": x, \"cache_write_per_mtok\": y, \"cache_read_per_mtok\": z, \"output_per_mtok\": w} in USD per million tokens. A model with no entry here yields cost_source \"unavailable\" -- prices are a Product Owner decision, never guessed by a worker (relay/NXS-LOCAL-0073, docs/design/GOV_ORCH_4_WORKBENCH_OBSERVABILITY_TOKENS_AND_STUCK_DETECTION.md section 3.2)."
+}

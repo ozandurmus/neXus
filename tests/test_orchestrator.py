@@ -1380,3 +1380,47 @@ def test_status_single_movement_found_only_in_legacy_dir_is_flagged(tmp_path, mo
     row = json.loads(capsys.readouterr().out)
     assert rc == orch.EXIT_OK
     assert row["legacy_state_dir"] is True
+
+
+# ---------------------------------------------------------------------------
+# GOV.ORCH.4 section 3.6: `orchestrator.py usage` -- AC-9
+# ---------------------------------------------------------------------------
+
+def test_usage_cli_json_output_equals_build_usage_report(tmp_path, capsys):
+    import orchestrator_dashboard as dash
+
+    state_dir = tmp_path / "state"
+    relay_dir = tmp_path / "relay"
+    orch._save_state(state_dir, "NXS-LOCAL-0201", {
+        "movement_id": "NXS-LOCAL-0201", "phase": orch.PHASE_RUNNING, "pid": os.getpid(),
+        "provider": "claude", "started_at": "2026-09-11T09:00:00Z", "worktree_path": None,
+    })
+    orch._save_state(state_dir, "NXS-LOCAL-0202", {
+        "movement_id": "NXS-LOCAL-0202", "phase": orch.PHASE_DONE, "pid": None,
+        "provider": "codex", "started_at": "2026-09-11T10:00:00Z", "worktree_path": None,
+    })
+
+    expected = dash.build_usage_report(state_dir, relay_dir, ROOT)
+
+    capsys.readouterr()
+    rc = orch.main(["usage", "--state-dir", str(state_dir), "--relay-dir", str(relay_dir),
+                     "--repo-root", str(ROOT), "--json"])
+    out = capsys.readouterr().out
+    assert rc == orch.EXIT_OK
+    assert json.loads(out) == expected
+
+
+def test_usage_cli_table_output_does_not_raise(tmp_path, capsys):
+    state_dir = tmp_path / "state"
+    relay_dir = tmp_path / "relay"
+    orch._save_state(state_dir, "NXS-LOCAL-0203", {
+        "movement_id": "NXS-LOCAL-0203", "phase": orch.PHASE_RUNNING, "pid": os.getpid(),
+        "provider": "claude", "started_at": "2026-09-11T09:00:00Z", "worktree_path": None,
+    })
+    capsys.readouterr()
+    rc = orch.main(["usage", "--state-dir", str(state_dir), "--relay-dir", str(relay_dir),
+                     "--repo-root", str(ROOT)])
+    out = capsys.readouterr().out
+    assert rc == orch.EXIT_OK
+    assert "NXS-LOCAL-0203" in out
+    assert "TOTAL" in out
