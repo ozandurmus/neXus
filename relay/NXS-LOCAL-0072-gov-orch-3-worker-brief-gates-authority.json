@@ -1,0 +1,104 @@
+{
+  "created_at": "2026-09-11T18:29:41Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-A1..A5, AC-B1..B4 and AC-C1..C4 exactly as written in the contract",
+          "git diff --check clean; privacy gate 0 new findings; existing docs/project-state tests green"
+        ],
+        "baseline": {
+          "authority": "docs/design/GOV_ORCH_3_WORKER_BRIEF_GIT_GATES_AND_AUTHORITY_CLEANUP.md (DRAFT -- FOR PRODUCT OWNER FREEZE); GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md (FROZEN) for everything the contract does not amend",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "sequencing": "GOV.ORCH.1 first; GOV.ORCH.2 and GOV.ORCH.3 after it merges (both touch scripts/orchestrator.py)"
+        },
+        "context_not_loaded": [
+          "docs/history/**",
+          "project/backlog.json and roadmap.json",
+          "Device, deployment or collection code",
+          "Graphify"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/gov-orch-3-worker-brief-gates-authority"
+        },
+        "invariants": [
+          "WORKER.md is rendered by a fixed template, never by a model call, and is never committed",
+          "FROZEN status lines of amended documents are untouched; amendments are appended blocks marked PO decision pending",
+          "The pre-push hook depends on no AI-tool environment variable"
+        ],
+        "merge_gate": "PO review of diff and orchestrator-run tests; no self-merge. Privacy gate at push; git diff --check.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Implement GOV.ORCH.3 Parts A, B and C: generate .nexus/WORKER.md from approved_task.json at dispatch and shrink ENGINEER_PROMPT to point at it; add the one-paragraph orchestrated-worker rule to AI_START_HERE.md; install a per-worktree pre-push git hook (scripts/nexus_worker_prepush.py) that denies force pushes and pushes with new privacy findings; add the authority amendment block to GOV_PO_ROLE_MIGRATION.md, collapse the duplicated SESSION START/CLOSE templates and reasoning matrix in COPILOT_OPERATING_MODEL.md into pointers, and record the contradiction report in AGENTS.md.",
+        "output_contract": [
+          "Implementation exactly as docs/design/GOV_ORCH_3_WORKER_BRIEF_GIT_GATES_AND_AUTHORITY_CLEANUP.md sections Design/Scope specify",
+          "Tests named in the contract, green in a foreground run",
+          "SESSION_CLOSE on the relay with exact changed files, test results, blockers and commit state"
+        ],
+        "recommended_reasoning": {
+          "reason": "Template rendering, a small git hook and doc edits with exact target text; governance edits need care but no design decision.",
+          "tier": "Sonnet 5, normal (low effort)"
+        },
+        "requirements": [
+          "English, per AGENTS.md engineering-output language law",
+          "Read the named contract document fully; read only the files it lists under Scope In plus their direct tests",
+          "Smallest diff that satisfies every acceptance criterion; no scope expansion",
+          "Run the validation plan in the foreground and wait for real results before SESSION_CLOSE"
+        ],
+        "risks": [
+          "Rewriting frozen text instead of appending an amendment block",
+          "Deleting a schema copy without leaving the pointer line",
+          "A hook that breaks pushes from interactive sessions in the main checkout: it must be installed per worktree only"
+        ],
+        "scope": {
+          "in": [
+            "scripts/orchestrator.py",
+            "scripts/orchestrator_verify.py",
+            "scripts/nexus_worker_prepush.py",
+            "tests/test_orchestrator.py",
+            "tests/test_worker_brief.py",
+            "tests/test_worker_prepush.py",
+            "AI_START_HERE.md",
+            "docs/reference/COPILOT_OPERATING_MODEL.md",
+            "docs/design/GOV_PO_ROLE_MIGRATION.md (amendment block only)",
+            "AGENTS.md (contradiction report entry only)",
+            "docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md (amendment note only)"
+          ],
+          "out": [
+            ".claude/** hook logic (a comment only)",
+            "Packet schema",
+            "scripts/local_relay.py",
+            "relay/*.json",
+            "GitHub branch-protection settings",
+            "Any product code"
+          ]
+        },
+        "validation_plan": [
+          "targeted tests: python3 -m pytest -q tests/test_orchestrator.py tests/test_worker_brief.py tests/test_worker_prepush.py tests/test_gov_po_role.py tests/test_gov_relay_protocol.py",
+          "privacy gate: python3 scripts/repository_privacy_check.py",
+          "diff check: git diff --check"
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-11T18:29:41Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0072",
+  "movement": "GOV_ORCH_3_WORKER_BRIEF_GIT_GATES_AND_AUTHORITY_CLEANUP",
+  "next_actor": "engineer",
+  "refs": [
+    "docs/design/GOV_ORCH_3_WORKER_BRIEF_GIT_GATES_AND_AUTHORITY_CLEANUP.md",
+    "docs/design/GOV_ORCH_1_SYNCHRONOUS_RUN_AND_ORCHESTRATOR_VERIFY.md",
+    "scripts/orchestrator.py",
+    "AI_START_HERE.md",
+    "docs/reference/COPILOT_OPERATING_MODEL.md",
+    "docs/design/GOV_PO_ROLE_MIGRATION.md"
+  ],
+  "schema_version": 1,
+  "status": "OPEN",
+  "updated_at": "2026-09-11T18:29:41Z"
+}
