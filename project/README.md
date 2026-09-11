@@ -22,3 +22,15 @@ in history and mark the rebase instead of silently rewriting history.
 
 No credentials, management IPs, device names, raw configuration, serial numbers,
 or other estate-specific evidence belongs in these metadata files.
+
+GOV.ORCH.8: these JSON files hold state only (ids, status, dates, counts,
+short truncated summaries) — narrative (full build summaries, evidence,
+risks forward, roadmap now/next prose, decided-decision text, long feature
+description text) lives in `docs/history/{builds,roadmap,features}/` and
+`docs/design/PRODUCT_DIRECTION_RECORD.md`, with a `detail` pointer left in
+the JSON. Terminal builds beyond the newest 20 move to
+`project/archive/build_history_2026.json`. The only write path for any of
+this is `scripts/project_queue.py` (`build add|status|note`,
+`decision open|decide`, alongside the existing `add|status|note|decide`) —
+it validates, redacts, writes canonically, and appends the narrative to its
+history file; never hand-edit these JSON files or `docs/history/` directly.

@@ -1,0 +1,4 @@
+# M8_3_REAL_ENVIRONMENT_VALIDATION — m8_3_real_environment_validation: M8.3 -- Product-Owner-gated real-environment validation of the first-contact producer
+
+- RESOLVED 2026-09-08: the bounded read-only command ran for real, Product-Owner-executed on their own Windows machine (`py main.py --identity-first-contact 65aca68e9bd54ebc8fea9fd8face81db`), against a real Check Point ClusterXL member (endpoint <PRIVATE_IP>, <DEVICE_NAME>) discovered via a real `--only cp` run against MDS <PRIVATE_IP>. `outcome: NEW`, `relationship_id: e4671bc45e5e49e2bf9257d32b3fa067` -- a proven device_id -> collector entity_id relationship. Full detail: project/backlog.json id m8_3_real_environment_validation.
+- M7 is now UNBLOCKED to start (implementation not yet begun -- unblocking is not the same as M7 being done). M12 still additionally needs M7 itself completed, not merely unblocked.

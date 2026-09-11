@@ -77,6 +77,8 @@ import secrets
 import shutil
 import subprocess
 import sys
+import time
+from datetime import datetime, timezone
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -87,6 +89,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 import local_relay as lr  # noqa: E402
 import orchestrator as orch  # noqa: E402
+import orchestrator_usage as ou  # noqa: E402
 
 ASSETS_DIR = Path(__file__).resolve().parent / "dashboard_assets"
 DEFAULT_PORT = 8765
@@ -95,6 +98,31 @@ CONFIG_INTERVAL_MIN = 2
 CONFIG_INTERVAL_MAX = 3600
 LOG_TAIL_DEFAULT = 200
 LOG_TAIL_MAX = 2000
+
+#: GOV.ORCH.4 section 3.3: `stuck_after_seconds`' own valid range and
+#: default, mirroring `CONFIG_INTERVAL_*`/`WATCH_INTERVAL_DEFAULT` above.
+CONFIG_STUCK_MIN = 30
+CONFIG_STUCK_MAX = 86400
+DEFAULT_STUCK_AFTER_SECONDS = 900
+
+#: Section 3.3's six-value health field -- `derive_health` below returns
+#: exactly one of these and never anything else (AC-5).
+HEALTH_HEALTHY = "healthy"
+HEALTH_SILENT = "silent"
+HEALTH_EXITED_WITHOUT_CLOSE = "exited_without_close"
+HEALTH_AWAITING_PO = "awaiting_po"
+HEALTH_FAILED = "failed"
+HEALTH_DONE = "done"
+ALL_HEALTH_VALUES = frozenset({
+    HEALTH_HEALTHY, HEALTH_SILENT, HEALTH_EXITED_WITHOUT_CLOSE,
+    HEALTH_AWAITING_PO, HEALTH_FAILED, HEALTH_DONE,
+})
+
+#: A sentinel distinct from `None` -- `None` is itself a legitimate
+#: "clear stuck_after_seconds" value in principle, so a real "unset,
+#: leave the stored value alone" needs its own marker (section 3.3's
+#: config round-trip, AC-10).
+_UNSET = object()
 
 STAGE_NOT_STARTED = "not_started"
 STAGE_CODING = "coding"
@@ -184,6 +212,68 @@ def derive_work_stage(
     return STAGE_UNKNOWN
 
 
+# ---------------------------------------------------------------------------
+# GOV.ORCH.4 section 3.3: stuck detection -- real signals only, never git
+# dirtiness or a heartbeat timestamp.
+# ---------------------------------------------------------------------------
+
+def _iso_from_epoch(ts: float) -> str:
+    return datetime.fromtimestamp(ts, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _parse_iso(ts: str | None) -> float | None:
+    if not ts:
+        return None
+    try:
+        return datetime.strptime(ts, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc).timestamp()
+    except ValueError:
+        return None
+
+
+def _log_idle_seconds(worktree_path: str | None) -> float | None:
+    """Seconds since `.nexus/engineer.log` last grew, from the file's own
+    mtime -- never from `heartbeat_at` (a fixed dispatch-time value, not a
+    running heartbeat) and never from git status. `None` when there is no
+    worktree or no log yet (nothing observed, not "healthy")."""
+    if not worktree_path:
+        return None
+    log_path = Path(worktree_path) / ".nexus" / "engineer.log"
+    try:
+        mtime = log_path.stat().st_mtime
+    except OSError:
+        return None
+    return max(0.0, time.time() - mtime)
+
+
+def derive_health(
+    *, pid_alive: bool, relay_status: str | None, next_actor: str | None, phase: str | None,
+    idle_seconds: float | None, stuck_after_seconds: int = DEFAULT_STUCK_AFTER_SECONDS,
+) -> str:
+    """Section 3.3's six-value health field, computed only from a live pid
+    check, relay status/next_actor, the record's own `phase`, and
+    `.nexus/engineer.log` growth -- returns exactly one of
+    `ALL_HEALTH_VALUES` (AC-5). Fixed precedence: a terminal outcome (`done`,
+    `failed`) always wins; `awaiting_po` comes next -- an engineer session
+    ends its process after posting a question, so a dead pid together with
+    `next_actor == "po"` is the ordinary, expected pause, not a problem;
+    only then does a genuinely dead-but-not-terminal process count as
+    `exited_without_close`; a still-alive process is `silent` or `healthy`
+    depending on how long `engineer.log` has gone quiet."""
+    if relay_status == "CLOSED" or phase == orch.PHASE_DONE:
+        return HEALTH_DONE
+    if phase == orch.PHASE_FAILED:
+        return HEALTH_FAILED
+    if next_actor == "po":
+        return HEALTH_AWAITING_PO
+    if not pid_alive:
+        return HEALTH_EXITED_WITHOUT_CLOSE
+    if idle_seconds is not None and idle_seconds >= stuck_after_seconds:
+        return HEALTH_SILENT
+    return HEALTH_HEALTHY
+
+
+# ---------------------------------------------------------------------------
+
 def parse_blocker_tag(subject: str) -> tuple[str, str]:
     """Split an optional leading bracket tag off a relay entry's own
     `subject` -- returns (blocker_source, subject_without_tag). An untagged
@@ -205,6 +295,13 @@ def _config_path(repo_root: Path) -> Path:
 
 
 def read_config(repo_root: Path) -> dict:
+    """Returns exactly `{"poll_interval_seconds": ...}` when no
+    `stuck_after_seconds` has ever been stored -- the pre-GOV.ORCH.4 shape,
+    preserved byte-for-byte so the original config tests keep passing
+    unchanged. `stuck_after_seconds` is only ever present in the returned
+    dict once a valid value for it has actually been written (section 3.3);
+    a caller that always wants a number regardless uses `config_for_api`
+    below, which fills in the section 3.3 default for display."""
     path = _config_path(repo_root)
     if not path.is_file():
         return {"poll_interval_seconds": orch.WATCH_INTERVAL_DEFAULT}
@@ -217,17 +314,59 @@ def read_config(repo_root: Path) -> dict:
         CONFIG_INTERVAL_MIN <= interval <= CONFIG_INTERVAL_MAX
     ):
         interval = orch.WATCH_INTERVAL_DEFAULT
-    return {"poll_interval_seconds": interval}
+    cfg = {"poll_interval_seconds": interval}
+    stuck = obj.get("stuck_after_seconds") if isinstance(obj, dict) else None
+    if isinstance(stuck, int) and not isinstance(stuck, bool) and CONFIG_STUCK_MIN <= stuck <= CONFIG_STUCK_MAX:
+        cfg["stuck_after_seconds"] = stuck
+    return cfg
 
 
-def write_config(repo_root: Path, poll_interval_seconds: Any) -> tuple[bool, dict | str]:
-    if not isinstance(poll_interval_seconds, int) or isinstance(poll_interval_seconds, bool):
-        return False, "poll_interval_seconds must be an integer"
-    if not (CONFIG_INTERVAL_MIN <= poll_interval_seconds <= CONFIG_INTERVAL_MAX):
-        return False, f"poll_interval_seconds must be between {CONFIG_INTERVAL_MIN} and {CONFIG_INTERVAL_MAX}"
-    cfg = {"poll_interval_seconds": poll_interval_seconds}
+def config_for_api(repo_root: Path) -> dict:
+    """`GET /api/config`'s own shape: `read_config` plus a filled-in
+    `stuck_after_seconds` default (section 3.3) so the UI always has a
+    number to show/edit, even before one has ever been saved."""
+    cfg = read_config(repo_root)
+    cfg.setdefault("stuck_after_seconds", DEFAULT_STUCK_AFTER_SECONDS)
+    return cfg
+
+
+def _raw_config_obj(repo_root: Path) -> dict:
+    path = _config_path(repo_root)
+    if not path.is_file():
+        return {}
+    try:
+        obj = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return obj if isinstance(obj, dict) else {}
+
+
+def write_config(repo_root: Path, poll_interval_seconds: Any = _UNSET, stuck_after_seconds: Any = _UNSET) -> tuple[bool, dict | str]:
+    """Merges onto whatever is already stored -- a caller that only sends
+    one of the two fields (e.g. the UI's separate poll-interval and
+    stuck-after-seconds inputs) never clobbers the other (AC-10's
+    round-trip). Passing neither is a no-op that still returns the
+    (unioned) current config. `poll_interval_seconds` alone, the
+    pre-GOV.ORCH.4 call shape, keeps behaving exactly as before."""
+    cfg = _raw_config_obj(repo_root)
+    if poll_interval_seconds is not _UNSET:
+        if not isinstance(poll_interval_seconds, int) or isinstance(poll_interval_seconds, bool):
+            return False, "poll_interval_seconds must be an integer"
+        if not (CONFIG_INTERVAL_MIN <= poll_interval_seconds <= CONFIG_INTERVAL_MAX):
+            return False, f"poll_interval_seconds must be between {CONFIG_INTERVAL_MIN} and {CONFIG_INTERVAL_MAX}"
+        cfg["poll_interval_seconds"] = poll_interval_seconds
+    if stuck_after_seconds is not _UNSET:
+        if not isinstance(stuck_after_seconds, int) or isinstance(stuck_after_seconds, bool):
+            return False, "stuck_after_seconds must be an integer"
+        if not (CONFIG_STUCK_MIN <= stuck_after_seconds <= CONFIG_STUCK_MAX):
+            return False, f"stuck_after_seconds must be between {CONFIG_STUCK_MIN} and {CONFIG_STUCK_MAX}"
+        cfg["stuck_after_seconds"] = stuck_after_seconds
+    cfg.setdefault("poll_interval_seconds", orch.WATCH_INTERVAL_DEFAULT)
     lr._atomic_write(_config_path(repo_root), json.dumps(cfg, sort_keys=True, indent=2) + "\n")
-    return True, cfg
+    result = {"poll_interval_seconds": cfg["poll_interval_seconds"]}
+    if "stuck_after_seconds" in cfg:
+        result["stuck_after_seconds"] = cfg["stuck_after_seconds"]
+    return True, result
 
 
 # ---------------------------------------------------------------------------
@@ -568,7 +707,26 @@ def build_pending_action_card(
     }
 
 
-def build_movement_summary(record: dict, relay_dir: Path, state_dir: Path, retry_limit: int) -> dict:
+def _price_table_path(repo_root: Path) -> Path:
+    return Path(repo_root) / "config" / "model_prices.json"
+
+
+def _load_approved_task(worktree_path: str | None) -> dict | None:
+    if not worktree_path:
+        return None
+    task_path = Path(worktree_path) / ".nexus" / "approved_task.json"
+    if not task_path.is_file():
+        return None
+    try:
+        return json.loads(task_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+def build_movement_summary(
+    record: dict, relay_dir: Path, state_dir: Path, retry_limit: int, *,
+    stuck_after_seconds: int = DEFAULT_STUCK_AFTER_SECONDS, price_table: dict | None = None,
+) -> dict:
     row = orch._status_row(record, relay_dir, retry_limit)
     worktree_path = row.get("worktree_path")
     porcelain = git_worktree_porcelain(worktree_path)
@@ -590,6 +748,12 @@ def build_movement_summary(record: dict, relay_dir: Path, state_dir: Path, retry
         relay_status=relay_status, next_actor=next_actor, phase=row.get("phase"),
         porcelain_lines=porcelain, last_activity=row.get("last_activity"), has_open_pr=bool(pr_info),
     )
+    idle_seconds = _log_idle_seconds(worktree_path)
+    health = derive_health(
+        pid_alive=bool(row.get("pid_alive")), relay_status=relay_status, next_actor=next_actor,
+        phase=row.get("phase"), idle_seconds=idle_seconds, stuck_after_seconds=stuck_after_seconds,
+    )
+    usage = ou.compute_usage(state_dir, row["movement_id"], worktree_path, row.get("provider", "claude"), price_table or {})
     return {
         **row,
         "process_status": derive_process_status(row),
@@ -598,12 +762,21 @@ def build_movement_summary(record: dict, relay_dir: Path, state_dir: Path, retry
         "open_pr": pr_info,
         "pending_action": pending_action,
         "outbox_pending": len(load_outbox(state_dir, row["movement_id"])),
+        # GOV.ORCH.4 section 3.4: added to the existing shape, nothing above
+        # removed or renamed (AC-8).
+        "health": health,
+        "idle_seconds": idle_seconds,
+        "usage": usage,
     }
 
 
-def gather_movements(state_dir: Path, relay_dir: Path, retry_limit: int) -> dict:
+def gather_movements(
+    state_dir: Path, relay_dir: Path, retry_limit: int, *,
+    stuck_after_seconds: int = DEFAULT_STUCK_AFTER_SECONDS, price_table: dict | None = None,
+) -> dict:
     summaries = [
-        build_movement_summary(record, relay_dir, state_dir, retry_limit)
+        build_movement_summary(record, relay_dir, state_dir, retry_limit,
+                                stuck_after_seconds=stuck_after_seconds, price_table=price_table)
         for record in orch._list_state_records(state_dir)
     ]
     summaries.sort(key=lambda s: s["movement_id"])
@@ -611,33 +784,50 @@ def gather_movements(state_dir: Path, relay_dir: Path, retry_limit: int) -> dict
     awaiting = [s for s in summaries if s["pending_action"] is not None]
     recent = [s for s in summaries if s["work_stage"] == STAGE_MERGED]
     integration = [s for s in summaries if s["work_stage"] == STAGE_INTEGRATION]
+    silent = [s for s in summaries if s["health"] == HEALTH_SILENT]
+    failed = [s for s in summaries if s["health"] == HEALTH_FAILED]
+
+    # Section 3.5's summary strip: tokens/cost for whatever usage activity
+    # was last observed today (UTC) -- a real signal (`usage.last_event_at`,
+    # itself the engineer.log mtime at the last parsed event), never a
+    # fabricated running total.
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    tokens_today = 0
+    cost_today = 0.0
+    have_cost_today = False
+    for s in summaries:
+        usage = s.get("usage") or {}
+        last_event_at = usage.get("last_event_at")
+        if last_event_at and last_event_at[:10] == today:
+            tokens_today += usage.get("total_tokens") or 0
+            if usage.get("cost_usd") is not None:
+                cost_today += usage["cost_usd"]
+                have_cost_today = True
+
     return {
         "summary": {
             "running": len(running), "awaiting_decision": len(awaiting), "in_integration": len(integration),
+            "silent": len(silent), "failed": len(failed),
+            "tokens_today": tokens_today, "cost_today": round(cost_today, 6) if have_cost_today else None,
         },
         "movements": summaries,
     }
 
 
-def build_movement_detail(movement_id: str, relay_dir: Path, state_dir: Path, retry_limit: int) -> dict:
+def build_movement_detail(
+    movement_id: str, relay_dir: Path, state_dir: Path, retry_limit: int, *,
+    stuck_after_seconds: int = DEFAULT_STUCK_AFTER_SECONDS, price_table: dict | None = None,
+) -> dict:
     record = orch._load_state(state_dir, movement_id)
     if record is None:
         raise DashboardError(f"no state record for {movement_id}")
-    summary = build_movement_summary(record, relay_dir, state_dir, retry_limit)
+    summary = build_movement_summary(record, relay_dir, state_dir, retry_limit,
+                                      stuck_after_seconds=stuck_after_seconds, price_table=price_table)
 
     relay_file = orch._resolve_relay_file(relay_dir, movement_id)
     relay_obj = orch._load_relay(relay_file)
     behind, ahead = git_ahead_behind(record.get("worktree_path"))
-
-    approved_task = None
-    worktree_path = record.get("worktree_path")
-    if worktree_path:
-        task_path = Path(worktree_path) / ".nexus" / "approved_task.json"
-        if task_path.is_file():
-            try:
-                approved_task = json.loads(task_path.read_text(encoding="utf-8"))
-            except (OSError, json.JSONDecodeError):
-                approved_task = None
+    approved_task = _load_approved_task(record.get("worktree_path"))
 
     return {
         **summary,
@@ -646,7 +836,191 @@ def build_movement_detail(movement_id: str, relay_dir: Path, state_dir: Path, re
         "ahead": ahead, "behind": behind,
         "approved_task": approved_task,
         "outbox": load_outbox(state_dir, movement_id),
+        # GOV.ORCH.4 section 3.5's Evidence tab: the GOV.ORCH.1 verify
+        # steps, straight from the record `orchestrator.py run` saved
+        # (None for a movement never run to completion by `run`).
+        "verify": record.get("verify"),
     }
+
+
+# ---------------------------------------------------------------------------
+# GOV.ORCH.4 section 3.4: work board and traffic view
+# ---------------------------------------------------------------------------
+
+def _record_mtime_iso(state_dir: Path, movement_id: str) -> str | None:
+    """A real, non-fabricated stand-in for "ended_at": the state record has
+    no explicit end timestamp, but it is only ever re-saved when the
+    movement's phase changes, so the file's own mtime at a terminal phase
+    is the actual moment that terminal state was recorded."""
+    try:
+        return _iso_from_epoch(orch._state_path(state_dir, movement_id).stat().st_mtime)
+    except OSError:
+        return None
+
+
+def _board_row(record: dict, summary: dict, state_dir: Path) -> dict:
+    approved_task = _load_approved_task(record.get("worktree_path"))
+    objective = ((approved_task or {}).get("report") or {}).get("objective") or ""
+    started_at = record.get("started_at")
+    started_epoch = _parse_iso(started_at)
+    ended_at = None
+    if summary.get("phase") in orch.TERMINAL_PHASES:
+        ended_at = _record_mtime_iso(state_dir, summary["movement_id"])
+    ended_epoch = _parse_iso(ended_at)
+    duration_s = None
+    if started_epoch is not None:
+        duration_s = round((ended_epoch if ended_epoch is not None else time.time()) - started_epoch, 3)
+    open_pr = summary.get("open_pr") or {}
+    verify = record.get("verify") or {}
+    return {
+        "movement_id": summary["movement_id"],
+        "objective": objective[:120],
+        "provider": summary.get("provider"),
+        "model_requested": summary.get("model_requested"),
+        "effort_requested": summary.get("effort_requested"),
+        "model_observed": record.get("model_observed"),
+        "effort_observed": record.get("effort_observed"),
+        "health": summary["health"],
+        "stage": summary["work_stage"],
+        "process_status": summary["process_status"],
+        "idle_seconds": summary.get("idle_seconds"),
+        "started_at": started_at,
+        "ended_at": ended_at,
+        "duration_s": duration_s,
+        "usage": summary["usage"],
+        "pr_number": open_pr.get("number"),
+        "pr_state": open_pr.get("state"),
+        "verify_passed": verify.get("passed"),
+        "branch": summary.get("branch"),
+    }
+
+
+def build_board(
+    state_dir: Path, relay_dir: Path, repo_root: Path, retry_limit: int,
+    stuck_after_seconds: int = DEFAULT_STUCK_AFTER_SECONDS,
+) -> dict:
+    """Section 3.4's `GET /api/board`: three buckets (open/awaiting_po/
+    closed) plus totals with `silent`/`failed` sub-counts of `open` -- the
+    Kanban UI (section 3.5) further splits `open` client-side by each row's
+    own `health`/`stage`, so this shape never has to change to grow a
+    column."""
+    price_table = ou.load_price_table(_price_table_path(repo_root))
+    rows = []
+    for record in orch._list_state_records(state_dir):
+        summary = build_movement_summary(
+            record, relay_dir, state_dir, retry_limit,
+            stuck_after_seconds=stuck_after_seconds, price_table=price_table,
+        )
+        rows.append(_board_row(record, summary, state_dir))
+    rows.sort(key=lambda r: r["movement_id"])
+
+    columns: dict[str, list[dict]] = {"open": [], "awaiting_po": [], "closed": []}
+    for row in rows:
+        if row["health"] == HEALTH_DONE:
+            columns["closed"].append(row)
+        elif row["health"] == HEALTH_AWAITING_PO:
+            columns["awaiting_po"].append(row)
+        else:
+            columns["open"].append(row)
+
+    totals = {
+        "open": len(columns["open"]), "awaiting_po": len(columns["awaiting_po"]), "closed": len(columns["closed"]),
+        "silent": sum(1 for r in rows if r["health"] == HEALTH_SILENT),
+        "failed": sum(1 for r in rows if r["health"] == HEALTH_FAILED),
+    }
+    return {**columns, "totals": totals}
+
+
+def build_traffic(relay_entries: list) -> list:
+    """Section 3.4's sent/received list: every `po`-actor relay entry is
+    something sent to the worker, every `engineer`-actor entry something
+    received from it; a `SESSION_CLOSE` additionally carries its own
+    `outcome`/`changed`/`validation` (AC-7)."""
+    items = []
+    for entry in relay_entries or []:
+        if not isinstance(entry, dict):
+            continue
+        actor = entry.get("actor")
+        direction = "sent" if actor == "po" else "received" if actor == "engineer" else "other"
+        item = {
+            "seq": entry.get("seq"), "timestamp": entry.get("timestamp"), "direction": direction,
+            "actor": actor, "marker": entry.get("marker"), "subject": entry.get("subject"),
+        }
+        if entry.get("marker") == "SESSION_CLOSE":
+            report = entry.get("report") if isinstance(entry.get("report"), dict) else {}
+            item["outcome"] = entry.get("outcome")
+            item["changed"] = report.get("changed")
+            item["validation"] = report.get("validation")
+        items.append(item)
+    return items
+
+
+def build_traffic_for_movement(record: dict, relay_obj: dict) -> list:
+    """`build_traffic` plus the dispatch/verify events the process record
+    itself carries (contract section 3.4: "dispatch, resume and verify
+    events from the process record are interleaved as orchestrator rows"),
+    interleaved by timestamp."""
+    entries = relay_obj.get("entries") or []
+    items = build_traffic(entries)
+    started_at = record.get("started_at")
+    last_ts = entries[-1].get("timestamp") if entries and isinstance(entries[-1], dict) else started_at
+    if started_at:
+        items.append({
+            "seq": None, "timestamp": started_at, "direction": "orchestrator", "actor": "orchestrator",
+            "marker": "DISPATCH", "subject": f"dispatched (provider={record.get('provider', 'claude')})",
+        })
+    verify = record.get("verify")
+    if verify is not None:
+        items.append({
+            "seq": None, "timestamp": last_ts, "direction": "orchestrator", "actor": "orchestrator",
+            "marker": "VERIFY", "subject": f"verify passed={verify.get('passed')}",
+        })
+    items.sort(key=lambda i: i.get("timestamp") or "")
+    return items
+
+
+# ---------------------------------------------------------------------------
+# GOV.ORCH.4 section 3.4/3.6: usage totals across the state dir
+# ---------------------------------------------------------------------------
+
+_USAGE_SUM_FIELDS = (
+    "turns", "input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens",
+    "output_tokens", "total_tokens",
+)
+
+
+def _sum_usage_rows(rows: list) -> dict:
+    totals = {"movements": len(rows), "cost_usd": None}
+    for field in _USAGE_SUM_FIELDS:
+        totals[field] = 0
+    cost_sum = 0.0
+    have_cost = False
+    for row in rows:
+        for field in _USAGE_SUM_FIELDS:
+            totals[field] += row.get(field, 0) or 0
+        if row.get("cost_usd") is not None:
+            cost_sum += row["cost_usd"]
+            have_cost = True
+    if have_cost:
+        totals["cost_usd"] = round(cost_sum, 6)
+    return totals
+
+
+def build_usage_report(state_dir: Path, relay_dir: Path, repo_root: Path, since: str | None = None) -> dict:
+    """Section 3.4's `GET /api/usage` and section 3.6's `orchestrator.py
+    usage` CLI share this one function (AC-9: they must return identical
+    data for the same state dir)."""
+    price_table = ou.load_price_table(_price_table_path(repo_root))
+    rows = []
+    for record in orch._list_state_records(state_dir):
+        started_at = record.get("started_at")
+        if since and (not started_at or started_at < since):
+            continue
+        provider = record.get("provider", "claude")
+        usage = ou.compute_usage(state_dir, record["movement_id"], record.get("worktree_path"), provider, price_table)
+        rows.append({"movement_id": record["movement_id"], **usage})
+    rows.sort(key=lambda r: r["movement_id"])
+    return {"movements": rows, "totals": _sum_usage_rows(rows)}
 
 
 # ---------------------------------------------------------------------------
@@ -730,10 +1104,23 @@ def make_handler_class(*, token: str, relay_dir: Path, state_dir: Path, repo_roo
                 return
 
             if path == "/api/movements":
-                self._send_json(HTTPStatus.OK, gather_movements(state_dir, relay_dir, retry_limit))
+                stuck_after_seconds = config_for_api(repo_root)["stuck_after_seconds"]
+                price_table = ou.load_price_table(_price_table_path(repo_root))
+                self._send_json(HTTPStatus.OK, gather_movements(
+                    state_dir, relay_dir, retry_limit,
+                    stuck_after_seconds=stuck_after_seconds, price_table=price_table,
+                ))
                 return
             if path == "/api/config":
-                self._send_json(HTTPStatus.OK, read_config(repo_root))
+                self._send_json(HTTPStatus.OK, config_for_api(repo_root))
+                return
+            if path == "/api/board":
+                stuck_after_seconds = config_for_api(repo_root)["stuck_after_seconds"]
+                self._send_json(HTTPStatus.OK, build_board(state_dir, relay_dir, repo_root, retry_limit, stuck_after_seconds))
+                return
+            if path == "/api/usage":
+                since = query.get("since", [None])[0]
+                self._send_json(HTTPStatus.OK, build_usage_report(state_dir, relay_dir, repo_root, since=since))
                 return
             if path.startswith("/api/movements/"):
                 rest = path[len("/api/movements/"):]
@@ -751,9 +1138,28 @@ def make_handler_class(*, token: str, relay_dir: Path, state_dir: Path, repo_roo
                         return
                     self._send_json(HTTPStatus.OK, {"lines": tail_log_lines(record.get("worktree_path"), limit)})
                     return
+                if rest.endswith("/traffic"):
+                    movement_id = rest[: -len("/traffic")]
+                    record = orch._load_state(state_dir, movement_id)
+                    if record is None:
+                        self._send_json(HTTPStatus.NOT_FOUND, {"error": "unknown movement"})
+                        return
+                    try:
+                        relay_file = orch._resolve_relay_file(relay_dir, movement_id)
+                        relay_obj = orch._load_relay(relay_file)
+                    except orch.OrchestratorError as exc:
+                        self._send_json(HTTPStatus.NOT_FOUND, {"error": str(exc)})
+                        return
+                    self._send_json(HTTPStatus.OK, {"traffic": build_traffic_for_movement(record, relay_obj)})
+                    return
                 movement_id = rest
+                stuck_after_seconds = config_for_api(repo_root)["stuck_after_seconds"]
+                price_table = ou.load_price_table(_price_table_path(repo_root))
                 try:
-                    detail = build_movement_detail(movement_id, relay_dir, state_dir, retry_limit)
+                    detail = build_movement_detail(
+                        movement_id, relay_dir, state_dir, retry_limit,
+                        stuck_after_seconds=stuck_after_seconds, price_table=price_table,
+                    )
                 except (DashboardError, orch.OrchestratorError) as exc:
                     self._send_json(HTTPStatus.NOT_FOUND, {"error": str(exc)})
                     return
@@ -777,7 +1183,11 @@ def make_handler_class(*, token: str, relay_dir: Path, state_dir: Path, repo_roo
                 if not isinstance(body, dict):
                     self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid JSON body"})
                     return
-                ok, result = write_config(repo_root, body.get("poll_interval_seconds"))
+                # AC-10: either field may be sent alone -- write_config merges
+                # onto whatever is already stored rather than requiring both.
+                poll = body["poll_interval_seconds"] if "poll_interval_seconds" in body else _UNSET
+                stuck = body["stuck_after_seconds"] if "stuck_after_seconds" in body else _UNSET
+                ok, result = write_config(repo_root, poll, stuck)
                 self._send_json(HTTPStatus.OK if ok else HTTPStatus.BAD_REQUEST,
                                  result if ok else {"error": result})
                 return

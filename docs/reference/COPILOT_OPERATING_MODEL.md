@@ -1,10 +1,11 @@
-# SecurityExpert — Copilot-Native Operating Model
+# SecurityExpert — Repository-Native Operating Model
 
 ## Purpose
 
-This document defines how SecurityExpert is developed when GitHub Copilot is
-the primary repository-native engineering surface. It is designed so a new chat
-can start productively without replaying previous conversations.
+This document defines how SecurityExpert is developed by a repository-native
+engineering agent tool, and the PO + Orchestrator provider/model routing
+record. It is designed so a new chat can start productively without
+replaying previous conversations.
 
 ## Repository memory model
 
@@ -32,23 +33,7 @@ review is desired.
 
 ## SESSION START template
 
-```text
-SESSION START
-Product baseline:
-Engineering baseline:
-Requested build/task:
-Movement type:
-In scope:
-Out of scope:
-Expected source/tests:
-Critical invariants:
-Risks/unknowns:
-Context intentionally not loaded:
-Recommended reasoning level:
-Definition of Done:
-```
-
-The agent must fill this from repository state before code changes.
+See `AI_START_HERE.md` § "SESSION START" — the single owner of this schema.
 
 ## Architecture gate
 
@@ -97,60 +82,35 @@ Only update files whose semantics actually changed.
 
 ## SESSION CLOSE template
 
-```text
-SESSION CLOSE
-Build/task:
-Status reached:
-Completed:
-Changed components:
-Preserved invariants:
-Tests:
-Real-environment evidence:
-Known gaps/risks:
-Durable state updated:
-Rollback:
-Exact next build/task:
-Next movement type:
-Recommended reasoning level:
-Chat recommendation: CONTINUE / NEW CHAT
-Preferred next validation or first command:
-```
+See `AI_START_HERE.md` § "SESSION CLOSE" — the single owner of this schema.
 
 ## Movement and reasoning matrix
 
-| Movement | Default approach | Typical reasoning |
-|---|---|---|
-| READ_ONLY_AUDIT | narrow search/read, no edits | normal/fast |
-| ROOT_CAUSE | evidence first, isolate failure | normal; high if cross-subsystem |
-| ARCHITECTURE | options + invariants + contract | Sol; Terra High for high-risk/cross-cutting |
-| IMPLEMENTATION | approved scope, Agent edits/tests | Sol/normal |
-| VALIDATION | targeted/subsystem/full by blast radius | normal/fast |
-| UI | preserve collector semantics | Sol/normal |
-| DOCS | durable state, no invented claims | low/normal |
-| RELEASE_HANDOVER | metadata, diff, Git state, next task | normal |
-
-Model names are examples of the currently approved Copilot set. If the model
-catalog changes, preserve the reasoning categories rather than the brand name.
+See `AI_START_HERE.md` § "Reasoning / model routing tiers" — the single
+owner of this table.
 
 ## PO + Orchestrator provider and model routing
 
 ### Decision record — 2026-09-11
 
 The following decisions are durable and must be used by a future PO without
-replaying chat context:
+replaying chat context. Current tool/model names for each neutral tier below
+live only in `docs/reference/MODEL_TIER_MAP.md`, updated independently of
+this record:
 
-- Codex is the PO + Orchestrator + final reviewer; workers own implementation.
+- One tool holder is the PO + Orchestrator; workers own implementation. It
+  synthesizes the evidence; an independent seat on a different provider
+  reviews (`docs/design/GOV_PO_ROLE_MIGRATION.md` Amendment A-2026-09-11).
 - The PO selects the actual provider, current model, and reasoning per
-  movement. There is no permanent Sonnet/Opus/Luna/Haiku default.
-- Prefer Claude when credit/license is available; use Codex when Claude is
-  unavailable. Model choice is based on scope, risk, contract state, and cost.
+  movement. There is no permanent per-tool model default.
+- Prefer the tool with available credit/license; fall back to another when it
+  is unavailable. Model choice is based on scope, risk, contract state, cost.
 - Architecture/security/contract work may invoke the formal council when its
   triggers hold. The PO chooses the lightest suitable model and effort for
-  each seat; Terra, Opus, Sol, Fable, or another currently available model may
-  be appropriate depending on scope. Fable is not mandatory, Astra is an
-  optional independent second opinion, Claude worker seats are valid when
-  Claude credit is available, and Codex synthesizes/reviews and freezes the
-  decision.
+  each seat from the currently available roster; an independent second
+  opinion on a different provider is optional, worker seats on any
+  sufficiently-credited provider are valid, and the PO-holding tool
+  synthesizes/reviews and freezes the decision.
 - OpenRouter `NXS-LOCAL-0065` / `3143bb6` is an optional advisory review POC,
   not a worker fallback or an orchestrator provider.
 - The current orchestrator has no unattended backlog queue-runner; the PO
@@ -160,51 +120,9 @@ replaying chat context:
 - Worker notifications use the ten-field Relay/Work/Provider/Model/Reasoning/
   PID/Phase/Worktree/First activity/Relay publication format below.
 
-The Product Owner selects the worker route per movement. There is no fixed
-"normal implementation = Sonnet" rule and no model-brand substitution.
-
-- **PO + Orchestrator + final reviewer:** Codex. The PO scopes and orders the
-  backlog, creates/advances relays, selects provider/model/reasoning, dispatches
-  through `scripts/orchestrator.py`, monitors workers, asks the human only when
-  a decision is needed, reviews the result, and handles authorized PR/pull/
-  merge work. The PO is not the operator and normally does not write worker
-  implementation code in the PO worktree.
-- **Worker selection:** choose the lightest suitable current model and effort
-  for the movement's contract, risk, and evidence needs. Claude is preferred
-  when its license/credit is available; Codex remains the fallback when Claude
-  is unavailable. Do not add OpenRouter as a general worker fallback: its
-  accepted POC is a separate, bounded, read-only advisory review node, not an
-  orchestrator worker provider. Use that POC only when a small sanitized
-  second-opinion review has a clear benefit and its separate credential/privacy
-  boundary is justified. It is not needed for ordinary implementation,
-  dashboard work, stale-state reconciliation, or topology review.
-- **Architecture/security/contract decisions:** first decide whether the
-  formal council trigger is actually present. If yes, the PO selects the
-  smallest relevant seat set and assigns models/effort by scope; Terra, Opus,
-  Sol, Fable, or another current model may be used. Fable is not mandatory and
-  Astra is optional. Claude seats are valid when credit is available. Codex
-  synthesizes dissent/consensus, reviews the evidence, and freezes or rejects
-  the decision. High-end models are not used continuously merely because they
-  exist.
-- **Backlog loop:** the PO opens work sequentially, follows each worker and
-  closes or parks the movement. A worker question is relayed to the human;
-  independent next items may continue while that movement is parked. No new
-  worker is created merely to hide stale state or an unresolved decision.
-  **Current implementation gap:** unattended night-time queue continuation is
-  an operating target, not yet a scheduler/queue-runner capability; until that
-  movement exists, the PO advances the queue explicitly and safely.
-- **Dispatch evidence:** every dispatch records the actual `provider`, `model`
-  and `effort` in state and in the status report. Omitted or defaulted values
-  are an audit exception and are never retroactively relabeled.
-
 This routing is the durable source for the handover pointer in
-`AI_HANDOVER.md`. Movement `NXS-LOCAL-0069` remains a recorded exception: it
-was started with the Codex default and no explicit model flag, produced no
-  accepted code, and must not be described as a Claude/Fable run.
-
-The OpenRouter POC is recorded by movement `NXS-LOCAL-0065` / commit
-`3143bb6` on its separate branch. It remains advisory-only and is not a
-requirement for the current worker-routing path.
+`AI_HANDOVER.md`; see `AI_START_HERE.md` § "Reasoning / model routing tiers"
+for the vendor-neutral tier table.
 
 ## PO worker status notification format
 

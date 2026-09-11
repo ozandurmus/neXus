@@ -12,13 +12,8 @@ progress; `RECOVER` has shipped its first controlled writes; `OPERATE` has
 shipped its read-only half (the operator console).
 
 **What the product may do is an explicit five-class taxonomy**, not a slogan —
-`utils/action_taxonomy.py` is the single source of truth and `AI_START_HERE.md`
-carries the table. In short: class 0 (read) is permitted and is most of the
-product; class 1 (controlled recovery write — backup creation and exact
-generated-artifact cleanup) is permitted only through the `RB.x` safety
-contracts and is never console-submittable; class 2 (failover / operational
-state change) has no member yet and is hard-gated; classes 3-4 (configuration
-write, policy install / remediation) are prohibited.
+`utils/action_taxonomy.py` is the single source of truth; see `AI_START_HERE.md`
+for the full table.
 
 Authoritative state: **`CURRENT_STATE.md`**.
 

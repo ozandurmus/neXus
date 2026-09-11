@@ -22,12 +22,6 @@ Product maturity axis: `SEE → VERIFY → TRACE → RECOVER → OPERATE`.
 in progress; `RECOVER` has shipped its first controlled writes; `OPERATE` has
 shipped its read-only half.
 
-Since `PCP.1` (`docs/design/PRODUCT_CONTROL_PLANE_ARCHITECTURE.md` §22 item 4,
-deferred from the `PCP.0` freeze to here), neXus also carries a first persistent
-product object: a filesystem-only Device Registry with CLI manual enrollment —
-the foundation of the emerging Product Control Plane, not yet a UI or a
-scheduling/capability surface.
-
 **What the product may do is an explicit taxonomy, not a slogan**
 (`utils/action_taxonomy.py` — the single source of truth):
 
@@ -81,46 +75,28 @@ outside it — on Windows under `%LOCALAPPDATA%\SecurityExpert\runtime\`.
 | `py .\main.py --render-only` | Rebuild HTML from the last `unified.json` + telemetry. No network, no credentials. |
 | `py .\main.py --cp-config-collect --cp-config-stage all` / `--cp-config-probe` | Check Point current-configuration collection / evidence probe only. |
 | `py .\main.py --repository-privacy-check` | Local/offline Corporate-Git privacy gate. No network, no credentials, matched values never printed. |
-| `py .\main.py --storage-analyze` / `--storage-deduplicate [--apply]` | Content-addressed storage inspection / dedup migration (dry-run default). |
-| `py .\main.py --scheduler-once` | Evaluate the default-disabled RuntimeRoot scheduler policy once; no loop. |
-| `py .\main.py --console [--console-port N]` | Operator console (`CON.1`+`CON.2`): authenticated loopback HTTP service serving the existing UI live from local artifacts, plus a job engine. The browser submits **typed intent** (`job_type` + `entity_id` targets) against a closed server-side registry — never a command, an argv fragment or a path. Only class 0 job types are submittable; everything else returns 409 with the refusing class named. Requires `pip install -r requirements-console.txt`. |
-| `py .\main.py --ha-readiness-check` | `OP.0a` HA readiness assessment over already-collected evidence. Offline, no credential, no device contact; writes `data/state/ha_readiness.json`. Cannot emit `SAFE_TO_FAILOVER` by construction — see below. |
-| `py .\main.py --restore-readiness-check` / `--recovery-attest` / `--recovery-store-check` / `--recovery-validate` | `RB.x` recovery plane, class 0 halves: readiness derivation, backup/snapshot attestation, store inspection, artifact validation. |
-| `py .\main.py --recovery-collect --recovery-vendor <checkpoint\|panorama>` | `RB.x` recovery collection — **class 1**. Ledgered, allowlisted, separately credentialed; never reachable from the console. |
-| `py .\main.py --persistent-secret-material-check` / `--compliance-trend-reconstruct` | Trust-material preflight (`DEV.2.2`) / compliance-trend retro-fill (`0.7.7`). |
-| `py .\main.py --registry-enroll --registry-endpoint <addr> [--registry-vendor-hint ...] [--registry-credential-profile ...] [--registry-tag k=v ...]` / `--registry-list [--show-endpoints]` / `--registry-disable <device_id>` | `PCP.1` Device Registry: manual enrollment, listing, disable. Filesystem-only, RuntimeRoot-resident; no device contact, no credential resolution, no vendor import. A bounded maintenance/bootstrap adapter for the registry foundation, not yet the Operator Console device experience. |
+| `py .\main.py --console [--console-port N]` | Operator console (`CON.1`+`CON.2`): authenticated loopback HTTP service serving the existing UI live from local artifacts, plus a job engine. Only class 0 job types are submittable. Requires `pip install -r requirements-console.txt`. |
 
 Vendor/config imports are lazy — maintenance modes return before touching them.
+Remaining modes (HA readiness, recovery plane, registry, storage, scheduler,
+trust/compliance preflight): **`docs/ARCHITECTURE.md` "CLI reference"**.
 
 ### Directory map
 
 | Path | Responsibility |
 | --- | --- |
-| `main.py` | CLI, mode matrix, orchestration, stage ordering |
-| `config.py` | `Config` — auth + endpoint + runtime-paths carrier |
-| `checkpoint/cp_runner.py` + `scripts/cp_inventory.sh` | CP inventory (SSH to MDS → `cprid_util` per managed gateway) |
-| `checkpoint/vsx_runner.py`, `vsx_parser.py` | VSX inventory (nested SSH + `vsenv <VSID>`) |
-| `checkpoint/direct_ssh_probe.py` | observe-only direct-SSH fallback probe |
-| `panorama/panorama_runtime_runner.py` | PAN inventory (HTTPS XML API) |
-| `configuration/panorama_config_collector.py` | PAN config + expected compiler + setting alignment + semantic validation |
-| `configuration/checkpoint_config_collector.py`, `checkpoint_config_probe.py` | CP config (interactive PTY SSH handshake, secret-aware redaction) |
-| `configuration/pan_*`, `*_alignment*.py`, `current_config_projection.py` | expected-vs-actual classification, UI projection |
-| `utils/collection_executor.py` | admission coordinator + limited scheduler (single entry gate for every collector) |
-| `utils/run_context.py` | run isolation, staged artifact capture + atomic manifest |
-| `utils/runtime_paths.py` | repository ↔ runtime path foundation |
-| `utils/merge.py` / `snapshot.py` / `verification.py` | unified model / last-known-good / integrity |
-| `utils/config_evidence.py`, `config_storage.py`, `config_history.py` | content-addressed store + dedup + read-only history |
+| `main.py`, `config.py` | CLI/mode matrix/orchestration; auth + endpoint + runtime-paths carrier |
+| `checkpoint/`, `panorama/`, `configuration/` | vendor inventory + configuration collectors (CP/VSX SSH, PAN HTTPS XML API), expected-vs-actual classification |
+| `utils/collection_executor.py`, `run_context.py`, `runtime_paths.py` | admission/scheduler gate, run isolation + manifest, repository ↔ runtime path foundation |
+| `utils/merge.py`/`snapshot.py`/`verification.py`, `config_evidence.py`/`config_storage.py`/`config_history.py` | unified model / last-known-good / integrity; content-addressed store + dedup + read-only history |
 | `utils/html_export.py`, `config_ui.py`, `compliance_posture.py`, `discovery_capability_ui.py`, `project_plan.py` | HTML payload builders |
 | `utils/support_bundle.py`, `completeness.py` | sanitized shareable zip |
 | `utils/logger.py`, `cp_ssh_trust.py`, `pan_tls_trust.py`, `repository_privacy.py`, `inventory_exclusions.py` | log redaction, trust preflight, DLP gate, exclusion policy |
-| `utils/device_registry.py` | `PCP.1` Device Registry: opaque `device_id`, endpoint normalization, vendor-hint-independent duplicate detection, lifecycle, the registry mutation lock; filesystem-only via `utils/evidence_backend.py::DeviceRegistryBackend` |
-| `templates/index.html` + `static/{*_ui.js,app_*.js,style.css}` | single-page UI shell: left vertical product navigation (Overview / Devices / Configuration / Operations / Compliance / Administration) over the module panels |
-| `static/navigation_ui.js` | `NAV.1` **prototype** navigation model — the left rail *and* the device-detail tab strip; an entry renders only when the shell ships the surface it points at. Its contract, `docs/design/NAVIGATION_INFORMATION_ARCHITECTURE.md`, is **FROZEN — PRODUCT OWNER APPROVED** (companion: `docs/design/LOCAL_CONTROL_PLANE_RUNTIME_AND_ENROLLMENT.md`), amended by `M3` with `FA-1`..`FA-9`; the capability-state vocabulary and presentation contract those amendments align to is `docs/design/CAPABILITY_STATE_VOCABULARY_AND_PRESENTATION.md` — **FROZEN — PRODUCT OWNER APPROVED, 2026-09-06**, with no producer implemented yet (`M10`/`M12`). `M2`'s accessibility closure (`AC-A11Y-1`..`5`) merged via PR #85, but the feature stays `in_progress` per `project/feature_registry.json` — its `availability_rule` criterion is separately owned by later movements |
-| `console/` + `templates/console.html` + `static/console_actions.js` | operator console (`--console`): `registry.py` is the closed job vocabulary, `runner.py` the single-worker executor, `jobs.py` the durable records; imports no vendor/collector module |
-| `utils/action_taxonomy.py` | the five action classes — what each surface may execute, and why not |
-| `utils/failover/` | `OP.0a` HA readiness assessment **only**; the absence of a plan/executor/adapter is test-enforced |
-| `project/*.json` | living plan metadata (roadmap / backlog / feature_registry / build_history) — embedded into the Project Plan UI on every render |
-| `tests/` | phase-scoped suites; for the current baseline see `CURRENT_STATE.md` (never hard-code it here — it went stale by ~750 tests) |
+| `utils/device_registry.py` | `PCP.1` Device Registry: opaque `device_id`, endpoint normalization, lifecycle; filesystem-only |
+| `templates/`, `static/` | single-page UI shell + navigation model; contract detail: `docs/ARCHITECTURE.md` |
+| `console/` + `templates/console.html` + `static/console_actions.js` | operator console (`--console`): closed job vocabulary, single-worker executor, durable records; imports no vendor/collector module |
+| `utils/action_taxonomy.py`, `utils/failover/` | the five action classes; `OP.0a` HA readiness assessment only, no plan/executor/adapter (test-enforced) |
+| `project/*.json`, `tests/` | living plan metadata; phase-scoped test suites — baseline is `CURRENT_STATE.md`, never hard-coded here |
 
 Full mechanism detail: **`docs/ARCHITECTURE.md`**.
 
@@ -135,7 +111,8 @@ Full mechanism detail: **`docs/ARCHITECTURE.md`**.
                              session did, your exact next action. If it
                              disagrees with CURRENT_STATE.md/roadmap.json,
                              they win.
-3. project/roadmap.json + project/backlog.json — pull the task by id / target
+3. project/QUEUE.md — pull the task by id; never open project/*.json directly
+                             (render data, tool-written)
 4. docs/ARCHITECTURE.md    — only the sections your task touches
 5. the current build/design doc, if the task names one
 6. relevant source + tests, via narrow search
@@ -144,6 +121,10 @@ On demand only:  docs/history/**  (reach it through project/build_history.json l
 Never by default: docs/history/SECURITYEXPERT_AI_CONTINUATION_PACK.md,
                   docs/history/phase/PHASE*.md, docs/history/validation/VALIDATION*.txt
 ```
+
+**Orchestrated worker.** If `.nexus/WORKER.md` exists in your working
+directory you are an orchestrated worker: follow it and skip the reading
+order below.
 
 Governance and engineering law: `AGENTS.md` (canonical constitution) and
 `docs/AI_DEVELOPMENT_PROTOCOL.md` (network-command gate, approval boundaries,
@@ -230,8 +211,8 @@ narrative alongside the packet (`docs/design/GOV_SESSION_TRANSFER_PROTOCOL.md`).
 ## Reasoning / model routing tiers
 
 Routing is task-driven (`AGENTS.md` "AI reasoning / movement routing"); this
-is the concrete tier table. Tool-specific tier *names* (a specific Claude or
-Copilot model) belong only in that tool's own delta file — this table uses
+is the concrete tier table. Tool-specific tier *names* (a specific provider's
+model) belong only in `docs/reference/MODEL_TIER_MAP.md` — this table uses
 neutral tier labels.
 
 | Tier | Use for |

@@ -1,0 +1,109 @@
+{
+  "created_at": "2026-09-11T20:02:54Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1..AC-8 exactly as written in the contract section 4"
+        ],
+        "baseline": {
+          "authority": "docs/design/GOV_ORCH_8_PROJECT_DATA_SPLIT_AND_SIZE_BUDGET.md (DRAFT; direction approved by the Product Owner in chat 2026-09-11); project/README.md planning-metadata contract; AGENTS.md privacy/DLP law for every moved text",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "sequencing": "After GOV.ORCH.5 on the same branch; may run in parallel with GOV.ORCH.6 (disjoint files); before GOV.ORCH.7"
+        },
+        "context_not_loaded": [
+          "docs/history/phase/**",
+          "Device, deployment or collection code",
+          "Graphify"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/gov-orch-8-project-data-split"
+        },
+        "invariants": [
+          "Counts, percentages, warnings and build id sets in the project-plan payload are identical before and after",
+          "Nothing is deleted; every narrative exists verbatim (post-redaction) in a history file",
+          "No project JSON or history file carries a privacy finding after the movement",
+          "Four reviewable commits: tool, data move, archive, budgets"
+        ],
+        "merge_gate": "PO review of diff and orchestrator-run tests; no self-merge. Privacy gate at push; git diff --check.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Implement GOV.ORCH.8: split narrative out of project/build_history.json, roadmap.json and feature_registry.json into docs/history/{builds,roadmap,features}/ and PRODUCT_DIRECTION_RECORD.md with pointers left in the JSON; archive terminal builds beyond the newest 20 into project/archive/; add build/decision subcommands to scripts/project_queue.py; enforce size budgets with tests/test_project_files_budget.py in CI; prove render equivalence with a before/after project-plan payload fixture.",
+        "output_contract": [
+          "Implementation exactly as the contract Design/Scope sections specify",
+          "Tests named in the contract, green in a foreground run",
+          "SESSION_CLOSE on the relay with exact changed files, before/after sizes, test results, blockers and commit state"
+        ],
+        "recommended_reasoning": {
+          "reason": "Mechanical moves with a render-equivalence proof and a count seam in project_plan.py.",
+          "tier": "Sonnet 5, normal (medium effort)"
+        },
+        "requirements": [
+          "English, per AGENTS.md engineering-output language law",
+          "Read the contract fully; read only the files under scope.in plus their direct tests",
+          "Every moved text is redacted with the GOV.ORCH.5 redaction before it is written anywhere",
+          "Run the validation plan in the foreground and wait for real results before SESSION_CLOSE"
+        ],
+        "risks": [
+          "Truncating summary in a way the UI test asserts on",
+          "Archiving a build that a test looks up by id in build_history.json (read the tests first; keep such builds current if a test pins them)",
+          "Moving a narrative without redaction into docs/history"
+        ],
+        "scope": {
+          "in": [
+            "scripts/project_queue.py",
+            "utils/project_plan.py",
+            "scripts/build_history_index.py",
+            "static/project_plan_ui.js",
+            "project/build_history.json",
+            "project/roadmap.json",
+            "project/feature_registry.json",
+            "project/archive/",
+            "project/README.md",
+            "docs/history/builds/",
+            "docs/history/roadmap/",
+            "docs/history/features/",
+            "docs/design/PRODUCT_DIRECTION_RECORD.md (appended section)",
+            "tests/test_project_files_budget.py",
+            "tests/test_project_queue.py",
+            ".github/workflows/validation.yml"
+          ],
+          "out": [
+            "project/backlog.json (GOV.ORCH.5)",
+            "Deleting any data",
+            "Changing any count or percentage",
+            "Any other UI change",
+            "Relay tooling"
+          ]
+        },
+        "validation_plan": [
+          "targeted tests: python3 -m pytest -q tests/test_project_files_budget.py tests/test_project_queue.py tests/test_phase0_6_1b_1_2_interactive_project_plan.py tests/test_html_export_placeholder_integrity.py tests/test_architecture_convergence.py",
+          "queue check: python3 scripts/project_queue.py check",
+          "index check: python3 scripts/build_history_index.py --check",
+          "privacy gate: python3 scripts/repository_privacy_check.py",
+          "diff check: git diff --check"
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-11T20:02:54Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0077",
+  "movement": "GOV_ORCH_8_PROJECT_DATA_SPLIT_AND_SIZE_BUDGET",
+  "next_actor": "engineer",
+  "refs": [
+    "docs/design/GOV_ORCH_8_PROJECT_DATA_SPLIT_AND_SIZE_BUDGET.md",
+    "docs/design/GOV_ORCH_5_PROJECT_QUEUE_AND_COLD_START_DIET.md",
+    "project/README.md",
+    "utils/project_plan.py",
+    "static/project_plan_ui.js",
+    "scripts/build_history_index.py"
+  ],
+  "schema_version": 1,
+  "status": "OPEN",
+  "updated_at": "2026-09-11T20:02:54Z"
+}

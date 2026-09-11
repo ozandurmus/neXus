@@ -144,17 +144,22 @@ def test_ac1_live_bug_regression_against_real_repository_state():
     # earlier test run) can legitimately still block, and correctly so: it
     # was never committed anywhere, so no git-based baseline can ever call it
     # pre-existing. That is a separate, out-of-scope gap, not this bug.
+    # Update (privacy-scanner prose rule): those two locations were quoted
+    # prose about the scanner, never credentials; the text rule now ignores
+    # such prose, so they must no longer be findings at all. Any tracked
+    # finding that remains must still be recognized as pre-existing.
     ac1_locations = {
         ("project/build_history.json", "CREDENTIAL_LITERAL"),
         ("relay/NXS-LOCAL-0003-local-relay-watch-command.json", "CREDENTIAL_LITERAL"),
     }
     current = gate.scan_repository(ROOT)
-    ac1_findings = [f for f in current.findings if (f.path, f.rule) in ac1_locations]
-    assert ac1_findings, "expected the AC-1 regression fixtures to still be present in the live repository"
+    assert not [f for f in current.findings if (f.path, f.rule) in ac1_locations]
 
-    baseline_keys, baseline_note = gate._baseline_finding_keys(str(ROOT))
-    for finding in ac1_findings:
-        assert gate._finding_key(ROOT, finding) in baseline_keys, (finding, baseline_note)
+    tracked = [f for f in current.findings if f.rule != "RUNTIME_DIRECTORY_PRESENT"]
+    if tracked:
+        baseline_keys, baseline_note = gate._baseline_finding_keys(str(ROOT))
+        for finding in tracked:
+            assert gate._finding_key(ROOT, finding) in baseline_keys, (finding, baseline_note)
 
 
 def test_resolve_interpreter_finds_shared_venv_via_git_common_dir(tmp_path):

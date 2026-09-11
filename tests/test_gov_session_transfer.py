@@ -557,3 +557,67 @@ def test_cli_reads_stdin_when_file_is_dash(monkeypatch, capsys):
     captured = capsys.readouterr()
     assert rc == gst.EXIT_OK
     assert json.loads(captured.out)["valid"] is True
+
+
+# --- GOV.ORCH.1 section 3: validation_plan item union (AC-7) --------------
+
+def test_validation_plan_accepts_object_form_entries():
+    obj = _set_path(_start_obj(), "report.validation_plan", [
+        "run the focused suite",
+        {"name": "targeted tests", "argv": ["py", "-m", "pytest", "-q", "tests/test_orchestrator.py"]},
+    ])
+    assert gst.validate_fields(obj) == []
+
+
+def test_validation_plan_accepts_object_form_entry_without_a_name():
+    obj = _set_path(_start_obj(), "report.validation_plan", [{"argv": ["git", "diff", "--check"]}])
+    assert gst.validate_fields(obj) == []
+
+
+def test_validation_plan_rejects_object_missing_argv():
+    obj = _set_path(_start_obj(), "report.validation_plan", [{"name": "targeted tests"}])
+    errors = gst.validate_fields(obj)
+    assert any("argv" in e for e in errors)
+
+
+def test_validation_plan_rejects_non_list_argv():
+    obj = _set_path(_start_obj(), "report.validation_plan", [
+        {"name": "targeted tests", "argv": "py -m pytest"},
+    ])
+    errors = gst.validate_fields(obj)
+    assert any("argv" in e for e in errors)
+
+
+def test_validation_plan_rejects_empty_argv_list():
+    obj = _set_path(_start_obj(), "report.validation_plan", [{"argv": []}])
+    errors = gst.validate_fields(obj)
+    assert any("argv" in e for e in errors)
+
+
+def test_validation_plan_rejects_non_string_argv_element():
+    obj = _set_path(_start_obj(), "report.validation_plan", [{"argv": ["py", 3]}])
+    errors = gst.validate_fields(obj)
+    assert any("argv" in e for e in errors)
+
+
+def test_validation_plan_rejects_unknown_object_field():
+    obj = _set_path(_start_obj(), "report.validation_plan", [{"argv": ["true"], "extra": 1}])
+    errors = gst.validate_fields(obj)
+    assert any("extra" in e for e in errors)
+
+
+def test_validation_plan_rejects_non_string_non_object_entry():
+    obj = _set_path(_start_obj(), "report.validation_plan", [123])
+    errors = gst.validate_fields(obj)
+    assert any("validation_plan" in e for e in errors)
+
+
+def test_validation_plan_still_rejects_empty_list():
+    obj = _set_path(_start_obj(), "report.validation_plan", [])
+    errors = gst.validate_fields(obj)
+    assert any("validation_plan" in e for e in errors)
+
+
+def test_validation_plan_string_only_form_still_validates():
+    obj = _set_path(_start_obj(), "report.validation_plan", ["run the focused suite"])
+    assert gst.validate_fields(obj) == []

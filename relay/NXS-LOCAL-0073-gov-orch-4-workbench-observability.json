@@ -1,0 +1,105 @@
+{
+  "created_at": "2026-09-11T19:20:54Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1..AC-11 exactly as written in the contract section 5"
+        ],
+        "baseline": {
+          "authority": "docs/design/GOV_ORCH_4_WORKBENCH_OBSERVABILITY_TOKENS_AND_STUCK_DETECTION.md (DRAFT -- FOR PRODUCT OWNER FREEZE); the shipped workbench contract in project/backlog.json item orchestrator_interactive_dashboard_app (relay NXS-LOCAL-0021) for every invariant this contract does not change",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "sequencing": "After GOV.ORCH.1-3 (same branch); independent of any product code"
+        },
+        "context_not_loaded": [
+          "docs/history/**",
+          "project/roadmap.json",
+          "Device, deployment or collection code",
+          "Graphify"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/gov-orch-4-workbench-observability"
+        },
+        "invariants": [
+          "Stdlib backend, vanilla JS, localhost, token + Origin check, read + relay-write only, no fabricated progress or liveness",
+          "Health and usage come from real events in engineer.log and the process record, never from git dirtiness or heartbeat timestamps",
+          "Existing /api/movements shape stays backward compatible",
+          "Provider event shapes are parsed only inside the provider adapters"
+        ],
+        "merge_gate": "PO review of diff and orchestrator-run tests; no self-merge. Privacy gate at push; git diff --check.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Implement GOV.ORCH.4: per-movement token and cost accounting from engineer.log via provider adapters (scripts/orchestrator_usage.py, incremental parse, price table config/model_prices.json), a six-value health field with stuck detection (derive_health, stuck_after_seconds in /api/config), a work board (/api/board), a sent/received traffic view per movement (/api/movements/<id>/traffic), /api/usage plus an `orchestrator.py usage` CLI, and the corresponding vanilla-JS workbench UI additions (summary strip, card badge and usage line, Board tab, traffic-based History tab, verify steps in Evidence).",
+        "output_contract": [
+          "Implementation exactly as the contract Design/Scope sections specify",
+          "Tests named in the contract, green in a foreground run",
+          "SESSION_CLOSE on the relay with exact changed files, test results, blockers and commit state"
+        ],
+        "recommended_reasoning": {
+          "reason": "Fixture-driven parsing, one pure function, three read-only routes and DOM rendering against fully specified shapes.",
+          "tier": "Sonnet 5, normal (low effort)"
+        },
+        "requirements": [
+          "English, per AGENTS.md engineering-output language law",
+          "Read the contract fully; read only the files under scope.in plus their direct tests",
+          "Smallest diff that satisfies AC-1..AC-11; no scope expansion",
+          "Run the validation plan in the foreground and wait for real results before SESSION_CLOSE"
+        ],
+        "risks": [
+          "Re-parsing a large engineer.log on every poll: the incremental offset file is required, not optional",
+          "Double-counting streamed Claude assistant events: dedupe by message id",
+          "Inventing token prices: ship the table empty"
+        ],
+        "scope": {
+          "in": [
+            "scripts/orchestrator_usage.py",
+            "scripts/orchestrator_providers.py",
+            "scripts/orchestrator_dashboard.py",
+            "scripts/orchestrator.py",
+            "scripts/dashboard_assets/index.html",
+            "scripts/dashboard_assets/dashboard.js",
+            "scripts/dashboard_assets/dashboard.css",
+            "config/model_prices.json",
+            "tests/test_orchestrator_usage.py",
+            "tests/test_orchestrator_dashboard.py",
+            "tests/test_orchestrator_providers.py",
+            "tests/test_orchestrator.py"
+          ],
+          "out": [
+            "Any write action beyond the existing relay-write set",
+            "Live session channels",
+            "Charts or a JS dependency",
+            "Relay tooling and packet schema",
+            "Price values (PO supplies)",
+            "Any product code"
+          ]
+        },
+        "validation_plan": [
+          "targeted tests: python3 -m pytest -q tests/test_orchestrator_usage.py tests/test_orchestrator_dashboard.py tests/test_orchestrator_providers.py tests/test_orchestrator.py",
+          "privacy gate: python3 scripts/repository_privacy_check.py",
+          "diff check: git diff --check"
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-11T19:20:54Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0073",
+  "movement": "GOV_ORCH_4_WORKBENCH_OBSERVABILITY",
+  "next_actor": "engineer",
+  "refs": [
+    "docs/design/GOV_ORCH_4_WORKBENCH_OBSERVABILITY_TOKENS_AND_STUCK_DETECTION.md",
+    "scripts/orchestrator_dashboard.py",
+    "scripts/orchestrator_providers.py",
+    "scripts/orchestrator.py",
+    "docs/design/GOV_ORCH_1_SYNCHRONOUS_RUN_AND_ORCHESTRATOR_VERIFY.md",
+    "docs/design/GOV_ORCH_2_PROVIDER_ADAPTER.md"
+  ],
+  "schema_version": 1,
+  "status": "OPEN",
+  "updated_at": "2026-09-11T19:20:54Z"
+}

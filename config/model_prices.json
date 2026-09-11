@@ -1,0 +1,45 @@
+{
+  "_comment": "GOV.ORCH.4 section 3.2 -- PO-owned token price table, USD per million tokens. Filled 2026-09-11 from vendor pricing pages (Claude: platform.claude.com/docs/en/about-claude/pricing; OpenAI: developers.openai.com/api/docs/pricing). Claude cache write = base input rate, cache read = 0.1x input (Fable 5.1: 0.025x). OpenAI cached input is published only for gpt-5.3-codex; for gpt-5.6-terra/luna the cache_read value is an assumption (0.1x input) and cache_write equals input. A model with no entry yields cost_source 'unavailable'.",
+  "claude-sonnet-5": {
+    "input_per_mtok": 2.0,
+    "cache_write_per_mtok": 2.0,
+    "cache_read_per_mtok": 0.2,
+    "output_per_mtok": 10.0
+  },
+  "claude-opus-5": {
+    "input_per_mtok": 2.5,
+    "cache_write_per_mtok": 2.5,
+    "cache_read_per_mtok": 0.25,
+    "output_per_mtok": 12.5
+  },
+  "claude-haiku-4-5": {
+    "input_per_mtok": 1.0,
+    "cache_write_per_mtok": 1.0,
+    "cache_read_per_mtok": 0.1,
+    "output_per_mtok": 5.0
+  },
+  "claude-fable-5-1": {
+    "input_per_mtok": 10.0,
+    "cache_write_per_mtok": 10.0,
+    "cache_read_per_mtok": 0.25,
+    "output_per_mtok": 50.0
+  },
+  "gpt-5.3-codex": {
+    "input_per_mtok": 1.75,
+    "cache_write_per_mtok": 1.75,
+    "cache_read_per_mtok": 0.175,
+    "output_per_mtok": 14.0
+  },
+  "gpt-5.6-terra": {
+    "input_per_mtok": 2.0,
+    "cache_write_per_mtok": 2.0,
+    "cache_read_per_mtok": 0.2,
+    "output_per_mtok": 12.0
+  },
+  "gpt-5.6-luna": {
+    "input_per_mtok": 0.2,
+    "cache_write_per_mtok": 0.2,
+    "cache_read_per_mtok": 0.02,
+    "output_per_mtok": 1.2
+  }
+}

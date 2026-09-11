@@ -1,0 +1,5 @@
+# stale_doc_correction_rb3_p0_audit — Merge-discovered correction: RB.3's CP P0 audit blocker claim was stale
+
+## Summary
+
+While merging origin/main (which already carried a separate session's stale-doc correction for the same fact) into the recovery_collect_rb2_rb4 branch, discovered this session's own RECOVER-track work had repeatedly cited the CP device-interaction-safety audit (P0, cp_device_interaction_safety) as 'not started' when it actually closed 2026-08-25 -- before this session began. Corrected in docs/design/BACKUP_AND_RECOVERY_ARCHITECTURE.md, docs/design/BACKUP_RECOVERY_CONTRACTS.md, checkpoint/checkpoint_recovery_collector.py's BLOCK_REASON, this file's recovery_collect_rb2_rb4 entry (summary + risks_forward), project/roadmap.json's RB entry, CURRENT_STATE.md and AI_HANDOVER.md. RB.3's real remaining blocker is D3 alone (product-owner decision on the operational-write command class) plus add backup local's own command-gate sign-off -- not an unstarted audit. Does not itself unblock RB.3; only corrects the stated reason.

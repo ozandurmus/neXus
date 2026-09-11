@@ -1,0 +1,5 @@
+# CE.3 - Browser check editor + signed distributable org check packs
+
+status: deferred · target: DEPLOY.1A
+
+Design: docs/design/COMPLIANCE_CHECK_ENGINE.md section 6 (decision D9). A Compliance-module check editor: name a check, pick the evidence source from a browsable tree of WHAT WAS ACTUALLY COLLECTED (no blank text box), choose an operator, enter the expected value/pattern, test it LIVE against the last run (which subjects pass/fail), preview the coverage delta, save; every save audited (who/when/before/after). Server writes the same compliance_checks.json shape (or its Postgres equivalent). Signed org packs: detached signature + a publisher trust store so an org distributes vetted check packs without a product release (the dynamic/signed-pack direction of the 0.6.6B / 0.7.0 rule packs); invalid/untrusted -> rejected, fail-closed. CIS/PCI/BDDK starter packs shipped as signed builtin-adjacent packs the operator enables. Requires the app server + DEPLOY.1A OIDC/RBAC (only an authorised role creates/edits/loads checks) + a persistent store. Signing mechanism specifics deferred to the DEPLOY.1 security workstream (deploy1_oidc_viewer / secrets vault).

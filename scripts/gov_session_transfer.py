@@ -90,6 +90,14 @@ class PacketError(ValueError):
 #   ("str_or_null",)                a non-empty string, or null
 #   ("obj", {field: spec, ...})     an object with exactly those fields,
 #                                    nothing missing, nothing extra
+#   ("validation_plan",)            GOV.ORCH.1 §3 additive union: a
+#                                    non-empty list whose items are each
+#                                    either a non-empty string (prose,
+#                                    unchanged) or an object
+#                                    {"name": str (optional), "argv": list
+#                                    of non-empty str} -- a machine-
+#                                    executable step the orchestrator can
+#                                    run directly with shell=False.
 # ---------------------------------------------------------------------------
 
 _REASONING_SCHEMA = ("obj", {"tier": ("str",), "reason": ("str",)})
@@ -101,7 +109,7 @@ SESSION_START_REPORT_SCHEMA = ("obj", {
     "movement_type": ("enum", MOVEMENT_TYPES),
     "requirements": ("list_str", False),
     "acceptance_criteria": ("list_str", False),
-    "validation_plan": ("list_str", False),
+    "validation_plan": ("validation_plan",),
     "invariants": ("list_str", False),
     "risks": ("list_str", True),
     "context_not_loaded": ("list_str", True),
@@ -175,6 +183,28 @@ def _validate_node(value: Any, spec: tuple, path: str, errors: list[str]) -> Non
             errors.append(f"{path}: must be a list of non-empty strings")
         elif not allow_empty and not value:
             errors.append(f"{path}: must be a non-empty list")
+    elif kind == "validation_plan":
+        if not isinstance(value, list) or not value:
+            errors.append(f"{path}: must be a non-empty list")
+        else:
+            for i, item in enumerate(value):
+                item_path = f"{path}[{i}]"
+                if isinstance(item, str):
+                    if not item:
+                        errors.append(f"{item_path}: string item must be a non-empty string")
+                elif isinstance(item, dict):
+                    allowed = {"name", "argv"}
+                    for field in sorted(set(item) - allowed):
+                        errors.append(f"{item_path}.{field}: unknown field")
+                    argv = item.get("argv")
+                    if not isinstance(argv, list) or not argv or not all(
+                        isinstance(a, str) and a for a in argv
+                    ):
+                        errors.append(f"{item_path}.argv: must be a non-empty list of non-empty strings")
+                    if "name" in item and not (isinstance(item["name"], str) and item["name"]):
+                        errors.append(f"{item_path}.name: must be a non-empty string")
+                else:
+                    errors.append(f"{item_path}: must be a string or an object")
     elif kind == "freeform_obj":
         if not isinstance(value, dict) or not value:
             errors.append(f"{path}: must be a non-empty object")

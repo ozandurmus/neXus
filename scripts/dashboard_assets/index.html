@@ -13,61 +13,58 @@
   <div id="poll-config">
     <label for="poll-interval">refresh (s)</label>
     <input id="poll-interval" type="number" min="2" max="3600" value="5">
+    <label for="stuck-after">stuck after (s)</label>
+    <input id="stuck-after" type="number" min="30" max="86400" value="900">
     <span id="poll-save-state"></span>
   </div>
 </header>
 
 <main id="app">
-  <section id="section-awaiting" class="movement-section">
-    <h2>Awaiting you</h2>
-    <div class="cards" id="cards-awaiting"></div>
-  </section>
+  <div id="token-panel" class="hidden">
+    <p>Paste the token printed by <code>orchestrator.py dashboard</code> (the
+      <code>#t=...</code> part of the URL it printed):</p>
+    <input id="token-input" type="text" placeholder="token" autocomplete="off">
+    <button id="token-save">Use this token</button>
+    <div id="token-error" class="muted"></div>
+  </div>
 
-  <section id="section-running" class="movement-section">
-    <h2>Running movements</h2>
-    <div class="cards" id="cards-running"></div>
-  </section>
+  <div id="board-wrap" class="hidden">
+    <div id="board-columns"></div>
 
-  <section id="section-agenda" class="movement-section">
-    <h2>PO agenda</h2>
-    <div class="cards" id="cards-agenda">
-      <p class="muted">Not-yet-started backlog items are not yet surfaced here in this first delivery -- see project/backlog.json directly.</p>
-    </div>
-  </section>
-
-  <section id="section-integration" class="movement-section">
-    <h2>Integration queue</h2>
-    <div class="cards" id="cards-integration"></div>
-  </section>
-
-  <section id="section-recent" class="movement-section collapsed">
-    <h2 id="recent-toggle">Recently completed / archive &#9656;</h2>
-    <div class="cards" id="cards-recent"></div>
-  </section>
+    <section id="detail-panel" class="hidden">
+      <div id="detail-header">
+        <button id="detail-close">&times;</button>
+        <h2 id="detail-title"></h2>
+      </div>
+      <div id="detail-sections">
+        <details class="detail-section" data-section="summary" open>
+          <summary>Summary</summary>
+          <div class="detail-body" id="pane-summary"></div>
+        </details>
+        <details class="detail-section" data-section="traffic">
+          <summary>Traffic</summary>
+          <div class="detail-body" id="pane-traffic"></div>
+        </details>
+        <details class="detail-section" data-section="changes">
+          <summary>Changes</summary>
+          <div class="detail-body" id="pane-changes"></div>
+        </details>
+        <details class="detail-section" data-section="evidence">
+          <summary>Evidence</summary>
+          <div class="detail-body" id="pane-evidence"></div>
+        </details>
+        <details class="detail-section" data-section="usage">
+          <summary>Usage</summary>
+          <div class="detail-body" id="pane-usage"></div>
+        </details>
+        <details class="detail-section" data-section="log">
+          <summary>Log</summary>
+          <div class="detail-body" id="pane-log"></div>
+        </details>
+      </div>
+    </section>
+  </div>
 </main>
-
-<aside id="detail-panel" class="hidden">
-  <div id="detail-header">
-    <button id="detail-close">&times;</button>
-    <h2 id="detail-title"></h2>
-  </div>
-  <nav id="detail-tabs">
-    <button data-tab="summary" class="active">Summary</button>
-    <button data-tab="activity">Live activity</button>
-    <button data-tab="conversation">Conversation</button>
-    <button data-tab="changes">Changes</button>
-    <button data-tab="evidence">Evidence</button>
-    <button data-tab="history">History</button>
-  </nav>
-  <div id="detail-body">
-    <div class="tab-pane active" data-pane="summary" id="pane-summary"></div>
-    <div class="tab-pane" data-pane="activity" id="pane-activity"></div>
-    <div class="tab-pane" data-pane="conversation" id="pane-conversation"></div>
-    <div class="tab-pane" data-pane="changes" id="pane-changes"></div>
-    <div class="tab-pane" data-pane="evidence" id="pane-evidence"></div>
-    <div class="tab-pane" data-pane="history" id="pane-history"></div>
-  </div>
-</aside>
 
 <script src="/dashboard.js"></script>
 </body>

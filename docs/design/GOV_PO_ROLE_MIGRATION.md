@@ -170,6 +170,23 @@ amendment appends one line in the same form. A merge without that recorded
 authorization, including an agent merging its own proposal, ratifies
 nothing and is reverted as an unauthorized Git action.
 
+## Amendment A-2026-09-11 (RATIFIED by the Product Owner, 2026-09-11)
+
+The PO assistant role is tool-neutral. The current holder is recorded in
+`docs/reference/COPILOT_OPERATING_MODEL.md` and may change without
+re-freezing this contract. §9's independence rule is kept, with the
+explicit consequence that when the orchestrator and the final reviewer are
+the same tool, an independent review is satisfied only by a different
+provider seat (`nexus-po-evidence-reviewer` or a council seat on a
+different provider). This replaces the "Codex is final reviewer" claim
+with "Codex synthesizes; an independent seat reviews".
+
+**GOV.ORCH.7 note (amendment text only, no rule changed).** Every reference
+in this document to a tracked `.claude/settings.json` is read as
+`.claude/nexus-po.settings.json`, the file that actually exists and is
+tracked; `.claude/settings.json` was never created and is not a separate
+gate.
+
 ## 5. PO episodes and their SESSION START/CLOSE compatibility
 
 A PO episode is one fresh context that reads the fixed set in §4, produces

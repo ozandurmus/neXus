@@ -1,0 +1,106 @@
+{
+  "created_at": "2026-09-11T18:29:41Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1: Claude adapter argv equals today's except prompt delivery; existing test_spawn_engineer_* and test_start_cli_* pass with at most the prompt-delivery assertion adjusted",
+          "AC-2: Codex fresh-dispatch argv matches contract section 2.3 for given model/effort; prompt on stdin; task content never in argv",
+          "AC-3: Codex resume argv is codex exec resume <id> with the id read from a fixture log",
+          "AC-4: summarize_line on a Codex JSON-lines fixture yields one summary per item and never raises on unknown event types",
+          "AC-5: --provider codex forces merge-mode orchestrator; prompt file carries the no-merge instruction; run calls integrate once (mocked) only after verify passed",
+          "AC-6: invalid --effort for the provider exits 2 with a usage message and creates no state record",
+          "AC-7: a dispatch with no observed model is reported with audit_exception provider_default_used",
+          "AC-8: git diff --check clean; privacy gate 0 new findings"
+        ],
+        "baseline": {
+          "authority": "docs/design/GOV_ORCH_2_PROVIDER_ADAPTER.md (DRAFT -- FOR PRODUCT OWNER FREEZE); GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md (FROZEN) for everything the contract does not amend",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "sequencing": "GOV.ORCH.1 first; GOV.ORCH.2 and GOV.ORCH.3 after it merges (both touch scripts/orchestrator.py)"
+        },
+        "context_not_loaded": [
+          "docs/history/**",
+          "project/backlog.json and roadmap.json",
+          "Device, deployment or collection code",
+          "Graphify"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/gov-orch-2-provider-adapter"
+        },
+        "invariants": [
+          "Task content never enters an argv element for any provider",
+          "Codex flag names are verified against the installed codex --help when available and recorded in the module docstring; if the CLI is not installed, record that and implement from the contract text",
+          "Claude behaviour is byte-for-byte unchanged apart from prompt delivery"
+        ],
+        "merge_gate": "PO review of diff and orchestrator-run tests; no self-merge. Privacy gate at push; git diff --check.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Implement GOV.ORCH.2: extract a ProviderAdapter interface into scripts/orchestrator_providers.py with a Claude adapter reproducing today's argv (prompt now delivered via file) and a Codex adapter (codex exec, stdin prompt, JSON-lines summariser, resume), add --provider and --merge-mode to start/run, provider/model/effort requested-vs-observed audit fields with the provider_default_used audit exception, per-provider effort allowlists, and move the integration sequence into scripts/orchestrator_verify.py::integrate.",
+        "output_contract": [
+          "Implementation exactly as docs/design/GOV_ORCH_2_PROVIDER_ADAPTER.md sections Design/Scope specify",
+          "Tests named in the contract, green in a foreground run",
+          "SESSION_CLOSE on the relay with exact changed files, test results, blockers and commit state"
+        ],
+        "recommended_reasoning": {
+          "reason": "Refactor to an interface plus one adapter with fixture-driven tests; the only open question (flag names) is answered by reading help text.",
+          "tier": "Sonnet 5, normal (low effort)"
+        },
+        "requirements": [
+          "English, per AGENTS.md engineering-output language law",
+          "Read the named contract document fully; read only the files it lists under Scope In plus their direct tests",
+          "Smallest diff that satisfies every acceptance criterion; no scope expansion",
+          "Run the validation plan in the foreground and wait for real results before SESSION_CLOSE"
+        ],
+        "risks": [
+          "Guessing Codex flags that do not exist; record uncertainty rather than inventing",
+          "Letting a Codex engineer reach gh pr merge before git-level gates exist",
+          "Silently passing unknown model/effort strings through"
+        ],
+        "scope": {
+          "in": [
+            "scripts/orchestrator_providers.py",
+            "scripts/orchestrator.py",
+            "scripts/orchestrator_verify.py",
+            "scripts/orchestrator_dashboard.py (display provider fields only)",
+            "tests/test_orchestrator_providers.py",
+            "tests/test_orchestrator.py",
+            "docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md (amendment note only)",
+            "docs/reference/COPILOT_OPERATING_MODEL.md (worker-selection paragraph only)"
+          ],
+          "out": [
+            ".claude/**",
+            "WORKER.md",
+            "Packet schema",
+            "scripts/local_relay.py",
+            "relay/*.json",
+            "OpenRouter",
+            "Device or deployment code"
+          ]
+        },
+        "validation_plan": [
+          "targeted tests: python3 -m pytest -q tests/test_orchestrator.py tests/test_orchestrator_providers.py tests/test_orchestrator_verify.py tests/test_orchestrator_dashboard.py",
+          "privacy gate: python3 scripts/repository_privacy_check.py",
+          "diff check: git diff --check"
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-11T18:29:41Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0071",
+  "movement": "GOV_ORCH_2_PROVIDER_ADAPTER",
+  "next_actor": "engineer",
+  "refs": [
+    "docs/design/GOV_ORCH_2_PROVIDER_ADAPTER.md",
+    "docs/design/GOV_ORCH_1_SYNCHRONOUS_RUN_AND_ORCHESTRATOR_VERIFY.md",
+    "scripts/orchestrator.py",
+    "docs/reference/COPILOT_OPERATING_MODEL.md"
+  ],
+  "schema_version": 1,
+  "status": "OPEN",
+  "updated_at": "2026-09-11T18:29:41Z"
+}

@@ -188,6 +188,9 @@ regardless of who directed it.
 
 ### 3.1 Actors and lifecycle, in order
 
+> Amended by GOV.ORCH.1 (DRAFT): see
+> docs/design/GOV_ORCH_1_SYNCHRONOUS_RUN_AND_ORCHESTRATOR_VERIFY.md.
+
 1. The Product Owner, in an interactive `nexus-po` session, runs `PLAN`/
    `REVIEW`/`DECIDE` as today and opens or advances a movement's local
    relay file (`scripts/local_relay.py create`, unchanged).
@@ -334,6 +337,12 @@ govern an interactive one, unchanged by this document.
 
 ### 3.5 Approved-task delivery and the content hash
 
+> Amended by GOV.ORCH.1 (DRAFT): see
+> docs/design/GOV_ORCH_1_SYNCHRONOUS_RUN_AND_ORCHESTRATOR_VERIFY.md.
+
+> Amended by GOV.ORCH.2 (DRAFT): see
+> docs/design/GOV_ORCH_2_PROVIDER_ADAPTER.md.
+
 At `start` time, the orchestrator reads the relay file fresh from disk,
 extracts `entries[0]` (the `SESSION_START` entry — the one already-approved
 task; `entries[0]` is structurally guaranteed to be `SESSION_START` by
@@ -415,6 +424,9 @@ session (posting its own relay entries) can legitimately touch the same
 canonical file for the same movement while both processes are alive.
 
 ### 3.7 Process records, duplicate-start prevention, retries, cancellation, recovery, worker limit
+
+> Amended by GOV.ORCH.1 (DRAFT): see
+> docs/design/GOV_ORCH_1_SYNCHRONOUS_RUN_AND_ORCHESTRATOR_VERIFY.md.
 
 **Addition B (Product Owner freeze decision).** `orchestrator status` with
 no `--movement` prints a table of every known movement: movement id,
@@ -803,3 +815,13 @@ or real-device approval boundary.
 | AC-6 | §5 |
 | AC-7 | §3.4 item 1, §3.10 |
 | AC-8 | §3.9, §7 |
+
+## Amendment A-2026-09-11 (GOV.ORCH.3, RATIFIED by the Product Owner 2026-09-11)
+
+`main` branch protection (PR required, CI green) is recorded as the final
+tool-neutral gate: after the per-worktree `pre-push` hook
+(`scripts/nexus_worker_prepush.py`) and the orchestrator's own `verify`/
+`integrate` sequence, branch protection is the backstop no tool or worker
+can bypass. This document does not change GitHub settings itself; enabling
+or confirming branch protection is a Product Owner action, recorded on the
+relay when taken.

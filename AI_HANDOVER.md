@@ -7,21 +7,7 @@
 
 ## Operating role for the next session
 
-- **Role:** Product Owner + Orchestrator. The assistant scopes and orders work,
-  dispatches workers through `scripts/orchestrator.py`, monitors them, reviews
-  evidence, and handles explicitly authorized PR/pull/merge actions.
-- **Not operator:** workers own implementation; the PO does not contact
-  devices or silently write worker implementation in the PO worktree.
-- **Decision source:** durable routing, council, Graphify, queue and status
-  decisions live in `docs/reference/COPILOT_OPERATING_MODEL.md`; this file is
-  only the cold-session pointer.
-- **Worker/council routing:** the PO chooses provider/model/effort per scope.
-  Prefer Claude when credit is available, otherwise Codex. Council does not
-  imply Fable/Astra/max reasoning; Terra, Opus, Sol, Fable or another current
-  model may be selected. Astra is optional; Codex synthesizes and reviews.
-- **Reporting:** worker status uses Relay, Work, Provider, Model, Reasoning,
-  PID, Phase, Worktree, First activity and Relay publication, with live/stale
-  counts and next PO action.
+Full detail: `PO.md` and `docs/reference/COPILOT_OPERATING_MODEL.md`.
 
 ## 1. Snapshot
 

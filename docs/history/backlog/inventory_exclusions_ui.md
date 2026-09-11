@@ -1,0 +1,5 @@
+# Inventory Exclusions UX & Management
+
+status: automated_validated · target: 0.6.1C / Inventory UX
+
+AUTOMATED_VALIDATED 2026-08-30 (phase 1 -- read-only). Contract: docs/history/phase/PHASE0_6_1C_INVENTORY_EXCLUSIONS_UI.md. New utils/inventory_exclusions_ui.py pure payload builder + new Exclusions nav/module in templates/index.html + static/app.js, modeled on the Discovery module. html_export.py loads the policy via the existing load_inventory_exclusions(compliance_data_root) -- no main.py call-site changes needed. A malformed local policy degrades to an explicit empty state on render rather than crashing the report; cp_runner.py's own collection-time load stays fail-closed and untouched. tests/fixtures/uitest/state/inventory_exclusions.json is read by the REAL builder (not hand-authored/injected like discovery_ui.json), so the render harness exercises the actual production code path for this module. 13 new tests; py -m pytest -q: 603 passed, 2 skipped, 2 failed (both pre-existing/unrelated) -- net +13, zero regressions. Deferred to a new, separately-contracted item: add/restore/reason/audit write workflows (DEPLOY.1A-adjacent, needs its own design pass).

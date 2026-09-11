@@ -173,13 +173,14 @@ function renderProjectPlan() {
     const historyHost = document.getElementById("projectBuildHistory");
     if (historyHost) {
         const builds = Array.isArray(plan.build_history) ? plan.build_history : [];
+        const archivedCount = Number(plan.archived_build_count || 0);
         historyHost.innerHTML = `<div class="build-history-list">${builds.map(item => `
             <article class="build-history-row">
                 <div class="build-history-version">${escapeHtml(item.build || "")}</div>
-                <div class="build-history-copy"><strong>${escapeHtml(item.title || "")}</strong><span>${escapeHtml(item.summary || "")}</span></div>
+                <div class="build-history-copy"><strong>${escapeHtml(item.title || "")}</strong><span>${escapeHtml(item.summary || "")}${item.detail ? ` <a class="build-history-detail-link">${escapeHtml(item.detail)}</a>` : ""}</span></div>
                 <div>${statusPill(roadmapStatusLabel(item.status), roadmapStatusTone(item.status))}</div>
             </article>
-        `).join("")}</div>`;
+        `).join("")}</div>${archivedCount > 0 ? `<p class="build-history-archived-note">${escapeHtml(String(archivedCount))} builds archived (docs/history/INDEX.md)</p>` : ""}`;
     }
 
     const notesHost = document.getElementById("projectRoadmapNotes");

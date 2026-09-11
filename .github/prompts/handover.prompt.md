@@ -1,5 +1,5 @@
 ---
-description: "Create a compact handover before changing Copilot chats/models"
+description: "Create a compact handover before changing chats/models"
 ---
 
 Do not restate the full project history.

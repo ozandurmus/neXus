@@ -2,11 +2,14 @@
 (docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md, FROZEN).
 
     py scripts/orchestrator.py start      --movement <relay-id> [options]
+    py scripts/orchestrator.py run        --movement <relay-id> [--timeout S] [--heartbeat-timeout S] [--no-verify] [options]
+    py scripts/orchestrator.py verify     --movement <relay-id> [options]
     py scripts/orchestrator.py status     [--movement <relay-id>] [options]
     py scripts/orchestrator.py stop       --movement <relay-id> [--force] [options]
     py scripts/orchestrator.py merge-lock {acquire|release} --movement <relay-id> [options]
     py scripts/orchestrator.py watch      [--interval SECONDS] [options]
     py scripts/orchestrator.py dashboard  [--port N] [options]
+    py scripts/orchestrator.py usage      [--movement <relay-id>] [--since ISO] [--json] [options]
 
 `<relay-id>` is the relay file's own id (`NXS-LOCAL-NNNN`), unambiguous and
 resolvable to exactly one file (`relay/<relay-id>-*.json`).
@@ -52,6 +55,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import shutil
 import signal
 import subprocess
@@ -65,18 +69,32 @@ from typing import Any
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 import local_relay as lr  # noqa: E402
+import orchestrator_verify as ov  # noqa: E402
+import orchestrator_providers as op  # noqa: E402
+import orchestrator_usage as ou  # noqa: E402
 
 EXIT_OK, EXIT_REFUSED, EXIT_USAGE = 0, 1, 2
 
-#: Runtime bookkeeping lives outside the repository, mirroring
-#: nexus_po_tool_gate.py's NEXUS_PO_HOOK_LOG precedent -- process records
-#: are not durable governance history and must not spam the git-tracked
-#: relay file with per-invocation diffs.
+DEFAULT_WORKTREES_DIR = REPO_ROOT.parent / f"{REPO_ROOT.name}-nexus-worktrees"
+
+#: GOV.ORCH.1 section 2.5: the default moves from the system temp directory
+#: to a sibling of the movement worktrees -- runtime bookkeeping, never
+#: inside the repository checkout, but no longer sharing the system temp
+#: root with every other tool on the machine. `NEXUS_ORCHESTRATOR_STATE_DIR`
+#: still overrides this, exactly as before.
 DEFAULT_STATE_DIR = Path(
     os.environ.get("NEXUS_ORCHESTRATOR_STATE_DIR")
-    or os.path.join(tempfile.gettempdir(), "nexus_orchestrator")
+    or str(DEFAULT_WORKTREES_DIR / ".state")
 )
-DEFAULT_WORKTREES_DIR = REPO_ROOT.parent / f"{REPO_ROOT.name}-nexus-worktrees"
+
+#: GOV.ORCH.1 section 2.5 / AC-9: the pre-GOV.ORCH.1 default location.
+#: `status` still reads a record found only here for one release, flagging
+#: it `legacy_state_dir` rather than losing track of it.
+LEGACY_STATE_DIR = Path(os.path.join(tempfile.gettempdir(), "nexus_orchestrator"))
+
+#: GOV.ORCH.4 section 3.2: the PO-owned, hand-maintained token price table.
+DEFAULT_PRICE_TABLE_PATH = REPO_ROOT / "config" / "model_prices.json"
+
 DEFAULT_MAX_WORKERS = 3
 DEFAULT_RETRY_LIMIT = 2
 DEFAULT_MERGE_LOCK_TTL = 600
@@ -122,23 +140,13 @@ TERMINAL_PHASES = frozenset({PHASE_DONE, PHASE_FAILED, PHASE_CANCELLED})
 #: movement -- never task-content-dependent (section 3.5 of the FROZEN
 #: amendment: the approved task itself is never interpolated into an argv
 #: element; the engineer reads it with its own Read tool).
+#: GOV.ORCH.3 Part A.2: shrunk to point at the generated worker brief --
+#: the interactive reading order (AGENTS.md/AI_START_HERE.md/CLAUDE.md) and
+#: the pytest-foreground/relay-re-read rules move into WORKER.md itself
+#: (sections 7-8, see `render_worker_md`), never restated here.
 ENGINEER_PROMPT = (
-    "Read .nexus/approved_task.json in the current directory -- it is your "
-    "SESSION_START for this movement, delivered verbatim by the orchestrator "
-    "and content-hash-verified against the Product Owner's own relay entry. "
-    "Immediately before opening your PR, re-read the canonical relay file "
-    "(NEXUS_RELAY_FILE) and act on any RELAY_CORRECTION or RELAY_DECISION "
-    "entries appended after dispatch. Proceed as the engineer role under "
-    "AGENTS.md, AI_START_HERE.md, and CLAUDE.md exactly as an interactively "
-    "started session would. Never treat a long-running validation command -- "
-    "the full pytest regression in particular -- as backgroundable: run it "
-    "as a foreground, awaited Bash command (pass an explicit long `timeout` "
-    "on that tool call rather than accepting its default) and wait for it to "
-    "actually finish. If the CLI still auto-backgrounds it anyway, do not end "
-    "your turn until you have polled for and read that background task's own "
-    "real completion result -- the standing relay#13 'green tests -> "
-    "self-merge' authorization must never be exercised on the strength of a "
-    "test run you did not actually wait to see the result of."
+    "Read .nexus/WORKER.md and .nexus/approved_task.json in the current "
+    "directory and follow them. Read nothing else unless WORKER.md names it."
 )
 
 #: AC-4: injected as an extra line onto ENGINEER_PROMPT for one specific
@@ -183,6 +191,183 @@ def task_hash(session_start_entry: dict) -> str:
     return hashlib.sha256(canonical_json(session_start_entry).encode("utf-8")).hexdigest()
 
 
+# ---------------------------------------------------------------------------
+# GOV.ORCH.3 Part A: WORKER.md -- a fixed-template worker brief, never a
+# model call, rendered from `approved_task.json` at dispatch.
+# ---------------------------------------------------------------------------
+
+#: GOV.ORCH.7 section 2.1: these two fixed sections are no longer Python
+#: string literals -- they are parsed, verbatim, from the checked-in
+#: template `roles/WORKER.md` (the same file `render_worker_md` documents
+#: itself against), so the template lives in one place, readable without
+#: Python. `_load_worker_md_template` does the parse; module import time
+#: populates RELAY_CLOSEOUT_TEXT/STANDING_RULES_TEXT from it exactly once.
+ROLES_WORKER_MD_PATH = REPO_ROOT / "roles" / "WORKER.md"
+
+
+def _load_worker_md_template(path: Path = ROLES_WORKER_MD_PATH) -> tuple[str, str]:
+    """Extract the "## Relay closeout" and "## Standing rules" section
+    bodies from `roles/WORKER.md`, verbatim (trailing/leading blank lines
+    stripped only). Raises if either section is missing -- a missing
+    template is a fail-closed condition for `preflight`, not a silent
+    empty brief."""
+    text = path.read_text(encoding="utf-8")
+    closeout_marker = "## Relay closeout\n\n"
+    standing_marker = "\n\n## Standing rules\n\n"
+    if closeout_marker not in text or standing_marker not in text:
+        raise OrchestratorError(f"{path} is missing the expected WORKER.md template sections")
+    _, rest = text.split(closeout_marker, 1)
+    closeout, standing = rest.split(standing_marker, 1)
+    return closeout.strip(), standing.strip()
+
+
+try:
+    RELAY_CLOSEOUT_TEXT, STANDING_RULES_TEXT = _load_worker_md_template()
+except (OSError, OrchestratorError):
+    # roles/WORKER.md missing at import time (e.g. a stale checkout) --
+    # leave both empty rather than crashing import; `preflight` fails
+    # closed on the missing file for any real dispatch.
+    RELAY_CLOSEOUT_TEXT, STANDING_RULES_TEXT = "", ""
+
+_TEST_FILE_RE = re.compile(r"tests/[\w./-]+\.py")
+
+
+def _worker_md_test_files(validation_plan: list) -> list[str]:
+    """A.2 §2: "the direct tests named in the validation plan" -- scraped
+    from string entries and object-form `argv` entries alike, de-duplicated,
+    order preserved."""
+    found: list[str] = []
+    for entry in validation_plan or []:
+        tokens: list[str] = []
+        if isinstance(entry, str):
+            tokens = [entry]
+        elif isinstance(entry, dict):
+            tokens = [str(a) for a in (entry.get("argv") or [])]
+        for tok in tokens:
+            for match in _TEST_FILE_RE.findall(tok):
+                if match not in found:
+                    found.append(match)
+    return found
+
+
+def _worker_md_validation_commands(validation_plan: list) -> str:
+    """A.2 §5: object-form entries render as fenced commands; string
+    (prose) entries are listed under "manual"."""
+    fenced: list[str] = []
+    manual: list[str] = []
+    for entry in validation_plan or []:
+        if isinstance(entry, str):
+            manual.append(entry)
+        elif isinstance(entry, dict):
+            argv = entry.get("argv")
+            name = entry.get("name")
+            if argv:
+                cmd = " ".join(str(a) for a in argv)
+                header = f"# {name}\n" if name else ""
+                fenced.append(f"{header}```\n{cmd}\n```")
+            elif name:
+                manual.append(name)
+    parts = list(fenced)
+    if manual:
+        parts.append("manual:\n" + "\n".join(f"- {item}" for item in manual))
+    return "\n\n".join(parts) if parts else "(none)"
+
+
+def _bullets(items: list) -> str:
+    items = list(items or [])
+    return "\n".join(f"- {item}" for item in items) if items else "(none)"
+
+
+def render_worker_md(*, movement_id: str, session_start: dict, merge_mode: str) -> str:
+    """GOV.ORCH.3 Part A.2: the fixed template rendered to `.nexus/WORKER.md`
+    at dispatch -- no model call, content-and-order fixed by contract. The
+    eight sections, in order: (1) movement id/objective/type, (2) files you
+    may read / must not touch, (3) acceptance criteria, (4) invariants and
+    risks, (5) validation commands, (6) git, (7) relay closeout, (8)
+    standing rules."""
+    report = session_start.get("report", {})
+    scope = report.get("scope", {})
+    scope_in = list(scope.get("in", []) or [])
+    scope_out = list(scope.get("out", []) or [])
+    validation_plan = report.get("validation_plan", []) or []
+    git_cfg = report.get("git", {})
+
+    sections = [
+        (
+            f"Movement: {movement_id}\n\n"
+            f"Objective: {report.get('objective', '')}\n\n"
+            f"Movement type: {report.get('movement_type', '')}"
+        ),
+        (
+            "## Files you may read\n\n"
+            + _bullets(scope_in + _worker_md_test_files(validation_plan))
+            + "\n\n## Files you must not touch\n\n"
+            + _bullets(scope_out)
+        ),
+        "## Acceptance criteria\n\n" + _bullets(report.get("acceptance_criteria", [])),
+        (
+            "## Invariants and risks\n\n"
+            "Invariants:\n" + _bullets(report.get("invariants", []))
+            + "\n\nRisks:\n" + _bullets(report.get("risks", []))
+        ),
+        "## Validation commands\n\n" + _worker_md_validation_commands(validation_plan),
+        (
+            "## Git\n\n"
+            f"- base: {git_cfg.get('base', '')}\n"
+            f"- lane: {git_cfg.get('lane', '')}\n"
+            f"- merge gate: {report.get('merge_gate', '')}\n"
+            f"- merge mode: {merge_mode}"
+            + ("\n\n" + op.NO_MERGE_PROMPT_NOTE if merge_mode == "orchestrator" else "")
+        ),
+        "## Relay closeout\n\n" + RELAY_CLOSEOUT_TEXT,
+        "## Standing rules\n\n" + STANDING_RULES_TEXT,
+    ]
+    return "# WORKER.md\n\n" + "\n\n".join(sections) + "\n"
+
+
+# ---------------------------------------------------------------------------
+# GOV.ORCH.3 Part B: per-worktree pre-push git hook install.
+# ---------------------------------------------------------------------------
+
+#: The pre-push wrapper git actually invokes -- a thin shell shim so the
+#: hooksPath mechanism (which expects an executable file, not a python
+#: script directly) can hand off to the real hook body.
+_PREPUSH_HOOK_TEMPLATE = (
+    "#!/bin/sh\n"
+    "exec python3 \"{script}\" \"{record}\"\n"
+)
+
+
+def install_prepush_hook(worktree_path: Path, record_path: Path | None = None) -> Path:
+    """GOV.ORCH.3 Part B.2 item 1: install a `pre-push` hook scoped to this
+    worktree only -- `git config --worktree core.hooksPath` (requiring
+    `extensions.worktreeConfig=true`, set first) plus the hook file itself,
+    executable. Returns the installed hook path. Never touches the main
+    checkout's own hooksPath (each worktree's `--worktree` config is local
+    to that worktree's own config section)."""
+    # `--worktree` itself only works once `extensions.worktreeConfig` is
+    # already on -- a chicken-and-egg that only the plain (repo-wide) form
+    # of `git config` can resolve from inside a linked worktree.
+    subprocess.run(
+        ["git", "config", "extensions.worktreeConfig", "true"],
+        cwd=str(worktree_path), check=True,
+    )
+    hooks_dir = worktree_path / ".nexus" / "hooks"
+    hooks_dir.mkdir(parents=True, exist_ok=True)
+    script_path = Path(__file__).resolve().parent / "nexus_worker_prepush.py"
+    hook_path = hooks_dir / "pre-push"
+    record = str(record_path) if record_path else ""
+    hook_path.write_text(
+        _PREPUSH_HOOK_TEMPLATE.format(script=script_path, record=record), encoding="utf-8",
+    )
+    hook_path.chmod(0o755)
+    subprocess.run(
+        ["git", "config", "--worktree", "core.hooksPath", str(hooks_dir)],
+        cwd=str(worktree_path), check=True,
+    )
+    return hook_path
+
+
 def validate_git_refs(base: str, lane: str) -> tuple[bool, str]:
     """Mirrors, and does not relax, the two argument-shape restrictions
     GOV_PO_1_GATE_5 already puts on the PO role's own `git worktree add`:
@@ -194,6 +379,105 @@ def validate_git_refs(base: str, lane: str) -> tuple[bool, str]:
     if not lane or not lane.startswith("feature/"):
         return False, f"report.git.lane must start with 'feature/' (got {lane!r})"
     return True, "ok"
+
+
+# ---------------------------------------------------------------------------
+# GOV.ORCH.7 section 2.3 item 4: fail-closed preflight, no skip flag.
+# ---------------------------------------------------------------------------
+
+_AUTHORITY_STATUS_TOKEN_RE = re.compile(r"\b(FROZEN|RATIFIED)\b")
+_AUTHORITY_PATH_RE = re.compile(r"([\w./-]+\.md)")
+
+
+def resolve_authority_status_ok(baseline_authority: str, repo_root: Path = REPO_ROOT) -> bool:
+    """§2.3-4 condition 1: the packet's own `baseline.authority` text names
+    a document, by path, whose status line reads FROZEN or RATIFIED. Best
+    effort, fail-closed: no path found, the file missing, or no such token
+    in its opening section (the first 3000 characters, well past any real
+    document's `## Status` block) all read as not-ok, never silently ok."""
+    match = _AUTHORITY_PATH_RE.search(baseline_authority or "")
+    if not match:
+        return False
+    path = repo_root / match.group(1)
+    if not path.is_file():
+        return False
+    head = path.read_text(encoding="utf-8", errors="ignore")[:3000]
+    return bool(_AUTHORITY_STATUS_TOKEN_RE.search(head))
+
+
+def decide_preflight(
+    *, session_start: dict, provider: str | None, model: str | None, effort: str | None,
+    authority_status_ok: bool, base_is_origin_main: bool,
+    packet_validation_errors: list[str], worker_md_exists: bool,
+) -> list[str]:
+    """Pure fail-closed decision core (GOV.ORCH.7 section 2.3 item 4): every
+    input is already resolved by the caller (`run_preflight` below spawns
+    the real git fetch / file reads) so this stays a plain, directly
+    testable function. Returns one reason string per failed condition --
+    empty means preflight passes. There is deliberately no way to pass any
+    of these individually as "already known good" from outside; a caller
+    that wants to skip a check has no flag to do it with."""
+    report = session_start.get("report", {})
+    failures: list[str] = []
+    if not authority_status_ok:
+        failures.append(
+            f"baseline.authority does not name a FROZEN/RATIFIED document: "
+            f"{report.get('baseline', {}).get('authority')!r}"
+        )
+    if not base_is_origin_main:
+        failures.append(
+            f"report.git.base is not origin/main at the fetched HEAD (got "
+            f"{report.get('git', {}).get('base')!r})"
+        )
+    if not provider or not model or not effort:
+        failures.append("--provider/--model/--effort must all be given explicitly on the command line")
+    if packet_validation_errors:
+        failures.append(f"packet fails gov_session_transfer.py validate: {packet_validation_errors}")
+    if not worker_md_exists:
+        failures.append("roles/WORKER.md is missing")
+    return failures
+
+
+def _packet_validation_errors(session_start: dict, movement_id: str) -> list[str]:
+    """Adapts a relay `SESSION_START` entry's own `report` object into the
+    NEXUS_SESSION_PACKET v2 envelope `gov_session_transfer.validate_fields`
+    actually validates, and returns its errors (empty means valid). Any
+    exception while adapting/validating is itself a validation failure --
+    fail closed, never silently pass a packet this could not even check."""
+    import gov_session_transfer as gst  # noqa: E402  (flat import, see sys.path above)
+
+    try:
+        packet = {
+            "protocol_version": gst.PROTOCOL_VERSION,
+            "message_type": "SESSION_START",
+            "movement": movement_id,
+            "refs": [],
+            "report": session_start.get("report", {}),
+        }
+        return gst.validate_fields(packet)
+    except Exception as exc:  # noqa: BLE001 -- fail closed on any adaptation error
+        return [f"could not validate packet: {exc}"]
+
+
+def run_preflight(
+    *, session_start: dict, movement_id: str, provider: str | None, model: str | None,
+    effort: str | None, repo_root: Path = REPO_ROOT,
+) -> list[str]:
+    """The real preflight: fetches `origin/main`, reads the authority
+    document, checks `roles/WORKER.md`, and adapts+validates the packet --
+    then hands every resolved input to `decide_preflight`."""
+    report = session_start.get("report", {})
+    subprocess.run(["git", "fetch", "origin", "main"], cwd=str(repo_root), capture_output=True)
+    base = report.get("git", {}).get("base")
+    authority_ok = resolve_authority_status_ok(
+        report.get("baseline", {}).get("authority", ""), repo_root=repo_root,
+    )
+    return decide_preflight(
+        session_start=session_start, provider=provider, model=model, effort=effort,
+        authority_status_ok=authority_ok, base_is_origin_main=(base == "origin/main"),
+        packet_validation_errors=_packet_validation_errors(session_start, movement_id),
+        worker_md_exists=(repo_root / "roles" / "WORKER.md").is_file(),
+    )
 
 
 def pid_alive(pid: int) -> bool:
@@ -292,6 +576,18 @@ def decide_merge_lock_acquire(
             "reclaimed an abandoned/stale lock"
         )
     return False, lock_record, f"held by {lock_record.get('movement_id')} (pid {lock_record.get('pid')})"
+
+
+def reconcile_failure_reason(
+    record: dict, phase: str, prior_phase: str,
+) -> str | None:
+    """GOV.ORCH.1 section 2.3: `failure_reason` is set when a record is
+    opportunistically reconciled to `failed` for a reason other than an
+    already-recorded one (e.g. `run`'s own `timeout`/`heartbeat_timeout`) --
+    here, specifically, a dead process that has exhausted `retry_limit`."""
+    if phase != PHASE_FAILED or prior_phase == PHASE_FAILED:
+        return record.get("failure_reason")
+    return record.get("failure_reason") or "retry_limit_exceeded"
 
 
 def reconcile_phase(record: dict, is_pid_alive_now: bool, relay_status: str | None, retry_limit: int) -> str:
@@ -411,7 +707,7 @@ def summarize_stream_json_line(raw_line: str) -> str | None:
     return _truncate(line, SUMMARY_TEXT_LIMIT)
 
 
-def _drain_log_once(log_path: Path, summary_fh, offset: int) -> int:
+def _drain_log_once(log_path: Path, summary_fh, offset: int, summarize=summarize_stream_json_line) -> int:
     """Read whatever complete lines have been appended to `log_path` since
     byte `offset`, append their summaries to the already-open `summary_fh`,
     and return the new offset. A line with no trailing newline yet (the
@@ -431,7 +727,7 @@ def _drain_log_once(log_path: Path, summary_fh, offset: int) -> int:
     consumed = len(data) if data.endswith(b"\n") else len(data) - len(pieces[-1])
     wrote = False
     for raw in complete:
-        summary = summarize_stream_json_line(raw.decode("utf-8", errors="replace"))
+        summary = summarize(raw.decode("utf-8", errors="replace"))
         if summary is not None:
             summary_fh.write(summary + "\n")
             wrote = True
@@ -442,6 +738,7 @@ def _drain_log_once(log_path: Path, summary_fh, offset: int) -> int:
 
 def _tail_engineer_log(
     log_path: Path, summary_path: Path, pid: int, poll_interval: float = TAIL_POLL_INTERVAL_DEFAULT,
+    summarize=summarize_stream_json_line,
 ) -> None:
     """AC-2's companion process: `_spawn_engineer` returns immediately
     (section 3.4 of the FROZEN amendment), so nothing in the orchestrator's
@@ -454,9 +751,9 @@ def _tail_engineer_log(
     offset = 0
     with open(summary_path, "a", encoding="utf-8") as summary_fh:
         while True:
-            offset = _drain_log_once(log_path, summary_fh, offset)
+            offset = _drain_log_once(log_path, summary_fh, offset, summarize=summarize)
             if not pid_alive(pid):
-                offset = _drain_log_once(log_path, summary_fh, offset)
+                offset = _drain_log_once(log_path, summary_fh, offset, summarize=summarize)
                 return
             time.sleep(poll_interval)
 
@@ -541,6 +838,24 @@ def _list_state_records(state_dir: Path) -> list[dict]:
     return records
 
 
+def _list_state_records_with_legacy(state_dir: Path, legacy_dir: Path) -> list[tuple[dict, bool]]:
+    """AC-9: every record under `state_dir`, plus any record found only
+    under `legacy_dir` (the pre-GOV.ORCH.1 default) -- each paired with
+    whether it came from the legacy location. A movement present in both is
+    reported once, from `state_dir`."""
+    seen = set()
+    out: list[tuple[dict, bool]] = []
+    for record in _list_state_records(state_dir):
+        seen.add(record.get("movement_id"))
+        out.append((record, False))
+    if legacy_dir.resolve() != state_dir.resolve():
+        for record in _list_state_records(legacy_dir):
+            if record.get("movement_id") in seen:
+                continue
+            out.append((record, True))
+    return out
+
+
 def _active_count(state_dir: Path, exclude_movement: str | None = None) -> int:
     count = 0
     for record in _list_state_records(state_dir):
@@ -617,15 +932,21 @@ def _git_status_porcelain(worktree_path: Path) -> str:
     return result.stdout
 
 
-def _spawn_summary_tailer(log_path: Path, summary_path: Path, pid: int) -> None:
+def _spawn_summary_tailer(log_path: Path, summary_path: Path, pid: int, provider: str = "claude") -> None:
     """AC-2: a second detached process, independent of both the engineer
     process and of `start`'s own (immediately-returning) invocation, that
     keeps `engineer.summary.log` growing for as long as the engineer pid it
     was given stays alive. Never awaited/joined -- `_tail-summary` is an
-    internal subcommand, not part of the documented CLI surface."""
+    internal subcommand, not part of the documented CLI surface.
+
+    GOV.ORCH.2: `--provider` tells `_cmd_tail_summary` which adapter's
+    `summarize_line` to use -- the tailer runs as a separate process, so it
+    cannot simply be handed the adapter object the spawning call already
+    built."""
     subprocess.Popen(
         [sys.executable, str(Path(__file__).resolve()), "_tail-summary",
-         "--log", str(log_path), "--summary", str(summary_path), "--pid", str(pid)],
+         "--log", str(log_path), "--summary", str(summary_path), "--pid", str(pid),
+         "--provider", provider],
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL,
         start_new_session=True,
     )
@@ -638,7 +959,9 @@ def _spawn_engineer(
     extra_prompt_note: str | None = None,
     model: str | None = None,
     effort: str | None = None,
+    provider: str = "claude",
 ) -> subprocess.Popen:
+    adapter = op.build_adapter(provider, profile_path=profile_path)
     env = dict(os.environ)
     env[lr.ENV_CANONICAL_RELAY_DIR] = str(canonical_relay_dir)
     env[lr.ENV_RELAY_FILE] = str(relay_file)
@@ -676,26 +999,33 @@ def _spawn_engineer(
     # appends RESUME_RECOVERY_NOTE onto the prompt for this dispatch only --
     # ENGINEER_PROMPT itself stays movement- and dispatch-invariant.
     prompt = ENGINEER_PROMPT if not extra_prompt_note else ENGINEER_PROMPT + "\n\n" + extra_prompt_note
-    argv = ["claude", "-p", prompt, "--settings", str(profile_path),
-            "--add-dir", str(canonical_relay_dir),
-            "--output-format", "stream-json", "--verbose",
-            "--permission-prompts", "none", "--max-budget-usd", str(max_budget_usd)]
-    if model:
-        argv += ["--model", model]
-    if effort:
-        argv += ["--effort", effort]
-    if resume_session_id:
-        argv += ["--resume", resume_session_id]
+    # GOV.ORCH.2 section 2.2: the prompt is written to a file first and the
+    # adapter reads it back to build argv -- never composed as an in-memory
+    # string the caller passes straight through. Content is unchanged
+    # (identical to the pre-GOV.ORCH.2 in-memory value), only its source is.
+    nexus_dir = worktree_path / ".nexus"
+    nexus_dir.mkdir(parents=True, exist_ok=True)
+    prompt_path = nexus_dir / "engineer_prompt.txt"
+    prompt_path.write_text(prompt, encoding="utf-8")
+
+    argv = adapter.build_argv(
+        prompt_path=prompt_path, worktree=worktree_path, model=model, effort=effort,
+        budget_usd=max_budget_usd, extra_dirs=[canonical_relay_dir],
+        resume_session_id=resume_session_id,
+    )
+    env = adapter.build_env(env, worktree=worktree_path, relay_dir=canonical_relay_dir, relay_file=relay_file)
+    stdin_src = adapter.stdin_source(prompt_path)
     log_path = worktree_path / ".nexus" / "engineer.log"
     log_path.parent.mkdir(parents=True, exist_ok=True)
     log_fh = open(log_path, "ab")
     proc = subprocess.Popen(
         argv, cwd=str(worktree_path), env=env,
-        stdout=log_fh, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
+        stdout=log_fh, stderr=subprocess.STDOUT,
+        stdin=stdin_src if stdin_src is not None else subprocess.DEVNULL,
         start_new_session=True,
     )
     summary_path = log_path.parent / "engineer.summary.log"
-    _spawn_summary_tailer(log_path, summary_path, proc.pid)
+    _spawn_summary_tailer(log_path, summary_path, proc.pid, provider=provider)
     return proc
 
 
@@ -723,7 +1053,14 @@ def _kill_pid(pid: int, force: bool = False, grace_seconds: float = 5.0) -> None
 # start
 # ---------------------------------------------------------------------------
 
-def _cmd_start(args: argparse.Namespace) -> int:
+def _do_start(args: argparse.Namespace) -> tuple[int, dict | None, subprocess.Popen | None]:
+    """The full body of `start` (dispatch or resume one approved movement),
+    factored out so `run` (GOV.ORCH.1 section 2.1) reuses this exact code
+    path rather than a copy: `_cmd_start` and `_cmd_run` both call this and
+    only differ in what they do with the outcome. Returns
+    `(exit_code, stdout_payload, proc)` -- `payload` is the JSON object
+    `start` prints (`None` on refusal/usage error); `proc` is the spawned
+    engineer `Popen`, `None` whenever no process was spawned."""
     relay_dir = Path(args.relay_dir).resolve()
     state_dir = Path(args.state_dir)
     worktrees_dir = Path(args.worktrees_dir)
@@ -732,7 +1069,21 @@ def _cmd_start(args: argparse.Namespace) -> int:
         relay_obj = _load_relay(relay_file)
     except OrchestratorError as exc:
         print(f"error: {exc}", file=sys.stderr)
-        return EXIT_USAGE
+        return EXIT_USAGE, None, None
+
+    # GOV.ORCH.7 section 2.3 item 4: preflight runs first, before the
+    # dispatch decision itself -- fail-closed, no `--skip-preflight` flag
+    # exists anywhere in this module.
+    session_start = relay_obj["entries"][0]
+    preflight_failures = run_preflight(
+        session_start=session_start, movement_id=args.movement,
+        provider=getattr(args, "provider", None), model=getattr(args, "model", None),
+        effort=getattr(args, "effort", None), repo_root=relay_dir.parent,
+    )
+    if preflight_failures:
+        for line in preflight_failures:
+            print(f"preflight: {line}", file=sys.stderr)
+        return 2, None, None
 
     existing = _load_state(state_dir, args.movement)
     is_alive = pid_alive(existing.get("pid")) if existing else False
@@ -743,18 +1094,26 @@ def _cmd_start(args: argparse.Namespace) -> int:
     )
     if action == "refuse":
         print(f"error: {reason}", file=sys.stderr)
-        return EXIT_REFUSED
+        return EXIT_REFUSED, None, None
 
-    session_start = relay_obj["entries"][0]
     report = session_start.get("report", {})
     git_cfg = report.get("git", {})
     base, lane = git_cfg.get("base"), git_cfg.get("lane")
     ok, ref_reason = validate_git_refs(base, lane)
     if not ok:
         print(f"error: {ref_reason}", file=sys.stderr)
-        return EXIT_USAGE
+        return EXIT_USAGE, None, None
 
     hash_hex = task_hash(session_start)
+
+    provider = getattr(args, "provider", "claude") or "claude"
+    try:
+        op.validate_effort(provider, args.effort)
+    except op.InvalidEffortError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return EXIT_USAGE, None, None
+    merge_mode = op.resolve_merge_mode(provider, getattr(args, "merge_mode", None))
+    no_merge_note = op.NO_MERGE_PROMPT_NOTE if merge_mode == "orchestrator" else None
 
     if action == "resume":
         worktree_path = Path(existing["worktree_path"])
@@ -772,40 +1131,56 @@ def _cmd_start(args: argparse.Namespace) -> int:
         recovery_note_needed = needs_resume_recovery_note(
             relay_obj=relay_obj, has_staged_uncommitted_changes=staged, is_pid_alive=False,
         )
+        # GOV.ORCH.1 section 2.3: retry_count increments on every resume
+        # dispatch and is persisted before the spawn, so a crash between
+        # this write and the spawn still leaves the increment recorded.
+        retry_count = existing.get("retry_count", 0) + 1
+        _save_state(state_dir, args.movement, {**existing, "retry_count": retry_count})
+        notes = [n for n in (RESUME_RECOVERY_NOTE if recovery_note_needed else None, no_merge_note) if n]
         proc = _spawn_engineer(
             worktree_path=worktree_path, profile_path=Path(args.profile),
             canonical_relay_dir=relay_dir, relay_file=relay_file,
             resume_session_id=session_id, max_budget_usd=args.max_budget_usd,
-            extra_prompt_note=RESUME_RECOVERY_NOTE if recovery_note_needed else None,
+            extra_prompt_note="\n\n".join(notes) if notes else None,
             model=args.model,
             effort=args.effort,
+            provider=provider,
         )
         record = {**existing, "pid": proc.pid, "phase": PHASE_RUNNING,
                   "last_action": "resumed", "task_hash": hash_hex,
-                  "dispatch_seq": len(relay_obj["entries"])}
+                  "dispatch_seq": len(relay_obj["entries"]), "retry_count": retry_count,
+                  "failure_reason": None, "exit_code": None,
+                  "provider": provider, "model_requested": args.model, "effort_requested": args.effort,
+                  "merge_mode": merge_mode}
         _save_state(state_dir, args.movement, record)
-        print(json.dumps({"action": "resume", "movement_id": args.movement, "pid": proc.pid,
-                           "worktree_path": str(worktree_path), "revision": revision,
-                           "recovery_note_injected": recovery_note_needed}))
-        return EXIT_OK
+        payload = {"action": "resume", "movement_id": args.movement, "pid": proc.pid,
+                   "worktree_path": str(worktree_path), "revision": revision,
+                   "recovery_note_injected": recovery_note_needed}
+        return EXIT_OK, payload, proc
 
     # action == "dispatch"
     revision = 1 if existing is None else existing.get("revision", 0) + 1
     worktree_path = worktrees_dir / args.movement
     if worktree_path.exists():
         print(f"error: worktree path already exists: {worktree_path}", file=sys.stderr)
-        return EXIT_REFUSED
+        return EXIT_REFUSED, None, None
     try:
         base_sha = _git_rev_parse(base, relay_dir.parent)
         _git_worktree_add(worktree_path, base, lane, relay_dir.parent)
     except OrchestratorError as exc:
         print(f"error: {exc}", file=sys.stderr)
-        return EXIT_REFUSED
+        return EXIT_REFUSED, None, None
 
     nexus_dir = worktree_path / ".nexus"
     nexus_dir.mkdir(parents=True, exist_ok=True)
-    (nexus_dir / "approved_task.json").write_text(canonical_json(session_start), encoding="utf-8")
+    approved_task_path = nexus_dir / "approved_task.json"
+    approved_task_path.write_text(canonical_json(session_start), encoding="utf-8")
     (nexus_dir / "movement_id.txt").write_text(args.movement + "\n", encoding="utf-8")
+    (nexus_dir / "WORKER.md").write_text(
+        render_worker_md(movement_id=args.movement, session_start=session_start, merge_mode=merge_mode),
+        encoding="utf-8",
+    )
+    install_prepush_hook(worktree_path, record_path=approved_task_path)
 
     proc = _spawn_engineer(
         worktree_path=worktree_path, profile_path=Path(args.profile),
@@ -813,6 +1188,8 @@ def _cmd_start(args: argparse.Namespace) -> int:
         max_budget_usd=args.max_budget_usd,
         model=args.model,
         effort=args.effort,
+        provider=provider,
+        extra_prompt_note=no_merge_note,
     )
     record = {
         "movement_id": args.movement, "revision": revision, "base_sha": base_sha,
@@ -821,18 +1198,226 @@ def _cmd_start(args: argparse.Namespace) -> int:
         "started_at": lr._utc_now_iso(), "heartbeat_at": lr._utc_now_iso(),
         "retry_count": 0, "last_error": None, "last_action": "dispatched",
         "dispatch_seq": len(relay_obj["entries"]),
+        "failure_reason": None, "exit_code": None,
+        "provider": provider, "model_requested": args.model, "effort_requested": args.effort,
+        "merge_mode": merge_mode,
     }
     _save_state(state_dir, args.movement, record)
-    print(json.dumps({"action": "dispatch", "movement_id": args.movement, "pid": proc.pid,
-                       "worktree_path": str(worktree_path), "branch": lane, "revision": revision}))
-    return EXIT_OK
+    payload = {"action": "dispatch", "movement_id": args.movement, "pid": proc.pid,
+               "worktree_path": str(worktree_path), "branch": lane, "revision": revision}
+    return EXIT_OK, payload, proc
+
+
+def _cmd_start(args: argparse.Namespace) -> int:
+    rc, payload, _proc = _do_start(args)
+    if payload is not None:
+        print(json.dumps(payload))
+    return rc
+
+
+# ---------------------------------------------------------------------------
+# run (GOV.ORCH.1 section 2.1): dispatch (via _do_start), wait, verify, report
+# ---------------------------------------------------------------------------
+
+def _wait_for_engineer(
+    proc: subprocess.Popen, log_path: Path, timeout: float, heartbeat_timeout: float,
+    poll_interval: float = 0.2,
+) -> tuple[int | None, str | None]:
+    """Block until `proc` exits, `timeout` elapses, or `heartbeat_timeout`
+    elapses with no growth of `log_path` (section 2.1 step 2). Returns
+    `(exit_code, failure_reason)`: a real exit code and `None` on natural
+    exit, or `(None, "timeout"|"heartbeat_timeout")` after killing `proc`
+    via `_kill_pid`."""
+    def _log_size() -> int:
+        try:
+            return log_path.stat().st_size
+        except OSError:
+            return 0
+
+    deadline = time.monotonic() + timeout
+    last_size = _log_size()
+    last_growth = time.monotonic()
+    while True:
+        rc = proc.poll()
+        if rc is not None:
+            return rc, None
+        now = time.monotonic()
+        size = _log_size()
+        if size > last_size:
+            last_size = size
+            last_growth = now
+        if now - last_growth >= heartbeat_timeout:
+            _kill_pid(proc.pid)
+            try:
+                proc.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                pass
+            return None, "heartbeat_timeout"
+        if now >= deadline:
+            _kill_pid(proc.pid)
+            try:
+                proc.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                pass
+            return None, "timeout"
+        time.sleep(min(poll_interval, max(deadline - now, 0.01)))
+
+
+def _movement_validation_plan_and_base(relay_dir: Path, movement_id: str) -> tuple[list, str | None, str | None]:
+    """Best-effort: the movement's own `validation_plan` and `git.base`,
+    plus the relay's own `status`, read fresh (never from the dispatch-time
+    snapshot) so `verify`/`run` react to the movement's current relay file.
+    Never raises -- an unresolvable/invalid relay file yields empty
+    defaults, matching `_status_row`'s own tolerance."""
+    try:
+        relay_file = _resolve_relay_file(relay_dir, movement_id)
+        relay_obj = _load_relay(relay_file)
+    except OrchestratorError:
+        return [], None, None
+    session_start = relay_obj["entries"][0]
+    report = session_start.get("report", {})
+    return report.get("validation_plan", []) or [], report.get("git", {}).get("base"), relay_obj.get("status")
+
+
+def _build_run_report(
+    *, movement: str, phase: str, exit_code: int | None, failure_reason: str | None,
+    relay_status: str | None, model: str | None, effort: str | None, duration_s: float,
+    verify_result: dict, worktree_path: Path, branch: str | None,
+    provider: str = "claude", merge_mode: str | None = None,
+    model_observed: str | None = None, effort_observed: str | None = None,
+    integrate_result: dict | None = None, usage: dict | None = None,
+) -> dict:
+    """GOV.ORCH.1 section 2.4's report object, extended by GOV.ORCH.2
+    section 2.4 with provider/model/effort requested-vs-observed fields and
+    the `provider_default_used` audit exception (section 2.4: a dispatch
+    whose observed values are null -- the engineer log never surfaced a
+    model -- is flagged rather than silently reported as if nothing was
+    recorded), and by GOV.ORCH.4 section 3.1 with the movement's own token/
+    cost usage, read from the usage file `orchestrator_usage.py` maintains."""
+    report = {
+        "movement": movement, "phase": phase, "exit_code": exit_code,
+        "failure_reason": failure_reason, "relay_status": relay_status,
+        "provider": provider, "model": model, "effort": effort,
+        "model_requested": model, "effort_requested": effort,
+        "model_observed": model_observed, "effort_observed": effort_observed,
+        "merge_mode": merge_mode,
+        "duration_s": round(duration_s, 3), "verify": verify_result,
+        "worktree_path": str(worktree_path), "branch": branch, "usage": usage,
+    }
+    if model_observed is None:
+        report["audit_exception"] = "provider_default_used"
+    if integrate_result is not None:
+        report["integrate"] = integrate_result
+    return report
+
+
+def _cmd_run(args: argparse.Namespace) -> int:
+    rc, _payload, proc = _do_start(args)
+    if rc != EXIT_OK:
+        return rc
+
+    state_dir = Path(args.state_dir)
+    relay_dir = Path(args.relay_dir).resolve()
+    movement = args.movement
+    record = _load_state(state_dir, movement)
+    worktree_path = Path(record["worktree_path"])
+    branch = record.get("branch")
+    log_path = worktree_path / ".nexus" / "engineer.log"
+
+    started = time.monotonic()
+    exit_code, failure_reason = _wait_for_engineer(
+        proc, log_path, timeout=args.timeout, heartbeat_timeout=args.heartbeat_timeout,
+    )
+    duration_s = time.monotonic() - started
+
+    validation_plan, base_ref, relay_status = _movement_validation_plan_and_base(relay_dir, movement)
+
+    if failure_reason is not None:
+        phase = PHASE_FAILED
+        # A killed engineer never gets an orchestrator-side verify run --
+        # nothing it did is trustworthy evidence of anything, and running
+        # the movement's full validation plan against a worktree the
+        # engineer was still writing to when killed would be a wasted,
+        # potentially-misleading verify.
+        verify_result = {"passed": False, "steps": [], "skipped_reason": failure_reason}
+    else:
+        if exit_code != 0:
+            failure_reason = "engineer_exit_nonzero"
+        elif relay_status != "CLOSED":
+            failure_reason = "relay_not_closed"
+        verify_result = (
+            {"passed": True, "steps": [], "skipped_reason": "no_verify"} if args.no_verify
+            else ov.verify_movement(worktree_path=worktree_path, validation_plan=validation_plan, base_ref=base_ref)
+        )
+        phase = PHASE_DONE if (exit_code == 0 and relay_status == "CLOSED" and verify_result["passed"]) else PHASE_FAILED
+
+    record = _load_state(state_dir, movement) or record
+    provider = record.get("provider", "claude")
+    merge_mode = record.get("merge_mode") or op.resolve_merge_mode(provider, getattr(args, "merge_mode", None))
+
+    adapter = op.build_adapter(provider)
+    model_observed, effort_observed = adapter.observed_model(log_path)
+
+    # GOV.ORCH.2 section 2.5: in orchestrator merge-mode the engineer never
+    # runs `gh pr merge` itself -- `run` performs the integration here,
+    # exactly once, and only after a green `verify` (never on a killed
+    # engineer, a nonzero exit, an unclosed relay, or a failed verify).
+    integrate_result = None
+    if merge_mode == "orchestrator" and phase == PHASE_DONE:
+        ok, reason = ov.integrate(worktree_path)
+        integrate_result = {"passed": ok, "reason": reason}
+        if not ok:
+            phase = PHASE_FAILED
+            failure_reason = "integration_failed"
+
+    # GOV.ORCH.4 section 3.1: the movement's own token/cost usage, refreshed
+    # one last time from the now-finished engineer.log and persisted in the
+    # record itself (§3.4's board reads it from the record, never
+    # re-deriving it) alongside `verify` (§3.4's Evidence tab / verify.passed).
+    price_table = ou.load_price_table(DEFAULT_PRICE_TABLE_PATH)
+    usage = ou.compute_usage(state_dir, movement, str(worktree_path), provider, price_table)
+
+    _save_state(state_dir, movement, {
+        **record, "phase": phase, "failure_reason": failure_reason, "exit_code": exit_code,
+        "model_observed": model_observed, "effort_observed": effort_observed,
+        "verify": verify_result, "usage": usage,
+    })
+
+    report_obj = _build_run_report(
+        movement=movement, phase=phase, exit_code=exit_code, failure_reason=failure_reason,
+        relay_status=relay_status, model=args.model, effort=args.effort, duration_s=duration_s,
+        verify_result=verify_result, worktree_path=worktree_path, branch=branch,
+        provider=provider, merge_mode=merge_mode,
+        model_observed=model_observed, effort_observed=effort_observed,
+        integrate_result=integrate_result, usage=usage,
+    )
+    print(json.dumps(report_obj))
+    return EXIT_OK if phase == PHASE_DONE else EXIT_REFUSED
+
+
+# ---------------------------------------------------------------------------
+# verify (GOV.ORCH.1 section 2.2, also standalone)
+# ---------------------------------------------------------------------------
+
+def _cmd_verify(args: argparse.Namespace) -> int:
+    state_dir = Path(args.state_dir)
+    relay_dir = Path(args.relay_dir).resolve()
+    record = _load_state(state_dir, args.movement)
+    if record is None:
+        print(f"error: no state record for {args.movement}", file=sys.stderr)
+        return EXIT_USAGE
+    worktree_path = Path(record["worktree_path"])
+    validation_plan, base_ref, _relay_status = _movement_validation_plan_and_base(relay_dir, args.movement)
+    result = ov.verify_movement(worktree_path=worktree_path, validation_plan=validation_plan, base_ref=base_ref)
+    print(json.dumps(result))
+    return EXIT_OK if result["passed"] else EXIT_REFUSED
 
 
 # ---------------------------------------------------------------------------
 # status
 # ---------------------------------------------------------------------------
 
-def _status_row(record: dict, relay_dir: Path, retry_limit: int) -> dict:
+def _status_row(record: dict, relay_dir: Path, retry_limit: int, legacy: bool = False) -> dict:
     is_alive = pid_alive(record.get("pid"))
     relay_status = None
     last_marker, last_timestamp = None, None
@@ -849,9 +1434,11 @@ def _status_row(record: dict, relay_dir: Path, retry_limit: int) -> dict:
             last_timestamp = entries[-1].get("timestamp")
     except OrchestratorError:
         pass
+    prior_phase = record.get("phase", PHASE_RUNNING)
     phase = reconcile_phase(record, is_alive, relay_status, retry_limit)
-    if phase != record.get("phase"):
-        record = {**record, "phase": phase}
+    failure_reason = reconcile_failure_reason(record, phase, prior_phase)
+    if phase != prior_phase or failure_reason != record.get("failure_reason"):
+        record = {**record, "phase": phase, "failure_reason": failure_reason}
     return {
         "movement_id": record["movement_id"], "phase": phase, "pid": record.get("pid"),
         "pid_alive": is_alive, "revision": record.get("revision"), "branch": record.get("branch"),
@@ -863,6 +1450,18 @@ def _status_row(record: dict, relay_dir: Path, retry_limit: int) -> dict:
         # (AC-5's own backward-compatibility requirement).
         "last_activity": _read_last_activity(record.get("worktree_path")),
         "heartbeat_age_seconds": _heartbeat_age_seconds(record),
+        "failure_reason": failure_reason,
+        "exit_code": record.get("exit_code"),
+        # GOV.ORCH.2 section 2.4: display-only pass-through of the provider
+        # selection and requested model/effort recorded at dispatch time.
+        "provider": record.get("provider", "claude"),
+        "model_requested": record.get("model_requested"),
+        "effort_requested": record.get("effort_requested"),
+        "merge_mode": record.get("merge_mode"),
+        # AC-9: a record found only under the pre-GOV.ORCH.1 default
+        # location (LEGACY_STATE_DIR), never a movement whose record lives
+        # under the current --state-dir.
+        "legacy_state_dir": legacy,
     }
 
 
@@ -871,18 +1470,26 @@ def _cmd_status(args: argparse.Namespace) -> int:
     state_dir = Path(args.state_dir)
     if args.movement:
         record = _load_state(state_dir, args.movement)
+        legacy = False
+        save_dir = state_dir
+        if record is None and state_dir.resolve() != LEGACY_STATE_DIR.resolve():
+            record = _load_state(LEGACY_STATE_DIR, args.movement)
+            legacy = record is not None
+            if legacy:
+                save_dir = LEGACY_STATE_DIR
         if record is None:
             print(f"error: no state record for {args.movement}", file=sys.stderr)
             return EXIT_USAGE
-        row = _status_row(record, relay_dir, args.retry_limit)
-        _save_state(state_dir, args.movement, {**record, "phase": row["phase"]})
+        row = _status_row(record, relay_dir, args.retry_limit, legacy=legacy)
+        _save_state(save_dir, args.movement, {**record, "phase": row["phase"], "failure_reason": row["failure_reason"]})
         print(json.dumps(row, sort_keys=True))
         return EXIT_OK
 
     rows = []
-    for record in _list_state_records(state_dir):
-        row = _status_row(record, relay_dir, args.retry_limit)
-        _save_state(state_dir, record["movement_id"], {**record, "phase": row["phase"]})
+    for record, legacy in _list_state_records_with_legacy(state_dir, LEGACY_STATE_DIR):
+        row = _status_row(record, relay_dir, args.retry_limit, legacy=legacy)
+        save_dir = LEGACY_STATE_DIR if legacy else state_dir
+        _save_state(save_dir, record["movement_id"], {**record, "phase": row["phase"], "failure_reason": row["failure_reason"]})
         rows.append(row)
     print(json.dumps(sorted(rows, key=lambda r: r["movement_id"]), sort_keys=True))
     return EXIT_OK
@@ -941,12 +1548,59 @@ def _cmd_merge_lock(args: argparse.Namespace) -> int:
         return EXIT_REFUSED
 
 
+def _cmd_install_hooks(args: argparse.Namespace) -> int:
+    """GOV.ORCH.7 section 2.3 item 1: install the same push gate into any
+    checkout (the main checkout, a linked worktree, or a fresh clone) via
+    `core.hooksPath .githooks` -- the repo-local `.githooks/` directory is
+    committed and its `pre-push` file is executable, so no per-checkout
+    file needs writing (unlike `install_prepush_hook`'s own per-worktree
+    `.nexus/hooks/pre-push`, which stays for movement worktrees)."""
+    path = Path(args.path).resolve() if args.path else REPO_ROOT
+    hooks_dir = path / ".githooks"
+    if not (hooks_dir / "pre-push").is_file():
+        print(f"error: {hooks_dir / 'pre-push'} not found -- not a checkout of this repository?",
+              file=sys.stderr)
+        return EXIT_USAGE
+    subprocess.run(["git", "config", "core.hooksPath", ".githooks"], cwd=str(path), check=True)
+    print(json.dumps({"installed": True, "checkout": str(path), "hooksPath": ".githooks"}))
+    return EXIT_OK
+
+
+def _cmd_preflight(args: argparse.Namespace) -> int:
+    """GOV.ORCH.7 section 2.3 item 4, as a standalone CLI entry point --
+    `run`/`start` call `run_preflight` themselves first; this command lets
+    it be checked (or scripted/CI'd) independently of a dispatch."""
+    relay_dir = Path(args.relay_dir).resolve()
+    try:
+        relay_file = _resolve_relay_file(relay_dir, args.movement)
+        relay_obj = _load_relay(relay_file)
+    except OrchestratorError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return EXIT_USAGE
+    session_start = relay_obj["entries"][0]
+    failures = run_preflight(
+        session_start=session_start, movement_id=args.movement,
+        provider=args.provider, model=args.model, effort=args.effort,
+        repo_root=relay_dir.parent,
+    )
+    if failures:
+        for line in failures:
+            print(f"preflight: {line}", file=sys.stderr)
+        return 2
+    print(json.dumps({"preflight": "ok"}))
+    return EXIT_OK
+
+
 # ---------------------------------------------------------------------------
 # _tail-summary (internal -- spawned by _spawn_engineer, not user-facing)
 # ---------------------------------------------------------------------------
 
 def _cmd_tail_summary(args: argparse.Namespace) -> int:
-    _tail_engineer_log(Path(args.log), Path(args.summary), args.pid, poll_interval=args.poll_interval)
+    adapter = op.build_adapter(args.provider)
+    _tail_engineer_log(
+        Path(args.log), Path(args.summary), args.pid, poll_interval=args.poll_interval,
+        summarize=adapter.summarize_line,
+    )
     return EXIT_OK
 
 
@@ -1024,6 +1678,39 @@ def _cmd_watch(args: argparse.Namespace) -> int:
 # other subcommands never pay for http.server's import cost.
 # ---------------------------------------------------------------------------
 
+def _cmd_usage(args: argparse.Namespace) -> int:
+    """GOV.ORCH.4 section 3.6: prints the same data as `GET /api/usage` for
+    the same state dir (AC-9) -- table by default, `--json` for the exact
+    payload. Lazily imports `orchestrator_dashboard` for the same reason
+    `_cmd_dashboard` does (it, not this module, owns http.server's import
+    cost, but the aggregation function this reuses lives there since it
+    needs both `orchestrator.py`'s own state records and
+    `orchestrator_usage.py`)."""
+    import orchestrator_dashboard as dash
+
+    state_dir = Path(args.state_dir)
+    relay_dir = Path(args.relay_dir).resolve()
+    repo_root = Path(args.repo_root).resolve()
+    report = dash.build_usage_report(state_dir, relay_dir, repo_root, since=args.since)
+    if args.movement:
+        rows = [m for m in report["movements"] if m["movement_id"] == args.movement]
+        report = {"movements": rows, "totals": dash._sum_usage_rows(rows)}
+
+    if args.json:
+        print(json.dumps(report, sort_keys=True))
+        return EXIT_OK
+
+    print(f"{'movement':<24}{'provider':<9}{'tokens':>12}{'cache%':>8}{'cost':>10}")
+    for m in report["movements"]:
+        cache_pct = f"{(m.get('cache_hit_ratio') or 0) * 100:.0f}%"
+        cost = f"${m['cost_usd']:.4f}" if m.get("cost_usd") is not None else (m.get("cost_source") or "-")
+        print(f"{m['movement_id']:<24}{(m.get('provider') or '-'):<9}{m.get('total_tokens', 0):>12}{cache_pct:>8}{cost:>10}")
+    totals = report["totals"]
+    cost_total = f"${totals['cost_usd']:.4f}" if totals.get("cost_usd") is not None else "-"
+    print(f"TOTAL movements={totals['movements']} tokens={totals['total_tokens']} cost={cost_total}")
+    return EXIT_OK
+
+
 def _cmd_dashboard(args: argparse.Namespace) -> int:
     import orchestrator_dashboard as dash
     port = args.port if args.port is not None else dash.DEFAULT_PORT
@@ -1054,9 +1741,36 @@ def build_parser() -> argparse.ArgumentParser:
     p_start.add_argument("--profile", default=str(DEFAULT_ENGINEER_PROFILE))
     p_start.add_argument("--max-workers", type=int, default=DEFAULT_MAX_WORKERS)
     p_start.add_argument("--max-budget-usd", type=float, default=DEFAULT_MAX_BUDGET_USD)
-    p_start.add_argument("--model", default=None, help="Passed through to claude -p --model (e.g. 'opus'). Unset uses the CLI's own default.")
-    p_start.add_argument("--effort", default=None, help="Passed through to claude -p --effort (e.g. 'high'). Unset uses the CLI's own default.")
+    p_start.add_argument("--model", default=None, help="Passed through to the provider's own --model/-m flag. Unset uses the CLI's own default.")
+    p_start.add_argument("--effort", default=None, help="Passed through to the provider's own reasoning-effort flag. Unset uses the CLI's own default.")
+    p_start.add_argument("--provider", default="claude", choices=sorted(op.PROVIDERS))
+    p_start.add_argument("--merge-mode", default=None, choices=("engineer", "orchestrator"),
+                          help="Default 'engineer' for claude, forced 'orchestrator' for codex (GOV.ORCH.2 section 2.5).")
     p_start.set_defaults(func=_cmd_start)
+
+    p_run = sub.add_parser(
+        "run", help="dispatch, wait, verify and report on one approved movement in a single foreground call"
+    )
+    p_run.add_argument("--movement", required=True)
+    _add_common(p_run)
+    p_run.add_argument("--worktrees-dir", default=str(DEFAULT_WORKTREES_DIR))
+    p_run.add_argument("--profile", default=str(DEFAULT_ENGINEER_PROFILE))
+    p_run.add_argument("--max-workers", type=int, default=DEFAULT_MAX_WORKERS)
+    p_run.add_argument("--max-budget-usd", type=float, default=DEFAULT_MAX_BUDGET_USD)
+    p_run.add_argument("--model", default=None)
+    p_run.add_argument("--effort", default=None)
+    p_run.add_argument("--provider", default="claude", choices=sorted(op.PROVIDERS))
+    p_run.add_argument("--merge-mode", default=None, choices=("engineer", "orchestrator"),
+                        help="Default 'engineer' for claude, forced 'orchestrator' for codex (GOV.ORCH.2 section 2.5).")
+    p_run.add_argument("--timeout", type=float, default=5400.0)
+    p_run.add_argument("--heartbeat-timeout", type=float, default=900.0)
+    p_run.add_argument("--no-verify", action="store_true")
+    p_run.set_defaults(func=_cmd_run)
+
+    p_verify = sub.add_parser("verify", help="re-run orchestrator-side verification for a finished worktree")
+    p_verify.add_argument("--movement", required=True)
+    _add_common(p_verify)
+    p_verify.set_defaults(func=_cmd_verify)
 
     p_status = sub.add_parser("status", help="report one movement, or every known movement")
     p_status.add_argument("--movement", default=None)
@@ -1069,6 +1783,22 @@ def build_parser() -> argparse.ArgumentParser:
     _add_common(p_stop)
     p_stop.add_argument("--force", action="store_true", help="SIGKILL immediately, skip the SIGTERM grace period")
     p_stop.set_defaults(func=_cmd_stop)
+
+    p_hooks = sub.add_parser(
+        "install-hooks", help="install the committed .githooks/pre-push into any checkout (GOV.ORCH.7)"
+    )
+    p_hooks.add_argument("--path", default=None, help="checkout to install into; default: this repository")
+    p_hooks.set_defaults(func=_cmd_install_hooks)
+
+    p_preflight = sub.add_parser(
+        "preflight", help="run the fail-closed dispatch preflight standalone (GOV.ORCH.7; no --skip flag)"
+    )
+    p_preflight.add_argument("--movement", required=True)
+    _add_common(p_preflight)
+    p_preflight.add_argument("--provider", default=None)
+    p_preflight.add_argument("--model", default=None)
+    p_preflight.add_argument("--effort", default=None)
+    p_preflight.set_defaults(func=_cmd_preflight)
 
     p_lock = sub.add_parser("merge-lock", help="acquire/release the cross-movement merge-serialization lock")
     p_lock.add_argument("action", choices=("acquire", "release"))
@@ -1087,6 +1817,16 @@ def build_parser() -> argparse.ArgumentParser:
     p_watch.add_argument("--retry-limit", type=int, default=DEFAULT_RETRY_LIMIT)
     p_watch.set_defaults(func=_cmd_watch)
 
+    p_usage = sub.add_parser(
+        "usage", help="per-movement token/cost usage accounting (GOV.ORCH.4 section 3.6)"
+    )
+    _add_common(p_usage)
+    p_usage.add_argument("--repo-root", default=str(REPO_ROOT))
+    p_usage.add_argument("--movement", default=None)
+    p_usage.add_argument("--since", default=None, help="ISO timestamp -- only movements started_at this or later")
+    p_usage.add_argument("--json", action="store_true")
+    p_usage.set_defaults(func=_cmd_usage)
+
     p_dashboard = sub.add_parser(
         "dashboard",
         help="interactive PO + Orchestrator workbench: local HTTP server + browser UI (read+relay-write only)",
@@ -1104,6 +1844,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_tail.add_argument("--summary", required=True)
     p_tail.add_argument("--pid", type=int, required=True)
     p_tail.add_argument("--poll-interval", type=float, default=TAIL_POLL_INTERVAL_DEFAULT)
+    p_tail.add_argument("--provider", default="claude", choices=sorted(op.PROVIDERS))
     p_tail.set_defaults(func=_cmd_tail_summary)
 
     return parser

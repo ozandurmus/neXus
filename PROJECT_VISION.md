@@ -53,14 +53,9 @@ Prefer observed evidence over inferred state.
 
 ## Safety model
 
-Product behavior is governed by `utils/action_taxonomy.py` (see `AGENTS.md`
-"Network action taxonomy" and `CURRENT_STATE.md` "Safety status"): class 0
-read is the great majority of the product, and class 1 controlled recovery
-writes exist only under their own explicit `RB.x` contracts, CLI-only, never
-console-submittable. No automatic configuration change, policy install,
-commit, reboot, failover, interface/routing change, credential change or
-remediation is permitted — classes 2 through 4 have no permitted member at
-the current product maturity.
+Product behavior is governed by `utils/action_taxonomy.py`; see
+`AI_START_HERE.md` for the full table (`AGENTS.md` "Network action
+taxonomy" and `CURRENT_STATE.md` "Safety status" point to the same source).
 
 Device interaction must be stable and conservative. New commands, higher
 frequency, recurring schedules or increased concurrency require explicit safety

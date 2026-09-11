@@ -1,0 +1,5 @@
+# Compliance assignment editor + tagged device registry (DEPLOY.1-gated)
+
+status: deferred · target: DEPLOY.1
+
+From docs/design/COMPLIANCE_ASSIGNMENT_AND_FRAMEWORKS.md section 4b / 10: a Compliance-module editor to assign controls / whole frameworks to devices and groups by direct manipulation (device-group x control matrix, coverage-delta preview, every save audited), and a first-class device registry with operator tags/groups (pci-scope, dmz, crown-jewel) plus the waiver-raise and trend-scrubber UI. Requires the app server + DEPLOY.1A OIDC/RBAC (only an authorised role edits scope) + a persistent store. The 0.7.1 control_assignments.json is the interchange format the server writes. UPDATE 2026-09-05 (Product Control Plane architecture, docs/design/PRODUCT_CONTROL_PLANE_ARCHITECTURE.md section 18): the 'first-class device registry with operator tags/groups' half of this item is SUBSUMED by the Product Control Plane Device Registry (PCP.1+, tags/site/environment as operator annotations) and is not built separately; only the assignment-editor half remains here, still DEPLOY.1A-gated.

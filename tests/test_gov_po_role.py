@@ -247,7 +247,10 @@ def test_gate_interactive_denies_agent_for_any_other_subagent_type(subagent_type
 
 
 def test_gate_interactive_edits_governance_paths_only():
-    ok = {"tool_name": "Edit", "tool_input": {"file_path": str(ROOT / "project/backlog.json")}, "cwd": str(ROOT)}
+    # GOV.ORCH.5: project/backlog.json and project/roadmap.json are no
+    # longer directly Edit-able (writes go through scripts/project_queue.py
+    # instead), so this exercises a path that is still a governance path.
+    ok = {"tool_name": "Edit", "tool_input": {"file_path": str(ROOT / "project/feature_registry.json")}, "cwd": str(ROOT)}
     bad = {"tool_name": "Edit", "tool_input": {"file_path": "console/app.py"}, "cwd": str(ROOT)}
     assert gate.decide(ok, "interactive")[0]
     assert not gate.decide(bad, "interactive")[0]
@@ -465,9 +468,13 @@ def test_gate_existing_governance_paths_still_exact_match_only():
     # AC-5: relay/*.json is a new pattern ALONGSIDE GOVERNANCE_PATHS, not a
     # widening of it. GOV.PO.2 narrows the list by removing the generated
     # history index, which remains reachable only through its generator.
-    assert len(gate.GOVERNANCE_PATHS) == 7
+    # GOV.ORCH.5 narrows it further by dropping project/backlog.json and
+    # project/roadmap.json (writes now go through scripts/project_queue.py).
+    assert len(gate.GOVERNANCE_PATHS) == 5
     assert "docs/history/INDEX.md" not in gate.GOVERNANCE_PATHS
-    almost = {"tool_name": "Edit", "tool_input": {"file_path": "project/roadmap.json.bak"}, "cwd": str(ROOT)}
+    assert "project/backlog.json" not in gate.GOVERNANCE_PATHS
+    assert "project/roadmap.json" not in gate.GOVERNANCE_PATHS
+    almost = {"tool_name": "Edit", "tool_input": {"file_path": "project/build_history.json.bak"}, "cwd": str(ROOT)}
     assert not gate.decide(almost, "interactive")[0]
 
 

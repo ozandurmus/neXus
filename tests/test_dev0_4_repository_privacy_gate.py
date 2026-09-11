@@ -55,3 +55,24 @@ def test_environment_specific_cp_exclusion_default_is_detected(tmp_path):
     )
     report = scan_repository(tmp_path)
     assert any(f.rule == "ENVIRONMENT_IDENTITY_LITERAL" for f in report.findings)
+
+
+def test_credential_rule_ignores_prose_that_merely_quotes_the_keyword(tmp_path):
+    """Documentation sentences such as ``'password='/'PASSWORD:' substrings``
+    are not credential literals: the captured value is either punctuation
+    only or running prose. A real single-token secret still trips the rule."""
+    from utils.repository_privacy import scan_repository
+
+    repo = tmp_path / "repo"
+    (repo / "docs").mkdir(parents=True)
+    (repo / "docs" / "note.md").write_text(
+        "third-party packages contain literal 'password='/'PASSWORD:' substrings; "
+        "confirmed unrelated by inspection\n"
+        "a note: 'secret= this is a sentence about the scanner not a value'\n",
+        encoding="utf-8",
+    )
+    (repo / "docs" / "leak.md").write_text("password = 'hunter2-real'\n", encoding="utf-8")
+    report = scan_repository(repo)
+    rules = {(f.path, f.rule) for f in report.findings}
+    assert ("docs/note.md", "CREDENTIAL_LITERAL") not in rules
+    assert ("docs/leak.md", "CREDENTIAL_LITERAL") in rules

@@ -1,0 +1,107 @@
+{
+  "created_at": "2026-09-11T19:54:22Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "Every AC exactly as written in the contract section 4"
+        ],
+        "baseline": {
+          "authority": "docs/design/GOV_ORCH_6_DOCUMENTATION_DIET.md (DRAFT; direction approved by the Product Owner in chat 2026-09-11); AGENTS.md for everything else",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "sequencing": "After GOV.ORCH.5 on the same branch; before GOV.ORCH.7"
+        },
+        "context_not_loaded": [
+          "docs/history/phase/**",
+          "project/*.json content",
+          "Device, deployment or collection code",
+          "Graphify"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/gov-orch-6-documentation-diet"
+        },
+        "invariants": [
+          "Nothing is reworded except the numbered cuts; removed passages are relocated verbatim or listed as deleted with their cut number",
+          "Every pinned heading and sentence in contract section 3 survives",
+          "git mv for relocations; no file deleted"
+        ],
+        "merge_gate": "PO review of diff and orchestrator-run tests; no self-merge. Privacy gate at push; git diff --check.",
+        "movement_type": "DOCS",
+        "objective": "Implement GOV.ORCH.6: apply the sixteen numbered cuts in the contract to AGENTS.md, AI_START_HERE.md, CURRENT_STATE.md, AI_HANDOVER.md, CLAUDE.md, PO.md, PRIVACY_AND_DATA_HANDLING.md, README.md, PROJECT_VISION.md, docs/reference/COPILOT_OPERATING_MODEL.md, docs/ARCHITECTURE.md (receives relocated CLI/map detail), two git mv relocations into docs/history/, and add tests/test_cold_start_budget.py with the word-count ceilings and the single-taxonomy-table assertion; every test pin in contract section 3 must survive.",
+        "output_contract": [
+          "Implementation exactly as the contract Design/Scope sections specify",
+          "Tests named in the contract, green in a foreground run",
+          "SESSION_CLOSE on the relay with exact changed files, test results, blockers and commit state"
+        ],
+        "recommended_reasoning": {
+          "reason": "Sixteen named cuts with named pins; no design judgement open.",
+          "tier": "Sonnet 5, normal (low effort)"
+        },
+        "requirements": [
+          "English, per AGENTS.md engineering-output language law",
+          "Read the contract fully; read only the files it names plus their direct tests",
+          "Smallest diff that satisfies every acceptance criterion; no scope expansion",
+          "Run the validation plan in the foreground and wait for real results before SESSION_CLOSE"
+        ],
+        "risks": [
+          "Rewording a pinned sentence while shortening its neighbour",
+          "Exceeding the CURRENT_STATE.md 200-line ceiling by adding pointer lines carelessly",
+          "Creating a second SESSION START/CLOSE heading when relocating text"
+        ],
+        "scope": {
+          "in": [
+            "AGENTS.md",
+            "AI_START_HERE.md",
+            "CURRENT_STATE.md",
+            "AI_HANDOVER.md",
+            "CLAUDE.md",
+            "PO.md",
+            "PRIVACY_AND_DATA_HANDLING.md",
+            "README.md",
+            "PROJECT_VISION.md",
+            "docs/ARCHITECTURE.md",
+            "docs/reference/COPILOT_OPERATING_MODEL.md",
+            "docs/design/GOV_PO_ROLE_MIGRATION.md (appended block only)",
+            "docs/reference/SECURITYEXPERT_TARGET_ARCHITECTURE.md (git mv)",
+            "docs/reference/UI_EXPERT_REVIEW.md (git mv)",
+            ".github/prompts/po-knowledge-extraction.prompt.md (git mv)",
+            "tests/test_cold_start_budget.py"
+          ],
+          "out": [
+            "Any code",
+            "relay/",
+            "Packet schema docs",
+            "Other docs/design bodies",
+            "Any test file except the new one"
+          ]
+        },
+        "validation_plan": [
+          "targeted tests: python3 -m pytest -q tests/test_cold_start_budget.py tests/test_architecture_convergence.py tests/test_worker_brief.py tests/test_gov_po_role.py tests/test_gov_relay_protocol.py tests/test_project_queue.py",
+          "privacy gate: python3 scripts/repository_privacy_check.py",
+          "diff check: git diff --check"
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-11T19:54:22Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0075",
+  "movement": "GOV_ORCH_6_DOCUMENTATION_DIET",
+  "next_actor": "engineer",
+  "refs": [
+    "docs/design/GOV_ORCH_6_DOCUMENTATION_DIET.md",
+    "AGENTS.md",
+    "AI_START_HERE.md",
+    "CURRENT_STATE.md",
+    "tests/test_architecture_convergence.py",
+    "tests/test_worker_brief.py"
+  ],
+  "schema_version": 1,
+  "status": "OPEN",
+  "updated_at": "2026-09-11T19:54:22Z"
+}

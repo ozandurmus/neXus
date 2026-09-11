@@ -1,9 +1,12 @@
 # AGENTS.md — SecurityExpert Agent Constitution
 
+> Product Owner assistant sessions start from `PO.md` (a short brief that
+> points back here); this file remains the authority it names.
+
 Durable, model/vendor-neutral engineering and security law. Rules here change
 rarely and apply to any coding/reasoning agent working in this repository —
-Claude, Copilot, ChatGPT, or a human. Never phrase a rule here as "Claude
-should..." or "Copilot should..."; use "the agent MUST...". Vendor-specific
+any AI coding tool, or a human. Never phrase a rule here as "the tool
+should..."; use "the agent MUST...". Vendor-specific
 files (`CLAUDE.md`, `.github/copilot-instructions.md`,
 `.github/instructions/*.instructions.md`) may translate a rule into a
 product's own tool names or model tiers, but must not restate the rule itself
@@ -38,6 +41,19 @@ the human or the higher authority resolve it.**
 7. Chat/session memory — transient, **never authoritative**. Every new
    session must be able to reconstruct the current project from the
    repository alone, without a historical chat transcript.
+
+**Contradiction report (2026-09-11).** `docs/reference/COPILOT_OPERATING_MODEL.md`
+(level 6) contradicted `docs/design/GOV_PO_ROLE_MIGRATION.md` (FROZEN, level 2)
+§9's independence rule and was corrected to match, per GOV.ORCH.3 Amendment
+A-2026-09-11 (ratified 2026-09-11).
+
+## Role dispatch
+
+If `.nexus/WORKER.md` exists in your working directory you are an
+orchestrated worker: read only it. Otherwise state your role in your first
+message and read `roles/<ROLE>.md` (`PO`, `ENGINEER`, `WORKER`, or
+`REVIEWER`) before anything else in the reading order. Nothing else in this
+file is role-specific — it applies to every role identically.
 
 ## Engineering-output language law
 
@@ -264,29 +280,14 @@ When that transport uses the GitHub-issue agent relay, follow the frozen
 prompt `.github/prompts/relay-bootstrap.prompt.md`. `RELAY_READY` is only a
 locator; it never carries authority.
 
-**Comment-only Product Owner assistant episodes.** A Product Owner
-assistant episode (`nexus-po`, `docs/design/GOV_PO_ROLE_MIGRATION.md`)
-whose only outputs are relay comments on an existing movement issue
-still produces its `SESSION START` at the start of the episode, in the
-PO session (movement type `READ_ONLY_AUDIT` for review and
-direction-audit episodes, `ARCHITECTURE` for decision episodes). It
-closes with exactly one plain-text `RELAY_NOTE episode close` comment on
-that same issue, never sentinel-wrapped, carrying: the episode type, the
-evidence inspected, the outputs produced (each relay comment by marker),
-unresolved risks, the recommended next movement, and its reasoning
-tier. No additional `SESSION_START` or `SESSION_CLOSE` packet is posted
-to that issue. Such an episode is exempt from the "Project-state update
-rule" and from rewriting `AI_HANDOVER.md` **only** when it changes none
-of the state those artifacts govern. A decision made in the episode that
-changes scope, delivery state, architecture, debt, or sequencing
-triggers the applicable durable-state updates through an explicitly
-owned governance or engineering movement: the episode-close note names
-that owner and the required follow-up, and the episode must not declare
-the affected work complete while those updates remain outstanding. The
+**Comment-only Product Owner assistant episodes.** A comment-only PO
+assistant episode still produces its `SESSION START` and closes with
+exactly one plain-text `RELAY_NOTE episode close` comment, never a
+packet; full mechanics, the state-update exemption test, and its
+boundaries are `docs/design/GOV_PO_ROLE_MIGRATION.md` §5.1.3. The
 episode-close note is never a substitute for a `RELAY_DECISION`; every
 authorization decision retains its own source, scope, and supersession
-record. This paragraph changes neither the `NEXUS_SESSION_PACKET`
-schema/parser nor the relay marker set.
+record.
 
 Movement types: `READ_ONLY_AUDIT`, `ARCHITECTURE`, `IMPLEMENTATION`,
 `VALIDATION`, `ROOT_CAUSE`, `UI`, `DOCS`, `RELEASE_HANDOVER`.
@@ -350,6 +351,12 @@ build touching `templates/index.html`, `templates/console.html`, any
 the HTML render harness green
 (`tests/test_html_render_harness.py`) alongside the full suite **and** the
 repository privacy gate.
+
+**Amendment (GOV.ORCH.5):** state updates to `project/backlog.json` and
+`project/roadmap.json` go through `scripts/project_queue.py`
+(`add`/`status`/`note`/`decide`), which validates and re-renders
+`project/QUEUE.md`; agents read `project/QUEUE.md`, never `project/*.json`
+directly.
 
 ## AI reasoning / movement routing
 
@@ -463,35 +470,3 @@ frequency) is not a command addition and needs no new gate entry.
   TLS-verification exceptions are technical debt, never production design.
 - PAN authentication transport convergence remains a hardening concern; do
   not silently normalize behavior without an explicit build.
-
-## graphify
-
-This project has a knowledge graph at `graphify-out/` with god nodes,
-community structure, and cross-file relationships.
-
-The primary agent and every delegated worker MUST use the graphify skill for
-codebase, architecture, file-relationship, and project-content questions.
-This is agent workflow, not a user-facing command requirement; never wait for
-the user to type `/graphify`.
-
-Rules:
-- The current graph is known to be oversized and incorrectly scoped: it is
-  approximately 45,000+ nodes and includes historical `copilot-worktrees/`
-  copies, so duplicate worker paths and broad result sets are expected. This
-  is a graph-scope defect, not a reason to remove graphify.
-- Never run bare `graphify .` for ordinary task work. Before source browsing,
-  use only a narrow `graphify query "<question>" --budget <small-budget>`,
-  `graphify path "<A>" "<B>"`, or `graphify explain "<concept>"` when it can
-  answer the relationship question. Treat results as a file-relationship
-  locator, never as a decision or authority source.
-- Ignore results rooted in `copilot-worktrees/`, `graphify-out/`, `data/`, or
-  `logs/`. Workers read only the canonical repository and the target files
-  named by the relay; a graph hit never authorizes expanding that scope.
-- When the graph is absent or stale, build/update the smallest relevant scope
-  with the installed graphify skill before continuing. The primary agent and
-  workers MUST reuse the existing graph and MUST NOT create competing graph
-  stores for the same repository. A canonical-scope graph rebuild is a
-  separate planned maintenance movement, not an implicit step of a small task.
-- Dirty `graphify-out/` files are expected after hooks or incremental updates;
-  skip graphify only for stale/incorrect graph output or explicit opt-out.
-- After modifying code, run `graphify update .` to keep the graph current.
