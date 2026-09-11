@@ -156,7 +156,16 @@ def test_codex_adapter_resume_argv_is_exactly_codex_exec_resume(tmp_path):
         effort="high", budget_usd=None, extra_dirs=[tmp_path / "relay"],
         resume_session_id="thread_abc123",
     )
-    assert argv == ["codex", "exec", "resume", "thread_abc123"]
+    # Contract section 2.3: resume keeps the same config flags as a fresh
+    # dispatch; only the leading verb differs.
+    assert argv[:4] == ["codex", "exec", "resume", "thread_abc123"]
+    assert "--cd" not in argv
+    assert ["-m", "gpt-5-codex"] == argv[argv.index("-m"):argv.index("-m") + 2]
+    assert "model_reasoning_effort=high" in argv
+    assert "sandbox_workspace_write.network_access=true" in argv
+    assert ["--sandbox", "workspace-write"] == argv[argv.index("--sandbox"):argv.index("--sandbox") + 2]
+    assert str(tmp_path / "relay") in argv
+    assert argv[-1] == "-"
 
 
 # --- AC-3: session id read from a fixture log --------------------------------

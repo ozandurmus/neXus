@@ -230,9 +230,13 @@ class CodexAdapter:
         self, *, prompt_path: Path, worktree: Path, model: str | None, effort: str | None,
         budget_usd: float | None, extra_dirs: list[Path], resume_session_id: str | None,
     ) -> list[str]:
+        # Section 2.3: a resume carries the same config flags as a fresh
+        # dispatch (sandbox, network, model, effort, add-dir, output file);
+        # only the leading verb differs.
         if resume_session_id:
-            return ["codex", "exec", "resume", resume_session_id]
-        argv = ["codex", "exec", "--cd", str(worktree), "--json"]
+            argv = ["codex", "exec", "resume", resume_session_id, "--json"]
+        else:
+            argv = ["codex", "exec", "--cd", str(worktree), "--json"]
         if model:
             argv += ["-m", model]
         if effort:
