@@ -1,0 +1,116 @@
+{
+  "created_at": "2026-09-11T19:54:22Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "Every AC exactly as written in the contract section 4"
+        ],
+        "baseline": {
+          "authority": "docs/design/GOV_ORCH_7_ROLE_FILES_AND_VENDOR_NEUTRAL_ENFORCEMENT.md (DRAFT; direction approved by the Product Owner in chat 2026-09-11); AGENTS.md for everything else",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "sequencing": "After GOV.ORCH.6 on the same branch"
+        },
+        "context_not_loaded": [
+          "docs/history/phase/**",
+          "project/*.json content",
+          "Device, deployment or collection code",
+          "Graphify"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/gov-orch-7-role-files-vendor-neutral"
+        },
+        "invariants": [
+          "No law text in AGENTS.md or a FROZEN document is rewritten; only sections and amendment notes are added",
+          "Every role file is at most 600 words and vendor-neutral",
+          "preflight cannot be skipped by a flag; run and start call it first",
+          "The git pre-push hook depends on no AI-tool environment variable"
+        ],
+        "merge_gate": "PO review of diff and orchestrator-run tests; no self-merge. Privacy gate at push; git diff --check.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Implement GOV.ORCH.7: roles/PO.md, roles/ENGINEER.md, roles/WORKER.md (template read by render_worker_md), roles/REVIEWER.md; AGENTS.md Role dispatch section; CLAUDE.md and .github/copilot-instructions.md reduced to pointer shims; docs/reference/MODEL_TIER_MAP.md with all model names moved there; tests/test_vendor_neutral_governance.py; orchestrator install-hooks (.githooks/pre-push via core.hooksPath for any checkout) and fail-closed preflight (five conditions) run by run/start; scripts/nexus_po_scope_check.py with config/po_write_scope.json wired into CI and the pre-push hook; gh pr merge handling removed from the engineer hook.",
+        "output_contract": [
+          "Implementation exactly as the contract Design/Scope sections specify",
+          "Tests named in the contract, green in a foreground run",
+          "SESSION_CLOSE on the relay with exact changed files, test results, blockers and commit state"
+        ],
+        "recommended_reasoning": {
+          "reason": "Cross-file consistency across frozen text, CI, hooks and a fail-closed gate.",
+          "tier": "Sonnet 5, normal (medium effort)"
+        },
+        "requirements": [
+          "English, per AGENTS.md engineering-output language law",
+          "Read the contract fully; read only the files it names plus their direct tests",
+          "Smallest diff that satisfies every acceptance criterion; no scope expansion",
+          "Run the validation plan in the foreground and wait for real results before SESSION_CLOSE"
+        ],
+        "risks": [
+          "Breaking a pinned string while shrinking CLAUDE.md or copilot-instructions.md",
+          "A vendor-name test whose exception list silently allows everything",
+          "Preflight that passes on a DRAFT authority because it only checks the file exists"
+        ],
+        "scope": {
+          "in": [
+            "roles/PO.md",
+            "roles/ENGINEER.md",
+            "roles/WORKER.md",
+            "roles/REVIEWER.md",
+            "PO.md",
+            "AGENTS.md (one added section)",
+            "CLAUDE.md",
+            ".github/copilot-instructions.md",
+            "docs/reference/MODEL_TIER_MAP.md",
+            "docs/reference/COPILOT_OPERATING_MODEL.md",
+            "docs/design/GOV_PO_ROLE_MIGRATION.md (amendment note only)",
+            ".claude/agents/*.md (pointers)",
+            "scripts/orchestrator.py",
+            "scripts/nexus_engineer_tool_gate.py",
+            "scripts/nexus_po_scope_check.py",
+            "config/po_write_scope.json",
+            ".githooks/pre-push",
+            ".github/workflows/validation.yml",
+            "tests/test_vendor_neutral_governance.py",
+            "tests/test_po_scope_check.py",
+            "tests/test_orchestrator.py",
+            "tests/test_worker_brief.py",
+            "tests/test_nexus_engineer_tool_gate.py",
+            "tests/test_gov_po_role.py"
+          ],
+          "out": [
+            "Any product code",
+            "Relay tooling and packet schema",
+            ".claude/skills bodies",
+            "GitHub branch protection settings"
+          ]
+        },
+        "validation_plan": [
+          "targeted tests: python3 -m pytest -q tests/test_vendor_neutral_governance.py tests/test_po_scope_check.py tests/test_orchestrator.py tests/test_worker_brief.py tests/test_nexus_engineer_tool_gate.py tests/test_gov_po_role.py tests/test_cold_start_budget.py tests/test_architecture_convergence.py",
+          "privacy gate: python3 scripts/repository_privacy_check.py",
+          "diff check: git diff --check"
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-11T19:54:22Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0076",
+  "movement": "GOV_ORCH_7_ROLE_FILES_AND_VENDOR_NEUTRAL_ENFORCEMENT",
+  "next_actor": "engineer",
+  "refs": [
+    "docs/design/GOV_ORCH_7_ROLE_FILES_AND_VENDOR_NEUTRAL_ENFORCEMENT.md",
+    "AGENTS.md",
+    "CLAUDE.md",
+    ".github/copilot-instructions.md",
+    "scripts/orchestrator.py",
+    "scripts/nexus_engineer_tool_gate.py",
+    "docs/design/GOV_PO_ROLE_MIGRATION.md"
+  ],
+  "schema_version": 1,
+  "status": "OPEN",
+  "updated_at": "2026-09-11T19:54:22Z"
+}
