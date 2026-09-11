@@ -2,7 +2,7 @@
 
 ## Status
 
-**DRAFT — FOR PRODUCT OWNER FREEZE (2026-09-11). Direction approved by
+**FROZEN — PRODUCT OWNER APPROVED, 2026-09-11 (chat directive "hepsine ok"). Direction approved by
 the Product Owner in chat, 2026-09-11 ("go").** Docs-only movement.
 Depends on GOV.ORCH.5 (QUEUE.md) having landed on the same branch.
 

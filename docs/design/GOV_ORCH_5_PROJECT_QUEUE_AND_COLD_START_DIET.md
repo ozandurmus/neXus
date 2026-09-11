@@ -2,7 +2,7 @@
 
 ## Status
 
-**DRAFT — FOR PRODUCT OWNER FREEZE (2026-09-11). Direction approved by
+**FROZEN — PRODUCT OWNER APPROVED, 2026-09-11 (chat directive "hepsine ok"). Direction approved by
 the Product Owner in chat, 2026-09-11 ("Bunu onaylıyorum").** Amends
 `AI_START_HERE.md` reading order step 3 and `AGENTS.md` "Project-state
 update rule" by amendment note; changes no product data schema.
