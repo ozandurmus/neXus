@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ui2-scheduler
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: ui2-scheduler }
+  template:
+    metadata:
+      labels: { app: ui2-scheduler }
+    spec:
+      securityContext:
+        fsGroup: 65532
+      containers:
+        - name: scheduler
+          image: nexus-ui2
+          args: ["scheduler"]
+          env:
+            - name: SECURITYEXPERT_UI2_SCHEDULER_DB_DSN_FILE
+              value: /var/run/ui2-secrets/db-dsn
+          volumeMounts:
+            - name: scheduler-secrets
+              mountPath: /var/run/ui2-secrets
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            capabilities: { drop: ["ALL"] }
+      volumes:
+        - name: scheduler-secrets
+          secret:
+            secretName: ui2-scheduler-secrets
+            defaultMode: 0440
+        - name: tmp
+          emptyDir: {}

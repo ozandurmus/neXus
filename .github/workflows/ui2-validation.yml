@@ -1,0 +1,60 @@
+name: UI2 validation
+
+on:
+  pull_request:
+    paths:
+      - "ui2/**"
+      - ".github/workflows/ui2-validation.yml"
+      - "docs/design/UI2_0_B1_01_SKELETON_CI_DOCKER_CONTRACT.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ui2-validation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: ui2-validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.21.0"
+          cache: npm
+          cache-dependency-path: ui2/frontend/package-lock.json
+      - name: Restore UI2 dependency cache
+        id: ui2-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+            ui2/frontend/node_modules
+          key: ui2-${{ runner.os }}-${{ hashFiles('ui2/gradle/wrapper/gradle-wrapper.properties', 'ui2/gradle/libs.versions.toml', 'ui2/**/gradle.lockfile', 'ui2/frontend/package-lock.json') }}
+      - name: Resolve dependencies on cache miss
+        if: steps.ui2-cache.outputs.cache-hit != 'true'
+        run: ./ui2/gradlew -p ui2 dependencies
+      - name: Verify dependencies from cache
+        if: steps.ui2-cache.outputs.cache-hit == 'true'
+        run: ./ui2/gradlew -p ui2 --offline dependencies
+      - run: ./ui2/gradlew -p ui2 check
+      - run: docker build --file ui2/Dockerfile --tag nexus-ui2:ci ui2
+      - name: Generate frontend SBOM
+        working-directory: ui2/frontend
+        run: npm sbom --package-lock-only --sbom-format cyclonedx > ../../ui2-frontend-sbom.json
+      - name: Assert SBOM artifacts
+        run: test -s ui2/build/reports/bom.json && test -s ui2-frontend-sbom.json
+      - run: docker image inspect nexus-ui2:ci
+      - run: python main.py --repository-privacy-check --privacy-baseline-ref origin/main
+      - run: git diff --check

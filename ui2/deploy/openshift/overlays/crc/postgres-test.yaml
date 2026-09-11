@@ -1,0 +1,39 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: ui2-postgres-test
+spec:
+  selector: { app: ui2-postgres-test }
+  ports: [{ name: postgres, port: 5432, targetPort: postgres }]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ui2-postgres-test
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: ui2-postgres-test }
+  template:
+    metadata:
+      labels: { app: ui2-postgres-test }
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          ports: [{ name: postgres, containerPort: 5432 }]
+          env:
+            - name: POSTGRES_DB
+              value: ui2
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef: { name: ui2-postgres-test-secrets, key: username }
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef: { name: ui2-postgres-test-secrets, key: password }
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+      volumes:
+        - name: data
+          emptyDir: {}

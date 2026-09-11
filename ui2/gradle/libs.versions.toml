@@ -1,0 +1,18 @@
+[versions]
+archunit = "1.4.1"
+flyway = "11.7.2"
+junit = "5.12.2"
+postgresql = "42.7.7"
+spring-boot = "3.5.3"
+testcontainers = "1.21.3"
+
+[libraries]
+archunit = { module = "com.tngtech.archunit:archunit-junit5", version.ref = "archunit" }
+flyway = { module = "org.flywaydb:flyway-core", version.ref = "flyway" }
+flyway-postgresql = { module = "org.flywaydb:flyway-database-postgresql", version.ref = "flyway" }
+junit-bom = { module = "org.junit:junit-bom", version.ref = "junit" }
+junit-jupiter = { module = "org.junit.jupiter:junit-jupiter" }
+postgresql = { module = "org.postgresql:postgresql", version.ref = "postgresql" }
+spring-boot = { module = "org.springframework.boot:spring-boot-starter-web", version.ref = "spring-boot" }
+testcontainers-junit = { module = "org.testcontainers:junit-jupiter", version.ref = "testcontainers" }
+testcontainers-postgresql = { module = "org.testcontainers:postgresql", version.ref = "testcontainers" }

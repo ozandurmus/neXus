@@ -525,3 +525,97 @@ and none relax `AGENTS.md`/`CLAUDE.md`'s existing reasoning-routing law.
     reference does not cover or that looks stale. Rejected: full re-reads
     as the default habit. Status: **decided operating direction**,
     reference captured 2026-09-08. [PO-DIRECTION 2026-09-08, this session]
+
+### UI2 v1 council review — 2026-09-11
+
+**Status: DRAFT advisory synthesis — not a ratification, contract amendment,
+release approval or device-execution authorization.** This appended review does
+not extend the scope of the historical ratification above. Owner for the
+release/topology proposals: `ui2_b1_01m_feature_service_topology`; B1-1 remains
+the current implementation movement. No sequencing or delivery status advances.
+
+Candidate: `UI2_0_V1_SCOPE_AND_SERVICE_TOPOLOGY_BRIEF.md`, all sections.
+The user's clarification is **native Java redevelopment for UI2 using validated
+Python-line know-how, not translation or porting of Python features**.
+This already agrees with frozen baseline section 1 items 1–4 and workflow
+P-1/P-2/P-3; it is not a new permission to discard proven semantics.
+No Line-1 runtime, payload layout, page structure or implementation status is
+inherited. Each Java capability earns its own automated and real-environment
+validation. [PO-DIRECTION 2026-09-11; REPO baseline section 1]
+
+#### Method and limits
+
+Three fresh Codex/Astra High contexts received the same candidate, AGENTS and
+baseline, plus bounded primary-source excerpts for their lens. No parent
+conversation or other seat's report was included. No Claude or OpenRouter was
+used. These are separate contexts in the same model family, **not cross-model
+independence**. The council skill supplied the consent/dissent procedure;
+Ponytail constrained recommendations to required boundaries, not a service per
+screen. Graphify was queried first; stale document semantics and unrelated
+worktree results were not treated as authority. Because native Read tools were
+unavailable to the no-shell seats, the primary supplied line-numbered excerpts.
+Seats performed no tool calls, tests, writes or device contact.
+
+| Seat | Context / transcript locator | Returned findings |
+| --- | --- | --- |
+| Technical Product Owner / Schrodinger | Codex subagent `01a08d41-525f-70f2-b8b0-b6ce11569b0a` | TPO-01 through TPO-05 |
+| DevSecOps / Platform Engineer / Lorentz | Codex subagent `01a08d41-5859-7a80-9340-a65c0f1b32a9` | P-F1 through P-F4 |
+| Security Reviewer / Newton | Codex subagent `01a08d41-5bb0-7d31-9500-88e47d279305` | SEC-01 through SEC-05 |
+
+Original prompts and returned reports are in this Codex task's tool transcript;
+no repository hook-log artifact was produced or verified. All three substantive
+reports arrived. Their SESSION_CLOSE envelopes used invalid field placement/
+status values; they are retained as advisory evidence, not accepted as valid
+session-transfer packets. Correction calls encountered quota exhaustion; no
+successful corrected packet was accepted. All seats were closed. The primary
+verified the material claims below against canonical files, without implying
+that packet structure validates their truth.
+
+#### Supported direction and unresolved dissent
+
+All three seats support the brief **as product direction**, not as a frozen
+implementation contract. They support the eight integrated v1 areas, existing
+development-only Project Plan, backup/storage without mandatory product-driven
+restore, actual controlled failover, and feature deployment independence.
+No seat requires the user to repeat these choices. No service count is approved.
+
+| ID / severity | Finding and evidence | Disposition / evidence required |
+| --- | --- | --- |
+| CR-1 / HIGH | Requested v1 reverses frozen restore/failover placement: baseline D-7 and section 4; C7 section 5.1; workflow REL/S. C2 section 5.3 currently refuses CLASS 2. TPO-01, P-F1, SEC-01. | Prepare an explicit amendment set and bounded eight-area acceptance map. Preserve gates, independent operation approval and historical outcomes. Real failover remains required for requested v1, but unavailable until authorized and validated. |
+| CR-2 / HIGH | Separate pods do not prove independent releases or failure isolation. Baseline section 1 item 7 requires one governed executor; C1 sections 2/6 and brief Independence objective require ownership decisions. TPO-04, P-F2, SEC-03. | Specify artifact/API/data/migration/worker ownership and shared device/HA coordination. Demonstrate a backup-only deployment without rebuilding/restarting Operations, mixed-version safety and backup-outage containment. Do not invent a database or service for every screen. |
+| CR-3 / HIGH | C2 section 3.2 closes its transition graph without EXECUTING-to-REQUESTED, while sections 4.4/8 require it. Sections 5.3/9 distinguish read retry from uncertain writes, whereas section 8 describes blanket post-contact uncertainty. Section 4.2 overstates what DB fencing alone proves. P-F3, primary-verified. | Reconcile the transition/crash tables and test paused workers, partitions and concurrent jobs on the same target before implementing distributed execution. DB ownership checks alone do not retract a network send. This is a contract finding, not proof of a deployed exploit. |
+| CR-4 / HIGH | Reliable backup acceptance needs a retrieval/custody contract: C7 sections 3.4–3.6/4 distinguish validation grades, retention and custody; section 3.6 prohibits artefact bytes in HTTP responses. SEC-02. | Define authorized retrieval without assuming a browser download. Preserve retention floors, key separation and refusal on unavailable custody. Lower-grade validation is not RESTORE_PROVEN; off-host recovery is not proven by a local key file. |
+| CR-5 / HIGH | Product administration is unbounded in the brief; existing C3 section 6 gates do not define every restart, upgrade, debug or telemetry operation. TPO-02, SEC-04. | Bound each privileged action, data exposure, target, audit and in-flight-job behavior. LDAP conditional verification and network-command gates remain separate. No arbitrary command or secret-export surface follows from the word Admin. |
+| CR-6 / HIGH for closure | CRC startup and a completed placeholder migrate Job do not prove B1-1 acceptance. Ui2Application returns from migrate after secret-file checks. B1-1 sections 4/5 separately require executable Flyway lifecycle and architecture checks. TPO-05, P-F4, SEC-05. | Re-audit B1-1 row by row. Empty/baseline Flyway lifecycle is B1-1; product V1 schema is B1-2. Useful scheduler/executor business behavior is later work, not an invented B1-1 requirement. Do not label Testcontainers as the only remaining gap without this audit. |
+
+Primary clarification to P-F3: C2 section 9 item 5 **already requires the YES
+commit before the simulated device write**, and section 1.4 also preserves
+that discipline. The finding is inconsistent prose in sections 5.1/5.2 and
+insufficiently specified post-guard pause handling, **not an absent ordering
+requirement**. The supplemental seat reply was not obtained; this qualification
+is the primary's source-backed disposition, not an additional council vote.
+
+The Security Reviewer rates conflicting distributed mutation authority
+**Critical as an execution blocker** (SEC-03). That dissent is retained: the
+brief is safe to discuss as DRAFT, but no conflicting mutation design is approved
+by majority. It is not evidence that the present non-executing skeleton is
+performing unsafe failover.
+
+#### Next owned work and evidence boundary
+
+1. B1-1 owner: bounded VALIDATION audit, Normal (strong), against its frozen
+   acceptance matrix; reconcile stale startup/migration claims in project state
+   and CURRENT_STATE without erasing historical results. The duplicate B1-1
+   history identifier and inconsistent hot-state summaries also need explicit
+   reconciliation, not a silent rewrite.
+2. B1-1M owner: ARCHITECTURE, High, after B1-1 and before B1-2. Prepare release
+   acceptance and topology amendments, with CR-3 resolved before job-engine
+   implementation. Start from the existing classic ClusterXL pilot scope when
+   proposing the v1 failover matrix; do not assume PAN or VSX is authorized.
+3. Implement Java capabilities in bounded slices against frozen contracts;
+   retain separate legacy-provenance and Java CAP-* status. Council consensus
+   supplies neither device-command approval nor real-environment validation.
+
+No source, tests, frozen contract, deployment, Git remote, release status or
+execution gate changed in this review. This is a local advisory record;
+formal governance/relay publication and contract disposition remain pending.
