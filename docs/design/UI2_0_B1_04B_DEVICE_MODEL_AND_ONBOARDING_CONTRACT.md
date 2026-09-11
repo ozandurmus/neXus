@@ -1,6 +1,8 @@
 # UI 2.0 — B1-4b minimal device model and onboarding contract
 
-**DRAFT — FOR PRODUCT OWNER FREEZE, 2026-09-11.**
+**FROZEN — 2026-09-12, under the Product Owner's written authorization of
+2026-09-12. Read as amended by `docs/design/UI2_0_B1_ADJUDICATION_2026_09_12.md`, which adjudicates twelve
+cross-contract findings and answers this document's open items.**
 
 ## 1. Scope and authority
 
