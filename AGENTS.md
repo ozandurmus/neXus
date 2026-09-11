@@ -1,5 +1,8 @@
 # AGENTS.md — SecurityExpert Agent Constitution
 
+> Product Owner assistant sessions start from `PO.md` (a short brief that
+> points back here); this file remains the authority it names.
+
 Durable, model/vendor-neutral engineering and security law. Rules here change
 rarely and apply to any coding/reasoning agent working in this repository —
 Claude, Copilot, ChatGPT, or a human. Never phrase a rule here as "Claude
