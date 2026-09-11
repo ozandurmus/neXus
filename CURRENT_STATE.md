@@ -39,81 +39,21 @@ plus `tests/test_architecture_convergence.py` fail the build if it does.
 carries the full table; `AGENTS.md` "Architectural invariants" carries the
 test-enforced boundaries.
 
-| Class | Permitted? | Where |
-| --- | --- | --- |
-| 0 — read | yes | everywhere; most of the product |
-| 1 — controlled recovery write | yes, **only** under the `RB.x` contracts | CLI only; never console-submittable |
-| 1.5 — controlled restore-write signability | taxonomy/registry only; runtime restore disabled | no device contact or write |
-| 2 — operational state change (failover) | **no member exists**; architecture frozen (`OP.2.0`), not implemented | hard-gated, `FAILOVER_ENGINE_ARCHITECTURE.md` §10/§10.1/§10.2 |
-| 3 — configuration write | prohibited | — |
-| 4 — policy / deployment / remediation | prohibited | — |
 ## Active build
 
 See checkpoint above for `ui2_b1_01_skeleton_ci_docker`, the current
 build. Full detail: `project/build_history.json`.
 
-Predecessors, all **MERGED**, detail in `project/build_history.json` /
-`docs/history/INDEX.md`: `gov_po_1_step_6_plan_po2_boundary` (PO2 boundary
-plan), `gov_po_1_local_relay_protocol` (PR #120), `gov_po_1_gate_4_issue_
-close_path` (PR #118), `m10_1_registry_evidence_reconciliation_projection`
-(`M10`'s first slice, `D4` producer, PR #117 — no canonical id spans
-`device_id`/`entity_id` today, `RELAY_DECISION` #11 option 4),
-`gov_po_1_step_5_first_plan_episode` (PR #113),
-`m9_enrollment_preview_confirmation_ui` (PR #104),
-`gov_po_1_gate_1_command_safety_correction` (PR #114),
-`gov_po_1_gate_2_self_sync_capability` (PR #115),
-`gov_po_1_step_4_direction_record_ratification` (PR #112, `RATIFIED`),
-`gov_po_1_step_3_docs_reconciliation` (PR #111),
-`gov_po_1_step_2_implementation` (PR #110),
-`gov_po_1_role_migration_contract` (PR #109, contract FROZEN),
-`gov_git_authority_reconciliation` (PR #108),
-`gov_relay_1_question_routing` (PR #107),
-`gov_relay_1_canonical_agent_relay` (PR #105/#106),
-`m8_evidence_host_key_fingerprint_not_persisted` (PR #103),
-`gov_session_1_unified_packet` (`GOV.SESSION.1A`, PR #102, protocol-v2
-`NEXUS_SESSION_PACKET`), `collector_target_selection_seam` (`M5`, PR #94),
-`local_control_plane_metadata_store` (`M4`, PR #93). `T1`–`T7` still do not
-exercise packet emission (step 6).
+Predecessors, all **MERGED**: `project/build_history.json` / `docs/history/INDEX.md`.
 
 ## Predecessor — `M3`
-**`nav_3_capability_state_vocabulary`** — COMPLETE / FROZEN (PO approved
-2026-09-06). `docs/design/CAPABILITY_STATE_VOCABULARY_AND_PRESENTATION.md` is
-implementation authority for the vocabulary/resolution/presentation matrix
-(`D1`–`D7`, `E1`–`E7`, `AC-CS-1`…`97`). `D4` has its producer as of
-`M10.1`; `D2`/`D3` as of `M10.3`; the resolver core (stages 0-3: union tag,
-`CX1`/`RI-1`/`RI-2`, primary ladder, qualifiers) as of `M10.2` (both
-above); `D1` (stage 0) is now wired into the navigation availability_rule
-as of `M11` (2026-09-08) — `D2`..`D7` still resolve `UNKNOWN`/`POLICY_UNKNOWN`
-in any actual render pending their own producers. Stages 4-5 and `D5`'s
-producer are still open; `M12` builds `D5`, `M14` builds `D7`.
+`docs/design/CAPABILITY_STATE_VOCABULARY_AND_PRESENTATION.md` — COMPLETE / FROZEN (PO approved 2026-09-06).
 
 ## `OP.0b.0` — FROZEN WITH REAL-ENV VALIDATION GATES
-`docs/history/phase/OP_0B_0_VENDOR_FAILOVER_PREFLIGHT_EVIDENCE_SURFACE.md`
-is implementation authority for the bounded S0–S9 slice sequence it defines
-— citable for command/schema/identity-model *interpretation*, but **still
-authorizes no CLASS 2 action**. `D-V4`/`D-V7a` are `CLOSED_BY_DOCS`. Every
-other row's minimal safe interpretation is frozen — `D-V1`/`D-V2`
-(field-binding, fail-closed predicates); `D-V5a`/`D-V5b`; `D-V6` (pnote
-via `-ia list`); `D-V9a`/`D-V9b`. **`D-V3a`/`D-V7b` stay `STILL_UNKNOWN`**
-as vendor facts — `D-V3a` (PAN) still scoped as a CLASS-2-time blocker;
-`D-V7b` (CP) no longer blocks the readiness roll-up (`OP.2.1b`,
-2026-09-05: advisory-exempt) though the vendor question is unchanged.
-`D-F3` (flap threshold) is **DECIDED** (2026-09-05): no threshold
-invented, advisory-exempt permanently, both vendors. `D-V8` remains open,
-non-blocking. Full reasoning: `project/roadmap.json` `open_decisions`.
+`docs/history/phase/OP_0B_0_VENDOR_FAILOVER_PREFLIGHT_EVIDENCE_SURFACE.md`.
 
 ## PAN HA serial evidence
-The approved real PAN pair's S0 result: one member's `self_identity_
-consistent`/`runtime_peer_serial_state` are `MATCH`, the other's both
-`MISMATCH`. **B2 bidirectional corroboration: NOT ESTABLISHED**, root cause
-**UNKNOWN** (representation divergence / genuine discrepancy / another
-mismatch all still possible; whitespace/numeric-conversion ruled out).
-Leading-zero normalization **not authorized** (opaque-identifier law).
-Tracked as `pan_serial_representation_identity_evidence_closure`. A manual
-2026-09-04 `show high-availability all` observation conflicts with the
-`MISMATCH` above — not reconciled, B2 stays NOT ESTABLISHED; S8-C separately
-established fresh **management-plane** (not serial) correspondence = `MATCH`,
-a narrower question never promoted toward B2.
+`docs/design/PAN_HA_SERIAL_IDENTITY_HARDENING_DECISION.md`; see "Open blockers" below.
 
 ## Next candidate and open mapping question
 
@@ -131,7 +71,7 @@ console flow is expected on the `PCP.4` device/HA tab, never a second one.
 
 | What | Blocked on | Kind |
 | --- | --- | --- |
-| PAN HA serial `B2` establishment | the mismatching member's root cause is `UNKNOWN` (see above) — do not resolve as a side effect of an unrelated build | investigation + hardware |
+| PAN HA serial `B2` establishment | the mismatching member's root cause is `UNKNOWN` (`docs/design/PAN_HA_SERIAL_IDENTITY_HARDENING_DECISION.md`) — do not resolve as a side effect of an unrelated build | investigation + hardware |
 | `CON.3` console operational-write actions | open decisions `C-D4`, `C-D6` **and** `RB.3b` | decision + hardware |
 | `RB.3b` CP Gaia backup collection | the watched real R81.10/R81.20 run — hardware, not engineering | hardware |
 | `OP.2` controlled failover execution | architecture FROZEN; readiness no longer blocks (`OP.2.1b`); CP ClusterXL adapter (`OP.2.C`), its real `ClusterXLMemberSession` transport, and its real `PreflightProvider`/`EligibilityEvaluator` now all IMPLEMENTED + unit-tested, all unwired — change-management/network-security review now DRAFTED but unsigned (`docs/history/phase/OP_2_C_CHANGE_MANAGEMENT_NETWORK_SECURITY_REVIEW.md`) — blocked on `DEPLOY.1A`/`OPERATE`, SSH trust hardening, this review's sign-off, a protected entry point | multiple |
