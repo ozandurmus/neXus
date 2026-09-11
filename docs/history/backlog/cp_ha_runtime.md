@@ -1,0 +1,5 @@
+# Recover ClusterXL/VSX runtime HA role coverage
+
+status: automated_validated · target: 0.6.1B.1.2
+
+AUTOMATED_VALIDATED 2026-08-30. Contract: docs/history/phase/PHASE0_6_1B_1_2_CP_HA_RUNTIME_VSX_CLOSURE.md. Each virtual_system row now probes its own per-VS cphaprob state (vsenv <VSID> ...; cphaprob stat) instead of silently inheriting the physical member's role; a genuine per-VS read is labeled ha_role_source=interactive_cphaprob_stat_runtime_per_vs / ha_runtime_status=success, an unresolved probe falls back to the physical role but explicitly labeled inherited_from_physical_member / unavailable_inherited. interactive_direct_clish hosts where cphaprob is unreachable now resolve to an explicit ha_runtime_status=capability_gap instead of undifferentiated unavailable. No new device command. 3 new regression tests; py -m pytest -q: 555 passed, 2 skipped, 2 failed (both pre-existing/unrelated, same as the immutable_store_permission baseline) -- net +3, zero regressions. Real-environment confirmation against an actual VSX cluster remains owed under on_hardware_real_env_validation.

@@ -1,0 +1,5 @@
+# CE.4 - Remediation checks (write-capable, HARD-GATED)
+
+status: deferred · target: post OP.2 / DEPLOY.1A
+
+Design: docs/design/COMPLIANCE_CHECK_ENGINE.md sections 11-12. The product end-state is a write-capable device administration platform; the check model reserves an OPTIONAL remediation { primitive: <write_primitive_id>, parameters, verify_after: [steps] } block, unused and validator-rejected in CE.1-CE.3. CE.4 lets the engine, on an operator-authorised in-window run, execute the write primitive, re-run verify_after (reusing the CE.1 source/assert grammar verbatim), record an immutable audit entry, and auto-rollback on verify failure. A future REMEDIABLE sub-state on FINDING is additive. HARD-GATED on every prerequisite in docs/design/FAILOVER_ENGINE_ARCHITECTURE.md section 10 - the same bar as failover_controlled_execution / OP.2: mature VERIFY/TRACE/RECOVER, the DEPLOY.1 server, DEPLOY.1A OIDC + an RBAC OPERATE role + full audit, the CP device-interaction-safety audit, the network-device command gate for every read AND write primitive, and a signed change-management / safety review with the network-security leads. No implementation until all are met.

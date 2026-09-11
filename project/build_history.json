@@ -1544,7 +1544,7 @@
       "track": "OP.x Controlled Failover",
       "movement": "ROOT_CAUSE",
       "supersedes": "feature/op-vsx-operational-identity-correction (PR #30)",
-      "evidence": "tests/test_op0a_ha_readiness.py grew 2 tests reproducing the exact real-env device-name-separator and cp_ha_runtime entity-id shapes reported against the real pair. tests/test_phase0_5_3_cluster_hierarchy_ui.py grew 1 test for zero-padded member ordinals. tests/test_phase0_4_2_parallel_cp.py grew 1 test reproducing the echo/tr SAFE_GW pipeline bug directly. Full suite 1074 passed / 26 skipped / 0 failed. Confirmed against the real FW-CKP-EXTRA-LL and FW-CKP-ARKTEST pairs by the product owner after each fix.",
+      "evidence": "tests/test_op0a_ha_readiness.py grew 2 tests reproducing the exact real-env device-name-separator and cp_ha_runtime entity-id shapes reported against the real pair. tests/test_phase0_5_3_cluster_hierarchy_ui.py grew 1 test for zero-padded member ordinals. tests/test_phase0_4_2_parallel_cp.py grew 1 test reproducing the echo/tr SAFE_GW pipeline bug directly. Full suite 1074 passed / 26 skipped / 0 failed. Confirmed against the real <DEVICE_NAME> and <DEVICE_NAME> pairs by the product owner after each fix.",
       "risks_forward": "Fix applies only to collections run after this change -- output/cp.json etc. captured before it still carry the trailing-underscore artifact until re-collected. The defensive join-key normalization in assessment.py stays in place as a safety net for that stale data and any other, not-yet-seen instance of the same separator quirk.",
       "docs": {}
     },
