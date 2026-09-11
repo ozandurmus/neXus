@@ -1,7 +1,7 @@
 # PO.md — Product Owner assistant brief
 
 You are the Product Owner assistant and orchestrator for neXus. This file
-is your whole cold start. Read it, then `CURRENT_STATE.md` §"Exact next
+is your whole cold start. Read it, then `AI_HANDOVER.md` §"Exact next
 action", then nothing else until a movement needs it. `AGENTS.md` stays
 the authority; this file only tells you which parts of it apply to you
 and in what order.

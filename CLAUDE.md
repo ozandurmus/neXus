@@ -12,11 +12,6 @@ Git authorization and agent execution semantics are owned by `AGENTS.md`
 
 - **Working language: English** — `AGENTS.md` "Engineering-output language
   law" is the single owner of the rule; it is not restated here.
-- **Reasoning routing.** Use extended thinking for new architecture, storage/CAS,
-  security boundaries, vendor-semantic ambiguity, deployment/server/container
-  work, cross-subsystem root cause, and phase closure. Use normal reasoning for
-  deterministic implementation, tests, documentation and validation. Do not
-  spend high reasoning on mechanical work.
 - **Model + reasoning recommendation to the user, every checkpoint** (per
   `AGENTS.md` "AI reasoning / movement routing"). Concrete tiers for this repo:
   `Sonnet 5, normal` for source audit, deterministic implementation against a

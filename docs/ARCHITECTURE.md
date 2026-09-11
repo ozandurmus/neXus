@@ -462,3 +462,31 @@ _build_runtime_config (endpoint + login + secret)
   have asymmetric error granularity.
 - `run_panorama_config_evidence` is ~750 lines in one function — the highest
   single complexity point in the codebase.
+
+---
+
+## 11. CLI reference (modes beyond the six a cold session runs)
+
+`AI_START_HERE.md` "CLI modes" keeps the six modes a cold session runs; the
+rest of `main.py`'s mode matrix (relocated here, GOV.ORCH.6 cut 5):
+
+| Command | Purpose |
+| --- | --- |
+| `py .\main.py --storage-analyze` / `--storage-deduplicate [--apply]` | Content-addressed storage inspection / dedup migration (dry-run default). |
+| `py .\main.py --scheduler-once` | Evaluate the default-disabled RuntimeRoot scheduler policy once; no loop. |
+| `py .\main.py --ha-readiness-check` | `OP.0a` HA readiness assessment over already-collected evidence. Offline, no credential, no device contact; writes `data/state/ha_readiness.json`. Cannot emit `SAFE_TO_FAILOVER` by construction — see below. |
+| `py .\main.py --restore-readiness-check` / `--recovery-attest` / `--recovery-store-check` / `--recovery-validate` | `RB.x` recovery plane, class 0 halves: readiness derivation, backup/snapshot attestation, store inspection, artifact validation. |
+| `py .\main.py --recovery-collect --recovery-vendor <checkpoint\|panorama>` | `RB.x` recovery collection — **class 1**. Ledgered, allowlisted, separately credentialed; never reachable from the console. |
+| `py .\main.py --persistent-secret-material-check` / `--compliance-trend-reconstruct` | Trust-material preflight (`DEV.2.2`) / compliance-trend retro-fill (`0.7.7`). |
+| `py .\main.py --registry-enroll --registry-endpoint <addr> [--registry-vendor-hint ...] [--registry-credential-profile ...] [--registry-tag k=v ...]` / `--registry-list [--show-endpoints]` / `--registry-disable <device_id>` | `PCP.1` Device Registry: manual enrollment, listing, disable. Filesystem-only, RuntimeRoot-resident; no device contact, no credential resolution, no vendor import. A bounded maintenance/bootstrap adapter for the registry foundation, not yet the Operator Console device experience. |
+
+The browser in `--console` submits **typed intent** (`job_type` + `entity_id`
+targets) against a closed server-side registry — never a command, an argv
+fragment or a path; a non-class-0 job type returns 409 with the refusing
+class named.
+
+`PCP.1` (`docs/design/PRODUCT_CONTROL_PLANE_ARCHITECTURE.md` §22 item 4,
+deferred from the `PCP.0` freeze) is the first persistent product object: a
+filesystem-only Device Registry with CLI manual enrollment — the foundation
+of the emerging Product Control Plane, not yet a UI or a scheduling/
+capability surface.
