@@ -57,13 +57,16 @@ main#app { padding: 1rem 1.25rem; max-width: 1400px; margin: 0 auto; }
 
 #board-columns {
   display: grid;
-  grid-template-columns: repeat(6, minmax(15rem, 1fr));
+  grid-template-columns: repeat(6, minmax(11rem, 1fr));
   gap: 0.75rem;
   overflow-x: auto;
   padding-bottom: 0.5rem;
 }
 @media (max-width: 900px) {
   #board-columns { grid-template-columns: 1fr; overflow-x: visible; }
+}
+@media (min-width: 701px) and (max-width: 1250px) {
+  #board-columns { grid-template-columns: repeat(3, minmax(11rem, 1fr)); overflow-x: visible; }
 }
 
 .board-column { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 0.6rem; min-width: 0; }
@@ -104,7 +107,7 @@ main#app { padding: 1rem 1.25rem; max-width: 1400px; margin: 0 auto; }
 .detail-section > summary { cursor: pointer; font-weight: 600; padding: 0.3rem 0; }
 .detail-body { padding: 0.5rem 0.25rem; }
 
-.kv { display: grid; grid-template-columns: 9rem 1fr; gap: 0.25rem 0.75rem; margin-bottom: 0.75rem; }
+.kv { display: grid; grid-template-columns: minmax(9rem, max-content) 1fr; gap: 0.25rem 0.75rem; margin-bottom: 0.75rem; }
 .kv dt { color: var(--muted); }
 .kv dd { margin: 0; word-break: break-word; }
 
