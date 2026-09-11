@@ -35,6 +35,28 @@ def test_process_status_disconnected_when_no_pid():
     assert dash.derive_process_status({"pid_alive": False, "pid": None}) == "disconnected"
 
 
+def test_usage_metrics_reads_latest_provider_usage(tmp_path):
+    nexus = tmp_path / ".nexus"
+    nexus.mkdir()
+    (nexus / "engineer.log").write_text(
+        '{"type":"turn.completed","usage":{"input_tokens":600000,"cached_input_tokens":500000,"output_tokens":12}}\n',
+        encoding="utf-8",
+    )
+    assert dash.read_usage_metrics(str(tmp_path)) == {
+        "input_tokens": 600000, "cached_input_tokens": 500000, "output_tokens": 12,
+    }
+
+
+def test_attention_flags_high_context_and_large_contract():
+    alerts = dash.derive_attention(
+        usage={"input_tokens": 600000},
+        approved_task={"refs": list(range(9)), "report": {"acceptance_criteria": list(range(9))}},
+        row={"phase": orch.PHASE_DONE, "process_status": "exited"},
+    )
+    assert len(alerts) == 2
+    assert "600,000" in alerts[0]
+
+
 # ---------------------------------------------------------------------------
 # derive_work_stage -- never inferred from git dirtiness alone
 # ---------------------------------------------------------------------------

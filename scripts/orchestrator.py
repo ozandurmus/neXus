@@ -130,7 +130,9 @@ ENGINEER_PROMPT = (
     "a PR, re-read NEXUS_RELAY_FILE for later corrections/decisions. Run "
     "targeted and required full tests in the foreground and wait for real "
     "results; never claim success from a background task. Report blockers "
-    "honestly and use only the relay's explicit Git authority."
+    "honestly and use only the relay's explicit Git authority. If graphify is "
+    "used, query named refs with a small budget; ignore worktrees, graphify-out, "
+    "data and logs, and never rebuild the full repository."
 )
 
 #: AC-4: injected as an extra line onto ENGINEER_PROMPT for one specific

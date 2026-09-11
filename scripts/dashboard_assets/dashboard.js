@@ -127,6 +127,19 @@
       (m.open_pr ? '<span>PR #' + esc(m.open_pr.number) + " (" + esc(m.open_pr.ci) + ")</span>" : "");
     card.appendChild(fields);
 
+    if (m.usage && m.usage.input_tokens !== undefined) {
+      var usage = document.createElement("div");
+      usage.className = "muted";
+      usage.textContent = "latest input: " + Number(m.usage.input_tokens).toLocaleString() + " tokens";
+      card.appendChild(usage);
+    }
+    (m.attention || []).forEach(function (message) {
+      var alert = document.createElement("div");
+      alert.className = "attention";
+      alert.textContent = message;
+      card.appendChild(alert);
+    });
+
     if (withExecCard && m.pending_action) {
       card.appendChild(renderExecCard(m));
     }
@@ -225,6 +238,17 @@
       '<dt>Worktree</dt><dd>' + esc(d.worktree_path || "-") + '</dd>' +
       '<dt>Objective</dt><dd>' + esc(report.objective || "-") + '</dd>' +
       '</dl>';
+    if (d.usage) {
+      html += '<strong>Latest provider usage</strong><dl class="kv">' +
+        '<dt>Input</dt><dd>' + esc(Number(d.usage.input_tokens || 0).toLocaleString()) + '</dd>' +
+        '<dt>Cached input</dt><dd>' + esc(Number(d.usage.cached_input_tokens || 0).toLocaleString()) + '</dd>' +
+        '<dt>Output</dt><dd>' + esc(Number(d.usage.output_tokens || 0).toLocaleString()) + '</dd></dl>';
+    }
+    if ((d.attention || []).length) {
+      html += '<strong>PO attention</strong><ul>';
+      d.attention.forEach(function (message) { html += '<li class="attention">' + esc(message) + '</li>'; });
+      html += '</ul>';
+    }
     if (ac.length) {
       html += "<strong>Acceptance criteria</strong><ul>";
       ac.forEach(function (item) { html += "<li>" + esc(item) + "</li>"; });
