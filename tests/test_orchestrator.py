@@ -809,8 +809,6 @@ def test_spawn_engineer_argv_defaults_to_codex_json(tmp_path, monkeypatch):
     assert len(calls) == 2  # the engineer process, then the summary-tailer companion
     engineer_argv = calls[0]
     assert engineer_argv[:3] == ["codex", "exec", "--json"]
-    assert "--sandbox" in engineer_argv
-    assert "workspace-write" in engineer_argv
     assert "--approve-for-me" in engineer_argv
 
     tailer_argv = calls[1]

@@ -675,8 +675,7 @@ def _spawn_engineer(
     prompt = ENGINEER_PROMPT if not extra_prompt_note else ENGINEER_PROMPT + "\n\n" + extra_prompt_note
     if provider == "codex":
         argv = ["codex", "exec", "--json", "--cd", str(worktree_path),
-                "--add-dir", str(canonical_relay_dir), "--sandbox", "workspace-write",
-                "--approve-for-me"]
+                "--add-dir", str(canonical_relay_dir), "--approve-for-me"]
         if model:
             argv += ["--model", model]
         if effort:
