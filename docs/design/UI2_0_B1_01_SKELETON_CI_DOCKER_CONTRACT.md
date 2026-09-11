@@ -5,7 +5,8 @@
 **DRAFT — FOR PRODUCT OWNER FREEZE, 2026-09-10; six pre-freeze defect
 fixes applied as Amendment B1-1-A and the Red Hat container-runtime
 change as Amendment B1-1-B, both 2026-09-11 (see the amendment sections at
-the end of this document; Correction C-1 supersedes B1-1-A item 5).**
+the end of this document; Correction C-1 supersedes B1-1-A item 5; Correction C-2 resolves a
+check-1 collision).**
 
 This document specifies the mechanical implementation contract for
 `ui2_b1_01_skeleton_ci_docker`. It creates no `ui2/` files, authorizes no
@@ -455,3 +456,30 @@ documents a build input and its forbidden dependency edges (`DIR-8`), not a
 Gradle project.
 
 This correction supersedes B1-1-A item 5 only; items 1, 2, 3, 4 and 6 stand.
+
+## Correction C-2 (2026-09-12) — check 1 collides with the rule name §5 mandates
+
+The implementing movement reported a conflict between two parts of this
+contract. §5's table mandates the architecture-test method name
+`dir10_no_line1_or_python_runtime_dependency`; §8 check 1, even in
+Amendment B1-1-A's narrowed form, greps `ui2` for the token `python` and
+therefore matches that mandated name. Every conformant implementation
+trips its own check.
+
+**Resolution.** Check 1 additionally excludes the architecture-test source
+directory, whose entire purpose is to name the tokens it forbids
+elsewhere:
+
+```text
+test ! -e ui2/.python-version && ! grep -R -E 'main\.py|python|console/|_runner\.py|_collector\.py' ui2 \
+  --exclude-dir=build --exclude-dir=node_modules --exclude-dir=fixtures \
+  --exclude-dir=architecture-tests --exclude='*.md'
+```
+
+The rule that check 1 protects is unchanged: no UI 2.0 runtime artifact
+may reference Line-1 Python. The `architecture-tests` module contains no
+runtime artifact — it is excluded from the image by §7 and from every
+production module's dependencies by `DIR-9` — and `DIR-10` itself is what
+enforces the rule inside that module. The implementing movement was right
+to report this rather than rename the mandated method or quietly widen the
+grep.
