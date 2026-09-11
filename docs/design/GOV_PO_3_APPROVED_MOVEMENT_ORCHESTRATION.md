@@ -188,6 +188,9 @@ regardless of who directed it.
 
 ### 3.1 Actors and lifecycle, in order
 
+> Amended by GOV.ORCH.1 (DRAFT): see
+> docs/design/GOV_ORCH_1_SYNCHRONOUS_RUN_AND_ORCHESTRATOR_VERIFY.md.
+
 1. The Product Owner, in an interactive `nexus-po` session, runs `PLAN`/
    `REVIEW`/`DECIDE` as today and opens or advances a movement's local
    relay file (`scripts/local_relay.py create`, unchanged).
@@ -334,6 +337,9 @@ govern an interactive one, unchanged by this document.
 
 ### 3.5 Approved-task delivery and the content hash
 
+> Amended by GOV.ORCH.1 (DRAFT): see
+> docs/design/GOV_ORCH_1_SYNCHRONOUS_RUN_AND_ORCHESTRATOR_VERIFY.md.
+
 At `start` time, the orchestrator reads the relay file fresh from disk,
 extracts `entries[0]` (the `SESSION_START` entry — the one already-approved
 task; `entries[0]` is structurally guaranteed to be `SESSION_START` by
@@ -415,6 +421,9 @@ session (posting its own relay entries) can legitimately touch the same
 canonical file for the same movement while both processes are alive.
 
 ### 3.7 Process records, duplicate-start prevention, retries, cancellation, recovery, worker limit
+
+> Amended by GOV.ORCH.1 (DRAFT): see
+> docs/design/GOV_ORCH_1_SYNCHRONOUS_RUN_AND_ORCHESTRATOR_VERIFY.md.
 
 **Addition B (Product Owner freeze decision).** `orchestrator status` with
 no `--movement` prints a table of every known movement: movement id,

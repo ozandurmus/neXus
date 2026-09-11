@@ -77,14 +77,17 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 ORCHESTRATOR = REPO_ROOT / "scripts" / "orchestrator.py"
 
-sys.path.insert(0, str(REPO_ROOT))
-from utils.repository_privacy import (  # noqa: E402
+sys.path.insert(0, str(REPO_ROOT / "scripts"))
+import orchestrator_verify as _orch_verify  # noqa: E402
+# Re-exported for backward compatibility: this module's own test suite
+# (tests/test_nexus_engineer_tool_gate.py) calls these by name directly.
+from utils.repository_privacy import (  # noqa: E402, F401
     PrivacyFinding,
     RepositoryPrivacyError,
     scan_repository,
 )
-from utils.repository_privacy import baseline_finding_keys as _shared_baseline_finding_keys  # noqa: E402
-from utils.repository_privacy import finding_key as _finding_key  # noqa: E402
+from utils.repository_privacy import finding_key as _finding_key  # noqa: E402, F401
+
 
 def _resolve_interpreter(cwd: str) -> str:
     """Resolve the project's validated interpreter for the merge-lock
@@ -146,52 +149,24 @@ def _approved_task_git_base(cwd: str) -> str | None:
     return base if isinstance(base, str) and base else None
 
 
-def _format_finding(finding: PrivacyFinding) -> str:
-    location = f"{finding.path}:{finding.line}" if finding.line else finding.path
-    return f"{location} {finding.rule}"
-
-
 def _baseline_finding_keys(cwd: str) -> tuple[frozenset[tuple[str, str, str]], str]:
     """Scan the movement's own base commit once and return its finding keys.
 
-    AC-5: this is the *only* place a second scan happens, and the caller
-    only invokes it when the post-changes scan already found something --
-    never once per file, never on the common zero-findings path. The
-    fingerprint-matching and baseline-scan mechanics themselves now live in
-    ``utils.repository_privacy`` (relay/NXS-LOCAL-0020, AC-2) so the CI
-    privacy gate can reuse them with its own baseline-ref source instead of
-    this movement-local one -- this wrapper only supplies that source
-    (``.nexus/approved_task.json``'s ``report.git.base``).
-    """
-    return _shared_baseline_finding_keys(cwd, _approved_task_git_base(cwd))
+    GOV.ORCH.1: kept as a thin, monkeypatchable wrapper for backward
+    compatibility with this module's own test suite -- the actual
+    baseline-aware privacy check (below) now runs entirely through
+    ``scripts/orchestrator_verify.py::privacy_check``, the one
+    implementation both this hook and ``orchestrator.py``'s own `verify`
+    step call (section 2.2 of GOV_ORCH_1_SYNCHRONOUS_RUN_AND_ORCHESTRATOR_VERIFY.md)."""
+    return _orch_verify.baseline_finding_keys(cwd, _approved_task_git_base(cwd))
 
 
 def _privacy_check(cwd: str) -> tuple[bool, str]:
-    root = Path(cwd)
-    try:
-        current = scan_repository(root)
-    except RepositoryPrivacyError as exc:
-        return False, f"repository privacy gate: ERROR ({exc})"
-
-    if not current.findings:
-        return True, "repository privacy gate: PASS (0 findings)"
-
-    # AC-5: baseline scan only runs when the post-changes scan is non-empty.
-    baseline_keys, baseline_note = _baseline_finding_keys(cwd)
-    new_findings = [f for f in current.findings if _finding_key(root, f) not in baseline_keys]
-
-    if not new_findings:
-        return True, (
-            f"repository privacy gate: PASS ({len(current.findings)} finding(s), "
-            f"all pre-existing, {baseline_note})"
-        )
-
-    # AC-4: name exactly the new findings, not the pre-existing ones alongside them.
-    named = "; ".join(_format_finding(f) for f in new_findings)
-    return False, (
-        f"repository privacy gate: {len(new_findings)} new finding(s) not present in "
-        f"the movement's base commit ({baseline_note}): {named}"
-    )
+    """Baseline-aware repository privacy gate. GOV.ORCH.1 moved the actual
+    implementation to ``orchestrator_verify.privacy_check`` -- behaviour is
+    unchanged; this wrapper only supplies the movement-local baseline ref
+    source (``.nexus/approved_task.json``'s ``report.git.base``)."""
+    return _orch_verify.privacy_check(cwd, _approved_task_git_base(cwd))
 
 
 def _merge_lock(action: str, movement_id: str, cwd: str) -> tuple[bool, str]:

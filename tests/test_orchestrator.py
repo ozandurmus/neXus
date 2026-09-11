@@ -938,3 +938,298 @@ def test_format_age_buckets():
     assert orch._format_age(5) == "5s"
     assert orch._format_age(65) == "1m05s"
     assert orch._format_age(3700) == "1h01m"
+
+
+# ---------------------------------------------------------------------------
+# GOV.ORCH.1: `run`, `verify`, retry accounting, state-dir default
+# ---------------------------------------------------------------------------
+
+def _init_bare_and_clone(tmp_path: Path) -> Path:
+    """A real, minimal git project with an `origin` remote whose `main`
+    branch is fetched -- real enough for `git worktree add origin/main -b
+    feature/x` and `git diff --check`/`git status --porcelain` to behave
+    exactly as they would against the real repository, without touching it."""
+    bare = tmp_path / "origin.git"
+    subprocess.run(["git", "init", "-q", "--bare", str(bare)], check=True)
+    work = tmp_path / "work"
+    subprocess.run(["git", "clone", "-q", str(bare), str(work)], check=True)
+    subprocess.run(["git", "config", "user.email", "t@example.com"], cwd=work, check=True)
+    subprocess.run(["git", "config", "user.name", "t"], cwd=work, check=True)
+    (work / "README.md").write_text("hello\n", encoding="utf-8")
+    # Mirrors this repository's own .gitignore entry for `.nexus/` -- the
+    # real neXus repo already ignores it, so a real movement worktree never
+    # shows an untracked `.nexus/` in `git status --porcelain`; this
+    # synthetic repo needs the same entry for `verify`'s uncommitted-changes
+    # step to behave realistically.
+    (work / ".gitignore").write_text(".nexus/\n", encoding="utf-8")
+    subprocess.run(["git", "add", "-A"], cwd=work, check=True)
+    subprocess.run(["git", "commit", "-q", "-m", "init"], cwd=work, check=True)
+    subprocess.run(["git", "push", "-q", "origin", "HEAD:main"], cwd=work, check=True)
+    subprocess.run(["git", "fetch", "-q", "origin"], cwd=work, check=True)
+    return work
+
+
+_STUB_CLAUDE = '''#!/usr/bin/env python3
+import json
+import os
+import subprocess
+import sys
+import time
+
+mode = os.environ.get("NEXUS_TEST_STUB_MODE", "close")
+
+if mode == "close":
+    import tempfile
+    relay_file = os.environ["NEXUS_RELAY_FILE"]
+    report = {
+        "completed": ["x"], "changed": ["x"], "preserved": ["x"],
+        "validation": {"targeted": "1 passed", "affected": "1 passed", "full_regression": "n/a",
+                       "privacy": "n/a", "state_consistency": "n/a", "diff_check": "n/a", "real_environment": "NOT_RUN"},
+        "unresolved_risks": [], "state_updates": [],
+        "next": {"movement": "n/a", "movement_type": "VALIDATION", "status": "done", "objective": "n/a"},
+        "recommended_reasoning": {"tier": "Normal", "reason": "x"},
+        "continuation": "SAME_SESSION",
+        "integration": {"branch": "n/a", "head_sha": "n/a", "pr": None, "pr_url": None, "ci": "n/a",
+                         "merge_state": "NOT_OPENED", "merge_commit": None, "merge_decision": "NOT_APPLICABLE"},
+        "effects": {"main_py": "none", "ui": "none"},
+    }
+    fd, report_path = tempfile.mkstemp(suffix=".json")
+    with os.fdopen(fd, "w", encoding="utf-8") as fh:
+        json.dump(report, fh)
+    python = os.environ["NEXUS_STUB_PYTHON"]
+    local_relay = os.environ["NEXUS_STUB_LOCAL_RELAY"]
+    subprocess.run([python, local_relay, "append", "--file", relay_file, "--role", "engineer",
+                     "--marker", "SESSION_CLOSE", "--report", report_path, "--outcome", "DONE"], check=True)
+    print("engineer: done", flush=True)
+    sys.exit(0)
+elif mode == "exit_nonzero":
+    print("engineer: about to fail", flush=True)
+    sys.exit(1)
+elif mode == "sleep":
+    time.sleep(30)
+    sys.exit(0)
+elif mode == "heartbeat_stall":
+    print("engineer: one line then silence", flush=True)
+    time.sleep(30)
+    sys.exit(0)
+'''
+
+
+def _install_stub_claude(tmp_path: Path, monkeypatch) -> None:
+    bin_dir = tmp_path / "stub_bin"
+    bin_dir.mkdir(exist_ok=True)
+    stub = bin_dir / "claude"
+    stub.write_text(_STUB_CLAUDE, encoding="utf-8")
+    stub.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{bin_dir}:{os.environ['PATH']}")
+    monkeypatch.setenv("NEXUS_STUB_PYTHON", sys.executable)
+    monkeypatch.setenv("NEXUS_STUB_LOCAL_RELAY", str(ROOT / "scripts" / "local_relay.py"))
+
+
+def _run_args(tmp_path, relay_dir, relay_id, **extra):
+    args = ["run", "--movement", relay_id, "--relay-dir", str(relay_dir),
+            "--state-dir", str(tmp_path / "state"), "--worktrees-dir", str(tmp_path / "worktrees"),
+            "--profile", str(tmp_path / "profile.json")]
+    for k, v in extra.items():
+        args += [f"--{k.replace('_', '-')}", str(v)]
+    return args
+
+
+def test_run_cli_success_returns_zero_and_prints_report_object(tmp_path, monkeypatch, capsys):
+    """AC-1: a stub engineer that exits 0 and closes the relay -- `run`
+    returns 0, prints the section 2.4 report object, and leaves no child
+    process."""
+    work = _init_bare_and_clone(tmp_path)
+    relay_dir = _make_relay(work, movement="M", git={"base": "origin/main", "lane": "feature/x"},
+                             validation_plan=[{"argv": [sys.executable, "-c", "pass"]}])
+    relay_id = json.loads(next(relay_dir.glob("*.json")).read_text())["id"]
+    _install_stub_claude(tmp_path, monkeypatch)
+    monkeypatch.setenv("NEXUS_TEST_STUB_MODE", "close")
+
+    capsys.readouterr()
+    rc = orch.main(_run_args(tmp_path, relay_dir, relay_id, timeout=15, heartbeat_timeout=10))
+    out = capsys.readouterr().out
+    report = json.loads(out.strip().splitlines()[-1])
+    assert rc == orch.EXIT_OK, report
+    assert report["movement"] == relay_id
+    assert report["phase"] == orch.PHASE_DONE
+    assert report["exit_code"] == 0
+    assert report["relay_status"] == "CLOSED"
+    assert report["verify"]["passed"] is True
+    assert report["provider"] == "claude"
+
+    record = orch._load_state(tmp_path / "state", relay_id)
+    assert not orch.pid_alive(record["pid"])
+
+
+def test_run_cli_timeout_kills_stub_and_records_failed_timeout(tmp_path, monkeypatch, capsys):
+    """AC-2."""
+    work = _init_bare_and_clone(tmp_path)
+    relay_dir = _make_relay(work, movement="M", git={"base": "origin/main", "lane": "feature/x"})
+    relay_id = json.loads(next(relay_dir.glob("*.json")).read_text())["id"]
+    _install_stub_claude(tmp_path, monkeypatch)
+    monkeypatch.setenv("NEXUS_TEST_STUB_MODE", "sleep")
+
+    capsys.readouterr()
+    rc = orch.main(_run_args(tmp_path, relay_dir, relay_id, timeout=1, heartbeat_timeout=30))
+    report = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
+    assert rc == orch.EXIT_REFUSED
+    assert report["phase"] == orch.PHASE_FAILED
+    assert report["failure_reason"] == "timeout"
+    assert report["exit_code"] is None
+
+    record = orch._load_state(tmp_path / "state", relay_id)
+    assert not orch.pid_alive(record["pid"])
+    assert record["phase"] == orch.PHASE_FAILED
+    assert record["failure_reason"] == "timeout"
+
+
+def test_run_cli_heartbeat_timeout_kills_stub_and_records_heartbeat_timeout(tmp_path, monkeypatch, capsys):
+    """AC-3."""
+    work = _init_bare_and_clone(tmp_path)
+    relay_dir = _make_relay(work, movement="M", git={"base": "origin/main", "lane": "feature/x"})
+    relay_id = json.loads(next(relay_dir.glob("*.json")).read_text())["id"]
+    _install_stub_claude(tmp_path, monkeypatch)
+    monkeypatch.setenv("NEXUS_TEST_STUB_MODE", "heartbeat_stall")
+
+    capsys.readouterr()
+    rc = orch.main(_run_args(tmp_path, relay_dir, relay_id, timeout=30, heartbeat_timeout=1))
+    report = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
+    assert rc == orch.EXIT_REFUSED
+    assert report["phase"] == orch.PHASE_FAILED
+    assert report["failure_reason"] == "heartbeat_timeout"
+
+    record = orch._load_state(tmp_path / "state", relay_id)
+    assert not orch.pid_alive(record["pid"])
+
+
+def test_run_cli_engineer_exit_nonzero_fails_without_verify_gate(tmp_path, monkeypatch, capsys):
+    work = _init_bare_and_clone(tmp_path)
+    relay_dir = _make_relay(work, movement="M", git={"base": "origin/main", "lane": "feature/x"})
+    relay_id = json.loads(next(relay_dir.glob("*.json")).read_text())["id"]
+    _install_stub_claude(tmp_path, monkeypatch)
+    monkeypatch.setenv("NEXUS_TEST_STUB_MODE", "exit_nonzero")
+
+    capsys.readouterr()
+    rc = orch.main(_run_args(tmp_path, relay_dir, relay_id, timeout=15, heartbeat_timeout=10))
+    report = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
+    assert rc == orch.EXIT_REFUSED
+    assert report["phase"] == orch.PHASE_FAILED
+    assert report["exit_code"] == 1
+    assert report["failure_reason"] == "engineer_exit_nonzero"
+
+
+# --- verify (standalone CLI subcommand) -------------------------------------
+
+def test_verify_cli_passes_on_a_clean_worktree_with_an_object_validation_plan(tmp_path):
+    work = _init_bare_and_clone(tmp_path)
+    relay_dir = tmp_path / "relay"
+    start = tmp_path / "start.json"
+    start.write_text(json.dumps({
+        "protocol_version": 2, "message_type": "SESSION_START", "movement": "M",
+        "refs": [], "report": _start_report(git={"base": "origin/main", "lane": "feature/x"},
+                                              validation_plan=[{"argv": [sys.executable, "-c", "pass"]}, "prose"]),
+    }), encoding="utf-8")
+    assert lr.main(["create", "--role", "po", "--start", str(start), "--dir", str(relay_dir)]) == lr.EXIT_OK
+    relay_id = json.loads(next(relay_dir.glob("*.json")).read_text())["id"]
+
+    worktree = tmp_path / "worktrees" / relay_id
+    subprocess.run(["git", "worktree", "add", str(worktree), "origin/main", "-b", "feature/x"],
+                    cwd=work, check=True)
+    state_dir = tmp_path / "state"
+    orch._save_state(state_dir, relay_id, {"movement_id": relay_id, "worktree_path": str(worktree),
+                                            "phase": orch.PHASE_RUNNING, "pid": os.getpid(), "retry_count": 0})
+
+    rc = orch.main(["verify", "--movement", relay_id, "--relay-dir", str(relay_dir), "--state-dir", str(state_dir)])
+    assert rc == orch.EXIT_OK
+
+
+def test_verify_cli_fails_on_uncommitted_changes(tmp_path):
+    """AC-5."""
+    work = _init_bare_and_clone(tmp_path)
+    relay_dir = _make_relay(tmp_path, movement="M", git={"base": "origin/main", "lane": "feature/x"})
+    relay_id = json.loads(next(relay_dir.glob("*.json")).read_text())["id"]
+
+    worktree = tmp_path / "worktrees" / relay_id
+    subprocess.run(["git", "worktree", "add", str(worktree), "origin/main", "-b", "feature/x"],
+                    cwd=work, check=True)
+    (worktree / "README.md").write_text("dirty\n", encoding="utf-8")
+
+    state_dir = tmp_path / "state"
+    orch._save_state(state_dir, relay_id, {"movement_id": relay_id, "worktree_path": str(worktree),
+                                            "phase": orch.PHASE_RUNNING, "pid": os.getpid(), "retry_count": 0})
+
+    rc = orch.main(["verify", "--movement", relay_id, "--relay-dir", str(relay_dir), "--state-dir", str(state_dir)])
+    assert rc == orch.EXIT_REFUSED
+
+
+# --- retry_count accounting on resume (AC-6) --------------------------------
+
+def test_retry_count_increments_on_each_resume_and_status_reports_failed_past_the_limit(tmp_path, monkeypatch):
+    relay_dir = _make_relay(tmp_path)
+    relay_id = json.loads(next(relay_dir.glob("*.json")).read_text())["id"]
+    state_dir = tmp_path / "state"
+    worktrees_dir = tmp_path / "worktrees"
+
+    monkeypatch.setattr(orch, "_git_rev_parse", lambda ref, cwd: "sha")
+    monkeypatch.setattr(orch, "_git_worktree_add", lambda *a, **k: None)
+    monkeypatch.setattr(orch, "_spawn_engineer", lambda **kwargs: _FakeProc(os.getpid()))
+
+    args = ["start", "--movement", relay_id, "--relay-dir", str(relay_dir), "--state-dir", str(state_dir),
+            "--worktrees-dir", str(worktrees_dir), "--profile", str(tmp_path / "profile.json")]
+    assert orch.main(args) == orch.EXIT_OK
+    record = orch._load_state(state_dir, relay_id)
+    assert record["retry_count"] == 0
+
+    retry_limit = 2
+    for expected_retry_count in (1, 2):
+        orch._save_state(state_dir, relay_id, {**orch._load_state(state_dir, relay_id), "pid": _dead_pid()})
+        assert orch.main(args) == orch.EXIT_OK  # resume
+        record = orch._load_state(state_dir, relay_id)
+        assert record["retry_count"] == expected_retry_count
+
+    # A final dead pid, retry_count already at the limit: status must now
+    # report (and persist) `failed`, never keep resuming forever.
+    orch._save_state(state_dir, relay_id, {**orch._load_state(state_dir, relay_id), "pid": _dead_pid()})
+    rc = orch.main(["status", "--movement", relay_id, "--state-dir", str(state_dir), "--relay-dir", str(relay_dir),
+                     "--retry-limit", str(retry_limit)])
+    assert rc == orch.EXIT_OK
+    record = orch._load_state(state_dir, relay_id)
+    assert record["phase"] == orch.PHASE_FAILED
+    assert record["failure_reason"] == "retry_limit_exceeded"
+
+
+# --- state-dir default under <worktrees-dir>/.state/ (AC-9) -----------------
+
+def test_default_state_dir_is_a_state_subdir_of_default_worktrees_dir():
+    assert orch.DEFAULT_STATE_DIR == orch.DEFAULT_WORKTREES_DIR / ".state"
+
+
+def test_status_lists_a_record_found_only_in_the_legacy_state_dir(tmp_path, monkeypatch):
+    legacy_dir = tmp_path / "legacy_state"
+    monkeypatch.setattr(orch, "LEGACY_STATE_DIR", legacy_dir)
+    orch._save_state(legacy_dir, "NXS-LOCAL-0099", {
+        "movement_id": "NXS-LOCAL-0099", "phase": orch.PHASE_DONE, "pid": 1, "retry_count": 0,
+    })
+    state_dir = tmp_path / "state"
+    relay_dir = tmp_path / "relay"
+
+    rc = orch.main(["status", "--state-dir", str(state_dir), "--relay-dir", str(relay_dir)])
+    assert rc == orch.EXIT_OK
+
+
+def test_status_single_movement_found_only_in_legacy_dir_is_flagged(tmp_path, monkeypatch, capsys):
+    legacy_dir = tmp_path / "legacy_state"
+    monkeypatch.setattr(orch, "LEGACY_STATE_DIR", legacy_dir)
+    orch._save_state(legacy_dir, "NXS-LOCAL-0099", {
+        "movement_id": "NXS-LOCAL-0099", "phase": orch.PHASE_DONE, "pid": 1, "retry_count": 0,
+    })
+    state_dir = tmp_path / "state"
+    relay_dir = tmp_path / "relay"
+
+    capsys.readouterr()
+    rc = orch.main(["status", "--movement", "NXS-LOCAL-0099", "--state-dir", str(state_dir),
+                     "--relay-dir", str(relay_dir)])
+    row = json.loads(capsys.readouterr().out)
+    assert rc == orch.EXIT_OK
+    assert row["legacy_state_dir"] is True

@@ -2,6 +2,8 @@
 (docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md, FROZEN).
 
     py scripts/orchestrator.py start      --movement <relay-id> [options]
+    py scripts/orchestrator.py run        --movement <relay-id> [--timeout S] [--heartbeat-timeout S] [--no-verify] [options]
+    py scripts/orchestrator.py verify     --movement <relay-id> [options]
     py scripts/orchestrator.py status     [--movement <relay-id>] [options]
     py scripts/orchestrator.py stop       --movement <relay-id> [--force] [options]
     py scripts/orchestrator.py merge-lock {acquire|release} --movement <relay-id> [options]
@@ -65,18 +67,27 @@ from typing import Any
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 import local_relay as lr  # noqa: E402
+import orchestrator_verify as ov  # noqa: E402
 
 EXIT_OK, EXIT_REFUSED, EXIT_USAGE = 0, 1, 2
 
-#: Runtime bookkeeping lives outside the repository, mirroring
-#: nexus_po_tool_gate.py's NEXUS_PO_HOOK_LOG precedent -- process records
-#: are not durable governance history and must not spam the git-tracked
-#: relay file with per-invocation diffs.
+DEFAULT_WORKTREES_DIR = REPO_ROOT.parent / f"{REPO_ROOT.name}-nexus-worktrees"
+
+#: GOV.ORCH.1 section 2.5: the default moves from the system temp directory
+#: to a sibling of the movement worktrees -- runtime bookkeeping, never
+#: inside the repository checkout, but no longer sharing the system temp
+#: root with every other tool on the machine. `NEXUS_ORCHESTRATOR_STATE_DIR`
+#: still overrides this, exactly as before.
 DEFAULT_STATE_DIR = Path(
     os.environ.get("NEXUS_ORCHESTRATOR_STATE_DIR")
-    or os.path.join(tempfile.gettempdir(), "nexus_orchestrator")
+    or str(DEFAULT_WORKTREES_DIR / ".state")
 )
-DEFAULT_WORKTREES_DIR = REPO_ROOT.parent / f"{REPO_ROOT.name}-nexus-worktrees"
+
+#: GOV.ORCH.1 section 2.5 / AC-9: the pre-GOV.ORCH.1 default location.
+#: `status` still reads a record found only here for one release, flagging
+#: it `legacy_state_dir` rather than losing track of it.
+LEGACY_STATE_DIR = Path(os.path.join(tempfile.gettempdir(), "nexus_orchestrator"))
+
 DEFAULT_MAX_WORKERS = 3
 DEFAULT_RETRY_LIMIT = 2
 DEFAULT_MERGE_LOCK_TTL = 600
@@ -292,6 +303,18 @@ def decide_merge_lock_acquire(
             "reclaimed an abandoned/stale lock"
         )
     return False, lock_record, f"held by {lock_record.get('movement_id')} (pid {lock_record.get('pid')})"
+
+
+def reconcile_failure_reason(
+    record: dict, phase: str, prior_phase: str,
+) -> str | None:
+    """GOV.ORCH.1 section 2.3: `failure_reason` is set when a record is
+    opportunistically reconciled to `failed` for a reason other than an
+    already-recorded one (e.g. `run`'s own `timeout`/`heartbeat_timeout`) --
+    here, specifically, a dead process that has exhausted `retry_limit`."""
+    if phase != PHASE_FAILED or prior_phase == PHASE_FAILED:
+        return record.get("failure_reason")
+    return record.get("failure_reason") or "retry_limit_exceeded"
 
 
 def reconcile_phase(record: dict, is_pid_alive_now: bool, relay_status: str | None, retry_limit: int) -> str:
@@ -541,6 +564,24 @@ def _list_state_records(state_dir: Path) -> list[dict]:
     return records
 
 
+def _list_state_records_with_legacy(state_dir: Path, legacy_dir: Path) -> list[tuple[dict, bool]]:
+    """AC-9: every record under `state_dir`, plus any record found only
+    under `legacy_dir` (the pre-GOV.ORCH.1 default) -- each paired with
+    whether it came from the legacy location. A movement present in both is
+    reported once, from `state_dir`."""
+    seen = set()
+    out: list[tuple[dict, bool]] = []
+    for record in _list_state_records(state_dir):
+        seen.add(record.get("movement_id"))
+        out.append((record, False))
+    if legacy_dir.resolve() != state_dir.resolve():
+        for record in _list_state_records(legacy_dir):
+            if record.get("movement_id") in seen:
+                continue
+            out.append((record, True))
+    return out
+
+
 def _active_count(state_dir: Path, exclude_movement: str | None = None) -> int:
     count = 0
     for record in _list_state_records(state_dir):
@@ -723,7 +764,14 @@ def _kill_pid(pid: int, force: bool = False, grace_seconds: float = 5.0) -> None
 # start
 # ---------------------------------------------------------------------------
 
-def _cmd_start(args: argparse.Namespace) -> int:
+def _do_start(args: argparse.Namespace) -> tuple[int, dict | None, subprocess.Popen | None]:
+    """The full body of `start` (dispatch or resume one approved movement),
+    factored out so `run` (GOV.ORCH.1 section 2.1) reuses this exact code
+    path rather than a copy: `_cmd_start` and `_cmd_run` both call this and
+    only differ in what they do with the outcome. Returns
+    `(exit_code, stdout_payload, proc)` -- `payload` is the JSON object
+    `start` prints (`None` on refusal/usage error); `proc` is the spawned
+    engineer `Popen`, `None` whenever no process was spawned."""
     relay_dir = Path(args.relay_dir).resolve()
     state_dir = Path(args.state_dir)
     worktrees_dir = Path(args.worktrees_dir)
@@ -732,7 +780,7 @@ def _cmd_start(args: argparse.Namespace) -> int:
         relay_obj = _load_relay(relay_file)
     except OrchestratorError as exc:
         print(f"error: {exc}", file=sys.stderr)
-        return EXIT_USAGE
+        return EXIT_USAGE, None, None
 
     existing = _load_state(state_dir, args.movement)
     is_alive = pid_alive(existing.get("pid")) if existing else False
@@ -743,7 +791,7 @@ def _cmd_start(args: argparse.Namespace) -> int:
     )
     if action == "refuse":
         print(f"error: {reason}", file=sys.stderr)
-        return EXIT_REFUSED
+        return EXIT_REFUSED, None, None
 
     session_start = relay_obj["entries"][0]
     report = session_start.get("report", {})
@@ -752,7 +800,7 @@ def _cmd_start(args: argparse.Namespace) -> int:
     ok, ref_reason = validate_git_refs(base, lane)
     if not ok:
         print(f"error: {ref_reason}", file=sys.stderr)
-        return EXIT_USAGE
+        return EXIT_USAGE, None, None
 
     hash_hex = task_hash(session_start)
 
@@ -772,6 +820,11 @@ def _cmd_start(args: argparse.Namespace) -> int:
         recovery_note_needed = needs_resume_recovery_note(
             relay_obj=relay_obj, has_staged_uncommitted_changes=staged, is_pid_alive=False,
         )
+        # GOV.ORCH.1 section 2.3: retry_count increments on every resume
+        # dispatch and is persisted before the spawn, so a crash between
+        # this write and the spawn still leaves the increment recorded.
+        retry_count = existing.get("retry_count", 0) + 1
+        _save_state(state_dir, args.movement, {**existing, "retry_count": retry_count})
         proc = _spawn_engineer(
             worktree_path=worktree_path, profile_path=Path(args.profile),
             canonical_relay_dir=relay_dir, relay_file=relay_file,
@@ -782,25 +835,26 @@ def _cmd_start(args: argparse.Namespace) -> int:
         )
         record = {**existing, "pid": proc.pid, "phase": PHASE_RUNNING,
                   "last_action": "resumed", "task_hash": hash_hex,
-                  "dispatch_seq": len(relay_obj["entries"])}
+                  "dispatch_seq": len(relay_obj["entries"]), "retry_count": retry_count,
+                  "failure_reason": None, "exit_code": None}
         _save_state(state_dir, args.movement, record)
-        print(json.dumps({"action": "resume", "movement_id": args.movement, "pid": proc.pid,
-                           "worktree_path": str(worktree_path), "revision": revision,
-                           "recovery_note_injected": recovery_note_needed}))
-        return EXIT_OK
+        payload = {"action": "resume", "movement_id": args.movement, "pid": proc.pid,
+                   "worktree_path": str(worktree_path), "revision": revision,
+                   "recovery_note_injected": recovery_note_needed}
+        return EXIT_OK, payload, proc
 
     # action == "dispatch"
     revision = 1 if existing is None else existing.get("revision", 0) + 1
     worktree_path = worktrees_dir / args.movement
     if worktree_path.exists():
         print(f"error: worktree path already exists: {worktree_path}", file=sys.stderr)
-        return EXIT_REFUSED
+        return EXIT_REFUSED, None, None
     try:
         base_sha = _git_rev_parse(base, relay_dir.parent)
         _git_worktree_add(worktree_path, base, lane, relay_dir.parent)
     except OrchestratorError as exc:
         print(f"error: {exc}", file=sys.stderr)
-        return EXIT_REFUSED
+        return EXIT_REFUSED, None, None
 
     nexus_dir = worktree_path / ".nexus"
     nexus_dir.mkdir(parents=True, exist_ok=True)
@@ -821,18 +875,177 @@ def _cmd_start(args: argparse.Namespace) -> int:
         "started_at": lr._utc_now_iso(), "heartbeat_at": lr._utc_now_iso(),
         "retry_count": 0, "last_error": None, "last_action": "dispatched",
         "dispatch_seq": len(relay_obj["entries"]),
+        "failure_reason": None, "exit_code": None,
     }
     _save_state(state_dir, args.movement, record)
-    print(json.dumps({"action": "dispatch", "movement_id": args.movement, "pid": proc.pid,
-                       "worktree_path": str(worktree_path), "branch": lane, "revision": revision}))
-    return EXIT_OK
+    payload = {"action": "dispatch", "movement_id": args.movement, "pid": proc.pid,
+               "worktree_path": str(worktree_path), "branch": lane, "revision": revision}
+    return EXIT_OK, payload, proc
+
+
+def _cmd_start(args: argparse.Namespace) -> int:
+    rc, payload, _proc = _do_start(args)
+    if payload is not None:
+        print(json.dumps(payload))
+    return rc
+
+
+# ---------------------------------------------------------------------------
+# run (GOV.ORCH.1 section 2.1): dispatch (via _do_start), wait, verify, report
+# ---------------------------------------------------------------------------
+
+def _wait_for_engineer(
+    proc: subprocess.Popen, log_path: Path, timeout: float, heartbeat_timeout: float,
+    poll_interval: float = 0.2,
+) -> tuple[int | None, str | None]:
+    """Block until `proc` exits, `timeout` elapses, or `heartbeat_timeout`
+    elapses with no growth of `log_path` (section 2.1 step 2). Returns
+    `(exit_code, failure_reason)`: a real exit code and `None` on natural
+    exit, or `(None, "timeout"|"heartbeat_timeout")` after killing `proc`
+    via `_kill_pid`."""
+    def _log_size() -> int:
+        try:
+            return log_path.stat().st_size
+        except OSError:
+            return 0
+
+    deadline = time.monotonic() + timeout
+    last_size = _log_size()
+    last_growth = time.monotonic()
+    while True:
+        rc = proc.poll()
+        if rc is not None:
+            return rc, None
+        now = time.monotonic()
+        size = _log_size()
+        if size > last_size:
+            last_size = size
+            last_growth = now
+        if now - last_growth >= heartbeat_timeout:
+            _kill_pid(proc.pid)
+            try:
+                proc.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                pass
+            return None, "heartbeat_timeout"
+        if now >= deadline:
+            _kill_pid(proc.pid)
+            try:
+                proc.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                pass
+            return None, "timeout"
+        time.sleep(min(poll_interval, max(deadline - now, 0.01)))
+
+
+def _movement_validation_plan_and_base(relay_dir: Path, movement_id: str) -> tuple[list, str | None, str | None]:
+    """Best-effort: the movement's own `validation_plan` and `git.base`,
+    plus the relay's own `status`, read fresh (never from the dispatch-time
+    snapshot) so `verify`/`run` react to the movement's current relay file.
+    Never raises -- an unresolvable/invalid relay file yields empty
+    defaults, matching `_status_row`'s own tolerance."""
+    try:
+        relay_file = _resolve_relay_file(relay_dir, movement_id)
+        relay_obj = _load_relay(relay_file)
+    except OrchestratorError:
+        return [], None, None
+    session_start = relay_obj["entries"][0]
+    report = session_start.get("report", {})
+    return report.get("validation_plan", []) or [], report.get("git", {}).get("base"), relay_obj.get("status")
+
+
+def _build_run_report(
+    *, movement: str, phase: str, exit_code: int | None, failure_reason: str | None,
+    relay_status: str | None, model: str | None, effort: str | None, duration_s: float,
+    verify_result: dict, worktree_path: Path, branch: str | None,
+) -> dict:
+    """GOV.ORCH.1 section 2.4's report object, exactly."""
+    return {
+        "movement": movement, "phase": phase, "exit_code": exit_code,
+        "failure_reason": failure_reason, "relay_status": relay_status,
+        "provider": "claude", "model": model, "effort": effort,
+        "duration_s": round(duration_s, 3), "verify": verify_result,
+        "worktree_path": str(worktree_path), "branch": branch,
+    }
+
+
+def _cmd_run(args: argparse.Namespace) -> int:
+    rc, _payload, proc = _do_start(args)
+    if rc != EXIT_OK:
+        return rc
+
+    state_dir = Path(args.state_dir)
+    relay_dir = Path(args.relay_dir).resolve()
+    movement = args.movement
+    record = _load_state(state_dir, movement)
+    worktree_path = Path(record["worktree_path"])
+    branch = record.get("branch")
+    log_path = worktree_path / ".nexus" / "engineer.log"
+
+    started = time.monotonic()
+    exit_code, failure_reason = _wait_for_engineer(
+        proc, log_path, timeout=args.timeout, heartbeat_timeout=args.heartbeat_timeout,
+    )
+    duration_s = time.monotonic() - started
+
+    validation_plan, base_ref, relay_status = _movement_validation_plan_and_base(relay_dir, movement)
+
+    if failure_reason is not None:
+        phase = PHASE_FAILED
+        # A killed engineer never gets an orchestrator-side verify run --
+        # nothing it did is trustworthy evidence of anything, and running
+        # the movement's full validation plan against a worktree the
+        # engineer was still writing to when killed would be a wasted,
+        # potentially-misleading verify.
+        verify_result = {"passed": False, "steps": [], "skipped_reason": failure_reason}
+    else:
+        if exit_code != 0:
+            failure_reason = "engineer_exit_nonzero"
+        elif relay_status != "CLOSED":
+            failure_reason = "relay_not_closed"
+        verify_result = (
+            {"passed": True, "steps": [], "skipped_reason": "no_verify"} if args.no_verify
+            else ov.verify_movement(worktree_path=worktree_path, validation_plan=validation_plan, base_ref=base_ref)
+        )
+        phase = PHASE_DONE if (exit_code == 0 and relay_status == "CLOSED" and verify_result["passed"]) else PHASE_FAILED
+
+    record = _load_state(state_dir, movement) or record
+    _save_state(state_dir, movement, {
+        **record, "phase": phase, "failure_reason": failure_reason, "exit_code": exit_code,
+    })
+
+    report_obj = _build_run_report(
+        movement=movement, phase=phase, exit_code=exit_code, failure_reason=failure_reason,
+        relay_status=relay_status, model=args.model, effort=args.effort, duration_s=duration_s,
+        verify_result=verify_result, worktree_path=worktree_path, branch=branch,
+    )
+    print(json.dumps(report_obj))
+    return EXIT_OK if phase == PHASE_DONE else EXIT_REFUSED
+
+
+# ---------------------------------------------------------------------------
+# verify (GOV.ORCH.1 section 2.2, also standalone)
+# ---------------------------------------------------------------------------
+
+def _cmd_verify(args: argparse.Namespace) -> int:
+    state_dir = Path(args.state_dir)
+    relay_dir = Path(args.relay_dir).resolve()
+    record = _load_state(state_dir, args.movement)
+    if record is None:
+        print(f"error: no state record for {args.movement}", file=sys.stderr)
+        return EXIT_USAGE
+    worktree_path = Path(record["worktree_path"])
+    validation_plan, base_ref, _relay_status = _movement_validation_plan_and_base(relay_dir, args.movement)
+    result = ov.verify_movement(worktree_path=worktree_path, validation_plan=validation_plan, base_ref=base_ref)
+    print(json.dumps(result))
+    return EXIT_OK if result["passed"] else EXIT_REFUSED
 
 
 # ---------------------------------------------------------------------------
 # status
 # ---------------------------------------------------------------------------
 
-def _status_row(record: dict, relay_dir: Path, retry_limit: int) -> dict:
+def _status_row(record: dict, relay_dir: Path, retry_limit: int, legacy: bool = False) -> dict:
     is_alive = pid_alive(record.get("pid"))
     relay_status = None
     last_marker, last_timestamp = None, None
@@ -849,9 +1062,11 @@ def _status_row(record: dict, relay_dir: Path, retry_limit: int) -> dict:
             last_timestamp = entries[-1].get("timestamp")
     except OrchestratorError:
         pass
+    prior_phase = record.get("phase", PHASE_RUNNING)
     phase = reconcile_phase(record, is_alive, relay_status, retry_limit)
-    if phase != record.get("phase"):
-        record = {**record, "phase": phase}
+    failure_reason = reconcile_failure_reason(record, phase, prior_phase)
+    if phase != prior_phase or failure_reason != record.get("failure_reason"):
+        record = {**record, "phase": phase, "failure_reason": failure_reason}
     return {
         "movement_id": record["movement_id"], "phase": phase, "pid": record.get("pid"),
         "pid_alive": is_alive, "revision": record.get("revision"), "branch": record.get("branch"),
@@ -863,6 +1078,12 @@ def _status_row(record: dict, relay_dir: Path, retry_limit: int) -> dict:
         # (AC-5's own backward-compatibility requirement).
         "last_activity": _read_last_activity(record.get("worktree_path")),
         "heartbeat_age_seconds": _heartbeat_age_seconds(record),
+        "failure_reason": failure_reason,
+        "exit_code": record.get("exit_code"),
+        # AC-9: a record found only under the pre-GOV.ORCH.1 default
+        # location (LEGACY_STATE_DIR), never a movement whose record lives
+        # under the current --state-dir.
+        "legacy_state_dir": legacy,
     }
 
 
@@ -871,18 +1092,26 @@ def _cmd_status(args: argparse.Namespace) -> int:
     state_dir = Path(args.state_dir)
     if args.movement:
         record = _load_state(state_dir, args.movement)
+        legacy = False
+        save_dir = state_dir
+        if record is None and state_dir.resolve() != LEGACY_STATE_DIR.resolve():
+            record = _load_state(LEGACY_STATE_DIR, args.movement)
+            legacy = record is not None
+            if legacy:
+                save_dir = LEGACY_STATE_DIR
         if record is None:
             print(f"error: no state record for {args.movement}", file=sys.stderr)
             return EXIT_USAGE
-        row = _status_row(record, relay_dir, args.retry_limit)
-        _save_state(state_dir, args.movement, {**record, "phase": row["phase"]})
+        row = _status_row(record, relay_dir, args.retry_limit, legacy=legacy)
+        _save_state(save_dir, args.movement, {**record, "phase": row["phase"], "failure_reason": row["failure_reason"]})
         print(json.dumps(row, sort_keys=True))
         return EXIT_OK
 
     rows = []
-    for record in _list_state_records(state_dir):
-        row = _status_row(record, relay_dir, args.retry_limit)
-        _save_state(state_dir, record["movement_id"], {**record, "phase": row["phase"]})
+    for record, legacy in _list_state_records_with_legacy(state_dir, LEGACY_STATE_DIR):
+        row = _status_row(record, relay_dir, args.retry_limit, legacy=legacy)
+        save_dir = LEGACY_STATE_DIR if legacy else state_dir
+        _save_state(save_dir, record["movement_id"], {**record, "phase": row["phase"], "failure_reason": row["failure_reason"]})
         rows.append(row)
     print(json.dumps(sorted(rows, key=lambda r: r["movement_id"]), sort_keys=True))
     return EXIT_OK
@@ -1057,6 +1286,27 @@ def build_parser() -> argparse.ArgumentParser:
     p_start.add_argument("--model", default=None, help="Passed through to claude -p --model (e.g. 'opus'). Unset uses the CLI's own default.")
     p_start.add_argument("--effort", default=None, help="Passed through to claude -p --effort (e.g. 'high'). Unset uses the CLI's own default.")
     p_start.set_defaults(func=_cmd_start)
+
+    p_run = sub.add_parser(
+        "run", help="dispatch, wait, verify and report on one approved movement in a single foreground call"
+    )
+    p_run.add_argument("--movement", required=True)
+    _add_common(p_run)
+    p_run.add_argument("--worktrees-dir", default=str(DEFAULT_WORKTREES_DIR))
+    p_run.add_argument("--profile", default=str(DEFAULT_ENGINEER_PROFILE))
+    p_run.add_argument("--max-workers", type=int, default=DEFAULT_MAX_WORKERS)
+    p_run.add_argument("--max-budget-usd", type=float, default=DEFAULT_MAX_BUDGET_USD)
+    p_run.add_argument("--model", default=None)
+    p_run.add_argument("--effort", default=None)
+    p_run.add_argument("--timeout", type=float, default=5400.0)
+    p_run.add_argument("--heartbeat-timeout", type=float, default=900.0)
+    p_run.add_argument("--no-verify", action="store_true")
+    p_run.set_defaults(func=_cmd_run)
+
+    p_verify = sub.add_parser("verify", help="re-run orchestrator-side verification for a finished worktree")
+    p_verify.add_argument("--movement", required=True)
+    _add_common(p_verify)
+    p_verify.set_defaults(func=_cmd_verify)
 
     p_status = sub.add_parser("status", help="report one movement, or every known movement")
     p_status.add_argument("--movement", default=None)
