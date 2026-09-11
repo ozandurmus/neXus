@@ -1,5 +1,5 @@
 # Project queue (generated — do not edit; run: py scripts/project_queue.py render)
-Build: ui2_b1_01_skeleton_ci_docker · Track: PCP.x · Generated: 2026-09-11T20:20:42Z
+Build: ui2_b1_01_skeleton_ci_docker · Track: PCP.x · Generated: 2026-09-11T20:27:58Z
 
 ## Now
 - ui2_b1_01_skeleton_ci_docker — UI2 B1-1 -- skeleton, CI and Docker contract (DRAFT, for Product Owner freeze) (in_progress)
