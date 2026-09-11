@@ -22,7 +22,18 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 HISTORY = REPO / "project" / "build_history.json"
+ARCHIVE_DIR = REPO / "project" / "archive"
 INDEX = REPO / "docs" / "history" / "INDEX.md"
+
+
+def _all_builds() -> list[dict]:
+    """GOV.ORCH.8 2.2: current + every project/archive/build_history_*.json,
+    newest-first within each source, archives after current."""
+    builds = list(json.loads(HISTORY.read_text(encoding="utf-8")).get("builds") or [])
+    if ARCHIVE_DIR.is_dir():
+        for path in sorted(ARCHIVE_DIR.glob("build_history_*.json")):
+            builds.extend(json.loads(path.read_text(encoding="utf-8")).get("builds") or [])
+    return builds
 
 #: Long enough to be useful at a glance, short enough that the table stays a
 #: table. The full text is in build_history.json; the detail is in the linked doc.
@@ -59,7 +70,7 @@ def _docs(build: dict) -> str:
 
 
 def render() -> str:
-    builds = json.loads(HISTORY.read_text(encoding="utf-8")).get("builds") or []
+    builds = _all_builds()
     rows = []
     for build in builds:
         summary = _cell(build.get("summary"))

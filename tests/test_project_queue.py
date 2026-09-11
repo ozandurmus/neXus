@@ -79,28 +79,45 @@ def _roadmap_fixture() -> dict:
     }
 
 
+def _build_history_fixture() -> dict:
+    return {
+        "schema_version": "1.0",
+        "builds": [
+            {"build": "build_x", "title": "Now title", "status": "in_progress",
+             "movement": "", "docs": {}, "summary": "Short summary."},
+        ],
+    }
+
+
 @pytest.fixture
 def queue_env(tmp_path, monkeypatch):
     project_dir = tmp_path / "project"
     project_dir.mkdir()
     backlog_path = project_dir / "backlog.json"
     roadmap_path = project_dir / "roadmap.json"
+    build_history_path = project_dir / "build_history.json"
     queue_path = project_dir / "QUEUE.md"
     history_dir = tmp_path / "docs" / "history" / "backlog"
+    history_builds_dir = tmp_path / "docs" / "history" / "builds"
 
     backlog_path.write_text(pq.canonical_dump(_backlog_fixture()), encoding="utf-8")
     roadmap_path.write_text(pq.canonical_dump(_roadmap_fixture()), encoding="utf-8")
+    build_history_path.write_text(pq.canonical_dump(_build_history_fixture()), encoding="utf-8")
 
     monkeypatch.setattr(pq, "BACKLOG", backlog_path)
     monkeypatch.setattr(pq, "ROADMAP", roadmap_path)
+    monkeypatch.setattr(pq, "BUILD_HISTORY", build_history_path)
     monkeypatch.setattr(pq, "QUEUE", queue_path)
     monkeypatch.setattr(pq, "HISTORY_BACKLOG_DIR", history_dir)
+    monkeypatch.setattr(pq, "HISTORY_BUILDS_DIR", history_builds_dir)
 
     return {
         "backlog": backlog_path,
         "roadmap": roadmap_path,
+        "build_history": build_history_path,
         "queue": queue_path,
         "history_dir": history_dir,
+        "history_builds_dir": history_builds_dir,
     }
 
 
@@ -278,6 +295,95 @@ def test_status_transition_to_terminal_moves_note_to_history(queue_env):
     text = history_file.read_text(encoding="utf-8")
     assert original_note in text
     assert "status: done" in text or "status: in_progress" in text  # written at move time
+
+
+# --- GOV.ORCH.8: redaction --------------------------------------------
+
+def test_redact_narrative_replaces_private_ip_and_device_hostname():
+    text = "endpoint 10.1.2.3 is FW-CKP-ARKTEST-01 on the estate."
+    out = pq.redact_narrative(text)
+    assert "10.1.2.3" not in out and "<PRIVATE_IP>" in out
+    assert "FW-CKP-ARKTEST-01" not in out and "<DEVICE_NAME>" in out
+
+
+def test_redact_narrative_keeps_loopback_and_documentation_ip():
+    text = "see 127.0.0.1 and 192.0.2.10 in the fixture."
+    out = pq.redact_narrative(text)
+    assert "127.0.0.1" in out
+    assert "192.0.2.10" in out
+
+
+def test_redact_narrative_honours_privacy_terms_file(tmp_path, monkeypatch):
+    terms_file = tmp_path / "privacy_terms.txt"
+    terms_file.write_text("ACMECORP\n# a comment\n\n", encoding="utf-8")
+    monkeypatch.setattr(pq, "PRIVACY_TERMS_FILE", terms_file)
+    out = pq.redact_narrative("the ACMECORP estate was scanned.")
+    assert "ACMECORP" not in out
+    assert "<ORG>" in out
+
+
+def test_redact_narrative_no_privacy_terms_file_is_a_no_op(tmp_path, monkeypatch):
+    monkeypatch.setattr(pq, "PRIVACY_TERMS_FILE", tmp_path / "missing.txt")
+    assert pq.redact_narrative("plain text, nothing to redact.") == "plain text, nothing to redact."
+
+
+# --- GOV.ORCH.8 AC-4: build/decision subcommands round-trip ---------------
+
+def test_build_add_status_note_round_trip(queue_env):
+    rc = pq.main([
+        "build", "add", "--build", "new_build", "--title", "A new build",
+        "--status", "in_progress", "--summary",
+        "First sentence stays. " + ("Extra evidence prose. " * 30),
+    ])
+    assert rc == 0
+    data = json.loads(queue_env["build_history"].read_text(encoding="utf-8"))
+    added = next(b for b in data["builds"] if b["build"] == "new_build")
+    assert added["status"] == "in_progress"
+    assert len(added["summary"]) <= pq.SUMMARY_TRUNCATE
+    assert added["detail"] == "docs/history/builds/new_build.md"
+    doc = queue_env["history_builds_dir"] / "new_build.md"
+    assert doc.exists()
+    assert "Extra evidence prose." in doc.read_text(encoding="utf-8")
+
+    rc_status = pq.main(["build", "status", "--build", "new_build", "--set", "done"])
+    assert rc_status == 0
+    data2 = json.loads(queue_env["build_history"].read_text(encoding="utf-8"))
+    assert next(b for b in data2["builds"] if b["build"] == "new_build")["status"] == "done"
+
+    rc_note = pq.main(["build", "note", "--build", "new_build", "--text", "A follow-up note."])
+    assert rc_note == 0
+    assert "A follow-up note." in doc.read_text(encoding="utf-8")
+
+
+def test_build_add_refuses_duplicate(queue_env):
+    pq.main(["build", "add", "--build", "dup_build", "--title", "x", "--status", "planned"])
+    rc = pq.main(["build", "add", "--build", "dup_build", "--title", "y", "--status", "planned"])
+    assert rc != 0
+
+
+def test_decision_open_and_decide_round_trip(queue_env):
+    rc = pq.main([
+        "decision", "open", "--id", "dec_new", "--question", "A new open question?",
+        "--decide-by", "build_z",
+    ])
+    assert rc == 0
+    data = json.loads(queue_env["roadmap"].read_text(encoding="utf-8"))
+    dec = next(d for d in data["open_decisions"] if d["id"] == "dec_new")
+    assert dec["status"] == "open"
+    assert dec["decide_by"] == "build_z"
+
+    rc_decide = pq.main(["decision", "decide", "--id", "dec_new", "--decision", "DECIDED: chose it."])
+    assert rc_decide == 0
+    data2 = json.loads(queue_env["roadmap"].read_text(encoding="utf-8"))
+    dec2 = next(d for d in data2["open_decisions"] if d["id"] == "dec_new")
+    assert dec2["status"] == "decided"
+
+
+def test_render_includes_recent_builds_section(queue_env):
+    pq.main(["render"])
+    content = queue_env["queue"].read_text(encoding="utf-8")
+    assert "## Recent builds" in content
+    assert "build_x" in content
 
 
 def test_json_load_failure_reports_line_and_column(queue_env, capsys):

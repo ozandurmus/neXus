@@ -1,5 +1,5 @@
 # Project queue (generated — do not edit; run: py scripts/project_queue.py render)
-Build: ui2_b1_01_skeleton_ci_docker · Track: PCP.x · Generated: 2026-09-11T19:57:32Z
+Build: ui2_b1_01_skeleton_ci_docker · Track: PCP.x · Generated: 2026-09-11T20:20:42Z
 
 ## Now
 - ui2_b1_01_skeleton_ci_docker — UI2 B1-1 -- skeleton, CI and Docker contract (DRAFT, for Product Owner freeze) (in_progress)
@@ -80,3 +80,9 @@ Build: ui2_b1_01_skeleton_ci_docker · Track: PCP.x · Generated: 2026-09-11T19:
 - D-V9b — sk165432 applicability to this estate's version. Does NOT block OP.0b.0 freeze -- the frozen interpr
 - pcp_server_enrollment_exposure — May console enrollment (manual or candidate-based) be exposed in non-loopback / server mode, i.e. be
 - pcp_storage_engine — PRODUCTION-SCOPED. Which engine backs the registry/job plane IN PRODUCTION, against the section 10 c
+## Recent builds
+- ui2_b1_01_skeleton_ci_docker (in_progress)
+- ui2_d1_option_a_taxonomy_step_kind (complete_with_followup)
+- ui2_b0_baseline_directory (in_progress)
+- ui2_b0_extraction_tooling (in_progress)
+- ui2_b0_c7_backup_artefact_restore_engine_contract (in_progress)
