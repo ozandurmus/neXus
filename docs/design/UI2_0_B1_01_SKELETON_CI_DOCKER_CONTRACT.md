@@ -3,7 +3,8 @@
 ## Status
 
 **DRAFT — FOR PRODUCT OWNER FREEZE, 2026-09-10; six pre-freeze defect
-fixes applied as Amendment B1-1-A, 2026-09-11 (see the amendment section at
+fixes applied as Amendment B1-1-A and the Red Hat container-runtime
+change as Amendment B1-1-B, both 2026-09-11 (see the amendment sections at
 the end of this document).**
 
 This document specifies the mechanical implementation contract for
@@ -341,3 +342,97 @@ part validatable without a Docker daemon. **Slice B** delivers the
 Testcontainers integration harness, the Dockerfile and image checks, and the
 CI job, and runs where Docker is available. Both are governed by this
 contract; neither narrows it.
+
+## Amendment B1-1-B (2026-09-11) — Red Hat container runtime, no Docker
+
+**Product Owner direction, 2026-09-11:** development happens on a local
+Red Hat container environment (OpenShift Local / CRC). Docker is not used
+now and may never be; the question is reopened only if the project later
+moves to an Ubuntu server. This amendment removes the Docker dependency
+from §7 and §8 without changing what the image must guarantee. The
+document's file name keeps the word `DOCKER` for reference stability; the
+contract is OCI, not Docker.
+
+### B-1. Build tool and file name
+
+The image is an **OCI image built with Podman/Buildah from a
+`ui2/Containerfile`** (Dockerfile syntax, unchanged semantics). No Docker
+daemon is required or permitted as a build dependency. §3.2's build command
+becomes:
+
+```text
+podman build --file ui2/Containerfile --tag nexus-ui2:local ui2
+```
+
+`buildah bud` with the same arguments is an accepted equivalent. A
+rootless build must succeed; a build that requires a privileged daemon is a
+contract violation.
+
+### B-2. Base image
+
+The distroless base of §7 is replaced by a **Red Hat Universal Base Image**,
+digest-pinned, in two stages:
+
+- build stage: `registry.access.redhat.com/ubi9/openjdk-21` (full JDK,
+  Gradle and Node toolchains are provisioned by the build, not by the base);
+- runtime stage: a `jlink`-produced custom Java 21 runtime copied onto
+  `registry.access.redhat.com/ubi9-micro`.
+
+`ubi9-micro` carries no package manager and no shell, so §7's "no shell,
+package manager, compiler, Node runtime, source tree" guarantee survives
+the move. Using `ubi9/openjdk-21-runtime` as the runtime stage is **not**
+accepted here: it ships a shell, which §7 forbids.
+
+### B-3. User and filesystem — OpenShift arbitrary UID
+
+§7's "fixed non-root numeric UID/GID" is **amended**, because it is
+incompatible with the target platform. OpenShift's default `restricted-v2`
+SCC runs a container under an **arbitrary, unpredictable UID** in group
+`0`. An image that depends on a fixed UID fails there.
+
+The image therefore:
+
+- declares a numeric non-root `USER` (for a plain `podman run`), but must
+  **not depend** on that UID being the one it receives;
+- gives every path the runtime reads or writes group `0` ownership and
+  `g=rwX` permissions on writable paths, `g=rX` elsewhere;
+- keeps the read-only root filesystem and explicit writable mounts of §7;
+- never writes to a path derived from the running user's home or name.
+
+An acceptance check proves this: the image starts and reaches readiness
+when run with an arbitrary UID (`podman run --user 1000670000:0 ...`).
+
+### B-4. Testcontainers under Podman
+
+§4's harness runs against the Podman socket, not a Docker daemon. The
+integration module configures `DOCKER_HOST` from the rootless Podman socket
+(`unix://$XDG_RUNTIME_DIR/podman/podman.sock`, or the `podman machine`
+socket on macOS) and sets `TESTCONTAINERS_RYUK_DISABLED=true` unless the
+environment supports a privileged reaper. PostgreSQL stays pinned to the
+version frozen in `C1` §9, pulled from a Red Hat or upstream registry by
+digest. If the harness cannot reach a Podman socket the integration task
+**fails closed with a message naming the socket it tried** — it never
+silently degrades to skipping the tests.
+
+### B-5. Amended acceptance checks
+
+§8 checks 9 and 10 are replaced, and one is added:
+
+- **9'.** `podman build --file ui2/Containerfile --tag nexus-ui2:acceptance ui2`
+  succeeds rootless, and image history contains no secret build argument.
+- **10'.** `podman image inspect` / `podman run --rm ... ` confirms a
+  jlink'd Java 21 runtime, no shell, no package manager, no Node, no
+  Line-1 path, no Python, and only the assembled application, SBOM and
+  licences.
+- **16 (new).** The image reaches readiness under an arbitrary UID in
+  group 0, per B-3.
+
+### B-6. What this amendment does not decide
+
+Deployment onto OpenShift — `Deployment`/`Route`/`Service` manifests,
+`SecurityContextConstraints` selection, secret mounting as OpenShift
+`Secret` objects, and whether CRC is also the integration-test host — is
+**out of scope for B1-1** and belongs to its own movement. This amendment
+only makes the image buildable and runnable there. The CI job of §6 is
+likewise unchanged in intent; the runner's container tooling is chosen by
+the Slice B movement and recorded in its `SESSION_CLOSE`.
