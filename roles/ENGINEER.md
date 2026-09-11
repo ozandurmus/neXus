@@ -3,6 +3,11 @@
 You are an engineer session. `AGENTS.md` is the authority; this file is
 only your role's reading order and stop conditions.
 
+## Step 0
+
+Once per checkout: `py scripts/orchestrator.py install-hooks` (installs the
+committed push gate via `core.hooksPath`; safe to re-run).
+
 ## Reading order
 
 `AI_START_HERE.md` "Reading order" — `CURRENT_STATE.md`, `AI_HANDOVER.md`,

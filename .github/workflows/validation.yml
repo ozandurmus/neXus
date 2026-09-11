@@ -50,6 +50,28 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # GOV.ORCH.7 section 2.3 item 3 -- PO write-scope enforcement. Runs only
+  # for a `gov/po-*` head branch; every other branch's PR is unaffected
+  # (`check-latest`/skip semantics: the job's own `if:` gates entry, not a
+  # step inside it, so it costs nothing on an ordinary PR).
+  po-scope-check:
+    if: github.event_name == 'pull_request' && startsWith(github.head_ref, 'gov/po-')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Fetch origin/main
+        run: git fetch origin +main:refs/remotes/origin/main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: PO write-scope check
+        run: >-
+          python3 scripts/nexus_po_scope_check.py
+          --branch "${{ github.head_ref }}" --base origin/main
+
   # FAST PR VALIDATION — runs on every pull_request. Cheap, high-value gates
   # only: import sanity, the repository/privacy gate, project-state
   # consistency, the build-history index, a small stable safety/regression
@@ -148,6 +170,14 @@ jobs:
           tests/test_dev0_4_repository_privacy_gate.py
           tests/test_known_safety_gaps.py
           tests/test_frontend_rendering_boundary.py
+
+      - name: GOV.ORCH.7 governance/scope tests
+        # Section 2.3 item 5 CI parity: the vendor-neutral governance guard
+        # and the PO write-scope check's own unit suite. A separate step
+        # (not folded into "PR smoke / safety regression set" above) so a
+        # concurrent movement adding its own cold-start-budget step here
+        # does not need to touch this one, or vice versa.
+        run: python -m pytest -q tests/test_vendor_neutral_governance.py tests/test_po_scope_check.py
 
       - name: Whitespace / conflict-marker check
         # Checks the whole HEAD tree against git's constant empty-tree SHA,

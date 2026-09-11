@@ -63,9 +63,20 @@ def _load_base_sha(worktree: Path, record_path: str | None) -> str | None:
     return git_cfg.get("base")
 
 
+def _current_branch(worktree: Path) -> str | None:
+    result = subprocess.run(
+        ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+        cwd=str(worktree), capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        return None
+    branch = result.stdout.strip()
+    return branch or None
+
+
 def check_push(
     *, stdin_lines: list[str], worktree: Path, force_marker: bool,
-    record_path: str | None = None, privacy_check=None,
+    record_path: str | None = None, privacy_check=None, po_scope_check=None,
 ) -> tuple[bool, str]:
     """The decision core, given already-read stdin lines and an explicit
     force marker -- kept separate from `main` so tests drive it directly
@@ -74,6 +85,13 @@ def check_push(
     `git`, against a real temporary repo the tests construct)."""
     if force_marker:
         return False, "denied: force push (NEXUS_GIT_FORCE_PUSH marker set)"
+
+    if po_scope_check is not None:
+        branch = _current_branch(worktree)
+        if branch is not None:
+            ok, reason = po_scope_check(worktree, branch)
+            if not ok:
+                return False, f"denied: {reason}"
 
     for line in stdin_lines:
         line = line.strip()
@@ -102,6 +120,26 @@ def check_push(
     return True, "ok"
 
 
+def _po_scope_check(worktree: Path, branch: str) -> tuple[bool, str]:
+    """GOV.ORCH.7 section 2.3 item 3: the same `nexus_po_scope_check.py`
+    check CI runs, applied here as a pre-push gate when the current branch
+    matches the configured `gov/po-*` prefix -- a branch that doesn't
+    match is out of scope and always passes (see
+    `nexus_po_scope_check.check_scope`). Base is always the configured
+    remote main branch: a PO governance branch's own base is always
+    `origin/main`, never a movement's own `report.git.base`."""
+    import nexus_po_scope_check as scope_check  # noqa: E402 (flat import)
+
+    try:
+        config = scope_check.load_scope_config()
+        if not branch.startswith(config["branch_prefix"]):
+            return True, "not a PO branch, skipped"
+        files = scope_check.changed_files(branch, "origin/main", cwd=worktree)
+    except scope_check.ScopeCheckError as exc:
+        return False, f"PO scope check could not run: {exc}"
+    return scope_check.check_scope(branch=branch, files=files, config=config)
+
+
 def main(argv: list[str]) -> int:
     worktree = Path.cwd()
     record_path = argv[1] if len(argv) > 1 else None
@@ -113,6 +151,7 @@ def main(argv: list[str]) -> int:
     ok, reason = check_push(
         stdin_lines=stdin_lines, worktree=worktree, force_marker=force_marker,
         record_path=record_path, privacy_check=ov.privacy_check,
+        po_scope_check=_po_scope_check,
     )
     if not ok:
         print(reason, file=sys.stderr)

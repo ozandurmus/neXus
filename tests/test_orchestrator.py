@@ -62,6 +62,18 @@ def _make_relay(tmp_path: Path, movement: str = "TEST_MOVEMENT", **report_overri
     return relay_dir
 
 
+@pytest.fixture(autouse=True)
+def _bypass_preflight(monkeypatch):
+    """GOV.ORCH.7 section 2.3 item 4: `_do_start` now calls `run_preflight`
+    first, which fetches `origin/main` and reads real repository files --
+    none of which this suite's isolated `tmp_path` fixtures provide, and
+    none of which is what this suite (dispatch/resume mechanics) is
+    testing. `run_preflight`'s own decision logic is covered directly by
+    tests/test_orchestrator_preflight.py, a separate module this autouse
+    fixture does not reach."""
+    monkeypatch.setattr(orch, "run_preflight", lambda **kwargs: [])
+
+
 class _FakeProc:
     def __init__(self, pid: int) -> None:
         self.pid = pid

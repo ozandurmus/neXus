@@ -1,0 +1,12 @@
+#!/bin/sh
+# GOV.ORCH.7 section 2.3 item 1: the same push gate for any checkout of this
+# repository (main checkout or a movement worktree), installed via
+# `git config core.hooksPath .githooks` (`scripts/orchestrator.py
+# install-hooks`). Depends on no AI-tool environment variable -- see
+# scripts/nexus_worker_prepush.py's own module docstring.
+#
+# This wrapper resolves the repository root itself (rather than a baked-in
+# absolute path) so the identical committed file works from the main
+# checkout, any linked worktree, or a fresh clone, unmodified.
+ROOT="$(git rev-parse --show-toplevel)"
+exec python3 "$ROOT/scripts/nexus_worker_prepush.py" "$@"
