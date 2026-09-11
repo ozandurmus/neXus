@@ -1,0 +1,110 @@
+{
+  "created_at": "2026-09-11T23:00:09Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1..AC-12 exactly as written in the B1-4 contract section 9"
+        ],
+        "baseline": {
+          "authority": "docs/design/UI2_0_B1_04_COLLECTION_ENGINE_CORE_CONTRACT.md (DRAFT -- FOR PRODUCT OWNER FREEZE) with frozen C2 for the job record and state machine, C4 for the registry and gate resolution, and C6 for the capability spec template. The B1-1 skeleton is merged.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "sequencing": "Phase B1 row 4, the product's core execution path. Six of its fourteen named tests need a container runtime and run where one exists."
+        },
+        "context_not_loaded": [
+          "docs/history/**",
+          "Line-1 source",
+          "project/*.json"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/ui2-b1-04-collection-engine-core"
+        },
+        "invariants": [
+          "The engine contacts no real device in this movement",
+          "A lease that expires is never double-claimed; a fenced writer cannot write",
+          "An unresolved gate means the capability never executes",
+          "Evidence is sanitized as the contract specifies and raw output is not retained"
+        ],
+        "merge_gate": "PO review of diff and test evidence; no self-merge.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Implement the collection engine core: capability registry loading and gate resolution, the step executor with the C2 crash-safe job record including leasing, heartbeat, fencing, timeout, worker loss, duplicate suppression and the OUTCOME_UNKNOWN no-retry rule, the transport port with an SSH exec adapter, the parser framework with explicit UNKNOWN and NOT_APPLICABLE handling, and the evidence writer.",
+        "output_contract": [
+          "Registry, executor, transport port, SSH adapter, parser framework and evidence writer as the contract specifies",
+          "The contract's named tests, with container-dependent ones clearly marked and never silently skipped",
+          "SESSION_CLOSE with exact changed files, test results, blockers and commit state"
+        ],
+        "recommended_reasoning": {
+          "reason": "The crash-safe execution path: leasing, fencing and uncertain-outcome semantics where a subtle gap causes a duplicate device contact.",
+          "tier": "Sonnet 5, extended thinking (high)"
+        },
+        "requirements": [
+          "English, per AGENTS.md engineering-output language law",
+          "Read the B1-4 contract and the frozen sections it cites; read nothing else outside scope.in",
+          "Only class 0 reads; the network-device command gate applies and no write path is implemented",
+          "job-engine gains no dependency on a transport implementation; DIR-3 and DIR-6 must stay green",
+          "A parse failure is never recorded as an empty result",
+          "OUTCOME_UNKNOWN never triggers an automatic second device contact",
+          "Run the validation plan in the foreground and wait for real results before SESSION_CLOSE"
+        ],
+        "risks": [
+          "Letting job-engine reference the SSH adapter directly and breaking the direction rules",
+          "Treating a parse failure as an empty result",
+          "Implementing an automatic retry after OUTCOME_UNKNOWN",
+          "Writing container-dependent tests that silently skip when no runtime is present"
+        ],
+        "scope": {
+          "in": [
+            "ui2/capability-registry/",
+            "ui2/job-engine/ (including the transport port)",
+            "ui2/worker/ (the ssh_exec adapter)",
+            "ui2/persistence/ and this movement's migration",
+            "ui2/platform-core/ where a shared type is genuinely shared",
+            "ui2/integration-tests/ and module unit tests"
+          ],
+          "out": [
+            "Any real device contact; this movement contacts no device",
+            "PAN XML API and SFTP adapters beyond their interfaces",
+            "Any UI screen",
+            "Any container image or deployment manifest",
+            ".github/workflows/**"
+          ]
+        },
+        "validation_plan": [
+          "assemble: ./ui2/gradlew -p ui2 clean assemble",
+          "architecture tests: ./ui2/gradlew -p ui2 architectureTest",
+          "unit tests: ./ui2/gradlew -p ui2 unitTest",
+          "privacy gate: python3 scripts/repository_privacy_check.py",
+          "diff check: git diff --check"
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-11T23:00:09Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "RELAY_QUESTION",
+      "seq": 2,
+      "subject": "Five open items from the B1-4 collection engine contract",
+      "text": "Parked overnight. Items 1 and 2 change what the code does and hold implementation; the rest can be answered later without rework.\n\n1. Capability spec file format. Neither C4 nor C6 fixes a serialization for a capability spec. The contract proposes a placeholder. Choosing it now avoids a migration of every spec later.\n\n2. Lease, heartbeat and retry-budget numeric defaults. Inherited unresolved from C2 section 10 items 1 and 2. These decide how quickly a lost worker is detected and how long a job can look alive after its process is gone.\n\n3. Where the second transport adapter lives when it arrives: the worker module, or a new transport-adapters module. Not needed until the PAN or SFTP slice.\n\n4. The connect timeout default under ssh_exec. No gate-sourced value exists because connect is gate NOT_APPLICABLE.\n\n5. Whether extending the architecture test suite needs its own amendment document to the B1-1 contract, or can be extended in place. Process question, not a code question.",
+      "timestamp": "2026-09-11T23:00:09Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0105",
+  "movement": "UI2_B1_04_COLLECTION_ENGINE_CORE",
+  "next_actor": "po",
+  "refs": [
+    "docs/design/UI2_0_B1_04_COLLECTION_ENGINE_CORE_CONTRACT.md",
+    "docs/design/UI2_0_C2_JOB_EXECUTION_CONTRACT.md",
+    "docs/design/UI2_0_C4_CAPABILITY_REGISTRY_GATE_RESOLUTION_CONTRACT.md",
+    "docs/design/UI2_0_C6_CAPABILITY_EXTRACTION_CONTRACT.md",
+    "docs/design/UI2_0_B1_01_SKELETON_CI_DOCKER_CONTRACT.md"
+  ],
+  "schema_version": 1,
+  "status": "AWAITING_PO",
+  "updated_at": "2026-09-11T23:00:09Z"
+}
