@@ -172,7 +172,9 @@ The Product Owner selects the worker route per movement. There is no fixed
 - **Worker selection:** choose the lightest suitable current model and effort
   for the movement's contract, risk, and evidence needs. Claude is preferred
   when its license/credit is available; Codex remains the fallback when Claude
-  is unavailable. Do not add OpenRouter as a general worker fallback: its
+  is unavailable, dispatched via `scripts/orchestrator.py start|run --provider
+  {claude,codex}` (GOV.ORCH.2, `docs/design/GOV_ORCH_2_PROVIDER_ADAPTER.md`;
+  default `claude`). Do not add OpenRouter as a general worker fallback: its
   accepted POC is a separate, bounded, read-only advisory review node, not an
   orchestrator worker provider. Use that POC only when a small sanitized
   second-opinion review has a clear benefit and its separate credential/privacy

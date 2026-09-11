@@ -173,3 +173,46 @@ def test_verify_movement_string_entries_never_fail_verification(tmp_path):
     repo = _base_repo(tmp_path)
     result = ov.verify_movement(worktree_path=repo, validation_plan=["run the focused suite"], base_ref="main")
     assert result["passed"] is True
+
+
+# --- integrate (GOV.ORCH.2 section 2.5, moved from
+# --- nexus_engineer_tool_gate.py::_integration_check) ----------------------
+
+def test_integrate_fails_when_fetch_has_no_origin_remote(tmp_path):
+    repo = _base_repo(tmp_path)  # no "origin" remote configured at all
+    ok, reason = ov.integrate(repo)
+    assert ok is False
+    assert "git fetch origin failed" in reason
+
+
+def test_integrate_merges_origin_main_and_runs_the_convergence_check(tmp_path):
+    bare = tmp_path / "origin.git"
+    subprocess.run(["git", "init", "-q", "--bare", str(bare)], check=True)
+    work = tmp_path / "work"
+    subprocess.run(["git", "clone", "-q", str(bare), str(work)], check=True)
+    _git(work, "config", "user.email", "t@example.com")
+    _git(work, "config", "user.name", "t")
+    _write(work, "README.md", "hello\n")
+    _commit_all(work, "init")
+    subprocess.run(["git", "push", "-q", "origin", "HEAD:main"], cwd=work, check=True)
+
+    # A second clone of the SAME bare repo, on the same branch it just
+    # pushed, diverges by one further commit on origin/main -- integrate()
+    # must fetch and merge that into `work` before validating.
+    other = tmp_path / "other"
+    subprocess.run(["git", "clone", "-q", "-b", "main", str(bare), str(other)], check=True)
+    _git(other, "config", "user.email", "t2@example.com")
+    _git(other, "config", "user.name", "t2")
+    _write(other, "UPSTREAM.md", "new upstream file\n")
+    _commit_all(other, "upstream change")
+    subprocess.run(["git", "push", "-q", "origin", "HEAD:main"], cwd=other, check=True)
+
+    # This synthetic repo has neither tests/test_architecture_convergence.py
+    # nor scripts/build_history_index.py -- integrate() still attempts to
+    # run them (exercising the merge step, not the real repo's own
+    # convergence suite), so the missing-file check step reports the
+    # expected failure rather than raising.
+    ok, reason = ov.integrate(work)
+    assert (work / "UPSTREAM.md").is_file()  # the merge itself did happen -- the assertion this test is really for
+    assert ok is False
+    assert "test_architecture_convergence.py" in reason

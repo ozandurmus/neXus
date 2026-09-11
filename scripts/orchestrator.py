@@ -68,6 +68,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 import local_relay as lr  # noqa: E402
 import orchestrator_verify as ov  # noqa: E402
+import orchestrator_providers as op  # noqa: E402
 
 EXIT_OK, EXIT_REFUSED, EXIT_USAGE = 0, 1, 2
 
@@ -434,7 +435,7 @@ def summarize_stream_json_line(raw_line: str) -> str | None:
     return _truncate(line, SUMMARY_TEXT_LIMIT)
 
 
-def _drain_log_once(log_path: Path, summary_fh, offset: int) -> int:
+def _drain_log_once(log_path: Path, summary_fh, offset: int, summarize=summarize_stream_json_line) -> int:
     """Read whatever complete lines have been appended to `log_path` since
     byte `offset`, append their summaries to the already-open `summary_fh`,
     and return the new offset. A line with no trailing newline yet (the
@@ -454,7 +455,7 @@ def _drain_log_once(log_path: Path, summary_fh, offset: int) -> int:
     consumed = len(data) if data.endswith(b"\n") else len(data) - len(pieces[-1])
     wrote = False
     for raw in complete:
-        summary = summarize_stream_json_line(raw.decode("utf-8", errors="replace"))
+        summary = summarize(raw.decode("utf-8", errors="replace"))
         if summary is not None:
             summary_fh.write(summary + "\n")
             wrote = True
@@ -465,6 +466,7 @@ def _drain_log_once(log_path: Path, summary_fh, offset: int) -> int:
 
 def _tail_engineer_log(
     log_path: Path, summary_path: Path, pid: int, poll_interval: float = TAIL_POLL_INTERVAL_DEFAULT,
+    summarize=summarize_stream_json_line,
 ) -> None:
     """AC-2's companion process: `_spawn_engineer` returns immediately
     (section 3.4 of the FROZEN amendment), so nothing in the orchestrator's
@@ -477,9 +479,9 @@ def _tail_engineer_log(
     offset = 0
     with open(summary_path, "a", encoding="utf-8") as summary_fh:
         while True:
-            offset = _drain_log_once(log_path, summary_fh, offset)
+            offset = _drain_log_once(log_path, summary_fh, offset, summarize=summarize)
             if not pid_alive(pid):
-                offset = _drain_log_once(log_path, summary_fh, offset)
+                offset = _drain_log_once(log_path, summary_fh, offset, summarize=summarize)
                 return
             time.sleep(poll_interval)
 
@@ -658,15 +660,21 @@ def _git_status_porcelain(worktree_path: Path) -> str:
     return result.stdout
 
 
-def _spawn_summary_tailer(log_path: Path, summary_path: Path, pid: int) -> None:
+def _spawn_summary_tailer(log_path: Path, summary_path: Path, pid: int, provider: str = "claude") -> None:
     """AC-2: a second detached process, independent of both the engineer
     process and of `start`'s own (immediately-returning) invocation, that
     keeps `engineer.summary.log` growing for as long as the engineer pid it
     was given stays alive. Never awaited/joined -- `_tail-summary` is an
-    internal subcommand, not part of the documented CLI surface."""
+    internal subcommand, not part of the documented CLI surface.
+
+    GOV.ORCH.2: `--provider` tells `_cmd_tail_summary` which adapter's
+    `summarize_line` to use -- the tailer runs as a separate process, so it
+    cannot simply be handed the adapter object the spawning call already
+    built."""
     subprocess.Popen(
         [sys.executable, str(Path(__file__).resolve()), "_tail-summary",
-         "--log", str(log_path), "--summary", str(summary_path), "--pid", str(pid)],
+         "--log", str(log_path), "--summary", str(summary_path), "--pid", str(pid),
+         "--provider", provider],
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL,
         start_new_session=True,
     )
@@ -679,7 +687,9 @@ def _spawn_engineer(
     extra_prompt_note: str | None = None,
     model: str | None = None,
     effort: str | None = None,
+    provider: str = "claude",
 ) -> subprocess.Popen:
+    adapter = op.build_adapter(provider, profile_path=profile_path)
     env = dict(os.environ)
     env[lr.ENV_CANONICAL_RELAY_DIR] = str(canonical_relay_dir)
     env[lr.ENV_RELAY_FILE] = str(relay_file)
@@ -717,26 +727,33 @@ def _spawn_engineer(
     # appends RESUME_RECOVERY_NOTE onto the prompt for this dispatch only --
     # ENGINEER_PROMPT itself stays movement- and dispatch-invariant.
     prompt = ENGINEER_PROMPT if not extra_prompt_note else ENGINEER_PROMPT + "\n\n" + extra_prompt_note
-    argv = ["claude", "-p", prompt, "--settings", str(profile_path),
-            "--add-dir", str(canonical_relay_dir),
-            "--output-format", "stream-json", "--verbose",
-            "--permission-prompts", "none", "--max-budget-usd", str(max_budget_usd)]
-    if model:
-        argv += ["--model", model]
-    if effort:
-        argv += ["--effort", effort]
-    if resume_session_id:
-        argv += ["--resume", resume_session_id]
+    # GOV.ORCH.2 section 2.2: the prompt is written to a file first and the
+    # adapter reads it back to build argv -- never composed as an in-memory
+    # string the caller passes straight through. Content is unchanged
+    # (identical to the pre-GOV.ORCH.2 in-memory value), only its source is.
+    nexus_dir = worktree_path / ".nexus"
+    nexus_dir.mkdir(parents=True, exist_ok=True)
+    prompt_path = nexus_dir / "engineer_prompt.txt"
+    prompt_path.write_text(prompt, encoding="utf-8")
+
+    argv = adapter.build_argv(
+        prompt_path=prompt_path, worktree=worktree_path, model=model, effort=effort,
+        budget_usd=max_budget_usd, extra_dirs=[canonical_relay_dir],
+        resume_session_id=resume_session_id,
+    )
+    env = adapter.build_env(env, worktree=worktree_path, relay_dir=canonical_relay_dir, relay_file=relay_file)
+    stdin_src = adapter.stdin_source(prompt_path)
     log_path = worktree_path / ".nexus" / "engineer.log"
     log_path.parent.mkdir(parents=True, exist_ok=True)
     log_fh = open(log_path, "ab")
     proc = subprocess.Popen(
         argv, cwd=str(worktree_path), env=env,
-        stdout=log_fh, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
+        stdout=log_fh, stderr=subprocess.STDOUT,
+        stdin=stdin_src if stdin_src is not None else subprocess.DEVNULL,
         start_new_session=True,
     )
     summary_path = log_path.parent / "engineer.summary.log"
-    _spawn_summary_tailer(log_path, summary_path, proc.pid)
+    _spawn_summary_tailer(log_path, summary_path, proc.pid, provider=provider)
     return proc
 
 
@@ -804,6 +821,15 @@ def _do_start(args: argparse.Namespace) -> tuple[int, dict | None, subprocess.Po
 
     hash_hex = task_hash(session_start)
 
+    provider = getattr(args, "provider", "claude") or "claude"
+    try:
+        op.validate_effort(provider, args.effort)
+    except op.InvalidEffortError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return EXIT_USAGE, None, None
+    merge_mode = op.resolve_merge_mode(provider, getattr(args, "merge_mode", None))
+    no_merge_note = op.NO_MERGE_PROMPT_NOTE if merge_mode == "orchestrator" else None
+
     if action == "resume":
         worktree_path = Path(existing["worktree_path"])
         branch = existing["branch"]
@@ -825,18 +851,22 @@ def _do_start(args: argparse.Namespace) -> tuple[int, dict | None, subprocess.Po
         # this write and the spawn still leaves the increment recorded.
         retry_count = existing.get("retry_count", 0) + 1
         _save_state(state_dir, args.movement, {**existing, "retry_count": retry_count})
+        notes = [n for n in (RESUME_RECOVERY_NOTE if recovery_note_needed else None, no_merge_note) if n]
         proc = _spawn_engineer(
             worktree_path=worktree_path, profile_path=Path(args.profile),
             canonical_relay_dir=relay_dir, relay_file=relay_file,
             resume_session_id=session_id, max_budget_usd=args.max_budget_usd,
-            extra_prompt_note=RESUME_RECOVERY_NOTE if recovery_note_needed else None,
+            extra_prompt_note="\n\n".join(notes) if notes else None,
             model=args.model,
             effort=args.effort,
+            provider=provider,
         )
         record = {**existing, "pid": proc.pid, "phase": PHASE_RUNNING,
                   "last_action": "resumed", "task_hash": hash_hex,
                   "dispatch_seq": len(relay_obj["entries"]), "retry_count": retry_count,
-                  "failure_reason": None, "exit_code": None}
+                  "failure_reason": None, "exit_code": None,
+                  "provider": provider, "model_requested": args.model, "effort_requested": args.effort,
+                  "merge_mode": merge_mode}
         _save_state(state_dir, args.movement, record)
         payload = {"action": "resume", "movement_id": args.movement, "pid": proc.pid,
                    "worktree_path": str(worktree_path), "revision": revision,
@@ -867,6 +897,8 @@ def _do_start(args: argparse.Namespace) -> tuple[int, dict | None, subprocess.Po
         max_budget_usd=args.max_budget_usd,
         model=args.model,
         effort=args.effort,
+        provider=provider,
+        extra_prompt_note=no_merge_note,
     )
     record = {
         "movement_id": args.movement, "revision": revision, "base_sha": base_sha,
@@ -876,6 +908,8 @@ def _do_start(args: argparse.Namespace) -> tuple[int, dict | None, subprocess.Po
         "retry_count": 0, "last_error": None, "last_action": "dispatched",
         "dispatch_seq": len(relay_obj["entries"]),
         "failure_reason": None, "exit_code": None,
+        "provider": provider, "model_requested": args.model, "effort_requested": args.effort,
+        "merge_mode": merge_mode,
     }
     _save_state(state_dir, args.movement, record)
     payload = {"action": "dispatch", "movement_id": args.movement, "pid": proc.pid,
@@ -958,15 +992,31 @@ def _build_run_report(
     *, movement: str, phase: str, exit_code: int | None, failure_reason: str | None,
     relay_status: str | None, model: str | None, effort: str | None, duration_s: float,
     verify_result: dict, worktree_path: Path, branch: str | None,
+    provider: str = "claude", merge_mode: str | None = None,
+    model_observed: str | None = None, effort_observed: str | None = None,
+    integrate_result: dict | None = None,
 ) -> dict:
-    """GOV.ORCH.1 section 2.4's report object, exactly."""
-    return {
+    """GOV.ORCH.1 section 2.4's report object, extended by GOV.ORCH.2
+    section 2.4 with provider/model/effort requested-vs-observed fields and
+    the `provider_default_used` audit exception (section 2.4: a dispatch
+    whose observed values are null -- the engineer log never surfaced a
+    model -- is flagged rather than silently reported as if nothing was
+    recorded)."""
+    report = {
         "movement": movement, "phase": phase, "exit_code": exit_code,
         "failure_reason": failure_reason, "relay_status": relay_status,
-        "provider": "claude", "model": model, "effort": effort,
+        "provider": provider, "model": model, "effort": effort,
+        "model_requested": model, "effort_requested": effort,
+        "model_observed": model_observed, "effort_observed": effort_observed,
+        "merge_mode": merge_mode,
         "duration_s": round(duration_s, 3), "verify": verify_result,
         "worktree_path": str(worktree_path), "branch": branch,
     }
+    if model_observed is None:
+        report["audit_exception"] = "provider_default_used"
+    if integrate_result is not None:
+        report["integrate"] = integrate_result
+    return report
 
 
 def _cmd_run(args: argparse.Namespace) -> int:
@@ -1010,14 +1060,36 @@ def _cmd_run(args: argparse.Namespace) -> int:
         phase = PHASE_DONE if (exit_code == 0 and relay_status == "CLOSED" and verify_result["passed"]) else PHASE_FAILED
 
     record = _load_state(state_dir, movement) or record
+    provider = record.get("provider", "claude")
+    merge_mode = record.get("merge_mode") or op.resolve_merge_mode(provider, getattr(args, "merge_mode", None))
+
+    adapter = op.build_adapter(provider)
+    model_observed, effort_observed = adapter.observed_model(log_path)
+
+    # GOV.ORCH.2 section 2.5: in orchestrator merge-mode the engineer never
+    # runs `gh pr merge` itself -- `run` performs the integration here,
+    # exactly once, and only after a green `verify` (never on a killed
+    # engineer, a nonzero exit, an unclosed relay, or a failed verify).
+    integrate_result = None
+    if merge_mode == "orchestrator" and phase == PHASE_DONE:
+        ok, reason = ov.integrate(worktree_path)
+        integrate_result = {"passed": ok, "reason": reason}
+        if not ok:
+            phase = PHASE_FAILED
+            failure_reason = "integration_failed"
+
     _save_state(state_dir, movement, {
         **record, "phase": phase, "failure_reason": failure_reason, "exit_code": exit_code,
+        "model_observed": model_observed, "effort_observed": effort_observed,
     })
 
     report_obj = _build_run_report(
         movement=movement, phase=phase, exit_code=exit_code, failure_reason=failure_reason,
         relay_status=relay_status, model=args.model, effort=args.effort, duration_s=duration_s,
         verify_result=verify_result, worktree_path=worktree_path, branch=branch,
+        provider=provider, merge_mode=merge_mode,
+        model_observed=model_observed, effort_observed=effort_observed,
+        integrate_result=integrate_result,
     )
     print(json.dumps(report_obj))
     return EXIT_OK if phase == PHASE_DONE else EXIT_REFUSED
@@ -1080,6 +1152,12 @@ def _status_row(record: dict, relay_dir: Path, retry_limit: int, legacy: bool = 
         "heartbeat_age_seconds": _heartbeat_age_seconds(record),
         "failure_reason": failure_reason,
         "exit_code": record.get("exit_code"),
+        # GOV.ORCH.2 section 2.4: display-only pass-through of the provider
+        # selection and requested model/effort recorded at dispatch time.
+        "provider": record.get("provider", "claude"),
+        "model_requested": record.get("model_requested"),
+        "effort_requested": record.get("effort_requested"),
+        "merge_mode": record.get("merge_mode"),
         # AC-9: a record found only under the pre-GOV.ORCH.1 default
         # location (LEGACY_STATE_DIR), never a movement whose record lives
         # under the current --state-dir.
@@ -1175,7 +1253,11 @@ def _cmd_merge_lock(args: argparse.Namespace) -> int:
 # ---------------------------------------------------------------------------
 
 def _cmd_tail_summary(args: argparse.Namespace) -> int:
-    _tail_engineer_log(Path(args.log), Path(args.summary), args.pid, poll_interval=args.poll_interval)
+    adapter = op.build_adapter(args.provider)
+    _tail_engineer_log(
+        Path(args.log), Path(args.summary), args.pid, poll_interval=args.poll_interval,
+        summarize=adapter.summarize_line,
+    )
     return EXIT_OK
 
 
@@ -1283,8 +1365,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_start.add_argument("--profile", default=str(DEFAULT_ENGINEER_PROFILE))
     p_start.add_argument("--max-workers", type=int, default=DEFAULT_MAX_WORKERS)
     p_start.add_argument("--max-budget-usd", type=float, default=DEFAULT_MAX_BUDGET_USD)
-    p_start.add_argument("--model", default=None, help="Passed through to claude -p --model (e.g. 'opus'). Unset uses the CLI's own default.")
-    p_start.add_argument("--effort", default=None, help="Passed through to claude -p --effort (e.g. 'high'). Unset uses the CLI's own default.")
+    p_start.add_argument("--model", default=None, help="Passed through to the provider's own --model/-m flag. Unset uses the CLI's own default.")
+    p_start.add_argument("--effort", default=None, help="Passed through to the provider's own reasoning-effort flag. Unset uses the CLI's own default.")
+    p_start.add_argument("--provider", default="claude", choices=sorted(op.PROVIDERS))
+    p_start.add_argument("--merge-mode", default=None, choices=("engineer", "orchestrator"),
+                          help="Default 'engineer' for claude, forced 'orchestrator' for codex (GOV.ORCH.2 section 2.5).")
     p_start.set_defaults(func=_cmd_start)
 
     p_run = sub.add_parser(
@@ -1298,6 +1383,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_run.add_argument("--max-budget-usd", type=float, default=DEFAULT_MAX_BUDGET_USD)
     p_run.add_argument("--model", default=None)
     p_run.add_argument("--effort", default=None)
+    p_run.add_argument("--provider", default="claude", choices=sorted(op.PROVIDERS))
+    p_run.add_argument("--merge-mode", default=None, choices=("engineer", "orchestrator"),
+                        help="Default 'engineer' for claude, forced 'orchestrator' for codex (GOV.ORCH.2 section 2.5).")
     p_run.add_argument("--timeout", type=float, default=5400.0)
     p_run.add_argument("--heartbeat-timeout", type=float, default=900.0)
     p_run.add_argument("--no-verify", action="store_true")
@@ -1354,6 +1442,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_tail.add_argument("--summary", required=True)
     p_tail.add_argument("--pid", type=int, required=True)
     p_tail.add_argument("--poll-interval", type=float, default=TAIL_POLL_INTERVAL_DEFAULT)
+    p_tail.add_argument("--provider", default="claude", choices=sorted(op.PROVIDERS))
     p_tail.set_defaults(func=_cmd_tail_summary)
 
     return parser

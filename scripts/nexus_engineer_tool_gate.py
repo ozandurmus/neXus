@@ -192,18 +192,13 @@ def _integration_check(movement_id: str, cwd: str) -> tuple[bool, str]:
     # --check); a movement's own targeted tests remain the engineer
     # session's own pre-merge responsibility, unchanged and unenforced by
     # this gate.
-    fetch = _run(["git", "fetch", "origin"], cwd)
-    if fetch.returncode != 0:
-        return False, f"git fetch origin failed: {fetch.stderr.strip()}"
-    merge = _run(["git", "merge", "origin/main"], cwd)
-    if merge.returncode != 0:
-        return False, f"git merge origin/main failed (resolve conflicts and retry): {merge.stderr.strip()}"
-    for argv in _validation_commands(cwd):
-        result = _run(argv, cwd)
-        if result.returncode != 0:
-            tail = (result.stdout + result.stderr).strip()[-2000:]
-            return False, f"{' '.join(argv)} failed after merging origin/main: {tail}"
-    return True, "origin/main merged; convergence and build-history checks green"
+    #
+    # GOV.ORCH.2 section 2.5: the actual fetch/merge/validate sequence moved
+    # to `orchestrator_verify.py::integrate`, shared with `orchestrator.py`'s
+    # own `run` (merge-mode orchestrator) -- this wrapper only supplies the
+    # unused `movement_id` parameter kept for this module's own call sites
+    # and test suite.
+    return _orch_verify.integrate(cwd)
 
 
 def _deny(reason: str) -> int:

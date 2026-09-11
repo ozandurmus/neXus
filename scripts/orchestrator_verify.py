@@ -70,6 +70,62 @@ def privacy_check(cwd: str | Path, base_ref: str | None) -> tuple[bool, str]:
     )
 
 
+def _resolve_interpreter(cwd: str) -> str:
+    """A worktree checkout has no `.venv` of its own -- every worktree
+    shares the one `.venv` next to the main checkout -- so `sys.executable`
+    here would resolve to whatever `python3` the *calling* process happened
+    to be launched with, not necessarily the interpreter with pytest
+    installed (relay/NXS-LOCAL-0016 seq 2, the live incident this closes;
+    moved here unchanged from `nexus_engineer_tool_gate.py` as part of
+    `integrate`'s own move, GOV.ORCH.2 section 2.5). Locate the shared
+    `.venv` via `git rev-parse --git-common-dir`, stable across every
+    worktree, and fall back to `sys.executable` if none is found."""
+    result = subprocess.run(["git", "rev-parse", "--git-common-dir"], cwd=cwd, capture_output=True, text=True, timeout=30)
+    if result.returncode != 0:
+        return sys.executable
+    common_dir = Path(result.stdout.strip())
+    if not common_dir.is_absolute():
+        common_dir = (Path(cwd) / common_dir).resolve()
+    venv_root = common_dir.parent
+    for candidate in (
+        venv_root / ".venv" / "bin" / "python3",
+        venv_root / ".venv" / "Scripts" / "python.exe",
+    ):
+        if candidate.is_file():
+            return str(candidate)
+    return sys.executable
+
+
+def integrate(cwd: str | Path) -> tuple[bool, str]:
+    """GOV.ORCH.2 section 2.5: the `git fetch origin` + `git merge
+    origin/main` + convergence/build-history validation sequence, moved
+    here from `nexus_engineer_tool_gate.py::_integration_check` (GOV.ORCH.1)
+    so both the PreToolUse hook (which still acquires/releases the
+    cross-movement merge lock around this call itself) and
+    `orchestrator.py`'s own `run` (merge-mode orchestrator, GOV.ORCH.2
+    section 2.5) share one implementation. Behaviour is unchanged from the
+    function this replaces; merge-lock acquisition is not part of this
+    function -- each caller owns that around its own call, exactly as the
+    hook already did."""
+    cwd = str(cwd)
+    fetch = subprocess.run(["git", "fetch", "origin"], cwd=cwd, capture_output=True, text=True, timeout=DEFAULT_STEP_TIMEOUT)
+    if fetch.returncode != 0:
+        return False, f"git fetch origin failed: {fetch.stderr.strip()}"
+    merge = subprocess.run(["git", "merge", "origin/main"], cwd=cwd, capture_output=True, text=True, timeout=DEFAULT_STEP_TIMEOUT)
+    if merge.returncode != 0:
+        return False, f"git merge origin/main failed (resolve conflicts and retry): {merge.stderr.strip()}"
+    python = _resolve_interpreter(cwd)
+    for argv in (
+        [python, "-m", "pytest", "tests/test_architecture_convergence.py", "-q"],
+        [python, "scripts/build_history_index.py", "--check"],
+    ):
+        result = subprocess.run(argv, cwd=cwd, capture_output=True, text=True, timeout=DEFAULT_STEP_TIMEOUT)
+        if result.returncode != 0:
+            tail = (result.stdout + result.stderr).strip()[-2000:]
+            return False, f"{' '.join(argv)} failed after merging origin/main: {tail}"
+    return True, "origin/main merged; convergence and build-history checks green"
+
+
 def _tail(text: str, lines: int = TAIL_LINES) -> str:
     return "\n".join(text.splitlines()[-lines:])
 

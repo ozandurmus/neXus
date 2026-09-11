@@ -1015,6 +1015,55 @@ elif mode == "heartbeat_stall":
 '''
 
 
+_STUB_CODEX = '''#!/usr/bin/env python3
+import json
+import os
+import subprocess
+import sys
+
+mode = os.environ.get("NEXUS_TEST_STUB_MODE", "close")
+sys.stdin.read()  # AC-2: the prompt arrives on stdin, exactly as real codex exec would consume it.
+
+if mode == "close":
+    import tempfile
+    relay_file = os.environ["NEXUS_RELAY_FILE"]
+    report = {
+        "completed": ["x"], "changed": ["x"], "preserved": ["x"],
+        "validation": {"targeted": "1 passed", "affected": "1 passed", "full_regression": "n/a",
+                       "privacy": "n/a", "state_consistency": "n/a", "diff_check": "n/a", "real_environment": "NOT_RUN"},
+        "unresolved_risks": [], "state_updates": [],
+        "next": {"movement": "n/a", "movement_type": "VALIDATION", "status": "done", "objective": "n/a"},
+        "recommended_reasoning": {"tier": "Normal", "reason": "x"},
+        "continuation": "SAME_SESSION",
+        "integration": {"branch": "n/a", "head_sha": "n/a", "pr": None, "pr_url": None, "ci": "n/a",
+                         "merge_state": "NOT_OPENED", "merge_commit": None, "merge_decision": "NOT_APPLICABLE"},
+        "effects": {"main_py": "none", "ui": "none"},
+    }
+    fd, report_path = tempfile.mkstemp(suffix=".json")
+    with os.fdopen(fd, "w", encoding="utf-8") as fh:
+        json.dump(report, fh)
+    python = os.environ["NEXUS_STUB_PYTHON"]
+    local_relay = os.environ["NEXUS_STUB_LOCAL_RELAY"]
+    subprocess.run([python, local_relay, "append", "--file", relay_file, "--role", "engineer",
+                     "--marker", "SESSION_CLOSE", "--report", report_path, "--outcome", "DONE"], check=True)
+    print(json.dumps({"type": "item.completed", "item": {"type": "agent_message", "text": "done"}}), flush=True)
+    sys.exit(0)
+elif mode == "exit_nonzero":
+    sys.exit(1)
+'''
+
+
+def _install_stub_codex(tmp_path: Path, monkeypatch) -> None:
+    bin_dir = tmp_path / "stub_bin"
+    bin_dir.mkdir(exist_ok=True)
+    stub = bin_dir / "codex"
+    stub.write_text(_STUB_CODEX, encoding="utf-8")
+    stub.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{bin_dir}:{os.environ['PATH']}")
+    monkeypatch.setenv("NEXUS_STUB_PYTHON", sys.executable)
+    monkeypatch.setenv("NEXUS_STUB_LOCAL_RELAY", str(ROOT / "scripts" / "local_relay.py"))
+
+
 def _install_stub_claude(tmp_path: Path, monkeypatch) -> None:
     bin_dir = tmp_path / "stub_bin"
     bin_dir.mkdir(exist_ok=True)
@@ -1117,6 +1166,98 @@ def test_run_cli_engineer_exit_nonzero_fails_without_verify_gate(tmp_path, monke
     assert report["phase"] == orch.PHASE_FAILED
     assert report["exit_code"] == 1
     assert report["failure_reason"] == "engineer_exit_nonzero"
+
+
+def test_run_cli_success_reports_provider_default_used_when_no_model_observed(tmp_path, monkeypatch, capsys):
+    """AC-7: the stub engineer's log never carries a recognizable
+    system/init event, so `model_observed` stays None and the report
+    carries `audit_exception: provider_default_used`."""
+    work = _init_bare_and_clone(tmp_path)
+    relay_dir = _make_relay(work, movement="M", git={"base": "origin/main", "lane": "feature/x"},
+                             validation_plan=[{"argv": [sys.executable, "-c", "pass"]}])
+    relay_id = json.loads(next(relay_dir.glob("*.json")).read_text())["id"]
+    _install_stub_claude(tmp_path, monkeypatch)
+    monkeypatch.setenv("NEXUS_TEST_STUB_MODE", "close")
+
+    capsys.readouterr()
+    rc = orch.main(_run_args(tmp_path, relay_dir, relay_id, timeout=15, heartbeat_timeout=10))
+    report = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
+    assert rc == orch.EXIT_OK, report
+    assert report["model_observed"] is None
+    assert report["audit_exception"] == "provider_default_used"
+
+
+# --- GOV.ORCH.2: --provider, --merge-mode, per-provider effort allowlists ---
+
+def test_start_cli_invalid_effort_for_the_chosen_provider_is_a_usage_error_with_no_state_record(tmp_path):
+    """AC-6: 'max' is Claude-only (section 2.4) -- requesting it for codex
+    is a usage error, and no state record is created."""
+    relay_dir = _make_relay(tmp_path, git={"base": "origin/main", "lane": "feature/x"})
+    relay_id = json.loads(next(relay_dir.glob("*.json")).read_text())["id"]
+    state_dir = tmp_path / "state"
+    rc = orch.main(["start", "--movement", relay_id, "--relay-dir", str(relay_dir),
+                     "--state-dir", str(state_dir), "--worktrees-dir", str(tmp_path / "worktrees"),
+                     "--profile", str(tmp_path / "profile.json"), "--provider", "codex", "--effort", "max"])
+    assert rc == orch.EXIT_USAGE
+    assert orch._load_state(state_dir, relay_id) is None
+
+
+def test_run_cli_provider_codex_forces_orchestrator_merge_mode_and_calls_integrate_once_after_verify(
+    tmp_path, monkeypatch, capsys,
+):
+    """AC-5: --provider codex forces merge-mode orchestrator; the prompt
+    file carries the no-merge instruction; `run` calls the shared
+    `orchestrator_verify.integrate` exactly once, only after verify passed."""
+    work = _init_bare_and_clone(tmp_path)
+    relay_dir = _make_relay(work, movement="M", git={"base": "origin/main", "lane": "feature/x"},
+                             validation_plan=[{"argv": [sys.executable, "-c", "pass"]}])
+    relay_id = json.loads(next(relay_dir.glob("*.json")).read_text())["id"]
+    _install_stub_codex(tmp_path, monkeypatch)
+    monkeypatch.setenv("NEXUS_TEST_STUB_MODE", "close")
+
+    integrate_calls = []
+
+    def fake_integrate(cwd):
+        integrate_calls.append(cwd)
+        return True, "mocked integrate: ok"
+
+    monkeypatch.setattr(orch.ov, "integrate", fake_integrate)
+
+    capsys.readouterr()
+    rc = orch.main(_run_args(tmp_path, relay_dir, relay_id, timeout=15, heartbeat_timeout=10, provider="codex"))
+    report = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
+    assert rc == orch.EXIT_OK, report
+    assert report["provider"] == "codex"
+    assert report["merge_mode"] == "orchestrator"
+    assert report["verify"]["passed"] is True
+    assert len(integrate_calls) == 1
+    assert report["integrate"] == {"passed": True, "reason": "mocked integrate: ok"}
+
+    worktree = Path(report["worktree_path"])
+    prompt_text = (worktree / ".nexus" / "engineer_prompt.txt").read_text(encoding="utf-8")
+    assert "gh pr merge" in prompt_text
+
+
+def test_run_cli_provider_codex_skips_integrate_when_verify_fails(tmp_path, monkeypatch, capsys):
+    """AC-5's other half: integrate must never run when verify did not
+    pass."""
+    work = _init_bare_and_clone(tmp_path)
+    relay_dir = _make_relay(work, movement="M", git={"base": "origin/main", "lane": "feature/x"},
+                             validation_plan=[{"argv": [sys.executable, "-c", "import sys; sys.exit(1)"]}])
+    relay_id = json.loads(next(relay_dir.glob("*.json")).read_text())["id"]
+    _install_stub_codex(tmp_path, monkeypatch)
+    monkeypatch.setenv("NEXUS_TEST_STUB_MODE", "close")
+
+    integrate_calls = []
+    monkeypatch.setattr(orch.ov, "integrate", lambda cwd: integrate_calls.append(cwd) or (True, "ok"))
+
+    capsys.readouterr()
+    rc = orch.main(_run_args(tmp_path, relay_dir, relay_id, timeout=15, heartbeat_timeout=10, provider="codex"))
+    report = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
+    assert rc == orch.EXIT_REFUSED
+    assert report["verify"]["passed"] is False
+    assert integrate_calls == []
+    assert "integrate" not in report
 
 
 # --- verify (standalone CLI subcommand) -------------------------------------

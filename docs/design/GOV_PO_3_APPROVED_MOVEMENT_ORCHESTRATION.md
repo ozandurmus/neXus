@@ -340,6 +340,9 @@ govern an interactive one, unchanged by this document.
 > Amended by GOV.ORCH.1 (DRAFT): see
 > docs/design/GOV_ORCH_1_SYNCHRONOUS_RUN_AND_ORCHESTRATOR_VERIFY.md.
 
+> Amended by GOV.ORCH.2 (DRAFT): see
+> docs/design/GOV_ORCH_2_PROVIDER_ADAPTER.md.
+
 At `start` time, the orchestrator reads the relay file fresh from disk,
 extracts `entries[0]` (the `SESSION_START` entry — the one already-approved
 task; `entries[0]` is structurally guaranteed to be `SESSION_START` by
