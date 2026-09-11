@@ -196,32 +196,38 @@ def task_hash(session_start_entry: dict) -> str:
 # model call, rendered from `approved_task.json` at dispatch.
 # ---------------------------------------------------------------------------
 
-#: A.2 §7: the exact relay-closeout shape, verbatim, plus the "re-read the
-#: relay file first" rule (moved here from the old ENGINEER_PROMPT).
-RELAY_CLOSEOUT_TEXT = (
-    "Immediately before opening your PR, re-read the canonical relay file "
-    "(NEXUS_RELAY_FILE) first and act on any RELAY_CORRECTION or "
-    "RELAY_DECISION entries appended after dispatch. Close with:\n\n"
-    "```\n"
-    "py scripts/local_relay.py append --file $NEXUS_RELAY_FILE --role engineer "
-    "--marker SESSION_CLOSE ...\n"
-    "```"
-)
+#: GOV.ORCH.7 section 2.1: these two fixed sections are no longer Python
+#: string literals -- they are parsed, verbatim, from the checked-in
+#: template `roles/WORKER.md` (the same file `render_worker_md` documents
+#: itself against), so the template lives in one place, readable without
+#: Python. `_load_worker_md_template` does the parse; module import time
+#: populates RELAY_CLOSEOUT_TEXT/STANDING_RULES_TEXT from it exactly once.
+ROLES_WORKER_MD_PATH = REPO_ROOT / "roles" / "WORKER.md"
 
-#: A.2 §8: standing rules, fixed text, under 200 words -- includes the
-#: pytest-foreground rule (moved here from the old ENGINEER_PROMPT).
-STANDING_RULES_TEXT = (
-    "Smallest diff that satisfies every acceptance criterion; no scope "
-    "expansion. Do not scan the repository beyond the files this brief "
-    "names; do not read docs/history/**, project/*.json, Graphify, device/"
-    "deployment/collection code, or secrets unless this brief names them. "
-    "Pull open work from project/QUEUE.md instead. Never treat "
-    "a long-running validation command -- the full pytest regression in "
-    "particular -- as backgroundable: run it as a foreground, awaited Bash "
-    "command and wait for it to actually finish before acting on its "
-    "result. A relay-tool error is reported, not treated as a blocker. "
-    "Never end your turn on a chat message without a SESSION_CLOSE."
-)
+
+def _load_worker_md_template(path: Path = ROLES_WORKER_MD_PATH) -> tuple[str, str]:
+    """Extract the "## Relay closeout" and "## Standing rules" section
+    bodies from `roles/WORKER.md`, verbatim (trailing/leading blank lines
+    stripped only). Raises if either section is missing -- a missing
+    template is a fail-closed condition for `preflight`, not a silent
+    empty brief."""
+    text = path.read_text(encoding="utf-8")
+    closeout_marker = "## Relay closeout\n\n"
+    standing_marker = "\n\n## Standing rules\n\n"
+    if closeout_marker not in text or standing_marker not in text:
+        raise OrchestratorError(f"{path} is missing the expected WORKER.md template sections")
+    _, rest = text.split(closeout_marker, 1)
+    closeout, standing = rest.split(standing_marker, 1)
+    return closeout.strip(), standing.strip()
+
+
+try:
+    RELAY_CLOSEOUT_TEXT, STANDING_RULES_TEXT = _load_worker_md_template()
+except (OSError, OrchestratorError):
+    # roles/WORKER.md missing at import time (e.g. a stale checkout) --
+    # leave both empty rather than crashing import; `preflight` fails
+    # closed on the missing file for any real dispatch.
+    RELAY_CLOSEOUT_TEXT, STANDING_RULES_TEXT = "", ""
 
 _TEST_FILE_RE = re.compile(r"tests/[\w./-]+\.py")
 
@@ -373,6 +379,105 @@ def validate_git_refs(base: str, lane: str) -> tuple[bool, str]:
     if not lane or not lane.startswith("feature/"):
         return False, f"report.git.lane must start with 'feature/' (got {lane!r})"
     return True, "ok"
+
+
+# ---------------------------------------------------------------------------
+# GOV.ORCH.7 section 2.3 item 4: fail-closed preflight, no skip flag.
+# ---------------------------------------------------------------------------
+
+_AUTHORITY_STATUS_TOKEN_RE = re.compile(r"\b(FROZEN|RATIFIED)\b")
+_AUTHORITY_PATH_RE = re.compile(r"([\w./-]+\.md)")
+
+
+def resolve_authority_status_ok(baseline_authority: str, repo_root: Path = REPO_ROOT) -> bool:
+    """§2.3-4 condition 1: the packet's own `baseline.authority` text names
+    a document, by path, whose status line reads FROZEN or RATIFIED. Best
+    effort, fail-closed: no path found, the file missing, or no such token
+    in its opening section (the first 3000 characters, well past any real
+    document's `## Status` block) all read as not-ok, never silently ok."""
+    match = _AUTHORITY_PATH_RE.search(baseline_authority or "")
+    if not match:
+        return False
+    path = repo_root / match.group(1)
+    if not path.is_file():
+        return False
+    head = path.read_text(encoding="utf-8", errors="ignore")[:3000]
+    return bool(_AUTHORITY_STATUS_TOKEN_RE.search(head))
+
+
+def decide_preflight(
+    *, session_start: dict, provider: str | None, model: str | None, effort: str | None,
+    authority_status_ok: bool, base_is_origin_main: bool,
+    packet_validation_errors: list[str], worker_md_exists: bool,
+) -> list[str]:
+    """Pure fail-closed decision core (GOV.ORCH.7 section 2.3 item 4): every
+    input is already resolved by the caller (`run_preflight` below spawns
+    the real git fetch / file reads) so this stays a plain, directly
+    testable function. Returns one reason string per failed condition --
+    empty means preflight passes. There is deliberately no way to pass any
+    of these individually as "already known good" from outside; a caller
+    that wants to skip a check has no flag to do it with."""
+    report = session_start.get("report", {})
+    failures: list[str] = []
+    if not authority_status_ok:
+        failures.append(
+            f"baseline.authority does not name a FROZEN/RATIFIED document: "
+            f"{report.get('baseline', {}).get('authority')!r}"
+        )
+    if not base_is_origin_main:
+        failures.append(
+            f"report.git.base is not origin/main at the fetched HEAD (got "
+            f"{report.get('git', {}).get('base')!r})"
+        )
+    if not provider or not model or not effort:
+        failures.append("--provider/--model/--effort must all be given explicitly on the command line")
+    if packet_validation_errors:
+        failures.append(f"packet fails gov_session_transfer.py validate: {packet_validation_errors}")
+    if not worker_md_exists:
+        failures.append("roles/WORKER.md is missing")
+    return failures
+
+
+def _packet_validation_errors(session_start: dict, movement_id: str) -> list[str]:
+    """Adapts a relay `SESSION_START` entry's own `report` object into the
+    NEXUS_SESSION_PACKET v2 envelope `gov_session_transfer.validate_fields`
+    actually validates, and returns its errors (empty means valid). Any
+    exception while adapting/validating is itself a validation failure --
+    fail closed, never silently pass a packet this could not even check."""
+    import gov_session_transfer as gst  # noqa: E402  (flat import, see sys.path above)
+
+    try:
+        packet = {
+            "protocol_version": gst.PROTOCOL_VERSION,
+            "message_type": "SESSION_START",
+            "movement": movement_id,
+            "refs": [],
+            "report": session_start.get("report", {}),
+        }
+        return gst.validate_fields(packet)
+    except Exception as exc:  # noqa: BLE001 -- fail closed on any adaptation error
+        return [f"could not validate packet: {exc}"]
+
+
+def run_preflight(
+    *, session_start: dict, movement_id: str, provider: str | None, model: str | None,
+    effort: str | None, repo_root: Path = REPO_ROOT,
+) -> list[str]:
+    """The real preflight: fetches `origin/main`, reads the authority
+    document, checks `roles/WORKER.md`, and adapts+validates the packet --
+    then hands every resolved input to `decide_preflight`."""
+    report = session_start.get("report", {})
+    subprocess.run(["git", "fetch", "origin", "main"], cwd=str(repo_root), capture_output=True)
+    base = report.get("git", {}).get("base")
+    authority_ok = resolve_authority_status_ok(
+        report.get("baseline", {}).get("authority", ""), repo_root=repo_root,
+    )
+    return decide_preflight(
+        session_start=session_start, provider=provider, model=model, effort=effort,
+        authority_status_ok=authority_ok, base_is_origin_main=(base == "origin/main"),
+        packet_validation_errors=_packet_validation_errors(session_start, movement_id),
+        worker_md_exists=(repo_root / "roles" / "WORKER.md").is_file(),
+    )
 
 
 def pid_alive(pid: int) -> bool:
@@ -966,6 +1071,20 @@ def _do_start(args: argparse.Namespace) -> tuple[int, dict | None, subprocess.Po
         print(f"error: {exc}", file=sys.stderr)
         return EXIT_USAGE, None, None
 
+    # GOV.ORCH.7 section 2.3 item 4: preflight runs first, before the
+    # dispatch decision itself -- fail-closed, no `--skip-preflight` flag
+    # exists anywhere in this module.
+    session_start = relay_obj["entries"][0]
+    preflight_failures = run_preflight(
+        session_start=session_start, movement_id=args.movement,
+        provider=getattr(args, "provider", None), model=getattr(args, "model", None),
+        effort=getattr(args, "effort", None), repo_root=relay_dir.parent,
+    )
+    if preflight_failures:
+        for line in preflight_failures:
+            print(f"preflight: {line}", file=sys.stderr)
+        return 2, None, None
+
     existing = _load_state(state_dir, args.movement)
     is_alive = pid_alive(existing.get("pid")) if existing else False
     active = _active_count(state_dir, exclude_movement=args.movement)
@@ -977,7 +1096,6 @@ def _do_start(args: argparse.Namespace) -> tuple[int, dict | None, subprocess.Po
         print(f"error: {reason}", file=sys.stderr)
         return EXIT_REFUSED, None, None
 
-    session_start = relay_obj["entries"][0]
     report = session_start.get("report", {})
     git_cfg = report.get("git", {})
     base, lane = git_cfg.get("base"), git_cfg.get("lane")
@@ -1430,6 +1548,49 @@ def _cmd_merge_lock(args: argparse.Namespace) -> int:
         return EXIT_REFUSED
 
 
+def _cmd_install_hooks(args: argparse.Namespace) -> int:
+    """GOV.ORCH.7 section 2.3 item 1: install the same push gate into any
+    checkout (the main checkout, a linked worktree, or a fresh clone) via
+    `core.hooksPath .githooks` -- the repo-local `.githooks/` directory is
+    committed and its `pre-push` file is executable, so no per-checkout
+    file needs writing (unlike `install_prepush_hook`'s own per-worktree
+    `.nexus/hooks/pre-push`, which stays for movement worktrees)."""
+    path = Path(args.path).resolve() if args.path else REPO_ROOT
+    hooks_dir = path / ".githooks"
+    if not (hooks_dir / "pre-push").is_file():
+        print(f"error: {hooks_dir / 'pre-push'} not found -- not a checkout of this repository?",
+              file=sys.stderr)
+        return EXIT_USAGE
+    subprocess.run(["git", "config", "core.hooksPath", ".githooks"], cwd=str(path), check=True)
+    print(json.dumps({"installed": True, "checkout": str(path), "hooksPath": ".githooks"}))
+    return EXIT_OK
+
+
+def _cmd_preflight(args: argparse.Namespace) -> int:
+    """GOV.ORCH.7 section 2.3 item 4, as a standalone CLI entry point --
+    `run`/`start` call `run_preflight` themselves first; this command lets
+    it be checked (or scripted/CI'd) independently of a dispatch."""
+    relay_dir = Path(args.relay_dir).resolve()
+    try:
+        relay_file = _resolve_relay_file(relay_dir, args.movement)
+        relay_obj = _load_relay(relay_file)
+    except OrchestratorError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return EXIT_USAGE
+    session_start = relay_obj["entries"][0]
+    failures = run_preflight(
+        session_start=session_start, movement_id=args.movement,
+        provider=args.provider, model=args.model, effort=args.effort,
+        repo_root=relay_dir.parent,
+    )
+    if failures:
+        for line in failures:
+            print(f"preflight: {line}", file=sys.stderr)
+        return 2
+    print(json.dumps({"preflight": "ok"}))
+    return EXIT_OK
+
+
 # ---------------------------------------------------------------------------
 # _tail-summary (internal -- spawned by _spawn_engineer, not user-facing)
 # ---------------------------------------------------------------------------
@@ -1622,6 +1783,22 @@ def build_parser() -> argparse.ArgumentParser:
     _add_common(p_stop)
     p_stop.add_argument("--force", action="store_true", help="SIGKILL immediately, skip the SIGTERM grace period")
     p_stop.set_defaults(func=_cmd_stop)
+
+    p_hooks = sub.add_parser(
+        "install-hooks", help="install the committed .githooks/pre-push into any checkout (GOV.ORCH.7)"
+    )
+    p_hooks.add_argument("--path", default=None, help="checkout to install into; default: this repository")
+    p_hooks.set_defaults(func=_cmd_install_hooks)
+
+    p_preflight = sub.add_parser(
+        "preflight", help="run the fail-closed dispatch preflight standalone (GOV.ORCH.7; no --skip flag)"
+    )
+    p_preflight.add_argument("--movement", required=True)
+    _add_common(p_preflight)
+    p_preflight.add_argument("--provider", default=None)
+    p_preflight.add_argument("--model", default=None)
+    p_preflight.add_argument("--effort", default=None)
+    p_preflight.set_defaults(func=_cmd_preflight)
 
     p_lock = sub.add_parser("merge-lock", help="acquire/release the cross-movement merge-serialization lock")
     p_lock.add_argument("action", choices=("acquire", "release"))

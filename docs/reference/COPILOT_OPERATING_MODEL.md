@@ -1,10 +1,11 @@
-# SecurityExpert — Copilot-Native Operating Model
+# SecurityExpert — Repository-Native Operating Model
 
 ## Purpose
 
-This document defines how SecurityExpert is developed when GitHub Copilot is
-the primary repository-native engineering surface. It is designed so a new chat
-can start productively without replaying previous conversations.
+This document defines how SecurityExpert is developed by a repository-native
+engineering agent tool, and the PO + Orchestrator provider/model routing
+record. It is designed so a new chat can start productively without
+replaying previous conversations.
 
 ## Repository memory model
 
@@ -93,22 +94,23 @@ owner of this table.
 ### Decision record — 2026-09-11
 
 The following decisions are durable and must be used by a future PO without
-replaying chat context:
+replaying chat context. Current tool/model names for each neutral tier below
+live only in `docs/reference/MODEL_TIER_MAP.md`, updated independently of
+this record:
 
-- Codex is the PO + Orchestrator; workers own implementation. Codex
+- One tool holder is the PO + Orchestrator; workers own implementation. It
   synthesizes the evidence; an independent seat on a different provider
   reviews (`docs/design/GOV_PO_ROLE_MIGRATION.md` Amendment A-2026-09-11).
 - The PO selects the actual provider, current model, and reasoning per
-  movement. There is no permanent Sonnet/Opus/Luna/Haiku default.
-- Prefer Claude when credit/license is available; use Codex when Claude is
-  unavailable. Model choice is based on scope, risk, contract state, and cost.
+  movement. There is no permanent per-tool model default.
+- Prefer the tool with available credit/license; fall back to another when it
+  is unavailable. Model choice is based on scope, risk, contract state, cost.
 - Architecture/security/contract work may invoke the formal council when its
   triggers hold. The PO chooses the lightest suitable model and effort for
-  each seat; Terra, Opus, Sol, Fable, or another currently available model may
-  be appropriate depending on scope. Fable is not mandatory, Astra is an
-  optional independent second opinion, Claude worker seats are valid when
-  Claude credit is available, and Codex synthesizes/reviews and freezes the
-  decision.
+  each seat from the currently available roster; an independent second
+  opinion on a different provider is optional, worker seats on any
+  sufficiently-credited provider are valid, and the PO-holding tool
+  synthesizes/reviews and freezes the decision.
 - OpenRouter `NXS-LOCAL-0065` / `3143bb6` is an optional advisory review POC,
   not a worker fallback or an orchestrator provider.
 - The current orchestrator has no unattended backlog queue-runner; the PO

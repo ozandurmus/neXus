@@ -181,6 +181,12 @@ provider seat (`nexus-po-evidence-reviewer` or a council seat on a
 different provider). This replaces the "Codex is final reviewer" claim
 with "Codex synthesizes; an independent seat reviews".
 
+**GOV.ORCH.7 note (amendment text only, no rule changed).** Every reference
+in this document to a tracked `.claude/settings.json` is read as
+`.claude/nexus-po.settings.json`, the file that actually exists and is
+tracked; `.claude/settings.json` was never created and is not a separate
+gate.
+
 ## 5. PO episodes and their SESSION START/CLOSE compatibility
 
 A PO episode is one fresh context that reads the fixed set in §4, produces

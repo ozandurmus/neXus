@@ -1,0 +1,12 @@
+{
+  "_comment": "GOV.ORCH.7 section 2.3 item 3: the single owner of the governance write-scope set a `gov/po-*` branch may touch (docs/design/GOV_PO_ROLE_MIGRATION.md section 4's PO write-scope column). Read by scripts/nexus_po_scope_check.py and .github/workflows/validation.yml; nowhere else defines this set.",
+  "branch_prefix": "gov/po-",
+  "allowed_paths": [
+    "docs/design/PRODUCT_DIRECTION_RECORD.md",
+    "project/roadmap.json",
+    "project/backlog.json",
+    "project/feature_registry.json",
+    "project/build_history.json",
+    "project/QUEUE.md"
+  ]
+}

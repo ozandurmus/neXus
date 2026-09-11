@@ -10,9 +10,9 @@ Usage (as a Claude Code hook, from .claude/nexus-engineer.settings.json):
 Unlike scripts/nexus_po_tool_gate.py (default-deny, a narrow allowlist),
 this gate is **default-allow**: an orchestrated engineer session has
 "normal dev tools: Read/Edit/Write/Bash/Git" (the FROZEN amendment's own
-words), exactly as an interactive engineer session has today. Exactly two
-command shapes are checked, at the code-publish / artifact-egress boundary
-(AC-7) and the cross-movement integration boundary (section 3.8):
+words), exactly as an interactive engineer session has today. Exactly one
+command shape is checked now, at the code-publish / artifact-egress
+boundary (AC-7):
 
   git push* / gh pr create*  -- deny unless the repository privacy gate
                                  (`utils.repository_privacy.scan_repository`,
@@ -33,23 +33,6 @@ command shapes are checked, at the code-publish / artifact-egress boundary
                                  before (relay/NXS-LOCAL-0012 seq 3-4: the
                                  live incident this closes).
 
-  gh pr merge*                -- acquire the cross-movement merge lock
-                                 (scripts/orchestrator.py merge-lock),
-                                 merge origin/main into the movement branch,
-                                 re-run tests/test_architecture_convergence.py,
-                                 scripts/build_history_index.py --check, and
-                                 the movement's own targeted tests (read
-                                 from .nexus/approved_task.json's
-                                 report.validation_plan), and only then
-                                 allow the actual merge -- Addition A of the
-                                 relay/NXS-LOCAL-0007 freeze decision, closing
-                                 the "re-validate against an advanced main"
-                                 gap the FROZEN amendment itself named as a
-                                 residual risk (section 3.8/9). Any failure
-                                 denies the merge and releases the lock
-                                 immediately, so one movement's own failure
-                                 never blocks another's integration.
-
   git push --force*/-f*       -- denied unconditionally (the one deny this
                                  profile shares with the PO profile -- a
                                  general stance on force-push, not
@@ -61,21 +44,24 @@ added or changed: the existing network-device command gate and real-device
 approval boundary in docs/AI_DEVELOPMENT_PROTOCOL.md are untouched by this
 profile.
 
-The `post` event releases the merge lock after a `gh pr merge*` call
-completes (success or failure), best-effort; a crash before this fires is
-covered by the lock's own TTL-based staleness reclaim
-(scripts/orchestrator.py::decide_merge_lock_acquire), not by this hook.
+GOV.ORCH.7 section 2.3 item 2: `gh pr merge` is no longer a gated shape
+here. `orchestrator integrate` (scripts/orchestrator.py) is the only
+integration path for an orchestrated movement (GOV.ORCH.2/3) -- the
+merge-lock acquisition, cross-movement re-validation, and lock release this
+hook used to perform around a `gh pr merge*` call now live only in that
+path. This hook keeps only the privacy/force-push checks above, which
+duplicate the git pre-push hook (`scripts/nexus_worker_prepush.py`) and
+stay as defense in depth. The `post` event is now a no-op, kept only so
+the `--event post` CLI shape stays valid for any caller still invoking it.
 """
 from __future__ import annotations
 
 import json
-import os
 import subprocess
 import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-ORCHESTRATOR = REPO_ROOT / "scripts" / "orchestrator.py"
 
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 import orchestrator_verify as _orch_verify  # noqa: E402
@@ -118,21 +104,6 @@ def _resolve_interpreter(cwd: str) -> str:
     return sys.executable
 
 
-def _validation_commands(cwd: str) -> tuple[list[str], ...]:
-    python = _resolve_interpreter(cwd)
-    return (
-        [python, "-m", "pytest", "tests/test_architecture_convergence.py", "-q"],
-        [python, "scripts/build_history_index.py", "--check"],
-    )
-
-
-def _movement_id(cwd: str) -> str | None:
-    marker = Path(cwd) / ".nexus" / "movement_id.txt"
-    if not marker.is_file():
-        return None
-    return marker.read_text(encoding="utf-8").strip() or None
-
-
 def _run(argv: list[str], cwd: str, timeout: int = 600) -> subprocess.CompletedProcess:
     return subprocess.run(argv, cwd=cwd, capture_output=True, text=True, timeout=timeout)
 
@@ -169,38 +140,6 @@ def _privacy_check(cwd: str) -> tuple[bool, str]:
     return _orch_verify.privacy_check(cwd, _approved_task_git_base(cwd))
 
 
-def _merge_lock(action: str, movement_id: str, cwd: str) -> tuple[bool, str]:
-    argv = [sys.executable, str(ORCHESTRATOR), "merge-lock", action, "--movement", movement_id,
-            "--pid", str(os.getpid())]
-    result = _run(argv, cwd)
-    try:
-        payload = json.loads(result.stdout.strip() or "{}")
-    except json.JSONDecodeError:
-        payload = {}
-    if action == "acquire":
-        return bool(payload.get("acquired")), payload.get("reason", result.stderr.strip())
-    return bool(payload.get("released")), payload.get("reason", result.stderr.strip())
-
-
-def _integration_check(movement_id: str, cwd: str) -> tuple[bool, str]:
-    # NOTE: `report.validation_plan` (GOV.SESSION.1 schema) is free-text
-    # English prose ("run the focused suite"), not a machine-executable
-    # command list -- there is no general way to run "the movement's own
-    # targeted tests" from it mechanically. _validation_commands() above is
-    # the mechanically-enforced floor Addition A actually specifies
-    # (tests/test_architecture_convergence.py + build_history_index.py
-    # --check); a movement's own targeted tests remain the engineer
-    # session's own pre-merge responsibility, unchanged and unenforced by
-    # this gate.
-    #
-    # GOV.ORCH.2 section 2.5: the actual fetch/merge/validate sequence moved
-    # to `orchestrator_verify.py::integrate`, shared with `orchestrator.py`'s
-    # own `run` (merge-mode orchestrator) -- this wrapper only supplies the
-    # unused `movement_id` parameter kept for this module's own call sites
-    # and test suite.
-    return _orch_verify.integrate(cwd)
-
-
 def _deny(reason: str) -> int:
     print(json.dumps({"hookSpecificOutput": {
         "hookEventName": "PreToolUse",
@@ -235,33 +174,21 @@ def handle_pre(payload: dict) -> int:
         ok, reason = _privacy_check(cwd)
         return _allow(reason) if ok else _deny(reason)
 
-    if cmd.startswith("gh pr merge"):
-        movement_id = _movement_id(cwd)
-        if not movement_id:
-            return _deny("no .nexus/movement_id.txt in cwd; cannot serialize this merge -- refusing to guess")
-        acquired, reason = _merge_lock("acquire", movement_id, cwd)
-        if not acquired:
-            return _deny(f"merge lock not acquired: {reason}")
-        ok, check_reason = _integration_check(movement_id, cwd)
-        if not ok:
-            _merge_lock("release", movement_id, cwd)
-            return _deny(check_reason)
-        return _allow(f"merge lock held ({reason}); {check_reason}")
-
+    # GOV.ORCH.7 section 2.3 item 2: `gh pr merge` is no longer a distinct
+    # gated shape here -- `orchestrator integrate` is the only integration
+    # path for an orchestrated movement (GOV.ORCH.2/3); merge-lock
+    # acquisition and the cross-movement re-validation it used to trigger
+    # from this hook now live only in that path. This hook keeps the
+    # privacy/force-push checks above, which duplicate the git pre-push
+    # hook (`scripts/nexus_worker_prepush.py`) and stay as defense in
+    # depth for a session that pushes without ever calling `gh pr merge`.
     return _allow("unrestricted (normal dev tools)")
 
 
 def handle_post(payload: dict) -> int:
-    tool = str(payload.get("tool_name", ""))
-    tool_input = payload.get("tool_input") or {}
-    cwd = payload.get("cwd") or str(Path.cwd())
-    if tool != "Bash":
-        return 0
-    cmd = " ".join(str(tool_input.get("command", "")).split())
-    if cmd.startswith("gh pr merge"):
-        movement_id = _movement_id(cwd)
-        if movement_id:
-            _merge_lock("release", movement_id, cwd)
+    # GOV.ORCH.7 section 2.3 item 2: no `gh pr merge*` merge-lock release to
+    # perform here any more -- see handle_pre's own note. Kept as a no-op so
+    # `--event post` stays a valid CLI shape.
     return 0
 
 

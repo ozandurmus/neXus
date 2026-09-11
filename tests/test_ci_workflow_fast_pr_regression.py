@@ -46,7 +46,10 @@ def test_workflow_yaml_parses():
     with WORKFLOW_PATH.open(encoding="utf-8") as f:
         data = yaml.safe_load(f)
     assert isinstance(data, dict)
-    assert set(data.get("jobs", {})) == {"validate", "full-regression"}
+    # GOV.ORCH.7 section 2.3 items 3/5: `po-scope-check` is a new,
+    # gov/po-*-only job (PO write-scope enforcement) -- added, not a
+    # replacement for either existing job.
+    assert set(data.get("jobs", {})) == {"validate", "full-regression", "po-scope-check"}
 
 
 def _job_block(text: str, job_id: str) -> str:
