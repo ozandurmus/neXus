@@ -5,7 +5,7 @@
 **DRAFT — FOR PRODUCT OWNER FREEZE, 2026-09-10; six pre-freeze defect
 fixes applied as Amendment B1-1-A and the Red Hat container-runtime
 change as Amendment B1-1-B, both 2026-09-11 (see the amendment sections at
-the end of this document).**
+the end of this document; Correction C-1 supersedes B1-1-A item 5).**
 
 This document specifies the mechanical implementation contract for
 `ui2_b1_01_skeleton_ci_docker`. It creates no `ui2/` files, authorizes no
@@ -436,3 +436,22 @@ Deployment onto OpenShift — `Deployment`/`Route`/`Service` manifests,
 only makes the image buildable and runnable there. The CI job of §6 is
 likewise unchanged in intent; the runner's container tooling is chosen by
 the Slice B movement and recorded in its `SESSION_CLOSE`.
+
+## Correction C-1 (2026-09-11) — Amendment B1-1-A item 5, `frontend`, is wrong
+
+Amendment B1-1-A resolved the `frontend` ambiguity by declaring it a Gradle
+subproject, on the reasoning that §3.2's `check` dependency was otherwise
+inexpressible. That reasoning is wrong, and a working implementation proves
+it: an existing unmerged `ui2/` tree wires `frontend` as a root-level
+`Exec` task (`frontendCheck`, running `npm ci`, `npm test`, `npm run
+build`) that `check` depends on, with `settings.gradle.kts` including
+**eleven** Java subprojects and no `frontend` subproject.
+
+**The corrected decision:** `frontend` is **not** a Gradle subproject. It is
+a build-time npm workspace driven by a root task that `check` depends on.
+`./ui2/gradlew -p ui2 projects` lists **eleven** subprojects, and §8 check 2
+is read against that number. §2's table keeps `frontend` as a row because it
+documents a build input and its forbidden dependency edges (`DIR-8`), not a
+Gradle project.
+
+This correction supersedes B1-1-A item 5 only; items 1, 2, 3, 4 and 6 stand.
