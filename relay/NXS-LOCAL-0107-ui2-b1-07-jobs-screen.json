@@ -89,6 +89,17 @@
       "subject": "The mockup shows a job outcome the job model does not define",
       "text": "This is a genuine product choice, so it stays with you rather than being decided here.\n\nThe Operations mockup's job history shows three outcomes: Succeeded, Partial and Blocked. The frozen job execution contract defines COMPLETED, FAILED, REJECTED, CANCELLED, OUTCOME_UNKNOWN and RECONCILED. There is no Partial. This is a gap rather than a contradiction, because the contract never claimed to enumerate UI labels.\n\nPartial is a meaningful idea for a collection job: some steps produced evidence and others did not. Two ways to resolve it.\n\nFirst, add a real outcome to the job model: a job whose steps did not all succeed but which produced usable evidence completes as PARTIAL. This is honest and matches what an operator sees, but it amends a frozen contract and every consumer of the outcome must handle a sixth value.\n\nSecond, drop Partial from the UI: a job either completed or failed, and the step log is where an operator sees which steps produced evidence. This changes no contract, but the screen then shows less than the mockup promised and the mockup needs a correction.\n\nMy recommendation is the first, because a collection job over several steps genuinely has this middle state and hiding it pushes the operator into reading step logs to answer a question the summary should answer. But it is your product call and it costs a contract amendment.",
       "timestamp": "2026-09-11T23:18:02Z"
+    },
+    {
+      "actor": "po",
+      "authorized_by": "Product Owner — chat authorization 2026-09-12: approve/revise/reject UI 2.0 B1 contracts and decide their open items",
+      "marker": "RELAY_DECISION",
+      "scope": "UI 2.0 B1-7 open items 2, 3 and 4 only; item 1 stays with the Product Owner",
+      "seq": 3,
+      "subject": "Three of the four open items decided; the Partial question remains yours",
+      "supersedes": "B1-7 contract section 13 items 2, 3 and 4",
+      "text": "Item 2, live update transport: server-sent events. One way, survives ordinary proxies, adds no dependency and no second protocol. A dropped connection reconnects and re-reads the step log from the server; the screen never fills the gap with invented progress.\n\nItem 3, the Run Now target picker: this movement ships a minimal device picker fed by the device list the B1-4b registration model already exposes. The device workspace of B1 row 9 becomes the richer entry point later and does not block this screen.\n\nItem 4, Run Now placement: a per-device action in the device overflow menu, matching the collect action the Navigation and components mockup already draws, rather than a second primary action competing with Schedule collection. One primary action per screen is the mockup's own rule.\n\nItem 1, the Partial outcome, is a product decision and stays with you. next_actor remains po for that reason.",
+      "timestamp": "2026-09-11T23:18:25Z"
     }
   ],
   "id": "NXS-LOCAL-0107",
@@ -103,5 +114,5 @@
   ],
   "schema_version": 1,
   "status": "AWAITING_PO",
-  "updated_at": "2026-09-11T23:18:02Z"
+  "updated_at": "2026-09-11T23:18:25Z"
 }
