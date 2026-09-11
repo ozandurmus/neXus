@@ -158,13 +158,16 @@ def test_codex_adapter_resume_argv_is_exactly_codex_exec_resume(tmp_path):
     )
     # Contract section 2.3: resume keeps the same config flags as a fresh
     # dispatch; only the leading verb differs.
-    assert argv[:4] == ["codex", "exec", "resume", "thread_abc123"]
-    assert "--cd" not in argv
+    # Verified against codex-cli 0.154.0: `exec resume` has no --cd,
+    # --sandbox or --add-dir, so sandbox policy travels as -c overrides.
+    assert argv[:5] == ["codex", "exec", "resume", "thread_abc123", "--json"]
+    for flag in ("--cd", "--sandbox", "--add-dir"):
+        assert flag not in argv
     assert ["-m", "gpt-5-codex"] == argv[argv.index("-m"):argv.index("-m") + 2]
     assert "model_reasoning_effort=high" in argv
     assert "sandbox_workspace_write.network_access=true" in argv
-    assert ["--sandbox", "workspace-write"] == argv[argv.index("--sandbox"):argv.index("--sandbox") + 2]
-    assert str(tmp_path / "relay") in argv
+    assert 'sandbox_mode="workspace-write"' in argv
+    assert f'sandbox_workspace_write.writable_roots=[{json.dumps(str(tmp_path / "relay"))}]' in argv
     assert argv[-1] == "-"
 
 

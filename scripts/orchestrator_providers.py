@@ -9,22 +9,31 @@ composed itself) and `CodexAdapter` (`codex exec`, prompt on stdin,
 `codex exec resume <id>` for a resumed session).
 
 Codex flag-name note (section 2.3's own discipline, previously applied
-to `--verbose` in relay `NXS-LOCAL-0013`): `which codex` and
-`codex --help` were checked at implementation time and the `codex` CLI
-is NOT installed in this environment. Every Codex flag name below
-(`--cd`, `--json`, `-m`, `-c model_reasoning_effort=<effort>`,
-`-c sandbox_workspace_write.network_access=true`, `--sandbox
-workspace-write`, `--add-dir`, `-o`, the trailing `-` for stdin, and
-`codex exec resume <id>`) is taken verbatim from
-docs/design/GOV_ORCH_2_PROVIDER_ADAPTER.md section 2.3 and has NOT been
-verified against an installed CLI. Likewise the exact JSON-lines event
-shapes `CodexAdapter.summarize_line`, `session_id_from_log`, and
-`observed_model` parse (`item.started`/`item.completed`,
-`thread.started` carrying `session_id`, and a `turn.started`/config
-event carrying `model`/`effort`) are a best-effort guess at Codex's
-JSON-lines schema, not a verified one -- the parser is written to never
-raise on an unrecognized shape (AC-4) specifically because of this
-uncertainty.
+to `--verbose` in relay `NXS-LOCAL-0013`): verified against the
+installed `codex-cli 0.154.0` (`codex exec --help`, `codex exec resume
+--help`, and one `codex exec --json` probe run). Findings applied here:
+
+- Fresh dispatch: `codex exec --cd <dir> --json -m <model>
+  -c model_reasoning_effort=<effort> -c
+  sandbox_workspace_write.network_access=true --sandbox workspace-write
+  --add-dir <dir> -o <file> -` are all real flags; `-` reads the prompt
+  from stdin. `codex exec` is non-interactive and never prompts for
+  approval, so no approval flag is needed.
+- Resume: `codex exec resume <id> [PROMPT]` accepts `--json`, `-m`, `-c`
+  and `-o` but NOT `--cd`, `--sandbox` or `--add-dir`; the sandbox and
+  the extra writable roots are therefore passed as config overrides
+  (`-c sandbox_mode="workspace-write"`,
+  `-c sandbox_workspace_write.writable_roots=[...]`) and the working
+  directory comes from the spawner's `cwd`, which the orchestrator sets
+  to the worktree for every provider.
+- JSON-lines events observed: `{"type":"thread.started","thread_id":
+  "<uuid>"}`, `{"type":"turn.started"}`, `{"type":"error","message":..}`;
+  item events follow the `item.started`/`item.completed` shape with an
+  `item` object. The stream carries NO model or effort field, so
+  `observed_model` returns `(None, None)` for Codex and every Codex
+  dispatch is reported with `audit_exception: "provider_default_used"`
+  until Codex exposes the served model in its event stream; the
+  requested values are still recorded on the process record.
 
 Task content (the approved-task JSON) never appears in argv for either
 adapter -- both receive it only indirectly, via the fixed `ENGINEER_PROMPT`
@@ -233,7 +242,8 @@ class CodexAdapter:
         # Section 2.3: a resume carries the same config flags as a fresh
         # dispatch (sandbox, network, model, effort, add-dir, output file);
         # only the leading verb differs.
-        if resume_session_id:
+        resume = bool(resume_session_id)
+        if resume:
             argv = ["codex", "exec", "resume", resume_session_id, "--json"]
         else:
             argv = ["codex", "exec", "--cd", str(worktree), "--json"]
@@ -242,9 +252,17 @@ class CodexAdapter:
         if effort:
             argv += ["-c", f"model_reasoning_effort={effort}"]
         argv += ["-c", "sandbox_workspace_write.network_access=true"]
-        argv += ["--sandbox", "workspace-write"]
-        for extra_dir in extra_dirs:
-            argv += ["--add-dir", str(extra_dir)]
+        if resume:
+            # `codex exec resume` has no --sandbox/--add-dir (module
+            # docstring); the same policy goes through config overrides.
+            argv += ["-c", 'sandbox_mode="workspace-write"']
+            if extra_dirs:
+                roots = ", ".join(json.dumps(str(d)) for d in extra_dirs)
+                argv += ["-c", f"sandbox_workspace_write.writable_roots=[{roots}]"]
+        else:
+            argv += ["--sandbox", "workspace-write"]
+            for extra_dir in extra_dirs:
+                argv += ["--add-dir", str(extra_dir)]
         argv += ["-o", str(Path(worktree) / ".nexus" / "engineer_last_message.txt")]
         argv += ["-"]  # prompt on stdin
         return argv
