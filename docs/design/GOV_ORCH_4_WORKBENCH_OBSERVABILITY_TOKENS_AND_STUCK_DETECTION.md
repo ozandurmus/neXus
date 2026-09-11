@@ -128,19 +128,47 @@ uses git dirtiness or heartbeat timestamps.
 - Existing `GET /api/movements` rows gain `health` and `usage`; the
   existing shape is otherwise unchanged (backward compatible).
 
-### 3.5 UI (vanilla JS, existing assets)
+### 3.5 UI: Kanban board first (vanilla JS, existing assets)
 
-- Summary strip gains: `N silent · N exited without close · tokens today
-  · cost today`.
-- Movement card gains a health badge and a one-line usage string
-  (`780k tok · 83% cache · $1.42`).
-- New top-level "Board" tab: three columns open / awaiting you / closed
-  from `/api/board`, closed collapsed by default, each row expandable
-  to the traffic list.
-- Detail panel "History" tab is replaced by the traffic view (§3.4);
-  "Evidence" tab shows the GOV.ORCH.1 verify steps (name, exit code,
-  duration, tail) when a record has them.
-- No charts beyond the numbers; no new dependency.
+Product Owner direction 2026-09-11 (after seeing the shipped five-section
+list): the first screen is a **Kanban board**, not a list of headings.
+
+- **Columns**, left to right, one per health/state group:
+  `Awaiting you` · `Running` · `Silent / stuck` · `Integration` (PR open
+  or verify running) · `Failed` · `Done`. A column shows its count in
+  the header; `Done` is collapsed to its most recent 10 cards with a
+  "show all" toggle.
+- **Card content** (always visible, no click needed): movement id and
+  the objective's first line; provider · model · effort (observed when
+  known, else requested with a "requested" mark); process status;
+  work stage; **duration** (`started_at` → now or `ended_at`); **idle
+  time** (seconds since the last `engineer.log` growth, shown as "idle
+  4m" / "active"); **tokens** as `in / cache-read / out` plus cache hit
+  percentage and cost when known; PR number and state when present.
+  Nothing on a card is inferred from git dirtiness or a heartbeat
+  timestamp.
+- **Click a card** → a detail panel opens **below the board** (not a
+  modal, not a right-hand pane) as collapsible sections: Summary
+  (objective, acceptance criteria, next step) · Traffic (sent /
+  received, §3.4) · Changes (files, diff summary, branch, worktree, PR) ·
+  Evidence (GOV.ORCH.1 verify steps) · Usage (full §3.1 object) · Log
+  (existing tail). Clicking another card swaps the panel; the open
+  section is remembered per session.
+- The summary strip above the board: `N running · N silent · N awaiting
+  you · N failed · tokens today · cost today`.
+- The five-section list from `NXS-LOCAL-0021` is removed as the default
+  view; its still-useful pieces (decision inbox cards with actions,
+  message box, executable-request card) live inside the detail panel's
+  Summary and Traffic sections, unchanged in behaviour.
+- **Token handling fix.** The bearer token is issued only in the URL
+  fragment the CLI prints; opening `127.0.0.1:<port>` without it, or
+  reloading in a new tab, yields "missing or invalid bearer token" on
+  every poll. The page stores the token from `#t=` in `localStorage`
+  on first load and reuses it; when no token is known it renders one
+  clear panel ("paste the token printed by `orchestrator.py dashboard`")
+  with an input, instead of polling and failing. The server contract
+  is unchanged.
+- No charts, no dependency, no build step.
 
 ### 3.6 CLI
 
@@ -186,6 +214,16 @@ channels; charts; changes to relay tooling or packet schema; price values.
 - AC-10: `stuck_after_seconds` round-trips through `/api/config`.
 - AC-11: `git diff --check` clean; privacy gate 0 new findings; no new
   third-party dependency.
+- AC-12: the page renders the board with the six columns from a fixture
+  `/api/board` payload and each card carries duration, idle, tokens and
+  cost fields (assert on the rendered DOM strings via a small jsdom-free
+  check: the JS render function is pure and returns HTML strings that a
+  Python test can call through the API payload contract; if that is
+  impractical, assert the server-side board rows carry every field the
+  card needs).
+- AC-13: with no token in the fragment and none stored, the page shows
+  the token panel and makes no `/api/*` request; with `#t=` present the
+  token is persisted and reused on a reload without a fragment.
 
 ## 6. Validation plan (machine-readable)
 
