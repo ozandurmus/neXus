@@ -9,6 +9,7 @@
 - Branch: `build/ui2-d1-c7-c2-frozen-amendments`; base `3993d95`.
 - Runtime restore remains disabled; no device contact or remote Git operations.
 - `scripts/orchestrator.py` now defaults to `codex exec --json`; legacy Claude dispatch is explicit via `--provider claude`.
+- Dashboard now reads the latest provider usage from worker logs and flags high context, oversized contracts, and process-state drift; worker graphify guidance is scoped to named refs and small budgets.
 
 ## What changed
 
@@ -18,6 +19,7 @@
 - Implemented `MigrationRunner` with a B1-1 baseline Flyway migration and added migration-role/app-role integration coverage; strengthened dependency-boundary checks and reconciled stale B1-1 state/history wording.
 - Converted integration validation to CRC-backed PostgreSQL: the CRC overlay now has disposable test Postgres, and the harness accepts an `oc port-forward` JDBC URL; Docker/Podman remains optional fallback only. The proposed frozen-contract amendment is `docs/design/UI2_0_B1_01_CRC_VALIDATION_AMENDMENT.md`.
 - Made the local AI worker dispatch provider-neutral with Codex as the default; retained the existing Claude argv as an explicit compatibility path and verified the orchestrator/dashboard/PO-gate tests.
+- Added PO-facing usage/attention signals to the dashboard; observed 1.35M and 1.23M input-token turns in the current worker logs, indicating broad context ingestion rather than prompt length alone.
 
 ## Exact next action
 
@@ -26,7 +28,7 @@ entry point now invokes Flyway) and remaining image/secret/SBOM/privacy evidence
 B1-1M remains next, before B1-2: High-tier release/topology amendments
 incorporating council CR-1..CR-6. C2 transition, crash and fencing
 contradictions must be resolved before job-engine execution.
-Formal governance publication remains pending; this review authorizes no fix.
+Formal governance publication remains pending; this observability fix does not authorize product or device behavior.
 
 ## Test delta
 
@@ -53,4 +55,4 @@ Formal governance publication remains pending; this review authorizes no fix.
   converted to a skip or success.
 - CRC-backed path is implemented but not yet real-environment validated in this
   session; it requires the user's running CRC cluster, secret and port-forward.
-- Provider-dispatch patch is locally validated; push/PR/merge remains pending for this change.
+- Provider-dispatch and dashboard-observability changes are locally validated; this change is ready for PO commit/push review.
