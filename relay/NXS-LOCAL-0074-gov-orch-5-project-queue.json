@@ -1,0 +1,106 @@
+{
+  "created_at": "2026-09-11T19:45:59Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1..AC-8 exactly as written in the contract section 4"
+        ],
+        "baseline": {
+          "authority": "docs/design/GOV_ORCH_5_PROJECT_QUEUE_AND_COLD_START_DIET.md (DRAFT; direction approved by the Product Owner in chat 2026-09-11); project/README.md for the planning-metadata contract; AGENTS.md for everything else",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "sequencing": "After GOV.ORCH.4 on the same branch; independent of product code"
+        },
+        "context_not_loaded": [
+          "docs/history/phase/**",
+          "build_history.json content",
+          "Device, deployment or collection code",
+          "Graphify"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/gov-orch-5-project-queue"
+        },
+        "invariants": [
+          "project/*.json remain the render data source; QUEUE.md is derived and never hand-edited",
+          "Notes move verbatim and reversibly; nothing is deleted",
+          "AGENTS.md law text is not rewritten (tests grep it); only an amendment note is added",
+          "No new third-party dependency"
+        ],
+        "merge_gate": "PO review of diff and orchestrator-run tests; no self-merge. Privacy gate at push; git diff --check.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Implement GOV.ORCH.5: scripts/project_queue.py (render/check/add/status/note/decide) generating project/QUEUE.md as the only planning file agents read; repair project/backlog.json; move terminal items' note narrative to docs/history/backlog/<id>.md; point the reading order (AI_START_HERE.md step 3, PO.md section 4, WORKER.md template, AGENTS.md amendment note) at QUEUE.md; add the check to CI next to the build-history index check.",
+        "output_contract": [
+          "Implementation exactly as the contract Design/Scope sections specify",
+          "Tests named in the contract, green in a foreground run",
+          "SESSION_CLOSE on the relay with exact changed files, test results, blockers and commit state"
+        ],
+        "recommended_reasoning": {
+          "reason": "JSON to Markdown with a fixed line format and a parser-located repair; the note move is mechanical and pinned by AC-4.",
+          "tier": "Sonnet 5, normal (low effort)"
+        },
+        "requirements": [
+          "English, per AGENTS.md engineering-output language law",
+          "Read the contract fully; read only the files under scope.in plus their direct tests",
+          "Smallest diff that satisfies AC-1..AC-8; the note move is a separate commit from the tool",
+          "Run the validation plan in the foreground and wait for real results before SESSION_CLOSE"
+        ],
+        "risks": [
+          "Repairing backlog.json by reformatting the whole file instead of the one delimiter",
+          "Changing project-plan percentages by altering open items",
+          "Rendering QUEUE.md with notes and blowing past 1,500 words"
+        ],
+        "scope": {
+          "in": [
+            "scripts/project_queue.py",
+            "project/QUEUE.md",
+            "project/backlog.json",
+            "docs/history/backlog/",
+            "AI_START_HERE.md",
+            "PO.md",
+            "scripts/orchestrator.py (WORKER.md template line only)",
+            "scripts/nexus_po_tool_gate.py (allowlist)",
+            "AGENTS.md (amendment note only)",
+            ".github/workflows/validation.yml",
+            "tests/test_project_queue.py",
+            "tests/test_worker_brief.py"
+          ],
+          "out": [
+            "roadmap.json restructuring beyond reading it",
+            "build_history.json",
+            "feature_registry.json",
+            "utils/project_plan.py and the HTML renderer",
+            "Deleting any data"
+          ]
+        },
+        "validation_plan": [
+          "targeted tests: python3 -m pytest -q tests/test_project_queue.py tests/test_worker_brief.py tests/test_gov_po_role.py tests/test_phase0_6_1b_1_2_interactive_project_plan.py tests/test_html_export_placeholder_integrity.py",
+          "queue check: python3 scripts/project_queue.py check",
+          "index check: python3 scripts/build_history_index.py --check",
+          "privacy gate: python3 scripts/repository_privacy_check.py",
+          "diff check: git diff --check"
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-11T19:45:59Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0074",
+  "movement": "GOV_ORCH_5_PROJECT_QUEUE_AND_COLD_START_DIET",
+  "next_actor": "engineer",
+  "refs": [
+    "docs/design/GOV_ORCH_5_PROJECT_QUEUE_AND_COLD_START_DIET.md",
+    "project/README.md",
+    "scripts/build_history_index.py",
+    "AI_START_HERE.md",
+    "PO.md",
+    "AGENTS.md"
+  ],
+  "schema_version": 1,
+  "status": "OPEN",
+  "updated_at": "2026-09-11T19:45:59Z"
+}
