@@ -92,11 +92,22 @@
       "subject": "Five open items from the B1-4 collection engine contract",
       "text": "Parked overnight. Items 1 and 2 change what the code does and hold implementation; the rest can be answered later without rework.\n\n1. Capability spec file format. Neither C4 nor C6 fixes a serialization for a capability spec. The contract proposes a placeholder. Choosing it now avoids a migration of every spec later.\n\n2. Lease, heartbeat and retry-budget numeric defaults. Inherited unresolved from C2 section 10 items 1 and 2. These decide how quickly a lost worker is detected and how long a job can look alive after its process is gone.\n\n3. Where the second transport adapter lives when it arrives: the worker module, or a new transport-adapters module. Not needed until the PAN or SFTP slice.\n\n4. The connect timeout default under ssh_exec. No gate-sourced value exists because connect is gate NOT_APPLICABLE.\n\n5. Whether extending the architecture test suite needs its own amendment document to the B1-1 contract, or can be extended in place. Process question, not a code question.",
       "timestamp": "2026-09-11T23:00:09Z"
+    },
+    {
+      "actor": "po",
+      "authorized_by": "Product Owner — chat authorization 2026-09-12: approve/revise/reject UI 2.0 B1 contracts and decide their open items",
+      "marker": "RELAY_DECISION",
+      "scope": "UI 2.0 B1 contract approval and open-item decisions",
+      "seq": 3,
+      "subject": "All parked items decided; contract frozen",
+      "supersedes": "the RELAY_QUESTION at seq 2 of this relay",
+      "text": "Every question parked on this relay is answered in docs/design/UI2_0_B1_ADJUDICATION_2026_09_12.md section 2, and the twelve cross-contract findings that an adversarial review raised are adjudicated in its section 1. This movement's contract is FROZEN as of 2026-09-12 and is read as amended by that document.\n\nThree of those findings were gaps no contract owned: nobody created the job lifecycle objects the executor reads, the gate registry storage was assigned in a circle, and nobody set the audit context that the schema fails closed without. Implementing any of these movements before the adjudication would have failed at runtime.\n\nThe implementation order is fixed in section 3 of the adjudication: B1-2, then B1-3, then B1-4b, then B1-4. B1-2 may not run concurrently with any of the others because the Flyway version ledger is a single global sequence. Version numbers are allocated: B1-2 is V1, B1-3 is V2, B1-4b is V3, B1-4 is V4.\n\nnext_actor returns to engineer; this movement is dispatchable.",
+      "timestamp": "2026-09-11T23:11:37Z"
     }
   ],
   "id": "NXS-LOCAL-0105",
   "movement": "UI2_B1_04_COLLECTION_ENGINE_CORE",
-  "next_actor": "po",
+  "next_actor": "engineer",
   "refs": [
     "docs/design/UI2_0_B1_04_COLLECTION_ENGINE_CORE_CONTRACT.md",
     "docs/design/UI2_0_C2_JOB_EXECUTION_CONTRACT.md",
@@ -105,6 +116,6 @@
     "docs/design/UI2_0_B1_01_SKELETON_CI_DOCKER_CONTRACT.md"
   ],
   "schema_version": 1,
-  "status": "AWAITING_PO",
-  "updated_at": "2026-09-11T23:00:09Z"
+  "status": "AWAITING_ENGINEER",
+  "updated_at": "2026-09-11T23:11:37Z"
 }

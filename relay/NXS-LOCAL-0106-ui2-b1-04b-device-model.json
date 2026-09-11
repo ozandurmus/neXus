@@ -90,11 +90,22 @@
       "subject": "Six open items from the B1-4b device model contract",
       "text": "Parked overnight. Items 1 and 2 hold implementation; the rest can be decided later without rework.\n\n1. The B1-2 table-ownership answer, plus migration ordering across B1-3, B1-4 and B1-4b. This contract is deliberately written to hold under either answer, but the implementing worker still needs to be told which migration file it owns.\n\n2. Enrollment state vocabulary. The states Draft, Enrolled, Unreachable and Degraded come from the Administration mockup, which itself marks them as subject to review against C1 and C4. That review has not happened. Confirm the set before code encodes it.\n\n3. Multi-endpoint devices. The schema allows a device to have several endpoints, but no document says whether registering a second endpoint by hand belongs to this movement or to REL-DISCOVERY.\n\n4. The connect timeout default. B1-4 deferred it to you or to this movement's registration defaults; no value is set anywhere yet.\n\n5. Pilot allowlist ownership. The mockups show a pilot allowlist gating backup creation, but no frozen section defines where it is stored or who edits it.\n\n6. Whether a disabled device is a fifth enrollment state or a separate column. Depends on item 2.",
       "timestamp": "2026-09-11T23:06:01Z"
+    },
+    {
+      "actor": "po",
+      "authorized_by": "Product Owner — chat authorization 2026-09-12: approve/revise/reject UI 2.0 B1 contracts and decide their open items",
+      "marker": "RELAY_DECISION",
+      "scope": "UI 2.0 B1 contract approval and open-item decisions",
+      "seq": 3,
+      "subject": "All parked items decided; contract frozen",
+      "supersedes": "the RELAY_QUESTION at seq 2 of this relay",
+      "text": "Every question parked on this relay is answered in docs/design/UI2_0_B1_ADJUDICATION_2026_09_12.md section 2, and the twelve cross-contract findings that an adversarial review raised are adjudicated in its section 1. This movement's contract is FROZEN as of 2026-09-12 and is read as amended by that document.\n\nThree of those findings were gaps no contract owned: nobody created the job lifecycle objects the executor reads, the gate registry storage was assigned in a circle, and nobody set the audit context that the schema fails closed without. Implementing any of these movements before the adjudication would have failed at runtime.\n\nThe implementation order is fixed in section 3 of the adjudication: B1-2, then B1-3, then B1-4b, then B1-4. B1-2 may not run concurrently with any of the others because the Flyway version ledger is a single global sequence. Version numbers are allocated: B1-2 is V1, B1-3 is V2, B1-4b is V3, B1-4 is V4.\n\nnext_actor returns to engineer; this movement is dispatchable.",
+      "timestamp": "2026-09-11T23:11:37Z"
     }
   ],
   "id": "NXS-LOCAL-0106",
   "movement": "UI2_B1_04B_DEVICE_MODEL_AND_ONBOARDING",
-  "next_actor": "po",
+  "next_actor": "engineer",
   "refs": [
     "docs/design/UI2_0_B1_04B_DEVICE_MODEL_AND_ONBOARDING_CONTRACT.md",
     "docs/design/UI2_0_C1_PLATFORM_SCHEMA_CONTRACT.md",
@@ -103,6 +114,6 @@
     "docs/design/UI2_0_B1_02_SCHEMA_V1_CONTRACT.md"
   ],
   "schema_version": 1,
-  "status": "AWAITING_PO",
-  "updated_at": "2026-09-11T23:06:01Z"
+  "status": "AWAITING_ENGINEER",
+  "updated_at": "2026-09-11T23:11:37Z"
 }

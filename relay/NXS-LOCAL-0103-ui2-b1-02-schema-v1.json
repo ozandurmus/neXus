@@ -85,11 +85,22 @@
       "subject": "Three interpretations block B1-2 implementation",
       "text": "Parked overnight for Product Owner decision; implementation is not dispatched until these are answered.\n\n1. Does V1 create all nine C1 section 3.1 tables? C1 section 3 says B1-2 writes the literal Flyway SQL for the core tables, but the section 3.1 owner column names B1-4b for devices, endpoints and credential_references. Foreign keys from jobs.target_device_id and the inventory projection require those tables to exist, and PostgreSQL cannot forward-reference a table that does not exist. The contract author read owner as column-set and onboarding-logic authority rather than migration ownership, and created all nine in V1. That reading is an interpretation, not something C1 states. Confirm it, or name the alternative, for example create the three as minimal stubs in V1 and let B1-4b extend them.\n\n2. Who allocates Flyway version numbers across concurrent B1 movements? B1-3, B1-4 and B1-4b will each add migrations and Flyway's version ledger is global. No document assigns the numbering. Proposal: the Product Owner allocates the next version at dispatch time and it is recorded in the movement packet.\n\n3. Acknowledge that the jobs and job_steps tables exist but are non-functional between B1-2 and B1-4. This follows from C1 section 3.3 and is expected, but a database inspection during that window shows empty job machinery.",
       "timestamp": "2026-09-11T22:36:19Z"
+    },
+    {
+      "actor": "po",
+      "authorized_by": "Product Owner — chat authorization 2026-09-12: approve/revise/reject UI 2.0 B1 contracts and decide their open items",
+      "marker": "RELAY_DECISION",
+      "scope": "UI 2.0 B1 contract approval and open-item decisions",
+      "seq": 3,
+      "subject": "All parked items decided; contract frozen",
+      "supersedes": "the RELAY_QUESTION at seq 2 of this relay",
+      "text": "Every question parked on this relay is answered in docs/design/UI2_0_B1_ADJUDICATION_2026_09_12.md section 2, and the twelve cross-contract findings that an adversarial review raised are adjudicated in its section 1. This movement's contract is FROZEN as of 2026-09-12 and is read as amended by that document.\n\nThree of those findings were gaps no contract owned: nobody created the job lifecycle objects the executor reads, the gate registry storage was assigned in a circle, and nobody set the audit context that the schema fails closed without. Implementing any of these movements before the adjudication would have failed at runtime.\n\nThe implementation order is fixed in section 3 of the adjudication: B1-2, then B1-3, then B1-4b, then B1-4. B1-2 may not run concurrently with any of the others because the Flyway version ledger is a single global sequence. Version numbers are allocated: B1-2 is V1, B1-3 is V2, B1-4b is V3, B1-4 is V4.\n\nnext_actor returns to engineer; this movement is dispatchable.",
+      "timestamp": "2026-09-11T23:11:37Z"
     }
   ],
   "id": "NXS-LOCAL-0103",
   "movement": "UI2_B1_02_SCHEMA_V1_FLYWAY",
-  "next_actor": "po",
+  "next_actor": "engineer",
   "refs": [
     "docs/design/UI2_0_B1_02_SCHEMA_V1_CONTRACT.md",
     "docs/design/UI2_0_C1_PLATFORM_SCHEMA_CONTRACT.md",
@@ -98,6 +109,6 @@
     "docs/design/UI2_0_B1_01_SKELETON_CI_DOCKER_CONTRACT.md"
   ],
   "schema_version": 1,
-  "status": "AWAITING_PO",
-  "updated_at": "2026-09-11T22:36:19Z"
+  "status": "AWAITING_ENGINEER",
+  "updated_at": "2026-09-11T23:11:37Z"
 }
