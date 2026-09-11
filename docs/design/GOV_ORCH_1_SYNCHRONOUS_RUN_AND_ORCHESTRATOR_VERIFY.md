@@ -2,7 +2,7 @@
 
 ## Status
 
-**DRAFT — FOR PRODUCT OWNER FREEZE (2026-09-11).** Amends
+**FROZEN — PRODUCT OWNER APPROVED, 2026-09-11 (chat directive "hepsine ok").** Amends
 `docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md` (FROZEN) §3.1,
 §3.5 and §3.7. It does not change the relay transports
 (`NEXUS_AGENT_RELAY_PROTOCOL.md`, `LOCAL_RELAY_PROTOCOL.md`) or the

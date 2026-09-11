@@ -2,7 +2,7 @@
 
 ## Status
 
-**DRAFT — FOR PRODUCT OWNER FREEZE (2026-09-11).** Extends the shipped
+**FROZEN — PRODUCT OWNER APPROVED, 2026-09-11 (chat directive "hepsine ok").** Extends the shipped
 PO + Orchestrator workbench (`py scripts/orchestrator.py dashboard`,
 relay `NXS-LOCAL-0021`, `scripts/orchestrator_dashboard.py`,
 `scripts/dashboard_assets/`). Depends on GOV.ORCH.1 (record fields,

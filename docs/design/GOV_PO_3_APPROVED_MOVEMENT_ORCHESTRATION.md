@@ -816,7 +816,7 @@ or real-device approval boundary.
 | AC-7 | §3.4 item 1, §3.10 |
 | AC-8 | §3.9, §7 |
 
-## Amendment A-2026-09-11 (GOV.ORCH.3, PO decision pending)
+## Amendment A-2026-09-11 (GOV.ORCH.3, RATIFIED by the Product Owner 2026-09-11)
 
 `main` branch protection (PR required, CI green) is recorded as the final
 tool-neutral gate: after the per-worktree `pre-push` hook

@@ -45,7 +45,7 @@ the human or the higher authority resolve it.**
 **Contradiction report (2026-09-11).** `docs/reference/COPILOT_OPERATING_MODEL.md`
 (level 6) contradicted `docs/design/GOV_PO_ROLE_MIGRATION.md` (FROZEN, level 2)
 §9's independence rule and was corrected to match, per GOV.ORCH.3 Amendment
-A-2026-09-11 (PO decision pending).
+A-2026-09-11 (ratified 2026-09-11).
 
 ## Role dispatch
 

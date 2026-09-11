@@ -182,11 +182,11 @@ def test_copilot_operating_model_session_templates_and_matrix_are_pointers():
     assert "AI_START_HERE.md" in text
 
 
-# --- AC-C3: amendment block marked "PO decision pending"; FROZEN untouched -
+# --- AC-C3: amendment block marked ratified; FROZEN untouched -
 
 def test_gov_po_role_migration_amendment_block_and_frozen_status():
     text = (ROOT / "docs/design/GOV_PO_ROLE_MIGRATION.md").read_text(encoding="utf-8")
-    assert "## Amendment A-2026-09-11 (PO decision pending)" in text
+    assert "## Amendment A-2026-09-11 (RATIFIED by the Product Owner, 2026-09-11)" in text
     assert "FROZEN — PRODUCT OWNER APPROVED, 2026-09-07" in text
 
 

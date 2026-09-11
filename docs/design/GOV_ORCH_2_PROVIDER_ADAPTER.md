@@ -2,7 +2,7 @@
 
 ## Status
 
-**DRAFT — FOR PRODUCT OWNER FREEZE (2026-09-11).** Depends on GOV.ORCH.1
+**FROZEN — PRODUCT OWNER APPROVED, 2026-09-11 (chat directive "hepsine ok").** Depends on GOV.ORCH.1
 (report object, `run`). Amends
 `docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md` §3.5 (engineer
 prompt and argv) and makes `docs/reference/COPILOT_OPERATING_MODEL.md`'s

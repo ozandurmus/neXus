@@ -170,7 +170,7 @@ amendment appends one line in the same form. A merge without that recorded
 authorization, including an agent merging its own proposal, ratifies
 nothing and is reverted as an unauthorized Git action.
 
-## Amendment A-2026-09-11 (PO decision pending)
+## Amendment A-2026-09-11 (RATIFIED by the Product Owner, 2026-09-11)
 
 The PO assistant role is tool-neutral. The current holder is recorded in
 `docs/reference/COPILOT_OPERATING_MODEL.md` and may change without

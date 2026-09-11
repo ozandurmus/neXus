@@ -2,7 +2,7 @@
 
 ## Status
 
-**DRAFT — FOR PRODUCT OWNER FREEZE (2026-09-11).** Depends on GOV.ORCH.1
+**FROZEN — PRODUCT OWNER APPROVED, 2026-09-11 (chat directive "hepsine ok").** Depends on GOV.ORCH.1
 (`verify`) and is designed to coexist with GOV.ORCH.2. Part C amends
 `docs/design/GOV_PO_ROLE_MIGRATION.md` (FROZEN) §4 D1 and §9 and
 `AGENTS.md`'s handover-economy rule; those edits are proposals for the
