@@ -5,6 +5,24 @@
 > If this disagrees with `CURRENT_STATE.md` or `project/roadmap.json`, those
 > sources win.
 
+## Operating role for the next session
+
+- **Role:** Product Owner + Orchestrator. The assistant scopes and orders work,
+  dispatches workers through `scripts/orchestrator.py`, monitors them, reviews
+  evidence, and handles explicitly authorized PR/pull/merge actions.
+- **Not operator:** workers own implementation; the PO does not contact
+  devices or silently write worker implementation in the PO worktree.
+- **Decision source:** durable routing, council, Graphify, queue and status
+  decisions live in `docs/reference/COPILOT_OPERATING_MODEL.md`; this file is
+  only the cold-session pointer.
+- **Worker/council routing:** the PO chooses provider/model/effort per scope.
+  Prefer Claude when credit is available, otherwise Codex. Council does not
+  imply Fable/Astra/max reasoning; Terra, Opus, Sol, Fable or another current
+  model may be selected. Astra is optional; Codex synthesizes and reviews.
+- **Reporting:** worker status uses Relay, Work, Provider, Model, Reasoning,
+  PID, Phase, Worktree, First activity and Relay publication, with live/stale
+  counts and next PO action.
+
 ## 1. Snapshot
 
 - 2026-09-10: `ui2_b1_01_skeleton_ci_docker`, contract-only movement integrated from worker relay `NXS-LOCAL-0061`.
@@ -18,7 +36,10 @@
 
 ## 3. Exact next action
 
-Product Owner review and freeze of the B1-1 contract. After freeze, dispatch a separate B1-1 implementation movement to create `ui2/`.
+Product Owner review and freeze of the B1-1 contract. After freeze, dispatch a
+separate B1-1 implementation movement to create `ui2/`. Before any new worker,
+inspect all existing worker state and reconcile stale movements; do not create
+workers to hide stale state.
 
 ## 4. Test delta
 
@@ -29,3 +50,8 @@ Product Owner review and freeze of the B1-1 contract. After freeze, dispatch a s
 
 - Contract is DRAFT; implementation is not authorized until freeze.
 - Worker had no PR/CI at close; integration is now pending push, PR, CI, and PO merge verification.
+- OpenRouter `NXS-LOCAL-0065` / `3143bb6` is advisory-only, not a worker
+  fallback. The current orchestrator has no unattended backlog queue-runner.
+- The existing Graphify graph is oversized and includes worktree duplicates;
+  use only narrow low-budget queries and ignore `copilot-worktrees/`,
+  `graphify-out/`, `data/` and `logs/`. Graphify is a locator, not authority.
