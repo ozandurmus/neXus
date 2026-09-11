@@ -258,7 +258,9 @@ command line.
 
 `orchestrator start` accepts `--provider codex|claude` and defaults to
 `codex` (also configurable with `NEXUS_ORCHESTRATOR_PROVIDER`). The Codex
-path uses `codex exec --json --sandbox workspace-write --approve-for-me`;
+path uses `codex exec --json --approve-for-me` (the Codex CLI applies its
+workspace-write policy through that flag; it is mutually exclusive with an
+explicit `--sandbox` flag);
 the prompt remains one argv value and task content still comes only from
 `.nexus/approved_task.json`. `--provider claude` preserves the existing
 `claude -p --output-format stream-json` compatibility path. Provider output
