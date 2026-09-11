@@ -8,6 +8,7 @@
 - 2026-09-11: `ui2_b1_01_skeleton_ci_docker` remains IN_PROGRESS; Flyway lifecycle is implemented but Docker-backed validation is unavailable on this host.
 - Branch: `build/ui2-d1-c7-c2-frozen-amendments`; base `3993d95`.
 - Runtime restore remains disabled; no device contact or remote Git operations.
+- `scripts/orchestrator.py` now defaults to `codex exec --json`; legacy Claude dispatch is explicit via `--provider claude`.
 
 ## What changed
 
@@ -16,6 +17,7 @@
 - Seats returned substantive findings but invalid session-transfer envelopes; quota blocked successful correction. All seats are closed. No cross-model or hook-log verification claim is made.
 - Implemented `MigrationRunner` with a B1-1 baseline Flyway migration and added migration-role/app-role integration coverage; strengthened dependency-boundary checks and reconciled stale B1-1 state/history wording.
 - Converted integration validation to CRC-backed PostgreSQL: the CRC overlay now has disposable test Postgres, and the harness accepts an `oc port-forward` JDBC URL; Docker/Podman remains optional fallback only. The proposed frozen-contract amendment is `docs/design/UI2_0_B1_01_CRC_VALIDATION_AMENDMENT.md`.
+- Made the local AI worker dispatch provider-neutral with Codex as the default; retained the existing Claude argv as an explicit compatibility path and verified the orchestrator/dashboard/PO-gate tests.
 
 ## Exact next action
 
@@ -51,4 +53,4 @@ Formal governance publication remains pending; this review authorizes no fix.
   converted to a skip or success.
 - CRC-backed path is implemented but not yet real-environment validated in this
   session; it requires the user's running CRC cluster, secret and port-forward.
-- Local patch only; no push, PR or merge performed.
+- Provider-dispatch patch is locally validated; push/PR/merge remains pending for this change.
