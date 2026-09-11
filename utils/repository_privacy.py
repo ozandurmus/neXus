@@ -109,6 +109,24 @@ _SAFE_LITERAL_VALUES = {
 }
 
 
+def _is_prose_not_secret(value: str) -> bool:
+    """True when a quoted "value" captured after a credential keyword cannot
+    be a secret: it has no letter or digit at all (e.g. the "/" between
+    ``'password='/'PASSWORD:'`` in a sentence about the scanner itself), or
+    it is running prose -- four or more whitespace-separated words. A real
+    credential literal is a single token; documentation that mentions the
+    keyword in quotes is not a finding. Applies only to text lines; the
+    Python AST path is unchanged."""
+    stripped = value.strip()
+    if not any(ch.isalnum() for ch in stripped):
+        return True
+    if value != stripped:
+        # A secret never starts or ends with whitespace; a quoted fragment
+        # of a sentence (``' and '``) does.
+        return True
+    return len(stripped.split()) >= 4
+
+
 def _is_text_candidate(path: Path) -> bool:
     return path.name == ".gitignore" or path.suffix.lower() in TEXT_SUFFIXES
 
@@ -246,7 +264,8 @@ def scan_repository(repository_root: Path) -> PrivacyReport:
                 match = _HIGH_RISK_ASSIGNMENT_RE.search(line)
                 if match:
                     normalized = match.group(2).strip().lower()
-                    if normalized not in _SAFE_LITERAL_VALUES and not normalized.startswith("["):
+                    if (normalized not in _SAFE_LITERAL_VALUES and not normalized.startswith("[")
+                            and not _is_prose_not_secret(match.group(2))):
                         findings.append(PrivacyFinding(rel.as_posix(), line_no, "CREDENTIAL_LITERAL"))
             # Known environment-coupling form: a repository default containing
             # concrete device identities. Values are deliberately not surfaced.

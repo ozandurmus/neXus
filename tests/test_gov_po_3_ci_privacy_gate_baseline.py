@@ -171,17 +171,24 @@ def test_ci_privacy_check_without_baseline_ref_fails_exactly_as_before(tmp_path,
 
 
 def test_ac6_live_repository_findings_are_pre_existing_against_origin_main():
+    # The two AC-1 locations were prose about the scanner itself (quoted
+    # 'password=' fragments), never credentials; the credential rule now
+    # ignores such prose (utils.repository_privacy._is_prose_not_secret),
+    # so they must no longer be reported. Whatever tracked findings remain
+    # must still be pre-existing against origin/main -- environment-only
+    # runtime directories (gitignored) are excluded from that comparison.
     ac1_locations = {
         ("project/build_history.json", "CREDENTIAL_LITERAL"),
         ("relay/NXS-LOCAL-0003-local-relay-watch-command.json", "CREDENTIAL_LITERAL"),
     }
     current = scan_repository(ROOT)
-    ac1_findings = [f for f in current.findings if (f.path, f.rule) in ac1_locations]
-    assert ac1_findings, "expected the AC-1 regression fixtures to still be present in the live repository"
+    assert not [f for f in current.findings if (f.path, f.rule) in ac1_locations]
 
-    keys, note = baseline_finding_keys(ROOT, "origin/main")
-    for finding in ac1_findings:
-        assert finding_key(ROOT, finding) in keys, (finding, note)
+    tracked = [f for f in current.findings if f.rule != "RUNTIME_DIRECTORY_PRESENT"]
+    if tracked:
+        keys, note = baseline_finding_keys(ROOT, "origin/main")
+        for finding in tracked:
+            assert finding_key(ROOT, finding) in keys, (finding, note)
 
 
 def test_ac6_synthetic_new_finding_still_fails_against_origin_main():
