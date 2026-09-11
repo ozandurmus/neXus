@@ -7,8 +7,8 @@
       "status": "done",
       "introduced": "0.5 Final",
       "weight": 8,
-      "summary": "Normalized multi-vendor inventory with search, filters, freshness and logical device views.",
-      "why": "Creates the trusted SEE layer used by every later configuration, alignment and recovery workflow.",
+      "summary": "Normalized multi-vendor inventory with search, filters, freshness and logical device views",
+      "why": "Creates the trusted SEE layer used by every later configuration, alignment and recovery wo",
       "criteria": [
         {
           "id": "normalized_inventory",
@@ -28,7 +28,8 @@
           "state": "done",
           "weight": 1
         }
-      ]
+      ],
+      "detail": "docs/history/features/network_inventory.md"
     },
     {
       "id": "failure_aware_inventory",
@@ -37,7 +38,7 @@
       "introduced": "0.5",
       "weight": 4,
       "summary": "Separates collection failure, management-reported state and last-known-good evidence.",
-      "why": "Prevents unavailable collection from being misrepresented as device failure or fresh state.",
+      "why": "Prevents unavailable collection from being misrepresented as device failure or fresh state",
       "criteria": [
         {
           "id": "failure_states",
@@ -51,7 +52,8 @@
           "state": "done",
           "weight": 1
         }
-      ]
+      ],
+      "detail": "docs/history/features/failure_aware_inventory.md"
     },
     {
       "id": "clusterxl_inventory",
@@ -59,7 +61,7 @@
       "status": "done",
       "introduced": "0.5",
       "weight": 5,
-      "summary": "Represents ClusterXL clusters, members, VIP/member addresses and member-specific route/interface evidence.",
+      "summary": "Represents ClusterXL clusters, members, VIP/member addresses and member-specific route/int",
       "why": "Keeps physical member evidence without losing the logical cluster view.",
       "criteria": [
         {
@@ -74,7 +76,8 @@
           "state": "done",
           "weight": 1
         }
-      ]
+      ],
+      "detail": "docs/history/features/clusterxl_inventory.md"
     },
     {
       "id": "vsx_inventory",
@@ -82,8 +85,8 @@
       "status": "done",
       "introduced": "0.5",
       "weight": 5,
-      "summary": "Models VSX physical members and Virtual Systems as a hierarchy instead of independent firewalls.",
-      "why": "Preserves the execution endpoint/context relationship required for correct collection and later alignment.",
+      "summary": "Models VSX physical members and Virtual Systems as a hierarchy instead of independent fire",
+      "why": "Preserves the execution endpoint/context relationship required for correct collection and",
       "criteria": [
         {
           "id": "contexts",
@@ -97,7 +100,8 @@
           "state": "done",
           "weight": 1
         }
-      ]
+      ],
+      "detail": "docs/history/features/vsx_inventory.md"
     },
     {
       "id": "pan_runtime_inventory",
@@ -120,7 +124,8 @@
           "state": "done",
           "weight": 1
         }
-      ]
+      ],
+      "detail": "docs/history/features/pan_runtime_inventory.md"
     },
     {
       "id": "pan_config_evidence",
@@ -128,8 +133,8 @@
       "status": "done",
       "introduced": "0.6.0A",
       "weight": 12,
-      "summary": "Collects direct-firewall effective-running configuration while retaining Panorama/local/merged provenance evidence.",
-      "why": "Answers what the firewall is actually configured as now without confusing management intent with effective state.",
+      "summary": "Collects direct-firewall effective-running configuration while retaining Panorama/local/me",
+      "why": "Answers what the firewall is actually configured as now without confusing management inten",
       "criteria": [
         {
           "id": "identity",
@@ -149,7 +154,8 @@
           "state": "done",
           "weight": 1
         }
-      ]
+      ],
+      "detail": "docs/history/features/pan_config_evidence.md"
     },
     {
       "id": "pan_alignment_foundation",
@@ -157,8 +163,8 @@
       "status": "done",
       "introduced": "0.6.0A4.2",
       "weight": 10,
-      "summary": "Compiles Panorama expected configuration and classifies setting-level alignment, override, member/provenance and drift states.",
-      "why": "Separates benign local/member semantics from unexplained effective drift and reduces false positives.",
+      "summary": "Compiles Panorama expected configuration and classifies setting-level alignment, override,",
+      "why": "Separates benign local/member semantics from unexplained effective drift and reduces false",
       "criteria": [
         {
           "id": "compiler",
@@ -178,7 +184,8 @@
           "state": "done",
           "weight": 2
         }
-      ]
+      ],
+      "detail": "docs/history/features/pan_alignment_foundation.md"
     },
     {
       "id": "content_addressed_history",
@@ -186,7 +193,7 @@
       "status": "done",
       "introduced": "0.6.0A4.3.2",
       "weight": 8,
-      "summary": "Stores one immutable object per unique configuration payload while history snapshots reference shared content.",
+      "summary": "Stores one immutable object per unique configuration payload while history snapshots refer",
       "why": "Preserves history without duplicating identical multi-gigabyte configuration payloads.",
       "evidence": "1295 legacy snapshots migrated to 153 unique CAS objects; approximately 2.98 GiB duplicate payload storage reclaimed in the validated migration.",
       "criteria": [
@@ -215,7 +222,8 @@
           "weight": 2,
           "note": "backlog.json distributed_evidence_store_migration, AUTOMATED_VALIDATED 2026-08-31. utils/evidence_backend.py moves the CAS metadata index, run manifests, last-known-good and scheduler state behind backends: filesystem by default (unchanged), PostgreSQL when SECURITYEXPERT_EVIDENCE_BACKEND=postgres. Content-addressed payload blobs are explicitly out of scope and never leave the runtime volume. Verified against a real local PostgreSQL 16, including a two-real-subprocess test proving concurrent writers never lose each other's last-known-good entities. Multi-container real-environment evidence still owed (server-blocked, DEPLOY.1)."
         }
-      ]
+      ],
+      "detail": "docs/history/features/content_addressed_history.md"
     },
     {
       "id": "configuration_ui",
@@ -223,8 +231,8 @@
       "status": "done",
       "introduced": "0.6.0A4.3",
       "weight": 8,
-      "summary": "Vendor-neutral current configuration, evidence, alignment, history and backup placeholders with fleet/device drilldown.",
-      "why": "Gives operators one consistent view while retaining vendor-specific evidence semantics underneath.",
+      "summary": "Vendor-neutral current configuration, evidence, alignment, history and backup placeholders",
+      "why": "Gives operators one consistent view while retaining vendor-specific evidence semantics und",
       "criteria": [
         {
           "id": "fleet",
@@ -244,7 +252,8 @@
           "state": "done",
           "weight": 1
         }
-      ]
+      ],
+      "detail": "docs/history/features/configuration_ui.md"
     },
     {
       "id": "workflow_modes",
@@ -252,8 +261,8 @@
       "status": "done",
       "introduced": "0.6.0A4.3.3.2",
       "weight": 5,
-      "summary": "Adds render-only, PAN-config, VSX-only, CP-only and full-checkpoint workflows with mixed-cycle provenance.",
-      "why": "Keeps development loops fast without presenting partial reused evidence as a fresh full checkpoint.",
+      "summary": "Adds render-only, PAN-config, VSX-only, CP-only and full-checkpoint workflows with mixed-c",
+      "why": "Keeps development loops fast without presenting partial reused evidence as a fresh full ch",
       "criteria": [
         {
           "id": "partial_modes",
@@ -267,7 +276,8 @@
           "state": "done",
           "weight": 1
         }
-      ]
+      ],
+      "detail": "docs/history/features/workflow_modes.md"
     },
     {
       "id": "living_project_plan",
@@ -275,8 +285,8 @@
       "status": "done",
       "introduced": "0.6.1B.1.2",
       "weight": 4,
-      "summary": "In-product roadmap, progress, Now/Next/Upcoming, backlog, completed-feature explanations and build history backed by versioned metadata files.",
-      "why": "Keeps implementation position, deferred work and technical debt visible so build-by-build decisions do not get lost across long development cycles.",
+      "summary": "In-product roadmap, progress, Now/Next/Upcoming, backlog, completed-feature explanations a",
+      "why": "Keeps implementation position, deferred work and technical debt visible so build-by-build",
       "criteria": [
         {
           "id": "metadata",
@@ -302,7 +312,8 @@
           "state": "done",
           "weight": 1
         }
-      ]
+      ],
+      "detail": "docs/history/features/living_project_plan.md"
     },
     {
       "id": "cp_config_probe",
@@ -310,8 +321,8 @@
       "status": "done",
       "introduced": "0.6.1A",
       "weight": 6,
-      "summary": "Validated direct read-only Check Point actual-configuration evidence, identity gating and VSX context-specific collection.",
-      "why": "Proved the collection semantics on real Standalone, ClusterXL and VSX devices before production promotion.",
+      "summary": "Validated direct read-only Check Point actual-configuration evidence, identity gating and",
+      "why": "Proved the collection semantics on real Standalone, ClusterXL and VSX devices before produ",
       "criteria": [
         {
           "id": "expert_clish",
@@ -331,7 +342,8 @@
           "state": "done",
           "weight": 1
         }
-      ]
+      ],
+      "detail": "docs/history/features/cp_config_probe.md"
     },
     {
       "id": "cp_config_collector",
@@ -339,8 +351,8 @@
       "status": "done",
       "introduced": "0.6.1B",
       "weight": 12,
-      "summary": "Collects secret-aware current Gaia configuration for Standalone, ClusterXL members, VSX hosts and Virtual Systems.",
-      "why": "Extends Configuration beyond PAN while keeping member/VS context and raw-secret boundaries explicit.",
+      "summary": "Collects secret-aware current Gaia configuration for Standalone, ClusterXL members, VSX ho",
+      "why": "Extends Configuration beyond PAN while keeping member/VS context and raw-secret boundaries",
       "criteria": [
         {
           "id": "standalone",
@@ -366,7 +378,8 @@
           "state": "done",
           "weight": 2
         }
-      ]
+      ],
+      "detail": "docs/history/features/cp_config_collector.md"
     },
     {
       "id": "cp_coverage_closure",
@@ -375,8 +388,8 @@
       "introduced": "0.6.1B.1",
       "target": "0.6.1B.1.2",
       "weight": 10,
-      "summary": "Closes shell/platform/metadata coverage gaps and distinguishes operational failure from unsupported capability.",
-      "why": "A management-discovered device should be collectable according to observed capabilities, not a hard-coded shell assumption.",
+      "summary": "Closes shell/platform/metadata coverage gaps and distinguishes operational failure from un",
+      "why": "A management-discovered device should be collectable according to observed capabilities, n",
       "criteria": [
         {
           "id": "failure_taxonomy",
@@ -414,7 +427,8 @@
           "state": "pending",
           "weight": 2
         }
-      ]
+      ],
+      "detail": "docs/history/features/cp_coverage_closure.md"
     },
     {
       "id": "discovery_capability_foundation",
@@ -423,8 +437,8 @@
       "introduced": "0.6.1C",
       "target": "0.6.1C",
       "weight": 10,
-      "summary": "Management-led discovery lifecycle, topology/identity confidence and capability-driven collection plans.",
-      "why": "Preserves zero-touch onboarding while making uncertainty explicit instead of automating by assumption.",
+      "summary": "Management-led discovery lifecycle, topology/identity confidence and capability-driven col",
+      "why": "Preserves zero-touch onboarding while making uncertainty explicit instead of automating by",
       "criteria": [
         {
           "id": "lifecycle",
@@ -456,7 +470,8 @@
           "state": "pending",
           "weight": 2
         }
-      ]
+      ],
+      "detail": "docs/history/features/discovery_capability_foundation.md"
     },
     {
       "id": "cp_management_alignment",
@@ -464,7 +479,7 @@
       "status": "real_env_validated",
       "target": "0.6.1D",
       "weight": 10,
-      "summary": "Compare Management intent/expected state with gateway/member/VS actual state using CP-specific semantics.",
+      "summary": "Compare Management intent/expected state with gateway/member/VS actual state using CP-spec",
       "why": "Adds VERIFY semantics without treating benign ClusterXL/VSX member differences as drift.",
       "criteria": [
         {
@@ -491,7 +506,8 @@
           "state": "pending",
           "weight": 2
         }
-      ]
+      ],
+      "detail": "docs/history/features/cp_management_alignment.md"
     },
     {
       "id": "configuration_history_ux",
@@ -500,7 +516,7 @@
       "introduced": "0.6.3",
       "target": "0.6.3",
       "weight": 8,
-      "summary": "Chronological snapshot selection, normalized change views and safe configuration diffs. Device-scoped artifact timeline from CAS metadata; latest CHANGED pair diff for PAN; CP timeline + INSUFFICIENT_EVIDENCE for diff.",
+      "summary": "Chronological snapshot selection, normalized change views and safe configuration diffs.",
       "why": "Turns existing FIRST/SAME/CHANGED history signals into operator-usable TRACE workflows.",
       "criteria": [
         {
@@ -515,7 +531,8 @@
           "state": "done",
           "weight": 2
         }
-      ]
+      ],
+      "detail": "docs/history/features/configuration_history_ux.md"
     },
     {
       "id": "native_backup_foundation",
@@ -523,8 +540,8 @@
       "status": "in_progress",
       "target": "RB.1-RB.3 (rebase of original 0.6.0B)",
       "weight": 10,
-      "summary": "Encrypted recovery plane separate from the evidence plane: vendor-native recovery artifacts, manifests, integrity validation, retention/immutability and restore-readiness evidence.",
-      "why": "Configuration evidence is deliberately redacted (secrets_redacted: True) and therefore NON-RESTORABLE by design. It is not a recovery backup, and the Configuration module's existence makes it easy to assume otherwise. docs/design/BACKUP_AND_RECOVERY_ARCHITECTURE.md + docs/design/BACKUP_RECOVERY_CONTRACTS.md (design frozen 2026-08-30). RB.1 landed 2026-08-30: utils/recovery_store.py + recovery_crypto.py (AES-256-GCM envelope encryption) + recovery_manifest.py + recovery_retention.py + main.py --recovery-store-check + resolve_recovery_root (utils/runtime_paths.py). Store/encryption/manifest/retention infrastructure only -- no collector calls it yet (RB.2/RB.3 gated). D2 RESOLVED 2026-08-30 (product owner): PAN service account may hold superuser for device-state export. RB.2 IMPLEMENTED 2026-08-30 (real-env validation owed): utils/recovery_collect.py orchestration (selective gateway targeting, scheduler-integrated, admission-coordinated) + panorama/panorama_recovery_collector.py. CP (RB.3) stays a typed blocked stub. RB.3a (CP Gaia attestation, read class) AUTOMATED_VALIDATED 2026-08-31. RB.3b (CP Gaia backup collection, operational-write): D3 RESOLVED 2026-08-31 (product owner, pilot-scoped, fail-closed); RB.3b unblocking prep DONE 2026-08-31 (feature/rb-3b-gate-prep) -- D4 decision brief (docs/design/D4_BACKUP_CREDENTIAL_IDENTITY_DECISION.md, distinct backup service account recommended), contract §7.7/§7.8 gate entries with literal Gaia strings, §7.3 point 14, the durable operational-write ledger design (docs/design/RECOVERY_OPERATIONAL_WRITE_LEDGER.md), and the §3-rule-5 version-unknown refusal all landed; RB.3b stays blocked pending product-owner / security-lead sign-off. The P0 cp_device_interaction_safety audit closed 2026-08-25 and is not a blocker. UPDATE 2026-08-31: RB.3b unblocking prep sign-off cleared all five blockers and implementation steps 2-7 landed the same day against fixture transports (offline layer, device core + C6, main.py wiring, project-metadata sync) -- superseding the 'stays blocked pending sign-off' line above. Full suite 879 passed / 23 skipped / 2 failed (documented pre-existing pollution), zero regressions. Status stays in_progress -- the cp_backup criterion below stays pending -- until the mandatory watched real R81.10/R81.20 single-gateway run happens; detail in docs/history/phase/RB_3B_CP_GAIA_BACKUP_COLLECTION.md and project/build_history.json.",
+      "summary": "Encrypted recovery plane separate from the evidence plane: vendor-native recovery artifact",
+      "why": "Configuration evidence is deliberately redacted (secrets_redacted: True) and therefore NON",
       "criteria": [
         {
           "id": "pan_export",
@@ -544,15 +561,16 @@
           "state": "pending",
           "weight": 1
         }
-      ]
+      ],
+      "detail": "docs/history/features/native_backup_foundation.md"
     },
     {
       "id": "production_read_trust",
       "title": "Read-Plane Production Trust Hardening",
       "status": "in_progress",
       "weight": 7,
-      "summary": "Close transport trust, credential, dependency and deployment hardening before production rollout.",
-      "why": "Read-only does not remove the need for authenticated endpoints, trusted TLS/SSH and controlled secret handling.",
+      "summary": "Close transport trust, credential, dependency and deployment hardening before production r",
+      "why": "Read-only does not remove the need for authenticated endpoints, trusted TLS/SSH and contro",
       "criteria": [
         {
           "id": "secret_redaction",
@@ -590,7 +608,8 @@
           "state": "pending",
           "weight": 1
         }
-      ]
+      ],
+      "detail": "docs/history/features/production_read_trust.md"
     },
     {
       "id": "compliance_posture_foundation",
@@ -598,8 +617,8 @@
       "status": "done",
       "introduced": "0.6.1B.1.5",
       "weight": 6,
-      "summary": "Builds an evidence-backed compliance control-area view from existing CP/PAN normalized configuration UI payload with fleet/subject drilldown and roadmap-linked planned controls.",
-      "why": "Creates the VERIFY on-ramp without over-claiming certification: PASS/FINDING/UNKNOWN/NOT_APPLICABLE/PLANNED states remain bounded to observed evidence and explicit coverage limits.",
+      "summary": "Builds an evidence-backed compliance control-area view from existing CP/PAN normalized con",
+      "why": "Creates the VERIFY on-ramp without over-claiming certification: PASS/FINDING/UNKNOWN/NOT_A",
       "criteria": [
         {
           "id": "control_states",
@@ -625,7 +644,8 @@
           "state": "done",
           "weight": 1
         }
-      ]
+      ],
+      "detail": "docs/history/features/compliance_posture_foundation.md"
     },
     {
       "id": "compliance_control_pack_v1",
@@ -633,8 +653,8 @@
       "status": "done",
       "target": "0.6.1B.1.6",
       "weight": 7,
-      "summary": "Expanded compliance posture with 10 vendor-neutral benchmark-aligned subject controls using CP/PAN normalized evidence adapters, with explicit control taxonomy and traceability metadata.",
-      "why": "Strengthens VERIFY signal quality and transparency while preserving privacy boundaries and no-certification-claim semantics.",
+      "summary": "Expanded compliance posture with 10 vendor-neutral benchmark-aligned subject controls usin",
+      "why": "Strengthens VERIFY signal quality and transparency while preserving privacy boundaries and",
       "criteria": [
         {
           "id": "ten_controls",
@@ -666,7 +686,8 @@
           "state": "done",
           "weight": 2
         }
-      ]
+      ],
+      "detail": "docs/history/features/compliance_control_pack_v1.md"
     },
     {
       "id": "compliance_engine",
@@ -675,8 +696,8 @@
       "target": "0.7.x",
       "weight": 12,
       "early_foundation": "Early evidence-backed control state model and framework area mappings delivered in 0.6.1B.1.5/1.6. Formal rule engine with versioned rule packs, stronger framework governance and compliance_posture_rulepack_transition bridge opens the 0.7.x track.",
-      "summary": "Vendor-neutral rule evaluation over verified normalized configuration facts. Designs: docs/design/COMPLIANCE_ASSIGNMENT_AND_FRAMEWORKS.md (0.7.1 file-based catalog + assignment, delivered 0.7.1a/b) and docs/design/COMPLIANCE_CHECK_ENGINE.md (user-authored data-driven checks over already-collected evidence - CE.1 target 0.7.3, no server / no new command; CE.2 curated read-only command primitives, command-gated; CE.3 UI editor + signed org packs, DEPLOY.1A).",
-      "why": "Transforms verified current/expected state into actionable compliance findings, and lets operators/auditors add their own checks as data instead of code.",
+      "summary": "Vendor-neutral rule evaluation over verified normalized configuration facts.",
+      "why": "Transforms verified current/expected state into actionable compliance findings, and lets o",
       "criteria": [
         {
           "id": "rules",
@@ -685,7 +706,8 @@
           "weight": 2,
           "note": "In progress: 0.6.6B static rule pack + 0.7.1a/b catalog + 0.7.3 (CE.1) data-driven user check engine (compliance_check_pack.py / compliance_check_engine.py) all delivered. Marked done once CE.2 (curated read-only command primitives; cp_device_interaction_safety itself closed 2026-08-25, remaining gate is the per-primitive network-device command gate + real-environment validation) and CE.3 (UI editor + signed org packs, DEPLOY.1A) land."
         }
-      ]
+      ],
+      "detail": "docs/history/features/compliance_engine.md"
     },
     {
       "id": "framework_mappings",
@@ -694,8 +716,8 @@
       "target": "0.7.x",
       "weight": 5,
       "early_foundation": "CIS/PCI-DSS/BDDK control-area mappings and benchmark references delivered in 0.6.1B.1.5/1.6 as evidence-bounded area mappings. 0.7.1a added real per-control per-framework membership; 0.7.4 added the framework SIDE - a declarative requirement catalog (utils/framework_catalog.py) with requirement-level COVERED/PARTIALLY_COVERED/UNCOVERED/NOT_APPLICABLE + posture, version/profile, unmapped-ref drift guard, and a UI requirement drill-down.",
-      "summary": "Map technical evidence/findings to internal and external control frameworks. Designs: docs/design/COMPLIANCE_ASSIGNMENT_AND_FRAMEWORKS.md. A signed / user-authored framework pack + a UI mapping editor (custom frameworks) is DEPLOY.1A-gated.",
-      "why": "Connects engineering evidence to audit and governance requirements - requirement by requirement, not just a framework-level percentage.",
+      "summary": "Map technical evidence/findings to internal and external control frameworks.",
+      "why": "Connects engineering evidence to audit and governance requirements - requirement by requir",
       "criteria": [
         {
           "id": "mapping",
@@ -710,7 +732,8 @@
           "weight": 1,
           "note": "0.7.4: framework_catalog.py + compliance_overview.by_framework[].requirements[] with coverage + posture. DEPLOY.1A: custom/signed framework packs + UI mapping editor."
         }
-      ]
+      ],
+      "detail": "docs/history/features/framework_mappings.md"
     },
     {
       "id": "evidence_reporting",
@@ -718,7 +741,7 @@
       "status": "in_progress",
       "target": "0.7.x",
       "weight": 5,
-      "summary": "Generate bounded evidence reports without exposing raw configuration secrets. Design + now/DEPLOY.1 split: docs/design/COMPLIANCE_ASSIGNMENT_AND_FRAMEWORKS.md (0.7.1 delivers the file-based, read-only foundation; 0.7.2 adds the read-side workbench spine - framework filter chips + inline explain-this-control panel).",
+      "summary": "Generate bounded evidence reports without exposing raw configuration secrets.",
       "why": "Supports review, audit and management communication from the same evidence model.",
       "criteria": [
         {
@@ -727,7 +750,8 @@
           "state": "pending",
           "weight": 1
         }
-      ]
+      ],
+      "detail": "docs/history/features/evidence_reporting.md"
     },
     {
       "id": "cross_vendor_change_timeline",
@@ -744,7 +768,8 @@
           "state": "pending",
           "weight": 1
         }
-      ]
+      ],
+      "detail": "docs/history/features/cross_vendor_change_timeline.md"
     },
     {
       "id": "root_cause_trace",
@@ -752,7 +777,7 @@
       "status": "planned",
       "target": "0.8.x",
       "weight": 8,
-      "summary": "Correlate evidence, alignment and history to explain what changed and why a finding appeared.",
+      "summary": "Correlate evidence, alignment and history to explain what changed and why a finding appear",
       "why": "Moves from detecting difference to explaining causality and provenance.",
       "criteria": [
         {
@@ -761,7 +786,8 @@
           "state": "pending",
           "weight": 1
         }
-      ]
+      ],
+      "detail": "docs/history/features/root_cause_trace.md"
     },
     {
       "id": "native_backup_validation",
@@ -769,8 +795,8 @@
       "status": "automated_validated",
       "target": "RB.4",
       "weight": 10,
-      "summary": "Validation battery V1 transport / V2 structural / V3 semantic. V3 cross-checks the artifact against unified.json (interface, vsys/VS, version, HA role).",
-      "why": "A hash proves a file arrived intact; it proves nothing about restorability. V3 catches truncated, partial and wrong-device artifacts that pass V1/V2 cleanly -- only possible because this platform already has a reconciled inventory to compare against. V4 RESTORE_PROVEN requires a real lab restore and is never inferred. docs/design/BACKUP_AND_RECOVERY_ARCHITECTURE.md + docs/design/BACKUP_RECOVERY_CONTRACTS.md (design frozen 2026-08-30). AUTOMATED_VALIDATED 2026-08-30: utils/recovery_validation.py (validate_artifact V1-V3) + attach_restore_proof (the only path that can set V4/RESTORE_PROVEN, never automatic) + main.py --recovery-validate.",
+      "summary": "Validation battery V1 transport / V2 structural / V3 semantic.",
+      "why": "A hash proves a file arrived intact; it proves nothing about restorability.",
       "criteria": [
         {
           "id": "validation",
@@ -778,7 +804,8 @@
           "state": "done",
           "weight": 1
         }
-      ]
+      ],
+      "detail": "docs/history/features/native_backup_validation.md"
     },
     {
       "id": "restore_readiness",
@@ -786,8 +813,8 @@
       "status": "in_progress",
       "target": "RB.0 (pulled forward from 0.9.x) + RB.5 (delivered by CON.4)",
       "weight": 8,
-      "summary": "Per-device READY / STALE / PARTIAL / UNPROTECTED / UNKNOWN readiness over already-collected evidence, plus the Recovery UI module and coverage-vs-inventory gap view. The Recovery UI module half (RB.5) is contracted as CON.4, rendering in both the exported report and the console from one shared payload.",
-      "why": "Answers 'if this device died right now, what do we actually have?' with zero new device commands, zero credentials and no network. Buildable immediately, depends on nothing later in the sequence, and quantifies the BackBox-exit risk with real numbers instead of assumption -- which is why it is pulled forward from 0.9.x. docs/design/BACKUP_AND_RECOVERY_ARCHITECTURE.md + docs/design/BACKUP_RECOVERY_CONTRACTS.md (design frozen 2026-08-30). RB.0 landed 2026-08-30: utils/restore_readiness.py + main.py --restore-readiness-check. RB.5 (Recovery UI module) is contracted 2026-08-31 as docs/history/phase/CON_4_CONSOLE_RECOVERY_MODULE.md.",
+      "summary": "Per-device READY / STALE / PARTIAL / UNPROTECTED / UNKNOWN readiness over already-collecte",
+      "why": "Answers 'if this device died right now, what do we actually have?' with zero new device co",
       "criteria": [
         {
           "id": "readiness",
@@ -801,7 +828,8 @@
           "state": "pending",
           "weight": 1
         }
-      ]
+      ],
+      "detail": "docs/history/features/restore_readiness.md"
     },
     {
       "id": "server_data_plane",
@@ -809,8 +837,8 @@
       "status": "planned",
       "target": "1.0",
       "weight": 10,
-      "summary": "Deliberate single-worker server data plane first: PostgreSQL when enabled, durable evidence payloads, and recovery storage; add queues or object storage only after measured scale requires them.",
-      "why": "Hardens local persistence for an internal server while avoiding premature distributed components that add operational and security surface.",
+      "summary": "Deliberate single-worker server data plane first: PostgreSQL when enabled, durable evidenc",
+      "why": "Hardens local persistence for an internal server while avoiding premature distributed comp",
       "criteria": [
         {
           "id": "db",
@@ -842,7 +870,8 @@
           "state": "pending",
           "weight": 2
         }
-      ]
+      ],
+      "detail": "docs/history/features/server_data_plane.md"
     },
     {
       "id": "oidc_rbac_audit",
@@ -871,7 +900,8 @@
           "state": "pending",
           "weight": 1
         }
-      ]
+      ],
+      "detail": "docs/history/features/oidc_rbac_audit.md"
     },
     {
       "id": "production_observability",
@@ -880,7 +910,7 @@
       "target": "1.0",
       "weight": 7,
       "summary": "Container/pod topology, health, metrics, logs, dependency and supply-chain controls.",
-      "why": "Makes collector/network access boundaries and operational health supportable in production.",
+      "why": "Makes collector/network access boundaries and operational health supportable in production",
       "criteria": [
         {
           "id": "containers",
@@ -906,7 +936,8 @@
           "state": "pending",
           "weight": 2
         }
-      ]
+      ],
+      "detail": "docs/history/features/production_observability.md"
     },
     {
       "id": "collection_execution_coordinator",
@@ -915,8 +946,8 @@
       "introduced": "0.6.1C",
       "target": "0.6.1C / DEPLOY.1",
       "weight": 10,
-      "summary": "Per-device canonical identity lock, vendor/context concurrency budget, cooldown, coalescing, priority and job provenance across manual, scheduled and event-triggered collection.",
-      "why": "Required before recurring scheduling or event-driven triggers; prevents concurrent CP/VSX/config collection hitting the same physical device simultaneously. Extends the 0.6.1B.1.3 safety audit finding into the scheduled-execution world.",
+      "summary": "Per-device canonical identity lock, vendor/context concurrency budget, cooldown, coalescin",
+      "why": "Required before recurring scheduling or event-driven triggers; prevents concurrent CP/VSX/",
       "criteria": [
         {
           "id": "device_lock",
@@ -961,7 +992,8 @@
           "weight": 2,
           "note": "backlog.json distributed_endpoint_lock, AUTOMATED_VALIDATED 2026-08-30. Verified this session against a real local PostgreSQL 16: real cross-process exclusion (a real child OS process, SIGKILLed, endpoint reclaimed with no TTL/heartbeat) and a real pgbouncer transaction-pooling proxy correctly rejected by the startup preflight. Multi-container-against-a-real-MDS real-environment evidence still owed (server-blocked, DEPLOY.1)."
         }
-      ]
+      ],
+      "detail": "docs/history/features/collection_execution_coordinator.md"
     },
     {
       "id": "deploy1_oidc_viewer",
@@ -969,8 +1001,8 @@
       "status": "planned",
       "target": "DEPLOY.1A",
       "weight": 9,
-      "summary": "Corporate OIDC login gate in front of all UI and API surfaces before the server is opened for internal use. IP allowlist remains as a defense-in-depth layer, not the primary control.",
-      "why": "Network topology, rule sets and configuration evidence are sensitive even after redaction. Any internal server deployment must verify who is viewing before exposing the evidence plane.",
+      "summary": "Corporate OIDC login gate in front of all UI and API surfaces before the server is opened",
+      "why": "Network topology, rule sets and configuration evidence are sensitive even after redaction.",
       "criteria": [
         {
           "id": "oidc_login",
@@ -996,7 +1028,8 @@
           "state": "pending",
           "weight": 2
         }
-      ]
+      ],
+      "detail": "docs/history/features/deploy1_oidc_viewer.md"
     },
     {
       "id": "deploy1_evidence_egress_policy",
@@ -1004,8 +1037,8 @@
       "status": "planned",
       "target": "DEPLOY.1",
       "weight": 6,
-      "summary": "Explicit policy and enforcement for every path evidence can leave the system: UI export, support bundle, audit log, webhook ingress persistence, TI enrichment query and OIDC claim retention.",
-      "why": "As server, event intake and TI integration add new egress paths, a single governed policy prevents accidental exposure of topology, identities or raw configuration.",
+      "summary": "Explicit policy and enforcement for every path evidence can leave the system: UI export, s",
+      "why": "As server, event intake and TI integration add new egress paths, a single governed policy",
       "criteria": [
         {
           "id": "egress_inventory",
@@ -1019,7 +1052,8 @@
           "state": "pending",
           "weight": 2
         }
-      ]
+      ],
+      "detail": "docs/history/features/deploy1_evidence_egress_policy.md"
     },
     {
       "id": "crypto_agility_pqc",
@@ -1027,8 +1061,8 @@
       "status": "automated_validated",
       "target": "0.7.x",
       "weight": 10,
-      "summary": "Normalize IPsec/IKE proposal, TLS policy, certificate and platform-capability facts for Check Point and Palo Alto; evaluate against versioned rule packs for crypto-agility, known-weak algorithms and PQC readiness. Distinct from and dependent on the core Compliance Rule Engine.",
-      "why": "Turns existing configuration evidence into actionable crypto risk findings without adding new vendors or collectors. Supports NIST/PCI-DSS framework mappings and strategic PQC transition planning.",
+      "summary": "Normalize IPsec/IKE proposal, TLS policy, certificate and platform-capability facts for Ch",
+      "why": "Turns existing configuration evidence into actionable crypto risk findings without adding",
       "criteria": [
         {
           "id": "crypto_facts",
@@ -1054,7 +1088,8 @@
           "state": "done",
           "weight": 1
         }
-      ]
+      ],
+      "detail": "docs/history/features/crypto_agility_pqc.md"
     },
     {
       "id": "event_signal_intake",
@@ -1062,8 +1097,8 @@
       "status": "in_progress",
       "target": "0.8.x",
       "weight": 8,
-      "summary": "Authenticated webhook ingress (e.g. Splunk correlation action) that validates, deduplicates and rate-limits inbound signals, resolves canonical device identity, and queues a bounded read-only evidence capture through the collection coordinator. Requires safe-diff and collection coordinator foundations.",
-      "why": "Enables near-real-time configuration snapshots after policy-install events without polling, while preserving all existing safety and identity contracts.",
+      "summary": "Authenticated webhook ingress (e.g.",
+      "why": "Enables near-real-time configuration snapshots after policy-install events without polling",
       "criteria": [
         {
           "id": "authenticated_ingress",
@@ -1098,7 +1133,8 @@
           "state": "done",
           "weight": 1
         }
-      ]
+      ],
+      "detail": "docs/history/features/event_signal_intake.md"
     },
     {
       "id": "passive_ti_enrichment",
@@ -1106,8 +1142,8 @@
       "status": "planned",
       "target": "0.8.x",
       "weight": 6,
-      "summary": "After a normalized, confirmed diff finding is produced, extract safe observables and check against a local/corporate-proxy TI feed. Result is stored as contextual risk enrichment, not root-cause evidence. Internet API query is off by default.",
-      "why": "Surfaces potential risk context without manual investigation, while keeping raw config, full topology and customer IP ranges inside the evidence boundary.",
+      "summary": "After a normalized, confirmed diff finding is produced, extract safe observables and check",
+      "why": "Surfaces potential risk context without manual investigation, while keeping raw config, fu",
       "criteria": [
         {
           "id": "observable_extraction",
@@ -1127,7 +1163,8 @@
           "state": "pending",
           "weight": 1
         }
-      ]
+      ],
+      "detail": "docs/history/features/passive_ti_enrichment.md"
     },
     {
       "id": "repository_privacy_gate",
@@ -1135,8 +1172,8 @@
       "status": "done",
       "introduced": "DEV.0.4/DEV.0.4.1",
       "weight": 3,
-      "summary": "Offline fail-closed repository scan plus runtime-only inventory exclusion policy removes environment identities from the Corporate Git candidate without changing exact pre-poll filtering semantics.",
-      "why": "Keeps operational identities and runtime artifacts outside Git/AI context while preserving deterministic device-selection behavior.",
+      "summary": "Offline fail-closed repository scan plus runtime-only inventory exclusion policy removes e",
+      "why": "Keeps operational identities and runtime artifacts outside Git/AI context while preserving",
       "criteria": [
         {
           "id": "offline_gate",
@@ -1156,7 +1193,8 @@
           "state": "done",
           "weight": 1
         }
-      ]
+      ],
+      "detail": "docs/history/features/repository_privacy_gate.md"
     },
     {
       "id": "failover_readiness_assessment",
@@ -1164,8 +1202,8 @@
       "status": "automated_validated",
       "introduced": "OP.0",
       "weight": 6,
-      "summary": "Read-only per-vendor preflight battery that scores whether an HA cluster is safe to fail over, and why not.",
-      "why": "The safety net and foundation for any controlled failover; valuable on its own as a VERIFY-plane capability.",
+      "summary": "Read-only per-vendor preflight battery that scores whether an HA cluster is safe to fail o",
+      "why": "The safety net and foundation for any controlled failover; valuable on its own as a VERIFY",
       "note": "Split 2026-09-01 into OP.0a / OP.0b / OP.0c - docs/history/phase/OP_0A_HA_READINESS_ASSESSMENT.md decision P1. OP.0a (ha_unit_derivation + readiness_verdict) is IMPLEMENTED / AUTOMATED_VALIDATED 2026-09-01 with zero new device commands; preflight_battery is OP.0b and is blocked on an un-approved command gate drafted in that contract; scc_readiness_dashboard is OP.0c, IMPLEMENTED / AUTOMATED_VALIDATED 2026-09-01 (Operator Console + report Failover module over compute_ha_readiness, read-only, no execution control). SAFE_TO_FAILOVER stays unreachable until OP.0b lands (decision P4, enforced by AC-6), so the dashboard correctly shows INSUFFICIENT_EVIDENCE/NOT_A_FAILOVER_UNIT today. 2026-09-02: VSX real-env retry (op_vsx_real_env_retry_fixes) found and fixed three CP-side identity/join defects invisible to synthetic tests, confirmed against a real physical VSX pair by the product owner. Same-day: OP.0a.P7's PAN HA peer-pairing was audited and found dead against real telemetry (peer_ip never populated) plus a hostname-normalization divergence risk; op0a_pan_ha_peer_pairing_identity_closure closes both, sources peer_ip from already-fetched evidence (no new device command), and requires mutual configuration agreement before pairing -- see docs/history/phase/OP_0A_PAN_HA_PEER_PAIRING_IDENTITY_CLOSURE.md. peer_ip remains configuration intent only (Grade A); never sufficient for a future CLASS 2 decision. 2026-09-03 OP.0b S1-S7: frozen evidence contract (OP_0B_0), PO-approved command gate (OP_0B_1, PR #41), dedicated CP/PAN preflight collectors (S5/S6) and the S7 readiness integration -- fresh PreflightSnapshot evidence is interpreted by one typed fact->check mapping (utils/failover/preflight_readiness.py) inside the same canonical evaluator; seven checks and five verdicts unchanged; SAFE/DEGRADED still unreachable (D-F3 open for both vendors, D-V7b for CP); S8 real-env validation owed. 2026-09-04 OP.0b S8-A: the CP preflight's remote execution primitive was corrected on the real ClusterXL pair (one persistent Expert shell per member, framed reads, 0.3 s pacing), the real vendor output shapes are recognised fail-closed, and the operator report is regenerated from the same canonical readiness record the CLI prints (no snapshot persistence). PO accepted S8-A as PASS: four checks PASS, D-V7b/D-F3 INSUFFICIENT_EVIDENCE by decision, Operator Console identical to the CLI. 2026-09-04 OP.0b S8-B''/S8-C: VSX per-VSID readiness and PAN dedicated-HA1 pairing correction both REAL_ENV_VALIDATED -- see docs/history/phase/OP_0B_S4A_VSX_PER_VS_FAILOVER_DOMAIN_REVIEW.md and docs/history/phase/OP_0B_S8C_PAN_DEDICATED_HA1_REAL_ENV_CORRECTION.md. OP.0b's read-only S1-S8 sequence is closed; S9 (UI authority reconciliation, static/inventory_ui.js + utils/merge.py + utils/config_ui.py) confirmed NOT STARTED and is the one remaining slice -- now_next.next.",
       "criteria": [
         {
@@ -1198,7 +1236,8 @@
           "state": "done",
           "weight": 1
         }
-      ]
+      ],
+      "detail": "docs/history/features/failover_readiness_assessment.md"
     },
     {
       "id": "failover_plan_compiler",
@@ -1206,7 +1245,7 @@
       "status": "automated_validated",
       "introduced": "OP.1",
       "weight": 4,
-      "summary": "Compiles the exact graceful vendor action, rollback, impact window and preemption note into a FailoverPlan. Dry-run only.",
+      "summary": "Compiles the exact graceful vendor action, rollback, impact window and preemption note int",
       "why": "Makes the action explicit and reviewable before any write capability exists.",
       "criteria": [
         {
@@ -1227,7 +1266,8 @@
           "state": "done",
           "weight": 1
         }
-      ]
+      ],
+      "detail": "docs/history/features/failover_plan_compiler.md"
     },
     {
       "id": "failover_controlled_execution",
@@ -1235,8 +1275,8 @@
       "status": "planned",
       "introduced": "OP.2",
       "weight": 8,
-      "summary": "The single write-capable component: one authorised, confirmed action with fresh same-workflow preflight, independent post-action verification, no automatic rollback (reversal is a new confirmed action), OUTCOME_UNKNOWN quarantine, full audit, and per-vendor adapters. Vendor-independent architecture FROZEN 2026-09-04 (docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md); several foundations implemented and unit-tested but structurally unreachable and unwired (no taxonomy member, unconditional DENY authorizer, no production entry point). Product execution not started.",
-      "why": "The payoff of a trustworthy SEE/VERIFY/TRACE/RECOVER stack; the tool's first OPERATE capability.",
+      "summary": "The single write-capable component: one authorised, confirmed action with fresh same-workf",
+      "why": "The payoff of a trustworthy SEE/VERIFY/TRACE/RECOVER stack; the tool's first OPERATE capab",
       "criteria": [
         {
           "id": "single_action_executor",
@@ -1268,7 +1308,8 @@
           "state": "pending",
           "weight": 1
         }
-      ]
+      ],
+      "detail": "docs/history/features/failover_controlled_execution.md"
     },
     {
       "id": "codebase_modularization",
@@ -1277,8 +1318,8 @@
       "introduced": "Local architecture health",
       "target": "Local development, before and during DEPLOY.1",
       "weight": 7,
-      "summary": "Separates large UI, orchestration and vendor-collector modules by stable responsibility while preserving the portable static report and existing evidence contracts.",
-      "why": "Reduces change risk, improves testability and creates clear server migration seams without introducing a premature platform rewrite.",
+      "summary": "Separates large UI, orchestration and vendor-collector modules by stable responsibility wh",
+      "why": "Reduces change risk, improves testability and creates clear server migration seams without",
       "criteria": [
         {
           "id": "frontend_composition",
@@ -1304,7 +1345,8 @@
           "state": "pending",
           "weight": 2
         }
-      ]
+      ],
+      "detail": "docs/history/features/codebase_modularization.md"
     },
     {
       "id": "operator_console_surface",
@@ -1312,8 +1354,8 @@
       "status": "done",
       "introduced": "CON.1",
       "weight": 5,
-      "summary": "Authenticated loopback HTTP surface serving the existing UI modules and report payloads live, with zero action capability and zero device contact.",
-      "why": "Establishes transport, authentication, CSP and the dual delivery mode (portable static report + live console) from one UI source tree, at no device risk. Contract: docs/history/phase/CON_1_OPERATOR_CONSOLE_READ_ONLY.md.",
+      "summary": "Authenticated loopback HTTP surface serving the existing UI modules and report payloads li",
+      "why": "Establishes transport, authentication, CSP and the dual delivery mode (portable static rep",
       "criteria": [
         {
           "id": "loopback_auth",
@@ -1339,7 +1381,8 @@
           "state": "done",
           "weight": 1
         }
-      ]
+      ],
+      "detail": "docs/history/features/operator_console_surface.md"
     },
     {
       "id": "operator_console_job_engine",
@@ -1347,8 +1390,8 @@
       "status": "automated_validated",
       "introduced": "CON.2",
       "weight": 8,
-      "summary": "Durable job records plus a closed registry of read-class actions (re-collect an inventory plane, RB.3a attestation, report rebuild), executed through the same main() path the scheduler uses.",
-      "why": "The phase where the product becomes an operator tool rather than a report you regenerate from a terminal - with no new device command and no write. Contract: docs/history/phase/CON_2_CONSOLE_JOB_ENGINE_READ_ACTIONS.md.",
+      "summary": "Durable job records plus a closed registry of read-class actions (re-collect an inventory",
+      "why": "The phase where the product becomes an operator tool rather than a report you regenerate f",
       "criteria": [
         {
           "id": "closed_registry",
@@ -1374,7 +1417,8 @@
           "state": "done",
           "weight": 1
         }
-      ]
+      ],
+      "detail": "docs/history/features/operator_console_job_engine.md"
     },
     {
       "id": "operator_console_operational_actions",
@@ -1382,8 +1426,8 @@
       "status": "planned",
       "introduced": "CON.3",
       "weight": 6,
-      "summary": "Per-device Check Point Gaia backup triggered from the console, inside the D3 pilot allowlist, behind a preflight + single-use confirmation token + mandatory reason.",
-      "why": "The BackBox-parity moment for the CP pilot set, in its smallest safe form: one device per request, three independent gates, no retry, no restore, no scheduling. Contract: docs/history/phase/CON_3_CONSOLE_OPERATIONAL_WRITE_ACTIONS.md.",
+      "summary": "Per-device Check Point Gaia backup triggered from the console, inside the D3 pilot allowli",
+      "why": "The BackBox-parity moment for the CP pilot set, in its smallest safe form: one device per",
       "criteria": [
         {
           "id": "three_gates",
@@ -1409,7 +1453,8 @@
           "state": "pending",
           "weight": 1
         }
-      ]
+      ],
+      "detail": "docs/history/features/operator_console_operational_actions.md"
     },
     {
       "id": "operator_console_scheduler_view",
@@ -1417,8 +1462,8 @@
       "status": "planned",
       "introduced": "CON.5",
       "weight": 3,
-      "summary": "Read-only view of the RuntimeRoot scheduler policy, due-ness and last/next run, including which workflows cannot be scheduled at all and why.",
-      "why": "'recovery-cp' is absent from ALLOWLISTED_WORKFLOWS because D3 approved the CP backup command and explicitly not unattended fleet backup. An operator who cannot see that assumes the opposite. Contract: docs/history/phase/CON_5_CONSOLE_SCHEDULER_SURFACE.md.",
+      "summary": "Read-only view of the RuntimeRoot scheduler policy, due-ness and last/next run, including",
+      "why": "'recovery-cp' is absent from ALLOWLISTED_WORKFLOWS because D3 approved the CP backup comma",
       "criteria": [
         {
           "id": "derived_unschedulable",
@@ -1438,7 +1483,8 @@
           "state": "pending",
           "weight": 1
         }
-      ]
+      ],
+      "detail": "docs/history/features/operator_console_scheduler_view.md"
     },
     {
       "id": "device_registry_enrollment_foundation",
@@ -1446,8 +1492,8 @@
       "status": "in_progress",
       "introduced": "PCP.1",
       "weight": 8,
-      "summary": "Persistent, RuntimeRoot-resident Device Registry (opaque device_id, endpoints, vendor classification with basis, credential profile reference, enrollment source, lifecycle, tags) with CLI manual enrollment; filesystem evidence-backend concern; no device contact, no UI.",
-      "why": "The first persistent product object: stable targets to schedule, display and relate without rediscovering the estate each run. Contract: docs/design/PRODUCT_CONTROL_PLANE_ARCHITECTURE.md section 21.",
+      "summary": "Persistent, RuntimeRoot-resident Device Registry (opaque device_id, endpoints, vendor clas",
+      "why": "The first persistent product object: stable targets to schedule, display and relate withou",
       "criteria": [
         {
           "id": "registry_model",
@@ -1479,7 +1525,8 @@
           "state": "done",
           "weight": 1
         }
-      ]
+      ],
+      "detail": "docs/history/features/device_registry_enrollment_foundation.md"
     },
     {
       "id": "management_plane_enrollment_providers",
@@ -1487,8 +1534,8 @@
       "status": "planned",
       "introduced": "PCP.2",
       "weight": 6,
-      "summary": "Candidates derived from already-collected Panorama and MDS/CMA discovery artifacts, explicit operator enrollment, and a first-contact job over existing identity reads (gate entry for the reuse).",
-      "why": "Default behaviour is candidate -> explicit enrollment; no phantom devices from unverified metadata; management-plane provenance stays distinct from direct-device evidence.",
+      "summary": "Candidates derived from already-collected Panorama and MDS/CMA discovery artifacts, explic",
+      "why": "Default behaviour is candidate -> explicit enrollment; no phantom devices from unverified",
       "criteria": [
         {
           "id": "candidates_from_existing_artifacts",
@@ -1514,7 +1561,8 @@
           "state": "pending",
           "weight": 1
         }
-      ]
+      ],
+      "detail": "docs/history/features/management_plane_enrollment_providers.md"
     },
     {
       "id": "capability_resolution_module_activation",
@@ -1522,8 +1570,8 @@
       "status": "planned",
       "introduced": "PCP.3",
       "weight": 6,
-      "summary": "Per-device capability projection (inventory, configuration, backup, ha_readiness, controlled_operations, telemetry, diagnostics) from established evidence and implemented vendor support; UNSUPPORTED explicit; never authorization.",
-      "why": "Modules light up from evidence, not from labels or user claims; capability != readiness != authorization.",
+      "summary": "Per-device capability projection (inventory, configuration, backup, ha_readiness, controll",
+      "why": "Modules light up from evidence, not from labels or user claims; capability != readiness !=",
       "criteria": [
         {
           "id": "projection_from_evidence",
@@ -1543,7 +1591,8 @@
           "state": "pending",
           "weight": 1
         }
-      ]
+      ],
+      "detail": "docs/history/features/capability_resolution_module_activation.md"
     },
     {
       "id": "control_plane_console_experience",
@@ -1551,8 +1600,8 @@
       "status": "planned",
       "introduced": "PCP.4",
       "weight": 6,
-      "summary": "Welcome / Add Devices (candidates) and per-device Overview / Inventory / Configuration / Backups / HA / Jobs / Diagnostics as projections over existing payloads, in the existing CON.x console with payload parity and an action-free exported report.",
-      "why": "The product interaction model of a persistent control plane; OP.2.D's class 2 flow is expected to live on this HA tab so a second console is never built.",
+      "summary": "Welcome / Add Devices (candidates) and per-device Overview / Inventory / Configuration / B",
+      "why": "The product interaction model of a persistent control plane; OP.2.D's class 2 flow is expe",
       "criteria": [
         {
           "id": "add_devices_from_candidates",
@@ -1578,7 +1627,8 @@
           "state": "pending",
           "weight": 1
         }
-      ]
+      ],
+      "detail": "docs/history/features/control_plane_console_experience.md"
     },
     {
       "id": "typed_job_plane_current_projections",
@@ -1586,8 +1636,8 @@
       "status": "planned",
       "introduced": "PCP.5",
       "weight": 7,
-      "summary": "Job definitions and runs keyed by device_id targets with independent cadences, closed job-type vocabulary, fail-closed policy, admission-coordinator entry, and projections carrying provenance/freshness/staleness with UNKNOWN/STALE first-class.",
-      "why": "Enrollment and collection are separate; schedules reference typed capabilities, never vendor commands; cached state never claims freshness it lacks.",
+      "summary": "Job definitions and runs keyed by device_id targets with independent cadences, closed job-",
+      "why": "Enrollment and collection are separate; schedules reference typed capabilities, never vend",
       "criteria": [
         {
           "id": "job_definitions_runs",
@@ -1613,7 +1663,8 @@
           "state": "pending",
           "weight": 1
         }
-      ]
+      ],
+      "detail": "docs/history/features/typed_job_plane_current_projections.md"
     },
     {
       "id": "independent_capability_jobs",
@@ -1621,8 +1672,8 @@
       "status": "planned",
       "introduced": "PCP.6",
       "weight": 5,
-      "summary": "Collector target-selection seams so each capability runs as its own typed job over registry targets; backup capability-driven through the RB.x contracts.",
-      "why": "Independent cadences without multiplying device contact: every job still enters the admission coordinator under the vendor budget of 1.",
+      "summary": "Collector target-selection seams so each capability runs as its own typed job over registr",
+      "why": "Independent cadences without multiplying device contact: every job still enters the admiss",
       "criteria": [
         {
           "id": "target_selection_seams",
@@ -1642,7 +1693,8 @@
           "state": "pending",
           "weight": 1
         }
-      ]
+      ],
+      "detail": "docs/history/features/independent_capability_jobs.md"
     },
     {
       "id": "fast_telemetry_plane",
@@ -1650,8 +1702,8 @@
       "status": "deferred",
       "introduced": "PCP.7",
       "weight": 3,
-      "summary": "Inexpensive periodic observation (availability, uptime, interface state, resource health) that marks projections changed/stale and triggers targeted authoritative collectors; never identity, configuration or eligibility authority.",
-      "why": "A future cheap signal plane behind its own security/command/OID gate; explicitly not a first-slice requirement.",
+      "summary": "Inexpensive periodic observation (availability, uptime, interface state, resource health)",
+      "why": "A future cheap signal plane behind its own security/command/OID gate; explicitly not a fir",
       "criteria": [
         {
           "id": "own_gate",
@@ -1665,7 +1717,8 @@
           "state": "pending",
           "weight": 1
         }
-      ]
+      ],
+      "detail": "docs/history/features/fast_telemetry_plane.md"
     },
     {
       "id": "diagnostic_runbooks",
@@ -1673,8 +1726,8 @@
       "status": "planned",
       "introduced": "PCP.8",
       "weight": 4,
-      "summary": "Bounded ordered read-only diagnostic sequences over registered targets from a closed source catalog sharing the CE.2 primitive registry; timeouts, output limits, redaction, audit.",
-      "why": "Operators run diagnostics from the product without a browser-to-shell path; every step passes the network-device command gate for this purpose.",
+      "summary": "Bounded ordered read-only diagnostic sequences over registered targets from a closed sourc",
+      "why": "Operators run diagnostics from the product without a browser-to-shell path; every step pas",
       "criteria": [
         {
           "id": "closed_catalog",
@@ -1694,7 +1747,8 @@
           "state": "pending",
           "weight": 1
         }
-      ]
+      ],
+      "detail": "docs/history/features/diagnostic_runbooks.md"
     },
     {
       "id": "left_vertical_product_navigation",
@@ -1702,8 +1756,8 @@
       "status": "in_progress",
       "introduced": "NAV.1 (prototype)",
       "weight": 5,
-      "summary": "ARCHITECTURE FROZEN 2026-09-05. docs/design/NAVIGATION_INFORMATION_ARCHITECTURE.md is FROZEN -- PRODUCT OWNER APPROVED, with fifteen frozen D-NAV decisions and section 19 acceptance criteria. The collapsible left rail (commit 5a5a1f7), driven by one model shared with the device-detail tab strip, merged to main via PR #85 (M2, 2026-09-06) once the four accessibility requirements (AC-A11Y-1..4) closed. The feature stays in_progress: its own availability_rule criterion (the remaining three of the four frozen capability predicates -- entity applicability, evidence state, future authorization) is genuinely pending and owned by later movements (M10+), independent of M2's scope.",
-      "why": "The flat one-root-per-view topbar strip could not express which entries are product domains, had no room left, and let a navigation entry exist without any backend behind it. The frozen contract settles the shape; the rail implements it; M2 closed the accessibility gate that made it mergeable and has merged; the four-predicate availability rule's remaining predicates are separate, later work.",
+      "summary": "ARCHITECTURE FROZEN 2026-09-05.",
+      "why": "The flat one-root-per-view topbar strip could not express which entries are product domain",
       "criteria": [
         {
           "id": "domain_grouping",
@@ -1747,7 +1801,8 @@
           "state": "done",
           "weight": 1
         }
-      ]
+      ],
+      "detail": "docs/history/features/left_vertical_product_navigation.md"
     },
     {
       "id": "ui2_java_product_line",
@@ -1755,8 +1810,9 @@
       "status": "planned",
       "introduced": "UI2.B0 (contracts)",
       "weight": 30,
-      "summary": "BASELINE ADOPTED 2026-09-09: docs/design/UI2_0_DEVELOPMENT_WORKFLOW.md (rev 2) and docs/design/UI2_0_BASELINE_CONTRACT.md (FROZEN -- PRODUCT OWNER APPROVED). Java is the only product development line; Line-1 (Python) is the reference/maintenance line with no new product features. B0 contracts C1-C7, the baseline directory and the extraction tooling are the primary backlog (project/backlog.json category \"UI 2.0 (Java product line)\"); B1 (skeleton, collection engine core, first CP inventory capability, two acceptance scenarios, second PAN export flow) follows once C1-C4 and the authorization/audit rows are frozen.",
-      "why": "The Line-1 feature scripts were written to feed static, task-specific pages. The product goal (BackBox-style device operations, profile-driven backup and restore, multi-admin RBAC, jobs with audit) needs one runtime, one executor and one schema; the PO rejected any direct reuse of Python code in UI 2.0 and adopted the reference-not-runtime direction after a council round and three external second-opinion rounds."
+      "summary": "BASELINE ADOPTED 2026-09-09: docs/design/UI2_0_DEVELOPMENT_WORKFLOW.md (rev 2) and docs/de",
+      "why": "The Line-1 feature scripts were written to feed static, task-specific pages.",
+      "detail": "docs/history/features/ui2_java_product_line.md"
     }
   ]
 }

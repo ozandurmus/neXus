@@ -1,0 +1,5 @@
+# D_F3_FLAP_FAILOVER_THRESHOLD_DECISION — d_f3_flap_failover_threshold_decision: D-F3 - flap/failover-frequency numeric threshold (product owner)
+
+- DECIDED 2026-09-05 (OP.2.1b readiness-policy-amendment session): the product owner declined to invent a numeric threshold against cumulative, no-recency-window counters. flap_history stays permanently INSUFFICIENT_EVIDENCE (visible, honest) but is now a closed-list, exact-reason advisory-exempt check for both vendors (utils/failover/assessment.ADVISORY_EXEMPT_CHECKS) -- it no longer, by itself, blocks a positive readiness verdict. This is a policy decision about the roll-up's treatment of the gap, not a vendor-semantics closure: the underlying counters' recency/window semantics remain exactly as unestablished as before (D-V5a).
+- Parallel to D-F1/D-F2. Superseded framing (historical, kept for context): 'needed before OP.0b.1/S2/S3 can compute a real check-7 verdict' -- the product owner chose non-blocking-forever over inventing a threshold instead.
+- Detail: docs/history/phase/OP_2_1B_CP_PILOT_READINESS_POLICY_AMENDMENT.md.

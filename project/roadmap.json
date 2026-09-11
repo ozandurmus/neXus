@@ -156,335 +156,192 @@
       "status": "in_progress",
       "started": "2026-09-10",
       "completed": "2026-09-10",
-      "notes": [
-        "Full detail: project/build_history.json's ui2_b1_01_skeleton_ci_docker record and docs/design/UI2_0_B1_01_SKELETON_CI_DOCKER_CONTRACT.md.",
-        "This is the second-to-last B0 item; runs concurrently with the extraction-tooling movement (Line-1 scripts/, fully independent). Once both merge, B0 is complete and the Product Owner can move to the actual freeze decision for C1-C7 as a whole, then to B1.",
-        "Predecessor ui2_b0_c7_backup_artefact_restore_engine_contract (C7): backup profile model, artefact store/manifest/validation/retention, key custody, restore execution (plan, preconditions, execution via C4, verification, a restore-specific OUTCOME_UNKNOWN), routine-vs-per-operation approval, device/version matrix. MERGED PR #170. Full detail: project/build_history.json's ui2_b0_c7_backup_artefact_restore_engine_contract record.",
-        "Predecessor ui2_b0_c5_amendments_bundle (C5): CON.0 separate-shell amendment text cited, action_taxonomy.py UI-OPERATIONAL-RUN-NOW clarification (docstring/comment only, no new ActionClass member), design document APPROVAL-MODEL/CAP-* replacements, PRIVACY_AND_DATA_HANDLING.md UI 2.0 database section. MERGED PR #169. Full detail: project/build_history.json's ui2_b0_c5_amendments_bundle record.",
-        "Predecessor ui2_b0_c6_capability_extraction_contract (C6): the extraction procedure against C4's exact schema, fixture-generation procedure, FIRST-CAPABILITY worked example, ordered extraction inventory. MERGED PR #168. Full detail: project/build_history.json's ui2_b0_c6_capability_extraction_contract record.",
-        "Predecessor ui2_b0_c3_identity_sessions_rbac_contract (C3): LDAP bind, single-active-session rule, role tokens -> bindings -> AD group references, E1-E7 gate chain -- the exact mechanism this movement's own §2.2 RBAC visible-but-refused rendering cites. MERGED PR #167. Full detail: project/build_history.json's ui2_b0_c3_identity_sessions_rbac_contract record.",
-        "Predecessor ui2_b0_c4_capability_registry_gate_resolution_contract (C4): the runtime capability registry schema, K-4 gate-registry resolution rule, closed step-kind set, shared-fact produces_facts/consumes_facts mechanism -- the exact schema this movement's own §4 feature-contribution contract ties to C2's job_type. MERGED PR #166. Full detail: project/build_history.json's ui2_b0_c4_capability_registry_gate_resolution_contract record.",
-        "Predecessor ui2_b0_c2_job_execution_contract (C2, 2026-09-09): job record and closed state machine, leasing/heartbeat/fencing, OUTCOME_UNKNOWN as terminal-until-reconciled -- the model this movement's own §5 alarm-delivery-failure section mirrors for DELIVERY_UNKNOWN. MERGED PR #164. Full detail: project/build_history.json's ui2_b0_c2_job_execution_contract record.",
-        "Predecessor ui2_b0_c1_platform_schema_contract (C1, ran concurrently with C2 each in its own worktree/branch): UI 2.0 schema ownership, Flyway as sole migration authority, audit-from-first-mutation (C1-1), the five data classes (C1 §4) this movement's own §6 cites directly. MERGED 2026-09-09 PR #163. Full detail: project/build_history.json's ui2_b0_c1_platform_schema_contract record.",
-        "Predecessor failover_plan_compiler (OP.1.S1, 2026-09-09): write-free failover plan compiler and dry-run for classic CP ClusterXL, AUTOMATED_VALIDATED, merged PR #162. Full detail: project/build_history.json's failover_plan_compiler record."
-      ]
+      "detail": "docs/history/roadmap/now_next_ui2_b1_01_skeleton_ci_docker.md"
     },
     "next": {
       "build": "ui2_d1_restore_c7_c2_amendments",
       "title": "UI2 D1 Option A -- apply C7 and C2 restore admission amendments",
       "status": "planned",
-      "notes": [
-        "Apply only frozen C7 and C2 restore admission amendments under separate authorization; tests and Java/UI remain later slices. No device contact or real write is implied.",
-        "Status: planned; restore remains disabled until this separate movement and later validation slices are complete."
-      ]
+      "detail": "docs/history/roadmap/now_next_ui2_d1_restore_c7_c2_amendments.md"
     },
     "upcoming": [
       {
         "build": "ui2_b0_c7_backup_artefact_restore_engine_contract",
         "title": "UI2 B0/C7 -- backup, artefact and restore engine contract (DRAFT, for Product Owner freeze)",
-        "goal": "Write the DRAFT backup/artefact/restore engine contract (docs/design/UI2_0_C7_BACKUP_ARTEFACT_RESTORE_ENGINE_CONTRACT.md): the backup profile model against C1/C2/C4's real schema, the artefact store/manifest/validation/retention model carrying forward BACKUP_RECOVERY_CONTRACTS.md, key custody, restore execution (plan, preconditions, execution via C4, verification, a restore-specific OUTCOME_UNKNOWN), the routine-vs-per-operation approval model, and the device/version support matrix template acceptance sentence A-3 depends on. Documentation only; authorizes no device execution.",
         "status": "in_progress",
         "started": "2026-09-09",
         "completed": "2026-09-09",
-        "notes": [
-          "MERGED 2026-09-09, PR #170. The document itself stays DRAFT pending a separate Product Owner freeze decision -- project/backlog.json's own status stays in_progress for that reason.",
-          "Full detail: project/backlog.json's ui2_b0_c7_backup_artefact_restore_engine_contract note; docs/design/UI2_0_C7_BACKUP_ARTEFACT_RESTORE_ENGINE_CONTRACT.md (DRAFT -- FOR PRODUCT OWNER FREEZE).",
-          "This is the second and final platform-adjacent freeze candidate (FREEZE-SLICING, D-3); the first is C1-C5.",
-          "Moved from now_next.now 2026-09-09 (ui2_b0_baseline_directory session): not a demotion -- this build is complete and merged (PR #170), and was already PO-accepted (commit b1b439c). Leaves 'now' only because horizon_contract reserves that slot for the newest project/build_history.json record, which is now the baseline directory."
-        ]
+        "detail": "docs/history/roadmap/now_next_ui2_b0_c7_backup_artefact_restore_engine_contract.md"
       },
       {
         "build": "ui2_b0_c5_amendments_bundle",
         "title": "UI2 B0/C5 -- amendments bundle (DRAFT -- FOR PRODUCT OWNER FREEZE)",
-        "goal": "Write and apply the DRAFT amendments bundle (docs/design/UI2_0_C5_AMENDMENTS_BUNDLE.md): the CON.0 separate-shell amendment text (cited, not applied to the FROZEN file), the utils/action_taxonomy.py UI-OPERATIONAL-RUN-NOW clarification, the design document's APPROVAL-MODEL and CAP-* states replacements, and the PRIVACY_AND_DATA_HANDLING.md UI 2.0 database section. Documentation/comment-only; no behavioral code change, no device execution, no ui2/ source.",
         "status": "in_progress",
         "started": "2026-09-09",
         "completed": "2026-09-09",
-        "notes": [
-          "MERGED 2026-09-09, PR #169. The document itself stays DRAFT pending a separate Product Owner freeze decision -- project/backlog.json's own status stays in_progress for that reason.",
-          "Full detail: project/backlog.json's ui2_b0_c5_amendments_bundle note; docs/design/UI2_0_C5_AMENDMENTS_BUNDLE.md (DRAFT -- FOR PRODUCT OWNER FREEZE).",
-          "Ran concurrently with C7 (backup, artefact and restore engine contract), each in its own worktree/branch; out of C7's own scope.",
-          "Moved from now_next.now 2026-09-09 (ui2_b0_c7_backup_artefact_restore_engine_contract session): not a demotion -- this build is complete and merged. Leaves 'now' only because horizon_contract reserves that slot for the newest project/build_history.json record, which is now C7."
-        ]
+        "detail": "docs/history/roadmap/now_next_ui2_b0_c5_amendments_bundle.md"
       },
       {
         "build": "ui2_b0_c6_capability_extraction_contract",
         "title": "UI2 B0/C6 -- capability extraction contract (DRAFT -- FOR PRODUCT OWNER FREEZE)",
-        "goal": "Define the extraction procedure against C4's exact schema, the fixture-generation procedure through the Private Replay tokenizer with the preserved-property checklist, a fully worked FIRST-CAPABILITY example, and the corrected ordered extraction inventory. Documentation only; authorizes no device execution and performs no actual extraction.",
         "status": "in_progress",
         "started": "2026-09-09",
         "completed": "2026-09-09",
-        "notes": [
-          "MERGED 2026-09-09, PR #168. The document itself stays DRAFT pending a separate Product Owner freeze decision -- project/backlog.json's own status stays in_progress for that reason.",
-          "Full detail: project/backlog.json's ui2_b0_c6_capability_extraction_contract note; docs/design/UI2_0_C6_CAPABILITY_EXTRACTION_CONTRACT.md (DRAFT -- FOR PRODUCT OWNER FREEZE).",
-          "Moved from now_next.now 2026-09-09 (ui2_b0_c5_amendments_bundle session): not a demotion -- this build is complete and merged. Leaves 'now' only because horizon_contract reserves that slot for the newest project/build_history.json record, which is now C5."
-        ]
+        "detail": "docs/history/roadmap/now_next_ui2_b0_c6_capability_extraction_contract.md"
       },
       {
         "build": "ui2_b0_c3_identity_sessions_rbac_contract",
         "title": "UI2 B0/C3 -- identity, sessions and RBAC contract (DRAFT -- FOR PRODUCT OWNER FREEZE)",
-        "goal": "Define LDAP bind, the single-active-session-per-identity rule and its takeover/refuse semantics, role tokens -> bindings -> AD group references, DIRECTORY-POSTURE's service account specified but disabled, and the E1-E7 gate chain on the HTTP layer. Documentation only; authorizes no device execution.",
         "status": "in_progress",
         "started": "2026-09-09",
         "completed": "2026-09-09",
-        "notes": [
-          "MERGED 2026-09-09, PR #167. The document itself stays DRAFT pending a separate Product Owner freeze decision -- project/backlog.json's own status stays in_progress for that reason.",
-          "Full detail: project/backlog.json's ui2_b0_c3_identity_sessions_rbac_contract note; docs/design/UI2_0_C3_IDENTITY_SESSIONS_RBAC_CONTRACT.md (DRAFT -- FOR PRODUCT OWNER FREEZE).",
-          "Ran concurrently with C6 (capability extraction contract), each in its own worktree/branch; out of C6's own scope.",
-          "Moved from now_next.now 2026-09-09 (ui2_b0_c6_capability_extraction_contract session): not a demotion -- this build is complete and merged. Leaves 'now' only because horizon_contract reserves that slot for the newest project/build_history.json record, which is now C6."
-        ]
+        "detail": "docs/history/roadmap/now_next_ui2_b0_c3_identity_sessions_rbac_contract.md"
       },
       {
         "build": "ui2_b0_c4_capability_registry_gate_resolution_contract",
         "title": "UI2 B0/C4 -- capability registry & command-gate resolution contract (DRAFT -- FOR PRODUCT OWNER FREEZE)",
-        "goal": "Define the runtime capability registry schema, the K-4 gate-registry resolution rule, the closed step-kind set, the CP-D6 VSX/ClusterXL target model, and the CP-D7 transport decision. Contract only: no ui2/ source, no migration file.",
         "status": "in_progress",
         "started": "2026-09-09",
         "completed": "2026-09-09",
-        "notes": [
-          "MERGED 2026-09-09, PR #166. The document itself stays DRAFT pending a separate Product Owner freeze decision -- project/backlog.json's own status stays in_progress for that reason.",
-          "Full detail: project/backlog.json's ui2_b0_c4_capability_registry_gate_resolution_contract note; docs/design/UI2_0_C4_CAPABILITY_REGISTRY_GATE_RESOLUTION_CONTRACT.md (DRAFT -- FOR PRODUCT OWNER FREEZE).",
-          "Ran concurrently with C3 (identity, sessions & RBAC contract), each in its own worktree/branch; out of C3's own scope.",
-          "Moved from now_next.now 2026-09-09 (ui2_b0_c3_identity_sessions_rbac_contract session): not a demotion -- this build is complete and merged. Leaves 'now' only because horizon_contract reserves that slot for the newest project/build_history.json record, which is now C3 (this movement's own PR lands after C4's)."
-        ]
+        "detail": "docs/history/roadmap/now_next_ui2_b0_c4_capability_registry_gate_resolution_contract.md"
       },
       {
         "build": "failover_plan_compiler",
         "title": "OP.1.S1 -- write-free failover plan compiler and dry-run",
-        "goal": "Compile what a controlled Check Point ClusterXL failover would look like -- the primitive, its preconditions, its postcondition, its explicit reversal -- from evidence the platform already holds, and answer whether it would proceed today. Runs no command, contacts no device, authorizes nothing.",
         "status": "automated_validated",
         "started": "2026-09-09",
         "completed": "2026-09-09",
-        "notes": [
-          "Full detail: project/backlog.json's failover_plan_compiler note; docs/history/phase/OP_1_FAILOVER_PLAN_COMPILER_AND_DRY_RUN.md (FROZEN 2026-09-09). Merged PR #162 as the reference implementation of the frozen OP.1 contract; the product implementation is Java, REL-FAILOVER-READINESS.",
-          "Moved from now_next.now 2026-09-09 (ui2_b0_c1_platform_schema_contract session): not a demotion -- this build is complete and automated_validated. Leaves 'now' only because horizon_contract reserves that slot for the newest project/build_history.json record, which then became C1 and, once C1 merged (PR #163), C2 (ui2_b0_c2_job_execution_contract).",
-          "Predecessor m7_real_device_targeted_collect_now (2026-09-08): console-submitted config_refresh_cp device_id targeting now resolves to a real collector entity_id and actually contacts the device. Full detail: project/build_history.json's m7_real_device_targeted_collect_now record; relay/NXS-LOCAL-0023.",
-          "Predecessor m11_shared_entity_workspace_and_availability_rule (2026-09-08): static/navigation_ui.js's render/not-render gate is the sole, explicit mirror of the M10.2 resolver's stage 0 union tag. Full detail: project/build_history.json's m11_shared_entity_workspace_and_availability_rule record; relay/NXS-LOCAL-0022.",
-          "Predecessor orchestrator_background_task_exit_race (2026-09-08): ENGINEER_PROMPT forbids treating long-running validation as backgroundable and waits for a real result before commit/push/merge. Full detail: project/build_history.json's orchestrator_background_task_exit_race record.",
-          "Predecessor gov_po_3_ci_privacy_gate_baseline_scoping, MERGED PR #135 -- CI's own repository-privacy-gate invocation is now baseline-aware. Full detail: project/build_history.json's gov_po_3_ci_privacy_gate_baseline_scoping record."
-        ]
+        "detail": "docs/history/roadmap/now_next_failover_plan_compiler.md"
       },
       {
         "build": "ui2_b0_c1_platform_schema_contract",
         "title": "UI2 B0/C1 -- platform & schema contract (DRAFT -- FOR PRODUCT OWNER FREEZE)",
-        "goal": "Define UI 2.0's own PostgreSQL schema ownership, Flyway as sole migration authority, the projection-table model, the audit mechanism that exists from the first mutation (C1-1), per-component secrets, backup-artefact key custody, data classes and Oracle portability exceptions. Contract only: no ui2/ source, no migration file, no Docker artefact.",
         "status": "automated_validated",
         "started": "2026-09-09",
         "completed": "2026-09-09",
-        "notes": [
-          "MERGED 2026-09-09, PR #163 (merge commit 5ca75bf3d551e20e611ea878c67a4cd255bdd919). 'automated_validated' describes this movement's own deliverable (produced and merged); the document itself stays DRAFT pending a separate Product Owner freeze decision -- project/backlog.json's own status stays in_progress for that reason.",
-          "Full detail: project/backlog.json's ui2_b0_c1_platform_schema_contract note; docs/design/UI2_0_C1_PLATFORM_SCHEMA_CONTRACT.md (DRAFT -- FOR PRODUCT OWNER FREEZE).",
-          "Ran concurrently with C2 (job execution contract, movement UI2_B0_C2_JOB_EXECUTION_CONTRACT), each in its own worktree/branch.",
-          "Moved from now_next.now 2026-09-09 (ui2_b0_c2_job_execution_contract session): not a demotion -- this build is complete and merged. Leaves 'now' only because horizon_contract reserves that slot for the newest project/build_history.json record, which is now C2."
-        ]
+        "detail": "docs/history/roadmap/now_next_ui2_b0_c1_platform_schema_contract.md"
       },
       {
         "build": "ui2_b0_c2_job_execution_contract",
         "title": "UI2 B0/C2 -- job execution contract (DRAFT -- FOR PRODUCT OWNER FREEZE)",
-        "goal": "Define how a Java worker claims, executes, records and completes a job: job record and closed state machine, leasing/heartbeat/fencing, OUTCOME_UNKNOWN as terminal-until-reconciled, per-action-class retry rules, pre-execution checks, owner/approver/execution-identity separation, schedule optimistic concurrency. Contract only: no ui2/ source, no schema migration, no device execution.",
         "status": "automated_validated",
         "started": "2026-09-09",
         "completed": "2026-09-09",
-        "notes": [
-          "MERGED 2026-09-09, PR #164. 'automated_validated' describes this movement's own deliverable (produced and merged); the document itself stays DRAFT pending a separate Product Owner freeze decision -- project/backlog.json's own status stays in_progress for that reason.",
-          "Full detail: project/backlog.json's ui2_b0_c2_job_execution_contract note; docs/design/UI2_0_C2_JOB_EXECUTION_CONTRACT.md (DRAFT -- FOR PRODUCT OWNER FREEZE).",
-          "Ran concurrently with C1 (platform & schema contract), each in its own worktree/branch.",
-          "Moved from now_next.now 2026-09-09 (ui2_b0_c4_capability_registry_gate_resolution_contract session): not a demotion -- this build is complete and merged. Leaves 'now' only because horizon_contract reserves that slot for the newest project/build_history.json record, which is now C4."
-        ]
+        "detail": "docs/history/roadmap/now_next_ui2_b0_c2_job_execution_contract.md"
       },
       {
         "build": "op1_failover_plan_compiler_contract_draft",
         "title": "OP.1 -- failover plan compiler and dry-run: contract draft",
-        "goal": "Produce the DRAFT OP.1 contract (docs/history/phase/OP_1_FAILOVER_PLAN_COMPILER_AND_DRY_RUN.md): a write-free failover plan compiler and dry-run over existing readiness/preflight evidence for classic Check Point ClusterXL, structurally non-authorizing, with op_degraded_verdict presented to the Product Owner for one freeze decision.",
         "status": "automated_validated",
         "started": "2026-09-08",
         "completed": "2026-09-08",
-        "notes": [
-          "Full detail: project/build_history.json's op1_failover_plan_compiler_contract_draft record.",
-          "Moved from now_next.now 2026-09-08 (orchestrator_background_task_exit_race session): not a demotion of any completed OP.1 work -- the DRAFT contract still awaits Product Owner freeze, unchanged. Leaves 'now' only because horizon_contract reserves that slot for the newest project/build_history.json record, which is now a smaller orchestrator-reliability fix dispatched in parallel (relay/NXS-LOCAL-0019); the OP.1 freeze decision is still pending and unaffected.",
-          "Runs in its own worktree/branch (feature/op1-failover-plan-compiler-contract), independent of GOV.PO.3.",
-          "Contract frozen 2026-09-09 (Option A); this draft build is complete. Implementation continues under the OP.1 row / OP.1.S1."
-        ]
+        "detail": "docs/history/roadmap/now_next_op1_failover_plan_compiler_contract_draft.md"
       },
       {
         "build": "m8_3_real_environment_validation",
         "title": "M8.3 -- Product-Owner-gated real-environment validation of the first-contact producer",
         "status": "real_env_validated",
-        "notes": [
-          "RESOLVED 2026-09-08: the bounded read-only command ran for real, Product-Owner-executed on their own Windows machine (`py main.py --identity-first-contact 65aca68e9bd54ebc8fea9fd8face81db`), against a real Check Point ClusterXL member (endpoint <PRIVATE_IP>, <DEVICE_NAME>) discovered via a real `--only cp` run against MDS <PRIVATE_IP>. `outcome: NEW`, `relationship_id: e4671bc45e5e49e2bf9257d32b3fa067` -- a proven device_id -> collector entity_id relationship. Full detail: project/backlog.json id m8_3_real_environment_validation.",
-          "M7 is now UNBLOCKED to start (implementation not yet begun -- unblocking is not the same as M7 being done). M12 still additionally needs M7 itself completed, not merely unblocked."
-        ]
+        "detail": "docs/history/roadmap/now_next_m8_3_real_environment_validation.md"
       },
       {
         "build": "M12",
         "title": "M12 -- per-device / per-capability schedules (D5 producer)",
         "status": "planned",
-        "notes": [
-          "Prerequisites M7 and M10. M10 complete (M10.1-M10.3, merged). M7 (entity_id-substitution wiring) is now AUTOMATED_VALIDATED (2026-09-08, fixture-proven; real-device end-to-end confirmation still pending Product Owner execution) -- M12 is now reachable on that prerequisite. Owns the D5 capability-policy producer that CAPABILITY_STATE_VOCABULARY_AND_PRESENTATION.md keeps at POLICY_UNKNOWN today.",
-          "Constraints already frozen: a ten-minute interval floor, default-disabled, editing gated on C-D7; D5 is never derived from LifecycleState.EXCLUDED, Device Registry DISABLED, or the global scheduler flag."
-        ]
+        "detail": "docs/history/roadmap/now_next_M12.md"
       },
       {
         "build": "m7_real_device_targeted_collect_now",
         "title": "M7 -- real device-targeted Collect now",
-        "goal": "Console-submitted config_refresh_cp device_id targeting resolves to a real collector entity_id and actually contacts the device -- functional per-device Collect now.",
         "status": "automated_validated",
         "started": "2026-09-08",
         "completed": "2026-09-08",
-        "notes": [
-          "IMPLEMENTED 2026-09-08: console/registry_targets.py's _identity_resolved now returns the resolved entity_id (was bool-only) on every M8.4 currency success; new resolve_registry_target_entities() shares the identical admission/eligibility/identity checks via a common _resolve_registry_targets_full() helper and returns the device_id -> entity_id mapping instead of None. console/runner.py::_execute's pre-execution re-check now calls resolve_registry_target_entities and substitutes the resolved entity_id(s), never the raw device_id(s), into the argv _build_argv passes to --cp-config-targets. resolve_registry_targets's own public contract (admission gate, returns TargetRefusal | None) is byte-identical; no refusal code/condition/ordering changed.",
-          "AC-1(c) investigation finding, reported via RELAY_NOTE before implementation: the SESSION_START's framing that CP config evidence carries no host_key_fingerprint field was STALE -- project/backlog.json's m8_evidence_host_key_fingerprint_not_persisted (PR #103, merged 2026-09-07) already closed that gap, before this movement's SESSION_START was issued. No fingerprint-metadata code change was needed; only two stale-comment locations (console/registry_targets.py, tests/test_m8_4_m6_resolver_consumption.py::_fully_resolved) were corrected to stop describing the closed gap as current fact.",
-          "Fixture-based functional proof (AC-3): tests/test_m8_4_m6_resolver_consumption.py::TestEntityIdSubstitution proves a fully-resolved device_id's constructed argv carries the resolved entity_id (not the device_id) after --cp-config-targets, and that a stale/unproven relationship still refuses via the unchanged IDENTITY_TRANSLATION_REQUIRED admission path (no regression). Real-device end-to-end proof still needs the Product Owner to run the actual console job against a real device -- see this build's RELAY_NOTE/SESSION_CLOSE for the proposed bounded command.",
-          "Validation: targeted 109 passed (test_m8_4_m6_resolver_consumption.py + test_m6_registry_keyed_job_targets.py + test_con2_console_job_engine.py + test_con1_operator_console_read_only.py); affected sweep 179 passed (M8.1/M8.2/M8.3, PCP.1, architecture_convergence, application_package). Full one-shot regression (.venv/bin/python -m pytest -q -n auto --dist worksteal, run in the foreground and awaited to actual completion): 3025 passed, 25 skipped, 4 failed -- all 4 self-inflicted by this movement's own project-state prose (not the code change): this build's first roadmap.json/build_history.json draft spelled out, in plain prose, the literal credential-assignment-shaped substrings tests/test_dev_0_5b_auth_consumer_canonical_config.py's repository-text DLP-collision scan matches (see that test file for the precise substrings), which the scan then flagged as a brand-new, non-baselined finding at this build's own build_history.json line; fixed in this same PR by rephrasing this build's own prose to stop spelling those substrings out verbatim, with no functional/code change. Final re-run (foreground, awaited to actual completion): 3027 passed, 25 skipped, 2 failed -- both confirmed pre-existing and unrelated (reproduce identically against a stashed-clean origin/main-based tree) -- see this build's project/build_history.json record for the full 3-run breakdown."
-        ]
+        "detail": "docs/history/roadmap/now_next_m7_real_device_targeted_collect_now.md"
       },
       {
         "build": "parallelize_full_regression_execution",
         "title": "DEV.TEST.1 -- Parallelize local and GitHub Actions full-regression execution",
-        "goal": "Make safe parallel execution (`python -m pytest -q -n auto --dist worksteal`) the default full-suite validation path everywhere -- locally, in every AI/development instruction, and in the GitHub Actions `full-regression` job -- replacing the prior ~11m56s serial CI run, with every test still executing and every worker's result required for the aggregate verdict. Pure test-execution infrastructure: no product behavior, capability-state vocabulary, navigation, registry, storage, enrollment, trust, or authorization change; authorizes no M3 work. Predecessor: M2 (`nav_1_accessibility_closure`), AUTOMATED_VALIDATED, merged via PR #85, complete.",
         "status": "automated_validated",
         "started": "2026-09-06",
         "completed": "2026-09-06",
-        "notes": [
-          "Root cause audit: the workflow's own long-standing 'serial on purpose' comment traced to a single concrete defect -- scripts/render_uitest.py::render() left three utils.html_export payload builders bare-rebound (not monkeypatch.setattr) after use, so the rebind silently outlived the call and leaked into whichever later in-process run_html_export() shared its worker/process, two order-dependent failures under -n auto historically hid about two runs in three. That defect is already fixed with a try/finally restore (scripts/render_uitest.py::_injected_builders) and directly regression-tested regardless of worker or ordering (tests/test_frontend_rendering_boundary.py::test_render_uitest_restores_the_builders_it_injects) -- confirmed by reading both files; no other shared-mutable-resource pattern (fixed ports beyond OS-assigned port 0, os.chdir, module-global caches, tracked-file mutation) was found across tests/. Candidate A (one pytest-xdist process, `-n auto --dist worksteal`) selected over a fixed worker count or matrix sharding: it is the exact command already proven locally and in scripts/pytest_one_shot.ps1/requirements-dev.txt/docs/AI_DEVELOPMENT_PROTOCOL.md, needs no shard-membership/aggregation machinery, and a single xdist master process already yields one aggregate exit code across every worker so no worker's failure can be masked.",
-          "Changed: .github/workflows/validation.yml full-regression job's 'Full test suite' step (serial -> `python -m pytest -q -n auto --dist worksteal`, plus a worker-topology visibility step); tests/test_ci_workflow_fast_pr_regression.py's FULL_SUITE_LINE constant/assertions to match; docs/AI_DEVELOPMENT_PROTOCOL.md 'Test execution economy'/'CI validation policy', AI_START_HERE.md validation ladder, CLAUDE.md 'Test economy' -- all now recommend the parallel command as the default full-suite path, with `-n0`/`-Serial` documented as an explicit diagnostic override only, never the default. Preserved: the `validate` job unchanged, every non-full-suite gate (privacy, project-state consistency, build-history index, whitespace check), scripts/pytest_one_shot.ps1 (already parallel-by-default, unmodified), and every targeted/subsystem test invocation (still serial where already serial -- e.g. tests/test_architecture_convergence.py alone in both gates).",
-          "Local validation: `python3 -m pytest -q -n auto --dist worksteal` (4 CPUs, auto-detected) -- 1957 passed, 24 skipped, 0 failed in 35.01s wall-clock (this sandbox; one test's skip/pass split vs. the 1958/23 prior baseline is an environment-dependent Playwright/Chromium resolution difference, not a coverage change -- 1981 collected either way). No serial full-suite run performed as evidence per this movement's own validation ladder (a local serial run would misrepresent cloud timing and is not required once the specific known leak is fixed+guarded).",
-          "PR-trigger expansion attempted, then reverted (Product Owner direction, same session): a follow-up commit removed full-regression's `if: github.event_name != 'pull_request'` guard so it would also run on every pull_request, to get automatic pre-merge cloud proof. Reverted back to the original approved policy: `pull_request` = fast `validate` only; push-to-`main`/`workflow_dispatch` = parallel `full-regression`; no serial full-suite default anywhere. This decision stands on its own and is independent of the misdiagnosis/incident recorded in the next note.",
-          "CORRECTION -- post-merge YAML-syntax incident (2026-09-06), an in-session misdiagnosis corrected: while chasing cloud proof, every check suite for every trigger (push, pull_request, workflow_dispatch) on every branch -- including, after merge, the merge commit on main itself -- completed with zero jobs. This was FIRST MISDIAGNOSED as an environment/automation-identity limitation (`workflow_dispatch` returning `403 Resource not accessible by integration` on non-default branches, and check suites for this session's automation identity completing with zero jobs on both push and pull_request events) preventing GitHub Actions from scheduling jobs on a non-default branch. That diagnosis was WRONG. Parsing the workflow file locally after merge found the real cause: the 'Report worker topology' step's `run:` value was an unquoted plain YAML scalar containing a bare `: ` inside an f-string label (\"...target): {os.cpu_count()}\"), which YAML parses as an illegal nested mapping -- a file that fails to parse cannot schedule a job under any trigger, on any branch, regardless of who pushed it, which is exactly the symptom observed. Fixed by rewording the f-string in a narrow post-merge follow-up. A new regression guard, tests/test_ci_workflow_fast_pr_regression.py::test_workflow_yaml_parses (pyyaml>=6 added to requirements-dev.txt), now actually parses the workflow file on every test run so this exact defect class fails locally before push, not silently after merge. The PR-trigger policy decision in the prior note was not reopened by this correction -- it was made independently and stands on its own merits.",
-          "Pre-merge evidence decision (Product Owner, this session): two clean complete local parallel runs were accepted as this movement's pre-merge full-suite evidence in place of a PR-triggered cloud run -- 1981 collected, 1957 passed, 24 skipped, 0 failed, at 32.27s and 35.01s (4 workers, `-n auto --dist worksteal`).",
-          "REAL GITHUB ACTIONS CLOUD PROOF (one-time proof parallel execution works, PRESERVED but NOT authorization for automatic triggering -- see next note): push-to-main workflow run 34020356372 (https://github.com/ozandurmus/neXus/actions/runs/34020356372, commit 6ca67cce2c25a8a29f0e1207c5851d0e2756f7f9, PR #88's merge) -- job full-regression concluded SUCCESS. From the actual job log: `python -m pytest -q -n auto --dist worksteal`, 'CPU count (xdist -n auto target) -> 4', final summary '1944 passed, 38 skipped, 3 warnings in 275.74s (0:04:35)' (1982 collected; the +1 vs. the 1981 local total is an environment-dependent collection difference between this sandbox and the GitHub runner, not a coverage gap -- 0 failed either way). Full test suite step wall-clock 07:53:55Z-07:58:31Z = 4m36s, matching pytest's own 275.74s. Timing comparison: 11m56s serial (run 34016204567) -> 4m36s parallel = ~61% faster, ~2.6x speedup -- but ABOVE the 4-minute acceptable ceiling by ~36s, reported honestly rather than rounded away. Bottleneck identified from the job log's own progress timestamps: 98% of tests complete by 07:54:50Z (well under a minute of actual worker time after ~13s xdist bring-up), then a ~3m41s gap before the final 2% finish -- a small number of tail tests (consistent with real retry/backoff-timing-bound tests) dominate wall-clock, not an xdist-distribution problem; not a correctness/coverage gap (0 failed, single aggregate exit code). See project/build_history.json's full record for the complete evidence including repository-gate results from the same run.",
-          "FINAL TRIGGER CORRECTION, CLOSING THIS MOVEMENT (same session, Product Owner directed, narrow follow-up amending this record in place -- no second movement record): the topology proven above (automatic full-regression on every push-to-main) was not the approved final policy. Corrected: pull_request -> validate (automatic, unchanged); workflow_dispatch -> full-regression (on demand ONLY, no automatic trigger of any kind); the workflow's push: trigger removed entirely, since with full-regression withheld from automatic triggers and validate restricted to pull_request, a retained push trigger would match no job's if: condition and produce an empty, zero-job run on every push. full-regression's if: changed from `github.event_name != 'pull_request'` to `github.event_name == 'workflow_dispatch'`. Recorded as durable AI working policy in docs/AI_DEVELOPMENT_PROTOCOL.md's 'CI validation policy' section (canonical, single source, no contradictory duplicate text elsewhere): a GitHub-hosted full-regression run is an exceptional, materially justified action -- the already-proven local/agent-cloud parallel run is normally sufficient evidence. Run 34020356372 above is explicitly preserved as one-time proof parallel execution works on GitHub-hosted infrastructure, not reinterpreted as authorization for automatic triggering. tests/test_ci_workflow_fast_pr_regression.py rewritten (9 tests) to prove: pull_request schedules validate and not full-regression; workflow_dispatch schedules full-regression; no push trigger exists; the full-suite command remains `python -m pytest -q -n auto --dist worksteal`; the YAML parses. Validation scope for this narrow workflow/docs-only correction: the rewritten contract tests, tests/test_architecture_convergence.py, metadata_warnings == [], build-history index --check, repository privacy gate, git diff --check -- no full local suite and no new GitHub-hosted full-regression run performed, per explicit instruction. M3 (nav_3_capability_state_vocabulary) remains not started and stays now_next.next, unchanged.",
-          "Recommended reasoning tier: Sonnet 5, extended thinking (high) for this audit/design/selection step (test-execution infrastructure, isolation analysis, CI topology decision); Sonnet 5, normal for the mechanical workflow/doc/test edits themselves, including this final deterministic trigger-policy correction."
-        ]
+        "detail": "docs/history/roadmap/now_next_parallelize_full_regression_execution.md"
       },
       {
         "build": "op2_c_cp_clusterxl_adapter_scoping",
         "title": "OP.2.C - CP ClusterXL vendor adapter scoping",
         "status": "blocked",
-        "notes": [
-          "Promoted 2026-09-05 (OP.2.1b readiness-policy-amendment session): with D-V7b/D-F3/D-F2 no longer blocking the readiness roll-up, the readiness gate is no longer the reason OP.2.C cannot start -- authorization/trust/adapter/change-management are.",
-          "Adapter itself now IMPLEMENTED + unit-tested (checkpoint/clusterxl_capability_adapter.py, tests/test_op2_c_cp_clusterxl_adapter.py): typed capability()/build_plan()/check_precondition()/execute_once()/observe_postcondition() for the two APPROVED_FOR_OP2C primitives (CP-M1 clusterXL_admin down, CP-M1-R clusterXL_admin up), exercised end-to-end through the real ActionCoordinator with fakes only. Wired into no production adapter_resolver -- CLASS 2 stays structurally unreachable (DenyAllAuthorizer unchanged, no taxonomy member).",
-          "CLOSED 2026-09-05 (op2_c1_cp_clusterxl_member_session): the real ClusterXLMemberSession is now implemented (checkpoint/clusterxl_member_session.py::RealClusterXLMemberSession) over the existing per-member MemberSession transport, unit-tested (tests/test_op2_c1_cp_clusterxl_member_session.py), and unwired -- CLASS 2 still structurally unreachable.",
-          "Still blocked on: DEPLOY.1A OIDC boundary + RBAC OPERATE role (authorize() is still unconditional DENY; no PermitAllAuthorizer exists outside tests); cp_production_ssh_host_key_trust_hardening (P0 before CLASS 2); the signed change-management/network-security review (FAILOVER_ENGINE_ARCHITECTURE.md section 10); a real PreflightProvider/EligibilityEvaluator supplying the check_statuses facts (cluster_mode, subject/peer member tokens, recovery_mode) the adapter's contract expects; a protected CLI/console entry point that actually constructs an ActionCoordinator with a real adapter_resolver, using RealClusterXLMemberSession as its session_resolver target.",
-          "DRAFTED 2026-09-05 (op2_c_change_management_review_package_draft): docs/history/phase/OP_2_C_CHANGE_MANAGEMENT_NETWORK_SECURITY_REVIEW.md compiles the change-management/network-security review package -- unsigned. Sign-off (Product Owner + Network Security Lead, both blank) remains EXTERNAL_SIGN_OFF_REQUIRED and is not this build's action. Drafting it does not unblock DEPLOY.1A, SSH trust hardening, or the protected entry point, all still OPEN_RELEASE_GATE.",
-          "Recommended: Sonnet 5, normal for the remaining wiring items (deterministic against a now-frozen adapter contract); Sonnet 5, extended thinking (high) only for a genuine new decision inside the authorization/trust-model gates.",
-          "Detail: docs/history/phase/OP_2_1B_CP_PILOT_READINESS_POLICY_AMENDMENT.md \"Exact next step toward OP.2.C\"; checkpoint/clusterxl_capability_adapter.py and checkpoint/clusterxl_member_session.py module docstrings.",
-          "CLOSED 2026-09-05 (op2_c_cp_clusterxl_preflight_eligibility_wiring): a real PreflightProvider/EligibilityEvaluator now exists (checkpoint/clusterxl_preflight_provider.py::ClusterXLPreflightProvider/ClusterXLReadinessEligibilityEvaluator), wired to run_cp_preflight + compute_ha_readiness, unit-tested (tests/test_op2_c_cp_clusterxl_real_preflight_wiring.py), and unwired -- CLASS 2 still structurally unreachable. Still blocked on: DEPLOY.1A OIDC boundary + RBAC OPERATE role; cp_production_ssh_host_key_trust_hardening; the signed change-management/network-security review; a protected CLI/console entry point that actually constructs an ActionCoordinator with a real adapter_resolver, using RealClusterXLMemberSession as its session_resolver target and ClusterXLPreflightProvider/ClusterXLReadinessEligibilityEvaluator as its preflight_provider/eligibility_evaluator.",
-          "op2_c_release_gate_dependency_scoping session (2026-09-05, ARCHITECTURE, read-only): classified the four remaining production-reachability gates named in CURRENT_STATE.md's blocker list. DEPLOY.1A OIDC+RBAC and cp_production_ssh_host_key_trust_hardening are both externally blocked -- the latter's own backlog.json target field reads 'production container/pod runtime hardening (post-DEPLOY.1)', i.e. it shares DEPLOY.1's external server-availability blocker rather than being separately closable. The signed change-management/network-security review (FAILOVER_ENGINE_ARCHITECTURE.md section 10) has no drafted artifact anywhere in the repository yet, unlike its sibling per-primitive network-device command gate (OP.2.1, already DRAFTED); its final sign-off is organizational/external (network-security leads), but the review package itself can be drafted now with zero code, zero server, zero device contact -- the one item in this blocker set that is engineering-actionable today. The protected production entry point + live adapter_resolver construction is dependent on DEPLOY.1A and the SSH-trust hardening both landing first (a live adapter_resolver pointed at RealClusterXLMemberSession in a genuinely production context needs both the auth boundary and the hardened transport in place); it stays explicitly out of scope for any build before then -- 'no production ActionCoordinator/adapter resolver/entry point' stays the correct framing, not something this session weakened. Selected smallest next build: op2_c_change_management_review_package_draft (new upcoming row, below) -- drafting only, no sign-off, no code. No stale JSON/CURRENT_STATE.md contradiction found; cp_device_interaction_safety's already-CLOSED status (backlog.json, 2026-08-25) correctly stays outside today's four-gate blocker set.",
-          "Moved from now_next.next to upcoming 2026-09-05 (product_control_plane_architecture_draft session): not a demotion of any completed OP.2 work and not a change to its blockers -- this row stays blocked on DEPLOY.1 (external) exactly as recorded above; it leaves 'next' only because the horizon contract reserves 'next' for one actionable build, and the Product Control Plane's first movement (PCP.1) is actionable on the laptop without the server. OP.2.D's console flow is expected to live on the PCP.4 device/HA tab so a second console is never built (docs/design/PRODUCT_CONTROL_PLANE_ARCHITECTURE.md section 16/20)."
-        ]
+        "detail": "docs/history/roadmap/now_next_op2_c_cp_clusterxl_adapter_scoping.md"
       },
       {
         "build": "op0b_0_close_d_v3a_d_v7b_pre_class2",
         "title": "OP.0b.0 - close D-V3a/D-V7b vendor facts (not a readiness-policy gate any more)",
         "status": "blocked",
-        "notes": [
-          "Demoted from now_next.next 2026-09-05 (OP.2.1b session): D-V7b's ROLE in the readiness roll-up is now decided (advisory-exempt) -- this row is now purely about closing the underlying VENDOR FACT (is there ever a supported CP read; PAN local-info/peer-info serial-num semantics), which no longer blocks CP CLASS 2 reachability at the readiness layer. Still relevant for PAN (D-V3a/B2 remain the PAN identity blocker, OP.3) and for intellectual completeness on the CP side, but not on the critical path to OP.2.C any more.",
-          "Try an official GitHub mirror first (the technique that closed D-V4/D-V7a): D-V3a needs an official PAN-OS/Panorama source for local-info/peer-info serial-num inside show high-availability state; D-V7b needs an official Check Point generic-object API schema (unconfirmed to exist) beyond the Simple Cluster API already ruled insufficient.",
-          "Fall back to a human fetching the specific pages the contract's source tables name.",
-          "Recommended: Sonnet 5, extended thinking (high), same as the prior vendor-semantics sessions."
-        ]
+        "detail": "docs/history/roadmap/now_next_op0b_0_close_d_v3a_d_v7b_pre_class2.md"
       },
       {
         "build": "cp_remote_collection_done_marker_diagnostics",
         "title": "CP remote collection - DONE-marker-loss diagnostic hardening",
         "status": "in_progress",
-        "notes": [
-          "Moved from now_next.now (2026-09-03 roadmap correction, OP.0b S4 session): stalled pending a real-device recurrence with the new diagnostic fields (exit_status/processed_gw/total_gw/stderr_bytes/last_marker/stderr_classification) -- no device access in this session, so it cannot progress here. Full detail: project/build_history.json 'cp_remote_collection_done_marker_diagnostics'.",
-          "Does not block OP.0b S4/S5/S6 -- independent subsystem (CP inventory collection channel-drain diagnostics vs. the OP.0b preflight command gate).",
-          "Resume when a real recurrence report with the new fields is available."
-        ]
+        "detail": "docs/history/roadmap/now_next_cp_remote_collection_done_marker_diagnostics.md"
       },
       {
         "build": "d_f3_flap_failover_threshold_decision",
         "title": "D-F3 - flap/failover-frequency numeric threshold (product owner)",
         "status": "done",
-        "notes": [
-          "DECIDED 2026-09-05 (OP.2.1b readiness-policy-amendment session): the product owner declined to invent a numeric threshold against cumulative, no-recency-window counters. flap_history stays permanently INSUFFICIENT_EVIDENCE (visible, honest) but is now a closed-list, exact-reason advisory-exempt check for both vendors (utils/failover/assessment.ADVISORY_EXEMPT_CHECKS) -- it no longer, by itself, blocks a positive readiness verdict. This is a policy decision about the roll-up's treatment of the gap, not a vendor-semantics closure: the underlying counters' recency/window semantics remain exactly as unestablished as before (D-V5a).",
-          "Parallel to D-F1/D-F2. Superseded framing (historical, kept for context): 'needed before OP.0b.1/S2/S3 can compute a real check-7 verdict' -- the product owner chose non-blocking-forever over inventing a threshold instead.",
-          "Detail: docs/history/phase/OP_2_1B_CP_PILOT_READINESS_POLICY_AMENDMENT.md."
-        ]
+        "detail": "docs/history/roadmap/now_next_d_f3_flap_failover_threshold_decision.md"
       },
       {
         "build": "pan_serial_representation_identity_evidence_closure",
         "title": "PAN SERIAL REPRESENTATION / IDENTITY EVIDENCE CLOSURE",
         "status": "blocked",
-        "notes": [
-          "Blocked on access to the same approved real PAN pair used for the S0 result (hardware/real-environment, not a decision gate).",
-          "Purpose: determine why one member's independently sourced serial representations (runtime local-info vs runtime peer-info claim) do not compare equal, without weakening opaque-identifier semantics -- not merely 'obtain B2'.",
-          "Independent of OP.0b S2/S3 -- may proceed independently.",
-          "Recommended: Sonnet 5, normal reasoning initially; escalate to extended thinking (high) only if vendor identity semantics become architectural."
-        ]
+        "detail": "docs/history/roadmap/now_next_pan_serial_representation_identity_evidence_closure.md"
       },
       {
         "build": "CON.2 real-environment run",
         "title": "Trigger a read-class console job against a real device",
         "status": "planned",
-        "notes": [
-          "No new code. Corporate laptop. Closes CON.2 from AUTOMATED_VALIDATED to DONE."
-        ]
+        "detail": "docs/history/roadmap/now_next_CON.2_real-environment_run.md"
       },
       {
         "build": "OP.1",
         "title": "Failover plan compiler and dry-run",
         "status": "automated_validated",
-        "notes": [
-          "DRAFT contract produced 2026-09-08: docs/history/phase/OP_1_FAILOVER_PLAN_COMPILER_AND_DRY_RUN.md (status line: DRAFT -- awaiting Product Owner freeze). Defines the FailoverPlan/DryRunReport artifacts for classic CP ClusterXL only, reusing utils.operate.adapter/eligibility types read-only (never constructing ActionCoordinator, never calling check_precondition()/execute_once()/observe_postcondition()). Still write-free.",
-          "Presents op_degraded_verdict to the Product Owner as one decision at this freeze (recommendation unchanged: keep DEGRADED_PROCEED_WITH_RISK structurally unreachable until real-field calibration) plus the consequence of each option for the plan/dry-run vocabulary. op_four_eyes/op_emergency_evac/op_continuity_tolerance/op_aa_vsls_scope confirmed non-blocking for this freeze.",
-          "Implementation slicing plan included in the contract doc (OP.1.S1, one slice, 5 non-test files, 8 acceptance criteria) so implementation can start immediately after freeze.",
-          "FROZEN -- PRODUCT OWNER APPROVED 2026-09-09: docs/history/phase/OP_1_FAILOVER_PLAN_COMPILER_AND_DRY_RUN.md, op_degraded_verdict decided Option A (DEGRADED_PROCEED_WITH_RISK stays structurally unreachable; see open_decisions). Slice OP.1.S1 (the only slice) implemented and AUTOMATED_VALIDATED the same day: write-free FailoverPlan/DryRunReport compiler for classic CP ClusterXL only. Full detail: project/backlog.json's failover_plan_compiler note.",
-          "Deliberately not in this slice, per the contract: Operator Console job type, any change to utils/failover/ or utils/operate/ beyond read-only imports, Palo Alto/VSX/VSLS support, anything responsive to op_degraded_verdict Option B. OP.2 (execution) remains separately gated and unimplemented at production scope."
-        ]
+        "detail": "docs/history/roadmap/now_next_OP.1.md"
       },
       {
         "build": "OP.2",
         "title": "Controlled failover execution -- single vendor pilot",
         "status": "blocked",
-        "notes": [
-          "Vendor-independent CLASS 2 architecture FROZEN 2026-09-04: docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md (PO freeze after the independent challenge review of the same date; parent reconciled in docs/design/FAILOVER_ENGINE_ARCHITECTURE.md section 10.2). Architecture authority only: CLASS 2 is NOT IMPLEMENTED and NOT REACHABLE, no vendor adapter exists, the taxonomy class has no member.",
-          "OP.2.A/OP.2.B DONE 2026-09-04 (typed model/state/audit/DENY boundary; coordinator/lock/idempotency/boundary/reconciliation -- still structurally DENY, no adapter). OP.2.1 (CP mutation command gate, docs only) DRAFTED 2026-09-05: docs/history/phase/OP_2_1_CP_CLUSTERXL_MUTATION_COMMAND_GATE.md approves clusterXL_admin down/up (CP ClusterXL only) for OP.2.C's future implementation; does not itself close any other OP.2.C prerequisite.",
-          "Hard-gated by FAILOVER_ENGINE_ARCHITECTURE.md section 10, still all open: DEPLOY.1A OIDC + an RBAC OPERATE role (P2's authorization boundary admits no local-pilot exemption either, per OP.2.1's own finding), production SSH trust hardening, D-V7b/D-F3 (OP.2.1 proved both are independent, already-coded reasons a positive readiness verdict is structurally unreachable -- not merely listed blockers), and a signed-off change-management review. One vendor proven before any cross-vendor abstraction is generalized. OP.2.C (first possible CLASS 2 member) remains blocked on all of the above; OP.2.D is the console flow + controlled real-env pilot; PAN is OP.3."
-        ]
+        "detail": "docs/history/roadmap/now_next_OP.2.md"
       },
       {
         "build": "CON.3",
         "title": "Operator Console operational-write actions",
         "status": "blocked",
-        "notes": [
-          "Blocked on open decisions C-D4 and C-D6 and on RB.3b's hardware-gated run. Check RB.3b first: if it is still hardware-gated, CON.3 cannot start regardless of how the decisions land."
-        ]
+        "detail": "docs/history/roadmap/now_next_CON.3.md"
       },
       {
         "build": "RB.3b",
         "title": "Check Point Gaia system backup collection",
         "status": "blocked",
-        "notes": [
-          "Steps 2-7 implemented against fixture transports. Blocked only on the watched real R81.10/R81.20 single-gateway run -- hardware, not engineering."
-        ]
+        "detail": "docs/history/roadmap/now_next_RB.3b.md"
       },
       {
         "build": "DEPLOY.1",
         "title": "Ubuntu + Docker server migration",
         "status": "blocked",
-        "notes": [
-          "Blocked on server availability (external). Carries the OIDC viewer boundary, evidence egress policy, CP strict host-key R2 and PAN TLS corporate-CA gates."
-        ]
+        "detail": "docs/history/roadmap/now_next_DEPLOY.1.md"
       },
       {
         "build": "DEV.0.3C",
         "title": "History/CAS runtime boundary",
         "status": "deferred",
-        "notes": [
-          "Pre-server, not a Corporate Git blocker. Config-evidence CAS still lives at repo-root data/configs (utils/config_evidence.py CONFIG_ROOT default)."
-        ]
+        "detail": "docs/history/roadmap/now_next_DEV.0.3C.md"
       },
       {
         "build": "OP.3+ / broader vendor coverage",
         "title": "Additional vendor failover coverage",
         "status": "deferred",
-        "notes": [
-          "Only after the first single-vendor pilot is proven in a real environment."
-        ]
+        "detail": "docs/history/roadmap/now_next_OP.3_broader_vendor_coverage.md"
       }
     ],
     "previous_recovery": {
@@ -522,713 +379,184 @@
     "2026-09-09: UI 2.0 baseline adopted (UI2_0_DEVELOPMENT_WORKFLOW.md rev 2) and Phase 0 DECIDE recorded (UI2_0_BASELINE_CONTRACT.md, FROZEN). Line-1 is the reference/maintenance line; no new Line-1 product features. B0 contracts C1-C7 are the primary backlog.",
     "2026-09-09: UI 2.0 visual design language decided -- Material Design 3 (docs/design/UI2_0_BASELINE_CONTRACT.md, VISUAL-DESIGN-LANGUAGE). Source: \"neXus 2026 Design Refresh\" design canvas, 7 M3 product screens (Overview/Inventory/Configuration/Compliance/Operations/Administration/Components). Feeds B0-8 baseline directory and B1 step 9."
   ],
-  "architecture_review_notes": [
-    "2026-08-25 architecture review: event-driven webhook, crypto/PQC readiness, DEPLOY.1 OIDC boundary and contextual TI enrichment evaluated for CP/PAN scope.",
-    "Vendor scope intentionally limited to Check Point and Palo Alto; no additional vendors will be added at current maturity.",
-    "Webhook signal is a read-only collection trigger only; it must never carry collector commands, device credentials or authoritative topology.",
-    "TI enrichment operates on normalized findings only; raw configuration, full topology and real IP ranges must not leave the evidence boundary.",
-    "2026-08-31 productization review: retain one worker and the static report while moving to the first server. Do not introduce a generic API around main.py, browser-supplied device commands, per-vendor workers, object storage or Kubernetes until a tested operational need appears. Server-only controls are recorded in docs/design/SERVER_PRODUCTIZATION_AND_MODULARIZATION_ARCHITECTURE.md.",
-    "2026-09-05 Product Control Plane architecture promotion: reconciled the parked product direction against main ff700e38. One genuine contradiction found and isolated -- a single console enrollment-write boundary covering BOTH the manual and candidate-based enrollment intents together (vs OPERATOR_CONSOLE_ARCHITECTURE.md section 4 wording + the exclusions-write DEPLOY.1A precedent) -> open decision pcp_console_registry_write_gate, decided for neither intent; the discovery-is-the-universe and workflow-is-a-whole-plane assumptions are superseded implementation assumptions, not laws. Storage engine, intervals, MIBs, schema names, UI framework and scheduler technology deliberately not frozen.",
-    "2026-09-05 Product Control Plane FREEZE (bounded, two mechanical corrections only): (1) the registry mutation lock's release is now instance-safe -- an ownership-token equality check embedded in the lock file at acquisition, compared before every unlink, so a releasing process never deletes a different writer's lock instance that a human recreated after removing a believed-stale one; the lock file itself is classified LOCAL-SENSITIVE (CLASS 2) and, like the registry file, never enters the support bundle (AC-5, AC-15 added). (2) section 22's amendment timing corrected: items 1-3 (OPERATOR_CONSOLE_ARCHITECTURE.md, COMPLIANCE_ASSIGNMENT_AND_FRAMEWORKS.md, BACKUP_AND_RECOVERY_ARCHITECTURE.md) applied at this freeze; item 4 (AI_START_HERE.md 'What this is' sentence) moved explicitly to the PCP.1 close scope because it is only true once PCP.1 ships a persistent registry -- writing it now would misstate current capability in the canonical cold-start document. No architecture or product-direction content reopened beyond these two corrections; docs/design/PRODUCT_CONTROL_PLANE_ARCHITECTURE.md status flipped DRAFT -> FROZEN."
-  ],
-  "engineering_tracks": [
-    {
-      "id": "DEV.0",
-      "title": "Repository Readiness",
-      "status": "done",
-      "steps": [
-        {
-          "build": "DEV.0.1",
-          "title": "Runtime Management Endpoint Decoupling",
-          "status": "done"
-        },
-        {
-          "build": "DEV.0.2",
-          "title": "Repository Sanitization & Corporate Git Candidate",
-          "status": "done"
-        },
-        {
-          "build": "DEV.0.3A",
-          "title": "Runtime Path Foundation",
-          "status": "done"
-        },
-        {
-          "build": "DEV.0.3B",
-          "title": "Runtime Artifact Consumer Migration",
-          "status": "done"
-        },
-        {
-          "build": "DEV.0.3C",
-          "title": "History/CAS Runtime Boundary (Pre-Server)",
-          "status": "deferred"
-        },
-        {
-          "build": "DEV.0.4",
-          "title": "Local Repository Privacy Gate",
-          "status": "done"
-        },
-        {
-          "build": "DEV.0.3B.1",
-          "title": "Direct SSH Runtime Path Closure",
-          "status": "done"
-        },
-        {
-          "build": "DEV.0.4.1",
-          "title": "Runtime Inventory Exclusion Policy Foundation",
-          "status": "done"
-        },
-        {
-          "build": "DEV.0.5A",
-          "title": "Runtime Authentication Vocabulary & Boundary Foundation",
-          "status": "done"
-        },
-        {
-          "build": "DEV.0.5B",
-          "title": "Authentication Consumer Migration + Canonical Config",
-          "status": "done"
-        },
-        {
-          "build": "DEV.0.5B.1",
-          "title": "Legacy Authentication Redaction Marker DLP Closure",
-          "status": "done"
-        },
-        {
-          "build": "DEV.0.5B.2",
-          "title": "Repository-Wide DLP Collision Closure",
-          "status": "done"
-        }
-      ]
-    },
-    {
-      "id": "DEV.1",
-      "title": "Corporate Git + Copilot Development Foundation",
-      "status": "done",
-      "steps": [
-        {
-          "build": "DEV.1",
-          "title": "Repository-native AI operating model and controlled Git baseline",
-          "status": "done"
-        }
-      ]
-    },
-    {
-      "id": "DEV.2",
-      "title": "Server Runtime Foundation",
-      "status": "in_progress",
-      "steps": [
-        {
-          "build": "DEV.2.1",
-          "title": "Non-interactive runtime configuration: env vars + mounted secret files with precedence over interactive input()/getpass; keep the interactive path for local use",
-          "status": "automated_validated"
-        },
-        {
-          "build": "DEV.2.2",
-          "title": "Persistent runtime volume contract: data_root, stable data/.support_hmac.key across restarts, mounted CP known_hosts and PAN CA bundle",
-          "status": "automated_validated"
-        },
-        {
-          "build": "DEV.2.3",
-          "title": "Linux base validation: pin Python 3.12, portable scripts, remove %LOCALAPPDATA% / py.exe assumptions from docs and CI",
-          "status": "planned"
-        }
-      ]
-    },
-    {
-      "id": "DEV.3",
-      "title": "Containerization",
-      "status": "in_progress",
-      "steps": [
-        {
-          "build": "DEV.3.1",
-          "title": "Single worker image + Compose: one container runs the existing sequential main.py pipeline; Nginx serves the static output volume; an external timer invokes --scheduler-once",
-          "status": "planned"
-        },
-        {
-          "build": "DEV.3.2",
-          "title": "Job/metadata store: move scheduler state, run manifests, last-known-good and the CAS metadata index to Postgres; CAS payload blobs stay on the volume",
-          "status": "planned"
-        },
-        {
-          "build": "DEV.3.3",
-          "title": "Distributed per-endpoint lock replacing the in-process coordinator (Postgres advisory lock or DB-backed queue); preserves the concurrency-budget-of-1 CP safety constraint",
-          "status": "planned"
-        },
-        {
-          "build": "DEV.3.4",
-          "title": "Per-vendor worker containers — DEFERRED until collection duration is a real operational pain; requires DEV.3.3 first",
-          "status": "deferred"
-        }
-      ]
-    },
-    {
-      "id": "DEV.4",
-      "title": "CI/CD & Production Hardening",
-      "status": "planned",
-      "steps": [
-        {
-          "build": "DEV.4.1",
-          "title": "Image build/scan CI with pinned base digests",
-          "status": "planned"
-        },
-        {
-          "build": "DEV.4.2",
-          "title": "DEPLOY.1A OIDC read-only viewer boundary in front of the served output, or integrate an existing corporate SSO proxy",
-          "status": "planned"
-        },
-        {
-          "build": "DEV.4.3",
-          "title": "Promote CP strict host-key and PAN CA trust from opt-in to required in the server image; R2 real-environment validation",
-          "status": "planned"
-        },
-        {
-          "build": "DEV.4.4",
-          "title": "Least-privilege server runtime: non-root containers, report-only viewer publication mount, immutable image identity, health/resource limits and protected Docker host",
-          "status": "planned"
-        },
-        {
-          "build": "DEV.4.5",
-          "title": "Release assurance: dependency lock, Python 3.12 CI, privacy/render regression, SBOM, vulnerability policy and signed release provenance",
-          "status": "planned"
-        },
-        {
-          "build": "DEV.4.6",
-          "title": "Production evidence/recovery data plane: deployment migrations, restricted PostgreSQL roles, secret/KMS custody, encrypted off-host recovery and restore-drill acceptance",
-          "status": "planned"
-        }
-      ]
-    },
-    {
-      "id": "DEV.TEST",
-      "title": "Test Execution Infrastructure",
-      "status": "done",
-      "steps": [
-        {
-          "build": "DEV.TEST.1",
-          "title": "Parallelize local and GitHub Actions full-regression execution (pytest-xdist, -n auto --dist worksteal, single aggregate verdict)",
-          "status": "done"
-        }
-      ]
-    }
-  ],
+  "engineering_tracks": "see docs/history/roadmap/engineering_tracks.md",
   "open_decisions": [
-    {
-      "id": "tufin_path_authority",
-      "area": "Product scope / external systems",
-      "status": "decided",
-      "question": "Does neXus build its own topology/path engine for path-based policy placement, or consume an external path authority?",
-      "options": [
-        "Consume Tufin-provided device paths and apply rules to the returned devices",
-        "Build an internal topology/path engine"
-      ],
-      "recommendation": "Consume Tufin; an internal engine duplicates an established authority and expands scope dramatically.",
-      "decision": "DECIDED -- neXus consumes Tufin-provided paths and does not build an independent topology/path engine. Missing or insufficient Tufin evidence stays explicit (UNKNOWN / INSUFFICIENT_EVIDENCE); no fallback path authority is invented. Tufin API availability, schema, authentication and organizational ownership are external dependencies, not yet verified in the repository. Ratified with docs/design/PRODUCT_DIRECTION_RECORD.md DR-1.",
-      "decide_by": "DECIDED 2026-09-08 (direction-record ratification)",
-      "decided_on": "2026-09-08"
-    },
-    {
-      "id": "gov_relay_1_protocol",
-      "area": "Agent session governance",
-      "status": "decided",
-      "question": "What is the canonical GitHub-issue relay convention for Codex/Claude movement handoffs?",
-      "options": [
-        "A locator plus canonical issue-body/final-comment packets and a closed intermediate-comment vocabulary",
-        "Ad hoc chat phrases and unconstrained issue comments"
-      ],
-      "recommendation": "Use the canonical governed relay contract so a locator cannot be mistaken for authority and malformed handoffs fail before implementation.",
-      "decision": "DECIDED -- RELAY_READY owner/repository#issue is locator-only; the issue body is exactly one validated SESSION_START packet; the final engineering comment is exactly one validated SESSION_CLOSE packet; intermediate comments use only RELAY_ACK, RELAY_NOTE, RELAY_QUESTION, RELAY_DECISION or RELAY_CORRECTION; RELAY_START and RELAY_END are invalid; only the Product Owner may authoritatively issue RELAY_DECISION. Every material question requiring Product Owner resolution MUST be posted as RELAY_QUESTION on the active relay before its dependent action and remains open until a matching Product Owner RELAY_DECISION or higher repository authority resolves it; direct chat may explain but does not replace the durable question. The NEXUS_SESSION_PACKET v2 schema and parser are unchanged.",
-      "decide_by": "DECIDED 2026-09-07 at GOV.RELAY.1 freeze; question-routing amendment approved 2026-09-07",
-      "decided_on": "2026-09-07"
-    },
     {
       "id": "op_track_id",
       "area": "OP.x Controlled Failover",
       "status": "open",
       "question": "Track id: keep OP.x as a dedicated OPERATE track, or fold into 1.x after the 1.0 GOVERN track?",
-      "options": [
-        "OP.x dedicated OPERATE track",
-        "1.x after GOVERN"
-      ],
-      "recommendation": "OP.x - OPERATE is a distinct theme with its own write-gate and should not be conflated with GOVERN.",
-      "decide_by": "OP.x approval review"
+      "decide_by": "OP.x approval review",
+      "detail": "docs/history/roadmap/decision_op_track_id.md"
     },
     {
       "id": "op_four_eyes",
       "area": "OP.2 Controlled Failover Execution",
       "status": "open",
       "question": "Second-approver (four-eyes) sign-off for an authorised failover: mandatory, or configurable per environment?",
-      "options": [
-        "mandatory in v1",
-        "configurable (default on)"
-      ],
-      "recommendation": "configurable, default on - mandatory can block a legitimate emergency; the audit record + OPERATE role are the hard controls.",
       "decide_by": "deployment/release policy before the OP.2.D pilot (not OP.2.0 architecture freeze)",
-      "note": "Rebased from 'OP.2 contract freeze' on 2026-09-04, not resolved. PO classification 2026-09-04: NOT an OP.2.0 architecture freeze blocker -- the architecture provides one approval_policy boundary in the confirmation gate (second approver, role combinations, maintenance window, change reference are its inputs); whether production requires one approver, two, or a role combination is a deployment/release policy decision. No generic quorum framework is built. Initial implementation: one confirmation by the requesting operator, no configuration surface. See docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md P5."
-    },
-    {
-      "id": "op_degraded_verdict",
-      "area": "OP.0 Readiness Assessment",
-      "status": "decided",
-      "question": "Support DEGRADED_PROCEED_WITH_RISK (per-risk operator acceptance) in v1, or restrict to SAFE_TO_FAILOVER / UNSAFE_DO_NOT_FAILOVER / INSUFFICIENT_EVIDENCE until there is field experience?",
-      "options": [
-        "include DEGRADED in v1",
-        "SAFE / UNSAFE / INSUFFICIENT only in v1"
-      ],
-      "recommendation": "SAFE / UNSAFE / INSUFFICIENT only in v1; add DEGRADED once the battery is validated against real clusters.",
-      "decision": "DECIDED -- Option A: SAFE / UNSAFE / INSUFFICIENT (+ NOT_A_FAILOVER_UNIT) only. DEGRADED_PROCEED_WITH_RISK stays structurally unreachable until real-field calibration. Ratified at the OP.1 contract freeze, docs/history/phase/OP_1_FAILOVER_PLAN_COMPILER_AND_DRY_RUN.md section 8.",
-      "decide_by": "DECIDED 2026-09-09 (OP.1 contract freeze)",
-      "decided_on": "2026-09-09",
-      "note": "Rebased from 'OP.0 contract freeze' on 2026-09-01. The OP.0a contract (docs/history/phase/OP_0A_HA_READINESS_ASSESSMENT.md, decision P4) reserves DEGRADED_PROCEED_WITH_RISK in the frozen verdict enum but made it structurally unreachable, along with SAFE_TO_FAILOVER, because OP.0a has evidence for only part of the design-doc section 4 stop-condition set. Resolved at the OP.1 freeze with the existing recommendation: Option B would have required reopening utils/failover/assessment.py::_verdict_for and its AC-6 unreachability test (both out of OP.1's scope), a new undefined risk-acceptance notion, and a new risk_items structure -- cost not owed by OP.1's own value. utils/failover_plan's own AC-5/AC-6 tests (tests/test_op1_failover_plan_compiler.py) re-prove DEGRADED_PROCEED_WITH_RISK is never reachable through would_proceed."
+      "note": "Rebased from 'OP.2 contract freeze' on 2026-09-04, not resolved. PO classification 2026-09-04: NOT an OP.2.0 architecture freeze blocker -- the architecture provides one approval_policy boundary in the confirmation gate (second approver, role combinations, maintenance window, change reference are its inputs); whether production requires one approver, two, or a role combination is a deployment/release policy decision. No generic quorum framework is built. Initial implementation: one confirmation by the requesting operator, no configuration surface. See docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md P5.",
+      "detail": "docs/history/roadmap/decision_op_four_eyes.md"
     },
     {
       "id": "op_emergency_evac",
       "area": "OP.x scope",
       "status": "open",
       "question": "Emergency 'evacuate a failing member fast' path: in scope for OP.2, or a later OP.3?",
-      "options": [
-        "OP.2 (separate, still-gated path)",
-        "defer to OP.3"
-      ],
-      "recommendation": "defer to OP.3 - OP.2 proves the planned-maintenance path first; emergency reuses it with a reduced-but-not-skipped preflight.",
       "decide_by": "OP.3 scoping (not OP.2.0 architecture freeze)",
-      "note": "Rebased from 'OP.2 contract freeze' on 2026-09-04, not resolved. PO classification 2026-09-04: NOT an OP.2.0 architecture freeze blocker -- the initial CLASS 2 architecture has NO emergency bypass: no path bypasses authorization, fresh preflight, confirmation or the operational lock. A future emergency capability requires its own explicit contract and approval. See docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md 'Scope -- out'."
+      "note": "Rebased from 'OP.2 contract freeze' on 2026-09-04, not resolved. PO classification 2026-09-04: NOT an OP.2.0 architecture freeze blocker -- the initial CLASS 2 architecture has NO emergency bypass: no path bypasses authorization, fresh preflight, confirmation or the operational lock. A future emergency capability requires its own explicit contract and approval. See docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md 'Scope -- out'.",
+      "detail": "docs/history/roadmap/decision_op_emergency_evac.md"
     },
     {
       "id": "op_aa_vsls_scope",
       "area": "OP.2 vendor coverage",
       "status": "open",
       "question": "PAN Active/Active and Check Point VSLS (per-VS load sharing) failover: first-class in OP.2, or deferred?",
-      "options": [
-        "first-class in OP.2",
-        "deferred (OP.0 still assesses them)"
-      ],
-      "recommendation": "deferred - OP.2 covers CP ClusterXL HA and PAN A/P (the common cases); A/A and VSLS are a later adapter. OP.0/OP.1 assess and plan for them regardless.",
       "decide_by": "OP.3 scoping (not OP.2.0 architecture freeze)",
-      "note": "Rebased from 'OP.2 contract freeze' on 2026-09-04, not resolved. PO classification 2026-09-04: NOT an OP.2.0 architecture freeze blocker -- Active/Active and VSLS semantics are outside the initial CLASS 2 scope; no VSLS assumption may enter the initial CP ClusterXL adapter (OP.2.C). OP.0 still assesses them. See docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md 'Identity invariants'. UPDATE 2026-09-04 (OP.0b S4-A'): real-env S8-B evidence establishes the approved VSX pair actually runs VSLS (Cluster Mode: Virtual System Load Sharing); OP.0b now collects per-VS readiness evidence and evaluates each VSID as an independent readiness unit (docs/history/phase/OP_0B_S4A_VSX_PER_VS_FAILOVER_DOMAIN_REVIEW.md). This decision's CLASS 2 scope is unchanged -- still deferred, still no VSID adapter, still OP.3 territory -- readiness and CLASS 2 execution are separate questions and only the former has moved."
+      "note": "Rebased from 'OP.2 contract freeze' on 2026-09-04, not resolved. PO classification 2026-09-04: NOT an OP.2.0 architecture freeze blocker -- Active/Active and VSLS semantics are outside the initial CLASS 2 scope; no VSLS assumption may enter the initial CP ClusterXL adapter (OP.2.C). OP.0 still assesses them. See docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md 'Identity invariants'. UPDATE 2026-09-04 (OP.0b S4-A'): real-env S8-B evidence establishes the approved VSX pair actually runs VSLS (Cluster Mode: Virtual System Load Sharing); OP.0b now collects per-VS readiness evidence and evaluates each VSID as an independent readiness unit (docs/history/phase/OP_0B_S4A_VSX_PER_VS_FAILOVER_DOMAIN_REVIEW.md). This decision's CLASS 2 scope is unchanged -- still deferred, still no VSID adapter, still OP.3 territory -- readiness and CLASS 2 execution are separate questions and only the former has moved.",
+      "detail": "docs/history/roadmap/decision_op_aa_vsls_scope.md"
     },
     {
       "id": "op_continuity_tolerance",
       "area": "OP.2 post-action verification",
       "status": "open",
       "question": "Session/connection continuity tolerance for post-action verification: fixed defaults, or operator-tunable per run? (Originally framed as the auto-rollback trigger; auto-rollback was removed by op_reversal_model on 2026-09-04, so the tolerance now bears only on whether a continuity observation can carry a verdict or a warning.)",
-      "options": [
-        "fixed default (e.g. sessions preserved >= ~90%, zero split-brain)",
-        "operator-tunable per run within bounds"
-      ],
-      "recommendation": "Fixed conservative default once real-cluster calibration exists (sessions preserved >= ~90%, zero split-brain, sync resumed); tunable-within-bounds only after that. Until decided, continuity observations are recorded on the action record and are not verdict-bearing; no numeric tolerance is invented; nothing they show triggers any action.",
       "decide_by": "OP.2.D pilot calibration, before any continuity observation becomes verdict-bearing (not OP.2.0 architecture freeze)",
-      "note": "Rebased from 'OP.2 contract freeze' on 2026-09-04, not resolved. PO classification 2026-09-04: NOT an OP.2.0 architecture freeze blocker -- continuity observations are recorded but not independently verdict-bearing; SUCCEEDED_WITH_WARNINGS was removed from the OP.2.0 state set until this is decided. See docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md 'Post-action verification'."
-    },
-    {
-      "id": "C-D1",
-      "area": "CON.x Operator Console",
-      "status": "decided",
-      "decision": "Approve as optional extra",
-      "decided_on": "2026-09-01",
-      "question": "Approve fastapi + uvicorn as an optional dependency set (requirements-console.txt), keeping the core CLI/report path at its current four dependencies?",
-      "options": [
-        "Approve as optional extra",
-        "Stdlib http.server only",
-        "Decline the console transport"
-      ],
-      "recommendation": "Approve. Boundary-level request validation is a security control and it is the same stack the later server control plane needs; the optional-extra pattern already exists for requirements-postgres.txt.",
-      "decide_by": "CON.1 contract review"
-    },
-    {
-      "id": "C-D2",
-      "area": "CON.x Operator Console",
-      "status": "decided",
-      "decision": "Cookieless per-launch bearer token in the URL fragment",
-      "decided_on": "2026-09-01",
-      "question": "Local authentication model for the console listener.",
-      "options": [
-        "Cookieless per-launch bearer token in the URL fragment",
-        "Cookie session",
-        "No auth, loopback bind only"
-      ],
-      "recommendation": "Cookieless per-launch bearer token. No cookie means no ambient credential, which makes the local-CSRF class structurally impossible rather than mitigated. 'It is only localhost' is the failure mode, not the control.",
-      "decide_by": "CON.1 contract review"
-    },
-    {
-      "id": "C-D3",
-      "area": "CON.x Operator Console",
-      "status": "decided",
-      "decision": "Add 'console'",
-      "decided_on": "2026-09-01",
-      "question": "Provenance vocabulary: add Provenance.CONSOLE = 'console', or reuse 'manual' for UI-triggered runs?",
-      "options": [
-        "Add 'console'",
-        "Reuse 'manual'"
-      ],
-      "recommendation": "Add 'console'. A UI-triggered device action must stay distinguishable from a CLI one in every manifest and audit record; conflating them destroys the audit trail on the first day it matters.",
-      "decide_by": "CON.2 contract review"
+      "note": "Rebased from 'OP.2 contract freeze' on 2026-09-04, not resolved. PO classification 2026-09-04: NOT an OP.2.0 architecture freeze blocker -- continuity observations are recorded but not independently verdict-bearing; SUCCEEDED_WITH_WARNINGS was removed from the OP.2.0 state set until this is decided. See docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md 'Post-action verification'.",
+      "detail": "docs/history/roadmap/decision_op_continuity_tolerance.md"
     },
     {
       "id": "C-D4",
       "area": "CON.x Operator Console",
       "status": "open",
       "question": "Maximum targets per operational-write request during the pilot.",
-      "options": [
-        "1 target per request",
-        "N targets per request",
-        "Fleet selection"
-      ],
-      "recommendation": "1. The pilot proves the path, not throughput; a per-request ceiling of one makes an accidental multi-device write structurally impossible. Revisit only with real pilot evidence.",
-      "decide_by": "CON.3 contract review"
+      "decide_by": "CON.3 contract review",
+      "detail": "docs/history/roadmap/decision_C-D4.md"
     },
     {
       "id": "C-D5",
       "area": "CON.x Operator Console",
       "status": "open",
       "question": "May the console run on the server before OIDC/RBAC exists?",
-      "options": [
-        "No - loopback operator workstation only",
-        "Yes, behind the reverse proxy"
-      ],
-      "recommendation": "No. Loopback only until the full DEPLOY.1 gate set passes; docker-compose.yml gains no console port mapping in this track.",
-      "decide_by": "CON.1 contract review"
+      "decide_by": "CON.1 contract review",
+      "detail": "docs/history/roadmap/decision_C-D5.md"
     },
     {
       "id": "C-D6",
       "area": "CON.x Operator Console",
       "status": "open",
       "question": "Mandatory operator reason text on every operational-write, and its retention?",
-      "options": [
-        "Mandatory, bounded, redaction-filtered, excluded from the support bundle",
-        "Optional",
-        "Not collected"
-      ],
-      "recommendation": "Mandatory (8-200 chars), filtered through the redaction registry before persistence, never in the support bundle. It is the difference between an audit log and a list of timestamps.",
-      "decide_by": "CON.3 contract review"
+      "decide_by": "CON.3 contract review",
+      "detail": "docs/history/roadmap/decision_C-D6.md"
     },
     {
       "id": "C-D7",
       "area": "CON.x Operator Console",
       "status": "open",
       "question": "May the scheduler policy be edited from the console?",
-      "options": [
-        "No - read-only view in CON.5",
-        "Yes, with confirmation"
-      ],
-      "recommendation": "No, not in this track. Editing the policy from a browser is a privilege-escalation path into unattended device contact and needs its own gate.",
-      "decide_by": "CON.5 contract review"
+      "decide_by": "CON.5 contract review",
+      "detail": "docs/history/roadmap/decision_C-D7.md"
     },
     {
       "id": "C-D8",
       "area": "CON.x Operator Console",
       "status": "open",
       "question": "Track identity: keep CON.x as its own roadmap track, or fold the work into DEV.x / 0.8.x?",
-      "options": [
-        "CON.x dedicated track",
-        "Fold into DEV.x",
-        "Fold into 0.8.x"
-      ],
-      "recommendation": "Keep CON.x. It is a delivery-surface track spanning several product themes; burying it in an engineering track hides an operator-visible capability from the roadmap.",
-      "decide_by": "roadmap review"
+      "decide_by": "roadmap review",
+      "detail": "docs/history/roadmap/decision_C-D8.md"
     },
     {
       "id": "D-V1",
       "area": "OP.0b.0 Vendor Failover Preflight Evidence",
       "status": "open",
       "question": "PAN conn-status/conn-ha1/conn-ha1-backup/conn-ha2 exhaustive value vocabulary and missing-field meaning. Does NOT block OP.0b.0 freeze as of 2026-09-03 (session 4) -- field-binding + nested structure are official-source CONFIRMED and a minimal fail-closed predicate (up = healthy, else/absent = not-safe) is frozen; this residual is real-env parser validation only.",
-      "options": [
-        "Confirm exhaustive vocabulary from official vendor documentation",
-        "Confirm from a bounded real-environment measurement (S2)"
-      ],
-      "recommendation": "Do not fill from generic product knowledge; resolve via the named source only. Not required before implementing S2.",
-      "decide_by": "S2 real-env"
+      "decide_by": "S2 real-env",
+      "detail": "docs/history/roadmap/decision_D-V1.md"
     },
     {
       "id": "D-V2",
       "area": "OP.0b.0 Vendor Failover Preflight Evidence",
       "status": "open",
       "question": "PAN state-sync/*-compat/preemptive exhaustive vocabulary and last-error-* binding. Does NOT block OP.0b.0 freeze as of 2026-09-03 (session 4) -- field-binding CONFIRMED for most of the family via an official PANW source; preemption sub-fields feed check 6, already non-blocking.",
-      "options": [
-        "Confirm exhaustive vocabulary from official vendor documentation",
-        "Confirm from a bounded real-environment measurement (S2)"
-      ],
-      "recommendation": "Do not fill from generic product knowledge; resolve via the named source only. Not required before implementing S2.",
-      "decide_by": "S2 real-env"
+      "decide_by": "S2 real-env",
+      "detail": "docs/history/roadmap/decision_D-V2.md"
     },
     {
       "id": "D-V3a",
       "area": "OP.0b.0 Vendor Failover Preflight Evidence",
       "status": "open",
       "question": "PAN local-info/peer-info serial-num semantics inside show high-availability state (docs-only half). STILL_UNKNOWN after four sessions (no official source, incl. an official PANW GitHub repo's captured example, names this field). Does NOT block OP.0b.0 freeze -- the successor serial-keyed pair-identity model is already specified NOT FROZEN until this closes AND D-V3b matches; the hostname-keyed fallback stands. Blocks the successor identity model and PAN CLASS 2 specifically.",
-      "options": [
-        "Official GitHub mirror search (the technique that closed D-V4/D-V7a)",
-        "Human-fetched official page body"
-      ],
-      "recommendation": "Do not fill from generic product knowledge or SDK property-name correspondence alone; resolve via a named source only. Not a freeze blocker.",
-      "decide_by": "human-assisted or GitHub-mirror official doc confirmation, pre-CLASS-2"
+      "decide_by": "human-assisted or GitHub-mirror official doc confirmation, pre-CLASS-2",
+      "detail": "docs/history/roadmap/decision_D-V3a.md"
     },
     {
       "id": "D-V3b",
       "area": "OP.0b.0 Vendor Failover Preflight Evidence",
       "status": "open",
       "question": "PAN peer-serial real correspondence (B2) on the approved real pair. B2 NOT ESTABLISHED; mismatch root cause UNKNOWN. Does NOT block OP.0b.0 freeze (same reasoning as D-V3a). Blocks the successor identity model and PAN CLASS 2 specifically -- B2 is the minimum CLASS-2 identity input.",
-      "options": [
-        "Real-environment investigation on the approved PAN pair"
-      ],
-      "recommendation": "Do not resolve as a side effect of an unrelated build; do not normalize/coerce serials to force a match.",
       "decide_by": "S0 real-env, hardware-blocked",
-      "note": "2026-09-04 (OP.0b S8-C session): the operator additionally captured `show high-availability all` manually (outside the approved S8-C battery, not runtime-authorized) and reported reciprocal serial correspondence on both members. NOT treated as closing this decision -- not independently re-verified by this session's own code path, and appears to conflict with the earlier S0 finding (one member MISMATCH, project/backlog.json pan_serial_representation_identity_evidence_closure). Recorded as potentially useful future evidence only; root cause of the earlier discrepancy remains UNKNOWN and is not reconciled here."
-    },
-    {
-      "id": "D-V4",
-      "area": "OP.0b.0 Vendor Failover Preflight Evidence",
-      "status": "decided",
-      "decision": "CLOSED_BY_DOCS -- running-sync/running-sync-enabled confirmed at group scope, sourced from show high-availability state (already-REQUIRED P2), via a verbatim read of the official PaloAltoNetworks pan-os-upgrade-assurance GitHub repository.",
-      "decided_on": "2026-09-03",
-      "question": "PAN running-sync location (state XML sibling vs all).",
-      "options": [
-        "Confirm from official vendor documentation"
-      ],
-      "recommendation": "Closed; no further action needed for freeze. Parser implementation (S2) remains owed.",
-      "decide_by": "resolved -- official PaloAltoNetworks GitHub source"
+      "note": "2026-09-04 (OP.0b S8-C session): the operator additionally captured `show high-availability all` manually (outside the approved S8-C battery, not runtime-authorized) and reported reciprocal serial correspondence on both members. NOT treated as closing this decision -- not independently re-verified by this session's own code path, and appears to conflict with the earlier S0 finding (one member MISMATCH, project/backlog.json pan_serial_representation_identity_evidence_closure). Recorded as potentially useful future evidence only; root cause of the earlier discrepancy remains UNKNOWN and is not reconciled here.",
+      "detail": "docs/history/roadmap/decision_D-V3b.md"
     },
     {
       "id": "D-V5a",
       "area": "OP.0b.0 Vendor Failover Preflight Evidence",
       "status": "open",
       "question": "CP ClusterXL failover-statistics exact command flag syntax (history-depth option) and full Clish/Expert schema parity. Does NOT block OP.0b.0 freeze as of 2026-09-03 (session 4) -- command/purpose/version-map/reset-exclusion are official-source confirmed; a minimal count/reason/last-time parser contract is frozen (extra columns safely ignorable). Command-gate-package work only.",
-      "options": [
-        "Official GitHub mirror search",
-        "Human-fetched official page body",
-        "OP.0b.1 gate-package research"
-      ],
-      "recommendation": "Not required before freeze; required before OP.0b.1 approves the exact command string.",
-      "decide_by": "OP.0b.1 gate package + S8"
-    },
-    {
-      "id": "D-V5b",
-      "area": "OP.0b.0 Vendor Failover Preflight Evidence",
-      "status": "decided",
-      "decision": "Not load-bearing -- the frozen minimum battery runs failover-statistics only at the physical/VS0 level (same as the rest of the ClusterXL battery), never per-VS. The source pack's VSX-applicability question has no frozen check that depends on its answer.",
-      "decided_on": "2026-09-03",
-      "question": "CP VSX failover-statistics applicability (VS0-only / per-VS / unsupported).",
-      "options": [
-        "N/A -- not required by the frozen battery"
-      ],
-      "recommendation": "Dropped from the active blocking list.",
-      "decide_by": "resolved -- not load-bearing"
+      "decide_by": "OP.0b.1 gate package + S8",
+      "detail": "docs/history/roadmap/decision_D-V5a.md"
     },
     {
       "id": "D-V6",
       "area": "OP.0b.0 Vendor Failover Preflight Evidence",
       "status": "open",
       "question": "CP exact cphaprob -l/-i/-ia differentiation and cphaprob state exact field set. Does NOT block OP.0b.0 freeze as of 2026-09-03 (session 4) -- cphaprob -ia list confirmed a complete pnote enumeration (contradicting an earlier problem-filtered hypothesis); minimal problem/no-problem predicate frozen; cphaprob state was already OPTIONAL/corroboration-only.",
-      "options": [
-        "Official GitHub mirror search",
-        "Human-fetched official page body",
-        "OP.0b.1 gate-package research"
-      ],
-      "recommendation": "Not required before freeze; nice-to-have precision for OP.0b.1.",
-      "decide_by": "OP.0b.1 gate package + S5"
-    },
-    {
-      "id": "D-V7a",
-      "area": "OP.0b.0 Vendor Failover Preflight Evidence",
-      "status": "decided",
-      "decision": "CLOSED_BY_DOCS -- \"Maintain current active\" vs \"Switch to higher priority Cluster Member\" behavioral semantics confirmed precisely; Cluster-Mode-string non-correlation already documented (sk180184).",
-      "decided_on": "2026-09-03",
-      "question": "CP recovery/preemption behavior semantics.",
-      "options": [
-        "Confirm from official vendor documentation"
-      ],
-      "recommendation": "Closed; no further action needed for freeze.",
-      "decide_by": "resolved -- official Check Point ClusterXL Admin Guide"
+      "decide_by": "OP.0b.1 gate package + S5",
+      "detail": "docs/history/roadmap/decision_D-V6.md"
     },
     {
       "id": "D-V7b",
       "area": "OP.0b.0 Vendor Failover Preflight Evidence",
       "status": "open",
       "question": "CP configured-recovery machine-readable read surface. STILL_UNKNOWN after four sessions -- the Simple Cluster API is officially documented as not exposing every cluster-object feature (\"use SmartConsole\"), and the official CheckPointSW Ansible simple-cluster module's full parameter list has no recovery/failback field. Does NOT block OP.0b.0 freeze -- check 6 (preemption_known) was originally specified \"recorded, non-blocking\" (session 1) in the design prose. Blocks CLASS 2 specifically (bug register CP-3, P0 before CLASS 2).",
-      "options": [
-        "Official GitHub mirror search (Check Point generic-object API schema, unconfirmed to exist)",
-        "Human-fetched official page body"
-      ],
-      "recommendation": "Do not invent an attribute name. Not a freeze blocker; required before CLASS 2.",
       "decide_by": "human-assisted or GitHub-mirror official doc confirmation, pre-CLASS-2",
       "implementation_note_2026_09_05": "OP.2.1 (docs/history/phase/OP_2_1_CP_CLUSTERXL_MUTATION_COMMAND_GATE.md) found this 'non-blocking' framing does not hold in the implemented readiness engine: utils/failover/preflight_readiness.py forces preemption_known to INSUFFICIENT_EVIDENCE while D-V7b is open, and utils/failover/assessment.py::_verdict_for requires ALL seven stop-conditions to PASS for a positive verdict -- there is no 'advisory check' concept in the code. D-V7b is therefore fully blocking in practice today, not merely recorded. Reconciling the design text with the implementation (or deciding the implementation should change) is an OP.0a/OP.1 readiness-layer decision (op_degraded_verdict), not something OP.2.1 had authority to resolve -- flagged here, not fixed.",
-      "readiness_policy_amendment_2026_09_05": "RESOLVED, for the readiness roll-up's ROLE only (OP.2.1b, docs/history/phase/OP_2_1B_CP_PILOT_READINESS_POLICY_AMENDMENT.md): the product owner made preemption_known a closed-list, exact-reason advisory-exempt check for Check Point specifically (utils/failover/assessment.ADVISORY_EXEMPT_CHECKS) -- it stays INSUFFICIENT_EVIDENCE, visible, but no longer blocks an otherwise-positive verdict. This row's own vendor question (is there ever a supported CP read for the recovery/preemption setting) stays STILL_UNKNOWN and open -- not resolved, only reclassified as non-blocking. PAN's equivalent check is deliberately NOT exempted (a supported read exists there)."
+      "readiness_policy_amendment_2026_09_05": "RESOLVED, for the readiness roll-up's ROLE only (OP.2.1b, docs/history/phase/OP_2_1B_CP_PILOT_READINESS_POLICY_AMENDMENT.md): the product owner made preemption_known a closed-list, exact-reason advisory-exempt check for Check Point specifically (utils/failover/assessment.ADVISORY_EXEMPT_CHECKS) -- it stays INSUFFICIENT_EVIDENCE, visible, but no longer blocks an otherwise-positive verdict. This row's own vendor question (is there ever a supported CP read for the recovery/preemption setting) stays STILL_UNKNOWN and open -- not resolved, only reclassified as non-blocking. PAN's equivalent check is deliberately NOT exempted (a supported read exists there).",
+      "detail": "docs/history/roadmap/decision_D-V7b.md"
     },
     {
       "id": "D-V8",
       "area": "OP.0b.0 Vendor Failover Preflight Evidence",
       "status": "open",
       "question": "CP hotfix parity command (optional check). Does not block OP.0b.0 freeze.",
-      "options": [
-        "Confirm from official vendor documentation",
-        "Confirm from a bounded real-environment measurement (S0/S2/S8 as applicable)"
-      ],
-      "recommendation": "Do not fill from generic product knowledge; resolve via the named source only.",
-      "decide_by": "Gaia CLI reference"
-    },
-    {
-      "id": "D-V9a",
-      "area": "OP.0b.0 Vendor Failover Preflight Evidence",
-      "status": "decided",
-      "decision": "PARTIAL, but does not block freeze -- the safe fail-closed interpretation (a contradictory non-VS0 cphaprob stat read is UNKNOWN/RELATIONSHIP_INCONSISTENT, never KNOWN_BAD, never a per-VS action input) was already written into this contract at session 1. Affected releases/fix version/official alternative remain unconfirmed but are not load-bearing for that interpretation.",
-      "decided_on": "2026-09-03",
-      "question": "CP VSX sk165432 documented caveat semantics.",
-      "options": [
-        "Confirm from official vendor documentation"
-      ],
-      "recommendation": "No further action needed for freeze.",
-      "decide_by": "resolved -- interpretation already frozen"
+      "decide_by": "Gaia CLI reference",
+      "detail": "docs/history/roadmap/decision_D-V8.md"
     },
     {
       "id": "D-V9b",
       "area": "OP.0b.0 Vendor Failover Preflight Evidence",
       "status": "open",
       "question": "sk165432 applicability to this estate's version. Does NOT block OP.0b.0 freeze -- the frozen interpretation (see D-V9a) is safe regardless of the answer, and a VS is never a CLASS-2 execution target either way (domain invariant 9).",
-      "options": [
-        "Confirm from a bounded real-environment measurement (S8)"
-      ],
-      "recommendation": "Informational/confirmatory only.",
-      "decide_by": "S8"
-    },
-    {
-      "id": "D-F3",
-      "area": "OP.0b.0 Vendor Failover Preflight Evidence",
-      "status": "decided",
-      "decision": "Advisory-exempt, permanently -- no numeric threshold invented (OP.2.1b, 2026-09-05, docs/history/phase/OP_2_1B_CP_PILOT_READINESS_POLICY_AMENDMENT.md). The collected A8/P2 flap/failover counters are cumulative since an operator-triggered reset with no recency/window semantics; the product owner declined to fabricate a threshold against evidence that cannot support one. flap_history stays INSUFFICIENT_EVIDENCE, visible, for both vendors, forever -- but is now a closed-list, exact-reason entry in utils/failover/assessment.ADVISORY_EXEMPT_CHECKS, so it no longer independently blocks a positive readiness verdict.",
-      "decided_on": "2026-09-05",
-      "question": "Numeric flap/failover-frequency threshold for check 7 (flap_history), both vendors -- new 2026-09-03 (session 4), parallel to D-F1/D-F2. Does not block freeze: the qualitative meaning is fixed (exceeding an as-yet-undecided threshold is unsafe; an undecided threshold means check 7 cannot yet compute a real PASS -- fail-closed, never silently permissive).",
-      "options": [
-        "Fixed conservative default (mirroring op_continuity_tolerance's pattern)",
-        "Operator-tunable within bounds",
-        "No threshold, ever -- advisory-exempt (DECIDED 2026-09-05)"
-      ],
-      "recommendation": "Superseded 2026-09-05: no threshold is invented; the check stays honest and permanently non-blocking instead.",
-      "decide_by": "resolved -- product-owner policy decision, OP.2.1b",
-      "implementation_note_2026_09_05": "OP.2.1 confirmed via utils/failover/assessment.py::_verdict_for's own docstring that flap_history can never PASS while D-F3 is open, independently making a positive verdict unreachable (alongside D-V7b, above) for any CP entity -- true for a bounded local pilot exactly as much as for production. No design-vs-implementation tension here (unlike D-V7b): the design parent always treated flap/instability as a hard stop-condition. Superseded the same day by the readiness_policy_amendment note below."
-    },
-    {
-      "id": "op_reversal_model",
-      "area": "OP.2 Controlled Failover Execution",
-      "status": "decided",
-      "question": "Reported contradiction inside the design parent, raised per AGENTS.md 'Authority hierarchy' rather than silently reconciled. FAILOVER_ENGINE_ARCHITECTURE.md sections 5/7/8 require automatic rollback on a failed or partial transition (and section 6 defines a FAILED_ROLLED_BACK outcome); section 10.1 items 5-7 require explicit human confirmation per action, exactly one action per authorised run, and UNKNOWN as a first-class outcome that is never a reason to re-issue. An automatic rollback fires precisely when the entity's state is unverified, so it is a second CLASS 2 mutation, unconfirmed, against an unknown state. Which text governs?",
-      "options": [
-        "Reversal is a NEW typed CLASS 2 action (own authorization, fresh preflight, confirmation, lock, single submission, verification, audit); automatic rollback and FAILED_ROLLED_BACK are removed from the model",
-        "Keep automatic rollback as designed in sections 5/7/8 and narrow section 10.1 items 5-7 accordingly"
-      ],
-      "recommendation": "Reversal as a new typed action. The situation an auto-rollback exists to handle is the situation in which the postcondition is unknown, and issuing an unconfirmed second mutation against an unknown state is the worst available action; section 10.1 is also the later, explicitly dated safety contract and is the one the frozen OP.0b.0 CLASS 2 handoff cites. Drafted as principle P12 of docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md (reviewed 2026-09-04).",
-      "decide_by": "OP.2.0 contract freeze",
-      "decision": "Reversal/failback is a NEW typed CLASS 2 action: new authorization, fresh same-workflow preflight, new confirmation, HA-entity lock, one new mutation attempt, independent post-action verification, independent audit record. No automatic rollback for HA failover; FAILED_ROLLED_BACK is not a state. FAILOVER_ENGINE_ARCHITECTURE.md section 10.2 records the supersession of its sections 1-8 auto-rollback wording.",
-      "decided_on": "2026-09-04"
-    },
-    {
-      "id": "op_outcome_unknown_recovery",
-      "area": "OP.2 Controlled Failover Execution",
-      "status": "decided",
-      "question": "What happens to an operational HA entity after a CLASS 2 action terminates OUTCOME_UNKNOWN (mutation boundary crossed, postcondition not independently determinable -- including the process-crash-after-submission case, which the product cannot distinguish from a transport timeout after submission)? FAILOVER_ENGINE_ARCHITECTURE.md section 10.1 item 7 makes UNKNOWN first-class but does not say what the entity's subsequent state is, and console/jobs.py's existing crash sweep resolves an orphaned running record to 'failed' -- correct for a class 0 collection, and the single most dangerous possible answer for a class 2 action, since it asserts the mutation did not happen from evidence that only proves the process died.",
-      "options": [
-        "Quarantine the HA entity against further CLASS 2 actions until an explicit audited operator acknowledgement; class 0 reads stay permitted; terminal state is never rewritten by a later observation",
-        "Allow a new CLASS 2 action once a fresh preflight returns a positive verdict, with no acknowledgement step"
-      ],
-      "recommendation": "Quarantine until acknowledged. A green readiness verdict answers 'is the entity safe to act on', not 'did my previous action execute', and letting the first silently clear the second is how a double failover happens. A later class 0 observation appends to the action record and never rewrites its terminal state. Drafted as principle P10 of docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md (reviewed 2026-09-04).",
-      "decide_by": "OP.2.0 contract freeze",
-      "decision": "Quarantine until acknowledged. After the mutation boundary is crossed, process death, worker death, transport timeout or a lost response is OUTCOME_UNKNOWN -- never merely FAILED -- unless independent evidence proves a more specific terminal outcome. The entity stays quarantined (a derived predicate over the unacknowledged OUTCOME_UNKNOWN action record, not a lock or entity state) until an explicit, authorized, audited operator acknowledgement; class 0 reads stay permitted; a later observation appends and never rewrites the terminal state. Class 0's sweep_orphaned_running -> failed stays valid for class 0 only; CLASS 2 does not inherit it.",
-      "decided_on": "2026-09-04"
-    },
-    {
-      "id": "pcp_console_registry_write_gate",
-      "area": "PCP.x Product Control Plane",
-      "status": "decided",
-      "question": "SCOPED 2026-09-05 to the LOCAL controlled loopback console profile only. May the local-loopback Operator Console accept an enrollment write -- manual (endpoint + opaque profile references) or candidate-based (closed candidate_id) -- before DEPLOY.1A? Server/production enrollment exposure is a separate decision (pcp_server_enrollment_exposure).",
-      "options": [
-        "(a) neither intent ships from the console before DEPLOY.1A -- both stay CLI-first through PCP.1/PCP.2",
-        "(b) candidate-based enrollment only, permitted pre-DEPLOY.1A on the strength of the closed candidate id plus typed confirmation + audit record; manual entry still waits",
-        "(c) both permitted pre-DEPLOY.1A with typed confirmation + audit record + mandatory strict first-contact trust preflight for any resulting device"
-      ],
-      "recommendation": "No pre-decision for either intent. Recommendation deferred to the security lead's reading of the exclusions precedent at the PCP.4 contract review. CLI-only enrollment in PCP.1/PCP.2 does not depend on this decision and proceeds regardless.",
-      "decide_by": "DECIDED 2026-09-05 at the M0 architecture freeze (was: PCP.4 contract review)",
-      "note": "Scoped deliberately: this row no longer carries the production question. Server/production enrollment exposure is tracked as pcp_server_enrollment_exposure and remains blocked on DEPLOY.1A OIDC/RBAC.",
-      "decided_on": "2026-09-05",
-      "decision": "DECIDED -- YES for BOTH manual and candidate-based enrollment, in the explicitly controlled loopback runtime profile ONLY, and only under every condition frozen in docs/design/LOCAL_CONTROL_PLANE_RUNTIME_AND_ENROLLMENT.md section 9.1 and CON.0 section 4.1/7.11: closed typed enrollment intent (endpoint, opaque credential-profile reference, opaque trust-profile reference, permitted tags, and/or a closed candidate id) and nothing else; no credential payload, command, argv, filesystem path or arbitrary transport field; no device I/O in the enrollment HTTP request; first contact as a separate queued CLASS 0 read-only job; strict transport trust before credential submission; positive-evidence vendor/identity; UNKNOWN/ambiguous/contradictory identity persists no registry record; operator review of the resolved identity; explicit confirmation; immutable audit durable before registry mutation; the one existing DeviceRegistry enrollment path with duplicate detection and the mutation-lock contract unchanged; NO automatic-write exemption for candidate-based enrollment. The permission is conditioned on the loopback binding itself and does not survive into server mode. This decision authorizes no code: movement M9 implements it."
+      "decide_by": "S8",
+      "detail": "docs/history/roadmap/decision_D-V9b.md"
     },
     {
       "id": "pcp_server_enrollment_exposure",
       "area": "Product Control Plane / deployment authorization",
       "status": "open",
       "question": "May console enrollment (manual or candidate-based) be exposed in non-loopback / server mode, i.e. beyond the explicitly controlled local profile decided in pcp_console_registry_write_gate?",
-      "options": [
-        "Blocked until DEPLOY.1A supplies real OIDC/RBAC authorization (current position)",
-        "Permitted earlier under some other compensating control (not proposed by any frozen contract)"
-      ],
-      "recommendation": "BLOCKED until DEPLOY.1A. CON.0 C-D5 and section 4.1 both condition the local enrollment permission on the loopback binding itself; server mode re-asks the question rather than inheriting the answer. DEPLOY.1A/M14 does not retroactively validate any local shortcut.",
       "decide_by": "DEPLOY.1A OIDC/RBAC authorization boundary (CON.6 / DEPLOY.1 gate set)",
-      "note": "Created 2026-09-05 at the M0 architecture freeze so the local decision cannot be read as production authority. Splitting the two questions is the point of this row."
-    },
-    {
-      "id": "pcp_auto_enrollment_policy",
-      "area": "PCP.x Product Control Plane",
-      "status": "decided",
-      "question": "Should a future opt-in 'trusted management source auto-enrolls candidates' policy exist, and under what audit/allowlist?",
-      "options": [
-        "never -- explicit enrollment only",
-        "opt-in per management source, audited, allowlisted, default off"
-      ],
-      "recommendation": "Not in the first slices; design only after PCP.2 shows real candidate volume. 'Everything discovered becomes authoritative inventory' is not the default architecture in any case.",
-      "decide_by": "DECIDED 2026-09-05 at the M0 architecture freeze (was: PCP.2 closure)",
-      "decided_on": "2026-09-05",
-      "decision": "DECIDED FOR THE CURRENT HORIZON -- NO automatic persistent enrollment. No discovery source and no 'trusted management source' policy may automatically create a persistent enrolled device. Manual endpoint enrollment and candidate-based enrollment BOTH require positive identity evidence, operator preview and explicit confirmation. A future auto-enrollment capability is a separately gated capability that requires a NEW Product Owner decision; 'not now' is explicitly not a permanent prohibition, and this row must be reopened (or a successor created) rather than silently reinterpreted."
-    },
-    {
-      "id": "pcp_local_control_plane_storage",
-      "area": "Product Control Plane / local storage sequencing",
-      "status": "decided",
-      "decided_on": "2026-09-05",
-      "question": "For the approved LOCAL control-plane sequence, where does new control-plane metadata live, and does the PCP.1 Device Registry move with it?",
-      "options": [
-        "A -- registry stays filesystem JSON; SQLite backs only new local control-plane metadata",
-        "B -- one governed movement migrates registry plus job/control-plane metadata to SQLite",
-        "C -- no SQLite yet; continue with filesystem concerns for another slice"
-      ],
-      "recommendation": "Option A -- it does not reopen PCP.1's frozen section 21 contract, and puts the new engine where the new query-shaped requirements are.",
-      "decision": "DECIDED -- Option A. The PCP.1 Device Registry REMAINS on its frozen filesystem JSON backend. A new SQLite store owns ONLY new local control-plane metadata: job definitions once durable, job/run lifecycle records, schedules, capability projections, idempotency/submission metadata, control-plane runtime metadata. It owns NONE of: Device Registry rows, credential payloads, trust secrets, raw configuration, backup bytes, CAS evidence objects, OP.2 action authority. The registry stays authoritative at job admission and again immediately before execution; a disabled or unresolvable target causes refusal/abort before contact with the reason recorded, and no copied endpoint is ever retained as fallback authority. THIS IS NOT A PRODUCTION ENGINE SELECTION -- see pcp_storage_engine. A future Device Registry backend migration remains a governed storage movement that must prove semantic parity for normalization, duplicate handling, lifecycle, concurrency, lock/transaction behaviour, corrupt/unsupported-state failure and rollback. This decision authorizes no code: movement M4 implements it under its own contract.",
-      "decide_by": "DECIDED 2026-09-05 at the M0 architecture freeze"
+      "note": "Created 2026-09-05 at the M0 architecture freeze so the local decision cannot be read as production authority. Splitting the two questions is the point of this row.",
+      "detail": "docs/history/roadmap/decision_pcp_server_enrollment_exposure.md"
     },
     {
       "id": "pcp_storage_engine",
       "area": "PCP.x Product Control Plane",
       "status": "open",
       "question": "PRODUCTION-SCOPED. Which engine backs the registry/job plane IN PRODUCTION, against the section 10 criteria? (The local sequencing question is separate and decided -- see pcp_local_control_plane_storage.)",
-      "options": [
-        "extend the existing opt-in PostgreSQL evidence backend",
-        "another engine chosen against the criteria",
-        "filesystem-only until measured need"
-      ],
-      "recommendation": "Still defer. The local Option A decision deliberately does NOT select the production engine, and SQLite is not proposed as one. Decide with DEV.4.6 migrations/roles.",
       "decide_by": "PCP.5 contract freeze / DEV.4.6 migrations and database roles",
-      "note": "Kept OPEN at the 2026-09-05 M0 freeze. Do not read the local SQLite decision as a production engine selection."
-    },
-    {
-      "id": "pcp_first_contact_trust_policy",
-      "area": "PCP.x Product Control Plane",
-      "status": "decided",
-      "question": "Must the first-contact job for a MANUALLY enrolled endpoint require strict CP host-key / PAN CA trust even in the local development profile, so that real credentials are never presented to a mistyped or hostile endpoint?",
-      "options": [
-        "strict trust mandatory for any endpoint not corroborated by a management-plane candidate",
-        "existing compat-mode default applies to manual endpoints too"
-      ],
-      "recommendation": "Strict trust mandatory for non-corroborated endpoints; compat mode stays available only for candidate-corroborated endpoints in the dev profile.",
-      "decide_by": "DECIDED 2026-09-05 at the M0 architecture freeze (was: PCP.2 contract review)",
-      "decided_on": "2026-09-05",
-      "decision": "DECIDED -- strict transport trust is REQUIRED before credentials are submitted to EVERY endpoint, including management-plane candidates. Candidate provenance may supply or select an approved trust profile; it may NOT waive SSH host-key or TLS trust. Prohibited: TOFU, automatic trust acceptance, certificate verification bypass, credential-first probing. The approved Check Point and Palo Alto trust-establishment mechanics are movement M8's implementation contract, over the existing transport seams (utils/cp_ssh_trust.py, utils/pan_tls_trust.py) -- no new credential or network path."
-    },
-    {
-      "id": "ui2_phase0_decide_2026_09_09",
-      "area": "UI2.x",
-      "status": "decided",
-      "question": "UI 2.0 Phase 0 DECIDE: runtime direction, JOB-UNCERTAIN-OUTCOME, UI-OPERATIONAL-RUN-NOW, APPROVAL-MODEL, RAW-RETENTION, FREEZE-SLICING, HISTORY-IMPORT, IN-FLIGHT-LINE-1, DIRECTORY-POSTURE, RESTORE-IN-RELEASE-1, FIRST-CAPABILITY",
-      "options": [
-        "see docs/design/UI2_0_BASELINE_CONTRACT.md §2"
-      ],
-      "recommendation": "Recorded rulings; DIRECTORY-POSTURE conditional on corporate verification; RAW-RETENTION default NO; HISTORY-IMPORT deferred.",
-      "decided_on": "2026-09-09",
-      "decision": "docs/design/UI2_0_BASELINE_CONTRACT.md (FROZEN -- PRODUCT OWNER APPROVED 2026-09-09)"
+      "note": "Kept OPEN at the 2026-09-05 M0 freeze. Do not read the local SQLite decision as a production engine selection.",
+      "detail": "docs/history/roadmap/decision_pcp_storage_engine.md"
     }
   ]
 }

@@ -1,0 +1,11 @@
+# html_render_performance — Opt-in HTML render stage-timing instrumentation + measured profiling report (profiling only)
+
+## Summary
+
+New _stage_timer context manager in utils/html_export.py wraps every render stage (read_unified_json, each of the five payload builders, load_compliance_history, read_template_files, fill_template, write_output_html); a true no-op (no perf_counter() call) when disabled. Enabled via profile=True kwarg or SECURITYEXPERT_HTML_RENDER_PROFILE env var (zero main.py call-site change needed for the env-var path); scripts/render_uitest.py gained a --profile flag. Measured on the uitest 16-device fixture across 3 runs: fill_template dominates (~40-46% of total), build_compliance_posture second (~27-34%), write_output_html noisy third (~9-20%). Critical documented caveat: render_uitest.py monkeypatches build_configuration_ui_payload/build_crypto_posture/build_discovery_capability_payload to instant stubs, so their real per-device cost is invisible in this measurement -- a real --render-only profile against production fleet size was not reachable this session (no prior real checkpoint artifact exists in this cloud environment) and remains owed before any optimization touches those three. Optimization itself deliberately out of scope; split into html_render_optimization, scoped from these findings.
+
+## Evidence
+
+- **automated**: 6 new tests in tests/test_phase0_6_x_html_render_performance.py: opt-in gating (default off, profile=True, env var, kwarg-overrides-env-var precedence), and a full-HTML-diff proof that the rendered artifact is identical with profiling on vs off (timestamps normalized out). py -m pytest -q: 616 passed, 2 skipped, 2 failed (both pre-existing and unrelated, same two tests already documented against the unmodified baseline in every prior 0.6.x closure this session). Net +5 from baseline 611, zero regressions.
+- **privacy_gate**: Profile output is stage name + duration only -- no device identity, credential, or raw configuration.
+- **real_env**: not applicable to the profiling instrumentation itself; the real-fleet-scale profile it was meant to also capture was not reachable in this cloud session (no prior real checkpoint artifact) and remains owed, tracked alongside html_render_optimization.
