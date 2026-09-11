@@ -1,0 +1,1 @@
+-- B1-1 baseline: the control-plane schema is introduced by B1-2.

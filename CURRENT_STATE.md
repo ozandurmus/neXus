@@ -5,8 +5,8 @@ see `AGENTS.md`/`AI_START_HERE.md`. **Predecessor build detail lives in
 `project/build_history.json`** (structured, newest-first) and its linked
 docs under `docs/history/`; `docs/history/INDEX.md` is the one-line timeline.
 
-- **Checkpoint:** 2026-09-10, `ui2_b1_01_contract_status_reconciliation` — **AUTOMATED_VALIDATED**: B1-1 secret profiles, isolated Testcontainers roles/DSNs, cold-cache CI resolution, and CycloneDX SBOM acceptance are explicit; the contract is FROZEN for implementation. No UI2 source or device behavior changed. Detail: `docs/design/UI2_0_B1_01_SKELETON_CI_DOCKER_CONTRACT.md` and `project/build_history.json`.
-- **Next** (`now_next.next`): `ui2_b1_01_skeleton_ci_docker` — implement the frozen Java skeleton, isolated CI, Docker image, Testcontainers/Flyway harness, and architecture checks. `m7_real_device_targeted_
+- **Checkpoint:** 2026-09-11, `ui2_b1_01_skeleton_ci_docker` — **IN_PROGRESS**: minimal Java skeleton, role-gated runtime, CI, multi-stage image, OpenShift manifests, and CRC overlay implemented. CRC process startup is reported, but Flyway lifecycle, Testcontainers role separation, architecture enforcement, image inspection, secret-profile coverage, SBOM evidence and privacy/state reconciliation remain open. Detail: `docs/design/UI2_0_B1_01_SKELETON_CI_DOCKER_CONTRACT.md` and `project/build_history.json`.
+- **Next** (`now_next.next`): `ui2_b1_01m_feature_service_topology` — after B1-1, reconcile the requested v1 scope and freeze service boundaries before schema implementation. Scope request, not execution authority: [v1 brief](docs/design/UI2_0_V1_SCOPE_AND_SERVICE_TOPOLOGY_BRIEF.md). `m7_real_device_targeted_
   collect_now` **AUTOMATED_VALIDATED 2026-09-08**, real-device confirmation
   pending Product Owner execution. `op2_c_cp_clusterxl_adapter_scoping`
   stays `upcoming`/`blocked`. `event_signal_intake` stays `in_progress` —
@@ -48,7 +48,7 @@ test-enforced boundaries.
 | 4 — policy / deployment / remediation | prohibited | — |
 ## Active build
 
-See checkpoint above for `ui2_b1_01_contract_status_reconciliation`, the current
+See checkpoint above for `ui2_b1_01_skeleton_ci_docker`, the current
 build. Full detail: `project/build_history.json`.
 
 Predecessors, all **MERGED**, detail in `project/build_history.json` /

@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "current_build": "ui2_b1_01_contract_status_reconciliation",
+  "current_build": "ui2_b1_01_skeleton_ci_docker",
   "current_track": "PCP.x",
   "progress_contract": "Weighted acceptance-criterion completion. Percentages describe the declared roadmap, not calendar time or delivery ETA.",
   "tracks": [
@@ -150,22 +150,23 @@
   "now_next": {
     "horizon_contract": "NOW is exactly one build. NEXT is exactly one. Everything else is an `upcoming` row carrying its own true status: planned = AFTER, blocked = waiting on a named external gate, deferred = consciously postponed. `now.build` must equal the newest project/build_history.json record -- utils.project_plan enforces it.",
     "now": {
-      "build": "ui2_b1_01_contract_status_reconciliation",
-      "title": "UI2 B1-1 -- contract status and freeze-blocker reconciliation",
-      "status": "automated_validated",
+      "build": "ui2_b1_01_skeleton_ci_docker",
+      "title": "UI2 B1-1 -- skeleton, CI, Docker and CRC implementation",
+      "status": "in_progress",
       "started": "2026-09-10",
-      "goal": "Resolve B1-1 freeze blockers and freeze the skeleton, CI, Docker, and Testcontainers contract before UI2 source implementation.",
+      "goal": "Complete the frozen B1-1 implementation and validation gates without introducing device behavior or Line-1 dependencies.",
       "notes": [
-        "Secret profiles, distinct migration/application roles, cold-cache dependency resolution, and CycloneDX SBOM acceptance are explicit. No UI2 source or device behavior changed."
+        "CRC real-environment service startup is validated. Docker-dependent Testcontainers integration remains open on this host; worker, scheduler, and migration-job runtime validation remain open."
       ]
     },
     "next": {
-      "build": "ui2_b1_01_skeleton_ci_docker",
-      "title": "UI2 B1-1 -- skeleton, CI and Docker implementation",
+      "build": "ui2_b1_01m_feature_service_topology",
+      "title": "UI2 B1-1M -- feature-service topology decision",
       "status": "planned",
       "notes": [
-        "Implement only the frozen B1-1 contract: Java skeleton, isolated CI workflow, Docker image, Testcontainers/Flyway harness, and architecture checks.",
-        "Exact dependency versions must be pinned and validated. No device behavior, Line-1 workflow change, or remote Git action is authorized by the implementation movement."
+        "Starts immediately after B1-1 reaches DONE; decide and freeze domain service boundaries before B1-2 schema work.",
+        "Candidate boundaries are control-plane, configuration, compliance, backup, scheduler, and worker; no service split is authorized until the topology contract is frozen.",
+        "2026-09-11 requested v1 scope: existing Project Plan visibility, reliable backup/storage without mandatory restore, and actual controlled failover. Prepare explicit frozen-contract amendments and historical 1.0/OP.x mapping; device execution remains gated. Brief: docs/design/UI2_0_V1_SCOPE_AND_SERVICE_TOPOLOGY_BRIEF.md."
       ]
     },
     "upcoming": [

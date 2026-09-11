@@ -3,16 +3,15 @@
   "record_contract": "One structured record per build, newest first. Required: build, status, title, summary (<= 2 sentences). Optional: started, completed, track, movement, supersedes, evidence, risks_forward, docs{agreement,validation,handover} (repo-relative paths under docs/history/). Full detail lives in the linked doc; do not restate it here. Status vocabulary must stay within utils/project_plan.py STATUS_VALUES.",
   "builds": [
     {
-      "build": "ui2_b1_01_contract_status_reconciliation",
-      "status": "automated_validated",
-      "title": "UI2 B1-1 -- contract status and freeze-blocker reconciliation",
-      "summary": "Resolved the B1-1 secret-profile, isolated Testcontainers role/DSN, cold-cache CI, and SBOM contract gaps, then froze the contract for implementation. No UI2 source, device behavior, or Line-1 workflow changed.",
-      "evidence": "The frozen contract adds runnable acceptance checks for profile precedence, role separation, cache miss/hit paths, and non-empty CycloneDX artifacts; targeted repository gates are required before implementation handoff.",
+      "build": "ui2_b1_01_skeleton_ci_docker",
+      "status": "in_progress",
+      "title": "UI2 B1-1 -- skeleton, CI, Docker and CRC implementation",
+      "summary": "Implemented the minimal Gradle skeleton, role-gated Spring Boot runtime, Flyway baseline migration step, multi-stage image, CI workflow, OpenShift manifests, and CRC overlay. Architecture and unit tasks pass; the Docker-dependent Testcontainers harness remains blocked by the unavailable Docker daemon.",
+      "evidence": "Gradle service compilation, architectureTest and unitTest pass; CRC image/build and service startup were previously reported. integrationTest reaches Testcontainers but fails before the test because no valid Docker environment is available.",
       "started": "2026-09-10",
-      "completed": "2026-09-10",
       "track": "UI 2.0 (Java product line)",
-      "movement": "ARCHITECTURE",
-      "risks_forward": "Exact dependency patch versions and implementation artifacts remain to be selected and validated in the B1-1 implementation movement; no device contact is authorized.",
+      "movement": "IMPLEMENTATION",
+      "risks_forward": "Testcontainers Flyway/app-role lifecycle, image inspection, secret-profile/SBOM/privacy evidence and worker/scheduler behavior remain open; no device contact is authorized.",
       "docs": {
         "agreement": "docs/design/UI2_0_B1_01_SKELETON_CI_DOCKER_CONTRACT.md",
         "handover": "AI_HANDOVER.md"
@@ -35,15 +34,15 @@
     },
     {
       "build": "ui2_b1_01_skeleton_ci_docker",
-      "status": "in_progress",
-      "title": "UI2 B1-1 -- skeleton, CI and Docker contract (DRAFT, for Product Owner freeze)",
-      "summary": "The worker added the DRAFT B1-1 contract for ui2 module boundaries, dependency direction, reproducible builds, isolated CI, Docker, Testcontainers/Flyway, and 15 runnable checks. Contract only; no ui2 source, Line-1 source, validation workflow, or device behavior changed.",
+      "status": "complete_with_followup",
+      "title": "UI2 B1-1 -- historical skeleton, CI and Docker contract proposal (superseded)",
+      "summary": "Historical contract proposal for UI2 module boundaries, dependency direction, reproducible builds, isolated CI, Docker, Testcontainers/Flyway, and the B1-1 acceptance checks. Superseded by the frozen B1-1 contract record above; no implementation evidence is claimed by this historical record.",
       "started": "2026-09-10",
       "completed": "2026-09-10",
       "track": "UI 2.0 (Java product line)",
       "movement": "ARCHITECTURE",
       "evidence": "Worker relay NXS-LOCAL-0061; contract self-check AC-1..AC-9; architecture/state tests 22 passed; repository privacy gate 0 new findings against origin/main; diff check clean.",
-      "risks_forward": "The contract remains DRAFT pending Product Owner freeze. No implementation, CI run, PR, or merge was completed by the worker because GitHub push authorization was unavailable at worker close.",
+      "risks_forward": "Historical proposal only; superseded by the frozen B1-1 contract record above. Its implementation and validation claims must not be used as current evidence.",
       "docs": {
         "agreement": "docs/design/UI2_0_B1_01_SKELETON_CI_DOCKER_CONTRACT.md",
         "handover": "AI_HANDOVER.md"
