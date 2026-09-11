@@ -1,0 +1,94 @@
+{
+  "created_at": "2026-09-11T06:35:23Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "CRC path is either evidenced from the available environment or reported as a concrete blocker.",
+          "Automated tests and state wording agree with demonstrated evidence.",
+          "No device contact or credential exposure occurs."
+        ],
+        "baseline": {
+          "current_build": "ui2_b1_01_skeleton_ci_docker (IN_PROGRESS)",
+          "engineering": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product": "0.7.7 (AUTOMATED_VALIDATED)",
+          "sequencing": "B1-1 closure precedes B1-1M and B1-2."
+        },
+        "context_not_loaded": [
+          "docs/history/** except linked records",
+          "Live device output and credentials",
+          "Unrelated Line-1 internals"
+        ],
+        "deployment_direction": "staging-like",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/ui2-b1-1-crc-closeout"
+        },
+        "invariants": [
+          "No Browser to device path.",
+          "No automatic network-device write.",
+          "No raw vendor responses or secrets persisted."
+        ],
+        "merge_gate": "PO review of evidence; no merge on automated tests alone for CRC-dependent claims.",
+        "movement_type": "VALIDATION",
+        "objective": "Close the B1-1 CRC validation evidence gap with the smallest safe repository changes and a precise real-environment validation report.",
+        "output_contract": [
+          "Validation report or minimal evidence/state patch",
+          "Targeted test results",
+          "RELAY_NOTE and SESSION_CLOSE"
+        ],
+        "recommended_reasoning": {
+          "reason": "Bounded validation and evidence reconciliation.",
+          "tier": "gpt-5.6-luna, low"
+        },
+        "requirements": [
+          "Read the cold-start files in order and use the existing graphify graph first.",
+          "Keep CRC as the local validation path and Docker/Podman optional only.",
+          "Never claim real CRC evidence unless actually observed."
+        ],
+        "risks": [
+          "The worker environment may not have access to the user's CRC/oc shell.",
+          "Do not convert unavailable evidence into success."
+        ],
+        "scope": {
+          "in": [
+            "CRC overlay and OpenShift manifests",
+            "Flyway integration harness",
+            "B1-1 state/evidence wording",
+            "targeted validation"
+          ],
+          "out": [
+            "Topology decision",
+            "B1-2 schema",
+            "Device contact",
+            "Docker or Podman",
+            "Secrets in repository"
+          ]
+        },
+        "validation_plan": [
+          "Targeted B1-1 and architecture/state tests.",
+          "git diff --check.",
+          "Report real-environment evidence separately from automated validation."
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-11T06:35:23Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0067",
+  "movement": "UI2_B1_01_CRC_VALIDATION_CLOSEOUT",
+  "next_actor": "engineer",
+  "refs": [
+    "CURRENT_STATE.md",
+    "AI_HANDOVER.md",
+    "docs/design/UI2_0_B1_01_SKELETON_CI_DOCKER_CONTRACT.md",
+    "docs/design/UI2_0_B1_01_CRC_VALIDATION_AMENDMENT.md",
+    "ui2/",
+    "project/build_history.json"
+  ],
+  "schema_version": 1,
+  "status": "OPEN",
+  "updated_at": "2026-09-11T06:35:23Z"
+}
