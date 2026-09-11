@@ -77,11 +77,19 @@
       },
       "seq": 1,
       "timestamp": "2026-09-11T22:35:54Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "RELAY_QUESTION",
+      "seq": 2,
+      "subject": "Three interpretations block B1-2 implementation",
+      "text": "Parked overnight for Product Owner decision; implementation is not dispatched until these are answered.\n\n1. Does V1 create all nine C1 section 3.1 tables? C1 section 3 says B1-2 writes the literal Flyway SQL for the core tables, but the section 3.1 owner column names B1-4b for devices, endpoints and credential_references. Foreign keys from jobs.target_device_id and the inventory projection require those tables to exist, and PostgreSQL cannot forward-reference a table that does not exist. The contract author read owner as column-set and onboarding-logic authority rather than migration ownership, and created all nine in V1. That reading is an interpretation, not something C1 states. Confirm it, or name the alternative, for example create the three as minimal stubs in V1 and let B1-4b extend them.\n\n2. Who allocates Flyway version numbers across concurrent B1 movements? B1-3, B1-4 and B1-4b will each add migrations and Flyway's version ledger is global. No document assigns the numbering. Proposal: the Product Owner allocates the next version at dispatch time and it is recorded in the movement packet.\n\n3. Acknowledge that the jobs and job_steps tables exist but are non-functional between B1-2 and B1-4. This follows from C1 section 3.3 and is expected, but a database inspection during that window shows empty job machinery.",
+      "timestamp": "2026-09-11T22:36:19Z"
     }
   ],
   "id": "NXS-LOCAL-0103",
   "movement": "UI2_B1_02_SCHEMA_V1_FLYWAY",
-  "next_actor": "engineer",
+  "next_actor": "po",
   "refs": [
     "docs/design/UI2_0_B1_02_SCHEMA_V1_CONTRACT.md",
     "docs/design/UI2_0_C1_PLATFORM_SCHEMA_CONTRACT.md",
@@ -90,6 +98,6 @@
     "docs/design/UI2_0_B1_01_SKELETON_CI_DOCKER_CONTRACT.md"
   ],
   "schema_version": 1,
-  "status": "OPEN",
-  "updated_at": "2026-09-11T22:35:54Z"
+  "status": "AWAITING_PO",
+  "updated_at": "2026-09-11T22:36:19Z"
 }
