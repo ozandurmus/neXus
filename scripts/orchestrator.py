@@ -15,8 +15,8 @@ resolvable to exactly one file (`relay/<relay-id>-*.json`).
 of its canonical relay file), computes its SHA-256 content hash, creates one
 git worktree from the packet's own `report.git.base`/`report.git.lane`
 fields, writes the canonical bytes to `.nexus/approved_task.json` inside
-that worktree, and spawns a detached `claude -p` engineer process there
-using the engineer permission profile
+that worktree, and spawns a detached AI engineer process there, using the
+selected provider's permission profile
 (`.claude/nexus-engineer.settings.json`) -- then returns immediately. It
 does not review, decide, or merge anything; merge authority stays with the
 engineer's own session under the standing authorization
@@ -38,7 +38,7 @@ governance history). Liveness is always checked live (`os.kill(pid, 0)`),
 never inferred from a stale timestamp: this is stricter and simpler than a
 staleness-threshold heuristic and removes any dependency on clock skew.
 
-Offline except for the subprocesses it spawns (`git`, `claude`, `gh`
+Offline except for the subprocesses it spawns (`git`, the selected AI CLI, `gh`
 indirectly via the engineer session). No device, credential, or vendor
 collector access; stdlib only.
 
@@ -81,6 +81,7 @@ DEFAULT_MAX_WORKERS = 3
 DEFAULT_RETRY_LIMIT = 2
 DEFAULT_MERGE_LOCK_TTL = 600
 DEFAULT_ENGINEER_PROFILE = REPO_ROOT / ".claude" / "nexus-engineer.settings.json"
+DEFAULT_PROVIDER = "codex"
 #: An unattended spawn has no human watching live spend; bound it. Not part
 #: of the FROZEN amendment's own text -- a safety addition made before the
 #: first real dispatch, named as such in this movement's own evidence.
@@ -638,6 +639,7 @@ def _spawn_engineer(
     extra_prompt_note: str | None = None,
     model: str | None = None,
     effort: str | None = None,
+    provider: str = DEFAULT_PROVIDER,
 ) -> subprocess.Popen:
     env = dict(os.environ)
     env[lr.ENV_CANONICAL_RELAY_DIR] = str(canonical_relay_dir)
@@ -667,25 +669,34 @@ def _spawn_engineer(
     # pre-authorizes exactly the canonical relay directory for every tool,
     # identically for a fresh dispatch and a resume, so access no longer
     # depends on which tool the session happens to pick.
-    # AC-1 (relay/NXS-LOCAL-0013): --output-format stream-json requires
-    # --verbose alongside --print (confirmed against the installed claude
-    # version's own --help/runtime error before writing this, per that
-    # movement's own requirement) -- engineer.log now fills incrementally,
-    # one JSON object per line, instead of only at process exit.
     # AC-4: for the one specific resume this fires on, `needs_resume_recovery_note`
     # appends RESUME_RECOVERY_NOTE onto the prompt for this dispatch only --
     # ENGINEER_PROMPT itself stays movement- and dispatch-invariant.
     prompt = ENGINEER_PROMPT if not extra_prompt_note else ENGINEER_PROMPT + "\n\n" + extra_prompt_note
-    argv = ["claude", "-p", prompt, "--settings", str(profile_path),
-            "--add-dir", str(canonical_relay_dir),
-            "--output-format", "stream-json", "--verbose",
-            "--permission-prompts", "none", "--max-budget-usd", str(max_budget_usd)]
-    if model:
-        argv += ["--model", model]
-    if effort:
-        argv += ["--effort", effort]
-    if resume_session_id:
-        argv += ["--resume", resume_session_id]
+    if provider == "codex":
+        argv = ["codex", "exec", "--json", "--cd", str(worktree_path),
+                "--add-dir", str(canonical_relay_dir), "--sandbox", "workspace-write",
+                "--approve-for-me"]
+        if model:
+            argv += ["--model", model]
+        if effort:
+            argv += ["-c", f"model_reasoning_effort={effort}"]
+        if resume_session_id:
+            argv += ["resume", resume_session_id]
+        argv += [prompt]
+    elif provider == "claude":
+        argv = ["claude", "-p", prompt, "--settings", str(profile_path),
+                "--add-dir", str(canonical_relay_dir),
+                "--output-format", "stream-json", "--verbose",
+                "--permission-prompts", "none", "--max-budget-usd", str(max_budget_usd)]
+        if model:
+            argv += ["--model", model]
+        if effort:
+            argv += ["--effort", effort]
+        if resume_session_id:
+            argv += ["--resume", resume_session_id]
+    else:
+        raise ValueError(f"unsupported orchestrator provider: {provider}")
     log_path = worktree_path / ".nexus" / "engineer.log"
     log_path.parent.mkdir(parents=True, exist_ok=True)
     log_fh = open(log_path, "ab")
@@ -779,6 +790,7 @@ def _cmd_start(args: argparse.Namespace) -> int:
             extra_prompt_note=RESUME_RECOVERY_NOTE if recovery_note_needed else None,
             model=args.model,
             effort=args.effort,
+            provider=args.provider,
         )
         record = {**existing, "pid": proc.pid, "phase": PHASE_RUNNING,
                   "last_action": "resumed", "task_hash": hash_hex,
@@ -813,6 +825,7 @@ def _cmd_start(args: argparse.Namespace) -> int:
         max_budget_usd=args.max_budget_usd,
         model=args.model,
         effort=args.effort,
+        provider=args.provider,
     )
     record = {
         "movement_id": args.movement, "revision": revision, "base_sha": base_sha,
@@ -1054,8 +1067,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_start.add_argument("--profile", default=str(DEFAULT_ENGINEER_PROFILE))
     p_start.add_argument("--max-workers", type=int, default=DEFAULT_MAX_WORKERS)
     p_start.add_argument("--max-budget-usd", type=float, default=DEFAULT_MAX_BUDGET_USD)
-    p_start.add_argument("--model", default=None, help="Passed through to claude -p --model (e.g. 'opus'). Unset uses the CLI's own default.")
-    p_start.add_argument("--effort", default=None, help="Passed through to claude -p --effort (e.g. 'high'). Unset uses the CLI's own default.")
+    p_start.add_argument("--provider", choices=("codex", "claude"),
+                         default=os.environ.get("NEXUS_ORCHESTRATOR_PROVIDER", DEFAULT_PROVIDER),
+                         help="AI CLI to spawn (default: codex; claude is legacy compatibility).")
+    p_start.add_argument("--model", default=None, help="Passed through to the selected AI CLI.")
+    p_start.add_argument("--effort", default=None, help="Reasoning effort for the selected AI CLI when supported.")
     p_start.set_defaults(func=_cmd_start)
 
     p_status = sub.add_parser("status", help="report one movement, or every known movement")

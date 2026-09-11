@@ -3,7 +3,7 @@ GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md, FROZEN).
 
 Covers the pure decision logic (dispatch/resume/refuse, merge-lock
 acquire, phase reconciliation, task hashing, git-ref validation) without
-spawning a real `claude -p` process or a real git worktree -- those are
+spawning a real AI process or a real git worktree -- those are
 exercised by the AC-5 demonstrations, not by this suite. A handful of
 CLI-level tests wire the pure functions together with monkeypatched
 git/spawn side effects to prove `start`/`status`/`merge-lock` plumbing.
@@ -607,10 +607,10 @@ def test_spawn_engineer_grants_add_dir_for_the_canonical_relay_directory_on_resu
     )
     argv = calls[0]  # the engineer process's own argv, not the summary-tailer companion's
     # The exact same grant a fresh dispatch gets (AC-3/AC-5: no regression,
-    # no divergence between the two paths) -- resume only adds --resume.
+    # no divergence between the two paths) -- resume only adds its session id.
     assert "--add-dir" in argv
     assert argv[argv.index("--add-dir") + 1] == str(canonical_relay_dir)
-    assert argv[-2:] == ["--resume", "11111111-1111-1111-1111-111111111111"]
+    assert argv[argv.index("resume") + 1] == "11111111-1111-1111-1111-111111111111"
 
 
 # --- AC-3/AC-4: extra_prompt_note gets appended onto the prompt argv element
@@ -625,7 +625,7 @@ def test_spawn_engineer_prompt_is_unmodified_without_an_extra_note(tmp_path, mon
         canonical_relay_dir=canonical_relay_dir, relay_file=canonical_relay_dir / "NXS-LOCAL-0001-x.json",
     )
     argv = calls[0]
-    assert argv[argv.index("-p") + 1] == orch.ENGINEER_PROMPT
+    assert argv[-1] == orch.ENGINEER_PROMPT
 
 
 def test_spawn_engineer_appends_the_extra_note_onto_the_prompt_when_given(tmp_path, monkeypatch):
@@ -638,7 +638,7 @@ def test_spawn_engineer_appends_the_extra_note_onto_the_prompt_when_given(tmp_pa
         extra_prompt_note=orch.RESUME_RECOVERY_NOTE,
     )
     argv = calls[0]
-    prompt = argv[argv.index("-p") + 1]
+    prompt = argv[-1]
     assert prompt.startswith(orch.ENGINEER_PROMPT)
     assert orch.RESUME_RECOVERY_NOTE in prompt
 
@@ -784,14 +784,14 @@ def test_drain_log_once_is_a_noop_when_log_file_does_not_exist_yet(tmp_path):
     assert summary_path.read_text() == ""
 
 
-# --- AC-1: _spawn_engineer's argv gains the streaming flags ------------------
+# --- Provider dispatch: Codex is the default; Claude remains explicit ---------
 
 class _FakePopen:
     def __init__(self, pid):
         self.pid = pid
 
 
-def test_spawn_engineer_argv_includes_stream_json_and_verbose(tmp_path, monkeypatch):
+def test_spawn_engineer_argv_defaults_to_codex_json(tmp_path, monkeypatch):
     calls = []
 
     def fake_popen(argv, **kwargs):
@@ -808,12 +808,25 @@ def test_spawn_engineer_argv_includes_stream_json_and_verbose(tmp_path, monkeypa
 
     assert len(calls) == 2  # the engineer process, then the summary-tailer companion
     engineer_argv = calls[0]
-    assert engineer_argv[engineer_argv.index("--output-format") + 1] == "stream-json"
-    assert "--verbose" in engineer_argv
+    assert engineer_argv[:3] == ["codex", "exec", "--json"]
+    assert "--sandbox" in engineer_argv
+    assert "workspace-write" in engineer_argv
+    assert "--approve-for-me" in engineer_argv
 
     tailer_argv = calls[1]
     assert "_tail-summary" in tailer_argv
     assert str(proc.pid) in tailer_argv
+
+
+def test_spawn_engineer_can_explicitly_use_legacy_claude(tmp_path, monkeypatch):
+    calls = []
+    monkeypatch.setattr(orch.subprocess, "Popen", lambda argv, **k: (calls.append(argv), _FakeProc(1))[1])
+    orch._spawn_engineer(
+        worktree_path=tmp_path / "wt", profile_path=tmp_path / "profile.json",
+        canonical_relay_dir=tmp_path / "relay", relay_file=tmp_path / "relay" / "X.json",
+        provider="claude",
+    )
+    assert calls[0][0:2] == ["claude", "-p"]
 
 
 # --- AC-4/AC-5: last_activity -------------------------------------------------

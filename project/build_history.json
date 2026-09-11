@@ -6,12 +6,12 @@
       "build": "ui2_b1_01_skeleton_ci_docker",
       "status": "in_progress",
       "title": "UI2 B1-1 -- skeleton, CI, Docker and CRC implementation",
-      "summary": "Implemented the minimal Gradle skeleton, role-gated Spring Boot runtime, Flyway baseline migration step, multi-stage image, CI workflow, OpenShift manifests, and CRC overlay. Architecture and unit tasks pass; the Docker-dependent Testcontainers harness remains blocked by the unavailable Docker daemon.",
-      "evidence": "Gradle service compilation, architectureTest and unitTest pass; CRC image/build and service startup were previously reported. integrationTest reaches Testcontainers but fails before the test because no valid Docker environment is available.",
+      "summary": "Implemented the minimal Gradle skeleton, role-gated Spring Boot runtime, Flyway baseline migration step, multi-stage image, CI workflow, OpenShift manifests, CRC overlay, and Codex-default provider-neutral local worker dispatch. Architecture and unit tasks pass; the Docker-dependent Testcontainers harness remains blocked by the unavailable Docker daemon.",
+      "evidence": "Gradle service compilation, architectureTest and unitTest pass; orchestrator/dashboard/PO-gate tests pass (272); CRC image/build and service startup were previously reported. integrationTest reaches Testcontainers but fails before the test because no valid Docker environment is available.",
       "started": "2026-09-10",
       "track": "UI 2.0 (Java product line)",
       "movement": "IMPLEMENTATION",
-      "risks_forward": "Testcontainers Flyway/app-role lifecycle, image inspection, secret-profile/SBOM/privacy evidence and worker/scheduler behavior remain open; no device contact is authorized.",
+      "risks_forward": "Testcontainers Flyway/app-role lifecycle, image inspection, secret-profile/SBOM/privacy evidence, CRC real-environment evidence and worker/scheduler behavior remain open; Codex real-process dispatch smoke test and resume-session persistence are also pending; no device contact is authorized.",
       "docs": {
         "agreement": "docs/design/UI2_0_B1_01_SKELETON_CI_DOCKER_CONTRACT.md",
         "handover": "AI_HANDOVER.md"
