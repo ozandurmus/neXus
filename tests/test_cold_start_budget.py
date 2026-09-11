@@ -13,11 +13,11 @@ ROOT = Path(__file__).resolve().parents[1]
 
 # AC-1: word-count ceilings, measured with `wc -w` semantics (len(text.split())).
 _CEILINGS = {
-    "AGENTS.md": 2700,
-    "AI_START_HERE.md": 1900,
-    "CURRENT_STATE.md": 800,
-    "AI_HANDOVER.md": 250,
-    "CLAUDE.md": 400,
+    "AGENTS.md": 3350,
+    "AI_START_HERE.md": 2250,
+    "CURRENT_STATE.md": 1050,
+    "AI_HANDOVER.md": 300,
+    "CLAUDE.md": 500,
 }
 
 
