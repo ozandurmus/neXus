@@ -21,7 +21,8 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
     static final Map<String, String> ACTION_ID_BY_ROUTE = Map.of(
             "POST /role-bindings", ActionRegistry.ROLE_BINDING_CREATE,
             "POST /role-bindings/revoke", ActionRegistry.ROLE_BINDING_REVOKE,
-            "POST /sessions/revoke", ActionRegistry.SESSION_REVOKE);
+            "POST /sessions/revoke", ActionRegistry.SESSION_REVOKE,
+            "POST /devices", ActionRegistry.DEVICE_REGISTER);
 
     private final GateChain gateChain;
 
