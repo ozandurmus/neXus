@@ -2102,6 +2102,53 @@
       "docs": {
         "agreement": "docs/history/phase/PHASE0_5_FINAL_UI_CLOSURE.md"
       }
+    },
+    {
+      "build": "ui2_d1_option_a_baseline_recording",
+      "status": "complete_with_followup",
+      "title": "UI2 D1 Option A -- record controlled restore-write decision in baseline",
+      "summary": "Applied the frozen Option A DEVICE-WRITE-CLASS (D-8) row to UI2_0_BASELINE_CONTRACT.md §2, preserving the physical-device-only scope, separate static signability/runtime admission, fail-closed topology, C7 check 1 and check 7, and C2...",
+      "started": "2026-09-10",
+      "completed": "2026-09-10",
+      "track": "UI 2.0 (Java product line)",
+      "movement": "IMPLEMENTATION",
+      "supersedes": "ui2_d1_option_a_contract_freeze",
+      "docs": {
+        "agreement": "docs/design/UI2_0_BASELINE_CONTRACT.md",
+        "handover": "AI_HANDOVER.md"
+      },
+      "detail": "docs/history/builds/ui2_d1_option_a_baseline_recording.md"
+    },
+    {
+      "build": "ui2_d1_option_a_contract_freeze",
+      "status": "complete_with_followup",
+      "title": "UI2 D1 Option A -- controlled restore-write admission and amendment contract freeze",
+      "summary": "The Product Owner froze RESTORE_CONTROLLED_WRITE_LEDGER.md and the Option A amendment contract after bounded same-model-family council review; the consolidated review is final and the recovered options document remains DRAFT pending the...",
+      "started": "2026-09-10",
+      "completed": "2026-09-10",
+      "track": "UI 2.0 (Java product line)",
+      "movement": "ARCHITECTURE",
+      "supersedes": null,
+      "docs": {
+        "agreement": "docs/design/RESTORE_CONTROLLED_WRITE_LEDGER.md",
+        "validation": "docs/design/UI2_0_D1_OPTION_A_CONSOLIDATED_REVIEW.md"
+      },
+      "detail": "docs/history/builds/ui2_d1_option_a_contract_freeze.md"
+    },
+    {
+      "build": "gov_po_2_implementation",
+      "status": "automated_validated",
+      "title": "GOV.PO.2 -- Product Owner visibility and bounded authorship implementation",
+      "summary": "Implements the frozen GOV.PO.2 permission model: boundary-safe read-only PR/CI observation, flat Edit/Write-only DRAFT authorship, generated-history narrowing, a standalone offline privacy entry point, and an exact-name read-only...",
+      "started": "2026-09-10",
+      "completed": "2026-09-10",
+      "track": "GOV",
+      "movement": "IMPLEMENTATION",
+      "supersedes": null,
+      "docs": {
+        "agreement": "docs/design/GOV_PO_2_PO_VISIBILITY_AND_BOUNDED_AUTHORSHIP.md"
+      },
+      "detail": "docs/history/builds/gov_po_2_implementation.md"
     }
   ]
 }
