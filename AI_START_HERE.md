@@ -135,7 +135,8 @@ Full mechanism detail: **`docs/ARCHITECTURE.md`**.
                              session did, your exact next action. If it
                              disagrees with CURRENT_STATE.md/roadmap.json,
                              they win.
-3. project/roadmap.json + project/backlog.json — pull the task by id / target
+3. project/QUEUE.md — pull the task by id; never open project/*.json directly
+                             (render data, tool-written)
 4. docs/ARCHITECTURE.md    — only the sections your task touches
 5. the current build/design doc, if the task names one
 6. relevant source + tests, via narrow search

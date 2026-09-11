@@ -140,8 +140,6 @@ EDIT_TOOLS = {"Edit", "Write", "MultiEdit", "NotebookEdit"}
 
 GOVERNANCE_PATHS = (
     "docs/design/PRODUCT_DIRECTION_RECORD.md",
-    "project/roadmap.json",
-    "project/backlog.json",
     "project/feature_registry.json",
     "project/build_history.json",
     "CURRENT_STATE.md",
@@ -218,6 +216,8 @@ INTERACTIVE_EXTRA_PREFIXES = (
     "py scripts/orchestrator.py start", ".venv/bin/python scripts/orchestrator.py start",
     "python3 scripts/orchestrator.py stop", "python scripts/orchestrator.py stop",
     "py scripts/orchestrator.py stop", ".venv/bin/python scripts/orchestrator.py stop",
+    "python3 scripts/project_queue.py", "py scripts/project_queue.py",
+    ".venv/bin/python scripts/project_queue.py",
 )
 
 # Always denied regardless of quoting: both keep executing even inside a

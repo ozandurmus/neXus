@@ -213,8 +213,9 @@ RELAY_CLOSEOUT_TEXT = (
 STANDING_RULES_TEXT = (
     "Smallest diff that satisfies every acceptance criterion; no scope "
     "expansion. Do not scan the repository beyond the files this brief "
-    "names; do not read docs/history/**, Graphify, device/deployment/"
-    "collection code, or secrets unless this brief names them. Never treat "
+    "names; do not read docs/history/**, project/*.json, Graphify, device/"
+    "deployment/collection code, or secrets unless this brief names them. "
+    "Pull open work from project/QUEUE.md instead. Never treat "
     "a long-running validation command -- the full pytest regression in "
     "particular -- as backgroundable: run it as a foreground, awaited Bash "
     "command and wait for it to actually finish before acting on its "

@@ -362,6 +362,12 @@ the HTML render harness green
 (`tests/test_html_render_harness.py`) alongside the full suite **and** the
 repository privacy gate.
 
+**Amendment (GOV.ORCH.5):** state updates to `project/backlog.json` and
+`project/roadmap.json` go through `scripts/project_queue.py`
+(`add`/`status`/`note`/`decide`), which validates and re-renders
+`project/QUEUE.md`; agents read `project/QUEUE.md`, never `project/*.json`
+directly.
+
 ## AI reasoning / movement routing
 
 Routing is task-driven, not model-brand-driven. Default down, not up: name

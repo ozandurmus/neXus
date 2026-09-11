@@ -58,6 +58,7 @@ Do not use `start` + polling. Do not "check back later".
 
 - Authority order, git law, privacy/DLP: `AGENTS.md`.
 - SESSION START/CLOSE schema, reasoning tiers: `AI_START_HERE.md`.
+- Open work by id, Now/Next, open decisions: `project/QUEUE.md` (generated; never hand-edit `project/*.json`).
 - Dispatch mechanics, worktrees, hooks: `docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md` and its GOV.ORCH amendments.
 - Relay transport: `docs/design/LOCAL_RELAY_PROTOCOL.md`.
 - Workbench: `py scripts/orchestrator.py dashboard`, open the printed URL with its `#t=` fragment.

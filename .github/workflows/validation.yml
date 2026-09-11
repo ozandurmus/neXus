@@ -124,6 +124,9 @@ jobs:
       - name: Build history index is current
         run: python scripts/build_history_index.py --check
 
+      - name: Project queue is current
+        run: python3 scripts/project_queue.py check
+
       - name: PR smoke / safety regression set
         # A small, stable, hand-picked set of fast tests that stand in for
         # "affected-subsystem regression" on an ordinary bounded PR — not a
@@ -219,6 +222,9 @@ jobs:
 
       - name: Build history index is current
         run: python scripts/build_history_index.py --check
+
+      - name: Project queue is current
+        run: python3 scripts/project_queue.py check
 
       - name: Report worker topology
         # DEV.TEST.1: makes the parallel step's actual worker count visible in
