@@ -475,15 +475,23 @@ This is agent workflow, not a user-facing command requirement; never wait for
 the user to type `/graphify`.
 
 Rules:
-- Before broad source browsing, first check `graphify-out/graph.json`. When it
-  exists, run `graphify query "<question>"` for scoped context, `graphify path
-  "<A>" "<B>"` for relationships, or `graphify explain "<concept>"` for a
-  focused concept. Then inspect only the relevant files/directories indicated
-  by the result.
+- The current graph is known to be oversized and incorrectly scoped: it is
+  approximately 45,000+ nodes and includes historical `copilot-worktrees/`
+  copies, so duplicate worker paths and broad result sets are expected. This
+  is a graph-scope defect, not a reason to remove graphify.
+- Never run bare `graphify .` for ordinary task work. Before source browsing,
+  use only a narrow `graphify query "<question>" --budget <small-budget>`,
+  `graphify path "<A>" "<B>"`, or `graphify explain "<concept>"` when it can
+  answer the relationship question. Treat results as a file-relationship
+  locator, never as a decision or authority source.
+- Ignore results rooted in `copilot-worktrees/`, `graphify-out/`, `data/`, or
+  `logs/`. Workers read only the canonical repository and the target files
+  named by the relay; a graph hit never authorizes expanding that scope.
 - When the graph is absent or stale, build/update the smallest relevant scope
   with the installed graphify skill before continuing. The primary agent and
   workers MUST reuse the existing graph and MUST NOT create competing graph
-  stores for the same repository.
+  stores for the same repository. A canonical-scope graph rebuild is a
+  separate planned maintenance movement, not an implicit step of a small task.
 - Dirty `graphify-out/` files are expected after hooks or incremental updates;
   skip graphify only for stale/incorrect graph output or explicit opt-out.
 - After modifying code, run `graphify update .` to keep the graph current.
