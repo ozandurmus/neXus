@@ -196,32 +196,38 @@ def task_hash(session_start_entry: dict) -> str:
 # model call, rendered from `approved_task.json` at dispatch.
 # ---------------------------------------------------------------------------
 
-#: A.2 §7: the exact relay-closeout shape, verbatim, plus the "re-read the
-#: relay file first" rule (moved here from the old ENGINEER_PROMPT).
-RELAY_CLOSEOUT_TEXT = (
-    "Immediately before opening your PR, re-read the canonical relay file "
-    "(NEXUS_RELAY_FILE) first and act on any RELAY_CORRECTION or "
-    "RELAY_DECISION entries appended after dispatch. Close with:\n\n"
-    "```\n"
-    "py scripts/local_relay.py append --file $NEXUS_RELAY_FILE --role engineer "
-    "--marker SESSION_CLOSE ...\n"
-    "```"
-)
+#: GOV.ORCH.7 section 2.1: these two fixed sections are no longer Python
+#: string literals -- they are parsed, verbatim, from the checked-in
+#: template `roles/WORKER.md` (the same file `render_worker_md` documents
+#: itself against), so the template lives in one place, readable without
+#: Python. `_load_worker_md_template` does the parse; module import time
+#: populates RELAY_CLOSEOUT_TEXT/STANDING_RULES_TEXT from it exactly once.
+ROLES_WORKER_MD_PATH = REPO_ROOT / "roles" / "WORKER.md"
 
-#: A.2 §8: standing rules, fixed text, under 200 words -- includes the
-#: pytest-foreground rule (moved here from the old ENGINEER_PROMPT).
-STANDING_RULES_TEXT = (
-    "Smallest diff that satisfies every acceptance criterion; no scope "
-    "expansion. Do not scan the repository beyond the files this brief "
-    "names; do not read docs/history/**, project/*.json, Graphify, device/"
-    "deployment/collection code, or secrets unless this brief names them. "
-    "Pull open work from project/QUEUE.md instead. Never treat "
-    "a long-running validation command -- the full pytest regression in "
-    "particular -- as backgroundable: run it as a foreground, awaited Bash "
-    "command and wait for it to actually finish before acting on its "
-    "result. A relay-tool error is reported, not treated as a blocker. "
-    "Never end your turn on a chat message without a SESSION_CLOSE."
-)
+
+def _load_worker_md_template(path: Path = ROLES_WORKER_MD_PATH) -> tuple[str, str]:
+    """Extract the "## Relay closeout" and "## Standing rules" section
+    bodies from `roles/WORKER.md`, verbatim (trailing/leading blank lines
+    stripped only). Raises if either section is missing -- a missing
+    template is a fail-closed condition for `preflight`, not a silent
+    empty brief."""
+    text = path.read_text(encoding="utf-8")
+    closeout_marker = "## Relay closeout\n\n"
+    standing_marker = "\n\n## Standing rules\n\n"
+    if closeout_marker not in text or standing_marker not in text:
+        raise OrchestratorError(f"{path} is missing the expected WORKER.md template sections")
+    _, rest = text.split(closeout_marker, 1)
+    closeout, standing = rest.split(standing_marker, 1)
+    return closeout.strip(), standing.strip()
+
+
+try:
+    RELAY_CLOSEOUT_TEXT, STANDING_RULES_TEXT = _load_worker_md_template()
+except (OSError, OrchestratorError):
+    # roles/WORKER.md missing at import time (e.g. a stale checkout) --
+    # leave both empty rather than crashing import; `preflight` fails
+    # closed on the missing file for any real dispatch.
+    RELAY_CLOSEOUT_TEXT, STANDING_RULES_TEXT = "", ""
 
 _TEST_FILE_RE = re.compile(r"tests/[\w./-]+\.py")
 

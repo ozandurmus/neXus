@@ -5,8 +5,8 @@
 
 Durable, model/vendor-neutral engineering and security law. Rules here change
 rarely and apply to any coding/reasoning agent working in this repository —
-Claude, Copilot, ChatGPT, or a human. Never phrase a rule here as "Claude
-should..." or "Copilot should..."; use "the agent MUST...". Vendor-specific
+any AI coding tool, or a human. Never phrase a rule here as "the tool
+should..."; use "the agent MUST...". Vendor-specific
 files (`CLAUDE.md`, `.github/copilot-instructions.md`,
 `.github/instructions/*.instructions.md`) may translate a rule into a
 product's own tool names or model tiers, but must not restate the rule itself
@@ -46,6 +46,14 @@ the human or the higher authority resolve it.**
 (level 6) contradicted `docs/design/GOV_PO_ROLE_MIGRATION.md` (FROZEN, level 2)
 §9's independence rule and was corrected to match, per GOV.ORCH.3 Amendment
 A-2026-09-11 (PO decision pending).
+
+## Role dispatch
+
+If `.nexus/WORKER.md` exists in your working directory you are an
+orchestrated worker: read only it. Otherwise state your role in your first
+message and read `roles/<ROLE>.md` (`PO`, `ENGINEER`, `WORKER`, or
+`REVIEWER`) before anything else in the reading order. Nothing else in this
+file is role-specific — it applies to every role identically.
 
 ## Engineering-output language law
 

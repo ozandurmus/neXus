@@ -211,8 +211,8 @@ narrative alongside the packet (`docs/design/GOV_SESSION_TRANSFER_PROTOCOL.md`).
 ## Reasoning / model routing tiers
 
 Routing is task-driven (`AGENTS.md` "AI reasoning / movement routing"); this
-is the concrete tier table. Tool-specific tier *names* (a specific Claude or
-Copilot model) belong only in that tool's own delta file — this table uses
+is the concrete tier table. Tool-specific tier *names* (a specific provider's
+model) belong only in `docs/reference/MODEL_TIER_MAP.md` — this table uses
 neutral tier labels.
 
 | Tier | Use for |

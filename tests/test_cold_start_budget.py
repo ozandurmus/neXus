@@ -13,7 +13,11 @@ ROOT = Path(__file__).resolve().parents[1]
 
 # AC-1: word-count ceilings, measured with `wc -w` semantics (len(text.split())).
 _CEILINGS = {
-    "AGENTS.md": 3350,
+    # GOV.ORCH.7: +54 words for the new "## Role dispatch" section
+    # (AGENTS.md "## Role dispatch"), net of a small vendor-name edit in
+    # the opening paragraph -- raised by exactly the words added, per the
+    # movement's own instruction.
+    "AGENTS.md": 3404,
     "AI_START_HERE.md": 2250,
     "CURRENT_STATE.md": 1050,
     "AI_HANDOVER.md": 300,
