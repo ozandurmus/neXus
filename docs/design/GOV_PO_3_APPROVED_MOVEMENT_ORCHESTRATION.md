@@ -29,6 +29,19 @@ This freeze authorizes AC-3/AC-5/AC-8 in this same movement (§7), per the
 decision's own text: "Proceed with AC-3 in this movement, then AC-5, then
 AC-8; merge under relay#13 once green and post the RELAY_NOTE here."
 
+**PO amendment, 2026-09-11:** the engineer provider is selectable. The
+default is the installed `codex exec --json` CLI; the legacy `claude -p`
+path remains available only with `--provider claude`. Both paths retain
+argument-list spawning, isolated worktrees, the canonical relay directory,
+and bounded non-interactive permissions. This amendment changes no relay,
+merge, or device-action authority.
+
+**PO amendment, 2026-09-11:** the dashboard keeps the per-launch bearer in
+the current browser tab's `sessionStorage` after consuming the URL fragment.
+This preserves refresh behavior without putting the token in the URL after
+launch, on disk in the repository, or in dashboard state; closing the tab
+clears it.
+
 ## 1. Purpose
 
 `GOV_PO_ROLE_MIGRATION.md` and `GOV_PO_2_PO_VISIBILITY_AND_BOUNDED_
@@ -232,7 +245,7 @@ existing scheme) — unambiguous and glob-resolvable to exactly one file
 
 **Argument-list discipline (a required AC-1 property, not a style
 preference).** Every subprocess `scripts/orchestrator.py` itself spawns —
-`git worktree add`, `claude -p`, `gh pr view` for status checks — is built
+`git worktree add`, the selected AI CLI, `gh pr view` for status checks — is built
 as a Python list passed to `subprocess.run`/`subprocess.Popen` with
 `shell=False` (the default), never a formatted/interpolated string passed
 through a shell. This is the same discipline `scripts/nexus_po_tool_gate.py`
@@ -246,6 +259,19 @@ at all (§3.5) — it is written to a file inside the worktree and the
 engineer process reads it with its own `Read` tool, which removes the one
 place a large, free-form JSON blob might otherwise tempt a string-built
 command line.
+
+### 3.2A Provider selection
+
+`orchestrator start` accepts `--provider codex|claude` and defaults to
+`codex` (also configurable with `NEXUS_ORCHESTRATOR_PROVIDER`). The Codex
+path uses `codex exec --json --approve-for-me` (the Codex CLI applies its
+workspace-write policy through that flag; it is mutually exclusive with an
+explicit `--sandbox` flag);
+the prompt remains one argv value and task content still comes only from
+`.nexus/approved_task.json`. `--provider claude` preserves the existing
+`claude -p --output-format stream-json` compatibility path. Provider output
+is JSONL and is summarized by the same bounded tailer; an unrecognized event
+is retained as a truncated line rather than dropped.
 
 ### 3.3 Worktree isolation
 

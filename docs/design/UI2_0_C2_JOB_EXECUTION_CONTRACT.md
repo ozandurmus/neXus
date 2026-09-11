@@ -39,7 +39,7 @@ ordering.
 4. `docs/design/UI2_0_DEVELOPMENT_WORKFLOW.md` §3.2 (step executor, closed step kinds, evidence writer) and §3.4 (Line-1/Java device-contact coordination, R-08) — the plan this contract concretizes.
 5. `docs/design/UI2_0_ARCHITECTURE_DESIGN.md` §5.4 (storage/audit pattern), §6.3–§6.7 (profile model, step kinds, lifecycle, taxonomy reconciliation, schedule-edit intent) — design under amendment; `APPROVAL-MODEL` supersedes its per-run four-eyes framing exactly where `UI2_0_BASELINE_CONTRACT.md` §5 item 3 says so.
 6. `docs/design/UI2_0_COUNCIL_REVIEW_AND_SECOND_OPINION_BRIEF.md` §6.3 (the job-execution-contract concern this document answers) and §6.7 (the identity concern §7 of this document resolves).
-7. `utils/action_taxonomy.py` — the five action classes, ported to Java verbatim (`RUNTIME-DIRECTION`); every retry rule and every console-submittability statement in this document keys on it.
+7. `utils/action_taxonomy.py` — the action classes, ported to Java verbatim (`RUNTIME-DIRECTION`); every retry rule and every console-submittability statement in this document keys on it.
 
 ### 1.4 Reference-only, not ported
 
@@ -333,6 +333,7 @@ whether the timeout comes from a genuine crash or from a slow/hung device.
 |---|---|
 | `CLASS_0_READ` (`read`) | Bounded automatic retry — proposed: up to 2 retries, exponential backoff starting at 2 s — **only** for a transport-level failure before any response was received (connection refused, connect timeout, DNS/handshake failure). A retry creates a new `job_step_attempt` row at the same `step_index` with an incremented `attempt_number`; it never retries after a response was received and parsed (that is a semantic failure, not a transient one, and is `FAILED`, not retried). Retry exhaustion is `FAILED` (or, if the boundary was somehow already crossed by an earlier attempt at the same step — which cannot happen for a class-0 step by construction, since a read step's precondition is that it declares no mutation — `OUTCOME_UNKNOWN` never applies to a pure class-0 job). |
 | `CLASS_1_RECOVERY_WRITE` (`recovery-write`) | **Never auto-retries, at any stage, for any reason** — this is the direct implementation of `UI2_0_BASELINE_CONTRACT.md` D-2a and the risk this contract's own dispatch explicitly names ("allowing a 'safe' automatic retry ... because the command is idempotent"). A class-1 step's failure or ambiguity ends the job (`FAILED` or `OUTCOME_UNKNOWN`, §3, §8); any further attempt is a brand-new job with its own owner, reason and (where `OUTCOME_UNKNOWN` is involved) reconciliation evidence, per §3.5. This holds even when the underlying device command is documented as idempotent — idempotency of the **device command** is not the same guarantee as safety of an **automatic** retry with no human decision point (brief §6.3), and this contract does not let one substitute for the other. |
+| `CLASS_1B_CONTROLLED_RESTORE_WRITE` (`controlled-restore-write`) | **Never auto-retries after execution begins.** Failure or ambiguity ends the job; any later restore attempt is a new job with its own approval path. A claim-time pre-execution failure is separately `CLAIMED` → `REJECTED` under §6. |
 | `CLASS_2`/`CLASS_3`/`CLASS_4` | Not applicable — no member of these classes is executable through this job contract (`utils.action_taxonomy`: class 2 has no member yet, classes 3–4 are prohibited); a job whose resolved `action_class` is one of these is refused at admission (`E3`/`E6`), never reaches `CLAIMED`. |
 
 A profile that mixes classes (design §6.3's example: class-0 `connect`/
@@ -355,7 +356,8 @@ fixes the field set and the write-ordering invariant above.
 ## 6. Pre-execution checks
 
 Pre-execution checks run **at claim time**, inside the `CLAIMED` state,
-strictly before the first device contact (`EXECUTING`). They are the `E7`
+strictly before the first device contact (`EXECUTING`). A refused check creates
+no step attempt. They are the `E7`
 step of the gate chain (design §5.3: "`E7` (execution phase only) admission
 + immediately-before-execution checks") plus the additional battery this
 contract's own scope requires. Every check is recorded on the job's
@@ -366,11 +368,20 @@ later check runs, and no device is contacted:
 | # | Check | Outcome field | What it re-reads |
 |---|---|---|---|
 | 1 | **Approval state, re-checked fresh** — the profile version is still `APPROVED` (not superseded/retired); the target's `BackupAssignment` (or capability assignment for a read job) is still enabled; for a Run Now, the `D7` role binding and mandatory reason are still valid for the owning actor | `PASSED` / `FAILED(reason)` | current rows, never the request-time snapshot in §2.2 — this is what closes AC-7: approval is checked at claim time, not only at request time |
-| 2 | **Connectivity precondition** — for a class-1 profile, a prior successful `backup_profile_connect_check` exists for this `{profile_id, version, device_id}` (design §6.5's `SCHEDULE_ENABLE_REQUIRES_CONNECT_CHECK` invariant, re-verified at every claim, not only at schedule-enable time) | `PASSED` / `FAILED(reason)` / `NOT_APPLICABLE` (class-0 job) | the connect-check record |
+| 2 | **Connectivity precondition** — for a class-1 profile, a prior successful `backup_profile_connect_check` exists for this `{profile_id, version, device_id}` (design §6.5's `SCHEDULE_ENABLE_REQUIRES_CONNECT_CHECK` invariant, re-verified at every claim, not only at schedule-enable time). For `CLASS_1B_CONTROLLED_RESTORE_WRITE`, re-evaluate `RestoreConnectivityFreshnessPolicy` at every claim per `RESTORE_CONTROLLED_WRITE_LEDGER.md` §3.3; the compile-time result is not authoritative. | `PASSED` / `FAILED(reason)` / `NOT_APPLICABLE` (class-0 job) | the connect-check record and, for restore, the current freshness policy |
 | 3 | **Line-1/Java device-contact coordination window** (workflow §3.4, R-08) — per device and job type, only one line may contact the device in a given window; the claim refuses if the coordination record shows Line-1 currently owns this device+job-type window | `PASSED` / `BLOCKED(reason)` | the coordination record (a shared window/ownership record, not a shared runtime) |
-| 4 | **`RB.x` operational-write ledger** (class-1 only) — the ledger is re-read *inside* the claimed/admitted section per `RECOVERY_OPERATIONAL_WRITE_LEDGER.md` §5/§7's ordering rule; **unreadable ⇒ `BLOCKED`, fail-closed** (never conflated with "no entry"); an entry inside the minimum re-execution interval ⇒ `BLOCKED` with the due time named; absent or outside the window ⇒ `PASSED` | `PASSED` / `BLOCKED(reason)` / `NOT_APPLICABLE` (class-0 job) | the operational-write ledger, Line-1 authority reused as a rule (P-4) |
-| 5 | **Device registry / allowlist re-check** — every `target_ref` still resolves to a live, non-disabled registry entry; for class-1, the target is still within the profile's fail-closed allowlist | `PASSED` / `FAILED(reason)` | the device registry |
+| 4 | **Class-scoped write ledger** — `CLASS_1_RECOVERY_WRITE` retains the `RB.x` ledger, read *inside* the claimed/admitted section per `RECOVERY_OPERATIONAL_WRITE_LEDGER.md` §5/§7: unreadable ⇒ `BLOCKED`; inside the minimum interval ⇒ `BLOCKED` with due time; absent/outside ⇒ `PASSED`. For `CLASS_1B_CONTROLLED_RESTORE_WRITE`, independently name and record `RestoreWriteLedger.has_unreconciled_prior` against the physical `device_id`, re-read fresh inside this same admission section: unreconciled prior outcome or unreadable ledger ⇒ `BLOCKED`; no unreconciled prior ⇒ `PASSED`. Never trust C7's earlier check-7 pass. | `PASSED` / `BLOCKED(reason)` / `NOT_APPLICABLE` (every other class) | the class-specific ledger; `RESTORE_CONTROLLED_WRITE_LEDGER.md` §3.1.0/§5 for restore |
+| 5 | **Device registry / allowlist re-check** — every `target_ref` still resolves to a live, non-disabled registry entry; for class-1, the target is still within the profile's fail-closed allowlist. For controlled restore-write, re-evaluate `RESTORE_TARGET_TOPOLOGY_ELIGIBILITY` from authoritative registry plus current topology evidence: only `STANDALONE_PHYSICAL_DEVICE` proceeds; refuse with `TARGET_CLUSTERXL_MEMBER_UNSUPPORTED`, `TARGET_TOPOLOGY_EVIDENCE_MISSING_OR_STALE`, or `TARGET_TOPOLOGY_EVIDENCE_CONFLICTING` as appropriate. These are claim-time reason codes: `TARGET_CLUSTERXL_MEMBER_UNSUPPORTED` is the claim-time counterpart of C7's compile-time `UNSUPPORTED_CLUSTERXL_MEMBER` outcome. VSX-context targets remain unsupported; physical `device_id`/`endpoint_id` only. | `PASSED` / `FAILED(reason)` | the device registry and current topology evidence for restore |
 | 6 | **Credential resolution** — the worker resolves `execution_credential_ref` from the server-side credential store for the profile's/capability's declared `credential_profile_ref`; a resolution failure blocks before contact | `PASSED` / `FAILED(reason)` | the credential store (server-side only; nothing reaches the operator's browser or the job row as a value) |
+
+For restore check 2, the active probe uses the actual restore-write transport.
+Cached evidence requires explicit configuration, TTL, identity binding and a
+per-vendor/platform council-reviewed semantic-sufficiency contract; failure
+of any condition falls back to the active probe. Probe failure/timeout blocks
+admission. Numeric timeout/TTL values remain `UNKNOWN`; no default is invented.
+Record evidence source, age, fallback and policy snapshot per ledger §3.3.1.
+These amendments add no standalone C2 check 7: the six-check order is retained.
+Static C4 sign-off remains necessary but never sufficient for runtime admission.
 
 Checks 2 and 4 are `NOT_APPLICABLE` for a class-0 job — recorded as such,
 never silently omitted, so the ordered list is complete for every job

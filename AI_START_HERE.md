@@ -246,6 +246,11 @@ contract is deterministic. Auto-routing is acceptable for low-risk work;
 explicit routing is preferred for major builds so cost and reasoning quality
 stay observable. Never use the strongest tier for mechanical work.
 
+The tier table is vendor-neutral. The Product Owner chooses the actual current
+provider/model/effort at dispatch time from the movement scope, risk, contract
+state, and available credit; see `docs/reference/COPILOT_OPERATING_MODEL.md`.
+No model brand is a permanent implementation default.
+
 ## Validation ladder
 
 - **Targeted**: tests for the files/behavior actually changed.

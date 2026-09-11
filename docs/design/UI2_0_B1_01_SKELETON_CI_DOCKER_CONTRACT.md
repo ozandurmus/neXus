@@ -2,7 +2,7 @@
 
 ## Status
 
-**DRAFT — FOR PRODUCT OWNER FREEZE, 2026-09-10.**
+**FROZEN — PRODUCT OWNER APPROVED, 2026-09-10.**
 
 This document specifies the mechanical implementation contract for
 `ui2_b1_01_skeleton_ci_docker`. It creates no `ui2/` files, authorizes no
@@ -112,11 +112,16 @@ dependency verification, dependency-lock consistency, and frontend
 
 `unitTest` contains no container, network, filesystem-runtime, or wall-clock
 dependency. `integrationTest` owns container-backed tests and starts one
-ephemeral PostgreSQL container per test class (reuse disabled in CI), waits
-for PostgreSQL readiness, and then runs Flyway with the `ui2_migrate` DSN
-before creating an application connection with the `ui2_app` DSN. Tests
-never create schema through jOOQ, Hibernate, application startup, or ad-hoc
-DDL.
+ephemeral PostgreSQL container per test class (reuse disabled in CI). A
+container bootstrap connection creates the test database roles and grants
+only the schema privileges required by the contract; generated credentials
+remain in memory and are never logged. The harness waits for PostgreSQL
+readiness, runs Flyway with the separately provisioned `ui2_migrate` DSN,
+then creates an application connection with the separately provisioned
+`ui2_app` DSN. It proves that the application role cannot apply migrations
+or arbitrary DDL. Tests never create schema through jOOQ, Hibernate,
+application startup, or ad-hoc DDL; the bootstrap role is test-fixture
+provisioning only and is not a runtime application role.
 
 The first B1-1 harness carries an empty/baseline migration location so the
 lifecycle is executable before B1-2. B1-2 adds `V1__initial_schema.sql` at
@@ -174,13 +179,19 @@ The job order is:
 
 1. checkout with the history needed by repository privacy comparison;
 2. set up pinned Java 21 and pinned Node LTS caches;
-3. run `./ui2/gradlew -p ui2 --offline dependencies` after a dependency-cache
-   restore, failing if verification metadata or locks disagree;
+3. restore the dependency cache keyed by the wrapper, lockfiles, and
+   verification metadata. On a cache miss, resolve dependencies online with
+   verification enabled and allow the job's cache-save step to populate the
+   cache; on a cache hit, run `./ui2/gradlew -p ui2 --offline dependencies`.
+   Both paths fail if verification metadata or locks disagree;
 4. run `./ui2/gradlew -p ui2 check`;
 5. run `docker build --file ui2/Dockerfile --tag nexus-ui2:ci ui2`;
 6. inspect the image as required by `dir8` and `dir10`;
-7. run the repository privacy gate against `origin/main`;
-8. run `git diff --check`.
+7. generate a non-empty CycloneDX SBOM for the Gradle runtime dependencies and
+   the locked frontend dependencies (`npm sbom`), then assert both artifacts
+   are present before upload;
+8. run the repository privacy gate against `origin/main`;
+9. run `git diff --check`.
 
 The UI 2.0 workflow has its own required-check name and does not replace,
 skip, weaken, rename, serialize with, or supply success for Line-1's
@@ -214,9 +225,13 @@ The runtime image:
 Secrets are injected at runtime exactly as C1 §6 requires. Each role resolves
 its own `<COMPONENT>_<PURPOSE>_FILE`; the migration invocation alone receives
 the `ui2_migrate` DSN, long-running roles receive only their scoped
-`ui2_app`/adapter credentials, and missing/unreadable/empty files fail closed
-without falling back. No build argument, image environment default, layer,
-label, healthcheck, or log contains a secret value.
+`ui2_app`/adapter credentials, and a set but unreadable, missing, or empty
+file fails closed without falling back. The local/dev profile may use the
+plain `<COMPONENT>_<PURPOSE>` variable only when its `_FILE` counterpart is
+unset; the server, CI, and production profiles require the `_FILE` form and
+reject the plain-variable form. No profile falls back after a set `_FILE`
+fails, and no build argument, image environment default, layer, label,
+healthcheck, or log contains a secret value.
 
 ## 8. Implementing-movement acceptance checks
 
@@ -240,16 +255,24 @@ All checks are runnable from the repository root:
    succeeds, and image history contains no secret build argument.
 10. Image inspection confirms non-root UID/GID, Java 21, no shell/Python/Node,
     no Line-1 path, and only the assembled UI 2.0 application/SBOM/licenses.
-11. Starting each `service`, `worker`, and `scheduler` role without its
-    required secret file fails closed and reports only component/purpose.
+11. Starting each `service`, `worker`, and `scheduler` role in the server
+    profile without its required secret file fails closed and reports only
+    component/purpose; the local/dev profile's plain-variable exception is
+    covered separately.
 12. Starting with synthetic mounted secret files reaches readiness without
-    persisting those values into the container writable layer or logs.
-13. `.github/workflows/validation.yml` is byte-identical to its pre-movement
+    persisting those values into the container writable layer or logs, and a
+    deliberately unreadable/empty file never falls back to a plain variable.
+13. The integration harness provisions distinct `ui2_migrate` and `ui2_app`
+    roles, applies Flyway through the former, and proves the latter cannot
+    migrate or execute arbitrary DDL.
+14. Both named CycloneDX SBOM artifacts are non-empty and contain no secret
+    values before upload.
+15. `.github/workflows/validation.yml` is byte-identical to its pre-movement
     version and both workflow job names are distinct.
-14. `/Users/OzanDur/Codo/neXus/.venv/bin/python main.py
+16. `/Users/OzanDur/Codo/neXus/.venv/bin/python main.py
     --repository-privacy-check --privacy-baseline-ref origin/main` reports
     zero new findings.
-15. `git diff --check origin/main...HEAD` is clean.
+17. `git diff --check origin/main...HEAD` is clean.
 
 ## 9. Technology decisions and PO veto points
 
@@ -264,10 +287,13 @@ All checks are runnable from the repository root:
 | Tests | JUnit 5, ArchUnit, Testcontainers PostgreSQL | architecture §8.3 and P-1 | equivalents must preserve every named runnable check |
 | Image | one digest-pinned distroless Java 21 image, role-selected entry point | architecture §8.3 | a non-distroless base needs a documented operational requirement and equivalent attack-surface checks |
 
-Version numbers are selected and pinned during implementation because this
-DRAFT intentionally does not assert which patch release is current. The
+Version numbers are selected and pinned during implementation because the
+contract intentionally does not assert which patch release is current. The
 policies above are binding after freeze; introducing any dependency remains
-subject to the repository's dependency approval boundary.
+subject to the repository's dependency approval boundary. The Gradle
+CycloneDX task/plugin and its exact version are pinned with the other
+dependencies; the frontend SBOM uses the locked package-manager command
+named in §6.
 
 ## 10. Cross-references
 

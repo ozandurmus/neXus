@@ -630,27 +630,48 @@ recorded):
 
 | # | Check | What it re-reads |
 |---|---|---|
-| 1 | **Connectivity** — a `backup_profile_connect_check`-equivalent class-0 job against the target device/endpoint has succeeded within a bounded freshness window | connect-check record (§2.6's pattern, reused for restore) |
+| 1 | **Connectivity** — an early, non-authoritative pass using `RestoreConnectivityFreshnessPolicy` (`RESTORE_CONTROLLED_WRITE_LEDGER.md` §3.3): active probe over the actual restore-write transport, or explicitly configured cached evidence meeting TTL, identity-binding and per-vendor/platform council-reviewed semantic-sufficiency requirements; insufficient cached evidence falls back to the active probe, whose failure/timeout refuses compilation. Numeric timeout/TTL values remain `UNKNOWN`. | connect-check record and freshness policy (§2.6's pattern, reused for restore) |
 | 2 | **Backup validity** — `source_artefact_id`'s `validation.level` is at least `V2` (`WELL_FORMED`); a `V1`-only or `FAILED` artefact refuses restore unconditionally, before any approval is even requested — restoring from a blob that has not even been proven structurally sound is refused categorically, never left to an approver's judgment | `backup_artefact.validation` |
 | 3 | **Target identity match** — the artefact's `device_id`/`hostname_fingerprint`/`platform` match the target's own registry identity; a mismatch refuses compilation outright (restoring artefact X onto device Y is never offered as a choice, not even behind an override) | `backup_artefact`, `devices`/`endpoints` |
 | 4 | **Version match** — for a version-locked artefact class (BRC §3 rule 5, §3.3 above), the artefact's `software_version` must match the target's currently-known running version from the latest evidence projection; a mismatch refuses compilation (whether a future, explicitly-authorized override may ever bypass this is left open, §9.5) | `backup_artefact.software_version`, the target's inventory projection |
 | 5 | **No concurrent restore or backup against the same target** — `C2`'s own per-target job admission (a `REQUESTED`/`CLAIMED`/`EXECUTING` job already exists against this `device_id`) refuses a second plan's job request; this is `C2`'s existing mechanism, not a new lock this document invents | `C1` `jobs` rows for the target |
 | 6 | **Credential resolution** — the restore capability's declared `credential_profile_ref` resolves; an unresolvable credential refuses compilation before any approval is requested | credential store |
+| 7 | **No unreconciled prior restore-write outcome**, `check_id=C7_RESTORE_NO_UNRECONCILED_PRIOR` (`controlled-restore-write` plans only) — an early, non-authoritative, staleness-tolerant pass against `RestoreWriteLedger.has_unreconciled_prior` for the physical target; an unreconciled prior outcome or unreadable ledger refuses compilation; `NOT_APPLICABLE` for every other class's plan | `RESTORE_CONTROLLED_WRITE_LEDGER.md` §3.1.1/§5/§3.7 |
 
-Checks 1–6 above are the compile-time battery; `C2` §6's own six checks
-(approval re-check, connectivity precondition, coordination window, `RB.x`
-ledger — not applicable to restore, §5.3 note below, registry/allowlist,
-credential resolution) still run again at **claim** time, unchanged, exactly
-as they do for a backup job — compile-time checking does not replace
-claim-time re-checking, it adds an earlier, human-facing refusal point.
+Checks 1–7 above are the compile-time battery; `C2` §6 retains six checks
+(approval, connectivity, coordination, class-scoped ledger, registry/allowlist,
+credential resolution) and re-reads current state at **claim** time. A pass
+at compilation is never carried forward as claim-time authority. Check 7
+is independently recorded under `C7_RESTORE_NO_UNRECONCILED_PRIOR`, never
+merged into check 2's or check 5's outcome; checks 2–6 retain their text/order.
 
-**Note on `C2` §6 check 4 (the `RB.x` operational-write ledger):** that
-check is `NOT_APPLICABLE` for a restore job. The ledger's 24-hour ceiling
-exists to bound a *recurring* class-1 resource-consuming operation
-(BRC §7.3 point 6); restore is not recurring and is not admitted by cadence
-at all — check 5 above (no concurrent operation against the same target) is
-restore's own mutual-exclusion mechanism, and it is per-target, not
-per-24-hours.
+**Target eligibility, separately recorded before approval:**
+`RESTORE_TARGET_TOPOLOGY_ELIGIBILITY` must positively establish
+`STANDALONE_PHYSICAL_DEVICE` from authoritative registry plus current topology
+evidence. Known ClusterXL members yield `UNSUPPORTED_CLUSTERXL_MEMBER`;
+missing, stale or conflicting membership evidence yields `NOT_EVALUABLE`.
+Either refuses compilation before approval. Targets are physical
+`device_id`/`endpoint_id` only; VSX-context restore is unsupported. Claim-time
+`C2` §6 check 5 re-evaluates eligibility with its distinct claim-time refusal
+reasons: this compile-time `UNSUPPORTED_CLUSTERXL_MEMBER` outcome maps to
+`TARGET_CLUSTERXL_MEMBER_UNSUPPORTED` at claim (`RESTORE_CONTROLLED_WRITE_LEDGER.md`
+§3.7). Per-member identity separation
+does not prove cross-member restore safety.
+
+**Note on `C2` §6 check 4, per-class interpretation (D1 Option A):**
+
+- `CLASS_1_RECOVERY_WRITE` retains the `RB.x` cadence ledger and its existing
+  minimum re-execution interval, unchanged.
+- `CLASS_1B_CONTROLLED_RESTORE_WRITE` consults `RestoreWriteLedger` for an
+  unreconciled prior restore-write outcome on the same physical device,
+  independently named and recorded; an unreadable ledger blocks fail-closed.
+- Every other class is `NOT_APPLICABLE`.
+
+This supersedes the former blanket restore exemption, per the frozen ledger
+§3.6 companion amendment. Check 5 above remains the independent live-job
+concurrency check; neither it nor the cadence ledger substitutes for the
+authoritative claim-time reconciliation check in `C2` §6 check 4. Runtime
+restore remains disabled pending the remaining D1 implementation/validation gates.
 
 ### 5.4 Execution steps, via `C4` (`AC-5`)
 
@@ -962,7 +983,7 @@ discipline `C1`/`C2`/`C3` already establish:
    reduces a device to zero held artefacts or removes its last
    `is_rma_grade` artefact while a non-RMA-grade one remains.
 7. **Restore plan compilation refuses on each precondition independently.**
-   Six scenarios, one per §5.3 check, each producing a named refusal before
+   Seven scenarios, one per §5.3 check, each producing a named refusal before
    any `restore_approval` row is even created and before any `C2` job is
    requested.
 8. **Restore approval is per-operation and non-reusable.** A granted
@@ -1055,6 +1076,12 @@ specified but **not executable** on any device — exactly the same posture
 `C3` §4.4 already established for `DIRECTORY-POSTURE`: the spec is ready,
 the function is not enabled.
 
+**Resolved (D1 Option A, baseline §2 `DEVICE-WRITE-CLASS`):** the write
+resolves to `CLASS_1B_CONTROLLED_RESTORE_WRITE`, distinct from recovery-write
+and operational-state-change, limited to provenance-bound replay to its
+originating physical device. Admission is governed by
+`RESTORE_CONTROLLED_WRITE_LEDGER.md`; class 3/4 remain prohibited.
+
 ### 9.2 `C4`'s closed step-kind set has no device-directed write/push step, and `sftp_put` is refused unconditionally
 
 `C4` §2.3 lists `sftp_put` as *"reserved, refused at spec-validation time —
@@ -1073,6 +1100,10 @@ in this document (which would be exactly the kind of silent reopening of
 `C4`'s closed set `C4` §2.3 itself forbids: "adding a kind is an amendment
 to this document [`C4`], never a runtime configuration choice").
 
+**Resolved (same D1 decision):** `restore_push` exists in C4 §2.3 and is
+legal only for `controlled-restore-write` under C4 §3.3 step 7. `sftp_put`
+remains reserved and refused unconditionally.
+
 ### 9.3 §9.1 and §9.2 are one combined blocker, not two independent ones
 
 Closing §9.1 (a taxonomy class restore's write can resolve to) without
@@ -1083,6 +1114,11 @@ step 7's "a row whose `action_class` is class 2, 3 or 4 can never be
 `SIGNED_OFF`" rule. Both need the same successor movement's attention
 together; recorded here so neither is scheduled as though it alone unblocks
 restore execution.
+
+**Resolved, both halves together:** the taxonomy class and C4 step kind
+landed together in the predecessor D1 slice. That resolution did not alter
+restore plan/run/approval schemas or enable execution. This movement separately
+applies the approved §5.3 admission amendments; runtime restore remains disabled.
 
 ### 9.4 Documentation inconsistency: `RB.2`'s real-environment status
 

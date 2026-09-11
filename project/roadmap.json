@@ -151,34 +151,45 @@
     "horizon_contract": "NOW is exactly one build. NEXT is exactly one. Everything else is an `upcoming` row carrying its own true status: planned = AFTER, blocked = waiting on a named external gate, deferred = consciously postponed. `now.build` must equal the newest project/build_history.json record -- utils.project_plan enforces it.",
     "now": {
       "build": "ui2_b1_01_skeleton_ci_docker",
-      "title": "UI2 B1-1 -- skeleton, CI and Docker contract (DRAFT, for Product Owner freeze)",
-      "goal": "Write the DRAFT B1-1 contract for the ui2 Gradle multi-module skeleton, isolated CI job, minimal Docker image, Testcontainers PostgreSQL harness, and P-1 dependency architecture tests. Contract only; no ui2 implementation or device behavior.",
+      "title": "UI2 B1-1 -- skeleton, CI, Docker and CRC implementation",
       "status": "in_progress",
       "started": "2026-09-10",
-      "completed": "2026-09-10",
+      "goal": "Complete the frozen B1-1 implementation and validation gates without introducing device behavior or Line-1 dependencies.",
       "notes": [
-        "Full detail: project/build_history.json's ui2_b1_01_skeleton_ci_docker record and docs/design/UI2_0_B1_01_SKELETON_CI_DOCKER_CONTRACT.md.",
-        "This is the second-to-last B0 item; runs concurrently with the extraction-tooling movement (Line-1 scripts/, fully independent). Once both merge, B0 is complete and the Product Owner can move to the actual freeze decision for C1-C7 as a whole, then to B1.",
-        "Predecessor ui2_b0_c7_backup_artefact_restore_engine_contract (C7): backup profile model, artefact store/manifest/validation/retention, key custody, restore execution (plan, preconditions, execution via C4, verification, a restore-specific OUTCOME_UNKNOWN), routine-vs-per-operation approval, device/version matrix. MERGED PR #170. Full detail: project/build_history.json's ui2_b0_c7_backup_artefact_restore_engine_contract record.",
-        "Predecessor ui2_b0_c5_amendments_bundle (C5): CON.0 separate-shell amendment text cited, action_taxonomy.py UI-OPERATIONAL-RUN-NOW clarification (docstring/comment only, no new ActionClass member), design document APPROVAL-MODEL/CAP-* replacements, PRIVACY_AND_DATA_HANDLING.md UI 2.0 database section. MERGED PR #169. Full detail: project/build_history.json's ui2_b0_c5_amendments_bundle record.",
-        "Predecessor ui2_b0_c6_capability_extraction_contract (C6): the extraction procedure against C4's exact schema, fixture-generation procedure, FIRST-CAPABILITY worked example, ordered extraction inventory. MERGED PR #168. Full detail: project/build_history.json's ui2_b0_c6_capability_extraction_contract record.",
-        "Predecessor ui2_b0_c3_identity_sessions_rbac_contract (C3): LDAP bind, single-active-session rule, role tokens -> bindings -> AD group references, E1-E7 gate chain -- the exact mechanism this movement's own §2.2 RBAC visible-but-refused rendering cites. MERGED PR #167. Full detail: project/build_history.json's ui2_b0_c3_identity_sessions_rbac_contract record.",
-        "Predecessor ui2_b0_c4_capability_registry_gate_resolution_contract (C4): the runtime capability registry schema, K-4 gate-registry resolution rule, closed step-kind set, shared-fact produces_facts/consumes_facts mechanism -- the exact schema this movement's own §4 feature-contribution contract ties to C2's job_type. MERGED PR #166. Full detail: project/build_history.json's ui2_b0_c4_capability_registry_gate_resolution_contract record.",
-        "Predecessor ui2_b0_c2_job_execution_contract (C2, 2026-09-09): job record and closed state machine, leasing/heartbeat/fencing, OUTCOME_UNKNOWN as terminal-until-reconciled -- the model this movement's own §5 alarm-delivery-failure section mirrors for DELIVERY_UNKNOWN. MERGED PR #164. Full detail: project/build_history.json's ui2_b0_c2_job_execution_contract record.",
-        "Predecessor ui2_b0_c1_platform_schema_contract (C1, ran concurrently with C2 each in its own worktree/branch): UI 2.0 schema ownership, Flyway as sole migration authority, audit-from-first-mutation (C1-1), the five data classes (C1 §4) this movement's own §6 cites directly. MERGED 2026-09-09 PR #163. Full detail: project/build_history.json's ui2_b0_c1_platform_schema_contract record.",
-        "Predecessor failover_plan_compiler (OP.1.S1, 2026-09-09): write-free failover plan compiler and dry-run for classic CP ClusterXL, AUTOMATED_VALIDATED, merged PR #162. Full detail: project/build_history.json's failover_plan_compiler record."
+        "CRC real-environment service startup is validated. Docker-dependent Testcontainers integration remains open on this host; worker, scheduler, and migration-job runtime validation remain open."
       ]
     },
     "next": {
-      "build": "ui2_d1_restore_c7_c2_amendments",
-      "title": "UI2 D1 Option A -- apply C7 and C2 restore admission amendments",
+      "build": "ui2_b1_01m_feature_service_topology",
+      "title": "UI2 B1-1M -- feature-service topology decision",
       "status": "planned",
       "notes": [
-        "Apply only frozen C7 and C2 restore admission amendments under separate authorization; tests and Java/UI remain later slices. No device contact or real write is implied.",
-        "Status: planned; restore remains disabled until this separate movement and later validation slices are complete."
+        "Starts immediately after B1-1 reaches DONE; decide and freeze domain service boundaries before B1-2 schema work.",
+        "Candidate boundaries are control-plane, configuration, compliance, backup, scheduler, and worker; no service split is authorized until the topology contract is frozen.",
+        "2026-09-11 requested v1 scope: existing Project Plan visibility, reliable backup/storage without mandatory restore, and actual controlled failover. Prepare explicit frozen-contract amendments and historical 1.0/OP.x mapping; device execution remains gated. Brief: docs/design/UI2_0_V1_SCOPE_AND_SERVICE_TOPOLOGY_BRIEF.md."
       ]
     },
     "upcoming": [
+      {
+        "build": "ui2_b1_01_skeleton_ci_docker",
+        "title": "UI2 B1-1 -- skeleton, CI and Docker implementation (contract frozen)",
+        "goal": "Write the DRAFT B1-1 contract for the ui2 Gradle multi-module skeleton, isolated CI job, minimal Docker image, Testcontainers PostgreSQL harness, and P-1 dependency architecture tests. Contract only; no ui2 implementation or device behavior.",
+        "status": "planned",
+        "started": "2026-09-10",
+        "completed": "2026-09-10",
+        "notes": [
+          "Contract frozen 2026-09-10: docs/design/UI2_0_B1_01_SKELETON_CI_DOCKER_CONTRACT.md. Implementation is the next actionable build.",
+          "This is the second-to-last B0 item; runs concurrently with the extraction-tooling movement (Line-1 scripts/, fully independent). Once both merge, B0 is complete and the Product Owner can move to the actual freeze decision for C1-C7 as a whole, then to B1.",
+          "Predecessor ui2_b0_c7_backup_artefact_restore_engine_contract (C7): backup profile model, artefact store/manifest/validation/retention, key custody, restore execution (plan, preconditions, execution via C4, verification, a restore-specific OUTCOME_UNKNOWN), routine-vs-per-operation approval, device/version matrix. MERGED PR #170. Full detail: project/build_history.json's ui2_b0_c7_backup_artefact_restore_engine_contract record.",
+          "Predecessor ui2_b0_c5_amendments_bundle (C5): CON.0 separate-shell amendment text cited, action_taxonomy.py UI-OPERATIONAL-RUN-NOW clarification (docstring/comment only, no new ActionClass member), design document APPROVAL-MODEL/CAP-* replacements, PRIVACY_AND_DATA_HANDLING.md UI 2.0 database section. MERGED PR #169. Full detail: project/build_history.json's ui2_b0_c5_amendments_bundle record.",
+          "Predecessor ui2_b0_c6_capability_extraction_contract (C6): the extraction procedure against C4's exact schema, fixture-generation procedure, FIRST-CAPABILITY worked example, ordered extraction inventory. MERGED PR #168. Full detail: project/build_history.json's ui2_b0_c6_capability_extraction_contract record.",
+          "Predecessor ui2_b0_c3_identity_sessions_rbac_contract (C3): LDAP bind, single-active-session rule, role tokens -> bindings -> AD group references, E1-E7 gate chain -- the exact mechanism this movement's own §2.2 RBAC visible-but-refused rendering cites. MERGED PR #167. Full detail: project/build_history.json's ui2_b0_c3_identity_sessions_rbac_contract record.",
+          "Predecessor ui2_b0_c4_capability_registry_gate_resolution_contract (C4): the runtime capability registry schema, K-4 gate-registry resolution rule, closed step-kind set, shared-fact produces_facts/consumes_facts mechanism -- the exact schema this movement's own §4 feature-contribution contract ties to C2's job_type. MERGED PR #166. Full detail: project/build_history.json's ui2_b0_c4_capability_registry_gate_resolution_contract record.",
+          "Predecessor ui2_b0_c2_job_execution_contract (C2, 2026-09-09): job record and closed state machine, leasing/heartbeat/fencing, OUTCOME_UNKNOWN as terminal-until-reconciled -- the model this movement's own §5 alarm-delivery-failure section mirrors for DELIVERY_UNKNOWN. MERGED PR #164. Full detail: project/build_history.json's ui2_b0_c2_job_execution_contract record.",
+          "Predecessor ui2_b0_c1_platform_schema_contract (C1, ran concurrently with C2 each in its own worktree/branch): UI 2.0 schema ownership, Flyway as sole migration authority, audit-from-first-mutation (C1-1), the five data classes (C1 §4) this movement's own §6 cites directly. MERGED 2026-09-09 PR #163. Full detail: project/build_history.json's ui2_b0_c1_platform_schema_contract record.",
+          "Predecessor failover_plan_compiler (OP.1.S1, 2026-09-09): write-free failover plan compiler and dry-run for classic CP ClusterXL, AUTOMATED_VALIDATED, merged PR #162. Full detail: project/build_history.json's failover_plan_compiler record."
+        ]
+      },
       {
         "build": "ui2_b0_c7_backup_artefact_restore_engine_contract",
         "title": "UI2 B0/C7 -- backup, artefact and restore engine contract (DRAFT, for Product Owner freeze)",

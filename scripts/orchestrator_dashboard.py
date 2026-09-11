@@ -508,6 +508,48 @@ def tail_log_lines(worktree_path: str | None, limit: int) -> list[str]:
     return []
 
 
+def read_usage_metrics(worktree_path: str | None) -> dict | None:
+    """Return the latest provider-reported usage without retaining log text."""
+    if not worktree_path:
+        return None
+    path = Path(worktree_path) / ".nexus" / "engineer.log"
+    if not path.is_file():
+        return None
+    latest = None
+    try:
+        # ponytail: inspect only the recent log tail; older turns cannot change
+        # the latest usage and full-log rescans waste dashboard poll time.
+        raw = path.read_bytes()[-262_144:]
+        for line in raw.decode("utf-8", errors="replace").splitlines():
+            if '"type":"turn.completed"' not in line:
+                continue
+            obj = json.loads(line)
+            usage = obj.get("usage")
+            if isinstance(usage, dict):
+                latest = {key: usage[key] for key in (
+                    "input_tokens", "cached_input_tokens", "cache_write_input_tokens",
+                    "output_tokens", "reasoning_output_tokens",
+                ) if isinstance(usage.get(key), int)}
+    except (OSError, json.JSONDecodeError):
+        return None
+    return latest or None
+
+
+def derive_attention(*, usage: dict | None, approved_task: dict | None, row: dict) -> list[str]:
+    """Small, explainable alerts for PO attention; no token estimate is invented."""
+    alerts = []
+    if usage and usage.get("input_tokens", 0) >= 500_000:
+        alerts.append(f"High input context: {usage['input_tokens']:,} tokens; narrow refs/scope before the next turn.")
+    report = (approved_task or {}).get("report", {}) if isinstance(approved_task, dict) else {}
+    refs = (approved_task or {}).get("refs", []) if isinstance(approved_task, dict) else []
+    criteria = report.get("acceptance_criteria", [])
+    if len(refs) > 8 or len(criteria) > 8:
+        alerts.append(f"Large task contract: {len(refs)} refs / {len(criteria)} acceptance criteria; split if independent.")
+    if row.get("phase") == orch.PHASE_RUNNING and row.get("process_status") == "exited":
+        alerts.append("State drift: process exited while movement is still marked running; reconcile before dispatching more work.")
+    return alerts
+
+
 # ---------------------------------------------------------------------------
 # Movement summary / detail assembly
 # ---------------------------------------------------------------------------
@@ -590,6 +632,15 @@ def build_movement_summary(record: dict, relay_dir: Path, state_dir: Path, retry
         relay_status=relay_status, next_actor=next_actor, phase=row.get("phase"),
         porcelain_lines=porcelain, last_activity=row.get("last_activity"), has_open_pr=bool(pr_info),
     )
+    usage = read_usage_metrics(worktree_path)
+    approved_task = None
+    if worktree_path:
+        task_path = Path(worktree_path) / ".nexus" / "approved_task.json"
+        if task_path.is_file():
+            try:
+                approved_task = json.loads(task_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                approved_task = None
     return {
         **row,
         "process_status": derive_process_status(row),
@@ -598,6 +649,8 @@ def build_movement_summary(record: dict, relay_dir: Path, state_dir: Path, retry
         "open_pr": pr_info,
         "pending_action": pending_action,
         "outbox_pending": len(load_outbox(state_dir, row["movement_id"])),
+        "usage": usage,
+        "attention": derive_attention(usage=usage, approved_task=approved_task, row={**row, "process_status": derive_process_status(row)}),
     }
 
 

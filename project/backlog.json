@@ -2,6 +2,24 @@
   "schema_version": "1.0",
   "items": [
     {
+      "id": "ui2_d1_claim_refusal_lifecycle_resolution",
+      "category": "UI2 / contract consistency",
+      "title": "Resolve restore claim refusal lifecycle",
+      "status": "done",
+      "priority": "P1",
+      "target": "RESOLVED 2026-09-10: claim-time refusal is CLAIMED -> REJECTED, terminal for that job_id; Class 1B never auto-retries after execution begins.",
+      "note": "The approved lifecycle alignment updated the ledger, C2 retry table, targeted contract test, and durable state. Runtime restore remains disabled."
+    },
+    {
+      "id": "ui2_b1_01_contract_status_reconciliation",
+      "category": "UI2 / contract consistency",
+      "title": "Reconcile B1-1 contract status and freeze blockers",
+      "status": "done",
+      "priority": "P1",
+      "target": "RESOLVED 2026-09-10: freeze B1-1 only after resolving secret profiles, isolated Testcontainers DSNs, cold-cache CI resolution, and SBOM acceptance.",
+      "note": "The B1-1 contract is FROZEN for implementation. Exact dependency patch versions and implementation artifacts remain in the next build; no device behavior is authorized."
+    },
+    {
       "id": "orchestrator_tool_gate_hook_cwd_relative_script_path_footgun",
       "category": "Orchestrator / reliability",
       "title": "scripts/nexus_engineer_tool_gate.py (PreToolUse hook) resolves its own script path relative to CWD -- an accidental cd outside the worktree permanently breaks the engineer session's Bash tool",
@@ -994,8 +1012,17 @@
       "title": "UI2 B1-1 -- Gradle multi-module skeleton under ui2/, CI job, Docker image, Testcontainers PostgreSQL, P-1 dependency-graph test",
       "priority": "P1 -- UI 2.0",
       "status": "in_progress",
-      "note": "Starts when C1-C4 and the authorization/audit rows are frozen. 2026-09-09: contract-first, implementation follows; dispatched NXS-LOCAL-0061 and resumed 2026-09-10 after PO selected B1 as the initial movement. CONTRACT FROZEN -- PRODUCT OWNER APPROVED 2026-09-10 after portability and cold-cache corrections; docs/design/UI2_0_B1_01_SKELETON_CI_DOCKER_CONTRACT.md defines 15 runnable checks. Contract only; no ui2 implementation, Line-1 source, validation.yml, or device contact."
+      "note": "CONTRACT FROZEN -- PRODUCT OWNER APPROVED 2026-09-10. Implementation is in progress: Gradle skeleton, role-gated runtime, CI, multi-stage image, OpenShift manifests and CRC overlay are present; CRC service startup is validated. Docker-dependent Testcontainers integration plus worker/scheduler/migration-job runtime validation remain open.",
       "target": "workflow §5 B1-1"
+    },
+    {
+      "category": "UI 2.0 (Java product line)",
+      "id": "ui2_b1_01m_feature_service_topology",
+      "title": "UI2 B1-1M -- feature-service topology and migration decision",
+      "priority": "P1 -- UI 2.0",
+      "status": "planned",
+      "note": "PO sequencing decision 2026-09-11: finish the current one-image B1-1 implementation first, then decide feature-oriented service boundaries before B1-2. Incorporate the requested integrated v1 scope and reconcile frozen release criteria explicitly: restore is not mandatory, actual controlled failover is required, and Project Plan is existing development visibility. Domain/API/event/data/deployment decisions and device gates remain pending. Scope and authority conflicts: docs/design/UI2_0_V1_SCOPE_AND_SERVICE_TOPOLOGY_BRIEF.md.",
+      "target": "workflow after §5 B1-1, before B1-2"
     },
     {
       "category": "UI 2.0 (Java product line)",

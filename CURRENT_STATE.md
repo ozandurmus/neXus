@@ -5,8 +5,8 @@ see `AGENTS.md`/`AI_START_HERE.md`. **Predecessor build detail lives in
 `project/build_history.json`** (structured, newest-first) and its linked
 docs under `docs/history/`; `docs/history/INDEX.md` is the one-line timeline.
 
-- **Checkpoint:** 2026-09-10, `ui2_b1_01_skeleton_ci_docker` (`UI2 B1-1`) — new `docs/design/UI2_0_B1_01_SKELETON_CI_DOCKER_CONTRACT.md` (status: **DRAFT — FOR PRODUCT OWNER FREEZE**). Contract only: module/dependency map, reproducible build commands, Testcontainers/Flyway harness, isolated CI, minimal non-root image, scoped secrets, and 15 runnable checks. No `ui2/` implementation, Line-1 source, validation workflow, or device contact. D1 Option A remains implemented as its predecessor; restore remains disabled. Detail: `project/build_history.json`.
-- **Next** (`now_next.next`): `ui2_d1_restore_c7_c2_amendments` — separate authorization for frozen C7/C2 restore-admission amendments; tests and Java/UI remain later slices, and no device contact or real write is implied. `m7_real_device_targeted_
+- **Checkpoint:** 2026-09-11, `ui2_b1_01_skeleton_ci_docker` — **IN_PROGRESS**: minimal Java skeleton, role-gated runtime, CI, multi-stage image, OpenShift manifests, and CRC overlay implemented. The local orchestrator defaults to Codex, and its dashboard now exposes provider usage plus high-context, oversized-contract and stale-process PO alerts; CRC process startup is reported, but Flyway lifecycle, Testcontainers role separation, architecture enforcement, image inspection, secret-profile coverage, SBOM evidence and privacy/state reconciliation remain open. Detail: `docs/design/UI2_0_B1_01_SKELETON_CI_DOCKER_CONTRACT.md` and `project/build_history.json`.
+- **Next** (`now_next.next`): `ui2_b1_01m_feature_service_topology` — after B1-1, reconcile the requested v1 scope and freeze service boundaries before schema implementation. Scope request, not execution authority: [v1 brief](docs/design/UI2_0_V1_SCOPE_AND_SERVICE_TOPOLOGY_BRIEF.md). `m7_real_device_targeted_
   collect_now` **AUTOMATED_VALIDATED 2026-09-08**, real-device confirmation
   pending Product Owner execution. `op2_c_cp_clusterxl_adapter_scoping`
   stays `upcoming`/`blocked`. `event_signal_intake` stays `in_progress` —
@@ -22,6 +22,7 @@ docs under `docs/history/`; `docs/history/INDEX.md` is the one-line timeline.
 - **Product baseline:** `0.7.7 — Compliance trend retro-fill` — AUTOMATED_VALIDATED.
 - **Engineering baseline:** `DEV.3.3` — AUTOMATED_VALIDATED. `DEV.1`/`DEV.4` complete.
 - **Product evidence baseline:** `0.6.1B.1.2` interactive CP config is REAL_ENV_VALIDATED.
+- **PO operating decisions:** durable routing, OpenRouter disposition, Graphify scope policy, worker status format, and queue-runner gap are recorded in `docs/reference/COPILOT_OPERATING_MODEL.md`; `AI_HANDOVER.md` is only the cold-session pointer.
 
 ## Reading this file
 

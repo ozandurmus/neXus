@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ui2-worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: ui2-worker }
+  template:
+    metadata:
+      labels: { app: ui2-worker }
+    spec:
+      securityContext:
+        fsGroup: 65532
+      containers:
+        - name: worker
+          image: nexus-ui2
+          args: ["worker"]
+          env:
+            - name: SECURITYEXPERT_UI2_WORKER_DB_DSN_FILE
+              value: /var/run/ui2-secrets/db-dsn
+          volumeMounts:
+            - name: worker-secrets
+              mountPath: /var/run/ui2-secrets
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            capabilities: { drop: ["ALL"] }
+      volumes:
+        - name: worker-secrets
+          secret:
+            secretName: ui2-worker-secrets
+            defaultMode: 0440
+        - name: tmp
+          emptyDir: {}
