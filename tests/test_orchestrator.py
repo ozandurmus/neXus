@@ -827,6 +827,12 @@ def test_spawn_engineer_can_explicitly_use_legacy_claude(tmp_path, monkeypatch):
     assert calls[0][0:2] == ["claude", "-p"]
 
 
+def test_engineer_prompt_is_compact_but_keeps_safety_gates():
+    assert len(orch.ENGINEER_PROMPT) < 700
+    for required in ("approved_task.json", "AGENTS.md", "NEXUS_RELAY_FILE", "foreground", "secrets"):
+        assert required in orch.ENGINEER_PROMPT
+
+
 # --- AC-4/AC-5: last_activity -------------------------------------------------
 
 def test_read_last_activity_returns_none_for_no_worktree_path():

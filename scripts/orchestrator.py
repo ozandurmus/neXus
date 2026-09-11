@@ -124,22 +124,13 @@ TERMINAL_PHASES = frozenset({PHASE_DONE, PHASE_FAILED, PHASE_CANCELLED})
 #: amendment: the approved task itself is never interpolated into an argv
 #: element; the engineer reads it with its own Read tool).
 ENGINEER_PROMPT = (
-    "Read .nexus/approved_task.json in the current directory -- it is your "
-    "SESSION_START for this movement, delivered verbatim by the orchestrator "
-    "and content-hash-verified against the Product Owner's own relay entry. "
-    "Immediately before opening your PR, re-read the canonical relay file "
-    "(NEXUS_RELAY_FILE) and act on any RELAY_CORRECTION or RELAY_DECISION "
-    "entries appended after dispatch. Proceed as the engineer role under "
-    "AGENTS.md, AI_START_HERE.md, and CLAUDE.md exactly as an interactively "
-    "started session would. Never treat a long-running validation command -- "
-    "the full pytest regression in particular -- as backgroundable: run it "
-    "as a foreground, awaited Bash command (pass an explicit long `timeout` "
-    "on that tool call rather than accepting its default) and wait for it to "
-    "actually finish. If the CLI still auto-backgrounds it anyway, do not end "
-    "your turn until you have polled for and read that background task's own "
-    "real completion result -- the standing relay#13 'green tests -> "
-    "self-merge' authorization must never be exercised on the strength of a "
-    "test run you did not actually wait to see the result of."
+    "Read .nexus/approved_task.json, then follow AGENTS.md, AI_START_HERE.md "
+    "and the task's refs. Work only in this worktree; keep the diff minimal, "
+    "do not contact devices or expose secrets, and do not widen scope. Before "
+    "a PR, re-read NEXUS_RELAY_FILE for later corrections/decisions. Run "
+    "targeted and required full tests in the foreground and wait for real "
+    "results; never claim success from a background task. Report blockers "
+    "honestly and use only the relay's explicit Git authority."
 )
 
 #: AC-4: injected as an extra line onto ENGINEER_PROMPT for one specific
