@@ -132,6 +132,102 @@ Preferred next validation or first command:
 Model names are examples of the currently approved Copilot set. If the model
 catalog changes, preserve the reasoning categories rather than the brand name.
 
+## PO + Orchestrator provider and model routing
+
+### Decision record — 2026-09-11
+
+The following decisions are durable and must be used by a future PO without
+replaying chat context:
+
+- Codex is the PO + Orchestrator + final reviewer; workers own implementation.
+- The PO selects the actual provider, current model, and reasoning per
+  movement. There is no permanent Sonnet/Opus/Luna/Haiku default.
+- Prefer Claude when credit/license is available; use Codex when Claude is
+  unavailable. Model choice is based on scope, risk, contract state, and cost.
+- Architecture/security/contract work may invoke the formal council when its
+  triggers hold. The PO chooses the lightest suitable model and effort for
+  each seat; Terra, Opus, Sol, Fable, or another currently available model may
+  be appropriate depending on scope. Fable is not mandatory, Astra is an
+  optional independent second opinion, Claude worker seats are valid when
+  Claude credit is available, and Codex synthesizes/reviews and freezes the
+  decision.
+- OpenRouter `NXS-LOCAL-0065` / `3143bb6` is an optional advisory review POC,
+  not a worker fallback or an orchestrator provider.
+- The current orchestrator has no unattended backlog queue-runner; the PO
+  advances movements explicitly and parks blocked questions safely.
+- Graphify is retained only as a narrow relationship locator until a separate
+  canonical-scope rebuild; the existing oversized graph is not authority.
+- Worker notifications use the ten-field Relay/Work/Provider/Model/Reasoning/
+  PID/Phase/Worktree/First activity/Relay publication format below.
+
+The Product Owner selects the worker route per movement. There is no fixed
+"normal implementation = Sonnet" rule and no model-brand substitution.
+
+- **PO + Orchestrator + final reviewer:** Codex. The PO scopes and orders the
+  backlog, creates/advances relays, selects provider/model/reasoning, dispatches
+  through `scripts/orchestrator.py`, monitors workers, asks the human only when
+  a decision is needed, reviews the result, and handles authorized PR/pull/
+  merge work. The PO is not the operator and normally does not write worker
+  implementation code in the PO worktree.
+- **Worker selection:** choose the lightest suitable current model and effort
+  for the movement's contract, risk, and evidence needs. Claude is preferred
+  when its license/credit is available; Codex remains the fallback when Claude
+  is unavailable. Do not add OpenRouter as a general worker fallback: its
+  accepted POC is a separate, bounded, read-only advisory review node, not an
+  orchestrator worker provider. Use that POC only when a small sanitized
+  second-opinion review has a clear benefit and its separate credential/privacy
+  boundary is justified. It is not needed for ordinary implementation,
+  dashboard work, stale-state reconciliation, or topology review.
+- **Architecture/security/contract decisions:** first decide whether the
+  formal council trigger is actually present. If yes, the PO selects the
+  smallest relevant seat set and assigns models/effort by scope; Terra, Opus,
+  Sol, Fable, or another current model may be used. Fable is not mandatory and
+  Astra is optional. Claude seats are valid when credit is available. Codex
+  synthesizes dissent/consensus, reviews the evidence, and freezes or rejects
+  the decision. High-end models are not used continuously merely because they
+  exist.
+- **Backlog loop:** the PO opens work sequentially, follows each worker and
+  closes or parks the movement. A worker question is relayed to the human;
+  independent next items may continue while that movement is parked. No new
+  worker is created merely to hide stale state or an unresolved decision.
+  **Current implementation gap:** unattended night-time queue continuation is
+  an operating target, not yet a scheduler/queue-runner capability; until that
+  movement exists, the PO advances the queue explicitly and safely.
+- **Dispatch evidence:** every dispatch records the actual `provider`, `model`
+  and `effort` in state and in the status report. Omitted or defaulted values
+  are an audit exception and are never retroactively relabeled.
+
+This routing is the durable source for the handover pointer in
+`AI_HANDOVER.md`. Movement `NXS-LOCAL-0069` remains a recorded exception: it
+was started with the Codex default and no explicit model flag, produced no
+  accepted code, and must not be described as a Claude/Fable run.
+
+The OpenRouter POC is recorded by movement `NXS-LOCAL-0065` / commit
+`3143bb6` on its separate branch. It remains advisory-only and is not a
+requirement for the current worker-routing path.
+
+## PO worker status notification format
+
+Every worker-start or meaningful worker-state notification uses the following
+fields and reports the actual observed values; no model/provider is inferred
+from the job name:
+
+1. Relay: `NXS-LOCAL-xxxx`
+2. Work: concise movement/job name
+3. Provider: actual CLI/provider
+4. Model: actual selected model alias/name
+5. Reasoning: actual effort/tier
+6. PID: process id, or `—` when not running
+7. Phase: actual orchestrator phase
+8. Worktree: separate worker worktree path/branch
+9. First activity: first observed log activity, or `—`
+10. Relay publication: commit/URL/status, or `—`
+
+Status updates also state live-worker count, stale records, the next PO action,
+and the PO's current model/reasoning/token-use line when requested. This format
+is reporting only; it does not authorize a dispatch or imply that a worker
+completed work.
+
 ## Full-scale development rule
 
 High reasoning should produce a decision/contract, not automatically perform

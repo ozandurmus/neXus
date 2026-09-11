@@ -27,6 +27,18 @@ UI/UX Product Designer, Technical Product Owner, Network/Security Manager,
 Business/Executive stakeholder). Security Reviewer is always seated when
 trigger (b) holds. Three to six seats is normal.
 
+## Model and reasoning selection
+
+Council invocation does not imply a permanent model, vendor, or maximum
+reasoning tier. The Product Owner assigns each seat the lightest current model
+and effort that can answer its lens: a bounded architecture question may use a
+Sol/Terra/Opus/Fable-class model at an appropriate effort, while a wider or
+security-critical freeze may justify a stronger tier. Fable is not mandatory;
+Astra is an optional independent second opinion, not a required seat. Claude
+worker seats may be used when Claude credit is available, and Codex remains the
+PO's synthesizer/reviewer. Record the actual provider, model and effort for
+each seat; do not infer them from the movement name.
+
 ## Procedure
 
 1. Write one brief per seat: the exact document under review (path and

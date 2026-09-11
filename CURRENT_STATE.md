@@ -22,6 +22,7 @@ docs under `docs/history/`; `docs/history/INDEX.md` is the one-line timeline.
 - **Product baseline:** `0.7.7 — Compliance trend retro-fill` — AUTOMATED_VALIDATED.
 - **Engineering baseline:** `DEV.3.3` — AUTOMATED_VALIDATED. `DEV.1`/`DEV.4` complete.
 - **Product evidence baseline:** `0.6.1B.1.2` interactive CP config is REAL_ENV_VALIDATED.
+- **PO operating decisions:** durable routing, OpenRouter disposition, Graphify scope policy, worker status format, and queue-runner gap are recorded in `docs/reference/COPILOT_OPERATING_MODEL.md`; `AI_HANDOVER.md` is only the cold-session pointer.
 
 ## Reading this file
 
