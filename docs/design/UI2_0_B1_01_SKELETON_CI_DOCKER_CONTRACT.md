@@ -2,7 +2,9 @@
 
 ## Status
 
-**DRAFT — FOR PRODUCT OWNER FREEZE, 2026-09-10.**
+**DRAFT — FOR PRODUCT OWNER FREEZE, 2026-09-10; six pre-freeze defect
+fixes applied as Amendment B1-1-A, 2026-09-11 (see the amendment section at
+the end of this document).**
 
 This document specifies the mechanical implementation contract for
 `ui2_b1_01_skeleton_ci_docker`. It creates no `ui2/` files, authorizes no
@@ -281,3 +283,61 @@ subject to the repository's dependency approval boundary.
   §§2–3, 6.
 - `PRIVACY_AND_DATA_HANDLING.md`, “UI 2.0 database”.
 - `.github/workflows/validation.yml` (coexisting Line-1 gate; unchanged).
+
+## Amendment B1-1-A (2026-09-11) — pre-freeze defect fixes
+
+Six defects were found by an independent freeze-readiness review of this
+DRAFT before dispatch. They are resolved here so the document can be frozen
+as a whole; no other text changes.
+
+1. **§8 check 14 — machine-specific path.** Replace the literal
+   `/Users/OzanDur/Codo/neXus/.venv/bin/python main.py …` with the
+   repository-relative form:
+   `python main.py --repository-privacy-check --privacy-baseline-ref origin/main`
+   (or the checkout's own interpreter). §3.2's "No command invokes Python"
+   is scoped to the **Gradle build and image**, not to the repository's own
+   governance gates, which are Line-1 Python tooling and always were.
+
+2. **§8 check 1 — grep scope.** The no-Python assertion excludes installed
+   npm packages and sanitized fixtures:
+   `test ! -e ui2/.python-version && ! grep -R -E 'main\.py|python|console/|_runner\.py|_collector\.py' ui2 --exclude-dir=build --exclude-dir=node_modules --exclude-dir=fixtures --exclude='*.md'`.
+   `ui2/fixtures/` is the fixture home written by
+   `scripts/ui2_extract_fixtures.py` and is not a Gradle module.
+
+3. **Migration-resource home — one answer.** Frozen `C1` §2.2 governs:
+   numbered Flyway SQL files live at
+   `ui2/service/src/main/resources/db/migration/`. §2's `persistence` row is
+   read as: `persistence` owns the Flyway **integration code**; `service`
+   owns the migration **resources**. §4 already states this and is correct.
+
+4. **§4 — container database facts.** The PostgreSQL image is pinned to
+   the version frozen in `C1` §9 (PostgreSQL 16). The `ui2_migrate` and
+   `ui2_app` roles are created by the integration harness's own bootstrap
+   step, executed before Flyway runs and owned by the `integration-tests`
+   module.
+
+5. **§2/§5 — `frontend` and the unnamed tooling.** `frontend` **is** a
+   Gradle subproject: it carries no Java plugin and no Java source set, and
+   its tasks delegate to npm so that §3.2's `check` can depend on them.
+   `./ui2/gradlew -p ui2 projects` therefore lists twelve entries, and §8
+   check 2 is read accordingly. Tooling for the rules §5 left unnamed:
+   `DIR-1`/`DIR-7`/`DIR-9` by a Gradle configuration-graph assertion in
+   `architecture-tests`; `DIR-8`/`DIR-10` by an artifact/manifest inspection
+   task in the same module; the SBOM generator named in §6 is chosen by the
+   implementing movement and recorded in its `SESSION_CLOSE`.
+
+6. **§8 — Line-1 `validate` obligations.** The implementing movement also
+   satisfies the repository's existing required checks, which §8 did not
+   name: project-state consistency
+   (`tests/test_architecture_convergence.py`), build-history index
+   currency, project-queue currency, and the project file size budgets.
+
+### Sliced implementation
+
+The implementing work is split by tooling availability, not by contract
+scope: **Slice A** (`relay/NXS-LOCAL-0101`) delivers the module map,
+direction-rule tests, unit-test wiring and the frontend workspace — every
+part validatable without a Docker daemon. **Slice B** delivers the
+Testcontainers integration harness, the Dockerfile and image checks, and the
+CI job, and runs where Docker is available. Both are governed by this
+contract; neither narrows it.
