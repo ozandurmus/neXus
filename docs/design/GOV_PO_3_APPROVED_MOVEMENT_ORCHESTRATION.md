@@ -36,6 +36,12 @@ argument-list spawning, isolated worktrees, the canonical relay directory,
 and bounded non-interactive permissions. This amendment changes no relay,
 merge, or device-action authority.
 
+**PO amendment, 2026-09-11:** the dashboard keeps the per-launch bearer in
+the current browser tab's `sessionStorage` after consuming the URL fragment.
+This preserves refresh behavior without putting the token in the URL after
+launch, on disk in the repository, or in dashboard state; closing the tab
+clears it.
+
 ## 1. Purpose
 
 `GOV_PO_ROLE_MIGRATION.md` and `GOV_PO_2_PO_VISIBILITY_AND_BOUNDED_

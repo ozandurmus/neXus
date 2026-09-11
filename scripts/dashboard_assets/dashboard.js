@@ -10,12 +10,16 @@
   var POLL_TIMER = null;
   var SELECTED_MOVEMENT = null;
   var RECENT_EXPANDED = false;
+  var TOKEN_STORAGE_KEY = "nexus.dashboard.token";
 
   function readTokenFromHash() {
     var match = /(?:^|[#&])t=([^&]+)/.exec(window.location.hash);
     if (match) {
       TOKEN = decodeURIComponent(match[1]);
+      try { sessionStorage.setItem(TOKEN_STORAGE_KEY, TOKEN); } catch (_) {}
       history.replaceState(null, "", window.location.pathname + window.location.search);
+    } else {
+      try { TOKEN = sessionStorage.getItem(TOKEN_STORAGE_KEY); } catch (_) { TOKEN = null; }
     }
   }
 
