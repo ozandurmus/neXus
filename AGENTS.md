@@ -39,6 +39,14 @@ the human or the higher authority resolve it.**
    session must be able to reconstruct the current project from the
    repository alone, without a historical chat transcript.
 
+**Contradiction report (2026-09-11).** `docs/reference/COPILOT_OPERATING_MODEL.md`
+(level 6) stated "Codex is the PO + Orchestrator + final reviewer", which
+contradicted `docs/design/GOV_PO_ROLE_MIGRATION.md` (FROZEN, level 2) §9's
+independence rule. Resolved by GOV.ORCH.3 Amendment A-2026-09-11 (PO
+decision pending) in `GOV_PO_ROLE_MIGRATION.md`: Codex synthesizes; an
+independent seat on a different provider reviews. `COPILOT_OPERATING_MODEL.md`
+is corrected to match.
+
 ## Engineering-output language law
 
 Repository artifacts, engineering reports, `SESSION START` / `SESSION CLOSE`

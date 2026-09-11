@@ -429,6 +429,7 @@ def test_start_cli_dispatches_and_writes_a_state_record(tmp_path, monkeypatch):
 
     monkeypatch.setattr(orch, "_git_rev_parse", lambda ref, cwd: "deadbeefcafe")
     monkeypatch.setattr(orch, "_git_worktree_add", lambda *a, **k: None)
+    monkeypatch.setattr(orch, "install_prepush_hook", lambda *a, **k: None)
     monkeypatch.setattr(orch, "_spawn_engineer", lambda **kwargs: _FakeProc(os.getpid()))
 
     rc = orch.main(["start", "--movement", relay_id, "--relay-dir", str(relay_dir),
@@ -450,6 +451,7 @@ def test_start_cli_refuses_a_duplicate_launch(tmp_path, monkeypatch):
     state_dir = tmp_path / "state"
     monkeypatch.setattr(orch, "_git_rev_parse", lambda ref, cwd: "sha")
     monkeypatch.setattr(orch, "_git_worktree_add", lambda *a, **k: None)
+    monkeypatch.setattr(orch, "install_prepush_hook", lambda *a, **k: None)
     monkeypatch.setattr(orch, "_spawn_engineer", lambda **kwargs: _FakeProc(os.getpid()))
 
     args = ["start", "--movement", relay_id, "--relay-dir", str(relay_dir), "--state-dir", str(state_dir),
@@ -470,6 +472,7 @@ def test_start_cli_resumes_after_an_interrupted_run_without_recreating_the_workt
 
     monkeypatch.setattr(orch, "_git_rev_parse", lambda ref, cwd: "sha")
     monkeypatch.setattr(orch, "_git_worktree_add", fake_worktree_add)
+    monkeypatch.setattr(orch, "install_prepush_hook", lambda *a, **k: None)
     monkeypatch.setattr(orch, "_spawn_engineer", lambda **kwargs: _FakeProc(os.getpid()))
 
     args = ["start", "--movement", relay_id, "--relay-dir", str(relay_dir), "--state-dir", str(state_dir),
@@ -503,6 +506,7 @@ def test_start_cli_resume_injects_recovery_note_for_the_background_task_exit_rac
 
     monkeypatch.setattr(orch, "_git_rev_parse", lambda ref, cwd: "sha")
     monkeypatch.setattr(orch, "_git_worktree_add", lambda *a, **k: None)
+    monkeypatch.setattr(orch, "install_prepush_hook", lambda *a, **k: None)
     monkeypatch.setattr(orch, "_spawn_engineer", fake_spawn_engineer)
 
     args = ["start", "--movement", relay_id, "--relay-dir", str(relay_dir), "--state-dir", str(state_dir),
@@ -531,6 +535,7 @@ def test_start_cli_resume_injects_no_recovery_note_when_nothing_is_staged(tmp_pa
 
     monkeypatch.setattr(orch, "_git_rev_parse", lambda ref, cwd: "sha")
     monkeypatch.setattr(orch, "_git_worktree_add", lambda *a, **k: None)
+    monkeypatch.setattr(orch, "install_prepush_hook", lambda *a, **k: None)
     monkeypatch.setattr(orch, "_spawn_engineer", fake_spawn_engineer)
 
     args = ["start", "--movement", relay_id, "--relay-dir", str(relay_dir), "--state-dir", str(state_dir),
@@ -1314,6 +1319,7 @@ def test_retry_count_increments_on_each_resume_and_status_reports_failed_past_th
 
     monkeypatch.setattr(orch, "_git_rev_parse", lambda ref, cwd: "sha")
     monkeypatch.setattr(orch, "_git_worktree_add", lambda *a, **k: None)
+    monkeypatch.setattr(orch, "install_prepush_hook", lambda *a, **k: None)
     monkeypatch.setattr(orch, "_spawn_engineer", lambda **kwargs: _FakeProc(os.getpid()))
 
     args = ["start", "--movement", relay_id, "--relay-dir", str(relay_dir), "--state-dir", str(state_dir),

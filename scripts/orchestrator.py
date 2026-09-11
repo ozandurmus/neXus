@@ -54,6 +54,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import shutil
 import signal
 import subprocess
@@ -134,23 +135,13 @@ TERMINAL_PHASES = frozenset({PHASE_DONE, PHASE_FAILED, PHASE_CANCELLED})
 #: movement -- never task-content-dependent (section 3.5 of the FROZEN
 #: amendment: the approved task itself is never interpolated into an argv
 #: element; the engineer reads it with its own Read tool).
+#: GOV.ORCH.3 Part A.2: shrunk to point at the generated worker brief --
+#: the interactive reading order (AGENTS.md/AI_START_HERE.md/CLAUDE.md) and
+#: the pytest-foreground/relay-re-read rules move into WORKER.md itself
+#: (sections 7-8, see `render_worker_md`), never restated here.
 ENGINEER_PROMPT = (
-    "Read .nexus/approved_task.json in the current directory -- it is your "
-    "SESSION_START for this movement, delivered verbatim by the orchestrator "
-    "and content-hash-verified against the Product Owner's own relay entry. "
-    "Immediately before opening your PR, re-read the canonical relay file "
-    "(NEXUS_RELAY_FILE) and act on any RELAY_CORRECTION or RELAY_DECISION "
-    "entries appended after dispatch. Proceed as the engineer role under "
-    "AGENTS.md, AI_START_HERE.md, and CLAUDE.md exactly as an interactively "
-    "started session would. Never treat a long-running validation command -- "
-    "the full pytest regression in particular -- as backgroundable: run it "
-    "as a foreground, awaited Bash command (pass an explicit long `timeout` "
-    "on that tool call rather than accepting its default) and wait for it to "
-    "actually finish. If the CLI still auto-backgrounds it anyway, do not end "
-    "your turn until you have polled for and read that background task's own "
-    "real completion result -- the standing relay#13 'green tests -> "
-    "self-merge' authorization must never be exercised on the strength of a "
-    "test run you did not actually wait to see the result of."
+    "Read .nexus/WORKER.md and .nexus/approved_task.json in the current "
+    "directory and follow them. Read nothing else unless WORKER.md names it."
 )
 
 #: AC-4: injected as an extra line onto ENGINEER_PROMPT for one specific
@@ -193,6 +184,176 @@ def canonical_json(obj: Any) -> str:
 
 def task_hash(session_start_entry: dict) -> str:
     return hashlib.sha256(canonical_json(session_start_entry).encode("utf-8")).hexdigest()
+
+
+# ---------------------------------------------------------------------------
+# GOV.ORCH.3 Part A: WORKER.md -- a fixed-template worker brief, never a
+# model call, rendered from `approved_task.json` at dispatch.
+# ---------------------------------------------------------------------------
+
+#: A.2 §7: the exact relay-closeout shape, verbatim, plus the "re-read the
+#: relay file first" rule (moved here from the old ENGINEER_PROMPT).
+RELAY_CLOSEOUT_TEXT = (
+    "Immediately before opening your PR, re-read the canonical relay file "
+    "(NEXUS_RELAY_FILE) first and act on any RELAY_CORRECTION or "
+    "RELAY_DECISION entries appended after dispatch. Close with:\n\n"
+    "```\n"
+    "py scripts/local_relay.py append --file $NEXUS_RELAY_FILE --role engineer "
+    "--marker SESSION_CLOSE ...\n"
+    "```"
+)
+
+#: A.2 §8: standing rules, fixed text, under 200 words -- includes the
+#: pytest-foreground rule (moved here from the old ENGINEER_PROMPT).
+STANDING_RULES_TEXT = (
+    "Smallest diff that satisfies every acceptance criterion; no scope "
+    "expansion. Do not scan the repository beyond the files this brief "
+    "names; do not read docs/history/**, Graphify, device/deployment/"
+    "collection code, or secrets unless this brief names them. Never treat "
+    "a long-running validation command -- the full pytest regression in "
+    "particular -- as backgroundable: run it as a foreground, awaited Bash "
+    "command and wait for it to actually finish before acting on its "
+    "result. A relay-tool error is reported, not treated as a blocker. "
+    "Never end your turn on a chat message without a SESSION_CLOSE."
+)
+
+_TEST_FILE_RE = re.compile(r"tests/[\w./-]+\.py")
+
+
+def _worker_md_test_files(validation_plan: list) -> list[str]:
+    """A.2 §2: "the direct tests named in the validation plan" -- scraped
+    from string entries and object-form `argv` entries alike, de-duplicated,
+    order preserved."""
+    found: list[str] = []
+    for entry in validation_plan or []:
+        tokens: list[str] = []
+        if isinstance(entry, str):
+            tokens = [entry]
+        elif isinstance(entry, dict):
+            tokens = [str(a) for a in (entry.get("argv") or [])]
+        for tok in tokens:
+            for match in _TEST_FILE_RE.findall(tok):
+                if match not in found:
+                    found.append(match)
+    return found
+
+
+def _worker_md_validation_commands(validation_plan: list) -> str:
+    """A.2 §5: object-form entries render as fenced commands; string
+    (prose) entries are listed under "manual"."""
+    fenced: list[str] = []
+    manual: list[str] = []
+    for entry in validation_plan or []:
+        if isinstance(entry, str):
+            manual.append(entry)
+        elif isinstance(entry, dict):
+            argv = entry.get("argv")
+            name = entry.get("name")
+            if argv:
+                cmd = " ".join(str(a) for a in argv)
+                header = f"# {name}\n" if name else ""
+                fenced.append(f"{header}```\n{cmd}\n```")
+            elif name:
+                manual.append(name)
+    parts = list(fenced)
+    if manual:
+        parts.append("manual:\n" + "\n".join(f"- {item}" for item in manual))
+    return "\n\n".join(parts) if parts else "(none)"
+
+
+def _bullets(items: list) -> str:
+    items = list(items or [])
+    return "\n".join(f"- {item}" for item in items) if items else "(none)"
+
+
+def render_worker_md(*, movement_id: str, session_start: dict, merge_mode: str) -> str:
+    """GOV.ORCH.3 Part A.2: the fixed template rendered to `.nexus/WORKER.md`
+    at dispatch -- no model call, content-and-order fixed by contract. The
+    eight sections, in order: (1) movement id/objective/type, (2) files you
+    may read / must not touch, (3) acceptance criteria, (4) invariants and
+    risks, (5) validation commands, (6) git, (7) relay closeout, (8)
+    standing rules."""
+    report = session_start.get("report", {})
+    scope = report.get("scope", {})
+    scope_in = list(scope.get("in", []) or [])
+    scope_out = list(scope.get("out", []) or [])
+    validation_plan = report.get("validation_plan", []) or []
+    git_cfg = report.get("git", {})
+
+    sections = [
+        (
+            f"Movement: {movement_id}\n\n"
+            f"Objective: {report.get('objective', '')}\n\n"
+            f"Movement type: {report.get('movement_type', '')}"
+        ),
+        (
+            "## Files you may read\n\n"
+            + _bullets(scope_in + _worker_md_test_files(validation_plan))
+            + "\n\n## Files you must not touch\n\n"
+            + _bullets(scope_out)
+        ),
+        "## Acceptance criteria\n\n" + _bullets(report.get("acceptance_criteria", [])),
+        (
+            "## Invariants and risks\n\n"
+            "Invariants:\n" + _bullets(report.get("invariants", []))
+            + "\n\nRisks:\n" + _bullets(report.get("risks", []))
+        ),
+        "## Validation commands\n\n" + _worker_md_validation_commands(validation_plan),
+        (
+            "## Git\n\n"
+            f"- base: {git_cfg.get('base', '')}\n"
+            f"- lane: {git_cfg.get('lane', '')}\n"
+            f"- merge gate: {report.get('merge_gate', '')}\n"
+            f"- merge mode: {merge_mode}"
+            + ("\n\n" + op.NO_MERGE_PROMPT_NOTE if merge_mode == "orchestrator" else "")
+        ),
+        "## Relay closeout\n\n" + RELAY_CLOSEOUT_TEXT,
+        "## Standing rules\n\n" + STANDING_RULES_TEXT,
+    ]
+    return "# WORKER.md\n\n" + "\n\n".join(sections) + "\n"
+
+
+# ---------------------------------------------------------------------------
+# GOV.ORCH.3 Part B: per-worktree pre-push git hook install.
+# ---------------------------------------------------------------------------
+
+#: The pre-push wrapper git actually invokes -- a thin shell shim so the
+#: hooksPath mechanism (which expects an executable file, not a python
+#: script directly) can hand off to the real hook body.
+_PREPUSH_HOOK_TEMPLATE = (
+    "#!/bin/sh\n"
+    "exec python3 \"{script}\" \"{record}\"\n"
+)
+
+
+def install_prepush_hook(worktree_path: Path, record_path: Path | None = None) -> Path:
+    """GOV.ORCH.3 Part B.2 item 1: install a `pre-push` hook scoped to this
+    worktree only -- `git config --worktree core.hooksPath` (requiring
+    `extensions.worktreeConfig=true`, set first) plus the hook file itself,
+    executable. Returns the installed hook path. Never touches the main
+    checkout's own hooksPath (each worktree's `--worktree` config is local
+    to that worktree's own config section)."""
+    # `--worktree` itself only works once `extensions.worktreeConfig` is
+    # already on -- a chicken-and-egg that only the plain (repo-wide) form
+    # of `git config` can resolve from inside a linked worktree.
+    subprocess.run(
+        ["git", "config", "extensions.worktreeConfig", "true"],
+        cwd=str(worktree_path), check=True,
+    )
+    hooks_dir = worktree_path / ".nexus" / "hooks"
+    hooks_dir.mkdir(parents=True, exist_ok=True)
+    script_path = Path(__file__).resolve().parent / "nexus_worker_prepush.py"
+    hook_path = hooks_dir / "pre-push"
+    record = str(record_path) if record_path else ""
+    hook_path.write_text(
+        _PREPUSH_HOOK_TEMPLATE.format(script=script_path, record=record), encoding="utf-8",
+    )
+    hook_path.chmod(0o755)
+    subprocess.run(
+        ["git", "config", "--worktree", "core.hooksPath", str(hooks_dir)],
+        cwd=str(worktree_path), check=True,
+    )
+    return hook_path
 
 
 def validate_git_refs(base: str, lane: str) -> tuple[bool, str]:
@@ -888,8 +1049,14 @@ def _do_start(args: argparse.Namespace) -> tuple[int, dict | None, subprocess.Po
 
     nexus_dir = worktree_path / ".nexus"
     nexus_dir.mkdir(parents=True, exist_ok=True)
-    (nexus_dir / "approved_task.json").write_text(canonical_json(session_start), encoding="utf-8")
+    approved_task_path = nexus_dir / "approved_task.json"
+    approved_task_path.write_text(canonical_json(session_start), encoding="utf-8")
     (nexus_dir / "movement_id.txt").write_text(args.movement + "\n", encoding="utf-8")
+    (nexus_dir / "WORKER.md").write_text(
+        render_worker_md(movement_id=args.movement, session_start=session_start, merge_mode=merge_mode),
+        encoding="utf-8",
+    )
+    install_prepush_hook(worktree_path, record_path=approved_task_path)
 
     proc = _spawn_engineer(
         worktree_path=worktree_path, profile_path=Path(args.profile),

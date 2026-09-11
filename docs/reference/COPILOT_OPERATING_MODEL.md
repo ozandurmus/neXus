@@ -32,23 +32,7 @@ review is desired.
 
 ## SESSION START template
 
-```text
-SESSION START
-Product baseline:
-Engineering baseline:
-Requested build/task:
-Movement type:
-In scope:
-Out of scope:
-Expected source/tests:
-Critical invariants:
-Risks/unknowns:
-Context intentionally not loaded:
-Recommended reasoning level:
-Definition of Done:
-```
-
-The agent must fill this from repository state before code changes.
+See `AI_START_HERE.md` § "SESSION START" — the single owner of this schema.
 
 ## Architecture gate
 
@@ -97,40 +81,12 @@ Only update files whose semantics actually changed.
 
 ## SESSION CLOSE template
 
-```text
-SESSION CLOSE
-Build/task:
-Status reached:
-Completed:
-Changed components:
-Preserved invariants:
-Tests:
-Real-environment evidence:
-Known gaps/risks:
-Durable state updated:
-Rollback:
-Exact next build/task:
-Next movement type:
-Recommended reasoning level:
-Chat recommendation: CONTINUE / NEW CHAT
-Preferred next validation or first command:
-```
+See `AI_START_HERE.md` § "SESSION CLOSE" — the single owner of this schema.
 
 ## Movement and reasoning matrix
 
-| Movement | Default approach | Typical reasoning |
-|---|---|---|
-| READ_ONLY_AUDIT | narrow search/read, no edits | normal/fast |
-| ROOT_CAUSE | evidence first, isolate failure | normal; high if cross-subsystem |
-| ARCHITECTURE | options + invariants + contract | Sol; Terra High for high-risk/cross-cutting |
-| IMPLEMENTATION | approved scope, Agent edits/tests | Sol/normal |
-| VALIDATION | targeted/subsystem/full by blast radius | normal/fast |
-| UI | preserve collector semantics | Sol/normal |
-| DOCS | durable state, no invented claims | low/normal |
-| RELEASE_HANDOVER | metadata, diff, Git state, next task | normal |
-
-Model names are examples of the currently approved Copilot set. If the model
-catalog changes, preserve the reasoning categories rather than the brand name.
+See `AI_START_HERE.md` § "Reasoning / model routing tiers" — the single
+owner of this table.
 
 ## PO + Orchestrator provider and model routing
 
@@ -139,7 +95,9 @@ catalog changes, preserve the reasoning categories rather than the brand name.
 The following decisions are durable and must be used by a future PO without
 replaying chat context:
 
-- Codex is the PO + Orchestrator + final reviewer; workers own implementation.
+- Codex is the PO + Orchestrator; workers own implementation. Codex
+  synthesizes the evidence; an independent seat on a different provider
+  reviews (`docs/design/GOV_PO_ROLE_MIGRATION.md` Amendment A-2026-09-11).
 - The PO selects the actual provider, current model, and reasoning per
   movement. There is no permanent Sonnet/Opus/Luna/Haiku default.
 - Prefer Claude when credit/license is available; use Codex when Claude is
@@ -163,12 +121,15 @@ replaying chat context:
 The Product Owner selects the worker route per movement. There is no fixed
 "normal implementation = Sonnet" rule and no model-brand substitution.
 
-- **PO + Orchestrator + final reviewer:** Codex. The PO scopes and orders the
+- **PO + Orchestrator:** Codex. The PO scopes and orders the
   backlog, creates/advances relays, selects provider/model/reasoning, dispatches
   through `scripts/orchestrator.py`, monitors workers, asks the human only when
-  a decision is needed, reviews the result, and handles authorized PR/pull/
+  a decision is needed, synthesizes the result, and handles authorized PR/pull/
   merge work. The PO is not the operator and normally does not write worker
-  implementation code in the PO worktree.
+  implementation code in the PO worktree. When the orchestrator and the final
+  reviewer would otherwise be the same tool, an independent review is
+  satisfied only by a different provider seat (`nexus-po-evidence-reviewer` or
+  a council seat on a different provider), never by Codex reviewing itself.
 - **Worker selection:** choose the lightest suitable current model and effort
   for the movement's contract, risk, and evidence needs. Claude is preferred
   when its license/credit is available; Codex remains the fallback when Claude

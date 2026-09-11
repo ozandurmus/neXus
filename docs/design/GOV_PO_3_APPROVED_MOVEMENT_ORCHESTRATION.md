@@ -815,3 +815,13 @@ or real-device approval boundary.
 | AC-6 | §5 |
 | AC-7 | §3.4 item 1, §3.10 |
 | AC-8 | §3.9, §7 |
+
+## Amendment A-2026-09-11 (GOV.ORCH.3, PO decision pending)
+
+`main` branch protection (PR required, CI green) is recorded as the final
+tool-neutral gate: after the per-worktree `pre-push` hook
+(`scripts/nexus_worker_prepush.py`) and the orchestrator's own `verify`/
+`integrate` sequence, branch protection is the backstop no tool or worker
+can bypass. This document does not change GitHub settings itself; enabling
+or confirming branch protection is a Product Owner action, recorded on the
+relay when taken.

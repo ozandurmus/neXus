@@ -145,6 +145,10 @@ Never by default: docs/history/SECURITYEXPERT_AI_CONTINUATION_PACK.md,
                   docs/history/phase/PHASE*.md, docs/history/validation/VALIDATION*.txt
 ```
 
+**Orchestrated worker.** If `.nexus/WORKER.md` exists in your working
+directory you are an orchestrated worker: follow it and skip the reading
+order below.
+
 Governance and engineering law: `AGENTS.md` (canonical constitution) and
 `docs/AI_DEVELOPMENT_PROTOCOL.md` (network-command gate, approval boundaries,
 render-harness mechanics — detail, not restated here). Tool-specific deltas:
