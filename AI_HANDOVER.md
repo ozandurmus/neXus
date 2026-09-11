@@ -7,25 +7,22 @@
 
 ## 1. Snapshot
 
-- 2026-09-10: `ui2_b1_01_skeleton_ci_docker`, contract-only movement integrated from worker relay `NXS-LOCAL-0061`.
-- New DRAFT: `docs/design/UI2_0_B1_01_SKELETON_CI_DOCKER_CONTRACT.md`.
-- No `ui2/` implementation, Line-1 source, validation workflow, or device contact.
+- 2026-09-11: architecture-only v1 topology recommendation added at `docs/design/UI2_0_V1_SCOPE_AND_SERVICE_TOPOLOGY_BRIEF.md`.
+- One Java artifact/image with role-selected `service`, `worker`, and `scheduler`; no feature microservices.
 
 ## 2. What changed
 
-- The contract defines component homes, one-way dependencies, reproducible build/test/image commands, Testcontainers/Flyway, isolated CI, scoped secrets, and 15 implementation checks.
-- The worker’s completed relay and contract were imported without restoring its stale pre-D1 state snapshot; D1 remains in build history and restore remains disabled.
+- Mapped Project Plan, discovery, configuration/inventory, compliance, backup, and failover readiness to existing B1 module boundaries.
+- Recorded C1's exact B1-2 V1 schema inputs and preserved all named ownership boundaries.
 
 ## 3. Exact next action
 
-Product Owner review and freeze of the B1-1 contract. After freeze, dispatch a separate B1-1 implementation movement to create `ui2/`.
+Product Owner must resolve the B1-1 contract-status conflict before authorizing B1-1 implementation; B1-2 then follows in that harness.
 
 ## 4. Test delta
 
-- Worker evidence: AC-1..AC-9 self-check, architecture/state tests 22 passed, privacy 0 new findings, diff check clean.
-- Integration validation: JSON/state consistency and generated history index are required before PR merge.
+- `tests/test_architecture_convergence.py`: 23 passed; privacy gate against `origin/main`: PASS, 0 new findings; diff check clean.
 
 ## 5. New risks
 
-- Contract is DRAFT; implementation is not authorized until freeze.
-- Worker had no PR/CI at close; integration is now pending push, PR, CI, and PO merge verification.
+- B1-1's document status is DRAFT while project metadata says frozen; document status is authoritative.
