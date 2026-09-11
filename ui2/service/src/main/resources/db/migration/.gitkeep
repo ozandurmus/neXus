@@ -1,0 +1,5 @@
+Baseline B1-1 migration location: intentionally empty.
+B1-2 adds V1__initial_schema.sql here per Amendment B1-1-A item 3 and
+contract §4. persistence/ owns the Flyway integration code that reads
+this location from the classpath; this directory is the resource home
+only.
