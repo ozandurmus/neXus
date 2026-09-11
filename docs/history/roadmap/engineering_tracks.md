@@ -1,0 +1,107 @@
+# Engineering tracks
+
+- - **id**: DEV.0
+- **title**: Repository Readiness
+- **status**: done
+- **steps**:
+  -   - **build**: DEV.0.1
+  - **title**: Runtime Management Endpoint Decoupling
+  - **status**: done
+  -   - **build**: DEV.0.2
+  - **title**: Repository Sanitization & Corporate Git Candidate
+  - **status**: done
+  -   - **build**: DEV.0.3A
+  - **title**: Runtime Path Foundation
+  - **status**: done
+  -   - **build**: DEV.0.3B
+  - **title**: Runtime Artifact Consumer Migration
+  - **status**: done
+  -   - **build**: DEV.0.3C
+  - **title**: History/CAS Runtime Boundary (Pre-Server)
+  - **status**: deferred
+  -   - **build**: DEV.0.4
+  - **title**: Local Repository Privacy Gate
+  - **status**: done
+  -   - **build**: DEV.0.3B.1
+  - **title**: Direct SSH Runtime Path Closure
+  - **status**: done
+  -   - **build**: DEV.0.4.1
+  - **title**: Runtime Inventory Exclusion Policy Foundation
+  - **status**: done
+  -   - **build**: DEV.0.5A
+  - **title**: Runtime Authentication Vocabulary & Boundary Foundation
+  - **status**: done
+  -   - **build**: DEV.0.5B
+  - **title**: Authentication Consumer Migration + Canonical Config
+  - **status**: done
+  -   - **build**: DEV.0.5B.1
+  - **title**: Legacy Authentication Redaction Marker DLP Closure
+  - **status**: done
+  -   - **build**: DEV.0.5B.2
+  - **title**: Repository-Wide DLP Collision Closure
+  - **status**: done
+- - **id**: DEV.1
+- **title**: Corporate Git + Copilot Development Foundation
+- **status**: done
+- **steps**:
+  -   - **build**: DEV.1
+  - **title**: Repository-native AI operating model and controlled Git baseline
+  - **status**: done
+- - **id**: DEV.2
+- **title**: Server Runtime Foundation
+- **status**: in_progress
+- **steps**:
+  -   - **build**: DEV.2.1
+  - **title**: Non-interactive runtime configuration: env vars + mounted secret files with precedence over interactive input()/getpass; keep the interactive path for local use
+  - **status**: automated_validated
+  -   - **build**: DEV.2.2
+  - **title**: Persistent runtime volume contract: data_root, stable data/.support_hmac.key across restarts, mounted CP known_hosts and PAN CA bundle
+  - **status**: automated_validated
+  -   - **build**: DEV.2.3
+  - **title**: Linux base validation: pin Python 3.12, portable scripts, remove %LOCALAPPDATA% / py.exe assumptions from docs and CI
+  - **status**: planned
+- - **id**: DEV.3
+- **title**: Containerization
+- **status**: in_progress
+- **steps**:
+  -   - **build**: DEV.3.1
+  - **title**: Single worker image + Compose: one container runs the existing sequential main.py pipeline; Nginx serves the static output volume; an external timer invokes --scheduler-once
+  - **status**: planned
+  -   - **build**: DEV.3.2
+  - **title**: Job/metadata store: move scheduler state, run manifests, last-known-good and the CAS metadata index to Postgres; CAS payload blobs stay on the volume
+  - **status**: planned
+  -   - **build**: DEV.3.3
+  - **title**: Distributed per-endpoint lock replacing the in-process coordinator (Postgres advisory lock or DB-backed queue); preserves the concurrency-budget-of-1 CP safety constraint
+  - **status**: planned
+  -   - **build**: DEV.3.4
+  - **title**: Per-vendor worker containers — DEFERRED until collection duration is a real operational pain; requires DEV.3.3 first
+  - **status**: deferred
+- - **id**: DEV.4
+- **title**: CI/CD & Production Hardening
+- **status**: planned
+- **steps**:
+  -   - **build**: DEV.4.1
+  - **title**: Image build/scan CI with pinned base digests
+  - **status**: planned
+  -   - **build**: DEV.4.2
+  - **title**: DEPLOY.1A OIDC read-only viewer boundary in front of the served output, or integrate an existing corporate SSO proxy
+  - **status**: planned
+  -   - **build**: DEV.4.3
+  - **title**: Promote CP strict host-key and PAN CA trust from opt-in to required in the server image; R2 real-environment validation
+  - **status**: planned
+  -   - **build**: DEV.4.4
+  - **title**: Least-privilege server runtime: non-root containers, report-only viewer publication mount, immutable image identity, health/resource limits and protected Docker host
+  - **status**: planned
+  -   - **build**: DEV.4.5
+  - **title**: Release assurance: dependency lock, Python 3.12 CI, privacy/render regression, SBOM, vulnerability policy and signed release provenance
+  - **status**: planned
+  -   - **build**: DEV.4.6
+  - **title**: Production evidence/recovery data plane: deployment migrations, restricted PostgreSQL roles, secret/KMS custody, encrypted off-host recovery and restore-drill acceptance
+  - **status**: planned
+- - **id**: DEV.TEST
+- **title**: Test Execution Infrastructure
+- **status**: done
+- **steps**:
+  -   - **build**: DEV.TEST.1
+  - **title**: Parallelize local and GitHub Actions full-regression execution (pytest-xdist, -n auto --dist worksteal, single aggregate verdict)
+  - **status**: done

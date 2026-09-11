@@ -1,0 +1,6 @@
+# OP0B_0_CLOSE_D_V3A_D_V7B_PRE_CLASS2 — op0b_0_close_d_v3a_d_v7b_pre_class2: OP.0b.0 - close D-V3a/D-V7b vendor facts (not a readiness-policy gate any more)
+
+- Demoted from now_next.next 2026-09-05 (OP.2.1b session): D-V7b's ROLE in the readiness roll-up is now decided (advisory-exempt) -- this row is now purely about closing the underlying VENDOR FACT (is there ever a supported CP read; PAN local-info/peer-info serial-num semantics), which no longer blocks CP CLASS 2 reachability at the readiness layer. Still relevant for PAN (D-V3a/B2 remain the PAN identity blocker, OP.3) and for intellectual completeness on the CP side, but not on the critical path to OP.2.C any more.
+- Try an official GitHub mirror first (the technique that closed D-V4/D-V7a): D-V3a needs an official PAN-OS/Panorama source for local-info/peer-info serial-num inside show high-availability state; D-V7b needs an official Check Point generic-object API schema (unconfirmed to exist) beyond the Simple Cluster API already ruled insufficient.
+- Fall back to a human fetching the specific pages the contract's source tables name.
+- Recommended: Sonnet 5, extended thinking (high), same as the prior vendor-semantics sessions.

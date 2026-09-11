@@ -22,12 +22,31 @@ STATUS_VALUES = {
 CRITERION_STATES = {"done", "pending", "blocked", "deferred"}
 
 
+ARCHIVE_DIR = PROJECT_DIR / "archive"
+
+
 def _load(name: str, default: Any) -> Any:
     path = PROJECT_DIR / name
     try:
         return json.loads(path.read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError, json.JSONDecodeError):
         return default
+
+
+def _load_archived_builds() -> list[dict[str, Any]]:
+    """GOV.ORCH.8 2.2: terminal builds beyond the newest 20 live in
+    project/archive/build_history_2026.json. Loaded for counting only --
+    the page shows current rows, never archived ones."""
+    rows: list[dict[str, Any]] = []
+    if not ARCHIVE_DIR.is_dir():
+        return rows
+    for path in sorted(ARCHIVE_DIR.glob("build_history_*.json")):
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+            continue
+        rows.extend(row for row in (data.get("builds") or []) if isinstance(row, dict))
+    return rows
 
 
 def _criterion_progress(feature: dict[str, Any]) -> float:
@@ -272,6 +291,7 @@ def build_project_plan_payload() -> dict[str, Any]:
 
     backlog_items = [dict(row) for row in (backlog.get("items") or []) if isinstance(row, dict)]
     builds = [dict(row) for row in (history.get("builds") or []) if isinstance(row, dict)]
+    archived_build_count = len(_load_archived_builds())
     metadata_warnings = _metadata_warnings(roadmap, features, backlog_items, builds)
     backlog_counts: dict[str, int] = {}
     for row in backlog_items:
@@ -293,5 +313,6 @@ def build_project_plan_payload() -> dict[str, Any]:
         "backlog_counts": backlog_counts,
         "completed_features": completed_features,
         "build_history": builds,
+        "archived_build_count": archived_build_count,
         "metadata_warnings": metadata_warnings,
     }

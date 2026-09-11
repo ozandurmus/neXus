@@ -525,3 +525,168 @@ and none relax `AGENTS.md`/`CLAUDE.md`'s existing reasoning-routing law.
     reference does not cover or that looks stale. Rejected: full re-reads
     as the default habit. Status: **decided operating direction**,
     reference captured 2026-09-08. [PO-DIRECTION 2026-09-08, this session]
+
+## Decisions migrated from roadmap.json (2026-09-11)
+
+GOV.ORCH.8 2.1: these decisions were already closed in `project/roadmap.json`'s `open_decisions`; moved here verbatim (post-redaction) as the file's size-budget narrative move.
+
+### tufin_path_authority — Does neXus build its own topology/path engine for path-based policy placement, or consume an external path authority?
+
+- **area**: Product scope / external systems
+- **options**: ['Consume Tufin-provided device paths and apply rules to the returned devices', 'Build an internal topology/path engine']
+- **recommendation**: Consume Tufin; an internal engine duplicates an established authority and expands scope dramatically.
+- **decide_by**: DECIDED 2026-09-08 (direction-record ratification)
+- **decided_on**: 2026-09-08
+- **decision**: DECIDED -- neXus consumes Tufin-provided paths and does not build an independent topology/path engine. Missing or insufficient Tufin evidence stays explicit (UNKNOWN / INSUFFICIENT_EVIDENCE); no fallback path authority is invented. Tufin API availability, schema, authentication and organizational ownership are external dependencies, not yet verified in the repository. Ratified with docs/design/PRODUCT_DIRECTION_RECORD.md DR-1.
+
+### gov_relay_1_protocol — What is the canonical GitHub-issue relay convention for Codex/Claude movement handoffs?
+
+- **area**: Agent session governance
+- **options**: ['A locator plus canonical issue-body/final-comment packets and a closed intermediate-comment vocabulary', 'Ad hoc chat phrases and unconstrained issue comments']
+- **recommendation**: Use the canonical governed relay contract so a locator cannot be mistaken for authority and malformed handoffs fail before implementation.
+- **decide_by**: DECIDED 2026-09-07 at GOV.RELAY.1 freeze; question-routing amendment approved 2026-09-07
+- **decided_on**: 2026-09-07
+- **decision**: DECIDED -- RELAY_READY owner/repository#issue is locator-only; the issue body is exactly one validated SESSION_START packet; the final engineering comment is exactly one validated SESSION_CLOSE packet; intermediate comments use only RELAY_ACK, RELAY_NOTE, RELAY_QUESTION, RELAY_DECISION or RELAY_CORRECTION; RELAY_START and RELAY_END are invalid; only the Product Owner may authoritatively issue RELAY_DECISION. Every material question requiring Product Owner resolution MUST be posted as RELAY_QUESTION on the active relay before its dependent action and remains open until a matching Product Owner RELAY_DECISION or higher repository authority resolves it; direct chat may explain but does not replace the durable question. The NEXUS_SESSION_PACKET v2 schema and parser are unchanged.
+
+### op_degraded_verdict — Support DEGRADED_PROCEED_WITH_RISK (per-risk operator acceptance) in v1, or restrict to SAFE_TO_FAILOVER / UNSAFE_DO_NOT_FAILOVER / INSUFFICIENT_EVIDENCE until there is field experience?
+
+- **area**: OP.0 Readiness Assessment
+- **options**: ['include DEGRADED in v1', 'SAFE / UNSAFE / INSUFFICIENT only in v1']
+- **recommendation**: SAFE / UNSAFE / INSUFFICIENT only in v1; add DEGRADED once the battery is validated against real clusters.
+- **decide_by**: DECIDED 2026-09-09 (OP.1 contract freeze)
+- **decided_on**: 2026-09-09
+- **decision**: DECIDED -- Option A: SAFE / UNSAFE / INSUFFICIENT (+ NOT_A_FAILOVER_UNIT) only. DEGRADED_PROCEED_WITH_RISK stays structurally unreachable until real-field calibration. Ratified at the OP.1 contract freeze, docs/history/phase/OP_1_FAILOVER_PLAN_COMPILER_AND_DRY_RUN.md section 8.
+
+### C-D1 — Approve fastapi + uvicorn as an optional dependency set (requirements-console.txt), keeping the core CLI/report path at its current four dependencies?
+
+- **area**: CON.x Operator Console
+- **options**: ['Approve as optional extra', 'Stdlib http.server only', 'Decline the console transport']
+- **recommendation**: Approve. Boundary-level request validation is a security control and it is the same stack the later server control plane needs; the optional-extra pattern already exists for requirements-postgres.txt.
+- **decide_by**: CON.1 contract review
+- **decided_on**: 2026-09-01
+- **decision**: Approve as optional extra
+
+### C-D2 — Local authentication model for the console listener.
+
+- **area**: CON.x Operator Console
+- **options**: ['Cookieless per-launch bearer token in the URL fragment', 'Cookie session', 'No auth, loopback bind only']
+- **recommendation**: Cookieless per-launch bearer token. No cookie means no ambient credential, which makes the local-CSRF class structurally impossible rather than mitigated. 'It is only localhost' is the failure mode, not the control.
+- **decide_by**: CON.1 contract review
+- **decided_on**: 2026-09-01
+- **decision**: Cookieless per-launch bearer token in the URL fragment
+
+### C-D3 — Provenance vocabulary: add Provenance.CONSOLE = 'console', or reuse 'manual' for UI-triggered runs?
+
+- **area**: CON.x Operator Console
+- **options**: ["Add 'console'", "Reuse 'manual'"]
+- **recommendation**: Add 'console'. A UI-triggered device action must stay distinguishable from a CLI one in every manifest and audit record; conflating them destroys the audit trail on the first day it matters.
+- **decide_by**: CON.2 contract review
+- **decided_on**: 2026-09-01
+- **decision**: Add 'console'
+
+### D-V4 — PAN running-sync location (state XML sibling vs all).
+
+- **area**: OP.0b.0 Vendor Failover Preflight Evidence
+- **options**: ['Confirm from official vendor documentation']
+- **recommendation**: Closed; no further action needed for freeze. Parser implementation (S2) remains owed.
+- **decide_by**: resolved -- official PaloAltoNetworks GitHub source
+- **decided_on**: 2026-09-03
+- **decision**: CLOSED_BY_DOCS -- running-sync/running-sync-enabled confirmed at group scope, sourced from show high-availability state (already-REQUIRED P2), via a verbatim read of the official PaloAltoNetworks pan-os-upgrade-assurance GitHub repository.
+
+### D-V5b — CP VSX failover-statistics applicability (VS0-only / per-VS / unsupported).
+
+- **area**: OP.0b.0 Vendor Failover Preflight Evidence
+- **options**: ['N/A -- not required by the frozen battery']
+- **recommendation**: Dropped from the active blocking list.
+- **decide_by**: resolved -- not load-bearing
+- **decided_on**: 2026-09-03
+- **decision**: Not load-bearing -- the frozen minimum battery runs failover-statistics only at the physical/VS0 level (same as the rest of the ClusterXL battery), never per-VS. The source pack's VSX-applicability question has no frozen check that depends on its answer.
+
+### D-V7a — CP recovery/preemption behavior semantics.
+
+- **area**: OP.0b.0 Vendor Failover Preflight Evidence
+- **options**: ['Confirm from official vendor documentation']
+- **recommendation**: Closed; no further action needed for freeze.
+- **decide_by**: resolved -- official Check Point ClusterXL Admin Guide
+- **decided_on**: 2026-09-03
+- **decision**: CLOSED_BY_DOCS -- "Maintain current active" vs "Switch to higher priority Cluster Member" behavioral semantics confirmed precisely; Cluster-Mode-string non-correlation already documented (sk180184).
+
+### D-V9a — CP VSX sk165432 documented caveat semantics.
+
+- **area**: OP.0b.0 Vendor Failover Preflight Evidence
+- **options**: ['Confirm from official vendor documentation']
+- **recommendation**: No further action needed for freeze.
+- **decide_by**: resolved -- interpretation already frozen
+- **decided_on**: 2026-09-03
+- **decision**: PARTIAL, but does not block freeze -- the safe fail-closed interpretation (a contradictory non-VS0 cphaprob stat read is UNKNOWN/RELATIONSHIP_INCONSISTENT, never KNOWN_BAD, never a per-VS action input) was already written into this contract at session 1. Affected releases/fix version/official alternative remain unconfirmed but are not load-bearing for that interpretation.
+
+### D-F3 — Numeric flap/failover-frequency threshold for check 7 (flap_history), both vendors -- new 2026-09-03 (session 4), parallel to D-F1/D-F2. Does not block freeze: the qualitative meaning is fixed (exceeding an as-yet-undecided threshold is unsafe; an undecided threshold means check 7 cannot yet compute a real PASS -- fail-closed, never silently permissive).
+
+- **area**: OP.0b.0 Vendor Failover Preflight Evidence
+- **options**: ["Fixed conservative default (mirroring op_continuity_tolerance's pattern)", 'Operator-tunable within bounds', 'No threshold, ever -- advisory-exempt (DECIDED 2026-09-05)']
+- **recommendation**: Superseded 2026-09-05: no threshold is invented; the check stays honest and permanently non-blocking instead.
+- **decide_by**: resolved -- product-owner policy decision, OP.2.1b
+- **decided_on**: 2026-09-05
+- **decision**: Advisory-exempt, permanently -- no numeric threshold invented (OP.2.1b, 2026-09-05, docs/history/phase/OP_2_1B_CP_PILOT_READINESS_POLICY_AMENDMENT.md). The collected A8/P2 flap/failover counters are cumulative since an operator-triggered reset with no recency/window semantics; the product owner declined to fabricate a threshold against evidence that cannot support one. flap_history stays INSUFFICIENT_EVIDENCE, visible, for both vendors, forever -- but is now a closed-list, exact-reason entry in utils/failover/assessment.ADVISORY_EXEMPT_CHECKS, so it no longer independently blocks a positive readiness verdict.
+
+### op_reversal_model — Reported contradiction inside the design parent, raised per AGENTS.md 'Authority hierarchy' rather than silently reconciled. FAILOVER_ENGINE_ARCHITECTURE.md sections 5/7/8 require automatic rollback on a failed or partial transition (and section 6 defines a FAILED_ROLLED_BACK outcome); section 10.1 items 5-7 require explicit human confirmation per action, exactly one action per authorised run, and UNKNOWN as a first-class outcome that is never a reason to re-issue. An automatic rollback fires precisely when the entity's state is unverified, so it is a second CLASS 2 mutation, unconfirmed, against an unknown state. Which text governs?
+
+- **area**: OP.2 Controlled Failover Execution
+- **options**: ['Reversal is a NEW typed CLASS 2 action (own authorization, fresh preflight, confirmation, lock, single submission, verification, audit); automatic rollback and FAILED_ROLLED_BACK are removed from the model', 'Keep automatic rollback as designed in sections 5/7/8 and narrow section 10.1 items 5-7 accordingly']
+- **recommendation**: Reversal as a new typed action. The situation an auto-rollback exists to handle is the situation in which the postcondition is unknown, and issuing an unconfirmed second mutation against an unknown state is the worst available action; section 10.1 is also the later, explicitly dated safety contract and is the one the frozen OP.0b.0 CLASS 2 handoff cites. Drafted as principle P12 of docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md (reviewed 2026-09-04).
+- **decide_by**: OP.2.0 contract freeze
+- **decided_on**: 2026-09-04
+- **decision**: Reversal/failback is a NEW typed CLASS 2 action: new authorization, fresh same-workflow preflight, new confirmation, HA-entity lock, one new mutation attempt, independent post-action verification, independent audit record. No automatic rollback for HA failover; FAILED_ROLLED_BACK is not a state. FAILOVER_ENGINE_ARCHITECTURE.md section 10.2 records the supersession of its sections 1-8 auto-rollback wording.
+
+### op_outcome_unknown_recovery — What happens to an operational HA entity after a CLASS 2 action terminates OUTCOME_UNKNOWN (mutation boundary crossed, postcondition not independently determinable -- including the process-crash-after-submission case, which the product cannot distinguish from a transport timeout after submission)? FAILOVER_ENGINE_ARCHITECTURE.md section 10.1 item 7 makes UNKNOWN first-class but does not say what the entity's subsequent state is, and console/jobs.py's existing crash sweep resolves an orphaned running record to 'failed' -- correct for a class 0 collection, and the single most dangerous possible answer for a class 2 action, since it asserts the mutation did not happen from evidence that only proves the process died.
+
+- **area**: OP.2 Controlled Failover Execution
+- **options**: ['Quarantine the HA entity against further CLASS 2 actions until an explicit audited operator acknowledgement; class 0 reads stay permitted; terminal state is never rewritten by a later observation', 'Allow a new CLASS 2 action once a fresh preflight returns a positive verdict, with no acknowledgement step']
+- **recommendation**: Quarantine until acknowledged. A green readiness verdict answers 'is the entity safe to act on', not 'did my previous action execute', and letting the first silently clear the second is how a double failover happens. A later class 0 observation appends to the action record and never rewrites its terminal state. Drafted as principle P10 of docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md (reviewed 2026-09-04).
+- **decide_by**: OP.2.0 contract freeze
+- **decided_on**: 2026-09-04
+- **decision**: Quarantine until acknowledged. After the mutation boundary is crossed, process death, worker death, transport timeout or a lost response is OUTCOME_UNKNOWN -- never merely FAILED -- unless independent evidence proves a more specific terminal outcome. The entity stays quarantined (a derived predicate over the unacknowledged OUTCOME_UNKNOWN action record, not a lock or entity state) until an explicit, authorized, audited operator acknowledgement; class 0 reads stay permitted; a later observation appends and never rewrites the terminal state. Class 0's sweep_orphaned_running -> failed stays valid for class 0 only; CLASS 2 does not inherit it.
+
+### pcp_console_registry_write_gate — SCOPED 2026-09-05 to the LOCAL controlled loopback console profile only. May the local-loopback Operator Console accept an enrollment write -- manual (endpoint + opaque profile references) or candidate-based (closed candidate_id) -- before DEPLOY.1A? Server/production enrollment exposure is a separate decision (pcp_server_enrollment_exposure).
+
+- **area**: PCP.x Product Control Plane
+- **options**: ['(a) neither intent ships from the console before DEPLOY.1A -- both stay CLI-first through PCP.1/PCP.2', '(b) candidate-based enrollment only, permitted pre-DEPLOY.1A on the strength of the closed candidate id plus typed confirmation + audit record; manual entry still waits', '(c) both permitted pre-DEPLOY.1A with typed confirmation + audit record + mandatory strict first-contact trust preflight for any resulting device']
+- **recommendation**: No pre-decision for either intent. Recommendation deferred to the security lead's reading of the exclusions precedent at the PCP.4 contract review. CLI-only enrollment in PCP.1/PCP.2 does not depend on this decision and proceeds regardless.
+- **decide_by**: DECIDED 2026-09-05 at the M0 architecture freeze (was: PCP.4 contract review)
+- **decided_on**: 2026-09-05
+- **decision**: DECIDED -- YES for BOTH manual and candidate-based enrollment, in the explicitly controlled loopback runtime profile ONLY, and only under every condition frozen in docs/design/LOCAL_CONTROL_PLANE_RUNTIME_AND_ENROLLMENT.md section 9.1 and CON.0 section 4.1/7.11: closed typed enrollment intent (endpoint, opaque credential-profile reference, opaque trust-profile reference, permitted tags, and/or a closed candidate id) and nothing else; no credential payload, command, argv, filesystem path or arbitrary transport field; no device I/O in the enrollment HTTP request; first contact as a separate queued CLASS 0 read-only job; strict transport trust before credential submission; positive-evidence vendor/identity; UNKNOWN/ambiguous/contradictory identity persists no registry record; operator review of the resolved identity; explicit confirmation; immutable audit durable before registry mutation; the one existing DeviceRegistry enrollment path with duplicate detection and the mutation-lock contract unchanged; NO automatic-write exemption for candidate-based enrollment. The permission is conditioned on the loopback binding itself and does not survive into server mode. This decision authorizes no code: movement M9 implements it.
+
+### pcp_auto_enrollment_policy — Should a future opt-in 'trusted management source auto-enrolls candidates' policy exist, and under what audit/allowlist?
+
+- **area**: PCP.x Product Control Plane
+- **options**: ['never -- explicit enrollment only', 'opt-in per management source, audited, allowlisted, default off']
+- **recommendation**: Not in the first slices; design only after PCP.2 shows real candidate volume. 'Everything discovered becomes authoritative inventory' is not the default architecture in any case.
+- **decide_by**: DECIDED 2026-09-05 at the M0 architecture freeze (was: PCP.2 closure)
+- **decided_on**: 2026-09-05
+- **decision**: DECIDED FOR THE CURRENT HORIZON -- NO automatic persistent enrollment. No discovery source and no 'trusted management source' policy may automatically create a persistent enrolled device. Manual endpoint enrollment and candidate-based enrollment BOTH require positive identity evidence, operator preview and explicit confirmation. A future auto-enrollment capability is a separately gated capability that requires a NEW Product Owner decision; 'not now' is explicitly not a permanent prohibition, and this row must be reopened (or a successor created) rather than silently reinterpreted.
+
+### pcp_local_control_plane_storage — For the approved LOCAL control-plane sequence, where does new control-plane metadata live, and does the PCP.1 Device Registry move with it?
+
+- **area**: Product Control Plane / local storage sequencing
+- **options**: ['A -- registry stays filesystem JSON; SQLite backs only new local control-plane metadata', 'B -- one governed movement migrates registry plus job/control-plane metadata to SQLite', 'C -- no SQLite yet; continue with filesystem concerns for another slice']
+- **recommendation**: Option A -- it does not reopen PCP.1's frozen section 21 contract, and puts the new engine where the new query-shaped requirements are.
+- **decide_by**: DECIDED 2026-09-05 at the M0 architecture freeze
+- **decided_on**: 2026-09-05
+- **decision**: DECIDED -- Option A. The PCP.1 Device Registry REMAINS on its frozen filesystem JSON backend. A new SQLite store owns ONLY new local control-plane metadata: job definitions once durable, job/run lifecycle records, schedules, capability projections, idempotency/submission metadata, control-plane runtime metadata. It owns NONE of: Device Registry rows, credential payloads, trust secrets, raw configuration, backup bytes, CAS evidence objects, OP.2 action authority. The registry stays authoritative at job admission and again immediately before execution; a disabled or unresolvable target causes refusal/abort before contact with the reason recorded, and no copied endpoint is ever retained as fallback authority. THIS IS NOT A PRODUCTION ENGINE SELECTION -- see pcp_storage_engine. A future Device Registry backend migration remains a governed storage movement that must prove semantic parity for normalization, duplicate handling, lifecycle, concurrency, lock/transaction behaviour, corrupt/unsupported-state failure and rollback. This decision authorizes no code: movement M4 implements it under its own contract.
+
+### pcp_first_contact_trust_policy — Must the first-contact job for a MANUALLY enrolled endpoint require strict CP host-key / PAN CA trust even in the local development profile, so that real credentials are never presented to a mistyped or hostile endpoint?
+
+- **area**: PCP.x Product Control Plane
+- **options**: ['strict trust mandatory for any endpoint not corroborated by a management-plane candidate', 'existing compat-mode default applies to manual endpoints too']
+- **recommendation**: Strict trust mandatory for non-corroborated endpoints; compat mode stays available only for candidate-corroborated endpoints in the dev profile.
+- **decide_by**: DECIDED 2026-09-05 at the M0 architecture freeze (was: PCP.2 contract review)
+- **decided_on**: 2026-09-05
+- **decision**: DECIDED -- strict transport trust is REQUIRED before credentials are submitted to EVERY endpoint, including management-plane candidates. Candidate provenance may supply or select an approved trust profile; it may NOT waive SSH host-key or TLS trust. Prohibited: TOFU, automatic trust acceptance, certificate verification bypass, credential-first probing. The approved Check Point and Palo Alto trust-establishment mechanics are movement M8's implementation contract, over the existing transport seams (utils/cp_ssh_trust.py, utils/pan_tls_trust.py) -- no new credential or network path.
+
+### ui2_phase0_decide_2026_09_09 — UI 2.0 Phase 0 DECIDE: runtime direction, JOB-UNCERTAIN-OUTCOME, UI-OPERATIONAL-RUN-NOW, APPROVAL-MODEL, RAW-RETENTION, FREEZE-SLICING, HISTORY-IMPORT, IN-FLIGHT-LINE-1, DIRECTORY-POSTURE, RESTORE-IN-RELEASE-1, FIRST-CAPABILITY
+
+- **area**: UI2.x
+- **options**: ['see docs/design/UI2_0_BASELINE_CONTRACT.md §2']
+- **recommendation**: Recorded rulings; DIRECTORY-POSTURE conditional on corporate verification; RAW-RETENTION default NO; HISTORY-IMPORT deferred.
+- **decided_on**: 2026-09-09
+- **decision**: docs/design/UI2_0_BASELINE_CONTRACT.md (FROZEN -- PRODUCT OWNER APPROVED 2026-09-09)

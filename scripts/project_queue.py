@@ -36,8 +36,15 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 BACKLOG = REPO / "project" / "backlog.json"
 ROADMAP = REPO / "project" / "roadmap.json"
+BUILD_HISTORY = REPO / "project" / "build_history.json"
+FEATURE_REGISTRY = REPO / "project" / "feature_registry.json"
+ARCHIVE_BUILD_HISTORY = REPO / "project" / "archive" / "build_history_2026.json"
 QUEUE = REPO / "project" / "QUEUE.md"
 HISTORY_BACKLOG_DIR = REPO / "docs" / "history" / "backlog"
+HISTORY_BUILDS_DIR = REPO / "docs" / "history" / "builds"
+HISTORY_ROADMAP_DIR = REPO / "docs" / "history" / "roadmap"
+HISTORY_FEATURES_DIR = REPO / "docs" / "history" / "features"
+PRIVACY_TERMS_FILE = REPO / ".nexus" / "privacy_terms.txt"
 
 #: Terminal statuses: their `note` narrative lives in docs/history/backlog/,
 #: not in the JSON. Open statuses are exactly the complement: in_progress, planned.
@@ -107,6 +114,76 @@ def write_json(path: Path, data: dict) -> None:
     path.write_text(canonical_dump(data), encoding="utf-8")
 
 
+# --------------------------------------------------------------------------
+# Redaction (GOV.ORCH.8 2.1): every moved narrative is redacted before it is
+# written anywhere. IPv4 literals (except loopback/RFC 5737) -> <PRIVATE_IP>;
+# vendor-prefixed device hostnames (e.g. FW-CKP-<...>-N) -> <DEVICE_NAME>; an
+# uppercase org token embedded in such a name -> <ORG>; and any additional
+# term listed one-per-line in the optional, gitignored
+# .nexus/privacy_terms.txt -> <ORG>.
+# --------------------------------------------------------------------------
+
+_IPV4_RE = re.compile(r"(?<![\w.])(?:\d{1,3}\.){3}\d{1,3}(?![\w.])")
+_DOC_IPV4_NETWORKS = ("192.0.2.", "198.51.100.", "203.0.113.")
+_DEVICE_HOSTNAME_RE = re.compile(
+    r"\b(FW|MDS|GW|VSX|SMS|CMA)-([A-Z0-9]+)-([A-Z0-9][A-Z0-9-]*?)-(\d+)\b"
+)
+_LOOPBACK_PREFIXES = ("127.",)
+
+
+def _is_safe_ip(literal: str) -> bool:
+    if literal in ("0.0.0.0",) or literal.startswith(_LOOPBACK_PREFIXES):
+        return True
+    return any(literal.startswith(net) for net in _DOC_IPV4_NETWORKS)
+
+
+def _redact_ipv4(text: str) -> str:
+    def _sub(match: "re.Match[str]") -> str:
+        literal = match.group(0)
+        return literal if _is_safe_ip(literal) else "<PRIVATE_IP>"
+
+    return _IPV4_RE.sub(_sub, text)
+
+
+def _redact_device_hostnames(text: str) -> str:
+    return _DEVICE_HOSTNAME_RE.sub("<DEVICE_NAME>", text)
+
+
+def _load_privacy_terms() -> list[str]:
+    """Optional, gitignored `.nexus/privacy_terms.txt`: one literal term per
+    line -> `<ORG>`. Missing file means no extra terms; blank lines and
+    lines starting with `#` are ignored."""
+    if not PRIVACY_TERMS_FILE.exists():
+        return []
+    terms: list[str] = []
+    for line in PRIVACY_TERMS_FILE.read_text(encoding="utf-8").splitlines():
+        term = line.strip()
+        if term and not term.startswith("#"):
+            terms.append(term)
+    # Longest first so a term that is a substring of another does not shadow it.
+    return sorted(set(terms), key=len, reverse=True)
+
+
+def _redact_privacy_terms(text: str, terms: list[str] | None = None) -> str:
+    for term in (terms if terms is not None else _load_privacy_terms()):
+        if term:
+            text = text.replace(term, "<ORG>")
+    return text
+
+
+def redact_narrative(text: str) -> str:
+    """The one redaction pass applied to every moved narrative before it is
+    written anywhere: IPv4 -> <PRIVATE_IP>, device hostnames -> <DEVICE_NAME>,
+    then any configured privacy term -> <ORG>. Idempotent and safe to run on
+    already-redacted text."""
+    if not text:
+        return text
+    text = _redact_ipv4(text)
+    text = _redact_device_hostnames(text)
+    text = _redact_privacy_terms(text)
+    return text
+
+
 def validate_backlog_item(item: dict) -> None:
     """Strict schema check (contract 2.2's "required keys per item"), applied
     to an item this tool is creating or fully rewriting -- e.g. `add`'s new
@@ -163,6 +240,14 @@ def _now_next_line(entry: dict | None) -> str | None:
     return f"- {ident} — {title} ({status})" if status else f"- {ident} — {title}"
 
 
+def _recent_builds(limit: int = 5) -> list[dict]:
+    try:
+        history = load_json(BUILD_HISTORY)
+    except QueueToolError:
+        return []
+    return list((history.get("builds") or [])[:limit])
+
+
 def render_queue_md(backlog: dict, roadmap: dict, generated: str | None = None) -> str:
     generated = generated or datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     current_build = roadmap.get("current_build", "")
@@ -209,6 +294,11 @@ def render_queue_md(backlog: dict, roadmap: dict, generated: str | None = None) 
             continue
         question = _truncate(decision.get("question", ""), QUESTION_TRUNCATE)
         lines.append(f"- {decision.get('id', '')} — {question}")
+
+    lines.append("## Recent builds")
+    for build in _recent_builds():
+        status = build.get("status", "")
+        lines.append(f"- {build.get('build', '')} ({status})" if status else f"- {build.get('build', '')}")
 
     return "\n".join(lines) + "\n"
 
@@ -319,7 +409,7 @@ def _move_note_to_history(item: dict) -> None:
     HISTORY_BACKLOG_DIR.mkdir(parents=True, exist_ok=True)
     path = HISTORY_BACKLOG_DIR / f"{item['id']}.md"
     header = _history_heading_body(item.get("title", ""), item.get("status", ""), item.get("target", ""))
-    note = item.get("note") or ""
+    note = redact_narrative(item.get("note") or "")
     path.write_text(header + "\n" + note + "\n", encoding="utf-8")
 
 
@@ -332,12 +422,13 @@ def cmd_note(args: argparse.Namespace) -> int:
 
     HISTORY_BACKLOG_DIR.mkdir(parents=True, exist_ok=True)
     path = HISTORY_BACKLOG_DIR / f"{item['id']}.md"
+    text = redact_narrative(args.text)
     if path.exists():
         existing = path.read_text(encoding="utf-8")
-        path.write_text(existing.rstrip("\n") + "\n\n" + args.text + "\n", encoding="utf-8")
+        path.write_text(existing.rstrip("\n") + "\n\n" + text + "\n", encoding="utf-8")
     else:
         header = _history_heading_body(item.get("title", ""), item.get("status", ""), item.get("target", ""))
-        path.write_text(header + "\n" + args.text + "\n", encoding="utf-8")
+        path.write_text(header + "\n" + text + "\n", encoding="utf-8")
     print(f"noted {args.id!r} -> {_display_path(path)}")
     return 0
 
@@ -359,6 +450,135 @@ def cmd_decide(args: argparse.Namespace) -> int:
     backlog = load_json(BACKLOG)
     QUEUE.write_text(render_queue_md(backlog, roadmap), encoding="utf-8")
     print(f"decided {args.id!r}")
+    return 0
+
+
+# --------------------------------------------------------------------------
+# build add / status / note  (GOV.ORCH.8 2.3 -- mirrors add/status/note above,
+# operating on project/build_history.json instead of backlog.json)
+# --------------------------------------------------------------------------
+
+BUILD_TERMINAL_STATUSES = ("done", "complete", "complete_with_followup", "automated_validated", "real_env_validated")
+SUMMARY_TRUNCATE = 240
+
+
+def cmd_build(args: argparse.Namespace) -> int:
+    return args.build_func(args)
+
+
+def _load_build_history() -> dict:
+    return load_json(BUILD_HISTORY)
+
+
+def _find_build(history: dict, build_id: str) -> dict | None:
+    return next((b for b in (history.get("builds") or []) if b.get("build") == build_id), None)
+
+
+def _build_history_doc_path(build_id: str) -> Path:
+    return HISTORY_BUILDS_DIR / f"{build_id}.md"
+
+
+def _write_build_history_doc(build: dict) -> None:
+    """Write/refresh docs/history/builds/<build>.md from a build row's full
+    (redacted) summary/evidence/risks_forward. Verbatim after redaction --
+    nothing is deleted."""
+    HISTORY_BUILDS_DIR.mkdir(parents=True, exist_ok=True)
+    path = _build_history_doc_path(build["build"])
+    lines = [f"# {build['build']} — {build.get('title', '')}", ""]
+    for section, key in (("Summary", "summary"), ("Evidence", "evidence"), ("Risks forward", "risks_forward")):
+        value = redact_narrative(build.get(f"_full_{key}") or build.get(key) or "")
+        if value:
+            lines.append(f"## {section}")
+            lines.append("")
+            lines.append(value)
+            lines.append("")
+    path.write_text("\n".join(lines).rstrip("\n") + "\n", encoding="utf-8")
+
+
+def cmd_build_add(args: argparse.Namespace) -> int:
+    history = _load_build_history()
+    builds = history.setdefault("builds", [])
+    if _find_build(history, args.build):
+        raise QueueToolError(f"build add: duplicate build {args.build!r} already exists")
+    full_summary = redact_narrative(args.summary or "")
+    new_row = {
+        "build": args.build,
+        "title": args.title,
+        "status": args.status,
+        "movement": args.movement or "",
+        "docs": {},
+        "summary": _truncate(full_summary, SUMMARY_TRUNCATE),
+    }
+    if len(full_summary) > SUMMARY_TRUNCATE:
+        new_row["detail"] = f"docs/history/builds/{args.build}.md"
+    builds.insert(0, new_row)
+    write_json(BUILD_HISTORY, history)
+    if full_summary:
+        _write_build_history_doc({**new_row, "_full_summary": full_summary})
+    print(f"added build {args.build!r}")
+    return 0
+
+
+def cmd_build_status(args: argparse.Namespace) -> int:
+    history = _load_build_history()
+    build = _find_build(history, args.build)
+    if build is None:
+        raise QueueToolError(f"build status: no such build {args.build!r}")
+    build["status"] = args.set
+    write_json(BUILD_HISTORY, history)
+    print(f"{args.build!r} -> {args.set}")
+    return 0
+
+
+def cmd_build_note(args: argparse.Namespace) -> int:
+    """Append a redacted note to docs/history/builds/<build>.md's Evidence
+    section; never writes narrative into build_history.json."""
+    history = _load_build_history()
+    build = _find_build(history, args.build)
+    if build is None:
+        raise QueueToolError(f"build note: no such build {args.build!r}")
+    HISTORY_BUILDS_DIR.mkdir(parents=True, exist_ok=True)
+    path = _build_history_doc_path(args.build)
+    text = redact_narrative(args.text)
+    if path.exists():
+        existing = path.read_text(encoding="utf-8")
+        path.write_text(existing.rstrip("\n") + "\n\n" + text + "\n", encoding="utf-8")
+    else:
+        path.write_text(f"# {args.build} — {build.get('title', '')}\n\n## Evidence\n\n{text}\n", encoding="utf-8")
+    if not build.get("detail"):
+        build["detail"] = f"docs/history/builds/{args.build}.md"
+        write_json(BUILD_HISTORY, history)
+    print(f"noted build {args.build!r} -> {_display_path(path)}")
+    return 0
+
+
+# --------------------------------------------------------------------------
+# decision open / decide  (GOV.ORCH.8 2.3 -- "decision" mirrors "decide" but
+# also covers opening a new roadmap decision)
+# --------------------------------------------------------------------------
+
+def cmd_decision(args: argparse.Namespace) -> int:
+    return args.decision_func(args)
+
+
+def cmd_decision_open(args: argparse.Namespace) -> int:
+    roadmap = load_json(ROADMAP)
+    decisions = roadmap.setdefault("open_decisions", [])
+    if any(d.get("id") == args.id for d in decisions):
+        raise QueueToolError(f"decision open: duplicate decision id {args.id!r} already exists")
+    decisions.append({
+        "id": args.id,
+        "area": args.area or "",
+        "status": "open",
+        "question": args.question,
+        "options": args.options or "",
+        "recommendation": args.recommendation or "",
+        "decide_by": args.decide_by,
+    })
+    write_json(ROADMAP, roadmap)
+    backlog = load_json(BACKLOG)
+    QUEUE.write_text(render_queue_md(backlog, roadmap), encoding="utf-8")
+    print(f"opened decision {args.id!r}")
     return 0
 
 
@@ -399,6 +619,48 @@ def build_parser() -> argparse.ArgumentParser:
     p_decide.add_argument("--id", required=True)
     p_decide.add_argument("--decision", required=True)
     p_decide.set_defaults(func=cmd_decide)
+
+    p_build = sub.add_parser("build", help="build_history.json: add|status|note")
+    build_sub = p_build.add_subparsers(dest="build_command", required=True)
+
+    p_build_add = build_sub.add_parser("add", help="add a new build_history record")
+    p_build_add.add_argument("--build", required=True)
+    p_build_add.add_argument("--title", required=True)
+    p_build_add.add_argument("--status", required=True)
+    p_build_add.add_argument("--movement", default="")
+    p_build_add.add_argument("--summary", default="")
+    p_build_add.set_defaults(build_func=cmd_build_add)
+
+    p_build_status = build_sub.add_parser("status", help="update a build's status")
+    p_build_status.add_argument("--build", required=True)
+    p_build_status.add_argument("--set", required=True)
+    p_build_status.set_defaults(build_func=cmd_build_status)
+
+    p_build_note = build_sub.add_parser("note", help="append a note to docs/history/builds/<build>.md")
+    p_build_note.add_argument("--build", required=True)
+    p_build_note.add_argument("--text", required=True)
+    p_build_note.set_defaults(build_func=cmd_build_note)
+
+    p_build.set_defaults(func=cmd_build)
+
+    p_decision = sub.add_parser("decision", help="roadmap open_decisions: open|decide")
+    decision_sub = p_decision.add_subparsers(dest="decision_command", required=True)
+
+    p_decision_open = decision_sub.add_parser("open", help="open a new roadmap decision")
+    p_decision_open.add_argument("--id", required=True)
+    p_decision_open.add_argument("--question", required=True)
+    p_decision_open.add_argument("--decide-by", dest="decide_by", required=True)
+    p_decision_open.add_argument("--area", default="")
+    p_decision_open.add_argument("--options", default="")
+    p_decision_open.add_argument("--recommendation", default="")
+    p_decision_open.set_defaults(decision_func=cmd_decision_open)
+
+    p_decision_decide = decision_sub.add_parser("decide", help="close an open roadmap decision")
+    p_decision_decide.add_argument("--id", required=True)
+    p_decision_decide.add_argument("--decision", required=True)
+    p_decision_decide.set_defaults(decision_func=cmd_decide)
+
+    p_decision.set_defaults(func=cmd_decision)
 
     return parser
 

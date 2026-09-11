@@ -127,6 +127,11 @@ jobs:
       - name: Project queue is current
         run: python3 scripts/project_queue.py check
 
+      - name: Project file size budgets
+        # GOV.ORCH.8 2.4: backlog/roadmap/build_history/feature_registry.json
+        # and QUEUE.md size ceilings, plus the no-long-narrative-field rule.
+        run: python -m pytest -q tests/test_project_files_budget.py
+
       - name: PR smoke / safety regression set
         # A small, stable, hand-picked set of fast tests that stand in for
         # "affected-subsystem regression" on an ordinary bounded PR — not a
@@ -225,6 +230,11 @@ jobs:
 
       - name: Project queue is current
         run: python3 scripts/project_queue.py check
+
+      - name: Project file size budgets
+        # GOV.ORCH.8 2.4: backlog/roadmap/build_history/feature_registry.json
+        # and QUEUE.md size ceilings, plus the no-long-narrative-field rule.
+        run: python -m pytest -q tests/test_project_files_budget.py
 
       - name: Report worker topology
         # DEV.TEST.1: makes the parallel step's actual worker count visible in
