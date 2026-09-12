@@ -1,0 +1,102 @@
+# gate_registry seed fixture (adjudication F2: "created in V4 and seeded
+# from a version-controlled fixture committed alongside the capability
+# specs"). Committed alongside cp_gaia_inventory.yaml in this same
+# directory. Loaded by GateRegistryFixtureLoader and upserted into the
+# gate_registry table at worker startup (never authored freehand by a
+# capability spec -- C4 §3.2: "gate_id values are source-committed... never
+# an author-typed free-text string a spec can invent at will").
+#
+# Each row mirrors one docs/AI_DEVELOPMENT_PROTOCOL.md "Network-device
+# command gate" entry (C4 §3.2). The two cp_gaia_* rows below back this
+# movement's own CP inventory capability (cp_gaia_inventory.yaml); the
+# three rb3b_* rows are C4 §2.4/§3.4's real, gate-signed-off worked example
+# (BACKUP_RECOVERY_CONTRACTS.md §7.3/§7.4/§7.7/§7.8), included here so a
+# test can exercise both a SIGNED_OFF resolution and a
+# SIGNED_OFF_PENDING_HARDWARE_CONFIRMATION one against real data, per C4
+# §7 test 5 -- these three rows back no capability this movement ships and
+# are never referenced by cp_gaia_inventory.yaml.
+gates:
+  - gate_id: cp_gaia_show_version_all
+    vendor: check_point
+    platform_role_scope: cp_gaia_gateway
+    shell_context: clish
+    transport_kind: SSH_EXEC
+    canonical_command_key: "show version all"
+    action_class: read
+    sign_off_state: SIGNED_OFF
+    timeout_s: 30
+    retry_rule: "class-0 bounded retry, pre-response only"
+    max_frequency: unrestricted
+    session_reuse_rule: "one connection per job, no shared shell state"
+    unsupported_behavior_ref: UNKNOWN
+    secret_output_risk: none
+    safe_telemetry_fields: []
+    source_document_pointer: "docs/design/UI2_0_C6_CAPABILITY_EXTRACTION_CONTRACT.md §4.1 field 15"
+
+  - gate_id: cp_gaia_cphaprob_stat
+    vendor: check_point
+    platform_role_scope: cp_gaia_gateway
+    shell_context: clish
+    transport_kind: SSH_EXEC
+    canonical_command_key: "cphaprob stat"
+    action_class: read
+    sign_off_state: SIGNED_OFF
+    timeout_s: 30
+    retry_rule: "class-0 bounded retry, pre-response only"
+    max_frequency: unrestricted
+    session_reuse_rule: "one connection per job, no shared shell state"
+    unsupported_behavior_ref: UNKNOWN
+    secret_output_risk: none
+    safe_telemetry_fields: []
+    source_document_pointer: "docs/design/UI2_0_C6_CAPABILITY_EXTRACTION_CONTRACT.md §4.1 field 15"
+
+  - gate_id: rb3b_add_backup_local
+    vendor: check_point
+    platform_role_scope: cp_gaia_gateway
+    shell_context: expert_via_clish_c
+    transport_kind: SSH_EXEC
+    canonical_command_key: "clish -c 'add backup local'"
+    action_class: recovery-write
+    sign_off_state: SIGNED_OFF
+    timeout_s: 900
+    retry_rule: "never auto-retries (class-1)"
+    max_frequency: "per RB.3b ledger minimum re-execution interval"
+    session_reuse_rule: "one connection per job"
+    unsupported_behavior_ref: UNKNOWN
+    secret_output_risk: none
+    safe_telemetry_fields: []
+    source_document_pointer: "docs/design/BACKUP_RECOVERY_CONTRACTS.md §7.3"
+
+  - gate_id: rb3b_freespace_read
+    vendor: check_point
+    platform_role_scope: cp_gaia_gateway
+    shell_context: clish
+    transport_kind: SSH_EXEC
+    canonical_command_key: "show diskspace"
+    action_class: read
+    sign_off_state: SIGNED_OFF_PENDING_HARDWARE_CONFIRMATION
+    timeout_s: 30
+    retry_rule: "class-0 bounded retry, pre-response only"
+    max_frequency: unrestricted
+    session_reuse_rule: "one connection per job"
+    unsupported_behavior_ref: "Expert df -P /var/log fallback per §7.7 point 3"
+    secret_output_risk: none
+    safe_telemetry_fields: []
+    source_document_pointer: "docs/design/BACKUP_RECOVERY_CONTRACTS.md §7.7"
+
+  - gate_id: rb3b_delete_backup_local
+    vendor: check_point
+    platform_role_scope: cp_gaia_gateway
+    shell_context: expert_via_clish_c
+    transport_kind: SSH_EXEC
+    canonical_command_key: "clish -c 'delete backup <name>'"
+    action_class: recovery-write
+    sign_off_state: SIGNED_OFF
+    timeout_s: 60
+    retry_rule: "never auto-retries (class-1)"
+    max_frequency: "per RB.3b ledger minimum re-execution interval"
+    session_reuse_rule: "one connection per job"
+    unsupported_behavior_ref: UNKNOWN
+    secret_output_risk: none
+    safe_telemetry_fields: []
+    source_document_pointer: "docs/design/BACKUP_RECOVERY_CONTRACTS.md §7.8"

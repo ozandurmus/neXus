@@ -11,4 +11,5 @@ org.junit.platform:junit-platform-engine:1.10.3=testRuntimeClasspath
 org.junit.platform:junit-platform-launcher:1.10.3=testRuntimeClasspath
 org.junit:junit-bom:5.10.3=testCompileClasspath,testRuntimeClasspath
 org.opentest4j:opentest4j:1.3.0=testCompileClasspath,testRuntimeClasspath
-empty=annotationProcessor,compileClasspath,runtimeClasspath,testAnnotationProcessor
+org.yaml:snakeyaml:2.2=compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
+empty=annotationProcessor,testAnnotationProcessor

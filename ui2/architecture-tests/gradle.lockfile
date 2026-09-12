@@ -12,6 +12,7 @@ com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.17.2=testRuntimeClasspa
 com.fasterxml.jackson.module:jackson-module-parameter-names:2.17.2=testRuntimeClasspath
 com.fasterxml.jackson:jackson-bom:2.17.2=testRuntimeClasspath
 com.google.code.gson:gson:2.10.1=testRuntimeClasspath
+com.jcraft:jsch:0.1.55=testRuntimeClasspath
 com.tngtech.archunit:archunit-junit5-api:1.3.0=testCompileClasspath,testRuntimeClasspath
 com.tngtech.archunit:archunit-junit5-engine-api:1.3.0=testRuntimeClasspath
 com.tngtech.archunit:archunit-junit5-engine:1.3.0=testRuntimeClasspath

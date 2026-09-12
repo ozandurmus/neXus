@@ -1,0 +1,36 @@
+# cp_gaia_inventory_show_version_ha_state -- the FIRST-CAPABILITY narrow
+# subset (baseline §2), per C6 §4.1's worked example. This is this
+# movement's own committed capability spec, offered as the shape B1-5
+# fills for real; its two gate references resolve against
+# gate_registry_fixture.yaml's cp_gaia_show_version_all /
+# cp_gaia_cphaprob_stat rows, committed alongside it in this directory.
+capability_id: cp_gaia_inventory_show_version_ha_state
+vendor: check_point
+platform_role_scope: cp_gaia_gateway
+maturity_state: CAP_OFFLINE
+transport:
+  kind: ssh_exec
+  trust_rule_ref: utils.cp_ssh_trust
+steps:
+  - kind: connect
+  - kind: exec
+    shell_context: clish
+    send: "show version all"
+    timeout_s: 30
+    expect:
+      regex: "^Product version.*$"
+  - kind: exec
+    shell_context: clish
+    send: "cphaprob stat"
+    timeout_s: 30
+    expect:
+      regex: "^(Active|Standby|Down).*$"
+finally_steps:
+  - kind: disconnect
+parser_ref:
+  parser_version: UNKNOWN
+  semantics_doc_ref: "docs/design/UI2_0_C6_CAPABILITY_EXTRACTION_CONTRACT.md §4.1 field 4"
+source_pointers:
+  - "checkpoint/checkpoint_config_collector module (read pointer only, never imported)"
+validation_status: FIXTURE_ONLY
+revalidation_plan_ref: "docs/design/UI2_0_C6_CAPABILITY_EXTRACTION_CONTRACT.md §4.1 field 9"
