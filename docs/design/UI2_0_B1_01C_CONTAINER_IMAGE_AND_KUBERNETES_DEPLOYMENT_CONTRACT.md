@@ -2,11 +2,28 @@
 
 ## Status
 
-**DRAFT — 2026-09-12. NOT IMPLEMENTATION AUTHORITY.** No container image,
-Containerfile, manifest, chart or script may be created on the strength of this
-document while it carries this status. Applying a status is the Product Owner's
-act, not an agent's; this movement wrote the contract and deliberately did not
-freeze it.
+**FROZEN — PRODUCT OWNER APPROVED, 2026-09-12.** The Product Owner was given
+the reviewed finding and authorized the freeze in the 2026-09-12 local session.
+This document is implementation authority for the container image and the
+Kubernetes deployment of UI 2.0, within the scope §1 states and no further.
+
+Review of record, so the approval is not an unevidenced claim: the Product
+Owner assistant read §3 (the image and its arbitrary-UID model) and §8
+(portability) clause by clause before recommending the freeze, and reported
+that finding to the Product Owner, who authorized it. The clauses that carried
+the decision were FS-1 to FS-6 — ownership by group 0 rather than by any UID,
+a closed and declared writable set, `readOnlyRootFilesystem` with each declared
+writable path supplied as a mount, and a numeric final `USER` so that a
+manifest asserting `runAsNonRoot` without a `runAsUser` can be validated —
+together with PORT-1 and PORT-4: one substitution between platforms and nothing
+else, and the local cluster held to a constraint it does not itself enforce,
+because the alternative is discovering the failure at the stage where a refused
+admission is least recoverable.
+
+This freeze approves the contract's decisions. It does **not** convert the §10
+`UNKNOWN` entries into decided values: each stays `UNKNOWN` until the evidence
+that clause names is produced, and the implementing movement reports what it
+observed rather than assuming a value.
 
 This is the successor contract that
 `docs/design/UI2_0_B1_01A_PLATFORM_SKELETON_CONTRACT.md` §6 requires before a
