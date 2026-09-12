@@ -60,11 +60,19 @@ COPY --from=build /build/service-boot.jar /app/service.jar
 # every path outside the declared set and then restored on exactly the two
 # that are declared. The run script those jboss paths belong to is not this
 # image's entry point (EP-3).
+#
+# The kernel and builder mount points are pruned rather than changed: they
+# are not image content, they are not present in the shipped layers, and at
+# runtime FS-4's readOnlyRootFilesystem is what governs them.
 RUN chown -R 0:0 /app \
  && chmod 0750 /app \
  && chmod 0640 /app/service.jar \
- && find / -xdev ! -type l -perm -0002 -exec chmod o-w {} + \
- && find / -xdev ! -type l -perm -0020 -exec chmod g-w {} + \
+ && find / -xdev \( -path /proc -o -path /sys -o -path /dev -o -path /run \
+      -o -path /var/run -o -path /kaniko -o -path /workspace \) -prune \
+      -o ! -type l -perm -0002 -exec chmod o-w {} + \
+ && find / -xdev \( -path /proc -o -path /sys -o -path /dev -o -path /run \
+      -o -path /var/run -o -path /kaniko -o -path /workspace \) -prune \
+      -o ! -type l -perm -0020 -exec chmod g-w {} + \
  && chmod 0770 /app/tmp /app/home
 
 # The working directory is a read path, not a writable one: a process whose
