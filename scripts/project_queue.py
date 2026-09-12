@@ -316,11 +316,12 @@ def render_queue_md(backlog: dict, roadmap: dict, generated: str | None = None) 
         lines.append(
             "## Deferred — held, not finished (reason: docs/history/backlog/<id>.md)"
         )
+        # Id and priority only: the hold's reason lives in the linked note,
+        # and repeating each title here would spend the cold-start word
+        # budget GOV.ORCH.5 §2.1 sets, for text the reader must follow the
+        # link to act on anyway.
         for item in sorted(deferred, key=lambda i: (_priority_rank(i.get("priority")), i.get("id", ""))):
-            priority = _priority_label(item.get("priority"))
-            title = _truncate(item.get("title", ""), TITLE_TRUNCATE)
-            target = _truncate(item.get("target", ""), TARGET_TRUNCATE)
-            lines.append(f"- {priority} {item.get('id', '')} — {title} (target: {target})")
+            lines.append(f"- {_priority_label(item.get('priority'))} {item.get('id', '')}")
 
     lines.append("## Open decisions")
     for decision in roadmap.get("open_decisions") or []:

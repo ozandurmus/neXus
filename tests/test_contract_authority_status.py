@@ -42,17 +42,36 @@ The two `C1` and `C3` authority-chain entries were closed on 2026-09-12 and
 their entries deleted: `UI2_0_C1_PLATFORM_SCHEMA_CONTRACT.md` "Correction C-1"
 and `UI2_0_C3_IDENTITY_SESSIONS_RBAC_CONTRACT.md` "Correction C-1" moved the
 cited DRAFT out of each contract's authority chain into a labelled
-evidence/precedent block that states it authorizes nothing. What remains
-catalogued is `UI2_0_ARCHITECTURE_DESIGN.md`'s own two citations.
+evidence/precedent block that states it authorizes nothing. The two entries keyed on
+`UI2_0_ARCHITECTURE_DESIGN.md` as a *citer* were also deleted: they existed
+only because that document misclassified as frozen. It is a DRAFT, and one
+DRAFT citing another is not a FROZEN-cites-DRAFT violation, so it is outside
+this gate's scope — not an exemption.
 
-**Known detector gap, reported not fixed.** `_classify` matches the bare token
-`FROZEN`, so a status line reading "DRAFT ... NOT frozen, NOT implementation
-authority" — `UI2_0_ARCHITECTURE_DESIGN.md`'s — classifies as `frozen`. That
-document is therefore scanned as a citer (the two entries below) while
-citations *of* it go unflagged, including its place in `C1` §1 and `C3` §1.4's
-authority chains. Tightening the match would newly fail several FROZEN
-contracts, which is a contract-owner adjudication, not a test change; both
-corrections name this explicitly.
+**Detector gap closed 2026-09-12.** `_classify` matched the bare token
+`FROZEN` anywhere in the status line, so `UI2_0_ARCHITECTURE_DESIGN.md`'s line
+— "DRAFT — design resolved, NOT frozen, NOT implementation authority" —
+classified as `frozen`. The gate was blind in the worst direction: it read a
+DRAFT as a frozen contract, so every citation *of* it went unchecked. It now
+reads the declared token, the leading one before the first dash or comma,
+falling back to the whole line only when that prefix names none.
+
+That fix surfaced eleven further findings, all catalogued below and none
+reconciled here. The load-bearing ones are structural rather than stray:
+`UI2_0_ARCHITECTURE_DESIGN.md` (DRAFT) sits at item 4 of the authority chain
+of **four** FROZEN C-series contracts — `C1` §1, `C2` §1.3, `C3` §1.4,
+`C4` §1.3 — and `UI2_0_D1_DEVICE_WRITE_CLASS_AND_STEP_KIND_DECISION.md`
+(DRAFT) is cited by `UI2_0_BASELINE_CONTRACT.md` §2's decision table. The
+whole UI 2.0 C-series therefore rests on a document that says of itself it is
+not implementation authority. That is a Product Owner adjudication, not an
+engineering edit: rewriting four frozen contracts to re-rank their own
+authority chain would change what they require.
+
+Entries marked DETECTOR FALSE POSITIVE are citations this gate flags but that
+carry no authority claim — a read list, a "reference-only, not ported"
+exclusion, or this gate's own contradiction report. They are catalogued rather
+than silently skipped so that tightening `_PROVENANCE_MARKERS` later is a
+visible change with a known expected effect.
 """
 from __future__ import annotations
 
@@ -105,14 +124,61 @@ _SKIPPED_HEADING_TOKENS = ("cross-reference", "status")
 # Keyed on the paragraph hash, never on a line number or a bare filename, so an
 # exemption cannot generalize to a new or edited citation.
 _KNOWN_DRAFT_AUTHORITY_CITATIONS: dict[tuple[str, str, str], str] = {
-("UI2_0_ARCHITECTURE_DESIGN.md",
-     "UI2_0_ARCHITECTURE_REQUIREMENTS.md",
-     "f17149b4ebdf5f6f5dc76b6e1762c20b44d80d4c620afc22b6b474872bea9654"):
-        "## 1. Purpose — the bar (`AC-0`) — prose mention of its own DRAFT evidentiary base; the sentence carries authority language",
-    ("UI2_0_ARCHITECTURE_DESIGN.md",
-     "PCP_STORAGE_ENGINE_DECISION.md",
-     "4813226e125bbc85040ef6239e62b1cb472d27d35c9a466ec5f9d0e7ca0dddcd"):
-        "## 12. Still open — must close before freeze or before the named slice — open-items table names the DRAFT storage decision as the closer of U-J1; the closer is itself unfrozen",
+    # --- REAL CONTRADICTIONS, surfaced 2026-09-12 by the _classify fix. ---
+    # A DRAFT stands in a FROZEN contract's own declared authority chain. Same
+    # class as the B1-1 defect, one layer deeper: these are the C-series.
+    # Product Owner adjudication required — re-ranking a frozen contract's
+    # authority chain changes what that contract requires.
+    ("UI2_0_C1_PLATFORM_SCHEMA_CONTRACT.md",
+     "UI2_0_ARCHITECTURE_DESIGN.md",
+     "3449b4a234f146951b420f1251ae228971d2b36fd0b57682567b01c0c42fc9a2"):
+        "REAL CONTRADICTION — §1 authority chain item 4 ranks a DRAFT as authority; C1 §9 (storage) and §10 (invariants) rely on it in body",
+    ("UI2_0_C2_JOB_EXECUTION_CONTRACT.md",
+     "UI2_0_ARCHITECTURE_DESIGN.md",
+     "66e74d90764e9f06ec41287bb16e643add54f2b10b9b8c7cc290eb0ce2d7d3f5"):
+        "REAL CONTRADICTION — §1.3 authority chain ranks a DRAFT as authority",
+    ("UI2_0_C3_IDENTITY_SESSIONS_RBAC_CONTRACT.md",
+     "UI2_0_ARCHITECTURE_DESIGN.md",
+     "c98ea099eed59f63bfb3308b084a24f6b768179c2d3e1cc81506ca5ecd460afc"):
+        "REAL CONTRADICTION — §1.4 authority chain item 4 ranks a DRAFT as authority; §6's U-4 disposition reads through it",
+    ("UI2_0_C4_CAPABILITY_REGISTRY_GATE_RESOLUTION_CONTRACT.md",
+     "UI2_0_ARCHITECTURE_DESIGN.md",
+     "d651908d1e65ad900dc76cea399a7c05c34de424596a949269ad53071d6d47c7"):
+        "REAL CONTRADICTION — §1.3 authority chain ranks a DRAFT as authority",
+    ("UI2_0_BASELINE_CONTRACT.md",
+     "UI2_0_D1_DEVICE_WRITE_CLASS_AND_STEP_KIND_DECISION.md",
+     "2ac37736d29723d81bea9ca73a960d437189454a7e211360919be290f44a4ea9"):
+        "REAL CONTRADICTION — §2's Phase 0 decision table cites a document whose own status is 'DRAFT — OPTION A SELECTED IN RELAY; FROZEN BASELINE AMENDMENT PENDING'; the amendment is pending, so the decision is not yet frozen authority",
+    ("UI2_0_D1_OPTION_A_AMENDMENT_PROPOSAL_BUNDLE.md",
+     "UI2_0_D1_DEVICE_WRITE_CLASS_AND_STEP_KIND_DECISION.md",
+     "8a11cba89570c68c8db28f7a2fb9ded0fd8651eeb4f439e20f169bc90d7a6da7"):
+        "REAL CONTRADICTION — a FROZEN-but-NOT-YET-APPLIED amendment bundle resting on the same pending DRAFT decision",
+    ("UI2_0_D1_OPTION_A_AMENDMENT_PROPOSAL_BUNDLE.md",
+     "UI2_0_D1_DEVICE_WRITE_CLASS_AND_STEP_KIND_DECISION.md",
+     "5c94a641d2f436fc9035a3f39eaff405e1f8ead30c3dc957abc2143387200e0f"):
+        "REAL CONTRADICTION — Step 5's proposed baseline row derives from the same pending DRAFT decision",
+
+    # --- DETECTOR FALSE POSITIVES. No authority is claimed in these. ---
+    ("UI2_0_C2_JOB_EXECUTION_CONTRACT.md",
+     "UI2_0_ARCHITECTURE_DESIGN.md",
+     "2dd6b1a9a684c85ebb3707fac6f2e6e8091d2cc60abab11832cd6951a88c3b03"):
+        "DETECTOR FALSE POSITIVE — §10's 'Documents checked' read list, in a section reporting no contradictions",
+    ("UI2_0_C3_IDENTITY_SESSIONS_RBAC_CONTRACT.md",
+     "UI2_0_ARCHITECTURE_DESIGN.md",
+     "9b71604037ea0457ff8f5243d82ef8bd6febfd01515e574e6b5978b010da49c8"):
+        "DETECTOR FALSE POSITIVE — Correction C-1's own report of this very contradiction, which says 'Not reconciled here, reported instead'",
+    ("UI2_0_C4_CAPABILITY_REGISTRY_GATE_RESOLUTION_CONTRACT.md",
+     "UI2_0_ARCHITECTURE_DESIGN.md",
+     "9dda89653888bd8f491773a8f437b8ec2dde4dbd601665f52c18dad5d3109722"):
+        "DETECTOR FALSE POSITIVE — §1.4 'Reference-only, not ported' explicitly refuses the cited profile as a command sequence",
+    ("UI2_0_C5_AMENDMENTS_BUNDLE.md",
+     "UI2_0_ARCHITECTURE_DESIGN.md",
+     "d3c6768d8de2b33a80859687f3e15a8400557394b881c2c2533cf08025c533bd"):
+        "DETECTOR FALSE POSITIVE — §2 names the design document as the target of an amendment, not as authority over C5",
+    ("UI2_0_C5_AMENDMENTS_BUNDLE.md",
+     "UI2_0_ARCHITECTURE_DESIGN.md",
+     "3f0dd77fedaa4a91d52f2355adc88c5e8485d942104a5ecd5410b684fac68fd3"):
+        "DETECTOR FALSE POSITIVE — §7's 'Documents checked while writing this' read list",
 }
 
 
@@ -153,12 +219,22 @@ def _classify(status_line: str) -> str:
     declared status token. `retired` wins: a SUPERSEDED document's status line
     routinely still names the draft it used to be."""
     upper = status_line.upper()
-    if any(marker in upper for marker in _RETIRED_MARKERS):
-        return "retired"
-    if any(marker in upper for marker in _FROZEN_MARKERS):
-        return "frozen"
-    if any(marker in upper for marker in _DRAFT_MARKERS):
-        return "draft"
+
+    # Match the declared token first, not any occurrence of it. A status line
+    # reading "DRAFT — design resolved, NOT frozen, NOT implementation
+    # authority" contains the substring FROZEN and classified as frozen,
+    # which made this gate blind in the worst direction: it read a DRAFT as a
+    # frozen contract, so every citation *of* that document went unchecked.
+    # The declared status is the leading token, before the first dash or
+    # comma; the whole line is only a fallback when that prefix names none.
+    prefix = re.split(r"[—–\-,:.]", upper.lstrip("*# "), maxsplit=1)[0]
+    for scope in (prefix, upper):
+        if any(marker in scope for marker in _RETIRED_MARKERS):
+            return "retired"
+        if any(marker in scope for marker in _DRAFT_MARKERS):
+            return "draft"
+        if any(marker in scope for marker in _FROZEN_MARKERS):
+            return "frozen"
     return "unknown"
 
 

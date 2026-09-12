@@ -1,5 +1,5 @@
 # Project queue (generated — do not edit; run: py scripts/project_queue.py render)
-Build: ui2_b1_01a_platform_skeleton_freeze · Track: PCP.x · Generated: 2026-09-12T07:18:01Z
+Build: ui2_b1_01a_platform_skeleton_freeze · Track: PCP.x · Generated: 2026-09-12T07:20:14Z
 
 ## Now
 - ui2_b1_01a_platform_skeleton_freeze — UI2 B1-1a — platform skeleton contract frozen, integration suite proven on real PostgreSQL 16, audit redaction policy (automated_validated)
@@ -55,17 +55,17 @@ Build: ui2_b1_01a_platform_skeleton_freeze · Track: PCP.x · Generated: 2026-09
 - P3/planned cp_cphaprob_peer_observation_corroboration — Extract peer-member rows from cphaprob stat for additional cluster-identity corroboration (target: Follow-up to OP.0a.P7 (PAN HA peer-pairing identity closure))
 - P3/planned pytest_xdist_privacy_scan_scratch_file_race — tests/test_gov_po_3_ci_privacy_gate_baseline.py's transient scratch fixture can crash a concurrently (target: Test-infrastructure follow-up; discovered incidentally while validating dlp_scan)
 ## Deferred — held, not finished (reason: docs/history/backlog/<id>.md)
-- P1 ui2_b1_05_extract_cp_inventory_subset — UI2 B1-5 -- extract: CP inventory narrow subset (show version, HA state) -> capability spec + saniti (target: workflow §5 B1-5)
-- P1 ui2_b1_06_implement_cp_inventory_capability — UI2 B1-6 -- implement CP inventory capability in Java against fixtures (CAP-OFFLINE) (target: workflow §5 B1-6)
-- P1 ui2_b1_13_second_flow_pan_config_export_artefact — UI2 B1-13 -- second representative flow: PAN configuration export (RB.2 semantics, read class) throu (target: workflow §5 B1-13)
-- P2 bulk_fleet_ops — Fleet selection foundation for future bulk read/recovery/approved operations (target: post-VERIFY/RECOVER)
-- P2 compliance_assignment_ui_and_registry — Compliance assignment editor + tagged device registry (DEPLOY.1-gated) (target: DEPLOY.1)
-- P2 compliance_check_engine_ui — CE.3 - Browser check editor + signed distributable org check packs (target: DEPLOY.1A)
-- P2 compliance_remediation_checks — CE.4 - Remediation checks (write-capable, HARD-GATED) (target: post OP.2 / DEPLOY.1A)
-- P2 failover_controlled_execution — OP.2 - Controlled Failover Execution (write-gated) (target: OP.2)
-- P2 per_vendor_worker_split — Per-vendor worker containers (target: DEV.3.4)
-- P2 snmpv3_fast_telemetry_plane — Optional SNMPv3 fast telemetry plane -- own security/command/OID gate before any code (target: PCP.7)
-- P4 pan_ha_peer_ipv6_pairing — PAN HA peer pairing does not match on IPv6 (target: Dual-stack PAN estates)
+- P1 ui2_b1_05_extract_cp_inventory_subset
+- P1 ui2_b1_06_implement_cp_inventory_capability
+- P1 ui2_b1_13_second_flow_pan_config_export_artefact
+- P2 bulk_fleet_ops
+- P2 compliance_assignment_ui_and_registry
+- P2 compliance_check_engine_ui
+- P2 compliance_remediation_checks
+- P2 failover_controlled_execution
+- P2 per_vendor_worker_split
+- P2 snmpv3_fast_telemetry_plane
+- P4 pan_ha_peer_ipv6_pairing
 ## Open decisions
 - op_track_id — Track id: keep OP.x as a dedicated OPERATE track, or fold into 1.x after the 1.0 GOVERN track?
 - op_four_eyes — Second-approver (four-eyes) sign-off for an authorised failover: mandatory, or configurable per envi

@@ -139,7 +139,20 @@ def test_render_produces_four_sections_open_items_only(queue_env):
     assert "item_open_p1" in content
     assert "item_open_p0" in content
     assert "item_done" not in content
-    assert "item_deferred" not in content
+    # A deferred row is held work, not finished work: it is rendered, in its
+    # own section, so a standing hold (for example a Product Owner gate on
+    # collection scope) stays visible in the one planning file read at cold
+    # start. Its reason lives in docs/history/backlog/<id>.md, so only the id
+    # and priority appear here.
+    assert "## Deferred" in content
+    deferred_line = next(
+        (l for l in content.split("\n") if l.startswith("- ") and "item_deferred" in l), None)
+    assert deferred_line is not None, "a deferred item must still be rendered"
+    assert deferred_line.strip().endswith("item_deferred"), (
+        "a deferred row carries id and priority only, never a repeated title or target")
+    deferred_index = content.index("item_deferred")
+    assert deferred_index > content.index("## Deferred"), (
+        "a deferred item must appear under the Deferred heading, never in the open backlog")
 
     # Only open decisions appear.
     assert "dec_open" in content
