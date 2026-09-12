@@ -1024,6 +1024,16 @@ if mode == "close":
 elif mode == "exit_nonzero":
     print("engineer: about to fail", flush=True)
     sys.exit(1)
+elif mode == "exit_nonzero_verbose":
+    # NXS-LOCAL-0115: a long log with a secret-shaped line near the start
+    # (outside the tail bound) and one near the end (inside it), so the
+    # tests can prove both the bound and the redaction independently.
+    print('password: "outside-the-tail-bound-secret"', flush=True)
+    for i in range(100):
+        print(f"engineer: verbose line {i}", flush=True)
+    print('api_key: "tail-bound-secret-value"', flush=True)
+    print("contact ops-oncall@example.com for help", flush=True)
+    sys.exit(1)
 elif mode == "sleep":
     time.sleep(30)
     sys.exit(0)
@@ -1185,6 +1195,103 @@ def test_run_cli_engineer_exit_nonzero_fails_without_verify_gate(tmp_path, monke
     assert report["phase"] == orch.PHASE_FAILED
     assert report["exit_code"] == 1
     assert report["failure_reason"] == "engineer_exit_nonzero"
+
+
+def test_run_cli_engineer_exit_nonzero_carries_exit_code_and_log_excerpt(tmp_path, monkeypatch, capsys):
+    """AC-1: a non-zero exit carries the exit code (already reported) plus a
+    new, additive `engineer_log_excerpt` diagnostic field."""
+    work = _init_bare_and_clone(tmp_path)
+    relay_dir = _make_relay(work, movement="M", git={"base": "origin/main", "lane": "feature/x"})
+    relay_id = json.loads(next(relay_dir.glob("*.json")).read_text())["id"]
+    _install_stub_claude(tmp_path, monkeypatch)
+    monkeypatch.setenv("NEXUS_TEST_STUB_MODE", "exit_nonzero")
+
+    capsys.readouterr()
+    rc = orch.main(_run_args(tmp_path, relay_dir, relay_id, timeout=15, heartbeat_timeout=10))
+    report = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
+    assert rc == orch.EXIT_REFUSED
+    assert report["exit_code"] == 1
+    assert "engineer: about to fail" in report["engineer_log_excerpt"]
+
+
+def test_run_cli_engineer_exit_nonzero_and_unclosed_relay_reports_both_reasons(tmp_path, monkeypatch, capsys):
+    """AC-2: a non-zero exit with an unclosed relay (the `exit_nonzero` stub
+    never closes it) reports both failure reasons, not only the first
+    checked; the pre-existing singular `failure_reason` keeps reporting the
+    first one, unchanged."""
+    work = _init_bare_and_clone(tmp_path)
+    relay_dir = _make_relay(work, movement="M", git={"base": "origin/main", "lane": "feature/x"})
+    relay_id = json.loads(next(relay_dir.glob("*.json")).read_text())["id"]
+    _install_stub_claude(tmp_path, monkeypatch)
+    monkeypatch.setenv("NEXUS_TEST_STUB_MODE", "exit_nonzero")
+
+    capsys.readouterr()
+    rc = orch.main(_run_args(tmp_path, relay_dir, relay_id, timeout=15, heartbeat_timeout=10))
+    report = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
+    assert rc == orch.EXIT_REFUSED
+    assert report["relay_status"] != "CLOSED"
+    assert report["failure_reason"] == "engineer_exit_nonzero"
+    assert report["failure_reasons"] == ["engineer_exit_nonzero", "relay_not_closed"]
+
+
+def test_run_cli_clean_run_report_has_no_new_diagnostic_fields(tmp_path, monkeypatch, capsys):
+    """AC-6: a clean run's report is unchanged apart from the absence of the
+    new diagnostic fields -- `failure_reasons`/`engineer_log_excerpt` are
+    omitted entirely, not present-and-empty/None."""
+    work = _init_bare_and_clone(tmp_path)
+    relay_dir = _make_relay(work, movement="M", git={"base": "origin/main", "lane": "feature/x"},
+                             validation_plan=[{"argv": [sys.executable, "-c", "pass"]}])
+    relay_id = json.loads(next(relay_dir.glob("*.json")).read_text())["id"]
+    _install_stub_claude(tmp_path, monkeypatch)
+    monkeypatch.setenv("NEXUS_TEST_STUB_MODE", "close")
+
+    capsys.readouterr()
+    rc = orch.main(_run_args(tmp_path, relay_dir, relay_id, timeout=15, heartbeat_timeout=10))
+    report = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
+    assert rc == orch.EXIT_OK, report
+    assert "failure_reasons" not in report
+    assert "engineer_log_excerpt" not in report
+
+
+def test_run_cli_engineer_exit_nonzero_log_excerpt_is_bounded(tmp_path, monkeypatch, capsys):
+    """AC-4: the excerpt is bounded to `orch.ENGINEER_LOG_EXCERPT_LINES`
+    lines even when the engineer log is much longer, and it carries the
+    tail (most recent evidence), not the head."""
+    work = _init_bare_and_clone(tmp_path)
+    relay_dir = _make_relay(work, movement="M", git={"base": "origin/main", "lane": "feature/x"})
+    relay_id = json.loads(next(relay_dir.glob("*.json")).read_text())["id"]
+    _install_stub_claude(tmp_path, monkeypatch)
+    monkeypatch.setenv("NEXUS_TEST_STUB_MODE", "exit_nonzero_verbose")
+
+    capsys.readouterr()
+    rc = orch.main(_run_args(tmp_path, relay_dir, relay_id, timeout=15, heartbeat_timeout=10))
+    report = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
+    assert rc == orch.EXIT_REFUSED
+    excerpt_lines = report["engineer_log_excerpt"].splitlines()
+    assert len(excerpt_lines) <= orch.ENGINEER_LOG_EXCERPT_LINES
+    assert "outside-the-tail-bound-secret" not in report["engineer_log_excerpt"]
+    assert "engineer: verbose line 99" in report["engineer_log_excerpt"]
+
+
+def test_run_cli_engineer_exit_nonzero_log_excerpt_is_redacted(tmp_path, monkeypatch, capsys):
+    """AC-5: a secret-shaped line (a credential-keyword assignment, an
+    email address) inside the captured tail does not survive into the
+    report."""
+    work = _init_bare_and_clone(tmp_path)
+    relay_dir = _make_relay(work, movement="M", git={"base": "origin/main", "lane": "feature/x"})
+    relay_id = json.loads(next(relay_dir.glob("*.json")).read_text())["id"]
+    _install_stub_claude(tmp_path, monkeypatch)
+    monkeypatch.setenv("NEXUS_TEST_STUB_MODE", "exit_nonzero_verbose")
+
+    capsys.readouterr()
+    rc = orch.main(_run_args(tmp_path, relay_dir, relay_id, timeout=15, heartbeat_timeout=10))
+    report = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
+    assert rc == orch.EXIT_REFUSED
+    excerpt = report["engineer_log_excerpt"]
+    assert "tail-bound-secret-value" not in excerpt
+    assert "ops-oncall@example.com" not in excerpt
+    assert "[REDACTED]" in excerpt
+    assert "[REDACTED_EMAIL]" in excerpt
 
 
 def test_run_cli_success_reports_provider_default_used_when_no_model_observed(tmp_path, monkeypatch, capsys):
