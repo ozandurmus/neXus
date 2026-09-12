@@ -388,13 +388,15 @@ def test_merge_lock_cli_acquire_release_round_trip(tmp_path):
 
 # --- CLI: status --------------------------------------------------------------
 
-def test_status_cli_reports_no_records_as_empty_list(tmp_path, capsys):
+def test_status_cli_reports_no_records_as_empty_list(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(orch, "LEGACY_STATE_DIR", tmp_path / "legacy_state")
     rc = orch.main(["status", "--state-dir", str(tmp_path / "state"), "--relay-dir", str(tmp_path / "relay")])
     assert rc == orch.EXIT_OK
     assert json.loads(capsys.readouterr().out) == []
 
 
-def test_status_cli_usage_error_for_unknown_movement(tmp_path, capsys):
+def test_status_cli_usage_error_for_unknown_movement(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(orch, "LEGACY_STATE_DIR", tmp_path / "legacy_state")
     rc = orch.main(["status", "--movement", "NXS-LOCAL-0001",
                      "--state-dir", str(tmp_path / "state"), "--relay-dir", str(tmp_path / "relay")])
     assert rc == orch.EXIT_USAGE
