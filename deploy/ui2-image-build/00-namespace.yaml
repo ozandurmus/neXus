@@ -1,0 +1,13 @@
+# B1-1c BP-1/BP-3: the image is produced by a builder that runs inside the
+# cluster and is driven through the cluster API with kubectl. No host build
+# daemon, no host container engine, no host JDK and no host Node takes part.
+#
+# This namespace is build equipment, not part of the §5 manifest set that
+# runs the product. It is applied, used and deleted independently of it.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ui2-build
+  labels:
+    app.kubernetes.io/part-of: nexus-ui2
+    app.kubernetes.io/component: image-build

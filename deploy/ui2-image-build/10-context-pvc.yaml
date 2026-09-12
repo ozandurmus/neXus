@@ -1,0 +1,15 @@
+# The build context is carried into the cluster on a claim rather than
+# mounted from the workstation: a hostPath would make the build depend on
+# the machine it runs on, which BP-5 (repeatable from the repository alone)
+# and the §5.1 construction discipline both rule out.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ui2-build-context
+  namespace: ui2-build
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi

@@ -1,0 +1,61 @@
+# The in-cluster image build (BP-1). Kaniko builds the Containerfile from
+# the context claim and pushes the result to the cluster's own registry, so
+# the produced image is addressable by the Deployment without a push to an
+# external registry (BP-4).
+#
+# The tag comes from the `ui2-build-config` ConfigMap the operator creates
+# from the commit being built, so no two different filesystems ever share a
+# tag (BP-7). The Deployment references the resulting digest, not this tag.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: ui2-image-build
+  namespace: ui2-build
+  labels:
+    app.kubernetes.io/part-of: nexus-ui2
+    app.kubernetes.io/component: image-build
+spec:
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/part-of: nexus-ui2
+        app.kubernetes.io/component: image-build
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: builder
+          image: gcr.io/kaniko-project/executor@sha256:4e7a52dd1f14872430652bb3b027405b8dfd17c4538751c620ac005741ef9698
+          args:
+            - --context=dir:///workspace/ui2
+            - --dockerfile=/workspace/ui2/Containerfile
+            - --destination=registry.kube-system.svc.cluster.local/nexus-ui2-service:$(UI2_IMAGE_TAG)
+            - --digest-file=/workspace/image-digest.txt
+            - --insecure
+            - --skip-tls-verify
+            - --cache=true
+            - --cache-repo=registry.kube-system.svc.cluster.local/nexus-ui2-build-cache
+            - --cache-copy-layers
+            - --snapshot-mode=redo
+            - --log-format=text
+            - --verbosity=info
+          env:
+            - name: UI2_IMAGE_TAG
+              valueFrom:
+                configMapKeyRef:
+                  name: ui2-build-config
+                  key: image_tag
+          volumeMounts:
+            - name: context
+              mountPath: /workspace
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1Gi
+            limits:
+              cpu: "3"
+              memory: 4Gi
+      volumes:
+        - name: context
+          persistentVolumeClaim:
+            claimName: ui2-build-context
