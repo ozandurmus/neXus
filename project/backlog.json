@@ -1315,55 +1315,64 @@
     {
       "id": "failover_readiness_check_contract",
       "category": "failover",
-      "title": "Failover readiness check contract carrying the PO's four semantics (reciprocal peer agreement, VSX/VSLS mentality, re-check on request, one session per device)",
+      "title": "Failover readiness contract carrying the PO's four semantics",
       "status": "planned",
       "priority": "P1",
-      "target": "PO_DECISION_RECORD_2026_09_12 section 3",
+      "target": "PO_DECISION_RECORD 3",
       "note": ""
     },
     {
       "id": "cp_cphaprob_command_gate",
       "category": "failover",
-      "title": "Network-device command gate for cphaprob stat, cphaprob -a if, cphaprob tablestat",
+      "title": "Command gate: cphaprob stat, -a if, tablestat",
       "status": "planned",
       "priority": "P1",
-      "target": "AI_DEVELOPMENT_PROTOCOL command gate",
+      "target": "AI_DEVELOPMENT_PROTOCOL",
       "note": ""
     },
     {
       "id": "ui2_device_add_discovery_and_manual",
       "category": "ui2",
-      "title": "Device add: discovery (Panorama/MDS) and manual, with operator multi-select import",
+      "title": "Device add: discovery and manual, operator multi-select import",
       "status": "planned",
       "priority": "P1",
-      "target": "PO_DECISION_RECORD_2026_09_12 section 4",
+      "target": "PO_DECISION_RECORD 4",
       "note": ""
     },
     {
       "id": "ui2_local_auth_successor_contract",
       "category": "identity",
-      "title": "Local-authentication successor contract, required before any local login path",
+      "title": "Local-authentication successor contract",
       "status": "planned",
       "priority": "P1",
-      "target": "UI2_0_C3 Correction C-2",
+      "target": "UI2_0_C3 C-2",
       "note": ""
     },
     {
       "id": "ui2_m3_design_transfer_pass",
       "category": "ui2",
-      "title": "Design transfer pass: reconcile each menu against the M3 Configuration and M3 Network Inventory canvas frames",
+      "title": "Reconcile each menu against the M3 canvas frames",
       "status": "planned",
       "priority": "P2",
-      "target": "ui2/frontend preview screens",
+      "target": "ui2/frontend preview",
       "note": ""
     },
     {
       "id": "agent_frozen_contract_audit",
       "category": "governance",
-      "title": "Audit the contracts the agent froze or amended on its own hand (PO_DECISION_RECORD section 6)",
+      "title": "Audit contracts the agent froze on its own hand",
       "status": "planned",
       "priority": "P1",
-      "target": "PO_DECISION_RECORD_2026_09_12 section 6",
+      "target": "PO_DECISION_RECORD 6",
+      "note": ""
+    },
+    {
+      "id": "po_o_role_dispatch_boundary",
+      "category": "governance",
+      "title": "Restore the PO+O dispatch loop, or decide direct authoring",
+      "status": "planned",
+      "priority": "P1",
+      "target": "PO_DECISION_RECORD 6.4",
       "note": ""
     }
   ]

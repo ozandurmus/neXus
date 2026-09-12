@@ -1,5 +1,5 @@
 # Project queue (generated — do not edit; run: py scripts/project_queue.py render)
-Build: ui2_d1_restore_c7_c2_amendments · Track: PCP.x · Generated: 2026-09-12T13:11:33Z
+Build: ui2_d1_restore_c7_c2_amendments · Track: PCP.x · Generated: 2026-09-12T13:26:24Z
 
 ## Now
 - ui2_d1_restore_c7_c2_amendments — UI2 D1 Option A -- apply the pending C7/C2/C4/baseline restore admission amendments (automated_validated)
@@ -39,28 +39,29 @@ Build: ui2_d1_restore_c7_c2_amendments · Track: PCP.x · Generated: 2026-09-12T
 - P1/in_progress ui2_b1_04_collection_engine_core — UI2 B1-4 -- collection engine core (capability registry, s (target: workflow §5 B1-4)
 - P1/in_progress ui2_b1_04b_minimal_device_model_onboarding — UI2 B1-4b -- minimal Device / Endpoint / CredentialReferen (target: workflow §5 B1-4b)
 - P1/in_progress ui2_b1_07_jobs_screen_run_now_read — UI2 B1-7 -- Jobs screen + Run Now (read class) + step log (target: workflow §5 B1-7)
-- P1/planned agent_frozen_contract_audit — Audit the contracts the agent froze or amended on its own (target: PO_DECISION_RECORD_2026_09_12 section 6)
+- P1/planned agent_frozen_contract_audit — Audit contracts the agent froze on its own hand (target: PO_DECISION_RECORD 6)
 - P1/planned auth_local_mechanism_contract — Local authentication: storage, lockout, role binding for a (target: C3 Correction C-2; successor contract be)
-- P1/planned cp_cphaprob_command_gate — Network-device command gate for cphaprob stat, cphaprob -a (target: AI_DEVELOPMENT_PROTOCOL command gate)
+- P1/planned cp_cphaprob_command_gate — Command gate: cphaprob stat, -a if, tablestat (target: AI_DEVELOPMENT_PROTOCOL)
 - P1/planned cp_failover_command_gate_batch — Command gate: cphaprob stat, cphaprob -a if, cphaprob tabl (target: PO request 2026-09-12; network-device co)
 - P1/planned cp_ssh_trust_r2_prod_server — CP SSH strict host-key R2 validation on production server (target: DEPLOY.1)
 - P1/planned device_session_one_per_device — One SSH session per device reused for every command; probe (target: PO rule 2026-09-12; command gate says se)
 - P1/planned failover_peer_reciprocal_agreement_check — Eighth stop-condition: both members must agree reciprocall (target: PO rule 2026-09-12; _pan_reciprocal_corr)
-- P1/planned failover_readiness_check_contract — Failover readiness check contract carrying the PO's four s (target: PO_DECISION_RECORD_2026_09_12 section 3)
+- P1/planned failover_readiness_check_contract — Failover readiness contract carrying the PO's four semanti (target: PO_DECISION_RECORD 3)
 - P1/planned failover_recheck_on_request — A failover request must re-run every readiness check at th (target: PO rule 2026-09-12; OP.2 contract)
 - P1/planned failover_vsx_vsls_mentality_contract — VSX/VSLS semantics: CP per-VS state independent of chassis (target: PO statement 2026-09-12; needs vendor-se)
 - P1/planned ldap_tls_trust_store_pin_and_format — LDAP TLS trust store cannot be given a PIN or format; a pr (target: docs/design/LDAP_TLS_TRUST_STORE_PIN_GAP)
 - P1/planned pan_active_active_not_excluded_as_failover_unit — PAN active/active is not excluded as a failover unit (CP l (target: docs/design/PAN_ACTIVE_ACTIVE_FAILOVER_U)
 - P1/planned pcp_storage_engine_decision — Storage-engine decision for the Device Registry and typed (target: PCP.5 contract freeze / DEV.4.6)
+- P1/planned po_o_role_dispatch_boundary — Restore the PO+O dispatch loop, or decide direct authoring (target: PO_DECISION_RECORD 6.4)
 - P1/planned ui2_b1_08_audit_logs_screen — UI2 B1-8 -- audit & logs screen (every mutation since B1-2 (target: workflow §5 B1-8)
 - P1/planned ui2_b1_09_device_workspace_first_read_screen — UI2 B1-9 -- device workspace: first read screen; RBAC visi (target: workflow §5 B1-9)
 - P1/planned ui2_b1_10_acceptance_scenario_concurrent_admins — UI2 B1-10 -- acceptance scenario A: three admins on one de (target: workflow §5 B1-10)
 - P1/planned ui2_b1_11_acceptance_scenario_worker_loss — UI2 B1-11 -- acceptance scenario B: worker killed mid-step (target: workflow §5 B1-11)
 - P1/planned ui2_b1_12_deployment_slice — UI2 B1-12 -- deployment slice (Docker compose for the DEPL (target: workflow §5 B1-12)
 - P1/planned ui2_composition_root_bootable_shell — Bootable service: Spring entry point, DataSource, Flyway a (target: Phase 1 step 1; no device contact)
-- P1/planned ui2_device_add_discovery_and_manual — Device add: discovery (Panorama/MDS) and manual, with oper (target: PO_DECISION_RECORD_2026_09_12 section 4)
+- P1/planned ui2_device_add_discovery_and_manual — Device add: discovery and manual, operator multi-select im (target: PO_DECISION_RECORD 4)
 - P1/planned ui2_frontend_screens_shell — Frontend screens: login, menu, device list, device add; fr (target: Phase 1 step 2-3)
-- P1/planned ui2_local_auth_successor_contract — Local-authentication successor contract, required before a (target: UI2_0_C3 Correction C-2)
+- P1/planned ui2_local_auth_successor_contract — Local-authentication successor contract (target: UI2_0_C3 C-2)
 - P2/in_progress inventory_exclusions_management_ui
 - P2/planned auth_radius_mechanism
 - P2/planned auth_tacacs_mechanism
