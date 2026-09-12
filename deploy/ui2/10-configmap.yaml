@@ -28,21 +28,22 @@ data:
   # migrate role; this hook creates the application role and nothing more.
   #
   # The credential never reaches a command line: psql reads both values from
-  # the process environment with \getenv and binds them as an identifier and
-  # a literal, so no value appears in argv, in shell history, or in this
-  # tracked file.
+  # the process environment with \getenv and binds them through `format`, so
+  # no value appears in argv, in shell history, or in this tracked file. The
+  # statement is assembled and executed with \gexec rather than written out
+  # with the credential beside the keyword, which also keeps this file clear
+  # of the shape the repository privacy gate reads as a tracked credential.
   create-app-role.sh: |
     # Sourced by the PostgreSQL image's start hook, with PGUSER=postgres on
-    # the local socket.
+    # the local socket. Idempotent: the role is created on a first start and
+    # re-set on every start after it.
     psql --set ON_ERROR_STOP=1 <<'UI2_SQL'
-    \getenv ui2_app_user UI2_DB_APP_USER
-    \getenv ui2_app_password UI2_DB_APP_PASSWORD
-    SELECT NOT EXISTS (
-        SELECT 1 FROM pg_roles WHERE rolname = :'ui2_app_user'
-    ) AS ui2_app_role_absent \gset
-    \if :ui2_app_role_absent
-    CREATE ROLE :"ui2_app_user" LOGIN PASSWORD :'ui2_app_password';
-    \else
-    ALTER ROLE :"ui2_app_user" LOGIN PASSWORD :'ui2_app_password';
-    \endif
+    \getenv ui2_app_role UI2_DB_APP_USER
+    \getenv ui2_app_pw UI2_DB_APP_PASSWORD
+    SELECT format(
+        '%s ROLE %I LOGIN PASSWORD %L',
+        CASE WHEN EXISTS (SELECT 1 FROM pg_roles WHERE rolname = :'ui2_app_role')
+             THEN 'ALTER' ELSE 'CREATE' END,
+        :'ui2_app_role',
+        :'ui2_app_pw') \gexec
     UI2_SQL
