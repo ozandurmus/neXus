@@ -47,11 +47,11 @@ export interface AlignmentRow {
 }
 
 export const ALIGNMENT: readonly AlignmentRow[] = [
-  { device: "fw-ist-core-02", setting: "ntp.server[2]", expected: "10.0.0.13", effective: "10.0.0.99", state: "Effective drift" },
-  { device: "pan-izm-edge-01", setting: "log.syslog.target", expected: "10.0.5.20:514", effective: "removed", state: "Effective drift" },
+  { device: "fw-ist-core-02", setting: "ntp.server[2]", expected: "ntp-pri.example.invalid", effective: "ntp-alt.example.invalid", state: "Effective drift" },
+  { device: "pan-izm-edge-01", setting: "log.syslog.target", expected: "syslog-a.example.invalid:514", effective: "removed", state: "Effective drift" },
   { device: "fw-ist-core-01", setting: "ha.monitor.interface", expected: "eth1", effective: "eth1", state: "Member-specific" },
   { device: "pan-ank-edge-02", setting: "panorama.template", expected: "TPL-EDGE-V4", effective: "TPL-EDGE-V3", state: "Out of sync" },
-  { device: "cp-edge-a", setting: "dns.resolver[1]", expected: "10.0.0.53", effective: "10.0.0.53", state: "Aligned" },
+  { device: "cp-edge-a", setting: "dns.resolver[1]", expected: "dns-pri.example.invalid", effective: "dns-pri.example.invalid", state: "Aligned" },
 ];
 
 export const ALIGNMENT_TOTALS: readonly { readonly label: string; readonly n: number }[] = [
