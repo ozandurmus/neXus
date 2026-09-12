@@ -1194,6 +1194,15 @@
       "priority": "P2",
       "target": "",
       "note": ""
+    },
+    {
+      "id": "ldap_tls_trust_store_pin_and_format",
+      "category": "security",
+      "title": "LDAP TLS trust store cannot be given a PIN or format; a protected PKCS12 loads empty",
+      "status": "planned",
+      "priority": "P1",
+      "target": "docs/design/LDAP_TLS_TRUST_STORE_PIN_GAP_2026_09_12.md",
+      "note": ""
     }
   ]
 }
