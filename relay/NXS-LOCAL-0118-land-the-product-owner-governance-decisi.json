@@ -1,0 +1,162 @@
+{
+  "created_at": "2026-09-12T15:59:46Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1 docs/design/UI2_0_B1_01C_CONTAINER_IMAGE_AND_KUBERNETES_DEPLOYMENT_CONTRACT.md exists on the lane and its status line reads FROZEN with the 2026-09-12 Product Owner approval.",
+          "AC-2 That document's status block records the review of record: which sections were read, that FS-1 to FS-6 and PORT-1 and PORT-4 carried the decision, and that the section 10 UNKNOWN entries stay UNKNOWN.",
+          "AC-3 Apart from its Status block, that document is byte-identical to the version on origin/feature/ui2-b1-01c-deployment-contract.",
+          "AC-4 GOV_ORCH_5 section 8's amendment reads APPROVED with the 2026-09-12 date and the recorded authorization.",
+          "AC-5 Apart from that one status line and its immediate sentence, GOV_ORCH_5 is byte-identical to its version on origin/main.",
+          "AC-6 No file outside those two documents changed.",
+          "AC-7 tests/test_contract_authority_status.py passes.",
+          "AC-8 The repository privacy gate reports zero findings."
+        ],
+        "baseline": {
+          "authority": "docs/design/UI2_0_B1_01A_PLATFORM_SKELETON_CONTRACT.md (FROZEN) section 6 gates the container image behind a successor contract. That successor was written as DRAFT and lives on the branch named below. The Product Owner authorized its freeze in the 2026-09-12 local session, and separately approved the amendment proposed in docs/design/GOV_ORCH_5_PROJECT_QUEUE_AND_COLD_START_DIET.md section 8. This movement applies two decisions the Product Owner has already made; it makes none of its own.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "sequencing": "Unblocks the Kubernetes deployment movement, which cannot be dispatched against a DRAFT.",
+          "why_a_worker_applies_it": "The Product Owner assistant reviewed both documents and recommended both decisions, and the Product Owner authorized them. The assistant's own commit path is unavailable in this session, so the recorded decisions are applied here under a packet instead of by hand. The decision is not this movement's to revisit."
+        },
+        "context_not_loaded": [
+          "docs/history/**",
+          "ui2/ sources",
+          "project/*.json",
+          "vendor contracts"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/land-po-governance-decisions"
+        },
+        "invariants": [
+          "This movement applies decisions already made; it makes none.",
+          "A contract's approved body is not edited while its status changes.",
+          "An UNKNOWN is never converted to a decided value by a status change.",
+          "No credential, management address, device name or serial enters a tracked file.",
+          "No vendor data collection and no device contact: the standing collection gate holds.",
+          "docs/history/** and relay/*.json are an audit trail and are never rewritten."
+        ],
+        "merge_gate": "Product Owner assistant review of the diff plus orchestrator verify.passed. The worker does not merge to main.",
+        "movement_type": "DOCS",
+        "objective": "Apply two Product Owner decisions to the repository, exactly as authorized and no further: freeze the B1-1c container image and Kubernetes deployment contract, and mark the GOV.ORCH.5 open-item note amendment approved. Change no other clause of either document.",
+        "output_contract": [
+          "The B1-1c contract FROZEN with its review of record, and the GOV.ORCH.5 amendment APPROVED",
+          "SESSION_CLOSE stating the line counts changed in each file and confirming nothing else changed"
+        ],
+        "recommended_reasoning": {
+          "reason": "Two status blocks, both dictated by this packet. The only judgement is refusing to touch anything else.",
+          "tier": "Sonnet 5, low effort"
+        },
+        "requirements": [
+          "English, per AGENTS.md engineering-output language law",
+          "Apply the decisions as recorded. If a document's text does not match what this packet describes, stop and report the mismatch in SESSION_CLOSE rather than improvising an equivalent edit.",
+          "The contract's own body is the Product Owner's approved text: do not improve, reword, correct or shorten any clause while changing the Status block.",
+          "Show the diff is confined to the two status blocks: state in SESSION_CLOSE the line counts changed in each file.",
+          "Publish SESSION_CLOSE with scripts/local_relay.py append using --report pointing at a JSON file you wrote first. Do not pass report JSON inline on the command line.",
+          "Do not merge to main. Commit on the lane and publish SESSION_CLOSE."
+        ],
+        "risks": [
+          "Reworking contract prose while editing the status block, so the approved text is no longer what was approved.",
+          "Treating a section 10 UNKNOWN as settled because the document is now FROZEN.",
+          "Applying a status the Product Owner did not authorize, to a document this packet does not name.",
+          "Merging to main, which is not this movement's act."
+        ],
+        "scope": {
+          "in": [
+            "Bring the contract onto the lane: from a lane cut off origin/main, merge the branch origin/feature/ui2-b1-01c-deployment-contract, which carries docs/design/UI2_0_B1_01C_CONTAINER_IMAGE_AND_KUBERNETES_DEPLOYMENT_CONTRACT.md as DRAFT and nothing else",
+            "Rewrite only that document's Status block so it reads FROZEN -- PRODUCT OWNER APPROVED, 2026-09-12, and records: that the Product Owner authorized the freeze in the 2026-09-12 local session after being given the reviewed finding; that the Product Owner assistant read section 3 and section 8 clause by clause before recommending it, naming FS-1 to FS-6 and PORT-1 and PORT-4 as the clauses that carried the decision; and that the freeze approves the contract's decisions only, leaving every section 10 UNKNOWN entry UNKNOWN until the evidence that clause names is produced",
+            "In docs/design/GOV_ORCH_5_PROJECT_QUEUE_AND_COLD_START_DIET.md section 8, change the amendment's status line from PROPOSED -- PENDING PRODUCT OWNER APPROVAL to APPROVED, dated 2026-09-12, recording that the Product Owner approved it in the local session after being shown the measured contradiction and the completed move",
+            "Leave every other line of both documents byte-identical"
+          ],
+          "out": [
+            "Any change to a clause of either document other than the two status blocks named above",
+            "Resolving, answering or narrowing any section 10 UNKNOWN entry of the contract",
+            "Creating any Containerfile, manifest, chart, script or image -- this movement implements nothing the contract governs",
+            "Editing any other contract, including UI2_0_B1_01A and UI2_0_B1_01B",
+            "Any change to project/*.json, docs/history/** or relay/**",
+            "Any change under ui2/ or scripts/",
+            "Merging any branch other than the one named in scope, and merging anything to main",
+            "Any vendor data collection or device contact"
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_contract_authority_status.py",
+              "-q"
+            ],
+            "name": "contract_authority_status"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_architecture_convergence.py",
+              "-q"
+            ],
+            "name": "architecture_convergence"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_project_files_budget.py",
+              "-q"
+            ],
+            "name": "project_files_budget"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/build_history_index.py",
+              "--check"
+            ],
+            "name": "build_history_index"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/project_queue.py",
+              "check"
+            ],
+            "name": "project_queue_check"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-12T15:59:46Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0118",
+  "movement": "land_the_product_owner_governance_decisions",
+  "next_actor": "engineer",
+  "refs": [
+    "AGENTS.md",
+    "docs/design/UI2_0_B1_01A_PLATFORM_SKELETON_CONTRACT.md",
+    "docs/design/UI2_0_B1_01B_CI_WORKFLOW_CONTRACT.md",
+    "docs/design/PO_DECISION_RECORD_2026_09_12.md",
+    "docs/design/PO_DECISION_RECORD_2026_09_12B_LOCAL_KUBERNETES.md",
+    "docs/design/GOV_ORCH_5_PROJECT_QUEUE_AND_COLD_START_DIET.md",
+    "docs/design/GOV_ORCH_8_PROJECT_DATA_SPLIT_AND_SIZE_BUDGET.md"
+  ],
+  "schema_version": 1,
+  "status": "OPEN",
+  "updated_at": "2026-09-12T15:59:46Z"
+}

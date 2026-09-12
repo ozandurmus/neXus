@@ -1,0 +1,234 @@
+{
+  "created_at": "2026-09-12T14:36:02Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1 The repository-root image definition file and both orchestration YAML files no longer exist.",
+          "AC-2 No file outside docs/history/**, relay/**, project/** and docs/design/ instructs a reader to use a host container daemon, and no live code path requires one.",
+          "AC-3 The environment-variable names, their meanings and the file-based secret convention are unchanged; only the prose that named the deleted equipment changed.",
+          "AC-4 The Python version pin in .github/workflows/validation.yml is byte-identical to its pre-movement value; only the justifying comments changed.",
+          "AC-5 The Python test suites named in the validation plan pass.",
+          "AC-6 The repository privacy gate reports zero findings.",
+          "AC-7 SESSION_CLOSE lists every deleted file, every reworded file, and for each file under deploy/secrets/ states whether it was kept and why.",
+          "AC-8 No test was deleted, skipped or weakened."
+        ],
+        "baseline": {
+          "authority": "docs/design/PO_DECISION_RECORD_2026_09_12B_LOCAL_KUBERNETES.md (FROZEN) section 1 withdraws host container tooling from every product path, and section 5 directs that the superseded equipment be removed from the repository rather than left unused. Section 5 also fixes the boundary: docs/history/**, relay/*.json and project/*.json are an audit trail and are not rewritten, and frozen contracts are revised only through their own amendment mechanism.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "sequencing": "Independent of the deployment contract and of the UI work; it removes equipment rather than adding any."
+        },
+        "context_not_loaded": [
+          "docs/history/**",
+          "ui2/ sources",
+          "vendor contracts"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/remove-superseded-host-runtime-equipment"
+        },
+        "invariants": [
+          "No credential, management address, device name or serial enters a tracked file.",
+          "No vendor data collection and no device contact: the standing collection gate holds.",
+          "The audit trail is never rewritten: docs/history/**, relay/*.json and project/*.json are out of scope.",
+          "No contract status is applied, removed or changed by this movement.",
+          "The product's observable behaviour is unchanged; this movement deletes equipment, it does not change what the product does."
+        ],
+        "merge_gate": "Product Owner assistant review of the diff plus orchestrator verify.passed. The worker does not open a pull request and does not merge.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Remove the superseded host-container-tooling deployment equipment from the Line 1 product and reword the comments that only mention it in passing, so that no live path in the repository depends on a host container daemon. The file-based secret convention itself is retained: it is equally the Kubernetes convention and is used by the product's own runtime configuration.",
+        "output_contract": [
+          "A diff that deletes the superseded equipment and rewords the comments that named it",
+          "SESSION_CLOSE listing every deleted file, every reference found to it, every reworded file, and the real output of every validation step"
+        ],
+        "recommended_reasoning": {
+          "reason": "Mechanically simple but wide: the difficulty is finding every reference before deleting, not deciding anything.",
+          "tier": "Sonnet 5, medium effort"
+        },
+        "requirements": [
+          "English, per AGENTS.md engineering-output language law",
+          "Removal only. If removing a file would break a live code path or a passing test, stop and report it in SESSION_CLOSE rather than inventing a replacement.",
+          "Before deleting any file, search the repository for references to it and report in SESSION_CLOSE every reference found and what was done about it.",
+          "Rewording a comment must not change the behaviour the comment describes. The file-based secret convention, the environment-variable names and the Python version pin all stay exactly as they are.",
+          "Do not weaken or delete any test. If a test asserts the presence of deleted equipment, report it rather than editing it away.",
+          "Do not open a pull request and do not merge. Commit on the lane and publish SESSION_CLOSE."
+        ],
+        "risks": [
+          "Deleting a file that a live code path or a test still reads, and discovering it only after the fact.",
+          "Changing an environment-variable name or a version pin while rewording the prose around it.",
+          "Reaching into docs/history/** or relay/** and destroying the audit trail.",
+          "Inventing a replacement deployment path that no frozen contract authorizes."
+        ],
+        "scope": {
+          "in": [
+            "Delete the repository-root image definition file and both of the multi-service orchestration YAML files that stand the Line 1 Python product up on a host container daemon",
+            "Delete deploy/nginx/default.conf, which exists only as the reverse-proxy configuration for that orchestration",
+            "Review deploy/secrets/: keep any file the product itself reads or that documents a still-live convention, delete only what exists solely to serve the deleted orchestration, and say in SESSION_CLOSE which of the two it was for each file",
+            "Reword .env.example so it documents the environment variables and the file-based secret convention without naming the deleted equipment; the variables themselves and their meanings do not change",
+            "Reword the passing comment in utils/runtime_config_source.py that names the deleted tooling alongside Kubernetes; the file-based secret convention it describes is retained unchanged",
+            "Reword the two comments in .github/workflows/validation.yml that justify the Python version by reference to the deleted image file; the version pin itself does not change",
+            "Update any remaining live, forward-looking documentation outside docs/history/** that instructs a reader to use the deleted equipment"
+          ],
+          "out": [
+            "docs/history/** and relay/*.json -- the audit trail, never rewritten",
+            "project/*.json and project/QUEUE.md -- generated state, not hand-edited",
+            "Any FROZEN contract under docs/design/ -- amendments are a separate movement with its own authority",
+            "Any change to ui2/ -- the UI 2.0 integration-test carrier is a separate movement",
+            "Any change to what the product does: no behaviour, no schema, no CLI flag, no environment-variable name or meaning changes",
+            "Any vendor data collection or device contact",
+            "Introducing a replacement deployment path -- removal only; the replacement is governed by a contract that has not frozen yet"
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_architecture_convergence.py",
+              "-q"
+            ],
+            "name": "architecture_convergence"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_dev_2_1_noninteractive_runtime_config.py",
+              "tests/test_credential_profiles.py",
+              "-q"
+            ],
+            "name": "runtime_config_and_credentials"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_contract_authority_status.py",
+              "-q"
+            ],
+            "name": "contract_authority_status"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_project_files_budget.py",
+              "-q"
+            ],
+            "name": "project_files_budget"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/build_history_index.py",
+              "--check"
+            ],
+            "name": "build_history_index"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/project_queue.py",
+              "check"
+            ],
+            "name": "project_queue_check"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-12T14:36:02Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "BLOCKED",
+      "report": {
+        "changed": [
+          "No repository files were changed this session -- see unresolved_risks for the blocking conflict discovered before any deletion or rewording was applied."
+        ],
+        "completed": [
+          "Repository-wide reference search for Dockerfile, docker-compose.yml, docker-compose.prod.yml and deploy/nginx/default.conf, completed before any deletion was attempted, per the brief's explicit requirement.",
+          "Reviewed deploy/secrets/: known_hosts.example and README.md both kept -- they document the live known_hosts / PAN CA bundle trust convention utils/cp_ssh_trust.py reads regardless of containerization, not something that exists solely to serve the deleted orchestration."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "unchanged",
+          "ui": "unchanged"
+        },
+        "integration": {
+          "branch": "feature/remove-superseded-host-runtime-equipment",
+          "ci": "not run -- no diff to submit",
+          "head_sha": "4da2c609c2c52c92868a67ffe3be1754b7c5b636",
+          "merge_commit": null,
+          "merge_decision": "No PR opened: this session made no repository changes, so there is nothing for the orchestrator to verify or merge.",
+          "merge_state": "NOT_OPENED",
+          "pr": null,
+          "pr_url": null
+        },
+        "next": {
+          "movement": "remove_superseded_host_runtime_equipment",
+          "movement_type": "IMPLEMENTATION",
+          "objective": "Resolve the tests/test_rb1_recovery_store.py compose-file dependency before this movement's deletions can proceed: either (a) amend this movement's scope to include tests/test_rb1_recovery_store.py so its RB.1 section-9.11 nginx/recovery-volume invariant can be re-expressed against whatever replaces the compose files once a frozen deployment contract exists, or (b) explicitly re-scope this movement to exclude the four interlocked files (Dockerfile, docker-compose.yml, docker-compose.prod.yml, deploy/nginx/default.conf) and their dependent reword tasks until that test is migrated.",
+          "status": "blocked"
+        },
+        "preserved": [
+          "Dockerfile, docker-compose.yml, docker-compose.prod.yml, deploy/nginx/default.conf -- left byte-identical (see unresolved_risks: blocking conflict discovered before deletion).",
+          ".env.example, utils/runtime_config_source.py, .github/workflows/validation.yml -- left byte-identical: their Docker/Compose references remain literally accurate as long as the equipment above is not deleted, so rewording them now would make the documentation describe a mechanism no longer explained anywhere. See unresolved_risks.",
+          "deploy/secrets/README.md, deploy/secrets/known_hosts.example -- kept unedited for the same reason: they still describe the currently-live docker-compose.prod.yml mount mechanism.",
+          "docs/history/**, relay/*.json, project/*.json, docs/design/** -- not read beyond confirming grep hits; not touched.",
+          "No test was touched, deleted, skipped or weakened (AC-8)."
+        ],
+        "recommended_reasoning": {
+          "reason": "The remaining work is a scope decision for the Product Owner, not additional engineering complexity.",
+          "tier": "Sonnet 5, medium effort"
+        },
+        "state_updates": [],
+        "unresolved_risks": [
+          "BLOCKING CONFLICT: tests/test_rb1_recovery_store.py:533 (test_nginx_service_never_mounts_recovery_volume) reads docker-compose.yml and docker-compose.prod.yml by relative path and scans the nginx service block's text for 'recovery', directly enforcing RB.1 contract section 9.11 against those two files' literal content. Deleting either file breaks this test (FileNotFoundError) in an environment where its cryptography dependency is installed (the project's CI/full-regression run). That test module is outside this movement's 'Files you may read' and editable-tests list, and both the brief and AGENTS.md forbid resolving this by editing the test away ('do not weaken or delete any test', 'report it rather than editing it away'; 'Removal only. If removing a file would break a live code path or a passing test, stop and report it'). Per AGENTS.md Authority hierarchy, this is reported as a genuine contradiction between AC-1 (unconditional deletion) and the brief's own stop-and-report clause, not resolved unilaterally.",
+          "Because docker-compose.yml/.prod.yml cannot be deleted without a prior decision, deploy/nginx/default.conf was also left in place: deleting it alone would leave docker-compose.yml's own bind-mount pointing at a missing file, a self-inflicted breakage strictly worse than leaving the equipment intact. Same reasoning kept Dockerfile in place (docker-compose.yml's `build: .` would otherwise dangle).",
+          "Because the equipment stays, AC-1 and AC-2 are not met this session: docker-compose.yml/.prod.yml still exist and their own header comments still instruct a reader to run `docker compose up`.",
+          "Downstream reword targets (.env.example, utils/runtime_config_source.py, .github/workflows/validation.yml comments, deploy/secrets/README.md) were all left unedited: each currently describes equipment that still physically exists in the repository, so rewording them now -- ahead of the equipment's actual removal -- would make the documentation inaccurate rather than correct.",
+          "Reference inventory for the record: requirements-postgres.txt:8 (comment only, mentions 'the Dockerfile'); docs/design/UI2_0_B1_01B_CI_WORKFLOW_CONTRACT.md, D4_BACKUP_CREDENTIAL_IDENTITY_DECISION.md, SERVER_PRODUCTIZATION_AND_MODULARIZATION_ARCHITECTURE.md, OPERATOR_CONSOLE_ARCHITECTURE.md, UI2_0_B1_01_SKELETON_CI_DOCKER_CONTRACT.md, UI2_0_B1_01A_PLATFORM_SKELETON_CONTRACT.md, PCP_STORAGE_ENGINE_DECISION.md (all under docs/design/, outside this movement's scope, not opened beyond the grep hit); docs/history/** and relay/*.json hits (audit trail, correctly left alone)."
+        ],
+        "validation": {
+          "affected": "Not applicable -- no files were changed.",
+          "diff_check": "git status: working tree clean, nothing to commit.",
+          "full_regression": "Not run -- no diff exists to justify it, and tests/test_rb1_recovery_store.py (which discovered the blocking conflict) does not currently collect in this worktree's python3 (ModuleNotFoundError: cryptography, a pre-existing local environment gap unrelated to this movement; cryptography is pinned in requirements.txt and is present in the project's CI/full-regression environment where this test does run).",
+          "privacy": "Not run -- no diff to gate.",
+          "real_environment": "Not applicable -- this movement is local-validation-only per its baseline; no network-device contact was made.",
+          "state_consistency": "Not run -- no diff to gate; project/*.json and CURRENT_STATE.md were not touched (out of this movement's scope).",
+          "targeted": "python3 -m pytest tests/test_architecture_convergence.py -q -> 23 passed. Run only to confirm the pre-existing baseline; no code changed this session for it to validate."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-12T14:42:39Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0112",
+  "movement": "remove_superseded_host_runtime_equipment",
+  "next_actor": null,
+  "refs": [
+    "AGENTS.md",
+    "docs/design/PO_DECISION_RECORD_2026_09_12B_LOCAL_KUBERNETES.md",
+    "docs/design/UI2_0_B1_01A_PLATFORM_SKELETON_CONTRACT.md",
+    "PRIVACY_AND_DATA_HANDLING.md"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-12T14:42:39Z"
+}

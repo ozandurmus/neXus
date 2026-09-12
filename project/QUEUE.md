@@ -1,5 +1,5 @@
 # Project queue (generated — do not edit; run: py scripts/project_queue.py render)
-Build: ui2_d1_restore_c7_c2_amendments · Track: PCP.x · Generated: 2026-09-12T14:47:26Z
+Build: ui2_d1_restore_c7_c2_amendments · Track: PCP.x · Generated: 2026-09-12T21:27:58Z
 
 ## Now
 - ui2_d1_restore_c7_c2_amendments — UI2 D1 Option A -- apply the pending C7/C2/C4/baseline restore admission amendments (automated_validated)
@@ -16,6 +16,7 @@ Build: ui2_d1_restore_c7_c2_amendments · Track: PCP.x · Generated: 2026-09-12T
 - P0/in_progress ui2_b0_c5_amendments_bundle — UI2 B0/C5 -- amendments bundle (CON.0 separate shell; acti (target: workflow §5 B0-5; baseline contract §5)
 - P0/in_progress ui2_b0_c6_capability_extraction_contract — UI2 B0/C6 -- capability extraction contract (spec template (target: workflow §3.1, §4, §5 B0-6; docs/design/)
 - P0/in_progress ui2_b0_c7_backup_artefact_restore_engine_contract — UI2 B0/C7 -- backup, artefact and restore engine contract (target: workflow §5 B0-7; docs/design/UI2_0_BASE)
+- P0/planned cp_discovery_java_implementation — CP discovery in Java: management-plane candidate enumerati (target: CP_AND_VSX_DISCOVERY_CONTRACT.md; gate l)
 - P0/planned cp_production_ssh_host_key_trust_hardening — CP SSH host-key trust: mandatory strict enforcement for pr (target: production container/pod runtime hardeni)
 - P0/planned deploy1_contract_freeze — DEPLOY.1 contract freeze and server-arrival execution gate (target: DEPLOY.1)
 - P0/planned deploy1_evidence_egress_policy — DEPLOY.1 â€” Evidence Egress & Sharing Policy (target: DEPLOY.1)
@@ -56,7 +57,6 @@ Build: ui2_d1_restore_c7_c2_amendments · Track: PCP.x · Generated: 2026-09-12T
 - P1/planned ui2_b1_09_device_workspace_first_read_screen — UI2 B1-9 -- device workspace: first read screen; RBAC visi (target: workflow §5 B1-9)
 - P1/planned ui2_b1_10_acceptance_scenario_concurrent_admins — UI2 B1-10 -- acceptance scenario A: three admins on one de (target: workflow §5 B1-10)
 - P1/planned ui2_b1_11_acceptance_scenario_worker_loss — UI2 B1-11 -- acceptance scenario B: worker killed mid-step (target: workflow §5 B1-11)
-- P1/planned ui2_b1_12_deployment_slice — UI2 B1-12 -- deployment slice (Docker compose for the DEPL (target: workflow §5 B1-12)
 - P1/planned ui2_composition_root_bootable_shell — Bootable service: Spring entry point, DataSource, Flyway a (target: Phase 1 step 1; no device contact)
 - P1/planned ui2_device_add_discovery_and_manual — Device add: discovery and manual, operator multi-select im (target: PO_DECISION_RECORD 4)
 - P1/planned ui2_frontend_screens_shell — Frontend screens: login, menu, device list, device add; fr (target: Phase 1 step 2-3)

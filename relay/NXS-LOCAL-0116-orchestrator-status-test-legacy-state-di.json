@@ -1,0 +1,204 @@
+{
+  "created_at": "2026-09-12T14:57:01Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1 tests/test_orchestrator.py passes in full on a machine whose legacy state directory contains records, and SESSION_CLOSE states how that condition was created for the run.",
+          "AC-2 No production code path changed; the diff touches tests only, or tests plus a named shared fixture.",
+          "AC-3 No test was deleted, skipped, weakened or marked xfail; the test count does not fall.",
+          "AC-4 A test still asserts that the legacy state directory is read when it is the configured one.",
+          "AC-5 The machine's real legacy state directory is untouched.",
+          "AC-6 The repository privacy gate reports zero findings."
+        ],
+        "baseline": {
+          "authority": "docs/design/GOV_ORCH_1_SYNCHRONOUS_RUN_AND_ORCHESTRATOR_VERIFY.md (FROZEN) section 2.5 defines the state directory and keeps the pre-GOV.ORCH.1 legacy location readable for one release. This movement does not change that behaviour; it stops the test suite from depending on the machine's own copy of it.",
+          "consequence": "Every movement whose validation plan runs tests/test_orchestrator.py fails verification on such a machine regardless of its own diff. One movement has already been blocked by exactly this.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "observed_defect": "tests/test_orchestrator.py::test_status_cli_reports_no_records_as_empty_list calls the status CLI with an explicit empty --state-dir and asserts the output is an empty list. scripts/orchestrator.py::_cmd_status, in its no --movement branch, always also reads LEGACY_STATE_DIR, which is a fixed path under the system temp directory and is not influenced by --state-dir. On any machine whose legacy directory is non-empty the test fails. Measured here: the legacy directory holds 33 records and the test fails on unmodified origin/main, before any change from any movement in flight.",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "sequencing": "Small and self-contained; it unblocks the orchestrator lane."
+        },
+        "context_not_loaded": [
+          "ui2/ sources",
+          "docs/design/UI2_0_*",
+          "project/*.json",
+          "vendor contracts"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/orchestrator-status-test-isolation"
+        },
+        "invariants": [
+          "Production behaviour is unchanged; only test isolation changes.",
+          "Test coverage does not shrink.",
+          "No credential, management address, device name or serial enters a tracked file.",
+          "No vendor data collection and no device contact: the standing collection gate holds.",
+          "No contract status is applied, removed or changed, and no FROZEN contract is edited."
+        ],
+        "merge_gate": "Product Owner assistant review of the diff plus orchestrator verify.passed. The worker does not open a pull request and does not merge.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Make the orchestrator status tests independent of whatever the machine happens to have in the legacy state directory, so a test result reflects the code under test and not the developer's temp directory.",
+        "output_contract": [
+          "A test suite that passes independently of the machine's legacy state directory, with no coverage lost",
+          "SESSION_CLOSE stating how the non-empty legacy condition was created for the proving run, and any production-behaviour finding observed but deliberately not acted on"
+        ],
+        "recommended_reasoning": {
+          "reason": "A small, precisely located test-isolation fix with an unambiguous pass condition.",
+          "tier": "Sonnet 5, medium effort"
+        },
+        "requirements": [
+          "English, per AGENTS.md engineering-output language law",
+          "The fix must make the tests pass on a machine whose legacy state directory is non-empty. Prove it: state in SESSION_CLOSE how you produced a non-empty legacy directory for the test run, and that the suite passed against it.",
+          "Do not empty or move the machine's real legacy directory to make a test pass. That hides the defect rather than fixing it.",
+          "Coverage may not shrink: the legacy-directory read is real behaviour and must still be asserted somewhere.",
+          "Do not open a pull request and do not merge. Commit on the lane and publish SESSION_CLOSE.",
+          "Publish SESSION_CLOSE with scripts/local_relay.py append using --report pointing at a JSON file you wrote first. Do not pass report JSON inline on the command line."
+        ],
+        "risks": [
+          "Making the test pass by deleting the assertion rather than isolating the path.",
+          "Emptying the machine's real legacy directory, which hides the defect from the next machine.",
+          "Silently changing _cmd_status while fixing the test, so the production behaviour drifts under cover of a test fix.",
+          "Losing the coverage that the legacy directory is read at all."
+        ],
+        "scope": {
+          "in": [
+            "tests/test_orchestrator.py: isolate every test that exercises the status CLI from the real LEGACY_STATE_DIR, by pointing it at a per-test temporary path, so no test reads a directory outside its own fixture",
+            "Audit the rest of tests/test_orchestrator.py for the same class of leak -- any test that depends on a fixed path outside its own tmp_path -- and isolate those too",
+            "Keep a test that proves the legacy directory is still read when it is the real one, so the GOV.ORCH.1 section 2.5 behaviour stays covered rather than merely disabled",
+            "If, and only if, the audit shows the production behaviour itself is wrong -- for example that an explicit --state-dir should suppress the legacy read -- report that finding in SESSION_CLOSE as a separate observation and do not change the behaviour under this movement"
+          ],
+          "out": [
+            "Changing _cmd_status's behaviour or any other production code path: this movement fixes test isolation, not the CLI",
+            "Deleting, skipping or weakening any test, or marking one xfail",
+            "Deleting anything from the machine's real legacy state directory",
+            "Any change outside tests/test_orchestrator.py, unless a shared fixture module is the cleaner place, in which case name it in SESSION_CLOSE",
+            "Any change under ui2/, project/, docs/design/ or relay/",
+            "Any vendor data collection or device contact"
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_orchestrator.py",
+              "-q"
+            ],
+            "name": "orchestrator_tests"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_orchestrator_verify.py",
+              "tests/test_orchestrator_providers.py",
+              "tests/test_orchestrator_usage.py",
+              "tests/test_orchestrator_dashboard.py",
+              "tests/test_orchestrator_preflight.py",
+              "tests/test_orchestrator_install_hooks.py",
+              "-q"
+            ],
+            "name": "orchestrator_siblings"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_architecture_convergence.py",
+              "-q"
+            ],
+            "name": "architecture_convergence"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-12T14:57:01Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "report": {
+        "changed": [
+          "tests/test_orchestrator.py"
+        ],
+        "completed": [
+          "Audited tests/test_orchestrator.py for status-CLI tests that depend on the machine's real LEGACY_STATE_DIR instead of a per-test tmp path.",
+          "Fixed test_status_cli_reports_no_records_as_empty_list to monkeypatch LEGACY_STATE_DIR to an empty per-test directory before calling the no-movement status CLI branch.",
+          "Fixed test_status_cli_usage_error_for_unknown_movement to monkeypatch LEGACY_STATE_DIR to an empty per-test directory before calling the record-not-found status CLI branch, closing the same class of leak even though it did not happen to fail on this machine's data."
+        ],
+        "continuation": "SAME_SESSION",
+        "effects": {
+          "main_py": "none",
+          "ui": "none"
+        },
+        "integration": {
+          "branch": "feature/orchestrator-status-test-isolation",
+          "ci": "n/a",
+          "head_sha": "3645c38",
+          "merge_commit": null,
+          "merge_decision": "NOT_APPLICABLE",
+          "merge_state": "NOT_OPENED",
+          "pr": null,
+          "pr_url": null
+        },
+        "next": {
+          "movement": "n/a",
+          "movement_type": "IMPLEMENTATION",
+          "objective": "n/a",
+          "status": "done"
+        },
+        "preserved": [
+          "test_status_lists_a_record_found_only_in_the_legacy_state_dir and test_status_single_movement_found_only_in_legacy_dir_is_flagged, which already monkeypatch LEGACY_STATE_DIR and continue to cover the GOV.ORCH.1 section 2.5 legacy-read behaviour (AC-4).",
+          "_cmd_status and all other production code in scripts/orchestrator.py, unchanged (AC-2)."
+        ],
+        "recommended_reasoning": {
+          "reason": "Remaining orchestrator lane work is small, precisely scoped test/CLI fixes; no new architecture or vendor semantics involved.",
+          "tier": "Sonnet 5, medium effort"
+        },
+        "state_updates": [],
+        "unresolved_risks": [
+          "Authority contradiction observed and not silently resolved: WORKER.md's own Git section and approved_task.json's requirements both say 'Do not open a pull request and do not merge; commit on the lane and publish SESSION_CLOSE,' while WORKER.md's closing boilerplate and the dispatch system-reminder instead say 'Open the pull request as usual, publish your SESSION_CLOSE, and stop.' This movement followed the explicit, itemized task requirement (no PR) and is flagging the contradiction for Product Owner resolution rather than picking a side unilaterally.",
+          "Production-behaviour finding (explicitly not acted on, per scope): the audit found no case where _cmd_status's legacy-fallback behaviour itself looks wrong; the two tests fixed here relied on the machine's real directory happening to be empty of/lack a matching id, not on a CLI defect. No production change made or recommended under this movement."
+        ],
+        "validation": {
+          "affected": "python3 -m pytest tests/test_orchestrator_verify.py tests/test_orchestrator_providers.py tests/test_orchestrator_usage.py tests/test_orchestrator_dashboard.py tests/test_orchestrator_preflight.py tests/test_orchestrator_install_hooks.py -q -> 145 passed",
+          "diff_check": "git diff scoped to tests/test_orchestrator.py only, 4 insertions / 2 deletions, no production file touched. AC-1 proof: the machine's real legacy state directory ($TMPDIR/nexus_orchestrator) already held 33 records, as noted in the SESSION_START baseline -- no fixture or synthetic data was created. Ran the two affected tests against unmodified origin/main first: test_status_cli_reports_no_records_as_empty_list failed with the real directory's 33 records leaking into the empty-list assertion, exactly as the baseline described. After the fix, the full tests/test_orchestrator.py suite (114 tests) passed against that same unmodified real legacy directory, which still held 33 records afterward (confirmed by listing it before and after the run) -- it was never read, written or truncated by the fixed tests.",
+          "full_regression": "n/a -- movement scoped to orchestrator status test isolation; sibling suites above cover the affected area",
+          "privacy": "python3 scripts/repository_privacy_check.py -> PASS, 0 findings",
+          "real_environment": "NOT_RUN",
+          "state_consistency": "python3 -m pytest tests/test_architecture_convergence.py -q -> 23 passed",
+          "targeted": "python3 -m pytest tests/test_orchestrator.py -q -> 114 passed (same count as before the change; no test deleted, skipped or weakened)"
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-12T15:00:22Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0116",
+  "movement": "orchestrator_status_test_legacy_state_dir_leak",
+  "next_actor": null,
+  "refs": [
+    "AGENTS.md",
+    "docs/design/GOV_ORCH_1_SYNCHRONOUS_RUN_AND_ORCHESTRATOR_VERIFY.md",
+    "scripts/orchestrator.py",
+    "tests/test_orchestrator.py"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-12T15:00:22Z"
+}

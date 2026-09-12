@@ -1,0 +1,240 @@
+{
+  "created_at": "2026-09-12T15:05:56Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1 For every tab of every tab strip in the shell, selecting that tab renders that tab's own panel, and a test asserts it tab by tab.",
+          "AC-2 A test asserts, for at least one screen, that a non-selected tab's panel is not rendered, so a component that renders every panel at once cannot pass.",
+          "AC-3 Administration's Project plan tab renders content taken from its own frame, in empty-database form; it is no longer blank.",
+          "AC-4 No two tabs on the same screen render the same panel text.",
+          "AC-5 The selected tab carries aria-selected, each panel carries role tabpanel associated with its tab, and keyboard arrow navigation changes the selection; a test asserts the keyboard path.",
+          "AC-6 The default route of every product screen still renders its empty state against an empty database, and the existing preview-fencing test passes unchanged.",
+          "AC-7 The frontend suite passes; its test count before and after is stated in SESSION_CLOSE.",
+          "AC-8 npm run build succeeds, including the TypeScript check it runs first.",
+          "AC-9 The repository privacy gate reports zero findings.",
+          "AC-10 No file outside ui2/frontend/ changed and no design frame changed.",
+          "AC-11 FIDELITY_NOTES.md records panels rather than strips and states plainly that the earlier claim was wrong."
+        ],
+        "baseline": {
+          "authority": "docs/design/UI2_0_B1_07_JOBS_SCREEN_CONTRACT.md (FROZEN) governs the Jobs surface, docs/design/UI2_0_B1_08_AUDIT_LOGS_SCREEN_CONTRACT.md (FROZEN) the audit and logs surface, and docs/design/UI2_0_B1_09_DEVICE_WORKSPACE_CONTRACT.md (FROZEN) the device workspace. docs/design/PO_DECISION_RECORD_2026_09_12.md (FROZEN) section 4 fixes the required first state: a clean empty database, the UI and its menus visible, nothing pre-populated. The design frames under docs/design/ui2_mockups/ are the fidelity reference.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "observed_defect": "Reported by the Product Owner against the merged shell and confirmed by direct interaction with the running application. ui2/frontend/src/shell/M3Widgets.tsx M3Tabs accepts only tabs: readonly string[] and renders a strip of labels with no panel of any kind. Every screen that uses it -- Operations with four tabs, Administration with four, Configuration with seven, and the Inventory detail pane with four -- then renders one fixed body underneath, unconnected to the selection. The Product Owner's words: you can walk the tabs and it is always the same screen, and Administration's Project plan tab shows nothing at all.",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "sequencing": "Frontend only; independent of the deployment lane.",
+          "why_the_previous_pass_missed_it": "FIDELITY_NOTES.md recorded the tab strips as matched. The strip does match the frame; the panels were never built. No test asserted that selecting a tab changes what is rendered, so a decorative strip passed a green suite."
+        },
+        "context_not_loaded": [
+          "docs/history/**",
+          "ui2/ Java sources",
+          "project/*.json",
+          "vendor contracts"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/ui2-tab-panels"
+        },
+        "invariants": [
+          "A clean, empty database is the required first state; no panel is populated by default.",
+          "No credential, management address, device name or serial enters a tracked file.",
+          "No vendor data collection and no device contact: the standing collection gate holds.",
+          "The committed design frames stay in their scrubbed form and are never re-synced.",
+          "No HTTP surface gains a write capability in this movement.",
+          "No contract status is applied, removed or changed."
+        ],
+        "merge_gate": "Product Owner assistant review of the diff, orchestrator verify.passed, and the Product Owner walking the tabs in the running application. The worker does not open a pull request and does not merge.",
+        "movement_type": "UI",
+        "objective": "Make every tab strip in the shell a real tab control: selecting a tab changes the panel below it, each tab has its own panel with its own empty state written from its own design frame, and a test proves it for every tab of every screen.",
+        "output_contract": [
+          "Tab strips that are real tab controls, with one distinct panel per tab across Operations, Administration, Configuration and the Inventory detail pane",
+          "Per-tab tests that fail if a panel is shared, missing, or all rendered at once",
+          "SESSION_CLOSE with the frontend test count before and after and the real output of every validation step"
+        ],
+        "recommended_reasoning": {
+          "reason": "Nineteen panels across four screens, each needing its own empty state read from its own frame, plus a component contract change and per-tab tests. Volume and care rather than difficulty.",
+          "tier": "Sonnet 5, high effort"
+        },
+        "requirements": [
+          "English, per AGENTS.md engineering-output language law",
+          "A tab that has nothing to show still gets a panel that says what is missing and why. An empty panel is a state, not an absence.",
+          "Every empty state must be specific to its own tab. Four tabs must not share one sentence.",
+          "The default route stays the empty state; the existing test fencing preview data out of product screens must keep passing unchanged.",
+          "Preview data stays fictional and obviously so; no literal that looks like a real address, hostname, serial or device name enters any file.",
+          "Do not weaken, skip or delete an existing test.",
+          "Publish SESSION_CLOSE with scripts/local_relay.py append using --report pointing at a JSON file you wrote first. Do not pass report JSON inline on the command line.",
+          "Do not open a pull request and do not merge. Commit on the lane and publish SESSION_CLOSE."
+        ],
+        "risks": [
+          "Rendering every panel at once so the tests pass while the user still sees one long page; AC-2 exists to catch exactly this.",
+          "Writing one generic empty sentence and reusing it for every tab, which reproduces the defect in a new form.",
+          "Inventing content for a tab whose frame does not show any, rather than stating what is missing.",
+          "Breaking the preview fence while adding panels.",
+          "Copying a device-shaped literal out of a frame while transcribing panel copy."
+        ],
+        "scope": {
+          "in": [
+            "ui2/frontend/src/shell/M3Widgets.tsx: give M3Tabs a panel per tab, so a caller supplies label and panel content together and the component renders the selected panel. Keep the Material 3 appearance it already has.",
+            "Correct tab semantics and accessibility: the selected tab carries the indicator and aria-selected, each panel has role tabpanel and is associated with its tab, and keyboard arrow navigation moves the selection",
+            "OperationsScreen: give HA & readiness, Jobs, Queue and History each their own panel, each with the empty state its own frame implies",
+            "AdministrationScreen: give Device management, Inventory exclusions, Credentials and Project plan each their own panel. Project plan currently renders nothing; read the M3Administration frame and give it the content the frame shows, in its empty-database form",
+            "ConfigurationScreen: give each of its seven detail tabs its own panel. Where a tab's populated view needs evidence that does not exist yet, its panel is an explicit empty state naming what is missing -- never a blank area and never a silent fall-through to another tab's body",
+            "InventoryScreen: the same for the detail pane's four tabs",
+            "Tests: for every screen with a tab strip, assert for every tab that selecting it renders that tab's own panel and does not render another tab's panel. A screen with four tabs needs four such assertions, not one.",
+            "Update ui2/frontend/FIDELITY_NOTES.md so it records panels, not strips, and corrects the earlier claim"
+          ],
+          "out": [
+            "Any change outside ui2/frontend/",
+            "Populating any panel with data the empty database does not have -- every panel is an empty state in the default route",
+            "Making a populated screen reachable by default; populated views stay behind the labelled preview route",
+            "Copying any address-shaped, hostname-shaped, serial-shaped or device-name-shaped literal out of a frame into repository source",
+            "Re-syncing or editing the design frames under docs/design/ui2_mockups/",
+            "Any new runtime dependency",
+            "Any backend, schema, API or build-configuration change",
+            "Any vendor data collection or device contact"
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "npm",
+              "--prefix",
+              "ui2/frontend",
+              "ci"
+            ],
+            "name": "frontend_install"
+          },
+          {
+            "argv": [
+              "npm",
+              "--prefix",
+              "ui2/frontend",
+              "test"
+            ],
+            "name": "frontend_tests"
+          },
+          {
+            "argv": [
+              "npm",
+              "--prefix",
+              "ui2/frontend",
+              "run",
+              "build"
+            ],
+            "name": "frontend_build"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_architecture_convergence.py",
+              "-q"
+            ],
+            "name": "architecture_convergence"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-12T15:05:56Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "AUTOMATED_VALIDATED",
+      "report": {
+        "changed": [
+          "ui2/frontend/src/shell/M3Widgets.tsx: M3Tabs signature changed from tabs: readonly string[] to tabs: readonly {label, panel}[]; added ARIA tab/tabpanel wiring and selectionFollowsFocus.",
+          "ui2/frontend/src/screens/OperationsScreen.tsx: HA & readiness, Jobs, Queue, History each given a distinct EmptyPanel; MetricGrid kept above the tabs as whole-screen summary context.",
+          "ui2/frontend/src/screens/AdministrationScreen.tsx: Device management keeps its existing full panel; Inventory exclusions, Credentials and Project plan each given a distinct EmptyPanel (Project plan was previously blank).",
+          "ui2/frontend/src/screens/ConfigurationScreen.tsx: all seven detail tabs (Overview, Current state, Alignment, Policy & objects, History, Evidence, Backup) given distinct EmptyPanels; Alignment keeps its prior text and stays the default (initial=2).",
+          "ui2/frontend/src/screens/InventoryScreen.tsx: all four detail-pane tabs (Interfaces, Routing, Cluster members, Identity & provenance) given distinct EmptyPanels; Interfaces keeps the SSH/HTTPS observation note.",
+          "ui2/frontend/FIDELITY_NOTES.md: corrected the earlier 'tab strip matched' claims and rewrote the Inventory/Configuration/Operations/Administration sections to describe panels.",
+          "ui2/frontend/tests/M3Widgets.test.tsx: M3Tabs test updated for the new API plus new cases for panel isolation, tabpanel/tab association, and keyboard arrow navigation.",
+          "ui2/frontend/tests/App.test.tsx: Operations' PRODUCT_MARKERS entry updated from 'No jobs yet' (no longer the default tab's text) to 'No HA pair or cluster enrolled' (the new default HA & readiness tab's panel title); no other marker needed to change.",
+          "New test files: ui2/frontend/tests/OperationsScreen.test.tsx, AdministrationScreen.test.tsx, ConfigurationScreen.test.tsx, InventoryScreen.test.tsx -- each asserts, tab by tab, that selecting a tab renders that tab's own panel and none of the others'."
+        ],
+        "completed": [
+          "AC-1/AC-2/AC-4: M3Tabs (ui2/frontend/src/shell/M3Widgets.tsx) now takes a `panel` per tab and mounts only the selected tab's panel; per-tab tests for Operations, Administration, Configuration and Inventory assert each tab renders its own panel and none of the other tabs' panels, tab by tab.",
+          "AC-3: Administration's Project plan tab now renders an explicit empty-state panel ('No project plan') instead of nothing.",
+          "AC-5: the selected Tab carries aria-selected (MUI default), the single mounted panel carries role=tabpanel with aria-labelledby pointing at the selected tab's id, each Tab carries aria-controls pointing at the panel id, and Tabs is given `selectionFollowsFocus` so ArrowLeft/ArrowRight moves both focus and the selection; a new M3Widgets.test.tsx case exercises the keyboard path.",
+          "AC-6: every screen's default route still renders its own empty state against an empty database; the existing design-preview fencing tests (App.test.tsx 'the design preview' describe block) pass unchanged.",
+          "AC-7/AC-8/AC-9: full frontend suite, TypeScript+vite build, and the repository privacy gate all pass -- details in validation.",
+          "AC-10: diff is contained to ui2/frontend/; no design frame under docs/design/ui2_mockups/ was touched.",
+          "AC-11: ui2/frontend/FIDELITY_NOTES.md now has an explicit 'Correction (this pass)' paragraph stating the earlier 'tab strip matched' claims were wrong, and every per-screen section describes panels (what each tab's panel says and why) rather than only the strip."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "none: no Python/backend file changed",
+          "ui": "M3Tabs is now a functional ARIA tab control across Operations, Administration, Configuration and the Inventory detail pane; every tab in the shell now shows its own distinct panel on selection instead of a shared, unconnected body."
+        },
+        "integration": {
+          "branch": "feature/ui2-tab-panels",
+          "ci": "not run: no pull request was opened, per this movement's merge gate (worker commits on the lane and publishes SESSION_CLOSE; the worker does not open a pull request and does not merge)",
+          "head_sha": "4595febece9fdd2e92da07c92e9e2ea5638c3c7a",
+          "merge_commit": null,
+          "merge_decision": "pending Product Owner assistant review, orchestrator verify.passed, and the Product Owner walking the tabs in the running application; the worker does not merge",
+          "merge_state": "NOT_OPENED",
+          "pr": null,
+          "pr_url": null
+        },
+        "next": {
+          "movement": "ui2_tab_panels_are_real_not_decorative",
+          "movement_type": "UI",
+          "objective": "Product Owner assistant review of the diff, orchestrator verify.passed, and the Product Owner walking the tabs in the running application; no further engineering action is expected unless one of those surfaces a defect.",
+          "status": "automated_validated"
+        },
+        "preserved": [
+          "The Material 3 tab appearance (underline indicator, colours, spacing) is unchanged.",
+          "Every existing M3Widgets.test.tsx describe block (StatusChip, ToggleRow, CapabilityMenu, M3Button, AddDeviceDialogTrigger) is untouched; only the M3Tabs block was adapted to its new required API.",
+          "The design-preview fencing tests in App.test.tsx ('the design preview' describe block, PREVIEW_MARKERS) are byte-for-byte unchanged and still pass.",
+          "No panel is populated by default; every panel added is an explicit empty state naming what evidence is missing, none invents data.",
+          "No address-, hostname-, serial- or device-name-shaped literal was copied out of any design frame into source; the one frame sentence reused verbatim ('Credentials are stored outside the repository and are never written into a report or a support bundle') names no device."
+        ],
+        "recommended_reasoning": {
+          "reason": "Remaining work is human/orchestrator review of an already-automated-validated diff, not further engineering; a low-effort tier is enough for any follow-up correction this movement might still need.",
+          "tier": "Sonnet 5, low effort"
+        },
+        "state_updates": [],
+        "unresolved_risks": [
+          "Administration's Project plan panel content is honestly hedged rather than populated: the M3Administration frame shows only the Device management tab's populated state and never depicts a populated Project plan view, so the panel states that no plan exists and that the canvas itself does not specify what one would show, rather than inventing content. The Product Owner may want a firmer definition of what 'Project plan' means before a future pass gives it richer content.",
+          "MetricGrid on OperationsScreen was left visible across all four tabs (not made tab-specific) since it summarizes the whole screen, not any one tab's data; if the Product Owner expects the metric row itself to change per tab, that is a follow-up, not covered by this brief's scope."
+        ],
+        "validation": {
+          "affected": "Same command covers every screen and shared-component change; no source outside ui2/frontend/ was touched so no other targeted suite applies.",
+          "diff_check": "git status --porcelain shows changes confined to ui2/frontend/ (5 modified screens/shell files, FIDELITY_NOTES.md, 2 modified test files, 4 new test files); no design frame under docs/design/ui2_mockups/ was modified.",
+          "full_regression": "npm --prefix ui2/frontend test is this workspace's full frontend regression; ran clean with 27/27 passing after npm --prefix ui2/frontend ci.",
+          "privacy": "python3 scripts/repository_privacy_check.py -- Files scanned: 1219, Files skipped: 13741, Findings: 0, Gate: PASS.",
+          "real_environment": "Not performed in this session. AC-required human step per the merge gate: the Product Owner walks the tabs in the running application before merge.",
+          "state_consistency": "python3 -m pytest tests/test_architecture_convergence.py -q -- 23 passed. This movement changed no project/*.json or architecture-relevant file.",
+          "targeted": "npm --prefix ui2/frontend test: 6 test files, 27 tests, all passing (was 2 test files, 15 tests, before this build)."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-12T15:15:52Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0117",
+  "movement": "ui2_tab_panels_are_real_not_decorative",
+  "next_actor": null,
+  "refs": [
+    "AGENTS.md",
+    "docs/design/UI2_0_B1_07_JOBS_SCREEN_CONTRACT.md",
+    "docs/design/UI2_0_B1_08_AUDIT_LOGS_SCREEN_CONTRACT.md",
+    "docs/design/UI2_0_B1_09_DEVICE_WORKSPACE_CONTRACT.md",
+    "docs/design/PO_DECISION_RECORD_2026_09_12.md",
+    "ui2/frontend/FIDELITY_NOTES.md"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-12T15:15:52Z"
+}

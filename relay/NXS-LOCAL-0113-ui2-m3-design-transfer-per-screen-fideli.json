@@ -1,0 +1,158 @@
+{
+  "created_at": "2026-09-12T14:36:55Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1 Each of the six screens has been compared against its own M3 frame, and the fidelity note records per screen what matches and what does not.",
+          "AC-2 The component and drawer states the M3Components frame specifies are implemented as shared components and are used by the screens.",
+          "AC-3 The default route of every product screen still renders its empty state against an empty database.",
+          "AC-4 The existing test asserting that preview data never reaches a product screen still passes, unchanged.",
+          "AC-5 The frontend test suite passes and covers every screen's empty state and every new component state; the suite's test count is stated in SESSION_CLOSE, before and after.",
+          "AC-6 npm run build succeeds, including the TypeScript check it runs first.",
+          "AC-7 The repository privacy gate reports zero findings.",
+          "AC-8 No file outside ui2/frontend/ changed, and no frame under docs/design/ui2_mockups/ changed.",
+          "AC-9 No new runtime dependency was added to package.json."
+        ],
+        "baseline": {
+          "authority": "docs/design/UI2_0_B1_07_JOBS_SCREEN_CONTRACT.md, UI2_0_B1_08_AUDIT_LOGS_SCREEN_CONTRACT.md and UI2_0_B1_09_DEVICE_WORKSPACE_CONTRACT.md are FROZEN and govern the product screens. docs/design/PO_DECISION_RECORD_2026_09_12.md (FROZEN) section 4 fixes the required first state: a clean empty database, the UI and its menus visible, nothing pre-populated. The Product Owner's design frames are committed under docs/design/ui2_mockups/ and are the fidelity reference for this movement.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "prior_pass": "A first pass landed the navigation rail, top app bar, six routed screens and five preview components. The Product Owner has recorded UI 2.0 as incomplete: per-screen fidelity against the six M3 frames and the M3Components drawer states remain.",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "sequencing": "Independent of the deployment work; it changes the frontend only."
+        },
+        "context_not_loaded": [
+          "docs/history/**",
+          "ui2/ Java sources",
+          "project/*.json",
+          "vendor contracts"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/ui2-m3-per-screen-fidelity"
+        },
+        "invariants": [
+          "A clean, empty database is the required first state; nothing is seeded and no product screen renders populated data by default.",
+          "No credential, management address, device name or serial enters a tracked file.",
+          "No vendor data collection and no device contact: the standing collection gate holds.",
+          "The committed design frames stay in their deliberately scrubbed form and are never re-synced from the design canvas.",
+          "No HTTP surface gains a write capability in this movement.",
+          "No contract status is applied, removed or changed by this movement."
+        ],
+        "merge_gate": "Product Owner assistant review of the diff plus orchestrator verify.passed. The worker does not open a pull request and does not merge.",
+        "movement_type": "UI",
+        "objective": "Bring each of the six product screens to per-screen fidelity against its own Material 3 design frame, and implement the component states the M3Components frame specifies, so that the shell matches the Product Owner's design rather than approximating it.",
+        "output_contract": [
+          "Per-screen fidelity against the six M3 frames plus the M3Components states, under ui2/frontend/",
+          "A fidelity note recording per screen what was matched and what was deliberately not matched",
+          "SESSION_CLOSE with the frontend test count before and after, and the real output of every validation step"
+        ],
+        "recommended_reasoning": {
+          "reason": "Volume and care rather than difficulty: six frames to read closely and a shared component set to factor out, with a known privacy regression to avoid repeating.",
+          "tier": "Sonnet 5, high effort"
+        },
+        "requirements": [
+          "English, per AGENTS.md engineering-output language law",
+          "The default screen stays the empty state, because the database is empty. Populated content stays behind the labelled preview route, and the existing test that fences preview data out of product screens must keep passing unchanged.",
+          "Preview data stays fictional and obviously so. No literal that looks like a real address, hostname, serial or device name enters any file; this is the regression that took the privacy gate from 3 findings to 6 in an earlier pass.",
+          "Frames are a design reference, not a specification of behaviour. Where a frame implies a behaviour no frozen contract authorizes, render the surface and leave the behaviour unimplemented, and say so in the fidelity note.",
+          "Prefer one shared component used by several screens over the same markup repeated per screen.",
+          "Do not weaken, skip or delete an existing test.",
+          "Do not open a pull request and do not merge. Commit on the lane and publish SESSION_CLOSE."
+        ],
+        "risks": [
+          "Copying an address-shaped or device-shaped literal out of a frame into preview data, which is a known previous regression.",
+          "Making a populated screen the default and breaking the required empty first state.",
+          "Re-syncing the raw design artboards, which adds 44 privacy-gate findings.",
+          "Implementing behaviour a frame implies but no frozen contract authorizes.",
+          "Duplicating the same markup across six screens instead of sharing one component."
+        ],
+        "scope": {
+          "in": [
+            "Read each frame under docs/design/ui2_mockups/ that carries an M3 screen -- M3Overview, M3Inventory, M3Configuration, M3Operations, M3Compliance, M3Administration -- and bring the matching screen under ui2/frontend/src/screens/ and its preview under ui2/frontend/src/preview/ to fidelity with it",
+            "Implement the component and drawer states the M3Components frame specifies, as shared components under ui2/frontend/src/shell/ or a sibling directory, used by the screens rather than duplicated per screen",
+            "Extend ui2/frontend/src/theme/tokens.ts and m3Theme.ts only where a frame uses a token the theme does not yet carry",
+            "Extend ui2/frontend/tests/App.test.tsx, or add sibling test files, so each screen's empty state and each new component state is asserted",
+            "A short fidelity note recording, per screen, what was matched and what was deliberately not matched and why"
+          ],
+          "out": [
+            "Any change outside ui2/frontend/",
+            "Re-syncing or editing the design frames under docs/design/ui2_mockups/ -- they are the reference and the committed copies are deliberately scrubbed; do not import any raw design-canvas artboard",
+            "Copying any address-shaped, hostname-shaped, serial-shaped or device-name-shaped literal out of a frame into repository source, including into preview data",
+            "Making a populated screen reachable by default -- populated screens stay behind the labelled preview route",
+            "Any backend, schema, API or build-configuration change",
+            "Any new runtime dependency; work with the dependencies already in ui2/frontend/package.json",
+            "Any vendor data collection or device contact"
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "npm",
+              "--prefix",
+              "ui2/frontend",
+              "ci"
+            ],
+            "name": "frontend_install"
+          },
+          {
+            "argv": [
+              "npm",
+              "--prefix",
+              "ui2/frontend",
+              "test"
+            ],
+            "name": "frontend_tests"
+          },
+          {
+            "argv": [
+              "npm",
+              "--prefix",
+              "ui2/frontend",
+              "run",
+              "build"
+            ],
+            "name": "frontend_build"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_architecture_convergence.py",
+              "-q"
+            ],
+            "name": "architecture_convergence"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-12T14:36:55Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0113",
+  "movement": "ui2_m3_design_transfer_per_screen_fidelity",
+  "next_actor": "engineer",
+  "refs": [
+    "AGENTS.md",
+    "docs/design/UI2_0_B1_07_JOBS_SCREEN_CONTRACT.md",
+    "docs/design/UI2_0_B1_08_AUDIT_LOGS_SCREEN_CONTRACT.md",
+    "docs/design/UI2_0_B1_09_DEVICE_WORKSPACE_CONTRACT.md",
+    "docs/design/PO_DECISION_RECORD_2026_09_12.md",
+    "docs/design/UI2_0_MOCKUP_REFERENCE_NOTES.md",
+    "PRIVACY_AND_DATA_HANDLING.md"
+  ],
+  "schema_version": 1,
+  "status": "OPEN",
+  "updated_at": "2026-09-12T14:36:55Z"
+}

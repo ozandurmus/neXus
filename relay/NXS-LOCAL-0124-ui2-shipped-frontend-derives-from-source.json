@@ -1,0 +1,178 @@
+{
+  "created_at": "2026-09-12T18:07:43Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1 The packaged service artifact contains a frontend built from ui2/frontend/src/ during the build, and no prebuilt bundle remains committed under the service module's resources.",
+          "AC-2 The Gradle relationship is a declared input/output one: changing a frontend source file makes the packaging task out of date. Demonstrate it by changing one source file, showing the task re-runs, and reverting.",
+          "AC-3 A regression test fails if a prebuilt frontend bundle is committed under the service module's resources again.",
+          "AC-4 A test asserts the packaged frontend carries a string that exists only in the current frontend source, so a stale bundle cannot pass.",
+          "AC-5 The image builds in the cluster with the builder stage carrying Node 22.x and the runtime stage free of it; state the real build output.",
+          "AC-6 The rebuilt image was deployed and served, and a string unique to the current frontend source was observed in the served bundle. Report the actual request and what came back.",
+          "AC-7 The existing deployment manifest rule tests, the frontend suite and the ui2 unit and architecture tests all pass.",
+          "AC-8 The repository privacy gate reports zero findings.",
+          "AC-9 No frontend source file changed, and no contract was edited or restatused.",
+          "AC-10 SESSION_CLOSE states plainly that contract UNKNOWN U-1 is now settled by observation, what the observation was, and that recording it in the contract was deliberately left to the Product Owner."
+        ],
+        "baseline": {
+          "authority": "docs/design/UI2_0_B1_01C_CONTAINER_IMAGE_AND_KUBERNETES_DEPLOYMENT_CONTRACT.md (FROZEN) section 3.2 requires the builder stage to carry every toolchain the packaging task needs and to resolve none from the host, and records as UNKNOWN U-1 whether that set includes Node 22.x -- the clause states the answer is settled by the declared inputs of the packaging task: if it consumes frontend build output, the builder carries Node, otherwise it must not. This movement acts on the observation that settles U-1; it does not amend the contract, it follows the rule the contract already conditioned on evidence.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "existing_seam": "ui2/build.gradle.kts already registers frontendCi, frontendTest and frontendBuild as root Exec tasks delegating to npm, with declared inputs and outputs. What is missing is the link from frontendBuild's output to the service module's packaged resources.",
+          "observed_defect": "Measured against the running deployment. The service module ships a committed, prebuilt frontend bundle at ui2/service/src/main/resources/static/, last regenerated at commit dffc8a9. The frontend source under ui2/frontend/src/ has changed twice since, at 1b0e947 and 4595feb, and neither regenerated it. The bundle served from the cluster therefore lacks both movements' work: strings unique to them are absent from the served asset, while strings from the older bundle are present. The image is faithful to what main contains; the repository carries two sources of truth for one artifact, and the shipped one is stale by two movements.",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "sequencing": "Follows the deployment movement, which is merged. Nothing else is in flight.",
+          "why_it_was_not_caught": "The deployment movement's own acceptance check asked whether the UI 2.0 shell renders. It did. It did not ask which version of the shell, and no test compares the shipped bundle against the source it is supposed to come from."
+        },
+        "context_not_loaded": [
+          "docs/history/**",
+          "project/*.json",
+          "vendor contracts",
+          "ui2/frontend component internals beyond what the wiring needs"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/ui2-shipped-frontend-from-source"
+        },
+        "invariants": [
+          "One source of truth for the shipped frontend.",
+          "No host Node, host JDK or host container tool enters any path.",
+          "A clean, empty database remains the required first state; nothing is seeded.",
+          "No credential, management address, device name or serial enters a tracked file.",
+          "No vendor data collection and no device contact: the standing collection gate holds.",
+          "No contract is edited and no contract status is applied, removed or changed.",
+          "The frontend's rendered behaviour is unchanged by this movement."
+        ],
+        "merge_gate": "Product Owner assistant review of the diff plus orchestrator verify.passed, and the rebuilt UI observed serving the current frontend from the cluster. The worker does not merge to main.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Make the frontend the service ships derive from the frontend source at build time, so the repository holds one source of truth for it and a stale bundle cannot be shipped again.",
+        "output_contract": [
+          "A build in which the shipped frontend derives from the frontend source, with the committed bundle gone and regressions that keep it gone",
+          "SESSION_CLOSE carrying the real served-bundle evidence and an explicit statement that U-1 is settled by observation and left for the Product Owner to record"
+        ],
+        "recommended_reasoning": {
+          "reason": "A small change with an easy wrong answer: an ordering dependency and a unit test would look like a fix and leave the defect in place. Proving it on the served artifact is the whole point.",
+          "tier": "Sonnet 5, high effort"
+        },
+        "requirements": [
+          "English, per AGENTS.md engineering-output language law",
+          "One source of truth at the end: either the bundle is built, or it is committed, never both.",
+          "The Gradle wiring must be a declared input/output relationship, so a frontend source change makes the packaged artifact out of date. An ordering-only dependency that leaves a stale bundle cacheable is the defect being fixed.",
+          "npm runs from the committed lockfile. Do not pass a flag that resolves dependencies outside it.",
+          "Prove the fix end to end: build the image and serve it, then show that a string which exists only in the current frontend source is present in the served bundle. A green unit test is not evidence that the shipped artifact changed.",
+          "If the builder stage cannot reach the npm registry from inside the cluster, report that as the finding rather than resolving it from the host.",
+          "Publish SESSION_CLOSE with scripts/local_relay.py append using --report pointing at a JSON file you wrote first. Do not pass report JSON inline on the command line.",
+          "Do not merge to main. Commit on the lane and publish SESSION_CLOSE."
+        ],
+        "risks": [
+          "Wiring the dependency as ordering only, so a stale bundle stays cacheable and the defect survives with a green suite.",
+          "Proving the fix with a unit test instead of a served artifact, which is exactly how the staleness went unnoticed.",
+          "Leaving the committed bundle in place alongside the built one, so two sources of truth remain and the wrong one can win.",
+          "Introducing a host Node to make the build work.",
+          "Letting Node reach the runtime stage and enlarging the shipped image.",
+          "Silently recording U-1 as decided inside the frozen contract."
+        ],
+        "scope": {
+          "in": [
+            "Wire the existing frontendBuild task's output into the service module's packaged static resources, so the packaged artifact contains the frontend built from ui2/frontend/src/ rather than a committed copy, with the dependency declared to Gradle as a real task input and output rather than an ordering hint",
+            "Remove the committed bundle under ui2/service/src/main/resources/static/ once the build produces it, so exactly one source of truth remains",
+            "ui2/Containerfile: the builder stage carries Node 22.x, because U-1 is now settled in the affirmative -- the packaging task consumes frontend build output. Pin it the same way the other base content is pinned, and keep the runtime stage free of it",
+            "A regression test that fails if a prebuilt frontend bundle is committed under the service module's resources again, and a test that the packaged artifact's frontend carries a string that exists only in the current frontend source",
+            "Update docs/operations/UI2_LOCAL_KUBERNETES_DEPLOYMENT.md where it describes what the build produces, if the change makes any statement there wrong"
+          ],
+          "out": [
+            "Any change to frontend source, screens, components or their tests: this movement changes how the frontend reaches the image, not what it renders",
+            "Any change to the manifest set, the database, the secret path or the operator procedure beyond a statement made wrong by this change",
+            "Amending, editing or restating any contract, or applying, removing or changing any contract status. U-1 is settled by observation; recording that in the contract is a Product Owner act, not this movement's",
+            "Introducing a host Node, a host JDK or any host container tool into any path",
+            "Any change under project/, relay/, docs/history/ or .github/workflows/",
+            "Any vendor data collection or device contact"
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "npm",
+              "--prefix",
+              "ui2/frontend",
+              "ci"
+            ],
+            "name": "frontend_install"
+          },
+          {
+            "argv": [
+              "npm",
+              "--prefix",
+              "ui2/frontend",
+              "test"
+            ],
+            "name": "frontend_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              "unitTest"
+            ],
+            "name": "ui2_unit_test"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              "architectureTest"
+            ],
+            "name": "ui2_architecture_test"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_ui2_deployment_manifests.py",
+              "-q"
+            ],
+            "name": "deployment_manifest_rules"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_architecture_convergence.py",
+              "-q"
+            ],
+            "name": "architecture_convergence"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-12T18:07:43Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0124",
+  "movement": "ui2_shipped_frontend_derives_from_source",
+  "next_actor": "engineer",
+  "refs": [
+    "AGENTS.md",
+    "docs/design/UI2_0_B1_01A_PLATFORM_SKELETON_CONTRACT.md",
+    "docs/design/UI2_0_B1_01C_CONTAINER_IMAGE_AND_KUBERNETES_DEPLOYMENT_CONTRACT.md",
+    "docs/operations/UI2_LOCAL_KUBERNETES_DEPLOYMENT.md",
+    "PRIVACY_AND_DATA_HANDLING.md"
+  ],
+  "schema_version": 1,
+  "status": "OPEN",
+  "updated_at": "2026-09-12T18:07:43Z"
+}

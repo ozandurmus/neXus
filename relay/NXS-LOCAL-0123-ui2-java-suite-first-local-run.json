@@ -1,0 +1,219 @@
+{
+  "created_at": "2026-09-12T16:33:09Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1 The module listing check ran, and the report states whether exactly the eleven modules of B1-1a section 2 were listed and whether a frontend subproject appeared.",
+          "AC-2 architectureTest ran, and the report names each direction method and whether it passed.",
+          "AC-3 unitTest ran with no container and no database, and the report gives the real pass and fail counts.",
+          "AC-4 check ran with dependency verification and locking enabled, and the report gives its real result.",
+          "AC-5 The report states plainly whether integrationTest can run in this environment and what it did when invoked -- including whether it failed rather than skipped, as the contract requires.",
+          "AC-6 A DRAFT report exists under docs/design/ carrying, per check, the command, the exit code, the counts and the first failure if any.",
+          "AC-7 No Java source, build script, lockfile, verification metadata or test changed; the diff adds the report and nothing else.",
+          "AC-8 The repository privacy gate reports zero findings.",
+          "AC-9 Nothing in the report claims a result the movement did not observe."
+        ],
+        "baseline": {
+          "authority": "docs/design/UI2_0_B1_01A_PLATFORM_SKELETON_CONTRACT.md (FROZEN) section 7 states the acceptance checks for the ui2/ Java skeleton: the eleven-module listing, architectureTest with all ten direction methods, unitTest with no container and no database, integrationTest against a real PostgreSQL 16, and check with dependency verification and locking enabled. This movement runs those checks and reports what they actually do.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "environment_note": "Measured before dispatch: the Gradle wrapper runs here with and without JAVA_HOME set, and `projects` lists the eleven modules B1-1a section 2 names.",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "sequencing": "Read-and-report. It changes no product code and does not compete with the deployment lane for any file.",
+          "why_now": "The ui2/ Java suites have not been run since the Material 3 frontend work, and no session has run them on this machine. The environment that made them unrunnable is gone: a JDK 21 is now present and the Gradle wrapper resolves eleven modules here. The deployment movement in flight packages this same Java code into an image, so a defect found now is found before it is packaged rather than after."
+        },
+        "context_not_loaded": [
+          "docs/history/**",
+          "ui2/frontend/ sources",
+          "project/*.json",
+          "vendor contracts"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/ui2-java-suite-baseline"
+        },
+        "invariants": [
+          "This movement reports; it does not repair.",
+          "Dependency verification and locking are never weakened to make a check pass.",
+          "No credential, management address, device name or serial enters a tracked file or a report.",
+          "No vendor data collection and no device contact: the standing collection gate holds.",
+          "No contract status is applied, removed or changed."
+        ],
+        "merge_gate": "Product Owner assistant review of the diff plus orchestrator verify.passed. The worker does not merge to main.",
+        "movement_type": "VALIDATION",
+        "objective": "Run the ui2/ Java acceptance checks on this machine for the first time and report exactly what passes, what fails and what cannot run, with the real command output. Fix nothing; the point is an honest baseline.",
+        "output_contract": [
+          "A DRAFT report recording, per acceptance check, the command, the exit code, the counts and the first failure",
+          "SESSION_CLOSE with the real output of every check and an explicit statement of anything that could not be run and why"
+        ],
+        "recommended_reasoning": {
+          "reason": "Running documented commands and writing down what happened. The only discipline required is not fixing what it finds.",
+          "tier": "Sonnet 5, low effort"
+        },
+        "requirements": [
+          "English, per AGENTS.md engineering-output language law",
+          "Report what the commands did, never what they were expected to do. A check that fails is a finding, not a problem to be worked around.",
+          "Do not pass --offline, --refresh-dependencies, --write-locks, --update-locks or any flag that weakens dependency verification or locking. If a check cannot run without one, that is the finding.",
+          "If a run takes longer than the movement can afford, report how far it got rather than reporting a result it did not observe.",
+          "Quote failure output rather than summarising it away, but keep each excerpt bounded and never reproduce a credential, address or device identity from any log.",
+          "Publish SESSION_CLOSE with scripts/local_relay.py append using --report pointing at a JSON file you wrote first. Do not pass report JSON inline on the command line.",
+          "Do not merge to main. Commit on the lane and publish SESSION_CLOSE."
+        ],
+        "risks": [
+          "Fixing a failure in passing, so the baseline reports a repaired state rather than the real one.",
+          "Weakening verification or locking to get check to pass.",
+          "Reporting a suite result that was never observed because the run was cut short.",
+          "Standing up a database to make integrationTest run, which belongs to the deployment movement and would change what is being measured."
+        ],
+        "scope": {
+          "in": [
+            "Run each acceptance check B1-1a section 7 names that does not require a database, and record the real output of each: the module listing, architectureTest, unitTest, and check",
+            "Record for architectureTest whether all ten direction methods ran and passed, by name",
+            "Determine whether integrationTest can run here at all, and report the finding rather than forcing it: it requires a real PostgreSQL 16, and the contract states the command must fail rather than skip when none is available",
+            "Write one short report under docs/design/ recording, per check, the command, the exit code, the counts, and the first failure if any -- status DRAFT, no contract status applied",
+            "Where a check fails, record the failure and its likely locus precisely enough for a later movement to act, and stop there"
+          ],
+          "out": [
+            "Fixing anything the run reveals: this movement reports, it does not repair",
+            "Changing any Java source, build script, lockfile, verification metadata or test",
+            "Regenerating dependency locks or verification metadata, or passing any flag that weakens dependency verification",
+            "Installing or provisioning a database, or standing up any part of the deployment: the deployment movement owns that",
+            "Any change under ui2/frontend/, project/, relay/ or .github/workflows/",
+            "Applying, removing or changing any contract status",
+            "Any vendor data collection or device contact"
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              "projects",
+              "--quiet"
+            ],
+            "name": "module_listing"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              "architectureTest"
+            ],
+            "name": "architecture_test"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              "unitTest"
+            ],
+            "name": "unit_test"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_architecture_convergence.py",
+              "-q"
+            ],
+            "name": "architecture_convergence"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-12T16:33:09Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "report": {
+        "changed": [
+          "Added docs/design/UI2_JAVA_SUITE_FIRST_LOCAL_RUN_BASELINE.md"
+        ],
+        "completed": [
+          "Ran module_listing (./ui2/gradlew -p ui2 projects --quiet): exit 0, exactly eleven modules listed, no frontend subproject in the Gradle project tree",
+          "Ran architectureTest: exit 0, all ten dir1-dir10 direction methods ran and passed (Ui2ArchitectureTest 10/10, NoRoleConditionalRenderingInFrontendTest 1/1)",
+          "Ran unitTest: exit 0, 126 tests, 0 skipped, 0 failures, 0 errors, no container and no database used",
+          "Ran check: exit 1, all module test/unitTest/architectureTest tasks passed, :integration-tests:test failed (34 tests, 29 failed) on missing PostgreSQL 16",
+          "Ran the dedicated integrationTest task directly: exit 1, failed closed (34 tests, 29 failed) rather than skipping, per contract, on the same missing-PostgreSQL-16 cause",
+          "Ran the repository privacy gate: exit 0, 0 findings",
+          "Ran tests/test_architecture_convergence.py: exit 0, 23 passed",
+          "Wrote docs/design/UI2_JAVA_SUITE_FIRST_LOCAL_RUN_BASELINE.md (status DRAFT) recording command, exit code, counts and first failure for every check",
+          "Opened PR https://github.com/ozandurmus/neXus/pull/200 on lane feature/ui2-java-suite-baseline; did not merge (orchestrator merge mode)"
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "none",
+          "ui": "none"
+        },
+        "integration": {
+          "branch": "feature/ui2-java-suite-baseline",
+          "ci": "not observed by this movement",
+          "head_sha": "41317aa",
+          "merge_commit": null,
+          "merge_decision": "Worker did not merge. Merge mode is orchestrator: PO assistant review of the diff plus orchestrator verify.passed decide the merge.",
+          "merge_state": "OPEN",
+          "pr": 200,
+          "pr_url": "https://github.com/ozandurmus/neXus/pull/200"
+        },
+        "next": {
+          "movement": "ui2 deployment / database provisioning",
+          "movement_type": "VALIDATION",
+          "objective": "Provision a real PostgreSQL 16 (via UI2_TEST_JDBC_URL or a container runtime) so integrationTest can be run and validated for real; no code defect was found in this baseline run",
+          "status": "complete"
+        },
+        "preserved": [
+          "No Java source, build script, lockfile, verification metadata or test touched",
+          "No contract status applied, removed or changed",
+          "No database provisioned; integration-tests fail-closed behavior observed, not worked around"
+        ],
+        "recommended_reasoning": {
+          "reason": "Provisioning and re-running integrationTest is another documented-command, report-what-happened task once a database is available",
+          "tier": "Sonnet 5, low effort"
+        },
+        "state_updates": [],
+        "unresolved_risks": [
+          "integrationTest cannot be exercised here without a real PostgreSQL 16 -- deployment movement must provision UI2_TEST_JDBC_URL or a working container runtime before that suite can be validated for real"
+        ],
+        "validation": {
+          "affected": "N/A -- read-only validation movement, no code changed",
+          "diff_check": "git status confirms only docs/design/UI2_JAVA_SUITE_FIRST_LOCAL_RUN_BASELINE.md added; no other file modified",
+          "full_regression": "Not run; out of scope for this movement (architecture_convergence pytest suite run instead, 23 passed)",
+          "privacy": "python3 scripts/repository_privacy_check.py: 0 findings, PASS",
+          "real_environment": "integrationTest requires a real PostgreSQL 16 not present here (no UI2_TEST_JDBC_URL, no container runtime); it correctly failed rather than skipped, confirming the fail-closed contract on this machine",
+          "state_consistency": "N/A -- no project/*.json or CURRENT_STATE.md touched",
+          "targeted": "module_listing, architectureTest, unitTest, check, integrationTest all run directly with real output captured; see report for exit codes and counts"
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-12T16:37:18Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0123",
+  "movement": "ui2_java_suite_first_local_run",
+  "next_actor": null,
+  "refs": [
+    "AGENTS.md",
+    "docs/design/UI2_0_B1_01A_PLATFORM_SKELETON_CONTRACT.md",
+    "docs/design/UI2_0_B1_01B_CI_WORKFLOW_CONTRACT.md",
+    "PRIVACY_AND_DATA_HANDLING.md"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-12T16:37:18Z"
+}
