@@ -4,7 +4,7 @@
 
 **FROZEN — PRODUCT OWNER APPROVED, 2026-09-09** (platform contract freeze (C1–C6 + baseline directory), per `UI2_0_BASELINE_CONTRACT.md` §2 `FREEZE-SLICING`). Open items listed in this document's own open-items section are deferred to the movements they name; they do not reopen this freeze. Previous status: DRAFT — FOR PRODUCT OWNER FREEZE. Written under
 `docs/design/UI2_0_BASELINE_CONTRACT.md` (FROZEN — PRODUCT OWNER APPROVED,
-2026-09-09), turning `UI2_0_ARCHITECTURE_DESIGN.md` §5 (RBAC is `D1`/`D7`,
+2026-09-09), turning `UI2_0_ARCHITECTURE_CONTRACT.md` §3 (RBAC is `D1`/`D7`,
 never menu-hiding) and §7 (concurrent multi-admin, single active session per
 identity) into a testable specification, amended by the baseline's
 `DIRECTORY-POSTURE` (D-6) ruling. Runs concurrently with `docs/design/UI2_0_C1_PLATFORM_SCHEMA_CONTRACT.md`
@@ -61,10 +61,17 @@ anything fixed here without one.
    Phase 0 decisions this document must not reopen: `DIRECTORY-POSTURE`
    (D-6, conditional), acceptance sentence A-1.
 3. This document, once its own status line reads `FROZEN`.
-4. `docs/design/UI2_0_ARCHITECTURE_DESIGN.md` §5 (RBAC, role model,
-   evaluation order, storage/audit) and §7 (authentication and sessions) —
-   design under amendment; this contract is the testable specification the
+4. `docs/design/UI2_0_ARCHITECTURE_CONTRACT.md` (FROZEN 2026-09-12) §3
+   (RBAC, role model, evaluation order, storage/audit) and §4
+   (authentication and sessions); §4.5 carries the `M14 U-4` disposition
+   §6 of this contract reads. This contract is the testable specification the
    baseline directs it to become.
+
+   Repointed 2026-09-12 from `UI2_0_ARCHITECTURE_DESIGN.md`, now SUPERSEDED
+   and historical only, never authority. Its status line said `DRAFT — NOT
+   implementation authority`, and a DRAFT cannot stand in a FROZEN contract's
+   authority chain (`AGENTS.md` "Authority hierarchy" item 2). Correction C-1
+   below recorded the defect before it was fixed.
 5. `docs/design/UI2_0_DEVELOPMENT_WORKFLOW.md` §5 B0-3 (this movement's own
    scope line) and B1 step 3 (the Java implementation this contract
    precedes).
@@ -72,10 +79,7 @@ anything fixed here without one.
    `SR-D6` (resolved by `C2` §7.2), `SR-D7`, `SR-D10`, `UX-D3`: the identity/
    session/authorization findings this document answers or explicitly
    leaves open (§9).
-7. `docs/design/M14_LOCAL_LDAP_AUTHORIZATION_ARCHITECTURE.md` — `LD-1`…`LD-7`,
-   the loopback-console precedent this document amends for a multi-admin
-   server, one decision at a time, exactly as design §7.7 tabulates; and
-   `utils/logger.py::principal_fingerprint` — the existing, unkeyed 12-hex
+7. `utils/logger.py::principal_fingerprint` — the existing, unkeyed 12-hex
    SHA-256-prefix correlator this document adopts, not redefines (§3.2).
 8. `docs/design/UI2_0_C1_PLATFORM_SCHEMA_CONTRACT.md` (concurrent movement,
    `C1`) — schema ownership rules (§2), the `secrets_metadata`/
@@ -85,6 +89,21 @@ anything fixed here without one.
 9. `docs/design/UI2_0_C2_JOB_EXECUTION_CONTRACT.md` (concurrent movement,
    `C2`) — `E7`/pre-execution checks (§6 below), owner/approver/execution
    identity (§7 below).
+
+**Evidence and precedent consulted — not authority** (Correction C-1,
+2026-09-12). `docs/design/M14_LOCAL_LDAP_AUTHORIZATION_ARCHITECTURE.md`
+(DRAFT — discussion proposal, "not implementation authority" by its own status
+line) is read here as the loopback-console **precedent** this contract amends
+for a multi-admin server, one decision at a time, exactly as design §7.7
+tabulates. It is **not authority**: it authorizes nothing in this contract and
+settles no identity model, authorization outcome, command, schema or security
+boundary for it. Where this contract cites an `LD-n` or `AG-n` id (§2.1, §2.2,
+§2.3, §4.4, §5.1), the cited id names where the behaviour came from; the
+normative clause is the one stated in this contract's own text, and where the
+two disagree this contract wins. `M14`'s own open unknowns `U-1`…`U-4` stay
+open as unknowns here and are not read as decided — §9 item 6 keeps `U-1`
+explicitly open, and `U-4` is decided for UI 2.0 by design §7.7 (chain item
+4), not by `M14`.
 
 ---
 
@@ -865,13 +884,14 @@ identities while that concurrency plays out.
 while writing this contract: `AGENTS.md` (identity law, evidence laws,
 UNKNOWN/fail-closed law, sensitive-identity reporting law, privacy/DLP),
 `docs/design/UI2_0_BASELINE_CONTRACT.md` (FROZEN), `docs/design/UI2_0_DEVELOPMENT_WORKFLOW.md`
-(BASELINE rev 2), `docs/design/UI2_0_ARCHITECTURE_DESIGN.md` §5/§7/§11/§12
+(BASELINE rev 2), `docs/design/UI2_0_ARCHITECTURE_CONTRACT.md` §3/§4/§9/§10
 (DRAFT, amended), `docs/design/UI2_0_C1_PLATFORM_SCHEMA_CONTRACT.md`,
 `docs/design/UI2_0_C2_JOB_EXECUTION_CONTRACT.md`,
 `docs/design/UI2_0_COUNCIL_REVIEW_AND_SECOND_OPINION_BRIEF.md`,
 `docs/design/OPERATOR_CONSOLE_ARCHITECTURE.md` (`CON.0`, FROZEN, checked
-specifically against `SR-D4` below), `docs/design/M14_LOCAL_LDAP_AUTHORIZATION_ARCHITECTURE.md`,
-`utils/logger.py`. This document reopens no PO-reserved decision:
+specifically against `SR-D4` below),
+`docs/design/M14_LOCAL_LDAP_AUTHORIZATION_ARCHITECTURE.md`
+(DRAFT, not authority — §1.4), `utils/logger.py`. This document reopens no PO-reserved decision:
 `DIRECTORY-POSTURE` is implemented exactly as conditional and disabled
 (§4.4), not enabled or reinterpreted as permission to enable it; `RAW
 -RETENTION` is not engaged by this document's scope at all (no raw device
@@ -944,7 +964,7 @@ output ever reaches an identity/session/RBAC table).
 - `docs/design/UI2_0_DEVELOPMENT_WORKFLOW.md` §5 B0-3 (this movement's scope
   line), B1 step 3 (Identity & sessions), B1 step 9 (RBAC visible-but
   -refused proof), B1 step 10 (acceptance scenario A / `B1-10`).
-- `docs/design/UI2_0_ARCHITECTURE_DESIGN.md` §5 (RBAC, role model,
+- `docs/design/UI2_0_ARCHITECTURE_CONTRACT.md` §3 (RBAC, role model,
   evaluation, storage/audit — this document's primary specification
   target), §7 (authentication and sessions — the same), §11 (`UA-8`,
   disposed against `SR-D4` in §9 above), §12 (`M14 U-1`, still open).
@@ -960,9 +980,9 @@ output ever reaches an identity/session/RBAC table).
   `C2`) — §1.2 (its own scope beginning at `E7`), §6 (pre-execution checks
   — `E7` itself), §7.2 (owner/approver/execution identity — resolved
   concretely here, §7).
-- `docs/design/M14_LOCAL_LDAP_AUTHORIZATION_ARCHITECTURE.md` — `LD-1`…`LD-7`,
-  the loopback-console precedent amended one decision at a time (design
-  §7.7); `utils/logger.py::principal_fingerprint` — the existing
+- `docs/design/M14_LOCAL_LDAP_AUTHORIZATION_ARCHITECTURE.md`
+  (DRAFT, not authority — §1.4) — `LD-1`…`LD-7`, the loopback-console precedent amended
+  one decision at a time (design §7.7); `utils/logger.py::principal_fingerprint` — the existing
   correlator adopted, not redefined (§3.2).
 - `docs/design/OPERATOR_CONSOLE_ARCHITECTURE.md` (`CON.0`, ARCHITECTURE
   FROZEN 2026-08-31) — §4.1/§7 rule 11 (server-mode/`DEPLOY.1A` gate,
@@ -971,3 +991,136 @@ output ever reaches an identity/session/RBAC table).
   sensitive-identity reporting law, privacy/DLP.
 - `docs/AI_DEVELOPMENT_PROTOCOL.md` — approval boundaries; unaffected by
   this document (contract only, no source, no migration).
+
+---
+
+## Correction C-1 (2026-09-12) — a DRAFT document stood in §1.4's authority chain
+
+§1.4's authority chain listed `docs/design/M14_LOCAL_LDAP_AUTHORIZATION_ARCHITECTURE.md`
+as item 7. That is a defect in this contract, not in the cited document, which
+is DRAFT and therefore not authority here.
+
+**Evidence.** `AGENTS.md` "Authority hierarchy" item 2 and "Contract-status
+law" both forbid a document whose status line says `DRAFT` from being treated
+as implementation authority or cited as approving a command, schema or
+identity model. `M14_LOCAL_LDAP_AUTHORIZATION_ARCHITECTURE.md`'s own status
+line reads "**DRAFT — discussion proposal. Not implementation authority**" and
+cites those same two rules against itself. Listing it in this FROZEN
+contract's authority chain — an identity/authorization contract, the exact
+subject matter the rule names — asserted the opposite. The same defect class
+was adjudicated for the B1 family by
+`docs/design/UI2_0_B1_01A_PLATFORM_SKELETON_CONTRACT.md` ("Why a successor
+instead of an amendment") and is now machine-checked by
+`tests/test_contract_authority_status.py`. The cited document is precedent and
+evidence, not authority, for anything in this contract.
+
+**Adjudication: reclassification, not a successor contract.** Item 7 bundled
+two unlike things: a DRAFT design document and `utils/logger.py::principal_fingerprint`,
+which is source (`AGENTS.md` authority hierarchy item 5) and legitimately
+belongs in the chain. Every use of the DRAFT was precedent, never a clause
+that settles something:
+
+- item 7 cited it as "the loopback-console precedent this document amends for
+  a multi-admin server, one decision at a time" — precedent, and a precedent
+  this contract amends rather than obeys.
+- §2.1, §2.2, §2.3, §4.4 and §5.1 cite `LD-1`, `LD-2`, `LD-3`, `LD-6` and the
+  `AG-n` acceptance ids alongside the full normative sentence stated in this
+  contract's own words ("carried over", "unchanged", "mirrors") — provenance
+  labels on clauses this contract states itself.
+- §6 cites `M14 U-4`, but for the **disposition** recorded in design §7.7
+  ("decided for UI 2.0"), which is chain item 4. `M14` leaves `U-4` open; this
+  contract does not read it as closed by `M14`.
+- §9 item 6 and §10 keep `M14 U-1` (nested-group membership semantics)
+  explicitly open pending Microsoft documentation, per `AGENTS.md` vendor
+  -semantics law.
+
+No normative clause of this contract depends on the DRAFT, so nothing this
+contract requires changes here. Item 7 now carries only the source citation;
+the DRAFT is moved into the labelled "Evidence and precedent consulted — not
+authority" block in §1.4, and every remaining reference is marked `DRAFT, not
+authority`.
+
+**Closed 2026-09-12, after this correction was written.** The item-4 defect
+reported below was resolved the same day: the cited document was superseded by
+`docs/design/UI2_0_ARCHITECTURE_CONTRACT.md` (FROZEN), §1.4 item 4 now cites
+the successor, and §4.5 there carries the `M14 U-4` disposition §6 of this
+contract reads. The report below is kept as the record of how it was found.
+
+**Not reconciled here, reported instead.** §1.4 item 4 places
+`docs/design/UI2_0_ARCHITECTURE_DESIGN.md` in this same authority chain, and
+that document's own status line reads "DRAFT — design resolved, NOT frozen,
+NOT implementation authority". That is the identical defect, but larger: item
+4 is this contract's primary specification target (design §5/§7) and supplies
+the `U-4` disposition §6 relies on, so reclassifying it could change what this
+contract requires. Under `AGENTS.md` "Authority hierarchy" that is a
+contradiction to report, not to reconcile locally. It is left standing and
+flagged for the contract owner, together with the detector gap that hides it:
+`tests/test_contract_authority_status.py::_classify` matches the token `FROZEN`
+inside the phrase "NOT frozen" and therefore classifies that document as
+frozen, so no citation of it is currently flagged in either direction.
+
+## Correction C-2 (2026-09-12) — authentication is not LDAP-only
+
+**Product Owner ruling, 2026-09-12.** Phase 1 carries **LDAP and local**
+authentication; RADIUS and TACACS follow later.
+
+This contract, as frozen, defines exactly one authentication mechanism: an
+UnboundID LDAP bind (§2). The words "local user", "fallback", "RADIUS" and
+"TACACS" do not appear in it anywhere. That is not a wrong claim — it is an
+incomplete one, and the difference matters: an implementation reading §2 as
+the whole identity model would wire login to LDAP alone and have to be
+unpicked when the second mechanism lands.
+
+The Product Owner's statement of the product rule: every comparable product
+offers local plus directory options, **and the fallback is always a local
+user**. A deployment whose directory is unreachable, misconfigured, or not yet
+integrated must still be administrable.
+
+### What this correction settles
+
+1. Authentication is a **pluggable set of mechanisms**, not one mechanism.
+   `LDAP` and `local` are in scope for Phase 1; `RADIUS` and `TACACS` are named
+   as later additions and nothing may be implemented for them yet.
+2. **Local is always present.** It is not a configuration option that can be
+   switched off, because it is the fallback that keeps the product
+   administrable when every external mechanism fails.
+3. Everything §3-§7 fixes about **sessions, RBAC and audit is mechanism-
+   independent** and unchanged: one active session per identity, the partial
+   unique index that makes it structural, takeover/refuse, the per-request gate
+   chain, `authz_decisions`, and the two-audit-row takeover shape of Correction
+   C-1. A local identity is an identity; it does not get a second session model.
+
+### What this correction deliberately does NOT settle
+
+Naming a mechanism is not designing it. None of the following is decided here,
+and **nothing may be implemented against a guess**:
+
+- How a local credential is stored and verified — the algorithm, its
+  parameters, and where the material lives relative to `C1` §6's secret-file
+  discipline. A password hash is credential material and `AGENTS.md`'s
+  privacy law applies to it.
+- Lockout, rate limiting and failed-attempt recording, and whether a failed
+  local bind is audited identically to a failed directory bind.
+- How a local identity acquires `role_bindings`, given §3's model binds roles
+  to a directory-resolved group reference. A local user has no group to
+  resolve; this is the sharpest open question and it is an authorization
+  question, not a login question.
+- Whether the first local administrator is seeded, and by what authority — a
+  bootstrap identity is a security boundary of its own.
+- The order mechanisms are tried, and whether "fallback" means *after a
+  directory failure* or *always available in parallel*. The Product Owner's
+  wording is "the fallback is always the local user"; the precise trigger is
+  not fixed here.
+
+These belong to a successor contract for local authentication, which must
+freeze before any local login path is built. Phase 1's shell (composition root,
+empty UI, menus) does not depend on any of them and is not blocked by this.
+
+### Standing
+
+`UI2_0_C3_IDENTITY_SESSIONS_RBAC_CONTRACT.md` remains FROZEN. This correction
+widens its scope statement and records a ruling; it removes no clause and
+weakens no gate. The LDAP mechanism of §2 and §4.4 is unchanged, including the
+trust-store gap reported in
+`docs/design/LDAP_TLS_TRUST_STORE_PIN_GAP_2026_09_12.md`, which now blocks one
+of two Phase 1 mechanisms rather than the only one.

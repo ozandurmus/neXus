@@ -514,6 +514,18 @@ ledger contract; it is never permission for a recovery write. The operator
 does not choose SSH/API commands for a supported platform today (closed
 registry) and will not under the control plane.
 
+> Amendment (2026-09-09, drafted in `UI2_0_ARCHITECTURE_DESIGN.md` §6 —
+> SUPERSEDED, named as provenance only and authority for nothing; successor
+> `UI2_0_ARCHITECTURE_CONTRACT.md` §5): backup becomes
+> **profile-driven**. A profile is a versioned, validated, four-eyes-approved
+> ordered step sequence with expectation gates; its commands are backed by
+> network-device command-gate records and its class is the maximum class of
+> its steps. The operator chooses **among approved profiles**; the run path
+> never accepts a command. Authoring a profile is a governed content path
+> (§6.10), distinct from the closed job registry, which stays closed. For a
+> platform with a native contract (`RB.2`, `RB.3`) the shipped profile *is*
+> that contract's step sequence.
+
 ---
 
 ## 12. Topology and HA operational units
@@ -543,7 +555,10 @@ starting point of navigation, never the resolved target.
 
 The Product Control Plane's console **is** the `CON.x` Operator Console —
 the same second delivery surface, the same one UI source tree, the same
-intent boundary — extended with the registry-driven experience. Nothing in
+intent boundary — extended with the registry-driven experience, **until each
+module ships in UI 2.0, which inherits `CON.0` §4 (intent boundary), §7
+(security model) and §9 (honest affordances) unchanged and is bound by
+`CON.0` §6 as amended by `UA-1`**. Nothing in
 `CON.0` §3 ("what this is not"), §4 (intent boundary), §7 (security model)
 or §10 (phasing) is relaxed. Completed `CON.1`/`CON.2` work is preserved.
 
@@ -568,10 +583,10 @@ Boundary rules, restated for the new intents:
 | HA / failover tab | nothing new | shows the last-known readiness projection with explicit freshness; **"Start failover" begins a NEW `OP.2` workflow with its own authoritative preflight** | `OP_2_0` P4/P14; the UI never computes identity, topology, pairing or readiness |
 | Diagnostics | `runbook_id` + `device_id[]` (future, `PCP.8`) | resolves a closed runbook catalog | §15 |
 
-Canonical backend authority remains the only authority. Payload parity
-between the exported report and the console (`CON.0` §6 invariant) holds:
-if the device experience needs a field, the payload builder gains it for
-both surfaces, and the report stays action-free.
+Canonical backend authority remains the only authority. Projection parity
+between the exported report and the console (`CON.0` §6 invariant, as
+amended by `UA-1`) holds: if the device experience needs a field, the
+projection gains it for every surface, and the report stays action-free.
 
 ---
 
@@ -1211,6 +1226,30 @@ does.
    line: typed backup jobs over registry targets are the `PCP.5`/`PCP.6`
    form of the scheduling this section already requires to route through
    the admission coordinator.
+
+**Amendment (`CON.0-AMENDMENT`, 2026-09-12, `UI2_0_C5_AMENDMENTS_BUNDLE.md`
+§2, FROZEN) — applied to this document's own §11 and §13.** Not a decision
+made here: `UI2_0_BASELINE_CONTRACT.md` §2 row `CON.0-AMENDMENT` (C-1)
+recorded it **ACCEPTED** on 2026-09-09, and `C5` §2 deferred only the act of
+writing the text into the frozen files it names. Applied now, verbatim as
+specified: **`UA-3`** amends §13 so "the control plane's console **is** the
+`CON.x` Operator Console" reads "until each module ships in UI 2.0, which
+inherits `CON.0` §4, §7 and §9 unchanged and is bound by `CON.0` §6 as
+amended by `UA-1`", and §13's payload-parity sentence becomes projection
+parity ("the projection gains it for every surface"); **`UA-4`** appends to
+§11 the profile-driven backup amendment — the operator chooses **among
+approved profiles**, the run path **never accepts a command**, and profile
+authoring is a governed content path outside the browser, distinct from the
+closed job registry, which stays closed. The literal wording is the text
+drafted in `UI2_0_ARCHITECTURE_DESIGN.md` §4.3 (companion note) and §6.9;
+that predecessor is **SUPERSEDED** and authorizes nothing — it is named only
+as where the approved text was written, its successor being
+`UI2_0_ARCHITECTURE_CONTRACT.md` (FROZEN) §2.3 and §10 rows `UA-3`/`UA-4`.
+**Nothing is widened.** §11's class-1 taxonomy statement, §13's enrollment
+gating (`pcp_console_registry_write_gate`) and boundary table, `CON.0` §4's
+command/argv boundary and the constitutional no-Browser-to-device-path
+invariant are all unchanged; no intent becomes console-submittable and no
+gate is weakened by this amendment.
 
 Item 4 is different in kind, not only in timing, and stays **explicitly out
 of this freeze**:

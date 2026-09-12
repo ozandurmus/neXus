@@ -1,0 +1,7 @@
+# UI2 B1-5 -- extract: CP inventory narrow subset (show version, HA state) -> capability spec + sanitized fixtures; channel-drain recorded UNKNOWN with validation plan
+
+status: deferred · target: workflow §5 B1-5
+
+Line-1 read-only AUDIT. FIRST-CAPABILITY ruling: an UNKNOWN affecting completeness blocks CAP-VALIDATED.
+
+PO GATE 2026-09-12 (standing): collection/extraction work is suspended pending Product Owner direction. The Product Owner will specify, per vendor, which collection type and which data-collection methods apply before any of this row is implemented. No capability spec, no command gate entry, and no extraction code may be written for this row until that direction is given. Non-collection B1 rows are unaffected and continue.

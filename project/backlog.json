@@ -1002,7 +1002,7 @@
       "id": "ui2_b1_02_schema_v1_flyway",
       "title": "UI2 B1-2 -- schema V1 via Flyway (C1 tables, audit table, projections for the first capability)",
       "priority": "P1 -- UI 2.0",
-      "status": "planned",
+      "status": "automated_validated",
       "note": "",
       "target": "workflow §5 B1-2"
     },
@@ -1011,7 +1011,7 @@
       "id": "ui2_b1_03_identity_sessions",
       "title": "UI2 B1-3 -- identity & sessions (UnboundID LDAP bind, single-active-session table as tests, role bindings, E1-E7 on HTTP)",
       "priority": "P1 -- UI 2.0",
-      "status": "planned",
+      "status": "in_progress",
       "note": "Sonnet 5 extended (high). D-6-gated parts stay disabled.",
       "target": "workflow §5 B1-3"
     },
@@ -1020,7 +1020,7 @@
       "id": "ui2_b1_04_collection_engine_core",
       "title": "UI2 B1-4 -- collection engine core (capability registry, step executor with C2 crash-safe job record, parser framework, evidence writer; SSH exec transport only; PAN XML API / SFTP as interfaces)",
       "priority": "P1 -- UI 2.0",
-      "status": "planned",
+      "status": "in_progress",
       "note": "Sonnet 5 extended (high).",
       "target": "workflow §5 B1-4"
     },
@@ -1029,7 +1029,7 @@
       "id": "ui2_b1_04b_minimal_device_model_onboarding",
       "title": "UI2 B1-4b -- minimal Device / Endpoint / CredentialReference model, authorised manual registration flow, test-target flag (no hard-coded CP object)",
       "priority": "P1 -- UI 2.0",
-      "status": "planned",
+      "status": "in_progress",
       "note": "",
       "target": "workflow §5 B1-4b"
     },
@@ -1038,8 +1038,8 @@
       "id": "ui2_b1_05_extract_cp_inventory_subset",
       "title": "UI2 B1-5 -- extract: CP inventory narrow subset (show version, HA state) -> capability spec + sanitized fixtures; channel-drain recorded UNKNOWN with validation plan",
       "priority": "P1 -- UI 2.0",
-      "status": "planned",
-      "note": "Line-1 read-only AUDIT. FIRST-CAPABILITY ruling: an UNKNOWN affecting completeness blocks CAP-VALIDATED.",
+      "status": "deferred",
+      "note": "see docs/history/backlog/ui2_b1_05_extract_cp_inventory_subset.md",
       "target": "workflow §5 B1-5"
     },
     {
@@ -1047,7 +1047,7 @@
       "id": "ui2_b1_06_implement_cp_inventory_capability",
       "title": "UI2 B1-6 -- implement CP inventory capability in Java against fixtures (CAP-OFFLINE)",
       "priority": "P1 -- UI 2.0",
-      "status": "planned",
+      "status": "deferred",
       "note": "",
       "target": "workflow §5 B1-6"
     },
@@ -1056,7 +1056,7 @@
       "id": "ui2_b1_07_jobs_screen_run_now_read",
       "title": "UI2 B1-7 -- Jobs screen + Run Now (read class) + step log",
       "priority": "P1 -- UI 2.0",
-      "status": "planned",
+      "status": "in_progress",
       "note": "",
       "target": "workflow §5 B1-7"
     },
@@ -1110,8 +1110,8 @@
       "id": "ui2_b1_13_second_flow_pan_config_export_artefact",
       "title": "UI2 B1-13 -- second representative flow: PAN configuration export (RB.2 semantics, read class) through the same executor; artefact store, manifest, job/session state; re-estimate the plan afterwards",
       "priority": "P1 -- UI 2.0",
-      "status": "planned",
-      "note": "Proves the executor/UI model is not CP-inventory-specific. PAN transport adapter with header/POST auth (never query-string credentials).",
+      "status": "deferred",
+      "note": "see docs/history/backlog/ui2_b1_13_second_flow_pan_config_export_artefact.md",
       "target": "workflow §5 B1-13"
     },
     {
@@ -1131,6 +1131,186 @@
       "status": "planned",
       "note": "Found by NXS-LOCAL-0057 (C7) SS9.1-9.3, not fixed inside that movement per its own scope boundary and per AGENTS.md's prohibition on inventing a new command class silently. CLASS_1_RECOVERY_WRITE's docstring scopes it to \"temporary backup creation, exact generated-artifact cleanup, recovery-specific device operations\" -- a restore is none of these; BACKUP_AND_RECOVERY_ARCHITECTURE.md S8 independently classifies restore as \"a config-write at the highest blast radius available... sits at the OP.2 bar\"; CLASS_2_OPERATIONAL_STATE_CHANGE has no member yet and is scoped to failover, not config restore; CLASS_3_CONFIGURATION_WRITE is prohibited outright at current maturity. Separately, C4 S2.3's closed step-kind set has no device-directed write/push step: sftp_put is \"reserved, refused at spec-validation time -- no capability may push bytes to a device at current maturity.\" Both gaps must close together (C4 S3.3 step 7: a row whose action_class is class 2/3/4 can never be SIGNED_OFF, so a step kind alone does not unblock restore, and a class alone has nothing to carry it). Until this closes, C7's restore engine (docs/design/UI2_0_C7_BACKUP_ARTEFACT_RESTORE_ENGINE_CONTRACT.md S5) is fully specified but not enabled -- same posture as C3's DIRECTORY-POSTURE. NOT auto-dispatched: this is a genuinely new device-write-capable action class, the kind of security boundary the council-trigger process (GOV_PO_ROLE_MIGRATION.md S7) exists for. Recommend a DECIDE episode (or at minimum an explicit PO scoping decision on tier/review depth) before dispatching, rather than routing it through the standard two-at-a-time B0 wave. 2026-09-09: dispatched as NXS-LOCAL-0060 (decision document only, Fable 5.1 medium); PO decides after. HELD 2026-09-09: stopped before output (credit conservation); packet ready in the relay file, resume from there.",
       "target": "docs/design/UI2_0_C7_BACKUP_ARTEFACT_RESTORE_ENGINE_CONTRACT.md §9.1-§9.3; docs/design/UI2_0_C4_CAPABILITY_REGISTRY_GATE_RESOLUTION_CONTRACT.md §2.3, §3.3 step 7; utils/action_taxonomy.py"
+    },
+    {
+      "id": "project_queue_cannot_write_roadmap_now_next",
+      "category": "governance",
+      "title": "scripts/project_queue.py has no write path for roadmap now_next.now / current_build, so 'build add' cannot be used without violating GOV.ORCH.5/8",
+      "status": "done",
+      "priority": "P2",
+      "target": "A successor to scripts/project_queue.py gains a command that moves roadmap now_next.now/next and current_build in the same transaction as 'build add'",
+      "note": ""
+    },
+    {
+      "id": "pan_active_active_not_excluded_as_failover_unit",
+      "category": "safety",
+      "title": "PAN active/active is not excluded as a failover unit (CP load-sharing is)",
+      "status": "planned",
+      "priority": "P1",
+      "target": "docs/design/PAN_ACTIVE_ACTIVE_FAILOVER_UNIT_GAP_2026_09_12.md; blocked on open decision op_aa_vsls_scope",
+      "note": ""
+    },
+    {
+      "id": "project_plan_baseline_fixture_partial_regeneration",
+      "category": "Project state / durable record hygiene",
+      "title": "Regression: project_plan_payload_baseline.json current_build not regenerated with roadmap.json, test_project_plan_render_equivalence fails",
+      "status": "done",
+      "priority": "P1",
+      "target": "",
+      "note": ""
+    },
+    {
+      "id": "dlp_prose_collision_catalogue_stale",
+      "category": "Governance / CI",
+      "title": "Pre-existing: DEV.0.5B prose-collision catalogue is stale, 6 tracked files trip test_repository_text_has_no_known_dlp_assignment_collision / legacy_redaction_collision",
+      "status": "planned",
+      "priority": "P2",
+      "target": "",
+      "note": ""
+    },
+    {
+      "id": "project_plan_crypto_placeholder_sentinel_lost",
+      "category": "Test correctness / CI coverage gap",
+      "title": "Pre-existing: projectPlanData no longer carries __CRYPTO_JSON_PLACEHOLDER__ verbatim, test_project_plan_keeps_the_sentinel_token_as_data fails",
+      "status": "planned",
+      "priority": "P2",
+      "target": "",
+      "note": ""
+    },
+    {
+      "id": "project_plan_build_history_archive_split_lookup",
+      "category": "Project state / durable record hygiene",
+      "title": "Pre-existing: build_history archive split removed build 0.6.1B.1.1 from the live payload, test_project_plan_payload_is_data_driven_and_percentages_are_bounded fails",
+      "status": "planned",
+      "priority": "P2",
+      "target": "",
+      "note": ""
+    },
+    {
+      "id": "privacy_baseline_tests_not_idempotent_runtime_trust_material",
+      "category": "Reliability / Test Infrastructure",
+      "title": "Pre-existing: full suite is not idempotent -- a first run creates gitignored data/.support_hmac.key, then AC6/AC1 privacy-baseline tests fail on the second run",
+      "status": "planned",
+      "priority": "P2",
+      "target": "",
+      "note": ""
+    },
+    {
+      "id": "ldap_tls_trust_store_pin_and_format",
+      "category": "security",
+      "title": "LDAP TLS trust store cannot be given a PIN or format; a protected PKCS12 loads empty",
+      "status": "planned",
+      "priority": "P1",
+      "target": "docs/design/LDAP_TLS_TRUST_STORE_PIN_GAP_2026_09_12.md",
+      "note": ""
+    },
+    {
+      "id": "auth_local_mechanism_contract",
+      "category": "security",
+      "title": "Local authentication: storage, lockout, role binding for a directory-less identity, bootstrap admin",
+      "status": "planned",
+      "priority": "P1",
+      "target": "C3 Correction C-2; successor contract before any local login path",
+      "note": ""
+    },
+    {
+      "id": "auth_radius_mechanism",
+      "category": "security",
+      "title": "RADIUS authentication mechanism",
+      "status": "planned",
+      "priority": "P2",
+      "target": "after Phase 1 LDAP+local",
+      "note": ""
+    },
+    {
+      "id": "auth_tacacs_mechanism",
+      "category": "security",
+      "title": "TACACS authentication mechanism",
+      "status": "planned",
+      "priority": "P2",
+      "target": "after Phase 1 LDAP+local",
+      "note": ""
+    },
+    {
+      "id": "ui2_composition_root_bootable_shell",
+      "category": "platform",
+      "title": "Bootable service: Spring entry point, DataSource, Flyway at startup, empty UI shell with menus",
+      "status": "planned",
+      "priority": "P1",
+      "target": "Phase 1 step 1; no device contact",
+      "note": ""
+    },
+    {
+      "id": "ui2_frontend_screens_shell",
+      "category": "ui",
+      "title": "Frontend screens: login, menu, device list, device add; frontend is 2 stub files today",
+      "status": "planned",
+      "priority": "P1",
+      "target": "Phase 1 step 2-3",
+      "note": ""
+    },
+    {
+      "id": "cp_failover_command_gate_batch",
+      "category": "evidence",
+      "title": "Command gate: cphaprob stat, cphaprob -a if, cphaprob tablestat for failover checks",
+      "status": "planned",
+      "priority": "P1",
+      "target": "PO request 2026-09-12; network-device command gate required",
+      "note": ""
+    },
+    {
+      "id": "failover_peer_reciprocal_agreement_check",
+      "category": "safety",
+      "title": "Eighth stop-condition: both members must agree reciprocally on local/peer roles in one pass",
+      "status": "planned",
+      "priority": "P1",
+      "target": "PO rule 2026-09-12; _pan_reciprocal_correspondence exists but is not a stop-condition",
+      "note": ""
+    },
+    {
+      "id": "failover_vsx_vsls_mentality_contract",
+      "category": "evidence",
+      "title": "VSX/VSLS semantics: CP per-VS state independent of chassis, VSLS off, static assignment; PAN vsys chassis-bound",
+      "status": "planned",
+      "priority": "P1",
+      "target": "PO statement 2026-09-12; needs vendor-semantic contract",
+      "note": ""
+    },
+    {
+      "id": "failover_recheck_on_request",
+      "category": "safety",
+      "title": "A failover request must re-run every readiness check at that moment; an earlier green never authorizes",
+      "status": "planned",
+      "priority": "P1",
+      "target": "PO rule 2026-09-12; OP.2 contract",
+      "note": ""
+    },
+    {
+      "id": "device_session_one_per_device",
+      "category": "evidence",
+      "title": "One SSH session per device reused for every command; probe opens a channel per command",
+      "status": "planned",
+      "priority": "P1",
+      "target": "PO rule 2026-09-12; command gate says session, code preserves connection",
+      "note": ""
+    },
+    {
+      "id": "discovery_import_selection_flow",
+      "category": "feature",
+      "title": "Discovery: Panorama/MDS enumeration then operator multi-select import of found devices",
+      "status": "planned",
+      "priority": "P2",
+      "target": "behind the standing collection gate",
+      "note": ""
+    },
+    {
+      "id": "device_manual_add_transport_choice",
+      "category": "feature",
+      "title": "Manual device add: IP + vendor + transport method (SSH/API/SNMP) selection",
+      "status": "planned",
+      "priority": "P2",
+      "target": "Phase 1 step 3; transport use is gated",
+      "note": ""
     }
   ]
 }

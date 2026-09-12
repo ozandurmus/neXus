@@ -2,42 +2,56 @@
 
 > **NON-AUTHORITATIVE DERIVED SUMMARY**
 > **DO NOT USE AS PROJECT-STATE AUTHORITY**
-> If this disagrees with `CURRENT_STATE.md` or `project/roadmap.json`, those
-> sources win.
+> If this disagrees with `CURRENT_STATE.md` or `project/QUEUE.md`, those win.
 
 ## Operating role for the next session
 
-Full detail: `PO.md` and `docs/reference/COPILOT_OPERATING_MODEL.md`.
+`roles/ENGINEER.md` carries the reading order. PO assistant: `PO.md`.
 
 ## 1. Snapshot
 
-- 2026-09-10: `ui2_b1_01_skeleton_ci_docker`, contract-only movement integrated from worker relay `NXS-LOCAL-0061`.
-- New DRAFT: `docs/design/UI2_0_B1_01_SKELETON_CI_DOCKER_CONTRACT.md`.
-- No `ui2/` implementation, Line-1 source, validation workflow, or device contact.
+- Branch `claude/inspiring-maxwell-gazhy3`.
+- UI2.0 boots: Spring Boot service + PostgreSQL 16 + Flyway V1–V7, serving a
+  React 18 / MUI 5 shell built through the real Vite pipeline.
+- Product default screen is the empty state (no devices). Design preview of the
+  populated Overview and Inventory screens is behind `?preview=overview|inventory`
+  and is banner-labelled; a test asserts preview data never reaches the product screen.
+- B1-1a/2/3/4/4b FROZEN, B1-5/B1-7 DRAFT. No B1 row has real-environment evidence.
+- Standing PO gate: **no vendor data-collection work** until the PO specifies,
+  per vendor, collection type and methods. UI2.0 shell work is exempt.
+- Standing PO rule: new feature implementation is Java written from scratch; the
+  existing Python scripts are know-how only, never reused.
 
-## 2. What changed
+## 2. What changed this session
 
-- The contract defines component homes, one-way dependencies, reproducible build/test/image commands, Testcontainers/Flyway, isolated CI, scoped secrets, and 15 implementation checks.
-- The worker’s completed relay and contract were imported without restoring its stale pre-D1 state snapshot; D1 remains in build history and restore remains disabled.
+- Service boots against PostgreSQL with file-based credentials (`DatabaseConfiguration`,
+  `MigrationStartupRunner`); `service.api` excluded from the scan with a documented reason.
+- V5 audit-redaction policy; V6 fixed my own NULL-check defect that blocked legitimate
+  writes; V7 actor-fingerprint index. Integration suite 19 → 86 tests, 0 failures.
+- Frontend rebuilt on the PO's design-canvas M3 scheme (`theme/m3Theme.ts`), navigation
+  rail, empty state, and the synthetic preview data set (`preview/previewData.ts`).
+- Privacy regression I introduced and pushed (address-shaped literals bundled into
+  three `dist` copies) found and corrected; gate back to the 3 pre-existing
+  runtime-directory findings.
+- New tests: `test_action_taxonomy_java_parity.py`, `test_design_cross_references_resolve.py`,
+  `test_contract_authority_status.py` (fixed `_classify`).
 
 ## 3. Exact next action
 
-Product Owner review and freeze of the B1-1 contract. After freeze, dispatch a
-separate B1-1 implementation movement to create `ui2/`. Before any new worker,
-inspect all existing worker state and reconcile stale movements; do not create
-workers to hide stale state.
+Continue the shell, one piece at a time, on the PO's order: **device add** (discovery
+vs manual: vendor + IP, Panorama/MDS for discovery), then multi-select import from
+discovery results, then login. Phase 1 auth = LDAP + local, local always the fallback;
+RADIUS/TACACS later. Write the four failover items into a contract before any probe work.
 
 ## 4. Test delta
 
-- Worker evidence: AC-1..AC-9 self-check, architecture/state tests 22 passed, privacy 0 new findings, diff check clean.
-- Integration validation: JSON/state consistency and generated history index are required before PR merge.
+Frontend 6/6; `ui2/` integration 84 executed / 0 failed; privacy gate 3 findings, all
+pre-existing git-ignored runtime directories.
 
 ## 5. New risks
 
-- Contract is DRAFT; implementation is not authorized until freeze.
-- Worker had no PR/CI at close; integration is now pending push, PR, CI, and PO merge verification.
-- OpenRouter `NXS-LOCAL-0065` / `3143bb6` is advisory-only, not a worker
-  fallback. The current orchestrator has no unattended backlog queue-runner.
-- The existing Graphify graph is oversized and includes worktree duplicates;
-  use only narrow low-budget queries and ignore `copilot-worktrees/`,
-  `graphify-out/`, `data/` and `logs/`. Graphify is a locator, not authority.
+- The design-preview screens have not been reviewed against the PO's M3 Configuration
+  and M3 Network Inventory canvas frames; a dedicated design-transfer pass is pending.
+- `scripts/project_queue.py` cannot write `roadmap.json` `now_next.now`/`current_build`.
+- **Open PO decisions:** CP backup async semantics contradiction; LDAP TLS CA bundle
+  format/pin; PAN A/A (latent — estate is A/S).

@@ -1,0 +1,114 @@
+{
+  "created_at": "2026-09-11T22:35:54Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1..AC-10 exactly as written in the B1-2 contract section 8"
+        ],
+        "baseline": {
+          "authority": "docs/design/UI2_0_B1_02_SCHEMA_V1_CONTRACT.md (DRAFT -- FOR PRODUCT OWNER FREEZE) and frozen C1 for schema ownership, the migration authority and the role split. The B1-1 skeleton is merged, so the module tree and the migration resources directory already exist.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "sequencing": "Phase B1 row 2, after the B1-1 skeleton. Blocked on one Product Owner interpretation, parked as a RELAY_QUESTION on this relay."
+        },
+        "context_not_loaded": [
+          "docs/history/**",
+          "Line-1 source",
+          "project/*.json"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/ui2-b1-02-schema-v1"
+        },
+        "invariants": [
+          "Flyway is the sole migration authority; no DDL runs outside a migration",
+          "ui2_app never holds DDL rights",
+          "Audit context missing fails closed",
+          "A test asserts the migration count, never merely that a call did not throw"
+        ],
+        "merge_gate": "PO review of diff and test evidence; no self-merge.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Write Flyway migration V1 for UI 2.0: the C1 core tables, the audit table and its fail-closed audit-context mechanism, the projection tables the first capability needs, and the ui2_migrate/ui2_app grants, plus the named tests the contract specifies.",
+        "output_contract": [
+          "Flyway V1 migration and the contract's named tests",
+          "Validation-plan commands green in a foreground run",
+          "SESSION_CLOSE with exact changed files, test results, blockers and commit state"
+        ],
+        "recommended_reasoning": {
+          "reason": "SQL against a frozen schema contract; the care point is the grants and the fail-closed audit mechanism.",
+          "tier": "Sonnet 5, normal (medium effort)"
+        },
+        "requirements": [
+          "English, per AGENTS.md engineering-output language law",
+          "Read the B1-2 contract and the C1 sections it cites; read nothing else outside scope.in",
+          "A migration file is never edited after it has been applied",
+          "No secret value may appear in a log line or an exception message",
+          "Run the validation plan in the foreground and wait for real results before SESSION_CLOSE"
+        ],
+        "risks": [
+          "Creating tables a later movement owns, or omitting tables a foreign key needs",
+          "Granting ui2_app more than C1 allows",
+          "Writing a second-migrate test that passes because nothing threw"
+        ],
+        "scope": {
+          "in": [
+            "ui2/service/src/main/resources/db/migration/ (the V1 SQL file)",
+            "ui2/persistence/ (any code the migration tests need)",
+            "ui2/integration-tests/ (the named tests, where a container runtime allows them)"
+          ],
+          "out": [
+            "Any application feature code",
+            "Any container image or deployment manifest",
+            "Any change to the module map",
+            ".github/workflows/**"
+          ]
+        },
+        "validation_plan": [
+          "assemble: ./ui2/gradlew -p ui2 clean assemble",
+          "architecture tests: ./ui2/gradlew -p ui2 architectureTest",
+          "unit tests: ./ui2/gradlew -p ui2 unitTest",
+          "privacy gate: python3 scripts/repository_privacy_check.py",
+          "diff check: git diff --check"
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-11T22:35:54Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "RELAY_QUESTION",
+      "seq": 2,
+      "subject": "Three interpretations block B1-2 implementation",
+      "text": "Parked overnight for Product Owner decision; implementation is not dispatched until these are answered.\n\n1. Does V1 create all nine C1 section 3.1 tables? C1 section 3 says B1-2 writes the literal Flyway SQL for the core tables, but the section 3.1 owner column names B1-4b for devices, endpoints and credential_references. Foreign keys from jobs.target_device_id and the inventory projection require those tables to exist, and PostgreSQL cannot forward-reference a table that does not exist. The contract author read owner as column-set and onboarding-logic authority rather than migration ownership, and created all nine in V1. That reading is an interpretation, not something C1 states. Confirm it, or name the alternative, for example create the three as minimal stubs in V1 and let B1-4b extend them.\n\n2. Who allocates Flyway version numbers across concurrent B1 movements? B1-3, B1-4 and B1-4b will each add migrations and Flyway's version ledger is global. No document assigns the numbering. Proposal: the Product Owner allocates the next version at dispatch time and it is recorded in the movement packet.\n\n3. Acknowledge that the jobs and job_steps tables exist but are non-functional between B1-2 and B1-4. This follows from C1 section 3.3 and is expected, but a database inspection during that window shows empty job machinery.",
+      "timestamp": "2026-09-11T22:36:19Z"
+    },
+    {
+      "actor": "po",
+      "authorized_by": "Product Owner — chat authorization 2026-09-12: approve/revise/reject UI 2.0 B1 contracts and decide their open items",
+      "marker": "RELAY_DECISION",
+      "scope": "UI 2.0 B1 contract approval and open-item decisions",
+      "seq": 3,
+      "subject": "All parked items decided; contract frozen",
+      "supersedes": "the RELAY_QUESTION at seq 2 of this relay",
+      "text": "Every question parked on this relay is answered in docs/design/UI2_0_B1_ADJUDICATION_2026_09_12.md section 2, and the twelve cross-contract findings that an adversarial review raised are adjudicated in its section 1. This movement's contract is FROZEN as of 2026-09-12 and is read as amended by that document.\n\nThree of those findings were gaps no contract owned: nobody created the job lifecycle objects the executor reads, the gate registry storage was assigned in a circle, and nobody set the audit context that the schema fails closed without. Implementing any of these movements before the adjudication would have failed at runtime.\n\nThe implementation order is fixed in section 3 of the adjudication: B1-2, then B1-3, then B1-4b, then B1-4. B1-2 may not run concurrently with any of the others because the Flyway version ledger is a single global sequence. Version numbers are allocated: B1-2 is V1, B1-3 is V2, B1-4b is V3, B1-4 is V4.\n\nnext_actor returns to engineer; this movement is dispatchable.",
+      "timestamp": "2026-09-11T23:11:37Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0103",
+  "movement": "UI2_B1_02_SCHEMA_V1_FLYWAY",
+  "next_actor": "engineer",
+  "refs": [
+    "docs/design/UI2_0_B1_02_SCHEMA_V1_CONTRACT.md",
+    "docs/design/UI2_0_C1_PLATFORM_SCHEMA_CONTRACT.md",
+    "docs/design/UI2_0_C2_JOB_EXECUTION_CONTRACT.md",
+    "docs/design/UI2_0_C4_CAPABILITY_REGISTRY_GATE_RESOLUTION_CONTRACT.md",
+    "docs/design/UI2_0_B1_01_SKELETON_CI_DOCKER_CONTRACT.md"
+  ],
+  "schema_version": 1,
+  "status": "AWAITING_ENGINEER",
+  "updated_at": "2026-09-11T23:11:37Z"
+}

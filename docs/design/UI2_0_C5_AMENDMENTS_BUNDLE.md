@@ -180,6 +180,14 @@ were re-run green against the amended file (§6).
 
 ## 4. `UI2_0_ARCHITECTURE_DESIGN.md` — the design-document amendments
 
+**Superseded by the successor, 2026-09-12.** Every amendment this section
+specifies is now carried, already applied, by
+`docs/design/UI2_0_ARCHITECTURE_CONTRACT.md` (FROZEN) — the `APPROVAL-MODEL`
+replacement at its §5.5 and §5.6, and the `CAP-*` states replacing the ladder
+at its §6.3. The target document is `SUPERSEDED`, so this section is the
+record of what was amended and why, not an instruction still to be carried
+out. Nothing below is pending.
+
 Three amendments, all applied directly to the file this movement (target
 scope includes it):
 

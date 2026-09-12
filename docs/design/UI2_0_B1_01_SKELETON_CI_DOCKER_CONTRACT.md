@@ -2,7 +2,29 @@
 
 ## Status
 
-**DRAFT — FOR PRODUCT OWNER FREEZE, 2026-09-10.**
+**SUPERSEDED — 2026-09-12**, by
+`docs/design/UI2_0_B1_01A_PLATFORM_SKELETON_CONTRACT.md` (FROZEN 2026-09-12).
+
+This document was never frozen. It is **historical only** and is **never
+implementation authority** — not for a module map, a dependency rule, a build
+or reproducibility policy, a test harness, a container image, or a CI
+workflow. Any engineering claim that needs one of those must cite the
+successor instead: module map → B1-1a §2; dependency direction → B1-1a §3;
+build and reproducibility → B1-1a §4; test harness → B1-1a §5. Material the
+successor deliberately did **not** carry forward — §7's container image,
+§6's CI workflow, and §4's single `AuditContextIntegrationTest` name — is
+withdrawn and has no successor clause; see B1-1a §§5, 6 and 10.
+
+Its original status line read: *DRAFT — FOR PRODUCT OWNER FREEZE, 2026-09-10;
+six pre-freeze defect fixes applied as Amendment B1-1-A and the Red Hat
+container-runtime change as Amendment B1-1-B, both 2026-09-11 (Correction C-1
+supersedes B1-1-A item 5; Correction C-2 resolves a check-1 collision).*
+
+Everything below this block — body, amendments and corrections — is retained
+unchanged as the historical record, per `AGENTS.md` ("Do not silently rewrite
+historical outcomes"), except that a leaked absolute developer path was
+redacted in acceptance check 14 and in Amendment B1-1-A item 1.
+B1-1a §10 records the four predecessor claims the implementation disproved.
 
 This document specifies the mechanical implementation contract for
 `ui2_b1_01_skeleton_ci_docker`. It creates no `ui2/` files, authorizes no
@@ -246,7 +268,7 @@ All checks are runnable from the repository root:
     persisting those values into the container writable layer or logs.
 13. `.github/workflows/validation.yml` is byte-identical to its pre-movement
     version and both workflow job names are distinct.
-14. `/Users/OzanDur/Codo/neXus/.venv/bin/python main.py
+14. `<redacted-local-root>/neXus/.venv/bin/python main.py
     --repository-privacy-check --privacy-baseline-ref origin/main` reports
     zero new findings.
 15. `git diff --check origin/main...HEAD` is clean.
@@ -281,3 +303,201 @@ subject to the repository's dependency approval boundary.
   §§2–3, 6.
 - `PRIVACY_AND_DATA_HANDLING.md`, “UI 2.0 database”.
 - `.github/workflows/validation.yml` (coexisting Line-1 gate; unchanged).
+
+## Amendment B1-1-A (2026-09-11) — pre-freeze defect fixes
+
+Six defects were found by an independent freeze-readiness review of this
+DRAFT before dispatch. They are resolved here so the document can be frozen
+as a whole; no other text changes.
+
+1. **§8 check 14 — machine-specific path.** Replace the literal
+   `<redacted-local-root>/neXus/.venv/bin/python main.py …` with the
+   repository-relative form:
+   `python main.py --repository-privacy-check --privacy-baseline-ref origin/main`
+   (or the checkout's own interpreter). §3.2's "No command invokes Python"
+   is scoped to the **Gradle build and image**, not to the repository's own
+   governance gates, which are Line-1 Python tooling and always were.
+
+2. **§8 check 1 — grep scope.** The no-Python assertion excludes installed
+   npm packages and sanitized fixtures:
+   `test ! -e ui2/.python-version && ! grep -R -E 'main\.py|python|console/|_runner\.py|_collector\.py' ui2 --exclude-dir=build --exclude-dir=node_modules --exclude-dir=fixtures --exclude='*.md'`.
+   `ui2/fixtures/` is the fixture home written by
+   `scripts/ui2_extract_fixtures.py` and is not a Gradle module.
+
+3. **Migration-resource home — one answer.** Frozen `C1` §2.2 governs:
+   numbered Flyway SQL files live at
+   `ui2/service/src/main/resources/db/migration/`. §2's `persistence` row is
+   read as: `persistence` owns the Flyway **integration code**; `service`
+   owns the migration **resources**. §4 already states this and is correct.
+
+4. **§4 — container database facts.** The PostgreSQL image is pinned to
+   the version frozen in `C1` §9 (PostgreSQL 16). The `ui2_migrate` and
+   `ui2_app` roles are created by the integration harness's own bootstrap
+   step, executed before Flyway runs and owned by the `integration-tests`
+   module.
+
+5. **§2/§5 — `frontend` and the unnamed tooling.** `frontend` **is** a
+   Gradle subproject: it carries no Java plugin and no Java source set, and
+   its tasks delegate to npm so that §3.2's `check` can depend on them.
+   `./ui2/gradlew -p ui2 projects` therefore lists twelve entries, and §8
+   check 2 is read accordingly. Tooling for the rules §5 left unnamed:
+   `DIR-1`/`DIR-7`/`DIR-9` by a Gradle configuration-graph assertion in
+   `architecture-tests`; `DIR-8`/`DIR-10` by an artifact/manifest inspection
+   task in the same module; the SBOM generator named in §6 is chosen by the
+   implementing movement and recorded in its `SESSION_CLOSE`.
+
+6. **§8 — Line-1 `validate` obligations.** The implementing movement also
+   satisfies the repository's existing required checks, which §8 did not
+   name: project-state consistency
+   (`tests/test_architecture_convergence.py`), build-history index
+   currency, project-queue currency, and the project file size budgets.
+
+### Sliced implementation
+
+The implementing work is split by tooling availability, not by contract
+scope: **Slice A** (`relay/NXS-LOCAL-0101`) delivers the module map,
+direction-rule tests, unit-test wiring and the frontend workspace — every
+part validatable without a Docker daemon. **Slice B** delivers the
+Testcontainers integration harness, the Dockerfile and image checks, and the
+CI job, and runs where Docker is available. Both are governed by this
+contract; neither narrows it.
+
+## Amendment B1-1-B (2026-09-11) — Red Hat container runtime, no Docker
+
+**Product Owner direction, 2026-09-11:** development happens on a local
+Red Hat container environment (OpenShift Local / CRC). Docker is not used
+now and may never be; the question is reopened only if the project later
+moves to an Ubuntu server. This amendment removes the Docker dependency
+from §7 and §8 without changing what the image must guarantee. The
+document's file name keeps the word `DOCKER` for reference stability; the
+contract is OCI, not Docker.
+
+### B-1. Build tool and file name
+
+The image is an **OCI image built with Podman/Buildah from a
+`ui2/Containerfile`** (Dockerfile syntax, unchanged semantics). No Docker
+daemon is required or permitted as a build dependency. §3.2's build command
+becomes:
+
+```text
+podman build --file ui2/Containerfile --tag nexus-ui2:local ui2
+```
+
+`buildah bud` with the same arguments is an accepted equivalent. A
+rootless build must succeed; a build that requires a privileged daemon is a
+contract violation.
+
+### B-2. Base image
+
+The distroless base of §7 is replaced by a **Red Hat Universal Base Image**,
+digest-pinned, in two stages:
+
+- build stage: `registry.access.redhat.com/ubi9/openjdk-21` (full JDK,
+  Gradle and Node toolchains are provisioned by the build, not by the base);
+- runtime stage: a `jlink`-produced custom Java 21 runtime copied onto
+  `registry.access.redhat.com/ubi9-micro`.
+
+`ubi9-micro` carries no package manager and no shell, so §7's "no shell,
+package manager, compiler, Node runtime, source tree" guarantee survives
+the move. Using `ubi9/openjdk-21-runtime` as the runtime stage is **not**
+accepted here: it ships a shell, which §7 forbids.
+
+### B-3. User and filesystem — OpenShift arbitrary UID
+
+§7's "fixed non-root numeric UID/GID" is **amended**, because it is
+incompatible with the target platform. OpenShift's default `restricted-v2`
+SCC runs a container under an **arbitrary, unpredictable UID** in group
+`0`. An image that depends on a fixed UID fails there.
+
+The image therefore:
+
+- declares a numeric non-root `USER` (for a plain `podman run`), but must
+  **not depend** on that UID being the one it receives;
+- gives every path the runtime reads or writes group `0` ownership and
+  `g=rwX` permissions on writable paths, `g=rX` elsewhere;
+- keeps the read-only root filesystem and explicit writable mounts of §7;
+- never writes to a path derived from the running user's home or name.
+
+An acceptance check proves this: the image starts and reaches readiness
+when run with an arbitrary UID (`podman run --user 1000670000:0 ...`).
+
+### B-4. Testcontainers under Podman
+
+§4's harness runs against the Podman socket, not a Docker daemon. The
+integration module configures `DOCKER_HOST` from the rootless Podman socket
+(`unix://$XDG_RUNTIME_DIR/podman/podman.sock`, or the `podman machine`
+socket on macOS) and sets `TESTCONTAINERS_RYUK_DISABLED=true` unless the
+environment supports a privileged reaper. PostgreSQL stays pinned to the
+version frozen in `C1` §9, pulled from a Red Hat or upstream registry by
+digest. If the harness cannot reach a Podman socket the integration task
+**fails closed with a message naming the socket it tried** — it never
+silently degrades to skipping the tests.
+
+### B-5. Amended acceptance checks
+
+§8 checks 9 and 10 are replaced, and one is added:
+
+- **9'.** `podman build --file ui2/Containerfile --tag nexus-ui2:acceptance ui2`
+  succeeds rootless, and image history contains no secret build argument.
+- **10'.** `podman image inspect` / `podman run --rm ... ` confirms a
+  jlink'd Java 21 runtime, no shell, no package manager, no Node, no
+  Line-1 path, no Python, and only the assembled application, SBOM and
+  licences.
+- **16 (new).** The image reaches readiness under an arbitrary UID in
+  group 0, per B-3.
+
+### B-6. What this amendment does not decide
+
+Deployment onto OpenShift — `Deployment`/`Route`/`Service` manifests,
+`SecurityContextConstraints` selection, secret mounting as OpenShift
+`Secret` objects, and whether CRC is also the integration-test host — is
+**out of scope for B1-1** and belongs to its own movement. This amendment
+only makes the image buildable and runnable there. The CI job of §6 is
+likewise unchanged in intent; the runner's container tooling is chosen by
+the Slice B movement and recorded in its `SESSION_CLOSE`.
+
+## Correction C-1 (2026-09-11) — Amendment B1-1-A item 5, `frontend`, is wrong
+
+Amendment B1-1-A resolved the `frontend` ambiguity by declaring it a Gradle
+subproject, on the reasoning that §3.2's `check` dependency was otherwise
+inexpressible. That reasoning is wrong, and a working implementation proves
+it: an existing unmerged `ui2/` tree wires `frontend` as a root-level
+`Exec` task (`frontendCheck`, running `npm ci`, `npm test`, `npm run
+build`) that `check` depends on, with `settings.gradle.kts` including
+**eleven** Java subprojects and no `frontend` subproject.
+
+**The corrected decision:** `frontend` is **not** a Gradle subproject. It is
+a build-time npm workspace driven by a root task that `check` depends on.
+`./ui2/gradlew -p ui2 projects` lists **eleven** subprojects, and §8 check 2
+is read against that number. §2's table keeps `frontend` as a row because it
+documents a build input and its forbidden dependency edges (`DIR-8`), not a
+Gradle project.
+
+This correction supersedes B1-1-A item 5 only; items 1, 2, 3, 4 and 6 stand.
+
+## Correction C-2 (2026-09-12) — check 1 collides with the rule name §5 mandates
+
+The implementing movement reported a conflict between two parts of this
+contract. §5's table mandates the architecture-test method name
+`dir10_no_line1_or_python_runtime_dependency`; §8 check 1, even in
+Amendment B1-1-A's narrowed form, greps `ui2` for the token `python` and
+therefore matches that mandated name. Every conformant implementation
+trips its own check.
+
+**Resolution.** Check 1 additionally excludes the architecture-test source
+directory, whose entire purpose is to name the tokens it forbids
+elsewhere:
+
+```text
+test ! -e ui2/.python-version && ! grep -R -E 'main\.py|python|console/|_runner\.py|_collector\.py' ui2 \
+  --exclude-dir=build --exclude-dir=node_modules --exclude-dir=fixtures \
+  --exclude-dir=architecture-tests --exclude='*.md'
+```
+
+The rule that check 1 protects is unchanged: no UI 2.0 runtime artifact
+may reference Line-1 Python. The `architecture-tests` module contains no
+runtime artifact — it is excluded from the image by §7 and from every
+production module's dependencies by `DIR-9` — and `DIR-10` itself is what
+enforces the rule inside that module. The implementing movement was right
+to report this rather than rename the mandated method or quietly widen the
+grep.

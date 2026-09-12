@@ -159,6 +159,20 @@ def test_current_state_names_the_same_active_build_as_the_roadmap():
         f"declared by project/roadmap.json"
     )
 
+    # "Mentioned anywhere" is not enough, and that weakness was real: the id
+    # also appears in the Snapshot's `now_next.next` line, so this gate passed
+    # while the "Active build" heading still named a superseded predecessor --
+    # exactly the staleness it exists to catch. The current build must be named
+    # under that heading.
+    heading = "## Active build"
+    assert heading in current_state, "CURRENT_STATE.md has no 'Active build' section"
+    section = current_state.split(heading, 1)[1]
+    section = section.split("\n## ", 1)[0]
+    assert now_build in section, (
+        f"CURRENT_STATE.md's 'Active build' section does not name {now_build!r}, "
+        f"the build project/roadmap.json declares current; it names something else"
+    )
+
 
 def test_current_state_stays_a_checkpoint_not_a_history():
     """AGENTS.md "Handover economy": CURRENT_STATE.md is a hot-path checkpoint

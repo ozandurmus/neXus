@@ -148,3 +148,30 @@ B2 contracts as DRAFT pending B1-6 feedback.
 - `docs/design/UI2_0_COUNCIL_REVIEW_AND_SECOND_OPINION_BRIEF.md` — review record.
 - `docs/design/BACKUP_RECOVERY_CONTRACTS.md`, `docs/history/phase/OP_1_FAILOVER_PLAN_COMPILER_AND_DRY_RUN.md` — frozen semantics carried into `C7` and `REL-FAILOVER-READINESS`.
 - `AGENTS.md` network-device command gate; `docs/AI_DEVELOPMENT_PROTOCOL.md` — unchanged and binding.
+
+---
+
+## Amendment A-1 (2026-09-12) — D1 Option A: record of the already-applied `DEVICE-WRITE-CLASS` (D-8) row
+
+§2's Phase 0 decision table already carries step 5 of
+`docs/design/UI2_0_D1_OPTION_A_AMENDMENT_PROPOSAL_BUNDLE.md` — the
+`DEVICE-WRITE-CLASS` (D-8) row. The row was added without an amendment record.
+This section supplies it; **no decision row is changed by it.**
+
+**Authorizing documents.** `docs/design/UI2_0_D1_OPTION_A_AMENDMENT_PROPOSAL_BUNDLE.md`
+(FROZEN — Product Owner approved amendment contract), resting on the Option A
+selection recorded at relay
+`relay/NXS-LOCAL-0060-ui2-d1-device-write-class-decision.json` (seq 3, fixed at
+seq 5, 7, 9, 13, 17, council-satisfied at seq 21) and on
+`docs/design/UI2_0_BASELINE_CONTRACT.md` §2 row `DEVICE-WRITE-CLASS` (D-8).
+The admission contract the amended clauses cross-reference,
+`docs/design/RESTORE_CONTROLLED_WRITE_LEDGER.md`, is itself FROZEN, so no
+amended clause here rests on a DRAFT.
+
+**Authority-hierarchy note.** Until 2026-09-12 this FROZEN contract's D-8 row
+cited `docs/design/UI2_0_D1_DEVICE_WRITE_CLASS_AND_STEP_KIND_DECISION.md`
+while that document's own status was "DRAFT — OPTION A SELECTED IN RELAY;
+FROZEN BASELINE AMENDMENT PENDING" — a FROZEN contract resting on an unfrozen
+decision, which `AGENTS.md` "Authority hierarchy" item 2 forbids. The pending
+amendment has now been applied across `C2`, `C4` and `C7`, and that decision
+document is frozen accordingly, so the citation is no longer a contradiction.

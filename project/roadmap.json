@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "current_build": "ui2_b1_01_skeleton_ci_docker",
+  "current_build": "ui2_d1_restore_c7_c2_amendments",
   "current_track": "PCP.x",
   "progress_contract": "Weighted acceptance-criterion completion. Percentages describe the declared roadmap, not calendar time or delivery ETA.",
   "tracks": [
@@ -150,19 +150,16 @@
   "now_next": {
     "horizon_contract": "NOW is exactly one build. NEXT is exactly one. Everything else is an `upcoming` row carrying its own true status: planned = AFTER, blocked = waiting on a named external gate, deferred = consciously postponed. `now.build` must equal the newest project/build_history.json record -- utils.project_plan enforces it.",
     "now": {
-      "build": "ui2_b1_01_skeleton_ci_docker",
-      "title": "UI2 B1-1 -- skeleton, CI and Docker contract (DRAFT, for Product Owner freeze)",
-      "goal": "Write the DRAFT B1-1 contract for the ui2 Gradle multi-module skeleton, isolated CI job, minimal Docker image, Testcontainers PostgreSQL harness, and P-1 dependency architecture tests. Contract only; no ui2 implementation or device behavior.",
-      "status": "in_progress",
-      "started": "2026-09-10",
-      "completed": "2026-09-10",
-      "detail": "docs/history/roadmap/now_next_ui2_b1_01_skeleton_ci_docker.md"
+      "build": "ui2_d1_restore_c7_c2_amendments",
+      "title": "UI2 D1 Option A -- apply the pending C7/C2/C4/baseline restore admission amendments",
+      "status": "automated_validated",
+      "contract_doc": "docs/design/UI2_0_D1_OPTION_A_AMENDMENT_PROPOSAL_BUNDLE.md"
     },
     "next": {
-      "build": "ui2_d1_restore_c7_c2_amendments",
-      "title": "UI2 D1 Option A -- apply C7 and C2 restore admission amendments",
+      "build": "M12",
+      "title": "M12 -- per-device / per-capability schedules (D5 producer)",
       "status": "planned",
-      "detail": "docs/history/roadmap/now_next_ui2_d1_restore_c7_c2_amendments.md"
+      "detail": "docs/history/roadmap/now_next_M12.md"
     },
     "upcoming": [
       {
@@ -242,12 +239,6 @@
         "title": "M8.3 -- Product-Owner-gated real-environment validation of the first-contact producer",
         "status": "real_env_validated",
         "detail": "docs/history/roadmap/now_next_m8_3_real_environment_validation.md"
-      },
-      {
-        "build": "M12",
-        "title": "M12 -- per-device / per-capability schedules (D5 producer)",
-        "status": "planned",
-        "detail": "docs/history/roadmap/now_next_M12.md"
       },
       {
         "build": "m7_real_device_targeted_collect_now",

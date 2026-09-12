@@ -76,9 +76,13 @@ matrix template.
 8. `docs/design/UI2_0_C4_CAPABILITY_REGISTRY_GATE_RESOLUTION_CONTRACT.md`
    §2–§6 (MERGED) — capability registry schema, closed step-kind set, gate
    resolution, target model, transport decision.
-9. `docs/design/UI2_0_ARCHITECTURE_DESIGN.md` §6 (DRAFT, amended by
-   `APPROVAL-MODEL` and by `C4`'s `K-3`/`CP-D7` corrections) — the profile
-   model, object diagram, and lifecycle this document turns into a schema.
+9. `docs/design/UI2_0_ARCHITECTURE_CONTRACT.md` (FROZEN 2026-09-12) §5.1,
+   §5.2 and §5.5 — the profile model, object diagram, and lifecycle this
+   document turns into a schema, with `APPROVAL-MODEL` and `C4`'s
+   `K-3`/`CP-D7` corrections already folded in. Repointed 2026-09-12 from
+   `UI2_0_ARCHITECTURE_DESIGN.md`, now SUPERSEDED and historical only, never
+   authority: it was a DRAFT, and a DRAFT cannot stand in a FROZEN contract's
+   authority chain (`AGENTS.md` "Authority hierarchy" item 2).
 10. `docs/design/BACKUP_RECOVERY_CONTRACTS.md` (BRC, CONTRACT, frozen for
     Line-1's `RB.x`) — §2–§10, carried forward as the specification this
     document's own tables realize (§3, §4).
@@ -630,27 +634,67 @@ recorded):
 
 | # | Check | What it re-reads |
 |---|---|---|
-| 1 | **Connectivity** — a `backup_profile_connect_check`-equivalent class-0 job against the target device/endpoint has succeeded within a bounded freshness window | connect-check record (§2.6's pattern, reused for restore) |
+| 1 | **Connectivity** — a `backup_profile_connect_check`-equivalent class-0 job against the target device/endpoint has succeeded recently enough to be trustworthy. For a `controlled-restore-write` plan, "recently enough" is **not** an unstated bounded window but a configurable `RestoreConnectivityFreshnessPolicy` (`docs/design/RESTORE_CONTROLLED_WRITE_LEDGER.md` §3.3.1): a mandatory active-probe path, always available, using the actual restore-write transport, plus an optional cached-telemetry/SNMP path usable only when TTL, identity-binding, per-vendor/platform semantic-sufficiency and explicit-configuration conditions are all met, falling back to the active probe otherwise. No numeric probe timeout or cache TTL is frozen here — both are `UNKNOWN`, left to the successor movement; 15 minutes is explicitly rejected. This pass is early and **non-authoritative**; the authoritative instance is `C2` §6 check 2 | connect-check record (§2.6's pattern, reused for restore); `RestoreConnectivityFreshnessPolicy` |
 | 2 | **Backup validity** — `source_artefact_id`'s `validation.level` is at least `V2` (`WELL_FORMED`); a `V1`-only or `FAILED` artefact refuses restore unconditionally, before any approval is even requested — restoring from a blob that has not even been proven structurally sound is refused categorically, never left to an approver's judgment | `backup_artefact.validation` |
 | 3 | **Target identity match** — the artefact's `device_id`/`hostname_fingerprint`/`platform` match the target's own registry identity; a mismatch refuses compilation outright (restoring artefact X onto device Y is never offered as a choice, not even behind an override) | `backup_artefact`, `devices`/`endpoints` |
 | 4 | **Version match** — for a version-locked artefact class (BRC §3 rule 5, §3.3 above), the artefact's `software_version` must match the target's currently-known running version from the latest evidence projection; a mismatch refuses compilation (whether a future, explicitly-authorized override may ever bypass this is left open, §9.5) | `backup_artefact.software_version`, the target's inventory projection |
 | 5 | **No concurrent restore or backup against the same target** — `C2`'s own per-target job admission (a `REQUESTED`/`CLAIMED`/`EXECUTING` job already exists against this `device_id`) refuses a second plan's job request; this is `C2`'s existing mechanism, not a new lock this document invents | `C1` `jobs` rows for the target |
 | 6 | **Credential resolution** — the restore capability's declared `credential_profile_ref` resolves; an unresolvable credential refuses compilation before any approval is requested | credential store |
+| 7 | **No unreconciled prior restore-write outcome** (`check_id=C7_RESTORE_NO_UNRECONCILED_PRIOR`; `controlled-restore-write` plans only) — an early, non-authoritative, staleness-tolerant pass against `docs/design/RESTORE_CONTROLLED_WRITE_LEDGER.md`'s `has_unreconciled_prior` check for the plan's target, per that document's §3.1.1 and §3.7; `NOT_APPLICABLE` for every other class's plan. Appended after check 6: checks 1–6 are **not** reordered or renumbered. Fixed-cardinality consumers and tests must move explicitly from six checks to seven | that document's `RestoreWriteLedger` |
 
-Checks 1–6 above are the compile-time battery; `C2` §6's own six checks
+Checks 1–7 above are the compile-time battery; `C2` §6's own six checks
 (approval re-check, connectivity precondition, coordination window, `RB.x`
 ledger — not applicable to restore, §5.3 note below, registry/allowlist,
 credential resolution) still run again at **claim** time, unchanged, exactly
 as they do for a backup job — compile-time checking does not replace
 claim-time re-checking, it adds an earlier, human-facing refusal point.
 
-**Note on `C2` §6 check 4 (the `RB.x` operational-write ledger):** that
-check is `NOT_APPLICABLE` for a restore job. The ledger's 24-hour ceiling
-exists to bound a *recurring* class-1 resource-consuming operation
-(BRC §7.3 point 6); restore is not recurring and is not admitted by cadence
-at all — check 5 above (no concurrent operation against the same target) is
-restore's own mutual-exclusion mechanism, and it is per-target, not
-per-24-hours.
+**Target eligibility is a separate fail-closed input.** Plan compilation
+also evaluates the named predicate `RESTORE_TARGET_TOPOLOGY_ELIGIBILITY`
+from authoritative registry plus current topology evidence, and it MUST
+positively establish `STANDALONE_PHYSICAL_DEVICE` before compilation
+proceeds. A known ClusterXL member yields
+`UNSUPPORTED_CLUSTERXL_MEMBER`; missing, stale, or conflicting membership
+evidence yields `NOT_EVALUABLE`, and either outcome refuses the plan before
+approval. At claim, the existing `C2` §6 check 5 registry/allowlist
+re-check MUST re-evaluate the same topology eligibility and refuse with
+distinct named reasons: `TARGET_CLUSTERXL_MEMBER_UNSUPPORTED`,
+`TARGET_TOPOLOGY_EVIDENCE_MISSING_OR_STALE`, or
+`TARGET_TOPOLOGY_EVIDENCE_CONFLICTING`. This is target eligibility, not a
+folding of the ledger predicate into check 5; the ledger predicate remains
+independently recorded as check 7 here and at the claim-time check-4 slot.
+
+**Note on `C2` §6 check 4, per-class interpretation (revised for
+`CLASS_1B_CONTROLLED_RESTORE_WRITE`,
+`docs/design/UI2_0_D1_DEVICE_WRITE_CLASS_AND_STEP_KIND_DECISION.md`/`UI2_0_BASELINE_CONTRACT.md`
+§2 `DEVICE-WRITE-CLASS`):** check 4's applicability is class-scoped, not a
+single restore-blanket `NOT_APPLICABLE`:
+
+- **`CLASS_1_RECOVERY_WRITE` (backup) — unchanged.** Check 4 remains the
+  `RB.x` operational-write ledger (`RECOVERY_OPERATIONAL_WRITE_LEDGER.md`),
+  the existing 24-hour cadence-ceiling interpretation, exactly as before
+  this amendment. Nothing about backup's own admission changes.
+- **`CLASS_1B_CONTROLLED_RESTORE_WRITE` (restore) — new.** Check 4 reads
+  `docs/design/RESTORE_CONTROLLED_WRITE_LEDGER.md`'s own reconciliation-
+  pending check instead of the `RB.x` cadence ledger — a materially
+  different admission question (whether a *prior* restore-write against
+  this same target left an unresolved `OUTCOME_UNKNOWN` outcome, not
+  whether *this* operation has run too recently; that document's §1
+  explains at length why a cadence ceiling does not apply to restore at
+  all). Fail-closed on an unreadable ledger, per that document's own §5.
+- **Every other class — unchanged.** `NOT_APPLICABLE`, exactly as
+  before.
+
+This replaces this section's prior text (*"that check is `NOT_APPLICABLE`
+for a restore job"*), which predates the `controlled-restore-write`
+class and its own ledger, and was accurate only because no restore
+class existed yet to give check 4 a second meaning. Check 5 above (no
+concurrent restore or backup against the same target) remains restore's
+own **additional**, unaffected mutual-exclusion mechanism — a live-job
+concurrency lock, distinct from check 4's now-class-scoped
+reconciliation-pending question about a *terminal, unreconciled* prior
+outcome; the two checks answer different temporal questions and neither
+substitutes for the other.
 
 ### 5.4 Execution steps, via `C4` (`AC-5`)
 
@@ -1020,7 +1064,7 @@ covers.
 **Documents checked for contradiction:** `AGENTS.md`,
 `docs/design/UI2_0_BASELINE_CONTRACT.md` (FROZEN),
 `docs/design/UI2_0_DEVELOPMENT_WORKFLOW.md` (BASELINE rev 2),
-`docs/design/UI2_0_ARCHITECTURE_DESIGN.md` §6 (DRAFT, amended),
+`docs/design/UI2_0_ARCHITECTURE_CONTRACT.md` §5 (FROZEN 2026-09-12),
 `docs/design/UI2_0_C1_PLATFORM_SCHEMA_CONTRACT.md`,
 `docs/design/UI2_0_C2_JOB_EXECUTION_CONTRACT.md`,
 `docs/design/UI2_0_C3_IDENTITY_SESSIONS_RBAC_CONTRACT.md`,
@@ -1055,6 +1099,16 @@ specified but **not executable** on any device — exactly the same posture
 `C3` §4.4 already established for `DIRECTORY-POSTURE`: the spec is ready,
 the function is not enabled.
 
+> **Resolved** (`docs/design/UI2_0_D1_DEVICE_WRITE_CLASS_AND_STEP_KIND_DECISION.md`,
+> Option A, Product Owner decision recorded at
+> `UI2_0_BASELINE_CONTRACT.md` §2 row `DEVICE-WRITE-CLASS` (D-8)): restore's
+> write resolves to `CLASS_1B_CONTROLLED_RESTORE_WRITE`
+> (`utils/action_taxonomy.py`), a new class distinct from both
+> `CLASS_1_RECOVERY_WRITE` and `CLASS_2_OPERATIONAL_STATE_CHANGE`, scoped
+> exactly to the provenance-bound write §4 above already argues is
+> distinguishable from `CLASS_3`. This class's own admission contract is
+> `docs/design/RESTORE_CONTROLLED_WRITE_LEDGER.md`.
+
 ### 9.2 `C4`'s closed step-kind set has no device-directed write/push step, and `sftp_put` is refused unconditionally
 
 `C4` §2.3 lists `sftp_put` as *"reserved, refused at spec-validation time —
@@ -1073,6 +1127,11 @@ in this document (which would be exactly the kind of silent reopening of
 `C4`'s closed set `C4` §2.3 itself forbids: "adding a kind is an amendment
 to this document [`C4`], never a runtime configuration choice").
 
+> **Resolved** (same decision as §9.1): the closed step-kind set gains
+> `restore_push` (`C4` §2.3), legal only for a `controlled-restore-write`
+> capability (`C4` §3.3 step 7, restated). `sftp_put` remains reserved and
+> refused unconditionally for every other purpose, unchanged.
+
 ### 9.3 §9.1 and §9.2 are one combined blocker, not two independent ones
 
 Closing §9.1 (a taxonomy class restore's write can resolve to) without
@@ -1083,6 +1142,14 @@ step 7's "a row whose `action_class` is class 2, 3 or 4 can never be
 `SIGNED_OFF`" rule. Both need the same successor movement's attention
 together; recorded here so neither is scheduled as though it alone unblocks
 restore execution.
+
+> **Resolved, both halves together**: `CLASS_1B_CONTROLLED_RESTORE_WRITE`
+> and `restore_push` land in the same successor movement, per this
+> subsection's own original warning that neither gap alone unblocks
+> restore. `C7` §5's restore engine (§5.2–§5.7, §6.2) is unchanged by this
+> resolution — no field, table, or precondition named there is modified;
+> only the class/kind that carries its already-specified execution now
+> exists.
 
 ### 9.4 Documentation inconsistency: `RB.2`'s real-environment status
 
@@ -1147,7 +1214,7 @@ a rule from.
   §1.4 above), §4 (extraction inventory row, §9.4's flagged discrepancy),
   §5 B0-7 (this movement's own scope line), §8 D-7 (restore's open-question
   framing before baseline resolved it).
-- `docs/design/UI2_0_ARCHITECTURE_DESIGN.md` §6 (the profile model this
+- `docs/design/UI2_0_ARCHITECTURE_CONTRACT.md` §5 (the profile model this
   document turns into schema; §6.9/§6.10's PCP/constitutional contradiction
   reports, unaffected by this document's own scope).
 - `docs/design/UI2_0_C1_PLATFORM_SCHEMA_CONTRACT.md` §3 (table sketch
@@ -1191,3 +1258,56 @@ a rule from.
   the network-device command gate, evidence laws.
 - `docs/AI_DEVELOPMENT_PROTOCOL.md` — approval boundaries; destructive
   local-data operation approval (§3.5's retention-deletion intent).
+
+---
+
+## Amendment A-1 (2026-09-12) — D1 Option A: restore admission clauses applied
+
+Steps 2b, 4 and 4b of
+`docs/design/UI2_0_D1_OPTION_A_AMENDMENT_PROPOSAL_BUNDLE.md` are applied to
+this contract. They were written, approved and frozen in that bundle but never
+applied, leaving this FROZEN contract reporting §9.1–§9.3 as open gaps that the
+Product Owner had in fact already closed.
+
+**Authorizing documents.** `docs/design/UI2_0_D1_OPTION_A_AMENDMENT_PROPOSAL_BUNDLE.md`
+(FROZEN — Product Owner approved amendment contract), resting on the Option A
+selection recorded at relay
+`relay/NXS-LOCAL-0060-ui2-d1-device-write-class-decision.json` (seq 3, fixed at
+seq 5, 7, 9, 13, 17, council-satisfied at seq 21) and on
+`docs/design/UI2_0_BASELINE_CONTRACT.md` §2 row `DEVICE-WRITE-CLASS` (D-8).
+The admission contract the amended clauses cross-reference,
+`docs/design/RESTORE_CONTROLLED_WRITE_LEDGER.md`, is itself FROZEN, so no
+amended clause here rests on a DRAFT.
+
+**What changed here.**
+
+- **§5.3 check 1 (Connectivity)** — amended in place: the unstated "bounded
+  freshness window" becomes, for a `controlled-restore-write` plan, the
+  configurable `RestoreConnectivityFreshnessPolicy`
+  (`RESTORE_CONTROLLED_WRITE_LEDGER.md` §3.3.1). No numeric bound is frozen;
+  15 minutes is explicitly rejected.
+- **§5.3 checks 2–6** — unchanged, not reordered, not renumbered. The prior
+  revision's proposed fold of the reconciliation fact into check 2 was
+  withdrawn by the Product Owner (relay seq 17) on council-informed input.
+- **§5.3 check 7 (new, `C7_RESTORE_NO_UNRECONCILED_PRIOR`)** — appended after
+  check 6; an early, non-authoritative, staleness-tolerant pass. The
+  introductory sentence now reads "Checks 1–7". Fixed-cardinality consumers
+  and tests must move from six checks to seven.
+- **§5.3 target eligibility** — `RESTORE_TARGET_TOPOLOGY_ELIGIBILITY` is named
+  as a separate fail-closed compile-time input that must positively establish
+  `STANDALONE_PHYSICAL_DEVICE`.
+- **§5.3's note on `C2` §6 check 4** — replaced (bundle step 4b) with the
+  class-scoped reading in `RESTORE_CONTROLLED_WRITE_LEDGER.md` §3.6, resolving
+  a direct contradiction between this section's prior blanket
+  "`NOT_APPLICABLE` for a restore job" and that document's §3.1.0.
+  `CLASS_1_RECOVERY_WRITE`'s `RB.x` cadence interpretation is unchanged.
+- **§9.1, §9.2, §9.3** — each gains a closing **Resolved** note (bundle step
+  4). The original gap analysis is preserved verbatim above each note; nothing
+  historical is deleted or rewritten.
+
+**Mutation boundary: not widened.** Every clause added here is an additional
+refusal point (a new fail-closed check, a narrowed freshness test, a
+class-scoped ledger read). Nothing becomes console-submittable —
+`CLASS_1B_CONTROLLED_RESTORE_WRITE.console_submittable` is `False` — no
+`RB.x` gate is weakened, and §5's restore engine (§5.2–§5.7, §6.2) is
+otherwise untouched. Restore remains disabled in Java per the D-8 row.

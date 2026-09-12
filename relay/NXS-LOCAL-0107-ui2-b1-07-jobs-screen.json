@@ -1,0 +1,129 @@
+{
+  "created_at": "2026-09-11T23:18:02Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1..AC-10 exactly as written in the B1-7 contract section 10"
+        ],
+        "baseline": {
+          "authority": "docs/design/UI2_0_B1_07_JOBS_SCREEN_CONTRACT.md (DRAFT) with frozen C2 for job states and outcomes, C3 for who may submit, C4 for capability availability, and the Material Design 3 mockups as UX ground truth.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "sequencing": "Phase B1 row 7, the product's first browser screen. Needs B1-2, B1-3, B1-4b and B1-4 in place."
+        },
+        "context_not_loaded": [
+          "docs/history/**",
+          "Line-1 source",
+          "project/*.json"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/ui2-b1-07-jobs-screen"
+        },
+        "invariants": [
+          "OUTCOME_UNKNOWN is presented as neither succeeded nor failed",
+          "Red is reserved for real fault and failure; an expected difference carries no warning",
+          "A capability that cannot run here is shown and explained, never a bare greyed control",
+          "The step log shows only steps the server reported"
+        ],
+        "merge_gate": "PO review of diff, test evidence and a look at the running screen; no self-merge.",
+        "movement_type": "UI",
+        "objective": "Build the jobs screen: a job list, a job detail with its live step log, and a read-class Run Now flow, with every C2 state and outcome mapped to exactly one truthful UI label and the visible-but-refused pattern applied wherever a role or a capability makes an action unavailable.",
+        "output_contract": [
+          "The jobs list, job detail with step log, and read-class Run Now as the contract specifies",
+          "The contract's ten named tests",
+          "SESSION_CLOSE with exact changed files, test results, blockers and commit state"
+        ],
+        "recommended_reasoning": {
+          "reason": "A bounded screen against a fixed API and a decided state vocabulary; the care is in refusing honestly rather than in the layout.",
+          "tier": "Sonnet 5, normal (medium effort)"
+        },
+        "requirements": [
+          "English, per AGENTS.md engineering-output language law",
+          "Read the B1-7 contract, the mockup reference notes and the frozen sections they cite",
+          "Run Now is class 0 only in this movement",
+          "The UI never renders an enabled control the API would refuse for a reason the UI already knows",
+          "No fabricated progress or percentage",
+          "Run the validation plan in the foreground and wait for real results before SESSION_CLOSE"
+        ],
+        "risks": [
+          "Inventing a progress indicator the server never sent",
+          "Presenting OUTCOME_UNKNOWN as a failure",
+          "Rendering a control the current role may not use as if it were enabled",
+          "Committing a device name or address as sample data"
+        ],
+        "scope": {
+          "in": [
+            "ui2/frontend/ (the screen)",
+            "ui2/service/ (the API endpoints it needs)",
+            "tests in both"
+          ],
+          "out": [
+            "Any write-class action or capability",
+            "Free-form command entry",
+            "Any job submission path from an exported report",
+            "Device workspace screens (B1-9)",
+            "Any container image or deployment manifest"
+          ]
+        },
+        "validation_plan": [
+          "assemble: ./ui2/gradlew -p ui2 clean assemble",
+          "architecture tests: ./ui2/gradlew -p ui2 architectureTest",
+          "unit tests: ./ui2/gradlew -p ui2 unitTest",
+          "frontend: npm --prefix ui2/frontend ci && npm --prefix ui2/frontend test && npm --prefix ui2/frontend run build",
+          "privacy gate: python3 scripts/repository_privacy_check.py",
+          "diff check: git diff --check"
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-11T23:18:02Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "RELAY_QUESTION",
+      "seq": 2,
+      "subject": "The mockup shows a job outcome the job model does not define",
+      "text": "This is a genuine product choice, so it stays with you rather than being decided here.\n\nThe Operations mockup's job history shows three outcomes: Succeeded, Partial and Blocked. The frozen job execution contract defines COMPLETED, FAILED, REJECTED, CANCELLED, OUTCOME_UNKNOWN and RECONCILED. There is no Partial. This is a gap rather than a contradiction, because the contract never claimed to enumerate UI labels.\n\nPartial is a meaningful idea for a collection job: some steps produced evidence and others did not. Two ways to resolve it.\n\nFirst, add a real outcome to the job model: a job whose steps did not all succeed but which produced usable evidence completes as PARTIAL. This is honest and matches what an operator sees, but it amends a frozen contract and every consumer of the outcome must handle a sixth value.\n\nSecond, drop Partial from the UI: a job either completed or failed, and the step log is where an operator sees which steps produced evidence. This changes no contract, but the screen then shows less than the mockup promised and the mockup needs a correction.\n\nMy recommendation is the first, because a collection job over several steps genuinely has this middle state and hiding it pushes the operator into reading step logs to answer a question the summary should answer. But it is your product call and it costs a contract amendment.",
+      "timestamp": "2026-09-11T23:18:02Z"
+    },
+    {
+      "actor": "po",
+      "authorized_by": "Product Owner — chat authorization 2026-09-12: approve/revise/reject UI 2.0 B1 contracts and decide their open items",
+      "marker": "RELAY_DECISION",
+      "scope": "UI 2.0 B1-7 open items 2, 3 and 4 only; item 1 stays with the Product Owner",
+      "seq": 3,
+      "subject": "Three of the four open items decided; the Partial question remains yours",
+      "supersedes": "B1-7 contract section 13 items 2, 3 and 4",
+      "text": "Item 2, live update transport: server-sent events. One way, survives ordinary proxies, adds no dependency and no second protocol. A dropped connection reconnects and re-reads the step log from the server; the screen never fills the gap with invented progress.\n\nItem 3, the Run Now target picker: this movement ships a minimal device picker fed by the device list the B1-4b registration model already exposes. The device workspace of B1 row 9 becomes the richer entry point later and does not block this screen.\n\nItem 4, Run Now placement: a per-device action in the device overflow menu, matching the collect action the Navigation and components mockup already draws, rather than a second primary action competing with Schedule collection. One primary action per screen is the mockup's own rule.\n\nItem 1, the Partial outcome, is a product decision and stays with you. next_actor remains po for that reason.",
+      "timestamp": "2026-09-11T23:18:25Z"
+    },
+    {
+      "actor": "po",
+      "authorized_by": "Product Owner — chat authorization 2026-09-12: approve/revise/reject UI 2.0 B1 contracts and decide their open items",
+      "marker": "RELAY_DECISION",
+      "scope": "UI 2.0 B1-7 open item 1, the Partial job outcome",
+      "seq": 4,
+      "subject": "No sixth job outcome; Partial is a readiness posture, not a run verdict",
+      "supersedes": "the RELAY_QUESTION at seq 2 and the recommendation it carried",
+      "text": "Decided in docs/design/UI2_0_BACKUP_OUTCOME_DECISION_2026_09_12.md, against official vendor documentation and the repository's own frozen semantics. This reverses the recommendation carried in the question at seq 2, which argued for adding a sixth outcome. The evidence does not support it.\n\nNeither Check Point nor Palo Alto documents a partial outcome for a single backup. Check Point's vocabulary is binary, and where a backup cannot proceed the documented shape is a precondition that stops it from starting, not a partial result. Palo Alto's API carries success and error codes only; there is no partial status.\n\nBoth vendors report per managed object. Panorama stores backups for each firewall keyed by serial number and reports fan-out results per device with counts. Check Point's multi-domain unit is the Domain. So a sixteen-device run has sixteen vendor results, and an aggregate label is a presentation roll-up, not a new state.\n\nThe repository already agrees. A BackupRun is literally one job row for one device, so a fleet run is many jobs and mixture is already expressible as counts. PARTIAL meanwhile already exists as a per-device readiness posture meaning some artefact classes present and required ones missing. The mockup's chip is that posture shown in the wrong column.\n\nConsequences. The jobs table renders only the frozen outcome set, one row per job, therefore one device per row. A fan-out parent row shows counts such as fourteen succeeded and two failed, never a blended label. A job in OUTCOME_UNKNOWN is surfaced separately and never folded into either count. The half-success the collector really observes, an archive stored but its on-device deletion unconfirmed, stays a failure that marks the endpoint ineligible. A Palo Alto export by a non-superuser obscures sensitive fields and produces a complete file with reduced content; that lowers the artefact's validation level and does not change the run verdict.\n\nThe decision document carries a per-vendor decision table of observable signals mapped to outcomes, with every undocumented signal marked UNKNOWN rather than guessed, and states what new vendor documentation would extend it.",
+      "timestamp": "2026-09-12T05:11:01Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0107",
+  "movement": "UI2_B1_07_JOBS_SCREEN",
+  "next_actor": "engineer",
+  "refs": [
+    "docs/design/UI2_0_B1_07_JOBS_SCREEN_CONTRACT.md",
+    "docs/design/UI2_0_C2_JOB_EXECUTION_CONTRACT.md",
+    "docs/design/UI2_0_C3_IDENTITY_SESSIONS_RBAC_CONTRACT.md",
+    "docs/design/UI2_0_MOCKUP_REFERENCE_NOTES.md",
+    "docs/design/UI2_0_B1_ADJUDICATION_2026_09_12.md"
+  ],
+  "schema_version": 1,
+  "status": "AWAITING_ENGINEER",
+  "updated_at": "2026-09-12T05:11:01Z"
+}

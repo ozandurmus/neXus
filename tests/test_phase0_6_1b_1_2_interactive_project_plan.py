@@ -116,7 +116,19 @@ def test_project_plan_payload_is_data_driven_and_percentages_are_bounded():
     assert payload["now_next"]["next"]["build"]
     assert payload["now_next"]["next"]["title"].strip()
     assert any(item["id"] == "cp_ssh_trust" for item in payload["backlog"])
-    assert any(item["build"] == "0.6.1B.1.1" for item in payload["build_history"])
+    # GOV.ORCH.8 2.2: build_history.json holds only the newest builds; older
+    # terminal builds (build 0.6.1B.1.1 included) are archived under
+    # project/archive/build_history_*.json and are deliberately not surfaced
+    # in the live payload -- see utils.project_plan._load_archived_builds.
+    # Pinning this assertion to a specific historical build id made the test
+    # itself go stale every time the archive split moved another build out,
+    # which is exactly the failure being fixed here. The property worth
+    # holding is that build_history is live/data-driven -- it must contain
+    # the build the payload calls current -- and that the archive split is
+    # reflected, not bypassed, by the payload's own archived_build_count.
+    assert any(item["build"] == payload["current_build"] for item in payload["build_history"])
+    assert payload["archived_build_count"] > 0
+
 
 
 def test_project_plan_ui_contract_and_export_embedding_are_present():

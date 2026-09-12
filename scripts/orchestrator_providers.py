@@ -270,9 +270,8 @@ class CodexAdapter:
     orchestrator` (enforced by `orchestrator.py`, not here) so it never
     reaches `gh pr merge` itself.
 
-    UNVERIFIED (see module docstring): flag names are taken from the
-    contract text; `codex` was not installed in this environment when this
-    was implemented."""
+    Flag names verified against the installed `codex-cli 0.154.0` (see
+    module docstring for the exact `--help` findings and dates)."""
 
     name = "codex"
 

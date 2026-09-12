@@ -1,0 +1,28 @@
+# UI 2.0 service — Phase 1 step 1 (the shell).
+#
+# The URL is configuration. The credentials are FILES, per C1 section 6: a
+# missing, unreadable or empty file stops startup rather than falling back.
+# No credential value belongs in this file, in an environment default, or in
+# a build argument.
+server:
+  port: ${UI2_HTTP_PORT:8080}
+
+spring:
+  application:
+    name: nexus-ui2
+  web:
+    resources:
+      static-locations: classpath:/static/
+
+ui2:
+  db:
+    url: ${UI2_DB_URL:jdbc:postgresql://localhost:5432/ui2}
+    user-file: ${UI2_DB_APP_USER_FILE:/run/secrets/ui2_db_app_user}
+    password-file: ${UI2_DB_APP_PASSWORD_FILE:/run/secrets/ui2_db_app_password}
+    migrate-user-file: ${UI2_DB_MIGRATE_USER_FILE:/run/secrets/ui2_db_migrate_user}
+    migrate-password-file: ${UI2_DB_MIGRATE_PASSWORD_FILE:/run/secrets/ui2_db_migrate_password}
+    migration-location: classpath:db/migration
+
+logging:
+  level:
+    root: INFO

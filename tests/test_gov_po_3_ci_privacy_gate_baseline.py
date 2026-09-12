@@ -25,6 +25,7 @@ from utils.repository_privacy import (
     baseline_finding_keys,
     finding_fingerprint,
     finding_key,
+    is_git_ignored,
     scan_repository,
 )
 
@@ -172,7 +173,7 @@ def test_ci_privacy_check_without_baseline_ref_fails_exactly_as_before(tmp_path,
 
 def test_ac6_live_repository_findings_are_pre_existing_against_origin_main():
     # The two AC-1 locations were prose about the scanner itself (quoted
-    # 'password=' fragments), never credentials; the credential rule now
+    # credential-keyword-plus-assignment fragments), never credentials; the credential rule now
     # ignores such prose (utils.repository_privacy._is_prose_not_secret),
     # so they must no longer be reported. Whatever tracked findings remain
     # must still be pre-existing against origin/main -- environment-only
@@ -184,7 +185,14 @@ def test_ac6_live_repository_findings_are_pre_existing_against_origin_main():
     current = scan_repository(ROOT)
     assert not [f for f in current.findings if (f.path, f.rule) in ac1_locations]
 
-    tracked = [f for f in current.findings if f.rule != "RUNTIME_DIRECTORY_PRESENT"]
+    # Idempotence (relay/privacy_baseline_tests_not_idempotent_runtime_trust_material):
+    # a warm tree can carry gitignored runtime artifacts under any rule (not
+    # just RUNTIME_DIRECTORY_PRESENT -- e.g. PRIVATE_OR_TRUST_MATERIAL for a
+    # runtime-generated key under data/). No git-ref baseline can ever call a
+    # gitignored path pre-existing, so such findings are excluded from this
+    # comparison by path, not by rule name. A finding at a tracked path is
+    # never git-ignored and always stays in scope.
+    tracked = [f for f in current.findings if not is_git_ignored(ROOT, f.path)]
     if tracked:
         keys, note = baseline_finding_keys(ROOT, "origin/main")
         for finding in tracked:

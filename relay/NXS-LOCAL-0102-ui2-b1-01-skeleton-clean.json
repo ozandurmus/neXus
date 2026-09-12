@@ -1,0 +1,112 @@
+{
+  "created_at": "2026-09-11T22:04:51Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1: ./ui2/gradlew -p ui2 projects lists exactly the eleven Java subprojects of contract section 2; frontend is not a subproject (Correction C-1)",
+          "AC-2: Each module's build file declares exactly the allowed project dependencies of the section 2 table, no more and no fewer",
+          "AC-3: Each module carries at least one real production class in its own package root from the section 2 table (.platform, .persistence, .capability, .jobs, .identity.ldap, .service, .worker, .scheduler, .cli); no class sits in a flat com.securityexpert.nexus.ui2 package",
+          "AC-4: Ui2ArchitectureTest uses ArchUnit's ClassFileImporter over compiled classes, with ten methods named for DIR-1..DIR-10. For EVERY rule, a temporary violating class or dependency edge was introduced during development and observed to FAIL the rule, then removed. The SESSION_CLOSE lists all ten with the violation used and the observed failure message. A rule that cannot be made to fail is reported as a gap, never quietly kept",
+          "AC-5: No ArchUnit rule relies on allowEmptyShould or on a package that matches no class; the suite fails if any rule imports zero classes",
+          "AC-6: Dependency locking is real: ui2/**/gradle.lockfile files are committed and a clean ./ui2/gradlew -p ui2 assemble succeeds with locks in strict mode. If artifact resolution through this environment's proxy prevents generating locks, say so precisely and leave the setting off rather than declaring a protection that does not exist",
+          "AC-7: Dependency verification is real: ui2/gradle/verification-metadata.xml is committed, or the setting is off with a stated reason. A strict setting with no metadata file is a defect, not a pass",
+          "AC-8: Flyway integration code lives in the persistence module (Amendment B1-1-A item 3); the service module holds only the migration resources directory. Credentials are passed to Flyway as separate user and password arguments read from separate files, never embedded in a JDBC URL, and no test or code path can place a secret into an exception message",
+          "AC-9: The integration-tests module exists with its source set and its Testcontainers dependency, and contains no test that requires a container runtime in this slice; a placeholder documents what the later slice must prove (Flyway before application access, second migrate applies zero migrations, ui2_app denied DDL with SQLState 42501)",
+          "AC-10: npm --prefix ui2/frontend ci && npm --prefix ui2/frontend test && npm --prefix ui2/frontend run build succeed from a committed lockfile, and the root Gradle check depends on that frontend task plus unitTest and architectureTest",
+          "AC-11: Contract check 1 holds in its amended form: no .python-version under ui2/ and no main.py/python/console/_runner.py/_collector.py match outside build, node_modules, fixtures and markdown",
+          "AC-12: .github/workflows/validation.yml is byte-identical to its pre-movement version; git diff --check clean; python3 scripts/repository_privacy_check.py reports no new finding"
+        ],
+        "baseline": {
+          "authority": "docs/design/UI2_0_B1_01_SKELETON_CI_DOCKER_CONTRACT.md sections 2, 2.1, 3, 4, 5 and 8, as amended by Amendment B1-1-A, Amendment B1-1-B and Correction C-1 at the end of that file. An earlier unmerged attempt on origin/build/ui2-d1-c7-c2-frozen-amendments was reviewed and rejected; this movement is a clean rebuild and must not copy from it.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "sequencing": "Replaces the rejected attempt. Container image, OpenShift manifests and the Testcontainers-backed integration bodies are a later slice on a host with a container runtime."
+        },
+        "context_not_loaded": [
+          "docs/history/**",
+          "origin/build/ui2-d1-c7-c2-frozen-amendments",
+          "Line-1 source and console code",
+          "project/*.json"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/ui2-b1-01-skeleton-clean"
+        },
+        "invariants": [
+          "A test that cannot fail is worse than no test; every rule is proven by a real violation",
+          "A declared protection that is not actually in effect (strict verification with no metadata, locking with no lockfiles) is a defect",
+          "No secret value can reach a log line or an exception message",
+          "UI 2.0 is one Java runtime; nothing under ui2/ references Line-1 Python or a device transport",
+          "The existing Line-1 CI workflow is not touched"
+        ],
+        "merge_gate": "Two gates: Product Owner freeze of the B1-1 contract, and PO review of the diff and the ten proven rule failures. No self-merge.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Build the ui2/ Gradle multi-module skeleton clean: eleven Java subprojects with per-module package roots and the exact dependency edges of contract section 2, a frontend npm workspace driven by a root Exec task, genuinely enforcing ArchUnit rules for DIR-1..DIR-10 over compiled bytecode, real dependency locking and verification metadata committed, and Flyway integration code in the persistence module with credentials passed as separate arguments so no secret can reach an exception message.",
+        "output_contract": [
+          "The ui2/ tree as contract sections 2-5 specify for this slice",
+          "All validation-plan commands green in a foreground run, with real output quoted",
+          "A table of the ten DIR rules with the violation used to prove each one and the failure message observed",
+          "SESSION_CLOSE on the relay with exact changed files, test results, anything that could not be enabled and why, blockers and commit state"
+        ],
+        "recommended_reasoning": {
+          "reason": "Large but fully specified scaffold whose value depends entirely on the architecture rules being genuinely enforcing; that proof step needs care, not creativity.",
+          "tier": "Sonnet 5, normal (medium effort)"
+        },
+        "requirements": [
+          "English, per AGENTS.md engineering-output language law",
+          "Read contract sections 2, 2.1, 3, 4, 5, 8 and the three amendment sections at the end of the file; read nothing else outside scope.in",
+          "Never open or copy from origin/build/ui2-d1-c7-c2-frozen-amendments; that attempt was rejected for vacuous tests and absent lock state",
+          "Every ArchUnit rule is proven to fail on a real violation before it is accepted",
+          "Run the validation plan in the foreground and wait for real results before SESSION_CLOSE"
+        ],
+        "risks": [
+          "Repeating the rejected attempt's pattern of grepping build files instead of analysing bytecode",
+          "Declaring locking or verification without committing the artifacts that make them real",
+          "Putting Flyway code in service and credentials in a JDBC URL",
+          "Writing an integration test that silently skips when no container runtime is present"
+        ],
+        "scope": {
+          "in": [
+            "ui2/ (new tree, written from scratch)"
+          ],
+          "out": [
+            "ui2/Dockerfile or ui2/Containerfile and any image work",
+            "ui2/deploy/** OpenShift manifests (Amendment B1-1-B section B-6 puts them out of B1-1 scope)",
+            "Any Testcontainers test body that needs a running container runtime",
+            ".github/workflows/** (contract check 13 requires validation.yml byte-identical)",
+            "Any Line-1 Python, console or product code",
+            "Any device contact"
+          ]
+        },
+        "validation_plan": [
+          "module list: ./ui2/gradlew -p ui2 projects",
+          "assemble: ./ui2/gradlew -p ui2 clean assemble",
+          "architecture tests: ./ui2/gradlew -p ui2 architectureTest",
+          "unit tests: ./ui2/gradlew -p ui2 unitTest",
+          "frontend: npm --prefix ui2/frontend ci && npm --prefix ui2/frontend test && npm --prefix ui2/frontend run build",
+          "privacy gate: python3 scripts/repository_privacy_check.py",
+          "diff check: git diff --check"
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-11T22:04:51Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0102",
+  "movement": "UI2_B1_01_SKELETON_CLEAN_REBUILD",
+  "next_actor": "engineer",
+  "refs": [
+    "docs/design/UI2_0_B1_01_SKELETON_CI_DOCKER_CONTRACT.md",
+    "docs/design/UI2_0_C1_PLATFORM_SCHEMA_CONTRACT.md",
+    "docs/design/UI2_0_C2_JOB_EXECUTION_CONTRACT.md",
+    "docs/design/UI2_0_C3_IDENTITY_SESSIONS_RBAC_CONTRACT.md",
+    "docs/design/UI2_0_C4_CAPABILITY_REGISTRY_GATE_RESOLUTION_CONTRACT.md"
+  ],
+  "schema_version": 1,
+  "status": "OPEN",
+  "updated_at": "2026-09-11T22:04:51Z"
+}

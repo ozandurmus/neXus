@@ -136,7 +136,7 @@
     "ui2_taxonomy_device_write_class_and_step_kind",
     "vsx_network_canonicalization"
   ],
-  "build_count": 191,
+  "build_count": 194,
   "build_ids": [
     "0.5 Final",
     "0.6.0A4.2.2",
@@ -235,6 +235,7 @@
     "gov_po_1_step_4_direction_record_ratification",
     "gov_po_1_step_5_first_plan_episode",
     "gov_po_1_step_6_plan_po2_boundary",
+    "gov_po_2_implementation",
     "gov_po_2_po_visibility_and_bounded_authorship",
     "gov_po_3_approved_movement_orchestration_ac3",
     "gov_po_3_ci_privacy_gate_baseline_scoping",
@@ -328,6 +329,8 @@
     "ui2_b0_c7_backup_artefact_restore_engine_contract",
     "ui2_b0_extraction_tooling",
     "ui2_b1_01_skeleton_ci_docker",
+    "ui2_d1_option_a_baseline_recording",
+    "ui2_d1_option_a_contract_freeze",
     "ui2_d1_option_a_taxonomy_step_kind"
   ],
   "completed_feature_ids": [

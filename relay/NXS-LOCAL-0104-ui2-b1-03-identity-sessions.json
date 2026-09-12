@@ -1,0 +1,117 @@
+{
+  "created_at": "2026-09-11T22:45:26Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "Every AC in the B1-3 contract section 9, exactly as written"
+        ],
+        "baseline": {
+          "authority": "docs/design/UI2_0_B1_03_IDENTITY_SESSIONS_CONTRACT.md (DRAFT -- FOR PRODUCT OWNER FREEZE) and frozen C3 for bind, sessions, roles and the authorization chain. The B1-1 skeleton is merged; this movement owns the four identity/session/RBAC tables that B1-2 deliberately leaves out.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "sequencing": "Phase B1 row 3, after B1-2 schema V1. Shares the unresolved Flyway version-allocation question parked on relay NXS-LOCAL-0103."
+        },
+        "context_not_loaded": [
+          "docs/history/**",
+          "Line-1 source",
+          "project/*.json"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/ui2-b1-03-identity-sessions"
+        },
+        "invariants": [
+          "An unmapped identity receives no role, never a default",
+          "The directory being unreachable fails closed",
+          "The authorization chain refuses in the order the contract states",
+          "Sessions obey the single-active-session rule with the audited transitions the contract tabulates"
+        ],
+        "merge_gate": "PO review of diff and test evidence; no self-merge.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Implement LDAP operator bind and re-validation in the ldap-adapter module, the single-active-session rule and its state transitions, role bindings with no default role, and the E1-E7 authorization chain on the HTTP layer in the service module, with the identity, session and RBAC tables delivered as this movement's own migration.",
+        "output_contract": [
+          "LDAP adapter, session model, role bindings and the authorization chain as the contract specifies",
+          "The contract's named tests, with directory-dependent ones clearly marked",
+          "SESSION_CLOSE with exact changed files, test results, blockers and commit state"
+        ],
+        "recommended_reasoning": {
+          "reason": "A security boundary: session takeover semantics and an ordered refusal chain, where a subtle gap is a real authorization defect.",
+          "tier": "Sonnet 5, extended thinking (high)"
+        },
+        "requirements": [
+          "English, per AGENTS.md engineering-output language law",
+          "Read the B1-3 contract and the C3 sections it cites; read nothing else outside scope.in",
+          "The ldap-adapter module must not gain a dependency DIR-5 forbids; the architecture tests must stay green",
+          "No credential may appear in a URL, a log line or an exception message",
+          "A test that needs a directory server is named as such and never silently skipped",
+          "Run the validation plan in the foreground and wait for real results before SESSION_CLOSE"
+        ],
+        "risks": [
+          "Granting a default role when a bind succeeds but maps to nothing",
+          "A session takeover path that leaves both sessions usable",
+          "Putting a web controller in the ldap-adapter module",
+          "A directory-dependent test that passes when no directory is present"
+        ],
+        "scope": {
+          "in": [
+            "ui2/ldap-adapter/ (UnboundID bind and re-validation adapter, no web controller)",
+            "ui2/service/ (HTTP layer, session and authorization interceptors)",
+            "ui2/persistence/ (session and identity persistence)",
+            "ui2/service/src/main/resources/db/migration/ (this movement's migration)",
+            "ui2/integration-tests/ and module unit tests"
+          ],
+          "out": [
+            "Any capability, job or device code (B1-4, B1-4b)",
+            "Any UI screen",
+            "Any container image or deployment manifest",
+            ".github/workflows/**"
+          ]
+        },
+        "validation_plan": [
+          "assemble: ./ui2/gradlew -p ui2 clean assemble",
+          "architecture tests: ./ui2/gradlew -p ui2 architectureTest",
+          "unit tests: ./ui2/gradlew -p ui2 unitTest",
+          "privacy gate: python3 scripts/repository_privacy_check.py",
+          "diff check: git diff --check"
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-11T22:45:26Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "RELAY_QUESTION",
+      "seq": 2,
+      "subject": "Five open items carried from the B1-3 contract",
+      "text": "Parked overnight; none blocks writing code, but three change what the code must do, so implementation is held until you decide.\n\n1. Flyway version allocation across concurrent B1 movements. Same question as relay NXS-LOCAL-0103 item 2; it now blocks two movements. Proposal: you allocate the next version at dispatch and it is recorded in the packet.\n\n2. DIRECTORY-POSTURE operational ceiling. C3 section 9 item 1 leaves this to you as a deployment decision. It affects how strict the adapter is allowed to be.\n\n3. SR-D10 fingerprint attributability. C3 section 9 item 5 is open. This movement adopts the existing algorithm unchanged rather than deciding it.\n\n4. M14 U-1 nested group membership. C3 section 9 item 6 is blocked on vendor documentation. The contract assumes flat membership until you say otherwise.\n\n5. Numeric defaults proposed by the contract: idle timeout, absolute session lifetime, re-validation interval, throttles and connection pool sizing. These are tunable and not load bearing; confirm or replace them.",
+      "timestamp": "2026-09-11T22:45:27Z"
+    },
+    {
+      "actor": "po",
+      "authorized_by": "Product Owner — chat authorization 2026-09-12: approve/revise/reject UI 2.0 B1 contracts and decide their open items",
+      "marker": "RELAY_DECISION",
+      "scope": "UI 2.0 B1 contract approval and open-item decisions",
+      "seq": 3,
+      "subject": "All parked items decided; contract frozen",
+      "supersedes": "the RELAY_QUESTION at seq 2 of this relay",
+      "text": "Every question parked on this relay is answered in docs/design/UI2_0_B1_ADJUDICATION_2026_09_12.md section 2, and the twelve cross-contract findings that an adversarial review raised are adjudicated in its section 1. This movement's contract is FROZEN as of 2026-09-12 and is read as amended by that document.\n\nThree of those findings were gaps no contract owned: nobody created the job lifecycle objects the executor reads, the gate registry storage was assigned in a circle, and nobody set the audit context that the schema fails closed without. Implementing any of these movements before the adjudication would have failed at runtime.\n\nThe implementation order is fixed in section 3 of the adjudication: B1-2, then B1-3, then B1-4b, then B1-4. B1-2 may not run concurrently with any of the others because the Flyway version ledger is a single global sequence. Version numbers are allocated: B1-2 is V1, B1-3 is V2, B1-4b is V3, B1-4 is V4.\n\nnext_actor returns to engineer; this movement is dispatchable.",
+      "timestamp": "2026-09-11T23:11:37Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0104",
+  "movement": "UI2_B1_03_IDENTITY_AND_SESSIONS",
+  "next_actor": "engineer",
+  "refs": [
+    "docs/design/UI2_0_B1_03_IDENTITY_SESSIONS_CONTRACT.md",
+    "docs/design/UI2_0_C3_IDENTITY_SESSIONS_RBAC_CONTRACT.md",
+    "docs/design/UI2_0_C1_PLATFORM_SCHEMA_CONTRACT.md",
+    "docs/design/UI2_0_B1_02_SCHEMA_V1_CONTRACT.md"
+  ],
+  "schema_version": 1,
+  "status": "AWAITING_ENGINEER",
+  "updated_at": "2026-09-11T23:11:37Z"
+}

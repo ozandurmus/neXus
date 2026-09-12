@@ -1,22 +1,22 @@
 # Project queue (generated — do not edit; run: py scripts/project_queue.py render)
-Build: ui2_b1_01_skeleton_ci_docker · Track: PCP.x · Generated: 2026-09-11T20:30:24Z
+Build: ui2_d1_restore_c7_c2_amendments · Track: PCP.x · Generated: 2026-09-12T12:38:40Z
 
 ## Now
-- ui2_b1_01_skeleton_ci_docker — UI2 B1-1 -- skeleton, CI and Docker contract (DRAFT, for Product Owner freeze) (in_progress)
+- ui2_d1_restore_c7_c2_amendments — UI2 D1 Option A -- apply the pending C7/C2/C4/baseline restore admission amendments (automated_validated)
 ## Next
-- ui2_d1_restore_c7_c2_amendments — UI2 D1 Option A -- apply C7 and C2 restore admission amendments (planned)
+- M12 — M12 -- per-device / per-capability schedules (D5 producer) (planned)
 ## Open backlog (P1 first, then P2, then P3; in_progress before planned)
-- P0/in_progress pan_serial_representation_identity_evidence_closure — PAN HA runtime peer-serial representation mismatch on one member -- root cause unknown (target: Pre-CLASS-2 (OP.0b/OP.2), independent of OP.0b.0 vendor-semantics confirmation)
-- P0/in_progress private_replay_agent_operated_test_environment — Private Replay -- agent-operated privacy-filtered test environment derived from real collection, for (target: docs/design/PRIVATE_REPLAY_ARCHITECTURE.md -- FROZEN -- PRODUCT OWNER APPROVED,)
-- P0/in_progress recovery_offhost_key_custody — Off-host recovery artifacts and encryption-key custody (target: DEPLOY.1; blocks reliance on RB.3b recovery)
-- P0/in_progress ui2_b0_c1_platform_schema_contract — UI2 B0/C1 -- platform & schema contract (UI 2.0 schema ownership, Flyway sole migration authority, p (target: workflow §5 B0-1; docs/design/UI2_0_BASELINE_CONTRACT.md (FROZEN 2026-09-09); pl)
-- P0/in_progress ui2_b0_c2_job_execution_contract — UI2 B0/C2 -- job execution contract (Java worker; leasing/heartbeat, timeout, worker loss, duplicate (target: workflow §5 B0-2; docs/design/UI2_0_BASELINE_CONTRACT.md (FROZEN 2026-09-09); pl)
-- P0/in_progress ui2_b0_c3_identity_sessions_rbac_contract — UI2 B0/C3 -- identity, sessions and RBAC contract (LDAP bind, single active session per identity, ro (target: workflow §5 B0-3; docs/design/UI2_0_BASELINE_CONTRACT.md (FROZEN 2026-09-09); pl)
-- P0/in_progress ui2_b0_c4_capability_registry_gate_resolution_contract — UI2 B0/C4 -- capability registry & command-gate resolution contract (runtime form of the capability (target: workflow §5 B0-4; docs/design/UI2_0_BASELINE_CONTRACT.md (FROZEN 2026-09-09); pl)
-- P0/in_progress ui2_b0_c5_amendments_bundle — UI2 B0/C5 -- amendments bundle (CON.0 separate shell; action_taxonomy UI-OPERATIONAL-RUN-NOW; design (target: workflow §5 B0-5; baseline contract §5)
-- P0/in_progress ui2_b0_c6_capability_extraction_contract — UI2 B0/C6 -- capability extraction contract (spec template with KNOWN/UNKNOWN/NOT_APPLICABLE field s (target: workflow §3.1, §4, §5 B0-6; docs/design/UI2_0_BASELINE_CONTRACT.md (FROZEN 2026-)
-- P0/in_progress ui2_b0_c7_backup_artefact_restore_engine_contract — UI2 B0/C7 -- backup, artefact and restore engine contract (profile rules per design §6 as amended; s (target: workflow §5 B0-7; docs/design/UI2_0_BASELINE_CONTRACT.md (FROZEN 2026-09-09); pl)
-- P0/planned cp_production_ssh_host_key_trust_hardening — CP SSH host-key trust: mandatory strict enforcement for production/container runtime (target: production container/pod runtime hardening (post-DEPLOY.1))
+- P0/in_progress pan_serial_representation_identity_evidence_closure — PAN HA runtime peer-serial representation mismatch on one member -- root cause u (target: Pre-CLASS-2 (OP.0b/OP.2), independent of)
+- P0/in_progress private_replay_agent_operated_test_environment — Private Replay -- agent-operated privacy-filtered test environment derived from (target: docs/design/PRIVATE_REPLAY_ARCHITECTURE.)
+- P0/in_progress recovery_offhost_key_custody — Off-host recovery artifacts and encryption-key custody (target: DEPLOY.1; blocks reliance on RB.3b recov)
+- P0/in_progress ui2_b0_c1_platform_schema_contract — UI2 B0/C1 -- platform & schema contract (UI 2.0 schema ownership, Flyway sole mi (target: workflow §5 B0-1; docs/design/UI2_0_BASE)
+- P0/in_progress ui2_b0_c2_job_execution_contract — UI2 B0/C2 -- job execution contract (Java worker; leasing/heartbeat, timeout, wo (target: workflow §5 B0-2; docs/design/UI2_0_BASE)
+- P0/in_progress ui2_b0_c3_identity_sessions_rbac_contract — UI2 B0/C3 -- identity, sessions and RBAC contract (LDAP bind, single active sess (target: workflow §5 B0-3; docs/design/UI2_0_BASE)
+- P0/in_progress ui2_b0_c4_capability_registry_gate_resolution_contract — UI2 B0/C4 -- capability registry & command-gate resolution contract (runtime for (target: workflow §5 B0-4; docs/design/UI2_0_BASE)
+- P0/in_progress ui2_b0_c5_amendments_bundle — UI2 B0/C5 -- amendments bundle (CON.0 separate shell; action_taxonomy UI-OPERATI (target: workflow §5 B0-5; baseline contract §5)
+- P0/in_progress ui2_b0_c6_capability_extraction_contract — UI2 B0/C6 -- capability extraction contract (spec template with KNOWN/UNKNOWN/NO (target: workflow §3.1, §4, §5 B0-6; docs/design/)
+- P0/in_progress ui2_b0_c7_backup_artefact_restore_engine_contract — UI2 B0/C7 -- backup, artefact and restore engine contract (profile rules per des (target: workflow §5 B0-7; docs/design/UI2_0_BASE)
+- P0/planned cp_production_ssh_host_key_trust_hardening — CP SSH host-key trust: mandatory strict enforcement for production/container run (target: production container/pod runtime hardeni)
 - P0/planned deploy1_contract_freeze — DEPLOY.1 contract freeze and server-arrival execution gate (target: DEPLOY.1)
 - P0/planned deploy1_evidence_egress_policy — DEPLOY.1 â€” Evidence Egress & Sharing Policy (target: DEPLOY.1)
 - P0/planned deploy1_least_privilege_runtime — Least-privilege worker and viewer runtime (target: DEV.4.4 / DEPLOY.1)
@@ -24,40 +24,66 @@ Build: ui2_b1_01_skeleton_ci_docker · Track: PCP.x · Generated: 2026-09-11T20:
 - P0/planned deploy1_release_assurance — Reproducible release assurance (target: DEV.4.5 / DEPLOY.1)
 - P0/planned deploy1_report_volume_isolation — Publish reports through a report-only viewer volume (target: DEPLOY.1 server arrival)
 - P0/planned on_hardware_real_env_validation — On-hardware validation of the 0.6.3 -> 0.6.6B + DEV.2.1 line (target: next corporate-laptop session)
-- P0/planned pan_auth_transport_convergence — PAN Authentication Transport Convergence -- URGENT: older runtime path sends credentials as URL quer (target: production hardening / PAN transport cleanup)
-- P0/planned ui2_taxonomy_device_write_class_and_step_kind — Taxonomy-successor movement: a utils/action_taxonomy.py class for a restore/config-apply write, and (target: docs/design/UI2_0_C7_BACKUP_ARTEFACT_RESTORE_ENGINE_CONTRACT.md §9.1-§9.3; docs/)
-- P1/in_progress cp_preflight_ccp_tablestat_evidence — CP preflight: add `cphaprob tablestat` (CCP unique-IP table) as an extra split-brain / control-link (target: OP.0b follow-on (post S8 closure); implement only after PO approval of the gate)
+- P0/planned pan_auth_transport_convergence — PAN Authentication Transport Convergence -- URGENT: older runtime path sends cre (target: production hardening / PAN transport cle)
+- P0/planned ui2_taxonomy_device_write_class_and_step_kind — Taxonomy-successor movement: a utils/action_taxonomy.py class for a restore/conf (target: docs/design/UI2_0_C7_BACKUP_ARTEFACT_RES)
+- P1/in_progress cp_preflight_ccp_tablestat_evidence — CP preflight: add `cphaprob tablestat` (CCP unique-IP table) as an extra split-b (target: OP.0b follow-on (post S8 closure); imple)
 - P1/in_progress credential_profiles — Credential profile / enterprise vault abstraction (target: 1.0 foundation)
 - P1/in_progress deploy1_database_migrations_and_roles — Database migrations and least-privilege runtime roles (target: DEV.4.6 / DEPLOY.1)
 - P1/in_progress event_signal_intake — External Change Signal Intake & Bounded Evidence Trigger (target: 0.8.x)
 - P1/in_progress failover_readiness_assessment — OP.0 - HA Readiness / Failover-Safety Assessment (read-only) (target: OP.0)
 - P1/in_progress native_backup — Vendor-native backup and restore-readiness foundation (target: RB.0-RB.5 (rebase of original 0.6.0B))
-- P1/in_progress operator_console — CON.x - Operator Console: authenticated local control plane over the existing engine (target: CON.0 (architecture, frozen 2026-08-31) -> CON.1 (DONE, 2026-09-01) -> CON.2 (AU)
-- P1/in_progress pcp_collector_target_selection_seams — Collector target-selection seams for registry-keyed typed jobs (CP inventory is plane-wide today) (target: PCP.6)
-- P1/in_progress ui2_b1_01_skeleton_ci_docker — UI2 B1-1 -- Gradle multi-module skeleton under ui2/, CI job, Docker image, Testcontainers PostgreSQL (target: workflow §5 B1-1)
+- P1/in_progress operator_console — CON.x - Operator Console: authenticated local control plane over the existing en (target: CON.0 (architecture, frozen 2026-08-31))
+- P1/in_progress pcp_collector_target_selection_seams — Collector target-selection seams for registry-keyed typed jobs (CP inventory is (target: PCP.6)
+- P1/in_progress ui2_b1_01_skeleton_ci_docker — UI2 B1-1 -- Gradle multi-module skeleton under ui2/, CI job, Docker image, Testc (target: workflow §5 B1-1)
+- P1/in_progress ui2_b1_03_identity_sessions — UI2 B1-3 -- identity & sessions (UnboundID LDAP bind, single-active-session tabl (target: workflow §5 B1-3)
+- P1/in_progress ui2_b1_04_collection_engine_core — UI2 B1-4 -- collection engine core (capability registry, step executor with C2 c (target: workflow §5 B1-4)
+- P1/in_progress ui2_b1_04b_minimal_device_model_onboarding — UI2 B1-4b -- minimal Device / Endpoint / CredentialReference model, authorised m (target: workflow §5 B1-4b)
+- P1/in_progress ui2_b1_07_jobs_screen_run_now_read — UI2 B1-7 -- Jobs screen + Run Now (read class) + step log (target: workflow §5 B1-7)
+- P1/planned auth_local_mechanism_contract — Local authentication: storage, lockout, role binding for a directory-less identi (target: C3 Correction C-2; successor contract be)
+- P1/planned cp_failover_command_gate_batch — Command gate: cphaprob stat, cphaprob -a if, cphaprob tablestat for failover che (target: PO request 2026-09-12; network-device co)
 - P1/planned cp_ssh_trust_r2_prod_server — CP SSH strict host-key R2 validation on production server (target: DEPLOY.1)
-- P1/planned pcp_storage_engine_decision — Storage-engine decision for the Device Registry and typed job plane (criteria recorded, engine defer (target: PCP.5 contract freeze / DEV.4.6)
-- P1/planned ui2_b1_02_schema_v1_flyway — UI2 B1-2 -- schema V1 via Flyway (C1 tables, audit table, projections for the first capability) (target: workflow §5 B1-2)
-- P1/planned ui2_b1_03_identity_sessions — UI2 B1-3 -- identity & sessions (UnboundID LDAP bind, single-active-session table as tests, role bin (target: workflow §5 B1-3)
-- P1/planned ui2_b1_04_collection_engine_core — UI2 B1-4 -- collection engine core (capability registry, step executor with C2 crash-safe job record (target: workflow §5 B1-4)
-- P1/planned ui2_b1_04b_minimal_device_model_onboarding — UI2 B1-4b -- minimal Device / Endpoint / CredentialReference model, authorised manual registration f (target: workflow §5 B1-4b)
-- P1/planned ui2_b1_05_extract_cp_inventory_subset — UI2 B1-5 -- extract: CP inventory narrow subset (show version, HA state) -> capability spec + saniti (target: workflow §5 B1-5)
-- P1/planned ui2_b1_06_implement_cp_inventory_capability — UI2 B1-6 -- implement CP inventory capability in Java against fixtures (CAP-OFFLINE) (target: workflow §5 B1-6)
-- P1/planned ui2_b1_07_jobs_screen_run_now_read — UI2 B1-7 -- Jobs screen + Run Now (read class) + step log (target: workflow §5 B1-7)
+- P1/planned device_session_one_per_device — One SSH session per device reused for every command; probe opens a channel per c (target: PO rule 2026-09-12; command gate says se)
+- P1/planned failover_peer_reciprocal_agreement_check — Eighth stop-condition: both members must agree reciprocally on local/peer roles (target: PO rule 2026-09-12; _pan_reciprocal_corr)
+- P1/planned failover_recheck_on_request — A failover request must re-run every readiness check at that moment; an earlier (target: PO rule 2026-09-12; OP.2 contract)
+- P1/planned failover_vsx_vsls_mentality_contract — VSX/VSLS semantics: CP per-VS state independent of chassis, VSLS off, static ass (target: PO statement 2026-09-12; needs vendor-se)
+- P1/planned ldap_tls_trust_store_pin_and_format — LDAP TLS trust store cannot be given a PIN or format; a protected PKCS12 loads e (target: docs/design/LDAP_TLS_TRUST_STORE_PIN_GAP)
+- P1/planned pan_active_active_not_excluded_as_failover_unit — PAN active/active is not excluded as a failover unit (CP load-sharing is) (target: docs/design/PAN_ACTIVE_ACTIVE_FAILOVER_U)
+- P1/planned pcp_storage_engine_decision — Storage-engine decision for the Device Registry and typed job plane (criteria re (target: PCP.5 contract freeze / DEV.4.6)
 - P1/planned ui2_b1_08_audit_logs_screen — UI2 B1-8 -- audit & logs screen (every mutation since B1-2 visible) (target: workflow §5 B1-8)
 - P1/planned ui2_b1_09_device_workspace_first_read_screen — UI2 B1-9 -- device workspace: first read screen; RBAC visible-but-refused proven (target: workflow §5 B1-9)
-- P1/planned ui2_b1_10_acceptance_scenario_concurrent_admins — UI2 B1-10 -- acceptance scenario A: three admins on one device, single-session takeover/refuse, corr (target: workflow §5 B1-10)
-- P1/planned ui2_b1_11_acceptance_scenario_worker_loss — UI2 B1-11 -- acceptance scenario B: worker killed mid-step -> OUTCOME_UNKNOWN, no duplicate device c (target: workflow §5 B1-11)
-- P1/planned ui2_b1_12_deployment_slice — UI2 B1-12 -- deployment slice (Docker compose for the DEPLOY.1 server shape, per-component secrets, (target: workflow §5 B1-12)
-- P1/planned ui2_b1_13_second_flow_pan_config_export_artefact — UI2 B1-13 -- second representative flow: PAN configuration export (RB.2 semantics, read class) throu (target: workflow §5 B1-13)
-- P2/in_progress inventory_exclusions_management_ui — Inventory Exclusions add/restore/reason/audit workflows (write phase, DEPLOY.1A-adjacent) (target: DEPLOY.1A)
-- P2/planned m14_local_ldap_d7_authorization_architecture — Local LDAP / Active-Directory group-membership authorization producer for D7, decoupled from the DEP (target: docs/design/M14_LOCAL_LDAP_AUTHORIZATION_ARCHITECTURE.md -- DRAFT, discussion pr)
-- P2/planned overview_eos_release_guidance — Overview: static EOS/EOL date + suggested-next-release guidance by model family (Increment 2) (target: 0.6.1C / Inventory UX follow-up)
-- P2/planned pan_ha_serial_identity_hardening — PAN HA pair operational identity should consider serial, not just hostname (target: Pre-CLASS-2 (OP.0b/OP.2) architecture decision)
-- P2/planned passive_ti_enrichment — Passive TI Enrichment for Confirmed Changes (target: 0.8.x)
-- P2/planned policy_rule_hygiene_and_path_placement_brief — Policy rule hygiene and path-based placement (original feature brief, umbrella) (target: unscheduled)
-- P3/planned cp_cphaprob_peer_observation_corroboration — Extract peer-member rows from cphaprob stat for additional cluster-identity corroboration (target: Follow-up to OP.0a.P7 (PAN HA peer-pairing identity closure))
-- P3/planned pytest_xdist_privacy_scan_scratch_file_race — tests/test_gov_po_3_ci_privacy_gate_baseline.py's transient scratch fixture can crash a concurrently (target: Test-infrastructure follow-up; discovered incidentally while validating dlp_scan)
+- P1/planned ui2_b1_10_acceptance_scenario_concurrent_admins — UI2 B1-10 -- acceptance scenario A: three admins on one device, single-session t (target: workflow §5 B1-10)
+- P1/planned ui2_b1_11_acceptance_scenario_worker_loss — UI2 B1-11 -- acceptance scenario B: worker killed mid-step -> OUTCOME_UNKNOWN, n (target: workflow §5 B1-11)
+- P1/planned ui2_b1_12_deployment_slice — UI2 B1-12 -- deployment slice (Docker compose for the DEPLOY.1 server shape, per (target: workflow §5 B1-12)
+- P1/planned ui2_composition_root_bootable_shell — Bootable service: Spring entry point, DataSource, Flyway at startup, empty UI sh (target: Phase 1 step 1; no device contact)
+- P1/planned ui2_frontend_screens_shell — Frontend screens: login, menu, device list, device add; frontend is 2 stub files (target: Phase 1 step 2-3)
+- P2/in_progress inventory_exclusions_management_ui
+- P2/planned auth_radius_mechanism
+- P2/planned auth_tacacs_mechanism
+- P2/planned device_manual_add_transport_choice
+- P2/planned discovery_import_selection_flow
+- P2/planned dlp_prose_collision_catalogue_stale
+- P2/planned m14_local_ldap_d7_authorization_architecture
+- P2/planned overview_eos_release_guidance
+- P2/planned pan_ha_serial_identity_hardening
+- P2/planned passive_ti_enrichment
+- P2/planned policy_rule_hygiene_and_path_placement_brief
+- P2/planned privacy_baseline_tests_not_idempotent_runtime_trust_material
+- P2/planned project_plan_build_history_archive_split_lookup
+- P2/planned project_plan_crypto_placeholder_sentinel_lost
+- P3/planned cp_cphaprob_peer_observation_corroboration
+- P3/planned pytest_xdist_privacy_scan_scratch_file_race
+## Deferred — held, not finished (reason: docs/history/backlog/<id>.md)
+- P1 ui2_b1_05_extract_cp_inventory_subset
+- P1 ui2_b1_06_implement_cp_inventory_capability
+- P1 ui2_b1_13_second_flow_pan_config_export_artefact
+- P2 bulk_fleet_ops
+- P2 compliance_assignment_ui_and_registry
+- P2 compliance_check_engine_ui
+- P2 compliance_remediation_checks
+- P2 failover_controlled_execution
+- P2 per_vendor_worker_split
+- P2 snmpv3_fast_telemetry_plane
+- P4 pan_ha_peer_ipv6_pairing
 ## Open decisions
 - op_track_id — Track id: keep OP.x as a dedicated OPERATE track, or fold into 1.x after the 1.0 GOVERN track?
 - op_four_eyes — Second-approver (four-eyes) sign-off for an authorised failover: mandatory, or configurable per envi
@@ -81,8 +107,8 @@ Build: ui2_b1_01_skeleton_ci_docker · Track: PCP.x · Generated: 2026-09-11T20:
 - pcp_server_enrollment_exposure — May console enrollment (manual or candidate-based) be exposed in non-loopback / server mode, i.e. be
 - pcp_storage_engine — PRODUCTION-SCOPED. Which engine backs the registry/job plane IN PRODUCTION, against the section 10 c
 ## Recent builds
+- ui2_d1_restore_c7_c2_amendments (automated_validated)
+- ui2_b1_01a_platform_skeleton_freeze (automated_validated)
 - ui2_b1_01_skeleton_ci_docker (in_progress)
 - ui2_d1_option_a_taxonomy_step_kind (complete_with_followup)
 - ui2_b0_baseline_directory (in_progress)
-- ui2_b0_extraction_tooling (in_progress)
-- ui2_b0_c7_backup_artefact_restore_engine_contract (in_progress)
