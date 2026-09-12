@@ -142,10 +142,10 @@ shells ship, identical evidence yields identical `primary_status`,
 test of the Line-1 console era is replaced by a **projection-parity test**
 that renders one projection set through each surface's resolver. Neither the
 parity test nor a second surface exists. The replacement text for the frozen
-`CON.0` clauses this requires was drafted as `UA-1`/`UA-2` and approved in
-direction (baseline §2 `CON.0-AMENDMENT`), but **has not been written into
-`OPERATOR_CONSOLE_ARCHITECTURE.md`**, which still carries its pre-amendment
-§3 row and §6 invariant — see §10.
+`CON.0` clauses this requires was drafted as `UA-1`/`UA-2`, approved in
+direction (baseline §2 `CON.0-AMENDMENT`), and **written into
+`OPERATOR_CONSOLE_ARCHITECTURE.md` on 2026-09-12** — see §10. What is still
+absent is the parity test and the second surface, not the clause.
 
 ### 2.4 Inherited verbatim — `S-B` in part
 
@@ -627,10 +627,10 @@ with their current state; none is reconciled by this contract.
 
 | id | Authority | Disagreement | State at freeze |
 | --- | --- | --- | --- |
-| `UA-1` | `OPERATOR_CONSOLE_ARCHITECTURE.md` §6 (FROZEN) | payload-shape parity between console and exporter vs UI 2.0's separate typed read API | replacement text drafted and approved in direction (baseline `CON.0-AMENDMENT`); **still not written into the frozen file**, which carries its original invariant. Unresolved |
-| `UA-2` | `OPERATOR_CONSOLE_ARCHITECTURE.md` §3 (FROZEN) | "no frontend framework / bundler" vs UI 2.0's own build | same: narrowing text drafted, not applied. The frozen row still reads unnarrowed. Unresolved |
-| `UA-3` | `PRODUCT_CONTROL_PLANE_ARCHITECTURE.md` §13 (FROZEN) | "the control plane's console **is** the `CON.x` console" vs UI 2.0 succeeding it module by module | one-sentence amendment drafted, not applied. Unresolved |
-| `UA-4` | `PRODUCT_CONTROL_PLANE_ARCHITECTURE.md` §11 (FROZEN) | "the operator does not choose SSH/API commands … and will not" vs profile-driven backup | amendment text drafted: the operator chooses **among approved profiles** and the run path never accepts a command; authoring is a governed content path. Not applied. Unresolved |
+| `UA-1` | `OPERATOR_CONSOLE_ARCHITECTURE.md` §6 (FROZEN) | payload-shape parity between console and exporter vs UI 2.0's separate typed read API | **Applied 2026-09-12.** The projection-parity invariant replaced the payload-shape-equality paragraph in the frozen file, recorded in that document's own amendment section. Resolved |
+| `UA-2` | `OPERATOR_CONSOLE_ARCHITECTURE.md` §3 (FROZEN) | "no frontend framework / bundler" vs UI 2.0's own build | **Applied 2026-09-12.** The §3 row now binds the shared report bundle only, so UI 2.0's own build is not caught by it. Resolved |
+| `UA-3` | `PRODUCT_CONTROL_PLANE_ARCHITECTURE.md` §13 (FROZEN) | "the control plane's console **is** the `CON.x` console" vs UI 2.0 succeeding it module by module | **Applied 2026-09-12**, with the module-by-module succession clause spliced into §13's sentence. Resolved |
+| `UA-4` | `PRODUCT_CONTROL_PLANE_ARCHITECTURE.md` §11 (FROZEN) | "the operator does not choose SSH/API commands … and will not" vs profile-driven backup | amendment text drafted: the operator chooses **among approved profiles** and the run path never accepts a command; authoring is a governed content path. **Applied 2026-09-12** as an appended amendment; §11's original sentence is retained above it. Resolved |
 | `UA-5` | `AGENTS.md` architectural invariant | "no command … ever originates in the browser" vs an in-browser profile editor | **no conflict in the shipped shape**: authoring is outside the browser (§9 `O-9`). The conflict exists only for the deferred editor, which needs a constitutional amendment first |
 | `UA-6` | `M14` §6 rule 4, `LD-3`, `LD-7` | no browser credential; nothing persisted; one bind on the TTY | amended for UI 2.0 only (§4.2, §4.3). `M14` itself is unchanged and stays the local loopback design, parked by the Product Owner. Not a live contradiction, recorded so the local rules are not read as broken |
 | `UA-7` | `OPERATOR_CONSOLE_ARCHITECTURE.md` `C-D7` | schedule editing "not in this track" | answered by the gate `C-D7` asked for (§5.7), for UI 2.0 only |

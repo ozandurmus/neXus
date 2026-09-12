@@ -84,7 +84,7 @@ prohibition.
 | Control plane bolted onto the nginx viewer | The viewer is a read model and must never hold credentials, evidence or recovery material | `SERVER_PRODUCTIZATION…` §2 |
 | A network-exposed listener | The report itself is `LOCAL OPERATOR SENSITIVE`; the console is strictly more sensitive | `docker-compose.yml` nginx loopback comment |
 | A second orchestration path | Two paths diverge; one of them eventually skips the ledger | `AGENTS.md` engineering laws |
-| A frontend framework / bundler | Breaks the "one portable inline script, no build step" invariant just frozen | `CODEBASE_MODULARIZATION_FRONTEND.md` D-MOD1 |
+| A frontend framework / bundler **in the shared report bundle** | The exported report is one portable inline script with no build step (`CODEBASE_MODULARIZATION_FRONTEND.md` D-MOD1); any surface that ships that bundle inherits the rule. A separate application that does not ship the report bundle (UI 2.0, `UI2_0_ARCHITECTURE_DESIGN.md` §4) may use its own build, provided the report bundle itself gains no build-step or framework dependency | `CODEBASE_MODULARIZATION_FRONTEND.md` D-MOD1; `UI2_0_ARCHITECTURE_DESIGN.md` §4 (SUPERSEDED, historical only; successor `UI2_0_ARCHITECTURE_CONTRACT.md` §2.1) |
 | Higher device polling or concurrency | The console must not increase device contact relative to a CLI run | `AGENTS.md`; `CURRENT_STATE.md` standing priority 2 |
 
 ## 4. The intent boundary — the browser sends intent, never a command
@@ -202,9 +202,23 @@ console mode calls it after a fetch. This is owned by `app_bootstrap.js` and is
 therefore a change to a file `codebase_modularization` is already rewriting —
 which is why **`CON.1` must not start before that build is DONE** (§10).
 
-Invariant: **the console never introduces a payload shape the exporter does not
-also produce.** If the console needs a field, the builder gains it and both
-surfaces get it. Enforced by an equality test in `CON.1` (AC-4 there).
+Invariant: **every delivery surface reads the same persisted projections.**
+A projection is an evidence-grade row set written by a producer at
+collection or derivation time (keyed by `device_id` / `entity_id`, carrying
+collection timestamp, provenance and completeness); it is never resolved
+presentation state. No surface computes a fact from a source another
+surface cannot read, and no surface introduces a projection another surface
+could not consume. Surfaces may differ in wire shape, declared action set
+and liveness (`CAPABILITY_STATE_VOCABULARY_AND_PRESENTATION.md` §6.8); they
+may not differ in `primary_status`, `capability_qualifiers` or
+`evidence_presentation` for the same evidence on a surface both ship
+(`AC-CS-39`). Enforced by a projection-parity test rendering one persisted
+projection set through each surface's resolver. The static exporter is one
+consumer of the projections; a collection workflow renders the portable
+report only on explicit request, never as an unconditional tail step.
+*(Amended 2026-09-09 under the `UI2_0` freeze; the prior payload-equality
+wording and `CON.1` AC-4's equality test are superseded for surfaces other
+than the report-derived console, which keeps them until it is retired.)*
 
 ## 7. Security model (hard rules)
 
@@ -358,6 +372,32 @@ The "living product" feeling arrives at `CON.2`, and nothing up to and including
    including the command/argv boundary in §4 and the closed job registry —
    stands unrelaxed; this amendment widens nothing beyond the enrollment
    intent it names.
+
+6. **Amendment (`CON.0-AMENDMENT`, 2026-09-12, `UI2_0_C5_AMENDMENTS_BUNDLE.md`
+   §2, FROZEN)** — applied, not decided here. `UI2_0_BASELINE_CONTRACT.md` §2
+   row `CON.0-AMENDMENT` (C-1) recorded this amendment **ACCEPTED** on
+   2026-09-09; `C5` §2 named the two clauses of this document it replaces and
+   deferred the act of writing them in, because this document is
+   `ARCHITECTURE FROZEN`. Both are now written in, verbatim as specified:
+   **`UA-1`** replaced §6's closing payload-shape-equality invariant with the
+   projection-parity invariant (every surface reads the same persisted
+   projections; wire shape, declared action set and liveness may differ;
+   `primary_status` / `capability_qualifiers` / `evidence_presentation` may
+   not, per `AC-CS-39`), and **`UA-2`** narrowed §3's "A frontend framework /
+   bundler" row to bind the shared report bundle only, so a separate
+   application that never ships that bundle is not forbidden a build step.
+   The literal replacement wording is the one drafted as `UA-1`/`UA-2` in
+   `UI2_0_ARCHITECTURE_DESIGN.md` §4.3 — that predecessor is **SUPERSEDED**
+   and authorizes nothing; it is cited here only as where the approved text
+   was written, and its successor `UI2_0_ARCHITECTURE_CONTRACT.md` (FROZEN)
+   §2.3 carries the same rule. **Nothing else in this document is relaxed.**
+   §4's command/argv boundary, §4.1's typed enrollment intent, §7's security
+   model and §9's honest affordances are unchanged; no surface becomes
+   console-submittable, no gate is weakened, and the no-Browser-to-device
+   path invariant is untouched. §7 rules 1–3 (loopback, per-launch token,
+   data-free shell) are likewise unamended here: UI 2.0's network-exposed
+   session model is the separate `DEPLOY.1A`-class decision recorded as
+   `UA-8`, not part of this amendment.
 
 ## 13. Risks
 
