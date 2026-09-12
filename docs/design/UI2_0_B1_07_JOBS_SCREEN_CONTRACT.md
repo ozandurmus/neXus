@@ -1,6 +1,20 @@
 # UI 2.0 — B1-7: Jobs screen + Run Now (read class) + step log contract
 
-**DRAFT — FOR PRODUCT OWNER FREEZE, 2026-09-11.**
+## Status
+
+**FROZEN — 2026-09-12**, under the Product Owner's standing written
+authorization to approve, revise or cancel UI 2.0 B1 contracts.
+
+This document was DRAFT since 2026-09-11 while two adjacent screens froze
+around it (`UI2_0_B1_08_AUDIT_LOGS_SCREEN_CONTRACT.md`,
+`UI2_0_B1_09_DEVICE_WORKSPACE_CONTRACT.md`), both of which had to cite it as
+"DRAFT and therefore not authority" for the job/step-log surface. This
+freeze reviews every clause against what changed since 2026-09-11 — the
+frozen `UI2_0_B1_01A_PLATFORM_SKELETON_CONTRACT.md`, the frozen
+`UI2_0_ARCHITECTURE_CONTRACT.md`, the two now-frozen adjacent screens, and
+the real `job_step_attempt` schema (`V4__collection_engine_core.sql`, fixed
+by `V6__fix_audit_redaction_null_check.sql`) — and records every correction
+in "Corrections" below rather than silently rewriting the 2026-09-11 text.
 
 ## 1. Scope and authority
 
@@ -27,6 +41,21 @@ creation stays behind the pilot allowlist regardless of who is looking at
 this screen. This document fixes only what B1-7 ships: submitting and
 watching a read job, and the job list/detail screens that make every job
 — read or write, run by this movement or another — visible.
+
+**This document stops at the typed-intent boundary and names the gate it
+stops at.** Run Now submits `capability_id` + `target_refs` + `reason` —
+opaque identifiers against server-supplied, already-resolved lists (§2, §3.2,
+§8) — and nothing here specifies, or may be implemented to specify, which
+collection type or which data-collection method any capability uses on any
+vendor. That is the standing Product Owner gate named identically in
+`UI2_0_B1_08_...` and `UI2_0_B1_09_...`: the Product Owner has not yet
+specified, per vendor, which collection type and which methods apply, and
+collection/extraction stay outside every B1 screen contract until that
+happens. This screen's job is unchanged either way it resolves — it renders
+whatever capability id and step outcome the already-frozen `C2`/`C4` layer
+hands it, never a capability's own semantics — so nothing in this contract
+needs to change when that gate clears; a capability becoming
+execution-eligible is `C4`'s own event, not an amendment to this document.
 
 The Product Owner decision this document's title refers to ("until the
 operational-write decision lands," workflow §5 row 7's "until Karar 2
@@ -95,14 +124,40 @@ no field capable of expressing either.
 
 ### 3.3 Step-log shape
 
-`steps[]` entries are the durable, server-recorded facts and nothing else:
-`step_index`, `step_kind` (one of `C4` §2.3's closed set), `attempt_number`,
-`sent_at`, `outcome` (`matched` / `expectation_unmet` / `ambiguous` /
-pending), `error_class` when applicable, and — only where the capability's
-`evidence_shape_ref` permits one — a bounded, redaction-filtered
-`sanitized_fragment` (`C1` §4, `UI2_0_B1_04_...` §7). The raw device response
+`steps[]` entries are the durable, server-recorded facts and nothing else,
+projected from the real `job_step_attempt` row (`V4__collection_engine_core.
+sql`, corrected by `V6__fix_audit_redaction_null_check.sql`): `step_index`,
+`step_kind` (one of `C4` §2.3's closed set), `attempt_number`, `sent_at`,
+`outcome` (nullable, `NULL` until the device responds — `C1` §3.4's
+`UNKNOWN`-as-`NULL` rule, `C2` §5.1), `matched_expectation` (nullable
+boolean), and `error_class` when applicable (`C2` §5.1's closed set:
+`STEP_EXPECTATION_UNMET`, `STEP_POLL_TIMEOUT`, `STEP_AMBIGUOUS_RESPONSE`,
+`STEP_OUTPUT_OVERFLOW`, or a transport-level class). The raw device response
 is never present in this payload, in any field, at any verbosity (raw-
 evidence law).
+
+**`UNKNOWN-7` — the wire-level string values of `outcome`.** No frozen
+contract or shipped code fixes the exact strings `job_step_attempt.outcome`
+holds (`C2` §5.1 and `UI2_0_B1_04_...` §6 describe the concept in prose —
+`matched(facts)` / `expectationUnmet` / `ambiguous` — without pinning a
+column literal, and no implementation exists yet to check against). This
+document does not invent one: the API response carries whatever string the
+column holds, and this screen's render logic must branch on
+`matched_expectation` (boolean) and `error_class` (the closed, frozen set
+above) for its state vocabulary (§4), never on an assumed `outcome` literal.
+Nothing may be implemented against a guessed `outcome` string until `C2`'s
+owner fixes one.
+
+**`sanitized_fragment` is not a `job_step_attempt` column and is not part of
+this payload.** The 2026-09-11 draft placed it here; `job_step_attempt` (as
+migrated) has no such column. `UI2_0_B1_04_COLLECTION_ENGINE_CORE_CONTRACT.md`
+§7 places `sanitized_fragment` on `provenance_records`, written in the same
+transaction as the step's terminal attempt but keyed by `run_id`/`step_id`,
+not `job_step_attempt`'s own primary key. Whether `GET /api/jobs/{job_id}`
+joins `provenance_records` to surface a sanitized fragment alongside a step,
+and if so under what rate/redaction discipline, is **`UNKNOWN-8`** — a new
+join surface this document declines to authorize. Until it is settled,
+`steps[]` carries only the `job_step_attempt` fields named above.
 
 ### 3.4 The three refusal shapes
 
@@ -342,16 +397,112 @@ cross-subsystem decision the Product Owner has not already made.
    document does not choose between the two, only fixes the behavioral
    contract (§7) either must satisfy.
 3. **The Run Now dialog's target picker source is unspecified here.** B1-7
-   needs *some* way to name a `target_ref`; the device workspace (workflow
-   §5 row 9) is the natural long-term source but is not guaranteed to land
-   before this movement. Whether B1-7 ships a minimal inline target picker
-   or depends on row 9 landing first is a sequencing question for the
-   Product Owner, not a contract question this document can settle alone.
+   needs *some* way to name a `target_ref`. `UI2_0_B1_09_DEVICE_WORKSPACE_
+   CONTRACT.md` has since frozen as the device workspace/list screen, but it
+   deliberately ships no job-submission surface and no picker component for
+   another screen to reuse (its own §7: "Job list, job detail, step log, Run
+   Now" is explicitly not in its scope, gated on this document). So B1-9
+   freezing did not resolve this item: whether B1-7 ships a minimal inline
+   target picker or calls `GET /api/devices` (B1-9 §2's own listing route)
+   directly is still a sequencing/reuse question for the Product Owner, not
+   settled by either document alone.
 4. **Whether the Jobs screen's "Run now" button is its own primary action or
    is instead launched only from a device's own row (per the mockup's
    "Collect now" overflow-menu pattern)** is a UX placement choice within
    the constraints this document already fixes (§2, §6); either placement
    satisfies every acceptance criterion above.
+
+## 13a. Overlap with the two adjacent, now-frozen screens
+
+- **`UI2_0_B1_09_DEVICE_WORKSPACE_CONTRACT.md`** names this document by path
+  in its own §1.1/§6/§7/§13 to fix the boundary: job list, job detail, the
+  step log and Run Now submission are this document's surface, not the
+  device workspace's, and the device workspace adds no submission path
+  ahead of this freeze. Nothing in this document claims any part of the
+  device workspace's surface (device identity header, transport summary,
+  enrollment panel) in return. Open item 3 above records the one genuine
+  remaining overlap question (target-picker reuse), which neither document
+  settles alone.
+- **`UI2_0_B1_08_AUDIT_LOGS_SCREEN_CONTRACT.md`** covers the **Audit** data
+  class (`C1` §4: `audit_log`, an append-only trigger-fed record of *every*
+  mutation) and explicitly declines the **Job log** class (`C1` §4: `jobs`,
+  `job_steps`, `job_step_attempt`) as its own `UNKNOWN-4`, naming this
+  screen's step log as that class's owner. This document is that owner: the
+  step log in §2/§3.3 is the Job-log-class surface `UI2_0_B1_08_...`
+  `UNKNOWN-4` pointed at. The two payloads do not overlap in practice — the
+  audit list/detail renders `audit_log`'s generic before/after row snapshot
+  for any audited table (including `jobs`/`job_step_attempt`, since
+  `trg_audit_jobs`/`trg_audit_job_step_attempt` fire on them, `V1`/`V4`),
+  while this screen's `steps[]` is a purpose-built, typed projection of
+  `job_step_attempt` alone (§3.3) — but both surfaces can legitimately show
+  facts about the same underlying row from two different lenses (generic
+  mutation audit vs. typed job progress). Neither document may be read as
+  authorizing the other's surface; a future reader who needs "did this job's
+  rows get audited" goes to `/audit`, and "what did this job do" goes to
+  `/operations/jobs/{job_id}` — this paragraph is the only place that states
+  the relationship, per `AGENTS.md`'s rule against silently reconciling two
+  authorities by picking one.
+
+## 13b. `UNKNOWN` carried forward — nothing may be implemented against these
+
+In addition to `UNKNOWN-7`/`UNKNOWN-8` (§3.3):
+
+- **`UNKNOWN-9`** ("Partial" has no `C2` job-model owner, §5) — unchanged
+  since 2026-09-11; no `C2` amendment since has defined a partial-job
+  concept.
+- **`UNKNOWN-10`** (live-update transport, §7 / open item 2) — unchanged;
+  `C2` §8 pt 5 still only requires best-effort, not a chosen transport.
+- **`UNKNOWN-11`** (target-picker source, open item 3, revised above) —
+  B1-9 freezing narrowed but did not close this; still no committed answer.
+- **`UNKNOWN-12`** (Run Now placement, open item 4) — unchanged; either
+  placement satisfies every acceptance criterion, so this is a UX choice
+  left open, not a blocking unknown.
+
+None of `UNKNOWN-7`–`UNKNOWN-12` blocks freezing this document, because each
+is a bounded, named gap the acceptance criteria and test specification (§9,
+§10) do not depend on — every test in §9 is written against the
+already-fixed column/state vocabulary, not against a guessed `outcome`
+string, a `sanitized_fragment` join, a partial-job label, a transport choice,
+or a picker source.
+
+## Corrections
+
+### Correction C-1 (2026-09-12) — stale references from the 2026-09-11 draft
+
+Found while reviewing this document for freeze against everything frozen
+today. Reported per house style (`UI2_0_B1_03_IDENTITY_SESSIONS_CONTRACT.md`
+"Correction C-1"), not silently rewritten.
+
+1. **§3.3's `steps[]` shape asserted three things not supported by the real
+   schema or any frozen contract**: a literal `outcome` enum
+   (`matched`/`expectation_unmet`/`ambiguous`/`pending`) that no frozen
+   document or shipped code fixes; a `sanitized_fragment` field attributed to
+   `job_step_attempt`, which has no such column (`V4__collection_engine_
+   core.sql`) — it belongs to `provenance_records` per `UI2_0_B1_04_...` §7;
+   and no mention of `matched_expectation`, the column the real table
+   actually carries. Corrected in place in §3.3 above, with the open
+   questions recorded as `UNKNOWN-7`/`UNKNOWN-8` rather than guessed.
+2. **§1 never named the standing Product Owner collection gate**, even
+   though the two screens that froze around this one both do. This is not a
+   scope change — the 2026-09-11 draft already stopped at the typed-intent
+   boundary in substance (§2, §3.2, §8 never named a capability, a command,
+   or a collection method) — but it left the boundary implicit instead of
+   stated. Corrected by adding the named-gate paragraph in §1.
+3. **§14's citation of `UI2_0_B1_01A_PLATFORM_SKELETON_CONTRACT.md` omitted
+   §5**, the test-harness carrier rule (`AGENTS.md`-mandated fail-closed
+   PostgreSQL 16 requirement) that this document's own §11 integration tests
+   run under. `UI2_0_B1_08_...` and `UI2_0_B1_09_...`, frozen today, both
+   cite §5 alongside §2. Corrected below.
+4. **Open item 3 (target picker) was written against a B1-9 that did not yet
+   exist.** `UI2_0_B1_09_DEVICE_WORKSPACE_CONTRACT.md` has since frozen but
+   deliberately ships no picker/job-submission surface, so the item's
+   premise ("not guaranteed to land") is now false in a way that could read
+   as resolved when it is not. Corrected in §13 above to state the actual
+   current relationship.
+
+No clause's acceptance criteria (§10), test specification (§9), or state
+vocabulary (§4) changed in substance — every correction above is a citation,
+schema-accuracy, or explicitness fix, not a new decision.
 
 ## 14. Cross-references
 
@@ -365,6 +516,13 @@ cross-subsystem decision the Product Owner has not already made.
 `UI2_0_B1_04_COLLECTION_ENGINE_CORE_CONTRACT.md` (FROZEN);
 `UI2_0_B1_ADJUDICATION_2026_09_12.md` (DECIDED) F4, F6;
 `UI2_0_B1_01A_PLATFORM_SKELETON_CONTRACT.md` (FROZEN) §2 (module map), §4
-(build commands);
-`AGENTS.md` — network action taxonomy, identity law;
+(build commands), §5 (test-harness carrier: real PostgreSQL 16, fail
+closed, this document's §11 integration tests run under it without
+restating it);
+`UI2_0_B1_08_AUDIT_LOGS_SCREEN_CONTRACT.md` (FROZEN) — adjacent screen,
+Audit data class, §13a above fixes the boundary;
+`UI2_0_B1_09_DEVICE_WORKSPACE_CONTRACT.md` (FROZEN) — adjacent screen,
+device workspace, §13a above fixes the boundary;
+`AGENTS.md` — network action taxonomy, identity law, the standing Product
+Owner collection gate;
 `utils/action_taxonomy.py`.
