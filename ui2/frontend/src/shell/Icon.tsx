@@ -14,7 +14,10 @@ export type IconName =
   | "admin"
   | "search"
   | "bell"
-  | "menu";
+  | "menu"
+  | "more"
+  | "plus"
+  | "download";
 
 const common: SVGProps<SVGSVGElement> = {
   viewBox: "0 0 24 24",
@@ -92,6 +95,26 @@ export function Icon({ name, size = 20 }: { readonly name: IconName; readonly si
       return (
         <svg {...props}>
           <path d="M4 7h16M4 12h16M4 17h16" />
+        </svg>
+      );
+    case "more":
+      return (
+        <svg {...props} fill="currentColor" stroke="none">
+          <circle cx="12" cy="5" r="1.5" />
+          <circle cx="12" cy="12" r="1.5" />
+          <circle cx="12" cy="19" r="1.5" />
+        </svg>
+      );
+    case "plus":
+      return (
+        <svg {...props}>
+          <path d="M12 5v14M5 12h14" />
+        </svg>
+      );
+    case "download":
+      return (
+        <svg {...props}>
+          <path d="M12 3v12M7 11l5 5 5-5M4 21h16" />
         </svg>
       );
   }
