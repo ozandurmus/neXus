@@ -291,6 +291,13 @@ def render_worker_md(*, movement_id: str, session_start: dict, merge_mode: str) 
     scope_out = list(scope.get("out", []) or [])
     validation_plan = report.get("validation_plan", []) or []
     git_cfg = report.get("git", {})
+    merge_gate_text = report.get("merge_gate", "")
+    if merge_mode != "orchestrator":
+        merge_mode_note = ""
+    elif op.merge_gate_forbids_pr_open(merge_gate_text):
+        merge_mode_note = "\n\n" + op.NO_MERGE_NO_PR_PROMPT_NOTE
+    else:
+        merge_mode_note = "\n\n" + op.NO_MERGE_PROMPT_NOTE
 
     sections = [
         (
@@ -315,9 +322,9 @@ def render_worker_md(*, movement_id: str, session_start: dict, merge_mode: str) 
             "## Git\n\n"
             f"- base: {git_cfg.get('base', '')}\n"
             f"- lane: {git_cfg.get('lane', '')}\n"
-            f"- merge gate: {report.get('merge_gate', '')}\n"
+            f"- merge gate: {merge_gate_text}\n"
             f"- merge mode: {merge_mode}"
-            + ("\n\n" + op.NO_MERGE_PROMPT_NOTE if merge_mode == "orchestrator" else "")
+            + merge_mode_note
         ),
         "## Relay closeout\n\n" + RELAY_CLOSEOUT_TEXT,
         "## Standing rules\n\n" + STANDING_RULES_TEXT,
@@ -1113,7 +1120,12 @@ def _do_start(args: argparse.Namespace) -> tuple[int, dict | None, subprocess.Po
         print(f"error: {exc}", file=sys.stderr)
         return EXIT_USAGE, None, None
     merge_mode = op.resolve_merge_mode(provider, getattr(args, "merge_mode", None))
-    no_merge_note = op.NO_MERGE_PROMPT_NOTE if merge_mode == "orchestrator" else None
+    if merge_mode != "orchestrator":
+        no_merge_note = None
+    elif op.merge_gate_forbids_pr_open(report.get("merge_gate", "")):
+        no_merge_note = op.NO_MERGE_NO_PR_PROMPT_NOTE
+    else:
+        no_merge_note = op.NO_MERGE_PROMPT_NOTE
 
     if action == "resume":
         worktree_path = Path(existing["worktree_path"])

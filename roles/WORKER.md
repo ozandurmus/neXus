@@ -13,10 +13,13 @@ every rendering, unchanged, and are the only content this file supplies.
 
 Immediately before opening your PR, re-read the canonical relay file
 (NEXUS_RELAY_FILE) first and act on any RELAY_CORRECTION or
-RELAY_DECISION entries appended after dispatch. Close with:
+RELAY_DECISION entries appended after dispatch. Write your SESSION_CLOSE
+report as JSON to a file first -- `--report` takes a file path (or `-` for
+stdin); the report JSON is never passed inline on the command line. Then
+close with:
 
 ```
-py scripts/local_relay.py append --file $NEXUS_RELAY_FILE --role engineer --marker SESSION_CLOSE ...
+python3 scripts/local_relay.py append --file $NEXUS_RELAY_FILE --role engineer --marker SESSION_CLOSE --report /path/to/session_close_report.json --outcome DONE
 ```
 
 ## Standing rules

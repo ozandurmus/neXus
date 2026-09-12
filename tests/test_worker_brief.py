@@ -79,6 +79,59 @@ def test_render_worker_md_appends_no_merge_note_only_in_orchestrator_mode():
     assert NO_MERGE_PROMPT_NOTE in orchestrator_mode
 
 
+# --- closeout command: complete, runnable, no inline report, no `py` alias -
+
+def test_relay_closeout_command_is_complete_and_runnable_as_printed():
+    text = orch.RELAY_CLOSEOUT_TEXT
+    assert "..." not in text
+    assert re.search(r"--report\s+\S+", text)
+    match = re.search(r"```\n(.+?)\n```", text, re.DOTALL)
+    assert match, "expected a fenced closeout command"
+    command = match.group(1)
+    assert "..." not in command
+    tokens = command.split()
+    assert "--report" in tokens
+    report_value = tokens[tokens.index("--report") + 1]
+    assert report_value not in ("-", "")
+    assert not report_value.startswith("{")
+    assert "--role" in tokens and "engineer" in tokens
+    assert "--marker" in tokens and "SESSION_CLOSE" in tokens
+
+
+def test_relay_closeout_states_report_is_written_to_file_first():
+    text = orch.RELAY_CLOSEOUT_TEXT
+    assert "file" in text.lower()
+    assert "inline" in text.lower()
+    assert "--report" in text
+
+
+def test_relay_closeout_does_not_assume_a_bare_py_interpreter_alias():
+    text = orch.RELAY_CLOSEOUT_TEXT
+    assert not re.search(r"(^|[\s`])py\s+scripts/local_relay\.py", text)
+    assert "python3 scripts/local_relay.py" in text
+
+
+# --- AC-4: exactly one pull-request instruction per merge mode ------------
+
+def test_orchestrator_merge_mode_gives_one_pr_instruction_matching_the_merge_gate():
+    from orchestrator_providers import NO_MERGE_PROMPT_NOTE, NO_MERGE_NO_PR_PROMPT_NOTE
+
+    # Ordinary orchestrator merge gate: worker still opens the PR, just
+    # never merges it -- exactly the fixed note, nothing contradicting it.
+    ordinary = _session_start(merge_gate="PO review plus orchestrator verify.passed.")
+    rendered = orch.render_worker_md(movement_id="M", session_start=ordinary, merge_mode="orchestrator")
+    assert NO_MERGE_PROMPT_NOTE in rendered
+    assert NO_MERGE_NO_PR_PROMPT_NOTE not in rendered
+
+    # A packet whose own merge gate says the worker does not open a pull
+    # request must not also be told to open one as usual.
+    no_pr = _session_start(merge_gate="Reviewed by the orchestrator; the worker does not open a pull request.")
+    rendered_no_pr = orch.render_worker_md(movement_id="M", session_start=no_pr, merge_mode="orchestrator")
+    assert NO_MERGE_NO_PR_PROMPT_NOTE in rendered_no_pr
+    assert NO_MERGE_PROMPT_NOTE not in rendered_no_pr
+    assert "open the pull request as usual" not in rendered_no_pr.lower()
+
+
 def test_render_worker_md_carries_every_scope_and_ac_string_verbatim():
     session_start = _session_start(
         scope={"in": ["a.py", "b.py"], "out": ["c.py"]},

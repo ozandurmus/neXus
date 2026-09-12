@@ -43,6 +43,7 @@ text (itself not task content) and the engineer's own later `Read` of
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import IO, Protocol
 
@@ -70,6 +71,33 @@ NO_MERGE_PROMPT_NOTE = (
     "SESSION_CLOSE, and stop -- the orchestrator merges after its own "
     "verification passes."
 )
+
+#: Used instead of NO_MERGE_PROMPT_NOTE when the packet's own `merge_gate`
+#: text already says the worker does not open a pull request -- the two
+#: must never both appear (GOV.ORCH.3 pull-request-contradiction defect).
+#: The packet's merge gate takes precedence; this note defers to it rather
+#: than repeating a PR-opening instruction it forbids.
+NO_MERGE_NO_PR_PROMPT_NOTE = (
+    "This dispatch runs under --merge-mode orchestrator, and the merge "
+    "gate above says you do not open a pull request: do not run "
+    "`gh pr merge` and do not open one. Publish your SESSION_CLOSE and "
+    "stop -- the orchestrator handles the pull request and merge after "
+    "its own verification passes."
+)
+
+#: Matches merge-gate wording that puts the "worker does not open a pull
+#: request" instruction ahead of the fixed merge-mode note above.
+_MERGE_GATE_FORBIDS_PR_OPEN_RE = re.compile(
+    r"does not open (?:a|the|one) pull request|does not open one",
+    re.IGNORECASE,
+)
+
+
+def merge_gate_forbids_pr_open(merge_gate_text: str) -> bool:
+    """True when the packet's own `merge_gate` text already tells the
+    worker not to open a pull request -- the fixed merge-mode note must
+    then defer to it instead of contradicting it."""
+    return bool(_MERGE_GATE_FORBIDS_PR_OPEN_RE.search(merge_gate_text or ""))
 
 
 class InvalidEffortError(ValueError):
