@@ -288,6 +288,22 @@ def render_queue_md(backlog: dict, roadmap: dict, generated: str | None = None) 
         target = _truncate(item.get("target", ""), TARGET_TRUNCATE)
         lines.append(f"- {priority}/{status} {item.get('id', '')} — {title} (target: {target})")
 
+    # A deferred row is held work, not finished work. Rendering it keeps a
+    # standing hold — for example a Product Owner gate on collection scope —
+    # visible in the one planning file an agent reads at cold start. Without
+    # this section the row vanishes from QUEUE.md and its reason survives only
+    # in docs/history/backlog/, which is not read by default.
+    deferred = [i for i in (backlog.get("items") or []) if i.get("status") == "deferred"]
+    if deferred:
+        lines.append(
+            "## Deferred — held, not finished (reason: docs/history/backlog/<id>.md)"
+        )
+        for item in sorted(deferred, key=lambda i: (_priority_rank(i.get("priority")), i.get("id", ""))):
+            priority = _priority_label(item.get("priority"))
+            title = _truncate(item.get("title", ""), TITLE_TRUNCATE)
+            target = _truncate(item.get("target", ""), TARGET_TRUNCATE)
+            lines.append(f"- {priority} {item.get('id', '')} — {title} (target: {target})")
+
     lines.append("## Open decisions")
     for decision in roadmap.get("open_decisions") or []:
         if decision.get("status") != "open":

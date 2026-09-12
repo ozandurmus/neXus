@@ -1038,8 +1038,8 @@
       "id": "ui2_b1_05_extract_cp_inventory_subset",
       "title": "UI2 B1-5 -- extract: CP inventory narrow subset (show version, HA state) -> capability spec + sanitized fixtures; channel-drain recorded UNKNOWN with validation plan",
       "priority": "P1 -- UI 2.0",
-      "status": "in_progress",
-      "note": "Line-1 read-only AUDIT. FIRST-CAPABILITY ruling: an UNKNOWN affecting completeness blocks CAP-VALIDATED.",
+      "status": "deferred",
+      "note": "see docs/history/backlog/ui2_b1_05_extract_cp_inventory_subset.md",
       "target": "workflow §5 B1-5"
     },
     {
@@ -1047,7 +1047,7 @@
       "id": "ui2_b1_06_implement_cp_inventory_capability",
       "title": "UI2 B1-6 -- implement CP inventory capability in Java against fixtures (CAP-OFFLINE)",
       "priority": "P1 -- UI 2.0",
-      "status": "planned",
+      "status": "deferred",
       "note": "",
       "target": "workflow §5 B1-6"
     },
@@ -1110,8 +1110,8 @@
       "id": "ui2_b1_13_second_flow_pan_config_export_artefact",
       "title": "UI2 B1-13 -- second representative flow: PAN configuration export (RB.2 semantics, read class) through the same executor; artefact store, manifest, job/session state; re-estimate the plan afterwards",
       "priority": "P1 -- UI 2.0",
-      "status": "planned",
-      "note": "Proves the executor/UI model is not CP-inventory-specific. PAN transport adapter with header/POST auth (never query-string credentials).",
+      "status": "deferred",
+      "note": "see docs/history/backlog/ui2_b1_13_second_flow_pan_config_export_artefact.md",
       "target": "workflow §5 B1-13"
     },
     {
