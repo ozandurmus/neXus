@@ -153,3 +153,66 @@ is the note move (verbatim, reversible), which AC-4 pins.
   to a history file in a follow-up movement (proposed: yes, GOV.ORCH.6).
 - Retention for `docs/history/backlog/`: keep forever (proposed) or
   prune by age.
+
+## 8. Amendment A-2026-09-12 — open-item note exemption relaxed
+
+**Status: PROPOSED — PENDING PRODUCT OWNER APPROVAL.** This section does
+not change the FROZEN status line above, and does not itself authorize
+anything; it records a measured contradiction and a proposed resolution
+for the Product Owner to decide. Nothing in this repository may treat it
+as approved until a Product Owner decision says so.
+
+### 8.1 The measured contradiction
+
+§2.3 point 2 of this document reads: "Open items keep their note in the
+JSON." `docs/design/GOV_ORCH_8_PROJECT_DATA_SPLIT_AND_SIZE_BUDGET.md`
+(FROZEN) §2.4 sets `backlog.json ≤ 60 KB`, and its own §3 "Out" line
+marks `backlog.json`'s field split as unchanged from GOV.ORCH.5 —
+i.e. it imports this document's open-item exemption unmodified while
+also imposing a budget the exemption prevents this file from meeting.
+Per `AGENTS.md` Authority hierarchy, this is a same-level (both FROZEN)
+disagreement this movement must report, not silently reconcile.
+
+Measured before this movement's change (`project/backlog.json`,
+2026-09-12): 153 items, file size 148,302 bytes. Every terminal item
+(`done`/`automated_validated`/`real_env_validated`/`deferred`) already
+carries its GOV.ORCH.5 §2.3-point-2 pointer, holding 4,361 note bytes
+between them — the first diet already did everything the open-item
+exemption's complement allows. The remaining 87,022 note bytes sit on
+42 note-bearing `in_progress`/`planned` items out of 72 open items —
+exactly the population §2.3 point 2 exempts. Those bytes are 59% of the
+file and the only remaining lever between 148,302 bytes and the
+GOV.ORCH.8 §2.4 target: the exemption and the budget cannot both hold
+against this data.
+
+### 8.2 Proposed resolution
+
+Relax §2.3 point 2 for note *content* only, not for status: an open
+item's `note` field moves to `docs/history/backlog/<id>.md` the same way
+a terminal item's already does, verbatim, leaving the JSON pointer form
+`"see docs/history/backlog/<id>.md"` in its place. No item's `status`,
+`priority`, `title`, `target` or id changes as part of this move, and no
+note byte is deleted — every byte removed from `backlog.json` is
+findable, verbatim after redaction, in its item's history file. Nothing
+about §2.3 point 1 (repair) or the terminal-item mechanism changes.
+
+Because this reaches back into an already-open item's live note (rather
+than only firing on a status transition, as the terminal-item path
+does), it is implemented as its own explicit, opt-in operation —
+`py scripts/project_queue.py migrate-open-notes --include-open` — not as
+a default behavior of `status` or `note`, and not automatic. Going
+forward, `py scripts/project_queue.py note --id <id> --text ...` keeps
+appending directly to the history file for every item regardless of
+status, per §2.3 point 2's second clause, so an open item's note does
+not re-accumulate inline in the JSON between now and its eventual
+terminal transition.
+
+### 8.3 What this does not decide
+
+This amendment does not raise or waive the GOV.ORCH.8 §2.4 60 KB budget
+for `backlog.json`, does not change GOV.ORCH.8's own "Out: `backlog.json`
+(GOV.ORCH.5)" line, and does not decide retention policy for
+`docs/history/backlog/` (§7, still open). If, after the move described
+in §8.2, `backlog.json` still exceeds 60 KB, that residual gap is a
+separate, subsequent measurement for the Product Owner and is not
+resolved by relaxing this exemption alone.

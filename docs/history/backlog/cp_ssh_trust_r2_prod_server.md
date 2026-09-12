@@ -1,0 +1,5 @@
+# CP SSH strict host-key R2 validation on production server
+
+status: planned · target: DEPLOY.1
+
+R2 deferred from 0.6.4: verify strict=on + provisioned MDS known_hosts entry completes full read-only CP collection on the DEPLOY.1 Ubuntu/Docker server. Requires: (1) server known_hosts provisioned with MDS host key before first run, (2) SECURITYEXPERT_CP_MDS_STRICT_HOST_KEY=1 set in server env, (3) collection succeeds at established baseline coverage. Value-free evidence only. 2026-09-03: previously unreachable because of the strict trust-store preflight defect corrected in op0b_s8_p01_cp_ssh_trust_preflight_correction; now reachable once the server known_hosts is provisioned. Also the gating prerequisite for the OP.0b S8-A retry. 2026-09-03: this R2 validation is now one specific obligation under the broader cp_production_ssh_host_key_trust_hardening item (the OP.0b S5 preflight feature's own strict-trust default was deferred to that same production-hardening milestone, PO decision, OP_0B_1_COMMAND_GATE_PACKAGE.md "CP SSH trust -- PO override") -- not duplicated, tracked there for the full production checklist.
