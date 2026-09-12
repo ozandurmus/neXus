@@ -427,6 +427,39 @@ def cmd_add(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_retitle(args: argparse.Namespace) -> int:
+    """Correct a backlog item's title and/or target in place.
+
+    GOV.ORCH.5 forbids hand-editing `project/*.json`, but until now the tool
+    could only ever *add* a title -- never shorten or correct one. That left
+    an overlong title written by mistake permanently in the file, pushing
+    `backlog.json` against its regression ceiling with no sanctioned remedy.
+    This closes that gap. It never changes an item's id, status or priority.
+    """
+    if args.title is None and args.target is None:
+        raise QueueToolError("retitle: pass --title and/or --target")
+
+    backlog = load_json(BACKLOG)
+    items = backlog.get("items") or []
+    item = next((i for i in items if i.get("id") == args.id), None)
+    if item is None:
+        raise QueueToolError(f"retitle: no such id {args.id!r}")
+
+    if args.title is not None:
+        item["title"] = args.title
+    if args.target is not None:
+        item["target"] = args.target
+
+    validate_backlog_item(item)
+    validate_backlog(backlog)
+    write_json(BACKLOG, backlog)
+
+    roadmap = load_json(ROADMAP)
+    QUEUE.write_text(render_queue_md(backlog, roadmap), encoding="utf-8")
+    print(f"retitled {args.id!r}")
+    return 0
+
+
 def cmd_status(args: argparse.Namespace) -> int:
     backlog = load_json(BACKLOG)
     items = backlog.get("items") or []
@@ -804,6 +837,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_status.add_argument("--set", required=True, choices=ALL_STATUSES)
     p_status.add_argument("--target", default=None)
     p_status.set_defaults(func=cmd_status)
+
+    p_retitle = sub.add_parser("retitle", help="correct a backlog item's title/target")
+    p_retitle.add_argument("--id", required=True)
+    p_retitle.add_argument("--title", default=None)
+    p_retitle.add_argument("--target", default=None)
+    p_retitle.set_defaults(func=cmd_retitle)
 
     p_note = sub.add_parser("note", help="append a note to docs/history/backlog/<id>.md")
     p_note.add_argument("--id", required=True)
