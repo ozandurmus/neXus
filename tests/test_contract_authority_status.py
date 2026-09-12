@@ -38,6 +38,15 @@ gate. They are **unreconciled contradictions reported to the contract owner**,
 not approvals. This module's job is to stop the set from growing; closing an
 entry is the contract owner's decision, not this test's.
 
+The three `UI2_0_D1_DEVICE_WRITE_CLASS_AND_STEP_KIND_DECISION.md` entries were
+closed on 2026-09-12 and their entries deleted. That document was a DRAFT only
+because the Option A amendment the Product Owner had already approved was never
+applied; the Product Owner ruled the amendment be applied rather than the
+document be frozen over undone work. `UI2_0_D1_OPTION_A_AMENDMENT_PROPOSAL_
+BUNDLE.md` steps 2b, 4 and 4b were applied to `C7` and `C2`, steps 1, 2 and 5
+were already applied and now carry amendment records, and the decision document
+is FROZEN — so its citers no longer cite a DRAFT.
+
 The two `C1` and `C3` authority-chain entries were closed on 2026-09-12 and
 their entries deleted: `UI2_0_C1_PLATFORM_SCHEMA_CONTRACT.md` "Correction C-1"
 and `UI2_0_C3_IDENTITY_SESSIONS_RBAC_CONTRACT.md` "Correction C-1" moved the
@@ -60,10 +69,8 @@ That fix surfaced eleven further findings, all catalogued below and none
 reconciled here. The load-bearing ones are structural rather than stray:
 `UI2_0_ARCHITECTURE_DESIGN.md` (DRAFT) sits at item 4 of the authority chain
 of **four** FROZEN C-series contracts — `C1` §1, `C2` §1.3, `C3` §1.4,
-`C4` §1.3 — and `UI2_0_D1_DEVICE_WRITE_CLASS_AND_STEP_KIND_DECISION.md`
-(DRAFT) is cited by `UI2_0_BASELINE_CONTRACT.md` §2's decision table. The
-whole UI 2.0 C-series therefore rests on a document that says of itself it is
-not implementation authority. That is a Product Owner adjudication, not an
+`C4` §1.3. The whole UI 2.0 C-series therefore rests on a document that says
+of itself it is not implementation authority. That is a Product Owner adjudication, not an
 engineering edit: rewriting four frozen contracts to re-rank their own
 authority chain would change what they require.
 
@@ -145,18 +152,6 @@ _KNOWN_DRAFT_AUTHORITY_CITATIONS: dict[tuple[str, str, str], str] = {
      "UI2_0_ARCHITECTURE_DESIGN.md",
      "d651908d1e65ad900dc76cea399a7c05c34de424596a949269ad53071d6d47c7"):
         "REAL CONTRADICTION — §1.3 authority chain ranks a DRAFT as authority",
-    ("UI2_0_BASELINE_CONTRACT.md",
-     "UI2_0_D1_DEVICE_WRITE_CLASS_AND_STEP_KIND_DECISION.md",
-     "2ac37736d29723d81bea9ca73a960d437189454a7e211360919be290f44a4ea9"):
-        "REAL CONTRADICTION — §2's Phase 0 decision table cites a document whose own status is 'DRAFT — OPTION A SELECTED IN RELAY; FROZEN BASELINE AMENDMENT PENDING'; the amendment is pending, so the decision is not yet frozen authority",
-    ("UI2_0_D1_OPTION_A_AMENDMENT_PROPOSAL_BUNDLE.md",
-     "UI2_0_D1_DEVICE_WRITE_CLASS_AND_STEP_KIND_DECISION.md",
-     "8a11cba89570c68c8db28f7a2fb9ded0fd8651eeb4f439e20f169bc90d7a6da7"):
-        "REAL CONTRADICTION — a FROZEN-but-NOT-YET-APPLIED amendment bundle resting on the same pending DRAFT decision",
-    ("UI2_0_D1_OPTION_A_AMENDMENT_PROPOSAL_BUNDLE.md",
-     "UI2_0_D1_DEVICE_WRITE_CLASS_AND_STEP_KIND_DECISION.md",
-     "5c94a641d2f436fc9035a3f39eaff405e1f8ead30c3dc957abc2143387200e0f"):
-        "REAL CONTRADICTION — Step 5's proposed baseline row derives from the same pending DRAFT decision",
 
     # --- DETECTOR FALSE POSITIVES. No authority is claimed in these. ---
     ("UI2_0_C2_JOB_EXECUTION_CONTRACT.md",

@@ -2,8 +2,34 @@
 
 ## Status
 
-**DRAFT — OPTION A SELECTED IN RELAY; FROZEN BASELINE AMENDMENT PENDING.**
-This document originally presented options for the Product Owner to choose
+**FROZEN — OPTION A SELECTED AND THE BASELINE AMENDMENT APPLIED, 2026-09-12.**
+The Product Owner selected Option A in relay and ruled that the pending
+amendment be applied rather than this document be frozen over undone work.
+That amendment is now applied in full across every document it named:
+`utils/action_taxonomy.py` (`CLASS_1B_CONTROLLED_RESTORE_WRITE`, step 1),
+`UI2_0_C4_CAPABILITY_REGISTRY_GATE_RESOLUTION_CONTRACT.md` §2.3/§3.3 step 7
+(step 2), `UI2_0_C7_BACKUP_ARTEFACT_RESTORE_ENGINE_CONTRACT.md` §5.3 and
+§9.1–§9.3 plus `UI2_0_C2_JOB_EXECUTION_CONTRACT.md` §5.3/§6 (steps 2b, 4, 4b),
+and `UI2_0_BASELINE_CONTRACT.md` §2 row `DEVICE-WRITE-CLASS` (D-8) (step 5) —
+the recording act §6 below names as the one that authorizes restore's
+device-write admission to be built. Each amended contract carries its own
+`Amendment A-1 (2026-09-12)` record naming
+`UI2_0_D1_OPTION_A_AMENDMENT_PROPOSAL_BUNDLE.md` as the authorizing document.
+This document is therefore authority for the decision it records, not a pending
+draft.
+
+**Still outstanding, and not claimed as done by this freeze:** item 3's
+admission contract `docs/design/RESTORE_CONTROLLED_WRITE_LEDGER.md` is FROZEN
+but its own `UNKNOWN`s (connectivity probe timeout, cache TTL) are unset; item
+6 (tests) and item 7 (the Java implementation) of §5's follow-up list are not
+started; `docs/AI_DEVELOPMENT_PROTOCOL.md`'s class-1.5 command-gate
+registration path (ledger §3.5) is proposed, not applied. **Restore stays
+disabled and unimplemented in Java.** Freezing this decision records what was
+decided; it does not assert that restore works.
+
+**Historical, preserved from this document's original DRAFT pass (superseded
+by the two paragraphs above, not deleted):** This document originally presented
+options for the Product Owner to choose
 from, per
 `relay/NXS-LOCAL-0060-ui2-d1-device-write-class-decision.json`'s
 `SESSION_START`. The Product Owner selected Option A at relay seq 3 and

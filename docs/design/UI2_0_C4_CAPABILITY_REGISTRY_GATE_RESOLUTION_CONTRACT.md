@@ -783,3 +783,31 @@ line), and its §5 cross-reference note already anticipates amendment by the
 - `AGENTS.md` — network-device command gate, identity law, VSX/ClusterXL
   vendor notes, action taxonomy pointer.
 - `utils/action_taxonomy.py` — the action classes.
+
+---
+
+## Amendment A-1 (2026-09-12) — D1 Option A: record of the already-applied `restore_push` step kind
+
+This contract's §2.3 (`restore_push` row and its accompanying prose) and §3.3
+step 7 (`controlled-restore-write` narrow `SIGNED_OFF` eligibility) already
+carry step 2 of
+`docs/design/UI2_0_D1_OPTION_A_AMENDMENT_PROPOSAL_BUNDLE.md`. The edit was
+applied without an amendment record, so the contract did not say under whose
+authority its closed step-kind set had been opened. This section supplies that
+record; **no clause is changed by it.**
+
+**Authorizing documents.** `docs/design/UI2_0_D1_OPTION_A_AMENDMENT_PROPOSAL_BUNDLE.md`
+(FROZEN — Product Owner approved amendment contract), resting on the Option A
+selection recorded at relay
+`relay/NXS-LOCAL-0060-ui2-d1-device-write-class-decision.json` (seq 3, fixed at
+seq 5, 7, 9, 13, 17, council-satisfied at seq 21) and on
+`docs/design/UI2_0_BASELINE_CONTRACT.md` §2 row `DEVICE-WRITE-CLASS` (D-8).
+The admission contract the amended clauses cross-reference,
+`docs/design/RESTORE_CONTROLLED_WRITE_LEDGER.md`, is itself FROZEN, so no
+amended clause here rests on a DRAFT.
+
+**Mutation boundary: not widened by this record.** `restore_push` is legal
+only for a capability whose resolved `action_class` is
+`controlled-restore-write`; `sftp_put` remains reserved and refused
+unconditionally; §3.3 step 7's eligibility is a static, spec-time predicate
+that never, alone, authorizes device contact.

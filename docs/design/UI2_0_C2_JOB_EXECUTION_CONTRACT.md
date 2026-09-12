@@ -333,6 +333,7 @@ whether the timeout comes from a genuine crash or from a slow/hung device.
 |---|---|
 | `CLASS_0_READ` (`read`) | Bounded automatic retry — proposed: up to 2 retries, exponential backoff starting at 2 s — **only** for a transport-level failure before any response was received (connection refused, connect timeout, DNS/handshake failure). A retry creates a new `job_step_attempt` row at the same `step_index` with an incremented `attempt_number`; it never retries after a response was received and parsed (that is a semantic failure, not a transient one, and is `FAILED`, not retried). Retry exhaustion is `FAILED` (or, if the boundary was somehow already crossed by an earlier attempt at the same step — which cannot happen for a class-0 step by construction, since a read step's precondition is that it declares no mutation — `OUTCOME_UNKNOWN` never applies to a pure class-0 job). |
 | `CLASS_1_RECOVERY_WRITE` (`recovery-write`) | **Never auto-retries, at any stage, for any reason** — this is the direct implementation of `UI2_0_BASELINE_CONTRACT.md` D-2a and the risk this contract's own dispatch explicitly names ("allowing a 'safe' automatic retry ... because the command is idempotent"). A class-1 step's failure or ambiguity ends the job (`FAILED` or `OUTCOME_UNKNOWN`, §3, §8); any further attempt is a brand-new job with its own owner, reason and (where `OUTCOME_UNKNOWN` is involved) reconciliation evidence, per §3.5. This holds even when the underlying device command is documented as idempotent — idempotency of the **device command** is not the same guarantee as safety of an **automatic** retry with no human decision point (brief §6.3), and this contract does not let one substitute for the other. |
+| `CLASS_1B_CONTROLLED_RESTORE_WRITE` (`controlled-restore-write`) | **Never auto-retries, at any stage, for any reason** — identical rule to `CLASS_1_RECOVERY_WRITE`'s row above, for a stronger reason: `C7` §5.7 already mandates this at the job-state level ("closes only via `RECONCILED`... no exception for restore"; a new attempt is always a **new** `restore_plan`/job, never a retried one). This row makes this table state the rule explicitly rather than leaving the new class implicitly covered only by `C7`'s restatement of §3.5's generic mechanism. **This rule governs a job that reached `EXECUTING`** — a job refused earlier, at claim, by §6's battery (including check 4's restore-reconciliation clause below) never reached `EXECUTING` at all and is governed instead by `docs/design/RESTORE_CONTROLLED_WRITE_LEDGER.md` §3.1.3's own retry-eligibility answer, not this row; the two are not the same event and this contract does not conflate them. |
 | `CLASS_2`/`CLASS_3`/`CLASS_4` | Not applicable — no member of these classes is executable through this job contract (`utils.action_taxonomy`: class 2 has no member yet, classes 3–4 are prohibited); a job whose resolved `action_class` is one of these is refused at admission (`E3`/`E6`), never reaches `CLAIMED`. |
 
 A profile that mixes classes (design §6.3's example: class-0 `connect`/
@@ -366,9 +367,9 @@ later check runs, and no device is contacted:
 | # | Check | Outcome field | What it re-reads |
 |---|---|---|---|
 | 1 | **Approval state, re-checked fresh** — the profile version is still `APPROVED` (not superseded/retired); the target's `BackupAssignment` (or capability assignment for a read job) is still enabled; for a Run Now, the `D7` role binding and mandatory reason are still valid for the owning actor | `PASSED` / `FAILED(reason)` | current rows, never the request-time snapshot in §2.2 — this is what closes AC-7: approval is checked at claim time, not only at request time |
-| 2 | **Connectivity precondition** — for a class-1 profile, a prior successful `backup_profile_connect_check` exists for this `{profile_id, version, device_id}` (design §6.5's `SCHEDULE_ENABLE_REQUIRES_CONNECT_CHECK` invariant, re-verified at every claim, not only at schedule-enable time) | `PASSED` / `FAILED(reason)` / `NOT_APPLICABLE` (class-0 job) | the connect-check record |
+| 2 | **Connectivity precondition** — for a class-1 profile, a prior successful `backup_profile_connect_check` exists for this `{profile_id, version, device_id}` (design §6.5's `SCHEDULE_ENABLE_REQUIRES_CONNECT_CHECK` invariant, re-verified at every claim, not only at schedule-enable time). This scope reads as **inclusive of `controlled-restore-write` (class 1.5) jobs**, which consult the same `RestoreConnectivityFreshnessPolicy` (`docs/design/RESTORE_CONTROLLED_WRITE_LEDGER.md` §3.3.1) as `C7` §5.3 check 1's compile-time pass — but here as the **authoritative** result, re-verified fresh however long ago that compile-time pass ran | `PASSED` / `FAILED(reason)` / `NOT_APPLICABLE` (class-0 job) | the connect-check record; `RestoreConnectivityFreshnessPolicy` |
 | 3 | **Line-1/Java device-contact coordination window** (workflow §3.4, R-08) — per device and job type, only one line may contact the device in a given window; the claim refuses if the coordination record shows Line-1 currently owns this device+job-type window | `PASSED` / `BLOCKED(reason)` | the coordination record (a shared window/ownership record, not a shared runtime) |
-| 4 | **`RB.x` operational-write ledger** (class-1 only) — the ledger is re-read *inside* the claimed/admitted section per `RECOVERY_OPERATIONAL_WRITE_LEDGER.md` §5/§7's ordering rule; **unreadable ⇒ `BLOCKED`, fail-closed** (never conflated with "no entry"); an entry inside the minimum re-execution interval ⇒ `BLOCKED` with the due time named; absent or outside the window ⇒ `PASSED` | `PASSED` / `BLOCKED(reason)` / `NOT_APPLICABLE` (class-0 job) | the operational-write ledger, Line-1 authority reused as a rule (P-4) |
+| 4 | **Write-admission ledger, class-scoped.** For **`CLASS_1_RECOVERY_WRITE`** — unchanged: the **`RB.x` operational-write ledger** is re-read *inside* the claimed/admitted section per `RECOVERY_OPERATIONAL_WRITE_LEDGER.md` §5/§7's ordering rule; **unreadable ⇒ `BLOCKED`, fail-closed** (never conflated with "no entry"); an entry inside the minimum re-execution interval ⇒ `BLOCKED` with the due time named; absent or outside the window ⇒ `PASSED`. For **`CLASS_1B_CONTROLLED_RESTORE_WRITE`** — this slot instead runs `docs/design/RESTORE_CONTROLLED_WRITE_LEDGER.md`'s own `RestoreWriteLedger.has_unreconciled_prior` check for the target (fail-closed on an unreadable ledger); a materially different admission question from the `RB.x` cadence ceiling, and an independently named, independently tracked, always-run check, per that document's §3.1.0. `NOT_APPLICABLE` for every other class, unchanged | `PASSED` / `BLOCKED(reason)` / `NOT_APPLICABLE` (class-0 job) | the operational-write ledger, Line-1 authority reused as a rule (P-4); or the restore-write ledger, per class |
 | 5 | **Device registry / allowlist re-check** — every `target_ref` still resolves to a live, non-disabled registry entry; for class-1, the target is still within the profile's fail-closed allowlist | `PASSED` / `FAILED(reason)` | the device registry |
 | 6 | **Credential resolution** — the worker resolves `execution_credential_ref` from the server-side credential store for the profile's/capability's declared `credential_profile_ref`; a resolution failure blocks before contact | `PASSED` / `FAILED(reason)` | the credential store (server-side only; nothing reaches the operator's browser or the job row as a value) |
 
@@ -565,3 +566,48 @@ document does not touch it.
 - `utils/operate/states.py`, `utils/operate/record.py` — reference-only pattern for the mutation-boundary-before-contact discipline and closed-transitions-graph shape (§1.4); not ported.
 - `docs/AI_DEVELOPMENT_PROTOCOL.md` — network-device command gate (unaffected; this contract contacts no device itself) and approval boundaries.
 - `docs/design/UI2_0_C1_PLATFORM_SCHEMA_CONTRACT.md` (concurrent movement, `C1`) — owns the audit table, secrets, and adopts the lifecycle columns this document names explicitly in §2, §4, §5, §7.
+
+---
+
+## Amendment A-1 (2026-09-12) — D1 Option A: restore admission and retry clauses applied
+
+Step 2b of `docs/design/UI2_0_D1_OPTION_A_AMENDMENT_PROPOSAL_BUNDLE.md` is
+applied to this contract, having been approved and frozen there but never
+applied.
+
+**Authorizing documents.** `docs/design/UI2_0_D1_OPTION_A_AMENDMENT_PROPOSAL_BUNDLE.md`
+(FROZEN — Product Owner approved amendment contract), resting on the Option A
+selection recorded at relay
+`relay/NXS-LOCAL-0060-ui2-d1-device-write-class-decision.json` (seq 3, fixed at
+seq 5, 7, 9, 13, 17, council-satisfied at seq 21) and on
+`docs/design/UI2_0_BASELINE_CONTRACT.md` §2 row `DEVICE-WRITE-CLASS` (D-8).
+The admission contract the amended clauses cross-reference,
+`docs/design/RESTORE_CONTROLLED_WRITE_LEDGER.md`, is itself FROZEN, so no
+amended clause here rests on a DRAFT.
+
+**What changed here.**
+
+- **§5.3** — one new, additive retry row:
+  `CLASS_1B_CONTROLLED_RESTORE_WRITE` never auto-retries, mirroring
+  `CLASS_1_RECOVERY_WRITE`'s existing row. No existing row is modified.
+- **§6 check 2 (Connectivity precondition)** — its existing "for a class-1
+  profile" scope now reads as inclusive of class-1.5
+  `controlled-restore-write` jobs, consulting the same
+  `RestoreConnectivityFreshnessPolicy` as `C7` §5.3 check 1's compile-time
+  pass, but as the authoritative result.
+- **§6 check 4** — gains an explicit second class-scoped clause (relay seq 13):
+  for `controlled-restore-write` jobs the slot runs
+  `RestoreWriteLedger.has_unreconciled_prior`, fail-closed on an unreadable
+  ledger. **Zero new rows** in §6's table; `CLASS_1_RECOVERY_WRITE` keeps the
+  `RB.x` cadence ledger unchanged, and every other class stays
+  `NOT_APPLICABLE`.
+
+**Mutation boundary: not widened.** All three changes add refusal, not reach.
+Nothing becomes console-submittable, and the `RB.x` ledger's own gate is
+untouched.
+
+**Note on §5.3's heading and the cross-reference to "the five action
+classes".** `utils/action_taxonomy.py` now defines six classes. That count is
+stated in this document's cross-reference list and is now stale; it is left as
+written rather than silently edited, and reported as a defect for the contract
+owner.

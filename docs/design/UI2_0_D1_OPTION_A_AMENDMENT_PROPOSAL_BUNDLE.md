@@ -1,7 +1,25 @@
 # UI 2.0 — D1 Option A: amendment proposal bundle (steps 1, 2, 4, 5)
 
-**Status: FROZEN — PRODUCT OWNER APPROVED AMENDMENT CONTRACT, NOT YET APPLIED,
-2026-09-10.** Council disclosure: two same-model-family, fresh-context seats
+**Status: FROZEN — PRODUCT OWNER APPROVED AMENDMENT CONTRACT, APPLIED
+2026-09-12 (originally approved 2026-09-10).** Every step this bundle carries
+has now been applied to its target document: step 1
+(`utils/action_taxonomy.py`), step 2 (`C4` §2.3, §3.3 step 7), step 2b (`C7`
+§5.3 check 1 and new check 7; `C2` §6 checks 2 and 4; `C2` §5.3 retry row),
+step 4 (`C7` §9.1–§9.3 closing notes), step 4b (`C7` §5.3's check-4 note), and
+step 5 (`UI2_0_BASELINE_CONTRACT.md` §2 row `DEVICE-WRITE-CLASS`, D-8). Steps
+1, 2 and 5 were applied by earlier movements without an amendment record; `C4`
+and `UI2_0_BASELINE_CONTRACT.md` now carry one. Steps 2b, 4 and 4b were applied
+2026-09-12. Items 6 (tests) and 7 (Java implementation) of the D1 §5 follow-up
+list remain explicitly out of this bundle's scope and are **not** done.
+
+**Read every "is not applied here", "is not edited by this document", and
+"proposed" below as historical.** The prose is preserved exactly as approved,
+because it is the authority for what each amended clause says; it is no longer
+an accurate description of the repository's state. The one sentence this
+supersedes most directly is the closing claim that "no
+`utils/action_taxonomy.py`, `C4`, `C2`, `C7`, `UI2_0_BASELINE_CONTRACT.md` ...
+file is modified by this document's existence" — true of the document's
+existence, no longer true of the repository. Council disclosure: two same-model-family, fresh-context seats
 (Security Reviewer and Senior Python Architect) reviewed independently; this
 was not a cross-model review. Both returned `FREEZE WITH CHANGES`, and relay
 `NXS-LOCAL-0060` seq 21 records that their required changes were satisfied
