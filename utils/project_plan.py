@@ -33,6 +33,23 @@ def _load(name: str, default: Any) -> Any:
         return default
 
 
+def _load_backlog_terminal() -> list[dict[str, Any]]:
+    """GOV.ORCH.9 2.2 pattern: terminal backlog items (`done`, `deferred`,
+    `automated_validated`, `real_env_validated`) live in
+    project/archive/backlog_terminal.json, not in backlog.json. Loaded for
+    counting only, the same way `_load_archived_builds` folds the build
+    archive back in -- every count, percentage and id set in the payload
+    must include both files."""
+    path = ARCHIVE_DIR / "backlog_terminal.json"
+    if not path.is_file():
+        return []
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return []
+    return [row for row in (data.get("items") or []) if isinstance(row, dict)]
+
+
 def _load_archived_builds() -> list[dict[str, Any]]:
     """GOV.ORCH.8 2.2: terminal builds beyond the newest 20 live in
     project/archive/build_history_2026.json. Loaded for counting only --
@@ -290,6 +307,7 @@ def build_project_plan_payload() -> dict[str, Any]:
     completed_features.sort(key=lambda row: str(row.get("introduced") or ""), reverse=True)
 
     backlog_items = [dict(row) for row in (backlog.get("items") or []) if isinstance(row, dict)]
+    backlog_items.extend(dict(row) for row in _load_backlog_terminal())
     builds = [dict(row) for row in (history.get("builds") or []) if isinstance(row, dict)]
     archived_build_count = len(_load_archived_builds())
     metadata_warnings = _metadata_warnings(roadmap, features, backlog_items, builds)
