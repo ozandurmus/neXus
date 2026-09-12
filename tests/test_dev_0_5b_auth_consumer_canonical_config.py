@@ -83,6 +83,46 @@ _KNOWN_PROSE_COLLISION_LINE_HASHES = {
         # files to main).
         "e531a2802635972596abea1d6ef0c54b555093720abaf18d6a056c908b7bb41c",
     },
+    # backlog: dlp_prose_collision_catalogue_stale -- catalogue refreshed after the
+    # guard went stale against files added since the b) decision above. Each entry
+    # below is the sha256 of one exact colliding line and a stated reason it cannot
+    # be reworded (never a bare hash with no reason -- that is how it went stale).
+    "docs/history/builds/gov_po_1_local_relay_watch_command.md": {
+        # SESSION CLOSE build-history log entry for a past movement, quoting the
+        # DLP pattern itself as evidence text. A durable session-history record
+        # must not be silently rewritten after the fact (AGENTS.md: "Do not
+        # silently rewrite historical outcomes").
+        "6d88c58a92d8ab04b926959167956bbe79b43a0f6f31a3ccc14024b68012186a",
+    },
+    "relay/NXS-LOCAL-0030-credential-profiles-reference-model.json": {
+        # Frozen relay/RELAY_DECISION evidence record quoting the same pattern
+        # as evidence prose about the scanner. A committed relay ledger entry is
+        # historical record, not editable prose.
+        "473804e77391f578fac9ad8dad02d45d0cbc540ecfa83662b302ad7d986a2d14",
+    },
+    "relay/NXS-LOCAL-0033-deploy1-database-migrations-and-roles-re.json": {
+        # Same class: frozen relay ledger entry quoting the pattern as evidence
+        # about this pre-existing baseline pair. Historical record, not editable.
+        "bd57daecad950914014a27d6f67d62afad9c7b75a633ebb1145070f4579feba7",
+    },
+    "tests/test_dev0_4_repository_privacy_gate.py": {
+        # Test fixture text for the privacy-gate test suite itself: these lines
+        # exist specifically to prove the scanner both ignores prose that merely
+        # quotes the credential keyword and still catches a genuine literal
+        # secret. The literal forms are the test subject and cannot be reworded
+        # without defeating the test they implement.
+        "e59e04547e65a254027fa560afc824444d12978d980cd37b6e5019064b9c9a79",
+        "dc48e9545e84273bc77faa5b9da591f8f729f592506b3258202cc2d47a0636b6",
+        "eda2d4acd930a9af1120dbaf21b0c50385746be6ae5b1183f3a85c0fda8cd493",
+    },
+    "utils/repository_privacy.py": {
+        # Docstring of the scanner's own prose-vs-secret classifier, quoting the
+        # pattern it exists to distinguish from a real secret. Out of this
+        # movement's edit scope (owned by another worker) and, independently,
+        # self-referential prose about the detector rather than a collision to
+        # reword.
+        "19663d8275828e473b225f479c877f3e0328f26997cb07127113f697968b1e33",
+    },
 }
 
 

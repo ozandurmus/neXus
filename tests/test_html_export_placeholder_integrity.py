@@ -15,6 +15,7 @@ re-scanned (``utils.html_export._fill_template``).
 import json
 import re
 
+from utils import html_export
 from utils.html_export import _fill_template, run_html_export
 import pytest
 
@@ -57,9 +58,51 @@ def test_every_embedded_payload_is_valid_json(tmp_path):
         json.loads(_script_literal(html, name))  # raises on the pre-fix corruption
 
 
-def test_project_plan_keeps_the_sentinel_token_as_data(tmp_path):
+def test_project_plan_keeps_the_sentinel_token_as_data(tmp_path, monkeypatch):
     """Proof the token was embedded as text, not expanded: it must still be
-    present verbatim inside projectPlanData, and that payload must still parse."""
+    present verbatim inside projectPlanData, and that payload must still parse.
+
+    Whether the *real* project/backlog.json or project/build_history.json
+    currently happens to carry a note mentioning the literal sentinel text is
+    incidental repository content, not a contract -- the archive split
+    (GOV.ORCH.8 2.2) can move that exact record out of the live payload at
+    any time (see docs/history/backlog/project_plan_build_history_archive_
+    split_lookup.md), and the record_contract for build_history.json does not
+    promise any particular note text will persist. A proof that only holds
+    while some unrelated backlog/build_history entry happens to contain this
+    string is not a proof at all -- it is state that a clean checkout may or
+    may not have. This test instead supplies a synthetic project-plan payload
+    that is guaranteed to contain the sentinel text in a data field, so the
+    property under test -- one-pass substitution never re-scans/expands a
+    sentinel that appears verbatim inside already-embedded data -- holds
+    identically on a clean checkout and on a warm tree.
+    """
+    # Deliberately NOT derived from the real project/*.json content -- any
+    # field copied from build_project_plan_payload() could itself carry (or
+    # lack) the sentinel by repository coincidence, which is exactly the
+    # state-dependence being eliminated here.
+    synthetic_payload = {
+        "schema_version": "1.0",
+        "generated_at": "2026-01-01T00:00:00+00:00",
+        "current_build": "synthetic",
+        "current_track": "synthetic",
+        "progress_contract": "",
+        "overall_progress_percent": 0,
+        "current_track_progress_percent": 0,
+        "tracks": [],
+        "now_next": {},
+        "roadmap_notes": [
+            "regression note: embeds __CRYPTO_JSON_PLACEHOLDER__ verbatim as prose"
+        ],
+        "backlog": [],
+        "backlog_counts": {},
+        "completed_features": [],
+        "build_history": [],
+        "archived_build_count": 0,
+        "metadata_warnings": [],
+    }
+    monkeypatch.setattr(html_export, "build_project_plan_payload", lambda: synthetic_payload)
+
     html = _render(tmp_path)
     plan = _script_literal(html, "projectPlanData")
     assert "__CRYPTO_JSON_PLACEHOLDER__" in plan

@@ -315,6 +315,32 @@ def finding_key(root: Path, finding: PrivacyFinding) -> tuple[str, str, str]:
     return (finding.path, finding.rule, finding_fingerprint(root, finding))
 
 
+def is_git_ignored(root: Path | str, rel_path: str) -> bool:
+    """True when ``rel_path`` is git-ignored (untracked and untrackable) under ``root``.
+
+    A gitignored path can never appear in a git-ref baseline -- it is not
+    committed anywhere, so no merge-base export will ever contain it. Any
+    finding at such a path is therefore structurally excluded from a
+    baseline-vs-current comparison, regardless of which rule matched: the
+    exclusion is "this path cannot have a git history to be pre-existing
+    against", not "this specific rule is exempt". This does not change what
+    ``scan_repository`` reports -- a real credential/trust-material finding
+    at a *tracked* path is never git-ignored and stays fully in scope.
+
+    Fails closed: a ``git check-ignore`` invocation error (missing git,
+    timeout, not a repository) is treated as "not ignored" so the finding
+    stays in the comparison rather than being silently dropped.
+    """
+    try:
+        result = subprocess.run(
+            ["git", "check-ignore", "-q", "--", rel_path],
+            cwd=str(root), capture_output=True, timeout=30,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return result.returncode == 0
+
+
 def _export_ref_to_tempdir(ref_sha: str, cwd: Path | str) -> Path:
     tmp_dir = Path(tempfile.mkdtemp(prefix="nexus-privacy-baseline-"))
     archive = subprocess.run(

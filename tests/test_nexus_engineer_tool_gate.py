@@ -14,6 +14,8 @@ from pathlib import Path
 
 import pytest
 
+from utils.repository_privacy import is_git_ignored
+
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "scripts"))
 import nexus_engineer_tool_gate as gate  # noqa: E402
@@ -155,7 +157,14 @@ def test_ac1_live_bug_regression_against_real_repository_state():
     current = gate.scan_repository(ROOT)
     assert not [f for f in current.findings if (f.path, f.rule) in ac1_locations]
 
-    tracked = [f for f in current.findings if f.rule != "RUNTIME_DIRECTORY_PRESENT"]
+    # Idempotence (relay/privacy_baseline_tests_not_idempotent_runtime_trust_material):
+    # a warm tree can carry gitignored runtime artifacts under any rule (not
+    # just RUNTIME_DIRECTORY_PRESENT -- e.g. PRIVATE_OR_TRUST_MATERIAL for a
+    # runtime-generated key under data/). No git-ref baseline can ever call a
+    # gitignored path pre-existing, so such findings are excluded from this
+    # comparison by path, not by rule name. A finding at a tracked path is
+    # never git-ignored and always stays in scope.
+    tracked = [f for f in current.findings if not is_git_ignored(ROOT, f.path)]
     if tracked:
         baseline_keys, baseline_note = gate._baseline_finding_keys(str(ROOT))
         for finding in tracked:
