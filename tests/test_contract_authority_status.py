@@ -65,14 +65,28 @@ DRAFT as a frozen contract, so every citation *of* it went unchecked. It now
 reads the declared token, the leading one before the first dash or comma,
 falling back to the whole line only when that prefix names none.
 
-That fix surfaced eleven further findings, all catalogued below and none
-reconciled here. The load-bearing ones are structural rather than stray:
-`UI2_0_ARCHITECTURE_DESIGN.md` (DRAFT) sits at item 4 of the authority chain
-of **four** FROZEN C-series contracts — `C1` §1, `C2` §1.3, `C3` §1.4,
-`C4` §1.3. The whole UI 2.0 C-series therefore rests on a document that says
-of itself it is not implementation authority. That is a Product Owner adjudication, not an
-engineering edit: rewriting four frozen contracts to re-rank their own
-authority chain would change what they require.
+That fix surfaced eleven further findings. **The seven REAL CONTRADICTIONs
+among them were closed on 2026-09-12** and their entries deleted; what follows
+records what they were, because the shape matters more than the list.
+`UI2_0_ARCHITECTURE_DESIGN.md` (DRAFT) sat at item 4 of the authority chain of
+**four** FROZEN C-series contracts — `C1` §1, `C2` §1.3, `C3` §1.4, `C4` §1.3
+— plus `C7` §1, so the whole UI 2.0 C-series rested on a document that said of
+itself it is not implementation authority.
+
+The Product Owner ruled: write a successor rather than freeze the predecessor.
+`docs/design/UI2_0_ARCHITECTURE_CONTRACT.md` (FROZEN) now carries those
+clauses, the five contracts cite it, and the predecessor is `SUPERSEDED`. The
+three `D1` entries closed the same day, by applying the pending baseline
+amendment the decision document was waiting on.
+
+**A second gap closed in the same pass.** `_findings` compared the cited
+document's class against `"draft"` alone, so retiring a cited document cleared
+every finding against it: marking the predecessor `SUPERSEDED` silently
+dropped nine catalogued entries, four of them REAL CONTRADICTIONs, while the
+citing contracts still pointed at it. `AGENTS.md` item 2 forbids four states,
+not two, so the comparison now covers `retired` as well. A superseded document
+is no more authority than a draft, and a fix that moves a violation out of the
+gate's sight is not a fix.
 
 Entries marked DETECTOR FALSE POSITIVE are citations this gate flags but that
 carry no authority claim — a read list, a "reference-only, not ported"
@@ -136,28 +150,8 @@ _KNOWN_DRAFT_AUTHORITY_CITATIONS: dict[tuple[str, str, str], str] = {
     # class as the B1-1 defect, one layer deeper: these are the C-series.
     # Product Owner adjudication required — re-ranking a frozen contract's
     # authority chain changes what that contract requires.
-    ("UI2_0_C1_PLATFORM_SCHEMA_CONTRACT.md",
-     "UI2_0_ARCHITECTURE_DESIGN.md",
-     "3449b4a234f146951b420f1251ae228971d2b36fd0b57682567b01c0c42fc9a2"):
-        "REAL CONTRADICTION — §1 authority chain item 4 ranks a DRAFT as authority; C1 §9 (storage) and §10 (invariants) rely on it in body",
-    ("UI2_0_C2_JOB_EXECUTION_CONTRACT.md",
-     "UI2_0_ARCHITECTURE_DESIGN.md",
-     "66e74d90764e9f06ec41287bb16e643add54f2b10b9b8c7cc290eb0ce2d7d3f5"):
-        "REAL CONTRADICTION — §1.3 authority chain ranks a DRAFT as authority",
-    ("UI2_0_C3_IDENTITY_SESSIONS_RBAC_CONTRACT.md",
-     "UI2_0_ARCHITECTURE_DESIGN.md",
-     "c98ea099eed59f63bfb3308b084a24f6b768179c2d3e1cc81506ca5ecd460afc"):
-        "REAL CONTRADICTION — §1.4 authority chain item 4 ranks a DRAFT as authority; §6's U-4 disposition reads through it",
-    ("UI2_0_C4_CAPABILITY_REGISTRY_GATE_RESOLUTION_CONTRACT.md",
-     "UI2_0_ARCHITECTURE_DESIGN.md",
-     "d651908d1e65ad900dc76cea399a7c05c34de424596a949269ad53071d6d47c7"):
-        "REAL CONTRADICTION — §1.3 authority chain ranks a DRAFT as authority",
 
     # --- DETECTOR FALSE POSITIVES. No authority is claimed in these. ---
-    ("UI2_0_C2_JOB_EXECUTION_CONTRACT.md",
-     "UI2_0_ARCHITECTURE_DESIGN.md",
-     "2dd6b1a9a684c85ebb3707fac6f2e6e8091d2cc60abab11832cd6951a88c3b03"):
-        "DETECTOR FALSE POSITIVE — §10's 'Documents checked' read list, in a section reporting no contradictions",
     ("UI2_0_C3_IDENTITY_SESSIONS_RBAC_CONTRACT.md",
      "UI2_0_ARCHITECTURE_DESIGN.md",
      "9b71604037ea0457ff8f5243d82ef8bd6febfd01515e574e6b5978b010da49c8"):
@@ -256,8 +250,10 @@ def _paragraph_key(paragraph: str) -> str:
 
 
 def _findings() -> list[tuple[tuple[str, str, str], str]]:
-    """Every FROZEN → DRAFT authority citation in `docs/design/*.md`, as
-    ((citing doc, cited doc, paragraph hash), human-readable context)."""
+    """Every authority citation in `docs/design/*.md` from a FROZEN document
+    to one the constitution forbids as authority -- DRAFT, DO NOT FREEZE,
+    SUPERSEDED or DEPRECATED -- as ((citing doc, cited doc, paragraph hash),
+    human-readable context)."""
     status = _status_by_name()
     found: list[tuple[tuple[str, str, str], str]] = []
     for name, path in _design_docs().items():
@@ -275,7 +271,16 @@ def _findings() -> list[tuple[tuple[str, str, str], str]]:
                     continue
                 for reference in sorted(set(_MD_REFERENCE_RE.findall(paragraph))):
                     cited = Path(reference).name
-                    if cited == name or status.get(cited) != "draft":
+                    # AGENTS.md "Authority hierarchy" item 2 forbids four
+                    # states as implementation authority, not two: DRAFT, DO
+                    # NOT FREEZE, SUPERSEDED and DEPRECATED. Checking only
+                    # `draft` meant retiring a cited document silently cleared
+                    # every finding against it -- marking
+                    # UI2_0_ARCHITECTURE_DESIGN.md SUPERSEDED dropped nine
+                    # catalogued entries, four of them REAL CONTRADICTIONs,
+                    # while the citing contracts still pointed at it. A
+                    # superseded document is no more authority than a draft.
+                    if cited == name or status.get(cited) not in ("draft", "retired"):
                         continue
                     context = f"{heading.strip()} :: {' '.join(paragraph.split())[:140]}"
                     found.append(((name, cited, _paragraph_key(paragraph)), context))

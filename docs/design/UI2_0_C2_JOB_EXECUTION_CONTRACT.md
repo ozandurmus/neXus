@@ -37,7 +37,7 @@ ordering.
 2. `docs/design/UI2_0_BASELINE_CONTRACT.md` (FROZEN) — binding direction and Phase 0 decisions; this document implements `JOB-UNCERTAIN-OUTCOME`, `UI-OPERATIONAL-RUN-NOW`, `APPROVAL-MODEL` and acceptance sentence A-2.
 3. This document, once its own status line reads `FROZEN`.
 4. `docs/design/UI2_0_DEVELOPMENT_WORKFLOW.md` §3.2 (step executor, closed step kinds, evidence writer) and §3.4 (Line-1/Java device-contact coordination, R-08) — the plan this contract concretizes.
-5. `docs/design/UI2_0_ARCHITECTURE_DESIGN.md` §5.4 (storage/audit pattern), §6.3–§6.7 (profile model, step kinds, lifecycle, taxonomy reconciliation, schedule-edit intent) — design under amendment; `APPROVAL-MODEL` supersedes its per-run four-eyes framing exactly where `UI2_0_BASELINE_CONTRACT.md` §5 item 3 says so.
+5. `docs/design/UI2_0_ARCHITECTURE_CONTRACT.md` (FROZEN 2026-09-12) §3.3 (storage/audit pattern), §5.3–§5.7 (profile model, step kinds, lifecycle, taxonomy reconciliation, schedule-edit intent). Repointed 2026-09-12 from `UI2_0_ARCHITECTURE_DESIGN.md`, now SUPERSEDED and historical only, never authority: it was a DRAFT, and a DRAFT cannot stand in a FROZEN contract's authority chain (`AGENTS.md` "Authority hierarchy" item 2); the successor carries the same clauses and already folds in the `APPROVAL-MODEL` amendment this item used to carry as a pending exception.
 6. `docs/design/UI2_0_COUNCIL_REVIEW_AND_SECOND_OPINION_BRIEF.md` §6.3 (the job-execution-contract concern this document answers) and §6.7 (the identity concern §7 of this document resolves).
 7. `utils/action_taxonomy.py` — the five action classes, ported to Java verbatim (`RUNTIME-DIRECTION`); every retry rule and every console-submittability statement in this document keys on it.
 
@@ -521,7 +521,7 @@ sessions or admins are involved.
 **Contradictions with frozen authority: none found.** Documents checked:
 `AGENTS.md`, `docs/design/UI2_0_BASELINE_CONTRACT.md`,
 `docs/design/UI2_0_DEVELOPMENT_WORKFLOW.md`,
-`docs/design/UI2_0_ARCHITECTURE_DESIGN.md` (as amended by the workflow),
+`docs/design/UI2_0_ARCHITECTURE_CONTRACT.md` (FROZEN 2026-09-12),
 `docs/design/RECOVERY_OPERATIONAL_WRITE_LEDGER.md`,
 `utils/action_taxonomy.py`, `docs/AI_DEVELOPMENT_PROTOCOL.md`. This document
 reopens no PO-reserved decision: `JOB-UNCERTAIN-OUTCOME`, `UI-OPERATIONAL-
@@ -559,7 +559,7 @@ document does not touch it.
 
 - `docs/design/UI2_0_BASELINE_CONTRACT.md` (FROZEN — PRODUCT OWNER APPROVED, 2026-09-09) — binding direction; `JOB-UNCERTAIN-OUTCOME`, `UI-OPERATIONAL-RUN-NOW`, `APPROVAL-MODEL`, acceptance sentences A-1/A-2.
 - `docs/design/UI2_0_DEVELOPMENT_WORKFLOW.md` §3.2 (step executor, crash-safe job record, duplicate detection), §3.4 (device-contact coordination, R-08), §5 B0-2 (this movement's own scope line).
-- `docs/design/UI2_0_ARCHITECTURE_DESIGN.md` §5.4 (storage/audit pattern this contract's tables follow), §6.2–§6.7 (profile/step model, lifecycle, taxonomy reconciliation, schedule-edit intent — the object this contract's `version`/optimistic-concurrency addition extends).
+- `docs/design/UI2_0_ARCHITECTURE_CONTRACT.md` (FROZEN 2026-09-12) §3.3 (storage/audit pattern this contract's tables follow), §5.2–§5.7 (profile/step model, lifecycle, taxonomy reconciliation, schedule-edit intent — the object this contract's `version`/optimistic-concurrency addition extends).
 - `docs/design/UI2_0_COUNCIL_REVIEW_AND_SECOND_OPINION_BRIEF.md` §6.3 (the job-execution-contract concern answered by §3–§5, §8 above), §6.7 (the identity concern answered by §7.2), §4.3/§182 (SR-D6, resolved §7.2/§10).
 - `docs/design/RECOVERY_OPERATIONAL_WRITE_LEDGER.md` — Line-1 fail-closed reference for §6 check 4.
 - `utils/action_taxonomy.py` — the five action classes; §5.3, §7.3, §9 all key on it directly.

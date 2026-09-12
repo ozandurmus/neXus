@@ -3,6 +3,17 @@
   "record_contract": "One structured record per build, newest first. Required: build, status, title, summary (<= 2 sentences). Optional: started, completed, track, movement, supersedes, evidence, risks_forward, docs{agreement,validation,handover} (repo-relative paths under docs/history/). Full detail lives in the linked doc; do not restate it here. Status vocabulary must stay within utils/project_plan.py STATUS_VALUES.",
   "builds": [
     {
+      "build": "ui2_d1_restore_c7_c2_amendments",
+      "status": "automated_validated",
+      "title": "UI2 D1 Option A -- apply the pending C7/C2/C4/baseline restore admission amendments",
+      "summary": "Applied the D1 Option A amendment bundle's pending steps to C7 and C2, and supplied the missing amendment records for C4 and the baseline. Three steps were already applied by earlier movements without any record, so the contracts did not sa",
+      "movement": "ARCHITECTURE",
+      "docs": {
+        "agreement": "docs/design/UI2_0_D1_OPTION_A_AMENDMENT_PROPOSAL_BUNDLE.md"
+      },
+      "detail": "docs/history/builds/ui2_d1_restore_c7_c2_amendments.md"
+    },
+    {
       "build": "ui2_b1_01a_platform_skeleton_freeze",
       "status": "automated_validated",
       "title": "UI2 B1-1a — platform skeleton contract frozen, integration suite proven on real PostgreSQL 16, audit redaction policy",

@@ -6,7 +6,7 @@ see `AGENTS.md`/`AI_START_HERE.md`. **Predecessor build detail lives in
 docs under `docs/history/`; `docs/history/INDEX.md` is the one-line timeline.
 
 - **Checkpoint:** 2026-09-10, `ui2_b1_01_skeleton_ci_docker` (`UI2 B1-1`) — new `docs/design/UI2_0_B1_01_SKELETON_CI_DOCKER_CONTRACT.md` (status: **DRAFT — FOR PRODUCT OWNER FREEZE**). Contract only: module/dependency map, reproducible build commands, Testcontainers/Flyway harness, isolated CI, minimal non-root image, scoped secrets, and 15 runnable checks. No `ui2/` implementation, Line-1 source, validation workflow, or device contact. D1 Option A remains implemented as its predecessor; restore remains disabled. Detail: `project/build_history.json`.
-- **Next** (`now_next.next`): `ui2_d1_restore_c7_c2_amendments` — separate authorization for frozen C7/C2 restore-admission amendments; tests and Java/UI remain later slices, and no device contact or real write is implied. `m7_real_device_targeted_
+- **Next** (`now_next.next`): `M12` — per-device / per-capability schedules (`D5` producer). No device contact or real write is implied.
   collect_now` **AUTOMATED_VALIDATED 2026-09-08**, real-device confirmation
   pending Product Owner execution. `op2_c_cp_clusterxl_adapter_scoping`
   stays `upcoming`/`blocked`. `event_signal_intake` stays `in_progress` —
@@ -41,11 +41,11 @@ test-enforced boundaries.
 
 ## Active build
 
-`ui2_b1_01a_platform_skeleton_freeze` — `automated_validated`.
-`docs/design/UI2_0_B1_01A_PLATFORM_SKELETON_CONTRACT.md` (FROZEN 2026-09-12)
-supersedes the never-frozen `UI2_0_B1_01_SKELETON_CI_DOCKER_CONTRACT.md`; its
-§6 blocks this row, §9 blocks `REAL_ENV_VALIDATED` for all B1. Rows:
-`project/QUEUE.md`.
+`ui2_d1_restore_c7_c2_amendments` — `automated_validated`.
+`UI2_0_D1_OPTION_A_AMENDMENT_PROPOSAL_BUNDLE.md` applied; restore stays
+disabled in Java. Frozen successors replace the drafts that stood in C1–C4/C7's
+and B1's authority chains; `UI2_0_B1_01A_PLATFORM_SKELETON_CONTRACT.md` §6/§9
+block `REAL_ENV_VALIDATED` for all B1. Rows: `project/QUEUE.md`.
 
 Predecessors, all **MERGED**: `project/build_history.json` / `docs/history/INDEX.md`.
 

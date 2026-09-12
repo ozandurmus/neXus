@@ -4,7 +4,7 @@
 
 **FROZEN — PRODUCT OWNER APPROVED, 2026-09-09** (platform contract freeze (C1–C6 + baseline directory), per `UI2_0_BASELINE_CONTRACT.md` §2 `FREEZE-SLICING`). Open items listed in this document's own open-items section are deferred to the movements they name; they do not reopen this freeze. Previous status: DRAFT — FOR PRODUCT OWNER FREEZE. Written under
 `docs/design/UI2_0_BASELINE_CONTRACT.md` (FROZEN — PRODUCT OWNER APPROVED,
-2026-09-09), turning `UI2_0_ARCHITECTURE_DESIGN.md` §5 (RBAC is `D1`/`D7`,
+2026-09-09), turning `UI2_0_ARCHITECTURE_CONTRACT.md` §3 (RBAC is `D1`/`D7`,
 never menu-hiding) and §7 (concurrent multi-admin, single active session per
 identity) into a testable specification, amended by the baseline's
 `DIRECTORY-POSTURE` (D-6) ruling. Runs concurrently with `docs/design/UI2_0_C1_PLATFORM_SCHEMA_CONTRACT.md`
@@ -61,10 +61,17 @@ anything fixed here without one.
    Phase 0 decisions this document must not reopen: `DIRECTORY-POSTURE`
    (D-6, conditional), acceptance sentence A-1.
 3. This document, once its own status line reads `FROZEN`.
-4. `docs/design/UI2_0_ARCHITECTURE_DESIGN.md` §5 (RBAC, role model,
-   evaluation order, storage/audit) and §7 (authentication and sessions) —
-   design under amendment; this contract is the testable specification the
+4. `docs/design/UI2_0_ARCHITECTURE_CONTRACT.md` (FROZEN 2026-09-12) §3
+   (RBAC, role model, evaluation order, storage/audit) and §4
+   (authentication and sessions); §4.5 carries the `M14 U-4` disposition
+   §6 of this contract reads. This contract is the testable specification the
    baseline directs it to become.
+
+   Repointed 2026-09-12 from `UI2_0_ARCHITECTURE_DESIGN.md`, now SUPERSEDED
+   and historical only, never authority. Its status line said `DRAFT — NOT
+   implementation authority`, and a DRAFT cannot stand in a FROZEN contract's
+   authority chain (`AGENTS.md` "Authority hierarchy" item 2). Correction C-1
+   below recorded the defect before it was fixed.
 5. `docs/design/UI2_0_DEVELOPMENT_WORKFLOW.md` §5 B0-3 (this movement's own
    scope line) and B1 step 3 (the Java implementation this contract
    precedes).
@@ -877,7 +884,7 @@ identities while that concurrency plays out.
 while writing this contract: `AGENTS.md` (identity law, evidence laws,
 UNKNOWN/fail-closed law, sensitive-identity reporting law, privacy/DLP),
 `docs/design/UI2_0_BASELINE_CONTRACT.md` (FROZEN), `docs/design/UI2_0_DEVELOPMENT_WORKFLOW.md`
-(BASELINE rev 2), `docs/design/UI2_0_ARCHITECTURE_DESIGN.md` §5/§7/§11/§12
+(BASELINE rev 2), `docs/design/UI2_0_ARCHITECTURE_CONTRACT.md` §3/§4/§9/§10
 (DRAFT, amended), `docs/design/UI2_0_C1_PLATFORM_SCHEMA_CONTRACT.md`,
 `docs/design/UI2_0_C2_JOB_EXECUTION_CONTRACT.md`,
 `docs/design/UI2_0_COUNCIL_REVIEW_AND_SECOND_OPINION_BRIEF.md`,
@@ -957,7 +964,7 @@ output ever reaches an identity/session/RBAC table).
 - `docs/design/UI2_0_DEVELOPMENT_WORKFLOW.md` §5 B0-3 (this movement's scope
   line), B1 step 3 (Identity & sessions), B1 step 9 (RBAC visible-but
   -refused proof), B1 step 10 (acceptance scenario A / `B1-10`).
-- `docs/design/UI2_0_ARCHITECTURE_DESIGN.md` §5 (RBAC, role model,
+- `docs/design/UI2_0_ARCHITECTURE_CONTRACT.md` §3 (RBAC, role model,
   evaluation, storage/audit — this document's primary specification
   target), §7 (authentication and sessions — the same), §11 (`UA-8`,
   disposed against `SR-D4` in §9 above), §12 (`M14 U-1`, still open).
@@ -1032,6 +1039,12 @@ contract requires changes here. Item 7 now carries only the source citation;
 the DRAFT is moved into the labelled "Evidence and precedent consulted — not
 authority" block in §1.4, and every remaining reference is marked `DRAFT, not
 authority`.
+
+**Closed 2026-09-12, after this correction was written.** The item-4 defect
+reported below was resolved the same day: the cited document was superseded by
+`docs/design/UI2_0_ARCHITECTURE_CONTRACT.md` (FROZEN), §1.4 item 4 now cites
+the successor, and §4.5 there carries the `M14 U-4` disposition §6 of this
+contract reads. The report below is kept as the record of how it was found.
 
 **Not reconciled here, reported instead.** §1.4 item 4 places
 `docs/design/UI2_0_ARCHITECTURE_DESIGN.md` in this same authority chain, and

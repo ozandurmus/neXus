@@ -76,9 +76,13 @@ matrix template.
 8. `docs/design/UI2_0_C4_CAPABILITY_REGISTRY_GATE_RESOLUTION_CONTRACT.md`
    §2–§6 (MERGED) — capability registry schema, closed step-kind set, gate
    resolution, target model, transport decision.
-9. `docs/design/UI2_0_ARCHITECTURE_DESIGN.md` §6 (DRAFT, amended by
-   `APPROVAL-MODEL` and by `C4`'s `K-3`/`CP-D7` corrections) — the profile
-   model, object diagram, and lifecycle this document turns into a schema.
+9. `docs/design/UI2_0_ARCHITECTURE_CONTRACT.md` (FROZEN 2026-09-12) §5.1,
+   §5.2 and §5.5 — the profile model, object diagram, and lifecycle this
+   document turns into a schema, with `APPROVAL-MODEL` and `C4`'s
+   `K-3`/`CP-D7` corrections already folded in. Repointed 2026-09-12 from
+   `UI2_0_ARCHITECTURE_DESIGN.md`, now SUPERSEDED and historical only, never
+   authority: it was a DRAFT, and a DRAFT cannot stand in a FROZEN contract's
+   authority chain (`AGENTS.md` "Authority hierarchy" item 2).
 10. `docs/design/BACKUP_RECOVERY_CONTRACTS.md` (BRC, CONTRACT, frozen for
     Line-1's `RB.x`) — §2–§10, carried forward as the specification this
     document's own tables realize (§3, §4).
@@ -1060,7 +1064,7 @@ covers.
 **Documents checked for contradiction:** `AGENTS.md`,
 `docs/design/UI2_0_BASELINE_CONTRACT.md` (FROZEN),
 `docs/design/UI2_0_DEVELOPMENT_WORKFLOW.md` (BASELINE rev 2),
-`docs/design/UI2_0_ARCHITECTURE_DESIGN.md` §6 (DRAFT, amended),
+`docs/design/UI2_0_ARCHITECTURE_CONTRACT.md` §5 (FROZEN 2026-09-12),
 `docs/design/UI2_0_C1_PLATFORM_SCHEMA_CONTRACT.md`,
 `docs/design/UI2_0_C2_JOB_EXECUTION_CONTRACT.md`,
 `docs/design/UI2_0_C3_IDENTITY_SESSIONS_RBAC_CONTRACT.md`,
@@ -1210,7 +1214,7 @@ a rule from.
   §1.4 above), §4 (extraction inventory row, §9.4's flagged discrepancy),
   §5 B0-7 (this movement's own scope line), §8 D-7 (restore's open-question
   framing before baseline resolved it).
-- `docs/design/UI2_0_ARCHITECTURE_DESIGN.md` §6 (the profile model this
+- `docs/design/UI2_0_ARCHITECTURE_CONTRACT.md` §5 (the profile model this
   document turns into schema; §6.9/§6.10's PCP/constitutional contradiction
   reports, unaffected by this document's own scope).
 - `docs/design/UI2_0_C1_PLATFORM_SCHEMA_CONTRACT.md` §3 (table sketch

@@ -69,9 +69,13 @@ this registry.
    is the eventual target of.
 6. `docs/design/UI2_0_C2_JOB_EXECUTION_CONTRACT.md` §1.2/§5 (same freeze
    slice) — the step interface this document populates (§6).
-7. `docs/design/UI2_0_ARCHITECTURE_DESIGN.md` §6.3 (DRAFT, amended here where
-   `CP-D7` requires) — the closed step-kind set this document ports and
-   extends (§2.3).
+7. `docs/design/UI2_0_ARCHITECTURE_CONTRACT.md` (FROZEN 2026-09-12) §5.3 —
+   the closed step-kind set and the six expectation rules this document ports
+   and extends (§2.3), as amended here where `CP-D7` requires. Repointed
+   2026-09-12 from `UI2_0_ARCHITECTURE_DESIGN.md`, now SUPERSEDED and
+   historical only, never authority: it was a DRAFT, and a DRAFT cannot stand
+   in a FROZEN contract's authority chain (`AGENTS.md` "Authority hierarchy"
+   item 2).
 8. `docs/design/UI2_0_COUNCIL_REVIEW_AND_SECOND_OPINION_BRIEF.md` §4 — `K-3`,
    `K-4`, `CP-D6`, `CP-D7`, this document's direct inputs.
 9. `docs/design/BACKUP_RECOVERY_CONTRACTS.md` §7.3/§7.4/§7.7/§7.8 — the
@@ -138,7 +142,7 @@ never reduced to a single pass/fail flag.
 
 ### 2.3 Closed step-kind set
 
-Ported from `UI2_0_ARCHITECTURE_DESIGN.md` §6.3, with one addition this
+Ported from `UI2_0_ARCHITECTURE_CONTRACT.md` §5.3 (predecessor §6.3), with one addition this
 document makes explicit (`xml_api_call`, needed because design §6.3 was
 drafted only against the CP/SSH backup-profile example, while workflow §3.2
 requires the same step model to also drive PAN XML API capabilities and
@@ -709,16 +713,21 @@ shapes), `docs/design/BACKUP_RECOVERY_CONTRACTS.md`,
 reopens no PO-reserved decision: `FIRST-CAPABILITY`'s narrow-subset scoping
 and `RUNTIME-DIRECTION` are implemented as ruled, not re-litigated.
 
-**Amendment to a `DRAFT` (not frozen) document, stated per §1.3 item 7:**
+**Amendment stated per §1.3 item 7.** When written, this recorded an
+amendment to a `DRAFT` document. As of 2026-09-12 that document is
+`SUPERSEDED` by `docs/design/UI2_0_ARCHITECTURE_CONTRACT.md` (FROZEN), which
+carries both corrections below already folded in, so nothing here amends a
+frozen contract.
+
 `docs/design/UI2_0_ARCHITECTURE_DESIGN.md` §6.3's illustrative CP profile
 sample is superseded by §2.4's `RB.3b`-accurate sequence (`K-3`), and its
 implicit interactive-shell transport assumption is superseded by §5's
 `ssh_exec`-default decision (`CP-D7`). Both are exactly what the council
 brief assigned this document to resolve (`K-3`, `CP-D7` — baseline §7 direct
-inputs), not an unauthorized reopening of frozen authority — `UI2_0_
-ARCHITECTURE_DESIGN.md` itself is `DRAFT`, not `FROZEN` (its own status
-line), and its §5 cross-reference note already anticipates amendment by the
-`C*` contracts.
+inputs), not an unauthorized reopening of frozen authority: at the time
+`UI2_0_ARCHITECTURE_DESIGN.md` was `DRAFT`, not `FROZEN` (its own status
+line), its §5 cross-reference note already anticipated amendment by the `C*`
+contracts, and its frozen successor carries both corrections.
 
 **Open items, not contradictions:**
 
@@ -770,7 +779,7 @@ line), and its §5 cross-reference note already anticipates amendment by the
 - `docs/design/UI2_0_C2_JOB_EXECUTION_CONTRACT.md` §1.2, §5, §6 — the step
   interface this document populates and the pre-execution check battery
   the execution-eligible view (§3.5) feeds.
-- `docs/design/UI2_0_ARCHITECTURE_DESIGN.md` §6.3/§6.4 — the closed
+- `docs/design/UI2_0_ARCHITECTURE_CONTRACT.md` §5.3/§5.4 — the closed
   step-kind set and raw-output-handling rules this document ports and
   (per §8) amends where `K-3`/`CP-D7` require.
 - `docs/design/UI2_0_COUNCIL_REVIEW_AND_SECOND_OPINION_BRIEF.md` §4 — `K-3`,

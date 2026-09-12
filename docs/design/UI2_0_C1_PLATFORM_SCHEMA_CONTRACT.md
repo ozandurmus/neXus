@@ -50,12 +50,19 @@ kind is out of scope; this is a document-only movement.
 3. `docs/design/UI2_0_DEVELOPMENT_WORKFLOW.md` (BASELINE rev 2) — §3.5
    (provenance record after `discard_raw`), §5 B0-1 scope, §10 (Astra's
    disposition table).
-4. `docs/design/UI2_0_ARCHITECTURE_DESIGN.md` (DRAFT, amended by the items
-   above) — §4 (shell boundary; not this document's concern except where it
-   names storage), §6.2/§6.4 (backup objects and raw-output handling, which
-   `C7` implements but this document's key-custody and data-class rules must
-   not contradict), §9 (storage: PostgreSQL recorded, not re-derived; Oracle
-   portability rules), §10 (invariants).
+4. `docs/design/UI2_0_ARCHITECTURE_CONTRACT.md` (FROZEN 2026-09-12) — §2
+   (shell boundary; not this document's concern except where it names
+   storage), §5.2/§5.4 (backup objects and raw-output handling, which `C7`
+   implements but this document's key-custody and data-class rules must not
+   contradict), §7 (storage: PostgreSQL recorded, not re-derived; Oracle
+   portability rules), §8 (invariants).
+
+   Repointed 2026-09-12: this item named
+   `docs/design/UI2_0_ARCHITECTURE_DESIGN.md`, whose own status line said
+   `DRAFT — NOT implementation authority`. A DRAFT cannot stand in a FROZEN
+   contract's authority chain (`AGENTS.md` "Authority hierarchy" item 2). The
+   predecessor is `SUPERSEDED`; the successor carries the same clauses, and
+   its §0 holds the section-by-section mapping.
 5. `PRIVACY_AND_DATA_HANDLING.md` ("Distributed evidence store"),
    `utils/recovery_key_custody.py`,
    `docs/design/D4_BACKUP_CREDENTIAL_IDENTITY_DECISION.md` — the existing
@@ -85,7 +92,8 @@ wording":
 > id."
 
 `SR-D8`/`DO-D8` (brief §4.1, `K-7`) is the finding that "encrypted at rest
-under the application role's key" (`UI2_0_ARCHITECTURE_DESIGN.md` §5.2) names
+under the application role's key" (`UI2_0_ARCHITECTURE_CONTRACT.md` §3.3,
+predecessor §5.2) names
 no key source, custody or rotation, and joins the existing
 `recovery_offhost_key_custody` backlog item — a question of **where an
 encryption key lives**. "Audit from the first mutation" is a different
@@ -740,13 +748,13 @@ while writing this contract: `AGENTS.md` (identity law, raw-evidence law,
 sensitive-identity reporting law, privacy/DLP, `DEV.4.6`-adjacent build
 lifecycle rules), `docs/design/UI2_0_BASELINE_CONTRACT.md` (FROZEN),
 `docs/design/UI2_0_DEVELOPMENT_WORKFLOW.md` (BASELINE rev 2),
-`docs/design/UI2_0_ARCHITECTURE_DESIGN.md` §4/§5.2/§6.2/§6.4/§9/§10/§11
-(DRAFT, amended), `docs/design/PCP_STORAGE_ENGINE_DECISION.md`
+`docs/design/UI2_0_ARCHITECTURE_CONTRACT.md` §2/§3.3/§5.2/§5.4/§7/§8/§10
+(FROZEN 2026-09-12; supersedes `UI2_0_ARCHITECTURE_DESIGN.md`), `docs/design/PCP_STORAGE_ENGINE_DECISION.md`
 (DRAFT, not authority — §1), `PRIVACY_AND_DATA_HANDLING.md`, `utils/recovery_key_custody.py`,
 `docs/design/D4_BACKUP_CREDENTIAL_IDENTITY_DECISION.md`,
 `docs/design/RECOVERY_OPERATIONAL_WRITE_LEDGER.md`,
 `docs/design/UI2_0_COUNCIL_REVIEW_AND_SECOND_OPINION_BRIEF.md`. None of
-`UI2_0_ARCHITECTURE_DESIGN.md` §11's existing contradiction rows
+`UI2_0_ARCHITECTURE_CONTRACT.md` §10's existing contradiction rows
 (`UA-1`…`UA-8`) are engaged or extended by this document's schema-only
 scope.
 
@@ -785,7 +793,7 @@ scope.
   (capability extraction contract, the eventual `capability_version`/
   `capability_id` source), §3.5 (provenance record, §5 above), §5 B0/B1
   tables (dependency gating), §8 Astra's directive (the `C1-1` correction).
-- `docs/design/UI2_0_ARCHITECTURE_DESIGN.md` (DRAFT, amended) — §5.2/§5.4
+- `docs/design/UI2_0_ARCHITECTURE_CONTRACT.md` (FROZEN 2026-09-12) — §3.3
   (the `SR-D8`/`DO-D8` key-custody finding this document distinguishes
   `C1-1` from), §6.2/§6.4 (backup objects, `discard_raw`), §8.3 (Flyway/jOOQ
   stack choice), §9 (storage decision, Oracle portability rules this
@@ -852,6 +860,14 @@ requires changes here. The citation is moved out of the authority chain into
 the labelled "Evidence and precedent consulted — not authority" block in §1,
 and every remaining reference is marked `DRAFT, not authority`. Where the
 cited document disagrees with this contract, this contract wins.
+
+**Closed 2026-09-12, after this correction was written.** The item-4 defect
+reported in the paragraph below was resolved the same day: the cited document
+was superseded by `docs/design/UI2_0_ARCHITECTURE_CONTRACT.md` (FROZEN), §1
+item 4 now cites the successor, and the detector gap named at the end of this
+correction was fixed — `_classify` reads the declared status token, and the
+gate now treats `SUPERSEDED` and `DEPRECATED` as forbidden authority beside
+`DRAFT`. The report below is kept as the record of how the defect was found.
 
 **Not reconciled here, reported instead.** §1 item 4 places
 `docs/design/UI2_0_ARCHITECTURE_DESIGN.md` in this same authority chain and

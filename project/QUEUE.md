@@ -1,10 +1,10 @@
 # Project queue (generated — do not edit; run: py scripts/project_queue.py render)
-Build: ui2_b1_01a_platform_skeleton_freeze · Track: PCP.x · Generated: 2026-09-12T07:20:14Z
+Build: ui2_d1_restore_c7_c2_amendments · Track: PCP.x · Generated: 2026-09-12T07:52:04Z
 
 ## Now
-- ui2_b1_01a_platform_skeleton_freeze — UI2 B1-1a — platform skeleton contract frozen, integration suite proven on real PostgreSQL 16, audit redaction policy (automated_validated)
+- ui2_d1_restore_c7_c2_amendments — UI2 D1 Option A -- apply the pending C7/C2/C4/baseline restore admission amendments (automated_validated)
 ## Next
-- ui2_d1_restore_c7_c2_amendments — UI2 D1 Option A -- apply C7 and C2 restore admission amendments (planned)
+- M12 — M12 -- per-device / per-capability schedules (D5 producer) (planned)
 ## Open backlog (P1 first, then P2, then P3; in_progress before planned)
 - P0/in_progress pan_serial_representation_identity_evidence_closure — PAN HA runtime peer-serial representation mismatch on one member -- root cause unknown (target: Pre-CLASS-2 (OP.0b/OP.2), independent of OP.0b.0 vendor-semantics confirmation)
 - P0/in_progress private_replay_agent_operated_test_environment — Private Replay -- agent-operated privacy-filtered test environment derived from real collection, for (target: docs/design/PRIVATE_REPLAY_ARCHITECTURE.md -- FROZEN -- PRODUCT OWNER APPROVED,)
@@ -89,8 +89,8 @@ Build: ui2_b1_01a_platform_skeleton_freeze · Track: PCP.x · Generated: 2026-09
 - pcp_server_enrollment_exposure — May console enrollment (manual or candidate-based) be exposed in non-loopback / server mode, i.e. be
 - pcp_storage_engine — PRODUCTION-SCOPED. Which engine backs the registry/job plane IN PRODUCTION, against the section 10 c
 ## Recent builds
+- ui2_d1_restore_c7_c2_amendments (automated_validated)
 - ui2_b1_01a_platform_skeleton_freeze (automated_validated)
 - ui2_b1_01_skeleton_ci_docker (in_progress)
 - ui2_d1_option_a_taxonomy_step_kind (complete_with_followup)
 - ui2_b0_baseline_directory (in_progress)
-- ui2_b0_extraction_tooling (in_progress)
