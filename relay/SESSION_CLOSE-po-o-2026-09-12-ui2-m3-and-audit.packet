@@ -1,0 +1,91 @@
+<<<NEXUS_SESSION_PACKET>>>
+{
+  "message_type": "SESSION_CLOSE",
+  "movement": "po_o_session_2026_09_12_ui2_m3_and_audit",
+  "outcome": "AUTOMATED_VALIDATED",
+  "protocol_version": 2,
+  "refs": [
+    "AGENTS.md",
+    "roles/PO.md",
+    "CURRENT_STATE.md",
+    "AI_HANDOVER.md",
+    "project/QUEUE.md",
+    "docs/design/PO_DECISION_RECORD_2026_09_12.md",
+    "docs/design/UI2_0_AGENT_FROZEN_CONTRACT_AUDIT.md",
+    "relay/NXS-LOCAL-0108-ui2-m3-design-transfer-pass.json",
+    "relay/NXS-LOCAL-0109-ui2-b1-12-deployment-slice.json",
+    "relay/NXS-LOCAL-0110-agent-frozen-contract-audit.json"
+  ],
+  "report": {
+    "changed": [
+      "ui2/frontend/src/** : App routing, shell (NavigationRail, TopAppBar, ScreenLayout, Icon, types), six screens, five preview components, previewData.ts, tests/App.test.tsx",
+      "docs/design/UI2_0_AGENT_FROZEN_CONTRACT_AUDIT.md (new, DRAFT)",
+      "relay/NXS-LOCAL-0108, 0109, 0110 (the three movement records with their session closes)",
+      "CURRENT_STATE.md checkpoint, AI_HANDOVER.md (rewritten), project/QUEUE.md, project/backlog.json, docs/history/backlog/ui2_m3_design_transfer_pass.md"
+    ],
+    "completed": [
+      "Restored the roles/PO.md section 3 dispatch loop and proved it runs in this environment: three movements scoped as validated GOV.SESSION.1 packets and run by workers in their own git worktrees. No worker implementation was authored by this session.",
+      "NXS-LOCAL-0108 ui2_m3_design_transfer_pass: reviewed and integrated. Navigation rail, top app bar, six routed product screens and preview components built against the Product Owner's Material 3 design frames.",
+      "NXS-LOCAL-0110 agent_frozen_contract_audit: reviewed and integrated. docs/design/UI2_0_AGENT_FROZEN_CONTRACT_AUDIT.md published as DRAFT; nothing frozen, no contract edited.",
+      "NXS-LOCAL-0109 ui2_b1_12_deployment_slice: closed BLOCKED with an empty diff. The worker refused the packet's Docker Compose assumption as contradicting the platform skeleton contract's Red Hat container target. The wrong assumption was this session's own.",
+      "Published the seven Material 3 design frames to a private artifact so the Product Owner could click through the product's own navigation rail and review the target directly."
+    ],
+    "continuation": "NEW_SESSION",
+    "effects": {
+      "main_py": "None. The Python CLI is untouched; no mode, collector or payload builder changed.",
+      "ui": "UI 2.0 only. After a normal build the shell shows a Material 3 navigation rail and top app bar with six routed screens; every product screen renders its empty state against an empty database, and the populated look appears only under the labelled preview route. The Python-generated HTML report is unchanged."
+    },
+    "integration": {
+      "branch": "claude/epic-bohr-1wppn5",
+      "ci": "not_run",
+      "head_sha": "f303752",
+      "merge_commit": "5f916fbb044693f18bb5bb40a765f8b14cc20d1e",
+      "merge_decision": "Merged to main under the Product Owner's explicit instruction to send it as is, with UI 2.0 recorded as incomplete. Evidence: vite build clean, frontend suite 9 passed, privacy gate PASS, git diff --check clean. The Python suites could not run in this container.",
+      "merge_state": "MERGED",
+      "pr": 189,
+      "pr_url": "https://github.com/ozandurmus/neXus/pull/189"
+    },
+    "next": {
+      "movement": "ui2_b1_12_deployment_slice",
+      "movement_type": "IMPLEMENTATION",
+      "objective": "Two jobs in the Product Owner's order. Job 1: complete UI 2.0 -- per-screen fidelity against the six M3 frames plus the M3Components drawer states, under ui2_m3_design_transfer_pass. Job 2: stand the UI up on kubectl in a local session -- re-scope this movement to plain Kubernetes manifests kept OpenShift-safe by construction (no root, no fixed UID, no hostPath, no privileged, resource limits set, Service plus Ingress with a Route replacing the Ingress on OpenShift), images built with Podman. Compose is not the product path. Re-dispatch with argv-list validation steps, from a session that has pytest.",
+      "status": "blocked"
+    },
+    "preserved": [
+      "The default product screen stays the empty state; populated screens stay behind the labelled preview route, still fenced by its test.",
+      "Both standing gates: no vendor data collection, and new features Java written from scratch with the Python scripts as know-how only.",
+      "The committed design mockups stay in their deliberately scrubbed form; the canvas's raw v4 artboards were not synced.",
+      "No contract status was applied, removed or changed anywhere in this session."
+    ],
+    "recommended_reasoning": {
+      "reason": "Job 1 is bounded UI fidelity against a fixed reference. Job 2 is packaging over an already-booting stack; its risk is secret handling and an unverified startup claim, not algorithmic difficulty.",
+      "tier": "Normal (strong) for both jobs; High only if the Kubernetes work reopens the identity or secret boundary"
+    },
+    "state_updates": [
+      "ui2_m3_design_transfer_pass -> in_progress, with its first-pass evidence appended to docs/history/backlog/ui2_m3_design_transfer_pass.md",
+      "agent_frozen_contract_audit -> automated_validated",
+      "CURRENT_STATE.md checkpoint moved to the M3 shell pass and states that UI 2.0 is incomplete",
+      "AI_HANDOVER.md rewritten for the next PO+O session",
+      "project/roadmap.json now_next.now and current_build NOT advanced: scripts/project_queue.py still cannot write those fields, and hand-editing would breach GOV.ORCH.5/8"
+    ],
+    "unresolved_risks": [
+      "pytest is absent from the cloud container, so every dispatched movement fails its post-merge convergence check and reports integration_failed regardless of the worker's own result. Both integrated lanes were reviewed on direct evidence instead. A local session does not have this gap.",
+      "A validation_plan entry written as a prose string is recorded skipped_prose and never executes. All three packets this session carried prose entries, so no build or test ran during verification. Entries must be argv lists.",
+      "NXS-LOCAL-0108 ended engineer_exit_nonzero despite a clean, passing diff; the cause was not identified and could recur.",
+      "The Product Owner has recorded UI 2.0 as incomplete: per-screen fidelity against the six frames and the M3Components drawer states remain.",
+      "project/backlog.json has roughly 178 bytes of headroom under its 145 KiB ceiling. The next queue addition breaches it; a second diet is the fix, never a raised ceiling.",
+      "Open Product Owner decisions unchanged: po_cp_backup_async_semantics, po_ldap_tls_trust_policy. PAN Active/Active stays latent; the estate is Active/Standby.",
+      "UI2_0_B1_01A and UI2_0_B1_02A remain FROZEN by an agent rather than Product Owner reviewed; the new audit document records the findings but resolves nothing on its own."
+    ],
+    "validation": {
+      "affected": "Repository privacy gate PASS with no address-shaped literal in preview data. project_queue.py check reports QUEUE.md up to date.",
+      "diff_check": "git diff --check clean on every commit.",
+      "full_regression": "NOT RUN. pytest is absent from this container, so the Python suites and the post-merge convergence check could not execute; ui2/ integration and architecture tests were not re-run.",
+      "privacy": "PASS. A sync of the canvas's raw v4 artboards was attempted and reverted after it produced 44 new findings.",
+      "real_environment": "None. No device was contacted and no real-environment evidence was produced or claimed.",
+      "state_consistency": "NOT EVALUATED. project_metadata_has_no_cross_authority_contradictions could not run without pytest.",
+      "targeted": "Frontend suite 9 passed, up from 6, including the test asserting preview data never reaches a product screen. Vite production build clean, 420 modules transformed."
+    }
+  }
+}
+<<<NEXUS_SESSION_PACKET>>>
