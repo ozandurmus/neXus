@@ -1,0 +1,247 @@
+{
+  "created_at": "2026-09-12T21:17:34Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1 The contract's liveness section records the completed negative search across the three planes, with the field-comparison result stated as counts.",
+          "AC-2 The contract carries the new channel-state signal with its four states, each named for what it observes.",
+          "AC-3 The contract states that the signal is taken from the management server, generates no new traffic and contacts no device.",
+          "AC-4 The contract states the two-observation sampling rule and the in-transition outcome for a disagreeing pair.",
+          "AC-5 The existing prohibition on up/down presentation is stated to apply to the new signal unchanged, and the signal is nowhere given liveness semantics.",
+          "AC-6 Liveness remains UNKNOWN and remains deferred out of discovery; a test of the document's own text would find no claim that it is answered.",
+          "AC-7 The count coincidence is recorded as a hypothesis with a stated test, not as a finding.",
+          "AC-8 The three implementation constraints are recorded: per-address reduction, derived-not-hard-coded channel port, and the recorded estate statement about addressing.",
+          "AC-9 The know-how audit records the three measured collector defects and the run-shape measurement.",
+          "AC-10 No real address, object name, domain name, serial or certificate subject appears in either document, and the repository privacy gate reports zero findings.",
+          "AC-11 Both documents keep the status they had; no status was applied, removed or changed.",
+          "AC-12 The diff touches exactly those two documents."
+        ],
+        "baseline": {
+          "authority": "docs/design/PO_DECISION_RECORD_2026_09_12.md (FROZEN) section 4 owns the discovery step this completes, and section 2 makes the existing Python know-how only. docs/design/CP_AND_VSX_DISCOVERY_CONTRACT.md is DRAFT, so this is completion of an unfrozen document, not an amendment to a frozen one.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "evidence_basis": "Measured by the Product Owner against a live multi-domain management server after that contract was written. The session that produced these measurements is not authoritative (AGENTS.md item 7); this movement is what makes them survive.",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "sequencing": "Last step of the discovery design. The implementation movement follows, and is still gated.",
+          "what_changed_since_the_contract": "The contract deferred liveness on the grounds that no management-plane signal answers it. That conclusion stands and is now backed by a completed negative search. Separately, a different signal was found that the contract did not anticipate: the management server's own kernel connection table shows, per device management address, whether the management's monitoring channel to that device is established or is failing to complete. It is read from the management server, generates no new traffic, and contacts no device."
+        },
+        "context_not_loaded": [
+          "docs/history/**",
+          "ui2/ sources",
+          "project/*.json",
+          "Palo Alto contracts and modules"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/discovery-channel-state-and-defects"
+        },
+        "invariants": [
+          "Liveness stays UNKNOWN and stays out of discovery.",
+          "No signal acquires up/down semantics.",
+          "Discovery contacts no device; the new signal preserves that property exactly.",
+          "Measurement and hypothesis are never presented as the same thing.",
+          "No real identity, address, domain or topology enters a tracked file.",
+          "No contract status is applied, removed or changed, and no FROZEN document is edited."
+        ],
+        "merge_gate": "Product Owner assistant review of the diff plus orchestrator verify.passed. The worker does not merge to main.",
+        "movement_type": "DOCS",
+        "objective": "Make this session's measurements durable in the two documents that already own them: complete the discovery contract with the management-channel-state signal and the completed liveness negative, and record in the know-how audit the defects measured in the existing collector.",
+        "output_contract": [
+          "A discovery contract whose liveness section is evidenced rather than declared, carrying a new management-channel signal that is explicitly not liveness",
+          "A know-how audit recording the measured collector defects and run shape",
+          "SESSION_CLOSE distinguishing every measurement from every hypothesis, and confirming no identity entered either document"
+        ],
+        "recommended_reasoning": {
+          "reason": "Two documents, bounded edits, but the whole value is in restraint: adding a signal that looks like a status column beside a section that forbids status columns, without letting it become one.",
+          "tier": "Sonnet 5, high effort"
+        },
+        "requirements": [
+          "English, per AGENTS.md engineering-output language law",
+          "Both documents keep their current status. The contract stays DRAFT.",
+          "Report mechanism and relationship, never values. No address, name, domain or serial appears anywhere, and the port is referred to as the observed channel port rather than a number treated as a vendor constant.",
+          "Distinguish measurement from hypothesis explicitly. The count coincidence between failing channels and failed collections is a hypothesis with a stated test, not a finding.",
+          "State the measurement's scope honestly: one management server, one software generation, one estate. Do not generalize it into a vendor law.",
+          "The new signal must not acquire liveness semantics anywhere in the document -- not in its name, its description, its examples, or a table heading.",
+          "Do not weaken, skip or delete an existing test.",
+          "Publish SESSION_CLOSE with scripts/local_relay.py append using --report pointing at a JSON file you wrote first. Do not pass report JSON inline on the command line.",
+          "Commit early and commit often on the lane; a movement that ends with uncommitted work loses it.",
+          "Do not merge to main. Commit on the lane and publish SESSION_CLOSE."
+        ],
+        "risks": [
+          "Letting the new signal become a status column in everything but name, which would defeat the section it sits next to.",
+          "Recording the count coincidence as a proven correlation.",
+          "Treating the observed channel port as a vendor constant and writing it in as one.",
+          "Quoting a measured address or object name into either document.",
+          "Generalizing a single-estate, single-version measurement into a vendor law.",
+          "Freezing the contract while completing it."
+        ],
+        "scope": {
+          "in": [
+            "In docs/design/CP_AND_VSX_DISCOVERY_CONTRACT.md, extend the liveness section with the completed negative search: the object database was compared field by field between a device the Product Owner confirmed powered off and a device confirmed live, of the same model, version and role -- 372 first-level fields, of which exactly two differed, and both were the object's own identity fields rather than any state. The per-device configuration directories on the management server hold policy and schema artifacts, not status. The management server's own status command reports its own state and its connected administrator sessions, not gateway state. Record this as three planes searched and all three negative, so the UNKNOWN is evidenced rather than merely declared",
+            "Add to the same contract a new numbered signal, obtained from the management server's own connection table rather than from the object database: per device management address, whether the management's monitoring channel is established, is failing to complete, is in transition between two observations, or is absent entirely. Four states, named for what they observe",
+            "State precisely what that signal is and is not: it is an observation of the management server's channel to a device, taken from the management server, with zero new network traffic and zero device contact. It is not liveness. The contract's existing prohibition on presenting any signal as up or down applies to it unchanged, and it is carried under its own name with its own meaning",
+            "State the sampling rule: the failing-to-complete state is a transient state by nature, so a single observation may catch a healthy device mid-handshake. Two observations separated by an interval are required before the state is reported, and a pair that disagrees is reported as in-transition rather than resolved",
+            "Record the measurement that produced it, as counts and shapes only: one management server, one software generation, all domains in one read; a large majority of channels established and a small minority failing; every observation stable across the interval; and the failing set contained every device the Product Owner had independently identified as powered off",
+            "Record as an explicit hypothesis, not a finding, that the count of failing channels equalled the count of devices whose collection failed in an earlier run of the existing collector, and state what would confirm or refute it. Identity was not verified because the earlier run's addresses are pseudonymized",
+            "State the three implementation constraints the measurement revealed: the connection table contains many rows per address for management servers and cluster addresses, so results are reduced per address and only addresses present in the object database are considered; the port on which the channel is observed is derived from the observed established channels or configured, never hard-coded, because a version-pinned constant is a defect this repository has already measured elsewhere; and a Product Owner statement of record is that in this estate a management server and a gateway always communicate from their own addresses, so address translation does not break the join",
+            "In docs/design/DISCOVERY_VS_COLLECTION_PYTHON_KNOW_HOW_AUDIT_2026_09_12.md, add a section recording three defects measured in the existing collector during this session: a hard-coded, version-pinned path to the vendor environment profile that does not exist on the management server measured, so the sourcing silently fails and the script works only because the login shell supplies the environment independently; a positional whitespace parse of the object query output that shifts columns when an object's own address field is empty, which would classify such a device as management-unreachable and skip it, latent today only because the production query does not select those objects; and a bounded retry that was attempted on every failed device in a real run and recovered none of them",
+            "In the same audit, record the run-shape measurement: the proportion of that run's wall-clock time spent in timeouts against devices that were not answering, derived from the recorded device counts, timeout values and parallelism"
+          ],
+          "out": [
+            "Changing any decision the contract already made: the classification matrix, the host-resolution invariant, the identity rules and the discovery/import boundary are untouched",
+            "Weakening or removing the liveness prohibition. The new signal is added beside it, never in place of it",
+            "Declaring liveness answered. It remains UNKNOWN and remains out of discovery",
+            "Applying, removing or changing any contract status, including freezing the discovery contract",
+            "Editing any FROZEN document",
+            "Any real address, object name, domain name, serial, certificate subject or port-to-vendor-semantic claim. Counts, shapes and relationships only",
+            "Implementing anything: no Java, no script, no query runner",
+            "Any device contact",
+            "Any change under ui2/, project/, deploy/, relay/ or .github/workflows/"
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_contract_authority_status.py",
+              "-q"
+            ],
+            "name": "contract_authority_status"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_architecture_convergence.py",
+              "-q"
+            ],
+            "name": "architecture_convergence"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_project_files_budget.py",
+              "-q"
+            ],
+            "name": "project_files_budget"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/project_queue.py",
+              "check"
+            ],
+            "name": "project_queue_check"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-12T21:17:34Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "report": {
+        "changed": [
+          "docs/design/CP_AND_VSX_DISCOVERY_CONTRACT.md: added §7.1a (completed liveness negative search across three planes) and §7.4 (the connection-table channel-state signal, CS-1 through CS-6), plus one cross-reference bullet in §12 pointing at the know-how audit's new §14.",
+          "docs/design/DISCOVERY_VS_COLLECTION_PYTHON_KNOW_HOW_AUDIT_2026_09_12.md: added §14 (three collector defects measured in a real execution this session, plus the run-shape timeout relationship), explicitly framed as a distinct evidence basis from the source-reading-only method of §§1-13."
+        ],
+        "completed": [
+          "AC-1: docs/design/CP_AND_VSX_DISCOVERY_CONTRACT.md §7.1a records the completed three-plane negative search (object database field-by-field: 372 first-level fields compared, exactly two differed and both were the object's own identity fields; per-device configuration directories, which hold policy/schema, not status; the management server's own status command, which reports its own state and connected administrator sessions, not gateway state).",
+          "AC-2: §7.4 CS-1 introduces the connection-table channel-state signal with four states, each named for what it observes (established, failing to complete, in transition, absent).",
+          "AC-3: CS-2 states the signal is taken entirely from the management server, generates zero new network traffic and contacts zero devices.",
+          "AC-4: CS-3 states the two-observation sampling rule and that a disagreeing pair is reported as in transition, never resolved to either state.",
+          "AC-5: CS-2 states the existing LV-1 to LV-6 prohibition applies to the new signal unchanged; no liveness vocabulary appears anywhere in its name, states, description or examples.",
+          "AC-6: §7.3's deferral is untouched; no clause anywhere in the new text claims liveness is answered.",
+          "AC-7: CS-5 records the count coincidence between failing channels and an earlier collector run's failure count as an explicit hypothesis, with a stated confirming/refuting test, never as a finding.",
+          "AC-8: CS-6a/b/c record the three implementation constraints -- per-address reduction, the derived-not-hard-coded channel port, and the Product Owner's addressing statement of record.",
+          "AC-9: docs/design/DISCOVERY_VS_COLLECTION_PYTHON_KNOW_HOW_AUDIT_2026_09_12.md §14 records three measured collector defects (D-1 hard-coded/version-pinned environment-profile path, D-2 a positional whitespace parse that shifts columns on an empty address field, D-3 a bounded retry that recovered nothing) and §14.2 records the run-shape timeout relationship.",
+          "AC-10: repository privacy gate reports zero findings; no real address, object name, domain name, serial or certificate subject appears in either document.",
+          "AC-11: both documents' Status sections re-verified unchanged after editing -- both remain DRAFT.",
+          "AC-12: git diff confirms exactly the two named documents changed, purely additive (206 insertions, 0 deletions)."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "none -- no Python source touched",
+          "ui": "none -- no ui2/, static, or template file touched"
+        },
+        "integration": {
+          "branch": "feature/discovery-channel-state-and-defects",
+          "ci": "not triggered by this session; orchestrator verification pending",
+          "head_sha": "305f5fae8081db4833782353059e86c2cdb2031c",
+          "merge_commit": null,
+          "merge_decision": "Not merged by this worker session, per --merge-mode orchestrator: PR opened and SESSION_CLOSE published; the orchestrator merges after its own verification passes.",
+          "merge_state": "OPEN",
+          "pr": 206,
+          "pr_url": "https://github.com/ozandurmus/neXus/pull/206"
+        },
+        "next": {
+          "movement": "Product Owner assistant review of PR #206, then orchestrator verify.passed",
+          "movement_type": "DOCS",
+          "objective": "Review the diff against docs/design/CP_AND_VSX_DISCOVERY_CONTRACT.md and docs/design/DISCOVERY_VS_COLLECTION_PYTHON_KNOW_HOW_AUDIT_2026_09_12.md, then allow the orchestrator's own verification to gate the merge to main. No further engineering movement is queued by this session; implementation of the channel-state signal, or of import/collection, remains separate and still gated by the discovery contract's own §1 and §11 deferrals.",
+          "status": "complete"
+        },
+        "preserved": [
+          "The classification matrix, host-resolution invariant, identity rules and discovery/import boundary in the discovery contract are untouched.",
+          "The existing liveness prohibition (LV-1 to LV-6) is untouched and now explicitly extended, never replaced, to cover the new signal.",
+          "Liveness remains UNKNOWN and remains deferred out of discovery -- no clause declares it answered.",
+          "Both documents keep the DRAFT status they had; no contract status was applied, removed or changed; no FROZEN document was touched.",
+          "No device was contacted and nothing was implemented (no Java, script or query runner).",
+          "The existing 'twelve UNKNOWNs' register (§10 of the contract) was left at twelve; the new hypothesis (CS-5) was kept inline rather than added as a thirteenth UNKNOWN, to avoid an unrequested renumbering.",
+          "No test in tests/test_contract_authority_status.py, tests/test_architecture_convergence.py or tests/test_project_files_budget.py was weakened, skipped or deleted."
+        ],
+        "recommended_reasoning": {
+          "reason": "Remaining work is a Product Owner review of a bounded, additive documentation diff -- no new architecture, security or vendor-semantic decision is being made here.",
+          "tier": "Sonnet 5, low effort"
+        },
+        "state_updates": [
+          "No project/*.json, CURRENT_STATE.md or build_history.json update was made or required -- this is a DOCS movement confined to two docs/design/*.md files per WORKER.md's explicit file scope, and project/QUEUE.md's own check confirms no drift."
+        ],
+        "unresolved_risks": [
+          "CS-5's count-coincidence hypothesis (failing channels vs. an earlier collector run's failure count) remains unconfirmed pending address-identity resolution across the pseudonymization boundary; the document names the test that would settle it but the test itself was not run in this movement.",
+          "D-2 (the positional whitespace parse defect) is recorded as latent-but-real; it has not been fixed, and the audit explicitly notes it would activate if the production query's selection criteria ever changed to include objects with an empty address field."
+        ],
+        "validation": {
+          "affected": "Only the two named markdown documents changed; no source module affected. git diff --stat confirms scope.",
+          "diff_check": "git diff --stat shows exactly docs/design/CP_AND_VSX_DISCOVERY_CONTRACT.md and docs/design/DISCOVERY_VS_COLLECTION_PYTHON_KNOW_HOW_AUDIT_2026_09_12.md changed (206 insertions, 0 deletions); git diff origin/main...HEAD contains no removed lines",
+          "full_regression": "Not run -- movement is DOCS-only per WORKER.md scope; the three named test files above are the full validation surface this brief specifies.",
+          "privacy": "python3 scripts/repository_privacy_check.py -- 1237 files scanned, 0 findings, gate PASS",
+          "real_environment": "N/A -- this movement documents measurements already taken against a live management server in a separate, earlier session; this movement itself made no device contact",
+          "state_consistency": "python3 scripts/project_queue.py check -- project/QUEUE.md is up to date; no project/*.json touched",
+          "targeted": "python3 -m pytest tests/test_contract_authority_status.py tests/test_architecture_convergence.py tests/test_project_files_budget.py -q -- 36 passed"
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-12T21:25:43Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0128",
+  "movement": "discovery_management_channel_state_and_measured_defects",
+  "next_actor": null,
+  "refs": [
+    "AGENTS.md",
+    "docs/design/CP_AND_VSX_DISCOVERY_CONTRACT.md",
+    "docs/design/DISCOVERY_VS_COLLECTION_PYTHON_KNOW_HOW_AUDIT_2026_09_12.md",
+    "docs/design/PO_DECISION_RECORD_2026_09_12.md",
+    "PRIVACY_AND_DATA_HANDLING.md"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-12T21:25:43Z"
+}

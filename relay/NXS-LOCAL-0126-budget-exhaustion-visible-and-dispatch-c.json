@@ -1,0 +1,234 @@
+{
+  "created_at": "2026-09-12T18:59:17Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1 A run whose engineer exhausted its budget reports that as its own named failure reason, alongside any other reason that also applies.",
+          "AC-2 The report carries the budget that was in force and the cost reached.",
+          "AC-3 The phase decision is unchanged; a test asserts it.",
+          "AC-4 A test fails if a budget-exhausted run reports only a non-zero exit.",
+          "AC-5 Anything taken from the engineer log into the report is bounded and redacted by the existing mechanism; a test proves a secret-shaped line does not survive.",
+          "AC-6 roles/PO.md section 3 carries the pre-dispatch checklist, including that the budget is set from scope and that the default will not fit a contract, audit or deployment movement.",
+          "AC-7 A test fails if the checklist is removed from roles/PO.md.",
+          "AC-8 No default value changed anywhere.",
+          "AC-9 The orchestrator suites and the worker-brief suite pass.",
+          "AC-10 The repository privacy gate reports zero findings."
+        ],
+        "baseline": {
+          "authority": "docs/design/GOV_ORCH_1_SYNCHRONOUS_RUN_AND_ORCHESTRATOR_VERIFY.md (FROZEN) owns the synchronous run report and its failure reasons. This movement makes one already-occurring outcome legible in that report and writes down a dispatch discipline that currently exists only in a session's habits.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "observed_defect": "Three movements in one session ended with failure_reason engineer_exit_nonzero while their work was sound. Their engineer logs all carry terminal_reason budget_exhausted and the error 'Reached maximum budget ($3)' -- the orchestrator's own DEFAULT_MAX_BUDGET_USD. The run report never said so, so the same cause was diagnosed three separate times, and a prior session recorded one instance as a cause that was never identified. One of the three lost a Containerfile, a manifest set and a test because it was killed before committing.",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "second_defect": "The corrections that stopped the bleeding live only in one session's behaviour: setting a budget matched to the movement's scope, running every validation step once before dispatching it, searching the test tree before scoping a deletion, and telling the worker to commit early. AGENTS.md item 7 makes chat non-authoritative, so none of that survives the session boundary. The next session will meet the same wall.",
+          "sequencing": "Independent of every product lane; it touches the orchestrator's reporting and the Product Owner role brief."
+        },
+        "context_not_loaded": [
+          "docs/history/**",
+          "ui2/ sources",
+          "project/*.json",
+          "vendor contracts"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/budget-exhaustion-visible"
+        },
+        "invariants": [
+          "The phase decision is unchanged; this movement adds a name and evidence, not a verdict.",
+          "No default value is changed; choosing the number is the Product Owner's act.",
+          "Worker log text is untrusted data, bounded and redacted before it reaches a stored report.",
+          "No credential, management address, device name or serial enters a tracked file.",
+          "No vendor data collection and no device contact: the standing collection gate holds.",
+          "No FROZEN contract is edited and no contract status is applied, removed or changed."
+        ],
+        "merge_gate": "Product Owner assistant review of the diff plus orchestrator verify.passed. The worker does not merge to main.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Make a run that died of budget exhaustion say so in its own report, and write the dispatch discipline that prevented the repeat failures into the role brief so it outlives the session that learned it.",
+        "output_contract": [
+          "A run report that names budget exhaustion when that is what happened, and a role brief carrying the dispatch checklist",
+          "SESSION_CLOSE with the real output of the proving run and an explicit statement that no default value changed"
+        ],
+        "recommended_reasoning": {
+          "reason": "A small additive change at one decision point plus a short brief edit, both with unambiguous pass conditions.",
+          "tier": "Sonnet 5, medium effort"
+        },
+        "requirements": [
+          "English, per AGENTS.md engineering-output language law",
+          "Additive only. An existing failure reason keeps its name and meaning, and the phase decision is untouched.",
+          "Detect budget exhaustion from the provider's own terminal signal in the engineer log, not by comparing a cost against a limit: a cost at the limit is evidence, the terminal reason is the fact.",
+          "The engineer log is untrusted worker output. Anything read from it that reaches the report must be bounded and must pass the same redaction the existing log excerpt uses.",
+          "Prove the new reason appears: construct a run record whose log carries the provider's budget terminal signal and show the report naming it. State the real output.",
+          "The roles/PO.md addition is a checklist, not an essay: it must fit the file's existing economy and must not restate rules AGENTS.md already owns.",
+          "Do not weaken, skip or delete an existing test.",
+          "Publish SESSION_CLOSE with scripts/local_relay.py append using --report pointing at a JSON file you wrote first. Do not pass report JSON inline on the command line.",
+          "Commit early and commit often on the lane; a movement that ends with uncommitted work loses it.",
+          "Do not merge to main. Commit on the lane and publish SESSION_CLOSE."
+        ],
+        "risks": [
+          "Inferring budget exhaustion from a cost near the limit rather than reading the provider's terminal signal, which would mislabel an expensive run that finished.",
+          "Changing the phase decision while adding the reason, so runs start passing or failing differently.",
+          "Carrying an unbounded or unredacted log fragment into the report.",
+          "Writing a role-brief essay instead of a checklist, which the file's own economy forbids.",
+          "Quietly raising the default budget, which is not this movement's decision."
+        ],
+        "scope": {
+          "in": [
+            "scripts/orchestrator.py and the provider adapter: when the engineer process ended because it exhausted its budget, report that as its own failure reason rather than only as a non-zero exit, and carry the budget that was in force and the cost reached",
+            "Read the provider's own terminal signal for this rather than inferring it from the cost: the engineer log records a terminal reason and an error subtype for exactly this case",
+            "Keep the existing failure reasons and the phase decision unchanged: this adds a name for something already happening, it does not change when a run fails",
+            "roles/PO.md section 3: a short pre-dispatch checklist the Product Owner assistant runs before every dispatch -- set the budget from the movement's scope rather than leaving the default; run each validation-plan step once locally before putting it in the packet; search the test tree for any file a deletion-shaped movement would remove; require the packet to tell the worker to commit early on its lane; and state the branch lane is unused",
+            "roles/PO.md section 3: state plainly that the per-movement budget defaults low and that a contract, an audit or a deployment movement will not fit in it",
+            "tests: regressions that fail if a budget-exhausted run reports only a non-zero exit, if the phase decision changes, or if the role brief loses the checklist"
+          ],
+          "out": [
+            "Changing DEFAULT_MAX_BUDGET_USD or any other default value: the number is the Product Owner's to choose and is not decided here",
+            "Changing when a run is considered done or failed",
+            "Changing the verify object, the validation-plan mechanics or the merge modes",
+            "Editing any FROZEN contract, or applying, removing or changing any contract status",
+            "Any change under ui2/, project/, deploy/, relay/ or docs/design/",
+            "Any vendor data collection or device contact"
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_orchestrator.py",
+              "-q"
+            ],
+            "name": "orchestrator_tests"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_orchestrator_verify.py",
+              "tests/test_orchestrator_providers.py",
+              "tests/test_orchestrator_usage.py",
+              "tests/test_orchestrator_dashboard.py",
+              "tests/test_orchestrator_preflight.py",
+              "tests/test_orchestrator_install_hooks.py",
+              "-q"
+            ],
+            "name": "orchestrator_siblings"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_worker_brief.py",
+              "tests/test_gov_po_role.py",
+              "-q"
+            ],
+            "name": "worker_brief_and_role"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_architecture_convergence.py",
+              "-q"
+            ],
+            "name": "architecture_convergence"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-12T18:59:17Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "report": {
+        "changed": [
+          "scripts/orchestrator.py",
+          "scripts/orchestrator_providers.py",
+          "roles/PO.md",
+          "tests/test_orchestrator.py",
+          "tests/test_orchestrator_providers.py",
+          "tests/test_worker_brief.py"
+        ],
+        "completed": [
+          "scripts/orchestrator_providers.py: ClaudeAdapter.budget_exhausted(log_path) reads the CLI's own result-event terminal_reason=='budget_exhausted' (subtype 'error_max_budget_usd'), returning the cost reached; CodexAdapter.budget_exhausted returns None (no proven Codex-side signal).",
+          "scripts/orchestrator.py: _cmd_run appends 'budget_exhausted' to failure_reasons alongside 'engineer_exit_nonzero' when the adapter's signal fires, and _build_run_report adds an additive 'budget_exhausted': {max_budget_usd, cost_reached_usd} object to the run report.",
+          "roles/PO.md section 3: added a 5-item pre-dispatch checklist (budget from scope, validation-plan steps run once locally, test tree searched before a deletion-shaped movement, packet tells the worker to commit early, branch lane confirmed unused) plus a plain statement that the default budget will not fit a CONTRACT/AUDIT/DEPLOYMENT movement.",
+          "tests: tests/test_orchestrator_providers.py (ClaudeAdapter/CodexAdapter budget_exhausted unit tests), tests/test_orchestrator.py (new 'budget_exhausted' stub mode + 4 regression tests covering AC-1/2/3/4/5), tests/test_worker_brief.py (regression test that fails if the roles/PO.md checklist is removed)."
+        ],
+        "continuation": "SAME_SESSION",
+        "effects": {
+          "main_py": "none",
+          "ui": "none"
+        },
+        "integration": {
+          "branch": "feature/budget-exhaustion-visible",
+          "ci": "n/a",
+          "head_sha": "43205d4",
+          "merge_commit": null,
+          "merge_decision": "NOT_APPLICABLE",
+          "merge_state": "NOT_OPENED",
+          "pr": 203,
+          "pr_url": "https://github.com/ozandurmus/neXus/pull/203"
+        },
+        "next": {
+          "movement": "n/a",
+          "movement_type": "IMPLEMENTATION",
+          "objective": "PR #203 opened against main; orchestrator (--merge-mode orchestrator) merges after its own verify.passed check, per WORKER.md -- this session does not run gh pr merge.",
+          "status": "done"
+        },
+        "preserved": [
+          "DEFAULT_MAX_BUDGET_USD and every other default value: untouched.",
+          "The phase decision (PHASE_DONE/PHASE_FAILED) computation and the single failure_reason field: unchanged code paths, verified by a dedicated regression test asserting phase stays PHASE_FAILED and failure_reason stays 'engineer_exit_nonzero' for a budget-exhausted run.",
+          "verify object, validation-plan mechanics, merge modes: untouched.",
+          "Existing engineer_log_excerpt bounding/redaction mechanism: reused unchanged; proven to still redact a secret-shaped line emitted by the budget-exhausted stub."
+        ],
+        "recommended_reasoning": {
+          "reason": "matched the dispatched tier; task was a small additive change at one decision point plus a short brief edit",
+          "tier": "Sonnet 5, medium effort"
+        },
+        "state_updates": [],
+        "unresolved_risks": [],
+        "validation": {
+          "affected": "python3 -m pytest tests/test_orchestrator.py tests/test_orchestrator_verify.py tests/test_orchestrator_providers.py tests/test_orchestrator_usage.py tests/test_orchestrator_dashboard.py tests/test_orchestrator_preflight.py tests/test_orchestrator_install_hooks.py tests/test_worker_brief.py tests/test_gov_po_role.py tests/test_architecture_convergence.py -q -> 449 passed",
+          "diff_check": "git diff reviewed by hand: 3 source files + 3 test files, all additive apart from moving the existing adapter/provider lookup a few lines earlier in _cmd_run so budget_exhausted() can use it before it was previously built",
+          "full_regression": "n/a (blast radius confined to the orchestrator report path and roles/PO.md; not run)",
+          "privacy": "python3 scripts/repository_privacy_check.py -> Findings: 0, Gate: PASS",
+          "real_environment": "NOT_RUN -- ran the real installed claude CLI once by hand (`claude -p ... --max-budget-usd 0.0001`) to confirm the exact result-event shape (terminal_reason/subtype/errors fields) before writing the adapter; the orchestrator's own detection is exercised only against a stub in the test suite, per AGENTS.md's automated-vs-real-environment distinction",
+          "state_consistency": "n/a",
+          "targeted": "python3 -m pytest tests/test_orchestrator.py tests/test_orchestrator_providers.py -q -> 165 passed"
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-12T19:10:04Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0126",
+  "movement": "budget_exhaustion_visible_and_dispatch_checklist_durable",
+  "next_actor": null,
+  "refs": [
+    "AGENTS.md",
+    "roles/PO.md",
+    "docs/design/GOV_ORCH_1_SYNCHRONOUS_RUN_AND_ORCHESTRATOR_VERIFY.md",
+    "docs/design/GOV_ORCH_2_PROVIDER_ADAPTER.md",
+    "scripts/orchestrator.py",
+    "scripts/orchestrator_providers.py"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-12T19:10:04Z"
+}

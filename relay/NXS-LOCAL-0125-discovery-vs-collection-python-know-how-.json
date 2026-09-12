@@ -1,0 +1,169 @@
+{
+  "created_at": "2026-09-12T18:40:16Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1 The document maps the Check Point path end to end -- management entry point to enumerated devices to a direct device read -- with module path, transport, port, exact command or route, context and return shape at every step.",
+          "AC-2 It maps the Palo Alto path to the same depth, including Panorama and direct firewall.",
+          "AC-3 It maps the VSX path and states precisely how it differs from the gateway path.",
+          "AC-4 It states what each of the --only modes cp, vsx and pan-config executes end to end, and where they overlap.",
+          "AC-5 Every mapped step is classified as discovery, inventory, configuration or running-config collection, and every place the existing code interleaves them is named.",
+          "AC-6 It states the minimum a candidate device row needs for an operator to decide whether to import it, derived from what the code actually learns before heavy collection begins.",
+          "AC-7 It carries a table of every device command and API route named, with the command-gate status of each and an explicit note where a new implementation would need a gate entry.",
+          "AC-8 It states, per vendor, how many sessions the existing code opens per device and whether one is reused.",
+          "AC-9 Every claim carries a source citation; every ambiguity is recorded as UNKNOWN with what would settle it.",
+          "AC-10 The diff is exactly one new DRAFT document under docs/design/ and nothing else.",
+          "AC-11 The repository privacy gate reports zero findings, and no real address, hostname, serial, credential or device name appears in the document.",
+          "AC-12 Nothing was executed against any device, management station or network endpoint, and SESSION_CLOSE says so explicitly."
+        ],
+        "baseline": {
+          "authority": "docs/design/PO_DECISION_RECORD_2026_09_12.md (FROZEN) section 2 states the existing Python is know-how only: it may be read to understand semantics, evidence handling and vendor behaviour, and must never be ported, wrapped, transliterated or invoked. Section 4 states the product sequence the Product Owner wants -- device add, then discovery returning candidates the operator multi-selects, then import creating the device row, then configuration and evidence subject to the collection gate. This movement reads the Python to learn exactly how the existing product reaches devices, so that sequence can be built in Java from the vendor behaviour rather than from a script.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "sequencing": "This is the first step of the discovery work and the last one that can proceed with the collection gate closed.",
+          "surface": "Roughly 18,700 lines across checkpoint/, panorama/, configuration/ and utils/discovery_lifecycle.py. application/cli.py exposes --only with the modes cp, vsx, pan-config and all, plus legacy diagnostic modes. The Product Owner's question is what each path actually does: which transport, which port, which command or API route, which script, and what comes back.",
+          "why_read_only": "Section 1's collection gate is still closed: no vendor data-collection or extraction work proceeds until the Product Owner specifies, per vendor, collection type and methods. Reading existing code is explicitly permitted by section 2 and contacts nothing. This movement therefore produces knowledge, not capability, and names what would need the Product Owner's gate and the network-device command gate before any of it becomes implementation."
+        },
+        "context_not_loaded": [
+          "docs/history/**",
+          "ui2/ sources",
+          "project/*.json",
+          "the HTML renderer and report templates"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/discovery-collection-know-how-audit"
+        },
+        "invariants": [
+          "The Python is know-how only: read to understand, never ported, wrapped, transliterated or invoked.",
+          "No device, management station or network endpoint is contacted.",
+          "The collection gate holds: this movement produces knowledge, not collection capability.",
+          "No credential, management address, device name or serial enters a tracked file.",
+          "A command appearing in source is not command approval; the gate status is reported, never assumed.",
+          "Explicit UNKNOWN over inferred vendor semantics.",
+          "No contract status is applied, removed or changed."
+        ],
+        "merge_gate": "Product Owner assistant review of the diff plus orchestrator verify.passed. The worker does not merge to main.",
+        "movement_type": "READ_ONLY_AUDIT",
+        "objective": "Produce a precise, evidence-backed map of how the existing Python product discovers devices and collects from them, per vendor, and draw the line the Product Owner wants drawn: which part is discovery -- finding candidate devices so an operator can choose what to import -- and which part is collection that happens only after import.",
+        "output_contract": [
+          "One DRAFT audit document mapping, per vendor, how devices are discovered and collected from, with the discovery/collection boundary drawn and a command-gate table",
+          "SESSION_CLOSE stating explicitly that nothing was executed against any device or endpoint, and listing every UNKNOWN the audit could not settle from the source"
+        ],
+        "recommended_reasoning": {
+          "reason": "Roughly 18,700 lines across three vendor paths, read for semantics rather than syntax, with a boundary to draw that the code itself does not draw and a standing prohibition on turning the reading into a porting plan.",
+          "tier": "Opus 5, high effort"
+        },
+        "requirements": [
+          "English, per AGENTS.md engineering-output language law",
+          "Every claim cites the module path and the function or line it comes from. A statement the reader cannot check against the source does not belong in the document.",
+          "Where the code's intent is ambiguous, record UNKNOWN and name what would settle it. Do not infer a vendor semantic from a field name, a function name or a comment: AGENTS.md states a field name is not its contract and a command name is not its semantics.",
+          "Distinguish what the code does from what it is documented to do, and report any disagreement between the two rather than reconciling it.",
+          "Report mechanism, never captured values. If a code path handles a credential or a device identity, describe the handling and not the data.",
+          "Keep the document navigable: a reader must be able to answer 'how do we reach a Check Point gateway, on what port, with what command' without reading the sources again.",
+          "Publish SESSION_CLOSE with scripts/local_relay.py append using --report pointing at a JSON file you wrote first. Do not pass report JSON inline on the command line.",
+          "Do not merge to main. Commit on the lane and publish SESSION_CLOSE."
+        ],
+        "risks": [
+          "Writing a porting plan instead of a behaviour map, which the language directive forbids.",
+          "Inferring a vendor semantic from a field or function name rather than recording UNKNOWN.",
+          "Copying a real address, serial or device name out of a fixture, a comment or a docstring into the document.",
+          "Treating a command's presence in the source as evidence that it passed the command gate.",
+          "Executing a collector to find out what it does.",
+          "Producing a document so long that the map it was written to provide cannot be found in it."
+        ],
+        "scope": {
+          "in": [
+            "Check Point: how a management entry point (MDS or CMA) is reached and what it is asked in order to enumerate devices, and how an individual gateway or cluster member is then reached directly. Record per step: the module and function by path, the transport, the port, the exact command string or API route, the shell or context it runs in, the authentication it requires, and what comes back",
+            "Palo Alto: the same map for Panorama as the management entry point and for a direct firewall, including which API routes are used and what each returns",
+            "VSX: how virtual systems are enumerated and attributed to a physical member, and what makes that path different from the Check Point gateway path",
+            "The --only modes cp, vsx and pan-config: what each actually executes end to end, and where they overlap",
+            "The discovery/collection boundary: for every step mapped, classify it as discovery (identifies a candidate device and the minimum needed to decide whether to import it), inventory, configuration, or running-config collection. Where the existing code interleaves them in one pass, say exactly where and why",
+            "The minimum evidence a candidate row needs for an operator to decide: what the existing code learns about a device before anything heavy is collected",
+            "Command-gate status: list every device command and API route the map names, and for each state whether the repository already records it as passed through the network-device command gate for this purpose, or whether a new Java implementation would need a gate entry. AGENTS.md is explicit that a command appearing in source is not command approval",
+            "Session shape: how many sessions per device the existing code opens, whether it reuses one, and how it confirms a command finished -- the Product Owner's section 3.4 requires one reused session per device",
+            "Credentials and secrets: what kind of credential each path needs and how the existing code avoids persisting sensitive output, reported as mechanism only",
+            "One DRAFT audit document under docs/design/, organised per vendor, with a boundary section and a command-gate table"
+          ],
+          "out": [
+            "Any code change anywhere. This movement writes one document and nothing else",
+            "Any Java. No implementation, no skeleton, no interface sketch presented as a design",
+            "Proposing a port, wrapper or transliteration of any Python module: section 2 forbids it and a map that reads as a porting plan violates it",
+            "Contacting any device, management station or network endpoint. Nothing is executed against anything",
+            "Running the Python collectors, even in a dry-run or offline mode",
+            "Reproducing any real address, hostname, serial, credential, device name or captured device output in the document",
+            "Designing the discovery feature, its schema, its screens or its contract: the map informs those, it does not decide them",
+            "Any change under ui2/, project/, relay/ or deploy/"
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_architecture_convergence.py",
+              "-q"
+            ],
+            "name": "architecture_convergence"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_contract_authority_status.py",
+              "-q"
+            ],
+            "name": "contract_authority_status"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_project_files_budget.py",
+              "-q"
+            ],
+            "name": "project_files_budget"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/project_queue.py",
+              "check"
+            ],
+            "name": "project_queue_check"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-12T18:40:16Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0125",
+  "movement": "discovery_vs_collection_python_know_how_audit",
+  "next_actor": "engineer",
+  "refs": [
+    "AGENTS.md",
+    "docs/design/PO_DECISION_RECORD_2026_09_12.md",
+    "docs/AI_DEVELOPMENT_PROTOCOL.md",
+    "docs/design/UI2_0_B1_04B_DEVICE_MODEL_AND_ONBOARDING_CONTRACT.md",
+    "docs/design/UI2_0_B1_04_COLLECTION_ENGINE_CORE_CONTRACT.md",
+    "PRIVACY_AND_DATA_HANDLING.md"
+  ],
+  "schema_version": 1,
+  "status": "OPEN",
+  "updated_at": "2026-09-12T18:40:16Z"
+}

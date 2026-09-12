@@ -1,0 +1,275 @@
+{
+  "created_at": "2026-09-12T20:50:08Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1 The document exists under docs/design/, its status line reads DRAFT, and its title names Check Point and VSX discovery.",
+          "AC-2 It states the transport and entry point, and states that discovery contacts no device at any point.",
+          "AC-3 It carries the classification matrix covering all ten candidate kinds, each identified by flags and field presence only, with no kind identified by a name pattern.",
+          "AC-4 It states the member-to-cluster resolution rule using the stable identifier, and states explicitly that the display name is never the join key.",
+          "AC-5 It states the host-resolution rule as a single invariant over the two address fields, covering the physical case, the virtual case with an own address, the virtual case with an empty own address, and the absent case -- and states that the clustered and standalone forms were measured separately and agreed.",
+          "AC-6 It carries an explicit prohibition on name-, label- and ordinal-derived relationships, with the measured reason recorded.",
+          "AC-7 It defines the candidate row field by field, and for each field states which candidate kinds carry it and which do not.",
+          "AC-8 Liveness has its own section, records that three measured management-plane signals are not liveness signals, forbids presenting them as up or down, and states what would settle the question.",
+          "AC-9 It states the discovery/import boundary: discovery writes no row, starts no collection, stores no evidence, and shows unreachable candidates rather than hiding them.",
+          "AC-10 It carries an acceptance-check list, each check runnable, naming no absolute path, developer account or identity.",
+          "AC-11 It carries an UNKNOWN register with what would settle each entry.",
+          "AC-12 No real object name, address, serial, domain name or certificate subject appears anywhere in the document, and the repository privacy gate reports zero findings.",
+          "AC-13 The diff is exactly one new document.",
+          "AC-14 Nothing in the document reads as a plan to port, wrap or invoke the existing Python."
+        ],
+        "baseline": {
+          "authority": "docs/design/PO_DECISION_RECORD_2026_09_12.md (FROZEN) section 4 fixes the product sequence: device add, then discovery returning candidates the operator multi-selects, then import creating the device row, then collection. Section 2 makes the existing Python know-how only. This movement writes the contract for the first of those steps, for Check Point and Check Point VSX only.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "evidence_basis": "Every rule in the scope below was measured by the Product Owner against a live R81.20 multi-domain management server during this session, not inferred from the existing Python and not taken from a field name. The Product Owner ran each query and returned the output. The measurements are restated in this packet as rules and shapes; no real identity, address or domain name is carried into the repository.",
+          "gate_position": "Writing this contract is permitted while the collection gate holds -- a contract may be written, it may not be implemented. It contacts nothing and enables nothing by itself.",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "sequencing": "Palo Alto is deliberately out of scope; the Product Owner set Check Point and VSX first.",
+          "why_a_contract_now": "The measured behaviour exists only in a session transcript, which AGENTS.md item 7 makes non-authoritative. Written down as a contract it survives the session; left in chat it is lost and the next session guesses field names again."
+        },
+        "context_not_loaded": [
+          "docs/history/**",
+          "ui2/ sources",
+          "project/*.json",
+          "Palo Alto contracts and modules"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/cp-vsx-discovery-contract"
+        },
+        "invariants": [
+          "Discovery contacts no device; the whole design rests on that.",
+          "A display name, label or ordinal is never an identity or a join key.",
+          "A management-plane signal is never presented as device liveness.",
+          "Explicit UNKNOWN over inferred vendor semantics.",
+          "No real identity, address, domain name or topology enters a tracked file.",
+          "The existing Python is know-how only: never ported, wrapped, transliterated or invoked.",
+          "The collection gate holds: this document enables nothing by itself.",
+          "No contract status is applied, removed or changed."
+        ],
+        "merge_gate": "Product Owner assistant review of the diff plus orchestrator verify.passed, and Product Owner review before any status is applied. The worker does not merge to main.",
+        "movement_type": "ARCHITECTURE",
+        "objective": "Write the frozen-candidate contract for Check Point and Check Point VSX discovery: what the management plane can be asked, what a candidate row may carry, how the object graph resolves, and where discovery stops and import begins. It decides the design; it implements none of it.",
+        "output_contract": [
+          "One DRAFT contract governing Check Point and VSX discovery: classification matrix, structural relationship resolution, candidate row, liveness as an open question, and the discovery/import boundary",
+          "SESSION_CLOSE listing every UNKNOWN the contract records and confirming that no real identity or topology entered the document"
+        ],
+        "recommended_reasoning": {
+          "reason": "A contract that will govern the product's first real feature, written from measurements that must be turned into a portable rule set without leaking the estate they came from, with an identity law and a liveness UNKNOWN that both have to survive contact with an implementer.",
+          "tier": "Opus 5, high effort"
+        },
+        "requirements": [
+          "English, per AGENTS.md engineering-output language law",
+          "Status line reads DRAFT. Applying a status is the Product Owner's act.",
+          "Every rule must be checkable against a management database without a device. Where a rule was measured, say that it was measured and on what class of system; where it was not, record UNKNOWN and name what would settle it.",
+          "No real identity, address, domain name or topology enters the document. The contract is a rule set, not a survey of one estate. A reader must be able to apply it to a different estate without knowing this one.",
+          "Do not generalize a single-estate measurement into a vendor law. State the observation's scope honestly: one multi-domain management server, one software generation, several domains. AGENTS.md's vendor-semantics law requires official documentation before a safety-critical semantic is frozen; this contract governs a read-only discovery projection, and must say which of its rules would need documentation before any of them becomes a device-facing behaviour.",
+          "The identity law is load-bearing here: state the stable-identifier-over-name rule as a construction rule with its own acceptance check, not as advice.",
+          "Liveness gets its own numbered section and is not smuggled into the candidate row as a status column.",
+          "Publish SESSION_CLOSE with scripts/local_relay.py append using --report pointing at a JSON file you wrote first. Do not pass report JSON inline on the command line.",
+          "Commit early and commit often on the lane; a movement that ends with uncommitted work loses it.",
+          "Do not merge to main. Commit on the lane and publish SESSION_CLOSE."
+        ],
+        "risks": [
+          "Writing the contract as a description of one estate rather than a rule set, so it cannot be applied anywhere else.",
+          "Quoting a measured identity, address or topology into the document.",
+          "Presenting a management-plane state field as an up/down column, which is exactly the error the measurements disproved.",
+          "Deriving a relationship from a name because the estate's naming happens to encode it.",
+          "Generalizing one management server's behaviour into a vendor law without saying so.",
+          "Letting the document drift into implementation or into a porting plan."
+        ],
+        "scope": {
+          "in": [
+            "One new document under docs/design/ named for Check Point and VSX discovery, status DRAFT",
+            "The transport and entry point: one authenticated session to the multi-domain management server; domain enumeration; per-domain object query. State that no device is contacted at any point in discovery and that this is the property the design is built on, not a limitation",
+            "The object classification matrix, as measured. Three object types -- a gateway type, a cluster type, and a cluster-member type -- crossed with the virtualization flag pairs and the Check-Point-product flag, yielding ten distinct candidate kinds: standalone product gateway; non-product interoperable device; standalone virtualization host; standalone virtual system; virtualization cluster; virtual-system cluster; plain high-availability cluster; physical virtualization chassis member; virtual-system member; plain cluster member. Each kind must be identified by flags and field presence only",
+            "The relationship resolution rules, as measured, stated as one invariant rather than special cases. Every object carries a management-address field whose value is the address of the physical device that serves it. Where that field equals the object's own address field, the object IS that physical device. Where it differs -- including where the object's own address field is empty -- the object is a virtual system hosted on the physical device at that management address. Where the field is absent, the object is a cluster object or not a product device. The same invariant resolves the clustered case and the standalone case, which were measured separately and agreed. Separately, a member object carries a reference to its own cluster object, and that reference carries a stable unique identifier alongside the display name -- the identifier is the join key, never the name.",
+            "An explicit prohibition on deriving any relationship from a name, a label, or an ordinal suffix, with the measured reason: the estate already contains two different ordinal separators and composite names whose split point is ambiguous. AGENTS.md's identity law is the authority; this section records the measurement that makes it concrete",
+            "The candidate row: every field the management plane can supply before any device is contacted -- identity, address, owning domain, object kind, cluster membership, model, software version, and the management-plane connection state -- and, for each, which candidate kinds actually carry it. State plainly which kinds carry no address of their own and why",
+            "Liveness, as an explicit UNKNOWN with its own section: three management-plane signals were measured and none is a liveness signal. A connection state reported as communicating was observed on devices that were powered off; a cluster object's own state is not its members' state; and the management console's red status indicator reflects a certificate condition, not reachability. The contract must not let any of these be presented to an operator as up or down. It states what would settle the question and defers it",
+            "The discovery/import boundary: discovery returns candidates and nothing else; it writes no device row, starts no collection, and stores no evidence. The operator selects, and only selection creates a row. Discovery shows everything it found, including candidates it cannot reach -- the Product Owner chose honesty over filtering, so exclusion is an operator act",
+            "Scale and safety shape: bounded per-domain queries, one session, and an explicit statement that the query set is read-only and touches only the management database",
+            "An acceptance-check list in the style of the existing B1 contracts, each check runnable and naming no absolute path, no developer account and no identity",
+            "An UNKNOWN register in the style of the B1-1c contract: every clause the measurement did not settle, with what would settle it",
+            "A section stating what the contract defers and what it does not prove"
+          ],
+          "out": [
+            "Palo Alto in any form",
+            "Collection of any kind: configuration, inventory, running configuration, routing or interface state from a device",
+            "Any device contact, any SSH, any remote execution, any management-plane write",
+            "Implementing anything: no Java, no query runner, no schema, no screen. This movement produces one document",
+            "Porting, wrapping, transliterating or invoking any existing Python module, and any text that reads as a porting plan",
+            "Reproducing any real object name, address, serial, domain name, certificate subject or estate topology. Rules are stated abstractly; the measurement is cited as having been performed, never quoted",
+            "Deciding the liveness question, or presenting any measured management-plane signal as if it answered it",
+            "Applying, removing or changing any contract status, or editing any other contract",
+            "Any change under ui2/, project/, deploy/, relay/ or .github/workflows/"
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_contract_authority_status.py",
+              "-q"
+            ],
+            "name": "contract_authority_status"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_architecture_convergence.py",
+              "-q"
+            ],
+            "name": "architecture_convergence"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_project_files_budget.py",
+              "-q"
+            ],
+            "name": "project_files_budget"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/project_queue.py",
+              "check"
+            ],
+            "name": "project_queue_check"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-12T20:50:08Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "report": {
+        "changed": [
+          "ADDED docs/design/CP_AND_VSX_DISCOVERY_CONTRACT.md - the whole diff. Twelve numbered sections: status and evidence basis, scope and authority, the scope of the measurement with the five vendor-documentation dependencies VD-1 to VD-5, transport T-1 to T-7, classification K-1 to K-10 and CL-1 to CL-4, relationship resolution HR-1 to HR-4 and HL-1 to HL-3 and MC-1 to MC-3 and NP-1 to NP-5, the candidate row CR-0 to CR-14 with field binding FB-1 to FB-3, liveness L-S1 to L-S3 and LV-1 to LV-6, the discovery/import boundary DI-1 to DI-7, eighteen acceptance checks, twelve UNKNOWNs, and what the contract defers and does not prove.",
+          "Commit 56c0e48 on lane feature/cp-vsx-discovery-contract, base origin/main. One commit, one file.",
+          "Pull request https://github.com/ozandurmus/neXus/pull/204 opened against main. Not merged - this dispatch runs under merge-mode orchestrator and the worker did not run gh pr merge."
+        ],
+        "completed": [
+          "Objective met: docs/design/CP_AND_VSX_DISCOVERY_CONTRACT.md decides the design of Check Point and Check Point VSX discovery - transport, classification, relationship resolution, the candidate row, liveness as an open question, and the discovery/import boundary - and implements none of it. Status line declares DRAFT; no status was applied, because applying one is the Product Owner's act.",
+          "AC-1 MET - the document exists under docs/design/, its status line reads DRAFT, and its title is 'Check Point and Check Point VSX discovery contract'.",
+          "AC-2 MET - section 3, T-1 to T-7: one authenticated session to the multi-domain management server, domain enumeration then per-domain object query. T-4 states that no device is contacted at any point, and states it as the property the design rests on rather than as a limitation, listing what that property buys: safe estate-wide enumeration, no maintenance window, no device credential, and position entirely outside the collection gate.",
+          "AC-3 MET - section 4.2 carries the matrix of all ten candidate kinds K-1 to K-10 as rows of (object type, PRODUCT flag, VIRT_HOST flag, VIRT_SYSTEM flag). CL-1 states the kind is determined by object type, flag values and field presence and by nothing else, naming display name, name pattern, label, ordinal, model, version and address as forbidden inputs. No kind is identified by a name pattern.",
+          "AC-4 MET - MC-1 states the member's cluster reference carries a stable unique identifier alongside a display name, that the identifier is the join key, and that the display name is never the join key, is never compared and never breaks a tie. MC-2 forbids any name-based fallback when the identifier is absent, yielding NOT_EVALUABLE. Acceptance check 12 is its machine proof.",
+          "AC-5 MET - HR-1 to HR-4 state the host rule as one invariant over the management-address field and the object's own address field: equal means the object IS that physical device; differing means the object is a virtual system hosted on the physical device at that management address; an empty own address is stated explicitly as the same case as a differing one rather than a separate rule or a value to repair; absent means a cluster object or a non-product device, yielding NOT_APPLICABLE rather than UNKNOWN. HR-4 states the clustered and standalone forms were measured separately and agreed, which is why host resolution is a function of the two address fields alone and does not branch on object type.",
+          "AC-6 MET - section 5.4, NP-1 to NP-5, prohibits deriving any relationship, identity, grouping, ordering or membership from a display name, label, comment or ordinal suffix. NP-2 names the specific forbidden techniques. NP-3 records the measured reason: the estate already contains two different ordinal separators in use and composite names whose split point is ambiguous, so a name-parsing rule would be wrong on that estate today. AGENTS.md identity law is cited as the authority.",
+          "AC-7 MET - section 6.2 carries a ten-column matrix of every candidate row field against K-1 to K-10, with four distinct cell values: measured present, measured present but observed empty, measured absent, and not measured. CR-0 requires a not-measured cell to be handled as may-be-absent and never as present. CR-3 states plainly which kinds carry no address of their own and why - the virtual-system kinds carry an empty own address because a virtual system is served by the physical device its management-address field names - and CR-3a forbids treating a cluster-type candidate's address as a device address whatever U-4 turns out to be.",
+          "AC-8 MET - section 7 is liveness's own numbered section. It records the three measured management-plane signals and that none is a liveness signal: L-S1, a connection state reported as communicating, observed on powered-off devices; L-S2, a cluster object's own state, which is not its members' state; L-S3, the console's red indicator, which reflects a certificate condition rather than reachability. LV-1 forbids any up/down/online/offline/reachable/unreachable/healthy vocabulary in any field, label, colour, icon, sort key or filter; LV-3 forbids composing the three into a health score or roll-up; LV-5 states that the measurement disproves L-S1 as a liveness signal without establishing what it means. Section 7.3 states what would settle it - a direct, identity-verified read from the device itself, which discovery by construction never performs - and defers the question to a movement authorized to contact a device.",
+          "AC-9 MET - section 8, DI-1 to DI-7: a run returns a candidate set and nothing else; it writes no device row, creates no persistent record, starts no collection, stores no evidence and retains no raw response; only operator selection creates a row; DI-3 and DI-4 require everything found to be shown, including unreachable, unclassifiable and unresolvable candidates, with exclusion stated as an operator act.",
+          "AC-10 MET - section 9 carries eighteen acceptance checks. Checks 1 to 6 are repository checks and were run. Checks 7 to 18 require a management database and are recorded as unrun. None names an absolute filesystem path, a developer account or any identity.",
+          "AC-11 MET - section 10 carries an UNKNOWN register of twelve entries, U-1 to U-12, each with what would settle it.",
+          "AC-12 MET - no real object name, address, identifier value, domain name, certificate subject or estate topology appears anywhere in the document. The repository privacy gate reports 0 findings over 1237 scanned files.",
+          "AC-13 MET - git diff --name-status origin/main...HEAD reports exactly one line: A docs/design/CP_AND_VSX_DISCOVERY_CONTRACT.md.",
+          "AC-14 MET - the existing Python appears once, in section 1's out-of-scope list, stated negatively: know-how only per the frozen PO decision record section 2, no rule derived from it, no rule a restatement of it, and nothing a plan to port, wrap, transliterate or invoke it. Acceptance check 4 greps for a product Python module path and matches nothing."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "None. No Python changed - no module added, edited or invoked, and the contract names no product Python module. The existing Python remains know-how only.",
+          "ui": "None. No template, static module, stylesheet or payload builder changed, so the HTML render harness has nothing to cover. The contract constrains what a future discovery screen may show - LV-1 forbids an up/down column and NP-4 makes a display name a label rather than an input - but designs no screen."
+        },
+        "integration": {
+          "branch": "feature/cp-vsx-discovery-contract",
+          "ci": "Local gates green: privacy gate 0 findings, the three named pytest files 36 passed, project queue check up to date, git diff --check clean. Remote CI not observed by this worker; the orchestrator verifies before merging.",
+          "head_sha": "56c0e4891d5c9d638251cab52e07fc99601a32ce",
+          "merge_commit": null,
+          "merge_decision": "Not merged by the worker. This dispatch runs under merge-mode orchestrator: the PR was opened and SESSION_CLOSE published, and the orchestrator merges after its own verification passes. The stated merge gate is Product Owner assistant review of the diff plus orchestrator verify.passed, with Product Owner review before any status is applied.",
+          "merge_state": "OPEN",
+          "pr": 204,
+          "pr_url": "https://github.com/ozandurmus/neXus/pull/204"
+        },
+        "next": {
+          "movement": "Product Owner assistant review of the PR 204 diff, then the Product Owner's decision on whether to apply a status to the contract",
+          "movement_type": "READ_ONLY_AUDIT",
+          "objective": "Review one document diff against the fourteen acceptance criteria and the invariants, with attention to the two clauses that carry the design - HR-1 to HR-4 as one invariant rather than special cases, and section 7's refusal to answer liveness - and decide whether a status is applied. If it is, the natural successor is the import contract, the far side of the section 8 boundary, which section 11 records as deferred and which needs its own measurement.",
+          "status": "planned"
+        },
+        "preserved": [
+          "PRIVACY CONFIRMATION, as the output contract requires: no real identity or topology entered the document. No object name, address, serial, identifier value, domain name, certificate subject, model string, version string or estate topology is reproduced anywhere in it. Every field is named by role rather than by vendor field name (FB-1 to FB-3), every rule is stated abstractly so it can be applied to an estate the reader has never seen, and the measurement is cited as having been performed, never quoted. The repository privacy gate reports 0 findings over 1237 scanned files and printed no matched value.",
+          "Discovery contacts no device - T-4 states it as the property the design rests on, and check 15 is its machine proof: a run performed with every candidate address made unroutable must return an identical candidate set.",
+          "A display name, label or ordinal is never an identity or a join key - NP-1 to NP-5, MC-1, HL-2. Check 8 is the machine proof: classify the estate twice, once with every display name replaced by a constant, and require identical kinds, host resolutions and cluster links.",
+          "A management-plane signal is never presented as device liveness - LV-1 to LV-6 and check 13, which asserts over the returned set that no field name and no enumerated value belongs to the up/down vocabulary and that no field is a function of L-S1, L-S2 or L-S3 alone.",
+          "Explicit UNKNOWN over inferred vendor semantics - CL-2's UNCLASSIFIED and AMBIGUOUS outcomes, HR-3's NOT_APPLICABLE, HL-1's fail-closed MISSING and AMBIGUOUS, MC-2's NOT_EVALUABLE, CR-0's not-measured handling, FB-3's unbound role, and the twelve entries of section 10.",
+          "The existing Python is know-how only - named once, negatively, in section 1. No rule was derived from it and no text reads as a porting plan.",
+          "The collection gate holds - DI-7 states that nothing in discovery is device-facing and that the document enables nothing by itself. No device-facing behaviour is defined anywhere in it.",
+          "No contract status was applied, removed or changed. The new document declares DRAFT and no other document in the repository was edited.",
+          "Scope held: no device contact, no collection, no implementation, no Palo Alto, no Python ported or invoked, and nothing touched under ui2/, project/, deploy/, relay/ or .github/workflows/."
+        ],
+        "recommended_reasoning": {
+          "reason": "The review target is one Markdown document with no code, no schema and no device-facing behaviour, and five validation gates are already green, so a low tier covers reading the diff against a numbered acceptance list. Escalate to Fable medium only for the freeze decision itself, which is a contract-status judgement and the one step in this sequence that is not merely a read.",
+          "tier": "Fable low"
+        },
+        "state_updates": [
+          "No project/*.json and no CURRENT_STATE.md update was made, deliberately. AC-13 requires the diff to be exactly one new document, the brief places project/ out of scope, and the movement applies no status and changes no delivery state - the document declares DRAFT and authorizes nothing. Recording this contract in project state belongs with the Product Owner's decision to apply a status, and it goes through scripts/project_queue.py per the GOV.ORCH.5 amendment rather than by editing the JSON directly.",
+          "project/QUEUE.md verified up to date by python3 scripts/project_queue.py check; nothing in it needed to change for this movement."
+        ],
+        "unresolved_risks": [
+          "U-1 OPEN - whether the stable identifier is unique across domains or only within one domain. Settled by one cross-domain enumeration checked for a repeated identifier, or by vendor documentation of the identifier's scope. Until then CR-1 makes the candidate key the (owning domain, stable identifier) pair, which is unique if either component is.",
+          "U-2 OPEN - what the management-plane connection state actually means, given that a communicating state was measured on powered-off devices. Settled by vendor documentation of the field, corroborated against a device whose power state is independently known. LV-5 forbids filling it from general product knowledge.",
+          "U-3 OPEN - whether a cluster object carries a member list, the cluster-to-member direction; only member-to-cluster was measured. Settled by one enumeration inspecting a cluster object's fields for a member collection. Until then MC-3 builds the tree from the member side only, and a cluster with no referencing member is a cluster with no known members rather than an empty cluster.",
+          "U-4 OPEN - whether a cluster-type candidate carries an own address and what it denotes. Settled by field enumeration over K-5, K-6 and K-7. CR-3a holds either way: an address on a cluster-type candidate is never resolved through HL-1 and never displayed as a device address.",
+          "U-5 OPEN - whether the management-address value is unique among candidates within a domain or may be shared by several. Settled by a count over one enumeration. HL-1's fail-closed MISSING and AMBIGUOUS outcomes hold either way.",
+          "U-6 OPEN - whether model, software version and connection state are supplied per kind, and what a model or version means on a virtual system, which has no hardware of its own. Settled by field enumeration per kind. CR-8a, CR-8b and CR-9 forbid inheritance either way.",
+          "U-7 OPEN - whether the three object types are the complete set that can represent a security device in this management database. Settled by enumerating the object-type vocabulary against vendor documentation. A fourth type would produce a silently missing candidate class rather than an error, which is why it is registered.",
+          "U-8 OPEN - whether K-1 to K-10 are exhaustive, or other flag combinations occur on other estates. Settled by check 7 run over an estate with a wider mix. CL-2's UNCLASSIFIED outcome is what makes an unmeasured combination visible instead of silent.",
+          "U-9 OPEN - whether the flags and fields the contract relies on are stable across software generations; one generation was measured. Settled by the same enumeration against a second generation, or by vendor documentation of the schema's compatibility guarantee.",
+          "U-10 OPEN - whether the physical device serving a virtual system can change, which would make a host link a snapshot rather than a durable fact. Settled by two enumerations taken across a member state change. Until then a host link is true as of its run and is not carried forward.",
+          "U-11 OPEN - whether the domain enumeration returns every domain that exists or only every domain the credential can see. Settled by comparison against an independently known domain count. It matters because a missing domain produces a silently missing candidate rather than an error; HL-3 is where it surfaces, as a virtual system whose host is MISSING.",
+          "U-12 OPEN - whether a MISSING host indicates an unenumerated domain, a cross-domain host, or a genuinely absent object. Settled by one enumeration in which a known-absent host is added to the queried scope. Until then MISSING is reported as MISSING and is not interpreted.",
+          "FORWARD RISK, VD-1, the sharpest one and called out in section 2: the management-address field resolves a structural relationship between two management database rows here. Treating it as a connection target is a different claim about a different plane, and any movement that wants to must take it through the network-device command gate with official vendor documentation first.",
+          "FORWARD RISK - section 2 scopes the measurement honestly to one multi-domain management server, one software generation, several domains, one session, one point in time, and section 11 states plainly that this is not a vendor law. U-8 and U-9 are the two entries that would reopen the classification matrix on a second estate or a second software generation; checks 7 and 8 are how an implementer finds out rather than guesses.",
+          "FORWARD RISK - checks 7 to 18 are unrun, because there is no implementation and this movement created none. Applying a status to this contract would prove the rules are stated and checkable; it would prove nothing about any artifact, and it would close none of the twelve UNKNOWNs."
+        ],
+        "validation": {
+          "affected": "PASS - the document's own repository-level acceptance checks 1 to 6 all run clean: the status line declares a leading DRAFT token with no applied status; the dotted-quad address grep matches nothing; the product Python module grep matches nothing; git diff --name-status origin/main...HEAD reports exactly one added file under docs/design/.",
+          "diff_check": "PASS - git diff --check origin/main...HEAD is clean, and git diff --name-status origin/main...HEAD reports exactly one line, an A against docs/design/CP_AND_VSX_DISCOVERY_CONTRACT.md, which is AC-13.",
+          "full_regression": "NOT RUN, and deliberately so. The dispatch's validation plan names five commands and no full suite. The diff is one new Markdown document under docs/design/ and touches no source module, no test, no payload builder, no template and no static UI module, so the HTML render harness and the wider regression have no blast radius to cover. The three test files the brief does name are exactly the ones that read docs/design/ and the project files, and all three pass.",
+          "privacy": "PASS - python3 scripts/repository_privacy_check.py reports 1237 files scanned, 357 skipped, 0 findings, gate PASS. No network access performed and no matched value printed.",
+          "real_environment": "NONE, and none was possible or wanted. This movement contacts nothing: it produces one document and defines no device-facing behaviour. AGENTS.md keeps automated and real-environment validation separate gates, and section 11 of the contract states plainly that applying a status to it would prove no device fact whatsoever - every rule in it is a rule about a management database row, and management-plane observation is not direct-device runtime truth. The measurements the contract records were performed by the Product Owner against a live management server before this movement began; this movement performed none of its own.",
+          "state_consistency": "PASS - python3 scripts/project_queue.py check reports project/QUEUE.md is up to date. tests/test_contract_authority_status.py passes, including its self-proof that the detector fires on an injected FROZEN-cites-DRAFT citation, so adding a new DRAFT contract to the corpus did not blind that gate. tests/test_architecture_convergence.py passes, including the rule that a DRAFT contract never backs a terminal build_history record - no build record cites this document.",
+          "targeted": "PASS - python3 -m pytest tests/test_contract_authority_status.py tests/test_architecture_convergence.py tests/test_project_files_budget.py -q reports 36 passed in 0.68s. Run in the foreground from the worktree root and awaited."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-12T21:00:52Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0127",
+  "movement": "ui2_cp_vsx_discovery_contract",
+  "next_actor": null,
+  "refs": [
+    "AGENTS.md",
+    "docs/design/PO_DECISION_RECORD_2026_09_12.md",
+    "docs/design/DISCOVERY_VS_COLLECTION_PYTHON_KNOW_HOW_AUDIT_2026_09_12.md",
+    "docs/design/UI2_0_B1_04B_DEVICE_MODEL_AND_ONBOARDING_CONTRACT.md",
+    "docs/AI_DEVELOPMENT_PROTOCOL.md",
+    "PRIVACY_AND_DATA_HANDLING.md"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-12T21:00:52Z"
+}

@@ -1,0 +1,158 @@
+{
+  "created_at": "2026-09-12T14:34:55Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1 The document exists at the named path and its status line reads DRAFT.",
+          "AC-2 It states, as a testable clause, how the image satisfies an arbitrary assigned UID, and explains why a fixed numeric UID and an fsGroup do not satisfy restricted-v2.",
+          "AC-3 It names every manifest kind the deployment needs and, for each, the OpenShift-safety constraints it must satisfy: no root, no fixed UID, no hostPath, no privileged, no host networking, resource requests and limits set.",
+          "AC-4 It states the single documented difference between the local Kubernetes manifest set and the corporate platform, and states that nothing else differs.",
+          "AC-5 It states how the clean empty database first state is reached, and how it is reset to empty, without naming a host tool.",
+          "AC-6 It states how the database credential reaches the service with no credential value in any tracked file.",
+          "AC-7 It carries an acceptance-check list whose checks are runnable and name no absolute path and no developer account.",
+          "AC-8 It carries a section naming what it defers and what it does not prove.",
+          "AC-9 No file outside the one new document is created or modified.",
+          "AC-10 The repository privacy gate reports zero findings."
+        ],
+        "baseline": {
+          "authority": "docs/design/UI2_0_B1_01A_PLATFORM_SKELETON_CONTRACT.md (FROZEN) section 6 states the container image is NOT BUILT and that implementing it requires its own successor contract, written against the runtime actually in use, which must resolve the restricted-v2 arbitrary-UID constraint that defeats a fixed numeric UID and an fsGroup. This movement writes that successor. docs/design/PO_DECISION_RECORD_2026_09_12B_LOCAL_KUBERNETES.md (FROZEN) fixes the runtime: plain Kubernetes driven with kubectl, no host container tooling, one OCI image carried unchanged across three stages.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "precedent": "docs/design/UI2_0_B1_01B_CI_WORKFLOW_CONTRACT.md is the exact precedent: the same section 6 gate, resolved by a successor contract that creates no artifact itself.",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "sequencing": "This movement writes a contract only. The Kubernetes manifests and the image are implemented by a separate movement after this contract freezes."
+        },
+        "context_not_loaded": [
+          "docs/history/**",
+          "frontend component sources",
+          "project/*.json",
+          "vendor contracts"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/ui2-b1-01c-deployment-contract"
+        },
+        "invariants": [
+          "A clean, empty database is the required first state; nothing is seeded.",
+          "No credential, management address, device name or serial enters a tracked file.",
+          "No vendor data collection and no device contact: the standing collection gate holds.",
+          "New feature code is Java written from scratch; the repository's Python scripts are know-how only.",
+          "No existing contract is edited and no contract status is applied, removed or changed by this movement.",
+          "docs/history/** and relay/*.json are an audit trail and are never rewritten."
+        ],
+        "merge_gate": "Product Owner assistant review of the diff plus orchestrator verify.passed. The worker does not open a pull request and does not merge.",
+        "movement_type": "ARCHITECTURE",
+        "objective": "Write docs/design/UI2_0_B1_01C_CONTAINER_IMAGE_AND_KUBERNETES_DEPLOYMENT_CONTRACT.md as DRAFT: the successor contract that UI2_0_B1_01A section 6 requires before any UI 2.0 container image or deployment manifest may be implemented. The contract decides the image's UID and filesystem model, the build path that needs no host container tooling, the manifest set, the secret path, and the empty-database first state. It creates no image, no manifest and no code.",
+        "output_contract": [
+          "One new DRAFT contract document at the named path",
+          "SESSION_CLOSE listing the exact file created, every clause where the contract records UNKNOWN and why, and the real output of every validation step"
+        ],
+        "recommended_reasoning": {
+          "reason": "The load-bearing decision is the arbitrary-UID filesystem model that must hold unchanged across three platforms; a wrong model is invisible until the corporate platform rejects the pod, and the Product Owner has lifted the model ceiling for decisions of this kind.",
+          "tier": "Opus 5, high effort"
+        },
+        "requirements": [
+          "English, per AGENTS.md engineering-output language law",
+          "Status line reads DRAFT. Do not write FROZEN; a status is the Product Owner's to apply.",
+          "Every clause must be checkable. Where the contract cannot decide something on available evidence, it records UNKNOWN and names what evidence would settle it, rather than asserting a plausible value.",
+          "The arbitrary-UID constraint is the load-bearing requirement: the image must run under a UID the platform assigns at admission time, which the image cannot know in advance. State the filesystem ownership and permission model that makes that work, and state why a fixed numeric USER line and an fsGroup do not.",
+          "State the build path in terms of what must be true (an image built from the repository without a host build daemon), not in terms of one vendor tool's command line, so the contract survives a change of cluster.",
+          "Cite UI2_0_B1_01A section 6 by name as the gate this contract answers, and UI2_0_B1_01B as the precedent for the shape.",
+          "Do not open a pull request and do not merge. Commit on the lane and publish SESSION_CLOSE."
+        ],
+        "risks": [
+          "Writing FROZEN instead of DRAFT, which would repeat the agent-authority problem the Product Owner recorded.",
+          "Asserting an arbitrary-UID model that only works because a specific cluster happens to be permissive, rather than one that satisfies restricted-v2 by construction.",
+          "Naming a host container tool anywhere in the proposed path, which the Product Owner has withdrawn.",
+          "Quietly widening scope by creating the manifests this contract only governs."
+        ],
+        "scope": {
+          "in": [
+            "One new document: docs/design/UI2_0_B1_01C_CONTAINER_IMAGE_AND_KUBERNETES_DEPLOYMENT_CONTRACT.md, status DRAFT",
+            "The image contract: base image family, the multi-stage shape whose builder stage carries the JDK so no host JDK is required, the arbitrary-UID and group-0 filesystem model that satisfies restricted-v2, and what the image must NOT contain",
+            "The build path: the image is produced inside the cluster from the repository, with no host build daemon and no host container tool at any stage",
+            "The manifest set: Deployment, Service, Ingress, ConfigMap, Secret, PersistentVolumeClaim, Namespace -- each named, with the OpenShift-safety construction rules stated as testable clauses, and the single documented substitution that replaces Ingress with Route on the corporate platform",
+            "The database: how PostgreSQL 16 is provided in the cluster, how the existing Flyway migrations V1 to V7 run, and how the required clean empty first state is reached and reset",
+            "The secret path: how the database credential reaches the service without any credential value entering a tracked file",
+            "The portability clause: the same image and the same manifests must carry from this machine to a later Ubuntu Kubernetes server to the corporate OpenShift platform, and the contract states exactly what differs at each stage",
+            "An acceptance-check list in the style of UI2_0_B1_01A section 7 and UI2_0_B1_01B section 10: each check runnable, none naming an absolute path or a developer account",
+            "A section stating what the contract deliberately defers and what it does not prove"
+          ],
+          "out": [
+            "Creating any Containerfile, manifest, chart or script -- this movement produces exactly one document",
+            "Editing any existing contract, including appending an amendment to UI2_0_B1_01A or UI2_0_B1_01B",
+            "Applying or changing any contract status anywhere, and freezing this document -- it lands as DRAFT and the Product Owner assistant decides the freeze",
+            "Any change under ui2/, .github/workflows/, project/ or docs/history/",
+            "Any vendor data collection or device contact",
+            "Any host container tooling appearing anywhere in the proposed path"
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_architecture_convergence.py",
+              "-q"
+            ],
+            "name": "architecture_convergence"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_contract_authority_status.py",
+              "-q"
+            ],
+            "name": "contract_authority_status"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/build_history_index.py",
+              "--check"
+            ],
+            "name": "build_history_index"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/project_queue.py",
+              "check"
+            ],
+            "name": "project_queue_check"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-12T14:34:55Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0111",
+  "movement": "ui2_b1_01c_container_image_and_kubernetes_deployment_contract",
+  "next_actor": "engineer",
+  "refs": [
+    "AGENTS.md",
+    "docs/design/UI2_0_B1_01A_PLATFORM_SKELETON_CONTRACT.md",
+    "docs/design/UI2_0_B1_01B_CI_WORKFLOW_CONTRACT.md",
+    "docs/design/PO_DECISION_RECORD_2026_09_12.md",
+    "docs/design/PO_DECISION_RECORD_2026_09_12B_LOCAL_KUBERNETES.md",
+    "relay/NXS-LOCAL-0109-ui2-b1-12-deployment-slice.json",
+    "PRIVACY_AND_DATA_HANDLING.md"
+  ],
+  "schema_version": 1,
+  "status": "OPEN",
+  "updated_at": "2026-09-12T14:34:55Z"
+}

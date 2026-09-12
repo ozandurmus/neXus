@@ -1,0 +1,247 @@
+{
+  "created_at": "2026-09-12T14:43:50Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1 project/backlog.json is measurably smaller, and SESSION_CLOSE states the before and after byte counts.",
+          "AC-2 Every note byte removed from the JSON is present in a docs/history/backlog/<id>.md file; SESSION_CLOSE states how that was verified.",
+          "AC-3 No backlog item was deleted, renamed, reprioritised or restatused; the item count is unchanged at 153.",
+          "AC-4 project/backlog.json was written by scripts/project_queue.py, not by hand.",
+          "AC-5 tests/test_project_files_budget.py passes with a ceiling that is lower than before, never higher.",
+          "AC-6 A new regression test asserts that no backlog item carries a long note, and it passes.",
+          "AC-7 The GOV.ORCH.5 amendment exists, is marked proposed and pending Product Owner approval, and states the measured contradiction it resolves.",
+          "AC-8 project/QUEUE.md is up to date per the tool's own check, and within its 1500-word budget.",
+          "AC-9 The repository privacy gate reports zero findings.",
+          "AC-10 tests/test_architecture_convergence.py passes, including the cross-authority contradiction check."
+        ],
+        "baseline": {
+          "authority": "docs/design/GOV_ORCH_8_PROJECT_DATA_SPLIT_AND_SIZE_BUDGET.md (FROZEN) section 5 sets the budget backlog.json <= 60 KB and names tests/test_project_files_budget.py as its enforcement. docs/design/GOV_ORCH_5_PROJECT_QUEUE_AND_COLD_START_DIET.md (FROZEN) defines the note-move mechanism and scripts/project_queue.py as the only write path.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "measured_state": "project/backlog.json is 148302 bytes (144.83 KiB) against a regression ceiling of 145 KiB, leaving about 178 bytes of headroom, and against the contract target of 60 KB. 153 items. The note field is 92093 bytes, 62 percent of the file. Every closed item has already had its note moved: automated_validated, done, deferred and real_env_validated together hold 4361 note bytes and already carry a see docs/history/backlog pointer. The remaining 86929 note bytes are held by 25 in_progress and 47 planned items -- exactly the items GOV.ORCH.5 exempts.",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "sequencing": "Independent of every other lane in flight; it touches project data and the queue tooling only.",
+          "the_contradiction": "GOV.ORCH.8's 60 KB budget and GOV.ORCH.5's open-item exemption cannot both hold against this data. The first diet already did everything the exemption allows. This movement's central task is to resolve that, not to re-run a move that has no bytes left to move."
+        },
+        "context_not_loaded": [
+          "ui2/ sources",
+          "vendor contracts",
+          "docs/design/UI2_0_*"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/backlog-second-diet"
+        },
+        "invariants": [
+          "No backlog information is lost; text moves, it is never deleted.",
+          "scripts/project_queue.py stays the only write path for project/*.json.",
+          "A size ceiling never rises.",
+          "No credential, management address, device name or serial enters a tracked file.",
+          "No vendor data collection and no device contact: the standing collection gate holds.",
+          "No contract status is applied, removed or changed; the amendment lands as a proposal."
+        ],
+        "merge_gate": "Product Owner assistant review of the diff plus orchestrator verify.passed, and Product Owner approval of the GOV.ORCH.5 amendment before it is marked approved. The worker does not open a pull request and does not merge.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Bring project/backlog.json under the GOV.ORCH.8 contract budget by moving the notes of open items into their own docs/history/backlog/<id>.md files, the same way closed items were already moved, and by proposing the GOV.ORCH.5 amendment that the move requires. No backlog information is lost: every byte removed from the JSON appears in a history file.",
+        "output_contract": [
+          "A smaller project/backlog.json with every moved note present in history, and the tooling and tests that keep it that way",
+          "A proposed GOV.ORCH.5 amendment stating the measured contradiction",
+          "SESSION_CLOSE with measured before and after byte counts and the real output of every validation step"
+        ],
+        "recommended_reasoning": {
+          "reason": "The mechanical move is simple; the judgement is in resolving two frozen contracts that disagree without silently reconciling them, and in not losing a byte of backlog history while doing it.",
+          "tier": "Sonnet 5, high effort"
+        },
+        "requirements": [
+          "English, per AGENTS.md engineering-output language law",
+          "The amendment is written as a proposal. Do not mark it approved, and do not change GOV.ORCH.5's own status line.",
+          "If the 60 KB target still cannot be reached after every open-item note is moved, report the exact remaining size and what else holds the bytes. Do not delete content to hit a number.",
+          "Report the before and after byte size of project/backlog.json in SESSION_CLOSE, measured, not estimated.",
+          "Do not weaken, skip or delete an existing test. The budget test's ceiling may only move downward.",
+          "AGENTS.md forbids silently reconciling two frozen contracts that disagree. Report the disagreement in the amendment text and in SESSION_CLOSE.",
+          "Do not open a pull request and do not merge. Commit on the lane and publish SESSION_CLOSE."
+        ],
+        "risks": [
+          "Deleting note text instead of moving it, to reach the number faster.",
+          "Hand-editing project/backlog.json and breaking GOV.ORCH.5's single-write-path rule.",
+          "Raising the ceiling instead of shrinking the file, which the Product Owner has explicitly refused.",
+          "Marking the GOV.ORCH.5 amendment as approved, repeating the agent-authority problem already recorded against this repository.",
+          "Curating the backlog while moving it, so a status or priority silently changes."
+        ],
+        "scope": {
+          "in": [
+            "Append to docs/design/GOV_ORCH_5_PROJECT_QUEUE_AND_COLD_START_DIET.md a clearly marked amendment, titled as PROPOSED and PENDING PRODUCT OWNER APPROVAL, that relaxes the open-item note exemption and states the measured reason it cannot stand alongside GOV.ORCH.8's budget",
+            "Extend scripts/project_queue.py so the note-move path covers open items as well, under an explicit flag rather than by default, and so it stays the only write path for project/backlog.json",
+            "Move the note of every note-bearing open item verbatim into docs/history/backlog/<id>.md, creating the file where it does not exist and appending under a dated heading where it does, and replace the JSON note with the same short pointer form the closed items already use",
+            "Update tests/test_project_files_budget.py: lower BACKLOG_REGRESSION_CEILING to the new real size and state in the module docstring what changed and why",
+            "Re-render project/QUEUE.md through the tool, not by hand",
+            "Add a regression test asserting that no backlog item carries a note longer than the pointer form"
+          ],
+          "out": [
+            "Deleting, merging, renaming, reprioritising or restatusing any backlog item -- this movement moves text, it does not curate the backlog",
+            "Losing a single byte of note text: every byte removed from the JSON must be findable in a history file",
+            "Hand-editing project/*.json: scripts/project_queue.py is the only write path",
+            "Raising any size ceiling: the ceiling moves down or not at all",
+            "Any change under ui2/, docs/design/UI2_0_*, relay/ or .github/workflows/",
+            "Applying a FROZEN status to the amendment -- it lands as proposed and the Product Owner decides",
+            "Any vendor data collection or device contact"
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_project_files_budget.py",
+              "-q"
+            ],
+            "name": "project_files_budget"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_project_queue.py",
+              "-q"
+            ],
+            "name": "project_queue_tests"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_architecture_convergence.py",
+              "-q"
+            ],
+            "name": "architecture_convergence"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/project_queue.py",
+              "check"
+            ],
+            "name": "project_queue_check"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/build_history_index.py",
+              "--check"
+            ],
+            "name": "build_history_index"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-12T14:43:50Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "AUTOMATED_VALIDATED",
+      "report": {
+        "changed": [
+          "scripts/project_queue.py: new `migrate-open-notes --include-open` subcommand (explicit opt-in, not a default of `status`/`note`) and its `_migrate_note_to_history` helper; module docstring updated",
+          "project/backlog.json: 148302 -> 63806 bytes; 42 of 72 open (in_progress/planned) items' notes moved verbatim to docs/history/backlog/<id>.md and replaced with the pointer form `see docs/history/backlog/<id>.md`; the other 30 open items either already had no note or already carried the pointer, so were left untouched; 153 items unchanged; residual note bytes in the JSON: 6921 (all pointer-form)",
+          "docs/history/backlog/: 39 new .md files created; 3 existing files (ui2_b1_01_skeleton_ci_docker, ui2_b1_03_identity_sessions, ui2_b1_04_collection_engine_core) appended under a new dated (2026-09-12) heading, prior content in those 3 files untouched",
+          "docs/design/GOV_ORCH_5_PROJECT_QUEUE_AND_COLD_START_DIET.md: new section 8 (PROPOSED, pending Product Owner approval)",
+          "tests/test_project_files_budget.py: BACKLOG_REGRESSION_CEILING lowered 145 KiB -> 63 KiB; module docstring rewritten to state what changed and why; new regression test added",
+          "tests/test_project_queue.py: 4 new tests for migrate-open-notes (required --include-open flag, move+pointer round-trip, dated-heading append to an existing history file, idempotency on a second run)",
+          "project/QUEUE.md: re-rendered through project_queue.py (content unaffected -- it never carried note text)"
+        ],
+        "completed": [
+          "AC-1: project/backlog.json measured before this movement's write: 148302 bytes, 153 items. Measured after: 63806 bytes, 153 items (item count unchanged).",
+          "AC-2: every note byte removed from the JSON is present in a docs/history/backlog/<id>.md file. Verified by loading project/backlog.json from git HEAD (pre-commit) and from the working tree post-migration, asserting every field other than `note` is byte-identical for all 153 items, and for the 42 items whose `note` changed, asserting the pre-migration note text is a verbatim substring of the corresponding docs/history/backlog/<id>.md; result: 42 changed note fields, 0 missing/mismatched.",
+          "AC-3: item count unchanged at 153; the same byte audit confirms no id/status/priority/title/target/category changed for any item -- this movement moved text only.",
+          "AC-4: project/backlog.json was written only by `python3 scripts/project_queue.py migrate-open-notes --include-open` (new subcommand added this movement); no hand-edit.",
+          "AC-5: tests/test_project_files_budget.py passes; BACKLOG_REGRESSION_CEILING lowered from 145*1024 (148480) to 63*1024 (64512) -- moved down, never up.",
+          "AC-6: added test_no_backlog_item_note_longer_than_pointer_form to tests/test_project_files_budget.py, asserting every backlog item's note is empty or matches ^see docs/history/backlog/[^/\\s]+\\.md$; passes against the real file.",
+          "AC-7: docs/design/GOV_ORCH_5_PROJECT_QUEUE_AND_COLD_START_DIET.md section 8 added, headed 'Status: PROPOSED -- PENDING PRODUCT OWNER APPROVAL', stating the measured contradiction (GOV.ORCH.5 2.3's open-item note exemption vs GOV.ORCH.8 2.4's 60 KB backlog budget, compounded by GOV.ORCH.8 3's 'Out: backlog.json (GOV.ORCH.5)' line importing that exemption unmodified); the document's own FROZEN status line is untouched.",
+          "AC-8: `python3 scripts/project_queue.py check` reports project/QUEUE.md up to date; word count unaffected by this move since QUEUE.md never rendered note text.",
+          "AC-9: `python3 scripts/repository_privacy_check.py` reports 1216 files scanned, 0 findings, gate PASS.",
+          "AC-10: `python3 -m pytest tests/test_architecture_convergence.py -q` reports 23 passed, including the cross-authority contradiction check."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "No effect -- this movement touches project data, docs/history/backlog/, scripts/project_queue.py and tests only",
+          "ui": "No visible UI change; utils/project_plan.py passes the full backlog row through unchanged, and the HTML render already renders a pointer-form note the same way it does for terminal items, so no renderer code path change was needed"
+        },
+        "integration": {
+          "branch": "feature/backlog-second-diet",
+          "ci": "not checked by this worker: merge_mode is orchestrator, which runs its own verification after this SESSION_CLOSE",
+          "head_sha": "ea67c4647db0ca07ef7c50814abc1c1639a4f933",
+          "merge_commit": null,
+          "merge_decision": "Worker did not run gh pr merge, per dispatch instruction (--merge-mode orchestrator). Orchestrator merges after its own verify.passed check and Product Owner assistant review of the diff and of the GOV.ORCH.5 amendment.",
+          "merge_state": "OPEN",
+          "pr": 194,
+          "pr_url": "https://github.com/ozandurmus/neXus/pull/194"
+        },
+        "next": {
+          "movement": "GOV_ORCH_5_AMENDMENT_A_2026_09_12_PO_DECISION",
+          "movement_type": "READ_ONLY_AUDIT",
+          "objective": "Product Owner assistant reviews PR #194's diff and the GOV_ORCH_5 section 8 amendment text, decides whether to approve relaxing the open-item note exemption (and separately whether the residual ~2.3 KB gap above the 60 KB GOV.ORCH.8 target warrants a follow-up movement or a target adjustment), and records the decision so a future session can mark the amendment FROZEN or supersede it",
+          "status": "planned"
+        },
+        "preserved": [
+          "GOV.ORCH.5's and GOV.ORCH.8's own FROZEN status lines: neither document's status line was changed",
+          "scripts/project_queue.py as the only write path for project/backlog.json: every write in this movement went through it",
+          "Every backlog item's id, status, priority, title, target and category: unchanged for all 153 items (verified, see AC-3)",
+          "Every byte of every moved note: present verbatim in its docs/history/backlog/<id>.md after redaction (none of the 42 moved notes triggered any redaction rule -- no IPv4, device hostname or configured privacy term was present in them)",
+          "Prior content of the 3 pre-existing history files this movement appended to"
+        ],
+        "recommended_reasoning": {
+          "reason": "The remaining step is a Product Owner review-and-decide on a proposal already written and measured; no new implementation, vendor semantics or architecture is involved",
+          "tier": "Sonnet 5, low effort"
+        },
+        "state_updates": [
+          "project/backlog.json updated via scripts/project_queue.py migrate-open-notes --include-open (see 'changed')",
+          "project/QUEUE.md re-rendered via scripts/project_queue.py render/check path",
+          "No project/roadmap.json, build_history.json or feature_registry.json change; no CURRENT_STATE.md change (this movement's scope is backlog.json and its tooling/tests only, per WORKER.md)"
+        ],
+        "unresolved_risks": [
+          "The GOV.ORCH.5 amendment (section 8) is proposed only; until the Product Owner decides, migrate-open-notes must not be re-run assuming approval, and no other session should cite section 8 as authorizing anything",
+          "project/backlog.json (63806 bytes) still exceeds GOV.ORCH.8's 60 KB target by 2366 bytes; per this movement's explicit instruction, that gap was not closed by deleting or curating content. The residual bytes are now id/title/target/category/status/priority state and JSON structural overhead across 153 items, not narrative -- there is no more note text left to move. Left for the Product Owner: whether to accept the residual gap, adjust the 60 KB figure, or open a further movement against the state fields themselves",
+          "42 new/updated docs/history/backlog/*.md files now exist outside the repository's usual build-history flow; retention policy for docs/history/backlog/ (GOV.ORCH.5 section 7, already an open PO item) applies to them same as the earlier terminal-item files"
+        ],
+        "validation": {
+          "affected": "python3 -m pytest tests/test_architecture_convergence.py -q -> 23 passed (dispatch's AC-10 target, not merely 'nearby'); no other suite reads project/backlog.json's note field",
+          "diff_check": "git diff --check -> clean, exit 0",
+          "full_regression": "Not run: this dispatch's WORKER.md scopes validation to the six named commands (targeted tests, project_queue check, build_history_index --check, privacy gate) rather than the full repository suite, and the brief's standing rules forbid scanning beyond the named files; utils/project_plan.py itself reads backlog rows only for id/status/priority/title/target/category and passes the row through for display, none of which changed, so a wider regression was judged unnecessary rather than skipped for convenience",
+          "privacy": "python3 scripts/repository_privacy_check.py -> Files scanned: 1216, Files skipped: 366, Findings: 0, Gate: PASS",
+          "real_environment": "Not applicable: this movement is pure repository data/tooling (project/backlog.json, docs/history/backlog/, scripts/project_queue.py, tests) with no vendor/device contact; the standing collection gate was not touched and no real-environment gate applies to it",
+          "state_consistency": "python3 scripts/project_queue.py check -> project/QUEUE.md is up to date; python3 scripts/build_history_index.py --check -> docs/history/INDEX.md is up to date; tests/test_architecture_convergence.py 23 passed",
+          "targeted": "python3 -m pytest tests/test_project_files_budget.py -q -> 8 passed; python3 -m pytest tests/test_project_queue.py -q -> 28 passed (24 pre-existing + 4 new for migrate-open-notes)"
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-12T14:52:47Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0114",
+  "movement": "backlog_json_second_diet_to_contract_limit",
+  "next_actor": null,
+  "refs": [
+    "AGENTS.md",
+    "docs/design/GOV_ORCH_5_PROJECT_QUEUE_AND_COLD_START_DIET.md",
+    "docs/design/GOV_ORCH_8_PROJECT_DATA_SPLIT_AND_SIZE_BUDGET.md",
+    "tests/test_project_files_budget.py",
+    "project/README.md"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-12T14:52:47Z"
+}

@@ -1099,11 +1099,11 @@
     {
       "category": "UI 2.0 (Java product line)",
       "id": "ui2_b1_12_deployment_slice",
-      "title": "UI2 B1-12 -- deployment slice (Docker compose for the DEPLOY.1 server shape, per-component secrets, DEPLOY.1/1A gates)",
+      "title": "UI2 B1-12 -- Kubernetes deployment slice: OCI image built in-cluster, plain manifests, empty database",
       "priority": "P1 -- UI 2.0",
-      "status": "planned",
+      "status": "automated_validated",
       "note": "",
-      "target": "workflow §5 B1-12"
+      "target": "UI2_0_B1_01C contract; deploy/ui2/ and ui2/Containerfile"
     },
     {
       "category": "UI 2.0 (Java product line)",
@@ -1373,6 +1373,15 @@
       "status": "planned",
       "priority": "P1",
       "target": "PO_DECISION_RECORD 6.4",
+      "note": ""
+    },
+    {
+      "id": "cp_discovery_java_implementation",
+      "category": "ui2",
+      "title": "CP discovery in Java: management-plane candidate enumeration under the frozen discovery contract",
+      "status": "planned",
+      "priority": "P0",
+      "target": "CP_AND_VSX_DISCOVERY_CONTRACT.md; gate lifted 2026-09-13 for discovery only",
       "note": ""
     }
   ]

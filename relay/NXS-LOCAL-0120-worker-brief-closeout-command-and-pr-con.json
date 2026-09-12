@@ -1,0 +1,223 @@
+{
+  "created_at": "2026-09-12T16:18:13Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1 The generated brief's closeout command is complete and runnable as printed, names --report with a file path, and contains no ellipsis standing in for arguments.",
+          "AC-2 The brief states that the report JSON is written to a file first and never passed inline on the command line.",
+          "AC-3 The printed command was executed end to end against a throwaway relay file; SESSION_CLOSE carries its real output.",
+          "AC-4 For one merge mode the brief gives exactly one pull-request instruction, and it agrees with the packet's own merge gate. A test fails if both instructions appear.",
+          "AC-5 The brief no longer assumes an interpreter alias that may be absent; a test fails if it returns.",
+          "AC-6 tests/test_worker_brief.py passes, its golden brief updated, and its test count does not fall.",
+          "AC-7 The orchestrator suites pass.",
+          "AC-8 The repository privacy gate reports zero findings.",
+          "AC-9 No change to worker policy: what a worker may and may not do is unchanged, only how the brief states it."
+        ],
+        "baseline": {
+          "authority": "docs/design/GOV_ORCH_3_WORKER_BRIEF_GIT_GATES_AND_AUTHORITY_CLEANUP.md (FROZEN) owns the worker brief that scripts/orchestrator.py generates. This movement corrects three defects in what that brief tells a worker; it changes no rule the contract states.",
+          "consequence": "Two movements in one session ended engineer_exit_nonzero with clean, passing work, at roughly three dollars each, for no reason other than the closeout instruction. The failure was masked further because only the first matching failure reason was reported, so relay_not_closed never surfaced beside it.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "observed_defects": "Measured from a real run's generated .nexus/WORKER.md and its engineer log. First: the Relay closeout section prints the closeout as `py scripts/local_relay.py append --file $NEXUS_RELAY_FILE --role engineer --marker SESSION_CLOSE ...` -- with a literal ellipsis and no flag for the report itself. A worker invented a flag that does not exist and passed the report JSON inline in single quotes; the shell broke on a quote inside the JSON, the append failed with exit 1, and the worker ran out of turns recovering. The real flag is --report, taking a file path or -. Second: the brief contradicts itself about pull requests -- the merge-gate line carried from the packet says the worker does not open one, and the merge-mode paragraph immediately below says to open it as usual. A worker followed the second and opened one. Third: the brief's command line begins `py`, an interpreter name that is not present on every machine the loop runs on.",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "sequencing": "Independent of the deployment lane; it touches the orchestrator's brief generation and its tests."
+        },
+        "context_not_loaded": [
+          "docs/history/**",
+          "ui2/ sources",
+          "project/*.json",
+          "vendor contracts"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/worker-brief-closeout-fix"
+        },
+        "invariants": [
+          "Worker policy is unchanged; only the brief's wording of it changes.",
+          "The brief must match the tool as it actually is.",
+          "No credential, management address, device name or serial enters a tracked file.",
+          "No vendor data collection and no device contact: the standing collection gate holds.",
+          "No contract status is applied, removed or changed, and no FROZEN contract is edited."
+        ],
+        "merge_gate": "Product Owner assistant review of the diff plus orchestrator verify.passed. The worker does not merge to main.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Make the generated worker brief tell a worker how to close out correctly, stop it contradicting itself about pull requests, and stop it assuming an interpreter name that may not exist.",
+        "output_contract": [
+          "A generated worker brief whose closeout command runs as printed and whose pull-request instruction is singular",
+          "SESSION_CLOSE carrying the real output of the closeout command executed against a throwaway relay file"
+        ],
+        "recommended_reasoning": {
+          "reason": "Three small text defects in one generator, each with an unambiguous pass condition; the only care point is proving the new command actually runs.",
+          "tier": "Sonnet 5, medium effort"
+        },
+        "requirements": [
+          "English, per AGENTS.md engineering-output language law",
+          "Read scripts/local_relay.py's own argument parser before writing the command into the brief; the brief must match the tool as it actually is, not as the brief previously described it.",
+          "Prove the printed command works: run it end to end against a throwaway relay file and report the real output in SESSION_CLOSE. A brief that teaches a command nobody executed is the defect being fixed.",
+          "If GOV.ORCH.3 specifies the contradicting text verbatim, report the contradiction rather than silently overriding a frozen contract, and stop at that boundary.",
+          "Do not weaken, skip or delete an existing test.",
+          "Publish SESSION_CLOSE with scripts/local_relay.py append using --report pointing at a JSON file you wrote first. Do not pass report JSON inline on the command line.",
+          "Do not merge to main. Commit on the lane and publish SESSION_CLOSE."
+        ],
+        "risks": [
+          "Writing a new command into the brief without running it, which repeats the defect in a new form.",
+          "Resolving the pull-request contradiction by changing policy rather than wording.",
+          "Silently overriding GOV.ORCH.3 if it specifies the contradicting text verbatim.",
+          "Updating the golden brief so loosely that the regressions no longer detect the defect."
+        ],
+        "scope": {
+          "in": [
+            "scripts/orchestrator.py: the Relay closeout section of the generated brief prints a complete, runnable closeout command, naming --report and a file path rather than an ellipsis, and states explicitly that the report JSON is written to a file first and never passed inline on the command line",
+            "The same section states which interpreter to invoke in a way that holds on a machine without the short alias, matching how the rest of the brief and the repository's own validation steps invoke Python",
+            "Resolve the pull-request contradiction: under merge-mode orchestrator the brief must give one instruction, not two. Where the packet's merge gate says the worker does not open a pull request, the generated text must not tell it to open one; decide the precedence in favour of the packet's own merge gate and say so in the brief's own words",
+            "tests/test_worker_brief.py: regressions that fail if the closeout command is incomplete, if the report is shown passed inline, if the interpreter assumption returns, or if the brief contains two contradictory pull-request instructions for one merge mode",
+            "Update the test's golden brief to match"
+          ],
+          "out": [
+            "Changing what the worker is allowed to do -- this movement fixes how the brief says it, not the policy",
+            "Changing scripts/local_relay.py's own interface",
+            "Changing the merge modes themselves, or which mode is chosen for which provider",
+            "Any change under ui2/, project/, docs/design/ or relay/",
+            "Editing a FROZEN contract or applying any contract status",
+            "Any vendor data collection or device contact"
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_worker_brief.py",
+              "-q"
+            ],
+            "name": "worker_brief_tests"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_orchestrator.py",
+              "-q"
+            ],
+            "name": "orchestrator_tests"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_orchestrator_verify.py",
+              "tests/test_orchestrator_providers.py",
+              "tests/test_orchestrator_usage.py",
+              "tests/test_orchestrator_dashboard.py",
+              "tests/test_orchestrator_preflight.py",
+              "tests/test_orchestrator_install_hooks.py",
+              "-q"
+            ],
+            "name": "orchestrator_siblings"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_architecture_convergence.py",
+              "-q"
+            ],
+            "name": "architecture_convergence"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-12T16:18:13Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "report": {
+        "changed": [
+          "roles/WORKER.md",
+          "scripts/orchestrator.py",
+          "scripts/orchestrator_providers.py",
+          "tests/test_worker_brief.py"
+        ],
+        "completed": [
+          "roles/WORKER.md: Relay closeout section now prints the real, complete `local_relay.py append --report <file> --outcome DONE` command via python3, with no ellipsis, and states the report is written to a file first and never passed inline",
+          "scripts/orchestrator_providers.py: added NO_MERGE_NO_PR_PROMPT_NOTE and merge_gate_forbids_pr_open() so the merge-mode note defers to the packet's own merge gate wording instead of contradicting it",
+          "scripts/orchestrator.py: render_worker_md and the resume engineer-prompt note now select the matching merge-mode note from the merge gate text",
+          "tests/test_worker_brief.py: added regressions for the runnable closeout command, the file-not-inline statement, the dropped `py` alias, and the single merge-gate-consistent pull-request instruction"
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "n/a",
+          "ui": "n/a"
+        },
+        "integration": {
+          "branch": "feature/worker-brief-closeout-fix",
+          "ci": "n/a -- no CI workflow triggered by this PR beyond the local validation commands already run",
+          "head_sha": "0c1e9f84399d2eec6570c7f33b81299c478a7daa",
+          "merge_commit": null,
+          "merge_decision": "Not merged by the worker per merge-mode orchestrator; the orchestrator integrates after its own verify.passed.",
+          "merge_state": "OPEN",
+          "pr": 199,
+          "pr_url": "https://github.com/ozandurmus/neXus/pull/199"
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0120",
+          "movement_type": "IMPLEMENTATION",
+          "objective": "PR #199 opened against main; awaiting Product Owner assistant review of the diff plus orchestrator verify.passed under merge-mode orchestrator",
+          "status": "done"
+        },
+        "preserved": [
+          "scripts/local_relay.py's own interface -- unchanged, only read to confirm --report/--outcome semantics",
+          "merge mode selection logic (resolve_merge_mode, FORCED_MERGE_MODE) -- unchanged",
+          "worker policy -- only the brief's wording changed, not what a worker may or may not do"
+        ],
+        "recommended_reasoning": {
+          "reason": "Remaining work is orchestrator verify + PO review, not further engineering.",
+          "tier": "Sonnet 5, low effort"
+        },
+        "state_updates": [],
+        "unresolved_risks": [],
+        "validation": {
+          "affected": "python3 -m pytest tests/test_orchestrator.py -q -- 119 passed",
+          "diff_check": "git diff --stat -- 4 files changed, 101 insertions(+), 5 deletions(-): roles/WORKER.md, scripts/orchestrator.py, scripts/orchestrator_providers.py, tests/test_worker_brief.py",
+          "full_regression": "python3 -m pytest tests/test_orchestrator_verify.py tests/test_orchestrator_providers.py tests/test_orchestrator_usage.py tests/test_orchestrator_dashboard.py tests/test_orchestrator_preflight.py tests/test_orchestrator_install_hooks.py -q -- 145 passed; python3 -m pytest tests/test_architecture_convergence.py -q -- 23 passed",
+          "privacy": "python3 scripts/repository_privacy_check.py -- Files scanned: 1218, Findings: 0, Gate: PASS",
+          "real_environment": "AC-3: built a throwaway relay file with `local_relay.py create` and ran the printed closeout command verbatim -- `python3 scripts/local_relay.py append --file $NEXUS_RELAY_FILE --role engineer --marker SESSION_CLOSE --report <file> --outcome DONE` -- against it; local_relay.py printed {\"status\": \"CLOSED\", \"next_actor\": null, \"seq\": 2} and exited 0, relay file transitioned OPEN -> CLOSED",
+          "state_consistency": "n/a -- no project/*.json or CURRENT_STATE.md change; this movement touches only brief generation and its tests",
+          "targeted": "python3 -m pytest tests/test_worker_brief.py -q -- 16 passed"
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-12T16:25:13Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0120",
+  "movement": "worker_brief_closeout_command_and_pr_contradiction",
+  "next_actor": null,
+  "refs": [
+    "AGENTS.md",
+    "docs/design/GOV_ORCH_3_WORKER_BRIEF_GIT_GATES_AND_AUTHORITY_CLEANUP.md",
+    "docs/design/GOV_ORCH_2_PROVIDER_ADAPTER.md",
+    "scripts/orchestrator.py",
+    "scripts/local_relay.py",
+    "tests/test_worker_brief.py"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-12T16:25:13Z"
+}

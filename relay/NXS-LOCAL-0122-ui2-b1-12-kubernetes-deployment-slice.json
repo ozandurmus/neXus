@@ -1,0 +1,269 @@
+{
+  "created_at": "2026-09-12T16:31:10Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1 ui2/Containerfile exists, is two-stage, references both base images by digest, and its final image carries no build-stage artifact beyond the packaged service and its runtime dependencies.",
+          "AC-2 The image satisfies FS-1 to FS-6: readable and traversable by group 0, writable paths owned by group 0 with g=u, the writable set closed and documented, and a numeric final USER.",
+          "AC-3 The manifest set contains every object the contract's section 5 names, and each satisfies the construction rules: no root, no fixed UID, no hostPath, no privileged, no host networking, resource requests and limits set, readOnlyRootFilesystem true with each declared writable path supplied as a mount.",
+          "AC-4 A Route manifest exists as a separate file and is the only difference from the local set, per PORT-1.",
+          "AC-5 An automated check fails when a manifest violates any rule named in AC-3; state in SESSION_CLOSE how it was proved to fail by injecting one violation.",
+          "AC-6 The image was actually built and the manifests actually applied in this environment, or the exact failure is reported. State the real command output either way.",
+          "AC-7 If the stack came up: the UI is reachable, its default screen is the empty state because the database is empty, and the Flyway migrations V1 to V7 ran. Report the observed evidence, not the expectation.",
+          "AC-8 The documented reset command returns the database to empty, and was executed.",
+          "AC-9 No credential value is present in any tracked file; the repository privacy gate reports zero findings.",
+          "AC-10 Every section 10 UNKNOWN the movement touched is reported with what was observed, and none is silently converted into a decided value in the contract.",
+          "AC-11 No file outside the movement's own new directories, ui2/Containerfile and its operator document changed."
+        ],
+        "baseline": {
+          "authority": "docs/design/UI2_0_B1_01C_CONTAINER_IMAGE_AND_KUBERNETES_DEPLOYMENT_CONTRACT.md (FROZEN, 2026-09-12) is the implementation authority for this movement: it is the successor contract UI2_0_B1_01A section 6 required, and it decides the image, the arbitrary-UID filesystem model, the build path, the manifest set, the database and empty first state, the secret path, and portability. This movement implements that contract and decides nothing the contract left open.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "prior_attempt": "A first attempt at this movement was killed by the orchestrator's default per-movement budget after 22 turns, with the Containerfile, the manifest directory and the manifest rule test written but not committed. Nothing about the scope was found impossible. This dispatch raises the budget and corrects a defective validation step in the previous packet, which ran pytest against the whole test directory instead of the movement's own test file and failed on unrelated collection errors. Neither correction changes what is being built.",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "required_first_state": "docs/design/PO_DECISION_RECORD_2026_09_12.md (FROZEN) section 4: a clean, empty database, the UI and its menus visible, nothing pre-populated.",
+          "runtime": "docs/design/PO_DECISION_RECORD_2026_09_12B_LOCAL_KUBERNETES.md (FROZEN): plain Kubernetes driven with kubectl, one OCI image carried unchanged across three stages, no host container tool in any path, and the image built inside the cluster because the host carries no JDK and no build daemon.",
+          "sequencing": "This is the first movement the frozen contract authorizes. The removal of the superseded Line 1 equipment follows it, not precedes it, because a test currently enforces a security invariant against that equipment's own files."
+        },
+        "context_not_loaded": [
+          "docs/history/**",
+          "ui2/frontend/ component sources",
+          "project/*.json",
+          "vendor contracts"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/ui2-b1-12-k8s-deployment-slice"
+        },
+        "invariants": [
+          "A clean, empty database is the required first state; nothing is seeded.",
+          "No credential, management address, device name or serial enters a tracked file.",
+          "No vendor data collection and no device contact: the standing collection gate holds.",
+          "New feature code is Java written from scratch; the repository's Python scripts are know-how only.",
+          "No host container tooling and no host JDK is introduced into any path.",
+          "No contract is edited and no contract status is applied, removed or changed.",
+          "An UNKNOWN stays UNKNOWN until the evidence its clause names is produced."
+        ],
+        "merge_gate": "Product Owner assistant review of the diff plus orchestrator verify.passed, and the stack observed running by the Product Owner assistant. The worker does not merge to main.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Implement the deployment the B1-1c contract governs: one multi-stage Containerfile that builds the service inside the cluster with no host toolchain, and one plain Kubernetes manifest set that stands UI 2.0 up on this machine with an empty database, reachable in a browser, with no credential in any tracked file.",
+        "output_contract": [
+          "A Containerfile and a plain Kubernetes manifest set implementing the frozen contract, plus the operator document and the rule check that keeps them honest",
+          "SESSION_CLOSE with the real output of the build, the apply, the reachability check and the reset, and every touched UNKNOWN reported with what was observed"
+        ],
+        "recommended_reasoning": {
+          "reason": "The first implementation under a newly frozen contract, spanning an image, a manifest set, a database and a secret path, with an arbitrary-UID model whose mistakes are invisible locally and fatal on the corporate platform.",
+          "tier": "Opus 5, high effort"
+        },
+        "requirements": [
+          "English, per AGENTS.md engineering-output language law",
+          "The contract is the authority. Where it states a rule, implement that rule; where it records UNKNOWN, report what you observed rather than deciding.",
+          "Both base images are referenced by digest, never by a floating tag.",
+          "No step may require a host JDK, a host build daemon or any host container tool. If a step appears to need one, stop and report it rather than introducing one.",
+          "The database starts empty. Do not seed, and do not add a fixture, demo row or sample device anywhere.",
+          "No credential value in any tracked file. The operator document says how the credential is supplied; the repository never contains one.",
+          "Bind to this machine only. The deployment is not exposed beyond it.",
+          "Do not claim a startup you did not execute. If the stack cannot be brought up in this environment, say so plainly and report the exact failure output.",
+          "Publish SESSION_CLOSE with scripts/local_relay.py append using --report pointing at a JSON file you wrote first. Do not pass report JSON inline on the command line.",
+          "Do not merge to main. Commit on the lane and publish SESSION_CLOSE.",
+          "Commit early and commit often on the lane. A movement that ends with uncommitted work loses it; the previous attempt lost a Containerfile, a manifest set and a test that way."
+        ],
+        "risks": [
+          "Reporting a startup that was never executed, which is the failure mode the contract's own acceptance checks exist to prevent.",
+          "Introducing a host toolchain dependency because it is the quickest way to get a build working.",
+          "Pinning a base image by tag instead of digest, so what was proved can change without a tracked file changing.",
+          "Writing a credential into a manifest, an environment file or the operator document.",
+          "Deciding an UNKNOWN because a plausible value makes the stack come up.",
+          "Touching the superseded Line 1 equipment and breaking the test that enforces a security invariant against it."
+        ],
+        "scope": {
+          "in": [
+            "ui2/Containerfile: the two-stage image the contract's section 3 specifies, satisfying FS-1 to FS-6 and referencing both base images by digest",
+            "The manifest set the contract's section 5 names, under a directory the contract's own naming allows: Namespace, Deployment, Service, Ingress, ConfigMap, Secret and PersistentVolumeClaim as that section defines them, each satisfying the OpenShift-safety construction rules",
+            "The Route manifest that replaces the Ingress on the corporate platform, as a separate file applied instead of it, per PORT-1 and PORT-3",
+            "PostgreSQL 16 in the cluster as section 6 specifies, with the existing Flyway migrations V1 to V7 running unchanged and the clean empty first state reached and resettable",
+            "The secret path of section 7: the database credential reaches the service without any credential value entering a tracked file, and the document states exactly how an operator supplies it",
+            "One short operator document: build the image, apply the manifests, reach the UI, reset the database to empty, and tear it down. Every command in it is one an operator can run as written.",
+            "A test or check that fails if a manifest violates a named construction rule of the contract -- no root, no fixed UID, no hostPath, no privileged, no host networking, resource requests and limits set, readOnlyRootFilesystem set"
+          ],
+          "out": [
+            "Deciding anything the contract records as UNKNOWN in its section 10. Where a value is UNKNOWN, observe it, report what was observed in SESSION_CLOSE, and do not amend the contract.",
+            "Editing the contract or any other contract, or applying, removing or changing any contract status",
+            "Deleting or editing the superseded Line 1 deployment equipment: a test enforces a security invariant against those files and its successor carrier is a later movement",
+            "Any change to ui2/frontend/ or to any product screen",
+            "Any schema or migration change beyond running the migrations that already exist",
+            "Seeding the database with anything",
+            "Any credential value, management address, device name or serial in a tracked file",
+            "Any vendor data collection or device contact",
+            ".github/workflows/**"
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_ui2_deployment_manifests.py",
+              "-q"
+            ],
+            "name": "manifest_rule_check"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_architecture_convergence.py",
+              "-q"
+            ],
+            "name": "architecture_convergence"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_contract_authority_status.py",
+              "-q"
+            ],
+            "name": "contract_authority_status"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/project_queue.py",
+              "check"
+            ],
+            "name": "project_queue_check"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-12T16:31:10Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "AUTOMATED_VALIDATED",
+      "report": {
+        "changed": [
+          "ui2/Containerfile - new. Two stages, both UBI9 OpenJDK 21 bases pinned by manifest-index digest, group-0 filesystem model with a closed writable set of exactly /app/tmp and /app/home, a numeric final account, working directory on a read path, and the JVM as the entry point with the workload role as an argument.",
+          "deploy/ui2/00-namespace.yaml, 10-configmap.yaml, 20-secret.yaml, 30-database-pvc.yaml, 40-database-statefulset.yaml, 45-database-service.yaml, 50-service-deployment.yaml, 55-service-service.yaml, 60-ingress.yaml - new. The section 5 manifest set plus the database StatefulSet DB-2 requires.",
+          "deploy/ui2/openshift/60-route.yaml - new. The Route that replaces the Ingress on the corporate platform, in its own directory so a non-recursive apply of the local set cannot pick it up.",
+          "deploy/ui2-image-build/00-namespace.yaml, 10-context-pvc.yaml, 20-context-loader.yaml, 30-build-job.yaml - new. The in-cluster builder BP-1 and BP-3 require. Build equipment, not part of the manifest set.",
+          "docs/operations/UI2_LOCAL_KUBERNETES_DEPLOYMENT.md - new. The operator procedure: build, supply the credential, apply, reach the UI, reset, rotate, tear down.",
+          "tests/test_ui2_deployment_manifests.py - new. 39 checks over the image and the manifest set, with its own block reader because the test interpreter carries no YAML library and this movement adds no dependency to make a check possible."
+        ],
+        "completed": [
+          "AC-1 MET. ui2/Containerfile declares exactly two FROM lines, both pinned by manifest-index digest (builder sha256:fa55b9f1..., runtime sha256:360822c3...). The shipped image carries /app/service.jar (33773828 bytes) and nothing else the build added: no Gradle, no Gradle cache, no /build tree, no Node, no javac, no .git, no source tree, no data/output/logs tree, each verified per entry on the built image.",
+          "AC-2 MET. IMG-UID-1 exited 0 in a pod running as uid 1000860007 with no passwd entry and the group left at 0. /app is 0750 root:0, /app/service.jar 0640 root:0, /app/tmp and /app/home 0770 root:0 with g=u. A sweep for any other group- or world-writable path outside the declared set returned nothing, a write to / was refused, and the final account declaration is numeric.",
+          "AC-3 MET. The set contains Namespace, ConfigMap, Secret, PersistentVolumeClaim, Deployment, two Services, Ingress and the database StatefulSet DB-2 requires. Both containers set runAsNonRoot, allowPrivilegeEscalation false, readOnlyRootFilesystem true, capabilities drop ALL, seccompProfile RuntimeDefault and all four of cpu/memory request and limit. No manifest sets a fixed uid, a fixed gid or a volume group id; there is no node-path volume, no privileged container, no host networking, no node- or cloud-exposed Service and no moving tag. Both declared writable paths are supplied as emptyDir mounts.",
+          "AC-4 MET. deploy/ui2/openshift/60-route.yaml is the only file under that directory and its only document is a Route; the local set has an Ingress and no Route. kubectl apply -f deploy/ui2/ is non-recursive, so applying the local set never applies the Route.",
+          "AC-5 MET. Nine violations were injected one at a time into the tracked files and reverted after each run; each produced at least one failure. A fixed uid in the pod security context: 2 failed. A writable root filesystem: 1. A missing memory limit: 1. Host networking: 1. A node-exposed Service type: 1. A moving image tag: 2. Capabilities not dropped: 1. A non-numeric account in the image: 1. A base image pinned by tag: 1. The clean tree reports 39 passed.",
+          "AC-6 MET. Built by a kaniko Job inside the cluster from a context carried in on a claim and driven with kubectl. Gradle 8.14.3 downloaded and ran inside the builder: BUILD SUCCESSFUL in 42s, 15 actionable tasks, 15 executed. Pushed registry.kube-system.svc.cluster.local/nexus-ui2-service@sha256:c57b8aab8d58d77ab68bed80e1cb5e3d23d47a6c4b71acb848fad1b86bd33365. The manifests were applied and both workloads reached Ready. Three of five build attempts failed first; the two instructive failures are reported under unresolved risks.",
+          "AC-7 MET. Through the Ingress object: / returns 200, 240 bytes, text/html, the UI 2.0 shell; /assets/index-CdCl8qUK.js returns 200, 261526 bytes; /healthz returns 200 'ok'. The service log reports 'Current version of schema public: << Empty Schema >>', then 'Successfully applied 7 migrations to schema public, now at version v7', then 'ui2 migrations applied: executed=7 targetSchemaVersion=7'. flyway_schema_history holds 7 rows, all success.",
+          "AC-8 MET. The reset was executed twice, both times only through the cluster API: scale the StatefulSet to zero, delete the claim, re-create it, scale back up, restart the service. A witness table created before the first reset was absent afterwards, the schema came back as '<< Empty Schema >>' and V1-V7 re-applied from nothing. No host database client, no host container tool and no ad-hoc SQL inside a pod took part.",
+          "AC-9 MET. python3 scripts/repository_privacy_check.py reports 1234 files scanned, 376 skipped, 0 findings, Gate PASS. An earlier run reported 4 CREDENTIAL_LITERAL findings against this movement's own text, two in the role-creation hook and two in the operator document; neither carried a value, and both were restructured rather than excused, with behaviour unchanged and both hook branches observed.",
+          "AC-10 MET. Six of the eight section 10 UNKNOWNs were touched. Each is reported under unresolved risks with what was observed. None was converted into a decided value and no contract was edited.",
+          "AC-11 MET. git diff --name-status origin/main...HEAD lists 17 files, every one an addition. No existing file was modified anywhere in the repository. git diff --check origin/main...HEAD is clean.",
+          "IMG-UID-2, the check that actually proves the model, PASSED. The service pod was admitted and reached Ready=True with uid 1000860007, which appears in no image file and differs from the image's own account, with the group left at 0. It wrote to both declared writable paths, connected to PostgreSQL 16.8, migrated and served. With the security context back as tracked, requesting no identity at all, it reached Ready=True again at the image's own uid 185, which is the second half of the check.",
+          "DB-3, the check behind U-5, PASSED. The database was admitted under uid 1000860011 with the group left at 0, initialized an empty data directory on a fresh claim, created both roles and accepted a connection.",
+          "MIG-4 confirmed. With the database scaled to zero the service failed start-up, never became ready and refused connections, reporting 'Unable to obtain connection from database (jdbc:postgresql://ui2-db:5432/ui2) for user ui2_migrate'. No credential and no assembled DSN appeared in any log line, probe output or event.",
+          "SEC-6 confirmed. The credential was generated in the cluster and rotated twice by the documented procedure; git status --porcelain stayed clean across both rotations. No credential value exists in any tracked file, in any encoding."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "None. Line 1 was not read, edited or executed, and no Line 1 path appears in the image or the manifests.",
+          "ui": "UI 2.0 now serves from a cluster. The shell at / returns 200 with its asset bundle, against a database that is empty apart from the schema V1 to V7 creates. No product screen was changed and no screen behaviour was altered."
+        },
+        "integration": {
+          "branch": "feature/ui2-b1-12-k8s-deployment-slice",
+          "ci": "Opened at close; not awaited. The five validation commands the dispatch names were run locally on the final tree and all pass.",
+          "head_sha": "80ad1aa",
+          "merge_commit": null,
+          "merge_decision": "Not the worker's. This dispatch runs under orchestrator merge mode: the pull request is open and the orchestrator merges after its own verification passes, with the Product Owner assistant's review of the diff and the stack observed running.",
+          "merge_state": "OPEN",
+          "pr": 201,
+          "pr_url": "https://github.com/ozandurmus/neXus/pull/201"
+        },
+        "next": {
+          "movement": "Resolve C-1 and C-2, then remove the superseded Line 1 deployment equipment",
+          "movement_type": "ARCHITECTURE",
+          "objective": "Resolve the two reported contradictions at contract level - SEC-4 against the C1 secret-file rule, and section 3.1's mandated base family against section 3.5's Python absence rule - before either is treated as a gate on the corporate stage. The superseded Line 1 deployment equipment removal follows, as the dispatch sequenced it, and after that the four B1-1b deferred-register rows that section 9 makes answerable now that the image exists.",
+          "status": "planned"
+        },
+        "preserved": [
+          "No contract was edited and no contract status was applied, removed or changed.",
+          "The superseded Line 1 deployment equipment under deploy/nginx and deploy/secrets was not read, edited or deleted; the test that enforces a security invariant against it is untouched and passing.",
+          "No change to ui2/frontend/ or to any product screen.",
+          "No schema or migration change. V1 to V7 ran exactly as they are in the repository.",
+          "Nothing was seeded: no demo device, no demo user, no sample evidence, no fixture row.",
+          "No worker and no scheduler workload was added; EP-2 defers both.",
+          "No device was contacted and no vendor data was collected. The standing collection gate holds.",
+          "No host JDK, no host build daemon and no host container engine was introduced into any path, tracked or otherwise.",
+          "The lane was not merged to main."
+        ],
+        "recommended_reasoning": {
+          "reason": "The engineering work that remains is deterministic: the Line 1 equipment removal and the B1-1b register rows are bounded edits against artifacts that now exist. The two contradictions are contract decisions and belong to a Product Owner episode rather than to an engineering session at any tier, so no escalation is recommended for engineering.",
+          "tier": "Fable low"
+        },
+        "state_updates": [
+          "None performed. AC-11 confines this movement to its own new directories, ui2/Containerfile and the operator document, so no project/*.json, no CURRENT_STATE.md, no build_history record and no QUEUE entry was written.",
+          "Flagged for the Product Owner: this delivery changes what the project can do - UI 2.0 now stands up from the repository on a cluster - which the project-state update rule would normally record. The dispatch's own acceptance criterion forbids that file footprint, so the two rules point in different directions and the resolution is the Product Owner's, not a worker's. Recorded here rather than silently resolved either way."
+        ],
+        "unresolved_risks": [
+          "CONTRADICTION C-1, needs a Product Owner or contract-level decision. B1-1c SEC-4 requires the credential to reach the service as secretKeyRef environment entries. The service does not read a credential from the environment at all: DatabaseConfiguration and FlywayMigrationRunner read four secret files and fail closed on a missing, unreadable or empty one, which is the C1 section 6 rule that B1-1c section 1 names as an authority above itself. Implementing SEC-4 literally would put credential values into the container environment for a code path that never reads them, which is worse for SEC-5 and would not start the service. The higher authority was implemented and the contradiction is reported rather than reconciled: the Secret is mounted as four files and the environment carries their paths, never their values, while the database workload, which does take environment configuration, uses secretKeyRef so the section 11 check 13 grep is also satisfied. Every other clause of section 7 holds unchanged.",
+          "CONTRADICTION C-2, needs a contract-level clarification. Section 3.1 mandates the UBI9 OpenJDK 21 family and pins it by digest; that family ships /usr/bin/python3 and /usr/bin/python3.9 at the pinned runtime digest, together with OS-owned .py files under /usr/share/crypto-policies. Section 3.5 states the image contains no Python interpreter and no Python source. Both cannot hold for this base family. Nothing was decided: the build introduces no Python and invokes none, and the setuid and setgid set of the built image is byte-identical to the base, so the build introduced none of those either. Either section 3.5's absence rules bind only what the build adds, or section 3.1's family choice needs an amendment.",
+          "U-1 still UNKNOWN. Observed: the packaging task consumes no frontend build output. :service:bootJar ran 15 tasks, none a frontend task, and the builder carries no Node. The static assets the service serves are committed under ui2/service/src/main/resources/static/ and are packaged from there as ordinary resources. What was observed is consistent with the builder carrying no Node; the clause's own evidence is the declared inputs of the packaging task.",
+          "U-2 still UNKNOWN. Observed: the check the contract names was run. Under uid 1000860007 there is no passwd entry, and the service started, migrated, served and reached readiness. Spring logged the start under the image's own account name rather than the running uid, which is a lookup that did not resolve and was not load-bearing. The image sets user.home explicitly so the JVM need not resolve one.",
+          "U-3 still UNKNOWN. Observed: Gradle egress exists from inside the builder, which downloaded its distribution from services.gradle.org and resolved every declared dependency under the committed lockfiles and verification metadata. Frontend resolution was never exercised because the packaging task does not need it.",
+          "U-4 untouched and still UNKNOWN. No corporate platform was contacted and no project-request policy was read. The Namespace manifest carries no quota and no limit-range assumption, so it stays an open precondition rather than a second manifest difference.",
+          "U-5 still UNKNOWN. Observed: the check the contract names passed for quay.io/sclorg/postgresql-16-c9s at digest sha256:fbef891e... - a pod admitted with an arbitrary uid and the group left at 0 initialized an empty data directory, created both roles and accepted a connection, with the data directory owned by the running uid and group 0. The community PostgreSQL image was not tested, so the contract's expectation that it fails DB-3 remains an expectation.",
+          "U-6 still UNKNOWN, and it is the one gap with an operational consequence. The service exposes /healthz, which returns ok as soon as the web server is up. Migration runs in an ApplicationRunner that executes after the context refresh that starts the web server, so there is a window in which /healthz answers while the schema is not yet complete. MIG-4 holds - a failed migration stops the process - but MIG-3 does not. /healthz is used as the readiness probe because it is what exists; closing U-6 needs a service-side readiness state gated on migration completion, which is outside this movement's scope, and section 11 of the operator document says so plainly rather than papering over it.",
+          "U-7 untouched and still UNKNOWN. No corporate directive was read.",
+          "U-8 still UNKNOWN. Magnitudes were needed for OS-6 to be satisfiable at all, so they are stated in the manifests as per-stage values under PORT-2: service 200m cpu and 512Mi requested, 1 cpu and 1Gi limited; database 100m cpu and 256Mi requested, 1 cpu and 1Gi limited. There was no load, so these are not an observed run under representative load and are not a decision about U-8.",
+          "FIRST-3 observation, reported rather than dismissed. After a first start every product table is empty except audit_redaction_policy, which holds 7 rows. Those rows are created by migration V5 and are the audit redaction policy itself - table name, column name, tier, reason - not product data. The deployment seeds nothing and adds no row. FIRST-3 allows what a migration creates as structure; whether a migration may insert policy rows is B1-2's question, not this movement's.",
+          "Build reproducibility hazard, belonging to B1-1a's build definition rather than to the image contract, and changed by nothing here. Three of five build attempts failed. One failed with java.net.UnknownHostException for github.com while the Gradle wrapper was downloading its distribution, which services.gradle.org redirects to. Another failed dependency verification on org.springframework.boot.gradle.plugin-3.3.4.pom resolved from MavenRepo: the plugin marker POM Maven Central serves is not the one the committed verification metadata records, which is the Gradle Plugin Portal's, so when the portal is slow or unreachable Gradle falls back and the build fails closed. That fail-closed behaviour is correct, but it makes BP-5's 'repeatable from the repository alone' conditional on which repository answers first.",
+          "Cluster preparation this deployment depends on, documented in the operator procedure and not automated: the local registry addon must be enabled so the in-cluster builder has somewhere to push, the node's container runtime must carry a plain-HTTP host entry for that registry so it can pull what was pushed, and the ingress addon must be enabled for browser reach. None is a host container engine; all three are cluster configuration reached through cluster tooling.",
+          "The Ingress sets no ingressClassName and was routed by the local cluster's default class. On a cluster with no default IngressClass it would not be routed. Nothing was added, because an ingressClassName is a per-platform value and PORT-3 forbids introducing a platform-conditional construct before the platform requires one."
+        ],
+        "validation": {
+          "affected": "python3 -m pytest tests/test_architecture_convergence.py -q: 23 passed. python3 -m pytest tests/test_contract_authority_status.py -q: 5 passed.",
+          "diff_check": "git diff --check origin/main...HEAD is clean. git diff --name-status origin/main...HEAD lists 17 additions and no modification.",
+          "full_regression": "Not run, and deliberately so: the dispatch's validation plan names four test targets and not the whole suite, correcting a defective step in the previous packet that ran pytest against the entire test directory and failed on unrelated collection errors. This movement adds only new files and modifies none, so its blast radius on existing tests is the two suites above.",
+          "privacy": "python3 scripts/repository_privacy_check.py: 1234 files scanned, 376 skipped, 0 findings, Gate PASS.",
+          "real_environment": "None, and none is claimed. The stack was brought up on the local single-node cluster and every acceptance check was exercised against it, but B1-1a section 9 stands and the contract's own section 13 says that a green deployment is not device evidence. A pass of IMG-UID-1 and IMG-UID-2 here proves the image's model is correct by construction; it is not evidence about the corporate platform's security context constraint, which has not been observed.",
+          "state_consistency": "python3 scripts/project_queue.py check: project/QUEUE.md is up to date. No project state file was changed, because AC-11 confines this movement to its own new directories, ui2/Containerfile and the operator document. Whether this delivery warrants a QUEUE entry is a Product Owner call and is flagged under state updates.",
+          "targeted": "python3 -m pytest tests/test_ui2_deployment_manifests.py -q: 39 passed. Proved to fail by injecting nine construction-rule violations one at a time, each reverted after its run."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-12T17:27:05Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0122",
+  "movement": "ui2_b1_12_kubernetes_deployment_slice",
+  "next_actor": null,
+  "refs": [
+    "AGENTS.md",
+    "docs/design/UI2_0_B1_01C_CONTAINER_IMAGE_AND_KUBERNETES_DEPLOYMENT_CONTRACT.md",
+    "docs/design/UI2_0_B1_01A_PLATFORM_SKELETON_CONTRACT.md",
+    "docs/design/PO_DECISION_RECORD_2026_09_12.md",
+    "docs/design/PO_DECISION_RECORD_2026_09_12B_LOCAL_KUBERNETES.md",
+    "PRIVACY_AND_DATA_HANDLING.md"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-12T17:27:05Z"
+}
