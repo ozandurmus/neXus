@@ -129,7 +129,7 @@ at collection or derivation time, keyed by `device_id` and/or `entity_id`,
 carrying collection/derivation timestamp, provenance and completeness. It is
 **never** resolved presentation state: `primary_status`, tone, copy and
 affordances are computed per request over projections and never stored as
-truth. One projection table exists (`cp_inventory_projection`, `V4`); the
+truth. One projection table exists (`cp_inventory_projection`, created in `V1`); the
 inventory, configuration, compliance and backup-readiness projection set the
 definition governs does not. `C1` owns the table discipline.
 
