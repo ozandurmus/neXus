@@ -6,94 +6,109 @@
 
 ## Operating role for the next session
 
-**PO+O** — Product Owner assistant and orchestrator. `roles/PO.md` is the whole
-cold start, and its §3 now opens with a **pre-dispatch checklist**: read it, it
-is the difference between a clean run and a movement that dies at the default
-budget. An engineering session instead reads `roles/ENGINEER.md`.
+**PO+O** — `roles/PO.md` is the whole cold start; its §3 pre-dispatch checklist
+earned its keep this session. An engineering session reads `roles/ENGINEER.md`.
 
 ## 1. Snapshot
 
-- **UI 2.0 runs on plain Kubernetes**, built and served from the cluster with no
-  host container tool and no host JDK. `ui2_b1_12_deployment_slice` is
-  AUTOMATED_VALIDATED.
-- **Check Point and VSX discovery is designed and measured**, not implemented.
-  The design came from queries the Product Owner ran against a live management
-  server, not from the existing Python.
-- **The collection gate is lifted for Check Point discovery only.** Every
-  device-facing path stays gated; Palo Alto is untouched.
-- **UI 2.0 itself stays incomplete** — per-screen fidelity against the Material 3
-  frames is the Product Owner's call and the row stays open.
-- Gates unchanged otherwise: new features are Java written from scratch, the
-  Python is know-how only.
+- **The Check Point discovery contract is FROZEN, Product Owner reviewed**, with
+  the review of record in its status block.
+- **Its domain core is implemented in Java and merged.** Transport is not.
+- **The backlog is split**: 29,862-byte active set, 34,388-byte terminal
+  reserve the cold start never loads. No ceiling was raised.
+- Gates unchanged: collection gate held except the bounded Check Point
+  discovery lift; Palo Alto still needs its own per-vendor statement; new
+  features are Java from scratch and the Python is know-how only.
 
 ## 2. What this session did
 
-Twelve movements dispatched, ten integrated. Contracts and records:
+Four merges. Two were Product Owner acts, two were dispatched.
 
-- **`CP_AND_VSX_DISCOVERY_CONTRACT.md`** (DRAFT) — ten candidate kinds by flags
-  and field presence; one host-resolution invariant over two address fields;
-  member-to-cluster joins on stable identifiers, never names; liveness refused
-  with a recorded three-plane negative search; and a connection-table channel
-  state carried under its own name and explicitly not liveness.
-- **`DISCOVERY_VS_COLLECTION_PYTHON_KNOW_HOW_AUDIT_2026_09_12.md`** (DRAFT) —
-  all 35 steps of the existing collector classified discovery / inventory /
-  configuration / running-config, plus the command-gate table and three measured
-  defects in that collector.
-- **`UI2_0_B1_01C_...DEPLOYMENT_CONTRACT.md`** — FROZEN, Product Owner approved
-  after review recorded in its own status block.
-- **`PO_DECISION_RECORD_2026_09_12B_LOCAL_KUBERNETES.md`** and
-  **`PO_DECISION_RECORD_2026_09_13_CP_DISCOVERY_COLLECTION_GATE.md`** — the
-  runtime decision and the bounded gate lift.
-
-Loop repairs, all merged: budget exhaustion is now its own failure reason and
-`roles/PO.md` §3 carries the dispatch checklist; the worker brief's closeout
-command is runnable and its pull-request instruction is singular; a
-machine-dependent orchestrator test is isolated; `backlog.json` went 144.83 KiB
-→ 62.31 KiB with no note text lost. UI: `M3Tabs` is a real tab control with one
-panel per tab. The `ui2/` Java suites ran here for the first time — 126 unit
-tests and all ten architecture direction tests pass.
+- **PR #208** — froze `CP_AND_VSX_DISCOVERY_CONTRACT.md`. It also amended the
+  four clauses the freeze itself invalidated rather than leaving them to
+  contradict the status, and split §9's acceptance checks into three bands:
+  repository, fixture-provable (8/10/12/13), and management-server.
+- **PR #209** — `GOV_ORCH_9_BACKLOG_ACTIVE_SET_AND_TERMINAL_RESERVE.md`, a
+  FROZEN successor amendment to GOV.ORCH.5 and GOV.ORCH.8 §2.1/§2.4.
+- **PR #210** (`NXS-LOCAL-0129`, Sonnet 5 high, 53 turns, $3.54) — the discovery
+  domain core, 26 new files in `ui2/platform-core`, nothing modified.
+- **PR #211** (`NXS-LOCAL-0130`, Sonnet 5 medium, 92 turns, $4.00) — the backlog
+  split, with the pre-split items and payload captured as fixtures so the
+  no-loss and no-count-change claims are compared, not asserted.
 
 ## 3. Exact next action
 
-**Freeze `CP_AND_VSX_DISCOVERY_CONTRACT.md`, then dispatch
-`cp_discovery_java_implementation`.**
+**Dispatch the Check Point discovery transport layer** — contract §3, T-1 to
+T-7, plus §7.4's connection-table channel state (CS-1 to CS-6). Bounded by the
+same gate: the four methods, management plane only, no device contacted.
 
-The contract is DRAFT, and `roles/PO.md` §2 allows a worker to implement FROZEN
-only. Review §4 (classification), §5 (relationship resolution) and §7 (liveness)
-before applying any status, and record the review in the status block — the
-Product Owner has said an agent-applied FROZEN is not evidence of their review.
+Two things make this movement different from the last one and must be decided
+before it is packeted:
 
-The implementation is bounded by the gate: management plane only, four methods,
-no device contacted. Acceptance must include a test proving no liveness claim is
-produced — §7's LV-1 protected by a test, not by intention.
+1. **It cannot be fully verified here.** FB-2's binding entries are all
+   `UNVERIFIED` and only a Product-Owner-run read against the live management
+   server can confirm them. Decide up front what evidence grade the movement
+   can reach, and say so in the packet rather than discovering it at verify.
+2. **§9 checks 15 and 16** — the unroutable-address run and the session audit —
+   are the ones that prove T-4 and T-3. Neither is fixture-provable.
+
+After that: **the cold-start budget is breached and needs its own movement.**
+`tests/test_cold_start_budget.py` fails at `CURRENT_STATE.md` 1,465 of 1,050
+words and `AI_HANDOVER.md` against 300. This predates the session (1,396 and
+761 at `b08a298`) and is now slightly worse. It is the same disease the backlog
+split just cured, in the two files every session actually reads.
 
 ## 4. Test delta
 
-`ui2/` Java: 126 unit tests pass, `architectureTest` 11 pass including all ten
-direction methods, module listing 11/11. `integrationTest` fails closed on the
-missing database exactly as the contract requires. Frontend suite green with
-per-tab assertions added. Orchestrator, provider, worker-brief and role suites
-green. Repository privacy gate 0 findings. `integrationTest` can now be pointed
-at the cluster's PostgreSQL, which no movement has done yet.
+Full suite on this machine: **3,541 passed, 25 skipped, 2 failed** (baseline
+before the session's dispatches: 3,532 passed, 2 failed). No new failure. The
+two are `test_dev_0_5b_auth_consumer_canonical_config.py`'s DLP-token collision
+and `test_cold_start_budget.py`. A third,
+`test_nexus_engineer_tool_gate.py::test_ac1_live_bug_regression_against_real_repository_state`,
+appears **only while a movement worktree exists** — it inspects live repository
+state. Treat it as parallel-dispatch-sensitive, not as a regression.
 
-## 5. New risks
+`ui2/`: `:platform-core:test` 44 tests green, `:architecture-tests:test` green,
+module listing still eleven.
 
-- **`backlog.json` is at 64,203 of 64,512 bytes — about 309 bytes of headroom.**
-  The next queue addition breaches it. The agreed fix is to split the backlog
-  into a small active set and a reserve the cold start never loads; that is a
-  GOV.ORCH.5/8 contract change and is the work item after the CP discovery
-  implementation. Raising the ceiling is not the fix.
-- The local Kubernetes VM stopped responding after the host slept and would not
-  rebuild; the deployment's manifests and image recipe are in the repository, so
-  this costs a rebuild, not the work.
+## 5. Environment, measured this session
+
+- **`./ui2/gradlew -p ui2 build` fails** on `:integration-tests:test`, which
+  fails closed on a missing database by design. Always pass
+  `-x :integration-tests:test`. This is correct behaviour, not a defect.
+- **There is no `.venv` here.** `python3` needed `requirements.txt`,
+  `requirements-dev.txt` and `requirements-console.txt` installed before the
+  full suite would run; `lxml` and `fastapi` were the blockers. They are
+  installed now. The brief's "pytest works locally" was true only of targeted
+  tests.
+- **Measured worker cost: roughly $0.037-0.043 per turn on Sonnet 5.** Set
+  `--max-budget-usd` from expected turns, never leave it at the $3.00 default —
+  both of this session's movements would have died at it.
+- **Do not put a full-suite run and the privacy gate in the same validation
+  plan.** The suite creates untracked `data/` and `logs/` directories and the
+  gate flags their presence, failing a movement whose diff is clean. This cost
+  `NXS-LOCAL-0130` its verify.
+- Local `git commit` and `git push` both worked this session. PRs were opened
+  and merged through the GitHub REST API.
+- **`relay/NXS-LOCAL-0130` is still `OPEN`.** Its worker was cut off at the
+  budget ceiling before writing its own `SESSION_CLOSE`, and the relay's
+  `next_actor` is `engineer`, so a Product Owner append is refused by
+  construction. The work was reviewed and merged directly (PR #211); the open
+  relay records that the worker was cut off, and is left open rather than
+  closed by a fabricated entry.
+- minikube is still down after the host slept; no movement needed it.
+
+## 6. New risks
+
+- **The transport movement is the first one that cannot prove its own main
+  claim here.** T-4 "no device is contacted" is checkable by construction; T-3
+  read-only is only checkable against a real session audit.
+- The cold-start budget breach above.
 - `UI2_0_B1_01A` and `UI2_0_B1_02A` are still FROZEN by an agent rather than
-  Product Owner reviewed (`UI2_0_AGENT_FROZEN_CONTRACT_AUDIT.md`).
-- The earlier collector's Line 1 equipment could not be removed: a test enforces
-  a security invariant against those files. The removal follows the Kubernetes
-  manifests taking that invariant over, not the other way round.
-- Discovery's channel-state signal records a hypothesis, not a finding: the
-  count of non-answering channels equalled the count of failed collections in an
-  earlier run, but identity was not verified.
+  Product Owner reviewed (`UI2_0_AGENT_FROZEN_CONTRACT_AUDIT.md`). The freeze
+  this session shows what that review costs and what it catches.
+- Discovery's channel-state signal is still a hypothesis, not a finding
+  (contract CS-5): the count of non-answering channels equalled the count of
+  failed collections, but identity was never verified.
 - **Open Product Owner decisions unchanged:** `po_cp_backup_async_semantics`,
-  `po_ldap_tls_trust_policy`. PAN Active/Active stays latent — the estate is
-  Active/Standby.
+  `po_ldap_tls_trust_policy`. PAN Active/Active stays latent.

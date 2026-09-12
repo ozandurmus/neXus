@@ -176,11 +176,89 @@
       },
       "seq": 1,
       "timestamp": "2026-09-12T21:45:58Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "report": {
+        "changed": [
+          "Added 16 production classes under ui2/platform-core/src/main/java/com/securityexpert/nexus/ui2/discovery/cp/: ObjectType, ClassificationFlags, CandidateKind, CandidateClassifier, Address, HostResolution, HostLink, HostLinkResolver, ClusterReference, ClusterLink, ClusterLinkResolver, CandidateKey, CandidateRow, RawCandidateInput, CandidateRowAssembler, ManagementApiFieldBinding.",
+          "Added 10 JUnit test classes under the mirrored test package, including the four §9 property-check tests (8, 10, 12, 13) and a synthetic Fixtures helper with no real address, name, domain or identifier.",
+          "Six commits on feature/cp-discovery-domain-core, grouped by contract section (classification; host resolution+linking; cluster resolution; candidate row; field binding; §9 property tests) rather than one end-of-movement commit."
+        ],
+        "completed": [
+          "AC-1: new package com.securityexpert.nexus.ui2.discovery.cp created inside the existing platform-core module; ui2/settings.gradle.kts untouched; module listing still eleven.",
+          "AC-2: CandidateKind enumerates K-1..K-10 exactly per contract §4.2, plus UNCLASSIFIED and AMBIGUOUS as outcomes (CL-3), not errors.",
+          "AC-3: CandidateClassifierTest.unmeasuredCombinationIsUnclassifiedNotNearestKind asserts a flag combination absent from §4.2 (both virtualization flags true) classifies UNCLASSIFIED and is returned.",
+          "AC-4: HostResolution.resolve returns exactly one of PHYSICAL_DEVICE/VIRTUAL_SYSTEM_HOSTED/NOT_APPLICABLE for every input; HostResolutionTest.emptyOwnAddressIsVirtualSystemHostedNotMissing covers the empty-own-address HR-2 case.",
+          "AC-5 (§9 check 10): Check10TypeBlindnessTest proves type-blindness structurally (HostResolution.resolve's method signature carries no ObjectType parameter, asserted by reflection) and behaviourally (matching address pairs on different object types resolve identically; a full type-swap over every fixture input produces identical outcomes).",
+          "AC-6 (§9 check 8): Check8NameBlindnessTest classifies the fixture set once as built and once with every display-name field (including inside cluster references) replaced by one constant, and asserts identical kind, host resolution and cluster link for every candidate.",
+          "AC-7 (§9 check 12): Check12IdentifierOnlyJoinTest asserts links are recorded by identifier, that renaming every cluster changes no link, and that removing every cluster-reference identifier yields zero Linked outcomes and NOT_EVALUABLE for every member that had carried a reference.",
+          "AC-8 (§9 check 13): Check13LivenessVocabularyTest reflects over CandidateRow's record components, recursively unwrapping Optional and following sealed permitted subtypes and enum constants, and asserts none of the collected identifiers match the up/down/online/offline/reachable/unreachable/healthy/unhealthy vocabulary or a bounded explicit synonym set.",
+          "AC-9: HostLinkResolverTest.zeroMatchesIsMissing and multipleMatchesIsAmbiguous assert HL-1 fail-closed behaviour with no host identifier recorded in either case.",
+          "AC-10: ManagementApiFieldBinding is the single isolated field-binding site; every entry is Status.UNVERIFIED; ManagementApiFieldBindingTest scans every other .java file in the package and asserts no bound field-name string literal appears there.",
+          "AC-11: './ui2/gradlew -p ui2 build -x :integration-tests:test' passes; ':architecture-tests:test' passes, including dir1 (no project dependency from platform-core) and dir7 (no persistence framework dependency), both of which the new package is now also subject to.",
+          "AC-12: no file under utils/, scripts/, tests/ or project/ was modified; git diff against origin/main touches only ui2/platform-core/src/{main,test}/java/.../discovery/cp/**.",
+          "AC-13: 'python3 scripts/repository_privacy_check.py' reports 0 findings over 1408 scanned files.",
+          "AC-14: no network call, HTTP client, socket or session-management code appears in the diff (verified by a targeted grep in addition to reading every file)."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "unaffected -- no Python file changed; the existing collector was not read, ported, wrapped or invoked",
+          "ui": "unaffected -- no HTTP surface, REST controller, screen or frontend change; the operator screen remains deferred per contract §11"
+        },
+        "integration": {
+          "branch": "feature/cp-discovery-domain-core",
+          "ci": "not invoked; no CI pipeline is configured for this local worktree movement",
+          "head_sha": "f98874fbc086ee42769c8ae48a0c984f304a3e05",
+          "merge_commit": null,
+          "merge_decision": "pending Product Owner assistant review of the diff plus orchestrator verify.passed, per the brief's merge gate; the worker does not merge to main",
+          "merge_state": "NOT_OPENED",
+          "pr": null,
+          "pr_url": null
+        },
+        "next": {
+          "movement": "cp_discovery_transport",
+          "movement_type": "IMPLEMENTATION",
+          "objective": "Implement contract §3's transport and entry point (the authenticated session, domain enumeration, per-domain object queries for the four named methods, and the connection-table read) against the Product Owner's live management server, binding CandidateRowAssembler's RawCandidateInput to real management-API responses and confirming or correcting every ManagementApiFieldBinding entry from UNVERIFIED to a real measurement. This is the movement that can run contract §9 checks 7, 9, 11 and 14-18, none of which this domain-core movement could discharge without a server.",
+          "status": "planned"
+        },
+        "preserved": [
+          "ui2/settings.gradle.kts: unchanged, still eleven subprojects.",
+          "Ui2ArchitectureTest and all ten direction methods: unchanged and passing, including dir1/dir7/dir10 now also covering the new package.",
+          "Every existing platform-core class and test: unchanged.",
+          "The FROZEN contract itself: not modified; no UNKNOWN of §10 closed; no binding entry marked VERIFIED.",
+          "The collection gate, Palo Alto code, and the existing Python collector: untouched, not read, not ported."
+        ],
+        "recommended_reasoning": {
+          "reason": "The transport movement binds to a live, safety-relevant management-plane schema and confirms/corrects UNVERIFIED field bindings against real vendor behaviour -- new vendor semantics and a security-relevant credential boundary, which the reasoning-tier table escalates above the domain-core movement's deterministic-implementation tier.",
+          "tier": "Sonnet 5, high effort"
+        },
+        "state_updates": [
+          "None: this movement did not touch project/*.json, CURRENT_STATE.md, AI_HANDOVER.md, or any docs/design contract. Per the brief's standing rules, only the code and this SESSION_CLOSE were produced; the Product Owner assistant updates durable project state on merge."
+        ],
+        "unresolved_risks": [
+          "The twelve UNKNOWNs of contract §10 remain open, as required; none was closed by this movement.",
+          "ManagementApiFieldBinding's twelve UNVERIFIED entries are this worker's best-effort candidate field names for the Check Point Management API, discharging FB-2/FB-3 as the contract's status block requires -- none is a measurement, per FB-2's explicit prohibition on citing an UNVERIFIED entry as one. Every entry needs a Product-Owner-run confirmation against the live management server before the transport movement wires a real adapter to it; a wrong candidate name only requires editing this one file."
+        ],
+        "validation": {
+          "affected": "':architecture-tests:test' -- all direction tests (dir1..dir10) passing with the new package present on the classpath.",
+          "diff_check": "'git diff --name-status origin/main...HEAD' shows only new files under ui2/platform-core/src/{main,test}/java/com/securityexpert/nexus/ui2/discovery/cp/; 'git status --porcelain' clean after commits.",
+          "full_regression": "'./ui2/gradlew -p ui2 build -x :integration-tests:test' -- BUILD SUCCESSFUL, all eleven subprojects.",
+          "privacy": "'python3 scripts/repository_privacy_check.py' -- PASS, 0 findings, 1408 files scanned.",
+          "real_environment": "NOT RUN and not applicable to this movement -- contract §9 checks 7, 9, 11, 14-18 require a live management server and are explicitly out of scope for the domain-core movement (contract §9 band split); this movement's real-environment gate is deferred to the transport movement.",
+          "state_consistency": "'python3 -m pytest tests/test_project_files_budget.py tests/test_contract_authority_status.py -q' -- 13 passed; project/*.json and CURRENT_STATE.md not touched by this movement.",
+          "targeted": "':platform-core:test' -- 29 new tests across 10 classes, all passing (verified via build/test-results/test/*.xml test counts)."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-12T22:01:37Z"
     }
   ],
   "id": "NXS-LOCAL-0129",
   "movement": "cp_discovery_domain_core",
-  "next_actor": "engineer",
+  "next_actor": null,
   "refs": [
     "docs/design/CP_AND_VSX_DISCOVERY_CONTRACT.md",
     "docs/design/PO_DECISION_RECORD_2026_09_13_CP_DISCOVERY_COLLECTION_GATE.md",
@@ -192,6 +270,6 @@
     "ui2/architecture-tests/src/test/java/com/securityexpert/nexus/ui2/architecture/Ui2ArchitectureTest.java"
   ],
   "schema_version": 1,
-  "status": "OPEN",
-  "updated_at": "2026-09-12T21:45:58Z"
+  "status": "CLOSED",
+  "updated_at": "2026-09-12T22:01:37Z"
 }
