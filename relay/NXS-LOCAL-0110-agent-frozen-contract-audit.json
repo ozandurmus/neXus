@@ -1,0 +1,104 @@
+{
+  "created_at": "2026-09-12T13:42:29Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1 A new document docs/design/UI2_0_AGENT_FROZEN_CONTRACT_AUDIT.md exists, status line DRAFT -- FOR PRODUCT OWNER REVIEW, and it freezes nothing.",
+          "AC-2 It carries one finding row per item in PO_DECISION_RECORD_2026_09_12.md section 6.1 and 6.2: document path, who applied the status, what the status line claims today, and a verdict of SOUND, NEEDS_PO_REVIEW or DEFECTIVE with the evidence that supports it.",
+          "AC-3 The B1-2 section 7 item 4 citation of AuditContextIntegrationTest, flagged in section 6.2 with no successor clause, is reported with its exact current text and the exact set of clauses that could succeed it, or an explicit UNKNOWN if none exists.",
+          "AC-4 For B1-1a section 3, the audit states per directive DIR-1 to DIR-10 which are bytecode-proved and which rest on file-tree inspection only, from the contract's own text, and names the evidence gap for DIR-8 and DIR-10.",
+          "AC-5 Every claim in the audit cites a repository path and, where the claim is about a document's own words, quotes the clause it rests on.",
+          "AC-6 No contract file outside the new audit document is modified: git diff --name-only shows the audit document and nothing else under docs/design/.",
+          "AC-7 The validation plan runs in the foreground and its real results, including any failure, are reported in SESSION_CLOSE."
+        ],
+        "baseline": {
+          "authority": "docs/design/PO_DECISION_RECORD_2026_09_12.md (FROZEN -- PRODUCT OWNER DIRECTIVES, 2026-09-12) section 6, which publishes the agent-authority audit list explicitly so a later session audits it rather than inheriting it. That section is the authority for this movement; the contracts being audited are its subjects, not its authority.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "sequencing": "Runs before any movement that would cite B1-1a or B1-2a as dispatch authority. roles/PO.md section 2 admits a FROZEN contract as dispatch authority, and the Product Owner has said an agent-applied FROZEN status is not evidence of review, so the audit is the gate on those two documents being usable at all."
+        },
+        "context_not_loaded": [
+          "docs/history/**",
+          "ui2/ Java and TypeScript sources",
+          "project/*.json"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/agent-frozen-contract-audit"
+        },
+        "invariants": [
+          "This movement is READ_ONLY_AUDIT over documents: it freezes nothing, amends nothing, and supersedes nothing.",
+          "A finding is a report, not a repair. A defect found is written down, never fixed in this movement.",
+          "AGENTS.md authority hierarchy is unchanged: an audit document is level 6 evidence and never becomes an authority by being written.",
+          "AGENTS.md UNKNOWN law: where the evidence does not settle a question, the verdict is UNKNOWN, never a guess.",
+          "No device name, management address, serial or credential enters the audit document."
+        ],
+        "merge_gate": "Product Owner assistant review of the diff plus orchestrator verify.passed. The worker does not open a pull request and does not merge.",
+        "movement_type": "READ_ONLY_AUDIT",
+        "objective": "Audit the contracts the previous agent froze, amended or superseded on its own hand, as listed in PO_DECISION_RECORD_2026_09_12.md section 6.1 and 6.2, and publish one DRAFT findings document that says, per contract, whether its current status is sound, needs Product Owner review, or is defective, with the evidence for each verdict.",
+        "output_contract": [
+          "docs/design/UI2_0_AGENT_FROZEN_CONTRACT_AUDIT.md, DRAFT, with one finding row per audited document and the four named deep-dive findings",
+          "No modification to any other document",
+          "SESSION_CLOSE with exact changed files, real validation results, findings that need a Product Owner decision, and commit state"
+        ],
+        "recommended_reasoning": {
+          "reason": "Document-only audit with no code change. The care needed is in reading clause text exactly and refusing to infer, which does not need a high tier.",
+          "tier": "Sonnet 5, normal (medium effort)"
+        },
+        "requirements": [
+          "English, per AGENTS.md engineering-output language law",
+          "Read PO_DECISION_RECORD_2026_09_12.md section 6, then only the documents that section names",
+          "Report the relationship and the evidence, never a repair: this movement changes no contract",
+          "Where a clause cannot be resolved to a successor, record UNKNOWN with the search performed",
+          "Do not apply, remove or propose a FROZEN status anywhere",
+          "Do not open a pull request and do not merge; commit on the lane and publish SESSION_CLOSE",
+          "Run the validation plan in the foreground and wait for real results before SESSION_CLOSE"
+        ],
+        "risks": [
+          "Repairing a defect instead of reporting it, which would put an unreviewed contract change inside an audit",
+          "Treating the previous agent's FROZEN status as settled and auditing only formatting",
+          "Inferring a successor clause for the flagged B1-2 citation rather than reporting UNKNOWN",
+          "Breaching the project file size budget or the design cross-reference test with the new document"
+        ],
+        "scope": {
+          "in": [
+            "docs/design/UI2_0_AGENT_FROZEN_CONTRACT_AUDIT.md (new)",
+            "Reading docs/design/UI2_0_B1_01A_PLATFORM_SKELETON_CONTRACT.md, UI2_0_B1_02A_AUDIT_REDACTION_CONTRACT.md, UI2_0_C3_IDENTITY_SESSIONS_RBAC_CONTRACT.md, UI2_0_B1_01_SKELETON_CI_DOCKER_CONTRACT.md and the B1-2/3/4/4b/7 contracts named in section 6.2"
+          ],
+          "out": [
+            "Any change to any contract document",
+            "Any change to ui2/ source, tests or migrations",
+            "Any change to project/*.json, CURRENT_STATE.md or AI_HANDOVER.md",
+            "Any vendor data collection or device contact",
+            ".github/workflows/**"
+          ]
+        },
+        "validation_plan": [
+          "contract status suite: python3 -m pytest tests/test_contract_authority_status.py -q",
+          "design cross references: python3 -m pytest tests/test_design_cross_references_resolve.py -q",
+          "project file budgets: python3 -m pytest tests/test_project_files_budget.py -q",
+          "privacy gate: python3 scripts/repository_privacy_check.py",
+          "diff check: git diff --check"
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-12T13:42:29Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0110",
+  "movement": "agent_frozen_contract_audit",
+  "next_actor": "engineer",
+  "refs": [
+    "AGENTS.md",
+    "roles/PO.md",
+    "docs/design/PO_DECISION_RECORD_2026_09_12.md",
+    "project/QUEUE.md"
+  ],
+  "schema_version": 1,
+  "status": "OPEN",
+  "updated_at": "2026-09-12T13:42:29Z"
+}

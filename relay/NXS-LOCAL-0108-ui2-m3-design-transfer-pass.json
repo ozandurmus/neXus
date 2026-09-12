@@ -1,0 +1,102 @@
+{
+  "created_at": "2026-09-12T13:42:29Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1 The navigation drawer reproduces M3Components.dc.html: the same destinations, in the same order, with the same collapsed and expanded behaviour.",
+          "AC-2 Each of Overview, Inventory, Configuration, Compliance, Operations and Administration exists as a routed screen whose layout, type scale, spacing and colour roles follow its M3 frame.",
+          "AC-3 The Material 3 token set in ui2/frontend/src/theme/m3Theme.ts carries the exact colour role values used by the frames; no component hard-codes a colour that a token already names.",
+          "AC-4 With an empty database every product screen renders its own empty state, and the populated look is reachable only under the existing labelled preview route.",
+          "AC-5 The existing test asserting preview data never reaches a product screen still passes, unchanged in intent, and covers every screen added here.",
+          "AC-6 No address-shaped literal is added to ui2/frontend/src/preview/previewData.ts or to any other frontend source; the repository privacy gate result is unchanged from the base commit.",
+          "AC-7 The frontend build and test suite pass in the foreground and their real output is reported."
+        ],
+        "baseline": {
+          "authority": "docs/design/PO_DECISION_RECORD_2026_09_12.md (FROZEN) section 4: stand the roof up first -- the shell, its menus and screens -- before the rooms underneath. The design frames in docs/design/ui2_mockups/ are the Product Owner's own canvas and are the visual target.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "sequencing": "Runs before device add is wired to a screen. No backend change, no collection."
+        },
+        "context_not_loaded": [
+          "docs/history/**",
+          "ui2/ Java sources beyond the API shapes the screens call",
+          "project/*.json"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/ui2-m3-design-transfer"
+        },
+        "invariants": [
+          "Preview data never reaches a product screen; that boundary is test-enforced and must stay.",
+          "No address-shaped literal, device name or serial in frontend source -- they reached three built bundles once before.",
+          "No vendor data collection, no device contact: the standing collection gate holds.",
+          "New feature code is written from scratch; the repository's Python scripts are know-how only, never ported, wrapped or invoked.",
+          "The design frames are read-only input."
+        ],
+        "merge_gate": "Product Owner assistant review of the diff against the frames plus orchestrator verify.passed. The worker does not open a pull request and does not merge.",
+        "movement_type": "UI",
+        "objective": "Rebuild the React shell so every screen and the navigation drawer match the Product Owner's Material 3 design frames in docs/design/ui2_mockups/ (M3Overview, M3Inventory, M3Configuration, M3Compliance, M3Operations, M3Administration, M3Components), with the six product screens present in the navigation and the populated look reachable only through the existing labelled preview route.",
+        "output_contract": [
+          "The six product screens and the navigation drawer matching the M3 frames",
+          "Theme tokens carrying the frames' colour roles",
+          "SESSION_CLOSE with exact changed files, real test output, and any frame detail deliberately not reproduced with its reason"
+        ],
+        "recommended_reasoning": {
+          "reason": "Bounded UI work against a fixed visual reference; the care is in fidelity and in not leaking preview data, not in novel design.",
+          "tier": "Sonnet 5, normal (medium effort)"
+        },
+        "requirements": [
+          "English, per AGENTS.md engineering-output language law",
+          "Read the seven M3 frames in docs/design/ui2_mockups/ before writing any component",
+          "Where a frame shows data the product cannot yet produce, render the empty state, never an invented value on a product screen",
+          "Do not open a pull request and do not merge; commit on the lane and publish SESSION_CLOSE",
+          "Run the validation plan in the foreground and wait for real results before SESSION_CLOSE"
+        ],
+        "risks": [
+          "Approximating the frames instead of matching them, which is exactly what this movement exists to correct",
+          "Letting synthetic data leak onto a product screen",
+          "Reintroducing address-shaped literals into a built bundle",
+          "Drifting the theme tokens away from the frames' own values"
+        ],
+        "scope": {
+          "in": [
+            "ui2/frontend/src/** (theme, navigation, screens, preview data)",
+            "ui2/frontend tests"
+          ],
+          "out": [
+            "Any Java module under ui2/ other than reading its API shape",
+            "Any migration or schema change",
+            "Any vendor data collection or device contact",
+            "Any container or deployment manifest",
+            ".github/workflows/**",
+            "docs/design/ui2_mockups/** -- read only, never edited"
+          ]
+        },
+        "validation_plan": [
+          "frontend build: npm --prefix ui2/frontend run build",
+          "frontend tests: npm --prefix ui2/frontend test",
+          "privacy gate: python3 scripts/repository_privacy_check.py",
+          "diff check: git diff --check"
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-12T13:42:29Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0108",
+  "movement": "ui2_m3_design_transfer_pass",
+  "next_actor": "engineer",
+  "refs": [
+    "AGENTS.md",
+    "docs/design/PO_DECISION_RECORD_2026_09_12.md",
+    "project/QUEUE.md",
+    "docs/design/ui2_mockups/"
+  ],
+  "schema_version": 1,
+  "status": "OPEN",
+  "updated_at": "2026-09-12T13:42:29Z"
+}

@@ -1,0 +1,103 @@
+{
+  "created_at": "2026-09-12T13:42:29Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1 One documented command brings up PostgreSQL, runs the existing Flyway migrations V1 to V7, starts the service and serves the frontend.",
+          "AC-2 A browser on the documented localhost address reaches the running shell, and its default screen is the empty state because the database is empty.",
+          "AC-3 The database starts empty on a fresh volume, and the document names the exact command that resets it to empty.",
+          "AC-4 No credential value is committed: the compose setup reads secrets from the environment or a git-ignored file, and the document says which.",
+          "AC-5 The service is not exposed beyond the local machine by default, and the document states the bound interface.",
+          "AC-6 The existing integration suite still passes unchanged.",
+          "AC-7 The startup is actually executed in the foreground and its real output, including any failure, is reported in SESSION_CLOSE."
+        ],
+        "baseline": {
+          "authority": "docs/design/PO_DECISION_RECORD_2026_09_12.md (FROZEN) section 4: the required first state is a clean, empty database with the UI and its menus visible and nothing pre-populated. project/QUEUE.md row ui2_b1_12_deployment_slice carries the container work.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "sequencing": "Runs alongside the M3 screen work; it packages what exists rather than changing it."
+        },
+        "context_not_loaded": [
+          "docs/history/**",
+          "frontend component sources",
+          "project/*.json"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/ui2-deployment-slice"
+        },
+        "invariants": [
+          "A clean, empty database is the required first state; nothing is seeded.",
+          "No credential, management address, device name or serial enters a tracked file.",
+          "No vendor data collection and no device contact: the standing collection gate holds.",
+          "No HTTP surface gains a write capability in this movement.",
+          "New feature code is Java written from scratch; the repository's Python scripts are know-how only."
+        ],
+        "merge_gate": "Product Owner assistant review of the diff plus orchestrator verify.passed. The worker does not open a pull request and does not merge.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Produce the deployment slice that stands the whole UI 2.0 product up on one machine with one command: PostgreSQL, Flyway migrations, the Spring Boot service and the built frontend, reachable in a browser on localhost, with a documented way to stop it and reset the database.",
+        "output_contract": [
+          "A working local deployment slice and its operator document",
+          "SESSION_CLOSE with exact changed files, the real startup output, the reset command, and any step that could not be executed in this environment stated plainly as not executed"
+        ],
+        "recommended_reasoning": {
+          "reason": "Packaging work over an existing, already-booting stack; the risk is credential handling and an unverified startup claim, not algorithmic difficulty.",
+          "tier": "Sonnet 5, normal (medium effort)"
+        },
+        "requirements": [
+          "English, per AGENTS.md engineering-output language law",
+          "Reuse the existing migrations and configuration rather than introducing a second source of truth",
+          "Bind to the local machine only; do not publish a port on all interfaces",
+          "Do not open a pull request and do not merge; commit on the lane and publish SESSION_CLOSE",
+          "Run the validation plan in the foreground and wait for real results before SESSION_CLOSE"
+        ],
+        "risks": [
+          "Committing a credential into a compose file or environment file",
+          "Seeding the database and breaking the required empty first state",
+          "Publishing the service on a non-local interface",
+          "Claiming a successful startup that was never executed"
+        ],
+        "scope": {
+          "in": [
+            "A compose file and its container definitions under ui2/",
+            "Service configuration needed to serve the built frontend and connect to the containerised database",
+            "One short operator document: start, stop, reset, and where the app appears"
+          ],
+          "out": [
+            "Any change to frontend components or screens",
+            "Any schema or migration change beyond what already exists",
+            "Any vendor data collection or device contact",
+            "Any credential value committed to the repository",
+            "Any production or server deployment; this is a local run",
+            ".github/workflows/**"
+          ]
+        },
+        "validation_plan": [
+          "build: ./ui2/gradlew -p ui2 clean assemble",
+          "frontend build: npm --prefix ui2/frontend run build",
+          "stack startup executed in the foreground, then the documented reset command",
+          "integration suite: ./ui2/gradlew -p ui2 integrationTest",
+          "privacy gate: python3 scripts/repository_privacy_check.py",
+          "diff check: git diff --check"
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-12T13:42:29Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0109",
+  "movement": "ui2_b1_12_deployment_slice",
+  "next_actor": "engineer",
+  "refs": [
+    "AGENTS.md",
+    "docs/design/PO_DECISION_RECORD_2026_09_12.md",
+    "project/QUEUE.md"
+  ],
+  "schema_version": 1,
+  "status": "OPEN",
+  "updated_at": "2026-09-12T13:42:29Z"
+}
