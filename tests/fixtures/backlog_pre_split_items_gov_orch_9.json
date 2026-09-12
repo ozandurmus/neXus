@@ -1,0 +1,1388 @@
+{
+  "schema_version": "1.0",
+  "items": [
+    {
+      "id": "orchestrator_tool_gate_hook_cwd_relative_script_path_footgun",
+      "category": "Orchestrator / reliability",
+      "title": "scripts/nexus_engineer_tool_gate.py (PreToolUse hook) resolves its own script path relative to CWD -- an accidental cd outside the worktree permanently breaks the engineer session's Bash tool",
+      "status": "done",
+      "priority": "P1",
+      "target": "RESOLVED 2026-09-09 (commit 624cd68): scripts/orchestrator.py::_spawn_engineer now exports NEXUS_WORKTREE_ROOT into the engineer environment; .claude/nexus-engineer.settings.json's PreToolUse/PostToolUse hook commands resolve against \"${NEXUS_WORKTREE_ROOT:-.}\" instead of a bare relative path. Recurred 3x live before the fix (NXS-LOCAL-0027, 0030, 0031), each losing self-merge/push ability until the Product Owner intervened by hand.",
+      "note": "see docs/history/backlog/orchestrator_tool_gate_hook_cwd_relative_script_path_footgun.md"
+    },
+    {
+      "id": "ui2_0_architecture_requirements",
+      "category": "Product Surface / Platform",
+      "title": "UI 2.0 -- empty-shell, DB-backed, LDAP-authenticated, role-scoped live operator console: requirements-and-tradeoffs draft",
+      "status": "done",
+      "priority": "P2",
+      "target": "docs/design/UI2_0_ARCHITECTURE_REQUIREMENTS.md -- DRAFT, requirements and tradeoffs only (relay/NXS-LOCAL-0025, 2026-09-09). SUCCEEDED 2026-09-09 by docs/design/UI2_0_ARCHITECTURE_DESIGN.md (backlog id ui2_0_architecture_design, relay/NXS-LOCAL-0047), which resolves every open point this draft left (C-1..C-4, U-1; X-2 recorded). This draft stays the evidentiary base (its section 2 audit and section 7 sketch); it is not a scope decision and not implementation authority. DONE: PR #140 merged 2026-09-08.",
+      "note": "see docs/history/backlog/ui2_0_architecture_requirements.md"
+    },
+    {
+      "id": "ui2_0_architecture_design",
+      "category": "Product Surface / Platform",
+      "title": "UI 2.0 -- architecture design: separate Java operator console, LDAP multi-admin sessions, profile-based backup, per-feature port from Line-1",
+      "status": "done",
+      "priority": "P1",
+      "target": "docs/design/UI2_0_ARCHITECTURE_DESIGN.md -- DRAFT, design resolved, awaiting Product Owner review, external second opinion and a formal DECIDE/freeze episode (relay/NXS-LOCAL-0047, 2026-09-09). Not implementation authority; freezing it authorizes no dispatch by itself. DONE: PR #160 merged 2026-09-09; superseded in part by UI2_0_DEVELOPMENT_WORKFLOW.md (BASELINE rev 2) and UI2_0_BASELINE_CONTRACT.md (FROZEN).",
+      "note": "see docs/history/backlog/ui2_0_architecture_design.md"
+    },
+    {
+      "id": "m14_local_ldap_d7_authorization_architecture",
+      "category": "Architecture / Security",
+      "title": "Local LDAP / Active-Directory group-membership authorization producer for D7, decoupled from the DEPLOY.1A server track",
+      "status": "planned",
+      "priority": "P2",
+      "target": "docs/design/M14_LOCAL_LDAP_AUTHORIZATION_ARCHITECTURE.md -- DRAFT, discussion proposal, awaiting Product Owner review (relay/NXS-LOCAL-0024, 2026-09-08). Not implementation authority; freezing it would still not authorize dispatch.",
+      "note": "see docs/history/backlog/m14_local_ldap_d7_authorization_architecture.md"
+    },
+    {
+      "id": "navigation_entity_type_classifier_for_content_level_p2_p3",
+      "category": "Architecture / navigation",
+      "title": "Real-device -> logical-entity-type classifier, to close P2/P3 at the content level",
+      "status": "done",
+      "priority": "P2",
+      "target": "RESOLVED (P2 classifier only) -- utils/entity_type_classifier.py::classify_entity_type, follow-up to M11 (relay/NXS-LOCAL-0022). tests/test_navigation_entity_type_classifier.py covers all 8 EntityType values plus fail-closed edge cases (missing PAN HA runtime, unresolved B2 pairing, mixed-source/disagreeing groups, no evidence, unrecognized source), and demonstrates composition with capability_applicability.resolve_d2 + capability_vendor_support.resolve_d3 for the ha_readiness worked example ('a standalone firewall has no HA readiness') for both CP and PAN standalone entity types plus the CP ClusterXL cluster case.",
+      "note": "see docs/history/backlog/navigation_entity_type_classifier_for_content_level_p2_p3.md"
+    },
+    {
+      "id": "cp_cphaprob_peer_observation_corroboration",
+      "category": "Identity / additional validation",
+      "title": "Extract peer-member rows from cphaprob stat for additional cluster-identity corroboration",
+      "status": "planned",
+      "priority": "P3",
+      "target": "Follow-up to OP.0a.P7 (PAN HA peer-pairing identity closure)",
+      "note": "see docs/history/backlog/cp_cphaprob_peer_observation_corroboration.md"
+    },
+    {
+      "id": "pan_ha_serial_identity_hardening",
+      "category": "Identity / architecture",
+      "title": "PAN HA pair operational identity should consider serial, not just hostname",
+      "status": "planned",
+      "priority": "P2",
+      "target": "Pre-CLASS-2 (OP.0b/OP.2) architecture decision",
+      "note": "see docs/history/backlog/pan_ha_serial_identity_hardening.md"
+    },
+    {
+      "id": "pan_hostname_parser_unification",
+      "category": "Reuse / architecture",
+      "title": "Unify the two independent PAN managed-device-discovery hostname parsers",
+      "status": "done",
+      "priority": "P3",
+      "target": "Follow-up to OP.0a.P7",
+      "note": "see docs/history/backlog/pan_hostname_parser_unification.md"
+    },
+    {
+      "id": "pan_ha_peer_ipv6_pairing",
+      "category": "Feature completeness",
+      "title": "PAN HA peer pairing does not match on IPv6",
+      "status": "deferred",
+      "priority": "P4",
+      "target": "Dual-stack PAN estates",
+      "note": "see docs/history/backlog/pan_ha_peer_ipv6_pairing.md"
+    },
+    {
+      "id": "op0c_uitest_fixture_verdict_diversity",
+      "category": "Test coverage",
+      "title": "uitest render-harness fixture never exercises a non-INSUFFICIENT_EVIDENCE failover verdict",
+      "status": "done",
+      "priority": "P3",
+      "target": "OP.0c follow-up",
+      "note": "see docs/history/backlog/op0c_uitest_fixture_verdict_diversity.md"
+    },
+    {
+      "id": "parser_correctness_hardening",
+      "category": "Correctness / Implementation",
+      "title": "0.6.6A — CP/PAN parser correctness hardening",
+      "status": "automated_validated",
+      "priority": "P1",
+      "target": "0.6.6A",
+      "note": "see docs/history/backlog/parser_correctness_hardening.md"
+    },
+    {
+      "id": "deploy1_contract_freeze",
+      "category": "Deployment / Architecture",
+      "title": "DEPLOY.1 contract freeze and server-arrival execution gate",
+      "status": "planned",
+      "priority": "P0",
+      "target": "DEPLOY.1",
+      "note": "see docs/history/backlog/deploy1_contract_freeze.md"
+    },
+    {
+      "id": "on_hardware_real_env_validation",
+      "category": "Safety / Validation",
+      "title": "On-hardware validation of the 0.6.3 -> 0.6.6B + DEV.2.1 line",
+      "status": "planned",
+      "priority": "P0",
+      "target": "next corporate-laptop session",
+      "note": "see docs/history/backlog/on_hardware_real_env_validation.md"
+    },
+    {
+      "id": "cp_management_alignment",
+      "category": "Alignment / Architecture",
+      "title": "0.6.1D — Check Point Management Intent ↔ Actual Alignment",
+      "status": "real_env_validated",
+      "note": "see docs/history/backlog/cp_management_alignment.md"
+    },
+    {
+      "id": "discovery_capability_real_env_validation",
+      "category": "Safety / Validation",
+      "title": "0.6.1C — Discovery / Coordinator Real-Environment Validation",
+      "status": "real_env_validated",
+      "priority": "P0",
+      "target": "0.6.1C real-environment validation",
+      "note": "see docs/history/backlog/discovery_capability_real_env_validation.md"
+    },
+    {
+      "id": "compliance_control_pack_v1",
+      "category": "Compliance / Implementation",
+      "title": "0.6.1B.1.6 â€” Compliance Control Pack v1 (10 controls)",
+      "status": "done",
+      "priority": "P1",
+      "target": "0.6.1B.1.6",
+      "note": "see docs/history/backlog/compliance_control_pack_v1.md"
+    },
+    {
+      "id": "collection_execution_coordinator",
+      "category": "Safety / Architecture",
+      "title": "Collection Execution Coordinator & Safety Policy",
+      "status": "real_env_validated",
+      "priority": "P0",
+      "target": "0.6.1C / DEPLOY.1",
+      "note": "see docs/history/backlog/collection_execution_coordinator.md"
+    },
+    {
+      "id": "cp_ssh_trust_r2_prod_server",
+      "category": "Security / Validation",
+      "title": "CP SSH strict host-key R2 validation on production server",
+      "status": "planned",
+      "priority": "P1",
+      "target": "DEPLOY.1",
+      "note": "see docs/history/backlog/cp_ssh_trust_r2_prod_server.md"
+    },
+    {
+      "id": "cp_production_ssh_host_key_trust_hardening",
+      "category": "Security / Deployment",
+      "title": "CP SSH host-key trust: mandatory strict enforcement for production/container runtime",
+      "status": "planned",
+      "priority": "P0 -- production-blocking before production deployment / CLASS 2",
+      "target": "production container/pod runtime hardening (post-DEPLOY.1)",
+      "note": "see docs/history/backlog/cp_production_ssh_host_key_trust_hardening.md"
+    },
+    {
+      "id": "op0b_s7_s6_test_order_isolation",
+      "category": "Test infrastructure",
+      "title": "OP.0b S7 readiness tests leak state into the S6 PAN preflight collector tests when run out of default order",
+      "status": "automated_validated",
+      "priority": "P2",
+      "target": "OP.0b",
+      "note": "see docs/history/backlog/op0b_s7_s6_test_order_isolation.md"
+    },
+    {
+      "id": "deploy1_oidc_viewer",
+      "category": "Security",
+      "title": "DEPLOY.1A — Authenticated Read-Only Viewer Boundary",
+      "status": "planned",
+      "priority": "P0",
+      "target": "DEPLOY.1A",
+      "note": "see docs/history/backlog/deploy1_oidc_viewer.md"
+    },
+    {
+      "id": "deploy1_evidence_egress_policy",
+      "category": "Security",
+      "title": "DEPLOY.1 â€” Evidence Egress & Sharing Policy",
+      "status": "planned",
+      "priority": "P0",
+      "target": "DEPLOY.1",
+      "note": "see docs/history/backlog/deploy1_evidence_egress_policy.md"
+    },
+    {
+      "id": "noninteractive_runtime_config",
+      "category": "Deployment / Architecture",
+      "title": "Non-interactive runtime configuration and credential sourcing",
+      "status": "automated_validated",
+      "priority": "P0",
+      "target": "DEV.2.1",
+      "note": "see docs/history/backlog/noninteractive_runtime_config.md"
+    },
+    {
+      "id": "deploy_persistent_secret_material",
+      "category": "Deployment / Security",
+      "title": "Persistent volume contract for HMAC key and production trust material",
+      "status": "automated_validated",
+      "priority": "P1",
+      "target": "DEV.2.2",
+      "note": "see docs/history/backlog/deploy_persistent_secret_material.md"
+    },
+    {
+      "id": "linux_container_image",
+      "category": "Deployment / Architecture",
+      "title": "Linux worker image + Compose (single-container first migration)",
+      "status": "automated_validated",
+      "priority": "P1",
+      "target": "DEV.3.1",
+      "note": "see docs/history/backlog/linux_container_image.md"
+    },
+    {
+      "id": "distributed_endpoint_lock",
+      "category": "Safety / Architecture",
+      "title": "DEV.3.2 - Distributed per-endpoint lock and cross-process admission (Postgres)",
+      "status": "automated_validated",
+      "priority": "P0",
+      "target": "DEV.3.2",
+      "note": "see docs/history/backlog/distributed_endpoint_lock.md"
+    },
+    {
+      "id": "distributed_evidence_store_migration",
+      "category": "Storage / Architecture",
+      "title": "DEV.3.3 - CAS metadata index, run manifests and last-known-good to Postgres",
+      "status": "automated_validated",
+      "priority": "P0",
+      "target": "DEV.3.3",
+      "note": "see docs/history/backlog/distributed_evidence_store_migration.md"
+    },
+    {
+      "id": "per_vendor_worker_split",
+      "category": "Performance / Architecture",
+      "title": "Per-vendor worker containers",
+      "status": "deferred",
+      "priority": "P2",
+      "target": "DEV.3.4",
+      "note": "see docs/history/backlog/per_vendor_worker_split.md"
+    },
+    {
+      "id": "crypto_agility_pqc",
+      "category": "Compliance / Security",
+      "title": "Cryptographic Posture, Crypto-Agility & PQC Readiness",
+      "status": "automated_validated",
+      "priority": "P1",
+      "target": "0.7.0",
+      "note": "see docs/history/backlog/crypto_agility_pqc.md"
+    },
+    {
+      "id": "compliance_posture_rulepack_transition",
+      "category": "Compliance / Architecture",
+      "title": "0.6.6B — Compliance Rule-Pack Transition Foundation",
+      "status": "automated_validated",
+      "priority": "P1",
+      "target": "0.6.6B",
+      "note": "see docs/history/backlog/compliance_posture_rulepack_transition.md"
+    },
+    {
+      "id": "event_signal_intake",
+      "category": "Architecture / Integration",
+      "title": "External Change Signal Intake & Bounded Evidence Trigger",
+      "status": "in_progress",
+      "priority": "P1",
+      "target": "0.8.x",
+      "note": "see docs/history/backlog/event_signal_intake.md"
+    },
+    {
+      "id": "passive_ti_enrichment",
+      "category": "Architecture / Intelligence",
+      "title": "Passive TI Enrichment for Confirmed Changes",
+      "status": "planned",
+      "priority": "P2",
+      "target": "0.8.x",
+      "note": "see docs/history/backlog/passive_ti_enrichment.md"
+    },
+    {
+      "id": "cp_interactive_validation",
+      "category": "Collection",
+      "title": "Validate interactive SSH coverage on direct-Clish WiFi/Spark estate",
+      "status": "done",
+      "priority": "P0",
+      "target": "0.6.1B.1.2",
+      "note": "see docs/history/backlog/cp_interactive_validation.md"
+    },
+    {
+      "id": "cp_ha_runtime",
+      "category": "Collection",
+      "title": "Recover ClusterXL/VSX runtime HA role coverage",
+      "status": "automated_validated",
+      "priority": "P0",
+      "target": "0.6.1B.1.2",
+      "note": "see docs/history/backlog/cp_ha_runtime.md"
+    },
+    {
+      "id": "cp_unknown_platform",
+      "category": "Discovery",
+      "title": "Classify collectable unknown CP platforms without blocking current-state evidence",
+      "status": "automated_validated",
+      "priority": "P1",
+      "target": "0.6.1C",
+      "note": "see docs/history/backlog/cp_unknown_platform.md"
+    },
+    {
+      "id": "inventory_exclusions_management_ui",
+      "category": "Inventory UX",
+      "title": "Inventory Exclusions add/restore/reason/audit workflows (write phase, DEPLOY.1A-adjacent)",
+      "status": "in_progress",
+      "priority": "P2",
+      "target": "DEPLOY.1A",
+      "note": "see docs/history/backlog/inventory_exclusions_management_ui.md"
+    },
+    {
+      "id": "html_render_optimization",
+      "category": "Performance",
+      "title": "Optimize HTML render wall-clock time based on the html_render_performance profiling findings",
+      "status": "automated_validated",
+      "priority": "P2",
+      "target": "0.6.x polish follow-up",
+      "note": "see docs/history/backlog/html_render_optimization.md"
+    },
+    {
+      "id": "overview_eos_release_guidance",
+      "category": "Inventory UX",
+      "title": "Overview: static EOS/EOL date + suggested-next-release guidance by model family (Increment 2)",
+      "status": "planned",
+      "priority": "P2",
+      "target": "0.6.1C / Inventory UX follow-up",
+      "note": "see docs/history/backlog/overview_eos_release_guidance.md"
+    },
+    {
+      "id": "discovery_fixture_shape_drift",
+      "category": "Reliability / Test Infrastructure",
+      "title": "tests/fixtures/uitest/discovery_ui.json entity keys drift from the real discovery_capability_ui builder shape",
+      "status": "automated_validated",
+      "priority": "P2",
+      "target": "render harness hardening",
+      "note": "see docs/history/backlog/discovery_fixture_shape_drift.md"
+    },
+    {
+      "id": "cp_identity_edges",
+      "category": "Identity",
+      "title": "Review remaining CP identity-gate edge cases after interactive session validation",
+      "status": "automated_validated",
+      "priority": "P1",
+      "target": "0.6.1B.1.2 / 0.6.1C",
+      "note": "see docs/history/backlog/cp_identity_edges.md"
+    },
+    {
+      "id": "cp_ssh_trust",
+      "category": "Security",
+      "title": "Replace CP AutoAddPolicy compatibility with trusted known_hosts/pinned host keys",
+      "status": "real_env_validated",
+      "priority": "P0",
+      "target": "0.6.4",
+      "note": "see docs/history/backlog/cp_ssh_trust.md"
+    },
+    {
+      "id": "pan_tls_ca",
+      "category": "Security",
+      "title": "Enable PAN/Panorama TLS verification with corporate CA trust",
+      "status": "real_env_validated",
+      "priority": "P0",
+      "target": "0.6.5",
+      "note": "see docs/history/backlog/pan_tls_ca.md"
+    },
+    {
+      "id": "vsx_network_canonicalization",
+      "category": "Known defect",
+      "title": "VSX network canonicalization characterization xfail",
+      "status": "automated_validated",
+      "priority": "P2",
+      "target": "0.6.6A",
+      "note": "see docs/history/backlog/vsx_network_canonicalization.md"
+    },
+    {
+      "id": "pan_default_route",
+      "category": "Known defect",
+      "title": "PAN default-route classification characterization xfail",
+      "status": "automated_validated",
+      "priority": "P2",
+      "target": "0.6.6A",
+      "note": "see docs/history/backlog/pan_default_route.md"
+    },
+    {
+      "id": "immutable_store_permission",
+      "category": "Reliability",
+      "title": "Investigate intermittent local immutable evidence-store PermissionError",
+      "status": "automated_validated",
+      "priority": "P1",
+      "target": "0.6.x hardening",
+      "note": "see docs/history/backlog/immutable_store_permission.md"
+    },
+    {
+      "id": "discovery_lifecycle",
+      "category": "Architecture",
+      "title": "Management-led discovery lifecycle and capability profiles",
+      "status": "automated_validated",
+      "priority": "P1",
+      "target": "0.6.1C"
+    },
+    {
+      "id": "credential_profiles",
+      "category": "Architecture",
+      "title": "Credential profile / enterprise vault abstraction",
+      "status": "in_progress",
+      "priority": "P1",
+      "target": "1.0 foundation",
+      "note": "see docs/history/backlog/credential_profiles.md"
+    },
+    {
+      "id": "history_diff_ui",
+      "category": "UX",
+      "title": "Chronological configuration history and safe diff UX",
+      "status": "automated_validated",
+      "priority": "P1",
+      "target": "0.6.3",
+      "note": "see docs/history/backlog/history_diff_ui.md"
+    },
+    {
+      "id": "bulk_fleet_ops",
+      "category": "UX",
+      "title": "Fleet selection foundation for future bulk read/recovery/approved operations",
+      "status": "deferred",
+      "priority": "P2",
+      "target": "post-VERIFY/RECOVER",
+      "note": "see docs/history/backlog/bulk_fleet_ops.md"
+    },
+    {
+      "id": "native_backup",
+      "category": "Recovery",
+      "title": "Vendor-native backup and restore-readiness foundation",
+      "status": "in_progress",
+      "priority": "P1",
+      "target": "RB.0-RB.5 (rebase of original 0.6.0B)",
+      "note": "see docs/history/backlog/native_backup.md"
+    },
+    {
+      "id": "render_harness_happydom_pin",
+      "category": "Dev tooling / Known defect",
+      "title": "Render harness's happy-dom check failed under Bun (window.eval undefined)",
+      "status": "automated_validated",
+      "priority": "P2",
+      "target": "before RB.5 (or any next UI build)",
+      "note": "see docs/history/backlog/render_harness_happydom_pin.md"
+    },
+    {
+      "id": "html_render_performance",
+      "category": "Performance",
+      "title": "Reduce HTML generation/render-only wall-clock time",
+      "status": "automated_validated",
+      "priority": "P2",
+      "target": "0.6.x polish",
+      "note": "see docs/history/backlog/html_render_performance.md"
+    },
+    {
+      "id": "clean_baseline_bootstrap",
+      "category": "Development Workflow",
+      "title": "Clean Baseline Bootstrap & Dependency UX",
+      "status": "automated_validated",
+      "priority": "P1",
+      "target": "workflow hardening",
+      "note": "see docs/history/backlog/clean_baseline_bootstrap.md"
+    },
+    {
+      "id": "cp_device_interaction_safety",
+      "category": "Safety",
+      "title": "Check Point Device Interaction Safety Audit & Polling Guardrails",
+      "status": "done",
+      "priority": "P0",
+      "target": "0.6.1B.1.3",
+      "note": "see docs/history/backlog/cp_device_interaction_safety.md"
+    },
+    {
+      "id": "repository_privacy_gate",
+      "category": "DevSecOps",
+      "title": "Local Repository Privacy Gate",
+      "status": "done",
+      "priority": "P0",
+      "target": "DEV.0.4/DEV.0.4.1",
+      "note": "see docs/history/backlog/repository_privacy_gate.md"
+    },
+    {
+      "id": "copilot_dlp_config_boundary",
+      "category": "DevSecOps",
+      "title": "Copilot/DLP-Compatible Configuration Boundary Refactor",
+      "status": "done",
+      "priority": "P1",
+      "target": "DEV.0.5B.2",
+      "note": "see docs/history/backlog/copilot_dlp_config_boundary.md"
+    },
+    {
+      "id": "cp_exclusion_policy_externalization",
+      "category": "DevSecOps",
+      "title": "Runtime Inventory Exclusion Policy Foundation",
+      "status": "done",
+      "priority": "P0",
+      "target": "DEV.0.4.1",
+      "note": "see docs/history/backlog/cp_exclusion_policy_externalization.md"
+    },
+    {
+      "id": "inventory_exclusions_ui",
+      "category": "Inventory UX",
+      "title": "Inventory Exclusions UX & Management",
+      "status": "automated_validated",
+      "priority": "P1",
+      "target": "0.6.1C / Inventory UX",
+      "note": "see docs/history/backlog/inventory_exclusions_ui.md"
+    },
+    {
+      "id": "pan_auth_transport_convergence",
+      "category": "Security",
+      "title": "PAN Authentication Transport Convergence -- URGENT: older runtime path sends credentials as URL query parameters",
+      "status": "planned",
+      "priority": "P0",
+      "target": "production hardening / PAN transport cleanup",
+      "note": "see docs/history/backlog/pan_auth_transport_convergence.md"
+    },
+    {
+      "id": "dev_python_env_tooling_friction",
+      "category": "Development Workflow",
+      "title": "Reduce Python environment bootstrap friction in AI-assisted sessions",
+      "status": "automated_validated",
+      "priority": "P2",
+      "target": "DEV.1 follow-up / workflow polish",
+      "note": "see docs/history/backlog/dev_python_env_tooling_friction.md"
+    },
+    {
+      "id": "overview_device_lifecycle_enrichment",
+      "category": "Inventory UX",
+      "title": "Overview enrichment: OS version, model, EOS and recommended target release",
+      "status": "automated_validated",
+      "priority": "P1",
+      "target": "0.6.1C / Inventory UX",
+      "note": "see docs/history/backlog/overview_device_lifecycle_enrichment.md"
+    },
+    {
+      "id": "failover_readiness_assessment",
+      "category": "Safety / Architecture",
+      "title": "OP.0 - HA Readiness / Failover-Safety Assessment (read-only)",
+      "status": "in_progress",
+      "priority": "P1",
+      "target": "OP.0",
+      "note": "see docs/history/backlog/failover_readiness_assessment.md"
+    },
+    {
+      "id": "failover_plan_compiler",
+      "category": "Architecture",
+      "title": "OP.1.S1 -- write-free failover plan compiler and dry-run (classic CP ClusterXL only)",
+      "status": "automated_validated",
+      "priority": "P1",
+      "target": "OP.1",
+      "note": "see docs/history/backlog/failover_plan_compiler.md"
+    },
+    {
+      "id": "failover_controlled_execution",
+      "category": "Safety / Architecture",
+      "title": "OP.2 - Controlled Failover Execution (write-gated)",
+      "status": "deferred",
+      "priority": "P2",
+      "target": "OP.2",
+      "note": "see docs/history/backlog/failover_controlled_execution.md"
+    },
+    {
+      "id": "compliance_control_enrichment",
+      "category": "Compliance / Architecture",
+      "title": "0.7.1 - Control enrichment, framework grouping & file-based assignment",
+      "status": "automated_validated",
+      "priority": "P1",
+      "target": "0.7.1",
+      "note": "see docs/history/backlog/compliance_control_enrichment.md"
+    },
+    {
+      "id": "compliance_assignment_ui_and_registry",
+      "category": "Compliance / UX",
+      "title": "Compliance assignment editor + tagged device registry (DEPLOY.1-gated)",
+      "status": "deferred",
+      "priority": "P2",
+      "target": "DEPLOY.1",
+      "note": "see docs/history/backlog/compliance_assignment_ui_and_registry.md"
+    },
+    {
+      "id": "compliance_check_engine",
+      "category": "Compliance / Architecture",
+      "title": "CE.1 - User-authored compliance check engine (data-driven, evidence-only)",
+      "status": "automated_validated",
+      "priority": "P1",
+      "target": "0.7.3",
+      "note": "see docs/history/backlog/compliance_check_engine.md"
+    },
+    {
+      "id": "compliance_check_engine_primitives",
+      "category": "Compliance / Safety",
+      "title": "CE.2 - Curated read-only command-primitive registry for checks",
+      "status": "automated_validated",
+      "priority": "P2",
+      "target": "0.7.x, needs its own contract",
+      "note": "see docs/history/backlog/compliance_check_engine_primitives.md"
+    },
+    {
+      "id": "compliance_check_engine_ui",
+      "category": "Compliance / UX",
+      "title": "CE.3 - Browser check editor + signed distributable org check packs",
+      "status": "deferred",
+      "priority": "P2",
+      "target": "DEPLOY.1A",
+      "note": "see docs/history/backlog/compliance_check_engine_ui.md"
+    },
+    {
+      "id": "compliance_remediation_checks",
+      "category": "Compliance / Safety",
+      "title": "CE.4 - Remediation checks (write-capable, HARD-GATED)",
+      "status": "deferred",
+      "priority": "P2",
+      "target": "post OP.2 / DEPLOY.1A",
+      "note": "see docs/history/backlog/compliance_remediation_checks.md"
+    },
+    {
+      "id": "remove_dormant_remote_cleanup",
+      "category": "Security / Code Health",
+      "title": "Remove dormant remote cleanup helper",
+      "status": "done",
+      "priority": "P0",
+      "target": "Local security hardening, before server exposure",
+      "note": "see docs/history/backlog/remove_dormant_remote_cleanup.md"
+    },
+    {
+      "id": "frontend_rendering_boundary",
+      "category": "Security / Frontend",
+      "title": "Harden browser rendering boundary for hostile device data",
+      "status": "automated_validated",
+      "priority": "P1",
+      "target": "Local development; required before DEPLOY.1 viewer exposure",
+      "note": "see docs/history/backlog/frontend_rendering_boundary.md"
+    },
+    {
+      "id": "codebase_modularization",
+      "category": "Architecture / Code Health",
+      "title": "Behavior-preserving modularization of large frontend and workflow modules",
+      "status": "done",
+      "priority": "P1",
+      "target": "Local development, independent of server arrival",
+      "note": "see docs/history/backlog/codebase_modularization.md"
+    },
+    {
+      "id": "deploy1_report_volume_isolation",
+      "category": "Deployment / Security",
+      "title": "Publish reports through a report-only viewer volume",
+      "status": "planned",
+      "priority": "P0",
+      "target": "DEPLOY.1 server arrival",
+      "note": "see docs/history/backlog/deploy1_report_volume_isolation.md"
+    },
+    {
+      "id": "deploy1_least_privilege_runtime",
+      "category": "Deployment / Security",
+      "title": "Least-privilege worker and viewer runtime",
+      "status": "planned",
+      "priority": "P0",
+      "target": "DEV.4.4 / DEPLOY.1",
+      "note": "see docs/history/backlog/deploy1_least_privilege_runtime.md"
+    },
+    {
+      "id": "deploy1_release_assurance",
+      "category": "Supply Chain / Validation",
+      "title": "Reproducible release assurance",
+      "status": "planned",
+      "priority": "P0",
+      "target": "DEV.4.5 / DEPLOY.1",
+      "note": "see docs/history/backlog/deploy1_release_assurance.md"
+    },
+    {
+      "id": "deploy1_database_migrations_and_roles",
+      "category": "Data Plane / Security",
+      "title": "Database migrations and least-privilege runtime roles",
+      "status": "in_progress",
+      "priority": "P1",
+      "target": "DEV.4.6 / DEPLOY.1",
+      "note": "see docs/history/backlog/deploy1_database_migrations_and_roles.md"
+    },
+    {
+      "id": "recovery_offhost_key_custody",
+      "category": "Recovery / Security",
+      "title": "Off-host recovery artifacts and encryption-key custody",
+      "status": "in_progress",
+      "priority": "P0",
+      "target": "DEPLOY.1; blocks reliance on RB.3b recovery",
+      "note": "see docs/history/backlog/recovery_offhost_key_custody.md"
+    },
+    {
+      "id": "operator_console",
+      "category": "Product Surface / Platform",
+      "title": "CON.x - Operator Console: authenticated local control plane over the existing engine",
+      "status": "in_progress",
+      "priority": "P1",
+      "target": "CON.0 (architecture, frozen 2026-08-31) -> CON.1 (DONE, 2026-09-01) -> CON.2 (AUTOMATED_VALIDATED, 2026-09-01; real-env owed) -> CON.3..CON.5",
+      "note": "see docs/history/backlog/operator_console.md"
+    },
+    {
+      "id": "pan_serial_representation_identity_evidence_closure",
+      "category": "Identity / architecture",
+      "title": "PAN HA runtime peer-serial representation mismatch on one member -- root cause unknown",
+      "status": "in_progress",
+      "priority": "P0",
+      "target": "Pre-CLASS-2 (OP.0b/OP.2), independent of OP.0b.0 vendor-semantics confirmation",
+      "note": "see docs/history/backlog/pan_serial_representation_identity_evidence_closure.md"
+    },
+    {
+      "id": "cp_preflight_ccp_tablestat_evidence",
+      "category": "Failover readiness / evidence surface",
+      "title": "CP preflight: add `cphaprob tablestat` (CCP unique-IP table) as an extra split-brain / control-link evidence source",
+      "status": "in_progress",
+      "priority": "P1 -- valuable evidence, requires a new command-gate row + readiness-contract mapping before implementation",
+      "target": "OP.0b follow-on (post S8 closure); implement only after PO approval of the gate row and the check mapping",
+      "note": "see docs/history/backlog/cp_preflight_ccp_tablestat_evidence.md"
+    },
+    {
+      "id": "ha_entity_operational_lock",
+      "category": "Safety / Architecture",
+      "title": "Per-HA-entity operational lock -- the CLASS 2 lock grain does not exist",
+      "status": "done",
+      "priority": "P0 -- before CLASS 2",
+      "target": "OP.2.B (architecture FROZEN 2026-09-04 in docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md)",
+      "note": "see docs/history/backlog/ha_entity_operational_lock.md"
+    },
+    {
+      "id": "pcp_collector_target_selection_seams",
+      "category": "Architecture / Collection",
+      "title": "Collector target-selection seams for registry-keyed typed jobs (CP inventory is plane-wide today)",
+      "status": "in_progress",
+      "priority": "P1",
+      "target": "PCP.6",
+      "note": "see docs/history/backlog/pcp_collector_target_selection_seams.md"
+    },
+    {
+      "id": "pcp_storage_engine_decision",
+      "category": "Storage / Architecture",
+      "title": "Storage-engine decision for the Device Registry and typed job plane (criteria recorded, engine deferred)",
+      "status": "planned",
+      "priority": "P1",
+      "target": "PCP.5 contract freeze / DEV.4.6",
+      "note": "see docs/history/backlog/pcp_storage_engine_decision.md"
+    },
+    {
+      "id": "snmpv3_fast_telemetry_plane",
+      "category": "Architecture / Telemetry",
+      "title": "Optional SNMPv3 fast telemetry plane -- own security/command/OID gate before any code",
+      "status": "deferred",
+      "priority": "P2",
+      "target": "PCP.7",
+      "note": "see docs/history/backlog/snmpv3_fast_telemetry_plane.md"
+    },
+    {
+      "id": "diagnostic_runbooks_read_only",
+      "category": "Product Surface / Safety",
+      "title": "Diagnostic Runbooks (CLASS 0, closed catalog, shared primitive registry with CE.2)",
+      "status": "automated_validated",
+      "priority": "P2",
+      "target": "PCP.8",
+      "note": "see docs/history/backlog/diagnostic_runbooks_read_only.md"
+    },
+    {
+      "id": "pcp1_registry_uuid_call_count_test_defect",
+      "category": "Test correctness / CI coverage gap",
+      "title": "Two PCP.1 registry tests fail deterministically on main: uuid4 call-count proof also counts the lock's owner token",
+      "status": "done",
+      "priority": "P2",
+      "target": "PCP.1 (utils/device_registry.py + tests/test_pcp1_device_registry.py); no product behaviour change expected",
+      "note": "see docs/history/backlog/pcp1_registry_uuid_call_count_test_defect.md"
+    },
+    {
+      "id": "m8_3_real_environment_validation",
+      "category": "Real-environment validation debt",
+      "title": "M8.3 first-contact identity-evidence producer: real-environment validation deferred by explicit Product Owner decision",
+      "status": "real_env_validated",
+      "priority": "P1",
+      "target": "M8.3 (utils/first_contact_producer.py, --identity-first-contact); gated M8.4's own §9 requirement for M7 -- now paid",
+      "note": "see docs/history/backlog/m8_3_real_environment_validation.md"
+    },
+    {
+      "id": "m8_evidence_host_key_fingerprint_not_persisted",
+      "category": "Correctness gap / follow-up fix needed",
+      "title": "M8.4 finding: CP config evidence snapshot metadata carries no host-key fingerprint, so the M8 trust-currency check can never affirmatively pass against real M8.3 evidence",
+      "status": "automated_validated",
+      "priority": "P2",
+      "target": "configuration/checkpoint_config_collector.py::_collect_host (the shared, 'existing unmodified' physical-host collection primitive both the bulk collector and the M8.3 producer reuse)",
+      "note": "see docs/history/backlog/m8_evidence_host_key_fingerprint_not_persisted.md"
+    },
+    {
+      "id": "policy_rule_hygiene_and_path_placement_brief",
+      "category": "Product intent / umbrella",
+      "title": "Policy rule hygiene and path-based placement (original feature brief, umbrella)",
+      "status": "planned",
+      "priority": "P2",
+      "target": "unscheduled",
+      "note": "see docs/history/backlog/policy_rule_hygiene_and_path_placement_brief.md"
+    },
+    {
+      "id": "dlp_scanner_venv_exclusion",
+      "category": "Test infrastructure / hygiene",
+      "title": "The two repository-text DLP scanners walk .venv and flag third-party library internals",
+      "status": "done",
+      "priority": "P2",
+      "target": "DEV.0.5B follow-up / test-infrastructure hygiene; unblocks a clean full regression on any workstation with a project-local virtual environment",
+      "note": "see docs/history/backlog/dlp_scanner_venv_exclusion.md"
+    },
+    {
+      "id": "dlp_scanner_prose_collision_in_frozen_records",
+      "category": "Test infrastructure / hygiene",
+      "title": "The two repository-text DLP scanners' zero-collision assertion is permanently false against frozen historical records, independent of any .venv",
+      "status": "done",
+      "priority": "P2",
+      "target": "Governance decision needed before test-infrastructure follow-up; discovered while resolving dlp_scanner_venv_exclusion",
+      "note": "see docs/history/backlog/dlp_scanner_prose_collision_in_frozen_records.md"
+    },
+    {
+      "id": "dlp_scanner_prose_collision_third_relay_scratch_file",
+      "category": "Test infrastructure / hygiene",
+      "title": "A third, previously-uncatalogued prose collision in relay/NXS-LOCAL-0012-gov-po-3-ac5-demo-1-scratch.json blocks the same two DLP collision-assertion tests, independent of the two already-decided findings",
+      "status": "done",
+      "priority": "P2",
+      "target": "Governance decision needed, same shape as dlp_scanner_prose_collision_in_frozen_records; discovered while implementing that item's fix",
+      "note": "see docs/history/backlog/dlp_scanner_prose_collision_third_relay_scratch_file.md"
+    },
+    {
+      "id": "pytest_xdist_privacy_scan_scratch_file_race",
+      "category": "Test infrastructure / hygiene",
+      "title": "tests/test_gov_po_3_ci_privacy_gate_baseline.py's transient scratch fixture can crash a concurrently-running full-repository privacy scan under pytest-xdist",
+      "status": "planned",
+      "priority": "P3",
+      "target": "Test-infrastructure follow-up; discovered incidentally while validating dlp_scanner_prose_collision_in_frozen_records",
+      "note": "see docs/history/backlog/pytest_xdist_privacy_scan_scratch_file_race.md"
+    },
+    {
+      "id": "project_state_wording_drift_reconciliation",
+      "category": "Project state / durable record hygiene",
+      "title": "Two verified feature_registry wording drifts contradict build_history and the shipped source",
+      "status": "done",
+      "priority": "P3",
+      "target": "A DOCS movement in an engineering session; wording only, no criterion state or feature status change",
+      "note": "see docs/history/backlog/project_state_wording_drift_reconciliation.md"
+    },
+    {
+      "id": "gov_po_3_ci_privacy_gate_baseline_scoping",
+      "category": "Governance / CI",
+      "title": "CI's 'Repository privacy gate' step fails unconditionally on every PR -- needs the same baseline-scoping fix already shipped for the local engineer hook",
+      "status": "done",
+      "priority": "P0",
+      "target": "Merged PR #135, feature/gov-po-3-ci-privacy-gate-baseline-scoping. Follow-up to relay/NXS-LOCAL-0014 (GOV_PO_3_PUSH_HOOK_BASELINE_SCOPING, merged PR #127).",
+      "note": "see docs/history/backlog/gov_po_3_ci_privacy_gate_baseline_scoping.md"
+    },
+    {
+      "id": "orchestrator_interactive_dashboard_app",
+      "category": "Orchestrator / Observability",
+      "title": "Interactive PO + Orchestrator workbench -- human-action inbox, live movement tracking, detail panel, message delivery, authorized command routing, integration visibility (supersedes the earlier read-only-dashboard framing)",
+      "status": "done",
+      "priority": "P0",
+      "target": "Follow-up to relay/NXS-LOCAL-0013 (GOV_PO_3_ORCHESTRATOR_OBSERVABILITY, merged PR #129, terminal-only 'orchestrator watch'); AMENDED 2026-09-08 per Product Owner-provided design review (external architecture pass, 'Astra') before dispatch; explicitly requested by the Product Owner as the next dispatch once queued",
+      "note": "see docs/history/backlog/orchestrator_interactive_dashboard_app.md"
+    },
+    {
+      "id": "orchestrator_background_task_exit_race",
+      "category": "Orchestrator / reliability",
+      "title": "An engineer's own claude -p background task can outlive its process's turn, leaving staged-but-uncommitted work when the session exits without waiting",
+      "status": "automated_validated",
+      "priority": "P0",
+      "target": "scripts/orchestrator.py::_spawn_engineer and/or the ENGINEER_PROMPT -- observed live during relay/NXS-LOCAL-0018 (PR #133 merge-conflict completion), 2026-09-08",
+      "note": "see docs/history/backlog/orchestrator_background_task_exit_race.md"
+    },
+    {
+      "id": "orchestrator_engineer_permission_profile_edit_write_denied",
+      "category": "Orchestrator / reliability",
+      "title": ".claude/nexus-engineer.settings.json never actually granted Edit/Write despite claiming default-allow -- every successful movement to date wrote files only via Bash",
+      "status": "done",
+      "priority": "P0",
+      "target": ".claude/nexus-engineer.settings.json -- fixed live 2026-09-08, uncommitted pending a standalone PR",
+      "note": "see docs/history/backlog/orchestrator_engineer_permission_profile_edit_write_denied.md"
+    },
+    {
+      "id": "orchestrator_local_relay_append_relative_file_path_footgun",
+      "category": "Orchestrator / reliability",
+      "title": "scripts/local_relay.py append accepts a relative --file path that silently shadows the correct canonical relay file with a new local copy inside the engineer's own worktree",
+      "status": "done",
+      "priority": "P1",
+      "target": "scripts/local_relay.py::_resolve_relay_file / append CLI -- observed live on NXS-LOCAL-0021 (orchestrator_interactive_dashboard_app), 2026-09-08",
+      "note": "see docs/history/backlog/orchestrator_local_relay_append_relative_file_path_footgun.md"
+    },
+    {
+      "id": "private_replay_agent_operated_test_environment",
+      "category": "Architecture / Testing / Security",
+      "title": "Private Replay -- agent-operated privacy-filtered test environment derived from real collection, for the coding agent to exercise the product UI/workflows without seeing real device data",
+      "status": "in_progress",
+      "priority": "P0",
+      "target": "docs/design/PRIVATE_REPLAY_ARCHITECTURE.md -- FROZEN -- PRODUCT OWNER APPROVED, 2026-09-08, Phase A only (offline exporter + PRIVATE_REPLAY + SYNTHETIC_SCENARIO). Phase B (LIVE_PRIVATE, agent-mediated real collection) stays explicitly deferred/unauthorized within that same document. Delivery slice 1 (dependency inventory + typed privacy/fidelity policy + isolated replay provider design) DELIVERED 2026-09-09 (relay/NXS-LOCAL-0027) -- see updated note. Next dispatchable unit: delivery slice 2 (Phase A exporter -- the offline typed exporter, package validator and relationship checks, extending utils/support_bundle.py's primitives, using synthetic inputs first).",
+      "note": "see docs/history/backlog/private_replay_agent_operated_test_environment.md"
+    },
+    {
+      "category": "UI 2.0 (Java product line)",
+      "id": "ui2_b0_c1_platform_schema_contract",
+      "title": "UI2 B0/C1 -- platform & schema contract (UI 2.0 schema ownership, Flyway sole migration authority, projection tables, audit from first mutation, per-component secrets, key custody)",
+      "priority": "P0 -- UI 2.0 primary",
+      "status": "in_progress",
+      "note": "see docs/history/backlog/ui2_b0_c1_platform_schema_contract.md",
+      "target": "workflow §5 B0-1; docs/design/UI2_0_BASELINE_CONTRACT.md (FROZEN 2026-09-09); plan: docs/design/UI2_0_DEVELOPMENT_WORKFLOW.md; produced docs/design/UI2_0_C1_PLATFORM_SCHEMA_CONTRACT.md (DRAFT -- FOR PRODUCT OWNER FREEZE). PR #163."
+    },
+    {
+      "category": "UI 2.0 (Java product line)",
+      "id": "ui2_b0_c2_job_execution_contract",
+      "title": "UI2 B0/C2 -- job execution contract (Java worker; leasing/heartbeat, timeout, worker loss, duplicate detection, OUTCOME_UNKNOWN, owner/approver/execution identity, schedule optimistic concurrency)",
+      "priority": "P0 -- UI 2.0 primary",
+      "status": "in_progress",
+      "note": "see docs/history/backlog/ui2_b0_c2_job_execution_contract.md",
+      "target": "workflow §5 B0-2; docs/design/UI2_0_BASELINE_CONTRACT.md (FROZEN 2026-09-09); plan: docs/design/UI2_0_DEVELOPMENT_WORKFLOW.md; output: docs/design/UI2_0_C2_JOB_EXECUTION_CONTRACT.md"
+    },
+    {
+      "category": "UI 2.0 (Java product line)",
+      "id": "ui2_b0_c3_identity_sessions_rbac_contract",
+      "title": "UI2 B0/C3 -- identity, sessions and RBAC contract (LDAP bind, single active session per identity, role tokens -> bindings -> AD group refs, E1-E7 on HTTP)",
+      "priority": "P0 -- UI 2.0 primary",
+      "status": "in_progress",
+      "note": "see docs/history/backlog/ui2_b0_c3_identity_sessions_rbac_contract.md",
+      "target": "workflow §5 B0-3; docs/design/UI2_0_BASELINE_CONTRACT.md (FROZEN 2026-09-09); plan: docs/design/UI2_0_DEVELOPMENT_WORKFLOW.md; output: docs/design/UI2_0_C3_IDENTITY_SESSIONS_RBAC_CONTRACT.md"
+    },
+    {
+      "category": "UI 2.0 (Java product line)",
+      "id": "ui2_b0_c4_capability_registry_gate_resolution_contract",
+      "title": "UI2 B0/C4 -- capability registry & command-gate resolution contract (runtime form of the capability spec; gate-registry resolution rule K-4; closed step kinds; VSX/ClusterXL rules CP-D6; transport decision CP-D7)",
+      "priority": "P0 -- UI 2.0 primary",
+      "status": "in_progress",
+      "note": "see docs/history/backlog/ui2_b0_c4_capability_registry_gate_resolution_contract.md",
+      "target": "workflow §5 B0-4; docs/design/UI2_0_BASELINE_CONTRACT.md (FROZEN 2026-09-09); plan: docs/design/UI2_0_DEVELOPMENT_WORKFLOW.md; produced docs/design/UI2_0_C4_CAPABILITY_REGISTRY_GATE_RESOLUTION_CONTRACT.md (DRAFT -- FOR PRODUCT OWNER FREEZE)."
+    },
+    {
+      "category": "UI 2.0 (Java product line)",
+      "id": "ui2_b0_c5_amendments_bundle",
+      "title": "UI2 B0/C5 -- amendments bundle (CON.0 separate shell; action_taxonomy UI-OPERATIONAL-RUN-NOW; design §6 APPROVAL-MODEL; ladder -> CAP-* states; AG-U2 restated)",
+      "priority": "P0 -- UI 2.0 primary",
+      "status": "in_progress",
+      "note": "see docs/history/backlog/ui2_b0_c5_amendments_bundle.md",
+      "target": "workflow §5 B0-5; baseline contract §5"
+    },
+    {
+      "category": "UI 2.0 (Java product line)",
+      "id": "ui2_b0_c6_capability_extraction_contract",
+      "title": "UI2 B0/C6 -- capability extraction contract (spec template with KNOWN/UNKNOWN/NOT_APPLICABLE field states, fixture set rules SYNTHETIC/DERIVED, tokenizer preserved-property list) + ordered extraction inventory",
+      "priority": "P0 -- UI 2.0 primary",
+      "status": "in_progress",
+      "note": "see docs/history/backlog/ui2_b0_c6_capability_extraction_contract.md",
+      "target": "workflow §3.1, §4, §5 B0-6; docs/design/UI2_0_BASELINE_CONTRACT.md (FROZEN 2026-09-09); plan: docs/design/UI2_0_DEVELOPMENT_WORKFLOW.md; produced docs/design/UI2_0_C6_CAPABILITY_EXTRACTION_CONTRACT.md (DRAFT -- FOR PRODUCT OWNER FREEZE)."
+    },
+    {
+      "category": "UI 2.0 (Java product line)",
+      "id": "ui2_b0_c7_backup_artefact_restore_engine_contract",
+      "title": "UI2 B0/C7 -- backup, artefact and restore engine contract (profile rules per design §6 as amended; store/manifest/validation/retention/key custody from RB contracts; restore execution: plan, preconditions, execute, verify, failure behaviour; per-operation approval; device/version matrix)",
+      "priority": "P0 -- UI 2.0 primary",
+      "status": "in_progress",
+      "note": "see docs/history/backlog/ui2_b0_c7_backup_artefact_restore_engine_contract.md",
+      "target": "workflow §5 B0-7; docs/design/UI2_0_BASELINE_CONTRACT.md (FROZEN 2026-09-09); plan: docs/design/UI2_0_DEVELOPMENT_WORKFLOW.md; produced docs/design/UI2_0_C7_BACKUP_ARTEFACT_RESTORE_ENGINE_CONTRACT.md (DRAFT -- FOR PRODUCT OWNER FREEZE). PR #170."
+    },
+    {
+      "category": "UI 2.0 (Java product line)",
+      "id": "ui2_b0_baseline_directory",
+      "title": "UI2 B0 -- baseline directory (product objects & navigation, shared screen states UX-D1..D5, feature contribution contract, alarm lifecycle contract, log/audit data classes, SNMP status exposure) with owner document and version per area",
+      "priority": "P0 -- UI 2.0 primary",
+      "status": "done",
+      "note": "see docs/history/backlog/ui2_b0_baseline_directory.md",
+      "target": "workflow §5 B0-8"
+    },
+    {
+      "category": "UI 2.0 (Java product line)",
+      "id": "ui2_b0_extraction_tooling",
+      "title": "UI2 B0 -- extraction tooling (Line-1): run the Private Replay tokenizer over an existing evidence/capture directory and emit a fixture set in the C6 layout; DLP-gated; preserved-property checks",
+      "priority": "P1 -- UI 2.0",
+      "status": "done",
+      "note": "see docs/history/backlog/ui2_b0_extraction_tooling.md",
+      "target": "workflow §5 B0-9; PR #171: https://github.com/ozandurmus/neXus/pull/171"
+    },
+    {
+      "category": "UI 2.0 (Java product line)",
+      "id": "ui2_b1_01_skeleton_ci_docker",
+      "title": "UI2 B1-1 -- Gradle multi-module skeleton under ui2/, CI job, Docker image, Testcontainers PostgreSQL, P-1 dependency-graph test",
+      "priority": "P1 -- UI 2.0",
+      "status": "in_progress",
+      "note": "see docs/history/backlog/ui2_b1_01_skeleton_ci_docker.md",
+      "target": "workflow §5 B1-1"
+    },
+    {
+      "category": "UI 2.0 (Java product line)",
+      "id": "ui2_b1_02_schema_v1_flyway",
+      "title": "UI2 B1-2 -- schema V1 via Flyway (C1 tables, audit table, projections for the first capability)",
+      "priority": "P1 -- UI 2.0",
+      "status": "automated_validated",
+      "note": "",
+      "target": "workflow §5 B1-2"
+    },
+    {
+      "category": "UI 2.0 (Java product line)",
+      "id": "ui2_b1_03_identity_sessions",
+      "title": "UI2 B1-3 -- identity & sessions (UnboundID LDAP bind, single-active-session table as tests, role bindings, E1-E7 on HTTP)",
+      "priority": "P1 -- UI 2.0",
+      "status": "in_progress",
+      "note": "see docs/history/backlog/ui2_b1_03_identity_sessions.md",
+      "target": "workflow §5 B1-3"
+    },
+    {
+      "category": "UI 2.0 (Java product line)",
+      "id": "ui2_b1_04_collection_engine_core",
+      "title": "UI2 B1-4 -- collection engine core (capability registry, step executor with C2 crash-safe job record, parser framework, evidence writer; SSH exec transport only; PAN XML API / SFTP as interfaces)",
+      "priority": "P1 -- UI 2.0",
+      "status": "in_progress",
+      "note": "see docs/history/backlog/ui2_b1_04_collection_engine_core.md",
+      "target": "workflow §5 B1-4"
+    },
+    {
+      "category": "UI 2.0 (Java product line)",
+      "id": "ui2_b1_04b_minimal_device_model_onboarding",
+      "title": "UI2 B1-4b -- minimal Device / Endpoint / CredentialReference model, authorised manual registration flow, test-target flag (no hard-coded CP object)",
+      "priority": "P1 -- UI 2.0",
+      "status": "in_progress",
+      "note": "",
+      "target": "workflow §5 B1-4b"
+    },
+    {
+      "category": "UI 2.0 (Java product line)",
+      "id": "ui2_b1_05_extract_cp_inventory_subset",
+      "title": "UI2 B1-5 -- extract: CP inventory narrow subset (show version, HA state) -> capability spec + sanitized fixtures; channel-drain recorded UNKNOWN with validation plan",
+      "priority": "P1 -- UI 2.0",
+      "status": "deferred",
+      "note": "see docs/history/backlog/ui2_b1_05_extract_cp_inventory_subset.md",
+      "target": "workflow §5 B1-5"
+    },
+    {
+      "category": "UI 2.0 (Java product line)",
+      "id": "ui2_b1_06_implement_cp_inventory_capability",
+      "title": "UI2 B1-6 -- implement CP inventory capability in Java against fixtures (CAP-OFFLINE)",
+      "priority": "P1 -- UI 2.0",
+      "status": "deferred",
+      "note": "",
+      "target": "workflow §5 B1-6"
+    },
+    {
+      "category": "UI 2.0 (Java product line)",
+      "id": "ui2_b1_07_jobs_screen_run_now_read",
+      "title": "UI2 B1-7 -- Jobs screen + Run Now (read class) + step log",
+      "priority": "P1 -- UI 2.0",
+      "status": "in_progress",
+      "note": "",
+      "target": "workflow §5 B1-7"
+    },
+    {
+      "category": "UI 2.0 (Java product line)",
+      "id": "ui2_b1_08_audit_logs_screen",
+      "title": "UI2 B1-8 -- audit & logs screen (every mutation since B1-2 visible)",
+      "priority": "P1 -- UI 2.0",
+      "status": "planned",
+      "note": "",
+      "target": "workflow §5 B1-8"
+    },
+    {
+      "category": "UI 2.0 (Java product line)",
+      "id": "ui2_b1_09_device_workspace_first_read_screen",
+      "title": "UI2 B1-9 -- device workspace: first read screen; RBAC visible-but-refused proven",
+      "priority": "P1 -- UI 2.0",
+      "status": "planned",
+      "note": "",
+      "target": "workflow §5 B1-9"
+    },
+    {
+      "category": "UI 2.0 (Java product line)",
+      "id": "ui2_b1_10_acceptance_scenario_concurrent_admins",
+      "title": "UI2 B1-10 -- acceptance scenario A: three admins on one device, single-session takeover/refuse, correct state throughout",
+      "priority": "P1 -- UI 2.0",
+      "status": "planned",
+      "note": "",
+      "target": "workflow §5 B1-10"
+    },
+    {
+      "category": "UI 2.0 (Java product line)",
+      "id": "ui2_b1_11_acceptance_scenario_worker_loss",
+      "title": "UI2 B1-11 -- acceptance scenario B: worker killed mid-step -> OUTCOME_UNKNOWN, no duplicate device contact, recovery path visible",
+      "priority": "P1 -- UI 2.0",
+      "status": "planned",
+      "note": "see docs/history/backlog/ui2_b1_11_acceptance_scenario_worker_loss.md",
+      "target": "workflow §5 B1-11"
+    },
+    {
+      "category": "UI 2.0 (Java product line)",
+      "id": "ui2_b1_12_deployment_slice",
+      "title": "UI2 B1-12 -- Kubernetes deployment slice: OCI image built in-cluster, plain manifests, empty database",
+      "priority": "P1 -- UI 2.0",
+      "status": "automated_validated",
+      "note": "",
+      "target": "UI2_0_B1_01C contract; deploy/ui2/ and ui2/Containerfile"
+    },
+    {
+      "category": "UI 2.0 (Java product line)",
+      "id": "ui2_b1_13_second_flow_pan_config_export_artefact",
+      "title": "UI2 B1-13 -- second representative flow: PAN configuration export (RB.2 semantics, read class) through the same executor; artefact store, manifest, job/session state; re-estimate the plan afterwards",
+      "priority": "P1 -- UI 2.0",
+      "status": "deferred",
+      "note": "see docs/history/backlog/ui2_b1_13_second_flow_pan_config_export_artefact.md",
+      "target": "workflow §5 B1-13"
+    },
+    {
+      "category": "UI 2.0 (Java product line)",
+      "id": "ui2_privacy_doc_amendment",
+      "title": "Amend PRIVACY_AND_DATA_HANDLING.md to name the UI 2.0 (PostgreSQL) database and its data classes",
+      "priority": "P2 -- UI 2.0",
+      "status": "done",
+      "note": "see docs/history/backlog/ui2_privacy_doc_amendment.md",
+      "target": "docs/design/UI2_0_C1_PLATFORM_SCHEMA_CONTRACT.md §10"
+    },
+    {
+      "category": "UI 2.0 (Java product line)",
+      "id": "ui2_taxonomy_device_write_class_and_step_kind",
+      "title": "Taxonomy-successor movement: a utils/action_taxonomy.py class for a restore/config-apply write, and a C4 device-directed write step kind (sftp_put or equivalent) to carry it",
+      "priority": "P0 -- UI 2.0 primary, HIGH SCRUTINY",
+      "status": "planned",
+      "note": "see docs/history/backlog/ui2_taxonomy_device_write_class_and_step_kind.md",
+      "target": "docs/design/UI2_0_C7_BACKUP_ARTEFACT_RESTORE_ENGINE_CONTRACT.md §9.1-§9.3; docs/design/UI2_0_C4_CAPABILITY_REGISTRY_GATE_RESOLUTION_CONTRACT.md §2.3, §3.3 step 7; utils/action_taxonomy.py"
+    },
+    {
+      "id": "project_queue_cannot_write_roadmap_now_next",
+      "category": "governance",
+      "title": "scripts/project_queue.py has no write path for roadmap now_next.now / current_build, so 'build add' cannot be used without violating GOV.ORCH.5/8",
+      "status": "done",
+      "priority": "P2",
+      "target": "A successor to scripts/project_queue.py gains a command that moves roadmap now_next.now/next and current_build in the same transaction as 'build add'",
+      "note": ""
+    },
+    {
+      "id": "pan_active_active_not_excluded_as_failover_unit",
+      "category": "safety",
+      "title": "PAN active/active is not excluded as a failover unit (CP load-sharing is)",
+      "status": "planned",
+      "priority": "P1",
+      "target": "docs/design/PAN_ACTIVE_ACTIVE_FAILOVER_UNIT_GAP_2026_09_12.md; blocked on open decision op_aa_vsls_scope",
+      "note": ""
+    },
+    {
+      "id": "project_plan_baseline_fixture_partial_regeneration",
+      "category": "Project state / durable record hygiene",
+      "title": "Regression: project_plan_payload_baseline.json current_build not regenerated with roadmap.json, test_project_plan_render_equivalence fails",
+      "status": "done",
+      "priority": "P1",
+      "target": "",
+      "note": ""
+    },
+    {
+      "id": "dlp_prose_collision_catalogue_stale",
+      "category": "Governance / CI",
+      "title": "Pre-existing: DEV.0.5B prose-collision catalogue is stale, 6 tracked files trip test_repository_text_has_no_known_dlp_assignment_collision / legacy_redaction_collision",
+      "status": "planned",
+      "priority": "P2",
+      "target": "",
+      "note": ""
+    },
+    {
+      "id": "project_plan_crypto_placeholder_sentinel_lost",
+      "category": "Test correctness / CI coverage gap",
+      "title": "Pre-existing: projectPlanData no longer carries __CRYPTO_JSON_PLACEHOLDER__ verbatim, test_project_plan_keeps_the_sentinel_token_as_data fails",
+      "status": "planned",
+      "priority": "P2",
+      "target": "",
+      "note": ""
+    },
+    {
+      "id": "project_plan_build_history_archive_split_lookup",
+      "category": "Project state / durable record hygiene",
+      "title": "Pre-existing: build_history archive split removed build 0.6.1B.1.1 from the live payload, test_project_plan_payload_is_data_driven_and_percentages_are_bounded fails",
+      "status": "planned",
+      "priority": "P2",
+      "target": "",
+      "note": ""
+    },
+    {
+      "id": "privacy_baseline_tests_not_idempotent_runtime_trust_material",
+      "category": "Reliability / Test Infrastructure",
+      "title": "Pre-existing: full suite is not idempotent -- a first run creates gitignored data/.support_hmac.key, then AC6/AC1 privacy-baseline tests fail on the second run",
+      "status": "planned",
+      "priority": "P2",
+      "target": "",
+      "note": ""
+    },
+    {
+      "id": "ldap_tls_trust_store_pin_and_format",
+      "category": "security",
+      "title": "LDAP TLS trust store cannot be given a PIN or format; a protected PKCS12 loads empty",
+      "status": "planned",
+      "priority": "P1",
+      "target": "docs/design/LDAP_TLS_TRUST_STORE_PIN_GAP_2026_09_12.md",
+      "note": ""
+    },
+    {
+      "id": "auth_local_mechanism_contract",
+      "category": "security",
+      "title": "Local authentication: storage, lockout, role binding for a directory-less identity, bootstrap admin",
+      "status": "planned",
+      "priority": "P1",
+      "target": "C3 Correction C-2; successor contract before any local login path",
+      "note": ""
+    },
+    {
+      "id": "auth_radius_mechanism",
+      "category": "security",
+      "title": "RADIUS authentication mechanism",
+      "status": "planned",
+      "priority": "P2",
+      "target": "after Phase 1 LDAP+local",
+      "note": ""
+    },
+    {
+      "id": "auth_tacacs_mechanism",
+      "category": "security",
+      "title": "TACACS authentication mechanism",
+      "status": "planned",
+      "priority": "P2",
+      "target": "after Phase 1 LDAP+local",
+      "note": ""
+    },
+    {
+      "id": "ui2_composition_root_bootable_shell",
+      "category": "platform",
+      "title": "Bootable service: Spring entry point, DataSource, Flyway at startup, empty UI shell with menus",
+      "status": "planned",
+      "priority": "P1",
+      "target": "Phase 1 step 1; no device contact",
+      "note": ""
+    },
+    {
+      "id": "ui2_frontend_screens_shell",
+      "category": "ui",
+      "title": "Frontend screens: login, menu, device list, device add; frontend is 2 stub files today",
+      "status": "planned",
+      "priority": "P1",
+      "target": "Phase 1 step 2-3",
+      "note": ""
+    },
+    {
+      "id": "cp_failover_command_gate_batch",
+      "category": "evidence",
+      "title": "Command gate: cphaprob stat, cphaprob -a if, cphaprob tablestat for failover checks",
+      "status": "planned",
+      "priority": "P1",
+      "target": "PO request 2026-09-12; network-device command gate required",
+      "note": ""
+    },
+    {
+      "id": "failover_peer_reciprocal_agreement_check",
+      "category": "safety",
+      "title": "Eighth stop-condition: both members must agree reciprocally on local/peer roles in one pass",
+      "status": "planned",
+      "priority": "P1",
+      "target": "PO rule 2026-09-12; _pan_reciprocal_correspondence exists but is not a stop-condition",
+      "note": ""
+    },
+    {
+      "id": "failover_vsx_vsls_mentality_contract",
+      "category": "evidence",
+      "title": "VSX/VSLS semantics: CP per-VS state independent of chassis, VSLS off, static assignment; PAN vsys chassis-bound",
+      "status": "planned",
+      "priority": "P1",
+      "target": "PO statement 2026-09-12; needs vendor-semantic contract",
+      "note": ""
+    },
+    {
+      "id": "failover_recheck_on_request",
+      "category": "safety",
+      "title": "A failover request must re-run every readiness check at that moment; an earlier green never authorizes",
+      "status": "planned",
+      "priority": "P1",
+      "target": "PO rule 2026-09-12; OP.2 contract",
+      "note": ""
+    },
+    {
+      "id": "device_session_one_per_device",
+      "category": "evidence",
+      "title": "One SSH session per device reused for every command; probe opens a channel per command",
+      "status": "planned",
+      "priority": "P1",
+      "target": "PO rule 2026-09-12; command gate says session, code preserves connection",
+      "note": ""
+    },
+    {
+      "id": "discovery_import_selection_flow",
+      "category": "feature",
+      "title": "Discovery: Panorama/MDS enumeration then operator multi-select import of found devices",
+      "status": "planned",
+      "priority": "P2",
+      "target": "behind the standing collection gate",
+      "note": ""
+    },
+    {
+      "id": "device_manual_add_transport_choice",
+      "category": "feature",
+      "title": "Manual device add: IP + vendor + transport method (SSH/API/SNMP) selection",
+      "status": "planned",
+      "priority": "P2",
+      "target": "Phase 1 step 3; transport use is gated",
+      "note": ""
+    },
+    {
+      "id": "failover_readiness_check_contract",
+      "category": "failover",
+      "title": "Failover readiness contract carrying the PO's four semantics",
+      "status": "planned",
+      "priority": "P1",
+      "target": "PO_DECISION_RECORD 3",
+      "note": ""
+    },
+    {
+      "id": "cp_cphaprob_command_gate",
+      "category": "failover",
+      "title": "Command gate: cphaprob stat, -a if, tablestat",
+      "status": "planned",
+      "priority": "P1",
+      "target": "AI_DEVELOPMENT_PROTOCOL",
+      "note": ""
+    },
+    {
+      "id": "ui2_device_add_discovery_and_manual",
+      "category": "ui2",
+      "title": "Device add: discovery and manual, operator multi-select import",
+      "status": "planned",
+      "priority": "P1",
+      "target": "PO_DECISION_RECORD 4",
+      "note": ""
+    },
+    {
+      "id": "ui2_local_auth_successor_contract",
+      "category": "identity",
+      "title": "Local-authentication successor contract",
+      "status": "planned",
+      "priority": "P1",
+      "target": "UI2_0_C3 C-2",
+      "note": ""
+    },
+    {
+      "id": "ui2_m3_design_transfer_pass",
+      "category": "ui2",
+      "title": "Reconcile each menu against the M3 canvas frames",
+      "status": "in_progress",
+      "priority": "P2",
+      "target": "ui2/frontend preview",
+      "note": ""
+    },
+    {
+      "id": "agent_frozen_contract_audit",
+      "category": "governance",
+      "title": "Audit contracts the agent froze on its own hand",
+      "status": "automated_validated",
+      "priority": "P1",
+      "target": "PO_DECISION_RECORD 6",
+      "note": ""
+    },
+    {
+      "id": "po_o_role_dispatch_boundary",
+      "category": "governance",
+      "title": "Restore the PO+O dispatch loop, or decide direct authoring",
+      "status": "planned",
+      "priority": "P1",
+      "target": "PO_DECISION_RECORD 6.4",
+      "note": ""
+    },
+    {
+      "id": "cp_discovery_java_implementation",
+      "category": "ui2",
+      "title": "CP discovery in Java: management-plane candidate enumeration under the frozen discovery contract",
+      "status": "planned",
+      "priority": "P0",
+      "target": "CP_AND_VSX_DISCOVERY_CONTRACT.md; gate lifted 2026-09-13 for discovery only",
+      "note": ""
+    }
+  ]
+}
