@@ -53,10 +53,23 @@ COPY --from=build /build/service-boot.jar /app/service.jar
 
 # FS-1: read paths are group-0 readable and traversable.
 # FS-2: the two writable paths are group-0 owned and carry g=u.
+# FS-3: the writable set is *closed*. The base family ships a number of
+# group-writable directories of its own (/opt/jboss/**, /deployments/data,
+# /home/default, /var/spool/mail) and the usual world-writable /tmp and
+# /var/tmp. None of them is declared here, so the write bit is taken off
+# every path outside the declared set and then restored on exactly the two
+# that are declared. The run script those jboss paths belong to is not this
+# image's entry point (EP-3).
 RUN chown -R 0:0 /app \
  && chmod 0750 /app \
  && chmod 0640 /app/service.jar \
+ && find / -xdev ! -type l -perm -0002 -exec chmod o-w {} + \
+ && find / -xdev ! -type l -perm -0020 -exec chmod g-w {} + \
  && chmod 0770 /app/tmp /app/home
+
+# The working directory is a read path, not a writable one: a process whose
+# current directory is writable can create a file nobody declared.
+WORKDIR /app
 
 # FS-5: HOME is explicit and satisfies FS-2, and no code path may depend on
 # a passwd entry for the running id — user.home is set on the command line
