@@ -2,7 +2,23 @@
 
 ## Status
 
-**DRAFT — design resolved, NOT frozen, NOT implementation authority.**
+**SUPERSEDED — 2026-09-12, by `docs/design/UI2_0_ARCHITECTURE_CONTRACT.md`
+(FROZEN — 2026-09-12). Historical only; never implementation authority.**
+This document never reached `FROZEN`, yet it stood at item 4 of the declared
+authority chain of four FROZEN contracts (`C1` §1, `C2` §1.3, `C3` §1.4,
+`C4` §1.3) and was relied on in body by `C1` §9/§10 and `C3` §6 — which
+`AGENTS.md` "Authority hierarchy" item 2 forbids. The Product Owner ruled on
+2026-09-12 that the defect closes by successor, not by freezing this text.
+The successor carries every clause a FROZEN contract relies on, sorted into
+settled-and-built, settled-but-unimplemented, and open; it also records
+(its §11) the five claims below that a frozen contract or the repository has
+since disproved. The body below is retained unedited as the historical
+record and must not be cited as authority, including where its own wording
+still asserts otherwise.
+
+Original status line, retained for the record: *"DRAFT — design resolved,
+NOT frozen, NOT implementation authority."*
+
 Successor to `docs/design/UI2_0_ARCHITECTURE_REQUIREMENTS.md` (the
 requirements-and-tradeoffs draft, PR #140), produced 2026-09-09 by movement
 `UI2_0_ARCHITECTURE_DESIGN_FABLE_HIGH` (relay/NXS-LOCAL-0047). Unlike the
