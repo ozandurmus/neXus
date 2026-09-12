@@ -100,11 +100,22 @@
       "supersedes": "B1-7 contract section 13 items 2, 3 and 4",
       "text": "Item 2, live update transport: server-sent events. One way, survives ordinary proxies, adds no dependency and no second protocol. A dropped connection reconnects and re-reads the step log from the server; the screen never fills the gap with invented progress.\n\nItem 3, the Run Now target picker: this movement ships a minimal device picker fed by the device list the B1-4b registration model already exposes. The device workspace of B1 row 9 becomes the richer entry point later and does not block this screen.\n\nItem 4, Run Now placement: a per-device action in the device overflow menu, matching the collect action the Navigation and components mockup already draws, rather than a second primary action competing with Schedule collection. One primary action per screen is the mockup's own rule.\n\nItem 1, the Partial outcome, is a product decision and stays with you. next_actor remains po for that reason.",
       "timestamp": "2026-09-11T23:18:25Z"
+    },
+    {
+      "actor": "po",
+      "authorized_by": "Product Owner — chat authorization 2026-09-12: approve/revise/reject UI 2.0 B1 contracts and decide their open items",
+      "marker": "RELAY_DECISION",
+      "scope": "UI 2.0 B1-7 open item 1, the Partial job outcome",
+      "seq": 4,
+      "subject": "No sixth job outcome; Partial is a readiness posture, not a run verdict",
+      "supersedes": "the RELAY_QUESTION at seq 2 and the recommendation it carried",
+      "text": "Decided in docs/design/UI2_0_BACKUP_OUTCOME_DECISION_2026_09_12.md, against official vendor documentation and the repository's own frozen semantics. This reverses the recommendation carried in the question at seq 2, which argued for adding a sixth outcome. The evidence does not support it.\n\nNeither Check Point nor Palo Alto documents a partial outcome for a single backup. Check Point's vocabulary is binary, and where a backup cannot proceed the documented shape is a precondition that stops it from starting, not a partial result. Palo Alto's API carries success and error codes only; there is no partial status.\n\nBoth vendors report per managed object. Panorama stores backups for each firewall keyed by serial number and reports fan-out results per device with counts. Check Point's multi-domain unit is the Domain. So a sixteen-device run has sixteen vendor results, and an aggregate label is a presentation roll-up, not a new state.\n\nThe repository already agrees. A BackupRun is literally one job row for one device, so a fleet run is many jobs and mixture is already expressible as counts. PARTIAL meanwhile already exists as a per-device readiness posture meaning some artefact classes present and required ones missing. The mockup's chip is that posture shown in the wrong column.\n\nConsequences. The jobs table renders only the frozen outcome set, one row per job, therefore one device per row. A fan-out parent row shows counts such as fourteen succeeded and two failed, never a blended label. A job in OUTCOME_UNKNOWN is surfaced separately and never folded into either count. The half-success the collector really observes, an archive stored but its on-device deletion unconfirmed, stays a failure that marks the endpoint ineligible. A Palo Alto export by a non-superuser obscures sensitive fields and produces a complete file with reduced content; that lowers the artefact's validation level and does not change the run verdict.\n\nThe decision document carries a per-vendor decision table of observable signals mapped to outcomes, with every undocumented signal marked UNKNOWN rather than guessed, and states what new vendor documentation would extend it.",
+      "timestamp": "2026-09-12T05:11:01Z"
     }
   ],
   "id": "NXS-LOCAL-0107",
   "movement": "UI2_B1_07_JOBS_SCREEN",
-  "next_actor": "po",
+  "next_actor": "engineer",
   "refs": [
     "docs/design/UI2_0_B1_07_JOBS_SCREEN_CONTRACT.md",
     "docs/design/UI2_0_C2_JOB_EXECUTION_CONTRACT.md",
@@ -113,6 +124,6 @@
     "docs/design/UI2_0_B1_ADJUDICATION_2026_09_12.md"
   ],
   "schema_version": 1,
-  "status": "AWAITING_PO",
-  "updated_at": "2026-09-11T23:18:25Z"
+  "status": "AWAITING_ENGINEER",
+  "updated_at": "2026-09-12T05:11:01Z"
 }
