@@ -2,11 +2,29 @@
 
 ## Status
 
-**DRAFT — FOR PRODUCT OWNER FREEZE, 2026-09-10; six pre-freeze defect
-fixes applied as Amendment B1-1-A and the Red Hat container-runtime
-change as Amendment B1-1-B, both 2026-09-11 (see the amendment sections at
-the end of this document; Correction C-1 supersedes B1-1-A item 5; Correction C-2 resolves a
-check-1 collision).**
+**SUPERSEDED — 2026-09-12**, by
+`docs/design/UI2_0_B1_01A_PLATFORM_SKELETON_CONTRACT.md` (FROZEN 2026-09-12).
+
+This document was never frozen. It is **historical only** and is **never
+implementation authority** — not for a module map, a dependency rule, a build
+or reproducibility policy, a test harness, a container image, or a CI
+workflow. Any engineering claim that needs one of those must cite the
+successor instead: module map → B1-1a §2; dependency direction → B1-1a §3;
+build and reproducibility → B1-1a §4; test harness → B1-1a §5. Material the
+successor deliberately did **not** carry forward — §7's container image,
+§6's CI workflow, and §4's single `AuditContextIntegrationTest` name — is
+withdrawn and has no successor clause; see B1-1a §§5, 6 and 10.
+
+Its original status line read: *DRAFT — FOR PRODUCT OWNER FREEZE, 2026-09-10;
+six pre-freeze defect fixes applied as Amendment B1-1-A and the Red Hat
+container-runtime change as Amendment B1-1-B, both 2026-09-11 (Correction C-1
+supersedes B1-1-A item 5; Correction C-2 resolves a check-1 collision).*
+
+Everything below this block — body, amendments and corrections — is retained
+unchanged as the historical record, per `AGENTS.md` ("Do not silently rewrite
+historical outcomes"), except that a leaked absolute developer path was
+redacted in acceptance check 14 and in Amendment B1-1-A item 1.
+B1-1a §10 records the four predecessor claims the implementation disproved.
 
 This document specifies the mechanical implementation contract for
 `ui2_b1_01_skeleton_ci_docker`. It creates no `ui2/` files, authorizes no
@@ -250,7 +268,7 @@ All checks are runnable from the repository root:
     persisting those values into the container writable layer or logs.
 13. `.github/workflows/validation.yml` is byte-identical to its pre-movement
     version and both workflow job names are distinct.
-14. `/Users/OzanDur/Codo/neXus/.venv/bin/python main.py
+14. `<redacted-local-root>/neXus/.venv/bin/python main.py
     --repository-privacy-check --privacy-baseline-ref origin/main` reports
     zero new findings.
 15. `git diff --check origin/main...HEAD` is clean.
@@ -293,7 +311,7 @@ DRAFT before dispatch. They are resolved here so the document can be frozen
 as a whole; no other text changes.
 
 1. **§8 check 14 — machine-specific path.** Replace the literal
-   `/Users/OzanDur/Codo/neXus/.venv/bin/python main.py …` with the
+   `<redacted-local-root>/neXus/.venv/bin/python main.py …` with the
    repository-relative form:
    `python main.py --repository-privacy-check --privacy-baseline-ref origin/main`
    (or the checkout's own interpreter). §3.2's "No command invokes Python"

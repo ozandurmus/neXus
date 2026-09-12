@@ -40,7 +40,7 @@ PAN/SFTP adapter implementations (later slices).
 
 ## 2. Module placement
 
-Per `UI2_0_B1_01_SKELETON_CI_DOCKER_CONTRACT.md` §2 (module map) and its
+Per `UI2_0_B1_01A_PLATFORM_SKELETON_CONTRACT.md` §2 (module map) and §3's
 `DIR-3`/`DIR-6` rules:
 
 | Component | Module/package | Rule kept |
@@ -366,7 +366,8 @@ normal`, implementing against this document's frozen port, not designing it.
    (`connect` is gate-`NOT_APPLICABLE`); a default is the PO's to set or
    delegate to `B1-4b`'s device-registration defaults.
 5. **Where the `Ui2ArchitectureTest` extension is documented** — a formal
-   `B1-1`-successor amendment, or simply extended in place — is left open;
+   amendment to `B1-1a` (the frozen `B1-1` successor), or simply extended in
+   place — is left open;
    the assertions (AC-1–AC-3) are fixed regardless.
 
 ## 12. Cross-references

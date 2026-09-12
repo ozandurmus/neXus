@@ -27,9 +27,9 @@ sketched by this contract; C4 "define[s] its own DDL"); `C3`'s
 `role_bindings`/`sessions`/`actor_authz_state`/`authz_decisions` (owned by
 `B1-3`); `C7`'s artefact/manifest tables. Role **creation** (`CREATE ROLE
 ui2_migrate`, `CREATE ROLE ui2_app`) is out of scope here too — per
-`UI2_0_B1_01_SKELETON_CI_DOCKER_CONTRACT.md` Amendment B1-1-A item 4, both
-roles are created by the integration harness's own bootstrap step, executed
-before Flyway runs; `V1` only grants/revokes privileges against roles that
+`UI2_0_B1_01A_PLATFORM_SKELETON_CONTRACT.md` §5 item 3, both roles are
+ensured by the integration harness's own database fixture, before Flyway
+runs; `V1` only grants/revokes privileges against roles that
 already exist.
 
 **Interpretation this document adopts, flagged in §11:** C1 §3.1's ownership
@@ -46,9 +46,9 @@ since `is_test_target`/`registration_source` are already in the sketch.
 
 ## 3. Migration file layout and naming
 
-Exact path, per `UI2_0_B1_01_SKELETON_CI_DOCKER_CONTRACT.md` Amendment
-B1-1-A item 3 (`persistence` owns the Flyway integration code; `service`
-owns the migration resources) and C1 §2.2:
+Exact path, per `UI2_0_B1_01A_PLATFORM_SKELETON_CONTRACT.md` §2, closing
+paragraph (`persistence` owns the Flyway integration code —
+`FlywayMigrationRunner`; `service` owns the migration resources) and C1 §2.2:
 
 ```
 ui2/service/src/main/resources/db/migration/V1__initial_schema.sql
@@ -152,7 +152,10 @@ defined actor context distinct from the mutation it is already recording).
 ## 7. Test specification
 
 Each of the following is a JUnit test in the `integration-tests` module
-(module map, B1-1 §2), Testcontainers-backed, PostgreSQL 16:
+(module map, `UI2_0_B1_01A_PLATFORM_SKELETON_CONTRACT.md` §2), carried by a
+real PostgreSQL **16** server resolved through the single fixture of that
+contract's §5 (external `UI2_TEST_JDBC_URL` server first, else a
+Testcontainers container; never a skip):
 
 1. **`FlywayPrecedesAppAccessTest`** — the harness opens the `ui2_migrate`
    connection, runs Flyway, and only then opens a `ui2_app` connection;
@@ -169,9 +172,14 @@ Each of the following is a JUnit test in the `integration-tests` module
    (`insufficient_privilege`); opening the connection first means a
    connection failure (wrong credential, unreachable host) cannot be
    mistaken for the DDL denial this test exists to prove.
-4. **`AuditContextMissingFailsClosedTest`** — per
-   `UI2_0_B1_01_SKELETON_CI_DOCKER_CONTRACT.md` §4's
-   `AuditContextIntegrationTest` spec: a raw `ui2_app` mutation without
+4. **`AuditContextMissingFailsClosedTest`** — behaviour derived from the
+   superseded `UI2_0_B1_01_SKELETON_CI_DOCKER_CONTRACT.md` §4
+   `AuditContextIntegrationTest` spec. **That single-test name is withdrawn
+   predecessor material**: `UI2_0_B1_01A_PLATFORM_SKELETON_CONTRACT.md` §5
+   (final paragraph) and §10 item 2 withdraw it and rule that this §7 owns
+   the audit test set. No successor clause replaces it; the citation is kept
+   only to record provenance and is not authority. Specification: a raw
+   `ui2_app` mutation without
    `SET LOCAL app.actor_fingerprint`/`app.action_id` fails with
    `audit_context_missing`, and a follow-up `SELECT` proves no row was
    written to the target table.

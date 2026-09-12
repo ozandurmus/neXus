@@ -60,7 +60,7 @@ credential_references` (one credential reference per registration;
 reassignment is `role:onboarding_admin`'s later "credential-profile
 *reference* assignment," `C3` §4.1, not created here). `job-engine`
 consumes both only through `B1-4`'s `ConnectionTarget`, never a foreign key
-of its own (`B1-1` `DIR-3`).
+of its own (`B1-1a` §3 `DIR-3`).
 
 ### 2.1 Under either answer to the B1-2 open item
 
@@ -258,8 +258,9 @@ git diff --check
 ```
 
 Implementation-phase (not this document's own scope): the JUnit suite
-exercising §8's nine tests against a Testcontainers PostgreSQL instance
-(`integration-tests`, `UI2_0_B1_01_SKELETON_CI_DOCKER_CONTRACT.md` §2),
+exercising §8's nine tests against a real PostgreSQL 16 server supplied by
+the single fixture of `UI2_0_B1_01A_PLATFORM_SKELETON_CONTRACT.md` §5
+(`integration-tests` module, same contract §2),
 plus `architecture-tests`' ArchUnit checks confirming `DIR-3`/`DIR-6` are
 not violated by any new dependency this movement introduces.
 

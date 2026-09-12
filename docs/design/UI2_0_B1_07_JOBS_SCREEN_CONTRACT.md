@@ -364,6 +364,7 @@ cross-subsystem decision the Product Owner has not already made.
 `UI2_0_C4_CAPABILITY_REGISTRY_GATE_RESOLUTION_CONTRACT.md` (FROZEN) §3.5;
 `UI2_0_B1_04_COLLECTION_ENGINE_CORE_CONTRACT.md` (FROZEN);
 `UI2_0_B1_ADJUDICATION_2026_09_12.md` (DECIDED) F4, F6;
-`UI2_0_B1_01_SKELETON_CI_DOCKER_CONTRACT.md` §2 (module map), §3.2;
+`UI2_0_B1_01A_PLATFORM_SKELETON_CONTRACT.md` (FROZEN) §2 (module map), §4
+(build commands);
 `AGENTS.md` — network action taxonomy, identity law;
 `utils/action_taxonomy.py`.

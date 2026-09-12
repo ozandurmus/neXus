@@ -41,8 +41,11 @@ test-enforced boundaries.
 
 ## Active build
 
-See checkpoint above for `ui2_b1_01_skeleton_ci_docker`, the current
-build. Full detail: `project/build_history.json`.
+`ui2_b1_01_skeleton_ci_docker` — `in_progress`.
+`docs/design/UI2_0_B1_01A_PLATFORM_SKELETON_CONTRACT.md` (FROZEN 2026-09-12)
+supersedes the never-frozen `UI2_0_B1_01_SKELETON_CI_DOCKER_CONTRACT.md`; its
+§6 blocks this row, §9 blocks `REAL_ENV_VALIDATED` for all B1. Rows:
+`project/QUEUE.md`.
 
 Predecessors, all **MERGED**: `project/build_history.json` / `docs/history/INDEX.md`.
 

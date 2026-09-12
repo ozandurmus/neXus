@@ -129,7 +129,7 @@
         "validation": {
           "affected": "panorama/pan_identity.py, panorama/panorama_runtime_runner.py, configuration/panorama_config_collector.py, plus their direct test coverage",
           "diff_check": "clean",
-          "full_regression": "python -m pytest -q -n auto --dist worksteal (shared .venv interpreter /Users/OzanDur/Codo/neXus/.venv/bin/python, awaited in foreground): 3130 passed, 27 skipped, 2 failed -- the 2 failures are the standing accepted DLP-collision exception (project/build_history.json + relay/NXS-LOCAL-0003) named in this movement's own merge_gate; run twice (pre-rebase and post-rebase onto origin/main) with identical results",
+          "full_regression": "python -m pytest -q -n auto --dist worksteal (shared .venv interpreter <redacted-local-root>/neXus/.venv/bin/python, awaited in foreground): 3130 passed, 27 skipped, 2 failed -- the 2 failures are the standing accepted DLP-collision exception (project/build_history.json + relay/NXS-LOCAL-0003) named in this movement's own merge_gate; run twice (pre-rebase and post-rebase onto origin/main) with identical results",
           "privacy": "repository privacy gate initially flagged 3 new findings (data/, logs/, data/.support_hmac.key) -- untracked, gitignored local runtime artifacts created by running the test suite locally, per the documented precedent (docs/history/phase/OP_0B_S9_UI_AUTHORITY_RECONCILIATION.md and others); removed before push, then gate PASS/0 new findings vs origin/main baseline",
           "real_environment": "n/a -- local validation only per movement's deployment_direction; out of scope per movement scope.out",
           "state_consistency": "git diff --check: clean; project/backlog.json re-validated as JSON after edit",

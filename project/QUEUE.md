@@ -1,5 +1,5 @@
 # Project queue (generated — do not edit; run: py scripts/project_queue.py render)
-Build: ui2_b1_01_skeleton_ci_docker · Track: PCP.x · Generated: 2026-09-11T20:30:24Z
+Build: ui2_b1_01_skeleton_ci_docker · Track: PCP.x · Generated: 2026-09-12T06:46:17Z
 
 ## Now
 - ui2_b1_01_skeleton_ci_docker — UI2 B1-1 -- skeleton, CI and Docker contract (DRAFT, for Product Owner freeze) (in_progress)
@@ -35,15 +35,14 @@ Build: ui2_b1_01_skeleton_ci_docker · Track: PCP.x · Generated: 2026-09-11T20:
 - P1/in_progress operator_console — CON.x - Operator Console: authenticated local control plane over the existing engine (target: CON.0 (architecture, frozen 2026-08-31) -> CON.1 (DONE, 2026-09-01) -> CON.2 (AU)
 - P1/in_progress pcp_collector_target_selection_seams — Collector target-selection seams for registry-keyed typed jobs (CP inventory is plane-wide today) (target: PCP.6)
 - P1/in_progress ui2_b1_01_skeleton_ci_docker — UI2 B1-1 -- Gradle multi-module skeleton under ui2/, CI job, Docker image, Testcontainers PostgreSQL (target: workflow §5 B1-1)
+- P1/in_progress ui2_b1_03_identity_sessions — UI2 B1-3 -- identity & sessions (UnboundID LDAP bind, single-active-session table as tests, role bin (target: workflow §5 B1-3)
+- P1/in_progress ui2_b1_04_collection_engine_core — UI2 B1-4 -- collection engine core (capability registry, step executor with C2 crash-safe job record (target: workflow §5 B1-4)
+- P1/in_progress ui2_b1_04b_minimal_device_model_onboarding — UI2 B1-4b -- minimal Device / Endpoint / CredentialReference model, authorised manual registration f (target: workflow §5 B1-4b)
+- P1/in_progress ui2_b1_05_extract_cp_inventory_subset — UI2 B1-5 -- extract: CP inventory narrow subset (show version, HA state) -> capability spec + saniti (target: workflow §5 B1-5)
+- P1/in_progress ui2_b1_07_jobs_screen_run_now_read — UI2 B1-7 -- Jobs screen + Run Now (read class) + step log (target: workflow §5 B1-7)
 - P1/planned cp_ssh_trust_r2_prod_server — CP SSH strict host-key R2 validation on production server (target: DEPLOY.1)
 - P1/planned pcp_storage_engine_decision — Storage-engine decision for the Device Registry and typed job plane (criteria recorded, engine defer (target: PCP.5 contract freeze / DEV.4.6)
-- P1/planned ui2_b1_02_schema_v1_flyway — UI2 B1-2 -- schema V1 via Flyway (C1 tables, audit table, projections for the first capability) (target: workflow §5 B1-2)
-- P1/planned ui2_b1_03_identity_sessions — UI2 B1-3 -- identity & sessions (UnboundID LDAP bind, single-active-session table as tests, role bin (target: workflow §5 B1-3)
-- P1/planned ui2_b1_04_collection_engine_core — UI2 B1-4 -- collection engine core (capability registry, step executor with C2 crash-safe job record (target: workflow §5 B1-4)
-- P1/planned ui2_b1_04b_minimal_device_model_onboarding — UI2 B1-4b -- minimal Device / Endpoint / CredentialReference model, authorised manual registration f (target: workflow §5 B1-4b)
-- P1/planned ui2_b1_05_extract_cp_inventory_subset — UI2 B1-5 -- extract: CP inventory narrow subset (show version, HA state) -> capability spec + saniti (target: workflow §5 B1-5)
 - P1/planned ui2_b1_06_implement_cp_inventory_capability — UI2 B1-6 -- implement CP inventory capability in Java against fixtures (CAP-OFFLINE) (target: workflow §5 B1-6)
-- P1/planned ui2_b1_07_jobs_screen_run_now_read — UI2 B1-7 -- Jobs screen + Run Now (read class) + step log (target: workflow §5 B1-7)
 - P1/planned ui2_b1_08_audit_logs_screen — UI2 B1-8 -- audit & logs screen (every mutation since B1-2 visible) (target: workflow §5 B1-8)
 - P1/planned ui2_b1_09_device_workspace_first_read_screen — UI2 B1-9 -- device workspace: first read screen; RBAC visible-but-refused proven (target: workflow §5 B1-9)
 - P1/planned ui2_b1_10_acceptance_scenario_concurrent_admins — UI2 B1-10 -- acceptance scenario A: three admins on one device, single-session takeover/refuse, corr (target: workflow §5 B1-10)
@@ -56,6 +55,7 @@ Build: ui2_b1_01_skeleton_ci_docker · Track: PCP.x · Generated: 2026-09-11T20:
 - P2/planned pan_ha_serial_identity_hardening — PAN HA pair operational identity should consider serial, not just hostname (target: Pre-CLASS-2 (OP.0b/OP.2) architecture decision)
 - P2/planned passive_ti_enrichment — Passive TI Enrichment for Confirmed Changes (target: 0.8.x)
 - P2/planned policy_rule_hygiene_and_path_placement_brief — Policy rule hygiene and path-based placement (original feature brief, umbrella) (target: unscheduled)
+- P2/planned project_queue_cannot_write_roadmap_now_next — scripts/project_queue.py has no write path for roadmap now_next.now / current_build, so 'build add' (target: A successor to scripts/project_queue.py gains a command that moves roadmap now_n)
 - P3/planned cp_cphaprob_peer_observation_corroboration — Extract peer-member rows from cphaprob stat for additional cluster-identity corroboration (target: Follow-up to OP.0a.P7 (PAN HA peer-pairing identity closure))
 - P3/planned pytest_xdist_privacy_scan_scratch_file_race — tests/test_gov_po_3_ci_privacy_gate_baseline.py's transient scratch fixture can crash a concurrently (target: Test-infrastructure follow-up; discovered incidentally while validating dlp_scan)
 ## Open decisions

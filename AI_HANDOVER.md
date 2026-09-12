@@ -10,29 +10,29 @@
 
 ## 1. Snapshot
 
-- Branch `claude/inspiring-maxwell-gazhy3`; PR #182 merged (GOV.ORCH.1-8), PR #183 open (UI 2.0 B1 core).
-- GOV.ORCH.1-8 and B1-2/3/4/4b/5/7 contracts FROZEN; cross-contract gaps adjudicated in `docs/design/UI2_0_B1_ADJUDICATION_2026_09_12.md`.
-- `ui2/` exists: eleven Gradle modules, ten proven ArchUnit rules, Flyway V1-V4, pinned dependency verification.
+- Branch `claude/inspiring-maxwell-gazhy3`.
+- B1-1a FROZEN; the B1-1 draft is SUPERSEDED and no longer cited as authority.
+- B1-2/3/4/4b FROZEN, B1-5/B1-7 DRAFT. `ui2/` integration suite green against a live PostgreSQL 16.
+- No B1 row has real-environment evidence; `REAL_ENV_VALIDATED` is unreachable for all of B1 (B1-1a §9).
 
-## 2. What changed
+## 2. What changed this session (DOCS + PROJECT-STATE)
 
-- Eight governance contracts replaced the Codex orchestrator: synchronous `run`, provider adapter, worker brief + git gates, workbench, `project/QUEUE.md`, documentation diet, role files, project data split.
-- Public history rewritten across 134 branches to purge customer identities; privacy gate reports zero findings on tracked files.
-- Backup outcome decided as `Partial` with per-vendor tables (`docs/design/UI2_0_BACKUP_OUTCOME_DECISION_2026_09_12.md`).
+- `UI2_0_B1_01_SKELETON_CI_DOCKER_CONTRACT.md` → SUPERSEDED; body and amendments retained as history.
+- Sixteen citations in B1-2/3/4/4b/7 repointed clause-by-clause to B1-1a (§2 map, §3 direction, §4 build, §5 harness).
+- One citation flagged, not repointed: B1-2 §7 item 4's `AuditContextIntegrationTest`, withdrawn by B1-1a §5/§10, no successor clause.
+- Leaked absolute developer path redacted from 13 files / 17 lines (marker only; no narrative rewritten).
+- Six stale B1 queue rows synced; B1-2 schema → `automated_validated`.
 
 ## 3. Exact next action
 
-1. Install JDK 21 on the Mac (`brew install --cask temurin@21`) — nothing in `ui2/` builds without it.
-2. Run V1-V4 against `quay.io/sclorg/postgresql-16-c9s` (CRC's imagestream maxes at 13) and prove two refusals: `INSERT INTO devices` as `ui2_app` fails `audit_context_missing`; `CREATE TABLE` as `ui2_app` fails on permissions.
-3. Then write the 29 disabled test bodies.
+Take the two catalogued FROZEN→DRAFT authority-chain findings to the contract owner: `UI2_0_C1_PLATFORM_SCHEMA_CONTRACT.md` → `PCP_STORAGE_ENGINE_DECISION.md`, and `UI2_0_C3_IDENTITY_SESSIONS_RBAC_CONTRACT.md` → `M14_LOCAL_LDAP_AUTHORIZATION_ARCHITECTURE.md`. Freeze the cited documents or repoint the chains, then delete their entries from `_KNOWN_DRAFT_AUTHORITY_CITATIONS`.
 
 ## 4. Test delta
 
-Architecture, state-consistency, cold-start-budget and privacy gates green. No real-environment evidence yet for migrations or collection.
+`tests/test_contract_authority_status.py` added (5 tests): a FROZEN contract may not cite a DRAFT one as authority. Cold-start, architecture-convergence and privacy gates green; the single `logs RUNTIME_DIRECTORY_PRESENT` finding is pre-existing (git-ignored runtime directory).
 
 ## 5. New risks
 
-- **Open PO decision:** `docs/design/CP_BACKUP_VENDOR_CONTRADICTION_2026_09_12.md` — Check Point documents `add backup local` as asynchronous; the frozen profile asserts blocking. Unresolved; do not implement against the blocking assumption.
-- Five ASSERTED vendor claims remain, chiefly FAILOVER preflight conditions that would fail *open*.
-- No Docker/Podman on the Mac; only Red Hat OpenShift Local.
-- Stale branch `origin/build/ui2-d1-c7-c2-frozen-amendments` still needs deletion.
+- `scripts/project_queue.py` cannot write `roadmap.json` `now_next.now`/`current_build`, so `build add` is unusable without breaching GOV.ORCH.5/8. Backlog: `project_queue_cannot_write_roadmap_now_next`.
+- A concurrent session committed `a964bf7` on this branch mid-task, sweeping in this movement's B1-3 edits.
+- **Open PO decision:** `docs/design/CP_BACKUP_VENDOR_CONTRADICTION_2026_09_12.md` — do not implement against the blocking-backup assumption.
