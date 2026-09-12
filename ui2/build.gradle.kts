@@ -68,7 +68,7 @@ subprojects {
             }
             "integration-tests" -> tasks.register<Test>("integrationTest") {
                 group = "verification"
-                description = "Runs Testcontainers-backed integration tests (none require a container in this slice)."
+                description = "Runs PostgreSQL 16 integration tests; requires UI2_TEST_JDBC_URL or container (fails if neither available)."
                 testClassesDirs = testSourceSet.output.classesDirs
                 classpath = testSourceSet.runtimeClasspath
                 useJUnitPlatform()
