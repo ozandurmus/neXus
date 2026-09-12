@@ -21,8 +21,18 @@ with its line and column and nothing is written. `add` refuses a duplicate
 id. `note` appends verbatim to `docs/history/backlog/<id>.md` and never
 touches the JSON `note` field.
 
+`build add` is one transaction over two authority files: it inserts the
+newest-first `build_history.json` record AND advances `roadmap.json`
+`now_next.now` / `current_build` to it, because the head record *is* the
+current build under `utils.project_plan` rules R1/R2. `--advance-now` is
+mandatory so that pointer move is stated, never implicit. Every `build`
+write re-validates the resulting state against `utils.project_plan.
+_cross_authority_warnings` and writes nothing if it would introduce a
+contradiction, and regenerates `docs/history/INDEX.md`. See
+`docs/design/GOV_ORCH_8_PROJECT_DATA_SPLIT_AND_SIZE_BUDGET.md`.
+
 Offline, no network, no credentials. Reads/writes only files under `project/`
-and `docs/history/backlog/`.
+and `docs/history/{backlog,builds}/`, plus `docs/history/INDEX.md`.
 """
 from __future__ import annotations
 
@@ -45,6 +55,14 @@ HISTORY_BUILDS_DIR = REPO / "docs" / "history" / "builds"
 HISTORY_ROADMAP_DIR = REPO / "docs" / "history" / "roadmap"
 HISTORY_FEATURES_DIR = REPO / "docs" / "history" / "features"
 PRIVACY_TERMS_FILE = REPO / ".nexus" / "privacy_terms.txt"
+
+# `utils.project_plan` owns the cross-authority gate and the build status
+# vocabulary; `build_history_index` owns docs/history/INDEX.md. Both are
+# imported lazily inside the functions that need them, so make their roots
+# importable whichever way this module is loaded (CLI or test import).
+for _root in (REPO, REPO / "scripts"):
+    if str(_root) not in sys.path:
+        sys.path.insert(0, str(_root))
 
 #: Terminal statuses: their `note` narrative lives in docs/history/backlog/,
 #: not in the JSON. Open statuses are exactly the complement: in_progress, planned.
@@ -511,27 +529,163 @@ def _write_build_history_doc(build: dict) -> None:
     path.write_text("\n".join(lines).rstrip("\n") + "\n", encoding="utf-8")
 
 
+def _sentence_count(text: str) -> int:
+    """Count sentences for the build_history record_contract's `summary
+    (<= 2 sentences)` limit. Terminators are . ! ? ; a trailing terminator
+    does not open a new sentence."""
+    parts = [p for p in re.split(r"[.!?]+(?:\s|$)", (text or "").strip()) if p.strip()]
+    return len(parts)
+
+
+def _promote_next(now_next: dict, new_build: str) -> None:
+    """If the build becoming NOW is the one roadmap called NEXT, NEXT must move
+    on: promote the first `upcoming` row still `planned`. The horizon contract
+    says NOW and NEXT are exactly one each and cannot be the same build."""
+    nxt = now_next.get("next") or {}
+    if str(nxt.get("build") or "") != new_build:
+        return
+    upcoming = now_next.get("upcoming") or []
+    for index, row in enumerate(upcoming):
+        if str(row.get("status") or "") == "planned":
+            now_next["next"] = upcoming.pop(index)
+            return
+    now_next["next"] = {}
+
+
+def _authority_warnings(history: dict, roadmap: dict) -> list[str]:
+    """Run the real cross-authority gate (utils.project_plan rules R1..R6) over
+    an in-memory project state. The gate is the authority; this tool validates
+    against it rather than restating or weakening it."""
+    from utils.project_plan import _cross_authority_warnings
+
+    features = (load_json(FEATURE_REGISTRY).get("features") or []) if FEATURE_REGISTRY.exists() else []
+    backlog_items = (load_json(BACKLOG).get("items") or []) if BACKLOG.exists() else []
+    return _cross_authority_warnings(
+        roadmap,
+        [row for row in (features or []) if isinstance(row, dict)],
+        [row for row in (history.get("builds") or []) if isinstance(row, dict)],
+        [row for row in (backlog_items or []) if isinstance(row, dict)],
+    )
+
+
+def _assert_no_new_contradiction(command: str, history: dict, roadmap: dict) -> None:
+    """Validate before writing: the state this command would produce must not
+    contradict itself under any rule it is responsible for. Compared as a delta
+    against the on-disk state, so pre-existing unrelated debt (e.g. an old
+    decision missing its decide_by gate) does not block an otherwise legal
+    write, while any contradiction this command would introduce aborts it with
+    nothing written."""
+    before = set(_authority_warnings(_load_build_history(), load_json(ROADMAP)))
+    introduced = [w for w in _authority_warnings(history, roadmap) if w not in before]
+    if introduced:
+        raise QueueToolError(
+            f"{command}: the resulting project state would contradict itself; "
+            "nothing written:\n  - " + "\n  - ".join(introduced)
+        )
+
+
+def _refresh_build_history_index() -> None:
+    """docs/history/INDEX.md is generated from build_history.json and is gated
+    by scripts/build_history_index.py --check, so any build_history write must
+    regenerate it in the same command. No-op when BUILD_HISTORY has been
+    redirected away from the repository file (tests against a fixture copy),
+    because the generator reads the real repository path."""
+    if BUILD_HISTORY != REPO / "project" / "build_history.json":
+        return
+    import build_history_index
+
+    build_history_index.INDEX.write_text(build_history_index.render(), encoding="utf-8")
+
+
 def cmd_build_add(args: argparse.Namespace) -> int:
+    """Add a build_history record AND advance the roadmap pointer in one
+    operation.
+
+    build_history.json is newest-first by its own record_contract, so a record
+    inserted at the head *is* the current build -- utils.project_plan rule R1
+    requires roadmap now_next.now.build and current_build to equal it. Adding
+    the record without moving the pointer leaves project/ contradicting itself,
+    and the pointer may not be hand-edited (GOV.ORCH.5 / GOV.ORCH.8). So the
+    two writes are one transaction, and --advance-now is mandatory: the caller
+    states the pointer move in the command rather than having it happen
+    implicitly. Recording an older build *behind* the head is a different
+    operation with its own ordering contract and is not supported here.
+    """
+    from utils.project_plan import STATUS_VALUES
+
+    if args.status not in STATUS_VALUES:
+        raise QueueToolError(
+            f"build add: status {args.status!r} is outside the build_history status "
+            f"vocabulary ({', '.join(sorted(STATUS_VALUES))})"
+        )
+    full_summary = redact_narrative(args.summary or "")
+    if _sentence_count(full_summary) > 2:
+        raise QueueToolError(
+            "build add: summary is longer than the 2 sentences build_history.json's "
+            "record_contract allows; put the detail in the linked document"
+        )
+
     history = _load_build_history()
     builds = history.setdefault("builds", [])
     if _find_build(history, args.build):
         raise QueueToolError(f"build add: duplicate build {args.build!r} already exists")
-    full_summary = redact_narrative(args.summary or "")
+
     new_row = {
         "build": args.build,
-        "title": args.title,
         "status": args.status,
-        "movement": args.movement or "",
-        "docs": {},
+        "title": args.title,
         "summary": _truncate(full_summary, SUMMARY_TRUNCATE),
     }
+    if args.started:
+        new_row["started"] = args.started
+    if args.completed:
+        new_row["completed"] = args.completed
+    new_row["movement"] = args.movement or ""
+    docs = {
+        key: value for key, value in (
+            ("agreement", args.doc_agreement),
+            ("validation", args.doc_validation),
+            ("handover", args.doc_handover),
+        ) if value
+    }
+    new_row["docs"] = docs
     if len(full_summary) > SUMMARY_TRUNCATE:
         new_row["detail"] = f"docs/history/builds/{args.build}.md"
     builds.insert(0, new_row)
+
+    # Pointer advance, same transaction. Existing keys keep their order; the
+    # displaced NOW is not rewritten anywhere -- its build_history record and
+    # its now_next detail document both stay as they are.
+    roadmap = load_json(ROADMAP)
+    now_next = roadmap.setdefault("now_next", {})
+    _promote_next(now_next, args.build)
+    new_now = {"build": args.build, "title": args.title, "status": args.status}
+    if args.started:
+        new_now["started"] = args.started
+    if args.completed:
+        new_now["completed"] = args.completed
+    if args.doc_agreement:
+        new_now["contract_doc"] = args.doc_agreement
+    now_next["now"] = new_now
+    roadmap["current_build"] = args.build
+
+    _assert_no_new_contradiction("build add", history, roadmap)
+
     write_json(BUILD_HISTORY, history)
+    write_json(ROADMAP, roadmap)
+    QUEUE.write_text(render_queue_md(load_json(BACKLOG), roadmap), encoding="utf-8")
+    _refresh_build_history_index()
     if full_summary:
         _write_build_history_doc({**new_row, "_full_summary": full_summary})
-    print(f"added build {args.build!r}")
+    print(f"added build {args.build!r}; roadmap now_next.now and current_build -> {args.build!r}")
+    # CURRENT_STATE.md is prose (authority level 4) and cannot be derived, so it
+    # is not tool-written -- but tests/test_architecture_convergence.py gates it
+    # against this pointer. Name it rather than letting it go quietly stale.
+    if args.build not in (REPO / "CURRENT_STATE.md").read_text(encoding="utf-8"):
+        print(
+            f"  NOTE: CURRENT_STATE.md 'Active build' still names an older build; "
+            f"update it to {args.build!r} (prose, hand-authored, not written by this tool)"
+        )
     return 0
 
 
@@ -541,7 +695,14 @@ def cmd_build_status(args: argparse.Namespace) -> int:
     if build is None:
         raise QueueToolError(f"build status: no such build {args.build!r}")
     build["status"] = args.set
+    roadmap = load_json(ROADMAP)
+    if str((roadmap.get("now_next") or {}).get("now", {}).get("build") or "") == args.build:
+        roadmap["now_next"]["now"]["status"] = args.set
+    _assert_no_new_contradiction("build status", history, roadmap)
     write_json(BUILD_HISTORY, history)
+    write_json(ROADMAP, roadmap)
+    QUEUE.write_text(render_queue_md(load_json(BACKLOG), roadmap), encoding="utf-8")
+    _refresh_build_history_index()
     print(f"{args.build!r} -> {args.set}")
     return 0
 
@@ -645,6 +806,16 @@ def build_parser() -> argparse.ArgumentParser:
     p_build_add.add_argument("--status", required=True)
     p_build_add.add_argument("--movement", default="")
     p_build_add.add_argument("--summary", default="")
+    p_build_add.add_argument("--started", default="")
+    p_build_add.add_argument("--completed", default="")
+    p_build_add.add_argument("--doc-agreement", dest="doc_agreement", default="")
+    p_build_add.add_argument("--doc-validation", dest="doc_validation", default="")
+    p_build_add.add_argument("--doc-handover", dest="doc_handover", default="")
+    p_build_add.add_argument(
+        "--advance-now", dest="advance_now", action="store_true", required=True,
+        help="required: acknowledge that this record becomes the newest build "
+             "history row and therefore roadmap now_next.now / current_build",
+    )
     p_build_add.set_defaults(build_func=cmd_build_add)
 
     p_build_status = build_sub.add_parser("status", help="update a build's status")

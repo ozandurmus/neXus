@@ -1136,7 +1136,7 @@
       "id": "project_queue_cannot_write_roadmap_now_next",
       "category": "governance",
       "title": "scripts/project_queue.py has no write path for roadmap now_next.now / current_build, so 'build add' cannot be used without violating GOV.ORCH.5/8",
-      "status": "planned",
+      "status": "done",
       "priority": "P2",
       "target": "A successor to scripts/project_queue.py gains a command that moves roadmap now_next.now/next and current_build in the same transaction as 'build add'",
       "note": ""

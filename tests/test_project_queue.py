@@ -96,6 +96,7 @@ def queue_env(tmp_path, monkeypatch):
     backlog_path = project_dir / "backlog.json"
     roadmap_path = project_dir / "roadmap.json"
     build_history_path = project_dir / "build_history.json"
+    feature_registry_path = project_dir / "feature_registry.json"
     queue_path = project_dir / "QUEUE.md"
     history_dir = tmp_path / "docs" / "history" / "backlog"
     history_builds_dir = tmp_path / "docs" / "history" / "builds"
@@ -103,10 +104,12 @@ def queue_env(tmp_path, monkeypatch):
     backlog_path.write_text(pq.canonical_dump(_backlog_fixture()), encoding="utf-8")
     roadmap_path.write_text(pq.canonical_dump(_roadmap_fixture()), encoding="utf-8")
     build_history_path.write_text(pq.canonical_dump(_build_history_fixture()), encoding="utf-8")
+    feature_registry_path.write_text(pq.canonical_dump({"schema_version": "1.0", "features": []}), encoding="utf-8")
 
     monkeypatch.setattr(pq, "BACKLOG", backlog_path)
     monkeypatch.setattr(pq, "ROADMAP", roadmap_path)
     monkeypatch.setattr(pq, "BUILD_HISTORY", build_history_path)
+    monkeypatch.setattr(pq, "FEATURE_REGISTRY", feature_registry_path)
     monkeypatch.setattr(pq, "QUEUE", queue_path)
     monkeypatch.setattr(pq, "HISTORY_BACKLOG_DIR", history_dir)
     monkeypatch.setattr(pq, "HISTORY_BUILDS_DIR", history_builds_dir)
@@ -115,6 +118,7 @@ def queue_env(tmp_path, monkeypatch):
         "backlog": backlog_path,
         "roadmap": roadmap_path,
         "build_history": build_history_path,
+        "feature_registry": feature_registry_path,
         "queue": queue_path,
         "history_dir": history_dir,
         "history_builds_dir": history_builds_dir,
@@ -332,8 +336,8 @@ def test_redact_narrative_no_privacy_terms_file_is_a_no_op(tmp_path, monkeypatch
 def test_build_add_status_note_round_trip(queue_env):
     rc = pq.main([
         "build", "add", "--build", "new_build", "--title", "A new build",
-        "--status", "in_progress", "--summary",
-        "First sentence stays. " + ("Extra evidence prose. " * 30),
+        "--status", "in_progress", "--advance-now", "--summary",
+        "First sentence stays. Extra evidence prose " + ("and more of it " * 30),
     ])
     assert rc == 0
     data = json.loads(queue_env["build_history"].read_text(encoding="utf-8"))
@@ -343,7 +347,7 @@ def test_build_add_status_note_round_trip(queue_env):
     assert added["detail"] == "docs/history/builds/new_build.md"
     doc = queue_env["history_builds_dir"] / "new_build.md"
     assert doc.exists()
-    assert "Extra evidence prose." in doc.read_text(encoding="utf-8")
+    assert "and more of it" in doc.read_text(encoding="utf-8")
 
     rc_status = pq.main(["build", "status", "--build", "new_build", "--set", "done"])
     assert rc_status == 0
@@ -356,8 +360,10 @@ def test_build_add_status_note_round_trip(queue_env):
 
 
 def test_build_add_refuses_duplicate(queue_env):
-    pq.main(["build", "add", "--build", "dup_build", "--title", "x", "--status", "planned"])
-    rc = pq.main(["build", "add", "--build", "dup_build", "--title", "y", "--status", "planned"])
+    pq.main(["build", "add", "--build", "dup_build", "--title", "x",
+             "--status", "planned", "--advance-now"])
+    rc = pq.main(["build", "add", "--build", "dup_build", "--title", "y",
+                  "--status", "planned", "--advance-now"])
     assert rc != 0
 
 
@@ -392,3 +398,105 @@ def test_json_load_failure_reports_line_and_column(queue_env, capsys):
     assert rc == 1
     err = capsys.readouterr().err
     assert "line" in err and "column" in err
+
+
+# --- The defect: `build add` must leave project/ internally consistent ------
+#
+# backlog `project_queue_cannot_write_roadmap_now_next`: build_history.json is
+# newest-first, so a record inserted at its head IS the current build, and
+# utils.project_plan rule R1 requires roadmap now_next.now.build (R2:
+# current_build too) to equal it. `build add` used to write only the history
+# record, so a clean invocation reddened
+# tests/test_architecture_convergence.py and the only repair was hand-editing
+# roadmap.json -- forbidden by GOV.ORCH.5 / GOV.ORCH.8.
+
+def _warnings_for(env) -> list[str]:
+    from utils.project_plan import _cross_authority_warnings
+
+    roadmap = json.loads(env["roadmap"].read_text(encoding="utf-8"))
+    history = json.loads(env["build_history"].read_text(encoding="utf-8"))
+    features = json.loads(env["feature_registry"].read_text(encoding="utf-8"))
+    backlog = json.loads(env["backlog"].read_text(encoding="utf-8"))
+    return _cross_authority_warnings(
+        roadmap, features.get("features") or [], history.get("builds") or [],
+        backlog.get("items") or [],
+    )
+
+
+def test_build_add_leaves_no_cross_authority_contradiction(queue_env):
+    """A `build add` through the real CLI must produce a project state the
+    cross-authority gate accepts, with no hand-editing of roadmap.json."""
+    before = set(_warnings_for(queue_env))
+
+    rc = pq.main([
+        "build", "add", "--build", "build_z", "--title", "A recorded build",
+        "--status", "in_progress", "--movement", "DOCS", "--advance-now",
+        "--summary", "One sentence summary.",
+    ])
+    assert rc == 0
+
+    introduced = [w for w in _warnings_for(queue_env) if w not in before]
+    assert introduced == [], introduced
+
+    roadmap = json.loads(queue_env["roadmap"].read_text(encoding="utf-8"))
+    history = json.loads(queue_env["build_history"].read_text(encoding="utf-8"))
+    assert history["builds"][0]["build"] == "build_z"        # newest-first head
+    assert roadmap["now_next"]["now"]["build"] == "build_z"  # R1
+    assert roadmap["current_build"] == "build_z"             # R2
+
+    # Historical outcomes are appended to, never rewritten.
+    assert any(b["build"] == "build_x" for b in history["builds"])
+    assert next(b for b in history["builds"] if b["build"] == "build_x")["status"] == "in_progress"
+
+    # Canonical on-disk form preserved for both files.
+    for key in ("roadmap", "build_history"):
+        raw = queue_env[key].read_text(encoding="utf-8")
+        assert raw == pq.canonical_dump(json.loads(raw))
+
+
+def test_build_add_requires_explicit_pointer_advance(queue_env):
+    """The pointer move is never implicit: the caller states it on the command
+    line, because a head insert necessarily redefines the current build."""
+    with pytest.raises(SystemExit):
+        pq.build_parser().parse_args([
+            "build", "add", "--build", "build_z", "--title", "t", "--status", "planned",
+        ])
+
+
+def test_build_add_promotes_next_when_next_becomes_now(queue_env):
+    """If the build becoming NOW is the one roadmap called NEXT, NEXT moves on
+    rather than duplicating NOW."""
+    roadmap = json.loads(queue_env["roadmap"].read_text(encoding="utf-8"))
+    roadmap["now_next"]["upcoming"] = [
+        {"build": "build_later", "title": "Later", "status": "planned"},
+    ]
+    queue_env["roadmap"].write_text(pq.canonical_dump(roadmap), encoding="utf-8")
+
+    rc = pq.main([
+        "build", "add", "--build", "build_y", "--title", "Next title",
+        "--status", "in_progress", "--advance-now", "--summary", "Promoted.",
+    ])
+    assert rc == 0
+    after = json.loads(queue_env["roadmap"].read_text(encoding="utf-8"))
+    assert after["now_next"]["now"]["build"] == "build_y"
+    assert after["now_next"]["next"]["build"] == "build_later"
+    assert after["now_next"]["upcoming"] == []
+
+
+def test_build_add_enforces_record_contract_summary_and_status(queue_env):
+    """build_history.json's own record_contract: summary <= 2 sentences, status
+    inside utils.project_plan STATUS_VALUES. Nothing is written when either
+    fails."""
+    original = queue_env["build_history"].read_text(encoding="utf-8")
+
+    rc_long = pq.main([
+        "build", "add", "--build", "x", "--title", "t", "--status", "planned",
+        "--advance-now", "--summary", "One. Two. Three.",
+    ])
+    assert rc_long != 0
+    rc_status = pq.main([
+        "build", "add", "--build", "y", "--title", "t", "--status", "almost_done",
+        "--advance-now", "--summary", "Fine.",
+    ])
+    assert rc_status != 0
+    assert queue_env["build_history"].read_text(encoding="utf-8") == original

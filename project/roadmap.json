@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "current_build": "ui2_b1_01_skeleton_ci_docker",
+  "current_build": "ui2_b1_01a_platform_skeleton_freeze",
   "current_track": "PCP.x",
   "progress_contract": "Weighted acceptance-criterion completion. Percentages describe the declared roadmap, not calendar time or delivery ETA.",
   "tracks": [
@@ -150,13 +150,12 @@
   "now_next": {
     "horizon_contract": "NOW is exactly one build. NEXT is exactly one. Everything else is an `upcoming` row carrying its own true status: planned = AFTER, blocked = waiting on a named external gate, deferred = consciously postponed. `now.build` must equal the newest project/build_history.json record -- utils.project_plan enforces it.",
     "now": {
-      "build": "ui2_b1_01_skeleton_ci_docker",
-      "title": "UI2 B1-1 -- skeleton, CI and Docker contract (DRAFT, for Product Owner freeze)",
-      "goal": "Write the DRAFT B1-1 contract for the ui2 Gradle multi-module skeleton, isolated CI job, minimal Docker image, Testcontainers PostgreSQL harness, and P-1 dependency architecture tests. Contract only; no ui2 implementation or device behavior.",
-      "status": "in_progress",
-      "started": "2026-09-10",
-      "completed": "2026-09-10",
-      "detail": "docs/history/roadmap/now_next_ui2_b1_01_skeleton_ci_docker.md"
+      "build": "ui2_b1_01a_platform_skeleton_freeze",
+      "title": "UI2 B1-1a — platform skeleton contract frozen, integration suite proven on real PostgreSQL 16, audit redaction policy",
+      "status": "automated_validated",
+      "started": "2026-09-12",
+      "completed": "2026-09-12",
+      "contract_doc": "docs/design/UI2_0_B1_01A_PLATFORM_SKELETON_CONTRACT.md"
     },
     "next": {
       "build": "ui2_d1_restore_c7_c2_amendments",

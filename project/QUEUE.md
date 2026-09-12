@@ -1,8 +1,8 @@
 # Project queue (generated — do not edit; run: py scripts/project_queue.py render)
-Build: ui2_b1_01_skeleton_ci_docker · Track: PCP.x · Generated: 2026-09-12T06:59:06Z
+Build: ui2_b1_01a_platform_skeleton_freeze · Track: PCP.x · Generated: 2026-09-12T07:18:01Z
 
 ## Now
-- ui2_b1_01_skeleton_ci_docker — UI2 B1-1 -- skeleton, CI and Docker contract (DRAFT, for Product Owner freeze) (in_progress)
+- ui2_b1_01a_platform_skeleton_freeze — UI2 B1-1a — platform skeleton contract frozen, integration suite proven on real PostgreSQL 16, audit redaction policy (automated_validated)
 ## Next
 - ui2_d1_restore_c7_c2_amendments — UI2 D1 Option A -- apply C7 and C2 restore admission amendments (planned)
 ## Open backlog (P1 first, then P2, then P3; in_progress before planned)
@@ -52,7 +52,6 @@ Build: ui2_b1_01_skeleton_ci_docker · Track: PCP.x · Generated: 2026-09-12T06:
 - P2/planned pan_ha_serial_identity_hardening — PAN HA pair operational identity should consider serial, not just hostname (target: Pre-CLASS-2 (OP.0b/OP.2) architecture decision)
 - P2/planned passive_ti_enrichment — Passive TI Enrichment for Confirmed Changes (target: 0.8.x)
 - P2/planned policy_rule_hygiene_and_path_placement_brief — Policy rule hygiene and path-based placement (original feature brief, umbrella) (target: unscheduled)
-- P2/planned project_queue_cannot_write_roadmap_now_next — scripts/project_queue.py has no write path for roadmap now_next.now / current_build, so 'build add' (target: A successor to scripts/project_queue.py gains a command that moves roadmap now_n)
 - P3/planned cp_cphaprob_peer_observation_corroboration — Extract peer-member rows from cphaprob stat for additional cluster-identity corroboration (target: Follow-up to OP.0a.P7 (PAN HA peer-pairing identity closure))
 - P3/planned pytest_xdist_privacy_scan_scratch_file_race — tests/test_gov_po_3_ci_privacy_gate_baseline.py's transient scratch fixture can crash a concurrently (target: Test-infrastructure follow-up; discovered incidentally while validating dlp_scan)
 ## Deferred — held, not finished (reason: docs/history/backlog/<id>.md)
@@ -90,8 +89,8 @@ Build: ui2_b1_01_skeleton_ci_docker · Track: PCP.x · Generated: 2026-09-12T06:
 - pcp_server_enrollment_exposure — May console enrollment (manual or candidate-based) be exposed in non-loopback / server mode, i.e. be
 - pcp_storage_engine — PRODUCTION-SCOPED. Which engine backs the registry/job plane IN PRODUCTION, against the section 10 c
 ## Recent builds
+- ui2_b1_01a_platform_skeleton_freeze (automated_validated)
 - ui2_b1_01_skeleton_ci_docker (in_progress)
 - ui2_d1_option_a_taxonomy_step_kind (complete_with_followup)
 - ui2_b0_baseline_directory (in_progress)
 - ui2_b0_extraction_tooling (in_progress)
-- ui2_b0_c7_backup_artefact_restore_engine_contract (in_progress)
