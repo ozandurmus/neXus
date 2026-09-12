@@ -23,8 +23,20 @@ read directly.
 
 Source pages, fetched and parsed (not summarized):
 `https://sc1.checkpoint.com/documents/<VER>/WebAdminGuides/EN/CP_<VER>_Gaia_AdminGuide/Topics-GAG/Backing-Up-and-Restoring-the-System.htm`
-for `VER` in `R80.40`, `R81`, `R81.10`. The three pages agree verbatim, so
-this is a stable documented semantic rather than one release's wording.
+for `VER` in `R80.40`, `R81`, `R81.10`, and the same page under the
+`.../CP_R81.20_Gaia_AdminGuide/Content/Topics-GAG/...` path for **`R81.20`**
+(that release moved the page under `Content/`, which is why a first pass using
+the older path pattern wrongly read as "no such page").
+
+**`R81.20` is the version this estate runs, and it was checked specifically.**
+All four releases agree verbatim, so this is a stable documented semantic
+rather than one release's wording — and, more to the point, the finding is not
+being carried across a version boundary by inference. `R81.20` shows the same
+worked example, the same `show backup {last-successful | logs | status}`
+syntax, the same `show backup status` → `Performing local backup` output, the
+same `add backup local [interactive]` signature, and the same single
+free-disk sentence about the administrator's own workstation with no multiple
+named.
 
 The guide's own worked example, quoted exactly:
 
