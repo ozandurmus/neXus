@@ -13,6 +13,83 @@ contract on a safety-critical vendor semantic, and the Product Owner's
 **Affected capability: `cp_gaia_backup_local`, a class-1 controlled write
 on production Check Point devices.**
 
+## 0. Documentation evidence obtained 2026-09-12 — no SK article needed
+
+The open question was recorded as blocked on `sk108902` / `sk100403` /
+`sk183833`, which are JavaScript-gated and return an empty body to an
+automated fetch. That blocker was wrong: the **public Gaia Administration
+Guide** answers two of the three questions outright, and was retrieved and
+read directly.
+
+Source pages, fetched and parsed (not summarized):
+`https://sc1.checkpoint.com/documents/<VER>/WebAdminGuides/EN/CP_<VER>_Gaia_AdminGuide/Topics-GAG/Backing-Up-and-Restoring-the-System.htm`
+for `VER` in `R80.40`, `R81`, `R81.10`. The three pages agree verbatim, so
+this is a stable documented semantic rather than one release's wording.
+
+The guide's own worked example, quoted exactly:
+
+```
+gaia> add backup local
+Creating backup package. Use the command 'show backups' to monitor creation progress.
+gaia>
+gaia> show backup status
+Performing local backup
+gaia>
+gaia> show backups
+backup_gw-8b0891_22_7_2012_14_29.tgz    Sun, Jul 22, 2012    109.73 MB
+gaia>
+```
+
+### Finding 1 — `add backup local` is asynchronous. CONFIRMED by vendor documentation.
+
+The prompt returns immediately with `Creating backup package.`, and the
+vendor's own instruction in that same line is to poll: *"Use the command
+`show backups` to monitor creation progress."* A command that blocked until
+completion would have nothing to monitor. The documented syntax
+`add backup local [interactive]` carries the same implication — the
+non-interactive default is the asynchronous one.
+
+This confirms the contradiction as reported: the frozen profile's blocking
+assumption is not what the vendor documents.
+
+### Finding 2 — `show backup status` is documented, not invented. This reverses a repository claim.
+
+`UI2_0_C4_CAPABILITY_REGISTRY_GATE_RESOLUTION_CONTRACT.md` §1.4 (and `K-3`)
+refuse the predecessor architecture document's illustrative CP profile partly
+on the grounds that it *"invents `show backup status` polling"*. It does not.
+The Gaia Administration Guide documents
+`show backup {last-successful | logs | status}` in the same syntax block as
+`add backup local`, and its example shows `show backup status` returning
+`Performing local backup` while a backup is in flight.
+
+This is an error in the conservative direction — the repository refused a real,
+documented command as invented — but it is still an error, and it matters
+here: the polling surface the corrected profile needs is exactly the one `K-3`
+ruled out. `K-3`'s other objections (directory-listing artefact discovery,
+delete-by-discovered-name, engine-owned precondition) are untouched by this
+finding and stand.
+
+### Finding 3 — the 3x free-disk rule is NOT in the Administration Guide. Still UNKNOWN.
+
+The guide's only free-disk statement is about exporting a backup to the
+administrator's own workstation: *"Make sure you have enough free disk space on
+your computer."* It states no multiple, and nothing about free space on the
+device before `add backup local`. So the repository's 3x rule has no support in
+the Administration Guide and remains unsourced. It must stay labelled
+`UNKNOWN` / `ASSERTED` until a source is produced, or be relabelled as a local
+safety margin chosen by this project rather than a vendor requirement. Do not
+promote it to a documented vendor constraint on the strength of this pass.
+
+### What this does and does not settle
+
+It settles the documentation half of the question, which is what `AGENTS.md`
+"Vendor semantics law" requires before freezing a safety-critical semantic. It
+does **not** amend anything: `cp_gaia_backup_local` is a class-1 controlled
+write on production devices, and the Product Owner's 2026-09-12 authorization
+covers UI 2.0 B1 contracts, not this capability. It also does not substitute
+for real-environment corroboration on the estate's own version — documentation
+and a live device are separate evidence grades.
+
 ## 1. What the repository asserts
 
 `docs/design/UI2_0_C4_CAPABILITY_REGISTRY_GATE_RESOLUTION_CONTRACT.md`
