@@ -2,42 +2,37 @@
 
 > **NON-AUTHORITATIVE DERIVED SUMMARY**
 > **DO NOT USE AS PROJECT-STATE AUTHORITY**
-> If this disagrees with `CURRENT_STATE.md` or `project/roadmap.json`, those
-> sources win.
+> If this disagrees with `CURRENT_STATE.md` or `project/QUEUE.md`, those win.
 
 ## Operating role for the next session
 
-Full detail: `PO.md` and `docs/reference/COPILOT_OPERATING_MODEL.md`.
+`roles/ENGINEER.md` carries the reading order. PO assistant: `PO.md`.
 
 ## 1. Snapshot
 
-- 2026-09-10: `ui2_b1_01_skeleton_ci_docker`, contract-only movement integrated from worker relay `NXS-LOCAL-0061`.
-- New DRAFT: `docs/design/UI2_0_B1_01_SKELETON_CI_DOCKER_CONTRACT.md`.
-- No `ui2/` implementation, Line-1 source, validation workflow, or device contact.
+- Branch `claude/inspiring-maxwell-gazhy3`; PR #182 merged (GOV.ORCH.1-8), PR #183 open (UI 2.0 B1 core).
+- GOV.ORCH.1-8 and B1-2/3/4/4b/5/7 contracts FROZEN; cross-contract gaps adjudicated in `docs/design/UI2_0_B1_ADJUDICATION_2026_09_12.md`.
+- `ui2/` exists: eleven Gradle modules, ten proven ArchUnit rules, Flyway V1-V4, pinned dependency verification.
 
 ## 2. What changed
 
-- The contract defines component homes, one-way dependencies, reproducible build/test/image commands, Testcontainers/Flyway, isolated CI, scoped secrets, and 15 implementation checks.
-- The worker’s completed relay and contract were imported without restoring its stale pre-D1 state snapshot; D1 remains in build history and restore remains disabled.
+- Eight governance contracts replaced the Codex orchestrator: synchronous `run`, provider adapter, worker brief + git gates, workbench, `project/QUEUE.md`, documentation diet, role files, project data split.
+- Public history rewritten across 134 branches to purge customer identities; privacy gate reports zero findings on tracked files.
+- Backup outcome decided as `Partial` with per-vendor tables (`docs/design/UI2_0_BACKUP_OUTCOME_DECISION_2026_09_12.md`).
 
 ## 3. Exact next action
 
-Product Owner review and freeze of the B1-1 contract. After freeze, dispatch a
-separate B1-1 implementation movement to create `ui2/`. Before any new worker,
-inspect all existing worker state and reconcile stale movements; do not create
-workers to hide stale state.
+1. Install JDK 21 on the Mac (`brew install --cask temurin@21`) — nothing in `ui2/` builds without it.
+2. Run V1-V4 against `quay.io/sclorg/postgresql-16-c9s` (CRC's imagestream maxes at 13) and prove two refusals: `INSERT INTO devices` as `ui2_app` fails `audit_context_missing`; `CREATE TABLE` as `ui2_app` fails on permissions.
+3. Then write the 29 disabled test bodies.
 
 ## 4. Test delta
 
-- Worker evidence: AC-1..AC-9 self-check, architecture/state tests 22 passed, privacy 0 new findings, diff check clean.
-- Integration validation: JSON/state consistency and generated history index are required before PR merge.
+Architecture, state-consistency, cold-start-budget and privacy gates green. No real-environment evidence yet for migrations or collection.
 
 ## 5. New risks
 
-- Contract is DRAFT; implementation is not authorized until freeze.
-- Worker had no PR/CI at close; integration is now pending push, PR, CI, and PO merge verification.
-- OpenRouter `NXS-LOCAL-0065` / `3143bb6` is advisory-only, not a worker
-  fallback. The current orchestrator has no unattended backlog queue-runner.
-- The existing Graphify graph is oversized and includes worktree duplicates;
-  use only narrow low-budget queries and ignore `copilot-worktrees/`,
-  `graphify-out/`, `data/` and `logs/`. Graphify is a locator, not authority.
+- **Open PO decision:** `docs/design/CP_BACKUP_VENDOR_CONTRADICTION_2026_09_12.md` — Check Point documents `add backup local` as asynchronous; the frozen profile asserts blocking. Unresolved; do not implement against the blocking assumption.
+- Five ASSERTED vendor claims remain, chiefly FAILOVER preflight conditions that would fail *open*.
+- No Docker/Podman on the Mac; only Red Hat OpenShift Local.
+- Stale branch `origin/build/ui2-d1-c7-c2-frozen-amendments` still needs deletion.
