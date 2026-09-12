@@ -208,3 +208,53 @@ current exposure, and the invariant above makes that path unreachable. If a
 future table genuinely needs a redacted identifier, that is the successor
 decision, and it must resolve what `row_pk` then means for joining an audit row
 back to its subject.
+
+## 9. Amendment A-2 (2026-09-12) — §5.4's fail-closed check was wrong, and blocked a real write
+
+Found by the movement that enabled the collection-engine lease tests, which hit
+it while seeding rows against a real server.
+
+`V5` implemented §5.4 ("the function must not be able to fail open") by
+comparing the whole redacted snapshot against the raw row: if they were equal,
+redaction had evidently not happened, so refuse. That reasoning is wrong
+whenever **every declared-redacted column of the row is NULL**. §2 deliberately
+leaves `NULL` as `NULL`, so that a null is distinguishable from a redacted
+value — and then the snapshot legitimately equals the raw row, and the check
+fires on a row that had nothing to redact.
+
+**Measured, not inferred.** `job_step_attempt.captured_variables` is that
+table's only declared-redacted column, and `C2` §5.1 leaves it unknown until
+the step runs, so it is `NULL` at pre-contact insert time. Against a real
+PostgreSQL 16 database with `V1`–`V5` applied, every pre-contact
+`job_step_attempt` insert raised `audit_redaction_not_applied` and rolled back.
+That blocked the collection engine's **first per-step write** — the executor
+could not record that it was about to contact a device.
+
+This is the more dangerous kind of fail-closed defect: the refusal was real and
+loud, but it refused correct work, and it would have surfaced only when someone
+ran the executor against a migrated database.
+
+**`V6` replaces the check with the property it meant to assert**, per column and
+NULL-safe: every declared-redacted key present in a snapshot must be either
+`NULL` or a `sha256:` string. That is **strictly stronger** than what it
+replaces — the whole-object comparison passed as long as *any* field differed,
+so it would not have noticed one redacted column among several going through
+raw; the per-column form inspects each declared column individually.
+
+Proven against a real PostgreSQL 16 server, all three directions:
+
+1. A pre-contact insert with the redacted column `NULL` now commits, and the
+   audit row preserves `NULL` rather than inventing a digest.
+2. With a value present, redaction still applies: the value appears nowhere in
+   `audit_log` and `sha256:<hex>` stands in its place.
+3. With `fn_audit_redact` deliberately replaced by a no-op, the mutation is
+   **refused** with `audit_redaction_not_applied` and nothing leaks — so the
+   fix did not trade the guarantee for the bug.
+
+§5.4 of this contract is amended to require the per-column form. The
+whole-snapshot comparison must not be reintroduced.
+
+**Migration numbering note.** `UI2_0_B1_08_AUDIT_LOGS_SCREEN_CONTRACT.md` §3
+reserved `V6` for `idx_audit_log_actor_fingerprint`. `V6` is taken by this fix,
+which is a correctness defect blocking a write path; the B1-8 index takes the
+next free number when that movement implements it.
