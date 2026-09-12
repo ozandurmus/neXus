@@ -1,6 +1,8 @@
 // service: Spring MVC API, session/RBAC interceptors, read models, static
 // UI assets and composition root. Contract §2: platform-core, persistence,
 // capability-registry, job-engine, ldap-adapter.
+import org.gradle.language.jvm.tasks.ProcessResources
+
 plugins {
     alias(libs.plugins.spring.boot)
 }
@@ -38,4 +40,18 @@ tasks.named("bootJar") {
 }
 tasks.named("jar") {
     enabled = true
+}
+
+// The shipped frontend comes from the frontend source at build time, not
+// from a committed copy (one source of truth). `from(frontendBuild)` -- the
+// task, not merely its output directory -- makes this a real Gradle
+// input/output relationship: Gradle resolves the task's declared outputs,
+// adds the task dependency automatically, and fingerprints the resulting
+// files, so a frontend source change (which changes frontendBuild's
+// declared output) is what makes this task, and the packaged artifact,
+// out of date -- not just execution order.
+tasks.named<ProcessResources>("processResources") {
+    from(rootProject.tasks.named("frontendBuild")) {
+        into("static")
+    }
 }
