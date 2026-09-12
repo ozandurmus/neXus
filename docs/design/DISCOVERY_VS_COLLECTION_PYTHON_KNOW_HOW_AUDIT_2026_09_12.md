@@ -989,6 +989,82 @@ Reported, not reconciled.
   need an entry.
 - It changes no contract status, and cites no DRAFT as authority.
 
+---
+
+## 14. Defects and run shape measured in a real execution, this session
+
+**Evidence basis, distinct from §§1–13.** Everything above this section was
+read from repository source only (Status, above): no collector was run and
+no endpoint was contacted in the drafting of §§1–13. This section is
+different — it records three defects and one run-shape measurement observed
+when the existing Check Point inventory collector was actually run against a
+live management server, in the same session that produced the measurements
+now recorded in `docs/design/CP_AND_VSX_DISCOVERY_CONTRACT.md` §2 and §7.
+That execution was not part of this document's own audit method and does not
+retroactively make any statement in §§1–13 executed; it is a second, later
+evidence event, kept in its own section so the two evidence bases are never
+conflated.
+
+### 14.1 Three defects
+
+- **D-1. A hard-coded, version-pinned path to the vendor environment
+  profile.** The script's environment sourcing (`cp_inventory.sh:3`, §3.1.2)
+  names a fixed, version-pinned filesystem path to the Check Point
+  environment profile. On the management server measured this session, that
+  path does not exist, so the `source` fails silently. The script works
+  anyway only because it is invoked as a login shell (`bash -l`, §3.1.2),
+  which supplies the same environment independently of the script's own
+  sourcing line — the defect is latent precisely because something else
+  already does the job the failing line was meant to do.
+- **D-2. A positional whitespace parse that shifts columns when an object's
+  own address field is empty.** The object query's return shape is one
+  whitespace-separated row per object carrying the six queried attributes
+  (§3.1.2). A parse that splits that row positionally on whitespace shifts
+  every field after the address field by one position when the address field
+  itself is empty, so a later attribute is read into the address's position
+  and vice versa. Measured this session, this shift causes such an object to
+  be classified as management-unreachable and skipped — the same outcome the
+  management-state skip already produces for a genuinely non-communicating
+  device (§3.2), but reached for a structural reason, not a management-state
+  one. §11 U-7 already records that rows with an empty second field are
+  skipped by design; this defect is the mechanism that would make an object
+  whose row is shaped this way join that same skip path regardless of its
+  actual management state. **It is latent today only because the production
+  query does not select objects whose address field is empty** — the defect
+  is in the parser whether or not the current query set happens to trigger
+  it.
+- **D-3. A bounded retry that recovered nothing in a real run.** The script's
+  one hard-capped retry (retry timeout 30 s, maximum 1 retry, §3.2) was
+  attempted, this session, against every device that had already failed its
+  first attempt. **It recovered none of them.** The measurement does not
+  settle why — a genuinely powered-off device would not be expected to
+  answer on a second attempt either — but it is recorded because a retry
+  budget that recovers zero devices in a real run is a cost (§14.2) with no
+  observed benefit, on this run.
+
+### 14.2 Run-shape measurement: wall-clock time spent in timeouts
+
+This session also measured the shape of the run's wall-clock cost, derived
+from the run's own recorded device counts, timeout values and parallelism —
+not estimated, and not a vendor constant. The relationship: devices that do
+not answer are timed out (and, per D-3, retried once) independently of the
+devices that do answer, and — because the script bounds concurrent CPRID
+execution to a fixed parallelism (6, §3.2) — the timeout cost the
+non-responding devices add is bounded by (their count ÷ that parallelism) ×
+(first timeout + retry timeout), not by their count alone, and is paid
+concurrently with, not in addition to, however long the responding majority
+takes.
+
+Applied to the run measured this session, a minority of the run's total
+wall-clock time — bounded by exactly that relationship — was spent timing out
+against devices that never answered, and that entire cost was concentrated in
+the devices this run could not reach: every device that did answer
+contributed no timeout cost to the run at all. The exact share is a property
+of one run's device count, which is not reproduced here as a number
+(`AGENTS.md`, "Sensitive identity reporting law"); the durable measurement is
+the relationship above, which any run's own recorded counts can be put
+through to reproduce it.
+
 ## Cross-references
 
 - `docs/design/PO_DECISION_RECORD_2026_09_12.md` — the decision record this

@@ -448,6 +448,42 @@ is a liveness signal**:
   a **certificate condition**, not reachability. An operator who reads it as
   "that device is down" is reading a different fact than the one displayed.
 
+### 7.1a The completed negative search
+
+L-S1 to L-S3 measured three signals and disproved each of them as liveness.
+Beyond those three, a further search asked a narrower question: does any
+plane discovery already reads carry *any* field, anywhere, that moves with a
+device's power state? Three planes were searched during this session, and
+all three are negative.
+
+- **L-S4. The object database, field by field.** The full object record for a
+  device the Product Owner confirmed powered off was compared, field by
+  field, against the full object record for a device confirmed live, of the
+  same model, version and role. **372 first-level fields were compared;
+  exactly two differed, and both were the object's own identity fields — not
+  a state field.** Nothing in the object database moved between the
+  powered-off device and its live counterpart.
+- **L-S5. The per-device configuration directories on the management
+  server.** These directories hold policy and schema artefacts for the
+  object — configuration intent, not device status. There is nothing in them
+  to move with a device's power state, because nothing in them is a status
+  field to begin with.
+- **L-S6. The management server's own status command.** It reports the
+  management server's own state and the administrator sessions currently
+  connected to it — not gateway state, and not any field indexed by a
+  managed device at all.
+
+**Three planes were searched — the object database, the per-device
+configuration directories, and the management server's own status surface —
+and all three are negative.** This is what makes §7.3's `UNKNOWN` an
+*evidenced* absence rather than a merely declared one: the search for a
+liveness signal on the planes discovery already reads was completed, not
+abandoned. It does not narrow §7.3: a direct, identity-verified device read
+remains the only evidence grade that settles liveness. And it licenses
+neither L-S4 nor L-S5 nor L-S6 as a positive signal about anything — each is
+negative evidence that a signal is absent from that plane, never a
+substitute answer.
+
 ### 7.2 The rules this produces
 
 - **LV-1.** No candidate row field, label, colour, icon, badge, sort key or
@@ -492,6 +528,96 @@ liveness, and worth answering on its own.
 Until then this contract states the question, refuses to answer it, and
 forbids any presentation that implies it has been answered. That refusal is
 the deliverable of this section.
+
+### 7.4 A new management-plane signal: the connection-table channel state — not liveness
+
+§7.1's L-S1 to L-S6 exhaust what this session found by *looking for* a
+liveness signal. Separately, while looking at something else, the same
+session found a signal this contract did not previously carry: the
+management server's own **connection table** — not the object database —
+records, per device management address, the state of the management
+server's monitoring channel to that address. This section adds it under its
+own name and its own meaning, deliberately distinct from L-S1's
+management-plane connection state: a different field, on a different plane
+(the object database's connection-state field, already disproven at L-S1 as
+a liveness signal in its own right).
+
+**CS-1. Four states, named for what they observe.**
+
+| State | What it observes |
+| --- | --- |
+| established | The management server's monitoring channel to this address is currently established. |
+| failing to complete | An attempt to establish the channel to this address exists and has not completed. |
+| in transition | Two observations of this address, taken as CS-3 requires, disagreed. |
+| absent | The connection table carries no entry at all for this address. |
+
+**CS-2. What this signal is, and what it is not.** It is an observation of
+the management server's own channel to a device, taken entirely from the
+management server: zero new network traffic and zero device contact produce
+it. **It is not liveness.** §7.2's prohibition (LV-1 to LV-6) applies to it
+exactly as it applies to L-S1 to L-S3: no field, label, colour, icon, badge,
+sort key or filter derived from CS-1 may express up, down, online, offline,
+reachable, unreachable, healthy, unhealthy or a synonym of them, and no
+roll-up computed from it may carry liveness semantics. It is carried under
+its own name — the connection-table channel state — and its own meaning, and
+it is never merged into a single "status" with L-S1, L-S2, L-S3 or anything
+else.
+
+**CS-3. The sampling rule.** *Failing to complete* is a transient state by
+construction: a single observation can catch a healthy device's channel
+mid-handshake and report it as failing when it is not. **Two observations,
+separated by an interval, are required before *failing to complete* is
+reported for an address.** A pair of observations that disagrees is reported
+as **in transition** — never resolved to either state by preference, and
+never resolved by simply taking the more recent observation.
+
+**CS-4. The measurement, as counts and shapes only.** One management server,
+one software generation, all domains read in one pass. A large majority of
+observed channels were established; a small minority were failing to
+complete. Every observation was stable across the sampling interval — no
+address produced a disagreeing pair in this run. The failing set contained
+every device the Product Owner had independently identified as powered off.
+No address, object name or domain name is reproduced here — counts and
+shapes only, per `AGENTS.md` "Sensitive identity reporting law".
+
+**CS-5. A hypothesis, not a finding.** The count of failing channels in this
+measurement equalled the count of devices whose collection failed in an
+earlier run of the existing collector. This is recorded as a **hypothesis**
+that the two sets are the same devices, not as a finding that they are:
+identity was not verified, because the earlier run's addresses are
+pseudonymized and cannot be compared address-for-address against this
+session's connection-table read. **What would confirm or refute it:** one
+read that resolves both sets to the same, non-pseudonymized address form and
+compares them member for member — either the earlier run's pseudonymization
+is reversed under a controlled procedure, or a fresh collector run and a
+fresh connection-table read are taken in the same session so both start from
+the same address form. Until then the equal count is a coincidence of
+counts, not a correlation of devices.
+
+**CS-6. Three implementation constraints the measurement revealed.**
+
+- **CS-6a. Per-address reduction.** The connection table carries many rows
+  per address for management servers and cluster addresses. An
+  implementation reduces the table to one state per address before it is
+  usable, and considers only addresses that are also present in the object
+  database — an address in the connection table with no corresponding object
+  is not a candidate and is not reported.
+- **CS-6b. The channel port is derived, never hard-coded.** The port on which
+  the channel is observed is taken from the observed established channels
+  themselves, or from configuration — never written into an implementation
+  as a fixed, version-pinned number.
+  `docs/design/DISCOVERY_VS_COLLECTION_PYTHON_KNOW_HOW_AUDIT_2026_09_12.md`
+  §14 records a hard-coded, version-pinned defect of exactly this shape,
+  already measured in the existing collector; this constraint exists so the
+  new signal does not repeat it.
+- **CS-6c. Addressing, as a Product Owner statement of record.** The Product
+  Owner states, of record, that in this estate a management server and a
+  gateway always communicate from their own addresses — never through
+  address translation between them. This is what makes the join between the
+  connection table and the object database, both keyed by address, safe on
+  this estate; it is an estate statement, not a vendor guarantee, and a
+  different estate would need its own statement before the same join could
+  be trusted there.
 
 ## 8. The discovery/import boundary
 
@@ -667,6 +793,10 @@ value here would be a guess wearing a decision's clothes.
 - `docs/design/PO_DECISION_RECORD_2026_09_12.md` §2, §4 — the existing Python
   as know-how only, and the product sequence this contract's first step
   belongs to.
+- `docs/design/DISCOVERY_VS_COLLECTION_PYTHON_KNOW_HOW_AUDIT_2026_09_12.md`
+  §14 — the existing collector's own hard-coded, version-pinned path defect,
+  the reason CS-6b requires the channel port to be derived rather than
+  hard-coded.
 - `PRIVACY_AND_DATA_HANDLING.md` — the data-sensitivity vocabulary and the
   repository privacy gate §9 check 2 invokes.
 - `docs/AI_DEVELOPMENT_PROTOCOL.md` — the network-device command gate that
