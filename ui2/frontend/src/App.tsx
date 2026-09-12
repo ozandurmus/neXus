@@ -1,15 +1,23 @@
-import Button from "@mui/material/Button";
+import Box from "@mui/material/Box";
+import CssBaseline from "@mui/material/CssBaseline";
+import { ThemeProvider } from "@mui/material/styles";
+
+import { NavigationRail } from "./shell/NavigationRail";
+import { DevicesEmptyState } from "./shell/DevicesEmptyState";
+import { m3Theme } from "./theme/m3Theme";
 
 /**
- * Skeleton root component. B1-1 seeds the frontend module only; the
- * real screens are a later slice. Uses one MUI component to prove the
- * theme/component wiring compiles and builds.
+ * UI 2.0 shell. React + MUI on the Material 3 scheme from the Product
+ * Owner's design canvas, per the platform contract's technology decision.
  */
 export function App() {
   return (
-    <main>
-      <h1>UI 2.0</h1>
-      <Button variant="contained">Ready</Button>
-    </main>
+    <ThemeProvider theme={m3Theme}>
+      <CssBaseline />
+      <Box sx={{ display: "flex", minHeight: "100vh" }}>
+        <NavigationRail active="devices" />
+        <DevicesEmptyState />
+      </Box>
+    </ThemeProvider>
   );
 }
