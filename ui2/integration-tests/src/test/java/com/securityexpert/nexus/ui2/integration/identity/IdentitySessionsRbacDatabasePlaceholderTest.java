@@ -1,67 +1,172 @@
 package com.securityexpert.nexus.ui2.integration.identity;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
+import com.securityexpert.nexus.ui2.integration.support.Ui2Rows;
+import com.securityexpert.nexus.ui2.integration.support.Ui2PostgresFixture;
+
 /**
- * Contract §8 (B1-3) tests that need a live PostgreSQL instance via
- * Testcontainers, unavailable in this environment (no container runtime),
- * mirroring {@code Ui2IntegrationHarnessPlaceholderTest}'s established
- * pattern (B1-1/B1-2). No container is instantiated anywhere in this
- * class — each disabled method below names, precisely, what a
- * container-capable host must prove; the pure decision-logic half of each
- * scenario that does not require a real database is instead proved by
- * {@code service}'s own unit tests ({@code LoginFlowTest},
+ * Contract §8 (B1-3) tests that need a real PostgreSQL 16 server, or a real
+ * directory server, or both.
+ *
+ * <p>The two database-only scenarios are implemented here against
+ * {@link Ui2PostgresFixture}. The directory-dependent ones still have no
+ * carrier in this environment (no test LDAP) and stay {@code @Disabled} with
+ * a precise reason, as does contract §8 test 3, which is blocked on an
+ * unresolved contract/migration contradiction rather than on tooling — see
+ * {@link #takeoverProducesExactlyOneAuditLogRowInOneTransaction()}.</p>
+ *
+ * <p>The pure decision-logic half of each scenario is proved without a
+ * database by {@code service}'s own unit tests ({@code LoginFlowTest},
  * {@code RbacEvaluatorTest}, {@code RoleBindingAdminServiceTest}), named in
- * each Javadoc below.
+ * each Javadoc below.</p>
  */
 class IdentitySessionsRbacDatabasePlaceholderTest {
+
+    private static Ui2PostgresFixture fixture;
+
+    @BeforeAll
+    static void migrate() {
+        fixture = Ui2PostgresFixture.createAndMigrate("identity_sessions");
+    }
+
+    @AfterAll
+    static void drop() {
+        if (fixture != null) {
+            fixture.close();
+        }
+    }
 
     @Test
     void placeholderCompilesAndRunsWithoutAContainer() {
         assertNotNull(IdentitySessionsRbacDatabasePlaceholderTest.class);
     }
 
+    /**
+     * Contract §8 test 1 / C3 §8 criterion 1: a raw INSERT that bypasses the
+     * Java service entirely cannot create a second {@code ACTIVE} session for
+     * an actor that already has one — {@code ux_sessions_one_active_per_actor}
+     * refuses it. {@code LoginFlowTest} exercises the application-layer logic
+     * against an in-memory repository that enforces the invariant itself,
+     * which is not proof that the database enforces it against a bypassed
+     * application layer.
+     */
     @Test
-    @Disabled("requires a live container runtime (Podman/Docker), not available in this environment")
-    void singleActiveSessionStructurallyEnforcedBySqlBypass() {
-        // Contract §8 test 1 / C3 §8 criterion 1. A container-capable host
-        // must prove: connect directly to PostgreSQL (bypassing the Java
-        // service entirely) and attempt a raw INSERT of a second `sessions`
-        // row with state = 'ACTIVE' for an actor_fingerprint that already
-        // has one active row; the partial unique index
-        // ux_sessions_one_active_per_actor must reject it. This is the one
-        // half of "single-active-session" that no in-memory fake can prove
-        // -- LoginFlowTest exercises the application-layer logic against
-        // an in-memory repository that itself enforces the invariant, but
-        // that is not proof the database enforces it against a bypassed
-        // application layer.
+    void singleActiveSessionStructurallyEnforcedBySqlBypass() throws SQLException {
+        String actor = "actor-single-active";
+        try (Connection app = fixture.appConnection()) {
+            insertSession(app, actor, "ACTIVE");
+
+            SQLException rejected = assertThrows(SQLException.class, () -> insertSession(app, actor, "ACTIVE"));
+            assertEquals("23505", rejected.getSQLState(), "expected unique_violation");
+            assertEquals(true, rejected.getMessage().contains("ux_sessions_one_active_per_actor"),
+                    "the refusal must come from the partial unique index specifically");
+
+            // The index is partial, so a non-ACTIVE second row for the same
+            // actor must still be accepted -- otherwise this would be proving
+            // "one session per actor", a different and wrong rule.
+            insertSession(app, actor, "SUPERSEDED");
+            insertSession(app, actor, "EXPIRED");
+            assertEquals(1L, Ui2Rows.count(app, "SELECT count(*) FROM sessions WHERE actor_fingerprint = '"
+                    + actor + "' AND state = 'ACTIVE'"));
+            assertEquals(3L, Ui2Rows.count(app, "SELECT count(*) FROM sessions WHERE actor_fingerprint = '"
+                    + actor + "'"));
+        }
+    }
+
+    /**
+     * Contract §8 test 6 / C3 §8 criterion 5: a
+     * {@code last_seen_at}/{@code idle_deadline_at}-only UPDATE produces zero
+     * new {@code audit_log} rows ({@code trg_audit_sessions} is scoped to
+     * {@code AFTER INSERT OR UPDATE OF state}, and PostgreSQL's
+     * {@code UPDATE OF column_list} trigger form does not fire when that
+     * column is absent from the SET list); a state UPDATE on the same row
+     * produces exactly one.
+     */
+    @Test
+    void heartbeatGeneratesNoAuditNoiseStateChangeGeneratesExactlyOne() throws SQLException {
+        String actor = "actor-heartbeat";
+        try (Connection app = fixture.appConnection()) {
+            String sessionId = insertSession(app, actor, "ACTIVE");
+            assertEquals(1L, Ui2Rows.countAuditRows(app, "sessions", sessionId),
+                    "the session INSERT itself is audited exactly once");
+
+            // Heartbeat: last_seen_at/idle_deadline_at only.
+            for (int i = 0; i < 3; i++) {
+                audited(app, "UPDATE sessions SET last_seen_at = now(), idle_deadline_at = now() + interval '15 "
+                        + "minutes' WHERE session_id = '" + sessionId + "'");
+            }
+            assertEquals(1L, Ui2Rows.countAuditRows(app, "sessions", sessionId),
+                    "three heartbeat UPDATEs must add zero audit_log rows");
+
+            // A state change on the same row.
+            audited(app, "UPDATE sessions SET state = 'EXPIRED', end_reason = 'idle_timeout' "
+                    + "WHERE session_id = '" + sessionId + "'");
+            assertEquals(2L, Ui2Rows.countAuditRows(app, "sessions", sessionId),
+                    "a state-column UPDATE must add exactly one audit_log row");
+        }
     }
 
     @Test
-    @Disabled("requires a live container runtime (Podman/Docker), not available in this environment")
-    void heartbeatGeneratesNoAuditNoiseStateChangeGeneratesExactlyOne() {
-        // Contract §8 test 6 / C3 §8 criterion 5. A container-capable host
-        // must prove: a last_seen_at/idle_deadline_at-only UPDATE on an
-        // ACTIVE sessions row produces zero new audit_log rows (because
-        // trg_audit_sessions is scoped to AFTER INSERT OR UPDATE OF state,
-        // and PostgreSQL's "UPDATE OF column_list" trigger form does not
-        // fire when that column is not in the UPDATE's SET list); a
-        // state-column UPDATE on the same row produces exactly one.
-    }
-
-    @Test
-    @Disabled("requires a live container runtime (Podman/Docker), not available in this environment")
+    @Disabled("CONTRADICTION, not tooling: UI2_0_B1_03_IDENTITY_SESSIONS_CONTRACT.md §8 test 3 (FROZEN) "
+            + "requires takeover to leave 'exactly one audit row', but V2's trg_audit_sessions fires on "
+            + "AFTER INSERT and on UPDATE OF state, so a takeover's S1 state UPDATE plus S2 INSERT "
+            + "necessarily produces two. Reported for resolution by the contract owner; not reconciled here.")
     void takeoverProducesExactlyOneAuditLogRowInOneTransaction() {
         // Contract §8 test 3 / C3 §8 criterion 2's database half.
         // LoginFlowTest.takeoverTransitionsPriorToSupersededAndCreatesANewActiveSessionInOneCall
-        // proves the state-transition logic; a container-capable host must
-        // additionally prove exactly one new audit_log row exists after a
-        // takeover (via trg_audit_sessions), and that the prior-session
-        // UPDATE and the new-session INSERT commit atomically (a forced
-        // rollback after the UPDATE must leave no INSERT and no audit row).
+        // proves the state-transition logic. The atomicity half (a forced
+        // rollback after the UPDATE leaves no INSERT and no audit row) is
+        // provable today and is covered generically for the same trigger
+        // mechanism by schema.AuditAtomicityTest; the audit-row COUNT half
+        // cannot be asserted either way without first resolving the
+        // contradiction named in the @Disabled reason above (AGENTS.md
+        // authority hierarchy: report, never silently reconcile).
+    }
+
+    // -----------------------------------------------------------------
+    // Helpers
+    // -----------------------------------------------------------------
+
+    /** One {@code sessions} row. {@code csrf_secret} is an opaque test token, never a real secret. */
+    private static String insertSession(Connection app, String actor, String state) throws SQLException {
+        String sessionId = Ui2Rows.opaqueId("sess");
+        Instant now = Instant.now();
+        audited(app, "INSERT INTO sessions(session_id, actor_fingerprint, csrf_secret, state, "
+                + "idle_deadline_at, absolute_expires_at) VALUES ('" + sessionId + "', '" + actor
+                + "', 'opaque-test-token', '" + state + "', '"
+                + now.plus(15, ChronoUnit.MINUTES) + "', '" + now.plus(8, ChronoUnit.HOURS) + "')");
+        return sessionId;
+    }
+
+    private static void audited(Connection app, String sql) throws SQLException {
+        boolean previousAutoCommit = app.getAutoCommit();
+        app.setAutoCommit(false);
+        try {
+            Ui2Rows.setAuditContext(app, Ui2Rows.ACTOR, "harness.session");
+            try (Statement statement = app.createStatement()) {
+                statement.execute(sql);
+            }
+            app.commit();
+        } catch (SQLException e) {
+            app.rollback();
+            throw e;
+        } finally {
+            app.setAutoCommit(previousAutoCommit);
+        }
     }
 
     @Test

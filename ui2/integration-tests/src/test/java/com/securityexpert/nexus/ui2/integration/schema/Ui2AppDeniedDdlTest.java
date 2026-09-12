@@ -1,31 +1,48 @@
 package com.securityexpert.nexus.ui2.integration.schema;
 
-import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
-import org.junit.jupiter.api.Disabled;
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.sql.Statement;
+
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import com.securityexpert.nexus.ui2.integration.support.Ui2PostgresFixture;
+
 /**
- * Contract §7 test 3. Requires a live PostgreSQL 16 instance via
- * Testcontainers, unavailable in this environment (no container runtime).
- * No container is instantiated in this class -- the disabled method below
- * fails closed and visibly, never as a silent pass.
+ * Contract §7 test 3, proved against a real PostgreSQL 16 server: the
+ * {@code ui2_app} connection is opened <b>outside</b> the assertion block,
+ * so a connection failure (wrong credential, unreachable host) can never be
+ * mistaken for the DDL denial this test exists to prove; the assertion then
+ * covers only the {@code CREATE TABLE} statement, and only its SQLState
+ * {@code 42501} (insufficient_privilege).
  */
 class Ui2AppDeniedDdlTest {
 
-    @Test
-    void placeholderCompilesAndRunsWithoutAContainer() {
-        assertNotNull(Ui2AppDeniedDdlTest.class);
+    private static Ui2PostgresFixture fixture;
+
+    @BeforeAll
+    static void migrate() {
+        fixture = Ui2PostgresFixture.createAndMigrate("app_denied_ddl");
+    }
+
+    @AfterAll
+    static void drop() {
+        if (fixture != null) {
+            fixture.close();
+        }
     }
 
     @Test
-    @Disabled("requires a live container runtime (Podman/Docker), not available in this environment")
-    void ui2AppCreateTableFailsWithSqlState42501() {
-        // A container-capable host must prove: open the ui2_app connection
-        // OUTSIDE the assertion block (so a connection failure -- wrong
-        // credential, unreachable host -- is never mistaken for the DDL
-        // denial this test exists to prove), then attempt CREATE TABLE and
-        // assert the thrown SQLException.getSQLState() equals "42501"
-        // (insufficient_privilege).
+    void ui2AppCreateTableFailsWithSqlState42501() throws SQLException {
+        try (Connection app = fixture.appConnection(); Statement statement = app.createStatement()) {
+            SQLException denied = assertThrows(SQLException.class,
+                    () -> statement.execute("CREATE TABLE ui2_app_should_never_create_this (x TEXT)"));
+            assertEquals("42501", denied.getSQLState());
+        }
     }
 }

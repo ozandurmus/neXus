@@ -1,27 +1,26 @@
 # This is a Gradle generated file for dependency locking.
 # Manual edits can break the build and are not advised.
 # This file is expected to be part of source control.
-com.fasterxml.jackson.core:jackson-annotations:2.10.3=testCompileClasspath
-com.fasterxml.jackson.core:jackson-annotations:2.15.2=testRuntimeClasspath
-com.fasterxml.jackson.core:jackson-core:2.15.2=testRuntimeClasspath
-com.fasterxml.jackson.core:jackson-databind:2.15.2=testRuntimeClasspath
-com.fasterxml.jackson.dataformat:jackson-dataformat-toml:2.15.2=testRuntimeClasspath
-com.fasterxml.jackson:jackson-bom:2.15.2=testRuntimeClasspath
+com.fasterxml.jackson.core:jackson-annotations:2.15.2=testCompileClasspath,testRuntimeClasspath
+com.fasterxml.jackson.core:jackson-core:2.15.2=testCompileClasspath,testRuntimeClasspath
+com.fasterxml.jackson.core:jackson-databind:2.15.2=testCompileClasspath,testRuntimeClasspath
+com.fasterxml.jackson.dataformat:jackson-dataformat-toml:2.15.2=testCompileClasspath,testRuntimeClasspath
+com.fasterxml.jackson:jackson-bom:2.15.2=testCompileClasspath,testRuntimeClasspath
 com.github.docker-java:docker-java-api:3.4.0=testCompileClasspath,testRuntimeClasspath
 com.github.docker-java:docker-java-transport-zerodep:3.4.0=testCompileClasspath,testRuntimeClasspath
 com.github.docker-java:docker-java-transport:3.4.0=testCompileClasspath,testRuntimeClasspath
-com.google.code.gson:gson:2.10.1=testRuntimeClasspath
-io.r2dbc:r2dbc-spi:1.0.0.RELEASE=testRuntimeClasspath
+com.google.code.gson:gson:2.10.1=testCompileClasspath,testRuntimeClasspath
+io.r2dbc:r2dbc-spi:1.0.0.RELEASE=testCompileClasspath,testRuntimeClasspath
 junit:junit:4.13.2=testCompileClasspath,testRuntimeClasspath
 net.java.dev.jna:jna:5.13.0=testCompileClasspath,testRuntimeClasspath
 org.apache.commons:commons-compress:1.24.0=testCompileClasspath,testRuntimeClasspath
 org.apiguardian:apiguardian-api:1.1.2=testCompileClasspath
 org.checkerframework:checker-qual:3.42.0=testRuntimeClasspath
-org.flywaydb:flyway-core:10.17.0=testRuntimeClasspath
+org.flywaydb:flyway-core:10.17.0=testCompileClasspath,testRuntimeClasspath
 org.flywaydb:flyway-database-postgresql:10.17.0=testRuntimeClasspath
 org.hamcrest:hamcrest-core:1.3=testCompileClasspath,testRuntimeClasspath
 org.jetbrains:annotations:17.0.0=testCompileClasspath,testRuntimeClasspath
-org.jooq:jooq:3.19.11=testRuntimeClasspath
+org.jooq:jooq:3.19.11=testCompileClasspath,testRuntimeClasspath
 org.junit.jupiter:junit-jupiter-api:5.10.3=testCompileClasspath,testRuntimeClasspath
 org.junit.jupiter:junit-jupiter-engine:5.10.3=testRuntimeClasspath
 org.junit.jupiter:junit-jupiter-params:5.10.3=testCompileClasspath,testRuntimeClasspath
@@ -31,8 +30,8 @@ org.junit.platform:junit-platform-engine:1.10.3=testRuntimeClasspath
 org.junit.platform:junit-platform-launcher:1.10.3=testRuntimeClasspath
 org.junit:junit-bom:5.10.3=testCompileClasspath,testRuntimeClasspath
 org.opentest4j:opentest4j:1.3.0=testCompileClasspath,testRuntimeClasspath
-org.postgresql:postgresql:42.7.4=testRuntimeClasspath
-org.reactivestreams:reactive-streams:1.0.3=testRuntimeClasspath
+org.postgresql:postgresql:42.7.4=testCompileClasspath,testRuntimeClasspath
+org.reactivestreams:reactive-streams:1.0.3=testCompileClasspath,testRuntimeClasspath
 org.rnorth.duct-tape:duct-tape:1.0.8=testCompileClasspath,testRuntimeClasspath
 org.slf4j:slf4j-api:1.7.36=testCompileClasspath,testRuntimeClasspath
 org.testcontainers:database-commons:1.20.1=testCompileClasspath,testRuntimeClasspath

@@ -1,11 +1,17 @@
-// integration-tests: Testcontainers PostgreSQL, Flyway lifecycle and
-// cross-component contract tests; production code forbidden. Production
-// modules are test-scope fixtures only.
+// integration-tests: real-PostgreSQL-16 Flyway lifecycle and cross-component
+// contract tests; production code forbidden. Production modules are
+// test-scope fixtures only.
 //
-// This slice (Slice A, no container runtime available in this environment)
-// carries the source set and the Testcontainers dependency, but no test
-// that requires a container runtime. See
-// Ui2IntegrationHarnessPlaceholderTest for what Slice B must prove.
+// UI2_0_B1_02_SCHEMA_V1_CONTRACT.md §7 names Testcontainers as the carrier;
+// the load-bearing requirement is a real PostgreSQL 16 server. Ui2PostgresFixture
+// therefore accepts either an already-running server via UI2_TEST_JDBC_URL or a
+// Testcontainers postgres:16 container, and fails closed when neither exists --
+// hence both the Testcontainers dependency and a direct JDBC/Flyway one.
+//
+// Flyway, the PostgreSQL driver and jOOQ are declared testImplementation (not
+// merely inherited at runtime through :persistence's `implementation` scope)
+// because the harness and its tests name MigrateResult, PGSimpleDataSource and
+// DSLContext in their own source.
 dependencies {
     testImplementation(project(":platform-core"))
     testImplementation(project(":persistence"))
@@ -16,5 +22,10 @@ dependencies {
     testImplementation(libs.testcontainers)
     testImplementation(libs.testcontainers.postgresql)
     testImplementation(libs.testcontainers.junit.jupiter)
+
+    testImplementation(libs.flyway.core)
+    testImplementation(libs.postgresql)
+    testImplementation(libs.jooq)
+    testRuntimeOnly(libs.flyway.database.postgresql)
     testRuntimeOnly(libs.junit.platform.launcher)
 }
