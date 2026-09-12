@@ -306,12 +306,22 @@ def render_queue_md(backlog: dict, roadmap: dict, generated: str | None = None) 
             item.get("id", ""),
         )
 
+    # P0/P1 render in full; P2/P3 carry id and status only. A cold start acts
+    # on the top of the queue -- a P2's title and target are looked up in its
+    # own note when it is reached, and spending the 1500-word budget
+    # (GOV.ORCH.5 2.1) on fifty of them crowds out the rows being worked. Every
+    # row stays listed: dropping one, or raising the budget, would each hide
+    # the growth instead of paying for it.
     for item in sorted(items, key=sort_key):
         priority = _priority_label(item.get("priority"))
         status = item.get("status", "")
-        title = _truncate(item.get("title", ""), TITLE_TRUNCATE)
-        target = _truncate(item.get("target", ""), TARGET_TRUNCATE)
-        lines.append(f"- {priority}/{status} {item.get('id', '')} — {title} (target: {target})")
+        item_id = item.get("id", "")
+        if _priority_rank(item.get("priority")) <= 1:
+            title = _truncate(item.get("title", ""), TITLE_TRUNCATE)
+            target = _truncate(item.get("target", ""), TARGET_TRUNCATE)
+            lines.append(f"- {priority}/{status} {item_id} — {title} (target: {target})")
+        else:
+            lines.append(f"- {priority}/{status} {item_id}")
 
     # A deferred row is held work, not finished work. Rendering it keeps a
     # standing hold — for example a Product Owner gate on collection scope —

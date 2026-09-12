@@ -1,5 +1,5 @@
 # Project queue (generated — do not edit; run: py scripts/project_queue.py render)
-Build: ui2_d1_restore_c7_c2_amendments · Track: PCP.x · Generated: 2026-09-12T10:00:42Z
+Build: ui2_d1_restore_c7_c2_amendments · Track: PCP.x · Generated: 2026-09-12T12:38:40Z
 
 ## Now
 - ui2_d1_restore_c7_c2_amendments — UI2 D1 Option A -- apply the pending C7/C2/C4/baseline restore admission amendments (automated_validated)
@@ -39,7 +39,13 @@ Build: ui2_d1_restore_c7_c2_amendments · Track: PCP.x · Generated: 2026-09-12T
 - P1/in_progress ui2_b1_04_collection_engine_core — UI2 B1-4 -- collection engine core (capability registry, step executor with C2 c (target: workflow §5 B1-4)
 - P1/in_progress ui2_b1_04b_minimal_device_model_onboarding — UI2 B1-4b -- minimal Device / Endpoint / CredentialReference model, authorised m (target: workflow §5 B1-4b)
 - P1/in_progress ui2_b1_07_jobs_screen_run_now_read — UI2 B1-7 -- Jobs screen + Run Now (read class) + step log (target: workflow §5 B1-7)
+- P1/planned auth_local_mechanism_contract — Local authentication: storage, lockout, role binding for a directory-less identi (target: C3 Correction C-2; successor contract be)
+- P1/planned cp_failover_command_gate_batch — Command gate: cphaprob stat, cphaprob -a if, cphaprob tablestat for failover che (target: PO request 2026-09-12; network-device co)
 - P1/planned cp_ssh_trust_r2_prod_server — CP SSH strict host-key R2 validation on production server (target: DEPLOY.1)
+- P1/planned device_session_one_per_device — One SSH session per device reused for every command; probe opens a channel per c (target: PO rule 2026-09-12; command gate says se)
+- P1/planned failover_peer_reciprocal_agreement_check — Eighth stop-condition: both members must agree reciprocally on local/peer roles (target: PO rule 2026-09-12; _pan_reciprocal_corr)
+- P1/planned failover_recheck_on_request — A failover request must re-run every readiness check at that moment; an earlier (target: PO rule 2026-09-12; OP.2 contract)
+- P1/planned failover_vsx_vsls_mentality_contract — VSX/VSLS semantics: CP per-VS state independent of chassis, VSLS off, static ass (target: PO statement 2026-09-12; needs vendor-se)
 - P1/planned ldap_tls_trust_store_pin_and_format — LDAP TLS trust store cannot be given a PIN or format; a protected PKCS12 loads e (target: docs/design/LDAP_TLS_TRUST_STORE_PIN_GAP)
 - P1/planned pan_active_active_not_excluded_as_failover_unit — PAN active/active is not excluded as a failover unit (CP load-sharing is) (target: docs/design/PAN_ACTIVE_ACTIVE_FAILOVER_U)
 - P1/planned pcp_storage_engine_decision — Storage-engine decision for the Device Registry and typed job plane (criteria re (target: PCP.5 contract freeze / DEV.4.6)
@@ -48,18 +54,24 @@ Build: ui2_d1_restore_c7_c2_amendments · Track: PCP.x · Generated: 2026-09-12T
 - P1/planned ui2_b1_10_acceptance_scenario_concurrent_admins — UI2 B1-10 -- acceptance scenario A: three admins on one device, single-session t (target: workflow §5 B1-10)
 - P1/planned ui2_b1_11_acceptance_scenario_worker_loss — UI2 B1-11 -- acceptance scenario B: worker killed mid-step -> OUTCOME_UNKNOWN, n (target: workflow §5 B1-11)
 - P1/planned ui2_b1_12_deployment_slice — UI2 B1-12 -- deployment slice (Docker compose for the DEPLOY.1 server shape, per (target: workflow §5 B1-12)
-- P2/in_progress inventory_exclusions_management_ui — Inventory Exclusions add/restore/reason/audit workflows (write phase, DEPLOY.1A- (target: DEPLOY.1A)
-- P2/planned dlp_prose_collision_catalogue_stale — Pre-existing: DEV.0.5B prose-collision catalogue is stale, 6 tracked files trip (target: )
-- P2/planned m14_local_ldap_d7_authorization_architecture — Local LDAP / Active-Directory group-membership authorization producer for D7, de (target: docs/design/M14_LOCAL_LDAP_AUTHORIZATION)
-- P2/planned overview_eos_release_guidance — Overview: static EOS/EOL date + suggested-next-release guidance by model family (target: 0.6.1C / Inventory UX follow-up)
-- P2/planned pan_ha_serial_identity_hardening — PAN HA pair operational identity should consider serial, not just hostname (target: Pre-CLASS-2 (OP.0b/OP.2) architecture de)
-- P2/planned passive_ti_enrichment — Passive TI Enrichment for Confirmed Changes (target: 0.8.x)
-- P2/planned policy_rule_hygiene_and_path_placement_brief — Policy rule hygiene and path-based placement (original feature brief, umbrella) (target: unscheduled)
-- P2/planned privacy_baseline_tests_not_idempotent_runtime_trust_material — Pre-existing: full suite is not idempotent -- a first run creates gitignored dat (target: )
-- P2/planned project_plan_build_history_archive_split_lookup — Pre-existing: build_history archive split removed build 0.6.1B.1.1 from the live (target: )
-- P2/planned project_plan_crypto_placeholder_sentinel_lost — Pre-existing: projectPlanData no longer carries __CRYPTO_JSON_PLACEHOLDER__ verb (target: )
-- P3/planned cp_cphaprob_peer_observation_corroboration — Extract peer-member rows from cphaprob stat for additional cluster-identity corr (target: Follow-up to OP.0a.P7 (PAN HA peer-pairi)
-- P3/planned pytest_xdist_privacy_scan_scratch_file_race — tests/test_gov_po_3_ci_privacy_gate_baseline.py's transient scratch fixture can (target: Test-infrastructure follow-up; discovere)
+- P1/planned ui2_composition_root_bootable_shell — Bootable service: Spring entry point, DataSource, Flyway at startup, empty UI sh (target: Phase 1 step 1; no device contact)
+- P1/planned ui2_frontend_screens_shell — Frontend screens: login, menu, device list, device add; frontend is 2 stub files (target: Phase 1 step 2-3)
+- P2/in_progress inventory_exclusions_management_ui
+- P2/planned auth_radius_mechanism
+- P2/planned auth_tacacs_mechanism
+- P2/planned device_manual_add_transport_choice
+- P2/planned discovery_import_selection_flow
+- P2/planned dlp_prose_collision_catalogue_stale
+- P2/planned m14_local_ldap_d7_authorization_architecture
+- P2/planned overview_eos_release_guidance
+- P2/planned pan_ha_serial_identity_hardening
+- P2/planned passive_ti_enrichment
+- P2/planned policy_rule_hygiene_and_path_placement_brief
+- P2/planned privacy_baseline_tests_not_idempotent_runtime_trust_material
+- P2/planned project_plan_build_history_archive_split_lookup
+- P2/planned project_plan_crypto_placeholder_sentinel_lost
+- P3/planned cp_cphaprob_peer_observation_corroboration
+- P3/planned pytest_xdist_privacy_scan_scratch_file_race
 ## Deferred — held, not finished (reason: docs/history/backlog/<id>.md)
 - P1 ui2_b1_05_extract_cp_inventory_subset
 - P1 ui2_b1_06_implement_cp_inventory_capability

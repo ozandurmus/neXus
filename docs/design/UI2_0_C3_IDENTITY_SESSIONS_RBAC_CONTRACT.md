@@ -1058,3 +1058,69 @@ flagged for the contract owner, together with the detector gap that hides it:
 `tests/test_contract_authority_status.py::_classify` matches the token `FROZEN`
 inside the phrase "NOT frozen" and therefore classifies that document as
 frozen, so no citation of it is currently flagged in either direction.
+
+## Correction C-2 (2026-09-12) — authentication is not LDAP-only
+
+**Product Owner ruling, 2026-09-12.** Phase 1 carries **LDAP and local**
+authentication; RADIUS and TACACS follow later.
+
+This contract, as frozen, defines exactly one authentication mechanism: an
+UnboundID LDAP bind (§2). The words "local user", "fallback", "RADIUS" and
+"TACACS" do not appear in it anywhere. That is not a wrong claim — it is an
+incomplete one, and the difference matters: an implementation reading §2 as
+the whole identity model would wire login to LDAP alone and have to be
+unpicked when the second mechanism lands.
+
+The Product Owner's statement of the product rule: every comparable product
+offers local plus directory options, **and the fallback is always a local
+user**. A deployment whose directory is unreachable, misconfigured, or not yet
+integrated must still be administrable.
+
+### What this correction settles
+
+1. Authentication is a **pluggable set of mechanisms**, not one mechanism.
+   `LDAP` and `local` are in scope for Phase 1; `RADIUS` and `TACACS` are named
+   as later additions and nothing may be implemented for them yet.
+2. **Local is always present.** It is not a configuration option that can be
+   switched off, because it is the fallback that keeps the product
+   administrable when every external mechanism fails.
+3. Everything §3-§7 fixes about **sessions, RBAC and audit is mechanism-
+   independent** and unchanged: one active session per identity, the partial
+   unique index that makes it structural, takeover/refuse, the per-request gate
+   chain, `authz_decisions`, and the two-audit-row takeover shape of Correction
+   C-1. A local identity is an identity; it does not get a second session model.
+
+### What this correction deliberately does NOT settle
+
+Naming a mechanism is not designing it. None of the following is decided here,
+and **nothing may be implemented against a guess**:
+
+- How a local credential is stored and verified — the algorithm, its
+  parameters, and where the material lives relative to `C1` §6's secret-file
+  discipline. A password hash is credential material and `AGENTS.md`'s
+  privacy law applies to it.
+- Lockout, rate limiting and failed-attempt recording, and whether a failed
+  local bind is audited identically to a failed directory bind.
+- How a local identity acquires `role_bindings`, given §3's model binds roles
+  to a directory-resolved group reference. A local user has no group to
+  resolve; this is the sharpest open question and it is an authorization
+  question, not a login question.
+- Whether the first local administrator is seeded, and by what authority — a
+  bootstrap identity is a security boundary of its own.
+- The order mechanisms are tried, and whether "fallback" means *after a
+  directory failure* or *always available in parallel*. The Product Owner's
+  wording is "the fallback is always the local user"; the precise trigger is
+  not fixed here.
+
+These belong to a successor contract for local authentication, which must
+freeze before any local login path is built. Phase 1's shell (composition root,
+empty UI, menus) does not depend on any of them and is not blocked by this.
+
+### Standing
+
+`UI2_0_C3_IDENTITY_SESSIONS_RBAC_CONTRACT.md` remains FROZEN. This correction
+widens its scope statement and records a ruling; it removes no clause and
+weakens no gate. The LDAP mechanism of §2 and §4.4 is unchanged, including the
+trust-store gap reported in
+`docs/design/LDAP_TLS_TRUST_STORE_PIN_GAP_2026_09_12.md`, which now blocks one
+of two Phase 1 mechanisms rather than the only one.

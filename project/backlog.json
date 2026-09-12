@@ -1203,6 +1203,114 @@
       "priority": "P1",
       "target": "docs/design/LDAP_TLS_TRUST_STORE_PIN_GAP_2026_09_12.md",
       "note": ""
+    },
+    {
+      "id": "auth_local_mechanism_contract",
+      "category": "security",
+      "title": "Local authentication: storage, lockout, role binding for a directory-less identity, bootstrap admin",
+      "status": "planned",
+      "priority": "P1",
+      "target": "C3 Correction C-2; successor contract before any local login path",
+      "note": ""
+    },
+    {
+      "id": "auth_radius_mechanism",
+      "category": "security",
+      "title": "RADIUS authentication mechanism",
+      "status": "planned",
+      "priority": "P2",
+      "target": "after Phase 1 LDAP+local",
+      "note": ""
+    },
+    {
+      "id": "auth_tacacs_mechanism",
+      "category": "security",
+      "title": "TACACS authentication mechanism",
+      "status": "planned",
+      "priority": "P2",
+      "target": "after Phase 1 LDAP+local",
+      "note": ""
+    },
+    {
+      "id": "ui2_composition_root_bootable_shell",
+      "category": "platform",
+      "title": "Bootable service: Spring entry point, DataSource, Flyway at startup, empty UI shell with menus",
+      "status": "planned",
+      "priority": "P1",
+      "target": "Phase 1 step 1; no device contact",
+      "note": ""
+    },
+    {
+      "id": "ui2_frontend_screens_shell",
+      "category": "ui",
+      "title": "Frontend screens: login, menu, device list, device add; frontend is 2 stub files today",
+      "status": "planned",
+      "priority": "P1",
+      "target": "Phase 1 step 2-3",
+      "note": ""
+    },
+    {
+      "id": "cp_failover_command_gate_batch",
+      "category": "evidence",
+      "title": "Command gate: cphaprob stat, cphaprob -a if, cphaprob tablestat for failover checks",
+      "status": "planned",
+      "priority": "P1",
+      "target": "PO request 2026-09-12; network-device command gate required",
+      "note": ""
+    },
+    {
+      "id": "failover_peer_reciprocal_agreement_check",
+      "category": "safety",
+      "title": "Eighth stop-condition: both members must agree reciprocally on local/peer roles in one pass",
+      "status": "planned",
+      "priority": "P1",
+      "target": "PO rule 2026-09-12; _pan_reciprocal_correspondence exists but is not a stop-condition",
+      "note": ""
+    },
+    {
+      "id": "failover_vsx_vsls_mentality_contract",
+      "category": "evidence",
+      "title": "VSX/VSLS semantics: CP per-VS state independent of chassis, VSLS off, static assignment; PAN vsys chassis-bound",
+      "status": "planned",
+      "priority": "P1",
+      "target": "PO statement 2026-09-12; needs vendor-semantic contract",
+      "note": ""
+    },
+    {
+      "id": "failover_recheck_on_request",
+      "category": "safety",
+      "title": "A failover request must re-run every readiness check at that moment; an earlier green never authorizes",
+      "status": "planned",
+      "priority": "P1",
+      "target": "PO rule 2026-09-12; OP.2 contract",
+      "note": ""
+    },
+    {
+      "id": "device_session_one_per_device",
+      "category": "evidence",
+      "title": "One SSH session per device reused for every command; probe opens a channel per command",
+      "status": "planned",
+      "priority": "P1",
+      "target": "PO rule 2026-09-12; command gate says session, code preserves connection",
+      "note": ""
+    },
+    {
+      "id": "discovery_import_selection_flow",
+      "category": "feature",
+      "title": "Discovery: Panorama/MDS enumeration then operator multi-select import of found devices",
+      "status": "planned",
+      "priority": "P2",
+      "target": "behind the standing collection gate",
+      "note": ""
+    },
+    {
+      "id": "device_manual_add_transport_choice",
+      "category": "feature",
+      "title": "Manual device add: IP + vendor + transport method (SSH/API/SNMP) selection",
+      "status": "planned",
+      "priority": "P2",
+      "target": "Phase 1 step 3; transport use is gated",
+      "note": ""
     }
   ]
 }
