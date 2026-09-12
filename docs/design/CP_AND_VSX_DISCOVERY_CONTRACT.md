@@ -2,25 +2,79 @@
 
 ## Status
 
-**DRAFT — not implementation authority.** This document decides the design of
-Check Point and Check Point VSX discovery. It implements none of it, and it
-authorizes no implementation. Applying a status to it is the Product Owner's
-act, not this movement's; until a status is applied, `AGENTS.md` "Authority
-hierarchy" item 2 and "Contract-status law" both apply in full — nothing here
-may be cited as approving a command, a schema or an identity model.
+**FROZEN — PRODUCT OWNER APPROVED, 2026-09-13.** This document is
+implementation authority for Check Point and Check Point VSX **discovery**,
+within the scope §1 states and no further. It remains authority for nothing
+device-facing: DI-7 holds, the collection gate holds, and the bounded lift of
+`docs/design/PO_DECISION_RECORD_2026_09_13_CP_DISCOVERY_COLLECTION_GATE.md`
+— management plane only, four methods, no device contacted — is the outer
+boundary of anything this contract authorizes.
 
-Every rule in §§3–8 was measured against a live multi-domain management server
-during the session that commissioned this contract, by the Product Owner, who
-ran each query and returned the output. §2 states the exact scope of that
-measurement and what it therefore does and does not license. The measurement
-existed only in a session transcript, which `AGENTS.md` item 7 makes
-non-authoritative; writing it down as a rule set is the whole point of this
-movement. No real object name, address, identifier, domain name, certificate
-subject or estate topology is reproduced here — the measurement is cited as
-having been performed, never quoted.
+**Review of record, so the approval is not an unevidenced claim.** The Product
+Owner assistant read §4, §5 and §7 clause by clause in the 2026-09-13 local
+session before applying this status. An agent-applied `FROZEN` is not evidence
+of Product Owner review; this paragraph states what was read and which clauses
+carried the decision.
 
-The twelve `UNKNOWN`s of §10 are open. Applying a status to this document would
-not close any of them.
+- **§4 carried on CL-2 and CL-4.** The ten kinds of §4.2 were checked for
+  exclusivity as a lattice, not taken on assertion: within each object type the
+  three flag triples are pairwise distinct, so no measured object can map to two
+  kinds, and every unlisted flag combination — including a `PRODUCT` object
+  carrying both virtualization flags — falls to `UNCLASSIFIED` rather than to a
+  nearest kind. CL-2's `AMBIGUOUS` outcome is therefore a self-check on the
+  classifier rather than a case the measured estate can produce, which is the
+  right way round. CL-4's closed flag set is what stops a fourth flag being read
+  opportunistically out of a response that happens to carry one.
+- **§5 carried on HR-4 and MC-1.** HR-4 is the clause that makes §5.1 a contract
+  rather than a pair of observations: host resolution is a function of two
+  address fields and **does not branch on object type**, because the clustered
+  and standalone forms were measured separately and agreed. An implementation
+  that reaches for an object-type test inside host resolution has left the
+  measurement, and check 10 is how that is detected rather than argued. MC-1
+  with MC-2 carried the join: the identifier is the key, the display name is
+  never compared and never breaks a tie, and there is **no fallback** when the
+  identifier is absent — `NOT_EVALUABLE` instead. NP-3 is why this is not
+  pedantry: the measured estate already contains two ordinal separators and
+  composite names with an ambiguous split point, so a name rule would be wrong
+  on this estate, today.
+- **§7 carried on LV-1, LV-3 and CS-2.** L-S1 is disproven outright — its most
+  positive value was observed on powered-off devices — and §7.1a's three-plane
+  negative search (372 first-level fields compared between a confirmed-off and a
+  confirmed-live device of the same model, version and role, two differing and
+  both identity fields) is what makes LV-4's `UNKNOWN` an *evidenced* absence
+  rather than a declared one. LV-3 is the clause that does the real work:
+  composing three signals that are individually not liveness does not produce
+  liveness, so no health score, traffic light or "N of M" roll-up is available.
+  CS-2 extends the same prohibition to the connection-table channel state, and
+  CS-5 keeps the equal-count observation a **hypothesis** — identity was never
+  verified — which is the honest reading and the one this freeze approves.
+
+**What this freeze does not do.** It closes none of the twelve `UNKNOWN`s of
+§10; each stays `UNKNOWN` until the evidence its row names is produced, and the
+implementing movement reports what it observed rather than assuming a value. It
+proves no device fact: §11's first four bullets are unamended and stand in
+full, and only its last bullet — the one that said a `DRAFT` authorizes no
+implementation — is superseded, there and not silently. It does not convert
+CS-5's hypothesis into a finding, and it does not license L-S4, L-S5 or L-S6 as
+a positive signal about anything.
+
+**Two clauses the freeze itself invalidated, amended here rather than left to
+contradict it.** §9 check 1 asserted a `DRAFT` status line with no applied
+status; it is replaced by the corresponding check on this status. §9's preamble
+claimed checks 7–18 all require a management server; four of them do not, and
+the amendment separates them, because those four are the acceptance surface the
+implementing movement can actually be held to.
+
+**Binding, for the implementing movement (FB-2/FB-3).** The measurement of §2
+existed in a Product Owner session against a live management server; no worker
+has that server. FB-2 is therefore discharged as follows and not otherwise: the
+implementation binds each role name to exactly one concrete field in a **single
+isolated binding site**, records the binding table with each entry marked
+`UNVERIFIED` pending a Product-Owner-run confirmation, and keeps every rule of
+§§4–7 written against the role names so that no rule depends on a field name.
+A role the implementation cannot bind is `UNKNOWN` and its field is not carried
+(FB-3). A binding marked `UNVERIFIED` is not a measurement and may not be cited
+as one.
 
 ## 1. Scope and authority
 
@@ -44,8 +98,11 @@ begins.
   discovery runs a second time, and how a candidate is reconciled against a
   row that already exists. §8 fixes only the boundary; everything past it is a
   separate contract.
-- Any implementation. This movement produces one document: no service, no
-  query runner, no schema, no screen.
+- Any implementation **by the movement that produced this document**. That
+  movement produced one document: no service, no query runner, no schema, no
+  screen. Since the 2026-09-13 freeze this document is implementation authority
+  for a *separate* movement, bounded by the gate lift named in the status
+  block; it was never authority for its own author.
 - The existing Python. `docs/design/PO_DECISION_RECORD_2026_09_12.md` §2 makes
   it know-how only. No rule here is derived from it, no rule here is a
   restatement of it, and nothing here is a plan to port, wrap, transliterate
@@ -605,11 +662,14 @@ counts, not a correlation of devices.
 - **CS-6b. The channel port is derived, never hard-coded.** The port on which
   the channel is observed is taken from the observed established channels
   themselves, or from configuration — never written into an implementation
-  as a fixed, version-pinned number.
+  as a fixed, version-pinned number. The rule stands on its own and derives
+  its force from no other document.
+
   `docs/design/DISCOVERY_VS_COLLECTION_PYTHON_KNOW_HOW_AUDIT_2026_09_12.md`
   §14 records a hard-coded, version-pinned defect of exactly this shape,
-  already measured in the existing collector; this constraint exists so the
-  new signal does not repeat it.
+  already measured in the existing collector. That document is `DRAFT` and is
+  cited here as provenance — why CS-6b was thought worth writing — and is
+  **not authority** for CS-6b or for anything else in this contract.
 - **CS-6c. Addressing, as a Product Owner statement of record.** The Product
   Owner states, of record, that in this estate a management server and a
   gateway always communicate from their own addresses — never through
@@ -648,15 +708,33 @@ counts, not a correlation of devices.
 
 ## 9. Acceptance checks
 
-Runnable from the repository root or against a management database. None names
-an absolute filesystem path, a developer account, or any identity. Checks 1–6
-are repository checks and are runnable now; checks 7–18 require a management
-server and are the ones that actually prove the model — they are unrun at the
-time of writing (§11).
+Runnable from the repository root, against synthetic fixtures, or against a
+management database. None names an absolute filesystem path, a developer
+account, or any identity. Three bands, separated at the 2026-09-13 freeze
+because the original two-band split overstated what a management server is
+needed for:
 
-1. The document's status line declares `DRAFT`:
+- **Checks 1–6 — repository checks.** Runnable now, with no fixture and no
+  server.
+- **Checks 8, 10, 12 and 13 — property checks, runnable against synthetic
+  fixtures.** Each is a property of the classifier and the resolver, not of any
+  estate: name-blindness, type-blindness, identifier-only joining and the
+  liveness-vocabulary prohibition are all decidable over constructed input.
+  **These four are the acceptance surface of the implementing movement**, and
+  check 13 in particular is how LV-1 is protected by a test rather than by
+  intention.
+- **Checks 7, 9, 11, 14–18 — management-server checks.** These prove the model
+  against a real estate and are **unrun** at the time of writing (§11). A
+  fixture cannot discharge them: each asserts something about what a real
+  enumeration returns, what a real session's audit shows, or what a real run
+  writes.
+
+1. The document's status line declares its applied status and its reviewer:
    `grep -n -A 3 '^## Status$' docs/design/CP_AND_VSX_DISCOVERY_CONTRACT.md`
-   shows a leading `DRAFT` token and no applied status.
+   shows a leading `FROZEN — PRODUCT OWNER APPROVED` token with a date.
+   (Before 2026-09-13 this check asserted a `DRAFT` token and no applied
+   status; the freeze replaced it rather than leaving it to contradict the
+   status block.)
 2. The repository privacy gate reports zero findings, invoked through the
    repository's own documented command:
    `python3 scripts/repository_privacy_check.py`.
@@ -666,9 +744,13 @@ time of writing (§11).
 4. The document names no existing Python module of the product:
    `grep -n -E '\butils/[A-Za-z0-9_/]*\.py' docs/design/CP_AND_VSX_DISCOVERY_CONTRACT.md`
    matches nothing — the existing Python is know-how only (§1).
-5. The diff is exactly one new document:
-   `git diff --name-status origin/main...HEAD` reports exactly one line, an
-   `A` against a path under `docs/design/`.
+5. The diff carries **no implementation**: `git diff --name-status
+   origin/main...HEAD` reports only paths under `docs/design/` plus the durable
+   project-state files `AGENTS.md`'s "Project-state update rule" requires. No
+   path under `utils/`, `scripts/`, `ui2/` or `tests/` appears. (Before
+   2026-09-13 this check required exactly one `A` line, which was correct for
+   the movement that created the document and cannot hold for the movement that
+   amends its status and must update state alongside it.)
 6. `git diff --check origin/main...HEAD` is clean, and
    `python3 -m pytest tests/test_contract_authority_status.py tests/test_architecture_convergence.py tests/test_project_files_budget.py -q`
    passes.
@@ -781,9 +863,12 @@ value here would be a guess wearing a decision's clothes.
   once, and check 7 and check 8 are how they find out whether it held.
 - It would close **none** of the twelve `UNKNOWN`s of §10, and none of them may
   be closed by assertion.
-- It authorizes **no implementation**. `AGENTS.md` "Contract-status law": a
-  `DRAFT` document may guide investigation and must not be treated as
-  implementation authority.
+- *Superseded 2026-09-13.* While this document was `DRAFT` it authorized no
+  implementation, per `AGENTS.md` "Contract-status law". The applied `FROZEN`
+  status makes it implementation authority for discovery within §1's scope and
+  within the gate lift the status block names. The four bullets above are
+  **not** superseded: the freeze still proves no artifact, no device fact and no
+  vendor law, and closes no `UNKNOWN`.
 
 ## 12. Cross-references
 
