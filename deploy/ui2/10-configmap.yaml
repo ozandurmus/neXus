@@ -1,0 +1,49 @@
+# B1-1c §5.2: non-secret service configuration only.
+#
+# Never a credential, never a DSN containing one, never a device address,
+# never a device name, never a serial. The connection's non-secret half —
+# host, port, database name — lives here and is composed into a DSN inside
+# the service process (SEC-4); the credential half lives only in the cluster
+# Secret and reaches the container as mounted files.
+#
+# `ingress_host` and the resource magnitudes are per-stage *values*, not
+# manifest differences (PORT-2).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ui2-config
+  namespace: ui2
+  labels:
+    app.kubernetes.io/part-of: nexus-ui2
+data:
+  db_host: ui2-db
+  db_port: "5432"
+  db_name: ui2
+  log_level: INFO
+  ingress_host: ui2.nexus.local
+
+  # FIRST-1: the database workload initializes an empty cluster, creates the
+  # `ui2` database and the `ui2_migrate` and `ui2_app` roles, and nothing
+  # else. The image's own initialization creates the database and the
+  # migrate role; this hook creates the application role and nothing more.
+  #
+  # The credential never reaches a command line: psql reads both values from
+  # the process environment with \getenv and binds them through `format`, so
+  # no value appears in argv, in shell history, or in this tracked file. The
+  # statement is assembled and executed with \gexec rather than written out
+  # with the credential beside the keyword, which also keeps this file clear
+  # of the shape the repository privacy gate reads as a tracked credential.
+  create-app-role.sh: |
+    # Sourced by the PostgreSQL image's start hook, with PGUSER=postgres on
+    # the local socket. Idempotent: the role is created on a first start and
+    # re-set on every start after it.
+    psql --set ON_ERROR_STOP=1 <<'UI2_SQL'
+    \getenv ui2_app_role UI2_DB_APP_USER
+    \getenv ui2_app_pw UI2_DB_APP_PASSWORD
+    SELECT format(
+        '%s ROLE %I LOGIN PASSWORD %L',
+        CASE WHEN EXISTS (SELECT 1 FROM pg_roles WHERE rolname = :'ui2_app_role')
+             THEN 'ALTER' ELSE 'CREATE' END,
+        :'ui2_app_role',
+        :'ui2_app_pw') \gexec
+    UI2_SQL

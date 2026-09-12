@@ -1,0 +1,27 @@
+# B1-1c PORT-1 and PORT-3: the single documented difference between the
+# local manifest set and the corporate platform.
+#
+# This file is applied *instead of* `deploy/ui2/60-ingress.yaml`, never
+# alongside it, and it lives in its own directory so that a non-recursive
+# `kubectl apply -f deploy/ui2/` of the local set cannot pick it up. Nothing
+# else differs between the stages: not the image, not the Containerfile, not
+# the security context, not the resource declarations, not the volume model,
+# not the secret path, not the number of objects otherwise.
+#
+# The host name is the same per-stage value as the Ingress carries
+# (`ui2-config` key `ingress_host`), in the one field that requires it.
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: ui2
+  namespace: ui2
+  labels:
+    app.kubernetes.io/part-of: nexus-ui2
+spec:
+  host: ui2.nexus.local
+  to:
+    kind: Service
+    name: ui2-service
+    weight: 100
+  port:
+    targetPort: http

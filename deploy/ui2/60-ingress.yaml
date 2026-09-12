@@ -1,0 +1,30 @@
+# B1-1c §5.2: external reach on the local cluster and on the Ingress-based
+# stage. The host name is a per-stage *value* carried in `ui2-config`
+# (`ingress_host`) and repeated here in the single field that requires it —
+# PORT-2 — never a structural difference.
+#
+# PORT-1/PORT-3: on the corporate platform this object is replaced by the
+# Route in `openshift/60-route.yaml`, which is applied *instead of* this
+# file. That substitution is the only difference between the stages. There
+# is no platform-conditional construct here: no templating that emits a
+# different kind per platform, no annotation that only one platform honours,
+# no commented-out alternative block.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ui2
+  namespace: ui2
+  labels:
+    app.kubernetes.io/part-of: nexus-ui2
+spec:
+  rules:
+    - host: ui2.nexus.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: ui2-service
+                port:
+                  name: http

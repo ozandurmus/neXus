@@ -1,0 +1,14 @@
+# B1-1c §5.2: the namespace the set is applied into. It carries no quota and
+# no limit-range assumption, because a quota or limit range would be a
+# platform-conditional object and PORT-3 forbids introducing one before the
+# platform requires it.
+#
+# Whether this object may be applied on the corporate platform, or whether
+# the project is pre-provisioned there, is contract UNKNOWN U-4. It is an
+# open precondition, not a second manifest difference: PORT-1 stands.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ui2
+  labels:
+    app.kubernetes.io/part-of: nexus-ui2

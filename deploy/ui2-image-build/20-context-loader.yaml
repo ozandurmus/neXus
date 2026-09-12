@@ -1,0 +1,33 @@
+# A holding pod whose only job is to make the build-context claim writable
+# through the cluster API, so that the repository can be streamed into it
+# with `kubectl exec`. It runs the same UBI9 OpenJDK 21 image the build
+# stage uses, pinned by the same digest, so the builder introduces no third
+# base image.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: ui2-build-context-loader
+  namespace: ui2-build
+  labels:
+    app.kubernetes.io/part-of: nexus-ui2
+    app.kubernetes.io/component: image-build
+spec:
+  restartPolicy: Never
+  containers:
+    - name: loader
+      image: registry.access.redhat.com/ubi9/openjdk-21@sha256:fa55b9f126da0d855e3709473e2237ad500f8d8e6a059f99b3ca10cdc2c5de58
+      command: ["sleep", "infinity"]
+      volumeMounts:
+        - name: context
+          mountPath: /workspace
+      resources:
+        requests:
+          cpu: 10m
+          memory: 64Mi
+        limits:
+          cpu: 200m
+          memory: 256Mi
+  volumes:
+    - name: context
+      persistentVolumeClaim:
+        claimName: ui2-build-context

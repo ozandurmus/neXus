@@ -1,0 +1,20 @@
+# B1-1c §5.2: in-cluster reach to the service workload. ClusterIP only, per
+# OS-9: external reach is through the ingress object, and no node-level or
+# cloud-level service type appears anywhere in this set.
+apiVersion: v1
+kind: Service
+metadata:
+  name: ui2-service
+  namespace: ui2
+  labels:
+    app.kubernetes.io/part-of: nexus-ui2
+    app.kubernetes.io/component: service
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/part-of: nexus-ui2
+    app.kubernetes.io/component: service
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http

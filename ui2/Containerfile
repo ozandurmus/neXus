@@ -1,0 +1,105 @@
+# UI 2.0 service image — B1-1c §3.
+#
+# Two stages. The build stage carries the JDK so that no host JDK, no host
+# build daemon and no host container engine participates (§3.2, BP-1). The
+# final stage carries a JRE only.
+#
+# Both bases are the Red Hat Universal Base Image 9 OpenJDK 21 family
+# (§3.1), pinned by manifest-index digest rather than by a moving tag, so
+# that what was proved cannot change without this tracked file changing.
+#
+# Build context: the `ui2/` directory.
+
+# ---------------------------------------------------------------------------
+# Stage 1 — build
+# ---------------------------------------------------------------------------
+FROM registry.access.redhat.com/ubi9/openjdk-21@sha256:fa55b9f126da0d855e3709473e2237ad500f8d8e6a059f99b3ca10cdc2c5de58 AS build
+
+# The base image's own default account cannot create /build, and this stage
+# never ships, so the build runs with id 0 here and only here.
+USER 0
+
+# Gradle's home lives inside the context so that nothing is resolved from,
+# or written to, a path outside this stage.
+ENV GRADLE_USER_HOME=/build/.gradle-home
+
+WORKDIR /build
+COPY . /build
+
+# The committed wrapper is the only Gradle entry point, validated by its
+# committed distributionSha256Sum (B1-1a §4). No verification-metadata
+# write, no lock write or update, no dependency refresh and no lenient
+# verification flag is passed (§3.2).
+RUN ./gradlew --no-daemon --console=plain :service:bootJar \
+ && cp "$(ls /build/service/build/libs/*.jar | grep -v -- '-plain\.jar' | head -1)" \
+       /build/service-boot.jar
+
+# ---------------------------------------------------------------------------
+# Stage 2 — runtime
+# ---------------------------------------------------------------------------
+FROM registry.access.redhat.com/ubi9/openjdk-21-runtime@sha256:360822c35c5741f542ab78fe123e6c4d9b68e0113a88d6e0250bb1f377b17f29
+
+# Ownership is by group 0, never by a uid: the uid this process runs as is
+# assigned at admission time and is not knowable here (§3.3). Group 0 is the
+# only group membership the platform guarantees.
+#
+# FS-3 declares the closed writable set: exactly /app/tmp (the JVM temporary
+# directory) and /app/home (the declared HOME). Nothing else in this image is
+# writable, and both are supplied as emptyDir mounts at runtime (FS-4).
+USER 0
+RUN mkdir -p /app /app/tmp /app/home
+
+COPY --from=build /build/service-boot.jar /app/service.jar
+
+# FS-1: read paths are group-0 readable and traversable.
+# FS-2: the two writable paths are group-0 owned and carry g=u.
+# FS-3: the writable set is *closed*. The base family ships a number of
+# group-writable directories of its own (/opt/jboss/**, /deployments/data,
+# /home/default, /var/spool/mail) and the usual world-writable /tmp and
+# /var/tmp. None of them is declared here, so the write bit is taken off
+# every path outside the declared set and then restored on exactly the two
+# that are declared. The run script those jboss paths belong to is not this
+# image's entry point (EP-3).
+#
+# The kernel and builder mount points are pruned rather than changed: they
+# are not image content, they are not present in the shipped layers, and at
+# runtime FS-4's readOnlyRootFilesystem is what governs them.
+RUN chown -R 0:0 /app \
+ && chmod 0750 /app \
+ && chmod 0640 /app/service.jar \
+ && find / -xdev \( -path /proc -o -path /sys -o -path /dev -o -path /run \
+      -o -path /var/run -o -path /kaniko -o -path /workspace \) -prune \
+      -o ! -type l -perm -0002 -exec chmod o-w {} + \
+ && find / -xdev \( -path /proc -o -path /sys -o -path /dev -o -path /run \
+      -o -path /var/run -o -path /kaniko -o -path /workspace \) -prune \
+      -o ! -type l -perm -0020 -exec chmod g-w {} + \
+ && chmod 0770 /app/tmp /app/home
+
+# The working directory is a read path, not a writable one: a process whose
+# current directory is writable can create a file nobody declared.
+WORKDIR /app
+
+# FS-5: HOME is explicit and satisfies FS-2, and no code path may depend on
+# a passwd entry for the running id — user.home is set on the command line
+# rather than looked up.
+ENV HOME=/app/home
+ENV LANG=C.UTF-8
+
+EXPOSE 8080
+
+# EP-3: the JVM directly, with the packaged artifact. No shell wrapper, so
+# there is no place a credential could be assembled into a command line.
+ENTRYPOINT ["java", \
+            "-XX:MaxRAMPercentage=75.0", \
+            "-Djava.io.tmpdir=/app/tmp", \
+            "-Duser.home=/app/home", \
+            "-jar", "/app/service.jar"]
+
+# EP-1/EP-2: the workload role is an argument, and `service` is the only role
+# this contract authorizes.
+CMD ["service"]
+
+# FS-6: numeric, never a name — the base family's own non-root id. It is a
+# default the platform overrides, and a manifest asserting runAsNonRoot with
+# no uid can only be validated against a numeric declaration.
+USER 185
