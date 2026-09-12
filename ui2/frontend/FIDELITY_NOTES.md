@@ -13,6 +13,18 @@ six-tone chip vocabulary), `M3Tabs`, `ToggleRow` (a disabled `m3-switch`),
 `M3Button` (filled/tonal/outlined/text emphases) and `AddDeviceDialogTrigger`
 (the enrollment dialog). All are used by more than one screen.
 
+**Correction (this pass).** Every earlier revision of this document said a
+screen's tab strip was "matched" against its frame. That claim was wrong:
+`M3Tabs` rendered a strip of labels only, wired to nothing, and every screen
+underneath it rendered one fixed body regardless of which label was
+selected — clicking a tab never changed what was on screen, and
+Administration's "Project plan" tab rendered nothing at all. No test caught
+it, because no test ever asserted that selecting a tab changed the rendered
+output. `M3Tabs` now takes a `panel` per tab and mounts only the selected
+one (ARIA `tablist`/`tab`/`tabpanel`, keyboard arrow navigation, only one
+panel in the DOM at a time), and each screen below records what changed:
+panels, not strips.
+
 ## Overview (`M3Overview`)
 Matched: header with the two action buttons and the overflow capability
 menu, the four metric cards, a "Configuration alignment" panel carrying the
@@ -28,32 +40,45 @@ padded with placeholder charts.
 
 ## Inventory (`M3Inventory`)
 Matched: list/detail split, the search-field affordance, the vendor/stale
-filter chips (now at zero), and the detail pane's four-tab strip
-(Interfaces / Routing / Cluster members / Identity & provenance) shown
-against the "no device selected" panel.
+filter chips (now at zero), and the detail pane's four tabs (Interfaces /
+Routing / Cluster members / Identity & provenance), each a real ARIA
+tabpanel. Selecting a tab renders that tab's own empty-state panel and no
+other tab's: Interfaces names the missing interface read, Routing the
+missing routing-table read, Cluster members the missing per-peer identity-
+verified read, Identity & provenance the missing direct device read. No two
+tabs share a sentence.
 Not matched: the frame's populated list rows and interface table are
 product data that does not exist yet; showing them would be exactly the
-regression AC-4 guards against, so they stay behind `?preview=inventory`.
+regression the per-tab tests guard against, so they stay behind
+`?preview=inventory`.
 
 ## Configuration (`M3Configuration`)
 Matched: list/detail split, the drift/override filter chips, and the
-detail pane's seven-tab strip (Overview / Current state / Alignment /
-Policy & objects / History / Evidence / Backup), defaulted to Alignment as
-the frame shows.
+detail pane's seven tabs (Overview / Current state / Alignment / Policy &
+objects / History / Evidence / Backup), each a real ARIA tabpanel and
+defaulted to Alignment as the frame shows. The frame itself only depicts
+the populated Alignment tab; the other six panels each name the specific
+evidence their tab needs and does not have (an intent/device summary for
+Overview, a direct verified read for Current state, a configuration read
+for Policy & objects, repeated collection for History, an export source for
+Evidence, the class 1 write's own contract for Backup) rather than
+inventing a populated look the frame never showed.
 Not matched: the populated alignment table (CMA intent vs. per-member
 evidence) — no intent snapshot and no device read exist yet, so there is
-nothing to tabulate; the frame's populated tabs beyond Alignment imply
-policy-object and backup-history views this build does not yet collect for
-and are left as tab labels only, not implemented panels.
+nothing to tabulate.
 
 ## Operations (`M3Operations`)
-Matched: the top-level tab strip (HA & readiness / Jobs / Queue / History),
-header actions, and the four metric cards.
+Matched: the top-level tabs (HA & readiness / Jobs / Queue / History),
+header actions, and the four metric cards (kept visible across every tab,
+since they summarize the whole screen rather than any one tab). Each tab is
+now a real ARIA tabpanel with its own empty state — HA & readiness names
+the missing enrolled cluster and health read, Jobs keeps the existing "no
+jobs yet" statement, Queue and History are new and each name what has not
+happened yet (nothing scheduled; nothing has run to have a history).
 Not matched: the frame's per-cluster readiness cards and job history table
-are populated evidence; the empty state keeps its single "no jobs yet"
-panel instead of four zero-value readiness cards, since a cluster card with
-no member rows communicated nothing beyond what the metric row already
-says.
+are populated evidence with no analogue in an empty database; each tab's
+panel states the absence in prose instead of four or six zero-value rows
+duplicating what a card grid would only re-state as zero.
 
 ## Compliance (`M3Compliance`)
 Matched: header actions, the framework chip row (now reading "not
@@ -64,12 +89,20 @@ populated evidence with no analogue when zero frameworks are assigned;
 kept as the single empty panel already in place.
 
 ## Administration (`M3Administration`)
-Matched: the four-tab strip, header actions including the enrollment
-dialog, the device-registry panel with its overflow capability menu (an
-enabled read action alongside "Collect now" shown disabled and explained as
-console-only, per the canvas's own rule), the enrollment summary now using
-the shared chip vocabulary, and three collection-scope toggles shown off
-and disabled (no write path exists for any of them in this movement).
+Matched: the four tabs, each now a real ARIA tabpanel, header actions
+including the enrollment dialog, the device-registry panel with its
+overflow capability menu (an enabled read action alongside "Collect now"
+shown disabled and explained as console-only, per the canvas's own rule),
+the enrollment summary now using the shared chip vocabulary, and three
+collection-scope toggles shown off and disabled (no write path exists for
+any of them in this movement) — all under the Device management tab, which
+is what the frame depicts (its own tab strip shows only that tab selected).
+Inventory exclusions, Credentials and Project plan have no populated view
+in the frame either; each now gets its own panel naming what is missing
+instead of falling through to Device management's body or, for Project
+plan, rendering nothing. Credentials' panel carries the frame's own
+"credentials are stored outside the repository" sentence, since that line
+is specific to the credential column the frame shows empty.
 Not matched: the registry table's populated rows, and the frame's
 credential-profile column — no device is enrolled and no credential
 profile is chosen yet.

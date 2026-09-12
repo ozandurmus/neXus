@@ -100,46 +100,76 @@ export function StatusChip({
   );
 }
 
-/** The canvas's `m3-tab` strip: an underline indicator in primary colour. */
+export interface M3TabDef {
+  readonly label: string;
+  /** This tab's own panel. Rendered only while this tab is selected. */
+  readonly panel: ReactNode;
+}
+
+/**
+ * The canvas's `m3-tab` strip: an underline indicator in primary colour,
+ * wired to a real ARIA tablist. Only the selected tab's panel is ever
+ * mounted -- a caller cannot satisfy the per-tab tests by rendering every
+ * panel at once and hiding the rest with CSS. Arrow-key navigation moves
+ * both focus and the selection (`selectionFollowsFocus`), matching the
+ * ARIA Authoring Practices tab pattern.
+ */
 export function M3Tabs({
   tabs,
   ariaLabel,
   initial = 0,
 }: {
-  readonly tabs: readonly string[];
+  readonly tabs: readonly M3TabDef[];
   readonly ariaLabel: string;
   readonly initial?: number;
 }) {
   const [value, setValue] = useState(initial);
+  const slug = ariaLabel.replace(/[^a-z0-9]+/gi, "-").toLowerCase();
+  const panelId = `${slug}-panel`;
+  const tabId = (index: number) => `${slug}-tab-${index}`;
   return (
-    <Tabs
-      value={value}
-      onChange={(_event, next: number) => setValue(next)}
-      aria-label={ariaLabel}
-      variant="scrollable"
-      scrollButtons={false}
-      sx={{
-        minHeight: 48,
-        borderBottom: `1px solid ${m3.outlineVar}`,
-        "& .MuiTabs-indicator": { backgroundColor: m3.primary, height: 3 },
-      }}
-    >
-      {tabs.map((t) => (
-        <Tab
-          key={t}
-          label={t}
-          sx={{
-            minHeight: 48,
-            textTransform: "none",
-            fontSize: 14,
-            fontWeight: 500,
-            letterSpacing: "0.1px",
-            color: m3.onSurfaceVar,
-            "&.Mui-selected": { color: m3.primary },
-          }}
-        />
-      ))}
-    </Tabs>
+    <>
+      <Tabs
+        value={value}
+        onChange={(_event, next: number) => setValue(next)}
+        aria-label={ariaLabel}
+        variant="scrollable"
+        scrollButtons={false}
+        selectionFollowsFocus
+        sx={{
+          minHeight: 48,
+          borderBottom: `1px solid ${m3.outlineVar}`,
+          "& .MuiTabs-indicator": { backgroundColor: m3.primary, height: 3 },
+        }}
+      >
+        {tabs.map((t, index) => (
+          <Tab
+            key={t.label}
+            id={tabId(index)}
+            aria-controls={panelId}
+            label={t.label}
+            sx={{
+              minHeight: 48,
+              textTransform: "none",
+              fontSize: 14,
+              fontWeight: 500,
+              letterSpacing: "0.1px",
+              color: m3.onSurfaceVar,
+              "&.Mui-selected": { color: m3.primary },
+            }}
+          />
+        ))}
+      </Tabs>
+      <Box
+        key={value}
+        role="tabpanel"
+        id={panelId}
+        aria-labelledby={tabId(value)}
+        sx={{ display: "flex", flexDirection: "column", gap: 2, flex: 1, minHeight: 0 }}
+      >
+        {tabs[value]?.panel}
+      </Box>
+    </>
   );
 }
 

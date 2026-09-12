@@ -42,12 +42,53 @@ export function InventoryScreen() {
           <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, minHeight: 0 }}>
             <M3Tabs
               ariaLabel="Device detail"
-              tabs={["Interfaces", "Routing", "Cluster members", "Identity & provenance"]}
+              tabs={[
+                {
+                  label: "Interfaces",
+                  panel: (
+                    <Stack spacing={1.5}>
+                      <EmptyPanel
+                        title="No interface evidence"
+                        body="Enrol a device from Administration to see its interfaces here; none is enrolled
+                              yet."
+                      />
+                      <Typography variant="body2">
+                        Interface evidence is read over SSH or HTTPS. Values are observed, never written.
+                      </Typography>
+                    </Stack>
+                  ),
+                },
+                {
+                  label: "Routing",
+                  panel: (
+                    <EmptyPanel
+                      title="No routing evidence"
+                      body="Routing tables are read directly from an enrolled device; no device has been
+                            enrolled or read yet."
+                    />
+                  ),
+                },
+                {
+                  label: "Cluster members",
+                  panel: (
+                    <EmptyPanel
+                      title="No cluster membership evidence"
+                      body="Membership needs an identity-verified read from each peer; none has been collected
+                            yet."
+                    />
+                  ),
+                },
+                {
+                  label: "Identity & provenance",
+                  panel: (
+                    <EmptyPanel
+                      title="No identity or provenance evidence"
+                      body="Identity requires a direct, verified device read; none has occurred yet."
+                    />
+                  ),
+                },
+              ]}
             />
-            <EmptyPanel title="No device selected" body="Enrol a device from Administration to see its interfaces, routing, cluster membership and identity evidence here." />
-            <Typography variant="body2">
-              Interface and routing evidence is read over SSH or HTTPS. Values are observed, never written.
-            </Typography>
           </Box>
         }
       />

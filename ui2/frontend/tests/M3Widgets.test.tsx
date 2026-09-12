@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { ThemeProvider } from "@mui/material/styles";
 import { m3Theme } from "../src/theme/m3Theme";
@@ -24,14 +24,54 @@ describe("StatusChip", () => {
 });
 
 describe("M3Tabs", () => {
-  it("switches the selected tab on click", () => {
-    render(withTheme(<M3Tabs ariaLabel="Test tabs" tabs={["One", "Two", "Three"]} />));
+  const threeTabs = [
+    { label: "One", panel: <span>One's panel</span> },
+    { label: "Two", panel: <span>Two's panel</span> },
+    { label: "Three", panel: <span>Three's panel</span> },
+  ];
+
+  it("switches the selected tab and its panel on click", () => {
+    render(withTheme(<M3Tabs ariaLabel="Test tabs" tabs={threeTabs} />));
     const tablist = screen.getByRole("tablist", { name: "Test tabs" });
     const one = within(tablist).getByRole("tab", { name: "One" });
     const two = within(tablist).getByRole("tab", { name: "Two" });
     expect(one).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByText("One's panel")).toBeInTheDocument();
+
     fireEvent.click(two);
     expect(two).toHaveAttribute("aria-selected", "true");
+    expect(one).toHaveAttribute("aria-selected", "false");
+    expect(screen.getByText("Two's panel")).toBeInTheDocument();
+  });
+
+  it("never renders a non-selected tab's panel at the same time as the selected one", () => {
+    render(withTheme(<M3Tabs ariaLabel="Test tabs" tabs={threeTabs} />));
+    expect(screen.getByText("One's panel")).toBeInTheDocument();
+    expect(screen.queryByText("Two's panel")).toBeNull();
+    expect(screen.queryByText("Three's panel")).toBeNull();
+
+    fireEvent.click(screen.getByRole("tab", { name: "Three" }));
+    expect(screen.getByText("Three's panel")).toBeInTheDocument();
+    expect(screen.queryByText("One's panel")).toBeNull();
+    expect(screen.queryByText("Two's panel")).toBeNull();
+  });
+
+  it("gives the panel role tabpanel, associated with the selected tab", () => {
+    render(withTheme(<M3Tabs ariaLabel="Test tabs" tabs={threeTabs} />));
+    const one = screen.getByRole("tab", { name: "One" });
+    const panel = screen.getByRole("tabpanel");
+    expect(panel).toHaveAttribute("aria-labelledby", one.id);
+    expect(one).toHaveAttribute("aria-controls", panel.id);
+  });
+
+  it("moves the selection with arrow-key navigation", () => {
+    render(withTheme(<M3Tabs ariaLabel="Test tabs" tabs={threeTabs} />));
+    const one = screen.getByRole("tab", { name: "One" });
+    const two = screen.getByRole("tab", { name: "Two" });
+    act(() => one.focus());
+    fireEvent.keyDown(one, { key: "ArrowRight" });
+    expect(two).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByText("Two's panel")).toBeInTheDocument();
   });
 });
 
