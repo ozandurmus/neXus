@@ -42,9 +42,17 @@ class AuditCoverageCompletenessTest {
      * bookkeeping, written by {@code ui2_migrate} before any audit context
      * can exist. Wiring {@code fn_audit_capture} to it would make every
      * migration fail closed with {@code audit_context_missing}.</p>
+     *
+     * <p>{@code audit_redaction_policy} is excluded for exactly that second
+     * reason, declared by {@code UI2_0_B1_02A_AUDIT_REDACTION_CONTRACT.md}
+     * §5.6: it is seeded by {@code V5} as {@code ui2_migrate}, and
+     * {@code ui2_app} holds no write grant on it at all, so its
+     * tamper-evidence is the grant and the §4 coverage test rather than a
+     * trigger.</p>
      */
     static final Set<String> AUDIT_TRIGGER_EXCLUSIONS = Set.of(
-            "audit_log", "authz_decisions", "actor_authz_state", "flyway_schema_history");
+            "audit_log", "authz_decisions", "actor_authz_state", "flyway_schema_history",
+            "audit_redaction_policy");
 
     private static Ui2PostgresFixture fixture;
 

@@ -1,0 +1,162 @@
+# UI 2.0 — B1-2a audit redaction contract
+
+## Status
+
+**FROZEN — 2026-09-12**, under the Product Owner's standing written
+authorization to approve, revise or cancel UI 2.0 B1 contracts.
+
+Scope-limited successor to `docs/design/UI2_0_B1_02_SCHEMA_V1_CONTRACT.md`
+(FROZEN) §3.5. It changes one thing: what `fn_audit_capture` is permitted to
+persist. Every other clause of B1-2 stands unchanged.
+
+## 1. The defect this contract fixes
+
+`V1__initial_schema.sql`'s `fn_audit_capture` writes
+`to_jsonb(OLD)` / `to_jsonb(NEW)` — **the whole row** — into
+`audit_log.before_state` / `after_state`. Measured against a live PostgreSQL
+16 server: inserting one `sessions` row places that row's `csrf_secret` value
+verbatim into `audit_log.after_state`, where the `ui2_app` role reads it with
+a plain `SELECT` (`ui2_app` holds `SELECT` on `audit_log` by V1 §5).
+
+Two repository laws are violated as written:
+
+- `AGENTS.md` "Privacy and DLP": secrets never enter browser or shareable
+  artifacts. `audit_log` is the backing store of the B1-8 audit screen, so
+  this defect was one screen away from rendering a live session secret into a
+  browser.
+- `AGENTS.md` "Raw-evidence law": persist the minimum required semantics,
+  prefer tokens and relationships over raw retention. A full-row snapshot is
+  raw retention by default.
+
+`role_bindings.group_reference_encrypted` is the same class with an extra
+consequence: copying ciphertext into a second table puts it outside the
+lifecycle of the key that protects it, so a key rotation or revocation never
+reaches the audit copies.
+
+This defect originates in this repository's own contracts, not in any
+inherited material.
+
+## 2. Decision
+
+Full-row capture is retained — the audit trail's value depends on it — but a
+**declared redaction set** is never persisted as a value. A redacted column's
+value is replaced by `sha256:<hex>` of the value's text representation. `NULL`
+stays `NULL`.
+
+The digest form is chosen over blanking because it preserves every audit
+property the value itself provided, except disclosure:
+
+| Property | Value stored | Blanked | `sha256:` digest |
+| --- | --- | --- | --- |
+| Column was present / absent | yes | yes | yes |
+| Value changed between two audit rows | yes | **no** | yes |
+| Two rows carry the same value | yes | **no** | yes |
+| Value is disclosed | **yes** | no | no |
+
+This is `AGENTS.md`'s "compare locally → report the relationship, not the
+values" applied to storage: the audit trail can still prove *that* a secret
+changed, and that two records agree or disagree, without holding it.
+
+A digest is not a protection for a low-entropy value: an attacker who can
+read `audit_log` can confirm a guess. It is therefore **not** a substitute for
+the column's own protection, and never a reason to relax a grant, an
+encryption boundary, or a revoke elsewhere.
+
+## 3. The redaction set
+
+Tier 1 — secret or cryptographic material. Redaction is mandatory.
+
+| Table | Column | Reason |
+| --- | --- | --- |
+| `sessions` | `csrf_secret` | live secret material |
+| `role_bindings` | `group_reference_encrypted` | ciphertext outside its key's lifecycle |
+
+Tier 2 — operational identity, credential location, or device-derived
+content. Redaction is mandatory; each is a pointer or payload that the audit
+trail needs to track but never to disclose.
+
+| Table | Column | Reason |
+| --- | --- | --- |
+| `credential_references` | `backend_pointer` | credential location |
+| `secrets_metadata` | `reference_pointer` | credential location |
+| `endpoints` | `address_ref` | management-path operational identity |
+| `job_step_attempt` | `captured_variables` | device-derived captured content |
+| `job_reconciliation` | `evidence` | free-text evidence of unbounded shape |
+
+Explicitly **not** redacted, with reason: `provenance_records.sanitized_fragment`
+(a sanitization boundary is already asserted upstream; redacting it here would
+hide the evidence the audit exists to carry), `gate_registry.safe_telemetry_fields`
+(declared safe by the command gate), `*_fingerprint_sha256` columns (already
+digests), and every identifier, state, timestamp, class and count column.
+
+A column being absent from both lists is not permission to persist it — see
+§4.
+
+## 4. Fail-closed coverage rule
+
+Every column of every audited table is classified exactly once: auditable in
+full, or redacted. An unclassified column is a **build failure**, not a
+default.
+
+A test enumerates, from the live database, every column of every table
+carrying a `trg_audit_*` trigger and fails if any column appears in neither
+list. Adding a column to an audited table therefore forces an explicit
+decision in the same change. The test must be proven to fail by injecting a
+real unclassified column.
+
+This is the part that matters more than the current list: the list will be
+wrong again the next time a table grows a column, and the rule is what
+catches it.
+
+## 5. Implementation requirements
+
+1. A forward-only migration (`V5`). `V1` is not edited — B1-2 §2 forbids
+   editing a migration already applied to any environment.
+2. The policy is stored in a table the migration creates and seeds, so that
+   both the coverage test and the audit screen can read it. `ui2_app` receives
+   `SELECT` only; no `INSERT`/`UPDATE`/`DELETE` grant, so the application
+   cannot widen or narrow its own audit policy at runtime.
+3. `fn_audit_capture` keeps its `SECURITY DEFINER` and its existing
+   fail-closed `audit_context_missing` behaviour unchanged. Redaction is
+   applied after the context check, never instead of it.
+4. The function must not be able to fail open: if the policy table is
+   unreadable or empty for a table that has declared redactions, the mutation
+   fails rather than persisting an unredacted row.
+5. No DSN, secret, or redacted value appears in any log, error message, or
+   exception raised by the function.
+6. `audit_redaction_policy` itself carries no audit trigger, and is a
+   declared exclusion from B1-2 §3.5's audit-coverage rule. The reason is the
+   same one that excludes `flyway_schema_history`: the table is written only
+   by a migration running as `ui2_migrate`, before any audit context can
+   exist, so wiring `fn_audit_capture` to it would make every migration fail
+   closed with `audit_context_missing`. Tamper-evidence for the policy comes
+   from the §5.2 grant instead — `ui2_app` cannot write it at all — and from
+   the §4 coverage test, which fails if the policy stops covering a column.
+7. Existing `audit_log` rows written before `V5` still contain unredacted
+   values. The migration purges them, because there is no production
+   environment and no retention obligation over development rows; a future
+   environment with a retention obligation needs its own successor decision.
+
+## 6. Acceptance checks
+
+1. Inserting a `sessions` row leaves no occurrence of the `csrf_secret` value
+   anywhere in `audit_log`, and leaves `sha256:<hex>` in its place.
+2. Two different secret values produce two different digests; the same value
+   twice produces the same digest — proving change detection survives.
+3. A `NULL` redacted column stays `NULL`, and is distinguishable from a
+   redacted non-null value.
+4. Every Tier 1 and Tier 2 column named in §3 is proven redacted by an
+   assertion naming that table and column, not by a blanket scan.
+5. The §4 coverage test fails when an unclassified column is added, and the
+   failure names the table and column.
+6. `fn_audit_capture`'s `audit_context_missing` refusal still fires, and no
+   row and no audit row commits.
+7. `ui2_app` cannot write to the policy table (SQLState `42501`).
+8. The full `ui2` integration suite passes against a real PostgreSQL 16.
+
+## 7. What this contract does not decide
+
+Retention and export of `audit_log` (who may read it, for how long, and in
+what form it leaves the product) is the B1-8 audit-screen contract's and the
+DEPLOY.1 evidence-egress policy's business, not this one's. Nor does this
+contract authorize any audit screen: it only makes one safe to design.
