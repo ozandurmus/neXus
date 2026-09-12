@@ -1,0 +1,23 @@
+# B1-1c §5.2: the database data directory.
+#
+# `storageClassName` is omitted so that the cluster's default class applies
+# on every stage; there is no `volumeName` pinning a pre-created volume and
+# no node-path volume of any kind. The storage size is a per-stage value
+# (PORT-2).
+#
+# RESET-1: this claim is the reset. It is deleted and re-created through the
+# cluster API, which makes the next database start a first start by FIRST-1.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ui2-db-data
+  namespace: ui2
+  labels:
+    app.kubernetes.io/part-of: nexus-ui2
+    app.kubernetes.io/component: database
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi

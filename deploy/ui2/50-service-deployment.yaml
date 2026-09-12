@@ -1,0 +1,147 @@
+# B1-1c §5.2: the `service` role workload, and the only workload in this set
+# (EP-2). `worker` and `scheduler` are deferred by the contract, not omitted
+# by accident.
+#
+# `replicas: 1` at stages 1 and 2 (§6.4): at one replica the start-up
+# migration is safe without a concurrent-migration guard, and RESET-3 makes
+# the restart after a reset meaningful.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ui2-service
+  namespace: ui2
+  labels:
+    app.kubernetes.io/part-of: nexus-ui2
+    app.kubernetes.io/component: service
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/part-of: nexus-ui2
+      app.kubernetes.io/component: service
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/part-of: nexus-ui2
+        app.kubernetes.io/component: service
+    spec:
+      # FS-7: no fixed uid, no fixed gid and no volume group id is set
+      # anywhere in this set; only the non-root assertion is made, and the
+      # image's numeric account is what it is validated against (FS-6).
+      securityContext:
+        runAsNonRoot: true
+      # EP-4: the process must terminate on SIGTERM within this window
+      # without leaving the database mid-migration.
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: service
+          # BP-7/OS-10: an immutable reference. This digest is the image the
+          # in-cluster build produced from the commit that introduced this
+          # file; PORT-2 makes the image reference a per-stage value.
+          image: registry.kube-system.svc.cluster.local/nexus-ui2-service@sha256:adc2ea92024bbc480635ed19c7eeb75049482627946f15f779ae3082366a3db0
+          # EP-1: the workload role is an argument, not a second image, a
+          # second tag or a shell-interpreted environment variable.
+          args: ["service"]
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            # SEC-4: the non-secret half of the connection comes from the
+            # ConfigMap and the DSN is assembled in the process. No complete
+            # DSN containing a credential exists in a manifest, a ConfigMap,
+            # an image layer, an argument or a log line.
+            - name: UI2_DB_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: ui2-config
+                  key: db_host
+            - name: UI2_DB_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: ui2-config
+                  key: db_port
+            - name: UI2_DB_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: ui2-config
+                  key: db_name
+            - name: UI2_DB_URL
+              value: "jdbc:postgresql://$(UI2_DB_HOST):$(UI2_DB_PORT)/$(UI2_DB_NAME)"
+            - name: LOGGING_LEVEL_ROOT
+              valueFrom:
+                configMapKeyRef:
+                  name: ui2-config
+                  key: log_level
+            # The credential reaches the process as four mounted files, per
+            # the C1 §6 secret-file rule the composition root implements: a
+            # missing, unreadable or empty file stops start-up rather than
+            # falling back. These entries carry paths, never values.
+            - name: UI2_DB_APP_USER_FILE
+              value: /run/secrets/ui2-db/app-user
+            - name: UI2_DB_APP_PASSWORD_FILE
+              value: /run/secrets/ui2-db/app-password
+            - name: UI2_DB_MIGRATE_USER_FILE
+              value: /run/secrets/ui2-db/migrate-user
+            - name: UI2_DB_MIGRATE_PASSWORD_FILE
+              value: /run/secrets/ui2-db/migrate-password
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+            seccompProfile:
+              type: RuntimeDefault
+          # OS-6: requests and limits for both cpu and memory. U-8 records
+          # the magnitudes as undecided; PORT-2 makes them per-stage values,
+          # so the structure does not wait on the numbers.
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 5
+            failureThreshold: 60
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 20
+            timeoutSeconds: 3
+            failureThreshold: 3
+          # OS-8/FS-4: the root filesystem is read only and each declared
+          # writable path of FS-3 — the JVM temporary directory and the
+          # declared HOME — is supplied as an emptyDir. An image-layer path
+          # is never a writable path at runtime.
+          volumeMounts:
+            - name: tmp
+              mountPath: /app/tmp
+            - name: home
+              mountPath: /app/home
+            - name: db-credentials
+              mountPath: /run/secrets/ui2-db
+              readOnly: true
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        - name: home
+          emptyDir: {}
+        - name: db-credentials
+          secret:
+            secretName: ui2-db
+            defaultMode: 0440

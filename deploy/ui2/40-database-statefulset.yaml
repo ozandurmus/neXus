@@ -1,0 +1,137 @@
+# B1-1c DB-1/DB-2: PostgreSQL 16 in the cluster, as a StatefulSet with one
+# replica rather than a Deployment, so that a stable identity and a single
+# non-shared claim on the data directory keep two pods from opening the same
+# data directory during a rollout.
+#
+# DB-3/U-5: the image must satisfy the same arbitrary-uid model as §3.3 — a
+# data directory owned by group 0, no assumption that a fixed uid owns it,
+# and no ownership change at start-up. The sclorg PostgreSQL 16 family is
+# built for exactly that. The contract records the concrete image as U-5 and
+# the check that settles it is a pod admitted with an arbitrary assigned id;
+# the reference is pinned by manifest-index digest either way (OS-10).
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: ui2-db
+  namespace: ui2
+  labels:
+    app.kubernetes.io/part-of: nexus-ui2
+    app.kubernetes.io/component: database
+spec:
+  serviceName: ui2-db
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/part-of: nexus-ui2
+      app.kubernetes.io/component: database
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/part-of: nexus-ui2
+        app.kubernetes.io/component: database
+    spec:
+      # FS-7: no fixed uid, no fixed gid and no volume group id is set
+      # anywhere in this set. On this cluster the image's own numeric
+      # account applies; on the corporate platform the assigned id applies.
+      # Omission is what makes one manifest correct in both places.
+      securityContext:
+        runAsNonRoot: true
+      containers:
+        - name: database
+          image: quay.io/sclorg/postgresql-16-c9s@sha256:fbef891ec464ee8d20332c7f9a4a68decc0b6db8460e7e875df6f33cac5003dc
+          ports:
+            - name: postgresql
+              containerPort: 5432
+          env:
+            # SEC-7: the database workload's credential follows the same
+            # path as the service's. The value is never in this file.
+            - name: POSTGRESQL_USER
+              valueFrom:
+                secretKeyRef:
+                  name: ui2-db
+                  key: migrate-user
+            - name: POSTGRESQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ui2-db
+                  key: migrate-password
+            - name: POSTGRESQL_DATABASE
+              valueFrom:
+                configMapKeyRef:
+                  name: ui2-config
+                  key: db_name
+            - name: UI2_DB_APP_USER
+              valueFrom:
+                secretKeyRef:
+                  name: ui2-db
+                  key: app-user
+            - name: UI2_DB_APP_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ui2-db
+                  key: app-password
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+            seccompProfile:
+              type: RuntimeDefault
+          # OS-6: requests and limits for both cpu and memory. The
+          # magnitudes are per-stage values (PORT-2) and the contract
+          # records them as U-8.
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-q", "-h", "127.0.0.1", "-p", "5432"]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: 12
+          livenessProbe:
+            exec:
+              command: ["pg_isready", "-q", "-h", "127.0.0.1", "-p", "5432"]
+            initialDelaySeconds: 30
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 6
+          # OS-8/FS-4: the root filesystem is read only, so every path the
+          # image writes is supplied as a mount. The claim carries the data
+          # directory; the rest are emptyDir because they are start-up
+          # scratch, not state.
+          volumeMounts:
+            - name: pgsql-home
+              mountPath: /var/lib/pgsql
+            - name: data
+              mountPath: /var/lib/pgsql/data
+            - name: run
+              mountPath: /var/run/postgresql
+            - name: tmp
+              mountPath: /tmp
+            - name: start-hooks
+              mountPath: /opt/app-root/src/postgresql-start
+              readOnly: true
+      volumes:
+        - name: pgsql-home
+          emptyDir: {}
+        - name: run
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
+        - name: start-hooks
+          configMap:
+            name: ui2-config
+            defaultMode: 0555
+            items:
+              - key: create-app-role.sh
+                path: create-app-role.sh
+        - name: data
+          persistentVolumeClaim:
+            claimName: ui2-db-data

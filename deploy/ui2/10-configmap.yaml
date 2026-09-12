@@ -1,0 +1,48 @@
+# B1-1c §5.2: non-secret service configuration only.
+#
+# Never a credential, never a DSN containing one, never a device address,
+# never a device name, never a serial. The connection's non-secret half —
+# host, port, database name — lives here and is composed into a DSN inside
+# the service process (SEC-4); the credential half lives only in the cluster
+# Secret and reaches the container as mounted files.
+#
+# `ingress_host` and the resource magnitudes are per-stage *values*, not
+# manifest differences (PORT-2).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ui2-config
+  namespace: ui2
+  labels:
+    app.kubernetes.io/part-of: nexus-ui2
+data:
+  db_host: ui2-db
+  db_port: "5432"
+  db_name: ui2
+  log_level: INFO
+  ingress_host: ui2.nexus.local
+
+  # FIRST-1: the database workload initializes an empty cluster, creates the
+  # `ui2` database and the `ui2_migrate` and `ui2_app` roles, and nothing
+  # else. The image's own initialization creates the database and the
+  # migrate role; this hook creates the application role and nothing more.
+  #
+  # The credential never reaches a command line: psql reads both values from
+  # the process environment with \getenv and binds them as an identifier and
+  # a literal, so no value appears in argv, in shell history, or in this
+  # tracked file.
+  create-app-role.sh: |
+    # Sourced by the PostgreSQL image's start hook, with PGUSER=postgres on
+    # the local socket.
+    psql --set ON_ERROR_STOP=1 <<'UI2_SQL'
+    \getenv ui2_app_user UI2_DB_APP_USER
+    \getenv ui2_app_password UI2_DB_APP_PASSWORD
+    SELECT NOT EXISTS (
+        SELECT 1 FROM pg_roles WHERE rolname = :'ui2_app_user'
+    ) AS ui2_app_role_absent \gset
+    \if :ui2_app_role_absent
+    CREATE ROLE :"ui2_app_user" LOGIN PASSWORD :'ui2_app_password';
+    \else
+    ALTER ROLE :"ui2_app_user" LOGIN PASSWORD :'ui2_app_password';
+    \endif
+    UI2_SQL
