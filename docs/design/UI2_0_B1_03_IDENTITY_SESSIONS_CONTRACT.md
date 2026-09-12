@@ -42,14 +42,14 @@ contract to date, baseline A-1).
 
 ## 3. Module placement
 
-Per `UI2_0_B1_01_SKELETON_CI_DOCKER_CONTRACT.md` §2 and `DIR-5` ("LDAP is an
-identity adapter only"; forbidden edge `ldap-adapter` → `service`, `worker`,
-or `scheduler`):
+Per `UI2_0_B1_01A_PLATFORM_SKELETON_CONTRACT.md` §2 (module map) and §3
+`DIR-5` ("LDAP is an identity adapter only"; forbidden edge `ldap-adapter` →
+`service`, `worker`, or `scheduler`):
 
 | Class | Module | Notes |
 | --- | --- | --- |
 | `LdapOperatorBindPort` | port surface exposed by `ldap-adapter` | consumed by `service` per the allowed `service`→`ldap-adapter` edge |
-| `UnboundIdOperatorBindAdapter`, `UnboundIdRevalidationAdapter` | `ldap-adapter`, `.identity.ldap` | `C3` §2.1/§4.4; no web-framework type (`B1-1` §2: "no web controller") |
+| `UnboundIdOperatorBindAdapter`, `UnboundIdRevalidationAdapter` | `ldap-adapter`, `.identity.ldap` | `C3` §2.1/§4.4; no web-framework type (`B1-1a` §3 `DIR-5`: "LDAP is an identity adapter only") |
 | `PrincipalFingerprint` (Java port of the existing algorithm) | `platform-core` | `C3` §3.2: pattern only, reference implementation |
 | `SessionRepository`, `RoleBindingRepository`, `ActorAuthzStateRepository`, `AuthzDecisionRepository` (jOOQ) | `persistence` | follows `C1`/`B1-2`'s home |
 | `V<n>__identity_sessions_rbac.sql` | `service` migration resources | additive to `B1-2`'s `V1`; numbering is §12 item 1 |
@@ -57,11 +57,11 @@ or `scheduler`):
 | `LoginController`, `LoginResolveController`, `RoleBindingAdminController` | `service`, `.service.api` | never call UnboundID SDK types directly (`DIR-5`) |
 
 **Dependency edges this movement may add:** `service`→`ldap-adapter`
-(already permitted, `B1-1` §2) and `service`/`ldap-adapter`→`platform-core`
+(already permitted, `B1-1a` §2) and `service`/`ldap-adapter`→`platform-core`
 (`DIR-1`). **No edge `DIR-5` forbids is added**: `ldap-adapter` gains no
 dependency on `service`, `worker`, or `scheduler`, and no class in it
 imports a servlet/Spring MVC type. No new edge touches `frontend`, `worker`,
-or `scheduler`. The `P-1` architecture test (`B1-1` §5) is extended with one
+or `scheduler`. The `P-1` architecture test (`Ui2ArchitectureTest`, `B1-1a` §3) is extended with one
 more forbidden-edge assertion (`ldap-adapter`→`service`), not replaced.
 
 ## 4. LDAP bind specification
@@ -318,7 +318,7 @@ multi-failure coverage.
   component/purpose name.
 - **AC-10.** No role-conditional rendering exists in built assets; a `GET`
   affordance and a `POST` refusal for the same action/actor/instant agree.
-- **AC-11.** No dependency edge `DIR-5` or any other `B1-1` §2.1 rule
+- **AC-11.** No dependency edge `DIR-5` or any other `B1-1a` §3 rule
   forbids is introduced; the extended `P-1` test passes.
 - **AC-12.** `directory_posture_enabled` defaults `false`, is not flipped to
   `true` by this movement's code, and the re-validation pool opens no
@@ -370,11 +370,56 @@ extended thinking would be more than the step needs.
    hard-coded, so the Product Owner can adjust any without a contract
    amendment.
 
-No contradiction between `C3`, `C1`, `B1-1`, or `B1-2` was found. `C1` §3.1
+No contradiction between `C3`, `C1`, `B1-1a`, or `B1-2` was found. `C1` §3.1
 reserves the four tables for `C3` without sketching them, and `C3` §1.3
-accepts and sketches all four — the two agree on ownership. `B1-1` §2 places
-the UnboundID adapter in `ldap-adapter` with "no web controller," and `C3`
+accepts and sketches all four — the two agree on ownership. `B1-1a` §2 places
+the UnboundID adapter in `ldap-adapter` and its §3 `DIR-5` keeps it identity-
+only, and `C3`
 §2.1/§4.4 describes exactly an adapter (bind + search), never a controller —
 no tension. `B1-2` §4 excludes this movement's four tables from `V1` as
 "owned by `C3`, delivered with workflow B1 row 3" — consistent with this
 document taking that ownership up in §3/§9.
+
+## Correction C-1 (2026-09-12) — §8 test 3's audit-row count is wrong
+
+§8 test 3 requires a takeover to leave "exactly one audit row, one
+transaction". That is a defect in this contract, found when the test was
+implemented against a real PostgreSQL 16 server.
+
+**Evidence.** `V2__identity_sessions_rbac.sql` declares
+
+```sql
+CREATE TRIGGER trg_audit_sessions
+    AFTER INSERT OR UPDATE OF state ON sessions
+    FOR EACH ROW EXECUTE FUNCTION fn_audit_capture('session_id');
+```
+
+A takeover mutates two rows — `S1`'s `state` to `SUPERSEDED` and the `INSERT`
+of `S2` — so a per-row trigger necessarily captures two. Measured against the
+live server: two audit rows, not one.
+
+**Adjudication: the schema is right and the clause is wrong.** Auditing per
+affected row is the behaviour `C1` §3.5 asks for; a single row would record
+the new session's creation while hiding the prior session's forced
+termination, which is the half of a takeover an auditor most needs. The clause
+also contradicts §8 test 6 in its own list, which requires a state-column
+update to produce exactly one row — under per-row auditing, two mutated rows
+give two.
+
+**§8 test 3 is replaced by:**
+
+> **TakeoverTransition** — takeover must leave `S1` `SUPERSEDED(by=S2)` and
+> `S2` `ACTIVE`, committed in one transaction, and must write **exactly two**
+> audit rows: one for `S1`'s state transition and one for `S2`'s creation.
+> Both must carry the same `actor_fingerprint`, `action_id` and correlation
+> id, proving one logical event rather than two unrelated mutations. A
+> rollback of the takeover must leave zero session rows changed and zero
+> audit rows. The test fails if either audit row is missing, if the two
+> disagree on actor/action/correlation, or if any row survives a rollback.
+
+This is strictly stronger than the clause it replaces: it proves the audit
+trail covers both halves of the event and that the two halves are
+attributable to one actor and one action.
+
+No other clause of this contract changes. `ux_sessions_one_active_per_actor`,
+the transition table, and the one-transaction requirement are unaffected.

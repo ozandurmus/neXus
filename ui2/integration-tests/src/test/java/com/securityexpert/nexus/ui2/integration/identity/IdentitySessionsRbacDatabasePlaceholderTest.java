@@ -1,10 +1,14 @@
 package com.securityexpert.nexus.ui2.integration.identity;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.sql.Connection;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.time.Instant;
@@ -25,9 +29,9 @@ import com.securityexpert.nexus.ui2.integration.support.Ui2PostgresFixture;
  * <p>The two database-only scenarios are implemented here against
  * {@link Ui2PostgresFixture}. The directory-dependent ones still have no
  * carrier in this environment (no test LDAP) and stay {@code @Disabled} with
- * a precise reason, as does contract §8 test 3, which is blocked on an
- * unresolved contract/migration contradiction rather than on tooling — see
- * {@link #takeoverProducesExactlyOneAuditLogRowInOneTransaction()}.</p>
+ * a precise reason. Contract §8 test 3 is implemented here per Correction
+ * C-1, which resolved the contradiction between its original "exactly one
+ * audit row" wording and {@code V2}'s per-row trigger.</p>
  *
  * <p>The pure decision-logic half of each scenario is proved without a
  * database by {@code service}'s own unit tests ({@code LoginFlowTest},
@@ -120,21 +124,109 @@ class IdentitySessionsRbacDatabasePlaceholderTest {
         }
     }
 
+    /**
+     * Contract §8 test 3, as replaced by Correction C-1 (2026-09-12): a
+     * takeover writes <strong>exactly two</strong> audit rows — one for
+     * {@code S1}'s state transition, one for {@code S2}'s creation — both
+     * carrying the same actor, action and correlation id, proving one logical
+     * event; and a rollback of the same takeover leaves neither session
+     * change nor audit row.
+     *
+     * <p>The original clause required exactly one row. That was a defect in
+     * the contract, not in the schema: {@code trg_audit_sessions} is a
+     * per-row trigger, and a single row would have recorded the new session
+     * while hiding the prior session's forced termination. C-1 records the
+     * adjudication.</p>
+     *
+     * <p>{@code LoginFlowTest.takeoverTransitionsPriorToSupersededAndCreatesANewActiveSessionInOneCall}
+     * proves the state-transition logic against an in-memory repository;
+     * this test proves the database half.</p>
+     */
     @Test
-    @Disabled("CONTRADICTION, not tooling: UI2_0_B1_03_IDENTITY_SESSIONS_CONTRACT.md §8 test 3 (FROZEN) "
-            + "requires takeover to leave 'exactly one audit row', but V2's trg_audit_sessions fires on "
-            + "AFTER INSERT and on UPDATE OF state, so a takeover's S1 state UPDATE plus S2 INSERT "
-            + "necessarily produces two. Reported for resolution by the contract owner; not reconciled here.")
-    void takeoverProducesExactlyOneAuditLogRowInOneTransaction() {
-        // Contract §8 test 3 / C3 §8 criterion 2's database half.
-        // LoginFlowTest.takeoverTransitionsPriorToSupersededAndCreatesANewActiveSessionInOneCall
-        // proves the state-transition logic. The atomicity half (a forced
-        // rollback after the UPDATE leaves no INSERT and no audit row) is
-        // provable today and is covered generically for the same trigger
-        // mechanism by schema.AuditAtomicityTest; the audit-row COUNT half
-        // cannot be asserted either way without first resolving the
-        // contradiction named in the @Disabled reason above (AGENTS.md
-        // authority hierarchy: report, never silently reconcile).
+    void takeoverWritesTwoCorrelatedAuditRowsInOneTransaction() throws SQLException {
+        String actor = "actor-takeover";
+        try (Connection app = fixture.appConnection()) {
+            String s1 = insertSession(app, actor, "ACTIVE");
+            long auditBefore = Ui2Rows.countAuditRows(app, "sessions", s1);
+
+            // The takeover: supersede S1 and create S2 in one transaction.
+            String s2 = Ui2Rows.opaqueId("sess");
+            Instant now = Instant.now();
+            app.setAutoCommit(false);
+            try {
+                Ui2Rows.setAuditContext(app, Ui2Rows.ACTOR, "harness.takeover");
+                try (Statement statement = app.createStatement()) {
+                    // The statement order is forced by two structural constraints:
+                    // superseded_by_session_id is an FK, so S2 must exist before
+                    // the link can be set; and ux_sessions_one_active_per_actor
+                    // is checked per statement, so S2 cannot be inserted ACTIVE
+                    // while S1 is still ACTIVE. Hence: supersede, insert, link.
+                    statement.execute("UPDATE sessions SET state = 'SUPERSEDED', end_reason = 'login_elsewhere', "
+                            + "ended_by_actor_fingerprint = '" + Ui2Rows.ACTOR + "' "
+                            + "WHERE session_id = '" + s1 + "'");
+                    statement.execute("INSERT INTO sessions(session_id, actor_fingerprint, csrf_secret, state, "
+                            + "idle_deadline_at, absolute_expires_at) VALUES ('" + s2 + "', '" + actor
+                            + "', 'opaque-test-token', 'ACTIVE', '"
+                            + now.plus(15, ChronoUnit.MINUTES) + "', '" + now.plus(8, ChronoUnit.HOURS) + "')");
+                    statement.execute("UPDATE sessions SET superseded_by_session_id = '" + s2 + "' "
+                            + "WHERE session_id = '" + s1 + "'");
+                }
+                app.commit();
+            } catch (SQLException e) {
+                app.rollback();
+                throw e;
+            } finally {
+                app.setAutoCommit(true);
+            }
+
+            assertEquals("SUPERSEDED", stateOf(app, s1), "S1 must be SUPERSEDED after the takeover");
+            assertEquals("ACTIVE", stateOf(app, s2), "S2 must be ACTIVE after the takeover");
+            assertEquals(s2, supersededBy(app, s1), "S1 must record S2 as its successor");
+
+            // Exactly two audit rows, one per mutated session row.
+            assertEquals(auditBefore + 1L, Ui2Rows.countAuditRows(app, "sessions", s1),
+                    "S1's state transition must be audited exactly once, and the "
+                            + "follow-up superseded_by_session_id UPDATE must add no further row "
+                            + "because trg_audit_sessions is scoped to UPDATE OF state");
+            assertEquals(1L, Ui2Rows.countAuditRows(app, "sessions", s2),
+                    "S2's creation must be audited exactly once");
+
+            // Both halves attributable to one actor and one action.
+            try (Statement statement = app.createStatement();
+                 ResultSet rs = statement.executeQuery(
+                         "SELECT DISTINCT actor_fingerprint, action_id FROM audit_log "
+                                 + "WHERE table_name = 'sessions' AND action_id = 'harness.takeover'")) {
+                assertTrue(rs.next(), "the takeover must produce audit rows under its own action_id");
+                assertEquals(Ui2Rows.ACTOR, rs.getString("actor_fingerprint"));
+                assertFalse(rs.next(),
+                        "both audit rows must share one actor_fingerprint and action_id, "
+                                + "proving one logical event rather than two unrelated mutations");
+            }
+
+            // A rolled-back takeover leaves neither session change nor audit row.
+            String s3 = Ui2Rows.opaqueId("sess");
+            long auditBeforeRollback = Ui2Rows.countAuditRows(app, "sessions", s2);
+            app.setAutoCommit(false);
+            try {
+                Ui2Rows.setAuditContext(app, Ui2Rows.ACTOR, "harness.takeover.rollback");
+                try (Statement statement = app.createStatement()) {
+                    statement.execute("UPDATE sessions SET state = 'SUPERSEDED', end_reason = 'login_elsewhere' "
+                            + "WHERE session_id = '" + s2 + "'");
+                    statement.execute("INSERT INTO sessions(session_id, actor_fingerprint, csrf_secret, state, "
+                            + "idle_deadline_at, absolute_expires_at) VALUES ('" + s3 + "', '" + actor
+                            + "', 'opaque-test-token', 'ACTIVE', '"
+                            + now.plus(15, ChronoUnit.MINUTES) + "', '" + now.plus(8, ChronoUnit.HOURS) + "')");
+                }
+                app.rollback();
+            } finally {
+                app.setAutoCommit(true);
+            }
+
+            assertEquals("ACTIVE", stateOf(app, s2), "a rolled-back takeover must leave S2 untouched");
+            assertNull(stateOf(app, s3), "a rolled-back takeover must leave no new session row");
+            assertEquals(auditBeforeRollback, Ui2Rows.countAuditRows(app, "sessions", s2),
+                    "a rolled-back takeover must leave no audit row behind");
+        }
     }
 
     // -----------------------------------------------------------------
@@ -150,6 +242,24 @@ class IdentitySessionsRbacDatabasePlaceholderTest {
                 + "', 'opaque-test-token', '" + state + "', '"
                 + now.plus(15, ChronoUnit.MINUTES) + "', '" + now.plus(8, ChronoUnit.HOURS) + "')");
         return sessionId;
+    }
+
+    /** The {@code state} of one session, or {@code null} when the row does not exist. */
+    private static String stateOf(Connection app, String sessionId) throws SQLException {
+        try (Statement statement = app.createStatement();
+             ResultSet rs = statement.executeQuery(
+                     "SELECT state FROM sessions WHERE session_id = '" + sessionId + "'")) {
+            return rs.next() ? rs.getString(1) : null;
+        }
+    }
+
+    /** The successor recorded on one session, or {@code null}. */
+    private static String supersededBy(Connection app, String sessionId) throws SQLException {
+        try (Statement statement = app.createStatement();
+             ResultSet rs = statement.executeQuery(
+                     "SELECT superseded_by_session_id FROM sessions WHERE session_id = '" + sessionId + "'")) {
+            return rs.next() ? rs.getString(1) : null;
+        }
     }
 
     private static void audited(Connection app, String sql) throws SQLException {
