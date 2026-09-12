@@ -1140,6 +1140,15 @@
       "priority": "P2",
       "target": "A successor to scripts/project_queue.py gains a command that moves roadmap now_next.now/next and current_build in the same transaction as 'build add'",
       "note": ""
+    },
+    {
+      "id": "pan_active_active_not_excluded_as_failover_unit",
+      "category": "safety",
+      "title": "PAN active/active is not excluded as a failover unit (CP load-sharing is)",
+      "status": "planned",
+      "priority": "P1",
+      "target": "docs/design/PAN_ACTIVE_ACTIVE_FAILOVER_UNIT_GAP_2026_09_12.md; blocked on open decision op_aa_vsls_scope",
+      "note": ""
     }
   ]
 }
