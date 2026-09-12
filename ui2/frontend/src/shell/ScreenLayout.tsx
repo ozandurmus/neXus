@@ -7,12 +7,23 @@ import { m3 } from "../theme/m3Theme";
 
 /** Shared building blocks the six product screens use for their empty state. */
 
-export function ScreenHeader({ title, subtitle }: { readonly title: string; readonly subtitle: string }) {
+export function ScreenHeader({
+  title,
+  subtitle,
+  actions,
+}: {
+  readonly title: string;
+  readonly subtitle: string;
+  readonly actions?: ReactNode;
+}) {
   return (
-    <Stack sx={{ px: 0.5, pb: 0.5 }} spacing={0.75}>
-      <Typography variant="h2">{title}</Typography>
-      <Typography variant="body1" sx={{ color: m3.onSurfaceVar }}>{subtitle}</Typography>
-    </Stack>
+    <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 3, px: 0.5, pb: 0.5 }}>
+      <Stack spacing={0.75}>
+        <Typography variant="h2">{title}</Typography>
+        <Typography variant="body1" sx={{ color: m3.onSurfaceVar }}>{subtitle}</Typography>
+      </Stack>
+      {actions ? <Box sx={{ display: "flex", gap: 1.25, alignItems: "center", flex: "none" }}>{actions}</Box> : null}
+    </Box>
   );
 }
 
@@ -27,12 +38,21 @@ export function MetricCard({ title, note }: { readonly title: string; readonly n
   );
 }
 
-export function EmptyPanel({ title, body }: { readonly title: string; readonly body: string }) {
+export function EmptyPanel({
+  title,
+  body,
+  children,
+}: {
+  readonly title: string;
+  readonly body: string;
+  readonly children?: ReactNode;
+}) {
   return (
     <Card sx={{ bgcolor: m3.scLow, borderRadius: "16px", p: 2.5, boxShadow: "none",
                 border: `1px solid ${m3.outlineVar}`, display: "flex", flexDirection: "column", gap: 1 }}>
       <Typography variant="h4">{title}</Typography>
       <Typography variant="body2" sx={{ maxWidth: 640 }}>{body}</Typography>
+      {children}
     </Card>
   );
 }

@@ -12,6 +12,7 @@ source, written only through this tool (never hand-edited). See
     py scripts/project_queue.py status --id <id> --set in_progress|done|deferred|automated_validated|real_env_validated|planned [--target ...]
     py scripts/project_queue.py note   --id <id> --text ...
     py scripts/project_queue.py decide --id <decision-id> --decision ...
+    py scripts/project_queue.py migrate-open-notes --include-open
 
 Every write (`add`/`status`/`decide`) loads the relevant JSON, validates it,
 applies the change, writes it back canonically (`json.dumps(indent=2,
@@ -19,7 +20,12 @@ ensure_ascii=False)` plus a trailing newline, preserving key order), then
 re-renders `project/QUEUE.md`. A JSON file that fails to load is reported
 with its line and column and nothing is written. `add` refuses a duplicate
 id. `note` appends verbatim to `docs/history/backlog/<id>.md` and never
-touches the JSON `note` field.
+touches the JSON `note` field. `migrate-open-notes --include-open` is the
+GOV.ORCH.5 amendment (proposed, see
+`docs/design/GOV_ORCH_5_PROJECT_QUEUE_AND_COLD_START_DIET.md`): it moves
+an `in_progress`/`planned` item's pre-existing inline `note` to the same
+history file and pointer form the `status` transition already uses for
+terminal items, verbatim, under an explicit flag rather than by default.
 
 `build add` is one transaction over two authority files: it inserts the
 newest-first `build_history.json` record AND advances `roadmap.json`
@@ -498,6 +504,62 @@ def _move_note_to_history(item: dict) -> None:
     path.write_text(header + "\n" + note + "\n", encoding="utf-8")
 
 
+def _migrate_note_to_history(item: dict, dated: str) -> None:
+    """Move `item['note']` verbatim into docs/history/backlog/<id>.md for the
+    GOV.ORCH.5 amendment's open-item sweep. Creates the file (with the
+    standard heading) if it does not exist yet; appends under a dated
+    heading if it already does, so a bulk open-item move is distinguishable
+    from any narrative a prior `note` command already appended there. Does
+    not touch item['note'] itself -- the caller replaces it afterward."""
+    HISTORY_BACKLOG_DIR.mkdir(parents=True, exist_ok=True)
+    path = HISTORY_BACKLOG_DIR / f"{item['id']}.md"
+    note = redact_narrative(item.get("note") or "")
+    if path.exists():
+        existing = path.read_text(encoding="utf-8")
+        path.write_text(existing.rstrip("\n") + f"\n\n## {dated}\n\n" + note + "\n", encoding="utf-8")
+    else:
+        header = _history_heading_body(item.get("title", ""), item.get("status", ""), item.get("target", ""))
+        path.write_text(header + "\n" + note + "\n", encoding="utf-8")
+
+
+def cmd_migrate_open_notes(args: argparse.Namespace) -> int:
+    """GOV.ORCH.5 amendment (PROPOSED — PENDING PRODUCT OWNER APPROVAL,
+    docs/design/GOV_ORCH_5_PROJECT_QUEUE_AND_COLD_START_DIET.md): move the
+    `note` of every note-bearing open item (`in_progress`/`planned`) into
+    docs/history/backlog/<id>.md, the same way terminal items already move
+    on `status`. Gated behind `--include-open` -- required, not the default
+    -- because it is a distinct, one-time-per-item write the original
+    GOV.ORCH.5 design explicitly exempted; it never changes an item's
+    status, priority, title or target."""
+    if not args.include_open:
+        raise QueueToolError("migrate-open-notes: pass --include-open to confirm this move")
+
+    backlog = load_json(BACKLOG)
+    items = backlog.get("items") or []
+    dated = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+    moved: list[str] = []
+    for item in items:
+        if item.get("status") not in OPEN_STATUSES:
+            continue
+        note = item.get("note") or ""
+        pointer = f"see docs/history/backlog/{item['id']}.md"
+        if not note or note == pointer:
+            continue
+        _migrate_note_to_history(item, dated)
+        item["note"] = pointer
+        moved.append(item["id"])
+
+    if moved:
+        validate_backlog(backlog)
+        write_json(BACKLOG, backlog)
+        roadmap = load_json(ROADMAP)
+        QUEUE.write_text(render_queue_md(backlog, roadmap), encoding="utf-8")
+
+    print(f"migrated {len(moved)} open item note(s): {', '.join(moved) if moved else '(none)'}")
+    return 0
+
+
 def cmd_note(args: argparse.Namespace) -> int:
     backlog = load_json(BACKLOG)
     items = backlog.get("items") or []
@@ -843,6 +905,16 @@ def build_parser() -> argparse.ArgumentParser:
     p_retitle.add_argument("--title", default=None)
     p_retitle.add_argument("--target", default=None)
     p_retitle.set_defaults(func=cmd_retitle)
+
+    p_migrate = sub.add_parser(
+        "migrate-open-notes",
+        help="GOV.ORCH.5 amendment (proposed): move open-item notes to docs/history/backlog/",
+    )
+    p_migrate.add_argument(
+        "--include-open", action="store_true", required=True,
+        help="required: confirms this move of in_progress/planned item notes",
+    )
+    p_migrate.set_defaults(func=cmd_migrate_open_notes)
 
     p_note = sub.add_parser("note", help="append a note to docs/history/backlog/<id>.md")
     p_note.add_argument("--id", required=True)

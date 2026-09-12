@@ -2,26 +2,31 @@
 files, enforced so narrative cannot simply be re-appended in place and grow
 these files back to where this movement found them.
 
-project/backlog.json is GOV.ORCH.5's own file and out of GOV.ORCH.8's scope
-(docs/design/GOV_ORCH_8_PROJECT_DATA_SPLIT_AND_SIZE_BUDGET.md section 3,
-"Out"): this movement does not touch its content, so it cannot bring it
-under the contract's 60 KB figure by itself (it is currently well above
-it -- a pre-existing condition, not a regression introduced here). Rather
-than assert a bound that is known false against real data, this test pins
-backlog.json's current size as a regression ceiling and separately records
-the gap against the contract's own 60 KB target, so a future backlog-
-specific size movement has a named test to update.
+2026-09-12 (NXS-LOCAL-0114, "the second diet"): GOV.ORCH.5's open-item note
+exemption ("open items keep their note in the JSON") and GOV.ORCH.8's 60 KB
+backlog.json budget cannot both hold against the real data -- see the
+GOV.ORCH.5 amendment (docs/design/GOV_ORCH_5_PROJECT_QUEUE_AND_COLD_START_
+DIET.md section 8, PROPOSED, pending Product Owner approval). Every
+note-bearing `in_progress`/`planned` item's note has now moved to
+docs/history/backlog/<id>.md, the same way terminal items already move,
+via `py scripts/project_queue.py migrate-open-notes --include-open`. That
+took project/backlog.json from 148,302 to 63,806 bytes (153 items,
+unchanged); BACKLOG_REGRESSION_CEILING moves down to match, never up. The
+remaining gap above the 60 KB contract target is now `id`/`title`/`target`/
+`category`/`status`/`priority` state fields and JSON structural overhead,
+not narrative -- there is no note text left to move.
 """
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 PROJECT = ROOT / "project"
 
 BACKLOG_CONTRACT_LIMIT = 60 * 1024
-BACKLOG_REGRESSION_CEILING = 145 * 1024  # pre-existing; not this movement's to fix
+BACKLOG_REGRESSION_CEILING = 63 * 1024  # lowered 2026-09-12; see module docstring
 ROADMAP_LIMIT = 40 * 1024
 BUILD_HISTORY_LIMIT = 80 * 1024
 FEATURE_REGISTRY_LIMIT = 70 * 1024
@@ -94,6 +99,24 @@ def test_no_long_text_field_in_any_project_json():
                     f"(> {_LONG_TEXT_LIMIT}) -- move it to docs/history/ and "
                     f"leave a pointer"
                 )
+
+
+#: The pointer form GOV.ORCH.5's terminal-item move and its 2026-09-12
+#: open-item amendment (section 8) both leave behind -- see
+#: scripts/project_queue.py `_history_heading_body`/`_move_note_to_history`/
+#: `_migrate_note_to_history`.
+_BACKLOG_NOTE_POINTER_RE = re.compile(r"^see docs/history/backlog/[^/\s]+\.md$")
+
+
+def test_no_backlog_item_note_longer_than_pointer_form():
+    data = json.loads((PROJECT / "backlog.json").read_text(encoding="utf-8"))
+    for item in data.get("items") or []:
+        note = item.get("note") or ""
+        assert note == "" or _BACKLOG_NOTE_POINTER_RE.match(note), (
+            f"backlog item {item.get('id')!r} carries a note longer than the "
+            f"pointer form ({note!r}); move it with "
+            "py scripts/project_queue.py note/status/migrate-open-notes"
+        )
 
 
 def test_no_long_text_field_in_archive_json():
