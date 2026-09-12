@@ -1,0 +1,5 @@
+# Overview: static EOS/EOL date + suggested-next-release guidance by model family (Increment 2)
+
+status: planned · target: 0.6.1C / Inventory UX follow-up
+
+Split out 2026-08-30 from overview_device_lifecycle_enrichment on that contract's own gate (docs/history/phase/PHASE0_6_1C_OVERVIEW_DEVICE_LIFECYCLE_ENRICHMENT.md, Increment 2 design write-up): Increment 1 (model/sw_version family aggregation on Overview) shipped; this is the deferred EOS/EOL half. Blocked on identifying and vetting a maintained public CP/PAN EOL dataset -- no live vendor API/internet call is ever acceptable (read-only, no-egress product posture), only a static in-repo table sourced from each vendor's own published EOL bulletins with a source_reference per entry (fail-closed on a missing provenance field, matching compliance_check_pack.py's pattern). Likely needs two separate tables (hardware model-family EOS vs. OS-train support window), not one, since those are independent maintenance axes. UI: an additional column/badge on the existing 'Fleet composition' Overview card -- no new card or module needed.

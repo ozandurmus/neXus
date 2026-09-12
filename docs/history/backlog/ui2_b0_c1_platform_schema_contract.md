@@ -1,0 +1,5 @@
+# UI2 B0/C1 -- platform & schema contract (UI 2.0 schema ownership, Flyway sole migration authority, projection tables, audit from first mutation, per-component secrets, key custody)
+
+status: in_progress · target: workflow §5 B0-1; docs/design/UI2_0_BASELINE_CONTRACT.md (FROZEN 2026-09-09); plan: docs/design/UI2_0_DEVELOPMENT_WORKFLOW.md; produced docs/design/UI2_0_C1_PLATFORM_SCHEMA_CONTRACT.md (DRAFT -- FOR PRODUCT OWNER FREEZE). PR #163.
+
+CONTRACT, Sonnet 5 extended (high). Audit-from-first-mutation gets its own finding id (C1-1). RAW-RETENTION default NO. 2026-09-09: DELIVERED -- docs/design/UI2_0_C1_PLATFORM_SCHEMA_CONTRACT.md (DRAFT -- FOR PRODUCT OWNER FREEZE), PR #163 + #165 merged (NXS-LOCAL-0051). AC-1..AC-8 self-checked and PO-accepted. Two open items for the PO, not contradictions: (a) the stale internal citation this note itself carried ("brief §11.5") is now corrected to C1-1/§3.5, the brief has no §11; (b) PRIVACY_AND_DATA_HANDLING.md does not yet name UI 2.0's database -- tracked as backlog item ui2_privacy_doc_amendment. Not yet FROZEN -- freeze happens together with C2-C5 per FREEZE-SLICING.

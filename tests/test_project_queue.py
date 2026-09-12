@@ -8,6 +8,7 @@ files and writes nothing.
 from __future__ import annotations
 
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -312,6 +313,68 @@ def test_status_transition_to_terminal_moves_note_to_history(queue_env):
     text = history_file.read_text(encoding="utf-8")
     assert original_note in text
     assert "status: done" in text or "status: in_progress" in text  # written at move time
+
+
+# --- GOV.ORCH.5 amendment (proposed, section 8): migrate-open-notes -------
+
+def test_migrate_open_notes_requires_include_open_flag(queue_env):
+    with pytest.raises(SystemExit):
+        pq.build_parser().parse_args(["migrate-open-notes"])
+
+
+def test_migrate_open_notes_moves_open_item_note_and_leaves_pointer(queue_env):
+    before = json.loads(queue_env["backlog"].read_text(encoding="utf-8"))
+    before_note = next(i for i in before["items"] if i["id"] == "item_open_p1")["note"]
+
+    rc = pq.main(["migrate-open-notes", "--include-open"])
+    assert rc == 0
+
+    after = json.loads(queue_env["backlog"].read_text(encoding="utf-8"))
+    item = next(i for i in after["items"] if i["id"] == "item_open_p1")
+    assert item["note"] == "see docs/history/backlog/item_open_p1.md"
+    # Never touches status, priority, title or target.
+    assert item["status"] == "in_progress"
+    assert item["title"] == "An open P1 item in progress"
+
+    history_file = queue_env["history_dir"] / "item_open_p1.md"
+    assert history_file.exists()
+    assert before_note in history_file.read_text(encoding="utf-8")
+
+    # A planned item with an empty note is left alone (nothing to move).
+    untouched = next(i for i in after["items"] if i["id"] == "item_open_p0")
+    assert untouched["note"] == ""
+    assert not (queue_env["history_dir"] / "item_open_p0.md").exists()
+
+    # A terminal item's note is out of scope for this command.
+    done_item = next(i for i in after["items"] if i["id"] == "item_done")
+    assert done_item["note"] == "DONE narrative that must move verbatim to history."
+
+
+def test_migrate_open_notes_appends_under_dated_heading_to_existing_file(queue_env):
+    queue_env["history_dir"].mkdir(parents=True, exist_ok=True)
+    existing_path = queue_env["history_dir"] / "item_open_p1.md"
+    existing_path.write_text("# An open P1 item in progress\n\nstatus: in_progress\n\nEarlier note text.\n",
+                              encoding="utf-8")
+
+    rc = pq.main(["migrate-open-notes", "--include-open"])
+    assert rc == 0
+
+    text = existing_path.read_text(encoding="utf-8")
+    assert "Earlier note text." in text  # nothing pre-existing is lost
+    assert "some in-flight note, stays in JSON while open" in text
+    assert re.search(r"## \d{4}-\d{2}-\d{2}", text), "moved note must land under a dated heading"
+
+
+def test_migrate_open_notes_is_idempotent_and_never_double_moves(queue_env):
+    rc1 = pq.main(["migrate-open-notes", "--include-open"])
+    assert rc1 == 0
+    history_file = queue_env["history_dir"] / "item_open_p1.md"
+    first_pass = history_file.read_text(encoding="utf-8")
+
+    rc2 = pq.main(["migrate-open-notes", "--include-open"])
+    assert rc2 == 0
+    second_pass = history_file.read_text(encoding="utf-8")
+    assert first_pass == second_pass  # already a pointer -- nothing left to move
 
 
 # --- GOV.ORCH.8: redaction --------------------------------------------
