@@ -662,7 +662,7 @@ independently recorded as check 7 here and at the claim-time check-4 slot.
 
 **Note on `C2` §6 check 4, per-class interpretation (revised for
 `CLASS_1B_CONTROLLED_RESTORE_WRITE`,
-`docs/design/D1_DEVICE_WRITE_CLASS_AND_STEP_KIND_DECISION.md`/`UI2_0_BASELINE_CONTRACT.md`
+`docs/design/UI2_0_D1_DEVICE_WRITE_CLASS_AND_STEP_KIND_DECISION.md`/`UI2_0_BASELINE_CONTRACT.md`
 §2 `DEVICE-WRITE-CLASS`):** check 4's applicability is class-scoped, not a
 single restore-blanket `NOT_APPLICABLE`:
 
