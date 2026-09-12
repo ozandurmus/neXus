@@ -160,3 +160,51 @@ Retention and export of `audit_log` (who may read it, for how long, and in
 what form it leaves the product) is the B1-8 audit-screen contract's and the
 DEPLOY.1 evidence-egress policy's business, not this one's. Nor does this
 contract authorize any audit screen: it only makes one safe to design.
+
+## 8. Amendment A-1 (2026-09-12) — `row_pk` is outside the redaction guarantee
+
+Found while writing `UI2_0_B1_08_AUDIT_LOGS_SCREEN_CONTRACT.md`, which had to
+render every `audit_log` column and therefore had to ask what each one is
+guaranteed to hold.
+
+`fn_audit_capture` computes the audit row's `row_pk` from the **unredacted**
+snapshot:
+
+```sql
+v_row JSONB := to_jsonb(COALESCE(NEW, OLD));
+...
+VALUES (TG_TABLE_NAME, v_row ->> v_pk_col, ...)
+```
+
+Redaction is applied to `before_state` and `after_state` only. So if a
+declared-redacted column were ever a table's primary key, its value would be
+persisted in cleartext in `row_pk` — in the same table this contract exists to
+keep values out of.
+
+**Not exploitable today, and that is measured, not assumed.** None of the seven
+redacted columns of §3 is a primary key: `sessions.csrf_secret` against PK
+`session_id`, `role_bindings.group_reference_encrypted` against `binding_id`,
+`credential_references.backend_pointer` against `credential_reference_id`,
+`secrets_metadata.reference_pointer` against `secret_id`,
+`endpoints.address_ref` against `endpoint_id`,
+`job_step_attempt.captured_variables` against `attempt_id`,
+`job_reconciliation.evidence` against `job_id`.
+
+**What this amendment changes is the claim, not the code.** §2's guarantee is
+hereby stated at its true scope: a declared-redacted column's value is never
+persisted **in `before_state` or `after_state`**. `row_pk` is not covered. A
+contract that implied otherwise would be the more dangerous artifact, because
+the next person to add a redacted column would read it as covered.
+
+**The rule that keeps it safe:** a declared-redacted column must never be, or
+become part of, its table's primary key. `UI2_0_B1_08_*`'s test
+`RedactedColumnIsNeverAPrimaryKeyTest` enforces it against the live database,
+so the day someone adds one the build fails rather than the value leaking.
+
+Closing the gap in `fn_audit_capture` itself — refusing the mutation when the
+pk column is in the policy — is the stronger fix and is deliberately **not**
+done here: it would change a frozen migration's behaviour on a path with no
+current exposure, and the invariant above makes that path unreachable. If a
+future table genuinely needs a redacted identifier, that is the successor
+decision, and it must resolve what `row_pk` then means for joining an audit row
+back to its subject.
