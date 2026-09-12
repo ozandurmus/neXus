@@ -74,8 +74,29 @@ not a permitted duplicate.
 Ten rules, `DIR-1` through `DIR-10`, with the directions and forbidden edges
 as stated in the predecessor §2.1, which the implementation satisfies
 unchanged. They are proved one-to-one by `Ui2ArchitectureTest` in
-`architecture-tests`, whose ten methods are named `dir1_…` through `dir10_…`
-and import ArchUnit's `ClassFileImporter` to analyse compiled bytecode.
+`architecture-tests`, whose ten methods are named `dir1_…` through `dir10_…`.
+
+**They are not all proved the same way, and the difference is load-bearing.**
+Corrected 2026-09-12: this section first said all ten "import ArchUnit's
+`ClassFileImporter` to analyse compiled bytecode". The implementation's own
+class Javadoc says otherwise, and the implementation is right:
+
+| Rules | Proved by | Therefore proves |
+| --- | --- | --- |
+| `DIR-1`–`DIR-7`, `DIR-9` | ArchUnit `ClassFileImporter` over compiled bytecode of every production module on the test classpath | the edge is absent in the code that actually runs, not merely absent from a build file |
+| `DIR-8`, `DIR-10` | direct file-tree inspection of the frontend workspace and the wider `ui2/` manifest and source tree — their subject is not JVM bytecode | the **repository/manifest half** only |
+
+The image half of `DIR-8` and `DIR-10` — a Python base-image layer, a
+container command invoking Python, an image filesystem carrying Line-1 paths —
+**is not proved by anything today**, because no image exists (§6). The
+implementation states that in its Javadoc rather than skipping silently, which
+is the behaviour this contract requires.
+
+So a green `architectureTest` proves `DIR-1`–`DIR-7`, `DIR-9`, and the
+repository halves of `DIR-8`/`DIR-10`. It does not prove the image halves, and
+no acceptance check or CI status may be read as proving them until the image
+contract of §6 freezes. Overstating what a green gate covers is the defect this
+correction removes.
 
 Two requirements on those tests, both learned from defects:
 
