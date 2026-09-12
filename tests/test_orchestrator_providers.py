@@ -222,6 +222,50 @@ def test_codex_observed_model_reads_thread_started_model_and_effort(tmp_path):
     assert adapter.observed_model(log_path) == ("gpt-5-codex", "high")
 
 
+def test_claude_budget_exhausted_reads_terminal_reason_and_cost(tmp_path):
+    """NXS-LOCAL-0126: the provider's own terminal signal, not an inferred
+    cost-vs-limit comparison."""
+    log_path = tmp_path / "engineer.log"
+    log_path.write_text(
+        json.dumps({
+            "type": "result", "subtype": "error_max_budget_usd", "is_error": True,
+            "terminal_reason": "budget_exhausted",
+            "errors": ["Reached maximum budget ($3)"], "total_cost_usd": 3.014217,
+        }) + "\n",
+        encoding="utf-8",
+    )
+    adapter = op.ClaudeAdapter(profile_path=Path("/dev/null"))
+    assert adapter.budget_exhausted(log_path) == {"cost_reached_usd": 3.014217}
+
+
+def test_claude_budget_exhausted_none_for_an_ordinary_result_event(tmp_path):
+    log_path = tmp_path / "engineer.log"
+    log_path.write_text(
+        json.dumps({"type": "result", "subtype": "success", "total_cost_usd": 0.02}) + "\n",
+        encoding="utf-8",
+    )
+    adapter = op.ClaudeAdapter(profile_path=Path("/dev/null"))
+    assert adapter.budget_exhausted(log_path) is None
+
+
+def test_claude_budget_exhausted_none_for_a_missing_log(tmp_path):
+    adapter = op.ClaudeAdapter(profile_path=Path("/dev/null"))
+    assert adapter.budget_exhausted(tmp_path / "no-such-log") is None
+
+
+def test_codex_budget_exhausted_always_none_no_proven_signal(tmp_path):
+    """No confirmed Codex event stream field exists for this yet -- per the
+    vendor-semantics law, absence of a proven signal is `None`, not an
+    invented equivalence."""
+    log_path = tmp_path / "engineer.log"
+    log_path.write_text(
+        json.dumps({"type": "error", "message": "budget exceeded"}) + "\n",
+        encoding="utf-8",
+    )
+    adapter = op.CodexAdapter()
+    assert adapter.budget_exhausted(log_path) is None
+
+
 # --- AC-4: summarize_line never raises, one summary per fixture item --------
 
 CODEX_JSON_LINES_FIXTURE = [
