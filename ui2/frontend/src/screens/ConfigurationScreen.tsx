@@ -40,10 +40,78 @@ export function ConfigurationScreen() {
           <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, minHeight: 0 }}>
             <M3Tabs
               ariaLabel="Configuration detail"
-              tabs={["Overview", "Current state", "Alignment", "Policy & objects", "History", "Evidence", "Backup"]}
               initial={2}
+              tabs={[
+                {
+                  label: "Overview",
+                  panel: (
+                    <EmptyPanel
+                      title="No configuration overview"
+                      body="An overview needs at least one enrolled device to summarize; none is enrolled yet."
+                    />
+                  ),
+                },
+                {
+                  label: "Current state",
+                  panel: (
+                    <EmptyPanel
+                      title="No current-state evidence"
+                      body="Current state is a direct, identity-verified device read; no device has been
+                            enrolled or read yet."
+                    />
+                  ),
+                },
+                {
+                  label: "Alignment",
+                  panel: (
+                    <EmptyPanel
+                      title="No alignment evidence"
+                      body="Alignment needs both an intent snapshot and a device read; neither exists yet."
+                    />
+                  ),
+                },
+                {
+                  label: "Policy & objects",
+                  panel: (
+                    <EmptyPanel
+                      title="No policy or object evidence"
+                      body="Policy and object evidence comes from a configuration read on an enrolled device;
+                            none exists yet."
+                    />
+                  ),
+                },
+                {
+                  label: "History",
+                  panel: (
+                    <EmptyPanel
+                      title="No configuration history"
+                      body="History accumulates only after configuration is collected more than once; nothing
+                            has been collected yet."
+                    />
+                  ),
+                },
+                {
+                  label: "Evidence",
+                  panel: (
+                    <EmptyPanel
+                      title="No evidence bundle"
+                      body="An evidence bundle is exported from collected configuration reads; none exist to
+                            export yet."
+                    />
+                  ),
+                },
+                {
+                  label: "Backup",
+                  panel: (
+                    <EmptyPanel
+                      title="No backup evidence"
+                      body="Backup creation is a class 1 controlled recovery write available only under its own
+                            contract; none has been created here."
+                    />
+                  ),
+                },
+              ]}
             />
-            <EmptyPanel title="No alignment evidence" body="Alignment needs both an intent snapshot and a device read; neither exists yet." />
           </Box>
         }
       />

@@ -12,7 +12,7 @@ const PRODUCT_MARKERS: Record<string, string> = {
   inventory: "Network inventory",
   configuration: "Configuration",
   compliance: "No framework assigned · nothing assessed yet",
-  operations: "No jobs yet",
+  operations: "No HA pair or cluster enrolled",
   administration: "Administration",
 };
 
