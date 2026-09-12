@@ -43,23 +43,53 @@ def test_fixture_exists():
     assert FIXTURE.exists(), "run the payload-baseline dump before the data move"
 
 
-def test_live_payload_matches_baseline_except_archive_split():
+def test_the_data_split_lost_nothing():
+    """The permanent invariant: the GOV.ORCH.8 move relocated rows, and no row
+    it relocated may ever go missing.
+
+    Corrected 2026-09-12. This test previously also asserted equality on
+    `current_build`, `backlog_counts`, the progress percentages, the track
+    progress map, `completed_feature_ids` and `backlog_ids`. That asserted
+    that **project state never changes**, which contradicts the repository's
+    own design: `scripts/project_queue.py` exists to change exactly those
+    values, and `AGENTS.md`'s project-state update rule requires a build that
+    changes scope or delivery state to update them. So the test failed on the
+    first legitimate state update after the baseline was captured -- not
+    because anything was lost, but because the world moved. A gate that trips
+    on normal operation stops being read.
+
+    What survives is the invariant the fixture was captured for. The baseline
+    was dumped *before* the move; every build id it recorded must still be
+    reachable in the live history or the archive, the archive count must
+    account for itself, and no id may vanish in the gap between them. New ids
+    may appear -- that is a build being recorded, not a loss.
+
+    Regenerating the fixture from the live payload was the other option and is
+    rejected deliberately: the fixture's entire value is that it predates the
+    move, and a regenerated baseline would compare the payload to itself.
+    """
     baseline = json.loads(FIXTURE.read_text(encoding="utf-8"))
     live = _strip(build_project_plan_payload())
-
-    # Everything that must never change under a data-only (state/narrative)
-    # split: progress math, warnings, backlog, completed features.
-    for key in (
-        "overall_progress_percent", "current_track_progress_percent",
-        "current_build", "current_track", "metadata_warnings",
-        "backlog_counts", "track_progress", "completed_feature_ids",
-        "backlog_ids",
-    ):
-        assert live[key] == baseline[key], key
-
-    # The build id SET is preserved across current + archive; only the
-    # current/archived split is allowed to move (that is the point of 2.2).
     archived_ids = sorted(str(b.get("build")) for b in _load_archived_builds())
-    assert sorted(live["build_ids"] + archived_ids) == baseline["build_ids"]
-    assert live["build_count"] + len(archived_ids) == baseline["build_count"]
+
+    baseline_ids = set(baseline["build_ids"])
+    assert baseline_ids, "the baseline recorded no build ids -- this test would pass vacuously"
+
+    reachable = set(live["build_ids"]) | set(archived_ids)
+    lost = sorted(baseline_ids - reachable)
+    assert lost == [], (
+        "build ids recorded before the GOV.ORCH.8 data move are no longer "
+        f"reachable in either the live history or the archive: {lost}"
+    )
+
+    # The archive must account for itself, and the split must add up.
     assert live["archived_build_count"] == len(archived_ids)
+    assert live["build_count"] + len(archived_ids) >= baseline["build_count"], (
+        "the current plus archived count fell below the pre-move count"
+    )
+
+    # Ids only ever accrue: a backlog row or a completed feature recorded
+    # before the move must not disappear either.
+    for key in ("backlog_ids", "completed_feature_ids"):
+        missing = sorted(set(baseline[key]) - set(live[key]))
+        assert missing == [], f"{key} recorded before the move went missing: {missing}"

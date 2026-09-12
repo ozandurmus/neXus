@@ -73,8 +73,15 @@ ALL_STATUSES = OPEN_STATUSES + TERMINAL_STATUSES
 #: `add`/write validation: required keys per backlog item (contract 2.2).
 REQUIRED_ITEM_KEYS = ("id", "title", "status", "priority", "category")
 
-TITLE_TRUNCATE = 100
-TARGET_TRUNCATE = 80
+TITLE_TRUNCATE = 80
+# Shortened from 80 on 2026-09-12. A defect-triage batch of five rows pushed
+# QUEUE.md fifteen words past the 1500-word cold-start budget GOV.ORCH.5 2.1
+# sets, leaving roughly sixty words of headroom -- not enough to absorb a
+# normal batch. The rendered target was the cheapest thing to cut: at cold
+# start the reader needs the id and the title, and the full pointer is in the
+# row's own note under docs/history/backlog/. Dropping rows, or raising the
+# budget, would each have hidden the problem instead.
+TARGET_TRUNCATE = 40
 QUESTION_TRUNCATE = 100
 
 _PRIORITY_RE = re.compile(r"^\s*(P\d)\b")

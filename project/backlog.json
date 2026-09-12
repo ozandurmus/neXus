@@ -1149,6 +1149,51 @@
       "priority": "P1",
       "target": "docs/design/PAN_ACTIVE_ACTIVE_FAILOVER_UNIT_GAP_2026_09_12.md; blocked on open decision op_aa_vsls_scope",
       "note": ""
+    },
+    {
+      "id": "project_plan_baseline_fixture_partial_regeneration",
+      "category": "Project state / durable record hygiene",
+      "title": "Regression: project_plan_payload_baseline.json current_build not regenerated with roadmap.json, test_project_plan_render_equivalence fails",
+      "status": "done",
+      "priority": "P1",
+      "target": "",
+      "note": ""
+    },
+    {
+      "id": "dlp_prose_collision_catalogue_stale",
+      "category": "Governance / CI",
+      "title": "Pre-existing: DEV.0.5B prose-collision catalogue is stale, 6 tracked files trip test_repository_text_has_no_known_dlp_assignment_collision / legacy_redaction_collision",
+      "status": "planned",
+      "priority": "P2",
+      "target": "",
+      "note": ""
+    },
+    {
+      "id": "project_plan_crypto_placeholder_sentinel_lost",
+      "category": "Test correctness / CI coverage gap",
+      "title": "Pre-existing: projectPlanData no longer carries __CRYPTO_JSON_PLACEHOLDER__ verbatim, test_project_plan_keeps_the_sentinel_token_as_data fails",
+      "status": "planned",
+      "priority": "P2",
+      "target": "",
+      "note": ""
+    },
+    {
+      "id": "project_plan_build_history_archive_split_lookup",
+      "category": "Project state / durable record hygiene",
+      "title": "Pre-existing: build_history archive split removed build 0.6.1B.1.1 from the live payload, test_project_plan_payload_is_data_driven_and_percentages_are_bounded fails",
+      "status": "planned",
+      "priority": "P2",
+      "target": "",
+      "note": ""
+    },
+    {
+      "id": "privacy_baseline_tests_not_idempotent_runtime_trust_material",
+      "category": "Reliability / Test Infrastructure",
+      "title": "Pre-existing: full suite is not idempotent -- a first run creates gitignored data/.support_hmac.key, then AC6/AC1 privacy-baseline tests fail on the second run",
+      "status": "planned",
+      "priority": "P2",
+      "target": "",
+      "note": ""
     }
   ]
 }
