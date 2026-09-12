@@ -35,9 +35,24 @@ so in the same paragraph.
 findings that already existed when this gate was written (2026-09-12), keyed to
 the sha256 of the exact citing paragraph so an edit to any of them re-opens the
 gate. They are **unreconciled contradictions reported to the contract owner**,
-not approvals — two of them (`C1` and `C3`) put a DRAFT document in a FROZEN
-contract's own authority chain. This module's job is to stop the set from
-growing; closing an entry is the contract owner's decision, not this test's.
+not approvals. This module's job is to stop the set from growing; closing an
+entry is the contract owner's decision, not this test's.
+
+The two `C1` and `C3` authority-chain entries were closed on 2026-09-12 and
+their entries deleted: `UI2_0_C1_PLATFORM_SCHEMA_CONTRACT.md` "Correction C-1"
+and `UI2_0_C3_IDENTITY_SESSIONS_RBAC_CONTRACT.md` "Correction C-1" moved the
+cited DRAFT out of each contract's authority chain into a labelled
+evidence/precedent block that states it authorizes nothing. What remains
+catalogued is `UI2_0_ARCHITECTURE_DESIGN.md`'s own two citations.
+
+**Known detector gap, reported not fixed.** `_classify` matches the bare token
+`FROZEN`, so a status line reading "DRAFT ... NOT frozen, NOT implementation
+authority" — `UI2_0_ARCHITECTURE_DESIGN.md`'s — classifies as `frozen`. That
+document is therefore scanned as a citer (the two entries below) while
+citations *of* it go unflagged, including its place in `C1` §1 and `C3` §1.4's
+authority chains. Tightening the match would newly fail several FROZEN
+contracts, which is a contract-owner adjudication, not a test change; both
+corrections name this explicitly.
 """
 from __future__ import annotations
 
@@ -98,26 +113,6 @@ _KNOWN_DRAFT_AUTHORITY_CITATIONS: dict[tuple[str, str, str], str] = {
      "PCP_STORAGE_ENGINE_DECISION.md",
      "4813226e125bbc85040ef6239e62b1cb472d27d35c9a466ec5f9d0e7ca0dddcd"):
         "## 12. Still open — must close before freeze or before the named slice — open-items table names the DRAFT storage decision as the closer of U-J1; the closer is itself unfrozen",
-    ("UI2_0_C1_PLATFORM_SCHEMA_CONTRACT.md",
-     "PCP_STORAGE_ENGINE_DECISION.md",
-     "36882ff6fae22125911b3a99f5660c35b0710f7663cd9d2b5855f082278a3d8f"):
-        "## 1. Scope and authority chain — REAL CONTRADICTION -- a DRAFT document appears in this FROZEN contract's own authority chain / open-items text; for the contract owner, not this test",
-    ("UI2_0_C1_PLATFORM_SCHEMA_CONTRACT.md",
-     "PCP_STORAGE_ENGINE_DECISION.md",
-     "6e6fad1af8c591b2753c9ec531a69fd9c6cea69dfcf95da08229c5795b5e73bb"):
-        "## 10. Contradictions and open items for the PO (`AC-7`) — REAL CONTRADICTION -- a DRAFT document appears in this FROZEN contract's own authority chain / open-items text; for the contract owner, not this test",
-    ("UI2_0_C1_PLATFORM_SCHEMA_CONTRACT.md",
-     "PCP_STORAGE_ENGINE_DECISION.md",
-     "4436751a9509c0abc214240814747881dff95758c805573938fb76047be66ff1"):
-        "## 10. Contradictions and open items for the PO (`AC-7`) — REAL CONTRADICTION -- a DRAFT document appears in this FROZEN contract's own authority chain / open-items text; for the contract owner, not this test",
-    ("UI2_0_C3_IDENTITY_SESSIONS_RBAC_CONTRACT.md",
-     "M14_LOCAL_LDAP_AUTHORIZATION_ARCHITECTURE.md",
-     "00102c5f6cc6bc0e2e8772656c27667edc4e7164f45dee3552a37a9b70634aab"):
-        "### 1.4 Authority chain (highest first) — REAL CONTRADICTION -- a DRAFT document appears in this FROZEN contract's own authority chain; for the contract owner, not this test",
-    ("UI2_0_C3_IDENTITY_SESSIONS_RBAC_CONTRACT.md",
-     "M14_LOCAL_LDAP_AUTHORIZATION_ARCHITECTURE.md",
-     "6f34248bc54629e60f4988ddb34e5e43f15ef39d8c6a4a3fde2a148a379c95da"):
-        "## 9. Contradictions and open items for the Product Owner — REAL CONTRADICTION -- a DRAFT document appears in this FROZEN contract's own authority chain; for the contract owner, not this test",
 }
 
 

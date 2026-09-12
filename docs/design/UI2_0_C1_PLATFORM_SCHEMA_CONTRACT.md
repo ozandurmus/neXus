@@ -56,11 +56,20 @@ kind is out of scope; this is a document-only movement.
    `C7` implements but this document's key-custody and data-class rules must
    not contradict), §9 (storage: PostgreSQL recorded, not re-derived; Oracle
    portability rules), §10 (invariants).
-5. `docs/design/PCP_STORAGE_ENGINE_DECISION.md`, `PRIVACY_AND_DATA_HANDLING.md`
-   ("Distributed evidence store"), `utils/recovery_key_custody.py`,
+5. `PRIVACY_AND_DATA_HANDLING.md` ("Distributed evidence store"),
+   `utils/recovery_key_custody.py`,
    `docs/design/D4_BACKUP_CREDENTIAL_IDENTITY_DECISION.md` — the existing
    Line-1 custody/secret discipline this document extends rather than
    re-derives (§6, §7).
+
+**Evidence and precedent consulted — not authority** (Correction C-1,
+2026-09-12). `docs/design/PCP_STORAGE_ENGINE_DECISION.md` (DRAFT — evaluation
+only) is read here as precedent and as the record of an open question (§6.3,
+§10 item 3). It is **not authority**: it authorizes nothing in this contract
+and settles no storage-engine, schema, key-custody, data-class or security
+-boundary decision for it. Where it disagrees with this FROZEN contract, this
+contract wins, and the disagreement is a reportable contradiction rather than
+a local reconciliation.
 
 ### New finding: `C1-1` — audit from the first mutation
 
@@ -568,10 +577,11 @@ live on the recovery-store volume "exactly as `RB.x` defines"):
   vault master key, exactly as for every other component secret (§6.1/§6.2).
 - **Off-host custody remains a separately tracked, unresolved item**: the
   existing backlog id `recovery_offhost_key_custody` (P0, target
-  `DEPLOY.1`) — and `PCP_STORAGE_ENGINE_DECISION.md`'s own gap #9 (whether
-  Postgres's standard backup posture satisfies the same off-host custody
-  bar) — are **not decided by this document**. This document's schema is
-  deliberately shaped so that decision can land later without a data
+  `DEPLOY.1`) — and gap #9 of `PCP_STORAGE_ENGINE_DECISION.md`
+  (DRAFT, not authority — §1): whether Postgres's standard backup posture
+  satisfies the same off-host custody bar — are **not decided by this
+  document**. This
+  document's schema is deliberately shaped so that decision can land later without a data
   migration: because only `key_id` + `wrapped_dek` are ever persisted, a
   future off-host custody backend can be swapped in by re-wrapping existing
   DEKs under a new `key_id` — old wrapped blobs stay valid until re-wrapped,
@@ -731,8 +741,8 @@ sensitive-identity reporting law, privacy/DLP, `DEV.4.6`-adjacent build
 lifecycle rules), `docs/design/UI2_0_BASELINE_CONTRACT.md` (FROZEN),
 `docs/design/UI2_0_DEVELOPMENT_WORKFLOW.md` (BASELINE rev 2),
 `docs/design/UI2_0_ARCHITECTURE_DESIGN.md` §4/§5.2/§6.2/§6.4/§9/§10/§11
-(DRAFT, amended), `docs/design/PCP_STORAGE_ENGINE_DECISION.md`,
-`PRIVACY_AND_DATA_HANDLING.md`, `utils/recovery_key_custody.py`,
+(DRAFT, amended), `docs/design/PCP_STORAGE_ENGINE_DECISION.md`
+(DRAFT, not authority — §1), `PRIVACY_AND_DATA_HANDLING.md`, `utils/recovery_key_custody.py`,
 `docs/design/D4_BACKUP_CREDENTIAL_IDENTITY_DECISION.md`,
 `docs/design/RECOVERY_OPERATIONAL_WRITE_LEDGER.md`,
 `docs/design/UI2_0_COUNCIL_REVIEW_AND_SECOND_OPINION_BRIEF.md`. None of
@@ -759,8 +769,8 @@ scope.
    implicit. Flagged for the PO as a documentation gap to close in a later
    movement (not blocking `B1-2`, since this contract states the rule that
    applies regardless).
-3. **Off-host key custody remains open.** `PCP_STORAGE_ENGINE_DECISION.md`
-   gap #9 (whether PostgreSQL's standard backup posture satisfies
+3. **Off-host key custody remains open.** Gap #9 of
+   `PCP_STORAGE_ENGINE_DECISION.md` (DRAFT, not authority — §1) (whether PostgreSQL's standard backup posture satisfies
    `recovery_offhost_key_custody`'s bar) and the backlog item itself are
    unresolved; §6.3 states this explicitly and shapes the schema so the
    eventual decision needs no migration, but does not resolve it.
@@ -783,8 +793,9 @@ scope.
 - `docs/design/UI2_0_COUNCIL_REVIEW_AND_SECOND_OPINION_BRIEF.md` §4.1 (`K-7`
   `SR-D8`/`DO-D8`), §7 (reconciliation table), §8 (the `C1-1` correction
   text, cited in full in §1 above).
-- `docs/design/PCP_STORAGE_ENGINE_DECISION.md` — §4 gap #9 (off-host key
-  custody vs. database backup posture, §6.3/§10 above).
+- `docs/design/PCP_STORAGE_ENGINE_DECISION.md`
+  (DRAFT, not authority — §1) — §4 gap #9 (off-host key custody vs. database backup posture, §6.3/§10
+  above).
 - `PRIVACY_AND_DATA_HANDLING.md` — "Distributed evidence store (DEV.3.3,
   opt-in)" (§7 above); CLASS 0–3 vocabulary.
 - `utils/recovery_key_custody.py`; `docs/design/D4_BACKUP_CREDENTIAL_IDENTITY_DECISION.md`
@@ -803,3 +814,57 @@ scope.
 - `docs/AI_DEVELOPMENT_PROTOCOL.md` — approval boundaries (schema/storage
   migration requires explicit human approval, unchanged and binding on
   `B1-2`).
+
+---
+
+## Correction C-1 (2026-09-12) — a DRAFT document stood in §1's authority chain
+
+§1's authority chain listed `docs/design/PCP_STORAGE_ENGINE_DECISION.md` as
+item 5. That is a defect in this contract, not in the cited document, which
+is DRAFT and therefore not authority here.
+
+**Evidence.** `AGENTS.md` "Authority hierarchy" item 2 and "Contract-status
+law" both forbid a document whose status line says `DRAFT` from being treated
+as implementation authority or cited as approving a command, schema or
+identity model. `PCP_STORAGE_ENGINE_DECISION.md`'s own status line reads
+"**DRAFT — evaluation only. Does not itself freeze `pcp_storage_engine`**" and
+states "No code, schema, or migration is authorized by this document." Listing
+it in this FROZEN contract's authority chain asserted the opposite. The same
+defect class was adjudicated for the B1 family by
+`docs/design/UI2_0_B1_01A_PLATFORM_SKELETON_CONTRACT.md` ("Why a successor
+instead of an amendment") and is now machine-checked by
+`tests/test_contract_authority_status.py`. The cited document is precedent and
+evidence, not authority, for anything in this contract.
+
+**Adjudication: reclassification, not a successor contract.** Every use of the
+cited document in this contract was already precedent or an explicitly-open
+question, never a clause that settles something:
+
+- §1 item 5 cited it for "the existing Line-1 custody/secret discipline this
+  document extends rather than re-derives" — precedent.
+- §6.3 and §10 item 3 cite its gap #9 and state, in this contract's own words,
+  that off-host key custody is **"not decided by this document"** — an open
+  question this contract deliberately declines to close.
+- §10's documents-checked list records that it was read — provenance.
+
+No normative clause of this contract depends on it, so nothing this contract
+requires changes here. The citation is moved out of the authority chain into
+the labelled "Evidence and precedent consulted — not authority" block in §1,
+and every remaining reference is marked `DRAFT, not authority`. Where the
+cited document disagrees with this contract, this contract wins.
+
+**Not reconciled here, reported instead.** §1 item 4 places
+`docs/design/UI2_0_ARCHITECTURE_DESIGN.md` in this same authority chain and
+labels it `DRAFT` — which its own status line confirms ("DRAFT — design
+resolved, NOT frozen, NOT implementation authority"). That is the identical
+defect this correction closes for `PCP_STORAGE_ENGINE_DECISION.md`, but it is
+larger: item 4 is cited in-body for §9's storage decision and §10's
+invariants, so reclassifying it may change what this contract requires. Under
+`AGENTS.md` "Authority hierarchy" that is a contradiction to report, not to
+reconcile locally: this correction settles only that
+`PCP_STORAGE_ENGINE_DECISION.md` is not authority here, and leaves item 4's
+standing open. It is left standing and flagged for the contract owner,
+together with the detector gap that hides it:
+`tests/test_contract_authority_status.py::_classify` matches the token
+`FROZEN` inside the phrase "NOT frozen" and therefore classifies that document
+as frozen, so no citation of it is currently flagged in either direction.
