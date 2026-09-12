@@ -156,11 +156,19 @@ is the note move (verbatim, reversible), which AC-4 pins.
 
 ## 8. Amendment A-2026-09-12 — open-item note exemption relaxed
 
-**Status: PROPOSED — PENDING PRODUCT OWNER APPROVAL.** This section does
-not change the FROZEN status line above, and does not itself authorize
-anything; it records a measured contradiction and a proposed resolution
-for the Product Owner to decide. Nothing in this repository may treat it
-as approved until a Product Owner decision says so.
+**Status: APPROVED — PRODUCT OWNER, 2026-09-12.** The Product Owner approved
+this amendment in the 2026-09-12 local session, after being shown the measured
+contradiction recorded in §8.1 and the completed move it made possible:
+`backlog.json` fell from 144.83 KiB to 62.31 KiB with the item count unchanged
+at 153 and no note text lost — every note removed from the JSON was verified
+present in its `docs/history/backlog/<id>.md` file before the approval was
+sought.
+
+This section does not change the FROZEN status line above; it relaxes the
+open-item note exemption that line's §2.3 point 2 established, and nothing
+else. §8.3's limits stand: the GOV.ORCH.8 §2.4 60 KB budget is neither raised
+nor waived, and the residual gap above it remains a separate, subsequent
+measurement.
 
 ### 8.1 The measured contradiction
 
