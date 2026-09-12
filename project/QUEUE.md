@@ -1,5 +1,5 @@
 # Project queue (generated — do not edit; run: py scripts/project_queue.py render)
-Build: ui2_d1_restore_c7_c2_amendments · Track: PCP.x · Generated: 2026-09-12T13:26:24Z
+Build: ui2_d1_restore_c7_c2_amendments · Track: PCP.x · Generated: 2026-09-12T13:56:24Z
 
 ## Now
 - ui2_d1_restore_c7_c2_amendments — UI2 D1 Option A -- apply the pending C7/C2/C4/baseline restore admission amendments (automated_validated)
@@ -39,7 +39,6 @@ Build: ui2_d1_restore_c7_c2_amendments · Track: PCP.x · Generated: 2026-09-12T
 - P1/in_progress ui2_b1_04_collection_engine_core — UI2 B1-4 -- collection engine core (capability registry, s (target: workflow §5 B1-4)
 - P1/in_progress ui2_b1_04b_minimal_device_model_onboarding — UI2 B1-4b -- minimal Device / Endpoint / CredentialReferen (target: workflow §5 B1-4b)
 - P1/in_progress ui2_b1_07_jobs_screen_run_now_read — UI2 B1-7 -- Jobs screen + Run Now (read class) + step log (target: workflow §5 B1-7)
-- P1/planned agent_frozen_contract_audit — Audit contracts the agent froze on its own hand (target: PO_DECISION_RECORD 6)
 - P1/planned auth_local_mechanism_contract — Local authentication: storage, lockout, role binding for a (target: C3 Correction C-2; successor contract be)
 - P1/planned cp_cphaprob_command_gate — Command gate: cphaprob stat, -a if, tablestat (target: AI_DEVELOPMENT_PROTOCOL)
 - P1/planned cp_failover_command_gate_batch — Command gate: cphaprob stat, cphaprob -a if, cphaprob tabl (target: PO request 2026-09-12; network-device co)
@@ -63,6 +62,7 @@ Build: ui2_d1_restore_c7_c2_amendments · Track: PCP.x · Generated: 2026-09-12T
 - P1/planned ui2_frontend_screens_shell — Frontend screens: login, menu, device list, device add; fr (target: Phase 1 step 2-3)
 - P1/planned ui2_local_auth_successor_contract — Local-authentication successor contract (target: UI2_0_C3 C-2)
 - P2/in_progress inventory_exclusions_management_ui
+- P2/in_progress ui2_m3_design_transfer_pass
 - P2/planned auth_radius_mechanism
 - P2/planned auth_tacacs_mechanism
 - P2/planned device_manual_add_transport_choice
@@ -76,7 +76,6 @@ Build: ui2_d1_restore_c7_c2_amendments · Track: PCP.x · Generated: 2026-09-12T
 - P2/planned privacy_baseline_tests_not_idempotent_runtime_trust_material
 - P2/planned project_plan_build_history_archive_split_lookup
 - P2/planned project_plan_crypto_placeholder_sentinel_lost
-- P2/planned ui2_m3_design_transfer_pass
 - P3/planned cp_cphaprob_peer_observation_corroboration
 - P3/planned pytest_xdist_privacy_scan_scratch_file_race
 ## Deferred — held, not finished (reason: docs/history/backlog/<id>.md)
