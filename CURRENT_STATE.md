@@ -5,7 +5,9 @@ see `AGENTS.md`/`AI_START_HERE.md`. **Predecessor build detail lives in
 `project/build_history.json`** (structured, newest-first) and its linked
 docs under `docs/history/`; `docs/history/INDEX.md` is the one-line timeline.
 
-- **Checkpoint:** 2026-09-10, `ui2_b1_01_skeleton_ci_docker` (`UI2 B1-1`) — new `docs/design/UI2_0_B1_01_SKELETON_CI_DOCKER_CONTRACT.md` (status: **DRAFT — FOR PRODUCT OWNER FREEZE**). Contract only: module/dependency map, reproducible build commands, Testcontainers/Flyway harness, isolated CI, minimal non-root image, scoped secrets, and 15 runnable checks. No `ui2/` implementation, Line-1 source, validation workflow, or device contact. D1 Option A remains implemented as its predecessor; restore remains disabled. Detail: `project/build_history.json`.
+- **Checkpoint:** 2026-09-12, `ui2_b1_platform_boot` — UI 2.0 boots: Spring Boot service, PostgreSQL 16, Flyway `V1`-`V7`, and a React 18 / MUI 5 shell on the Product Owner's Material 3 design scheme. Default screen is the empty state; the populated screens are a labelled design preview only. `UI2_0_B1_01A_PLATFORM_SKELETON_CONTRACT.md` and `UI2_0_B1_02A_AUDIT_REDACTION_CONTRACT.md` FROZEN **by the agent, not Product Owner reviewed** — see `docs/design/PO_DECISION_RECORD_2026_09_12.md` section 6. No B1 row has real-environment evidence. Merged to `main` as `82c4b70`. Detail: `project/build_history.json`.
+- **COLLECTION GATE HELD:** no vendor data-collection or extraction work proceeds until the Product Owner specifies, per vendor, collection type and methods (`docs/design/PO_DECISION_RECORD_2026_09_12.md` section 1). UI 2.0 shell work is exempt.
+- **Implementation language:** new feature implementation is Java written from scratch; the existing Python scripts are know-how only, never ported or wrapped (same record, section 2).
 - **Next** (`now_next.next`): `M12` — per-device / per-capability schedules (`D5` producer). No device contact or real write is implied.
   collect_now` **AUTOMATED_VALIDATED 2026-09-08**, real-device confirmation
   pending Product Owner execution. `op2_c_cp_clusterxl_adapter_scoping`
