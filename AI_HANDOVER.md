@@ -38,10 +38,19 @@
 
 ## 3. Exact next action
 
-Continue the shell, one piece at a time, on the PO's order: **device add** (discovery
-vs manual: vendor + IP, Panorama/MDS for discovery), then multi-select import from
-discovery results, then login. Phase 1 auth = LDAP + local, local always the fallback;
-RADIUS/TACACS later. Write the four failover items into a contract before any probe work.
+`docs/design/PO_DECISION_RECORD_2026_09_12.md` is the durable record of the PO's
+directives and of what the agent did on its own hand — read it before acting.
+
+Then continue the shell, one piece at a time, on the PO's order: **device add**
+(discovery vs manual: vendor + IP, Panorama/MDS for discovery), then multi-select
+import from discovery results, then login. Phase 1 auth = LDAP + local, local always
+the fallback; RADIUS/TACACS later. Queue ids: `ui2_device_add_discovery_and_manual`,
+`ui2_local_auth_successor_contract`, `failover_readiness_check_contract`,
+`cp_cphaprob_command_gate`, `ui2_m3_design_transfer_pass`,
+`agent_frozen_contract_audit`.
+
+**The collection gate is held.** No vendor data collection until the PO specifies,
+per vendor, collection type and methods. UI shell work is exempt.
 
 ## 4. Test delta
 
@@ -53,5 +62,8 @@ pre-existing git-ignored runtime directories.
 - The design-preview screens have not been reviewed against the PO's M3 Configuration
   and M3 Network Inventory canvas frames; a dedicated design-transfer pass is pending.
 - `scripts/project_queue.py` cannot write `roadmap.json` `now_next.now`/`current_build`.
-- **Open PO decisions:** CP backup async semantics contradiction; LDAP TLS CA bundle
-  format/pin; PAN A/A (latent — estate is A/S).
+- **Open PO decisions:** `po_cp_backup_async_semantics`, `po_ldap_tls_trust_policy`
+  (both now in `project/QUEUE.md` "Open decisions"); PAN A/A stays latent — the
+  estate is Active/Standby.
+- Two contracts on this branch were frozen by the agent, not reviewed by the PO
+  (B1-1a, B1-2a). Audit before relying on them: `agent_frozen_contract_audit`.

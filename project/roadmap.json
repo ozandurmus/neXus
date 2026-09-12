@@ -549,6 +549,24 @@
       "decide_by": "PCP.5 contract freeze / DEV.4.6 migrations and database roles",
       "note": "Kept OPEN at the 2026-09-05 M0 freeze. Do not read the local SQLite decision as a production engine selection.",
       "detail": "docs/history/roadmap/decision_pcp_storage_engine.md"
+    },
+    {
+      "id": "po_cp_backup_async_semantics",
+      "area": "backup",
+      "status": "open",
+      "question": "CP R81.20 backup is asynchronous, contradicting the blocking-backup assumption the contracts were written against. Which semantics does the product implement?",
+      "options": "",
+      "recommendation": "implement against the documented asynchronous semantics; poll for completion",
+      "decide_by": "before any CP backup implementation"
+    },
+    {
+      "id": "po_ldap_tls_trust_policy",
+      "area": "identity",
+      "status": "open",
+      "question": "LDAP TLS trust: CA bundle format and whether the product pins the directory certificate.",
+      "options": "",
+      "recommendation": "",
+      "decide_by": "before LDAP authentication transport is implemented"
     }
   ]
 }

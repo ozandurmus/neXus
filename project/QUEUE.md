@@ -1,5 +1,5 @@
 # Project queue (generated — do not edit; run: py scripts/project_queue.py render)
-Build: ui2_d1_restore_c7_c2_amendments · Track: PCP.x · Generated: 2026-09-12T12:38:40Z
+Build: ui2_d1_restore_c7_c2_amendments · Track: PCP.x · Generated: 2026-09-12T13:09:38Z
 
 ## Now
 - ui2_d1_restore_c7_c2_amendments — UI2 D1 Option A -- apply the pending C7/C2/C4/baseline restore admission amendments (automated_validated)
@@ -39,11 +39,14 @@ Build: ui2_d1_restore_c7_c2_amendments · Track: PCP.x · Generated: 2026-09-12T
 - P1/in_progress ui2_b1_04_collection_engine_core — UI2 B1-4 -- collection engine core (capability registry, step executor with C2 c (target: workflow §5 B1-4)
 - P1/in_progress ui2_b1_04b_minimal_device_model_onboarding — UI2 B1-4b -- minimal Device / Endpoint / CredentialReference model, authorised m (target: workflow §5 B1-4b)
 - P1/in_progress ui2_b1_07_jobs_screen_run_now_read — UI2 B1-7 -- Jobs screen + Run Now (read class) + step log (target: workflow §5 B1-7)
+- P1/planned agent_frozen_contract_audit — Audit the contracts the agent froze or amended on its own hand (PO_DECISION_RECO (target: PO_DECISION_RECORD_2026_09_12 section 6)
 - P1/planned auth_local_mechanism_contract — Local authentication: storage, lockout, role binding for a directory-less identi (target: C3 Correction C-2; successor contract be)
+- P1/planned cp_cphaprob_command_gate — Network-device command gate for cphaprob stat, cphaprob -a if, cphaprob tablesta (target: AI_DEVELOPMENT_PROTOCOL command gate)
 - P1/planned cp_failover_command_gate_batch — Command gate: cphaprob stat, cphaprob -a if, cphaprob tablestat for failover che (target: PO request 2026-09-12; network-device co)
 - P1/planned cp_ssh_trust_r2_prod_server — CP SSH strict host-key R2 validation on production server (target: DEPLOY.1)
 - P1/planned device_session_one_per_device — One SSH session per device reused for every command; probe opens a channel per c (target: PO rule 2026-09-12; command gate says se)
 - P1/planned failover_peer_reciprocal_agreement_check — Eighth stop-condition: both members must agree reciprocally on local/peer roles (target: PO rule 2026-09-12; _pan_reciprocal_corr)
+- P1/planned failover_readiness_check_contract — Failover readiness check contract carrying the PO's four semantics (reciprocal p (target: PO_DECISION_RECORD_2026_09_12 section 3)
 - P1/planned failover_recheck_on_request — A failover request must re-run every readiness check at that moment; an earlier (target: PO rule 2026-09-12; OP.2 contract)
 - P1/planned failover_vsx_vsls_mentality_contract — VSX/VSLS semantics: CP per-VS state independent of chassis, VSLS off, static ass (target: PO statement 2026-09-12; needs vendor-se)
 - P1/planned ldap_tls_trust_store_pin_and_format — LDAP TLS trust store cannot be given a PIN or format; a protected PKCS12 loads e (target: docs/design/LDAP_TLS_TRUST_STORE_PIN_GAP)
@@ -55,7 +58,9 @@ Build: ui2_d1_restore_c7_c2_amendments · Track: PCP.x · Generated: 2026-09-12T
 - P1/planned ui2_b1_11_acceptance_scenario_worker_loss — UI2 B1-11 -- acceptance scenario B: worker killed mid-step -> OUTCOME_UNKNOWN, n (target: workflow §5 B1-11)
 - P1/planned ui2_b1_12_deployment_slice — UI2 B1-12 -- deployment slice (Docker compose for the DEPLOY.1 server shape, per (target: workflow §5 B1-12)
 - P1/planned ui2_composition_root_bootable_shell — Bootable service: Spring entry point, DataSource, Flyway at startup, empty UI sh (target: Phase 1 step 1; no device contact)
+- P1/planned ui2_device_add_discovery_and_manual — Device add: discovery (Panorama/MDS) and manual, with operator multi-select impo (target: PO_DECISION_RECORD_2026_09_12 section 4)
 - P1/planned ui2_frontend_screens_shell — Frontend screens: login, menu, device list, device add; frontend is 2 stub files (target: Phase 1 step 2-3)
+- P1/planned ui2_local_auth_successor_contract — Local-authentication successor contract, required before any local login path (target: UI2_0_C3 Correction C-2)
 - P2/in_progress inventory_exclusions_management_ui
 - P2/planned auth_radius_mechanism
 - P2/planned auth_tacacs_mechanism
@@ -70,6 +75,7 @@ Build: ui2_d1_restore_c7_c2_amendments · Track: PCP.x · Generated: 2026-09-12T
 - P2/planned privacy_baseline_tests_not_idempotent_runtime_trust_material
 - P2/planned project_plan_build_history_archive_split_lookup
 - P2/planned project_plan_crypto_placeholder_sentinel_lost
+- P2/planned ui2_m3_design_transfer_pass
 - P3/planned cp_cphaprob_peer_observation_corroboration
 - P3/planned pytest_xdist_privacy_scan_scratch_file_race
 ## Deferred — held, not finished (reason: docs/history/backlog/<id>.md)
@@ -106,6 +112,8 @@ Build: ui2_d1_restore_c7_c2_amendments · Track: PCP.x · Generated: 2026-09-12T
 - D-V9b — sk165432 applicability to this estate's version. Does NOT block OP.0b.0 freeze -- the frozen interpr
 - pcp_server_enrollment_exposure — May console enrollment (manual or candidate-based) be exposed in non-loopback / server mode, i.e. be
 - pcp_storage_engine — PRODUCTION-SCOPED. Which engine backs the registry/job plane IN PRODUCTION, against the section 10 c
+- po_cp_backup_async_semantics — CP R81.20 backup is asynchronous, contradicting the blocking-backup assumption the contracts were wr
+- po_ldap_tls_trust_policy — LDAP TLS trust: CA bundle format and whether the product pins the directory certificate.
 ## Recent builds
 - ui2_d1_restore_c7_c2_amendments (automated_validated)
 - ui2_b1_01a_platform_skeleton_freeze (automated_validated)

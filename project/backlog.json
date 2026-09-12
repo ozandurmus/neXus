@@ -1311,6 +1311,60 @@
       "priority": "P2",
       "target": "Phase 1 step 3; transport use is gated",
       "note": ""
+    },
+    {
+      "id": "failover_readiness_check_contract",
+      "category": "failover",
+      "title": "Failover readiness check contract carrying the PO's four semantics (reciprocal peer agreement, VSX/VSLS mentality, re-check on request, one session per device)",
+      "status": "planned",
+      "priority": "P1",
+      "target": "PO_DECISION_RECORD_2026_09_12 section 3",
+      "note": ""
+    },
+    {
+      "id": "cp_cphaprob_command_gate",
+      "category": "failover",
+      "title": "Network-device command gate for cphaprob stat, cphaprob -a if, cphaprob tablestat",
+      "status": "planned",
+      "priority": "P1",
+      "target": "AI_DEVELOPMENT_PROTOCOL command gate",
+      "note": ""
+    },
+    {
+      "id": "ui2_device_add_discovery_and_manual",
+      "category": "ui2",
+      "title": "Device add: discovery (Panorama/MDS) and manual, with operator multi-select import",
+      "status": "planned",
+      "priority": "P1",
+      "target": "PO_DECISION_RECORD_2026_09_12 section 4",
+      "note": ""
+    },
+    {
+      "id": "ui2_local_auth_successor_contract",
+      "category": "identity",
+      "title": "Local-authentication successor contract, required before any local login path",
+      "status": "planned",
+      "priority": "P1",
+      "target": "UI2_0_C3 Correction C-2",
+      "note": ""
+    },
+    {
+      "id": "ui2_m3_design_transfer_pass",
+      "category": "ui2",
+      "title": "Design transfer pass: reconcile each menu against the M3 Configuration and M3 Network Inventory canvas frames",
+      "status": "planned",
+      "priority": "P2",
+      "target": "ui2/frontend preview screens",
+      "note": ""
+    },
+    {
+      "id": "agent_frozen_contract_audit",
+      "category": "governance",
+      "title": "Audit the contracts the agent froze or amended on its own hand (PO_DECISION_RECORD section 6)",
+      "status": "planned",
+      "priority": "P1",
+      "target": "PO_DECISION_RECORD_2026_09_12 section 6",
+      "note": ""
     }
   ]
 }
