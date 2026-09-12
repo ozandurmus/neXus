@@ -1352,7 +1352,7 @@
       "id": "ui2_m3_design_transfer_pass",
       "category": "ui2",
       "title": "Reconcile each menu against the M3 canvas frames",
-      "status": "planned",
+      "status": "in_progress",
       "priority": "P2",
       "target": "ui2/frontend preview",
       "note": ""
@@ -1361,7 +1361,7 @@
       "id": "agent_frozen_contract_audit",
       "category": "governance",
       "title": "Audit contracts the agent froze on its own hand",
-      "status": "planned",
+      "status": "automated_validated",
       "priority": "P1",
       "target": "PO_DECISION_RECORD 6",
       "note": ""
