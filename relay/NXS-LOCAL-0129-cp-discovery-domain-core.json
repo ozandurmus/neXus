@@ -1,0 +1,197 @@
+{
+  "created_at": "2026-09-12T21:45:58Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1 A new package com.securityexpert.nexus.ui2.discovery.cp exists inside ui2/platform-core. ui2/settings.gradle.kts is unchanged and the module listing is still eleven.",
+          "AC-2 K-1 to K-10 are represented exactly as the section 4.2 table defines them, and UNCLASSIFIED and AMBIGUOUS exist as outcomes rather than as errors.",
+          "AC-3 A test asserts that a flag combination absent from the 4.2 table classifies as UNCLASSIFIED and is returned rather than dropped.",
+          "AC-4 Host resolution returns exactly one of the three outcomes for every input, and a test covers the empty-own-address case resolving as HR-2 rather than as a missing value.",
+          "AC-5 Section 9 check 10 passes as a test: host resolution is type-blind.",
+          "AC-6 Section 9 check 8 passes as a test: replacing every display name with a constant changes no kind, no host resolution and no cluster link.",
+          "AC-7 Section 9 check 12 passes as a test, including the case where removing the identifier yields zero links and NOT_EVALUABLE rather than a name fallback.",
+          "AC-8 Section 9 check 13 passes as a test, implemented by reflection over the candidate row type and its enums rather than by a hand-written list of today's field names.",
+          "AC-9 A test asserts HL-1 fail-closed: with zero or with more than one address match, the host is MISSING or AMBIGUOUS and no host identifier is recorded.",
+          "AC-10 The field-binding site is a single type, every entry is marked UNVERIFIED, and no concrete management-API field name appears anywhere else in the production source.",
+          "AC-11 ./ui2/gradlew -p ui2 build passes, and the architecture test suite including all ten direction methods still passes.",
+          "AC-12 The full Python test suite is unaffected: no file under utils/, scripts/, tests/ or project/ is modified.",
+          "AC-13 The repository privacy gate reports zero findings.",
+          "AC-14 No network call, no HTTP client, no socket and no session code appears anywhere in the diff."
+        ],
+        "baseline": {
+          "authority": "docs/design/CP_AND_VSX_DISCOVERY_CONTRACT.md -- FROZEN, PRODUCT OWNER APPROVED 2026-09-13. It is the sole implementation authority for this movement. Read its status block first: it records which clauses carried the review and it discharges FB-2 in a specific way this movement must follow.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "gate": "docs/design/PO_DECISION_RECORD_2026_09_13_CP_DISCOVERY_COLLECTION_GATE.md -- the collection gate is lifted for Check Point discovery ONLY, management plane only, four named methods, no device contacted. Every other device-facing path stays gated and Palo Alto is untouched.",
+          "language_rule": "docs/design/PO_DECISION_RECORD_2026_09_12.md section 2 -- new feature implementation is Java written from scratch. The existing Python is know-how only: never read as a source to port, never transliterated, never wrapped, never invoked. ui2 architecture direction test dir10 already enforces the runtime half of this.",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "sequencing": "This is the first of two implementation movements. This one is the pure domain core, which is fully testable with no server. The transport layer of contract section 3 -- the authenticated session, the domain enumeration, the object queries and the connection-table read -- is deliberately NOT in this movement and is a separate one, because binding to a concrete management API schema can only be verified against the Product Owner's live management server."
+        },
+        "context_not_loaded": [
+          "The existing Python collector and every module under utils/",
+          "docs/history/**",
+          "Palo Alto contracts and modules",
+          "ui2 frontend sources",
+          "project/*.json"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/cp-discovery-domain-core"
+        },
+        "invariants": [
+          "No device is contacted, by any path, at any point. Contract T-4.",
+          "No relationship, identity, grouping, ordering or membership is ever derived from a display name, a label, a comment or an ordinal suffix. Contract NP-1 to NP-5.",
+          "Host resolution does not branch on object type. Contract HR-4.",
+          "The identifier is the only join key. There is no name-based fallback anywhere, including when the identifier is missing. Contract MC-1, MC-2, HL-2.",
+          "No field, label, colour, icon, badge, sort key or filter expresses up, down, online, offline, reachable, unreachable, healthy or unhealthy, and no value is derived from the disproven signals to carry those semantics. Contract LV-1 and LV-3.",
+          "A candidate is never dropped for being incomplete, unclassifiable or unresolvable. Contract DI-3, DI-4.",
+          "Discovery writes nothing and retains no raw response. Contract DI-1, T-7.",
+          "The ui2 build keeps exactly eleven Gradle subprojects.",
+          "No real identity, address, domain or topology enters any tracked file."
+        ],
+        "merge_gate": "Product Owner assistant review of the diff plus orchestrator verify.passed. The worker does not merge to main.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Implement the Check Point and VSX discovery DOMAIN CORE in Java, inside the existing ui2 platform-core module, exactly as docs/design/CP_AND_VSX_DISCOVERY_CONTRACT.md (FROZEN 2026-09-13) states it: candidate classification, host resolution, host linking, member-to-cluster resolution, the candidate row, and one isolated field-binding site. Plus the four acceptance checks of that contract's §9 that are provable over synthetic fixtures -- 8, 10, 12 and 13 -- as real JUnit tests. Check 13 is the one that matters most: it is how §7's LV-1 becomes a test rather than an intention.",
+        "output_contract": [
+          "A discovery domain core in Java, in one package of platform-core, with every rule traceable to a clause id of the FROZEN contract.",
+          "Four property tests that make name-blindness, type-blindness, identifier-only joining and the liveness-vocabulary prohibition machine-checked rather than intended.",
+          "One isolated binding site, entirely UNVERIFIED, ready for a Product-Owner-run confirmation.",
+          "SESSION_CLOSE stating which contract clauses have code, which acceptance checks ran and their results, and what remains for the transport movement."
+        ],
+        "recommended_reasoning": {
+          "reason": "Deterministic implementation against an already-frozen contract, which the reasoning-tier table puts at Normal (strong). High effort rather than medium because the four property tests are the real deliverable and each is easy to write in a form that passes without proving anything -- check 13 by reflection rather than by a field list is the example.",
+          "tier": "Sonnet 5, high effort"
+        },
+        "requirements": [
+          "English, per AGENTS.md engineering-output language law.",
+          "Java written from scratch. Do not open the existing Python collector as a source to translate. If a rule is not in the FROZEN contract, it is not in scope -- do not supply it from product knowledge.",
+          "Every public type and method carries a short comment naming the contract clause id it implements -- CL-2, HR-4, MC-1, CR-1, LV-1 and so on. A clause with no code and code with no clause are both defects.",
+          "Commit early and often on the lane. Do not accumulate the whole movement into one commit at the end.",
+          "Do not merge to main. The Product Owner assistant reviews the diff and merges.",
+          "If the contract does not answer something, raise one RELAY_QUESTION rather than deciding it. Do not invent a rule and do not widen scope to make something fit.",
+          "Do NOT use './ui2/gradlew -p ui2 build' without '-x :integration-tests:test'. The integration tests fail closed on a missing database by design, which is correct behaviour and not something to fix. Measured locally before this packet was written."
+        ],
+        "risks": [
+          "Creating a twelfth Gradle subproject, which breaks the module-listing assertion.",
+          "Writing a name-parsing convenience -- splitting on a separator, stripping an ordinal, pairing by suffix -- which the measured estate already proves wrong, since it carries two different ordinal separators and ambiguous split points.",
+          "Letting an object-type test creep into host resolution because a case looks like it needs one. That is the exact departure HR-4 names.",
+          "Supplying a status, health or reachability field because a candidate list looks incomplete without one. Contract section 7 forbids it and check 13 catches it.",
+          "Reading the existing Python collector for guidance and reproducing its shape or its measured defects.",
+          "Filling an UNKNOWN from product knowledge rather than leaving it UNKNOWN.",
+          "Marking a binding entry VERIFIED when no server was contacted.",
+          "Treating a '?' cell in the 6.2 table as present."
+        ],
+        "scope": {
+          "in": [
+            "Create ONE new Java package, com.securityexpert.nexus.ui2.discovery.cp, inside the EXISTING ui2/platform-core module. Do not create a new Gradle subproject: ui2/settings.gradle.kts fixes eleven subprojects and Ui2ArchitectureTest asserts that listing. platform-core is the correct home for a second reason -- direction tests dir1, dir7 and dir10 already forbid it any project dependency, any persistence framework and any Python runtime, which is the structural form of contract rules DI-1 and the know-how-only language rule.",
+            "Candidate classification, contract section 4. A CandidateKind type carrying K-1 to K-10 exactly as the section 4.2 table defines them, plus the two outcomes UNCLASSIFIED and AMBIGUOUS. A classifier that decides kind from object type and the three flags PRODUCT, VIRT_HOST, VIRT_SYSTEM and from nothing else (CL-1). An unmeasured flag combination yields UNCLASSIFIED and is returned, never dropped and never assigned to the nearest kind (CL-2). A combination matching more than one kind yields AMBIGUOUS and is never resolved by preference order (CL-2). The flag set is closed at exactly three (CL-4).",
+            "Host resolution, contract section 5.1. A pure function of the two address fields -- management address and own address -- returning exactly one of the three HR-1/HR-2/HR-3 outcomes. HR-2 covers the empty own address as the same case as a differing one, not as a separate rule and not as a value to repair. HR-3 yields NOT_APPLICABLE, never UNKNOWN. HR-4 is a hard constraint on the implementation: this function must NOT branch on object type or on candidate kind. Equality is decided by comparing the two values locally after trimming surrounding whitespace and after nothing else -- no numeric casting, no zero-stripping, no truncation or padding, no case or punctuation normalization. Where equality cannot be decided this way the outcome is NOT_EVALUABLE.",
+            "Host linking, contract section 5.2. For a candidate resolved by HR-2, find the candidates in the SAME owning domain whose own address equals its management address. Exactly one match links; zero yields MISSING; more than one yields AMBIGUOUS (HL-1). In the MISSING and AMBIGUOUS cases NO host identifier is recorded. A resolved link is recorded by the host candidate's stable identifier, never by the address (HL-2). Candidates with MISSING or AMBIGUOUS hosts are still returned (HL-3).",
+            "Member-to-cluster resolution, contract section 5.3. The cluster reference's stable identifier is the join key. The display name is never compared, never used as a key and never used to break a tie (MC-1). Where the reference is absent, or carries a display name but no identifier, the result is NOT_EVALUABLE with NO fallback of any kind (MC-2). The tree is built from the member side only; a cluster with no referencing member is a cluster with no known members, not an empty cluster (MC-3).",
+            "The candidate row, contract section 6. The fields of the 6.2 table, with the per-kind presence the table states and with CR-0 honoured: a '?' cell means the field MAY BE ABSENT and the code handles the absence -- it is never treated as present. The candidate key is the pair (owning domain, stable identifier) per CR-1, because U-1 is unsettled. The stable identifier is opaque: not cast, not trimmed of leading zeroes, not normalized, not parsed (CR-1). Owning domain comes from the enumeration context, not from the object (CR-5). Candidate kind is derived, never supplied (CR-6). CR-3a: an address on a cluster-kind candidate is never resolved through HL-1 and is never presented as a device address. CR-8a/CR-8b/CR-9: model and software version are never inherited from host to virtual system and a cluster object's are never presented as a member's. CR-11 to CR-14: no field derived from a name, no liveness field, no raw response, no collected device state.",
+            "One isolated field-binding site, contract section 6.4 as discharged by the FROZEN status block. A single class or single enum is the ONLY place where a role name is associated with a concrete management-API field name. Every entry is marked UNVERIFIED, because the measurement lived in a Product Owner session against a management server no worker has. Every rule in the classification and resolution code is written against the ROLE names, so that no rule depends on a concrete field name. A role that cannot be bound is recorded UNKNOWN and its field is not carried (FB-3).",
+            "JUnit tests implementing contract section 9 checks 8, 10, 12 and 13 over synthetic fixtures constructed in the test source. Check 8, name-blindness: classify a fixture set twice, once as built and once with EVERY display-name field replaced by one constant, and assert the kind assignment, every host resolution and every cluster link are identical. Check 10, type-blindness: assert host resolution computed with no access to object type produces the same outcome for every candidate as the same computation with object type available. Check 12, identifier-only join: assert links are recorded by identifier; assert a run with every cluster display name replaced by a constant produces identical links; assert a run with the identifier removed from every cluster reference produces ZERO links and NOT_EVALUABLE, never a name-based fallback. Check 13, liveness vocabulary: assert that no field name and no enumerated field value anywhere in the produced candidate row belongs to the vocabulary up, down, online, offline, reachable, unreachable, healthy, unhealthy or a synonym -- implement this by reflecting over the candidate row type and its enums, so it keeps holding for fields added later, not by listing today's fields.",
+            "Fixtures are synthetic and invented in the test source. No real address, object name, domain name, identifier, serial or certificate subject appears in any file."
+          ],
+          "out": [
+            "The transport layer, contract section 3. No HTTP client, no session management, no login, no domain enumeration call, no object query call, no connection-table read, no network code of any kind. This movement compiles and tests without any server and must contain nothing that would try to reach one. That layer is the NEXT movement.",
+            "The connection-table channel state of contract section 7.4. It arrives with the transport that reads it; nothing about CS-1 to CS-6 is implemented here.",
+            "Persistence of any kind. No repository, no entity, no migration, no SQL. DI-1 says a discovery run writes nothing, and dir7 already forbids platform-core a persistence framework.",
+            "Any HTTP surface, any REST controller, any screen, any frontend change. The operator screen is deferred by contract section 11.",
+            "Import, deduplication and reconciliation against existing device rows. Contract section 8 fixes the boundary; DI-6 says discovery makes no claim about whether a candidate is already imported.",
+            "Any device contact by any transport. Any Palo Alto code. Any change to a FROZEN contract. Any new Gradle subproject. Any change to project/*.json. Any change to the existing Python.",
+            "Closing any of the twelve UNKNOWNs of contract section 10, or marking any binding entry VERIFIED."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              "build",
+              "-x",
+              ":integration-tests:test"
+            ],
+            "name": "ui2_build_excluding_db_bound_integration_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              ":platform-core:test"
+            ],
+            "name": "ui2_platform_core_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              ":architecture-tests:test"
+            ],
+            "name": "ui2_architecture_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              "projects"
+            ],
+            "name": "ui2_module_listing_must_stay_eleven"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_project_files_budget.py",
+              "-q"
+            ],
+            "name": "project_files_budget"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_contract_authority_status.py",
+              "-q"
+            ],
+            "name": "contract_authority_status"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-12T21:45:58Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0129",
+  "movement": "cp_discovery_domain_core",
+  "next_actor": "engineer",
+  "refs": [
+    "docs/design/CP_AND_VSX_DISCOVERY_CONTRACT.md",
+    "docs/design/PO_DECISION_RECORD_2026_09_13_CP_DISCOVERY_COLLECTION_GATE.md",
+    "docs/design/PO_DECISION_RECORD_2026_09_12.md",
+    "AGENTS.md",
+    "AI_START_HERE.md",
+    "CURRENT_STATE.md",
+    "ui2/settings.gradle.kts",
+    "ui2/architecture-tests/src/test/java/com/securityexpert/nexus/ui2/architecture/Ui2ArchitectureTest.java"
+  ],
+  "schema_version": 1,
+  "status": "OPEN",
+  "updated_at": "2026-09-12T21:45:58Z"
+}
