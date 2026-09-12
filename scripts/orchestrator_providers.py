@@ -155,6 +155,8 @@ class ProviderAdapter(Protocol):
 
     def usage_from_event(self, obj: dict) -> dict | None: ...
 
+    def budget_exhausted(self, log_path: Path) -> dict | None: ...
+
 
 def _iter_json_lines(log_path: Path):
     """Yields one parsed JSON object per complete, valid line of `log_path`.
@@ -288,6 +290,21 @@ class ClaudeAdapter:
                 },
                 "total_cost_usd": cost if isinstance(cost, (int, float)) and not isinstance(cost, bool) else None,
             }
+        return None
+
+    def budget_exhausted(self, log_path: Path) -> dict | None:
+        """NXS-LOCAL-0126: the CLI's own `result` event carries
+        `terminal_reason: "budget_exhausted"` (subtype
+        `"error_max_budget_usd"`) when `--max-budget-usd` cut the run off --
+        observed directly against the installed `claude` binary rather than
+        inferred from cost vs. limit. Returns `{"cost_reached_usd": ...}`
+        (the event's own `total_cost_usd`, possibly `None` if the event
+        omits it -- still a real exhaustion, just without a recorded cost)
+        when that terminal reason is present, else `None`."""
+        for obj in _iter_json_lines(Path(log_path)):
+            if obj.get("type") == "result" and obj.get("terminal_reason") == "budget_exhausted":
+                cost = obj.get("total_cost_usd")
+                return {"cost_reached_usd": cost if isinstance(cost, (int, float)) and not isinstance(cost, bool) else None}
         return None
 
 
@@ -429,6 +446,13 @@ class CodexAdapter:
             model = obj.get("model")
             if isinstance(model, str) and model:
                 return {"kind": "model", "model": model}
+        return None
+
+    def budget_exhausted(self, log_path: Path) -> dict | None:
+        """No Codex event stream field for this is proven (this module's own
+        docstring already notes the stream carries no model field either,
+        until Codex exposes one) -- per the vendor-semantics law, absence of
+        a confirmed signal is `None`, never an inferred equivalence."""
         return None
 
 

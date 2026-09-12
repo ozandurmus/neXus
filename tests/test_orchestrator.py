@@ -1041,6 +1041,18 @@ elif mode == "heartbeat_stall":
     print("engineer: one line then silence", flush=True)
     time.sleep(30)
     sys.exit(0)
+elif mode == "budget_exhausted":
+    # NXS-LOCAL-0126: shape observed directly against the installed
+    # `claude` CLI's own stream-json `result` event when `--max-budget-usd`
+    # cuts a run off -- `terminal_reason`/`subtype`/`errors` verbatim.
+    print(json.dumps({
+        "type": "result", "subtype": "error_max_budget_usd", "is_error": True,
+        "terminal_reason": "budget_exhausted",
+        "errors": ["Reached maximum budget ($3)"],
+        "total_cost_usd": 3.014217, "num_turns": 4,
+    }), flush=True)
+    print('api_key: "tail-bound-secret-value"', flush=True)
+    sys.exit(1)
 '''
 
 
@@ -1212,6 +1224,85 @@ def test_run_cli_engineer_exit_nonzero_carries_exit_code_and_log_excerpt(tmp_pat
     assert rc == orch.EXIT_REFUSED
     assert report["exit_code"] == 1
     assert "engineer: about to fail" in report["engineer_log_excerpt"]
+
+
+def test_run_cli_budget_exhausted_names_its_own_failure_reason(tmp_path, monkeypatch, capsys):
+    """AC-1/AC-2/AC-4 (NXS-LOCAL-0126): an engineer whose log carries the
+    provider's own `terminal_reason: "budget_exhausted"` result event is
+    named as its own failure reason -- not only `engineer_exit_nonzero` --
+    and the report carries the budget that was in force and the cost the
+    engineer reached before it was cut off."""
+    work = _init_bare_and_clone(tmp_path)
+    relay_dir = _make_relay(work, movement="M", git={"base": "origin/main", "lane": "feature/x"})
+    relay_id = json.loads(next(relay_dir.glob("*.json")).read_text())["id"]
+    _install_stub_claude(tmp_path, monkeypatch)
+    monkeypatch.setenv("NEXUS_TEST_STUB_MODE", "budget_exhausted")
+
+    capsys.readouterr()
+    rc = orch.main(_run_args(
+        tmp_path, relay_dir, relay_id, timeout=15, heartbeat_timeout=10, max_budget_usd=3.0,
+    ))
+    report = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
+    assert rc == orch.EXIT_REFUSED
+    # AC-4: not only a bare non-zero exit -- "budget_exhausted" is named
+    # alongside "engineer_exit_nonzero", not in place of it.
+    assert report["failure_reasons"] == ["engineer_exit_nonzero", "budget_exhausted", "relay_not_closed"]
+    assert report["budget_exhausted"] == {"max_budget_usd": 3.0, "cost_reached_usd": 3.014217}
+
+
+def test_run_cli_budget_exhausted_phase_decision_unchanged(tmp_path, monkeypatch, capsys):
+    """AC-3: naming budget exhaustion does not change the phase decision --
+    it fails exactly as a plain non-zero exit already would."""
+    work = _init_bare_and_clone(tmp_path)
+    relay_dir = _make_relay(work, movement="M", git={"base": "origin/main", "lane": "feature/x"})
+    relay_id = json.loads(next(relay_dir.glob("*.json")).read_text())["id"]
+    _install_stub_claude(tmp_path, monkeypatch)
+    monkeypatch.setenv("NEXUS_TEST_STUB_MODE", "budget_exhausted")
+
+    capsys.readouterr()
+    rc = orch.main(_run_args(tmp_path, relay_dir, relay_id, timeout=15, heartbeat_timeout=10))
+    report = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
+    assert rc == orch.EXIT_REFUSED
+    assert report["phase"] == orch.PHASE_FAILED
+    assert report["failure_reason"] == "engineer_exit_nonzero"
+
+    record = orch._load_state(tmp_path / "state", relay_id)
+    assert record["phase"] == orch.PHASE_FAILED
+
+
+def test_run_cli_budget_exhausted_log_excerpt_is_still_redacted(tmp_path, monkeypatch, capsys):
+    """AC-5: the secret-shaped line the budget-exhausted stub also emits
+    does not survive into the report -- the same bounded/redacted
+    mechanism applies regardless of which failure reason fired."""
+    work = _init_bare_and_clone(tmp_path)
+    relay_dir = _make_relay(work, movement="M", git={"base": "origin/main", "lane": "feature/x"})
+    relay_id = json.loads(next(relay_dir.glob("*.json")).read_text())["id"]
+    _install_stub_claude(tmp_path, monkeypatch)
+    monkeypatch.setenv("NEXUS_TEST_STUB_MODE", "budget_exhausted")
+
+    capsys.readouterr()
+    rc = orch.main(_run_args(tmp_path, relay_dir, relay_id, timeout=15, heartbeat_timeout=10))
+    report = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
+    assert rc == orch.EXIT_REFUSED
+    excerpt = report["engineer_log_excerpt"]
+    assert "tail-bound-secret-value" not in excerpt
+    assert "[REDACTED]" in excerpt
+
+
+def test_run_cli_clean_run_report_has_no_budget_exhausted_field(tmp_path, monkeypatch, capsys):
+    """A clean run never carries the new `budget_exhausted` field."""
+    work = _init_bare_and_clone(tmp_path)
+    relay_dir = _make_relay(work, movement="M", git={"base": "origin/main", "lane": "feature/x"},
+                             validation_plan=[{"argv": [sys.executable, "-c", "pass"]}])
+    relay_id = json.loads(next(relay_dir.glob("*.json")).read_text())["id"]
+    _install_stub_claude(tmp_path, monkeypatch)
+    monkeypatch.setenv("NEXUS_TEST_STUB_MODE", "close")
+
+    capsys.readouterr()
+    rc = orch.main(_run_args(tmp_path, relay_dir, relay_id, timeout=15, heartbeat_timeout=10))
+    report = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
+    assert rc == orch.EXIT_OK, report
+    assert "budget_exhausted" not in report
 
 
 def test_run_cli_engineer_exit_nonzero_and_unclosed_relay_reports_both_reasons(tmp_path, monkeypatch, capsys):

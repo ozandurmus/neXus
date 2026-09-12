@@ -1342,6 +1342,7 @@ def _build_run_report(
     model_observed: str | None = None, effort_observed: str | None = None,
     integrate_result: dict | None = None, usage: dict | None = None,
     failure_reasons: list[str] | None = None, engineer_log_excerpt: str | None = None,
+    budget_exhausted: dict | None = None,
 ) -> dict:
     """GOV.ORCH.1 section 2.4's report object, extended by GOV.ORCH.2
     section 2.4 with provider/model/effort requested-vs-observed fields and
@@ -1355,7 +1356,11 @@ def _build_run_report(
     fields (NXS-LOCAL-0115): both are omitted entirely on a clean run, so an
     existing reader of `failure_reason`/`exit_code` sees no change. Neither
     changes the phase decision above -- they only make an already-decided
-    non-zero exit diagnosable."""
+    non-zero exit diagnosable. `budget_exhausted` (NXS-LOCAL-0126) is the
+    same kind of addition: present only when the engineer's own terminal
+    signal named budget exhaustion, carrying the budget that was in force
+    and the cost reached; "budget_exhausted" also then appears in
+    `failure_reasons` alongside `engineer_exit_nonzero`."""
     report = {
         "movement": movement, "phase": phase, "exit_code": exit_code,
         "failure_reason": failure_reason, "relay_status": relay_status,
@@ -1374,6 +1379,8 @@ def _build_run_report(
         report["failure_reasons"] = failure_reasons
     if engineer_log_excerpt is not None:
         report["engineer_log_excerpt"] = engineer_log_excerpt
+    if budget_exhausted is not None:
+        report["budget_exhausted"] = budget_exhausted
     return report
 
 
@@ -1389,6 +1396,8 @@ def _cmd_run(args: argparse.Namespace) -> int:
     worktree_path = Path(record["worktree_path"])
     branch = record.get("branch")
     log_path = worktree_path / ".nexus" / "engineer.log"
+    provider = record.get("provider", "claude")
+    adapter = op.build_adapter(provider)
 
     started = time.monotonic()
     exit_code, failure_reason = _wait_for_engineer(
@@ -1400,6 +1409,7 @@ def _cmd_run(args: argparse.Namespace) -> int:
 
     failure_reasons: list[str] = []
     engineer_log_excerpt: str | None = None
+    budget_exhausted: dict | None = None
     if failure_reason is not None:
         phase = PHASE_FAILED
         # A killed engineer never gets an orchestrator-side verify run --
@@ -1415,6 +1425,19 @@ def _cmd_run(args: argparse.Namespace) -> int:
         if exit_code != 0:
             failure_reasons.append("engineer_exit_nonzero")
             engineer_log_excerpt = _engineer_log_excerpt(log_path)
+            # NXS-LOCAL-0126: name a budget-exhausted engineer as its own
+            # failure reason, read from the provider's own terminal signal
+            # in the log (never inferred from cost vs. limit) -- a cost at
+            # the limit is evidence, the provider's own terminal reason is
+            # the fact. Additive: engineer_exit_nonzero above already fired
+            # and the phase decision below is untouched.
+            budget_signal = adapter.budget_exhausted(log_path)
+            if budget_signal is not None:
+                failure_reasons.append("budget_exhausted")
+                budget_exhausted = {
+                    "max_budget_usd": args.max_budget_usd,
+                    "cost_reached_usd": budget_signal["cost_reached_usd"],
+                }
         if relay_status != "CLOSED":
             failure_reasons.append("relay_not_closed")
         failure_reason = failure_reasons[0] if failure_reasons else None
@@ -1425,10 +1448,8 @@ def _cmd_run(args: argparse.Namespace) -> int:
         phase = PHASE_DONE if (exit_code == 0 and relay_status == "CLOSED" and verify_result["passed"]) else PHASE_FAILED
 
     record = _load_state(state_dir, movement) or record
-    provider = record.get("provider", "claude")
     merge_mode = record.get("merge_mode") or op.resolve_merge_mode(provider, getattr(args, "merge_mode", None))
 
-    adapter = op.build_adapter(provider)
     model_observed, effort_observed = adapter.observed_model(log_path)
 
     # GOV.ORCH.2 section 2.5: in orchestrator merge-mode the engineer never
@@ -1464,6 +1485,7 @@ def _cmd_run(args: argparse.Namespace) -> int:
         model_observed=model_observed, effort_observed=effort_observed,
         integrate_result=integrate_result, usage=usage,
         failure_reasons=failure_reasons, engineer_log_excerpt=engineer_log_excerpt,
+        budget_exhausted=budget_exhausted,
     )
     print(json.dumps(report_obj))
     return EXIT_OK if phase == PHASE_DONE else EXIT_REFUSED

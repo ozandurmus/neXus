@@ -31,6 +31,22 @@ and in what order.
 
 ## 3. The loop, as commands
 
+Pre-dispatch checklist -- run every item before the first command below.
+The per-movement budget defaults low (`DEFAULT_MAX_BUDGET_USD`); a
+CONTRACT, AUDIT, or DEPLOYMENT movement will not fit in it.
+
+1. `--max-budget-usd` is set from this movement's own scope, not left at
+   the default.
+2. Every `validation_plan` step has been run once, locally, before it goes
+   into the packet.
+3. For a deletion-shaped movement, the test tree has been searched for any
+   file the deletion would remove.
+4. The packet tells the worker to commit early and often on its lane.
+5. The branch lane is confirmed unused -- no other movement already holds
+   it.
+
+A "no" to any of these is a stop, not a workaround.
+
 ```
 git fetch origin main
 py scripts/gov_session_transfer.py validate <packet>          # must print valid: true
