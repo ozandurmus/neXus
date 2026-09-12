@@ -1279,6 +1279,49 @@ def _movement_validation_plan_and_base(relay_dir: Path, movement_id: str) -> tup
     return report.get("validation_plan", []) or [], report.get("git", {}).get("base"), relay_obj.get("status")
 
 
+#: Bound on how much of the engineer's own log enters a run report when the
+#: engineer exits non-zero -- large enough to show the failure, small enough
+#: that a stuck/verbose engineer cannot bloat every stored run record.
+ENGINEER_LOG_EXCERPT_LINES = 40
+
+# Secret-shaped patterns mirrored from utils/repository_privacy.py's own
+# scanner categories (private-key headers, key=value credential
+# assignments, email addresses, IPv4 addresses) -- applied here to an
+# in-memory log excerpt rather than a committed file, so the same detection
+# classes redact a diagnostic string before it is allowed into a stored run
+# report.
+_ENGINEER_LOG_PRIVATE_KEY_RE = re.compile(r"-----BEGIN (?:RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----")
+_ENGINEER_LOG_SECRET_ASSIGNMENT_RE = re.compile(
+    r"(?i)\b(password|passwd|api[_-]?key|access[_-]?token|secret|community|psk)\b(\s*[:=]\s*)(\S+)"
+)
+_ENGINEER_LOG_EMAIL_RE = re.compile(r"(?i)\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b")
+_ENGINEER_LOG_IPV4_RE = re.compile(r"(?<![\w.])(?:\d{1,3}\.){3}\d{1,3}(?![\w.])")
+
+
+def _redact_engineer_log_text(text: str) -> str:
+    """Redact secret-shaped substrings out of untrusted engineer-log text
+    before it is allowed to enter a stored run report. The engineer log is
+    worker output: data to be bounded and redacted, never instructions to
+    follow."""
+    text = _ENGINEER_LOG_PRIVATE_KEY_RE.sub("[REDACTED_PRIVATE_KEY]", text)
+    text = _ENGINEER_LOG_SECRET_ASSIGNMENT_RE.sub(lambda m: f"{m.group(1)}{m.group(2)}[REDACTED]", text)
+    text = _ENGINEER_LOG_EMAIL_RE.sub("[REDACTED_EMAIL]", text)
+    text = _ENGINEER_LOG_IPV4_RE.sub("[REDACTED_IP]", text)
+    return text
+
+
+def _engineer_log_excerpt(log_path: Path, *, lines: int = ENGINEER_LOG_EXCERPT_LINES) -> str | None:
+    """Bounded (last `lines` lines), redacted tail of the engineer's own log,
+    for diagnosing a non-zero exit. `None` when the log cannot be read --
+    collection failure is not itself a failure reason."""
+    try:
+        text = log_path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return None
+    tail = text.splitlines()[-lines:]
+    return _redact_engineer_log_text("\n".join(tail))
+
+
 def _build_run_report(
     *, movement: str, phase: str, exit_code: int | None, failure_reason: str | None,
     relay_status: str | None, model: str | None, effort: str | None, duration_s: float,
@@ -1286,6 +1329,7 @@ def _build_run_report(
     provider: str = "claude", merge_mode: str | None = None,
     model_observed: str | None = None, effort_observed: str | None = None,
     integrate_result: dict | None = None, usage: dict | None = None,
+    failure_reasons: list[str] | None = None, engineer_log_excerpt: str | None = None,
 ) -> dict:
     """GOV.ORCH.1 section 2.4's report object, extended by GOV.ORCH.2
     section 2.4 with provider/model/effort requested-vs-observed fields and
@@ -1293,7 +1337,13 @@ def _build_run_report(
     whose observed values are null -- the engineer log never surfaced a
     model -- is flagged rather than silently reported as if nothing was
     recorded), and by GOV.ORCH.4 section 3.1 with the movement's own token/
-    cost usage, read from the usage file `orchestrator_usage.py` maintains."""
+    cost usage, read from the usage file `orchestrator_usage.py` maintains.
+
+    `failure_reasons` and `engineer_log_excerpt` are additive diagnostic
+    fields (NXS-LOCAL-0115): both are omitted entirely on a clean run, so an
+    existing reader of `failure_reason`/`exit_code` sees no change. Neither
+    changes the phase decision above -- they only make an already-decided
+    non-zero exit diagnosable."""
     report = {
         "movement": movement, "phase": phase, "exit_code": exit_code,
         "failure_reason": failure_reason, "relay_status": relay_status,
@@ -1308,6 +1358,10 @@ def _build_run_report(
         report["audit_exception"] = "provider_default_used"
     if integrate_result is not None:
         report["integrate"] = integrate_result
+    if failure_reasons:
+        report["failure_reasons"] = failure_reasons
+    if engineer_log_excerpt is not None:
+        report["engineer_log_excerpt"] = engineer_log_excerpt
     return report
 
 
@@ -1332,6 +1386,8 @@ def _cmd_run(args: argparse.Namespace) -> int:
 
     validation_plan, base_ref, relay_status = _movement_validation_plan_and_base(relay_dir, movement)
 
+    failure_reasons: list[str] = []
+    engineer_log_excerpt: str | None = None
     if failure_reason is not None:
         phase = PHASE_FAILED
         # A killed engineer never gets an orchestrator-side verify run --
@@ -1341,10 +1397,15 @@ def _cmd_run(args: argparse.Namespace) -> int:
         # potentially-misleading verify.
         verify_result = {"passed": False, "steps": [], "skipped_reason": failure_reason}
     else:
+        # Report every applicable failure reason, not only the first one
+        # checked: an engineer that exits non-zero AND leaves the relay
+        # unclosed is two distinct, independently diagnosable facts.
         if exit_code != 0:
-            failure_reason = "engineer_exit_nonzero"
-        elif relay_status != "CLOSED":
-            failure_reason = "relay_not_closed"
+            failure_reasons.append("engineer_exit_nonzero")
+            engineer_log_excerpt = _engineer_log_excerpt(log_path)
+        if relay_status != "CLOSED":
+            failure_reasons.append("relay_not_closed")
+        failure_reason = failure_reasons[0] if failure_reasons else None
         verify_result = (
             {"passed": True, "steps": [], "skipped_reason": "no_verify"} if args.no_verify
             else ov.verify_movement(worktree_path=worktree_path, validation_plan=validation_plan, base_ref=base_ref)
@@ -1390,6 +1451,7 @@ def _cmd_run(args: argparse.Namespace) -> int:
         provider=provider, merge_mode=merge_mode,
         model_observed=model_observed, effort_observed=effort_observed,
         integrate_result=integrate_result, usage=usage,
+        failure_reasons=failure_reasons, engineer_log_excerpt=engineer_log_excerpt,
     )
     print(json.dumps(report_obj))
     return EXIT_OK if phase == PHASE_DONE else EXIT_REFUSED
