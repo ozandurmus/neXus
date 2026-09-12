@@ -55,6 +55,11 @@ ROADMAP = REPO / "project" / "roadmap.json"
 BUILD_HISTORY = REPO / "project" / "build_history.json"
 FEATURE_REGISTRY = REPO / "project" / "feature_registry.json"
 ARCHIVE_BUILD_HISTORY = REPO / "project" / "archive" / "build_history_2026.json"
+#: GOV.ORCH.9: the terminal reserve. `BACKLOG` (the active set) carries only
+#: `planned`/`in_progress` items and is what the cold start loads; every
+#: `done`/`deferred`/`automated_validated`/`real_env_validated` item lives
+#: here instead, same row schema, never loaded at cold start.
+ARCHIVE_BACKLOG_TERMINAL = REPO / "project" / "archive" / "backlog_terminal.json"
 QUEUE = REPO / "project" / "QUEUE.md"
 HISTORY_BACKLOG_DIR = REPO / "docs" / "history" / "backlog"
 HISTORY_BUILDS_DIR = REPO / "docs" / "history" / "builds"
@@ -256,6 +261,93 @@ def validate_backlog(data: dict) -> None:
 
 
 # --------------------------------------------------------------------------
+# GOV.ORCH.9: active set / terminal reserve split. `BACKLOG` and
+# `ARCHIVE_BACKLOG_TERMINAL` are two halves of one logical backlog, split by
+# status (`_file_for_status`). Every command that counts, lists, looks up by
+# id, or writes an item goes through the helpers below so both files stay
+# correct and the split is invisible to callers beyond needing both dicts.
+# --------------------------------------------------------------------------
+
+def _empty_backlog_doc(schema_version: str = "1.0") -> dict:
+    return {"schema_version": schema_version, "items": []}
+
+
+def load_backlog_terminal() -> dict:
+    """The reserve, or an empty doc if it does not exist yet (pre-migration
+    or a fixture that only sets up the active file)."""
+    if not ARCHIVE_BACKLOG_TERMINAL.exists():
+        return _empty_backlog_doc()
+    return load_json(ARCHIVE_BACKLOG_TERMINAL)
+
+
+def _file_for_status(status: str) -> str:
+    """Which of the two backlog files an item with this status belongs in."""
+    return "terminal" if status in TERMINAL_STATUSES else "active"
+
+
+def load_backlog_both() -> tuple[dict, dict]:
+    """Load the active set and the terminal reserve together."""
+    return load_json(BACKLOG), load_backlog_terminal()
+
+
+def write_backlog_both(active: dict, terminal: dict) -> None:
+    write_json(BACKLOG, active)
+    ARCHIVE_BACKLOG_TERMINAL.parent.mkdir(parents=True, exist_ok=True)
+    write_json(ARCHIVE_BACKLOG_TERMINAL, terminal)
+
+
+def all_backlog_items(active: dict, terminal: dict) -> list[dict]:
+    """The full backlog, both files, in the order GOV.ORCH.8 2.2's `_load`
+    pattern uses for build_history: active first, then the reserve."""
+    return list(active.get("items") or []) + list(terminal.get("items") or [])
+
+
+def find_backlog_item(active: dict, terminal: dict, item_id: str) -> tuple[dict | None, dict | None]:
+    """Look an item up by id across both files. Returns (item, its home dict)
+    or (None, None)."""
+    for item in active.get("items") or []:
+        if item.get("id") == item_id:
+            return item, active
+    for item in terminal.get("items") or []:
+        if item.get("id") == item_id:
+            return item, terminal
+    return None, None
+
+
+def move_backlog_item_if_needed(item: dict, home: dict, active: dict, terminal: dict) -> None:
+    """After `item['status']` has been set, move it to the file its new
+    status selects if that crosses the terminal boundary (GOV.ORCH.9 B-5)."""
+    dest = active if _file_for_status(item["status"]) == "active" else terminal
+    if dest is home:
+        return
+    home["items"] = [i for i in (home.get("items") or []) if i is not item]
+    dest.setdefault("items", []).append(item)
+
+
+def validate_backlog_split(active: dict, terminal: dict) -> None:
+    """GOV.ORCH.9 B-1/B-2: every active item is open, every terminal item is
+    terminal, and no id appears in both files."""
+    validate_backlog_structure(active)
+    validate_backlog_structure(terminal)
+    seen: set[str] = set()
+    for label, doc, allowed in (
+        ("backlog.json", active, OPEN_STATUSES),
+        ("archive/backlog_terminal.json", terminal, TERMINAL_STATUSES),
+    ):
+        for item in doc.get("items") or []:
+            item_id = item.get("id")
+            if item_id in seen:
+                raise QueueToolError(f"backlog split: duplicate id {item_id!r} across both files")
+            seen.add(item_id)
+            status = item.get("status")
+            if status not in allowed:
+                raise QueueToolError(
+                    f"{label}: item {item_id!r} has status {status!r}, which does not "
+                    f"belong in this file (expected one of {', '.join(allowed)})"
+                )
+
+
+# --------------------------------------------------------------------------
 # render
 # --------------------------------------------------------------------------
 
@@ -279,7 +371,19 @@ def _recent_builds(limit: int = 5) -> list[dict]:
     return list((history.get("builds") or [])[:limit])
 
 
-def render_queue_md(backlog: dict, roadmap: dict, generated: str | None = None) -> str:
+def render_queue_md(
+    backlog: dict,
+    roadmap: dict,
+    backlog_terminal: dict | None = None,
+    generated: str | None = None,
+) -> str:
+    """`backlog` is the active set (GOV.ORCH.9): it may still carry terminal
+    rows when called on a not-yet-split fixture, so the open/deferred filters
+    below run over `backlog` and `backlog_terminal` combined rather than
+    assuming either file's contents. `backlog_terminal` defaults to empty for
+    callers (and old fixtures) that only have one file."""
+    backlog_terminal = backlog_terminal or _empty_backlog_doc()
+    all_items = list(backlog.get("items") or []) + list(backlog_terminal.get("items") or [])
     generated = generated or datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     current_build = roadmap.get("current_build", "")
     current_track = roadmap.get("current_track", "")
@@ -302,7 +406,7 @@ def render_queue_md(backlog: dict, roadmap: dict, generated: str | None = None) 
         lines.append(next_line)
 
     lines.append("## Open backlog (P1 first, then P2, then P3; in_progress before planned)")
-    items = [i for i in (backlog.get("items") or []) if i.get("status") in OPEN_STATUSES]
+    items = [i for i in all_items if i.get("status") in OPEN_STATUSES]
     status_rank = {"in_progress": 0, "planned": 1}
 
     def sort_key(item: dict):
@@ -334,7 +438,7 @@ def render_queue_md(backlog: dict, roadmap: dict, generated: str | None = None) 
     # visible in the one planning file an agent reads at cold start. Without
     # this section the row vanishes from QUEUE.md and its reason survives only
     # in docs/history/backlog/, which is not read by default.
-    deferred = [i for i in (backlog.get("items") or []) if i.get("status") == "deferred"]
+    deferred = [i for i in all_items if i.get("status") == "deferred"]
     if deferred:
         lines.append(
             "## Deferred — held, not finished (reason: docs/history/backlog/<id>.md)"
@@ -362,10 +466,10 @@ def render_queue_md(backlog: dict, roadmap: dict, generated: str | None = None) 
 
 
 def cmd_render(args: argparse.Namespace) -> int:
-    backlog = load_json(BACKLOG)
+    backlog, backlog_terminal = load_backlog_both()
     roadmap = load_json(ROADMAP)
-    validate_backlog(backlog)
-    content = render_queue_md(backlog, roadmap)
+    validate_backlog_split(backlog, backlog_terminal)
+    content = render_queue_md(backlog, roadmap, backlog_terminal)
     QUEUE.write_text(content, encoding="utf-8")
     print(f"wrote {_display_path(QUEUE)}")
     return 0
@@ -373,13 +477,13 @@ def cmd_render(args: argparse.Namespace) -> int:
 
 def cmd_check(args: argparse.Namespace) -> int:
     try:
-        backlog = load_json(BACKLOG)
+        backlog, backlog_terminal = load_backlog_both()
         roadmap = load_json(ROADMAP)
     except QueueToolError as exc:
         print(str(exc))
         return 1
     try:
-        validate_backlog(backlog)
+        validate_backlog_split(backlog, backlog_terminal)
     except QueueToolError as exc:
         print(str(exc))
         return 1
@@ -393,7 +497,7 @@ def cmd_check(args: argparse.Namespace) -> int:
     if current:
         match = _GENERATED_RE.search(current)
         existing_generated = match.group(1) if match else None
-    expected = render_queue_md(backlog, roadmap, generated=existing_generated)
+    expected = render_queue_md(backlog, roadmap, backlog_terminal, generated=existing_generated)
     if current != expected:
         print(f"{_display_path(QUEUE)} is stale — run: py scripts/project_queue.py render")
         return 1
@@ -406,29 +510,29 @@ def cmd_check(args: argparse.Namespace) -> int:
 # --------------------------------------------------------------------------
 
 def cmd_add(args: argparse.Namespace) -> int:
-    backlog = load_json(BACKLOG)
-    items = backlog.get("items")
-    if not isinstance(items, list):
-        raise QueueToolError("backlog.json: 'items' must be a list")
-    if any(i.get("id") == args.id for i in items):
+    backlog, backlog_terminal = load_backlog_both()
+    if any(i.get("id") == args.id for i in all_backlog_items(backlog, backlog_terminal)):
         raise QueueToolError(f"add: duplicate id {args.id!r} already exists")
 
     new_item = {
         "id": args.id,
         "category": args.category,
         "title": args.title,
-        "status": "planned",
+        "status": args.status,
         "priority": args.priority,
         "target": args.target or "",
         "note": "",
     }
     validate_backlog_item(new_item)
-    items.append(new_item)
-    validate_backlog(backlog)
-    write_json(BACKLOG, backlog)
+    # GOV.ORCH.9 B-5: an item lands in whichever file its status selects --
+    # the reserve for a terminal status, the active set for an open one.
+    dest = backlog_terminal if _file_for_status(args.status) == "terminal" else backlog
+    dest.setdefault("items", []).append(new_item)
+    validate_backlog_split(backlog, backlog_terminal)
+    write_backlog_both(backlog, backlog_terminal)
 
     roadmap = load_json(ROADMAP)
-    QUEUE.write_text(render_queue_md(backlog, roadmap), encoding="utf-8")
+    QUEUE.write_text(render_queue_md(backlog, roadmap, backlog_terminal), encoding="utf-8")
     print(f"added {args.id!r}")
     return 0
 
@@ -445,9 +549,8 @@ def cmd_retitle(args: argparse.Namespace) -> int:
     if args.title is None and args.target is None:
         raise QueueToolError("retitle: pass --title and/or --target")
 
-    backlog = load_json(BACKLOG)
-    items = backlog.get("items") or []
-    item = next((i for i in items if i.get("id") == args.id), None)
+    backlog, backlog_terminal = load_backlog_both()
+    item, _home = find_backlog_item(backlog, backlog_terminal, args.id)
     if item is None:
         raise QueueToolError(f"retitle: no such id {args.id!r}")
 
@@ -457,19 +560,53 @@ def cmd_retitle(args: argparse.Namespace) -> int:
         item["target"] = args.target
 
     validate_backlog_item(item)
-    validate_backlog(backlog)
-    write_json(BACKLOG, backlog)
+    validate_backlog_split(backlog, backlog_terminal)
+    write_backlog_both(backlog, backlog_terminal)
 
     roadmap = load_json(ROADMAP)
-    QUEUE.write_text(render_queue_md(backlog, roadmap), encoding="utf-8")
+    QUEUE.write_text(render_queue_md(backlog, roadmap, backlog_terminal), encoding="utf-8")
     print(f"retitled {args.id!r}")
     return 0
 
 
-def cmd_status(args: argparse.Namespace) -> int:
+def cmd_migrate_backlog_terminal(args: argparse.Namespace) -> int:
+    """GOV.ORCH.9's one-time migration: split `backlog.json` into the active
+    set (planned/in_progress) and `archive/backlog_terminal.json` (the
+    terminal reserve), row schema and content unchanged, nothing deleted.
+    Reproducible and idempotent: running it again on an already-split pair
+    of files is a no-op because every item already sits in the file its
+    status selects."""
     backlog = load_json(BACKLOG)
-    items = backlog.get("items") or []
-    item = next((i for i in items if i.get("id") == args.id), None)
+    backlog_terminal = load_backlog_terminal()
+    before_ids = {item.get("id") for item in all_backlog_items(backlog, backlog_terminal)}
+
+    active_items = [i for i in (backlog.get("items") or []) if i.get("status") in OPEN_STATUSES]
+    terminal_items = [i for i in (backlog.get("items") or []) if i.get("status") in TERMINAL_STATUSES]
+    backlog["items"] = active_items
+    backlog_terminal.setdefault("schema_version", backlog.get("schema_version", "1.0"))
+    backlog_terminal["items"] = list(backlog_terminal.get("items") or []) + terminal_items
+
+    after_ids = {item.get("id") for item in all_backlog_items(backlog, backlog_terminal)}
+    if after_ids != before_ids:
+        raise QueueToolError(
+            "migrate-backlog-terminal: the split would change the item set; nothing written"
+        )
+    validate_backlog_split(backlog, backlog_terminal)
+    write_backlog_both(backlog, backlog_terminal)
+
+    roadmap = load_json(ROADMAP)
+    QUEUE.write_text(render_queue_md(backlog, roadmap, backlog_terminal), encoding="utf-8")
+    print(
+        f"split: {len(active_items)} active item(s) in {_display_path(BACKLOG)}, "
+        f"{len(backlog_terminal['items'])} terminal item(s) in "
+        f"{_display_path(ARCHIVE_BACKLOG_TERMINAL)}"
+    )
+    return 0
+
+
+def cmd_status(args: argparse.Namespace) -> int:
+    backlog, backlog_terminal = load_backlog_both()
+    item, home = find_backlog_item(backlog, backlog_terminal, args.id)
     if item is None:
         raise QueueToolError(f"status: no such id {args.id!r}")
 
@@ -481,11 +618,16 @@ def cmd_status(args: argparse.Namespace) -> int:
         _move_note_to_history(item)
         item["note"] = f"see docs/history/backlog/{item['id']}.md"
 
-    validate_backlog(backlog)
-    write_json(BACKLOG, backlog)
+    # GOV.ORCH.9 B-5/acceptance item 6: a status change that crosses the
+    # terminal boundary moves the item to the file its new status selects,
+    # in either direction.
+    move_backlog_item_if_needed(item, home, backlog, backlog_terminal)
+
+    validate_backlog_split(backlog, backlog_terminal)
+    write_backlog_both(backlog, backlog_terminal)
 
     roadmap = load_json(ROADMAP)
-    QUEUE.write_text(render_queue_md(backlog, roadmap), encoding="utf-8")
+    QUEUE.write_text(render_queue_md(backlog, roadmap, backlog_terminal), encoding="utf-8")
     print(f"{args.id!r} -> {args.set}")
     return 0
 
@@ -554,16 +696,15 @@ def cmd_migrate_open_notes(args: argparse.Namespace) -> int:
         validate_backlog(backlog)
         write_json(BACKLOG, backlog)
         roadmap = load_json(ROADMAP)
-        QUEUE.write_text(render_queue_md(backlog, roadmap), encoding="utf-8")
+        QUEUE.write_text(render_queue_md(backlog, roadmap, load_backlog_terminal()), encoding="utf-8")
 
     print(f"migrated {len(moved)} open item note(s): {', '.join(moved) if moved else '(none)'}")
     return 0
 
 
 def cmd_note(args: argparse.Namespace) -> int:
-    backlog = load_json(BACKLOG)
-    items = backlog.get("items") or []
-    item = next((i for i in items if i.get("id") == args.id), None)
+    backlog, backlog_terminal = load_backlog_both()
+    item, _home = find_backlog_item(backlog, backlog_terminal, args.id)
     if item is None:
         raise QueueToolError(f"note: no such id {args.id!r}")
 
@@ -594,8 +735,8 @@ def cmd_decide(args: argparse.Namespace) -> int:
     decision["decided_on"] = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     write_json(ROADMAP, roadmap)
 
-    backlog = load_json(BACKLOG)
-    QUEUE.write_text(render_queue_md(backlog, roadmap), encoding="utf-8")
+    backlog, backlog_terminal = load_backlog_both()
+    QUEUE.write_text(render_queue_md(backlog, roadmap, backlog_terminal), encoding="utf-8")
     print(f"decided {args.id!r}")
     return 0
 
@@ -672,7 +813,7 @@ def _authority_warnings(history: dict, roadmap: dict) -> list[str]:
     from utils.project_plan import _cross_authority_warnings
 
     features = (load_json(FEATURE_REGISTRY).get("features") or []) if FEATURE_REGISTRY.exists() else []
-    backlog_items = (load_json(BACKLOG).get("items") or []) if BACKLOG.exists() else []
+    backlog_items = all_backlog_items(*load_backlog_both()) if BACKLOG.exists() else []
     return _cross_authority_warnings(
         roadmap,
         [row for row in (features or []) if isinstance(row, dict)],
@@ -786,7 +927,7 @@ def cmd_build_add(args: argparse.Namespace) -> int:
 
     write_json(BUILD_HISTORY, history)
     write_json(ROADMAP, roadmap)
-    QUEUE.write_text(render_queue_md(load_json(BACKLOG), roadmap), encoding="utf-8")
+    QUEUE.write_text(render_queue_md(load_json(BACKLOG), roadmap, load_backlog_terminal()), encoding="utf-8")
     _refresh_build_history_index()
     if full_summary:
         _write_build_history_doc({**new_row, "_full_summary": full_summary})
@@ -814,7 +955,7 @@ def cmd_build_status(args: argparse.Namespace) -> int:
     _assert_no_new_contradiction("build status", history, roadmap)
     write_json(BUILD_HISTORY, history)
     write_json(ROADMAP, roadmap)
-    QUEUE.write_text(render_queue_md(load_json(BACKLOG), roadmap), encoding="utf-8")
+    QUEUE.write_text(render_queue_md(load_json(BACKLOG), roadmap, load_backlog_terminal()), encoding="utf-8")
     _refresh_build_history_index()
     print(f"{args.build!r} -> {args.set}")
     return 0
@@ -866,8 +1007,8 @@ def cmd_decision_open(args: argparse.Namespace) -> int:
         "decide_by": args.decide_by,
     })
     write_json(ROADMAP, roadmap)
-    backlog = load_json(BACKLOG)
-    QUEUE.write_text(render_queue_md(backlog, roadmap), encoding="utf-8")
+    backlog, backlog_terminal = load_backlog_both()
+    QUEUE.write_text(render_queue_md(backlog, roadmap, backlog_terminal), encoding="utf-8")
     print(f"opened decision {args.id!r}")
     return 0
 
@@ -892,6 +1033,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_add.add_argument("--priority", required=True)
     p_add.add_argument("--category", required=True)
     p_add.add_argument("--target", default="")
+    p_add.add_argument(
+        "--status", default="planned", choices=ALL_STATUSES,
+        help="GOV.ORCH.9: a terminal status lands the new item in the reserve "
+             "directly (default: planned, in the active set)",
+    )
     p_add.set_defaults(func=cmd_add)
 
     p_status = sub.add_parser("status", help="update a backlog item's status")
@@ -905,6 +1051,13 @@ def build_parser() -> argparse.ArgumentParser:
     p_retitle.add_argument("--title", default=None)
     p_retitle.add_argument("--target", default=None)
     p_retitle.set_defaults(func=cmd_retitle)
+
+    p_migrate_terminal = sub.add_parser(
+        "migrate-backlog-terminal",
+        help="GOV.ORCH.9: one-time split of backlog.json into the active set "
+             "and archive/backlog_terminal.json",
+    )
+    p_migrate_terminal.set_defaults(func=cmd_migrate_backlog_terminal)
 
     p_migrate = sub.add_parser(
         "migrate-open-notes",

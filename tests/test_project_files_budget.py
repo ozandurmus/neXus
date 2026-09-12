@@ -1,20 +1,17 @@
-"""GOV.ORCH.8 2.4 / AC-1, AC-6, AC-7: size budgets for the project planning
-files, enforced so narrative cannot simply be re-appended in place and grow
-these files back to where this movement found them.
+"""GOV.ORCH.8 2.4 / AC-1, AC-6, AC-7, amended by GOV.ORCH.9 section 3: size
+budgets for the project planning files, enforced so narrative cannot simply
+be re-appended in place and grow these files back to where this movement
+found them.
 
-2026-09-12 (NXS-LOCAL-0114, "the second diet"): GOV.ORCH.5's open-item note
-exemption ("open items keep their note in the JSON") and GOV.ORCH.8's 60 KB
-backlog.json budget cannot both hold against the real data -- see the
-GOV.ORCH.5 amendment (docs/design/GOV_ORCH_5_PROJECT_QUEUE_AND_COLD_START_
-DIET.md section 8, PROPOSED, pending Product Owner approval). Every
-note-bearing `in_progress`/`planned` item's note has now moved to
-docs/history/backlog/<id>.md, the same way terminal items already move,
-via `py scripts/project_queue.py migrate-open-notes --include-open`. That
-took project/backlog.json from 148,302 to 63,806 bytes (153 items,
-unchanged); BACKLOG_REGRESSION_CEILING moves down to match, never up. The
-remaining gap above the 60 KB contract target is now `id`/`title`/`target`/
-`category`/`status`/`priority` state fields and JSON structural overhead,
-not narrative -- there is no note text left to move.
+GOV.ORCH.9 (2026-09-13, "the active set and terminal reserve"): backlog.json
+now carries only `planned`/`in_progress` items -- every `done`/`deferred`/
+`automated_validated`/`real_env_validated` item moved to
+project/archive/backlog_terminal.json (docs/design/
+GOV_ORCH_9_BACKLOG_ACTIVE_SET_AND_TERMINAL_RESERVE.md). backlog.json is
+capped at 40 KiB, enforced with no known-gap escape clause; the reserve is
+capped at 60 KiB, enforced. The prior 63 KiB regression ceiling and the
+conditional assertion that tolerated backlog.json sitting above 60 KiB are
+both removed: after the split they described a state that no longer exists.
 """
 from __future__ import annotations
 
@@ -25,8 +22,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 PROJECT = ROOT / "project"
 
-BACKLOG_CONTRACT_LIMIT = 60 * 1024
-BACKLOG_REGRESSION_CEILING = 63 * 1024  # lowered 2026-09-12; see module docstring
+BACKLOG_LIMIT = 40 * 1024
+BACKLOG_TERMINAL_LIMIT = 60 * 1024
 ROADMAP_LIMIT = 40 * 1024
 BUILD_HISTORY_LIMIT = 80 * 1024
 FEATURE_REGISTRY_LIMIT = 70 * 1024
@@ -42,16 +39,20 @@ def _size(name: str) -> int:
     return len((PROJECT / name).read_bytes())
 
 
-def test_backlog_json_within_regression_ceiling():
+def test_backlog_json_within_budget():
     size = _size("backlog.json")
-    assert size <= BACKLOG_REGRESSION_CEILING, (
+    assert size <= BACKLOG_LIMIT, (
         f"project/backlog.json grew to {size} bytes -- above the "
-        f"{BACKLOG_REGRESSION_CEILING} byte regression ceiling"
+        f"{BACKLOG_LIMIT} byte GOV.ORCH.9 active-set budget"
     )
-    if size > BACKLOG_CONTRACT_LIMIT:
-        # Known, pre-existing, out-of-scope-for-GOV.ORCH.8 gap: recorded
-        # rather than silently ignored. See module docstring.
-        assert size - BACKLOG_CONTRACT_LIMIT < BACKLOG_REGRESSION_CEILING - BACKLOG_CONTRACT_LIMIT
+
+
+def test_backlog_terminal_archive_within_budget():
+    size = len((PROJECT / "archive" / "backlog_terminal.json").read_bytes())
+    assert size <= BACKLOG_TERMINAL_LIMIT, (
+        f"project/archive/backlog_terminal.json grew to {size} bytes -- above "
+        f"the {BACKLOG_TERMINAL_LIMIT} byte GOV.ORCH.9 reserve budget"
+    )
 
 
 def test_roadmap_json_within_budget():

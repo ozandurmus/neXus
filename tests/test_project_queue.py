@@ -19,7 +19,10 @@ sys.path.insert(0, str(ROOT / "scripts"))
 import project_queue as pq  # noqa: E402
 
 
-def _backlog_fixture() -> dict:
+#: GOV.ORCH.9: the fixture now mirrors the real active-set/terminal-reserve
+#: split -- open items in `_backlog_active_fixture`, terminal items in
+#: `_backlog_terminal_fixture`.
+def _backlog_active_fixture() -> dict:
     return {
         "schema_version": "1.0",
         "items": [
@@ -41,6 +44,14 @@ def _backlog_fixture() -> dict:
                 "target": "target B",
                 "note": "",
             },
+        ],
+    }
+
+
+def _backlog_terminal_fixture() -> dict:
+    return {
+        "schema_version": "1.0",
+        "items": [
             {
                 "id": "item_done",
                 "category": "Cat C",
@@ -60,6 +71,15 @@ def _backlog_fixture() -> dict:
                 "note": "DEFERRED narrative.",
             },
         ],
+    }
+
+
+def _backlog_fixture() -> dict:
+    """Combined shape, kept for the few call sites that still want every
+    fixture item in one dict (e.g. id-set assertions)."""
+    return {
+        "schema_version": "1.0",
+        "items": _backlog_active_fixture()["items"] + _backlog_terminal_fixture()["items"],
     }
 
 
@@ -94,7 +114,10 @@ def _build_history_fixture() -> dict:
 def queue_env(tmp_path, monkeypatch):
     project_dir = tmp_path / "project"
     project_dir.mkdir()
+    archive_dir = project_dir / "archive"
+    archive_dir.mkdir()
     backlog_path = project_dir / "backlog.json"
+    backlog_terminal_path = archive_dir / "backlog_terminal.json"
     roadmap_path = project_dir / "roadmap.json"
     build_history_path = project_dir / "build_history.json"
     feature_registry_path = project_dir / "feature_registry.json"
@@ -102,12 +125,14 @@ def queue_env(tmp_path, monkeypatch):
     history_dir = tmp_path / "docs" / "history" / "backlog"
     history_builds_dir = tmp_path / "docs" / "history" / "builds"
 
-    backlog_path.write_text(pq.canonical_dump(_backlog_fixture()), encoding="utf-8")
+    backlog_path.write_text(pq.canonical_dump(_backlog_active_fixture()), encoding="utf-8")
+    backlog_terminal_path.write_text(pq.canonical_dump(_backlog_terminal_fixture()), encoding="utf-8")
     roadmap_path.write_text(pq.canonical_dump(_roadmap_fixture()), encoding="utf-8")
     build_history_path.write_text(pq.canonical_dump(_build_history_fixture()), encoding="utf-8")
     feature_registry_path.write_text(pq.canonical_dump({"schema_version": "1.0", "features": []}), encoding="utf-8")
 
     monkeypatch.setattr(pq, "BACKLOG", backlog_path)
+    monkeypatch.setattr(pq, "ARCHIVE_BACKLOG_TERMINAL", backlog_terminal_path)
     monkeypatch.setattr(pq, "ROADMAP", roadmap_path)
     monkeypatch.setattr(pq, "BUILD_HISTORY", build_history_path)
     monkeypatch.setattr(pq, "FEATURE_REGISTRY", feature_registry_path)
@@ -117,6 +142,7 @@ def queue_env(tmp_path, monkeypatch):
 
     return {
         "backlog": backlog_path,
+        "backlog_terminal": backlog_terminal_path,
         "roadmap": roadmap_path,
         "build_history": build_history_path,
         "feature_registry": feature_registry_path,
@@ -181,10 +207,10 @@ def test_render_on_real_repository_is_read_only_and_under_budget():
     """The one exercise against the real files: a pure render, nothing
     written. Also proves the repaired backlog.json loads and the real
     QUEUE.md content stays within the word budget."""
-    backlog = pq.load_json(pq.BACKLOG)
+    backlog, backlog_terminal = pq.load_backlog_both()
     roadmap = pq.load_json(pq.ROADMAP)
-    pq.validate_backlog(backlog)
-    content = pq.render_queue_md(backlog, roadmap, generated="1970-01-01T00:00:00Z")
+    pq.validate_backlog_split(backlog, backlog_terminal)
+    content = pq.render_queue_md(backlog, roadmap, backlog_terminal, generated="1970-01-01T00:00:00Z")
     assert content.startswith("# Project queue")
     assert len(content.split()) < 1500
     for heading in ("## Now", "## Next", "## Open backlog", "## Open decisions"):
@@ -241,6 +267,36 @@ def test_add_round_trips_and_refuses_duplicate(queue_env):
     assert rc_dup != 0
     data_after = json.loads(queue_env["backlog"].read_text(encoding="utf-8"))
     assert sum(1 for i in data_after["items"] if i["id"] == "new_item") == 1
+
+
+# --- GOV.ORCH.9 acceptance item 7: add lands in the file the status selects
+
+def test_add_with_open_status_lands_in_active_set(queue_env):
+    rc = pq.main([
+        "add", "--id", "new_open_item", "--title", "A new open item",
+        "--priority", "P2", "--category", "Cat E",
+    ])
+    assert rc == 0
+    active = json.loads(queue_env["backlog"].read_text(encoding="utf-8"))
+    assert any(i["id"] == "new_open_item" for i in active["items"])
+    terminal = json.loads(queue_env["backlog_terminal"].read_text(encoding="utf-8"))
+    assert all(i["id"] != "new_open_item" for i in terminal["items"])
+
+
+def test_add_with_terminal_status_lands_in_reserve(queue_env):
+    rc = pq.main([
+        "add", "--id", "new_terminal_item", "--title", "A new terminal item",
+        "--priority", "P2", "--category", "Cat E", "--status", "done",
+    ])
+    assert rc == 0
+    terminal = json.loads(queue_env["backlog_terminal"].read_text(encoding="utf-8"))
+    added = next(i for i in terminal["items"] if i["id"] == "new_terminal_item")
+    assert added["status"] == "done"
+    active = json.loads(queue_env["backlog"].read_text(encoding="utf-8"))
+    assert all(i["id"] != "new_terminal_item" for i in active["items"])
+
+    content = queue_env["queue"].read_text(encoding="utf-8")
+    assert "new_terminal_item" not in content  # terminal items never render as open backlog
 
 
 def test_status_round_trips(queue_env):
@@ -305,14 +361,48 @@ def test_status_transition_to_terminal_moves_note_to_history(queue_env):
     rc = pq.main(["status", "--id", "item_open_p1", "--set", "done"])
     assert rc == 0
 
-    after = json.loads(queue_env["backlog"].read_text(encoding="utf-8"))
-    after_item = next(i for i in after["items"] if i["id"] == "item_open_p1")
+    # GOV.ORCH.9 acceptance item 6: the item crossed the terminal boundary,
+    # so it now lives in the reserve, not the active set.
+    active_after = json.loads(queue_env["backlog"].read_text(encoding="utf-8"))
+    assert all(i["id"] != "item_open_p1" for i in active_after["items"])
+    terminal_after = json.loads(queue_env["backlog_terminal"].read_text(encoding="utf-8"))
+    after_item = next(i for i in terminal_after["items"] if i["id"] == "item_open_p1")
+    assert after_item["status"] == "done"
     assert after_item["note"] == "see docs/history/backlog/item_open_p1.md"
 
     history_file = queue_env["history_dir"] / "item_open_p1.md"
     text = history_file.read_text(encoding="utf-8")
     assert original_note in text
     assert "status: done" in text or "status: in_progress" in text  # written at move time
+
+
+# --- GOV.ORCH.9 acceptance item 6: status moves across the terminal boundary,
+# each direction with its own test -----------------------------------------
+
+def test_status_open_to_terminal_moves_item_to_reserve(queue_env):
+    rc = pq.main(["status", "--id", "item_open_p0", "--set", "automated_validated"])
+    assert rc == 0
+
+    active_after = json.loads(queue_env["backlog"].read_text(encoding="utf-8"))
+    assert all(i["id"] != "item_open_p0" for i in active_after["items"])
+
+    terminal_after = json.loads(queue_env["backlog_terminal"].read_text(encoding="utf-8"))
+    moved = next(i for i in terminal_after["items"] if i["id"] == "item_open_p0")
+    assert moved["status"] == "automated_validated"
+    assert moved["title"] == "An open P0 item, planned"  # row content otherwise unchanged
+
+
+def test_status_terminal_reopening_moves_item_back_to_active_set(queue_env):
+    rc = pq.main(["status", "--id", "item_done", "--set", "in_progress"])
+    assert rc == 0
+
+    terminal_after = json.loads(queue_env["backlog_terminal"].read_text(encoding="utf-8"))
+    assert all(i["id"] != "item_done" for i in terminal_after["items"])
+
+    active_after = json.loads(queue_env["backlog"].read_text(encoding="utf-8"))
+    reopened = next(i for i in active_after["items"] if i["id"] == "item_done")
+    assert reopened["status"] == "in_progress"
+    assert reopened["title"] == "A done item"  # row content otherwise unchanged
 
 
 # --- GOV.ORCH.5 amendment (proposed, section 8): migrate-open-notes -------
@@ -345,8 +435,10 @@ def test_migrate_open_notes_moves_open_item_note_and_leaves_pointer(queue_env):
     assert untouched["note"] == ""
     assert not (queue_env["history_dir"] / "item_open_p0.md").exists()
 
-    # A terminal item's note is out of scope for this command.
-    done_item = next(i for i in after["items"] if i["id"] == "item_done")
+    # A terminal item's note is out of scope for this command -- it lives in
+    # the reserve, not the active file this command reads.
+    terminal = json.loads(queue_env["backlog_terminal"].read_text(encoding="utf-8"))
+    done_item = next(i for i in terminal["items"] if i["id"] == "item_done")
     assert done_item["note"] == "DONE narrative that must move verbatim to history."
 
 
@@ -493,9 +585,10 @@ def _warnings_for(env) -> list[str]:
     history = json.loads(env["build_history"].read_text(encoding="utf-8"))
     features = json.loads(env["feature_registry"].read_text(encoding="utf-8"))
     backlog = json.loads(env["backlog"].read_text(encoding="utf-8"))
+    backlog_terminal = json.loads(env["backlog_terminal"].read_text(encoding="utf-8"))
     return _cross_authority_warnings(
         roadmap, features.get("features") or [], history.get("builds") or [],
-        backlog.get("items") or [],
+        (backlog.get("items") or []) + (backlog_terminal.get("items") or []),
     )
 
 
