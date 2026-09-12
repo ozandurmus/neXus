@@ -40,4 +40,5 @@ org.testcontainers:jdbc:1.20.1=testCompileClasspath,testRuntimeClasspath
 org.testcontainers:junit-jupiter:1.20.1=testCompileClasspath,testRuntimeClasspath
 org.testcontainers:postgresql:1.20.1=testCompileClasspath,testRuntimeClasspath
 org.testcontainers:testcontainers:1.20.1=testCompileClasspath,testRuntimeClasspath
+org.yaml:snakeyaml:2.2=testRuntimeClasspath
 empty=annotationProcessor,compileClasspath,runtimeClasspath,testAnnotationProcessor
