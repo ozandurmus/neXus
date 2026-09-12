@@ -1,0 +1,172 @@
+{
+  "created_at": "2026-09-12T22:08:21Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1 project/backlog.json contains only planned and in_progress items and is under 40 KiB.",
+          "AC-2 project/archive/backlog_terminal.json contains exactly the terminal items, row schema unchanged, and is under 60 KiB.",
+          "AC-3 A check proves the union of the two files equals the pre-split set id for id and row for row, by comparing id sets and row content rather than counts.",
+          "AC-4 build_project_plan_payload() output is identical before and after the move: every count, percentage, warning list and id set. The captured pre-split baseline is the evidence.",
+          "AC-5 python3 scripts/project_queue.py check passes, and render produces a QUEUE.md whose open-item content is unchanged.",
+          "AC-6 A test covers an open item becoming terminal and moving to the reserve, and a separate test covers a terminal item reopening and moving back.",
+          "AC-7 A test covers adding a new item with a terminal status landing in the reserve, and a new open item landing in the active set.",
+          "AC-8 tests/test_project_files_budget.py enforces 40 KiB on backlog.json and 60 KiB on the reserve, and no longer carries the 63 KiB regression ceiling or the conditional known-gap assertion.",
+          "AC-9 The repository privacy gate reports zero findings.",
+          "AC-10 No file under ui2/, and no other project/*.json, appears in the diff."
+        ],
+        "baseline": {
+          "authority": "docs/design/GOV_ORCH_9_BACKLOG_ACTIVE_SET_AND_TERMINAL_RESERVE.md -- FROZEN, PRODUCT OWNER APPROVED 2026-09-13. Its sections 2, 3 and 4 are the specification. Read it first; it is short and it is complete.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "measurement": "Taken at b08a298 and restated in GOV.ORCH.9 section 1: backlog.json is 64,203 bytes of a 64,512-byte regression ceiling; of its 154 items, 82 terminal ones are 29,988 bytes and 72 open ones are 26,040. Confirm these numbers before moving anything -- if they do not reproduce, stop and raise a RELAY_QUESTION rather than proceeding against a changed file.",
+          "predecessors": "GOV.ORCH.5 established the single write path scripts/project_queue.py and the rule that project/*.json is never hand-edited. GOV.ORCH.8 section 2.2 established the archive pattern this copies -- build_history.json plus project/archive/build_history_2026.json with a _load helper that reads both for counting -- and section 2.5 established the render-equivalence rule that is acceptance item 4 here. Both are FROZEN and neither may be edited.",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)"
+        },
+        "context_not_loaded": [
+          "ui2/ sources",
+          "docs/history/**",
+          "Palo Alto and Check Point contracts",
+          "utils/ modules other than project_plan.py"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/gov-orch-9-backlog-active-set"
+        },
+        "invariants": [
+          "No item is deleted, and no item's content changes. The union of the two files equals the original set, row for row.",
+          "No status is changed by the migration itself.",
+          "Every count, percentage, warning list and id set produced by utils/project_plan.py is identical before and after.",
+          "project/*.json is written only through the single write path (GOV.ORCH.5), apart from the one-time reproducible migration.",
+          "No ceiling is raised anywhere.",
+          "The cold start is never pointed at the reserve.",
+          "No FROZEN contract is edited."
+        ],
+        "merge_gate": "Product Owner assistant review of the diff plus orchestrator verify.passed. The worker does not merge to main.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Split project/backlog.json into an active set and a terminal reserve exactly as docs/design/GOV_ORCH_9_BACKLOG_ACTIVE_SET_AND_TERMINAL_RESERVE.md (FROZEN 2026-09-13) decides it, and make the single write path and the counting path read both files. No item is deleted, no status is changed, and no count moves.",
+        "output_contract": [
+          "An active backlog under 40 KiB and a bounded, tracked terminal reserve the cold start never loads.",
+          "A write path that keeps both files correct, including movement across the terminal boundary in both directions, each with a test.",
+          "A budget test that enforces the new caps with no escape clause.",
+          "SESSION_CLOSE reporting the before and after byte sizes, the item counts on both sides, and the render-equivalence result as a stated comparison rather than a claim."
+        ],
+        "recommended_reasoning": {
+          "reason": "A mechanical data move against a contract that is already explicit about every rule and every acceptance item, plus bounded edits to one script, one module and one test. The reasoning-tier table puts deterministic implementation against a frozen contract at Normal (strong); medium rather than high effort because GOV.ORCH.9 leaves nothing to decide and GOV.ORCH.8 section 2.2 already supplies the pattern to copy.",
+          "tier": "Sonnet 5, medium effort"
+        },
+        "requirements": [
+          "English, per AGENTS.md engineering-output language law.",
+          "Before moving anything, record the pre-split payload from utils.project_plan.build_project_plan_payload() so the render-equivalence comparison of acceptance item 4 is against a real captured baseline, not an assumption.",
+          "The migration must be reproducible: a script or tool subcommand performs it, and the diff shows both the code and the moved data.",
+          "Commit early and often on the lane: capture the baseline, then the tool changes, then the data move, then the budget amendment.",
+          "Do not merge to main. The Product Owner assistant reviews the diff and merges.",
+          "Do not touch anything under ui2/. Another movement holds that area right now.",
+          "If GOV.ORCH.9's measured numbers do not reproduce against the current file, stop and raise one RELAY_QUESTION.",
+          "Full-regression baseline, measured on this machine at the merge of PR #210: 'python3 -m pytest -q -n auto --dist worksteal' gives 3532 passed, 25 skipped, 3 failed. The three are pre-existing and are NOT yours to fix: tests/test_dev_0_5b_auth_consumer_canonical_config.py DLP-token collision; tests/test_cold_start_budget.py word-count ceilings, which CURRENT_STATE.md and AI_HANDOVER.md already breached before this session; and tests/test_nexus_engineer_tool_gate.py::test_ac1_live_bug_regression_against_real_repository_state, which inspects live repository state and trips when another worktree exists. Run the full suite once at the end and REPORT the delta against these numbers in your SESSION_CLOSE. A new failure is yours; these three are not.",
+          "The Python dependencies are installed on this machine now (requirements.txt, requirements-dev.txt, requirements-console.txt). There is no .venv; use python3 directly."
+        ],
+        "risks": [
+          "Dropping an item in the move, which a count-only check would not catch. AC-3 exists because of this.",
+          "Changing a count or percentage as a side effect, because something counted the active file only.",
+          "Raising a ceiling to make a test pass instead of completing the split.",
+          "Leaving the conditional known-gap assertion in the budget test, which would silently re-admit the state this movement removes.",
+          "Hand-editing the JSON and bypassing the single write path.",
+          "Touching ui2/ and colliding with the movement running there.",
+          "Treating a status value outside the two known sets as open or terminal by guessing rather than by the explicit lists in GOV.ORCH.9 B-1 and B-2.",
+          "Reporting the full-suite result as a pass or a fail rather than as a delta against the three named pre-existing failures."
+        ],
+        "scope": {
+          "in": [
+            "Move every item whose status is done, deferred, automated_validated or real_env_validated out of project/backlog.json and into a new project/archive/backlog_terminal.json, row schema unchanged and content byte-identical per row. project/backlog.json keeps only planned and in_progress items (GOV.ORCH.9 B-1, B-2).",
+            "Give the archive file the same top-level shape as backlog.json -- schema_version and items -- so nothing has to special-case its structure.",
+            "Make scripts/project_queue.py read BOTH files wherever it counts, lists or looks up an item by id, and write each item to the file its status selects. Adding an item with a terminal status writes it to the reserve; adding an open one writes it to the active set (GOV.ORCH.9 B-5, B-6).",
+            "Make scripts/project_queue.py MOVE an item between the two files when a status change crosses the terminal boundary, in both directions: an open item that becomes terminal moves to the reserve, and a terminal item that reopens moves back to the active set. Each direction gets its own test (GOV.ORCH.9 acceptance item 6).",
+            "Make utils/project_plan.py count over both files, following the helper pattern GOV.ORCH.8 section 2.2 already uses for build_history plus its archive. Every count, percentage, warning list and id set must be identical to before the move.",
+            "Add a check -- a test, or a subcommand of scripts/project_queue.py check, whichever fits the existing shape -- that the UNION of the two files equals the pre-split item set id for id and row for row. Compare id sets and row content, never counts alone (GOV.ORCH.9 acceptance item 3).",
+            "Amend tests/test_project_files_budget.py per GOV.ORCH.9 section 3: backlog.json is capped at 40 KiB enforced; project/archive/backlog_terminal.json is capped at 60 KiB enforced; the 63 KiB regression ceiling and the conditional assertion that tolerates being above 60 KiB are both REMOVED, along with the module-docstring paragraph that explains the known gap, because after this movement they describe a state that no longer exists.",
+            "Update the module docstring of tests/test_project_files_budget.py to cite GOV.ORCH.9 for the two budgets it now enforces.",
+            "If any role file, brief, reading order or generated document points a cold-start session at backlog.json in a way that would now also need the reserve, leave the pointer at the active set only -- the reserve is never loaded at cold start (GOV.ORCH.9 B-2)."
+          ],
+          "out": [
+            "Deleting any item, editing any note or evidence text, and changing any item's status. The split is a move, not an edit.",
+            "Changing any other project JSON: roadmap.json, build_history.json, feature_registry.json are untouched.",
+            "Changing any budget other than the two named in GOV.ORCH.9 section 3.",
+            "Editing docs/design/GOV_ORCH_5_*.md or docs/design/GOV_ORCH_8_*.md, or any other FROZEN contract. GOV.ORCH.9 is the amendment and it already exists.",
+            "Raising any ceiling. GOV.ORCH.9 B-4 refuses it explicitly and the 40 KiB cap has no escape clause.",
+            "Hand-editing project/*.json outside the tool, except for the one-time migration itself, which is performed by a script or by the tool and is committed with the data.",
+            "Any change under ui2/, any Java, any Check Point or discovery work -- a separate movement is running on that and touching it would collide.",
+            "Any change to AGENTS.md, AI_START_HERE.md or CURRENT_STATE.md."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "python3",
+              "scripts/project_queue.py",
+              "check"
+            ],
+            "name": "project_queue_check"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_project_files_budget.py",
+              "-q"
+            ],
+            "name": "project_files_budget"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_architecture_convergence.py",
+              "-q"
+            ],
+            "name": "architecture_convergence"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_contract_authority_status.py",
+              "-q"
+            ],
+            "name": "contract_authority_status"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-12T22:08:21Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0130",
+  "movement": "backlog_active_set_and_terminal_reserve",
+  "next_actor": "engineer",
+  "refs": [
+    "docs/design/GOV_ORCH_9_BACKLOG_ACTIVE_SET_AND_TERMINAL_RESERVE.md",
+    "docs/design/GOV_ORCH_8_PROJECT_DATA_SPLIT_AND_SIZE_BUDGET.md",
+    "docs/design/GOV_ORCH_5_PROJECT_QUEUE_AND_COLD_START_DIET.md",
+    "AGENTS.md",
+    "scripts/project_queue.py",
+    "utils/project_plan.py",
+    "tests/test_project_files_budget.py",
+    "project/backlog.json"
+  ],
+  "schema_version": 1,
+  "status": "OPEN",
+  "updated_at": "2026-09-12T22:08:21Z"
+}
