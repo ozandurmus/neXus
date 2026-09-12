@@ -36,3 +36,30 @@ describe("the UI 2.0 shell", () => {
     expect(screen.getAllByText("0")).toHaveLength(3);
   });
 });
+
+describe("the design preview", () => {
+  it("renders the populated target screens only behind an explicit flag", () => {
+    render(<App search="?preview=overview" />);
+    expect(screen.getByText("Operational posture")).toBeInTheDocument();
+    expect(screen.getByText("fw-ist-core-02")).toBeInTheDocument();
+  });
+
+  it("always says a preview is synthetic", () => {
+    // A mockup that does not say it is a mockup becomes a screenshot someone
+    // later reads as a status report.
+    for (const s of ["?preview=overview", "?preview=inventory"]) {
+      const { unmount } = render(<App search={s} />);
+      expect(screen.getByText("DESIGN PREVIEW")).toBeInTheDocument();
+      expect(screen.getByText(/No device has been contacted/)).toBeInTheDocument();
+      unmount();
+    }
+  });
+
+  it("never leaks preview data into the product screen", () => {
+    // The default screen is the product's own, and the database is empty.
+    render(<App search="" />);
+    expect(screen.getByText("No devices yet")).toBeInTheDocument();
+    expect(screen.queryByText("fw-ist-core-02")).toBeNull();
+    expect(screen.queryByText("DESIGN PREVIEW")).toBeNull();
+  });
+});
