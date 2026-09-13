@@ -9,8 +9,8 @@ import com.securityexpert.nexus.ui2.persistence.identity.LocalCredentialRecord;
 import com.securityexpert.nexus.ui2.persistence.identity.LocalCredentialsRepository;
 import com.securityexpert.nexus.ui2.platform.AttemptOutcome;
 import com.securityexpert.nexus.ui2.platform.Clock;
+import com.securityexpert.nexus.ui2.platform.LocalPrincipalFingerprint;
 import com.securityexpert.nexus.ui2.platform.Mechanism;
-import com.securityexpert.nexus.ui2.platform.PrincipalFingerprint;
 
 /**
  * The {@code local} {@link Mechanism} (C3A contract §2.1, §5): the
@@ -32,7 +32,7 @@ import com.securityexpert.nexus.ui2.platform.PrincipalFingerprint;
 public final class LocalMechanism implements Mechanism {
 
     public static final String MECHANISM_ID = "local";
-    public static final String LOCAL_PRINCIPAL_PREFIX = "local:";
+    public static final String LOCAL_PRINCIPAL_PREFIX = LocalPrincipalFingerprint.LOCAL_PRINCIPAL_PREFIX;
 
     /** LOCK-2. */
     public static final int LOCKOUT_THRESHOLD = 5;
@@ -42,6 +42,8 @@ public final class LocalMechanism implements Mechanism {
     private static final String REASON_UNKNOWN_IDENTITY = "unknown_identity";
     private static final String REASON_LOCKED = "locked";
     private static final String REASON_WRONG_PASSWORD = "wrong_password";
+    /** 13G {@code LIA-3.6}: a disabled identity cannot authenticate. */
+    private static final String REASON_DISABLED = "disabled";
 
     private final LocalCredentialsRepository repository;
     private final Clock clock;
@@ -70,6 +72,11 @@ public final class LocalMechanism implements Mechanism {
             return AttemptOutcome.refused(REASON_UNKNOWN_IDENTITY);
         }
         LocalCredentialRecord record = row.get();
+        if (!record.enabled()) {
+            // 13G LIA-3.6: refused regardless of `matches`, exactly like a
+            // lockout -- a disabled identity cannot authenticate.
+            return AttemptOutcome.refused(REASON_DISABLED);
+        }
         if (record.isLocked(now)) {
             // §5.2: refused regardless of `matches` -- the computed result
             // above is deliberately discarded while locked.
@@ -85,6 +92,6 @@ public final class LocalMechanism implements Mechanism {
     }
 
     public static String actorFingerprintFor(String localIdentityId) {
-        return PrincipalFingerprint.of(LOCAL_PRINCIPAL_PREFIX + localIdentityId);
+        return LocalPrincipalFingerprint.forLocalIdentity(localIdentityId);
     }
 }
