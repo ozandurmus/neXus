@@ -18,11 +18,18 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
  */
 public final class SecurityWebMvcConfig implements WebMvcConfigurer {
 
-    static final Map<String, String> ACTION_ID_BY_ROUTE = Map.of(
-            "POST /role-bindings", ActionRegistry.ROLE_BINDING_CREATE,
-            "POST /role-bindings/revoke", ActionRegistry.ROLE_BINDING_REVOKE,
-            "POST /sessions/revoke", ActionRegistry.SESSION_REVOKE,
-            "POST /devices", ActionRegistry.DEVICE_REGISTER);
+    static final Map<String, String> ACTION_ID_BY_ROUTE = Map.ofEntries(
+            Map.entry("POST /role-bindings", ActionRegistry.ROLE_BINDING_CREATE),
+            Map.entry("POST /role-bindings/revoke", ActionRegistry.ROLE_BINDING_REVOKE),
+            Map.entry("POST /sessions/revoke", ActionRegistry.SESSION_REVOKE),
+            Map.entry("POST /devices", ActionRegistry.DEVICE_REGISTER),
+            // 13G: one resource, body-only (no path variable), matching
+            // /role-bindings/revoke's own shape.
+            Map.entry("POST /local-identities", ActionRegistry.LOCAL_IDENTITY_CREATE),
+            Map.entry("GET /local-identities", ActionRegistry.LOCAL_IDENTITY_LIST),
+            Map.entry("POST /local-identities/set-password", ActionRegistry.LOCAL_IDENTITY_SET_PASSWORD),
+            Map.entry("POST /local-identities/disable", ActionRegistry.LOCAL_IDENTITY_DISABLE),
+            Map.entry("POST /local-identities/enable", ActionRegistry.LOCAL_IDENTITY_ENABLE));
 
     private final GateChain gateChain;
 

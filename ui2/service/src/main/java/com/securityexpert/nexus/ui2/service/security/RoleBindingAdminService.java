@@ -6,9 +6,11 @@ import java.util.Set;
 
 import com.securityexpert.nexus.ui2.platform.GroupReferenceCipher;
 import com.securityexpert.nexus.ui2.platform.OpaqueId;
+import com.securityexpert.nexus.ui2.platform.RoleToken;
 import com.securityexpert.nexus.ui2.persistence.identity.ActorAuthzStateRepository;
 import com.securityexpert.nexus.ui2.persistence.identity.RoleBindingRecord;
 import com.securityexpert.nexus.ui2.persistence.identity.RoleBindingRepository;
+import com.securityexpert.nexus.ui2.persistence.identity.SecurityAdminLockoutGuard;
 
 /**
  * {@code role_bindings} administration: four-eyes / self-grant refusal
@@ -33,17 +35,29 @@ public final class RoleBindingAdminService {
         /** {@code 403 SELF_GRANT_REFUSED} (C3 §4.3). */
         record SelfGrantRefused() implements Outcome {
         }
+
+        /**
+         * 13G {@code LIA-3.5}: the distinct, non-identity-bearing refusal
+         * for revoking the product's last enabled {@code role:security_admin}
+         * binding -- the same check {@code LocalIdentityAdministration}'s
+         * {@code disable} path reaches, via {@link SecurityAdminLockoutGuard}.
+         */
+        record LastSecurityAdminRefused() implements Outcome {
+        }
     }
 
     private final RoleBindingRepository roleBindingRepository;
     private final ActorAuthzStateRepository actorAuthzStateRepository;
     private final GroupReferenceCipher groupReferenceCipher;
+    private final SecurityAdminLockoutGuard securityAdminLockoutGuard;
 
     public RoleBindingAdminService(RoleBindingRepository roleBindingRepository,
-            ActorAuthzStateRepository actorAuthzStateRepository, GroupReferenceCipher groupReferenceCipher) {
+            ActorAuthzStateRepository actorAuthzStateRepository, GroupReferenceCipher groupReferenceCipher,
+            SecurityAdminLockoutGuard securityAdminLockoutGuard) {
         this.roleBindingRepository = roleBindingRepository;
         this.actorAuthzStateRepository = actorAuthzStateRepository;
         this.groupReferenceCipher = groupReferenceCipher;
+        this.securityAdminLockoutGuard = securityAdminLockoutGuard;
     }
 
     public Outcome create(String actingAdminActorFingerprint, String roleToken, String plaintextGroupReference,
@@ -61,6 +75,14 @@ public final class RoleBindingAdminService {
     public Outcome revoke(String actingAdminActorFingerprint, String bindingId, Instant now) {
         Optional<RoleBindingRecord> binding = roleBindingRepository.find(bindingId);
         if (binding.isPresent() && binding.get().isActive()) {
+            // 13G LIA-3.5: checked before the self-grant check, and
+            // independent of it -- revoking the last enabled
+            // role:security_admin binding is refused even when the acting
+            // admin is not the one losing access.
+            if (RoleToken.SECURITY_ADMIN.token().equals(binding.get().roleToken())
+                    && !securityAdminLockoutGuard.anyEnabledSecurityAdminRemainsIfBindingRevoked(bindingId)) {
+                return new Outcome.LastSecurityAdminRefused();
+            }
             String plaintext = groupReferenceCipher.decrypt(binding.get().groupReferenceEncrypted());
             if (adminAlreadyInGroup(actingAdminActorFingerprint, plaintext, now)) {
                 return new Outcome.SelfGrantRefused();

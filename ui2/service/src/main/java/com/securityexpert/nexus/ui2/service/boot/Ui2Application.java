@@ -50,18 +50,22 @@ import org.springframework.context.annotation.FilterType;
 // SessionAdminController that stays excluded below). All five now have real,
 // working collaborators via LocalAuthenticationConfiguration.
 //
-// RoleBindingAdminController, SessionAdminController and DeviceRegistrationController
-// stay excluded: their own collaborators (GateChain/RBAC wiring, device
-// registration service) are untouched by this movement and remain out of
-// scope. They are excluded, not deleted: a route that 404s because its
-// controller was never registered is honest, while one that 500s on every
-// call is not.
+// RoleBindingAdminController is no longer excluded: 13G local identity
+// administration (PO_DECISION_RECORD_2026_09_13G) needs
+// POST /role-bindings / POST /role-bindings/revoke reachable for real, so
+// this movement finished wiring GateChain/RBAC (RbacConfiguration) rather
+// than leave it deferred. SessionAdminController and
+// DeviceRegistrationController stay excluded: their own remaining
+// collaborators (a session-admin service, device registration) are
+// untouched by this movement and remain out of scope. They are excluded,
+// not deleted: a route that 404s because its controller was never
+// registered is honest, while one that 500s on every call is not.
 @ComponentScan(
         basePackages = "com.securityexpert.nexus.ui2.service",
         excludeFilters = @ComponentScan.Filter(
                 type = FilterType.REGEX,
                 pattern = "com\\.securityexpert\\.nexus\\.ui2\\.service\\.api\\."
-                        + "(RoleBindingAdminController|SessionAdminController|DeviceRegistrationController)"))
+                        + "(SessionAdminController|DeviceRegistrationController)"))
 public class Ui2Application {
 
     public static void main(String[] args) {
