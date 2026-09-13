@@ -1,0 +1,247 @@
+package com.securityexpert.nexus.ui2.worker.transport.xmlapi;
+
+import java.io.IOException;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.security.KeyStore;
+import java.security.MessageDigest;
+import java.security.SecureRandom;
+import java.security.cert.CertificateException;
+import java.security.cert.CertificateFactory;
+import java.security.cert.X509Certificate;
+import java.time.Duration;
+import java.util.Collection;
+import java.util.Map;
+import java.util.Objects;
+
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLParameters;
+import javax.net.ssl.TrustManager;
+import javax.net.ssl.TrustManagerFactory;
+import javax.net.ssl.X509TrustManager;
+
+import com.securityexpert.nexus.ui2.jobs.transport.ApiTarget;
+import com.securityexpert.nexus.ui2.jobs.transport.ConnectResult;
+import com.securityexpert.nexus.ui2.jobs.transport.ConnectSpec;
+import com.securityexpert.nexus.ui2.jobs.transport.ConnectionTarget;
+import com.securityexpert.nexus.ui2.jobs.transport.DeviceTransport;
+import com.securityexpert.nexus.ui2.jobs.transport.ExecResult;
+import com.securityexpert.nexus.ui2.jobs.transport.ExecSpec;
+import com.securityexpert.nexus.ui2.jobs.transport.FetchResult;
+import com.securityexpert.nexus.ui2.jobs.transport.FetchSpec;
+import com.securityexpert.nexus.ui2.jobs.transport.TransportNotImplementedException;
+import com.securityexpert.nexus.ui2.jobs.transport.TransportSession;
+import com.securityexpert.nexus.ui2.jobs.transport.XmlApiResult;
+import com.securityexpert.nexus.ui2.jobs.transport.XmlApiSpec;
+
+/**
+ * The {@code xml_api_call} adapter (WORKER.md "ADAPTER") -- the only
+ * production implementation of {@link DeviceTransport#xmlApiCall} in this
+ * codebase. {@code connect}/{@code exec}/{@code fetch} throw {@link
+ * TransportNotImplementedException} exactly as {@code SshExecTransport}
+ * does for {@code xmlApiCall} (contract §5).
+ *
+ * <p>TLS verification is always on (WORKER.md "TLS trust"): the {@link
+ * SSLContext} used for every request is built strictly from the resolved
+ * {@link TrustResolution} -- a PEM CA bundle or a pinned certificate
+ * fingerprint -- and standard HTTPS hostname verification is always
+ * requested via {@link SSLParameters#setEndpointIdentificationAlgorithm}.
+ * There is no branch anywhere in this class that accepts an unresolved
+ * trust rule or any certificate: an unresolved trust rule fails every call
+ * this instance ever makes ({@link XmlApiResult.Failed}), and this is
+ * defense-in-depth only -- {@code PanoramaEnumerationAdapter} refuses the
+ * run before this class is ever invoked for an unresolvable trust rule
+ * (AC-3), so this path is exercised by no fixture test.</p>
+ */
+public final class PanXmlApiTransport implements DeviceTransport {
+
+    private static final String API_PATH = "/api/";
+    private static final String FORM_CONTENT_TYPE = "application/x-www-form-urlencoded; charset=UTF-8";
+
+    private final String trustRuleRef;
+    private final PanTrustRuleResolver trustRuleResolver;
+    private volatile HttpClient cachedClient;
+
+    public PanXmlApiTransport(String trustRuleRef, PanTrustRuleResolver trustRuleResolver) {
+        this.trustRuleRef = Objects.requireNonNull(trustRuleRef, "trustRuleRef");
+        this.trustRuleResolver = Objects.requireNonNull(trustRuleResolver, "trustRuleResolver");
+    }
+
+    @Override
+    public ConnectResult connect(ConnectionTarget target, ConnectSpec spec, Duration timeout) {
+        throw new TransportNotImplementedException("connect");
+    }
+
+    @Override
+    public ExecResult exec(TransportSession session, ExecSpec spec, Duration timeout) {
+        throw new TransportNotImplementedException("exec");
+    }
+
+    @Override
+    public FetchResult fetch(TransportSession session, FetchSpec spec, Duration timeout) {
+        throw new TransportNotImplementedException("sftp_get/scp_get");
+    }
+
+    /** T-1/T-2/T-4: one POST to {@code target.baseUrl() + "/api/"}, never any other path or host. */
+    @Override
+    public XmlApiResult xmlApiCall(ApiTarget target, XmlApiSpec spec, Duration timeout) {
+        HttpClient client;
+        try {
+            client = client();
+        } catch (RuntimeException e) {
+            return new XmlApiResult.Failed("trust rule could not be resolved into a usable TLS configuration");
+        }
+        try {
+            URI uri = URI.create(target.baseUrl() + API_PATH);
+            HttpRequest.Builder builder = HttpRequest.newBuilder(uri)
+                    .timeout(timeout)
+                    .POST(HttpRequest.BodyPublishers.ofString(formEncode(spec.formParams()), StandardCharsets.UTF_8))
+                    .header("Content-Type", FORM_CONTENT_TYPE);
+            for (Map.Entry<String, String> header : spec.headers().entrySet()) {
+                builder.header(header.getKey(), header.getValue());
+            }
+            HttpResponse<String> response = client.send(builder.build(), HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+            return new XmlApiResult.Completed(response.statusCode(), response.body());
+        } catch (IOException e) {
+            return new XmlApiResult.Failed("xml api call did not complete");
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return new XmlApiResult.Failed("xml api call was interrupted");
+        }
+    }
+
+    @Override
+    public void disconnect(TransportSession session) {
+        // T-1: this transport holds no session of its own -- xmlApiCall is session-less by
+        // the port's own signature. Nothing to close here; the caller's in-memory key
+        // disposal (PanoramaEnumerationAdapter) is what T-1's "closed when the run ends" means.
+    }
+
+    private HttpClient client() {
+        HttpClient client = cachedClient;
+        if (client != null) {
+            return client;
+        }
+        synchronized (this) {
+            if (cachedClient == null) {
+                cachedClient = buildClient();
+            }
+            return cachedClient;
+        }
+    }
+
+    private HttpClient buildClient() {
+        SSLContext sslContext = buildSslContext(resolveOrThrow());
+        SSLParameters sslParameters = new SSLParameters();
+        sslParameters.setEndpointIdentificationAlgorithm("HTTPS");
+        return HttpClient.newBuilder()
+                .sslContext(sslContext)
+                .sslParameters(sslParameters)
+                .build();
+    }
+
+    private TrustResolution resolveOrThrow() {
+        TrustResolution resolution = trustRuleResolver.resolveTrust(trustRuleRef);
+        if (resolution instanceof TrustResolution.Unresolved) {
+            throw new IllegalStateException("trust rule ref did not resolve to a usable trust configuration");
+        }
+        return resolution;
+    }
+
+    /** TLS trust law: strictly a CA bundle or a pinned fingerprint -- no other branch exists. */
+    private static SSLContext buildSslContext(TrustResolution resolution) {
+        try {
+            TrustManager[] trustManagers = switch (resolution) {
+                case TrustResolution.CaBundlePath caBundlePath -> caBundleTrustManagers(caBundlePath.path());
+                case TrustResolution.PinnedFingerprint pinned -> new TrustManager[] { pinnedTrustManager(pinned.sha256Hex()) };
+                case TrustResolution.Unresolved ignored -> throw new IllegalStateException("unresolved trust rule reached SSLContext construction");
+            };
+            SSLContext context = SSLContext.getInstance("TLS");
+            context.init(null, trustManagers, new SecureRandom());
+            return context;
+        } catch (java.security.GeneralSecurityException | IOException e) {
+            throw new IllegalStateException("could not build a TLS trust configuration from the resolved trust rule", e);
+        }
+    }
+
+    private static TrustManager[] caBundleTrustManagers(String path) throws java.security.GeneralSecurityException, IOException {
+        CertificateFactory factory = CertificateFactory.getInstance("X.509");
+        Collection<? extends java.security.cert.Certificate> certificates;
+        try (var in = Files.newInputStream(Path.of(path))) {
+            certificates = factory.generateCertificates(in);
+        }
+        KeyStore trustStore = KeyStore.getInstance(KeyStore.getDefaultType());
+        trustStore.load(null, null);
+        int index = 0;
+        for (java.security.cert.Certificate certificate : certificates) {
+            trustStore.setCertificateEntry("pan-discovery-ca-" + index, certificate);
+            index++;
+        }
+        TrustManagerFactory trustManagerFactory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+        trustManagerFactory.init(trustStore);
+        return trustManagerFactory.getTrustManagers();
+    }
+
+    /**
+     * Verifies the presented chain the same way a CA-backed trust manager would (no
+     * expiry/path shortcuts), then additionally requires the leaf certificate's SHA-256
+     * fingerprint to equal the pinned value -- never a trust manager that returns without
+     * checking (WORKER.md: "no all-trusting TrustManager").
+     */
+    private static X509TrustManager pinnedTrustManager(String expectedSha256Hex) throws java.security.GeneralSecurityException {
+        return new X509TrustManager() {
+            @Override
+            public void checkClientTrusted(X509Certificate[] chain, String authType) throws CertificateException {
+                throw new CertificateException("pan discovery transport is a client only; it never verifies a client certificate");
+            }
+
+            @Override
+            public void checkServerTrusted(X509Certificate[] chain, String authType) throws CertificateException {
+                if (chain == null || chain.length == 0) {
+                    throw new CertificateException("no server certificate presented");
+                }
+                String presented = sha256Hex(chain[0]);
+                if (!presented.equalsIgnoreCase(expectedSha256Hex)) {
+                    throw new CertificateException("presented certificate fingerprint does not match the pinned trust rule");
+                }
+            }
+
+            @Override
+            public X509Certificate[] getAcceptedIssuers() {
+                return new X509Certificate[0];
+            }
+        };
+    }
+
+    private static String sha256Hex(X509Certificate certificate) throws CertificateException {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(certificate.getEncoded());
+            StringBuilder sb = new StringBuilder(hash.length * 2);
+            for (byte b : hash) {
+                sb.append(String.format("%02x", b));
+            }
+            return sb.toString();
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new CertificateException(e);
+        }
+    }
+
+    private static String formEncode(Map<String, String> params) {
+        StringBuilder sb = new StringBuilder();
+        for (Map.Entry<String, String> entry : params.entrySet()) {
+            if (sb.length() > 0) {
+                sb.append('&');
+            }
+            sb.append(java.net.URLEncoder.encode(entry.getKey(), StandardCharsets.UTF_8));
+            sb.append('=');
+            sb.append(java.net.URLEncoder.encode(entry.getValue(), StandardCharsets.UTF_8));
+        }
+        return sb.toString();
+    }
+}
