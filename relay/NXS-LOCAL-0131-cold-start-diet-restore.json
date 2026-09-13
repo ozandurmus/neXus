@@ -1,0 +1,169 @@
+{
+  "created_at": "2026-09-13T00:51:00Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1 tests/test_cold_start_budget.py passes: CURRENT_STATE.md at most 1,050 words and AI_HANDOVER.md at most 300.",
+          "AC-2 tests/test_architecture_convergence.py passes, including every pinned phrase and the CURRENT_STATE.md line-count assertion.",
+          "AC-3 The six environment facts named in scope are present in docs/reference/ and AI_HANDOVER.md points at them in one line.",
+          "AC-4 AI_HANDOVER.md still carries a snapshot, this-session bullets, the exact next action, the test delta and new risks -- shorter, not missing sections.",
+          "AC-5 The SESSION_CLOSE lists, fact by fact, what moved out of each cold-start file and which file received it. A fact that moved nowhere is a deletion and must be justified or reverted.",
+          "AC-6 Word counts before and after are reported for both files.",
+          "AC-7 The repository privacy gate reports zero findings.",
+          "AC-8 The diff contains no change under ui2/, utils/, scripts/ or application/."
+        ],
+        "baseline": {
+          "authority": "docs/design/GOV_ORCH_6_DOCUMENTATION_DIET.md -- FROZEN. Its section 2 table already names the specific cuts, section 3 names the test pins that must survive, and section 4 is its acceptance. This movement re-applies that diet; it does not design a new one and it does not need a new contract.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "measurement": "Measured at main after PR #212: CURRENT_STATE.md is 1,465 words against a 1,050 ceiling and AI_HANDOVER.md is 761 against 300. tests/test_cold_start_budget.py::test_cold_start_word_count_ceilings currently FAILS on both. AGENTS.md, AI_START_HERE.md and CLAUDE.md are within their ceilings and are not in scope.",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "why_now": "The same disease the backlog split just cured, in the two files every single session actually reads. Handover economy (AGENTS.md) says a cold chat must resume in one read each; at 1,465 and 761 words they no longer do that."
+        },
+        "context_not_loaded": [
+          "ui2/ sources",
+          "docs/history/**",
+          "Check Point and Palo Alto contracts",
+          "application/ and utils/ modules"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/cold-start-diet-restore"
+        },
+        "invariants": [
+          "No fact is lost. Every sentence removed from a cold-start file either already exists in its owning file or is moved there in the same diff.",
+          "Every phrase pinned by tests/test_architecture_convergence.py still appears in CURRENT_STATE.md.",
+          "No ceiling is raised.",
+          "CURRENT_STATE.md makes no claim project/*.json does not support.",
+          "No FROZEN contract is edited.",
+          "No source code changes."
+        ],
+        "merge_gate": "Product Owner assistant review of the diff plus orchestrator verify.passed. The worker does not merge to main.",
+        "movement_type": "DOCS",
+        "objective": "Bring CURRENT_STATE.md and AI_HANDOVER.md back under the cold-start word-count ceilings tests/test_cold_start_budget.py already enforces, by re-applying the diet docs/design/GOV_ORCH_6_DOCUMENTATION_DIET.md (FROZEN) already specifies. Nothing is deleted: every fact that leaves a cold-start file lands in the file that owns it.",
+        "output_contract": [
+          "Two cold-start files under their ceilings, with nothing lost.",
+          "The session's durable environment facts relocated to docs/reference/ where they survive the next handover rewrite.",
+          "SESSION_CLOSE with a fact-by-fact relocation table and before/after word counts."
+        ],
+        "recommended_reasoning": {
+          "reason": "Bounded editing of two documents against a FROZEN contract that already names the cuts. The judgment is in deciding which file owns a relocated fact, which is real but small; the reasoning-tier table puts routine documentation work at the lighter end and nothing here is a new decision.",
+          "tier": "Sonnet 5, medium effort"
+        },
+        "requirements": [
+          "English, per AGENTS.md engineering-output language law.",
+          "Before cutting, run 'python3 -m pytest tests/test_architecture_convergence.py -q' and note which phrases it pins in CURRENT_STATE.md. GOV.ORCH.6 section 3 lists the pins; verify each with grep before committing, because a pinned phrase removed is a broken build, not a shorter file.",
+          "Report the word count of both files before and after, measured as len(text.split()).",
+          "Commit early and often: the relocation commits first, the cuts after, so a reviewer can see nothing was lost.",
+          "Do not merge to main. The Product Owner assistant reviews the diff and merges.",
+          "Do not run the full pytest suite as part of your work. It creates untracked data/ and logs/ directories that the repository privacy gate then flags, which fails a movement whose diff is clean. The targeted suites in the validation plan are sufficient for a documentation movement."
+        ],
+        "risks": [
+          "Deleting a fact instead of moving it, because shortening is easier than finding the owner. AC-5 exists to catch exactly this.",
+          "Removing a phrase tests/test_architecture_convergence.py pins.",
+          "Raising a ceiling to make the test pass.",
+          "Making a statement vaguer rather than shorter, so the file passes the word count while saying less.",
+          "Running the full pytest suite and tripping the privacy gate on runtime residue.",
+          "Losing the environment facts, which are the most expensive thing in the handover to rediscover."
+        ],
+        "scope": {
+          "in": [
+            "Reduce CURRENT_STATE.md to at most 1,050 words and AI_HANDOVER.md to at most 300 words, so tests/test_cold_start_budget.py::test_cold_start_word_count_ceilings passes.",
+            "Apply the cuts GOV.ORCH.6 section 2 already specifies, in particular its rows 8, 9 and 10: the predecessor list in CURRENT_STATE.md becomes one line pointing at project/build_history.json; the standalone Predecessor / OP.0b.0 / PAN HA blocks reduce to the live rows under Open blockers with one line each naming their design document; AI_HANDOVER.md's operating-role section becomes one pointer.",
+            "Move, never delete. Any durable fact that leaves a cold-start file must land where that fact belongs: build detail in project/build_history.json (through scripts/project_queue.py, never by hand), design detail in the design document that owns it, and history in docs/history/.",
+            "The environment facts currently in AI_HANDOVER.md section 5 are durable and must survive: the gradlew build exclusion, the absence of a .venv and the three requirements files, the measured per-turn worker cost and the DEFAULT_MAX_BUDGET_USD consequence, the full-suite-versus-privacy-gate validation-plan conflict, and the worktree-sensitive tool-gate test. Move them into docs/reference/ -- extend docs/reference/COPILOT_OPERATING_MODEL.md, or add one new reference document if that file is the wrong home -- and leave AI_HANDOVER.md pointing at it in one line.",
+            "AI_HANDOVER.md keeps only what AGENTS.md 'Handover economy' allows it: a snapshot of at most six lines, what changed this session as bullets, the exact next action, the test delta, and new risks. No decision re-litigation, no doc-editing mechanics, no restating a contract.",
+            "CURRENT_STATE.md keeps only the hot checkpoint and the sections AGENTS.md allows it, and must not contain a claim project/*.json does not support."
+          ],
+          "out": [
+            "Changing AGENTS.md, AI_START_HERE.md or CLAUDE.md. All three are within their ceilings.",
+            "Raising any ceiling in tests/test_cold_start_budget.py. The ceilings are GOV.ORCH.6's own and are not the problem.",
+            "Deleting any fact outright, or dropping a fact because no obvious home was found. If a fact has no owner, raise a RELAY_QUESTION rather than deleting it.",
+            "Changing any project/*.json content other than by adding relocated build detail through scripts/project_queue.py.",
+            "Editing any FROZEN contract, including GOV.ORCH.6 itself.",
+            "Any change under ui2/, utils/, scripts/ or application/, and any code change at all beyond a test that must not be touched anyway.",
+            "Changing the meaning of any statement while shortening it. Shorter is the goal; vaguer is not."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_cold_start_budget.py",
+              "-q"
+            ],
+            "name": "cold_start_budget"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_architecture_convergence.py",
+              "-q"
+            ],
+            "name": "architecture_convergence"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_contract_authority_status.py",
+              "-q"
+            ],
+            "name": "contract_authority_status"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_project_files_budget.py",
+              "-q"
+            ],
+            "name": "project_files_budget"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/project_queue.py",
+              "check"
+            ],
+            "name": "project_queue_check"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-13T00:51:00Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0131",
+  "movement": "cold_start_diet_restore",
+  "next_actor": "engineer",
+  "refs": [
+    "docs/design/GOV_ORCH_6_DOCUMENTATION_DIET.md",
+    "AGENTS.md",
+    "AI_START_HERE.md",
+    "CURRENT_STATE.md",
+    "AI_HANDOVER.md",
+    "tests/test_cold_start_budget.py",
+    "tests/test_architecture_convergence.py",
+    "docs/reference/COPILOT_OPERATING_MODEL.md"
+  ],
+  "schema_version": 1,
+  "status": "OPEN",
+  "updated_at": "2026-09-13T00:51:00Z"
+}
