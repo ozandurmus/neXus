@@ -22,6 +22,12 @@ ui2:
     migrate-user-file: ${UI2_DB_MIGRATE_USER_FILE:/run/secrets/ui2_db_migrate_user}
     migrate-password-file: ${UI2_DB_MIGRATE_PASSWORD_FILE:/run/secrets/ui2_db_migrate_password}
     migration-location: classpath:db/migration
+  role-binding:
+    # C3 section 4.2's role_bindings.group_reference_encrypted envelope key
+    # (secrets_metadata purpose 'role_binding_group_ref_key'): a base64
+    # -encoded 256-bit key, read once at startup, never a property default.
+    group-reference-key-file: ${UI2_ROLE_BINDING_GROUP_REFERENCE_KEY_FILE:/run/secrets/ui2_role_binding_group_reference_key}
+    group-reference-key-id: ${UI2_ROLE_BINDING_GROUP_REFERENCE_KEY_ID:role_binding_group_ref_key_v1}
 
 logging:
   level:
