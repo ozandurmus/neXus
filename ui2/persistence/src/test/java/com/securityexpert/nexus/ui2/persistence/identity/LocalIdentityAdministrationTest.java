@@ -38,6 +38,8 @@ class LocalIdentityAdministrationTest {
     }
 
     private static final class FakeLocalCredentialsRepository implements LocalCredentialsRepository {
+        private final java.util.List<String> mustChangePassword = new java.util.ArrayList<>();
+
         final Map<String, LocalCredentialRecord> byId = new HashMap<>();
         int createCalls = 0;
 
@@ -100,6 +102,12 @@ class LocalIdentityAdministrationTest {
                     newVerifier.parameters().memoryCostKib(), newVerifier.parameters().timeCost(),
                     newVerifier.parameters().parallelism(), existing.failedAttemptCount(), existing.lockedUntil(),
                     existing.createdAt(), now, existing.enabled(), existing.createdByActorFingerprint(), now, true));
+        }
+
+        /** NXS-LOCAL-0152's V9 seeding hook; this fake records the call and nothing else. */
+        @Override
+        public void markMustChangePassword(String localIdentityId, String actorFingerprint) {
+            mustChangePassword.add(localIdentityId);
         }
 
         @Override

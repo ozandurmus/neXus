@@ -37,11 +37,9 @@ public interface LocalCredentialsRepository {
 
     Optional<LocalCredentialRecord> findById(String localIdentityId);
 
-    /** 13G section 3: every row, for the local identity administration list view. */
-    List<LocalCredentialRecord> findAll();
-
     /**
-     * Every row (NXS-LOCAL-0152's own need: resolving a session's opaque
+     * Every row -- 13G §3's local identity administration list view, and
+     * NXS-LOCAL-0152's own need: resolving a session's opaque
      * {@code actor_fingerprint} back to the local identity behind it, since
      * the fingerprint is a one-way hash of {@code "local:" + local_identity_id}
      * -- see {@link com.securityexpert.nexus.ui2.platform.PrincipalFingerprint} --
@@ -111,6 +109,8 @@ public interface LocalCredentialsRepository {
      * default ({@code false}).
      */
     void markMustChangePassword(String localIdentityId, String actorFingerprint);
+
+    /**
      * 13G LIA-3.2/LIA-3.3: an administrative reset. Overwrites
      * verifier/salt/parameters, sets {@code password_set_at} = now and
      * {@code must_change_password} = true, attributed to the acting

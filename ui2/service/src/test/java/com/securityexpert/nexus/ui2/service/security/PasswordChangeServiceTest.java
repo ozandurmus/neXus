@@ -38,9 +38,8 @@ class PasswordChangeServiceTest {
             idByName.put(name, id);
             byId.put(id, new LocalCredentialRecord(id, name, verifier.verifier(), verifier.salt(), verifier.algorithmId(),
                     verifier.parameters().memoryCostKib(), verifier.parameters().timeCost(),
-                    verifier.parameters().parallelism(), 0, Optional.empty(), NOW, NOW, true));
                     verifier.parameters().parallelism(), 0, Optional.empty(), NOW, NOW, true, "system:bootstrap", NOW,
-                    false));
+                    true));
             return id;
         }
 
@@ -96,14 +95,9 @@ class PasswordChangeServiceTest {
                     newVerifier.verifier(), newVerifier.salt(), newVerifier.algorithmId(),
                     newVerifier.parameters().memoryCostKib(), newVerifier.parameters().timeCost(),
                     newVerifier.parameters().parallelism(), r.failedAttemptCount(), r.lockedUntil(), r.createdAt(), NOW,
-                    false));
-                    r.enabled(), r.createdByActorFingerprint(), NOW, r.mustChangePassword()));
+                    r.enabled(), r.createdByActorFingerprint(), NOW, false));
         }
 
-        @Override
-        public java.util.List<LocalCredentialRecord> findAll() {
-            throw new UnsupportedOperationException("not exercised by this test");
-        }
 
         @Override
         public void adminSetPassword(String localIdentityId, Argon2PasswordHasher.Verifier newVerifier,

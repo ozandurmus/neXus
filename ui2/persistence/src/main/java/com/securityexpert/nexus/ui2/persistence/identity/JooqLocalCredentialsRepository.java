@@ -24,7 +24,6 @@ public final class JooqLocalCredentialsRepository implements LocalCredentialsRep
 
     private static final String COLUMNS = "local_identity_id, local_identity_name, verifier, salt, algorithm_id, "
             + "memory_cost_kib, time_cost, parallelism, failed_attempt_count, locked_until, created_at, updated_at, "
-            + "must_change_password";
             + "enabled, created_by_actor_fingerprint, password_set_at, must_change_password";
 
     private final TransactionBoundary transactionBoundary;
@@ -60,8 +59,6 @@ public final class JooqLocalCredentialsRepository implements LocalCredentialsRep
 
     @Override
     public List<LocalCredentialRecord> findAll() {
-        return transactionBoundary.inTransaction(dsl -> dsl.fetch("select " + COLUMNS + " from local_credentials")
-                .stream().map(JooqLocalCredentialsRepository::toRecord).toList());
         return transactionBoundary.inTransaction(dsl -> {
             Result<Record> rows = dsl.fetch("select " + COLUMNS + " from local_credentials order by created_at");
             return rows.stream().map(JooqLocalCredentialsRepository::toRecord).toList();
@@ -109,8 +106,8 @@ public final class JooqLocalCredentialsRepository implements LocalCredentialsRep
         // call (NXS-LOCAL-0152).
         auditedTransactionBoundary.inTransaction(changedByActorFingerprint, ACTION_PASSWORD_CHANGE, dsl -> dsl.execute(
                 "update local_credentials set verifier = {0}, salt = {1}, algorithm_id = {2}, memory_cost_kib = {3}, "
-                        + "time_cost = {4}, parallelism = {5}, updated_at = {6}, must_change_password = false "
-                        + "time_cost = {4}, parallelism = {5}, updated_at = {6}, password_set_at = {6} "
+                        + "time_cost = {4}, parallelism = {5}, updated_at = {6}, password_set_at = {6}, "
+                        + "must_change_password = false "
                         + "where local_identity_id = {7}",
                 newVerifier.verifier(), newVerifier.salt(), newVerifier.algorithmId(),
                 newVerifier.parameters().memoryCostKib(), newVerifier.parameters().timeCost(),
@@ -122,6 +119,9 @@ public final class JooqLocalCredentialsRepository implements LocalCredentialsRep
         auditedTransactionBoundary.inTransaction(actorFingerprint, ACTION_MUST_CHANGE_PASSWORD_SEED, dsl -> dsl.execute(
                 "update local_credentials set must_change_password = true, updated_at = {0} where local_identity_id = {1}",
                 Timestamp.from(java.time.Instant.now()), localIdentityId));
+    }
+
+    @Override
     public void adminSetPassword(String localIdentityId, Argon2PasswordHasher.Verifier newVerifier,
             String settingAdminActorFingerprint) {
         auditedTransactionBoundary.inTransaction(settingAdminActorFingerprint, ACTION_ADMIN_PASSWORD_RESET,
@@ -157,10 +157,9 @@ public final class JooqLocalCredentialsRepository implements LocalCredentialsRep
                 Optional.ofNullable(lockedUntil).map(Timestamp::toInstant),
                 row.get("created_at", Timestamp.class).toInstant(),
                 row.get("updated_at", Timestamp.class).toInstant(),
-                Boolean.TRUE.equals(row.get("must_change_password", Boolean.class)));
-                row.get("enabled", Boolean.class),
+                Boolean.TRUE.equals(row.get("enabled", Boolean.class)),
                 row.get("created_by_actor_fingerprint", String.class),
                 row.get("password_set_at", Timestamp.class).toInstant(),
-                row.get("must_change_password", Boolean.class));
+                Boolean.TRUE.equals(row.get("must_change_password", Boolean.class)));
     }
 }

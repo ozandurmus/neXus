@@ -118,6 +118,12 @@ class RoleBindingAdminServiceTest {
                     "admin0", Instant.now(), false));
         }
 
+        /** NXS-LOCAL-0152's V9 seeding hook: not exercised by this test. */
+        @Override
+        public void markMustChangePassword(String localIdentityId, String actorFingerprint) {
+            throw new UnsupportedOperationException("not used by this test");
+        }
+
         @Override
         public Optional<LocalCredentialRecord> findByName(String localIdentityName) {
             throw new UnsupportedOperationException("not used by this test");

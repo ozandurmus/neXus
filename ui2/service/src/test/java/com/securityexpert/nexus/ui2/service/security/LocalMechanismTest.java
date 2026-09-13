@@ -60,7 +60,6 @@ class LocalMechanismTest {
             idByName.put(name, id);
             byId.put(id, new LocalCredentialRecord(id, name, verifier.verifier(), verifier.salt(), verifier.algorithmId(),
                     verifier.parameters().memoryCostKib(), verifier.parameters().timeCost(), verifier.parameters().parallelism(),
-                    0, Optional.empty(), NOW, NOW, false));
                     0, Optional.empty(), NOW, NOW, true, "system:bootstrap", NOW, false));
             return id;
         }
@@ -105,10 +104,6 @@ class LocalMechanismTest {
             return !byId.isEmpty();
         }
 
-        @Override
-        public java.util.List<LocalCredentialRecord> findAll() {
-            return java.util.List.copyOf(byId.values());
-        }
 
         @Override
         public void markMustChangePassword(String localIdentityId, String actorFingerprint) {
@@ -123,7 +118,6 @@ class LocalMechanismTest {
             Optional<Instant> lockedUntil = next >= lockoutThreshold ? Optional.of(now.plus(lockoutDuration)) : r.lockedUntil();
             byId.put(localIdentityId, new LocalCredentialRecord(r.localIdentityId(), r.localIdentityName(), r.verifier(),
                     r.salt(), r.algorithmId(), r.memoryCostKib(), r.timeCost(), r.parallelism(), next, lockedUntil,
-                    r.createdAt(), now, r.mustChangePassword()));
                     r.createdAt(), now, r.enabled(), r.createdByActorFingerprint(), r.passwordSetAt(),
                     r.mustChangePassword()));
         }
@@ -133,7 +127,6 @@ class LocalMechanismTest {
             LocalCredentialRecord r = byId.get(localIdentityId);
             byId.put(localIdentityId, new LocalCredentialRecord(r.localIdentityId(), r.localIdentityName(), r.verifier(),
                     r.salt(), r.algorithmId(), r.memoryCostKib(), r.timeCost(), r.parallelism(), 0, Optional.empty(),
-                    r.createdAt(), now, r.mustChangePassword()));
                     r.createdAt(), now, r.enabled(), r.createdByActorFingerprint(), r.passwordSetAt(),
                     r.mustChangePassword()));
         }

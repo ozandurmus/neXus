@@ -600,10 +600,6 @@ class IdentitySessionsRbacDatabasePlaceholderTest {
             throw new AssertionError("not exercised by this test");
         }
 
-        @Override
-        public java.util.List<LocalCredentialRecord> findAll() {
-            throw new AssertionError("not exercised by this test");
-        }
 
         @Override
         public void adminSetPassword(String localIdentityId, Argon2PasswordHasher.Verifier newVerifier,

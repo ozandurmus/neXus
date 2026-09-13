@@ -74,10 +74,6 @@ class MechanismRegistryTest {
             throw new UnsupportedOperationException();
         }
 
-        @Override
-        public java.util.List<LocalCredentialRecord> findAll() {
-            throw new UnsupportedOperationException();
-        }
 
         @Override
         public void adminSetPassword(String localIdentityId, Argon2PasswordHasher.Verifier newVerifier,
