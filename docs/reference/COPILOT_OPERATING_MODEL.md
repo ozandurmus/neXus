@@ -176,9 +176,15 @@ Measured empirically in this worktree; durable until re-measured:
   installed before the full suite runs (`lxml` and `fastapi` were the
   observed blockers); "pytest works locally" without them is true only of
   targeted tests.
-- Measured worker cost: roughly $0.037-$0.043 per turn on Sonnet 5. Set
-  `--max-budget-usd` from expected turns rather than leaving the $3.00
-  default, which is too low for a multi-dozen-turn movement.
+- Measured worker cost at the **Normal (strong)** tier, 2026-09-13: roughly
+  $0.037-$0.043 per turn. Set `--max-budget-usd` from expected turns rather
+  than leaving the $3.00 default, which is too low for a multi-dozen-turn
+  movement. Estimate turns from how many times the movement must measure and
+  correct, not from how many files it touches: a text-compression movement
+  iterated to 109 turns over two files, while a code movement writing 26 new
+  files in one pass finished in 53. The tier's current model name is in
+  `docs/reference/MODEL_TIER_MAP.md`, which is the only file permitted to
+  carry one.
 - Do not put a full-suite regression run and the repository privacy gate
   in the same validation plan: the suite creates untracked `data/`/`logs/`
   directories that the gate then flags, failing a movement whose diff is
