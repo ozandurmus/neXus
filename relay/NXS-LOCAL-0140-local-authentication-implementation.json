@@ -1,0 +1,188 @@
+{
+  "created_at": "2026-09-13T11:13:04Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1 V8 creates local_credentials as contract section 3.2 states, and V1-V7 are untouched.",
+          "AC-2 The mechanism registry exists with local as a non-removable member, and adding ldap would be adding a member rather than changing the flow. State in the SESSION_CLOSE how that is true.",
+          "AC-3 Verification uses Argon2id with per-row parameters read from the row, not from a constant.",
+          "AC-4 A test proves every failure mode returns the identical response body, and a test proves the constant response-time envelope holds when verification is skipped due to lockout.",
+          "AC-5 Tests cover the lockout threshold, its effect, and its clearing.",
+          "AC-6 Password change works; no forced change exists anywhere in the code.",
+          "AC-7 Both bootstrap accounts are seeded on a clean database with their role bindings, and a test proves they are distinct actors in audit rows.",
+          "AC-8 A test proves no credential material -- password, verifier, salt or parameters -- appears in any audit row produced by any path this movement adds.",
+          "AC-9 A login screen exists and no product screen renders without a session; a frontend test proves it.",
+          "AC-10 The component-scan exclusion is narrowed deliberately and the SESSION_CLOSE states exactly what it now admits.",
+          "AC-11 ./ui2/gradlew -p ui2 build -x :integration-tests:test passes, architecture tests pass, and the module listing is still eleven.",
+          "AC-12 The repository privacy gate reports zero findings.",
+          "AC-13 No file under panorama/, configuration/, utils/, scripts/ or docs/design/ is modified."
+        ],
+        "baseline": {
+          "authority": "docs/design/UI2_0_C3A_LOCAL_AUTHENTICATION_CONTRACT.md -- FROZEN, PRODUCT OWNER APPROVED 2026-09-13. It is the specification: section 2 the mechanism registry, section 3 credential storage and the local_credentials DDL, section 4 password change, section 5 login and lockout, section 6 the two bootstrap accounts, section 7 role binding, section 8 audit, section 11 acceptance and test specification. Read all of it before writing anything.",
+          "current_state": "ui2/service already carries Ui2Application, DatabaseConfiguration, MigrationStartupRunner, migrations V1 through V7, and security classes including GateChain, RbacEvaluator, SessionReconciler and LoginFlow. LoginController and LoginResolveController exist under service/api but are EXCLUDED from Ui2Application's component scan by regex. The frontend has six routed Material 3 screens, a navigation rail and a top app bar, and NO login screen.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "test_baseline": "Run ./ui2/gradlew -p ui2 build -x :integration-tests:test and :platform-core:test and :architecture-tests:test first and record the counts before changing anything.",
+          "unchanged_authority": "docs/design/UI2_0_C3_IDENTITY_SESSIONS_RBAC_CONTRACT.md (FROZEN) owns sessions, role tokens and bindings, RBAC enforcement and the gate chain, and Correction C-2 states they are MECHANISM-INDEPENDENT and unchanged. Do not redesign, extend or work around any of it. docs/design/UI2_0_C1_PLATFORM_SCHEMA_CONTRACT.md (FROZEN) owns Flyway as sole migration authority, the fn_audit_capture trigger the new table attaches to, and the two database roles."
+        },
+        "context_not_loaded": [
+          "panorama/ and configuration/ collectors",
+          "docs/history/**",
+          "Check Point and Palo Alto contracts",
+          "project/*.json"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/local-authentication-implementation"
+        },
+        "invariants": [
+          "No recoverable password exists anywhere in the product.",
+          "Local authentication can never be disabled.",
+          "A refusal never reveals whether an identity exists, in body or in timing.",
+          "No credential material reaches an audit row, a log line or an exception message.",
+          "Sessions, RBAC and audit behave exactly as C3 fixes them.",
+          "No product screen renders without a session.",
+          "The two bootstrap identities remain distinct actors in the audit trail.",
+          "Flyway history is append-only; no existing migration is edited.",
+          "No FROZEN contract is edited."
+        ],
+        "merge_gate": "Product Owner assistant review of the diff plus orchestrator verify.passed. The worker does not merge to main.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Implement local authentication end to end against docs/design/UI2_0_C3A_LOCAL_AUTHENTICATION_CONTRACT.md (FROZEN 2026-09-13): the local_credentials table and its migration, the mechanism registry with local as its first member, login and lockout, password change, the two seeded bootstrap accounts, and a login screen that stands in front of the existing UI. The Product Owner's stated goal is that the product cannot be used without logging in, even on localhost.",
+        "output_contract": [
+          "A product that cannot be used without logging in, with two distinct bootstrap identities.",
+          "A registry that admits LDAP later without rework.",
+          "Tests that prove the refusal is non-revealing in timing as well as in body, and that no credential material reaches audit.",
+          "SESSION_CLOSE naming which contract clause each new type implements, what the component-scan exclusion now admits, and the build/test counts before and after."
+        ],
+        "recommended_reasoning": {
+          "reason": "A security boundary implemented against a contract that is already explicit, so the design is decided -- but the failure modes are subtle: a timing side channel, parameters read from the wrong place, credential material leaking into audit. High effort for the care those need, not for the volume of code.",
+          "tier": "Sonnet 5, high effort"
+        },
+        "requirements": [
+          "English, per AGENTS.md engineering-output language law.",
+          "Java written from scratch for the backend; the existing Python is know-how only and must not be read as a source to port.",
+          "Every public type and method carries a short comment naming the contract clause it implements. A clause with no code and code with no clause are both defects.",
+          "Do NOT use './ui2/gradlew -p ui2 build' without '-x :integration-tests:test'. The integration tests fail closed on a missing database by design; that is correct behaviour and not something to fix.",
+          "Do not run the full Python pytest suite. It creates untracked data/ and logs/ directories that the repository privacy gate then flags.",
+          "The ui2 build must keep exactly eleven Gradle subprojects.",
+          "Commit early and often: the migration, the registry and verification, login and lockout, the seeding, the screen, then the tests.",
+          "Do not merge to main. The Product Owner assistant reviews the diff and merges.",
+          "If the contract does not answer something, raise one RELAY_QUESTION rather than deciding it."
+        ],
+        "risks": [
+          "Implementing the non-revealing refusal in the response body only and leaving the timing side channel open. Section 5.3 requires both and a skipped verification is measurably faster.",
+          "Reading Argon2 parameters from a constant instead of from the row, which defeats the whole point of recording them per row.",
+          "Adding a forced password change because it seems obviously right. The Product Owner deferred it deliberately and section 6.2 records why.",
+          "Inventing a password policy.",
+          "Editing an existing Flyway migration instead of adding V8.",
+          "Widening the component-scan exclusion more than the login flow needs.",
+          "Letting a verifier, salt or parameter set reach an audit row or a log line.",
+          "Redesigning sessions or RBAC because the login flow touches them."
+        ],
+        "scope": {
+          "in": [
+            "The Flyway migration creating local_credentials exactly as contract section 3.2's DDL states, as V8. Do not renumber or edit any existing migration -- Flyway is sole migration authority and history is append-only.",
+            "The mechanism registry of contract section 2, with `local` as its first and non-removable member. The shape must make adding `ldap` later an added member, not a changed flow.",
+            "Credential verification using the Argon2id family with the per-row parameters the DDL records, so parameters can be raised later without invalidating existing rows. Never a reversible form, never a plain column, never a fast general-purpose digest.",
+            "Login and lockout per contract section 5: per-identity counting, the stated threshold, the stated lock duration and clearing rule.",
+            "The non-revealing refusal of section 5.3, INCLUDING the timing requirement. Every failure mode -- unknown identity, wrong password, empty password, active lockout -- returns the identical response AND is served inside a constant response-time envelope, so a skipped verification does not return measurably faster than a performed one. This is the clause most likely to be implemented in body only; implement the timing too.",
+            "Password change per section 4, available from the first release. There is NO forced change: the Product Owner deferred it on 2026-09-13 and section 6.2 records that decision, its risk and its revisit condition. Implement the ability, not a compulsion.",
+            "Seeding the two bootstrap accounts, nexusadmin and claudeadmin, on a clean empty database, with their role bindings per section 7. claudeadmin exists so automation actions are attributable to it rather than to the Product Owner; keep the two identities genuinely distinct in the audit trail.",
+            "Wiring LoginController and LoginResolveController into Ui2Application's component scan, and whatever else section 2's flow requires. Change the scan exclusion deliberately and say in the SESSION_CLOSE exactly what it now admits -- it was excluded for a reason and you are narrowing that exclusion, not deleting it.",
+            "A login screen in ui2/frontend: username and password, submit, and an error presentation that shows the same message for every failure mode, matching section 5.3. The application must not render any product screen until a session exists -- the six existing screens stay exactly as they are behind it.",
+            "Audit coverage per section 8: every authentication attempt, lockout, password change and role-binding change, through C1 section 3.5's existing mechanism. No credential, verifier, salt or parameter set may reach an audit row, a log line or an exception message.",
+            "Tests for contract section 11's specification, including at minimum: the non-revealing refusal including timing, lockout threshold and clearing, that no credential material appears in any audit row, that both bootstrap accounts exist and are distinct actors, and that a product screen is unreachable without a session."
+          ],
+          "out": [
+            "LDAP, RADIUS or TACACS implementation. The registry must ADMIT ldap; nothing may be built for it. C3 owns LDAP and C-2 names RADIUS and TACACS as later.",
+            "Any forced password change, any password expiry, complexity class, history or reuse rule. The Product Owner explicitly deferred password policy on 2026-09-13. Implement only what section 4 requires for a password to be storable.",
+            "Redesigning or extending sessions, role tokens, role bindings, RBAC enforcement or the gate chain. C3 owns them and they are unchanged.",
+            "Editing any existing Flyway migration, or any FROZEN contract.",
+            "Any user-management screen -- creating, listing, disabling or editing accounts. Only login and password change are in scope.",
+            "Any device contact, any discovery, any Palo Alto or Check Point work.",
+            "Changing the Ingress, any Kubernetes manifest, or anything about external exposure. Contract section 9 reports an unresolved tension there and this movement must not resolve it.",
+            "Self-service password reset, email, multi-factor, or session-token cryptography."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              "build",
+              "-x",
+              ":integration-tests:test"
+            ],
+            "name": "ui2_build_excluding_db_bound_integration_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              ":service:test"
+            ],
+            "name": "ui2_service_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              ":architecture-tests:test"
+            ],
+            "name": "ui2_architecture_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              "projects"
+            ],
+            "name": "ui2_module_listing_must_stay_eleven"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_contract_authority_status.py",
+              "-q"
+            ],
+            "name": "contract_authority_status"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-13T11:13:04Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0140",
+  "movement": "local_authentication_implementation",
+  "next_actor": "engineer",
+  "refs": [
+    "docs/design/UI2_0_C3A_LOCAL_AUTHENTICATION_CONTRACT.md",
+    "docs/design/UI2_0_C3_IDENTITY_SESSIONS_RBAC_CONTRACT.md",
+    "docs/design/UI2_0_C1_PLATFORM_SCHEMA_CONTRACT.md",
+    "AGENTS.md",
+    "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/boot/Ui2Application.java",
+    "ui2/frontend/src/App.tsx"
+  ],
+  "schema_version": 1,
+  "status": "OPEN",
+  "updated_at": "2026-09-13T11:13:04Z"
+}
