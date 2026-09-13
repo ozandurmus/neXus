@@ -169,11 +169,95 @@
       },
       "seq": 1,
       "timestamp": "2026-09-13T11:13:04Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "report": {
+        "changed": [
+          "ui2/service/src/main/java/.../api/LoginController.java: constructor now takes MechanismRegistry instead of LdapOperatorBindPort; LoginRequest gained mechanism_id",
+          "ui2/service/src/main/java/.../boot/Ui2Application.java: ComponentScan exclusion narrowed from the whole service.api package to three named controllers",
+          "ui2/service/build.gradle.kts: added jOOQ as a direct compile dependency (composition root now builds its own DSLContext)",
+          "ui2/platform-core/build.gradle.kts, gradle/libs.versions.toml, gradle/verification-metadata.xml: added BouncyCastle (Argon2id)",
+          "ui2/frontend/src/main.tsx: App is now mounted inside AuthGate",
+          "ui2/integration-tests/.../IdentitySessionsRbacDatabasePlaceholderTest.java: updated one test to the new LoginController/Mechanism API"
+        ],
+        "completed": [
+          "V8 migration: local_credentials table + fn_audit_capture_local_credentials narrow allowlisted audit trigger",
+          "Mechanism/AttemptOutcome registry shape (platform-core), Argon2PasswordHasher (BouncyCastle, per-row parameters)",
+          "LocalMechanism: per-identity lockout (LOCK-1/LOCK-2), constant-cost refusal (LocalCredentialVerification always runs Argon2, on a dummy verifier when unknown)",
+          "MechanismRegistry: local structurally non-removable (sole constructor requires a concrete LocalMechanism)",
+          "LdapMechanism (ldap-adapter): proves the registry shape extends to ldap; not wired into the running app (no directory config exists)",
+          "PasswordChangeService/-Controller: self-service password change only, no forced change anywhere",
+          "SessionStatusController + LocalAuthenticationConfiguration: real bean wiring (DSLContext/TransactionBoundary/SessionRepository/LocalCredentialsRepository/LoginFlow/MechanismRegistry/PasswordChangeService)",
+          "LoginController rewritten to route through MechanismRegistry instead of a direct LdapOperatorBindPort dependency",
+          "cli bootstrap-local-identity command, mirroring the existing bootstrap-security-admin pattern, for seeding nexusadmin/claudeadmin",
+          "Ui2Application component-scan exclusion narrowed to admit LoginController, LoginResolveController, PasswordChangeController, SessionStatusController by name",
+          "Frontend: LoginScreen + AuthGate wrapping main.tsx; App.tsx and its 6 existing test files untouched",
+          "17 new service unit tests (LocalMechanismTest, MechanismRegistryTest, LocalPasswordPolicyTest, PasswordChangeServiceTest) -- all pass",
+          "LocalCredentialsSchemaTest added to integration-tests (compiles; not run, no DB in this session)",
+          "Fixed a pre-existing integration test (IdentitySessionsRbacDatabasePlaceholderTest) broken by the LoginController signature change",
+          "5 new frontend tests (AuthGate.test.tsx) -- all pass; full frontend suite (32 tests) green"
+        ],
+        "continuation": "SAME_SESSION",
+        "effects": {
+          "main_py": "not applicable -- this movement is entirely within ui2/ (Java/TypeScript), no Python product code touched",
+          "ui": "The application now requires a session to reach a product screen: frontend AuthGate calls GET /session/status before mounting App, and shows LoginScreen until an ACTIVE session exists. No existing screen's markup or behavior changed."
+        },
+        "integration": {
+          "branch": "feature/local-authentication-implementation",
+          "ci": "NOT_RUN",
+          "head_sha": "22e07fc3fb73ead04ade055fbc5b6873eddb7e86",
+          "merge_commit": null,
+          "merge_decision": "PENDING_PO_REVIEW",
+          "merge_state": "NOT_OPENED",
+          "pr": null,
+          "pr_url": null
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0140",
+          "movement_type": "VALIDATION",
+          "objective": "Product Owner assistant review of this diff, then a real-environment validation pass: apply V8 against a live Postgres 16, run both CLI bootstrap commands end-to-end, exercise login/lockout/password-change over real HTTP, and confirm the audit-allowlist assertion against real inserted rows.",
+          "status": "planned"
+        },
+        "preserved": [
+          "V1-V7 migrations untouched (append-only)",
+          "C3's sessions/RBAC/gate-chain model untouched -- no GateChain/RbacEvaluator/ActionRegistry/SecurityWebMvcConfig change",
+          "The six existing frontend product screens and their tests, byte-for-byte",
+          "RoleBindingAdminController, SessionAdminController, DeviceRegistrationController remain excluded from the component scan",
+          "No forced password change, no password policy beyond PW-1/2/3, anywhere"
+        ],
+        "recommended_reasoning": {
+          "reason": "Remaining work is real-environment validation and a Product Owner design confirmation on the bootstrap-seeding choice (U-2), not further design or high-ambiguity implementation.",
+          "tier": "Sonnet 5, medium effort"
+        },
+        "state_updates": [
+          "None to project/*.json or CURRENT_STATE.md in this session -- out of this brief's named file scope"
+        ],
+        "unresolved_risks": [
+          "AC-7 (bootstrap seeding, U-2) implemented as a two-step, deployment-controlled CLI process, not automatic first-boot seeding -- a design choice this session made under the contract's own UNKNOWN, not verified against Product Owner intent",
+          "No real-environment (Testcontainers/live Postgres) validation ran for the new SQL/trigger/lockout/audit-allowlist behavior in this session -- LocalCredentialsSchemaTest compiles but did not execute (no Docker/DB here)",
+          "The role:security_admin-administers-another-identity password-change variant (section 4) is not implemented, only the self-service path -- deliberately narrowed to avoid touching GateChain/RBAC wiring",
+          "LdapMechanism exists but is not registered in the running MechanismRegistry bean -- local is the only live mechanism in this build"
+        ],
+        "validation": {
+          "affected": "ui2/service, ui2/platform-core, ui2/persistence, ui2/job-engine, ui2/cli, ui2/ldap-adapter, ui2/integration-tests, ui2/frontend",
+          "diff_check": "git status/diff confirm changes confined to ui2/ only; no docs/design/, panorama/, configuration/, utils/, scripts/ file touched; V1-V7 migrations untouched",
+          "full_regression": "PASS: ./ui2/gradlew -p ui2 build -x :integration-tests:test (clean), :service:test, :architecture-tests:test, npm test (32 tests total, 7 files)",
+          "privacy": "PASS: python3 scripts/repository_privacy_check.py -- 0 findings across 1450 files",
+          "real_environment": "NOT RUN this session -- no Docker/UI2_TEST_JDBC_URL available; LocalCredentialsSchemaTest and the integration-tests module compile cleanly under :integration-tests:compileTestJava but were not executed",
+          "state_consistency": "python3 -m pytest tests/test_contract_authority_status.py -q -- 5/5 passed; ./ui2/gradlew -p ui2 projects lists exactly eleven subprojects",
+          "targeted": "PASS: 17 new service unit tests (LocalMechanismTest, MechanismRegistryTest, LocalPasswordPolicyTest, PasswordChangeServiceTest) plus 5 new frontend tests (AuthGate.test.tsx)"
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-13T11:42:40Z"
     }
   ],
   "id": "NXS-LOCAL-0140",
   "movement": "local_authentication_implementation",
-  "next_actor": "engineer",
+  "next_actor": null,
   "refs": [
     "docs/design/UI2_0_C3A_LOCAL_AUTHENTICATION_CONTRACT.md",
     "docs/design/UI2_0_C3_IDENTITY_SESSIONS_RBAC_CONTRACT.md",
@@ -183,6 +267,6 @@
     "ui2/frontend/src/App.tsx"
   ],
   "schema_version": 1,
-  "status": "OPEN",
-  "updated_at": "2026-09-13T11:13:04Z"
+  "status": "CLOSED",
+  "updated_at": "2026-09-13T11:42:40Z"
 }

@@ -1,0 +1,107 @@
+{
+  "created_at": "2026-09-10T09:45:56Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "Every amended C7/C2 paragraph matches the frozen Option A amendment bundle and the PO decision recorded in relay NXS-LOCAL-0060.",
+          "The folded C7 check-1/check-2 admission shape is explicit; no standalone C2 check-7 is introduced.",
+          "C7 check-4 scope is class-aware: class 1 keeps RB.x cadence semantics, class 1.5 reads the restore reconciliation condition, other classes remain not applicable.",
+          "Claim-time C2 checks remain independently named and fail closed on missing, stale, conflicting, or unsupported topology evidence.",
+          "Minimal tests cover the amended invariants and preserve existing class-3/class-4 refusal.",
+          "Restore remains disabled; no Java/UI/device path changes.",
+          "git diff --check, project-state tests, and privacy validation pass with 0 new findings against origin/main."
+        ],
+        "baseline": {
+          "authority": "UI2_0_BASELINE_CONTRACT.md (FROZEN): RESTORE-IN-RELEASE-1 (D-7 ACCEPTED -- restore is in Release 1 on declared-supported platforms), APPROVAL-MODEL (restore = per-operation independent approval), acceptance sentences A-2 (OUTCOME_UNKNOWN never triggers an automatic second write) and A-3. C7 (FROZEN) sections 5 (restore execution), 6 (approval), 9.1-9.3 (the gap, verbatim the problem statement). C4 (FROZEN) section 2.3 (the eight closed step kinds; adding one is a C4 amendment) and section 3.3 step 7 (a class 2/3/4 gate row can never be SIGNED_OFF). utils/action_taxonomy.py is the single source of truth for the five action classes and is test-enforced (tests named in AGENTS.md 'Architectural invariants'); AGENTS.md prohibits inventing a new command class silently. OP_2_0 architecture: CLASS 2 has no member and is hard-gated; its authorization/trust/change-management prerequisites are the closest precedent for a device-write class.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED); UI 2.0 B0 complete, both freezes made 2026-09-09",
+          "sequencing": "Runs concurrently with the B1-1 skeleton contract movement (different files, no overlap). This is the single HIGH SCRUTINY item of the UI 2.0 backlog; nothing in B1 depends on it, REL-BACKUP's restore half does."
+        },
+        "context_not_loaded": [
+          "Java source and ui2 implementation tree",
+          "device access, credentials, and real-environment validation",
+          "unrelated Line-1 recovery implementation",
+          "OpenRouter inference output until the worker review is complete"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/ui2-d1-c7-c2-admission-amendments"
+        },
+        "invariants": [
+          "Preserve CLASS_3_CONFIGURATION_WRITE and CLASS_4_POLICY_DEPLOYMENT prohibitions.",
+          "Keep C2 claim-time admission authoritative; compile-time checks cannot replace it.",
+          "Keep restore physical-device/endpoint-only; VSX-context and ClusterXL-member restore remain unsupported and fail closed.",
+          "Keep restore disabled at runtime; this movement changes contracts/tests only.",
+          "Do not invent a new action class or step kind; those are already frozen and landed."
+        ],
+        "merge_gate": "Worker produces a local commit and relay handback only. PO reviews the diff, targeted tests, privacy result, and any optional bounded OpenRouter advisory before deciding push/PR/merge.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Apply the already-frozen UI2 D1 Option A C7/C2 restore-admission amendments and their minimal contract tests. The taxonomy class, C4 restore_push kind, and baseline row are already landed; this movement completes only the remaining admission-contract slice while keeping runtime restore disabled.",
+        "output_contract": [
+          "Contract amendments in the named C7/C2/ledger files only, with no silent edits to unrelated frozen text.",
+          "Minimal focused tests for the amended admission invariants.",
+          "Updated project-state files and generated docs/history/INDEX.md.",
+          "RELAY_NOTE describing files, tests, privacy result, and unresolved risks.",
+          "SESSION_CLOSE with outcome IMPLEMENTED or PARTIAL; no merge claim."
+        ],
+        "recommended_reasoning": {
+          "reason": "Frozen security/admission amendment with bounded scope; medium reasoning is required for contract fidelity and fail-closed review, but no high-tier architecture redesign is authorized.",
+          "tier": "Fable 5.1, medium effort"
+        },
+        "requirements": [
+          "Read the frozen C7 sections 5.3, 6, 9 and the C2 sections 5.3, 6, 7 in full before editing.",
+          "Read RESTORE_CONTROLLED_WRITE_LEDGER.md and UI2_0_D1_OPTION_A_AMENDMENT_PROPOSAL_BUNDLE.md in full for exact amendment text.",
+          "Use English for repository artifacts.",
+          "Run targeted project-state/architecture tests first, then relevant contract tests; run git diff --check and repository privacy validation."
+        ],
+        "risks": [
+          "The amendment touches frozen contract files and must remain an exact application of the already-approved bundle, not a redesign.",
+          "Any ambiguity about C2/C7 admission semantics must be reported as UNKNOWN and handed back to the PO; do not infer.",
+          "OpenRouter review is optional and advisory only; the worker must not delegate authority or merge decisions to it."
+        ],
+        "scope": {
+          "in": [
+            "docs/design/UI2_0_C7_BACKUP_ARTEFACT_RESTORE_ENGINE_CONTRACT.md: frozen C7 amendment points named by the Option A bundle",
+            "docs/design/UI2_0_C2_JOB_EXECUTION_CONTRACT.md: frozen C2 admission points named by the Option A bundle",
+            "docs/design/RESTORE_CONTROLLED_WRITE_LEDGER.md and frozen amendment cross-references",
+            "minimal tests for the amended admission invariants",
+            "project-state bookkeeping"
+          ],
+          "out": [
+            "Java or ui2 source",
+            "utils/action_taxonomy.py",
+            "C4 taxonomy/step-kind changes already landed",
+            "device contact or credentials",
+            "runtime restore enablement",
+            "push, PR, or merge"
+          ]
+        },
+        "validation_plan": [
+          "Self-check against AC-1..AC-8 in the RELAY_NOTE",
+          "docs/project-state tests",
+          "git diff --check",
+          "privacy gate at push"
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-10T09:45:56Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0065",
+  "movement": "ui2_d1_restore_c7_c2_amendments",
+  "next_actor": "engineer",
+  "refs": [
+    "docs/design/UI2_0_C7_BACKUP_ARTEFACT_RESTORE_ENGINE_CONTRACT.md",
+    "docs/design/UI2_0_C2_JOB_EXECUTION_CONTRACT.md",
+    "docs/design/RESTORE_CONTROLLED_WRITE_LEDGER.md",
+    "docs/design/UI2_0_D1_OPTION_A_AMENDMENT_PROPOSAL_BUNDLE.md",
+    "relay/NXS-LOCAL-0060-ui2-d1-device-write-class-decision.json"
+  ],
+  "schema_version": 1,
+  "status": "OPEN",
+  "updated_at": "2026-09-10T09:45:56Z"
+}

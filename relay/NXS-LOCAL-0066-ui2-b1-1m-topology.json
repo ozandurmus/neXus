@@ -1,0 +1,172 @@
+{
+  "created_at": "2026-09-11T06:30:55Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "The recommendation names the minimum deployable service boundaries and which capabilities remain in the existing UI2 service.",
+          "The recommendation maps the requested v1 scope to boundaries without inventing unresolved device semantics.",
+          "The recommendation identifies the exact B1-2 schema inputs and unresolved blockers.",
+          "The recommendation preserves the current one-image CRC deployment until a later split is justified.",
+          "Targeted document/state checks pass and no device contact occurs."
+        ],
+        "baseline": {
+          "current_build": "ui2_b1_01_skeleton_ci_docker (IN_PROGRESS)",
+          "engineering": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product": "0.7.7 (AUTOMATED_VALIDATED)",
+          "sequencing": "Topology decision before B1-2 schema V1; Java-native UI2 only; Python is reference know-how, not runtime code."
+        },
+        "context_not_loaded": [
+          "docs/history/** except targeted records named by project/build_history.json",
+          "Live device output and credentials",
+          "Unrelated Line-1 collector internals"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/ui2-b1-1m-topology"
+        },
+        "invariants": [
+          "No Browser to device path.",
+          "No automatic network-device write or class 2 failover execution.",
+          "No raw vendor evidence or secrets in repository artifacts.",
+          "Do not turn a scope brief into silent implementation authority."
+        ],
+        "merge_gate": "Product Owner review required; DRAFT architecture may not authorize B1-2 implementation until accepted.",
+        "movement_type": "ARCHITECTURE",
+        "objective": "Produce the smallest DRAFT B1-1M feature-service topology decision for UI2 v1, reconciling Project Plan visibility, discovery/configuration/compliance, backup, and controlled failover without implementing runtime or schema behavior.",
+        "output_contract": [
+          "DRAFT topology decision document or a precise readiness report",
+          "Targeted validation results",
+          "RELAY_NOTE and SESSION_CLOSE"
+        ],
+        "recommended_reasoning": {
+          "reason": "Cross-module architecture and sequencing decision with security and schema-boundary implications.",
+          "tier": "gpt-5.6-terra, medium"
+        },
+        "requirements": [
+          "Read the repository cold-start files in order and use the existing graphify graph before broad browsing.",
+          "Keep configuration, runtime inventory, alignment, evidence identity and operational identity separate.",
+          "Mark new contract material DRAFT unless an existing frozen authority explicitly permits implementation."
+        ],
+        "risks": [
+          "Premature microservice splitting can increase deployment and data-consistency cost.",
+          "B1-2 schema fields must not be invented before topology and C1 contract reconciliation.",
+          "Controlled failover remains a separate class 2 gated capability."
+        ],
+        "scope": {
+          "in": [
+            "docs/design/UI2_0_V1_SCOPE_AND_SERVICE_TOPOLOGY_BRIEF.md",
+            "A new DRAFT topology decision document if needed",
+            "A concise project-state update only if the decision changes sequencing"
+          ],
+          "out": [
+            "B1-2 schema implementation",
+            "Java runtime behavior",
+            "Device contact or vendor commands",
+            "Failover executor or backup execution",
+            "Python code porting",
+            "Docker or Podman"
+          ]
+        },
+        "validation_plan": [
+          "Targeted contract and architecture/state tests.",
+          "JSON and history-index consistency checks if project state changes.",
+          "git diff --check.",
+          "No real-environment or device validation; this is architecture only."
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-11T06:30:55Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "RELAY_NOTE",
+      "seq": 2,
+      "subject": "DRAFT topology recommendation and PR ready for review",
+      "text": "Delivered docs/design/UI2_0_V1_SCOPE_AND_SERVICE_TOPOLOGY_BRIEF.md: one Java artifact/image with role-selected service, worker, and scheduler; Project Plan, discovery, configuration/inventory, compliance, backup, and readiness remain shared capability/projection concerns, not feature services. The brief records C1's B1-2 V1 inputs and the authority conflict that blocks implementation: B1-1's contract file says DRAFT while project metadata says frozen; the document status controls. Validation: architecture convergence 23 passed, baselined privacy PASS with 0 new findings, diff check clean. PR #179 is open for the Product Owner review required by this movement; no self-merge was attempted.",
+      "timestamp": "2026-09-11T06:37:17Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "AUTOMATED_VALIDATED",
+      "report": {
+        "changed": [
+          "Added docs/design/UI2_0_V1_SCOPE_AND_SERVICE_TOPOLOGY_BRIEF.md.",
+          "Rewrote AI_HANDOVER.md for the next movement."
+        ],
+        "completed": [
+          "Produced the DRAFT v1 service-topology recommendation.",
+          "Mapped the requested v1 concerns to shared role and module boundaries.",
+          "Recorded C1's B1-2 V1 inputs and the B1-1 contract-status conflict."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "No change.",
+          "ui": "No visible change; topology recommendation only."
+        },
+        "integration": {
+          "branch": "feature/ui2-b1-1m-topology",
+          "ci": "Not awaited; Product Owner review is required before merge.",
+          "head_sha": "7d74c4f",
+          "merge_commit": null,
+          "merge_decision": "Blocked pending Product Owner review; this DRAFT must not authorize B1-2 implementation.",
+          "merge_state": "OPEN",
+          "pr": 179,
+          "pr_url": "https://github.com/ozandurmus/neXus/pull/179"
+        },
+        "next": {
+          "movement": "ui2_b1_01_skeleton_ci_docker",
+          "movement_type": "ARCHITECTURE",
+          "objective": "Product Owner reviews the topology DRAFT and resolves the B1-1 status conflict before authorizing B1-1 implementation; B1-2 follows in the resulting harness.",
+          "status": "in_progress"
+        },
+        "preserved": [
+          "One Java artifact/image with role-selected service, worker, and scheduler; no feature microservices.",
+          "No runtime, schema implementation, Line-1 source, device contact, or class-2 execution."
+        ],
+        "recommended_reasoning": {
+          "reason": "Next action is a bounded Product Owner review and status correction/freeze decision.",
+          "tier": "Fast/normal"
+        },
+        "state_updates": [
+          "AI_HANDOVER.md updated.",
+          "No roadmap, backlog, build-history, or CURRENT_STATE update because sequencing did not change."
+        ],
+        "unresolved_risks": [
+          "B1-1 contract file status is DRAFT while project metadata says frozen; contract status controls.",
+          "This DRAFT requires Product Owner review and does not authorize B1-2 implementation."
+        ],
+        "validation": {
+          "affected": "Architecture/documentation scope reviewed against frozen baseline, C1, C2, C4, and C7 contracts.",
+          "diff_check": "PASS before commit.",
+          "full_regression": "Not run: architecture-only documentation movement; dispatched validation requires targeted contract/state checks.",
+          "privacy": "PASS: privacy gate against origin/main reported 0 new findings; pre-existing findings withheld.",
+          "real_environment": "Not applicable: device contact prohibited for this architecture movement.",
+          "state_consistency": "PASS: architecture convergence passed; no project-state sequencing update was required.",
+          "targeted": "PASS: tests/test_architecture_convergence.py, 23 passed."
+        }
+      },
+      "seq": 3,
+      "timestamp": "2026-09-11T06:38:06Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0066",
+  "movement": "UI2_B1_01M_FEATURE_SERVICE_TOPOLOGY",
+  "next_actor": null,
+  "refs": [
+    "CURRENT_STATE.md",
+    "AI_HANDOVER.md",
+    "docs/design/UI2_0_V1_SCOPE_AND_SERVICE_TOPOLOGY_BRIEF.md",
+    "docs/design/PRODUCT_DIRECTION_RECORD.md",
+    "project/roadmap.json",
+    "project/backlog.json",
+    "ui2/"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-11T06:38:06Z"
+}
