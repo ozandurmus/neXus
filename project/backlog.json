@@ -396,6 +396,24 @@
       "priority": "P0",
       "target": "PAN_DISCOVERY_CONTRACT.md; gate lifted 2026-09-13 for two methods; domain core in flight as NXS-LOCAL-0146",
       "note": ""
+    },
+    {
+      "id": "device_import_enrollment_contract_implementation",
+      "category": "Architecture / Import-Enrollment",
+      "title": "Implement device import/enrollment (candidate to devices row, cluster/VS modifiers, enrollment confirm first contact) once DEVICE_IMPORT_AND_ENROLLMENT_CONTRACT.md is Product-Owner frozen",
+      "status": "planned",
+      "priority": "P1",
+      "target": "docs/design/DEVICE_IMPORT_AND_ENROLLMENT_CONTRACT.md (DRAFT -- FOR PRODUCT OWNER FREEZE)",
+      "note": ""
+    },
+    {
+      "id": "gov_orch_resume_after_relay_question",
+      "category": "governance",
+      "title": "Orchestrator: a worker that parks a RELAY_QUESTION and exits is recorded failed (relay_not_closed) and cannot be resumed after the RELAY_DECISION; run refuses because the worktree exists",
+      "status": "planned",
+      "priority": "P1",
+      "target": "scripts/orchestrator.py decide_start -- add a resume path when the relay's last marker is RELAY_DECISION and next_actor is engineer (GOV.ORCH successor); observed on NXS-LOCAL-0147, 2026-09-13",
+      "note": ""
     }
   ]
 }

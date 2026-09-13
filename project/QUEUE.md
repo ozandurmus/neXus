@@ -1,5 +1,5 @@
 # Project queue (generated — do not edit; run: py scripts/project_queue.py render)
-Build: ui2_d1_restore_c7_c2_amendments · Track: PCP.x · Generated: 2026-09-13T14:06:18Z
+Build: ui2_d1_restore_c7_c2_amendments · Track: PCP.x · Generated: 2026-09-13T14:25:46Z
 
 ## Now
 - ui2_d1_restore_c7_c2_amendments — UI2 D1 Option A -- apply the pending C7/C2/C4/baseline restore admission amendments (automated_validated)
@@ -22,10 +22,12 @@ Build: ui2_d1_restore_c7_c2_amendments · Track: PCP.x · Generated: 2026-09-13T
 - P1/planned c7_c2_contract_shape_guard — Contract-shape guard for C7 §5.3 and C2 §6 admission batte (target: successor to the test PR #180 carried)
 - P1/planned cp_cphaprob_command_gate — Command gate: cphaprob stat, -a if, tablestat (target: AI_DEVELOPMENT_PROTOCOL)
 - P1/planned cp_failover_command_gate_batch — Command gate: cphaprob stat, cphaprob -a if, cphaprob tabl (target: PO request 2026-09-12; network-device co)
+- P1/planned device_import_enrollment_contract_implementation — Implement device import/enrollment (candidate to devices r (target: docs/design/DEVICE_IMPORT_AND_ENROLLMENT)
 - P1/planned failover_peer_reciprocal_agreement_check — Eighth stop-condition: both members must agree reciprocall (target: PO rule 2026-09-12; _pan_reciprocal_corr)
 - P1/planned failover_readiness_check_contract — Failover readiness contract carrying the PO's four semanti (target: PO_DECISION_RECORD 3)
 - P1/planned failover_recheck_on_request — A failover request must re-run every readiness check at th (target: PO rule 2026-09-12; OP.2 contract)
 - P1/planned failover_vsx_vsls_mentality_contract — VSX/VSLS semantics: CP per-VS state independent of chassis (target: PO statement 2026-09-12; needs vendor-se)
+- P1/planned gov_orch_resume_after_relay_question — Orchestrator: a worker that parks a RELAY_QUESTION and exi (target: scripts/orchestrator.py decide_start --)
 - P1/planned ldap_tls_trust_store_pin_and_format — LDAP TLS trust store cannot be given a PIN or format; a pr (target: docs/design/LDAP_TLS_TRUST_STORE_PIN_GAP)
 - P1/planned pan_active_active_not_excluded_as_failover_unit — PAN active/active is not excluded as a failover unit (CP l (target: docs/design/PAN_ACTIVE_ACTIVE_FAILOVER_U)
 - P1/planned relay_id_reuse_when_record_uncommitted — local_relay _next_id reissues an id whose JSON was never c (target: GOV.ORCH successor or scripts/local_rela)
