@@ -5,6 +5,7 @@ flyway = "10.17.0"
 postgresql = "42.7.4"
 jooq = "3.19.11"
 unboundid = "7.0.1"
+bouncycastle = "1.86"
 testcontainers = "1.20.1"
 springboot = "3.3.4"
 snakeyaml = "2.2"
@@ -19,6 +20,7 @@ flyway-database-postgresql = { module = "org.flywaydb:flyway-database-postgresql
 postgresql = { module = "org.postgresql:postgresql", version.ref = "postgresql" }
 jooq = { module = "org.jooq:jooq", version.ref = "jooq" }
 unboundid-ldapsdk = { module = "com.unboundid:unboundid-ldapsdk", version.ref = "unboundid" }
+bouncycastle-provider = { module = "org.bouncycastle:bcprov-jdk18on", version.ref = "bouncycastle" }
 testcontainers = { module = "org.testcontainers:testcontainers", version.ref = "testcontainers" }
 testcontainers-postgresql = { module = "org.testcontainers:postgresql", version.ref = "testcontainers" }
 testcontainers-junit-jupiter = { module = "org.testcontainers:junit-jupiter", version.ref = "testcontainers" }

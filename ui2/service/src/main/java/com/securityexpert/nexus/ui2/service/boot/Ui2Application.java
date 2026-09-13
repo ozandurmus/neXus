@@ -39,18 +39,29 @@ import org.springframework.context.annotation.FilterType;
 @SpringBootApplication(
         scanBasePackages = "com.securityexpert.nexus.ui2.service",
         exclude = {DataSourceAutoConfiguration.class, JooqAutoConfiguration.class})
-// The `…service.api` controllers are written but their collaborators are not
-// beans yet -- login needs the authentication mechanisms C3 Correction C-2
-// opened up, and device registration needs its service wired. Scanning them in
-// now fails startup on an unsatisfied dependency, so step 1 leaves them out
-// deliberately and step 2 removes this filter as it wires each one. They are
-// excluded, not deleted: a route that 404s because its controller was never
-// registered is honest, while one that 500s on every call is not.
+// The `…service.api` controllers were all written before their collaborators
+// were beans; step 1 excluded the whole package deliberately, one movement at
+// a time removing the filter as it wires each controller's own collaborators.
+//
+// This movement (C3A local authentication) narrows the exclusion to admit
+// exactly four: LoginController and LoginResolveController (the flow C3A §2
+// requires), plus PasswordChangeController and SessionStatusController (this
+// movement's own additions -- §4's change-password path, and the frontend's
+// pre-authorization check that no product screen renders without a session).
+// All four now have real, working collaborators via LocalAuthenticationConfiguration.
+//
+// RoleBindingAdminController, SessionAdminController and DeviceRegistrationController
+// stay excluded: their own collaborators (GateChain/RBAC wiring, device
+// registration service) are untouched by this movement and remain out of
+// scope. They are excluded, not deleted: a route that 404s because its
+// controller was never registered is honest, while one that 500s on every
+// call is not.
 @ComponentScan(
         basePackages = "com.securityexpert.nexus.ui2.service",
         excludeFilters = @ComponentScan.Filter(
                 type = FilterType.REGEX,
-                pattern = "com\\.securityexpert\\.nexus\\.ui2\\.service\\.api\\..*"))
+                pattern = "com\\.securityexpert\\.nexus\\.ui2\\.service\\.api\\."
+                        + "(RoleBindingAdminController|SessionAdminController|DeviceRegistrationController)"))
 public class Ui2Application {
 
     public static void main(String[] args) {

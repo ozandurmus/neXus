@@ -29,6 +29,7 @@ org.apache.tomcat.embed:tomcat-embed-core:10.1.30=testRuntimeClasspath
 org.apache.tomcat.embed:tomcat-embed-el:10.1.30=testRuntimeClasspath
 org.apache.tomcat.embed:tomcat-embed-websocket:10.1.30=testRuntimeClasspath
 org.apiguardian:apiguardian-api:1.1.2=testCompileClasspath
+org.bouncycastle:bcprov-jdk18on:1.86=testRuntimeClasspath
 org.checkerframework:checker-qual:3.42.0=testRuntimeClasspath
 org.flywaydb:flyway-core:10.17.0=testRuntimeClasspath
 org.flywaydb:flyway-database-postgresql:10.17.0=testRuntimeClasspath
