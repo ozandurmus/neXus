@@ -2,15 +2,6 @@
   "schema_version": "1.0",
   "items": [
     {
-      "id": "m14_local_ldap_d7_authorization_architecture",
-      "category": "Architecture / Security",
-      "title": "Local LDAP / Active-Directory group-membership authorization producer for D7, decoupled from the DEPLOY.1A server track",
-      "status": "planned",
-      "priority": "P2",
-      "target": "docs/design/M14_LOCAL_LDAP_AUTHORIZATION_ARCHITECTURE.md -- DRAFT, discussion proposal, awaiting Product Owner review (relay/NXS-LOCAL-0024, 2026-09-08). Not implementation authority; freezing it would still not authorize dispatch.",
-      "note": "see docs/history/backlog/m14_local_ldap_d7_authorization_architecture.md"
-    },
-    {
       "id": "cp_cphaprob_peer_observation_corroboration",
       "category": "Identity / additional validation",
       "title": "Extract peer-member rows from cphaprob stat for additional cluster-identity corroboration",
@@ -29,51 +20,6 @@
       "note": "see docs/history/backlog/pan_ha_serial_identity_hardening.md"
     },
     {
-      "id": "deploy1_contract_freeze",
-      "category": "Deployment / Architecture",
-      "title": "DEPLOY.1 contract freeze and server-arrival execution gate",
-      "status": "planned",
-      "priority": "P0",
-      "target": "DEPLOY.1",
-      "note": "see docs/history/backlog/deploy1_contract_freeze.md"
-    },
-    {
-      "id": "on_hardware_real_env_validation",
-      "category": "Safety / Validation",
-      "title": "On-hardware validation of the 0.6.3 -> 0.6.6B + DEV.2.1 line",
-      "status": "planned",
-      "priority": "P0",
-      "target": "next corporate-laptop session",
-      "note": "see docs/history/backlog/on_hardware_real_env_validation.md"
-    },
-    {
-      "id": "cp_ssh_trust_r2_prod_server",
-      "category": "Security / Validation",
-      "title": "CP SSH strict host-key R2 validation on production server",
-      "status": "planned",
-      "priority": "P1",
-      "target": "DEPLOY.1",
-      "note": "see docs/history/backlog/cp_ssh_trust_r2_prod_server.md"
-    },
-    {
-      "id": "cp_production_ssh_host_key_trust_hardening",
-      "category": "Security / Deployment",
-      "title": "CP SSH host-key trust: mandatory strict enforcement for production/container runtime",
-      "status": "planned",
-      "priority": "P0 -- production-blocking before production deployment / CLASS 2",
-      "target": "production container/pod runtime hardening (post-DEPLOY.1)",
-      "note": "see docs/history/backlog/cp_production_ssh_host_key_trust_hardening.md"
-    },
-    {
-      "id": "deploy1_oidc_viewer",
-      "category": "Security",
-      "title": "DEPLOY.1A — Authenticated Read-Only Viewer Boundary",
-      "status": "planned",
-      "priority": "P0",
-      "target": "DEPLOY.1A",
-      "note": "see docs/history/backlog/deploy1_oidc_viewer.md"
-    },
-    {
       "id": "deploy1_evidence_egress_policy",
       "category": "Security",
       "title": "DEPLOY.1 â€” Evidence Egress & Sharing Policy",
@@ -81,42 +27,6 @@
       "priority": "P0",
       "target": "DEPLOY.1",
       "note": "see docs/history/backlog/deploy1_evidence_egress_policy.md"
-    },
-    {
-      "id": "event_signal_intake",
-      "category": "Architecture / Integration",
-      "title": "External Change Signal Intake & Bounded Evidence Trigger",
-      "status": "in_progress",
-      "priority": "P1",
-      "target": "0.8.x",
-      "note": "see docs/history/backlog/event_signal_intake.md"
-    },
-    {
-      "id": "passive_ti_enrichment",
-      "category": "Architecture / Intelligence",
-      "title": "Passive TI Enrichment for Confirmed Changes",
-      "status": "planned",
-      "priority": "P2",
-      "target": "0.8.x",
-      "note": "see docs/history/backlog/passive_ti_enrichment.md"
-    },
-    {
-      "id": "inventory_exclusions_management_ui",
-      "category": "Inventory UX",
-      "title": "Inventory Exclusions add/restore/reason/audit workflows (write phase, DEPLOY.1A-adjacent)",
-      "status": "in_progress",
-      "priority": "P2",
-      "target": "DEPLOY.1A",
-      "note": "see docs/history/backlog/inventory_exclusions_management_ui.md"
-    },
-    {
-      "id": "overview_eos_release_guidance",
-      "category": "Inventory UX",
-      "title": "Overview: static EOS/EOL date + suggested-next-release guidance by model family (Increment 2)",
-      "status": "planned",
-      "priority": "P2",
-      "target": "0.6.1C / Inventory UX follow-up",
-      "note": "see docs/history/backlog/overview_eos_release_guidance.md"
     },
     {
       "id": "credential_profiles",
@@ -128,69 +38,6 @@
       "note": "see docs/history/backlog/credential_profiles.md"
     },
     {
-      "id": "native_backup",
-      "category": "Recovery",
-      "title": "Vendor-native backup and restore-readiness foundation",
-      "status": "in_progress",
-      "priority": "P1",
-      "target": "RB.0-RB.5 (rebase of original 0.6.0B)",
-      "note": "see docs/history/backlog/native_backup.md"
-    },
-    {
-      "id": "pan_auth_transport_convergence",
-      "category": "Security",
-      "title": "PAN Authentication Transport Convergence -- URGENT: older runtime path sends credentials as URL query parameters",
-      "status": "planned",
-      "priority": "P0",
-      "target": "production hardening / PAN transport cleanup",
-      "note": "see docs/history/backlog/pan_auth_transport_convergence.md"
-    },
-    {
-      "id": "failover_readiness_assessment",
-      "category": "Safety / Architecture",
-      "title": "OP.0 - HA Readiness / Failover-Safety Assessment (read-only)",
-      "status": "in_progress",
-      "priority": "P1",
-      "target": "OP.0",
-      "note": "see docs/history/backlog/failover_readiness_assessment.md"
-    },
-    {
-      "id": "deploy1_report_volume_isolation",
-      "category": "Deployment / Security",
-      "title": "Publish reports through a report-only viewer volume",
-      "status": "planned",
-      "priority": "P0",
-      "target": "DEPLOY.1 server arrival",
-      "note": "see docs/history/backlog/deploy1_report_volume_isolation.md"
-    },
-    {
-      "id": "deploy1_least_privilege_runtime",
-      "category": "Deployment / Security",
-      "title": "Least-privilege worker and viewer runtime",
-      "status": "planned",
-      "priority": "P0",
-      "target": "DEV.4.4 / DEPLOY.1",
-      "note": "see docs/history/backlog/deploy1_least_privilege_runtime.md"
-    },
-    {
-      "id": "deploy1_release_assurance",
-      "category": "Supply Chain / Validation",
-      "title": "Reproducible release assurance",
-      "status": "planned",
-      "priority": "P0",
-      "target": "DEV.4.5 / DEPLOY.1",
-      "note": "see docs/history/backlog/deploy1_release_assurance.md"
-    },
-    {
-      "id": "deploy1_database_migrations_and_roles",
-      "category": "Data Plane / Security",
-      "title": "Database migrations and least-privilege runtime roles",
-      "status": "in_progress",
-      "priority": "P1",
-      "target": "DEV.4.6 / DEPLOY.1",
-      "note": "see docs/history/backlog/deploy1_database_migrations_and_roles.md"
-    },
-    {
       "id": "recovery_offhost_key_custody",
       "category": "Recovery / Security",
       "title": "Off-host recovery artifacts and encryption-key custody",
@@ -200,15 +47,6 @@
       "note": "see docs/history/backlog/recovery_offhost_key_custody.md"
     },
     {
-      "id": "operator_console",
-      "category": "Product Surface / Platform",
-      "title": "CON.x - Operator Console: authenticated local control plane over the existing engine",
-      "status": "in_progress",
-      "priority": "P1",
-      "target": "CON.0 (architecture, frozen 2026-08-31) -> CON.1 (DONE, 2026-09-01) -> CON.2 (AUTOMATED_VALIDATED, 2026-09-01; real-env owed) -> CON.3..CON.5",
-      "note": "see docs/history/backlog/operator_console.md"
-    },
-    {
       "id": "pan_serial_representation_identity_evidence_closure",
       "category": "Identity / architecture",
       "title": "PAN HA runtime peer-serial representation mismatch on one member -- root cause unknown",
@@ -216,42 +54,6 @@
       "priority": "P0",
       "target": "Pre-CLASS-2 (OP.0b/OP.2), independent of OP.0b.0 vendor-semantics confirmation",
       "note": "see docs/history/backlog/pan_serial_representation_identity_evidence_closure.md"
-    },
-    {
-      "id": "cp_preflight_ccp_tablestat_evidence",
-      "category": "Failover readiness / evidence surface",
-      "title": "CP preflight: add `cphaprob tablestat` (CCP unique-IP table) as an extra split-brain / control-link evidence source",
-      "status": "in_progress",
-      "priority": "P1 -- valuable evidence, requires a new command-gate row + readiness-contract mapping before implementation",
-      "target": "OP.0b follow-on (post S8 closure); implement only after PO approval of the gate row and the check mapping",
-      "note": "see docs/history/backlog/cp_preflight_ccp_tablestat_evidence.md"
-    },
-    {
-      "id": "pcp_collector_target_selection_seams",
-      "category": "Architecture / Collection",
-      "title": "Collector target-selection seams for registry-keyed typed jobs (CP inventory is plane-wide today)",
-      "status": "in_progress",
-      "priority": "P1",
-      "target": "PCP.6",
-      "note": "see docs/history/backlog/pcp_collector_target_selection_seams.md"
-    },
-    {
-      "id": "pcp_storage_engine_decision",
-      "category": "Storage / Architecture",
-      "title": "Storage-engine decision for the Device Registry and typed job plane (criteria recorded, engine deferred)",
-      "status": "planned",
-      "priority": "P1",
-      "target": "PCP.5 contract freeze / DEV.4.6",
-      "note": "see docs/history/backlog/pcp_storage_engine_decision.md"
-    },
-    {
-      "id": "policy_rule_hygiene_and_path_placement_brief",
-      "category": "Product intent / umbrella",
-      "title": "Policy rule hygiene and path-based placement (original feature brief, umbrella)",
-      "status": "planned",
-      "priority": "P2",
-      "target": "unscheduled",
-      "note": "see docs/history/backlog/policy_rule_hygiene_and_path_placement_brief.md"
     },
     {
       "id": "pytest_xdist_privacy_scan_scratch_file_race",
@@ -407,15 +209,6 @@
       "note": ""
     },
     {
-      "id": "auth_local_mechanism_contract",
-      "category": "security",
-      "title": "Local authentication: storage, lockout, role binding for a directory-less identity, bootstrap admin",
-      "status": "planned",
-      "priority": "P1",
-      "target": "C3 Correction C-2; successor contract before any local login path",
-      "note": ""
-    },
-    {
       "id": "auth_radius_mechanism",
       "category": "security",
       "title": "RADIUS authentication mechanism",
@@ -431,24 +224,6 @@
       "status": "planned",
       "priority": "P2",
       "target": "after Phase 1 LDAP+local",
-      "note": ""
-    },
-    {
-      "id": "ui2_composition_root_bootable_shell",
-      "category": "platform",
-      "title": "Bootable service: Spring entry point, DataSource, Flyway at startup, empty UI shell with menus",
-      "status": "planned",
-      "priority": "P1",
-      "target": "Phase 1 step 1; no device contact",
-      "note": ""
-    },
-    {
-      "id": "ui2_frontend_screens_shell",
-      "category": "ui",
-      "title": "Frontend screens: login, menu, device list, device add; frontend is 2 stub files today",
-      "status": "planned",
-      "priority": "P1",
-      "target": "Phase 1 step 2-3",
       "note": ""
     },
     {
@@ -488,33 +263,6 @@
       "note": ""
     },
     {
-      "id": "device_session_one_per_device",
-      "category": "evidence",
-      "title": "One SSH session per device reused for every command; probe opens a channel per command",
-      "status": "planned",
-      "priority": "P1",
-      "target": "PO rule 2026-09-12; command gate says session, code preserves connection",
-      "note": ""
-    },
-    {
-      "id": "discovery_import_selection_flow",
-      "category": "feature",
-      "title": "Discovery: Panorama/MDS enumeration then operator multi-select import of found devices",
-      "status": "planned",
-      "priority": "P2",
-      "target": "behind the standing collection gate",
-      "note": ""
-    },
-    {
-      "id": "device_manual_add_transport_choice",
-      "category": "feature",
-      "title": "Manual device add: IP + vendor + transport method (SSH/API/SNMP) selection",
-      "status": "planned",
-      "priority": "P2",
-      "target": "Phase 1 step 3; transport use is gated",
-      "note": ""
-    },
-    {
       "id": "failover_readiness_check_contract",
       "category": "failover",
       "title": "Failover readiness contract carrying the PO's four semantics",
@@ -542,30 +290,12 @@
       "note": ""
     },
     {
-      "id": "ui2_local_auth_successor_contract",
-      "category": "identity",
-      "title": "Local-authentication successor contract",
-      "status": "planned",
-      "priority": "P1",
-      "target": "UI2_0_C3 C-2",
-      "note": ""
-    },
-    {
       "id": "ui2_m3_design_transfer_pass",
       "category": "ui2",
       "title": "Reconcile each menu against the M3 canvas frames",
       "status": "in_progress",
       "priority": "P2",
       "target": "ui2/frontend preview",
-      "note": ""
-    },
-    {
-      "id": "po_o_role_dispatch_boundary",
-      "category": "governance",
-      "title": "Restore the PO+O dispatch loop, or decide direct authoring",
-      "status": "planned",
-      "priority": "P1",
-      "target": "PO_DECISION_RECORD 6.4",
       "note": ""
     },
     {
@@ -602,6 +332,69 @@
       "status": "planned",
       "priority": "P1",
       "target": "GOV.ORCH successor or scripts/local_relay.py",
+      "note": ""
+    },
+    {
+      "id": "ui2_pan_transport_no_credentials_in_url",
+      "category": "security",
+      "title": "UI2 Palo Alto transport: no credential ever appears in a URL, query string, log line or exception (successor to pan_auth_transport_convergence)",
+      "status": "planned",
+      "priority": "P1",
+      "target": "PAN_DISCOVERY_CONTRACT.md T-1/T-5; the PAN discovery transport movement carries this as an invariant with a test",
+      "note": ""
+    },
+    {
+      "id": "ui2_ssh_strict_host_key_trust_in_production",
+      "category": "Security / Deployment",
+      "title": "UI2 SSH host-key trust: strict enforcement mandatory in the production container runtime, validated once on the R2 production server",
+      "status": "planned",
+      "priority": "P0 -- production-blocking before production deployment",
+      "target": "ui2 worker HostKeyVerifier / TrustRuleResolver; successor to cp_production_ssh_host_key_trust_hardening + cp_ssh_trust_r2_prod_server",
+      "note": ""
+    },
+    {
+      "id": "ui2_device_session_one_per_device",
+      "category": "evidence",
+      "title": "UI2 transport rule: one SSH session per device per run, a channel per command; a probe never opens a second session",
+      "status": "planned",
+      "priority": "P1",
+      "target": "PO rule 2026-09-12; CP discovery already obeys it (CP_AND_VSX_DISCOVERY_CONTRACT.md T-1); collection transports must too",
+      "note": ""
+    },
+    {
+      "id": "ui2_database_roles_and_data_ownership",
+      "category": "Data Plane / Security",
+      "title": "UI2 database roles: least-privilege runtime roles per service, decided together with 13D DATA-OWNERSHIP (one schema vs. one per service)",
+      "status": "planned",
+      "priority": "P1",
+      "target": "PO_DECISION_RECORD_2026_09_13D section 3 DATA-OWNERSHIP; UI2_0_C1 (Flyway sole authority, audit trigger)",
+      "note": ""
+    },
+    {
+      "id": "ui2_auth_placement_second_authenticated_surface",
+      "category": "identity",
+      "title": "UI2 AUTH-PLACEMENT: where session and RBAC enforcement live once a second deployable service exists (per-service, or one gateway in front)",
+      "status": "planned",
+      "priority": "P1",
+      "target": "PO_DECISION_RECORD_2026_09_13D section 3; blocks any second authenticated surface, not the discovery transport",
+      "note": ""
+    },
+    {
+      "id": "ui2_reproducible_in_cluster_image_build",
+      "category": "Supply Chain / Validation",
+      "title": "UI2 reproducible in-cluster image build and release assurance, per service (successor to deploy1_release_assurance)",
+      "status": "planned",
+      "priority": "P1",
+      "target": "UI2_0_B1_01C in-cluster OCI build; 13D BUILD-AND-RELEASE",
+      "note": ""
+    },
+    {
+      "id": "pan_discovery_java_implementation",
+      "category": "ui2",
+      "title": "PAN discovery in Java: Panorama candidate enumeration under the frozen discovery contract (domain core, then transport)",
+      "status": "in_progress",
+      "priority": "P0",
+      "target": "PAN_DISCOVERY_CONTRACT.md; gate lifted 2026-09-13 for two methods; domain core in flight as NXS-LOCAL-0146",
       "note": ""
     }
   ]
