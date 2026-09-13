@@ -63,6 +63,22 @@ class MechanismRegistryTest {
                 String changedByActorFingerprint) {
             throw new UnsupportedOperationException();
         }
+
+        @Override
+        public java.util.List<LocalCredentialRecord> findAll() {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public void adminSetPassword(String localIdentityId, Argon2PasswordHasher.Verifier newVerifier,
+                String settingAdminActorFingerprint) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public void setEnabled(String localIdentityId, boolean enabled, String actingAdminActorFingerprint) {
+            throw new UnsupportedOperationException();
+        }
     }
 
     @Test

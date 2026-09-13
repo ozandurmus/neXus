@@ -89,7 +89,8 @@ class FirstBootIdentitySeedingRunnerTest {
             idByName.put(localIdentityName, localIdentityId);
             byId.put(localIdentityId, new LocalCredentialRecord(localIdentityId, localIdentityName, verifier.verifier(),
                     verifier.salt(), verifier.algorithmId(), verifier.parameters().memoryCostKib(),
-                    verifier.parameters().timeCost(), verifier.parameters().parallelism(), 0, Optional.empty(), NOW, NOW));
+                    verifier.parameters().timeCost(), verifier.parameters().parallelism(), 0, Optional.empty(), NOW, NOW,
+                    true, "system:bootstrap", NOW, false));
             return localIdentityId;
         }
 
@@ -112,7 +113,24 @@ class FirstBootIdentitySeedingRunnerTest {
                     newVerifier.verifier(), newVerifier.salt(), newVerifier.algorithmId(),
                     newVerifier.parameters().memoryCostKib(), newVerifier.parameters().timeCost(),
                     newVerifier.parameters().parallelism(), r.failedAttemptCount(), r.lockedUntil(),
-                    r.createdAt(), Instant.now()));
+                    r.createdAt(), Instant.now(), r.enabled(), r.createdByActorFingerprint(), r.passwordSetAt(),
+                    r.mustChangePassword()));
+        }
+
+        @Override
+        public List<LocalCredentialRecord> findAll() {
+            return List.copyOf(byId.values());
+        }
+
+        @Override
+        public void adminSetPassword(String localIdentityId, Argon2PasswordHasher.Verifier newVerifier,
+                String settingAdminActorFingerprint) {
+            throw new UnsupportedOperationException("not exercised by this test");
+        }
+
+        @Override
+        public void setEnabled(String localIdentityId, boolean enabled, String actingAdminActorFingerprint) {
+            throw new UnsupportedOperationException("not exercised by this test");
         }
     }
 

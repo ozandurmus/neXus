@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -59,12 +60,21 @@ class LocalMechanismTest {
             idByName.put(name, id);
             byId.put(id, new LocalCredentialRecord(id, name, verifier.verifier(), verifier.salt(), verifier.algorithmId(),
                     verifier.parameters().memoryCostKib(), verifier.parameters().timeCost(), verifier.parameters().parallelism(),
-                    0, Optional.empty(), NOW, NOW));
+                    0, Optional.empty(), NOW, NOW, true, "system:bootstrap", NOW, false));
             return id;
         }
 
         LocalCredentialRecord row(String id) {
             return byId.get(id);
+        }
+
+        /** 13G LIA-3.6 test helper. */
+        void disable(String id) {
+            LocalCredentialRecord r = byId.get(id);
+            byId.put(id, new LocalCredentialRecord(r.localIdentityId(), r.localIdentityName(), r.verifier(), r.salt(),
+                    r.algorithmId(), r.memoryCostKib(), r.timeCost(), r.parallelism(), r.failedAttemptCount(),
+                    r.lockedUntil(), r.createdAt(), r.updatedAt(), false, r.createdByActorFingerprint(),
+                    r.passwordSetAt(), r.mustChangePassword()));
         }
 
         @Override
@@ -85,6 +95,11 @@ class LocalMechanismTest {
         }
 
         @Override
+        public List<LocalCredentialRecord> findAll() {
+            return List.copyOf(byId.values());
+        }
+
+        @Override
         public boolean anyExist() {
             return !byId.isEmpty();
         }
@@ -97,7 +112,8 @@ class LocalMechanismTest {
             Optional<Instant> lockedUntil = next >= lockoutThreshold ? Optional.of(now.plus(lockoutDuration)) : r.lockedUntil();
             byId.put(localIdentityId, new LocalCredentialRecord(r.localIdentityId(), r.localIdentityName(), r.verifier(),
                     r.salt(), r.algorithmId(), r.memoryCostKib(), r.timeCost(), r.parallelism(), next, lockedUntil,
-                    r.createdAt(), now));
+                    r.createdAt(), now, r.enabled(), r.createdByActorFingerprint(), r.passwordSetAt(),
+                    r.mustChangePassword()));
         }
 
         @Override
@@ -105,13 +121,25 @@ class LocalMechanismTest {
             LocalCredentialRecord r = byId.get(localIdentityId);
             byId.put(localIdentityId, new LocalCredentialRecord(r.localIdentityId(), r.localIdentityName(), r.verifier(),
                     r.salt(), r.algorithmId(), r.memoryCostKib(), r.timeCost(), r.parallelism(), 0, Optional.empty(),
-                    r.createdAt(), now));
+                    r.createdAt(), now, r.enabled(), r.createdByActorFingerprint(), r.passwordSetAt(),
+                    r.mustChangePassword()));
         }
 
         @Override
         public void changePassword(String localIdentityId, Argon2PasswordHasher.Verifier newVerifier,
                 String changedByActorFingerprint) {
             throw new UnsupportedOperationException("not exercised by this test");
+        }
+
+        @Override
+        public void adminSetPassword(String localIdentityId, Argon2PasswordHasher.Verifier newVerifier,
+                String settingAdminActorFingerprint) {
+            throw new UnsupportedOperationException("not exercised by this test");
+        }
+
+        @Override
+        public void setEnabled(String localIdentityId, boolean enabled, String actingAdminActorFingerprint) {
+            throw new UnsupportedOperationException("use disable(...) in this test");
         }
     }
 
@@ -244,6 +272,19 @@ class LocalMechanismTest {
         assertTrue(lockedIdentityNanos > knownWrongPasswordNanos / 4,
                 "a locked identity's skipped-verification-result path must not resolve dramatically faster "
                         + "than a performed verification");
+    }
+
+    /** 13G LIA-3.6: a disabled identity cannot authenticate, even with the correct password. */
+    @Test
+    void aDisabledIdentityCannotAuthenticateEvenWithTheCorrectPassword() {
+        InMemoryLocalCredentialsRepository repo = new InMemoryLocalCredentialsRepository();
+        repo.seed("nexusadmin");
+        repo.disable("id-nexusadmin");
+        LocalMechanism mechanism = new LocalMechanism(repo, new FixedClock(NOW));
+
+        AttemptOutcome outcome = mechanism.attempt("nexusadmin", REAL_PASSWORD);
+
+        assertTrue(outcome instanceof AttemptOutcome.Refused, "a disabled identity must not be able to authenticate");
     }
 
     private static long elapsedNanos(Runnable work) {

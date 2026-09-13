@@ -476,13 +476,18 @@ class IdentitySessionsRbacDatabasePlaceholderTest {
             ActorAuthzStateRepository actorAuthzStateRepository = new JooqActorAuthzStateRepository(transactionBoundary);
             RoleBindingRepository roleBindingRepository = new JooqRoleBindingRepository(transactionBoundary);
             GroupReferenceCipher cipher = testCipher();
+            com.securityexpert.nexus.ui2.persistence.identity.LocalCredentialsRepository localCredentialsRepository =
+                    new com.securityexpert.nexus.ui2.persistence.identity.JooqLocalCredentialsRepository(transactionBoundary);
+            com.securityexpert.nexus.ui2.persistence.identity.SecurityAdminLockoutGuard securityAdminLockoutGuard =
+                    new com.securityexpert.nexus.ui2.persistence.identity.SecurityAdminLockoutGuard(
+                            roleBindingRepository, localCredentialsRepository, cipher);
 
             Instant now = Instant.now();
             actorAuthzStateRepository.upsert(outcome.actorFingerprint(), outcome.groupReferences(), now,
                     now.plus(15, ChronoUnit.MINUTES));
 
-            RoleBindingAdminService service =
-                    new RoleBindingAdminService(roleBindingRepository, actorAuthzStateRepository, cipher);
+            RoleBindingAdminService service = new RoleBindingAdminService(roleBindingRepository,
+                    actorAuthzStateRepository, cipher, securityAdminLockoutGuard);
             RoleBindingAdminService.Outcome result = service.create(outcome.actorFingerprint(),
                     RoleToken.SECURITY_ADMIN.token(), "cn=group-admin-already-holds,ou=groups,dc=example,dc=com",
                     "test-key", now);
@@ -582,6 +587,22 @@ class IdentitySessionsRbacDatabasePlaceholderTest {
         @Override
         public void changePassword(String localIdentityId, Argon2PasswordHasher.Verifier newVerifier,
                 String changedByActorFingerprint) {
+            throw new AssertionError("not exercised by this test");
+        }
+
+        @Override
+        public java.util.List<LocalCredentialRecord> findAll() {
+            throw new AssertionError("not exercised by this test");
+        }
+
+        @Override
+        public void adminSetPassword(String localIdentityId, Argon2PasswordHasher.Verifier newVerifier,
+                String settingAdminActorFingerprint) {
+            throw new AssertionError("not exercised by this test");
+        }
+
+        @Override
+        public void setEnabled(String localIdentityId, boolean enabled, String actingAdminActorFingerprint) {
             throw new AssertionError("not exercised by this test");
         }
     }

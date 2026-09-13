@@ -38,7 +38,8 @@ class PasswordChangeServiceTest {
             idByName.put(name, id);
             byId.put(id, new LocalCredentialRecord(id, name, verifier.verifier(), verifier.salt(), verifier.algorithmId(),
                     verifier.parameters().memoryCostKib(), verifier.parameters().timeCost(),
-                    verifier.parameters().parallelism(), 0, Optional.empty(), NOW, NOW));
+                    verifier.parameters().parallelism(), 0, Optional.empty(), NOW, NOW, true, "system:bootstrap", NOW,
+                    false));
             return id;
         }
 
@@ -83,7 +84,24 @@ class PasswordChangeServiceTest {
             byId.put(localIdentityId, new LocalCredentialRecord(r.localIdentityId(), r.localIdentityName(),
                     newVerifier.verifier(), newVerifier.salt(), newVerifier.algorithmId(),
                     newVerifier.parameters().memoryCostKib(), newVerifier.parameters().timeCost(),
-                    newVerifier.parameters().parallelism(), r.failedAttemptCount(), r.lockedUntil(), r.createdAt(), NOW));
+                    newVerifier.parameters().parallelism(), r.failedAttemptCount(), r.lockedUntil(), r.createdAt(), NOW,
+                    r.enabled(), r.createdByActorFingerprint(), NOW, r.mustChangePassword()));
+        }
+
+        @Override
+        public java.util.List<LocalCredentialRecord> findAll() {
+            throw new UnsupportedOperationException("not exercised by this test");
+        }
+
+        @Override
+        public void adminSetPassword(String localIdentityId, Argon2PasswordHasher.Verifier newVerifier,
+                String settingAdminActorFingerprint) {
+            throw new UnsupportedOperationException("not exercised by this test");
+        }
+
+        @Override
+        public void setEnabled(String localIdentityId, boolean enabled, String actingAdminActorFingerprint) {
+            throw new UnsupportedOperationException("not exercised by this test");
         }
     }
 
