@@ -224,3 +224,31 @@ supplies the evidence some of them should be checked against.
 - `DISCOVERY_VS_COLLECTION_PYTHON_KNOW_HOW_AUDIT_2026_09_12.md` — the existing
   collector's steps, and the defects measured in it.
 - `docs/AI_DEVELOPMENT_PROTOCOL.md` — the network-device command gate.
+
+## 10. Addendum — probes run by the Product Owner later on 2026-09-13
+
+Five read-only probes, run on the management server in a domain context, to
+close §7 items 1–3 before the transport is aligned. Counts and shapes only.
+
+| Probe | Result | Consequence |
+| --- | --- | --- |
+| `attr` query requesting a `__uid__` attribute | Returned the placeholder token in the value position on every row | The stable identifier is **not** reachable through the `attr` result type, confirming §4 item 5 |
+| Placeholder token for an absent attribute | The literal token is `MISSING_ATTR` (12 characters); observed for a cluster object's management address (4 attributes requested, 4 columns returned) | An absent attribute keeps the column count stable |
+| An attribute that exists but is **empty** (own address of a virtual-system cluster member) | 4 attributes requested, **3 columns returned** | An empty value drops its column: positional parsing of `attr` output is unsafe, as §5's last row warned |
+| `object` result type with a **type filter** (no name) | One call dumps every object of that type; each object starts with `(` followed by its name at column 0, then nested `:key (value)` / `:key (` … `)` blocks; the stable identifier is `:chkpf_uid` inside the `:AdminInfo` block; `:name`, `:type`, `:ipaddr`, `:mgmt_ip`, `:connection_state`, `:cp_products_installed`, `:vsx_netobj`, `:vs_netobj`, `:appliance_type`, `:hardware_platform`, `:svn_version_name`, `:cpver` appear as top-level keys of a gateway object | **The transport reads the `object` result type, one call per domain per object type.** It carries the stable identifier and names every field, so no column can shift. T-2's "one query per domain per object type" holds unchanged |
+| Field presence on the cluster-member type | `:cluster_object`, `:vsx_cluster_member`, `:vs_cluster_member`, `:mgmt_ip`, `:ipaddr`, `:chkpf_uid`, `:name` all occur; `:mgmt_ip` and `:vs_cluster_member` occur on a minority of members, `:vsx_cluster_member` on fewer still | Presence is per kind, as contract §6.2's `?` cells say; the parser treats a missing key as absent, never as empty |
+
+Two facts carried from the same probes: the domain context command (§4 item 2)
+must precede the query **on the same shell command line** — an exec channel
+per command loses it; and the `object` dump for one type on one domain is
+large (hundreds of lines per object), so it is parsed as a stream and dropped
+(contract T-7), never written to a file.
+
+**Field-binding consequence, for the implementing movement.** The three
+contract flags bind to different attributes per object type: `VIRT_HOST` ←
+`vsx_netobj` (gateway) / `vsx_cluster_netobj` (cluster) / `vsx_cluster_member`
+(member); `VIRT_SYSTEM` ← `vs_netobj` / `vs_cluster_netobj` / `vs_cluster_member`;
+`PRODUCT` ← `cp_products_installed`. Whether a per-object-type binding is one
+field per role in FB-2's sense is for the contract's freeze owner; the record
+here is what was measured. Every entry stays `UNVERIFIED` until the first live
+run of the aligned transport reports its counts.
