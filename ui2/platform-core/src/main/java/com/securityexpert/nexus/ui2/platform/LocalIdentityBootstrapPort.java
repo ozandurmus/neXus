@@ -1,16 +1,21 @@
 package com.securityexpert.nexus.ui2.platform;
 
 /**
- * The bootstrap-account creation port (C3A contract §6, §11 U-2). Two
- * callers reach it, both deployment-controlled or startup-controlled --
- * never the browser: the {@code cli} module's {@code bootstrap-local-identity}
- * action, for an operator-chosen identity/password pair; and, since
- * {@code UI2_0_C3B_BOOTSTRAP_IDENTITIES_AND_ROLES.md} (BOOT-1), the running
- * service's own first-boot seeding routine, which uses it only once, only
- * when {@code local_credentials} is empty, and only for the two documented
- * bootstrap identities. Role binding stays CLI-only and untouched by BOOT-1
- * (BOOT-5); see {@link SecurityAdminBootstrapPort}, whose existing pattern
- * this port already mirrored before BOOT-1 existed.
+ * The bootstrap-account creation port (C3A contract §6, §11 U-2), reached
+ * only from the {@code cli} module's {@code bootstrap-local-identity}
+ * action, for an operator-chosen identity/password pair, deployment
+ * -controlled and never the browser (BOOT-5b: this CLI path is unaffected
+ * by first-boot seeding and stays the way an identity is created or
+ * changed outside first boot).
+ *
+ * <p>The running service's own first-boot seeding routine
+ * ({@code UI2_0_C3B_BOOTSTRAP_IDENTITIES_AND_ROLES.md}, BOOT-1..BOOT-5a)
+ * does <b>not</b> reach this port: it needs its identity row and role
+ * -binding row(s) to commit in one transaction (BOOT-5a), which this port's
+ * one-identity-at-a-time shape cannot express, so it goes through
+ * {@code persistence.identity.FirstBootIdentityRoleBindingSeeder} instead.
+ * See {@link SecurityAdminBootstrapPort}, whose existing pattern this port
+ * already mirrored before BOOT-1 existed.</p>
  */
 public interface LocalIdentityBootstrapPort {
 
