@@ -28,6 +28,8 @@ and in what order.
 | Contract status a worker may implement | FROZEN only. A DRAFT contract is a design input, never a dispatch authority |
 | Packet schema | `docs/design/GOV_SESSION_TRANSFER_PROTOCOL.md` protocol 2, as validated by `scripts/gov_session_transfer.py`; whatever the validator rejects is wrong, whatever a DRAFT proposes is not yet real |
 | Merge | Only after `verify.passed` and PO review; never on a worker's own claim |
+| Vendor measurement | A contract that names a vendor command, route or field may only be implemented once a **measurement record** exists next to it, committed, saying which tool was used, which commands were run and which field names came back (counts and shapes, never a value). No worker chooses a vendor command from product knowledge |
+| Worker's PR | The packet's `merge_gate` says in words that the worker opens the PR and does not merge. A worker that is not told this does not open one |
 
 ## 3. The loop, as commands
 
@@ -86,5 +88,33 @@ Do not use `start` + polling. Do not "check back later".
 3. Base is `origin/main` HEAD as of `git fetch` just now?
 4. Does the validator accept the packet unchanged?
 5. Is exactly one behavior in scope, with named files and named tests?
+6. If the movement touches a vendor: does a committed measurement record
+   cover every command and field it will bind, and does the packet point the
+   worker at it?
+7. Does `report.baseline.authority` **start** with the `docs/design/<file>.md`
+   path of a FROZEN document? The orchestrator's preflight rejects prose.
 
 A "no" to any of these is a stop, not a workaround.
+
+## 6. Mechanics that have bitten this loop
+
+- A bare `SESSION_START` needs `protocol_version: 2`, `message_type`,
+  `refs`, `movement`, `report`. `gov_session_transfer.py validate` wants the
+  sentinel file from `render --out`; `local_relay.py create --start` takes
+  the bare JSON.
+- Two `run` launches within seconds race on `.git/config.lock`. Leave ~30
+  seconds between dispatches, and delete the half-created branch before
+  retrying.
+- Assign migration numbers yourself when two movements run in parallel; two
+  workers both reaching for the next free `V` is a guaranteed conflict, as
+  is two workers both adding a backlog row.
+- A worker that parks a `RELAY_QUESTION` and exits is recorded `failed`
+  (`relay_not_closed`) and `run` refuses to resume it (`decide_start` has no
+  resume path for it, backlog `gov_orch_resume_after_relay_question`).
+  Answer on the relay, then apply the decision yourself.
+- A worker stopped at its budget ceiling has usually committed everything:
+  run `orchestrator.py verify --movement <id>`, review, and open the PR from
+  the PO side rather than re-running it.
+- Per-turn cost is not flat: contract and domain-core movements run about
+  $0.05 a turn, transport and multi-layer implementation movements about
+  $0.08. Budget the class, not the average.
