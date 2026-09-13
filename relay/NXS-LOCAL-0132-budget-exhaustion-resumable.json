@@ -1,0 +1,245 @@
+{
+  "created_at": "2026-09-13T02:02:43Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1 decide_start returns resume for a failed record whose failure reasons are exactly {budget_exhausted}.",
+          "AC-2 decide_start returns dispatch, not resume, for a failed record whose failure reasons contain budget_exhausted together with at least one other reason. A test asserts this explicitly.",
+          "AC-3 decide_start returns dispatch for every other terminal record, unchanged.",
+          "AC-4 A budget resume with a ceiling less than or equal to the stopping ceiling is refused, and the refusal reason names both numbers.",
+          "AC-5 A budget resume reuses worktree_path, branch and session id, creates no new worktree and consumes no new worker slot.",
+          "AC-6 retry_count increments on a budget resume, and a record at retry_limit is not resumable by this path.",
+          "AC-7 The run report of a resumed run identifies it as a budget resume and records the ceiling it was given.",
+          "AC-8 python3 -m pytest tests/test_orchestrator.py -q passes with at least three new tests, covering AC-1, AC-2 and AC-4.",
+          "AC-9 The repository privacy gate reports zero findings.",
+          "AC-10 The diff touches scripts/orchestrator.py and tests/test_orchestrator.py and nothing else."
+        ],
+        "baseline": {
+          "authority": "docs/design/GOV_ORCH_10_BUDGET_EXHAUSTION_IS_RESUMABLE.md -- FROZEN, PRODUCT OWNER APPROVED 2026-09-13. Its section 2 is the specification (R-1 to R-6) and its section 4 is the acceptance. It is short; read all of it before writing anything.",
+          "current_behaviour": "scripts/orchestrator.py: decide_start reaches its resume branch only when the existing record's phase is not in TERMINAL_PHASES, and TERMINAL_PHASES contains PHASE_FAILED. Budget exhaustion is already detected and recorded -- the run report carries a budget_exhausted object with max_budget_usd and cost_reached_usd, and failure_reasons carries the string budget_exhausted alongside any other reasons. Those recorded values are the input this movement needs; it does not need to detect anything new.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "predecessor": "docs/design/GOV_ORCH_1_SYNCHRONOUS_RUN_AND_ORCHESTRATOR_VERIFY.md sections 2.1 and 2.3 own decide_start and the retry accounting. GOV.ORCH.10 amends them by succession and neither may be edited.",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "test_baseline": "python3 -m pytest tests/test_orchestrator.py -q gives 123 passed, measured on main at the merge of PR #215."
+        },
+        "context_not_loaded": [
+          "ui2/ sources",
+          "docs/history/**",
+          "vendor contracts",
+          "utils/ and application/ modules"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/gov-orch-10-budget-resume-impl"
+        },
+        "invariants": [
+          "A budget ceiling stays a hard stop that the worker cannot raise for itself.",
+          "Only budget_exhausted, and only when it is the sole failure reason, becomes resumable. Every other terminal record behaves exactly as before.",
+          "A resume reuses the existing worktree, branch and engineer session; it never creates a second worktree and never takes an extra worker slot.",
+          "retry_count and retry_limit semantics are unchanged.",
+          "decide_start stays a pure function.",
+          "No FROZEN contract is edited."
+        ],
+        "merge_gate": "Product Owner assistant review of the diff plus orchestrator verify.passed. The worker does not merge to main.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Make a budget-exhausted movement resumable, exactly as docs/design/GOV_ORCH_10_BUDGET_EXHAUSTION_IS_RESUMABLE.md (FROZEN 2026-09-13) decides it: decide_start returns resume for a record that failed for that reason and no other, a resume must be given a higher ceiling than the one that stopped it, and everything else about budgets, retries and terminal phases stays exactly as it is.",
+        "output_contract": [
+          "A resume path that a Product Owner assistant can use by raising the ceiling and re-running, with no new worktree and no lost session context.",
+          "A mixed-reason test that proves the amendment did not make every failure resumable.",
+          "SESSION_CLOSE naming which of R-1 to R-6 has code, which acceptance item each new test covers, and the tests/test_orchestrator.py count before and after."
+        ],
+        "recommended_reasoning": {
+          "reason": "Small diff, but it changes a safety classification in the dispatch loop: the difference between 'ran out of money' and 'produced something wrong' is the entire content of the change, and getting it loose would let a failed movement restart as if it were merely interrupted. High effort for the care, not for the volume.",
+          "tier": "Sonnet 5, high effort"
+        },
+        "requirements": [
+          "English, per AGENTS.md engineering-output language law.",
+          "Read GOV.ORCH.10 fully first. Every rule you implement must be traceable to one of R-1 to R-6, and each new test names the acceptance item it covers.",
+          "Do not introduce a second notion of 'budget failure'. The recorded failure_reasons list is the single signal; if the record does not persist enough to decide R-2, persist it rather than re-deriving it from a log.",
+          "Commit early and often on the lane: the decide_start change, the ceiling refusal, the report field, and the tests as separate commits.",
+          "Do not merge to main. The Product Owner assistant reviews the diff and merges.",
+          "Do not run the full pytest suite. It creates untracked data/ and logs/ directories that the repository privacy gate then flags, which fails a movement whose diff is clean. tests/test_orchestrator.py is the suite that matters here.",
+          "If GOV.ORCH.10 does not answer something, raise one RELAY_QUESTION rather than deciding it."
+        ],
+        "risks": [
+          "Making every failed record resumable, which would let a movement that failed verification be restarted as though it had merely run out of money. R-2 and AC-2 exist for this.",
+          "Writing a second resume path instead of reusing the one that already reuses worktree, branch and session.",
+          "Deciding R-2 from a log tail rather than from the persisted failure reasons, which would make the decision non-deterministic.",
+          "Allowing a resume into the same or a lower ceiling, which burns the resumed session's start-up cost and stops in the same place.",
+          "Quietly changing retry_limit or TERMINAL_PHASES for unrelated phases.",
+          "Touching the state records of the already-merged movements to demonstrate the feature."
+        ],
+        "scope": {
+          "in": [
+            "In scripts/orchestrator.py, allow decide_start to return resume for an existing record whose phase is failed when its recorded failure reasons contain budget_exhausted AND contain nothing else (GOV.ORCH.10 R-1, R-2). Every other terminal record, and every budget-exhausted record that carries any additional failure reason, keeps returning dispatch exactly as today.",
+            "Refuse a resume under R-1 when the new --max-budget-usd is less than or equal to the ceiling that stopped the movement, and state both numbers in the refusal reason (R-3). The stopping ceiling is available from the persisted record or its report; read it rather than asking the caller to restate it.",
+            "A resume under R-1 must go through the SAME resume path that already exists: reuse the recorded worktree_path, branch and engineer session id, create no new worktree, and consume no new worker slot (R-1 and acceptance item 4). Do not write a second resume implementation.",
+            "retry_count increments on a budget resume exactly as it already does on every resume, and a record at retry_limit is not resumable by this path either (R-4, acceptance item 5).",
+            "The run report of a resumed run records that it was a budget resume and the ceiling it was given (acceptance item 6). Add the minimum field that carries this; do not restructure the report.",
+            "Tests in tests/test_orchestrator.py for acceptance items 1, 2 and 3, with item 2 covering at least one explicit MIXED-reason case -- a record whose failure reasons contain budget_exhausted together with another reason, asserted to return dispatch and NOT resume. That mixed case is the whole safety of the amendment and a test that omits it proves nothing.",
+            "Keep decide_start a pure function of its arguments, as its own docstring says it is. If it needs the failure reasons, they arrive through the existing record argument, not through a new read inside it."
+          ],
+          "out": [
+            "Changing DEFAULT_MAX_BUDGET_USD, or its value anywhere.",
+            "Letting a worker raise or influence its own ceiling by any path.",
+            "Automatic or implicit resume. A resume happens only because a caller explicitly ran the command with a higher ceiling.",
+            "Making any other failure reason resumable. budget_exhausted alone, and only alone.",
+            "Changing retry_limit, TERMINAL_PHASES membership for any other purpose, reconcile_phase's meaning, verification, the relay protocol, or the report schema beyond acceptance item 6.",
+            "Editing docs/design/GOV_ORCH_1_*.md or any other FROZEN contract.",
+            "Any change under ui2/, utils/, application/ or project/.",
+            "Retro-fitting this to the already-closed movements NXS-LOCAL-0130 or NXS-LOCAL-0131. Their work is merged; do not touch their state records."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_orchestrator.py",
+              "-q"
+            ],
+            "name": "orchestrator_tests"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_gov_po_role.py",
+              "-q"
+            ],
+            "name": "gov_po_role"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_nexus_engineer_tool_gate.py",
+              "-q"
+            ],
+            "name": "nexus_engineer_tool_gate"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_architecture_convergence.py",
+              "-q"
+            ],
+            "name": "architecture_convergence"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_contract_authority_status.py",
+              "-q"
+            ],
+            "name": "contract_authority_status"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-13T02:02:43Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "report": {
+        "changed": [
+          "scripts/orchestrator.py: decide_start signature (+max_budget_usd, +retry_limit, both optional with backward-compatible defaults), new _is_resumable_budget_failure helper, _do_start's resume branch (+is_budget_resume, resets failure_reasons/budget_exhausted to None on resume, payload +budget_resume), _cmd_run (persists failure_reasons/budget_exhausted on the record, builds and passes budget_resume into the report), _build_run_report (+budget_resume param/field).",
+          "tests/test_orchestrator.py: 12 new tests -- 6 pure decide_start tests, 2 CLI-level start tests (resume reuse + retry_count + payload; ceiling refusal), 2 _build_run_report tests, plus 2 parametrizations counted individually."
+        ],
+        "completed": [
+          "GOV.ORCH.10 R-1/R-2: decide_start returns resume for a failed record whose failure_reasons is exactly {budget_exhausted}, via a new _is_resumable_budget_failure(record) helper shared with _do_start.",
+          "GOV.ORCH.10 R-3: a budget resume with --max-budget-usd <= the persisted stopping ceiling is refused, naming both numbers.",
+          "GOV.ORCH.10 R-4: a budget-only failed record at retry_limit falls through to ordinary terminal-record dispatch, not resumed by this path.",
+          "Budget resume reuses the existing resume branch unchanged (same worktree_path/branch/session_id, no new worktree, no new worker slot) -- no second resume implementation.",
+          "_cmd_run now persists failure_reasons and budget_exhausted onto the state record so decide_start reads them without re-deriving anything from a log.",
+          "_build_run_report gained one additive field, budget_resume ({'ceiling_usd': <float>}), present only when the run was a budget resume.",
+          "AC-1, AC-2 (explicit mixed-reason case), AC-3, AC-4, AC-5, AC-6, AC-7 all covered by new tests in tests/test_orchestrator.py."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "n/a -- no application/main.py touched",
+          "ui": "n/a -- no ui2/, static/, or templates/ files touched"
+        },
+        "integration": {
+          "branch": "feature/gov-orch-10-budget-resume-impl",
+          "ci": "not applicable in this local environment",
+          "head_sha": "608e7dc",
+          "merge_commit": null,
+          "merge_decision": "Not merged by the worker per the merge gate (Product Owner assistant review of the diff plus orchestrator verify.passed); PR opened per this movement's own relay-closeout instruction and merge_mode: engineer.",
+          "merge_state": "OPEN",
+          "pr": 216,
+          "pr_url": "https://github.com/ozandurmus/neXus/pull/216"
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0132",
+          "movement_type": "IMPLEMENTATION",
+          "objective": "Product Owner assistant review of PR #216 (feature/gov-orch-10-budget-resume-impl -> main) plus orchestrator verify.passed, per the merge gate; the worker does not merge to main. If approved, consider a follow-up movement on the unresolved_risks item above.",
+          "status": "automated_validated"
+        },
+        "preserved": [
+          "DEFAULT_MAX_BUDGET_USD and every other budget-ceiling value, unchanged.",
+          "No path exists for a worker to raise or influence its own ceiling.",
+          "No automatic/implicit resume: a budget resume only happens because a caller explicitly re-ran start/run with a higher --max-budget-usd.",
+          "Every failure reason other than an exact {budget_exhausted} set stays non-resumable; every other terminal record (PHASE_DONE, PHASE_CANCELLED, any other PHASE_FAILED shape) still returns dispatch exactly as before.",
+          "retry_limit's meaning, TERMINAL_PHASES membership, reconcile_phase's meaning, verification, the relay protocol, and the report schema (beyond the one additive field) are all untouched.",
+          "No FROZEN contract was edited; decide_start remains a pure function of its arguments.",
+          "NXS-LOCAL-0130 and NXS-LOCAL-0131's own state records were not touched."
+        ],
+        "recommended_reasoning": {
+          "reason": "Matches the SESSION_START recommendation: small diff, but the change is a safety classification in the dispatch loop (interrupted-by-limit vs. produced-something-wrong), so review warrants the same care as implementation.",
+          "tier": "Sonnet 5, high effort"
+        },
+        "state_updates": [],
+        "unresolved_risks": [
+          "Under the current _cmd_run construction, adapter.budget_exhausted(log_path) is only ever consulted inside the 'if exit_code != 0:' branch, after 'engineer_exit_nonzero' has already been appended to failure_reasons -- so a real `run` invocation's failure_reasons for a budget-exhausted engineer is today always at least ['engineer_exit_nonzero', 'budget_exhausted'], never budget_exhausted alone (confirmed by the pre-existing test_run_cli_budget_exhausted_names_its_own_failure_reason fixture). This movement's scope was decide_start's decision logic, the ceiling refusal, resume-path reuse, retry accounting and the report field -- not the failure_reasons construction rule in _cmd_run -- so R-1/R-2 are implemented and tested exactly as GOV.ORCH.10 section 4 items 1-3 specify (against directly-constructed records), but whether an unmodified `run` invocation can ever naturally produce a record this new path acts on was left open rather than decided or silently fixed. Recommend a follow-up movement to decide whether engineer_exit_nonzero should be withheld when the non-zero exit is explained by budget_exhausted."
+        ],
+        "validation": {
+          "affected": "n/a -- no other module imports the changed functions' new keyword-only parameters or the new report/record fields.",
+          "diff_check": "git diff --stat confirms only scripts/orchestrator.py and tests/test_orchestrator.py changed (AC-10).",
+          "full_regression": "Not run, per this movement's own instruction (it creates untracked data/logs/ that would fail the privacy gate on an otherwise-clean diff). tests/test_orchestrator.py is the suite of record for this change.",
+          "privacy": "python3 scripts/repository_privacy_check.py: PASS, 0 findings (1267 files scanned, 410 skipped).",
+          "real_environment": "Not performed -- this is local/CLI logic with no network-device or vendor interaction; validated by the automated suites above only, per the movement's deployment_direction (local validation only).",
+          "state_consistency": "n/a -- no project/*.json or CURRENT_STATE.md touched by this movement's scope.",
+          "targeted": "python3 -m pytest tests/test_orchestrator.py -q: 135 passed (baseline 123 at PR #215 merge, +12 new tests covering AC-1 through AC-7)."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-13T02:16:04Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0132",
+  "movement": "budget_exhaustion_resumable",
+  "next_actor": null,
+  "refs": [
+    "docs/design/GOV_ORCH_10_BUDGET_EXHAUSTION_IS_RESUMABLE.md",
+    "docs/design/GOV_ORCH_1_SYNCHRONOUS_RUN_AND_ORCHESTRATOR_VERIFY.md",
+    "docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md",
+    "AGENTS.md",
+    "roles/PO.md",
+    "scripts/orchestrator.py",
+    "tests/test_orchestrator.py"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-13T02:16:04Z"
+}
