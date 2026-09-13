@@ -12,6 +12,8 @@ import com.securityexpert.nexus.ui2.discovery.cp.ConnectionTableChannelState;
 import com.securityexpert.nexus.ui2.discovery.cp.HostLink;
 import com.securityexpert.nexus.ui2.discovery.cp.HostResolution;
 import com.securityexpert.nexus.ui2.discovery.cp.ManagementPlaneEnumerationResult;
+import com.securityexpert.nexus.ui2.discovery.cp.ManagementPlaneEnumerationResult.ParseCounts;
+import com.securityexpert.nexus.ui2.discovery.cp.ObjectType;
 
 /**
  * AGENTS.md "Sensitive identity reporting law": renders a {@link
@@ -96,7 +98,21 @@ final class DiscoveryRunReport {
         appendMap(out, "channel_state_counts", byChannelState);
         out.append("unclassified_count=").append(byKind.get(CandidateKind.UNCLASSIFIED)).append(System.lineSeparator());
         out.append("ambiguous_count=").append(byKind.get(CandidateKind.AMBIGUOUS)).append(System.lineSeparator());
+        appendParseCounts(out, completed.parseCountsByObjectType());
         return out.toString();
+    }
+
+    /** counts only, per object type -- how many objects one type's dump produced, and how many lacked the stable identifier. */
+    private static void appendParseCounts(StringBuilder out, Map<ObjectType, ParseCounts> parseCounts) {
+        Map<String, Integer> parsed = new java.util.LinkedHashMap<>();
+        Map<String, Integer> missingStableIdentifier = new java.util.LinkedHashMap<>();
+        for (ObjectType objectType : ObjectType.values()) {
+            ParseCounts counts = parseCounts.getOrDefault(objectType, new ParseCounts(0, 0));
+            parsed.put(objectType.name(), counts.parsed());
+            missingStableIdentifier.put(objectType.name(), counts.missingStableIdentifier());
+        }
+        appendMap(out, "objects_parsed_by_object_type", parsed);
+        appendMap(out, "objects_missing_stable_identifier_by_object_type", missingStableIdentifier);
     }
 
     private static <K> void appendMap(StringBuilder out, String label, Map<K, Integer> counts) {
