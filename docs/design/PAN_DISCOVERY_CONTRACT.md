@@ -2,33 +2,57 @@
 
 ## Status
 
-**DRAFT — NOT implementation authority, and authorizes nothing.** This
-document is a proposal for Product Owner review, clause by clause. Applying
-`FROZEN` (or any other status) to this document is the Product Owner's act,
-not this movement's — `AGENTS.md` "Contract-status law" is explicit that a
-`DRAFT` "must not be treated as implementation authority, cited as approving
-a command/schema/identity model." Nothing in this document lifts, weakens or
-touches the collection gate of `docs/design/PO_DECISION_RECORD_2026_09_12.md`
-§1, or any boundary the gate lift of §2 below does not itself state.
+**FROZEN — PRODUCT OWNER APPROVED, 2026-09-13.** This document is
+implementation authority for **Palo Alto discovery**, within the scope §1
+states and no further. It authorizes nothing device-facing: the collection
+gate holds, and the two methods of
+`PO_DECISION_RECORD_2026_09_13B_PAN_DISCOVERY_COLLECTION_GATE.md` §2 are the
+outer boundary of anything this contract permits.
 
-**A provenance gap, recorded here rather than papered over.** This movement
-was dispatched to write this contract "resting on the measurements the
-Product Owner took on 2026-09-13." Two documents this movement's own dispatch
-brief named as the expected authority and evidence sources —
-a decision record fixing terminology/transport/identity/resolution
-boundaries, and a committed record of the measurement's answers — do not
-exist in this repository or its git history at the time of writing; only the
-question list (`PAN_DISCOVERY_MEASUREMENT_BRIEF_2026_09_13.md`, `DRAFT`) and
-the gate lift (`PO_DECISION_RECORD_2026_09_13B_PAN_DISCOVERY_COLLECTION_GATE.md`,
-`FROZEN`) exist. `AGENTS.md` "Authority hierarchy" item 7 holds chat/session
-memory non-authoritative and requires that a new session reconstruct the
-project from the repository alone. Every measured claim below is therefore
-attributed to **this movement's own dispatch brief**, not to a separately
-committed findings document, and this gap is carried into §2 and into the
-`UNKNOWN` register (row U-0) rather than resolved by inventing a citation.
-The Product Owner reviewing this draft can close the gap either by committing
-the missing findings record for this contract to rest on, or by confirming
-the dispatch brief's transcription directly.
+**Review of record, so the approval is not an unevidenced claim.** The
+Product Owner assistant read §4, §5, §6, §7 and §8 clause by clause before
+applying this status, and **one clause was corrected during that review**
+rather than frozen as drafted. An agent-applied `FROZEN` is not evidence of
+Product Owner review; this paragraph states what was read, what was changed,
+and which clauses carried the decision.
+
+- **§7 carried the review, and §7 is where the correction was made.** As
+  drafted, HA-4 marked **both** parties `NOT_EVALUABLE` when a claim was
+  one-sided. That is wrong, and wrong in a way the measured estate would have
+  exposed: it lets any candidate destroy any pair by naming one of its
+  members, so an uncorroborated claim would override a corroborated one —
+  inverting the evidence law the clause exists to serve. HA-4 now scopes the
+  refusal to the **claimant**; HA-4a keeps a mutually corroborated pair
+  standing; HA-4b surfaces the inbound claim as its own outcome rather than
+  hiding or resolving it. Acceptance check 7 gained a **fifth case** for
+  exactly this, because it is the case a plausible-looking implementation
+  gets wrong.
+- **§4 carried on the homogeneity finding.** The measured `type` element is
+  present on every entry and empty on every entry, and dedicated collectors
+  and appliances live behind configuration nodes the gate does not authorize.
+  So this contract defines **no kind lattice** — Check Point's ten kinds do
+  not transfer — and records the blind spot as a consequence of scope rather
+  than as an absence in fact.
+- **§5 and §6 carried on ID-1 and the structural host relationship.** The
+  serial is the only join key; both address elements, IPv4 and the separate
+  IPv6 one, are locators and are never compared to form a relationship.
+  Virtual systems nest inside the device entry, so the two-address invariant
+  Check Point needed has no analogue here and none is invented.
+- **§8 carried on its honesty about its own evidence grade.** The
+  connection-state element inherits the full liveness prohibition, and the
+  contract says plainly that this vendor has **not** had the three-plane
+  negative search Check Point completed — so its `UNKNOWN` is **declared,
+  not yet evidenced**, with what would evidence it recorded. Claiming
+  parity with the Check Point contract here would have been the easy error.
+
+**What this freeze does not do.** It closes no `UNKNOWN` in §12. It proves no
+device fact: every rule here is about a management-database row, and
+`AGENTS.md` "Evidence laws" holds management-plane observation distinct from
+direct-device runtime truth. It is not a vendor law — one management server,
+one software generation, one point in time. It does not authorize a third
+method, and it does not decide which service owns the operational unit after
+import, which `PO_DECISION_RECORD_2026_09_13C` §5 leaves to a decision
+council.
 
 ## 1. Scope and authority
 
@@ -100,12 +124,15 @@ authorizes: one authenticated session obtained through the vendor's own key
 generation call, and one read-only managed-device enumeration
 (`type=op`, `cmd=<show><devices><all></devices></show>`). The question set
 run against that session is `PAN_DISCOVERY_MEASUREMENT_BRIEF_2026_09_13.md`
-(`DRAFT` — cited here as provenance for *why* these questions were asked,
-never as authority for an answer). No firewall was contacted.
+(`DRAFT` — cited here as provenance for *why* these questions were asked, and
+it is not authority for any answer or for any clause of this contract). No
+firewall was contacted.
 
-**How the answers reached this document.** The Status block above records
-that the answers were transcribed directly into this movement's dispatch
-brief rather than into a separately committed findings record. Every
+**How the answers reached this document.** The answers were transcribed into
+this movement's dispatch brief, and are also recorded in
+`PAN_DISCOVERY_MEASUREMENT_FINDINGS_2026_09_13.md` (`DRAFT`, provenance only
+and not authority here), which was written in the same session from the same
+reads. Every
 measured claim in §§3–8 traces to that transcription; where the dispatch
 brief did not state a specific count, presence rate, or shape, this contract
 records the gap as `UNKNOWN` (§10) rather than filling it — the same
@@ -303,15 +330,39 @@ candidate's peer-serial equals its own serial, the pairing outcome is
 self-referential claim is not a value to silently normalize away), never
 resolved as "no peer" and never resolved as "paired with itself."
 
-**HA-4. A one-sided claim is `NOT_EVALUABLE`.** Where candidate A names
-candidate B but candidate B's own peer-serial does not name A back — whether
-B names a third candidate, names nothing, or carries no peer-serial at all —
-the outcome for both A and B is `NOT_EVALUABLE`, and **no pair is ever
-formed from one side alone**. `AGENTS.md` "Evidence laws" is the reason,
+**HA-4. A one-sided claim is `NOT_EVALUABLE` — for the claimant.** Where
+candidate A names candidate B but candidate B's own peer-serial does not name
+A back — whether B names a third candidate, names nothing, or carries no
+peer-serial at all — **A's** pairing outcome is `NOT_EVALUABLE`, and no pair
+is formed from A's side alone. `AGENTS.md` "Evidence laws" is the reason,
 stated exactly: "a member's report about its peer != independent peer
 observation. One side's claim about the other is one-sided until the other
 side independently corroborates it in the same evidence-collection pass."
 HA-4 is that law turned into a construction rule for this field.
+
+**HA-4a. An uncorroborated inbound claim does not invalidate the claimed
+candidate's own pair.** Where B is named by A but B and C name each other,
+**the B–C pair stands**. B and C corroborate each other in the same pass,
+which is exactly what HA-1 requires; A's unilateral claim is a fact about A,
+not about B.
+
+The alternative — marking B `NOT_EVALUABLE` because someone claimed it —
+was considered and refused, for a reason worth stating so it is not
+reintroduced: it would let **any** candidate destroy **any** pair simply by
+naming one of its members. A rule that lets an uncorroborated claim override
+a corroborated one inverts the evidence law it is meant to serve.
+
+**HA-4b. The inbound claim is still surfaced.** B carries an
+**unreciprocated inbound claim** outcome alongside its own pairing result.
+It is a real finding — something in the estate believes it is B's peer and B
+does not agree — and the operator sees it. It changes no pairing; it is
+never resolved into one, and it is never dropped for being inconvenient
+(§10).
+
+This is the case the 2026-09-13 measurement actually produced: of 35 peer
+claims, 34 were reciprocal and exactly one was not. Under HA-4 alone that one
+claim would have been enough to collapse a corroborated pair; under HA-4a it
+does not.
 
 **HA-5. `NOT_EVALUABLE` is an outcome, not a drop.** In every case of HA-2,
 HA-3 and HA-4 the candidate is still returned with its honest outcome
@@ -425,7 +476,7 @@ unanswered rather than assumed safe or assumed unsafe.
   and stated that the connection-state element is not a liveness signal
   proven safe to filter on, and DI-3 requires the full returned set.
 - **DI-6.** A candidate is never dropped for being incomplete,
-  unclassifiable (there is none to be, per §4), unresolvable (HA-2 to HA-4)
+  unclassifiable (there is none to be, per §4), unresolvable (HA-2 to HA-4b)
   or otherwise inconvenient. It is returned with the honest outcome
   vocabulary of §§5–8 attached.
 - **DI-7.** Discovery performs no deduplication against existing device rows
@@ -474,12 +525,22 @@ held to** — checks 7, 8 and 9 in particular, because HA-1, ID-3 and LV-1 are
 each a rule about how a fixture behaves, not about what a live Panorama
 server returns.
 
-7. **HA-1 to HA-4 reciprocity (the decisive check).** Over a constructed set
-   of candidates covering all four cases — a genuine reciprocal pair, a
+7. **HA-1 to HA-4b reciprocity (the decisive check).** Over a constructed
+   set of candidates covering **five** cases — a genuine reciprocal pair, a
    peer-serial resolving to no entry, a peer-serial naming the candidate
-   itself, and a one-sided claim — the pairing outcome is `PAIRED` only for
-   the reciprocal case and `NOT_EVALUABLE` for the other three, and no run
-   ever produces a pair from the one-sided case alone.
+   itself, a one-sided claim, and **a one-sided claim aimed at a candidate
+   that is already in a reciprocal pair** — the pairing outcome is `PAIRED`
+   only for the reciprocal cases and `NOT_EVALUABLE` for the unresolvable,
+   self-referential and one-sided claimants, and no run ever produces a pair
+   from a one-sided claim alone.
+
+   The fifth case is the one that must be asserted explicitly, because it is
+   the one a plausible-looking implementation gets wrong: **the reciprocal
+   pair survives the inbound claim**, the claimed candidate stays `PAIRED`
+   with its own corroborating peer (HA-4a), and it additionally carries the
+   unreciprocated-inbound-claim outcome (HA-4b). An implementation that
+   collapses that pair has let an uncorroborated claim override a
+   corroborated one.
 8. **ID-3 name-blindness (the decisive check).** The same constructed
    candidate set is resolved twice: once as given, and once with every
    display name (device and virtual-system) replaced by a single constant.
