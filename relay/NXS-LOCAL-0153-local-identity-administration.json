@@ -1,0 +1,200 @@
+{
+  "created_at": "2026-09-13T20:12:18Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1 THE DECISIVE TEST: no sequence of operations can leave the product with zero enabled identities holding role:security_admin -- proven over both the disable path and the role-binding revoke path; observed failing before the check exists.",
+          "AC-2 No response body, log line, exception message, audit row or CLI output contains a password, verifier or salt -- proven by a test that scans a full create-and-list cycle.",
+          "AC-3 A created identity, and one whose password an administrator reset, must change its password at next sign-in (the parallel movement's flag, set by this movement's paths).",
+          "AC-4 A disabled identity cannot authenticate and has no active session; re-enabling restores authentication without resetting its password (BOOT-2's spirit: nothing silently resets a credential).",
+          "AC-5 Role assignment and revocation go through the existing POST /role-bindings paths with C3 section 4.3's four-eyes and SELF_GRANT_REFUSED unchanged; no second authorization check exists.",
+          "AC-6 The CLI covers every operation the API does and shares the same domain port; the existing bootstrap CLI paths and tests still work.",
+          "AC-7 The Administration screen lists identities with the fields 13G section 3 allows and none it forbids; NoRoleConditionalRenderingInFrontendTest passes.",
+          "AC-8 The eleven-module build, :service:test, :cli:test, :architecture-tests:test and the frontend checks are green; privacy gate PASS."
+        ],
+        "baseline": {
+          "authority": "docs/design/PO_DECISION_RECORD_2026_09_13G_LOCAL_IDENTITY_ADMINISTRATION_AND_CLI_PARITY.md -- FROZEN, PRODUCT OWNER DIRECTIVES 2026-09-13, and implementation authority for this movement: LIA-1 (reachable from the product's own authenticated surface), LIA-2 (CLI parity, same coverage), LIA-3 (the six constraints, and no more), LIA-4 (what is deliberately not required -- do not build it), LIA-5 (role:security_admin administers identities; C3 section 4.1's vocabulary is closed, invent no role), LIA-6 (one authenticated surface), section 3 (what the operator sees), section 4 (the additive migration). Also FROZEN: UI2_0_C3 (section 3 sessions and one-active-session, section 4.1 the closed role vocabulary, section 4.3 four-eyes / SELF_GRANT_REFUSED / the CLI-only FIRST security_admin binding, which stays as written), UI2_0_C3A (verifier parameters, lockout, the identical refusal, zeroing discipline), UI2_0_C3B (BOOT-1..BOOT-5b, first-boot seeding, BOOT-2 idempotence, BOOT-5b's deployment-controlled CLI paths which this movement extends rather than replaces), UI2_0_C1 (Flyway sole migration authority, section 3.5 audit trigger, section 6.2 secret conventions).",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "test_baseline": "Run ./ui2/gradlew -p ui2 build -x :integration-tests:test, :service:test and :cli:test first and record the counts before you change anything.",
+          "what_exists": "Service (ui2/service .../api): POST /login, POST /login/resolve, GET /session/status, POST /local-credentials/change-password (an identity changing its OWN password), POST /sessions/revoke, POST /role-bindings, POST /role-bindings/revoke (the C3 four-eyes path -- REUSE it, do not write a second one). Persistence: migrations V1..V8; V8__local_credentials.sql holds local_credentials (local_identity_id, local_identity_name, verifier, salt, algorithm_id, memory_cost_kib, time_cost, parallelism, failed_attempt_count, locked_until, created_at, updated_at); V2__identity_sessions_rbac.sql holds role_bindings and the audit trigger. ui2/service .../boot/FirstBootIdentitySeedingRunner seeds the two bootstrap identities and their bindings in one transaction; FirstBootIdentityRoleBindingSeeder and GroupReferenceCipher are the existing pieces to reuse. ui2/cli holds CliEntryPoint and the existing bootstrap commands -- extend that entry point, do not create a second CLI. Frontend (ui2/frontend/src): screens/AdministrationScreen.tsx is where the identity section belongs; shell/M3Widgets.tsx, theme/m3Theme.ts are the Material 3 vocabulary to reuse; architecture-tests/NoRoleConditionalRenderingInFrontendTest must keep passing. A PARALLEL movement (relay NXS-LOCAL-0152, lane feature/login-session-ux) is adding migration V9 with a must-change-password flag, an extended GET /session/status and self sign-out: assume that flag exists by the name it gives it, do NOT create a second flag, and take migration number V10 for this movement's own migration."
+        },
+        "context_not_loaded": [
+          "ui2/worker and every discovery package",
+          "docs/history/**",
+          "project/*.json",
+          "Every vendor document"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/local-identity-administration"
+        },
+        "invariants": [
+          "The product can never be left without an enabled security_admin.",
+          "No credential material in any response, log, audit row, exception or CLI output.",
+          "C3's four-eyes and self-grant refusal are reused unchanged, never re-implemented.",
+          "The CLI and the HTTP path share one domain port, so they cannot drift.",
+          "Only the constraints 13G LIA-3 lists are built; nothing from LIA-4 is added.",
+          "No second authenticated surface, no new Gradle subproject, no new dependency, no edited migration."
+        ],
+        "merge_gate": "Product Owner assistant review of the diff plus orchestrator verify.passed. The worker opens the PR and does not merge to main.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Make local identity administration real, in all three places at once, exactly as PO_DECISION_RECORD_2026_09_13G directs: an HTTP API on the existing service, an Administration screen section, and ui2 CLI commands with the same coverage -- create a local identity, list identities, set or reset a password, disable and re-enable, and assign or revoke role bindings through C3's existing four-eyes path. Six proportionate constraints (13G LIA-3) and nothing more: every mutation audited, no password or verifier ever returned or logged, an administrator-set password must be changed at next sign-in, C3 section 4.3's four-eyes and self-grant refusal unchanged for role bindings, a hard refusal on the action that would leave no enabled role:security_admin, and a disabled identity that cannot authenticate and whose session ends.",
+        "output_contract": [
+          "Local identity administration usable from the product's own screen, from its API and from the CLI, with the same coverage in all three.",
+          "One additive migration, one resource on the existing service, CLI subcommands on the existing entry point, one Administration screen section.",
+          "SESSION_CLOSE naming the migration columns, the endpoints, the CLI subcommands, where the last-security_admin check lives, and the test counts before and after."
+        ],
+        "recommended_reasoning": {
+          "reason": "Three layers at once (migration, service, CLI, frontend) on the authorization boundary, with two lock-out failure modes that are silent until they matter. High effort for the boundary, not the volume; commit early so a budget stop is recoverable.",
+          "tier": "Sonnet 5, high effort"
+        },
+        "requirements": [
+          "English, per AGENTS.md engineering-output language law.",
+          "Every public type and method names the clause it implements (13G LIA-n, C3 section n, C3A section n).",
+          "Write the last-enabled-security_admin refusal test and the no-credential-material-in-any-response test FIRST; report that each was observed failing before the change and passing after.",
+          "Do NOT use './ui2/gradlew -p ui2 build' without '-x :integration-tests:test'. Do not run the full Python pytest suite. The ui2 build must keep exactly eleven Gradle subprojects.",
+          "Use migration number V10. If V9 is not present when you start, still use V10 and say so -- the parallel movement owns V9.",
+          "No password, verifier, salt or session token reaches a log line, an exception message, an audit row, an HTTP response or CLI output.",
+          "If 13G and a FROZEN contract disagree, the contract wins; raise a RELAY_QUESTION rather than reconciling silently.",
+          "The SESSION_CLOSE names the migration and its columns, every endpoint and CLI subcommand added, where the last-security_admin check lives, and the test counts before and after."
+        ],
+        "risks": [
+          "Putting the last-security_admin check only in the disable handler, so revoking the last binding still locks the product out.",
+          "Writing a second authorization check or a second role-binding path instead of reusing C3's.",
+          "Returning the created identity's password 'for convenience' in the create response, or printing it from the CLI.",
+          "Taking migration V9 and colliding with the parallel movement.",
+          "Adding a complexity or expiry policy because it feels safer -- 13G LIA-4 excludes it deliberately.",
+          "Letting a disabled identity keep an active session until it expires.",
+          "Reading a password from a command-line argument, which lands in shell history and process listings."
+        ],
+        "scope": {
+          "in": [
+            "Migration V10 (additive only; never edit V1..V9): add to local_credentials an enabled/disabled state defaulting to enabled, the actor that created the row, and the timestamp its password was last set (13G section 4). Backfill existing rows sensibly and say how in the SESSION_CLOSE. The C1 section 3.5 audit trigger must cover the new columns exactly as it covers the existing ones.",
+            "Domain and persistence: a LocalIdentityAdministration port in the module the existing local-authentication code lives in, with create / list / set-password / disable / enable operations. Creating an identity computes a verifier with C3A's existing parameters through the existing helper, zeroes the password array, and never persists, logs, audits or returns the password itself (LIA-3.2). A created or administratively reset identity has the must-change-password flag (V9's, the parallel movement's) set true (LIA-3.3).",
+            "HTTP API on the existing service, one resource: create, list, set-password, disable, enable. Every operation requires role:security_admin (LIA-5) through the existing gate chain -- reuse it, do not write a second authorization check. Role assignment and revocation are NOT re-implemented here: the screen and the CLI call the existing POST /role-bindings and POST /role-bindings/revoke, whose four-eyes and SELF_GRANT_REFUSED behaviour stays exactly as C3 section 4.3 froze it (LIA-3.4).",
+            "The two hard refusals, each with its own test: (a) any operation that would leave the product with no ENABLED identity holding role:security_admin is refused with a distinct, non-identity-bearing status -- this covers disabling the last one and revoking the last binding, so the check lives where both paths reach it, not only in the disable handler (LIA-3.5); (b) a disabled identity cannot authenticate and its active session, if any, ends -- enforced in the login path and by ending the session row at disable time, not by waiting for expiry (LIA-3.6).",
+            "Responses and lists carry: display name, enabled state, role tokens, whether a password change is required, created-at and password-set-at. They never carry a verifier, a salt, a password, a group reference or a session token (13G section 3). A test asserts that over a full response body.",
+            "ui2 CLI parity (LIA-2): the same five operations plus role assign/revoke as subcommands of the existing CliEntryPoint, sharing the same domain port as the HTTP path so the two cannot drift. A password is read from a prompt or a file argument, never from a command-line argument that would land in shell history, and is zeroed after use; the CLI prints the same fields the API returns and no password. The existing bootstrap CLI paths and their tests keep working (BOOT-5b).",
+            "Frontend: a local identities section in AdministrationScreen.tsx using the existing Material 3 vocabulary -- a list showing the fields of 13G section 3, a create dialog (display name, initial password, optional role tokens), a set-password dialog, disable/enable actions, and role assignment through the existing binding endpoints. Refusals are shown as the server states them, without revealing whether an identity exists beyond what the operator can already see in the list. Role tokens are displayed, never used to decide what renders (NoRoleConditionalRenderingInFrontendTest must pass).",
+            "Tests, the first two written FIRST and observed failing: (1) the last-enabled-security_admin refusal, over both the disable path and the binding-revoke path; (2) no response, log line, exception or audit row contains a password, verifier or salt. Then: a disabled identity's login is refused and its session is gone; a created identity must change its password at first sign-in; the CLI and the HTTP path produce the same result for the same operation; the existing login, lockout, bootstrap-seeding and four-eyes tests stay green.",
+            "Do NOT build anything 13G LIA-4 excludes: no password complexity policy beyond C3A, no expiry, no history, no self-service reset, no multi-factor, no approval workflow for creating an identity.",
+            "Commit early and often, grouped by layer (migration; domain and persistence; HTTP API; CLI; frontend; tests). Open the PR at the end; do not merge."
+          ],
+          "out": [
+            "Directory-backed identity administration (LDAP/RADIUS/TACACS), session administration beyond ending a disabled identity's session, and any second authenticated surface (13G LIA-6, PO_DECISION_RECORD_2026_09_13D section 4).",
+            "Re-implementing role binding creation or revocation, or changing C3 section 4.3's four-eyes, self-grant refusal, or the CLI-only FIRST security_admin binding.",
+            "Changing C3A's verifier parameters, lockout or the identical refusal; changing the parallel movement's must-change-password flag or adding a second one; editing any existing migration or any FROZEN document.",
+            "Deleting an identity (13G's UNKNOWN: audit retention makes deletion a separate decision -- disable is the supported action; if the screen seems to need delete, raise a RELAY_QUESTION).",
+            "Any discovery, collection or device work; any change to the shell's navigation or the other screens."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              "build",
+              "-x",
+              ":integration-tests:test"
+            ],
+            "name": "ui2_build_excluding_db_bound_integration_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              ":service:test"
+            ],
+            "name": "ui2_service_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              ":cli:test"
+            ],
+            "name": "ui2_cli_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              ":architecture-tests:test"
+            ],
+            "name": "ui2_architecture_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              "projects"
+            ],
+            "name": "ui2_module_listing_must_stay_eleven"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_contract_authority_status.py",
+              "-q"
+            ],
+            "name": "contract_authority_status"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-13T20:12:18Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "RELAY_QUESTION",
+      "seq": 2,
+      "subject": "V9 / must-change-password column ownership",
+      "text": "V9 (owned by NXS-LOCAL-0152) does not exist in either branch's history. LIA-3.3 needs a must-change-password flag attributed to V9, and 13G section 3 independently requires reporting it in every local-identity response. I added must_change_password to local_credentials in my own V10 (set on create and admin password reset only; not enforced at login/session-status -- that stays 0152's scope) rather than leave the response contract unsatisfiable. Please reconcile this column with NXS-LOCAL-0152's own V9 before merge (rename/de-duplicate then).",
+      "timestamp": "2026-09-13T20:43:14Z"
+    },
+    {
+      "actor": "po",
+      "authorized_by": "Product Owner assistant (PO+O), from PO_DECISION_RECORD_2026_09_13G LIA-3.3 and the merged NXS-LOCAL-0152 (PR #253)",
+      "marker": "RELAY_DECISION",
+      "scope": "V10 must_change_password column ownership",
+      "seq": 3,
+      "subject": "V9 owns must_change_password; V10 drops it",
+      "supersedes": "none",
+      "text": "Correct call to disclose rather than assume. NXS-LOCAL-0152 has merged and its V9 owns must_change_password; V10 now adds only enabled, created_by_actor_fingerprint and password_set_at. This movement keeps SETTING the flag on create and on an administrative reset (LIA-3.3); enforcing it at login and reporting it on the session are 0152's, already merged. The rebase, the de-duplication and the PR were done by the PO assistant because the movement stopped at its budget ceiling; no further worker turn is needed.",
+      "timestamp": "2026-09-13T20:54:53Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0153",
+  "movement": "local-identity-administration",
+  "next_actor": "engineer",
+  "refs": [
+    "docs/design/PO_DECISION_RECORD_2026_09_13G_LOCAL_IDENTITY_ADMINISTRATION_AND_CLI_PARITY.md",
+    "docs/design/UI2_0_C3_IDENTITY_SESSIONS_RBAC_CONTRACT.md",
+    "docs/design/UI2_0_C3A_LOCAL_AUTHENTICATION_CONTRACT.md",
+    "docs/design/UI2_0_C3B_BOOTSTRAP_IDENTITIES_AND_ROLES.md",
+    "docs/design/UI2_0_C1_PLATFORM_SCHEMA_CONTRACT.md",
+    "relay/NXS-LOCAL-0152-login-session-ux.json"
+  ],
+  "schema_version": 1,
+  "status": "AWAITING_ENGINEER",
+  "updated_at": "2026-09-13T20:54:53Z"
+}
