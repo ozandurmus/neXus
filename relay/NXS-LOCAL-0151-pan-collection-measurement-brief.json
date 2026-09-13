@@ -1,0 +1,234 @@
+{
+  "created_at": "2026-09-13T19:40:10Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1 Every item of 13F section 4's inventory scope has at least one question and at least one candidate request, and each is asked for the direct-firewall plane and, where 13F section 1 allows it, for the Panorama target=<serial> plane.",
+          "AC-2 effective-running, the active configuration and merged are asked about as three separate questions, with the size and two-read stability questions 13F section 3 needs.",
+          "AC-3 The Template / Template Stack / Device Group provenance question is asked against Panorama's own configuration read, and the brief states that this read was declined for discovery and accepted for configuration by the Product Owner.",
+          "AC-4 No request shows a credential in a URL; every request is annotated read-only class 0; no write, commit, backup or failover request appears anywhere.",
+          "AC-5 The document contains no address, hostname, serial or configuration content; the privacy gate passes.",
+          "AC-6 git diff --name-status origin/main...HEAD shows the one new document under docs/design/ plus the project-state files written through the queue tool; the three pytest files pass."
+        ],
+        "baseline": {
+          "authority": "docs/design/PO_DECISION_RECORD_2026_09_13F_COLLECTION_TRANSPORT_AND_IDENTITY_DECISIONS.md -- FROZEN, PRODUCT OWNER DIRECTIVES 2026-09-13. Section 1: Palo Alto collection goes over the HTTPS XML API -- the firewall's own management address for actual/effective evidence, Panorama with target=<serial> for per-device runtime reads, and Panorama's own configuration read (no target) for Template / Template Stack / Device Group provenance, the read the Product Owner declined for discovery and accepts here. Section 2: an identity mismatch warns and continues. Section 3: one read, two outputs -- a sanitized view copy and an untouched encrypted backup copy whose digest is compared for change; effective-running is the primary configuration evidence. Section 4: the inventory scope. Section 6: the per-vendor gate statement at the method-class level; every concrete route still needs its own network-device command gate row. Also FROZEN: PO_DECISION_RECORD_2026_09_13E (build order). AGENTS.md Palo Alto section: Panorama is intent and provenance, the direct firewall is actual evidence, production TLS requires trusted corporate CA verification.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "test_baseline": "Repository checks only: python3 scripts/repository_privacy_check.py and python3 -m pytest tests/test_contract_authority_status.py tests/test_architecture_convergence.py tests/test_project_files_budget.py -q. Run them once before writing and once after.",
+          "what_exists": "docs/design/PAN_DISCOVERY_MEASUREMENT_FINDINGS_2026_09_13.md (DRAFT) is the Product Owner's discovery measurement and the shape to follow; note that it records only a few element names, which is exactly the gap this brief must not repeat for collection. docs/design/PAN_AUTH_TRANSPORT_CONVERGENCE_AUDIT.md (AUDIT ONLY) records that an older Python path sent credentials as URL query parameters while another used POST bodies and an X-PAN-KEY header -- the brief asks its questions in the safe form only. docs/design/DISCOVERY_VS_COLLECTION_PYTHON_KNOW_HOW_AUDIT_2026_09_12.md sections 5.1 to 5.4 record which routes the existing Python called and in what order -- know-how only (PO_DECISION_RECORD_2026_09_12 section 2), cite it to say what question a route raises, never as a source to copy. The merged PAN discovery transport (ui2/worker .../discovery/pan) shows the route/binding/gate-document pattern and is where its 18 UNVERIFIED element bindings live; the collection brief is a separate measurement and does not close those."
+        },
+        "context_not_loaded": [
+          "ui2/** beyond the transport pattern described here",
+          "docs/history/**",
+          "project/*.json (write only through scripts/project_queue.py)",
+          "Every Check Point document"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/pan-collection-measurement-brief"
+        },
+        "invariants": [
+          "The document authorizes nothing, approves no command and contains no identity.",
+          "Every read is class 0; no write of any class is named as something to run.",
+          "No device or management server is contacted by this movement.",
+          "The existing Python is know-how only; no command list is copied as an answer.",
+          "Every referent cited exists."
+        ],
+        "merge_gate": "Product Owner assistant review plus orchestrator verify.passed. The worker opens the PR and does not merge to main. The brief stays DRAFT; running it is the Product Owner's own act.",
+        "movement_type": "ARCHITECTURE",
+        "objective": "Write ONE document, docs/design/PAN_COLLECTION_MEASUREMENT_BRIEF_2026_09_13.md, status DRAFT -- MEASUREMENT BRIEF, NOT AUTHORITY, NOT COMMAND APPROVAL: the question set and the exact, ordered, read-only XML API route list the Product Owner will run ONCE against one Palo Alto firewall and one Panorama, so that a per-vendor Palo Alto COLLECTION contract can be written from measurement instead of from the existing Python or from general product knowledge. It is the Palo Alto twin of the Check Point measured-method handover, written before the measurement rather than after it. It contains no implementation, contacts nothing, and approves no route.",
+        "output_contract": [
+          "docs/design/PAN_COLLECTION_MEASUREMENT_BRIEF_2026_09_13.md, DRAFT, runnable by a security expert at a terminal.",
+          "One backlog item for the Palo Alto collection contract, blocked on this measurement.",
+          "SESSION_CLOSE listing every question the brief asks, every request it proposes, and every disagreement it found between its authorities."
+        ],
+        "recommended_reasoning": {
+          "reason": "Same class as the discovery contract and brief movements: the value is entirely in asking the right questions in the right order and refusing to answer them from product knowledge. Low volume, high judgment.",
+          "tier": "Sonnet 5, high effort"
+        },
+        "requirements": [
+          "English, per AGENTS.md engineering-output language law.",
+          "Every question is numbered and every command line in section 3 names the question it answers and its action class.",
+          "Verify every referent as you write it: every section number, clause id and file path you cite must exist at origin/main HEAD -- open the file and check.",
+          "The status block says DRAFT -- MEASUREMENT BRIEF and states plainly that it authorizes nothing and approves no command.",
+          "If 13F, 13E, C4 or the discovery handover disagree with each other within this scope, report it in the document's own open-items section and raise a RELAY_QUESTION; never reconcile silently.",
+          "The document must be usable by a security expert at a terminal: plain command lines, no build steps, no code."
+        ],
+        "risks": [
+          "Copying the Python collector's route list as the measured truth instead of asking whether each route returns what the collection contract will need.",
+          "Showing a credential in a URL form because the older Python path did -- the convergence audit calls that an urgent live exposure.",
+          "Collapsing effective-running, active and merged into one question; AGENTS.md fixes effective-running as primary evidence precisely because they are not the same fact.",
+          "Asking for output to be pasted back rather than element names, paths, shapes and sizes.",
+          "Drifting into the discovery transport's element bindings, which are a different measurement.",
+          "Assuming a virtual-system-scoped read exists for every inventory item rather than asking."
+        ],
+        "scope": {
+          "in": [
+            "Section 1: scope and authority -- what this brief is for, that it authorizes nothing, and the exact boundary 13F section 6 draws for Palo Alto (three method classes: direct-firewall API reads, Panorama target=<serial> reads, and Panorama's own configuration read; no commit, no push, no write of any class; no direct SSH to a firewall, per PO_DECISION_RECORD_2026_09_13C SB-11's measured reasoning).",
+            "Section 2: the question set, each phrased so the answer is observed behaviour rather than opinion. At minimum: (a) how a session key is obtained and how long it is valid, and whether the key can be sent only in a header; (b) which route returns the identity facts (serial, hostname, model, software version, HA state) and which element names carry them; (c) which route enumerates interfaces WITH every address on them, and how a high-availability floating address is distinguished from an interface's own address; (d) which route returns the routing table, and whether it is paginated or truncated on a large table; (e) what effective-running returns, how large it is, and how it differs from the active configuration and from merged -- asked as three separate questions, not assumed equivalent; (f) whether a virtual-system-scoped read exists for each of (c) to (e) and how the virtual system is selected; (g) which reads are available through Panorama with target=<serial> and whether the response differs in shape from the same read taken directly; (h) what Panorama's own configuration read returns for Template, Template Stack and Device Group assignment, and under which element paths; (i) whether any response can carry a credential, key or other secret; (j) what a failure looks like -- HTTP status, an error element, or a success envelope carrying an error.",
+            "Section 3: the exact request list the Product Owner runs, ordered and numbered, each shown as a runnable form with placeholders for estate values, each annotated with the question it answers and with 'read-only, class 0' or a stop. Credentials are shown only in a POST body or a header form, never in a URL, and the brief says why in one line. For each request, what to RECORD: element names and their nesting paths, response shape, counts, sizes -- counts and shapes only, per AGENTS.md sensitive identity reporting law, with an explicit reminder at the top of the section that no address, hostname, serial or configuration content is to be pasted back.",
+            "Section 4: what must be recorded about the configuration reads specifically, because 13F section 3 requires one read and two outputs: the size of effective-running on a typical device, whether two consecutive reads of an unchanged device are byte-identical (the digest question), and which element categories would have to be removed for the sanitized view copy -- described by category, never by example.",
+            "Section 5: the Panorama-side questions kept separate from the direct-firewall ones, because 13F section 1 gives them different evidence roles: what target=<serial> reads are for, what Panorama's own configuration read is for, and the explicit question of whether a fact appearing in both planes ever disagrees -- and what the Product Owner should record when it does.",
+            "Section 6: what the brief deliberately does NOT ask, with the reason -- no commit, push or write of any class; no backup command (C7 owns that); no failover or HA state change; no direct SSH to a firewall; no Check Point question; and no request whose purpose is to test reachability rather than to read a fact.",
+            "Section 7: the acceptance shape of the answer -- what a complete measurement record looks like, mirroring the Check Point handover's structure (method table, request forms, element-binding table, open verification items), so the follow-on findings document and the collection contract have a fixed target.",
+            "Section 8: cross-references.",
+            "Add one backlog item for the follow-on work (the Palo Alto collection contract, blocked on this measurement) through scripts/project_queue.py -- never hand-edit project/*.json. Do not touch CURRENT_STATE.md. Commit early and often."
+          ],
+          "out": [
+            "Any implementation, code, schema, screen or capability specification. Any command gate entry (the brief names routes as candidates to measure; approval is a separate act).",
+            "Running any request anywhere; contacting any firewall or Panorama.",
+            "Check Point in any form; backup and restore routes (C7); any write of any class; any commit, push or policy operation; any direct SSH to a firewall.",
+            "Editing any FROZEN document, or applying a status to any document.",
+            "Closing or changing any of the discovery transport's 18 UNVERIFIED element bindings -- a different measurement, already briefed separately.",
+            "Any address, hostname, serial, certificate subject or configuration content anywhere in the document."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_contract_authority_status.py",
+              "-q"
+            ],
+            "name": "contract_authority_status"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_architecture_convergence.py",
+              "-q"
+            ],
+            "name": "architecture_convergence"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_project_files_budget.py",
+              "-q"
+            ],
+            "name": "project_files_budget"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/project_queue.py",
+              "check"
+            ],
+            "name": "queue_check"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-13T19:40:10Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "report": {
+        "changed": [
+          "New file: docs/design/PAN_COLLECTION_MEASUREMENT_BRIEF_2026_09_13.md",
+          "project/backlog.json: one new P1 item, pan_collection_contract_from_measurement, added via scripts/project_queue.py add",
+          "project/QUEUE.md: re-rendered by the queue tool as a consequence of the backlog add"
+        ],
+        "completed": [
+          "Wrote docs/design/PAN_COLLECTION_MEASUREMENT_BRIEF_2026_09_13.md, status DRAFT -- MEASUREMENT BRIEF, NOT AUTHORITY, NOT COMMAND APPROVAL, covering all 8 required sections.",
+          "Section 2 asks 16 numbered questions (Q-1..Q-16): session-key acquisition and validity/header-only transport; failure shape; identity route and element names; interface enumeration with every address and HA-floating-address distinction; routing-table route and truncation/pagination behaviour; effective-running, active configuration and merged asked as three separate questions; virtual-system-scoped reads for each of interfaces/routes/configuration, asked per route rather than assumed; Panorama target=<serial> availability and shape-parity per route; Panorama's own configuration read for Template/Template Stack/Device Group provenance; cross-plane disagreement; secret-carrying responses; two-read digest stability of effective-running.",
+          "Section 3 lists 19 ordered, numbered, runnable requests (R-1..R-19), each annotated with the question it answers and 'read-only, class 0'; credentials shown only in a POST body or an X-PAN-KEY header, never a URL, with the one-line reason (PAN_AUTH_TRANSPORT_CONVERGENCE_AUDIT.md's urgent finding); each request states what to RECORD as element names/paths/shapes/counts/sizes only, with an explicit no-paste-back reminder at the top of the section.",
+          "Section 4 records what the configuration-retention questions (13F CF-1/CF-2) require: effective-running size, the two-read byte-identity/digest question (R-7 run twice), and configuration categories to remove for the sanitized view copy, by category only.",
+          "Section 5 separates the Panorama-side questions from the direct-firewall ones per 13F section 1's distinct evidence roles, and asks explicitly whether a fact appearing on both planes ever disagrees, with MATCH/MISMATCH/NOT_EVALUABLE as the only recordable outcomes.",
+          "Section 6 states what the brief deliberately does not ask and why: no write of any class, no backup command (C7 owns that), no failover/HA change, no direct SSH to a firewall (13C SB-11's measured reason), no Check Point question, no bare-reachability probe.",
+          "Section 7 fixes the acceptance shape of the follow-on findings document (method table, request forms actually used, element-binding table, Q-16 digest finding, cross-plane comparison table, open-verification-items list), mirroring the Check Point handover and the PAN discovery findings document.",
+          "Section 8 cross-references every authority cited, all verified to exist at HEAD before citing.",
+          "Added backlog item pan_collection_contract_from_measurement (P1, category collection) through scripts/project_queue.py, blocked on this measurement; did not hand-edit project/*.json; did not touch CURRENT_STATE.md.",
+          "Committed in two small commits (the document; the queue-tool-written project state), pushed the branch, and opened PR #249 (worker opens the PR, does not merge)."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "None -- no Python source changed.",
+          "ui": "None -- no UI module, screen, or payload changed."
+        },
+        "integration": {
+          "branch": "feature/pan-collection-measurement-brief",
+          "ci": "not checked in this movement",
+          "head_sha": "73e858370b1022e5e31cc3fb7f983d57634ccb45",
+          "merge_commit": null,
+          "merge_decision": "Awaiting Product Owner assistant review plus orchestrator verify.passed, per WORKER.md merge gate. The worker opened the PR and does not merge to main; the brief stays DRAFT and running it is the Product Owner's own act.",
+          "merge_state": "OPEN",
+          "pr": 249,
+          "pr_url": "https://github.com/ozandurmus/neXus/pull/249"
+        },
+        "next": {
+          "movement": "pan_collection_contract_from_measurement",
+          "movement_type": "ARCHITECTURE",
+          "objective": "Write the per-vendor Palo Alto collection contract from the Product Owner's PAN_COLLECTION_MEASUREMENT_BRIEF_2026_09_13.md run and its follow-on findings document (not yet produced); blocked until the Product Owner executes this brief once against one firewall and one Panorama and records the findings.",
+          "status": "blocked"
+        },
+        "preserved": [
+          "No FROZEN document was edited or had its status changed.",
+          "No implementation, code, schema, screen, or capability specification was written.",
+          "No network-device command gate entry was added; every request in section 3 is stated as a measurement candidate only.",
+          "No request was run; no firewall or Panorama was contacted.",
+          "No Check Point content, no backup/restore route, no write of any class, no direct SSH to a firewall appears anywhere in the document.",
+          "The discovery transport's 18 UNVERIFIED element bindings were not touched -- out of scope, a different measurement.",
+          "No address, hostname, serial, certificate subject or configuration content appears in the document (privacy gate confirms)."
+        ],
+        "recommended_reasoning": {
+          "reason": "Same class as the discovery contract and brief movements this baseline named: low volume, high judgment, entirely in asking the right questions in the right order and refusing to answer them from product knowledge. No escalation trigger (new architecture beyond this brief's own shape, security/storage/CAS work, cross-subsystem root cause, or phase closure) applies to the follow-on contract until the measurement findings exist.",
+          "tier": "Sonnet 5, high effort"
+        },
+        "state_updates": [
+          "project/backlog.json: added pan_collection_contract_from_measurement (P1, category collection, status planned, target docs/design/PAN_COLLECTION_MEASUREMENT_BRIEF_2026_09_13.md) via scripts/project_queue.py add.",
+          "project/QUEUE.md: regenerated by the queue tool's own render step as part of the same add."
+        ],
+        "unresolved_risks": [
+          "Section 3's exact parameter names (e.g. a vsys= query parameter, the precise element paths) are the brief's best-informed guess from the existing Python's know-how audit and the discovery measurement findings, not a live-verified form; the brief says so throughout and treats every request's actual accepted form as itself part of what the measurement run must record (section 7 item 2).",
+          "Whether the live API accepts a target= parameter together with a vsys= parameter on the same request (a combination this brief did not find precedent for in any read source) is unasked; if the estate needs a per-virtual-system Panorama-proxied read, that combination should be added as a question before or during the run rather than assumed absent.",
+          "R-19's deliberately-invalid-key failure probe could, on some PAN software versions, echo the submitted key value into an error message; section 3's RECORD instruction for R-19 already flags this and restricts recording to status/shape, not message text, but the brief could not verify this behaviour without running it."
+        ],
+        "validation": {
+          "affected": "N/A -- no source module changed.",
+          "diff_check": "git diff --name-status origin/main...HEAD shows exactly: A docs/design/PAN_COLLECTION_MEASUREMENT_BRIEF_2026_09_13.md, M project/QUEUE.md, M project/backlog.json -- matches AC-6 exactly.",
+          "full_regression": "Not run in full (out of this movement's scope per WORKER.md file-access restriction); the three named pytest files were run instead, see state_consistency.",
+          "privacy": "python3 scripts/repository_privacy_check.py -- PASS, 0 findings, run once before writing and once after (1316 then 1317 files scanned).",
+          "real_environment": "Not applicable. This document authorizes no run against a real environment; the measurement it specifies is the Product Owner's own separate act.",
+          "state_consistency": "python3 -m pytest tests/test_contract_authority_status.py tests/test_architecture_convergence.py tests/test_project_files_budget.py -q -- 37 passed, run once before writing and once after with identical results; python3 scripts/project_queue.py check -- project/QUEUE.md up to date after the backlog add.",
+          "targeted": "N/A -- this movement produces a design document, not code; no unit test targets this document directly."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-13T19:44:54Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0151",
+  "movement": "pan-collection-measurement-brief",
+  "next_actor": null,
+  "refs": [
+    "docs/design/PO_DECISION_RECORD_2026_09_13F_COLLECTION_TRANSPORT_AND_IDENTITY_DECISIONS.md",
+    "docs/design/PO_DECISION_RECORD_2026_09_13E_PRODUCT_SEQUENCE_AND_SERVICE_INDEPENDENCE.md",
+    "docs/design/PAN_DISCOVERY_MEASUREMENT_FINDINGS_2026_09_13.md",
+    "docs/design/PAN_AUTH_TRANSPORT_CONVERGENCE_AUDIT.md",
+    "docs/design/DISCOVERY_VS_COLLECTION_PYTHON_KNOW_HOW_AUDIT_2026_09_12.md",
+    "docs/AI_DEVELOPMENT_PROTOCOL.md"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-13T19:44:54Z"
+}
