@@ -59,7 +59,7 @@ class LocalMechanismTest {
             idByName.put(name, id);
             byId.put(id, new LocalCredentialRecord(id, name, verifier.verifier(), verifier.salt(), verifier.algorithmId(),
                     verifier.parameters().memoryCostKib(), verifier.parameters().timeCost(), verifier.parameters().parallelism(),
-                    0, Optional.empty(), NOW, NOW));
+                    0, Optional.empty(), NOW, NOW, false));
             return id;
         }
 
@@ -90,6 +90,16 @@ class LocalMechanismTest {
         }
 
         @Override
+        public java.util.List<LocalCredentialRecord> findAll() {
+            return java.util.List.copyOf(byId.values());
+        }
+
+        @Override
+        public void markMustChangePassword(String localIdentityId, String actorFingerprint) {
+            throw new UnsupportedOperationException("not exercised by this test");
+        }
+
+        @Override
         public void recordFailedAttempt(String localIdentityId, Instant now, int lockoutThreshold,
                 Duration lockoutDuration) {
             LocalCredentialRecord r = byId.get(localIdentityId);
@@ -97,7 +107,7 @@ class LocalMechanismTest {
             Optional<Instant> lockedUntil = next >= lockoutThreshold ? Optional.of(now.plus(lockoutDuration)) : r.lockedUntil();
             byId.put(localIdentityId, new LocalCredentialRecord(r.localIdentityId(), r.localIdentityName(), r.verifier(),
                     r.salt(), r.algorithmId(), r.memoryCostKib(), r.timeCost(), r.parallelism(), next, lockedUntil,
-                    r.createdAt(), now));
+                    r.createdAt(), now, r.mustChangePassword()));
         }
 
         @Override
@@ -105,7 +115,7 @@ class LocalMechanismTest {
             LocalCredentialRecord r = byId.get(localIdentityId);
             byId.put(localIdentityId, new LocalCredentialRecord(r.localIdentityId(), r.localIdentityName(), r.verifier(),
                     r.salt(), r.algorithmId(), r.memoryCostKib(), r.timeCost(), r.parallelism(), 0, Optional.empty(),
-                    r.createdAt(), now));
+                    r.createdAt(), now, r.mustChangePassword()));
         }
 
         @Override

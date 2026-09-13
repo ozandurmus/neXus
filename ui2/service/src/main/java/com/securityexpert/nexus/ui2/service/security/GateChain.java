@@ -6,6 +6,8 @@ import java.util.Map;
 import java.util.Optional;
 
 import com.securityexpert.nexus.ui2.persistence.identity.AuthzDecisionRepository;
+import com.securityexpert.nexus.ui2.persistence.identity.LocalCredentialRecord;
+import com.securityexpert.nexus.ui2.persistence.identity.LocalCredentialsRepository;
 import com.securityexpert.nexus.ui2.persistence.identity.SessionRecord;
 import com.securityexpert.nexus.ui2.persistence.identity.SessionRepository;
 import com.securityexpert.nexus.ui2.persistence.identity.SessionState;
@@ -25,13 +27,33 @@ public final class GateChain {
     private final ActionRegistry actionRegistry;
     private final RbacEvaluator rbacEvaluator;
     private final AuthzDecisionRepository authzDecisionRepository;
+    /**
+     * NXS-LOCAL-0152's own must-change-password gate -- not part of the
+     * frozen {@code E1}-{@code E6} contract, so it is {@code null} for
+     * every caller that predates this movement (the legacy 4-arg
+     * constructor below), which disables the gate entirely.
+     */
+    private final LocalCredentialsRepository localCredentialsRepository;
 
     public GateChain(SessionRepository sessionRepository, ActionRegistry actionRegistry,
             RbacEvaluator rbacEvaluator, AuthzDecisionRepository authzDecisionRepository) {
+        this(sessionRepository, actionRegistry, rbacEvaluator, authzDecisionRepository, null);
+    }
+
+    /**
+     * @param localCredentialsRepository resolves whether the session's
+     *     local identity still holds its seeded password (WORKER.md
+     *     "Server enforcement", NXS-LOCAL-0152) -- {@code null} disables
+     *     the check.
+     */
+    public GateChain(SessionRepository sessionRepository, ActionRegistry actionRegistry,
+            RbacEvaluator rbacEvaluator, AuthzDecisionRepository authzDecisionRepository,
+            LocalCredentialsRepository localCredentialsRepository) {
         this.sessionRepository = sessionRepository;
         this.actionRegistry = actionRegistry;
         this.rbacEvaluator = rbacEvaluator;
         this.authzDecisionRepository = authzDecisionRepository;
+        this.localCredentialsRepository = localCredentialsRepository;
     }
 
     public GateOutcome evaluate(GateRequest request, Instant now) {
@@ -63,6 +85,23 @@ public final class GateChain {
             }
         }
         String actorFingerprint = session.actorFingerprint();
+
+        // Must-change-password gate (NXS-LOCAL-0152, WORKER.md "Server
+        // enforcement"; not one of the frozen E1-E6 gates, runs immediately
+        // after E1 since it is itself a session-validity property). A local
+        // identity that still holds its seeded password may reach only the
+        // password-change, session-status and sign-out paths -- none of
+        // which are registered actions, so they never reach this chain at
+        // all; every registered (gated) action is refused here with a
+        // distinct, non-identity-bearing status. A non-local actor
+        // fingerprint matches no local_credentials row and is never
+        // restricted by this gate.
+        if (localCredentialsRepository != null && new LocalIdentityResolver(localCredentialsRepository)
+                .resolve(actorFingerprint).map(LocalCredentialRecord::mustChangePassword).orElse(false)) {
+            Map<String, Object> body = new LinkedHashMap<>();
+            body.put("error", "PASSWORD_CHANGE_REQUIRED");
+            return new GateOutcome.Refused("PWD", 403, body);
+        }
 
         // E2: action identity.
         Optional<ActionDescriptor> maybeAction = actionRegistry.find(request.actionId());
