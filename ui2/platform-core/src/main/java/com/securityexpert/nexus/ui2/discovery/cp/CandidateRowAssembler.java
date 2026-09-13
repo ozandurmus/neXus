@@ -30,6 +30,6 @@ public final class CandidateRowAssembler {
         ClusterLink clusterLink = ClusterLinkResolver.resolve(in.clusterReference());
         return new CandidateRow(in.key(), in.objectType(), kind, in.displayName(), in.ownAddress(),
                 in.managementAddress(), in.clusterReference(), in.model(), in.softwareVersion(),
-                in.managementPlaneConnectionState(), Optional.empty(), clusterLink);
+                in.managementPlaneConnectionState(), in.connectionTableChannelState(), Optional.empty(), clusterLink);
     }
 }

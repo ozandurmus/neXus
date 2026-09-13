@@ -46,6 +46,27 @@ class Check13LivenessVocabularyTest {
         assertTrue(violations.isEmpty(), "liveness-vocabulary identifiers found: " + violations);
     }
 
+    /**
+     * CS-2/LV-2 (AC-7): the §7.4 connection-table channel state is a new
+     * field and a new enum this movement adds to {@link CandidateRow}.
+     * Asserted explicitly, rather than trusting the generic recursion
+     * above to keep reaching it, so a future refactor of {@link #collect}
+     * cannot silently stop covering it.
+     */
+    @Test
+    void connectionTableChannelStateAndItsFieldNameAreInsideTheVocabularyCheck() {
+        List<String> identifiers = new ArrayList<>();
+        collect(CandidateRow.class, identifiers, new HashSet<>());
+
+        assertTrue(identifiers.contains("connectionTableChannelState"),
+                "CS-2's field name must be reachable by this check's reflection");
+        for (ConnectionTableChannelState state : ConnectionTableChannelState.values()) {
+            assertTrue(identifiers.contains(state.name()),
+                    "CS-1 state " + state.name() + " must be reachable by this check's reflection");
+        }
+        assertTrue(identifiers.stream().noneMatch(Check13LivenessVocabularyTest::containsForbiddenWord));
+    }
+
     private static void collect(Class<?> type, List<String> identifiers, Set<Class<?>> visited) {
         if (!visited.add(type)) {
             return;

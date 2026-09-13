@@ -16,6 +16,11 @@ import java.util.Optional;
  * reachable/unreachable, healthy/unhealthy field, label, colour, icon or
  * sort key (CR-12, LV-1), any raw management-plane response (CR-13, T-7),
  * and any collected device state (CR-14).</p>
+ *
+ * <p>CS-2: {@code connectionTableChannelState} is a §7.4 signal, carried
+ * under its own name and never merged into {@code
+ * managementPlaneConnectionState} -- it is not liveness either (LV-1 to
+ * LV-3 apply to it exactly as they apply to every other field here).</p>
  */
 public record CandidateRow(
         CandidateKey key,
@@ -28,6 +33,7 @@ public record CandidateRow(
         Optional<String> model,
         Optional<String> softwareVersion,
         Optional<String> managementPlaneConnectionState,
+        Optional<ConnectionTableChannelState> connectionTableChannelState,
         Optional<HostLink> hostLink,
         ClusterLink clusterLink) {
 
@@ -38,6 +44,7 @@ public record CandidateRow(
 
     CandidateRow withHostLink(Optional<HostLink> newHostLink) {
         return new CandidateRow(key, objectType, kind, displayName, ownAddress, managementAddress,
-                clusterReference, model, softwareVersion, managementPlaneConnectionState, newHostLink, clusterLink);
+                clusterReference, model, softwareVersion, managementPlaneConnectionState,
+                connectionTableChannelState, newHostLink, clusterLink);
     }
 }

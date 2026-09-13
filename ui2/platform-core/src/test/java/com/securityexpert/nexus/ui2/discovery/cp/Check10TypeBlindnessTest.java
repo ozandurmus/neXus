@@ -66,7 +66,7 @@ class Check10TypeBlindnessTest {
         List<RawCandidateInput> typeSwapped = original.stream()
                 .map(in -> new RawCandidateInput(in.key(), swap(in.objectType()), in.flags(), in.displayName(),
                         in.ownAddress(), in.managementAddress(), in.clusterReference(), in.model(),
-                        in.softwareVersion(), in.managementPlaneConnectionState()))
+                        in.softwareVersion(), in.managementPlaneConnectionState(), in.connectionTableChannelState()))
                 .toList();
 
         Map<String, HostResolution> before = original.stream()
