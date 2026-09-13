@@ -198,6 +198,90 @@ def test_decide_start_a_terminal_prior_run_still_needs_a_free_slot():
     assert "max_workers" in reason
 
 
+# --- decide_start budget resume (GOV.ORCH.10, FROZEN 2026-09-13) -----------
+
+def _budget_failed_record(**overrides) -> dict:
+    record = {
+        "pid": 123, "phase": orch.PHASE_FAILED, "retry_count": 0,
+        "failure_reasons": ["budget_exhausted"],
+        "budget_exhausted": {"max_budget_usd": 4.0, "cost_reached_usd": 4.0},
+    }
+    record.update(overrides)
+    return record
+
+
+def test_decide_start_resumes_a_record_whose_only_failure_reason_is_budget_exhausted():
+    """GOV.ORCH.10 section 4 acceptance item 1 (AC-1)."""
+    action, reason = orch.decide_start(
+        relay_obj=_relay_obj(), existing_record=_budget_failed_record(),
+        is_pid_alive=False, active_count=0, max_workers=3, max_budget_usd=8.0,
+    )
+    assert action == "resume"
+    assert "budget" in reason
+
+
+def test_decide_start_treats_a_mixed_budget_and_other_failure_as_not_resumable():
+    """GOV.ORCH.10 section 4 acceptance item 2 (AC-2): the whole safety of
+    the amendment -- budget_exhausted alongside any other recorded failure
+    reason must NOT be resumed, and stays a terminal record."""
+    existing = _budget_failed_record(
+        failure_reasons=["engineer_exit_nonzero", "budget_exhausted", "relay_not_closed"],
+    )
+    action, _ = orch.decide_start(
+        relay_obj=_relay_obj(), existing_record=existing,
+        is_pid_alive=False, active_count=0, max_workers=3, max_budget_usd=8.0,
+    )
+    assert action == "dispatch"
+
+
+@pytest.mark.parametrize("phase", [orch.PHASE_DONE, orch.PHASE_CANCELLED])
+def test_decide_start_a_non_failed_terminal_record_is_never_a_budget_resume(phase):
+    """GOV.ORCH.10 section 4 acceptance item 3 (AC-3): every other terminal
+    record keeps returning `dispatch`, unchanged, even if it happens to
+    carry a stray `failure_reasons` field."""
+    existing = _budget_failed_record(phase=phase)
+    action, _ = orch.decide_start(
+        relay_obj=_relay_obj(), existing_record=existing,
+        is_pid_alive=False, active_count=0, max_workers=3, max_budget_usd=8.0,
+    )
+    assert action == "dispatch"
+
+
+@pytest.mark.parametrize("requested_ceiling", [4.0, 3.0])
+def test_decide_start_refuses_a_budget_resume_into_the_same_or_lower_ceiling(requested_ceiling):
+    """GOV.ORCH.10 section 4 acceptance item 3 / R-3 (AC-4): the refusal
+    names both the stopping ceiling and the one that was requested."""
+    action, reason = orch.decide_start(
+        relay_obj=_relay_obj(), existing_record=_budget_failed_record(),
+        is_pid_alive=False, active_count=0, max_workers=3, max_budget_usd=requested_ceiling,
+    )
+    assert action == "refuse"
+    assert "4.0" in reason
+    assert str(requested_ceiling) in reason
+
+
+def test_decide_start_does_not_resume_a_budget_failure_at_retry_limit():
+    """GOV.ORCH.10 R-4 / section 4 acceptance item 5 (AC-6): a movement at
+    `retry_limit` is not resumable by this path either -- it falls through
+    to the ordinary terminal-record dispatch, which still needs a slot."""
+    existing = _budget_failed_record(retry_count=2)
+    action, _ = orch.decide_start(
+        relay_obj=_relay_obj(), existing_record=existing,
+        is_pid_alive=False, active_count=0, max_workers=3, max_budget_usd=8.0, retry_limit=2,
+    )
+    assert action == "dispatch"
+
+
+def test_decide_start_budget_resume_ignores_active_count_and_max_workers():
+    """A budget resume is not a new slot (mirrors the existing dead-pid
+    resume branch): a full worker pool must not block it."""
+    action, _ = orch.decide_start(
+        relay_obj=_relay_obj(), existing_record=_budget_failed_record(),
+        is_pid_alive=False, active_count=3, max_workers=3, max_budget_usd=8.0,
+    )
+    assert action == "resume"
+
+
 # --- AC-4 (orchestrator_background_task_exit_race): resume recovery-note ---
 # --- detection -- the exact live-observed pattern from relay/NXS-LOCAL-0018:
 # --- staged-but-uncommitted changes, relay still at its own SESSION_START,
@@ -562,6 +646,94 @@ def test_start_cli_resume_injects_no_recovery_note_when_nothing_is_staged(tmp_pa
 
     assert orch.main(args) == orch.EXIT_OK  # resume, nothing staged -- no note
     assert spawn_calls[-1].get("extra_prompt_note") is None
+
+
+# --- start CLI budget resume (GOV.ORCH.10, FROZEN 2026-09-13) -------------
+
+def test_start_cli_resumes_a_budget_exhausted_record_reusing_worktree_and_session(tmp_path, monkeypatch, capsys):
+    """GOV.ORCH.10 section 4 acceptance items 1, 4 and 5 (AC-1, AC-5, AC-6):
+    a real `start` call against a record whose only recorded failure was
+    budget exhaustion resumes into the same worktree/branch/session, creates
+    no new worktree, increments retry_count, and its own payload names the
+    resume a budget resume (which `run`'s report reads, AC-7)."""
+    relay_dir = _make_relay(tmp_path)
+    relay_id = json.loads(next(relay_dir.glob("*.json")).read_text())["id"]
+    state_dir = tmp_path / "state"
+    worktrees_dir = tmp_path / "worktrees"
+    calls = {"worktree_add": 0}
+
+    monkeypatch.setattr(orch, "_git_rev_parse", lambda ref, cwd: "sha")
+    monkeypatch.setattr(orch, "_git_worktree_add",
+                         lambda *a, **k: calls.__setitem__("worktree_add", calls["worktree_add"] + 1))
+    monkeypatch.setattr(orch, "install_prepush_hook", lambda *a, **k: None)
+    monkeypatch.setattr(orch, "_spawn_engineer", lambda **kwargs: _FakeProc(os.getpid()))
+
+    args = ["start", "--movement", relay_id, "--relay-dir", str(relay_dir), "--state-dir", str(state_dir),
+            "--worktrees-dir", str(worktrees_dir), "--profile", str(tmp_path / "profile.json"),
+            "--max-budget-usd", "2.0"]
+    assert orch.main(args) == orch.EXIT_OK
+    assert calls["worktree_add"] == 1
+    dispatched = orch._load_state(state_dir, relay_id)
+
+    # What `run` persists for a movement that stopped only on its budget
+    # ceiling (GOV.ORCH.10 R-2's signal).
+    orch._save_state(state_dir, relay_id, {
+        **dispatched, "pid": _dead_pid(), "phase": orch.PHASE_FAILED,
+        "failure_reasons": ["budget_exhausted"],
+        "budget_exhausted": {"max_budget_usd": 2.0, "cost_reached_usd": 2.0},
+    })
+
+    capsys.readouterr()
+    resume_args = ["start", "--movement", relay_id, "--relay-dir", str(relay_dir), "--state-dir", str(state_dir),
+                   "--worktrees-dir", str(worktrees_dir), "--profile", str(tmp_path / "profile.json"),
+                   "--max-budget-usd", "5.0"]
+    assert orch.main(resume_args) == orch.EXIT_OK
+    assert calls["worktree_add"] == 1  # not recreated
+
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["action"] == "resume"
+    assert payload["budget_resume"] is True
+
+    resumed = orch._load_state(state_dir, relay_id)
+    assert resumed["worktree_path"] == dispatched["worktree_path"]
+    assert resumed["branch"] == dispatched["branch"]
+    assert resumed["session_id"] == dispatched.get("session_id")
+    assert resumed["retry_count"] == 1
+    assert resumed["phase"] == orch.PHASE_RUNNING
+
+
+def test_start_cli_refuses_a_budget_resume_into_the_same_or_lower_ceiling(tmp_path, monkeypatch, capsys):
+    """GOV.ORCH.10 R-3 / section 4 acceptance item 3 (AC-4), exercised
+    through the real CLI: the refusal reason on stderr names both numbers."""
+    relay_dir = _make_relay(tmp_path)
+    relay_id = json.loads(next(relay_dir.glob("*.json")).read_text())["id"]
+    state_dir = tmp_path / "state"
+    worktrees_dir = tmp_path / "worktrees"
+
+    monkeypatch.setattr(orch, "_git_rev_parse", lambda ref, cwd: "sha")
+    monkeypatch.setattr(orch, "_git_worktree_add", lambda *a, **k: None)
+    monkeypatch.setattr(orch, "install_prepush_hook", lambda *a, **k: None)
+    monkeypatch.setattr(orch, "_spawn_engineer", lambda **kwargs: _FakeProc(os.getpid()))
+
+    args = ["start", "--movement", relay_id, "--relay-dir", str(relay_dir), "--state-dir", str(state_dir),
+            "--worktrees-dir", str(worktrees_dir), "--profile", str(tmp_path / "profile.json"),
+            "--max-budget-usd", "4.0"]
+    assert orch.main(args) == orch.EXIT_OK
+    dispatched = orch._load_state(state_dir, relay_id)
+    orch._save_state(state_dir, relay_id, {
+        **dispatched, "pid": _dead_pid(), "phase": orch.PHASE_FAILED,
+        "failure_reasons": ["budget_exhausted"],
+        "budget_exhausted": {"max_budget_usd": 4.0, "cost_reached_usd": 4.0},
+    })
+
+    capsys.readouterr()
+    resume_args = ["start", "--movement", relay_id, "--relay-dir", str(relay_dir), "--state-dir", str(state_dir),
+                   "--worktrees-dir", str(worktrees_dir), "--profile", str(tmp_path / "profile.json"),
+                   "--max-budget-usd", "4.0"]
+    rc = orch.main(resume_args)
+    assert rc == orch.EXIT_REFUSED
+    err = capsys.readouterr().err
+    assert "4.0" in err
 
 
 def test_start_cli_refuses_when_relay_says_it_is_not_engineers_turn(tmp_path):
@@ -1303,6 +1475,30 @@ def test_run_cli_clean_run_report_has_no_budget_exhausted_field(tmp_path, monkey
     report = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
     assert rc == orch.EXIT_OK, report
     assert "budget_exhausted" not in report
+
+
+# --- _build_run_report budget_resume field (GOV.ORCH.10 section 4 --------
+# --- acceptance item 6 / AC-7) ----------------------------------------------
+
+def _minimal_run_report_kwargs(**overrides) -> dict:
+    kwargs = dict(
+        movement="M", phase=orch.PHASE_DONE, exit_code=0, failure_reason=None,
+        relay_status="CLOSED", model=None, effort=None, duration_s=1.0,
+        verify_result={"passed": True, "steps": []}, worktree_path=Path("/tmp/x"), branch="feature/x",
+        model_observed="claude", effort_observed="medium",
+    )
+    kwargs.update(overrides)
+    return kwargs
+
+
+def test_build_run_report_names_a_budget_resume_and_its_ceiling():
+    report = orch._build_run_report(**_minimal_run_report_kwargs(budget_resume={"ceiling_usd": 9.0}))
+    assert report["budget_resume"] == {"ceiling_usd": 9.0}
+
+
+def test_build_run_report_omits_budget_resume_when_this_run_was_not_one():
+    report = orch._build_run_report(**_minimal_run_report_kwargs())
+    assert "budget_resume" not in report
 
 
 def test_run_cli_engineer_exit_nonzero_and_unclosed_relay_reports_both_reasons(tmp_path, monkeypatch, capsys):
