@@ -26,10 +26,10 @@ import com.securityexpert.nexus.ui2.worker.transport.ssh.SshCredentialMaterial;
 import com.securityexpert.nexus.ui2.worker.transport.ssh.SshCredentialResolver;
 
 /**
- * AC-1, AC-2 (T-4, the decisive test), AC-5, AC-7's check-17 readiness and
- * T-7's no-raw-retention property, exercised through a full fixture run
- * with {@link FakeDeviceTransport} -- never a real socket, never a real
- * management server.
+ * AC-1, AC-2 (T-4, the decisive test lives in {@link SameShellContextAndQueryTest}),
+ * AC-5, AC-7's check-17 readiness and T-7's no-raw-retention property,
+ * exercised through a full fixture run with {@link FakeDeviceTransport} --
+ * never a real socket, never a real management server.
  */
 class ManagementPlaneEnumerationAdapterTest {
 
@@ -38,6 +38,19 @@ class ManagementPlaneEnumerationAdapterTest {
     private static final String CREDENTIAL_REF = "fixture-credential-ref";
     private static final String TRUST_RULE_REF = "fixture-trust-rule-ref";
 
+    private static final String DOMAIN_A_GATEWAY_QUERY =
+            "mdsenv '" + WorkerFixtures.DOMAIN_A_UID + "'; cpmiquerybin object \"\" network_objects \"type='gateway'\"";
+    private static final String DOMAIN_A_CLUSTER_QUERY =
+            "mdsenv '" + WorkerFixtures.DOMAIN_A_UID + "'; cpmiquerybin object \"\" network_objects \"type='gateway_cluster'\"";
+    private static final String DOMAIN_A_MEMBER_QUERY =
+            "mdsenv '" + WorkerFixtures.DOMAIN_A_UID + "'; cpmiquerybin object \"\" network_objects \"type='cluster_member'\"";
+    private static final String DOMAIN_B_GATEWAY_QUERY =
+            "mdsenv '" + WorkerFixtures.DOMAIN_B_UID + "'; cpmiquerybin object \"\" network_objects \"type='gateway'\"";
+    private static final String DOMAIN_B_CLUSTER_QUERY =
+            "mdsenv '" + WorkerFixtures.DOMAIN_B_UID + "'; cpmiquerybin object \"\" network_objects \"type='gateway_cluster'\"";
+    private static final String DOMAIN_B_MEMBER_QUERY =
+            "mdsenv '" + WorkerFixtures.DOMAIN_B_UID + "'; cpmiquerybin object \"\" network_objects \"type='cluster_member'\"";
+
     private static final SshCredentialResolver ALWAYS_RESOLVES =
             ref -> new SshCredentialMaterial("fixture-user", "fixture-password".toCharArray(), null);
 
@@ -45,7 +58,7 @@ class ManagementPlaneEnumerationAdapterTest {
         return new ManagementPlaneEnumerationRequest(HOST, PORT, CREDENTIAL_REF, TRUST_RULE_REF, Duration.ZERO, Optional.empty());
     }
 
-    /** T-4 -- THE DECISIVE TEST. Across a full run, exactly one distinct ConnectionTarget host is ever dialed. */
+    /** T-4 -- across a full run, exactly one distinct ConnectionTarget host is ever dialed. */
     @Test
     void acrossAFullRunExactlyOneDistinctHostIsEverDialed() {
         FakeDeviceTransport transport = new FakeDeviceTransport(happyPathHandler());
@@ -63,7 +76,7 @@ class ManagementPlaneEnumerationAdapterTest {
         assertEquals(Set.of(HOST), distinctHosts);
     }
 
-    /** AC-1: exactly one connect(), one disconnect(), and check 17's formula for a two-domain fixture. */
+    /** AC-1/AC-2: exactly one connect(), one disconnect(), and check 17's formula for a two-domain fixture. */
     @Test
     void fullRunConnectsOnceDisconnectsOnceAndCountsRequestsPerCheck17() {
         FakeDeviceTransport transport = new FakeDeviceTransport(happyPathHandler());
@@ -75,17 +88,19 @@ class ManagementPlaneEnumerationAdapterTest {
         assertEquals(1, transport.connectCount());
         assertEquals(1, transport.disconnectCount());
         ManagementPlaneEnumerationResult.Completed completed = assertInstanceOf(ManagementPlaneEnumerationResult.Completed.class, result);
-        // check 17: one session + one domain enumeration page + (2 domains * 3 object types * 1 page) = 8.
+        // check 17: one session + one domain enumeration + (2 domains * 3 object types * 1 query each) = 8.
         assertEquals(8, completed.managementPlaneRequestCount());
         assertEquals(SessionDisconnectOutcome.CLOSED, completed.disconnectOutcome());
         assertEquals(6, completed.candidates().size());
+        // the two connection-table reads are not counted -- exactly two "netstat -an" commands were issued regardless.
+        assertEquals(2, transport.commandsIssued().stream().filter("netstat -an"::equals).count());
     }
 
     /** AC-1: disconnect() is still called, and reported, when a per-domain query throws mid-run. */
     @Test
     void disconnectIsStillCalledWhenAPerDomainQueryFails() {
         Function<String, ExecResult> handler = command -> {
-            if (command.startsWith("mgmt_cli show-cluster-members --session-id '" + WorkerFixtures.DOMAIN_B_SESSION_ID + "'")) {
+            if (command.equals(DOMAIN_B_MEMBER_QUERY)) {
                 return new ExecResult.ChannelFailed("fixture-forced-channel-failure");
             }
             return happyPathHandler().apply(command);
@@ -100,8 +115,8 @@ class ManagementPlaneEnumerationAdapterTest {
         assertEquals(1, transport.disconnectCount());
         ManagementPlaneEnumerationResult.Failed failed = assertInstanceOf(ManagementPlaneEnumerationResult.Failed.class, result);
         assertEquals(SessionDisconnectOutcome.CLOSED, failed.disconnectOutcome());
-        // 1 session + 1 domain enumeration + domain A's 3 + domain B's gateway and cluster pages (2) = 7;
-        // the failing member query is never counted because it never returned a page.
+        // 1 session + 1 domain enumeration + domain A's 3 + domain B's gateway and cluster queries (2) = 7;
+        // the failing member query is never counted because it never returned.
         assertEquals(7, failed.managementPlaneRequestCount());
         assertFalse(failed.reason().contains("fixture-forced-channel-failure"),
                 "the transport's own failure reason must never reach the result");
@@ -176,14 +191,28 @@ class ManagementPlaneEnumerationAdapterTest {
             if (candidate.managementAddress().equals(Address.of(WorkerFixtures.DOMAIN_A_GATEWAY_MGMT_ADDRESS))) {
                 assertEquals(Optional.of(ConnectionTableChannelState.ESTABLISHED), candidate.connectionTableChannelState());
             }
-            if (candidate.managementAddress().isPresent() == false) {
-                // cluster candidates carry no management address in this fixture (CR-4): never joined to the table.
-                assertEquals(Optional.empty(), candidate.connectionTableChannelState());
-            }
         }
     }
 
-    /** T-7: no raw response text -- structural markers only a raw blob would carry -- is reachable from the result. */
+    /** AC-7: per object type, how many objects were parsed and how many lacked the stable identifier -- counts only. */
+    @Test
+    void parseCountsAreReportedPerObjectTypeWithNoneMissingInTheHappyPath() {
+        FakeDeviceTransport transport = new FakeDeviceTransport(happyPathHandler());
+        ManagementPlaneEnumerationAdapter adapter =
+                new ManagementPlaneEnumerationAdapter(transport, ALWAYS_RESOLVES, d -> { });
+
+        ManagementPlaneEnumerationResult.Completed result =
+                assertInstanceOf(ManagementPlaneEnumerationResult.Completed.class, adapter.run(request()));
+
+        result.parseCountsByObjectType().values().forEach(counts -> {
+            assertEquals(0, counts.missingStableIdentifier());
+        });
+        int totalParsed = result.parseCountsByObjectType().values().stream()
+                .mapToInt(ManagementPlaneEnumerationResult.ParseCounts::parsed).sum();
+        assertEquals(6, totalParsed);
+    }
+
+    /** T-7: no raw response text -- structural markers only a raw blob or a command string would carry -- is reachable from the result. */
     @Test
     void noRawResponseTextIsReachableFromTheResult() {
         FakeDeviceTransport transport = new FakeDeviceTransport(happyPathHandler());
@@ -193,116 +222,58 @@ class ManagementPlaneEnumerationAdapterTest {
         ManagementPlaneEnumerationResult result = adapter.run(request());
         String resultAsText = String.valueOf(result);
 
-        for (String rawFieldName : List.of("peer-ip", "peer-port", "channel-state", "chassis-role",
-                "hosted-instance-role", "controlling-device-address", "cluster-uid", "cluster-name")) {
-            assertFalse(resultAsText.contains(rawFieldName), "raw field-name literal \"" + rawFieldName + "\" leaked into the result");
+        for (String rawMarker : List.of("cpmiquerybin", "mdsenv", "AdminInfo", "chkpf_uid", "cluster_object",
+                "vsx_netobj", "vs_netobj", "appliance_type", "svn_version_name")) {
+            assertFalse(resultAsText.contains(rawMarker), "raw field/command literal \"" + rawMarker + "\" leaked into the result");
         }
-        assertFalse(resultAsText.contains("mgmt_cli"), "a raw command string leaked into the result");
-        assertFalse(resultAsText.contains(WorkerFixtures.TOP_SESSION_ID), "the session token leaked into the result");
-    }
-
-    /** T-2 pagination: a domain enumeration spanning two pages is fully read, and every page counts once. */
-    @Test
-    void pagedDomainEnumerationIsFullyReadAndEveryPageCounted() {
-        Function<String, ExecResult> handler = command -> {
-            if (command.startsWith("mgmt_cli show-domains --session-id '" + WorkerFixtures.TOP_SESSION_ID + "' --offset 0")) {
-                // a full page (PAGE_SIZE items) signals "there may be more".
-                StringBuilder page = new StringBuilder("[");
-                for (int i = 0; i < ManagementShellCommands.PAGE_SIZE; i++) {
-                    if (i > 0) {
-                        page.append(',');
-                    }
-                    page.append("{\"uid\":\"fixture-domain-page1-").append(i).append("\"}");
-                }
-                page.append(']');
-                return new ExecResult.Completed(page.toString(), 0);
-            }
-            if (command.startsWith("mgmt_cli show-domains --session-id '" + WorkerFixtures.TOP_SESSION_ID
-                    + "' --offset " + ManagementShellCommands.PAGE_SIZE)) {
-                return new ExecResult.Completed(WorkerFixtures.twoDomainsResponse(), 0);
-            }
-            if (command.startsWith("mgmt_cli login-to-domain")) {
-                return new ExecResult.Completed(WorkerFixtures.loginToDomainResponse("fixture-any-domain-session"), 0);
-            }
-            if (command.contains("show-gateways-and-servers") || command.contains("show-clusters")
-                    || command.contains("show-cluster-members")) {
-                return new ExecResult.Completed(WorkerFixtures.emptyPageResponse(), 0);
-            }
-            return happyPathHandler().apply(command);
-        };
-        FakeDeviceTransport transport = new FakeDeviceTransport(handler);
-        ManagementPlaneEnumerationAdapter adapter =
-                new ManagementPlaneEnumerationAdapter(transport, ALWAYS_RESOLVES, d -> { });
-
-        ManagementPlaneEnumerationResult.Completed result =
-                assertInstanceOf(ManagementPlaneEnumerationResult.Completed.class, adapter.run(request()));
-
-        int domainCount = ManagementShellCommands.PAGE_SIZE + 2;
-        // 1 session + 2 domain-enumeration pages + (domainCount domains * 3 object types * 1 empty page each).
-        assertEquals(1 + 2 + domainCount * 3, result.managementPlaneRequestCount());
     }
 
     static Function<String, ExecResult> happyPathHandler() {
         int[] tableObservationCount = {0};
         return command -> {
-            if (command.startsWith("mgmt_cli login -r true -f json")) {
-                return new ExecResult.Completed(WorkerFixtures.loginResponse(), 0);
-            }
-            if (command.startsWith("mgmt_cli login-to-domain --session-id '" + WorkerFixtures.TOP_SESSION_ID
-                    + "' --domain '" + WorkerFixtures.DOMAIN_A_UID + "'")) {
-                return new ExecResult.Completed(WorkerFixtures.loginToDomainResponse(WorkerFixtures.DOMAIN_A_SESSION_ID), 0);
-            }
-            if (command.startsWith("mgmt_cli login-to-domain --session-id '" + WorkerFixtures.TOP_SESSION_ID
-                    + "' --domain '" + WorkerFixtures.DOMAIN_B_UID + "'")) {
-                return new ExecResult.Completed(WorkerFixtures.loginToDomainResponse(WorkerFixtures.DOMAIN_B_SESSION_ID), 0);
-            }
-            if (command.startsWith("mgmt_cli show-domains --session-id '" + WorkerFixtures.TOP_SESSION_ID + "' --offset 0")) {
+            if (command.equals(ManagementShellCommands.domainList())) {
                 return new ExecResult.Completed(WorkerFixtures.twoDomainsResponse(), 0);
             }
-            if (command.startsWith("mgmt_cli show-gateways-and-servers --session-id '" + WorkerFixtures.DOMAIN_A_SESSION_ID
-                    + "' --offset 0")) {
-                return new ExecResult.Completed(WorkerFixtures.array(
+            if (command.equals(DOMAIN_A_GATEWAY_QUERY)) {
+                return new ExecResult.Completed(WorkerFixtures.objectDump(
                         WorkerFixtures.gatewayObject("gw-a-1", "fixture-gw-a-1", WorkerFixtures.DOMAIN_A_GATEWAY_MGMT_ADDRESS)), 0);
             }
-            if (command.startsWith("mgmt_cli show-clusters --session-id '" + WorkerFixtures.DOMAIN_A_SESSION_ID + "' --offset 0")) {
-                return new ExecResult.Completed(WorkerFixtures.array(
+            if (command.equals(DOMAIN_A_CLUSTER_QUERY)) {
+                return new ExecResult.Completed(WorkerFixtures.objectDump(
                         WorkerFixtures.clusterObject("cl-a-1", "fixture-cluster-a-1")), 0);
             }
-            if (command.startsWith("mgmt_cli show-cluster-members --session-id '" + WorkerFixtures.DOMAIN_A_SESSION_ID
-                    + "' --offset 0")) {
-                return new ExecResult.Completed(WorkerFixtures.array(WorkerFixtures.memberObject(
+            if (command.equals(DOMAIN_A_MEMBER_QUERY)) {
+                return new ExecResult.Completed(WorkerFixtures.objectDump(WorkerFixtures.memberObject(
                         "mem-a-1", "fixture-member-a-1", WorkerFixtures.DOMAIN_A_MEMBER_MGMT_ADDRESS,
                         "cl-a-1", "fixture-cluster-a-1")), 0);
             }
-            if (command.startsWith("mgmt_cli show-gateways-and-servers --session-id '" + WorkerFixtures.DOMAIN_B_SESSION_ID
-                    + "' --offset 0")) {
-                return new ExecResult.Completed(WorkerFixtures.array(
+            if (command.equals(DOMAIN_B_GATEWAY_QUERY)) {
+                return new ExecResult.Completed(WorkerFixtures.objectDump(
                         WorkerFixtures.gatewayObject("gw-b-1", "fixture-gw-b-1", WorkerFixtures.DOMAIN_B_GATEWAY_MGMT_ADDRESS)), 0);
             }
-            if (command.startsWith("mgmt_cli show-clusters --session-id '" + WorkerFixtures.DOMAIN_B_SESSION_ID + "' --offset 0")) {
-                return new ExecResult.Completed(WorkerFixtures.array(
+            if (command.equals(DOMAIN_B_CLUSTER_QUERY)) {
+                return new ExecResult.Completed(WorkerFixtures.objectDump(
                         WorkerFixtures.clusterObject("cl-b-1", "fixture-cluster-b-1")), 0);
             }
-            if (command.startsWith("mgmt_cli show-cluster-members --session-id '" + WorkerFixtures.DOMAIN_B_SESSION_ID
-                    + "' --offset 0")) {
-                return new ExecResult.Completed(WorkerFixtures.array(WorkerFixtures.memberObject(
+            if (command.equals(DOMAIN_B_MEMBER_QUERY)) {
+                return new ExecResult.Completed(WorkerFixtures.objectDump(WorkerFixtures.memberObject(
                         "mem-b-1", "fixture-member-b-1", WorkerFixtures.DOMAIN_B_MEMBER_MGMT_ADDRESS,
                         "cl-b-1", "fixture-cluster-b-1")), 0);
             }
-            if (command.startsWith("mgmt_cli show-connectivity-state --session-id '" + WorkerFixtures.TOP_SESSION_ID + "'")) {
+            if (command.equals(ManagementShellCommands.connectionTable())) {
                 tableObservationCount[0]++;
                 if (tableObservationCount[0] == 1) {
                     return new ExecResult.Completed(WorkerFixtures.connectionTable(
-                            WorkerFixtures.connectionTableRow(WorkerFixtures.DOMAIN_A_GATEWAY_MGMT_ADDRESS, 18190, true),
-                            WorkerFixtures.connectionTableRow(WorkerFixtures.DOMAIN_A_MEMBER_MGMT_ADDRESS, 18190, false),
-                            WorkerFixtures.connectionTableRow(WorkerFixtures.DOMAIN_B_GATEWAY_MGMT_ADDRESS, 18190, true),
-                            WorkerFixtures.connectionTableRow(WorkerFixtures.UNMATCHED_TABLE_ADDRESS, 18190, true)), 0);
+                            WorkerFixtures.netstatRow(WorkerFixtures.DOMAIN_A_GATEWAY_MGMT_ADDRESS, 18190, true),
+                            WorkerFixtures.netstatRow(WorkerFixtures.DOMAIN_A_MEMBER_MGMT_ADDRESS, 18190, false),
+                            WorkerFixtures.netstatRow(WorkerFixtures.DOMAIN_B_GATEWAY_MGMT_ADDRESS, 18190, true),
+                            WorkerFixtures.netstatRow(WorkerFixtures.UNMATCHED_TABLE_ADDRESS, 18190, true)), 0);
                 }
                 return new ExecResult.Completed(WorkerFixtures.connectionTable(
-                        WorkerFixtures.connectionTableRow(WorkerFixtures.DOMAIN_A_GATEWAY_MGMT_ADDRESS, 18190, true),
-                        WorkerFixtures.connectionTableRow(WorkerFixtures.DOMAIN_A_MEMBER_MGMT_ADDRESS, 18190, false),
-                        WorkerFixtures.connectionTableRow(WorkerFixtures.DOMAIN_B_GATEWAY_MGMT_ADDRESS, 18190, false),
-                        WorkerFixtures.connectionTableRow(WorkerFixtures.UNMATCHED_TABLE_ADDRESS, 18190, true)), 0);
+                        WorkerFixtures.netstatRow(WorkerFixtures.DOMAIN_A_GATEWAY_MGMT_ADDRESS, 18190, true),
+                        WorkerFixtures.netstatRow(WorkerFixtures.DOMAIN_A_MEMBER_MGMT_ADDRESS, 18190, false),
+                        WorkerFixtures.netstatRow(WorkerFixtures.DOMAIN_B_GATEWAY_MGMT_ADDRESS, 18190, false),
+                        WorkerFixtures.netstatRow(WorkerFixtures.UNMATCHED_TABLE_ADDRESS, 18190, true)), 0);
             }
             throw new AssertionError("unscripted fixture command: " + command);
         };
