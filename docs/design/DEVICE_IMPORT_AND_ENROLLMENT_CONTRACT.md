@@ -382,6 +382,16 @@ what the MDS shows").
 the recorded identity, the product **connects anyway** with the configured
 credentials (`13F` ID-M1). It does not refuse by default.
 
+**EC-6a. A first contact that connects and completes the identity read
+moves `DRAFT` to `ENROLLED` even when the presented identity does not
+match** the recorded or management-plane view — `ENROLLED` with an open
+identity-mismatch warning attached (EC-7), never a separate enrollment
+state, never `DRAFT` retained, never a refusal in default mode. `B1-04b`
+§3's "confirm … succeeds" is read as "the connection and the identity read
+completed"; §10 names the successor clause that records that reading.
+(Decided by `RELAY_DECISION`, `relay/NXS-LOCAL-0147`, 2026-09-13, from
+`13F` ID-M1/ID-M2.)
+
 **EC-7.** The mismatch is surfaced as a **visible warning**, on the device
 and on the run, placed side by side with what the management plane
 currently reports for that device (`13F` ID-M2). It is written to the audit
@@ -420,14 +430,14 @@ secret-output risk, safe telemetry) before an implementing movement may
 issue it. Both reads are `action_class = read` (class 0); no write of any
 class is part of the confirm.
 
-**EC-12.** This document does not decide whether the confirm's steps are
-resolved through `C4`'s `capability_registry`/`gate_registry` machinery
-(§3 there) with their own `capability_id`, or authorized as a distinct
-`C3`-gated action outside that registry. Both `B1-04b` (which frames the
-confirm as a `C3`-authorized action, `role:onboarding_admin`'s "enrollment
-preview/confirm") and `13F` (which frames it in the same warn-and-continue
-language as a collection-adjacent first contact) are silent on which. §11
-records this as an open item rather than choosing.
+**EC-12. Both, layered.** The confirm is a `C3`-authorized action
+(`role:onboarding_admin`'s "enrollment preview/confirm", `B1-04b` §3), and
+the device-contact steps it performs (EC-11: one connect and one identity
+read per vendor) execute as an ordinary `C4` read capability with their own
+`gate_registry` rows — so `C4` §3.5's rule that an `UNKNOWN` gate blocks
+execution applies to the confirm exactly as to every other device contact.
+No second execution path outside `C4` is created. (Decided by
+`RELAY_DECISION`, `relay/NXS-LOCAL-0147`, 2026-09-13.)
 
 ## 5. Identity and privacy
 
@@ -660,23 +670,15 @@ would apply it:
 against each other for this document's scope. No clause in one asserts
 what another's clause forbids.
 
-**Open items, not contradictions — each raised as a `RELAY_QUESTION`
-rather than resolved here:**
+**Open items.** Items 1 and 2 below were raised as a `RELAY_QUESTION` and
+decided on the relay the same day; the decisions are written into EC-6a and
+EC-12 and kept here so the question is visible to the freeze review.
 
-1. **Whether `B1-04b`'s "confirm succeeds" already covers a warned-and-
-   continued mismatch, or needs a successor clause to say so (`U-6`).**
-   `B1-04b` was frozen 2026-09-12; `13F`'s warn-and-continue rule is
-   2026-09-13. `B1-04b` §3's transition table reads naturally either way —
-   this document assumes a mismatch-but-continued connection is a success
-   for enrollment-state purposes (§4.4), because `13F` ID-M1 states the
-   product "connects anyway," and a connection that succeeds is what moves
-   `DRAFT` to `ENROLLED` — but it does not silently amend `B1-04b` to say so
-   and names the gap instead.
-2. **Whether the confirm's device-contact steps run through `C4`'s
-   capability/gate machinery or a distinct `C3`-gated action (`U-7`,
-   `EC-12`).** Neither document states which, and this document is
-   deliberately written so that either answer holds: §4.5 names the gate
-   entries the steps need without asserting how they are registered.
+1. **Decided — a warned-and-continued mismatch is a successful confirm
+   (`U-6`, EC-6a).** `B1-04b` §3's "succeeds" is read as "connection and
+   identity read completed"; §10 keeps the successor clause that records it.
+2. **Decided — the confirm is `C3`-authorized and its device steps run
+   through `C4`'s capability/gate machinery (`U-7`, EC-12).**
 3. **Which service owns the operational unit after import** (`13C` §5's
    first bullet) **remains open, unchanged by this document.** This
    document's rules (§2, §3) hold under either answer: nothing here assigns
