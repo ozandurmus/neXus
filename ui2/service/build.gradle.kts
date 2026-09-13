@@ -18,6 +18,11 @@ dependencies {
     // than only a transitive runtime one of :persistence.
     implementation(libs.postgresql)
     implementation(libs.flyway.core)
+    // LocalAuthenticationConfiguration builds its own DSLContext from that
+    // DataSource (C3A contract §2/§5's composition root) -- :persistence
+    // declares jOOQ as `implementation`, not `api`, so it is not otherwise
+    // visible here.
+    implementation(libs.jooq)
 
     testImplementation(libs.junit.jupiter)
     testImplementation(libs.spring.boot.starter.test)
