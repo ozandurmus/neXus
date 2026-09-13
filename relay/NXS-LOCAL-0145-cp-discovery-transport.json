@@ -1,0 +1,268 @@
+{
+  "created_at": "2026-09-13T13:35:13Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1 A fixture run through a fake DeviceTransport performs exactly one connect(), one disconnect(), and a request count equal to check 17's formula for the fixture -- and disconnect() is still called when a per-domain query throws.",
+          "AC-2 Across a full fixture run the fake transport observes exactly one distinct ConnectionTarget host (T-4). THE DECISIVE TEST -- written first, observed failing before the adapter exists.",
+          "AC-3 Every command string the adapter can send is a member of the single closed command list, every list entry is documented in docs/design/CP_DISCOVERY_MANAGEMENT_COMMAND_GATE_ENTRIES.md with all ten gate items and taxonomy class 0, and the document's status block says it is DRAFT pending Product Owner gate approval.",
+          "AC-4 No production source outside ManagementApiFieldBinding contains a string literal equal to a bound field name; every binding entry, old and new, is UNVERIFIED.",
+          "AC-5 A credentialRef the resolver cannot resolve produces a typed refusal with zero connect() calls; no secret or raw response text is reachable from any result, exception or log.",
+          "AC-6 CS-3: agreeing failing observations report FAILING_TO_COMPLETE, disagreeing observations report IN_TRANSITION, an address absent from the table reports ABSENT, and an address present in the table but absent from the object results is not reported at all (CS-6a); no numeric port literal exists in the adapter's production sources (CS-6b).",
+          "AC-7 CandidateRow carries the channel state under its own field, Check13LivenessVocabularyTest covers the new names and passes, and the eleven-module build, :platform-core:test, :worker:test and :architecture-tests:test are green.",
+          "AC-8 The runner prints counts and shapes only; a test over a fixture run asserts its output contains none of the fixture's names, addresses, domains or identifiers."
+        ],
+        "baseline": {
+          "authority": "docs/design/CP_AND_VSX_DISCOVERY_CONTRACT.md -- FROZEN, PRODUCT OWNER APPROVED 2026-09-13. Sections 3 and 7.4 are the specification of this movement; section 6.4 (FB-1 to FB-3) governs how fields are bound; section 9 checks 14 to 18 are the management-server checks this transport must make RUNNABLE (not run). Gate: docs/design/PO_DECISION_RECORD_2026_09_13_CP_DISCOVERY_COLLECTION_GATE.md (FROZEN) section 2 lifts the collection gate for exactly four methods -- one authenticated session to the management server, enumeration of the management domains, read-only object queries against the management database, reading the management server's own connection table -- and nothing else. Transport choice: docs/design/PO_DECISION_RECORD_2026_09_13C_DISCOVERY_SERVICE_BOUNDARIES.md (FROZEN) SB-11: Check Point Management is reached by a SHELL SESSION to the management server; SB-12/SB-16: the product holds an opaque credential reference, never a secret, and credential-resolution failure is refused before any contact. Topology: docs/design/PO_DECISION_RECORD_2026_09_13D_INDEPENDENTLY_DEPLOYABLE_SERVICES.md section 4: no second authenticated surface may exist until AUTH-PLACEMENT is decided, so this movement exposes NO HTTP endpoint.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "test_baseline": "Run ./ui2/gradlew -p ui2 build -x :integration-tests:test first and record the platform-core, worker and architecture-tests counts before you change anything.",
+          "what_exists": "ui2/platform-core/src/main/java/com/securityexpert/nexus/ui2/discovery/cp/ holds 16 merged production classes: RawCandidateInput is the transport's output shape, CandidateRowAssembler consumes it, ManagementApiFieldBinding is the ONE site that maps 12 role names to candidate API field names (all UNVERIFIED), CandidateRow is the returned row. ui2/worker/src/main/java/com/securityexpert/nexus/ui2/worker/transport/ssh/ holds a working jsch-based SshExecTransport implementing the job-engine DeviceTransport port (connect(ConnectionTarget, ConnectSpec, Duration) -> ConnectResult; exec(TransportSession, ExecSpec(String command), Duration) -> ExecResult.Completed(output, exitStatus)|TimedOut|ChannelFailed; disconnect(TransportSession)), with SshCredentialResolver.resolve(String credentialRef) -> SshCredentialMaterial(username, char[] password, byte[] privateKeyPem) and TrustRuleResolver/HostKeyVerifier for host-key trust. ui2/cli depends on platform-core and job-engine only. Ui2ArchitectureTest dir1..dir10 fix module directions: platform-core has no project dependency, no persistence framework, no Python runtime; service may not reach worker."
+        },
+        "context_not_loaded": [
+          "panorama/ collectors and every Palo Alto document",
+          "docs/history/**",
+          "project/*.json",
+          "The UI2 frontend module",
+          "The local-authentication and bootstrap-identity code under ui2/service and ui2/persistence"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/cp-discovery-transport"
+        },
+        "invariants": [
+          "No device is contacted: the management server is the only connection target a run ever has.",
+          "Every command a run issues is a class 0 read from one closed, documented list.",
+          "Every concrete field name lives in ManagementApiFieldBinding and is UNVERIFIED.",
+          "No raw management-plane response, secret, name, address, domain or identifier is persisted, logged or printed.",
+          "No liveness vocabulary and no derived liveness value anywhere (LV-1 to LV-3), the channel state included.",
+          "No HTTP surface, no persistence, no new Gradle subproject, no new dependency.",
+          "The merged domain-core rules are unchanged."
+        ],
+        "merge_gate": "Product Owner assistant review of the diff plus orchestrator verify.passed. The worker does not merge to main. The command-gate document additionally needs the Product Owner's explicit gate approval before any run against the live management server.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Implement the Check Point discovery TRANSPORT in Java, exactly as docs/design/CP_AND_VSX_DISCOVERY_CONTRACT.md (FROZEN, PRODUCT OWNER APPROVED 2026-09-13) section 3 (T-1 to T-7) and section 7.4 (CS-1 to CS-6c) state it, feeding the already-merged domain core (com.securityexpert.nexus.ui2.discovery.cp, CandidateRowAssembler.assemble(List<RawCandidateInput>)) from a real management-server shell session: one authenticated session, a domain enumeration, per-domain read-only object queries, and the connection-table channel-state read. Every concrete management command and every concrete response field this movement binds is recorded once, at one isolated site, marked UNVERIFIED, because the only measurement lives in the Product Owner's live management server which no worker has. The deliverable is a transport the Product Owner can run against that server to turn UNVERIFIED into a measurement, plus fixture-driven tests proving the transport obeys T-1 to T-7 and CS-3/CS-6 without any server.",
+        "output_contract": [
+          "A transport the Product Owner can run against the live management server, from a documented runner that prints counts and shapes only.",
+          "One closed, documented command set (all class 0) and one binding site with every entry UNVERIFIED, so the Product Owner's run has exactly one place to confirm or correct.",
+          "Fixture tests proving T-1, T-2, T-3, T-4, T-5, T-7, CS-3, CS-6a, CS-6b and FB-2 without a server; contract section 9 checks 7, 9, 11, 14 to 18 made runnable and explicitly reported NOT RUN.",
+          "SESSION_CLOSE naming the command set, the added Roles, the runner invocation, and the test counts before and after."
+        ],
+        "recommended_reasoning": {
+          "reason": "The 2026-09-13 domain-core movement's SESSION_CLOSE recommended this tier for the transport: it binds to a live, safety-relevant management-plane schema under vendor-semantics and raw-evidence law, and the quiet failure modes -- a second connection target, a class 1 command, an inlined field name, a liveness word -- are each caught only by a test the worker must write first.",
+          "tier": "Sonnet 5, high effort"
+        },
+        "requirements": [
+          "English, per AGENTS.md engineering-output language law.",
+          "Every public type and method carries a short comment naming the contract clause it implements (T-n, CS-n, FB-n, LV-n).",
+          "Write the T-4 single-host test and the FB-2 no-inline-field-name scan test FIRST, before the adapter exists, and report in the SESSION_CLOSE that each was observed to fail (or to be vacuous) before the implementation and to pass after.",
+          "Do NOT use './ui2/gradlew -p ui2 build' without '-x :integration-tests:test'.",
+          "Do not run the full Python pytest suite; it creates untracked data/ and logs/ directories the privacy gate flags.",
+          "The ui2 build must keep exactly eleven Gradle subprojects.",
+          "If a contract clause and this packet disagree, the contract wins; raise a RELAY_QUESTION rather than inventing a reconciliation. If a management command you need is not a read (taxonomy class 0), STOP and raise a RELAY_QUESTION -- no class 1 to 4 command may be introduced.",
+          "The SESSION_CLOSE names every command in the closed set, every Role you added to ManagementApiFieldBinding, and the exact runner invocation the Product Owner will use."
+        ],
+        "risks": [
+          "Reading the existing Python and copying its hard-coded, version-pinned management-server path or its command forms verbatim -- CS-6b names that defect; the Python is know-how, not a source.",
+          "Inlining a field-name string 'just for the domain key' or the connection-table columns instead of adding a Role -- this silently creates a second binding site.",
+          "Treating the connection table's 'failing to complete' as reachability, or naming the enum constants with liveness words -- check 13 must catch it; extend it, do not route around it.",
+          "Discovering that a needed management command is not a pure read (for example one that leaves a session lock behind, T-3) and proceeding anyway instead of raising a RELAY_QUESTION.",
+          "Building the runner as an HTTP endpoint in service because that is where a composition root is convenient -- 13D section 4 forbids it and dir2 forbids service reaching worker.",
+          "Writing the decisive tests after the adapter so they have never been seen to fail.",
+          "Letting a jsch exception message carry the host or the username into a result object."
+        ],
+        "scope": {
+          "in": [
+            "PORT, in platform-core: add to package com.securityexpert.nexus.ui2.discovery.cp one interface (name it for what it is, e.g. ManagementPlaneEnumeration) whose single run-shaped operation yields the List<RawCandidateInput> for every domain plus the per-address connection-table channel state, and one enum ConnectionTableChannelState with exactly the four CS-1 states -- established, failing to complete, in transition, absent -- under those names. Add ONE Optional<ConnectionTableChannelState> field to CandidateRow (and thread it through CandidateRowAssembler/RawCandidateInput as needed), carried under its own name per CS-2/LV-2, never merged with managementPlaneConnectionState. Extend Check13LivenessVocabularyTest so the new enum's constant names and the new field name are inside the vocabulary check.",
+            "ADAPTER, in worker: a new package com.securityexpert.nexus.ui2.worker.discovery.cp implementing that port over the EXISTING DeviceTransport/SshExecTransport, SshCredentialResolver and TrustRuleResolver. Do not add a Gradle subproject (ui2/settings.gradle.kts fixes eleven and Ui2ArchitectureTest asserts it) and do not add a dependency to libs.versions.toml. platform-core must not gain a dependency on worker or job-engine (dir1).",
+            "T-1 session lifecycle: exactly one connect() per run, used for the domain enumeration and every per-domain query and the connection-table reads, and disconnect() in a finally path so a run that fails mid-way still closes; a run whose disconnect fails reports that outcome explicitly in its result type rather than swallowing it.",
+            "T-2/T-3 the closed command set: the concrete management shell commands this transport issues (the domain enumeration, the per-domain object query per queried object type, the connection-table read, and whatever session/context-switch commands those require) are declared ONCE in a single class as a closed list, each with the ten items docs/AI_DEVELOPMENT_PROTOCOL.md 'Network-device command gate' requires (why required, taxonomy class -- every one of them must be class 0 read --, vendor/platform/shell/context, timeout, retry, max frequency per endpoint, session reuse, unsupported behaviour, secret-bearing output risk, safe telemetry) written as a table in a NEW document docs/design/CP_DISCOVERY_MANAGEMENT_COMMAND_GATE_ENTRIES.md whose status block reads 'DRAFT -- PENDING PRODUCT OWNER GATE APPROVAL' and states plainly it authorizes nothing until approved. A JUnit test asserts every command string the adapter can ever send is a member of that closed list.",
+            "FB-2 binding at one site: the adapter parses responses ONLY through ManagementApiFieldBinding.forRole(...).apiField() -- no other production class may contain a concrete field-name string literal. Where the adapter needs a field the 12 existing roles do not cover (for example whatever key identifies a domain in the enumeration, or the address/port/state columns of the connection table), ADD a Role to ManagementApiFieldBinding with an UNVERIFIED entry; never inline it. Every entry stays UNVERIFIED: this movement may not flip any entry to a verified status, because no worker has the measurement (contract status block; FB-2). A JUnit test scans the adapter's production sources for string literals that equal any bound field name outside ManagementApiFieldBinding and fails on a hit.",
+            "T-4 no device contact: the only host the adapter ever passes to connect() is the management server's own address given by the caller; every address parsed out of any response is a value inside a RawCandidateInput or a connection-table row and is never used as a ConnectionTarget, never resolved, never probed. A test with a fake DeviceTransport records every ConnectionTarget seen across a full fixture run and asserts exactly one distinct host.",
+            "T-5/SB-12/SB-16: the run takes an opaque credentialRef and a trustRuleRef (the existing ConnectSpec shape) and NOTHING secret; if SshCredentialResolver.resolve throws or returns nothing usable, the run is refused with a typed outcome BEFORE connect() is called. No username, password, key or raw response reaches a log line, an exception message or a result object.",
+            "T-6: commands are issued strictly sequentially in the one session; no executor, no parallel stream, no per-domain thread.",
+            "T-7 raw-evidence law: the raw command output is parsed in memory into RawCandidateInput / channel-state values and then dropped. The result type carries no raw text field and nothing writes a file. A test asserts the run result and every value reachable from it contains no raw response string.",
+            "Section 7.4 connection table: CS-6a reduce the table to one state per address, join only addresses that also appear as a candidate's management address in the object-database results, and report nothing for an address with no object; CS-3 take two observations separated by a caller-supplied interval and report 'failing to complete' only when both observations agree, 'in transition' when they disagree, never resolving by recency or preference; CS-6b the channel port is DERIVED from the observed established rows or supplied by configuration -- a test asserts no numeric port literal appears in the adapter's production sources (loopback/zero excluded if you need them); LV-1 to LV-3 no derived liveness value of any kind.",
+            "Section 9 check 17 readiness: the run result carries the count of management-plane requests issued so that check 17's arithmetic (one session + one domain enumeration + per domain per queried type the number of pages) can be evaluated by the Product Owner; a fixture test asserts the count equals that formula for a fixture with two domains.",
+            "A Product-Owner-runnable entry point WITHOUT an authenticated network surface: one subcommand in the existing ui2 worker main (composition root, where SshExecTransport is already wired) or a documented main class in worker, that takes management host, credentialRef, trustRuleRef and the CS-3 interval, runs one discovery, and prints COUNTS AND SHAPES ONLY per AGENTS.md 'Sensitive identity reporting law': candidates per kind, host-resolution outcomes per kind, cluster links / NOT_EVALUABLE counts, channel-state counts per CS-1 state, request count, and the UNCLASSIFIED/AMBIGUOUS counts of check 7. It prints no name, no address, no domain name, no identifier. This is how section 9 checks 7, 9, 11, 14 to 18 become runnable; this movement does NOT run them.",
+            "Fixture-driven tests only, in worker's test tree, with synthetic response texts you invent (no real address, hostname, domain, identifier or object name -- follow platform-core's discovery/cp/Fixtures.java discipline): the T-1 close-on-failure path, the T-2 request-count formula, the T-3 closed-command-set membership, the T-4 single-host assertion, the T-5 refusal-before-contact path, the T-7 no-raw-retention assertion, CS-3's three outcomes, CS-6a's reduction and object-join, CS-6b's no-literal-port scan, and the FB-2 no-inline-field-name scan.",
+            "Commit early and often on the lane, grouped by contract clause (port and CandidateRow field; command set and gate document; adapter and parser; connection table; runner; tests)."
+          ],
+          "out": [
+            "Running any check against a real management server, and changing any ManagementApiFieldBinding entry from UNVERIFIED to anything else. Both belong to a Product-Owner-run confirmation.",
+            "Any HTTP endpoint, controller, route or screen (PO_DECISION_RECORD_2026_09_13D section 4, AUTH-PLACEMENT open). Any persistence: no Flyway migration, no repository, no device row, no evidence record (DI-1, DI-2).",
+            "Any device contact of any kind, any command against a gateway, cluster member or virtual system, any credential other than the one management-plane credential (T-4, T-5, the gate lift's 'no device is contacted').",
+            "Palo Alto in any form; import; collection; liveness (section 7.3); re-discovery scheduling; multi-management-server estates.",
+            "Editing any FROZEN document, including the contract and the three PO decision records named above. Editing any existing Flyway migration.",
+            "Porting, wrapping, transliterating or invoking the existing Python (PO_DECISION_RECORD_2026_09_12 section 2). You may read it as know-how for which management commands exist; you may not copy a hard-coded, version-pinned path from it (CS-6b names that defect).",
+            "Adding a Gradle subproject or a new external dependency.",
+            "Changing the classifier, host resolution, host linking or cluster resolution rules of the merged domain core beyond threading the one new CandidateRow field."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              "build",
+              "-x",
+              ":integration-tests:test"
+            ],
+            "name": "ui2_build_excluding_db_bound_integration_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              ":platform-core:test"
+            ],
+            "name": "ui2_platform_core_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              ":worker:test"
+            ],
+            "name": "ui2_worker_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              ":architecture-tests:test"
+            ],
+            "name": "ui2_architecture_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              "projects"
+            ],
+            "name": "ui2_module_listing_must_stay_eleven"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_contract_authority_status.py",
+              "-q"
+            ],
+            "name": "contract_authority_status"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-13T13:35:13Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "AUTOMATED_VALIDATED",
+      "report": {
+        "changed": [
+          "ui2/platform-core/.../discovery/cp/: new ManagementPlaneEnumeration port, ManagementPlaneEnumerationRequest, ManagementPlaneEnumerationResult (Refused/Completed/Failed), SessionDisconnectOutcome, ConnectionTableChannelState; RawCandidateInput and CandidateRow gained connectionTableChannelState; CandidateRowAssembler threads it through; ManagementApiFieldBinding gained 5 UNVERIFIED roles; Check13LivenessVocabularyTest, Fixtures.java and Check10TypeBlindnessTest.java updated for the new record field.",
+          "docs/design/CP_DISCOVERY_MANAGEMENT_COMMAND_GATE_ENTRIES.md: new, DRAFT -- PENDING PRODUCT OWNER GATE APPROVAL.",
+          "ui2/worker/.../worker/discovery/cp/: new package -- ManagementShellCommands, MinimalJson, ConnectionTableRow, ConnectionTableReducer, Sleeper, ManagementPlaneQueryFailedException, ManagementPlaneEnumerationAdapter, DiscoveryRunReport, DiscoveryRunnerMain, EnvironmentCredentialAndTrustResolvers, plus 8 test classes (WorkerFixtures, FakeDeviceTransport, ManagementPlaneEnumerationAdapterTest, ManagementShellCommandsClosedSetTest, FieldBindingIsolationTest, NoNumericPortLiteralTest, ConnectionTableReducerTest, DiscoveryRunReportTest).",
+          "Runner invocation the Product Owner will use: CP_DISCOVERY_SSH_USERNAME=<user> CP_DISCOVERY_SSH_PASSWORD=<pass> CP_DISCOVERY_TRUST_FINGERPRINT=<expected-fingerprint> java -cp <worker+deps classpath> com.securityexpert.nexus.ui2.worker.discovery.cp.DiscoveryRunnerMain --management-host <host> --management-ssh-port <port> --credential-ref <opaque-ref> --trust-rule-ref <opaque-ref> --channel-observation-interval-seconds <n> [--configured-channel-port <port>]. The credential/trust resolvers are a temporary environment-variable stand-in (EnvironmentCredentialAndTrustResolvers) until the real secret-backed store exists; credentialRef/trustRuleRef are accepted but not yet resolved against a store."
+        ],
+        "completed": [
+          "AC-1: ManagementPlaneEnumerationAdapter performs exactly one connect() and one disconnect() per run, in a try/finally-equivalent path; disconnect() still runs and its outcome (CLOSED/FAILED_TO_CLOSE) is reported explicitly when a per-domain query throws mid-run.",
+          "AC-2 (decisive T-4 test): acrossAFullRunExactlyOneDistinctHostIsEverDialed, written and run against an intentionally-broken adapter first (a temporary second connect() to a bogus host), observed FAILING, then the violation was reverted and the test observed PASSING against the real adapter.",
+          "AC-3: ManagementShellCommands declares the seven-command closed set once (login, login-to-domain, show-domains, show-gateways-and-servers, show-clusters, show-cluster-members, show-connectivity-state), all class 0 reads; docs/design/CP_DISCOVERY_MANAGEMENT_COMMAND_GATE_ENTRIES.md documents all ten gate items per entry and is DRAFT -- PENDING PRODUCT OWNER GATE APPROVAL; ManagementShellCommandsClosedSetTest asserts every command a full fixture run issues is a member of the closed set.",
+          "AC-4 (FB-2 scan, written before the adapter body): FieldBindingIsolationTest scans the whole worker discovery/cp package for bound field-name literals, run against an intentionally-inlined 'uid' literal first, observed FAILING, then reverted and observed PASSING. Five new UNVERIFIED roles added to ManagementApiFieldBinding: DOMAIN_IDENTIFIER->uid, SESSION_IDENTIFIER->sid, CONNECTION_TABLE_ADDRESS->peer-ip, CONNECTION_TABLE_PORT->peer-port, CONNECTION_TABLE_STATE->channel-state. No existing entry's status changed from UNVERIFIED.",
+          "AC-5: unresolvableCredentialRefusesBeforeAnyConnectAttempt and unusableCredentialMaterialRefusesBeforeAnyConnectAttempt both assert zero connect() calls and that neither the resolver's exception text nor any username/host substring reaches the Refused reason.",
+          "AC-6: ConnectionTableReducerTest covers CS-3 (agreeing established/failing, disagreeing -> IN_TRANSITION, no entry in either observation -> ABSENT), CS-6a (an address with no corresponding candidate is dropped, many rows per address reduce correctly), and CS-6b (configured-port fallback when no row is established); NoNumericPortLiteralTest scans the whole adapter package and finds no port-shaped integer literal (management port and configured channel port are both required CLI/request arguments, never defaulted in code).",
+          "AC-7: CandidateRow carries connectionTableChannelState as its own Optional field (never merged with managementPlaneConnectionState); Check13LivenessVocabularyTest was extended with an explicit assertion for the new field name and the four ConnectionTableChannelState constant names, and passes; the eleven-module build, :platform-core:test, :worker:test and :architecture-tests:test are all green (see validation).",
+          "AC-8: DiscoveryRunReport renders outcome/counts/shapes only (candidates_by_kind, host_resolution_outcomes, host_link_outcomes, cluster_link_outcomes, channel_state_counts, unclassified_count, ambiguous_count, management_plane_request_count, disconnect_outcome); DiscoveryRunReportTest asserts the rendered text contains none of a two-domain fixture's uids, addresses or session tokens.",
+          "Section 9 check 17 readiness: managementPlaneRequestCount equals 1 (session) + domain-enumeration pages + sum over domains and object types of pages actually issued; verified for a two-domain, single-page fixture (=8) and for a paginated 52-domain fixture, both via managementPlaneEnumerationAdapterTest.",
+          "Section 9 checks 7, 9, 11, 14-18 are now runnable (DiscoveryRunReport surfaces UNCLASSIFIED/AMBIGUOUS counts for check 7, host-resolution/host-link outcome counts for checks 9/11, request counts for check 17, DI-1/DI-3/DI-4 shapes for checks 14/18) but are explicitly NOT RUN by this movement -- no worker has the live management server."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "none -- this movement touches only ui2/ (Java) and docs/design/; no Python entry point changed.",
+          "ui": "none -- no HTTP endpoint, controller, route or screen added or changed; the UI 2.0 frontend module is untouched."
+        },
+        "integration": {
+          "branch": "feature/cp-discovery-transport",
+          "ci": "not run (no CI pipeline invoked by this worker session; local Gradle/pytest validation only, see validation block)",
+          "head_sha": "c8b36db8ff5b8a75fcdb2f27d805669aef7adf5a",
+          "merge_commit": null,
+          "merge_decision": "The worker does not merge to main. Awaiting Product Owner assistant review of the diff plus orchestrator verify.passed; the command-gate document additionally needs explicit Product Owner gate approval before any live-server run.",
+          "merge_state": "NOT_OPENED",
+          "pr": null,
+          "pr_url": null
+        },
+        "next": {
+          "movement": "cp-discovery-transport-po-review-and-gate-approval",
+          "movement_type": "VALIDATION",
+          "objective": "Product Owner assistant review of this diff, orchestrator verify.passed, explicit gate approval of docs/design/CP_DISCOVERY_MANAGEMENT_COMMAND_GATE_ENTRIES.md, then a Product-Owner-run DiscoveryRunnerMain invocation against the live management server to turn each UNVERIFIED ManagementApiFieldBinding entry and each ManagementShellCommands command into a measurement or a correction, and to actually run contract section 9 checks 7, 9, 11 and 14-18.",
+          "status": "automated_validated"
+        },
+        "preserved": [
+          "CandidateClassifier, HostResolution, HostLinkResolver, ClusterLinkResolver and every other merged domain-core rule file: untouched, no diff.",
+          "No HTTP endpoint, controller, route or screen added; no Flyway migration, repository or persisted row added.",
+          "No Gradle subproject added (still exactly eleven); no dependency added to gradle/libs.versions.toml.",
+          "Every ManagementApiFieldBinding entry, old and new, remains Status.UNVERIFIED -- none was flipped.",
+          "platform-core gained no dependency on job-engine or worker (Ui2ArchitectureTest dir1 still passes)."
+        ],
+        "recommended_reasoning": {
+          "reason": "The next step is review plus a live-server run the Product Owner alone can perform, not new architecture or vendor-semantic ambiguity this session had to resolve -- default down from this session's high-effort tier per AGENTS.md 'default down, not up'.",
+          "tier": "Sonnet 5, medium effort"
+        },
+        "state_updates": [
+          "Not applied in this worker session (WORKER.md restricts this session to the files it names and does not name project/*.json or CURRENT_STATE.md). Recommended for the next state-owning session: record this movement's IMPLEMENTED/AUTOMATED_VALIDATED status and the still-open command-gate approval in project/roadmap.json and CURRENT_STATE.md's Active build line via scripts/project_queue.py, per GOV.ORCH.5."
+        ],
+        "unresolved_risks": [
+          "The command-gate document is DRAFT -- PENDING PRODUCT OWNER GATE APPROVAL; no command in ManagementShellCommands may be run against a real server until that approval lands.",
+          "Every ManagementApiFieldBinding entry (12 original + 5 new) is UNVERIFIED; a real run may show a different concrete field name, a different pagination shape, or a different connection-table row shape than this movement guessed -- the Product Owner's run is what turns UNVERIFIED into a measurement or a correction.",
+          "The connection-table row reduction and channel-port derivation (ConnectionTableReducer) is a plausible, testable, but unmeasured algorithm -- CS-4/CS-5's real-server shape (many rows per address, which column carries the channel port) has not been observed by any worker.",
+          "EnvironmentCredentialAndTrustResolvers is a temporary stand-in; it does not resolve credentialRef/trustRuleRef against any real store (none exists yet) -- a later movement must replace it without changing the ManagementPlaneEnumeration port or the adapter's refusal-before-connect behaviour."
+        ],
+        "validation": {
+          "affected": ":platform-core:test and :worker:test both BUILD SUCCESSFUL, run directly and confirmed via test-results XML (0 failures, 0 errors across all listed classes).",
+          "diff_check": "git diff --check origin/main...HEAD clean; git diff --name-status origin/main...HEAD touches only docs/design/CP_DISCOVERY_MANAGEMENT_COMMAND_GATE_ENTRIES.md (new), ui2/platform-core/... and ui2/worker/... -- no utils/, scripts/, service/, persistence/ or FROZEN-document path.",
+          "full_regression": "./ui2/gradlew -p ui2 build -x :integration-tests:test -> BUILD SUCCESSFUL (42 actionable tasks). :architecture-tests:test -> BUILD SUCCESSFUL (dir1..dir10 all pass, including dir1's platform-core-has-no-worker/job-engine-dependency check). ./ui2/gradlew -p ui2 projects -> exactly eleven subprojects, unchanged.",
+          "privacy": "python3 scripts/repository_privacy_check.py -> PASS, 0 findings, 1484 files scanned.",
+          "real_environment": "NOT RUN. No worker of this movement has the Product Owner's live management server (contract §2, §11). Every ManagementApiFieldBinding entry and every ManagementShellCommands command string is UNVERIFIED; contract §9 checks 7, 9, 11, 14-18 are made runnable (DiscoveryRunReport) but not executed here.",
+          "state_consistency": "python3 -m pytest tests/test_contract_authority_status.py -q -> 5 passed; the new DRAFT gate document cites the FROZEN contract as provenance only and asserts no authority of its own.",
+          "targeted": "New worker package tests: 21/21 passed (ConnectionTableReducerTest 7, DiscoveryRunReportTest 2, FieldBindingIsolationTest 1, ManagementPlaneEnumerationAdapterTest 9, ManagementShellCommandsClosedSetTest 1, NoNumericPortLiteralTest 1). Platform-core discovery/cp tests (including the extended Check13LivenessVocabularyTest and updated Fixtures/Check10TypeBlindnessTest) all pass."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-13T14:03:17Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0145",
+  "movement": "cp-discovery-transport",
+  "next_actor": null,
+  "refs": [
+    "docs/design/CP_AND_VSX_DISCOVERY_CONTRACT.md",
+    "docs/design/PO_DECISION_RECORD_2026_09_13_CP_DISCOVERY_COLLECTION_GATE.md",
+    "docs/design/PO_DECISION_RECORD_2026_09_13C_DISCOVERY_SERVICE_BOUNDARIES.md",
+    "docs/design/PO_DECISION_RECORD_2026_09_13D_INDEPENDENTLY_DEPLOYABLE_SERVICES.md",
+    "docs/AI_DEVELOPMENT_PROTOCOL.md",
+    "relay/NXS-LOCAL-0129-cp-discovery-domain-core.json"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-13T14:03:17Z"
+}

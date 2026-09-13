@@ -1,0 +1,242 @@
+{
+  "created_at": "2026-09-13T13:35:13Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1 Check 7, all five cases, as separate assertions: PAIRED only for reciprocal cases; NOT_EVALUABLE with the correct reason for the unresolvable, self-referential and one-sided claimants; and in the fifth case the corroborated pair stays PAIRED while the claimed member carries the inbound claim. THE DECISIVE TEST -- observed failing before the resolver exists.",
+          "AC-2 Check 8 name-blindness: identical pairing outcomes and host links with every display name replaced by one constant.",
+          "AC-3 Check 9 vocabulary: no forbidden word in any field name or enum constant in the package; no field derived from the connection-state element.",
+          "AC-4 Check 10 and check 11: identical addresses form no relationship; whitespace-padded serials pair identically; a removed serial yields NOT_EVALUABLE and never a fallback.",
+          "AC-5 Check 12: every virtual-system row's host link is its parent entry, established structurally.",
+          "AC-6 The assembler returns one row per input entry plus one per nested virtual-system entry; a fixture with a serial-less entry and a non-established entry loses neither (DI-4, DI-5).",
+          "AC-7 PanoramaApiFieldBinding is the only production class containing a concrete element name and every entry is UNVERIFIED; the eleven-module build, :platform-core:test and :architecture-tests:test are green."
+        ],
+        "baseline": {
+          "authority": "docs/design/PAN_DISCOVERY_CONTRACT.md -- FROZEN, PRODUCT OWNER APPROVED 2026-09-13; its status block records a clause-by-clause review in which HA-4 was corrected to HA-4/HA-4a/HA-4b before freezing. Sections 4 to 10 are the specification; section 11 Band 2 (checks 7 to 12) is the acceptance surface. The gate lift docs/design/PO_DECISION_RECORD_2026_09_13B_PAN_DISCOVERY_COLLECTION_GATE.md (FROZEN) authorizes two methods, neither of which this movement uses: this movement is pure domain code over fixtures. docs/design/PO_DECISION_RECORD_2026_09_13C_DISCOVERY_SERVICE_BOUNDARIES.md (FROZEN) SB-5 to SB-10 place virtual-system and HA-pair resolution in discovery under the reciprocity rule; this movement is that placement, in code.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "test_baseline": "Run ./ui2/gradlew -p ui2 build -x :integration-tests:test first and record the platform-core and architecture-tests counts before you change anything.",
+          "what_exists": "The Check Point domain core is merged at ui2/platform-core/src/main/java/com/securityexpert/nexus/ui2/discovery/cp/ (16 classes) with its tests and a synthetic Fixtures helper; it is the shape and discipline to follow -- role-named rules, one ManagementApiFieldBinding site with every entry UNVERIFIED, an assembler that drops nothing, Check8/10/12/13-style property tests. Nothing Palo Alto exists in ui2. platform-core has no project dependency (Ui2ArchitectureTest dir1), no persistence framework (dir7) and no Python runtime (dir10). com.securityexpert.nexus.ui2.platform.OpaqueId is the opaque identifier type the cp package uses for keys."
+        },
+        "context_not_loaded": [
+          "panorama/ and configuration/ collectors",
+          "docs/history/**",
+          "project/*.json",
+          "The Check Point contract beyond what the Palo Alto contract cites",
+          "ui2/service, ui2/persistence, ui2/worker, the frontend"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/pan-discovery-domain-core"
+        },
+        "invariants": [
+          "A pair is formed only from two agreeing claims in the same input set; one side never forms or destroys a pair.",
+          "The serial is the only join key; no name and no address is ever compared.",
+          "Nothing is dropped: one row per entry and per nested virtual system, with an honest outcome.",
+          "No liveness vocabulary and no derived liveness value; connection state, connection timestamp and certificate elements stay apart.",
+          "One binding site, every entry UNVERIFIED; no Panorama contact.",
+          "No new Gradle subproject, no new dependency; the cp package is untouched."
+        ],
+        "merge_gate": "Product Owner assistant review of the diff plus orchestrator verify.passed. The worker does not merge to main.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Implement the Palo Alto discovery DOMAIN CORE in Java, inside the existing ui2 platform-core module, exactly as docs/design/PAN_DISCOVERY_CONTRACT.md (FROZEN, PRODUCT OWNER APPROVED 2026-09-13) states it: the single candidate shape of section 4, identity and addressing of section 5, structural virtual-system resolution of section 6, high-availability peer resolution with its reciprocity rule of section 7 (HA-0 to HA-5, including HA-4a/HA-4b), the liveness and kept-apart rules of sections 8 and 9, the no-filter rules of section 10, and one isolated field-binding site. Plus the six Band 2 acceptance checks of section 11 -- checks 7 to 12 -- as real JUnit tests over synthetic fixtures. Check 7's fifth case (a one-sided claim aimed at a member of a reciprocal pair, HA-4a) is the one that matters most. No transport: Panorama is not contacted by this movement.",
+        "output_contract": [
+          "A Palo Alto discovery domain core in platform-core that the next movement's transport can feed with parsed enumeration entries.",
+          "Section 11 Band 2 checks 7 to 12 as JUnit tests, check 7's fifth case observed failing before the implementation.",
+          "One PanoramaApiFieldBinding site, every entry UNVERIFIED, ready for check 14 against a live Panorama.",
+          "SESSION_CLOSE naming the test counts before and after and every Role the binding site carries."
+        ],
+        "recommended_reasoning": {
+          "reason": "Deterministic implementation under a FROZEN contract with fixtures, same shape as the merged Check Point domain core (Sonnet 5, 53 turns). High rather than medium effort because HA-4a/HA-4b is a subtle rule whose plausible wrong implementation passes four of check 7's five cases.",
+          "tier": "Sonnet 5, high effort"
+        },
+        "requirements": [
+          "English, per AGENTS.md engineering-output language law.",
+          "Every public type and method carries a short comment naming the contract clause it implements (CL-n, ID-n, VS-n, HA-n, LV-n, CS-n, DI-n, check n).",
+          "Write the check 7 fifth-case test FIRST, before the pairing resolver exists, and report in the SESSION_CLOSE that it was observed failing before the implementation and passing after.",
+          "Do NOT use './ui2/gradlew -p ui2 build' without '-x :integration-tests:test'.",
+          "Do not run the full Python pytest suite; it creates untracked data/ and logs/ directories the privacy gate flags.",
+          "The ui2 build must keep exactly eleven Gradle subprojects.",
+          "If a contract clause and this packet disagree, the contract wins; raise a RELAY_QUESTION rather than inventing a reconciliation."
+        ],
+        "risks": [
+          "Implementing HA-4 as drafted (both parties NOT_EVALUABLE) instead of as frozen (HA-4a keeps the pair) -- the fifth case of check 7 exists precisely for this.",
+          "Normalizing the serial (stripping zeroes, upper-casing) to make a fixture match -- ID-1 forbids everything except surrounding-whitespace trimming.",
+          "Passing address fields into the pairing or host resolver 'for later' -- ID-5 wants that impossible by signature.",
+          "Building a CandidateKind for Palo Alto by analogy with Check Point -- CL-1 says there is no lattice.",
+          "Merging connection state, connection timestamp and certificate elements into one status field -- CS-3 names exactly that historical defect.",
+          "Writing the decisive test after the resolver so it has never been seen to fail."
+        ],
+        "scope": {
+          "in": [
+            "Create ONE new Java package, com.securityexpert.nexus.ui2.discovery.pan, inside the EXISTING ui2/platform-core module. No new Gradle subproject, no new dependency.",
+            "The one candidate shape, section 4 and sections 5 to 9: a raw input record and a candidate row carrying, by ROLE name, the stable identifier (serial, Optional -- ID-2/U-1), the display name, the device-type marker carried as-is even when empty (CL-3), the two address roles as SEPARATE Optional fields for the IPv4 locator and the IPv6 locator (ID-4), the peer-serial reference (Optional, HA-0), the connection-state element (Optional, LV-0), the connection timestamp element and the certificate elements (Optional, CS-1/CS-2, each under its own name), and the nested virtual-system entries (VS-1) each with its own identifier, display name and the three shared-policy elements under three role names (VS-2). No kind lattice and no computed kind (CL-1, CL-3). Every '?'-shaped field is Optional and its absence is handled, never repaired.",
+            "Identity, section 5: the serial is opaque -- not cast, not trimmed of leading zeroes, not normalized, not parsed (ID-1). Representation-equality for the join is decided after trimming SURROUNDING whitespace only (check 11 fixes exactly that) and after nothing else. The display name is never compared (ID-3). Neither address is ever compared to form any relationship (ID-4/ID-5) -- host resolution and pairing are written with no access to either address field; make that structural (the resolver signatures do not receive addresses).",
+            "Virtual systems, section 6: each nested entry becomes a candidate row in its own right (VS-4) whose host link is exactly its parent entry, read off the structure with zero lookups (VS-3); the virtual-system identifier is scoped to its parent (VS-2). Do not build a two-address host invariant -- the contract says that problem does not exist here.",
+            "High availability, section 7: a PairingOutcome type with PAIRED and NOT_EVALUABLE, the latter carrying WHY as a closed enum (no serial; peer resolves to no entry HA-2; peer names self HA-3; one-sided HA-4). A pair forms only when A names B and B names A within the same input set (HA-1). HA-4a: an inbound claim on a member of a reciprocal pair leaves that pair PAIRED. HA-4b: that member additionally carries the unreciprocated inbound claim(s), by the claimant's serial, as a separate outcome field -- surfaced, never resolved into a pair, never dropped. HA-5: every candidate is returned with its outcome.",
+            "Sections 8 and 9: no field name and no enumerated value in the package uses up/down/online/offline/reachable/unreachable/healthy/unhealthy or a synonym; no value is derived from the connection-state, connection-timestamp or certificate elements (LV-1 to LV-3, CS-1/CS-2); they are carried under their own names only.",
+            "Section 10: the assembler returns exactly one row per input entry plus one per nested virtual-system entry; nothing is dropped for a missing serial (DI-4), for a non-established or absent connection state (DI-5), or for any NOT_EVALUABLE outcome (DI-6). No deduplication (DI-7).",
+            "One isolated field-binding site: a PanoramaApiFieldBinding class mirroring cp's ManagementApiFieldBinding -- one Role enum covering every role above, one entry per role naming a CANDIDATE response element path, every entry UNVERIFIED (section 11 check 14 is what would verify them, and it needs a live Panorama this movement does not have); a role you cannot even propose an element for is UNKNOWN and not carried. Every rule in the package is written against Role names; no other production class contains a concrete element name.",
+            "JUnit tests implementing section 11 Band 2 checks 7, 8, 9, 10, 11 and 12 over synthetic fixtures constructed in the test source (no real serial, name, address or estate value -- follow cp's Fixtures.java discipline). Check 7 MUST assert all five cases explicitly and separately, and the fifth case must assert both that the B-C pair stays PAIRED and that B carries A's inbound claim. Check 8 replaces every device and virtual-system display name with one constant and asserts identical pairing outcomes and host links. Check 9 asserts the vocabulary rule over every field name and every enum constant name in the package, and that no field is a function of the connection-state element. Check 10 gives two candidates identical IPv4 and IPv6 values and asserts no relationship forms. Check 11 asserts whitespace-padded serials pair identically and a removed serial yields NOT_EVALUABLE with no name- or address-based fallback. Check 12 asserts each virtual-system row's host link is its parent with zero simulated calls.",
+            "Commit early and often on the lane, grouped by contract section (shape and binding; identity and virtual systems; HA pairing; sections 8 to 10; Band 2 tests)."
+          ],
+          "out": [
+            "Any transport: no HTTPS, no XML API client, no key-generation call, no Panorama contact, no parsing of a real response. The transport is the next movement.",
+            "Any HTTP endpoint or screen; any persistence, migration or device row (DI-1, DI-2, PO_DECISION_RECORD_2026_09_13D section 4).",
+            "Template, Template Stack and Device Group relationships (excluded by Product Owner decision, gate record section 3). Liveness. Import. Collection. Which service owns the operational unit after import.",
+            "Check Point in any form beyond reading its merged package as the shape to follow. Any change to the cp package.",
+            "Editing any FROZEN document. Porting, wrapping or invoking the existing Python (know-how only; the contract cites it once, in section 10, to name the two filters it forbids).",
+            "Adding a Gradle subproject or an external dependency. Verifying any binding entry."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              "build",
+              "-x",
+              ":integration-tests:test"
+            ],
+            "name": "ui2_build_excluding_db_bound_integration_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              ":platform-core:test"
+            ],
+            "name": "ui2_platform_core_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              ":architecture-tests:test"
+            ],
+            "name": "ui2_architecture_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              "projects"
+            ],
+            "name": "ui2_module_listing_must_stay_eleven"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_contract_authority_status.py",
+              "-q"
+            ],
+            "name": "contract_authority_status"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-13T13:35:13Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "report": {
+        "changed": [
+          "Added 9 production classes under ui2/platform-core/src/main/java/com/securityexpert/nexus/ui2/discovery/pan/: Serial, RawDeviceInput, RawVirtualSystemInput, CandidateRow, HostLink, PairingOutcome, PeerPairingResolver, CandidateRowAssembler, PanoramaApiFieldBinding.",
+          "Added 7 JUnit test classes under the mirrored test package plus a synthetic Fixtures helper: Check7ReciprocityTest, Check8NameBlindnessTest, Check9VocabularyTest, Check10AddressNonJoinTest, Check11IdentifierOnlyJoinTest, Check12StructuralHostLinkTest, PanoramaApiFieldBindingTest.",
+          "Three commits on feature/pan-discovery-domain-core, grouped by contract section (shape+binding; HA pairing+assembler, including the decisive-test TDD sequence; Band 2 tests 8-12 plus binding isolation)."
+        ],
+        "completed": [
+          "AC-1 (THE DECISIVE TEST): Check7ReciprocityTest asserts all five §11 check-7 cases separately -- reciprocal pair PAIRED, dangling claim NOT_EVALUABLE(PEER_NOT_FOUND), self-referential NOT_EVALUABLE(SELF_REFERENTIAL), one-sided claim NOT_EVALUABLE(ONE_SIDED_CLAIM) for the claimant only, and the decisive fifth case: the B-C pair stays PAIRED on both sides while B separately carries the unreciprocated inbound claimant's serial (HA-4a/HA-4b). Written and run FIRST against a deliberately DRAFT-wrong PeerPairingResolver (HA-4 as originally drafted -- collapsing both parties), observed FAILING on exactly the fifth case plus a side effect on case 4; the resolver was then corrected to HA-4a/HA-4b with no test changes, and the same 6 assertions were observed PASSING.",
+          "AC-2 (check 8): Check8NameBlindnessTest resolves the check-7 and check-12 fixture sets twice -- once as given, once with every device and virtual-system display name replaced by one constant -- and asserts identical pairingOutcome, unreciprocatedInboundClaimantSerials and hostLink for every candidate.",
+          "AC-3 (check 9): Check9VocabularyTest reflects over CandidateRow (unwrapping Optional, following PairingOutcome's sealed subtypes, reading Reason enum constants) and asserts no forbidden liveness word or synonym in any field/enum-constant identifier; a second property test asserts every CandidateRow field except connectionState itself is identical between two otherwise-identical inputs whose connectionState differs.",
+          "AC-4 (checks 10 and 11): Check10AddressNonJoinTest gives two candidates an identical IPv4 and IPv6 own-address and asserts neither a pairing nor a host relationship forms. Check11IdentifierOnlyJoinTest re-runs check 7's reciprocal pair with both serials padded with surrounding whitespace and asserts identical pairing; a variant with the referenced serial removed entirely yields NOT_EVALUABLE(PEER_NOT_FOUND) -- no fallback is even reachable, since PeerPairingResolver.PeerClaim carries no name or address field by construction.",
+          "AC-5 (check 12): Check12StructuralHostLinkTest asserts each of two nested virtual-system rows' hostLink equals Optional.of(new HostLink(<parent Serial>)), read directly off the nesting in CandidateRowAssembler with zero search across the candidate list -- unlike cp's address-searched HostLinkResolver, this package has no such resolver to call.",
+          "AC-6: CandidateRowAssembler.assemble() has no filter predicate; it emits exactly one row per RawDeviceInput plus one per nested RawVirtualSystemInput unconditionally. A serial-less peer-reference fixture and a non-established-connectionState fixture both still produce full rows with honest carried-through outcomes.",
+          "AC-7: PanoramaApiFieldBindingTest.everyEntryIsUnverified asserts all 15 Role entries are Status.UNVERIFIED; boundFieldPathsAppearNowhereElseInProductionSource scans every other .java file in the package for the 15 bound element-path literals and asserts zero matches. './ui2/gradlew -p ui2 build -x :integration-tests:test' is BUILD SUCCESSFUL; ':platform-core:test' and ':architecture-tests:test' are both green; 'projects' lists exactly the same eleven pre-existing subprojects -- no new subproject added."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "unaffected -- no Python file changed; the existing collector was not read, ported, wrapped or invoked",
+          "ui": "unaffected -- no HTTP surface, REST controller, screen or frontend change"
+        },
+        "integration": {
+          "branch": "feature/pan-discovery-domain-core",
+          "ci": "not invoked; no CI pipeline is configured for this local worktree movement",
+          "head_sha": "2d6786e0eda97e2158cd301668eb11ceda19cdce",
+          "merge_commit": null,
+          "merge_decision": "pending Product Owner assistant review of the diff plus orchestrator verify.passed, per the brief's merge gate; the worker does not merge to main",
+          "merge_state": "NOT_OPENED",
+          "pr": null,
+          "pr_url": null
+        },
+        "next": {
+          "movement": "pan_discovery_transport",
+          "movement_type": "IMPLEMENTATION",
+          "objective": "Implement contract §3's transport and entry point (the authenticated session via the vendor's key-generation call, and the single managed-device enumeration call) against the Product Owner's live Panorama server, binding this movement's RawDeviceInput/RawVirtualSystemInput to real response parsing and confirming or correcting every PanoramaApiFieldBinding entry from UNVERIFIED to a real measurement. This is the movement that can discharge §11 Band 3 checks 13-16, none of which the domain-core movement could discharge without a server.",
+          "status": "planned"
+        },
+        "preserved": [
+          "ui2/settings.gradle.kts: unchanged, still eleven subprojects.",
+          "Ui2ArchitectureTest: unchanged and passing (14 tests, same as baseline), now also covering the new pan package.",
+          "Every existing platform-core class and test, including the entire cp package: unchanged.",
+          "The FROZEN contract itself: not modified; no UNKNOWN of §12 closed; no binding entry marked VERIFIED.",
+          "The collection gate and the existing Python collector: untouched, not read, not ported."
+        ],
+        "recommended_reasoning": {
+          "reason": "The transport movement binds to a live, safety-relevant Panorama management-plane schema and confirms/corrects UNVERIFIED field bindings against real vendor behaviour -- new vendor semantics and a management-plane credential boundary, which the reasoning-tier table escalates above the domain-core movement's deterministic-implementation tier.",
+          "tier": "Sonnet 5, high effort"
+        },
+        "state_updates": [
+          "None: this movement did not touch project/*.json, CURRENT_STATE.md, AI_HANDOVER.md, or any docs/design contract. Per the brief's standing rules, only the code and this SESSION_CLOSE were produced; the Product Owner assistant updates durable project state on merge."
+        ],
+        "unresolved_risks": [
+          "The eleven UNKNOWNs of contract §12 remain open, as required; none was closed by this movement.",
+          "PanoramaApiFieldBinding's 15 UNVERIFIED entries are this worker's best-effort candidate element paths for Panorama's managed-device enumeration response, discharging the contract's FB-2/FB-3-analogous requirement -- none is a measurement. Every entry needs a Product-Owner-run confirmation against a live Panorama response (§11 check 14) before the transport movement wires a real parser to it; a wrong candidate path only requires editing this one file.",
+          "The certificate elements (CS-2) were modelled as two separate roles (CERTIFICATE_STATUS, CERTIFICATE_EXPIRATION) rather than one, reading the contract's plural 'certificate elements ... each under its own name' literally; this is itself an UNVERIFIED shape choice and may need revisiting once check 14 runs against a live Panorama and shows the real element count and names."
+        ],
+        "validation": {
+          "affected": "':architecture-tests:test' -- unchanged at 14 tests, all passing with the new pan package present on the classpath (dir1/dir7/dir10 now also cover it, same as they do the cp package).",
+          "diff_check": "'git diff --stat origin/main...HEAD' shows only 17 new files, all under ui2/platform-core/src/{main,test}/java/com/securityexpert/nexus/ui2/discovery/pan/, 1102 insertions, 0 deletions; 'git status --porcelain' clean after commits.",
+          "full_regression": "'./ui2/gradlew -p ui2 build -x :integration-tests:test' -- BUILD SUCCESSFUL, all eleven subprojects.",
+          "privacy": "'python3 scripts/repository_privacy_check.py' -- PASS, 0 findings, 1486 files scanned.",
+          "real_environment": "NOT RUN and not applicable to this movement -- contract §11 Band 3 checks 13-16 require a live Panorama server and are explicitly out of scope for the domain-core movement; deferred to the transport movement.",
+          "state_consistency": "'python3 -m pytest tests/test_contract_authority_status.py -q' -- 5 passed; project/*.json and CURRENT_STATE.md not touched by this movement.",
+          "targeted": "':platform-core:test' -- platform-core total went from 47 tests (baseline, before this movement) to 66 tests (after); all 19 new tests are in the pan package (6 in Check7ReciprocityTest including the decisive fifth case, 2 in Check8NameBlindnessTest, 3 in Check9VocabularyTest, 2 in Check10AddressNonJoinTest, 2 in Check11IdentifierOnlyJoinTest, 1 in Check12StructuralHostLinkTest, 3 in PanoramaApiFieldBindingTest), verified via build/test-results/test/*.xml test counts; all passing, 0 failures."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-13T13:51:53Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0146",
+  "movement": "pan-discovery-domain-core",
+  "next_actor": null,
+  "refs": [
+    "docs/design/PAN_DISCOVERY_CONTRACT.md",
+    "docs/design/PO_DECISION_RECORD_2026_09_13B_PAN_DISCOVERY_COLLECTION_GATE.md",
+    "docs/design/PO_DECISION_RECORD_2026_09_13C_DISCOVERY_SERVICE_BOUNDARIES.md",
+    "relay/NXS-LOCAL-0129-cp-discovery-domain-core.json"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-13T13:51:53Z"
+}

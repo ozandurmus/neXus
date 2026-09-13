@@ -1,0 +1,179 @@
+{
+  "created_at": "2026-09-13T14:09:15Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1 Every Check Point candidate kind K-1..K-10 and every Palo Alto row shape (device PAIRED / NOT_EVALUABLE by reason / virtual system) has exactly one stated import outcome: devices row, target modifier on a named row, or not importable with the reason shown.",
+          "AC-2 The enrollment confirm is specified as first contact under 13F section 2 word for word in effect: connect, record identity, on mismatch warn with the management plane's view alongside + audit + continue; strict-refuse optional and off by default; re-baseline is an explicit audited action.",
+          "AC-3 Import deduplication is by the vendor stable identifier (and owning domain for Check Point) only; a name-blindness property check is stated; conflicts are never auto-resolved; absence from a later run never deletes or marks down.",
+          "AC-4 Endpoint kinds for both vendors are stated with the B1_04B successor clause they need; device_id stays opaque and never derives from a vendor identifier.",
+          "AC-5 Three-band acceptance checks and an UNKNOWN register with at least the five entries named in scope; no UNKNOWN is closed by assertion.",
+          "AC-6 git diff --name-status origin/main...HEAD shows the one new document under docs/design/ plus project-state files written through the queue tool; privacy gate PASS; the three pytest files pass; every cited referent exists."
+        ],
+        "baseline": {
+          "authority": "docs/design/PO_DECISION_RECORD_2026_09_13F_COLLECTION_TRANSPORT_AND_IDENTITY_DECISIONS.md -- FROZEN, PRODUCT OWNER DIRECTIVES 2026-09-13, sections 1, 2, 5 and 7 (the identity-mismatch rule and the explicit request for this contract). Also FROZEN: docs/design/PO_DECISION_RECORD_2026_09_13E_PRODUCT_SEQUENCE_AND_SERVICE_INDEPENDENCE.md (build order, per-feature independence); docs/design/PO_DECISION_RECORD_2026_09_13C_DISCOVERY_SERVICE_BOUNDARIES.md SB-1 to SB-10; docs/design/UI2_0_B1_04B_DEVICE_MODEL_AND_ONBOARDING_CONTRACT.md (three records, enrollment states, credential handling); docs/design/UI2_0_C4_CAPABILITY_REGISTRY_GATE_RESOLUTION_CONTRACT.md section 4 (target_ref modifiers, CP-D6); docs/design/CP_AND_VSX_DISCOVERY_CONTRACT.md section 8 and docs/design/PAN_DISCOVERY_CONTRACT.md section 10 (the discovery/import boundary). AGENTS.md identity law, evidence laws, sensitive identity reporting law.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "test_baseline": "Repository checks only: python3 scripts/repository_privacy_check.py; python3 -m pytest tests/test_contract_authority_status.py tests/test_architecture_convergence.py tests/test_project_files_budget.py -q. Run them once before writing and once after.",
+          "what_exists": "Both discovery domain cores are merged in ui2/platform-core: com.securityexpert.nexus.ui2.discovery.cp.CandidateRow (key = (owning domain, stable identifier); kind K-1..K-10; own/management address; cluster link by identifier; host link by identifier; channel state) and com.securityexpert.nexus.ui2.discovery.pan.CandidateRow (Serial; IPv4/IPv6 locators; PairingOutcome PAIRED / NOT_EVALUABLE with reasons; unreciprocated inbound claims; virtual-system rows with a structural HostLink to the parent serial). Read them: the contract must be writable against exactly these shapes, not against an imagined richer row. B1_04B section 4's manual registration flow and section 3's state table exist and stay; this contract adds the discovery-sourced path beside them (SB-1: unified in the interface, never beneath it). ui2/persistence has Flyway V1-V8 with devices / endpoints / credential_references per C1 section 3.2. No import code exists."
+        },
+        "context_not_loaded": [
+          "ui2/service, ui2/worker transport code, the frontend",
+          "docs/history/**",
+          "The Python collectors under checkpoint/, panorama/, configuration/",
+          "project/*.json (write only through scripts/project_queue.py)"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/import-enrollment-contract"
+        },
+        "invariants": [
+          "No device row for a cluster or a virtual system; those are modifiers on a physical device (CP-D6).",
+          "device_id is opaque; vendor identifiers are attributes and the only match keys; names and addresses are never keys.",
+          "An identity mismatch warns and continues by default; nothing is ever silently refused or silently re-baselined.",
+          "Discovery output is never mutated by import; a later run never deletes or marks a device down.",
+          "The document authorizes nothing and contains no identity.",
+          "Every referent cited exists."
+        ],
+        "merge_gate": "Product Owner assistant review of the document clause by clause plus orchestrator verify.passed. The worker opens the PR and does not merge to main. The document stays DRAFT until the Product Owner freezes it in a later review.",
+        "movement_type": "ARCHITECTURE",
+        "objective": "Write ONE document, docs/design/DEVICE_IMPORT_AND_ENROLLMENT_CONTRACT.md, status DRAFT -- FOR PRODUCT OWNER FREEZE, that fixes what happens between discovery and collection: how a candidate row from either FROZEN discovery contract becomes a device the product owns (UI2_0_B1_04B's devices / endpoints / credential-reference records), how clusters, HA pairs and virtual systems are represented WITHOUT becoming device rows (UI2_0_C4 section 4.2's target modifiers), what the enrollment confirm step does on first contact under PO_DECISION_RECORD_2026_09_13F section 2 (connect with the credentials; on an identity mismatch warn, show the management plane's view alongside, audit, continue), and what a second discovery run means for rows the first one created. No code, no schema migration, no screen: one contract in the shape and discipline of the two discovery contracts, with acceptance checks in three bands and an UNKNOWN register.",
+        "output_contract": [
+          "docs/design/DEVICE_IMPORT_AND_ENROLLMENT_CONTRACT.md, DRAFT -- FOR PRODUCT OWNER FREEZE, in the discovery contracts' shape.",
+          "One backlog item for its implementation, added through the queue tool.",
+          "SESSION_CLOSE listing every FROZEN successor clause the contract needs, every UNKNOWN it registers, and every disagreement it found between its authorities."
+        ],
+        "recommended_reasoning": {
+          "reason": "Same class as the two discovery contract movements (0127, 0138): value is in precision and restraint, and the judgment calls -- what is a row versus a modifier, what a second run means, how the mismatch rule is stated without weakening it -- are the whole deliverable.",
+          "tier": "Sonnet 5, high effort"
+        },
+        "requirements": [
+          "English, per AGENTS.md engineering-output language law.",
+          "Every rule is numbered (IM-n, EN-n, RD-n, ID-n ...) and each acceptance check names the rules it protects, exactly as the discovery contracts do.",
+          "Verify every referent as you write it: every section number, clause id, class name and file path you cite must exist in the repository at origin/main HEAD -- open the file and check. The 2026-09-13 session recorded five clauses that cited something that did not exist; this movement records zero.",
+          "No address literal, no hostname, no domain name, no serial, no identity of any kind in the document; the privacy gate must pass.",
+          "Where 13F, 13C, B1_04B or C4 disagree with each other or with a discovery contract, report the disagreement in the document's open-items section and raise a RELAY_QUESTION; never reconcile silently (AGENTS.md authority hierarchy).",
+          "The document's status block says DRAFT -- FOR PRODUCT OWNER FREEZE and states plainly that it authorizes nothing."
+        ],
+        "risks": [
+          "Writing the mismatch path as a refusal because that is the conventional security default -- 13F section 2 decided otherwise and the Product Owner owns that call.",
+          "Inventing a richer candidate row than the merged CandidateRow classes carry (a CP serial, a PAN model) and building rules on it.",
+          "Letting a display name or a hostname become a match key 'as a fallback'.",
+          "Creating a cluster or virtual-system device row because the screen wants a parent node -- SB-9's parent is a presentation of the modifier, not a row.",
+          "Citing a section number from memory instead of opening the file.",
+          "Silently choosing an answer to the operational-unit ownership question."
+        ],
+        "scope": {
+          "in": [
+            "Section 1 scope and authority in the discovery contracts' shape: in scope is the mapping candidate -> device/endpoint/credential reference, the representation of clusters, HA pairs and virtual systems, the enrollment confirm's first contact, re-discovery semantics, and what the operator sees; out of scope is any collection read (13F section 6's methods belong to the collection contracts), any screen design, any schema migration text (name the C1-successor columns you need, do not write SQL), and Individual Device registration beyond citing B1_04B.",
+            "Section 2 the import mapping, per vendor and per candidate kind. For Check Point: which of K-1..K-10 become a devices row (physical gateways and cluster members), which become a target modifier only (cluster objects -> cluster_member_ref grouping; virtual systems -> virtual_system_ref on their resolved host's device), and what happens to a virtual system whose host link is MISSING or AMBIGUOUS (it is shown and importable only when its host is; state the rule). For Palo Alto: every device entry -> a devices row; a PAIRED outcome -> the two members share one cluster_member_ref; NOT_EVALUABLE -> standalone with the outcome carried and shown; virtual-system rows -> virtual_system_ref on the parent. Endpoint: transport_kind ssh_exec with address_ref = the CP management address; transport_kind pan_xml_api with address_ref = the PAN management address (name this as the B1_04B successor clause it needs; B1_04B currently fixes ssh_exec only). device_id is opaque and application-generated (AGENTS.md identity law); the vendor stable identifier (CP uid, PAN serial) and the owning domain are carried as attributes, never as the device_id and never parsed.",
+            "Section 3 the discovery-set to device-set relation: what 'import' selects (operator multi-select per 13C section 3; the cluster shown as parent per SB-9, selecting a cluster selects its members), that discovery never deduplicates against existing rows (DI-7 both contracts) but IMPORT must: define the match key per vendor (CP: (owning domain, uid); PAN: serial), define the three outcomes for a candidate against the existing device set -- new, already imported (same key), and conflicting (same key, different management address or different kind) -- and the rule that a conflict is shown to the operator and never auto-resolved. Define what a second discovery run means for rows the first created: nothing changes on a device row without an operator action; a candidate that no longer appears is reported as absent-from-this-run, never deleted, never marked down (LV-1 applies to import too).",
+            "Section 4 the enrollment confirm, under 13F section 2 exactly: DRAFT -> ENROLLED is the first contact; it connects with the referenced credential (B1_04B section 6, refusal before contact only when the credential cannot be RESOLVED, per SB-16); it records the presented identity (CP: SSH host key fingerprint and the observed hostname; PAN: the serial from the identity read and the TLS certificate identity) as the device's recorded identity; on a later mismatch it does NOT refuse -- it connects, raises a visible warning on the device and on the run showing the management plane's current view of that device alongside, writes an audit row, and continues; re-baselining the recorded identity is an explicit, audited operator action; strict-refuse is a configurable option, off by default (ID-M3). State plainly, as 13F ID-M4 does, that an interposed host produces the same symptom, and that visibility is the control. The confirm step contacts a device, so name the command-gate rows it needs (SSH connect + one identity read per vendor) as gate entries this contract requires but does not approve.",
+            "Section 5 identity and privacy: which fields are CLASS 2 (addresses, hostnames) per C1 section 7, what the audit trigger captures, what may appear in a log line or a report (counts and shapes; sensitive identity reporting law).",
+            "Section 6 what the operator sees, as constraints not as a screen: the candidate list with cluster-as-parent and virtual systems under their host, the three import outcomes, the identity-mismatch warning with the management plane's view beside it, and the prohibition on any liveness vocabulary (LV-1 of both contracts carries over).",
+            "Section 7 acceptance checks in three bands like the discovery contracts: repository checks runnable now (status line, privacy gate, no address literal, no Python module named, diff shape); property checks provable over synthetic fixtures (import mapping totality -- every candidate kind maps to exactly one of row / modifier / not-importable; match-key-only deduplication -- a run with every display name replaced by a constant produces identical outcomes; conflict never auto-resolved; absent-from-run never deletes; mismatch never refuses in default mode); and management-server / device checks unrun at the time of writing (first contact against a real gateway and a real firewall, the mismatch path exercised once deliberately).",
+            "Section 8 UNKNOWN register with what settles each -- at minimum: whether the CP uid is unique across domains (inherits discovery U-1), whether a PAN virtual-system identifier is stable across Panorama restarts, whether the SSH host key of a VSX host is shared by its virtual systems, what the TLS identity of a firewall's management interface is in this estate (self-signed vs. CA-issued), and whether a device can legitimately appear under two management planes.",
+            "Section 9 cross-references, and a section 10 listing the successor clauses this contract needs from FROZEN documents (B1_04B endpoint kind and discovery-sourced endpoints; C1 columns for recorded identity and identity-mismatch audit; nothing in C4).",
+            "Update project state alongside the document exactly as AGENTS.md's project-state update rule requires and the discovery contract movements did (0127/0138): add a backlog item for the contract's implementation through scripts/project_queue.py (never hand-edit project/*.json); do not touch CURRENT_STATE.md. Commit early and often."
+          ],
+          "out": [
+            "Any code, test, migration or screen. Any collection read or command (13F section 6 and the collection contracts own those). Any change to the two discovery domain cores.",
+            "Applying FROZEN to this document or any other; editing any FROZEN document (name successor clauses instead).",
+            "Deciding which service owns the operational unit after import (13C section 5, decision council) -- record it as open and write the contract so either answer holds.",
+            "Credential storage, the secret backend, or credential_profiles -- B1_04B section 6's reference model is assumed as it stands.",
+            "Inventing a field the discovery contracts do not carry (for example a CP serial or a PAN model at import time): where the row lacks it, import lacks it, and the contract says so.",
+            "Re-deriving rules from the existing Python (utils/device_registry.py, discovery_lifecycle.py, first_contact_producer.py, pre_enrollment_identity_probe.py are know-how only, PO_DECISION_RECORD_2026_09_12 section 2); cite them at most once, to name a behaviour this contract forbids or deliberately keeps."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_contract_authority_status.py",
+              "-q"
+            ],
+            "name": "contract_authority_status"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_architecture_convergence.py",
+              "-q"
+            ],
+            "name": "architecture_convergence"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_project_files_budget.py",
+              "-q"
+            ],
+            "name": "project_files_budget"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/project_queue.py",
+              "check"
+            ],
+            "name": "queue_check"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-13T14:09:15Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "RELAY_QUESTION",
+      "seq": 2,
+      "subject": "Two open items in DEVICE_IMPORT_AND_ENROLLMENT_CONTRACT.md (DRAFT) needing PO clarification",
+      "text": "Section 11 of docs/design/DEVICE_IMPORT_AND_ENROLLMENT_CONTRACT.md (new, DRAFT -- FOR PRODUCT OWNER FREEZE) records two open items rather than resolving them silently: (1) U-6 -- B1_04B section 3's enrollment-state transition table ('authorized confirm ... succeeds') was frozen 2026-09-12, one day before 13F's warn-and-continue identity-mismatch rule; it does not itself say whether a mismatch-but-continued connection counts as 'succeeds' for the DRAFT to ENROLLED transition. This document assumes yes (13F ID-M1: 'connects anyway') but does not amend B1_04B to say so, and names it as a successor clause B1_04B needs (section 10). (2) U-7/EC-12 -- neither B1_04B (frames the confirm as a C3-gated action) nor C4 (the capability/gate-registry machinery) states whether the enrollment confirm's device-contact steps (one connect + one identity read per vendor) are resolved through C4's capability_registry/gate_registry or authorized as a distinct C3 action outside that registry. The contract is written so either answer holds (section 4.5 names the required gate entries without asserting the registration mechanism). Neither item blocks the document's own acceptance checks; both need Product Owner adjudication before or during the freeze review.",
+      "timestamp": "2026-09-13T14:17:41Z"
+    },
+    {
+      "actor": "po",
+      "authorized_by": "Product Owner assistant (PO+O), from PO_DECISION_RECORD_2026_09_13F section 2 and UI2_0_C4 section 3.5; PO confirmed the mismatch rule in session 2026-09-13",
+      "marker": "RELAY_DECISION",
+      "scope": "DEVICE_IMPORT_AND_ENROLLMENT_CONTRACT.md section 11 items 1 and 2 (U-6, U-7/EC-12)",
+      "seq": 3,
+      "subject": "Decisions on the two open items; close the movement and open the PR",
+      "supersedes": "none",
+      "text": "Item 1 (U-6): YES -- a first contact that connects with the credentials and completes the identity read moves DRAFT to ENROLLED even when the presented identity does not match the recorded or management-plane view. 13F ID-M1 ('connects anyway') is the Product Owner's own rule, given in session and recorded; ID-M2 requires the warning to be carried on the device and the run and audited. Write section 4.4 to state this positively: ENROLLED with an open identity-mismatch warning attached, never a separate enrollment state, never DRAFT retained, never a refusal in default mode. Keep the B1_04B successor clause in section 10 as you have it -- B1_04B section 3's 'succeeds' is to be read as 'the connection and identity read completed', and that reading is what the successor clause records. Item 2 (U-7/EC-12): BOTH, layered, exactly as the two documents already imply -- the confirm is a C3-authorized action (role:onboarding_admin's enrollment preview/confirm, B1_04B section 3), and the device-contact steps it performs (one connect + one identity read per vendor) are executed as an ordinary C4 read capability with its own gate_registry rows, so C4 section 3.5's rule that an UNKNOWN gate blocks execution applies to the confirm like to every other device contact; no second execution path outside C4 is created. State that in section 4.5 and keep the gate entries named there. Item 3 stays open as you wrote it. Then: run your validation plan once more, append SESSION_CLOSE with outcome DONE, push the lane and open the PR (do not merge). No other change is requested.",
+      "timestamp": "2026-09-13T14:22:49Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0147",
+  "movement": "import-enrollment-contract",
+  "next_actor": "engineer",
+  "refs": [
+    "docs/design/PO_DECISION_RECORD_2026_09_13F_COLLECTION_TRANSPORT_AND_IDENTITY_DECISIONS.md",
+    "docs/design/PO_DECISION_RECORD_2026_09_13E_PRODUCT_SEQUENCE_AND_SERVICE_INDEPENDENCE.md",
+    "docs/design/PO_DECISION_RECORD_2026_09_13C_DISCOVERY_SERVICE_BOUNDARIES.md",
+    "docs/design/UI2_0_B1_04B_DEVICE_MODEL_AND_ONBOARDING_CONTRACT.md",
+    "docs/design/UI2_0_C4_CAPABILITY_REGISTRY_GATE_RESOLUTION_CONTRACT.md",
+    "docs/design/CP_AND_VSX_DISCOVERY_CONTRACT.md",
+    "docs/design/PAN_DISCOVERY_CONTRACT.md",
+    "relay/NXS-LOCAL-0138-pan-discovery-contract.json"
+  ],
+  "schema_version": 1,
+  "status": "AWAITING_ENGINEER",
+  "updated_at": "2026-09-13T14:22:49Z"
+}

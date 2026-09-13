@@ -1,0 +1,185 @@
+{
+  "created_at": "2026-09-13T14:13:15Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1 A full fixture run issues exactly two requests (key generation, enumeration), dials exactly one distinct base URL, and carries no target= parameter. THE DECISIVE TEST -- written first, observed failing before the adapter exists.",
+          "AC-2 The username, password and key never appear in any URL; the key travels in a header; both strings are absent from every result, exception and rendered report.",
+          "AC-3 TLS verification cannot be disabled: no all-trusting TrustManager or hostname verifier exists in production sources; an unresolvable trust rule or credential yields a typed refusal with zero requests.",
+          "AC-4 The XML parser rejects a DOCTYPE/external-entity fixture without resolving it.",
+          "AC-5 No production source outside PanoramaApiFieldBinding contains a bound element literal; every entry, old and new, is UNVERIFIED; model and version are not carried.",
+          "AC-6 No raw body reaches the result; no file is written; a serial-less entry and a non-connected entry both reach the assembler.",
+          "AC-7 docs/design/PAN_DISCOVERY_API_ROUTE_GATE_ENTRIES.md documents both routes with all ten gate items, taxonomy class 0, and a DRAFT status pending Product Owner gate approval; the key-disposal limitation is stated there.",
+          "AC-8 The eleven-module build, :platform-core:test, :worker:test and :architecture-tests:test are green; the runner prints counts and shapes only, asserted by test."
+        ],
+        "baseline": {
+          "authority": "docs/design/PAN_DISCOVERY_CONTRACT.md -- FROZEN, PRODUCT OWNER APPROVED 2026-09-13; section 3 T-1 to T-7 is the specification, section 11 Band 3 checks 13 to 16 are what this transport makes RUNNABLE (not run). docs/design/PO_DECISION_RECORD_2026_09_13B_PAN_DISCOVERY_COLLECTION_GATE.md (FROZEN) section 2 lifts the gate for exactly two methods: one authenticated session obtained through the vendor's key-generation call, and one read-only managed-device enumeration (type=op, cmd=<show><devices><all></all></devices></show>); section 3 keeps everything else closed, explicitly including Panorama's own configuration read and any target= parameter. docs/design/PO_DECISION_RECORD_2026_09_13C_DISCOVERY_SERVICE_BOUNDARIES.md (FROZEN) SB-11: Palo Alto Management is reached over HTTPS to the XML API; SB-12/SB-16 opaque credential reference, refusal before contact when it cannot be resolved. docs/design/PO_DECISION_RECORD_2026_09_13D_INDEPENDENTLY_DEPLOYABLE_SERVICES.md section 4: no HTTP endpoint of our own. AGENTS.md Palo Alto section: production TLS requires trusted corporate CA verification; historical POC verification exceptions are debt, never design. AGENTS.md Raw-evidence law and Sensitive identity reporting law.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "test_baseline": "Run ./ui2/gradlew -p ui2 build -x :integration-tests:test first and record the platform-core, worker and architecture-tests counts before you change anything.",
+          "what_exists": "Merged domain core in ui2/platform-core com.securityexpert.nexus.ui2.discovery.pan: RawDeviceInput (Serial stableIdentifier, displayName, deviceTypeMarker, Optional ownIpv4Address / ownIpv6Address, Serial peerSerialReference, Optional connectionState / connectionTimestamp / certificateStatus / certificateExpiration, List<RawVirtualSystemInput> virtualSystems), RawVirtualSystemInput, Serial, CandidateRowAssembler, PanoramaApiFieldBinding with 15 UNVERIFIED roles (read it before adding any). Merged Check Point transport in ui2/worker com.securityexpert.nexus.ui2.worker.discovery.cp: ManagementPlaneEnumerationAdapter, a closed command set with a DRAFT gate document (docs/design/CP_DISCOVERY_MANAGEMENT_COMMAND_GATE_ENTRIES.md), DiscoveryRunReport and DiscoveryRunnerMain (counts and shapes only), EnvironmentCredentialAndTrustResolvers (temporary env-var stand-in), and the test pattern (FakeDeviceTransport, FieldBindingIsolationTest, NoNumericPortLiteralTest) -- copy the discipline, not the code. The job-engine transport port already has XmlApiResult (Completed(httpStatus, body) | Failed(reason)), ApiTarget(endpointId, baseUrl), XmlApiSpec(httpMethod, type, category, targetScope) and DeviceTransport.xmlApiCall(ApiTarget, XmlApiSpec, Duration); SshExecTransport.xmlApiCall throws TransportNotImplementedException and TransportRegistry deliberately has no PAN_XML_API adapter yet. No HTTP client library is in libs.versions.toml: use the JDK's java.net.http.HttpClient and the JDK XML parser; add no dependency. ui2/settings.gradle.kts fixes eleven subprojects."
+        },
+        "context_not_loaded": [
+          "ui2/service, the frontend, ui2/persistence",
+          "docs/history/**",
+          "project/*.json",
+          "The Check Point discovery contract beyond the transport pattern in ui2/worker/.../discovery/cp"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/pan-discovery-transport"
+        },
+        "invariants": [
+          "Exactly two requests per run, to one host, with no target= parameter.",
+          "No credential or key in a URL, log, exception, result or report.",
+          "TLS verification always on; no bypass exists.",
+          "Every element name lives in PanoramaApiFieldBinding and is UNVERIFIED.",
+          "No raw response persisted; nothing written to disk; nothing filtered out.",
+          "No HTTP surface of our own, no persistence, no new subproject, no new dependency; the cp packages and the pan domain core rules are unchanged."
+        ],
+        "merge_gate": "Product Owner assistant review of the diff plus orchestrator verify.passed. The worker opens the PR and does not merge to main. The route-gate document additionally needs the Product Owner's explicit gate approval before any run against the live Panorama.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Implement the Palo Alto discovery TRANSPORT in Java exactly as docs/design/PAN_DISCOVERY_CONTRACT.md (FROZEN, PRODUCT OWNER APPROVED 2026-09-13) section 3 (T-1 to T-7) states it, feeding the merged domain core (com.securityexpert.nexus.ui2.discovery.pan.CandidateRowAssembler.assemble(List<RawDeviceInput>)) from Panorama's HTTPS XML API with exactly two requests per run: the vendor's key-generation call and one read-only managed-device enumeration. Every concrete API route and every concrete response element this movement binds is recorded once, at one isolated site, marked UNVERIFIED, because the only measurement lives in the Product Owner's live Panorama which no worker has. Deliverable: a transport the Product Owner can run against that Panorama to turn UNVERIFIED into a measurement, plus fixture-driven tests proving T-1 to T-7 without a server. Mirror the shape of the merged Check Point transport (NXS-LOCAL-0145) wherever the vendor allows.",
+        "output_contract": [
+          "A Palo Alto discovery transport the Product Owner can run against the live Panorama from a documented runner that prints counts and shapes only, with TLS verification that cannot be turned off.",
+          "One closed two-route set with a DRAFT gate document, and one binding site with every entry UNVERIFIED.",
+          "Fixture tests proving T-1 to T-7, check 16's request count, credential handling, TLS refusal and XML hardening without a server; section 11 checks 13 to 16 made runnable and explicitly reported NOT RUN.",
+          "SESSION_CLOSE naming the routes, added Roles, runner invocation, trust inputs, and test counts before and after."
+        ],
+        "recommended_reasoning": {
+          "reason": "Same class as the merged Check Point transport (Sonnet 5 high, 97 turns): a live, safety-relevant management-plane schema under vendor-semantics and raw-evidence law, plus a TLS trust boundary where the quiet failure is a silent bypass. Smaller surface (two requests, no pagination, no connection table) than the Check Point one.",
+          "tier": "Sonnet 5, high effort"
+        },
+        "requirements": [
+          "English, per AGENTS.md engineering-output language law.",
+          "Every public type and method carries a short comment naming the contract clause it implements (T-n, ID-n, DI-n, check n).",
+          "Write the T-4 single-host test and the credentials-never-in-URL test FIRST, before the adapter exists; report in the SESSION_CLOSE that each was observed failing (or vacuous) before and passing after.",
+          "Do NOT use './ui2/gradlew -p ui2 build' without '-x :integration-tests:test'. Do not run the full Python pytest suite.",
+          "The ui2 build must keep exactly eleven Gradle subprojects.",
+          "If a contract clause and this packet disagree, the contract wins; raise a RELAY_QUESTION rather than reconciling silently. If the two authorized methods turn out to need a third request, STOP and raise a RELAY_QUESTION.",
+          "The SESSION_CLOSE names both routes, every Role added to PanoramaApiFieldBinding, the exact runner invocation, the TLS trust inputs the Product Owner must provide, and the test counts before and after."
+        ],
+        "risks": [
+          "Copying the Python's GET-with-credentials-in-the-query key generation or its verify=False default -- both are the defects this movement exists to not repeat.",
+          "Adding a third request 'just to check HA state' or a target= read because the response shape makes it tempting -- the gate lift is two methods.",
+          "Inlining an XPath or element name outside the binding site.",
+          "A permissive XML parser (external entities) on a response from a network peer.",
+          "Letting the HttpClient default to a system trust store silently when the trust rule cannot be resolved -- that is a bypass in disguise; refuse instead.",
+          "Writing the decisive tests after the adapter."
+        ],
+        "scope": {
+          "in": [
+            "PORT, in platform-core discovery.pan: one interface (e.g. PanoramaEnumeration) whose single run-shaped operation yields List<RawDeviceInput> plus a result type in the cp transport's shape (Refused before contact / Completed with the request count and a session-disposal outcome / Failed), with no raw text field anywhere in it.",
+            "ADAPTER, in worker: new package com.securityexpert.nexus.ui2.worker.discovery.pan implementing that port over a new PanXmlApiTransport (worker.transport.xmlapi or similar) that implements DeviceTransport.xmlApiCall with java.net.http.HttpClient; connect/exec/fetch on that class throw TransportNotImplementedException the way SshExecTransport does for xmlApiCall. Registering it in TransportRegistry for PAN_XML_API is in scope ONLY if the registry's startup check (StartupTransportCheck / UnimplementedTransportFailsAtStartupNotPerJobTest) keeps passing; otherwise leave registration to a later movement and say so.",
+            "T-1 the session: the key-generation call is an HTTPS POST with the username and password in the request BODY (form-encoded), never in the URL, never in a header the URL could log; the returned key is held only in memory (char[] or equivalent, zeroed when the run ends) and sent on the enumeration call in a request header, never as a query parameter. Because the vendor's key has no logout call, 'closed when the run ends' (T-1) means: the key is discarded from memory and the result reports that disposal; record this as a limitation in the gate document, not as a session left open.",
+            "T-2/T-3/T-5 the closed route set: exactly two routes, declared once in a single class as a closed list (key generation; the managed-device enumeration with type=op and the exact cmd the gate record names); no target= parameter anywhere; a JUnit test asserts every request the adapter can ever send is one of the two, that no request carries target=, and that the total per run is exactly two (section 11 check 16). Document both routes with the ten network-device command gate items in a NEW document docs/design/PAN_DISCOVERY_API_ROUTE_GATE_ENTRIES.md, status 'DRAFT -- PENDING PRODUCT OWNER GATE APPROVAL', in the shape of the Check Point one.",
+            "T-4 no device contact: the only host ever dialled is the Panorama address the caller gives; every address parsed from the response is a value inside a RawDeviceInput. A test with a fake DeviceTransport records every ApiTarget seen across a full fixture run and asserts exactly one distinct base URL. THE DECISIVE TEST -- write it first.",
+            "TLS trust: verification is ALWAYS on. The adapter takes a trust rule reference resolved to either a PEM CA bundle path or a pinned server-certificate SHA-256, builds an SSLContext from it, and refuses the run BEFORE any request when neither can be resolved. There is no code path, flag, property or environment variable that disables verification or accepts any certificate -- a test asserts the adapter's production sources contain no all-trusting TrustManager / hostname verifier and that an unresolvable trust rule yields a typed refusal with zero requests. (The earlier Python defaulted to verify=False; that is know-how of what not to do.)",
+            "Credentials: an opaque credentialRef resolved through a resolver interface (a temporary environment-variable stand-in like the cp one is acceptable and must be marked as such); unresolvable -> typed refusal before any request; no username, password, key, or raw response reaches a log line, an exception message, a result object or the runner's output. A test scans a full fixture run's result, thrown exceptions and rendered report for the fixture's credential and key strings.",
+            "XML parsing with the JDK parser configured against external entities and DTDs (disallow-doctype-decl, no external general/parameter entities, no XInclude); a test feeds a fixture response carrying a DOCTYPE with an external entity and asserts the run fails closed without resolving it.",
+            "FB-2 binding at one site: parse the response ONLY through PanoramaApiFieldBinding.forRole(...).apiField() -- no other production class contains a concrete element name or path. If a role is missing (for example the entry container path or the vsys container), ADD a Role with an UNVERIFIED entry; never inline it; never flip an entry to verified. Model and software version are NOT in the frozen contract's roles: do not carry them; note in the SESSION_CLOSE that the contract amendment is pending. A FieldBindingIsolationTest in the cp transport's pattern scans the pan adapter package for bound literals.",
+            "T-7 raw-evidence law: the response body is parsed in memory and dropped; nothing is written to disk (the earlier Python wrote raw XML files -- forbidden); a test asserts no raw body string is reachable from the result and that the adapter's production sources contain no file-writing call.",
+            "Sections 8 to 10 carry through: no filtering of entries (DI-3 to DI-6) -- every <entry> becomes a RawDeviceInput regardless of serial presence or connection state; a fixture with a serial-less entry and a non-connected entry asserts both arrive at the assembler.",
+            "Runner: PanDiscoveryRunnerMain in worker, mirroring DiscoveryRunnerMain -- arguments: Panorama base URL, credentialRef, trustRuleRef; output COUNTS AND SHAPES ONLY: device rows, virtual-system rows, pairing outcomes by kind and NOT_EVALUABLE reason, count of unreciprocated inbound claims, count of entries without a serial, count per distinct connection-state value (the value string is a vendor enum, not an identity), request count, key-disposal outcome. It prints no serial, hostname, address or key. A test over a fixture run asserts the rendered output contains none of the fixture's serials, names, addresses or credential strings.",
+            "Commit early and often on the lane, grouped by clause (port; route set and gate document; TLS and credential resolution; adapter and parser; runner; tests). Open the PR at the end; do not merge."
+          ],
+          "out": [
+            "Any request beyond the two methods: no target=, no type=config, no high-availability call, no per-firewall call, no Panorama configuration read (gate record section 3).",
+            "Running anything against a real Panorama; changing any PanoramaApiFieldBinding entry from UNVERIFIED; carrying model or software version.",
+            "Any HTTP endpoint of our own, any persistence, any device row (13D section 4, DI-1, DI-2). Any new Gradle subproject or external dependency.",
+            "Check Point in any form beyond reading its transport as the pattern. Import, collection, liveness.",
+            "Editing any FROZEN document. Porting or invoking the Python collectors (panorama/, configuration/) -- read them only to learn what the response looks like and which mistakes (verify=False, credentials in the URL, raw XML on disk) this movement must not repeat."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              "build",
+              "-x",
+              ":integration-tests:test"
+            ],
+            "name": "ui2_build_excluding_db_bound_integration_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              ":platform-core:test"
+            ],
+            "name": "ui2_platform_core_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              ":worker:test"
+            ],
+            "name": "ui2_worker_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              ":architecture-tests:test"
+            ],
+            "name": "ui2_architecture_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              "projects"
+            ],
+            "name": "ui2_module_listing_must_stay_eleven"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_contract_authority_status.py",
+              "-q"
+            ],
+            "name": "contract_authority_status"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-13T14:13:15Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0148",
+  "movement": "pan-discovery-transport",
+  "next_actor": "engineer",
+  "refs": [
+    "docs/design/PAN_DISCOVERY_CONTRACT.md",
+    "docs/design/PO_DECISION_RECORD_2026_09_13B_PAN_DISCOVERY_COLLECTION_GATE.md",
+    "docs/design/PO_DECISION_RECORD_2026_09_13C_DISCOVERY_SERVICE_BOUNDARIES.md",
+    "docs/design/PO_DECISION_RECORD_2026_09_13D_INDEPENDENTLY_DEPLOYABLE_SERVICES.md",
+    "docs/design/CP_DISCOVERY_MANAGEMENT_COMMAND_GATE_ENTRIES.md",
+    "docs/AI_DEVELOPMENT_PROTOCOL.md",
+    "relay/NXS-LOCAL-0145-cp-discovery-transport.json",
+    "relay/NXS-LOCAL-0146-pan-discovery-domain-core.json"
+  ],
+  "schema_version": 1,
+  "status": "OPEN",
+  "updated_at": "2026-09-13T14:13:15Z"
+}
