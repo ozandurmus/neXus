@@ -38,7 +38,33 @@ public final class PanoramaApiFieldBinding {
         VIRTUAL_SYSTEM_DISPLAY_NAME,
         VIRTUAL_SYSTEM_SHARED_POLICY_ONE,
         VIRTUAL_SYSTEM_SHARED_POLICY_TWO,
-        VIRTUAL_SYSTEM_SHARED_POLICY_THREE
+        VIRTUAL_SYSTEM_SHARED_POLICY_THREE,
+
+        /**
+         * The key-generation response's key element (T-1). Not a role §4
+         * through §9 write a candidate-row rule against; it exists so the
+         * transport movement never contains this element-name literal
+         * outside this class either (FB-2's "no other production class" is
+         * not qualified to "no other candidate-row rule"). Added by the
+         * transport movement.
+         */
+        KEY_GENERATION_RESPONSE_KEY,
+
+        /**
+         * The enumeration response's device-entry container: where the
+         * repeated per-device entries live, relative to the response root.
+         * Added by the transport movement (FB-2) -- the original 15 roles
+         * covered only fields *within* one entry, not where to find the
+         * entries themselves.
+         */
+        DEVICE_ENTRY_CONTAINER,
+
+        /**
+         * The nested virtual-system-entry container within one device
+         * entry (VS-1). Added by the transport movement (FB-2) for the same
+         * reason as {@link #DEVICE_ENTRY_CONTAINER}.
+         */
+        VIRTUAL_SYSTEM_ENTRY_CONTAINER
     }
 
     public enum Status {
@@ -73,7 +99,10 @@ public final class PanoramaApiFieldBinding {
             new PanoramaApiFieldBinding(Role.VIRTUAL_SYSTEM_DISPLAY_NAME, "vsys/entry/display-name", Status.UNVERIFIED),
             new PanoramaApiFieldBinding(Role.VIRTUAL_SYSTEM_SHARED_POLICY_ONE, "vsys/entry/shared-policy-status", Status.UNVERIFIED),
             new PanoramaApiFieldBinding(Role.VIRTUAL_SYSTEM_SHARED_POLICY_TWO, "vsys/entry/shared-policy-md5sum", Status.UNVERIFIED),
-            new PanoramaApiFieldBinding(Role.VIRTUAL_SYSTEM_SHARED_POLICY_THREE, "vsys/entry/shared-policy-version", Status.UNVERIFIED));
+            new PanoramaApiFieldBinding(Role.VIRTUAL_SYSTEM_SHARED_POLICY_THREE, "vsys/entry/shared-policy-version", Status.UNVERIFIED),
+            new PanoramaApiFieldBinding(Role.KEY_GENERATION_RESPONSE_KEY, "response/result/key", Status.UNVERIFIED),
+            new PanoramaApiFieldBinding(Role.DEVICE_ENTRY_CONTAINER, "response/result/devices/entry", Status.UNVERIFIED),
+            new PanoramaApiFieldBinding(Role.VIRTUAL_SYSTEM_ENTRY_CONTAINER, "vsys/entry", Status.UNVERIFIED));
 
     public static PanoramaApiFieldBinding forRole(Role role) {
         return ENTRIES.stream()
