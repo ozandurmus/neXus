@@ -1,0 +1,225 @@
+{
+  "created_at": "2026-09-13T02:23:36Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1 decide_start returns resume for a failed record whose failure_reasons are exactly ['engineer_exit_nonzero', 'budget_exhausted', 'relay_not_closed'].",
+          "AC-2 decide_start returns resume for ['budget_exhausted', 'engineer_exit_nonzero'].",
+          "AC-3 decide_start returns dispatch for a set containing budget_exhausted plus a reason that does not appear anywhere in the codebase, proving the check is an allowlist.",
+          "AC-4 decide_start returns dispatch for ['engineer_exit_nonzero', 'relay_not_closed'] with no budget_exhausted.",
+          "AC-5 The entailed set is a named module-level constant carrying a comment that names GOV.ORCH.10-A R-2a and why each member is entailed.",
+          "AC-6 The superseded mixed-reason test is updated, not deleted, and now covers AC-3.",
+          "AC-7 python3 -m pytest tests/test_orchestrator.py -q passes, with at least 135 tests still passing plus the new ones.",
+          "AC-8 The repository privacy gate reports zero findings.",
+          "AC-9 The diff touches scripts/orchestrator.py and tests/test_orchestrator.py and nothing else."
+        ],
+        "baseline": {
+          "authority": "docs/design/GOV_ORCH_10A_BUDGET_RESUME_ENTAILED_REASONS.md -- FROZEN, PRODUCT OWNER APPROVED 2026-09-13. Section 2 is the specification (R-2a, R-2b, R-2c), section 3 settles the verify question, section 4 is the acceptance. It corrects R-2 of GOV.ORCH.10 and nothing else; every other clause of GOV.ORCH.10 stands and its existing tests must keep passing.",
+          "current_state": "scripts/orchestrator.py already carries the whole GOV.ORCH.10 machine, merged as PR #216: _is_resumable_budget_failure, the resume branch in decide_start, the R-3 ceiling refusal, retry_limit handling, persistence of failure_reasons and budget_exhausted into the state record, and the budget_resume report field. Only the predicate inside _is_resumable_budget_failure is wrong.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "test_baseline": "python3 -m pytest tests/test_orchestrator.py -q gives 135 passed, measured on main at the merge of PR #217.",
+          "the_defect": "_is_resumable_budget_failure requires set(failure_reasons) == {'budget_exhausted'}. In practice budget_exhausted is appended INSIDE the `if exit_code != 0` branch, so engineer_exit_nonzero is always present with it, and a killed engineer never writes its SESSION_CLOSE so relay_not_closed is present too. Both real budget-exhausted movements recorded exactly ['engineer_exit_nonzero', 'budget_exhausted', 'relay_not_closed']."
+        },
+        "context_not_loaded": [
+          "ui2/ sources",
+          "docs/history/**",
+          "vendor contracts",
+          "utils/ and application/ modules"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/gov-orch-10a-entailed-reasons-impl"
+        },
+        "invariants": [
+          "budget_exhausted must be present for any budget resume; the entailed set never substitutes for it.",
+          "The entailed set is a closed allowlist, and an unknown reason blocks the resume.",
+          "A failed verify does not block a budget resume, and verify is not consulted by this predicate.",
+          "Every other GOV.ORCH.10 clause keeps its behaviour and its tests.",
+          "decide_start stays a pure function.",
+          "No FROZEN contract is edited."
+        ],
+        "merge_gate": "Product Owner assistant review of the diff plus orchestrator verify.passed. The worker does not merge to main.",
+        "movement_type": "IMPLEMENTATION",
+        "objective": "Correct the budget-resume predicate in scripts/orchestrator.py to GOV.ORCH.10-A section 2: budget_exhausted may be accompanied by the reasons budget exhaustion entails, and by nothing else. The current predicate requires budget_exhausted to be the ONLY reason, which the code makes impossible, so the resume path can never be reached.",
+        "output_contract": [
+          "A budget-resume predicate that actually fires on the reason set real runs produce, and still refuses anything else.",
+          "A test using an invented reason name, so the allowlist is proven rather than assumed.",
+          "SESSION_CLOSE naming which acceptance item each new or updated test covers and the tests/test_orchestrator.py count before and after."
+        ],
+        "recommended_reasoning": {
+          "reason": "A small, fully specified predicate change against a contract that states the rule, the closed set and the reason for each member, plus four named test cases. The judgment was already made in the contract; this is deterministic implementation, which the tier table puts at Normal (strong), and the diff is a few lines plus tests.",
+          "tier": "Sonnet 5, medium effort"
+        },
+        "requirements": [
+          "English, per AGENTS.md engineering-output language law.",
+          "Read GOV.ORCH.10-A fully before editing. It is short. Section 3 in particular answers a question you would otherwise have to decide yourself, and deciding it yourself would be wrong.",
+          "Every existing test in tests/test_orchestrator.py must still pass. The baseline is 135 passed.",
+          "Commit early and often: the predicate change first, then the updated and new tests.",
+          "Do not merge to main. The Product Owner assistant reviews the diff and merges.",
+          "Do not run the full pytest suite. It creates untracked data/ and logs/ directories that the repository privacy gate then flags, failing a movement whose diff is clean."
+        ],
+        "risks": [
+          "Implementing the allowlist as an exclusion list, so a future unknown reason silently becomes resumable. R-2b and AC-3 exist for this.",
+          "Dropping the requirement that budget_exhausted be present, which would make any nonzero exit with an open relay resumable.",
+          "Deleting the superseded test instead of updating it, losing the coverage that found this defect.",
+          "Widening the entailed set because a third reason seems harmless.",
+          "Letting verify state leak into the predicate after GOV.ORCH.10-A section 3 decided it must not."
+        ],
+        "scope": {
+          "in": [
+            "Replace the predicate in _is_resumable_budget_failure with GOV.ORCH.10-A R-2a: the record is resumable when budget_exhausted is present in its recorded failure_reasons and every other reason present belongs to a closed entailed set. That set is exactly {engineer_exit_nonzero, relay_not_closed} and nothing else.",
+            "Define the entailed set as a named module-level constant with a comment naming GOV.ORCH.10-A R-2a and the reason each member is entailed, so a future reader sees why membership is closed rather than guessing.",
+            "R-2b, default-closed: any reason NOT in the entailed set blocks the resume, including a reason that does not exist today. Implement this as membership in the allowlist, never as exclusion of a list of known-bad reasons.",
+            "R-2c: budget_exhausted must still be PRESENT. A record carrying only engineer_exit_nonzero, or only relay_not_closed, or both without budget_exhausted, is not a budget failure and stays terminal.",
+            "Keep everything else in _is_resumable_budget_failure unchanged, including its phase == PHASE_FAILED guard and its role as the single place both decide_start and _do_start read the decision from.",
+            "Update the tests written against the superseded R-2 rather than deleting them. GOV.ORCH.10 section 4 item 2's mixed-reason test becomes GOV.ORCH.10-A acceptance item 3: keep the test, change its reason set to one containing a reason OUTSIDE the entailed table, and keep asserting dispatch.",
+            "Add tests for GOV.ORCH.10-A acceptance items 1, 2, 3 and 4. Item 1 must use the exact set ['engineer_exit_nonzero', 'budget_exhausted', 'relay_not_closed'], because that is what both real movements produced. Item 3 must use an INVENTED reason name that does not exist in the codebase, so the test proves the allowlist rather than a list of today's reasons."
+          ],
+          "out": [
+            "Changing how failure_reasons is constructed anywhere in the file. The reasons are an input to this decision, not something to reshape for it.",
+            "Making verify a recorded failure reason, or letting verify state influence the resume decision. GOV.ORCH.10-A section 3 decides this explicitly: a failed verify does NOT block a budget resume, because a run killed mid-work almost always has a red verify, and the safety is that verify runs again and the Product Owner assistant reviews the diff before any merge.",
+            "Changing the phase decision, TERMINAL_PHASES, retry_limit, DEFAULT_MAX_BUDGET_USD, or the R-3 ceiling refusal.",
+            "Widening the entailed set beyond the two reasons GOV.ORCH.10-A R-2a names. If a third reason looks like it belongs, that is an amendment to the contract and a RELAY_QUESTION here, not an implementation decision.",
+            "Editing any FROZEN contract.",
+            "Any change outside scripts/orchestrator.py and tests/test_orchestrator.py.",
+            "Touching the state records of NXS-LOCAL-0130, 0131 or 0132."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_orchestrator.py",
+              "-q"
+            ],
+            "name": "orchestrator_tests"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_gov_po_role.py",
+              "-q"
+            ],
+            "name": "gov_po_role"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_architecture_convergence.py",
+              "-q"
+            ],
+            "name": "architecture_convergence"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_contract_authority_status.py",
+              "-q"
+            ],
+            "name": "contract_authority_status"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-13T02:23:36Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "report": {
+        "changed": [
+          "scripts/orchestrator.py: _is_resumable_budget_failure body and its docstring; decide_start's docstring and its resume-reason string, updated to name GOV.ORCH.10-A R-2a instead of the superseded R-2/R-1 'only reason' language.",
+          "tests/test_orchestrator.py: the GOV.ORCH.10 budget-resume test block, per the completed list above."
+        ],
+        "completed": [
+          "Replaced the R-2 predicate in _is_resumable_budget_failure with GOV.ORCH.10-A R-2a/R-2b/R-2c: budget_exhausted must be present, and every other reason present must be a member of the closed _BUDGET_ENTAILED_REASONS allowlist ({engineer_exit_nonzero, relay_not_closed}).",
+          "Defined _BUDGET_ENTAILED_REASONS as a module-level frozenset constant with a comment naming GOV.ORCH.10-A R-2a and the entailment reason for each member (AC-5).",
+          "Implemented R-2b default-closed as a subset/allowlist check ((reasons - {budget_exhausted}) <= _BUDGET_ENTAILED_REASONS), never as exclusion of known-bad reasons.",
+          "Updated the superseded GOV.ORCH.10 mixed-reason test (test_decide_start_treats_a_mixed_budget_and_other_failure_as_not_resumable) to use a reason outside the entailed table and renamed it test_decide_start_treats_a_mixed_budget_and_unentailed_failure_as_not_resumable; it still asserts dispatch (AC-3/AC-6).",
+          "Added test_decide_start_resumes_the_exact_reason_set_both_real_movements_produced (AC-1), test_decide_start_resumes_budget_exhausted_with_only_engineer_exit_nonzero (AC-2), and test_decide_start_does_not_resume_entailed_reasons_without_budget_exhausted (AC-4)."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "No change to scripts/main.py or any CLI entrypoint; scripts/orchestrator.py's public decide_start/_is_resumable_budget_failure surface is unchanged in shape, only its internal predicate logic.",
+          "ui": "No UI-facing effect; this is an orchestrator-internal dispatch predicate with no templates/static payload involvement."
+        },
+        "integration": {
+          "branch": "feature/gov-orch-10a-entailed-reasons-impl",
+          "ci": "not run in this session",
+          "head_sha": "5e71623a9cd8cb03314f524dafbb6fbb1e8021d0",
+          "merge_commit": null,
+          "merge_decision": "Awaiting Product Owner assistant review of the diff plus orchestrator verify.passed, per the merge gate in WORKER.md. The worker does not merge to main.",
+          "merge_state": "NOT_OPENED",
+          "pr": null,
+          "pr_url": null
+        },
+        "next": {
+          "movement": "NXS-LOCAL-0133 PO review and merge",
+          "movement_type": "IMPLEMENTATION",
+          "objective": "Product Owner assistant reviews the two-commit diff on feature/gov-orch-10a-entailed-reasons-impl against GOV.ORCH.10-A and merges to main; the worker does not merge.",
+          "status": "complete"
+        },
+        "preserved": [
+          "The phase == PHASE_FAILED guard and _is_resumable_budget_failure's role as the single place both decide_start and _do_start read the decision from.",
+          "Every other GOV.ORCH.10 clause: R-1 dispatch semantics, R-3 ceiling refusal, R-4 retry_limit handling, TERMINAL_PHASES, DEFAULT_MAX_BUDGET_USD.",
+          "How failure_reasons is constructed elsewhere in the file -- untouched.",
+          "verify/verify_result: not read, added, or referenced by this predicate, per GOV.ORCH.10-A section 3.",
+          "decide_start's purity."
+        ],
+        "recommended_reasoning": {
+          "reason": "Deterministic implementation against a fully specified FROZEN contract; no further judgment calls remain for this movement.",
+          "tier": "Sonnet 5, medium effort"
+        },
+        "state_updates": [],
+        "unresolved_risks": [],
+        "validation": {
+          "affected": "python3 -m pytest tests/test_gov_po_role.py -q: 137 passed. python3 -m pytest tests/test_architecture_convergence.py -q: 23 passed. python3 -m pytest tests/test_contract_authority_status.py -q: 5 passed.",
+          "diff_check": "git diff --stat confirms only scripts/orchestrator.py and tests/test_orchestrator.py changed (AC-9).",
+          "full_regression": "Not run, per WORKER.md standing rule: the full suite creates untracked data/logs directories that trip the repository privacy gate on an otherwise-clean diff.",
+          "privacy": "python3 scripts/repository_privacy_check.py: Findings 0, Gate PASS.",
+          "real_environment": "Not applicable -- this is a pure-function predicate change validated by unit tests; no network-device or live-orchestrator interaction is in scope.",
+          "state_consistency": "N/A -- decide_start is a pure function; no project/*.json or CURRENT_STATE.md fields are affected by this change.",
+          "targeted": "python3 -m pytest tests/test_orchestrator.py -q: 138 passed (135 baseline + 3 net new test functions; the 4th acceptance item is covered by the updated superseded test)."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-13T02:27:20Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0133",
+  "movement": "budget_resume_entailed_reasons",
+  "next_actor": null,
+  "refs": [
+    "docs/design/GOV_ORCH_10A_BUDGET_RESUME_ENTAILED_REASONS.md",
+    "docs/design/GOV_ORCH_10_BUDGET_EXHAUSTION_IS_RESUMABLE.md",
+    "docs/design/GOV_ORCH_1_SYNCHRONOUS_RUN_AND_ORCHESTRATOR_VERIFY.md",
+    "AGENTS.md",
+    "roles/PO.md",
+    "scripts/orchestrator.py",
+    "tests/test_orchestrator.py"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-13T02:27:20Z"
+}
