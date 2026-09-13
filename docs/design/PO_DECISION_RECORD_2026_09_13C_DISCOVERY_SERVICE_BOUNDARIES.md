@@ -108,41 +108,123 @@ full. That document is `DRAFT`, is cited throughout this record as provenance
 here. Every clause rests on the Product Owner's own read and on the FROZEN
 documents §6 names.
 
-**SB-6. Cluster and HA-pair formation does not belong to discovery — for
-Palo Alto by construction, and for Check Point by consistency.**
+**SB-6. Cluster and HA-pair resolution belongs to discovery, under a
+reciprocity rule.** An earlier draft of this record said the opposite for Palo
+Alto. It was written before the enumeration had been read as XML, and it was
+wrong; the correction is recorded rather than quietly replaced.
 
-- Palo Alto: the enumeration establishes that a device participates in an HA
-  pair and **names no peer** — the Product Owner's 2026-09-13 read found no
-  field in it identifying the other member. The configured peer is an
-  **address**, not an identifier, and is reachable only through a per-device
-  targeted read the gate does not authorize. This project already decided,
-  under the `OP.0a.P7` contract, that a pair is formed only from a **mutual**
-  configuration-agreement check across both members and never from one side.
-  A discovery run holds no device rows and cannot arrange a two-sided check.
-- Check Point: membership *is* a management-plane fact, joined on a stable
-  identifier (`MC-1`), so discovery **may carry it** — and does, under the
-  frozen contract. What discovery still must not do is *form the operational
-  unit* from it.
+- **Palo Alto.** The enumeration carries each member's peer as a **serial** —
+  a stable identifier, not an address. Every member is in the same response,
+  so the two-sided corroboration `AGENTS.md` "Evidence laws" requires **in the
+  same evidence-collection pass** is available at discovery, contacting no
+  device. Measured 2026-09-13: of 35 peer claims, all 35 resolved within the
+  response, 34 were reciprocal — 17 complete pairs — and one was one-sided.
+- **Check Point.** Membership is a management-plane fact joined on a stable
+  identifier (`CP_AND_VSX_DISCOVERY_CONTRACT.md` MC-1), available at discovery
+  already.
 
-**SB-7. The distinction that makes SB-6 coherent.** Discovery **carries what
-the management plane states** and **forms nothing**. Check Point's cluster
-reference is carried because the management plane states it; Palo Alto's peer
-is `NOT_EVALUABLE` because the management plane does not. The operational
-unit — the thing that fails over — is formed later, from corroborated
-evidence, by whichever service owns it.
+**SB-7. The rule, stated once for both vendors: a unit is formed only from
+corroborated identity, never from one side.**
 
-**SB-8. The Product Owner's standing rule applies to the unit, not to the
-candidate: clusters fail over, devices do not.** That is the reason SB-6 is
-strict. An operational unit built from an uncorroborated one-sided claim
-would be a failover target assembled from evidence this constitution does not
-accept.
+- The join key is a **stable identifier**. Never a display name, never an
+  address (`AGENTS.md` identity law; `CP_AND_VSX_DISCOVERY_CONTRACT.md` HL-2).
+- For Palo Alto, corroboration means **reciprocity**: A names B *and* B names
+  A. Each member carries its own claim, so both must agree.
+- For Check Point, corroboration is structural: members reference one shared
+  cluster object, so there is no second side to disagree.
+- A claim that does not corroborate is **`NOT_EVALUABLE`**, and the candidate
+  is still returned and still shown. This is
+  `CP_AND_VSX_DISCOVERY_CONTRACT.md` MC-2 and DI-3 unchanged — no new
+  vocabulary is introduced.
+- The one non-reciprocal claim measured on 2026-09-13 is the case this clause
+  exists for. Forming that pair from one side would have assembled an
+  operational unit from an uncorroborated claim, silently.
+
+**SB-8. The Product Owner's standing rule is why SB-7 is strict: clusters fail
+over, devices do not.** The unit is the failover target, so it may not rest on
+evidence this constitution does not accept.
+
+**SB-9. Discovery presents the cluster as the parent of its members.** When a
+unit is formed under SB-7, the operator sees the cluster object with the
+devices attached to it, not a flat list that hides the relationship.
+
+**SB-10. Virtual systems are shown at discovery where the vendor supplies
+them.** Measured for Palo Alto: 140 virtual-system entries across 39 devices,
+each with a display name, arriving in the same enumeration. For Check Point
+they are candidates in their own right (§4 of the frozen contract). The
+Product Owner asked to see them at this stage where they are available; where
+a vendor does not supply them without contacting a device, they are absent and
+said to be absent, never inferred.
+
+## 4a. Transport
+
+**SB-11. Transport is chosen per vendor; the shared abstraction is the
+management-plane session, not a protocol.**
+
+- **Check Point Management** — a shell session to the management server.
+- **Palo Alto Management** — HTTPS to the management server's XML API.
+
+The Product Owner raised the alternative of one transport for both. It was
+assessed and declined on a measured ground: `set cli config-output-format xml`
+applies to configuration commands only and **not** to operational commands, so
+taking the Palo Alto enumeration over a shell would mean parsing a
+human-formatted table — column positions and a free-text block — where the API
+returns named elements. `AGENTS.md` "Vendor semantics law" holds that a field
+name is not its contract; a column heading is further still from one.
+
+Each vendor's management plane is reached the way that plane exposes
+structured data. What is shared is the session and identity model, not the
+protocol.
+
+## 4b. Identity
+
+**SB-12. One identity model, indifferent to what backs it.** The product
+holds an **opaque credential reference** and never a secret
+(`UI2_0_B1_04B_DEVICE_MODEL_AND_ONBOARDING_CONTRACT.md` §6). What sits behind
+that reference is deliberately not the product's concern: a directory account
+reached through RADIUS, LDAP or TACACS, or a local account on the management
+plane. The account type is verified by the management plane itself, not
+modelled here.
+
+**SB-13. Both a directory account and a local account must be selectable.**
+The Product Owner's rule is that productisation offers two options where doing
+so adds no confusion, and here it adds none: the distinction lives in the
+transport's authentication step, never in the store, which holds one opaque
+reference either way.
+
+**SB-14. Two management-plane records may reference the same credential.**
+The Product Owner's estate uses one directory account for both vendors, and
+the productised service account will also be a directory account. The
+reference model already permits this and needs no change.
+
+**SB-15. Key-based authentication is supported as an option, never as the
+default, and is recorded as a distinct identity.** It removes password expiry
+from the collection path, which is a real operational gain. Its costs are
+stated so a later movement does not rediscover them: a key is **its own
+identity**, not an extension of the directory account, so management-plane
+audit attribution changes; key custody becomes a problem of its own
+(`recovery_offhost_key_custody`); and on the Check Point plane a key is in
+practice bound to a **local** account rather than a directory-authenticated
+one. Choosing it is choosing those trade-offs.
+
+**SB-16. Credential resolution failure is refused before any contact.**
+`UI2_0_B1_04B` §6 already fixes this and it carries over: a single directory
+account backing both vendors is a single point of rotation, and the correct
+behaviour when it cannot be resolved is a clean refusal, never a partial run.
 
 ## 5. What this record does not decide
 
-- **Which service forms the operational unit** once devices are imported —
-  import, the configuration engine, or a separate topology service. The
-  Product Owner has raised a decision council for this question and it stays
+- **Which service owns the operational unit after discovery has proposed
+  it.** SB-6 settles that discovery *resolves* the unit from corroborated
+  management-plane identity; it does not settle which service *owns* that unit
+  once devices are imported, nor where a later runtime confirmation of it
+  lives. The Product Owner has raised a decision council for this and it stays
   open here.
+- **How the cluster view, the common configuration/route/address presentation
+  and its difference marking are built.** The Product Owner has named the
+  previous product's screens as the reference and the existing Python as
+  where its parsing, matching and difference logic can be read. That is a
+  separate read-only audit and a separate contract.
 - Any collection gate. §2's engines remain gated;
   `PO_DECISION_RECORD_2026_09_13B` lifted Palo Alto discovery only, for two
   methods.

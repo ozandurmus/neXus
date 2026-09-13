@@ -77,11 +77,13 @@ the recommended maximum, `VPN Disable Mode`, `Operational Mode`,
   means a firewall configured as an **HA pair but not as an HA cluster** —
   the vendor's HA pair and its multi-peer HA clustering are separate
   features. `Cluster node-id` was empty, consistent with that reading.
-- **F-5. Membership is visible; the peer is not.** `HA State` establishes
-  that a device participates in an HA pair. **No label in the enumeration
-  names the other member** — no peer serial, no pair identifier, no group
-  identifier. So this response supports the statement "this device is in a
-  pair" and does not support "these two devices are that pair."
+- **F-5. Membership and the peer are BOTH visible.** `HA State` establishes
+  that a device participates in an HA pair, and the enumeration also carries
+  the peer's **serial** — a stable identifier, not an address. An earlier
+  reading of this measurement, taken from the CLI's formatted rendering,
+  recorded that no field named the peer. **That was wrong**: the rendering
+  omits it, the XML carries it. §3b records the corrected, structured
+  measurement and supersedes the earlier reading entirely.
 - **F-6. `Connected at:` exists.** This answers brief Q-16 affirmatively: a
   timestamp accompanies the connection state. It is a candidate corroborating
   signal, and Check Point had no analogue for it.
@@ -92,7 +94,114 @@ the recommended maximum, `VPN Disable Mode`, `Operational Mode`,
   keeps the two apart in the data; a contract must keep them apart in the
   presentation too.
 
-## 3a. The peer question, settled — and it was settled once already
+## 3b. The structured measurement — 39 entries, read as XML
+
+A third Product-Owner-executed read on 2026-09-13 took the same enumeration
+through the API rather than the CLI, and reported element paths, occurrence
+counts and value distributions. Counts and shapes only; no identity was
+reported and none is recorded here.
+
+**F-8. The enumeration returns devices that are not connected.** 39 entries;
+the connection state was the affirmative value on 38 and a different value on
+one. The Product Owner independently confirmed the estate holds 38 working
+devices and that the remaining one is the known-problem device. **This settles
+brief Q-9 and the `DI-3` question together**: the vendor's own command returns
+everything, so discovery can show everything and leave exclusion to the
+operator, exactly as `CP_AND_VSX_DISCOVERY_CONTRACT.md` DI-3 requires. No
+second command and no wider gate is needed for it.
+
+**F-9. The peer is carried, as a serial, inside the enumeration.** 35 of 39
+entries carry an HA block; each of those 35 carries a peer serial. Four
+entries carry no HA block at all — standalone devices. HA state values
+distributed as 17 / 17 / 1 across two opposing roles and one suspended role.
+
+**F-10. Reciprocity holds for all but one claim, and it is checkable inside a
+single response.** Of the 35 peer claims, **35 resolved to another entry in
+the same response** — none named a device absent from it, and none named
+itself. **34 were reciprocal**, both sides naming each other, which is
+exactly 17 complete pairs. **One was one-sided**: it named a peer that did not
+name it back.
+
+This is the finding that changes the design. `AGENTS.md` "Evidence laws"
+requires a peer claim to be corroborated by the other side **in the same
+evidence-collection pass**. Every member is in this one response, so that
+corroboration is available at discovery, from a stable identifier, contacting
+no device. The two-sided check the `OP.0a.P7` contract requires before forming
+a pair is therefore satisfiable here — which an earlier reading of this
+measurement wrongly concluded was impossible.
+
+**F-11. The one-sided claim is a real finding, and the honest outcome for it is
+`NOT_EVALUABLE`.** It is not noise to be smoothed over: forming a pair from it
+would be forming an operational unit from an uncorroborated claim. The
+arithmetic is consistent with the one-sided claimer being the suspended
+member — 17 opposing-role pairs account for the 34 reciprocal entries — but
+**identity was not verified and this is recorded as consistency, not as a
+finding**.
+
+**F-12. A field inventory, by presence.** Every one of the 39 entries carries:
+serial, hostname, an IPv4 address element, a **separate IPv6 address
+element**, a MAC address, model, family, type, software version, uptime,
+domain, tag, operational mode, multi-virtual-system flag, slot count,
+cellular-port count, connection state, **connection timestamp**, five
+certificate elements (status, expiry, subject name, device-cert presence,
+device-cert expiry), configuration-size elements, masterkey-push status and
+timestamp, a plugin-version block, and a dozen content-version elements.
+Partial presence: a high-speed-mode element on 11, a VPN-client package
+version on 26.
+
+**F-13. `type` is present on every entry and empty on every entry.** It is
+therefore **not** a candidate-kind discriminator in this estate. Together
+with the fact that dedicated log collectors and WildFire appliances are
+addressed by their own configuration nodes, this settles brief Q-10: the
+enumeration's candidate set is **homogeneous**, and Check Point's ten-kind
+classification problem has no Palo Alto analogue. The cost is stated in
+`PO_DECISION_RECORD_2026_09_13B` §3: non-firewall appliances are invisible to
+the authorized method — absent by scope decision, not absent in fact.
+
+**F-14. Virtual systems are enumerated in full.** 140 virtual-system entries
+across the 39 devices, each carrying a display name and three shared-policy
+elements (status, checksum, version). The multi-virtual-system flag was the
+affirmative value on all 39.
+
+**F-15. Platform and version spread.** Four hardware families and eight
+models. Three software versions, of which one appears on a single device.
+
+**F-16. A count coincidence, recorded as a hypothesis.** Exactly one device is
+not connected, exactly one is suspended, exactly one peer claim is one-sided,
+and exactly one device runs the odd software version. **Whether these are the
+same device is not established** — identity was not verified and equal counts
+are not a correlation. `CP_AND_VSX_DISCOVERY_CONTRACT.md` CS-5 refused the
+same inference for Check Point and this document refuses it here. **What would
+settle it**: one read that resolves all four conditions to the same entry key
+and reports whether they coincide, as a relationship rather than as a device.
+
+## 3c. A lead on an open P0, offered as a hypothesis
+
+Backlog item `pan_serial_representation_identity_evidence_closure` (P0,
+`in_progress`) has stood since 2026-09-04: a peer-serial mismatch on **one
+member**, root cause `UNKNOWN`, whose own investigation note records that the
+field-level evidence from the original run **was never persisted anywhere
+reachable**, so it cannot be re-derived. Its proposed next step awaits Product
+Owner authorization for a device-facing capture.
+
+This measurement found **exactly one** non-reciprocal peer claim among 35,
+from the management plane, contacting no device.
+
+**Whether it is the same member is UNKNOWN and is not asserted.** The prior
+finding came from a per-device runtime read (`show high-availability state`);
+this one comes from the management-plane enumeration. They are different
+planes and may disagree for reasons neither has established. What makes the
+lead worth recording is that this observation is **reproducible, cheap, and
+inside the authorized gate**, where the blocked step is none of those.
+
+**What would settle it**: resolve the one-sided claimant here and the
+mismatching member there to the same entry key, and report `MATCH` /
+`MISMATCH` — never the identities.
+
+## 3a. The management appliance's own HA block — a separate thing, kept for the record
+
+*Superseded in its conclusion by §3b. The schema comparison below stands; the
+inference drawn from it at the time did not.*
 
 A second Product-Owner read on 2026-09-13 inspected the management server's
 own configuration entry and found an HA peer block carrying an address **and
@@ -120,16 +229,17 @@ project settled under the `OP.0a.P7` contract:
   locator and never a join key. Check Point's member-to-cluster join had a
   stable identifier (`MC-1`); this vendor's firewall HA configuration does
   not offer one.
-- **F-5b. Pair formation already requires two-sided evidence, by a prior
-  product decision.** Forming a pair from one member's configured peer
-  address alone is explicitly refused. A discovery run cannot satisfy a
-  two-sided check: it holds no device rows yet, and both members'
-  configuration is reachable only through per-device targeted reads that the
-  2026-09-13 gate lift does not authorize.
-- **F-5c. Therefore the peer question is not a gap in discovery's evidence —
-  it is outside discovery's reach by construction**, and consistent with
-  `AGENTS.md` "Evidence laws": a member's report about its peer is
-  uncorroborated until the other side reports in the same pass.
+- **F-5b. Pair formation requires two-sided evidence, by a prior product
+  decision.** Forming a pair from one member's configured peer address alone
+  is explicitly refused. That rule stands.
+- **F-5c. SUPERSEDED by F-10.** This section originally concluded that a
+  discovery run could not satisfy the two-sided check and that the peer
+  question was therefore outside discovery's reach by construction. The
+  structured measurement disproves it: the peer serial is in the enumeration,
+  every member is in the same response, and reciprocity is checkable there.
+  The conclusion was drawn from the CLI's formatted rendering, which omits the
+  peer element. Recorded as an error rather than deleted, because the
+  reasoning was sound and only the evidence was incomplete.
 
 ## 4. `UNKNOWN` — what this measurement did not settle
 
