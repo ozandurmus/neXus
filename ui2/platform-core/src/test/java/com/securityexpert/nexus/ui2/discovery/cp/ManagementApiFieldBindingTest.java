@@ -22,9 +22,32 @@ import org.junit.jupiter.api.Test;
  */
 class ManagementApiFieldBindingTest {
 
+    /**
+     * record §10's field-binding consequence: VIRT_HOST_FLAG/VIRT_SYSTEM_FLAG
+     * each carry three entries, one per {@link ObjectType} -- every other
+     * role carries exactly one, unscoped, entry.
+     */
     @Test
-    void everyRoleIsBound() {
-        assertEquals(ManagementApiFieldBinding.Role.values().length, ManagementApiFieldBinding.all().size());
+    void everyRoleIsBoundScopedRolesCarryOneEntryPerObjectType() {
+        for (ManagementApiFieldBinding.Role role : ManagementApiFieldBinding.Role.values()) {
+            long entryCount = ManagementApiFieldBinding.all().stream().filter(e -> e.role() == role).count();
+            if (role == ManagementApiFieldBinding.Role.VIRT_HOST_FLAG
+                    || role == ManagementApiFieldBinding.Role.VIRT_SYSTEM_FLAG) {
+                assertEquals(ObjectType.values().length, entryCount, role + " must carry one entry per ObjectType");
+            } else {
+                assertEquals(1, entryCount, role + " must carry exactly one unscoped entry");
+            }
+        }
+    }
+
+    @Test
+    void scopedRolesAreResolvableForEveryObjectType() {
+        for (ObjectType objectType : ObjectType.values()) {
+            assertTrue(ManagementApiFieldBinding.forRole(ManagementApiFieldBinding.Role.VIRT_HOST_FLAG, objectType)
+                    .apiField().isPresent());
+            assertTrue(ManagementApiFieldBinding.forRole(ManagementApiFieldBinding.Role.VIRT_SYSTEM_FLAG, objectType)
+                    .apiField().isPresent());
+        }
     }
 
     @Test

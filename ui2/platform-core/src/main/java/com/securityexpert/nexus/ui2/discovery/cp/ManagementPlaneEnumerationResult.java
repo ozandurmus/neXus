@@ -19,7 +19,18 @@ public sealed interface ManagementPlaneEnumerationResult {
             List<RawCandidateInput> candidates,
             Map<Address, ConnectionTableChannelState> connectionTableStates,
             int managementPlaneRequestCount,
-            SessionDisconnectOutcome disconnectOutcome) implements ManagementPlaneEnumerationResult {
+            SessionDisconnectOutcome disconnectOutcome,
+            Map<ObjectType, ParseCounts> parseCountsByObjectType) implements ManagementPlaneEnumerationResult {
+    }
+
+    /**
+     * Runner-level telemetry only (counts, never a name/address/domain/identifier,
+     * per AGENTS.md "Sensitive identity reporting law"): how many objects one
+     * object-type's dump produced, and how many of those lacked the stable
+     * identifier (record §10 row 4's {@code AdminInfo/chkpf_uid}) and so were
+     * never turned into a candidate row at all.
+     */
+    record ParseCounts(int parsed, int missingStableIdentifier) {
     }
 
     /**

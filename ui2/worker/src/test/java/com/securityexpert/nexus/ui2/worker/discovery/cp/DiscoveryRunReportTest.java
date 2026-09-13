@@ -40,12 +40,14 @@ class DiscoveryRunReportTest {
                 WorkerFixtures.DOMAIN_B_GATEWAY_MGMT_ADDRESS, WorkerFixtures.DOMAIN_B_MEMBER_MGMT_ADDRESS,
                 "fixture-gw-a-1", "fixture-gw-b-1", "fixture-cluster-a-1", "fixture-cluster-b-1",
                 "fixture-member-a-1", "fixture-member-b-1", "gw-a-1", "gw-b-1", "cl-a-1", "cl-b-1",
-                "mem-a-1", "mem-b-1", WorkerFixtures.TOP_SESSION_ID,
-                WorkerFixtures.DOMAIN_A_SESSION_ID, WorkerFixtures.DOMAIN_B_SESSION_ID)) {
+                "mem-a-1", "mem-b-1")) {
             assertFalse(report.contains(sensitive), "report leaked \"" + sensitive + "\": " + report);
         }
         assertTrue(report.contains("candidates_total=6"));
         assertTrue(report.contains("management_plane_request_count=8"));
+        // AC-7: per-object-type parse counts, counts only -- two domains, one object of each type per domain.
+        assertTrue(report.contains("objects_parsed_by_object_type={GATEWAY=2, CLUSTER=2, MEMBER=2}"), report);
+        assertTrue(report.contains("objects_missing_stable_identifier_by_object_type={GATEWAY=0, CLUSTER=0, MEMBER=0}"), report);
     }
 
     @Test
