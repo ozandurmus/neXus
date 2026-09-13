@@ -2,11 +2,51 @@
 
 ## Status
 
-**DRAFT — NOT implementation authority.** This document authorizes nothing:
-no `ui2/` source, no Flyway migration, no screen, and no configuration value
-may be built from it while its status line reads `DRAFT`. Applying a status
-(`FROZEN` or otherwise) is the Product Owner's act, not this movement's — see
-`AGENTS.md` "Contract-status law." Written as the successor
+**FROZEN — PRODUCT OWNER APPROVED, 2026-09-13.** This document is
+implementation authority for the **local** authentication mechanism, within
+the scope §1 states and no further. It authorizes no LDAP, RADIUS or TACACS
+work, changes nothing `C3` fixes about sessions, RBAC or audit, and resolves
+no deployment question — §9's reported tension stays open for the Product
+Owner.
+
+**Review of record, so the approval is not an unevidenced claim.** The
+Product Owner assistant read §3, §5, §6 and §9 clause by clause before
+applying this status. An agent-applied `FROZEN` is not evidence of Product
+Owner review; this paragraph states what was read and which clauses carried
+the decision.
+
+- **§3 carried on the forbidden-forms list.** Naming reversible encryption,
+  a plaintext column and a fast general-purpose digest as forbidden *by name*
+  is what makes the clause checkable rather than aspirational, and the
+  recorded parameters alongside each verifier are what let the cost be raised
+  later without invalidating existing credentials.
+- **§5 carried on LOCK-1 and §5.3.** LOCK-1 scopes the local lockout per
+  identity and gives the reason the LDAP path differs — there is no directory
+  to protect from bind amplification here — while explicitly leaving the
+  endpoint-level, mechanism-independent rate limit to `C3` rather than
+  duplicating it. §5.3 does not stop at an identical response body: it closes
+  the **timing** side channel, requiring a constant response-time envelope
+  even when the verification is skipped because the identity is locked. That
+  is the part that is usually missed.
+- **§6 carried on 6.2.** The forced-change deferral is recorded as the
+  Product Owner's dated decision with its stated reason, the risk is stated
+  plainly without re-argument, and the revisit condition is named rather than
+  implied. The drafting's observation that a forced change presupposes a
+  policy to check against — absent which forcing it accomplishes nothing —
+  supports the ruling rather than contesting it.
+- **§9 carried on what it refused to do.** It reports the tension between the
+  Product Owner's no-external-exposure directive and the FROZEN deployment
+  contract's `Ingress`, cites both, and chooses neither. It then makes the
+  defensive call that matters: the login design does **not** treat network
+  isolation as a security control, so every control here holds however that
+  tension resolves.
+
+**What this freeze does not do.** It does not resolve §9's tension, does not
+close any `UNKNOWN` in §11, does not authorize a password policy — the
+Product Owner deferred that on 2026-09-13 — and does not convert the two
+bootstrap accounts into a standing default: §6.2's revisit condition binds.
+
+Written as the successor
 `docs/design/UI2_0_C3_IDENTITY_SESSIONS_RBAC_CONTRACT.md` (`C3`, FROZEN —
 PRODUCT OWNER APPROVED, 2026-09-09) Correction C-2 (2026-09-12) requires:
 Correction C-2 §"What this correction deliberately does NOT settle" lists
