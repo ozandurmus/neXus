@@ -597,13 +597,12 @@ boundary.
 
 **Reported tension, not resolved here.**
 `docs/design/UI2_0_B1_01C_CONTAINER_IMAGE_AND_KUBERNETES_DEPLOYMENT_CONTRACT.md`
-§5.2 defines an `Ingress` object explicitly for **external reach** ("`Ingress`
-| external reach on the local cluster and on the Ingress-based stage") and
-§8's `PORT-1`/`PORT-3` fix that object (or its `Route` substitute on the
-corporate platform, per Correction... no correction — per that contract's
-own §2/§8) as a **permanent, non-conditional** part of the manifest set
-across all three deployment stages, with no platform-conditional construct
-permitted that would omit it. That contract's own text does not describe
+§5.2 defines an `Ingress` object explicitly for **external reach**, and §8's
+`PORT-1`/`PORT-3` fix that object — or its `Route` substitute on the
+corporate platform, per that contract's own §2 and §8 — as a **permanent,
+non-conditional** part of the manifest set across all three deployment
+stages, with no platform-conditional construct permitted that would omit
+it. That contract's own text does not describe
 the Ingress as optional, disabled-by-default, or gated behind a directive
 like this one.
 
