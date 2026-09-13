@@ -1,5 +1,6 @@
 package com.securityexpert.nexus.ui2.discovery.cp;
 
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -11,23 +12,40 @@ import java.util.Optional;
  * name string.
  *
  * <p><b>FB-2/FB-3, discharged per the contract's FROZEN status block.</b>
- * The measurement of §2 was taken in a Product Owner session against a
- * live management server that no worker of this movement has. Every entry
- * below is therefore recorded {@link Status#UNVERIFIED}: a candidate field
- * name for a Product-Owner-run confirmation, never a measurement, and it
- * may not be cited as one. A role this movement cannot even propose a
- * candidate field for is recorded {@link Status#UNKNOWN} and carries no
- * field at all (FB-3) — none of the entries below currently need that
- * fallback, but the type supports it so a future, more cautious entry
- * never has to invent a field name it cannot justify.</p>
+ * These entries were rebound to the {@code cpmiquerybin object} tree format
+ * the Product Owner measured against a live multi-domain management server
+ * (record {@code docs/design/
+ * CP_DISCOVERY_MEASURED_METHOD_AND_COMMAND_HANDOVER_2026_09_13.md}, DRAFT --
+ * evidence, not authority). Every entry below is still {@link
+ * Status#UNVERIFIED}: a candidate field name for a Product-Owner-run
+ * confirmation, never itself a measurement, and it may not be cited as one
+ * -- record §10's closing line: "every entry stays UNVERIFIED until the
+ * first live run of the aligned transport reports its counts". A nested
+ * field is written as {@code "block/leaf"} ({@link #apiField()}); the
+ * adapter splits on the one {@code '/'} to read the named block, then the
+ * named leaf inside it -- never by position.</p>
+ *
+ * <p><b>Per-object-type scope (record §10's field-binding consequence).</b>
+ * {@link Role#VIRT_HOST_FLAG} and {@link Role#VIRT_SYSTEM_FLAG} bind to a
+ * DIFFERENT measured attribute per {@link ObjectType}, so each carries three
+ * entries here, looked up with {@link #forRole(Role, ObjectType)}. Every
+ * other role carries exactly one, unscoped, entry, looked up with {@link
+ * #forRole(Role)}. Whether a role with three scoped entries still satisfies
+ * FB-2's "exactly one field" is left to the contract's freeze owner; this
+ * class only records the measured shape and does not amend the contract.</p>
  */
 public final class ManagementApiFieldBinding {
 
     /** The role names contract §§4 and 6 write their rules against. */
     public enum Role {
         PRODUCT_FLAG,
+
+        /** Scoped per {@link ObjectType} — see class javadoc. */
         VIRT_HOST_FLAG,
+
+        /** Scoped per {@link ObjectType} — see class javadoc. */
         VIRT_SYSTEM_FLAG,
+
         STABLE_IDENTIFIER,
         DISPLAY_NAME,
         OWN_ADDRESS,
@@ -39,81 +57,120 @@ public final class ManagementApiFieldBinding {
         MANAGEMENT_PLANE_CONNECTION_STATE,
 
         /**
-         * §T-2 domain enumeration: the key identifying one domain, not
-         * covered by the original 12 roles because §2's measurement did not
-         * enumerate domains. Added by the transport movement (FB-2).
+         * T-2 domain enumeration: the identifier for one domain. The
+         * measured domain-list utility returns one domain per line, not a
+         * keyed record (record §10) — this entry is positional, not a map
+         * lookup, and its {@link #apiField()} value documents that fact
+         * rather than naming a literal the adapter looks up by key. Kept as
+         * a bound role for FB-2 traceability, the same way the previous
+         * transport's SESSION_IDENTIFIER role existed only so no other
+         * production class needed its own field-name literal.
          */
         DOMAIN_IDENTIFIER,
 
         /**
-         * The management-plane session token a {@code login}-shaped command
-         * returns and every subsequent command in the same run echoes back.
-         * Not a role §4/§6 write a candidate-row rule against; it exists so
-         * the adapter never contains this field-name literal outside this
-         * class either (FB-2's "no other production class" is not qualified
-         * to "no other candidate-row rule").
+         * §7.4 connection table: the foreign-address column of a {@code
+         * netstat -an} row (record §4 item 6, awk {@code $5}). Positional,
+         * like {@link #DOMAIN_IDENTIFIER} — {@link
+         * NetstatConnectionTableParser} reads it by column index, not by
+         * key; this entry documents the measured column, it is not looked
+         * up through {@link #forRole(Role)}.
          */
-        SESSION_IDENTIFIER,
-
-        /** §7.4 connection table: the address column (CS-6a). */
         CONNECTION_TABLE_ADDRESS,
 
-        /** §7.4 connection table: the port column, read only to derive CS-6b's channel port -- never hard-coded. */
+        /** §7.4 connection table: the port half of the same foreign-address column (CS-6b) — positional, never hard-coded. */
         CONNECTION_TABLE_PORT,
 
-        /** §7.4 connection table: the raw per-row channel-state column (CS-1, before CS-3/CS-6a reduction). */
+        /** §7.4 connection table: the state column of the same row (record §4 item 6, awk {@code $6}) — positional. */
         CONNECTION_TABLE_STATE
     }
 
     public enum Status {
         /** A candidate field name, pending Product-Owner-run confirmation against the live management server. */
         UNVERIFIED,
-        /** No field name could be justified by the measured behaviour of §2; the field is not carried (FB-3). */
+        /** No field name could be justified by the measured behaviour of the record; the field is not carried (FB-3). */
         UNKNOWN
     }
 
     private final Role role;
+    private final Optional<ObjectType> objectType;
     private final String apiField;
     private final Status status;
 
-    private ManagementApiFieldBinding(Role role, String apiField, Status status) {
+    private ManagementApiFieldBinding(Role role, Optional<ObjectType> objectType, String apiField, Status status) {
         this.role = role;
+        this.objectType = objectType;
         this.apiField = apiField;
         this.status = status;
     }
 
-    private static final java.util.List<ManagementApiFieldBinding> ENTRIES = java.util.List.of(
-            new ManagementApiFieldBinding(Role.PRODUCT_FLAG, "type", Status.UNVERIFIED),
-            new ManagementApiFieldBinding(Role.VIRT_HOST_FLAG, "chassis-role", Status.UNVERIFIED),
-            new ManagementApiFieldBinding(Role.VIRT_SYSTEM_FLAG, "hosted-instance-role", Status.UNVERIFIED),
-            new ManagementApiFieldBinding(Role.STABLE_IDENTIFIER, "uid", Status.UNVERIFIED),
-            new ManagementApiFieldBinding(Role.DISPLAY_NAME, "name", Status.UNVERIFIED),
-            new ManagementApiFieldBinding(Role.OWN_ADDRESS, "ipv4-address", Status.UNVERIFIED),
-            new ManagementApiFieldBinding(Role.MANAGEMENT_ADDRESS, "controlling-device-address", Status.UNVERIFIED),
-            new ManagementApiFieldBinding(Role.CLUSTER_REFERENCE_IDENTIFIER, "cluster-uid", Status.UNVERIFIED),
-            new ManagementApiFieldBinding(Role.CLUSTER_REFERENCE_DISPLAY_NAME, "cluster-name", Status.UNVERIFIED),
-            new ManagementApiFieldBinding(Role.MODEL, "hardware", Status.UNVERIFIED),
-            new ManagementApiFieldBinding(Role.SOFTWARE_VERSION, "version", Status.UNVERIFIED),
-            new ManagementApiFieldBinding(Role.MANAGEMENT_PLANE_CONNECTION_STATE, "sic-state", Status.UNVERIFIED),
-            new ManagementApiFieldBinding(Role.DOMAIN_IDENTIFIER, "uid", Status.UNVERIFIED),
-            new ManagementApiFieldBinding(Role.SESSION_IDENTIFIER, "sid", Status.UNVERIFIED),
-            new ManagementApiFieldBinding(Role.CONNECTION_TABLE_ADDRESS, "peer-ip", Status.UNVERIFIED),
-            new ManagementApiFieldBinding(Role.CONNECTION_TABLE_PORT, "peer-port", Status.UNVERIFIED),
-            new ManagementApiFieldBinding(Role.CONNECTION_TABLE_STATE, "channel-state", Status.UNVERIFIED));
-
-    public static ManagementApiFieldBinding forRole(Role role) {
-        return ENTRIES.stream()
-                .filter(e -> e.role == role)
-                .findFirst()
-                .orElseThrow(() -> new IllegalStateException("no binding entry for role " + role));
+    private static ManagementApiFieldBinding unscoped(Role role, String apiField) {
+        return new ManagementApiFieldBinding(role, Optional.empty(), apiField, Status.UNVERIFIED);
     }
 
-    public static java.util.List<ManagementApiFieldBinding> all() {
+    private static ManagementApiFieldBinding scoped(Role role, ObjectType objectType, String apiField) {
+        return new ManagementApiFieldBinding(role, Optional.of(objectType), apiField, Status.UNVERIFIED);
+    }
+
+    private static final List<ManagementApiFieldBinding> ENTRIES = List.of(
+            // record §10 addendum: PRODUCT is one field across every object type.
+            unscoped(Role.PRODUCT_FLAG, "cp_products_installed"),
+
+            // record §10 addendum: VIRT_HOST/VIRT_SYSTEM bind to a different attribute per object type.
+            scoped(Role.VIRT_HOST_FLAG, ObjectType.GATEWAY, "vsx_netobj"),
+            scoped(Role.VIRT_HOST_FLAG, ObjectType.CLUSTER, "vsx_cluster_netobj"),
+            scoped(Role.VIRT_HOST_FLAG, ObjectType.MEMBER, "vsx_cluster_member"),
+            scoped(Role.VIRT_SYSTEM_FLAG, ObjectType.GATEWAY, "vs_netobj"),
+            scoped(Role.VIRT_SYSTEM_FLAG, ObjectType.CLUSTER, "vs_cluster_netobj"),
+            scoped(Role.VIRT_SYSTEM_FLAG, ObjectType.MEMBER, "vs_cluster_member"),
+
+            // record §10 row 4: the stable identifier lives inside the AdminInfo block, not at top level.
+            unscoped(Role.STABLE_IDENTIFIER, "AdminInfo/chkpf_uid"),
+            unscoped(Role.DISPLAY_NAME, "name"),
+            unscoped(Role.OWN_ADDRESS, "ipaddr"),
+            unscoped(Role.MANAGEMENT_ADDRESS, "mgmt_ip"),
+
+            // record §5 row 4: the cluster reference's stable identifier and display name live inside cluster_object.
+            unscoped(Role.CLUSTER_REFERENCE_IDENTIFIER, "cluster_object/chkpf_uid"),
+            unscoped(Role.CLUSTER_REFERENCE_DISPLAY_NAME, "cluster_object/name"),
+
+            unscoped(Role.MODEL, "appliance_type"),
+            unscoped(Role.SOFTWARE_VERSION, "svn_version_name"),
+            unscoped(Role.MANAGEMENT_PLANE_CONNECTION_STATE, "connection_state"),
+
+            // Positional roles — see their Role javadoc; not a map-key lookup.
+            unscoped(Role.DOMAIN_IDENTIFIER, "domain-list-line"),
+            unscoped(Role.CONNECTION_TABLE_ADDRESS, "netstat-foreign-address"),
+            unscoped(Role.CONNECTION_TABLE_PORT, "netstat-foreign-port"),
+            unscoped(Role.CONNECTION_TABLE_STATE, "netstat-state-column"));
+
+    /** For a role with exactly one, unscoped, entry. Throws for {@link Role#VIRT_HOST_FLAG}/{@link Role#VIRT_SYSTEM_FLAG} -- use {@link #forRole(Role, ObjectType)}. */
+    public static ManagementApiFieldBinding forRole(Role role) {
+        return ENTRIES.stream()
+                .filter(e -> e.role == role && e.objectType.isEmpty())
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException("no unscoped binding entry for role " + role));
+    }
+
+    /** For a role scoped per {@link ObjectType} (falls back to an unscoped entry if the role has one instead). */
+    public static ManagementApiFieldBinding forRole(Role role, ObjectType objectType) {
+        return ENTRIES.stream()
+                .filter(e -> e.role == role && (e.objectType.isEmpty() || e.objectType.get() == objectType))
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException("no binding entry for role " + role + " / " + objectType));
+    }
+
+    public static List<ManagementApiFieldBinding> all() {
         return ENTRIES;
     }
 
     public Role role() {
         return role;
+    }
+
+    /** Empty when this role has no unscoped entry — {@link Role#VIRT_HOST_FLAG}/{@link Role#VIRT_SYSTEM_FLAG}. */
+    public Optional<ObjectType> objectType() {
+        return objectType;
     }
 
     public Status status() {
