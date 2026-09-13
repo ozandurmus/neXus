@@ -46,7 +46,14 @@ import com.securityexpert.nexus.ui2.platform.OpaqueId;
 import com.securityexpert.nexus.ui2.platform.PrincipalFingerprint;
 import com.securityexpert.nexus.ui2.platform.Result;
 import com.securityexpert.nexus.ui2.platform.RoleToken;
+import com.securityexpert.nexus.ui2.identity.ldap.LdapMechanism;
+import com.securityexpert.nexus.ui2.persistence.identity.LocalCredentialRecord;
+import com.securityexpert.nexus.ui2.persistence.identity.LocalCredentialsRepository;
+import com.securityexpert.nexus.ui2.platform.Argon2PasswordHasher;
+import com.securityexpert.nexus.ui2.platform.Clock;
 import com.securityexpert.nexus.ui2.service.api.LoginController;
+import com.securityexpert.nexus.ui2.service.security.LocalMechanism;
+import com.securityexpert.nexus.ui2.service.security.MechanismRegistry;
 import com.securityexpert.nexus.ui2.service.security.RbacEvaluator;
 import com.securityexpert.nexus.ui2.service.security.RoleBindingAdminService;
 
@@ -518,16 +525,60 @@ class IdentitySessionsRbacDatabasePlaceholderTest {
         // successful bind (see its Javadoc above); a failed-closed bind
         // must never reach it, so no LoginFlow/SessionRepository
         // implementation is needed here at all -- null is deliberate, not
-        // a shortcut around the real code path.
-        LoginController controller = new LoginController(adapter, null);
+        // a shortcut around the real code path. LdapMechanism wraps the
+        // real adapter behind the C3A §2.1 Mechanism interface, exactly as
+        // the production registry would; the LocalMechanism passed to
+        // MechanismRegistry is never exercised on this "ldap"-selected
+        // request (its repository throws if it ever is, which would itself
+        // fail this test).
+        MechanismRegistry mechanismRegistry = new MechanismRegistry(
+                new LocalMechanism(new NeverInvokedLocalCredentialsRepository(), Clock.system()),
+                java.util.List.of(new LdapMechanism(adapter)));
+        LoginController controller = new LoginController(mechanismRegistry, null);
 
         ResponseEntity<java.util.Map<String, Object>> response = controller.login(
-                new LoginController.LoginRequest("carol", "test-pw-carol-1".toCharArray()),
+                new LoginController.LoginRequest("carol", "test-pw-carol-1".toCharArray(), "ldap"),
                 (HttpServletResponse) null);
 
         assertEquals(HttpStatus.SERVICE_UNAVAILABLE, response.getStatusCode(),
                 "a directory that goes unreachable between two calls must fail closed 503, never 401");
         assertEquals("DIRECTORY_UNAVAILABLE", response.getBody().get("error"));
+    }
+
+    /** A {@link LocalCredentialsRepository} that fails the test if the "ldap"-selected request above ever reaches it. */
+    private static final class NeverInvokedLocalCredentialsRepository implements LocalCredentialsRepository {
+        @Override
+        public java.util.Optional<LocalCredentialRecord> findByName(String localIdentityName) {
+            throw new AssertionError("the local mechanism must never be invoked for an ldap-selected login attempt");
+        }
+
+        @Override
+        public java.util.Optional<LocalCredentialRecord> findById(String localIdentityId) {
+            throw new AssertionError("not exercised by this test");
+        }
+
+        @Override
+        public String create(String localIdentityId, String localIdentityName, Argon2PasswordHasher.Verifier verifier,
+                String createdByActorFingerprint) {
+            throw new AssertionError("not exercised by this test");
+        }
+
+        @Override
+        public void recordFailedAttempt(String localIdentityId, java.time.Instant now, int lockoutThreshold,
+                java.time.Duration lockoutDuration) {
+            throw new AssertionError("not exercised by this test");
+        }
+
+        @Override
+        public void recordSuccessfulLogin(String localIdentityId, java.time.Instant now, String actorFingerprint) {
+            throw new AssertionError("not exercised by this test");
+        }
+
+        @Override
+        public void changePassword(String localIdentityId, Argon2PasswordHasher.Verifier newVerifier,
+                String changedByActorFingerprint) {
+            throw new AssertionError("not exercised by this test");
+        }
     }
 
     /**
