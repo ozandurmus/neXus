@@ -273,69 +273,6 @@
     },
     {
       "category": "UI 2.0 (Java product line)",
-      "id": "ui2_b0_c1_platform_schema_contract",
-      "title": "UI2 B0/C1 -- platform & schema contract (UI 2.0 schema ownership, Flyway sole migration authority, projection tables, audit from first mutation, per-component secrets, key custody)",
-      "priority": "P0 -- UI 2.0 primary",
-      "status": "in_progress",
-      "note": "see docs/history/backlog/ui2_b0_c1_platform_schema_contract.md",
-      "target": "workflow §5 B0-1; docs/design/UI2_0_BASELINE_CONTRACT.md (FROZEN 2026-09-09); plan: docs/design/UI2_0_DEVELOPMENT_WORKFLOW.md; produced docs/design/UI2_0_C1_PLATFORM_SCHEMA_CONTRACT.md (DRAFT -- FOR PRODUCT OWNER FREEZE). PR #163."
-    },
-    {
-      "category": "UI 2.0 (Java product line)",
-      "id": "ui2_b0_c2_job_execution_contract",
-      "title": "UI2 B0/C2 -- job execution contract (Java worker; leasing/heartbeat, timeout, worker loss, duplicate detection, OUTCOME_UNKNOWN, owner/approver/execution identity, schedule optimistic concurrency)",
-      "priority": "P0 -- UI 2.0 primary",
-      "status": "in_progress",
-      "note": "see docs/history/backlog/ui2_b0_c2_job_execution_contract.md",
-      "target": "workflow §5 B0-2; docs/design/UI2_0_BASELINE_CONTRACT.md (FROZEN 2026-09-09); plan: docs/design/UI2_0_DEVELOPMENT_WORKFLOW.md; output: docs/design/UI2_0_C2_JOB_EXECUTION_CONTRACT.md"
-    },
-    {
-      "category": "UI 2.0 (Java product line)",
-      "id": "ui2_b0_c3_identity_sessions_rbac_contract",
-      "title": "UI2 B0/C3 -- identity, sessions and RBAC contract (LDAP bind, single active session per identity, role tokens -> bindings -> AD group refs, E1-E7 on HTTP)",
-      "priority": "P0 -- UI 2.0 primary",
-      "status": "in_progress",
-      "note": "see docs/history/backlog/ui2_b0_c3_identity_sessions_rbac_contract.md",
-      "target": "workflow §5 B0-3; docs/design/UI2_0_BASELINE_CONTRACT.md (FROZEN 2026-09-09); plan: docs/design/UI2_0_DEVELOPMENT_WORKFLOW.md; output: docs/design/UI2_0_C3_IDENTITY_SESSIONS_RBAC_CONTRACT.md"
-    },
-    {
-      "category": "UI 2.0 (Java product line)",
-      "id": "ui2_b0_c4_capability_registry_gate_resolution_contract",
-      "title": "UI2 B0/C4 -- capability registry & command-gate resolution contract (runtime form of the capability spec; gate-registry resolution rule K-4; closed step kinds; VSX/ClusterXL rules CP-D6; transport decision CP-D7)",
-      "priority": "P0 -- UI 2.0 primary",
-      "status": "in_progress",
-      "note": "see docs/history/backlog/ui2_b0_c4_capability_registry_gate_resolution_contract.md",
-      "target": "workflow §5 B0-4; docs/design/UI2_0_BASELINE_CONTRACT.md (FROZEN 2026-09-09); plan: docs/design/UI2_0_DEVELOPMENT_WORKFLOW.md; produced docs/design/UI2_0_C4_CAPABILITY_REGISTRY_GATE_RESOLUTION_CONTRACT.md (DRAFT -- FOR PRODUCT OWNER FREEZE)."
-    },
-    {
-      "category": "UI 2.0 (Java product line)",
-      "id": "ui2_b0_c5_amendments_bundle",
-      "title": "UI2 B0/C5 -- amendments bundle (CON.0 separate shell; action_taxonomy UI-OPERATIONAL-RUN-NOW; design §6 APPROVAL-MODEL; ladder -> CAP-* states; AG-U2 restated)",
-      "priority": "P0 -- UI 2.0 primary",
-      "status": "in_progress",
-      "note": "see docs/history/backlog/ui2_b0_c5_amendments_bundle.md",
-      "target": "workflow §5 B0-5; baseline contract §5"
-    },
-    {
-      "category": "UI 2.0 (Java product line)",
-      "id": "ui2_b0_c6_capability_extraction_contract",
-      "title": "UI2 B0/C6 -- capability extraction contract (spec template with KNOWN/UNKNOWN/NOT_APPLICABLE field states, fixture set rules SYNTHETIC/DERIVED, tokenizer preserved-property list) + ordered extraction inventory",
-      "priority": "P0 -- UI 2.0 primary",
-      "status": "in_progress",
-      "note": "see docs/history/backlog/ui2_b0_c6_capability_extraction_contract.md",
-      "target": "workflow §3.1, §4, §5 B0-6; docs/design/UI2_0_BASELINE_CONTRACT.md (FROZEN 2026-09-09); plan: docs/design/UI2_0_DEVELOPMENT_WORKFLOW.md; produced docs/design/UI2_0_C6_CAPABILITY_EXTRACTION_CONTRACT.md (DRAFT -- FOR PRODUCT OWNER FREEZE)."
-    },
-    {
-      "category": "UI 2.0 (Java product line)",
-      "id": "ui2_b0_c7_backup_artefact_restore_engine_contract",
-      "title": "UI2 B0/C7 -- backup, artefact and restore engine contract (profile rules per design §6 as amended; store/manifest/validation/retention/key custody from RB contracts; restore execution: plan, preconditions, execute, verify, failure behaviour; per-operation approval; device/version matrix)",
-      "priority": "P0 -- UI 2.0 primary",
-      "status": "in_progress",
-      "note": "see docs/history/backlog/ui2_b0_c7_backup_artefact_restore_engine_contract.md",
-      "target": "workflow §5 B0-7; docs/design/UI2_0_BASELINE_CONTRACT.md (FROZEN 2026-09-09); plan: docs/design/UI2_0_DEVELOPMENT_WORKFLOW.md; produced docs/design/UI2_0_C7_BACKUP_ARTEFACT_RESTORE_ENGINE_CONTRACT.md (DRAFT -- FOR PRODUCT OWNER FREEZE). PR #170."
-    },
-    {
-      "category": "UI 2.0 (Java product line)",
       "id": "ui2_b1_01_skeleton_ci_docker",
       "title": "UI2 B1-1 -- Gradle multi-module skeleton under ui2/, CI job, Docker image, Testcontainers PostgreSQL, P-1 dependency-graph test",
       "priority": "P1 -- UI 2.0",
@@ -414,15 +351,6 @@
       "status": "planned",
       "note": "see docs/history/backlog/ui2_b1_11_acceptance_scenario_worker_loss.md",
       "target": "workflow §5 B1-11"
-    },
-    {
-      "category": "UI 2.0 (Java product line)",
-      "id": "ui2_taxonomy_device_write_class_and_step_kind",
-      "title": "Taxonomy-successor movement: a utils/action_taxonomy.py class for a restore/config-apply write, and a C4 device-directed write step kind (sftp_put or equivalent) to carry it",
-      "priority": "P0 -- UI 2.0 primary, HIGH SCRUTINY",
-      "status": "planned",
-      "note": "see docs/history/backlog/ui2_taxonomy_device_write_class_and_step_kind.md",
-      "target": "docs/design/UI2_0_C7_BACKUP_ARTEFACT_RESTORE_ENGINE_CONTRACT.md §9.1-§9.3; docs/design/UI2_0_C4_CAPABILITY_REGISTRY_GATE_RESOLUTION_CONTRACT.md §2.3, §3.3 step 7; utils/action_taxonomy.py"
     },
     {
       "id": "pan_active_active_not_excluded_as_failover_unit",

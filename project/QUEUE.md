@@ -1,5 +1,5 @@
 # Project queue (generated — do not edit; run: py scripts/project_queue.py render)
-Build: ui2_d1_restore_c7_c2_amendments · Track: PCP.x · Generated: 2026-09-13T12:54:59Z
+Build: ui2_d1_restore_c7_c2_amendments · Track: PCP.x · Generated: 2026-09-13T13:09:10Z
 
 ## Now
 - ui2_d1_restore_c7_c2_amendments — UI2 D1 Option A -- apply the pending C7/C2/C4/baseline restore admission amendments (automated_validated)
@@ -9,13 +9,6 @@ Build: ui2_d1_restore_c7_c2_amendments · Track: PCP.x · Generated: 2026-09-13T
 - P0/in_progress pan_serial_representation_identity_evidence_closure — PAN HA runtime peer-serial representation mismatch on one (target: Pre-CLASS-2 (OP.0b/OP.2), independent of)
 - P0/in_progress private_replay_agent_operated_test_environment — Private Replay -- agent-operated privacy-filtered test env (target: docs/design/PRIVATE_REPLAY_ARCHITECTURE.)
 - P0/in_progress recovery_offhost_key_custody — Off-host recovery artifacts and encryption-key custody (target: DEPLOY.1; blocks reliance on RB.3b recov)
-- P0/in_progress ui2_b0_c1_platform_schema_contract — UI2 B0/C1 -- platform & schema contract (UI 2.0 schema own (target: workflow §5 B0-1; docs/design/UI2_0_BASE)
-- P0/in_progress ui2_b0_c2_job_execution_contract — UI2 B0/C2 -- job execution contract (Java worker; leasing/ (target: workflow §5 B0-2; docs/design/UI2_0_BASE)
-- P0/in_progress ui2_b0_c3_identity_sessions_rbac_contract — UI2 B0/C3 -- identity, sessions and RBAC contract (LDAP bi (target: workflow §5 B0-3; docs/design/UI2_0_BASE)
-- P0/in_progress ui2_b0_c4_capability_registry_gate_resolution_contract — UI2 B0/C4 -- capability registry & command-gate resolution (target: workflow §5 B0-4; docs/design/UI2_0_BASE)
-- P0/in_progress ui2_b0_c5_amendments_bundle — UI2 B0/C5 -- amendments bundle (CON.0 separate shell; acti (target: workflow §5 B0-5; baseline contract §5)
-- P0/in_progress ui2_b0_c6_capability_extraction_contract — UI2 B0/C6 -- capability extraction contract (spec template (target: workflow §3.1, §4, §5 B0-6; docs/design/)
-- P0/in_progress ui2_b0_c7_backup_artefact_restore_engine_contract — UI2 B0/C7 -- backup, artefact and restore engine contract (target: workflow §5 B0-7; docs/design/UI2_0_BASE)
 - P0/planned cp_discovery_java_implementation — CP discovery in Java: management-plane candidate enumerati (target: CP_AND_VSX_DISCOVERY_CONTRACT.md; gate l)
 - P0/planned cp_production_ssh_host_key_trust_hardening — CP SSH host-key trust: mandatory strict enforcement for pr (target: production container/pod runtime hardeni)
 - P0/planned deploy1_contract_freeze — DEPLOY.1 contract freeze and server-arrival execution gate (target: DEPLOY.1)
@@ -26,7 +19,6 @@ Build: ui2_d1_restore_c7_c2_amendments · Track: PCP.x · Generated: 2026-09-13T
 - P0/planned deploy1_report_volume_isolation — Publish reports through a report-only viewer volume (target: DEPLOY.1 server arrival)
 - P0/planned on_hardware_real_env_validation — On-hardware validation of the 0.6.3 -> 0.6.6B + DEV.2.1 li (target: next corporate-laptop session)
 - P0/planned pan_auth_transport_convergence — PAN Authentication Transport Convergence -- URGENT: older (target: production hardening / PAN transport cle)
-- P0/planned ui2_taxonomy_device_write_class_and_step_kind — Taxonomy-successor movement: a utils/action_taxonomy.py cl (target: docs/design/UI2_0_C7_BACKUP_ARTEFACT_RES)
 - P1/in_progress cp_preflight_ccp_tablestat_evidence — CP preflight: add `cphaprob tablestat` (CCP unique-IP tabl (target: OP.0b follow-on (post S8 closure); imple)
 - P1/in_progress credential_profiles — Credential profile / enterprise vault abstraction (target: 1.0 foundation)
 - P1/in_progress deploy1_database_migrations_and_roles — Database migrations and least-privilege runtime roles (target: DEV.4.6 / DEPLOY.1)
