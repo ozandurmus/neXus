@@ -544,11 +544,13 @@
     {
       "id": "pcp_storage_engine",
       "area": "PCP.x Product Control Plane",
-      "status": "open",
+      "status": "decided",
       "question": "PRODUCTION-SCOPED. Which engine backs the registry/job plane IN PRODUCTION, against the section 10 criteria? (The local sequencing question is separate and decided -- see pcp_local_control_plane_storage.)",
       "decide_by": "PCP.5 contract freeze / DEV.4.6 migrations and database roles",
       "note": "Kept OPEN at the 2026-09-05 M0 freeze. Do not read the local SQLite decision as a production engine selection.",
-      "detail": "docs/history/roadmap/decision_pcp_storage_engine.md"
+      "detail": "docs/history/roadmap/decision_pcp_storage_engine.md",
+      "decision": "Decided 2026-09-13 by supersession: UI2_0_C1_PLATFORM_SCHEMA_CONTRACT.md (FROZEN) fixes PostgreSQL 16 with Flyway as the sole migration authority for the UI 2.0 registry and job plane; the Python PCP registry receives no production engine (PO_DECISION_RECORD_2026_09_12 section 2).",
+      "decided_on": "2026-09-13"
     },
     {
       "id": "po_cp_backup_async_semantics",
