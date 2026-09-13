@@ -11,14 +11,13 @@ under `docs/history/`; `docs/history/INDEX.md` is the one-line timeline.
   refusal identical in body *and* timing, and first-boot seeding of
   `nexusadmin` (full administrative capability) and `claudeadmin`
   (`role:viewer`), which a restart can never reset.
-- **Both discovery contracts are FROZEN** — `CP_AND_VSX_DISCOVERY_CONTRACT.md`
-  and `PAN_DISCOVERY_CONTRACT.md`, each measured by the Product Owner against
-  a live management server, neither derived from the existing Python. CP's
-  domain core is merged: §9 checks 8/10/12/13 are real JUnit tests in
-  `ui2/platform-core` (`…ui2.discovery.cp`); the rest need a management
-  server. Both leave their field bindings `UNVERIFIED` at one isolated site
-  and their `UNKNOWN` registers open. **Transport is next for both, and is
-  the only work the product now waits on.**
+- **Both discovery contracts are FROZEN** and both are now Java: CP domain
+  core + transport (`…ui2.discovery.cp`, `…worker.discovery.cp`, PR #241)
+  and PAN domain core (`…ui2.discovery.pan`, PR #240). Every field binding
+  and every `mgmt_cli` command is `UNVERIFIED` at one site; the CP
+  command-gate document is DRAFT pending PO approval, so nothing has run
+  against a live server. Next: PAN transport, import/enrollment contract.
+  Build order and collection decisions: `PO_DECISION_RECORD_2026_09_13E`/`13F`.
 - **Services are independently deployable** (`PO_DECISION_RECORD_2026_09_13D`,
   superseding `UI2_0_B1_01C` EP-1). Its `AUTH-PLACEMENT` question is open and
   blocks a *second* authenticated surface, not the transport work.
@@ -47,14 +46,12 @@ under `docs/history/`; `docs/history/INDEX.md` is the one-line timeline.
 - **Implementation language:** new features are Java, written from
   scratch; existing Python scripts are know-how only, never ported or
   wrapped (same record, section 2).
-- **Next** (`now_next.next`): `M12` — per-device/per-capability schedules
-  (`D5` producer); no device contact or write implied. `collect_now`
-  **AUTOMATED_VALIDATED 2026-09-08**, real-device confirmation pending PO
-  execution. `op2_c_cp_clusterxl_adapter_scoping` stays
-  `upcoming`/`blocked`; `event_signal_intake` stays `in_progress` —
-  cross-vendor timeline (0.8.x) and real network exposure of
-  `signal_intake/` are later work. `DEV.TEST.1`/`PCP.1`/`M1`-`M11`/`M7` are
-  complete/automated_validated/real_env_validated.
+- **Next** (`now_next.next`) still names `M12` (per-device schedules);
+  record `13E` defers the scheduler and fixes the order discovery → login →
+  inventory/configuration collection → backup → failover. `collect_now`
+  AUTOMATED_VALIDATED 2026-09-08. `op2_c_cp_clusterxl_adapter_scoping` stays
+  `upcoming`/`blocked`; `event_signal_intake` moved to the reserve
+  (2026-09-13). `DEV.TEST.1`/`PCP.1`/`M1`-`M11`/`M7` are complete.
 - **OP.2.0 CLASS 2 architecture**
   (`docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md`):
   **CONTRACT FROZEN 2026-09-04**; `OP.2.A`/`OP.2.B` IMPLEMENTED; `OP.2.1`
