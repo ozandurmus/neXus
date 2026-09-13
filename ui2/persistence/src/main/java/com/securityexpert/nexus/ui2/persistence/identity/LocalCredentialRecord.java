@@ -18,7 +18,9 @@ public record LocalCredentialRecord(
         int failedAttemptCount,
         Optional<Instant> lockedUntil,
         Instant createdAt,
-        Instant updatedAt) {
+        Instant updatedAt,
+        /** V9 (NXS-LOCAL-0152): true while this row still holds the password it was seeded with. */
+        boolean mustChangePassword) {
 
     /** This row's own recorded verifier and parameters -- never the service's current default (§3.2). */
     public Argon2PasswordHasher.Verifier toVerifier() {

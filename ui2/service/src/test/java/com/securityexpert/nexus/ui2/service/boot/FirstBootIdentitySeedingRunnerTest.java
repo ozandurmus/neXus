@@ -89,8 +89,22 @@ class FirstBootIdentitySeedingRunnerTest {
             idByName.put(localIdentityName, localIdentityId);
             byId.put(localIdentityId, new LocalCredentialRecord(localIdentityId, localIdentityName, verifier.verifier(),
                     verifier.salt(), verifier.algorithmId(), verifier.parameters().memoryCostKib(),
-                    verifier.parameters().timeCost(), verifier.parameters().parallelism(), 0, Optional.empty(), NOW, NOW));
+                    verifier.parameters().timeCost(), verifier.parameters().parallelism(), 0, Optional.empty(), NOW, NOW,
+                    false));
             return localIdentityId;
+        }
+
+        @Override
+        public List<LocalCredentialRecord> findAll() {
+            return List.copyOf(byId.values());
+        }
+
+        @Override
+        public void markMustChangePassword(String localIdentityId, String actorFingerprint) {
+            LocalCredentialRecord r = byId.get(localIdentityId);
+            byId.put(localIdentityId, new LocalCredentialRecord(r.localIdentityId(), r.localIdentityName(), r.verifier(),
+                    r.salt(), r.algorithmId(), r.memoryCostKib(), r.timeCost(), r.parallelism(), r.failedAttemptCount(),
+                    r.lockedUntil(), r.createdAt(), Instant.now(), true));
         }
 
         @Override
@@ -112,7 +126,7 @@ class FirstBootIdentitySeedingRunnerTest {
                     newVerifier.verifier(), newVerifier.salt(), newVerifier.algorithmId(),
                     newVerifier.parameters().memoryCostKib(), newVerifier.parameters().timeCost(),
                     newVerifier.parameters().parallelism(), r.failedAttemptCount(), r.lockedUntil(),
-                    r.createdAt(), Instant.now()));
+                    r.createdAt(), Instant.now(), false));
         }
     }
 
@@ -250,6 +264,39 @@ class FirstBootIdentitySeedingRunnerTest {
         assertEquals(2, fixture.localCredentials.byId.size(), "the restart must not have created a duplicate or third row");
         assertEquals(bindingCountAfterFirstBoot, fixture.roleBindings.bindings.size(),
                 "AC-5: a restart must not duplicate or alter a role binding");
+    }
+
+    @Test
+    void bothBootstrapIdentitiesAreSeededWithMustChangePasswordSetAndARestartNeverResetsAClearedFlag() {
+        // NXS-LOCAL-0152 AC-2: seeded true for both bootstrap identities in
+        // the same transaction as their creation, cleared by a successful
+        // change, and a restart of the seeding routine (BOOT-2's gate)
+        // never sets it again for an identity whose password was already
+        // changed.
+        Fixture fixture = new Fixture();
+        fixture.runner.run(null);
+
+        assertTrue(fixture.localCredentials.findByName(BootstrapCredentialDefaults.NEXUSADMIN_NAME)
+                .orElseThrow().mustChangePassword(), "nexusadmin must be seeded still holding its seeded password");
+        assertTrue(fixture.localCredentials.findByName(BootstrapCredentialDefaults.CLAUDEADMIN_NAME)
+                .orElseThrow().mustChangePassword(), "claudeadmin must be seeded still holding its seeded password");
+
+        PasswordChangeService passwordChangeService = new PasswordChangeService(fixture.localCredentials);
+        PasswordChangeService.Result changeResult = passwordChangeService.changePassword(
+                BootstrapCredentialDefaults.NEXUSADMIN_NAME,
+                BootstrapCredentialDefaults.nexusadminInitialPassword(), "correct-horse-battery-staple".toCharArray());
+        assertTrue(changeResult instanceof PasswordChangeService.Result.Ok());
+        assertFalse(fixture.localCredentials.findByName(BootstrapCredentialDefaults.NEXUSADMIN_NAME)
+                        .orElseThrow().mustChangePassword(),
+                "AC-2: a successful password change clears the flag");
+
+        fixture.runner.run(null); // simulated restart: BOOT-2's gate skips seeding entirely (any row present)
+
+        assertFalse(fixture.localCredentials.findByName(BootstrapCredentialDefaults.NEXUSADMIN_NAME)
+                        .orElseThrow().mustChangePassword(),
+                "AC-2/BOOT-2: a restart must never re-set the flag for an identity whose password was already changed");
+        assertTrue(fixture.localCredentials.findByName(BootstrapCredentialDefaults.CLAUDEADMIN_NAME)
+                .orElseThrow().mustChangePassword(), "claudeadmin (untouched) must still require a password change");
     }
 
     @Test

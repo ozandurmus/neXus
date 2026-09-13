@@ -2,6 +2,7 @@ package com.securityexpert.nexus.ui2.persistence.identity;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 
 import com.securityexpert.nexus.ui2.platform.Argon2PasswordHasher;
@@ -23,10 +24,25 @@ public interface LocalCredentialsRepository {
     String ACTION_LOGIN_FAILURE = "local_login_failure";
     String ACTION_LOGIN_SUCCESS = "local_login_success";
     String ACTION_PASSWORD_CHANGE = "local_password_change";
+    /** V9 (NXS-LOCAL-0152): the audited action id {@link #markMustChangePassword} runs under. */
+    String ACTION_MUST_CHANGE_PASSWORD_SEED = "local_credential_must_change_password_seed";
 
     Optional<LocalCredentialRecord> findByName(String localIdentityName);
 
     Optional<LocalCredentialRecord> findById(String localIdentityId);
+
+    /**
+     * Every row (NXS-LOCAL-0152's own need: resolving a session's opaque
+     * {@code actor_fingerprint} back to the local identity behind it, since
+     * the fingerprint is a one-way hash of {@code "local:" + local_identity_id}
+     * -- see {@link com.securityexpert.nexus.ui2.platform.PrincipalFingerprint} --
+     * and is never itself a lookup key on this table). This table holds at
+     * most a handful of rows (bootstrap identities plus any operator-created
+     * via the CLI), so an in-memory scan by the caller is the right size
+     * trade-off; the returned rows are compared in-process and never
+     * serialized to an external caller.
+     */
+    List<LocalCredentialRecord> findAll();
 
     /**
      * BOOT-1/BOOT-2 (C3B contract §2): true when the table holds at least
@@ -58,7 +74,24 @@ public interface LocalCredentialsRepository {
      */
     void recordSuccessfulLogin(String localIdentityId, Instant now, String actorFingerprint);
 
-    /** Overwrites verifier/salt/parameters (§4/§3.2's rehash-shape); attributed to the identity's own fingerprint. */
+    /**
+     * Overwrites verifier/salt/parameters (§4/§3.2's rehash-shape); attributed
+     * to the identity's own fingerprint. V9 (NXS-LOCAL-0152, AC-2): the same
+     * {@code UPDATE} statement also clears {@code must_change_password}, so
+     * the flag is cleared in the same transaction that writes the new
+     * verifier -- never a separate call that could commit independently.
+     */
     void changePassword(String localIdentityId, Argon2PasswordHasher.Verifier newVerifier,
             String changedByActorFingerprint);
+
+    /**
+     * V9 (NXS-LOCAL-0152, BOOT-5a): marks a freshly-created row as still
+     * holding its seeded password. Called only by
+     * {@link com.securityexpert.nexus.ui2.persistence.identity.FirstBootIdentityRoleBindingSeeder},
+     * immediately after {@link #create}, inside the very same outer
+     * transaction -- every other caller of {@link #create} (the CLI
+     * bootstrap path) never calls this, and its rows keep the schema
+     * default ({@code false}).
+     */
+    void markMustChangePassword(String localIdentityId, String actorFingerprint);
 }
