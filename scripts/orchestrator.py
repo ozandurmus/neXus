@@ -501,13 +501,33 @@ def pid_alive(pid: int) -> bool:
     return True
 
 
+def _is_resumable_budget_failure(record: dict) -> bool:
+    """GOV.ORCH.10 R-2: true iff `record`'s own persisted `failure_reasons`
+    contain `budget_exhausted` and nothing else. The set, not the list
+    order, is the signal -- this is the entire safety of the amendment, so
+    it lives in one place `decide_start` and its caller both read, never a
+    second re-derivation."""
+    if record.get("phase") != PHASE_FAILED:
+        return False
+    return set(record.get("failure_reasons") or []) == {"budget_exhausted"}
+
+
 def decide_start(
     *, relay_obj: dict, existing_record: dict | None, is_pid_alive: bool,
     active_count: int, max_workers: int,
+    max_budget_usd: float | None = None, retry_limit: int = DEFAULT_RETRY_LIMIT,
 ) -> tuple[str, str]:
     """Pure dispatch decision. Returns (action, reason); action is one of
     "dispatch" (fresh worktree + spawn), "resume" (same worktree/branch/
-    session, no new worktree), or "refuse"."""
+    session, no new worktree), or "refuse".
+
+    GOV.ORCH.10 R-1/R-2: a terminal (`failed`) record whose only recorded
+    failure reason was `budget_exhausted` is also resumable, unless it is
+    already at `retry_limit` (R-4) -- both read from `existing_record`,
+    never re-derived. `max_budget_usd` is the ceiling this call is being
+    asked to use; R-3 refuses a budget resume into the same or a lower
+    ceiling than the one that stopped it.
+    """
     next_actor = relay_obj.get("next_actor")
     if next_actor != "engineer":
         return "refuse", f"not engineer's turn (next_actor is {next_actor!r})"
@@ -520,9 +540,23 @@ def decide_start(
             )
         return "resume", "recovering an interrupted run (same worktree, branch, and session)"
 
-    # No record, or the prior run ended terminally: a fresh dispatch, which
-    # needs a free worker slot. (A resume above is not a NEW slot -- it is
-    # already occupying the one it was given originally.)
+    if (
+        existing_record is not None
+        and _is_resumable_budget_failure(existing_record)
+        and existing_record.get("retry_count", 0) < retry_limit
+    ):
+        stopped_at = (existing_record.get("budget_exhausted") or {}).get("max_budget_usd")
+        if max_budget_usd is not None and stopped_at is not None and max_budget_usd <= stopped_at:
+            return "refuse", (
+                "budget resume requires --max-budget-usd greater than the ceiling that "
+                f"stopped the movement (stopped at {stopped_at}, requested {max_budget_usd})"
+            )
+        return "resume", "budget resume: prior run's only failure reason was budget_exhausted (GOV.ORCH.10 R-1)"
+
+    # No record, the prior run ended terminally for a non-resumable reason,
+    # or a budget failure already at retry_limit (R-4): a fresh dispatch,
+    # which needs a free worker slot. (A resume above is not a NEW slot --
+    # it is already occupying the one it was given originally.)
     if active_count >= max_workers:
         return "refuse", f"max_workers ({max_workers}) reached; no free slot"
     return "dispatch", "fresh dispatch"
@@ -1098,6 +1132,7 @@ def _do_start(args: argparse.Namespace) -> tuple[int, dict | None, subprocess.Po
     action, reason = decide_start(
         relay_obj=relay_obj, existing_record=existing, is_pid_alive=is_alive,
         active_count=active, max_workers=args.max_workers,
+        max_budget_usd=args.max_budget_usd,
     )
     if action == "refuse":
         print(f"error: {reason}", file=sys.stderr)
@@ -1143,6 +1178,10 @@ def _do_start(args: argparse.Namespace) -> tuple[int, dict | None, subprocess.Po
         recovery_note_needed = needs_resume_recovery_note(
             relay_obj=relay_obj, has_staged_uncommitted_changes=staged, is_pid_alive=False,
         )
+        # GOV.ORCH.10 R-1: a resume reached because the prior run's only
+        # failure reason was budget_exhausted, read the same way
+        # `decide_start` read it -- never re-derived from `reason`'s text.
+        is_budget_resume = _is_resumable_budget_failure(existing)
         # GOV.ORCH.1 section 2.3: retry_count increments on every resume
         # dispatch and is persisted before the spawn, so a crash between
         # this write and the spawn still leaves the increment recorded.
@@ -1162,12 +1201,14 @@ def _do_start(args: argparse.Namespace) -> tuple[int, dict | None, subprocess.Po
                   "last_action": "resumed", "task_hash": hash_hex,
                   "dispatch_seq": len(relay_obj["entries"]), "retry_count": retry_count,
                   "failure_reason": None, "exit_code": None,
+                  "failure_reasons": None, "budget_exhausted": None,
                   "provider": provider, "model_requested": args.model, "effort_requested": args.effort,
                   "merge_mode": merge_mode}
         _save_state(state_dir, args.movement, record)
         payload = {"action": "resume", "movement_id": args.movement, "pid": proc.pid,
                    "worktree_path": str(worktree_path), "revision": revision,
-                   "recovery_note_injected": recovery_note_needed}
+                   "recovery_note_injected": recovery_note_needed,
+                   "budget_resume": is_budget_resume}
         return EXIT_OK, payload, proc
 
     # action == "dispatch"
@@ -1342,7 +1383,7 @@ def _build_run_report(
     model_observed: str | None = None, effort_observed: str | None = None,
     integrate_result: dict | None = None, usage: dict | None = None,
     failure_reasons: list[str] | None = None, engineer_log_excerpt: str | None = None,
-    budget_exhausted: dict | None = None,
+    budget_exhausted: dict | None = None, budget_resume: dict | None = None,
 ) -> dict:
     """GOV.ORCH.1 section 2.4's report object, extended by GOV.ORCH.2
     section 2.4 with provider/model/effort requested-vs-observed fields and
@@ -1360,7 +1401,11 @@ def _build_run_report(
     same kind of addition: present only when the engineer's own terminal
     signal named budget exhaustion, carrying the budget that was in force
     and the cost reached; "budget_exhausted" also then appears in
-    `failure_reasons` alongside `engineer_exit_nonzero`."""
+    `failure_reasons` alongside `engineer_exit_nonzero`. `budget_resume`
+    (GOV.ORCH.10 acceptance item 6) is the same kind of addition: present
+    only when this run was itself a resume of a record whose sole prior
+    failure reason was budget exhaustion, carrying the ceiling it was
+    given."""
     report = {
         "movement": movement, "phase": phase, "exit_code": exit_code,
         "failure_reason": failure_reason, "relay_status": relay_status,
@@ -1381,11 +1426,13 @@ def _build_run_report(
         report["engineer_log_excerpt"] = engineer_log_excerpt
     if budget_exhausted is not None:
         report["budget_exhausted"] = budget_exhausted
+    if budget_resume is not None:
+        report["budget_resume"] = budget_resume
     return report
 
 
 def _cmd_run(args: argparse.Namespace) -> int:
-    rc, _payload, proc = _do_start(args)
+    rc, start_payload, proc = _do_start(args)
     if rc != EXIT_OK:
         return rc
 
@@ -1475,7 +1522,16 @@ def _cmd_run(args: argparse.Namespace) -> int:
         **record, "phase": phase, "failure_reason": failure_reason, "exit_code": exit_code,
         "model_observed": model_observed, "effort_observed": effort_observed,
         "verify": verify_result, "usage": usage,
+        # GOV.ORCH.10 R-2: persisted so a later `decide_start` can read this
+        # run's outcome directly, never re-deriving it from a log.
+        "failure_reasons": failure_reasons, "budget_exhausted": budget_exhausted,
     })
+
+    # GOV.ORCH.10 acceptance item 6: this run's own report names itself a
+    # budget resume, read from `_do_start`'s own determination (never
+    # re-derived from `reason` text) -- present only when this run was
+    # dispatched via the R-1 resume path.
+    budget_resume = {"ceiling_usd": args.max_budget_usd} if (start_payload or {}).get("budget_resume") else None
 
     report_obj = _build_run_report(
         movement=movement, phase=phase, exit_code=exit_code, failure_reason=failure_reason,
@@ -1485,7 +1541,7 @@ def _cmd_run(args: argparse.Namespace) -> int:
         model_observed=model_observed, effort_observed=effort_observed,
         integrate_result=integrate_result, usage=usage,
         failure_reasons=failure_reasons, engineer_log_excerpt=engineer_log_excerpt,
-        budget_exhausted=budget_exhausted,
+        budget_exhausted=budget_exhausted, budget_resume=budget_resume,
     )
     print(json.dumps(report_obj))
     return EXIT_OK if phase == PHASE_DONE else EXIT_REFUSED
