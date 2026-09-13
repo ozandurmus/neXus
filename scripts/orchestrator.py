@@ -501,15 +501,34 @@ def pid_alive(pid: int) -> bool:
     return True
 
 
+# GOV.ORCH.10-A R-2a: the closed set of reasons budget exhaustion entails.
+# A resumable record may carry budget_exhausted plus any subset of these --
+# and nothing else. Membership is closed (R-2b, default-closed): a reason
+# not in this set blocks the resume, including one that does not exist yet.
+_BUDGET_ENTAILED_REASONS = frozenset({
+    # The engineer is killed at the ceiling, so it exits non-zero. The code
+    # appends budget_exhausted only inside this branch.
+    "engineer_exit_nonzero",
+    # A killed engineer never reaches its own SESSION_CLOSE, so its relay
+    # is still open.
+    "relay_not_closed",
+})
+
+
 def _is_resumable_budget_failure(record: dict) -> bool:
-    """GOV.ORCH.10 R-2: true iff `record`'s own persisted `failure_reasons`
-    contain `budget_exhausted` and nothing else. The set, not the list
-    order, is the signal -- this is the entire safety of the amendment, so
-    it lives in one place `decide_start` and its caller both read, never a
-    second re-derivation."""
+    """GOV.ORCH.10-A R-2a/R-2b/R-2c: true iff `record`'s own persisted
+    `failure_reasons` contain `budget_exhausted` (R-2c: it must be present,
+    never substituted for) and every other reason present is a member of
+    the closed `_BUDGET_ENTAILED_REASONS` allowlist (R-2b: default-closed,
+    so an unknown reason blocks the resume). This is the entire safety of
+    the amendment, so it lives in one place `decide_start` and its caller
+    both read, never a second re-derivation."""
     if record.get("phase") != PHASE_FAILED:
         return False
-    return set(record.get("failure_reasons") or []) == {"budget_exhausted"}
+    reasons = set(record.get("failure_reasons") or [])
+    if "budget_exhausted" not in reasons:
+        return False
+    return (reasons - {"budget_exhausted"}) <= _BUDGET_ENTAILED_REASONS
 
 
 def decide_start(
@@ -521,12 +540,13 @@ def decide_start(
     "dispatch" (fresh worktree + spawn), "resume" (same worktree/branch/
     session, no new worktree), or "refuse".
 
-    GOV.ORCH.10 R-1/R-2: a terminal (`failed`) record whose only recorded
-    failure reason was `budget_exhausted` is also resumable, unless it is
-    already at `retry_limit` (R-4) -- both read from `existing_record`,
-    never re-derived. `max_budget_usd` is the ceiling this call is being
-    asked to use; R-3 refuses a budget resume into the same or a lower
-    ceiling than the one that stopped it.
+    GOV.ORCH.10 R-1 / GOV.ORCH.10-A R-2a-c: a terminal (`failed`) record
+    whose recorded failure reasons contain `budget_exhausted` and nothing
+    outside the closed entailed set is also resumable, unless it is already
+    at `retry_limit` (R-4) -- both read from `existing_record`, never
+    re-derived. `max_budget_usd` is the ceiling this call is being asked to
+    use; R-3 refuses a budget resume into the same or a lower ceiling than
+    the one that stopped it.
     """
     next_actor = relay_obj.get("next_actor")
     if next_actor != "engineer":
@@ -551,7 +571,7 @@ def decide_start(
                 "budget resume requires --max-budget-usd greater than the ceiling that "
                 f"stopped the movement (stopped at {stopped_at}, requested {max_budget_usd})"
             )
-        return "resume", "budget resume: prior run's only failure reason was budget_exhausted (GOV.ORCH.10 R-1)"
+        return "resume", "budget resume: prior run's failure reasons are budget_exhausted plus only entailed reasons (GOV.ORCH.10-A R-2a)"
 
     # No record, the prior run ended terminally for a non-resumable reason,
     # or a budget failure already at retry_limit (R-4): a fresh dispatch,

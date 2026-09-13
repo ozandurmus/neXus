@@ -198,7 +198,7 @@ def test_decide_start_a_terminal_prior_run_still_needs_a_free_slot():
     assert "max_workers" in reason
 
 
-# --- decide_start budget resume (GOV.ORCH.10, FROZEN 2026-09-13) -----------
+# --- decide_start budget resume (GOV.ORCH.10 / GOV.ORCH.10-A, FROZEN 2026-09-13) ---
 
 def _budget_failed_record(**overrides) -> dict:
     record = {
@@ -211,7 +211,8 @@ def _budget_failed_record(**overrides) -> dict:
 
 
 def test_decide_start_resumes_a_record_whose_only_failure_reason_is_budget_exhausted():
-    """GOV.ORCH.10 section 4 acceptance item 1 (AC-1)."""
+    """GOV.ORCH.10-A R-2a: budget_exhausted alone (no entailed reasons at
+    all) is still trivially resumable."""
     action, reason = orch.decide_start(
         relay_obj=_relay_obj(), existing_record=_budget_failed_record(),
         is_pid_alive=False, active_count=0, max_workers=3, max_budget_usd=8.0,
@@ -220,12 +221,56 @@ def test_decide_start_resumes_a_record_whose_only_failure_reason_is_budget_exhau
     assert "budget" in reason
 
 
-def test_decide_start_treats_a_mixed_budget_and_other_failure_as_not_resumable():
-    """GOV.ORCH.10 section 4 acceptance item 2 (AC-2): the whole safety of
-    the amendment -- budget_exhausted alongside any other recorded failure
-    reason must NOT be resumed, and stays a terminal record."""
+def test_decide_start_resumes_the_exact_reason_set_both_real_movements_produced():
+    """GOV.ORCH.10-A section 4 acceptance item 1 (AC-1): the set both
+    NXS-LOCAL-0130 and NXS-LOCAL-0131 actually recorded -- budget_exhausted
+    plus its two entailed reasons -- is resumable, not terminal."""
     existing = _budget_failed_record(
         failure_reasons=["engineer_exit_nonzero", "budget_exhausted", "relay_not_closed"],
+    )
+    action, reason = orch.decide_start(
+        relay_obj=_relay_obj(), existing_record=existing,
+        is_pid_alive=False, active_count=0, max_workers=3, max_budget_usd=8.0,
+    )
+    assert action == "resume"
+    assert "budget" in reason
+
+
+def test_decide_start_resumes_budget_exhausted_with_only_engineer_exit_nonzero():
+    """GOV.ORCH.10-A section 4 acceptance item 2 (AC-2)."""
+    existing = _budget_failed_record(
+        failure_reasons=["budget_exhausted", "engineer_exit_nonzero"],
+    )
+    action, _ = orch.decide_start(
+        relay_obj=_relay_obj(), existing_record=existing,
+        is_pid_alive=False, active_count=0, max_workers=3, max_budget_usd=8.0,
+    )
+    assert action == "resume"
+
+
+def test_decide_start_treats_a_mixed_budget_and_unentailed_failure_as_not_resumable():
+    """GOV.ORCH.10-A section 4 acceptance item 3 (AC-3), superseding
+    GOV.ORCH.10 section 4 item 2: budget_exhausted alongside a reason
+    OUTSIDE the closed entailed table must NOT be resumed and stays a
+    terminal record. The reason name is invented so this proves the check
+    is an allowlist, not a list of today's known reasons."""
+    existing = _budget_failed_record(
+        failure_reasons=["budget_exhausted", "some_reason_nobody_has_classified"],
+    )
+    action, _ = orch.decide_start(
+        relay_obj=_relay_obj(), existing_record=existing,
+        is_pid_alive=False, active_count=0, max_workers=3, max_budget_usd=8.0,
+    )
+    assert action == "dispatch"
+
+
+def test_decide_start_does_not_resume_entailed_reasons_without_budget_exhausted():
+    """GOV.ORCH.10-A section 4 acceptance item 4 (AC-4) / R-2c: the entailed
+    set is a permission to accompany budget_exhausted, never a substitute
+    for it."""
+    existing = _budget_failed_record(
+        failure_reasons=["engineer_exit_nonzero", "relay_not_closed"],
+        budget_exhausted=None,
     )
     action, _ = orch.decide_start(
         relay_obj=_relay_obj(), existing_record=existing,
