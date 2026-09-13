@@ -8,6 +8,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
+import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
 import com.securityexpert.nexus.ui2.persistence.FlywayMigrationRunner;
@@ -25,8 +26,13 @@ import com.securityexpert.nexus.ui2.persistence.FlywayMigrationRunner;
  * <p>A failed migration stops the process. Serving requests against a schema
  * that did not fully apply is the situation the fail-closed rule exists to
  * prevent, and a half-migrated database is worse than an unavailable one.</p>
+ *
+ * <p>{@code @Order(0)}, ahead of {@link FirstBootIdentitySeedingRunner}'s
+ * {@code @Order(1)} (C3B contract §2): {@code local_credentials} must exist
+ * before that runner can query it.</p>
  */
 @Component
+@Order(0)
 public class MigrationStartupRunner implements ApplicationRunner {
 
     private static final Logger LOG = LoggerFactory.getLogger(MigrationStartupRunner.class);

@@ -60,6 +60,11 @@ class PasswordChangeServiceTest {
         }
 
         @Override
+        public boolean anyExist() {
+            throw new UnsupportedOperationException("not exercised by this test");
+        }
+
+        @Override
         public void recordFailedAttempt(String localIdentityId, Instant now, int lockoutThreshold,
                 Duration lockoutDuration) {
             throw new UnsupportedOperationException("password change must never touch login lockout state");

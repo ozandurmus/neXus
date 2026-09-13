@@ -1,14 +1,16 @@
 package com.securityexpert.nexus.ui2.platform;
 
 /**
- * The bootstrap-account creation port (C3A contract §6, §11 U-2: this
- * movement's own choice of seeding mechanism -- a CLI-only, deployment
- * -controlled action, mirroring {@link SecurityAdminBootstrapPort}'s
- * existing pattern for the first {@code role:security_admin} binding
- * exactly, per §7.3's "this contract adds no second bootstrap mechanism for
- * role binding; it only supplies the local identity that path binds a role
- * to"). Reachable only from the {@code cli} module, never a running
- * service, never the browser.
+ * The bootstrap-account creation port (C3A contract §6, §11 U-2). Two
+ * callers reach it, both deployment-controlled or startup-controlled --
+ * never the browser: the {@code cli} module's {@code bootstrap-local-identity}
+ * action, for an operator-chosen identity/password pair; and, since
+ * {@code UI2_0_C3B_BOOTSTRAP_IDENTITIES_AND_ROLES.md} (BOOT-1), the running
+ * service's own first-boot seeding routine, which uses it only once, only
+ * when {@code local_credentials} is empty, and only for the two documented
+ * bootstrap identities. Role binding stays CLI-only and untouched by BOOT-1
+ * (BOOT-5); see {@link SecurityAdminBootstrapPort}, whose existing pattern
+ * this port already mirrored before BOOT-1 existed.
  */
 public interface LocalIdentityBootstrapPort {
 
