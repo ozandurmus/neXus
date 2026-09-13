@@ -373,7 +373,113 @@ def test_status_transition_to_terminal_moves_note_to_history(queue_env):
     history_file = queue_env["history_dir"] / "item_open_p1.md"
     text = history_file.read_text(encoding="utf-8")
     assert original_note in text
-    assert "status: done" in text or "status: in_progress" in text  # written at move time
+    # GOV.ORCH.11 N-4/acceptance item 6: the heading's status line reflects
+    # the item's new status, not its pre-closure status.
+    assert "status: done" in text
+    assert "status: in_progress" not in text
+
+
+# --- GOV.ORCH.11: closing an item must not destroy its history -------------
+
+def test_status_close_with_self_referential_pointer_note_preserves_narrative_verbatim(queue_env):
+    """Acceptance item 3 (the decisive test): an item whose JSON `note` is
+    already the pointer to its own history file must not have that pointer
+    written into the file, and the narrative already there must survive
+    verbatim. Pre-fix, `_move_note_to_history` overwrote the file with
+    `header + pointer`, destroying the narrative -- this is the test the
+    defect would have failed."""
+    queue_env["history_dir"].mkdir(parents=True, exist_ok=True)
+    history_file = queue_env["history_dir"] / "item_open_p1.md"
+    narrative_line = (
+        "Pre-existing narrative that must survive verbatim, including PR numbers "
+        "and open items recorded for the Product Owner."
+    )
+    history_file.write_text(
+        "# An open P1 item in progress\n\nstatus: in_progress · target: target A\n\n"
+        f"{narrative_line}\n",
+        encoding="utf-8",
+    )
+
+    data = json.loads(queue_env["backlog"].read_text(encoding="utf-8"))
+    item = next(i for i in data["items"] if i["id"] == "item_open_p1")
+    item["note"] = "see docs/history/backlog/item_open_p1.md"
+    queue_env["backlog"].write_text(pq.canonical_dump(data), encoding="utf-8")
+
+    rc = pq.main(["status", "--id", "item_open_p1", "--set", "done"])
+    assert rc == 0
+
+    text = history_file.read_text(encoding="utf-8")
+    assert narrative_line in text
+    # The pointer carries no information about itself and must never be
+    # written into the file it points at.
+    assert "see docs/history/backlog/item_open_p1.md" not in text
+    assert "status: done" in text
+
+
+def test_status_close_with_real_note_appends_without_removing_existing_content(queue_env):
+    """Acceptance item 4: the ordinary case -- a real JSON note reaches the
+    history file on closure without removing what was already there."""
+    queue_env["history_dir"].mkdir(parents=True, exist_ok=True)
+    history_file = queue_env["history_dir"] / "item_open_p1.md"
+    history_file.write_text(
+        "# An open P1 item in progress\n\nstatus: in_progress · target: target A\n\n"
+        "Earlier narrative already recorded.\n",
+        encoding="utf-8",
+    )
+
+    data = json.loads(queue_env["backlog"].read_text(encoding="utf-8"))
+    item = next(i for i in data["items"] if i["id"] == "item_open_p1")
+    item["note"] = "A real closing note with real information."
+    queue_env["backlog"].write_text(pq.canonical_dump(data), encoding="utf-8")
+
+    rc = pq.main(["status", "--id", "item_open_p1", "--set", "done"])
+    assert rc == 0
+
+    text = history_file.read_text(encoding="utf-8")
+    assert "Earlier narrative already recorded." in text
+    assert "A real closing note with real information." in text
+    assert "status: done" in text
+
+
+def test_note_then_status_done_sequence_preserves_appended_note(queue_env):
+    """Acceptance item 5: `note` followed by `status --set done` is the
+    sequence a worker naturally uses, and the sequence that lost data
+    pre-fix -- the appended note must survive closure."""
+    rc_note = pq.main(["note", "--id", "item_open_p1", "--text", "Progress note before closing."])
+    assert rc_note == 0
+
+    rc_status = pq.main(["status", "--id", "item_open_p1", "--set", "done"])
+    assert rc_status == 0
+
+    history_file = queue_env["history_dir"] / "item_open_p1.md"
+    text = history_file.read_text(encoding="utf-8")
+    assert "Progress note before closing." in text
+    assert "status: done" in text
+
+
+def test_status_close_updates_status_line_in_place_without_duplicate_heading(queue_env):
+    """Acceptance item 6: the heading's status line is updated in place,
+    never left stale and never duplicated by a second heading block."""
+    queue_env["history_dir"].mkdir(parents=True, exist_ok=True)
+    history_file = queue_env["history_dir"] / "item_open_p1.md"
+    history_file.write_text(
+        "# An open P1 item in progress\n\nstatus: in_progress · target: target A\n\n"
+        "Some narrative.\n",
+        encoding="utf-8",
+    )
+
+    data = json.loads(queue_env["backlog"].read_text(encoding="utf-8"))
+    item = next(i for i in data["items"] if i["id"] == "item_open_p1")
+    item["note"] = "Closing note."
+    queue_env["backlog"].write_text(pq.canonical_dump(data), encoding="utf-8")
+
+    rc = pq.main(["status", "--id", "item_open_p1", "--set", "done"])
+    assert rc == 0
+
+    text = history_file.read_text(encoding="utf-8")
+    assert text.count("status: in_progress") == 0
+    assert text.count("status: done") == 1
+    assert text.count("# An open P1 item in progress") == 1  # no duplicate heading block
 
 
 # --- GOV.ORCH.9 acceptance item 6: status moves across the terminal boundary,
