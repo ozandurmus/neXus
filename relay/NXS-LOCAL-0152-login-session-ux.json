@@ -1,0 +1,173 @@
+{
+  "created_at": "2026-09-13T19:59:38Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1 THE DECISIVE TEST: an identity whose credential still holds its seeded password is refused by every authenticated product endpoint except password change, session status and sign-out -- observed failing before the change.",
+          "AC-2 A successful password change clears the flag in the same transaction that writes the new verifier; a restart does not set it again for that identity (BOOT-2 still holds).",
+          "AC-3 GET /session/status returns the signed-in identity's display name, its role tokens and the flag -- and no credential material of any kind.",
+          "AC-4 Sign-out ends the server-side session row: a subsequent request carrying the same cookie is unauthenticated, and the event is audited.",
+          "AC-5 AuthGate renders the password-change screen instead of the shell while the flag is true; the TopAppBar shows the identity and its role tokens as text and a sign-out control; the Material 3 vocabulary of the existing shell is reused.",
+          "AC-6 NoRoleConditionalRenderingInFrontendTest passes; the eleven-module build, :service:test, :architecture-tests:test and the frontend checks are green; privacy gate PASS."
+        ],
+        "baseline": {
+          "authority": "docs/design/UI2_0_C3A_LOCAL_AUTHENTICATION_CONTRACT.md -- FROZEN, PRODUCT OWNER APPROVED 2026-09-13: local verifier storage, per-identity lockout, the identical-body-and-timing refusal, and the existing password-change path. docs/design/UI2_0_C3B_BOOTSTRAP_IDENTITIES_AND_ROLES.md (FROZEN): BOOT-1..BOOT-5b, first-boot seeding of the two bootstrap identities with their role bindings, and BOOT-2's rule that a restart never resets a changed password. docs/design/UI2_0_C3_IDENTITY_SESSIONS_RBAC_CONTRACT.md (FROZEN): section 3 session lifecycle and one-active-session-per-identity, section 3.3 session administration, section 4.1 the closed role-token vocabulary. docs/design/UI2_0_C1_PLATFORM_SCHEMA_CONTRACT.md (FROZEN): Flyway is the sole migration authority and section 3.5's audit trigger; an ADDITIVE new migration is the normal way to add a column, editing an existing migration is forbidden. docs/design/PO_DECISION_RECORD_2026_09_13E (FROZEN) section 1 step 2: GUI login, local user first.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "test_baseline": "Run ./ui2/gradlew -p ui2 build -x :integration-tests:test and ./ui2/gradlew -p ui2 :service:test first and record the counts before you change anything.",
+          "what_exists": "Frontend (ui2/frontend/src): LoginScreen.tsx posts {username, password, mechanism_id:'local'} to /login and renders ONE generic message for every failure plus a distinct 409 'another session is active' case; AuthGate.tsx gates the whole shell on GET /session/status; shell/ holds TopAppBar.tsx, NavigationRail.tsx, M3Widgets.tsx and theme/m3Theme.ts -- the Material 3 vocabulary to reuse (the Product Owner asked for the existing M3 style; there is no login frame in docs/design/ui2_mockups). Service: POST /login, POST /login/resolve, GET /session/status (currently returns an authenticated flag only), POST /local-credentials/change-password, POST /sessions/revoke, POST /role-bindings. Persistence: migrations V1..V8; V8__local_credentials.sql holds local_credentials (local_identity_id, local_identity_name, verifier, salt, algorithm_id, memory_cost_kib, time_cost, parallelism, failed_attempt_count, locked_until, created_at, updated_at) -- there is NO column recording that a password is still the seeded one. FirstBootIdentitySeedingRunner (ui2/service .../boot) seeds the two identities and their role bindings in one transaction. ui2/architecture-tests holds NoRoleConditionalRenderingInFrontendTest -- read it before touching the frontend."
+        },
+        "context_not_loaded": [
+          "ui2/worker, the discovery packages, every vendor document",
+          "docs/history/**",
+          "project/*.json"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/login-session-ux"
+        },
+        "invariants": [
+          "A deployed product's default credential cannot survive its first sign-in.",
+          "The restriction is enforced by the server, not only by the browser.",
+          "No credential material in any response, log, audit row or exception.",
+          "Role tokens are displayed, never used to decide rendering.",
+          "No new HTTP surface beyond the session's own endpoints; no FROZEN contract or existing migration edited."
+        ],
+        "merge_gate": "Product Owner assistant review of the diff plus orchestrator verify.passed. The worker opens the PR and does not merge to main.",
+        "movement_type": "UI",
+        "objective": "Finish the product's own sign-in experience for a local user, which PO_DECISION_RECORD_2026_09_13E step 2 makes the work that follows discovery: (1) a bootstrap identity that still holds its seeded password MUST change it before it can reach any product screen; (2) the signed-in identity and its role tokens are visible in the shell; (3) the operator can sign out, and signing out ends the server-side session, not just the browser's view of it. No new authenticated surface, no user-management screen, no directory work -- those are separate movements.",
+        "output_contract": [
+          "A product whose default administrator must set its own password before it can do anything, whose operator can see who they are signed in as, and who can sign out for real.",
+          "One additive migration, one extended status endpoint, one self sign-out path, three frontend additions in the existing Material 3 vocabulary.",
+          "SESSION_CLOSE naming the migration, the refusal code, the sign-out endpoint and the test counts before and after."
+        ],
+        "recommended_reasoning": {
+          "reason": "Small diff but on the authentication boundary, across migration, service and frontend at once; the quiet failures -- a frontend-only gate, a constant compared instead of a flag, a restart resetting the flag -- are each caught only by a test written first.",
+          "tier": "Sonnet 5, high effort"
+        },
+        "requirements": [
+          "English, per AGENTS.md engineering-output language law.",
+          "Every public type and method names the contract clause it implements (C3A section n, C3B BOOT-n, C3 section n).",
+          "Write the 'a seeded identity cannot reach a product endpoint before changing its password' test FIRST and report that it was observed failing before the change and passing after.",
+          "Do NOT use './ui2/gradlew -p ui2 build' without '-x :integration-tests:test'. Do not run the full Python pytest suite. The ui2 build must keep exactly eleven Gradle subprojects.",
+          "No password, verifier, salt, session token or group reference reaches a log line, an exception message, an audit row or an HTTP response body.",
+          "If a contract clause and this packet disagree, the contract wins; raise a RELAY_QUESTION rather than reconciling silently.",
+          "The SESSION_CLOSE names the new migration file, the refusal status code chosen, which sign-out endpoint turned out to exist, and the test counts before and after."
+        ],
+        "risks": [
+          "Detecting the default password by comparing against the seeded constant instead of a stored flag -- that reads a secret into a code path that must not have it.",
+          "Enforcing the restriction only in the frontend, so a direct API call walks past it.",
+          "Breaking BOOT-2: a restart that re-sets the flag for an identity whose password was already changed is the same defect class as one that resets the password.",
+          "Weakening NoRoleConditionalRenderingInFrontendTest to make the role display pass.",
+          "Overloading the administrative session-revoke path for self sign-out, which would hand an ordinary user an administrative capability.",
+          "Leaking which rule a rejected password broke, or which identity exists, through a distinct error body."
+        ],
+        "scope": {
+          "in": [
+            "Forced password change, server first: ADD one additive Flyway migration (the next V number, never edit an existing file) giving local_credentials a boolean column recording that the credential still holds the password it was seeded with. FirstBootIdentitySeedingRunner sets it true for both bootstrap identities as part of the SAME transaction that already creates them and their bindings (BOOT-2/BOOT-5a unchanged); the existing change-password path clears it in the same transaction that writes the new verifier. NEVER decide this by comparing the submitted or stored password against the seeded constant -- the flag is the only mechanism, and BootstrapCredentialDefaults must not be read anywhere outside the seeding runner.",
+            "Server enforcement: while that flag is true, the identity's session may reach ONLY the password-change path and the session-status/sign-out paths; every other authenticated endpoint refuses with a distinct, non-identity-bearing status (choose one code and state it), so the restriction cannot be bypassed by calling an API directly. A password change that succeeds clears the flag and the same session continues -- no re-login required unless C3 section 3 already requires one, in which case follow C3 and say so.",
+            "GET /session/status extended to carry, for an authenticated session: the signed-in identity's display name and its resolved role tokens (C3 section 4.1's closed vocabulary), plus the must-change-password flag. It carries no credential material, no verifier, no group reference, no internal identifier that is not already public to that session.",
+            "Sign-out: an authenticated identity can end its OWN session. If POST /sessions/revoke is the C3 section 3.3 administrative path (an admin ending someone else's session), do NOT overload it -- add a self-scoped endpoint that revokes only the caller's own session row and clears the session cookie, and say in the SESSION_CLOSE which of the two it turned out to be. Ending a session is audited through C1 section 3.5's existing trigger like every other mutation.",
+            "Frontend, in the existing Material 3 vocabulary (theme/m3Theme.ts, shell/M3Widgets.tsx): (a) a password-change screen that AuthGate shows INSTEAD of the shell while the flag is true -- old password, new password, confirm; it states the rule it is enforcing in one plain sentence and offers no way past it except a successful change or signing out; (b) the signed-in identity and its role tokens shown in the TopAppBar, as text only; (c) a sign-out control in the TopAppBar that calls the self sign-out endpoint and returns to LoginScreen. The password-change screen reuses LoginScreen's single-generic-message discipline for failures (C3A section 5.3) and never says which rule a rejected new password broke beyond what C3A already specifies.",
+            "NoRoleConditionalRenderingInFrontendTest must keep passing: role tokens are DISPLAYED, never used to decide what to render. If showing them at all would trip that test, keep the display and extend the test's own allowance explicitly with a comment naming this movement -- do not weaken the rule, and raise a RELAY_QUESTION if the two cannot both hold.",
+            "Tests: a service test proving a seeded identity cannot reach a product endpoint before changing its password and can after (write it first and observe it failing); a test proving the flag is cleared in the same transaction as the new verifier; a test proving sign-out ends the server-side session so a later request with the same cookie is unauthenticated; a frontend test (the existing vitest setup) proving AuthGate renders the password-change screen rather than the shell while the flag is true. Keep the existing login and lockout tests green.",
+            "Commit early and often, grouped by layer (migration + seeding; endpoint changes; frontend; tests). Open the PR at the end; do not merge."
+          ],
+          "out": [
+            "Any user-management screen: creating, listing, disabling a local identity, or assigning a role from the browser. C3 section 4.3's bootstrap clause and the missing HTTP path make that a contract question, dispatched separately as the C3 successor movement.",
+            "Directory (LDAP/RADIUS/TACACS) login, password policy beyond what C3A already fixes, self-service password reset, multi-factor, or any second authenticated surface (PO_DECISION_RECORD_2026_09_13D section 4).",
+            "Changing C3A's verifier parameters, lockout, or the identical refusal; changing C3's one-active-session rule; editing any FROZEN contract or any existing migration.",
+            "Redesigning the shell, the navigation rail or any product screen; any discovery, collection or device work.",
+            "Printing, logging or auditing any password, verifier, salt or session token."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              "build",
+              "-x",
+              ":integration-tests:test"
+            ],
+            "name": "ui2_build_excluding_db_bound_integration_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              ":service:test"
+            ],
+            "name": "ui2_service_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              ":architecture-tests:test"
+            ],
+            "name": "ui2_architecture_tests"
+          },
+          {
+            "argv": [
+              "./ui2/gradlew",
+              "-p",
+              "ui2",
+              "projects"
+            ],
+            "name": "ui2_module_listing_must_stay_eleven"
+          },
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_contract_authority_status.py",
+              "-q"
+            ],
+            "name": "contract_authority_status"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-13T19:59:38Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "RELAY_QUESTION",
+      "seq": 2,
+      "subject": "C3 closed session end_reason vocabulary has no self-initiated sign-out transition",
+      "text": "WORKER.md (NXS-LOCAL-0152) requires 'an authenticated identity can end its OWN session' (AC-4). C3 contract sec 3.1's sessions.end_reason is a DB-enforced closed vocabulary (CHECK constraint in V2__identity_sessions_rbac.sql: login_elsewhere/idle_timeout/absolute_lifetime/revoked_by_admin/access_group_lost) and sec 3.3's transition table is stated exhaustive ('No other transition exists'). Every existing REVOKED/EXPIRED transition is caused by the reconciler, role:security_admin acting on someone else, or the revalidation adapter -- none covers an identity ending its own session, and a plain viewer (no role:security_admin) has no path in the table at all. Proceeding with the minimal additive resolution: a new Flyway migration extends (never edits) the V2 CHECK constraint with one new closed-vocabulary value, and adds exactly one new self-scoped transition row (ACTIVE -> REVOKED, end_reason='signed_out_by_self', ended_by=caller's own actor_fingerprint), leaving every existing value/row/rule untouched. Flagging per AGENTS.md 'contract wins, raise a RELAY_QUESTION rather than reconciling silently' -- please confirm or override before merge; PR will state this plainly.",
+      "timestamp": "2026-09-13T20:05:50Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0152",
+  "movement": "login-session-ux",
+  "next_actor": "po",
+  "refs": [
+    "docs/design/UI2_0_C3A_LOCAL_AUTHENTICATION_CONTRACT.md",
+    "docs/design/UI2_0_C3B_BOOTSTRAP_IDENTITIES_AND_ROLES.md",
+    "docs/design/UI2_0_C3_IDENTITY_SESSIONS_RBAC_CONTRACT.md",
+    "docs/design/UI2_0_C1_PLATFORM_SCHEMA_CONTRACT.md",
+    "docs/design/PO_DECISION_RECORD_2026_09_13E_PRODUCT_SEQUENCE_AND_SERVICE_INDEPENDENCE.md",
+    "ui2/frontend/src/auth/LoginScreen.tsx",
+    "ui2/frontend/src/auth/AuthGate.tsx"
+  ],
+  "schema_version": 1,
+  "status": "AWAITING_PO",
+  "updated_at": "2026-09-13T20:05:50Z"
+}
