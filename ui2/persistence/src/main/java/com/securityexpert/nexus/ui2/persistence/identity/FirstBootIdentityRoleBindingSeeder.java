@@ -77,6 +77,13 @@ public final class FirstBootIdentityRoleBindingSeeder {
                             Argon2PasswordHasher.DEFAULT_PARAMETERS);
                     localCredentialsRepository.create(localIdentityId, spec.localIdentityName(), verifier,
                             SecurityAdminBootstrapPort.BOOTSTRAP_ACTOR);
+                    // NXS-LOCAL-0152 (forced password change): both bootstrap
+                    // identities still hold the password they were seeded
+                    // with -- set true in this same outer transaction as the
+                    // row's own creation, never a later, separately
+                    // -committable call.
+                    localCredentialsRepository.markMustChangePassword(localIdentityId,
+                            SecurityAdminBootstrapPort.BOOTSTRAP_ACTOR);
 
                     byte[] selfReferenceEncrypted = groupReferenceCipher.encrypt(localIdentityId);
                     for (RoleToken roleToken : spec.roleTokens()) {

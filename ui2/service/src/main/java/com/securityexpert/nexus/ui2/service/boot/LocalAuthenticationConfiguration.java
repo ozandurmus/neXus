@@ -25,10 +25,13 @@ import com.securityexpert.nexus.ui2.persistence.identity.SessionRepository;
 import com.securityexpert.nexus.ui2.platform.Clock;
 import com.securityexpert.nexus.ui2.platform.GroupReferenceCipher;
 import com.securityexpert.nexus.ui2.platform.SecretFile;
+import com.securityexpert.nexus.ui2.service.security.LocalIdentityResolver;
 import com.securityexpert.nexus.ui2.service.security.LocalMechanism;
+import com.securityexpert.nexus.ui2.service.security.LocalRoleTokenResolver;
 import com.securityexpert.nexus.ui2.service.security.LoginFlow;
 import com.securityexpert.nexus.ui2.service.security.MechanismRegistry;
 import com.securityexpert.nexus.ui2.service.security.PasswordChangeService;
+import com.securityexpert.nexus.ui2.service.security.SessionSelfLogoutService;
 
 /**
  * Composition root for the local-authentication flow (C3A contract §2's
@@ -139,5 +142,24 @@ public class LocalAuthenticationConfiguration {
     @Bean
     public PasswordChangeService passwordChangeService(LocalCredentialsRepository localCredentialsRepository) {
         return new PasswordChangeService(localCredentialsRepository);
+    }
+
+    /** NXS-LOCAL-0152 AC-4: self sign-out, distinct from the admin-only {@code /sessions/revoke} path. */
+    @Bean
+    public SessionSelfLogoutService sessionSelfLogoutService(SessionRepository sessionRepository) {
+        return new SessionSelfLogoutService(sessionRepository);
+    }
+
+    /** NXS-LOCAL-0152: resolves {@code GET /session/status}'s display name and must-change-password flag. */
+    @Bean
+    public LocalIdentityResolver localIdentityResolver(LocalCredentialsRepository localCredentialsRepository) {
+        return new LocalIdentityResolver(localCredentialsRepository);
+    }
+
+    /** NXS-LOCAL-0152: resolves {@code GET /session/status}'s displayed role tokens (C3 §4.1). */
+    @Bean
+    public LocalRoleTokenResolver localRoleTokenResolver(RoleBindingRepository roleBindingRepository,
+            GroupReferenceCipher groupReferenceCipher) {
+        return new LocalRoleTokenResolver(roleBindingRepository, groupReferenceCipher);
     }
 }

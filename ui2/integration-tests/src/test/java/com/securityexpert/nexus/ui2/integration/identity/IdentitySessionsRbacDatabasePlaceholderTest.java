@@ -569,6 +569,16 @@ class IdentitySessionsRbacDatabasePlaceholderTest {
         }
 
         @Override
+        public java.util.List<LocalCredentialRecord> findAll() {
+            throw new AssertionError("not exercised by this test");
+        }
+
+        @Override
+        public void markMustChangePassword(String localIdentityId, String actorFingerprint) {
+            throw new AssertionError("not exercised by this test");
+        }
+
+        @Override
         public void recordFailedAttempt(String localIdentityId, java.time.Instant now, int lockoutThreshold,
                 java.time.Duration lockoutDuration) {
             throw new AssertionError("not exercised by this test");

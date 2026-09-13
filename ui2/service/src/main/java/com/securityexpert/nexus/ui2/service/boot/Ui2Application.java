@@ -43,12 +43,12 @@ import org.springframework.context.annotation.FilterType;
 // were beans; step 1 excluded the whole package deliberately, one movement at
 // a time removing the filter as it wires each controller's own collaborators.
 //
-// This movement (C3A local authentication) narrows the exclusion to admit
-// exactly four: LoginController and LoginResolveController (the flow C3A §2
-// requires), plus PasswordChangeController and SessionStatusController (this
-// movement's own additions -- §4's change-password path, and the frontend's
-// pre-authorization check that no product screen renders without a session).
-// All four now have real, working collaborators via LocalAuthenticationConfiguration.
+// C3A local authentication narrowed the exclusion to admit LoginController,
+// LoginResolveController, PasswordChangeController and SessionStatusController.
+// NXS-LOCAL-0152 (forced password change / session sign-out) adds a fifth:
+// SessionLogoutController (self sign-out, distinct from the admin-only
+// SessionAdminController that stays excluded below). All five now have real,
+// working collaborators via LocalAuthenticationConfiguration.
 //
 // RoleBindingAdminController, SessionAdminController and DeviceRegistrationController
 // stay excluded: their own collaborators (GateChain/RBAC wiring, device

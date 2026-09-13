@@ -62,6 +62,9 @@ describe("AuthGate", () => {
     const fetchMock = vi.fn();
     fetchMock.mockResolvedValueOnce(jsonResponse(401, { authenticated: false })); // initial /session/status
     fetchMock.mockResolvedValueOnce(jsonResponse(200, { ok: true })); // POST /login
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(200, { authenticated: true, display_name: "nexusadmin", role_tokens: [], must_change_password: false }),
+    ); // AuthGate's post-login re-check of /session/status
     vi.stubGlobal("fetch", fetchMock);
 
     render(
@@ -76,6 +79,24 @@ describe("AuthGate", () => {
     fireEvent.click(screen.getByRole("button", { name: /sign in/i }));
 
     await waitFor(() => expect(screen.getByText("product screen content")).toBeInTheDocument());
+  });
+
+  it("shows the password-change screen instead of the shell while must_change_password is true", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        jsonResponse(200, { authenticated: true, display_name: "nexusadmin", role_tokens: [], must_change_password: true }),
+      ),
+    );
+
+    render(
+      <AuthGate>
+        <div>product screen content</div>
+      </AuthGate>,
+    );
+
+    await waitFor(() => expect(screen.getByLabelText("Current password")).toBeInTheDocument());
+    expect(screen.queryByText("product screen content")).toBeNull();
   });
 
   it("shows the identical error message for every login failure mode (contract §5.3)", async () => {

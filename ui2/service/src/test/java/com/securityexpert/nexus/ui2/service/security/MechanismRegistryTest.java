@@ -48,6 +48,16 @@ class MechanismRegistryTest {
         }
 
         @Override
+        public java.util.List<LocalCredentialRecord> findAll() {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public void markMustChangePassword(String localIdentityId, String actorFingerprint) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
         public void recordFailedAttempt(String localIdentityId, Instant now, int lockoutThreshold,
                 java.time.Duration lockoutDuration) {
             throw new UnsupportedOperationException();

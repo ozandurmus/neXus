@@ -16,11 +16,14 @@ import java.util.Set;
 
 import org.junit.jupiter.api.Test;
 
+import com.securityexpert.nexus.ui2.platform.Argon2PasswordHasher;
 import com.securityexpert.nexus.ui2.platform.AuthzOutcome;
 import com.securityexpert.nexus.ui2.platform.GroupReferenceCipher;
 import com.securityexpert.nexus.ui2.persistence.identity.ActorAuthzStateRecord;
 import com.securityexpert.nexus.ui2.persistence.identity.ActorAuthzStateRepository;
 import com.securityexpert.nexus.ui2.persistence.identity.AuthzDecisionRepository;
+import com.securityexpert.nexus.ui2.persistence.identity.LocalCredentialRecord;
+import com.securityexpert.nexus.ui2.persistence.identity.LocalCredentialsRepository;
 import com.securityexpert.nexus.ui2.persistence.identity.RoleBindingRecord;
 import com.securityexpert.nexus.ui2.persistence.identity.RoleBindingRepository;
 import com.securityexpert.nexus.ui2.persistence.identity.SessionEndReason;
@@ -155,6 +158,67 @@ class GateChainTest {
         }
     }
 
+    /** NXS-LOCAL-0152's must-change-password gate, exercised without a database. */
+    private static final class FakeLocalCredentialsRepository implements LocalCredentialsRepository {
+        final List<LocalCredentialRecord> rows = new ArrayList<>();
+
+        void seed(String localIdentityId, boolean mustChangePassword) {
+            Argon2PasswordHasher.Verifier verifier =
+                    Argon2PasswordHasher.hash("irrelevant".toCharArray(), Argon2PasswordHasher.DEFAULT_PARAMETERS);
+            rows.add(new LocalCredentialRecord(localIdentityId, localIdentityId, verifier.verifier(), verifier.salt(),
+                    verifier.algorithmId(), verifier.parameters().memoryCostKib(), verifier.parameters().timeCost(),
+                    verifier.parameters().parallelism(), 0, Optional.empty(), NOW, NOW, mustChangePassword));
+        }
+
+        @Override
+        public Optional<LocalCredentialRecord> findByName(String localIdentityName) {
+            throw new UnsupportedOperationException("not used by GateChainTest");
+        }
+
+        @Override
+        public Optional<LocalCredentialRecord> findById(String localIdentityId) {
+            throw new UnsupportedOperationException("not used by GateChainTest");
+        }
+
+        @Override
+        public List<LocalCredentialRecord> findAll() {
+            return rows;
+        }
+
+        @Override
+        public String create(String localIdentityId, String localIdentityName, Argon2PasswordHasher.Verifier verifier,
+                String createdByActorFingerprint) {
+            throw new UnsupportedOperationException("not used by GateChainTest");
+        }
+
+        @Override
+        public boolean anyExist() {
+            throw new UnsupportedOperationException("not used by GateChainTest");
+        }
+
+        @Override
+        public void markMustChangePassword(String localIdentityId, String actorFingerprint) {
+            throw new UnsupportedOperationException("not used by GateChainTest");
+        }
+
+        @Override
+        public void recordFailedAttempt(String localIdentityId, Instant now, int lockoutThreshold,
+                Duration lockoutDuration) {
+            throw new UnsupportedOperationException("not used by GateChainTest");
+        }
+
+        @Override
+        public void recordSuccessfulLogin(String localIdentityId, Instant now, String actorFingerprint) {
+            throw new UnsupportedOperationException("not used by GateChainTest");
+        }
+
+        @Override
+        public void changePassword(String localIdentityId, Argon2PasswordHasher.Verifier newVerifier,
+                String changedByActorFingerprint) {
+            throw new UnsupportedOperationException("not used by GateChainTest");
+        }
+    }
+
     private static GroupReferenceCipher cipher() {
         byte[] key = new byte[32];
         new SecureRandom().nextBytes(key);
@@ -259,6 +323,67 @@ class GateChainTest {
         assertEquals("E3", refused.gate());
         assertEquals("recovery_write_not_console_submittable", refused.body().get("reason_code"));
         assertEquals(0, decisions.callCount, "E4 must never run once E3 has refused (H5c)");
+    }
+
+    @Test
+    void aSeededIdentityStillHoldingItsSeededPasswordIsRefusedAGatedActionByADistinctStatus() {
+        // NXS-LOCAL-0152 AC-1, THE DECISIVE TEST: observed to FAIL before
+        // this movement, since GateChain had no such gate at all -- every
+        // registered action would reach E2/E3/E4 regardless of the flag.
+        String localIdentityId = "id-must-change";
+        String actorFingerprint = LocalMechanism.actorFingerprintFor(localIdentityId);
+        FakeSessionRepository sessions = new FakeSessionRepository();
+        String sessionId = SessionHasher.hash("raw-cookie-pwd-1");
+        sessions.put(new SessionRecord(sessionId, actorFingerprint, "csrf-secret", SessionState.ACTIVE,
+                NOW.minusSeconds(60), NOW.minusSeconds(10), NOW.plusSeconds(1800), NOW.plusSeconds(36000),
+                Optional.empty(), Optional.empty(), Optional.empty()));
+        FakeLocalCredentialsRepository localCredentials = new FakeLocalCredentialsRepository();
+        localCredentials.seed(localIdentityId, true);
+        RbacEvaluator evaluator = new RbacEvaluator(new FakeRoleBindingRepository(),
+                new FakeActorAuthzStateRepository(), cipher());
+        GateChain chain = new GateChain(sessions, new ActionRegistry(), evaluator, new FakeAuthzDecisionRepository(),
+                localCredentials);
+
+        GateRequest request = new GateRequest("GET", Optional.of("raw-cookie-pwd-1"), Optional.empty(),
+                Optional.empty(), ActionRegistry.ROLE_BINDING_CREATE, Optional.empty());
+
+        GateOutcome outcome = chain.evaluate(request, NOW);
+
+        assertTrue(outcome instanceof GateOutcome.Refused);
+        GateOutcome.Refused refused = (GateOutcome.Refused) outcome;
+        assertEquals(403, refused.httpStatus());
+        assertEquals("PASSWORD_CHANGE_REQUIRED", refused.body().get("error"));
+        assertEquals(1, refused.body().size(), "the refusal body must carry no identity-bearing field");
+    }
+
+    @Test
+    void onceTheFlagIsClearedTheSameActionReachesTheNormalGateChain() {
+        // AC-1's positive half: after the flag clears, the identical
+        // request is no longer refused by the PWD gate and proceeds into
+        // E2 onward as normal.
+        String localIdentityId = "id-must-change";
+        String actorFingerprint = LocalMechanism.actorFingerprintFor(localIdentityId);
+        FakeSessionRepository sessions = new FakeSessionRepository();
+        String sessionId = SessionHasher.hash("raw-cookie-pwd-2");
+        sessions.put(new SessionRecord(sessionId, actorFingerprint, "csrf-secret", SessionState.ACTIVE,
+                NOW.minusSeconds(60), NOW.minusSeconds(10), NOW.plusSeconds(1800), NOW.plusSeconds(36000),
+                Optional.empty(), Optional.empty(), Optional.empty()));
+        FakeLocalCredentialsRepository localCredentials = new FakeLocalCredentialsRepository();
+        localCredentials.seed(localIdentityId, false);
+        ActionRegistry registry = new ActionRegistry();
+        registry.register(new ActionDescriptor("open_to_any_session", true, Optional.empty()));
+        RbacEvaluator evaluator = new RbacEvaluator(new FakeRoleBindingRepository(),
+                new FakeActorAuthzStateRepository(), cipher());
+        GateChain chain = new GateChain(sessions, registry, evaluator, new FakeAuthzDecisionRepository(),
+                localCredentials);
+
+        GateRequest request = new GateRequest("GET", Optional.of("raw-cookie-pwd-2"), Optional.empty(),
+                Optional.empty(), "open_to_any_session", Optional.empty());
+
+        GateOutcome outcome = chain.evaluate(request, NOW);
+
+        assertTrue(outcome instanceof GateOutcome.Proceed);
+        assertEquals(actorFingerprint, ((GateOutcome.Proceed) outcome).actorFingerprint());
     }
 
     @Test

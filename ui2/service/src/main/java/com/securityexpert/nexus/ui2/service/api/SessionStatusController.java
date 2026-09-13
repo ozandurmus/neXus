@@ -2,6 +2,7 @@ package com.securityexpert.nexus.ui2.service.api;
 
 import java.time.Instant;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -13,8 +14,12 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.securityexpert.nexus.ui2.persistence.identity.LocalCredentialRecord;
 import com.securityexpert.nexus.ui2.persistence.identity.SessionRecord;
 import com.securityexpert.nexus.ui2.persistence.identity.SessionRepository;
+import com.securityexpert.nexus.ui2.platform.RoleToken;
+import com.securityexpert.nexus.ui2.service.security.LocalIdentityResolver;
+import com.securityexpert.nexus.ui2.service.security.LocalRoleTokenResolver;
 import com.securityexpert.nexus.ui2.service.security.SessionHasher;
 
 /**
@@ -37,27 +42,46 @@ public final class SessionStatusController {
     private static final String SESSION_COOKIE_NAME = "ui2_session";
 
     private final SessionRepository sessionRepository;
+    private final LocalIdentityResolver localIdentityResolver;
+    private final LocalRoleTokenResolver localRoleTokenResolver;
 
-    public SessionStatusController(SessionRepository sessionRepository) {
+    public SessionStatusController(SessionRepository sessionRepository, LocalIdentityResolver localIdentityResolver,
+            LocalRoleTokenResolver localRoleTokenResolver) {
         this.sessionRepository = sessionRepository;
+        this.localIdentityResolver = localIdentityResolver;
+        this.localRoleTokenResolver = localRoleTokenResolver;
     }
 
     @GetMapping("/session/status")
     public ResponseEntity<Map<String, Object>> status(HttpServletRequest request) {
         Optional<String> rawCookie = findSessionCookie(request);
-        boolean authenticated = rawCookie.isPresent() && isActive(rawCookie.get());
+        Optional<SessionRecord> session = rawCookie.flatMap(this::activeSession);
 
         Map<String, Object> body = new LinkedHashMap<>();
-        body.put("authenticated", authenticated);
-        return authenticated
-                ? ResponseEntity.ok(body)
-                : ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(body);
+        if (session.isEmpty()) {
+            body.put("authenticated", false);
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(body);
+        }
+
+        body.put("authenticated", true);
+        // NXS-LOCAL-0152 AC-3: display name, resolved role tokens, and the
+        // must-change-password flag -- no credential material, no verifier,
+        // no group reference, no internal identifier beyond what a local
+        // identity's own display name already is.
+        Optional<LocalCredentialRecord> identity = localIdentityResolver.resolve(session.get().actorFingerprint());
+        identity.ifPresent(record -> {
+            body.put("display_name", record.localIdentityName());
+            body.put("must_change_password", record.mustChangePassword());
+            List<String> roleTokens = localRoleTokenResolver.resolve(record.localIdentityId()).stream()
+                    .map(RoleToken::token).toList();
+            body.put("role_tokens", roleTokens);
+        });
+        return ResponseEntity.ok(body);
     }
 
-    private boolean isActive(String rawCookieValue) {
+    private Optional<SessionRecord> activeSession(String rawCookieValue) {
         String sessionId = SessionHasher.hash(rawCookieValue);
-        Optional<SessionRecord> session = sessionRepository.findBySessionId(sessionId);
-        return session.map(s -> s.isActive(Instant.now())).orElse(false);
+        return sessionRepository.findBySessionId(sessionId).filter(s -> s.isActive(Instant.now()));
     }
 
     private static Optional<String> findSessionCookie(HttpServletRequest request) {
