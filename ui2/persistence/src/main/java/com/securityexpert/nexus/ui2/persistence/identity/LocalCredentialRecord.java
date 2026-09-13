@@ -5,7 +5,7 @@ import java.util.Optional;
 
 import com.securityexpert.nexus.ui2.platform.Argon2PasswordHasher;
 
-/** A read view of one {@code local_credentials} row (C3A contract §3.2/§5.2). */
+/** A read view of one {@code local_credentials} row (C3A contract §3.2/§5.2, 13G section 4). */
 public record LocalCredentialRecord(
         String localIdentityId,
         String localIdentityName,
@@ -18,7 +18,11 @@ public record LocalCredentialRecord(
         int failedAttemptCount,
         Optional<Instant> lockedUntil,
         Instant createdAt,
-        Instant updatedAt) {
+        Instant updatedAt,
+        boolean enabled,
+        String createdByActorFingerprint,
+        Instant passwordSetAt,
+        boolean mustChangePassword) {
 
     /** This row's own recorded verifier and parameters -- never the service's current default (§3.2). */
     public Argon2PasswordHasher.Verifier toVerifier() {
