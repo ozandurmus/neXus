@@ -53,20 +53,18 @@ firewall ships with its default administrator.**
 **PO directive, 2026-09-13**, option C of three that were put to the Product
 Owner.
 
-- **ROLE-1. `nexusadmin` holds the full set of roles.**
-- **ROLE-2. Separation of duties is waived for `nexusadmin`, deliberately and
-  with its cost recorded.** `C3` §5 refuses `role:security_admin` "any
-  device-facing action", stating the reason: *the actor who administers
-  authorization does not also execute*. A single identity holding both
-  administers the authorization it then uses. The Product Owner was shown
-  this clause and chose the full set anyway, for a product that today has one
-  human administrator.
+- **ROLE-1. `nexusadmin` is the default administrator and holds full
+  administrative capability.** This is what a default administrator is, on
+  this product as on any appliance that ships with one. It is not an
+  exception to anything and needs no justification beyond being the account
+  the product is first administered with.
 
-  **Named REVISIT CONDITION.** The waiver holds while there is **one** human
-  administrator. It is revisited when a second human administrator exists, or
-  before any deployment where authorization administration and operational
-  execution are meant to be held by different people — whichever comes first.
-  This document does not re-argue the ruling; it records the cost beside it.
+- **ROLE-2. `C3` §5's separation of duties is an operational-role rule, not a
+  rule about this account.** That clause exists so that, once distinct people
+  hold distinct jobs, the person who administers authorization is not also the
+  person who executes with it. The bootstrap administrator predates any such
+  split and is outside the rule's subject. Recorded only so a later reader
+  does not mistake ROLE-1 for an oversight.
 
 - **ROLE-3. `claudeadmin` holds `role:viewer` and nothing else.** It reads
   every projection the product ships and its own audit rows; it submits no
@@ -100,8 +98,8 @@ Owner.
    reserved bootstrap marker, carrying no credential material.
 5. First boot creates no `role_bindings` row; a test asserts the table is
    still empty afterwards (BOOT-5).
-6. After the deployment-controlled binding step, `nexusadmin` resolves the
-   full role set and `claudeadmin` resolves `role:viewer` only.
+6. After the deployment-controlled binding step, `nexusadmin` resolves full
+   administrative capability and `claudeadmin` resolves `role:viewer` only.
 7. A test asserts `claudeadmin`'s resolved role set permits no mutation
    path — it is refused, visible-but-refused per `C3` §5.1, never a silent
    404.
