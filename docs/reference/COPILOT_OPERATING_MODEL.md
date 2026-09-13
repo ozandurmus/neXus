@@ -164,6 +164,30 @@ Do not push/merge until the local privacy gate, tests and staged-file review
 pass. Real-environment evidence may follow in a separate validation commit/state
 update when appropriate.
 
+## Workspace environment facts
+
+Measured empirically in this worktree; durable until re-measured:
+
+- `./ui2/gradlew -p ui2 build` fails on `:integration-tests:test` (fails
+  closed on a missing database, by design). Always pass
+  `-x :integration-tests:test`.
+- There is no `.venv` here by default. `python3` needs
+  `requirements.txt`, `requirements-dev.txt` and `requirements-console.txt`
+  installed before the full suite runs (`lxml` and `fastapi` were the
+  observed blockers); "pytest works locally" without them is true only of
+  targeted tests.
+- Measured worker cost: roughly $0.037-$0.043 per turn on Sonnet 5. Set
+  `--max-budget-usd` from expected turns rather than leaving the $3.00
+  default, which is too low for a multi-dozen-turn movement.
+- Do not put a full-suite regression run and the repository privacy gate
+  in the same validation plan: the suite creates untracked `data/`/`logs/`
+  directories that the gate then flags, failing a movement whose diff is
+  otherwise clean.
+- `tests/test_nexus_engineer_tool_gate.py::test_ac1_live_bug_regression_against_real_repository_state`
+  appears as a failure only while a movement worktree exists (it inspects
+  live repository state); treat it as parallel-dispatch-sensitive, not a
+  regression.
+
 ## DLP / privacy
 
 The repository must remain compatible with approved enterprise inspection.
