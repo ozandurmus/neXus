@@ -38,7 +38,7 @@ class PasswordChangeServiceTest {
             idByName.put(name, id);
             byId.put(id, new LocalCredentialRecord(id, name, verifier.verifier(), verifier.salt(), verifier.algorithmId(),
                     verifier.parameters().memoryCostKib(), verifier.parameters().timeCost(),
-                    verifier.parameters().parallelism(), 0, Optional.empty(), NOW, NOW));
+                    verifier.parameters().parallelism(), 0, Optional.empty(), NOW, NOW, true));
             return id;
         }
 
@@ -65,6 +65,16 @@ class PasswordChangeServiceTest {
         }
 
         @Override
+        public java.util.List<LocalCredentialRecord> findAll() {
+            return java.util.List.copyOf(byId.values());
+        }
+
+        @Override
+        public void markMustChangePassword(String localIdentityId, String actorFingerprint) {
+            throw new UnsupportedOperationException("not exercised by this test");
+        }
+
+        @Override
         public void recordFailedAttempt(String localIdentityId, Instant now, int lockoutThreshold,
                 Duration lockoutDuration) {
             throw new UnsupportedOperationException("password change must never touch login lockout state");
@@ -83,7 +93,8 @@ class PasswordChangeServiceTest {
             byId.put(localIdentityId, new LocalCredentialRecord(r.localIdentityId(), r.localIdentityName(),
                     newVerifier.verifier(), newVerifier.salt(), newVerifier.algorithmId(),
                     newVerifier.parameters().memoryCostKib(), newVerifier.parameters().timeCost(),
-                    newVerifier.parameters().parallelism(), r.failedAttemptCount(), r.lockedUntil(), r.createdAt(), NOW));
+                    newVerifier.parameters().parallelism(), r.failedAttemptCount(), r.lockedUntil(), r.createdAt(), NOW,
+                    false));
         }
     }
 
@@ -98,6 +109,23 @@ class PasswordChangeServiceTest {
 
         assertTrue(result instanceof PasswordChangeService.Result.Ok);
         assertTrue(repo.lastChangedVerifier != null);
+    }
+
+    @Test
+    void aSuccessfulChangeClearsTheMustChangePasswordFlag() {
+        // NXS-LOCAL-0152 AC-2: seeded identities start with the flag set;
+        // a successful change clears it in the same repository call that
+        // writes the new verifier.
+        InMemoryRepository repo = new InMemoryRepository();
+        String id = repo.seed("nexusadmin");
+        assertTrue(repo.findById(id).orElseThrow().mustChangePassword(), "seeded row must start requiring a change");
+        PasswordChangeService service = new PasswordChangeService(repo);
+
+        PasswordChangeService.Result result = service.changePassword(
+                "nexusadmin", CURRENT_PASSWORD, "a-brand-new-password-12".toCharArray());
+
+        assertTrue(result instanceof PasswordChangeService.Result.Ok);
+        assertTrue(!repo.findById(id).orElseThrow().mustChangePassword(), "AC-2: the flag must be cleared");
     }
 
     @Test
