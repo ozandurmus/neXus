@@ -30,12 +30,32 @@ firewall ships with its default administrator.**
   an operator has changed.** A seeding routine that rewrote an existing row
   would silently restore a documented credential on every restart, which is
   worse than having no seeding at all. This is the clause to test first.
-- **BOOT-3. The verifier is computed at boot, never stored as a literal.**
-  No migration, source file or manifest carries a password or a precomputed
-  verifier. `C3A` §3 requires a random per-credential salt; a verifier
-  committed to version control pins that salt permanently and turns a
-  documented default into a precomputed one. The initial password is a
-  documented constant; its verifier is not.
+- **BOOT-3. The verifier is computed at boot and is never a literal; the
+  initial password is a named constant and may be.** `C3A` §3 requires a
+  random per-credential salt, so a verifier committed to version control
+  pins that salt permanently and turns a published default into a
+  precomputed one. **No migration, source file, resource or manifest may
+  carry a verifier.**
+
+  The initial password is a different case and the distinction matters. A
+  shipped default administrator credential is public by construction — it is
+  in the product's own documentation, the way an appliance's is — so keeping
+  it out of the source buys nothing and would make a shipped default
+  impossible. It is therefore a **named constant in one place**, referenced
+  from there and never re-spelled. An earlier draft of this clause forbade
+  both and was self-contradictory: it required a default the product could
+  not carry. Corrected here.
+
+- **BOOT-3a. The initial credentials, named.** `nexusadmin`'s initial
+  password is `nexusadmin`; `claudeadmin`'s is `claudeadmin`. The Product
+  Owner set these on 2026-09-13, in the appliance model they asked for —
+  the product is administrable the moment it is deployed, with a credential
+  its own documentation states.
+
+  They are weak by design and published by design, which is what makes
+  `C3A` §4's change path and `BOOT-2`'s idempotence the controls that
+  matter: the credential is expected to be changed, and the product must
+  never undo that change.
 - **BOOT-4. Seeding is audited.** Each created identity produces an
   `audit_log` row through `C1` §3.5's existing trigger, attributed to a
   reserved bootstrap actor marker — the same posture `C3`'s own bootstrap
@@ -91,9 +111,10 @@ Owner.
    creates nothing and changes nothing. **A test changes a password, restarts,
    and asserts the changed password still authenticates and the documented
    initial one does not.** This is BOOT-2 and it is the decisive check.
-3. No migration, source file, resource or manifest contains a password or a
-   verifier. A test greps the tracked tree for the documented initial values
-   and asserts zero matches outside documentation prose.
+3. No migration, source file, resource or manifest contains a **verifier**. A
+   test asserts this. The initial password constant is permitted in exactly
+   one place (BOOT-3) and a test asserts it is not re-spelled anywhere else,
+   so there is one value to change and not several to hunt.
 4. Seeding produces one `audit_log` row per identity, attributed to the
    reserved bootstrap marker, carrying no credential material.
 5. First boot creates no `role_bindings` row; a test asserts the table is
