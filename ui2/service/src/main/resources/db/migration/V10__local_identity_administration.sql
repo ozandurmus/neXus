@@ -9,32 +9,18 @@
 -- and has not landed it yet) -- this movement still takes V10, per its own
 -- brief's explicit instruction.
 --
--- RELAY_QUESTION (see relay/NXS-LOCAL-0153-local-identity-administration.json):
--- LIA-3.3 requires a created/administratively-reset identity to carry a
--- must-change-password flag, described in this movement's own brief as
--- "V9's, the parallel movement's". That flag does not exist anywhere in
--- either branch's history at this movement's start, and 13G section 3
--- separately requires every local-identity response/list to report "whether
--- a password change is required" -- a requirement this movement cannot
--- satisfy at all without a persisted column. Rather than leave section 3's
--- response contract unsatisfiable, this movement adds `must_change_password`
--- to `local_credentials` below and only ever SETS it (create, admin
--- set-password) -- it does not enforce it at login or extend
--- GET /session/status, which stay the parallel movement's own scope. This
--- is a disclosed, additive, reversible assumption: the Product Owner must
--- reconcile this column with NXS-LOCAL-0152's own V9 before merge (rename
--- or de-duplicate then, not now) rather than have two movements silently
--- invent two different flags for the same concept.
-
--- ---------------------------------------------------------------------
--- 1. local_credentials additive columns (13G section 4 / LIA-3.1/3.3)
--- ---------------------------------------------------------------------
-
+-- RESOLVED by the Product Owner assistant before merge (RELAY_DECISION,
+-- relay/NXS-LOCAL-0153): V9 landed first and owns `must_change_password`,
+-- so this migration no longer adds it. This movement still SETS it on
+-- create and on an administrative password reset (LIA-3.3); enforcing it at
+-- login and reporting it on the session belong to V9's movement, which has
+-- merged.
+--
 ALTER TABLE local_credentials
     ADD COLUMN enabled                  BOOLEAN     NOT NULL DEFAULT true,
     ADD COLUMN created_by_actor_fingerprint TEXT,
-    ADD COLUMN password_set_at          TIMESTAMPTZ,
-    ADD COLUMN must_change_password     BOOLEAN     NOT NULL DEFAULT false;
+    ADD COLUMN password_set_at          TIMESTAMPTZ;
+-- must_change_password is V9's (NXS-LOCAL-0152); this migration must not add it again.
 
 -- Backfill (13G section 4): every existing row was created by the one path
 -- that existed before this movement -- the deployment-controlled
