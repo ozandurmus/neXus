@@ -1,0 +1,242 @@
+{
+  "created_at": "2026-09-13T10:35:57Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1 docs/design/UI2_0_C3A_LOCAL_AUTHENTICATION_CONTRACT.md exists, status DRAFT, and says it authorizes nothing.",
+          "AC-2 The mechanism registry is specified so that adding LDAP is adding a member, not changing the flow, and local is stated to be non-removable with C-2 cited.",
+          "AC-3 Credential storage names a memory-hard one-way function, a per-credential salt, and recorded parameters, and forbids any recoverable form.",
+          "AC-4 Both bootstrap accounts are specified, the audit-attribution reason for the second is stated, the deferral of the forced change is recorded as a dated Product Owner decision with its reason, the risk is stated plainly, and a named revisit condition is given.",
+          "AC-5 Lockout is fully specified -- counting, threshold, effect, clearing -- and the refusal is stated not to reveal identity existence.",
+          "AC-6 Role binding for a local identity is specified, and the forward requirement for distinct team roles is recorded.",
+          "AC-7 Audit coverage is specified and credential material is forbidden from every output.",
+          "AC-8 The exposure directive is recorded AND its tension with the deployment contract's Ingress is reported, not resolved.",
+          "AC-9 A section states that a reverse proxy may terminate TLS but may not own identity, with the reason from C3.",
+          "AC-10 A test specification exists, including the forced-change test and the no-credential-in-audit test.",
+          "AC-11 An UNKNOWN register exists, each row with what would settle it.",
+          "AC-12 The repository privacy gate reports zero findings and the diff is exactly one added file under docs/design/."
+        ],
+        "baseline": {
+          "authority": "docs/design/UI2_0_C3_IDENTITY_SESSIONS_RBAC_CONTRACT.md (FROZEN, PO approved) and its Correction C-2 (2026-09-12), which rules that authentication is a pluggable set of mechanisms, that LDAP and local are both Phase 1, that LOCAL IS ALWAYS PRESENT and cannot be switched off because it is the fallback that keeps the product administrable, and that everything C3 fixes about sessions, RBAC and audit is mechanism-independent and unchanged. This successor supplies the local mechanism's own detail and changes nothing C3 already fixed.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "po_directives_2026_09_13": "The Product Owner stated, in the 2026-09-13 session: a login must be required even on localhost; TWO bootstrap accounts exist on a clean database -- `nexusadmin` for the Product Owner and `claudeadmin` for the assistant, so that agent actions are distinguishable from human ones in the audit trail; a forced password change is explicitly NOT wanted at this stage, because the Product Owner does not want to introduce password-policy standards yet and considers that later work; RBAC capability must exist in the model now even though it is not operationally important yet, because one team will see failover and another configuration; local account management comes first and directory integration follows; and no screen may be exposed outside the server.",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)",
+          "related_frozen": "docs/design/UI2_0_C1_PLATFORM_SCHEMA_CONTRACT.md section 6 (per-component secrets, the FILE/env resolution mechanism, fail-closed on unresolvable credentials) and section 7 (the whole database is CLASS 2, identifiers are opaque). docs/design/UI2_0_B1_04B_DEVICE_MODEL_AND_ONBOARDING_CONTRACT.md section 6 (a reference names a credential and never holds one) is the pattern for how secrets are NOT stored in product tables."
+        },
+        "context_not_loaded": [
+          "panorama/ and configuration/ collectors",
+          "docs/history/**",
+          "Check Point and Palo Alto contracts",
+          "project/*.json"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/local-authentication-contract"
+        },
+        "invariants": [
+          "Local authentication can never be disabled; it is the fallback that keeps the product administrable.",
+          "No recoverable password exists anywhere in the product.",
+          "A refusal never reveals whether an identity exists.",
+          "No credential material reaches an audit row, a log line or an error message.",
+          "Sessions, RBAC and audit stay exactly as C3 fixes them.",
+          "Identity is owned by the service, never by a proxy in front of it.",
+          "Changing a password is possible from the first release; only the compulsion to change is deferred, and the deferral is recorded as a dated Product Owner decision with a revisit condition.",
+          "Agent actions are attributable to the agent's own identity, never merged with a human administrator's."
+        ],
+        "merge_gate": "Product Owner assistant review of the diff plus orchestrator verify.passed. The worker does not merge to main.",
+        "movement_type": "ARCHITECTURE",
+        "objective": "Write docs/design/UI2_0_C3A_LOCAL_AUTHENTICATION_CONTRACT.md -- the successor contract UI2_0_C3's Correction C-2 requires for the local authentication mechanism: how a local credential is stored, how login and lockout behave, how the two bootstrap accounts work, and how the mechanism set stays pluggable so LDAP drops in beside it without rework.",
+        "output_contract": [
+          "One DRAFT contract that makes local authentication implementable without touching anything C3 fixed.",
+          "A bootstrap rule that cannot be shipped as a standing default.",
+          "A reported, unresolved tension with the deployment contract's Ingress.",
+          "SESSION_CLOSE naming which clauses rest on C3, which on the Product Owner's 2026-09-13 directives, and what is left UNKNOWN."
+        ],
+        "recommended_reasoning": {
+          "reason": "A security-boundary contract: credential storage, lockout and a bootstrap account are exactly where a plausible-sounding but wrong rule causes real harm, and it must fit inside a FROZEN contract without disturbing it. High effort for the care.",
+          "tier": "Sonnet 5, high effort"
+        },
+        "requirements": [
+          "English, per AGENTS.md engineering-output language law.",
+          "This movement produces ONE document. No source file is created or changed.",
+          "The document's status is DRAFT -- NOT implementation authority. Applying a status is the Product Owner's act, not this movement's. Say so in the status block.",
+          "Every rule must be traceable to measured behaviour or to a FROZEN document, and must carry a check. A rule with no check is a wish.",
+          "Where something is not settled, write UNKNOWN with what would settle it. AGENTS.md forbids filling a gap from general product knowledge.",
+          "Commit early and often.",
+          "Do not merge to main. The Product Owner assistant reviews the diff and merges.",
+          "Do not run the full pytest suite. It creates untracked data/ and logs/ directories the privacy gate then flags.",
+          "No real identity -- no serial, hostname, address, domain, certificate subject or display name -- may appear in the document.",
+          "Where this contract and a FROZEN document are in tension -- the Ingress question is one -- report the tension explicitly with both citations, and leave it for the Product Owner. AGENTS.md 'Authority hierarchy': never silently reconcile two authorities."
+        ],
+        "risks": [
+          "Designing an elaborate password policy nobody asked for.",
+          "Redesigning sessions or RBAC, which C3 already owns and this contract must leave alone.",
+          "Silently resolving the Ingress tension instead of reporting it.",
+          "Putting identity in the proxy because it is convenient.",
+          "Designing LDAP detail, which is out of scope and already owned.",
+          "Letting a verifier, a salt or a parameter set appear in an audit row.",
+          "Re-arguing the forced-password-change decision instead of recording it. The Product Owner heard the risk and decided; this contract records the decision, the risk and the revisit condition, and does not re-litigate.",
+          "Writing a password policy the Product Owner explicitly deferred."
+        ],
+        "scope": {
+          "in": [
+            "The mechanism registry: authentication is a set, local is a member, and local can never be removed or disabled. State how a mechanism is selected for an attempt and how the outcome is reported, so that adding LDAP later is adding a member and not rewriting the flow. C3's Correction C-2 is the authority; this section makes it concrete.",
+            "Local credential storage. The stored value must be a one-way verifier produced by a memory-hard password hashing function with a per-credential salt -- never a reversible encryption, never a plain or merely digested password. Name the algorithm family and the parameters that must be recorded alongside each verifier so parameters can be raised later without invalidating existing credentials. State explicitly that no product table ever holds a recoverable password, consistent with UI2_0_B1_04B section 6's rule for device credentials.",
+            "The bootstrap accounts. TWO accounts exist on a clean, empty database: `nexusadmin` and `claudeadmin`. `claudeadmin` is the assistant's own account and exists so that actions taken by the automation are attributable to it rather than to the Product Owner -- state that audit benefit explicitly, because it is the reason the second account is worth having at all. **A forced password change is NOT required at this stage.** The Product Owner ruled on 2026-09-13 that password-policy standards are later work and declined the forced change after being told the risk. Record that decision as the Product Owner's, with its date and its stated reason, and record the risk plainly alongside it: a bootstrap credential that survives onto a reachable server is the product's weakest point. Give the risk a named REVISIT CONDITION rather than an argument -- the forced change, or an equivalent, is required before the surface is reachable from outside the server or before any production deployment, whichever comes first. Changing a password must be POSSIBLE from the first release; it is only the compulsion that is deferred.",
+            "Login behaviour and lockout: failed-attempt counting, the threshold, what the lockout does, how it clears, and what the response says. The response must not reveal whether an identity exists -- a refusal is a refusal. Fix whether lockout is per identity, per source, or both, and say why.",
+            "Password change and password rules: what the product requires of a new password, stated as checkable rules. Keep them defensible and few; do not invent an elaborate policy.",
+            "RBAC in the local mechanism: C3 already owns the RBAC model and it is mechanism-independent. State only how a LOCAL identity acquires its role binding, and record the Product Owner's forward requirement that distinct teams will hold distinct roles -- one seeing failover, another configuration -- so the model must already represent that even while only one account exists.",
+            "Audit: every authentication attempt, lockout, password change and role binding change is audited through C1 section 3.5's existing mechanism. No credential, no verifier, no salt and no parameter set ever reaches an audit row, a log line or an error message.",
+            "Exposure: record the Product Owner's 2026-09-13 directive that no screen is exposed outside the server, and state the consequence for this contract -- the login surface is reachable in-cluster only. Note that docs/design/UI2_0_B1_01C_CONTAINER_IMAGE_AND_KUBERNETES_DEPLOYMENT_CONTRACT.md defines an Ingress, that this directive is in tension with it, and REPORT the tension rather than resolving it: AGENTS.md forbids silently reconciling two authorities.",
+            "A section stating what a reverse proxy may and may not do: it may terminate TLS; it may not own identity. Give the reason from C3 -- the one-active-session-per-identity rule and the audit trail both require the service to know who authenticated, which an upstream proxy performing the authentication would take away.",
+            "Acceptance criteria and a test specification, including the forced-bootstrap-change test and a test that no credential material appears in any audit row or log line.",
+            "An UNKNOWN register."
+          ],
+          "out": [
+            "Any implementation, Java, SQL, migration or screen. This movement writes one document.",
+            "LDAP, RADIUS or TACACS mechanism detail. C3 owns LDAP; RADIUS and TACACS are named by C-2 as later and nothing may be designed for them here. This contract only ensures the registry admits them.",
+            "Changing anything C3 already fixes about sessions, RBAC or audit. They are mechanism-independent and unchanged.",
+            "Changing the C1 schema contract, the deployment contract, or any other FROZEN document. Report a tension; never resolve it here.",
+            "Designing the user-management screens. State what the mechanism requires; the screen is a separate contract.",
+            "Self-service password reset, email flows, multi-factor, or session-token cryptography. C3 owns sessions.",
+            "Applying any contract status.",
+            "Designing a password-policy standard -- complexity classes, expiry, history, reuse rules. The Product Owner explicitly deferred this on 2026-09-13. State only the minimum a new password must satisfy to be storable, and nothing about policy."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_contract_authority_status.py",
+              "-q"
+            ],
+            "name": "contract_authority_status"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_architecture_convergence.py",
+              "-q"
+            ],
+            "name": "architecture_convergence"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_project_files_budget.py",
+              "-q"
+            ],
+            "name": "project_files_budget"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-13T10:35:57Z"
+    },
+    {
+      "actor": "engineer",
+      "marker": "SESSION_CLOSE",
+      "outcome": "DONE",
+      "report": {
+        "changed": [
+          "Added docs/design/UI2_0_C3A_LOCAL_AUTHENTICATION_CONTRACT.md (new file, DRAFT status, 840 lines) -- the local-authentication successor contract C3's Correction C-2 requires."
+        ],
+        "completed": [
+          "AC-1: docs/design/UI2_0_C3A_LOCAL_AUTHENTICATION_CONTRACT.md created, status DRAFT, states it authorizes nothing.",
+          "AC-2: mechanism registry (Section 2) makes adding a mechanism a member-add, never a flow rewrite; local is stated non-removable, citing C3 Correction C-2.",
+          "AC-3: credential storage (Section 3) names Argon2id, a per-credential salt, and recorded parameters (memory_cost_kib, time_cost, parallelism); forbids reversible encryption, plain text, and a bare fast digest.",
+          "AC-4: both bootstrap accounts specified (Section 6); claudeadmin's audit-attribution reason stated explicitly; the forced-change deferral recorded as a dated (2026-09-13) Product Owner decision with its reason; the risk stated plainly; a named revisit condition given (external reachability or production deployment, whichever first).",
+          "AC-5: lockout fully specified (Section 5) -- per-identity counting, 5-attempt threshold, 15-minute self-expiring effect, clearing on success or expiry; refusal stated never to reveal identity existence.",
+          "AC-6: local role-binding acquisition specified (Section 7) via a direct role_bindings row (encrypted self-reference in place of a group reference); the Product Owner's forward requirement for distinct team roles is recorded and shown already representable under C3's existing schema.",
+          "AC-7: audit coverage specified (Section 8) through C1 Section 3.5's mechanism, with a named allowlist exception (fn_audit_capture_local_credentials) so no verifier/salt/parameter reaches an audit row; log/error-message credential exposure forbidden.",
+          "AC-8: exposure directive recorded (Section 9); the tension with UI2_0_B1_01C's Ingress is reported with both citations and explicitly not resolved.",
+          "AC-9: Section 10 states a reverse proxy may terminate TLS but may not own identity, citing C3's one-active-session-per-identity structural rule and its audit-trail actor requirement.",
+          "AC-10: test specification (Section 11.2) written, including the forced-bootstrap-change test (test 8) and the no-credential-in-audit test (test 9), plus a no-credential-in-logs test (test 10).",
+          "AC-11: UNKNOWN register (Section 11.3) written, 8 rows, each with what would settle it.",
+          "AC-12: repository privacy gate reports zero findings against the diff; the diff is exactly one added file under docs/design/."
+        ],
+        "continuation": "NEW_SESSION",
+        "effects": {
+          "main_py": "unaffected -- no source file was created or changed",
+          "ui": "unaffected -- no screen, source, or migration was created or changed"
+        },
+        "integration": {
+          "branch": "feature/local-authentication-contract",
+          "ci": "not run -- no PR opened yet",
+          "head_sha": "4bc956a0c2e21dabd9e07ddcd1c88e25f7c0390e",
+          "merge_commit": null,
+          "merge_decision": "Not this movement's to make. Per the brief's merge gate: Product Owner assistant review of the diff plus orchestrator verify.passed; the worker does not merge to main.",
+          "merge_state": "NOT_OPENED",
+          "pr": null,
+          "pr_url": null
+        },
+        "next": {
+          "movement": "Product Owner assistant review and freeze decision for UI2_0_C3A_LOCAL_AUTHENTICATION_CONTRACT.md",
+          "movement_type": "ARCHITECTURE",
+          "objective": "Review the drafted local-authentication contract against C3's Correction C-2 and this movement's acceptance criteria, rule on the reported Ingress/exposure tension (U-7), and decide whether to freeze the document as-is, request revision, or escalate the Ingress tension to the deployment-contract owner.",
+          "status": "planned"
+        },
+        "preserved": [
+          "UI2_0_C3_IDENTITY_SESSIONS_RBAC_CONTRACT.md (FROZEN) unchanged -- sessions, RBAC enforcement, the E1-E7 gate chain, and audit linkage are cited as mechanism-independent and reused, never modified.",
+          "UI2_0_C1_PLATFORM_SCHEMA_CONTRACT.md (FROZEN) unchanged -- the audit trigger mechanism and secrets pattern are cited and extended by reference (a named, documented exception for the new table), never edited.",
+          "UI2_0_B1_01C_CONTAINER_IMAGE_AND_KUBERNETES_DEPLOYMENT_CONTRACT.md (FROZEN) unchanged -- the Ingress/exposure tension is reported, not resolved, per AGENTS.md's authority-hierarchy rule against silent reconciliation.",
+          "No implementation, Java, SQL, migration, or screen was created or changed -- this movement produced exactly one document."
+        ],
+        "recommended_reasoning": {
+          "reason": "The next step is a Product Owner review of an already-drafted, internally-cross-referenced contract, not new architecture or vendor-semantic work -- default down per AGENTS.md's routing rule.",
+          "tier": "Sonnet 5, low effort"
+        },
+        "state_updates": [],
+        "unresolved_risks": [
+          "U-7 (Section 11.3): the exposure/Ingress tension between the Product Owner's no-external-exposure directive and UI2_0_B1_01C's frozen Ingress/Route manifest requirement is reported, not resolved -- needs a Product Owner ruling or a deployment-contract successor.",
+          "The bootstrap-credential risk recorded in Section 6.2 stands as accepted, per the Product Owner's 2026-09-13 ruling, until the named revisit condition (external reachability or production deployment) is reached.",
+          "U-1/U-2 (Section 11.3): the concrete Java Argon2 library, its default parameters, and the bootstrap-account seeding mechanism are UNKNOWN, left to a B1-scope implementation movement.",
+          "U-3/U-4 (Section 11.3): username case-normalization and the exact strength of the timing-safety guarantee for the non-revealing refusal are UNKNOWN, left to a later contract/real-environment measurement.",
+          "U-5 (Section 11.3): claudeadmin's initial role-token binding is UNKNOWN -- this contract fixes only that the account exists and why."
+        ],
+        "validation": {
+          "affected": "No source files were changed; only one new docs/design/*.md file was added, so no code-affected test surface exists beyond the three named validation commands.",
+          "diff_check": "git diff --stat against origin/main shows exactly one file changed: docs/design/UI2_0_C3A_LOCAL_AUTHENTICATION_CONTRACT.md (840 insertions, 0 deletions), matching AC-12.",
+          "full_regression": "Not run, per standing instruction (the full pytest suite creates untracked data/ and logs/ directories the privacy gate would then flag); only the three brief-named targeted suites plus the privacy gate were run.",
+          "privacy": "python3 scripts/repository_privacy_check.py -- 1275 files scanned, 383 skipped, 0 findings, gate PASS.",
+          "real_environment": "Not applicable -- this is a DRAFT architecture/design document only; no runtime, network, or device-facing behavior exists yet to validate in a real environment.",
+          "state_consistency": "Not applicable -- no project/*.json, CURRENT_STATE.md, or other durable-state file was touched by this movement's scope.",
+          "targeted": "python3 -m pytest tests/test_contract_authority_status.py -q -- 5 passed."
+        }
+      },
+      "seq": 2,
+      "timestamp": "2026-09-13T10:42:49Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0139",
+  "movement": "local_authentication_contract",
+  "next_actor": null,
+  "refs": [
+    "docs/design/UI2_0_C3_IDENTITY_SESSIONS_RBAC_CONTRACT.md",
+    "docs/design/UI2_0_C1_PLATFORM_SCHEMA_CONTRACT.md",
+    "docs/design/UI2_0_B1_04B_DEVICE_MODEL_AND_ONBOARDING_CONTRACT.md",
+    "docs/design/UI2_0_B1_01C_CONTAINER_IMAGE_AND_KUBERNETES_DEPLOYMENT_CONTRACT.md",
+    "AGENTS.md",
+    "PRIVACY_AND_DATA_HANDLING.md"
+  ],
+  "schema_version": 1,
+  "status": "CLOSED",
+  "updated_at": "2026-09-13T10:42:49Z"
+}

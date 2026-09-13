@@ -1,0 +1,164 @@
+{
+  "created_at": "2026-09-13T10:35:57Z",
+  "entries": [
+    {
+      "actor": "po",
+      "marker": "SESSION_START",
+      "report": {
+        "acceptance_criteria": [
+          "AC-1 docs/design/PAN_DISCOVERY_CONTRACT.md exists, status DRAFT, and says it authorizes nothing.",
+          "AC-2 The evidence-basis section states exactly what was measured, by whom, on what, and what that licenses -- following the Check Point contract's section 2.",
+          "AC-3 The transport section names the two authorized methods and no others.",
+          "AC-4 The classification section states the set is homogeneous and says why, and records the non-firewall blind spot as a scope consequence.",
+          "AC-5 The candidate row names fields by role and requires an isolated, UNVERIFIED binding site.",
+          "AC-6 The HA section states the reciprocity rule and the three NOT_EVALUABLE cases, each with its own clause id.",
+          "AC-7 The liveness section carries the full prohibition and states that this vendor's UNKNOWN is declared, not yet evidenced.",
+          "AC-8 The boundary section forbids the two filters the existing Python performs, naming each.",
+          "AC-9 Acceptance checks are given in three bands, and the reciprocity, name-blindness and liveness-vocabulary checks are in the fixture-provable band.",
+          "AC-10 An UNKNOWN register exists, each row with what would settle it.",
+          "AC-11 The repository privacy gate reports zero findings and no real identity appears.",
+          "AC-12 The diff is exactly one added file under docs/design/."
+        ],
+        "baseline": {
+          "authority": "docs/design/PO_DECISION_RECORD_2026_09_13B_PAN_DISCOVERY_COLLECTION_GATE.md (FROZEN) fixes the two authorized methods. docs/design/PO_DECISION_RECORD_2026_09_13C_DISCOVERY_SERVICE_BOUNDARIES.md (FROZEN) fixes terminology, transport, identity, and where cluster and virtual-system resolution belong. docs/design/PO_DECISION_RECORD_2026_09_12.md section 2 makes the existing Python know-how only.",
+          "engineering_baseline": "DEV.3.3 (AUTOMATED_VALIDATED)",
+          "evidence": "docs/design/PAN_DISCOVERY_MEASUREMENT_FINDINGS_2026_09_13.md (DRAFT) records what the Product Owner measured against a live management server: field inventory, counts, reciprocity. It is provenance, not authority -- the evidence is the Product Owner's own read, which that document writes down.",
+          "model": "docs/design/CP_AND_VSX_DISCOVERY_CONTRACT.md (FROZEN) is the SHAPE to follow -- scope, evidence basis, transport, classification, relationship resolution, candidate row, liveness refusal, discovery/import boundary, acceptance checks, UNKNOWN register. Follow its structure and its discipline; do NOT copy its Check Point rules, which do not transfer.",
+          "product_baseline": "0.7.7 (AUTOMATED_VALIDATED)"
+        },
+        "context_not_loaded": [
+          "ui2/ sources",
+          "docs/history/**",
+          "orchestrator and relay internals",
+          "project/*.json"
+        ],
+        "deployment_direction": "local validation only",
+        "git": {
+          "base": "origin/main",
+          "lane": "feature/pan-discovery-contract"
+        },
+        "invariants": [
+          "No device is contacted, by any path, in anything this contract describes.",
+          "The serial is the only join key; no relationship is ever derived from a name or an address.",
+          "A pair is formed only from a reciprocal claim; a one-sided claim is NOT_EVALUABLE.",
+          "No candidate is dropped for being disconnected, unresolvable or inconvenient.",
+          "No field expresses liveness, derived or composed.",
+          "Measurement and hypothesis are never presented as the same thing.",
+          "No real identity enters the document."
+        ],
+        "merge_gate": "Product Owner assistant review of the diff plus orchestrator verify.passed. The worker does not merge to main.",
+        "movement_type": "ARCHITECTURE",
+        "objective": "Write docs/design/PAN_DISCOVERY_CONTRACT.md -- the Palo Alto discovery contract, in the shape CP_AND_VSX_DISCOVERY_CONTRACT.md established, resting on the measurements the Product Owner took on 2026-09-13 rather than on the existing Python.",
+        "output_contract": [
+          "One DRAFT contract a Product Owner can review clause by clause and freeze or refuse.",
+          "A reciprocity rule stated precisely enough to be a test.",
+          "An honest separation between what was measured, what is hypothesis, and what is UNKNOWN.",
+          "SESSION_CLOSE naming which clauses rest on measurement, which on a FROZEN document, and which questions remain UNKNOWN."
+        ],
+        "recommended_reasoning": {
+          "reason": "A contract whose value is entirely in restraint and precision: separating measured behaviour from inferred meaning, refusing to transfer the Check Point rules that do not apply, and stating a reciprocity rule exactly enough to become a test. High effort for the judgment, not the volume.",
+          "tier": "Sonnet 5, high effort"
+        },
+        "requirements": [
+          "English, per AGENTS.md engineering-output language law.",
+          "This movement produces ONE document. No source file is created or changed.",
+          "The document's status is DRAFT -- NOT implementation authority. Applying a status is the Product Owner's act, not this movement's. Say so in the status block.",
+          "Every rule must be traceable to measured behaviour or to a FROZEN document, and must carry a check. A rule with no check is a wish.",
+          "Where something is not settled, write UNKNOWN with what would settle it. AGENTS.md forbids filling a gap from general product knowledge.",
+          "Commit early and often.",
+          "Do not merge to main. The Product Owner assistant reviews the diff and merges.",
+          "Do not run the full pytest suite. It creates untracked data/ and logs/ directories the privacy gate then flags.",
+          "No real identity -- no serial, hostname, address, domain, certificate subject or display name -- may appear in the document."
+        ],
+        "risks": [
+          "Copying the Check Point contract's rules instead of its shape. The ten kinds, the two-address invariant and the connection-table signal are Check Point's and do not transfer.",
+          "Reaching for a third method because a rule feels incomplete without it.",
+          "Presenting the counted coincidences in the findings document as findings. They are hypotheses and the contract must keep them so.",
+          "Writing the liveness UNKNOWN as though it were as well evidenced as Check Point's. It is not -- no negative search has been done for this vendor.",
+          "Reproducing the existing Python's filtering because the code does it.",
+          "Asserting a field's meaning from its element name."
+        ],
+        "scope": {
+          "in": [
+            "Transport and entry point: the two authorized methods and nothing else. One authenticated session to Palo Alto Management, one read-only managed-device enumeration. No target parameter, no device contact, no write, no raw response retained.",
+            "Classification: state plainly that the measured enumeration is HOMOGENEOUS -- a `type` element is present on every entry and empty on every entry, and dedicated log collectors and WildFire appliances are addressed by their own configuration nodes, which the gate does not authorize. Therefore Check Point's ten-kind model has no analogue and this contract defines no kind lattice. Record the consequence: those appliances are invisible to the authorized method, absent by scope decision and NOT absent in fact.",
+            "The candidate row: every field the measurement found present on all entries, plus the partially-present ones with their presence treated as MAY BE ABSENT. Name fields by ROLE, not by vendor element name, exactly as the Check Point contract's section 6.4 does, and require the implementing movement to bind roles at one isolated site with every entry marked UNVERIFIED.",
+            "Identity: the serial is the stable identifier and the only join key. The display name is never a join key. Both address elements -- the IPv4 one and the SEPARATE IPv6 one -- are locators, never join keys. An address is never compared to form a relationship.",
+            "Virtual systems: they arrive inside the enumeration, one entry per virtual system, each with an identifier and a display name and three shared-policy elements. State that they are resolved at discovery, with no second call and no device contact, and that the host relationship is STRUCTURAL -- nested inside the device entry -- so Check Point's two-address host-resolution invariant has no analogue and none is needed.",
+            "High availability, the central section: the enumeration carries each member's peer as a SERIAL. State the reciprocity rule -- a pair is formed only when A names B and B names A, within the SAME response. State that a claim resolving to no entry, a claim naming the device itself, and a one-sided claim are each NOT_EVALUABLE, the candidate is still returned, and no pair is ever formed from one side. Cite AGENTS.md's evidence law on one-sided peer claims as the reason.",
+            "Liveness: the connection-state element is the analogue of the Check Point contract's disproven L-S1 and must carry the same prohibition -- no field, label, colour, icon, badge, sort key or filter may express up, down, online, offline, reachable, unreachable, healthy, unhealthy or a synonym, derived or composed. State honestly that Palo Alto has NOT had the three-plane negative search Check Point completed, so the UNKNOWN here is DECLARED and not yet EVIDENCED, and record what would evidence it.",
+            "The connection timestamp and the certificate elements: carried under their own names, never merged into a status, never read as liveness. Note that the Check Point contract measured a console indicator that reflected a certificate condition and was read by operators as reachability -- this vendor keeps them apart in the data and the contract must keep them apart in the presentation.",
+            "The discovery/import boundary: restate it for this vendor. The measurement settles that the enumeration returns devices that are not connected, so DI-3's 'discovery shows everything it found' is achievable with the authorized method and no filtering is permitted. Record explicitly that the existing Python filters -- one collector drops entries with no serial, the other selects connected ones first -- and that this contract forbids both.",
+            "Acceptance checks, in three bands like the Check Point contract's section 9 as amended: repository checks, checks provable over synthetic fixtures, and checks that need a live management server. Put the reciprocity rule, the name-blindness rule and the liveness-vocabulary rule in the fixture band, because those are what an implementing movement can actually be held to.",
+            "An UNKNOWN register, each row with what would settle it."
+          ],
+          "out": [
+            "Any implementation, schema, screen, API or Java. This movement writes one document.",
+            "Any method beyond the two the gate lift authorizes. In particular: no per-device targeted read, no Panorama configuration read, no second operational command, and no direct firewall contact. If a rule seems to need one, record it as UNKNOWN rather than reaching for it.",
+            "Import, deduplication, reconciliation against existing device rows, re-discovery cadence, and the operator screen. Fix the boundary; design nothing past it.",
+            "Check Point in any form beyond citing its contract as the shape and as a contrast.",
+            "Porting, wrapping, transliterating or invoking the existing Python. Cite it only where it shows a defect this contract must not repeat.",
+            "Applying any contract status, to this document or any other.",
+            "Deciding which service owns the operational unit after import -- PO_DECISION_RECORD_2026_09_13C section 5 leaves it open for a decision council."
+          ]
+        },
+        "validation_plan": [
+          {
+            "argv": [
+              "python3",
+              "scripts/repository_privacy_check.py"
+            ],
+            "name": "privacy_gate"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_contract_authority_status.py",
+              "-q"
+            ],
+            "name": "contract_authority_status"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_architecture_convergence.py",
+              "-q"
+            ],
+            "name": "architecture_convergence"
+          },
+          {
+            "argv": [
+              "python3",
+              "-m",
+              "pytest",
+              "tests/test_project_files_budget.py",
+              "-q"
+            ],
+            "name": "project_files_budget"
+          }
+        ]
+      },
+      "seq": 1,
+      "timestamp": "2026-09-13T10:35:57Z"
+    }
+  ],
+  "id": "NXS-LOCAL-0138",
+  "movement": "pan_discovery_contract",
+  "next_actor": "engineer",
+  "refs": [
+    "docs/design/PO_DECISION_RECORD_2026_09_13B_PAN_DISCOVERY_COLLECTION_GATE.md",
+    "docs/design/PO_DECISION_RECORD_2026_09_13C_DISCOVERY_SERVICE_BOUNDARIES.md",
+    "docs/design/PAN_DISCOVERY_MEASUREMENT_FINDINGS_2026_09_13.md",
+    "docs/design/PAN_DISCOVERY_PYTHON_STEP_MAP_2026_09_13.md",
+    "docs/design/CP_AND_VSX_DISCOVERY_CONTRACT.md",
+    "docs/design/PO_DECISION_RECORD_2026_09_12.md",
+    "AGENTS.md"
+  ],
+  "schema_version": 1,
+  "status": "OPEN",
+  "updated_at": "2026-09-13T10:35:57Z"
+}
